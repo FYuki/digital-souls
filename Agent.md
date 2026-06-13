@@ -9,15 +9,16 @@
 | 記憶 | RAG（Qdrant） + PostgreSQL | Phase 3〜 |
 | アバター（標準） | Live2D | VTube Studio / OBS連携 |
 | アバター（配信） | VRM | 3tene / Warudo / VNyan 等 |
-| 音声 | 未定 | Phase 5〜 |
+| 音声入力 | Whisper | Mac mini常時稼働 / Windows動画編集用 |
+| 音声出力 | 未定 | Phase 5〜 |
 | UI | 静止画UI / チャットUI / Discord Bot / Web UI | 用途別 |
 
 ## 環境
 
 - OS: Windows 11
-- WSL2 Ubuntu: メイン開発環境（Ollama / Docker）
+- WSL2 Ubuntu: メイン開発環境（Ollama / PostgreSQL / Qdrant / Redis / AIRI）
 - WindowsメインPC: RTX搭載、重いAI処理・配信処理専用（必要時のみ起動）
-- Mac mini（将来）: 常時稼働サーバー（軽量LLM・記憶DB・生活支援ツール）
+- Mac mini（将来）: 常時稼働サーバー（軽量LLM・Whisper・記憶DB・生活支援ツール）
 - Cloud GPU/VM: WindowsメインPC未起動時のフォールバック
 
 ## 現在の開発フェーズ
@@ -26,7 +27,7 @@
 |---|---|---|
 | Phase 0 | ✅ 完了 | 方針整理・リポジトリ構成 |
 | Phase 1 | 📝 草案完了 | 光織の人格・世界観・記憶方針（`characters/miori/` に格納） |
-| Phase 2 | ⬜ 次 | WSL2 開発環境・Docker・Ollama 検証 |
+| Phase 2 | ⬜ 次 | WSL2 開発環境・Ollama 検証 |
 | Phase 3 | ⬜ 未着手 | コア基盤検証（AIRI / 推論ルーター / RAG） |
 | Phase 4 | ⬜ 未着手 | パーソナルAI機能（農業日誌・レシピ・メモ） |
 | Phase 5 | ⬜ 未着手 | 表現・配信連携（Live2D / VRM） |

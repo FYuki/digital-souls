@@ -6,13 +6,16 @@ Mac mini調達までは、WindowsメインPC上のWSL2で開発を進める。
 
 ```text
 Windows
-├─ VSCode
-├─ WSL2 Ubuntu
-├─ Docker Desktop
+└─ VSCode
+
+WSL2 Ubuntu（LTS最新安定版）
 ├─ Git
-├─ Node.js
-├─ Python
-└─ Ollama
+├─ Node.js（LTS最新安定版）
+├─ Ollama
+├─ PostgreSQL
+├─ Qdrant
+├─ Redis
+└─ AIRI
 ```
 
 ## WSL2利用方針
@@ -33,71 +36,88 @@ Windows
 
 理由:
 
-* Node.jsの依存関係処理が遅くなりやすい
-* Dockerやファイル監視で問題が出やすい
-* Linux/Mac環境への移行性が下がる
+- Node.jsの依存関係処理が遅くなりやすい
+- ファイル監視で問題が出やすい
+- Linux/Mac環境への移行性が下がる
 
 ## Ollama利用方針
 
-初期はWindows側のOllamaを利用し、WSL2からAPI経由でアクセスする構成を優先する。
+WSL2内にOllamaを直接インストールして使用する。
 
-```text
-WSL2
-└─ digital-souls / AIRI
+疎通確認:
 
-Windows
-└─ Ollama
+```bash
+curl http://localhost:11434/api/tags
 ```
 
-WSL2内でOllamaを直接動かす構成も可能だが、初期段階ではトラブルを減らすためWindows側Ollamaを優先する。
+## サービス構成
 
-## Docker利用方針
+以下をWSL2上に直接インストールして管理する。
 
-将来的に以下のサービスをDocker Composeで管理する。
+| サービス | インストール方法 | 用途 |
+|---|---|---|
+| PostgreSQL | apt install | 記憶DB・農業日誌・レシピ管理 |
+| Qdrant | バイナリ直接起動 | ベクトル検索（RAG） |
+| Redis | apt install | キャッシュ |
+| Ollama | 公式インストーラ | LLM推論 |
+| AIRI | WSL2直接起動 | 人格・エージェント制御 |
 
-候補:
+## 環境分け
 
-* PostgreSQL
-* Qdrant
-* Redis
-* アプリケーション本体
-* 管理用Web UI
+開発・本番は環境変数ファイルで分離する。
 
-初期段階では、まずドキュメントと人格設計を優先し、Docker構成は後続タスクとする。
+| ファイル | 用途 | リポジトリ管理 |
+|---|---|---|
+| `.env.development` | WSL2ローカル開発 | 除外（.gitignore） |
+| `.env.production` | Mac mini本番 | 除外（.gitignore） |
+| `.env.example` | 設定項目のテンプレート | 含める |
+
+DBはPostgreSQL内でデータベース名を分けて管理する。
+
+| 環境 | DB名 |
+|---|---|
+| 開発 | digital_souls_dev |
+| 本番 | digital_souls |
 
 ## Mac mini移行方針
 
-Mac mini導入後は、以下の流れで移行する。
+Mac mini導入後は以下の手順で移行する。
 
 ```bash
 git clone https://github.com/FYuki/digital-souls.git
 cd digital-souls
-docker compose up -d
+# 各サービスをインストール・起動
+# .env.production を配置
 ```
 
-実際の移行時には、以下を整理する。
+移行時に整理する項目:
 
-* 環境変数
-* モデル保存先
-* DBバックアップ
-* Qdrantデータ移行
-* 起動スクリプト
-* 自動起動設定
-* ログ管理
+- 環境変数の移植
+- モデル保存先（Ollama）
+- DBデータのバックアップ・リストア
+- Qdrantデータの移行
+- 自動起動設定（launchd）
+- ログ管理
 
-## 初期セットアップ候補
+## 初期セットアップ
 
 ```bash
 sudo apt update
 sudo apt install -y git curl build-essential
 
-# Node.js / Python / Docker は採用技術決定後に確定する
+# Node.js（LTS最新安定版）
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# PostgreSQL
+sudo apt install -y postgresql postgresql-contrib
+
+# Redis
+sudo apt install -y redis-server
+
+# Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Qdrant（バイナリ）
+# インストール手順はPhase 2検証時に確定する
 ```
-
-## 今後の検証項目
-
-* WSL2でAIRIが問題なく動作するか
-* Ollama + Gemma 4B級の応答速度
-* PostgreSQL / Qdrant / Redisの必要性
-* Windows側Ollamaへの接続方法
-* Mac mini移行時の差分
