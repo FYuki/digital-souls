@@ -25,7 +25,7 @@ WSL2 Ubuntu（LTS最新安定版）
 推奨作業ディレクトリ:
 
 ```bash
-~/projects/digital-souls
+~/dev/digital-souls
 ```
 
 避ける構成:

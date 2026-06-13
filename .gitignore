@@ -1,0 +1,19 @@
+# 環境変数
+.env
+.env.development
+.env.production
+
+# Qdrant データ
+storage/
+snapshots/
+qdrant
+
+# Node.js
+node_modules/
+
+# ログ
+*.log
+
+# TAKT ローカル管理
+.takt/tasks/
+.takt/logs/
