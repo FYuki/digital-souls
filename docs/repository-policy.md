@@ -15,7 +15,9 @@ repo/
 │  ├─ system-architecture.md
 │  ├─ infrastructure-policy.md
 │  ├─ development-environment.md
-│  └─ repository-policy.md
+│  ├─ repository-policy.md
+│  └─ decisions/
+│     └─ <topic>-YYYY-MM.md
 │
 ├─ characters/
 │  └─ miori/
@@ -61,17 +63,17 @@ characters/
 * `voice.md`
 * `appearance.md`
 
-## GitHub Discussions
+## docs/decisions
 
-GitHub Discussionsは、検討経緯や意思決定ログを残す場所とする。
+`docs/decisions/` には、検討経緯と意思決定ログを残す。
 
-想定カテゴリ:
+ファイル命名規則: `<topic>-YYYY-MM.md`
 
-* インフラ構成検討
-* システムアーキテクチャ検討
-* AIRI採用方針
-* Live2D / VRM / 配信連携方針
-* パーソナルAI人格設計
+想定ファイル例:
+
+* `airi-2026-06.md` — AIRI採用方針
+* `character-miori-2026-06.md` — 光織キャラクター設定補正
+* `infrastructure-2026-07.md` — インフラ構成選定
 
 ## GitHub Issues
 
