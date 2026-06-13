@@ -48,7 +48,8 @@ digital-souls/
 │  ├─ system-architecture.md   # システムアーキテクチャ
 │  ├─ infrastructure-policy.md # インフラ方針
 │  ├─ development-environment.md
-│  └─ repository-policy.md
+│  ├─ repository-policy.md
+│  └─ decisions/               # 検討経緯・意思決定ログ
 ├─ characters/
 │  └─ miori/                   # 初期人格「光織」
 │     ├─ personality.md        # 人格設定・話し方
