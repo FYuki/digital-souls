@@ -99,7 +99,9 @@ cd digital-souls
 - 自動起動設定（launchd）
 - ログ管理
 
-## 初期セットアップ
+## 初期セットアップ（Linux / WSL2）
+
+以下の手順は **Linux（WSL2 Ubuntu）専用**。Mac mini移行時の手順は Phase 6 で整備する。
 
 ```bash
 sudo apt update
@@ -121,3 +123,21 @@ curl -fsSL https://ollama.com/install.sh | sh
 # Qdrant（バイナリ）
 # インストール手順はPhase 2検証時に確定する
 ```
+
+## Mac環境構築に関する注意点（Phase 6 向け先行メモ）
+
+Mac mini移行時に Claude Code で環境構築する際は、以下の点に注意する。
+詳細手順は Phase 6 で整備する。
+
+| 項目 | Linux（WSL2） | Mac |
+|---|---|---|
+| パッケージマネージャ | `apt` | `brew`（Homebrew が前提） |
+| PostgreSQL | `apt install postgresql` | `brew install postgresql@17` 等 |
+| Redis | `apt install redis-server` | `brew install redis` |
+| Node.js | nodesource スクリプト | `nvm` または `brew install node` |
+| Qdrant | Linux用バイナリ | macOS用バイナリ（URL・パスが異なる） |
+| 自動起動 | systemd | launchd（設定例は Phase 6 で追加） |
+
+- `sudo apt install` をそのまま実行すると `apt: command not found` で失敗する
+- Homebrew 未インストールの場合はほぼすべての手順が動かないため、先にインストールが必要
+- WSL2固有の注意事項（`/mnt/c/...` を避ける等）は Mac には無関係
