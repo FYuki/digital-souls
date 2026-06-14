@@ -27,8 +27,8 @@
 |---|---|---|
 | Phase 0 | ✅ 完了 | 方針整理・リポジトリ構成 |
 | Phase 1 | 📝 草案完了 | 光織の人格・世界観・記憶方針（`characters/miori/` に格納） |
-| Phase 2 | ⬜ 次 | WSL2 開発環境・Ollama 検証 |
-| Phase 3 | ⬜ 未着手 | コア基盤検証（AIRI / 推論ルーター / RAG） |
+| Phase 2 | ✅ 完了 | WSL2 開発環境・Ollama 検証 |
+| Phase 3 | ⬜ 次 | コア基盤検証（AIRI / 推論ルーター / RAG） |
 | Phase 4 | ⬜ 未着手 | パーソナルAI機能（農業日誌・レシピ・メモ） |
 | Phase 5 | ⬜ 未着手 | 表現・配信連携（Live2D / VRM） |
 | Phase 6 | ⬜ 未着手 | 常時稼働化（Mac mini 本番運用） |
