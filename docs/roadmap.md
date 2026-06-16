@@ -29,10 +29,18 @@
 
 ## Phase 3: コア基盤検証
 
-[ ] AIRIを人格・記憶・エージェント制御のコア候補として検証する
-[ ] 推論ルーターを設計する
-[ ] ローカルLLM、WindowsメインPC、Cloud VMを切り替える設計を検討する
-[ ] 長期記憶・RAG・ツール実行の構成を検討する
+[ ] AIRIをサイドカーとして特定バージョンで導入する（upstream参照、フォークなし）
+[ ] AIRIのserver-runtimeをWSL2上で起動し、動作確認する
+[ ] Character Card（光織）をAIRIにインポートし、人格反映を確認する
+[ ] gemma3:4b（Ollama）とAIRIのWebSocket接続を確認する
+[ ] 推論ルーターを設計する（ローカル / Windows / Cloud VMの切り替え）
+[ ] 長期記憶・RAG・ツール実行の構成を検討する（memory-pgvectorの評価含む）
+[ ] プラグイン開発方針を確定する（plugin-sdkの接続方式を検証）
+
+### 備忘：上流へのコントリビューション候補
+
+- YouTube Live Chat対応（AIRIのv0.9ロードマップ Issue #840 に記載あり、services/youtube-bot として実装するパターン）
+- VOICEVOX音声対応（AIRIではなくUnspeechリポジトリへ。PR #887 が失敗した反省点が明確なため通る可能性あり）
 
 ## Phase 4: パーソナルAI機能
 
