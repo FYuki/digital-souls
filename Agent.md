@@ -1,24 +1,29 @@
 ## 技術スタック
 
+> **2026-06-17 方針転換**: AIRIフォーク利用を取りやめ、自作BE（FastAPI）+ 自作FE（Vite + Svelte）構成に移行した。
+> 理由・経緯は `docs/decisions/` を参照。
+
 | 層 | 技術 | 備考 |
 |---|---|---|
-| コアフレームワーク | AIRI（候補） | Phase 3 で検証 |
-| LLM (small) | Ollama + Gemma 4B / Qwen 8B / Llama 8B | Mac mini（常時稼働予定） |
-| LLM (medium) | Ollama + 大型モデル | WindowsメインPC（RTX搭載） |
-| LLM (large) | Cloud GPU / VM | Windows未起動時フォールバック |
-| 記憶 | RAG（Qdrant） + PostgreSQL | Phase 3〜 |
-| アバター（標準） | Live2D | VTube Studio / OBS連携 |
-| アバター（配信） | VRM | 3tene / Warudo / VNyan 等 |
-| 音声入力 | Whisper | Mac mini常時稼働 / Windows動画編集用 |
-| 音声出力 | 未定 | Phase 5〜 |
-| UI | 静止画UI / チャットUI / Discord Bot / Web UI | 用途別 |
+| バックエンド | FastAPI（Python） | キャラクター管理・LLM振り分け・WebSocket・RAGを実装 |
+| フロントエンド | Vite + Svelte + TypeScript | テキストチャットUI → 音声UIへ拡張 |
+| LLM (small) | Ollama + gemma4:e4b | ローカル開発・常用想定 |
+| LLM (medium/large) | Claude / GPT（クラウド） | LLM振り分けルーターの枠のみ用意、初期はダミー |
+| 長期記憶 | RAG（Chroma + nomic-embed-text） + SQLite | キャラクターごとに完全独立。`character_id`を全レコードに付与。詳細は `docs/decisions/Multi-character-db-2026-06.md` |
+| 音声通信（初期） | WebSocket | ローカル環境では遅延差がほぼ出ないため |
+| 音声通信（将来） | LiveKit | 抽象レイヤー（AudioTransport）で差し替え可能にしておく |
+| STT | Whisper（faster-whisper, WSL2ローカル） | |
+| TTS | VOICEVOX（WSL2ローカル） | 日本語対応 |
+| アバター（標準） | Live2D | VTube Studio / OBS連携、Phase 7〜 |
+| アバター（配信） | VRM | 3tene / Warudo / VNyan 等、Phase 7〜 |
+| UI | ブラウザ → Discord → スマホ → デスクトップ | MVPはブラウザのみ |
 
 ## 環境
 
 - OS: Windows 11
-- WSL2 Ubuntu: メイン開発環境（Ollama / PostgreSQL / Qdrant / Redis / AIRI）
+- WSL2 Ubuntu: メイン開発環境（Ollama / Whisper / VOICEVOX / FastAPI）
 - WindowsメインPC: RTX搭載、重いAI処理・配信処理専用（必要時のみ起動）
-- Mac mini（将来）: 常時稼働サーバー（軽量LLM・Whisper・記憶DB・生活支援ツール）
+- Mac mini（将来）: 常時稼働サーバー（M4 Pro 48GB想定。軽量LLM・Whisper・記憶DB・生活支援ツール）
 - Cloud GPU/VM: WindowsメインPC未起動時のフォールバック
 
 ## 現在の開発フェーズ
@@ -26,14 +31,16 @@
 | Phase | 状態 | 内容 |
 |---|---|---|
 | Phase 0 | ✅ 完了 | 方針整理・リポジトリ構成 |
-| Phase 1 | 📝 草案完了 | 光織の人格・世界観・記憶方針（`characters/miori/` に格納） |
+| Phase 1 | ✅ 完了 | 光織の人格・世界観・記憶方針（`characters/miori/` に格納） |
 | Phase 2 | ✅ 完了 | WSL2 開発環境・Ollama 検証 |
-| Phase 3 | ⬜ 次 | コア基盤検証（AIRI / 推論ルーター / RAG） |
-| Phase 4 | ⬜ 未着手 | パーソナルAI機能（農業日誌・レシピ・メモ） |
-| Phase 5 | ⬜ 未着手 | 表現・配信連携（Live2D / VRM） |
-| Phase 6 | ⬜ 未着手 | 常時稼働化（Mac mini 本番運用） |
+| Phase 3 | ⬜ 次 | テキストチャット基盤（自作BE/FE） |
+| Phase 4 | ⬜ 未着手 | 音声対応（Whisper / VOICEVOX / WebSocket） |
+| Phase 5 | ⬜ 未着手 | 長期記憶（RAG: Chroma + SQLite） |
+| Phase 6 | ⬜ 未着手 | パーソナルAI機能（農業日誌・レシピ・メモ） |
+| Phase 7 | ⬜ 未着手 | 表現・配信連携（Live2D / VRM） |
+| Phase 8 | ⬜ 未着手 | 常時稼働化・マルチクライアント対応（Mac mini 本番運用） |
 
-> **注意**: Phase 2 に入るまでは実装コードを追加しない。現在はドキュメント中心の開発フェーズ。
+詳細は `docs/roadmap.md` を参照。
 
 ## 規約
 
@@ -56,7 +63,8 @@ digital-souls/
 │     ├─ personality.md        # 人格設定・話し方
 │     ├─ world.md              # 世界観・比喩体系
 │     └─ memory-policy.md      # 記憶方針・プライバシー
-└─ src/                        # 将来の実装コード（Phase 2〜）
+├─ backend/                    # 自作BE（FastAPI）
+└─ frontend/                   # 自作FE（Vite + Svelte）
 ```
 
 ## 実装フロー管理（TAKT）
@@ -69,6 +77,9 @@ npm install -g takt
 
 # タスクを AI と相談して積む
 takt
+
+# GitHub issueをタスクとして積む（#を含む場合はクオート必須）
+takt add "#9"
 
 # 積んだタスクを実行
 takt run
