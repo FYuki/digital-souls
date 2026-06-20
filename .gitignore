@@ -14,6 +14,12 @@ node_modules/
 # ログ
 *.log
 
+# Python 生成物
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
 # TAKT ローカル管理
 .takt/tasks/
 .takt/logs/
