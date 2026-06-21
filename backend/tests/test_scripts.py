@@ -134,6 +134,36 @@ class TestStartBackend:
         assert "uvicorn" in order, "uvicorn was not called"
         assert order.index("activate") < order.index("uvicorn")
 
+    def test_uvicorn_is_called_with_backend_app_and_reload(self, tmp_path):
+        backend_dir = tmp_path / "backend"
+        backend_dir.mkdir()
+
+        venv_bin = backend_dir / ".venv" / "bin"
+        venv_bin.mkdir(parents=True)
+        (venv_bin / "activate").write_text("# stub activate\n")
+
+        args_log = tmp_path / "uvicorn_args.txt"
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        uvicorn = bin_dir / "uvicorn"
+        uvicorn.write_text(
+            f"#!/usr/bin/env bash\n"
+            f"printf '%s\\n' \"$@\" > \"{args_log}\"\n"
+        )
+        uvicorn.chmod(0o755)
+
+        script = _make_modified_start_backend(tmp_path, backend_dir)
+        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+        subprocess.run([str(script)], env=env, capture_output=True, text=True)
+
+        assert args_log.read_text().splitlines() == [
+            "--app-dir",
+            str(backend_dir),
+            "app.main:app",
+            "--reload",
+        ]
+
 
 def _make_start_all_stub_env(tmp_path: Path, curl_exit: int, max_attempts: int = 30):
     scripts_dir = tmp_path / "scripts"
@@ -229,6 +259,92 @@ class TestStartAll:
 
         assert result.returncode != 0
         assert "ERROR" in result.stderr
+
+    def test_does_not_start_frontend_when_backend_check_times_out(self, tmp_path):
+        scripts_dir, bin_dir = _make_start_all_stub_env(
+            tmp_path, curl_exit=0, max_attempts=1
+        )
+        frontend_marker = tmp_path / "frontend_started.txt"
+
+        (scripts_dir / "start-ollama.sh").write_text(
+            "#!/usr/bin/env bash\nexec sleep 30\n"
+        )
+        (scripts_dir / "start-ollama.sh").chmod(0o755)
+        (scripts_dir / "start-backend.sh").write_text(
+            "#!/usr/bin/env bash\nexec sleep 30\n"
+        )
+        (scripts_dir / "start-backend.sh").chmod(0o755)
+        (scripts_dir / "start-frontend.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"touch \"{frontend_marker}\"\n"
+        )
+        (scripts_dir / "start-frontend.sh").chmod(0o755)
+        (bin_dir / "curl").write_text(
+            "#!/usr/bin/env bash\n"
+            "url=\"${@: -1}\"\n"
+            "case \"$url\" in\n"
+            "  *localhost:11434*) exit 0 ;;\n"
+            "  *localhost:8000*) exit 1 ;;\n"
+            "  *) exit 1 ;;\n"
+            "esac\n"
+        )
+        (bin_dir / "curl").chmod(0o755)
+
+        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+        result = subprocess.run(
+            [str(scripts_dir / "start-all.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode != 0
+        assert not frontend_marker.exists()
+
+    def test_returns_nonzero_when_started_child_exits_nonzero(self, tmp_path):
+        scripts_dir, bin_dir = _make_start_all_stub_env(tmp_path, curl_exit=0)
+
+        (scripts_dir / "start-ollama.sh").write_text("#!/usr/bin/env bash\nexit 7\n")
+        (scripts_dir / "start-ollama.sh").chmod(0o755)
+        (scripts_dir / "start-backend.sh").write_text("#!/usr/bin/env bash\nexit 0\n")
+        (scripts_dir / "start-backend.sh").chmod(0o755)
+        (scripts_dir / "start-frontend.sh").write_text("#!/usr/bin/env bash\nexit 0\n")
+        (scripts_dir / "start-frontend.sh").chmod(0o755)
+
+        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+        result = subprocess.run(
+            [str(scripts_dir / "start-all.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode == 7
+
+    def test_fails_when_child_exits_before_health_check_succeeds(self, tmp_path):
+        scripts_dir, bin_dir = _make_start_all_stub_env(
+            tmp_path, curl_exit=1, max_attempts=30
+        )
+
+        (scripts_dir / "start-ollama.sh").write_text("#!/usr/bin/env bash\nexit 0\n")
+        (scripts_dir / "start-ollama.sh").chmod(0o755)
+
+        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+        result = subprocess.run(
+            [str(scripts_dir / "start-all.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode != 0
+        assert "process exited before becoming ready" in result.stderr
 
 
 class TestStartOllama:

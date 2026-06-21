@@ -45,19 +45,26 @@ class TestGenerateResponse:
 
 class TestClaudeClientDummy:
     def test_generate_raises_not_implemented_error(self):
-        from app.llm.claude_client import ClaudeClient
+        from app.llm.router import _create_llm_client
 
-        client = ClaudeClient()
+        client = _create_llm_client("claude")
 
         with pytest.raises(NotImplementedError):
             client.generate("system prompt", "user message")
 
     def test_not_implemented_error_is_not_caught(self):
-        from app.llm.claude_client import ClaudeClient
+        from app.llm.router import _create_llm_client
 
-        client = ClaudeClient()
+        client = _create_llm_client("claude")
 
         with pytest.raises(NotImplementedError) as exc_info:
             client.generate("system", "user")
 
         assert exc_info.type is NotImplementedError
+
+    def test_router_does_not_expose_infrastructure_clients(self):
+        from app.llm import router
+
+        assert not hasattr(router, "__all__")
+        assert not hasattr(router, "OllamaClient")
+        assert not hasattr(router, "ClaudeClient")
