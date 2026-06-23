@@ -2,8 +2,8 @@ import httpx
 from unittest.mock import patch
 
 
-_LOAD_PERSONALITY = "app.routers.chat.load_personality"
-_GENERATE_RESPONSE = "app.routers.chat.generate_response"
+_LOAD_PERSONALITY = "app.chat_service._character_loader.load_personality"
+_GENERATE_RESPONSE = "app.chat_service._llm_router.generate_response"
 
 _VALID_BODY = {"character": "miori", "message": "自己紹介してください"}
 _PERSONALITY = "# 光織\n穏やかなAIです。"
