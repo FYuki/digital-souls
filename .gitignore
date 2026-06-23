@@ -10,6 +10,8 @@ qdrant
 
 # Node.js
 node_modules/
+.npm-cache/
+dist/
 
 # ログ
 *.log
