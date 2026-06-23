@@ -2,12 +2,14 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 
 from app.routers.chat import router as chat_router
+from app.routers.ws import router as ws_router
 
 load_dotenv()
 
 app = FastAPI()
 
 app.include_router(chat_router)
+app.include_router(ws_router)
 
 
 @app.get("/")
