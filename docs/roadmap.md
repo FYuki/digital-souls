@@ -49,7 +49,7 @@
 [ ] RAG（Chroma + nomic-embed-text）のMVP構成を実装する（`docs/decisions/Multi-character-db-2026-06.md` の決定事項に基づく）
 [ ] 全レコードに `character_id` を付与したスキーマで会話ログ（SQLite）と長期記憶（Chroma）を連携する
 [ ] キャラクターごとに完全独立したメモリ空間を構成する（DB共有はしない）
-[ ] 光織の記憶方針（`characters/miori/memory-policy.md`）に沿った保存・参照ルールを反映する
+[ ] 光織の記憶方針（`docs/decisions/miori-memory-policy-2026-06.md`）と実装設定（`backend/app/memory/memory_policy.json`）に沿った保存・参照ルールを反映する
 [ ] Embeddingモデル・チャンク戦略を調整する
 
 ## Phase 6: パーソナルAI機能

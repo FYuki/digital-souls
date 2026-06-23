@@ -23,7 +23,7 @@ repo/
 │  └─ miori/
 │     ├─ personality.md
 │     ├─ world.md
-│     └─ memory-policy.md
+│     └─ memory-policy.md  # 方針本文と実装設定への案内
 │
 └─ src/
    └─ 将来の実装コード
@@ -59,7 +59,7 @@ characters/
 
 * `personality.md`
 * `world.md`
-* `memory-policy.md`
+* `memory-policy.md`（方針本文と実装設定への案内）
 * `voice.md`
 * `appearance.md`
 

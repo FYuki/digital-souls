@@ -1,15 +1,12 @@
-import os
 from collections.abc import Mapping
 from typing import cast
 
 import httpx
 
 from app.llm.base import LLMClient
+from app.llm.ollama_config import ollama_endpoint, ollama_timeout
 
 _MODEL = "gemma4:e4b"
-_OLLAMA_BASE_URL_ENV = "OLLAMA_BASE_URL"
-_DEFAULT_BASE_URL = "http://localhost:11434"
-_OLLAMA_TIMEOUT_SECONDS = 30.0
 
 
 def _as_object_mapping(value: object, field_name: str) -> Mapping[str, object]:
@@ -28,11 +25,7 @@ def _extract_message_content(response_body: object) -> str:
 
 
 class OllamaClient(LLMClient):
-    def __init__(self) -> None:
-        self._base_url = os.environ.get(_OLLAMA_BASE_URL_ENV, _DEFAULT_BASE_URL)
-
     def generate(self, system_prompt: str, user_message: str) -> str:
-        url = f"{self._base_url}/api/chat"
         payload = {
             "model": _MODEL,
             "stream": False,
@@ -42,9 +35,9 @@ class OllamaClient(LLMClient):
             ],
         }
         response = httpx.post(
-            url,
+            ollama_endpoint("/api/chat"),
             json=payload,
-            timeout=httpx.Timeout(_OLLAMA_TIMEOUT_SECONDS),
+            timeout=ollama_timeout(),
         )
         response.raise_for_status()
         return _extract_message_content(response.json())

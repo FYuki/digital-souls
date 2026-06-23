@@ -39,7 +39,7 @@ characters/
 |---|---|
 | `personality.md` | 人格設定、性格、話し方、行動方針、得意・不得意、表現モード |
 | `world.md` | 世界観、比喩体系、用語、演出方針、応答上の扱い |
-| `memory-policy.md` | 記憶の分類、保存対象、参照方針、削除・訂正方針 |
+| `memory-policy.md` | 記憶方針本文の移動先と実装設定ファイルへの案内 |
 
 必要に応じて、将来的に以下のようなファイルを追加する。
 
@@ -88,4 +88,5 @@ characters/example-character/
 
 - `characters/miori/personality.md`
 - `characters/miori/world.md`
-- `characters/miori/memory-policy.md`
+- `docs/decisions/miori-memory-policy-2026-06.md`
+- `backend/app/memory/memory_policy.json`
