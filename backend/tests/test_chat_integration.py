@@ -63,14 +63,16 @@ class TestChatFlowIntegration:
         expected_reply = "前回は畑の話をしました。"
         policy = object()
         with patch(
-            "app.routers.chat.resolved_memory_policy",
+            "app.chat_service._memory_policy.resolved_memory_policy",
             return_value=policy,
         ) as mock_policy:
             with patch(
-                "app.routers.chat.build_augmented_system_prompt",
+                "app.chat_service._rag_service.build_augmented_system_prompt",
                 return_value=augmented_prompt,
             ) as mock_build:
-                with patch("app.routers.chat.record_chat_turn") as mock_record:
+                with patch(
+                    "app.chat_service._rag_service.record_chat_turn"
+                ) as mock_record:
                     with patch(
                         "app.llm.ollama_client.httpx.post",
                         return_value=_ollama_response(expected_reply),

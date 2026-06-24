@@ -2,11 +2,13 @@ import httpx
 from unittest.mock import patch
 
 
-_LOAD_PERSONALITY = "app.routers.chat.load_personality"
-_GENERATE_RESPONSE = "app.routers.chat.generate_response"
-_BUILD_AUGMENTED_SYSTEM_PROMPT = "app.routers.chat.build_augmented_system_prompt"
-_RECORD_CHAT_TURN = "app.routers.chat.record_chat_turn"
-_RESOLVED_MEMORY_POLICY = "app.routers.chat.resolved_memory_policy"
+_LOAD_PERSONALITY = "app.chat_service._character_loader.load_personality"
+_GENERATE_RESPONSE = "app.chat_service._llm_router.generate_response"
+_BUILD_AUGMENTED_SYSTEM_PROMPT = (
+    "app.chat_service._rag_service.build_augmented_system_prompt"
+)
+_RECORD_CHAT_TURN = "app.chat_service._rag_service.record_chat_turn"
+_RESOLVED_MEMORY_POLICY = "app.chat_service._memory_policy.resolved_memory_policy"
 
 _VALID_BODY = {"character": "miori", "message": "自己紹介してください"}
 _PERSONALITY = "# 光織\n穏やかなAIです。"

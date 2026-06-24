@@ -1,6 +1,6 @@
 import importlib
 import json
-import sys
+import time
 from pathlib import Path
 from uuid import uuid4
 
@@ -40,21 +40,18 @@ def _require_runtime_evidence_dependencies() -> None:
         pytest.skip(f"Ollama model is not pulled: {model_name}")
 
 
-def _reload_runtime_modules() -> dict[str, object]:
+def _load_runtime_modules() -> dict[str, object]:
     module_names = (
         "app.memory.chroma_store",
         "app.memory.conversation_log",
         "app.memory.rag_service",
+        "app.chat_service",
         "app.routers.chat",
         "app.main",
     )
-    modules = {}
-    for module_name in module_names:
-        if module_name in sys.modules:
-            modules[module_name] = importlib.reload(sys.modules[module_name])
-        else:
-            modules[module_name] = importlib.import_module(module_name)
-    return modules
+    return {
+        module_name: importlib.import_module(module_name) for module_name in module_names
+    }
 
 
 def _isolate_memory_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -73,6 +70,8 @@ def _isolate_memory_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
         "FAILED_MEMORY_LOG_PATH",
         data_dir / "failed-memories.jsonl",
     )
+    monkeypatch.setattr(rag_service, "add_memory", chroma_store.add_memory)
+    monkeypatch.setattr(rag_service, "query_memories", chroma_store.query_memories)
 
 
 def _write_character(tmp_path: Path, character: str, system_prompt: str) -> None:
@@ -81,20 +80,39 @@ def _write_character(tmp_path: Path, character: str, system_prompt: str) -> None
     character_dir.joinpath("personality.md").write_text(system_prompt, encoding="utf-8")
 
 
+def _wait_until(predicate, timeout: float = 5.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return
+        time.sleep(0.01)
+    raise AssertionError("condition was not met before timeout")
+
+
 class TestRagRuntimeEvidence:
+    def test_runtime_module_setup_keeps_websocket_exception_bindings_current(self):
+        import app.routers.ws as ws_router
+
+        modules = _load_runtime_modules()
+        chat_service = modules["app.chat_service"]
+
+        assert ws_router.CharacterNotFoundError is chat_service.CharacterNotFoundError
+        assert ws_router.ChatBackendError is chat_service.ChatBackendError
+        assert ws_router.ChatTimeoutError is chat_service.ChatTimeoutError
+
     def test_real_chat_store_chroma_query_and_prompt_injection_reach_llm(
         self, tmp_path, monkeypatch
     ):
         monkeypatch.setenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:latest")
         _require_runtime_evidence_dependencies()
-        modules = _reload_runtime_modules()
+        modules = _load_runtime_modules()
         _isolate_memory_paths(tmp_path, monkeypatch)
 
         import app.characters.loader as loader_module
         from app.memory.embedder import embed_text
 
         chroma_store = modules["app.memory.chroma_store"]
-        chat_module = modules["app.routers.chat"]
+        chat_service = modules["app.chat_service"]
         app = modules["app.main"].app
         character = f"miori{uuid4().hex[:8]}"
         system_prompt = "# 光織\nあなたは光織です。"
@@ -113,7 +131,11 @@ class TestRagRuntimeEvidence:
                 return "農業日誌として保存しました。"
             return "前回はトマト畑に水やりしました。"
 
-        monkeypatch.setattr(chat_module, "generate_response", capture_generate_response)
+        monkeypatch.setattr(
+            chat_service._llm_router,
+            "generate_response",
+            capture_generate_response,
+        )
 
         client = TestClient(app)
         save_response = client.post(
@@ -124,7 +146,14 @@ class TestRagRuntimeEvidence:
         assert save_response.json()["response"] == "農業日誌として保存しました。"
 
         query_embedding = embed_text("前回の畑作業は?")
-        query_results = chroma_store.query_memories(character, query_embedding, 5)
+        query_results = []
+
+        def memory_was_persisted() -> bool:
+            nonlocal query_results
+            query_results = chroma_store.query_memories(character, query_embedding, 5)
+            return any(result.content == stored_memory for result in query_results)
+
+        _wait_until(memory_was_persisted)
         assert any(result.content == stored_memory for result in query_results)
 
         response = client.post(
@@ -143,14 +172,14 @@ class TestRagRuntimeEvidence:
     ):
         monkeypatch.setenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:latest")
         _require_runtime_evidence_dependencies()
-        modules = _reload_runtime_modules()
+        modules = _load_runtime_modules()
         _isolate_memory_paths(tmp_path, monkeypatch)
 
         import app.characters.loader as loader_module
         import chromadb
 
         rag_service = modules["app.memory.rag_service"]
-        chat_module = modules["app.routers.chat"]
+        chat_service = modules["app.chat_service"]
         app = modules["app.main"].app
         system_prompt = "# 光織\nあなたは光織です。"
         user_message = "農業日誌: 保存して。2026-06-23はナスに追肥した"
@@ -185,7 +214,11 @@ class TestRagRuntimeEvidence:
             assert user_message_arg == user_message
             return "農業日誌として保存しました。"
 
-        monkeypatch.setattr(chat_module, "generate_response", capture_generate_response)
+        monkeypatch.setattr(
+            chat_service._llm_router,
+            "generate_response",
+            capture_generate_response,
+        )
 
         client = TestClient(app)
         response = client.post(
@@ -199,6 +232,7 @@ class TestRagRuntimeEvidence:
             "response": "農業日誌として保存しました。",
         }
 
+        _wait_until(lambda: rag_service.FAILED_MEMORY_LOG_PATH.exists())
         failed_lines = rag_service.FAILED_MEMORY_LOG_PATH.read_text(
             encoding="utf-8"
         ).splitlines()
