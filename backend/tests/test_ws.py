@@ -90,7 +90,7 @@ class TestWebSocketEndpoint:
         mock_record.assert_called_once()
         args, _kwargs = mock_record.call_args
         assert args[:3] == ("miori", user_message, _LLM_REPLY)
-        assert args[4] is policy
+        assert args[3] is policy
 
     def test_returns_422_when_payload_is_not_json_object(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):

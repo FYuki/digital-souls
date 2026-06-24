@@ -1,10 +1,6 @@
-import os
-from collections.abc import Callable
-from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass
-from functools import partial
 import asyncio
-import logging
+import os
+from dataclasses import dataclass
 from typing import Protocol
 
 import httpx
@@ -16,7 +12,6 @@ from app.memory import rag_service as _rag_service
 
 RAG_ENABLED_ENV = "RAG_ENABLED"
 RAG_ENABLED_VALUE = "true"
-logger = logging.getLogger(__name__)
 
 __all__ = [
     "CharacterNotFoundError",
@@ -57,55 +52,6 @@ class ChatReplySession(Protocol):
         ...
 
 
-class _ThreadPoolChatTaskQueue:
-    def __init__(self, executor: ThreadPoolExecutor) -> None:
-        self._executor = executor
-
-    def add_task(
-        self,
-        func: Callable[..., object],
-        *args: object,
-        **kwargs: object,
-    ) -> None:
-        future = self._executor.submit(partial(func, *args, **kwargs))
-        future.add_done_callback(_log_task_failure)
-
-
-class _EventLoopChatTaskQueue:
-    def __init__(self, loop: asyncio.AbstractEventLoop) -> None:
-        self._loop = loop
-
-    def add_task(
-        self,
-        func: Callable[..., object],
-        *args: object,
-        **kwargs: object,
-    ) -> None:
-        self._loop.call_soon_threadsafe(
-            self._submit,
-            partial(func, *args, **kwargs),
-        )
-
-    def _submit(self, task: Callable[[], object]) -> None:
-        future = self._loop.run_in_executor(None, task)
-        future.add_done_callback(_log_task_failure)
-
-
-_DEFAULT_TASK_EXECUTOR = ThreadPoolExecutor(
-    max_workers=4,
-    thread_name_prefix="chat-memory",
-)
-_DEFAULT_TASK_QUEUE = _ThreadPoolChatTaskQueue(_DEFAULT_TASK_EXECUTOR)
-
-
-def _log_task_failure(future: Future[object] | asyncio.Future[object]) -> None:
-    if future.cancelled():
-        return
-    exception = future.exception()
-    if exception is not None:
-        logger.warning("Chat background task failed: %s", exception.__class__.__name__)
-
-
 @dataclass(frozen=True)
 class _ResolvedChatContext:
     system_prompt: str
@@ -116,10 +62,9 @@ class _ResolvedChatContext:
 class _ChatSession:
     character: str
     context: _ResolvedChatContext
-    task_queue: _rag_service.BackgroundTaskQueue
 
     def generate_reply(self, message: str) -> str:
-        return _generate_reply(self.character, message, self.context, self.task_queue)
+        return _generate_reply(self.character, message, self.context)
 
 
 def _rag_enabled() -> bool:
@@ -171,36 +116,32 @@ def _record_reply(
     character: str,
     message: str,
     reply: str,
-    task_queue: _rag_service.BackgroundTaskQueue,
     memory_policy: _memory_policy.MemoryPolicy | None,
 ) -> None:
     if memory_policy is None:
         return
-    _rag_service.record_chat_turn(character, message, reply, task_queue, memory_policy)
+    _rag_service.record_chat_turn(character, message, reply, memory_policy)
 
 
 def _generate_reply(
     character: str,
     message: str,
     context: _ResolvedChatContext,
-    task_queue: _rag_service.BackgroundTaskQueue,
 ) -> str:
     prompt = _system_prompt_for_reply(character, message, context)
     reply = _call_llm(prompt, message)
-    _record_reply(character, message, reply, task_queue, context.memory_policy)
+    _record_reply(character, message, reply, context.memory_policy)
     return reply
 
 
 def generate_chat_reply(character: str, message: str) -> str:
     context = _resolve_chat_context(character)
-    return _generate_reply(character, message, context, _DEFAULT_TASK_QUEUE)
+    return _generate_reply(character, message, context)
 
 
 async def create_chat_session(character: str) -> ChatReplySession:
-    event_loop = asyncio.get_running_loop()
     context = await asyncio.to_thread(_resolve_chat_context, character)
     return _ChatSession(
         character=character,
         context=context,
-        task_queue=_EventLoopChatTaskQueue(event_loop),
     )

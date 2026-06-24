@@ -117,7 +117,7 @@ class TestChatEndpoint:
         mock_record.assert_called_once()
         args, _kwargs = mock_record.call_args
         assert args[:3] == ("miori", _VALID_BODY["message"], _LLM_REPLY)
-        assert args[4] is policy
+        assert args[3] is policy
 
     def test_rag_disabled_does_not_resolve_memory_policy_or_record(self, client):
         with patch.dict("os.environ", {"RAG_ENABLED": "false"}):

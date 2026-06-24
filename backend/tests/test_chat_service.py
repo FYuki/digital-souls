@@ -1,9 +1,9 @@
 import asyncio
 import inspect
+from unittest.mock import patch
 
 import httpx
 import pytest
-from unittest.mock import patch
 
 from app import chat_service
 from app.chat_service import (
@@ -108,7 +108,7 @@ class TestChatServiceRagContract:
         mock_record.assert_called_once()
         args, _kwargs = mock_record.call_args
         assert args[:3] == ("miori", "hello", "reply")
-        assert args[4] is policy
+        assert args[3] is policy
 
     def test_rag_disabled_keeps_plain_prompt_without_memory_work(self):
         with patch.dict("os.environ", {"RAG_ENABLED": "false"}):
