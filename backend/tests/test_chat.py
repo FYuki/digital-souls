@@ -1,14 +1,17 @@
 import httpx
 from unittest.mock import patch
+from fastapi.testclient import TestClient
+
+from app.main import app
 
 
-_LOAD_PERSONALITY = "app.chat_service._character_loader.load_personality"
-_GENERATE_RESPONSE = "app.chat_service._llm_router.generate_response"
+_LOAD_PERSONALITY = "app._chat_runtime._character_loader.load_personality"
+_GENERATE_RESPONSE = "app._chat_runtime._llm_router.generate_response"
 _BUILD_AUGMENTED_SYSTEM_PROMPT = (
-    "app.chat_service._rag_service.build_augmented_system_prompt"
+    "app._chat_runtime._rag_service.build_augmented_system_prompt"
 )
-_RECORD_CHAT_TURN = "app.chat_service._rag_service.record_chat_turn"
-_RESOLVED_MEMORY_POLICY = "app.chat_service._memory_policy.resolved_memory_policy"
+_RECORD_CHAT_TURN = "app._chat_runtime._rag_service.record_chat_turn"
+_RESOLVED_MEMORY_POLICY = "app._chat_runtime.resolved_memory_policy"
 
 _VALID_BODY = {"character": "miori", "message": "自己紹介してください"}
 _PERSONALITY = "# 光織\n穏やかなAIです。"
@@ -81,11 +84,12 @@ class TestChatEndpoint:
         assert _PERSONALITY in all_args
         assert user_message in all_args
 
-    def test_generate_response_uses_rag_augmented_system_prompt(self, client):
+    def test_generate_response_uses_rag_augmented_system_prompt(self, monkeypatch):
         policy = object()
         augmented_prompt = f"{_PERSONALITY}\n\n過去の記憶:\n前回は畑の話をした"
-        with patch.dict("os.environ", {"RAG_ENABLED": "true"}):
-            with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
+        monkeypatch.setenv("RAG_ENABLED", "true")
+        with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
+            with TestClient(app) as client:
                 with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
                     with patch(
                         _BUILD_AUGMENTED_SYSTEM_PROMPT,
@@ -103,10 +107,11 @@ class TestChatEndpoint:
         )
         mock_gen.assert_called_once_with(augmented_prompt, _VALID_BODY["message"])
 
-    def test_records_chat_turn_after_llm_reply(self, client):
+    def test_records_chat_turn_after_llm_reply(self, monkeypatch):
         policy = object()
-        with patch.dict("os.environ", {"RAG_ENABLED": "true"}):
-            with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
+        monkeypatch.setenv("RAG_ENABLED", "true")
+        with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
+            with TestClient(app) as client:
                 with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
                     with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT, return_value=_PERSONALITY):
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
@@ -118,10 +123,12 @@ class TestChatEndpoint:
         args, _kwargs = mock_record.call_args
         assert args[:3] == ("miori", _VALID_BODY["message"], _LLM_REPLY)
         assert args[3] is policy
+        assert hasattr(args[4], "add_task")
 
-    def test_rag_disabled_does_not_resolve_memory_policy_or_record(self, client):
-        with patch.dict("os.environ", {"RAG_ENABLED": "false"}):
-            with patch(_RESOLVED_MEMORY_POLICY) as mock_policy:
+    def test_rag_disabled_does_not_resolve_memory_policy_or_record(self, monkeypatch):
+        monkeypatch.setenv("RAG_ENABLED", "false")
+        with patch(_RESOLVED_MEMORY_POLICY) as mock_policy:
+            with TestClient(app) as client:
                 with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
                     with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT) as mock_build:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):

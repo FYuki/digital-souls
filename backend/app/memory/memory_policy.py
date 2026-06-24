@@ -37,7 +37,6 @@ class RagServicePolicy:
 @dataclass(frozen=True)
 class MemoryPolicy:
     terms: MemoryPolicyTerms
-    services: dict[str, dict[str, object]]
     rag_service: RagServicePolicy
 
 
@@ -124,7 +123,6 @@ def _load_policy(path: Path) -> MemoryPolicy:
     services = _service_sections(_section(config, SERVICES_SECTION_KEY))
     return MemoryPolicy(
         terms=_terms_with_service_override(common, services, RAG_SERVICE_KEY),
-        services=services,
         rag_service=_required_rag_service_policy(services),
     )
 

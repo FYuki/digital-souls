@@ -45,6 +45,7 @@ def _load_runtime_modules() -> dict[str, object]:
         "app.memory.chroma_store",
         "app.memory.conversation_log",
         "app.memory.rag_service",
+        "app._chat_runtime",
         "app.chat_service",
         "app.routers.chat",
         "app.main",
@@ -112,7 +113,7 @@ class TestRagRuntimeEvidence:
         from app.memory.embedder import embed_text
 
         chroma_store = modules["app.memory.chroma_store"]
-        chat_service = modules["app.chat_service"]
+        chat_runtime = modules["app._chat_runtime"]
         app = modules["app.main"].app
         character = f"miori{uuid4().hex[:8]}"
         system_prompt = "# 光織\nあなたは光織です。"
@@ -132,34 +133,34 @@ class TestRagRuntimeEvidence:
             return "前回はトマト畑に水やりしました。"
 
         monkeypatch.setattr(
-            chat_service._llm_router,
+            chat_runtime._llm_router,
             "generate_response",
             capture_generate_response,
         )
 
-        client = TestClient(app)
-        save_response = client.post(
-            "/chat",
-            json={"character": character, "message": stored_memory},
-        )
-        assert save_response.status_code == 200
-        assert save_response.json()["response"] == "農業日誌として保存しました。"
+        with TestClient(app) as client:
+            save_response = client.post(
+                "/chat",
+                json={"character": character, "message": stored_memory},
+            )
+            assert save_response.status_code == 200
+            assert save_response.json()["response"] == "農業日誌として保存しました。"
 
-        query_embedding = embed_text("前回の畑作業は?")
-        query_results = []
+            query_embedding = embed_text("前回の畑作業は?")
+            query_results = []
 
-        def memory_was_persisted() -> bool:
-            nonlocal query_results
-            query_results = chroma_store.query_memories(character, query_embedding, 5)
-            return any(result.content == stored_memory for result in query_results)
+            def memory_was_persisted() -> bool:
+                nonlocal query_results
+                query_results = chroma_store.query_memories(character, query_embedding, 5)
+                return any(result.content == stored_memory for result in query_results)
 
-        _wait_until(memory_was_persisted)
-        assert any(result.content == stored_memory for result in query_results)
+            _wait_until(memory_was_persisted)
+            assert any(result.content == stored_memory for result in query_results)
 
-        response = client.post(
-            "/chat",
-            json={"character": character, "message": "前回の畑作業は?"},
-        )
+            response = client.post(
+                "/chat",
+                json={"character": character, "message": "前回の畑作業は?"},
+            )
 
         assert response.status_code == 200
         assert response.json()["response"] == "前回はトマト畑に水やりしました。"
@@ -179,11 +180,11 @@ class TestRagRuntimeEvidence:
         import chromadb
 
         rag_service = modules["app.memory.rag_service"]
-        chat_service = modules["app.chat_service"]
+        chat_runtime = modules["app._chat_runtime"]
         app = modules["app.main"].app
         system_prompt = "# 光織\nあなたは光織です。"
         user_message = "農業日誌: 保存して。2026-06-23はナスに追肥した"
-        _write_character(tmp_path, "mi", system_prompt)
+        _write_character(tmp_path, "miori", system_prompt)
         monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
         monkeypatch.setenv("RAG_ENABLED", "true")
 
@@ -215,20 +216,20 @@ class TestRagRuntimeEvidence:
             return "農業日誌として保存しました。"
 
         monkeypatch.setattr(
-            chat_service._llm_router,
+            chat_runtime._llm_router,
             "generate_response",
             capture_generate_response,
         )
 
-        client = TestClient(app)
-        response = client.post(
-            "/chat",
-            json={"character": "mi", "message": user_message},
-        )
+        with TestClient(app) as client:
+            response = client.post(
+                "/chat",
+                json={"character": "miori", "message": user_message},
+            )
 
         assert response.status_code == 200
         assert response.json() == {
-            "character": "mi",
+            "character": "miori",
             "response": "農業日誌として保存しました。",
         }
 
@@ -238,7 +239,7 @@ class TestRagRuntimeEvidence:
         ).splitlines()
         failed_payloads = [json.loads(line) for line in failed_lines]
         assert any(
-            payload["character"] == "mi"
+            payload["character"] == "miori"
             and payload["role"] == "user"
             and payload["content"] == user_message
             for payload in failed_payloads

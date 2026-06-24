@@ -1,4 +1,5 @@
 import importlib
+import re
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -8,9 +9,9 @@ import pytest
 
 class FakeCollection:
     def __init__(self) -> None:
-        self.add_calls = []
-        self.query_calls = []
-        self.query_result = {
+        self.add_calls: list[dict[str, object]] = []
+        self.query_calls: list[dict[str, object]] = []
+        self.query_result: dict[str, list[list[object]]] = {
             "documents": [["雨の話", "畑の話"]],
             "metadatas": [
                 [
@@ -20,30 +21,33 @@ class FakeCollection:
             ],
         }
 
-    def add(self, **kwargs):
+    def add(self, **kwargs: object) -> None:
         self.add_calls.append(kwargs)
 
-    def query(self, **kwargs):
+    def query(self, **kwargs: object) -> dict[str, list[list[object]]]:
         self.query_calls.append(kwargs)
         return self.query_result
 
 
 class FakePersistentClient:
-    instances = []
+    instances: list["FakePersistentClient"] = []
 
     def __init__(self, path: str) -> None:
         self.path = path
-        self.collections = {}
+        self.collections: dict[str, FakeCollection] = {}
         FakePersistentClient.instances.append(self)
 
-    def get_or_create_collection(self, name: str):
+    def get_or_create_collection(self, name: str) -> FakeCollection:
         collection = self.collections.setdefault(name, FakeCollection())
         return collection
 
 
-def _import_chroma_store(monkeypatch, tmp_path: Path):
+def _import_chroma_store(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> ModuleType:
     fake_chromadb = ModuleType("chromadb")
-    fake_chromadb.PersistentClient = FakePersistentClient
+    setattr(fake_chromadb, "PersistentClient", FakePersistentClient)
     monkeypatch.setitem(sys.modules, "chromadb", fake_chromadb)
     sys.modules.pop("app.memory.chroma_store", None)
 
@@ -69,9 +73,10 @@ class TestChromaStore:
         chroma_store.add_memory("miori", 42, [0.1, 0.2], "畑の相談", metadata)
 
         client = FakePersistentClient.instances[0]
-        collection_name = chroma_store.resolve_collection_name("miori")
+        collection_name = next(iter(client.collections))
         collection = client.collections[collection_name]
         assert client.path == str(tmp_path / "data" / "chroma")
+        assert collection_name.startswith("character-miori-")
         assert collection.add_calls == [
             {
                 "ids": ["42"],
@@ -89,8 +94,9 @@ class TestChromaStore:
         memories = chroma_store.query_memories("miori", [0.3, 0.4], n_results=5)
 
         client = FakePersistentClient.instances[0]
-        collection_name = chroma_store.resolve_collection_name("miori")
+        collection_name = next(iter(client.collections))
         collection = client.collections[collection_name]
+        assert collection_name.startswith("character-miori-")
         assert memories == [
             chroma_store.MemorySearchResult(
                 content="雨の話",
@@ -107,15 +113,11 @@ class TestChromaStore:
             {"query_embeddings": [[0.3, 0.4]], "n_results": 5}
         ]
 
-    def test_resolve_collection_name_accepts_short_character_names(
+    def test_short_and_symbol_character_names_use_chroma_safe_collections(
         self, monkeypatch, tmp_path
     ):
         chroma_store = _import_chroma_store(monkeypatch, tmp_path)
 
-        collection_name = chroma_store.resolve_collection_name("mi")
-
-        assert collection_name.startswith("character-mi-")
-        assert len(collection_name) >= 3
         chroma_store.add_memory(
             "mi",
             43,
@@ -127,29 +129,49 @@ class TestChromaStore:
                 "timestamp": "2026-06-23T00:00:00+00:00",
             },
         )
-        client = FakePersistentClient.instances[0]
-        assert collection_name in client.collections
+        chroma_store.query_memories("光織/mi", [0.3, 0.4], n_results=5)
 
-    def test_resolve_collection_name_is_stable_for_symbols(
+        add_client = FakePersistentClient.instances[0]
+        query_client = FakePersistentClient.instances[1]
+        add_name = next(iter(add_client.collections))
+        query_name = next(iter(query_client.collections))
+        assert add_name.startswith("character-mi-")
+        assert query_name.startswith("character-mi-")
+        assert add_name != query_name
+        assert _is_chroma_safe_name(add_name)
+        assert _is_chroma_safe_name(query_name)
+        assert add_client.collections[add_name].add_calls[0]["ids"] == ["43"]
+        assert query_client.collections[query_name].query_calls == [
+            {"query_embeddings": [[0.3, 0.4]], "n_results": 5}
+        ]
+
+    def test_case_variant_character_names_keep_separate_collection_boundaries(
         self, monkeypatch, tmp_path
     ):
         chroma_store = _import_chroma_store(monkeypatch, tmp_path)
 
-        first_name = chroma_store.resolve_collection_name("光織/mi")
-        second_name = chroma_store.resolve_collection_name("光織/mi")
+        chroma_store.add_memory(
+            "Miori",
+            44,
+            [0.1, 0.2],
+            "別キャラクターの記憶",
+            {
+                "character": "Miori",
+                "role": "user",
+                "timestamp": "2026-06-23T00:00:00+00:00",
+            },
+        )
+        chroma_store.query_memories("miori", [0.3, 0.4], n_results=5)
 
-        assert first_name == second_name
-        assert first_name.startswith("character-mi-")
-
-    def test_resolve_collection_name_preserves_case_sensitive_character_boundary(
-        self, monkeypatch, tmp_path
-    ):
-        chroma_store = _import_chroma_store(monkeypatch, tmp_path)
-
-        lower_name = chroma_store.resolve_collection_name("miori")
-        upper_name = chroma_store.resolve_collection_name("Miori")
-
-        assert lower_name != upper_name
+        add_client = FakePersistentClient.instances[0]
+        query_client = FakePersistentClient.instances[1]
+        add_name = next(iter(add_client.collections))
+        query_name = next(iter(query_client.collections))
+        assert add_name != query_name
+        assert add_client.collections[add_name].add_calls[0]["ids"] == ["44"]
+        assert query_client.collections[query_name].query_calls == [
+            {"query_embeddings": [[0.3, 0.4]], "n_results": 5}
+        ]
 
     def test_long_character_name_stays_chroma_safe_for_add_and_query(
         self, monkeypatch, tmp_path
@@ -157,10 +179,9 @@ class TestChromaStore:
         chroma_store = _import_chroma_store(monkeypatch, tmp_path)
         character = "a" * 80
 
-        collection_name = chroma_store.resolve_collection_name(character)
         chroma_store.add_memory(
             character,
-            44,
+            45,
             [0.1, 0.2],
             "長いキャラクター名の記憶",
             {
@@ -173,21 +194,29 @@ class TestChromaStore:
 
         add_client = FakePersistentClient.instances[0]
         query_client = FakePersistentClient.instances[1]
-        add_collection = add_client.collections[collection_name]
-        query_collection = query_client.collections[collection_name]
-        assert 3 <= len(collection_name) <= 63
-        assert collection_name in add_client.collections
-        assert collection_name in query_client.collections
-        assert add_collection.add_calls[0]["ids"] == ["44"]
-        assert query_collection.query_calls == [
+        add_name = next(iter(add_client.collections))
+        query_name = next(iter(query_client.collections))
+        assert add_name == query_name
+        assert _is_chroma_safe_name(add_name)
+        assert add_client.collections[add_name].add_calls[0]["ids"] == ["45"]
+        assert query_client.collections[query_name].query_calls == [
             {"query_embeddings": [[0.3, 0.4]], "n_results": 5}
         ]
         assert memories[0].content == "雨の話"
 
-    def test_resolve_collection_name_rejects_empty_character(
+    def test_empty_character_name_is_rejected_before_client_access(
         self, monkeypatch, tmp_path
     ):
         chroma_store = _import_chroma_store(monkeypatch, tmp_path)
 
         with pytest.raises(ValueError, match="character must not be empty"):
-            chroma_store.resolve_collection_name(" ")
+            chroma_store.query_memories(" ", [0.3, 0.4], n_results=5)
+
+        assert FakePersistentClient.instances == []
+
+
+def _is_chroma_safe_name(collection_name: str) -> bool:
+    return (
+        3 <= len(collection_name) <= 63
+        and re.fullmatch(r"[a-z0-9][a-z0-9_-]*[a-z0-9]", collection_name) is not None
+    )

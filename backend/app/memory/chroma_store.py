@@ -26,7 +26,7 @@ class MemorySearchResult:
     role: str
 
 
-class ChromaCollection(Protocol):
+class _ChromaCollection(Protocol):
     def add(
         self,
         *,
@@ -46,17 +46,20 @@ class ChromaCollection(Protocol):
         ...
 
 
-class ChromaClient(Protocol):
-    def get_or_create_collection(self, name: str) -> ChromaCollection:
+class _ChromaClient(Protocol):
+    def get_or_create_collection(self, name: str) -> _ChromaCollection:
         ...
 
 
-def resolve_collection_name(character: str) -> str:
-    normalized = character.strip()
-    if not normalized:
+def _validate_character_collection_name(character: str) -> None:
+    if not character.strip():
         raise ValueError("character must not be empty")
-    slug_source = normalized.lower()
-    slug = re.sub(r"[^a-z0-9_-]+", "-", slug_source).strip("-_")
+
+
+def _collection_name(character: str) -> str:
+    normalized = character.strip()
+    _validate_character_collection_name(normalized)
+    slug = re.sub(r"[^a-z0-9_-]+", "-", normalized.lower()).strip("-_")
     slug = slug[:COLLECTION_NAME_MAX_SLUG_LENGTH].strip("-_")
     digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[
         :COLLECTION_NAME_DIGEST_LENGTH
@@ -66,11 +69,12 @@ def resolve_collection_name(character: str) -> str:
     return f"{COLLECTION_NAME_PREFIX}-{digest}"
 
 
-def _collection(character: str) -> ChromaCollection:
+def _collection(character: str) -> _ChromaCollection:
+    collection_name = _collection_name(character)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     chromadb = importlib.import_module("chromadb")
-    client = cast(ChromaClient, chromadb.PersistentClient(path=str(CHROMA_PATH)))
-    return client.get_or_create_collection(name=resolve_collection_name(character))
+    client = cast(_ChromaClient, chromadb.PersistentClient(path=str(CHROMA_PATH)))
+    return client.get_or_create_collection(name=collection_name)
 
 
 def add_memory(

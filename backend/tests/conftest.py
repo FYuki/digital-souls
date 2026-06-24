@@ -3,6 +3,9 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    monkeypatch.setenv("RAG_ENABLED", "false")
     from app.main import app
-    return TestClient(app)
+
+    with TestClient(app) as test_client:
+        yield test_client

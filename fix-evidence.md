@@ -10,36 +10,36 @@ counts; it verifies that `fix-evidence.md` and `test-report.md` stay aligned.
 ### Completion Condition 1/2/4 Runtime Evidence
 
 - Command: `backend/.venv/bin/pytest -q backend/tests/test_memory_rag_runtime_evidence.py`
-- Result: `3 passed, 1 warning in 1.91s`
+- Result: `3 passed, 1 warning in 2.21s`
 
 ### RAG Disabled And Embedder Subset
 
 - Command: `backend/.venv/bin/python -m pytest backend/tests/test_memory_embedder.py backend/tests/test_chat.py backend/tests/test_chat_integration.py -q`
-- Result: `27 passed, 1 warning in 0.16s`
+- Result: `28 passed, 1 warning in 0.24s`
 
 ### Memory Policy And Runtime Contract Subset
 
 - Command: `backend/.venv/bin/python -m pytest backend/tests/test_memory_rag_service.py backend/tests/test_runtime_contract.py -q`
-- Result: `50 passed, 1 warning in 0.17s`
+- Result: `65 passed, 1 warning in 0.13s`
 
 ### WebSocket RAG Subset
 
 - Command: `backend/.venv/bin/python -m pytest backend/tests/test_chat_service.py backend/tests/test_ws.py backend/tests/test_ws_integration.py -q`
-- Result: `25 passed, 1 warning in 0.24s`
+- Result: `32 passed, 1 warning in 0.26s`
 
 ### Chat/WebSocket RAG Regression Subset
 
 - Command: `backend/.venv/bin/python -m pytest backend/tests/test_chat.py backend/tests/test_chat_service.py backend/tests/test_ws.py backend/tests/test_ws_integration.py backend/tests/test_chat_integration.py backend/tests/test_memory_rag_runtime_evidence.py backend/tests/test_runtime_contract.py -q`
-- Result: `70 passed, 1 warning in 1.22s`
+- Result: `91 passed, 1 warning in 2.22s`
 
 ### Regression Suite
 
 - Command: `backend/.venv/bin/pytest -q backend/tests`
-- Result: `165 passed, 1 warning in 1.44s`
+- Result: `191 passed, 1 warning in 1.53s`
 
 ### Build Check
 
 - Command: `backend/.venv/bin/python -m compileall -q backend/app backend/tests`
 - Result: success with no output.
-- Command: `backend/.venv/bin/mypy --config-file backend/mypy.ini backend/app`
-- Result: `Success: no issues found`
+- Command: `backend/.venv/bin/python -m mypy backend/app backend/tests`
+- Result: `Success: no issues found in 41 source files`

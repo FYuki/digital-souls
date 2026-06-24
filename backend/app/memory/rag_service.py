@@ -20,10 +20,10 @@ DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 FAILED_MEMORY_LOG_PATH = DATA_DIR / "failed-memories.jsonl"
 
 logger = logging.getLogger(__name__)
-RAG_OPERATION_ERRORS = (httpx.HTTPError, OSError, RuntimeError)
+RAG_OPERATION_ERRORS = (httpx.HTTPError, OSError, RuntimeError, ValueError)
 
 
-class BackgroundTaskQueue(Protocol):
+class _BackgroundTaskQueue(Protocol):
     def add_task(
         self,
         func: Callable[..., object],
@@ -35,11 +35,11 @@ class BackgroundTaskQueue(Protocol):
 
 def _enqueue_memory_candidate(
     record: ConversationRecord,
-    background_tasks: BackgroundTaskQueue,
     policy: MemoryPolicy,
+    task_queue: _BackgroundTaskQueue,
 ) -> None:
     if is_long_term_memory_candidate(record, policy):
-        background_tasks.add_task(_embed_and_store, record)
+        task_queue.add_task(_embed_and_store, record)
 
 
 def _format_augmented_prompt(
@@ -81,13 +81,13 @@ def record_chat_turn(
     character: str,
     user_message: str,
     assistant_reply: str,
-    background_tasks: BackgroundTaskQueue,
     policy: MemoryPolicy,
+    task_queue: _BackgroundTaskQueue,
 ) -> None:
     user_record = save_message(character, "user", user_message)
     assistant_record = save_message(character, "assistant", assistant_reply)
-    _enqueue_memory_candidate(user_record, background_tasks, policy)
-    _enqueue_memory_candidate(assistant_record, background_tasks, policy)
+    _enqueue_memory_candidate(user_record, policy, task_queue)
+    _enqueue_memory_candidate(assistant_record, policy, task_queue)
 
 
 def _failed_record_payload(record: ConversationRecord) -> dict[str, object]:

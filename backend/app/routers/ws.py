@@ -9,7 +9,6 @@ from app.chat_service import (
     ChatBackendError,
     ChatReplySession,
     ChatTimeoutError,
-    create_chat_session,
 )
 
 router = APIRouter()
@@ -65,7 +64,7 @@ async def _open_chat_session(
     character_name: str,
 ) -> ChatReplySession | None:
     try:
-        return await create_chat_session(character_name)
+        return await websocket.app.state.chat_service.create_chat_session(character_name)
     except CharacterNotFoundError as exc:
         await _send_error(websocket, 404, exc.detail)
         await websocket.close()
@@ -92,6 +91,10 @@ async def websocket_chat(websocket: WebSocket, character_name: str) -> None:
 
             try:
                 reply = await run_in_threadpool(chat_session.generate_reply, message)
+            except CharacterNotFoundError as exc:
+                await _send_error(websocket, 404, exc.detail)
+                await websocket.close()
+                return
             except ChatTimeoutError as exc:
                 await _send_error(websocket, 504, exc.detail)
                 continue

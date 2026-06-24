@@ -1,4 +1,5 @@
 import importlib
+import inspect
 import json
 from dataclasses import dataclass
 from unittest.mock import MagicMock
@@ -138,7 +139,7 @@ class TestRagServicePrompt:
         assert prompt == "基本人格"
         rag_service.query_memories.assert_not_called()
 
-    def test_build_augmented_system_prompt_raises_contract_validation_errors(
+    def test_build_augmented_system_prompt_skips_rag_on_contract_validation_errors(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -150,15 +151,37 @@ class TestRagServicePrompt:
         )
         monkeypatch.setattr(rag_service, "query_memories", MagicMock())
 
-        with pytest.raises(ValueError, match="invalid embedding response"):
-            rag_service.build_augmented_system_prompt(
-                "miori",
-                "前回は?",
-                "基本人格",
-                _resolved_policy(),
-            )
+        prompt = rag_service.build_augmented_system_prompt(
+            "miori",
+            "前回は?",
+            "基本人格",
+            _resolved_policy(),
+        )
 
+        assert prompt == "基本人格"
         rag_service.query_memories.assert_not_called()
+
+    def test_build_augmented_system_prompt_skips_rag_when_query_contract_fails(
+        self, monkeypatch
+    ):
+        rag_service = importlib.import_module("app.memory.rag_service")
+
+        monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+        monkeypatch.setattr(
+            rag_service,
+            "query_memories",
+            MagicMock(side_effect=ValueError("invalid query response")),
+        )
+
+        prompt = rag_service.build_augmented_system_prompt(
+            "miori",
+            "前回は?",
+            "基本人格",
+            _resolved_policy(),
+        )
+
+        assert prompt == "基本人格"
+        rag_service.query_memories.assert_called_once()
 
     def test_build_augmented_system_prompt_skips_sensitive_query_embedding(
         self, monkeypatch
@@ -181,12 +204,29 @@ class TestRagServicePrompt:
 
 
 class TestRagServiceRecording:
+    def test_record_chat_turn_requires_explicit_task_queue(self):
+        rag_service = importlib.import_module("app.memory.rag_service")
+
+        signature = inspect.signature(rag_service.record_chat_turn)
+
+        assert list(signature.parameters) == [
+            "character",
+            "user_message",
+            "assistant_reply",
+            "policy",
+            "task_queue",
+        ]
+        assert not hasattr(rag_service, "_BACKGROUND_TASK_QUEUE")
+        assert not hasattr(rag_service, "_configure_memory_task_queue")
+        assert not hasattr(rag_service, "_clear_memory_task_queue")
+
     def test_record_chat_turn_saves_both_roles_and_enqueues_user_memory_record(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
 
         background_tasks = MagicMock()
+
         user_message = "農業日誌: トマトに水やり"
         assistant_reply = "作業ログとして保存しました: トマトに水やり"
         user_record = SavedRecord(
@@ -213,8 +253,8 @@ class TestRagServiceRecording:
             "miori",
             user_message,
             assistant_reply,
-            background_tasks,
             _resolved_policy(),
+            background_tasks,
         )
 
         assert rag_service.save_message.call_args_list[0].args == (
@@ -236,6 +276,7 @@ class TestRagServiceRecording:
         rag_service = importlib.import_module("app.memory.rag_service")
 
         background_tasks = MagicMock()
+
         user_record = SavedRecord(
             3,
             "miori",
@@ -260,8 +301,8 @@ class TestRagServiceRecording:
             "miori",
             "今日は眠いね",
             "そうですね",
-            background_tasks,
             _resolved_policy(),
+            background_tasks,
         )
 
         assert rag_service.save_message.call_count == 2
@@ -293,7 +334,7 @@ class TestRagServiceRecording:
             "timestamp": "2026-06-23T00:00:00+00:00",
         }
 
-    def test_background_store_raises_contract_validation_errors(
+    def test_background_store_dumps_failed_record_for_contract_validation_errors(
         self, tmp_path, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -314,10 +355,16 @@ class TestRagServiceRecording:
         )
         monkeypatch.setattr(rag_service, "add_memory", MagicMock())
 
-        with pytest.raises(ValueError, match="invalid embedding response"):
-            rag_service._embed_and_store(record)
+        rag_service._embed_and_store(record)
 
-        assert not failed_path.exists()
+        dumped = json.loads(failed_path.read_text(encoding="utf-8").splitlines()[0])
+        assert dumped == {
+            "id": 31,
+            "character": "miori",
+            "role": "user",
+            "content": "農業日誌: invalid payload",
+            "timestamp": "2026-06-23T00:00:00+00:00",
+        }
         rag_service.add_memory.assert_not_called()
 
     def test_background_store_does_not_recheck_candidate_policy(self, monkeypatch):
@@ -369,8 +416,8 @@ class TestRagServiceRecording:
             "miori",
             user_record.content,
             assistant_record.content,
-            background_tasks,
             _resolved_policy(),
+            background_tasks,
         )
 
         background_tasks.add_task.assert_not_called()
@@ -404,8 +451,8 @@ class TestRagServiceRecording:
             "miori",
             user_record.content,
             assistant_record.content,
-            background_tasks,
             _resolved_policy(),
+            background_tasks,
         )
 
         background_tasks.add_task.assert_not_called()
@@ -416,6 +463,7 @@ class TestRagServiceRecording:
         rag_service = importlib.import_module("app.memory.rag_service")
 
         background_tasks = MagicMock()
+
         user_record = SavedRecord(
             10,
             "miori",
@@ -440,8 +488,8 @@ class TestRagServiceRecording:
             "miori",
             user_record.content,
             assistant_record.content,
-            background_tasks,
             _resolved_policy(),
+            background_tasks,
         )
 
         assert rag_service.save_message.call_count == 2
@@ -451,6 +499,7 @@ class TestRagServiceRecording:
         rag_service = importlib.import_module("app.memory.rag_service")
 
         background_tasks = MagicMock()
+
         user_record = SavedRecord(
             13,
             "miori",
@@ -475,8 +524,8 @@ class TestRagServiceRecording:
             "miori",
             user_record.content,
             assistant_record.content,
-            background_tasks,
             _resolved_policy(),
+            background_tasks,
         )
 
         assert rag_service.save_message.call_count == 2
@@ -489,6 +538,7 @@ class TestRagServiceRecording:
         rag_service = importlib.import_module("app.memory.rag_service")
 
         background_tasks = MagicMock()
+
         records = [
             SavedRecord(
                 15,
@@ -529,15 +579,15 @@ class TestRagServiceRecording:
             "miori",
             records[0].content,
             records[1].content,
-            background_tasks,
             _resolved_policy(),
+            background_tasks,
         )
         rag_service.record_chat_turn(
             "miori",
             records[2].content,
             records[3].content,
-            background_tasks,
             _resolved_policy(),
+            background_tasks,
         )
 
         assert rag_service.save_message.call_count == 4
@@ -572,8 +622,8 @@ class TestRagServiceRecording:
             "miori",
             user_record.content,
             assistant_record.content,
-            background_tasks,
             _resolved_policy(),
+            background_tasks,
         )
 
         assert background_tasks.add_task.call_count == 1
@@ -585,6 +635,7 @@ class TestRagServiceRecording:
         rag_service = importlib.import_module("app.memory.rag_service")
 
         background_tasks = MagicMock()
+
         user_record = SavedRecord(
             19,
             "miori",
@@ -609,8 +660,8 @@ class TestRagServiceRecording:
             "miori",
             user_record.content,
             assistant_record.content,
-            background_tasks,
             _resolved_policy(),
+            background_tasks,
         )
 
         assert rag_service.save_message.call_count == 2
@@ -622,6 +673,7 @@ class TestRagServiceRecording:
         rag_service = importlib.import_module("app.memory.rag_service")
 
         background_tasks = MagicMock()
+
         user_record = SavedRecord(
             21,
             "miori",
@@ -646,8 +698,8 @@ class TestRagServiceRecording:
             "miori",
             user_record.content,
             assistant_record.content,
-            background_tasks,
             _resolved_policy(),
+            background_tasks,
         )
 
         assert rag_service.save_message.call_count == 2
@@ -747,8 +799,8 @@ class TestMemoryPolicyConfiguration:
             "miori",
             user_record.content,
             assistant_record.content,
-            background_tasks,
             policy,
+            background_tasks,
         )
 
         assert prompt == "基本人格"
@@ -931,7 +983,7 @@ class TestMemoryPolicyConfiguration:
         with pytest.raises(ValueError, match="max_retrieved_memories"):
             memory_policy.resolved_memory_policy()
 
-    def test_additional_service_sections_are_allowed_as_override_objects(
+    def test_additional_service_sections_are_accepted_without_public_policy_surface(
         self, tmp_path, monkeypatch
     ):
         memory_policy = importlib.import_module("app.memory.memory_policy")
@@ -960,8 +1012,7 @@ class TestMemoryPolicyConfiguration:
         policy = memory_policy.resolved_memory_policy()
 
         assert policy.rag_service.max_retrieved_memories == 3
-        assert policy.services["embedder"] == {"batch_size": 16}
-        assert policy.services["chroma_store"] == {"collection_prefix": "test"}
+        assert not hasattr(policy, "services")
 
     def test_same_config_path_update_is_reflected_without_process_restart(
         self, tmp_path, monkeypatch

@@ -3,6 +3,9 @@ import threading
 import time
 from unittest.mock import MagicMock, patch
 
+from fastapi.testclient import TestClient
+
+from app.main import app
 from app.memory.chroma_store import MemorySearchResult
 
 
@@ -88,7 +91,7 @@ class TestWebSocketFlowIntegration:
         ]
 
     def test_rag_search_injection_and_recording_flow_through_websocket(
-        self, client, tmp_path, monkeypatch
+        self, tmp_path, monkeypatch
     ):
         import app.characters.loader as loader_module
         import app.memory.rag_service as rag_service
@@ -136,20 +139,21 @@ class TestWebSocketFlowIntegration:
         monkeypatch.setattr(rag_service, "query_memories", fake_query_memories)
 
         with patch("app.llm.ollama_client.httpx.post", side_effect=capture_post):
-            with client.websocket_connect("/ws/miori") as websocket:
-                websocket.send_json(
-                    {
-                        "type": "text",
-                        "message": "農業日誌: 2026-06-23はトマト畑に水やりした",
-                    },
-                )
-                first_response = websocket.receive_json()
-                _wait_until(lambda: len(stored_memories) == 1)
+            with TestClient(app) as client:
+                with client.websocket_connect("/ws/miori") as websocket:
+                    websocket.send_json(
+                        {
+                            "type": "text",
+                            "message": "農業日誌: 2026-06-23はトマト畑に水やりした",
+                        },
+                    )
+                    first_response = websocket.receive_json()
+                    _wait_until(lambda: len(stored_memories) == 1)
 
-                websocket.send_json(
-                    {"type": "text", "message": "前回の畑作業は?"},
-                )
-                second_response = websocket.receive_json()
+                    websocket.send_json(
+                        {"type": "text", "message": "前回の畑作業は?"},
+                    )
+                    second_response = websocket.receive_json()
 
         assert first_response == {"type": "text", "response": "記録しました。"}
         assert second_response == {"type": "text", "response": "記録しました。"}
@@ -161,7 +165,7 @@ class TestWebSocketFlowIntegration:
         )
 
     def test_rag_storage_failure_does_not_block_websocket_response_and_writes_fallback(
-        self, client, tmp_path, monkeypatch
+        self, tmp_path, monkeypatch
     ):
         import app.characters.loader as loader_module
         import app.memory.rag_service as rag_service
@@ -192,19 +196,20 @@ class TestWebSocketFlowIntegration:
             "app.llm.ollama_client.httpx.post",
             return_value=_ollama_response("農業日誌として保存しました。"),
         ):
-            with client.websocket_connect("/ws/miori") as websocket:
-                release_timer = threading.Timer(1.0, release_add.set)
-                release_timer.start()
-                websocket.send_json({"type": "text", "message": user_message})
-                response = websocket.receive_json()
-                release_timer.cancel()
-                assert add_started.wait(timeout=5)
-                assert not release_add.is_set()
-                assert response == {
-                    "type": "text",
-                    "response": "農業日誌として保存しました。",
-                }
-                release_add.set()
+            with TestClient(app) as client:
+                with client.websocket_connect("/ws/miori") as websocket:
+                    release_timer = threading.Timer(1.0, release_add.set)
+                    release_timer.start()
+                    websocket.send_json({"type": "text", "message": user_message})
+                    response = websocket.receive_json()
+                    release_timer.cancel()
+                    assert add_started.wait(timeout=5)
+                    assert not release_add.is_set()
+                    assert response == {
+                        "type": "text",
+                        "response": "農業日誌として保存しました。",
+                    }
+                    release_add.set()
 
         failed_path = rag_service.FAILED_MEMORY_LOG_PATH
         _wait_until(lambda: failed_path.exists())
