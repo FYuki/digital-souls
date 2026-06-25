@@ -23,7 +23,7 @@ repo/
 │  └─ miori/
 │     ├─ personality.md
 │     ├─ world.md
-│     └─ memory-policy.md
+│     └─ memory-policy.md  # 方針本文と実装設定への案内
 │
 └─ src/
    └─ 将来の実装コード
@@ -59,7 +59,7 @@ characters/
 
 * `personality.md`
 * `world.md`
-* `memory-policy.md`
+* `memory-policy.md`（方針本文と実装設定への案内）
 * `voice.md`
 * `appearance.md`
 
@@ -95,6 +95,12 @@ Issue例:
 個人開発のため、当面はGitHub Projectsを使用しない。
 
 必要になった場合のみ、Issuesをまとめるために導入する。
+
+## テスト証跡
+
+テスト件数・通過数をレポートに記載する場合は、実行ログを一次証跡として扱う。
+
+`mypy` などのツールが出力する対象ファイル件数は、ソース追加で変動するため契約テストに固定しない。レポートでは成功可否を記録し、可変件数を仕様として扱わない。
 
 ## ブランチ運用
 

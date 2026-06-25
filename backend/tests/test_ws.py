@@ -1,11 +1,18 @@
 import httpx
 import pytest
+from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 from unittest.mock import patch
 
+from app.main import app
 
-_LOAD_PERSONALITY = "app.chat_service._character_loader.load_personality"
-_GENERATE_RESPONSE = "app.chat_service._llm_router.generate_response"
+_LOAD_PERSONALITY = "app._chat_runtime._character_loader.load_personality"
+_GENERATE_RESPONSE = "app._chat_runtime._llm_router.generate_response"
+_BUILD_AUGMENTED_SYSTEM_PROMPT = (
+    "app._chat_runtime._rag_service.build_augmented_system_prompt"
+)
+_RECORD_CHAT_TURN = "app._chat_runtime._rag_service.record_chat_turn"
+_RESOLVED_MEMORY_POLICY = "app._chat_runtime.resolved_memory_policy"
 
 _PERSONALITY = "# 光織\n穏やかなAIです。"
 _LLM_REPLY = "光織です。よろしくお願いします。"
@@ -36,7 +43,8 @@ class TestWebSocketEndpoint:
                     )
                     websocket.receive_json()
 
-        mock_load.assert_called_once_with("miori")
+        assert mock_load.call_count == 2
+        mock_load.assert_any_call("miori")
 
     def test_generate_response_uses_loaded_personality_and_root_message(self, client):
         user_message = "農業日誌を記録したい"
@@ -53,6 +61,41 @@ class TestWebSocketEndpoint:
                     websocket.receive_json()
 
         mock_gen.assert_called_once_with(_PERSONALITY, user_message)
+
+    def test_rag_enabled_uses_augmented_prompt_and_records_turn(self, monkeypatch):
+        user_message = "前回なんの話をしたっけ？"
+        policy = object()
+        augmented_prompt = f"{_PERSONALITY}\n\n過去の記憶:\n前回は畑の話をした"
+
+        monkeypatch.setenv("RAG_ENABLED", "true")
+        with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
+            with TestClient(app) as client:
+                with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+                    with patch(
+                        _BUILD_AUGMENTED_SYSTEM_PROMPT,
+                        return_value=augmented_prompt,
+                    ) as mock_build:
+                        with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
+                            with patch(_RECORD_CHAT_TURN) as mock_record:
+                                with client.websocket_connect("/ws/miori") as websocket:
+                                    websocket.send_json(
+                                        {"type": "text", "message": user_message},
+                                    )
+                                    response = websocket.receive_json()
+
+        assert response == {"type": "text", "response": _LLM_REPLY}
+        mock_build.assert_called_once_with(
+            "miori",
+            user_message,
+            _PERSONALITY,
+            policy,
+        )
+        mock_gen.assert_called_once_with(augmented_prompt, user_message)
+        mock_record.assert_called_once()
+        args, _kwargs = mock_record.call_args
+        assert args[:3] == ("miori", user_message, _LLM_REPLY)
+        assert args[3] is policy
+        assert hasattr(args[4], "add_task")
 
     def test_returns_422_when_payload_is_not_json_object(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
@@ -130,6 +173,25 @@ class TestWebSocketEndpoint:
             "type": "error",
             "status": 404,
             "detail": "Character 'unknown' not found",
+        }
+        mock_gen.assert_not_called()
+
+    def test_returns_404_when_character_disappears_after_session_open(self, client):
+        with patch(
+            _LOAD_PERSONALITY,
+            side_effect=[_PERSONALITY, FileNotFoundError("character not found")],
+        ):
+            with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
+                with client.websocket_connect("/ws/miori") as websocket:
+                    websocket.send_json({"type": "text", "message": "こんにちは"})
+                    response = websocket.receive_json()
+                    with pytest.raises(WebSocketDisconnect):
+                        websocket.receive_json()
+
+        assert response == {
+            "type": "error",
+            "status": 404,
+            "detail": "Character 'miori' not found",
         }
         mock_gen.assert_not_called()
 

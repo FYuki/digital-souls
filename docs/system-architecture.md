@@ -132,5 +132,7 @@ characters/
 └─ miori/
    ├─ personality.md
    ├─ world.md
-   └─ memory-policy.md
+   └─ memory-policy.md  # 方針本文と実装設定への案内
 ```
+
+光織の記憶方針本文は `docs/decisions/miori-memory-policy-2026-06.md`、実装が参照する機械可読な設定値は `backend/app/memory/memory_policy.json` で管理する。

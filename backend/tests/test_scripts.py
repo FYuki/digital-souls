@@ -360,6 +360,9 @@ class TestStartOllama:
             f"exit 42\n"
         )
         ollama.chmod(0o755)
+        curl = bin_dir / "curl"
+        curl.write_text("#!/usr/bin/env bash\nexit 1\n")
+        curl.chmod(0o755)
 
         env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
 

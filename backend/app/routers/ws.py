@@ -7,9 +7,8 @@ from starlette.websockets import WebSocketDisconnect
 from app.chat_service import (
     CharacterNotFoundError,
     ChatBackendError,
-    ChatSession,
+    ChatReplySession,
     ChatTimeoutError,
-    create_chat_session,
 )
 
 router = APIRouter()
@@ -25,7 +24,7 @@ ERROR_MESSAGE_TYPE = "error"
 
 
 class WebSocketMessageError(ValueError):
-    pass
+    """Invalid client message that should not close the WebSocket session."""
 
 
 async def _send_error(websocket: WebSocket, status: int, detail: str) -> None:
@@ -60,9 +59,12 @@ def _extract_text_message(payload: object) -> str:
     return message
 
 
-async def _open_chat_session(websocket: WebSocket, character_name: str) -> ChatSession | None:
+async def _open_chat_session(
+    websocket: WebSocket,
+    character_name: str,
+) -> ChatReplySession | None:
     try:
-        return await run_in_threadpool(create_chat_session, character_name)
+        return await websocket.app.state.chat_service.create_chat_session(character_name)
     except CharacterNotFoundError as exc:
         await _send_error(websocket, 404, exc.detail)
         await websocket.close()
@@ -89,6 +91,10 @@ async def websocket_chat(websocket: WebSocket, character_name: str) -> None:
 
             try:
                 reply = await run_in_threadpool(chat_session.generate_reply, message)
+            except CharacterNotFoundError as exc:
+                await _send_error(websocket, 404, exc.detail)
+                await websocket.close()
+                return
             except ChatTimeoutError as exc:
                 await _send_error(websocket, 504, exc.detail)
                 continue

@@ -1,9 +1,17 @@
 import httpx
 from unittest.mock import patch
+from fastapi.testclient import TestClient
+
+from app.main import app
 
 
-_LOAD_PERSONALITY = "app.chat_service._character_loader.load_personality"
-_GENERATE_RESPONSE = "app.chat_service._llm_router.generate_response"
+_LOAD_PERSONALITY = "app._chat_runtime._character_loader.load_personality"
+_GENERATE_RESPONSE = "app._chat_runtime._llm_router.generate_response"
+_BUILD_AUGMENTED_SYSTEM_PROMPT = (
+    "app._chat_runtime._rag_service.build_augmented_system_prompt"
+)
+_RECORD_CHAT_TURN = "app._chat_runtime._rag_service.record_chat_turn"
+_RESOLVED_MEMORY_POLICY = "app._chat_runtime.resolved_memory_policy"
 
 _VALID_BODY = {"character": "miori", "message": "自己紹介してください"}
 _PERSONALITY = "# 光織\n穏やかなAIです。"
@@ -75,6 +83,71 @@ class TestChatEndpoint:
         all_args = list(args) + list(kwargs.values())
         assert _PERSONALITY in all_args
         assert user_message in all_args
+
+    def test_generate_response_uses_rag_augmented_system_prompt(self, monkeypatch):
+        policy = object()
+        augmented_prompt = f"{_PERSONALITY}\n\n過去の記憶:\n前回は畑の話をした"
+        monkeypatch.setenv("RAG_ENABLED", "true")
+        with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
+            with TestClient(app) as client:
+                with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+                    with patch(
+                        _BUILD_AUGMENTED_SYSTEM_PROMPT,
+                        return_value=augmented_prompt,
+                    ) as mock_build:
+                        with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
+                            with patch(_RECORD_CHAT_TURN):
+                                client.post("/chat", json=_VALID_BODY)
+
+        mock_build.assert_called_once_with(
+            "miori",
+            _VALID_BODY["message"],
+            _PERSONALITY,
+            policy,
+        )
+        mock_gen.assert_called_once_with(augmented_prompt, _VALID_BODY["message"])
+
+    def test_records_chat_turn_after_llm_reply(self, monkeypatch):
+        policy = object()
+        monkeypatch.setenv("RAG_ENABLED", "true")
+        with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
+            with TestClient(app) as client:
+                with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+                    with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT, return_value=_PERSONALITY):
+                        with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
+                            with patch(_RECORD_CHAT_TURN) as mock_record:
+                                response = client.post("/chat", json=_VALID_BODY)
+
+        assert response.status_code == 200
+        mock_record.assert_called_once()
+        args, _kwargs = mock_record.call_args
+        assert args[:3] == ("miori", _VALID_BODY["message"], _LLM_REPLY)
+        assert args[3] is policy
+        assert hasattr(args[4], "add_task")
+
+    def test_rag_disabled_does_not_resolve_memory_policy_or_record(self, monkeypatch):
+        monkeypatch.setenv("RAG_ENABLED", "false")
+        with patch(_RESOLVED_MEMORY_POLICY) as mock_policy:
+            with TestClient(app) as client:
+                with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+                    with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT) as mock_build:
+                        with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
+                            with patch(_RECORD_CHAT_TURN) as mock_record:
+                                response = client.post("/chat", json=_VALID_BODY)
+
+        assert response.status_code == 200
+        mock_policy.assert_not_called()
+        mock_build.assert_not_called()
+        mock_record.assert_not_called()
+
+    def test_does_not_record_chat_turn_when_llm_fails(self, client):
+        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+            with patch(_GENERATE_RESPONSE, side_effect=httpx.HTTPError("boom")):
+                with patch(_RECORD_CHAT_TURN) as mock_record:
+                    response = client.post("/chat", json=_VALID_BODY)
+
+        assert response.status_code == 502
+        mock_record.assert_not_called()
 
     def test_returns_404_when_character_not_found(self, client):
         with patch(_LOAD_PERSONALITY, side_effect=FileNotFoundError("character not found")):

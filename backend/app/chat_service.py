@@ -1,16 +1,10 @@
-from dataclasses import dataclass
-
-import httpx
-
-from app.characters import loader as _character_loader
-from app.llm import router as _llm_router
-
+from typing import Protocol
 
 __all__ = [
     "CharacterNotFoundError",
     "ChatBackendError",
+    "ChatReplySession",
     "ChatServiceError",
-    "ChatSession",
     "ChatTimeoutError",
     "create_chat_session",
     "generate_chat_reply",
@@ -18,7 +12,7 @@ __all__ = [
 
 
 class ChatServiceError(Exception):
-    pass
+    """Base error type for failures that routers convert to chat responses."""
 
 
 class CharacterNotFoundError(ChatServiceError):
@@ -40,34 +34,18 @@ class ChatBackendError(ChatServiceError):
         super().__init__(self.detail)
 
 
-@dataclass(frozen=True)
-class ChatSession:
-    system_prompt: str
-
+class ChatReplySession(Protocol):
     def generate_reply(self, message: str) -> str:
-        return _generate_reply_from_prompt(self.system_prompt, message)
+        ...
 
 
-def create_chat_session(character: str) -> ChatSession:
-    try:
-        system_prompt = _character_loader.load_personality(character)
-    except FileNotFoundError as exc:
-        raise CharacterNotFoundError(character) from exc
+def generate_chat_reply(character: str, message: str) -> str:
+    from app import _chat_runtime
 
-    return ChatSession(system_prompt=system_prompt)
+    return _chat_runtime.default_chat_service().generate_chat_reply(character, message)
 
 
-def generate_chat_reply(
-    character: str,
-    message: str,
-) -> str:
-    return create_chat_session(character).generate_reply(message)
+async def create_chat_session(character: str) -> ChatReplySession:
+    from app import _chat_runtime
 
-
-def _generate_reply_from_prompt(system_prompt: str, message: str) -> str:
-    try:
-        return _llm_router.generate_response(system_prompt, message)
-    except httpx.TimeoutException as exc:
-        raise ChatTimeoutError() from exc
-    except httpx.HTTPError as exc:
-        raise ChatBackendError() from exc
+    return await _chat_runtime.default_chat_service().create_chat_session(character)

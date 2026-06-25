@@ -8,6 +8,10 @@ storage/
 snapshots/
 qdrant
 
+# Backend 永続データ
+backend/app/data/*
+!backend/app/data/.gitkeep
+
 # Node.js
 node_modules/
 .npm-cache/
