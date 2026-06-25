@@ -141,6 +141,14 @@ def contains_sensitive_memory(content: str, policy: MemoryPolicy) -> bool:
     return any(term.lower() in normalized for term in terms.sensitive_terms)
 
 
+def contains_non_storable_memory(content: str, policy: MemoryPolicy) -> bool:
+    terms = policy.terms
+    normalized = content.lower()
+    return contains_sensitive_memory(content, policy) or any(
+        term.lower() in normalized for term in terms.do_not_store_terms
+    )
+
+
 def is_long_term_memory_candidate(
     record: ConversationRecord,
     policy: MemoryPolicy,
@@ -149,9 +157,7 @@ def is_long_term_memory_candidate(
         return False
     terms = policy.terms
     normalized = record.content.lower()
-    if any(term.lower() in normalized for term in terms.sensitive_terms):
-        return False
-    if any(term.lower() in normalized for term in terms.do_not_store_terms):
+    if contains_non_storable_memory(record.content, policy):
         return False
     return any(term.lower() in normalized for term in terms.explicit_memory_terms) or any(
         marker in record.content for marker in terms.long_term_memory_markers

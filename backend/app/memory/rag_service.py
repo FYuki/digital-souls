@@ -11,6 +11,7 @@ from app.memory.conversation_log import ConversationRecord, save_message
 from app.memory.embedder import embed_text
 from app.memory.memory_policy import (
     MemoryPolicy,
+    contains_non_storable_memory,
     contains_sensitive_memory,
     is_long_term_memory_candidate,
     rag_service_policy,
@@ -84,10 +85,12 @@ def record_chat_turn(
     policy: MemoryPolicy,
     task_queue: _BackgroundTaskQueue,
 ) -> None:
-    user_record = save_message(character, "user", user_message)
-    assistant_record = save_message(character, "assistant", assistant_reply)
-    _enqueue_memory_candidate(user_record, policy, task_queue)
-    _enqueue_memory_candidate(assistant_record, policy, task_queue)
+    if not contains_non_storable_memory(user_message, policy):
+        user_record = save_message(character, "user", user_message)
+        _enqueue_memory_candidate(user_record, policy, task_queue)
+    if not contains_non_storable_memory(assistant_reply, policy):
+        assistant_record = save_message(character, "assistant", assistant_reply)
+        _enqueue_memory_candidate(assistant_record, policy, task_queue)
 
 
 def _failed_record_payload(record: ConversationRecord) -> dict[str, object]:
