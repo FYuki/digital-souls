@@ -17,6 +17,12 @@
       "farming",
       "recipe",
       "streaming"
-    ]
+    ],
+    "tts_config": {
+      "engine": "voicevox",
+      "speaker_id": 14,
+      "speaker_name": "冥鳴ひまり",
+      "style_name": "ノーマル"
+    }
   }
 }
