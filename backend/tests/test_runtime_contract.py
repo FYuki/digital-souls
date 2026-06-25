@@ -225,6 +225,107 @@ class TestRuntimeConfiguration:
             ("ws-reply", "miori", "hello"),
         ]
 
+    def test_ws_route_uses_app_audio_pipeline_service_for_audio_frames(self):
+        import app.main as main
+
+        class StubChatSession:
+            def __init__(self) -> None:
+                self.messages = []
+
+            def generate_reply(self, message: str) -> str:
+                self.messages.append(message)
+                return f"reply:{message}"
+
+        class StubChatService:
+            async def create_chat_session(self, character: str) -> StubChatSession:
+                return StubChatSession()
+
+        class StubAudioSession:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def generate_response_audio(self, audio: bytes, reply_generator):
+                reply = reply_generator("transcribed")
+                self.calls.append((audio, reply))
+                return b"RIFF delegated"
+
+        class StubAudioPipelineService:
+            def __init__(self) -> None:
+                self.sessions = []
+
+            def create_session(self, character: str) -> StubAudioSession:
+                session = StubAudioSession()
+                self.sessions.append((character, session))
+                return session
+
+        audio_service = StubAudioPipelineService()
+        with TestClient(main.app) as client:
+            main.app.state.chat_service = StubChatService()
+            main.app.state.audio_pipeline_service = audio_service
+            with client.websocket_connect("/ws/miori") as websocket:
+                websocket.send_bytes(b"\x01\x00")
+                response = websocket.receive_bytes()
+
+        assert response == b"RIFF delegated"
+        assert len(audio_service.sessions) == 1
+        character, session = audio_service.sessions[0]
+        assert character == "miori"
+        assert session.calls == [(b"\x01\x00", "reply:transcribed")]
+
+    def test_audio_pipeline_session_runs_audio_steps_and_logs_latency(
+        self,
+        monkeypatch,
+        caplog,
+    ):
+        import app.audio_pipeline as audio_pipeline
+        from app.characters.loader import VoicevoxTtsConfig
+
+        class StubTranscriber:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def transcribe(self, audio: bytes) -> str:
+                self.calls.append(audio)
+                return "音声入力"
+
+        synthesize_calls = []
+
+        def synthesize_stub(reply: str, speaker_id: int, voicevox_base_url: str) -> bytes:
+            synthesize_calls.append((reply, speaker_id, voicevox_base_url))
+            return b"RIFF synthesized"
+
+        transcriber = StubTranscriber()
+        session = audio_pipeline.AudioPipelineSession(
+            tts_config=VoicevoxTtsConfig(speaker_id=14),
+            voicevox_base_url="http://voicevox.local:50021",
+            transcriber=transcriber,
+        )
+        monkeypatch.setattr(audio_pipeline, "synthesize", synthesize_stub)
+
+        with caplog.at_level("INFO", logger="app.audio_pipeline"):
+            audio = session.generate_response_audio(
+                b"\x01\x00",
+                lambda message: f"応答:{message}",
+            )
+
+        assert audio == b"RIFF synthesized"
+        assert transcriber.calls == [b"\x01\x00"]
+        assert synthesize_calls == [
+            ("応答:音声入力", 14, "http://voicevox.local:50021")
+        ]
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("STT completed in" in message for message in messages)
+        assert any("LLM completed in" in message for message in messages)
+        assert any("VOICEVOX completed in" in message for message in messages)
+
+    def test_main_lifespan_owns_audio_pipeline_service_state(self):
+        import app.main as main
+
+        assert not hasattr(main.app.state, "audio_pipeline_service")
+        with TestClient(main.app):
+            assert hasattr(main.app.state, "audio_pipeline_service")
+        assert not hasattr(main.app.state, "audio_pipeline_service")
+
     def test_main_lifespan_shuts_down_chat_service_task_queue_executor(self, monkeypatch):
         import app.main as main
 
@@ -279,6 +380,7 @@ class TestRuntimeConfiguration:
 
         assert executor.shutdown_called is True
         assert not hasattr(main.app.state, "chat_service")
+        assert not hasattr(main.app.state, "audio_pipeline_service")
         with pytest.raises(chat_service.ChatServiceError):
             chat_service.generate_chat_reply("miori", "hello")
 
@@ -288,13 +390,16 @@ class TestRuntimeConfiguration:
         assert not hasattr(main.app.state, "memory_task_queue")
         assert not hasattr(main.app.state, "chat_runtime")
         assert not hasattr(main.app.state, "chat_service")
+        assert not hasattr(main.app.state, "audio_pipeline_service")
         with TestClient(main.app):
             assert not hasattr(main.app.state, "memory_task_queue")
             assert not hasattr(main.app.state, "chat_runtime")
             assert hasattr(main.app.state, "chat_service")
+            assert hasattr(main.app.state, "audio_pipeline_service")
         assert not hasattr(main.app.state, "memory_task_queue")
         assert not hasattr(main.app.state, "chat_runtime")
         assert not hasattr(main.app.state, "chat_service")
+        assert not hasattr(main.app.state, "audio_pipeline_service")
 
     def test_main_lifespan_registers_module_entrypoints_to_app_chat_service(self):
         import app.chat_service as chat_service
