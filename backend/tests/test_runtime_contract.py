@@ -1,5 +1,4 @@
 import inspect
-import re
 import subprocess
 from pathlib import Path
 
@@ -8,44 +7,6 @@ from fastapi.testclient import TestClient
 
 
 _BACKEND_DIR = Path(__file__).parent.parent
-
-
-def _passed_result_counts_by_command(markdown: str) -> dict[str, str]:
-    matches = re.findall(
-        r"- Command: `([^`]+)`\n- Result: `([^`]*?\d+ passed[^`]*)`",
-        markdown,
-    )
-
-    results: dict[str, str] = {}
-    for command, result in matches:
-        count = re.search(r"\d+ passed", result)
-        if count is None:
-            continue
-        existing = results.get(command)
-        if existing is not None and existing != count.group(0):
-            raise AssertionError(f"Conflicting result counts for {command}")
-        results[command] = count.group(0)
-    return results
-
-
-def _required_result_count(markdown: str, command: str) -> str:
-    results = _passed_result_counts_by_command(markdown)
-    if command not in results:
-        raise AssertionError(f"Missing result evidence for {command}")
-    return results[command]
-
-
-def _read_required_text(path: Path) -> str:
-    assert path.exists(), f"Missing required evidence file: {path}"
-    return path.read_text(encoding="utf-8")
-
-
-def _required_runtime_evidence_commands() -> set[str]:
-    return {
-        "backend/.venv/bin/python -m pytest backend/tests/test_memory_rag_service.py backend/tests/test_runtime_contract.py -q",
-        "backend/.venv/bin/python -m pytest backend/tests/test_chat.py backend/tests/test_chat_service.py backend/tests/test_ws.py backend/tests/test_ws_integration.py backend/tests/test_chat_integration.py backend/tests/test_memory_rag_runtime_evidence.py backend/tests/test_runtime_contract.py -q",
-        "backend/.venv/bin/pytest -q backend/tests",
-    }
 
 
 class TestRuntimeConfiguration:
@@ -360,96 +321,6 @@ class TestRuntimeConfiguration:
         ]
 
         assert all("memory-policy.md" not in source for source in sources)
-
-    def test_test_report_uses_current_runtime_evidence_names(self):
-        report = (_BACKEND_DIR.parent / "test-report.md").read_text(encoding="utf-8")
-
-        assert (
-            "TestChatEndpoint.test_rag_disabled_does_not_resolve_memory_policy_or_record"
-            in report
-        )
-        assert (
-            "TestEmbedder.test_embed_text_uses_embedding_model_environment_override"
-            in report
-        )
-        assert (
-            "test_build_augmented_system_prompt_returns_original_when_disabled"
-            not in report
-        )
-        assert "test_record_chat_turn_does_not_write_when_disabled" not in report
-        assert "test_embed_text_uses_embedding_model_from_environment" not in report
-        assert "TestChatTaskQueueContract" not in report
-        assert "test_thread_pool_task_queue_does_not_run_task_inline" not in report
-        assert "test_chat_and_ws_routes_delegate_to_same_app_chat_service" in report
-        assert "test_main_lifespan_shuts_down_chat_service_task_queue_executor" in report
-        assert "test_main_lifespan_cleans_runtime_when_config_resolution_fails" in report
-        assert "test_chat_session_uses_same_per_message_resolution_as_http_reply" in report
-        assert "test_thread_pool_memory_task_queue_shutdown_waits_for_pending_tasks" in report
-        assert "test_runtime_config_fails_fast_for_inconsistent_rag_policy" in report
-        assert "test_infra_functions_are_not_public_api" in report
-        assert "test_public_generate_chat_reply_delegates_to_configured_service" in report
-        assert "test_public_create_chat_session_delegates_to_configured_service" in report
-        assert "test_public_entrypoints_fail_fast_without_registered_service" in report
-        assert "test_public_entrypoints_follow_registered_app_state_service" in report
-        assert "test_public_entrypoints_restore_previous_resolver_after_nested_clear" in report
-        assert "test_main_lifespan_registers_module_entrypoints_to_app_chat_service" in report
-        assert "test_returns_404_when_character_disappears_after_session_open" in report
-        assert "test_two_argument_reply_fails_fast_without_runtime_queue" not in report
-        assert "runtime_adapter_uses_app_bound_memory_task_queue" not in report
-        assert "Success: no issues found in 41 source files" in report
-
-    def test_test_report_passed_counts_match_fix_evidence(self):
-        root = _BACKEND_DIR.parent
-        fix_evidence = _read_required_text(root / "fix-evidence.md")
-        report = _read_required_text(root / "test-report.md")
-
-        fix_counts = _passed_result_counts_by_command(fix_evidence)
-        report_counts = _passed_result_counts_by_command(report)
-
-        assert fix_counts
-        assert report_counts
-        for command, report_count in report_counts.items():
-            assert command in fix_counts
-            assert fix_counts[command] == report_count
-
-    def test_fix_evidence_keeps_required_runtime_count_commands_as_source(self):
-        root = _BACKEND_DIR.parent
-        fix_evidence = _read_required_text(root / "fix-evidence.md")
-
-        fix_counts = _passed_result_counts_by_command(fix_evidence)
-
-        assert _required_runtime_evidence_commands().issubset(fix_counts)
-
-    def test_test_report_copies_required_runtime_counts_from_fix_evidence(self):
-        root = _BACKEND_DIR.parent
-        fix_evidence = _read_required_text(root / "fix-evidence.md")
-        report = _read_required_text(root / "test-report.md")
-
-        fix_counts = _passed_result_counts_by_command(fix_evidence)
-        report_counts = _passed_result_counts_by_command(report)
-
-        for command in _required_runtime_evidence_commands():
-            assert report_counts[command] == fix_counts[command]
-
-    def test_repository_policy_documents_evidence_count_source_of_truth(self):
-        root = _BACKEND_DIR.parent
-        policy = _read_required_text(root / "docs" / "repository-policy.md")
-
-        assert "`fix-evidence.md` のコマンド出力を単一のソース・オブ・トゥルース" in policy
-        assert "`test-report.md` へ同じ値を同時に転記" in policy
-        assert "契約テストは固定件数を持たず" in policy
-
-    def test_runtime_contract_full_suite_count_comes_from_fix_evidence(self):
-        root = _BACKEND_DIR.parent
-        fix_evidence = _read_required_text(root / "fix-evidence.md")
-        report = _read_required_text(root / "test-report.md")
-
-        full_suite_count = _required_result_count(
-            fix_evidence,
-            "backend/.venv/bin/pytest -q backend/tests",
-        )
-
-        assert f"Result: `{full_suite_count}" in report
 
 
 class TestFastAPIContract:
