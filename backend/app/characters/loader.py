@@ -11,6 +11,10 @@ TTS_CONFIG_FIELD = "tts_config"
 TTS_ENGINE_FIELD = "engine"
 TTS_SPEAKER_ID_FIELD = "speaker_id"
 VOICEVOX_ENGINE = "voicevox"
+CARD_DATA_MISSING_MESSAGE = "'data' field is missing in character card"
+CARD_DATA_INVALID_MESSAGE = "'data' field must be an object in character card"
+TTS_CONFIG_MISSING_MESSAGE = "'tts_config' field is missing in character card data"
+TTS_CONFIG_INVALID_MESSAGE = "'tts_config' field must be an object in character card data"
 
 
 @dataclass(frozen=True)
@@ -58,13 +62,17 @@ def _load_character_card(character: str) -> JsonObject:
 
 def load_tts_config(character: str) -> VoicevoxTtsConfig:
     card = _load_character_card(character)
-    data = card.get(DATA_FIELD)
+    if DATA_FIELD not in card:
+        raise KeyError(CARD_DATA_MISSING_MESSAGE)
+    data = card[DATA_FIELD]
     if not isinstance(data, dict):
-        raise KeyError(DATA_FIELD)
+        raise ValueError(CARD_DATA_INVALID_MESSAGE)
 
-    tts_config = data.get(TTS_CONFIG_FIELD)
+    if TTS_CONFIG_FIELD not in data:
+        raise KeyError(TTS_CONFIG_MISSING_MESSAGE)
+    tts_config = data[TTS_CONFIG_FIELD]
     if not isinstance(tts_config, dict):
-        raise KeyError(TTS_CONFIG_FIELD)
+        raise ValueError(TTS_CONFIG_INVALID_MESSAGE)
 
     if tts_config.get(TTS_ENGINE_FIELD) != VOICEVOX_ENGINE:
         raise ValueError("tts_config.engine must be 'voicevox'")

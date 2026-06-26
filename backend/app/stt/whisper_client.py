@@ -4,8 +4,6 @@ import wave
 from collections.abc import Iterable
 from typing import Protocol, cast
 
-from faster_whisper import WhisperModel  # type: ignore[import-untyped]
-
 WHISPER_MODEL_SIZE = "medium"
 WHISPER_LANGUAGE = "ja"
 PCM_CHANNELS = 1
@@ -15,6 +13,16 @@ PCM_FRAME_RATE = 16_000
 
 class WhisperSegment(Protocol):
     text: str
+
+
+class WhisperModel(Protocol):
+    def transcribe(
+        self,
+        audio_source: io.BytesIO,
+        *,
+        language: str,
+    ) -> tuple[Iterable[WhisperSegment], object]:
+        pass
 
 
 class WhisperTranscriber:
@@ -28,14 +36,20 @@ class WhisperTranscriber:
             audio_source,
             language=WHISPER_LANGUAGE,
         )
-        typed_segments = cast(Iterable[WhisperSegment], segments)
-        return "".join(_segment_text(segment) for segment in typed_segments)
+        return "".join(_segment_text(segment) for segment in segments)
 
     def _get_model(self) -> WhisperModel:
         if self._model is None:
             with self._model_lock:
                 if self._model is None:
-                    self._model = WhisperModel(WHISPER_MODEL_SIZE)
+                    from faster_whisper import (  # type: ignore[import-untyped]
+                        WhisperModel as FasterWhisperModel,
+                    )
+
+                    self._model = cast(
+                        WhisperModel,
+                        FasterWhisperModel(WHISPER_MODEL_SIZE),
+                    )
         return self._model
 
 

@@ -53,7 +53,10 @@ async def _send_error(websocket: WebSocket, status: int, detail: str) -> None:
 async def _receive_frame(websocket: WebSocket) -> WebSocketFrame:
     frame = cast(WebSocketFrame, await websocket.receive())
     if frame.get(WEBSOCKET_TYPE_FIELD) == WEBSOCKET_DISCONNECT_TYPE:
-        raise WebSocketDisconnect()
+        raise WebSocketDisconnect(
+            cast(int, frame.get("code")),
+            cast(str | None, frame.get("reason")),
+        )
     return frame
 
 
@@ -216,9 +219,12 @@ async def websocket_chat(websocket: WebSocket, character_name: str) -> None:
                             AudioPipelineService,
                             websocket.app.state.audio_pipeline_service,
                         )
-                        audio_session = audio_service.create_session(character_name)
+                        audio_session = await run_in_threadpool(
+                            audio_service.create_session,
+                            character_name,
+                        )
                     except AudioPipelineConfigError as exc:
-                        logger.exception("Audio pipeline configuration failed")
+                        logger.error("Audio pipeline configuration failed: %s", exc)
                         await _send_error(websocket, 500, str(exc))
                         continue
                 keep_open = await _handle_audio_frame(
@@ -233,5 +239,10 @@ async def websocket_chat(websocket: WebSocket, character_name: str) -> None:
 
             if not keep_open:
                 return
-    except WebSocketDisconnect:
-        logger.info("WebSocket disconnected for character '%s'", character_name)
+    except WebSocketDisconnect as exc:
+        logger.info(
+            "WebSocket disconnected for character '%s' (code=%s, reason=%s)",
+            character_name,
+            exc.code,
+            exc.reason,
+        )

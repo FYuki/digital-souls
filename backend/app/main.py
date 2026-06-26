@@ -54,6 +54,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if resolver_registered and chat_service_resolver is not None:
             _chat_runtime.clear_default_chat_service_resolver(chat_service_resolver)
         if audio_pipeline_state_set:
+            app.state.audio_pipeline_service.close()
             del app.state.audio_pipeline_service
         if chat_service_state_set:
             del app.state.chat_service

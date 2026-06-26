@@ -258,6 +258,9 @@ class TestRuntimeConfiguration:
                 self.sessions.append((character, session))
                 return session
 
+            def close(self) -> None:
+                return None
+
         audio_service = StubAudioPipelineService()
         with TestClient(main.app) as client:
             main.app.state.chat_service = StubChatService()
@@ -274,7 +277,6 @@ class TestRuntimeConfiguration:
 
     def test_audio_pipeline_session_runs_audio_steps_and_logs_latency(
         self,
-        monkeypatch,
         caplog,
     ):
         import app.audio_pipeline as audio_pipeline
@@ -288,19 +290,25 @@ class TestRuntimeConfiguration:
                 self.calls.append(audio)
                 return "音声入力"
 
-        synthesize_calls = []
+        class StubVoicevoxClient:
+            def __init__(self) -> None:
+                self.synthesize_calls = []
 
-        def synthesize_stub(reply: str, speaker_id: int, voicevox_base_url: str) -> bytes:
-            synthesize_calls.append((reply, speaker_id, voicevox_base_url))
-            return b"RIFF synthesized"
+            def synthesize(
+                self,
+                reply: str,
+                speaker_id: int,
+            ) -> bytes:
+                self.synthesize_calls.append((reply, speaker_id))
+                return b"RIFF synthesized"
 
         transcriber = StubTranscriber()
+        voicevox_client = StubVoicevoxClient()
         session = audio_pipeline.AudioPipelineSession(
             tts_config=VoicevoxTtsConfig(speaker_id=14),
-            voicevox_base_url="http://voicevox.local:50021",
             transcriber=transcriber,
+            speech_synthesizer=voicevox_client,
         )
-        monkeypatch.setattr(audio_pipeline, "synthesize", synthesize_stub)
 
         with caplog.at_level("INFO", logger="app.audio_pipeline"):
             audio = session.generate_response_audio(
@@ -310,17 +318,97 @@ class TestRuntimeConfiguration:
 
         assert audio == b"RIFF synthesized"
         assert transcriber.calls == [b"\x01\x00"]
-        assert synthesize_calls == [
-            ("応答:音声入力", 14, "http://voicevox.local:50021")
+        assert voicevox_client.synthesize_calls == [
+            ("応答:音声入力", 14)
         ]
         messages = [record.getMessage() for record in caplog.records]
         assert any("STT completed in" in message for message in messages)
         assert any("LLM completed in" in message for message in messages)
         assert any("VOICEVOX completed in" in message for message in messages)
 
+    def test_audio_pipeline_service_accepts_speech_synthesizer_protocol(self):
+        import app.audio_pipeline as audio_pipeline
+
+        signature = inspect.signature(audio_pipeline.AudioPipelineService)
+        annotation = signature.parameters["speech_synthesizer"].annotation
+        synthesize_signature = inspect.signature(audio_pipeline.SpeechSynthesizer.synthesize)
+
+        assert annotation is audio_pipeline.SpeechSynthesizer
+        assert list(synthesize_signature.parameters) == ["self", "text", "speaker_id"]
+        assert not hasattr(audio_pipeline, "VoicevoxClient")
+
+    def test_audio_pipeline_service_accepts_speech_transcriber_protocol(self):
+        import app.audio_pipeline as audio_pipeline
+
+        service_signature = inspect.signature(audio_pipeline.AudioPipelineService)
+        service_annotation = service_signature.parameters["transcriber"].annotation
+
+        assert service_annotation is audio_pipeline.SpeechTranscriber
+        assert not hasattr(audio_pipeline, "WhisperTranscriber")
+
+    def test_audio_pipeline_session_public_api_hides_collaborators(self):
+        import app.audio_pipeline as audio_pipeline
+        from app.characters.loader import VoicevoxTtsConfig
+
+        class StubTranscriber:
+            def transcribe(self, audio: bytes) -> str:
+                return "音声入力"
+
+        class StubSpeechSynthesizer:
+            def synthesize(self, reply: str, speaker_id: int) -> bytes:
+                return b"RIFF synthesized"
+
+            def close(self) -> None:
+                pass
+
+        session = audio_pipeline.AudioPipelineSession(
+            tts_config=VoicevoxTtsConfig(speaker_id=14),
+            transcriber=StubTranscriber(),
+            speech_synthesizer=StubSpeechSynthesizer(),
+        )
+
+        assert list(
+            name for name in dir(session) if not name.startswith("_")
+        ) == ["generate_response_audio"]
+
+    def test_audio_pipeline_does_not_depend_on_httpx_transport_errors(self):
+        import app.audio_pipeline as audio_pipeline
+
+        source = inspect.getsource(audio_pipeline)
+
+        assert "import httpx" not in source
+        assert "httpx.HTTPError" not in source
+
     def test_main_lifespan_owns_audio_pipeline_service_state(self):
         import app.main as main
 
+        assert not hasattr(main.app.state, "audio_pipeline_service")
+
+    def test_main_lifespan_closes_audio_pipeline_service(self, monkeypatch):
+        import app.main as main
+
+        class StubAudioPipelineService:
+            def __init__(self) -> None:
+                self.close_called = False
+
+            def close(self) -> None:
+                self.close_called = True
+
+        audio_service = StubAudioPipelineService()
+
+        def create_audio_pipeline_service_stub(_runtime_config):
+            return audio_service
+
+        monkeypatch.setattr(
+            main,
+            "create_audio_pipeline_service",
+            create_audio_pipeline_service_stub,
+        )
+
+        with TestClient(main.app):
+            assert audio_service.close_called is False
+
+        assert audio_service.close_called is True
         assert not hasattr(main.app.state, "audio_pipeline_service")
         with TestClient(main.app):
             assert hasattr(main.app.state, "audio_pipeline_service")

@@ -140,6 +140,93 @@ class TestLoadTtsConfig:
         with pytest.raises(KeyError):
             load_tts_config("miori")
 
+    def test_raises_distinct_key_error_when_card_data_is_missing(
+        self, tmp_path, monkeypatch
+    ):
+        character_dir = tmp_path / "characters" / "miori"
+        character_dir.mkdir(parents=True)
+        card = {"name": "miori"}
+        (character_dir / "miori.card.json").write_text(
+            json.dumps(card),
+            encoding="utf-8",
+        )
+
+        import app.characters.loader as loader_module
+
+        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
+
+        from app.characters.loader import load_tts_config
+
+        with pytest.raises(KeyError) as exc_info:
+            load_tts_config("miori")
+
+        assert exc_info.value.args[0] == "'data' field is missing in character card"
+
+    def test_raises_distinct_key_error_when_tts_config_is_missing(
+        self, tmp_path, monkeypatch
+    ):
+        character_dir = tmp_path / "characters" / "miori"
+        character_dir.mkdir(parents=True)
+        card = {"name": "miori", "data": {}}
+        (character_dir / "miori.card.json").write_text(
+            json.dumps(card),
+            encoding="utf-8",
+        )
+
+        import app.characters.loader as loader_module
+
+        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
+
+        from app.characters.loader import load_tts_config
+
+        with pytest.raises(KeyError) as exc_info:
+            load_tts_config("miori")
+
+        assert (
+            exc_info.value.args[0]
+            == "'tts_config' field is missing in character card data"
+        )
+
+    def test_raises_value_error_when_card_data_is_not_object(
+        self, tmp_path, monkeypatch
+    ):
+        character_dir = tmp_path / "characters" / "miori"
+        character_dir.mkdir(parents=True)
+        card = {"name": "miori", "data": []}
+        (character_dir / "miori.card.json").write_text(
+            json.dumps(card),
+            encoding="utf-8",
+        )
+
+        import app.characters.loader as loader_module
+
+        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
+
+        from app.characters.loader import load_tts_config
+
+        with pytest.raises(ValueError, match="'data' field must be an object"):
+            load_tts_config("miori")
+
+    def test_raises_value_error_when_tts_config_is_not_object(
+        self, tmp_path, monkeypatch
+    ):
+        character_dir = tmp_path / "characters" / "miori"
+        character_dir.mkdir(parents=True)
+        card = {"name": "miori", "data": {"tts_config": []}}
+        (character_dir / "miori.card.json").write_text(
+            json.dumps(card),
+            encoding="utf-8",
+        )
+
+        import app.characters.loader as loader_module
+
+        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
+
+        from app.characters.loader import load_tts_config
+
+        with pytest.raises(ValueError, match="'tts_config' field must be an object"):
+            load_tts_config("miori")
+
     def test_raises_file_not_found_for_missing_card(self, tmp_path, monkeypatch):
         (tmp_path / "characters" / "miori").mkdir(parents=True)
 
