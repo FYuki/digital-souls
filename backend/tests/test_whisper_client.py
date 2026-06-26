@@ -15,6 +15,7 @@ class _Segment:
 class _FakeWhisperModel:
     instances = []
     creation_delay = 0.0
+    transcribe_delay = 0.0
 
     def __init__(self, *args, **kwargs) -> None:
         if _FakeWhisperModel.creation_delay:
@@ -22,11 +23,30 @@ class _FakeWhisperModel:
         self.init_args = args
         self.init_kwargs = kwargs
         self.transcribe_calls = []
+        self.concurrent_transcribe_count = 0
+        self.max_concurrent_transcribe_count = 0
+        self._concurrency_lock = threading.Lock()
         _FakeWhisperModel.instances.append(self)
 
     def transcribe(self, audio_source, **kwargs):
-        self.transcribe_calls.append((audio_source, kwargs))
-        return [_Segment("こんにちは"), _Segment(" 光織です")], object()
+        with self._concurrency_lock:
+            self.concurrent_transcribe_count += 1
+            self.max_concurrent_transcribe_count = max(
+                self.max_concurrent_transcribe_count,
+                self.concurrent_transcribe_count,
+            )
+        try:
+            if _FakeWhisperModel.transcribe_delay:
+                time.sleep(_FakeWhisperModel.transcribe_delay)
+            self.transcribe_calls.append((audio_source, kwargs))
+            return self._iter_segments(), object()
+        finally:
+            with self._concurrency_lock:
+                self.concurrent_transcribe_count -= 1
+
+    def _iter_segments(self):
+        yield _Segment("こんにちは")
+        yield _Segment(" 光織です")
 
 
 def _import_client_with_fake_whisper(monkeypatch):
@@ -36,6 +56,7 @@ def _import_client_with_fake_whisper(monkeypatch):
     sys.modules.pop("app.stt.whisper_client", None)
     _FakeWhisperModel.instances.clear()
     _FakeWhisperModel.creation_delay = 0.0
+    _FakeWhisperModel.transcribe_delay = 0.0
     return importlib.import_module("app.stt.whisper_client")
 
 
@@ -96,3 +117,40 @@ class TestWhisperClientTranscribe:
 
         assert results == ["こんにちは 光織です", "こんにちは 光織です"]
         assert len(_FakeWhisperModel.instances) == 1
+
+    def test_serializes_concurrent_transcribe_calls(self, monkeypatch):
+        client = _import_client_with_fake_whisper(monkeypatch)
+        _FakeWhisperModel.transcribe_delay = 0.05
+        transcriber = client.WhisperTranscriber()
+        transcriber.transcribe(b"\x01\x00\x02\x00")
+        model = _FakeWhisperModel.instances[0]
+        results = []
+        errors = []
+        start = threading.Barrier(4)
+
+        def transcribe_audio(audio: bytes) -> None:
+            try:
+                start.wait()
+                results.append(transcriber.transcribe(audio))
+            except Exception as exc:  # pragma: no cover - surfaced by assertion below
+                errors.append(exc)
+
+        threads = [
+            threading.Thread(target=transcribe_audio, args=(b"\x03\x00\x04\x00",)),
+            threading.Thread(target=transcribe_audio, args=(b"\x05\x00\x06\x00",)),
+            threading.Thread(target=transcribe_audio, args=(b"\x07\x00\x08\x00",)),
+        ]
+
+        for thread in threads:
+            thread.start()
+        start.wait()
+        for thread in threads:
+            thread.join()
+
+        assert errors == []
+        assert results == [
+            "こんにちは 光織です",
+            "こんにちは 光織です",
+            "こんにちは 光織です",
+        ]
+        assert model.max_concurrent_transcribe_count == 1

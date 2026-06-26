@@ -32,24 +32,24 @@ class WhisperTranscriber:
 
     def transcribe(self, audio: bytes) -> str:
         audio_source = _pcm16_16khz_to_wav(audio)
-        segments, _info = self._get_model().transcribe(
-            audio_source,
-            language=WHISPER_LANGUAGE,
-        )
-        return "".join(_segment_text(segment) for segment in segments)
+        with self._model_lock:
+            model = self._get_or_create_model()
+            segments, _info = model.transcribe(
+                audio_source,
+                language=WHISPER_LANGUAGE,
+            )
+            return "".join(_segment_text(segment) for segment in segments)
 
-    def _get_model(self) -> WhisperModel:
+    def _get_or_create_model(self) -> WhisperModel:
         if self._model is None:
-            with self._model_lock:
-                if self._model is None:
-                    from faster_whisper import (  # type: ignore[import-untyped]
-                        WhisperModel as FasterWhisperModel,
-                    )
+            from faster_whisper import (  # type: ignore[import-untyped]
+                WhisperModel as FasterWhisperModel,
+            )
 
-                    self._model = cast(
-                        WhisperModel,
-                        FasterWhisperModel(WHISPER_MODEL_SIZE),
-                    )
+            self._model = cast(
+                WhisperModel,
+                FasterWhisperModel(WHISPER_MODEL_SIZE),
+            )
         return self._model
 
 

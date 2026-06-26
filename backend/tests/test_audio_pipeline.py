@@ -25,6 +25,24 @@ class _StubVoicevoxClient:
 
 
 class TestAudioPipelineService:
+    def test_wraps_permission_error_from_tts_config_as_config_error(self, monkeypatch):
+        import app.audio_pipeline as audio_pipeline
+
+        service = audio_pipeline.AudioPipelineService(
+            _StubTranscriber(),
+            _StubVoicevoxClient(),
+        )
+        monkeypatch.setattr(
+            audio_pipeline,
+            "load_tts_config",
+            lambda character: (_ for _ in ()).throw(PermissionError("denied")),
+        )
+
+        with pytest.raises(audio_pipeline.AudioPipelineConfigError) as exc_info:
+            service.create_session("miori")
+
+        assert str(exc_info.value) == "character card is not readable"
+
     def test_wraps_os_error_from_tts_config_as_config_error(self, monkeypatch):
         import app.audio_pipeline as audio_pipeline
 

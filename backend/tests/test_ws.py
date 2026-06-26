@@ -677,3 +677,20 @@ class TestWebSocketEndpoint:
             in message
             for message in messages
         )
+
+    def test_receive_frame_preserves_disconnect_code_and_reason(self):
+        from app.routers.ws import _receive_frame
+
+        class DisconnectingWebSocket:
+            async def receive(self):
+                return {
+                    "type": "websocket.disconnect",
+                    "code": 1001,
+                    "reason": "going away",
+                }
+
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            anyio.run(_receive_frame, DisconnectingWebSocket())
+
+        assert exc_info.value.code == 1001
+        assert exc_info.value.reason == "going away"
