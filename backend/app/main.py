@@ -1,11 +1,16 @@
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
+from typing import cast
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
 
 from app import _chat_runtime
+from app.audio_pipeline import (
+    create_audio_pipeline_service,
+    resolve_audio_runtime_config,
+)
 from app.routers.chat import router as chat_router
 from app.routers.ws import router as ws_router
 
@@ -15,7 +20,7 @@ RAG_MEMORY_WORKERS = _chat_runtime.DEFAULT_RAG_MEMORY_WORKERS
 
 
 def _app_chat_service(app: FastAPI) -> _chat_runtime.ChatService:
-    return app.state.chat_service
+    return cast(_chat_runtime.ChatService, app.state.chat_service)
 
 
 @asynccontextmanager
@@ -28,6 +33,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     chat_service_resolver = None
     resolver_registered = False
     chat_service_state_set = False
+    audio_pipeline_state_set = False
     try:
         memory_task_queue = _chat_runtime.create_thread_pool_memory_task_queue(executor)
         app_chat_service = _chat_runtime.create_chat_service(
@@ -36,6 +42,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         app.state.chat_service = app_chat_service
         chat_service_state_set = True
+        app.state.audio_pipeline_service = create_audio_pipeline_service(
+            resolve_audio_runtime_config(),
+        )
+        audio_pipeline_state_set = True
         chat_service_resolver = lambda: _app_chat_service(app)
         _chat_runtime.register_default_chat_service_resolver(chat_service_resolver)
         resolver_registered = True
@@ -43,6 +53,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         if resolver_registered and chat_service_resolver is not None:
             _chat_runtime.clear_default_chat_service_resolver(chat_service_resolver)
+        if audio_pipeline_state_set:
+            app.state.audio_pipeline_service.close()
+            del app.state.audio_pipeline_service
         if chat_service_state_set:
             del app.state.chat_service
         if memory_task_queue is not None:
