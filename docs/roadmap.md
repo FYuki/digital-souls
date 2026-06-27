@@ -32,21 +32,22 @@
 
 ## Phase 3: テキストチャット基盤（自作BE/FE）
 
-[ ] リポジトリ構成を自作BE/FE用に整備する（backend/, frontend/）
-[ ] FastAPI プロジェクト基盤を構築する（Ollama接続・キャラクターロード）
-[ ] Vite + Svelte テキストチャットUIを実装する
-[ ] キャラクター指定方式（リクエストパラメータ・ステートレス）を実装する
+[x] リポジトリ構成を自作BE/FE用に整備する（backend/, frontend/）
+[x] FastAPI プロジェクト基盤を構築する（Ollama接続・キャラクターロード）
+[x] Vite + Svelte テキストチャットUIを実装する
+[x] キャラクター指定方式（リクエストパラメータ・ステートレス）を実装する
 
 ## Phase 4: 音声対応
 
-[ ] BEにWebSocketエンドポイントを追加する
-[ ] STT（Whisper）+ TTS（VOICEVOX）パイプラインを実装する
-[ ] FEにマイク入力・音声再生UIを実装する
+[x] BEにWebSocketエンドポイントを追加する
+[x] STT（Whisper）+ TTS（VOICEVOX）パイプラインを実装する
+[ ] FEにマイク入力（VAD対応）・音声再生UIを実装する（テキスト/音声をWS接続に統合、#14）
+[ ] BEのWS音声フレームに処理中キュー（1件保持・上書き）を実装する（#29）
 [ ] WebSocketの遅延を計測し、LiveKit移行の必要性を判断する
 
 ## Phase 5: 長期記憶（RAG）
 
-[ ] RAG（Chroma + nomic-embed-text）のMVP構成を実装する（`docs/decisions/Multi-character-db-2026-06.md` の決定事項に基づく）
+[x] RAG（Chroma + nomic-embed-text）のMVP構成を実装する（`docs/decisions/Multi-character-db-2026-06.md` の決定事項に基づく）
 [ ] 全レコードに `character_id` を付与したスキーマで会話ログ（SQLite）と長期記憶（Chroma）を連携する
 [ ] キャラクターごとに完全独立したメモリ空間を構成する（DB共有はしない）
 [ ] 光織の記憶方針（`docs/decisions/miori-memory-policy-2026-06.md`）と実装設定（`backend/app/memory/memory_policy.json`）に沿った保存・参照ルールを反映する
