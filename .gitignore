@@ -16,6 +16,12 @@ backend/app/data/*
 node_modules/
 .npm-cache/
 dist/
+*.tsbuildinfo
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+frontend/.playwright-cache/
 
 # ログ
 *.log
