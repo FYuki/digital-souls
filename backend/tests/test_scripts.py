@@ -13,6 +13,8 @@ _SCRIPTS = [
     "start-backend.sh",
     "start-frontend.sh",
     "start-ollama.sh",
+    "start-voice-chat-e2e.sh",
+    "setup-backend.sh",
 ]
 
 
@@ -50,27 +52,135 @@ class TestScriptStructure:
 
 
 class TestStartFrontend:
-    def test_exits_successfully(self):
-        result = subprocess.run(
-            [str(_SCRIPTS_DIR / "start-frontend.sh")],
-            capture_output=True,
-            text=True,
+    def test_invokes_frontend_dev_server(self, tmp_path):
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        npm_log = tmp_path / "npm.log"
+        npm = bin_dir / "npm"
+        npm.write_text(
+            f"#!/usr/bin/env bash\n"
+            f"printf '%s\\n' \"$@\" > \"{npm_log}\"\n"
         )
-        assert result.returncode == 0
+        npm.chmod(0o755)
 
-    def test_prints_skip_message(self):
+        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
         result = subprocess.run(
             [str(_SCRIPTS_DIR / "start-frontend.sh")],
+            env=env,
             capture_output=True,
             text=True,
         )
-        assert "not yet implemented" in result.stdout.lower() or "skipping" in result.stdout.lower()
+
+        assert result.returncode == 0
+        assert npm_log.read_text().splitlines() == [
+            "run",
+            "dev",
+            "--prefix",
+            str(_SCRIPTS_DIR / "../frontend"),
+        ]
+
+
+def _make_modified_setup_backend(tmp_path: Path, backend_dir: Path) -> Path:
+    content = (_SCRIPTS_DIR / "setup-backend.sh").read_text()
+    content = content.replace(
+        'BACKEND_DIR="$SCRIPT_DIR/../backend"',
+        f'BACKEND_DIR="{backend_dir}"',
+    )
+    script = tmp_path / "setup-backend.sh"
+    script.write_text(content)
+    script.chmod(0o755)
+    return script
+
+
+class TestSetupBackend:
+    def test_creates_venv_and_installs_runtime_requirements_when_venv_is_absent(
+        self, tmp_path
+    ):
+        backend_dir = tmp_path / "backend"
+        backend_dir.mkdir()
+        requirements = backend_dir / "requirements.txt"
+        requirements.write_text("# runtime requirements\n")
+
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        python_log = tmp_path / "python_args.txt"
+        pip_log = tmp_path / "pip_args.txt"
+        python = bin_dir / "python3"
+        python.write_text(
+            "#!/usr/bin/env bash\n"
+            f"printf '%s\\n' \"$@\" > \"{python_log}\"\n"
+            "venv_dir=\"${@: -1}\"\n"
+            "mkdir -p \"$venv_dir/bin\"\n"
+            f"cat > \"$venv_dir/bin/pip\" <<'EOF'\n"
+            "#!/usr/bin/env bash\n"
+            f"printf '%s\\n' \"$@\" > \"{pip_log}\"\n"
+            "EOF\n"
+            "chmod +x \"$venv_dir/bin/pip\"\n"
+        )
+        python.chmod(0o755)
+
+        script = _make_modified_setup_backend(tmp_path, backend_dir)
+        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+        result = subprocess.run([str(script)], env=env, capture_output=True, text=True)
+
+        assert result.returncode == 0
+        assert python_log.read_text().splitlines() == [
+            "-m",
+            "venv",
+            str(backend_dir / ".venv"),
+        ]
+        assert pip_log.read_text().splitlines() == [
+            "install",
+            "-r",
+            str(requirements),
+        ]
+
+    def test_reuses_existing_venv_and_installs_runtime_requirements(self, tmp_path):
+        backend_dir = tmp_path / "backend"
+        venv_bin = backend_dir / ".venv" / "bin"
+        venv_bin.mkdir(parents=True)
+        requirements = backend_dir / "requirements.txt"
+        requirements.write_text("# runtime requirements\n")
+
+        pip_log = tmp_path / "pip_args.txt"
+        pip = venv_bin / "pip"
+        pip.write_text(f"#!/usr/bin/env bash\nprintf '%s\\n' \"$@\" > \"{pip_log}\"\n")
+        pip.chmod(0o755)
+
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        python_log = tmp_path / "python_called.txt"
+        python = bin_dir / "python3"
+        python.write_text(f"#!/usr/bin/env bash\necho called > \"{python_log}\"\n")
+        python.chmod(0o755)
+
+        script = _make_modified_setup_backend(tmp_path, backend_dir)
+        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+        result = subprocess.run([str(script)], env=env, capture_output=True, text=True)
+
+        assert result.returncode == 0
+        assert not python_log.exists()
+        assert pip_log.read_text().splitlines() == [
+            "install",
+            "-r",
+            str(requirements),
+        ]
 
 
 def _make_uvicorn_stub(bin_dir: Path, log_file: Path) -> None:
     stub = bin_dir / "uvicorn"
     stub.write_text(f'#!/usr/bin/env bash\necho "uvicorn" >> "{log_file}"\n')
     stub.chmod(0o755)
+
+
+def _make_venv_uvicorn_stub(venv_bin: Path, content: str) -> Path:
+    stub = venv_bin / "uvicorn"
+    stub.write_text(content)
+    stub.chmod(0o755)
+    return stub
 
 
 def _make_modified_start_backend(tmp_path: Path, backend_dir: Path) -> Path:
@@ -96,16 +206,11 @@ class TestStartBackend:
         (venv_bin / "activate").write_text("# stub activate\n")
 
         env_log = tmp_path / "env.txt"
-        bin_dir = tmp_path / "bin"
-        bin_dir.mkdir()
-        uvicorn = bin_dir / "uvicorn"
-        uvicorn.write_text(f'#!/usr/bin/env bash\nenv > "{env_log}"\n')
-        uvicorn.chmod(0o755)
+        _make_venv_uvicorn_stub(venv_bin, f'#!/usr/bin/env bash\nenv > "{env_log}"\n')
 
         script = _make_modified_start_backend(tmp_path, backend_dir)
-        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
 
-        subprocess.run([str(script)], env=env, capture_output=True, text=True)
+        subprocess.run([str(script)], env=os.environ, capture_output=True, text=True)
 
         assert env_log.exists(), "uvicorn stub was not called"
         assert "TEST_MARKER=loaded_from_env" in env_log.read_text()
@@ -119,15 +224,14 @@ class TestStartBackend:
         venv_bin = backend_dir / ".venv" / "bin"
         venv_bin.mkdir(parents=True)
         (venv_bin / "activate").write_text(f'echo "activate" >> "{order_log}"\n')
-
-        bin_dir = tmp_path / "bin"
-        bin_dir.mkdir()
-        _make_uvicorn_stub(bin_dir, order_log)
+        _make_venv_uvicorn_stub(
+            venv_bin,
+            f'#!/usr/bin/env bash\necho "uvicorn" >> "{order_log}"\n',
+        )
 
         script = _make_modified_start_backend(tmp_path, backend_dir)
-        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
 
-        subprocess.run([str(script)], env=env, capture_output=True, text=True)
+        subprocess.run([str(script)], env=os.environ, capture_output=True, text=True)
 
         order = order_log.read_text().splitlines()
         assert "activate" in order, "venv activate was not sourced"
@@ -143,19 +247,15 @@ class TestStartBackend:
         (venv_bin / "activate").write_text("# stub activate\n")
 
         args_log = tmp_path / "uvicorn_args.txt"
-        bin_dir = tmp_path / "bin"
-        bin_dir.mkdir()
-        uvicorn = bin_dir / "uvicorn"
-        uvicorn.write_text(
+        _make_venv_uvicorn_stub(
+            venv_bin,
             f"#!/usr/bin/env bash\n"
-            f"printf '%s\\n' \"$@\" > \"{args_log}\"\n"
+            f"printf '%s\\n' \"$@\" > \"{args_log}\"\n",
         )
-        uvicorn.chmod(0o755)
 
         script = _make_modified_start_backend(tmp_path, backend_dir)
-        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
 
-        subprocess.run([str(script)], env=env, capture_output=True, text=True)
+        subprocess.run([str(script)], env=os.environ, capture_output=True, text=True)
 
         assert args_log.read_text().splitlines() == [
             "--app-dir",
@@ -163,6 +263,23 @@ class TestStartBackend:
             "app.main:app",
             "--reload",
         ]
+
+    def test_backend_venv_is_required(self, tmp_path):
+        backend_dir = tmp_path / "backend"
+        backend_dir.mkdir()
+
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        _make_uvicorn_stub(bin_dir, tmp_path / "uvicorn_called.txt")
+
+        script = _make_modified_start_backend(tmp_path, backend_dir)
+        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+        result = subprocess.run([str(script)], env=env, capture_output=True, text=True)
+
+        assert result.returncode == 1
+        assert "backend virtualenv is required" in result.stderr
+        assert not (tmp_path / "uvicorn_called.txt").exists()
 
 
 def _make_start_all_stub_env(tmp_path: Path, curl_exit: int, max_attempts: int = 30):
@@ -174,7 +291,11 @@ def _make_start_all_stub_env(tmp_path: Path, curl_exit: int, max_attempts: int =
     (scripts_dir / "start-all.sh").write_text(content)
     (scripts_dir / "start-all.sh").chmod(0o755)
 
-    for name in ["start-ollama.sh", "start-backend.sh", "start-frontend.sh"]:
+    for name in [
+        "start-ollama.sh",
+        "start-backend.sh",
+        "start-frontend.sh",
+    ]:
         stub = scripts_dir / name
         stub.write_text("#!/usr/bin/env bash\n")
         stub.chmod(0o755)
@@ -345,6 +466,243 @@ class TestStartAll:
 
         assert result.returncode != 0
         assert "process exited before becoming ready" in result.stderr
+
+
+def _make_voice_chat_e2e_stub_env(tmp_path: Path):
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+
+    script = scripts_dir / "start-voice-chat-e2e.sh"
+    script.write_text((_SCRIPTS_DIR / "start-voice-chat-e2e.sh").read_text())
+    script.chmod(0o755)
+
+    for name in [
+        "start-ollama.sh",
+        "setup-backend.sh",
+        "start-backend.sh",
+        "start-frontend.sh",
+    ]:
+        stub = scripts_dir / name
+        stub.write_text("#!/usr/bin/env bash\nexit 0\n")
+        stub.chmod(0o755)
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "curl").write_text("#!/usr/bin/env bash\nexit 0\n")
+    (bin_dir / "curl").chmod(0o755)
+    (bin_dir / "docker").write_text("#!/usr/bin/env bash\nexit 0\n")
+    (bin_dir / "docker").chmod(0o755)
+
+    return scripts_dir, bin_dir
+
+
+class TestStartVoiceChatE2E:
+    def test_mock_mode_starts_frontend_only(self, tmp_path):
+        scripts_dir, bin_dir = _make_voice_chat_e2e_stub_env(tmp_path)
+        order_log = tmp_path / "order.log"
+
+        for name in ["start-ollama.sh", "setup-backend.sh", "start-backend.sh"]:
+            (scripts_dir / name).write_text(
+                f"#!/usr/bin/env bash\n"
+                f"echo {name} >> \"{order_log}\"\n"
+            )
+            (scripts_dir / name).chmod(0o755)
+        (scripts_dir / "start-frontend.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"echo start-frontend.sh >> \"{order_log}\"\n"
+        )
+        (scripts_dir / "start-frontend.sh").chmod(0o755)
+
+        env = {
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "VOICE_CHAT_E2E_BACKEND": "mock",
+        }
+
+        result = subprocess.run(
+            [str(scripts_dir / "start-voice-chat-e2e.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode == 0
+        assert order_log.read_text().splitlines() == ["start-frontend.sh"]
+
+    def test_default_real_mode_fails_when_backend_health_check_fails(self, tmp_path):
+        scripts_dir, bin_dir = _make_voice_chat_e2e_stub_env(tmp_path)
+        order_log = tmp_path / "order.log"
+        frontend_marker = tmp_path / "frontend-started"
+
+        (scripts_dir / "start-ollama.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"echo start-ollama.sh >> \"{order_log}\"\n"
+            f"exec sleep 30\n"
+        )
+        (scripts_dir / "start-ollama.sh").chmod(0o755)
+        (scripts_dir / "start-backend.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"echo start-backend.sh >> \"{order_log}\"\n"
+            f"exit 1\n"
+        )
+        (scripts_dir / "start-backend.sh").chmod(0o755)
+        (scripts_dir / "start-frontend.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"touch \"{frontend_marker}\"\n"
+        )
+        (scripts_dir / "start-frontend.sh").chmod(0o755)
+        (bin_dir / "curl").write_text(
+            "#!/usr/bin/env bash\n"
+            "url=\"${@: -1}\"\n"
+            "case \"$url\" in\n"
+            "  *localhost:11434*) exit 0 ;;\n"
+            "  *localhost:50021*) exit 0 ;;\n"
+            "  *localhost:8000*) exit 1 ;;\n"
+            "  *) exit 1 ;;\n"
+            "esac\n"
+        )
+        (bin_dir / "curl").chmod(0o755)
+
+        env = {
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "VOICE_CHAT_E2E_HTTP_MAX_ATTEMPTS": "1",
+        }
+
+        result = subprocess.run(
+            [str(scripts_dir / "start-voice-chat-e2e.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode != 0
+        assert order_log.read_text().splitlines() == [
+            "start-ollama.sh",
+            "start-backend.sh",
+        ]
+        assert not frontend_marker.exists()
+
+    def test_default_real_mode_fails_when_voicevox_health_check_fails(self, tmp_path):
+        scripts_dir, bin_dir = _make_voice_chat_e2e_stub_env(tmp_path)
+        order_log = tmp_path / "order.log"
+        frontend_marker = tmp_path / "frontend-started"
+
+        (scripts_dir / "start-ollama.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"echo start-ollama.sh >> \"{order_log}\"\n"
+            f"exec sleep 30\n"
+        )
+        (scripts_dir / "start-ollama.sh").chmod(0o755)
+        (scripts_dir / "setup-backend.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"echo setup-backend.sh >> \"{order_log}\"\n"
+        )
+        (scripts_dir / "setup-backend.sh").chmod(0o755)
+        (scripts_dir / "start-backend.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"echo start-backend.sh >> \"{order_log}\"\n"
+        )
+        (scripts_dir / "start-backend.sh").chmod(0o755)
+        (scripts_dir / "start-frontend.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"touch \"{frontend_marker}\"\n"
+        )
+        (scripts_dir / "start-frontend.sh").chmod(0o755)
+        (bin_dir / "curl").write_text(
+            "#!/usr/bin/env bash\n"
+            "url=\"${@: -1}\"\n"
+            "case \"$url\" in\n"
+            "  *localhost:11434*) exit 0 ;;\n"
+            "  *localhost:50021*) exit 1 ;;\n"
+            "  *localhost:8000*) exit 0 ;;\n"
+            "  *) exit 1 ;;\n"
+            "esac\n"
+        )
+        (bin_dir / "curl").chmod(0o755)
+
+        env = {
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "VOICE_CHAT_E2E_HTTP_MAX_ATTEMPTS": "1",
+        }
+
+        result = subprocess.run(
+            [str(scripts_dir / "start-voice-chat-e2e.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode != 0
+        assert "VOICEVOX did not become ready" in result.stderr
+        assert order_log.read_text().splitlines() == ["start-ollama.sh"]
+        assert not frontend_marker.exists()
+
+    def test_auto_mode_is_rejected(self, tmp_path):
+        scripts_dir, bin_dir = _make_voice_chat_e2e_stub_env(tmp_path)
+
+        env = {
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "VOICE_CHAT_E2E_BACKEND": "auto",
+        }
+
+        result = subprocess.run(
+            [str(scripts_dir / "start-voice-chat-e2e.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode != 0
+        assert 'VOICE_CHAT_E2E_BACKEND must be "mock" or "real"' in result.stderr
+
+    def test_real_mode_fails_when_backend_health_check_fails(self, tmp_path):
+        scripts_dir, bin_dir = _make_voice_chat_e2e_stub_env(tmp_path)
+        frontend_marker = tmp_path / "frontend-started"
+
+        (scripts_dir / "start-ollama.sh").write_text("#!/usr/bin/env bash\nexec sleep 30\n")
+        (scripts_dir / "start-ollama.sh").chmod(0o755)
+        (scripts_dir / "start-backend.sh").write_text("#!/usr/bin/env bash\nexit 1\n")
+        (scripts_dir / "start-backend.sh").chmod(0o755)
+        (scripts_dir / "start-frontend.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"touch \"{frontend_marker}\"\n"
+        )
+        (scripts_dir / "start-frontend.sh").chmod(0o755)
+        (bin_dir / "curl").write_text(
+            "#!/usr/bin/env bash\n"
+            "url=\"${@: -1}\"\n"
+            "case \"$url\" in\n"
+            "  *localhost:11434*) exit 0 ;;\n"
+            "  *localhost:50021*) exit 0 ;;\n"
+            "  *localhost:8000*) exit 1 ;;\n"
+            "  *) exit 1 ;;\n"
+            "esac\n"
+        )
+        (bin_dir / "curl").chmod(0o755)
+
+        env = {
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "VOICE_CHAT_E2E_BACKEND": "real",
+        }
+
+        result = subprocess.run(
+            [str(scripts_dir / "start-voice-chat-e2e.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode != 0
+        assert not frontend_marker.exists()
 
 
 class TestStartOllama:

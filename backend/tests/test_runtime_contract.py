@@ -247,7 +247,7 @@ class TestRuntimeConfiguration:
             def generate_response_audio(self, audio: bytes, reply_generator):
                 reply = reply_generator("transcribed")
                 self.calls.append((audio, reply))
-                return b"RIFF delegated"
+                return "transcribed", reply, b"RIFF delegated"
 
         class StubAudioPipelineService:
             def __init__(self) -> None:
@@ -267,8 +267,16 @@ class TestRuntimeConfiguration:
             main.app.state.audio_pipeline_service = audio_service
             with client.websocket_connect("/ws/miori") as websocket:
                 websocket.send_bytes(b"\x01\x00")
+                user_text = websocket.receive_json()
+                miori_text = websocket.receive_json()
                 response = websocket.receive_bytes()
 
+        assert user_text == {"type": "text", "speaker": "user", "message": "transcribed"}
+        assert miori_text == {
+            "type": "text",
+            "speaker": "miori",
+            "response": "reply:transcribed",
+        }
         assert response == b"RIFF delegated"
         assert len(audio_service.sessions) == 1
         character, session = audio_service.sessions[0]
@@ -311,11 +319,13 @@ class TestRuntimeConfiguration:
         )
 
         with caplog.at_level("INFO", logger="app.audio_pipeline"):
-            audio = session.generate_response_audio(
+            transcript, reply, audio = session.generate_response_audio(
                 b"\x01\x00",
                 lambda message: f"応答:{message}",
             )
 
+        assert transcript == "音声入力"
+        assert reply == "応答:音声入力"
         assert audio == b"RIFF synthesized"
         assert transcriber.calls == [b"\x01\x00"]
         assert voicevox_client.synthesize_calls == [
@@ -370,6 +380,11 @@ class TestRuntimeConfiguration:
         assert list(
             name for name in dir(session) if not name.startswith("_")
         ) == ["generate_response_audio"]
+        assert not hasattr(audio_pipeline, "AudioPipelineResponse")
+        assert not hasattr(audio_pipeline, "_AudioPipelineResponse")
+        assert inspect.signature(session.generate_response_audio).return_annotation == tuple[
+            str, str, bytes
+        ]
 
     def test_audio_pipeline_does_not_depend_on_httpx_transport_errors(self):
         import app.audio_pipeline as audio_pipeline

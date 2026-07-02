@@ -25,10 +25,13 @@ logger = logging.getLogger(__name__)
 MESSAGE_TYPE_FIELD = "type"
 MESSAGE_FIELD = "message"
 RESPONSE_FIELD = "response"
+SPEAKER_FIELD = "speaker"
 STATUS_FIELD = "status"
 DETAIL_FIELD = "detail"
 TEXT_MESSAGE_TYPE = "text"
 ERROR_MESSAGE_TYPE = "error"
+USER_SPEAKER = "user"
+MIORI_SPEAKER = "miori"
 WEBSOCKET_TEXT_FIELD = "text"
 WEBSOCKET_BYTES_FIELD = "bytes"
 WEBSOCKET_TYPE_FIELD = "type"
@@ -174,7 +177,7 @@ async def _handle_audio_frame(
         return True
 
     try:
-        response_audio = await run_in_threadpool(
+        transcript, reply, response_audio = await run_in_threadpool(
             audio_session.generate_response_audio,
             audio,
             chat_session.generate_reply,
@@ -193,6 +196,20 @@ async def _handle_audio_frame(
         await _send_error(websocket, 502, exc.detail)
         return True
 
+    await websocket.send_json(
+        {
+            MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
+            SPEAKER_FIELD: USER_SPEAKER,
+            MESSAGE_FIELD: transcript,
+        }
+    )
+    await websocket.send_json(
+        {
+            MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
+            SPEAKER_FIELD: MIORI_SPEAKER,
+            RESPONSE_FIELD: reply,
+        }
+    )
     await websocket.send_bytes(response_audio)
     return True
 

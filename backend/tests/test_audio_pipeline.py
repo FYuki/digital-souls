@@ -117,6 +117,27 @@ class TestAudioPipelineService:
 
 
 class TestAudioPipelineSession:
+    def test_returns_transcript_reply_and_audio(self):
+        import app.audio_pipeline as audio_pipeline
+        from app.characters.loader import VoicevoxTtsConfig
+
+        voicevox_client = _StubVoicevoxClient()
+        session = audio_pipeline.AudioPipelineSession(
+            tts_config=VoicevoxTtsConfig(speaker_id=14),
+            transcriber=_StubTranscriber("今日の音声"),
+            speech_synthesizer=voicevox_client,
+        )
+
+        transcript, reply, audio = session.generate_response_audio(
+            b"\x01\x00",
+            lambda message: f"応答:{message}",
+        )
+
+        assert transcript == "今日の音声"
+        assert reply == "応答:今日の音声"
+        assert audio == b"RIFF synthesized"
+        assert voicevox_client.synthesize_calls == [("応答:今日の音声", 14)]
+
     def test_maps_invalid_pcm16_audio_to_client_input_step_error(self):
         import app.audio_pipeline as audio_pipeline
         from app.characters.loader import VoicevoxTtsConfig

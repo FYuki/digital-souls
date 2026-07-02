@@ -1,13 +1,23 @@
 import { svelte, vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import { defineConfig } from 'vite'
 
-import { API_PROXY_PREFIX, apiProxyConfig } from './vite.proxy'
+import { createVadAssetPlugin } from './vite.vad-assets'
+import {
+  API_PROXY_PREFIX,
+  WS_PROXY_PREFIX,
+  apiProxyConfig,
+  wsProxyConfig,
+} from './vite.proxy'
 
 export default defineConfig({
-  plugins: [svelte({ preprocess: vitePreprocess() })],
+  plugins: [svelte({ preprocess: vitePreprocess() }), createVadAssetPlugin()],
+  resolve: {
+    conditions: ['browser'],
+  },
   server: {
     proxy: {
       [API_PROXY_PREFIX]: apiProxyConfig,
+      [WS_PROXY_PREFIX]: wsProxyConfig,
     },
   },
   test: {

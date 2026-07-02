@@ -75,10 +75,11 @@ class AudioPipelineSession:
         self,
         audio: bytes,
         reply_generator: ReplyGenerator,
-    ) -> bytes:
+    ) -> tuple[str, str, bytes]:
         message = self._transcribe_audio(audio)
         reply = self._generate_reply(reply_generator, message)
-        return self._synthesize_reply(reply)
+        response_audio = self._synthesize_reply(reply)
+        return message, reply, response_audio
 
     def _transcribe_audio(self, audio: bytes) -> str:
         _validate_pcm16_audio(audio)

@@ -1,7 +1,17 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
+
+  import AudioPlayer from './lib/AudioPlayer.svelte'
+  import AudioRecorder from './lib/AudioRecorder.svelte'
   import ChatWindow from './lib/ChatWindow.svelte'
   import InputBar from './lib/InputBar.svelte'
-  import { sendMessage } from './lib/api'
+  import {
+    WebSocketAudioTransport,
+    type AudioTransport,
+    type BackendErrorMessage,
+    type TextMessageSpeaker,
+    type TransportCallbacks,
+  } from './lib/audio/transport'
 
   type ChatMessage = {
     id: number
@@ -9,11 +19,15 @@
     text: string
   }
 
+  const AUDIO_WS_PATH = '/ws/miori'
   const ERROR_MESSAGE = '応答の取得に失敗しました。'
-
+  type PendingRequest = 'text' | 'audio' | null
   let messages: ChatMessage[] = []
   let nextMessageId = 1
-  let isSending = false
+  let pendingRequest: PendingRequest = null
+  let isConnected = false
+  let audioData: ArrayBuffer | null = null
+  let transport: AudioTransport | null = null
 
   const createMessage = (speaker: ChatMessage['speaker'], text: string): ChatMessage => {
     const message = {
@@ -37,24 +51,149 @@
     appendMessage(createMessage('miori', ERROR_MESSAGE))
   }
 
-  const handleSend = async (message: string) => {
+  const getTransport = (): AudioTransport => {
+    if (transport === null) {
+      throw new Error('Audio transport is not initialized')
+    }
+
+    return transport
+  }
+
+  const resolveAudioWebSocketUrl = (): string => {
+    const { protocol, host } = window.location
+    const webSocketProtocol = protocol === 'https:' ? 'wss:' : 'ws:'
+
+    return `${webSocketProtocol}//${host}${AUDIO_WS_PATH}`
+  }
+
+  const handleTransportError = (_error: BackendErrorMessage) => {
+    appendErrorMessage(new Error('WebSocket transport reported an error'))
+    clearPendingRequest()
+  }
+
+  const handleTransportRuntimeError = (error: Error) => {
+    appendErrorMessage(error)
+    clearPendingRequest()
+  }
+
+  const clearPendingRequest = () => {
+    pendingRequest = null
+  }
+
+  const clearAudioPendingRequest = () => {
+    if (pendingRequest === 'audio') {
+      clearPendingRequest()
+    }
+  }
+
+  const createTransportCallbacks = (isCurrentTransport: () => boolean): TransportCallbacks => ({
+    onTextMessage: (speaker: TextMessageSpeaker, text: string) => {
+      if (!isCurrentTransport()) {
+        return
+      }
+
+      appendMessage(createMessage(speaker, text))
+      if (pendingRequest === 'text' && speaker === 'miori') {
+        clearPendingRequest()
+      }
+    },
+    onAudioMessage: (audio: ArrayBuffer) => {
+      if (!isCurrentTransport()) {
+        return
+      }
+
+      audioData = audio
+      clearAudioPendingRequest()
+    },
+    onError: (error: BackendErrorMessage) => {
+      if (!isCurrentTransport()) {
+        return
+      }
+
+      handleTransportError(error)
+    },
+    onTransportError: (error: Error) => {
+      if (!isCurrentTransport()) {
+        return
+      }
+
+      handleTransportRuntimeError(error)
+    },
+    onOpen: () => {
+      if (!isCurrentTransport()) {
+        return
+      }
+
+      isConnected = true
+    },
+    onClose: () => {
+      if (!isCurrentTransport()) {
+        return
+      }
+
+      isConnected = false
+      clearPendingRequest()
+    },
+  })
+
+  const connectTransport = () => {
+    let nextTransport: AudioTransport
+    const callbacks = createTransportCallbacks(() => transport === nextTransport)
+    nextTransport = new WebSocketAudioTransport(resolveAudioWebSocketUrl(), callbacks)
+    transport = nextTransport
+    void nextTransport.connect().catch((error) => {
+      if (transport !== nextTransport) {
+        return
+      }
+
+      appendErrorMessage(error)
+      isConnected = false
+      clearPendingRequest()
+    })
+  }
+
+  onMount(() => {
+    connectTransport()
+
+    return () => {
+      transport?.disconnect()
+    }
+  })
+
+  const handleSend = (message: string) => {
     const text = message.trim()
 
-    if (text.length === 0 || isSending) {
+    if (text.length === 0 || pendingRequest !== null) {
       return
     }
 
     appendMessage(createMessage('user', text))
-    isSending = true
-
+    pendingRequest = 'text'
     try {
-      const response = await sendMessage(text)
-      appendMessage(createMessage('miori', response))
+      getTransport().sendText(text)
     } catch (error) {
       appendErrorMessage(error)
-    } finally {
-      isSending = false
+      clearPendingRequest()
     }
+  }
+
+  const handleAudioCaptured = (pcmData: ArrayBuffer) => {
+    if (!isConnected || pendingRequest !== null) {
+      return
+    }
+
+    pendingRequest = 'audio'
+    try {
+      getTransport().sendAudio(pcmData)
+    } catch (error) {
+      appendErrorMessage(error)
+      clearAudioPendingRequest()
+    }
+  }
+
+  const handleAudioError = (error: Error) => {
+    appendErrorMessage(error)
+    clearAudioPendingRequest()
   }
 </script>
 
@@ -66,7 +205,18 @@
     </header>
 
     <ChatWindow {messages} />
-    <InputBar onSend={handleSend} disabled={isSending} />
+    <div class="input-area">
+      <InputBar onSend={handleSend} disabled={pendingRequest !== null || !isConnected} />
+      <AudioRecorder
+        disabled={pendingRequest !== null || !isConnected}
+        onAudioCaptured={handleAudioCaptured}
+        onError={handleAudioError}
+      />
+    </div>
+    <AudioPlayer
+      {audioData}
+      onError={handleAudioError}
+    />
   </section>
 </main>
 
@@ -115,6 +265,23 @@
     color: #4a2822;
   }
 
+  .input-area {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    padding: 16px 24px 20px;
+    border-top: 1px solid rgba(144, 67, 47, 0.16);
+    background: #fff4ec;
+  }
+
+  :global(.input-area .input-bar) {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border-top: 0;
+    background: transparent;
+  }
+
   @media (max-width: 640px) {
     .app-shell {
       padding: 0;
@@ -124,6 +291,11 @@
       min-height: 100vh;
       border: 0;
       border-radius: 0;
+    }
+
+    .input-area {
+      padding: 12px;
+      gap: 8px;
     }
   }
 </style>

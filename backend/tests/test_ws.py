@@ -310,12 +310,67 @@ class TestWebSocketEndpoint:
                             with patch(_SYNTHESIZE, return_value=output_audio) as mock_tts:
                                 with client.websocket_connect("/ws/miori") as websocket:
                                     websocket.send_bytes(_PCM_AUDIO)
+                                    user_text = websocket.receive_json()
+                                    miori_text = websocket.receive_json()
                                     response = websocket.receive_bytes()
 
+        assert user_text == {"type": "text", "speaker": "user", "message": "こんにちは"}
+        assert miori_text == {
+            "type": "text",
+            "speaker": "miori",
+            "response": _LLM_REPLY,
+        }
         assert response == output_audio
         mock_transcribe.assert_called_once_with(_PCM_AUDIO)
         mock_gen.assert_called_once_with(_PERSONALITY, "こんにちは")
         mock_tts.assert_called_once_with(_LLM_REPLY, 14)
+
+    def test_audio_handler_sends_user_text_miori_text_then_audio(self):
+        from app.routers.ws import _handle_audio_frame
+
+        class RecordingWebSocket:
+            def __init__(self):
+                self.sent_frames = []
+
+            async def send_json(self, payload):
+                self.sent_frames.append(("json", payload))
+
+            async def send_bytes(self, payload):
+                self.sent_frames.append(("bytes", payload))
+
+        class StubChatSession:
+            def generate_reply(self, message):
+                return f"応答:{message}"
+
+        class StubAudioSession:
+            def generate_response_audio(self, audio, reply_generator):
+                reply = reply_generator("音声入力")
+                return "音声入力", reply, b"RIFF output"
+
+        async def run_handler():
+            websocket = RecordingWebSocket()
+            keep_open = await _handle_audio_frame(
+                websocket,
+                StubChatSession(),
+                StubAudioSession(),
+                {"bytes": _PCM_AUDIO},
+            )
+            return keep_open, websocket
+
+        keep_open, websocket = anyio.run(run_handler)
+
+        assert keep_open is True
+        assert websocket.sent_frames == [
+            (
+                "json",
+                {"type": "text", "speaker": "user", "message": "音声入力"},
+            ),
+            (
+                "json",
+                {"type": "text", "speaker": "miori", "response": "応答:音声入力"},
+            ),
+            ("bytes", b"RIFF output"),
+        ]
 
     def test_creates_audio_session_in_threadpool(self):
         class StubChatSession:
@@ -332,7 +387,8 @@ class TestWebSocketEndpoint:
 
         class RecordingAudioSession:
             def generate_response_audio(self, audio, reply_generator):
-                return b"RIFF output"
+                reply = reply_generator("threadpool transcript")
+                return "threadpool transcript", reply, b"RIFF output"
 
         class RecordingAudioService:
             def __init__(self):
@@ -353,6 +409,8 @@ class TestWebSocketEndpoint:
             app.state.audio_pipeline_service = audio_service
             with client.websocket_connect("/ws/miori") as websocket:
                 websocket.send_bytes(_PCM_AUDIO)
+                websocket.receive_json()
+                websocket.receive_json()
                 response = websocket.receive_bytes()
 
         assert response == b"RIFF output"
@@ -380,6 +438,8 @@ class TestWebSocketEndpoint:
                             ) as mock_tts:
                                 with client.websocket_connect("/ws/miori") as websocket:
                                     websocket.send_bytes(_PCM_AUDIO)
+                                    first_user_text = websocket.receive_json()
+                                    first_miori_text = websocket.receive_json()
                                     first_response = websocket.receive_bytes()
 
                                     monkeypatch.setenv(
@@ -387,8 +447,22 @@ class TestWebSocketEndpoint:
                                         "http://changed.local:50021",
                                     )
                                     websocket.send_bytes(_PCM_AUDIO)
+                                    second_user_text = websocket.receive_json()
+                                    second_miori_text = websocket.receive_json()
                                     second_response = websocket.receive_bytes()
 
+        assert first_user_text == {"type": "text", "speaker": "user", "message": "1つ目の質問"}
+        assert first_miori_text == {
+            "type": "text",
+            "speaker": "miori",
+            "response": "1つ目の応答",
+        }
+        assert second_user_text == {"type": "text", "speaker": "user", "message": "2つ目の質問"}
+        assert second_miori_text == {
+            "type": "text",
+            "speaker": "miori",
+            "response": "2つ目の応答",
+        }
         assert first_response == b"RIFF first"
         assert second_response == b"RIFF second"
         mock_config.assert_called_once_with("miori")
@@ -527,9 +601,17 @@ class TestWebSocketEndpoint:
                                 text_response = websocket.receive_json()
 
                                 websocket.send_bytes(_PCM_AUDIO)
+                                user_text = websocket.receive_json()
+                                miori_text = websocket.receive_json()
                                 audio_response = websocket.receive_bytes()
 
         assert text_response == {"type": "text", "response": "テキスト応答"}
+        assert user_text == {"type": "text", "speaker": "user", "message": "音声の質問"}
+        assert miori_text == {
+            "type": "text",
+            "speaker": "miori",
+            "response": "音声応答",
+        }
         assert audio_response == b"RIFF voice"
         assert [call.args[1] for call in mock_gen.call_args_list] == [
             "テキストの質問",
@@ -638,6 +720,8 @@ class TestWebSocketEndpoint:
                             with caplog.at_level("INFO", logger="app.audio_pipeline"):
                                 with client.websocket_connect("/ws/miori") as websocket:
                                     websocket.send_bytes(_PCM_AUDIO)
+                                    websocket.receive_json()
+                                    websocket.receive_json()
                                     websocket.receive_bytes()
 
         messages = [record.getMessage() for record in caplog.records]
