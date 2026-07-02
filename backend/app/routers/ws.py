@@ -1,5 +1,6 @@
 import json
 import logging
+from dataclasses import dataclass
 from typing import cast
 
 from fastapi import APIRouter, WebSocket
@@ -36,7 +37,25 @@ WEBSOCKET_TEXT_FIELD = "text"
 WEBSOCKET_BYTES_FIELD = "bytes"
 WEBSOCKET_TYPE_FIELD = "type"
 WEBSOCKET_DISCONNECT_TYPE = "websocket.disconnect"
+MAX_AUDIO_FRAME_SECONDS = 30
+PCM_SAMPLE_RATE_HZ = 16000
+PCM_CHANNELS = 1
+PCM_SAMPLE_WIDTH_BYTES = 2
+MAX_AUDIO_FRAME_BYTES = (
+    PCM_SAMPLE_RATE_HZ
+    * PCM_CHANNELS
+    * PCM_SAMPLE_WIDTH_BYTES
+    * MAX_AUDIO_FRAME_SECONDS
+)
+AUDIO_FRAME_TOO_LARGE_CLOSE_CODE = 4008
+AUDIO_FRAME_TOO_LARGE_REASON = "Audio frame too large"
 WebSocketFrame = dict[str, object]
+
+
+@dataclass(frozen=True)
+class AudioFrameExtractionResult:
+    keep_open: bool
+    audio: bytes | None
 
 
 class WebSocketMessageError(ValueError):
@@ -104,6 +123,27 @@ def _extract_audio_frame(frame: WebSocketFrame) -> bytes:
     return audio
 
 
+def _is_audio_frame_too_large(audio: bytes) -> bool:
+    return len(audio) > MAX_AUDIO_FRAME_BYTES
+
+
+async def _close_oversized_audio_frame(websocket: WebSocket, audio: bytes) -> bool:
+    if not _is_audio_frame_too_large(audio):
+        return False
+
+    logger.error(
+        "%s: received %s bytes, limit is %s bytes",
+        AUDIO_FRAME_TOO_LARGE_REASON,
+        len(audio),
+        MAX_AUDIO_FRAME_BYTES,
+    )
+    await websocket.close(
+        code=AUDIO_FRAME_TOO_LARGE_CLOSE_CODE,
+        reason=AUDIO_FRAME_TOO_LARGE_REASON,
+    )
+    return True
+
+
 async def _open_chat_session(
     websocket: WebSocket,
     character_name: str,
@@ -164,18 +204,47 @@ async def _handle_text_frame(
     return True
 
 
-async def _handle_audio_frame(
+async def _extract_checked_audio_frame(
     websocket: WebSocket,
-    chat_session: ChatReplySession,
-    audio_session: AudioPipelineSession,
     frame: WebSocketFrame,
-) -> bool:
+) -> AudioFrameExtractionResult:
     try:
         audio = _extract_audio_frame(frame)
     except WebSocketMessageError as exc:
         await _send_error(websocket, 422, str(exc))
-        return True
+        return AudioFrameExtractionResult(keep_open=True, audio=None)
 
+    if await _close_oversized_audio_frame(websocket, audio):
+        return AudioFrameExtractionResult(keep_open=False, audio=None)
+
+    return AudioFrameExtractionResult(keep_open=True, audio=audio)
+
+
+async def _open_audio_session(
+    websocket: WebSocket,
+    character_name: str,
+) -> AudioPipelineSession | None:
+    try:
+        audio_service = cast(
+            AudioPipelineService,
+            websocket.app.state.audio_pipeline_service,
+        )
+        return cast(
+            AudioPipelineSession,
+            await run_in_threadpool(audio_service.create_session, character_name),
+        )
+    except AudioPipelineConfigError as exc:
+        logger.error("Audio pipeline configuration failed: %s", exc)
+        await _send_error(websocket, 500, str(exc))
+        return None
+
+
+async def _handle_audio_payload(
+    websocket: WebSocket,
+    chat_session: ChatReplySession,
+    audio_session: AudioPipelineSession,
+    audio: bytes,
+) -> bool:
     try:
         transcript, reply, response_audio = await run_in_threadpool(
             audio_session.generate_response_audio,
@@ -230,25 +299,21 @@ async def websocket_chat(websocket: WebSocket, character_name: str) -> None:
             if frame.get(WEBSOCKET_TEXT_FIELD) is not None:
                 keep_open = await _handle_text_frame(websocket, chat_session, frame)
             elif frame.get(WEBSOCKET_BYTES_FIELD) is not None:
-                if audio_session is None:
-                    try:
-                        audio_service = cast(
-                            AudioPipelineService,
-                            websocket.app.state.audio_pipeline_service,
-                        )
-                        audio_session = await run_in_threadpool(
-                            audio_service.create_session,
-                            character_name,
-                        )
-                    except AudioPipelineConfigError as exc:
-                        logger.error("Audio pipeline configuration failed: %s", exc)
-                        await _send_error(websocket, 500, str(exc))
+                extraction = await _extract_checked_audio_frame(websocket, frame)
+                if extraction.audio is None:
+                    keep_open = extraction.keep_open
+                    if keep_open:
                         continue
-                keep_open = await _handle_audio_frame(
+                    return
+                if audio_session is None:
+                    audio_session = await _open_audio_session(websocket, character_name)
+                    if audio_session is None:
+                        continue
+                keep_open = await _handle_audio_payload(
                     websocket,
                     chat_session,
                     audio_session,
-                    frame,
+                    extraction.audio,
                 )
             else:
                 await _send_error(websocket, 422, "WebSocket frame must include text or bytes")

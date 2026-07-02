@@ -250,6 +250,29 @@ class TestWebSocketEndpoint:
             },
         ]
 
+    def test_invalid_audio_frame_allows_following_text_message(self):
+        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+            with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
+                with TestClient(app) as client:
+                    with client.websocket_connect("/ws/miori") as websocket:
+                        websocket.send(
+                            {"type": "websocket.receive", "bytes": "not-bytes"}
+                        )
+                        first_response = websocket.receive_json()
+
+                        websocket.send_json(
+                            {"type": "text", "message": "続けてください"}
+                        )
+                        second_response = websocket.receive_json()
+
+        assert first_response == {
+            "type": "error",
+            "status": 422,
+            "detail": "WebSocket audio frame must be bytes",
+        }
+        assert second_response == {"type": "text", "response": _LLM_REPLY}
+        mock_gen.assert_called_once_with(_PERSONALITY, "続けてください")
+
     def test_returns_504_error_when_llm_request_times_out(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
             with patch(
@@ -325,52 +348,108 @@ class TestWebSocketEndpoint:
         mock_gen.assert_called_once_with(_PERSONALITY, "こんにちは")
         mock_tts.assert_called_once_with(_LLM_REPLY, 14)
 
-    def test_audio_handler_sends_user_text_miori_text_then_audio(self):
-        from app.routers.ws import _handle_audio_frame
+    def test_accepts_audio_frame_below_size_limit(self, monkeypatch):
+        from app.routers.ws import MAX_AUDIO_FRAME_BYTES
 
-        class RecordingWebSocket:
-            def __init__(self):
-                self.sent_frames = []
+        output_audio = b"RIFF output wav"
+        audio_frame = b"\x01\x00\x02\x00"
+        monkeypatch.setenv("VOICEVOX_BASE_URL", "http://voicevox.local:50021")
 
-            async def send_json(self, payload):
-                self.sent_frames.append(("json", payload))
+        assert len(audio_frame) < MAX_AUDIO_FRAME_BYTES
 
-            async def send_bytes(self, payload):
-                self.sent_frames.append(("bytes", payload))
+        with TestClient(app) as client:
+            with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+                with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
+                    with patch(_TRANSCRIBE, return_value="こんにちは") as mock_transcribe:
+                        with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
+                            with patch(_SYNTHESIZE, return_value=output_audio):
+                                with client.websocket_connect("/ws/miori") as websocket:
+                                    websocket.send_bytes(audio_frame)
+                                    websocket.receive_json()
+                                    websocket.receive_json()
+                                    response = websocket.receive_bytes()
 
-        class StubChatSession:
-            def generate_reply(self, message):
-                return f"応答:{message}"
+        assert response == output_audio
+        mock_transcribe.assert_called_once_with(audio_frame)
 
-        class StubAudioSession:
-            def generate_response_audio(self, audio, reply_generator):
-                reply = reply_generator("音声入力")
-                return "音声入力", reply, b"RIFF output"
+    def test_accepts_audio_frame_at_exact_size_limit(self, monkeypatch):
+        from app.routers.ws import MAX_AUDIO_FRAME_BYTES
 
-        async def run_handler():
-            websocket = RecordingWebSocket()
-            keep_open = await _handle_audio_frame(
-                websocket,
-                StubChatSession(),
-                StubAudioSession(),
-                {"bytes": _PCM_AUDIO},
-            )
-            return keep_open, websocket
+        output_audio = b"RIFF exact limit wav"
+        audio_frame = b"\x00" * MAX_AUDIO_FRAME_BYTES
+        monkeypatch.setenv("VOICEVOX_BASE_URL", "http://voicevox.local:50021")
 
-        keep_open, websocket = anyio.run(run_handler)
+        with TestClient(app) as client:
+            with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+                with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
+                    with patch(_TRANSCRIBE, return_value="上限ちょうど") as mock_transcribe:
+                        with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
+                            with patch(_SYNTHESIZE, return_value=output_audio):
+                                with client.websocket_connect("/ws/miori") as websocket:
+                                    websocket.send_bytes(audio_frame)
+                                    user_text = websocket.receive_json()
+                                    miori_text = websocket.receive_json()
+                                    response = websocket.receive_bytes()
 
-        assert keep_open is True
-        assert websocket.sent_frames == [
-            (
-                "json",
-                {"type": "text", "speaker": "user", "message": "音声入力"},
-            ),
-            (
-                "json",
-                {"type": "text", "speaker": "miori", "response": "応答:音声入力"},
-            ),
-            ("bytes", b"RIFF output"),
-        ]
+        assert user_text == {"type": "text", "speaker": "user", "message": "上限ちょうど"}
+        assert miori_text == {
+            "type": "text",
+            "speaker": "miori",
+            "response": _LLM_REPLY,
+        }
+        assert response == output_audio
+        mock_transcribe.assert_called_once_with(audio_frame)
+
+    def test_closes_websocket_when_audio_frame_exceeds_size_limit(
+        self, monkeypatch, caplog
+    ):
+        from app.routers.ws import MAX_AUDIO_FRAME_BYTES
+
+        oversized_audio_frame = b"\x00" * (MAX_AUDIO_FRAME_BYTES + 1)
+        monkeypatch.setenv("VOICEVOX_BASE_URL", "http://voicevox.local:50021")
+
+        with TestClient(app) as client:
+            with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+                with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()) as mock_load_tts:
+                    with patch(_TRANSCRIBE, return_value="呼ばれない") as mock_transcribe:
+                        with caplog.at_level("ERROR", logger="app.routers.ws"):
+                            with client.websocket_connect("/ws/miori") as websocket:
+                                websocket.send_bytes(oversized_audio_frame)
+                                with pytest.raises(WebSocketDisconnect) as exc_info:
+                                    websocket.receive_json()
+
+        assert exc_info.value.code == 4008
+        assert exc_info.value.reason == "Audio frame too large"
+        mock_load_tts.assert_not_called()
+        mock_transcribe.assert_not_called()
+        assert any(
+            "Audio frame too large" in record.getMessage()
+            for record in caplog.records
+        )
+
+    def test_websocket_sends_user_text_miori_text_then_audio(self, monkeypatch):
+        output_audio = b"RIFF output"
+        monkeypatch.setenv("VOICEVOX_BASE_URL", "http://voicevox.local:50021")
+
+        with TestClient(app) as client:
+            with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+                with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
+                    with patch(_TRANSCRIBE, return_value="音声入力"):
+                        with patch(_GENERATE_RESPONSE, return_value="応答:音声入力"):
+                            with patch(_SYNTHESIZE, return_value=output_audio):
+                                with client.websocket_connect("/ws/miori") as websocket:
+                                    websocket.send_bytes(_PCM_AUDIO)
+                                    user_text = websocket.receive_json()
+                                    miori_text = websocket.receive_json()
+                                    response = websocket.receive_bytes()
+
+        assert user_text == {"type": "text", "speaker": "user", "message": "音声入力"}
+        assert miori_text == {
+            "type": "text",
+            "speaker": "miori",
+            "response": "応答:音声入力",
+        }
+        assert response == output_audio
 
     def test_creates_audio_session_in_threadpool(self):
         class StubChatSession:

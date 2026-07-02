@@ -25,6 +25,8 @@ declare global {
 const speechFixturePath = fileURLToPath(new URL('./fixtures/speech.wav', import.meta.url))
 const VOICE_RESPONSE_TIMEOUT_MS = 60000
 const VOICE_TEST_TIMEOUT_MS = 120000
+const MOCK_TRANSCRIPT_TEXT = 'テスト音声です'
+const MOCK_RESPONSE_TEXT = 'テスト音声に応答します。'
 let voiceChatBackend: VoiceChatBackend
 
 type CompletedVoiceCycle = {
@@ -215,8 +217,8 @@ const installMockVoiceBackend = async (page: Page) => {
   await installMockWebSocketBackend(page, {
     textFrames: [],
     binaryFrames: [
-      { kind: 'text', data: JSON.stringify({ type: 'text', speaker: 'user', message: 'テスト音声です' }) },
-      { kind: 'text', data: JSON.stringify({ type: 'text', speaker: 'miori', response: 'テスト音声に応答します。' }) },
+      { kind: 'text', data: JSON.stringify({ type: 'text', speaker: 'user', message: MOCK_TRANSCRIPT_TEXT }) },
+      { kind: 'text', data: JSON.stringify({ type: 'text', speaker: 'miori', response: MOCK_RESPONSE_TEXT }) },
       { kind: 'binary', data: Array.from(mockAudioResponse) },
     ],
   })
@@ -256,6 +258,11 @@ const expectVoiceChatMessages = async (page: Page) => {
 
   await expect(messages.nth(0).locator('p')).not.toHaveText('')
   await expect(messages.nth(1).locator('p')).not.toHaveText('')
+
+  if (voiceChatBackend.mode === 'mock') {
+    await expect(messages.nth(0).locator('p')).toHaveText(MOCK_TRANSCRIPT_TEXT)
+    await expect(messages.nth(1).locator('p')).toHaveText(MOCK_RESPONSE_TEXT)
+  }
 }
 
 const waitForSpeechDetection = async (page: Page) => {

@@ -209,6 +209,7 @@
       <InputBar onSend={handleSend} disabled={pendingRequest !== null || !isConnected} />
       <AudioRecorder
         disabled={pendingRequest !== null || !isConnected}
+        forceOff={!isConnected}
         onAudioCaptured={handleAudioCaptured}
         onError={handleAudioError}
       />

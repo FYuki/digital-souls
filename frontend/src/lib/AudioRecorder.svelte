@@ -13,6 +13,7 @@
   }
 
   export let disabled: boolean
+  export let forceOff: boolean
   export let onAudioCaptured: (pcmData: ArrayBuffer) => void
   export let onError: (error: Error) => void
 
@@ -147,7 +148,7 @@
     }
   }
 
-  $: if (disabled && status !== 'off' && !isLoading) {
+  $: if (forceOff && status !== 'off' && !isLoading) {
     setStatus('off')
     void releaseMicrophoneResources().catch(reportError)
   }

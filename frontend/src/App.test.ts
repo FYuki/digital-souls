@@ -266,6 +266,24 @@ describe('App chat and audio flow', () => {
     expect(screen.getByRole('button', { name: '送信' }).hasAttribute('disabled')).toBe(true)
   })
 
+  test('should render an error and keep controls disabled when the initial WebSocket connection fails', async () => {
+    render(App)
+    await act()
+    await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1))
+    const socket = latestSocket()
+
+    await act(async () => {
+      socket.onerror?.()
+    })
+
+    expect(await screen.findByText('応答の取得に失敗しました。')).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: '送信' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: 'マイクをオンにする' }).hasAttribute('disabled')).toBe(
+      true,
+    )
+  })
+
   test('should send captured microphone audio and play the backend WAV response', async () => {
     const { container } = render(App)
     const socket = await openSocket()
@@ -285,7 +303,7 @@ describe('App chat and audio flow', () => {
 
     expect(mocks.recorderStart).toHaveBeenCalledTimes(1)
     await waitFor(() => expect(socket.sent).toEqual([mocks.pcmData]))
-    expect(screen.getByRole('button', { name: 'マイクをオンにする' }).hasAttribute('disabled')).toBe(
+    expect(screen.getByRole('button', { name: 'マイクをオフにする' }).hasAttribute('disabled')).toBe(
       true,
     )
     socket.onmessage?.(
@@ -341,7 +359,47 @@ describe('App chat and audio flow', () => {
     expect(await screen.findByText('音声の途中です')).toBeTruthy()
     expect(await screen.findByText('再生準備中です。')).toBeTruthy()
     expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(true)
+    expect(mocks.recorderClose).not.toHaveBeenCalled()
+    expect(mocks.vadDestroy).not.toHaveBeenCalled()
+    const microphoneButton = screen.getByRole('button', { name: 'マイクをオフにする' })
+    expect(microphoneButton.hasAttribute('disabled')).toBe(true)
+    expect(microphoneButton.classList.contains('mic-standby')).toBe(true)
+  })
+
+  test('should keep microphone in standby while an audio response is pending', async () => {
+    render(App)
+    const socket = await openSocket()
+
+    await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
+    await waitFor(() => expect(mocks.vadStart).toHaveBeenCalledTimes(1))
+
+    if (mocks.vadOptions === undefined) {
+      throw new Error('VAD callbacks are required')
+    }
+    mocks.vadOptions.onSpeechEnd()
+    await waitFor(() => expect(socket.sent).toEqual([mocks.pcmData]))
+
+    const microphoneButton = screen.getByRole('button', { name: 'マイクをオフにする' })
+
+    expect(microphoneButton.hasAttribute('disabled')).toBe(true)
+    expect(microphoneButton.getAttribute('aria-pressed')).toBe('true')
+    expect(microphoneButton.classList.contains('mic-standby')).toBe(true)
+    expect(microphoneButton.classList.contains('mic-active')).toBe(false)
+    expect(mocks.recorderClose).not.toHaveBeenCalled()
+    expect(mocks.vadDestroy).not.toHaveBeenCalled()
+  })
+
+  test('should force microphone off when the WebSocket closes', async () => {
+    render(App)
+    const socket = await openSocket()
+
+    await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
+    await waitFor(() => expect(mocks.vadStart).toHaveBeenCalledTimes(1))
+
+    socket.onclose?.()
+
     await waitFor(() => expect(mocks.recorderClose).toHaveBeenCalledTimes(1))
+    expect(mocks.vadDestroy).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('button', { name: 'マイクをオンにする' }).hasAttribute('disabled')).toBe(
       true,
     )
@@ -414,10 +472,9 @@ describe('App chat and audio flow', () => {
 
     expect(socket.sent).toEqual([mocks.pcmData])
     expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(true)
-    await waitFor(() => expect(mocks.recorderClose).toHaveBeenCalledTimes(1))
-    expect(screen.getByRole('button', { name: 'マイクをオンにする' }).hasAttribute('disabled')).toBe(
-      true,
-    )
+    expect(mocks.recorderClose).not.toHaveBeenCalled()
+    expect(mocks.vadDestroy).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'マイクをオフにする' }).hasAttribute('disabled')).toBe(true)
 
     socket.onmessage?.(
       new MessageEvent('message', {
@@ -433,9 +490,7 @@ describe('App chat and audio flow', () => {
     expect(await screen.findByText('音声の質問')).toBeTruthy()
     expect(await screen.findByText('音声の応答です。')).toBeTruthy()
     expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(true)
-    expect(screen.getByRole('button', { name: 'マイクをオンにする' }).hasAttribute('disabled')).toBe(
-      true,
-    )
+    expect(screen.getByRole('button', { name: 'マイクをオフにする' }).hasAttribute('disabled')).toBe(true)
 
     socket.onmessage?.(new MessageEvent('message', { data: new ArrayBuffer(12) }))
 
@@ -454,12 +509,10 @@ describe('App chat and audio flow', () => {
 
     expect(await screen.findByText('テキストへの応答です。')).toBeTruthy()
     expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(false)
-    expect(screen.getByRole('button', { name: 'マイクをオンにする' }).hasAttribute('disabled')).toBe(
-      false,
-    )
+    expect(screen.getByRole('button', { name: 'マイクをオフにする' }).hasAttribute('disabled')).toBe(false)
   })
 
-  test('should disable microphone capture while the first audio response is pending', async () => {
+  test('should disable microphone controls while the first audio response is pending', async () => {
     render(App)
     const socket = await openSocket()
 
@@ -472,11 +525,11 @@ describe('App chat and audio flow', () => {
     mocks.vadOptions.onSpeechEnd()
     await waitFor(() => expect(socket.sent).toEqual([mocks.pcmData]))
 
-    await waitFor(() => expect(mocks.recorderClose).toHaveBeenCalledTimes(1))
-    expect(mocks.vadDestroy).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('button', { name: 'マイクをオンにする' }).hasAttribute('disabled')).toBe(
-      true,
-    )
+    expect(mocks.recorderClose).not.toHaveBeenCalled()
+    expect(mocks.vadDestroy).not.toHaveBeenCalled()
+    const microphoneButton = screen.getByRole('button', { name: 'マイクをオフにする' })
+    expect(microphoneButton.hasAttribute('disabled')).toBe(true)
+    expect(microphoneButton.classList.contains('mic-standby')).toBe(true)
   })
 
   test('should keep microphone disabled until the first audio response completes', async () => {
@@ -492,17 +545,15 @@ describe('App chat and audio flow', () => {
     mocks.vadOptions.onSpeechEnd()
     await waitFor(() => expect(socket.sent).toEqual([mocks.pcmData]))
 
-    await waitFor(() => expect(mocks.recorderClose).toHaveBeenCalledTimes(1))
-    expect(screen.getByRole('button', { name: 'マイクをオンにする' }).hasAttribute('disabled')).toBe(
-      true,
-    )
+    expect(mocks.recorderClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'マイクをオフにする' }).hasAttribute('disabled')).toBe(true)
 
     socket.onmessage?.(new MessageEvent('message', { data: new ArrayBuffer(12) }))
 
     expect(socket.sent).toEqual([mocks.pcmData])
     expect(screen.queryByText('応答の取得に失敗しました。')).toBeNull()
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'マイクをオンにする' }).hasAttribute('disabled')).toBe(
+      expect(screen.getByRole('button', { name: 'マイクをオフにする' }).hasAttribute('disabled')).toBe(
         false,
       ),
     )

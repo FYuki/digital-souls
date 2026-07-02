@@ -79,6 +79,7 @@ describe('AudioRecorder', () => {
     render(AudioRecorder, {
       props: {
         disabled: false,
+        forceOff: false,
         onAudioCaptured: createCaptureMock(),
         onError: vi.fn(),
       },
@@ -95,6 +96,7 @@ describe('AudioRecorder', () => {
     render(AudioRecorder, {
       props: {
         disabled: false,
+        forceOff: false,
         onAudioCaptured: createCaptureMock(),
         onError: vi.fn(),
       },
@@ -129,6 +131,7 @@ describe('AudioRecorder', () => {
     render(AudioRecorder, {
       props: {
         disabled: false,
+        forceOff: false,
         onAudioCaptured: createCaptureMock(),
         onError: vi.fn(),
       },
@@ -146,6 +149,7 @@ describe('AudioRecorder', () => {
     render(AudioRecorder, {
       props: {
         disabled: false,
+        forceOff: false,
         onAudioCaptured: createCaptureMock(),
         onError: vi.fn(),
       },
@@ -166,6 +170,7 @@ describe('AudioRecorder', () => {
     render(AudioRecorder, {
       props: {
         disabled: false,
+        forceOff: false,
         onAudioCaptured,
         onError: vi.fn(),
       },
@@ -187,6 +192,7 @@ describe('AudioRecorder', () => {
     render(AudioRecorder, {
       props: {
         disabled: false,
+        forceOff: false,
         onAudioCaptured: createCaptureMock(),
         onError: vi.fn(),
       },
@@ -208,6 +214,7 @@ describe('AudioRecorder', () => {
     render(AudioRecorder, {
       props: {
         disabled: false,
+        forceOff: false,
         onAudioCaptured: createCaptureMock(),
         onError: vi.fn(),
       },
@@ -230,6 +237,7 @@ describe('AudioRecorder', () => {
     const { unmount } = render(AudioRecorder, {
       props: {
         disabled: false,
+        forceOff: false,
         onAudioCaptured: createCaptureMock(),
         onError: vi.fn(),
       },
@@ -250,6 +258,7 @@ describe('AudioRecorder', () => {
     render(AudioRecorder, {
       props: {
         disabled: false,
+        forceOff: false,
         onAudioCaptured: createCaptureMock(),
         onError,
       },
@@ -274,6 +283,7 @@ describe('AudioRecorder', () => {
     render(AudioRecorder, {
       props: {
         disabled: false,
+        forceOff: false,
         onAudioCaptured: createCaptureMock(),
         onError,
       },
@@ -288,5 +298,149 @@ describe('AudioRecorder', () => {
     expect(button.getAttribute('aria-pressed')).toBe('false')
     expect(button.classList.contains('mic-standby')).toBe(false)
     expect(button.classList.contains('mic-active')).toBe(false)
+  })
+
+  test('should keep standby resources while disabled without force off', async () => {
+    const { component } = render(AudioRecorder, {
+      props: {
+        disabled: false,
+        forceOff: false,
+        onAudioCaptured: createCaptureMock(),
+        onError: vi.fn(),
+      },
+    })
+
+    const button = screen.getByRole('button', { name: 'マイクをオンにする' })
+    await fireEvent.click(button)
+    await waitFor(() => expect(vadStart).toHaveBeenCalledTimes(1))
+    await component.$set({ disabled: true, forceOff: false })
+
+    await waitFor(() => expect(button.hasAttribute('disabled')).toBe(true))
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    expect(button.classList.contains('mic-standby')).toBe(true)
+    expect(button.classList.contains('mic-active')).toBe(false)
+    expect(vadDestroy).not.toHaveBeenCalled()
+    expect(recorderClose).not.toHaveBeenCalled()
+  })
+
+  test('should force microphone resources off when forceOff becomes true', async () => {
+    const { component } = render(AudioRecorder, {
+      props: {
+        disabled: false,
+        forceOff: false,
+        onAudioCaptured: createCaptureMock(),
+        onError: vi.fn(),
+      },
+    })
+
+    const button = screen.getByRole('button', { name: 'マイクをオンにする' })
+    await fireEvent.click(button)
+    await waitFor(() => expect(vadStart).toHaveBeenCalledTimes(1))
+    await component.$set({ disabled: true, forceOff: true })
+
+    await waitFor(() => expect(vadDestroy).toHaveBeenCalledTimes(1))
+    expect(recorderClose).toHaveBeenCalledTimes(1)
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    expect(button.classList.contains('mic-standby')).toBe(false)
+    expect(button.classList.contains('mic-active')).toBe(false)
+  })
+
+  test('should return to OFF and report error when getUserMedia is denied', async () => {
+    const error = new Error('Permission denied')
+    const onError = vi.fn()
+    getUserMedia.mockRejectedValueOnce(error)
+
+    render(AudioRecorder, {
+      props: {
+        disabled: false,
+        forceOff: false,
+        onAudioCaptured: createCaptureMock(),
+        onError,
+      },
+    })
+
+    const button = screen.getByRole('button', { name: 'マイクをオンにする' })
+    await fireEvent.click(button)
+
+    await waitFor(() => expect(onError).toHaveBeenCalledWith(error))
+    expect(recorderInitialize).not.toHaveBeenCalled()
+    expect(vadDestroy).not.toHaveBeenCalled()
+    expect(recorderClose).toHaveBeenCalledTimes(1)
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    expect(button.classList.contains('mic-standby')).toBe(false)
+    expect(button.classList.contains('mic-active')).toBe(false)
+  })
+
+  test('should return to OFF and report error when recorder initialization fails', async () => {
+    const error = new Error('AudioWorklet failed to load')
+    const onError = vi.fn()
+    recorderInitialize.mockRejectedValueOnce(error)
+
+    render(AudioRecorder, {
+      props: {
+        disabled: false,
+        forceOff: false,
+        onAudioCaptured: createCaptureMock(),
+        onError,
+      },
+    })
+
+    const button = screen.getByRole('button', { name: 'マイクをオンにする' })
+    await fireEvent.click(button)
+
+    await waitFor(() => expect(onError).toHaveBeenCalledWith(error))
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+    expect(vadDestroy).not.toHaveBeenCalled()
+    expect(recorderClose).toHaveBeenCalledTimes(1)
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    expect(button.classList.contains('mic-standby')).toBe(false)
+    expect(button.classList.contains('mic-active')).toBe(false)
+  })
+
+  test('should return to standby and report error when stopAndTake fails', async () => {
+    const error = new Error('PCM concatenation failed')
+    const onAudioCaptured = createCaptureMock()
+    const onError = vi.fn()
+    recorderStopAndTake.mockRejectedValueOnce(error)
+
+    render(AudioRecorder, {
+      props: {
+        disabled: false,
+        forceOff: false,
+        onAudioCaptured,
+        onError,
+      },
+    })
+
+    const button = screen.getByRole('button', { name: 'マイクをオンにする' })
+    await fireEvent.click(button)
+    await waitFor(() => expect(vadStart).toHaveBeenCalledTimes(1))
+    vadOptions.onSpeechStart()
+    vadOptions.onSpeechEnd()
+
+    await waitFor(() => expect(onError).toHaveBeenCalledWith(error))
+    expect(onAudioCaptured).not.toHaveBeenCalled()
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    expect(button.classList.contains('mic-standby')).toBe(true)
+    expect(button.classList.contains('mic-active')).toBe(false)
+  })
+
+  test('should keep OFF status and disable the button when initially forced off', () => {
+    render(AudioRecorder, {
+      props: {
+        disabled: true,
+        forceOff: true,
+        onAudioCaptured: createCaptureMock(),
+        onError: vi.fn(),
+      },
+    })
+
+    const button = screen.getByRole('button', { name: 'マイクをオンにする' })
+
+    expect(button.hasAttribute('disabled')).toBe(true)
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    expect(getUserMedia).not.toHaveBeenCalled()
+    expect(vadStart).not.toHaveBeenCalled()
+    expect(recorderClose).not.toHaveBeenCalled()
   })
 })
