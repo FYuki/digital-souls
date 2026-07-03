@@ -1438,3 +1438,185 @@ class TestWebSocketEndpoint:
 
         assert exc_info.value.code == 1001
         assert exc_info.value.reason == "going away"
+
+    def test_audio_worker_normal_exit_stops_websocket_chat(self):
+        import asyncio
+
+        from app.chat_service import CharacterNotFoundError
+        from app.routers import ws as ws_module
+
+        class StubChatSession:
+            def generate_reply(self, message):
+                raise CharacterNotFoundError("miori")
+
+        class StubChatService:
+            async def create_chat_session(self, character_name):
+                return StubChatSession()
+
+        class StubAudioSession:
+            def generate_response_audio(self, audio, reply_generator):
+                transcript = "transcript"
+                reply = reply_generator(transcript)
+                return transcript, reply, b"RIFF"
+
+        class StubAudioPipelineService:
+            def create_session(self, character_name):
+                return StubAudioSession()
+
+        class BlockingReceiveWebSocket:
+            def __init__(self):
+                self.app = type("App", (), {})()
+                self.app.state = type("State", (), {})()
+                self.app.state.chat_service = StubChatService()
+                self.app.state.audio_pipeline_service = StubAudioPipelineService()
+                self.frames = [{"bytes": b"\x01\x00"}]
+                self.accepted = False
+                self.closed = False
+                self.sent_json = []
+
+            async def accept(self):
+                self.accepted = True
+
+            async def receive(self):
+                if self.frames:
+                    return self.frames.pop(0)
+                while True:
+                    await anyio.sleep(0)
+
+            async def send_json(self, payload):
+                self.sent_json.append(payload)
+
+            async def send_bytes(self, payload):
+                return None
+
+            async def close(self, code=1000, reason=None):
+                self.closed = True
+
+        async def run_chat():
+            websocket = BlockingReceiveWebSocket()
+            await asyncio.wait_for(
+                ws_module.websocket_chat(websocket, "miori"),
+                timeout=0.5,
+            )
+            return websocket
+
+        websocket = anyio.run(run_chat)
+
+        assert websocket.accepted is True
+        assert websocket.sent_json == [
+            {
+                "type": "error",
+                "status": 404,
+                "detail": "Character 'miori' not found",
+            }
+        ]
+        assert websocket.closed is True
+
+    def test_disconnect_discards_pending_frame_while_first_is_inflight(self):
+        import asyncio
+
+        from app.routers import ws as ws_module
+
+        class StubChatSession:
+            def generate_reply(self, message):
+                return f"reply:{message}"
+
+        class StubChatService:
+            async def create_chat_session(self, character_name):
+                return StubChatSession()
+
+        class BlockingAudioSession:
+            def __init__(self):
+                self.calls = []
+                self.started = threading.Event()
+                self.release = threading.Event()
+
+            def generate_response_audio(self, audio, reply_generator):
+                self.calls.append(audio)
+                if audio == b"first":
+                    self.started.set()
+                    self.release.wait(timeout=5)
+                transcript = f"transcript:{audio.decode()}"
+                reply = reply_generator(transcript)
+                return transcript, reply, b"RIFF " + audio
+
+        class StubAudioPipelineService:
+            def __init__(self, session):
+                self.session = session
+
+            def create_session(self, character_name):
+                return self.session
+
+        audio_session = BlockingAudioSession()
+
+        class DisconnectingWebSocket:
+            def __init__(self):
+                self.app = type("App", (), {})()
+                self.app.state = type("State", (), {})()
+                self.app.state.chat_service = StubChatService()
+                self.app.state.audio_pipeline_service = StubAudioPipelineService(
+                    audio_session
+                )
+                self.frames = [{"bytes": b"first"}]
+                self.pending_sent = False
+
+            async def accept(self):
+                return None
+
+            async def receive(self):
+                if self.frames:
+                    return self.frames.pop(0)
+                while not audio_session.started.is_set():
+                    await anyio.sleep(0)
+                if not self.pending_sent:
+                    self.pending_sent = True
+                    return {"bytes": b"latest"}
+                return {
+                    "type": "websocket.disconnect",
+                    "code": 1001,
+                    "reason": "bye",
+                }
+
+            async def send_json(self, payload):
+                return None
+
+            async def send_bytes(self, payload):
+                return None
+
+            async def close(self, code=1000, reason=None):
+                return None
+
+        async def run_chat():
+            websocket = DisconnectingWebSocket()
+            try:
+                await asyncio.wait_for(
+                    ws_module.websocket_chat(websocket, "miori"),
+                    timeout=2.0,
+                )
+            finally:
+                audio_session.release.set()
+
+        anyio.run(run_chat)
+
+        assert b"latest" not in audio_session.calls
+
+    def test_audio_session_failure_does_not_close_connection(self, client):
+        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+            with patch(
+                _LOAD_TTS_CONFIG,
+                side_effect=KeyError(_TTS_CONFIG_MISSING_MESSAGE),
+            ):
+                with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
+                    with client.websocket_connect("/ws/miori") as websocket:
+                        websocket.send_bytes(_PCM_AUDIO)
+                        response_500 = websocket.receive_json()
+
+                        websocket.send_json({"type": "text", "message": "接続確認"})
+                        response_text = websocket.receive_json()
+
+        assert response_500 == {
+            "type": "error",
+            "status": 500,
+            "detail": _TTS_CONFIG_MISSING_MESSAGE,
+        }
+        assert response_text == {"type": "text", "response": _LLM_REPLY}
