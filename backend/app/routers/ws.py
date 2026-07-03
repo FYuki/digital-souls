@@ -1,5 +1,7 @@
+import asyncio
 import json
 import logging
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import cast
 
@@ -49,7 +51,9 @@ MAX_AUDIO_FRAME_BYTES = (
 )
 AUDIO_FRAME_TOO_LARGE_CLOSE_CODE = 4008
 AUDIO_FRAME_TOO_LARGE_REASON = "Audio frame too large"
+UNEXPECTED_AUDIO_WORKER_ERROR = "Audio processing failed"
 WebSocketFrame = dict[str, object]
+AudioFrameQueue = asyncio.Queue[bytes]
 
 
 @dataclass(frozen=True)
@@ -62,14 +66,58 @@ class WebSocketMessageError(ValueError):
     """Invalid client message that should not close the WebSocket session."""
 
 
-async def _send_error(websocket: WebSocket, status: int, detail: str) -> None:
-    await websocket.send_json(
+async def _send_json(
+    websocket: WebSocket,
+    send_lock: asyncio.Lock,
+    payload: dict[str, object],
+) -> None:
+    async with send_lock:
+        await _send_json_unlocked(websocket, payload)
+
+
+async def _send_json_unlocked(
+    websocket: WebSocket,
+    payload: dict[str, object],
+) -> None:
+    await websocket.send_json(payload)
+
+
+async def _send_bytes_unlocked(websocket: WebSocket, payload: bytes) -> None:
+    await websocket.send_bytes(payload)
+
+
+async def _send_error(
+    websocket: WebSocket,
+    send_lock: asyncio.Lock,
+    status: int,
+    detail: str,
+) -> None:
+    await _send_json(
+        websocket,
+        send_lock,
         {
             MESSAGE_TYPE_FIELD: ERROR_MESSAGE_TYPE,
             STATUS_FIELD: status,
             DETAIL_FIELD: detail,
-        }
+        },
     )
+
+
+async def _send_character_not_found_and_close(
+    websocket: WebSocket,
+    send_lock: asyncio.Lock,
+    detail: str,
+) -> None:
+    async with send_lock:
+        await _send_json_unlocked(
+            websocket,
+            {
+                MESSAGE_TYPE_FIELD: ERROR_MESSAGE_TYPE,
+                STATUS_FIELD: 404,
+                DETAIL_FIELD: detail,
+            },
+        )
+        await websocket.close()
 
 
 async def _receive_frame(websocket: WebSocket) -> WebSocketFrame:
@@ -80,6 +128,25 @@ async def _receive_frame(websocket: WebSocket) -> WebSocketFrame:
             cast(str | None, frame.get("reason")),
         )
     return frame
+
+
+async def _receive_frame_while_audio_worker_runs(
+    websocket: WebSocket,
+    audio_worker: asyncio.Task[None],
+) -> WebSocketFrame | None:
+    receive_task = asyncio.create_task(_receive_frame(websocket))
+    done, _ = await asyncio.wait(
+        {receive_task, audio_worker},
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+
+    if audio_worker in done:
+        receive_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await receive_task
+        return None
+
+    return await receive_task
 
 
 def _extract_text_frame_payload(frame: WebSocketFrame) -> object:
@@ -127,7 +194,11 @@ def _is_audio_frame_too_large(audio: bytes) -> bool:
     return len(audio) > MAX_AUDIO_FRAME_BYTES
 
 
-async def _close_oversized_audio_frame(websocket: WebSocket, audio: bytes) -> bool:
+async def _close_oversized_audio_frame(
+    websocket: WebSocket,
+    send_lock: asyncio.Lock,
+    audio: bytes,
+) -> bool:
     if not _is_audio_frame_too_large(audio):
         return False
 
@@ -137,15 +208,17 @@ async def _close_oversized_audio_frame(websocket: WebSocket, audio: bytes) -> bo
         len(audio),
         MAX_AUDIO_FRAME_BYTES,
     )
-    await websocket.close(
-        code=AUDIO_FRAME_TOO_LARGE_CLOSE_CODE,
-        reason=AUDIO_FRAME_TOO_LARGE_REASON,
-    )
+    async with send_lock:
+        await websocket.close(
+            code=AUDIO_FRAME_TOO_LARGE_CLOSE_CODE,
+            reason=AUDIO_FRAME_TOO_LARGE_REASON,
+        )
     return True
 
 
 async def _open_chat_session(
     websocket: WebSocket,
+    send_lock: asyncio.Lock,
     character_name: str,
 ) -> ChatReplySession | None:
     try:
@@ -153,28 +226,29 @@ async def _open_chat_session(
         chat_session = await chat_service.create_chat_session(character_name)
         return cast(ChatReplySession, chat_session)
     except CharacterNotFoundError as exc:
-        await _send_error(websocket, 404, exc.detail)
-        await websocket.close()
+        await _send_character_not_found_and_close(websocket, send_lock, exc.detail)
         return None
 
 
 async def _generate_reply(
     websocket: WebSocket,
+    send_lock: asyncio.Lock,
     chat_session: ChatReplySession,
     message: str,
 ) -> str | None:
     try:
         return await run_in_threadpool(chat_session.generate_reply, message)
     except ChatTimeoutError as exc:
-        await _send_error(websocket, 504, exc.detail)
+        await _send_error(websocket, send_lock, 504, exc.detail)
         return None
     except ChatBackendError as exc:
-        await _send_error(websocket, 502, exc.detail)
+        await _send_error(websocket, send_lock, 502, exc.detail)
         return None
 
 
 async def _handle_text_frame(
     websocket: WebSocket,
+    send_lock: asyncio.Lock,
     chat_session: ChatReplySession,
     frame: WebSocketFrame,
 ) -> bool:
@@ -182,39 +256,41 @@ async def _handle_text_frame(
         payload = _extract_text_frame_payload(frame)
         message = _extract_text_message(payload)
     except WebSocketMessageError as exc:
-        await _send_error(websocket, 422, str(exc))
+        await _send_error(websocket, send_lock, 422, str(exc))
         return True
 
     try:
-        reply = await _generate_reply(websocket, chat_session, message)
+        reply = await _generate_reply(websocket, send_lock, chat_session, message)
     except CharacterNotFoundError as exc:
-        await _send_error(websocket, 404, exc.detail)
-        await websocket.close()
+        await _send_character_not_found_and_close(websocket, send_lock, exc.detail)
         return False
 
     if reply is None:
         return True
 
-    await websocket.send_json(
+    await _send_json(
+        websocket,
+        send_lock,
         {
             MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
             RESPONSE_FIELD: reply,
-        }
+        },
     )
     return True
 
 
 async def _extract_checked_audio_frame(
     websocket: WebSocket,
+    send_lock: asyncio.Lock,
     frame: WebSocketFrame,
 ) -> AudioFrameExtractionResult:
     try:
         audio = _extract_audio_frame(frame)
     except WebSocketMessageError as exc:
-        await _send_error(websocket, 422, str(exc))
+        await _send_error(websocket, send_lock, 422, str(exc))
         return AudioFrameExtractionResult(keep_open=True, audio=None)
 
-    if await _close_oversized_audio_frame(websocket, audio):
+    if await _close_oversized_audio_frame(websocket, send_lock, audio):
         return AudioFrameExtractionResult(keep_open=False, audio=None)
 
     return AudioFrameExtractionResult(keep_open=True, audio=audio)
@@ -222,6 +298,7 @@ async def _extract_checked_audio_frame(
 
 async def _open_audio_session(
     websocket: WebSocket,
+    send_lock: asyncio.Lock,
     character_name: str,
 ) -> AudioPipelineSession | None:
     try:
@@ -235,12 +312,13 @@ async def _open_audio_session(
         )
     except AudioPipelineConfigError as exc:
         logger.error("Audio pipeline configuration failed: %s", exc)
-        await _send_error(websocket, 500, str(exc))
+        await _send_error(websocket, send_lock, 500, str(exc))
         return None
 
 
 async def _handle_audio_payload(
     websocket: WebSocket,
+    send_lock: asyncio.Lock,
     chat_session: ChatReplySession,
     audio_session: AudioPipelineSession,
     audio: bytes,
@@ -252,35 +330,107 @@ async def _handle_audio_payload(
             chat_session.generate_reply,
         )
     except AudioPipelineStepError as exc:
-        await _send_error(websocket, exc.status_code, exc.detail)
+        await _send_error(websocket, send_lock, exc.status_code, exc.detail)
         return True
     except CharacterNotFoundError as exc:
-        await _send_error(websocket, 404, exc.detail)
-        await websocket.close()
+        await _send_character_not_found_and_close(websocket, send_lock, exc.detail)
         return False
     except ChatTimeoutError as exc:
-        await _send_error(websocket, 504, exc.detail)
+        await _send_error(websocket, send_lock, 504, exc.detail)
         return True
     except ChatBackendError as exc:
-        await _send_error(websocket, 502, exc.detail)
+        await _send_error(websocket, send_lock, 502, exc.detail)
         return True
 
-    await websocket.send_json(
-        {
-            MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
-            SPEAKER_FIELD: USER_SPEAKER,
-            MESSAGE_FIELD: transcript,
-        }
-    )
-    await websocket.send_json(
-        {
-            MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
-            SPEAKER_FIELD: MIORI_SPEAKER,
-            RESPONSE_FIELD: reply,
-        }
-    )
-    await websocket.send_bytes(response_audio)
+    async with send_lock:
+        await _send_json_unlocked(
+            websocket,
+            {
+                MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
+                SPEAKER_FIELD: USER_SPEAKER,
+                MESSAGE_FIELD: transcript,
+            },
+        )
+        await _send_json_unlocked(
+            websocket,
+            {
+                MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
+                SPEAKER_FIELD: MIORI_SPEAKER,
+                RESPONSE_FIELD: reply,
+            },
+        )
+        await _send_bytes_unlocked(websocket, response_audio)
     return True
+
+
+def _enqueue_audio_frame(queue: AudioFrameQueue, audio: bytes) -> None:
+    if queue.full():
+        queue.get_nowait()
+    queue.put_nowait(audio)
+
+
+def _discard_pending_audio_frames(queue: AudioFrameQueue) -> None:
+    while not queue.empty():
+        queue.get_nowait()
+
+
+async def _run_audio_worker(
+    websocket: WebSocket,
+    send_lock: asyncio.Lock,
+    chat_session: ChatReplySession,
+    character_name: str,
+    audio_queue: AudioFrameQueue,
+) -> None:
+    try:
+        await _process_audio_queue(
+            websocket,
+            send_lock,
+            chat_session,
+            character_name,
+            audio_queue,
+        )
+    except Exception:
+        logger.exception("Audio worker failed for character '%s'", character_name)
+        async with send_lock:
+            await _send_json_unlocked(
+                websocket,
+                {
+                    MESSAGE_TYPE_FIELD: ERROR_MESSAGE_TYPE,
+                    STATUS_FIELD: 500,
+                    DETAIL_FIELD: UNEXPECTED_AUDIO_WORKER_ERROR,
+                },
+            )
+            await websocket.close()
+
+
+async def _process_audio_queue(
+    websocket: WebSocket,
+    send_lock: asyncio.Lock,
+    chat_session: ChatReplySession,
+    character_name: str,
+    audio_queue: AudioFrameQueue,
+) -> None:
+    audio_session: AudioPipelineSession | None = None
+    while True:
+        audio = await audio_queue.get()
+        if audio_session is None:
+            audio_session = await _open_audio_session(websocket, send_lock, character_name)
+            if audio_session is None:
+                continue
+
+        keep_open = await _handle_audio_payload(
+            websocket,
+            send_lock,
+            chat_session,
+            audio_session,
+            audio,
+        )
+        if not keep_open:
+            return
+
+
+def _cancel_audio_worker(audio_worker: asyncio.Task[None]) -> None:
+    audio_worker.cancel()
 
 
 @router.websocket("/ws/{character_name}")
@@ -288,35 +438,54 @@ async def websocket_chat(websocket: WebSocket, character_name: str) -> None:
     await websocket.accept()
     logger.info("WebSocket connected for character '%s'", character_name)
 
-    chat_session = await _open_chat_session(websocket, character_name)
+    send_lock = asyncio.Lock()
+    chat_session = await _open_chat_session(websocket, send_lock, character_name)
     if chat_session is None:
         return
 
+    audio_queue: AudioFrameQueue = asyncio.Queue(maxsize=1)
+    audio_worker = asyncio.create_task(
+        _run_audio_worker(
+            websocket,
+            send_lock,
+            chat_session,
+            character_name,
+            audio_queue,
+        )
+    )
+
     try:
-        audio_session: AudioPipelineSession | None = None
         while True:
-            frame = await _receive_frame(websocket)
+            frame = await _receive_frame_while_audio_worker_runs(websocket, audio_worker)
+            if frame is None:
+                return
             if frame.get(WEBSOCKET_TEXT_FIELD) is not None:
-                keep_open = await _handle_text_frame(websocket, chat_session, frame)
+                keep_open = await _handle_text_frame(
+                    websocket,
+                    send_lock,
+                    chat_session,
+                    frame,
+                )
             elif frame.get(WEBSOCKET_BYTES_FIELD) is not None:
-                extraction = await _extract_checked_audio_frame(websocket, frame)
+                extraction = await _extract_checked_audio_frame(
+                    websocket,
+                    send_lock,
+                    frame,
+                )
                 if extraction.audio is None:
                     keep_open = extraction.keep_open
                     if keep_open:
                         continue
                     return
-                if audio_session is None:
-                    audio_session = await _open_audio_session(websocket, character_name)
-                    if audio_session is None:
-                        continue
-                keep_open = await _handle_audio_payload(
-                    websocket,
-                    chat_session,
-                    audio_session,
-                    extraction.audio,
-                )
+                _enqueue_audio_frame(audio_queue, extraction.audio)
+                keep_open = True
             else:
-                await _send_error(websocket, 422, "WebSocket frame must include text or bytes")
+                await _send_error(
+                    websocket,
+                    send_lock,
+                    422,
+                    "WebSocket frame must include text or bytes",
+                )
                 keep_open = True
 
             if not keep_open:
@@ -328,3 +497,6 @@ async def websocket_chat(websocket: WebSocket, character_name: str) -> None:
             exc.code,
             exc.reason,
         )
+    finally:
+        _discard_pending_audio_frames(audio_queue)
+        _cancel_audio_worker(audio_worker)
