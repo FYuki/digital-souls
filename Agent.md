@@ -28,19 +28,7 @@
 
 ## 現在の開発フェーズ
 
-| Phase | 状態 | 内容 |
-|---|---|---|
-| Phase 0 | ✅ 完了 | 方針整理・リポジトリ構成 |
-| Phase 1 | ✅ 完了 | 光織の人格・世界観・記憶方針（`characters/miori/` に格納） |
-| Phase 2 | ✅ 完了 | WSL2 開発環境・Ollama 検証 |
-| Phase 3 | ⬜ 次 | テキストチャット基盤（自作BE/FE） |
-| Phase 4 | ⬜ 未着手 | 音声対応（Whisper / VOICEVOX / WebSocket） |
-| Phase 5 | ⬜ 未着手 | 長期記憶（RAG: Chroma + SQLite） |
-| Phase 6 | ⬜ 未着手 | パーソナルAI機能（農業日誌・レシピ・メモ） |
-| Phase 7 | ⬜ 未着手 | 表現・配信連携（Live2D / VRM） |
-| Phase 8 | ⬜ 未着手 | 常時稼働化・マルチクライアント対応（Mac mini 本番運用） |
-
-詳細は `docs/roadmap.md` を参照。
+`docs/roadmap.md` を参照。
 
 ## 規約
 
