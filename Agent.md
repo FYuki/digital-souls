@@ -46,6 +46,7 @@ digital-souls/
 │  ├─ infrastructure-policy.md # インフラ方針
 │  ├─ development-environment.md
 │  ├─ repository-policy.md
+│  ├─ testing-policy.md        # テスト方針（ユニット/インテグレーション/E2Eの区別、外部サービス実接続要件）
 │  └─ decisions/               # 検討経緯・意思決定ログ
 ├─ characters/
 │  └─ miori/                   # 初期人格「光織」
