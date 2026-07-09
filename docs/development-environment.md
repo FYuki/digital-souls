@@ -1,5 +1,8 @@
 # 開発環境
 
+> **注記**: 本ドキュメントは旧構成（PostgreSQL/Qdrant/Redis/AIRI）の記述を含み陳腐化している。
+> 現行構成への改訂は issue #32 で対応予定。
+
 ## 初期開発環境
 
 Mac mini調達までは、WindowsメインPC上のWSL2で開発を進める。
