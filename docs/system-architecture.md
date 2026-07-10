@@ -1,5 +1,9 @@
 # システムアーキテクチャ
 
+> **2026-06-17 方針転換**: AIRIフォーク利用を取りやめ、自作BE（FastAPI）+ 自作FE（Vite + Svelte）構成に移行した。
+> 「AIRIの位置づけ」セクションは本転換に伴い失効しているため削除し、現行の自作構成の記述に置換した。
+> 理由・経緯は `docs/decisions/` を参照。
+
 ## 基本思想
 
 `digital-souls` では、AI人格の本体を「表示・配信システム」ではなく、「人格・記憶・判断・ツール実行」に置く。
@@ -49,20 +53,29 @@
   Personal UI       VTube Studio      3tene/Warudo/etc.
 ```
 
-## AIRIの位置づけ
+## 自作BE/FE構成
 
-AIRIは、人格・記憶・エージェント制御のコア候補として扱う。
+`digital-souls` のCoreは、自作BE（FastAPI）+ 自作FE（Vite + Svelte）で実装する。
 
-想定する役割:
+### バックエンド（FastAPI, `backend/app/`）
 
-* 会話制御
-* 人格定義の適用
-* 記憶の参照
-* ツール呼び出し
-* 感情・表情制御の判断
-* 外部UIへの出力制御
+* `routers/chat.py` — テキストチャットのHTTPエンドポイント
+* `routers/ws.py` — 音声チャット用WebSocketエンドポイント（STT→LLM→TTSの一連の処理、音声フレームの処理中キューを含む）
+* `chat_service.py` / `_chat_runtime.py` — チャットセッションの生成・応答生成のエントリポイント
+* `characters/loader.py` — `characters/` 配下の人格定義（personality.md・card.json等）のロード
+* `llm/` — LLM振り分けルーター（`router.py`）とクライアント実装。`ollama_client.py`（ローカルOllama、常用）、`base.py`（クライアント共通インターフェース）。クラウドLLM（Claude等）向けクライアントは未実装のスタブ
+* `memory/` — 長期記憶（RAG）基盤。`chroma_store.py`（ベクトルDB）、`conversation_log.py`（SQLite会話ログ）、`embedder.py`（埋め込み生成）、`memory_policy.py`（`backend/app/memory/memory_policy.json` を参照する保存・参照ルール判定）、`rag_service.py`（検索・合成の統合サービス）
+* `stt/whisper_client.py` — faster-whisperによる音声認識
+* `tts/voicevox_client.py` / `tts/speech_synthesizer.py` — VOICEVOXによる音声合成
+* `audio/transport.py` / `audio_pipeline.py` — 音声フレームの送受信・パイプライン制御
 
-AIRI本体を直接大きく改造するのではなく、まずは `digital-souls` 側で人格・記憶・ツール定義を管理し、必要に応じてAIRIへ接続する。
+### フロントエンド（Vite + Svelte, `frontend/src/`）
+
+* `lib/audio/transport.ts` — WebSocket通信を抽象化する `AudioTransport`（将来のLiveKit移行に備えたシーム）
+* `lib/audio/pcm-worklet-recorder.ts` / `lib/audio/vad-assets.ts` — AudioWorkletによるPCM録音とVAD（発話区間検出）
+* `lib/AudioRecorder.svelte` / `lib/AudioPlayer.svelte` — マイク入力UI・音声再生UI
+* `lib/ChatWindow.svelte` / `lib/InputBar.svelte` — テキストチャットUI
+* `App.svelte` — テキスト/音声チャットを統合したメインUI
 
 ## 表示・配信レイヤー
 
