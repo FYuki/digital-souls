@@ -1,143 +1,101 @@
 # 開発環境
 
-## 初期開発環境
+## 前提
 
-Mac mini調達までは、WindowsメインPC上のWSL2で開発を進める。
+開発作業は Linux / WSL2 上で行う。推奨作業ディレクトリは `~/dev/digital-souls` とし、`/mnt/c/Users/...` 配下は Node.js の依存関係処理やファイル監視が不安定になりやすいため避ける。
 
-```text
-Windows
-└─ VSCode
+必要なランタイム:
 
-WSL2 Ubuntu（LTS最新安定版）
-├─ Git
-├─ Node.js（LTS最新安定版）
-├─ Ollama
-├─ PostgreSQL
-├─ Qdrant
-├─ Redis
-└─ AIRI
-```
+| 種別 | 用途 | 起動方法 |
+|---|---|---|
+| Node.js | Frontend 開発サーバー | `scripts/start-frontend.sh` |
+| Python 3 | FastAPI Backend | `scripts/setup-backend.sh` 後に `scripts/start-backend.sh` |
+| Ollama | テキストチャットの LLM 推論 | `scripts/start-all.sh` または `scripts/start-ollama.sh` |
+| Docker | VOICEVOX コンテナ実行 | `scripts/start-all.sh` または `scripts/start-voicevox.sh` |
+| VOICEVOX | 音声チャットの TTS | `voicevox_engine` コンテナ |
+| Whisper | 音声チャットの STT | Backend プロセス内で `faster-whisper` がロード |
+| ChromaDB | 会話記憶のベクトルストア | Backend プロセス内の永続ストア |
 
-## WSL2利用方針
+PostgreSQL / Qdrant / Redis / AIRI は現行の通常起動フローでは使用しない。
 
-開発作業は基本的にWSL2内で行う。
-
-推奨作業ディレクトリ:
+## 初期セットアップ
 
 ```bash
-~/dev/digital-souls
+sudo apt update
+sudo apt install -y git curl build-essential docker.io python3 python3-venv
+
+# Node.js（LTS）
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Backend 仮想環境
+scripts/setup-backend.sh
 ```
 
-避ける構成:
+VOICEVOX は `voicevox_engine` という名前の既存コンテナを `docker start` で起動する。初回は次のように作成する。
 
 ```bash
-/mnt/c/Users/...
+docker run -d --name voicevox_engine -p 50021:50021 voicevox/voicevox_engine:cpu-latest
 ```
-
-理由:
-
-- Node.jsの依存関係処理が遅くなりやすい
-- ファイル監視で問題が出やすい
-- Linux/Mac環境への移行性が下がる
-
-## Ollama利用方針
-
-WSL2内にOllamaを直接インストールして使用する。
 
 疎通確認:
 
 ```bash
 curl http://localhost:11434/api/tags
+curl http://localhost:50021/version
 ```
 
-## サービス構成
+## 通常起動
 
-以下をWSL2上に直接インストールして管理する。
+通常利用では次を実行する。
 
-| サービス | インストール方法 | 用途 |
-|---|---|---|
-| PostgreSQL | apt install | 記憶DB・農業日誌・レシピ管理 |
-| Qdrant | バイナリ直接起動 | ベクトル検索（RAG） |
-| Redis | apt install | キャッシュ |
-| Ollama | 公式インストーラ | LLM推論 |
-| AIRI | WSL2直接起動 | 人格・エージェント制御 |
+```bash
+scripts/start-all.sh
+```
 
-## 環境分け
+`scripts/start-all.sh` は次の順序で起動確認を行う。
 
-開発・本番は環境変数ファイルで分離する。
+1. Ollama を起動し、`http://localhost:11434/api/tags` を確認する
+2. VOICEVOX を起動確認する。`VOICEVOX_BASE_URL` 未設定または空文字時はコンテナ `voicevox_engine` を起動し、`http://localhost:50021/version` を確認する
+3. FastAPI Backend を起動し、`http://localhost:8000` を確認する
+4. Frontend 開発サーバーを起動する
 
-| ファイル | 用途 | リポジトリ管理 |
-|---|---|---|
-| `.env.development` | WSL2ローカル開発 | 除外（.gitignore） |
-| `.env.production` | Mac mini本番 | 除外（.gitignore） |
-| `.env.example` | 設定項目のテンプレート | 含める |
+`backend/.env` で `VOICEVOX_BASE_URL` を別ホスト・別ポートに設定している場合、`scripts/start-all.sh` はその接続先の `/version` を確認し、ローカルの `voicevox_engine` コンテナは起動しない。`http://127.0.0.1:50021` は `http://localhost:50021` と同じローカル既定エンジンとして扱う。
 
-DBはPostgreSQL内でデータベース名を分けて管理する。
+VOICEVOX コンテナが未作成の場合、`VOICEVOX_BASE_URL` 未設定または空文字時の `scripts/start-all.sh` は Backend / Frontend を起動せず、初回セットアップ用の `docker run` 例を表示して終了する。
 
-| 環境 | DB名 |
+## 個別起動スクリプト
+
+| スクリプト | 役割 |
 |---|---|
-| 開発 | digital_souls_dev |
-| 本番 | digital_souls |
+| `scripts/setup-backend.sh` | Backend の `.venv` を作成し、`backend/requirements.txt` をインストールする |
+| `scripts/start-backend.sh` | `.venv` と `backend/.env` を読み、FastAPI を `uvicorn --reload` で起動する |
+| `scripts/start-frontend.sh` | Frontend 開発サーバーを起動する |
+| `scripts/start-ollama.sh` | `ollama serve` を起動する |
+| `scripts/start-voicevox.sh` | `backend/.env` の `VOICEVOX_BASE_URL` を読み、未設定または空文字時は `voicevox_engine` コンテナを起動して VOICEVOX の `/version` を確認する |
+| `scripts/start-voice-chat-e2e.sh` | 音声チャット E2E 用。既定では実 Backend / Ollama / VOICEVOX を起動し、`VOICE_CHAT_E2E_BACKEND=mock` では Frontend のみ起動する |
 
-## Mac mini移行方針
+Backend 単体起動では VOICEVOX を自動起動しない。音声チャットを実際に使う場合は、事前に `scripts/start-voicevox.sh` または `scripts/start-all.sh` で VOICEVOX を起動する。
 
-Mac mini導入後は以下の手順で移行する。
+## 音声チャットの依存関係
 
-```bash
-git clone https://github.com/FYuki/digital-souls.git
-cd digital-souls
-# 各サービスをインストール・起動
-# .env.production を配置
-```
+音声チャットでは Backend の `AudioPipelineService` が STT、LLM、TTS を順に実行する。
 
-移行時に整理する項目:
+- TTS は `VOICEVOX_BASE_URL` を参照し、未設定または空文字時は `http://localhost:50021` に接続する
+- `VoicevoxClient` は `/audio_query` と `/synthesis` を呼び出す
+- `scripts/start-voicevox.sh` のヘルスチェックは Backend と同じ `backend/.env` の `VOICEVOX_BASE_URL` 解決結果に `/version` を付けて使用する
+- Whisper は外部サービスではなく Backend プロセス内で `faster-whisper` の `WhisperModel("medium")` を初回利用時にロードする
+- Whisper モデルは初回利用時に取得が発生し得るため、オフライン環境では事前にモデルキャッシュを用意する
 
-- 環境変数の移植
-- モデル保存先（Ollama）
-- DBデータのバックアップ・リストア
-- Qdrantデータの移行
-- 自動起動設定（launchd）
-- ログ管理
+## ChromaDB
 
-## 初期セットアップ（Linux / WSL2）
+ChromaDB は外部プロセスではなく、Backend プロセス内で `chromadb.PersistentClient` として利用する。永続化先は `backend/app/data/chroma` で、初回利用時に `backend/app/data` が作成される。
 
-以下の手順は **Linux（WSL2 Ubuntu）専用**。Mac mini移行時の手順は Phase 6 で整備する。
+リポジトリ配下に永続データが作られるため、開発環境では作業ユーザーが `backend/app/data` を作成・書き込みできる権限を持っている必要がある。
 
-```bash
-sudo apt update
-sudo apt install -y git curl build-essential
+## テストとの関係
 
-# Node.js（LTS最新安定版）
-curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# PostgreSQL
-sudo apt install -y postgresql postgresql-contrib
-
-# Redis
-sudo apt install -y redis-server
-
-# Ollama
-curl -fsSL https://ollama.com/install.sh | sh
-
-# Qdrant（バイナリ）
-# インストール手順はPhase 2検証時に確定する
-```
-
-## Mac環境構築に関する注意点（Phase 6 向け先行メモ）
-
-Mac mini移行時に Claude Code で環境構築する際は、以下の点に注意する。
-詳細手順は Phase 6 で整備する。
-
-| 項目 | Linux（WSL2） | Mac |
-|---|---|---|
-| パッケージマネージャ | `apt` | `brew`（Homebrew が前提） |
-| PostgreSQL | `apt install postgresql` | `brew install postgresql@17` 等 |
-| Redis | `apt install redis-server` | `brew install redis` |
-| Node.js | nodesource スクリプト | `nvm` または `brew install node` |
-| Qdrant | Linux用バイナリ | macOS用バイナリ（URL・パスが異なる） |
-| 自動起動 | systemd | launchd（設定例は Phase 6 で追加） |
-
-- `sudo apt install` をそのまま実行すると `apt: command not found` で失敗する
-- Homebrew 未インストールの場合はほぼすべての手順が動かないため、先にインストールが必要
-- WSL2固有の注意事項（`/mnt/c/...` を避ける等）は Mac には無関係
+テスト層と外部サービス実接続の扱いは `docs/testing-policy.md` を参照する。VOICEVOX / Whisper / ChromaDB / Ollama の実接続を完了条件として報告する場合は、同ドキュメントのインテグレーションテスト方針に従い、実サービスへの接続ログを一次証跡にする。

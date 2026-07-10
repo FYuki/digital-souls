@@ -145,7 +145,7 @@ class AudioPipelineService:
 
 def resolve_audio_runtime_config() -> AudioRuntimeConfig:
     configured_url = os.environ.get(VOICEVOX_BASE_URL_ENV)
-    if configured_url is None:
+    if not configured_url:
         voicevox_base_url = DEFAULT_VOICEVOX_BASE_URL
     else:
         voicevox_base_url = configured_url.rstrip("/")
