@@ -10,22 +10,16 @@
 
 ## 基本方針
 
-- AIRIを人格・記憶・エージェント制御のコア候補として検証する（Phase 3）
+- 自作BE（FastAPI）+ 自作FE（Vite + Svelte）構成で開発する（2026-06-17にAIRIフォーク利用から転換）
 - 基本の姿はLive2Dとし、パーソナルAI用途では静止画UIも許容する
 - 配信時のみ、必要に応じてVRMを利用する
 - 常時稼働サーバーは将来的にMac miniを想定する
 - Mac mini調達まではWindows + WSL2で開発を進める
 - 重いAI処理はWindowsメインPCまたはクラウドGPU/VMへ委譲する
 
-## 現在の状態
+方針の詳細・経緯は [システムアーキテクチャ](docs/system-architecture.md)・[インフラ方針](docs/infrastructure-policy.md)・`docs/decisions/` を参照。
 
-| Phase | 状態 | 内容 |
-|---|---|---|
-| Phase 0 | ✅ 完了 | 方針整理・リポジトリ構成 |
-| Phase 1 | 📝 草案完了 | 光織の人格・世界観・記憶方針 |
-| Phase 2 | ⬜ 次 | WSL2 開発環境・Docker・Ollama 検証 |
-
-詳細は [開発ロードマップ](docs/roadmap.md) を参照。
+現在の開発状況は [開発ロードマップ](docs/roadmap.md) を参照。
 
 ## ドキュメント
 
@@ -45,8 +39,11 @@
 digital-souls/
 ├─ docs/          # 設計・運用・方針ドキュメント
 ├─ characters/    # AI人格ごとの設定・世界観・記憶方針
-└─ src/           # 実装コード（Phase 2〜）
+├─ backend/       # 自作BE（FastAPI）
+└─ frontend/      # 自作FE（Vite + Svelte）
 ```
+
+詳細は `Agent.md` を参照。
 
 ## 開発への参加・運用
 

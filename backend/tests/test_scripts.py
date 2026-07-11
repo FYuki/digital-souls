@@ -51,6 +51,10 @@ class TestScriptStructure:
         content = (_ROOT_DIR / "backend/requirements-dev.txt").read_text().splitlines()
         assert "-r requirements.txt" in content
 
+    def test_chat_e2e_startup_scripts_are_not_present(self):
+        assert not (_SCRIPTS_DIR / "start-chat-e2e.sh").exists()
+        assert not (_SCRIPTS_DIR / "chat-e2e-backend.sh").exists()
+
 
 class TestDevelopmentEnvironmentDocs:
     def test_initial_setup_includes_backend_venv_prerequisites(self):
@@ -853,16 +857,14 @@ def _make_voice_chat_e2e_stub_env(tmp_path: Path):
 
 
 class TestStartVoiceChatE2E:
-    def test_mock_mode_starts_frontend_only(self, tmp_path):
+    def test_startup_boundary_does_not_source_chat_backend_helper(self):
+        content = (_SCRIPTS_DIR / "start-voice-chat-e2e.sh").read_text()
+
+        assert "chat-e2e-backend.sh" not in content
+
+    def test_mock_mode_starts_frontend_only_for_mixed_runs(self, tmp_path):
         scripts_dir, bin_dir = _make_voice_chat_e2e_stub_env(tmp_path)
         order_log = tmp_path / "order.log"
-
-        for name in ["start-ollama.sh", "setup-backend.sh", "start-backend.sh"]:
-            (scripts_dir / name).write_text(
-                f"#!/usr/bin/env bash\n"
-                f"echo {name} >> \"{order_log}\"\n"
-            )
-            (scripts_dir / name).chmod(0o755)
         (scripts_dir / "start-frontend.sh").write_text(
             f"#!/usr/bin/env bash\n"
             f"echo start-frontend.sh >> \"{order_log}\"\n"
@@ -886,6 +888,34 @@ class TestStartVoiceChatE2E:
         assert result.returncode == 0
         assert order_log.read_text().splitlines() == ["start-frontend.sh"]
 
+    def test_mock_mode_does_not_export_chat_real_backend_origin_for_mixed_runs(self, tmp_path):
+        scripts_dir, bin_dir = _make_voice_chat_e2e_stub_env(tmp_path)
+        vite_backend_origin_log = tmp_path / "vite-backend-origin.log"
+        (scripts_dir / "start-frontend.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"printf '%s\\n' \"${{VITE_BACKEND_ORIGIN:-}}\" > \"{vite_backend_origin_log}\"\n"
+        )
+        (scripts_dir / "start-frontend.sh").chmod(0o755)
+
+        env = {
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "VOICE_CHAT_E2E_BACKEND": "mock",
+            "CHAT_E2E_BACKEND": "real",
+            "CHAT_E2E_BACKEND_ORIGIN": "http://127.0.0.1:18000",
+        }
+
+        result = subprocess.run(
+            [str(scripts_dir / "start-voice-chat-e2e.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode == 0
+        assert vite_backend_origin_log.read_text() == "\n"
+
     def test_default_real_mode_fails_when_backend_health_check_fails(self, tmp_path):
         scripts_dir, bin_dir = _make_voice_chat_e2e_stub_env(tmp_path)
         order_log = tmp_path / "order.log"
@@ -897,6 +927,8 @@ class TestStartVoiceChatE2E:
             f"exec sleep 30\n"
         )
         (scripts_dir / "start-ollama.sh").chmod(0o755)
+        (scripts_dir / "setup-backend.sh").write_text("#!/usr/bin/env bash\n")
+        (scripts_dir / "setup-backend.sh").chmod(0o755)
         (scripts_dir / "start-backend.sh").write_text(
             f"#!/usr/bin/env bash\n"
             f"echo start-backend.sh >> \"{order_log}\"\n"
@@ -941,7 +973,96 @@ class TestStartVoiceChatE2E:
         ]
         assert not frontend_marker.exists()
 
-    def test_default_real_mode_fails_when_voicevox_health_check_fails(self, tmp_path):
+    def test_mock_mode_starts_frontend_only(self, tmp_path):
+        scripts_dir, bin_dir = _make_voice_chat_e2e_stub_env(tmp_path)
+        order_log = tmp_path / "order.log"
+
+        for name in ["start-ollama.sh", "setup-backend.sh", "start-backend.sh"]:
+            (scripts_dir / name).write_text(
+                f"#!/usr/bin/env bash\n"
+                f"echo {name} >> \"{order_log}\"\n"
+            )
+            (scripts_dir / name).chmod(0o755)
+        (scripts_dir / "start-frontend.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"echo start-frontend.sh >> \"{order_log}\"\n"
+        )
+        (scripts_dir / "start-frontend.sh").chmod(0o755)
+
+        env = {
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "VOICE_CHAT_E2E_BACKEND": "mock",
+        }
+
+        result = subprocess.run(
+            [str(scripts_dir / "start-voice-chat-e2e.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode == 0
+        assert order_log.read_text().splitlines() == ["start-frontend.sh"]
+
+    def test_real_mode_backend_health_check_failure_stops_before_frontend(self, tmp_path):
+        scripts_dir, bin_dir = _make_voice_chat_e2e_stub_env(tmp_path)
+        order_log = tmp_path / "order.log"
+        frontend_marker = tmp_path / "frontend-started"
+
+        (scripts_dir / "start-ollama.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"echo start-ollama.sh >> \"{order_log}\"\n"
+            f"exec sleep 30\n"
+        )
+        (scripts_dir / "start-ollama.sh").chmod(0o755)
+        (scripts_dir / "start-backend.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"echo start-backend.sh >> \"{order_log}\"\n"
+            f"exit 1\n"
+        )
+        (scripts_dir / "start-backend.sh").chmod(0o755)
+        (scripts_dir / "start-frontend.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"touch \"{frontend_marker}\"\n"
+        )
+        (scripts_dir / "start-frontend.sh").chmod(0o755)
+        (bin_dir / "curl").write_text(
+            "#!/usr/bin/env bash\n"
+            "url=\"${@: -1}\"\n"
+            "case \"$url\" in\n"
+            "  *localhost:11434*) exit 0 ;;\n"
+            "  *localhost:50021*) exit 0 ;;\n"
+            "  *localhost:8000*) exit 1 ;;\n"
+            "  *) exit 1 ;;\n"
+            "esac\n"
+        )
+        (bin_dir / "curl").chmod(0o755)
+
+        env = {
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "VOICE_CHAT_E2E_BACKEND": "real",
+            "VOICE_CHAT_E2E_HTTP_MAX_ATTEMPTS": "1",
+        }
+
+        result = subprocess.run(
+            [str(scripts_dir / "start-voice-chat-e2e.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode != 0
+        assert order_log.read_text().splitlines() == [
+            "start-ollama.sh",
+            "start-backend.sh",
+        ]
+        assert not frontend_marker.exists()
+
+    def test_real_mode_fails_when_voicevox_health_check_fails(self, tmp_path):
         scripts_dir, bin_dir = _make_voice_chat_e2e_stub_env(tmp_path)
         order_log = tmp_path / "order.log"
         frontend_marker = tmp_path / "frontend-started"
@@ -982,6 +1103,7 @@ class TestStartVoiceChatE2E:
         env = {
             **os.environ,
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "VOICE_CHAT_E2E_BACKEND": "real",
             "VOICE_CHAT_E2E_HTTP_MAX_ATTEMPTS": "1",
         }
 
@@ -1017,48 +1139,6 @@ class TestStartVoiceChatE2E:
 
         assert result.returncode != 0
         assert 'VOICE_CHAT_E2E_BACKEND must be "mock" or "real"' in result.stderr
-
-    def test_real_mode_fails_when_backend_health_check_fails(self, tmp_path):
-        scripts_dir, bin_dir = _make_voice_chat_e2e_stub_env(tmp_path)
-        frontend_marker = tmp_path / "frontend-started"
-
-        (scripts_dir / "start-ollama.sh").write_text("#!/usr/bin/env bash\nexec sleep 30\n")
-        (scripts_dir / "start-ollama.sh").chmod(0o755)
-        (scripts_dir / "start-backend.sh").write_text("#!/usr/bin/env bash\nexit 1\n")
-        (scripts_dir / "start-backend.sh").chmod(0o755)
-        (scripts_dir / "start-frontend.sh").write_text(
-            f"#!/usr/bin/env bash\n"
-            f"touch \"{frontend_marker}\"\n"
-        )
-        (scripts_dir / "start-frontend.sh").chmod(0o755)
-        (bin_dir / "curl").write_text(
-            "#!/usr/bin/env bash\n"
-            "url=\"${@: -1}\"\n"
-            "case \"$url\" in\n"
-            "  *localhost:11434*) exit 0 ;;\n"
-            "  *localhost:50021*) exit 0 ;;\n"
-            "  *localhost:8000*) exit 1 ;;\n"
-            "  *) exit 1 ;;\n"
-            "esac\n"
-        )
-        (bin_dir / "curl").chmod(0o755)
-
-        env = {
-            **os.environ,
-            "PATH": f"{bin_dir}:{os.environ['PATH']}",
-            "VOICE_CHAT_E2E_BACKEND": "real",
-        }
-
-        result = subprocess.run(
-            [str(scripts_dir / "start-voice-chat-e2e.sh")],
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-
-        assert result.returncode != 0
-        assert not frontend_marker.exists()
 
 
 class TestStartOllama:
