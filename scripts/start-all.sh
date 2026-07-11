@@ -93,6 +93,8 @@ _start_child "Ollama" "$SCRIPT_DIR/start-ollama.sh"
 OLLAMA_PID="$LAST_CHILD_PID"
 _wait_for_http "http://localhost:11434/api/tags" "Ollama" "$OLLAMA_PID"
 
+"$SCRIPT_DIR/start-voicevox.sh"
+
 _start_child "Backend" "$SCRIPT_DIR/start-backend.sh"
 BACKEND_PID="$LAST_CHILD_PID"
 _wait_for_http "http://localhost:8000" "Backend" "$BACKEND_PID"

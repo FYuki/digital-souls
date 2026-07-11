@@ -76,24 +76,6 @@ _wait_for_http() {
   echo "$label is ready."
 }
 
-_wait_for_external_http() {
-  local url="$1"
-  local label="$2"
-  local max_attempts="${VOICE_CHAT_E2E_HTTP_MAX_ATTEMPTS:-30}"
-  local attempt=0
-
-  echo "Waiting for $label to be ready at $url..."
-  until curl -sf "$url" > /dev/null 2>&1; do
-    attempt=$((attempt + 1))
-    if [ "$attempt" -ge "$max_attempts" ]; then
-      echo "ERROR: $label did not become ready within $max_attempts seconds" >&2
-      return 1
-    fi
-    sleep 1
-  done
-  echo "$label is ready."
-}
-
 _wait_for_children() {
   local status=0
   local pid
@@ -143,10 +125,8 @@ _start_frontend_only() {
 }
 
 _start_voicevox() {
-  echo "==> Starting VOICEVOX..."
-  docker start voicevox_engine > /dev/null
-  echo "VOICEVOX container start requested."
-  _wait_for_external_http "http://localhost:50021/version" "VOICEVOX"
+  VOICEVOX_HTTP_MAX_ATTEMPTS="${VOICE_CHAT_E2E_HTTP_MAX_ATTEMPTS:-30}" \
+    "$SCRIPT_DIR/start-voicevox.sh"
 }
 
 _start_real_services() {

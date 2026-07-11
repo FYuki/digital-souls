@@ -9,8 +9,10 @@ from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 from unittest.mock import MagicMock, patch
 
+from app.audio_pipeline import resolve_audio_runtime_config
 from app.main import app
 from app.memory.chroma_store import MemorySearchResult
+from app.tts.voicevox_client import DEFAULT_VOICEVOX_BASE_URL
 
 _LOAD_PERSONALITY = "app._chat_runtime._character_loader.load_personality"
 _GENERATE_RESPONSE = "app._chat_runtime._llm_router.generate_response"
@@ -87,6 +89,13 @@ def _wait_until(predicate, timeout: float = 5.0) -> None:
 
 
 class TestWebSocketEndpoint:
+    def test_empty_voicevox_base_url_uses_default_runtime_config(self, monkeypatch):
+        monkeypatch.setenv("VOICEVOX_BASE_URL", "")
+
+        runtime_config = resolve_audio_runtime_config()
+
+        assert runtime_config.voicevox_base_url == DEFAULT_VOICEVOX_BASE_URL
+
     def test_returns_text_response_for_text_message(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):

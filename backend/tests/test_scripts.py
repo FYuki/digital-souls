@@ -13,6 +13,7 @@ _SCRIPTS = [
     "start-backend.sh",
     "start-frontend.sh",
     "start-ollama.sh",
+    "start-voicevox.sh",
     "start-voice-chat-e2e.sh",
     "setup-backend.sh",
 ]
@@ -53,6 +54,16 @@ class TestScriptStructure:
     def test_chat_e2e_startup_scripts_are_not_present(self):
         assert not (_SCRIPTS_DIR / "start-chat-e2e.sh").exists()
         assert not (_SCRIPTS_DIR / "chat-e2e-backend.sh").exists()
+
+
+class TestDevelopmentEnvironmentDocs:
+    def test_initial_setup_includes_backend_venv_prerequisites(self):
+        setup_backend = (_SCRIPTS_DIR / "setup-backend.sh").read_text()
+        docs = (_ROOT_DIR / "docs/development-environment.md").read_text()
+
+        assert "python3 -m venv" in setup_backend
+        assert "python3" in docs
+        assert "python3-venv" in docs
 
 
 class TestStartFrontend:
@@ -297,6 +308,7 @@ def _make_start_all_stub_env(tmp_path: Path, curl_exit: int, max_attempts: int =
 
     for name in [
         "start-ollama.sh",
+        "start-voicevox.sh",
         "start-backend.sh",
         "start-frontend.sh",
     ]:
@@ -313,8 +325,21 @@ def _make_start_all_stub_env(tmp_path: Path, curl_exit: int, max_attempts: int =
 
 
 class TestStartAll:
-    def test_starts_services_in_order_ollama_backend_frontend(self, tmp_path):
+    def test_starts_services_in_order_ollama_voicevox_backend_frontend(self, tmp_path):
         scripts_dir, bin_dir = _make_start_all_stub_env(tmp_path, curl_exit=0)
+        order_log = tmp_path / "order.log"
+        for name in [
+            "start-ollama.sh",
+            "start-voicevox.sh",
+            "start-backend.sh",
+            "start-frontend.sh",
+        ]:
+            (scripts_dir / name).write_text(
+                f"#!/usr/bin/env bash\n"
+                f"echo {name} >> \"{order_log}\"\n"
+            )
+            (scripts_dir / name).chmod(0o755)
+
         env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
 
         result = subprocess.run(
@@ -325,15 +350,13 @@ class TestStartAll:
             timeout=10,
         )
 
-        stdout = result.stdout
-        ollama_pos = stdout.find("==> Starting Ollama...")
-        backend_pos = stdout.find("==> Starting Backend...")
-        frontend_pos = stdout.find("==> Starting Frontend...")
-
-        assert ollama_pos != -1, "Ollama start message not found in stdout"
-        assert backend_pos != -1, "Backend start message not found in stdout"
-        assert frontend_pos != -1, "Frontend start message not found in stdout"
-        assert ollama_pos < backend_pos < frontend_pos
+        assert result.returncode == 0
+        assert order_log.read_text().splitlines() == [
+            "start-ollama.sh",
+            "start-voicevox.sh",
+            "start-backend.sh",
+            "start-frontend.sh",
+        ]
 
     def test_start_all_cleans_up_started_processes_when_ollama_check_times_out(self, tmp_path):
         scripts_dir, bin_dir = _make_start_all_stub_env(tmp_path, curl_exit=1, max_attempts=1)
@@ -428,6 +451,44 @@ class TestStartAll:
         assert result.returncode != 0
         assert not frontend_marker.exists()
 
+    def test_does_not_start_backend_or_frontend_when_voicevox_start_fails(self, tmp_path):
+        scripts_dir, bin_dir = _make_start_all_stub_env(
+            tmp_path, curl_exit=0, max_attempts=1
+        )
+        backend_marker = tmp_path / "backend_started.txt"
+        frontend_marker = tmp_path / "frontend_started.txt"
+
+        (scripts_dir / "start-ollama.sh").write_text(
+            "#!/usr/bin/env bash\nexec sleep 30\n"
+        )
+        (scripts_dir / "start-ollama.sh").chmod(0o755)
+        (scripts_dir / "start-voicevox.sh").write_text("#!/usr/bin/env bash\nexit 12\n")
+        (scripts_dir / "start-voicevox.sh").chmod(0o755)
+        (scripts_dir / "start-backend.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"touch \"{backend_marker}\"\n"
+        )
+        (scripts_dir / "start-backend.sh").chmod(0o755)
+        (scripts_dir / "start-frontend.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"touch \"{frontend_marker}\"\n"
+        )
+        (scripts_dir / "start-frontend.sh").chmod(0o755)
+
+        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+        result = subprocess.run(
+            [str(scripts_dir / "start-all.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode == 12
+        assert not backend_marker.exists()
+        assert not frontend_marker.exists()
+
     def test_returns_nonzero_when_started_child_exits_nonzero(self, tmp_path):
         scripts_dir, bin_dir = _make_start_all_stub_env(tmp_path, curl_exit=0)
 
@@ -472,6 +533,297 @@ class TestStartAll:
         assert "process exited before becoming ready" in result.stderr
 
 
+class TestStartVoicevox:
+    def _copy_script(self, tmp_path):
+        scripts_dir = tmp_path / "scripts"
+        scripts_dir.mkdir()
+        script = scripts_dir / "start-voicevox.sh"
+        script.write_text((_SCRIPTS_DIR / "start-voicevox.sh").read_text())
+        script.chmod(0o755)
+        return script
+
+    def test_starts_existing_container_and_waits_for_version_endpoint(self, tmp_path):
+        script = self._copy_script(tmp_path)
+
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        docker_log = tmp_path / "docker.log"
+        curl_log = tmp_path / "curl.log"
+        docker = bin_dir / "docker"
+        docker.write_text(
+            f"#!/usr/bin/env bash\n"
+            f"printf '%s\\n' \"$*\" >> \"{docker_log}\"\n"
+        )
+        docker.chmod(0o755)
+        curl = bin_dir / "curl"
+        curl.write_text(
+            f"#!/usr/bin/env bash\n"
+            f"printf '%s\\n' \"${{@: -1}}\" >> \"{curl_log}\"\n"
+        )
+        curl.chmod(0o755)
+
+        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+        result = subprocess.run(
+            [str(script)],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode == 0
+        assert docker_log.read_text().splitlines() == [
+            "container inspect voicevox_engine",
+            "start voicevox_engine",
+        ]
+        assert curl_log.read_text().splitlines() == ["http://localhost:50021/version"]
+
+    def test_empty_backend_env_voicevox_base_url_uses_default_container(self, tmp_path):
+        script = self._copy_script(tmp_path)
+        backend_dir = tmp_path / "backend"
+        backend_dir.mkdir()
+        (backend_dir / ".env").write_text("VOICEVOX_BASE_URL=\n")
+
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        docker_log = tmp_path / "docker.log"
+        curl_log = tmp_path / "curl.log"
+        docker = bin_dir / "docker"
+        docker.write_text(
+            f"#!/usr/bin/env bash\n"
+            f"printf '%s\\n' \"$*\" >> \"{docker_log}\"\n"
+        )
+        docker.chmod(0o755)
+        curl = bin_dir / "curl"
+        curl.write_text(
+            f"#!/usr/bin/env bash\n"
+            f"printf '%s\\n' \"${{@: -1}}\" >> \"{curl_log}\"\n"
+        )
+        curl.chmod(0o755)
+
+        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+        result = subprocess.run(
+            [str(script)],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode == 0
+        assert docker_log.read_text().splitlines() == [
+            "container inspect voicevox_engine",
+            "start voicevox_engine",
+        ]
+        assert curl_log.read_text().splitlines() == ["http://localhost:50021/version"]
+
+    def test_localhost_alias_voicevox_base_url_starts_default_container(self, tmp_path):
+        script = self._copy_script(tmp_path)
+        backend_dir = tmp_path / "backend"
+        backend_dir.mkdir()
+        (backend_dir / ".env").write_text("VOICEVOX_BASE_URL=http://127.0.0.1:50021/\n")
+
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        docker_log = tmp_path / "docker.log"
+        curl_log = tmp_path / "curl.log"
+        docker = bin_dir / "docker"
+        docker.write_text(
+            f"#!/usr/bin/env bash\n"
+            f"printf '%s\\n' \"$*\" >> \"{docker_log}\"\n"
+        )
+        docker.chmod(0o755)
+        curl = bin_dir / "curl"
+        curl.write_text(
+            f"#!/usr/bin/env bash\n"
+            f"printf '%s\\n' \"${{@: -1}}\" >> \"{curl_log}\"\n"
+        )
+        curl.chmod(0o755)
+
+        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+        result = subprocess.run(
+            [str(script)],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode == 0
+        assert docker_log.read_text().splitlines() == [
+            "container inspect voicevox_engine",
+            "start voicevox_engine",
+        ]
+        assert curl_log.read_text().splitlines() == ["http://127.0.0.1:50021/version"]
+
+    def test_uses_backend_env_voicevox_base_url_without_starting_local_container(
+        self, tmp_path
+    ):
+        script = self._copy_script(tmp_path)
+        backend_dir = tmp_path / "backend"
+        backend_dir.mkdir()
+        (backend_dir / ".env").write_text(
+            "VOICEVOX_BASE_URL=http://voicevox.local:51000/\n"
+        )
+
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        docker_log = tmp_path / "docker.log"
+        curl_log = tmp_path / "curl.log"
+        docker = bin_dir / "docker"
+        docker.write_text(
+            f"#!/usr/bin/env bash\n"
+            f"printf '%s\\n' \"$*\" >> \"{docker_log}\"\n"
+        )
+        docker.chmod(0o755)
+        curl = bin_dir / "curl"
+        curl.write_text(
+            f"#!/usr/bin/env bash\n"
+            f"printf '%s\\n' \"${{@: -1}}\" >> \"{curl_log}\"\n"
+        )
+        curl.chmod(0o755)
+
+        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+        result = subprocess.run(
+            [str(script)],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode == 0
+        assert not docker_log.exists()
+        assert curl_log.read_text().splitlines() == [
+            "http://voicevox.local:51000/version"
+        ]
+
+    def test_reports_docker_install_requirement_when_docker_command_is_missing(self, tmp_path):
+        script = self._copy_script(tmp_path)
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+
+        env = {**os.environ, "PATH": str(bin_dir)}
+
+        result = subprocess.run(
+            ["/bin/bash", str(script)],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode == 1
+        assert "docker is required to start VOICEVOX" in result.stderr
+        assert "VOICEVOX container \"voicevox_engine\" does not exist" not in result.stderr
+        assert "docker run -d --name voicevox_engine" in result.stderr
+
+    def test_reports_setup_command_when_container_is_missing(self, tmp_path):
+        script = self._copy_script(tmp_path)
+
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        docker_log = tmp_path / "docker.log"
+        docker = bin_dir / "docker"
+        docker.write_text(
+            f"#!/usr/bin/env bash\n"
+            f"printf '%s\\n' \"$*\" >> \"{docker_log}\"\n"
+            "case \"$*\" in\n"
+            "  \"container inspect voicevox_engine\") "
+            "echo 'Error: No such object: voicevox_engine' >&2; exit 1 ;;\n"
+            "  *) exit 0 ;;\n"
+            "esac\n"
+        )
+        docker.chmod(0o755)
+
+        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+        result = subprocess.run(
+            [str(script)],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode == 1
+        assert 'VOICEVOX container "voicevox_engine" does not exist' in result.stderr
+        assert "docker run -d --name voicevox_engine" in result.stderr
+        assert docker_log.read_text().splitlines() == [
+            "container inspect voicevox_engine",
+        ]
+
+    def test_reports_setup_command_for_docker_no_such_container_message(self, tmp_path):
+        script = self._copy_script(tmp_path)
+
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        docker = bin_dir / "docker"
+        docker.write_text(
+            "#!/usr/bin/env bash\n"
+            "case \"$*\" in\n"
+            "  \"container inspect voicevox_engine\") "
+            "echo 'Error response from daemon: No such container: voicevox_engine' >&2; exit 1 ;;\n"
+            "  *) exit 0 ;;\n"
+            "esac\n"
+        )
+        docker.chmod(0o755)
+
+        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+        result = subprocess.run(
+            [str(script)],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode == 1
+        assert 'VOICEVOX container "voicevox_engine" does not exist' in result.stderr
+        assert "docker run -d --name voicevox_engine" in result.stderr
+
+    def test_reports_inspect_failure_without_setup_message(self, tmp_path):
+        script = self._copy_script(tmp_path)
+
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        docker_log = tmp_path / "docker.log"
+        docker = bin_dir / "docker"
+        docker.write_text(
+            f"#!/usr/bin/env bash\n"
+            f"printf '%s\\n' \"$*\" >> \"{docker_log}\"\n"
+            "case \"$*\" in\n"
+            "  \"container inspect voicevox_engine\") "
+            "echo 'Cannot connect to the Docker daemon' >&2; exit 1 ;;\n"
+            "  *) exit 0 ;;\n"
+            "esac\n"
+        )
+        docker.chmod(0o755)
+
+        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+        result = subprocess.run(
+            [str(script)],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode == 1
+        assert "failed to inspect VOICEVOX container" in result.stderr
+        assert "Cannot connect to the Docker daemon" in result.stderr
+        assert "docker run -d --name voicevox_engine" not in result.stderr
+        assert docker_log.read_text().splitlines() == [
+            "container inspect voicevox_engine",
+        ]
+
+
 def _make_voice_chat_e2e_stub_env(tmp_path: Path):
     scripts_dir = tmp_path / "scripts"
     scripts_dir.mkdir()
@@ -479,6 +831,10 @@ def _make_voice_chat_e2e_stub_env(tmp_path: Path):
     script = scripts_dir / "start-voice-chat-e2e.sh"
     script.write_text((_SCRIPTS_DIR / "start-voice-chat-e2e.sh").read_text())
     script.chmod(0o755)
+
+    voicevox_script = scripts_dir / "start-voicevox.sh"
+    voicevox_script.write_text((_SCRIPTS_DIR / "start-voicevox.sh").read_text())
+    voicevox_script.chmod(0o755)
 
     for name in [
         "start-ollama.sh",
