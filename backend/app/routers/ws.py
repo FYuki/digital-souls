@@ -9,6 +9,11 @@ from fastapi import APIRouter, WebSocket
 from starlette.concurrency import run_in_threadpool
 from starlette.websockets import WebSocketDisconnect
 
+from app.audio.constants import (
+    PCM_CHANNELS,
+    PCM_SAMPLE_RATE_HZ,
+    PCM_SAMPLE_WIDTH_BYTES,
+)
 from app.chat_service import (
     CharacterNotFoundError,
     ChatBackendError,
@@ -40,9 +45,6 @@ WEBSOCKET_BYTES_FIELD = "bytes"
 WEBSOCKET_TYPE_FIELD = "type"
 WEBSOCKET_DISCONNECT_TYPE = "websocket.disconnect"
 MAX_AUDIO_FRAME_SECONDS = 30
-PCM_SAMPLE_RATE_HZ = 16000
-PCM_CHANNELS = 1
-PCM_SAMPLE_WIDTH_BYTES = 2
 MAX_AUDIO_FRAME_BYTES = (
     PCM_SAMPLE_RATE_HZ
     * PCM_CHANNELS
