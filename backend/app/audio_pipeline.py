@@ -5,6 +5,7 @@ import logging
 from time import perf_counter
 from typing import Callable, Iterator, Protocol
 
+from app.audio.constants import PCM_SAMPLE_WIDTH_BYTES
 from app.characters.loader import VoicevoxTtsConfig, load_tts_config
 from app.tts.speech_synthesizer import SpeechSynthesizer
 from app.tts.voicevox_client import (
@@ -18,7 +19,6 @@ ReplyGenerator = Callable[[str], str]
 CLIENT_INPUT_ERROR_STATUS = 422
 UPSTREAM_SERVICE_ERROR_STATUS = 502
 UNREADABLE_CHARACTER_CARD_MESSAGE = "character card is not readable"
-PCM_SAMPLE_WIDTH_BYTES = 2
 
 
 class AudioPipelineConfigError(ValueError):
