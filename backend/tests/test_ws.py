@@ -89,6 +89,52 @@ def _wait_until(predicate, timeout: float = 5.0) -> None:
 
 
 class TestWebSocketEndpoint:
+    @pytest.mark.parametrize(
+        ("error", "expected_status", "expected_detail"),
+        [
+            pytest.param(
+                "character_not_found",
+                404,
+                "Character 'miori' not found",
+                id="character-not-found",
+            ),
+            pytest.param(
+                "timeout",
+                504,
+                "LLM request timed out",
+                id="timeout",
+            ),
+            pytest.param(
+                "backend",
+                502,
+                "LLM request failed",
+                id="backend",
+            ),
+        ],
+    )
+    def test_should_map_chat_error_to_websocket_status_and_detail(
+        self,
+        error,
+        expected_status,
+        expected_detail,
+    ):
+        from app.chat_service import (
+            CharacterNotFoundError,
+            ChatBackendError,
+            ChatTimeoutError,
+        )
+        from app.routers.ws import _map_chat_error
+
+        errors = {
+            "character_not_found": CharacterNotFoundError("miori"),
+            "timeout": ChatTimeoutError(),
+            "backend": ChatBackendError(),
+        }
+
+        result = _map_chat_error(errors[error])
+
+        assert result == (expected_status, expected_detail)
+
     def test_empty_voicevox_base_url_uses_default_runtime_config(self, monkeypatch):
         monkeypatch.setenv("VOICEVOX_BASE_URL", "")
 
@@ -253,6 +299,57 @@ class TestWebSocketEndpoint:
         }
         mock_gen.assert_not_called()
 
+    def test_should_use_shared_mapping_when_opening_chat_session_fails(
+        self,
+        monkeypatch,
+    ):
+        import asyncio
+
+        from app.chat_service import CharacterNotFoundError
+        from app.routers import ws as ws_module
+
+        error = CharacterNotFoundError("miori")
+        mapped_error = (490, "mapped session error")
+        map_chat_error = MagicMock(return_value=mapped_error)
+        monkeypatch.setattr(ws_module, "_map_chat_error", map_chat_error)
+
+        class MissingCharacterService:
+            async def create_chat_session(self, character_name):
+                raise error
+
+        class RecordingWebSocket:
+            def __init__(self):
+                self.app = type("App", (), {})()
+                self.app.state = type("State", (), {})()
+                self.app.state.chat_service = MissingCharacterService()
+                self.sent_json = []
+                self.closed = False
+
+            async def send_json(self, payload):
+                self.sent_json.append(payload)
+
+            async def close(self):
+                self.closed = True
+
+        async def run_open_chat_session():
+            websocket = RecordingWebSocket()
+            session = await ws_module._open_chat_session(
+                websocket,
+                asyncio.Lock(),
+                "miori",
+            )
+            return session, websocket
+
+        session, websocket = anyio.run(run_open_chat_session)
+
+        mapped_status, mapped_detail = mapped_error
+        map_chat_error.assert_called_once_with(error)
+        assert session is None
+        assert websocket.sent_json == [
+            {"type": "error", "status": mapped_status, "detail": mapped_detail}
+        ]
+        assert websocket.closed is True
+
     def test_returns_404_when_character_disappears_after_session_open(self, client):
         with patch(
             _LOAD_PERSONALITY,
@@ -314,6 +411,55 @@ class TestWebSocketEndpoint:
                 "detail": "Character 'miori' not found",
             },
         ]
+
+    def test_should_use_shared_mapping_for_missing_character_in_text_handler(
+        self,
+        monkeypatch,
+    ):
+        import asyncio
+
+        from app.chat_service import CharacterNotFoundError
+        from app.routers import ws as ws_module
+
+        error = CharacterNotFoundError("miori")
+        mapped_error = (490, "mapped text error")
+        map_chat_error = MagicMock(return_value=mapped_error)
+        monkeypatch.setattr(ws_module, "_map_chat_error", map_chat_error)
+
+        class MissingCharacterSession:
+            def generate_reply(self, message):
+                raise error
+
+        class RecordingWebSocket:
+            def __init__(self):
+                self.sent_json = []
+                self.closed = False
+
+            async def send_json(self, payload):
+                self.sent_json.append(payload)
+
+            async def close(self):
+                self.closed = True
+
+        async def run_handler():
+            websocket = RecordingWebSocket()
+            keep_open = await ws_module._handle_text_frame(
+                websocket,
+                asyncio.Lock(),
+                MissingCharacterSession(),
+                {"text": '{"type": "text", "message": "hello"}'},
+            )
+            return keep_open, websocket
+
+        keep_open, websocket = anyio.run(run_handler)
+
+        mapped_status, mapped_detail = mapped_error
+        map_chat_error.assert_called_once_with(error)
+        assert keep_open is False
+        assert websocket.sent_json == [
+            {"type": "error", "status": mapped_status, "detail": mapped_detail}
+        ]
+        assert websocket.closed is True
 
     def test_text_close_path_holds_send_lock_until_close_completes(self):
         import asyncio
@@ -439,11 +585,92 @@ class TestWebSocketEndpoint:
             "detail": "LLM request failed",
         }
 
-    def test_connection_continues_after_llm_error(self, client):
+    @pytest.mark.parametrize(
+        "error_name",
+        [pytest.param("timeout", id="timeout"), pytest.param("backend", id="backend")],
+    )
+    def test_should_use_shared_mapping_when_generating_reply_fails(
+        self,
+        monkeypatch,
+        error_name,
+    ):
+        import asyncio
+
+        from app.chat_service import ChatBackendError, ChatTimeoutError
+        from app.routers import ws as ws_module
+
+        errors = {
+            "timeout": ChatTimeoutError(),
+            "backend": ChatBackendError(),
+        }
+        error = errors[error_name]
+        mapped_error = (590, "mapped reply error")
+        map_chat_error = MagicMock(return_value=mapped_error)
+        monkeypatch.setattr(ws_module, "_map_chat_error", map_chat_error)
+
+        class FailingChatSession:
+            def generate_reply(self, message):
+                raise error
+
+        class RecordingWebSocket:
+            def __init__(self):
+                self.sent_json = []
+
+            async def send_json(self, payload):
+                self.sent_json.append(payload)
+
+        async def run_generate_reply():
+            websocket = RecordingWebSocket()
+            reply = await ws_module._generate_reply(
+                websocket,
+                asyncio.Lock(),
+                FailingChatSession(),
+                "hello",
+            )
+            return reply, websocket
+
+        reply, websocket = anyio.run(run_generate_reply)
+
+        mapped_status, mapped_detail = mapped_error
+        map_chat_error.assert_called_once_with(error)
+        assert reply is None
+        assert websocket.sent_json == [
+            {"type": "error", "status": mapped_status, "detail": mapped_detail}
+        ]
+
+    @pytest.mark.parametrize(
+        ("llm_error", "expected_response"),
+        [
+            pytest.param(
+                httpx.ReadTimeout("timed out"),
+                {
+                    "type": "error",
+                    "status": 504,
+                    "detail": "LLM request timed out",
+                },
+                id="timeout",
+            ),
+            pytest.param(
+                httpx.HTTPError("backend failed"),
+                {
+                    "type": "error",
+                    "status": 502,
+                    "detail": "LLM request failed",
+                },
+                id="backend",
+            ),
+        ],
+    )
+    def test_should_keep_text_connection_open_after_llm_error(
+        self,
+        client,
+        llm_error,
+        expected_response,
+    ):
         with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
             with patch(
                 _GENERATE_RESPONSE,
-                side_effect=[httpx.ReadTimeout("timed out"), _LLM_REPLY],
+                side_effect=[llm_error, _LLM_REPLY],
             ):
                 with client.websocket_connect("/ws/miori") as websocket:
                     websocket.send_json({"type": "text", "message": "1回目"})
@@ -452,8 +679,65 @@ class TestWebSocketEndpoint:
                     websocket.send_json({"type": "text", "message": "2回目"})
                     second_response = websocket.receive_json()
 
-        assert first_response["status"] == 504
+        assert first_response == expected_response
         assert second_response == {"type": "text", "response": _LLM_REPLY}
+
+    @pytest.mark.parametrize(
+        ("llm_error", "expected_response"),
+        [
+            pytest.param(
+                httpx.ReadTimeout("timed out"),
+                {
+                    "type": "error",
+                    "status": 504,
+                    "detail": "LLM request timed out",
+                },
+                id="timeout",
+            ),
+            pytest.param(
+                httpx.HTTPError("backend failed"),
+                {
+                    "type": "error",
+                    "status": 502,
+                    "detail": "LLM request failed",
+                },
+                id="backend",
+            ),
+        ],
+    )
+    def test_should_return_mapped_audio_chat_error_and_keep_connection_open(
+        self,
+        client,
+        llm_error,
+        expected_response,
+    ):
+        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+            with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
+                with patch(_TRANSCRIBE, return_value="audio question"):
+                    with patch(
+                        _GENERATE_RESPONSE,
+                        side_effect=[llm_error, _LLM_REPLY],
+                    ) as mock_gen:
+                        with patch(
+                            _SYNTHESIZE,
+                            return_value=b"RIFF output",
+                        ) as mock_tts:
+                            with client.websocket_connect("/ws/miori") as websocket:
+                                websocket.send_bytes(_PCM_AUDIO)
+                                audio_error = websocket.receive_json()
+
+                                websocket.send_json(
+                                    {"type": "text", "message": "continue"},
+                                )
+                                text_response = websocket.receive_json()
+
+        assert audio_error == expected_response
+        assert text_response == {"type": "text", "response": _LLM_REPLY}
+        assert [call.args[1] for call in mock_gen.call_args_list] == [
+            "audio question",
+            "continue",
+        ]
+        mock_tts.assert_not_called()
 
     def test_returns_wav_bytes_for_binary_audio_frame(self, monkeypatch):
         output_audio = b"RIFF output wav"
@@ -959,6 +1243,80 @@ class TestWebSocketEndpoint:
 
         assert queue_size == 1
         assert queued_audio == b"new"
+
+    @pytest.mark.parametrize(
+        ("error_name", "expected_keep_open", "expected_closed"),
+        [
+            pytest.param("character_not_found", False, True, id="character-not-found"),
+            pytest.param("timeout", True, False, id="timeout"),
+            pytest.param("backend", True, False, id="backend"),
+        ],
+    )
+    def test_should_use_shared_mapping_for_audio_chat_errors(
+        self,
+        monkeypatch,
+        error_name,
+        expected_keep_open,
+        expected_closed,
+    ):
+        import asyncio
+
+        from app.chat_service import (
+            CharacterNotFoundError,
+            ChatBackendError,
+            ChatTimeoutError,
+        )
+        from app.routers import ws as ws_module
+
+        errors = {
+            "character_not_found": CharacterNotFoundError("miori"),
+            "timeout": ChatTimeoutError(),
+            "backend": ChatBackendError(),
+        }
+        error = errors[error_name]
+        mapped_error = (590, "mapped audio error")
+        map_chat_error = MagicMock(return_value=mapped_error)
+        monkeypatch.setattr(ws_module, "_map_chat_error", map_chat_error)
+
+        class StubChatSession:
+            def generate_reply(self, message):
+                return f"reply:{message}"
+
+        class FailingAudioSession:
+            def generate_response_audio(self, audio, reply_generator):
+                raise error
+
+        class RecordingWebSocket:
+            def __init__(self):
+                self.sent_json = []
+                self.closed = False
+
+            async def send_json(self, payload):
+                self.sent_json.append(payload)
+
+            async def close(self):
+                self.closed = True
+
+        async def run_handler():
+            websocket = RecordingWebSocket()
+            keep_open = await ws_module._handle_audio_payload(
+                websocket,
+                asyncio.Lock(),
+                StubChatSession(),
+                FailingAudioSession(),
+                b"audio",
+            )
+            return keep_open, websocket
+
+        keep_open, websocket = anyio.run(run_handler)
+
+        mapped_status, mapped_detail = mapped_error
+        map_chat_error.assert_called_once_with(error)
+        assert keep_open is expected_keep_open
+        assert websocket.sent_json == [
+            {"type": "error", "status": mapped_status, "detail": mapped_detail}
+        ]
+        assert websocket.closed is expected_closed
 
     def test_audio_response_sends_text_and_bytes_without_interleaving(self):
         import asyncio
