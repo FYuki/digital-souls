@@ -18,10 +18,18 @@ _SCRIPTS = [
     "setup-backend.sh",
 ]
 
+_SCRIPT_LIBRARIES = [
+    "lib/process.sh",
+    "lib/readiness.sh",
+]
+
 
 class TestScriptStructure:
     def test_all_scripts_exist(self):
         for name in _SCRIPTS:
+            assert (_SCRIPTS_DIR / name).exists(), f"{name} not found"
+
+        for name in _SCRIPT_LIBRARIES:
             assert (_SCRIPTS_DIR / name).exists(), f"{name} not found"
 
     def test_all_scripts_are_executable(self):
@@ -35,7 +43,7 @@ class TestScriptStructure:
             assert "set -euo pipefail" in content, f"{name} missing set -euo pipefail"
 
     def test_all_scripts_pass_bash_syntax_check(self):
-        for name in _SCRIPTS:
+        for name in _SCRIPTS + _SCRIPT_LIBRARIES:
             result = subprocess.run(
                 ["bash", "-n", str(_SCRIPTS_DIR / name)],
                 capture_output=True,
@@ -302,9 +310,20 @@ def _make_start_all_stub_env(tmp_path: Path, curl_exit: int, max_attempts: int =
     scripts_dir.mkdir()
 
     content = (_SCRIPTS_DIR / "start-all.sh").read_text()
-    content = content.replace("local max_attempts=30", f"local max_attempts={max_attempts}")
+    content = content.replace(
+        "set -euo pipefail",
+        "set -euo pipefail\n"
+        f"export HTTP_READINESS_MAX_ATTEMPTS={max_attempts}\n"
+        "export HTTP_READINESS_INTERVAL_SECONDS=0",
+        1,
+    )
     (scripts_dir / "start-all.sh").write_text(content)
     (scripts_dir / "start-all.sh").chmod(0o755)
+
+    lib_dir = scripts_dir / "lib"
+    lib_dir.mkdir()
+    for name in _SCRIPT_LIBRARIES:
+        (scripts_dir / name).write_text((_SCRIPTS_DIR / name).read_text())
 
     for name in [
         "start-ollama.sh",
@@ -325,6 +344,30 @@ def _make_start_all_stub_env(tmp_path: Path, curl_exit: int, max_attempts: int =
 
 
 class TestStartAll:
+    def test_uses_shared_process_and_readiness_libraries(self):
+        content = (_SCRIPTS_DIR / "start-all.sh").read_text()
+
+        assert 'source "$SCRIPT_DIR/lib/process.sh"' in content
+        assert 'source "$SCRIPT_DIR/lib/readiness.sh"' in content
+        assert "process_manager_init" in content
+        assert "process_start_child" in content
+        assert "wait_for_http" in content
+        assert '"$SCRIPT_DIR/start-voicevox.sh"' in content
+
+    def test_does_not_keep_local_process_or_readiness_implementations(self):
+        content = (_SCRIPTS_DIR / "start-all.sh").read_text()
+
+        for obsolete in [
+            "CHILD_PIDS=",
+            "_CLEANED_UP=",
+            "cleanup()",
+            "handle_signal()",
+            "_start_child()",
+            "_wait_for_children()",
+            "_wait_for_http()",
+        ]:
+            assert obsolete not in content
+
     def test_starts_services_in_order_ollama_voicevox_backend_frontend(self, tmp_path):
         scripts_dir, bin_dir = _make_start_all_stub_env(tmp_path, curl_exit=0)
         order_log = tmp_path / "order.log"
@@ -344,6 +387,7 @@ class TestStartAll:
 
         result = subprocess.run(
             [str(scripts_dir / "start-all.sh")],
+            cwd=tmp_path.parent,
             env=env,
             capture_output=True,
             text=True,
@@ -540,7 +584,20 @@ class TestStartVoicevox:
         script = scripts_dir / "start-voicevox.sh"
         script.write_text((_SCRIPTS_DIR / "start-voicevox.sh").read_text())
         script.chmod(0o755)
+        lib_dir = scripts_dir / "lib"
+        lib_dir.mkdir()
+        (lib_dir / "readiness.sh").write_text(
+            (_SCRIPTS_DIR / "lib/readiness.sh").read_text()
+        )
         return script
+
+    def test_uses_shared_readiness_directly(self):
+        content = (_SCRIPTS_DIR / "start-voicevox.sh").read_text()
+
+        assert 'source "$SCRIPT_DIR/lib/readiness.sh"' in content
+        assert "wait_for_http" in content
+        assert "_wait_for_voicevox()" not in content
+        assert "VOICEVOX_HTTP_MAX_ATTEMPTS" not in content
 
     def test_starts_existing_container_and_waits_for_version_endpoint(self, tmp_path):
         script = self._copy_script(tmp_path)
@@ -566,6 +623,7 @@ class TestStartVoicevox:
 
         result = subprocess.run(
             [str(script)],
+            cwd=tmp_path.parent,
             env=env,
             capture_output=True,
             text=True,
@@ -832,6 +890,11 @@ def _make_voice_chat_e2e_stub_env(tmp_path: Path):
     script.write_text((_SCRIPTS_DIR / "start-voice-chat-e2e.sh").read_text())
     script.chmod(0o755)
 
+    lib_dir = scripts_dir / "lib"
+    lib_dir.mkdir()
+    for name in _SCRIPT_LIBRARIES:
+        (scripts_dir / name).write_text((_SCRIPTS_DIR / name).read_text())
+
     voicevox_script = scripts_dir / "start-voicevox.sh"
     voicevox_script.write_text((_SCRIPTS_DIR / "start-voicevox.sh").read_text())
     voicevox_script.chmod(0o755)
@@ -857,6 +920,73 @@ def _make_voice_chat_e2e_stub_env(tmp_path: Path):
 
 
 class TestStartVoiceChatE2E:
+    def test_uses_shared_process_and_readiness_libraries(self):
+        content = (_SCRIPTS_DIR / "start-voice-chat-e2e.sh").read_text()
+
+        assert 'source "$SCRIPT_DIR/lib/process.sh"' in content
+        assert 'source "$SCRIPT_DIR/lib/readiness.sh"' in content
+        assert "process_manager_init" in content
+        assert "process_start_child" in content
+        assert "wait_for_http" in content
+
+    def test_does_not_keep_local_process_or_readiness_implementations(self):
+        content = (_SCRIPTS_DIR / "start-voice-chat-e2e.sh").read_text()
+
+        for obsolete in [
+            "CHILD_PIDS=",
+            "_CLEANED_UP=",
+            "cleanup()",
+            "handle_signal()",
+            "_start_child()",
+            "_wait_for_children()",
+            "_wait_for_http()",
+        ]:
+            assert obsolete not in content
+
+    def test_calls_voicevox_directly_without_e2e_attempt_override(self):
+        content = (_SCRIPTS_DIR / "start-voice-chat-e2e.sh").read_text()
+
+        assert '"$SCRIPT_DIR/start-voicevox.sh"' in content
+        assert "_start_voicevox" not in content
+        assert "VOICEVOX_HTTP_MAX_ATTEMPTS" not in content
+        assert "VOICE_CHAT_E2E_HTTP_MAX_ATTEMPTS" not in content
+
+    def test_real_mode_does_not_pass_legacy_attempt_settings_to_voicevox(self, tmp_path):
+        scripts_dir, bin_dir = _make_voice_chat_e2e_stub_env(tmp_path)
+        voicevox_env_log = tmp_path / "voicevox-env.log"
+        (scripts_dir / "start-ollama.sh").write_text(
+            "#!/usr/bin/env bash\nexec sleep 0.2\n"
+        )
+        (scripts_dir / "start-ollama.sh").chmod(0o755)
+        (scripts_dir / "start-backend.sh").write_text(
+            "#!/usr/bin/env bash\nexec sleep 0.2\n"
+        )
+        (scripts_dir / "start-backend.sh").chmod(0o755)
+        (scripts_dir / "start-voicevox.sh").write_text(
+            "#!/usr/bin/env bash\n"
+            f"printf '%s\\n' \"${{VOICEVOX_HTTP_MAX_ATTEMPTS-unset}}\" > \"{voicevox_env_log}\"\n"
+        )
+        (scripts_dir / "start-voicevox.sh").chmod(0o755)
+
+        env = {
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "VOICE_CHAT_E2E_BACKEND": "real",
+            "VOICE_CHAT_E2E_HTTP_MAX_ATTEMPTS": "1",
+        }
+
+        result = subprocess.run(
+            [str(scripts_dir / "start-voice-chat-e2e.sh")],
+            cwd=tmp_path,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        assert result.returncode == 0
+        assert voicevox_env_log.read_text().splitlines() == ["unset"]
+
     def test_startup_boundary_does_not_source_chat_backend_helper(self):
         content = (_SCRIPTS_DIR / "start-voice-chat-e2e.sh").read_text()
 
@@ -955,7 +1085,8 @@ class TestStartVoiceChatE2E:
         env = {
             **os.environ,
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
-            "VOICE_CHAT_E2E_HTTP_MAX_ATTEMPTS": "1",
+            "HTTP_READINESS_MAX_ATTEMPTS": "1",
+            "HTTP_READINESS_INTERVAL_SECONDS": "0",
         }
 
         result = subprocess.run(
@@ -1044,7 +1175,8 @@ class TestStartVoiceChatE2E:
             **os.environ,
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
             "VOICE_CHAT_E2E_BACKEND": "real",
-            "VOICE_CHAT_E2E_HTTP_MAX_ATTEMPTS": "1",
+            "HTTP_READINESS_MAX_ATTEMPTS": "1",
+            "HTTP_READINESS_INTERVAL_SECONDS": "0",
         }
 
         result = subprocess.run(
@@ -1104,7 +1236,8 @@ class TestStartVoiceChatE2E:
             **os.environ,
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
             "VOICE_CHAT_E2E_BACKEND": "real",
-            "VOICE_CHAT_E2E_HTTP_MAX_ATTEMPTS": "1",
+            "HTTP_READINESS_MAX_ATTEMPTS": "1",
+            "HTTP_READINESS_INTERVAL_SECONDS": "0",
         }
 
         result = subprocess.run(
