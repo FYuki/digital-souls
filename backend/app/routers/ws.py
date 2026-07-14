@@ -3,7 +3,7 @@ import json
 import logging
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import cast
+from typing import assert_never, cast
 
 from fastapi import APIRouter, WebSocket
 from starlette.concurrency import run_in_threadpool
@@ -68,6 +68,18 @@ class WebSocketMessageError(ValueError):
     """Invalid client message that should not close the WebSocket session."""
 
 
+def _map_chat_error(
+    error: CharacterNotFoundError | ChatTimeoutError | ChatBackendError,
+) -> tuple[int, str]:
+    if isinstance(error, CharacterNotFoundError):
+        return 404, error.detail
+    if isinstance(error, ChatTimeoutError):
+        return 504, error.detail
+    if isinstance(error, ChatBackendError):
+        return 502, error.detail
+    assert_never(error)
+
+
 async def _send_json(
     websocket: WebSocket,
     send_lock: asyncio.Lock,
@@ -105,9 +117,10 @@ async def _send_error(
     )
 
 
-async def _send_character_not_found_and_close(
+async def _send_error_and_close(
     websocket: WebSocket,
     send_lock: asyncio.Lock,
+    status: int,
     detail: str,
 ) -> None:
     async with send_lock:
@@ -115,7 +128,7 @@ async def _send_character_not_found_and_close(
             websocket,
             {
                 MESSAGE_TYPE_FIELD: ERROR_MESSAGE_TYPE,
-                STATUS_FIELD: 404,
+                STATUS_FIELD: status,
                 DETAIL_FIELD: detail,
             },
         )
@@ -228,7 +241,8 @@ async def _open_chat_session(
         chat_session = await chat_service.create_chat_session(character_name)
         return cast(ChatReplySession, chat_session)
     except CharacterNotFoundError as exc:
-        await _send_character_not_found_and_close(websocket, send_lock, exc.detail)
+        status, detail = _map_chat_error(exc)
+        await _send_error_and_close(websocket, send_lock, status, detail)
         return None
 
 
@@ -240,11 +254,9 @@ async def _generate_reply(
 ) -> str | None:
     try:
         return await run_in_threadpool(chat_session.generate_reply, message)
-    except ChatTimeoutError as exc:
-        await _send_error(websocket, send_lock, 504, exc.detail)
-        return None
-    except ChatBackendError as exc:
-        await _send_error(websocket, send_lock, 502, exc.detail)
+    except (ChatTimeoutError, ChatBackendError) as exc:
+        status, detail = _map_chat_error(exc)
+        await _send_error(websocket, send_lock, status, detail)
         return None
 
 
@@ -264,7 +276,8 @@ async def _handle_text_frame(
     try:
         reply = await _generate_reply(websocket, send_lock, chat_session, message)
     except CharacterNotFoundError as exc:
-        await _send_character_not_found_and_close(websocket, send_lock, exc.detail)
+        status, detail = _map_chat_error(exc)
+        await _send_error_and_close(websocket, send_lock, status, detail)
         return False
 
     if reply is None:
@@ -335,13 +348,12 @@ async def _handle_audio_payload(
         await _send_error(websocket, send_lock, exc.status_code, exc.detail)
         return True
     except CharacterNotFoundError as exc:
-        await _send_character_not_found_and_close(websocket, send_lock, exc.detail)
+        status, detail = _map_chat_error(exc)
+        await _send_error_and_close(websocket, send_lock, status, detail)
         return False
-    except ChatTimeoutError as exc:
-        await _send_error(websocket, send_lock, 504, exc.detail)
-        return True
-    except ChatBackendError as exc:
-        await _send_error(websocket, send_lock, 502, exc.detail)
+    except (ChatTimeoutError, ChatBackendError) as exc:
+        status, detail = _map_chat_error(exc)
+        await _send_error(websocket, send_lock, status, detail)
         return True
 
     async with send_lock:
