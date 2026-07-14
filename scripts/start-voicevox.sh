@@ -10,12 +10,12 @@ case "$SCRIPT_DIR" in
   /*) ;;
   *) SCRIPT_DIR="$PWD/$SCRIPT_DIR" ;;
 esac
+source "$SCRIPT_DIR/lib/readiness.sh"
 
 BACKEND_DIR="$SCRIPT_DIR/../backend"
 VOICEVOX_CONTAINER_NAME="voicevox_engine"
 DEFAULT_VOICEVOX_BASE_URL="http://localhost:50021"
 VOICEVOX_SETUP_COMMAND="docker run -d --name voicevox_engine -p 50021:50021 voicevox/voicevox_engine:cpu-latest"
-VOICEVOX_MAX_ATTEMPTS="${VOICEVOX_HTTP_MAX_ATTEMPTS:-30}"
 
 if [ -f "$BACKEND_DIR/.env" ]; then
   set -a
@@ -73,22 +73,6 @@ _ensure_voicevox_container_exists() {
   exit 1
 }
 
-_wait_for_voicevox() {
-  local health_url="$1"
-  local attempt=0
-
-  echo "Waiting for VOICEVOX to be ready at $health_url..."
-  until curl -sf "$health_url" > /dev/null 2>&1; do
-    attempt=$((attempt + 1))
-    if [ "$attempt" -ge "$VOICEVOX_MAX_ATTEMPTS" ]; then
-      echo "ERROR: VOICEVOX did not become ready within $VOICEVOX_MAX_ATTEMPTS seconds" >&2
-      exit 1
-    fi
-    sleep 1
-  done
-  echo "VOICEVOX is ready."
-}
-
 VOICEVOX_BASE_URL_RESOLVED="$(_resolve_voicevox_base_url)"
 VOICEVOX_HEALTH_URL="$VOICEVOX_BASE_URL_RESOLVED/version"
 
@@ -103,4 +87,4 @@ else
   echo "==> Using configured VOICEVOX at $VOICEVOX_BASE_URL_RESOLVED"
 fi
 
-_wait_for_voicevox "$VOICEVOX_HEALTH_URL"
+wait_for_http "$VOICEVOX_HEALTH_URL" "VOICEVOX"
