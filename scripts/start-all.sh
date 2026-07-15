@@ -7,6 +7,8 @@ source "$SCRIPT_DIR/lib/readiness.sh"
 
 process_manager_init
 
+"$SCRIPT_DIR/setup-backend.sh"
+
 process_start_child "Ollama" "$SCRIPT_DIR/start-ollama.sh"
 OLLAMA_PID="$(process_last_started_pid)"
 wait_for_http "http://localhost:11434/api/tags" "Ollama" "$OLLAMA_PID"

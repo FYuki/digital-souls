@@ -11,16 +11,18 @@ digital-souls の自作バックエンド（FastAPI）。
 
 ## セットアップ
 
+初回、または `backend/requirements.txt` の更新後に、リポジトリルートで実行する。
+
 ```bash
-cd backend
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+scripts/setup-backend.sh
 ```
+
+`setup-backend.sh` は `backend/.venv` の作成と実行時依存関係のインストールだけを行い、Backend は起動しない。
 
 ## 起動
 
 ```bash
-cd backend
-source .venv/bin/activate
-uvicorn app.main:app --reload
+scripts/start-backend.sh
 ```
+
+`start-backend.sh` は構築済みの `backend/.venv` を使って Backend だけを foreground で起動する。環境がない場合にセットアップは自動実行されず、`setup-backend.sh` の実行を促すエラーで終了する。Backend プロセス自身が終了した場合は、その終了ステータスが呼び出し元へ伝播する。

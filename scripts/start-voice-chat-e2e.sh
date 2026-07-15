@@ -42,14 +42,14 @@ _start_frontend_only() {
 }
 
 _start_real_services() {
+  "$SCRIPT_DIR/setup-backend.sh" || return $?
+
   local ollama_pid
   process_start_child "Ollama" "$SCRIPT_DIR/start-ollama.sh"
   ollama_pid="$(process_last_started_pid)"
   wait_for_http "http://localhost:11434/api/tags" "Ollama" "$ollama_pid" || return $?
 
   "$SCRIPT_DIR/start-voicevox.sh" || return $?
-
-  "$SCRIPT_DIR/setup-backend.sh" || return $?
 
   local backend_pid
   process_start_child "Backend" "$SCRIPT_DIR/start-backend.sh"

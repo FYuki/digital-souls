@@ -326,6 +326,7 @@ def _make_start_all_stub_env(tmp_path: Path, curl_exit: int, max_attempts: int =
         (scripts_dir / name).write_text((_SCRIPTS_DIR / name).read_text())
 
     for name in [
+        "setup-backend.sh",
         "start-ollama.sh",
         "start-voicevox.sh",
         "start-backend.sh",
@@ -368,10 +369,11 @@ class TestStartAll:
         ]:
             assert obsolete not in content
 
-    def test_starts_services_in_order_ollama_voicevox_backend_frontend(self, tmp_path):
+    def test_starts_services_after_backend_setup(self, tmp_path):
         scripts_dir, bin_dir = _make_start_all_stub_env(tmp_path, curl_exit=0)
         order_log = tmp_path / "order.log"
         for name in [
+            "setup-backend.sh",
             "start-ollama.sh",
             "start-voicevox.sh",
             "start-backend.sh",
@@ -396,6 +398,7 @@ class TestStartAll:
 
         assert result.returncode == 0
         assert order_log.read_text().splitlines() == [
+            "setup-backend.sh",
             "start-ollama.sh",
             "start-voicevox.sh",
             "start-backend.sh",
@@ -1057,7 +1060,10 @@ class TestStartVoiceChatE2E:
             f"exec sleep 30\n"
         )
         (scripts_dir / "start-ollama.sh").chmod(0o755)
-        (scripts_dir / "setup-backend.sh").write_text("#!/usr/bin/env bash\n")
+        (scripts_dir / "setup-backend.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"echo setup-backend.sh >> \"{order_log}\"\n"
+        )
         (scripts_dir / "setup-backend.sh").chmod(0o755)
         (scripts_dir / "start-backend.sh").write_text(
             f"#!/usr/bin/env bash\n"
@@ -1097,8 +1103,10 @@ class TestStartVoiceChatE2E:
             timeout=10,
         )
 
-        assert result.returncode != 0
+        assert result.returncode == 1
+        assert "Backend process exited before becoming ready" in result.stderr
         assert order_log.read_text().splitlines() == [
+            "setup-backend.sh",
             "start-ollama.sh",
             "start-backend.sh",
         ]
@@ -1148,6 +1156,11 @@ class TestStartVoiceChatE2E:
             f"exec sleep 30\n"
         )
         (scripts_dir / "start-ollama.sh").chmod(0o755)
+        (scripts_dir / "setup-backend.sh").write_text(
+            f"#!/usr/bin/env bash\n"
+            f"echo setup-backend.sh >> \"{order_log}\"\n"
+        )
+        (scripts_dir / "setup-backend.sh").chmod(0o755)
         (scripts_dir / "start-backend.sh").write_text(
             f"#!/usr/bin/env bash\n"
             f"echo start-backend.sh >> \"{order_log}\"\n"
@@ -1189,6 +1202,7 @@ class TestStartVoiceChatE2E:
 
         assert result.returncode != 0
         assert order_log.read_text().splitlines() == [
+            "setup-backend.sh",
             "start-ollama.sh",
             "start-backend.sh",
         ]
@@ -1250,7 +1264,10 @@ class TestStartVoiceChatE2E:
 
         assert result.returncode != 0
         assert "VOICEVOX did not become ready" in result.stderr
-        assert order_log.read_text().splitlines() == ["start-ollama.sh"]
+        assert order_log.read_text().splitlines() == [
+            "setup-backend.sh",
+            "start-ollama.sh",
+        ]
         assert not frontend_marker.exists()
 
     def test_auto_mode_is_rejected(self, tmp_path):
