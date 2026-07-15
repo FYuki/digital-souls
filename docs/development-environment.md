@@ -58,10 +58,11 @@ scripts/start-all.sh
 
 `scripts/start-all.sh` は次の順序で起動確認を行う。
 
-1. Ollama を起動し、`http://localhost:11434/api/tags` を確認する
-2. VOICEVOX を起動確認する。`VOICEVOX_BASE_URL` 未設定または空文字時はコンテナ `voicevox_engine` を起動し、`http://localhost:50021/version` を確認する
-3. FastAPI Backend を起動し、`http://localhost:8000` を確認する
-4. Frontend 開発サーバーを起動する
+1. `scripts/setup-backend.sh` で Backend の仮想環境と依存関係を準備する
+2. Ollama を起動し、`http://localhost:11434/api/tags` を確認する
+3. VOICEVOX を起動確認する。`VOICEVOX_BASE_URL` 未設定または空文字時はコンテナ `voicevox_engine` を起動し、`http://localhost:50021/version` を確認する
+4. `scripts/start-backend.sh` で FastAPI Backend を起動し、`http://localhost:8000` を確認する
+5. Frontend 開発サーバーを起動する
 
 `backend/.env` で `VOICEVOX_BASE_URL` を別ホスト・別ポートに設定している場合、`scripts/start-all.sh` はその接続先の `/version` を確認し、ローカルの `voicevox_engine` コンテナは起動しない。`http://127.0.0.1:50021` は `http://localhost:50021` と同じローカル既定エンジンとして扱う。
 
@@ -78,7 +79,9 @@ VOICEVOX コンテナが未作成の場合、`VOICEVOX_BASE_URL` 未設定また
 | `scripts/start-voicevox.sh` | `backend/.env` の `VOICEVOX_BASE_URL` を読み、未設定または空文字時は `voicevox_engine` コンテナを起動して VOICEVOX の `/version` を確認する |
 | `scripts/start-voice-chat-e2e.sh` | 音声チャット E2E 用。既定では実 Backend / Ollama / VOICEVOX を起動し、`VOICE_CHAT_E2E_BACKEND=mock` では Frontend のみ起動する |
 
-Backend 単体起動では VOICEVOX を自動起動しない。音声チャットを実際に使う場合は、事前に `scripts/start-voicevox.sh` または `scripts/start-all.sh` で VOICEVOX を起動する。
+`scripts/start-backend.sh` は仮想環境の作成や依存インストールを自動実行しない。初回または依存関係の更新時は `scripts/setup-backend.sh` を別に実行する。セットアップ失敗は `Backend setup failed` と失敗工程、起動環境の不足は `start-backend.sh` の対象ファイル名を含むエラーで判別できる。Backend プロセスの起動後は、その終了ステータスが呼び出し元へ伝播する。
+
+Backend 単体起動では Ollama や VOICEVOX を準備・起動しない。音声チャットを実際に使う場合は、事前に `scripts/start-voicevox.sh` または `scripts/start-all.sh` で VOICEVOX を起動する。開発用の `scripts/start-all.sh` と実 Backend を使う E2E 用の `scripts/start-voice-chat-e2e.sh` は、どちらも準備段階で `scripts/setup-backend.sh` を実行し、起動段階で共通の `scripts/start-backend.sh` を使う。
 
 ## 音声チャットの依存関係
 
