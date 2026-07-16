@@ -2,12 +2,13 @@ import { defineConfig, devices } from '@playwright/test'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const configDir = dirname(fileURLToPath(import.meta.url))
-const VOICE_CHAT_BACKEND_REPORT_ENV = 'VOICE_CHAT_E2E_BACKEND_REPORT'
+import { PROFILE_REPORT_ENV } from './e2e/resolved-profile'
 
-const configuredVoiceBackendReport = process.env[VOICE_CHAT_BACKEND_REPORT_ENV]
-if (configuredVoiceBackendReport === undefined || configuredVoiceBackendReport.length === 0) {
-  process.env[VOICE_CHAT_BACKEND_REPORT_ENV] = join(configDir, 'test-results', 'voice-chat-backend.json')
+const configDir = dirname(fileURLToPath(import.meta.url))
+
+const configuredProfileReport = process.env[PROFILE_REPORT_ENV]
+if (configuredProfileReport === undefined || configuredProfileReport.length === 0) {
+  process.env[PROFILE_REPORT_ENV] = join(configDir, 'test-results', 'resolved-profile.json')
 }
 
 const e2eWebServer = {

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "name": "test-mocked",
+  "description": "ブラウザ内mockバックエンドを使う独立E2Eテスト環境",
+  "dependencies": {
+    "frontend": { "mode": "real", "source": "managed", "baseUrl": "http://localhost:5173", "readinessPath": "/" },
+    "backend": { "mode": "mock", "source": "browser" },
+    "ollama": { "mode": "disabled", "source": null },
+    "voicevox": { "mode": "disabled", "source": null },
+    "whisper": { "mode": "disabled", "source": null },
+    "chroma": { "mode": "disabled", "source": null }
+  }
+}

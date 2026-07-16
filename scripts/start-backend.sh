@@ -4,6 +4,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$SCRIPT_DIR/../backend"
 VENV_BIN_DIR="$BACKEND_DIR/.venv/bin"
+source "$SCRIPT_DIR/lib/profile.sh"
+
+profile_use_resolved_report_or_resolve "dev"
+profile_require_managed_dependency backend
+RESOLVED_PROFILE_REPORT="$DS_PROFILE_REPORT"
 
 if [ ! -f "$VENV_BIN_DIR/activate" ]; then
   echo "ERROR: backend virtualenv is required: activate script is missing. Run scripts/setup-backend.sh before starting the backend." >&2
@@ -22,5 +27,8 @@ if [ -f "$BACKEND_DIR/.env" ]; then
   source "$BACKEND_DIR/.env"
   set +a
 fi
+
+export DS_PROFILE_REPORT="$RESOLVED_PROFILE_REPORT"
+profile_export_derived_environment
 
 exec "$VENV_BIN_DIR/uvicorn" --app-dir "$BACKEND_DIR" app.main:app --reload

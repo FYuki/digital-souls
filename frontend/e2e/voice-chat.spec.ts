@@ -1,11 +1,13 @@
 import { fileURLToPath } from 'node:url'
 
-import { expect, test, type Page, type TestInfo } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 import {
-  resolveVoiceChatBackend,
-  type VoiceChatBackend,
-} from './voice-chat-backend'
+  attachProfileEvidence,
+  getCapabilitySkipReason,
+  readResolvedProfile,
+  type ResolvedProfile,
+} from './resolved-profile'
 import { installMockWebSocketBackend } from './mock-web-socket'
 
 declare global {
@@ -27,7 +29,7 @@ const VOICE_RESPONSE_TIMEOUT_MS = 60000
 const VOICE_TEST_TIMEOUT_MS = 120000
 const MOCK_TRANSCRIPT_TEXT = 'テスト音声です'
 const MOCK_RESPONSE_TEXT = 'テスト音声に応答します。'
-let voiceChatBackend: VoiceChatBackend
+let resolvedProfile: ResolvedProfile
 
 type CompletedVoiceCycle = {
   sendAt: number
@@ -82,7 +84,11 @@ test.describe.configure({ mode: 'serial' })
 test.setTimeout(VOICE_TEST_TIMEOUT_MS)
 
 test.beforeAll(async () => {
-  voiceChatBackend = await resolveVoiceChatBackend()
+  resolvedProfile = await readResolvedProfile()
+})
+
+test.beforeEach(async ({}, testInfo) => {
+  await attachProfileEvidence(testInfo, resolvedProfile)
 })
 
 const installPlaybackProbe = async (page: Page) => {
@@ -198,19 +204,8 @@ const installPlaybackProbe = async (page: Page) => {
   })
 }
 
-const attachBackendModeEvidence = async (testInfo: TestInfo) => {
-  testInfo.annotations.push({
-    type: 'voice-chat-backend',
-    description: voiceChatBackend.mode,
-  })
-  await testInfo.attach('voice-chat-backend.json', {
-    body: JSON.stringify(voiceChatBackend, null, 2),
-    contentType: 'application/json',
-  })
-}
-
 const installMockVoiceBackend = async (page: Page) => {
-  if (voiceChatBackend.mode !== 'mock') {
+  if (resolvedProfile.dependencies.backend.mode !== 'mock') {
     return
   }
 
@@ -229,8 +224,11 @@ const installVoiceChatTestHarness = async (page: Page) => {
   await installPlaybackProbe(page)
 }
 
-const openVoiceChat = async (page: Page, testInfo: TestInfo) => {
-  await attachBackendModeEvidence(testInfo)
+const openVoiceChat = async (page: Page) => {
+  const reason = getCapabilitySkipReason(resolvedProfile, ['mocked-e2e', 'voice-chat-real'])
+  if (reason !== null) {
+    test.skip(true, reason)
+  }
   await installVoiceChatTestHarness(page)
   await page.goto('/')
 
@@ -240,8 +238,8 @@ const openVoiceChat = async (page: Page, testInfo: TestInfo) => {
   return micButton
 }
 
-const enableMicrophone = async (page: Page, testInfo: TestInfo) => {
-  const micButton = await openVoiceChat(page, testInfo)
+const enableMicrophone = async (page: Page) => {
+  const micButton = await openVoiceChat(page)
   await micButton.click()
   await expect(micButton).toHaveAttribute('aria-pressed', 'true')
 
@@ -259,7 +257,7 @@ const expectVoiceChatMessages = async (page: Page) => {
   await expect(messages.nth(0).locator('p')).not.toHaveText('')
   await expect(messages.nth(1).locator('p')).not.toHaveText('')
 
-  if (voiceChatBackend.mode === 'mock') {
+  if (resolvedProfile.dependencies.backend.mode === 'mock') {
     await expect(messages.nth(0).locator('p')).toHaveText(MOCK_TRANSCRIPT_TEXT)
     await expect(messages.nth(1).locator('p')).toHaveText(MOCK_RESPONSE_TEXT)
   }
@@ -363,8 +361,8 @@ const waitForVoiceResponseFrameOrder = async (page: Page): Promise<string[]> => 
   return frameOrderHandle.jsonValue() as Promise<string[]>
 }
 
-test('マイクボタン操作でOFFからSTANDBYへ遷移する', async ({ page }, testInfo) => {
-  const micButton = await openVoiceChat(page, testInfo)
+test('マイクボタン操作でOFFからSTANDBYへ遷移する', async ({ page }) => {
+  const micButton = await openVoiceChat(page)
 
   await expect(micButton).not.toHaveClass(/mic-standby/)
   await expect(micButton).not.toHaveClass(/mic-active/)
@@ -375,8 +373,8 @@ test('マイクボタン操作でOFFからSTANDBYへ遷移する', async ({ page
   await expect(micButton).toHaveClass(/mic-standby/)
 })
 
-test('VADの発話イベント中だけON表示になり、発話終了後にSTANDBYへ戻る', async ({ page }, testInfo) => {
-  await enableMicrophone(page, testInfo)
+test('VADの発話イベント中だけON表示になり、発話終了後にSTANDBYへ戻る', async ({ page }) => {
+  await enableMicrophone(page)
 
   const micButton = await waitForSpeechDetection(page)
 
@@ -384,15 +382,15 @@ test('VADの発話イベント中だけON表示になり、発話終了後にSTA
   await expect(micButton).not.toHaveClass(/mic-active/)
 })
 
-test('音声応答のuser発話とmiori応答がこの順でチャット欄に表示される', async ({ page }, testInfo) => {
-  await enableMicrophone(page, testInfo)
+test('音声応答のuser発話とmiori応答がこの順でチャット欄に表示される', async ({ page }) => {
+  await enableMicrophone(page)
   await waitForSpeechCompletion(page)
 
   await expectVoiceChatMessages(page)
 })
 
-test('音声応答はuser text、miori text、audio binaryの順で受信する', async ({ page }, testInfo) => {
-  await enableMicrophone(page, testInfo)
+test('音声応答はuser text、miori text、audio binaryの順で受信する', async ({ page }) => {
+  await enableMicrophone(page)
   await waitForSpeechCompletion(page)
 
   await expectVoiceChatMessages(page)
@@ -403,15 +401,15 @@ test('音声応答はuser text、miori text、audio binaryの順で受信する'
   ])
 })
 
-test('音声応答のバイナリフレームを受信するとブラウザで音声再生を開始する', async ({ page }, testInfo) => {
-  await enableMicrophone(page, testInfo)
+test('音声応答のバイナリフレームを受信するとブラウザで音声再生を開始する', async ({ page }) => {
+  await enableMicrophone(page)
   await waitForSpeechCompletion(page)
 
   await waitForCompletedVoiceCycle(page)
 })
 
 test('音声送信から音声再生開始までの遅延を計測してレポートへ添付する', async ({ page }, testInfo) => {
-  await enableMicrophone(page, testInfo)
+  await enableMicrophone(page)
   await waitForSpeechCompletion(page)
 
   const completedCycle = await waitForCompletedVoiceCycle(page)
