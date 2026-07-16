@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "name": "integration-voice",
+  "description": "音声チャットの実サービス統合テスト環境",
+  "dependencies": {
+    "frontend": { "mode": "real", "source": "managed", "baseUrl": "http://localhost:5173", "readinessPath": "/" },
+    "backend": { "mode": "real", "source": "managed", "baseUrl": "http://localhost:8000", "readinessPath": "/" },
+    "ollama": { "mode": "real", "source": "managed", "baseUrl": "http://localhost:11434", "readinessPath": "/api/tags" },
+    "voicevox": { "mode": "real", "source": "managed", "baseUrl": "http://localhost:50021", "readinessPath": "/version" },
+    "whisper": { "mode": "real", "source": "in_process" },
+    "chroma": { "mode": "disabled", "source": null }
+  }
+}

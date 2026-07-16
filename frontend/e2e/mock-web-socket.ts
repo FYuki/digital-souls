@@ -70,6 +70,6 @@ export const installMockWebSocketBackend = async (page: Page, backend: MockWebSo
       }
     }
 
-    window.WebSocket = MockWebSocket as typeof WebSocket
+    window.WebSocket = MockWebSocket as unknown as typeof WebSocket
   }, backend)
 }

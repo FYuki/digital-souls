@@ -11,10 +11,14 @@ case "$SCRIPT_DIR" in
   *) SCRIPT_DIR="$PWD/$SCRIPT_DIR" ;;
 esac
 source "$SCRIPT_DIR/lib/readiness.sh"
+source "$SCRIPT_DIR/lib/profile.sh"
+
+profile_use_resolved_report_or_resolve "dev"
+profile_require_managed_dependency voicevox
+RESOLVED_PROFILE_REPORT="$DS_PROFILE_REPORT"
 
 BACKEND_DIR="$SCRIPT_DIR/../backend"
 VOICEVOX_CONTAINER_NAME="voicevox_engine"
-DEFAULT_VOICEVOX_BASE_URL="http://localhost:50021"
 VOICEVOX_SETUP_COMMAND="docker run -d --name voicevox_engine -p 50021:50021 voicevox/voicevox_engine:cpu-latest"
 
 if [ -f "$BACKEND_DIR/.env" ]; then
@@ -23,23 +27,8 @@ if [ -f "$BACKEND_DIR/.env" ]; then
   set +a
 fi
 
-_resolve_voicevox_base_url() {
-  if [ "${VOICEVOX_BASE_URL+x}" = "x" ] && [ -n "$VOICEVOX_BASE_URL" ]; then
-    printf '%s\n' "${VOICEVOX_BASE_URL%/}"
-    return
-  fi
-
-  printf '%s\n' "$DEFAULT_VOICEVOX_BASE_URL"
-}
-
-_is_local_default_voicevox() {
-  local base_url="$1"
-
-  case "$base_url" in
-    http://localhost:50021|http://127.0.0.1:50021) return 0 ;;
-    *) return 1 ;;
-  esac
-}
+export DS_PROFILE_REPORT="$RESOLVED_PROFILE_REPORT"
+profile_export_derived_environment
 
 _print_voicevox_setup_message() {
   echo "ERROR: VOICEVOX container \"$VOICEVOX_CONTAINER_NAME\" does not exist." >&2
@@ -73,18 +62,14 @@ _ensure_voicevox_container_exists() {
   exit 1
 }
 
-VOICEVOX_BASE_URL_RESOLVED="$(_resolve_voicevox_base_url)"
+VOICEVOX_BASE_URL_RESOLVED="${VOICEVOX_BASE_URL%/}"
 VOICEVOX_HEALTH_URL="$VOICEVOX_BASE_URL_RESOLVED/version"
 
-if _is_local_default_voicevox "$VOICEVOX_BASE_URL_RESOLVED"; then
-  _require_docker
-  _ensure_voicevox_container_exists
+_require_docker
+_ensure_voicevox_container_exists
 
-  echo "==> Starting VOICEVOX..."
-  docker start "$VOICEVOX_CONTAINER_NAME" > /dev/null
-  echo "VOICEVOX container start requested."
-else
-  echo "==> Using configured VOICEVOX at $VOICEVOX_BASE_URL_RESOLVED"
-fi
+echo "==> Starting VOICEVOX..."
+docker start "$VOICEVOX_CONTAINER_NAME" > /dev/null
+echo "VOICEVOX container start requested."
 
 wait_for_http "$VOICEVOX_HEALTH_URL" "VOICEVOX"

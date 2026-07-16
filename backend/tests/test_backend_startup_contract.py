@@ -1,11 +1,13 @@
+import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
 
 _ROOT_DIR = Path(__file__).parent.parent.parent
 _SCRIPTS_DIR = _ROOT_DIR / "scripts"
-_SCRIPT_LIBRARIES = ["lib/process.sh", "lib/readiness.sh"]
+_SCRIPT_LIBRARIES = ["lib/process.sh", "lib/readiness.sh", "lib/profile.sh"]
 _FORBIDDEN_COMMANDS = ["curl", "docker", "ollama", "pip", "python3", "sleep"]
 
 
@@ -16,10 +18,62 @@ def _copy_script(tmp_path: Path, name: str, backend_dir: Path | None = None) -> 
             'BACKEND_DIR="$SCRIPT_DIR/../backend"',
             f'BACKEND_DIR="{backend_dir}"',
         )
-    script = tmp_path / name
+    profile_aware = name in {"start-backend.sh", "start-voicevox.sh"}
+    script_dir = tmp_path / "scripts" if profile_aware else tmp_path
+    script_dir.mkdir(exist_ok=True)
+    script = script_dir / name
     script.write_text(content)
     script.chmod(0o755)
+    if profile_aware:
+        lib_dir = script_dir / "lib"
+        lib_dir.mkdir(exist_ok=True)
+        for library in ["profile.sh", "readiness.sh"]:
+            (lib_dir / library).write_text(
+                (_SCRIPTS_DIR / "lib" / library).read_text()
+            )
+        if not (tmp_path / "environments").exists():
+            shutil.copytree(_ROOT_DIR / "environments", tmp_path / "environments")
     return script
+
+
+def _prepare_profile_backend_start(tmp_path: Path) -> tuple[Path, Path]:
+    scripts_dir = tmp_path / "scripts"
+    (scripts_dir / "lib").mkdir(parents=True)
+    script = scripts_dir / "start-backend.sh"
+    script.write_text((_SCRIPTS_DIR / "start-backend.sh").read_text())
+    script.chmod(0o755)
+    (scripts_dir / "lib" / "profile.sh").write_text(
+        (_SCRIPTS_DIR / "lib" / "profile.sh").read_text()
+    )
+    shutil.copytree(_ROOT_DIR / "environments", tmp_path / "environments")
+    return script, tmp_path / "backend"
+
+
+def _resolve_profile_report(tmp_path: Path, report_path: Path) -> None:
+    legacy_keys = {
+        "DS_PROFILE",
+        "DS_PROFILE_REPORT",
+        "VOICE_CHAT_E2E_BACKEND",
+        "CHAT_E2E_BACKEND",
+        "CHAT_E2E_BACKEND_ORIGIN",
+        "VOICE_CHAT_E2E_BACKEND_REPORT",
+    }
+    env = {key: value for key, value in os.environ.items() if key not in legacy_keys}
+    result = subprocess.run(
+        [
+            "python3",
+            str(tmp_path / "environments" / "profile.py"),
+            "resolve",
+            "--report",
+            str(report_path),
+            "--default-profile",
+            "dev",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def _write_command_stub(path: Path, body: str) -> None:
@@ -74,6 +128,8 @@ def _prepare_orchestrator(tmp_path: Path, name: str) -> tuple[Path, Path, Path]:
     (scripts_dir / "lib").mkdir()
     for library in _SCRIPT_LIBRARIES:
         (scripts_dir / library).write_text((_SCRIPTS_DIR / library).read_text())
+
+    shutil.copytree(_ROOT_DIR / "environments", tmp_path / "environments")
 
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -154,6 +210,9 @@ class TestBackendStartContract:
             f'printf "%s\\n" "setup-backend.sh" >> "{event_log}"\n',
         )
         _, env = _isolated_path(tmp_path, event_log)
+        python_stub = tmp_path / "bin" / "python3"
+        python_stub.unlink()
+        python_stub.symlink_to(shutil.which("python3"))
 
         result = subprocess.run([str(script)], env=env, capture_output=True, text=True)
 
@@ -190,6 +249,68 @@ class TestBackendStartContract:
 
         assert result.returncode == 29
 
+    def test_should_load_non_profile_dotenv_values_and_restore_profile_values(self, tmp_path):
+        script, backend_dir = _prepare_profile_backend_start(tmp_path)
+        venv_bin = backend_dir / ".venv" / "bin"
+        venv_bin.mkdir(parents=True)
+        (venv_bin / "activate").write_text("")
+        (backend_dir / ".env").write_text(
+            "OLLAMA_BASE_URL=http://dotenv.invalid:11434\n"
+            "OLLAMA_EMBEDDING_MODEL=mxbai-embed-large:latest\n"
+            "VOICEVOX_BASE_URL=http://dotenv.invalid:50021\n"
+            "RAG_ENABLED=true\n"
+            "DS_BACKEND_ORIGIN=http://dotenv.invalid:8000\n"
+            "DS_PROFILE_REPORT=/tmp/dotenv-invalid-profile.json\n"
+        )
+        event_log = tmp_path / "environment.json"
+        _write_command_stub(
+            venv_bin / "uvicorn",
+            "python3 - <<'PY'\n"
+            "import json, os\n"
+            f"with open({str(event_log)!r}, 'w') as output:\n"
+            "    json.dump({key: os.environ[key] for key in "
+            "['OLLAMA_BASE_URL', 'OLLAMA_EMBEDDING_MODEL', "
+            "'VOICEVOX_BASE_URL', 'RAG_ENABLED', 'DS_BACKEND_ORIGIN']}, output)\n"
+            "PY\n",
+        )
+        report_path = tmp_path / "resolved.json"
+        _resolve_profile_report(tmp_path, report_path)
+        env = {
+            **os.environ,
+            "DS_PROFILE_REPORT": str(report_path),
+        }
+
+        result = subprocess.run([str(script)], env=env, capture_output=True, text=True)
+
+        assert result.returncode == 0, result.stderr
+        assert json.loads(event_log.read_text()) == {
+            "OLLAMA_BASE_URL": "http://localhost:11434",
+            "OLLAMA_EMBEDDING_MODEL": "mxbai-embed-large:latest",
+            "VOICEVOX_BASE_URL": "http://localhost:50021",
+            "RAG_ENABLED": "false",
+            "DS_BACKEND_ORIGIN": "http://localhost:8000",
+        }
+
+    def test_should_restore_profile_values_after_loading_backend_dotenv(self, tmp_path):
+        backend_dir = tmp_path / "backend"
+        venv_bin = backend_dir / ".venv" / "bin"
+        venv_bin.mkdir(parents=True)
+        (venv_bin / "activate").write_text("")
+        (backend_dir / ".env").write_text("OLLAMA_BASE_URL=http://dotenv.example:11434\n")
+        event_log = tmp_path / "ollama-url.txt"
+        _write_command_stub(
+            venv_bin / "uvicorn",
+            f'printf "%s" "$OLLAMA_BASE_URL" > "{event_log}"\n',
+        )
+        script = _copy_script(tmp_path, "start-backend.sh", backend_dir)
+        env = {key: value for key, value in os.environ.items() if key != "DS_PROFILE_REPORT"}
+        env.pop("OLLAMA_BASE_URL", None)
+
+        result = subprocess.run([str(script)], env=env, capture_output=True, text=True)
+
+        assert result.returncode == 0, result.stderr
+        assert event_log.read_text() == "http://localhost:11434"
+
     def test_should_fail_clearly_without_activate_and_not_run_setup(self, tmp_path):
         backend_dir = tmp_path / "backend"
         venv_bin = backend_dir / ".venv" / "bin"
@@ -221,6 +342,36 @@ class TestBackendStartContract:
         assert "uvicorn" in result.stderr.lower()
         assert "setup-backend.sh" in result.stderr
         assert not setup_marker.exists()
+
+
+class TestVoicevoxStartContract:
+    def test_should_preserve_profile_voicevox_url_when_dotenv_conflicts(self, tmp_path):
+        backend_dir = tmp_path / "backend"
+        backend_dir.mkdir()
+        (backend_dir / ".env").write_text(
+            "VOICEVOX_BASE_URL=http://dotenv.invalid:50021\n"
+        )
+        script = _copy_script(tmp_path, "start-voicevox.sh", backend_dir)
+        event_log = tmp_path / "events.log"
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        _write_command_stub(bin_dir / "docker", "exit 0\n")
+        _write_command_stub(
+            bin_dir / "curl",
+            f'printf "%s\\n" "curl $*" >> "{event_log}"\n',
+        )
+        env = {
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "DS_PROFILE_REPORT": str(tmp_path / "resolved.json"),
+        }
+
+        result = subprocess.run([str(script)], env=env, capture_output=True, text=True)
+
+        assert result.returncode == 0, result.stderr
+        assert event_log.read_text().splitlines() == [
+            "curl -sf http://localhost:50021/version"
+        ]
 
 
 class TestBackendOrchestrationContract:

@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -21,7 +22,26 @@ _SCRIPTS = [
 _SCRIPT_LIBRARIES = [
     "lib/process.sh",
     "lib/readiness.sh",
+    "lib/profile.sh",
 ]
+
+_PROFILE_ENV_TO_CLEAR = {
+    "DS_PROFILE",
+    "DS_PROFILE_REPORT",
+    "DS_BACKEND_ORIGIN",
+    "VOICE_CHAT_E2E_BACKEND",
+    "CHAT_E2E_BACKEND",
+    "CHAT_E2E_BACKEND_ORIGIN",
+    "VOICE_CHAT_E2E_BACKEND_REPORT",
+}
+
+
+def _without_profile_environment() -> dict[str, str]:
+    return {
+        key: value
+        for key, value in os.environ.items()
+        if key not in _PROFILE_ENV_TO_CLEAR
+    }
 
 
 class TestScriptStructure:
@@ -86,7 +106,12 @@ class TestStartFrontend:
         )
         npm.chmod(0o755)
 
-        env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+        report_path = tmp_path / "resolved-profile.json"
+        env = {
+            **_without_profile_environment(),
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "DS_PROFILE_REPORT": str(report_path),
+        }
 
         result = subprocess.run(
             [str(_SCRIPTS_DIR / "start-frontend.sh")],
@@ -102,6 +127,60 @@ class TestStartFrontend:
             "--prefix",
             str(_SCRIPTS_DIR / "../frontend"),
         ]
+        assert report_path.exists()
+
+    def test_reuses_parent_resolved_report_without_resolving_again(self, tmp_path):
+        report_path = tmp_path / "resolved-profile.json"
+        resolve_result = subprocess.run(
+            [
+                "python3",
+                str(_ROOT_DIR / "environments/profile.py"),
+                "resolve",
+                "--report",
+                str(report_path),
+            ],
+            env={**_without_profile_environment(), "DS_PROFILE": "test-mocked"},
+            capture_output=True,
+            text=True,
+        )
+        assert resolve_result.returncode == 0, resolve_result.stderr
+        original_report = report_path.read_text()
+
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        npm = bin_dir / "npm"
+        npm.write_text("#!/usr/bin/env bash\nexit 0\n")
+        npm.chmod(0o755)
+        env = {
+            **_without_profile_environment(),
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "DS_PROFILE_REPORT": str(report_path),
+        }
+
+        result = subprocess.run(
+            [str(_SCRIPTS_DIR / "start-frontend.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert report_path.read_text() == original_report
+
+    def test_standalone_start_loads_real_vite_config(self):
+        env = _without_profile_environment()
+
+        result = subprocess.run(
+            ["timeout", "8", str(_SCRIPTS_DIR / "start-frontend.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 124, result.stdout + result.stderr
+        assert "VITE" in result.stdout
+        assert "ready in" in result.stdout
+        assert "DS_PROFILE_REPORT must identify" not in result.stderr
 
 
 def _make_modified_setup_backend(tmp_path: Path, backend_dir: Path) -> Path:
@@ -212,7 +291,15 @@ def _make_modified_start_backend(tmp_path: Path, backend_dir: Path) -> Path:
         'BACKEND_DIR="$SCRIPT_DIR/../backend"',
         f'BACKEND_DIR="{backend_dir}"',
     )
-    script = tmp_path / "start-backend.sh"
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    lib_dir = scripts_dir / "lib"
+    lib_dir.mkdir()
+    (lib_dir / "profile.sh").write_text(
+        (_SCRIPTS_DIR / "lib" / "profile.sh").read_text()
+    )
+    shutil.copytree(_ROOT_DIR / "environments", tmp_path / "environments")
+    script = scripts_dir / "start-backend.sh"
     script.write_text(content)
     script.chmod(0o755)
     return script
@@ -324,6 +411,7 @@ def _make_start_all_stub_env(tmp_path: Path, curl_exit: int, max_attempts: int =
     lib_dir.mkdir()
     for name in _SCRIPT_LIBRARIES:
         (scripts_dir / name).write_text((_SCRIPTS_DIR / name).read_text())
+    shutil.copytree(_ROOT_DIR / "environments", tmp_path / "environments")
 
     for name in [
         "setup-backend.sh",
@@ -351,9 +439,9 @@ class TestStartAll:
         assert 'source "$SCRIPT_DIR/lib/process.sh"' in content
         assert 'source "$SCRIPT_DIR/lib/readiness.sh"' in content
         assert "process_manager_init" in content
-        assert "process_start_child" in content
-        assert "wait_for_http" in content
-        assert '"$SCRIPT_DIR/start-voicevox.sh"' in content
+        assert 'source "$SCRIPT_DIR/lib/profile.sh"' in content
+        assert 'profile_resolve "dev"' in content
+        assert "profile_start_stack" in content
 
     def test_does_not_keep_local_process_or_readiness_implementations(self):
         content = (_SCRIPTS_DIR / "start-all.sh").read_text()
@@ -433,8 +521,8 @@ class TestStartAll:
             os.kill(pid, 0)
 
     def test_ollama_health_check_uses_api_tags_endpoint(self):
-        content = (_SCRIPTS_DIR / "start-all.sh").read_text()
-        assert "localhost:11434/api/tags" in content, (
+        content = (_ROOT_DIR / "environments/profiles/dev.json").read_text()
+        assert '"readinessPath": "/api/tags"' in content, (
             "Ollama health check must target /api/tags, not root /"
         )
 
@@ -592,6 +680,10 @@ class TestStartVoicevox:
         (lib_dir / "readiness.sh").write_text(
             (_SCRIPTS_DIR / "lib/readiness.sh").read_text()
         )
+        (lib_dir / "profile.sh").write_text(
+            (_SCRIPTS_DIR / "lib/profile.sh").read_text()
+        )
+        shutil.copytree(_ROOT_DIR / "environments", tmp_path / "environments")
         return script
 
     def test_uses_shared_readiness_directly(self):
@@ -718,9 +810,9 @@ class TestStartVoicevox:
             "container inspect voicevox_engine",
             "start voicevox_engine",
         ]
-        assert curl_log.read_text().splitlines() == ["http://127.0.0.1:50021/version"]
+        assert curl_log.read_text().splitlines() == ["http://localhost:50021/version"]
 
-    def test_uses_backend_env_voicevox_base_url_without_starting_local_container(
+    def test_profile_overrides_backend_env_voicevox_base_url(
         self, tmp_path
     ):
         script = self._copy_script(tmp_path)
@@ -758,15 +850,18 @@ class TestStartVoicevox:
         )
 
         assert result.returncode == 0
-        assert not docker_log.exists()
-        assert curl_log.read_text().splitlines() == [
-            "http://voicevox.local:51000/version"
+        assert docker_log.read_text().splitlines() == [
+            "container inspect voicevox_engine",
+            "start voicevox_engine",
         ]
+        assert curl_log.read_text().splitlines() == ["http://localhost:50021/version"]
 
     def test_reports_docker_install_requirement_when_docker_command_is_missing(self, tmp_path):
         script = self._copy_script(tmp_path)
         bin_dir = tmp_path / "bin"
         bin_dir.mkdir()
+        (bin_dir / "dirname").symlink_to("/usr/bin/dirname")
+        (bin_dir / "python3").symlink_to("/usr/bin/python3")
 
         env = {**os.environ, "PATH": str(bin_dir)}
 
@@ -897,6 +992,7 @@ def _make_voice_chat_e2e_stub_env(tmp_path: Path):
     lib_dir.mkdir()
     for name in _SCRIPT_LIBRARIES:
         (scripts_dir / name).write_text((_SCRIPTS_DIR / name).read_text())
+    shutil.copytree(_ROOT_DIR / "environments", tmp_path / "environments")
 
     voicevox_script = scripts_dir / "start-voicevox.sh"
     voicevox_script.write_text((_SCRIPTS_DIR / "start-voicevox.sh").read_text())
@@ -929,8 +1025,9 @@ class TestStartVoiceChatE2E:
         assert 'source "$SCRIPT_DIR/lib/process.sh"' in content
         assert 'source "$SCRIPT_DIR/lib/readiness.sh"' in content
         assert "process_manager_init" in content
-        assert "process_start_child" in content
-        assert "wait_for_http" in content
+        assert 'source "$SCRIPT_DIR/lib/profile.sh"' in content
+        assert 'profile_resolve "integration-voice"' in content
+        assert "profile_start_stack" in content
 
     def test_does_not_keep_local_process_or_readiness_implementations(self):
         content = (_SCRIPTS_DIR / "start-voice-chat-e2e.sh").read_text()
@@ -947,10 +1044,9 @@ class TestStartVoiceChatE2E:
             assert obsolete not in content
 
     def test_calls_voicevox_directly_without_e2e_attempt_override(self):
-        content = (_SCRIPTS_DIR / "start-voice-chat-e2e.sh").read_text()
+        content = (_SCRIPTS_DIR / "lib/profile.sh").read_text()
 
-        assert '"$SCRIPT_DIR/start-voicevox.sh"' in content
-        assert "_start_voicevox" not in content
+        assert '"$PROFILE_SCRIPTS_DIR/start-voicevox.sh"' in content
         assert "VOICEVOX_HTTP_MAX_ATTEMPTS" not in content
         assert "VOICE_CHAT_E2E_HTTP_MAX_ATTEMPTS" not in content
 
@@ -1021,7 +1117,7 @@ class TestStartVoiceChatE2E:
         assert result.returncode == 0
         assert order_log.read_text().splitlines() == ["start-frontend.sh"]
 
-    def test_mock_mode_does_not_export_chat_real_backend_origin_for_mixed_runs(self, tmp_path):
+    def test_mixed_legacy_backend_modes_are_rejected_before_frontend(self, tmp_path):
         scripts_dir, bin_dir = _make_voice_chat_e2e_stub_env(tmp_path)
         vite_backend_origin_log = tmp_path / "vite-backend-origin.log"
         (scripts_dir / "start-frontend.sh").write_text(
@@ -1046,8 +1142,8 @@ class TestStartVoiceChatE2E:
             timeout=10,
         )
 
-        assert result.returncode == 0
-        assert vite_backend_origin_log.read_text() == "\n"
+        assert result.returncode != 0
+        assert not vite_backend_origin_log.exists()
 
     def test_default_real_mode_fails_when_backend_health_check_fails(self, tmp_path):
         scripts_dir, bin_dir = _make_voice_chat_e2e_stub_env(tmp_path)
@@ -1082,7 +1178,13 @@ class TestStartVoiceChatE2E:
             "case \"$url\" in\n"
             "  *localhost:11434*) exit 0 ;;\n"
             "  *localhost:50021*) exit 0 ;;\n"
-            "  *localhost:8000*) exit 1 ;;\n"
+            f"  *localhost:8000*)\n"
+            f"    for _ in {{1..100}}; do\n"
+            f"      grep -Fxq start-backend.sh \"{order_log}\" 2>/dev/null && exit 1\n"
+            f"      sleep 0.01\n"
+            f"    done\n"
+            f"    exit 1\n"
+            f"    ;;\n"
             "  *) exit 1 ;;\n"
             "esac\n"
         )
@@ -1178,7 +1280,13 @@ class TestStartVoiceChatE2E:
             "case \"$url\" in\n"
             "  *localhost:11434*) exit 0 ;;\n"
             "  *localhost:50021*) exit 0 ;;\n"
-            "  *localhost:8000*) exit 1 ;;\n"
+            f"  *localhost:8000*)\n"
+            f"    for _ in {{1..100}}; do\n"
+            f"      grep -Fxq start-backend.sh \"{order_log}\" 2>/dev/null && exit 1\n"
+            f"      sleep 0.01\n"
+            f"    done\n"
+            f"    exit 1\n"
+            f"    ;;\n"
             "  *) exit 1 ;;\n"
             "esac\n"
         )

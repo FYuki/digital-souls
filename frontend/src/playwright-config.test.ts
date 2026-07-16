@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
 const playwrightConfigSourcePath = join(process.cwd(), 'playwright.config.ts')
-const originalVoiceChatBackendReport = process.env.VOICE_CHAT_E2E_BACKEND_REPORT
+const originalProfileReport = process.env.DS_PROFILE_REPORT
 
 const restoreEnv = (envName: string, value: string | undefined) => {
   if (value === undefined) {
@@ -29,7 +29,7 @@ describe('Playwright voice chat webServer configuration', () => {
   afterEach(() => {
     process.argv = ['node', 'playwright', 'test']
     vi.unstubAllEnvs()
-    restoreEnv('VOICE_CHAT_E2E_BACKEND_REPORT', originalVoiceChatBackendReport)
+    restoreEnv('DS_PROFILE_REPORT', originalProfileReport)
     vi.resetModules()
   })
 
@@ -95,28 +95,20 @@ describe('Playwright voice chat webServer configuration', () => {
     )
   })
 
-  test('sets voice backend report path for the startup boundary and specs', async () => {
+  test('sets resolved profile report path for the startup boundary and specs', async () => {
     await loadPlaywrightConfig(['node', 'playwright', 'test'])
 
-    expect(process.env.VOICE_CHAT_E2E_BACKEND_REPORT).toBe(
-      join(process.cwd(), 'test-results', 'voice-chat-backend.json'),
+    expect(process.env.DS_PROFILE_REPORT).toBe(
+      join(process.cwd(), 'test-results', 'resolved-profile.json'),
     )
   })
 
-  test('does not inject chat backend report path globally', async () => {
-    vi.stubEnv('CHAT_E2E_BACKEND_REPORT', undefined)
+  test('preserves explicit resolved profile report path', async () => {
+    vi.stubEnv('DS_PROFILE_REPORT', '/tmp/custom-profile-report.json')
 
     await loadPlaywrightConfig(['node', 'playwright', 'test'])
 
-    expect(process.env.CHAT_E2E_BACKEND_REPORT).toBeUndefined()
-  })
-
-  test('preserves explicit voice backend report path', async () => {
-    vi.stubEnv('VOICE_CHAT_E2E_BACKEND_REPORT', '/tmp/custom-voice-report.json')
-
-    await loadPlaywrightConfig(['node', 'playwright', 'test'])
-
-    expect(process.env.VOICE_CHAT_E2E_BACKEND_REPORT).toBe('/tmp/custom-voice-report.json')
+    expect(process.env.DS_PROFILE_REPORT).toBe('/tmp/custom-profile-report.json')
   })
 
 })

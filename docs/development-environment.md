@@ -50,23 +50,45 @@ curl http://localhost:50021/version
 
 ## 通常起動
 
-通常利用では次を実行する。
+環境全体の構成は `DS_PROFILE` で選択する。通常利用では次を実行する。
 
 ```bash
 scripts/start-all.sh
 ```
 
-`scripts/start-all.sh` は次の順序で起動確認を行う。
+`DS_PROFILE` 未指定時の `scripts/start-all.sh` は `dev` を選択する。別の構成を使う場合は起動前に明示する。
+
+```bash
+DS_PROFILE=integration-text scripts/start-all.sh
+DS_PROFILE=test-mocked scripts/start-voice-chat-e2e.sh
+```
+
+初期 Profile は次の4種類である。各依存の完全な接続先と readiness path は `environments/profiles/*.json` を参照する。
+
+| Profile | 用途 | 有効な依存 |
+|---|---|---|
+| `dev` | 通常のローカル開発 | Frontend、Backend、Ollama、VOICEVOX、Whisper |
+| `test-mocked` | ブラウザ内 mock を使う独立 E2E | Frontend、browser mock Backend |
+| `integration-text` | 実テキストチャット | Frontend、Backend、Ollama |
+| `integration-voice` | 実音声チャット | Frontend、Backend、Ollama、VOICEVOX、Whisper |
+
+起動スクリプトはサービス起動前に中央 resolver で Profile を検証し、既定では `frontend/test-results/resolved-profile.json` を生成する。この report には選択元、6依存の解決済み `mode` / `source` / 接続先、Capability、子プロセスへ渡す `derivedEnvironment` が記録される。`DS_PROFILE_REPORT` を指定すると出力先を変更できる。
+
+`derivedEnvironment` の `OLLAMA_BASE_URL`、`VOICEVOX_BASE_URL`、`RAG_ENABLED`、`DS_BACKEND_ORIGIN` は resolver の解決結果から起動対象へ渡される。Backend は `backend/.env` の実行時設定も読み込むが、この4項目は読み込み後に resolved report の値を再適用するため、Profile の構成が優先される。
+
+依存の `source` が `managed` の場合は対応するローカルプロセスまたはコンテナを起動して readiness を待つ。`external` の場合は起動せず、Profile の `readinessUrl` で外部サービスの準備完了だけを確認する。`disabled` の依存は起動しない。
+
+`dev` では次の順序で起動確認を行う。
 
 1. `scripts/setup-backend.sh` で Backend の仮想環境と依存関係を準備する
 2. Ollama を起動し、`http://localhost:11434/api/tags` を確認する
-3. VOICEVOX を起動確認する。`VOICEVOX_BASE_URL` 未設定または空文字時はコンテナ `voicevox_engine` を起動し、`http://localhost:50021/version` を確認する
+3. VOICEVOX コンテナ `voicevox_engine` を起動し、`http://localhost:50021/version` を確認する
 4. `scripts/start-backend.sh` で FastAPI Backend を起動し、`http://localhost:8000` を確認する
 5. Frontend 開発サーバーを起動する
 
-`backend/.env` で `VOICEVOX_BASE_URL` を別ホスト・別ポートに設定している場合、`scripts/start-all.sh` はその接続先の `/version` を確認し、ローカルの `voicevox_engine` コンテナは起動しない。`http://127.0.0.1:50021` は `http://localhost:50021` と同じローカル既定エンジンとして扱う。
+VOICEVOX コンテナが未作成の場合、`dev` または `integration-voice` の起動は Backend / Frontend を起動せず、初回セットアップ用の `docker run` 例を表示して終了する。
 
-VOICEVOX コンテナが未作成の場合、`VOICEVOX_BASE_URL` 未設定または空文字時の `scripts/start-all.sh` は Backend / Frontend を起動せず、初回セットアップ用の `docker run` 例を表示して終了する。
+`VOICE_CHAT_E2E_BACKEND`、`CHAT_E2E_BACKEND`、`CHAT_E2E_BACKEND_ORIGIN`、`VOICE_CHAT_E2E_BACKEND_REPORT` は中央 resolver だけが解釈する非推奨の互換入口である。新しい起動・テスト設定では `DS_PROFILE` と `DS_PROFILE_REPORT` を使用する。`DS_PROFILE` と旧指定が異なる構成を示す場合や、複数の旧指定を単一 Profile に変換できない場合は、サービス起動前にエラーとなる。
 
 ## 個別起動スクリプト
 
@@ -76,8 +98,8 @@ VOICEVOX コンテナが未作成の場合、`VOICEVOX_BASE_URL` 未設定また
 | `scripts/start-backend.sh` | `.venv` と `backend/.env` を読み、FastAPI を `uvicorn --reload` で起動する |
 | `scripts/start-frontend.sh` | Frontend 開発サーバーを起動する |
 | `scripts/start-ollama.sh` | `ollama serve` を起動する |
-| `scripts/start-voicevox.sh` | `backend/.env` の `VOICEVOX_BASE_URL` を読み、未設定または空文字時は `voicevox_engine` コンテナを起動して VOICEVOX の `/version` を確認する |
-| `scripts/start-voice-chat-e2e.sh` | 音声チャット E2E 用。既定では実 Backend / Ollama / VOICEVOX を起動し、`VOICE_CHAT_E2E_BACKEND=mock` では Frontend のみ起動する |
+| `scripts/start-voicevox.sh` | Profile から渡された `VOICEVOX_BASE_URL` を使い、`voicevox_engine` コンテナを起動して `/version` を確認する。単体起動でも `backend/.env` 読み込み後に Profile の接続先を再適用する |
+| `scripts/start-voice-chat-e2e.sh` | 音声チャット E2E 用。`DS_PROFILE` 未指定時は `integration-voice` を選択し、`test-mocked` では Frontend のみを起動する |
 
 `scripts/start-backend.sh` は仮想環境の作成や依存インストールを自動実行しない。初回または依存関係の更新時は `scripts/setup-backend.sh` を別に実行する。セットアップ失敗は `Backend setup failed` と失敗工程、起動環境の不足は `start-backend.sh` の対象ファイル名を含むエラーで判別できる。Backend プロセスの起動後は、その終了ステータスが呼び出し元へ伝播する。
 
@@ -89,7 +111,7 @@ Backend 単体起動では Ollama や VOICEVOX を準備・起動しない。音
 
 - TTS は `VOICEVOX_BASE_URL` を参照し、未設定または空文字時は `http://localhost:50021` に接続する
 - `VoicevoxClient` は `/audio_query` と `/synthesis` を呼び出す
-- `scripts/start-voicevox.sh` のヘルスチェックは Backend と同じ `backend/.env` の `VOICEVOX_BASE_URL` 解決結果に `/version` を付けて使用する
+- `scripts/start-voicevox.sh` のヘルスチェックは Profile から導出された `VOICEVOX_BASE_URL` に `/version` を付けて使用する。単体起動でも Profile の値が `backend/.env` より優先される
 - Whisper は外部サービスではなく Backend プロセス内で `faster-whisper` の `WhisperModel("medium")` を初回利用時にロードする
 - Whisper モデルは初回利用時に取得が発生し得るため、オフライン環境では事前にモデルキャッシュを用意する
 

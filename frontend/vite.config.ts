@@ -3,26 +3,22 @@ import { defineConfig } from 'vite'
 
 import { createVadAssetPlugin } from './vite.vad-assets'
 import {
-  API_PROXY_PREFIX,
-  WS_PROXY_PREFIX,
-  apiProxyConfig,
-  wsProxyConfig,
+  createBackendProxy,
 } from './vite.proxy'
 
-export default defineConfig({
+export default defineConfig(({ command, mode, isPreview }) => ({
   plugins: [svelte({ preprocess: vitePreprocess() }), createVadAssetPlugin()],
   resolve: {
     conditions: ['browser'],
   },
   server: {
-    proxy: {
-      [API_PROXY_PREFIX]: apiProxyConfig,
-      [WS_PROXY_PREFIX]: wsProxyConfig,
-    },
+    proxy: command === 'serve' && !isPreview && mode !== 'test'
+      ? createBackendProxy(process.env)
+      : {},
   },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
     exclude: ['**/node_modules/**', './e2e/**'],
   },
-})
+}))
