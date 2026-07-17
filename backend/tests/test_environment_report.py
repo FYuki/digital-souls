@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
-from tests.environment_test_support import DEPENDENCY_NAMES, resolved_profile
+from tests.environment_test_support import (
+    DEPENDENCY_NAMES,
+    orchestrator_identity,
+    resolved_profile,
+)
 
 
 ROOT_DIR = Path(__file__).parent.parent.parent
@@ -23,6 +27,7 @@ def _initial_report():
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=Path("/runtime/resolved-profile.json"),
         effective_profile=resolved_profile(),
+        orchestrator_identity=orchestrator_identity(),
     )
 
 
@@ -46,6 +51,7 @@ def test_should_create_schema_valid_report_before_profile_resolution(
         run_id="run-profile-failure",
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=Path("/runtime/resolved-profile.json"),
+        orchestrator_identity=orchestrator_identity(),
     )
 
     report_validator.validate(report)
@@ -53,6 +59,59 @@ def test_should_create_schema_valid_report_before_profile_resolution(
     assert report["status"] == "running"
     assert report["effectiveProfile"] is None
     assert set(report["services"]) == set(DEPENDENCY_NAMES)
+    assert report["orchestratorIdentity"] == orchestrator_identity()
+
+
+def test_should_require_orchestrator_identity_in_runtime_report(
+    report_validator: Draft202012Validator,
+):
+    from run_report import RunReportError, validate_run_report
+
+    report = _initial_report()
+    report.pop("orchestratorIdentity")
+
+    with pytest.raises(RunReportError, match="orchestratorIdentity"):
+        validate_run_report(report)
+    assert list(report_validator.iter_errors(report))
+
+
+def test_should_require_orchestrator_identity_when_creating_pending_report():
+    from run_report import create_pending_report
+
+    with pytest.raises(TypeError, match="orchestrator_identity"):
+        create_pending_report(
+            run_id="missing-orchestrator-identity",
+            started_at="2026-07-17T00:00:00+00:00",
+            resolved_profile_path=Path("/runtime/resolved-profile.json"),
+        )
+
+
+@pytest.mark.parametrize(
+    "identity",
+    [
+        None,
+        {"pid": 3101, "pgid": 3101, "sessionId": 3101},
+        {"pid": True, "pgid": 3101, "sessionId": 3101, "startTime": 99101},
+        {
+            "pid": 3101,
+            "pgid": 3101,
+            "sessionId": 3101,
+            "startTime": 99101,
+            "command": "up.sh",
+        },
+    ],
+)
+def test_should_reject_invalid_orchestrator_identity_consistently_with_schema(
+    report_validator: Draft202012Validator, identity: object
+):
+    from run_report import RunReportError, validate_run_report
+
+    report = _initial_report()
+    report["orchestratorIdentity"] = identity
+
+    with pytest.raises(RunReportError, match="orchestratorIdentity"):
+        validate_run_report(report)
+    assert list(report_validator.iter_errors(report))
 
 
 def test_should_map_all_profile_dependencies_to_initial_runtime_states(
@@ -161,6 +220,152 @@ def test_should_use_teardown_as_primary_category_only_without_prior_failure():
     )
 
     assert updated["failure"]["category"] == "teardown"
+
+
+@pytest.mark.parametrize("later_result", ["stopped_term", "skipped_identity_mismatch"])
+def test_should_append_cleanup_retry_after_prior_failure_without_clearing_evidence(
+    later_result: str,
+):
+    from run_report import record_cleanup
+
+    first_attempt = record_cleanup(
+        _initial_report(),
+        results=[
+            {"service": "backend", "result": "failed", "message": "TERM timed out"}
+        ],
+        ended_at="2026-07-17T00:01:00+00:00",
+    )
+
+    retried = record_cleanup(
+        first_attempt,
+        results=[{"service": "backend", "result": later_result}],
+        ended_at="2026-07-17T00:02:00+00:00",
+    )
+
+    assert retried["teardown"] == {
+        "status": "failed",
+        "results": [
+            {
+                "service": "backend",
+                "result": "failed",
+                "message": "TERM timed out",
+            },
+            {"service": "backend", "result": later_result},
+        ],
+    }
+    assert retried["failure"] == first_attempt["failure"]
+    assert retried["status"] == "failed"
+    assert retried["endedAt"] == "2026-07-17T00:02:00+00:00"
+
+
+def test_should_preserve_failed_teardown_without_result_evidence_on_retry():
+    from run_report import record_cleanup, validate_run_report
+
+    prior_failure = record_cleanup(
+        _initial_report(),
+        results=[
+            {"service": "backend", "result": "failed", "message": "stop failed"}
+        ],
+        ended_at="2026-07-17T00:01:00+00:00",
+    )
+    prior_failure["teardown"]["results"] = []
+    validate_run_report(prior_failure)
+
+    retried = record_cleanup(
+        prior_failure,
+        results=[{"service": "backend", "result": "skipped_identity_mismatch"}],
+        ended_at="2026-07-17T00:02:00+00:00",
+    )
+
+    assert retried["teardown"] == {
+        "status": "failed",
+        "results": [
+            {"service": "backend", "result": "skipped_identity_mismatch"},
+        ],
+    }
+    assert retried["failure"] == prior_failure["failure"]
+    assert retried["status"] == "failed"
+
+
+def test_should_complete_cleanup_when_accumulated_history_has_no_failure():
+    from run_report import record_cleanup, record_ready
+
+    first_attempt = record_cleanup(
+        record_ready(_initial_report(), ready_at="2026-07-17T00:00:30+00:00"),
+        results=[{"service": "frontend", "result": "stopped_term"}],
+        ended_at="2026-07-17T00:01:00+00:00",
+    )
+
+    retried = record_cleanup(
+        first_attempt,
+        results=[{"service": "backend", "result": "skipped_identity_mismatch"}],
+        ended_at="2026-07-17T00:02:00+00:00",
+    )
+
+    assert retried["teardown"] == {
+        "status": "completed",
+        "results": [
+            {"service": "frontend", "result": "stopped_term"},
+            {"service": "backend", "result": "skipped_identity_mismatch"},
+        ],
+    }
+    assert retried["status"] == "completed"
+    assert retried["failure"] is None
+
+
+def test_should_reject_teardown_failure_category_with_completed_teardown(
+    report_validator: Draft202012Validator,
+):
+    from run_report import RunReportError, record_cleanup, validate_run_report
+
+    report = record_cleanup(
+        _initial_report(),
+        results=[{"service": "backend", "result": "failed", "message": "stop failed"}],
+        ended_at="2026-07-17T00:01:00+00:00",
+    )
+    report["teardown"]["status"] = "completed"
+
+    with pytest.raises(RunReportError, match="teardown"):
+        validate_run_report(report)
+    assert list(report_validator.iter_errors(report))
+
+
+def test_should_reject_completed_teardown_with_accumulated_failed_result(
+    report_validator: Draft202012Validator,
+):
+    from run_report import (
+        RunReportError,
+        record_cleanup,
+        record_failure,
+        validate_run_report,
+    )
+
+    report = record_cleanup(
+        record_failure(_initial_report(), category="readiness", message="not ready"),
+        results=[{"service": "backend", "result": "failed", "message": "stop failed"}],
+        ended_at="2026-07-17T00:01:00+00:00",
+    )
+    report["teardown"]["status"] = "completed"
+
+    with pytest.raises(RunReportError, match="teardown"):
+        validate_run_report(report)
+    assert list(report_validator.iter_errors(report))
+
+
+def test_should_accept_non_teardown_failure_with_completed_cleanup(
+    report_validator: Draft202012Validator,
+):
+    from run_report import record_cleanup, record_failure
+
+    report = record_cleanup(
+        record_failure(_initial_report(), category="readiness", message="not ready"),
+        results=[{"service": "frontend", "result": "stopped_term"}],
+        ended_at="2026-07-17T00:01:00+00:00",
+    )
+
+    report_validator.validate(report)
+    assert report["failure"]["category"] == "readiness"
+    assert report["teardown"]["status"] == "completed"
 
 
 def test_should_accept_ready_gate_as_teardown_target(
@@ -382,6 +587,7 @@ def test_should_not_serialize_process_environment_or_secret_values():
         "readyAt",
         "endedAt",
         "resolvedProfilePath",
+        "orchestratorIdentity",
         "effectiveProfile",
         "phase",
         "status",

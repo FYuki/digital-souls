@@ -10,6 +10,9 @@ from typing import Mapping, cast
 
 
 IDENTITY_ROLLBACK_GRACE_SECONDS = 1.0
+PROCESS_STOP_REQUESTED = "signaled"
+PROCESS_NOT_RUNNING = "not_running"
+PROCESS_IDENTITY_MISMATCH = "skipped_identity_mismatch"
 
 
 @dataclass(frozen=True)
@@ -70,6 +73,34 @@ def _read_identity(pid: int) -> ProcessIdentity:
         session_id=os.getsid(pid),
         start_time=_process_stat(pid)[3],
     )
+
+
+def current_process_identity() -> ProcessIdentity:
+    return _read_identity(os.getpid())
+
+
+def request_process_stop(identity: ProcessIdentity) -> ProcessStopResult:
+    try:
+        pidfd = os.pidfd_open(identity.pid)
+    except ProcessLookupError:
+        return ProcessStopResult(PROCESS_NOT_RUNNING)
+    try:
+        try:
+            state = _process_stat(identity.pid)[0]
+            current_identity = _read_identity(identity.pid)
+        except (FileNotFoundError, ProcessLookupError):
+            return ProcessStopResult(PROCESS_NOT_RUNNING)
+        if state == "Z":
+            return ProcessStopResult(PROCESS_NOT_RUNNING)
+        if current_identity != identity:
+            return ProcessStopResult(PROCESS_IDENTITY_MISMATCH)
+        try:
+            signal.pidfd_send_signal(pidfd, signal.SIGTERM)
+        except ProcessLookupError:
+            return ProcessStopResult(PROCESS_NOT_RUNNING)
+        return ProcessStopResult(PROCESS_STOP_REQUESTED)
+    finally:
+        os.close(pidfd)
 
 
 def start_managed_process(
@@ -172,9 +203,12 @@ def _managed_group_identity_matches(process: ManagedProcess) -> bool:
     identity = process.identity
     if process.process.pid != identity.pid:
         return False
+    members = _group_members(identity)
+    if any(start_time < identity.start_time for _pid, start_time in members):
+        return False
     if _leader_identity_matches(identity):
         return True
-    return process.process.poll() is not None and _group_has_live_members(identity)
+    return process.process.poll() is not None and bool(members)
 
 
 def _group_has_live_members(identity: ProcessIdentity) -> bool:
@@ -192,7 +226,8 @@ def _wait_until_group_exits(identity: ProcessIdentity, deadline: float) -> bool:
 def _stop_process_group(
     identity: ProcessIdentity, *, grace_seconds: float
 ) -> ProcessStopResult:
-    if not _group_has_live_members(identity):
+    owned_members = frozenset(_group_members(identity))
+    if not owned_members:
         return ProcessStopResult("stopped_term")
     try:
         os.killpg(identity.pgid, signal.SIGTERM)
@@ -202,6 +237,9 @@ def _stop_process_group(
         raise
     if _wait_until_group_exits(identity, time.monotonic() + grace_seconds):
         return ProcessStopResult("stopped_term")
+    current_members = frozenset(_group_members(identity))
+    if not owned_members.intersection(current_members):
+        return ProcessStopResult(PROCESS_IDENTITY_MISMATCH)
     try:
         os.killpg(identity.pgid, signal.SIGKILL)
     except ProcessLookupError:
@@ -231,7 +269,7 @@ def stop_owned_process(
 ) -> ProcessStopResult:
     _validate_grace_seconds(grace_seconds)
     if not _leader_identity_matches(identity):
-        return ProcessStopResult("skipped_identity_mismatch")
+        return ProcessStopResult(PROCESS_IDENTITY_MISMATCH)
     return _stop_process_group(identity, grace_seconds=grace_seconds)
 
 
@@ -240,5 +278,5 @@ def stop_managed_process(
 ) -> ProcessStopResult:
     _validate_grace_seconds(grace_seconds)
     if not _managed_group_identity_matches(process):
-        return ProcessStopResult("skipped_identity_mismatch")
+        return ProcessStopResult(PROCESS_IDENTITY_MISMATCH)
     return _stop_process_group(process.identity, grace_seconds=grace_seconds)

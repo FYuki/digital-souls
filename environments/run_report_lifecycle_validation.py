@@ -31,6 +31,23 @@ def _validate_completion_state(report: Mapping[str, object]) -> None:
         raise RunReportError("incomplete lifecycle has final teardown state")
     if teardown["status"] == "failed" and status != "failed":
         raise RunReportError("failed teardown requires failed lifecycle status")
+    failure = report["failure"]
+    if (
+        isinstance(failure, dict)
+        and failure["category"] == "teardown"
+        and teardown["status"] != "failed"
+    ):
+        raise RunReportError("teardown failure requires failed teardown status")
+    results = teardown["results"]
+    if (
+        isinstance(results, list)
+        and any(
+            isinstance(result, dict) and result.get("result") == "failed"
+            for result in results
+        )
+        and teardown["status"] == "completed"
+    ):
+        raise RunReportError("failed teardown result requires failed teardown status")
 
 
 def _validate_timestamps(report: Mapping[str, object]) -> None:

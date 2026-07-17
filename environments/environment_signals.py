@@ -37,6 +37,15 @@ def restore_interrupt_handlers(
 
 
 @contextmanager
+def block_interrupt_signals() -> Iterator[None]:
+    previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, INTERRUPT_SIGNALS)
+    try:
+        yield
+    finally:
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+
+
+@contextmanager
 def defer_interrupt_signals() -> Iterator[None]:
     pending: list[int] = []
 
@@ -58,3 +67,15 @@ def defer_interrupt_signals() -> Iterator[None]:
                 handler(pending_signum, None)
             elif handler != signal.SIG_IGN:
                 raise InterruptedError("environment run interrupted")
+
+
+@contextmanager
+def coalesce_interrupt_signals() -> Iterator[None]:
+    previous = {
+        signum: cast(InstalledHandler, signal.signal(signum, signal.SIG_IGN))
+        for signum in INTERRUPT_SIGNALS
+    }
+    try:
+        yield
+    finally:
+        restore_interrupt_handlers(previous)

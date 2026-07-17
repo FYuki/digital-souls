@@ -57,21 +57,24 @@ def _is_uri(value: object) -> bool:
     return bool(parsed.scheme and parsed.netloc)
 
 
+def _is_process_identity(value: object) -> bool:
+    expected = {"pid", "pgid", "sessionId", "startTime"}
+    return (
+        isinstance(value, dict)
+        and set(value) == expected
+        and all(
+            not isinstance(value[field], bool)
+            and isinstance(value[field], int)
+            and value[field] > 0
+            for field in expected
+        )
+    )
+
+
 def _validate_identity(name: str, value: Mapping[str, object]) -> None:
     process_identity = value["processIdentity"]
-    if process_identity is not None:
-        expected = {"pid", "pgid", "sessionId", "startTime"}
-        if (
-            not isinstance(process_identity, dict)
-            or set(process_identity) != expected
-            or any(
-                isinstance(process_identity[field], bool)
-                or not isinstance(process_identity[field], int)
-                or process_identity[field] <= 0
-                for field in expected
-            )
-        ):
-            raise RunReportError(f"services.{name} has invalid process identity")
+    if process_identity is not None and not _is_process_identity(process_identity):
+        raise RunReportError(f"services.{name} has invalid process identity")
     container_identity = value["containerIdentity"]
     if container_identity is not None and (
         not isinstance(container_identity, dict)
@@ -158,6 +161,8 @@ def _validate_service(name: str, value: object) -> None:
 
 
 def _validate_top_level(report: Mapping[str, object]) -> None:
+    if "orchestratorIdentity" not in report:
+        raise RunReportError("missing orchestratorIdentity")
     if set(report) != REPORT_FIELDS:
         raise RunReportError("run report has unknown or missing fields")
     if report["schemaVersion"] != RUN_REPORT_SCHEMA_VERSION or isinstance(
@@ -174,6 +179,9 @@ def _validate_top_level(report: Mapping[str, object]) -> None:
         raise RunReportError("invalid lifecycle timestamp")
     if not isinstance(report["resolvedProfilePath"], str) or not report["resolvedProfilePath"]:
         raise RunReportError("invalid resolvedProfilePath")
+    orchestrator_identity = report["orchestratorIdentity"]
+    if not _is_process_identity(orchestrator_identity):
+        raise RunReportError("invalid orchestratorIdentity")
     if report["effectiveProfile"] is not None and not isinstance(report["effectiveProfile"], dict):
         raise RunReportError("invalid effectiveProfile")
     if (

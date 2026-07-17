@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Mapping
 
 import pytest
+import tests.environment_test_support
 
 from tests.environment_test_support import DEPENDENCY_NAMES, RecordingRunner
 
@@ -180,6 +181,7 @@ def test_should_run_resolved_profile_through_ready_and_owned_cleanup(
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
+        orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
     )
     store.save(report)
     monkeypatch.setattr(
@@ -199,6 +201,7 @@ def test_should_run_resolved_profile_through_ready_and_owned_cleanup(
         report=report,
         root_dir=tmp_path,
         ready_gate_url="http://127.0.0.1:0/ready",
+        was_interrupted=lambda: False,
         registry=_test_registry(),
     )
 
@@ -239,6 +242,7 @@ def test_should_preserve_playwright_result_written_after_ready_gate_opens(
             started_at="2026-07-17T00:00:00+00:00",
             resolved_profile_path=tmp_path / "resolved-profile.json",
             effective_profile=profile,
+            orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
         ),
         ready_at="2026-07-17T00:00:30+00:00",
     )
@@ -250,6 +254,7 @@ def test_should_preserve_playwright_result_written_after_ready_gate_opens(
         report=report,
         root_dir=tmp_path,
         ready_gate_url="http://127.0.0.1:0/ready",
+        was_interrupted=lambda: False,
         registry=_test_registry(),
     )
 
@@ -287,6 +292,7 @@ def test_should_finalize_report_and_stop_owned_service_when_ready_gate_close_fai
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
+        orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
     )
     report = update_service(
         report,
@@ -306,6 +312,7 @@ def test_should_finalize_report_and_stop_owned_service_when_ready_gate_close_fai
         report=report,
         root_dir=tmp_path,
         ready_gate_url="http://127.0.0.1:0/ready",
+        was_interrupted=lambda: False,
         registry=_single_adapter_registry("frontend", operations),
     )
     run.ready_gate = FailingReadyGate()
@@ -370,6 +377,7 @@ def test_should_stop_owned_service_when_cleanup_phase_update_fails(tmp_path: Pat
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
+        orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
     )
     report = update_service(
         report,
@@ -388,6 +396,7 @@ def test_should_stop_owned_service_when_cleanup_phase_update_fails(tmp_path: Pat
         report=report,
         root_dir=tmp_path,
         ready_gate_url="http://127.0.0.1:0/ready",
+        was_interrupted=lambda: False,
         registry=_single_adapter_registry("frontend", operations),
     )
 
@@ -431,6 +440,7 @@ def test_should_persist_started_ownership_before_delivering_pending_signal(tmp_p
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
+        orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
     )
     store = RecordingReportStore(tmp_path / "environment-run.json")
     store.save(report)
@@ -441,6 +451,7 @@ def test_should_persist_started_ownership_before_delivering_pending_signal(tmp_p
         report=report,
         root_dir=tmp_path,
         ready_gate_url="http://127.0.0.1:0/ready",
+        was_interrupted=lambda: False,
         registry=_single_adapter_registry("frontend", InterruptingOperations()),
     )
     _was_interrupted, previous = install_interrupt_handlers()
@@ -509,6 +520,7 @@ def test_should_persist_in_memory_ownership_in_final_report_when_start_update_fa
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
+        orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
     )
     store = FailingOwnershipUpdateStore(tmp_path / "environment-run.json")
     store.save(report)
@@ -520,6 +532,7 @@ def test_should_persist_in_memory_ownership_in_final_report_when_start_update_fa
         report=report,
         root_dir=tmp_path,
         ready_gate_url="http://127.0.0.1:0/ready",
+        was_interrupted=lambda: False,
         registry=_single_adapter_registry("frontend", operations),
     )
 
@@ -605,6 +618,7 @@ def test_should_persist_external_probe_observation_when_verification_fails(
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
+        orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
     )
     store.save(report)
     monkeypatch.setattr(
@@ -618,6 +632,7 @@ def test_should_persist_external_probe_observation_when_verification_fails(
         report=report,
         root_dir=tmp_path,
         ready_gate_url="http://127.0.0.1:0/ready",
+        was_interrupted=lambda: False,
         registry=_test_registry(),
     )
 
@@ -648,6 +663,7 @@ def test_should_fail_verification_before_start_for_unpreparable_dependency(
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
+        orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
     )
     store.save(report)
     monkeypatch.setattr(
@@ -673,6 +689,7 @@ def test_should_fail_verification_before_start_for_unpreparable_dependency(
         report=report,
         root_dir=tmp_path,
         ready_gate_url="http://127.0.0.1:0/ready",
+        was_interrupted=lambda: False,
         registry=_test_registry(),
     )
 
@@ -710,6 +727,7 @@ def test_should_reach_backend_prepare_when_whisper_cache_is_missing(
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
+        orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
     )
     store = RecordingReportStore(tmp_path / "environment-run.json")
     store.save(report)
@@ -724,6 +742,7 @@ def test_should_reach_backend_prepare_when_whisper_cache_is_missing(
         report=report,
         root_dir=tmp_path,
         ready_gate_url="http://127.0.0.1:0/ready",
+        was_interrupted=lambda: False,
         registry=_single_adapter_registry("backend", adapter),
     )
 
@@ -763,6 +782,7 @@ def test_should_persist_ollama_observation_before_model_validation_failure(
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
+        orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
     )
     store.save(report)
     monkeypatch.setattr(
@@ -782,6 +802,7 @@ def test_should_persist_ollama_observation_before_model_validation_failure(
         report=report,
         root_dir=tmp_path,
         ready_gate_url="http://127.0.0.1:0/ready",
+        was_interrupted=lambda: False,
         registry=_single_adapter_registry("ollama", adapter),
     )
 
@@ -827,6 +848,7 @@ def test_should_persist_ollama_observation_before_tags_request_failure(
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
+        orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
     )
     store.save(report)
     monkeypatch.setattr(
@@ -847,6 +869,7 @@ def test_should_persist_ollama_observation_before_tags_request_failure(
         report=report,
         root_dir=tmp_path,
         ready_gate_url="http://127.0.0.1:0/ready",
+        was_interrupted=lambda: False,
         registry=_single_adapter_registry("ollama", OllamaAdapter(tmp_path)),
     )
 
@@ -885,6 +908,7 @@ def test_should_detect_later_registered_process_exit_during_readiness(
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
+        orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
     )
     identity = {"pid": 10, "pgid": 10, "sessionId": 10, "startTime": 10}
     report = update_service(
@@ -908,11 +932,60 @@ def test_should_detect_later_registered_process_exit_during_readiness(
         report=report,
         root_dir=tmp_path,
         ready_gate_url="http://127.0.0.1:0/ready",
+        was_interrupted=lambda: False,
         registry=_two_process_registry(),
     )
 
     with pytest.raises(SupervisionError, match="backend"):
         run.wait_until_ready()
+
+
+def test_should_not_report_service_exit_as_failure_when_stop_is_requested_during_check(
+    tmp_path: Path,
+):
+    from environment_runtime import EnvironmentRun
+    from profile_resolution import resolve_profile
+    from run_report import create_initial_report, update_service
+
+    stop_requested = False
+
+    class StopRaceOperations(FakeFrontendOperations):
+        def is_running(self, service):
+            nonlocal stop_requested
+            stop_requested = True
+            return False
+
+    profile = dict(resolve_profile({"DS_PROFILE": "test-mocked"}, None))
+    report = create_initial_report(
+        run_id="intentional-stop-race",
+        started_at="2026-07-17T00:00:00+00:00",
+        resolved_profile_path=tmp_path / "resolved-profile.json",
+        effective_profile=profile,
+        orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+    )
+    report = update_service(
+        report,
+        "frontend",
+        state="started",
+        owned=True,
+        process_identity={"pid": 10, "pgid": 10, "sessionId": 10, "startTime": 10},
+    )
+    store = RecordingReportStore(tmp_path / "environment-run.json")
+    store.save(report)
+    run = EnvironmentRun(
+        profile=profile,
+        profile_path=tmp_path / "resolved-profile.json",
+        store=store,
+        report=report,
+        root_dir=tmp_path,
+        ready_gate_url="http://127.0.0.1:0/ready",
+        was_interrupted=lambda: stop_requested,
+        registry=_single_adapter_registry("frontend", StopRaceOperations()),
+    )
+
+    run.supervise()
+
+    assert stop_requested is True
 
 
 def test_should_reuse_ollama_through_runtime_without_starting_placeholder(
@@ -944,6 +1017,7 @@ def test_should_reuse_ollama_through_runtime_without_starting_placeholder(
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
+        orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
     )
     store = RecordingReportStore(tmp_path / "environment-run.json")
     store.save(report)
@@ -958,6 +1032,7 @@ def test_should_reuse_ollama_through_runtime_without_starting_placeholder(
         report=report,
         root_dir=tmp_path,
         ready_gate_url="http://127.0.0.1:0/ready",
+        was_interrupted=lambda: False,
         registry=_single_adapter_registry("ollama", adapter),
     )
 
@@ -995,6 +1070,7 @@ def test_should_not_invoke_docker_for_external_voicevox_runtime(
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
+        orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
     )
     store = RecordingReportStore(tmp_path / "environment-run.json")
     store.save(report)
@@ -1011,6 +1087,7 @@ def test_should_not_invoke_docker_for_external_voicevox_runtime(
         report=report,
         root_dir=tmp_path,
         ready_gate_url="http://127.0.0.1:0/ready",
+        was_interrupted=lambda: False,
         registry=_single_adapter_registry("voicevox", adapter),
     )
 

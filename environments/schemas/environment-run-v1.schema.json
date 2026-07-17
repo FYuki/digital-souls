@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schemaVersion", "runId", "startedAt", "readyAt", "endedAt",
-    "resolvedProfilePath", "effectiveProfile", "phase", "status",
+    "resolvedProfilePath", "orchestratorIdentity", "effectiveProfile", "phase", "status",
     "startSequence", "services", "testResult", "failure", "teardown"
   ],
   "properties": {
@@ -16,6 +16,7 @@
     "readyAt": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/dateTime" }] },
     "endedAt": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/dateTime" }] },
     "resolvedProfilePath": { "type": "string", "minLength": 1 },
+    "orchestratorIdentity": { "$ref": "#/$defs/processIdentity" },
     "effectiveProfile": { "type": ["object", "null"] },
     "phase": {
       "enum": ["resolve", "verify", "prepare", "pre_probe", "start_or_reuse", "readiness", "ready", "supervise", "cleanup", "complete"]
@@ -314,6 +315,48 @@
         {
           "if": { "properties": { "teardown": { "properties": { "status": { "const": "failed" } } } } },
           "then": { "properties": { "status": { "const": "failed" } } }
+        },
+        {
+          "if": {
+            "properties": {
+              "failure": {
+                "type": "object",
+                "required": ["category"],
+                "properties": { "category": { "const": "teardown" } }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "teardown": {
+                "properties": { "status": { "const": "failed" } }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "teardown": {
+                "properties": {
+                  "results": {
+                    "contains": {
+                      "type": "object",
+                      "required": ["result"],
+                      "properties": { "result": { "const": "failed" } }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "teardown": {
+                "properties": { "status": { "const": "failed" } }
+              }
+            }
+          }
         },
         {
           "if": {

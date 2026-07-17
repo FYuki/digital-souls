@@ -153,6 +153,170 @@ def test_should_refuse_to_signal_stale_process_identity(monkeypatch: pytest.Monk
     assert sent == []
 
 
+def test_should_signal_matching_process_through_open_pidfd(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import process_control
+    from process_control import ProcessIdentity, request_process_stop
+
+    identity = ProcessIdentity(pid=91, pgid=91, session_id=91, start_time=200)
+    events: list[object] = []
+    monkeypatch.setattr(
+        process_control.os,
+        "pidfd_open",
+        lambda pid: events.append(("open", pid)) or 71,
+    )
+    monkeypatch.setattr(process_control, "_read_identity", lambda pid: identity)
+    monkeypatch.setattr(
+        process_control, "_process_stat", lambda pid: ("S", 91, 91, 200)
+    )
+    monkeypatch.setattr(
+        process_control.signal,
+        "pidfd_send_signal",
+        lambda fd, sent_signal: events.append(("signal", fd, sent_signal)),
+    )
+    monkeypatch.setattr(
+        process_control.os,
+        "close",
+        lambda fd: events.append(("close", fd)),
+    )
+
+    result = request_process_stop(identity)
+
+    assert result.result == "signaled"
+    assert events == [
+        ("open", 91),
+        ("signal", 71, signal.SIGTERM),
+        ("close", 71),
+    ]
+
+
+def test_should_treat_unreaped_zombie_as_not_running(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import process_control
+    from process_control import request_process_stop
+
+    read_fd, write_fd = os.pipe()
+    child_pid = os.fork()
+    if child_pid == 0:
+        os.close(write_fd)
+        os.read(read_fd, 1)
+        os.close(read_fd)
+        os._exit(0)
+
+    os.close(read_fd)
+    sent: list[tuple[int, signal.Signals]] = []
+    try:
+        identity = process_control._read_identity(child_pid)
+        os.close(write_fd)
+        deadline = time.monotonic() + 5
+        while process_control._process_stat(child_pid)[0] != "Z":
+            if time.monotonic() >= deadline:
+                pytest.fail("child process did not become a zombie")
+            time.sleep(0.01)
+        monkeypatch.setattr(
+            process_control.signal,
+            "pidfd_send_signal",
+            lambda fd, sent_signal: sent.append((fd, sent_signal)),
+        )
+
+        result = request_process_stop(identity)
+    finally:
+        try:
+            os.close(write_fd)
+        except OSError:
+            pass
+        os.waitpid(child_pid, 0)
+
+    assert result.result == "not_running"
+    assert sent == []
+
+
+def test_should_not_signal_pidfd_when_identity_changed_after_open(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import process_control
+    from process_control import ProcessIdentity, request_process_stop
+
+    expected = ProcessIdentity(pid=91, pgid=91, session_id=91, start_time=200)
+    reused = ProcessIdentity(pid=91, pgid=91, session_id=91, start_time=201)
+    sent: list[tuple[int, signal.Signals]] = []
+    closed: list[int] = []
+    monkeypatch.setattr(process_control.os, "pidfd_open", lambda pid: 71)
+    monkeypatch.setattr(process_control, "_read_identity", lambda pid: reused)
+    monkeypatch.setattr(
+        process_control, "_process_stat", lambda pid: ("S", 91, 91, 201)
+    )
+    monkeypatch.setattr(
+        process_control.signal,
+        "pidfd_send_signal",
+        lambda fd, sent_signal: sent.append((fd, sent_signal)),
+    )
+    monkeypatch.setattr(process_control.os, "close", closed.append)
+
+    result = request_process_stop(expected)
+
+    assert result.result == "skipped_identity_mismatch"
+    assert sent == []
+    assert closed == [71]
+
+
+def test_should_treat_exit_after_pidfd_open_as_not_running(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import process_control
+    from process_control import ProcessIdentity, request_process_stop
+
+    identity = ProcessIdentity(pid=91, pgid=91, session_id=91, start_time=200)
+    closed: list[int] = []
+    monkeypatch.setattr(process_control.os, "pidfd_open", lambda pid: 71)
+    monkeypatch.setattr(process_control, "_read_identity", lambda pid: identity)
+    monkeypatch.setattr(process_control, "_process_stat", lambda pid: ("S", 91, 91, 200))
+    monkeypatch.setattr(
+        process_control.signal,
+        "pidfd_send_signal",
+        lambda fd, sent_signal: (_ for _ in ()).throw(ProcessLookupError()),
+    )
+    monkeypatch.setattr(process_control.os, "close", closed.append)
+
+    result = request_process_stop(identity)
+
+    assert result.result == "not_running"
+    assert closed == [71]
+
+
+def test_should_propagate_pidfd_permission_error_without_falling_back_to_pid_signal(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import process_control
+    from process_control import ProcessIdentity, request_process_stop
+
+    identity = ProcessIdentity(pid=91, pgid=91, session_id=91, start_time=200)
+    closed: list[int] = []
+    direct_signals: list[tuple[int, signal.Signals]] = []
+    monkeypatch.setattr(process_control.os, "pidfd_open", lambda pid: 71)
+    monkeypatch.setattr(process_control, "_read_identity", lambda pid: identity)
+    monkeypatch.setattr(process_control, "_process_stat", lambda pid: ("S", 91, 91, 200))
+    monkeypatch.setattr(
+        process_control.signal,
+        "pidfd_send_signal",
+        lambda fd, sent_signal: (_ for _ in ()).throw(PermissionError()),
+    )
+    monkeypatch.setattr(
+        process_control.os,
+        "kill",
+        lambda pid, sig: direct_signals.append((pid, sig)),
+    )
+    monkeypatch.setattr(process_control.os, "close", closed.append)
+
+    with pytest.raises(PermissionError):
+        request_process_stop(identity)
+
+    assert direct_signals == []
+    assert closed == [71]
+
+
 def test_should_refuse_orphan_group_with_members_older_than_recorded_leader(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -244,6 +408,7 @@ def test_should_report_failed_stop_when_group_survives_kill(
     identity = ProcessIdentity(pid=91, pgid=91, session_id=91, start_time=200)
     sent: list[tuple[int, signal.Signals]] = []
     monkeypatch.setattr(process_control, "_leader_identity_matches", lambda value: True)
+    monkeypatch.setattr(process_control, "_group_members", lambda value: ((91, 200),))
     monkeypatch.setattr(process_control, "_group_has_live_members", lambda value: True)
     monkeypatch.setattr(process_control, "_wait_until_group_exits", lambda value, deadline: False)
     monkeypatch.setattr(os, "killpg", lambda pgid, sent_signal: sent.append((pgid, sent_signal)))
@@ -252,6 +417,26 @@ def test_should_report_failed_stop_when_group_survives_kill(
         stop_owned_process(identity, grace_seconds=0.01)
 
     assert sent == [(91, signal.SIGTERM), (91, signal.SIGKILL)]
+
+
+def test_should_not_kill_reused_group_after_owned_members_exit_during_grace(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import process_control
+    from process_control import ProcessIdentity, stop_owned_process
+
+    identity = ProcessIdentity(pid=91, pgid=91, session_id=91, start_time=200)
+    member_snapshots = iter((((91, 200),), ((92, 300),)))
+    sent: list[tuple[int, signal.Signals]] = []
+    monkeypatch.setattr(process_control, "_leader_identity_matches", lambda value: True)
+    monkeypatch.setattr(process_control, "_group_members", lambda value: next(member_snapshots))
+    monkeypatch.setattr(process_control, "_wait_until_group_exits", lambda value, deadline: False)
+    monkeypatch.setattr(os, "killpg", lambda pgid, sent_signal: sent.append((pgid, sent_signal)))
+
+    result = stop_owned_process(identity, grace_seconds=0.01)
+
+    assert result.result == "skipped_identity_mismatch"
+    assert sent == [(91, signal.SIGTERM)]
 
 
 def test_should_kill_remaining_group_child_after_leader_exits_on_term(tmp_path: Path):

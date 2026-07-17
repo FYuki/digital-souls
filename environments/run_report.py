@@ -38,7 +38,11 @@ def _service_record(dependency: Mapping[str, object] | None) -> dict[str, object
 
 
 def create_pending_report(
-    *, run_id: str, started_at: str, resolved_profile_path: Path
+    *,
+    run_id: str,
+    started_at: str,
+    resolved_profile_path: Path,
+    orchestrator_identity: Mapping[str, int],
 ) -> dict[str, object]:
     report = {
         "schemaVersion": RUN_REPORT_SCHEMA_VERSION,
@@ -47,6 +51,7 @@ def create_pending_report(
         "readyAt": None,
         "endedAt": None,
         "resolvedProfilePath": str(resolved_profile_path),
+        "orchestratorIdentity": dict(orchestrator_identity),
         "effectiveProfile": None,
         "phase": "resolve",
         "status": "running",
@@ -66,12 +71,16 @@ def create_initial_report(
     started_at: str,
     resolved_profile_path: Path,
     effective_profile: Mapping[str, object],
+    orchestrator_identity: Mapping[str, int],
 ) -> dict[str, object]:
     dependencies = effective_profile.get("dependencies")
     if not isinstance(dependencies, dict) or set(dependencies) != set(DEPENDENCY_NAMES):
         raise RunReportError("effective profile must define all dependencies")
     pending = create_pending_report(
-        run_id=run_id, started_at=started_at, resolved_profile_path=resolved_profile_path
+        run_id=run_id,
+        started_at=started_at,
+        resolved_profile_path=resolved_profile_path,
+        orchestrator_identity=orchestrator_identity,
     )
     report = {
         **pending,
@@ -226,10 +235,24 @@ def record_cleanup(
     report: Mapping[str, object], *, results: list[dict[str, object]], ended_at: str
 ) -> dict[str, object]:
     updated = deepcopy(dict(report))
-    failed = any(result.get("result") == "failed" for result in results)
+    teardown = cast(Mapping[str, object], updated["teardown"])
+    prior_results = cast(list[dict[str, object]], teardown["results"])
+    cumulative_results = [*deepcopy(prior_results), *deepcopy(results)]
+    failure = updated["failure"]
+    failed = (
+        teardown["status"] == "failed"
+        or (
+            isinstance(failure, dict)
+            and failure.get("category") == "teardown"
+        )
+        or any(result.get("result") == "failed" for result in cumulative_results)
+    )
     updated["phase"] = "complete"
     updated["endedAt"] = ended_at
-    updated["teardown"] = {"status": "failed" if failed else "completed", "results": deepcopy(results)}
+    updated["teardown"] = {
+        "status": "failed" if failed else "completed",
+        "results": cumulative_results,
+    }
     if failed and updated["failure"] is None:
         updated["failure"] = {"category": "teardown", "message": "environment cleanup failed"}
     updated["status"] = "failed" if updated["failure"] is not None else "completed"

@@ -186,7 +186,8 @@ class ProcessServiceOperations(HttpServiceOperations, ABC):
         identity = ProcessIdentity.from_report(_process_identity(service, self.label))
         if self._process is not None and self._process.identity == identity:
             result = stop_managed_process(self._process, grace_seconds=grace_seconds)
-            self._process.process.wait(timeout=max(1.0, grace_seconds + 1.0))
+            if result.result in {"stopped_term", "stopped_kill"}:
+                self._process.process.wait(timeout=max(1.0, grace_seconds + 1.0))
         else:
             result = stop_owned_process(identity, grace_seconds=grace_seconds)
         return StopResult(result.result)

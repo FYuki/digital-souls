@@ -60,6 +60,7 @@ class EnvironmentRun:
         report: dict[str, object],
         root_dir: Path,
         ready_gate_url: str,
+        was_interrupted: Callable[[], bool],
         registry: ServiceRegistry | None = None,
     ) -> None:
         self.profile = profile
@@ -75,6 +76,7 @@ class EnvironmentRun:
         self.cleanup_failures: list[dict[str, object]] = []
         self.ready_gate = ReadyGate(ready_gate_url)
         self.ready_gate_open = False
+        self.was_interrupted = was_interrupted
 
     def _save_phase(self, phase: str) -> None:
         self._update_report(lambda report: record_phase(report, phase))
@@ -196,10 +198,15 @@ class EnvironmentRun:
                 self.report = self.store.update(ownership_update)
 
     def _assert_owned_services_running(self) -> None:
+        if self.was_interrupted():
+            return
         services = cast(dict[str, dict[str, object]], self.report["services"])
         for name in cast(list[str], self.report["startSequence"]):
             service = services[name]
-            if not require_service_operations(self.registry, name).is_running(service):
+            running = require_service_operations(self.registry, name).is_running(service)
+            if self.was_interrupted():
+                return
+            if not running:
                 raise SupervisionError(
                     f"managed service exited unexpectedly: {name}"
                 )
@@ -246,9 +253,10 @@ class EnvironmentRun:
     def supervise(self) -> None:
         import time
 
-        while True:
+        while not self.was_interrupted():
             self._assert_owned_services_running()
-            time.sleep(0.5)
+            if not self.was_interrupted():
+                time.sleep(0.5)
 
     def cleanup(self) -> list[dict[str, object]]:
         outcome = cleanup_environment(

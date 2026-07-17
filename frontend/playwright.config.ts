@@ -34,6 +34,10 @@ const e2eWebServer = {
   url: environmentReadyGateUrl,
   reuseExistingServer: false,
   timeout: 600_000,
+  gracefulShutdown: {
+    signal: 'SIGTERM' as const,
+    timeout: 60_000,
+  },
 }
 
 export default defineConfig({

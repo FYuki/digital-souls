@@ -599,6 +599,97 @@ def test_should_finalize_interrupted_ready_run_when_wall_clock_moves_backward(
     assert report["failure"] is None
 
 
+@pytest.mark.parametrize("interrupt_point", ["before_save", "during_save"])
+def test_should_block_sigterm_until_orchestrator_identity_is_published(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, interrupt_point: str
+):
+    import commands.up_command as up_command
+    from run_report_store import RunReportStore
+
+    class InterruptingReportStore(RunReportStore):
+        interrupted = False
+
+        def save(self, report):
+            if interrupt_point == "before_save" and not self.interrupted:
+                self.interrupted = True
+                os.kill(os.getpid(), signal.SIGTERM)
+            super().save(report)
+
+        def _save_unlocked(self, report):
+            if interrupt_point == "during_save" and not self.interrupted:
+                self.interrupted = True
+                os.kill(os.getpid(), signal.SIGTERM)
+            super()._save_unlocked(report)
+
+    monkeypatch.setattr(up_command, "RunReportStore", InterruptingReportStore)
+    report_path = tmp_path / "environment-run.json"
+    arguments = argparse.Namespace(
+        run_report=str(report_path),
+        profile_report=None,
+        default_profile="test-mocked",
+    )
+
+    exit_code = up_command.up_environment(ROOT_DIR, tmp_path / ".runtime", arguments)
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert exit_code == 1
+    assert report["phase"] == "complete"
+    assert report["status"] == "failed"
+    assert report["endedAt"] is not None
+    assert report["orchestratorIdentity"]["pid"] == os.getpid()
+
+
+def test_should_publish_report_when_sigterm_arrives_during_identity_capture(
+    tmp_path: Path,
+):
+    report_path = tmp_path / "environment-run.json"
+    runtime_path = tmp_path / ".runtime"
+    script = f"""
+import argparse
+import os
+import signal
+import sys
+from pathlib import Path
+
+sys.path.insert(0, {str(ROOT_DIR / "environments")!r})
+sys.path.insert(0, {str(ROOT_DIR / "backend")!r})
+import commands.up_command as up_command
+
+original_current_process_identity = up_command.current_process_identity
+
+def interrupting_current_process_identity():
+    os.kill(os.getpid(), signal.SIGTERM)
+    return original_current_process_identity()
+
+up_command.current_process_identity = interrupting_current_process_identity
+arguments = argparse.Namespace(
+    run_report={str(report_path)!r},
+    profile_report=None,
+    default_profile="test-mocked",
+)
+raise SystemExit(up_command.up_environment(
+    Path({str(ROOT_DIR)!r}),
+    Path({str(runtime_path)!r}),
+    arguments,
+))
+"""
+
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert report_path.exists(), result.stderr
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert result.returncode == 1, result.stderr
+    assert report["phase"] == "complete"
+    assert report["status"] == "failed"
+    assert report["endedAt"] is not None
+    assert report["orchestratorIdentity"]["pid"] != os.getpid()
+
+
 def test_should_require_explicit_report_path_for_down(tmp_path: Path):
     result = subprocess.run(
         [str(ROOT_DIR / "environments" / "down.sh")],
@@ -611,18 +702,99 @@ def test_should_require_explicit_report_path_for_down(tmp_path: Path):
     assert "run report" in result.stderr.lower()
 
 
+def test_should_only_request_orchestrator_stop_for_live_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    import commands.down_command as down_command
+    from process_control import ProcessStopResult
+    from run_report import create_initial_report
+    from run_report_store import RunReportStore
+    from tests.environment_test_support import orchestrator_identity, resolved_profile
+
+    report_path = tmp_path / "environment-run.json"
+    report = create_initial_report(
+        run_id="live-down",
+        started_at="2026-07-17T00:00:00+00:00",
+        resolved_profile_path=tmp_path / "resolved-profile.json",
+        effective_profile=resolved_profile(),
+        orchestrator_identity=orchestrator_identity(),
+    )
+    RunReportStore(report_path).save(report)
+    stop_requests: list[dict[str, int]] = []
+    monkeypatch.setattr(
+        down_command,
+        "request_process_stop",
+        lambda identity: stop_requests.append(identity.to_report())
+        or ProcessStopResult("signaled"),
+    )
+    monkeypatch.setattr(
+        down_command,
+        "cleanup_environment_services",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("live down must not clean up services")
+        ),
+    )
+
+    exit_code = down_command.down_environment(ROOT_DIR, str(report_path))
+
+    assert exit_code == 0
+    assert stop_requests == [orchestrator_identity()]
+    assert RunReportStore(report_path).load() == report
+
+
+def test_should_not_fall_back_to_direct_cleanup_when_orchestrator_signal_is_denied(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    import commands.down_command as down_command
+    from run_report import create_initial_report
+    from run_report_store import RunReportStore
+    from tests.environment_test_support import orchestrator_identity, resolved_profile
+
+    report_path = tmp_path / "environment-run.json"
+    report = create_initial_report(
+        run_id="permission-denied-down",
+        started_at="2026-07-17T00:00:00+00:00",
+        resolved_profile_path=tmp_path / "resolved-profile.json",
+        effective_profile=resolved_profile(),
+        orchestrator_identity=orchestrator_identity(),
+    )
+    RunReportStore(report_path).save(report)
+    cleanup_called = False
+
+    def record_cleanup_call(*_args, **_kwargs):
+        nonlocal cleanup_called
+        cleanup_called = True
+        return []
+
+    monkeypatch.setattr(
+        down_command,
+        "request_process_stop",
+        lambda identity: (_ for _ in ()).throw(PermissionError("signal denied")),
+    )
+    monkeypatch.setattr(
+        down_command, "cleanup_environment_services", record_cleanup_call
+    )
+
+    with pytest.raises(PermissionError, match="signal denied"):
+        down_command.down_environment(ROOT_DIR, str(report_path))
+
+    assert cleanup_called is False
+    assert RunReportStore(report_path).load() == report
+
+
 def test_should_reject_profile_service_mismatch_before_down_stopper(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
     import commands.down_command as down_command
     from run_report import RunReportError, create_initial_report
-    from tests.environment_test_support import resolved_profile
+    from tests.environment_test_support import orchestrator_identity, resolved_profile
 
     report = create_initial_report(
         run_id="contradictory-down-report",
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=resolved_profile(),
+        orchestrator_identity=orchestrator_identity(),
     )
     report["effectiveProfile"]["dependencies"]["backend"]["source"] = "external"
     report_path = tmp_path / "environment-run.json"
@@ -646,12 +818,14 @@ def test_should_reject_profile_service_mismatch_before_down_stopper(
 
 def test_should_report_invalid_raw_test_result_without_traceback(tmp_path: Path):
     from run_report import create_pending_report
+    from tests.environment_test_support import orchestrator_identity
 
     report_path = tmp_path / "invalid-environment-run.json"
     report = create_pending_report(
         run_id="invalid-test-result",
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
+        orchestrator_identity=orchestrator_identity(),
     )
     report["testResult"] = {
         "status": [],
@@ -689,13 +863,14 @@ def test_should_rerun_down_for_completed_stale_report(
         update_service,
     )
     from run_report_store import RunReportStore
-    from tests.environment_test_support import resolved_profile
+    from tests.environment_test_support import orchestrator_identity, resolved_profile
 
     report = create_initial_report(
         run_id="completed-down",
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=resolved_profile(),
+        orchestrator_identity=orchestrator_identity(),
     )
     report = update_service(
         report,
@@ -728,13 +903,21 @@ def test_should_rerun_down_for_completed_stale_report(
     updated = RunReportStore(report_path).load()
     assert result.returncode == 0, result.stderr
     assert updated["phase"] == "complete"
-    assert updated["teardown"]["status"] == "completed"
-    assert updated["teardown"]["results"] == [
-        {"service": "backend", "result": "skipped_identity_mismatch"}
+    expected_results = [
+        *prior_cleanup_results,
+        {"service": "backend", "result": "skipped_identity_mismatch"},
     ]
+    assert updated["teardown"]["results"] == expected_results
+    assert updated["teardown"]["status"] == (
+        "failed" if prior_cleanup_results else "completed"
+    )
+    assert updated["status"] == ("failed" if prior_cleanup_results else "completed")
+    assert (updated["failure"] or {}).get("category") == (
+        "teardown" if prior_cleanup_results else None
+    )
 
 
-def test_should_finish_cleanup_and_report_after_additional_sigterm(
+def test_should_delegate_live_down_cleanup_to_up_even_after_additional_sigterm(
     tmp_path: Path,
 ):
     environments = _copy_environment_runtime(tmp_path)
@@ -845,7 +1028,12 @@ def test_should_finish_cleanup_and_report_after_additional_sigterm(
     )
     try:
         _wait_for_report_phase(report_path, "supervise")
-        process.send_signal(signal.SIGTERM)
+        down_result = subprocess.run(
+            [str(environments / "down.sh"), "--run-report", str(report_path)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
         deadline = time.monotonic() + 10
         while (
             (not stop_log.exists() or not stop_log.read_text(encoding="utf-8"))
@@ -861,7 +1049,8 @@ def test_should_finish_cleanup_and_report_after_additional_sigterm(
             process.communicate(timeout=5)
 
     report = json.loads(report_path.read_text(encoding="utf-8"))
-    assert process.returncode == 1, (stdout, stderr)
+    assert down_result.returncode == 0, (down_result.stdout, down_result.stderr)
+    assert process.returncode == 0, (stdout, stderr)
     assert stop_log.read_text(encoding="utf-8").splitlines() == [
         "begin:frontend",
         "frontend",
@@ -872,6 +1061,7 @@ def test_should_finish_cleanup_and_report_after_additional_sigterm(
     assert report["status"] == "completed"
     assert report["endedAt"] is not None
     assert report["failure"] is None
+    assert report["orchestratorIdentity"]["pid"] == process.pid
     assert report["teardown"] == {
         "status": "completed",
         "results": [

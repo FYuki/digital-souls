@@ -18,12 +18,14 @@ from environment_runtime import (
     SupervisionError,
 )
 from environment_signals import (
-    defer_interrupt_signals,
+    block_interrupt_signals,
+    coalesce_interrupt_signals,
     install_interrupt_handlers,
     restore_interrupt_handlers,
 )
 from environment_verification import EnvironmentVerificationError
 from orchestrator import classify_failure
+from process_control import current_process_identity
 from run_report import create_initial_report, create_pending_report, record_cleanup, record_failure
 from run_report_store import RunReportStore
 from run_report_timestamps import current_timestamp, next_lifecycle_timestamp
@@ -48,16 +50,21 @@ def up_environment(
         else configured_ready_gate
     )
     store = RunReportStore(paths.run_report)
-    report = create_pending_report(
-        run_id=run_id,
-        started_at=started_at,
-        resolved_profile_path=paths.profile_report,
-    )
-    store.save(report)
     phase = "resolve"
     environment_run: EnvironmentRun | None = None
-    was_interrupted, previous_handlers = install_interrupt_handlers()
+    previous_handlers = None
+    report = None
     try:
+        with block_interrupt_signals():
+            was_interrupted, previous_handlers = install_interrupt_handlers()
+            orchestrator_identity = current_process_identity().to_report()
+            report = create_pending_report(
+                run_id=run_id,
+                started_at=started_at,
+                resolved_profile_path=paths.profile_report,
+                orchestrator_identity=orchestrator_identity,
+            )
+            store.save(report)
         profile = resolve_and_write_profile(
             dict(os.environ),
             arguments.default_profile,
@@ -69,6 +76,7 @@ def up_environment(
             started_at=started_at,
             resolved_profile_path=paths.profile_report,
             effective_profile=profile,
+            orchestrator_identity=orchestrator_identity,
         )
         store.save(report)
         environment_run = EnvironmentRun(
@@ -78,6 +86,7 @@ def up_environment(
             report=report,
             root_dir=root_dir,
             ready_gate_url=ready_gate_url,
+            was_interrupted=was_interrupted,
         )
         phase = "verify"
         environment_run.verify()
@@ -93,6 +102,8 @@ def up_environment(
         environment_run.begin_supervision()
         environment_run.supervise()
     except (Exception, KeyboardInterrupt) as error:
+        if report is None:
+            raise
         current = environment_run.report if environment_run is not None else report
         if not (was_interrupted() and current.get("status") == "ready"):
             try:
@@ -118,20 +129,23 @@ def up_environment(
                     )
     finally:
         try:
-            with defer_interrupt_signals():
-                if environment_run is not None:
-                    cleanup_results = environment_run.cleanup()
-                else:
-                    cleanup_results = []
-                final_report = store.update(
-                    lambda report: record_cleanup(
-                        report,
-                        results=cleanup_results,
-                        ended_at=next_lifecycle_timestamp(report),
+            with coalesce_interrupt_signals():
+                if report is not None:
+                    cleanup_results = (
+                        environment_run.cleanup()
+                        if environment_run is not None
+                        else []
                     )
-                )
+                    final_report = store.update(
+                        lambda report: record_cleanup(
+                            report,
+                            results=cleanup_results,
+                            ended_at=next_lifecycle_timestamp(report),
+                        )
+                    )
         finally:
-            restore_interrupt_handlers(previous_handlers)
+            if previous_handlers is not None:
+                restore_interrupt_handlers(previous_handlers)
     return 0 if final_report["status"] == "completed" else 1
 
 

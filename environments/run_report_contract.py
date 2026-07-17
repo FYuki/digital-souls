@@ -3,7 +3,7 @@ from __future__ import annotations
 
 REPORT_FIELDS = {
     "schemaVersion", "runId", "startedAt", "readyAt", "endedAt",
-    "resolvedProfilePath", "effectiveProfile", "phase", "status",
+    "resolvedProfilePath", "orchestratorIdentity", "effectiveProfile", "phase", "status",
     "startSequence", "services", "testResult", "failure", "teardown",
 }
 STATES = {

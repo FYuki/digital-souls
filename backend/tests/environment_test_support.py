@@ -15,6 +15,15 @@ if str(ENVIRONMENTS_DIR) not in sys.path:
 from profile_types import ResolvedDependencies, ResolvedDependency, ResolvedReport
 
 
+def orchestrator_identity() -> dict[str, int]:
+    return {
+        "pid": 2_147_483_647,
+        "pgid": 2_147_483_647,
+        "sessionId": 2_147_483_647,
+        "startTime": 1,
+    }
+
+
 def resolved_profile(profile_name: str = "integration-voice") -> ResolvedReport:
     dependencies: dict[str, ResolvedDependency] = {
         "frontend": {

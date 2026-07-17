@@ -56,6 +56,23 @@ describe('Playwright voice chat webServer configuration', () => {
     )
   })
 
+  test('requests graceful SIGTERM shutdown with enough time for environment cleanup', async () => {
+    const config = await loadPlaywrightConfig(['node', 'playwright', 'test'])
+
+    expect(config.webServer).toEqual(
+      expect.objectContaining({
+        command: '../scripts/start-voice-chat-e2e.sh',
+        gracefulShutdown: {
+          signal: 'SIGTERM',
+          timeout: 60_000,
+        },
+        reuseExistingServer: false,
+        timeout: 600_000,
+        url: 'http://127.0.0.1:4174/ready',
+      }),
+    )
+  })
+
   test('waits for the configured all-services readiness gate', async () => {
     vi.stubEnv('DS_ENVIRONMENT_READY_URL', 'http://127.0.0.1:4317/all-ready')
 

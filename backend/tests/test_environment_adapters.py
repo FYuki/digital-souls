@@ -85,6 +85,91 @@ def test_should_start_frontend_in_foreground_without_install_command(tmp_path: P
     assert runner.calls == []
 
 
+def test_should_preserve_identity_mismatch_skip_without_waiting_or_signaling(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    from adapters.frontend import FrontendAdapter
+    from process_control import ManagedProcess, ProcessIdentity
+
+    class ReusedPidProcess:
+        pid = 4102
+
+        def __init__(self) -> None:
+            self.wait_calls: list[float] = []
+
+        def poll(self):
+            return None
+
+        def wait(self, timeout: float):
+            self.wait_calls.append(timeout)
+            raise subprocess.TimeoutExpired("unrelated-process", timeout)
+
+    process = ReusedPidProcess()
+    identity = ProcessIdentity(pid=4101, pgid=4101, session_id=4101, start_time=99101)
+    sent_signals: list[tuple[int, int]] = []
+    adapter = FrontendAdapter(root_dir=tmp_path, runner=RecordingRunner())
+    adapter._process = ManagedProcess(
+        label="frontend",
+        process=process,  # type: ignore[arg-type]
+        identity=identity,
+    )
+    monkeypatch.setattr(
+        "process_control.os.killpg",
+        lambda pgid, sent_signal: sent_signals.append((pgid, sent_signal)),
+    )
+    service = {"processIdentity": identity.to_report()}
+
+    result = adapter.stop(service, grace_seconds=5.0)
+
+    assert result.result == "skipped_identity_mismatch"
+    assert process.wait_calls == []
+    assert sent_signals == []
+
+
+def test_should_refuse_managed_group_with_member_older_than_recorded_leader(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    from adapters.frontend import FrontendAdapter
+    from process_control import ManagedProcess, ProcessIdentity
+
+    class MatchingLeaderProcess:
+        pid = 4101
+
+        def __init__(self) -> None:
+            self.wait_calls: list[float] = []
+
+        def poll(self):
+            return None
+
+        def wait(self, timeout: float):
+            self.wait_calls.append(timeout)
+            raise subprocess.TimeoutExpired("unrelated-process", timeout)
+
+    process = MatchingLeaderProcess()
+    identity = ProcessIdentity(pid=4101, pgid=4101, session_id=4101, start_time=99101)
+    sent_signals: list[tuple[int, int]] = []
+    adapter = FrontendAdapter(root_dir=tmp_path, runner=RecordingRunner())
+    adapter._process = ManagedProcess(
+        label="frontend",
+        process=process,  # type: ignore[arg-type]
+        identity=identity,
+    )
+    monkeypatch.setattr("process_control._leader_identity_matches", lambda value: True)
+    monkeypatch.setattr("process_control._group_members", lambda value: ((4102, 99100),))
+    monkeypatch.setattr(
+        "process_control.os.killpg",
+        lambda pgid, sent_signal: sent_signals.append((pgid, sent_signal)),
+    )
+
+    result = adapter.stop(
+        {"processIdentity": identity.to_report()}, grace_seconds=5.0
+    )
+
+    assert result.result == "skipped_identity_mismatch"
+    assert process.wait_calls == []
+    assert sent_signals == []
+
+
 def test_should_keep_backend_setup_in_prepare_and_uvicorn_in_start(tmp_path: Path):
     from adapters.backend import BackendAdapter
 
