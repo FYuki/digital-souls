@@ -1,0 +1,390 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digital-souls.local/schemas/environment-run-v1.schema.json",
+  "title": "Digital Souls environment run report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "runId", "startedAt", "readyAt", "endedAt",
+    "resolvedProfilePath", "effectiveProfile", "phase", "status",
+    "startSequence", "services", "testResult", "failure", "teardown"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "startedAt": { "$ref": "#/$defs/dateTime" },
+    "readyAt": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/dateTime" }] },
+    "endedAt": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/dateTime" }] },
+    "resolvedProfilePath": { "type": "string", "minLength": 1 },
+    "effectiveProfile": { "type": ["object", "null"] },
+    "phase": {
+      "enum": ["resolve", "verify", "prepare", "pre_probe", "start_or_reuse", "readiness", "ready", "supervise", "cleanup", "complete"]
+    },
+    "status": { "enum": ["running", "ready", "completed", "failed"] },
+    "startSequence": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/serviceName" }
+    },
+    "services": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frontend", "backend", "ollama", "voicevox", "whisper", "chroma"],
+      "properties": {
+        "frontend": { "$ref": "#/$defs/processService" },
+        "backend": { "$ref": "#/$defs/processService" },
+        "ollama": { "$ref": "#/$defs/processService" },
+        "voicevox": { "$ref": "#/$defs/containerService" },
+        "whisper": { "$ref": "#/$defs/noIdentityService" },
+        "chroma": { "$ref": "#/$defs/noIdentityService" }
+      }
+    },
+    "testResult": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "endedAt", "message"],
+          "properties": {
+            "status": { "enum": ["passed", "failed"] },
+            "endedAt": { "$ref": "#/$defs/dateTime" },
+            "message": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "failure": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["category", "message"],
+          "properties": {
+            "category": { "enum": ["profile", "preparation", "startup", "readiness", "supervision", "test", "teardown"] },
+            "message": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "teardown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "results"],
+      "properties": {
+        "status": { "enum": ["pending", "completed", "failed"] },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["service", "result"],
+            "properties": {
+              "service": { "$ref": "#/$defs/cleanupTargetName" },
+              "result": { "type": "string" },
+              "message": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    { "$ref": "#/$defs/frontendSequenceInvariant" },
+    { "$ref": "#/$defs/backendSequenceInvariant" },
+    { "$ref": "#/$defs/ollamaSequenceInvariant" },
+    { "$ref": "#/$defs/voicevoxSequenceInvariant" },
+    { "$ref": "#/$defs/whisperSequenceInvariant" },
+    { "$ref": "#/$defs/chromaSequenceInvariant" },
+    { "$ref": "#/$defs/lifecycleInvariant" }
+  ],
+  "$defs": {
+    "dateTime": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt ][0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?([Zz]|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "serviceName": { "enum": ["frontend", "backend", "ollama", "voicevox", "whisper", "chroma"] },
+    "cleanupTargetName": { "enum": ["frontend", "backend", "ollama", "voicevox", "whisper", "chroma", "ready_gate", "run_report"] },
+    "processIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pid", "pgid", "sessionId", "startTime"],
+      "properties": {
+        "pid": { "type": "integer", "minimum": 1 },
+        "pgid": { "type": "integer", "minimum": 1 },
+        "sessionId": { "type": "integer", "minimum": 1 },
+        "startTime": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "containerIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["containerId", "startedAt"],
+      "properties": {
+        "containerId": { "type": "string", "minLength": 1 },
+        "startedAt": { "type": "string", "minLength": 1 }
+      }
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "attempts", "elapsedSeconds", "result"],
+      "properties": {
+        "url": { "type": "string", "format": "uri" },
+        "attempts": { "type": "integer", "minimum": 1 },
+        "elapsedSeconds": { "type": "number", "minimum": 0 },
+        "result": { "enum": ["ready", "not_ready", "timeout"] }
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "source", "state", "owned", "processIdentity", "containerIdentity", "readiness"],
+      "properties": {
+        "mode": { "type": ["string", "null"], "enum": ["real", "mock", "disabled", null] },
+        "source": { "type": ["string", "null"], "enum": ["managed", "external", "in_process", "browser", null] },
+        "state": { "enum": ["pending", "started", "reused", "external", "in_process", "browser", "disabled"] },
+        "owned": { "type": "boolean" },
+        "processIdentity": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/processIdentity" }] },
+        "containerIdentity": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/containerIdentity" }] },
+        "readiness": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/readiness" }] }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "source": { "const": "managed" },
+                "state": { "enum": ["pending", "started", "reused"] }
+              }
+            },
+            {
+              "properties": {
+                "source": { "const": "external" },
+                "state": { "const": "external" }
+              }
+            },
+            {
+              "properties": {
+                "source": { "const": "in_process" },
+                "state": { "const": "in_process" }
+              }
+            },
+            {
+              "properties": {
+                "source": { "const": "browser" },
+                "state": { "const": "browser" }
+              }
+            },
+            {
+              "properties": {
+                "mode": { "const": "disabled" },
+                "source": { "type": "null" },
+                "state": { "const": "disabled" }
+              }
+            },
+            {
+              "properties": {
+                "mode": { "type": "null" },
+                "source": { "type": "null" },
+                "state": { "const": "pending" }
+              }
+            }
+          ]
+        },
+        {
+          "if": { "properties": { "state": { "const": "started" } }, "required": ["state"] },
+          "then": {
+            "properties": {
+              "source": { "const": "managed" },
+              "owned": { "const": true }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "owned": { "const": true } }, "required": ["owned"] },
+          "then": {
+            "properties": { "state": { "const": "started" } },
+            "oneOf": [
+              {
+                "properties": {
+                  "processIdentity": { "$ref": "#/$defs/processIdentity" },
+                  "containerIdentity": { "type": "null" }
+                }
+              },
+              {
+                "properties": {
+                  "processIdentity": { "type": "null" },
+                  "containerIdentity": { "$ref": "#/$defs/containerIdentity" }
+                }
+              }
+            ]
+          },
+          "else": {
+            "properties": {
+              "processIdentity": { "type": "null" },
+              "containerIdentity": { "type": "null" }
+            }
+          }
+        }
+      ]
+    },
+    "processService": {
+      "allOf": [
+        { "$ref": "#/$defs/service" },
+        { "properties": { "containerIdentity": { "type": "null" } } }
+      ]
+    },
+    "containerService": {
+      "allOf": [
+        { "$ref": "#/$defs/service" },
+        { "properties": { "processIdentity": { "type": "null" } } }
+      ]
+    },
+    "noIdentityService": {
+      "allOf": [
+        { "$ref": "#/$defs/service" },
+        {
+          "properties": {
+            "processIdentity": { "type": "null" },
+            "containerIdentity": { "type": "null" }
+          }
+        }
+      ]
+    },
+    "frontendSequenceInvariant": { "$ref": "#/$defs/sequenceInvariantTemplate/frontend" },
+    "backendSequenceInvariant": { "$ref": "#/$defs/sequenceInvariantTemplate/backend" },
+    "ollamaSequenceInvariant": { "$ref": "#/$defs/sequenceInvariantTemplate/ollama" },
+    "voicevoxSequenceInvariant": { "$ref": "#/$defs/sequenceInvariantTemplate/voicevox" },
+    "whisperSequenceInvariant": { "$ref": "#/$defs/sequenceInvariantTemplate/whisper" },
+    "chromaSequenceInvariant": { "$ref": "#/$defs/sequenceInvariantTemplate/chroma" },
+    "lifecycleInvariant": {
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "failed" } } },
+          "then": { "properties": { "failure": { "not": { "type": "null" } } } },
+          "else": { "properties": { "failure": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "phase": { "const": "complete" } } },
+          "then": {
+            "properties": {
+              "endedAt": { "$ref": "#/$defs/dateTime" },
+              "status": { "enum": ["completed", "failed"] },
+              "teardown": { "properties": { "status": { "enum": ["completed", "failed"] } } }
+            }
+          },
+          "else": {
+            "properties": {
+              "endedAt": { "type": "null" },
+              "status": { "enum": ["running", "ready", "failed"] },
+              "teardown": {
+                "properties": {
+                  "status": { "const": "pending" },
+                  "results": { "maxItems": 0 }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "phase": { "enum": ["resolve", "verify", "prepare", "pre_probe", "start_or_reuse", "readiness"] } } },
+          "then": {
+            "properties": {
+              "status": { "enum": ["running", "failed"] },
+              "readyAt": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "phase": { "enum": ["ready", "supervise"] } } },
+          "then": {
+            "properties": {
+              "status": { "enum": ["ready", "failed"] },
+              "readyAt": { "$ref": "#/$defs/dateTime" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "status": { "enum": ["ready", "completed"] } } },
+          "then": { "properties": { "readyAt": { "$ref": "#/$defs/dateTime" } } }
+        },
+        {
+          "if": { "properties": { "teardown": { "properties": { "status": { "const": "failed" } } } } },
+          "then": { "properties": { "status": { "const": "failed" } } }
+        },
+        {
+          "if": {
+            "properties": {
+              "testResult": {
+                "type": "object",
+                "required": ["status"],
+                "properties": { "status": { "const": "failed" } }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "status": { "const": "failed" },
+              "failure": { "type": "object" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "failure": {
+                "type": "object",
+                "required": ["category"],
+                "properties": { "category": { "const": "test" } }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "testResult": {
+                "type": "object",
+                "required": ["status"],
+                "properties": { "status": { "const": "failed" } }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "sequenceInvariantTemplate": {
+      "frontend": {
+        "if": { "properties": { "services": { "properties": { "frontend": { "properties": { "owned": { "const": true } }, "required": ["owned"] } } } } },
+        "then": { "properties": { "startSequence": { "contains": { "const": "frontend" } } } },
+        "else": { "properties": { "startSequence": { "not": { "contains": { "const": "frontend" } } } } }
+      },
+      "backend": {
+        "if": { "properties": { "services": { "properties": { "backend": { "properties": { "owned": { "const": true } }, "required": ["owned"] } } } } },
+        "then": { "properties": { "startSequence": { "contains": { "const": "backend" } } } },
+        "else": { "properties": { "startSequence": { "not": { "contains": { "const": "backend" } } } } }
+      },
+      "ollama": {
+        "if": { "properties": { "services": { "properties": { "ollama": { "properties": { "owned": { "const": true } }, "required": ["owned"] } } } } },
+        "then": { "properties": { "startSequence": { "contains": { "const": "ollama" } } } },
+        "else": { "properties": { "startSequence": { "not": { "contains": { "const": "ollama" } } } } }
+      },
+      "voicevox": {
+        "if": { "properties": { "services": { "properties": { "voicevox": { "properties": { "owned": { "const": true } }, "required": ["owned"] } } } } },
+        "then": { "properties": { "startSequence": { "contains": { "const": "voicevox" } } } },
+        "else": { "properties": { "startSequence": { "not": { "contains": { "const": "voicevox" } } } } }
+      },
+      "whisper": {
+        "if": { "properties": { "services": { "properties": { "whisper": { "properties": { "owned": { "const": true } }, "required": ["owned"] } } } } },
+        "then": { "properties": { "startSequence": { "contains": { "const": "whisper" } } } },
+        "else": { "properties": { "startSequence": { "not": { "contains": { "const": "whisper" } } } } }
+      },
+      "chroma": {
+        "if": { "properties": { "services": { "properties": { "chroma": { "properties": { "owned": { "const": true } }, "required": ["owned"] } } } } },
+        "then": { "properties": { "startSequence": { "contains": { "const": "chroma" } } } },
+        "else": { "properties": { "startSequence": { "not": { "contains": { "const": "chroma" } } } } }
+      }
+    }
+  }
+}

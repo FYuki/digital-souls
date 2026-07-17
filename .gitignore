@@ -23,6 +23,9 @@ frontend/test-results/
 frontend/playwright-report/
 frontend/.playwright-cache/
 
+# Environment orchestrator runtime reports
+.runtime/environments/
+
 # ログ
 *.log
 
@@ -31,6 +34,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+.cache/huggingface/
 
 # TAKT ローカル管理
 .takt/tasks/

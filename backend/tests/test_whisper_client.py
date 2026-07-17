@@ -5,6 +5,7 @@ import threading
 import time
 import types
 import wave
+from pathlib import Path
 
 
 class _Segment:
@@ -72,6 +73,9 @@ class TestWhisperClientTranscribe:
         assert second_result == "こんにちは 光織です"
         assert len(_FakeWhisperModel.instances) == 1
         assert _FakeWhisperModel.instances[0].init_args[0] == "medium"
+        assert _FakeWhisperModel.instances[0].init_kwargs["download_root"] == str(
+            Path(__file__).parent.parent.parent / ".cache" / "huggingface" / "hub"
+        )
 
     def test_passes_audio_bytes_as_file_like_object_and_language_ja(self, monkeypatch):
         client = _import_client_with_fake_whisper(monkeypatch)

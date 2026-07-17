@@ -53,12 +53,13 @@ class TestOllamaClientGenerate:
 
     def test_payload_model_is_gemma4_e4b(self):
         from app.llm.ollama_client import OllamaClient
+        from app.model_settings import OLLAMA_MODEL_NAME
 
         with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
             OllamaClient().generate("system", "user")
 
         payload: dict = mock_post.call_args.kwargs.get("json", {})
-        assert payload.get("model") == "gemma4:e4b"
+        assert payload.get("model") == OLLAMA_MODEL_NAME
 
     def test_payload_stream_is_false(self):
         from app.llm.ollama_client import OllamaClient
