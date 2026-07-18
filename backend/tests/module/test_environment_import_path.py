@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 
-BACKEND_DIR = Path(__file__).parent.parent
+BACKEND_DIR = Path(__file__).parent.parent.parent
 ENVIRONMENTS_DIR = BACKEND_DIR.parent / "environments"
 
 

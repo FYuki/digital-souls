@@ -9,7 +9,7 @@ from typing import TypeAlias, cast
 import pytest
 
 
-ROOT_DIR = Path(__file__).parent.parent.parent
+ROOT_DIR = Path(__file__).parent.parent.parent.parent
 ENVIRONMENTS_DIR = ROOT_DIR / "environments"
 PROFILE_NAMES = ["dev", "test-mocked", "integration-text", "integration-voice"]
 JsonValue: TypeAlias = (

@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 
-_BACKEND_DIR = Path(__file__).parent.parent
+_BACKEND_DIR = Path(__file__).parent.parent.parent
 
 
 class TestRuntimeConfiguration:

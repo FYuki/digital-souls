@@ -1,74 +1,65 @@
 # テスト方針
 
-テストの一般的な品質基準（Given-When-Then、モックの使い分け、境界値分析等）はTAKTのテストポリシー（`testing`policy / `unit-testing`・`e2e-testing`knowledge）に従う。本ドキュメントは、それらの汎用基準ではカバーされない `digital-souls` 固有の運用（テスト層の呼称、対象外部サービス、命名・配置、環境変数、ローカル/CI運用、完了条件の証跡）を定める。
+本書は `digital-souls` 固有のテスト層、配置、実行方法、実行証跡を定める。
 
-## テスト層の呼称
+## テスト層
 
-`digital-souls` では、TAKTのユニット/E2Eの2層に加え、外部サービスへの実接続を検証する層を独立させ、3種類を区別する。
-
-| 層 | 目的 | モック方針 |
+| 層 | 配置・命名 | 外部サービス |
 |---|---|---|
-| ユニットテスト | 個々の関数・クラス・コンポーネントのロジックを検証する | モック可 |
-| 統合（モジュール横断）テスト | ユニットではカバーできない、アプリ内の複数モジュールを横断するデータフローを検証する | 外部サービス境界はモック可（TAKTのユニット/インテグレーション基準に準拠） |
-| インテグレーションテスト | 実際の外部サービスに接続し、プロトコル互換性・実レスポンスを検証する | モック禁止（実接続必須） |
-| E2Eテスト | ユーザーの操作フロー全体を検証する | 外部サービス境界はモック可（TAKTのE2E基準に準拠） |
+| 単体テスト | Backend: `backend/tests/unit/`、Frontend: `*.unit.test.ts` | モック可 |
+| 結合テスト | Backend: `backend/tests/module/`、Frontend: `*.module.test.ts` | 境界をモック可 |
+| モックE2E | `frontend/e2e/` | Browser 内 Backend をモック |
+| インテグレーションテスト | Backend: `backend/tests/integration/test_*_integration.py`、Frontend: `frontend/integration/` | 実接続必須 |
 
-「モジュール横断のデータフロー検証」と「外部サービスへの実接続検証」は目的が異なるため、同じテストファイル・テスト名で両方を主張しない。インテグレーションテストを名乗るファイルは、外部サービスへの実接続を伴うものに限定する。
+「結合テスト」はアプリ内のモジュール横断を検証する。「インテグレーションテスト」は Ollama、ChromaDB、VOICEVOX、Whisper などの外部サービスへ実接続するテストだけを指す。Backend では ChromaDB と Ollama の実埋め込み API を使う RAG runtime evidence テストをインテグレーションテストとして実行する。
 
-ユニットテスト・統合テスト・E2Eテスト（いずれもモック使用）のみでは、外部サービスとの実連携が機能する一次証跡として扱わない。インテグレーションテストによる実接続の検証をもって、初めて「実際に外部サービスと連携して動作する」ことの一次証跡とする。
+モックを使用する単体・結合・E2Eテストの結果は、外部サービスとの実接続に成功した一次証跡として扱わない。
 
-## 対象となる外部サービス
+## Playwright スイート
 
-現時点でインテグレーションテストの対象となる外部サービス:
+| コマンド | 配置 | Profile | 要求Capability | 結果ディレクトリ |
+|---|---|---|---|---|
+| `npm run test:e2e:mocked` | `frontend/e2e/` | `test-mocked` | `mocked-e2e` | `frontend/test-results/mocked-e2e/` |
+| `npm run test:integration:text` | `frontend/integration/text/` | `integration-text` | `text-chat-real` | `frontend/test-results/integration-text/` |
+| `npm run test:integration:voice` | `frontend/integration/voice/` | `integration-voice` | `voice-chat-real` | `frontend/test-results/integration-voice/` |
 
-- Ollama（LLM推論）
-- ChromaDB（RAGベクトルストア）
-- VOICEVOX（TTS）
-- Whisper（STT）
+各設定は Profile、収集ディレクトリ、成果物の出力先を固定する。spec 内で環境変数や依存 mode によってモックと実接続を切り替えない。各 spec が受け入れる要求Capabilityは1つだけとする。実接続 spec では mock WebSocket、`page.route`、HARによる外部通信の置換を禁止する。
 
-BE/FEの結合を実接続で検証する場合は、BE側も実プロセスとして起動した上で接続する（BEをモックしたテストはインテグレーションテストと呼ばない）。
+## 実行入口
 
-## 命名・配置
+リポジトリルートから次を実行する。
 
-インテグレーションテストは、ファイル名・配置から実接続を行うテストであると分かるようにする。BE/FEで採用しているテストランナーが異なるため、命名規則はそれぞれの慣習に従う。
+```text
+npm run test:unit
+npm run test:module
+npm run test:integration:backend
+npm run test:e2e:mocked
+npm run test:integration:text
+npm run test:integration:voice
+```
 
-- **BE（pytest）**: `backend/tests/test_<対象>_integration.py`
-  - モックを用いた単体テスト・統合（モジュール横断）テスト: `test_<対象>.py`
-  - `_integration.py` は外部サービスへ実接続するテストのみに用いる。モジュール横断だが外部サービスをモックするテストには使わない
-- **FE（Playwright）**: `frontend/e2e/<対象>.spec.ts`
-  - 単体テスト: `frontend/src/**/*.test.ts`
-  - `e2e/` 配下はE2Eテストの置き場とする。外部サービス境界（BE本体を含む）をモックしてよいが、モックを使う E2E は `DS_PROFILE=test-mocked` で実行し、resolved report の Profile 名、全依存 mode、Capability をテスト結果へ添付する
-  - E2Eとは別に、実BEプロセス・実外部サービスへ接続する検証が必要な場合はインテグレーションテストとして書く
+`npm run test:integration:backend` は ChromaDB パッケージ、Ollama、`nomic-embed-text:latest` モデルを必要とする。
 
-## E2E の環境 Profile と証跡
+CI は単体テスト、結合テスト、モックE2E、型チェック、ビルドを実行する。実接続スイートは外部サービスを必要とするため自動実行せず、Pull Request の検証欄へローカル実行結果または未実行状態を記録する。
 
-E2E の環境構成は `DS_PROFILE` を一次情報とする。テストや Playwright 設定で Backend と外部依存の mock / real 構成を個別に決定しない。
+## Capability不足と失敗
 
-- `test-mocked` は browser mock Backend と `mocked-e2e` Capability を使用する
-- `integration-text` は実 Frontend / Backend / Ollama と `text-chat-real` Capability を使用する
-- `integration-voice` は実 Frontend / Backend / Ollama / VOICEVOX / Whisper と `voice-chat-real` Capability を使用する
-- E2E は `DS_PROFILE_REPORT` の resolved report を読み、必要な Capability がない場合は不足している依存 mode を理由として skip する
-- 実行証跡には Profile 名、6依存すべての mode、Capability を添付し、mock 使用の有無を resolved report から判定できるようにする
+スイートの要求Capabilityが resolved Profile にない場合、テストは不足Capabilityと解決済み依存を理由に `skip` する。スイートを明示的に開始した後の次の失敗は skip に変換しない。
 
-`VOICE_CHAT_E2E_BACKEND`、`CHAT_E2E_BACKEND`、`CHAT_E2E_BACKEND_ORIGIN`、`VOICE_CHAT_E2E_BACKEND_REPORT` は非推奨の互換入力であり、中央 resolver だけが Profile と report へ変換する。新しいテストでは使用しない。
+- Profile 解決失敗: `profile`
+- 環境準備・起動失敗: `preparation` または `startup`
+- readiness 失敗: `readiness`
+- Playwright テスト失敗: `test`
 
-## インテグレーションテストの要件
+環境ライフサイクルの詳細と失敗カテゴリは `environment-run.json` に保持する。
 
-- 外部サービスへの通信を `unittest.mock.patch`（BE）や `page.route` / モックWebSocket（FE）等でモックしてはならない
-- 接続先は環境変数で切り替え可能にする（例: `TEST_OLLAMA_BASE_URL`）
-  - 単体テスト・本番実装で使う `OLLAMA_BASE_URL` 等の環境変数とは分離する
-  - テスト専用の環境変数が未設定の場合は、そのテストを `skip` する
+## スイート別証跡
 
-## ローカル/CIでの実行方針
+各結果ディレクトリには次を保存し、別スイートの成果物を上書きしない。
 
-インテグレーションテストは、実接続先をローカルでのみ用意する想定とする。
+- `playwright-results.json`
+- `resolved-profile.json`
+- `environment-run.json`
+- `evidence.json`
 
-- **ローカル環境**: 開発者が起動済みの実サービス（Ollama等）にテスト専用の環境変数（`TEST_OLLAMA_BASE_URL` 等）で接続し、インテグレーションテストを実行する
-  - 具体的なサービス起動手順（VOICEVOXを含む音声系の実行方法を含む）は `docs/development-environment.md` の該当セクションを参照すること
-- **CI環境**: テスト専用の環境変数が未設定であることを前提とし、インテグレーションテストは自動的にスキップする（BE: `pytest.mark.skipif` 等、FE: `test.skip` 等）
-  - CI上での実サービスコンテナ起動（Ollama等）は現時点では行わない
-  - そのため、インテグレーションテストの実行・確認はPR作成前に開発者がローカルで責任を持って行う
-
-## 完了条件レポートにおける扱い
-
-PR等で「動作確認済み」と報告する場合、インテグレーションテストの実行ログ（実接続によるレスポンス内容を含む）を一次証跡として添付する。ユニットテスト・統合テスト・E2Eテスト（いずれもモック使用）の通過のみを根拠にしない。
+`evidence.json` は `suite`、`testLayer`、`profile`、`testStatus`、レポートの相対パスを記録する。`runId` は同じディレクトリの `environment-run.json` と一致しなければならず、Profile名も実行スイートと一致しなければならない。失敗時は `failureCategory` により Profile・環境・readiness・テストの失敗を区別する。

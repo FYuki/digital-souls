@@ -6,5 +6,10 @@
     "target": "ES2022",
     "types": ["node", "@playwright/test"]
   },
-  "include": ["e2e/**/*.ts"]
+  "include": [
+    "e2e/**/*.ts",
+    "integration/**/*.ts",
+    "playwright/**/*.ts",
+    "playwright.*.config.ts"
+  ]
 }

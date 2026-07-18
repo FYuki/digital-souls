@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 
-ROOT_DIR = Path(__file__).parent.parent.parent
+ROOT_DIR = Path(__file__).parent.parent.parent.parent
 
 
 def _copy_environment_runtime(tmp_path: Path) -> Path:
@@ -164,6 +164,57 @@ def test_should_allow_run_report_environment_override_through_up_cli(tmp_path: P
     env = {
         **os.environ,
         "DS_PROFILE": "missing-profile",
+        "DS_ENVIRONMENT_RUN_REPORT": str(report_path),
+    }
+
+    result = subprocess.run(
+        [str(environments / "up.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode != 0
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["failure"]["category"] == "profile"
+    assert report["status"] == "failed"
+
+
+def test_should_remove_previous_profile_report_before_profile_resolution(tmp_path: Path):
+    environments = _copy_environment_runtime(tmp_path)
+    report_path = tmp_path / "custom" / "environment-run.json"
+    profile_report_path = report_path.parent / "resolved-profile.json"
+    profile_report_path.parent.mkdir(parents=True)
+    profile_report_path.write_text('{"runId":"stale-run"}', encoding="utf-8")
+    env = {
+        **os.environ,
+        "DS_PROFILE": "missing-profile",
+        "DS_ENVIRONMENT_RUN_REPORT": str(report_path),
+    }
+
+    result = subprocess.run(
+        [str(environments / "up.sh")],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode != 0
+    assert not profile_report_path.exists()
+
+
+def test_should_record_profile_failure_when_previous_profile_report_cannot_be_removed(
+    tmp_path: Path,
+):
+    environments = _copy_environment_runtime(tmp_path)
+    report_path = tmp_path / "custom" / "environment-run.json"
+    profile_report_path = report_path.parent / "resolved-profile.json"
+    profile_report_path.mkdir(parents=True)
+    env = {
+        **os.environ,
+        "DS_PROFILE": "test-mocked",
         "DS_ENVIRONMENT_RUN_REPORT": str(report_path),
     }
 

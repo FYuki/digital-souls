@@ -7,9 +7,14 @@
     "dev": "vite",
     "check": "svelte-check --tsconfig ./tsconfig.json && tsc --noEmit -p ./tsconfig.e2e.json",
     "build": "vite build",
+    "install:browser": "playwright install --with-deps chromium",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:unit": "vitest run .unit.test.ts",
+    "test:module": "vitest run .module.test.ts",
+    "test:e2e:mocked": "playwright test --config playwright.mocked.config.ts",
+    "test:integration:text": "playwright test --config playwright.integration-text.config.ts",
+    "test:integration:voice": "playwright test --config playwright.integration-voice.config.ts"
   },
   "dependencies": {
     "@ricky0123/vad-web": "^0.0.30",

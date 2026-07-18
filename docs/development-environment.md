@@ -72,7 +72,7 @@ DS_PROFILE=test-mocked scripts/start-voice-chat-e2e.sh
 | `integration-text` | 実テキストチャット | Frontend、Backend、Ollama |
 | `integration-voice` | 実音声チャット | Frontend、Backend、Ollama、VOICEVOX、Whisper |
 
-起動スクリプトはサービス起動前に中央 resolver で Profile を検証する。`scripts/start-all.sh` の既定出力先は `.runtime/environments/<run-id>/resolved-profile.json` で、Playwright 経由の `scripts/start-voice-chat-e2e.sh` は `frontend/test-results/resolved-profile.json` を使用する。この report には選択元、6依存の解決済み `mode` / `source` / 接続先、Capability、子プロセスへ渡す `derivedEnvironment` が記録される。`DS_PROFILE_REPORT` を指定すると出力先を変更できる。
+起動スクリプトはサービス起動前に中央 resolver で Profile を検証する。`scripts/start-all.sh` の既定出力先は `.runtime/environments/<run-id>/resolved-profile.json` である。Playwright はスイート別入口 `npm run test:e2e:mocked`、`npm run test:integration:text`、`npm run test:integration:voice` を使用し、それぞれ `frontend/test-results/mocked-e2e/resolved-profile.json`、`frontend/test-results/integration-text/resolved-profile.json`、`frontend/test-results/integration-voice/resolved-profile.json` に保存する。この report には選択元、6依存の解決済み `mode` / `source` / 接続先、Capability、子プロセスへ渡す `derivedEnvironment` が記録される。`scripts/start-all.sh` では `DS_PROFILE_REPORT` を指定すると出力先を変更できる。
 
 `derivedEnvironment` の `OLLAMA_BASE_URL`、`VOICEVOX_BASE_URL`、`RAG_ENABLED`、`DS_BACKEND_ORIGIN` は resolver の解決結果から起動対象へ渡される。Backend は `backend/.env` の実行時設定も読み込むが、この4項目は読み込み後に resolved report の値を再適用するため、Profile の構成が優先される。
 
