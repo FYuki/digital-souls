@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
+from environment_constants import DEPENDENCY_NAMES
 from tests.environment_test_support import (
-    DEPENDENCY_NAMES,
     orchestrator_identity,
     resolved_profile,
 )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import subprocess
 from copy import deepcopy
 from pathlib import Path
@@ -10,7 +11,130 @@ import pytest
 
 from tests.environment_entrypoint_test_support import (
     copy_environment_runtime as _copy_environment_runtime,
+    write_executable,
 )
+
+
+_SUCCESS_PROFILE = "test-verify-safe"
+_SUCCESS_CLASSIFICATIONS = {
+    "frontend": "disabled",
+    "backend": "browser",
+    "ollama": "disabled",
+    "voicevox": "disabled",
+    "whisper": "disabled",
+    "chroma": "disabled",
+}
+
+
+def _write_success_profile(environments: Path) -> None:
+    disabled = {"mode": "disabled", "source": None}
+    profile = {
+        "schemaVersion": 1,
+        "name": _SUCCESS_PROFILE,
+        "description": "外部サービスを使わないverify entrypointテスト",
+        "dependencies": {
+            "frontend": disabled,
+            "backend": {"mode": "mock", "source": "browser"},
+            "ollama": disabled,
+            "voicevox": disabled,
+            "whisper": disabled,
+            "chroma": disabled,
+        },
+    }
+    profile_path = environments / "profiles" / f"{_SUCCESS_PROFILE}.json"
+    profile_path.write_text(json.dumps(profile), encoding="utf-8")
+
+
+def _run_successful_verify(
+    environments: Path,
+    env: dict[str, str],
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            str(environments / "verify.sh"),
+            "--default-profile",
+            _SUCCESS_PROFILE,
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+
+def _tree_snapshot(root: Path) -> dict[str, tuple[int, int, int, bytes]]:
+    snapshot: dict[str, tuple[int, int, int, bytes]] = {}
+    for path in root.rglob("*"):
+        metadata = path.lstat()
+        content = path.read_bytes() if path.is_file() else b""
+        snapshot[str(path.relative_to(root))] = (
+            stat.S_IFMT(metadata.st_mode),
+            stat.S_IMODE(metadata.st_mode),
+            metadata.st_mtime_ns,
+            content,
+        )
+    return snapshot
+
+
+def test_should_detect_file_timestamp_changes_in_tree_snapshot(tmp_path: Path):
+    target = tmp_path / "unchanged-content.txt"
+    target.write_text("unchanged", encoding="utf-8")
+    before = _tree_snapshot(tmp_path)
+    metadata = target.stat()
+
+    os.utime(
+        target,
+        ns=(metadata.st_atime_ns, metadata.st_mtime_ns + 1_000_000_000),
+    )
+
+    assert target.read_text(encoding="utf-8") == "unchanged"
+    assert stat.S_IMODE(target.stat().st_mode) == stat.S_IMODE(metadata.st_mode)
+    assert _tree_snapshot(tmp_path) != before
+
+
+def test_should_select_cli_default_profile_through_verify_entrypoint(tmp_path: Path):
+    environments = _copy_environment_runtime(tmp_path)
+    _write_success_profile(environments)
+
+    result = _run_successful_verify(
+        environments,
+        {"PATH": os.environ["PATH"]},
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["effectiveProfile"] == _SUCCESS_PROFILE
+    assert {
+        name: service["classification"]
+        for name, service in payload["services"].items()
+    } == _SUCCESS_CLASSIFICATIONS
+
+
+def test_should_not_run_mutating_commands_or_change_files_during_verify(
+    tmp_path: Path,
+):
+    environments = _copy_environment_runtime(tmp_path)
+    _write_success_profile(environments)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    command_log = tmp_path / "mutating-command.log"
+    for command in ("npm", "pip", "pip3", "docker"):
+        write_executable(
+            bin_dir / command,
+            f'printf "%s\\n" "{command} $*" >> "{command_log}"\nexit 97\n',
+        )
+    before = _tree_snapshot(tmp_path)
+
+    result = _run_successful_verify(
+        environments,
+        {"PATH": f"{bin_dir}:{os.environ['PATH']}"},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not command_log.exists()
+    assert _tree_snapshot(tmp_path) == before
+
+
 def test_should_verify_without_creating_files_or_running_mutating_commands(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -19,8 +143,10 @@ def test_should_verify_without_creating_files_or_running_mutating_commands(
     import commands.verify_command as verify_command
     from adapters.base import Check, ReadinessValidationResult, VerificationResult
     from http_readiness import ReadinessResult
-    from service_registry import ServiceRegistration, ServiceRegistry
-    from tests.environment_test_support import DEPENDENCY_NAMES, profile_with_dependencies
+    from tests.environment_test_support import (
+        profile_with_dependencies,
+        single_adapter_registry,
+    )
 
     class NonMutatingOperations:
         def verify(self, dependency, context):
@@ -57,18 +183,7 @@ def test_should_verify_without_creating_files_or_running_mutating_commands(
         chroma=disabled,
     )
     operations = NonMutatingOperations()
-    registry = ServiceRegistry(
-        services={
-            name: ServiceRegistration(
-                name,
-                operations if name == "frontend" else None,
-                "backend" if name in {"whisper", "chroma"} else None,
-            )
-            for name in DEPENDENCY_NAMES
-        },
-        prepare_order=("frontend",),
-        start_order=("frontend",),
-    )
+    registry = single_adapter_registry("frontend", operations)
     monkeypatch.setattr(
         verify_command, "resolve_profile", lambda environment, default: profile
     )

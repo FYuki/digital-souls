@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from tests.environment_test_support import DEPENDENCY_NAMES, resolved_profile
+from environment_constants import DEPENDENCY_NAMES
+from tests.environment_test_support import resolved_profile
 
 
 def test_should_register_adapters_and_dependency_order_in_one_registry(tmp_path: Path):

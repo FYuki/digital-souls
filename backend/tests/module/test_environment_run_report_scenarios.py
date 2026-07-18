@@ -6,7 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from tests.environment_test_support import DEPENDENCY_NAMES, profile_with_dependencies
+from environment_constants import DEPENDENCY_NAMES
+from tests.environment_test_support import (
+    profile_with_dependencies,
+    single_adapter_registry,
+)
 
 
 class _NeverReadyOperations:
@@ -59,23 +63,6 @@ class _ExitedFrontendOperations(_NeverReadyOperations):
         return False
 
 
-def _frontend_registry(adapter: _NeverReadyOperations):
-    from service_registry import ServiceRegistration, ServiceRegistry
-
-    return ServiceRegistry(
-        services={
-            name: ServiceRegistration(
-                name,
-                adapter if name == "frontend" else None,
-                "backend" if name in {"whisper", "chroma"} else None,
-            )
-            for name in DEPENDENCY_NAMES
-        },
-        prepare_order=("frontend",),
-        start_order=("frontend",),
-    )
-
-
 def test_should_persist_schema_valid_readiness_timeout_from_up_command(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -109,7 +96,7 @@ def test_should_persist_schema_valid_readiness_timeout_from_up_command(
         tmp_path,
         tmp_path / ".runtime",
         arguments,
-        registry=_frontend_registry(adapter),
+        registry=single_adapter_registry("frontend", adapter),
         timing=EnvironmentTiming(
             readiness_attempts=2,
             readiness_interval_seconds=0,
@@ -164,7 +151,7 @@ def test_should_persist_managed_exit_as_schema_valid_supervision_failure(
         tmp_path,
         tmp_path / ".runtime",
         arguments,
-        registry=_frontend_registry(adapter),
+        registry=single_adapter_registry("frontend", adapter),
         timing=EnvironmentTiming(
             readiness_attempts=1,
             readiness_interval_seconds=0,
@@ -197,8 +184,7 @@ def test_should_record_failed_teardown_when_voicevox_rollback_fails(
     import environment_runtime
     from adapters.voicevox import VoicevoxAdapter
     from http_readiness import ReadinessResult
-    from service_registry import ServiceRegistration, ServiceRegistry
-    from tests.environment_test_support import DEPENDENCY_NAMES, RecordingRunner, resolved_profile
+    from tests.environment_test_support import RecordingRunner, resolved_profile
 
     profile = resolved_profile()
     dependencies = {
@@ -234,18 +220,7 @@ def test_should_record_failed_teardown_when_voicevox_rollback_fails(
         ]
     )
     adapter = VoicevoxAdapter(tmp_path, runner)
-    registry = ServiceRegistry(
-        services={
-            name: ServiceRegistration(
-                name,
-                adapter if name == "voicevox" else None,
-                "backend" if name in {"whisper", "chroma"} else None,
-            )
-            for name in DEPENDENCY_NAMES
-        },
-        prepare_order=("voicevox",),
-        start_order=("voicevox",),
-    )
+    registry = single_adapter_registry("voicevox", adapter)
     report_path = tmp_path / "environment-run.json"
     monkeypatch.setattr(
         up_command,

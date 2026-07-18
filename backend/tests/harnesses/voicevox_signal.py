@@ -20,7 +20,7 @@ from adapters.base import (  # noqa: E402
 from commands.voicevox_command import start_voicevox  # noqa: E402
 from environment_timing import EnvironmentTiming  # noqa: E402
 from http_readiness import ReadinessResult  # noqa: E402
-from service_registry import ServiceRegistration, ServiceRegistry  # noqa: E402
+from tests.environment_test_support import single_adapter_registry  # noqa: E402
 
 
 class SignalVoicevox:
@@ -55,20 +55,8 @@ class SignalVoicevox:
         return StopResult("stopped")
 
 
-names = ("frontend", "backend", "ollama", "voicevox", "whisper", "chroma")
 adapter = SignalVoicevox()
-registry = ServiceRegistry(
-    {
-        name: ServiceRegistration(
-            name,
-            adapter if name == "voicevox" else None,
-            "backend" if name in {"whisper", "chroma"} else None,
-        )
-        for name in names
-    },
-    ("voicevox",),
-    ("voicevox",),
-)
+registry = single_adapter_registry("voicevox", adapter)
 raise SystemExit(
     start_voicevox(
         root,

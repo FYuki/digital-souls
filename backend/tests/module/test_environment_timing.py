@@ -6,7 +6,10 @@ from pathlib import Path
 import pytest
 
 import tests.environment_test_support
-from tests.environment_test_support import DEPENDENCY_NAMES, profile_with_dependencies
+from tests.environment_test_support import (
+    profile_with_dependencies,
+    single_adapter_registry,
+)
 
 
 def test_should_expose_documented_environment_timing_defaults():
@@ -103,23 +106,6 @@ class _TimingProbeOperations:
         raise AssertionError("stop is outside this timing contract")
 
 
-def _timing_registry(adapter: _TimingProbeOperations):
-    from service_registry import ServiceRegistration, ServiceRegistry
-
-    return ServiceRegistry(
-        services={
-            name: ServiceRegistration(
-                name,
-                adapter if name == "frontend" else None,
-                "backend" if name in {"whisper", "chroma"} else None,
-            )
-            for name in DEPENDENCY_NAMES
-        },
-        prepare_order=("frontend",),
-        start_order=("frontend",),
-    )
-
-
 @pytest.mark.parametrize("missing_dependency", ["registry", "timing"])
 def test_should_require_resolved_runtime_dependencies(
     missing_dependency: str, tmp_path: Path
@@ -134,7 +120,7 @@ def test_should_require_resolved_runtime_dependencies(
         "report": {},
         "ready_gate_url": "http://127.0.0.1:0/ready",
         "was_interrupted": lambda: False,
-        "registry": _timing_registry(_TimingProbeOperations()),
+        "registry": single_adapter_registry("frontend", _TimingProbeOperations()),
         "timing": EnvironmentTiming(),
     }
     del options[missing_dependency]
@@ -182,7 +168,7 @@ def test_should_apply_one_timing_object_to_verification_preprobe_and_readiness(
         report=report,
         ready_gate_url="http://127.0.0.1:0/ready",
         was_interrupted=lambda: False,
-        registry=_timing_registry(adapter),
+        registry=single_adapter_registry("frontend", adapter),
         timing=timing,
     )
 
@@ -231,7 +217,7 @@ def test_should_apply_injected_supervision_interval(
         report=report,
         ready_gate_url="http://127.0.0.1:0/ready",
         was_interrupted=lambda: interrupted,
-        registry=_timing_registry(_TimingProbeOperations()),
+        registry=single_adapter_registry("frontend", _TimingProbeOperations()),
         timing=EnvironmentTiming(supervision_interval_seconds=0.125),
     )
 

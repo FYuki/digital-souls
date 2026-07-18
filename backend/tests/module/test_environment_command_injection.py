@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.environment_test_support import DEPENDENCY_NAMES, resolved_profile
+from tests.environment_test_support import resolved_profile, single_adapter_registry
 
 
 def test_should_pass_injected_registry_and_timing_from_up_command_to_runtime(
@@ -121,23 +121,6 @@ class _ReadyVoicevoxOperations:
         raise AssertionError("a reused service must not be stopped")
 
 
-def _voicevox_registry(adapter: _ReadyVoicevoxOperations):
-    from service_registry import ServiceRegistration, ServiceRegistry
-
-    return ServiceRegistry(
-        services={
-            name: ServiceRegistration(
-                name,
-                adapter if name == "voicevox" else None,
-                "backend" if name in {"whisper", "chroma"} else None,
-            )
-            for name in DEPENDENCY_NAMES
-        },
-        prepare_order=("voicevox",),
-        start_order=("voicevox",),
-    )
-
-
 def test_should_use_injected_registry_probe_and_timing_for_voicevox_command(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
@@ -145,7 +128,7 @@ def test_should_use_injected_registry_probe_and_timing_for_voicevox_command(
     from environment_timing import EnvironmentTiming
 
     adapter = _ReadyVoicevoxOperations()
-    registry = _voicevox_registry(adapter)
+    registry = single_adapter_registry("voicevox", adapter)
     timing = EnvironmentTiming(
         readiness_attempts=1,
         readiness_interval_seconds=0,
