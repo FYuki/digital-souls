@@ -65,6 +65,8 @@ def up_environment(
                 orchestrator_identity=orchestrator_identity,
             )
             store.save(report)
+        paths.profile_report.unlink(missing_ok=True)
+        paths.legacy_report.unlink(missing_ok=True)
         profile = resolve_and_write_profile(
             dict(os.environ),
             arguments.default_profile,

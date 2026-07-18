@@ -47,16 +47,16 @@ export const readResolvedProfile = async (): Promise<ResolvedProfile> => {
 
 export const getCapabilitySkipReason = (
   report: ResolvedProfile,
-  acceptedCapabilities: readonly Capability[],
+  requiredCapability: Capability,
 ): string | null => {
-  if (acceptedCapabilities.some((capability) => report.capabilities.includes(capability))) {
+  if (report.capabilities.includes(requiredCapability)) {
     return null
   }
   const dependencyModes = DEPENDENCY_NAMES.map((name) =>
     `${name}=${report.dependencies[name].mode}/${String(report.dependencies[name].source)}`
   )
   return [
-    `profile ${report.effectiveProfile} lacks required capabilities: ${acceptedCapabilities.join(', ')}`,
+    `profile ${report.effectiveProfile} lacks required capability: ${requiredCapability}`,
     `resolved dependencies: ${dependencyModes.join(', ')}`,
   ].join('; ')
 }

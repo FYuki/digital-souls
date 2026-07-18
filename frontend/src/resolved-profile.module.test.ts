@@ -11,7 +11,7 @@ import {
   attachProfileEvidence,
   getCapabilitySkipReason,
   readResolvedProfile,
-} from '../e2e/resolved-profile'
+} from '../playwright/resolved-profile'
 import { DEPENDENCY_NAMES, parseResolvedProfile } from '../resolved-profile'
 
 type DependencyMode = 'real' | 'mock' | 'disabled'
@@ -165,23 +165,22 @@ describe('resolved profile reader', () => {
     expect(report.capabilities).toEqual(['text-chat-real'])
   })
 
-  test('should return no skip reason when an accepted capability is present', async () => {
+  test('should return no skip reason when the one required capability is present', async () => {
     await writeReport(createReport())
     const report = await readResolvedProfile()
 
-    const reason = getCapabilitySkipReason(report, ['mocked-e2e', 'voice-chat-real'])
+    const reason = getCapabilitySkipReason(report, 'voice-chat-real')
 
     expect(reason).toBeNull()
   })
 
-  test('should explain profile and missing alternatives when capability is unavailable', async () => {
+  test('should identify the one missing capability and resolved dependencies', async () => {
     await writeReport(createIntegrationTextReport())
     const report = await readResolvedProfile()
 
-    const reason = getCapabilitySkipReason(report, ['mocked-e2e', 'voice-chat-real'])
+    const reason = getCapabilitySkipReason(report, 'voice-chat-real')
 
     expect(reason).toContain('integration-text')
-    expect(reason).toContain('mocked-e2e')
     expect(reason).toContain('voice-chat-real')
     expect(reason).toContain('backend=real/managed')
     expect(reason).toContain('voicevox=disabled/null')
@@ -225,10 +224,15 @@ describe('resolved profile reader', () => {
     const runnerDir = await mkdtemp(join(process.cwd(), '.profile-evidence-'))
     const configPath = join(runnerDir, 'playwright.config.mjs')
     const specPath = join(runnerDir, 'skipped.spec.ts')
-    await writeFile(configPath, `export default { testDir: ${JSON.stringify(runnerDir)}, reporter: 'json' }`, 'utf-8')
+    const artifactPath = join(runnerDir, 'artifacts')
+    await writeFile(
+      configPath,
+      `export default { testDir: ${JSON.stringify(runnerDir)}, outputDir: ${JSON.stringify(artifactPath)}, reporter: 'json' }`,
+      'utf-8',
+    )
     await writeFile(specPath, `
       import { test } from '@playwright/test'
-      import { attachProfileEvidence } from '../e2e/resolved-profile'
+      import { attachProfileEvidence } from '../playwright/resolved-profile'
       const report = ${JSON.stringify(createReport())}
       test.beforeEach(async ({}, testInfo) => attachProfileEvidence(testInfo, report))
       test('skipped profile', () => test.skip(true, 'capability unavailable'))

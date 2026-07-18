@@ -19,7 +19,7 @@ def test_should_import_concrete_adapters_with_backend_package_contract():
     assert OllamaAdapter.__name__ == "OllamaAdapter"
 
 
-ROOT_DIR = Path(__file__).parent.parent.parent
+ROOT_DIR = Path(__file__).parent.parent.parent.parent
 OPERATION_CONTEXT = OperationContext(whisper_enabled=False, chroma_enabled=False)
 
 

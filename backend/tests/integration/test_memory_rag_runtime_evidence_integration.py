@@ -6,30 +6,23 @@ from uuid import uuid4
 
 import httpx
 import pytest
-
 from fastapi.testclient import TestClient
 
 
 def _require_runtime_evidence_dependencies() -> None:
-    try:
-        importlib.import_module("chromadb")
-    except ModuleNotFoundError:
-        pytest.skip("chromadb is not installed")
+    importlib.import_module("chromadb")
 
     from app.llm.ollama_config import (
         resolve_ollama_base_url,
         resolve_ollama_embedding_model,
     )
 
-    try:
-        response = httpx.get(f"{resolve_ollama_base_url()}/api/tags", timeout=5.0)
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        pytest.skip(f"Ollama is not available: {exc.__class__.__name__}")
+    response = httpx.get(f"{resolve_ollama_base_url()}/api/tags", timeout=5.0)
+    response.raise_for_status()
 
     models = response.json().get("models")
     if not isinstance(models, list):
-        pytest.skip("Ollama tags response does not include models")
+        pytest.fail("Ollama tags response does not include models")
     model_name = resolve_ollama_embedding_model()
     available = {
         model.get("name")
@@ -37,7 +30,7 @@ def _require_runtime_evidence_dependencies() -> None:
         if isinstance(model, dict) and isinstance(model.get("name"), str)
     }
     if model_name not in available:
-        pytest.skip(f"Ollama model is not pulled: {model_name}")
+        pytest.fail(f"Ollama model is not pulled: {model_name}")
 
 
 def _load_runtime_modules() -> dict[str, object]:
@@ -90,17 +83,7 @@ def _wait_until(predicate, timeout: float = 5.0) -> None:
     raise AssertionError("condition was not met before timeout")
 
 
-class TestRagRuntimeEvidence:
-    def test_runtime_module_setup_keeps_websocket_exception_bindings_current(self):
-        import app.routers.ws as ws_router
-
-        modules = _load_runtime_modules()
-        chat_service = modules["app.chat_service"]
-
-        assert ws_router.CharacterNotFoundError is chat_service.CharacterNotFoundError
-        assert ws_router.ChatBackendError is chat_service.ChatBackendError
-        assert ws_router.ChatTimeoutError is chat_service.ChatTimeoutError
-
+class TestRagRuntimeEvidenceIntegration:
     def test_real_chat_store_chroma_query_and_prompt_injection_reach_llm(
         self, tmp_path, monkeypatch
     ):

@@ -1,0 +1,14 @@
+{
+  "name": "digital-souls",
+  "private": true,
+  "scripts": {
+    "test:unit": "python3 -m pytest backend/tests/unit && npm --prefix frontend run test:unit",
+    "test:module": "python3 -m pytest backend/tests/module && npm --prefix frontend run test:module",
+    "test:integration:backend": "python3 -m pytest backend/tests/integration",
+    "test:e2e:mocked": "npm --prefix frontend run test:e2e:mocked",
+    "test:integration:text": "npm --prefix frontend run test:integration:text",
+    "test:integration:voice": "npm --prefix frontend run test:integration:voice",
+    "check": "python3 -m mypy --config-file backend/mypy.ini backend/app environments && npm --prefix frontend run check",
+    "build": "npm --prefix frontend run build"
+  }
+}

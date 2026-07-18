@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 
-ROOT_DIR = Path(__file__).parent.parent.parent
+ROOT_DIR = Path(__file__).parent.parent.parent.parent
 ENVIRONMENTS_DIR = ROOT_DIR / "environments"
 
 

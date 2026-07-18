@@ -10,7 +10,7 @@ import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
 
-ROOT_DIR = Path(__file__).parent.parent.parent
+ROOT_DIR = Path(__file__).parent.parent.parent.parent
 ENVIRONMENTS_DIR = ROOT_DIR / "environments"
 DEPENDENCY_NAMES = ["frontend", "backend", "ollama", "voicevox", "whisper", "chroma"]
 

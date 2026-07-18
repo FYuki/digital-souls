@@ -15,7 +15,7 @@ from tests.environment_test_support import (
 )
 
 
-ROOT_DIR = Path(__file__).parent.parent.parent
+ROOT_DIR = Path(__file__).parent.parent.parent.parent
 ENVIRONMENTS_DIR = ROOT_DIR / "environments"
 
 
