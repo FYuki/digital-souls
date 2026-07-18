@@ -2,17 +2,12 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
-import sys
 from typing import cast
+
+from profile_types import ResolvedDependencies, ResolvedDependency, ResolvedReport
 
 
 DEPENDENCY_NAMES = ("frontend", "backend", "ollama", "voicevox", "whisper", "chroma")
-ENVIRONMENTS_DIR = Path(__file__).parent.parent.parent / "environments"
-if str(ENVIRONMENTS_DIR) not in sys.path:
-    sys.path.insert(0, str(ENVIRONMENTS_DIR))
-
-
-from profile_types import ResolvedDependencies, ResolvedDependency, ResolvedReport
 
 
 def orchestrator_identity() -> dict[str, int]:
