@@ -115,6 +115,20 @@ describe('Playwright suite evidence reporter', () => {
         profile: { name: 'integration-text' },
       },
     },
+    {
+      category: 'supervision',
+      effectiveProfile: {
+        effectiveProfile: 'integration-text',
+        profile: { name: 'integration-text' },
+      },
+    },
+    {
+      category: 'teardown',
+      effectiveProfile: {
+        effectiveProfile: 'integration-text',
+        profile: { name: 'integration-text' },
+      },
+    },
   ])('preserves an existing $category environment failure category', async ({
     category,
     effectiveProfile,

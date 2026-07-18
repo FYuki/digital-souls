@@ -74,7 +74,7 @@ export const createSuiteConfig = (suiteName: SuiteName): PlaywrightTestConfig =>
       : [
           ['list'],
           ['json', { outputFile: join(suite.resultDir, 'playwright-results.json') }],
-          ['./playwright/suite-reporter.ts', {
+          ['./playwright/suite-reporter-entrypoint.ts', {
             suite: suite.suite,
           }],
         ],

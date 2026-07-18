@@ -76,7 +76,7 @@ describe('suite-specific Playwright configuration', () => {
     expect(process.env.DS_ENVIRONMENT_RUN_REPORT).toBe(join(resultDir, 'environment-run.json'))
     expect(config.reporter).toEqual(expect.arrayContaining([
       ['json', { outputFile: join(resultDir, 'playwright-results.json') }],
-      ['./playwright/suite-reporter.ts', {
+      ['./playwright/suite-reporter-entrypoint.ts', {
         suite: suite.suite,
       }],
     ]))
