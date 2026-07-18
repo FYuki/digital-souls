@@ -6,6 +6,8 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 
 const playwrightConfigSourcePath = join(process.cwd(), 'playwright.config.ts')
 const originalProfileReport = process.env.DS_PROFILE_REPORT
+const originalEnvironmentRunReport = process.env.DS_ENVIRONMENT_RUN_REPORT
+const originalEnvironmentReadyUrl = process.env.DS_ENVIRONMENT_READY_URL
 
 const restoreEnv = (envName: string, value: string | undefined) => {
   if (value === undefined) {
@@ -22,7 +24,12 @@ const loadPlaywrightConfig = async (argv: string[]) => {
   const configUrl = `${pathToFileURL(playwrightConfigSourcePath).href}?test=${randomUUID()}`
   const module = await import(configUrl)
 
-  return module.default as { testDir?: unknown; webServer?: unknown; workers?: unknown }
+  return module.default as {
+    testDir?: unknown
+    webServer?: unknown
+    workers?: unknown
+    reporter?: unknown
+  }
 }
 
 describe('Playwright voice chat webServer configuration', () => {
@@ -30,6 +37,8 @@ describe('Playwright voice chat webServer configuration', () => {
     process.argv = ['node', 'playwright', 'test']
     vi.unstubAllEnvs()
     restoreEnv('DS_PROFILE_REPORT', originalProfileReport)
+    restoreEnv('DS_ENVIRONMENT_RUN_REPORT', originalEnvironmentRunReport)
+    restoreEnv('DS_ENVIRONMENT_READY_URL', originalEnvironmentReadyUrl)
     vi.resetModules()
   })
 
@@ -42,7 +51,35 @@ describe('Playwright voice chat webServer configuration', () => {
         command: '../scripts/start-voice-chat-e2e.sh',
         reuseExistingServer: false,
         timeout: 600_000,
+        url: 'http://127.0.0.1:4174/ready',
       }),
+    )
+  })
+
+  test('requests graceful SIGTERM shutdown with enough time for environment cleanup', async () => {
+    const config = await loadPlaywrightConfig(['node', 'playwright', 'test'])
+
+    expect(config.webServer).toEqual(
+      expect.objectContaining({
+        command: '../scripts/start-voice-chat-e2e.sh',
+        gracefulShutdown: {
+          signal: 'SIGTERM',
+          timeout: 60_000,
+        },
+        reuseExistingServer: false,
+        timeout: 600_000,
+        url: 'http://127.0.0.1:4174/ready',
+      }),
+    )
+  })
+
+  test('waits for the configured all-services readiness gate', async () => {
+    vi.stubEnv('DS_ENVIRONMENT_READY_URL', 'http://127.0.0.1:4317/all-ready')
+
+    const config = await loadPlaywrightConfig(['node', 'playwright', 'test'])
+
+    expect(config.webServer).toEqual(
+      expect.objectContaining({ url: 'http://127.0.0.1:4317/all-ready' }),
     )
   })
 
@@ -109,6 +146,26 @@ describe('Playwright voice chat webServer configuration', () => {
     await loadPlaywrightConfig(['node', 'playwright', 'test'])
 
     expect(process.env.DS_PROFILE_REPORT).toBe('/tmp/custom-profile-report.json')
+  })
+
+  test('sets environment run report path for the shared startup boundary', async () => {
+    const config = await loadPlaywrightConfig(['node', 'playwright', 'test'])
+
+    expect(process.env.DS_ENVIRONMENT_RUN_REPORT).toBe(
+      join(process.cwd(), 'test-results', 'environment-run.json'),
+    )
+    expect(config.reporter).toEqual([
+      ['list'],
+      ['./e2e/environment-run-reporter.ts'],
+    ])
+  })
+
+  test('preserves explicit environment run report path', async () => {
+    vi.stubEnv('DS_ENVIRONMENT_RUN_REPORT', '/tmp/custom-environment-run.json')
+
+    await loadPlaywrightConfig(['node', 'playwright', 'test'])
+
+    expect(process.env.DS_ENVIRONMENT_RUN_REPORT).toBe('/tmp/custom-environment-run.json')
   })
 
 })

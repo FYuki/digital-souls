@@ -5,8 +5,7 @@ import httpx
 
 from app.llm.base import LLMClient
 from app.llm.ollama_config import ollama_endpoint, ollama_timeout
-
-_MODEL = "gemma4:e4b"
+from app.model_settings import OLLAMA_MODEL_NAME
 
 
 def _as_object_mapping(value: object, field_name: str) -> Mapping[str, object]:
@@ -27,7 +26,7 @@ def _extract_message_content(response_body: object) -> str:
 class OllamaClient(LLMClient):
     def generate(self, system_prompt: str, user_message: str) -> str:
         payload = {
-            "model": _MODEL,
+            "model": OLLAMA_MODEL_NAME,
             "stream": False,
             "messages": [
                 {"role": "system", "content": system_prompt},

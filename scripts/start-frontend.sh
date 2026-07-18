@@ -9,8 +9,8 @@ profile_use_resolved_report_or_resolve "dev"
 profile_require_managed_dependency frontend
 
 if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
-  echo "node_modules not found, running npm install..."
-  npm install --prefix "$FRONTEND_DIR"
+  echo "ERROR: frontend dependencies are missing. Run environments/up.sh to prepare them." >&2
+  exit 1
 fi
 
-npm run dev --prefix "$FRONTEND_DIR"
+exec npm run dev --prefix "$FRONTEND_DIR"

@@ -72,7 +72,7 @@ DS_PROFILE=test-mocked scripts/start-voice-chat-e2e.sh
 | `integration-text` | 実テキストチャット | Frontend、Backend、Ollama |
 | `integration-voice` | 実音声チャット | Frontend、Backend、Ollama、VOICEVOX、Whisper |
 
-起動スクリプトはサービス起動前に中央 resolver で Profile を検証し、既定では `frontend/test-results/resolved-profile.json` を生成する。この report には選択元、6依存の解決済み `mode` / `source` / 接続先、Capability、子プロセスへ渡す `derivedEnvironment` が記録される。`DS_PROFILE_REPORT` を指定すると出力先を変更できる。
+起動スクリプトはサービス起動前に中央 resolver で Profile を検証する。`scripts/start-all.sh` の既定出力先は `.runtime/environments/<run-id>/resolved-profile.json` で、Playwright 経由の `scripts/start-voice-chat-e2e.sh` は `frontend/test-results/resolved-profile.json` を使用する。この report には選択元、6依存の解決済み `mode` / `source` / 接続先、Capability、子プロセスへ渡す `derivedEnvironment` が記録される。`DS_PROFILE_REPORT` を指定すると出力先を変更できる。
 
 `derivedEnvironment` の `OLLAMA_BASE_URL`、`VOICEVOX_BASE_URL`、`RAG_ENABLED`、`DS_BACKEND_ORIGIN` は resolver の解決結果から起動対象へ渡される。Backend は `backend/.env` の実行時設定も読み込むが、この4項目は読み込み後に resolved report の値を再適用するため、Profile の構成が優先される。
 
@@ -98,12 +98,12 @@ VOICEVOX コンテナが未作成の場合、`dev` または `integration-voice`
 | `scripts/start-backend.sh` | `.venv` と `backend/.env` を読み、FastAPI を `uvicorn --reload` で起動する |
 | `scripts/start-frontend.sh` | Frontend 開発サーバーを起動する |
 | `scripts/start-ollama.sh` | `ollama serve` を起動する |
-| `scripts/start-voicevox.sh` | Profile から渡された `VOICEVOX_BASE_URL` を使い、`voicevox_engine` コンテナを起動して `/version` を確認する。単体起動でも `backend/.env` 読み込み後に Profile の接続先を再適用する |
+| `scripts/start-voicevox.sh` | `dev` Profile の VOICEVOX adapter だけを起動する単体入口 |
 | `scripts/start-voice-chat-e2e.sh` | 音声チャット E2E 用。`DS_PROFILE` 未指定時は `integration-voice` を選択し、`test-mocked` では Frontend のみを起動する |
 
 `scripts/start-backend.sh` は仮想環境の作成や依存インストールを自動実行しない。初回または依存関係の更新時は `scripts/setup-backend.sh` を別に実行する。セットアップ失敗は `Backend setup failed` と失敗工程、起動環境の不足は `start-backend.sh` の対象ファイル名を含むエラーで判別できる。Backend プロセスの起動後は、その終了ステータスが呼び出し元へ伝播する。
 
-Backend 単体起動では Ollama や VOICEVOX を準備・起動しない。音声チャットを実際に使う場合は、事前に `scripts/start-voicevox.sh` または `scripts/start-all.sh` で VOICEVOX を起動する。開発用の `scripts/start-all.sh` と実 Backend を使う E2E 用の `scripts/start-voice-chat-e2e.sh` は、どちらも準備段階で `scripts/setup-backend.sh` を実行し、起動段階で共通の `scripts/start-backend.sh` を使う。
+Backend 単体起動では Ollama や VOICEVOX を準備・起動しない。VOICEVOX だけを起動する場合は `scripts/start-voicevox.sh`、音声チャットの全依存を起動する場合は `scripts/start-all.sh` を使う。開発用の `scripts/start-all.sh` と実 Backend を使う E2E 用の `scripts/start-voice-chat-e2e.sh` は、どちらも準備段階で `scripts/setup-backend.sh` を実行し、起動段階で共通の `scripts/start-backend.sh` を使う。
 
 ## 音声チャットの依存関係
 
@@ -111,9 +111,10 @@ Backend 単体起動では Ollama や VOICEVOX を準備・起動しない。音
 
 - TTS は `VOICEVOX_BASE_URL` を参照し、未設定または空文字時は `http://localhost:50021` に接続する
 - `VoicevoxClient` は `/audio_query` と `/synthesis` を呼び出す
-- `scripts/start-voicevox.sh` のヘルスチェックは Profile から導出された `VOICEVOX_BASE_URL` に `/version` を付けて使用する。単体起動でも Profile の値が `backend/.env` より優先される
+- 共通環境オーケストレーターの VOICEVOX adapter は Profile の `readinessUrl` で `/version` を確認する
 - Whisper は外部サービスではなく Backend プロセス内で `faster-whisper` の `WhisperModel("medium")` を初回利用時にロードする
-- Whisper モデルは初回利用時に取得が発生し得るため、オフライン環境では事前にモデルキャッシュを用意する
+- 共通環境オーケストレーターは prepare で Whisper モデルをリポジトリ内の `.cache/huggingface/hub` へ準備し、Backend 実行時も同じ保存先を使う
+- `.cache/huggingface/` は Git 管理対象外である。Backend を単体起動する場合は初回利用時に取得が発生し得るため、オフライン環境では事前にこのキャッシュを用意する
 
 ## ChromaDB
 

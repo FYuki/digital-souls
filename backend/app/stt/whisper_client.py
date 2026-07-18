@@ -3,15 +3,17 @@ import threading
 import wave
 from collections.abc import Iterable
 from typing import Protocol, cast
+from pathlib import Path
 
 from app.audio.constants import (
     PCM_CHANNELS,
     PCM_SAMPLE_RATE_HZ,
     PCM_SAMPLE_WIDTH_BYTES,
 )
+from app.model_settings import WHISPER_MODEL_NAME, whisper_model_cache
 
-WHISPER_MODEL_SIZE = "medium"
 WHISPER_LANGUAGE = "ja"
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 
 class WhisperSegment(Protocol):
@@ -51,7 +53,10 @@ class WhisperTranscriber:
 
             self._model = cast(
                 WhisperModel,
-                FasterWhisperModel(WHISPER_MODEL_SIZE),
+                FasterWhisperModel(
+                    WHISPER_MODEL_NAME,
+                    download_root=str(whisper_model_cache(REPOSITORY_ROOT)),
+                ),
             )
         return self._model
 
