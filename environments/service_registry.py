@@ -6,7 +6,7 @@ from types import MappingProxyType
 from typing import Mapping
 
 from adapters.backend import BackendAdapter
-from adapters.base import OperationContext, ServiceOperations
+from adapters.base import CommandRunner, OperationContext, ServiceOperations
 from adapters.frontend import FrontendAdapter
 from adapters.ollama import OllamaAdapter
 from adapters.voicevox import VoicevoxAdapter
@@ -36,12 +36,18 @@ class RuntimeServices:
     start_order: tuple[str, ...]
 
 
-def create_service_registry(root_dir: Path) -> ServiceRegistry:
+def create_service_registry(
+    root_dir: Path, runner: CommandRunner | None = None
+) -> ServiceRegistry:
     services = {
-        "frontend": ServiceRegistration("frontend", FrontendAdapter(root_dir), None),
-        "backend": ServiceRegistration("backend", BackendAdapter(root_dir), None),
-        "ollama": ServiceRegistration("ollama", OllamaAdapter(root_dir), None),
-        "voicevox": ServiceRegistration("voicevox", VoicevoxAdapter(root_dir), None),
+        "frontend": ServiceRegistration(
+            "frontend", FrontendAdapter(root_dir, runner), None
+        ),
+        "backend": ServiceRegistration("backend", BackendAdapter(root_dir, runner), None),
+        "ollama": ServiceRegistration("ollama", OllamaAdapter(root_dir, runner), None),
+        "voicevox": ServiceRegistration(
+            "voicevox", VoicevoxAdapter(root_dir, runner), None
+        ),
         "whisper": ServiceRegistration("whisper", None, "backend"),
         "chroma": ServiceRegistration("chroma", None, "backend"),
     }

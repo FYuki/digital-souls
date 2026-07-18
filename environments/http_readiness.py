@@ -4,11 +4,17 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Protocol
 
 
 class ReadinessConfigurationError(ValueError):
     __slots__ = ()
+
+
+class HttpProbe(Protocol):
+    def __call__(
+        self, url: str, *, timeout_seconds: float
+    ) -> ReadinessResult: ...
 
 
 @dataclass(frozen=True)
@@ -53,16 +59,18 @@ def wait_for_http(
     interval_seconds: float,
     request_timeout_seconds: float,
     assert_environment_running: Callable[[], None] | None = None,
+    probe: HttpProbe | None = None,
 ) -> ReadinessResult:
     if isinstance(max_attempts, bool) or not isinstance(max_attempts, int) or max_attempts <= 0:
         raise ReadinessConfigurationError("max_attempts must be a positive integer")
     interval = _require_non_negative_number(interval_seconds, "interval_seconds")
     _require_non_negative_number(request_timeout_seconds, "request_timeout_seconds")
     started = time.monotonic()
+    resolved_probe = probe_http if probe is None else probe
     for attempt in range(1, max_attempts + 1):
         if assert_environment_running is not None:
             assert_environment_running()
-        observation = probe_http(url, timeout_seconds=request_timeout_seconds)
+        observation = resolved_probe(url, timeout_seconds=request_timeout_seconds)
         if observation.result == "ready":
             if assert_environment_running is not None:
                 assert_environment_running()

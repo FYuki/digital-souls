@@ -11,22 +11,34 @@ from adapters.base import (
     ServiceStartResult,
     StopResult,
 )
-from http_readiness import wait_for_http
+from http_readiness import ReadinessResult, wait_for_http
 from environment_signals import (
     defer_interrupt_signals,
     install_interrupt_handlers,
     restore_interrupt_handlers,
 )
+from environment_timing import EnvironmentTiming
 from profile_resolution import resolve_profile
 from profile_types import ProfileError
 from service_registry import (
+    ServiceRegistry,
     create_service_registry,
     operation_context_for,
     require_service_operations,
 )
 
 
-def start_voicevox(root_dir: Path, default_profile: str | None) -> int:
+def start_voicevox(
+    root_dir: Path,
+    default_profile: str | None,
+    *,
+    registry: ServiceRegistry | None = None,
+    timing: EnvironmentTiming | None = None,
+) -> int:
+    resolved_registry = (
+        registry if registry is not None else create_service_registry(root_dir)
+    )
+    resolved_timing = timing if timing is not None else EnvironmentTiming()
     ownership: ServiceStartResult | None = None
     _was_interrupted, previous_handlers = install_interrupt_handlers()
     try:
@@ -37,14 +49,13 @@ def start_voicevox(root_dir: Path, default_profile: str | None) -> int:
         dependency = dependencies["voicevox"]
         if not isinstance(dependency, dict) or dependency.get("source") != "managed":
             raise ProfileError("start-voicevox requires managed VOICEVOX")
-        registry = create_service_registry(root_dir)
-        operations = require_service_operations(registry, "voicevox")
-        context = operation_context_for("voicevox", dependencies, registry)
+        operations = require_service_operations(resolved_registry, "voicevox")
+        context = operation_context_for("voicevox", dependencies, resolved_registry)
         _verify_voicevox(operations, dependency, context)
         operations.prepare(dependency, context)
         with defer_interrupt_signals():
             ownership = operations.start(dependency, profile["derivedEnvironment"])
-        _wait_until_voicevox_ready(operations, dependency)
+        _wait_until_voicevox_ready(operations, dependency, resolved_timing)
     except BaseException as error:
         ownership_from_error = (
             error.ownership
@@ -90,13 +101,19 @@ def _verify_voicevox(
 
 
 def _wait_until_voicevox_ready(
-    operations: ServiceOperations, dependency: Mapping[str, object]
+    operations: ServiceOperations,
+    dependency: Mapping[str, object],
+    timing: EnvironmentTiming,
 ) -> None:
+    def probe_service(url: str, *, timeout_seconds: float) -> ReadinessResult:
+        return operations.probe(dependency, timeout_seconds)
+
     readiness = wait_for_http(
         str(dependency["readinessUrl"]),
-        max_attempts=120,
-        interval_seconds=0.5,
-        request_timeout_seconds=1.0,
+        max_attempts=timing.readiness_attempts,
+        interval_seconds=timing.readiness_interval_seconds,
+        request_timeout_seconds=timing.request_timeout_seconds,
+        probe=probe_service,
     )
     if readiness.result != "ready":
         raise RuntimeError("VOICEVOX did not become ready")

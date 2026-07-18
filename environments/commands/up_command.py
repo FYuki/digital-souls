@@ -20,20 +20,32 @@ from environment_runtime import (
 from environment_signals import (
     block_interrupt_signals,
     coalesce_interrupt_signals,
+    defer_interrupt_signals,
     install_interrupt_handlers,
     restore_interrupt_handlers,
 )
+from environment_timing import EnvironmentTiming
 from environment_verification import EnvironmentVerificationError
 from orchestrator import classify_failure
 from process_control import current_process_identity
 from run_report import create_initial_report, create_pending_report, record_cleanup, record_failure
 from run_report_store import RunReportStore
 from run_report_timestamps import current_timestamp, next_lifecycle_timestamp
+from service_registry import ServiceRegistry, create_service_registry
 
 
 def up_environment(
-    root_dir: Path, default_runtime_dir: Path, arguments: argparse.Namespace
+    root_dir: Path,
+    default_runtime_dir: Path,
+    arguments: argparse.Namespace,
+    *,
+    registry: ServiceRegistry | None = None,
+    timing: EnvironmentTiming | None = None,
 ) -> int:
+    resolved_registry = (
+        registry if registry is not None else create_service_registry(root_dir)
+    )
+    resolved_timing = timing if timing is not None else EnvironmentTiming()
     run_id = str(uuid.uuid4())
     started_at = current_timestamp()
     paths = resolve_output_paths(
@@ -57,14 +69,15 @@ def up_environment(
     try:
         with block_interrupt_signals():
             was_interrupted, previous_handlers = install_interrupt_handlers()
-            orchestrator_identity = current_process_identity().to_report()
-            report = create_pending_report(
-                run_id=run_id,
-                started_at=started_at,
-                resolved_profile_path=paths.profile_report,
-                orchestrator_identity=orchestrator_identity,
-            )
-            store.save(report)
+            with defer_interrupt_signals():
+                orchestrator_identity = current_process_identity().to_report()
+                report = create_pending_report(
+                    run_id=run_id,
+                    started_at=started_at,
+                    resolved_profile_path=paths.profile_report,
+                    orchestrator_identity=orchestrator_identity,
+                )
+                store.save(report)
         paths.profile_report.unlink(missing_ok=True)
         paths.legacy_report.unlink(missing_ok=True)
         profile = resolve_and_write_profile(
@@ -86,9 +99,10 @@ def up_environment(
             profile_path=paths.profile_report,
             store=store,
             report=report,
-            root_dir=root_dir,
             ready_gate_url=ready_gate_url,
             was_interrupted=was_interrupted,
+            registry=resolved_registry,
+            timing=resolved_timing,
         )
         phase = "verify"
         environment_run.verify()
