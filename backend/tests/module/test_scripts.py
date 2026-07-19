@@ -16,11 +16,16 @@ SCRIPT_NAMES = (
     "start-voicevox.sh",
 )
 LIBRARY_NAMES = ("lib/profile.sh",)
+ENVIRONMENT_ENTRYPOINT_NAMES = ("up.sh", "down.sh", "verify.sh")
 
 
 def test_should_keep_all_supported_script_entrypoints_executable_and_strict():
-    for name in SCRIPT_NAMES:
-        path = ROOT_DIR / "scripts" / name
+    paths = [
+        *(ROOT_DIR / "scripts" / name for name in SCRIPT_NAMES),
+        *(ROOT_DIR / "environments" / name for name in ENVIRONMENT_ENTRYPOINT_NAMES),
+    ]
+
+    for path in paths:
         content = path.read_text(encoding="utf-8")
         assert path.is_file()
         assert os.access(path, os.X_OK)
@@ -29,7 +34,8 @@ def test_should_keep_all_supported_script_entrypoints_executable_and_strict():
 
 def test_should_keep_all_supported_shell_entrypoints_syntax_valid():
     paths = [
-        ROOT_DIR / "scripts" / name for name in (*SCRIPT_NAMES, *LIBRARY_NAMES)
+        *(ROOT_DIR / "scripts" / name for name in (*SCRIPT_NAMES, *LIBRARY_NAMES)),
+        *(ROOT_DIR / "environments" / name for name in ENVIRONMENT_ENTRYPOINT_NAMES),
     ]
 
     result = subprocess.run(

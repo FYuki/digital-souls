@@ -23,7 +23,10 @@ class ReadinessRecorder(Protocol):
 
 
 def verification_checks(
-    profile: Mapping[str, object], registry: ServiceRegistry
+    profile: Mapping[str, object],
+    registry: ServiceRegistry,
+    *,
+    request_timeout_seconds: float,
 ) -> dict[str, dict[str, object]]:
     dependencies = profile["dependencies"]
     if not isinstance(dependencies, dict):
@@ -44,7 +47,9 @@ def verification_checks(
             verification = operations.verify(
                 dependency, operation_context_for(name, dependencies, registry)
             )
-        observation = operations.probe(dependency, timeout_seconds=0.1)
+        observation = operations.probe(
+            dependency, timeout_seconds=request_timeout_seconds
+        )
         validation = None
         if observation.result == "ready":
             validation = operations.validate_readiness(dependency)

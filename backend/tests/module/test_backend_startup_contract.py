@@ -6,13 +6,10 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from tests.environment_entrypoint_test_support import write_executable
+
 
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
-
-
-def _write_executable(path: Path, body: str) -> None:
-    path.write_text(f"#!/usr/bin/env bash\nset -euo pipefail\n{body}", encoding="utf-8")
-    path.chmod(0o755)
 
 
 def _copy_backend_scripts(tmp_path: Path) -> tuple[Path, Path, Path]:
@@ -23,12 +20,7 @@ def _copy_backend_scripts(tmp_path: Path) -> tuple[Path, Path, Path]:
     backend = tmp_path / "backend"
     backend.mkdir()
     for name in ("setup-backend.sh", "start-backend.sh"):
-        source = (ROOT_DIR / "scripts" / name).read_text(encoding="utf-8")
-        source = source.replace(
-            'BACKEND_DIR="$SCRIPT_DIR/../backend"', f'BACKEND_DIR="{backend}"'
-        )
-        (scripts / name).write_text(source, encoding="utf-8")
-        (scripts / name).chmod(0o755)
+        shutil.copy2(ROOT_DIR / "scripts" / name, scripts / name)
     return scripts / "setup-backend.sh", scripts / "start-backend.sh", backend
 
 
@@ -38,11 +30,14 @@ def test_should_prepare_backend_before_start_without_starting_uvicorn(tmp_path: 
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     event_log = tmp_path / "events.log"
-    _write_executable(
+    write_executable(
         bin_dir / "python3",
         f'printf "%s\\n" "python $*" >> "{event_log}"\n'
         'venv_dir="${@: -1}"\nmkdir -p "$venv_dir/bin"\n'
-        f'printf "#!/usr/bin/env bash\\nprintf \'%s\\\\n\' \'pip $*\' >> \'{event_log}\'\\n" > "$venv_dir/bin/pip"\n'
+        f"cat > \"$venv_dir/bin/pip\" <<'SH'\n"
+        "#!/usr/bin/env bash\n"
+        f'printf \'%s\\n\' "pip $*" >> "{event_log}"\n'
+        "SH\n"
         'chmod +x "$venv_dir/bin/pip"\n',
     )
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
@@ -50,8 +45,13 @@ def test_should_prepare_backend_before_start_without_starting_uvicorn(tmp_path: 
     result = subprocess.run([str(setup)], env=env, capture_output=True, text=True)
 
     assert result.returncode == 0, result.stderr
-    assert event_log.read_text(encoding="utf-8").splitlines()[0].startswith("python -m venv")
-    assert all("uvicorn" not in event for event in event_log.read_text().splitlines())
+    events = event_log.read_text(encoding="utf-8").splitlines()
+    backend_argument = backend.parent / "scripts" / ".." / "backend"
+    assert events == [
+        f"python -m venv {backend_argument / '.venv'}",
+        f"pip install -r {backend_argument / 'requirements.txt'}",
+    ]
+    assert all("uvicorn" not in event for event in events)
 
 
 def test_should_start_prepared_backend_as_foreground_process(tmp_path: Path):
@@ -60,7 +60,7 @@ def test_should_start_prepared_backend_as_foreground_process(tmp_path: Path):
     venv_bin.mkdir(parents=True)
     (venv_bin / "activate").write_text("", encoding="utf-8")
     pid_log = tmp_path / "uvicorn.pid"
-    _write_executable(venv_bin / "uvicorn", f'printf "%s" "$$" > "{pid_log}"')
+    write_executable(venv_bin / "uvicorn", f'printf "%s" "$$" > "{pid_log}"')
 
     process = subprocess.Popen([str(start)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     process.communicate(timeout=10)
@@ -69,13 +69,38 @@ def test_should_start_prepared_backend_as_foreground_process(tmp_path: Path):
     assert int(pid_log.read_text(encoding="utf-8")) == process.pid
 
 
+def test_should_delegate_complete_uvicorn_arguments(tmp_path: Path):
+    _setup, start, backend = _copy_backend_scripts(tmp_path)
+    venv_bin = backend / ".venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    (venv_bin / "activate").write_text("", encoding="utf-8")
+    arguments_log = tmp_path / "uvicorn-arguments.json"
+    write_executable(
+        venv_bin / "uvicorn",
+        "python3 - \"$@\" <<'PY'\n"
+        "import json, sys\n"
+        f"json.dump(sys.argv[1:], open({str(arguments_log)!r}, 'w'))\n"
+        "PY\n",
+    )
+
+    result = subprocess.run([str(start)], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(arguments_log.read_text(encoding="utf-8")) == [
+        "--app-dir",
+        str(backend.parent / "scripts" / ".." / "backend"),
+        "app.main:app",
+        "--reload",
+    ]
+
+
 def test_should_preserve_callers_pythonpath_when_starting_backend(tmp_path: Path):
     _setup, start, backend = _copy_backend_scripts(tmp_path)
     venv_bin = backend / ".venv" / "bin"
     venv_bin.mkdir(parents=True)
     (venv_bin / "activate").write_text("", encoding="utf-8")
     pythonpath_log = tmp_path / "pythonpath.log"
-    _write_executable(
+    write_executable(
         venv_bin / "uvicorn", f'printf "%s" "$PYTHONPATH" > "{pythonpath_log}"'
     )
     environment = {**os.environ, "PYTHONPATH": "/caller/import/root"}
@@ -143,7 +168,7 @@ def test_should_propagate_backend_process_status(tmp_path: Path):
     venv_bin = backend / ".venv" / "bin"
     venv_bin.mkdir(parents=True)
     (venv_bin / "activate").write_text("", encoding="utf-8")
-    _write_executable(venv_bin / "uvicorn", "exit 29\n")
+    write_executable(venv_bin / "uvicorn", "exit 29\n")
 
     result = subprocess.run([str(start)], capture_output=True, text=True)
 
@@ -157,7 +182,7 @@ def test_should_report_backend_dependency_install_failure_with_original_status(
     (backend / "requirements.txt").write_text("# runtime\n", encoding="utf-8")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    _write_executable(
+    write_executable(
         bin_dir / "python3",
         'venv_dir="${@: -1}"\nmkdir -p "$venv_dir/bin"\n'
         'printf "#!/usr/bin/env bash\\nexit 41\\n" > "$venv_dir/bin/pip"\n'
@@ -183,7 +208,7 @@ def test_should_preserve_resolved_profile_values_when_dotenv_conflicts(tmp_path:
         encoding="utf-8",
     )
     captured = tmp_path / "environment.json"
-    _write_executable(
+    write_executable(
         venv_bin / "uvicorn",
         "python3 - <<'PY'\n"
         "import json, os\n"

@@ -2,12 +2,33 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from profile_types import ResolvedDependencies, ResolvedDependency, ResolvedReport
 
+if TYPE_CHECKING:
+    from adapters.base import ServiceOperations
+    from service_registry import ServiceRegistry
 
-DEPENDENCY_NAMES = ("frontend", "backend", "ollama", "voicevox", "whisper", "chroma")
+
+def single_adapter_registry(
+    service: str, adapter: ServiceOperations
+) -> ServiceRegistry:
+    from environment_constants import DEPENDENCY_NAMES
+    from service_registry import ServiceRegistration, ServiceRegistry
+
+    return ServiceRegistry(
+        services={
+            name: ServiceRegistration(
+                name,
+                adapter if name == service else None,
+                "backend" if name in {"whisper", "chroma"} else None,
+            )
+            for name in DEPENDENCY_NAMES
+        },
+        prepare_order=(service,),
+        start_order=(service,),
+    )
 
 
 def orchestrator_identity() -> dict[str, int]:

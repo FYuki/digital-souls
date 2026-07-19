@@ -17,24 +17,20 @@ from environment_verification import (
     require_service_readiness,
     verification_checks,
 )
-from http_readiness import wait_for_http
+from http_readiness import ReadinessResult, wait_for_http
 from orchestrator import classify_preprobe, readiness_complete
 from environment_signals import defer_interrupt_signals
+from environment_timing import EnvironmentTiming
 from ready_gate import ReadyGate
 from run_report import record_phase, record_ready, update_readiness, update_service
 from run_report_timestamps import next_lifecycle_timestamp
 from service_registry import (
     ServiceRegistry,
-    create_service_registry,
     operation_context_for,
     require_service_operations,
     resolve_runtime_services,
 )
 
-
-READINESS_ATTEMPTS = 120
-READINESS_INTERVAL_SECONDS = 0.5
-REQUEST_TIMEOUT_SECONDS = 1.0
 
 class SupervisionError(RuntimeError):
     pass
@@ -58,16 +54,17 @@ class EnvironmentRun:
         profile_path: Path,
         store: ReportStore,
         report: dict[str, object],
-        root_dir: Path,
         ready_gate_url: str,
         was_interrupted: Callable[[], bool],
-        registry: ServiceRegistry | None = None,
+        registry: ServiceRegistry,
+        timing: EnvironmentTiming,
     ) -> None:
         self.profile = profile
         self.profile_path = profile_path
         self.store = store
         self.report = report
-        self.registry = registry if registry is not None else create_service_registry(root_dir)
+        self.registry = registry
+        self.timing = timing
         self.runtime = resolve_runtime_services(profile, self.registry)
         dependencies = profile["dependencies"]
         if not isinstance(dependencies, dict):
@@ -88,7 +85,11 @@ class EnvironmentRun:
 
     def verify(self) -> None:
         self._save_phase("verify")
-        results = verification_checks(self.profile, self.registry)
+        results = verification_checks(
+            self.profile,
+            self.registry,
+            request_timeout_seconds=self.timing.request_timeout_seconds,
+        )
         record_and_validate_verification(results, self._record_verification_readiness)
 
     def _record_verification_readiness(
@@ -114,7 +115,7 @@ class EnvironmentRun:
             if dependency.get("mode") == "disabled" or dependency.get("source") == "browser":
                 continue
             observation = require_service_operations(self.registry, name).probe(
-                dependency, timeout_seconds=REQUEST_TIMEOUT_SECONDS
+                dependency, timeout_seconds=self.timing.request_timeout_seconds
             )
             observation_report = observation.to_report()
             self._update_report(
@@ -218,12 +219,22 @@ class EnvironmentRun:
             dependency = self.dependencies[name]
             if dependency.get("mode") == "disabled" or dependency.get("source") == "browser":
                 continue
+            operations = require_service_operations(self.registry, name)
+
+            def probe_service(
+                url: str,
+                *,
+                timeout_seconds: float,
+            ) -> ReadinessResult:
+                return operations.probe(dependency, timeout_seconds)
+
             result = wait_for_http(
                 str(dependency["readinessUrl"]),
-                max_attempts=READINESS_ATTEMPTS,
-                interval_seconds=READINESS_INTERVAL_SECONDS,
-                request_timeout_seconds=REQUEST_TIMEOUT_SECONDS,
+                max_attempts=self.timing.readiness_attempts,
+                interval_seconds=self.timing.readiness_interval_seconds,
+                request_timeout_seconds=self.timing.request_timeout_seconds,
                 assert_environment_running=self._assert_owned_services_running,
+                probe=probe_service,
             )
             observations[name] = result.to_report()
             readiness_report = result.to_report()
@@ -256,7 +267,7 @@ class EnvironmentRun:
         while not self.was_interrupted():
             self._assert_owned_services_running()
             if not self.was_interrupted():
-                time.sleep(0.5)
+                time.sleep(self.timing.supervision_interval_seconds)
 
     def cleanup(self) -> list[dict[str, object]]:
         outcome = cleanup_environment(

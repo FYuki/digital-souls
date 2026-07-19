@@ -132,3 +132,77 @@ def test_should_abort_readiness_when_managed_environment_exits():
             request_timeout_seconds=0.01,
             assert_environment_running=report_exit,
         )
+
+
+def test_should_retry_with_injected_probe_until_ready():
+    from http_readiness import ReadinessResult, wait_for_http
+
+    url = "http://service.test/health"
+    observations = iter(("not_ready", "ready"))
+    calls: list[tuple[str, float]] = []
+
+    def probe(probe_url: str, *, timeout_seconds: float) -> ReadinessResult:
+        calls.append((probe_url, timeout_seconds))
+        return ReadinessResult(probe_url, 1, 0.0, next(observations))
+
+    result = wait_for_http(
+        url,
+        max_attempts=3,
+        interval_seconds=0,
+        request_timeout_seconds=0.25,
+        probe=probe,
+    )
+
+    assert result.result == "ready"
+    assert result.attempts == 2
+    assert calls == [(url, 0.25), (url, 0.25)]
+
+
+def test_should_stop_injected_probe_at_attempt_limit():
+    from http_readiness import ReadinessResult, wait_for_http
+
+    url = "http://service.test/health"
+    calls: list[tuple[str, float]] = []
+
+    def probe(probe_url: str, *, timeout_seconds: float) -> ReadinessResult:
+        calls.append((probe_url, timeout_seconds))
+        return ReadinessResult(probe_url, 1, 0.0, "not_ready")
+
+    result = wait_for_http(
+        url,
+        max_attempts=2,
+        interval_seconds=0,
+        request_timeout_seconds=0.125,
+        probe=probe,
+    )
+
+    assert result.result == "timeout"
+    assert result.attempts == 2
+    assert calls == [(url, 0.125), (url, 0.125)]
+
+
+def test_should_resolve_default_probe_when_wait_is_called(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import http_readiness
+
+    url = "http://service.test/health"
+    calls: list[tuple[str, float]] = []
+
+    def replacement_probe(
+        probe_url: str, *, timeout_seconds: float
+    ) -> http_readiness.ReadinessResult:
+        calls.append((probe_url, timeout_seconds))
+        return http_readiness.ReadinessResult(probe_url, 1, 0.0, "ready")
+
+    monkeypatch.setattr(http_readiness, "probe_http", replacement_probe)
+
+    result = http_readiness.wait_for_http(
+        url,
+        max_attempts=1,
+        interval_seconds=0,
+        request_timeout_seconds=0.375,
+    )
+
+    assert result.result == "ready"
+    assert calls == [(url, 0.375)]

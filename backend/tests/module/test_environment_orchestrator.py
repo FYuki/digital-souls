@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from tests.environment_test_support import DEPENDENCY_NAMES, resolved_profile
+from environment_constants import DEPENDENCY_NAMES
+from tests.environment_test_support import resolved_profile
 
 
 def test_should_register_adapters_and_dependency_order_in_one_registry(tmp_path: Path):
@@ -18,6 +19,21 @@ def test_should_register_adapters_and_dependency_order_in_one_registry(tmp_path:
     assert registry.start_order == ("ollama", "voicevox", "backend", "frontend")
     assert registry.services["whisper"].contained_by == "backend"
     assert registry.services["chroma"].contained_by == "backend"
+
+
+def test_should_inject_one_command_runner_into_every_concrete_adapter(tmp_path: Path):
+    from service_registry import create_service_registry
+    from tests.environment_test_support import RecordingRunner
+
+    runner = RecordingRunner()
+
+    registry = create_service_registry(tmp_path, runner=runner)
+
+    adapters = [
+        registry.services[name].adapter
+        for name in ("frontend", "backend", "ollama", "voicevox")
+    ]
+    assert all(adapter is not None and adapter.runner is runner for adapter in adapters)
 
 
 def test_should_isolate_and_freeze_registry_services(tmp_path: Path):

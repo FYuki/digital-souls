@@ -11,7 +11,12 @@ from typing import Mapping
 import pytest
 import tests.environment_test_support
 
-from tests.environment_test_support import DEPENDENCY_NAMES, RecordingRunner
+from environment_constants import DEPENDENCY_NAMES
+from environment_timing import EnvironmentTiming
+from tests.environment_test_support import (
+    RecordingRunner,
+    single_adapter_registry,
+)
 
 
 class RecordingReportStore:
@@ -99,24 +104,6 @@ def _process_identity(service: Mapping[str, object]) -> Mapping[str, object]:
     return identity
 
 
-def _test_registry():
-    from service_registry import ServiceRegistration, ServiceRegistry
-
-    services = {
-        name: ServiceRegistration(
-            name,
-            FakeFrontendOperations() if name == "frontend" else None,
-            "backend" if name in {"whisper", "chroma"} else None,
-        )
-        for name in DEPENDENCY_NAMES
-    }
-    return ServiceRegistry(
-        services=services,
-        prepare_order=("frontend",),
-        start_order=("frontend",),
-    )
-
-
 def _two_process_registry():
     from service_registry import ServiceRegistration, ServiceRegistry
 
@@ -136,24 +123,6 @@ def _two_process_registry():
         services=services,
         prepare_order=("backend", "frontend"),
         start_order=("backend", "frontend"),
-    )
-
-
-def _single_adapter_registry(name: str, adapter):
-    from service_registry import ServiceRegistration, ServiceRegistry
-
-    services = {
-        service_name: ServiceRegistration(
-            service_name,
-            adapter if service_name == name else None,
-            "backend" if service_name in {"whisper", "chroma"} else None,
-        )
-        for service_name in DEPENDENCY_NAMES
-    }
-    return ServiceRegistry(
-        services=services,
-        prepare_order=(name,),
-        start_order=(name,),
     )
 
 
@@ -199,10 +168,10 @@ def test_should_run_resolved_profile_through_ready_and_owned_cleanup(
         profile_path=tmp_path / "resolved-profile.json",
         store=store,
         report=report,
-        root_dir=tmp_path,
+        timing=EnvironmentTiming(),
         ready_gate_url="http://127.0.0.1:0/ready",
         was_interrupted=lambda: False,
-        registry=_test_registry(),
+        registry=single_adapter_registry("frontend", FakeFrontendOperations()),
     )
 
     run.verify()
@@ -252,10 +221,10 @@ def test_should_preserve_playwright_result_written_after_ready_gate_opens(
         profile_path=tmp_path / "resolved-profile.json",
         store=store,
         report=report,
-        root_dir=tmp_path,
+        timing=EnvironmentTiming(),
         ready_gate_url="http://127.0.0.1:0/ready",
         was_interrupted=lambda: False,
-        registry=_test_registry(),
+        registry=single_adapter_registry("frontend", FakeFrontendOperations()),
     )
 
     run.begin_supervision()
@@ -310,10 +279,10 @@ def test_should_finalize_report_and_stop_owned_service_when_ready_gate_close_fai
         profile_path=tmp_path / "resolved-profile.json",
         store=store,
         report=report,
-        root_dir=tmp_path,
+        timing=EnvironmentTiming(),
         ready_gate_url="http://127.0.0.1:0/ready",
         was_interrupted=lambda: False,
-        registry=_single_adapter_registry("frontend", operations),
+        registry=single_adapter_registry("frontend", operations),
     )
     run.ready_gate = FailingReadyGate()
     run.ready_gate_open = True
@@ -394,10 +363,10 @@ def test_should_stop_owned_service_when_cleanup_phase_update_fails(tmp_path: Pat
         profile_path=tmp_path / "resolved-profile.json",
         store=store,
         report=report,
-        root_dir=tmp_path,
+        timing=EnvironmentTiming(),
         ready_gate_url="http://127.0.0.1:0/ready",
         was_interrupted=lambda: False,
-        registry=_single_adapter_registry("frontend", operations),
+        registry=single_adapter_registry("frontend", operations),
     )
 
     cleanup_results = run.cleanup()
@@ -449,10 +418,10 @@ def test_should_persist_started_ownership_before_delivering_pending_signal(tmp_p
         profile_path=tmp_path / "resolved-profile.json",
         store=store,
         report=report,
-        root_dir=tmp_path,
+        timing=EnvironmentTiming(),
         ready_gate_url="http://127.0.0.1:0/ready",
         was_interrupted=lambda: False,
-        registry=_single_adapter_registry("frontend", InterruptingOperations()),
+        registry=single_adapter_registry("frontend", InterruptingOperations()),
     )
     _was_interrupted, previous = install_interrupt_handlers()
     try:
@@ -530,10 +499,10 @@ def test_should_persist_in_memory_ownership_in_final_report_when_start_update_fa
         profile_path=tmp_path / "resolved-profile.json",
         store=store,
         report=report,
-        root_dir=tmp_path,
+        timing=EnvironmentTiming(),
         ready_gate_url="http://127.0.0.1:0/ready",
         was_interrupted=lambda: False,
-        registry=_single_adapter_registry("frontend", operations),
+        registry=single_adapter_registry("frontend", operations),
     )
 
     with pytest.raises(OSError, match="ownership report update failed"):
@@ -630,10 +599,10 @@ def test_should_persist_external_probe_observation_when_verification_fails(
         profile_path=tmp_path / "resolved-profile.json",
         store=store,
         report=report,
-        root_dir=tmp_path,
+        timing=EnvironmentTiming(),
         ready_gate_url="http://127.0.0.1:0/ready",
         was_interrupted=lambda: False,
-        registry=_test_registry(),
+        registry=single_adapter_registry("frontend", FakeFrontendOperations()),
     )
 
     with pytest.raises(EnvironmentVerificationError, match="external service is not ready"):
@@ -668,7 +637,7 @@ def test_should_fail_verification_before_start_for_unpreparable_dependency(
     store.save(report)
     monkeypatch.setattr(
         "environment_runtime.verification_checks",
-        lambda profile, registry: {
+        lambda profile, registry, *, request_timeout_seconds: {
             "ollama": {
                 "classification": "preparation_required",
                 "checks": [
@@ -687,10 +656,10 @@ def test_should_fail_verification_before_start_for_unpreparable_dependency(
         profile_path=tmp_path / "resolved-profile.json",
         store=store,
         report=report,
-        root_dir=tmp_path,
+        timing=EnvironmentTiming(),
         ready_gate_url="http://127.0.0.1:0/ready",
         was_interrupted=lambda: False,
-        registry=_test_registry(),
+        registry=single_adapter_registry("frontend", FakeFrontendOperations()),
     )
 
     with pytest.raises(EnvironmentVerificationError) as error:
@@ -740,10 +709,10 @@ def test_should_reach_backend_prepare_when_whisper_cache_is_missing(
         profile_path=tmp_path / "resolved-profile.json",
         store=store,
         report=report,
-        root_dir=tmp_path,
+        timing=EnvironmentTiming(),
         ready_gate_url="http://127.0.0.1:0/ready",
         was_interrupted=lambda: False,
-        registry=_single_adapter_registry("backend", adapter),
+        registry=single_adapter_registry("backend", adapter),
     )
 
     run.verify()
@@ -800,10 +769,10 @@ def test_should_persist_ollama_observation_before_model_validation_failure(
         profile_path=tmp_path / "resolved-profile.json",
         store=store,
         report=report,
-        root_dir=tmp_path,
+        timing=EnvironmentTiming(),
         ready_gate_url="http://127.0.0.1:0/ready",
         was_interrupted=lambda: False,
-        registry=_single_adapter_registry("ollama", adapter),
+        registry=single_adapter_registry("ollama", adapter),
     )
 
     with pytest.raises(EnvironmentVerificationError) as error:
@@ -867,10 +836,10 @@ def test_should_persist_ollama_observation_before_tags_request_failure(
         profile_path=tmp_path / "resolved-profile.json",
         store=store,
         report=report,
-        root_dir=tmp_path,
+        timing=EnvironmentTiming(),
         ready_gate_url="http://127.0.0.1:0/ready",
         was_interrupted=lambda: False,
-        registry=_single_adapter_registry("ollama", OllamaAdapter(tmp_path)),
+        registry=single_adapter_registry("ollama", OllamaAdapter(tmp_path)),
     )
 
     with pytest.raises(EnvironmentVerificationError) as error:
@@ -930,7 +899,7 @@ def test_should_detect_later_registered_process_exit_during_readiness(
         profile_path=tmp_path / "resolved-profile.json",
         store=store,
         report=report,
-        root_dir=tmp_path,
+        timing=EnvironmentTiming(),
         ready_gate_url="http://127.0.0.1:0/ready",
         was_interrupted=lambda: False,
         registry=_two_process_registry(),
@@ -977,10 +946,10 @@ def test_should_not_report_service_exit_as_failure_when_stop_is_requested_during
         profile_path=tmp_path / "resolved-profile.json",
         store=store,
         report=report,
-        root_dir=tmp_path,
+        timing=EnvironmentTiming(),
         ready_gate_url="http://127.0.0.1:0/ready",
         was_interrupted=lambda: stop_requested,
-        registry=_single_adapter_registry("frontend", StopRaceOperations()),
+        registry=single_adapter_registry("frontend", StopRaceOperations()),
     )
 
     run.supervise()
@@ -1030,10 +999,10 @@ def test_should_reuse_ollama_through_runtime_without_starting_placeholder(
         profile_path=tmp_path / "resolved-profile.json",
         store=store,
         report=report,
-        root_dir=tmp_path,
+        timing=EnvironmentTiming(),
         ready_gate_url="http://127.0.0.1:0/ready",
         was_interrupted=lambda: False,
-        registry=_single_adapter_registry("ollama", adapter),
+        registry=single_adapter_registry("ollama", adapter),
     )
 
     decisions = run.pre_probe()
@@ -1085,10 +1054,10 @@ def test_should_not_invoke_docker_for_external_voicevox_runtime(
         profile_path=tmp_path / "resolved-profile.json",
         store=store,
         report=report,
-        root_dir=tmp_path,
+        timing=EnvironmentTiming(),
         ready_gate_url="http://127.0.0.1:0/ready",
         was_interrupted=lambda: False,
-        registry=_single_adapter_registry("voicevox", adapter),
+        registry=single_adapter_registry("voicevox", adapter),
     )
 
     run.verify()
