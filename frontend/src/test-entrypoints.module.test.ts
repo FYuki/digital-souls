@@ -46,8 +46,10 @@ describe('test execution entrypoints', () => {
   test('CI runs local suites but never starts real-service integration suites', async () => {
     const source = await readFile(join(process.cwd(), '..', '.github', 'workflows', 'ci.yml'), 'utf-8')
 
-    expect(source).toMatch(/npm run test:unit/)
-    expect(source).toMatch(/npm run test:module/)
+    expect(source).toMatch(/python3 -m pytest backend\/tests\/unit/)
+    expect(source).toMatch(/python3 -m pytest backend\/tests\/module/)
+    expect(source).toMatch(/npm --prefix frontend run test:unit/)
+    expect(source).toMatch(/npm --prefix frontend run test:module/)
     expect(source).toMatch(/npm run test:e2e:mocked/)
     expect(source).not.toMatch(/npm run test:integration:(backend|text|voice)/)
   })
