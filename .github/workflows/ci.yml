@@ -8,24 +8,99 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  verify:
+  backend:
+    name: backend
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - uses: actions/setup-node@v4
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      - name: Install dependencies
+        run: python3 -m pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+      - name: Static checks
+        run: python3 -m mypy --config-file backend/mypy.ini backend/app environments
+      - name: Unit tests
+        run: python3 -m pytest backend/tests/unit
+      - name: Module tests
+        run: python3 -m pytest backend/tests/module
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - run: python3 -m pip install -r backend/requirements.txt -r backend/requirements-dev.txt
-      - run: npm ci --prefix frontend
-      - run: npm --prefix frontend run install:browser
-      - run: npm run check
-      - run: npm run build
-      - run: npm run test:unit
-      - run: npm run test:module
-      - run: npm run test:e2e:mocked
+      - name: Install dependencies
+        run: npm ci --prefix frontend
+      - name: Static checks
+        run: npm --prefix frontend run check
+      - name: Build
+        run: npm --prefix frontend run build
+      - name: Unit tests
+        run: npm --prefix frontend run test:unit
+      - name: Module tests
+        run: npm --prefix frontend run test:module
+
+  mocked-e2e:
+    name: mocked-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci --prefix frontend
+      - name: Install browser
+        run: npm --prefix frontend run install:browser
+      - name: Mocked E2E tests
+        run: npm run test:e2e:mocked
+      - name: Record integration test policy
+        if: always()
+        run: |
+          {
+            echo '### Integration test policy'
+            echo
+            echo 'Real-service integration suites are intentionally excluded from the standard CI workflow.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Required-check migration compatibility. Remove after branch protection
+  # requires backend, frontend, and mocked-e2e instead of verify.
+  verify:
+    name: verify
+    if: always()
+    needs: [backend, frontend, mocked-e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Confirm required jobs succeeded
+        env:
+          BACKEND_RESULT: ${{ needs.backend.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          MOCKED_E2E_RESULT: ${{ needs.mocked-e2e.result }}
+        run: |
+          if [[ "$BACKEND_RESULT" != success ||
+                "$FRONTEND_RESULT" != success ||
+                "$MOCKED_E2E_RESULT" != success ]]; then
+            echo 'One or more required jobs did not succeed.' >&2
+            exit 1
+          fi
