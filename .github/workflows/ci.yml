@@ -82,25 +82,3 @@ jobs:
             echo
             echo 'Real-service integration suites are intentionally excluded from the standard CI workflow.'
           } >> "$GITHUB_STEP_SUMMARY"
-
-  # Required-check migration compatibility. Remove after branch protection
-  # requires backend, frontend, and mocked-e2e instead of verify.
-  verify:
-    name: verify
-    if: always()
-    needs: [backend, frontend, mocked-e2e]
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Confirm required jobs succeeded
-        env:
-          BACKEND_RESULT: ${{ needs.backend.result }}
-          FRONTEND_RESULT: ${{ needs.frontend.result }}
-          MOCKED_E2E_RESULT: ${{ needs.mocked-e2e.result }}
-        run: |
-          if [[ "$BACKEND_RESULT" != success ||
-                "$FRONTEND_RESULT" != success ||
-                "$MOCKED_E2E_RESULT" != success ]]; then
-            echo 'One or more required jobs did not succeed.' >&2
-            exit 1
-          fi
