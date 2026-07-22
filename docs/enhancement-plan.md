@@ -48,65 +48,106 @@ MVP（テキスト+音声チャット、RAG基盤）完了後の開発を、Wave
 
 ## Wave 1: 会話が「続く」（短期記憶・基盤整備）
 
-### 1. 会話履歴のプロンプト注入
+### 1. 機微情報分類基盤
 
-SQLiteの `conversations`（会話ログ）テーブルから直近N往復を復元し、LLMへのプロンプトに含める。
-BE自体はステートレス設計を維持し、状態はDB（SQLite）が持つ形にする。
+決定論的scannerと実装交換可能な意味分類器を組み合わせる。ローカルLLM、spaCy／GiNZA等の
+parser、専用分類器を候補とし、日英の固定conformance corpusで検出品質、過検知、初期化時間、
+判定時間、メモリ使用量を比較する。MVPでは全方式を本実装せず、1方式を選定する。
+
+分類結果は保存許可と分離し、カテゴリ、本人・第三者・一般の対象、判定結果、reason code、
+実装versionを型付きで返す。一般質問がhealth上安全でも、それだけでRAG保存可能とはしない。
+
+### 2. SQLite会話履歴schema
+
+既存SQLiteはテストデータのためmigrationせず削除し、`conversations`と`conversation_turns`を
+空状態から作成する。UI上のスレッドIDは実装上の`conversation_id`へ統一する。
+
+### 3. 保存先別privacy境界
+
+履歴用privacy filterとRAG admission policyを分離する。APIキー、password、秘密鍵等は
+履歴保存前に値をマスクし、安全にマスクできない場合と明示的な履歴非保存要求では本文を
+保存しない。health、心理状態、金融、住所、第三者情報は同一conversationの履歴には保持できるが、
+MVPではRAG長期記憶へ保存しない。
+
+### 4. 会話履歴のプロンプト注入
+
+SQLiteから同じ`character_id`と`conversation_id`の直近N往復だけを復元し、LLMへのpromptに
+含める。BE自体はステートレス設計を維持し、状態はSQLiteが持つ形にする。
 
 RAGが無効（`RAG_ENABLED=false`）の状態でも会話ログは常時記録されるよう、
 記録経路をRAGの有効/無効から分離する（現状はRAG有効時のみ記録に寄っている可能性があるため要確認）。
 
 完了イメージ: RAGを切った状態でも、直前のやり取りを踏まえた応答が返る。
 
-### 2. プロンプト合成の一元設計
+### 5. プロンプト合成の一元設計
 
 以下の要素の合成順序・優先順位を確定し、一元化する。
 
 - personality.md（人格設定）
 - card.json の未使用フィールド（`system_prompt` / `first_mes` / `post_history_instructions`）
-- 会話履歴（Wave 1-1で追加）
+- 会話履歴（Wave 1-4で追加）
 - RAG記憶（検索結果、Wave 2で本稼働）
 
 現状はプロンプト構築ロジックが分散している想定のため、単一のプロンプトビルダーに集約する。
 
 完了イメージ: プロンプト構築が1箇所に集約され、各要素の追加・並び替えが容易になる。
 
-### 3. 設定のenv化
+### 6. 設定のenv化
 
 - `OLLAMA_CHAT_MODEL` 等、`gemma4:e4b` のハードコードを解消する
 - Whisperモデルサイズを環境変数化する
-- 履歴注入数N（Wave 1-1で使用）を環境変数化する
+- 履歴注入数N（Wave 1-4で使用）を環境変数化する
 
 完了イメージ: モデル差し替え・チューニングがコード変更なしで可能になる。
 
 ## Wave 2: 「覚えている」（RAG本稼働 = 旧Phase 5の実質的完遂）
 
-### 1. character_idスキーマ統一
+### 1. SQLiteを長期記憶の正本にする
 
-- SQLiteの `character` カラムを `character_id` にリネーム・統一する
-- Chromaのメタデータに `character_id` を付与する
-- `docs/decisions/Multi-character-db-2026-06.md` の決定事項（全レコードに `character_id` を付与）に沿う
+- `approved_memories`へ許可型、正規化本文、`character_id`、`source_conversation_id`、
+  `policy_version`、状態、日時を保存する
+- SQLiteを訂正・削除・policy状態の正本とする
+- 既存のSQLite／Chromaテストデータは移行せず、空状態から開始する
+- `docs/decisions/Multi-character-db-2026-06.md`の決定事項どおり、全レコードを
+  `character_id`で分離する
 
-### 2. RAG検索品質検証 → デフォルト有効化
+### 2. transactional outboxとChroma派生index
+
+- `approved_memories`保存と`memory_index_outbox`作成を同じSQLite transactionで行う
+- Chromaへ`memory_id`単位で冪等にupsert／deleteする
+- outbox・application log・fallbackファイルへ本文やembeddingを複製しない
+- 旧`failed-memories.jsonl`を廃止する
+
+### 3. ingestion時・取得時のprivacy境界
+
+- ingestion時は絶対禁止scanner、意味分類、許可型抽出、ユーザー確認、policy evaluatorを通す
+- `ALLOW_STRUCTURED`だけを`approved_memories`とoutboxへ保存する
+- 取得時はChromaの`memory_id`をSQLiteで引き直し、`character_id`、状態、TTL、
+  `policy_version`を検証する
+- 一般質問が機微情報でないことを、RAG保存許可の根拠にしない
+
+### 4. RAG検索品質検証 → デフォルト有効化
 
 - 検証セットを用意し、無関係な記憶がプロンプトを汚染しないかを確認する
 - Embeddingモデル・チャンク戦略を必要に応じて調整する
 - 問題ないことを確認した上で `RAG_ENABLED=true` をデフォルトにする
 
-### 3. 自動記憶昇格
+### 5. positive allowlistと自動記憶昇格
 
-- 会話サマリから長期記憶候補を生成する
+- 会話サマリから許可型の長期記憶候補を生成する
 - `docs/decisions/miori-memory-policy-2026-06.md` の「重要な長期記憶は原則確認してから保存する」方針に沿い、
   光織がユーザーに確認してから保存するフローを実装する
+- 明示的な「覚えて」は確認済み候補として扱うが、絶対禁止と機微情報判定は省略しない
+- 未確認候補はRAGへ保存しない
 - 現状の「明示マーカー付き発言のみ長期記憶化」という制約を緩和する
 
-### 4. 時系列照合
+### 6. 時系列照合
 
 - 記憶に日付メタデータを付与し、時期指定での検索を可能にする
 - 「昨年もこの時期に〜」のような応答を実現する
 - personality.md が描く長期パートナー性の中核体験にあたる機能
 
-### 5. 記憶の閲覧・削除インターフェース
+### 7. 記憶の閲覧・削除インターフェース
 
 - `docs/decisions/miori-memory-policy-2026-06.md` の「削除・訂正依頼は優先対応する」方針の実装担保
 - ユーザーが記憶内容を閲覧・削除・訂正できるインターフェースを用意する
@@ -187,7 +228,6 @@ LLMストリーミングと文単位TTSは、会話状態マシン・WSプロト
 2. `ClaudeClient` 実装・プロバイダ切替（現状は `NotImplementedError` スタブ）
 3. 2人目キャラクターでの複数キャラクター運用検証
 4. Discord Bot / Mac mini常時稼働 / Live2D
-   （issue #27 のMac mini / SER8分離アーキテクチャはここに紐づく）
 
 ## 旧Phase → Wave 対応表
 

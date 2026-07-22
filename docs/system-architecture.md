@@ -64,7 +64,7 @@
 * `chat_service.py` / `_chat_runtime.py` — チャットセッションの生成・応答生成のエントリポイント
 * `characters/loader.py` — `characters/` 配下の人格定義（personality.md・card.json等）のロード
 * `llm/` — LLM振り分けルーター（`router.py`）とクライアント実装。`ollama_client.py`（ローカルOllama、常用）、`base.py`（クライアント共通インターフェース）。クラウドLLM（Claude等）向けクライアントは未実装のスタブ
-* `memory/` — 長期記憶（RAG）基盤。`chroma_store.py`（ベクトルDB）、`conversation_log.py`（SQLite会話ログ）、`embedder.py`（埋め込み生成）、`memory_policy.py`（`backend/app/memory/memory_policy.json` を参照する保存・参照ルール判定）、`rag_service.py`（検索・合成の統合サービス）
+* `memory/` — 会話履歴と長期記憶の基盤。SQLiteに同一conversation再開用の履歴と承認済み長期記憶を責務分離して保存し、Chromaは承認済み長期記憶だけの派生検索インデックスとして扱う。`memory_policy.py`は`backend/app/memory/memory_policy.json`の認識設定と、アプリケーションの非緩和policyを組み合わせて保存先別に判定する
 * `stt/whisper_client.py` — faster-whisperによる音声認識
 * `tts/voicevox_client.py` / `tts/speech_synthesizer.py` — VOICEVOXによる音声合成
 * `audio/transport.py` / `audio_pipeline.py` — 音声フレームの送受信・パイプライン制御
@@ -135,6 +135,35 @@ large:
 
 ## 記憶・ツール設計
 
+### 会話履歴とRAG長期記憶
+
+UI上のスレッドはBackendの`conversation_id`に対応する。同じ`character_id`と
+`conversation_id`の履歴だけを復元し、別conversationの生会話は検索しない。
+
+```text
+受信した会話
+  ├─ 履歴用privacy filter
+  │    └─ SQLite: conversations / conversation_turns
+  └─ RAG admission policy
+       └─ SQLite: approved_memories + memory_index_outbox
+            └─ Chroma: 承認済み記憶の派生index
+```
+
+履歴用privacy filterは、APIキー、password、秘密鍵等をマスクし、明示的な履歴非保存要求では
+本文を破棄する。health、心理状態、金融、住所、第三者情報は同一conversationの履歴として
+保持できるが、MVPではRAG長期記憶へ昇格させない。
+
+RAG長期記憶はpositive allowlist方式とし、許可型へ正規化され、機微情報検査と必要なユーザー確認を
+通過した`ApprovedMemoryCandidate`だけをSQLiteへ保存する。SQLiteを正本、Chromaを派生indexとし、
+SQLiteへの承認済み記憶保存とoutbox作成を同一transactionで行う。Chroma登録失敗時は本文を
+別ファイルへ退避せず、outboxの`memory_id`でSQLiteの承認済み記憶を再読して冪等に再試行する。
+
+検索時はChromaの結果をそのままpromptへ渡さず、`memory_id`をSQLiteで引き直し、
+`character_id`、状態、TTL、policy versionを確認する。
+
+詳細な不変条件とMVP境界は
+`docs/decisions/rag-memory-privacy-policy-2026-07.md`を参照する。
+
 初期ツール候補:
 
 * 農業日誌
@@ -154,4 +183,7 @@ characters/
    └─ memory-policy.md  # 方針本文と実装設定への案内
 ```
 
-光織の記憶方針本文は `docs/decisions/miori-memory-policy-2026-06.md`、実装が参照する機械可読な設定値は `backend/app/memory/memory_policy.json` で管理する。
+光織の記憶方針本文は`docs/decisions/miori-memory-policy-2026-06.md`、RAG privacyの不変条件は
+`docs/decisions/rag-memory-privacy-policy-2026-07.md`で管理する。
+`backend/app/memory/memory_policy.json`は認識語彙・pattern・閾値・追加禁止設定の実行時Source of
+Truthとするが、ADRとtyped policy schemaが定める絶対禁止を削除・許可へ反転できない。
