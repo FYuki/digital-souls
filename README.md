@@ -43,7 +43,7 @@ digital-souls/
 └─ frontend/      # 自作FE（Vite + Svelte）
 ```
 
-詳細は `Agent.md` を参照。
+詳細は `AGENTS.md` を参照。
 
 ## 開発への参加・運用
 

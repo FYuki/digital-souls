@@ -1,1 +1,1 @@
-digital-souls/Agent.mdを参照
+digital-souls/AGENTS.mdを参照
