@@ -78,4 +78,4 @@ digital-souls コア（WSL2直接起動）
 - `docs/decisions/docker-policy-2026-06.md` — Docker全体方針
 - `docs/development-environment.md` — 開発環境構成
 - `characters/miori/` — 光織人格設定（Character Card作成の参照元）
-- `Agent.md` — 技術スタック（AIRI: Phase 3で検証）
+- `AGENTS.md` — 技術スタック（AIRI: Phase 3で検証）

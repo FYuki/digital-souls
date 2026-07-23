@@ -142,16 +142,25 @@ UI上のスレッドはBackendの`conversation_id`に対応する。同じ`chara
 
 ```text
 受信した会話
-  ├─ 履歴用privacy filter
-  │    └─ SQLite: conversations / conversation_turns
-  └─ RAG admission policy
-       └─ SQLite: approved_memories + memory_index_outbox
-            └─ Chroma: 承認済み記憶の派生index
+  ├─ 現在ターンの応答生成（原文は処理中だけ利用）
+  └─ 共通privacy scanner / 意味assessment
+       ├─ 履歴用policy
+       │    ├─ MASK / STORE
+       │    └─ SKIP_CONTENT
+       │         └─ SQLite: conversations / conversation_turns
+       └─ RAG admission policy
+            └─ ALLOW_STRUCTURED
+                 └─ SQLite: approved_memories + memory_index_outbox
+                      └─ Chroma: 承認済み記憶の派生index
 ```
 
-履歴用privacy filterは、APIキー、password、秘密鍵等をマスクし、明示的な履歴非保存要求では
-本文を破棄する。health、心理状態、金融、住所、第三者情報は同一conversationの履歴として
-保持できるが、MVPではRAG長期記憶へ昇格させない。
+共通privacy scannerは保存先を決めず、カテゴリ、本文中の位置、reason code、versionを
+型付きfindingとして処理中だけ返す。履歴用policyは、APIキー、password、秘密鍵、決済認証、
+口座番号、政府ID、私用連絡先、正確な住所等の値をマスクし、明示的な履歴非保存要求または
+安全にマスクできない場合は本文を破棄する。health、心理状態、金融状況、第三者情報等の話題は
+同一conversationの履歴として保持できるが、MVPではRAG長期記憶へ昇格させない。
+userとassistantの双方へ同じscannerとsanitizerを適用し、原文、検出値、マスク前本文を
+SQLiteやapplication logへ残さない。
 
 RAG長期記憶はpositive allowlist方式とし、許可型へ正規化され、機微情報検査と必要なユーザー確認を
 通過した`ApprovedMemoryCandidate`だけをSQLiteへ保存する。SQLiteを正本、Chromaを派生indexとし、
@@ -159,7 +168,8 @@ SQLiteへの承認済み記憶保存とoutbox作成を同一transactionで行う
 別ファイルへ退避せず、outboxの`memory_id`でSQLiteの承認済み記憶を再読して冪等に再試行する。
 
 検索時はChromaの結果をそのままpromptへ渡さず、`memory_id`をSQLiteで引き直し、
-`character_id`、状態、TTL、policy versionを確認する。
+`character_id`、状態、TTL、policy versionを確認する。さらにSQLiteの`normalized_text`へ
+共通の決定論的絶対禁止scannerを再適用し、検出した記憶をpromptへ渡さない。
 
 詳細な不変条件とMVP境界は
 `docs/decisions/rag-memory-privacy-policy-2026-07.md`を参照する。
