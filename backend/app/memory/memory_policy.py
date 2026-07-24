@@ -2,7 +2,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.memory.conversation_log import ConversationRecord
+from app.memory.rag_record import MemoryCandidateRecord
 
 MEMORY_POLICY_CONFIG_PATH = Path(__file__).with_name("memory_policy.json")
 COMMON_SECTION_KEY = "common"
@@ -150,11 +150,9 @@ def contains_non_storable_memory(content: str, policy: MemoryPolicy) -> bool:
 
 
 def is_long_term_memory_candidate(
-    record: ConversationRecord,
+    record: MemoryCandidateRecord,
     policy: MemoryPolicy,
 ) -> bool:
-    if record.role != "user":
-        return False
     terms = policy.terms
     normalized = record.content.lower()
     if contains_non_storable_memory(record.content, policy):
