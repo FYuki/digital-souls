@@ -6,7 +6,6 @@ def test_runtime_module_setup_keeps_websocket_exception_bindings_current() -> No
 
     module_names = (
         "app.memory.chroma_store",
-        "app.memory.conversation_log",
         "app.memory.rag_service",
         "app._chat_runtime",
         "app.chat_service",
