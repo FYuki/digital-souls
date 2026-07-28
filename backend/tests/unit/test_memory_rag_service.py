@@ -1,15 +1,18 @@
 import importlib
 import inspect
 import json
+import logging
 from dataclasses import dataclass
+from pathlib import Path
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
 
 
 @dataclass
 class SavedRecord:
-    id: int
+    id: str
     character: str
     role: str
     content: str
@@ -19,6 +22,10 @@ class SavedRecord:
 def _resolved_policy():
     memory_policy = importlib.import_module("app.memory.memory_policy")
     return memory_policy.resolved_memory_policy()
+
+
+def _record_id(sequence: int) -> str:
+    return f"00000000-0000-4000-8000-{sequence:012d}"
 
 
 class TestRagServicePrompt:
@@ -204,15 +211,14 @@ class TestRagServicePrompt:
 
 
 class TestRagServiceRecording:
-    def test_record_chat_turn_requires_explicit_task_queue(self):
+    def test_record_user_memory_candidate_requires_explicit_task_queue(self):
         rag_service = importlib.import_module("app.memory.rag_service")
 
-        signature = inspect.signature(rag_service.record_chat_turn)
+        signature = inspect.signature(rag_service.record_user_memory_candidate)
 
         assert list(signature.parameters) == [
             "character",
             "user_message",
-            "assistant_reply",
             "policy",
             "task_queue",
         ]
@@ -220,7 +226,23 @@ class TestRagServiceRecording:
         assert not hasattr(rag_service, "_configure_memory_task_queue")
         assert not hasattr(rag_service, "_clear_memory_task_queue")
 
-    def test_record_chat_turn_saves_both_roles_and_enqueues_user_memory_record(
+    def test_record_user_memory_candidate_does_not_create_legacy_sqlite(
+        self, tmp_path
+    ):
+        rag_service = importlib.import_module("app.memory.rag_service")
+        background_tasks = MagicMock()
+
+        rag_service.record_user_memory_candidate(
+            "miori",
+            "今日は晴れですね",
+            _resolved_policy(),
+            background_tasks,
+        )
+
+        assert not hasattr(rag_service, "DATA_DIR")
+        assert not tmp_path.joinpath("conversations.db").exists()
+
+    def test_record_user_memory_candidate_creates_and_enqueues_record(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -228,49 +250,35 @@ class TestRagServiceRecording:
         background_tasks = MagicMock()
 
         user_message = "農業日誌: トマトに水やり"
-        assistant_reply = "作業ログとして保存しました: トマトに水やり"
         user_record = SavedRecord(
-            1,
+            _record_id(1),
             "miori",
             "user",
             user_message,
             "2026-06-23T00:00:00+00:00",
         )
-        assistant_record = SavedRecord(
-            2,
-            "miori",
-            "assistant",
-            assistant_reply,
-            "2026-06-23T00:00:01+00:00",
-        )
         monkeypatch.setattr(
             rag_service,
-            "save_message",
-            MagicMock(side_effect=[user_record, assistant_record]),
+            "create_memory_candidate_record",
+            MagicMock(return_value=user_record),
         )
 
-        rag_service.record_chat_turn(
+        rag_service.record_user_memory_candidate(
             "miori",
             user_message,
-            assistant_reply,
             _resolved_policy(),
             background_tasks,
         )
 
-        assert rag_service.save_message.call_args_list[0].args == (
+        assert rag_service.create_memory_candidate_record.call_args_list[0].args == (
             "miori",
-            "user",
             user_message,
         )
-        assert rag_service.save_message.call_args_list[1].args == (
-            "miori",
-            "assistant",
-            assistant_reply,
-        )
+        assert rag_service.create_memory_candidate_record.call_count == 1
         assert background_tasks.add_task.call_count == 1
         assert background_tasks.add_task.call_args_list[0].args[1] == user_record
 
-    def test_record_chat_turn_does_not_enqueue_temporary_chat_as_long_term_memory(
+    def test_record_user_memory_candidate_does_not_enqueue_temporary_chat(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -278,101 +286,89 @@ class TestRagServiceRecording:
         background_tasks = MagicMock()
 
         user_record = SavedRecord(
-            3,
+            _record_id(3),
             "miori",
             "user",
             "今日は眠いね",
             "2026-06-23T00:00:00+00:00",
         )
-        assistant_record = SavedRecord(
-            4,
-            "miori",
-            "assistant",
-            "そうですね",
-            "2026-06-23T00:00:01+00:00",
-        )
         monkeypatch.setattr(
             rag_service,
-            "save_message",
-            MagicMock(side_effect=[user_record, assistant_record]),
+            "create_memory_candidate_record",
+            MagicMock(return_value=user_record),
         )
 
-        rag_service.record_chat_turn(
+        rag_service.record_user_memory_candidate(
             "miori",
             "今日は眠いね",
-            "そうですね",
             _resolved_policy(),
             background_tasks,
         )
 
-        assert rag_service.save_message.call_count == 2
+        assert rag_service.create_memory_candidate_record.call_count == 1
         background_tasks.add_task.assert_not_called()
 
-    def test_background_store_dumps_failed_record_for_retry(self, tmp_path, monkeypatch):
-        rag_service = importlib.import_module("app.memory.rag_service")
-
-        failed_path = tmp_path / "failed-memories.jsonl"
-        record = SavedRecord(
-            7,
-            "miori",
-            "user",
-            "保存したい内容",
-            "2026-06-23T00:00:00+00:00",
-        )
-        monkeypatch.setattr(rag_service, "FAILED_MEMORY_LOG_PATH", failed_path)
-        monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.5]))
-        monkeypatch.setattr(rag_service, "add_memory", MagicMock(side_effect=RuntimeError))
-
-        rag_service._embed_and_store(record)
-
-        dumped = json.loads(failed_path.read_text(encoding="utf-8").splitlines()[0])
-        assert dumped == {
-            "id": 7,
-            "character": "miori",
-            "role": "user",
-            "content": "保存したい内容",
-            "timestamp": "2026-06-23T00:00:00+00:00",
-        }
-
-    def test_background_store_dumps_failed_record_for_contract_validation_errors(
-        self, tmp_path, monkeypatch
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            httpx.HTTPError("network failure"),
+            OSError("storage failure"),
+            RuntimeError("runtime failure"),
+            ValueError("contract failure"),
+        ],
+        ids=["http", "os", "runtime", "value"],
+    )
+    @pytest.mark.parametrize("failure_stage", ["embedding", "chroma"])
+    def test_background_store_failure_is_metadata_only(
+        self,
+        tmp_path,
+        monkeypatch,
+        caplog,
+        failure,
+        failure_stage,
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
 
         failed_path = tmp_path / "failed-memories.jsonl"
         record = SavedRecord(
-            31,
+            _record_id(7),
             "miori",
             "user",
-            "農業日誌: invalid payload",
+            "ログへ残してはいけない本文",
             "2026-06-23T00:00:00+00:00",
         )
-        monkeypatch.setattr(rag_service, "FAILED_MEMORY_LOG_PATH", failed_path)
+        embed_failure = failure if failure_stage == "embedding" else None
+        store_failure = failure if failure_stage == "chroma" else None
+        file_open = MagicMock()
+        monkeypatch.setattr(Path, "open", file_open)
         monkeypatch.setattr(
             rag_service,
             "embed_text",
-            MagicMock(side_effect=ValueError("invalid embedding response")),
+            MagicMock(side_effect=embed_failure, return_value=[0.5]),
         )
-        monkeypatch.setattr(rag_service, "add_memory", MagicMock())
+        monkeypatch.setattr(
+            rag_service,
+            "add_memory",
+            MagicMock(side_effect=store_failure),
+        )
 
-        rag_service._embed_and_store(record)
+        with caplog.at_level(logging.WARNING, logger=rag_service.__name__):
+            rag_service._embed_and_store(record)
 
-        dumped = json.loads(failed_path.read_text(encoding="utf-8").splitlines()[0])
-        assert dumped == {
-            "id": 31,
-            "character": "miori",
-            "role": "user",
-            "content": "農業日誌: invalid payload",
-            "timestamp": "2026-06-23T00:00:00+00:00",
-        }
-        rag_service.add_memory.assert_not_called()
+        assert not failed_path.exists()
+        file_open.assert_not_called()
+        assert "ログへ残してはいけない本文" not in caplog.text
+        assert _record_id(7) in caplog.text
+        assert failure.__class__.__name__ in caplog.text
+        if failure_stage == "embedding":
+            rag_service.add_memory.assert_not_called()
 
     def test_background_store_does_not_recheck_candidate_policy(self, monkeypatch):
         rag_service = importlib.import_module("app.memory.rag_service")
         record = SavedRecord(
-            29,
+            _record_id(29),
             "miori",
-            "assistant",
+            "user",
             "worker receives records after candidate filtering",
             "2026-06-23T00:00:00+00:00",
         )
@@ -389,73 +385,53 @@ class TestRagServiceRecording:
         rag_service.add_memory.assert_called_once()
         rag_service.is_long_term_memory_candidate.assert_not_called()
 
-    def test_record_chat_turn_skips_password_memory_policy_terms(self, monkeypatch):
+    def test_record_user_memory_candidate_skips_password_terms(self, monkeypatch):
         rag_service = importlib.import_module("app.memory.rag_service")
         background_tasks = MagicMock()
-        assistant_record = SavedRecord(
-            9,
-            "miori",
-            "assistant",
-            "受け取りました",
-            "2026-06-23T00:00:01+00:00",
-        )
         monkeypatch.setattr(
             rag_service,
-            "save_message",
-            MagicMock(return_value=assistant_record),
+            "create_memory_candidate_record",
+            MagicMock(),
         )
 
-        rag_service.record_chat_turn(
+        rag_service.record_user_memory_candidate(
             "miori",
             "パスワードはabc",
-            assistant_record.content,
             _resolved_policy(),
             background_tasks,
         )
 
-        rag_service.save_message.assert_called_once_with(
-            "miori",
-            "assistant",
-            assistant_record.content,
-        )
+        rag_service.create_memory_candidate_record.assert_not_called()
         background_tasks.add_task.assert_not_called()
 
-    def test_record_chat_turn_skips_temporary_chat_without_memory_value(
+    def test_record_user_memory_candidate_skips_temporary_chat_without_memory_value(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
         background_tasks = MagicMock()
         user_record = SavedRecord(
-            23,
+            _record_id(23),
             "miori",
             "user",
             "今日は眠いね",
             "2026-06-23T00:00:00+00:00",
         )
-        assistant_record = SavedRecord(
-            24,
-            "miori",
-            "assistant",
-            "そうですね",
-            "2026-06-23T00:00:01+00:00",
-        )
         monkeypatch.setattr(
             rag_service,
-            "save_message",
-            MagicMock(side_effect=[user_record, assistant_record]),
+            "create_memory_candidate_record",
+            MagicMock(return_value=user_record),
         )
 
-        rag_service.record_chat_turn(
+        rag_service.record_user_memory_candidate(
             "miori",
             user_record.content,
-            assistant_record.content,
             _resolved_policy(),
             background_tasks,
         )
 
         background_tasks.add_task.assert_not_called()
 
-    def test_record_chat_turn_does_not_enqueue_uncategorized_conversation(
+    def test_record_user_memory_candidate_does_not_enqueue_uncategorized_content(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -463,74 +439,58 @@ class TestRagServiceRecording:
         background_tasks = MagicMock()
 
         user_record = SavedRecord(
-            10,
+            _record_id(10),
             "miori",
             "user",
             "この料理は材料が多いね",
             "2026-06-23T00:00:00+00:00",
         )
-        assistant_record = SavedRecord(
-            11,
-            "miori",
-            "assistant",
-            "手順を整理しましょう",
-            "2026-06-23T00:00:01+00:00",
-        )
         monkeypatch.setattr(
             rag_service,
-            "save_message",
-            MagicMock(side_effect=[user_record, assistant_record]),
+            "create_memory_candidate_record",
+            MagicMock(return_value=user_record),
         )
 
-        rag_service.record_chat_turn(
+        rag_service.record_user_memory_candidate(
             "miori",
             user_record.content,
-            assistant_record.content,
             _resolved_policy(),
             background_tasks,
         )
 
-        assert rag_service.save_message.call_count == 2
+        assert rag_service.create_memory_candidate_record.call_count == 1
         background_tasks.add_task.assert_not_called()
 
-    def test_record_chat_turn_enqueues_recipe_memory_category(self, monkeypatch):
+    def test_record_user_memory_candidate_enqueues_recipe_category(self, monkeypatch):
         rag_service = importlib.import_module("app.memory.rag_service")
 
         background_tasks = MagicMock()
 
         user_record = SavedRecord(
-            13,
+            _record_id(13),
             "miori",
             "user",
             "レシピ: トマトソースの材料はトマトと塩",
             "2026-06-23T00:00:00+00:00",
         )
-        assistant_record = SavedRecord(
-            14,
-            "miori",
-            "assistant",
-            "レシピ記録として保存しました",
-            "2026-06-23T00:00:01+00:00",
-        )
         monkeypatch.setattr(
             rag_service,
-            "save_message",
-            MagicMock(side_effect=[user_record, assistant_record]),
+            "create_memory_candidate_record",
+            MagicMock(return_value=user_record),
         )
 
-        rag_service.record_chat_turn(
+        rag_service.record_user_memory_candidate(
             "miori",
             user_record.content,
-            assistant_record.content,
             _resolved_policy(),
             background_tasks,
         )
 
-        assert rag_service.save_message.call_count == 2
+        assert rag_service.create_memory_candidate_record.call_count == 1
         assert background_tasks.add_task.call_count == 1
         assert background_tasks.add_task.call_args_list[0].args[1] == user_record
 
-    def test_record_chat_turn_does_not_enqueue_policy_candidate_natural_records(
+    def test_record_user_memory_candidate_does_not_enqueue_natural_records(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -539,87 +499,63 @@ class TestRagServiceRecording:
 
         records = [
             SavedRecord(
-                15,
+                _record_id(15),
                 "miori",
                 "user",
                 "トマトに水やりした",
                 "2026-06-23T00:00:00+00:00",
             ),
             SavedRecord(
-                16,
-                "miori",
-                "assistant",
-                "前回の追肥は6月上旬です",
-                "2026-06-23T00:00:01+00:00",
-            ),
-            SavedRecord(
-                17,
+                _record_id(17),
                 "miori",
                 "user",
                 "材料はトマトと塩",
                 "2026-06-23T00:00:02+00:00",
             ),
-            SavedRecord(
-                18,
-                "miori",
-                "assistant",
-                "手順は煮詰めて味を調整します",
-                "2026-06-23T00:00:03+00:00",
-            ),
         ]
         monkeypatch.setattr(
             rag_service,
-            "save_message",
+            "create_memory_candidate_record",
             MagicMock(side_effect=records),
         )
 
-        rag_service.record_chat_turn(
+        rag_service.record_user_memory_candidate(
             "miori",
             records[0].content,
+            _resolved_policy(),
+            background_tasks,
+        )
+        rag_service.record_user_memory_candidate(
+            "miori",
             records[1].content,
             _resolved_policy(),
             background_tasks,
         )
-        rag_service.record_chat_turn(
-            "miori",
-            records[2].content,
-            records[3].content,
-            _resolved_policy(),
-            background_tasks,
-        )
 
-        assert rag_service.save_message.call_count == 4
+        assert rag_service.create_memory_candidate_record.call_count == 2
         background_tasks.add_task.assert_not_called()
 
-    def test_record_chat_turn_skips_assistant_reply_without_user_save_request(
+    def test_record_user_memory_candidate_enqueues_one_user_record(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
         background_tasks = MagicMock()
         user_record = SavedRecord(
-            11,
+            _record_id(11),
             "miori",
             "user",
             "保存したい: トマトに水やり",
             "2026-06-23T00:00:00+00:00",
         )
-        assistant_record = SavedRecord(
-            12,
-            "miori",
-            "assistant",
-            "保存しました: トマトに水やり",
-            "2026-06-23T00:00:01+00:00",
-        )
         monkeypatch.setattr(
             rag_service,
-            "save_message",
-            MagicMock(side_effect=[user_record, assistant_record]),
+            "create_memory_candidate_record",
+            MagicMock(return_value=user_record),
         )
 
-        rag_service.record_chat_turn(
+        rag_service.record_user_memory_candidate(
             "miori",
             user_record.content,
-            assistant_record.content,
             _resolved_policy(),
             background_tasks,
         )
@@ -627,81 +563,57 @@ class TestRagServiceRecording:
         assert background_tasks.add_task.call_count == 1
         assert background_tasks.add_task.call_args_list[0].args[1] == user_record
 
-    def test_record_chat_turn_logs_sensitive_content_without_chroma_enqueue(
+    def test_record_user_memory_candidate_skips_sensitive_content(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
 
         background_tasks = MagicMock()
 
-        assistant_record = SavedRecord(
-            20,
-            "miori",
-            "assistant",
-            "受け取りました",
-            "2026-06-23T00:00:01+00:00",
-        )
         monkeypatch.setattr(
             rag_service,
-            "save_message",
-            MagicMock(return_value=assistant_record),
+            "create_memory_candidate_record",
+            MagicMock(),
         )
 
-        rag_service.record_chat_turn(
+        rag_service.record_user_memory_candidate(
             "miori",
             "APIキーはabcです",
-            assistant_record.content,
             _resolved_policy(),
             background_tasks,
         )
 
-        rag_service.save_message.assert_called_once_with(
-            "miori",
-            "assistant",
-            assistant_record.content,
-        )
+        rag_service.create_memory_candidate_record.assert_not_called()
         background_tasks.add_task.assert_not_called()
 
-    def test_record_chat_turn_skips_sqlite_save_for_sensitive_user_message(
+    def test_record_user_memory_candidate_skips_sensitive_user_message(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
         background_tasks = MagicMock()
-        assistant_record = SavedRecord(
-            34,
-            "miori",
-            "assistant",
-            "その情報は保存しません",
-            "2026-06-23T00:00:01+00:00",
-        )
         monkeypatch.setattr(
             rag_service,
-            "save_message",
-            MagicMock(return_value=assistant_record),
+            "create_memory_candidate_record",
+            MagicMock(),
         )
 
-        rag_service.record_chat_turn(
+        rag_service.record_user_memory_candidate(
             "miori",
             "api key はabcです",
-            assistant_record.content,
             _resolved_policy(),
             background_tasks,
         )
 
-        rag_service.save_message.assert_called_once_with(
-            "miori",
-            "assistant",
-            assistant_record.content,
-        )
+        rag_service.create_memory_candidate_record.assert_not_called()
         background_tasks.add_task.assert_not_called()
 
-    def test_record_chat_turn_skips_sqlite_save_for_sensitive_assistant_reply(
+    def test_record_user_memory_candidate_uses_user_message_for_admission(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
         background_tasks = MagicMock()
         user_record = SavedRecord(
-            35,
+            _record_id(35),
             "miori",
             "user",
             "今日は晴れですね",
@@ -709,100 +621,61 @@ class TestRagServiceRecording:
         )
         monkeypatch.setattr(
             rag_service,
-            "save_message",
+            "create_memory_candidate_record",
             MagicMock(return_value=user_record),
         )
 
-        rag_service.record_chat_turn(
+        rag_service.record_user_memory_candidate(
             "miori",
             user_record.content,
-            "認証情報はabcです",
             _resolved_policy(),
             background_tasks,
         )
 
-        rag_service.save_message.assert_called_once_with(
+        rag_service.create_memory_candidate_record.assert_called_once_with(
             "miori",
-            "user",
             user_record.content,
         )
         background_tasks.add_task.assert_not_called()
 
-    def test_record_chat_turn_skips_both_sqlite_saves_when_both_messages_are_sensitive(
+    def test_record_user_memory_candidate_skips_when_message_is_sensitive(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
         background_tasks = MagicMock()
-        monkeypatch.setattr(rag_service, "save_message", MagicMock())
+        monkeypatch.setattr(rag_service, "create_memory_candidate_record", MagicMock())
 
-        rag_service.record_chat_turn(
+        rag_service.record_user_memory_candidate(
             "miori",
             "パスワードはabc",
-            "secret key は保存できません",
             _resolved_policy(),
             background_tasks,
         )
 
-        rag_service.save_message.assert_not_called()
+        rag_service.create_memory_candidate_record.assert_not_called()
         background_tasks.add_task.assert_not_called()
 
-    def test_record_chat_turn_does_not_persist_sensitive_message_to_sqlite(
-        self, tmp_path, monkeypatch
-    ):
-        conversation_log = importlib.import_module("app.memory.conversation_log")
-        rag_service = importlib.import_module("app.memory.rag_service")
-        data_dir = tmp_path / "data"
-        monkeypatch.setattr(conversation_log, "DATA_DIR", data_dir)
-        monkeypatch.setattr(conversation_log, "DB_PATH", data_dir / "conversations.db")
-        background_tasks = MagicMock()
-
-        rag_service.record_chat_turn(
-            "miori",
-            "APIキーはabcです",
-            "受け取りました",
-            _resolved_policy(),
-            background_tasks,
-        )
-
-        messages = conversation_log.get_messages("miori")
-        assert [(message.role, message.content) for message in messages] == [
-            ("assistant", "受け取りました"),
-        ]
-        background_tasks.add_task.assert_not_called()
-
-    def test_record_chat_turn_logs_negative_save_request_without_chroma_enqueue(
+    def test_record_user_memory_candidate_skips_negative_save_request(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
 
         background_tasks = MagicMock()
 
-        assistant_record = SavedRecord(
-            22,
-            "miori",
-            "assistant",
-            "保存しません",
-            "2026-06-23T00:00:01+00:00",
-        )
         monkeypatch.setattr(
             rag_service,
-            "save_message",
-            MagicMock(return_value=assistant_record),
+            "create_memory_candidate_record",
+            MagicMock(),
         )
 
-        rag_service.record_chat_turn(
+        rag_service.record_user_memory_candidate(
             "miori",
             "この内容は保存しないで",
-            assistant_record.content,
             _resolved_policy(),
             background_tasks,
         )
 
-        rag_service.save_message.assert_called_once_with(
-            "miori",
-            "assistant",
-            assistant_record.content,
-        )
+        rag_service.create_memory_candidate_record.assert_not_called()
         background_tasks.add_task.assert_not_called()
 
 
@@ -874,18 +747,11 @@ class TestMemoryPolicyConfiguration:
         rag_service = importlib.import_module("app.memory.rag_service")
         memory_policy = importlib.import_module("app.memory.memory_policy")
         background_tasks = MagicMock()
-        assistant_record = SavedRecord(
-            33,
-            "miori",
-            "assistant",
-            "受け取りました",
-            "2026-06-23T00:00:01+00:00",
-        )
         policy = memory_policy.resolved_memory_policy()
         monkeypatch.setattr(
             rag_service,
-            "save_message",
-            MagicMock(return_value=assistant_record),
+            "create_memory_candidate_record",
+            MagicMock(),
         )
         monkeypatch.setattr(rag_service, "embed_text", MagicMock())
         monkeypatch.setattr(rag_service, "query_memories", MagicMock())
@@ -896,10 +762,9 @@ class TestMemoryPolicyConfiguration:
             "基本人格",
             policy,
         )
-        rag_service.record_chat_turn(
+        rag_service.record_user_memory_candidate(
             "miori",
             sensitive_content,
-            assistant_record.content,
             policy,
             background_tasks,
         )
@@ -908,11 +773,7 @@ class TestMemoryPolicyConfiguration:
         assert memory_policy.contains_sensitive_memory(sensitive_content, policy)
         rag_service.embed_text.assert_not_called()
         rag_service.query_memories.assert_not_called()
-        rag_service.save_message.assert_called_once_with(
-            "miori",
-            "assistant",
-            assistant_record.content,
-        )
+        rag_service.create_memory_candidate_record.assert_not_called()
         background_tasks.add_task.assert_not_called()
 
     def test_do_not_store_terms_are_loaded_from_config_file(
@@ -940,7 +801,7 @@ class TestMemoryPolicyConfiguration:
 
         assert not memory_policy.is_long_term_memory_candidate(
             SavedRecord(
-                27,
+                _record_id(27),
                 "miori",
                 "user",
                 "save-me never-store this",
@@ -950,7 +811,7 @@ class TestMemoryPolicyConfiguration:
         )
         assert memory_policy.is_long_term_memory_candidate(
             SavedRecord(
-                28,
+                _record_id(28),
                 "miori",
                 "user",
                 "save-me ordinary memory",
@@ -989,7 +850,7 @@ class TestMemoryPolicyConfiguration:
 
         assert memory_policy.is_long_term_memory_candidate(
             SavedRecord(
-                23,
+                _record_id(23),
                 "miori",
                 "user",
                 "service-save peppers",
@@ -999,7 +860,7 @@ class TestMemoryPolicyConfiguration:
         )
         assert not memory_policy.is_long_term_memory_candidate(
             SavedRecord(
-                24,
+                _record_id(24),
                 "miori",
                 "user",
                 "common-save peppers",
@@ -1031,7 +892,7 @@ class TestMemoryPolicyConfiguration:
 
         assert memory_policy.is_long_term_memory_candidate(
             SavedRecord(
-                25,
+                _record_id(25),
                 "miori",
                 "user",
                 "Journal* peppers",
@@ -1041,7 +902,7 @@ class TestMemoryPolicyConfiguration:
         )
         assert not memory_policy.is_long_term_memory_candidate(
             SavedRecord(
-                26,
+                _record_id(26),
                 "miori",
                 "user",
                 "レシピ: peppers",

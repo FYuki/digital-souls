@@ -1,13 +1,10 @@
-import json
 import logging
 from collections.abc import Callable
-from pathlib import Path
 from typing import Protocol
 
 import httpx
 
 from app.memory.chroma_store import MemorySearchResult, add_memory, query_memories
-from app.memory.conversation_log import ConversationRecord, save_message
 from app.memory.embedder import embed_text
 from app.memory.memory_policy import (
     MemoryPolicy,
@@ -16,9 +13,10 @@ from app.memory.memory_policy import (
     is_long_term_memory_candidate,
     rag_service_policy,
 )
-
-DATA_DIR = Path(__file__).resolve().parents[1] / "data"
-FAILED_MEMORY_LOG_PATH = DATA_DIR / "failed-memories.jsonl"
+from app.memory.rag_record import (
+    MemoryCandidateRecord,
+    create_memory_candidate_record,
+)
 
 logger = logging.getLogger(__name__)
 RAG_OPERATION_ERRORS = (httpx.HTTPError, OSError, RuntimeError, ValueError)
@@ -35,12 +33,24 @@ class _BackgroundTaskQueue(Protocol):
 
 
 def _enqueue_memory_candidate(
-    record: ConversationRecord,
+    record: MemoryCandidateRecord,
     policy: MemoryPolicy,
     task_queue: _BackgroundTaskQueue,
 ) -> None:
     if is_long_term_memory_candidate(record, policy):
         task_queue.add_task(_embed_and_store, record)
+
+
+def record_user_memory_candidate(
+    character: str,
+    user_message: str,
+    policy: MemoryPolicy,
+    task_queue: _BackgroundTaskQueue,
+) -> None:
+    if contains_non_storable_memory(user_message, policy):
+        return
+    record = create_memory_candidate_record(character, user_message)
+    _enqueue_memory_candidate(record, policy, task_queue)
 
 
 def _format_augmented_prompt(
@@ -78,39 +88,7 @@ def build_augmented_system_prompt(
     return _format_augmented_prompt(system_prompt, memories)
 
 
-def record_chat_turn(
-    character: str,
-    user_message: str,
-    assistant_reply: str,
-    policy: MemoryPolicy,
-    task_queue: _BackgroundTaskQueue,
-) -> None:
-    if not contains_non_storable_memory(user_message, policy):
-        user_record = save_message(character, "user", user_message)
-        _enqueue_memory_candidate(user_record, policy, task_queue)
-    if not contains_non_storable_memory(assistant_reply, policy):
-        assistant_record = save_message(character, "assistant", assistant_reply)
-        _enqueue_memory_candidate(assistant_record, policy, task_queue)
-
-
-def _failed_record_payload(record: ConversationRecord) -> dict[str, object]:
-    return {
-        "id": record.id,
-        "character": record.character,
-        "role": record.role,
-        "content": record.content,
-        "timestamp": record.timestamp,
-    }
-
-
-def _write_failed_record(record: ConversationRecord) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    with FAILED_MEMORY_LOG_PATH.open("a", encoding="utf-8") as file:
-        file.write(json.dumps(_failed_record_payload(record), ensure_ascii=False))
-        file.write("\n")
-
-
-def _embed_and_store(record: ConversationRecord) -> None:
+def _embed_and_store(record: MemoryCandidateRecord) -> None:
     try:
         embedding = embed_text(record.content)
         add_memory(
@@ -125,5 +103,8 @@ def _embed_and_store(record: ConversationRecord) -> None:
             },
         )
     except RAG_OPERATION_ERRORS as exc:
-        logger.warning("RAG memory storage failed: %s", exc.__class__.__name__)
-        _write_failed_record(record)
+        logger.warning(
+            "RAG memory storage failed: memory_id=%s error_type=%s",
+            record.id,
+            exc.__class__.__name__,
+        )

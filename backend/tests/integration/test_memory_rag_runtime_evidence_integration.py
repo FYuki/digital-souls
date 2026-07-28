@@ -1,5 +1,4 @@
 import importlib
-import json
 import time
 from pathlib import Path
 from uuid import uuid4
@@ -36,7 +35,6 @@ def _require_runtime_evidence_dependencies() -> None:
 def _load_runtime_modules() -> dict[str, object]:
     module_names = (
         "app.memory.chroma_store",
-        "app.memory.conversation_log",
         "app.memory.rag_service",
         "app._chat_runtime",
         "app.chat_service",
@@ -50,20 +48,11 @@ def _load_runtime_modules() -> dict[str, object]:
 
 def _isolate_memory_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import app.memory.chroma_store as chroma_store
-    import app.memory.conversation_log as conversation_log
     import app.memory.rag_service as rag_service
 
     data_dir = tmp_path / "data"
     monkeypatch.setattr(chroma_store, "DATA_DIR", data_dir)
     monkeypatch.setattr(chroma_store, "CHROMA_PATH", data_dir / "chroma")
-    monkeypatch.setattr(conversation_log, "DATA_DIR", data_dir)
-    monkeypatch.setattr(conversation_log, "DB_PATH", data_dir / "conversations.db")
-    monkeypatch.setattr(rag_service, "DATA_DIR", data_dir)
-    monkeypatch.setattr(
-        rag_service,
-        "FAILED_MEMORY_LOG_PATH",
-        data_dir / "failed-memories.jsonl",
-    )
     monkeypatch.setattr(rag_service, "add_memory", chroma_store.add_memory)
     monkeypatch.setattr(rag_service, "query_memories", chroma_store.query_memories)
 
@@ -151,7 +140,7 @@ class TestRagRuntimeEvidenceIntegration:
         assert "過去の記憶:" in captured_llm_calls[-1]["system_prompt"]
         assert stored_memory in captured_llm_calls[-1]["system_prompt"]
 
-    def test_real_storage_failure_chat_continues_and_failed_memory_is_written(
+    def test_real_storage_failure_chat_continues_without_failed_memory_file(
         self, tmp_path, monkeypatch
     ):
         monkeypatch.setenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:latest")
@@ -216,14 +205,4 @@ class TestRagRuntimeEvidenceIntegration:
             "response": "農業日誌として保存しました。",
         }
 
-        _wait_until(lambda: rag_service.FAILED_MEMORY_LOG_PATH.exists())
-        failed_lines = rag_service.FAILED_MEMORY_LOG_PATH.read_text(
-            encoding="utf-8"
-        ).splitlines()
-        failed_payloads = [json.loads(line) for line in failed_lines]
-        assert any(
-            payload["character"] == "miori"
-            and payload["role"] == "user"
-            and payload["content"] == user_message
-            for payload in failed_payloads
-        )
+        assert not tmp_path.joinpath("data", "failed-memories.jsonl").exists()

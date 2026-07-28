@@ -1,4 +1,3 @@
-import json
 import threading
 import time
 
@@ -19,7 +18,9 @@ _GENERATE_RESPONSE = "app._chat_runtime._llm_router.generate_response"
 _BUILD_AUGMENTED_SYSTEM_PROMPT = (
     "app._chat_runtime._rag_service.build_augmented_system_prompt"
 )
-_RECORD_CHAT_TURN = "app._chat_runtime._rag_service.record_chat_turn"
+_RECORD_USER_MEMORY_CANDIDATE = (
+    "app._chat_runtime._rag_service.record_user_memory_candidate"
+)
 _RESOLVED_MEMORY_POLICY = "app._chat_runtime.resolved_memory_policy"
 _LOAD_TTS_CONFIG = "app.audio_pipeline.load_tts_config"
 _TRANSCRIBE = "app.stt.whisper_client.WhisperTranscriber.transcribe"
@@ -63,20 +64,10 @@ def _write_character(tmp_path, character: str, system_prompt: str) -> None:
 
 def _isolate_memory_paths(tmp_path, monkeypatch) -> None:
     import app.memory.chroma_store as chroma_store
-    import app.memory.conversation_log as conversation_log
-    import app.memory.rag_service as rag_service
 
     data_dir = tmp_path / "data"
     monkeypatch.setattr(chroma_store, "DATA_DIR", data_dir)
     monkeypatch.setattr(chroma_store, "CHROMA_PATH", data_dir / "chroma")
-    monkeypatch.setattr(conversation_log, "DATA_DIR", data_dir)
-    monkeypatch.setattr(conversation_log, "DB_PATH", data_dir / "conversations.db")
-    monkeypatch.setattr(rag_service, "DATA_DIR", data_dir)
-    monkeypatch.setattr(
-        rag_service,
-        "FAILED_MEMORY_LOG_PATH",
-        data_dir / "failed-memories.jsonl",
-    )
 
 
 def _wait_until(predicate, timeout: float = 5.0) -> None:
@@ -185,7 +176,9 @@ class TestWebSocketEndpoint:
 
         mock_gen.assert_called_once_with(_PERSONALITY, user_message)
 
-    def test_rag_enabled_uses_augmented_prompt_and_records_turn(self, monkeypatch):
+    def test_rag_enabled_uses_prompt_and_records_user_memory_candidate(
+        self, monkeypatch
+    ):
         user_message = "前回なんの話をしたっけ？"
         policy = object()
         augmented_prompt = f"{_PERSONALITY}\n\n過去の記憶:\n前回は畑の話をした"
@@ -199,7 +192,9 @@ class TestWebSocketEndpoint:
                         return_value=augmented_prompt,
                     ) as mock_build:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
-                            with patch(_RECORD_CHAT_TURN) as mock_record:
+                            with patch(
+                                _RECORD_USER_MEMORY_CANDIDATE
+                            ) as mock_record:
                                 with client.websocket_connect("/ws/miori") as websocket:
                                     websocket.send_json(
                                         {"type": "text", "message": user_message},
@@ -216,9 +211,9 @@ class TestWebSocketEndpoint:
         mock_gen.assert_called_once_with(augmented_prompt, user_message)
         mock_record.assert_called_once()
         args, _kwargs = mock_record.call_args
-        assert args[:3] == ("miori", user_message, _LLM_REPLY)
-        assert args[3] is policy
-        assert hasattr(args[4], "add_task")
+        assert args[:2] == ("miori", user_message)
+        assert args[2] is policy
+        assert hasattr(args[3], "add_task")
 
     def test_returns_422_when_payload_is_not_json_object(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
@@ -2147,7 +2142,7 @@ class TestWebSocketFlow:
             "農業日誌: 2026-06-23はトマト畑に水やりした"
         )
 
-    def test_rag_storage_failure_does_not_block_websocket_response_and_writes_fallback(
+    def test_rag_storage_failure_does_not_block_or_write_fallback(
         self, tmp_path, monkeypatch
     ):
         import app.characters.loader as loader_module
@@ -2194,15 +2189,4 @@ class TestWebSocketFlow:
                     }
                     release_add.set()
 
-        failed_path = rag_service.FAILED_MEMORY_LOG_PATH
-        _wait_until(lambda: failed_path.exists())
-        failed_payloads = [
-            json.loads(line)
-            for line in failed_path.read_text(encoding="utf-8").splitlines()
-        ]
-        assert any(
-            payload["character"] == "miori"
-            and payload["role"] == "user"
-            and payload["content"] == user_message
-            for payload in failed_payloads
-        )
+        assert not tmp_path.joinpath("data", "failed-memories.jsonl").exists()

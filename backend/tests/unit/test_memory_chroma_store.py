@@ -70,7 +70,14 @@ class TestChromaStore:
             "timestamp": "2026-06-23T00:00:00+00:00",
         }
 
-        chroma_store.add_memory("miori", 42, [0.1, 0.2], "畑の相談", metadata)
+        record_id = "00000000-0000-4000-8000-000000000042"
+        chroma_store.add_memory(
+            "miori",
+            record_id,
+            [0.1, 0.2],
+            "畑の相談",
+            metadata,
+        )
 
         client = FakePersistentClient.instances[0]
         collection_name = next(iter(client.collections))
@@ -79,7 +86,7 @@ class TestChromaStore:
         assert collection_name.startswith("character-miori-")
         assert collection.add_calls == [
             {
-                "ids": ["42"],
+                "ids": [record_id],
                 "embeddings": [[0.1, 0.2]],
                 "documents": ["畑の相談"],
                 "metadatas": [metadata],
@@ -120,7 +127,7 @@ class TestChromaStore:
 
         chroma_store.add_memory(
             "mi",
-            43,
+            "00000000-0000-4000-8000-000000000043",
             [0.1, 0.2],
             "短いキャラクター名の記憶",
             {
@@ -140,7 +147,9 @@ class TestChromaStore:
         assert add_name != query_name
         assert _is_chroma_safe_name(add_name)
         assert _is_chroma_safe_name(query_name)
-        assert add_client.collections[add_name].add_calls[0]["ids"] == ["43"]
+        assert add_client.collections[add_name].add_calls[0]["ids"] == [
+            "00000000-0000-4000-8000-000000000043"
+        ]
         assert query_client.collections[query_name].query_calls == [
             {"query_embeddings": [[0.3, 0.4]], "n_results": 5}
         ]
@@ -152,7 +161,7 @@ class TestChromaStore:
 
         chroma_store.add_memory(
             "Miori",
-            44,
+            "00000000-0000-4000-8000-000000000044",
             [0.1, 0.2],
             "別キャラクターの記憶",
             {
@@ -168,7 +177,9 @@ class TestChromaStore:
         add_name = next(iter(add_client.collections))
         query_name = next(iter(query_client.collections))
         assert add_name != query_name
-        assert add_client.collections[add_name].add_calls[0]["ids"] == ["44"]
+        assert add_client.collections[add_name].add_calls[0]["ids"] == [
+            "00000000-0000-4000-8000-000000000044"
+        ]
         assert query_client.collections[query_name].query_calls == [
             {"query_embeddings": [[0.3, 0.4]], "n_results": 5}
         ]
@@ -181,7 +192,7 @@ class TestChromaStore:
 
         chroma_store.add_memory(
             character,
-            45,
+            "00000000-0000-4000-8000-000000000045",
             [0.1, 0.2],
             "長いキャラクター名の記憶",
             {
@@ -198,7 +209,9 @@ class TestChromaStore:
         query_name = next(iter(query_client.collections))
         assert add_name == query_name
         assert _is_chroma_safe_name(add_name)
-        assert add_client.collections[add_name].add_calls[0]["ids"] == ["45"]
+        assert add_client.collections[add_name].add_calls[0]["ids"] == [
+            "00000000-0000-4000-8000-000000000045"
+        ]
         assert query_client.collections[query_name].query_calls == [
             {"query_embeddings": [[0.3, 0.4]], "n_results": 5}
         ]

@@ -1,5 +1,3 @@
-import json
-import time
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -13,7 +11,9 @@ _GENERATE_RESPONSE = "app._chat_runtime._llm_router.generate_response"
 _BUILD_AUGMENTED_SYSTEM_PROMPT = (
     "app._chat_runtime._rag_service.build_augmented_system_prompt"
 )
-_RECORD_CHAT_TURN = "app._chat_runtime._rag_service.record_chat_turn"
+_RECORD_USER_MEMORY_CANDIDATE = (
+    "app._chat_runtime._rag_service.record_user_memory_candidate"
+)
 _RESOLVED_MEMORY_POLICY = "app._chat_runtime.resolved_memory_policy"
 
 _VALID_BODY = {"character": "miori", "message": "自己紹介してください"}
@@ -28,30 +28,6 @@ def _ollama_response(content: str) -> MagicMock:
     }
     response.raise_for_status.return_value = None
     return response
-
-
-def _isolate_memory_paths(tmp_path, monkeypatch) -> None:
-    import app.memory.conversation_log as conversation_log
-    import app.memory.rag_service as rag_service
-
-    data_dir = tmp_path / "data"
-    monkeypatch.setattr(conversation_log, "DATA_DIR", data_dir)
-    monkeypatch.setattr(conversation_log, "DB_PATH", data_dir / "conversations.db")
-    monkeypatch.setattr(rag_service, "DATA_DIR", data_dir)
-    monkeypatch.setattr(
-        rag_service,
-        "FAILED_MEMORY_LOG_PATH",
-        data_dir / "failed-memories.jsonl",
-    )
-
-
-def _wait_until(predicate, timeout: float = 5.0) -> None:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if predicate():
-            return
-        time.sleep(0.01)
-    raise AssertionError("condition was not met before timeout")
 
 
 class TestChatEndpoint:
@@ -132,7 +108,7 @@ class TestChatEndpoint:
                         return_value=augmented_prompt,
                     ) as mock_build:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
-                            with patch(_RECORD_CHAT_TURN):
+                            with patch(_RECORD_USER_MEMORY_CANDIDATE):
                                 client.post("/chat", json=_VALID_BODY)
 
         mock_build.assert_called_once_with(
@@ -143,7 +119,7 @@ class TestChatEndpoint:
         )
         mock_gen.assert_called_once_with(augmented_prompt, _VALID_BODY["message"])
 
-    def test_records_chat_turn_after_llm_reply(self, monkeypatch):
+    def test_records_user_memory_candidate_after_llm_reply(self, monkeypatch):
         policy = object()
         monkeypatch.setenv("RAG_ENABLED", "true")
         with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
@@ -151,15 +127,17 @@ class TestChatEndpoint:
                 with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
                     with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT, return_value=_PERSONALITY):
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
-                            with patch(_RECORD_CHAT_TURN) as mock_record:
+                            with patch(
+                                _RECORD_USER_MEMORY_CANDIDATE
+                            ) as mock_record:
                                 response = client.post("/chat", json=_VALID_BODY)
 
         assert response.status_code == 200
         mock_record.assert_called_once()
         args, _kwargs = mock_record.call_args
-        assert args[:3] == ("miori", _VALID_BODY["message"], _LLM_REPLY)
-        assert args[3] is policy
-        assert hasattr(args[4], "add_task")
+        assert args[:2] == ("miori", _VALID_BODY["message"])
+        assert args[2] is policy
+        assert hasattr(args[3], "add_task")
 
     def test_rag_disabled_does_not_resolve_memory_policy_or_record(self, monkeypatch):
         monkeypatch.setenv("RAG_ENABLED", "false")
@@ -168,7 +146,9 @@ class TestChatEndpoint:
                 with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
                     with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT) as mock_build:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
-                            with patch(_RECORD_CHAT_TURN) as mock_record:
+                            with patch(
+                                _RECORD_USER_MEMORY_CANDIDATE
+                            ) as mock_record:
                                 response = client.post("/chat", json=_VALID_BODY)
 
         assert response.status_code == 200
@@ -176,10 +156,10 @@ class TestChatEndpoint:
         mock_build.assert_not_called()
         mock_record.assert_not_called()
 
-    def test_does_not_record_chat_turn_when_llm_fails(self, client):
+    def test_does_not_record_user_memory_candidate_when_llm_fails(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
             with patch(_GENERATE_RESPONSE, side_effect=httpx.HTTPError("boom")):
-                with patch(_RECORD_CHAT_TURN) as mock_record:
+                with patch(_RECORD_USER_MEMORY_CANDIDATE) as mock_record:
                     response = client.post("/chat", json=_VALID_BODY)
 
         assert response.status_code == 502
@@ -317,7 +297,7 @@ class TestChatFlow:
                 return_value=augmented_prompt,
             ) as mock_build:
                 with patch(
-                    "app._chat_runtime._rag_service.record_chat_turn"
+                    "app._chat_runtime._rag_service.record_user_memory_candidate"
                 ) as mock_record:
                     with patch(
                         "app.llm.ollama_client.httpx.post",
@@ -342,13 +322,12 @@ class TestChatFlow:
             policy,
         )
         mock_record.assert_called_once()
-        assert mock_record.call_args.args[:3] == (
+        assert mock_record.call_args.args[:2] == (
             "miori",
             "前回なんの話をしたっけ？",
-            expected_reply,
         )
-        assert mock_record.call_args.args[3] is policy
-        assert hasattr(mock_record.call_args.args[4], "add_task")
+        assert mock_record.call_args.args[2] is policy
+        assert hasattr(mock_record.call_args.args[3], "add_task")
 
         payload = mock_post.call_args.kwargs["json"]
         assert payload["messages"] == [
@@ -356,14 +335,13 @@ class TestChatFlow:
             {"role": "user", "content": "前回なんの話をしたっけ？"},
         ]
 
-    def test_rag_value_error_falls_back_to_plain_chat_and_writes_failed_memory(
+    def test_rag_value_error_falls_back_without_writing_failed_memory(
         self, tmp_path, monkeypatch
     ):
         import app.characters.loader as loader_module
         import app.memory.rag_service as rag_service
 
         monkeypatch.setenv("RAG_ENABLED", "true")
-        _isolate_memory_paths(tmp_path, monkeypatch)
         characters_dir = tmp_path / "characters" / "miori"
         characters_dir.mkdir(parents=True)
         system_prompt = "# 光織\nあなたは光織です。"
@@ -400,15 +378,4 @@ class TestChatFlow:
         ]
         rag_service.query_memories.assert_not_called()
 
-        failed_path = rag_service.FAILED_MEMORY_LOG_PATH
-        _wait_until(lambda: failed_path.exists())
-        failed_payloads = [
-            json.loads(line)
-            for line in failed_path.read_text(encoding="utf-8").splitlines()
-        ]
-        assert any(
-            payload["character"] == "miori"
-            and payload["role"] == "user"
-            and payload["content"] == user_message
-            for payload in failed_payloads
-        )
+        assert not tmp_path.joinpath("data", "failed-memories.jsonl").exists()

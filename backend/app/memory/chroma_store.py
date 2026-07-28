@@ -79,13 +79,13 @@ def _collection(character: str) -> _ChromaCollection:
 
 def add_memory(
     character: str,
-    record_id: int,
+    record_id: str,
     embedding: list[float],
     content: str,
     metadata: dict[str, str],
 ) -> None:
     _collection(character).add(
-        ids=[str(record_id)],
+        ids=[record_id],
         embeddings=[embedding],
         documents=[content],
         metadatas=[metadata],

@@ -26,7 +26,9 @@ _GENERATE_RESPONSE = "app._chat_runtime._llm_router.generate_response"
 _BUILD_AUGMENTED_SYSTEM_PROMPT = (
     "app._chat_runtime._rag_service.build_augmented_system_prompt"
 )
-_RECORD_CHAT_TURN = "app._chat_runtime._rag_service.record_chat_turn"
+_RECORD_USER_MEMORY_CANDIDATE = (
+    "app._chat_runtime._rag_service.record_user_memory_candidate"
+)
 _RESOLVED_MEMORY_POLICY = "app._chat_runtime.resolved_memory_policy"
 
 
@@ -54,7 +56,7 @@ class TestChatServiceErrorContract:
         assert not hasattr(chat_service, "generate_response")
         assert not hasattr(chat_service, "resolved_memory_policy")
         assert not hasattr(chat_service, "build_augmented_system_prompt")
-        assert not hasattr(chat_service, "record_chat_turn")
+        assert not hasattr(chat_service, "record_user_memory_candidate")
         assert not hasattr(chat_service, "MemoryPolicy")
         assert not hasattr(chat_service, "BackgroundTaskQueue")
         assert not hasattr(chat_service, "_generate_chat_reply_for_runtime")
@@ -225,29 +227,29 @@ class TestChatServiceRagContract:
                 return_value=augmented_prompt,
             ) as mock_build:
                 with patch(_GENERATE_RESPONSE, return_value="reply") as mock_gen:
-                    with patch(_RECORD_CHAT_TURN):
+                    with patch(_RECORD_USER_MEMORY_CANDIDATE):
                         reply = service.generate_chat_reply("miori", "hello")
 
         assert reply == "reply"
         mock_build.assert_called_once_with("miori", "hello", base_prompt, policy)
         mock_gen.assert_called_once_with(augmented_prompt, "hello")
 
-    def test_two_argument_reply_records_turn_when_rag_enabled(self):
+    def test_two_argument_reply_records_user_memory_candidate_when_rag_enabled(self):
         policy = object()
 
         service = _chat_service(True, policy)
         with patch(_LOAD_PERSONALITY, return_value="# prompt"):
             with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT, return_value="# augmented"):
                 with patch(_GENERATE_RESPONSE, return_value="reply"):
-                    with patch(_RECORD_CHAT_TURN) as mock_record:
+                    with patch(_RECORD_USER_MEMORY_CANDIDATE) as mock_record:
                         reply = service.generate_chat_reply("miori", "hello")
 
         assert reply == "reply"
         mock_record.assert_called_once()
         args, _kwargs = mock_record.call_args
-        assert args[:3] == ("miori", "hello", "reply")
-        assert args[3] is policy
-        assert hasattr(args[4], "add_task")
+        assert args[:2] == ("miori", "hello")
+        assert args[2] is policy
+        assert hasattr(args[3], "add_task")
 
     def test_two_argument_reply_uses_shared_memory_queue_when_rag_enabled(self):
         policy = object()
@@ -256,12 +258,12 @@ class TestChatServiceRagContract:
         with patch(_LOAD_PERSONALITY, return_value="# prompt"):
             with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT, return_value="# prompt"):
                 with patch(_GENERATE_RESPONSE, return_value="reply"):
-                    with patch(_RECORD_CHAT_TURN) as mock_record:
+                    with patch(_RECORD_USER_MEMORY_CANDIDATE) as mock_record:
                         reply = service.generate_chat_reply("miori", "hello")
 
         assert reply == "reply"
         mock_record.assert_called_once()
-        assert hasattr(mock_record.call_args.args[4], "add_task")
+        assert hasattr(mock_record.call_args.args[3], "add_task")
 
     def test_rag_disabled_keeps_plain_prompt_without_memory_work(self):
         service = _chat_service(False)
@@ -269,7 +271,7 @@ class TestChatServiceRagContract:
             with patch(_LOAD_PERSONALITY, return_value="# prompt"):
                 with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT) as mock_build:
                     with patch(_GENERATE_RESPONSE, return_value="reply") as mock_gen:
-                        with patch(_RECORD_CHAT_TURN) as mock_record:
+                        with patch(_RECORD_USER_MEMORY_CANDIDATE) as mock_record:
                             reply = service.generate_chat_reply("miori", "hello")
 
         assert reply == "reply"
@@ -293,7 +295,7 @@ class TestChatServiceRagContract:
                         _GENERATE_RESPONSE,
                         side_effect=["reply 1", "reply 2"],
                     ) as mock_gen:
-                        with patch(_RECORD_CHAT_TURN) as mock_record:
+                        with patch(_RECORD_USER_MEMORY_CANDIDATE) as mock_record:
                             first_reply = session.generate_reply("hello")
                             second_reply = session.generate_reply("again")
             return (
@@ -320,8 +322,12 @@ class TestChatServiceRagContract:
         mock_gen.assert_any_call("# augmented 1", "hello")
         mock_gen.assert_any_call("# augmented 2", "again")
         assert mock_record.call_count == 2
+        assert [call.args[:2] for call in mock_record.call_args_list] == [
+            ("miori", "hello"),
+            ("miori", "again"),
+        ]
         for call in mock_record.call_args_list:
-            assert hasattr(call.args[4], "add_task")
+            assert hasattr(call.args[3], "add_task")
 
     def test_runtime_config_fails_fast_for_inconsistent_rag_policy(self):
         with pytest.raises(ValueError, match="memory policy is required"):

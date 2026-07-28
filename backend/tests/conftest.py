@@ -12,6 +12,16 @@ if str(ENVIRONMENTS_DIR) not in sys.path:
     sys.path.insert(0, str(ENVIRONMENTS_DIR))
 
 
+@pytest.fixture(autouse=True)
+def conversation_history_database_path(tmp_path, monkeypatch) -> Path:
+    database_path = tmp_path / "conversation-history.db"
+    monkeypatch.setattr(
+        "app.conversation_history.config.DEFAULT_DATABASE_PATH",
+        database_path,
+    )
+    return database_path
+
+
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setenv("RAG_ENABLED", "false")

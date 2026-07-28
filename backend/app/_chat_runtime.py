@@ -238,18 +238,16 @@ def _call_llm(system_prompt: str, message: str) -> str:
         raise chat_service.ChatBackendError() from exc
 
 
-def _record_reply(
+def _record_user_memory_candidate(
     character: str,
     message: str,
-    reply: str,
     context: _ResolvedChatContext,
 ) -> None:
     if context.memory_policy is None:
         return
-    _rag_service.record_chat_turn(
+    _rag_service.record_user_memory_candidate(
         character,
         message,
-        reply,
         context.memory_policy,
         context.memory_task_queue,
     )
@@ -262,5 +260,5 @@ def _generate_reply(
 ) -> str:
     prompt = _system_prompt_for_reply(character, message, context)
     reply = _call_llm(prompt, message)
-    _record_reply(character, message, reply, context)
+    _record_user_memory_candidate(character, message, context)
     return reply
