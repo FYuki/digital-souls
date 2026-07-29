@@ -143,29 +143,51 @@ UI上のスレッドはBackendの`conversation_id`に対応する。同じ`chara
 ```text
 受信した会話
   ├─ 現在ターンの応答生成（原文は処理中だけ利用）
-  └─ 共通privacy scanner / 意味assessment
-       ├─ 履歴用policy
-       │    ├─ MASK / STORE
-       │    └─ SKIP_CONTENT
-       │         └─ SQLite: conversations / conversation_turns
+  ├─ Wave 1: 共通の決定論的privacy scanner
+  │    ├─ 履歴用policy
+  │    │    ├─ MASK / STORE
+  │    │    └─ SKIP_CONTENT
+  │    │         └─ SQLite: conversations / conversation_turns
+  │    └─ Wave 2へfindingを提供
+  └─ Wave 2: 文脈依存PrivacyAssessment
        └─ RAG admission policy
             └─ ALLOW_STRUCTURED
                  └─ SQLite: approved_memories + memory_index_outbox
                       └─ Chroma: 承認済み記憶の派生index
 ```
 
-共通privacy scannerは保存先を決めず、カテゴリ、本文中の位置、reason code、versionを
-型付きfindingとして処理中だけ返す。履歴用policyは、APIキー、password、秘密鍵、決済認証、
+共通privacy scannerは保存先を決めず、カテゴリ、原文上の半開区間、reason code、version、
+保存拒否scopeを型付きfindingとして処理中だけ返す。公開interfaceは`ScanSuccess`または
+metadata-onlyの`ScanFailure`を返す。NFKC等の認識用viewと原文spanの対応はscanner内部だけで
+保持し、MVPは日本と米国の固定corpusから開始する。履歴用policyは、APIキー、password、秘密鍵、決済認証、
 口座番号、政府ID、私用連絡先、正確な住所等の値をマスクし、明示的な履歴非保存要求または
 安全にマスクできない場合は本文を破棄する。health、心理状態、金融状況、第三者情報等の話題は
 同一conversationの履歴として保持できるが、MVPではRAG長期記憶へ昇格させない。
 userとassistantの双方へ同じscannerとsanitizerを適用し、原文、検出値、マスク前本文を
 SQLiteやapplication logへ残さない。
 
+保存拒否findingは`RAG`、`HISTORY`、`BOTH`のscopeを持ち、current userのcurrent turnだけへ
+適用する。assistant側で`SKIP_CONTENT`になった場合は、保存済みuser本文も同一transactionで
+消去し、turn全体を`privacy_skipped`へ遷移する。
+
+文脈依存`PrivacyAssessment`はWave 2でhealth、心理状態、自傷、虐待・性的被害、金融状況、
+第三者の非公開情報、暗示的な機微情報を分類する。classifierは保存可否を返さず、
+RAG admission evaluatorだけが決定論的findingとassessmentから保存可否を決める。
+
+conversationのアーカイブは履歴をSQLiteへ保持したまま通常一覧、prompt注入、追記対象から
+除外する。物理削除はconversationとturnをSQLiteからhard deleteし、RAG長期記憶は暗黙削除しない。
+
 RAG長期記憶はpositive allowlist方式とし、許可型へ正規化され、機微情報検査と必要なユーザー確認を
 通過した`ApprovedMemoryCandidate`だけをSQLiteへ保存する。SQLiteを正本、Chromaを派生indexとし、
 SQLiteへの承認済み記憶保存とoutbox作成を同一transactionで行う。Chroma登録失敗時は本文を
 別ファイルへ退避せず、outboxの`memory_id`でSQLiteの承認済み記憶を再読して冪等に再試行する。
+
+長期記憶の訂正はSQLite正本の更新、失効は`expires_at`／状態による取得除外、ユーザー削除は
+`approved_memories`行のhard deleteとして区別する。hard deleteでは`character_id`と`memory_id`を
+持つmetadata-onlyの`DELETE` outboxを同一transactionで作成し、削除済みSQLite本文を再読せず
+Chromaから冪等に削除する。SQLite commit後の同じ削除操作でChroma deleteを同期試行し、
+失敗時はoutbox retryで回復する。さらに定期reconciliationでSQLiteに存在しないChroma orphanを
+削除し、欠落entryとmetadata不一致をSQLite正本から修復する。
 
 検索時はChromaの結果をそのままpromptへ渡さず、`memory_id`をSQLiteで引き直し、
 `character_id`、状態、TTL、policy versionを確認する。さらにSQLiteの`normalized_text`へ

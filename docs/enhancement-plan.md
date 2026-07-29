@@ -64,6 +64,12 @@ health、心理状態、金融状況、第三者情報等の話題は同一conve
 userとassistantへ同じscannerとsanitizerを適用し、原文、原文hash、マスク前本文を永続化しない。
 履歴sanitizerはRAG保存可否を返さない。
 
+scannerは`ScanSuccess`またはmetadata-onlyの`ScanFailure`を返し、findingのspanはNFKC等の
+正規化viewから原文の半開区間へ復元する。MVPは日本と米国の固定corpusから開始する。
+保存拒否findingは`RAG`、`HISTORY`、`BOTH`のscopeを持ち、current userのcurrent turnだけへ
+適用する。assistant側が`SKIP_CONTENT`の場合は、保存済みuser本文も原子的に消去して
+turn全体を`privacy_skipped`へ遷移する。
+
 ### 3. プロンプト合成の一元設計
 
 以下の要素の合成順序・優先順位を確定し、一元化する。
@@ -89,7 +95,9 @@ RAGが無効（`RAG_ENABLED=false`）の状態でも会話ログは常時記録�
 ### 5. 会話ライフサイクルとスレッド管理
 
 HTTPとWebSocketで同じ`character_id` / `conversation_id`、状態遷移、privacy処理順序を使用する。
-Frontendはcharacter単位のconversation IDを保持し、スレッド一覧、再開、削除を提供する。
+Frontendはcharacter単位のconversation IDを保持し、スレッド一覧、再開、アーカイブ、復元、
+物理削除を提供する。アーカイブは履歴を保持したまま通常一覧から非表示にし、物理削除は
+conversationとturnをSQLiteからhard deleteする。
 別conversationの生履歴を横断検索しない。
 
 ### 6. 設定のenv化
@@ -102,19 +110,22 @@ Frontendはcharacter単位のconversation IDを保持し、スレッド一覧、
 
 ## Wave 2: 「覚えている」（RAG本稼働 = 旧Phase 5の実質的完遂）
 
-### 1. health意味分類基盤
+### 1. 文脈依存の機微情報assessment基盤
 
-決定論的health screenerと実装交換可能な意味分類器を組み合わせる。ローカルLLM、
+policy管理の決定論的screenerと実装交換可能な意味分類器を組み合わせる。health、心理状態、
+自傷、虐待・性的被害、金融状況、第三者の非公開情報、暗示的な機微情報を対象とする。ローカルLLM、
 spaCy／GiNZA等のparser、専用分類器を候補とし、日英の固定conformance corpusで検出品質、
 過検知、初期化時間、判定時間、メモリ使用量を比較する。MVPでは1方式を選定する。
 
 分類結果は保存許可と分離し、カテゴリ、本人・第三者・一般の対象、判定結果、reason code、
-実装versionを型付きで返す。SQLiteやChromaへ書き込まず、RAG admissionへassessmentを渡す。
+実装versionを共通`PrivacyAssessment`として型付きで返す。SQLiteやChromaへ書き込まず、
+RAG admissionへassessmentを渡す。
 
 ### 2. RAG admission policy
 
-Wave 1の共通privacy scannerとhealth assessmentを再利用する。絶対禁止scanner、保存拒否指示、
-positive allowlist型の候補抽出、候補全体の機微情報再検査、必要なユーザー確認を順に行う。
+Wave 1の共通privacy scannerと文脈依存`PrivacyAssessment`を再利用する。絶対禁止scanner、
+scope付き保存拒否指示、positive allowlist型の候補抽出、候補全体の機微情報再検査、
+必要なユーザー確認を順に行う。
 scannerは保存可否を決めず、決定的なapplication policy evaluatorだけが
 `RagAdmissionDecision`を返す。秘密値をマスクした候補をRAG保存へ昇格させない。
 
@@ -122,7 +133,8 @@ scannerは保存可否を決めず、決定的なapplication policy evaluatorだ
 
 - `approved_memories`へ許可型、正規化本文、`character_id`、`source_conversation_id`、
   `policy_version`、状態、日時を保存する
-- SQLiteを訂正・削除・policy状態の正本とする
+- 訂正はSQLite正本を更新し、失効は`expires_at`／状態で取得対象外にする
+- ユーザー削除は`approved_memories`行をSQLiteからhard deleteする
 - 既存のSQLite／Chromaテストデータは移行せず、空状態から開始する
 - `docs/decisions/Multi-character-db-2026-06.md`の決定事項どおり、全レコードを
   `character_id`で分離する
@@ -131,6 +143,11 @@ scannerは保存可否を決めず、決定的なapplication policy evaluatorだ
 
 - `approved_memories`保存と`memory_index_outbox`作成を同じSQLite transactionで行う
 - Chromaへ`memory_id`単位で冪等にupsert／deleteする
+- hard deleteでは`character_id`と`memory_id`を持つ`DELETE` outboxを先に作成し、
+  削除済みSQLite本文の再読に依存せずChromaを削除する
+- SQLite commit後の同じ削除操作でChroma deleteを同期試行し、失敗時はoutboxで再試行する
+- 定期reconciliationでSQLiteにないChroma orphanの削除、欠落entryの再作成、
+  metadata不一致の修復を行う
 - outbox・application log・fallbackファイルへ本文やembeddingを複製しない
 - 旧`failed-memories.jsonl`を廃止する
 
@@ -163,10 +180,10 @@ scannerは保存可否を決めず、決定的なapplication policy evaluatorだ
 - 「昨年もこの時期に〜」のような応答を実現する
 - personality.md が描く長期パートナー性の中核体験にあたる機能
 
-### 9. 記憶の閲覧・削除インターフェース
+### 9. 記憶の閲覧・訂正・物理削除インターフェース
 
 - `docs/decisions/miori-memory-policy-2026-06.md` の「削除・訂正依頼は優先対応する」方針の実装担保
-- ユーザーが記憶内容を閲覧・削除・訂正できるインターフェースを用意する
+- ユーザーが記憶内容を閲覧・訂正・物理削除できるインターフェースを用意する
 
 ## Wave 3: 「自然に話せる」（会話状態管理による双方向会話）
 

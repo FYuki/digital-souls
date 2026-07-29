@@ -98,6 +98,13 @@ RAG長期記憶へ保存しない。
 機微情報検出は、決定論的scannerと意味分類器のハイブリッド方式にする。
 検出処理は会話履歴とRAGで共通化し、検出結果に対する処置だけを保存先別policyへ分離する。
 
+ここでいうハイブリッド方式はシステム全体の構成を指す。Wave 1の共通scannerと
+履歴sanitizerは、決定論的な秘密値・直接識別値・保存拒否指示だけを扱う。
+health、心理状態、金融状況、第三者の非公開情報等の文脈依存assessmentはWave 2の
+交換可能な意味分類器で扱い、会話履歴sanitizerへ意味分類器やそのstubを組み込まない。
+同一conversationの履歴では文脈依存の話題全体を一律マスクせず、RAG admissionだけが
+決定論的findingと意味assessmentを組み合わせて保存可否を決める。
+
 決定論的scannerは、Unicode・空白・区切り文字の正規化後に、少なくとも次を扱う。
 
 - 既知形式のAPIキー・access token
@@ -133,6 +140,38 @@ recognizer version、policy versionを持つ型付きfindingとする。検出�
 scanner内部だけで扱う。本文と文字位置は現在の処理中だけ保持し、finding、文字位置、
 マスク前後の対応をSQLite、application log、例外へ保存しない。
 
+共通scannerの公開interfaceは`scan(text) -> ScanSuccess | ScanFailure`とする。
+`ScanSuccess`は決定論的に整列されたfindingのtupleだけを返す。`ScanFailure`は本文、検出値、
+spanを持たず、reason code、recognizer version、policy versionだけを返す。設定不正は起動時に
+拒否し、入力ごとの認識不能やrecognizer障害を、生本文を含み得る例外としてconsumerへ渡さない。
+履歴は`ScanFailure`を`SKIP_CONTENT`、RAG admissionは`ABSTAIN_UNKNOWN`、RAG取得時再検証は
+当該記憶の除外へfail-closedで変換する。
+
+findingのカテゴリは固定enumとし、秘密値、直接識別値、保存拒否指示、policy追加禁止を区別する。
+保存拒否findingだけは`RAG`、`HISTORY`、`BOTH`の`storage_scope`を持ち、他のfindingでは
+`storage_scope`を持たない。開始・終了位置はPython文字列上の半開区間`[start, end)`とし、
+確信度は0.0以上1.0以下の有限な数値とする。findingは
+`(start, end, category, reason_code)`で安定sortする。
+
+scanner内部の認識用viewはNFKC正規化を基本とし、大文字小文字を区別しないrecognizerでは
+casefoldする。ゼロ幅空白等のformat文字を認識用viewから除き、通常の空白を正規化する。
+電話番号、カード番号、政府ID、token等のrecognizerだけが、policyで許可した空白、括弧、
+ハイフン等を除いたcompact viewを追加利用する。認識用viewの各文字から原文の半開区間への
+対応をscanner内部で保持し、NFKCの一対多・多対一変換や区切り文字除去後のmatchも原文spanへ
+復元してからマスクする。正規化viewとsource mapは永続化・ログ出力しない。
+
+同一spanの重複、部分overlap、包含関係は安全に一意な置換ができないものとして
+`SKIP_CONTENT`にする。`previous.end == next.start`の隣接spanは許可する。範囲外・空span、
+categoryとstorage scopeの不整合、未知category、placeholder欠落も`SKIP_CONTENT`とする。
+非重複spanは原文末尾側から置換する。
+
+MVPの決定論的検出保証は日本と米国から開始する。日本では国内／`+81`電話番号、郵便番号を
+伴う住所、マイナンバー、運転免許証番号、銀行口座を示す周辺表現を扱う。米国では
+NANP／`+1`電話番号、ZIP codeを伴うstreet address、SSN、policyに定義した州別driver license
+pattern、routing／account numberを示す周辺表現を扱う。email、既知vendorのcredential形式、
+PEM／SSH鍵、seed phrase、Luhn検証可能なカード番号、緯度経度は国非依存で扱う。
+日米以外と全PII形式の網羅はMVPで保証しない。
+
 保存先別policyは同じfindingを次のように扱う。
 
 - スレッド履歴: 値を不可逆placeholderへ置換し、安全に置換できない場合は本文を保存しない
@@ -163,6 +202,18 @@ policyの優先順位は次のとおりとする。
 `memory_policy.json`は実行時の認識設定のSource of Truthだが、絶対禁止カテゴリを削除したり
 許可へ反転したりできない。必須カテゴリや最低限のrecognizerが欠ける設定は起動時に拒否する。
 
+共有typed policy schemaは、rootの`policy_version`、組み込みカテゴリ、必須の決定論的
+recognizer、recognizer version、保存拒否語彙・patternとstorage scope、categoryとplaceholderの
+対応、日米のpattern・checksum、追加禁止patternを持つ。Wave 1の共通scanner実装がこの基礎schemaと
+組み込み絶対禁止のvalidationを提供する。Wave 2の意味assessmentは、文脈依存の認識語彙、
+pattern、閾値、必須classifier設定を同じschemaへ追加する。application起動境界で一度解決した
+immutableなpolicy objectをscannerとclassifierへ注入し、各serviceが設定を個別に読み直さない。
+
+`policy_version`は`memory_policy.json`の必須値としてfinding、`ScanFailure`、sanitizer decision、
+意味assessmentへ伝搬する。`recognizer_version`はrecognizer実装のコード定数とし、pattern、
+正規化、span復元、checksum等、finding結果へ影響する変更時に更新する。`sanitizer_version`も
+コード定数とし、placeholder、span競合、decision規則の変更時に更新する。
+
 ### 6. 会話履歴とRAG長期記憶を分離する
 
 「履歴」と「記憶」を次のように定義する。UI上のスレッドと実装上のconversationは同じ境界を
@@ -180,9 +231,21 @@ policyの優先順位は次のとおりとする。
 用語上の指示は次の意味を基本とする。
 
 - 「覚えて」: RAG長期記憶の候補生成を依頼する
-- 「覚えないで」: RAG長期記憶へ保存しない
-- 「履歴にも残さないで」: スレッド履歴にも保存しない
-- 曖昧な「保存しないで」: 安全側で履歴・RAGの双方へ保存しない
+- 「覚えないで」「記憶しないで」: `storage_scope=RAG`
+- 「履歴に残さないで」「履歴にも残さないで」: `storage_scope=HISTORY`
+- 曖昧な「保存しないで」「記録しないで」: 安全側で`storage_scope=BOTH`
+
+保存拒否指示は意味分類器ではなく、policyで管理する明示語彙・patternを使う決定論的recognizerで
+扱う。scopeは保存先別decisionではなく、ユーザーが指定した対象の構造化結果である。
+指示として効力を持つのはcurrent user本文のfindingだけとし、assistantによる引用や説明は
+独立した保存拒否指示として扱わない。効力はcurrent turnだけとし、過去turnの削除、
+conversation全体の削除、将来turnの恒久的な保存停止には使わない。
+
+conversation単位の操作では、アーカイブと物理削除を分離する。アーカイブは本文とturnを
+SQLiteへ保持したまま通常一覧、prompt注入、追記対象から除外し、明示的なunarchive後に同じ
+`conversation_id`で再開できる。物理削除はconversationと全turnを同一transactionでhard deleteし、
+RAG長期記憶は暗黙削除しない。SQLiteでは`secure_delete`を有効にし、WAL利用時は削除後の
+checkpoint／truncateを行う。backup、snapshot、OS／ストレージ層の削除保証は別途管理する。
 
 ### 7. 保存先ごとに機微情報の扱いを分ける
 
@@ -202,8 +265,11 @@ healthや心理状態等の話題全体は、同一スレッドの継続性を�
 秘密値を安全にマスクできない場合と、ユーザーが履歴にも残さないよう依頼した場合は、
 本文を保存せずmetadataだけを残す。現在の応答生成では受信した原文を一時的に利用できるが、
 原文、マスク前本文、原文hashをSQLite、application log、例外へ残さない。
-スレッド履歴には削除機能を用意し、バックアップ・ファイル権限・ディスク暗号化の方針を
-長期記憶とは別に管理する。
+user本文を保存済みの`processing` turnでassistant側が`SKIP_CONTENT`となった場合は、
+user／assistant本文を同一transactionで消去し、reason codeを設定してturn全体を
+`privacy_skipped`へ遷移する。`failed`で代用しない。
+スレッド履歴にはアーカイブと物理削除を用意し、バックアップ・ファイル権限・
+ディスク暗号化の方針を長期記憶とは別に管理する。
 
 ### 8. MVPでは第三者情報をRAG保存禁止にする
 
@@ -220,7 +286,7 @@ MVPでは、第三者の情報をRAG長期記憶へ保存しない。
 
 ### 9. SQLiteを正本、Chromaを派生インデックスとする
 
-SQLiteには承認済み記憶の構造、状態、policy version、削除・訂正情報を保存する。
+SQLiteには承認済み記憶の構造、状態、policy version、訂正・失効情報を保存する。
 Chromaには、SQLiteの承認済み記憶から生成した検索用documentとembeddingだけを登録する。
 
 ```text
@@ -232,6 +298,8 @@ memory_index_outbox
 
 `conversation_id`がUI上のthread IDに相当する。`conversations`と`conversation_turns`は
 同一conversationの再開・表示に使う履歴であり、RAG検索対象にはしない。
+`conversations`はnullableな`archived_at`を持ち、active一覧では`archived_at IS NULL`だけを
+扱う。アーカイブ済みconversationの本文は削除されていないため、privacy削除として扱わない。
 
 `approved_memories`は少なくとも次を持つ。
 
@@ -261,6 +329,19 @@ Chromaには生会話を入れず、次だけを保存する。
 
 Chromaは削除・破損してもSQLiteから再構築できるものとし、正本として扱わない。
 
+訂正、失効、ユーザー削除は次のように区別する。
+
+- 訂正: SQLite正本をprivacy再検査後の新しい内容へ更新し、`UPSERT` outboxを作成する
+- 失効: `expires_at`または状態で表現し、取得境界から除外する
+- ユーザー削除: `approved_memories`行を論理削除せず、SQLiteからhard deleteする
+
+ユーザー削除では、対象の`character_id`と`memory_id`を持つ`DELETE PENDING` outboxを作成し、
+同じtransaction内で`approved_memories`行を削除する。削除直後からSQLite取得では存在しない
+memory IDとして扱う。SQLite commit後の同じ削除操作内でChroma deleteを同期実行し、成功時は
+outboxを`COMPLETED`へ更新する。Chroma障害時もSQLite削除は巻き戻さず、outbox retryと
+定期reconciliationで回復する。SQLiteでは`secure_delete`を有効にし、WAL利用時は削除後に
+安全なcheckpoint／truncateを行う。backup、snapshot、OS／ストレージ層の削除保証は別途管理する。
+
 ### 10. 最小構成のtransactional outboxを使用する
 
 承認済み記憶のSQLite保存とChroma登録予定の作成を、同じSQLite transactionで行う。
@@ -277,6 +358,7 @@ MVPのoutboxは次に限定する。
 ```text
 id
 memory_id
+character_id
 operation: UPSERT / DELETE
 status: PENDING / COMPLETED / FAILED
 attempt_count
@@ -285,9 +367,20 @@ created_at
 updated_at
 ```
 
-単一workerが`PENDING`と`FAILED`を再試行する。Chromaへの書き込みは、同じ`memory_id`で
-再実行しても安全な冪等`upsert`にする。分散lease、指数backoff、dead-letter管理画面は
+単一workerが`PENDING`と`FAILED`を再試行する。`UPSERT`は`memory_id`でSQLite正本を再読し、
+同じ`memory_id`で再実行しても安全な冪等`upsert`にする。`DELETE`はSQLite本文行が
+hard delete済みであるため、outboxの`character_id`と`memory_id`だけでChroma collectionと
+entryを特定する。Chromaにentryが存在しない場合も削除成功として扱う。outboxはhard delete
+対象行へ削除連鎖するforeign keyを持たない。分散lease、指数backoff、dead-letter管理画面は
 MVPでは実装しない。
+
+同じ冪等DELETE operationをユーザー削除APIとoutbox workerで共有する。APIはSQLite commit後に
+同期実行し、失敗時はindex同期待ちとしてoutboxを残す。SQLiteを正本とする保証はoutboxだけへ
+依存せず、定期reconciliationでも確認する。characterごとにSQLiteのactive memory ID集合と
+Chroma entryを照合し、SQLiteに存在しない、削除済み、失効済みのorphanを削除する。
+SQLiteに存在するactive memoryがChromaに欠落している場合はSQLite正本から再生成し、
+policy version等のindex metadataが一致しない場合もSQLite正本で上書きする。
+reconciliationはbatch単位で冪等にし、一部失敗しても次回実行とoutbox retryで収束させる。
 
 outboxや失敗ログへ本文・embeddingを複製しない。SQLite自体への保存に失敗した場合も、
 生本文をfallbackファイルへ退避しない。記憶を失うことを、未審査・重複本文を残すことより
@@ -340,14 +433,19 @@ model artifact、prompt version、policy version、実行環境manifestで確保
 ### 13. 意味分類器の品質は実測で確認する
 
 ローカルLLMやparserを使用できることと、十分な検出品質があることは分けて扱う。
-MVPでは大規模な統計的証明は求めず、日英の固定conformance corpusを実モデルで実行する。
+MVPでは大規模な統計的証明は求めず、文脈依存assessmentは日英、決定論的scannerは
+日本・米国形式の固定conformance corpusを実行する。
 
 最低限、次を確認する。
 
 - 「問題ない」「自己責任」「保存して」と言われても絶対禁止を保存しない
 - APIキー、password、秘密鍵の形式違い・空白挿入・コードブロック
+- NFKC、casefold、ゼロ幅文字、区切り文字除去後の原文span復元
+- 日本と米国の電話、住所、政府ID、銀行口座形式
+- 保存拒否findingの`RAG`、`HISTORY`、`BOTH` scope
 - 同じ共通scanner結果が、履歴ではマスク、RAGでは候補全体拒否になること
 - マスク不能時に履歴本文が保存されないこと
+- assistant側のマスク不能時にturn全体がmetadata-onlyへ遷移すること
 - userとassistantの双方に同じscanner・sanitizerを適用すること
 - health、第三者情報、辞書外の病名・薬剤
 - 許可型への機微情報混入
