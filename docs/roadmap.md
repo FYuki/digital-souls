@@ -73,20 +73,20 @@ MVP完了時点で判明した現状ギャップ（会話がステートレス�
 - [ ] プロンプト合成の一元設計（personality.md / card.json未使用フィールド / 会話履歴 / RAG記憶の合成順序を確定）
 - [ ] 設定のenv化（`OLLAMA_CHAT_MODEL` 等、Whisperモデルサイズ、履歴注入数N）
 - [ ] Backend／Frontendのconversation lifecycle統合
-- [ ] スレッド一覧・再開・削除インターフェース
+- [ ] スレッド一覧・再開・アーカイブ・物理削除インターフェース
 
 ### Wave 2: 「覚えている」（RAG本稼働）
 
-- [ ] health意味分類基盤（交換可能なclassifierと固定corpusでMVP方式を1つ選定し、保存可否とは分離）
-- [ ] RAG admission policy（共通scannerとhealth assessmentを再利用し、positive allowlist型だけを許可）
+- [ ] 文脈依存の機微情報assessment基盤（health、心理状態、金融状況、第三者情報等を交換可能なclassifierと固定corpusで判定し、保存可否とは分離）
+- [ ] RAG admission policy（共通scannerと`PrivacyAssessment`を再利用し、positive allowlist型だけを許可）
 - [ ] 承認済み記憶schema（SQLite `approved_memories`を正本とし、全レコードへ`character_id`と`policy_version`を付与）
-- [ ] transactional outbox（`memory_index_outbox`からChromaへ冪等upsert／deleteし、失敗本文ファイルを廃止）
+- [ ] transactional outbox（SQLite hard delete後にChromaを同期削除し、失敗時はmetadata-only outboxと定期reconciliationでSQLite正本へ収束させる）
 - [ ] Chroma派生index化（承認済み記憶だけを登録し、取得時にSQLiteの状態・TTL・policy versionと絶対禁止findingを再検証）
 - [ ] RAG検索品質検証 → `RAG_ENABLED=true` デフォルト化
 - [ ] positive allowlist型の記憶候補抽出（絶対禁止・機微情報判定を通過した構造化候補だけを扱う）
 - [ ] 自動記憶昇格（会話サマリ→長期記憶候補化、光織が確認し、未確認候補はRAGへ保存しない）
 - [ ] 時系列照合（日付メタデータ+時期検索）
-- [ ] 記憶の閲覧・削除インターフェース
+- [ ] 記憶の閲覧・訂正・物理削除インターフェース
 
 ### Wave 3: 「自然に話せる」（会話状態管理による双方向会話）
 
