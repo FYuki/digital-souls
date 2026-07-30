@@ -1,0 +1,132 @@
+[
+  {
+    "case_id": "global-email",
+    "text": "連絡先は user@example.test です",
+    "category": "EMAIL",
+    "matched_text": "user@example.test",
+    "placeholder": "[EMAIL]",
+    "storage_scope": null,
+    "recognizer_version": "contact-v1",
+    "policy_version": "2026-07-wave1-v1"
+  },
+  {
+    "case_id": "jp-phone-domestic",
+    "text": "電話は 090-0000-0000 です",
+    "category": "PHONE",
+    "matched_text": "090-0000-0000",
+    "placeholder": "[PHONE]",
+    "storage_scope": null,
+    "recognizer_version": "contact-v1",
+    "policy_version": "2026-07-wave1-v1"
+  },
+  {
+    "case_id": "jp-phone-country-code",
+    "text": "電話は +81 (90) 0000-0000 です",
+    "category": "PHONE",
+    "matched_text": "+81 (90) 0000-0000",
+    "placeholder": "[PHONE]",
+    "storage_scope": null,
+    "recognizer_version": "contact-v1",
+    "policy_version": "2026-07-wave1-v1"
+  },
+  {
+    "case_id": "us-phone-country-code",
+    "text": "Call +1 (202) 555-0100 now",
+    "category": "PHONE",
+    "matched_text": "+1 (202) 555-0100",
+    "placeholder": "[PHONE]",
+    "storage_scope": null,
+    "recognizer_version": "contact-v1",
+    "policy_version": "2026-07-wave1-v1"
+  },
+  {
+    "case_id": "payment-card-luhn",
+    "text": "テストカード 4111 1111 1111 1111",
+    "category": "PAYMENT_CARD",
+    "matched_text": "4111 1111 1111 1111",
+    "placeholder": "[PAYMENT_CARD]",
+    "storage_scope": null,
+    "recognizer_version": "financial-v1",
+    "policy_version": "2026-07-wave1-v1"
+  },
+  {
+    "case_id": "jp-postal-address",
+    "text": "住所は 〒000-0000 東京都千代田区架空1-1 です",
+    "category": "PRECISE_ADDRESS",
+    "matched_text": "〒000-0000 東京都千代田区架空1-1",
+    "placeholder": "[ADDRESS]",
+    "storage_scope": null,
+    "recognizer_version": "location-v1",
+    "policy_version": "2026-07-wave1-v1"
+  },
+  {
+    "case_id": "us-zip-address",
+    "text": "Address: 100 Test Street, Example, CA 00000",
+    "category": "PRECISE_ADDRESS",
+    "matched_text": "100 Test Street, Example, CA 00000",
+    "placeholder": "[ADDRESS]",
+    "storage_scope": null,
+    "recognizer_version": "location-v1",
+    "policy_version": "2026-07-wave1-v1"
+  },
+  {
+    "case_id": "us-ssn",
+    "text": "Synthetic SSN: 000-00-0000",
+    "category": "GOVERNMENT_ID",
+    "matched_text": "000-00-0000",
+    "placeholder": "[GOVERNMENT_ID]",
+    "storage_scope": null,
+    "recognizer_version": "government-v1",
+    "policy_version": "2026-07-wave1-v1"
+  },
+  {
+    "case_id": "precise-location",
+    "text": "座標は 35.0000, 135.0000 です",
+    "category": "PRECISE_LOCATION",
+    "matched_text": "35.0000, 135.0000",
+    "placeholder": "[LOCATION]",
+    "storage_scope": null,
+    "recognizer_version": "location-v1",
+    "policy_version": "2026-07-wave1-v1"
+  },
+  {
+    "case_id": "storage-opt-out-rag",
+    "text": "この話は覚えないで",
+    "category": "STORAGE_OPT_OUT",
+    "matched_text": "覚えないで",
+    "placeholder": null,
+    "storage_scope": "RAG",
+    "recognizer_version": "configured-v1",
+    "policy_version": "2026-07-wave1-v1"
+  },
+  {
+    "case_id": "storage-opt-out-history",
+    "text": "この話は履歴に残さないで",
+    "category": "STORAGE_OPT_OUT",
+    "matched_text": "履歴に残さないで",
+    "placeholder": null,
+    "storage_scope": "HISTORY",
+    "recognizer_version": "configured-v1",
+    "policy_version": "2026-07-wave1-v1"
+  },
+  {
+    "case_id": "storage-opt-out-both",
+    "text": "この話は保存しないで",
+    "category": "STORAGE_OPT_OUT",
+    "matched_text": "保存しないで",
+    "placeholder": null,
+    "storage_scope": "BOTH",
+    "recognizer_version": "configured-v1",
+    "policy_version": "2026-07-wave1-v1"
+  },
+  {
+    "case_id": "policy-added-sensitive",
+    "text": "値は PROJECT-SECRET-0000 です",
+    "category": "POLICY_ADDED_SENSITIVE",
+    "matched_text": "PROJECT-SECRET-0000",
+    "placeholder": "[SENSITIVE]",
+    "storage_scope": null,
+    "recognizer_version": "configured-v1",
+    "policy_version": "2026-07-wave1-v1"
+  }
+]

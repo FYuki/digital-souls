@@ -72,7 +72,7 @@ class TestRuntimeConfiguration:
         assert "os.environ" not in source
         assert "RAG_ENABLED" not in source
 
-    def test_memory_policy_is_resolved_at_chat_boundary_only(self):
+    def test_memory_policy_is_resolved_at_application_boundary_only(self):
         import app._chat_runtime as chat_runtime
         import app.memory.rag_service as rag_service
         import app.chat_service as chat_service
@@ -85,7 +85,8 @@ class TestRuntimeConfiguration:
 
         assert "resolved_memory_policy" not in rag_source
         assert "resolved_memory_policy" not in chat_service_source
-        assert "resolved_memory_policy" in chat_runtime_source
+        assert "resolved_memory_policy" not in chat_runtime_source
+        assert "resolved_memory_policy" in main_source
         assert "resolve_chat_runtime_config" in main_source
 
     def test_chat_service_public_api_exposes_only_chat_entrypoints_without_rag_queue(self):
@@ -157,7 +158,9 @@ class TestRuntimeConfiguration:
 
         config = json.loads(config_path.read_text(encoding="utf-8"))
 
-        assert set(config) == {"common", "services"}
+        assert set(config) == {"policy_version", "common", "services", "privacy"}
+        assert isinstance(config["policy_version"], str)
+        assert config["policy_version"]
         assert set(config["common"]) == {
             "sensitive_terms",
             "do_not_store_terms",
@@ -168,6 +171,10 @@ class TestRuntimeConfiguration:
         assert "rag_service" in config["services"]
         assert isinstance(config["services"]["rag_service"], dict)
         assert "max_retrieved_memories" in config["services"]["rag_service"]
+        assert isinstance(config["privacy"], dict)
+        assert "required_recognizers" in config["privacy"]
+        assert "placeholders" in config["privacy"]
+        assert "storage_opt_out_rules" in config["privacy"]
         assert "characters" not in config
 
     def test_memory_policy_module_does_not_expose_test_only_persistence_helper(self):
@@ -505,7 +512,7 @@ class TestRuntimeConfiguration:
         def executor_factory(*args, **kwargs):
             return executor
 
-        def fail_config_resolution():
+        def fail_config_resolution(_policy, _privacy_scanner):
             raise ValueError("invalid memory policy")
 
         monkeypatch.setattr(main, "ThreadPoolExecutor", executor_factory)
@@ -523,6 +530,8 @@ class TestRuntimeConfiguration:
         assert not hasattr(main.app.state, "conversation_history_repository")
         assert not hasattr(main.app.state, "chat_service")
         assert not hasattr(main.app.state, "audio_pipeline_service")
+        assert not hasattr(main.app.state, "privacy_scanner")
+        assert not hasattr(main.app.state, "history_sanitizer")
         with pytest.raises(chat_service.ChatServiceError):
             chat_service.generate_chat_reply("miori", "hello")
 
@@ -533,15 +542,21 @@ class TestRuntimeConfiguration:
         assert not hasattr(main.app.state, "chat_runtime")
         assert not hasattr(main.app.state, "chat_service")
         assert not hasattr(main.app.state, "audio_pipeline_service")
+        assert not hasattr(main.app.state, "privacy_scanner")
+        assert not hasattr(main.app.state, "history_sanitizer")
         with TestClient(main.app):
             assert not hasattr(main.app.state, "memory_task_queue")
             assert not hasattr(main.app.state, "chat_runtime")
             assert hasattr(main.app.state, "chat_service")
             assert hasattr(main.app.state, "audio_pipeline_service")
+            assert not hasattr(main.app.state, "privacy_scanner")
+            assert not hasattr(main.app.state, "history_sanitizer")
         assert not hasattr(main.app.state, "memory_task_queue")
         assert not hasattr(main.app.state, "chat_runtime")
         assert not hasattr(main.app.state, "chat_service")
         assert not hasattr(main.app.state, "audio_pipeline_service")
+        assert not hasattr(main.app.state, "privacy_scanner")
+        assert not hasattr(main.app.state, "history_sanitizer")
 
     def test_main_lifespan_registers_module_entrypoints_to_app_chat_service(self):
         import app.chat_service as chat_service

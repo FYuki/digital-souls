@@ -14,11 +14,19 @@ _BUILD_AUGMENTED_SYSTEM_PROMPT = (
 _RECORD_USER_MEMORY_CANDIDATE = (
     "app._chat_runtime._rag_service.record_user_memory_candidate"
 )
-_RESOLVED_MEMORY_POLICY = "app._chat_runtime.resolved_memory_policy"
+_RESOLVED_MEMORY_POLICY = "app.main.resolved_memory_policy"
 
 _VALID_BODY = {"character": "miori", "message": "自己紹介してください"}
 _PERSONALITY = "# 光織\n穏やかなAIです。"
 _LLM_REPLY = "光織です。よろしくお願いします。"
+
+
+def _rag_policy() -> MagicMock:
+    from app.memory.memory_policy import resolved_memory_policy
+
+    policy = MagicMock(name="resolved_memory_policy")
+    policy.privacy = resolved_memory_policy().privacy
+    return policy
 
 
 def _ollama_response(content: str) -> MagicMock:
@@ -97,7 +105,7 @@ class TestChatEndpoint:
         assert user_message in all_args
 
     def test_generate_response_uses_rag_augmented_system_prompt(self, monkeypatch):
-        policy = object()
+        policy = _rag_policy()
         augmented_prompt = f"{_PERSONALITY}\n\n過去の記憶:\n前回は畑の話をした"
         monkeypatch.setenv("RAG_ENABLED", "true")
         with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
@@ -120,7 +128,7 @@ class TestChatEndpoint:
         mock_gen.assert_called_once_with(augmented_prompt, _VALID_BODY["message"])
 
     def test_records_user_memory_candidate_after_llm_reply(self, monkeypatch):
-        policy = object()
+        policy = _rag_policy()
         monkeypatch.setenv("RAG_ENABLED", "true")
         with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
             with TestClient(app) as client:
@@ -134,14 +142,20 @@ class TestChatEndpoint:
 
         assert response.status_code == 200
         mock_record.assert_called_once()
-        args, _kwargs = mock_record.call_args
+        args, kwargs = mock_record.call_args
         assert args[:2] == ("miori", _VALID_BODY["message"])
         assert args[2] is policy
         assert hasattr(args[3], "add_task")
+        assert hasattr(kwargs["privacy_scanner"], "scan")
 
-    def test_rag_disabled_does_not_resolve_memory_policy_or_record(self, monkeypatch):
+    def test_rag_disabled_resolves_policy_for_privacy_but_does_not_record(
+        self, monkeypatch
+    ):
+        from app.memory.memory_policy import resolved_memory_policy
+
+        policy = resolved_memory_policy()
         monkeypatch.setenv("RAG_ENABLED", "false")
-        with patch(_RESOLVED_MEMORY_POLICY) as mock_policy:
+        with patch(_RESOLVED_MEMORY_POLICY, return_value=policy) as mock_policy:
             with TestClient(app) as client:
                 with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
                     with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT) as mock_build:
@@ -152,7 +166,7 @@ class TestChatEndpoint:
                                 response = client.post("/chat", json=_VALID_BODY)
 
         assert response.status_code == 200
-        mock_policy.assert_not_called()
+        mock_policy.assert_called_once_with()
         mock_build.assert_not_called()
         mock_record.assert_not_called()
 
@@ -206,6 +220,16 @@ class TestChatEndpoint:
         response = client.post("/chat", json={})
 
         assert response.status_code == 422
+
+    def test_returns_422_for_empty_message(self, client):
+        with patch(_GENERATE_RESPONSE) as generate:
+            response = client.post(
+                "/chat",
+                json={"character": "miori", "message": ""},
+            )
+
+        assert response.status_code == 422
+        generate.assert_not_called()
 
     def test_returns_422_for_wrapped_body_envelope(self, client):
         response = client.post(
@@ -287,9 +311,9 @@ class TestChatFlow:
 
         augmented_prompt = f"{system_prompt}\n\n過去の記憶:\n前回は畑の話をした"
         expected_reply = "前回は畑の話をしました。"
-        policy = object()
+        policy = _rag_policy()
         with patch(
-            "app._chat_runtime.resolved_memory_policy",
+            "app.main.resolved_memory_policy",
             return_value=policy,
         ) as mock_policy:
             with patch(
@@ -328,6 +352,10 @@ class TestChatFlow:
         )
         assert mock_record.call_args.args[2] is policy
         assert hasattr(mock_record.call_args.args[3], "add_task")
+        assert hasattr(
+            mock_record.call_args.kwargs["privacy_scanner"],
+            "scan",
+        )
 
         payload = mock_post.call_args.kwargs["json"]
         assert payload["messages"] == [

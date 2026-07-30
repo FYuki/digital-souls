@@ -190,6 +190,8 @@ def _extract_text_message(payload: object) -> str:
     message = payload.get(MESSAGE_FIELD)
     if not isinstance(message, str):
         raise WebSocketMessageError("WebSocket text message must include a string message")
+    if not message:
+        raise WebSocketMessageError("WebSocket text message must not be empty")
 
     return message
 

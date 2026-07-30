@@ -1,7 +1,8 @@
 import asyncio
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+from uuid import UUID
 
 import httpx
 import pytest
@@ -19,6 +20,7 @@ from app.chat_service import (
     ChatServiceError,
     ChatTimeoutError,
 )
+from app.conversation_history.service import StartedHistoryTurn
 
 
 _LOAD_PERSONALITY = "app._chat_runtime._character_loader.load_personality"
@@ -29,9 +31,6 @@ _BUILD_AUGMENTED_SYSTEM_PROMPT = (
 _RECORD_USER_MEMORY_CANDIDATE = (
     "app._chat_runtime._rag_service.record_user_memory_candidate"
 )
-_RESOLVED_MEMORY_POLICY = "app._chat_runtime.resolved_memory_policy"
-
-
 class _CollectingTaskQueue:
     def __init__(self) -> None:
         self.tasks: list[tuple[object, tuple[object, ...], dict[str, object]]] = []
@@ -40,13 +39,122 @@ class _CollectingTaskQueue:
         self.tasks.append((func, args, kwargs))
 
 
+class _IgnoringHistorySession:
+    def start_turn(self, user_content: str) -> StartedHistoryTurn:
+        return StartedHistoryTurn(
+            UUID("00000000-0000-4000-8000-000000000001"),
+            content_skipped=False,
+        )
+
+    def complete_turn(
+        self,
+        started_turn: StartedHistoryTurn,
+        assistant_content: str,
+    ) -> None:
+        return None
+
+    def fail_turn(self, started_turn: StartedHistoryTurn) -> None:
+        return None
+
+
+class _IgnoringHistoryService:
+    def open_session(self, character_id: str) -> _IgnoringHistorySession:
+        return _IgnoringHistorySession()
+
+
+class _RecordingHistorySession:
+    def __init__(self) -> None:
+        self.started_turn = StartedHistoryTurn(
+            UUID("00000000-0000-4000-8000-000000000002"),
+            content_skipped=False,
+        )
+        self.start_calls: list[str] = []
+        self.complete_calls: list[tuple[StartedHistoryTurn, str]] = []
+        self.fail_calls: list[StartedHistoryTurn] = []
+
+    def start_turn(self, user_content: str) -> StartedHistoryTurn:
+        self.start_calls.append(user_content)
+        return self.started_turn
+
+    def complete_turn(
+        self,
+        started_turn: StartedHistoryTurn,
+        assistant_content: str,
+    ) -> None:
+        self.complete_calls.append((started_turn, assistant_content))
+
+    def fail_turn(self, started_turn: StartedHistoryTurn) -> None:
+        self.fail_calls.append(started_turn)
+
+
+class _FailingCompleteHistorySession(_RecordingHistorySession):
+    def __init__(self, error: RuntimeError) -> None:
+        super().__init__()
+        self.error = error
+
+    def complete_turn(
+        self,
+        started_turn: StartedHistoryTurn,
+        assistant_content: str,
+    ) -> None:
+        super().complete_turn(started_turn, assistant_content)
+        raise self.error
+
+
+class _FailingCleanupHistorySession(_RecordingHistorySession):
+    def __init__(self, error: RuntimeError) -> None:
+        super().__init__()
+        self.error = error
+
+    def fail_turn(self, started_turn: StartedHistoryTurn) -> None:
+        super().fail_turn(started_turn)
+        raise self.error
+
+
+class _FailingCompleteAndCleanupHistorySession(_FailingCompleteHistorySession):
+    def __init__(
+        self,
+        complete_error: RuntimeError,
+        cleanup_error: RuntimeError,
+    ) -> None:
+        super().__init__(complete_error)
+        self.cleanup_error = cleanup_error
+
+    def fail_turn(self, started_turn: StartedHistoryTurn) -> None:
+        super().fail_turn(started_turn)
+        raise self.cleanup_error
+
+
+class _RecordingHistoryService:
+    def __init__(self, session: _RecordingHistorySession) -> None:
+        self.session = session
+
+    def open_session(self, character_id: str) -> _RecordingHistorySession:
+        return self.session
+
+
 def _chat_service(rag_enabled: bool, policy=None) -> ChatService:
+    privacy_scanner = MagicMock() if rag_enabled else None
     return ChatService(
         ChatRuntimeConfig(
             rag_enabled=rag_enabled,
             memory_policy=policy,
+            privacy_scanner=privacy_scanner,
         ),
         _CollectingTaskQueue(),
+        _IgnoringHistoryService(),
+    )
+
+
+def _chat_service_with_history(session: _RecordingHistorySession) -> ChatService:
+    return ChatService(
+        ChatRuntimeConfig(
+            rag_enabled=False,
+            memory_policy=None,
+            privacy_scanner=None,
+        ),
+        _CollectingTaskQueue(),
+        _RecordingHistoryService(session),
     )
 
 
@@ -106,6 +214,80 @@ class TestChatServiceErrorContract:
                     _chat_service(False).generate_chat_reply("miori", "hello")
 
         assert exc_info.value.detail == "LLM request failed"
+
+    def test_generate_reply_failure_marks_started_turn_failed_once(self):
+        session = _RecordingHistorySession()
+        service = _chat_service_with_history(session)
+        original_error = RuntimeError("generation failed")
+
+        with patch(_LOAD_PERSONALITY, return_value="# prompt"):
+            with patch(_GENERATE_RESPONSE, side_effect=original_error):
+                with pytest.raises(RuntimeError) as exc_info:
+                    service.generate_chat_reply("miori", "hello")
+
+        assert exc_info.value is original_error
+        assert session.start_calls == ["hello"]
+        assert session.complete_calls == []
+        assert session.fail_calls == [session.started_turn]
+
+    def test_complete_turn_failure_marks_started_turn_failed_once(self):
+        original_error = RuntimeError("completion failed")
+        session = _FailingCompleteHistorySession(original_error)
+        service = _chat_service_with_history(session)
+
+        with patch(_LOAD_PERSONALITY, return_value="# prompt"):
+            with patch(_GENERATE_RESPONSE, return_value="reply"):
+                with pytest.raises(RuntimeError) as exc_info:
+                    service.generate_chat_reply("miori", "hello")
+
+        assert exc_info.value is original_error
+        assert session.start_calls == ["hello"]
+        assert session.complete_calls == [(session.started_turn, "reply")]
+        assert session.fail_calls == [session.started_turn]
+
+    def test_cleanup_failure_does_not_replace_generate_reply_error(self):
+        original_error = RuntimeError("generation failed")
+        session = _FailingCleanupHistorySession(RuntimeError("cleanup failed"))
+        service = _chat_service_with_history(session)
+
+        with patch(_LOAD_PERSONALITY, return_value="# prompt"):
+            with patch(_GENERATE_RESPONSE, side_effect=original_error):
+                with pytest.raises(RuntimeError) as exc_info:
+                    service.generate_chat_reply("miori", "hello")
+
+        assert exc_info.value is original_error
+        assert session.complete_calls == []
+        assert session.fail_calls == [session.started_turn]
+
+    def test_cleanup_failure_does_not_replace_complete_turn_error(self):
+        original_error = RuntimeError("completion failed")
+        session = _FailingCompleteAndCleanupHistorySession(
+            original_error,
+            RuntimeError("cleanup failed"),
+        )
+        service = _chat_service_with_history(session)
+
+        with patch(_LOAD_PERSONALITY, return_value="# prompt"):
+            with patch(_GENERATE_RESPONSE, return_value="reply"):
+                with pytest.raises(RuntimeError) as exc_info:
+                    service.generate_chat_reply("miori", "hello")
+
+        assert exc_info.value is original_error
+        assert session.complete_calls == [(session.started_turn, "reply")]
+        assert session.fail_calls == [session.started_turn]
+
+    def test_success_completes_started_turn_without_marking_it_failed(self):
+        session = _RecordingHistorySession()
+        service = _chat_service_with_history(session)
+
+        with patch(_LOAD_PERSONALITY, return_value="# prompt"):
+            with patch(_GENERATE_RESPONSE, return_value="reply"):
+                reply = service.generate_chat_reply("miori", "hello")
+
+        assert reply == "reply"
+        assert session.start_calls == ["hello"]
+        assert session.complete_calls == [(session.started_turn, "reply")]
+        assert session.fail_calls == []
 
     def test_public_generate_chat_reply_delegates_to_configured_service(self):
         service = _chat_service(False)
@@ -246,10 +428,11 @@ class TestChatServiceRagContract:
 
         assert reply == "reply"
         mock_record.assert_called_once()
-        args, _kwargs = mock_record.call_args
+        args, kwargs = mock_record.call_args
         assert args[:2] == ("miori", "hello")
         assert args[2] is policy
         assert hasattr(args[3], "add_task")
+        assert hasattr(kwargs["privacy_scanner"], "scan")
 
     def test_two_argument_reply_uses_shared_memory_queue_when_rag_enabled(self):
         policy = object()
@@ -264,18 +447,17 @@ class TestChatServiceRagContract:
         assert reply == "reply"
         mock_record.assert_called_once()
         assert hasattr(mock_record.call_args.args[3], "add_task")
+        assert hasattr(mock_record.call_args.kwargs["privacy_scanner"], "scan")
 
     def test_rag_disabled_keeps_plain_prompt_without_memory_work(self):
         service = _chat_service(False)
-        with patch(_RESOLVED_MEMORY_POLICY) as mock_policy:
-            with patch(_LOAD_PERSONALITY, return_value="# prompt"):
-                with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT) as mock_build:
-                    with patch(_GENERATE_RESPONSE, return_value="reply") as mock_gen:
-                        with patch(_RECORD_USER_MEMORY_CANDIDATE) as mock_record:
-                            reply = service.generate_chat_reply("miori", "hello")
+        with patch(_LOAD_PERSONALITY, return_value="# prompt"):
+            with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT) as mock_build:
+                with patch(_GENERATE_RESPONSE, return_value="reply") as mock_gen:
+                    with patch(_RECORD_USER_MEMORY_CANDIDATE) as mock_record:
+                        reply = service.generate_chat_reply("miori", "hello")
 
         assert reply == "reply"
-        mock_policy.assert_not_called()
         mock_build.assert_not_called()
         mock_gen.assert_called_once_with("# prompt", "hello")
         mock_record.assert_not_called()
@@ -328,12 +510,33 @@ class TestChatServiceRagContract:
         ]
         for call in mock_record.call_args_list:
             assert hasattr(call.args[3], "add_task")
+            assert hasattr(call.kwargs["privacy_scanner"], "scan")
 
     def test_runtime_config_fails_fast_for_inconsistent_rag_policy(self):
         with pytest.raises(ValueError, match="memory policy is required"):
             _chat_service(True)
         with pytest.raises(ValueError, match="memory policy must be omitted"):
             _chat_service(False, object())
+        with pytest.raises(ValueError, match="privacy scanner is required"):
+            ChatService(
+                ChatRuntimeConfig(
+                    rag_enabled=True,
+                    memory_policy=object(),
+                    privacy_scanner=None,
+                ),
+                _CollectingTaskQueue(),
+                _IgnoringHistoryService(),
+            )
+        with pytest.raises(ValueError, match="privacy scanner must be omitted"):
+            ChatService(
+                ChatRuntimeConfig(
+                    rag_enabled=False,
+                    memory_policy=None,
+                    privacy_scanner=MagicMock(),
+                ),
+                _CollectingTaskQueue(),
+                _IgnoringHistoryService(),
+            )
 
     def test_thread_pool_memory_task_queue_shutdown_waits_for_pending_tasks(self):
         task_started = threading.Event()

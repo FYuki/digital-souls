@@ -17,6 +17,13 @@ from app.memory.rag_record import (
     MemoryCandidateRecord,
     create_memory_candidate_record,
 )
+from app.privacy.contracts import (
+    PrivacyCategory,
+    PrivacyScanner,
+    ScanFailure,
+    ScanResult,
+    StorageScope,
+)
 
 logger = logging.getLogger(__name__)
 RAG_OPERATION_ERRORS = (httpx.HTTPError, OSError, RuntimeError, ValueError)
@@ -46,11 +53,26 @@ def record_user_memory_candidate(
     user_message: str,
     policy: MemoryPolicy,
     task_queue: _BackgroundTaskQueue,
+    *,
+    privacy_scanner: PrivacyScanner,
 ) -> None:
+    if not _allows_rag_storage(privacy_scanner.scan(user_message)):
+        return
     if contains_non_storable_memory(user_message, policy):
         return
     record = create_memory_candidate_record(character, user_message)
     _enqueue_memory_candidate(record, policy, task_queue)
+
+
+def _allows_rag_storage(result: ScanResult) -> bool:
+    if isinstance(result, ScanFailure):
+        return False
+    for finding in result.findings:
+        if finding.category is not PrivacyCategory.STORAGE_OPT_OUT:
+            return False
+        if finding.storage_scope in {StorageScope.RAG, StorageScope.BOTH}:
+            return False
+    return True
 
 
 def _format_augmented_prompt(

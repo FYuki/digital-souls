@@ -15,7 +15,11 @@ from app.audio_pipeline import (
 )
 from app.conversation_history.config import resolve_conversation_history_config
 from app.conversation_history.repository import ConversationHistoryRepository
+from app.conversation_history.service import ConversationHistoryService
 from app.conversation_history.schema import initialize_conversation_history_schema
+from app.memory.memory_policy import resolved_memory_policy
+from app.privacy.history_sanitizer import create_history_sanitizer
+from app.privacy.scanner import create_privacy_scanner
 from app.routers.chat import router as chat_router
 from app.routers.ws import router as ws_router
 
@@ -30,6 +34,9 @@ def _app_chat_service(app: FastAPI) -> _chat_runtime.ChatService:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    policy = resolved_memory_policy()
+    privacy_scanner = create_privacy_scanner(policy.privacy)
+    history_sanitizer = create_history_sanitizer(privacy_scanner, policy.privacy)
     conversation_history_config = resolve_conversation_history_config()
     initialize_conversation_history_schema(
         conversation_history_config.database_path,
@@ -58,8 +65,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         memory_task_queue = _chat_runtime.create_thread_pool_memory_task_queue(executor)
         app_chat_service = _chat_runtime.create_chat_service(
-            _chat_runtime.resolve_chat_runtime_config(),
+            _chat_runtime.resolve_chat_runtime_config(policy, privacy_scanner),
             memory_task_queue,
+            ConversationHistoryService(
+                conversation_history_repository,
+                history_sanitizer,
+            ),
         )
         app.state.chat_service = app_chat_service
         chat_service_state_set = True

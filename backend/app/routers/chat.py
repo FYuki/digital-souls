@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.chat_service import (
     CharacterNotFoundError,
@@ -12,7 +12,7 @@ router = APIRouter()
 
 class ChatRequest(BaseModel):
     character: str
-    message: str
+    message: str = Field(min_length=1)
 
 
 class ChatResponse(BaseModel):

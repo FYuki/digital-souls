@@ -180,6 +180,43 @@ class ConversationHistoryRepository:
                 turn_id,
             )
 
+    def skip_processing_turn_for_privacy(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+        turn_id: UUID,
+        turn_input: PrivacySkippedTurnInput,
+    ) -> ConversationTurn:
+        now = self._now()
+        with self._database.transaction() as connection:
+            current = select_turn(
+                connection,
+                character_id,
+                conversation_id,
+                turn_id,
+            )
+            require_turn_transition(current.status, TurnStatus.PRIVACY_SKIPPED)
+            connection.execute(
+                "UPDATE conversation_turns "
+                "SET user_content = NULL, assistant_content = NULL, "
+                "status = ?, privacy_reason_code = ?, updated_at = ? "
+                "WHERE character_id = ? AND conversation_id = ? AND turn_id = ?",
+                (
+                    TurnStatus.PRIVACY_SKIPPED.value,
+                    turn_input.reason_code.value,
+                    format_datetime(now),
+                    character_id,
+                    str(conversation_id),
+                    str(turn_id),
+                ),
+            )
+            return select_turn(
+                connection,
+                character_id,
+                conversation_id,
+                turn_id,
+            )
+
     def recover_stale_processing(self) -> list[ConversationTurn]:
         now = self._now()
         cutoff = format_datetime(now - self._stale_after)
