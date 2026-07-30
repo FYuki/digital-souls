@@ -51,6 +51,7 @@ class TestTurnTransitions:
         allowed = {
             (TurnStatus.PROCESSING, TurnStatus.COMPLETED),
             (TurnStatus.PROCESSING, TurnStatus.FAILED),
+            (TurnStatus.PROCESSING, TurnStatus.PRIVACY_SKIPPED),
             (TurnStatus.COMPLETED, TurnStatus.FAILED),
         }
 
@@ -90,6 +91,26 @@ class TestTurnTransitions:
 
         assert failed.status is TurnStatus.FAILED
         assert failed.assistant_content is None
+
+    def test_should_clear_processing_content_when_privacy_sanitization_fails(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        repository = _processing_turn(tmp_path / "history.db")
+
+        skipped = repository.skip_processing_turn_for_privacy(
+            "miori",
+            CONVERSATION_ID,
+            TURN_ID,
+            PrivacySkippedTurnInput(
+                reason_code=PrivacySkipReason.SENSITIVE_CONTENT,
+            ),
+        )
+
+        assert skipped.status is TurnStatus.PRIVACY_SKIPPED
+        assert skipped.user_content is None
+        assert skipped.assistant_content is None
+        assert skipped.privacy_reason_code is PrivacySkipReason.SENSITIVE_CONTENT
 
     def test_should_preserve_assistant_body_when_completed_turn_fails(
         self,
@@ -224,6 +245,7 @@ class TestTurnTransitions:
             "create_privacy_skipped_turn",
             "complete_turn",
             "fail_turn",
+            "skip_processing_turn_for_privacy",
             "recover_stale_processing",
             "list_turns",
         }

@@ -10,11 +10,15 @@ from typing import Protocol
 import httpx
 
 from app import chat_service
+from app.conversation_history.service import (
+    HistoryService,
+    HistorySession,
+)
 from app.characters import loader as _character_loader
 from app.llm import router as _llm_router
 from app.memory import memory_policy as _memory_policy
 from app.memory import rag_service as _rag_service
-from app.memory.memory_policy import resolved_memory_policy
+from app.privacy.contracts import PrivacyScanner
 
 RAG_ENABLED_ENV = "RAG_ENABLED"
 RAG_ENABLED_VALUE = "true"
@@ -84,12 +88,14 @@ def _log_task_failure(future: Future[object]) -> None:
 class ChatRuntimeConfig:
     rag_enabled: bool
     memory_policy: _memory_policy.MemoryPolicy | None
+    privacy_scanner: PrivacyScanner | None
 
 
 @dataclass(frozen=True)
 class _ResolvedChatContext:
     system_prompt: str
     memory_policy: _memory_policy.MemoryPolicy | None
+    privacy_scanner: PrivacyScanner | None
     memory_task_queue: MemoryTaskQueue
 
 
@@ -97,9 +103,14 @@ class _ResolvedChatContext:
 class _ChatSession:
     character: str
     chat_service: "ChatService"
+    history_session: HistorySession
 
     def generate_reply(self, message: str) -> str:
-        return self.chat_service.generate_chat_reply(self.character, message)
+        return self.chat_service._generate_chat_reply(
+            self.character,
+            message,
+            self.history_session,
+        )
 
 
 class ChatService:
@@ -107,13 +118,19 @@ class ChatService:
         self,
         runtime_config: ChatRuntimeConfig,
         memory_task_queue: MemoryTaskQueue,
+        conversation_history_service: HistoryService,
     ) -> None:
         if runtime_config.rag_enabled and runtime_config.memory_policy is None:
             raise ValueError("memory policy is required when RAG is enabled")
+        if runtime_config.rag_enabled and runtime_config.privacy_scanner is None:
+            raise ValueError("privacy scanner is required when RAG is enabled")
         if not runtime_config.rag_enabled and runtime_config.memory_policy is not None:
             raise ValueError("memory policy must be omitted when RAG is disabled")
+        if not runtime_config.rag_enabled and runtime_config.privacy_scanner is not None:
+            raise ValueError("privacy scanner must be omitted when RAG is disabled")
         self._runtime_config = runtime_config
         self._memory_task_queue = memory_task_queue
+        self._conversation_history_service = conversation_history_service
 
     def generate_chat_reply(
         self,
@@ -125,7 +142,31 @@ class ChatService:
             self._runtime_config,
             self._memory_task_queue,
         )
-        return _generate_reply(character, message, context)
+        history_session = self._conversation_history_service.open_session(character)
+        return _generate_recorded_reply(
+            character,
+            message,
+            context,
+            history_session,
+        )
+
+    def _generate_chat_reply(
+        self,
+        character: str,
+        message: str,
+        history_session: HistorySession,
+    ) -> str:
+        context = _resolve_chat_context(
+            character,
+            self._runtime_config,
+            self._memory_task_queue,
+        )
+        return _generate_recorded_reply(
+            character,
+            message,
+            context,
+            history_session,
+        )
 
     async def create_chat_session(
         self,
@@ -135,23 +176,32 @@ class ChatService:
         return _ChatSession(
             character=character,
             chat_service=self,
+            history_session=self._conversation_history_service.open_session(character),
         )
 
 
-def resolve_chat_runtime_config() -> ChatRuntimeConfig:
+def resolve_chat_runtime_config(
+    policy: _memory_policy.MemoryPolicy,
+    privacy_scanner: PrivacyScanner,
+) -> ChatRuntimeConfig:
     rag_enabled = os.environ.get(RAG_ENABLED_ENV) == RAG_ENABLED_VALUE
-    policy = resolved_memory_policy() if rag_enabled else None
     return ChatRuntimeConfig(
         rag_enabled=rag_enabled,
-        memory_policy=policy,
+        memory_policy=policy if rag_enabled else None,
+        privacy_scanner=privacy_scanner if rag_enabled else None,
     )
 
 
 def create_chat_service(
     runtime_config: ChatRuntimeConfig,
     memory_task_queue: MemoryTaskQueue,
+    conversation_history_service: HistoryService,
 ) -> ChatService:
-    return ChatService(runtime_config, memory_task_queue)
+    return ChatService(
+        runtime_config,
+        memory_task_queue,
+        conversation_history_service,
+    )
 
 
 def create_thread_pool_memory_task_queue(
@@ -205,11 +255,13 @@ def _resolve_chat_context(
         return _ResolvedChatContext(
             system_prompt=system_prompt,
             memory_policy=None,
+            privacy_scanner=None,
             memory_task_queue=memory_task_queue,
         )
     return _ResolvedChatContext(
         system_prompt=system_prompt,
         memory_policy=runtime_config.memory_policy,
+        privacy_scanner=runtime_config.privacy_scanner,
         memory_task_queue=memory_task_queue,
     )
 
@@ -231,11 +283,14 @@ def _system_prompt_for_reply(
 
 def _call_llm(system_prompt: str, message: str) -> str:
     try:
-        return _llm_router.generate_response(system_prompt, message)
+        reply = _llm_router.generate_response(system_prompt, message)
     except httpx.TimeoutException as exc:
         raise chat_service.ChatTimeoutError() from exc
     except httpx.HTTPError as exc:
         raise chat_service.ChatBackendError() from exc
+    if not reply:
+        raise chat_service.ChatBackendError()
+    return reply
 
 
 def _record_user_memory_candidate(
@@ -245,11 +300,14 @@ def _record_user_memory_candidate(
 ) -> None:
     if context.memory_policy is None:
         return
+    if context.privacy_scanner is None:
+        raise ValueError("privacy scanner is required for RAG memory recording")
     _rag_service.record_user_memory_candidate(
         character,
         message,
         context.memory_policy,
         context.memory_task_queue,
+        privacy_scanner=context.privacy_scanner,
     )
 
 
@@ -261,4 +319,26 @@ def _generate_reply(
     prompt = _system_prompt_for_reply(character, message, context)
     reply = _call_llm(prompt, message)
     _record_user_memory_candidate(character, message, context)
+    return reply
+
+
+def _generate_recorded_reply(
+    character: str,
+    message: str,
+    context: _ResolvedChatContext,
+    history_session: HistorySession,
+) -> str:
+    started_turn = history_session.start_turn(message)
+    try:
+        reply = _generate_reply(character, message, context)
+        history_session.complete_turn(started_turn, reply)
+    except Exception:
+        try:
+            history_session.fail_turn(started_turn)
+        except Exception as cleanup_error:
+            logger.warning(
+                "Failed to mark conversation turn failed: %s",
+                cleanup_error.__class__.__name__,
+            )
+        raise
     return reply

@@ -9,6 +9,17 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
+from app.privacy.contracts import (
+    FindingReasonCode,
+    PrivacyCategory,
+    PrivacyFinding,
+    ScanFailure,
+    ScanFailureReasonCode,
+    ScanSuccess,
+    StorageScope,
+)
+from tests.privacy_test_support import policy_config
+
 
 @dataclass
 class SavedRecord:
@@ -26,6 +37,41 @@ def _resolved_policy():
 
 def _record_id(sequence: int) -> str:
     return f"00000000-0000-4000-8000-{sequence:012d}"
+
+
+def _record_candidate(
+    rag_service,
+    character: str,
+    user_message: str,
+    policy,
+    background_tasks,
+) -> None:
+    from app.privacy.scanner import create_privacy_scanner
+
+    rag_service.record_user_memory_candidate(
+        character,
+        user_message,
+        policy,
+        background_tasks,
+        privacy_scanner=create_privacy_scanner(policy.privacy),
+    )
+
+
+def _finding(
+    policy_version: str,
+    category: PrivacyCategory,
+    storage_scope: StorageScope | None = None,
+) -> PrivacyFinding:
+    return PrivacyFinding(
+        category=category,
+        start=0,
+        end=1,
+        confidence=1.0,
+        reason_code=FindingReasonCode.DETERMINISTIC_MATCH,
+        recognizer_version="test-recognizer-v1",
+        policy_version=policy_version,
+        storage_scope=storage_scope,
+    )
 
 
 class TestRagServicePrompt:
@@ -221,10 +267,180 @@ class TestRagServiceRecording:
             "user_message",
             "policy",
             "task_queue",
+            "privacy_scanner",
         ]
         assert not hasattr(rag_service, "_BACKGROUND_TASK_QUEUE")
         assert not hasattr(rag_service, "_configure_memory_task_queue")
         assert not hasattr(rag_service, "_clear_memory_task_queue")
+
+    def test_record_user_memory_candidate_rejects_scan_failure(self, monkeypatch):
+        rag_service = importlib.import_module("app.memory.rag_service")
+        policy = _resolved_policy()
+        scanner = MagicMock()
+        scanner.scan.return_value = ScanFailure(
+            reason_code=ScanFailureReasonCode.RECOGNIZER_ERROR,
+            recognizer_version="test-recognizer-v1",
+            policy_version=policy.policy_version,
+        )
+        background_tasks = MagicMock()
+        monkeypatch.setattr(rag_service, "create_memory_candidate_record", MagicMock())
+
+        rag_service.record_user_memory_candidate(
+            "miori",
+            "農業日誌: トマトに水やり",
+            policy,
+            background_tasks,
+            privacy_scanner=scanner,
+        )
+
+        scanner.scan.assert_called_once_with("農業日誌: トマトに水やり")
+        rag_service.create_memory_candidate_record.assert_not_called()
+        background_tasks.add_task.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "category",
+        [
+            category
+            for category in PrivacyCategory
+            if category is not PrivacyCategory.STORAGE_OPT_OUT
+        ],
+    )
+    def test_record_user_memory_candidate_rejects_sensitive_finding(
+        self,
+        monkeypatch,
+        category,
+    ):
+        rag_service = importlib.import_module("app.memory.rag_service")
+        policy = _resolved_policy()
+        scanner = MagicMock()
+        scanner.scan.return_value = ScanSuccess(
+            (_finding(policy.policy_version, category),)
+        )
+        background_tasks = MagicMock()
+        monkeypatch.setattr(rag_service, "create_memory_candidate_record", MagicMock())
+
+        rag_service.record_user_memory_candidate(
+            "miori",
+            "農業日誌: トマトに水やり",
+            policy,
+            background_tasks,
+            privacy_scanner=scanner,
+        )
+
+        rag_service.create_memory_candidate_record.assert_not_called()
+        background_tasks.add_task.assert_not_called()
+
+    @pytest.mark.parametrize("scope", [StorageScope.RAG, StorageScope.BOTH])
+    def test_record_user_memory_candidate_rejects_rag_opt_out(
+        self,
+        monkeypatch,
+        scope,
+    ):
+        rag_service = importlib.import_module("app.memory.rag_service")
+        policy = _resolved_policy()
+        scanner = MagicMock()
+        scanner.scan.return_value = ScanSuccess(
+            (
+                _finding(
+                    policy.policy_version,
+                    PrivacyCategory.STORAGE_OPT_OUT,
+                    scope,
+                ),
+            )
+        )
+        background_tasks = MagicMock()
+        monkeypatch.setattr(rag_service, "create_memory_candidate_record", MagicMock())
+
+        rag_service.record_user_memory_candidate(
+            "miori",
+            "農業日誌: トマトに水やり",
+            policy,
+            background_tasks,
+            privacy_scanner=scanner,
+        )
+
+        rag_service.create_memory_candidate_record.assert_not_called()
+        background_tasks.add_task.assert_not_called()
+
+    def test_record_user_memory_candidate_allows_history_only_opt_out(
+        self,
+        monkeypatch,
+    ):
+        rag_service = importlib.import_module("app.memory.rag_service")
+        policy = _resolved_policy()
+        scanner = MagicMock()
+        scanner.scan.return_value = ScanSuccess(
+            (
+                _finding(
+                    policy.policy_version,
+                    PrivacyCategory.STORAGE_OPT_OUT,
+                    StorageScope.HISTORY,
+                ),
+            )
+        )
+        background_tasks = MagicMock()
+        record = SavedRecord(
+            _record_id(41),
+            "miori",
+            "user",
+            "農業日誌: トマトに水やり",
+            "2026-06-23T00:00:00+00:00",
+        )
+        monkeypatch.setattr(
+            rag_service,
+            "create_memory_candidate_record",
+            MagicMock(return_value=record),
+        )
+
+        rag_service.record_user_memory_candidate(
+            "miori",
+            record.content,
+            policy,
+            background_tasks,
+            privacy_scanner=scanner,
+        )
+
+        rag_service.create_memory_candidate_record.assert_called_once_with(
+            "miori",
+            record.content,
+        )
+        background_tasks.add_task.assert_called_once()
+
+    def test_record_user_memory_candidate_allows_empty_scan_success(
+        self,
+        monkeypatch,
+    ):
+        rag_service = importlib.import_module("app.memory.rag_service")
+        policy = _resolved_policy()
+        scanner = MagicMock()
+        scanner.scan.return_value = ScanSuccess(())
+        background_tasks = MagicMock()
+        record = SavedRecord(
+            _record_id(43),
+            "miori",
+            "user",
+            "農業日誌: トマトに水やり",
+            "2026-06-23T00:00:00+00:00",
+        )
+        monkeypatch.setattr(
+            rag_service,
+            "create_memory_candidate_record",
+            MagicMock(return_value=record),
+        )
+
+        rag_service.record_user_memory_candidate(
+            "miori",
+            record.content,
+            policy,
+            background_tasks,
+            privacy_scanner=scanner,
+        )
+
+        rag_service.create_memory_candidate_record.assert_called_once_with(
+            "miori",
+            record.content,
+        )
+        background_tasks.add_task.assert_called_once()
 
     def test_record_user_memory_candidate_does_not_create_legacy_sqlite(
         self, tmp_path
@@ -232,7 +448,8 @@ class TestRagServiceRecording:
         rag_service = importlib.import_module("app.memory.rag_service")
         background_tasks = MagicMock()
 
-        rag_service.record_user_memory_candidate(
+        _record_candidate(
+            rag_service,
             "miori",
             "今日は晴れですね",
             _resolved_policy(),
@@ -263,7 +480,8 @@ class TestRagServiceRecording:
             MagicMock(return_value=user_record),
         )
 
-        rag_service.record_user_memory_candidate(
+        _record_candidate(
+            rag_service,
             "miori",
             user_message,
             _resolved_policy(),
@@ -298,7 +516,8 @@ class TestRagServiceRecording:
             MagicMock(return_value=user_record),
         )
 
-        rag_service.record_user_memory_candidate(
+        _record_candidate(
+            rag_service,
             "miori",
             "今日は眠いね",
             _resolved_policy(),
@@ -394,7 +613,8 @@ class TestRagServiceRecording:
             MagicMock(),
         )
 
-        rag_service.record_user_memory_candidate(
+        _record_candidate(
+            rag_service,
             "miori",
             "パスワードはabc",
             _resolved_policy(),
@@ -422,7 +642,8 @@ class TestRagServiceRecording:
             MagicMock(return_value=user_record),
         )
 
-        rag_service.record_user_memory_candidate(
+        _record_candidate(
+            rag_service,
             "miori",
             user_record.content,
             _resolved_policy(),
@@ -451,7 +672,8 @@ class TestRagServiceRecording:
             MagicMock(return_value=user_record),
         )
 
-        rag_service.record_user_memory_candidate(
+        _record_candidate(
+            rag_service,
             "miori",
             user_record.content,
             _resolved_policy(),
@@ -479,7 +701,8 @@ class TestRagServiceRecording:
             MagicMock(return_value=user_record),
         )
 
-        rag_service.record_user_memory_candidate(
+        _record_candidate(
+            rag_service,
             "miori",
             user_record.content,
             _resolved_policy(),
@@ -519,13 +742,15 @@ class TestRagServiceRecording:
             MagicMock(side_effect=records),
         )
 
-        rag_service.record_user_memory_candidate(
+        _record_candidate(
+            rag_service,
             "miori",
             records[0].content,
             _resolved_policy(),
             background_tasks,
         )
-        rag_service.record_user_memory_candidate(
+        _record_candidate(
+            rag_service,
             "miori",
             records[1].content,
             _resolved_policy(),
@@ -553,7 +778,8 @@ class TestRagServiceRecording:
             MagicMock(return_value=user_record),
         )
 
-        rag_service.record_user_memory_candidate(
+        _record_candidate(
+            rag_service,
             "miori",
             user_record.content,
             _resolved_policy(),
@@ -576,7 +802,8 @@ class TestRagServiceRecording:
             MagicMock(),
         )
 
-        rag_service.record_user_memory_candidate(
+        _record_candidate(
+            rag_service,
             "miori",
             "APIキーはabcです",
             _resolved_policy(),
@@ -597,7 +824,8 @@ class TestRagServiceRecording:
             MagicMock(),
         )
 
-        rag_service.record_user_memory_candidate(
+        _record_candidate(
+            rag_service,
             "miori",
             "api key はabcです",
             _resolved_policy(),
@@ -625,7 +853,8 @@ class TestRagServiceRecording:
             MagicMock(return_value=user_record),
         )
 
-        rag_service.record_user_memory_candidate(
+        _record_candidate(
+            rag_service,
             "miori",
             user_record.content,
             _resolved_policy(),
@@ -645,7 +874,8 @@ class TestRagServiceRecording:
         background_tasks = MagicMock()
         monkeypatch.setattr(rag_service, "create_memory_candidate_record", MagicMock())
 
-        rag_service.record_user_memory_candidate(
+        _record_candidate(
+            rag_service,
             "miori",
             "パスワードはabc",
             _resolved_policy(),
@@ -668,7 +898,8 @@ class TestRagServiceRecording:
             MagicMock(),
         )
 
-        rag_service.record_user_memory_candidate(
+        _record_candidate(
+            rag_service,
             "miori",
             "この内容は保存しないで",
             _resolved_policy(),
@@ -680,12 +911,12 @@ class TestRagServiceRecording:
 
 
 def _write_memory_policy_config(config_path, common, services):
+    config = policy_config()
+    config["common"] = common
+    config["services"] = services
     config_path.write_text(
         json.dumps(
-            {
-                "common": common,
-                "services": services,
-            },
+            config,
             ensure_ascii=False,
         ),
         encoding="utf-8",
@@ -762,7 +993,8 @@ class TestMemoryPolicyConfiguration:
             "基本人格",
             policy,
         )
-        rag_service.record_user_memory_candidate(
+        _record_candidate(
+            rag_service,
             "miori",
             sensitive_content,
             policy,

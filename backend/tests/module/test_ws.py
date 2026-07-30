@@ -21,7 +21,7 @@ _BUILD_AUGMENTED_SYSTEM_PROMPT = (
 _RECORD_USER_MEMORY_CANDIDATE = (
     "app._chat_runtime._rag_service.record_user_memory_candidate"
 )
-_RESOLVED_MEMORY_POLICY = "app._chat_runtime.resolved_memory_policy"
+_RESOLVED_MEMORY_POLICY = "app.main.resolved_memory_policy"
 _LOAD_TTS_CONFIG = "app.audio_pipeline.load_tts_config"
 _TRANSCRIBE = "app.stt.whisper_client.WhisperTranscriber.transcribe"
 _SYNTHESIZE = "app.tts.voicevox_client.VoicevoxClient.synthesize"
@@ -180,7 +180,10 @@ class TestWebSocketEndpoint:
         self, monkeypatch
     ):
         user_message = "前回なんの話をしたっけ？"
-        policy = object()
+        from app.memory.memory_policy import resolved_memory_policy
+
+        policy = MagicMock(name="resolved_memory_policy")
+        policy.privacy = resolved_memory_policy().privacy
         augmented_prompt = f"{_PERSONALITY}\n\n過去の記憶:\n前回は畑の話をした"
 
         monkeypatch.setenv("RAG_ENABLED", "true")
@@ -210,10 +213,11 @@ class TestWebSocketEndpoint:
         )
         mock_gen.assert_called_once_with(augmented_prompt, user_message)
         mock_record.assert_called_once()
-        args, _kwargs = mock_record.call_args
+        args, kwargs = mock_record.call_args
         assert args[:2] == ("miori", user_message)
         assert args[2] is policy
         assert hasattr(args[3], "add_task")
+        assert hasattr(kwargs["privacy_scanner"], "scan")
 
     def test_returns_422_when_payload_is_not_json_object(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
@@ -273,6 +277,20 @@ class TestWebSocketEndpoint:
             "type": "error",
             "status": 422,
             "detail": "WebSocket text message must include a string message",
+        }
+        mock_gen.assert_not_called()
+
+    def test_returns_422_when_text_message_is_empty(self, client):
+        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+            with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
+                with client.websocket_connect("/ws/miori") as websocket:
+                    websocket.send_json({"type": "text", "message": ""})
+                    response = websocket.receive_json()
+
+        assert response == {
+            "type": "error",
+            "status": 422,
+            "detail": "WebSocket text message must not be empty",
         }
         mock_gen.assert_not_called()
 
