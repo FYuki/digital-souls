@@ -2,7 +2,7 @@ import subprocess
 from pathlib import Path
 
 
-def test_mypy_rejects_swapped_raw_and_masked_text_types(tmp_path):
+def test_mypy_rejects_swapped_raw_and_masked_text_types(tmp_path: Path) -> None:
     backend_dir = Path(__file__).resolve().parents[2]
     fixture = tmp_path / "type_contract.py"
     fixture.write_text(

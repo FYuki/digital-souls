@@ -1,6 +1,8 @@
 import json
+from collections.abc import MutableMapping
 from pathlib import Path
 from types import MappingProxyType
+from typing import Literal, cast
 
 import pytest
 
@@ -59,7 +61,9 @@ def _use_repo_root(monkeypatch: pytest.MonkeyPatch, root: Path) -> None:
 
 
 class TestLoadCharacterCardV3:
-    def test_loads_all_supported_v3_fields(self, tmp_path, monkeypatch):
+    def test_loads_all_supported_v3_fields(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         _write_card(tmp_path, _valid_card())
         _use_repo_root(monkeypatch, tmp_path)
         from app.characters.loader import load_character_card
@@ -82,7 +86,9 @@ class TestLoadCharacterCardV3:
         assert card.data.creator == "作者"
         assert card.data.character_version == "1.2.3"
 
-    def test_preserves_unknown_extension_namespaces(self, tmp_path, monkeypatch):
+    def test_preserves_unknown_extension_namespaces(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         _write_card(tmp_path, _valid_card())
         _use_repo_root(monkeypatch, tmp_path)
         from app.characters.loader import load_character_card
@@ -91,7 +97,9 @@ class TestLoadCharacterCardV3:
 
         assert card.data.extensions["future_namespace"] == {"enabled": True}
 
-    def test_recursively_freezes_extension_values(self, tmp_path, monkeypatch):
+    def test_recursively_freezes_extension_values(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         _write_card(tmp_path, _valid_card())
         _use_repo_root(monkeypatch, tmp_path)
         from app.characters.loader import load_character_card
@@ -102,9 +110,11 @@ class TestLoadCharacterCardV3:
         assert isinstance(extensions, MappingProxyType)
         assert isinstance(digital_souls, MappingProxyType)
         with pytest.raises(TypeError):
-            digital_souls["tts_config"] = {}
+            cast(MutableMapping[str, object], digital_souls)["tts_config"] = {}
 
-    def test_accepts_unknown_root_and_data_fields(self, tmp_path, monkeypatch):
+    def test_accepts_unknown_root_and_data_fields(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         _write_card(tmp_path, _valid_card())
         _use_repo_root(monkeypatch, tmp_path)
         from app.characters.loader import load_character_card
@@ -121,8 +131,12 @@ class TestLoadCharacterCardV3:
         ],
     )
     def test_rejects_unsupported_card_identity(
-        self, tmp_path, monkeypatch, field, value
-    ):
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: Literal["spec", "spec_version"],
+        value: str,
+    ) -> None:
         card = _valid_card()
         card[field] = value
         _write_card(tmp_path, card)
@@ -141,8 +155,12 @@ class TestLoadCharacterCardV3:
         ],
     )
     def test_rejects_invalid_known_field_types(
-        self, tmp_path, monkeypatch, field, value
-    ):
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        value: object,
+    ) -> None:
         card = _valid_card()
         data = card["data"]
         assert isinstance(data, dict)
@@ -154,7 +172,9 @@ class TestLoadCharacterCardV3:
         with pytest.raises(ValueError, match=field):
             load_character_card("testchar")
 
-    def test_rejects_path_traversal(self, tmp_path, monkeypatch):
+    def test_rejects_path_traversal(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         outside = tmp_path / "secrets"
         outside.mkdir()
         (outside / "secrets.card.json").write_text("{}", encoding="utf-8")
@@ -164,7 +184,9 @@ class TestLoadCharacterCardV3:
         with pytest.raises(FileNotFoundError):
             load_character_card("../secrets")
 
-    def test_raises_file_not_found_for_missing_card(self, tmp_path, monkeypatch):
+    def test_raises_file_not_found_for_missing_card(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         (tmp_path / "characters" / "missing").mkdir(parents=True)
         _use_repo_root(monkeypatch, tmp_path)
         from app.characters.loader import load_character_card
@@ -175,8 +197,8 @@ class TestLoadCharacterCardV3:
 
 class TestLoadTtsConfig:
     def test_loads_voicevox_config_from_digital_souls_extension(
-        self, tmp_path, monkeypatch
-    ):
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         _write_card(tmp_path, _valid_card())
         _use_repo_root(monkeypatch, tmp_path)
         from app.characters.models import VoicevoxTtsConfig
@@ -185,6 +207,24 @@ class TestLoadTtsConfig:
         result = load_tts_config("testchar")
 
         assert result == VoicevoxTtsConfig(speaker_id=14)
+
+    def test_prefers_digital_souls_extension_over_legacy_data_field(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        card = _valid_card()
+        data = card["data"]
+        assert isinstance(data, dict)
+        data["tts_config"] = {
+            "engine": "voicevox",
+            "speaker_id": 99,
+        }
+        _write_card(tmp_path, card)
+        _use_repo_root(monkeypatch, tmp_path)
+        from app.characters.loader import load_tts_config
+
+        result = load_tts_config("testchar")
+
+        assert result.speaker_id == 14
 
     @pytest.mark.parametrize(
         "tts_config",
@@ -196,8 +236,11 @@ class TestLoadTtsConfig:
         ],
     )
     def test_rejects_invalid_voicevox_config(
-        self, tmp_path, monkeypatch, tts_config
-    ):
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        tts_config: object,
+    ) -> None:
         card = _valid_card()
         data = card["data"]
         assert isinstance(data, dict)
@@ -213,7 +256,7 @@ class TestLoadTtsConfig:
         with pytest.raises(ValueError, match="tts_config"):
             load_tts_config("testchar")
 
-    def test_repository_card_uses_v3_extension_contract(self):
+    def test_repository_card_uses_v3_extension_contract(self) -> None:
         from app.characters.loader import load_character_card, load_tts_config
 
         card = load_character_card("miori")

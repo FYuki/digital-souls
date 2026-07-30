@@ -1,7 +1,11 @@
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from app.conversation_history.sanitizer import ConversationHistorySanitizer
 from app.conversation_history.scanner import DeterministicPrivacyScanner
@@ -9,7 +13,12 @@ from tests.prompt_test_support import StubConversationHistory
 
 
 class _CollectingTaskQueue:
-    def add_task(self, func, *args, **kwargs):
+    def add_task(
+        self,
+        func: Callable[..., object],
+        *args: object,
+        **kwargs: object,
+    ) -> None:
         raise AssertionError("RAG無効時にmemory taskを登録してはいけない")
 
 
@@ -25,7 +34,9 @@ def _card_data() -> dict[str, object]:
     return data
 
 
-def _generate_reply_through_runtime(current_user_text: str):
+def _generate_reply_through_runtime(
+    current_user_text: str,
+) -> tuple[str, dict[str, object]]:
     from app._chat_runtime import ChatRuntimeConfig, ChatService
 
     response = MagicMock()
@@ -38,10 +49,11 @@ def _generate_reply_through_runtime(current_user_text: str):
             StubConversationHistory(),
             ConversationHistorySanitizer(DeterministicPrivacyScanner()),
         ).generate_chat_reply("miori", current_user_text)
-    return result, post.call_args.kwargs["json"]
+    payload = cast(dict[str, object], post.call_args.kwargs["json"])
+    return result, payload
 
 
-def test_runtime_propagates_card_prompt_through_router_to_ollama_payload():
+def test_runtime_propagates_card_prompt_through_router_to_ollama_payload() -> None:
     data = _card_data()
     current_user_text = "統合経路の現在発言"
 
@@ -68,7 +80,9 @@ def test_runtime_propagates_card_prompt_through_router_to_ollama_payload():
     ]
 
 
-def test_runtime_logs_no_card_or_current_user_content(caplog):
+def test_runtime_logs_no_card_or_current_user_content(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     data = _card_data()
     current_user_text = "RUNTIME_CURRENT_USER_LOG_SENTINEL"
     caplog.set_level(logging.DEBUG)

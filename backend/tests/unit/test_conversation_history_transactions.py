@@ -1,8 +1,10 @@
 import sqlite3
+from collections.abc import Mapping, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import timedelta
 from pathlib import Path
 from threading import Barrier
+from typing import cast
 
 import pytest
 
@@ -23,7 +25,8 @@ from tests.conversation_history_test_support import (
     set_turn_times,
 )
 
-SqlParameters = tuple[str | None, ...]
+SqlParameter = str | bytes | int | float | None
+SqlParameters = Sequence[SqlParameter] | Mapping[str, SqlParameter]
 
 
 class TestTransactionBoundaries:
@@ -133,7 +136,7 @@ class TestTransactionBoundaries:
             def execute(
                 self,
                 sql: str,
-                parameters: SqlParameters = (),
+                parameters: object = (),
             ) -> sqlite3.Cursor:
                 normalized = " ".join(sql.lower().split())
                 if (
@@ -142,7 +145,7 @@ class TestTransactionBoundaries:
                     and "conversation_turns" in normalized
                 ):
                     raise sqlite3.OperationalError("injected create return failure")
-                return super().execute(sql, parameters)
+                return super().execute(sql, cast(SqlParameters, parameters))
 
         repository = create_repository(
             database_path,
@@ -222,7 +225,7 @@ class TestTransactionBoundaries:
             def execute(
                 self,
                 sql: str,
-                parameters: SqlParameters = (),
+                parameters: object = (),
             ) -> sqlite3.Cursor:
                 normalized = " ".join(sql.lower().split())
                 if (
@@ -233,7 +236,7 @@ class TestTransactionBoundaries:
                     self.select_count += 1
                     if self.select_count == 2:
                         raise sqlite3.OperationalError("injected return-row failure")
-                return super().execute(sql, parameters)
+                return super().execute(sql, cast(SqlParameters, parameters))
 
         repository = create_repository(
             database_path,
@@ -283,7 +286,7 @@ class TestTransactionBoundaries:
             def execute(
                 self,
                 sql: str,
-                parameters: SqlParameters = (),
+                parameters: object = (),
             ) -> sqlite3.Cursor:
                 normalized = " ".join(sql.lower().split())
                 if (
@@ -294,7 +297,7 @@ class TestTransactionBoundaries:
                     self.select_count += 1
                     if self.select_count == 2:
                         raise sqlite3.OperationalError("injected return-row failure")
-                return super().execute(sql, parameters)
+                return super().execute(sql, cast(SqlParameters, parameters))
 
         repository = create_repository(
             database_path,

@@ -2,6 +2,7 @@ import json
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TypedDict, Unpack
 from uuid import UUID, uuid4
 
 from app.characters.models import CharacterCard, CharacterCardData
@@ -9,6 +10,7 @@ from app.conversation_history.models import (
     Conversation,
     ConversationTurn,
     PersistedMaskedText,
+    PrivacySkipReason,
     PrivacySkippedTurnInput,
     ProcessingTurnInput,
     TurnStatus,
@@ -16,6 +18,13 @@ from app.conversation_history.models import (
 from app.prompting.types import BuiltPrompt
 
 TEST_CONVERSATION_ID = UUID("00000000-0000-4000-8000-000000000001")
+
+
+class _TurnChanges(TypedDict, total=False):
+    user_content: PersistedMaskedText | None
+    assistant_content: PersistedMaskedText | None
+    status: TurnStatus
+    privacy_reason_code: PrivacySkipReason | None
 
 
 class StubConversationHistory:
@@ -147,7 +156,7 @@ class StubConversationHistory:
         character_id: str,
         conversation_id: UUID,
         turn_id: UUID,
-        **changes: object,
+        **changes: Unpack[_TurnChanges],
     ) -> ConversationTurn:
         index = next(
             index
