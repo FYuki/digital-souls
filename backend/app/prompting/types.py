@@ -1,9 +1,8 @@
 from dataclasses import dataclass, field
 from typing import ClassVar, Literal, NewType
 
-from app.conversation_history.models import PersistedMaskedText
-
 CurrentUserOriginalText = NewType("CurrentUserOriginalText", str)
+PersistedMaskedText = NewType("PersistedMaskedText", str)
 RagContextText = NewType("RagContextText", str)
 PromptRole = Literal["system", "user", "assistant"]
 PersistedRole = Literal["user", "assistant"]
@@ -54,10 +53,3 @@ class PromptTokenBudget:
 class BuiltPrompt:
     messages: tuple[PromptMessage, ...] = field(repr=False)
     token_budget: PromptTokenBudget
-
-
-class PromptInputLimitError(ValueError):
-    def __init__(self, element: str, limit: int) -> None:
-        self.element = element
-        self.limit = limit
-        super().__init__(f"{element} exceeds its token limit ({limit})")

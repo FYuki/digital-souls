@@ -2,9 +2,13 @@ import json
 from collections.abc import MutableMapping
 from pathlib import Path
 from types import MappingProxyType
-from typing import Literal, cast
+from typing import Protocol, cast
 
 import pytest
+
+
+class _TaggedCharacterCardData(Protocol):
+    tags: tuple[str, ...]
 
 
 def _valid_card() -> dict[str, object]:
@@ -26,6 +30,7 @@ def _valid_card() -> dict[str, object]:
             "group_only_greetings": ["グループ挨拶"],
             "creator": "作者",
             "character_version": "1.2.3",
+            "tags": ["相棒", "夜"],
             "unknown_data": "accepted",
             "extensions": {
                 "digital_souls": {
@@ -85,6 +90,7 @@ class TestLoadCharacterCardV3:
         assert card.data.group_only_greetings == ("グループ挨拶",)
         assert card.data.creator == "作者"
         assert card.data.character_version == "1.2.3"
+        assert cast(_TaggedCharacterCardData, card.data).tags == ("相棒", "夜")
 
     def test_preserves_unknown_extension_namespaces(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -112,38 +118,32 @@ class TestLoadCharacterCardV3:
         with pytest.raises(TypeError):
             cast(MutableMapping[str, object], digital_souls)["tts_config"] = {}
 
-    def test_accepts_unknown_root_and_data_fields(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        _write_card(tmp_path, _valid_card())
-        _use_repo_root(monkeypatch, tmp_path)
-        from app.characters.loader import load_character_card
-
-        card = load_character_card("testchar")
-
-        assert card.data.name == "テスト人格"
-
-    @pytest.mark.parametrize(
-        ("field", "value"),
-        [
-            ("spec", "chara_card_v4"),
-            ("spec_version", "4.0"),
-        ],
-    )
-    def test_rejects_unsupported_card_identity(
+    def test_rejects_unsupported_card_spec(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
-        field: Literal["spec", "spec_version"],
-        value: str,
     ) -> None:
         card = _valid_card()
-        card[field] = value
+        card["spec"] = "chara_card_v4"
         _write_card(tmp_path, card)
         _use_repo_root(monkeypatch, tmp_path)
         from app.characters.loader import load_character_card
 
-        with pytest.raises(ValueError, match=field):
+        with pytest.raises(ValueError, match="spec"):
+            load_character_card("testchar")
+
+    def test_rejects_missing_tags(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        card = _valid_card()
+        data = card["data"]
+        assert isinstance(data, dict)
+        del data["tags"]
+        _write_card(tmp_path, card)
+        _use_repo_root(monkeypatch, tmp_path)
+        from app.characters.loader import load_character_card
+
+        with pytest.raises(ValueError, match="tags"):
             load_character_card("testchar")
 
     @pytest.mark.parametrize(
@@ -151,6 +151,8 @@ class TestLoadCharacterCardV3:
         [
             ("description", []),
             ("alternate_greetings", ["valid", 1]),
+            ("tags", {"not": "an array"}),
+            ("tags", ["valid", 1]),
             ("extensions", []),
         ],
     )
@@ -196,13 +198,18 @@ class TestLoadCharacterCardV3:
 
 
 class TestLoadTtsConfig:
+    def test_loader_does_not_reexport_voicevox_config_model(self) -> None:
+        import app.characters.loader as character_loader
+
+        assert not hasattr(character_loader, "VoicevoxTtsConfig")
+
     def test_loads_voicevox_config_from_digital_souls_extension(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         _write_card(tmp_path, _valid_card())
         _use_repo_root(monkeypatch, tmp_path)
-        from app.characters.models import VoicevoxTtsConfig
         from app.characters.loader import load_tts_config
+        from app.characters.models import VoicevoxTtsConfig
 
         result = load_tts_config("testchar")
 
@@ -225,6 +232,28 @@ class TestLoadTtsConfig:
         result = load_tts_config("testchar")
 
         assert result.speaker_id == 14
+
+    def test_does_not_fall_back_to_legacy_data_field(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        card = _valid_card()
+        data = card["data"]
+        assert isinstance(data, dict)
+        data["tts_config"] = {
+            "engine": "voicevox",
+            "speaker_id": 99,
+        }
+        extensions = data["extensions"]
+        assert isinstance(extensions, dict)
+        digital_souls = extensions["digital_souls"]
+        assert isinstance(digital_souls, dict)
+        del digital_souls["tts_config"]
+        _write_card(tmp_path, card)
+        _use_repo_root(monkeypatch, tmp_path)
+        from app.characters.loader import load_tts_config
+
+        with pytest.raises(KeyError, match="extensions.digital_souls"):
+            load_tts_config("testchar")
 
     @pytest.mark.parametrize(
         "tts_config",

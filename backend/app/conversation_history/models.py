@@ -1,10 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import NewType
 from uuid import UUID
-
-PersistedMaskedText = NewType("PersistedMaskedText", str)
 
 
 class TurnStatus(str, Enum):
@@ -31,8 +28,8 @@ class ConversationTurn:
     turn_id: UUID
     character_id: str
     conversation_id: UUID
-    user_content: PersistedMaskedText | None
-    assistant_content: PersistedMaskedText | None
+    user_content: str | None
+    assistant_content: str | None
     status: TurnStatus
     privacy_reason_code: PrivacySkipReason | None
     created_at: datetime
@@ -41,7 +38,7 @@ class ConversationTurn:
 
 @dataclass(frozen=True)
 class ProcessingTurnInput:
-    sanitized_user_content: PersistedMaskedText
+    sanitized_user_content: str
 
 
 @dataclass(frozen=True)

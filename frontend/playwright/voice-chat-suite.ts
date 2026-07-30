@@ -185,14 +185,12 @@ export const createVoiceChatDriver = () => {
 
   const expectMessages = async (page: Page) => {
     const messages = page.locator('article.message')
-    await expect.poll(
-      async () => (await messages.locator('.speaker').allTextContents()).slice(-2),
-      { timeout: VOICE_RESPONSE_TIMEOUT_MS },
-    ).toEqual(['あなた', '光織'])
-
-    const messageCount = await messages.count()
-    await expect(messages.nth(messageCount - 2).locator('p')).not.toHaveText('')
-    await expect(messages.nth(messageCount - 1).locator('p')).not.toHaveText('')
+    await expect.poll(async () => messages.count(), { timeout: VOICE_RESPONSE_TIMEOUT_MS })
+      .toBeGreaterThanOrEqual(2)
+    await expect(messages.nth(0).locator('.speaker')).toHaveText('あなた')
+    await expect(messages.nth(1).locator('.speaker')).toHaveText('光織')
+    await expect(messages.nth(0).locator('p')).not.toHaveText('')
+    await expect(messages.nth(1).locator('p')).not.toHaveText('')
   }
 
   const waitForFrameOrder = async (page: Page) => {

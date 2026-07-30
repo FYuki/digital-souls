@@ -8,13 +8,11 @@ from app.conversation_history.errors import (
     TurnNotFoundError,
 )
 from app.conversation_history.models import (
-    PersistedMaskedText,
     PrivacySkipReason,
     PrivacySkippedTurnInput,
     ProcessingTurnInput,
     TurnStatus,
 )
-from app.conversation_history.repository import ConversationHistoryRepository
 from app.conversation_history.turn_state import require_turn_transition
 from tests.conversation_history_test_support import (
     CONVERSATION_ID,
@@ -25,15 +23,13 @@ from tests.conversation_history_test_support import (
 )
 
 
-def _processing_turn(database_path: Path) -> ConversationHistoryRepository:
+def _processing_turn(database_path: Path):
     repository = create_repository(database_path)
     repository.create_conversation("miori")
     repository.create_processing_turn(
         "miori",
         CONVERSATION_ID,
-        ProcessingTurnInput(
-            sanitized_user_content=PersistedMaskedText("処理済みの質問")
-        ),
+        ProcessingTurnInput(sanitized_user_content="処理済みの質問"),
     )
     return repository
 
@@ -55,7 +51,6 @@ class TestTurnTransitions:
         allowed = {
             (TurnStatus.PROCESSING, TurnStatus.COMPLETED),
             (TurnStatus.PROCESSING, TurnStatus.FAILED),
-            (TurnStatus.PROCESSING, TurnStatus.PRIVACY_SKIPPED),
             (TurnStatus.COMPLETED, TurnStatus.FAILED),
         }
 
@@ -79,7 +74,7 @@ class TestTurnTransitions:
             "miori",
             CONVERSATION_ID,
             TURN_ID,
-            sanitized_assistant_content=PersistedMaskedText("完全な回答です。"),
+            sanitized_assistant_content="完全な回答です。",
         )
 
         assert completed.status is TurnStatus.COMPLETED
@@ -96,26 +91,6 @@ class TestTurnTransitions:
         assert failed.status is TurnStatus.FAILED
         assert failed.assistant_content is None
 
-    def test_should_atomically_remove_bodies_when_processing_turn_is_privacy_skipped(
-        self,
-        tmp_path: Path,
-    ) -> None:
-        repository = _processing_turn(tmp_path / "history.db")
-
-        skipped = repository.privacy_skip_turn(
-            "miori",
-            CONVERSATION_ID,
-            TURN_ID,
-            PrivacySkippedTurnInput(
-                reason_code=PrivacySkipReason.SENSITIVE_CONTENT,
-            ),
-        )
-
-        assert skipped.status is TurnStatus.PRIVACY_SKIPPED
-        assert skipped.user_content is None
-        assert skipped.assistant_content is None
-        assert skipped.privacy_reason_code is PrivacySkipReason.SENSITIVE_CONTENT
-
     def test_should_preserve_assistant_body_when_completed_turn_fails(
         self,
         tmp_path: Path,
@@ -125,7 +100,7 @@ class TestTurnTransitions:
             "miori",
             CONVERSATION_ID,
             TURN_ID,
-            sanitized_assistant_content=PersistedMaskedText("送信済みの完全回答"),
+            sanitized_assistant_content="送信済みの完全回答",
         )
 
         failed = repository.fail_turn("miori", CONVERSATION_ID, TURN_ID)
@@ -146,9 +121,7 @@ class TestTurnTransitions:
             repository.create_processing_turn(
                 "miori",
                 CONVERSATION_ID,
-                ProcessingTurnInput(
-                    sanitized_user_content=PersistedMaskedText("処理済み本文")
-                ),
+                ProcessingTurnInput(sanitized_user_content="処理済み本文"),
             )
             repository.fail_turn("miori", CONVERSATION_ID, TURN_ID)
         else:
@@ -165,9 +138,7 @@ class TestTurnTransitions:
                 "miori",
                 CONVERSATION_ID,
                 TURN_ID,
-                sanitized_assistant_content=PersistedMaskedText(
-                    "保存してはいけない本文"
-                ),
+                sanitized_assistant_content="保存してはいけない本文",
             )
 
         assert captured.value.current_status.value == terminal_status
@@ -183,7 +154,7 @@ class TestTurnTransitions:
             "miori",
             CONVERSATION_ID,
             TURN_ID,
-            sanitized_assistant_content=PersistedMaskedText("最初の完全回答"),
+            sanitized_assistant_content="最初の完全回答",
         )
 
         with pytest.raises(InvalidStateTransitionError):
@@ -191,7 +162,7 @@ class TestTurnTransitions:
                 "miori",
                 CONVERSATION_ID,
                 TURN_ID,
-                sanitized_assistant_content=PersistedMaskedText("上書き回答"),
+                sanitized_assistant_content="上書き回答",
             )
 
     def test_should_not_update_turn_through_other_character_boundary(
@@ -223,9 +194,7 @@ class TestTurnTransitions:
         repository.create_processing_turn(
             "miori",
             CONVERSATION_ID,
-            ProcessingTurnInput(
-                sanitized_user_content=PersistedMaskedText("処理済みの質問")
-            ),
+            ProcessingTurnInput(sanitized_user_content="処理済みの質問"),
         )
         other = repository.create_conversation("miori")
         assert other.conversation_id == OTHER_CONVERSATION_ID
@@ -254,7 +223,6 @@ class TestTurnTransitions:
             "create_processing_turn",
             "create_privacy_skipped_turn",
             "complete_turn",
-            "privacy_skip_turn",
             "fail_turn",
             "recover_stale_processing",
             "list_turns",

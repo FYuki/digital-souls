@@ -1,15 +1,14 @@
 import logging
-import inspect
 from dataclasses import FrozenInstanceError
 from typing import Literal, TypedDict, Unpack
 
 import pytest
 
 from app.characters.models import CharacterCardData
-from app.conversation_history.models import PersistedMaskedText
 from app.prompting.types import (
     BuiltPrompt,
     CurrentUserOriginalText,
+    PersistedMaskedText,
     PersistedConversationMessage,
     PersistedRole,
     PromptTokenBudget,
@@ -69,7 +68,9 @@ def _card_data(**overrides: Unpack[_CharacterCardOverrides]) -> CharacterCardDat
         group_only_greetings=overrides.get("group_only_greetings", ()),
         creator=overrides.get("creator", ""),
         character_version=overrides.get("character_version", ""),
+        tags=(),
         extensions=overrides.get("extensions", {}),
+        extra_fields={},
     )
 
 
@@ -155,6 +156,46 @@ class TestPromptBuilderOrdering:
             "POST_HISTORY_SENTINEL",
         )
 
+    @pytest.mark.parametrize(
+        ("field", "greetings"),
+        [
+            ("alternate_greetings", ("ALTERNATE_GREETING_SENTINEL",)),
+            ("group_only_greetings", ("GROUP_GREETING_SENTINEL",)),
+        ],
+    )
+    def test_does_not_include_optional_greetings_in_generation_prompt(
+        self,
+        field: Literal["alternate_greetings", "group_only_greetings"],
+        greetings: tuple[str, ...],
+    ) -> None:
+        if field == "alternate_greetings":
+            character = _card_data(alternate_greetings=greetings)
+        else:
+            character = _card_data(group_only_greetings=greetings)
+
+        prompt = _build(character=character)
+
+        assert [(message.role, message.content) for message in prompt.messages] == [
+            (
+                "system",
+                "\n\n".join(
+                    [
+                        "CARD_DESCRIPTION_SENTINEL",
+                        "CARD_PERSONALITY_SENTINEL",
+                        "CARD_SCENARIO_SENTINEL",
+                        "CARD_SYSTEM_SENTINEL",
+                        "CARD_EXAMPLE_SENTINEL",
+                    ]
+                ),
+            ),
+            ("system", "RAG_FIRST_SENTINEL"),
+            ("system", "RAG_SECOND_SENTINEL"),
+            ("user", "MASKED_USER_SENTINEL"),
+            ("assistant", "MASKED_ASSISTANT_SENTINEL"),
+            ("user", "CURRENT_RAW_USER_SENTINEL"),
+            ("system", "POST_HISTORY_SENTINEL"),
+        ]
+
     def test_preserves_history_roles_and_input_order(self) -> None:
         prompt = _build()
 
@@ -195,6 +236,26 @@ class TestPromptBuilderOptionalInputs:
                     ]
                 ),
             ),
+            ("user", "CURRENT_RAW_USER_SENTINEL"),
+            ("system", "POST_HISTORY_SENTINEL"),
+        ]
+
+    def test_preserves_order_when_rag_is_empty(self) -> None:
+        prompt = _build(rag_context=())
+
+        assert [(message.role, message.content) for message in prompt.messages[1:]] == [
+            ("user", "MASKED_USER_SENTINEL"),
+            ("assistant", "MASKED_ASSISTANT_SENTINEL"),
+            ("user", "CURRENT_RAW_USER_SENTINEL"),
+            ("system", "POST_HISTORY_SENTINEL"),
+        ]
+
+    def test_preserves_order_when_history_is_empty(self) -> None:
+        prompt = _build(persisted_history=())
+
+        assert [(message.role, message.content) for message in prompt.messages[1:]] == [
+            ("system", "RAG_FIRST_SENTINEL"),
+            ("system", "RAG_SECOND_SENTINEL"),
             ("user", "CURRENT_RAW_USER_SENTINEL"),
             ("system", "POST_HISTORY_SENTINEL"),
         ]
@@ -300,18 +361,6 @@ class TestPromptBudgetContract:
 
         with pytest.raises(ValueError, match=field):
             PromptTokenBudget(**values)
-
-    def test_required_input_limit_error_does_not_expose_content(self) -> None:
-        from app.prompting.types import PromptInputLimitError
-
-        error = PromptInputLimitError(element="current_user", limit=10)
-
-        assert tuple(inspect.signature(PromptInputLimitError).parameters) == (
-            "element",
-            "limit",
-        )
-        assert error.element == "current_user"
-        assert error.limit == 10
 
     def test_does_not_apply_element_budgets_to_messages(self) -> None:
         budget = _budget(

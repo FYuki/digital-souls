@@ -7,11 +7,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.conversation_history.sanitizer import ConversationHistorySanitizer
-from app.conversation_history.scanner import DeterministicPrivacyScanner
-from tests.prompt_test_support import StubConversationHistory
-
-
 class _CollectingTaskQueue:
     def add_task(
         self,
@@ -46,8 +41,6 @@ def _generate_reply_through_runtime(
         result = ChatService(
             ChatRuntimeConfig(rag_enabled=False, memory_policy=None),
             _CollectingTaskQueue(),
-            StubConversationHistory(),
-            ConversationHistorySanitizer(DeterministicPrivacyScanner()),
         ).generate_chat_reply("miori", current_user_text)
     payload = cast(dict[str, object], post.call_args.kwargs["json"])
     return result, payload

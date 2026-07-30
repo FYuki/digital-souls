@@ -19,21 +19,21 @@ from tests.prompt_test_support import (
     write_character_card,
 )
 
-_LOAD_PERSONALITY = "app._chat_runtime._character_loader.load_character_card"
+_LOAD_CHARACTER_CARD = "app._chat_runtime._character_loader.load_character_card"
 _GENERATE_RESPONSE = "app._chat_runtime._llm_router.generate_response"
-_BUILD_AUGMENTED_SYSTEM_PROMPT = (
-    "app._chat_runtime._rag_service.build_rag_context_for_scanned_user"
+_BUILD_RAG_CONTEXT = (
+    "app._chat_runtime._rag_service.build_rag_context"
 )
 _RECORD_USER_MEMORY_CANDIDATE = (
-    "app._chat_runtime._rag_service.record_scanned_user_memory_candidate"
+    "app._chat_runtime._rag_service.record_user_memory_candidate"
 )
 _RESOLVED_MEMORY_POLICY = "app._chat_runtime.resolved_memory_policy"
 _LOAD_TTS_CONFIG = "app.audio_pipeline.load_tts_config"
 _TRANSCRIBE = "app.stt.whisper_client.WhisperTranscriber.transcribe"
 _SYNTHESIZE = "app.tts.voicevox_client.VoicevoxClient.synthesize"
 
-_PERSONALITY_TEXT = "# 光織\n穏やかなAIです。"
-_PERSONALITY = character_card(_PERSONALITY_TEXT)
+_CHARACTER_CARD_PROMPT_TEXT = "# 光織\n穏やかなAIです。"
+_CHARACTER_CARD = character_card(_CHARACTER_CARD_PROMPT_TEXT)
 _LLM_REPLY = "光織です。よろしくお願いします。"
 _PCM_AUDIO = b"\x01\x00\x02\x00"
 _ODD_LENGTH_PCM_AUDIO = b"\x01\x00\x03"
@@ -48,7 +48,7 @@ def _wait_for_event(event: threading.Event, label: str, timeout: float = 5.0) ->
 
 
 def _tts_config():
-    from app.characters.loader import VoicevoxTtsConfig
+    from app.characters.models import VoicevoxTtsConfig
 
     return VoicevoxTtsConfig(speaker_id=14)
 
@@ -138,7 +138,7 @@ class TestWebSocketEndpoint:
         assert runtime_config.voicevox_base_url == DEFAULT_VOICEVOX_BASE_URL
 
     def test_returns_text_response_for_text_message(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                 with client.websocket_connect("/ws/miori") as websocket:
                     websocket.send_json(
@@ -148,8 +148,8 @@ class TestWebSocketEndpoint:
 
         assert response == {"type": "text", "response": _LLM_REPLY}
 
-    def test_loads_personality_from_path_character_name(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY) as mock_load:
+    def test_loads_character_card_for_path_character(self, client):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD) as mock_load:
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                 with client.websocket_connect("/ws/miori") as websocket:
                     websocket.send_json(
@@ -164,9 +164,9 @@ class TestWebSocketEndpoint:
         assert mock_load.call_count == 2
         mock_load.assert_any_call("miori")
 
-    def test_generate_response_uses_loaded_personality_and_root_message(self, client):
+    def test_generate_response_uses_loaded_character_card_and_root_message(self, client):
         user_message = "農業日誌を記録したい"
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(_GENERATE_RESPONSE, return_value="了解です") as mock_gen:
                 with client.websocket_connect("/ws/miori") as websocket:
                     websocket.send_json(
@@ -179,7 +179,7 @@ class TestWebSocketEndpoint:
                     websocket.receive_json()
 
         assert prompt_messages(mock_gen.call_args.args[0]) == [
-            ("system", _PERSONALITY_TEXT),
+            ("system", _CHARACTER_CARD_PROMPT_TEXT),
             ("user", user_message),
         ]
 
@@ -188,15 +188,15 @@ class TestWebSocketEndpoint:
     ):
         user_message = "前回なんの話をしたっけ？"
         policy = object()
-        augmented_prompt = "過去の記憶:\n前回は畑の話をした"
+        rag_context = "過去の記憶:\n前回は畑の話をした"
 
         monkeypatch.setenv("RAG_ENABLED", "true")
         with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
             with TestClient(app) as client:
-                with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+                with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
                     with patch(
-                        _BUILD_AUGMENTED_SYSTEM_PROMPT,
-                        return_value=(augmented_prompt,),
+                        _BUILD_RAG_CONTEXT,
+                        return_value=(rag_context,),
                     ) as mock_build:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
                             with patch(
@@ -209,15 +209,14 @@ class TestWebSocketEndpoint:
                                     response = websocket.receive_json()
 
         assert response == {"type": "text", "response": _LLM_REPLY}
-        assert mock_build.call_args.args[:3] == (
+        assert mock_build.call_args.args == (
             "miori",
             user_message,
             policy,
         )
-        assert len(mock_build.call_args.args) == 5
         assert prompt_messages(mock_gen.call_args.args[0]) == [
-            ("system", _PERSONALITY_TEXT),
-            ("system", augmented_prompt),
+            ("system", _CHARACTER_CARD_PROMPT_TEXT),
+            ("system", rag_context),
             ("user", user_message),
         ]
         mock_record.assert_called_once()
@@ -227,7 +226,7 @@ class TestWebSocketEndpoint:
         assert hasattr(args[3], "add_task")
 
     def test_returns_422_when_payload_is_not_json_object(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
                 with client.websocket_connect("/ws/miori") as websocket:
                     websocket.send_text('"hello"')
@@ -241,7 +240,7 @@ class TestWebSocketEndpoint:
         mock_gen.assert_not_called()
 
     def test_returns_422_when_payload_is_malformed_json(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
                 with client.websocket_connect("/ws/miori") as websocket:
                     websocket.send_text("{")
@@ -255,7 +254,7 @@ class TestWebSocketEndpoint:
         mock_gen.assert_not_called()
 
     def test_returns_422_when_message_type_is_not_text(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
                 with client.websocket_connect("/ws/miori") as websocket:
                     websocket.send_json({"type": "audio", "message": "こんにちは"})
@@ -269,7 +268,7 @@ class TestWebSocketEndpoint:
         mock_gen.assert_not_called()
 
     def test_returns_422_when_text_message_is_not_root_string(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
                 with client.websocket_connect("/ws/miori") as websocket:
                     websocket.send_json(
@@ -287,24 +286,9 @@ class TestWebSocketEndpoint:
         }
         mock_gen.assert_not_called()
 
-    @pytest.mark.parametrize("message", ["", " \t\n"])
-    def test_returns_422_when_text_message_is_blank(self, client, message):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
-            with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
-                with client.websocket_connect("/ws/miori") as websocket:
-                    websocket.send_json({"type": "text", "message": message})
-                    response = websocket.receive_json()
-
-        assert response == {
-            "type": "error",
-            "status": 422,
-            "detail": "WebSocket text message must not be blank",
-        }
-        mock_gen.assert_not_called()
-
     def test_returns_404_error_and_disconnects_when_character_not_found(self, client):
         with patch(
-            _LOAD_PERSONALITY,
+            _LOAD_CHARACTER_CARD,
             side_effect=FileNotFoundError("character not found"),
         ):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
@@ -373,8 +357,8 @@ class TestWebSocketEndpoint:
 
     def test_returns_404_when_character_disappears_after_session_open(self, client):
         with patch(
-            _LOAD_PERSONALITY,
-            side_effect=[_PERSONALITY, FileNotFoundError("character not found")],
+            _LOAD_CHARACTER_CARD,
+            side_effect=[_CHARACTER_CARD, FileNotFoundError("character not found")],
         ):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
                 with client.websocket_connect("/ws/miori") as websocket:
@@ -552,7 +536,7 @@ class TestWebSocketEndpoint:
         ]
 
     def test_invalid_audio_frame_allows_following_text_message(self):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
                 with TestClient(app) as client:
                     with client.websocket_connect("/ws/miori") as websocket:
@@ -575,7 +559,7 @@ class TestWebSocketEndpoint:
         assert current_user_text(mock_gen.call_args.args[0]) == "続けてください"
 
     def test_returns_504_error_when_llm_request_times_out(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(
                 _GENERATE_RESPONSE,
                 side_effect=httpx.ReadTimeout("timed out"),
@@ -591,7 +575,7 @@ class TestWebSocketEndpoint:
         }
 
     def test_returns_502_error_when_llm_request_fails(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(
                 _GENERATE_RESPONSE,
                 side_effect=httpx.HTTPError("boom"),
@@ -688,7 +672,7 @@ class TestWebSocketEndpoint:
         llm_error,
         expected_response,
     ):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(
                 _GENERATE_RESPONSE,
                 side_effect=[llm_error, _LLM_REPLY],
@@ -732,7 +716,7 @@ class TestWebSocketEndpoint:
         llm_error,
         expected_response,
     ):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
                 with patch(_TRANSCRIBE, return_value="audio question"):
                     with patch(
@@ -767,7 +751,7 @@ class TestWebSocketEndpoint:
         monkeypatch.setenv("VOICEVOX_BASE_URL", "http://voicevox.local:50021")
 
         with TestClient(app) as client:
-            with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+            with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
                 with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
                     with patch(_TRANSCRIBE, return_value="こんにちは") as mock_transcribe:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
@@ -799,7 +783,7 @@ class TestWebSocketEndpoint:
         assert len(audio_frame) < MAX_AUDIO_FRAME_BYTES
 
         with TestClient(app) as client:
-            with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+            with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
                 with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
                     with patch(_TRANSCRIBE, return_value="こんにちは") as mock_transcribe:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
@@ -821,7 +805,7 @@ class TestWebSocketEndpoint:
         monkeypatch.setenv("VOICEVOX_BASE_URL", "http://voicevox.local:50021")
 
         with TestClient(app) as client:
-            with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+            with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
                 with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
                     with patch(_TRANSCRIBE, return_value="上限ちょうど") as mock_transcribe:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
@@ -850,7 +834,7 @@ class TestWebSocketEndpoint:
         monkeypatch.setenv("VOICEVOX_BASE_URL", "http://voicevox.local:50021")
 
         with TestClient(app) as client:
-            with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+            with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
                 with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()) as mock_load_tts:
                     with patch(_TRANSCRIBE, return_value="呼ばれない") as mock_transcribe:
                         with caplog.at_level("ERROR", logger="app.routers.ws"):
@@ -873,7 +857,7 @@ class TestWebSocketEndpoint:
         monkeypatch.setenv("VOICEVOX_BASE_URL", "http://voicevox.local:50021")
 
         with TestClient(app) as client:
-            with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+            with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
                 with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
                     with patch(_TRANSCRIBE, return_value="音声入力"):
                         with patch(_GENERATE_RESPONSE, return_value="応答:音声入力"):
@@ -894,7 +878,6 @@ class TestWebSocketEndpoint:
 
     def test_creates_audio_session_in_threadpool(self):
         class StubChatSession:
-            initial_assistant_message = None
 
             def generate_reply(self, message):
                 return f"reply:{message}"
@@ -944,7 +927,7 @@ class TestWebSocketEndpoint:
         monkeypatch.setenv("VOICEVOX_BASE_URL", "http://voicevox.local:50021/")
 
         with TestClient(app) as client:
-            with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+            with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
                 with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()) as mock_config:
                     with patch(
                         _TRANSCRIBE,
@@ -994,7 +977,7 @@ class TestWebSocketEndpoint:
         ]
 
     def test_returns_502_and_continues_when_stt_transport_fails(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
                 with patch(_TRANSCRIBE, side_effect=OSError("stt failed")):
                     with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
@@ -1020,7 +1003,7 @@ class TestWebSocketEndpoint:
     def test_returns_422_and_continues_when_pcm16_audio_has_odd_byte_length(
         self, client
     ):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
                 with patch(_TRANSCRIBE, return_value="呼ばれない") as mock_transcribe:
                     with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
@@ -1047,7 +1030,7 @@ class TestWebSocketEndpoint:
     def test_returns_502_and_continues_when_stt_value_error_fails(
         self, client
     ):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
                 with patch(_TRANSCRIBE, side_effect=ValueError("model rejected audio")):
                     with patch(
@@ -1076,7 +1059,7 @@ class TestWebSocketEndpoint:
     def test_returns_502_and_continues_when_tts_transport_fails(self, client):
         from app.tts.speech_synthesizer import SpeechSynthesisError
 
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
                 with patch(_TRANSCRIBE, return_value="音声の質問"):
                     with patch(
@@ -1110,7 +1093,7 @@ class TestWebSocketEndpoint:
         ]
 
     def test_text_and_binary_frames_share_one_websocket_connection(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
                 with patch(_TRANSCRIBE, return_value="音声の質問"):
                     with patch(
@@ -1145,7 +1128,7 @@ class TestWebSocketEndpoint:
         ]
 
     def test_text_chat_still_works_when_tts_config_is_missing(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(
                 _LOAD_TTS_CONFIG,
                 side_effect=KeyError(_TTS_CONFIG_MISSING_MESSAGE),
@@ -1158,7 +1141,7 @@ class TestWebSocketEndpoint:
         assert response == {"type": "text", "response": _LLM_REPLY}
 
     def test_returns_500_when_tts_config_is_missing_for_audio_frame(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(
                 _LOAD_TTS_CONFIG,
                 side_effect=KeyError(_TTS_CONFIG_MISSING_MESSAGE),
@@ -1176,7 +1159,7 @@ class TestWebSocketEndpoint:
         mock_transcribe.assert_not_called()
 
     def test_returns_500_when_character_card_is_missing_for_audio_frame(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(_LOAD_TTS_CONFIG, side_effect=FileNotFoundError("missing card")):
                 with patch(_TRANSCRIBE, return_value="こんにちは") as mock_transcribe:
                     with client.websocket_connect("/ws/miori") as websocket:
@@ -1194,7 +1177,7 @@ class TestWebSocketEndpoint:
         self, client, caplog
     ):
         card_path = "/tmp/private/miori.card.json"
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(
                 _LOAD_TTS_CONFIG,
                 side_effect=PermissionError(13, "Permission denied", card_path),
@@ -1220,7 +1203,7 @@ class TestWebSocketEndpoint:
         mock_transcribe.assert_not_called()
 
     def test_returns_500_when_tts_engine_is_invalid_for_audio_frame(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(
                 _LOAD_TTS_CONFIG,
                 side_effect=ValueError("tts_config.engine must be 'voicevox'"),
@@ -1238,7 +1221,7 @@ class TestWebSocketEndpoint:
         mock_transcribe.assert_not_called()
 
     def test_logs_latency_for_audio_pipeline_steps(self, client, caplog):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
                 with patch(_TRANSCRIBE, return_value="こんにちは"):
                     with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
@@ -1432,7 +1415,6 @@ class TestWebSocketEndpoint:
 
     def test_audio_worker_unexpected_error_sends_500_and_closes(self):
         class StubChatSession:
-            initial_assistant_message = None
 
             def generate_reply(self, message):
                 return f"reply:{message}"
@@ -1469,7 +1451,6 @@ class TestWebSocketEndpoint:
         from app.routers import ws as ws_module
 
         class StubChatSession:
-            initial_assistant_message = None
 
             def generate_reply(self, message):
                 return f"reply:{message}"
@@ -1533,7 +1514,6 @@ class TestWebSocketEndpoint:
 
     def test_audio_processing_does_not_block_following_text_frame(self):
         class StubChatSession:
-            initial_assistant_message = None
 
             def __init__(self):
                 self.messages = []
@@ -1595,7 +1575,6 @@ class TestWebSocketEndpoint:
 
     def test_audio_queue_processes_only_latest_pending_frame(self):
         class StubChatSession:
-            initial_assistant_message = None
 
             def generate_reply(self, message):
                 return f"reply:{message}"
@@ -1693,7 +1672,6 @@ class TestWebSocketEndpoint:
         from app.routers import ws as ws_module
 
         class StubChatSession:
-            initial_assistant_message = None
 
             def generate_reply(self, message):
                 return f"reply:{message}"
@@ -1771,7 +1749,6 @@ class TestWebSocketEndpoint:
         from app.routers import ws as ws_module
 
         class StubChatSession:
-            initial_assistant_message = None
 
             def generate_reply(self, message):
                 return f"reply:{message}"
@@ -1848,12 +1825,9 @@ class TestWebSocketEndpoint:
     def test_logs_websocket_disconnect_code_and_reason(self, caplog):
         from app.routers.ws import websocket_chat
 
-        class StubChatSession:
-            initial_assistant_message = None
-
         class StubChatService:
             async def create_chat_session(self, character_name):
-                return StubChatSession()
+                return object()
 
         class FakeWebSocket:
             def __init__(self):
@@ -1905,7 +1879,6 @@ class TestWebSocketEndpoint:
         from app.routers import ws as ws_module
 
         class StubChatSession:
-            initial_assistant_message = None
 
             def generate_reply(self, message):
                 raise CharacterNotFoundError("miori")
@@ -1979,7 +1952,6 @@ class TestWebSocketEndpoint:
         from app.routers import ws as ws_module
 
         class StubChatSession:
-            initial_assistant_message = None
 
             def generate_reply(self, message):
                 return f"reply:{message}"
@@ -2064,7 +2036,7 @@ class TestWebSocketEndpoint:
         assert b"latest" not in audio_session.calls
 
     def test_audio_session_failure_does_not_close_connection(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_CHARACTER_CARD, return_value=_CHARACTER_CARD):
             with patch(
                 _LOAD_TTS_CONFIG,
                 side_effect=KeyError(_TTS_CONFIG_MISSING_MESSAGE),

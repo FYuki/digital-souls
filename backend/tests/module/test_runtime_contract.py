@@ -1,7 +1,6 @@
 import inspect
 import subprocess
 from pathlib import Path
-from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
@@ -139,7 +138,7 @@ class TestRuntimeConfiguration:
         assert "app.chat_runtime" not in ws_router_source
         assert "request.app.state.chat_service" in chat_router_source
         assert "websocket.app.state.chat_service" in ws_router_source
-        assert "generate_http_reply(" in chat_router_source
+        assert "generate_chat_reply(" in chat_router_source
         assert "create_chat_session(" in ws_router_source
 
     def test_ollama_environment_is_resolved_in_llm_boundary_only(self):
@@ -187,8 +186,6 @@ class TestRuntimeConfiguration:
         import app.main as main
 
         class StubSession:
-            initial_assistant_message = None
-
             def __init__(self, service):
                 self._service = service
 
@@ -200,20 +197,9 @@ class TestRuntimeConfiguration:
             def __init__(self):
                 self.calls = []
 
-            def generate_http_reply(
-                self,
-                character: str,
-                message: str,
-                conversation_id,
-            ):
-                from app._chat_runtime import ChatReply
-
-                assert conversation_id is None
+            def generate_chat_reply(self, character: str, message: str) -> str:
                 self.calls.append(("http", character, message))
-                return ChatReply(
-                    conversation_id=UUID("00000000-0000-4000-8000-000000000001"),
-                    response=f"http:{message}",
-                )
+                return f"http:{message}"
 
             async def create_chat_session(self, character: str):
                 self.calls.append(("ws-open", character))
@@ -231,11 +217,7 @@ class TestRuntimeConfiguration:
                 ws_response = websocket.receive_json()
 
         assert http_response.status_code == 200
-        assert http_response.json() == {
-            "character": "miori",
-            "conversation_id": "00000000-0000-4000-8000-000000000001",
-            "response": "http:hello",
-        }
+        assert http_response.json() == {"character": "miori", "response": "http:hello"}
         assert ws_response == {"type": "text", "response": "ws:hello"}
         assert stub_service.calls == [
             ("http", "miori", "hello"),
@@ -247,8 +229,6 @@ class TestRuntimeConfiguration:
         import app.main as main
 
         class StubChatSession:
-            initial_assistant_message = None
-
             def __init__(self) -> None:
                 self.messages = []
 
@@ -308,7 +288,7 @@ class TestRuntimeConfiguration:
         caplog,
     ):
         import app.audio_pipeline as audio_pipeline
-        from app.characters.loader import VoicevoxTtsConfig
+        from app.characters.models import VoicevoxTtsConfig
 
         class StubTranscriber:
             def __init__(self) -> None:
@@ -378,7 +358,7 @@ class TestRuntimeConfiguration:
 
     def test_audio_pipeline_session_public_api_hides_collaborators(self):
         import app.audio_pipeline as audio_pipeline
-        from app.characters.loader import VoicevoxTtsConfig
+        from app.characters.models import VoicevoxTtsConfig
 
         class StubTranscriber:
             def transcribe(self, audio: bytes) -> str:
@@ -634,5 +614,8 @@ class TestLLMClientContract:
 
         signature = inspect.signature(LLMClient.generate)
 
-        assert list(signature.parameters) == ["self", "prompt"]
+        assert list(signature.parameters) == [
+            "self",
+            "prompt",
+        ]
         assert signature.return_annotation is str

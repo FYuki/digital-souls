@@ -14,14 +14,10 @@ MVP（テキスト+音声チャット、RAG基盤）完了後の開発を、Wave
   VAD付きマイクUI、WebSocket統合、単一キャラクター「光織」で動作
 - RAG基盤: Chroma + SQLite + 記憶ポリシー（`backend/app/memory/`）を実装済み
 
-### 計画策定時点のギャップ（2026-07、実装前スナップショット）
+### 現状ギャップ（コード調査で判明）
 
-以下はWave構成を決めた時点の調査結果であり、現在の実装状態ではない。会話履歴の保存・
-prompt注入、Character Card V3へのruntime人格定義の一元化、PromptBuilderによる合成、
-Character Cardの各フィールドとTTS extensionの利用はWave 1で実装済みである。
-
-1. **会話が完全ステートレス**: 直前のやりとりすらプロンプトに含まれず、多ターン会話が成立しない。
-   プロンプトは personality.md +（RAG有効時のみ）検索記憶 + 今回の発言のみで構成される
+1. **会話履歴がruntimeへ未配線**: `PromptBuilder`は永続化済みのマスク済み履歴を受け取れるが、
+   runtimeは空の履歴を渡しており、直前のやりとりを含む多ターン会話が成立しない
 2. **RAGが眠っている**: 実装済みだが `RAG_ENABLED=false` がデフォルト。長期記憶化も
    明示マーカー（「農業日誌:」等）付き発言のみが対象
 3. **スキーマ不整合**: SQLiteは `character` カラムのままで、決定事項
@@ -34,8 +30,8 @@ Character Cardの各フィールドとTTS extensionの利用はWave 1で実装�
    一括で返信する。双方向・割り込み可能な会話にはなっていない
 6. **設定のハードコード**: モデル名 `gemma4:e4b` が `backend/app/llm/ollama_client.py` に
    直書きされており、`ClaudeClient` は `NotImplementedError` のスタブのまま
-7. **card.jsonの未使用フィールド**: `system_prompt` / `first_mes` / `post_history_instructions` が
-   未使用で、`tts_config` のみが参照されている
+7. **初回greetingのUI未配線**: Character Card V3の`first_mes`、`alternate_greetings`、
+   `group_only_greetings`を初回assistant表示として選択・表示する経路がない
 
 ## Wave構成の考え方
 
@@ -74,28 +70,31 @@ scannerは`ScanSuccess`またはmetadata-onlyの`ScanFailure`を返し、finding
 適用する。assistant側が`SKIP_CONTENT`の場合は、保存済みuser本文も原子的に消去して
 turn全体を`privacy_skipped`へ遷移する。
 
-### 3. プロンプト合成の一元設計（実装済み）
+### 3. プロンプト合成の一元設計（完了）
 
-runtime人格定義はCharacter Card V3を唯一の正本とし、`personality.md`は設計資料として
-runtimeでは読み込まない。`PromptBuilder`が以下の順序で合成する。
+Character Card V3をruntime人格定義の唯一の正規情報源とし、LLM向けmessageの合成を
+`PromptBuilder`へ一元化した。
 
-1. Character Cardの人格情報、会話例、system指示
+合成順序は次の契約で固定している。
+
+1. Character Cardの人格情報とsystem指示
 2. RAG記憶
 3. privacy処理後に永続化された会話履歴
-4. 現在ターンの未加工ユーザー原文
+4. 現在ターンのユーザー原文
 5. `post_history_instructions`
 
-現在ターンの原文と永続化済みのマスク済み履歴は、別の型と入力で区別する。
-`first_mes`は通常の応答生成promptへ含めず、履歴がない場合の初回assistant表示に使う。
-詳細な契約は`docs/decisions/character-card-v3-prompt-builder-2026-07.md`を参照する。
+現在ターンの原文と永続化済みのマスク済み履歴は、別の型と引数で区別する。
+`first_mes`と各greetingは通常promptへ注入せず、初回assistant表示として扱う。
+実際の履歴取得・選択とruntimeへの注入は次項の残課題である。詳細は
+`docs/decisions/character-card-v3-prompt-builder-2026-07.md`を参照。
 
-### 4. 会話履歴のプロンプト注入（バックエンド実装済み）
+### 4. 会話履歴のプロンプト注入
 
-SQLiteから同じ`character_id`と`conversation_id`の完了済みturnを復元し、LLMへのpromptに
-含める。BE自体はステートレス設計を維持し、状態はSQLiteが持つ。
+SQLiteから同じ`character_id`と`conversation_id`の直近N往復だけを復元し、LLMへのpromptに
+含める。BE自体はステートレス設計を維持し、状態はSQLiteが持つ形にする。
 
-会話履歴の記録経路はRAGの有効／無効から分離されている。保存前に共通privacy scannerと
-履歴sanitizerを適用し、処理中、失敗、privacy skipのturnはprompt履歴へ含めない。
+RAGが無効（`RAG_ENABLED=false`）の状態でも会話ログは常時記録されるよう、
+記録経路をRAGの有効/無効から分離する（現状はRAG有効時のみ記録に寄っている可能性があるため要確認）。
 
 完了イメージ: RAGを切った状態でも、直前のやり取りを踏まえた応答が返る。
 

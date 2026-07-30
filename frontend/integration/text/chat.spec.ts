@@ -29,16 +29,13 @@ test('実サービスから受け取った光織の応答がチャット画面�
   await page.goto('/')
 
   const input = page.getByLabel('メッセージ')
-  const mioriMessages = page.locator('article.message').filter({
-    has: page.locator('.speaker').filter({ hasText: /^光織$/ }),
-  })
-  const initialMioriMessageCount = await mioriMessages.count()
   await input.fill('こんにちは')
   await page.getByRole('button', { name: '送信' }).click()
 
   await expect(page.getByText('こんにちは', { exact: true })).toBeVisible()
-  const mioriMessage = mioriMessages.nth(initialMioriMessageCount)
+  const mioriMessage = page.locator('article.message').nth(1)
   await expect(mioriMessage).toBeVisible({ timeout: REAL_RESPONSE_TIMEOUT_MS })
+  await expect(mioriMessage.locator('.speaker')).toHaveText('光織')
   await expect(mioriMessage.locator('p')).not.toHaveText('')
   await expect(mioriMessage.locator('p')).not.toHaveText('応答の取得に失敗しました。')
   await expect(input).toHaveValue('')

@@ -6,7 +6,6 @@ from uuid import uuid4
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-
 from tests.prompt_test_support import (
     current_user_text,
     prompt_messages,
@@ -101,11 +100,8 @@ class TestRagRuntimeEvidenceIntegration:
         captured_llm_calls = []
 
         def capture_generate_response(prompt) -> str:
-            user_message = current_user_text(prompt)
-            captured_llm_calls.append(
-                {"messages": prompt_messages(prompt), "user_message": user_message}
-            )
-            if user_message == stored_memory:
+            captured_llm_calls.append(prompt)
+            if current_user_text(prompt) == stored_memory:
                 return "農業日誌として保存しました。"
             return "前回はトマト畑に水やりしました。"
 
@@ -141,12 +137,15 @@ class TestRagRuntimeEvidenceIntegration:
 
         assert response.status_code == 200
         assert response.json()["response"] == "前回はトマト畑に水やりしました。"
-        assert captured_llm_calls[-1]["user_message"] == "前回の畑作業は?"
-        rendered_messages = "\n".join(
-            content for _role, content in captured_llm_calls[-1]["messages"]
+        messages = prompt_messages(captured_llm_calls[-1])
+        assert messages[0] == ("system", system_prompt)
+        assert messages[-1] == ("user", "前回の畑作業は?")
+        assert any(
+            role == "system"
+            and "過去の記憶:" in content
+            and stored_memory in content
+            for role, content in messages[1:-1]
         )
-        assert "過去の記憶:" in rendered_messages
-        assert stored_memory in rendered_messages
 
     def test_real_storage_failure_chat_continues_without_failed_memory_file(
         self, tmp_path, monkeypatch
@@ -210,8 +209,9 @@ class TestRagRuntimeEvidenceIntegration:
             )
 
         assert response.status_code == 200
-        assert response.json()["character"] == "miori"
-        assert response.json()["response"] == "農業日誌として保存しました。"
-        assert response.json()["conversation_id"]
+        assert response.json() == {
+            "character": "miori",
+            "response": "農業日誌として保存しました。",
+        }
 
         assert not tmp_path.joinpath("data", "failed-memories.jsonl").exists()

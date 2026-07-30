@@ -119,7 +119,7 @@ class TestAudioPipelineService:
 class TestAudioPipelineSession:
     def test_returns_transcript_reply_and_audio(self):
         import app.audio_pipeline as audio_pipeline
-        from app.characters.loader import VoicevoxTtsConfig
+        from app.characters.models import VoicevoxTtsConfig
 
         voicevox_client = _StubVoicevoxClient()
         session = audio_pipeline.AudioPipelineSession(
@@ -140,7 +140,7 @@ class TestAudioPipelineSession:
 
     def test_maps_invalid_pcm16_audio_to_client_input_step_error(self):
         import app.audio_pipeline as audio_pipeline
-        from app.characters.loader import VoicevoxTtsConfig
+        from app.characters.models import VoicevoxTtsConfig
 
         transcriber = _StubTranscriber()
 
@@ -159,7 +159,7 @@ class TestAudioPipelineSession:
 
     def test_wraps_unexpected_stt_errors_as_upstream_step_error(self):
         import app.audio_pipeline as audio_pipeline
-        from app.characters.loader import VoicevoxTtsConfig
+        from app.characters.models import VoicevoxTtsConfig
 
         class FailingTranscriber:
             def transcribe(self, audio: bytes) -> str:
@@ -179,7 +179,7 @@ class TestAudioPipelineSession:
 
     def test_wraps_unexpected_tts_errors_as_upstream_step_error(self):
         import app.audio_pipeline as audio_pipeline
-        from app.characters.loader import VoicevoxTtsConfig
+        from app.characters.models import VoicevoxTtsConfig
 
         class FailingVoicevoxClient(_StubVoicevoxClient):
             def synthesize(self, reply: str, speaker_id: int) -> bytes:
@@ -199,7 +199,7 @@ class TestAudioPipelineSession:
 
     def test_does_not_wrap_llm_reply_generator_errors(self):
         import app.audio_pipeline as audio_pipeline
-        from app.characters.loader import VoicevoxTtsConfig
+        from app.characters.models import VoicevoxTtsConfig
 
         def failing_reply_generator(message: str) -> str:
             raise RuntimeError("llm failed")

@@ -5,7 +5,6 @@ ALLOWED_TURN_TRANSITIONS = frozenset(
     {
         (TurnStatus.PROCESSING, TurnStatus.COMPLETED),
         (TurnStatus.PROCESSING, TurnStatus.FAILED),
-        (TurnStatus.PROCESSING, TurnStatus.PRIVACY_SKIPPED),
         (TurnStatus.COMPLETED, TurnStatus.FAILED),
     }
 )

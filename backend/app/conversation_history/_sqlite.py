@@ -12,7 +12,6 @@ from app.conversation_history.errors import (
 from app.conversation_history.models import (
     Conversation,
     ConversationTurn,
-    PersistedMaskedText,
     PrivacySkipReason,
     TurnStatus,
 )
@@ -96,12 +95,8 @@ def turn_from_row(row: sqlite3.Row) -> ConversationTurn:
         turn_id=UUID(str(row[0])),
         character_id=str(row[1]),
         conversation_id=UUID(str(row[2])),
-        user_content=(
-            None if row[3] is None else PersistedMaskedText(str(row[3]))
-        ),
-        assistant_content=(
-            None if row[4] is None else PersistedMaskedText(str(row[4]))
-        ),
+        user_content=None if row[3] is None else str(row[3]),
+        assistant_content=None if row[4] is None else str(row[4]),
         status=TurnStatus(str(row[5])),
         privacy_reason_code=(
             None if row[6] is None else PrivacySkipReason(str(row[6]))

@@ -4,12 +4,7 @@ from pathlib import Path
 import pytest
 
 from app.conversation_history.errors import InvalidUtcDatetimeError
-from app.conversation_history.models import (
-    PersistedMaskedText,
-    ProcessingTurnInput,
-    TurnStatus,
-)
-from app.conversation_history.repository import ConversationHistoryRepository
+from app.conversation_history.models import ProcessingTurnInput, TurnStatus
 from tests.conversation_history_test_support import (
     CONVERSATION_ID,
     OTHER_TURN_ID,
@@ -20,9 +15,7 @@ from tests.conversation_history_test_support import (
 )
 
 
-def _repository_with_two_processing_turns(
-    database_path: Path,
-) -> ConversationHistoryRepository:
+def _repository_with_two_processing_turns(database_path: Path):
     repository = create_repository(
         database_path,
         uuid_factory=SequenceUuidFactory(
@@ -35,16 +28,12 @@ def _repository_with_two_processing_turns(
     repository.create_processing_turn(
         "miori",
         CONVERSATION_ID,
-        ProcessingTurnInput(
-            sanitized_user_content=PersistedMaskedText("古いturn")
-        ),
+        ProcessingTurnInput(sanitized_user_content="古いturn"),
     )
     repository.create_processing_turn(
         "miori",
         CONVERSATION_ID,
-        ProcessingTurnInput(
-            sanitized_user_content=PersistedMaskedText("新しいturn")
-        ),
+        ProcessingTurnInput(sanitized_user_content="新しいturn"),
     )
     return repository
 
@@ -90,15 +79,13 @@ class TestStaleRecovery:
         repository.create_processing_turn(
             "miori",
             CONVERSATION_ID,
-            ProcessingTurnInput(
-                sanitized_user_content=PersistedMaskedText("処理済み本文")
-            ),
+            ProcessingTurnInput(sanitized_user_content="処理済み本文"),
         )
         repository.complete_turn(
             "miori",
             CONVERSATION_ID,
             TURN_ID,
-            sanitized_assistant_content=PersistedMaskedText("完全回答"),
+            sanitized_assistant_content="完全回答",
         )
         old = datetime(2026, 7, 24, 11, 0, tzinfo=UTC)
         set_turn_times(
@@ -196,16 +183,12 @@ class TestHistoryRetention:
         repository.create_processing_turn(
             "miori",
             CONVERSATION_ID,
-            ProcessingTurnInput(
-                sanitized_user_content=PersistedMaskedText("古いturn")
-            ),
+            ProcessingTurnInput(sanitized_user_content="古いturn"),
         )
         repository.create_processing_turn(
             "miori",
             CONVERSATION_ID,
-            ProcessingTurnInput(
-                sanitized_user_content=PersistedMaskedText("新しいturn")
-            ),
+            ProcessingTurnInput(sanitized_user_content="新しいturn"),
         )
         old = datetime(2026, 6, 23, 12, 0, tzinfo=UTC)
         set_turn_times(
@@ -227,9 +210,7 @@ class TestHistoryRetention:
         turn = repository.create_processing_turn(
             "miori",
             CONVERSATION_ID,
-            ProcessingTurnInput(
-                sanitized_user_content=PersistedMaskedText("UTC保存確認")
-            ),
+            ProcessingTurnInput(sanitized_user_content="UTC保存確認"),
         )
 
         created_at = turn.created_at

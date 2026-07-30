@@ -6,7 +6,7 @@ from typing import Mapping, cast
 from app.characters.models import (
     CharacterCard,
     CharacterCardData,
-    VoicevoxTtsConfig,
+    VoicevoxTtsConfig as _VoicevoxTtsConfig,
 )
 
 CARD_FILE_SUFFIX = ".card.json"
@@ -28,6 +28,32 @@ TTS_CONFIG_MISSING_MESSAGE = (
 )
 TTS_CONFIG_INVALID_MESSAGE = (
     "'tts_config' field must be an object in extensions.digital_souls"
+)
+CARD_ROOT_FIELDS = frozenset(
+    {
+        CARD_SPEC_FIELD,
+        CARD_SPEC_VERSION_FIELD,
+        DATA_FIELD,
+    }
+)
+CARD_DATA_FIELDS = frozenset(
+    {
+        "name",
+        "description",
+        "personality",
+        "scenario",
+        "first_mes",
+        "mes_example",
+        "creator_notes",
+        "system_prompt",
+        "post_history_instructions",
+        "alternate_greetings",
+        "group_only_greetings",
+        "creator",
+        "character_version",
+        "tags",
+        EXTENSIONS_FIELD,
+    }
 )
 
 
@@ -93,16 +119,36 @@ def _extensions(data: Mapping[str, object]) -> Mapping[str, object]:
     return cast(Mapping[str, object], _freeze_json(value))
 
 
+def _extra_fields(
+    source: Mapping[str, object],
+    known_fields: frozenset[str],
+) -> Mapping[str, object]:
+    return cast(
+        Mapping[str, object],
+        _freeze_json(
+            {
+                field_name: value
+                for field_name, value in source.items()
+                if field_name not in known_fields
+            }
+        ),
+    )
+
+
+def _validate_spec_version(spec_version: str) -> None:
+    if spec_version != CARD_V3_VERSION:
+        raise ValueError(
+            f"{CARD_SPEC_VERSION_FIELD} must be '{CARD_V3_VERSION}'"
+        )
+
+
 def load_character_card(character: str) -> CharacterCard:
     card = _load_character_card(character)
     spec = _required_string(card, CARD_SPEC_FIELD)
     spec_version = _required_string(card, CARD_SPEC_VERSION_FIELD)
     if spec != CARD_V3_SPEC:
         raise ValueError(f"{CARD_SPEC_FIELD} must be '{CARD_V3_SPEC}'")
-    if spec_version != CARD_V3_VERSION:
-        raise ValueError(
-            f"{CARD_SPEC_VERSION_FIELD} must be '{CARD_V3_VERSION}'"
-        )
+    _validate_spec_version(spec_version)
 
     data_value = card.get(DATA_FIELD)
     if not isinstance(data_value, dict):
@@ -128,8 +174,11 @@ def load_character_card(character: str) -> CharacterCard:
             group_only_greetings=_string_tuple(data, "group_only_greetings"),
             creator=_required_string(data, "creator"),
             character_version=_required_string(data, "character_version"),
+            tags=_string_tuple(data, "tags"),
             extensions=_extensions(data),
+            extra_fields=_extra_fields(data, CARD_DATA_FIELDS),
         ),
+        extra_fields=_extra_fields(card, CARD_ROOT_FIELDS),
     )
 
 
@@ -140,7 +189,7 @@ def _digital_souls_extension(card: CharacterCard) -> Mapping[str, object]:
     return value
 
 
-def load_tts_config(character: str) -> VoicevoxTtsConfig:
+def load_tts_config(character: str) -> _VoicevoxTtsConfig:
     digital_souls = _digital_souls_extension(load_character_card(character))
     if TTS_CONFIG_FIELD not in digital_souls:
         raise KeyError(TTS_CONFIG_MISSING_MESSAGE)
@@ -153,4 +202,4 @@ def load_tts_config(character: str) -> VoicevoxTtsConfig:
     speaker_id = tts_config.get(TTS_SPEAKER_ID_FIELD)
     if type(speaker_id) is not int:
         raise ValueError("tts_config.speaker_id must be an integer")
-    return VoicevoxTtsConfig(speaker_id=speaker_id)
+    return _VoicevoxTtsConfig(speaker_id=speaker_id)

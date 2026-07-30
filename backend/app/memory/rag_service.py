@@ -4,8 +4,6 @@ from typing import Protocol
 
 import httpx
 
-from app.conversation_history.scan_models import ScanResult
-from app.conversation_history.scanner import DeterministicPrivacyScanner
 from app.memory.chroma_store import MemorySearchResult, add_memory, query_memories
 from app.memory.embedder import embed_text
 from app.memory.memory_policy import (
@@ -15,7 +13,6 @@ from app.memory.memory_policy import (
     is_long_term_memory_candidate,
     rag_service_policy,
 )
-from app.memory.rag_admission import RagAdmissionEvaluator
 from app.memory.rag_record import (
     MemoryCandidateRecord,
     create_memory_candidate_record,
@@ -44,15 +41,12 @@ def _enqueue_memory_candidate(
         task_queue.add_task(_embed_and_store, record)
 
 
-def record_scanned_user_memory_candidate(
+def record_user_memory_candidate(
     character: str,
     user_message: str,
     policy: MemoryPolicy,
     task_queue: _BackgroundTaskQueue,
-    scan_result: ScanResult,
 ) -> None:
-    if not RagAdmissionEvaluator().allows(scan_result):
-        return
     if contains_non_storable_memory(user_message, policy):
         return
     record = create_memory_candidate_record(character, user_message)
@@ -68,17 +62,11 @@ def _format_rag_context(
     )
 
 
-def build_rag_context_for_scanned_user(
+def build_rag_context(
     character: str,
     user_message: str,
     policy: MemoryPolicy,
-    user_scan_result: ScanResult,
-    scanner: DeterministicPrivacyScanner,
 ) -> tuple[str, ...]:
-    evaluator = RagAdmissionEvaluator()
-    if not evaluator.allows(user_scan_result):
-        logger.warning("Skipped RAG memory lookup due to privacy metadata")
-        return ()
     if contains_sensitive_memory(user_message, policy):
         logger.warning("Skipped RAG memory lookup for sensitive content")
         return ()
@@ -94,12 +82,7 @@ def build_rag_context_for_scanned_user(
         return ()
     if not memories:
         return ()
-    safe_memories = [
-        memory
-        for memory in memories
-        if evaluator.allows(scanner.scan(memory.content))
-    ]
-    return _format_rag_context(safe_memories)
+    return _format_rag_context(memories)
 
 
 def _embed_and_store(record: MemoryCandidateRecord) -> None:

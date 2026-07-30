@@ -17,7 +17,9 @@ class CharacterCardData:
     group_only_greetings: tuple[str, ...]
     creator: str
     character_version: str
+    tags: tuple[str, ...]
     extensions: Mapping[str, object]
+    extra_fields: Mapping[str, object]
 
 
 @dataclass(frozen=True)
@@ -25,6 +27,7 @@ class CharacterCard:
     spec: str
     spec_version: str
     data: CharacterCardData
+    extra_fields: Mapping[str, object]
 
 
 @dataclass(frozen=True)
