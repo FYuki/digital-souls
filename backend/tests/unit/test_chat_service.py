@@ -1,7 +1,9 @@
 import asyncio
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from unittest.mock import patch
+from uuid import UUID
 
 import httpx
 import pytest
@@ -19,15 +21,27 @@ from app.chat_service import (
     ChatServiceError,
     ChatTimeoutError,
 )
+from app.conversation_history.models import (
+    ConversationTurn,
+    PersistedMaskedText,
+    TurnStatus,
+)
+from app.conversation_history.sanitizer import ConversationHistorySanitizer
+from app.conversation_history.scanner import DeterministicPrivacyScanner
+from tests.prompt_test_support import (
+    StubConversationHistory,
+    character_card,
+    prompt_messages,
+)
 
 
-_LOAD_PERSONALITY = "app._chat_runtime._character_loader.load_personality"
+_LOAD_CHARACTER_CARD = "app._chat_runtime._character_loader.load_character_card"
 _GENERATE_RESPONSE = "app._chat_runtime._llm_router.generate_response"
 _BUILD_AUGMENTED_SYSTEM_PROMPT = (
-    "app._chat_runtime._rag_service.build_augmented_system_prompt"
+    "app._chat_runtime._rag_service.build_rag_context_for_scanned_user"
 )
 _RECORD_USER_MEMORY_CANDIDATE = (
-    "app._chat_runtime._rag_service.record_user_memory_candidate"
+    "app._chat_runtime._rag_service.record_scanned_user_memory_candidate"
 )
 _RESOLVED_MEMORY_POLICY = "app._chat_runtime.resolved_memory_policy"
 
@@ -47,6 +61,8 @@ def _chat_service(rag_enabled: bool, policy=None) -> ChatService:
             memory_policy=policy,
         ),
         _CollectingTaskQueue(),
+        StubConversationHistory(),
+        ConversationHistorySanitizer(DeterministicPrivacyScanner()),
     )
 
 
@@ -85,14 +101,14 @@ class TestChatServiceErrorContract:
         assert "create_chat_service" not in chat_service.__all__
 
     def test_normalizes_missing_character_error(self):
-        with patch(_LOAD_PERSONALITY, side_effect=FileNotFoundError("missing")):
+        with patch(_LOAD_CHARACTER_CARD, side_effect=FileNotFoundError("missing")):
             with pytest.raises(CharacterNotFoundError) as exc_info:
                 _chat_service(False).generate_chat_reply("unknown", "hello")
 
         assert exc_info.value.detail == "Character 'unknown' not found"
 
     def test_normalizes_llm_timeout_error(self):
-        with patch(_LOAD_PERSONALITY, return_value="# prompt"):
+        with patch(_LOAD_CHARACTER_CARD, return_value=character_card("# prompt")):
             with patch(_GENERATE_RESPONSE, side_effect=httpx.ReadTimeout("timeout")):
                 with pytest.raises(ChatTimeoutError) as exc_info:
                     _chat_service(False).generate_chat_reply("miori", "hello")
@@ -100,19 +116,36 @@ class TestChatServiceErrorContract:
         assert exc_info.value.detail == "LLM request timed out"
 
     def test_normalizes_llm_backend_error(self):
-        with patch(_LOAD_PERSONALITY, return_value="# prompt"):
+        history = StubConversationHistory()
+        service = ChatService(
+            ChatRuntimeConfig(rag_enabled=False, memory_policy=None),
+            _CollectingTaskQueue(),
+            history,
+            ConversationHistorySanitizer(DeterministicPrivacyScanner()),
+        )
+        with patch(_LOAD_CHARACTER_CARD, return_value=character_card("# prompt")):
             with patch(_GENERATE_RESPONSE, side_effect=httpx.HTTPError("boom")):
                 with pytest.raises(ChatBackendError) as exc_info:
-                    _chat_service(False).generate_chat_reply("miori", "hello")
+                    service.generate_chat_reply("miori", "hello")
 
         assert exc_info.value.detail == "LLM request failed"
+        turns = history.list_turns(
+            "miori",
+            UUID("00000000-0000-4000-8000-000000000001"),
+        )
+        assert len(turns) == 1
+        assert turns[0].status is TurnStatus.FAILED
+        assert turns[0].assistant_content is None
 
     def test_public_generate_chat_reply_delegates_to_configured_service(self):
         service = _chat_service(False)
         resolver = lambda: service
         _chat_runtime.register_default_chat_service_resolver(resolver)
         try:
-            with patch(_LOAD_PERSONALITY, return_value="# prompt") as mock_load:
+            with patch(
+                _LOAD_CHARACTER_CARD,
+                return_value=character_card("# prompt"),
+            ) as mock_load:
                 with patch(_GENERATE_RESPONSE, return_value="reply") as mock_gen:
                     reply = chat_service.generate_chat_reply("miori", "hello")
         finally:
@@ -120,7 +153,10 @@ class TestChatServiceErrorContract:
 
         assert reply == "reply"
         mock_load.assert_called_once_with("miori")
-        mock_gen.assert_called_once_with("# prompt", "hello")
+        assert prompt_messages(mock_gen.call_args.args[0]) == [
+            ("system", "# prompt"),
+            ("user", "hello"),
+        ]
 
     def test_public_create_chat_session_delegates_to_configured_service(self):
         async def run_session_flow():
@@ -128,18 +164,55 @@ class TestChatServiceErrorContract:
             resolver = lambda: service
             _chat_runtime.register_default_chat_service_resolver(resolver)
             try:
-                with patch(_LOAD_PERSONALITY, side_effect=["# open", "# prompt"]):
+                with patch(
+                    _LOAD_CHARACTER_CARD,
+                    side_effect=[
+                        character_card("# open"),
+                        character_card("# prompt"),
+                    ],
+                ):
                     session = await chat_service.create_chat_session("miori")
                     with patch(_GENERATE_RESPONSE, return_value="reply") as mock_gen:
                         reply = session.generate_reply("hello")
             finally:
                 _chat_runtime.clear_default_chat_service_resolver(resolver)
-            return reply, mock_gen
+            return reply, session.initial_assistant_message, mock_gen
 
-        reply, mock_gen = asyncio.run(run_session_flow())
+        reply, initial_assistant_message, mock_gen = asyncio.run(run_session_flow())
 
         assert reply == "reply"
-        mock_gen.assert_called_once_with("# prompt", "hello")
+        assert initial_assistant_message is None
+        assert prompt_messages(mock_gen.call_args.args[0]) == [
+            ("system", "# prompt"),
+            ("user", "hello"),
+        ]
+
+    def test_chat_session_exposes_first_message_without_persisting_it(self):
+        history = StubConversationHistory()
+        service = ChatService(
+            ChatRuntimeConfig(rag_enabled=False, memory_policy=None),
+            _CollectingTaskQueue(),
+            history,
+            ConversationHistorySanitizer(DeterministicPrivacyScanner()),
+        )
+
+        async def open_session():
+            with patch(
+                _LOAD_CHARACTER_CARD,
+                return_value=character_card(
+                    "# prompt",
+                    first_mes="はじめまして",
+                ),
+            ):
+                return await service.create_chat_session("miori")
+
+        session = asyncio.run(open_session())
+
+        assert session.initial_assistant_message == "はじめまして"
+        assert history.list_turns(
+            "miori",
+            UUID("00000000-0000-4000-8000-000000000001"),
+        ) == []
 
     def test_public_entrypoints_fail_fast_without_registered_service(self):
         with pytest.raises(ChatServiceError, match="resolver is not configured"):
@@ -147,6 +220,8 @@ class TestChatServiceErrorContract:
 
     def test_public_entrypoints_follow_registered_app_state_service(self):
         class StubSession:
+            initial_assistant_message = None
+
             def generate_reply(self, message: str) -> str:
                 return f"ws:{message}"
 
@@ -158,7 +233,7 @@ class TestChatServiceErrorContract:
                 self.calls.append(("http", character, message))
                 return f"http:{message}"
 
-            async def create_chat_session(self, character: str):
+            async def create_chat_session(self, character: str) -> StubSession:
                 self.calls.append(("ws-open", character, ""))
                 return StubSession()
 
@@ -166,7 +241,7 @@ class TestChatServiceErrorContract:
         second = StubChatService()
         state = {"service": first}
 
-        def resolver():
+        def resolver() -> StubChatService:
             return state["service"]
 
         _chat_runtime.register_default_chat_service_resolver(resolver)
@@ -189,7 +264,10 @@ class TestChatServiceErrorContract:
             def generate_chat_reply(self, character: str, message: str) -> str:
                 return f"{self.label}:{character}:{message}"
 
-            async def create_chat_session(self, character: str):
+            async def create_chat_session(
+                self,
+                character: str,
+            ) -> chat_service.ChatReplySession:
                 raise AssertionError("not used")
 
         first = StubChatService("first")
@@ -215,31 +293,124 @@ class TestChatServiceErrorContract:
 
 
 class TestChatServiceRagContract:
+    def test_passes_completed_persisted_turns_to_prompt_in_repository_order(self):
+        conversation_id = UUID("00000000-0000-4000-8000-000000000001")
+        now = datetime.now(UTC)
+        turns = [
+            ConversationTurn(
+                turn_id=UUID(f"00000000-0000-4000-8000-00000000000{index}"),
+                character_id="miori",
+                conversation_id=conversation_id,
+                user_content=PersistedMaskedText(user),
+                assistant_content=PersistedMaskedText(assistant),
+                status=TurnStatus.COMPLETED,
+                privacy_reason_code=None,
+                created_at=now,
+                updated_at=now,
+            )
+            for index, user, assistant in (
+                (2, "masked user 1", "masked assistant 1"),
+                (3, "masked user 2", "masked assistant 2"),
+            )
+        ]
+        turns.append(
+            ConversationTurn(
+                turn_id=UUID("00000000-0000-4000-8000-000000000004"),
+                character_id="miori",
+                conversation_id=conversation_id,
+                user_content=PersistedMaskedText("processing user"),
+                assistant_content=None,
+                status=TurnStatus.PROCESSING,
+                privacy_reason_code=None,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        service = ChatService(
+            ChatRuntimeConfig(rag_enabled=False, memory_policy=None),
+            _CollectingTaskQueue(),
+            StubConversationHistory(turns),
+            ConversationHistorySanitizer(DeterministicPrivacyScanner()),
+        )
+
+        with patch(_LOAD_CHARACTER_CARD, return_value=character_card("# prompt")):
+            with patch(_GENERATE_RESPONSE, return_value="reply") as mock_gen:
+                result = service.generate_conversation_reply(
+                    "miori",
+                    conversation_id,
+                    "current raw",
+                )
+
+        assert result == "reply"
+        assert prompt_messages(mock_gen.call_args.args[0]) == [
+            ("system", "# prompt"),
+            ("user", "masked user 1"),
+            ("assistant", "masked assistant 1"),
+            ("user", "masked user 2"),
+            ("assistant", "masked assistant 2"),
+            ("user", "current raw"),
+        ]
+
     def test_two_argument_reply_uses_rag_augmented_prompt_when_enabled(self):
         policy = object()
-        base_prompt = "# prompt"
-        augmented_prompt = "# prompt\n\n過去の記憶:\n畑の話"
+        augmented_prompt = "過去の記憶:\n畑の話"
 
         service = _chat_service(True, policy)
-        with patch(_LOAD_PERSONALITY, return_value=base_prompt):
+        with patch(
+            _LOAD_CHARACTER_CARD,
+            return_value=character_card("# prompt"),
+        ):
             with patch(
                 _BUILD_AUGMENTED_SYSTEM_PROMPT,
-                return_value=augmented_prompt,
+                return_value=(augmented_prompt,),
             ) as mock_build:
                 with patch(_GENERATE_RESPONSE, return_value="reply") as mock_gen:
                     with patch(_RECORD_USER_MEMORY_CANDIDATE):
                         reply = service.generate_chat_reply("miori", "hello")
 
         assert reply == "reply"
-        mock_build.assert_called_once_with("miori", "hello", base_prompt, policy)
-        mock_gen.assert_called_once_with(augmented_prompt, "hello")
+        assert mock_build.call_args.args[:3] == ("miori", "hello", policy)
+        assert len(mock_build.call_args.args) == 5
+        assert prompt_messages(mock_gen.call_args.args[0]) == [
+            ("system", "# prompt"),
+            ("system", augmented_prompt),
+            ("user", "hello"),
+        ]
+
+    def test_runtime_keeps_all_rag_memories_regardless_of_budget(self):
+        policy = object()
+        first_memory = "A" * 700
+        second_memory = "B" * 700
+        service = _chat_service(True, policy)
+
+        with patch(
+            _LOAD_CHARACTER_CARD,
+            return_value=character_card("# prompt"),
+        ):
+            with patch(
+                _BUILD_AUGMENTED_SYSTEM_PROMPT,
+                return_value=(first_memory, second_memory),
+            ):
+                with patch(_GENERATE_RESPONSE, return_value="reply") as mock_gen:
+                    with patch(_RECORD_USER_MEMORY_CANDIDATE):
+                        service.generate_chat_reply("miori", "hello")
+
+        assert prompt_messages(mock_gen.call_args.args[0]) == [
+            ("system", "# prompt"),
+            ("system", first_memory),
+            ("system", second_memory),
+            ("user", "hello"),
+        ]
 
     def test_two_argument_reply_records_user_memory_candidate_when_rag_enabled(self):
         policy = object()
 
         service = _chat_service(True, policy)
-        with patch(_LOAD_PERSONALITY, return_value="# prompt"):
-            with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT, return_value="# augmented"):
+        with patch(_LOAD_CHARACTER_CARD, return_value=character_card("# prompt")):
+            with patch(
+                _BUILD_AUGMENTED_SYSTEM_PROMPT,
+                return_value=("# augmented",),
+            ):
                 with patch(_GENERATE_RESPONSE, return_value="reply"):
                     with patch(_RECORD_USER_MEMORY_CANDIDATE) as mock_record:
                         reply = service.generate_chat_reply("miori", "hello")
@@ -255,8 +426,11 @@ class TestChatServiceRagContract:
         policy = object()
 
         service = _chat_service(True, policy)
-        with patch(_LOAD_PERSONALITY, return_value="# prompt"):
-            with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT, return_value="# prompt"):
+        with patch(_LOAD_CHARACTER_CARD, return_value=character_card("# prompt")):
+            with patch(
+                _BUILD_AUGMENTED_SYSTEM_PROMPT,
+                return_value=("# prompt",),
+            ):
                 with patch(_GENERATE_RESPONSE, return_value="reply"):
                     with patch(_RECORD_USER_MEMORY_CANDIDATE) as mock_record:
                         reply = service.generate_chat_reply("miori", "hello")
@@ -268,7 +442,10 @@ class TestChatServiceRagContract:
     def test_rag_disabled_keeps_plain_prompt_without_memory_work(self):
         service = _chat_service(False)
         with patch(_RESOLVED_MEMORY_POLICY) as mock_policy:
-            with patch(_LOAD_PERSONALITY, return_value="# prompt"):
+            with patch(
+                _LOAD_CHARACTER_CARD,
+                return_value=character_card("# prompt"),
+            ):
                 with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT) as mock_build:
                     with patch(_GENERATE_RESPONSE, return_value="reply") as mock_gen:
                         with patch(_RECORD_USER_MEMORY_CANDIDATE) as mock_record:
@@ -277,7 +454,10 @@ class TestChatServiceRagContract:
         assert reply == "reply"
         mock_policy.assert_not_called()
         mock_build.assert_not_called()
-        mock_gen.assert_called_once_with("# prompt", "hello")
+        assert prompt_messages(mock_gen.call_args.args[0]) == [
+            ("system", "# prompt"),
+            ("user", "hello"),
+        ]
         mock_record.assert_not_called()
 
     def test_chat_session_uses_same_per_message_resolution_as_http_reply(self):
@@ -285,11 +465,21 @@ class TestChatServiceRagContract:
         service = _chat_service(True, policy)
 
         async def run_session_flow():
-            with patch(_LOAD_PERSONALITY, side_effect=["# open", "# prompt 1", "# prompt 2"]):
+            with patch(
+                _LOAD_CHARACTER_CARD,
+                side_effect=[
+                    character_card("# open"),
+                    character_card("# prompt 1"),
+                    character_card("# prompt 2"),
+                ],
+            ):
                 session = await service.create_chat_session("miori")
                 with patch(
                     _BUILD_AUGMENTED_SYSTEM_PROMPT,
-                    side_effect=["# augmented 1", "# augmented 2"],
+                    side_effect=[
+                        ("# augmented 1",),
+                        ("# augmented 2",),
+                    ],
                 ) as mock_build:
                     with patch(
                         _GENERATE_RESPONSE,
@@ -317,10 +507,27 @@ class TestChatServiceRagContract:
         assert first_reply == "reply 1"
         assert second_reply == "reply 2"
         assert mock_build.call_count == 2
-        mock_build.assert_any_call("miori", "hello", "# prompt 1", policy)
-        mock_build.assert_any_call("miori", "again", "# prompt 2", policy)
-        mock_gen.assert_any_call("# augmented 1", "hello")
-        mock_gen.assert_any_call("# augmented 2", "again")
+        assert [call.args[:3] for call in mock_build.call_args_list] == [
+            ("miori", "hello", policy),
+            ("miori", "again", policy),
+        ]
+        generated_messages = [
+            prompt_messages(call.args[0]) for call in mock_gen.call_args_list
+        ]
+        assert generated_messages == [
+            [
+                ("system", "# prompt 1"),
+                ("system", "# augmented 1"),
+                ("user", "hello"),
+            ],
+            [
+                ("system", "# prompt 2"),
+                ("system", "# augmented 2"),
+                ("user", "hello"),
+                ("assistant", "reply 1"),
+                ("user", "again"),
+            ],
+        ]
         assert mock_record.call_count == 2
         assert [call.args[:2] for call in mock_record.call_args_list] == [
             ("miori", "hello"),

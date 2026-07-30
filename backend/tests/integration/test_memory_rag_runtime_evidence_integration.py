@@ -7,6 +7,12 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.prompt_test_support import (
+    current_user_text,
+    prompt_messages,
+    write_character_card,
+)
+
 
 def _require_runtime_evidence_dependencies() -> None:
     importlib.import_module("chromadb")
@@ -58,9 +64,7 @@ def _isolate_memory_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def _write_character(tmp_path: Path, character: str, system_prompt: str) -> None:
-    character_dir = tmp_path / "characters" / character
-    character_dir.mkdir(parents=True)
-    character_dir.joinpath("personality.md").write_text(system_prompt, encoding="utf-8")
+    write_character_card(tmp_path, character, system_prompt)
 
 
 def _wait_until(predicate, timeout: float = 5.0) -> None:
@@ -96,9 +100,10 @@ class TestRagRuntimeEvidenceIntegration:
 
         captured_llm_calls = []
 
-        def capture_generate_response(system_prompt_arg: str, user_message: str) -> str:
+        def capture_generate_response(prompt) -> str:
+            user_message = current_user_text(prompt)
             captured_llm_calls.append(
-                {"system_prompt": system_prompt_arg, "user_message": user_message}
+                {"messages": prompt_messages(prompt), "user_message": user_message}
             )
             if user_message == stored_memory:
                 return "農業日誌として保存しました。"
@@ -137,8 +142,11 @@ class TestRagRuntimeEvidenceIntegration:
         assert response.status_code == 200
         assert response.json()["response"] == "前回はトマト畑に水やりしました。"
         assert captured_llm_calls[-1]["user_message"] == "前回の畑作業は?"
-        assert "過去の記憶:" in captured_llm_calls[-1]["system_prompt"]
-        assert stored_memory in captured_llm_calls[-1]["system_prompt"]
+        rendered_messages = "\n".join(
+            content for _role, content in captured_llm_calls[-1]["messages"]
+        )
+        assert "過去の記憶:" in rendered_messages
+        assert stored_memory in rendered_messages
 
     def test_real_storage_failure_chat_continues_without_failed_memory_file(
         self, tmp_path, monkeypatch
@@ -182,9 +190,11 @@ class TestRagRuntimeEvidenceIntegration:
 
         monkeypatch.setattr(chromadb, "PersistentClient", AddFailureClient)
 
-        def capture_generate_response(system_prompt_arg: str, user_message_arg: str) -> str:
-            assert system_prompt_arg == system_prompt
-            assert user_message_arg == user_message
+        def capture_generate_response(prompt) -> str:
+            assert prompt_messages(prompt) == [
+                ("system", system_prompt),
+                ("user", user_message),
+            ]
             return "農業日誌として保存しました。"
 
         monkeypatch.setattr(
@@ -200,9 +210,8 @@ class TestRagRuntimeEvidenceIntegration:
             )
 
         assert response.status_code == 200
-        assert response.json() == {
-            "character": "miori",
-            "response": "農業日誌として保存しました。",
-        }
+        assert response.json()["character"] == "miori"
+        assert response.json()["response"] == "農業日誌として保存しました。"
+        assert response.json()["conversation_id"]
 
         assert not tmp_path.joinpath("data", "failed-memories.jsonl").exists()

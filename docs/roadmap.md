@@ -60,17 +60,16 @@ RAG（Chroma + nomic-embed-text）のMVP構成は実装済みだが、`RAG_ENABL
 
 ## Post-MVP: Wave 1〜4
 
-MVP完了時点で判明した現状ギャップ（会話がステートレスで多ターン成立しない、RAGが眠っている、
-`character_id`スキーマ未統一、LLM/TTSが逐次処理で遅延が大きい 等）を踏まえ、
+MVP完了時点で判明したギャップを踏まえ、
 「続く → 覚えている → 自然に話せる → 役に立つ」の順で再編する。
 各Waveの詳細タスク・完了イメージ・依存関係は `docs/enhancement-plan.md` を参照。
 
 ### Wave 1: 会話が「続く」（短期記憶・基盤整備）
 
-- [ ] SQLite会話履歴schema（既存テストDBは移行せず削除し、`conversations` / `conversation_turns`を空状態から作成）
-- [ ] 共通privacy scannerと履歴sanitizer（直接識別値を保存前にマスクし、マスク不能時は本文を保存しない）
-- [ ] 会話履歴のプロンプト注入（同じ`character_id` / `conversation_id`の直近N往復だけを復元してLLMへ渡す。RAG無効時も履歴を記録する）
-- [ ] プロンプト合成の一元設計（personality.md / card.json未使用フィールド / 会話履歴 / RAG記憶の合成順序を確定）
+- [x] SQLite会話履歴schema（`conversations` / `conversation_turns`を作成し、会話単位で完了済みturnを復元）
+- [x] 共通privacy scannerと履歴sanitizer（直接識別値を保存前にマスクし、マスク不能時は本文を保存しない）
+- [x] 会話履歴のプロンプト注入（同じ`character_id` / `conversation_id`の完了済みturnを復元してLLMへ渡す。RAG無効時も履歴を記録する）
+- [x] プロンプト合成の一元設計（Character Card V3をruntime人格定義の正本とし、PromptBuilderへ合成を集約）
 - [ ] 設定のenv化（`OLLAMA_CHAT_MODEL` 等、Whisperモデルサイズ、履歴注入数N）
 - [ ] Backend／Frontendのconversation lifecycle統合
 - [ ] スレッド一覧・再開・アーカイブ・物理削除インターフェース

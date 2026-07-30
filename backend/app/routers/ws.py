@@ -190,6 +190,8 @@ def _extract_text_message(payload: object) -> str:
     message = payload.get(MESSAGE_FIELD)
     if not isinstance(message, str):
         raise WebSocketMessageError("WebSocket text message must include a string message")
+    if not message.strip():
+        raise WebSocketMessageError("WebSocket text message must not be blank")
 
     return message
 
@@ -244,6 +246,23 @@ async def _open_chat_session(
         status, detail = _map_chat_error(exc)
         await _send_error_and_close(websocket, send_lock, status, detail)
         return None
+
+
+async def _send_initial_assistant_message(
+    websocket: WebSocket,
+    send_lock: asyncio.Lock,
+    chat_session: ChatReplySession,
+) -> None:
+    if chat_session.initial_assistant_message is None:
+        return
+    await _send_json(
+        websocket,
+        send_lock,
+        {
+            MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
+            RESPONSE_FIELD: chat_session.initial_assistant_message,
+        },
+    )
 
 
 async def _generate_reply(
@@ -456,6 +475,7 @@ async def websocket_chat(websocket: WebSocket, character_name: str) -> None:
     chat_session = await _open_chat_session(websocket, send_lock, character_name)
     if chat_session is None:
         return
+    await _send_initial_assistant_message(websocket, send_lock, chat_session)
 
     audio_queue: AudioFrameQueue = asyncio.Queue(maxsize=1)
     audio_worker = asyncio.create_task(

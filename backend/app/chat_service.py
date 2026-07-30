@@ -3,6 +3,7 @@ from typing import Protocol
 __all__ = [
     "CharacterNotFoundError",
     "ChatBackendError",
+    "ChatConversationNotFoundError",
     "ChatReplySession",
     "ChatServiceError",
     "ChatTimeoutError",
@@ -34,7 +35,17 @@ class ChatBackendError(ChatServiceError):
         super().__init__(self.detail)
 
 
+class ChatConversationNotFoundError(ChatServiceError):
+    def __init__(self) -> None:
+        self.detail = "Conversation not found"
+        super().__init__(self.detail)
+
+
 class ChatReplySession(Protocol):
+    @property
+    def initial_assistant_message(self) -> str | None:
+        ...
+
     def generate_reply(self, message: str) -> str:
         ...
 

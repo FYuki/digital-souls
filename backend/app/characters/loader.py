@@ -1,25 +1,34 @@
 import json
-from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from types import MappingProxyType
+from typing import Mapping, cast
+
+from app.characters.models import (
+    CharacterCard,
+    CharacterCardData,
+    VoicevoxTtsConfig,
+)
 
 CARD_FILE_SUFFIX = ".card.json"
 CHARACTERS_DIR_NAME = "characters"
-PERSONALITY_FILE_NAME = "personality.md"
+CARD_SPEC_FIELD = "spec"
+CARD_SPEC_VERSION_FIELD = "spec_version"
+CARD_V3_SPEC = "chara_card_v3"
+CARD_V3_VERSION = "3.0"
 DATA_FIELD = "data"
+EXTENSIONS_FIELD = "extensions"
+DIGITAL_SOULS_EXTENSION = "digital_souls"
 TTS_CONFIG_FIELD = "tts_config"
 TTS_ENGINE_FIELD = "engine"
 TTS_SPEAKER_ID_FIELD = "speaker_id"
 VOICEVOX_ENGINE = "voicevox"
-CARD_DATA_MISSING_MESSAGE = "'data' field is missing in character card"
 CARD_DATA_INVALID_MESSAGE = "'data' field must be an object in character card"
-TTS_CONFIG_MISSING_MESSAGE = "'tts_config' field is missing in character card data"
-TTS_CONFIG_INVALID_MESSAGE = "'tts_config' field must be an object in character card data"
-
-
-@dataclass(frozen=True)
-class VoicevoxTtsConfig:
-    speaker_id: int
+TTS_CONFIG_MISSING_MESSAGE = (
+    "'tts_config' field is missing in extensions.digital_souls"
+)
+TTS_CONFIG_INVALID_MESSAGE = (
+    "'tts_config' field must be an object in extensions.digital_souls"
+)
 
 
 def _get_repo_root() -> Path:
@@ -39,13 +48,6 @@ def _build_character_file_path(character: str, file_name: str) -> Path:
     return character_file_path
 
 
-def load_personality(character: str) -> str:
-    personality_path = _build_character_file_path(character, PERSONALITY_FILE_NAME)
-    if not personality_path.is_file():
-        raise FileNotFoundError(f"Personality file not found: {personality_path}")
-    return personality_path.read_text(encoding="utf-8")
-
-
 JsonObject = dict[str, object]
 
 
@@ -60,18 +62,90 @@ def _load_character_card(character: str) -> JsonObject:
     return cast(JsonObject, card)
 
 
-def load_tts_config(character: str) -> VoicevoxTtsConfig:
-    card = _load_character_card(character)
-    if DATA_FIELD not in card:
-        raise KeyError(CARD_DATA_MISSING_MESSAGE)
-    data = card[DATA_FIELD]
-    if not isinstance(data, dict):
-        raise ValueError(CARD_DATA_INVALID_MESSAGE)
+def _required_string(data: Mapping[str, object], field_name: str) -> str:
+    value = data.get(field_name)
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a string")
+    return value
 
-    if TTS_CONFIG_FIELD not in data:
+
+def _string_tuple(data: Mapping[str, object], field_name: str) -> tuple[str, ...]:
+    value = data.get(field_name)
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ValueError(f"{field_name} must be an array of strings")
+    return tuple(value)
+
+
+def _freeze_json(value: object) -> object:
+    if isinstance(value, dict):
+        return MappingProxyType(
+            {key: _freeze_json(item) for key, item in value.items()}
+        )
+    if isinstance(value, list):
+        return tuple(_freeze_json(item) for item in value)
+    return value
+
+
+def _extensions(data: Mapping[str, object]) -> Mapping[str, object]:
+    value = data.get(EXTENSIONS_FIELD)
+    if not isinstance(value, dict):
+        raise ValueError(f"{EXTENSIONS_FIELD} must be an object")
+    return cast(Mapping[str, object], _freeze_json(value))
+
+
+def load_character_card(character: str) -> CharacterCard:
+    card = _load_character_card(character)
+    spec = _required_string(card, CARD_SPEC_FIELD)
+    spec_version = _required_string(card, CARD_SPEC_VERSION_FIELD)
+    if spec != CARD_V3_SPEC:
+        raise ValueError(f"{CARD_SPEC_FIELD} must be '{CARD_V3_SPEC}'")
+    if spec_version != CARD_V3_VERSION:
+        raise ValueError(
+            f"{CARD_SPEC_VERSION_FIELD} must be '{CARD_V3_VERSION}'"
+        )
+
+    data_value = card.get(DATA_FIELD)
+    if not isinstance(data_value, dict):
+        raise ValueError(CARD_DATA_INVALID_MESSAGE)
+    data = cast(JsonObject, data_value)
+    return CharacterCard(
+        spec=spec,
+        spec_version=spec_version,
+        data=CharacterCardData(
+            name=_required_string(data, "name"),
+            description=_required_string(data, "description"),
+            personality=_required_string(data, "personality"),
+            scenario=_required_string(data, "scenario"),
+            first_mes=_required_string(data, "first_mes"),
+            mes_example=_required_string(data, "mes_example"),
+            creator_notes=_required_string(data, "creator_notes"),
+            system_prompt=_required_string(data, "system_prompt"),
+            post_history_instructions=_required_string(
+                data,
+                "post_history_instructions",
+            ),
+            alternate_greetings=_string_tuple(data, "alternate_greetings"),
+            group_only_greetings=_string_tuple(data, "group_only_greetings"),
+            creator=_required_string(data, "creator"),
+            character_version=_required_string(data, "character_version"),
+            extensions=_extensions(data),
+        ),
+    )
+
+
+def _digital_souls_extension(card: CharacterCard) -> Mapping[str, object]:
+    value = card.data.extensions.get(DIGITAL_SOULS_EXTENSION)
+    if not isinstance(value, Mapping):
+        raise ValueError("extensions.digital_souls must be an object")
+    return value
+
+
+def load_tts_config(character: str) -> VoicevoxTtsConfig:
+    digital_souls = _digital_souls_extension(load_character_card(character))
+    if TTS_CONFIG_FIELD not in digital_souls:
         raise KeyError(TTS_CONFIG_MISSING_MESSAGE)
-    tts_config = data[TTS_CONFIG_FIELD]
-    if not isinstance(tts_config, dict):
+    tts_config = digital_souls[TTS_CONFIG_FIELD]
+    if not isinstance(tts_config, Mapping):
         raise ValueError(TTS_CONFIG_INVALID_MESSAGE)
 
     if tts_config.get(TTS_ENGINE_FIELD) != VOICEVOX_ENGINE:

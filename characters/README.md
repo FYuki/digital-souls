@@ -20,6 +20,7 @@
 ```text
 characters/
 └─ miori/
+   ├─ miori.card.json
    ├─ personality.md
    ├─ world.md
    └─ memory-policy.md
@@ -33,12 +34,13 @@ characters/
 
 ## 各人格ディレクトリの基本構成
 
-各人格ディレクトリでは、原則として以下のファイルを配置する。
+各人格ディレクトリでは、以下のファイルを配置する。
 
 | ファイル | 役割 |
 |---|---|
-| `personality.md` | 人格設定、性格、話し方、行動方針、得意・不得意、表現モード |
-| `world.md` | 世界観、比喩体系、用語、演出方針、応答上の扱い |
+| `{id}.card.json` | runtimeが読み込むCharacter Card V3。人格、表示名、会話例、応答指示、初回メッセージ、TTS設定の正本 |
+| `personality.md` | 人格設計の検討資料。runtimeからは読み込まない |
+| `world.md` | 世界観設計の検討資料。runtimeからは読み込まない |
 | `memory-policy.md` | 記憶方針本文の移動先と実装設定ファイルへの案内 |
 
 必要に応じて、将来的に以下のようなファイルを追加する。
@@ -47,7 +49,7 @@ characters/
 |---|---|
 | `design.md` | 外見デザイン、衣装、キーアイテム、Live2D/VRM向け注意点 |
 | `voice.md` | 声質、話速、口調、音声合成向け方針 |
-| `prompts.md` | システムプロンプトや用途別プロンプトの草案 |
+| `prompts.md` | Character Cardへ反映する前の用途別プロンプトの草案 |
 | `scenarios.md` | 配信、日常会話、農業日誌、レシピ管理などの応答例 |
 
 ## 命名規則
@@ -61,21 +63,55 @@ characters/miori/
 characters/example-character/
 ```
 
-日本語名や表示名は、各人格の `personality.md` に記載する。
+日本語名や表示名は、各人格のCharacter Card V3にある`data.name`を正本とする。
 
 ## 新しい人格を追加する場合
 
 1. `characters/{id}/` ディレクトリを作成する
-2. 基本構成の3ファイルを作成する
-3. このREADMEの「人格一覧」テーブルに追記する
-4. `docs/decisions/` に設計経緯を残す
+2. `{id}.card.json`を`spec: "chara_card_v3"`、`spec_version: "3.0"`で作成する
+3. `data`にV3の必須フィールドをすべて設定する
+4. 音声設定を`data.extensions.digital_souls.tts_config`へ設定する
+5. 設計資料として`personality.md`、`world.md`、`memory-policy.md`を作成する
+6. このREADMEの「人格一覧」テーブルに追記する
+7. `docs/decisions/` に設計経緯を残す
+
+Character Cardの`data`では、次のフィールドを使用する。
+
+| フィールド | 役割 |
+|---|---|
+| `name` | UI等で使う表示名の正本 |
+| `description` | キャラクター概要 |
+| `personality` | 性格、話し方 |
+| `scenario` | ユーザーとの関係、世界観 |
+| `system_prompt` | 常に守る応答方針 |
+| `first_mes` | 履歴がない場合の初回assistant表示 |
+| `mes_example` | 会話および話し方の例 |
+| `post_history_instructions` | 現在のユーザー発言より後に適用する最終指示 |
+| `creator`、`character_version`、`creator_notes` | 作成者、人格版、作成者向け注記 |
+| `alternate_greetings`、`group_only_greetings` | 代替・グループ向け初回メッセージ |
+| `extensions` | 実装固有設定のnamespace |
+
+VOICEVOXを使う場合は、次の構造で設定する。
+
+```json
+{
+  "extensions": {
+    "digital_souls": {
+      "tts_config": {
+        "engine": "voicevox",
+        "speaker_id": 14
+      }
+    }
+  }
+}
+```
 
 ## 管理方針
 
 - 人格設定は、通常の会話ログや一時メモとは分けて管理する
 - 人格の核となる設定は、安易に削除・上書きしない
 - 変更する場合は、理由が分かるようにコミットメッセージやIssueに残す
-- 実装コードから参照する場合は、人格IDをキーとして扱う
+- 実装コードから参照する場合は、人格IDをキーとしてCharacter Cardを読み込む
 - RAGや長期記憶に取り込む場合は、人格設定ファイルを通常ログより高い優先度で扱う
 
 ## 初期人格

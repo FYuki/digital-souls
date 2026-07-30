@@ -62,7 +62,8 @@
 * `routers/chat.py` — テキストチャットのHTTPエンドポイント
 * `routers/ws.py` — 音声チャット用WebSocketエンドポイント（STT→LLM→TTSの一連の処理、音声フレームの処理中キューを含む）
 * `chat_service.py` / `_chat_runtime.py` — チャットセッションの生成・応答生成のエントリポイント
-* `characters/loader.py` — `characters/` 配下の人格定義（personality.md・card.json等）のロード
+* `characters/loader.py` — `characters/` 配下のCharacter Card V3を読み込み、runtime人格定義と`extensions.digital_souls.tts_config`を解決する。`personality.md`はruntimeでは読み込まない
+* `prompting/` — Character Card、RAG、privacy処理後の会話履歴、現在発言、最終指示を決定的な順序でLLM向けmessageへ合成する
 * `llm/` — LLM振り分けルーター（`router.py`）とクライアント実装。`ollama_client.py`（ローカルOllama、常用）、`base.py`（クライアント共通インターフェース）。クラウドLLM（Claude等）向けクライアントは未実装のスタブ
 * `memory/` — 会話履歴と長期記憶の基盤。SQLiteに同一conversation再開用の履歴と承認済み長期記憶を責務分離して保存し、Chromaは承認済み長期記憶だけの派生検索インデックスとして扱う。`memory_policy.py`は`backend/app/memory/memory_policy.json`の認識設定と、アプリケーションの非緩和policyを組み合わせて保存先別に判定する
 * `stt/whisper_client.py` — faster-whisperによる音声認識
@@ -210,9 +211,10 @@ Chromaから冪等に削除する。SQLite commit後の同じ削除操作でChro
 ```text
 characters/
 └─ miori/
-   ├─ personality.md
-   ├─ world.md
-   └─ memory-policy.md  # 方針本文と実装設定への案内
+   ├─ miori.card.json   # runtime人格定義とTTS設定の正本
+   ├─ personality.md   # 人格設計資料（runtimeでは未使用）
+   ├─ world.md         # 世界観の設計資料
+   └─ memory-policy.md # 方針本文と実装設定への案内
 ```
 
 光織の記憶方針本文は`docs/decisions/miori-memory-policy-2026-06.md`、RAG privacyの不変条件は

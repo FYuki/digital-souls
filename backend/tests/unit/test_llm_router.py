@@ -1,47 +1,32 @@
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 
 class TestGenerateResponse:
     def test_returns_ollama_client_output(self):
         from app.llm.router import generate_response
 
-        expected = "光織のLLM応答"
-        with patch("app.llm.ollama_client.OllamaClient.generate", return_value=expected):
-            result = generate_response("system prompt", "user message")
+        prompt = object()
+        with patch(
+            "app.llm.ollama_client.OllamaClient.generate",
+            return_value="光織のLLM応答",
+        ):
+            result = generate_response(prompt)
 
-        assert result == expected
+        assert result == "光織のLLM応答"
 
-    def test_return_type_is_str(self):
+    def test_passes_built_prompt_to_client_unchanged(self):
         from app.llm.router import generate_response
 
-        with patch("app.llm.ollama_client.OllamaClient.generate", return_value="text"):
-            result = generate_response("system", "user")
+        prompt = object()
+        with patch(
+            "app.llm.ollama_client.OllamaClient.generate",
+            return_value="ok",
+        ) as generate:
+            generate_response(prompt)
 
-        assert isinstance(result, str)
-
-    def test_passes_system_prompt_to_client(self):
-        from app.llm.router import generate_response
-
-        system_prompt = "あなたは光織です。"
-        with patch("app.llm.ollama_client.OllamaClient.generate", return_value="ok") as mock_gen:
-            generate_response(system_prompt, "user message")
-
-        args, kwargs = mock_gen.call_args
-        all_args = list(args) + list(kwargs.values())
-        assert system_prompt in all_args
-
-    def test_passes_user_message_to_client(self):
-        from app.llm.router import generate_response
-
-        user_message = "こんにちは"
-        with patch("app.llm.ollama_client.OllamaClient.generate", return_value="ok") as mock_gen:
-            generate_response("system", user_message)
-
-        args, kwargs = mock_gen.call_args
-        all_args = list(args) + list(kwargs.values())
-        assert user_message in all_args
-
+        generate.assert_called_once_with(prompt)
 
 class TestClaudeClientDummy:
     def test_generate_raises_not_implemented_error(self):
@@ -50,17 +35,7 @@ class TestClaudeClientDummy:
         client = _create_llm_client("claude")
 
         with pytest.raises(NotImplementedError):
-            client.generate("system prompt", "user message")
-
-    def test_not_implemented_error_is_not_caught(self):
-        from app.llm.router import _create_llm_client
-
-        client = _create_llm_client("claude")
-
-        with pytest.raises(NotImplementedError) as exc_info:
-            client.generate("system", "user")
-
-        assert exc_info.type is NotImplementedError
+            client.generate(object())
 
     def test_router_does_not_expose_infrastructure_clients(self):
         from app.llm import router

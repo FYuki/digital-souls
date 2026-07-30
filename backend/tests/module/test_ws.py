@@ -12,25 +12,34 @@ from app.audio_pipeline import resolve_audio_runtime_config
 from app.main import app
 from app.memory.chroma_store import MemorySearchResult
 from app.tts.voicevox_client import DEFAULT_VOICEVOX_BASE_URL
+from tests.prompt_test_support import (
+    character_card,
+    current_user_text,
+    prompt_messages,
+    write_character_card,
+)
 
-_LOAD_PERSONALITY = "app._chat_runtime._character_loader.load_personality"
+_LOAD_PERSONALITY = "app._chat_runtime._character_loader.load_character_card"
 _GENERATE_RESPONSE = "app._chat_runtime._llm_router.generate_response"
 _BUILD_AUGMENTED_SYSTEM_PROMPT = (
-    "app._chat_runtime._rag_service.build_augmented_system_prompt"
+    "app._chat_runtime._rag_service.build_rag_context_for_scanned_user"
 )
 _RECORD_USER_MEMORY_CANDIDATE = (
-    "app._chat_runtime._rag_service.record_user_memory_candidate"
+    "app._chat_runtime._rag_service.record_scanned_user_memory_candidate"
 )
 _RESOLVED_MEMORY_POLICY = "app._chat_runtime.resolved_memory_policy"
 _LOAD_TTS_CONFIG = "app.audio_pipeline.load_tts_config"
 _TRANSCRIBE = "app.stt.whisper_client.WhisperTranscriber.transcribe"
 _SYNTHESIZE = "app.tts.voicevox_client.VoicevoxClient.synthesize"
 
-_PERSONALITY = "# 光織\n穏やかなAIです。"
+_PERSONALITY_TEXT = "# 光織\n穏やかなAIです。"
+_PERSONALITY = character_card(_PERSONALITY_TEXT)
 _LLM_REPLY = "光織です。よろしくお願いします。"
 _PCM_AUDIO = b"\x01\x00\x02\x00"
 _ODD_LENGTH_PCM_AUDIO = b"\x01\x00\x03"
-_TTS_CONFIG_MISSING_MESSAGE = "'tts_config' field is missing in character card data"
+_TTS_CONFIG_MISSING_MESSAGE = (
+    "'tts_config' field is missing in extensions.digital_souls"
+)
 
 
 def _wait_for_event(event: threading.Event, label: str, timeout: float = 5.0) -> None:
@@ -54,12 +63,7 @@ def _ollama_response(content: str) -> MagicMock:
 
 
 def _write_character(tmp_path, character: str, system_prompt: str) -> None:
-    character_dir = tmp_path / "characters" / character
-    character_dir.mkdir(parents=True)
-    character_dir.joinpath("personality.md").write_text(
-        system_prompt,
-        encoding="utf-8",
-    )
+    write_character_card(tmp_path, character, system_prompt)
 
 
 def _isolate_memory_paths(tmp_path, monkeypatch) -> None:
@@ -174,14 +178,17 @@ class TestWebSocketEndpoint:
                     )
                     websocket.receive_json()
 
-        mock_gen.assert_called_once_with(_PERSONALITY, user_message)
+        assert prompt_messages(mock_gen.call_args.args[0]) == [
+            ("system", _PERSONALITY_TEXT),
+            ("user", user_message),
+        ]
 
     def test_rag_enabled_uses_prompt_and_records_user_memory_candidate(
         self, monkeypatch
     ):
         user_message = "前回なんの話をしたっけ？"
         policy = object()
-        augmented_prompt = f"{_PERSONALITY}\n\n過去の記憶:\n前回は畑の話をした"
+        augmented_prompt = "過去の記憶:\n前回は畑の話をした"
 
         monkeypatch.setenv("RAG_ENABLED", "true")
         with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
@@ -189,7 +196,7 @@ class TestWebSocketEndpoint:
                 with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
                     with patch(
                         _BUILD_AUGMENTED_SYSTEM_PROMPT,
-                        return_value=augmented_prompt,
+                        return_value=(augmented_prompt,),
                     ) as mock_build:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
                             with patch(
@@ -202,13 +209,17 @@ class TestWebSocketEndpoint:
                                     response = websocket.receive_json()
 
         assert response == {"type": "text", "response": _LLM_REPLY}
-        mock_build.assert_called_once_with(
+        assert mock_build.call_args.args[:3] == (
             "miori",
             user_message,
-            _PERSONALITY,
             policy,
         )
-        mock_gen.assert_called_once_with(augmented_prompt, user_message)
+        assert len(mock_build.call_args.args) == 5
+        assert prompt_messages(mock_gen.call_args.args[0]) == [
+            ("system", _PERSONALITY_TEXT),
+            ("system", augmented_prompt),
+            ("user", user_message),
+        ]
         mock_record.assert_called_once()
         args, _kwargs = mock_record.call_args
         assert args[:2] == ("miori", user_message)
@@ -273,6 +284,21 @@ class TestWebSocketEndpoint:
             "type": "error",
             "status": 422,
             "detail": "WebSocket text message must include a string message",
+        }
+        mock_gen.assert_not_called()
+
+    @pytest.mark.parametrize("message", ["", " \t\n"])
+    def test_returns_422_when_text_message_is_blank(self, client, message):
+        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+            with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
+                with client.websocket_connect("/ws/miori") as websocket:
+                    websocket.send_json({"type": "text", "message": message})
+                    response = websocket.receive_json()
+
+        assert response == {
+            "type": "error",
+            "status": 422,
+            "detail": "WebSocket text message must not be blank",
         }
         mock_gen.assert_not_called()
 
@@ -546,7 +572,7 @@ class TestWebSocketEndpoint:
             "detail": "WebSocket audio frame must be bytes",
         }
         assert second_response == {"type": "text", "response": _LLM_REPLY}
-        mock_gen.assert_called_once_with(_PERSONALITY, "続けてください")
+        assert current_user_text(mock_gen.call_args.args[0]) == "続けてください"
 
     def test_returns_504_error_when_llm_request_times_out(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
@@ -728,7 +754,9 @@ class TestWebSocketEndpoint:
 
         assert audio_error == expected_response
         assert text_response == {"type": "text", "response": _LLM_REPLY}
-        assert [call.args[1] for call in mock_gen.call_args_list] == [
+        assert [
+            current_user_text(call.args[0]) for call in mock_gen.call_args_list
+        ] == [
             "audio question",
             "continue",
         ]
@@ -758,7 +786,7 @@ class TestWebSocketEndpoint:
         }
         assert response == output_audio
         mock_transcribe.assert_called_once_with(_PCM_AUDIO)
-        mock_gen.assert_called_once_with(_PERSONALITY, "こんにちは")
+        assert current_user_text(mock_gen.call_args.args[0]) == "こんにちは"
         mock_tts.assert_called_once_with(_LLM_REPLY, 14)
 
     def test_accepts_audio_frame_below_size_limit(self, monkeypatch):
@@ -866,6 +894,8 @@ class TestWebSocketEndpoint:
 
     def test_creates_audio_session_in_threadpool(self):
         class StubChatSession:
+            initial_assistant_message = None
+
             def generate_reply(self, message):
                 return f"reply:{message}"
 
@@ -984,7 +1014,7 @@ class TestWebSocketEndpoint:
             "detail": "STT request failed",
         }
         assert second_response == {"type": "text", "response": _LLM_REPLY}
-        mock_gen.assert_called_once_with(_PERSONALITY, "続けてください")
+        assert current_user_text(mock_gen.call_args.args[0]) == "続けてください"
         mock_tts.assert_not_called()
 
     def test_returns_422_and_continues_when_pcm16_audio_has_odd_byte_length(
@@ -1010,7 +1040,7 @@ class TestWebSocketEndpoint:
             "detail": "Audio length must be a multiple of 2 bytes, got 3",
         }
         assert second_response == {"type": "text", "response": _LLM_REPLY}
-        mock_gen.assert_called_once_with(_PERSONALITY, "続けてください")
+        assert current_user_text(mock_gen.call_args.args[0]) == "続けてください"
         mock_transcribe.assert_not_called()
         mock_tts.assert_not_called()
 
@@ -1040,7 +1070,7 @@ class TestWebSocketEndpoint:
             "detail": "STT request failed",
         }
         assert second_response == {"type": "text", "response": _LLM_REPLY}
-        mock_gen.assert_called_once_with(_PERSONALITY, "続けてください")
+        assert current_user_text(mock_gen.call_args.args[0]) == "続けてください"
         mock_tts.assert_not_called()
 
     def test_returns_502_and_continues_when_tts_transport_fails(self, client):
@@ -1072,7 +1102,9 @@ class TestWebSocketEndpoint:
             "detail": "VOICEVOX request failed",
         }
         assert second_response == {"type": "text", "response": "テキスト応答"}
-        assert [call.args[1] for call in mock_gen.call_args_list] == [
+        assert [
+            current_user_text(call.args[0]) for call in mock_gen.call_args_list
+        ] == [
             "音声の質問",
             "続けてください",
         ]
@@ -1105,7 +1137,9 @@ class TestWebSocketEndpoint:
             "response": "音声応答",
         }
         assert audio_response == b"RIFF voice"
-        assert [call.args[1] for call in mock_gen.call_args_list] == [
+        assert [
+            current_user_text(call.args[0]) for call in mock_gen.call_args_list
+        ] == [
             "テキストの質問",
             "音声の質問",
         ]
@@ -1398,6 +1432,8 @@ class TestWebSocketEndpoint:
 
     def test_audio_worker_unexpected_error_sends_500_and_closes(self):
         class StubChatSession:
+            initial_assistant_message = None
+
             def generate_reply(self, message):
                 return f"reply:{message}"
 
@@ -1433,6 +1469,8 @@ class TestWebSocketEndpoint:
         from app.routers import ws as ws_module
 
         class StubChatSession:
+            initial_assistant_message = None
+
             def generate_reply(self, message):
                 return f"reply:{message}"
 
@@ -1495,6 +1533,8 @@ class TestWebSocketEndpoint:
 
     def test_audio_processing_does_not_block_following_text_frame(self):
         class StubChatSession:
+            initial_assistant_message = None
+
             def __init__(self):
                 self.messages = []
 
@@ -1555,6 +1595,8 @@ class TestWebSocketEndpoint:
 
     def test_audio_queue_processes_only_latest_pending_frame(self):
         class StubChatSession:
+            initial_assistant_message = None
+
             def generate_reply(self, message):
                 return f"reply:{message}"
 
@@ -1651,6 +1693,8 @@ class TestWebSocketEndpoint:
         from app.routers import ws as ws_module
 
         class StubChatSession:
+            initial_assistant_message = None
+
             def generate_reply(self, message):
                 return f"reply:{message}"
 
@@ -1727,6 +1771,8 @@ class TestWebSocketEndpoint:
         from app.routers import ws as ws_module
 
         class StubChatSession:
+            initial_assistant_message = None
+
             def generate_reply(self, message):
                 return f"reply:{message}"
 
@@ -1802,9 +1848,12 @@ class TestWebSocketEndpoint:
     def test_logs_websocket_disconnect_code_and_reason(self, caplog):
         from app.routers.ws import websocket_chat
 
+        class StubChatSession:
+            initial_assistant_message = None
+
         class StubChatService:
             async def create_chat_session(self, character_name):
-                return object()
+                return StubChatSession()
 
         class FakeWebSocket:
             def __init__(self):
@@ -1856,6 +1905,8 @@ class TestWebSocketEndpoint:
         from app.routers import ws as ws_module
 
         class StubChatSession:
+            initial_assistant_message = None
+
             def generate_reply(self, message):
                 raise CharacterNotFoundError("miori")
 
@@ -1928,6 +1979,8 @@ class TestWebSocketEndpoint:
         from app.routers import ws as ws_module
 
         class StubChatSession:
+            initial_assistant_message = None
+
             def generate_reply(self, message):
                 return f"reply:{message}"
 
@@ -2038,13 +2091,8 @@ class TestWebSocketFlow:
     ):
         import app.characters.loader as loader_module
 
-        characters_dir = tmp_path / "characters" / "miori"
-        characters_dir.mkdir(parents=True)
         system_prompt = "# 光織\nあなたは光織です。"
-        characters_dir.joinpath("personality.md").write_text(
-            system_prompt,
-            encoding="utf-8",
-        )
+        write_character_card(tmp_path, "miori", system_prompt)
         monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
 
         expected_reply = "光織です。よろしくお願いします。"
@@ -2135,7 +2183,7 @@ class TestWebSocketFlow:
 
         assert first_response == {"type": "text", "response": "記録しました。"}
         assert second_response == {"type": "text", "response": "記録しました。"}
-        second_system_prompt = llm_payloads[-1]["messages"][0]["content"]
+        second_system_prompt = llm_payloads[-1]["messages"][1]["content"]
         assert "過去の記憶:" in second_system_prompt
         assert "2026-06-23はトマト畑に水やりした" in second_system_prompt
         assert stored_memories[0]["content"] == (

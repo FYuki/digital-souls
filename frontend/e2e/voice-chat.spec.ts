@@ -74,8 +74,9 @@ const driver = createVoiceChatDriver()
 
 const expectMockMessages = async (page: Page) => {
   const messages = page.locator('article.message')
-  await expect(messages.nth(0).locator('p')).toHaveText(MOCK_TRANSCRIPT_TEXT)
-  await expect(messages.nth(1).locator('p')).toHaveText(MOCK_RESPONSE_TEXT)
+  const messageCount = await messages.count()
+  await expect(messages.nth(messageCount - 2).locator('p')).toHaveText(MOCK_TRANSCRIPT_TEXT)
+  await expect(messages.nth(messageCount - 1).locator('p')).toHaveText(MOCK_RESPONSE_TEXT)
 }
 
 test('マイクボタン操作でOFFからSTANDBYへ遷移する', async ({ page }) => {

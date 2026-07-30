@@ -9,6 +9,9 @@ import pytest
 from app.conversation_history.errors import InvalidStateTransitionError
 from app.conversation_history.models import (
     ConversationTurn,
+    PersistedMaskedText,
+    PrivacySkipReason,
+    PrivacySkippedTurnInput,
     ProcessingTurnInput,
     TurnStatus,
 )
@@ -19,6 +22,8 @@ from tests.conversation_history_test_support import (
     create_repository,
     set_turn_times,
 )
+
+SqlParameters = tuple[str | None, ...]
 
 
 class TestTransactionBoundaries:
@@ -32,7 +37,9 @@ class TestTransactionBoundaries:
         repository.create_processing_turn(
             "miori",
             CONVERSATION_ID,
-            ProcessingTurnInput(sanitized_user_content="処理済みの質問"),
+            ProcessingTurnInput(
+                sanitized_user_content=PersistedMaskedText("処理済みの質問")
+            ),
         )
         barrier = Barrier(2)
 
@@ -42,7 +49,7 @@ class TestTransactionBoundaries:
                 "miori",
                 CONVERSATION_ID,
                 TURN_ID,
-                sanitized_assistant_content=answer,
+                sanitized_assistant_content=PersistedMaskedText(answer),
             )
 
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -68,7 +75,9 @@ class TestTransactionBoundaries:
         repository.create_processing_turn(
             "miori",
             CONVERSATION_ID,
-            ProcessingTurnInput(sanitized_user_content="処理済みの質問"),
+            ProcessingTurnInput(
+                sanitized_user_content=PersistedMaskedText("処理済みの質問")
+            ),
         )
         set_turn_times(
             database_path,
@@ -90,7 +99,7 @@ class TestTransactionBoundaries:
                 "miori",
                 CONVERSATION_ID,
                 TURN_ID,
-                sanitized_assistant_content="完全回答",
+                sanitized_assistant_content=PersistedMaskedText("完全回答"),
             )
 
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -121,7 +130,11 @@ class TestTransactionBoundaries:
         class FailingConnection(sqlite3.Connection):
             inject_failure = False
 
-            def execute(self, sql, parameters=()):
+            def execute(
+                self,
+                sql: str,
+                parameters: SqlParameters = (),
+            ) -> sqlite3.Cursor:
                 normalized = " ".join(sql.lower().split())
                 if (
                     self.inject_failure
@@ -145,7 +158,9 @@ class TestTransactionBoundaries:
             repository.create_processing_turn(
                 "miori",
                 CONVERSATION_ID,
-                ProcessingTurnInput(sanitized_user_content="部分保存禁止"),
+                ProcessingTurnInput(
+                    sanitized_user_content=PersistedMaskedText("部分保存禁止")
+                ),
             )
 
         with sqlite3.connect(database_path) as connection:
@@ -177,7 +192,9 @@ class TestTransactionBoundaries:
         repository.create_processing_turn(
             "miori",
             CONVERSATION_ID,
-            ProcessingTurnInput(sanitized_user_content="処理済みの質問"),
+            ProcessingTurnInput(
+                sanitized_user_content=PersistedMaskedText("処理済みの質問")
+            ),
         )
         calls = 0
         enforce_single_connection = True
@@ -186,7 +203,7 @@ class TestTransactionBoundaries:
             "miori",
             CONVERSATION_ID,
             TURN_ID,
-            sanitized_assistant_content="完全回答",
+            sanitized_assistant_content=PersistedMaskedText("完全回答"),
         )
 
         assert completed.status is TurnStatus.COMPLETED
@@ -202,7 +219,11 @@ class TestTransactionBoundaries:
             inject_failure = False
             select_count = 0
 
-            def execute(self, sql, parameters=()):
+            def execute(
+                self,
+                sql: str,
+                parameters: SqlParameters = (),
+            ) -> sqlite3.Cursor:
                 normalized = " ".join(sql.lower().split())
                 if (
                     self.inject_failure
@@ -225,7 +246,9 @@ class TestTransactionBoundaries:
         repository.create_processing_turn(
             "miori",
             CONVERSATION_ID,
-            ProcessingTurnInput(sanitized_user_content="処理済みの質問"),
+            ProcessingTurnInput(
+                sanitized_user_content=PersistedMaskedText("処理済みの質問")
+            ),
         )
         FailingConnection.inject_failure = True
 
@@ -234,7 +257,9 @@ class TestTransactionBoundaries:
                 "miori",
                 CONVERSATION_ID,
                 TURN_ID,
-                sanitized_assistant_content="部分保存してはいけない回答",
+                sanitized_assistant_content=PersistedMaskedText(
+                    "部分保存してはいけない回答"
+                ),
             )
 
         with sqlite3.connect(database_path) as connection:
@@ -244,6 +269,67 @@ class TestTransactionBoundaries:
                 (str(TURN_ID),),
             ).fetchone()
         assert row == ("processing", None)
+
+    def test_should_rollback_privacy_skip_when_returning_row_fails(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        database_path = tmp_path / "history.db"
+
+        class FailingConnection(sqlite3.Connection):
+            inject_failure = False
+            select_count = 0
+
+            def execute(
+                self,
+                sql: str,
+                parameters: SqlParameters = (),
+            ) -> sqlite3.Cursor:
+                normalized = " ".join(sql.lower().split())
+                if (
+                    self.inject_failure
+                    and normalized.startswith("select")
+                    and "conversation_turns" in normalized
+                ):
+                    self.select_count += 1
+                    if self.select_count == 2:
+                        raise sqlite3.OperationalError("injected return-row failure")
+                return super().execute(sql, parameters)
+
+        repository = create_repository(
+            database_path,
+            connection_factory=lambda path: sqlite3.connect(
+                path,
+                factory=FailingConnection,
+            ),
+        )
+        repository.create_conversation("miori")
+        repository.create_processing_turn(
+            "miori",
+            CONVERSATION_ID,
+            ProcessingTurnInput(
+                sanitized_user_content=PersistedMaskedText("処理済みの質問")
+            ),
+        )
+        FailingConnection.inject_failure = True
+
+        with pytest.raises(sqlite3.OperationalError, match="injected"):
+            repository.privacy_skip_turn(
+                "miori",
+                CONVERSATION_ID,
+                TURN_ID,
+                PrivacySkippedTurnInput(
+                    reason_code=PrivacySkipReason.SENSITIVE_CONTENT,
+                ),
+            )
+
+        with sqlite3.connect(database_path) as connection:
+            row = connection.execute(
+                "SELECT user_content, assistant_content, status, "
+                "privacy_reason_code FROM conversation_turns WHERE turn_id = ?",
+                (str(TURN_ID),),
+            ).fetchone()
+        assert row == ("処理済みの質問", None, "processing", None)
 
 
 def _partition_futures(

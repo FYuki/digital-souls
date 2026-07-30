@@ -21,9 +21,10 @@ repo/
 │
 ├─ characters/
 │  └─ miori/
-│     ├─ personality.md
-│     ├─ world.md
-│     └─ memory-policy.md  # 方針本文と実装設定への案内
+│     ├─ miori.card.json   # runtime人格定義とTTS設定の正本
+│     ├─ personality.md   # 人格設計資料
+│     ├─ world.md         # 世界観の設計資料
+│     └─ memory-policy.md # 方針本文と実装設定への案内
 │
 └─ src/
    └─ 将来の実装コード
@@ -57,8 +58,9 @@ characters/
 
 想定ファイル:
 
-* `personality.md`
-* `world.md`
+* `<id>.card.json`（runtime人格定義と`extensions.digital_souls.tts_config`の正本）
+* `personality.md`（人格設計資料。runtimeでは読み込まない）
+* `world.md`（世界観の設計資料）
 * `memory-policy.md`（方針本文と実装設定への案内）
 * `voice.md`
 * `appearance.md`

@@ -11,6 +11,7 @@ from app.conversation_history.errors import (
     InvalidConversationIdError,
 )
 from app.conversation_history.models import (
+    PersistedMaskedText,
     PrivacySkipReason,
     PrivacySkippedTurnInput,
     ProcessingTurnInput,
@@ -93,12 +94,16 @@ class TestConversationLifecycle:
         miori_turn = repository.create_processing_turn(
             "miori",
             CONVERSATION_ID,
-            ProcessingTurnInput(sanitized_user_content="光織の履歴"),
+            ProcessingTurnInput(
+                sanitized_user_content=PersistedMaskedText("光織の履歴")
+            ),
         )
         akira_turn = repository.create_processing_turn(
             "akira",
             CONVERSATION_ID,
-            ProcessingTurnInput(sanitized_user_content="晶の履歴"),
+            ProcessingTurnInput(
+                sanitized_user_content=PersistedMaskedText("晶の履歴")
+            ),
         )
 
         assert miori.conversation_id == akira.conversation_id
@@ -120,7 +125,11 @@ class TestTurnCreation:
         turn = repository.create_processing_turn(
             "miori",
             conversation.conversation_id,
-            ProcessingTurnInput(sanitized_user_content="連絡先は[REDACTED]です"),
+            ProcessingTurnInput(
+                sanitized_user_content=PersistedMaskedText(
+                    "連絡先は[REDACTED]です"
+                )
+            ),
         )
 
         assert turn.turn_id == TURN_ID
@@ -184,7 +193,9 @@ class TestTurnCreation:
             repository.create_processing_turn(
                 "akira",
                 CONVERSATION_ID,
-                ProcessingTurnInput(sanitized_user_content="処理済み本文"),
+                ProcessingTurnInput(
+                    sanitized_user_content=PersistedMaskedText("処理済み本文")
+                ),
             )
 
     def test_should_keep_conversation_histories_isolated(
@@ -206,12 +217,16 @@ class TestTurnCreation:
         first = repository.create_processing_turn(
             "miori",
             CONVERSATION_ID,
-            ProcessingTurnInput(sanitized_user_content="最初の会話"),
+            ProcessingTurnInput(
+                sanitized_user_content=PersistedMaskedText("最初の会話")
+            ),
         )
         repository.create_processing_turn(
             "miori",
             OTHER_CONVERSATION_ID,
-            ProcessingTurnInput(sanitized_user_content="別の会話"),
+            ProcessingTurnInput(
+                sanitized_user_content=PersistedMaskedText("別の会話")
+            ),
         )
 
         turns = repository.list_turns("miori", CONVERSATION_ID)

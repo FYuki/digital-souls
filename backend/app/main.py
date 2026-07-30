@@ -15,6 +15,8 @@ from app.audio_pipeline import (
 )
 from app.conversation_history.config import resolve_conversation_history_config
 from app.conversation_history.repository import ConversationHistoryRepository
+from app.conversation_history.sanitizer import ConversationHistorySanitizer
+from app.conversation_history.scanner import DeterministicPrivacyScanner
 from app.conversation_history.schema import initialize_conversation_history_schema
 from app.routers.chat import router as chat_router
 from app.routers.ws import router as ws_router
@@ -60,6 +62,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app_chat_service = _chat_runtime.create_chat_service(
             _chat_runtime.resolve_chat_runtime_config(),
             memory_task_queue,
+            conversation_history_repository,
+            ConversationHistorySanitizer(DeterministicPrivacyScanner()),
         )
         app.state.chat_service = app_chat_service
         chat_service_state_set = True

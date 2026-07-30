@@ -9,6 +9,9 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
+from app.conversation_history.scan_models import ScanFailure, ScanResult
+from app.conversation_history.scanner import DeterministicPrivacyScanner
+
 
 @dataclass
 class SavedRecord:
@@ -28,8 +31,19 @@ def _record_id(sequence: int) -> str:
     return f"00000000-0000-4000-8000-{sequence:012d}"
 
 
+def _scan(user_message: str) -> ScanResult:
+    return DeterministicPrivacyScanner().scan(user_message)
+
+
+def _scanned_query(
+    user_message: str,
+) -> tuple[ScanResult, DeterministicPrivacyScanner]:
+    scanner = DeterministicPrivacyScanner()
+    return scanner.scan(user_message), scanner
+
+
 class TestRagServicePrompt:
-    def test_build_augmented_system_prompt_appends_retrieved_memories(
+    def test_build_rag_context_formats_retrieved_memories(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -54,21 +68,22 @@ class TestRagServicePrompt:
             ),
         )
 
-        prompt = rag_service.build_augmented_system_prompt(
+        context = rag_service.build_rag_context_for_scanned_user(
             "miori",
             "前回は?",
-            "基本人格",
             _resolved_policy(),
+            *_scanned_query("前回は?"),
         )
 
-        assert prompt.startswith("基本人格")
-        assert "[2026-06-20T00:00:00+00:00] (user)" in prompt
-        assert "前回は畑の土壌について話した" in prompt
-        assert "[2026-06-21T00:00:00+00:00] (assistant)" in prompt
-        assert "雨量を確認した" in prompt
+        assert context == (
+            "過去の記憶:\n"
+            "- [2026-06-20T00:00:00+00:00] (user) 前回は畑の土壌について話した",
+            "過去の記憶:\n"
+            "- [2026-06-21T00:00:00+00:00] (assistant) 雨量を確認した",
+        )
         rag_service.query_memories.assert_called_once_with("miori", [0.1], n_results=5)
 
-    def test_build_augmented_system_prompt_uses_passed_policy_once(
+    def test_build_rag_context_uses_passed_policy_once(
         self, monkeypatch, tmp_path
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -117,18 +132,18 @@ class TestRagServicePrompt:
             MagicMock(wraps=rag_service.rag_service_policy),
         )
 
-        prompt = rag_service.build_augmented_system_prompt(
+        context = rag_service.build_rag_context_for_scanned_user(
             "miori",
             "前回は?",
-            "基本人格",
             policy,
+            *_scanned_query("前回は?"),
         )
 
-        assert prompt.startswith("基本人格")
+        assert len(context) == 2
         rag_service.query_memories.assert_called_once_with("miori", [0.1], n_results=2)
         rag_service.rag_service_policy.assert_called_once_with(policy)
 
-    def test_build_augmented_system_prompt_skips_rag_when_search_fails(
+    def test_build_rag_context_returns_empty_when_search_fails(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -136,17 +151,17 @@ class TestRagServicePrompt:
         monkeypatch.setattr(rag_service, "embed_text", MagicMock(side_effect=RuntimeError))
         monkeypatch.setattr(rag_service, "query_memories", MagicMock())
 
-        prompt = rag_service.build_augmented_system_prompt(
+        context = rag_service.build_rag_context_for_scanned_user(
             "miori",
             "前回は?",
-            "基本人格",
             _resolved_policy(),
+            *_scanned_query("前回は?"),
         )
 
-        assert prompt == "基本人格"
+        assert context == ()
         rag_service.query_memories.assert_not_called()
 
-    def test_build_augmented_system_prompt_skips_rag_on_contract_validation_errors(
+    def test_build_rag_context_returns_empty_on_contract_validation_errors(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -158,17 +173,17 @@ class TestRagServicePrompt:
         )
         monkeypatch.setattr(rag_service, "query_memories", MagicMock())
 
-        prompt = rag_service.build_augmented_system_prompt(
+        context = rag_service.build_rag_context_for_scanned_user(
             "miori",
             "前回は?",
-            "基本人格",
             _resolved_policy(),
+            *_scanned_query("前回は?"),
         )
 
-        assert prompt == "基本人格"
+        assert context == ()
         rag_service.query_memories.assert_not_called()
 
-    def test_build_augmented_system_prompt_skips_rag_when_query_contract_fails(
+    def test_build_rag_context_returns_empty_when_query_contract_fails(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -180,17 +195,17 @@ class TestRagServicePrompt:
             MagicMock(side_effect=ValueError("invalid query response")),
         )
 
-        prompt = rag_service.build_augmented_system_prompt(
+        context = rag_service.build_rag_context_for_scanned_user(
             "miori",
             "前回は?",
-            "基本人格",
             _resolved_policy(),
+            *_scanned_query("前回は?"),
         )
 
-        assert prompt == "基本人格"
+        assert context == ()
         rag_service.query_memories.assert_called_once()
 
-    def test_build_augmented_system_prompt_skips_sensitive_query_embedding(
+    def test_build_rag_context_skips_sensitive_query_embedding(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -198,33 +213,115 @@ class TestRagServicePrompt:
         monkeypatch.setattr(rag_service, "embed_text", MagicMock())
         monkeypatch.setattr(rag_service, "query_memories", MagicMock())
 
-        prompt = rag_service.build_augmented_system_prompt(
+        context = rag_service.build_rag_context_for_scanned_user(
             "miori",
             "APIキーはabcです",
-            "基本人格",
             _resolved_policy(),
+            *_scanned_query("APIキーはabcです"),
         )
 
-        assert prompt == "基本人格"
+        assert context == ()
         rag_service.embed_text.assert_not_called()
         rag_service.query_memories.assert_not_called()
 
-
-class TestRagServiceRecording:
-    def test_record_user_memory_candidate_requires_explicit_task_queue(self):
+    def test_build_rag_context_excludes_sensitive_retrieved_memory(
+        self, monkeypatch
+    ):
         rag_service = importlib.import_module("app.memory.rag_service")
 
-        signature = inspect.signature(rag_service.record_user_memory_candidate)
+        monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+        monkeypatch.setattr(
+            rag_service,
+            "query_memories",
+            MagicMock(
+                return_value=[
+                    rag_service.MemorySearchResult(
+                        content="電話番号は090-1234-5678です",
+                        timestamp="2026-06-20T00:00:00+00:00",
+                        role="user",
+                    ),
+                    rag_service.MemorySearchResult(
+                        content="トマトに水やりした",
+                        timestamp="2026-06-21T00:00:00+00:00",
+                        role="user",
+                    ),
+                ]
+            ),
+        )
 
-        assert list(signature.parameters) == [
-            "character",
-            "user_message",
-            "policy",
-            "task_queue",
-        ]
-        assert not hasattr(rag_service, "_BACKGROUND_TASK_QUEUE")
-        assert not hasattr(rag_service, "_configure_memory_task_queue")
-        assert not hasattr(rag_service, "_clear_memory_task_queue")
+        context = rag_service.build_rag_context_for_scanned_user(
+            "miori",
+            "前回は?",
+            _resolved_policy(),
+            *_scanned_query("前回は?"),
+        )
+
+        assert context == (
+            "過去の記憶:\n"
+            "- [2026-06-21T00:00:00+00:00] (user) トマトに水やりした",
+        )
+
+    def test_build_rag_context_excludes_memory_when_rescan_fails(
+        self, monkeypatch
+    ):
+        rag_service = importlib.import_module("app.memory.rag_service")
+        scanner = MagicMock()
+        scanner.scan.return_value = ScanFailure(reason_code="recognizer_failure")
+        monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+        monkeypatch.setattr(
+            rag_service,
+            "query_memories",
+            MagicMock(
+                return_value=[
+                    rag_service.MemorySearchResult(
+                        content="取得後の再検証に失敗する記憶",
+                        timestamp="2026-06-20T00:00:00+00:00",
+                        role="user",
+                    ),
+                ]
+            ),
+        )
+
+        context = rag_service.build_rag_context_for_scanned_user(
+            "miori",
+            "前回は?",
+            _resolved_policy(),
+            DeterministicPrivacyScanner().scan("前回は?"),
+            scanner,
+        )
+
+        assert context == ()
+
+
+class TestRagServiceRecording:
+    @pytest.mark.parametrize(
+        "user_message",
+        (
+            "農業日誌: 電話は090-1234-5678です。覚えて",
+            "保存して + 電話番号は090-1234-5678です",
+        ),
+    )
+    def test_record_user_memory_candidate_rejects_direct_identifier(
+        self, monkeypatch, user_message
+    ):
+        rag_service = importlib.import_module("app.memory.rag_service")
+        background_tasks = MagicMock()
+        monkeypatch.setattr(
+            rag_service,
+            "create_memory_candidate_record",
+            MagicMock(),
+        )
+
+        rag_service.record_scanned_user_memory_candidate(
+            "miori",
+            user_message,
+            _resolved_policy(),
+            background_tasks,
+            _scan(user_message),
+        )
+
+        rag_service.create_memory_candidate_record.assert_not_called()
+        background_tasks.add_task.assert_not_called()
 
     def test_record_user_memory_candidate_does_not_create_legacy_sqlite(
         self, tmp_path
@@ -232,11 +329,12 @@ class TestRagServiceRecording:
         rag_service = importlib.import_module("app.memory.rag_service")
         background_tasks = MagicMock()
 
-        rag_service.record_user_memory_candidate(
+        rag_service.record_scanned_user_memory_candidate(
             "miori",
             "今日は晴れですね",
             _resolved_policy(),
             background_tasks,
+            _scan("今日は晴れですね"),
         )
 
         assert not hasattr(rag_service, "DATA_DIR")
@@ -263,11 +361,12 @@ class TestRagServiceRecording:
             MagicMock(return_value=user_record),
         )
 
-        rag_service.record_user_memory_candidate(
+        rag_service.record_scanned_user_memory_candidate(
             "miori",
             user_message,
             _resolved_policy(),
             background_tasks,
+            _scan(user_message),
         )
 
         assert rag_service.create_memory_candidate_record.call_args_list[0].args == (
@@ -298,11 +397,12 @@ class TestRagServiceRecording:
             MagicMock(return_value=user_record),
         )
 
-        rag_service.record_user_memory_candidate(
+        rag_service.record_scanned_user_memory_candidate(
             "miori",
             "今日は眠いね",
             _resolved_policy(),
             background_tasks,
+            _scan("今日は眠いね"),
         )
 
         assert rag_service.create_memory_candidate_record.call_count == 1
@@ -394,11 +494,12 @@ class TestRagServiceRecording:
             MagicMock(),
         )
 
-        rag_service.record_user_memory_candidate(
+        rag_service.record_scanned_user_memory_candidate(
             "miori",
             "パスワードはabc",
             _resolved_policy(),
             background_tasks,
+            _scan("パスワードはabc"),
         )
 
         rag_service.create_memory_candidate_record.assert_not_called()
@@ -422,11 +523,12 @@ class TestRagServiceRecording:
             MagicMock(return_value=user_record),
         )
 
-        rag_service.record_user_memory_candidate(
+        rag_service.record_scanned_user_memory_candidate(
             "miori",
             user_record.content,
             _resolved_policy(),
             background_tasks,
+            _scan(user_record.content),
         )
 
         background_tasks.add_task.assert_not_called()
@@ -451,11 +553,12 @@ class TestRagServiceRecording:
             MagicMock(return_value=user_record),
         )
 
-        rag_service.record_user_memory_candidate(
+        rag_service.record_scanned_user_memory_candidate(
             "miori",
             user_record.content,
             _resolved_policy(),
             background_tasks,
+            _scan(user_record.content),
         )
 
         assert rag_service.create_memory_candidate_record.call_count == 1
@@ -479,11 +582,12 @@ class TestRagServiceRecording:
             MagicMock(return_value=user_record),
         )
 
-        rag_service.record_user_memory_candidate(
+        rag_service.record_scanned_user_memory_candidate(
             "miori",
             user_record.content,
             _resolved_policy(),
             background_tasks,
+            _scan(user_record.content),
         )
 
         assert rag_service.create_memory_candidate_record.call_count == 1
@@ -519,17 +623,19 @@ class TestRagServiceRecording:
             MagicMock(side_effect=records),
         )
 
-        rag_service.record_user_memory_candidate(
+        rag_service.record_scanned_user_memory_candidate(
             "miori",
             records[0].content,
             _resolved_policy(),
             background_tasks,
+            _scan(records[0].content),
         )
-        rag_service.record_user_memory_candidate(
+        rag_service.record_scanned_user_memory_candidate(
             "miori",
             records[1].content,
             _resolved_policy(),
             background_tasks,
+            _scan(records[1].content),
         )
 
         assert rag_service.create_memory_candidate_record.call_count == 2
@@ -553,11 +659,12 @@ class TestRagServiceRecording:
             MagicMock(return_value=user_record),
         )
 
-        rag_service.record_user_memory_candidate(
+        rag_service.record_scanned_user_memory_candidate(
             "miori",
             user_record.content,
             _resolved_policy(),
             background_tasks,
+            _scan(user_record.content),
         )
 
         assert background_tasks.add_task.call_count == 1
@@ -576,11 +683,12 @@ class TestRagServiceRecording:
             MagicMock(),
         )
 
-        rag_service.record_user_memory_candidate(
+        rag_service.record_scanned_user_memory_candidate(
             "miori",
             "APIキーはabcです",
             _resolved_policy(),
             background_tasks,
+            _scan("APIキーはabcです"),
         )
 
         rag_service.create_memory_candidate_record.assert_not_called()
@@ -597,11 +705,12 @@ class TestRagServiceRecording:
             MagicMock(),
         )
 
-        rag_service.record_user_memory_candidate(
+        rag_service.record_scanned_user_memory_candidate(
             "miori",
             "api key はabcです",
             _resolved_policy(),
             background_tasks,
+            _scan("api key はabcです"),
         )
 
         rag_service.create_memory_candidate_record.assert_not_called()
@@ -625,11 +734,12 @@ class TestRagServiceRecording:
             MagicMock(return_value=user_record),
         )
 
-        rag_service.record_user_memory_candidate(
+        rag_service.record_scanned_user_memory_candidate(
             "miori",
             user_record.content,
             _resolved_policy(),
             background_tasks,
+            _scan(user_record.content),
         )
 
         rag_service.create_memory_candidate_record.assert_called_once_with(
@@ -645,11 +755,12 @@ class TestRagServiceRecording:
         background_tasks = MagicMock()
         monkeypatch.setattr(rag_service, "create_memory_candidate_record", MagicMock())
 
-        rag_service.record_user_memory_candidate(
+        rag_service.record_scanned_user_memory_candidate(
             "miori",
             "パスワードはabc",
             _resolved_policy(),
             background_tasks,
+            _scan("パスワードはabc"),
         )
 
         rag_service.create_memory_candidate_record.assert_not_called()
@@ -668,11 +779,12 @@ class TestRagServiceRecording:
             MagicMock(),
         )
 
-        rag_service.record_user_memory_candidate(
+        rag_service.record_scanned_user_memory_candidate(
             "miori",
             "この内容は保存しないで",
             _resolved_policy(),
             background_tasks,
+            _scan("この内容は保存しないで"),
         )
 
         rag_service.create_memory_candidate_record.assert_not_called()
@@ -756,20 +868,21 @@ class TestMemoryPolicyConfiguration:
         monkeypatch.setattr(rag_service, "embed_text", MagicMock())
         monkeypatch.setattr(rag_service, "query_memories", MagicMock())
 
-        prompt = rag_service.build_augmented_system_prompt(
+        context = rag_service.build_rag_context_for_scanned_user(
             "miori",
             sensitive_content,
-            "基本人格",
             policy,
+            *_scanned_query(sensitive_content),
         )
-        rag_service.record_user_memory_candidate(
+        rag_service.record_scanned_user_memory_candidate(
             "miori",
             sensitive_content,
             policy,
             background_tasks,
+            _scan(sensitive_content),
         )
 
-        assert prompt == "基本人格"
+        assert context == ()
         assert memory_policy.contains_sensitive_memory(sensitive_content, policy)
         rag_service.embed_text.assert_not_called()
         rag_service.query_memories.assert_not_called()

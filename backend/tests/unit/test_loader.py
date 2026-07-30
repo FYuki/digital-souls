@@ -1,361 +1,228 @@
 import json
+from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 
 
-class TestLoadPersonality:
-    def test_returns_string_for_existing_character(self):
-        from app.characters.loader import load_personality
+def _valid_card() -> dict[str, object]:
+    return {
+        "spec": "chara_card_v3",
+        "spec_version": "3.0",
+        "unknown_root": "accepted",
+        "data": {
+            "name": "テスト人格",
+            "description": "概要",
+            "personality": "性格と話し方",
+            "scenario": "関係と世界観",
+            "first_mes": "初回表示",
+            "mes_example": "会話例",
+            "creator_notes": "作者メモ",
+            "system_prompt": "常時指示",
+            "post_history_instructions": "最終指示",
+            "alternate_greetings": ["挨拶A", "挨拶B"],
+            "group_only_greetings": ["グループ挨拶"],
+            "creator": "作者",
+            "character_version": "1.2.3",
+            "unknown_data": "accepted",
+            "extensions": {
+                "digital_souls": {
+                    "tts_config": {
+                        "engine": "voicevox",
+                        "speaker_id": 14,
+                        "speaker_name": "冥鳴ひまり",
+                    }
+                },
+                "future_namespace": {"enabled": True},
+            },
+        },
+    }
 
-        result = load_personality("miori")
 
-        assert isinstance(result, str)
+def _write_card(
+    root: Path,
+    card: object,
+    character: str = "testchar",
+) -> None:
+    character_dir = root / "characters" / character
+    character_dir.mkdir(parents=True)
+    (character_dir / f"{character}.card.json").write_text(
+        json.dumps(card, ensure_ascii=False),
+        encoding="utf-8",
+    )
 
-    def test_returns_nonempty_content_for_miori(self):
-        from app.characters.loader import load_personality
 
-        result = load_personality("miori")
+def _use_repo_root(monkeypatch: pytest.MonkeyPatch, root: Path) -> None:
+    import app.characters.loader as loader
 
-        assert len(result) > 0
+    monkeypatch.setattr(loader, "_get_repo_root", lambda: root)
 
-    def test_returned_content_includes_character_name(self):
-        from app.characters.loader import load_personality
 
-        result = load_personality("miori")
+class TestLoadCharacterCardV3:
+    def test_loads_all_supported_v3_fields(self, tmp_path, monkeypatch):
+        _write_card(tmp_path, _valid_card())
+        _use_repo_root(monkeypatch, tmp_path)
+        from app.characters.loader import load_character_card
 
-        assert "光織" in result
+        card = load_character_card("testchar")
 
-    def test_raises_file_not_found_for_unknown_character(self):
-        from app.characters.loader import load_personality
+        assert card.spec == "chara_card_v3"
+        assert card.spec_version == "3.0"
+        assert card.data.name == "テスト人格"
+        assert card.data.description == "概要"
+        assert card.data.personality == "性格と話し方"
+        assert card.data.scenario == "関係と世界観"
+        assert card.data.first_mes == "初回表示"
+        assert card.data.mes_example == "会話例"
+        assert card.data.creator_notes == "作者メモ"
+        assert card.data.system_prompt == "常時指示"
+        assert card.data.post_history_instructions == "最終指示"
+        assert card.data.alternate_greetings == ("挨拶A", "挨拶B")
+        assert card.data.group_only_greetings == ("グループ挨拶",)
+        assert card.data.creator == "作者"
+        assert card.data.character_version == "1.2.3"
+
+    def test_preserves_unknown_extension_namespaces(self, tmp_path, monkeypatch):
+        _write_card(tmp_path, _valid_card())
+        _use_repo_root(monkeypatch, tmp_path)
+        from app.characters.loader import load_character_card
+
+        card = load_character_card("testchar")
+
+        assert card.data.extensions["future_namespace"] == {"enabled": True}
+
+    def test_recursively_freezes_extension_values(self, tmp_path, monkeypatch):
+        _write_card(tmp_path, _valid_card())
+        _use_repo_root(monkeypatch, tmp_path)
+        from app.characters.loader import load_character_card
+
+        extensions = load_character_card("testchar").data.extensions
+        digital_souls = extensions["digital_souls"]
+
+        assert isinstance(extensions, MappingProxyType)
+        assert isinstance(digital_souls, MappingProxyType)
+        with pytest.raises(TypeError):
+            digital_souls["tts_config"] = {}
+
+    def test_accepts_unknown_root_and_data_fields(self, tmp_path, monkeypatch):
+        _write_card(tmp_path, _valid_card())
+        _use_repo_root(monkeypatch, tmp_path)
+        from app.characters.loader import load_character_card
+
+        card = load_character_card("testchar")
+
+        assert card.data.name == "テスト人格"
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("spec", "chara_card_v4"),
+            ("spec_version", "4.0"),
+        ],
+    )
+    def test_rejects_unsupported_card_identity(
+        self, tmp_path, monkeypatch, field, value
+    ):
+        card = _valid_card()
+        card[field] = value
+        _write_card(tmp_path, card)
+        _use_repo_root(monkeypatch, tmp_path)
+        from app.characters.loader import load_character_card
+
+        with pytest.raises(ValueError, match=field):
+            load_character_card("testchar")
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("description", []),
+            ("alternate_greetings", ["valid", 1]),
+            ("extensions", []),
+        ],
+    )
+    def test_rejects_invalid_known_field_types(
+        self, tmp_path, monkeypatch, field, value
+    ):
+        card = _valid_card()
+        data = card["data"]
+        assert isinstance(data, dict)
+        data[field] = value
+        _write_card(tmp_path, card)
+        _use_repo_root(monkeypatch, tmp_path)
+        from app.characters.loader import load_character_card
+
+        with pytest.raises(ValueError, match=field):
+            load_character_card("testchar")
+
+    def test_rejects_path_traversal(self, tmp_path, monkeypatch):
+        outside = tmp_path / "secrets"
+        outside.mkdir()
+        (outside / "secrets.card.json").write_text("{}", encoding="utf-8")
+        _use_repo_root(monkeypatch, tmp_path)
+        from app.characters.loader import load_character_card
 
         with pytest.raises(FileNotFoundError):
-            load_personality("nonexistent_character_xyz_99999")
+            load_character_card("../secrets")
 
-    def test_raises_exactly_file_not_found_not_subclass(self):
-        from app.characters.loader import load_personality
-
-        with pytest.raises(FileNotFoundError) as exc_info:
-            load_personality("nonexistent_character_xyz_99999")
-
-        assert exc_info.type is FileNotFoundError
-
-    def test_returns_plain_str_not_bytes(self):
-        from app.characters.loader import load_personality
-
-        result = load_personality("miori")
-
-        assert type(result) is str
-
-    def test_raises_file_not_found_when_personality_is_directory(self, tmp_path, monkeypatch):
-        char_dir = tmp_path / "characters" / "dirchar"
-        char_dir.mkdir(parents=True)
-        (char_dir / "personality.md").mkdir()
-
-        import app.characters.loader as loader_module
-
-        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
-
-        from app.characters.loader import load_personality
+    def test_raises_file_not_found_for_missing_card(self, tmp_path, monkeypatch):
+        (tmp_path / "characters" / "missing").mkdir(parents=True)
+        _use_repo_root(monkeypatch, tmp_path)
+        from app.characters.loader import load_character_card
 
         with pytest.raises(FileNotFoundError):
-            load_personality("dirchar")
-
-    def test_content_with_tmp_path(self, tmp_path, monkeypatch):
-        char_dir = tmp_path / "characters" / "testchar"
-        char_dir.mkdir(parents=True)
-        expected = "# TestChar\nThis is the system prompt."
-        (char_dir / "personality.md").write_text(expected, encoding="utf-8")
-
-        import app.characters.loader as loader_module
-
-        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
-
-        from app.characters.loader import load_personality
-
-        result = load_personality("testchar")
-
-        assert result == expected
-
-    def test_rejects_path_traversal_outside_characters_directory(self, tmp_path, monkeypatch):
-        repo_root = tmp_path
-        inside_dir = repo_root / "characters" / "safe"
-        inside_dir.mkdir(parents=True)
-        (inside_dir / "personality.md").write_text("safe prompt", encoding="utf-8")
-
-        outside_dir = repo_root / "secrets"
-        outside_dir.mkdir()
-        (outside_dir / "personality.md").write_text("outside prompt", encoding="utf-8")
-
-        import app.characters.loader as loader_module
-
-        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: repo_root)
-
-        from app.characters.loader import load_personality
-
-        with pytest.raises(FileNotFoundError):
-            load_personality("../secrets")
+            load_character_card("missing")
 
 
 class TestLoadTtsConfig:
-    def test_returns_tts_config_from_card_data(self, tmp_path, monkeypatch):
-        character_dir = tmp_path / "characters" / "miori"
-        character_dir.mkdir(parents=True)
-        tts_config = {
-            "engine": "voicevox",
-            "speaker_id": 14,
-            "speaker_name": "冥鳴ひまり",
-        }
-        card = {"name": "miori", "data": {"tts_config": tts_config}}
-        (character_dir / "miori.card.json").write_text(
-            json.dumps(card),
-            encoding="utf-8",
-        )
+    def test_loads_voicevox_config_from_digital_souls_extension(
+        self, tmp_path, monkeypatch
+    ):
+        _write_card(tmp_path, _valid_card())
+        _use_repo_root(monkeypatch, tmp_path)
+        from app.characters.models import VoicevoxTtsConfig
+        from app.characters.loader import load_tts_config
 
-        import app.characters.loader as loader_module
-
-        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
-
-        from app.characters.loader import VoicevoxTtsConfig, load_tts_config
-
-        result = load_tts_config("miori")
+        result = load_tts_config("testchar")
 
         assert result == VoicevoxTtsConfig(speaker_id=14)
-        assert not isinstance(result, dict)
 
-    def test_raises_key_error_when_tts_config_is_missing(self, tmp_path, monkeypatch):
-        character_dir = tmp_path / "characters" / "miori"
-        character_dir.mkdir(parents=True)
-        card = {"name": "miori", "data": {}}
-        (character_dir / "miori.card.json").write_text(
-            json.dumps(card),
-            encoding="utf-8",
-        )
-
-        import app.characters.loader as loader_module
-
-        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
-
-        from app.characters.loader import load_tts_config
-
-        with pytest.raises(KeyError):
-            load_tts_config("miori")
-
-    def test_raises_distinct_key_error_when_card_data_is_missing(
-        self, tmp_path, monkeypatch
+    @pytest.mark.parametrize(
+        "tts_config",
+        [
+            {"engine": "other", "speaker_id": 14},
+            {"engine": "voicevox", "speaker_id": True},
+            {"engine": "voicevox", "speaker_id": "14"},
+            {"engine": "voicevox"},
+        ],
+    )
+    def test_rejects_invalid_voicevox_config(
+        self, tmp_path, monkeypatch, tts_config
     ):
-        character_dir = tmp_path / "characters" / "miori"
-        character_dir.mkdir(parents=True)
-        card = {"name": "miori"}
-        (character_dir / "miori.card.json").write_text(
-            json.dumps(card),
-            encoding="utf-8",
-        )
-
-        import app.characters.loader as loader_module
-
-        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
-
+        card = _valid_card()
+        data = card["data"]
+        assert isinstance(data, dict)
+        extensions = data["extensions"]
+        assert isinstance(extensions, dict)
+        digital_souls = extensions["digital_souls"]
+        assert isinstance(digital_souls, dict)
+        digital_souls["tts_config"] = tts_config
+        _write_card(tmp_path, card)
+        _use_repo_root(monkeypatch, tmp_path)
         from app.characters.loader import load_tts_config
 
-        with pytest.raises(KeyError) as exc_info:
-            load_tts_config("miori")
+        with pytest.raises(ValueError, match="tts_config"):
+            load_tts_config("testchar")
 
-        assert exc_info.value.args[0] == "'data' field is missing in character card"
+    def test_repository_card_uses_v3_extension_contract(self):
+        from app.characters.loader import load_character_card, load_tts_config
 
-    def test_raises_distinct_key_error_when_tts_config_is_missing(
-        self, tmp_path, monkeypatch
-    ):
-        character_dir = tmp_path / "characters" / "miori"
-        character_dir.mkdir(parents=True)
-        card = {"name": "miori", "data": {}}
-        (character_dir / "miori.card.json").write_text(
-            json.dumps(card),
-            encoding="utf-8",
-        )
+        card = load_character_card("miori")
 
-        import app.characters.loader as loader_module
-
-        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
-
-        from app.characters.loader import load_tts_config
-
-        with pytest.raises(KeyError) as exc_info:
-            load_tts_config("miori")
-
-        assert (
-            exc_info.value.args[0]
-            == "'tts_config' field is missing in character card data"
-        )
-
-    def test_raises_value_error_when_card_data_is_not_object(
-        self, tmp_path, monkeypatch
-    ):
-        character_dir = tmp_path / "characters" / "miori"
-        character_dir.mkdir(parents=True)
-        card = {"name": "miori", "data": []}
-        (character_dir / "miori.card.json").write_text(
-            json.dumps(card),
-            encoding="utf-8",
-        )
-
-        import app.characters.loader as loader_module
-
-        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
-
-        from app.characters.loader import load_tts_config
-
-        with pytest.raises(ValueError, match="'data' field must be an object"):
-            load_tts_config("miori")
-
-    def test_raises_value_error_when_tts_config_is_not_object(
-        self, tmp_path, monkeypatch
-    ):
-        character_dir = tmp_path / "characters" / "miori"
-        character_dir.mkdir(parents=True)
-        card = {"name": "miori", "data": {"tts_config": []}}
-        (character_dir / "miori.card.json").write_text(
-            json.dumps(card),
-            encoding="utf-8",
-        )
-
-        import app.characters.loader as loader_module
-
-        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
-
-        from app.characters.loader import load_tts_config
-
-        with pytest.raises(ValueError, match="'tts_config' field must be an object"):
-            load_tts_config("miori")
-
-    def test_raises_file_not_found_for_missing_card(self, tmp_path, monkeypatch):
-        (tmp_path / "characters" / "miori").mkdir(parents=True)
-
-        import app.characters.loader as loader_module
-
-        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
-
-        from app.characters.loader import load_tts_config
-
-        with pytest.raises(FileNotFoundError):
-            load_tts_config("miori")
-
-    def test_rejects_path_traversal_outside_characters_directory(
-        self, tmp_path, monkeypatch
-    ):
-        outside_dir = tmp_path / "secrets"
-        outside_dir.mkdir()
-        (outside_dir / "secrets.card.json").write_text("{}", encoding="utf-8")
-
-        import app.characters.loader as loader_module
-
-        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
-
-        from app.characters.loader import load_tts_config
-
-        with pytest.raises(FileNotFoundError):
-            load_tts_config("../secrets")
-
-    def test_raises_value_error_when_tts_engine_is_not_voicevox(
-        self, tmp_path, monkeypatch
-    ):
-        character_dir = tmp_path / "characters" / "miori"
-        character_dir.mkdir(parents=True)
-        card = {
-            "name": "miori",
-            "data": {
-                "tts_config": {
-                    "engine": "other",
-                    "speaker_id": 14,
-                },
-            },
-        }
-        (character_dir / "miori.card.json").write_text(
-            json.dumps(card),
-            encoding="utf-8",
-        )
-
-        import app.characters.loader as loader_module
-
-        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
-
-        from app.characters.loader import load_tts_config
-
-        with pytest.raises(ValueError, match="tts_config.engine"):
-            load_tts_config("miori")
-
-    def test_raises_value_error_when_speaker_id_is_bool(self, tmp_path, monkeypatch):
-        character_dir = tmp_path / "characters" / "miori"
-        character_dir.mkdir(parents=True)
-        card = {
-            "name": "miori",
-            "data": {
-                "tts_config": {
-                    "engine": "voicevox",
-                    "speaker_id": True,
-                },
-            },
-        }
-        (character_dir / "miori.card.json").write_text(
-            json.dumps(card),
-            encoding="utf-8",
-        )
-
-        import app.characters.loader as loader_module
-
-        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
-
-        from app.characters.loader import load_tts_config
-
-        with pytest.raises(ValueError, match="tts_config.speaker_id"):
-            load_tts_config("miori")
-
-    def test_raises_value_error_when_speaker_id_is_missing(self, tmp_path, monkeypatch):
-        character_dir = tmp_path / "characters" / "miori"
-        character_dir.mkdir(parents=True)
-        card = {
-            "name": "miori",
-            "data": {
-                "tts_config": {
-                    "engine": "voicevox",
-                },
-            },
-        }
-        (character_dir / "miori.card.json").write_text(
-            json.dumps(card),
-            encoding="utf-8",
-        )
-
-        import app.characters.loader as loader_module
-
-        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
-
-        from app.characters.loader import load_tts_config
-
-        with pytest.raises(ValueError, match="tts_config.speaker_id"):
-            load_tts_config("miori")
-
-    def test_raises_value_error_when_speaker_id_is_string(self, tmp_path, monkeypatch):
-        character_dir = tmp_path / "characters" / "miori"
-        character_dir.mkdir(parents=True)
-        card = {
-            "name": "miori",
-            "data": {
-                "tts_config": {
-                    "engine": "voicevox",
-                    "speaker_id": "14",
-                },
-            },
-        }
-        (character_dir / "miori.card.json").write_text(
-            json.dumps(card),
-            encoding="utf-8",
-        )
-
-        import app.characters.loader as loader_module
-
-        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
-
-        from app.characters.loader import load_tts_config
-
-        with pytest.raises(ValueError, match="tts_config.speaker_id"):
-            load_tts_config("miori")
+        assert card.spec == "chara_card_v3"
+        assert card.spec_version == "3.0"
+        assert card.data.creator == ""
+        assert card.data.character_version == ""
+        assert card.data.creator_notes == ""
+        assert card.data.alternate_greetings == ()
+        assert card.data.group_only_greetings == ()
+        assert load_tts_config("miori").speaker_id == 14

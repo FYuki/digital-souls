@@ -14,7 +14,11 @@ MVP（テキスト+音声チャット、RAG基盤）完了後の開発を、Wave
   VAD付きマイクUI、WebSocket統合、単一キャラクター「光織」で動作
 - RAG基盤: Chroma + SQLite + 記憶ポリシー（`backend/app/memory/`）を実装済み
 
-### 現状ギャップ（コード調査で判明）
+### 計画策定時点のギャップ（2026-07、実装前スナップショット）
+
+以下はWave構成を決めた時点の調査結果であり、現在の実装状態ではない。会話履歴の保存・
+prompt注入、Character Card V3へのruntime人格定義の一元化、PromptBuilderによる合成、
+Character Cardの各フィールドとTTS extensionの利用はWave 1で実装済みである。
 
 1. **会話が完全ステートレス**: 直前のやりとりすらプロンプトに含まれず、多ターン会話が成立しない。
    プロンプトは personality.md +（RAG有効時のみ）検索記憶 + 今回の発言のみで構成される
@@ -70,25 +74,28 @@ scannerは`ScanSuccess`またはmetadata-onlyの`ScanFailure`を返し、finding
 適用する。assistant側が`SKIP_CONTENT`の場合は、保存済みuser本文も原子的に消去して
 turn全体を`privacy_skipped`へ遷移する。
 
-### 3. プロンプト合成の一元設計
+### 3. プロンプト合成の一元設計（実装済み）
 
-以下の要素の合成順序・優先順位を確定し、一元化する。
+runtime人格定義はCharacter Card V3を唯一の正本とし、`personality.md`は設計資料として
+runtimeでは読み込まない。`PromptBuilder`が以下の順序で合成する。
 
-- personality.md（人格設定）
-- card.json の未使用フィールド（`system_prompt` / `first_mes` / `post_history_instructions`）
-- 会話履歴（Wave 1-4で追加）
-- RAG記憶（検索結果、Wave 2で本稼働）
+1. Character Cardの人格情報、会話例、system指示
+2. RAG記憶
+3. privacy処理後に永続化された会話履歴
+4. 現在ターンの未加工ユーザー原文
+5. `post_history_instructions`
 
-現在ターンの原文と、永続化済みのマスク済み履歴を型・引数で区別する。
-現状はプロンプト構築ロジックが分散している想定のため、単一のプロンプトビルダーに集約する。
+現在ターンの原文と永続化済みのマスク済み履歴は、別の型と入力で区別する。
+`first_mes`は通常の応答生成promptへ含めず、履歴がない場合の初回assistant表示に使う。
+詳細な契約は`docs/decisions/character-card-v3-prompt-builder-2026-07.md`を参照する。
 
-### 4. 会話履歴のプロンプト注入
+### 4. 会話履歴のプロンプト注入（バックエンド実装済み）
 
-SQLiteから同じ`character_id`と`conversation_id`の直近N往復だけを復元し、LLMへのpromptに
-含める。BE自体はステートレス設計を維持し、状態はSQLiteが持つ形にする。
+SQLiteから同じ`character_id`と`conversation_id`の完了済みturnを復元し、LLMへのpromptに
+含める。BE自体はステートレス設計を維持し、状態はSQLiteが持つ。
 
-RAGが無効（`RAG_ENABLED=false`）の状態でも会話ログは常時記録されるよう、
-記録経路をRAGの有効/無効から分離する（現状はRAG有効時のみ記録に寄っている可能性があるため要確認）。
+会話履歴の記録経路はRAGの有効／無効から分離されている。保存前に共通privacy scannerと
+履歴sanitizerを適用し、処理中、失敗、privacy skipのturnはprompt履歴へ含めない。
 
 完了イメージ: RAGを切った状態でも、直前のやり取りを踏まえた応答が返る。
 

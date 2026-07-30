@@ -19,6 +19,7 @@ from app.conversation_history.errors import (
 from app.conversation_history.models import (
     Conversation,
     ConversationTurn,
+    PersistedMaskedText,
     PrivacySkipReason,
     PrivacySkippedTurnInput,
     ProcessingTurnInput,
@@ -112,7 +113,7 @@ class ConversationHistoryRepository:
         conversation_id: UUID,
         turn_id: UUID,
         *,
-        sanitized_assistant_content: str,
+        sanitized_assistant_content: PersistedMaskedText,
     ) -> ConversationTurn:
         _require_non_empty(
             sanitized_assistant_content,
@@ -134,6 +135,43 @@ class ConversationHistoryRepository:
                 (
                     sanitized_assistant_content,
                     TurnStatus.COMPLETED.value,
+                    format_datetime(now),
+                    character_id,
+                    str(conversation_id),
+                    str(turn_id),
+                ),
+            )
+            return select_turn(
+                connection,
+                character_id,
+                conversation_id,
+                turn_id,
+            )
+
+    def privacy_skip_turn(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+        turn_id: UUID,
+        turn_input: PrivacySkippedTurnInput,
+    ) -> ConversationTurn:
+        now = self._now()
+        with self._database.transaction() as connection:
+            current = select_turn(
+                connection,
+                character_id,
+                conversation_id,
+                turn_id,
+            )
+            require_turn_transition(current.status, TurnStatus.PRIVACY_SKIPPED)
+            connection.execute(
+                "UPDATE conversation_turns "
+                "SET user_content = NULL, assistant_content = NULL, "
+                "status = ?, privacy_reason_code = ?, updated_at = ? "
+                "WHERE character_id = ? AND conversation_id = ? AND turn_id = ?",
+                (
+                    TurnStatus.PRIVACY_SKIPPED.value,
+                    turn_input.reason_code.value,
                     format_datetime(now),
                     character_id,
                     str(conversation_id),
@@ -240,7 +278,7 @@ class ConversationHistoryRepository:
         character_id: str,
         conversation_id: UUID,
         *,
-        user_content: str | None,
+        user_content: PersistedMaskedText | None,
         status: TurnStatus,
         privacy_reason_code: PrivacySkipReason | None,
     ) -> ConversationTurn:
