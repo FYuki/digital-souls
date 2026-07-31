@@ -14,10 +14,11 @@ MVP（テキスト+音声チャット、RAG基盤）完了後の開発を、Wave
   VAD付きマイクUI、WebSocket統合、単一キャラクター「光織」で動作
 - RAG基盤: Chroma + SQLite + 記憶ポリシー（`backend/app/memory/`）を実装済み
 
-### 現状ギャップ（コード調査で判明）
+### 実装済み基盤と残存ギャップ（コード調査で判明）
 
-1. **会話が完全ステートレス**: 直前のやりとりすらプロンプトに含まれず、多ターン会話が成立しない。
-   プロンプトは personality.md +（RAG有効時のみ）検索記憶 + 今回の発言のみで構成される
+1. **会話履歴とprompt合成（実装済み）**: SQLiteへ保存した同一キャラクター・同一会話セッションの
+   完了済み往復をRAGの有効・無効にかかわらず復元し、Character Card V3、RAG、履歴、
+   現在発言、最終指示を`PromptBuilder`で合成する
 2. **RAGが眠っている**: 実装済みだが `RAG_ENABLED=false` がデフォルト。長期記憶化も
    明示マーカー（「農業日誌:」等）付き発言のみが対象
 3. **スキーマ不整合**: SQLiteは `character` カラムのままで、決定事項
@@ -30,8 +31,10 @@ MVP（テキスト+音声チャット、RAG基盤）完了後の開発を、Wave
    一括で返信する。双方向・割り込み可能な会話にはなっていない
 6. **設定のハードコード**: モデル名 `gemma4:e4b` が `backend/app/llm/ollama_client.py` に
    直書きされており、`ClaudeClient` は `NotImplementedError` のスタブのまま
-7. **card.jsonの未使用フィールド**: `system_prompt` / `first_mes` / `post_history_instructions` が
-   未使用で、`tts_config` のみが参照されている
+7. **Character Card V3のruntime利用（実装済み）**: Character Cardをruntime人格定義の正本とし、
+   人格領域、`system_prompt`、`post_history_instructions`をpromptへ反映する。`first_mes`は
+   初回assistant表示用として通常promptへ含めず、TTS設定は
+   `data.extensions.digital_souls.tts_config`から取得する
 
 ## Wave構成の考え方
 
@@ -70,27 +73,28 @@ scannerは`ScanSuccess`またはmetadata-onlyの`ScanFailure`を返し、finding
 適用する。assistant側が`SKIP_CONTENT`の場合は、保存済みuser本文も原子的に消去して
 turn全体を`privacy_skipped`へ遷移する。
 
-### 3. プロンプト合成の一元設計
+### 3. プロンプト合成の一元設計（実装済み）
 
-以下の要素の合成順序・優先順位を確定し、一元化する。
+次の要素の合成順序・優先順位を`PromptBuilder`へ一元化した。
 
-- personality.md（人格設定）
-- card.json の未使用フィールド（`system_prompt` / `first_mes` / `post_history_instructions`）
-- 会話履歴（Wave 1-4で追加）
-- RAG記憶（検索結果、Wave 2で本稼働）
+- Character Card V3の人格領域と`system_prompt`
+- RAG記憶（検索結果。RAG本稼働はWave 2の残作業）
+- SQLiteへ保存されたマスク済み会話履歴
+- 現在ターンのuser原文
+- `post_history_instructions`
 
 現在ターンの原文と、永続化済みのマスク済み履歴を型・引数で区別する。
-現状はプロンプト構築ロジックが分散している想定のため、単一のプロンプトビルダーに集約する。
+`first_mes`は初回assistant表示用データとして保持し、通常のpromptには含めない。
+`personality.md`はCharacter Card編集時の非runtime補助資料とする。
 
-### 4. 会話履歴のプロンプト注入
+### 4. 会話履歴のプロンプト注入（実装済み）
 
 SQLiteから同じ`character_id`と`conversation_id`の直近N往復だけを復元し、LLMへのpromptに
 含める。BE自体はステートレス設計を維持し、状態はSQLiteが持つ形にする。
 
-RAGが無効（`RAG_ENABLED=false`）の状態でも会話ログは常時記録されるよう、
-記録経路をRAGの有効/無効から分離する（現状はRAG有効時のみ記録に寄っている可能性があるため要確認）。
+会話履歴の記録経路はRAGの有効・無効から分離済みであり、`RAG_ENABLED=false`でも記録する。
 
-完了イメージ: RAGを切った状態でも、直前のやり取りを踏まえた応答が返る。
+RAGを切った状態でも、直前のやり取りを踏まえた応答を生成できる。
 
 ### 5. 会話ライフサイクルとスレッド管理
 
@@ -178,7 +182,7 @@ scannerは保存可否を決めず、決定的なapplication policy evaluatorだ
 
 - 記憶に日付メタデータを付与し、時期指定での検索を可能にする
 - 「昨年もこの時期に〜」のような応答を実現する
-- personality.md が描く長期パートナー性の中核体験にあたる機能
+- Character Cardが定義する長期パートナー性の中核体験にあたる機能
 
 ### 9. 記憶の閲覧・訂正・物理削除インターフェース
 

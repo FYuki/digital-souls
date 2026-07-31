@@ -8,6 +8,7 @@ from app.conversation_history.models import (
     PrivacySkipReason,
     PrivacySkippedTurnInput,
     ProcessingTurnInput,
+    TurnStatus,
 )
 from app.conversation_history.repository import ConversationHistoryRepository
 from app.privacy.contracts import (
@@ -24,6 +25,12 @@ class StartedHistoryTurn:
     content_skipped: bool
 
 
+@dataclass(frozen=True, repr=False)
+class CompletedHistoryExchange:
+    user_content: str
+    assistant_content: str
+
+
 class HistorySession(Protocol):
     def start_turn(self, user_content: str) -> StartedHistoryTurn:
         ...
@@ -36,6 +43,9 @@ class HistorySession(Protocol):
         ...
 
     def fail_turn(self, started_turn: StartedHistoryTurn) -> None:
+        ...
+
+    def completed_exchanges(self) -> tuple[CompletedHistoryExchange, ...]:
         ...
 
 
@@ -107,6 +117,22 @@ class ConversationHistorySession:
             self._character_id,
             self._conversation_id,
             started_turn.turn_id,
+        )
+
+    def completed_exchanges(self) -> tuple[CompletedHistoryExchange, ...]:
+        turns = self._repository.list_turns(
+            self._character_id,
+            self._conversation_id,
+        )
+        return tuple(
+            CompletedHistoryExchange(
+                user_content=turn.user_content,
+                assistant_content=turn.assistant_content,
+            )
+            for turn in turns
+            if turn.status is TurnStatus.COMPLETED
+            and turn.user_content is not None
+            and turn.assistant_content is not None
         )
 
 

@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 
+from app.prompting import BuiltPrompt
+
 
 class LLMClient(ABC):
     @abstractmethod
-    def generate(self, system_prompt: str, user_message: str) -> str: ...
+    def generate(self, prompt: BuiltPrompt) -> str: ...

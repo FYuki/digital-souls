@@ -20,6 +20,7 @@
 ```text
 characters/
 └─ miori/
+   ├─ miori.card.json
    ├─ personality.md
    ├─ world.md
    └─ memory-policy.md
@@ -37,7 +38,8 @@ characters/
 
 | ファイル | 役割 |
 |---|---|
-| `personality.md` | 人格設定、性格、話し方、行動方針、得意・不得意、表現モード |
+| `{id}.card.json` | runtimeで使用する人格・表示名・会話例・応答指示の正本 |
+| `personality.md` | Character Cardを編集するときの非runtime補助資料 |
 | `world.md` | 世界観、比喩体系、用語、演出方針、応答上の扱い |
 | `memory-policy.md` | 記憶方針本文の移動先と実装設定ファイルへの案内 |
 
@@ -61,22 +63,22 @@ characters/miori/
 characters/example-character/
 ```
 
-日本語名や表示名は、各人格の `personality.md` に記載する。
+日本語名や表示名は、各人格の `{id}.card.json` の `data.name` に記載する。
 
 ## 新しい人格を追加する場合
 
 1. `characters/{id}/` ディレクトリを作成する
-2. 基本構成の3ファイルを作成する
+2. 基本構成の4ファイルを作成する
 3. このREADMEの「人格一覧」テーブルに追記する
 4. `docs/decisions/` に設計経緯を残す
 
 ## 管理方針
 
-- 人格設定は、通常の会話ログや一時メモとは分けて管理する
+- runtime人格設定はCharacter Cardで管理し、通常の会話ログや一時メモとは分ける
 - 人格の核となる設定は、安易に削除・上書きしない
 - 変更する場合は、理由が分かるようにコミットメッセージやIssueに残す
 - 実装コードから参照する場合は、人格IDをキーとして扱う
-- RAGや長期記憶に取り込む場合は、人格設定ファイルを通常ログより高い優先度で扱う
+- RAGや長期記憶へ人格設定を取り込まず、runtimeではCharacter Cardを直接参照する
 
 ## 初期人格
 
@@ -86,7 +88,8 @@ characters/example-character/
 
 詳細は以下を参照。
 
-- `characters/miori/personality.md`
+- `characters/miori/miori.card.json`
+- `characters/miori/personality.md`（非runtimeの編集補助）
 - `characters/miori/world.md`
 - `docs/decisions/miori-memory-policy-2026-06.md`
 - `backend/app/memory/memory_policy.json`

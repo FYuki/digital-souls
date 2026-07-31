@@ -3,6 +3,7 @@ from typing import Protocol
 __all__ = [
     "CharacterNotFoundError",
     "ChatBackendError",
+    "ChatInputLimitError",
     "ChatReplySession",
     "ChatServiceError",
     "ChatTimeoutError",
@@ -31,6 +32,18 @@ class ChatTimeoutError(ChatServiceError):
 class ChatBackendError(ChatServiceError):
     def __init__(self) -> None:
         self.detail = "LLM request failed"
+        super().__init__(self.detail)
+
+
+class ChatInputLimitError(ChatServiceError):
+    def __init__(self, region: str, used: int, limit: int) -> None:
+        self.region = region
+        self.used = used
+        self.limit = limit
+        self.detail = (
+            "Prompt input exceeds token budget: "
+            f"region={region} used={used} limit={limit}"
+        )
         super().__init__(self.detail)
 
 

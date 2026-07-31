@@ -6,6 +6,11 @@ from uuid import uuid4
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from tests.character_card_test_support import (
+    character_card_data,
+    character_card_document,
+    write_character_card,
+)
 
 
 def _require_runtime_evidence_dependencies() -> None:
@@ -58,9 +63,19 @@ def _isolate_memory_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def _write_character(tmp_path: Path, character: str, system_prompt: str) -> None:
-    character_dir = tmp_path / "characters" / character
-    character_dir.mkdir(parents=True)
-    character_dir.joinpath("personality.md").write_text(system_prompt, encoding="utf-8")
+    data = character_card_data(
+        description="",
+        personality="",
+        scenario="",
+        system_prompt=system_prompt,
+        mes_example="",
+        post_history_instructions="",
+    )
+    write_character_card(
+        tmp_path,
+        character,
+        character_card_document(data=data),
+    )
 
 
 def _wait_until(predicate, timeout: float = 5.0) -> None:
@@ -96,10 +111,14 @@ class TestRagRuntimeEvidenceIntegration:
 
         captured_llm_calls = []
 
-        def capture_generate_response(system_prompt_arg: str, user_message: str) -> str:
-            captured_llm_calls.append(
-                {"system_prompt": system_prompt_arg, "user_message": user_message}
+        def capture_generate_response(prompt) -> str:
+            messages = prompt.messages
+            user_message = next(
+                message.content
+                for message in reversed(messages)
+                if message.role.value == "user"
             )
+            captured_llm_calls.append(prompt)
             if user_message == stored_memory:
                 return "農業日誌として保存しました。"
             return "前回はトマト畑に水やりしました。"
@@ -136,9 +155,13 @@ class TestRagRuntimeEvidenceIntegration:
 
         assert response.status_code == 200
         assert response.json()["response"] == "前回はトマト畑に水やりしました。"
-        assert captured_llm_calls[-1]["user_message"] == "前回の畑作業は?"
-        assert "過去の記憶:" in captured_llm_calls[-1]["system_prompt"]
-        assert stored_memory in captured_llm_calls[-1]["system_prompt"]
+        contents = [
+            message.content
+            for message in captured_llm_calls[-1].messages
+        ]
+        assert contents[-1] == "前回の畑作業は?"
+        assert any("関連する記憶" in content for content in contents)
+        assert any(stored_memory in content for content in contents)
 
     def test_real_storage_failure_chat_continues_without_failed_memory_file(
         self, tmp_path, monkeypatch
@@ -182,9 +205,10 @@ class TestRagRuntimeEvidenceIntegration:
 
         monkeypatch.setattr(chromadb, "PersistentClient", AddFailureClient)
 
-        def capture_generate_response(system_prompt_arg: str, user_message_arg: str) -> str:
-            assert system_prompt_arg == system_prompt
-            assert user_message_arg == user_message
+        def capture_generate_response(prompt) -> str:
+            contents = [message.content for message in prompt.messages]
+            assert system_prompt in contents[0]
+            assert contents[-1] == user_message
             return "農業日誌として保存しました。"
 
         monkeypatch.setattr(

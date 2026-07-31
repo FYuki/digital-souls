@@ -19,11 +19,33 @@ from app.llm import router as _llm_router
 from app.memory import memory_policy as _memory_policy
 from app.memory import rag_service as _rag_service
 from app.privacy.contracts import PrivacyScanner
+from app.prompting import (
+    BuiltPrompt,
+    CharacterPrompt,
+    CurrentUserMessage,
+    MaskedHistory,
+    MaskedHistoryExchange,
+    PromptBuildInput,
+    PromptBuilder,
+    PromptInputLimitError,
+    RagContext,
+    RagItem,
+    TokenBudget,
+)
+from app.prompting.token_counter import Utf8TokenEstimator
 
 RAG_ENABLED_ENV = "RAG_ENABLED"
 RAG_ENABLED_VALUE = "true"
 RAG_MEMORY_THREAD_PREFIX = "rag-memory"
 DEFAULT_RAG_MEMORY_WORKERS = 4
+DEFAULT_PROMPT_TOKEN_BUDGET = TokenBudget(
+    total=32_768,
+    character=8_192,
+    rag=8_192,
+    history=16_384,
+    current_user=8_192,
+    post_history=4_096,
+)
 logger = logging.getLogger(__name__)
 
 _default_service_lock = threading.Lock()
@@ -93,7 +115,7 @@ class ChatRuntimeConfig:
 
 @dataclass(frozen=True)
 class _ResolvedChatContext:
-    system_prompt: str
+    character_prompt: CharacterPrompt
     memory_policy: _memory_policy.MemoryPolicy | None
     privacy_scanner: PrivacyScanner | None
     memory_task_queue: MemoryTaskQueue
@@ -172,7 +194,7 @@ class ChatService:
         self,
         character: str,
     ) -> chat_service.ChatReplySession:
-        await asyncio.to_thread(_load_system_prompt, character)
+        await asyncio.to_thread(_load_character_prompt, character)
         return _ChatSession(
             character=character,
             chat_service=self,
@@ -238,9 +260,11 @@ def _current_default_service_resolver() -> Callable[[], ChatService] | None:
         return _default_service_resolvers[-1]
 
 
-def _load_system_prompt(character: str) -> str:
+def _load_character_prompt(character: str) -> CharacterPrompt:
     try:
-        return _character_loader.load_personality(character)
+        return _character_loader.load_character_card(
+            character
+        ).to_character_prompt()
     except FileNotFoundError as exc:
         raise chat_service.CharacterNotFoundError(character) from exc
 
@@ -250,40 +274,47 @@ def _resolve_chat_context(
     runtime_config: ChatRuntimeConfig,
     memory_task_queue: MemoryTaskQueue,
 ) -> _ResolvedChatContext:
-    system_prompt = _load_system_prompt(character)
+    character_prompt = _load_character_prompt(character)
     if not runtime_config.rag_enabled:
         return _ResolvedChatContext(
-            system_prompt=system_prompt,
+            character_prompt=character_prompt,
             memory_policy=None,
             privacy_scanner=None,
             memory_task_queue=memory_task_queue,
         )
     return _ResolvedChatContext(
-        system_prompt=system_prompt,
+        character_prompt=character_prompt,
         memory_policy=runtime_config.memory_policy,
         privacy_scanner=runtime_config.privacy_scanner,
         memory_task_queue=memory_task_queue,
     )
 
 
-def _system_prompt_for_reply(
+def _rag_context_for_reply(
     character: str,
     message: str,
     context: _ResolvedChatContext,
-) -> str:
+) -> RagContext:
     if context.memory_policy is None:
-        return context.system_prompt
-    return _rag_service.build_augmented_system_prompt(
+        return RagContext(items=())
+    memories = _rag_service.retrieve_prompt_memories(
         character,
         message,
-        context.system_prompt,
         context.memory_policy,
+    )
+    return RagContext(
+        items=tuple(
+            RagItem(
+                f"[{memory.timestamp}] ({memory.role}) {memory.content}"
+            )
+            for memory in memories
+        )
     )
 
 
-def _call_llm(system_prompt: str, message: str) -> str:
+def _call_llm(prompt: BuiltPrompt) -> str:
     try:
-        reply = _llm_router.generate_response(system_prompt, message)
+        reply = _llm_router.generate_response(prompt)
     except httpx.TimeoutException as exc:
         raise chat_service.ChatTimeoutError() from exc
     except httpx.HTTPError as exc:
@@ -315,11 +346,45 @@ def _generate_reply(
     character: str,
     message: str,
     context: _ResolvedChatContext,
+    history_session: HistorySession,
 ) -> str:
-    prompt = _system_prompt_for_reply(character, message, context)
-    reply = _call_llm(prompt, message)
+    prompt = _build_prompt(character, message, context, history_session)
+    reply = _call_llm(prompt)
     _record_user_memory_candidate(character, message, context)
     return reply
+
+
+def _build_prompt(
+    character: str,
+    message: str,
+    context: _ResolvedChatContext,
+    history_session: HistorySession,
+) -> BuiltPrompt:
+    completed_exchanges = history_session.completed_exchanges()
+    history = MaskedHistory(
+        exchanges=tuple(
+            MaskedHistoryExchange(
+                user_content=exchange.user_content,
+                assistant_content=exchange.assistant_content,
+            )
+            for exchange in completed_exchanges
+        )
+    )
+    prompt_input = PromptBuildInput(
+        character=context.character_prompt,
+        rag=_rag_context_for_reply(character, message, context),
+        history=history,
+        current_user=CurrentUserMessage(message),
+        budget=DEFAULT_PROMPT_TOKEN_BUDGET,
+    )
+    try:
+        return PromptBuilder(Utf8TokenEstimator()).build(prompt_input)
+    except PromptInputLimitError as exc:
+        raise chat_service.ChatInputLimitError(
+            region=exc.region,
+            used=exc.used,
+            limit=exc.limit,
+        ) from exc
 
 
 def _generate_recorded_reply(
@@ -330,7 +395,12 @@ def _generate_recorded_reply(
 ) -> str:
     started_turn = history_session.start_turn(message)
     try:
-        reply = _generate_reply(character, message, context)
+        reply = _generate_reply(
+            character,
+            message,
+            context,
+            history_session,
+        )
         history_session.complete_turn(started_turn, reply)
     except Exception:
         try:

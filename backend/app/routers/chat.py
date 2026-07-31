@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from app.chat_service import (
     CharacterNotFoundError,
     ChatBackendError,
+    ChatInputLimitError,
     ChatTimeoutError,
 )
 
@@ -32,6 +33,8 @@ def chat(payload: ChatRequest, request: Request) -> ChatResponse:
             status_code=404,
             detail=exc.detail,
         ) from exc
+    except ChatInputLimitError as exc:
+        raise HTTPException(status_code=422, detail=exc.detail) from exc
     except ChatTimeoutError as exc:
         raise HTTPException(status_code=504, detail=exc.detail) from exc
     except ChatBackendError as exc:

@@ -17,6 +17,7 @@ from app.audio.constants import (
 from app.chat_service import (
     CharacterNotFoundError,
     ChatBackendError,
+    ChatInputLimitError,
     ChatReplySession,
     ChatTimeoutError,
 )
@@ -69,10 +70,17 @@ class WebSocketMessageError(ValueError):
 
 
 def _map_chat_error(
-    error: CharacterNotFoundError | ChatTimeoutError | ChatBackendError,
+    error: (
+        CharacterNotFoundError
+        | ChatInputLimitError
+        | ChatTimeoutError
+        | ChatBackendError
+    ),
 ) -> tuple[int, str]:
     if isinstance(error, CharacterNotFoundError):
         return 404, error.detail
+    if isinstance(error, ChatInputLimitError):
+        return 422, error.detail
     if isinstance(error, ChatTimeoutError):
         return 504, error.detail
     if isinstance(error, ChatBackendError):
@@ -256,7 +264,7 @@ async def _generate_reply(
 ) -> str | None:
     try:
         return await run_in_threadpool(chat_session.generate_reply, message)
-    except (ChatTimeoutError, ChatBackendError) as exc:
+    except (ChatInputLimitError, ChatTimeoutError, ChatBackendError) as exc:
         status, detail = _map_chat_error(exc)
         await _send_error(websocket, send_lock, status, detail)
         return None
@@ -353,7 +361,7 @@ async def _handle_audio_payload(
         status, detail = _map_chat_error(exc)
         await _send_error_and_close(websocket, send_lock, status, detail)
         return False
-    except (ChatTimeoutError, ChatBackendError) as exc:
+    except (ChatInputLimitError, ChatTimeoutError, ChatBackendError) as exc:
         status, detail = _map_chat_error(exc)
         await _send_error(websocket, send_lock, status, detail)
         return True

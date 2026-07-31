@@ -6,6 +6,7 @@ import httpx
 from app.llm.base import LLMClient
 from app.llm.ollama_config import ollama_endpoint, ollama_timeout
 from app.model_settings import OLLAMA_MODEL_NAME
+from app.prompting import BuiltPrompt
 
 
 def _as_object_mapping(value: object, field_name: str) -> Mapping[str, object]:
@@ -24,13 +25,16 @@ def _extract_message_content(response_body: object) -> str:
 
 
 class OllamaClient(LLMClient):
-    def generate(self, system_prompt: str, user_message: str) -> str:
+    def generate(self, prompt: BuiltPrompt) -> str:
         payload = {
             "model": OLLAMA_MODEL_NAME,
             "stream": False,
             "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
+                {
+                    "role": message.role.value,
+                    "content": message.content,
+                }
+                for message in prompt.messages
             ],
         }
         response = httpx.post(
