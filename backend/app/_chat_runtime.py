@@ -27,6 +27,7 @@ from app.prompting import (
     MaskedHistoryExchange,
     PromptBuildInput,
     PromptBuilder,
+    PromptInputLimitError,
     RagContext,
     RagItem,
     TokenBudget,
@@ -376,7 +377,14 @@ def _build_prompt(
         current_user=CurrentUserMessage(message),
         budget=DEFAULT_PROMPT_TOKEN_BUDGET,
     )
-    return PromptBuilder(Utf8TokenEstimator()).build(prompt_input)
+    try:
+        return PromptBuilder(Utf8TokenEstimator()).build(prompt_input)
+    except PromptInputLimitError as exc:
+        raise chat_service.ChatInputLimitError(
+            region=exc.region,
+            used=exc.used,
+            limit=exc.limit,
+        ) from exc
 
 
 def _generate_recorded_reply(

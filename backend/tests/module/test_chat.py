@@ -1,11 +1,13 @@
+import sqlite3
 from unittest.mock import MagicMock, patch
 
 import httpx
 from fastapi.testclient import TestClient
 
+from app.conversation_history.service import CompletedHistoryExchange
 from app.main import app
 from app.memory.chroma_store import MemorySearchResult
-from app.prompting import CharacterPrompt
+from app.prompting import CharacterPrompt, PromptInputLimitError
 from tests.character_card_test_support import (
     character_card_data,
     character_card_document,
@@ -22,6 +24,10 @@ _RECORD_USER_MEMORY_CANDIDATE = (
     "app._chat_runtime._rag_service.record_user_memory_candidate"
 )
 _RESOLVED_MEMORY_POLICY = "app.main.resolved_memory_policy"
+_BUILD_PROMPT = "app._chat_runtime.PromptBuilder.build"
+_COMPLETED_EXCHANGES = (
+    "app.conversation_history.service.ConversationHistorySession.completed_exchanges"
+)
 
 _VALID_BODY = {"character": "miori", "message": "自己紹介してください"}
 _PERSONALITY = "# 光織\n穏やかなAIです。"
@@ -83,6 +89,112 @@ def _ollama_response(content: str) -> MagicMock:
 
 
 class TestChatEndpoint:
+    def test_returns_422_with_diagnostics_when_prompt_input_exceeds_limit(
+        self,
+        monkeypatch,
+    ):
+        monkeypatch.setenv("RAG_ENABLED", "false")
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(
+                _BUILD_PROMPT,
+                side_effect=PromptInputLimitError("current_user", 8193, 8192),
+            ):
+                with TestClient(app, raise_server_exceptions=False) as client:
+                    response = client.post("/chat", json=_VALID_BODY)
+
+        assert response.status_code == 422
+        assert response.json() == {
+            "detail": (
+                "Prompt input exceeds token budget: "
+                "region=current_user used=8193 limit=8192"
+            )
+        }
+
+    def test_prompt_limit_http_response_and_logs_do_not_leak_prompt_bodies(
+        self,
+        monkeypatch,
+        caplog,
+    ):
+        secrets = {
+            "character": "SECRET_HTTP_CHARACTER_37D1",
+            "rag": "SECRET_HTTP_RAG_645A",
+            "history_user": "SECRET_HTTP_HISTORY_USER_A920",
+            "history_assistant": "SECRET_HTTP_HISTORY_ASSISTANT_B781",
+            "current_user": "SECRET_HTTP_CURRENT_USER_293A",
+        }
+        monkeypatch.setenv("RAG_ENABLED", "true")
+
+        def reject_prompt(prompt_input):
+            assert prompt_input.character.system_prompt == secrets["character"]
+            assert prompt_input.rag.items[0].content.endswith(secrets["rag"])
+            assert prompt_input.history.exchanges[0].user_content == secrets[
+                "history_user"
+            ]
+            assert prompt_input.history.exchanges[0].assistant_content == secrets[
+                "history_assistant"
+            ]
+            assert prompt_input.current_user.content == secrets["current_user"]
+            raise PromptInputLimitError("current_user", 8193, 8192)
+
+        with patch(
+            _LOAD_PERSONALITY,
+            return_value=_character_card(secrets["character"]),
+        ):
+            with patch(
+                _BUILD_AUGMENTED_SYSTEM_PROMPT,
+                return_value=[_rag_memory(secrets["rag"])],
+            ):
+                with patch(
+                    _COMPLETED_EXCHANGES,
+                    return_value=(
+                        CompletedHistoryExchange(
+                            user_content=secrets["history_user"],
+                            assistant_content=secrets["history_assistant"],
+                        ),
+                    ),
+                ):
+                    with patch(_BUILD_PROMPT, side_effect=reject_prompt):
+                        with TestClient(
+                            app,
+                            raise_server_exceptions=False,
+                        ) as client:
+                            response = client.post(
+                                "/chat",
+                                json={
+                                    "character": "miori",
+                                    "message": secrets["current_user"],
+                                },
+                            )
+
+        assert response.status_code == 422
+        for secret in secrets.values():
+            assert secret not in response.text
+            assert secret not in caplog.text
+
+    def test_prompt_limit_persists_failed_conversation_turn(
+        self,
+        monkeypatch,
+        conversation_history_database_path,
+    ):
+        monkeypatch.setenv("RAG_ENABLED", "false")
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(
+                _BUILD_PROMPT,
+                side_effect=PromptInputLimitError("current_user", 8193, 8192),
+            ):
+                with TestClient(app, raise_server_exceptions=False) as client:
+                    response = client.post("/chat", json=_VALID_BODY)
+
+        with sqlite3.connect(conversation_history_database_path) as connection:
+            statuses = connection.execute(
+                "SELECT status FROM conversation_turns ORDER BY created_at"
+            ).fetchall()
+
+        assert response.status_code == 422
+        assert statuses == [("failed",)]
+
     def test_returns_200_for_valid_request(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):

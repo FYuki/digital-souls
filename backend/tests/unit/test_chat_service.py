@@ -20,9 +20,12 @@ from app.chat_service import (
     ChatServiceError,
     ChatTimeoutError,
 )
-from app.conversation_history.service import StartedHistoryTurn
+from app.conversation_history.service import (
+    CompletedHistoryExchange,
+    StartedHistoryTurn,
+)
 from app.memory.chroma_store import MemorySearchResult
-from app.prompting import CharacterPrompt
+from app.prompting import CharacterPrompt, PromptInputLimitError
 
 
 _LOAD_PERSONALITY = "app._chat_runtime._character_loader.load_character_card"
@@ -33,6 +36,7 @@ _BUILD_AUGMENTED_SYSTEM_PROMPT = (
 _RECORD_USER_MEMORY_CANDIDATE = (
     "app._chat_runtime._rag_service.record_user_memory_candidate"
 )
+_BUILD_PROMPT = "app._chat_runtime.PromptBuilder.build"
 
 
 def _character_card(system_prompt: str = "# prompt") -> MagicMock:
@@ -195,6 +199,120 @@ def _chat_service_with_history(session: _RecordingHistorySession) -> ChatService
 
 
 class TestChatServiceErrorContract:
+    def test_input_limit_error_exposes_safe_diagnostic_fields(self):
+        error_type = getattr(chat_service, "ChatInputLimitError", None)
+
+        assert error_type is not None
+        error = error_type(region="current_user", used=8193, limit=8192)
+        assert isinstance(error, ChatServiceError)
+        assert error.region == "current_user"
+        assert error.used == 8193
+        assert error.limit == 8192
+        assert error.detail == (
+            "Prompt input exceeds token budget: "
+            "region=current_user used=8193 limit=8192"
+        )
+        assert str(error) == error.detail
+        assert "ChatInputLimitError" in chat_service.__all__
+
+    def test_runtime_converts_prompt_limit_error_and_preserves_cause(self):
+        source_error = PromptInputLimitError(
+            region="current_user",
+            used=8193,
+            limit=8192,
+        )
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_BUILD_PROMPT, side_effect=source_error):
+                with pytest.raises(ChatServiceError) as exc_info:
+                    _chat_service(False).generate_chat_reply("miori", "hello")
+
+        error = exc_info.value
+        assert error.__class__.__name__ == "ChatInputLimitError"
+        assert error.region == source_error.region
+        assert error.used == source_error.used
+        assert error.limit == source_error.limit
+        assert error.__cause__ is source_error
+
+    def test_prompt_limit_error_marks_started_turn_failed_once(self):
+        session = _RecordingHistorySession()
+        service = _chat_service_with_history(session)
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(
+                _BUILD_PROMPT,
+                side_effect=PromptInputLimitError("current_user", 8193, 8192),
+            ):
+                with pytest.raises(ChatServiceError):
+                    service.generate_chat_reply("miori", "hello")
+
+        assert session.start_calls == ["hello"]
+        assert session.complete_calls == []
+        assert session.fail_calls == [session.started_turn]
+
+    def test_prompt_limit_error_and_logs_do_not_contain_prompt_bodies(self, caplog):
+        secrets = {
+            "character": "SECRET_CHARACTER_PROMPT_86C2",
+            "rag": "SECRET_RAG_BODY_41D7",
+            "history_user": "SECRET_HISTORY_USER_5E09",
+            "history_assistant": "SECRET_HISTORY_ASSISTANT_A13B",
+            "current_user": "SECRET_CURRENT_USER_F742",
+        }
+        session = _RecordingHistorySession()
+        session.completed_exchanges = MagicMock(
+            return_value=(
+                CompletedHistoryExchange(
+                    user_content=secrets["history_user"],
+                    assistant_content=secrets["history_assistant"],
+                ),
+            )
+        )
+        service = ChatService(
+            ChatRuntimeConfig(
+                rag_enabled=True,
+                memory_policy=MagicMock(),
+                privacy_scanner=MagicMock(),
+            ),
+            _CollectingTaskQueue(),
+            _RecordingHistoryService(session),
+        )
+
+        def reject_prompt(prompt_input):
+            assert prompt_input.character.system_prompt == secrets["character"]
+            assert prompt_input.rag.items[0].content.endswith(secrets["rag"])
+            assert prompt_input.history.exchanges[0].user_content == secrets[
+                "history_user"
+            ]
+            assert prompt_input.history.exchanges[0].assistant_content == secrets[
+                "history_assistant"
+            ]
+            assert prompt_input.current_user.content == secrets["current_user"]
+            raise PromptInputLimitError("current_user", 8193, 8192)
+
+        with patch(
+            _LOAD_PERSONALITY,
+            return_value=_character_card(secrets["character"]),
+        ):
+            with patch(
+                _BUILD_AUGMENTED_SYSTEM_PROMPT,
+                return_value=[_rag_memory(secrets["rag"])],
+            ):
+                with patch(
+                    _BUILD_PROMPT,
+                    side_effect=reject_prompt,
+                ):
+                    with pytest.raises(ChatServiceError) as exc_info:
+                        service.generate_chat_reply(
+                            "miori",
+                            secrets["current_user"],
+                        )
+
+        observed = "\n".join(
+            (str(exc_info.value), repr(exc_info.value), caplog.text)
+        )
+        for secret in secrets.values():
+            assert secret not in observed
+
     def test_infra_functions_are_not_public_api(self):
         assert not hasattr(chat_service, "load_personality")
         assert not hasattr(chat_service, "generate_response")

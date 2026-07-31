@@ -11,7 +11,8 @@ from unittest.mock import MagicMock, patch
 from app.audio_pipeline import resolve_audio_runtime_config
 from app.main import app
 from app.memory.chroma_store import MemorySearchResult
-from app.prompting import CharacterPrompt
+from app.prompting import CharacterPrompt, PromptInputLimitError
+from app.prompting.builder import PromptBuilder
 from app.tts.voicevox_client import DEFAULT_VOICEVOX_BASE_URL
 from tests.character_card_test_support import (
     character_card_data,
@@ -31,6 +32,7 @@ _RESOLVED_MEMORY_POLICY = "app.main.resolved_memory_policy"
 _LOAD_TTS_CONFIG = "app.audio_pipeline.load_tts_config"
 _TRANSCRIBE = "app.stt.whisper_client.WhisperTranscriber.transcribe"
 _SYNTHESIZE = "app.tts.voicevox_client.VoicevoxClient.synthesize"
+_BUILD_PROMPT = "app._chat_runtime.PromptBuilder.build"
 
 _PERSONALITY = "# 光織\n穏やかなAIです。"
 _LLM_REPLY = "光織です。よろしくお願いします。"
@@ -122,6 +124,99 @@ def _wait_until(predicate, timeout: float = 5.0) -> None:
 
 
 class TestWebSocketEndpoint:
+    def test_returns_422_and_continues_after_text_prompt_limit(
+        self,
+        client,
+        caplog,
+    ):
+        secret = "SECRET_WS_TEXT_CURRENT_USER_C934"
+        original_build = PromptBuilder.build
+        calls = 0
+
+        def fail_first_build(builder, prompt_input):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise PromptInputLimitError("current_user", 8193, 8192)
+            return original_build(builder, prompt_input)
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_BUILD_PROMPT, autospec=True, side_effect=fail_first_build):
+                with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
+                    with client.websocket_connect("/ws/miori") as websocket:
+                        websocket.send_json({"type": "text", "message": secret})
+                        limit_response = websocket.receive_json()
+
+                        websocket.send_json(
+                            {"type": "text", "message": "continue after limit"}
+                        )
+                        normal_response = websocket.receive_json()
+
+        assert limit_response == {
+            "type": "error",
+            "status": 422,
+            "detail": (
+                "Prompt input exceeds token budget: "
+                "region=current_user used=8193 limit=8192"
+            ),
+        }
+        assert normal_response == {"type": "text", "response": _LLM_REPLY}
+        assert secret not in str(limit_response)
+        assert secret not in caplog.text
+
+    def test_returns_422_and_continues_after_audio_prompt_limit(
+        self,
+        client,
+        caplog,
+    ):
+        secret = "SECRET_WS_AUDIO_TRANSCRIPT_8B51"
+        original_build = PromptBuilder.build
+        calls = 0
+
+        def fail_first_build(builder, prompt_input):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise PromptInputLimitError("current_user", 8193, 8192)
+            return original_build(builder, prompt_input)
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
+                with patch(_TRANSCRIBE, return_value=secret):
+                    with patch(
+                        _BUILD_PROMPT,
+                        autospec=True,
+                        side_effect=fail_first_build,
+                    ):
+                        with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
+                            with patch(_SYNTHESIZE) as mock_tts:
+                                with client.websocket_connect(
+                                    "/ws/miori"
+                                ) as websocket:
+                                    websocket.send_bytes(_PCM_AUDIO)
+                                    limit_response = websocket.receive_json()
+
+                                    websocket.send_json(
+                                        {
+                                            "type": "text",
+                                            "message": "continue after audio limit",
+                                        }
+                                    )
+                                    normal_response = websocket.receive_json()
+
+        assert limit_response == {
+            "type": "error",
+            "status": 422,
+            "detail": (
+                "Prompt input exceeds token budget: "
+                "region=current_user used=8193 limit=8192"
+            ),
+        }
+        assert normal_response == {"type": "text", "response": _LLM_REPLY}
+        assert secret not in str(limit_response)
+        assert secret not in caplog.text
+        mock_tts.assert_not_called()
+
     @pytest.mark.parametrize(
         ("error", "expected_status", "expected_detail"),
         [
