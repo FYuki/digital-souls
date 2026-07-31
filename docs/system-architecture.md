@@ -62,8 +62,9 @@
 * `routers/chat.py` — テキストチャットのHTTPエンドポイント
 * `routers/ws.py` — 音声チャット用WebSocketエンドポイント（STT→LLM→TTSの一連の処理、音声フレームの処理中キューを含む）
 * `chat_service.py` / `_chat_runtime.py` — チャットセッションの生成・応答生成のエントリポイント
-* `characters/loader.py` — `characters/` 配下の人格定義（personality.md・card.json等）のロード
-* `llm/` — LLM振り分けルーター（`router.py`）とクライアント実装。`ollama_client.py`（ローカルOllama、常用）、`base.py`（クライアント共通インターフェース）。クラウドLLM（Claude等）向けクライアントは未実装のスタブ
+* `characters/loader.py` — `characters/` 配下のCharacter Card V3の検証・ロードと、`extensions.digital_souls`の型付き設定読み取り
+* `prompting/` — Character Card、RAG、保存済み履歴、現在発言を順序とtoken budgetに従って合成する単一境界
+* `llm/` — 完成済みpromptを受け取るLLM振り分けルーターとクライアント実装。`ollama_client.py`（ローカルOllama、常用）、`base.py`（クライアント共通インターフェース）。クラウドLLM（Claude等）向けクライアントは未実装のスタブ
 * `memory/` — 会話履歴と長期記憶の基盤。SQLiteに同一conversation再開用の履歴と承認済み長期記憶を責務分離して保存し、Chromaは承認済み長期記憶だけの派生検索インデックスとして扱う。`memory_policy.py`は`backend/app/memory/memory_policy.json`の認識設定と、アプリケーションの非緩和policyを組み合わせて保存先別に判定する
 * `stt/whisper_client.py` — faster-whisperによる音声認識
 * `tts/voicevox_client.py` / `tts/speech_synthesizer.py` — VOICEVOXによる音声合成
@@ -210,7 +211,8 @@ Chromaから冪等に削除する。SQLite commit後の同じ削除操作でChro
 ```text
 characters/
 └─ miori/
-   ├─ personality.md
+   ├─ miori.card.json  # runtime人格定義のSource of Truth
+   ├─ personality.md   # 人格設計の編集資料（runtimeでは未使用）
    ├─ world.md
    └─ memory-policy.md  # 方針本文と実装設定への案内
 ```

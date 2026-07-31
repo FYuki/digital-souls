@@ -255,7 +255,7 @@ class TestRagHistorySeparation:
             or "from conversations" in value
         }
 
-        assert callable(rag_service.build_augmented_system_prompt)
+        assert callable(rag_service.retrieve_prompt_memories)
         assert callable(rag_service.record_user_memory_candidate)
         assert forbidden_imports == set()
         assert forbidden_sql == set()

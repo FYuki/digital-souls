@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 
-_LOAD_PERSONALITY = "app._chat_runtime._character_loader.load_personality"
 _GENERATE_RESPONSE = "app._chat_runtime._llm_router.generate_response"
 
 
@@ -24,18 +23,17 @@ def test_should_persist_only_sanitized_user_and_assistant_content(
     client,
     conversation_history_database_path: Path,
 ) -> None:
-    with patch(_LOAD_PERSONALITY, return_value="# prompt"):
-        with patch(
-            _GENERATE_RESPONSE,
-            return_value="確認: password: synthetic-assistant-secret",
-        ):
-            response = client.post(
-                "/chat",
-                json={
-                    "character": "miori",
-                    "message": "password: synthetic-user-secret",
-                },
-            )
+    with patch(
+        _GENERATE_RESPONSE,
+        return_value="確認: password: synthetic-assistant-secret",
+    ):
+        response = client.post(
+            "/chat",
+            json={
+                "character": "miori",
+                "message": "password: synthetic-user-secret",
+            },
+        )
 
     assert response.status_code == 200
     assert _stored_turn(conversation_history_database_path) == (
@@ -50,15 +48,14 @@ def test_should_persist_metadata_only_for_current_user_history_opt_out(
     client,
     conversation_history_database_path: Path,
 ) -> None:
-    with patch(_LOAD_PERSONALITY, return_value="# prompt"):
-        with patch(_GENERATE_RESPONSE, return_value="承知しました"):
-            response = client.post(
-                "/chat",
-                json={
-                    "character": "miori",
-                    "message": "このターンは履歴に残さないで",
-                },
-            )
+    with patch(_GENERATE_RESPONSE, return_value="承知しました"):
+        response = client.post(
+            "/chat",
+            json={
+                "character": "miori",
+                "message": "このターンは履歴に残さないで",
+            },
+        )
 
     assert response.status_code == 200
     assert _stored_turn(conversation_history_database_path) == (
@@ -73,12 +70,11 @@ def test_should_mark_turn_failed_for_empty_assistant_response(
     client,
     conversation_history_database_path: Path,
 ) -> None:
-    with patch(_LOAD_PERSONALITY, return_value="# prompt"):
-        with patch(_GENERATE_RESPONSE, return_value=""):
-            response = client.post(
-                "/chat",
-                json={"character": "miori", "message": "通常の質問です"},
-            )
+    with patch(_GENERATE_RESPONSE, return_value=""):
+        response = client.post(
+            "/chat",
+            json={"character": "miori", "message": "通常の質問です"},
+        )
 
     assert response.status_code == 502
     assert _stored_turn(conversation_history_database_path) == (
@@ -100,17 +96,16 @@ def test_should_reject_policy_sensitive_content_at_rag_storage_entry(
     monkeypatch.setenv("RAG_ENABLED", "true")
     monkeypatch.setattr(rag_service, "create_memory_candidate_record", create_record)
 
-    with patch(_LOAD_PERSONALITY, return_value="# prompt"):
-        with patch(
-            "app._chat_runtime._rag_service.build_augmented_system_prompt",
-            return_value="# prompt",
-        ):
-            with patch(_GENERATE_RESPONSE, return_value="承知しました"):
-                with TestClient(main.app) as client:
-                    response = client.post(
-                        "/chat",
-                        json={"character": "miori", "message": user_message},
-                    )
+    with patch(
+        "app._chat_runtime._rag_service.retrieve_prompt_memories",
+        return_value=(),
+    ):
+        with patch(_GENERATE_RESPONSE, return_value="承知しました"):
+            with TestClient(main.app) as client:
+                response = client.post(
+                    "/chat",
+                    json={"character": "miori", "message": user_message},
+                )
 
     assert response.status_code == 200
     create_record.assert_not_called()

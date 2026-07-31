@@ -75,26 +75,14 @@ def _allows_rag_storage(result: ScanResult) -> bool:
     return True
 
 
-def _format_augmented_prompt(
-    system_prompt: str,
-    memories: list[MemorySearchResult],
-) -> str:
-    memory_block = "\n".join(
-        f"- [{memory.timestamp}] ({memory.role}) {memory.content}"
-        for memory in memories
-    )
-    return f"{system_prompt}\n\n過去の記憶:\n{memory_block}"
-
-
-def build_augmented_system_prompt(
+def retrieve_prompt_memories(
     character: str,
     user_message: str,
-    system_prompt: str,
     policy: MemoryPolicy,
-) -> str:
+) -> tuple[MemorySearchResult, ...]:
     if contains_sensitive_memory(user_message, policy):
         logger.warning("Skipped RAG memory lookup for sensitive content")
-        return system_prompt
+        return ()
     try:
         embedding = embed_text(user_message)
         memories = query_memories(
@@ -104,10 +92,8 @@ def build_augmented_system_prompt(
         )
     except RAG_OPERATION_ERRORS as exc:
         logger.warning("RAG memory lookup failed: %s", exc.__class__.__name__)
-        return system_prompt
-    if not memories:
-        return system_prompt
-    return _format_augmented_prompt(system_prompt, memories)
+        return ()
+    return tuple(memories)
 
 
 def _embed_and_store(record: MemoryCandidateRecord) -> None:

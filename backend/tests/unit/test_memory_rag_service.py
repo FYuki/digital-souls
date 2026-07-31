@@ -75,7 +75,7 @@ def _finding(
 
 
 class TestRagServicePrompt:
-    def test_build_augmented_system_prompt_appends_retrieved_memories(
+    def test_retrieve_prompt_memories_returns_retrieved_memories(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -100,21 +100,20 @@ class TestRagServicePrompt:
             ),
         )
 
-        prompt = rag_service.build_augmented_system_prompt(
+        memories = rag_service.retrieve_prompt_memories(
             "miori",
             "前回は?",
-            "基本人格",
             _resolved_policy(),
         )
 
-        assert prompt.startswith("基本人格")
-        assert "[2026-06-20T00:00:00+00:00] (user)" in prompt
-        assert "前回は畑の土壌について話した" in prompt
-        assert "[2026-06-21T00:00:00+00:00] (assistant)" in prompt
-        assert "雨量を確認した" in prompt
+        assert [memory.content for memory in memories] == [
+            "前回は畑の土壌について話した",
+            "雨量を確認した",
+        ]
+        assert [memory.role for memory in memories] == ["user", "assistant"]
         rag_service.query_memories.assert_called_once_with("miori", [0.1], n_results=5)
 
-    def test_build_augmented_system_prompt_uses_passed_policy_once(
+    def test_retrieve_prompt_memories_uses_passed_policy_once(
         self, monkeypatch, tmp_path
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -163,18 +162,17 @@ class TestRagServicePrompt:
             MagicMock(wraps=rag_service.rag_service_policy),
         )
 
-        prompt = rag_service.build_augmented_system_prompt(
+        memories = rag_service.retrieve_prompt_memories(
             "miori",
             "前回は?",
-            "基本人格",
             policy,
         )
 
-        assert prompt.startswith("基本人格")
+        assert len(memories) == 2
         rag_service.query_memories.assert_called_once_with("miori", [0.1], n_results=2)
         rag_service.rag_service_policy.assert_called_once_with(policy)
 
-    def test_build_augmented_system_prompt_skips_rag_when_search_fails(
+    def test_retrieve_prompt_memories_returns_empty_when_search_fails(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -182,17 +180,16 @@ class TestRagServicePrompt:
         monkeypatch.setattr(rag_service, "embed_text", MagicMock(side_effect=RuntimeError))
         monkeypatch.setattr(rag_service, "query_memories", MagicMock())
 
-        prompt = rag_service.build_augmented_system_prompt(
+        memories = rag_service.retrieve_prompt_memories(
             "miori",
             "前回は?",
-            "基本人格",
             _resolved_policy(),
         )
 
-        assert prompt == "基本人格"
+        assert memories == ()
         rag_service.query_memories.assert_not_called()
 
-    def test_build_augmented_system_prompt_skips_rag_on_contract_validation_errors(
+    def test_retrieve_prompt_memories_returns_empty_on_contract_validation_errors(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -204,17 +201,16 @@ class TestRagServicePrompt:
         )
         monkeypatch.setattr(rag_service, "query_memories", MagicMock())
 
-        prompt = rag_service.build_augmented_system_prompt(
+        memories = rag_service.retrieve_prompt_memories(
             "miori",
             "前回は?",
-            "基本人格",
             _resolved_policy(),
         )
 
-        assert prompt == "基本人格"
+        assert memories == ()
         rag_service.query_memories.assert_not_called()
 
-    def test_build_augmented_system_prompt_skips_rag_when_query_contract_fails(
+    def test_retrieve_prompt_memories_returns_empty_when_query_contract_fails(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -226,17 +222,16 @@ class TestRagServicePrompt:
             MagicMock(side_effect=ValueError("invalid query response")),
         )
 
-        prompt = rag_service.build_augmented_system_prompt(
+        memories = rag_service.retrieve_prompt_memories(
             "miori",
             "前回は?",
-            "基本人格",
             _resolved_policy(),
         )
 
-        assert prompt == "基本人格"
+        assert memories == ()
         rag_service.query_memories.assert_called_once()
 
-    def test_build_augmented_system_prompt_skips_sensitive_query_embedding(
+    def test_retrieve_prompt_memories_skips_sensitive_query_embedding(
         self, monkeypatch
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
@@ -244,14 +239,13 @@ class TestRagServicePrompt:
         monkeypatch.setattr(rag_service, "embed_text", MagicMock())
         monkeypatch.setattr(rag_service, "query_memories", MagicMock())
 
-        prompt = rag_service.build_augmented_system_prompt(
+        memories = rag_service.retrieve_prompt_memories(
             "miori",
             "APIキーはabcです",
-            "基本人格",
             _resolved_policy(),
         )
 
-        assert prompt == "基本人格"
+        assert memories == ()
         rag_service.embed_text.assert_not_called()
         rag_service.query_memories.assert_not_called()
 
@@ -987,10 +981,9 @@ class TestMemoryPolicyConfiguration:
         monkeypatch.setattr(rag_service, "embed_text", MagicMock())
         monkeypatch.setattr(rag_service, "query_memories", MagicMock())
 
-        prompt = rag_service.build_augmented_system_prompt(
+        memories = rag_service.retrieve_prompt_memories(
             "miori",
             sensitive_content,
-            "基本人格",
             policy,
         )
         _record_candidate(
@@ -1001,7 +994,7 @@ class TestMemoryPolicyConfiguration:
             background_tasks,
         )
 
-        assert prompt == "基本人格"
+        assert memories == ()
         assert memory_policy.contains_sensitive_memory(sensitive_content, policy)
         rag_service.embed_text.assert_not_called()
         rag_service.query_memories.assert_not_called()

@@ -4,12 +4,19 @@ import httpx
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.memory.chroma_store import MemorySearchResult
+from app.prompting import CharacterPrompt
+from tests.character_card_test_support import (
+    character_card_data,
+    character_card_document,
+    write_character_card,
+)
 
 
-_LOAD_PERSONALITY = "app._chat_runtime._character_loader.load_personality"
+_LOAD_PERSONALITY = "app._chat_runtime._character_loader.load_character_card"
 _GENERATE_RESPONSE = "app._chat_runtime._llm_router.generate_response"
 _BUILD_AUGMENTED_SYSTEM_PROMPT = (
-    "app._chat_runtime._rag_service.build_augmented_system_prompt"
+    "app._chat_runtime._rag_service.retrieve_prompt_memories"
 )
 _RECORD_USER_MEMORY_CANDIDATE = (
     "app._chat_runtime._rag_service.record_user_memory_candidate"
@@ -19,6 +26,43 @@ _RESOLVED_MEMORY_POLICY = "app.main.resolved_memory_policy"
 _VALID_BODY = {"character": "miori", "message": "自己紹介してください"}
 _PERSONALITY = "# 光織\n穏やかなAIです。"
 _LLM_REPLY = "光織です。よろしくお願いします。"
+
+
+def _character_card(system_prompt: str = _PERSONALITY) -> MagicMock:
+    card = MagicMock()
+    card.to_character_prompt.return_value = CharacterPrompt(
+        description="",
+        personality="",
+        scenario="",
+        system_prompt=system_prompt,
+        mes_example="",
+        post_history_instructions="",
+    )
+    return card
+
+
+def _write_card(tmp_path, system_prompt: str) -> None:
+    data = character_card_data(
+        description="",
+        personality="",
+        scenario="",
+        system_prompt=system_prompt,
+        mes_example="",
+        post_history_instructions="",
+    )
+    write_character_card(
+        tmp_path,
+        "miori",
+        character_card_document(data=data),
+    )
+
+
+def _rag_memory(content: str) -> MemorySearchResult:
+    return MemorySearchResult(
+        content=content,
+        timestamp="2026-07-31T00:00:00+00:00",
+        role="user",
+    )
 
 
 def _rag_policy() -> MagicMock:
@@ -40,35 +84,35 @@ def _ollama_response(content: str) -> MagicMock:
 
 class TestChatEndpoint:
     def test_returns_200_for_valid_request(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                 response = client.post("/chat", json=_VALID_BODY)
 
         assert response.status_code == 200
 
     def test_response_has_character_key(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                 response = client.post("/chat", json=_VALID_BODY)
 
         assert "character" in response.json()
 
     def test_response_has_response_key(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                 response = client.post("/chat", json=_VALID_BODY)
 
         assert "response" in response.json()
 
     def test_response_body_has_exactly_two_keys(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                 response = client.post("/chat", json=_VALID_BODY)
 
         assert set(response.json().keys()) == {"character", "response"}
 
     def test_response_character_echoes_request_character(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                 response = client.post("/chat", json=_VALID_BODY)
 
@@ -76,14 +120,14 @@ class TestChatEndpoint:
 
     def test_response_field_contains_llm_output(self, client):
         expected = "こんにちは、光織です。"
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=expected):
                 response = client.post("/chat", json=_VALID_BODY)
 
         assert response.json()["response"] == expected
 
     def test_load_personality_called_with_character_name(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY) as mock_load:
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()) as mock_load:
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                 client.post("/chat", json=_VALID_BODY)
 
@@ -91,7 +135,7 @@ class TestChatEndpoint:
 
     def test_generate_response_called_with_personality_and_message(self, client):
         user_message = "農業日誌を記録したい"
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value="了解です") as mock_gen:
                 client.post(
                     "/chat",
@@ -99,21 +143,20 @@ class TestChatEndpoint:
                 )
 
         mock_gen.assert_called_once()
-        args, kwargs = mock_gen.call_args
-        all_args = list(args) + list(kwargs.values())
-        assert _PERSONALITY in all_args
-        assert user_message in all_args
+        prompt = mock_gen.call_args.args[0]
+        contents = [message.content for message in prompt.messages]
+        assert _PERSONALITY in contents[0]
+        assert user_message == contents[-1]
 
     def test_generate_response_uses_rag_augmented_system_prompt(self, monkeypatch):
         policy = _rag_policy()
-        augmented_prompt = f"{_PERSONALITY}\n\n過去の記憶:\n前回は畑の話をした"
         monkeypatch.setenv("RAG_ENABLED", "true")
         with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
             with TestClient(app) as client:
-                with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+                with patch(_LOAD_PERSONALITY, return_value=_character_card()):
                     with patch(
                         _BUILD_AUGMENTED_SYSTEM_PROMPT,
-                        return_value=augmented_prompt,
+                        return_value=(_rag_memory("前回は畑の話をした"),),
                     ) as mock_build:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
                             with patch(_RECORD_USER_MEMORY_CANDIDATE):
@@ -122,18 +165,18 @@ class TestChatEndpoint:
         mock_build.assert_called_once_with(
             "miori",
             _VALID_BODY["message"],
-            _PERSONALITY,
             policy,
         )
-        mock_gen.assert_called_once_with(augmented_prompt, _VALID_BODY["message"])
+        prompt = mock_gen.call_args.args[0]
+        assert "前回は畑の話をした" in prompt.messages[1].content
 
     def test_records_user_memory_candidate_after_llm_reply(self, monkeypatch):
         policy = _rag_policy()
         monkeypatch.setenv("RAG_ENABLED", "true")
         with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
             with TestClient(app) as client:
-                with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
-                    with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT, return_value=_PERSONALITY):
+                with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+                    with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT, return_value=()):
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                             with patch(
                                 _RECORD_USER_MEMORY_CANDIDATE
@@ -157,7 +200,7 @@ class TestChatEndpoint:
         monkeypatch.setenv("RAG_ENABLED", "false")
         with patch(_RESOLVED_MEMORY_POLICY, return_value=policy) as mock_policy:
             with TestClient(app) as client:
-                with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+                with patch(_LOAD_PERSONALITY, return_value=_character_card()):
                     with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT) as mock_build:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                             with patch(
@@ -171,7 +214,7 @@ class TestChatEndpoint:
         mock_record.assert_not_called()
 
     def test_does_not_record_user_memory_candidate_when_llm_fails(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, side_effect=httpx.HTTPError("boom")):
                 with patch(_RECORD_USER_MEMORY_CANDIDATE) as mock_record:
                     response = client.post("/chat", json=_VALID_BODY)
@@ -193,14 +236,14 @@ class TestChatEndpoint:
         mock_gen.assert_not_called()
 
     def test_returns_504_when_llm_request_times_out(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, side_effect=httpx.ReadTimeout("timed out")):
                 response = client.post("/chat", json=_VALID_BODY)
 
         assert response.status_code == 504
 
     def test_returns_502_when_llm_request_fails(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, side_effect=httpx.HTTPError("boom")):
                 response = client.post("/chat", json=_VALID_BODY)
 
@@ -240,7 +283,7 @@ class TestChatEndpoint:
         assert response.status_code == 422
 
     def test_character_comes_from_request_body_not_query(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                 response = client.post(
                     "/chat?character=miori",
@@ -250,7 +293,7 @@ class TestChatEndpoint:
         assert response.status_code == 422
 
     def test_message_comes_from_request_body_not_query(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_PERSONALITY):
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                 response = client.post(
                     "/chat?message=hello",
@@ -266,13 +309,8 @@ class TestChatFlow:
     ):
         import app.characters.loader as loader_module
 
-        characters_dir = tmp_path / "characters" / "miori"
-        characters_dir.mkdir(parents=True)
         system_prompt = "# 光織\nあなたは光織です。"
-        characters_dir.joinpath("personality.md").write_text(
-            system_prompt,
-            encoding="utf-8",
-        )
+        _write_card(tmp_path, system_prompt)
         monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
 
         expected_reply = "光織です。よろしくお願いします。"
@@ -290,7 +328,7 @@ class TestChatFlow:
 
         payload = mock_post.call_args.kwargs["json"]
         assert payload["messages"] == [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": f"## 応答方針\n{system_prompt}"},
             {"role": "user", "content": "自己紹介してください"},
         ]
 
@@ -300,16 +338,10 @@ class TestChatFlow:
         import app.characters.loader as loader_module
 
         monkeypatch.setenv("RAG_ENABLED", "true")
-        characters_dir = tmp_path / "characters" / "miori"
-        characters_dir.mkdir(parents=True)
         system_prompt = "# 光織\nあなたは光織です。"
-        characters_dir.joinpath("personality.md").write_text(
-            system_prompt,
-            encoding="utf-8",
-        )
+        _write_card(tmp_path, system_prompt)
         monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
 
-        augmented_prompt = f"{system_prompt}\n\n過去の記憶:\n前回は畑の話をした"
         expected_reply = "前回は畑の話をしました。"
         policy = _rag_policy()
         with patch(
@@ -317,8 +349,8 @@ class TestChatFlow:
             return_value=policy,
         ) as mock_policy:
             with patch(
-                "app._chat_runtime._rag_service.build_augmented_system_prompt",
-                return_value=augmented_prompt,
+                "app._chat_runtime._rag_service.retrieve_prompt_memories",
+                return_value=(_rag_memory("前回は畑の話をした"),),
             ) as mock_build:
                 with patch(
                     "app._chat_runtime._rag_service.record_user_memory_candidate"
@@ -342,7 +374,6 @@ class TestChatFlow:
         mock_build.assert_called_once_with(
             "miori",
             "前回なんの話をしたっけ？",
-            system_prompt,
             policy,
         )
         mock_record.assert_called_once()
@@ -359,7 +390,12 @@ class TestChatFlow:
 
         payload = mock_post.call_args.kwargs["json"]
         assert payload["messages"] == [
-            {"role": "system", "content": augmented_prompt},
+            {"role": "system", "content": f"## 応答方針\n{system_prompt}"},
+            {
+                "role": "system",
+                "content": "## 関連する記憶\n"
+                "[2026-07-31T00:00:00+00:00] (user) 前回は畑の話をした",
+            },
             {"role": "user", "content": "前回なんの話をしたっけ？"},
         ]
 
@@ -370,13 +406,8 @@ class TestChatFlow:
         import app.memory.rag_service as rag_service
 
         monkeypatch.setenv("RAG_ENABLED", "true")
-        characters_dir = tmp_path / "characters" / "miori"
-        characters_dir.mkdir(parents=True)
         system_prompt = "# 光織\nあなたは光織です。"
-        characters_dir.joinpath("personality.md").write_text(
-            system_prompt,
-            encoding="utf-8",
-        )
+        _write_card(tmp_path, system_prompt)
         monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
         monkeypatch.setattr(
             rag_service,
@@ -401,7 +432,7 @@ class TestChatFlow:
         assert response.json() == {"character": "miori", "response": expected_reply}
         payload = mock_post.call_args.kwargs["json"]
         assert payload["messages"] == [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": f"## 応答方針\n{system_prompt}"},
             {"role": "user", "content": user_message},
         ]
         rag_service.query_memories.assert_not_called()

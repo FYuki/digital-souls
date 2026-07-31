@@ -1,30 +1,50 @@
 from unittest.mock import MagicMock, patch
 
 import httpx
-
 import pytest
 
 
 def _mock_response(content: str) -> MagicMock:
-    mock = MagicMock()
-    mock.json.return_value = {
+    response = MagicMock()
+    response.json.return_value = {
         "model": "gemma4:e4b",
         "message": {"role": "assistant", "content": content},
         "done": True,
     }
-    mock.raise_for_status.return_value = None
-    return mock
+    response.raise_for_status.return_value = None
+    return response
+
+
+def _built_prompt():
+    from tests.prompt_test_support import prompt_build_input, prompt_builder
+
+    return prompt_builder().build(prompt_build_input())
 
 
 _PATCH_HTTPX_POST = "app.llm.ollama_client.httpx.post"
 
 
 class TestOllamaClientGenerate:
+    def test_sends_built_prompt_messages_without_reassembling_them(self):
+        from app.llm.ollama_client import OllamaClient
+
+        built_prompt = _built_prompt()
+        expected_messages = [
+            {"role": message.role.value, "content": message.content}
+            for message in built_prompt.messages
+        ]
+
+        with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
+            OllamaClient().generate(built_prompt)
+
+        payload = mock_post.call_args.kwargs["json"]
+        assert payload["messages"] == expected_messages
+
     def test_sends_post_to_api_chat_path(self):
         from app.llm.ollama_client import OllamaClient
 
         with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate("system", "user")
+            OllamaClient().generate(_built_prompt())
 
         called_url: str = mock_post.call_args.args[0]
         assert called_url.endswith("/api/chat")
@@ -35,7 +55,7 @@ class TestOllamaClientGenerate:
         from app.llm.ollama_client import OllamaClient
 
         with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate("system", "user")
+            OllamaClient().generate(_built_prompt())
 
         called_url: str = mock_post.call_args.args[0]
         assert called_url.startswith("http://localhost:11434")
@@ -46,99 +66,44 @@ class TestOllamaClientGenerate:
         from app.llm.ollama_client import OllamaClient
 
         with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate("system", "user")
+            OllamaClient().generate(_built_prompt())
 
         called_url: str = mock_post.call_args.args[0]
         assert called_url.startswith("http://custom-host:9999")
 
-    def test_payload_model_is_gemma4_e4b(self):
+    def test_payload_uses_configured_model(self):
         from app.llm.ollama_client import OllamaClient
         from app.model_settings import OLLAMA_MODEL_NAME
 
         with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate("system", "user")
+            OllamaClient().generate(_built_prompt())
 
-        payload: dict = mock_post.call_args.kwargs.get("json", {})
-        assert payload.get("model") == OLLAMA_MODEL_NAME
+        payload = mock_post.call_args.kwargs["json"]
+        assert payload["model"] == OLLAMA_MODEL_NAME
 
-    def test_payload_stream_is_false(self):
+    def test_payload_disables_streaming(self):
         from app.llm.ollama_client import OllamaClient
 
         with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate("system", "user")
+            OllamaClient().generate(_built_prompt())
 
-        payload: dict = mock_post.call_args.kwargs.get("json", {})
-        assert payload.get("stream") is False
-
-    def test_payload_messages_has_two_entries(self):
-        from app.llm.ollama_client import OllamaClient
-
-        with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate("system prompt", "user message")
-
-        payload: dict = mock_post.call_args.kwargs.get("json", {})
-        assert len(payload.get("messages", [])) == 2
-
-    def test_payload_first_message_is_system_role(self):
-        from app.llm.ollama_client import OllamaClient
-
-        with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate("system prompt", "user message")
-
-        messages = mock_post.call_args.kwargs.get("json", {}).get("messages", [])
-        assert messages[0]["role"] == "system"
-
-    def test_payload_first_message_content_is_system_prompt(self):
-        from app.llm.ollama_client import OllamaClient
-
-        system_prompt = "あなたは光織です。"
-        with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate(system_prompt, "user message")
-
-        messages = mock_post.call_args.kwargs.get("json", {}).get("messages", [])
-        assert messages[0]["content"] == system_prompt
-
-    def test_payload_second_message_is_user_role(self):
-        from app.llm.ollama_client import OllamaClient
-
-        with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate("system prompt", "user message")
-
-        messages = mock_post.call_args.kwargs.get("json", {}).get("messages", [])
-        assert messages[1]["role"] == "user"
-
-    def test_payload_second_message_content_is_user_message(self):
-        from app.llm.ollama_client import OllamaClient
-
-        user_message = "こんにちは、自己紹介してください。"
-        with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate("system", user_message)
-
-        messages = mock_post.call_args.kwargs.get("json", {}).get("messages", [])
-        assert messages[1]["content"] == user_message
+        payload = mock_post.call_args.kwargs["json"]
+        assert payload["stream"] is False
 
     def test_returns_message_content_from_ollama_response(self):
         from app.llm.ollama_client import OllamaClient
 
         expected = "光織です。よろしくお願いします。"
         with patch(_PATCH_HTTPX_POST, return_value=_mock_response(expected)):
-            result = OllamaClient().generate("system", "user")
+            result = OllamaClient().generate(_built_prompt())
 
         assert result == expected
-
-    def test_return_type_is_str(self):
-        from app.llm.ollama_client import OllamaClient
-
-        with patch(_PATCH_HTTPX_POST, return_value=_mock_response("hello")):
-            result = OllamaClient().generate("system", "user")
-
-        assert isinstance(result, str)
 
     def test_passes_explicit_timeout_to_httpx_post(self):
         from app.llm.ollama_client import OllamaClient
 
         with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate("system", "user")
+            OllamaClient().generate(_built_prompt())
 
         timeout = mock_post.call_args.kwargs["timeout"]
         assert isinstance(timeout, httpx.Timeout)
@@ -157,6 +122,6 @@ class TestOllamaClientGenerate:
 
         with patch(_PATCH_HTTPX_POST, return_value=response):
             with pytest.raises(httpx.HTTPStatusError):
-                OllamaClient().generate("system", "user")
+                OllamaClient().generate(_built_prompt())
 
         response.json.assert_not_called()

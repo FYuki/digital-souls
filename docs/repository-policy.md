@@ -21,7 +21,8 @@ repo/
 │
 ├─ characters/
 │  └─ miori/
-│     ├─ personality.md
+│     ├─ miori.card.json
+│     ├─ personality.md  # Character Card編集用の非runtime補助資料
 │     ├─ world.md
 │     └─ memory-policy.md  # 方針本文と実装設定への案内
 │
@@ -55,11 +56,17 @@ characters/
 └─ common/
 ```
 
-想定ファイル:
+基本ファイル:
 
-* `personality.md`
+* `{id}.card.json`（runtimeで使用する人格・表示名・会話例・応答指示の正本）
+* `personality.md`（Character Card編集用の非runtime補助資料）
 * `world.md`
 * `memory-policy.md`（方針本文と実装設定への案内）
+
+runtimeは`{id}.card.json`を直接読み込み、`personality.md`から人格情報を合成しない。
+
+追加可能な補助ファイル:
+
 * `voice.md`
 * `appearance.md`
 

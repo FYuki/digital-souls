@@ -631,7 +631,6 @@ class TestLLMClientContract:
 
         assert list(signature.parameters) == [
             "self",
-            "system_prompt",
-            "user_message",
+            "prompt",
         ]
         assert signature.return_annotation is str
