@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
@@ -8,9 +9,12 @@ from app.conversation_history.models import (
     PrivacySkipReason,
     PrivacySkippedTurnInput,
     ProcessingTurnInput,
-    TurnStatus,
 )
 from app.conversation_history.repository import ConversationHistoryRepository
+from app.conversation_history.prompt_history import (
+    RestoredHistoryTurn,
+    restore_prompt_turn,
+)
 from app.privacy.contracts import (
     ConversationHistoryAction,
     ConversationHistoryDecision,
@@ -23,12 +27,6 @@ from app.privacy.history_sanitizer import HistorySanitizer
 class StartedHistoryTurn:
     turn_id: UUID
     content_skipped: bool
-
-
-@dataclass(frozen=True, repr=False)
-class CompletedHistoryExchange:
-    user_content: str
-    assistant_content: str
 
 
 class HistorySession(Protocol):
@@ -45,7 +43,12 @@ class HistorySession(Protocol):
     def fail_turn(self, started_turn: StartedHistoryTurn) -> None:
         ...
 
-    def completed_exchanges(self) -> tuple[CompletedHistoryExchange, ...]:
+    def prompt_turns(
+        self,
+        *,
+        max_completed_turns: int,
+        page_size: int,
+    ) -> Iterator[RestoredHistoryTurn]:
         ...
 
 
@@ -119,21 +122,33 @@ class ConversationHistorySession:
             started_turn.turn_id,
         )
 
-    def completed_exchanges(self) -> tuple[CompletedHistoryExchange, ...]:
-        turns = self._repository.list_turns(
-            self._character_id,
-            self._conversation_id,
-        )
-        return tuple(
-            CompletedHistoryExchange(
-                user_content=turn.user_content,
-                assistant_content=turn.assistant_content,
+    def prompt_turns(
+        self,
+        *,
+        max_completed_turns: int,
+        page_size: int,
+    ) -> Iterator[RestoredHistoryTurn]:
+        if max_completed_turns < 1:
+            raise ValueError("max_completed_turns must be positive")
+        completed = 0
+        cursor = None
+        while completed < max_completed_turns:
+            page = self._repository.list_prompt_turns_page(
+                self._character_id,
+                self._conversation_id,
+                cursor=cursor,
+                page_size=page_size,
             )
-            for turn in turns
-            if turn.status is TurnStatus.COMPLETED
-            and turn.user_content is not None
-            and turn.assistant_content is not None
-        )
+            for turn in page.turns:
+                restored_turn = restore_prompt_turn(turn)
+                yield restored_turn
+                if restored_turn.is_completed:
+                    completed += 1
+                    if completed == max_completed_turns:
+                        return
+            cursor = page.next_cursor
+            if cursor is None:
+                return
 
 
 class ConversationHistoryService:

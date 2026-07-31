@@ -6,7 +6,7 @@ from app.prompting import (
     CharacterPrompt,
     CurrentUserMessage,
     MaskedHistory,
-    MaskedHistoryExchange,
+    MaskedHistoryTurn,
     PromptBuildInput,
     PromptInputLimitError,
     RagContext,
@@ -57,7 +57,8 @@ def _prompt_input_with_secret_bodies(budget: TokenBudget) -> PromptBuildInput:
         ),
         rag=RagContext(items=(RagItem(rag),)),
         history=MaskedHistory(
-            exchanges=(MaskedHistoryExchange(history_user, history_assistant),)
+            turns=(MaskedHistoryTurn(history_user, history_assistant, True),),
+            omitted_turns=0,
         ),
         current_user=CurrentUserMessage(current_user),
         budget=budget,
@@ -77,10 +78,11 @@ class TestPromptBuilderBudget:
 
     def test_should_drop_rag_before_old_history_at_total_limit(self) -> None:
         history = MaskedHistory(
-            exchanges=(
-                MaskedHistoryExchange("古いuser", "古いassistant"),
-                MaskedHistoryExchange("直前user", "直前assistant"),
-            )
+            turns=(
+                MaskedHistoryTurn("古いuser", "古いassistant", True),
+                MaskedHistoryTurn("直前user", "直前assistant", True),
+            ),
+            omitted_turns=0,
         )
         prompt_input = prompt_build_input(
             history=history,
@@ -100,10 +102,11 @@ class TestPromptBuilderBudget:
         self,
     ) -> None:
         history = MaskedHistory(
-            exchanges=(
-                MaskedHistoryExchange("最古user", "最古assistant"),
-                MaskedHistoryExchange("直前user", "直前assistant"),
-            )
+            turns=(
+                MaskedHistoryTurn("最古user", "最古assistant", True),
+                MaskedHistoryTurn("直前user", "直前assistant", True),
+            ),
+            omitted_turns=0,
         )
         prompt_input = prompt_build_input(
             rag=RagContext(items=()),
@@ -143,7 +146,6 @@ class TestPromptBuilderBudget:
         [
             (token_budget(character=0), "character"),
             (token_budget(current_user=0), "current_user"),
-            (token_budget(history=1), "history"),
             (token_budget(total=3), "total"),
         ],
     )
@@ -163,6 +165,50 @@ class TestPromptBuilderBudget:
         assert captured.value.region == region
         assert captured.value.used > captured.value.limit
 
+    def test_should_drop_post_history_after_rag_and_old_history_at_total_limit(
+        self,
+    ) -> None:
+        history = MaskedHistory(
+            turns=(
+                MaskedHistoryTurn("古いuser", "古いassistant", False),
+                MaskedHistoryTurn("直前user", "直前assistant", True),
+            ),
+            omitted_turns=0,
+        )
+        prompt_input = prompt_build_input(
+            history=history,
+            budget=token_budget(total=4),
+        )
+
+        result = prompt_builder().build(prompt_input)
+
+        contents = [message.content for message in result.messages]
+        assert contents[0].startswith("## キャラクター概要\n")
+        assert contents[1:] == [
+            "直前user",
+            "直前assistant",
+            "現在user原文",
+        ]
+        assert "RAG本文" not in contents
+        assert "古いuser" not in contents
+        assert "最終指示" not in contents
+
+    def test_should_reject_total_limit_that_cannot_keep_required_regions(
+        self,
+    ) -> None:
+        prompt_input = prompt_build_input(
+            rag=RagContext(items=()),
+            history=MaskedHistory(turns=(), omitted_turns=0),
+            budget=token_budget(total=1),
+        )
+
+        with pytest.raises(PromptInputLimitError) as captured:
+            prompt_builder().build(prompt_input)
+
+        assert captured.value.region == "total"
+        assert captured.value.used == 2
+        assert captured.value.limit == 1
+
 
 class TestPromptBuilderLogging:
     def test_should_not_expose_prompt_bodies_in_input_or_output_repr(
@@ -176,7 +222,7 @@ class TestPromptBuilderLogging:
             prompt_input.character,
             prompt_input.rag.items[0],
             prompt_input.rag,
-            prompt_input.history.exchanges[0],
+            prompt_input.history.turns[0],
             prompt_input.history,
             prompt_input.current_user,
             prompt_input,

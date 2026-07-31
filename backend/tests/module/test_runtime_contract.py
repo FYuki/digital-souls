@@ -496,6 +496,51 @@ class TestRuntimeConfiguration:
 
         assert executor.shutdown_called is True
 
+    def test_main_lifespan_propagates_prompt_environment_to_chat_runtime_config(
+        self,
+        monkeypatch,
+    ):
+        import app.main as main
+
+        environment = {
+            "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "4",
+            "CONVERSATION_HISTORY_TOKEN_LIMIT": "1300",
+            "USER_INPUT_TOKEN_LIMIT": "650",
+            "ASSISTANT_MAX_GENERATION_TOKENS": "750",
+            "LLM_CONTEXT_TOKEN_LIMIT": "9000",
+        }
+        for key, value in environment.items():
+            monkeypatch.setenv(key, value)
+        captured = {}
+
+        class StubChatService:
+            pass
+
+        def create_chat_service_stub(
+            runtime_config,
+            _memory_task_queue,
+            _conversation_history_service,
+        ):
+            captured["runtime_config"] = runtime_config
+            return StubChatService()
+
+        monkeypatch.setattr(
+            main._chat_runtime,
+            "create_chat_service",
+            create_chat_service_stub,
+        )
+
+        with TestClient(main.app):
+            prompt_config = captured["runtime_config"].prompt_config
+
+        assert (
+            prompt_config.max_completed_turns,
+            prompt_config.history_token_limit,
+            prompt_config.user_input_token_limit,
+            prompt_config.assistant_max_generation_tokens,
+            prompt_config.context_token_limit,
+        ) == (4, 1300, 650, 750, 9000)
+
     def test_main_lifespan_cleans_runtime_when_config_resolution_fails(self, monkeypatch):
         import app.chat_service as chat_service
         import app.main as main
@@ -632,5 +677,10 @@ class TestLLMClientContract:
         assert list(signature.parameters) == [
             "self",
             "prompt",
+            "max_output_tokens",
         ]
         assert signature.return_annotation is str
+
+        count_signature = inspect.signature(LLMClient.count_input_tokens)
+        assert list(count_signature.parameters) == ["self", "messages"]
+        assert count_signature.return_annotation is int

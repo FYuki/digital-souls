@@ -20,7 +20,7 @@ Source of Truthとする。`personality.md`は設計資料として残すが、r
 | `system_prompt` | 必須の応答方針 | `scenario`の後 |
 | `mes_example` | 会話・話し方の例 | 人格領域の末尾 |
 | `first_mes` | 履歴がない場合の初回表示 | 通常promptへ含めない |
-| `post_history_instructions` | 履歴を踏まえた最終指示 | 現在発言の後 |
+| `post_history_instructions` | 履歴を踏まえた最終指示 | 現在発言の直前 |
 
 空文字の任意要素は見出しごと省略する。
 
@@ -31,8 +31,8 @@ Source of Truthとする。`personality.md`は設計資料として残すが、r
 1. Character Cardの人格領域
 2. RAGコンテキスト
 3. SQLiteに保存された過去のuser／assistant履歴
-4. 現在ターンのuser原文
-5. `post_history_instructions`
+4. `post_history_instructions`
+5. 現在ターンのuser原文
 
 過去履歴は`MaskedHistory`、現在原文は`CurrentUserMessage`として別の型で受け取る。
 現在原文は保存前の入力であり、privacy処理後の履歴へbuilderが追加することはない。

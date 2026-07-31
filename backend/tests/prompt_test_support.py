@@ -2,7 +2,8 @@ from app.prompting import (
     CharacterPrompt,
     CurrentUserMessage,
     MaskedHistory,
-    MaskedHistoryExchange,
+    MaskedHistoryTurn,
+    PromptMessage,
     PromptBuildInput,
     PromptBuilder,
     RagContext,
@@ -12,8 +13,8 @@ from app.prompting import (
 
 
 class UnitTokenCounter:
-    def count(self, text: str) -> int:
-        return 0 if text == "" else 1
+    def count_input_tokens(self, messages: tuple[PromptMessage, ...]) -> int:
+        return sum(message.content != "" for message in messages)
 
 
 def token_budget(
@@ -58,12 +59,14 @@ def prompt_build_input(
         history=history
         if history is not None
         else MaskedHistory(
-            exchanges=(
-                MaskedHistoryExchange(
+            turns=(
+                MaskedHistoryTurn(
                     user_content="過去user",
                     assistant_content="過去assistant",
+                    is_completed=True,
                 ),
-            )
+            ),
+            omitted_turns=0,
         ),
         current_user=current_user
         if current_user is not None

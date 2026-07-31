@@ -18,10 +18,10 @@ class TestGenerateResponse:
             "app.llm.ollama_client.OllamaClient.generate",
             return_value="光織のLLM応答",
         ) as generate:
-            result = generate_response(built_prompt)
+            result = generate_response(built_prompt, max_output_tokens=512)
 
         assert result == "光織のLLM応答"
-        generate.assert_called_once_with(built_prompt)
+        generate.assert_called_once_with(built_prompt, max_output_tokens=512)
 
 
 class TestClaudeClientDummy:
@@ -31,7 +31,7 @@ class TestClaudeClientDummy:
         client = _create_llm_client("claude")
 
         with pytest.raises(NotImplementedError):
-            client.generate(_built_prompt())
+            client.generate(_built_prompt(), max_output_tokens=512)
 
     def test_router_does_not_expose_infrastructure_clients(self):
         from app.llm import router

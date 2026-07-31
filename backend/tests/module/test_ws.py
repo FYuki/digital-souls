@@ -32,7 +32,7 @@ _RESOLVED_MEMORY_POLICY = "app.main.resolved_memory_policy"
 _LOAD_TTS_CONFIG = "app.audio_pipeline.load_tts_config"
 _TRANSCRIBE = "app.stt.whisper_client.WhisperTranscriber.transcribe"
 _SYNTHESIZE = "app.tts.voicevox_client.VoicevoxClient.synthesize"
-_BUILD_PROMPT = "app._chat_runtime.PromptBuilder.build"
+_BUILD_PROMPT = "app.chat_prompt.PromptBuilder.build"
 
 _PERSONALITY = "# 光織\n穏やかなAIです。"
 _LLM_REPLY = "光織です。よろしくお願いします。"

@@ -1,5 +1,6 @@
 import sqlite3
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -29,6 +30,21 @@ from app.conversation_history.turn_state import require_turn_transition
 ConnectionFactory = Callable[[Path], sqlite3.Connection]
 Clock = Callable[[], datetime]
 UuidFactory = Callable[[], UUID]
+MIN_PROMPT_PAGE_SIZE = 1
+MAX_PROMPT_PAGE_SIZE = 100
+
+
+@dataclass(frozen=True)
+class PromptHistoryCursor:
+    created_at: datetime
+    turn_id: UUID
+    retention_cutoff: datetime
+
+
+@dataclass(frozen=True)
+class PromptHistoryPage:
+    turns: tuple[ConversationTurn, ...]
+    next_cursor: PromptHistoryCursor | None
 
 
 class ConversationHistoryRepository:
@@ -271,6 +287,62 @@ class ConversationHistoryRepository:
                 (character_id, str(conversation_id), cutoff),
             ).fetchall()
             return [turn_from_row(row) for row in rows]
+
+    def list_prompt_turns_page(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+        *,
+        cursor: PromptHistoryCursor | None = None,
+        page_size: int,
+    ) -> PromptHistoryPage:
+        _require_uuid4(conversation_id)
+        if not MIN_PROMPT_PAGE_SIZE <= page_size <= MAX_PROMPT_PAGE_SIZE:
+            raise ValueError(
+                f"page_size must be between {MIN_PROMPT_PAGE_SIZE} "
+                f"and {MAX_PROMPT_PAGE_SIZE}"
+            )
+        if cursor is None:
+            self.recover_stale_processing()
+        cutoff = (
+            self._now() - self._retention
+            if cursor is None
+            else cursor.retention_cutoff
+        )
+        parameters: list[object] = [
+            character_id,
+            str(conversation_id),
+            TurnStatus.COMPLETED.value,
+            TurnStatus.FAILED.value,
+            format_datetime(cutoff),
+        ]
+        cursor_clause = ""
+        if cursor is not None:
+            cursor_clause = "AND (created_at, turn_id) < (?, ?) "
+            parameters.extend(
+                (format_datetime(cursor.created_at), str(cursor.turn_id))
+            )
+        parameters.append(page_size)
+        with self._database.connection() as connection:
+            select_conversation(connection, character_id, conversation_id)
+            rows = connection.execute(
+                f"SELECT {TURN_COLUMNS} FROM conversation_turns "
+                "WHERE character_id = ? AND conversation_id = ? "
+                "AND status IN (?, ?) AND created_at >= ? "
+                f"{cursor_clause}"
+                "ORDER BY created_at DESC, turn_id DESC LIMIT ?",
+                parameters,
+            ).fetchall()
+        turns = tuple(turn_from_row(row) for row in rows)
+        next_cursor = None
+        if len(turns) == page_size:
+            oldest = turns[-1]
+            next_cursor = PromptHistoryCursor(
+                created_at=oldest.created_at,
+                turn_id=oldest.turn_id,
+                retention_cutoff=cutoff,
+            )
+        return PromptHistoryPage(turns=turns, next_cursor=next_cursor)
 
     def _create_turn(
         self,
