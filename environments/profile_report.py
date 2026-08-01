@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import cast
 
+from app.model_settings import MODEL_ENVIRONMENT_KEYS, resolve_model_settings
 from profile_constants import PROFILE_ENV
 from profile_resolution import derive_capabilities, derive_environment, resolve_dependencies
 from profile_types import (
@@ -181,7 +182,31 @@ def validate_resolved_report(raw: object) -> ResolvedReport:
     if capabilities != derive_capabilities(dependencies):
         raise ProfileError("capabilities must match the resolved dependencies")
     derived_environment = _require_record(report["derivedEnvironment"], "derivedEnvironment")
-    if derived_environment != derive_environment(dependencies):
+    model_environment = {
+        key: value
+        for key, value in derived_environment.items()
+        if key in MODEL_ENVIRONMENT_KEYS
+        and isinstance(value, str)
+    }
+    backend_uses_model_settings = dependencies["backend"]["mode"] == "real"
+    if backend_uses_model_settings and set(model_environment) != set(
+        MODEL_ENVIRONMENT_KEYS
+    ):
+        raise ProfileError(
+            "derivedEnvironment must define every model setting for a real backend"
+        )
+    try:
+        expected_environment = derive_environment(
+            dependencies,
+            (
+                resolve_model_settings(model_environment)
+                if backend_uses_model_settings
+                else None
+            ),
+        )
+    except ValueError as error:
+        raise ProfileError(str(error)) from error
+    if derived_environment != expected_environment:
         raise ProfileError("derivedEnvironment must match the resolved dependencies")
     _validate_compatibility(report["compatibility"])
     return cast(ResolvedReport, report)

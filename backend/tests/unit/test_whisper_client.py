@@ -61,10 +61,31 @@ def _import_client_with_fake_whisper(monkeypatch):
     return importlib.import_module("app.stt.whisper_client")
 
 
+def _transcriber(client):
+    return client.WhisperTranscriber(
+        model_name="medium",
+        download_root=Path(__file__).parents[3] / ".cache" / "huggingface" / "hub",
+    )
+
+
 class TestWhisperClientTranscribe:
+    def test_uses_injected_model_and_download_root(self, monkeypatch, tmp_path):
+        client = _import_client_with_fake_whisper(monkeypatch)
+        transcriber = client.WhisperTranscriber(
+            model_name="large-v3",
+            download_root=tmp_path,
+        )
+
+        result = transcriber.transcribe(b"\x01\x00\x02\x00")
+
+        assert result == "こんにちは 光織です"
+        model = _FakeWhisperModel.instances[0]
+        assert model.init_args[0] == "large-v3"
+        assert model.init_kwargs["download_root"] == str(tmp_path)
+
     def test_uses_medium_model_once_for_repeated_transcription(self, monkeypatch):
         client = _import_client_with_fake_whisper(monkeypatch)
-        transcriber = client.WhisperTranscriber()
+        transcriber = _transcriber(client)
 
         first_result = transcriber.transcribe(b"\x01\x00\x02\x00")
         second_result = transcriber.transcribe(b"\x03\x00\x04\x00")
@@ -79,7 +100,7 @@ class TestWhisperClientTranscribe:
 
     def test_passes_audio_bytes_as_file_like_object_and_language_ja(self, monkeypatch):
         client = _import_client_with_fake_whisper(monkeypatch)
-        transcriber = client.WhisperTranscriber()
+        transcriber = _transcriber(client)
         pcm_audio = b"\x01\x00\x02\x00"
 
         transcriber.transcribe(pcm_audio)
@@ -100,7 +121,7 @@ class TestWhisperClientTranscribe:
     def test_creates_one_model_for_concurrent_first_transcriptions(self, monkeypatch):
         client = _import_client_with_fake_whisper(monkeypatch)
         _FakeWhisperModel.creation_delay = 0.05
-        transcriber = client.WhisperTranscriber()
+        transcriber = _transcriber(client)
         results = []
         start = threading.Barrier(3)
 
@@ -125,7 +146,7 @@ class TestWhisperClientTranscribe:
     def test_serializes_concurrent_transcribe_calls(self, monkeypatch):
         client = _import_client_with_fake_whisper(monkeypatch)
         _FakeWhisperModel.transcribe_delay = 0.05
-        transcriber = client.WhisperTranscriber()
+        transcriber = _transcriber(client)
         transcriber.transcribe(b"\x01\x00\x02\x00")
         model = _FakeWhisperModel.instances[0]
         results = []

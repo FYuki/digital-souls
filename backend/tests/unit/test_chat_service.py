@@ -28,7 +28,7 @@ from app.conversation_history.service import StartedHistoryTurn
 from app.llm import router as llm_router
 from app.memory.chroma_store import MemorySearchResult
 from app.prompting import CharacterPrompt, PromptInputLimitError
-from app.prompting.config import PromptRuntimeConfig
+from app.model_settings import resolve_model_settings
 from tests.conversation_history_test_support import CONVERSATION_ID
 
 
@@ -41,7 +41,7 @@ _RECORD_USER_MEMORY_CANDIDATE = (
     "app._chat_runtime._rag_service.record_user_memory_candidate"
 )
 _BUILD_PROMPT = "app.chat_prompt.PromptBuilder.build"
-_PROMPT_CONFIG = PromptRuntimeConfig(10, 4096, 8192, 4096, 32768)
+_PROMPT_CONFIG = resolve_model_settings({})
 
 
 @pytest.fixture(autouse=True)
@@ -49,7 +49,7 @@ def _formal_token_counter(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         llm_router,
         "count_input_tokens",
-        lambda messages: len(messages),
+        lambda messages, *, settings: len(messages),
     )
 
 
@@ -67,6 +67,9 @@ def _character_card(system_prompt: str = "# prompt") -> MagicMock:
 
 
 def _runtime_dependencies() -> ChatRuntimeDependencies:
+    from app.model_settings import resolve_model_settings
+
+    settings = resolve_model_settings({})
     def load_prompt(character: str) -> CharacterPrompt:
         return character_loader.load_character_card(character).to_character_prompt()
 
@@ -77,9 +80,12 @@ def _runtime_dependencies() -> ChatRuntimeDependencies:
             llm_router.generate_response(
                 prompt,
                 max_output_tokens=max_output_tokens,
+                settings=settings,
             )
         ),
-        input_token_counter=lambda messages: llm_router.count_input_tokens(messages),
+        input_token_counter=lambda messages: llm_router.count_input_tokens(
+            messages, settings=settings
+        ),
     )
 
 

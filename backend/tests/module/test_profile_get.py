@@ -1,20 +1,18 @@
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+from app.model_settings import MODEL_ENVIRONMENT_KEYS
+from tests.environment_entrypoint_test_support import copy_environment_runtime
 
 
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
-ENVIRONMENTS_DIR = ROOT_DIR / "environments"
 
 
 def _copy_environments(tmp_path: Path) -> Path:
-    target = tmp_path / "environments"
-    shutil.copytree(ENVIRONMENTS_DIR, target)
-    return target
+    return copy_environment_runtime(tmp_path)
 
 
 def _run(environments_dir: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
@@ -72,6 +70,15 @@ def test_should_get_scalar_report_value(path: str, expected: str, tmp_path: Path
 
     assert result.returncode == 0, result.stderr
     assert result.stdout == expected
+
+
+def test_should_list_backend_owned_model_environment_keys(tmp_path: Path):
+    environments_dir = _copy_environments(tmp_path)
+
+    result = _run(environments_dir, "model-environment-keys")
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == list(MODEL_ENVIRONMENT_KEYS)
 
 
 @pytest.mark.parametrize("path", ["dependencies.missing.mode", "dependencies"])

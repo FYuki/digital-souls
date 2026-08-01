@@ -153,9 +153,17 @@ class EnvironmentRun:
     def _validate_service_readiness(
         self, name: str, dependency: Mapping[str, object]
     ) -> None:
-        validation = require_service_operations(
-            self.registry, name
-        ).validate_readiness(dependency)
+        operations = require_service_operations(self.registry, name)
+        validation = operations.validate_readiness(dependency)
+        if (
+            validation.classification == "preparation"
+            and name in self.runtime.available_prepare_order
+        ):
+            operations.prepare(
+                dependency,
+                operation_context_for(name, self.dependencies, self.registry),
+            )
+            validation = operations.validate_readiness(dependency)
         require_service_readiness(validation)
 
     def _service_environment(self) -> dict[str, str]:

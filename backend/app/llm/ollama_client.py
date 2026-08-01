@@ -5,7 +5,6 @@ import httpx
 
 from app.llm.base import LLMClient
 from app.llm.ollama_config import ollama_endpoint, ollama_timeout
-from app.model_settings import OLLAMA_MODEL_NAME
 from app.prompting import BuiltPrompt, PromptMessage
 
 
@@ -34,6 +33,10 @@ def _serialize_messages(
 
 
 class OllamaClient(LLMClient):
+    def __init__(self, *, model_name: str, context_tokens: int) -> None:
+        self._model_name = model_name
+        self._context_tokens = context_tokens
+
     def generate(
         self,
         prompt: BuiltPrompt,
@@ -41,11 +44,14 @@ class OllamaClient(LLMClient):
         max_output_tokens: int,
     ) -> str:
         payload = {
-            "model": OLLAMA_MODEL_NAME,
+            "model": self._model_name,
             "stream": False,
             "messages": _serialize_messages(prompt.messages),
         }
-        payload["options"] = {"num_predict": max_output_tokens}
+        payload["options"] = {
+            "num_ctx": self._context_tokens,
+            "num_predict": max_output_tokens,
+        }
         response = httpx.post(
             ollama_endpoint("/api/chat"),
             json=payload,
@@ -58,10 +64,13 @@ class OllamaClient(LLMClient):
         response = httpx.post(
             ollama_endpoint("/api/chat"),
             json={
-                "model": OLLAMA_MODEL_NAME,
+                "model": self._model_name,
                 "stream": False,
                 "messages": _serialize_messages(messages),
-                "options": {"num_predict": 1},
+                "options": {
+                    "num_ctx": self._context_tokens,
+                    "num_predict": 1,
+                },
             },
             timeout=ollama_timeout(),
         )

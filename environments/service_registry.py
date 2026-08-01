@@ -11,6 +11,7 @@ from adapters.frontend import FrontendAdapter
 from adapters.ollama import OllamaAdapter
 from adapters.voicevox import VoicevoxAdapter
 from environment_constants import DEPENDENCY_NAMES
+from app.model_settings import OLLAMA_MODEL_NAME, WHISPER_MODEL_NAME
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,7 @@ class ServiceRegistry:
     services: Mapping[str, ServiceRegistration]
     prepare_order: tuple[str, ...]
     start_order: tuple[str, ...]
+    available_prepare_order: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "services", MappingProxyType(dict(self.services)))
@@ -34,17 +36,32 @@ class ServiceRegistry:
 class RuntimeServices:
     prepare_order: tuple[str, ...]
     start_order: tuple[str, ...]
+    available_prepare_order: tuple[str, ...]
 
 
 def create_service_registry(
-    root_dir: Path, runner: CommandRunner | None = None
+    root_dir: Path,
+    runner: CommandRunner | None = None,
+    *,
+    ollama_model_name: str = OLLAMA_MODEL_NAME,
+    whisper_model_name: str = WHISPER_MODEL_NAME,
 ) -> ServiceRegistry:
     services = {
         "frontend": ServiceRegistration(
             "frontend", FrontendAdapter(root_dir, runner), None
         ),
-        "backend": ServiceRegistration("backend", BackendAdapter(root_dir, runner), None),
-        "ollama": ServiceRegistration("ollama", OllamaAdapter(root_dir, runner), None),
+        "backend": ServiceRegistration(
+            "backend",
+            BackendAdapter(
+                root_dir, runner, whisper_model_name=whisper_model_name
+            ),
+            None,
+        ),
+        "ollama": ServiceRegistration(
+            "ollama",
+            OllamaAdapter(root_dir, runner, model_name=ollama_model_name),
+            None,
+        ),
         "voicevox": ServiceRegistration(
             "voicevox", VoicevoxAdapter(root_dir, runner), None
         ),
@@ -55,6 +72,7 @@ def create_service_registry(
         services=services,
         prepare_order=("backend", "frontend"),
         start_order=("ollama", "voicevox", "backend", "frontend"),
+        available_prepare_order=("ollama",),
     )
 
 
@@ -72,6 +90,9 @@ def resolve_runtime_services(
     return RuntimeServices(
         prepare_order=tuple(name for name in registry.prepare_order if name in managed),
         start_order=tuple(name for name in registry.start_order if name in managed),
+        available_prepare_order=tuple(
+            name for name in registry.available_prepare_order if name in managed
+        ),
     )
 
 

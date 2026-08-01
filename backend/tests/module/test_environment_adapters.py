@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -21,6 +22,39 @@ def test_should_import_concrete_adapters_with_backend_package_contract():
 
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
 OPERATION_CONTEXT = OperationContext(whisper_enabled=False, chroma_enabled=False)
+
+
+def _write_cached_whisper_model(
+    root_dir: Path, repository_id: str, *, complete: bool = True
+) -> None:
+    python = root_dir / "backend" / ".venv" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text(
+        f"#!/bin/sh\nexec {shlex.quote(sys.executable)} \"$@\"\n",
+        encoding="utf-8",
+    )
+    python.chmod(0o755)
+    repository_cache = (
+        root_dir
+        / ".cache"
+        / "huggingface"
+        / "hub"
+        / f"models--{repository_id.replace('/', '--')}"
+    )
+    snapshot = repository_cache / "snapshots" / "revision"
+    snapshot.mkdir(parents=True)
+    refs = repository_cache / "refs"
+    refs.mkdir()
+    (refs / "main").write_text("revision", encoding="utf-8")
+    if complete:
+        for artifact in (
+            "config.json",
+            "model.bin",
+            "preprocessor_config.json",
+            "tokenizer.json",
+            "vocabulary.json",
+        ):
+            (snapshot / artifact).write_text("fixture", encoding="utf-8")
 
 
 def test_should_import_adapter_contract_without_loading_concrete_adapters():
@@ -210,8 +244,8 @@ def test_should_prepare_whisper_model_in_cache_used_by_backend_runtime(tmp_path:
 
     assert runner.calls[0] == (str(tmp_path / "scripts" / "setup-backend.sh"),)
     assert runner.calls[1][0] == str(tmp_path / "backend" / ".venv" / "bin" / "python")
-    assert repr(WHISPER_MODEL_NAME) in runner.calls[1][2]
-    assert repr(str(whisper_model_cache(tmp_path))) in runner.calls[1][2]
+    assert runner.calls[1][3] == WHISPER_MODEL_NAME
+    assert runner.calls[1][4] == str(whisper_model_cache(tmp_path))
 
 
 def test_should_mark_missing_whisper_cache_as_preparable(tmp_path: Path):
@@ -226,13 +260,42 @@ def test_should_mark_missing_whisper_cache_as_preparable(tmp_path: Path):
     assert whisper.can_prepare is True
 
 
+@pytest.mark.parametrize(
+    ("model_name", "repository_id"),
+    [
+        ("medium", "Systran/faster-whisper-medium"),
+        ("large", "Systran/faster-whisper-large-v3"),
+        ("distil-large-v3", "Systran/faster-distil-whisper-large-v3"),
+        ("turbo", "mobiuslabsgmbh/faster-whisper-large-v3-turbo"),
+        ("example/converted-whisper", "example/converted-whisper"),
+    ],
+)
+def test_should_verify_cache_resolved_by_faster_whisper(
+    tmp_path: Path, model_name: str, repository_id: str
+) -> None:
+    from adapters.backend import BackendAdapter
+
+    _write_cached_whisper_model(tmp_path, repository_id)
+
+    result = BackendAdapter(root_dir=tmp_path, whisper_model_name=model_name).verify(
+        resolved_profile()["dependencies"]["backend"],
+        OperationContext(whisper_enabled=True, chroma_enabled=False),
+    )
+
+    whisper = next(
+        check for check in result.checks if check.name == f"whisper-model-{model_name}"
+    )
+    assert whisper.classification == "ready"
+
+
 def test_should_treat_empty_whisper_cache_as_preparation_required(tmp_path: Path):
     from adapters.backend import BackendAdapter
-    from app.model_settings import WHISPER_MODEL_CACHE_DIRECTORY, whisper_model_cache
 
-    (whisper_model_cache(tmp_path) / WHISPER_MODEL_CACHE_DIRECTORY).mkdir(parents=True)
+    _write_cached_whisper_model(
+        tmp_path, "Systran/faster-whisper-medium", complete=False
+    )
 
-    result = BackendAdapter(root_dir=tmp_path, runner=RecordingRunner()).verify(
+    result = BackendAdapter(root_dir=tmp_path).verify(
         resolved_profile()["dependencies"]["backend"],
         OperationContext(whisper_enabled=True, chroma_enabled=False),
     )
@@ -390,6 +453,21 @@ def test_should_require_gemma_model_after_started_ollama_becomes_http_ready(
 
     assert result.classification == "preparation"
     assert result.message is not None and "gemma4:e4b" in result.message
+
+
+def test_should_fail_ollama_preparation_when_model_pull_fails(tmp_path: Path) -> None:
+    from adapters.ollama import OllamaAdapter, OllamaPreparationError
+
+    runner = RecordingRunner(
+        [{"returncode": 1, "stdout": "", "stderr": "pull failed"}]
+    )
+
+    with pytest.raises(OllamaPreparationError, match="pull failed"):
+        OllamaAdapter(root_dir=tmp_path, runner=runner).prepare(
+            resolved_profile()["dependencies"]["ollama"], OPERATION_CONTEXT
+        )
+
+    assert runner.calls == [("ollama", "pull", "gemma4:e4b")]
 
 
 def test_should_reuse_running_voicevox_without_ownership(tmp_path: Path):

@@ -21,8 +21,8 @@ from tests.conversation_history_test_support import (
 
 
 _LOAD_PERSONALITY = "app.main.load_character_card"
-_GENERATE_RESPONSE = "app.main.generate_response"
-_COUNT_INPUT_TOKENS = "app.main.count_input_tokens"
+_GENERATE_RESPONSE = "app.llm.router.generate_response"
+_COUNT_INPUT_TOKENS = "app.llm.router.count_input_tokens"
 _BUILD_AUGMENTED_SYSTEM_PROMPT = (
     "app._chat_runtime._rag_service.retrieve_prompt_memories"
 )
@@ -46,7 +46,9 @@ _LLM_REPLY = "光織です。よろしくお願いします。"
 
 @pytest.fixture(autouse=True)
 def _formal_token_counter(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(_COUNT_INPUT_TOKENS, lambda messages: len(messages))
+    monkeypatch.setattr(
+        _COUNT_INPUT_TOKENS, lambda messages, *, settings: len(messages)
+    )
 
 
 def _character_card(system_prompt: str = _PERSONALITY) -> MagicMock:
@@ -456,8 +458,8 @@ class TestChatFlow:
         other_conversation_user = "別会話の内容"
         other_character_user = "別キャラクターの内容"
 
-        def generate(prompt, *, max_output_tokens):
-            del max_output_tokens
+        def generate(prompt, *, max_output_tokens, settings):
+            del max_output_tokens, settings
             current = prompt.messages[-1].content
             if current == target_user:
                 return target_assistant

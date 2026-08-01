@@ -29,8 +29,9 @@ MVP（テキスト+音声チャット、RAG基盤）完了後の開発を、Wave
 5. **音声がターン形式**: FEのVADが発話終了を検出してPCMを一括送信し、
    BEがSTT/LLM/TTSをすべて完了させてから、ユーザー転写・応答テキスト・音声WAVの3フレームを
    一括で返信する。双方向・割り込み可能な会話にはなっていない
-6. **設定のハードコード**: モデル名 `gemma4:e4b` が `backend/app/llm/ollama_client.py` に
-   直書きされており、`ClaudeClient` は `NotImplementedError` のスタブのまま
+6. **設定のenv化（実装済み）**: Ollamaのモデル・context・応答予約量、Whisperモデル、
+   履歴・入出力のtoken上限をtyped settingsへ集約し、Profile経由でもBackendと環境adapterへ
+   同じ解決値を伝播する。クラウドLLMの実接続は未実装
 7. **Character Card V3のruntime利用（実装済み）**: Character Cardをruntime人格定義の正本とし、
    人格領域、`system_prompt`、`post_history_instructions`をpromptへ反映する。`first_mes`は
    初回assistant表示用として通常promptへ含めず、TTS設定は
@@ -104,13 +105,16 @@ Frontendはcharacter単位のconversation IDを保持し、スレッド一覧、
 conversationとturnをSQLiteからhard deleteする。
 別conversationの生履歴を横断検索しない。
 
-### 6. 設定のenv化
+### 6. 設定のenv化（実装済み）
 
-- `OLLAMA_CHAT_MODEL` 等、`gemma4:e4b` のハードコードを解消する
-- Whisperモデルサイズを環境変数化する
-- 履歴注入数N（Wave 1-4で使用）を環境変数化する
+- `OLLAMA_CHAT_MODEL`、`OLLAMA_CONTEXT_TOKENS`、`OLLAMA_RESPONSE_RESERVE_TOKENS`で
+  Ollamaのモデル、実行時context、応答予約量を設定する
+- `WHISPER_MODEL`で実行時モデルとcache準備対象を揃える
+- 会話履歴件数、履歴token上限、user入力上限、assistant最大生成量、モデル最大contextを設定する
+- typed settingsで不正値と設定間の不整合を起動時に拒否し、Profile経由でBackendと環境adapterへ
+  同じ解決値を伝播する
 
-完了イメージ: モデル差し替え・チューニングがコード変更なしで可能になる。
+モデル差し替え・チューニングをコード変更なしで行える。
 
 ## Wave 2: 「覚えている」（RAG本稼働 = 旧Phase 5の実質的完遂）
 

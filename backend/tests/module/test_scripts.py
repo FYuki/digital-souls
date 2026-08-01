@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
+
+from tests.environment_entrypoint_test_support import (
+    copy_environment_runtime,
+    write_executable,
+)
 
 
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
@@ -73,3 +79,33 @@ def test_should_keep_development_requirements_linked_to_runtime_requirements():
     ).read_text(encoding="utf-8").splitlines()
 
     assert "-r requirements.txt" in requirements
+
+
+def test_should_start_frontend_with_mock_backend_profile(tmp_path: Path):
+    scripts_dir = tmp_path / "scripts"
+    (scripts_dir / "lib").mkdir(parents=True)
+    shutil.copy2(ROOT_DIR / "scripts" / "start-frontend.sh", scripts_dir)
+    shutil.copy2(ROOT_DIR / "scripts" / "lib" / "profile.sh", scripts_dir / "lib")
+    copy_environment_runtime(tmp_path)
+    (tmp_path / "frontend" / "node_modules").mkdir(parents=True)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    write_executable(bin_dir / "npm", 'printf "%s" "$RAG_ENABLED"\n')
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in {"DS_PROFILE", "DS_PROFILE_REPORT"}
+    }
+    environment.update(
+        {"DS_PROFILE": "test-mocked", "PATH": f"{bin_dir}:{environment['PATH']}"}
+    )
+
+    result = subprocess.run(
+        [str(scripts_dir / "start-frontend.sh")],
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "false"

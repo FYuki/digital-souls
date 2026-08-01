@@ -367,8 +367,8 @@ def test_runtime_should_inject_history_when_rag_is_disabled(
         "miori", CONVERSATION_ID, repository, sanitizer
     )
     prompt_config = importlib.import_module(
-        "app.prompting.config"
-    ).resolve_prompt_config()
+        "app.model_settings"
+    ).resolve_model_settings({})
     card = MagicMock()
     card.to_character_prompt.return_value = CharacterPrompt(
         "", "", "", "system", "", ""

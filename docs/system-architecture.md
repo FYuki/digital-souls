@@ -67,6 +67,7 @@
 * `llm/` — 完成済みpromptを受け取るLLM振り分けルーターとクライアント実装。`ollama_client.py`（ローカルOllama、常用）、`base.py`（クライアント共通インターフェース）。クラウドLLM（Claude等）向けクライアントは未実装のスタブ
 * `memory/` — 会話履歴と長期記憶の基盤。SQLiteに同一conversation再開用の履歴と承認済み長期記憶を責務分離して保存し、Chromaは承認済み長期記憶だけの派生検索インデックスとして扱う。`memory_policy.py`は`backend/app/memory/memory_policy.json`の認識設定と、アプリケーションの非緩和policyを組み合わせて保存先別に判定する
 * `stt/whisper_client.py` — faster-whisperによる音声認識
+* `model_settings.py` — Ollamaモデル・実行時context・応答予約量、Whisperモデル、履歴・入力・モデルcontext上限を環境変数から型付きで一括解決する。Backendはlifespanの先頭で検証し、不正設定ではリクエスト受付前に起動失敗する
 * `tts/voicevox_client.py` / `tts/speech_synthesizer.py` — VOICEVOXによる音声合成
 * `audio/transport.py` / `audio_pipeline.py` — 音声フレームの送受信・パイプライン制御
 

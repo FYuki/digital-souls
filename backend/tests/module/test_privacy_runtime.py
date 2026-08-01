@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 def _patch_privacy_startup(monkeypatch: pytest.MonkeyPatch):
     import app.main as main
+    from app.model_settings import resolve_model_settings
 
     resolved_policy = MagicMock(name="resolved_policy")
     resolved_policy.privacy = MagicMock(name="privacy_policy")
@@ -22,7 +23,7 @@ def _patch_privacy_startup(monkeypatch: pytest.MonkeyPatch):
             rag_enabled=False,
             memory_policy=None,
             privacy_scanner=None,
-            prompt_config=main._chat_runtime.resolve_prompt_config(),
+            prompt_config=resolve_model_settings({}),
         )
     )
     monkeypatch.setattr(main, "resolved_memory_policy", resolve_policy)
@@ -76,7 +77,9 @@ def test_should_resolve_policy_once_and_inject_same_instance_at_startup(
     create_sanitizer.assert_called_once_with(scanner, policy.privacy)
     create_history_service.assert_called_once_with(repository, sanitizer)
     assert history_service is not None
-    resolve_chat.assert_called_once_with(policy, scanner)
+    resolve_chat.assert_called_once()
+    assert resolve_chat.call_args.args[:2] == (policy, scanner)
+    assert resolve_chat.call_args.args[2].ollama_chat_model == "gemma4:e4b"
 
 
 def test_should_initialize_privacy_even_when_rag_is_disabled(

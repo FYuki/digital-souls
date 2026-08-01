@@ -17,11 +17,19 @@ def verify_environment(
     registry: ServiceRegistry | None = None,
     timing: EnvironmentTiming | None = None,
 ) -> int:
-    resolved_registry = (
-        registry if registry is not None else create_service_registry(root_dir)
-    )
     resolved_timing = timing if timing is not None else EnvironmentTiming()
     profile = resolve_profile(dict(os.environ), default_profile)
+    derived = profile["derivedEnvironment"]
+    if registry is not None:
+        resolved_registry = registry
+    elif profile["dependencies"]["backend"]["mode"] == "real":
+        resolved_registry = create_service_registry(
+            root_dir,
+            ollama_model_name=derived["OLLAMA_CHAT_MODEL"],
+            whisper_model_name=derived["WHISPER_MODEL"],
+        )
+    else:
+        resolved_registry = create_service_registry(root_dir)
     services = verification_checks(
         profile,
         resolved_registry,

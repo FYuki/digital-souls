@@ -18,7 +18,11 @@ def _copy_backend_scripts(tmp_path: Path) -> tuple[Path, Path, Path]:
     shutil.copy2(ROOT_DIR / "scripts" / "lib" / "profile.sh", scripts / "lib" / "profile.sh")
     shutil.copytree(ROOT_DIR / "environments", tmp_path / "environments")
     backend = tmp_path / "backend"
-    backend.mkdir()
+    backend_app = backend / "app"
+    backend_app.mkdir(parents=True)
+    (backend_app / "__init__.py").write_text("", encoding="utf-8")
+    for name in ("environment.py", "model_settings.py"):
+        shutil.copy2(ROOT_DIR / "backend" / "app" / name, backend_app / name)
     for name in ("setup-backend.sh", "start-backend.sh"):
         shutil.copy2(ROOT_DIR / "scripts" / name, scripts / name)
     return scripts / "setup-backend.sh", scripts / "start-backend.sh", backend
@@ -134,14 +138,11 @@ def test_should_import_backend_clients_without_repository_root_on_pythonpath():
 
 
 def test_should_exclude_repository_local_whisper_cache_from_git():
-    from app.model_settings import (
-        WHISPER_MODEL_CACHE_DIRECTORY,
-        whisper_model_cache,
-    )
+    from app.model_settings import whisper_model_cache
 
     generated_model = (
         whisper_model_cache(ROOT_DIR)
-        / WHISPER_MODEL_CACHE_DIRECTORY
+        / "models--example--converted-whisper"
         / "snapshots"
         / "generated-model"
     )
@@ -204,7 +205,10 @@ def test_should_preserve_resolved_profile_values_when_dotenv_conflicts(tmp_path:
     (backend / ".env").write_text(
         "OLLAMA_BASE_URL=http://dotenv.invalid:11434\n"
         "VOICEVOX_BASE_URL=http://dotenv.invalid:50021\n"
-        "RAG_ENABLED=true\n",
+        "RAG_ENABLED=true\n"
+        "OLLAMA_CHAT_MODEL=dotenv-invalid:1b\n"
+        "WHISPER_MODEL=tiny\n"
+        "OLLAMA_CONTEXT_TOKENS=2048\n",
         encoding="utf-8",
     )
     captured = tmp_path / "environment.json"
@@ -213,7 +217,8 @@ def test_should_preserve_resolved_profile_values_when_dotenv_conflicts(tmp_path:
         "python3 - <<'PY'\n"
         "import json, os\n"
         f"json.dump({{key: os.environ[key] for key in "
-        "['OLLAMA_BASE_URL', 'VOICEVOX_BASE_URL', 'RAG_ENABLED']}, "
+        "['OLLAMA_BASE_URL', 'VOICEVOX_BASE_URL', 'RAG_ENABLED', "
+        "'OLLAMA_CHAT_MODEL', 'WHISPER_MODEL', 'OLLAMA_CONTEXT_TOKENS']}, "
         f"open({str(captured)!r}, 'w'))\n"
         "PY\n",
     )
@@ -228,6 +233,12 @@ def test_should_preserve_resolved_profile_values_when_dotenv_conflicts(tmp_path:
             "--default-profile",
             "dev",
         ],
+        env={
+            **os.environ,
+            "OLLAMA_CHAT_MODEL": "profile-chat:12b",
+            "WHISPER_MODEL": "large-v3",
+            "OLLAMA_CONTEXT_TOKENS": "12288",
+        },
         capture_output=True,
         text=True,
     )
@@ -245,4 +256,54 @@ def test_should_preserve_resolved_profile_values_when_dotenv_conflicts(tmp_path:
         "OLLAMA_BASE_URL": "http://localhost:11434",
         "VOICEVOX_BASE_URL": "http://localhost:50021",
         "RAG_ENABLED": "false",
+        "OLLAMA_CHAT_MODEL": "profile-chat:12b",
+        "WHISPER_MODEL": "large-v3",
+        "OLLAMA_CONTEXT_TOKENS": "12288",
+    }
+
+
+def test_should_resolve_dotenv_model_settings_before_starting_backend(tmp_path: Path):
+    _setup, start, backend = _copy_backend_scripts(tmp_path)
+    venv_bin = backend / ".venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    (venv_bin / "activate").write_text("", encoding="utf-8")
+    (backend / ".env").write_text(
+        "OLLAMA_CHAT_MODEL=dotenv-chat:9b\n"
+        "WHISPER_MODEL=small\n"
+        "OLLAMA_CONTEXT_TOKENS=12288\n",
+        encoding="utf-8",
+    )
+    captured = tmp_path / "dotenv-environment.json"
+    write_executable(
+        venv_bin / "uvicorn",
+        "python3 - <<'PY'\n"
+        "import json, os\n"
+        "keys = ['OLLAMA_CHAT_MODEL', 'WHISPER_MODEL', 'OLLAMA_CONTEXT_TOKENS']\n"
+        f"json.dump({{key: os.environ[key] for key in keys}}, open({str(captured)!r}, 'w'))\n"
+        "PY\n",
+    )
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key
+        not in {
+            "DS_PROFILE",
+            "DS_PROFILE_REPORT",
+            "CHAT_E2E_BACKEND",
+            "VOICE_CHAT_E2E_BACKEND",
+            "OLLAMA_CHAT_MODEL",
+            "WHISPER_MODEL",
+            "OLLAMA_CONTEXT_TOKENS",
+        }
+    }
+
+    result = subprocess.run(
+        [str(start)], env=environment, capture_output=True, text=True
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(captured.read_text(encoding="utf-8")) == {
+        "OLLAMA_CHAT_MODEL": "dotenv-chat:9b",
+        "WHISPER_MODEL": "small",
+        "OLLAMA_CONTEXT_TOKENS": "12288",
     }

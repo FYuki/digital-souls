@@ -111,6 +111,8 @@ WindowsメインPC
 
 重い推論や高精度回答は、WindowsメインPCまたはCloud VMへ委譲する。
 
+ローカルOllamaのチャットモデルは `OLLAMA_CHAT_MODEL`、実行時contextは `OLLAMA_CONTEXT_TOKENS` で指定する。Profile resolver、Ollama readiness・prepare、Backend payloadは同じ解決値を使用する。モデル自体の最大contextは `LLM_CONTEXT_TOKEN_LIMIT` として分離し、prompt予算は実行時contextから `OLLAMA_RESPONSE_RESERVE_TOKENS` を差し引く。Whisperは `WHISPER_MODEL` をBackend実行とcache準備の共通契約とする。
+
 ## インフラ判断
 
 - 常時稼働には省電力・静音性を重視する

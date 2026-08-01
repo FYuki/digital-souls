@@ -17,7 +17,7 @@ from app.prompting import (
     RagContext,
     RagItem,
 )
-from app.prompting.config import PromptRuntimeConfig
+from app.model_settings import resolve_model_settings
 from app.prompting.history import select_history
 from app.prompting.measurement import TokenMeasurements
 from tests.prompt_test_support import prompt_build_input, token_budget
@@ -106,12 +106,14 @@ def _build_chat_prompt(
         ),
         current_user=CurrentUserMessage("current-user"),
         history_session=history_session,
-        config=PromptRuntimeConfig(
-            max_completed_turns=history_count,
-            history_token_limit=1_000,
-            user_input_token_limit=1_000,
-            assistant_max_generation_tokens=1,
-            context_token_limit=2_000,
+        config=resolve_model_settings(
+            {
+                "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": str(history_count),
+                "CONVERSATION_HISTORY_TOKEN_LIMIT": "1000",
+                "USER_INPUT_TOKEN_LIMIT": "1000",
+                "OLLAMA_RESPONSE_RESERVE_TOKENS": "1",
+                "OLLAMA_CONTEXT_TOKENS": "2000",
+            }
         ),
         token_counter=counter,
     )
@@ -277,12 +279,14 @@ def test_should_stream_many_failed_turns_without_materializing_or_measuring_all(
         rag=RagContext(items=()),
         current_user=CurrentUserMessage("current-user"),
         history_session=FailedHistorySession(),
-        config=PromptRuntimeConfig(
-            max_completed_turns=10,
-            history_token_limit=1,
-            user_input_token_limit=10,
-            assistant_max_generation_tokens=1,
-            context_token_limit=20,
+        config=resolve_model_settings(
+            {
+                "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "10",
+                "CONVERSATION_HISTORY_TOKEN_LIMIT": "1",
+                "USER_INPUT_TOKEN_LIMIT": "10",
+                "OLLAMA_RESPONSE_RESERVE_TOKENS": "1",
+                "OLLAMA_CONTEXT_TOKENS": "20",
+            }
         ),
         token_counter=YieldAwareCounter(),
     )
