@@ -248,4 +248,5 @@ class TestTurnTransitions:
             "skip_processing_turn_for_privacy",
             "recover_stale_processing",
             "list_turns",
+            "list_prompt_turns_page",
         }

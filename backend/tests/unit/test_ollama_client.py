@@ -35,7 +35,7 @@ class TestOllamaClientGenerate:
         ]
 
         with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate(built_prompt)
+            OllamaClient().generate(built_prompt, max_output_tokens=512)
 
         payload = mock_post.call_args.kwargs["json"]
         assert payload["messages"] == expected_messages
@@ -44,7 +44,7 @@ class TestOllamaClientGenerate:
         from app.llm.ollama_client import OllamaClient
 
         with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate(_built_prompt())
+            OllamaClient().generate(_built_prompt(), max_output_tokens=512)
 
         called_url: str = mock_post.call_args.args[0]
         assert called_url.endswith("/api/chat")
@@ -55,7 +55,7 @@ class TestOllamaClientGenerate:
         from app.llm.ollama_client import OllamaClient
 
         with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate(_built_prompt())
+            OllamaClient().generate(_built_prompt(), max_output_tokens=512)
 
         called_url: str = mock_post.call_args.args[0]
         assert called_url.startswith("http://localhost:11434")
@@ -66,7 +66,7 @@ class TestOllamaClientGenerate:
         from app.llm.ollama_client import OllamaClient
 
         with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate(_built_prompt())
+            OllamaClient().generate(_built_prompt(), max_output_tokens=512)
 
         called_url: str = mock_post.call_args.args[0]
         assert called_url.startswith("http://custom-host:9999")
@@ -76,7 +76,7 @@ class TestOllamaClientGenerate:
         from app.model_settings import OLLAMA_MODEL_NAME
 
         with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate(_built_prompt())
+            OllamaClient().generate(_built_prompt(), max_output_tokens=512)
 
         payload = mock_post.call_args.kwargs["json"]
         assert payload["model"] == OLLAMA_MODEL_NAME
@@ -85,7 +85,7 @@ class TestOllamaClientGenerate:
         from app.llm.ollama_client import OllamaClient
 
         with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate(_built_prompt())
+            OllamaClient().generate(_built_prompt(), max_output_tokens=512)
 
         payload = mock_post.call_args.kwargs["json"]
         assert payload["stream"] is False
@@ -95,7 +95,9 @@ class TestOllamaClientGenerate:
 
         expected = "光織です。よろしくお願いします。"
         with patch(_PATCH_HTTPX_POST, return_value=_mock_response(expected)):
-            result = OllamaClient().generate(_built_prompt())
+            result = OllamaClient().generate(
+                _built_prompt(), max_output_tokens=512
+            )
 
         assert result == expected
 
@@ -103,7 +105,7 @@ class TestOllamaClientGenerate:
         from app.llm.ollama_client import OllamaClient
 
         with patch(_PATCH_HTTPX_POST, return_value=_mock_response("ok")) as mock_post:
-            OllamaClient().generate(_built_prompt())
+            OllamaClient().generate(_built_prompt(), max_output_tokens=512)
 
         timeout = mock_post.call_args.kwargs["timeout"]
         assert isinstance(timeout, httpx.Timeout)
@@ -122,6 +124,8 @@ class TestOllamaClientGenerate:
 
         with patch(_PATCH_HTTPX_POST, return_value=response):
             with pytest.raises(httpx.HTTPStatusError):
-                OllamaClient().generate(_built_prompt())
+                OllamaClient().generate(
+                    _built_prompt(), max_output_tokens=512
+                )
 
         response.json.assert_not_called()

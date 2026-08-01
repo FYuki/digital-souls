@@ -1,10 +1,11 @@
 import logging
-from dataclasses import dataclass
-from typing import Protocol
+from dataclasses import dataclass, replace
 
+from app.prompting.history import select_history_with_measurements, turn_messages
+from app.prompting.measurement import TokenCounter, TokenMeasurement, TokenMeasurements
 from app.prompting.models import (
     BuiltPrompt,
-    MaskedHistoryExchange,
+    MaskedHistoryTurn,
     PromptBuildInput,
     PromptInputLimitError,
     PromptMessage,
@@ -25,20 +26,21 @@ CHARACTER_SECTIONS = (
 RAG_HEADING = "## 関連する記憶"
 
 
-class TokenCounter(Protocol):
-    def count(self, text: str) -> int:
-        ...
-
-
 @dataclass(frozen=True, repr=False)
 class _SelectedRegions:
     character: PromptMessage | None
     rag: tuple[PromptMessage, ...]
-    history: tuple[PromptMessage, ...]
+    history: tuple[MaskedHistoryTurn, ...]
     current_user: PromptMessage
     post_history: PromptMessage | None
     omitted_rag_items: int
-    omitted_history_exchanges: int
+    omitted_history_turns: int
+
+
+@dataclass(frozen=True, repr=False)
+class _MeasuredRegions:
+    selected: _SelectedRegions
+    measurements: TokenMeasurements
 
 
 class PromptBuilder:
@@ -46,10 +48,14 @@ class PromptBuilder:
         self._token_counter = token_counter
 
     def build(self, prompt_input: PromptBuildInput) -> BuiltPrompt:
-        selected = self._select_regions(prompt_input)
-        selected = self._fit_total_budget(selected, prompt_input.budget.total)
-        messages = self._messages(selected)
-        usage = self._usage(selected)
+        measurements = TokenMeasurements(self._token_counter)
+        measured = self._select_regions(prompt_input, measurements)
+        measured = self._fit_total_budget(
+            measured,
+            prompt_input.budget.total,
+        )
+        messages = self._messages(measured.selected)
+        usage = self._usage(measured)
         logger.debug(
             "Prompt built: messages=%d tokens=%d omitted_rag=%d "
             "omitted_history=%d",
@@ -60,230 +66,346 @@ class PromptBuilder:
         )
         return BuiltPrompt(messages=messages, usage=usage)
 
-    def _select_regions(self, prompt_input: PromptBuildInput) -> _SelectedRegions:
-        character = self._character_message(prompt_input)
-        current_user = PromptMessage(
-            PromptRole.USER,
-            prompt_input.current_user.content,
-        )
+    def _select_regions(
+        self,
+        prompt_input: PromptBuildInput,
+        measurements: TokenMeasurements,
+    ) -> _MeasuredRegions:
+        character, measurements = self._character_message(prompt_input, measurements)
+        current_user = PromptMessage(PromptRole.USER, prompt_input.current_user.content)
+        measured_user = measurements.measure((current_user,))
         self._require_within(
             "current_user",
-            self._message_tokens(current_user),
+            measured_user.count,
             prompt_input.budget.current_user,
         )
-        history, omitted_history = self._select_history(prompt_input)
-        rag, omitted_rag = self._select_rag(prompt_input)
-        post_history = self._post_history_message(prompt_input)
-        return _SelectedRegions(
+        selected_history = select_history_with_measurements(
+            prompt_input.history.newest_first_factory(),
+            measurements=measured_user.measurements,
+            token_limit=prompt_input.budget.history,
+        )
+        rag, omitted_rag, measurements = self._select_rag(
+            prompt_input, selected_history.measurements
+        )
+        post_history, measurements = self._post_history_message(
+            prompt_input, measurements
+        )
+        selected = _SelectedRegions(
             character=character,
             rag=rag,
-            history=history,
+            history=selected_history.history.turns,
             current_user=current_user,
             post_history=post_history,
             omitted_rag_items=omitted_rag,
-            omitted_history_exchanges=omitted_history,
+            omitted_history_turns=(
+                prompt_input.history.omitted_turns
+                + selected_history.history.omitted_turns
+            ),
         )
+        return _MeasuredRegions(selected, measurements)
 
     def _character_message(
         self,
         prompt_input: PromptBuildInput,
-    ) -> PromptMessage | None:
+        measurements: TokenMeasurements,
+    ) -> tuple[PromptMessage | None, TokenMeasurements]:
         sections = [
             f"## {heading}\n{value.strip()}"
             for heading, field in CHARACTER_SECTIONS
             if (value := getattr(prompt_input.character, field)).strip()
         ]
         if not sections:
-            return None
+            return None, measurements
         message = PromptMessage(PromptRole.SYSTEM, "\n\n".join(sections))
+        measured = measurements.measure((message,))
         self._require_within(
             "character",
-            self._message_tokens(message),
+            measured.count,
             prompt_input.budget.character,
         )
-        return message
+        return message, measured.measurements
 
     def _select_rag(
         self,
         prompt_input: PromptBuildInput,
-    ) -> tuple[tuple[PromptMessage, ...], int]:
-        selected: list[PromptMessage] = []
-        used = 0
-        for item in prompt_input.rag.items:
-            message = self._rag_message(item)
-            item_tokens = self._message_tokens(message)
-            if used + item_tokens > prompt_input.budget.rag:
-                break
-            selected.append(message)
-            used += item_tokens
-        return tuple(selected), len(prompt_input.rag.items) - len(selected)
-
-    def _select_history(
-        self,
-        prompt_input: PromptBuildInput,
-    ) -> tuple[tuple[PromptMessage, ...], int]:
-        exchanges = prompt_input.history.exchanges
-        if not exchanges:
-            return (), 0
-        latest = self._exchange_messages(exchanges[-1])
-        latest_tokens = self._tokens(latest)
-        self._require_within(
-            "history",
-            latest_tokens,
-            prompt_input.budget.history,
+        measurements: TokenMeasurements,
+    ) -> tuple[tuple[PromptMessage, ...], int, TokenMeasurements]:
+        messages = tuple(self._rag_message(item) for item in prompt_input.rag.items)
+        if not messages:
+            return (), 0, measurements
+        measured = measurements.measure(messages)
+        if measured.count <= prompt_input.budget.rag:
+            return messages, 0, measured.measurements
+        selected_count, measurements = self._largest_fitting_message_prefix(
+            messages,
+            prompt_input.budget.rag,
+            measured.measurements,
         )
-        selected = list(latest)
-        used = latest_tokens
-        selected_exchanges = 1
-        for exchange in reversed(exchanges[:-1]):
-            messages = self._exchange_messages(exchange)
-            exchange_tokens = self._tokens(messages)
-            if used + exchange_tokens > prompt_input.budget.history:
-                break
-            selected[0:0] = messages
-            used += exchange_tokens
-            selected_exchanges += 1
-        return tuple(selected), len(exchanges) - selected_exchanges
+        return (
+            messages[:selected_count],
+            len(messages) - selected_count,
+            measurements,
+        )
 
     def _post_history_message(
         self,
         prompt_input: PromptBuildInput,
-    ) -> PromptMessage | None:
+        measurements: TokenMeasurements,
+    ) -> tuple[PromptMessage | None, TokenMeasurements]:
         content = prompt_input.character.post_history_instructions.strip()
         if not content:
-            return None
+            return None, measurements
         message = PromptMessage(PromptRole.SYSTEM, content)
-        if self._message_tokens(message) > prompt_input.budget.post_history:
-            return None
-        return message
+        measured = measurements.measure((message,))
+        if measured.count > prompt_input.budget.post_history:
+            return None, measured.measurements
+        return message, measured.measurements
 
     def _fit_total_budget(
         self,
-        selected: _SelectedRegions,
+        measured: _MeasuredRegions,
         total_limit: int,
-    ) -> _SelectedRegions:
-        required = self._required_tokens(selected)
-        self._require_within("total", required, total_limit)
-        current = selected
-        while current.rag and self._region_tokens(current) > total_limit:
-            current = self._without_lowest_priority_rag(current)
-        while (
-            len(current.history) > 2
-            and self._region_tokens(current) > total_limit
-        ):
-            current = self._without_oldest_exchange(current)
-        if (
-            current.post_history is not None
-            and self._region_tokens(current) > total_limit
-        ):
-            current = self._without_post_history(current)
-        return current
+    ) -> _MeasuredRegions:
+        total = self._measure_total(measured.selected, measured.measurements)
+        measured = _MeasuredRegions(measured.selected, total.measurements)
+        if total.count <= total_limit:
+            return measured
+        required = measured.measurements.measure(
+            self._required_messages(measured.selected)
+        )
+        self._require_within(
+            "total",
+            required.count,
+            total_limit,
+        )
+        current = self._fit_rag_to_total(
+            _MeasuredRegions(measured.selected, required.measurements), total_limit
+        )
+        current_total = self._measure_total(current.selected, current.measurements)
+        current = _MeasuredRegions(current.selected, current_total.measurements)
+        if current_total.count <= total_limit:
+            return current
+        current = self._fit_history_to_total(current, total_limit)
+        current_total = self._measure_total(current.selected, current.measurements)
+        current = _MeasuredRegions(current.selected, current_total.measurements)
+        if current_total.count <= total_limit:
+            return current
+        selected = current.selected
+        if selected.post_history is not None:
+            selected = replace(selected, post_history=None)
+        final_total = self._measure_total(selected, current.measurements)
+        self._require_within(
+            "total",
+            final_total.count,
+            total_limit,
+        )
+        return _MeasuredRegions(selected, final_total.measurements)
 
-    def _usage(self, selected: _SelectedRegions) -> PromptUsage:
-        character = self._optional_message_tokens(selected.character)
-        rag = self._tokens(selected.rag)
-        history = self._tokens(selected.history)
-        current_user = self._message_tokens(selected.current_user)
-        post_history = self._optional_message_tokens(selected.post_history)
-        return PromptUsage(
-            total=character + rag + history + current_user + post_history,
-            character=character,
-            rag=rag,
-            history=history,
-            current_user=current_user,
-            post_history=post_history,
-            omitted_rag_items=selected.omitted_rag_items,
-            omitted_history_exchanges=selected.omitted_history_exchanges,
+    def _fit_rag_to_total(
+        self,
+        measured: _MeasuredRegions,
+        total_limit: int,
+    ) -> _MeasuredRegions:
+        selected = measured.selected
+        if not selected.rag:
+            return measured
+        without_rag = replace(
+            selected,
+            rag=(),
+            omitted_rag_items=selected.omitted_rag_items + len(selected.rag),
+        )
+        without_rag_total = self._measure_total(without_rag, measured.measurements)
+        measurements = without_rag_total.measurements
+        if without_rag_total.count > total_limit:
+            return _MeasuredRegions(without_rag, measurements)
+        lower = 0
+        upper = len(selected.rag)
+        while lower + 1 < upper:
+            middle = (lower + upper) // 2
+            candidate = self._with_rag_prefix(selected, middle)
+            candidate_total = self._measure_total(candidate, measurements)
+            measurements = candidate_total.measurements
+            if candidate_total.count <= total_limit:
+                lower = middle
+            else:
+                upper = middle
+        return _MeasuredRegions(self._with_rag_prefix(selected, lower), measurements)
+
+    def _fit_history_to_total(
+        self,
+        measured: _MeasuredRegions,
+        total_limit: int,
+    ) -> _MeasuredRegions:
+        selected = measured.selected
+        removable = self._removable_history_indices(selected.history)
+        if not removable:
+            return measured
+        all_removed = self._without_oldest_history(
+            selected,
+            removable,
+            len(removable),
+        )
+        all_removed_total = self._measure_total(all_removed, measured.measurements)
+        measurements = all_removed_total.measurements
+        if all_removed_total.count > total_limit:
+            return _MeasuredRegions(all_removed, measurements)
+        lower = 0
+        upper = len(removable)
+        while lower + 1 < upper:
+            middle = (lower + upper) // 2
+            candidate = self._without_oldest_history(selected, removable, middle)
+            candidate_total = self._measure_total(candidate, measurements)
+            measurements = candidate_total.measurements
+            if candidate_total.count <= total_limit:
+                upper = middle
+            else:
+                lower = middle
+        return _MeasuredRegions(
+            self._without_oldest_history(selected, removable, upper), measurements
         )
 
-    def _messages(
+    @staticmethod
+    def _with_rag_prefix(
+        selected: _SelectedRegions,
+        count: int,
+    ) -> _SelectedRegions:
+        removed = len(selected.rag) - count
+        return replace(
+            selected,
+            rag=selected.rag[:count],
+            omitted_rag_items=selected.omitted_rag_items + removed,
+        )
+
+    @staticmethod
+    def _without_oldest_history(
+        selected: _SelectedRegions,
+        removable: tuple[int, ...],
+        count: int,
+    ) -> _SelectedRegions:
+        removed = frozenset(removable[:count])
+        return replace(
+            selected,
+            history=tuple(
+                turn
+                for index, turn in enumerate(selected.history)
+                if index not in removed
+            ),
+            omitted_history_turns=selected.omitted_history_turns + count,
+        )
+
+    @staticmethod
+    def _largest_fitting_message_prefix(
+        messages: tuple[PromptMessage, ...],
+        token_limit: int,
+        measurements: TokenMeasurements,
+    ) -> tuple[int, TokenMeasurements]:
+        lower = 0
+        upper = len(messages)
+        while lower + 1 < upper:
+            middle = (lower + upper) // 2
+            measured = measurements.measure(messages[:middle])
+            measurements = measured.measurements
+            if measured.count <= token_limit:
+                lower = middle
+            else:
+                upper = middle
+        return lower, measurements
+
+    def _usage(
+        self,
+        measured: _MeasuredRegions,
+    ) -> PromptUsage:
+        selected = measured.selected
+        character, measurements = self._measure_optional(
+            selected.character, measured.measurements
+        )
+        rag = measurements.measure(selected.rag)
+        history = rag.measurements.measure(self._history_messages(selected.history))
+        current_user = history.measurements.measure((selected.current_user,))
+        post_history, measurements = self._measure_optional(
+            selected.post_history, current_user.measurements
+        )
+        total = self._measure_total(selected, measurements)
+        return PromptUsage(
+            total=total.count,
+            character=character,
+            rag=rag.count,
+            history=history.count,
+            current_user=current_user.count,
+            post_history=post_history,
+            omitted_rag_items=selected.omitted_rag_items,
+            omitted_history_exchanges=selected.omitted_history_turns,
+        )
+
+    def _messages(self, selected: _SelectedRegions) -> tuple[PromptMessage, ...]:
+        character = () if selected.character is None else (selected.character,)
+        post_history = (
+            () if selected.post_history is None else (selected.post_history,)
+        )
+        return (
+            *character,
+            *selected.rag,
+            *self._history_messages(selected.history),
+            *post_history,
+            selected.current_user,
+        )
+
+    def _required_messages(
         self,
         selected: _SelectedRegions,
     ) -> tuple[PromptMessage, ...]:
-        messages: list[PromptMessage] = []
-        if selected.character is not None:
-            messages.append(selected.character)
-        messages.extend(selected.rag)
-        messages.extend(selected.history)
-        messages.append(selected.current_user)
-        if selected.post_history is not None:
-            messages.append(selected.post_history)
-        return tuple(messages)
-
-    def _rag_message(self, item: RagItem) -> PromptMessage:
-        return PromptMessage(PromptRole.SYSTEM, f"{RAG_HEADING}\n{item.content}")
+        character = () if selected.character is None else (selected.character,)
+        latest_completed = next(
+            (turn for turn in reversed(selected.history) if turn.is_completed),
+            None,
+        )
+        completed = (
+            () if latest_completed is None else turn_messages(latest_completed)
+        )
+        return (*character, *completed, selected.current_user)
 
     @staticmethod
-    def _exchange_messages(
-        exchange: MaskedHistoryExchange,
-    ) -> list[PromptMessage]:
-        return [
-            PromptMessage(PromptRole.USER, exchange.user_content),
-            PromptMessage(PromptRole.ASSISTANT, exchange.assistant_content),
-        ]
-
-    def _required_tokens(self, selected: _SelectedRegions) -> int:
-        return (
-            self._optional_message_tokens(selected.character)
-            + self._tokens(selected.history[-2:])
-            + self._message_tokens(selected.current_user)
+    def _removable_history_indices(
+        turns: tuple[MaskedHistoryTurn, ...],
+    ) -> tuple[int, ...]:
+        protected = next(
+            (
+                index
+                for index in range(len(turns) - 1, -1, -1)
+                if turns[index].is_completed
+            ),
+            None,
         )
+        return tuple(index for index in range(len(turns)) if index != protected)
 
-    def _region_tokens(self, selected: _SelectedRegions) -> int:
-        return self._usage(selected).total
+    @staticmethod
+    def _history_messages(
+        turns: tuple[MaskedHistoryTurn, ...],
+    ) -> tuple[PromptMessage, ...]:
+        return tuple(message for turn in turns for message in turn_messages(turn))
 
-    def _tokens(self, messages: tuple[PromptMessage, ...] | list[PromptMessage]) -> int:
-        return sum(self._message_tokens(message) for message in messages)
+    def _measure_total(
+        self,
+        selected: _SelectedRegions,
+        measurements: TokenMeasurements,
+    ) -> TokenMeasurement:
+        return measurements.measure(self._messages(selected))
 
-    def _message_tokens(self, message: PromptMessage) -> int:
-        return self._token_counter.count(message.content)
+    @staticmethod
+    def _measure_optional(
+        message: PromptMessage | None,
+        measurements: TokenMeasurements,
+    ) -> tuple[int, TokenMeasurements]:
+        if message is None:
+            return 0, measurements
+        measured = measurements.measure((message,))
+        return measured.count, measured.measurements
 
-    def _optional_message_tokens(self, message: PromptMessage | None) -> int:
-        return 0 if message is None else self._message_tokens(message)
+    @staticmethod
+    def _rag_message(item: RagItem) -> PromptMessage:
+        return PromptMessage(PromptRole.SYSTEM, f"{RAG_HEADING}\n{item.content}")
 
     @staticmethod
     def _require_within(region: str, used: int, limit: int) -> None:
         if used > limit:
             raise PromptInputLimitError(region, used, limit)
-
-    @staticmethod
-    def _without_lowest_priority_rag(
-        selected: _SelectedRegions,
-    ) -> _SelectedRegions:
-        return _SelectedRegions(
-            character=selected.character,
-            rag=selected.rag[:-1],
-            history=selected.history,
-            current_user=selected.current_user,
-            post_history=selected.post_history,
-            omitted_rag_items=selected.omitted_rag_items + 1,
-            omitted_history_exchanges=selected.omitted_history_exchanges,
-        )
-
-    @staticmethod
-    def _without_oldest_exchange(
-        selected: _SelectedRegions,
-    ) -> _SelectedRegions:
-        return _SelectedRegions(
-            character=selected.character,
-            rag=selected.rag,
-            history=selected.history[2:],
-            current_user=selected.current_user,
-            post_history=selected.post_history,
-            omitted_rag_items=selected.omitted_rag_items,
-            omitted_history_exchanges=selected.omitted_history_exchanges + 1,
-        )
-
-    @staticmethod
-    def _without_post_history(
-        selected: _SelectedRegions,
-    ) -> _SelectedRegions:
-        return _SelectedRegions(
-            character=selected.character,
-            rag=selected.rag,
-            history=selected.history,
-            current_user=selected.current_user,
-            post_history=None,
-            omitted_rag_items=selected.omitted_rag_items,
-            omitted_history_exchanges=selected.omitted_history_exchanges,
-        )

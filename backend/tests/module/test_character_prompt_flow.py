@@ -7,9 +7,11 @@ from fastapi.testclient import TestClient
 from app.characters.loader import load_character_card, load_tts_config
 from app.prompting import (
     CurrentUserMessage,
+    HistoryCandidates,
     MaskedHistory,
     PromptBuildInput,
     PromptBuilder,
+    PromptMessage,
     RagContext,
     TokenBudget,
 )
@@ -22,8 +24,8 @@ from tests.character_card_test_support import (
 
 
 class UnitTokenCounter:
-    def count(self, text: str) -> int:
-        return 0 if text == "" else 1
+    def count_input_tokens(self, messages: tuple[PromptMessage, ...]) -> int:
+        return sum(message.content != "" for message in messages)
 
 
 def test_should_build_runtime_prompt_from_shipped_character_card() -> None:
@@ -33,7 +35,9 @@ def test_should_build_runtime_prompt_from_shipped_character_card() -> None:
     prompt_input = PromptBuildInput(
         character=character_prompt,
         rag=RagContext(items=()),
-        history=MaskedHistory(exchanges=()),
+        history=HistoryCandidates(
+            newest_first_factory=lambda: iter(()), omitted_turns=0
+        ),
         current_user=CurrentUserMessage("現在ターンの入力"),
         budget=TokenBudget(
             total=20,
@@ -55,8 +59,8 @@ def test_should_build_runtime_prompt_from_shipped_character_card() -> None:
     assert character_prompt.system_prompt in character_region
     assert character_prompt.mes_example in character_region
     assert all(card.data.first_mes not in content for content in prompt_contents)
-    assert prompt_contents[-2] == "現在ターンの入力"
-    assert prompt_contents[-1] == character_prompt.post_history_instructions
+    assert prompt_contents[1] == character_prompt.post_history_instructions
+    assert prompt_contents[-1] == "現在ターンの入力"
     assert tts_config.speaker_id == 14
 
 
@@ -76,7 +80,9 @@ def test_should_omit_final_instruction_when_card_field_is_missing(
     prompt_input = PromptBuildInput(
         character=card.to_character_prompt(),
         rag=RagContext(items=()),
-        history=MaskedHistory(exchanges=()),
+        history=HistoryCandidates(
+            newest_first_factory=lambda: iter(()), omitted_turns=0
+        ),
         current_user=CurrentUserMessage("現在ターンの入力"),
         budget=TokenBudget(
             total=20,
@@ -124,5 +130,5 @@ def test_should_send_builder_messages_from_http_entrypoint(
     assert card.data.description in contents[0]
     assert card.data.system_prompt in contents[0]
     assert all(card.data.first_mes not in content for content in contents)
-    assert contents[-2] == "HTTP_CURRENT_USER"
-    assert contents[-1] == card.data.post_history_instructions
+    assert contents[1] == card.data.post_history_instructions
+    assert contents[-1] == "HTTP_CURRENT_USER"

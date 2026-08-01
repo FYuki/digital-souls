@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 from fastapi.testclient import TestClient
 
-from app.conversation_history.service import CompletedHistoryExchange
+from app.conversation_history.prompt_history import RestoredHistoryTurn
 from app.main import app
 from app.memory.chroma_store import MemorySearchResult
 from app.prompting import CharacterPrompt, PromptInputLimitError
@@ -24,9 +24,9 @@ _RECORD_USER_MEMORY_CANDIDATE = (
     "app._chat_runtime._rag_service.record_user_memory_candidate"
 )
 _RESOLVED_MEMORY_POLICY = "app.main.resolved_memory_policy"
-_BUILD_PROMPT = "app._chat_runtime.PromptBuilder.build"
-_COMPLETED_EXCHANGES = (
-    "app.conversation_history.service.ConversationHistorySession.completed_exchanges"
+_BUILD_PROMPT = "app.chat_prompt.PromptBuilder.build"
+_PROMPT_TURNS = (
+    "app.conversation_history.service.ConversationHistorySession.prompt_turns"
 )
 
 _VALID_BODY = {"character": "miori", "message": "自己紹介してください"}
@@ -128,10 +128,11 @@ class TestChatEndpoint:
         def reject_prompt(prompt_input):
             assert prompt_input.character.system_prompt == secrets["character"]
             assert prompt_input.rag.items[0].content.endswith(secrets["rag"])
-            assert prompt_input.history.exchanges[0].user_content == secrets[
+            history = tuple(prompt_input.history.newest_first_factory())
+            assert history[0].user_content == secrets[
                 "history_user"
             ]
-            assert prompt_input.history.exchanges[0].assistant_content == secrets[
+            assert history[0].assistant_content == secrets[
                 "history_assistant"
             ]
             assert prompt_input.current_user.content == secrets["current_user"]
@@ -146,12 +147,15 @@ class TestChatEndpoint:
                 return_value=[_rag_memory(secrets["rag"])],
             ):
                 with patch(
-                    _COMPLETED_EXCHANGES,
-                    return_value=(
-                        CompletedHistoryExchange(
-                            user_content=secrets["history_user"],
-                            assistant_content=secrets["history_assistant"],
-                        ),
+                    _PROMPT_TURNS,
+                    return_value=iter(
+                        (
+                            RestoredHistoryTurn(
+                                user_content=secrets["history_user"],
+                                assistant_content=secrets["history_assistant"],
+                                is_completed=True,
+                            ),
+                        )
                     ),
                 ):
                     with patch(_BUILD_PROMPT, side_effect=reject_prompt):

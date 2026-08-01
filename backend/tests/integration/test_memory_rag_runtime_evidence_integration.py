@@ -111,7 +111,8 @@ class TestRagRuntimeEvidenceIntegration:
 
         captured_llm_calls = []
 
-        def capture_generate_response(prompt) -> str:
+        def capture_generate_response(prompt, *, max_output_tokens: int) -> str:
+            assert max_output_tokens == 4096
             messages = prompt.messages
             user_message = next(
                 message.content
@@ -205,7 +206,8 @@ class TestRagRuntimeEvidenceIntegration:
 
         monkeypatch.setattr(chromadb, "PersistentClient", AddFailureClient)
 
-        def capture_generate_response(prompt) -> str:
+        def capture_generate_response(prompt, *, max_output_tokens: int) -> str:
+            assert max_output_tokens == 4096
             contents = [message.content for message in prompt.messages]
             assert system_prompt in contents[0]
             assert contents[-1] == user_message

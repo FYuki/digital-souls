@@ -22,6 +22,7 @@ def _patch_privacy_startup(monkeypatch: pytest.MonkeyPatch):
             rag_enabled=False,
             memory_policy=None,
             privacy_scanner=None,
+            prompt_config=main._chat_runtime.resolve_prompt_config(),
         )
     )
     monkeypatch.setattr(main, "resolved_memory_policy", resolve_policy)

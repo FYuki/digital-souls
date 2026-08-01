@@ -20,12 +20,11 @@ from app.chat_service import (
     ChatServiceError,
     ChatTimeoutError,
 )
-from app.conversation_history.service import (
-    CompletedHistoryExchange,
-    StartedHistoryTurn,
-)
+from app.conversation_history.prompt_history import RestoredHistoryTurn
+from app.conversation_history.service import StartedHistoryTurn
 from app.memory.chroma_store import MemorySearchResult
 from app.prompting import CharacterPrompt, PromptInputLimitError
+from app.prompting.config import PromptRuntimeConfig
 
 
 _LOAD_PERSONALITY = "app._chat_runtime._character_loader.load_character_card"
@@ -36,7 +35,17 @@ _BUILD_AUGMENTED_SYSTEM_PROMPT = (
 _RECORD_USER_MEMORY_CANDIDATE = (
     "app._chat_runtime._rag_service.record_user_memory_candidate"
 )
-_BUILD_PROMPT = "app._chat_runtime.PromptBuilder.build"
+_BUILD_PROMPT = "app.chat_prompt.PromptBuilder.build"
+_PROMPT_CONFIG = PromptRuntimeConfig(10, 4096, 8192, 4096, 32768)
+
+
+@pytest.fixture(autouse=True)
+def _formal_token_counter(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        _chat_runtime._llm_router,
+        "count_input_tokens",
+        lambda messages: len(messages),
+    )
 
 
 def _character_card(system_prompt: str = "# prompt") -> MagicMock:
@@ -90,8 +99,8 @@ class _IgnoringHistorySession:
     def fail_turn(self, started_turn: StartedHistoryTurn) -> None:
         return None
 
-    def completed_exchanges(self) -> tuple[object, ...]:
-        return ()
+    def prompt_turns(self, *, max_completed_turns: int, page_size: int):
+        return iter(())
 
 
 class _IgnoringHistoryService:
@@ -108,6 +117,7 @@ class _RecordingHistorySession:
         self.start_calls: list[str] = []
         self.complete_calls: list[tuple[StartedHistoryTurn, str]] = []
         self.fail_calls: list[StartedHistoryTurn] = []
+        self.restored_turns: tuple[RestoredHistoryTurn, ...] = ()
 
     def start_turn(self, user_content: str) -> StartedHistoryTurn:
         self.start_calls.append(user_content)
@@ -123,8 +133,8 @@ class _RecordingHistorySession:
     def fail_turn(self, started_turn: StartedHistoryTurn) -> None:
         self.fail_calls.append(started_turn)
 
-    def completed_exchanges(self) -> tuple[object, ...]:
-        return ()
+    def prompt_turns(self, *, max_completed_turns: int, page_size: int):
+        return iter(self.restored_turns)
 
 
 class _FailingCompleteHistorySession(_RecordingHistorySession):
@@ -180,6 +190,7 @@ def _chat_service(rag_enabled: bool, policy=None) -> ChatService:
             rag_enabled=rag_enabled,
             memory_policy=policy,
             privacy_scanner=privacy_scanner,
+            prompt_config=_PROMPT_CONFIG,
         ),
         _CollectingTaskQueue(),
         _IgnoringHistoryService(),
@@ -192,6 +203,7 @@ def _chat_service_with_history(session: _RecordingHistorySession) -> ChatService
             rag_enabled=False,
             memory_policy=None,
             privacy_scanner=None,
+            prompt_config=_PROMPT_CONFIG,
         ),
         _CollectingTaskQueue(),
         _RecordingHistoryService(session),
@@ -259,19 +271,19 @@ class TestChatServiceErrorContract:
             "current_user": "SECRET_CURRENT_USER_F742",
         }
         session = _RecordingHistorySession()
-        session.completed_exchanges = MagicMock(
-            return_value=(
-                CompletedHistoryExchange(
-                    user_content=secrets["history_user"],
-                    assistant_content=secrets["history_assistant"],
-                ),
-            )
+        session.restored_turns = (
+            RestoredHistoryTurn(
+                user_content=secrets["history_user"],
+                assistant_content=secrets["history_assistant"],
+                is_completed=True,
+            ),
         )
         service = ChatService(
             ChatRuntimeConfig(
                 rag_enabled=True,
                 memory_policy=MagicMock(),
                 privacy_scanner=MagicMock(),
+                prompt_config=_PROMPT_CONFIG,
             ),
             _CollectingTaskQueue(),
             _RecordingHistoryService(session),
@@ -280,10 +292,11 @@ class TestChatServiceErrorContract:
         def reject_prompt(prompt_input):
             assert prompt_input.character.system_prompt == secrets["character"]
             assert prompt_input.rag.items[0].content.endswith(secrets["rag"])
-            assert prompt_input.history.exchanges[0].user_content == secrets[
+            history = tuple(prompt_input.history.newest_first_factory())
+            assert history[0].user_content == secrets[
                 "history_user"
             ]
-            assert prompt_input.history.exchanges[0].assistant_content == secrets[
+            assert history[0].assistant_content == secrets[
                 "history_assistant"
             ]
             assert prompt_input.current_user.content == secrets["current_user"]
@@ -368,6 +381,38 @@ class TestChatServiceErrorContract:
                     _chat_service(False).generate_chat_reply("miori", "hello")
 
         assert exc_info.value.detail == "LLM request failed"
+
+    @pytest.mark.parametrize(
+        ("source_error", "expected_error", "expected_detail"),
+        [
+            (
+                httpx.ReadTimeout("timeout"),
+                ChatTimeoutError,
+                "LLM request timed out",
+            ),
+            (
+                httpx.HTTPError("boom"),
+                ChatBackendError,
+                "LLM request failed",
+            ),
+        ],
+    )
+    def test_normalizes_prompt_token_count_transport_error(
+        self,
+        source_error: httpx.HTTPError,
+        expected_error: type[ChatServiceError],
+        expected_detail: str,
+    ) -> None:
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(
+                "app._chat_runtime._llm_router.count_input_tokens",
+                side_effect=source_error,
+            ):
+                with pytest.raises(expected_error) as exc_info:
+                    _chat_service(False).generate_chat_reply("miori", "hello")
+
+        assert exc_info.value.detail == expected_detail
+        assert exc_info.value.__cause__ is source_error
 
     def test_generate_reply_failure_marks_started_turn_failed_once(self):
         session = _RecordingHistorySession()
@@ -681,6 +726,7 @@ class TestChatServiceRagContract:
                     rag_enabled=True,
                     memory_policy=object(),
                     privacy_scanner=None,
+                    prompt_config=_PROMPT_CONFIG,
                 ),
                 _CollectingTaskQueue(),
                 _IgnoringHistoryService(),
@@ -691,6 +737,7 @@ class TestChatServiceRagContract:
                     rag_enabled=False,
                     memory_policy=None,
                     privacy_scanner=MagicMock(),
+                    prompt_config=_PROMPT_CONFIG,
                 ),
                 _CollectingTaskQueue(),
                 _IgnoringHistoryService(),

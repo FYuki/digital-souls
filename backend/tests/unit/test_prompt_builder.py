@@ -3,8 +3,9 @@ import pytest
 from app.prompting import (
     CharacterPrompt,
     CurrentUserMessage,
+    HistoryCandidates,
     MaskedHistory,
-    MaskedHistoryExchange,
+    MaskedHistoryTurn,
     PromptBuildInput,
     PromptRole,
     RagContext,
@@ -27,8 +28,8 @@ class TestPromptBuilderComposition:
             PromptRole.SYSTEM,
             PromptRole.USER,
             PromptRole.ASSISTANT,
-            PromptRole.USER,
             PromptRole.SYSTEM,
+            PromptRole.USER,
         ]
         contents = [message.content for message in result.messages]
         assert contents[0].index("概要") < contents[0].index("性格")
@@ -36,8 +37,12 @@ class TestPromptBuilderComposition:
         assert contents[0].index("関係") < contents[0].index("システム指示")
         assert contents[0].index("システム指示") < contents[0].index("会話例")
         assert "RAG本文" in contents[1]
-        assert contents[2:5] == ["過去user", "過去assistant", "現在user原文"]
-        assert contents[-1] == "最終指示"
+        assert contents[2:] == [
+            "過去user",
+            "過去assistant",
+            "最終指示",
+            "現在user原文",
+        ]
 
     @pytest.mark.parametrize(
         ("field", "marker"),
@@ -69,7 +74,7 @@ class TestPromptBuilderComposition:
         prompt_input = prompt_build_input(
             character=character,
             rag=RagContext(items=()),
-            history=MaskedHistory(exchanges=()),
+            history=MaskedHistory(turns=(), omitted_turns=0),
         )
 
         result = prompt_builder().build(prompt_input)
@@ -92,7 +97,7 @@ class TestPromptBuilderComposition:
         prompt_input = prompt_build_input(
             character=character,
             rag=RagContext(items=()),
-            history=MaskedHistory(exchanges=()),
+            history=MaskedHistory(turns=(), omitted_turns=0),
         )
 
         result = prompt_builder().build(prompt_input)
@@ -108,12 +113,14 @@ class TestPromptBuilderComposition:
     def test_should_keep_current_user_separate_when_body_matches_history(self) -> None:
         repeated_body = "同じ本文"
         history = MaskedHistory(
-            exchanges=(
-                MaskedHistoryExchange(
+            turns=(
+                MaskedHistoryTurn(
                     user_content=repeated_body,
                     assistant_content="過去の回答",
+                    is_completed=True,
                 ),
-            )
+            ),
+            omitted_turns=0,
         )
         prompt_input = prompt_build_input(
             history=history,
@@ -131,16 +138,18 @@ class TestPromptBuilderComposition:
             PromptRole.USER,
             PromptRole.USER,
         ]
-        assert result.messages[-2].content == repeated_body
+        assert result.messages[-1].content == repeated_body
 
     def test_should_reject_masked_history_in_the_current_user_boundary(self) -> None:
         history = MaskedHistory(
-            exchanges=(
-                MaskedHistoryExchange(
+            turns=(
+                MaskedHistoryTurn(
                     user_content="マスク済み",
                     assistant_content="回答",
+                    is_completed=True,
                 ),
-            )
+            ),
+            omitted_turns=0,
         )
 
         with pytest.raises(TypeError, match="CurrentUserMessage"):
@@ -154,7 +163,9 @@ class TestPromptBuilderComposition:
                     post_history_instructions="",
                 ),
                 rag=RagContext(items=()),
-                history=MaskedHistory(exchanges=()),
+                history=HistoryCandidates(
+                    newest_first_factory=lambda: iter(()), omitted_turns=0
+                ),
                 current_user=history,  # type: ignore[arg-type]
                 budget=token_budget(),
             )

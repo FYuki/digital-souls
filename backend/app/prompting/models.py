@@ -1,3 +1,4 @@
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from enum import Enum
 
@@ -49,29 +50,44 @@ class RagContext:
 
 
 @dataclass(frozen=True, repr=False)
-class MaskedHistoryExchange:
+class MaskedHistoryTurn:
     user_content: str
-    assistant_content: str
+    assistant_content: str | None
+    is_completed: bool
 
     def __post_init__(self) -> None:
         if not isinstance(self.user_content, str):
             raise TypeError("user_content must be a string")
-        if not isinstance(self.assistant_content, str):
-            raise TypeError("assistant_content must be a string")
+        if self.assistant_content is not None and not isinstance(
+            self.assistant_content, str
+        ):
+            raise TypeError("assistant_content must be a string or None")
+        if type(self.is_completed) is not bool:
+            raise TypeError("is_completed must be a boolean")
 
 
 @dataclass(frozen=True, repr=False)
 class MaskedHistory:
-    exchanges: tuple[MaskedHistoryExchange, ...]
+    turns: tuple[MaskedHistoryTurn, ...]
+    omitted_turns: int
 
     def __post_init__(self) -> None:
-        if not all(
-            isinstance(exchange, MaskedHistoryExchange)
-            for exchange in self.exchanges
-        ):
-            raise TypeError(
-                "exchanges must contain only MaskedHistoryExchange values"
-            )
+        if not all(isinstance(turn, MaskedHistoryTurn) for turn in self.turns):
+            raise TypeError("turns must contain only MaskedHistoryTurn values")
+        if type(self.omitted_turns) is not int or self.omitted_turns < 0:
+            raise ValueError("omitted_turns must be a non-negative integer")
+
+
+@dataclass(frozen=True, repr=False)
+class HistoryCandidates:
+    newest_first_factory: Callable[[], Iterator[MaskedHistoryTurn]]
+    omitted_turns: int
+
+    def __post_init__(self) -> None:
+        if not callable(self.newest_first_factory):
+            raise TypeError("newest_first_factory must be callable")
+        if type(self.omitted_turns) is not int or self.omitted_turns < 0:
+            raise ValueError("omitted_turns must be a non-negative integer")
 
 
 @dataclass(frozen=True, repr=False)
@@ -109,7 +125,7 @@ class TokenBudget:
 class PromptBuildInput:
     character: CharacterPrompt
     rag: RagContext
-    history: MaskedHistory
+    history: HistoryCandidates
     current_user: CurrentUserMessage
     budget: TokenBudget
 
@@ -117,7 +133,7 @@ class PromptBuildInput:
         boundaries = (
             ("character", self.character, CharacterPrompt),
             ("rag", self.rag, RagContext),
-            ("history", self.history, MaskedHistory),
+            ("history", self.history, HistoryCandidates),
             ("current_user", self.current_user, CurrentUserMessage),
             ("budget", self.budget, TokenBudget),
         )

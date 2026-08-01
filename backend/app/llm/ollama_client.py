@@ -6,7 +6,7 @@ import httpx
 from app.llm.base import LLMClient
 from app.llm.ollama_config import ollama_endpoint, ollama_timeout
 from app.model_settings import OLLAMA_MODEL_NAME
-from app.prompting import BuiltPrompt
+from app.prompting import BuiltPrompt, PromptMessage
 
 
 def _as_object_mapping(value: object, field_name: str) -> Mapping[str, object]:
@@ -24,19 +24,28 @@ def _extract_message_content(response_body: object) -> str:
     return content
 
 
+def _serialize_messages(
+    messages: tuple[PromptMessage, ...],
+) -> list[dict[str, str]]:
+    return [
+        {"role": message.role.value, "content": message.content}
+        for message in messages
+    ]
+
+
 class OllamaClient(LLMClient):
-    def generate(self, prompt: BuiltPrompt) -> str:
+    def generate(
+        self,
+        prompt: BuiltPrompt,
+        *,
+        max_output_tokens: int,
+    ) -> str:
         payload = {
             "model": OLLAMA_MODEL_NAME,
             "stream": False,
-            "messages": [
-                {
-                    "role": message.role.value,
-                    "content": message.content,
-                }
-                for message in prompt.messages
-            ],
+            "messages": _serialize_messages(prompt.messages),
         }
+        payload["options"] = {"num_predict": max_output_tokens}
         response = httpx.post(
             ollama_endpoint("/api/chat"),
             json=payload,
@@ -44,3 +53,23 @@ class OllamaClient(LLMClient):
         )
         response.raise_for_status()
         return _extract_message_content(response.json())
+
+    def count_input_tokens(self, messages: tuple[PromptMessage, ...]) -> int:
+        response = httpx.post(
+            ollama_endpoint("/api/chat"),
+            json={
+                "model": OLLAMA_MODEL_NAME,
+                "stream": False,
+                "messages": _serialize_messages(messages),
+                "options": {"num_predict": 1},
+            },
+            timeout=ollama_timeout(),
+        )
+        response.raise_for_status()
+        body = _as_object_mapping(response.json(), "root")
+        count = body.get("prompt_eval_count")
+        if type(count) is not int or count < 1:
+            raise ValueError(
+                "Ollama response field 'prompt_eval_count' must be a positive integer"
+            )
+        return count

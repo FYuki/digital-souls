@@ -10,6 +10,7 @@ from typing import Protocol
 import httpx
 
 from app import chat_service
+from app.chat_prompt import build_chat_prompt
 from app.conversation_history.service import (
     HistoryService,
     HistorySession,
@@ -23,29 +24,18 @@ from app.prompting import (
     BuiltPrompt,
     CharacterPrompt,
     CurrentUserMessage,
-    MaskedHistory,
-    MaskedHistoryExchange,
-    PromptBuildInput,
-    PromptBuilder,
-    PromptInputLimitError,
     RagContext,
     RagItem,
-    TokenBudget,
 )
-from app.prompting.token_counter import Utf8TokenEstimator
+from app.prompting.config import (
+    PromptRuntimeConfig,
+    resolve_prompt_config,
+)
 
 RAG_ENABLED_ENV = "RAG_ENABLED"
 RAG_ENABLED_VALUE = "true"
 RAG_MEMORY_THREAD_PREFIX = "rag-memory"
 DEFAULT_RAG_MEMORY_WORKERS = 4
-DEFAULT_PROMPT_TOKEN_BUDGET = TokenBudget(
-    total=32_768,
-    character=8_192,
-    rag=8_192,
-    history=16_384,
-    current_user=8_192,
-    post_history=4_096,
-)
 logger = logging.getLogger(__name__)
 
 _default_service_lock = threading.Lock()
@@ -111,6 +101,7 @@ class ChatRuntimeConfig:
     rag_enabled: bool
     memory_policy: _memory_policy.MemoryPolicy | None
     privacy_scanner: PrivacyScanner | None
+    prompt_config: PromptRuntimeConfig
 
 
 @dataclass(frozen=True)
@@ -119,6 +110,7 @@ class _ResolvedChatContext:
     memory_policy: _memory_policy.MemoryPolicy | None
     privacy_scanner: PrivacyScanner | None
     memory_task_queue: MemoryTaskQueue
+    prompt_config: PromptRuntimeConfig
 
 
 @dataclass(frozen=True)
@@ -211,6 +203,7 @@ def resolve_chat_runtime_config(
         rag_enabled=rag_enabled,
         memory_policy=policy if rag_enabled else None,
         privacy_scanner=privacy_scanner if rag_enabled else None,
+        prompt_config=resolve_prompt_config(),
     )
 
 
@@ -281,12 +274,14 @@ def _resolve_chat_context(
             memory_policy=None,
             privacy_scanner=None,
             memory_task_queue=memory_task_queue,
+            prompt_config=runtime_config.prompt_config,
         )
     return _ResolvedChatContext(
         character_prompt=character_prompt,
         memory_policy=runtime_config.memory_policy,
         privacy_scanner=runtime_config.privacy_scanner,
         memory_task_queue=memory_task_queue,
+        prompt_config=runtime_config.prompt_config,
     )
 
 
@@ -312,9 +307,12 @@ def _rag_context_for_reply(
     )
 
 
-def _call_llm(prompt: BuiltPrompt) -> str:
+def _call_llm(prompt: BuiltPrompt, max_output_tokens: int) -> str:
     try:
-        reply = _llm_router.generate_response(prompt)
+        reply = _llm_router.generate_response(
+            prompt,
+            max_output_tokens=max_output_tokens,
+        )
     except httpx.TimeoutException as exc:
         raise chat_service.ChatTimeoutError() from exc
     except httpx.HTTPError as exc:
@@ -348,43 +346,19 @@ def _generate_reply(
     context: _ResolvedChatContext,
     history_session: HistorySession,
 ) -> str:
-    prompt = _build_prompt(character, message, context, history_session)
-    reply = _call_llm(prompt)
-    _record_user_memory_candidate(character, message, context)
-    return reply
-
-
-def _build_prompt(
-    character: str,
-    message: str,
-    context: _ResolvedChatContext,
-    history_session: HistorySession,
-) -> BuiltPrompt:
-    completed_exchanges = history_session.completed_exchanges()
-    history = MaskedHistory(
-        exchanges=tuple(
-            MaskedHistoryExchange(
-                user_content=exchange.user_content,
-                assistant_content=exchange.assistant_content,
-            )
-            for exchange in completed_exchanges
-        )
-    )
-    prompt_input = PromptBuildInput(
+    prompt = build_chat_prompt(
         character=context.character_prompt,
         rag=_rag_context_for_reply(character, message, context),
-        history=history,
         current_user=CurrentUserMessage(message),
-        budget=DEFAULT_PROMPT_TOKEN_BUDGET,
+        history_session=history_session,
+        config=context.prompt_config,
     )
-    try:
-        return PromptBuilder(Utf8TokenEstimator()).build(prompt_input)
-    except PromptInputLimitError as exc:
-        raise chat_service.ChatInputLimitError(
-            region=exc.region,
-            used=exc.used,
-            limit=exc.limit,
-        ) from exc
+    reply = _call_llm(
+        prompt,
+        context.prompt_config.assistant_max_generation_tokens,
+    )
+    _record_user_memory_candidate(character, message, context)
+    return reply
 
 
 def _generate_recorded_reply(

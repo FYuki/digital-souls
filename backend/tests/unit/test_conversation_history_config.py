@@ -36,10 +36,12 @@ class TestConversationHistoryConfig:
             ("CONVERSATION_TURN_STALE_AFTER_SECONDS", "0"),
             ("CONVERSATION_TURN_STALE_AFTER_SECONDS", "-1"),
             ("CONVERSATION_TURN_STALE_AFTER_SECONDS", "1.5"),
+            ("CONVERSATION_TURN_STALE_AFTER_SECONDS", " 1"),
             ("CONVERSATION_TURN_STALE_AFTER_SECONDS", "invalid"),
             ("CONVERSATION_HISTORY_RETENTION_DAYS", "0"),
             ("CONVERSATION_HISTORY_RETENTION_DAYS", "-1"),
             ("CONVERSATION_HISTORY_RETENTION_DAYS", "1.5"),
+            ("CONVERSATION_HISTORY_RETENTION_DAYS", " 1"),
             ("CONVERSATION_HISTORY_RETENTION_DAYS", "invalid"),
         ],
     )
