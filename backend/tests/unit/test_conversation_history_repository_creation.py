@@ -11,11 +11,11 @@ from app.conversation_history.errors import (
     InvalidConversationIdError,
 )
 from app.conversation_history.models import (
-    PrivacySkipReason,
     PrivacySkippedTurnInput,
     ProcessingTurnInput,
     TurnStatus,
 )
+from app.privacy.contracts import HistoryDecisionReasonCode
 from tests.conversation_history_test_support import (
     CONVERSATION_ID,
     OTHER_CONVERSATION_ID,
@@ -142,7 +142,9 @@ class TestTurnCreation:
             "miori",
             CONVERSATION_ID,
             PrivacySkippedTurnInput(
-                reason_code=PrivacySkipReason.SENSITIVE_CONTENT,
+                reason_code=HistoryDecisionReasonCode.SCAN_FAILURE,
+                sanitizer_version="test-sanitizer-v1",
+                policy_version="test-policy-v1",
             ),
         )
 
@@ -150,14 +152,18 @@ class TestTurnCreation:
         assert turn.status is TurnStatus.PRIVACY_SKIPPED
         assert turn.user_content is None
         assert turn.assistant_content is None
-        assert turn.privacy_reason_code is PrivacySkipReason.SENSITIVE_CONTENT
+        assert turn.privacy_reason_code is HistoryDecisionReasonCode.SCAN_FAILURE
 
     def test_should_not_expose_raw_body_fields_on_privacy_skip_input(self) -> None:
         parameters = inspect.signature(PrivacySkippedTurnInput).parameters
 
         accepted_fields = set(parameters)
 
-        assert accepted_fields == {"reason_code"}
+        assert accepted_fields == {
+            "reason_code",
+            "sanitizer_version",
+            "policy_version",
+        }
 
     def test_should_accept_only_sanitized_body_for_processing_input(self) -> None:
         parameters = inspect.signature(ProcessingTurnInput).parameters
@@ -169,7 +175,9 @@ class TestTurnCreation:
     def test_should_reject_unregistered_privacy_reason_code(self) -> None:
         with pytest.raises(TypeError):
             PrivacySkippedTurnInput(
-                reason_code=cast(PrivacySkipReason, "secret=raw-value")
+                reason_code=cast(HistoryDecisionReasonCode, "secret=raw-value"),
+                sanitizer_version="test-sanitizer-v1",
+                policy_version="test-policy-v1",
             )
 
     def test_should_reject_turn_creation_for_other_character(

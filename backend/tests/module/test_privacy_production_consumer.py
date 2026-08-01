@@ -2,10 +2,18 @@ import sqlite3
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
+from tests.conversation_history_test_support import CONVERSATION_ID
 
 
-_GENERATE_RESPONSE = "app._chat_runtime._llm_router.generate_response"
+_GENERATE_RESPONSE = "app.main.generate_response"
+_COUNT_INPUT_TOKENS = "app.main.count_input_tokens"
+
+
+@pytest.fixture(autouse=True)
+def _formal_token_counter(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_COUNT_INPUT_TOKENS, lambda messages: len(messages))
 
 
 def _stored_turn(database_path: Path) -> tuple[object, ...]:
@@ -31,6 +39,7 @@ def test_should_persist_only_sanitized_user_and_assistant_content(
             "/chat",
             json={
                 "character": "miori",
+                "conversation_id": str(CONVERSATION_ID),
                 "message": "password: synthetic-user-secret",
             },
         )
@@ -53,6 +62,7 @@ def test_should_persist_metadata_only_for_current_user_history_opt_out(
             "/chat",
             json={
                 "character": "miori",
+                "conversation_id": str(CONVERSATION_ID),
                 "message": "このターンは履歴に残さないで",
             },
         )
@@ -62,7 +72,7 @@ def test_should_persist_metadata_only_for_current_user_history_opt_out(
         None,
         None,
         "privacy_skipped",
-        "policy_denied",
+        "STORAGE_OPT_OUT",
     )
 
 
@@ -73,7 +83,11 @@ def test_should_mark_turn_failed_for_empty_assistant_response(
     with patch(_GENERATE_RESPONSE, return_value=""):
         response = client.post(
             "/chat",
-            json={"character": "miori", "message": "通常の質問です"},
+            json={
+                "character": "miori",
+                "conversation_id": str(CONVERSATION_ID),
+                "message": "通常の質問です",
+            },
         )
 
     assert response.status_code == 502
@@ -104,7 +118,11 @@ def test_should_reject_policy_sensitive_content_at_rag_storage_entry(
             with TestClient(main.app) as client:
                 response = client.post(
                     "/chat",
-                    json={"character": "miori", "message": user_message},
+                    json={
+                        "character": "miori",
+                        "conversation_id": str(CONVERSATION_ID),
+                        "message": user_message,
+                    },
                 )
 
     assert response.status_code == 200

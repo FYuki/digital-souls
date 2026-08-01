@@ -143,6 +143,9 @@ describe('App chat and audio flow', () => {
     createBufferSource.mockReturnValue({ connect, start })
     decodeAudioData.mockResolvedValue({ duration: 1 })
     vi.stubGlobal('WebSocket', FakeWebSocket)
+    vi.stubGlobal('crypto', {
+      randomUUID: vi.fn(() => 'e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'),
+    })
     vi.stubGlobal('AudioContext', FakeAudioContext)
     vi.stubGlobal('navigator', {
       mediaDevices: {
@@ -162,7 +165,9 @@ describe('App chat and audio flow', () => {
     await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'こんにちは' } })
     await fireEvent.click(screen.getByRole('button', { name: '送信' }))
 
-    expect(socket.url).toBe('ws://localhost:3000/ws/miori')
+    expect(socket.url).toBe(
+      'ws://localhost:3000/ws/miori?conversation_id=e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010',
+    )
     expect(socket.sent).toEqual([JSON.stringify({ type: 'text', message: 'こんにちは' })])
     expect(await screen.findByText('こんにちは')).toBeTruthy()
 

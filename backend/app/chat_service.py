@@ -1,9 +1,12 @@
+from dataclasses import dataclass
 from typing import Protocol
+from uuid import UUID
 
 __all__ = [
     "CharacterNotFoundError",
     "ChatBackendError",
     "ChatInputLimitError",
+    "ChatReply",
     "ChatReplySession",
     "ChatServiceError",
     "ChatTimeoutError",
@@ -47,18 +50,47 @@ class ChatInputLimitError(ChatServiceError):
         super().__init__(self.detail)
 
 
+@dataclass(frozen=True)
+class ChatReply:
+    response: str
+    turn_id: UUID
+
+
 class ChatReplySession(Protocol):
-    def generate_reply(self, message: str) -> str:
+    def generate_reply(self, message: str) -> ChatReply:
+        ...
+
+    def mark_delivered(self, turn_id: UUID) -> None:
+        ...
+
+    def mark_delivery_failed(self, turn_id: UUID) -> None:
+        ...
+
+    def close(self) -> None:
         ...
 
 
-def generate_chat_reply(character: str, message: str) -> str:
+def generate_chat_reply(
+    character: str,
+    conversation_id: UUID,
+    message: str,
+) -> ChatReply:
     from app import _chat_runtime
 
-    return _chat_runtime.default_chat_service().generate_chat_reply(character, message)
+    return _chat_runtime.default_chat_service().generate_chat_reply(
+        character,
+        conversation_id,
+        message,
+    )
 
 
-async def create_chat_session(character: str) -> ChatReplySession:
+async def create_chat_session(
+    character: str,
+    conversation_id: UUID,
+) -> ChatReplySession:
     from app import _chat_runtime
 
-    return await _chat_runtime.default_chat_service().create_chat_session(character)
+    return await _chat_runtime.default_chat_service().create_chat_session(
+        character,
+        conversation_id,
+    )

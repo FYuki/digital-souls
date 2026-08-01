@@ -5,8 +5,10 @@ from uuid import UUID
 import pytest
 
 from app import chat_service
+from app.chat_prompt import build_chat_prompt
 from app.conversation_history.service import StartedHistoryTurn
 from app.prompting import CharacterPrompt
+from tests.conversation_history_test_support import CONVERSATION_ID
 
 
 class _HistorySession:
@@ -19,8 +21,8 @@ class _HistorySession:
             content_skipped=False,
         )
 
-    def complete_turn(self, started_turn, assistant_content: str) -> None:
-        return None
+    def complete_turn(self, started_turn, assistant_content: str) -> bool:
+        return True
 
     def fail_turn(self, started_turn) -> None:
         return None
@@ -33,7 +35,11 @@ class _HistoryService:
     def __init__(self, session: _HistorySession) -> None:
         self._session = session
 
-    def open_session(self, character_id: str) -> _HistorySession:
+    def open_session(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+    ) -> _HistorySession:
         return self._session
 
 
@@ -42,17 +48,17 @@ class _TaskQueue:
         return None
 
 
-def _service(monkeypatch, *, turns: tuple[object, ...]):
+def _service(
+    *,
+    turns: tuple[object, ...],
+    count_input_tokens,
+    generate_response,
+):
     from app import _chat_runtime
 
     card = MagicMock()
     card.to_character_prompt.return_value = CharacterPrompt(
         "", "", "", "system", "", ""
-    )
-    monkeypatch.setattr(
-        _chat_runtime._character_loader,
-        "load_character_card",
-        lambda character: card,
     )
     config = importlib.import_module("app.prompting.config").resolve_prompt_config()
     return _chat_runtime.ChatService(
@@ -64,6 +70,12 @@ def _service(monkeypatch, *, turns: tuple[object, ...]):
         ),
         _TaskQueue(),
         _HistoryService(_HistorySession(turns)),
+        _chat_runtime.ChatRuntimeDependencies(
+            character_prompt_loader=lambda character: card.to_character_prompt(),
+            prompt_builder=build_chat_prompt,
+            llm_response_generator=generate_response,
+            input_token_counter=count_input_tokens,
+        ),
     )
 
 
@@ -81,13 +93,15 @@ def test_should_reject_user_input_using_formal_provider_count(
             return 2
         return len(messages)
 
-    monkeypatch.setattr(_chat_runtime._llm_router, "count_input_tokens", count)
     generate = MagicMock()
-    monkeypatch.setattr(_chat_runtime._llm_router, "generate_response", generate)
 
     with pytest.raises(chat_service.ChatInputLimitError) as exc_info:
-        _service(monkeypatch, turns=()).generate_chat_reply(
-            "miori", "RAW_TOO_LARGE"
+        _service(
+            turns=(),
+            count_input_tokens=count,
+            generate_response=generate,
+        ).generate_chat_reply(
+            "miori", CONVERSATION_ID, "RAW_TOO_LARGE"
         )
 
     assert exc_info.value.region == "current_user"
@@ -113,17 +127,15 @@ def test_should_reserve_assistant_tokens_and_keep_latest_completed_or_fail(
         assistant_content="MASKED_LATEST_ASSISTANT",
         is_completed=True,
     )
-    monkeypatch.setattr(
-        _chat_runtime._llm_router,
-        "count_input_tokens",
-        lambda messages: len(messages),
-    )
     generate = MagicMock()
-    monkeypatch.setattr(_chat_runtime._llm_router, "generate_response", generate)
 
     with pytest.raises(chat_service.ChatInputLimitError) as exc_info:
-        _service(monkeypatch, turns=(latest_completed,)).generate_chat_reply(
-            "miori", "RAW_CURRENT"
+        _service(
+            turns=(latest_completed,),
+            count_input_tokens=lambda messages: len(messages),
+            generate_response=generate,
+        ).generate_chat_reply(
+            "miori", CONVERSATION_ID, "RAW_CURRENT"
         )
 
     assert exc_info.value.region == "total"

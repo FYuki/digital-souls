@@ -1,3 +1,4 @@
+import sqlite3
 import threading
 import time
 
@@ -9,6 +10,7 @@ from starlette.websockets import WebSocketDisconnect
 from unittest.mock import MagicMock, patch
 
 from app.audio_pipeline import resolve_audio_runtime_config
+from app.chat_service import ChatReply
 from app.main import app
 from app.memory.chroma_store import MemorySearchResult
 from app.prompting import CharacterPrompt, PromptInputLimitError
@@ -19,9 +21,15 @@ from tests.character_card_test_support import (
     character_card_document,
     write_character_card,
 )
+from tests.conversation_history_test_support import (
+    CONVERSATION_ID,
+    OTHER_CONVERSATION_ID,
+    TURN_ID,
+)
 
-_LOAD_PERSONALITY = "app._chat_runtime._character_loader.load_character_card"
-_GENERATE_RESPONSE = "app._chat_runtime._llm_router.generate_response"
+_LOAD_PERSONALITY = "app.main.load_character_card"
+_GENERATE_RESPONSE = "app.main.generate_response"
+_COUNT_INPUT_TOKENS = "app.main.count_input_tokens"
 _BUILD_AUGMENTED_SYSTEM_PROMPT = (
     "app._chat_runtime._rag_service.retrieve_prompt_memories"
 )
@@ -36,9 +44,26 @@ _BUILD_PROMPT = "app.chat_prompt.PromptBuilder.build"
 
 _PERSONALITY = "# 光織\n穏やかなAIです。"
 _LLM_REPLY = "光織です。よろしくお願いします。"
+
+
+@pytest.fixture(autouse=True)
+def _formal_token_counter(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_COUNT_INPUT_TOKENS, lambda messages: len(messages))
 _PCM_AUDIO = b"\x01\x00\x02\x00"
 _ODD_LENGTH_PCM_AUDIO = b"\x01\x00\x03"
 _TTS_CONFIG_MISSING_MESSAGE = "'tts_config' field is missing in character card data"
+_WS_URL = f"/ws/miori?conversation_id={CONVERSATION_ID}"
+
+
+class _StubDeliverySession:
+    def mark_delivered(self, turn_id):
+        return None
+
+    def mark_delivery_failed(self, turn_id):
+        return None
+
+    def close(self):
+        return None
 
 
 def _character_card(system_prompt: str = _PERSONALITY) -> MagicMock:
@@ -143,7 +168,7 @@ class TestWebSocketEndpoint:
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_BUILD_PROMPT, autospec=True, side_effect=fail_first_build):
                 with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
-                    with client.websocket_connect("/ws/miori") as websocket:
+                    with client.websocket_connect(_WS_URL) as websocket:
                         websocket.send_json({"type": "text", "message": secret})
                         limit_response = websocket.receive_json()
 
@@ -191,7 +216,7 @@ class TestWebSocketEndpoint:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                             with patch(_SYNTHESIZE) as mock_tts:
                                 with client.websocket_connect(
-                                    "/ws/miori"
+                                    _WS_URL
                                 ) as websocket:
                                     websocket.send_bytes(_PCM_AUDIO)
                                     limit_response = websocket.receive_json()
@@ -273,7 +298,7 @@ class TestWebSocketEndpoint:
     def test_returns_text_response_for_text_message(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
-                with client.websocket_connect("/ws/miori") as websocket:
+                with client.websocket_connect(_WS_URL) as websocket:
                     websocket.send_json(
                         {"type": "text", "message": "自己紹介してください"},
                     )
@@ -284,7 +309,7 @@ class TestWebSocketEndpoint:
     def test_loads_personality_from_path_character_name(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()) as mock_load:
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
-                with client.websocket_connect("/ws/miori") as websocket:
+                with client.websocket_connect(_WS_URL) as websocket:
                     websocket.send_json(
                         {
                             "type": "text",
@@ -301,7 +326,7 @@ class TestWebSocketEndpoint:
         user_message = "農業日誌を記録したい"
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value="了解です") as mock_gen:
-                with client.websocket_connect("/ws/miori") as websocket:
+                with client.websocket_connect(_WS_URL) as websocket:
                     websocket.send_json(
                         {
                             "type": "text",
@@ -340,7 +365,7 @@ class TestWebSocketEndpoint:
                             with patch(
                                 _RECORD_USER_MEMORY_CANDIDATE
                             ) as mock_record:
-                                with client.websocket_connect("/ws/miori") as websocket:
+                                with client.websocket_connect(_WS_URL) as websocket:
                                     websocket.send_json(
                                         {"type": "text", "message": user_message},
                                     )
@@ -363,7 +388,7 @@ class TestWebSocketEndpoint:
     def test_returns_422_when_payload_is_not_json_object(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
-                with client.websocket_connect("/ws/miori") as websocket:
+                with client.websocket_connect(_WS_URL) as websocket:
                     websocket.send_text('"hello"')
                     response = websocket.receive_json()
 
@@ -377,7 +402,7 @@ class TestWebSocketEndpoint:
     def test_returns_422_when_payload_is_malformed_json(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
-                with client.websocket_connect("/ws/miori") as websocket:
+                with client.websocket_connect(_WS_URL) as websocket:
                     websocket.send_text("{")
                     response = websocket.receive_json()
 
@@ -391,7 +416,7 @@ class TestWebSocketEndpoint:
     def test_returns_422_when_message_type_is_not_text(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
-                with client.websocket_connect("/ws/miori") as websocket:
+                with client.websocket_connect(_WS_URL) as websocket:
                     websocket.send_json({"type": "audio", "message": "こんにちは"})
                     response = websocket.receive_json()
 
@@ -405,7 +430,7 @@ class TestWebSocketEndpoint:
     def test_returns_422_when_text_message_is_not_root_string(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
-                with client.websocket_connect("/ws/miori") as websocket:
+                with client.websocket_connect(_WS_URL) as websocket:
                     websocket.send_json(
                         {
                             "type": "text",
@@ -424,7 +449,7 @@ class TestWebSocketEndpoint:
     def test_returns_422_when_text_message_is_empty(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
-                with client.websocket_connect("/ws/miori") as websocket:
+                with client.websocket_connect(_WS_URL) as websocket:
                     websocket.send_json({"type": "text", "message": ""})
                     response = websocket.receive_json()
 
@@ -441,7 +466,9 @@ class TestWebSocketEndpoint:
             side_effect=FileNotFoundError("character not found"),
         ):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
-                with client.websocket_connect("/ws/unknown") as websocket:
+                with client.websocket_connect(
+                    f"/ws/unknown?conversation_id={CONVERSATION_ID}"
+                ) as websocket:
                     response = websocket.receive_json()
                     with pytest.raises(WebSocketDisconnect):
                         websocket.receive_json()
@@ -468,7 +495,7 @@ class TestWebSocketEndpoint:
         monkeypatch.setattr(ws_module, "_map_chat_error", map_chat_error)
 
         class MissingCharacterService:
-            async def create_chat_session(self, character_name):
+            async def create_chat_session(self, character_name, conversation_id):
                 raise error
 
         class RecordingWebSocket:
@@ -491,6 +518,7 @@ class TestWebSocketEndpoint:
                 websocket,
                 asyncio.Lock(),
                 "miori",
+                CONVERSATION_ID,
             )
             return session, websocket
 
@@ -513,7 +541,7 @@ class TestWebSocketEndpoint:
             ],
         ):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
-                with client.websocket_connect("/ws/miori") as websocket:
+                with client.websocket_connect(_WS_URL) as websocket:
                     websocket.send_json({"type": "text", "message": "こんにちは"})
                     response = websocket.receive_json()
                     with pytest.raises(WebSocketDisconnect):
@@ -691,7 +719,7 @@ class TestWebSocketEndpoint:
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
                 with TestClient(app) as client:
-                    with client.websocket_connect("/ws/miori") as websocket:
+                    with client.websocket_connect(_WS_URL) as websocket:
                         websocket.send(
                             {"type": "websocket.receive", "bytes": "not-bytes"}
                         )
@@ -716,7 +744,7 @@ class TestWebSocketEndpoint:
                 _GENERATE_RESPONSE,
                 side_effect=httpx.ReadTimeout("timed out"),
             ):
-                with client.websocket_connect("/ws/miori") as websocket:
+                with client.websocket_connect(_WS_URL) as websocket:
                     websocket.send_json({"type": "text", "message": "こんにちは"})
                     response = websocket.receive_json()
 
@@ -732,7 +760,7 @@ class TestWebSocketEndpoint:
                 _GENERATE_RESPONSE,
                 side_effect=httpx.HTTPError("boom"),
             ):
-                with client.websocket_connect("/ws/miori") as websocket:
+                with client.websocket_connect(_WS_URL) as websocket:
                     websocket.send_json({"type": "text", "message": "こんにちは"})
                     response = websocket.receive_json()
 
@@ -829,7 +857,7 @@ class TestWebSocketEndpoint:
                 _GENERATE_RESPONSE,
                 side_effect=[llm_error, _LLM_REPLY],
             ):
-                with client.websocket_connect("/ws/miori") as websocket:
+                with client.websocket_connect(_WS_URL) as websocket:
                     websocket.send_json({"type": "text", "message": "1回目"})
                     first_response = websocket.receive_json()
 
@@ -879,7 +907,7 @@ class TestWebSocketEndpoint:
                             _SYNTHESIZE,
                             return_value=b"RIFF output",
                         ) as mock_tts:
-                            with client.websocket_connect("/ws/miori") as websocket:
+                            with client.websocket_connect(_WS_URL) as websocket:
                                 websocket.send_bytes(_PCM_AUDIO)
                                 audio_error = websocket.receive_json()
 
@@ -906,7 +934,7 @@ class TestWebSocketEndpoint:
                     with patch(_TRANSCRIBE, return_value="こんにちは") as mock_transcribe:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
                             with patch(_SYNTHESIZE, return_value=output_audio) as mock_tts:
-                                with client.websocket_connect("/ws/miori") as websocket:
+                                with client.websocket_connect(_WS_URL) as websocket:
                                     websocket.send_bytes(_PCM_AUDIO)
                                     user_text = websocket.receive_json()
                                     miori_text = websocket.receive_json()
@@ -938,7 +966,7 @@ class TestWebSocketEndpoint:
                     with patch(_TRANSCRIBE, return_value="こんにちは") as mock_transcribe:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                             with patch(_SYNTHESIZE, return_value=output_audio):
-                                with client.websocket_connect("/ws/miori") as websocket:
+                                with client.websocket_connect(_WS_URL) as websocket:
                                     websocket.send_bytes(audio_frame)
                                     websocket.receive_json()
                                     websocket.receive_json()
@@ -960,7 +988,7 @@ class TestWebSocketEndpoint:
                     with patch(_TRANSCRIBE, return_value="上限ちょうど") as mock_transcribe:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                             with patch(_SYNTHESIZE, return_value=output_audio):
-                                with client.websocket_connect("/ws/miori") as websocket:
+                                with client.websocket_connect(_WS_URL) as websocket:
                                     websocket.send_bytes(audio_frame)
                                     user_text = websocket.receive_json()
                                     miori_text = websocket.receive_json()
@@ -988,7 +1016,7 @@ class TestWebSocketEndpoint:
                 with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()) as mock_load_tts:
                     with patch(_TRANSCRIBE, return_value="呼ばれない") as mock_transcribe:
                         with caplog.at_level("ERROR", logger="app.routers.ws"):
-                            with client.websocket_connect("/ws/miori") as websocket:
+                            with client.websocket_connect(_WS_URL) as websocket:
                                 websocket.send_bytes(oversized_audio_frame)
                                 with pytest.raises(WebSocketDisconnect) as exc_info:
                                     websocket.receive_json()
@@ -1012,7 +1040,7 @@ class TestWebSocketEndpoint:
                     with patch(_TRANSCRIBE, return_value="音声入力"):
                         with patch(_GENERATE_RESPONSE, return_value="応答:音声入力"):
                             with patch(_SYNTHESIZE, return_value=output_audio):
-                                with client.websocket_connect("/ws/miori") as websocket:
+                                with client.websocket_connect(_WS_URL) as websocket:
                                     websocket.send_bytes(_PCM_AUDIO)
                                     user_text = websocket.receive_json()
                                     miori_text = websocket.receive_json()
@@ -1027,15 +1055,15 @@ class TestWebSocketEndpoint:
         assert response == output_audio
 
     def test_creates_audio_session_in_threadpool(self):
-        class StubChatSession:
+        class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return f"reply:{message}"
+                return ChatReply(f"reply:{message}", TURN_ID)
 
         class RecordingChatService:
             def __init__(self):
                 self.thread_id = None
 
-            async def create_chat_session(self, character_name):
+            async def create_chat_session(self, character_name, conversation_id):
                 self.thread_id = threading.get_ident()
                 return StubChatSession()
 
@@ -1061,7 +1089,7 @@ class TestWebSocketEndpoint:
         with TestClient(app) as client:
             app.state.chat_service = chat_service
             app.state.audio_pipeline_service = audio_service
-            with client.websocket_connect("/ws/miori") as websocket:
+            with client.websocket_connect(_WS_URL) as websocket:
                 websocket.send_bytes(_PCM_AUDIO)
                 websocket.receive_json()
                 websocket.receive_json()
@@ -1090,7 +1118,7 @@ class TestWebSocketEndpoint:
                                 _SYNTHESIZE,
                                 side_effect=[b"RIFF first", b"RIFF second"],
                             ) as mock_tts:
-                                with client.websocket_connect("/ws/miori") as websocket:
+                                with client.websocket_connect(_WS_URL) as websocket:
                                     websocket.send_bytes(_PCM_AUDIO)
                                     first_user_text = websocket.receive_json()
                                     first_miori_text = websocket.receive_json()
@@ -1131,7 +1159,7 @@ class TestWebSocketEndpoint:
                 with patch(_TRANSCRIBE, side_effect=OSError("stt failed")):
                     with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
                         with patch(_SYNTHESIZE, return_value=b"RIFF output") as mock_tts:
-                            with client.websocket_connect("/ws/miori") as websocket:
+                            with client.websocket_connect(_WS_URL) as websocket:
                                 websocket.send_bytes(_PCM_AUDIO)
                                 first_response = websocket.receive_json()
 
@@ -1157,7 +1185,7 @@ class TestWebSocketEndpoint:
                 with patch(_TRANSCRIBE, return_value="呼ばれない") as mock_transcribe:
                     with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
                         with patch(_SYNTHESIZE, return_value=b"RIFF output") as mock_tts:
-                            with client.websocket_connect("/ws/miori") as websocket:
+                            with client.websocket_connect(_WS_URL) as websocket:
                                 websocket.send_bytes(_ODD_LENGTH_PCM_AUDIO)
                                 first_response = websocket.receive_json()
 
@@ -1187,7 +1215,7 @@ class TestWebSocketEndpoint:
                         return_value=_LLM_REPLY,
                     ) as mock_gen:
                         with patch(_SYNTHESIZE, return_value=b"RIFF output") as mock_tts:
-                            with client.websocket_connect("/ws/miori") as websocket:
+                            with client.websocket_connect(_WS_URL) as websocket:
                                 websocket.send_bytes(_PCM_AUDIO)
                                 first_response = websocket.receive_json()
 
@@ -1219,7 +1247,7 @@ class TestWebSocketEndpoint:
                             _SYNTHESIZE,
                             side_effect=SpeechSynthesisError("tts failed"),
                         ):
-                            with client.websocket_connect("/ws/miori") as websocket:
+                            with client.websocket_connect(_WS_URL) as websocket:
                                 websocket.send_bytes(_PCM_AUDIO)
                                 first_response = websocket.receive_json()
 
@@ -1248,7 +1276,7 @@ class TestWebSocketEndpoint:
                         side_effect=["テキスト応答", "音声応答"],
                     ) as mock_gen:
                         with patch(_SYNTHESIZE, return_value=b"RIFF voice"):
-                            with client.websocket_connect("/ws/miori") as websocket:
+                            with client.websocket_connect(_WS_URL) as websocket:
                                 websocket.send_json(
                                     {"type": "text", "message": "テキストの質問"},
                                 )
@@ -1279,7 +1307,7 @@ class TestWebSocketEndpoint:
                 side_effect=KeyError(_TTS_CONFIG_MISSING_MESSAGE),
             ):
                 with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
-                    with client.websocket_connect("/ws/miori") as websocket:
+                    with client.websocket_connect(_WS_URL) as websocket:
                         websocket.send_json({"type": "text", "message": "こんにちは"})
                         response = websocket.receive_json()
 
@@ -1292,7 +1320,7 @@ class TestWebSocketEndpoint:
                 side_effect=KeyError(_TTS_CONFIG_MISSING_MESSAGE),
             ):
                 with patch(_TRANSCRIBE, return_value="こんにちは") as mock_transcribe:
-                    with client.websocket_connect("/ws/miori") as websocket:
+                    with client.websocket_connect(_WS_URL) as websocket:
                         websocket.send_bytes(_PCM_AUDIO)
                         response = websocket.receive_json()
 
@@ -1307,7 +1335,7 @@ class TestWebSocketEndpoint:
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_LOAD_TTS_CONFIG, side_effect=FileNotFoundError("missing card")):
                 with patch(_TRANSCRIBE, return_value="こんにちは") as mock_transcribe:
-                    with client.websocket_connect("/ws/miori") as websocket:
+                    with client.websocket_connect(_WS_URL) as websocket:
                         websocket.send_bytes(_PCM_AUDIO)
                         response = websocket.receive_json()
 
@@ -1329,7 +1357,7 @@ class TestWebSocketEndpoint:
             ):
                 with patch(_TRANSCRIBE, return_value="こんにちは") as mock_transcribe:
                     with caplog.at_level("ERROR", logger="app.routers.ws"):
-                        with client.websocket_connect("/ws/miori") as websocket:
+                        with client.websocket_connect(_WS_URL) as websocket:
                             websocket.send_bytes(_PCM_AUDIO)
                             response = websocket.receive_json()
 
@@ -1354,7 +1382,7 @@ class TestWebSocketEndpoint:
                 side_effect=ValueError("tts_config.engine must be 'voicevox'"),
             ):
                 with patch(_TRANSCRIBE, return_value="こんにちは") as mock_transcribe:
-                    with client.websocket_connect("/ws/miori") as websocket:
+                    with client.websocket_connect(_WS_URL) as websocket:
                         websocket.send_bytes(_PCM_AUDIO)
                         response = websocket.receive_json()
 
@@ -1372,7 +1400,7 @@ class TestWebSocketEndpoint:
                     with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                         with patch(_SYNTHESIZE, return_value=b"RIFF output"):
                             with caplog.at_level("INFO", logger="app.audio_pipeline"):
-                                with client.websocket_connect("/ws/miori") as websocket:
+                                with client.websocket_connect(_WS_URL) as websocket:
                                     websocket.send_bytes(_PCM_AUDIO)
                                     websocket.receive_json()
                                     websocket.receive_json()
@@ -1394,7 +1422,11 @@ class TestWebSocketEndpoint:
             _enqueue_audio_frame(queue, b"old")
             _enqueue_audio_frame(queue, b"new")
 
-            return queue.qsize(), await queue.get()
+            queue_size = queue.qsize()
+            queued_audio = await queue.get()
+            queue.task_done()
+            await asyncio.wait_for(queue.join(), timeout=0.1)
+            return queue_size, queued_audio
 
         queue_size, queued_audio = anyio.run(run_queue_flow)
 
@@ -1435,9 +1467,9 @@ class TestWebSocketEndpoint:
         map_chat_error = MagicMock(return_value=mapped_error)
         monkeypatch.setattr(ws_module, "_map_chat_error", map_chat_error)
 
-        class StubChatSession:
+        class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return f"reply:{message}"
+                return ChatReply(f"reply:{message}", TURN_ID)
 
         class FailingAudioSession:
             def generate_response_audio(self, audio, reply_generator):
@@ -1480,9 +1512,9 @@ class TestWebSocketEndpoint:
 
         from app.routers.ws import _handle_audio_payload, _send_json
 
-        class StubChatSession:
+        class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return f"reply:{message}"
+                return ChatReply(f"reply:{message}", TURN_ID)
 
         class StubAudioSession:
             def generate_response_audio(self, audio, reply_generator):
@@ -1559,12 +1591,12 @@ class TestWebSocketEndpoint:
         ]
 
     def test_audio_worker_unexpected_error_sends_500_and_closes(self):
-        class StubChatSession:
+        class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return f"reply:{message}"
+                return ChatReply(f"reply:{message}", TURN_ID)
 
         class StubChatService:
-            async def create_chat_session(self, character_name):
+            async def create_chat_session(self, character_name, conversation_id):
                 return StubChatSession()
 
         class FailingAudioPipelineService:
@@ -1577,7 +1609,7 @@ class TestWebSocketEndpoint:
         with TestClient(app) as client:
             app.state.chat_service = StubChatService()
             app.state.audio_pipeline_service = FailingAudioPipelineService()
-            with client.websocket_connect("/ws/miori") as websocket:
+            with client.websocket_connect(_WS_URL) as websocket:
                 websocket.send_bytes(b"\x01\x00")
                 response = websocket.receive_json()
                 with pytest.raises(WebSocketDisconnect):
@@ -1594,12 +1626,12 @@ class TestWebSocketEndpoint:
 
         from app.routers import ws as ws_module
 
-        class StubChatSession:
+        class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return f"reply:{message}"
+                return ChatReply(f"reply:{message}", TURN_ID)
 
         class StubChatService:
-            async def create_chat_session(self, character_name):
+            async def create_chat_session(self, character_name, conversation_id):
                 return StubChatSession()
 
         class FailingAudioPipelineService:
@@ -1638,7 +1670,7 @@ class TestWebSocketEndpoint:
         async def run_chat():
             websocket = BlockingReceiveWebSocket()
             await asyncio.wait_for(
-                ws_module.websocket_chat(websocket, "miori"),
+                ws_module.websocket_chat(websocket, "miori", CONVERSATION_ID),
                 timeout=0.5,
             )
             return websocket
@@ -1656,16 +1688,16 @@ class TestWebSocketEndpoint:
         assert websocket.closed is True
 
     def test_audio_processing_does_not_block_following_text_frame(self):
-        class StubChatSession:
+        class StubChatSession(_StubDeliverySession):
             def __init__(self):
                 self.messages = []
 
             def generate_reply(self, message):
                 self.messages.append(message)
-                return f"reply:{message}"
+                return ChatReply(f"reply:{message}", TURN_ID)
 
         class StubChatService:
-            async def create_chat_session(self, character_name):
+            async def create_chat_session(self, character_name, conversation_id):
                 return StubChatSession()
 
         class BlockingAudioSession:
@@ -1696,7 +1728,7 @@ class TestWebSocketEndpoint:
         with TestClient(app) as client:
             app.state.chat_service = StubChatService()
             app.state.audio_pipeline_service = StubAudioPipelineService(audio_session)
-            with client.websocket_connect("/ws/miori") as websocket:
+            with client.websocket_connect(_WS_URL) as websocket:
                 websocket.send_bytes(b"\x01\x00")
                 _wait_for_event(audio_session.started, "first audio processing")
 
@@ -1716,12 +1748,12 @@ class TestWebSocketEndpoint:
         assert text_response == [{"type": "text", "response": "reply:text while audio runs"}]
 
     def test_audio_queue_processes_only_latest_pending_frame(self):
-        class StubChatSession:
+        class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return f"reply:{message}"
+                return ChatReply(f"reply:{message}", TURN_ID)
 
         class StubChatService:
-            async def create_chat_session(self, character_name):
+            async def create_chat_session(self, character_name, conversation_id):
                 return StubChatSession()
 
         class RecordingAudioSession:
@@ -1756,7 +1788,7 @@ class TestWebSocketEndpoint:
         with TestClient(app) as client:
             app.state.chat_service = StubChatService()
             app.state.audio_pipeline_service = StubAudioPipelineService(audio_session)
-            with client.websocket_connect("/ws/miori") as websocket:
+            with client.websocket_connect(_WS_URL) as websocket:
                 websocket.send_bytes(b"first")
                 _wait_for_event(audio_session.first_started, "first audio processing")
 
@@ -1812,12 +1844,12 @@ class TestWebSocketEndpoint:
     def test_disconnect_cancels_audio_worker_and_discards_pending_frames(self):
         from app.routers import ws as ws_module
 
-        class StubChatSession:
+        class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return f"reply:{message}"
+                return ChatReply(f"reply:{message}", TURN_ID)
 
         class StubChatService:
-            async def create_chat_session(self, character_name):
+            async def create_chat_session(self, character_name, conversation_id):
                 return StubChatSession()
 
         class StubAudioSession:
@@ -1872,7 +1904,7 @@ class TestWebSocketEndpoint:
         async def run_chat():
             audio_session = StubAudioSession()
             websocket = FakeWebSocket(audio_session)
-            await ws_module.websocket_chat(websocket, "miori")
+            await ws_module.websocket_chat(websocket, "miori", CONVERSATION_ID)
             await anyio.sleep(0)
             return websocket, audio_session
 
@@ -1888,12 +1920,12 @@ class TestWebSocketEndpoint:
 
         from app.routers import ws as ws_module
 
-        class StubChatSession:
+        class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return f"reply:{message}"
+                return ChatReply(f"reply:{message}", TURN_ID)
 
         class StubChatService:
-            async def create_chat_session(self, character_name):
+            async def create_chat_session(self, character_name, conversation_id):
                 return StubChatSession()
 
         class BlockingAudioSession:
@@ -1953,7 +1985,7 @@ class TestWebSocketEndpoint:
             websocket = DisconnectingWebSocket(audio_session)
             try:
                 await asyncio.wait_for(
-                    ws_module.websocket_chat(websocket, "miori"),
+                    ws_module.websocket_chat(websocket, "miori", CONVERSATION_ID),
                     timeout=0.5,
                 )
             finally:
@@ -1961,12 +1993,14 @@ class TestWebSocketEndpoint:
 
         anyio.run(run_chat)
 
-    def test_logs_websocket_disconnect_code_and_reason(self, caplog):
+    def test_logs_websocket_disconnect_code_without_client_reason(self, caplog):
         from app.routers.ws import websocket_chat
 
+        raw_secret = "password: websocket-disconnect-secret"
+
         class StubChatService:
-            async def create_chat_session(self, character_name):
-                return object()
+            async def create_chat_session(self, character_name, conversation_id):
+                return _StubDeliverySession()
 
         class FakeWebSocket:
             def __init__(self):
@@ -1981,18 +2015,15 @@ class TestWebSocketEndpoint:
                 return {
                     "type": "websocket.disconnect",
                     "code": 1001,
-                    "reason": "going away",
+                    "reason": raw_secret,
                 }
 
         with caplog.at_level("INFO", logger="app.routers.ws"):
-            anyio.run(websocket_chat, FakeWebSocket(), "miori")
+            anyio.run(websocket_chat, FakeWebSocket(), "miori", CONVERSATION_ID)
 
         messages = [record.getMessage() for record in caplog.records]
-        assert any(
-            "WebSocket disconnected for character 'miori' (code=1001, reason=going away)"
-            in message
-            for message in messages
-        )
+        assert "WebSocket disconnected for character 'miori' (code=1001)" in messages
+        assert raw_secret not in caplog.text
 
     def test_receive_frame_preserves_disconnect_code_and_reason(self):
         from app.routers.ws import _receive_frame
@@ -2017,12 +2048,12 @@ class TestWebSocketEndpoint:
         from app.chat_service import CharacterNotFoundError
         from app.routers import ws as ws_module
 
-        class StubChatSession:
+        class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
                 raise CharacterNotFoundError("miori")
 
         class StubChatService:
-            async def create_chat_session(self, character_name):
+            async def create_chat_session(self, character_name, conversation_id):
                 return StubChatSession()
 
         class StubAudioSession:
@@ -2067,7 +2098,7 @@ class TestWebSocketEndpoint:
         async def run_chat():
             websocket = BlockingReceiveWebSocket()
             await asyncio.wait_for(
-                ws_module.websocket_chat(websocket, "miori"),
+                ws_module.websocket_chat(websocket, "miori", CONVERSATION_ID),
                 timeout=0.5,
             )
             return websocket
@@ -2089,12 +2120,12 @@ class TestWebSocketEndpoint:
 
         from app.routers import ws as ws_module
 
-        class StubChatSession:
+        class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return f"reply:{message}"
+                return ChatReply(f"reply:{message}", TURN_ID)
 
         class StubChatService:
-            async def create_chat_session(self, character_name):
+            async def create_chat_session(self, character_name, conversation_id):
                 return StubChatSession()
 
         class BlockingAudioSession:
@@ -2162,7 +2193,7 @@ class TestWebSocketEndpoint:
             websocket = DisconnectingWebSocket()
             try:
                 await asyncio.wait_for(
-                    ws_module.websocket_chat(websocket, "miori"),
+                    ws_module.websocket_chat(websocket, "miori", CONVERSATION_ID),
                     timeout=2.0,
                 )
             finally:
@@ -2179,7 +2210,7 @@ class TestWebSocketEndpoint:
                 side_effect=KeyError(_TTS_CONFIG_MISSING_MESSAGE),
             ):
                 with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
-                    with client.websocket_connect("/ws/miori") as websocket:
+                    with client.websocket_connect(_WS_URL) as websocket:
                         websocket.send_bytes(_PCM_AUDIO)
                         response_500 = websocket.receive_json()
 
@@ -2195,6 +2226,71 @@ class TestWebSocketEndpoint:
 
 
 class TestWebSocketFlow:
+    def test_rag_disabled_restores_only_same_websocket_conversation_history(
+        self,
+        monkeypatch,
+        conversation_history_database_path,
+    ):
+        monkeypatch.setenv("RAG_ENABLED", "false")
+        target_user = "password: websocket-target-user-secret"
+        target_assistant = "password: websocket-target-assistant-secret"
+        current_user = "対象会話の前の応答を確認して"
+        other_conversation_user = "別会話の内容"
+        other_character_user = "別キャラクターの内容"
+
+        def generate(prompt, *, max_output_tokens):
+            del max_output_tokens
+            current = prompt.messages[-1].content
+            if current == target_user:
+                return target_assistant
+            return "確認しました"
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_GENERATE_RESPONSE, side_effect=generate) as mock_generate:
+                with TestClient(app) as client:
+                    with client.websocket_connect(
+                        f"/ws/miori?conversation_id={OTHER_CONVERSATION_ID}"
+                    ) as websocket:
+                        websocket.send_json(
+                            {"type": "text", "message": other_conversation_user}
+                        )
+                        websocket.receive_json()
+                    with client.websocket_connect(
+                        f"/ws/other?conversation_id={CONVERSATION_ID}"
+                    ) as websocket:
+                        websocket.send_json(
+                            {"type": "text", "message": other_character_user}
+                        )
+                        websocket.receive_json()
+                    with client.websocket_connect(_WS_URL) as websocket:
+                        websocket.send_json({"type": "text", "message": target_user})
+                        websocket.receive_json()
+                        websocket.send_json({"type": "text", "message": current_user})
+                        response = websocket.receive_json()
+
+        assert response == {"type": "text", "response": "確認しました"}
+        prompt = mock_generate.call_args.args[0]
+        assert [message.content for message in prompt.messages[-3:]] == [
+            "password: [PASSWORD]",
+            "password: [PASSWORD]",
+            current_user,
+        ]
+        prompt_contents = [message.content for message in prompt.messages]
+        assert other_conversation_user not in prompt_contents
+        assert other_character_user not in prompt_contents
+        with sqlite3.connect(conversation_history_database_path) as connection:
+            stored = connection.execute(
+                "SELECT user_content, assistant_content, status "
+                "FROM conversation_turns "
+                "WHERE character_id = ? AND conversation_id = ? "
+                "ORDER BY created_at, turn_id",
+                ("miori", str(CONVERSATION_ID)),
+            ).fetchall()
+        assert stored == [
+            ("password: [PASSWORD]", "password: [PASSWORD]", "completed"),
+            (current_user, "確認しました", "completed"),
+        ]
+
     def test_path_character_prompt_and_message_reach_ollama_payload(
         self, client, tmp_path, monkeypatch
     ):
@@ -2210,7 +2306,7 @@ class TestWebSocketFlow:
             return_value=_ollama_response(expected_reply),
         ) as mock_post:
             with client.websocket_connect(
-                "/ws/miori?character=ignored&message=ignored",
+                f"/ws/miori?conversation_id={CONVERSATION_ID}&character=ignored&message=ignored",
             ) as websocket:
                 websocket.send_json(
                     {"type": "text", "message": "自己紹介してください"},
@@ -2275,7 +2371,7 @@ class TestWebSocketFlow:
 
         with patch("app.llm.ollama_client.httpx.post", side_effect=capture_post):
             with TestClient(app) as client:
-                with client.websocket_connect("/ws/miori") as websocket:
+                with client.websocket_connect(_WS_URL) as websocket:
                     websocket.send_json(
                         {
                             "type": "text",
@@ -2332,7 +2428,7 @@ class TestWebSocketFlow:
             return_value=_ollama_response("農業日誌として保存しました。"),
         ):
             with TestClient(app) as client:
-                with client.websocket_connect("/ws/miori") as websocket:
+                with client.websocket_connect(_WS_URL) as websocket:
                     release_timer = threading.Timer(1.0, release_add.set)
                     release_timer.start()
                     websocket.send_json({"type": "text", "message": user_message})

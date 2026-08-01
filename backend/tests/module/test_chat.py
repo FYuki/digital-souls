@@ -2,6 +2,7 @@ import sqlite3
 from unittest.mock import MagicMock, patch
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 
 from app.conversation_history.prompt_history import RestoredHistoryTurn
@@ -13,10 +14,15 @@ from tests.character_card_test_support import (
     character_card_document,
     write_character_card,
 )
+from tests.conversation_history_test_support import (
+    CONVERSATION_ID,
+    OTHER_CONVERSATION_ID,
+)
 
 
-_LOAD_PERSONALITY = "app._chat_runtime._character_loader.load_character_card"
-_GENERATE_RESPONSE = "app._chat_runtime._llm_router.generate_response"
+_LOAD_PERSONALITY = "app.main.load_character_card"
+_GENERATE_RESPONSE = "app.main.generate_response"
+_COUNT_INPUT_TOKENS = "app.main.count_input_tokens"
 _BUILD_AUGMENTED_SYSTEM_PROMPT = (
     "app._chat_runtime._rag_service.retrieve_prompt_memories"
 )
@@ -29,9 +35,18 @@ _PROMPT_TURNS = (
     "app.conversation_history.service.ConversationHistorySession.prompt_turns"
 )
 
-_VALID_BODY = {"character": "miori", "message": "自己紹介してください"}
+_VALID_BODY = {
+    "character": "miori",
+    "conversation_id": str(CONVERSATION_ID),
+    "message": "自己紹介してください",
+}
 _PERSONALITY = "# 光織\n穏やかなAIです。"
 _LLM_REPLY = "光織です。よろしくお願いします。"
+
+
+@pytest.fixture(autouse=True)
+def _formal_token_counter(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_COUNT_INPUT_TOKENS, lambda messages: len(messages))
 
 
 def _character_card(system_prompt: str = _PERSONALITY) -> MagicMock:
@@ -167,6 +182,7 @@ class TestChatEndpoint:
                                 "/chat",
                                 json={
                                     "character": "miori",
+                                    "conversation_id": str(CONVERSATION_ID),
                                     "message": secrets["current_user"],
                                 },
                             )
@@ -255,7 +271,11 @@ class TestChatEndpoint:
             with patch(_GENERATE_RESPONSE, return_value="了解です") as mock_gen:
                 client.post(
                     "/chat",
-                    json={"character": "miori", "message": user_message},
+                    json={
+                        "character": "miori",
+                        "conversation_id": str(CONVERSATION_ID),
+                        "message": user_message,
+                    },
                 )
 
         mock_gen.assert_called_once()
@@ -384,7 +404,11 @@ class TestChatEndpoint:
         with patch(_GENERATE_RESPONSE) as generate:
             response = client.post(
                 "/chat",
-                json={"character": "miori", "message": ""},
+                json={
+                    "character": "miori",
+                    "conversation_id": str(CONVERSATION_ID),
+                    "message": "",
+                },
             )
 
         assert response.status_code == 422
@@ -420,6 +444,69 @@ class TestChatEndpoint:
 
 
 class TestChatFlow:
+    def test_rag_disabled_restores_only_same_http_conversation_history(
+        self,
+        monkeypatch,
+        conversation_history_database_path,
+    ):
+        monkeypatch.setenv("RAG_ENABLED", "false")
+        target_user = "password: http-target-user-secret"
+        target_assistant = "password: http-target-assistant-secret"
+        current_user = "対象会話の前の応答を確認して"
+        other_conversation_user = "別会話の内容"
+        other_character_user = "別キャラクターの内容"
+
+        def generate(prompt, *, max_output_tokens):
+            del max_output_tokens
+            current = prompt.messages[-1].content
+            if current == target_user:
+                return target_assistant
+            return "確認しました"
+
+        requests = (
+            ("miori", OTHER_CONVERSATION_ID, other_conversation_user),
+            ("other", CONVERSATION_ID, other_character_user),
+            ("miori", CONVERSATION_ID, target_user),
+            ("miori", CONVERSATION_ID, current_user),
+        )
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_GENERATE_RESPONSE, side_effect=generate) as mock_generate:
+                with TestClient(app) as client:
+                    responses = [
+                        client.post(
+                            "/chat",
+                            json={
+                                "character": character,
+                                "conversation_id": str(conversation_id),
+                                "message": message,
+                            },
+                        )
+                        for character, conversation_id, message in requests
+                    ]
+
+        assert all(response.status_code == 200 for response in responses)
+        prompt = mock_generate.call_args.args[0]
+        assert [message.content for message in prompt.messages[-3:]] == [
+            "password: [PASSWORD]",
+            "password: [PASSWORD]",
+            current_user,
+        ]
+        prompt_contents = [message.content for message in prompt.messages]
+        assert other_conversation_user not in prompt_contents
+        assert other_character_user not in prompt_contents
+        with sqlite3.connect(conversation_history_database_path) as connection:
+            stored = connection.execute(
+                "SELECT user_content, assistant_content, status "
+                "FROM conversation_turns "
+                "WHERE character_id = ? AND conversation_id = ? "
+                "ORDER BY created_at, turn_id",
+                ("miori", str(CONVERSATION_ID)),
+            ).fetchall()
+        assert stored == [
+            ("password: [PASSWORD]", "password: [PASSWORD]", "completed"),
+            (current_user, "確認しました", "completed"),
+        ]
+
     def test_body_character_prompt_and_message_reach_ollama_payload(
         self, client, tmp_path, monkeypatch
     ):
@@ -436,7 +523,7 @@ class TestChatFlow:
         ) as mock_post:
             response = client.post(
                 "/chat?character=ignored&message=ignored",
-                json={"character": "miori", "message": "自己紹介してください"},
+                json=_VALID_BODY,
             )
 
         assert response.status_code == 200
@@ -480,6 +567,7 @@ class TestChatFlow:
                                 "/chat",
                                 json={
                                     "character": "miori",
+                                    "conversation_id": str(CONVERSATION_ID),
                                     "message": "前回なんの話をしたっけ？",
                                 },
                             )
@@ -541,7 +629,11 @@ class TestChatFlow:
             with TestClient(app) as client:
                 response = client.post(
                     "/chat",
-                    json={"character": "miori", "message": user_message},
+                    json={
+                        "character": "miori",
+                        "conversation_id": str(CONVERSATION_ID),
+                        "message": user_message,
+                    },
                 )
 
         assert response.status_code == 200

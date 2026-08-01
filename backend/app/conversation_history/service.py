@@ -6,7 +6,6 @@ from typing import Protocol
 from uuid import UUID
 
 from app.conversation_history.models import (
-    PrivacySkipReason,
     PrivacySkippedTurnInput,
     ProcessingTurnInput,
 )
@@ -18,7 +17,6 @@ from app.conversation_history.prompt_history import (
 from app.privacy.contracts import (
     ConversationHistoryAction,
     ConversationHistoryDecision,
-    HistoryDecisionReasonCode,
 )
 from app.privacy.history_sanitizer import HistorySanitizer
 
@@ -37,7 +35,7 @@ class HistorySession(Protocol):
         self,
         started_turn: StartedHistoryTurn,
         assistant_content: str,
-    ) -> None:
+    ) -> bool:
         ...
 
     def fail_turn(self, started_turn: StartedHistoryTurn) -> None:
@@ -53,7 +51,11 @@ class HistorySession(Protocol):
 
 
 class HistoryService(Protocol):
-    def open_session(self, character_id: str) -> HistorySession:
+    def open_session(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+    ) -> HistorySession:
         ...
 
 
@@ -76,7 +78,7 @@ class ConversationHistorySession:
             turn = self._repository.create_privacy_skipped_turn(
                 self._character_id,
                 self._conversation_id,
-                PrivacySkippedTurnInput(reason_code=_privacy_skip_reason(decision)),
+                _privacy_skip_input(decision),
             )
             return StartedHistoryTurn(turn.turn_id, content_skipped=True)
         if decision.content is None:
@@ -92,18 +94,18 @@ class ConversationHistorySession:
         self,
         started_turn: StartedHistoryTurn,
         assistant_content: str,
-    ) -> None:
-        if started_turn.content_skipped:
-            return
+    ) -> bool:
         decision = self._sanitizer.sanitize_assistant(assistant_content)
+        if started_turn.content_skipped:
+            return False
         if decision.action is ConversationHistoryAction.SKIP_CONTENT:
             self._repository.skip_processing_turn_for_privacy(
                 self._character_id,
                 self._conversation_id,
                 started_turn.turn_id,
-                PrivacySkippedTurnInput(reason_code=_privacy_skip_reason(decision)),
+                _privacy_skip_input(decision),
             )
-            return
+            return False
         if decision.content is None:
             raise ValueError("STORE_MASKED decision requires content")
         self._repository.complete_turn(
@@ -112,6 +114,7 @@ class ConversationHistorySession:
             started_turn.turn_id,
             sanitized_assistant_content=decision.content,
         )
+        return True
 
     def fail_turn(self, started_turn: StartedHistoryTurn) -> None:
         if started_turn.content_skipped:
@@ -160,8 +163,15 @@ class ConversationHistoryService:
         self._repository = repository
         self._sanitizer = sanitizer
 
-    def open_session(self, character_id: str) -> ConversationHistorySession:
-        conversation = self._repository.create_conversation(character_id)
+    def open_session(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+    ) -> ConversationHistorySession:
+        conversation = self._repository.ensure_conversation(
+            character_id,
+            conversation_id,
+        )
         return ConversationHistorySession(
             character_id,
             conversation.conversation_id,
@@ -170,9 +180,11 @@ class ConversationHistoryService:
         )
 
 
-def _privacy_skip_reason(
+def _privacy_skip_input(
     decision: ConversationHistoryDecision,
-) -> PrivacySkipReason:
-    if decision.reason_code is HistoryDecisionReasonCode.STORAGE_OPT_OUT:
-        return PrivacySkipReason.POLICY_DENIED
-    return PrivacySkipReason.SENSITIVE_CONTENT
+) -> PrivacySkippedTurnInput:
+    return PrivacySkippedTurnInput(
+        reason_code=decision.reason_code,
+        sanitizer_version=decision.sanitizer_version,
+        policy_version=decision.policy_version,
+    )

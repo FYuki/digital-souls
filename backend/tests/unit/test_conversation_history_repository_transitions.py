@@ -8,11 +8,11 @@ from app.conversation_history.errors import (
     TurnNotFoundError,
 )
 from app.conversation_history.models import (
-    PrivacySkipReason,
     PrivacySkippedTurnInput,
     ProcessingTurnInput,
     TurnStatus,
 )
+from app.privacy.contracts import HistoryDecisionReasonCode
 from app.conversation_history.turn_state import require_turn_transition
 from tests.conversation_history_test_support import (
     CONVERSATION_ID,
@@ -103,14 +103,16 @@ class TestTurnTransitions:
             CONVERSATION_ID,
             TURN_ID,
             PrivacySkippedTurnInput(
-                reason_code=PrivacySkipReason.SENSITIVE_CONTENT,
+                reason_code=HistoryDecisionReasonCode.SCAN_FAILURE,
+                sanitizer_version="test-sanitizer-v1",
+                policy_version="test-policy-v1",
             ),
         )
 
         assert skipped.status is TurnStatus.PRIVACY_SKIPPED
         assert skipped.user_content is None
         assert skipped.assistant_content is None
-        assert skipped.privacy_reason_code is PrivacySkipReason.SENSITIVE_CONTENT
+        assert skipped.privacy_reason_code is HistoryDecisionReasonCode.SCAN_FAILURE
 
     def test_should_preserve_assistant_body_when_completed_turn_fails(
         self,
@@ -150,7 +152,9 @@ class TestTurnTransitions:
                 "miori",
                 CONVERSATION_ID,
                 PrivacySkippedTurnInput(
-                    reason_code=PrivacySkipReason.POLICY_DENIED,
+                    reason_code=HistoryDecisionReasonCode.STORAGE_OPT_OUT,
+                    sanitizer_version="test-sanitizer-v1",
+                    policy_version="test-policy-v1",
                 ),
             )
 
@@ -240,6 +244,7 @@ class TestTurnTransitions:
 
         assert public_methods == {
             "create_conversation",
+            "ensure_conversation",
             "resume_conversation",
             "create_processing_turn",
             "create_privacy_skipped_turn",

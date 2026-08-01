@@ -1,11 +1,14 @@
 import asyncio
 import json
 import logging
+import threading
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import assert_never, cast
+from uuid import UUID
 
 from fastapi import APIRouter, WebSocket
+from pydantic import UUID4
 from starlette.concurrency import run_in_threadpool
 from starlette.websockets import WebSocketDisconnect
 
@@ -18,6 +21,7 @@ from app.chat_service import (
     CharacterNotFoundError,
     ChatBackendError,
     ChatInputLimitError,
+    ChatReply,
     ChatReplySession,
     ChatTimeoutError,
 )
@@ -67,6 +71,32 @@ class AudioFrameExtractionResult:
 
 class WebSocketMessageError(ValueError):
     """Invalid client message that should not close the WebSocket session."""
+
+
+class DeliveryClosedError(RuntimeError):
+    pass
+
+
+class _ConnectionChatSession:
+    def __init__(self, session: ChatReplySession) -> None:
+        self._session = session
+        self._closed = threading.Event()
+
+    def generate_reply(self, message: str) -> ChatReply:
+        reply = self._session.generate_reply(message)
+        if self._closed.is_set():
+            raise DeliveryClosedError()
+        return reply
+
+    def mark_delivered(self, turn_id: UUID) -> None:
+        self._session.mark_delivered(turn_id)
+
+    def mark_delivery_failed(self, turn_id: UUID) -> None:
+        self._session.mark_delivery_failed(turn_id)
+
+    def close(self) -> None:
+        self._closed.set()
+        self._session.close()
 
 
 def _map_chat_error(
@@ -245,10 +275,14 @@ async def _open_chat_session(
     websocket: WebSocket,
     send_lock: asyncio.Lock,
     character_name: str,
+    conversation_id: UUID,
 ) -> ChatReplySession | None:
     try:
         chat_service = websocket.app.state.chat_service
-        chat_session = await chat_service.create_chat_session(character_name)
+        chat_session = await chat_service.create_chat_session(
+            character_name,
+            conversation_id,
+        )
         return cast(ChatReplySession, chat_session)
     except CharacterNotFoundError as exc:
         status, detail = _map_chat_error(exc)
@@ -261,7 +295,7 @@ async def _generate_reply(
     send_lock: asyncio.Lock,
     chat_session: ChatReplySession,
     message: str,
-) -> str | None:
+) -> ChatReply | None:
     try:
         return await run_in_threadpool(chat_session.generate_reply, message)
     except (ChatInputLimitError, ChatTimeoutError, ChatBackendError) as exc:
@@ -293,14 +327,19 @@ async def _handle_text_frame(
     if reply is None:
         return True
 
-    await _send_json(
-        websocket,
-        send_lock,
-        {
-            MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
-            RESPONSE_FIELD: reply,
-        },
-    )
+    try:
+        await _send_json(
+            websocket,
+            send_lock,
+            {
+                MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
+                RESPONSE_FIELD: reply.response,
+            },
+        )
+    except BaseException:
+        chat_session.mark_delivery_failed(reply.turn_id)
+        raise
+    chat_session.mark_delivered(reply.turn_id)
     return True
 
 
@@ -348,13 +387,22 @@ async def _handle_audio_payload(
     audio_session: AudioPipelineSession,
     audio: bytes,
 ) -> bool:
+    generated_reply: ChatReply | None = None
+
+    def generate_tracked_reply(message: str) -> ChatReply:
+        nonlocal generated_reply
+        generated_reply = chat_session.generate_reply(message)
+        return generated_reply
+
     try:
         transcript, reply, response_audio = await run_in_threadpool(
             audio_session.generate_response_audio,
             audio,
-            chat_session.generate_reply,
+            generate_tracked_reply,
         )
     except AudioPipelineStepError as exc:
+        if generated_reply is not None:
+            chat_session.mark_delivery_failed(generated_reply.turn_id)
         await _send_error(websocket, send_lock, exc.status_code, exc.detail)
         return True
     except CharacterNotFoundError as exc:
@@ -366,36 +414,46 @@ async def _handle_audio_payload(
         await _send_error(websocket, send_lock, status, detail)
         return True
 
-    async with send_lock:
-        await _send_json_unlocked(
-            websocket,
-            {
-                MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
-                SPEAKER_FIELD: USER_SPEAKER,
-                MESSAGE_FIELD: transcript,
-            },
-        )
-        await _send_json_unlocked(
-            websocket,
-            {
-                MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
-                SPEAKER_FIELD: MIORI_SPEAKER,
-                RESPONSE_FIELD: reply,
-            },
-        )
-        await _send_bytes_unlocked(websocket, response_audio)
+    if generated_reply is None:
+        raise RuntimeError("audio pipeline did not generate a chat reply")
+
+    try:
+        async with send_lock:
+            await _send_json_unlocked(
+                websocket,
+                {
+                    MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
+                    SPEAKER_FIELD: USER_SPEAKER,
+                    MESSAGE_FIELD: transcript,
+                },
+            )
+            await _send_json_unlocked(
+                websocket,
+                {
+                    MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
+                    SPEAKER_FIELD: MIORI_SPEAKER,
+                    RESPONSE_FIELD: reply.response,
+                },
+            )
+            await _send_bytes_unlocked(websocket, response_audio)
+    except BaseException:
+        chat_session.mark_delivery_failed(generated_reply.turn_id)
+        raise
+    chat_session.mark_delivered(generated_reply.turn_id)
     return True
 
 
 def _enqueue_audio_frame(queue: AudioFrameQueue, audio: bytes) -> None:
     if queue.full():
         queue.get_nowait()
+        queue.task_done()
     queue.put_nowait(audio)
 
 
 def _discard_pending_audio_frames(queue: AudioFrameQueue) -> None:
     while not queue.empty():
         queue.get_nowait()
+        queue.task_done()
 
 
 async def _run_audio_worker(
@@ -413,6 +471,8 @@ async def _run_audio_worker(
             character_name,
             audio_queue,
         )
+    except DeliveryClosedError:
+        return
     except Exception:
         logger.exception("Audio worker failed for character '%s'", character_name)
         async with send_lock:
@@ -437,20 +497,27 @@ async def _process_audio_queue(
     audio_session: AudioPipelineSession | None = None
     while True:
         audio = await audio_queue.get()
-        if audio_session is None:
-            audio_session = await _open_audio_session(websocket, send_lock, character_name)
+        try:
             if audio_session is None:
-                continue
+                audio_session = await _open_audio_session(
+                    websocket,
+                    send_lock,
+                    character_name,
+                )
+                if audio_session is None:
+                    continue
 
-        keep_open = await _handle_audio_payload(
-            websocket,
-            send_lock,
-            chat_session,
-            audio_session,
-            audio,
-        )
-        if not keep_open:
-            return
+            keep_open = await _handle_audio_payload(
+                websocket,
+                send_lock,
+                chat_session,
+                audio_session,
+                audio,
+            )
+            if not keep_open:
+                return
+        finally:
+            audio_queue.task_done()
 
 
 def _cancel_audio_worker(audio_worker: asyncio.Task[None]) -> None:
@@ -458,14 +525,24 @@ def _cancel_audio_worker(audio_worker: asyncio.Task[None]) -> None:
 
 
 @router.websocket("/ws/{character_name}")
-async def websocket_chat(websocket: WebSocket, character_name: str) -> None:
+async def websocket_chat(
+    websocket: WebSocket,
+    character_name: str,
+    conversation_id: UUID4,
+) -> None:
     await websocket.accept()
     logger.info("WebSocket connected for character '%s'", character_name)
 
     send_lock = asyncio.Lock()
-    chat_session = await _open_chat_session(websocket, send_lock, character_name)
-    if chat_session is None:
+    opened_chat_session = await _open_chat_session(
+        websocket,
+        send_lock,
+        character_name,
+        conversation_id,
+    )
+    if opened_chat_session is None:
         return
+    chat_session = _ConnectionChatSession(opened_chat_session)
 
     audio_queue: AudioFrameQueue = asyncio.Queue(maxsize=1)
     audio_worker = asyncio.create_task(
@@ -516,11 +593,13 @@ async def websocket_chat(websocket: WebSocket, character_name: str) -> None:
                 return
     except WebSocketDisconnect as exc:
         logger.info(
-            "WebSocket disconnected for character '%s' (code=%s, reason=%s)",
+            "WebSocket disconnected for character '%s' (code=%s)",
             character_name,
             exc.code,
-            exc.reason,
         )
     finally:
+        chat_session.close()
         _discard_pending_audio_frames(audio_queue)
         _cancel_audio_worker(audio_worker)
+        with suppress(asyncio.CancelledError):
+            await audio_worker

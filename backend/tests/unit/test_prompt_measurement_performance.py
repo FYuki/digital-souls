@@ -84,7 +84,6 @@ def _completed_turns_newest_first(count: int) -> tuple[RestoredHistoryTurn, ...]
 
 
 def _build_chat_prompt(
-    monkeypatch: pytest.MonkeyPatch,
     *,
     history_count: int,
     rag_count: int,
@@ -92,11 +91,6 @@ def _build_chat_prompt(
     counter = RecordingMessageCounter()
     history_session = RecordingHistorySession(
         _completed_turns_newest_first(history_count)
-    )
-    monkeypatch.setattr(
-        chat_prompt._llm_router,
-        "count_input_tokens",
-        counter.count_input_tokens,
     )
     result = chat_prompt.build_chat_prompt(
         character=CharacterPrompt(
@@ -119,6 +113,7 @@ def _build_chat_prompt(
             assistant_max_generation_tokens=1,
             context_token_limit=2_000,
         ),
+        token_counter=counter,
     )
     return result, counter, history_session
 
@@ -128,14 +123,12 @@ def _build_chat_prompt(
     [(10, 5, 6, 56), (20, 10, 6, 106)],
 )
 def test_should_measure_untrimmed_prompt_without_quadratic_resends(
-    monkeypatch: pytest.MonkeyPatch,
     history_count: int,
     rag_count: int,
     expected_calls: int,
     expected_resent_messages: int,
 ) -> None:
     _, counter, _ = _build_chat_prompt(
-        monkeypatch,
         history_count=history_count,
         rag_count=rag_count,
     )
@@ -144,11 +137,8 @@ def test_should_measure_untrimmed_prompt_without_quadratic_resends(
     assert actual == (expected_calls, expected_resent_messages, 0)
 
 
-def test_should_preserve_prompt_order_and_usage_after_reusing_measurements(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_should_preserve_prompt_order_and_usage_after_reusing_measurements() -> None:
     result, _, history_session = _build_chat_prompt(
-        monkeypatch,
         history_count=10,
         rag_count=5,
     )
@@ -278,7 +268,10 @@ def test_should_stream_many_failed_turns_without_materializing_or_measuring_all(
         yielded_at_measurement.append(yielded)
         return counter.count_input_tokens(messages)
 
-    monkeypatch.setattr(chat_prompt._llm_router, "count_input_tokens", count)
+    class YieldAwareCounter:
+        def count_input_tokens(self, messages: tuple[PromptMessage, ...]) -> int:
+            return count(messages)
+
     result = chat_prompt.build_chat_prompt(
         character=CharacterPrompt("", "", "", "system", "", ""),
         rag=RagContext(items=()),
@@ -291,6 +284,7 @@ def test_should_stream_many_failed_turns_without_materializing_or_measuring_all(
             assistant_max_generation_tokens=1,
             context_token_limit=20,
         ),
+        token_counter=YieldAwareCounter(),
     )
 
     history_calls = [

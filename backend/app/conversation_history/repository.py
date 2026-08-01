@@ -20,12 +20,12 @@ from app.conversation_history.errors import (
 from app.conversation_history.models import (
     Conversation,
     ConversationTurn,
-    PrivacySkipReason,
     PrivacySkippedTurnInput,
     ProcessingTurnInput,
     TurnStatus,
 )
 from app.conversation_history.turn_state import require_turn_transition
+from app.privacy.contracts import HistoryDecisionReasonCode
 
 ConnectionFactory = Callable[[Path], sqlite3.Connection]
 Clock = Callable[[], datetime]
@@ -93,6 +93,22 @@ class ConversationHistoryRepository:
         with self._database.connection() as connection:
             return select_conversation(connection, character_id, conversation_id)
 
+    def ensure_conversation(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+    ) -> Conversation:
+        _require_non_empty(character_id, "character_id")
+        _require_uuid4(conversation_id)
+        now = self._now()
+        with self._database.transaction() as connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO conversations "
+                "(character_id, conversation_id, created_at) VALUES (?, ?, ?)",
+                (character_id, str(conversation_id), format_datetime(now)),
+            )
+            return select_conversation(connection, character_id, conversation_id)
+
     def create_processing_turn(
         self,
         character_id: str,
@@ -106,6 +122,8 @@ class ConversationHistoryRepository:
             user_content=turn_input.sanitized_user_content,
             status=TurnStatus.PROCESSING,
             privacy_reason_code=None,
+            sanitizer_version=None,
+            policy_version=None,
         )
 
     def create_privacy_skipped_turn(
@@ -120,6 +138,8 @@ class ConversationHistoryRepository:
             user_content=None,
             status=TurnStatus.PRIVACY_SKIPPED,
             privacy_reason_code=turn_input.reason_code,
+            sanitizer_version=turn_input.sanitizer_version,
+            policy_version=turn_input.policy_version,
         )
 
     def complete_turn(
@@ -215,11 +235,14 @@ class ConversationHistoryRepository:
             connection.execute(
                 "UPDATE conversation_turns "
                 "SET user_content = NULL, assistant_content = NULL, "
-                "status = ?, privacy_reason_code = ?, updated_at = ? "
+                "status = ?, privacy_reason_code = ?, sanitizer_version = ?, "
+                "policy_version = ?, updated_at = ? "
                 "WHERE character_id = ? AND conversation_id = ? AND turn_id = ?",
                 (
                     TurnStatus.PRIVACY_SKIPPED.value,
                     turn_input.reason_code.value,
+                    turn_input.sanitizer_version,
+                    turn_input.policy_version,
                     format_datetime(now),
                     character_id,
                     str(conversation_id),
@@ -351,7 +374,9 @@ class ConversationHistoryRepository:
         *,
         user_content: str | None,
         status: TurnStatus,
-        privacy_reason_code: PrivacySkipReason | None,
+        privacy_reason_code: HistoryDecisionReasonCode | None,
+        sanitizer_version: str | None,
+        policy_version: str | None,
     ) -> ConversationTurn:
         _require_uuid4(conversation_id)
         turn_id = self._new_uuid4()
@@ -361,7 +386,8 @@ class ConversationHistoryRepository:
             select_conversation(connection, character_id, conversation_id)
             connection.execute(
                 "INSERT INTO conversation_turns "
-                f"({TURN_COLUMNS}) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)",
+                f"({TURN_COLUMNS}) VALUES "
+                "(?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)",
                 (
                     str(turn_id),
                     character_id,
@@ -371,6 +397,8 @@ class ConversationHistoryRepository:
                     None
                     if privacy_reason_code is None
                     else privacy_reason_code.value,
+                    sanitizer_version,
+                    policy_version,
                     timestamp,
                     timestamp,
                 ),

@@ -2,9 +2,9 @@ import sqlite3
 from pathlib import Path
 
 from app.conversation_history.errors import LegacySchemaError
-from app.conversation_history.models import PrivacySkipReason
+from app.privacy.contracts import HistoryDecisionReasonCode
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 CURRENT_TABLES = frozenset({"conversations", "conversation_turns"})
 CONVERSATIONS_COLUMNS = (
     "character_id",
@@ -19,11 +19,13 @@ CONVERSATION_TURNS_COLUMNS = (
     "assistant_content",
     "status",
     "privacy_reason_code",
+    "sanitizer_version",
+    "policy_version",
     "created_at",
     "updated_at",
 )
 PRIVACY_SKIP_REASON_VALUES_SQL = ", ".join(
-    f"'{reason.value}'" for reason in PrivacySkipReason
+    f"'{reason.value}'" for reason in HistoryDecisionReasonCode
 )
 
 
@@ -66,6 +68,8 @@ CREATE TABLE conversation_turns (
         status IN ('processing', 'completed', 'failed', 'privacy_skipped')
     ),
     privacy_reason_code TEXT,
+    sanitizer_version TEXT,
+    policy_version TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (character_id, conversation_id)
@@ -76,23 +80,31 @@ CREATE TABLE conversation_turns (
             AND user_content IS NOT NULL
             AND assistant_content IS NULL
             AND privacy_reason_code IS NULL
+            AND sanitizer_version IS NULL
+            AND policy_version IS NULL
         )
         OR (
             status = 'completed'
             AND user_content IS NOT NULL
             AND assistant_content IS NOT NULL
             AND privacy_reason_code IS NULL
+            AND sanitizer_version IS NULL
+            AND policy_version IS NULL
         )
         OR (
             status = 'failed'
             AND user_content IS NOT NULL
             AND privacy_reason_code IS NULL
+            AND sanitizer_version IS NULL
+            AND policy_version IS NULL
         )
         OR (
             status = 'privacy_skipped'
             AND user_content IS NULL
             AND assistant_content IS NULL
             AND privacy_reason_code IN ({PRIVACY_SKIP_REASON_VALUES_SQL})
+            AND length(trim(sanitizer_version)) > 0
+            AND length(trim(policy_version)) > 0
         )
     )
 )

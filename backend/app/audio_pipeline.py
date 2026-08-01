@@ -7,6 +7,7 @@ from typing import Callable, Iterator, Protocol
 
 from app.audio.constants import PCM_SAMPLE_WIDTH_BYTES
 from app.characters.loader import VoicevoxTtsConfig, load_tts_config
+from app.chat_service import ChatReply
 from app.tts.speech_synthesizer import SpeechSynthesizer
 from app.tts.voicevox_client import (
     DEFAULT_VOICEVOX_BASE_URL,
@@ -15,7 +16,7 @@ from app.tts.voicevox_client import (
 )
 
 logger = logging.getLogger(__name__)
-ReplyGenerator = Callable[[str], str]
+ReplyGenerator = Callable[[str], ChatReply]
 CLIENT_INPUT_ERROR_STATUS = 422
 UPSTREAM_SERVICE_ERROR_STATUS = 502
 UNREADABLE_CHARACTER_CARD_MESSAGE = "character card is not readable"
@@ -75,10 +76,10 @@ class AudioPipelineSession:
         self,
         audio: bytes,
         reply_generator: ReplyGenerator,
-    ) -> tuple[str, str, bytes]:
+    ) -> tuple[str, ChatReply, bytes]:
         message = self._transcribe_audio(audio)
         reply = self._generate_reply(reply_generator, message)
-        response_audio = self._synthesize_reply(reply)
+        response_audio = self._synthesize_reply(reply.response)
         return message, reply, response_audio
 
     def _transcribe_audio(self, audio: bytes) -> str:
@@ -93,7 +94,11 @@ class AudioPipelineSession:
                     "STT request failed",
                 ) from exc
 
-    def _generate_reply(self, reply_generator: ReplyGenerator, message: str) -> str:
+    def _generate_reply(
+        self,
+        reply_generator: ReplyGenerator,
+        message: str,
+    ) -> ChatReply:
         with _log_step_latency("LLM"):
             return reply_generator(message)
 
