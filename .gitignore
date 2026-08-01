@@ -19,6 +19,7 @@ dist/
 *.tsbuildinfo
 
 # Playwright
+/test-results/
 frontend/test-results/
 frontend/playwright-report/
 frontend/.playwright-cache/

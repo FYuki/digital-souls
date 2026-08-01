@@ -1,14 +1,11 @@
+import { CONVERSATION_ID_FIELD } from '../conversation-contract'
+
 const TEXT_MESSAGE_TYPE = 'text'
 const ERROR_MESSAGE_TYPE = 'error'
 const USER_SPEAKER = 'user'
 const MIORI_SPEAKER = 'miori'
 
 export type TextMessageSpeaker = typeof USER_SPEAKER | typeof MIORI_SPEAKER
-
-type BackendTextMessage = {
-  type: typeof TEXT_MESSAGE_TYPE
-  response: string
-}
 
 type BackendUserTextMessage = {
   type: typeof TEXT_MESSAGE_TYPE
@@ -44,21 +41,11 @@ export interface AudioTransport {
   readonly connected: boolean
   connect: () => Promise<void>
   disconnect: () => void
-  sendText: (message: string) => void
   sendAudio: (pcmData: ArrayBuffer) => void
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null
-}
-
-const isBackendTextMessage = (value: unknown): value is BackendTextMessage => {
-  return (
-    isRecord(value) &&
-    value.type === TEXT_MESSAGE_TYPE &&
-    value.speaker === undefined &&
-    typeof value.response === 'string'
-  )
 }
 
 const isBackendUserTextMessage = (value: unknown): value is BackendUserTextMessage => {
@@ -94,6 +81,7 @@ export class WebSocketAudioTransport implements AudioTransport {
 
   constructor(
     private readonly webSocketUrl: string,
+    private readonly conversationId: string,
     private readonly callbacks: TransportCallbacks,
   ) {}
 
@@ -102,7 +90,9 @@ export class WebSocketAudioTransport implements AudioTransport {
   }
 
   connect(): Promise<void> {
-    const socket = new WebSocket(this.webSocketUrl)
+    const url = new URL(this.webSocketUrl)
+    url.searchParams.set(CONVERSATION_ID_FIELD, this.conversationId)
+    const socket = new WebSocket(url.toString())
     this.#socket = socket
     socket.binaryType = 'arraybuffer'
 
@@ -149,10 +139,6 @@ export class WebSocketAudioTransport implements AudioTransport {
     this.getOpenSocket().send(pcmData)
   }
 
-  sendText(message: string): void {
-    this.getOpenSocket().send(JSON.stringify({ type: TEXT_MESSAGE_TYPE, message }))
-  }
-
   private getOpenSocket(): WebSocket {
     if (this.#socket === null || !this.#connected) {
       throw new Error('WebSocket is not connected')
@@ -187,11 +173,6 @@ export class WebSocketAudioTransport implements AudioTransport {
 
     if (isBackendMioriTextMessage(parsed)) {
       this.callbacks.onTextMessage(parsed.speaker, parsed.response)
-      return
-    }
-
-    if (isBackendTextMessage(parsed)) {
-      this.callbacks.onTextMessage(MIORI_SPEAKER, parsed.response)
       return
     }
 

@@ -51,6 +51,22 @@ def test_should_keep_backend_virtual_environment_out_of_git():
     assert ".venv/" in patterns
 
 
+def test_should_keep_playwright_result_directories_out_of_git():
+    result_paths = (
+        ROOT_DIR / "test-results" / ".last-run.json",
+        ROOT_DIR / "frontend" / "test-results" / "mocked-e2e" / "evidence.json",
+    )
+
+    for result_path in result_paths:
+        result = subprocess.run(
+            ["git", "check-ignore", "--quiet", "--no-index", str(result_path)],
+            cwd=ROOT_DIR,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+
+
 def test_should_keep_development_requirements_linked_to_runtime_requirements():
     requirements = (
         ROOT_DIR / "backend" / "requirements-dev.txt"

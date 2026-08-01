@@ -12,6 +12,7 @@ class FakeWebSocket {
   onerror: (() => void) | null = null
   onmessage: ((event: MessageEvent) => void) | null = null
   sent: (string | ArrayBuffer)[] = []
+  closeCalls = 0
 
   constructor(readonly url: string) {
     FakeWebSocket.instances.push(this)
@@ -22,6 +23,7 @@ class FakeWebSocket {
   }
 
   close() {
+    this.closeCalls += 1
     this.onclose?.()
   }
 }
@@ -78,6 +80,7 @@ const createBufferSource = vi.fn()
 const connect = vi.fn()
 const start = vi.fn()
 const close = vi.fn()
+const fetchMock = vi.fn()
 
 class FakeAudioContext {
   destination = {}
@@ -119,6 +122,8 @@ const openSocket = async (): Promise<FakeWebSocket> => {
 describe('App chat and audio flow', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    window.history.replaceState({}, '', '/')
+    localStorage.clear()
     FakeWebSocket.instances = []
     mocks.vadOptions = undefined
     mocks.vadStart.mockReset()
@@ -143,6 +148,13 @@ describe('App chat and audio flow', () => {
     createBufferSource.mockReturnValue({ connect, start })
     decodeAudioData.mockResolvedValue({ duration: 1 })
     vi.stubGlobal('WebSocket', FakeWebSocket)
+    fetchMock.mockReset()
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ character: 'miori', response: 'HTTP応答です。' }), {
+        status: 200,
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
     vi.stubGlobal('crypto', {
       randomUUID: vi.fn(() => 'e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'),
     })
@@ -158,59 +170,118 @@ describe('App chat and audio flow', () => {
     vi.unstubAllGlobals()
   })
 
-  test('should connect the audio transport on mount and send user text through the WebSocket', async () => {
+  test('should use one conversation ID for the voice WebSocket and HTTP text request', async () => {
     const { container } = render(App)
     const socket = await openSocket()
 
-    await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'こんにちは' } })
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: 'こんにちは' },
+    })
     await fireEvent.click(screen.getByRole('button', { name: '送信' }))
 
     expect(socket.url).toBe(
       'ws://localhost:3000/ws/miori?conversation_id=e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010',
     )
-    expect(socket.sent).toEqual([JSON.stringify({ type: 'text', message: 'こんにちは' })])
+    expect(socket.sent).toEqual([])
     expect(await screen.findByText('こんにちは')).toBeTruthy()
-
-    socket.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify({ type: 'text', response: '夕焼けがきれいですね。' }),
-      }),
-    )
-
-    expect(await screen.findByText('夕焼けがきれいですね。')).toBeTruthy()
+    expect(await screen.findByText('HTTP応答です。')).toBeTruthy()
+    const [, request] = fetchMock.mock.calls[0] ?? []
+    expect(JSON.parse(String(request?.body))).toEqual({
+      character: 'miori',
+      conversation_id: 'e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010',
+      message: 'こんにちは',
+    })
     if (container.textContent === null) {
       throw new Error('Chat text content is required')
     }
     expect(container.textContent.indexOf('こんにちは')).toBeLessThan(
-      container.textContent.indexOf('夕焼けがきれいですね。'),
+      container.textContent.indexOf('HTTP応答です。'),
     )
   })
 
-  test('should render legacy WebSocket text responses as miori messages', async () => {
+  test('should route A to B to A through HTTP and WebSocket without mixing conversation IDs', async () => {
+    const conversationIdA = 'e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'
+    const conversationIdB = '6ad9a610-02cc-4a41-b02e-503826f7292b'
+    vi.stubGlobal('crypto', {
+      randomUUID: vi.fn()
+        .mockReturnValueOnce(conversationIdA)
+        .mockReturnValueOnce(conversationIdB),
+    })
+    fetchMock.mockImplementation(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, string>
+      return new Response(
+        JSON.stringify({ character: body.character, response: `${body.character}の応答` }),
+        { status: 200 },
+      )
+    })
     render(App)
-    const socket = await openSocket()
+    const socketA = await openSocket()
 
-    socket.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify({ type: 'text', response: '従来形式の応答です。' }),
-      }),
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: 'Aへの質問' },
+    })
+    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
+    expect(await screen.findByText('mioriの応答')).toBeTruthy()
+
+    const switcher = screen.getByRole('textbox', { name: 'キャラクターID' })
+    await fireEvent.input(switcher, { target: { value: 'mock character/b' } })
+    await fireEvent.click(screen.getByRole('button', { name: '切り替え' }))
+    await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(2))
+    const socketB = latestSocket()
+    await act(() => socketB.onopen?.())
+
+    expect(socketA.closeCalls).toBe(1)
+    socketA.onclose?.()
+    expect(screen.getByRole('button', { name: 'マイクをオンにする' }).hasAttribute('disabled')).toBe(
+      false,
     )
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: 'Bへの質問' },
+    })
+    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
+    expect(await screen.findByText('mock character/bの応答')).toBeTruthy()
 
-    expect(await screen.findByText('従来形式の応答です。')).toBeTruthy()
-  })
+    await fireEvent.input(switcher, { target: { value: 'miori' } })
+    await fireEvent.click(screen.getByRole('button', { name: '切り替え' }))
+    await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(3))
+    const returnedSocketA = latestSocket()
+    await act(() => returnedSocketA.onopen?.())
 
-  test('should render an error message when the WebSocket text request fails', async () => {
-    render(App)
-    const socket = await openSocket()
-
-    await fireEvent.input(screen.getByRole('textbox'), { target: { value: '応答して' } })
+    expect(socketB.closeCalls).toBe(1)
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: 'Aへの再質問' },
+    })
     await fireEvent.click(screen.getByRole('button', { name: '送信' }))
 
-    socket.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify({ type: 'error', status: 500, detail: 'backend error' }),
-      }),
-    )
+    const requestBodies = fetchMock.mock.calls.map(([, init]) => (
+      JSON.parse(String(init?.body)) as Record<string, string>
+    ))
+    expect(requestBodies).toEqual([
+      { character: 'miori', conversation_id: conversationIdA, message: 'Aへの質問' },
+      {
+        character: 'mock character/b',
+        conversation_id: conversationIdB,
+        message: 'Bへの質問',
+      },
+      { character: 'miori', conversation_id: conversationIdA, message: 'Aへの再質問' },
+    ])
+    expect(FakeWebSocket.instances.map((socket) => socket.url)).toEqual([
+      `ws://localhost:3000/ws/miori?conversation_id=${conversationIdA}`,
+      `ws://localhost:3000/ws/mock%20character%2Fb?conversation_id=${conversationIdB}`,
+      `ws://localhost:3000/ws/miori?conversation_id=${conversationIdA}`,
+    ])
+    expect(conversationIdB).not.toBe(conversationIdA)
+  })
+
+  test('should render an error message when the HTTP text request fails', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('backend error'))
+    render(App)
+    await openSocket()
+
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: '応答して' },
+    })
+    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
 
     expect(await screen.findByText('応答して')).toBeTruthy()
     expect(await screen.findByText('応答の取得に失敗しました。')).toBeTruthy()
@@ -236,23 +307,34 @@ describe('App chat and audio flow', () => {
     expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(false)
   })
 
-  test('should clear text pending state when the WebSocket runtime errors after a text send', async () => {
+  test('should keep HTTP text pending state when the WebSocket runtime errors', async () => {
+    let resolveRequest: ((response: Response) => void) | undefined
+    fetchMock.mockImplementationOnce(
+      () => new Promise<Response>((resolve) => { resolveRequest = resolve }),
+    )
     render(App)
     const socket = await openSocket()
 
-    await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'エラー後も入力したい' } })
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: 'エラー後も入力したい' },
+    })
     await fireEvent.click(screen.getByRole('button', { name: '送信' }))
 
-    expect(socket.sent).toEqual([JSON.stringify({ type: 'text', message: 'エラー後も入力したい' })])
+    expect(socket.sent).toEqual([])
     expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(true)
 
     socket.onerror?.()
 
     expect(await screen.findByText('応答の取得に失敗しました。')).toBeTruthy()
-    expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(false)
+    expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(true)
     expect(screen.getByRole('button', { name: 'マイクをオンにする' }).hasAttribute('disabled')).toBe(
-      false,
+      true,
     )
+    resolveRequest?.(
+      new Response(JSON.stringify({ character: 'miori', response: 'HTTP完了' }), { status: 200 }),
+    )
+    expect(await screen.findByText('HTTP完了')).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(false)
   })
 
   test('should disable microphone capture before the WebSocket is connected', async () => {
@@ -264,14 +346,17 @@ describe('App chat and audio flow', () => {
     expect(mocks.vadStart).not.toHaveBeenCalled()
   })
 
-  test('should disable text chat before the WebSocket connects', async () => {
+  test('should allow HTTP text chat before the WebSocket connects', async () => {
     render(App)
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: '接続前に送信' },
+    })
 
-    expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(true)
-    expect(screen.getByRole('button', { name: '送信' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(false)
+    expect(screen.getByRole('button', { name: '送信' }).hasAttribute('disabled')).toBe(false)
   })
 
-  test('should render an error and keep controls disabled when the initial WebSocket connection fails', async () => {
+  test('should render an error and keep HTTP text controls enabled when the initial WebSocket connection fails', async () => {
     render(App)
     await act()
     await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1))
@@ -282,8 +367,11 @@ describe('App chat and audio flow', () => {
     })
 
     expect(await screen.findByText('応答の取得に失敗しました。')).toBeTruthy()
-    expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(true)
-    expect(screen.getByRole('button', { name: '送信' }).hasAttribute('disabled')).toBe(true)
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: '音声接続失敗後に送信' },
+    })
+    expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(false)
+    expect(screen.getByRole('button', { name: '送信' }).hasAttribute('disabled')).toBe(false)
     expect(screen.getByRole('button', { name: 'マイクをオンにする' }).hasAttribute('disabled')).toBe(
       true,
     )
@@ -410,18 +498,28 @@ describe('App chat and audio flow', () => {
     )
   })
 
-  test('should disable text input and microphone capture while a text response is pending', async () => {
+  test('should disable text, microphone, and character switching while a text response is pending', async () => {
+    let resolveRequest: ((response: Response) => void) | undefined
+    fetchMock.mockImplementationOnce(
+      () => new Promise<Response>((resolve) => { resolveRequest = resolve }),
+    )
     render(App)
     const socket = await openSocket()
 
-    await fireEvent.input(screen.getByRole('textbox'), { target: { value: '少し待って' } })
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: '少し待って' },
+    })
     await fireEvent.click(screen.getByRole('button', { name: '送信' }))
 
-    expect(socket.sent).toEqual([JSON.stringify({ type: 'text', message: '少し待って' })])
+    expect(socket.sent).toEqual([])
     expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(true)
     expect(screen.getByRole('button', { name: 'マイクをオンにする' }).hasAttribute('disabled')).toBe(
       true,
     )
+    expect(
+      screen.getByRole<HTMLInputElement>('textbox', { name: 'キャラクターID' }).disabled,
+    ).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: '切り替え' }).disabled).toBe(true)
 
     const disabledMicrophoneButton = screen.getByRole('button', { name: 'マイクをオンにする' })
     disabledMicrophoneButton.click()
@@ -429,24 +527,30 @@ describe('App chat and audio flow', () => {
     expect(mocks.getUserMedia).not.toHaveBeenCalled()
     expect(mocks.vadStart).not.toHaveBeenCalled()
 
-    socket.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify({ type: 'text', response: 'お待たせしました。' }),
+    resolveRequest?.(
+      new Response(JSON.stringify({ character: 'miori', response: 'お待たせしました。' }), {
+        status: 200,
       }),
     )
 
     expect(await screen.findByText('お待たせしました。')).toBeTruthy()
     expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(false)
+    expect(
+      screen.getByRole<HTMLInputElement>('textbox', { name: 'キャラクターID' }).disabled,
+    ).toBe(false)
     expect(screen.getByRole('button', { name: 'マイクをオンにする' }).hasAttribute('disabled')).toBe(
       false,
     )
   })
 
   test('should keep text input disabled when the WebSocket closes', async () => {
+    fetchMock.mockImplementationOnce(() => new Promise<Response>(() => {}))
     render(App)
     const socket = await openSocket()
 
-    await fireEvent.input(screen.getByRole('textbox'), { target: { value: '閉じても待って' } })
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: '閉じても待って' },
+    })
     await fireEvent.click(screen.getByRole('button', { name: '送信' }))
 
     expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(true)
@@ -472,7 +576,9 @@ describe('App chat and audio flow', () => {
     mocks.vadOptions.onSpeechEnd()
     await waitFor(() => expect(socket.sent).toEqual([mocks.pcmData]))
 
-    await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'テキストもお願い' } })
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: 'テキストもお願い' },
+    })
     await fireEvent.click(screen.getByRole('button', { name: '送信' }))
 
     expect(socket.sent).toEqual([mocks.pcmData])
@@ -499,20 +605,18 @@ describe('App chat and audio flow', () => {
 
     socket.onmessage?.(new MessageEvent('message', { data: new ArrayBuffer(12) }))
 
-    await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'テキストもお願い' } })
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: 'テキストもお願い' },
+    })
     await fireEvent.click(screen.getByRole('button', { name: '送信' }))
 
-    expect(socket.sent).toEqual([
-      mocks.pcmData,
-      JSON.stringify({ type: 'text', message: 'テキストもお願い' }),
-    ])
-    socket.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify({ type: 'text', response: 'テキストへの応答です。' }),
-      }),
+    expect(socket.sent).toEqual([mocks.pcmData])
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/chat',
+      expect.objectContaining({ method: 'POST' }),
     )
 
-    expect(await screen.findByText('テキストへの応答です。')).toBeTruthy()
+    expect(await screen.findByText('HTTP応答です。')).toBeTruthy()
     expect(screen.getByRole('textbox', { name: 'メッセージ' }).hasAttribute('disabled')).toBe(false)
     expect(screen.getByRole('button', { name: 'マイクをオフにする' }).hasAttribute('disabled')).toBe(false)
   })
