@@ -292,10 +292,11 @@ class TestChatServiceErrorContract:
         def reject_prompt(prompt_input):
             assert prompt_input.character.system_prompt == secrets["character"]
             assert prompt_input.rag.items[0].content.endswith(secrets["rag"])
-            assert prompt_input.history.turns[0].user_content == secrets[
+            history = tuple(prompt_input.history.newest_first_factory())
+            assert history[0].user_content == secrets[
                 "history_user"
             ]
-            assert prompt_input.history.turns[0].assistant_content == secrets[
+            assert history[0].assistant_content == secrets[
                 "history_assistant"
             ]
             assert prompt_input.current_user.content == secrets["current_user"]

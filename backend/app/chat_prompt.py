@@ -1,5 +1,3 @@
-from typing import Protocol
-
 import httpx
 
 from app import chat_service
@@ -9,23 +7,18 @@ from app.prompting import (
     BuiltPrompt,
     CharacterPrompt,
     CurrentUserMessage,
+    HistoryCandidates,
+    MaskedHistoryTurn,
     PromptBuildInput,
     PromptBuilder,
     PromptInputLimitError,
     PromptMessage,
-    PromptRole,
     RagContext,
     TokenBudget,
 )
 from app.prompting.config import PromptRuntimeConfig
-from app.prompting.history import select_history
 
 _PROMPT_HISTORY_PAGE_SIZE = 32
-
-
-class _InputTokenCounter(Protocol):
-    def count_input_tokens(self, messages: tuple[PromptMessage, ...]) -> int:
-        ...
 
 
 class _ChatTokenCounter:
@@ -54,7 +47,6 @@ def build_chat_prompt(
             current_user=current_user,
             history_session=history_session,
             config=config,
-            token_counter=token_counter,
         )
         return PromptBuilder(token_counter).build(prompt_input)
     except PromptInputLimitError as exc:
@@ -68,16 +60,20 @@ def _build_prompt_input(
     current_user: CurrentUserMessage,
     history_session: HistorySession,
     config: PromptRuntimeConfig,
-    token_counter: _InputTokenCounter,
 ) -> PromptBuildInput:
-    _validate_current_user(current_user, config, token_counter)
-    history = select_history(
-        history_session.prompt_turns(
-            max_completed_turns=config.max_completed_turns,
-            page_size=_PROMPT_HISTORY_PAGE_SIZE,
+    history = HistoryCandidates(
+        newest_first_factory=lambda: (
+            MaskedHistoryTurn(
+                turn.user_content,
+                turn.assistant_content,
+                turn.is_completed,
+            )
+            for turn in history_session.prompt_turns(
+                max_completed_turns=config.max_completed_turns,
+                page_size=_PROMPT_HISTORY_PAGE_SIZE,
+            )
         ),
-        token_counter=token_counter,
-        token_limit=config.history_token_limit,
+        omitted_turns=0,
     )
     input_limit = config.context_token_limit - config.assistant_max_generation_tokens
     return PromptBuildInput(
@@ -94,21 +90,6 @@ def _build_prompt_input(
             post_history=input_limit,
         ),
     )
-
-
-def _validate_current_user(
-    current_user: CurrentUserMessage,
-    config: PromptRuntimeConfig,
-    token_counter: _InputTokenCounter,
-) -> None:
-    message = PromptMessage(PromptRole.USER, current_user.content)
-    used = token_counter.count_input_tokens((message,))
-    if used > config.user_input_token_limit:
-        raise chat_service.ChatInputLimitError(
-            region="current_user",
-            used=used,
-            limit=config.user_input_token_limit,
-        )
 
 
 def _input_limit_error(

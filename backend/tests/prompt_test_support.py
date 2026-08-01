@@ -1,6 +1,7 @@
 from app.prompting import (
     CharacterPrompt,
     CurrentUserMessage,
+    HistoryCandidates,
     MaskedHistory,
     MaskedHistoryTurn,
     PromptMessage,
@@ -44,6 +45,20 @@ def prompt_build_input(
     current_user: CurrentUserMessage | None = None,
     budget: TokenBudget | None = None,
 ) -> PromptBuildInput:
+    masked_history = (
+        history
+        if history is not None
+        else MaskedHistory(
+            turns=(
+                MaskedHistoryTurn(
+                    user_content="過去user",
+                    assistant_content="過去assistant",
+                    is_completed=True,
+                ),
+            ),
+            omitted_turns=0,
+        )
+    )
     return PromptBuildInput(
         character=character
         if character is not None
@@ -56,17 +71,9 @@ def prompt_build_input(
             post_history_instructions="最終指示",
         ),
         rag=rag if rag is not None else RagContext(items=(RagItem("RAG本文"),)),
-        history=history
-        if history is not None
-        else MaskedHistory(
-            turns=(
-                MaskedHistoryTurn(
-                    user_content="過去user",
-                    assistant_content="過去assistant",
-                    is_completed=True,
-                ),
-            ),
-            omitted_turns=0,
+        history=HistoryCandidates(
+            newest_first_factory=lambda: reversed(masked_history.turns),
+            omitted_turns=masked_history.omitted_turns,
         ),
         current_user=current_user
         if current_user is not None

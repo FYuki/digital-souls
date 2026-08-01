@@ -3,6 +3,7 @@ import pytest
 from app.prompting import (
     CharacterPrompt,
     CurrentUserMessage,
+    HistoryCandidates,
     MaskedHistory,
     MaskedHistoryTurn,
     PromptBuildInput,
@@ -162,7 +163,9 @@ class TestPromptBuilderComposition:
                     post_history_instructions="",
                 ),
                 rag=RagContext(items=()),
-                history=MaskedHistory(turns=(), omitted_turns=0),
+                history=HistoryCandidates(
+                    newest_first_factory=lambda: iter(()), omitted_turns=0
+                ),
                 current_user=history,  # type: ignore[arg-type]
                 budget=token_budget(),
             )

@@ -1,3 +1,4 @@
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from enum import Enum
 
@@ -78,6 +79,18 @@ class MaskedHistory:
 
 
 @dataclass(frozen=True, repr=False)
+class HistoryCandidates:
+    newest_first_factory: Callable[[], Iterator[MaskedHistoryTurn]]
+    omitted_turns: int
+
+    def __post_init__(self) -> None:
+        if not callable(self.newest_first_factory):
+            raise TypeError("newest_first_factory must be callable")
+        if type(self.omitted_turns) is not int or self.omitted_turns < 0:
+            raise ValueError("omitted_turns must be a non-negative integer")
+
+
+@dataclass(frozen=True, repr=False)
 class CurrentUserMessage:
     content: str
 
@@ -112,7 +125,7 @@ class TokenBudget:
 class PromptBuildInput:
     character: CharacterPrompt
     rag: RagContext
-    history: MaskedHistory
+    history: HistoryCandidates
     current_user: CurrentUserMessage
     budget: TokenBudget
 
@@ -120,7 +133,7 @@ class PromptBuildInput:
         boundaries = (
             ("character", self.character, CharacterPrompt),
             ("rag", self.rag, RagContext),
-            ("history", self.history, MaskedHistory),
+            ("history", self.history, HistoryCandidates),
             ("current_user", self.current_user, CurrentUserMessage),
             ("budget", self.budget, TokenBudget),
         )

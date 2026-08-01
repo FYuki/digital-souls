@@ -89,7 +89,10 @@ def test_should_build_system_rag_saved_history_then_current_user() -> None:
             post_history_instructions="final instruction",
         ),
         rag=RagContext(items=(prompting.RagItem("RAG_CONTEXT"),)),
-        history=history,
+        history=prompting.HistoryCandidates(
+            newest_first_factory=lambda: reversed(history.turns),
+            omitted_turns=history.omitted_turns,
+        ),
         current_user=CurrentUserMessage("RAW_CURRENT_USER"),
         budget=prompting.TokenBudget(
             total=20,
@@ -130,7 +133,10 @@ def test_should_keep_history_when_rag_context_is_empty() -> None:
     prompt_input = prompting.PromptBuildInput(
         character=CharacterPrompt("", "", "", "system", "", ""),
         rag=RagContext(items=()),
-        history=history,
+        history=prompting.HistoryCandidates(
+            newest_first_factory=lambda: reversed(history.turns),
+            omitted_turns=history.omitted_turns,
+        ),
         current_user=CurrentUserMessage("current"),
         budget=prompting.TokenBudget(20, 10, 10, 10, 10, 10),
     )
@@ -191,21 +197,17 @@ def test_sqlite_pages_restore_select_and_reach_existing_builder(
         repository,
         MagicMock(),
     )
-    restored_newest_first = session.prompt_turns(
-        max_completed_turns=2,
-        page_size=1,
-    )
-    selection = importlib.import_module("app.prompting.history")
-    history = selection.select_history(
-        restored_newest_first,
-        token_counter=UnitMessageCounter(),
-        token_limit=10,
-    )
     prompting = importlib.import_module("app.prompting")
     prompt_input = prompting.PromptBuildInput(
         character=CharacterPrompt("", "", "", "system", "", ""),
         rag=RagContext(items=()),
-        history=history,
+        history=prompting.HistoryCandidates(
+            newest_first_factory=lambda: session.prompt_turns(
+                max_completed_turns=2,
+                page_size=1,
+            ),
+            omitted_turns=0,
+        ),
         current_user=CurrentUserMessage("RAW_CURRENT_USER"),
         budget=prompting.TokenBudget(20, 10, 10, 10, 10, 10),
     )

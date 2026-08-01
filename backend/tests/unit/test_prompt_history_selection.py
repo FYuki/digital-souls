@@ -46,6 +46,34 @@ def _select(turns, counter: RecordingMessageCounter, limit: int):
 
 
 class TestHistoryTokenSelection:
+    @pytest.mark.parametrize(
+        ("completed_index", "limit", "expected_users"),
+        [
+            (0, 100, tuple(f"turn-{index}" for index in reversed(range(40)))),
+            (35, 1, ("turn-35",)),
+        ],
+    )
+    def test_should_select_streaming_history_with_immutable_state_transitions(
+        self,
+        completed_index: int,
+        limit: int,
+        expected_users: tuple[str, ...],
+    ) -> None:
+        counter = RecordingMessageCounter({})
+        newest_first = tuple(
+            _turn(
+                f"turn-{index}",
+                None,
+                completed=index == completed_index,
+            )
+            for index in range(40)
+        )
+
+        selected = _select(newest_first, counter, limit)
+
+        assert tuple(turn.user_content for turn in selected.turns) == expected_users
+        assert selected.omitted_turns == 40 - len(expected_users)
+
     def test_should_measure_candidates_in_final_oldest_first_order(self) -> None:
         counter = RecordingMessageCounter({})
         newest_first = (
@@ -97,6 +125,76 @@ class TestHistoryTokenSelection:
             "new-failed",
         ]
         assert selected.omitted_turns == 1
+
+    def test_should_not_restore_older_failed_when_newer_failed_does_not_fit(
+        self,
+    ) -> None:
+        counter = RecordingMessageCounter(
+            {
+                "new-failed": 2,
+                "completed": 1,
+                "old-failed": 1,
+            }
+        )
+        newest_first = (
+            _turn("new-failed", None, completed=False),
+            _turn("completed", None, completed=True),
+            _turn("old-failed", None, completed=False),
+        )
+
+        selected = _select(newest_first, counter, limit=2)
+
+        assert [turn.user_content for turn in selected.turns] == ["completed"]
+        assert selected.omitted_turns == 2
+
+    def test_should_not_restore_older_failed_in_streaming_selection(self) -> None:
+        counter = RecordingMessageCounter(
+            {
+                "new-failed": 2,
+                "completed": 1,
+                "old-failed": 1,
+                **{f"overflow-{index}": 10 for index in range(30)},
+            }
+        )
+        newest_first = (
+            _turn("new-failed", None, completed=False),
+            _turn("completed", None, completed=True),
+            _turn("old-failed", None, completed=False),
+            *(
+                _turn(f"overflow-{index}", None, completed=False)
+                for index in range(30)
+            ),
+        )
+
+        selected = _select(newest_first, counter, limit=2)
+
+        assert [turn.user_content for turn in selected.turns] == ["completed"]
+        assert selected.omitted_turns == 32
+
+    def test_should_close_older_streaming_selection_after_first_overflow(
+        self,
+    ) -> None:
+        counter = RecordingMessageCounter(
+            {
+                "completed": 1,
+                "overflowing-failed": 2,
+                **{f"older-{index}": 1 for index in range(31)},
+            }
+        )
+        newest_first = (
+            _turn("completed", None, completed=True),
+            _turn("overflowing-failed", None, completed=False),
+            *(
+                _turn(f"older-{index}", None, completed=False)
+                for index in range(31)
+            ),
+        )
+
+        selected = _select(newest_first, counter, limit=1)
+
+        assert [turn.user_content for turn in selected.turns] == ["completed"]
+        assert selected.omitted_turns == 32
+        assert len(counter.calls) <= 5
 
     def test_should_not_restore_older_optional_turn_after_selection_closes(
         self,

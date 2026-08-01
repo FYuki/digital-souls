@@ -222,7 +222,6 @@ class TestPromptBuilderLogging:
             prompt_input.character,
             prompt_input.rag.items[0],
             prompt_input.rag,
-            prompt_input.history.turns[0],
             prompt_input.history,
             prompt_input.current_user,
             prompt_input,

@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from app.characters.loader import load_character_card, load_tts_config
 from app.prompting import (
     CurrentUserMessage,
+    HistoryCandidates,
     MaskedHistory,
     PromptBuildInput,
     PromptBuilder,
@@ -34,7 +35,9 @@ def test_should_build_runtime_prompt_from_shipped_character_card() -> None:
     prompt_input = PromptBuildInput(
         character=character_prompt,
         rag=RagContext(items=()),
-        history=MaskedHistory(turns=(), omitted_turns=0),
+        history=HistoryCandidates(
+            newest_first_factory=lambda: iter(()), omitted_turns=0
+        ),
         current_user=CurrentUserMessage("現在ターンの入力"),
         budget=TokenBudget(
             total=20,
@@ -77,7 +80,9 @@ def test_should_omit_final_instruction_when_card_field_is_missing(
     prompt_input = PromptBuildInput(
         character=card.to_character_prompt(),
         rag=RagContext(items=()),
-        history=MaskedHistory(turns=(), omitted_turns=0),
+        history=HistoryCandidates(
+            newest_first_factory=lambda: iter(()), omitted_turns=0
+        ),
         current_user=CurrentUserMessage("現在ターンの入力"),
         budget=TokenBudget(
             total=20,

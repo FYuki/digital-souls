@@ -1,8 +1,10 @@
-from app.prompting.builder import PromptBuilder, TokenCounter
+from app.prompting.builder import PromptBuilder
+from app.prompting.measurement import TokenCounter
 from app.prompting.models import (
     BuiltPrompt,
     CharacterPrompt,
     CurrentUserMessage,
+    HistoryCandidates,
     MaskedHistory,
     MaskedHistoryTurn,
     PromptBuildInput,
@@ -19,6 +21,7 @@ __all__ = [
     "BuiltPrompt",
     "CharacterPrompt",
     "CurrentUserMessage",
+    "HistoryCandidates",
     "MaskedHistory",
     "MaskedHistoryTurn",
     "PromptBuildInput",
