@@ -31,9 +31,7 @@ class _HistorySession:
         return iter(self._turns)
 
 
-def test_should_coordinate_history_budget_and_existing_prompt_builder(
-    monkeypatch,
-) -> None:
+def test_should_coordinate_history_budget_and_existing_prompt_builder() -> None:
     config = PromptRuntimeConfig(
         max_completed_turns=2,
         history_token_limit=10,
@@ -50,18 +48,13 @@ def test_should_coordinate_history_budget_and_existing_prompt_builder(
             ),
         )
     )
-    monkeypatch.setattr(
-        chat_prompt._llm_router,
-        "count_input_tokens",
-        lambda messages: len(messages),
-    )
-
     result = chat_prompt.build_chat_prompt(
         character=CharacterPrompt("", "", "", "SYSTEM", "", ""),
         rag=RagContext(items=(RagItem("RAG"),)),
         current_user=CurrentUserMessage("RAW_CURRENT_USER"),
         history_session=history_session,
         config=config,
+        token_counter=UnitTokenCounter(),
     )
 
     assert history_session.prompt_turns_calls == [

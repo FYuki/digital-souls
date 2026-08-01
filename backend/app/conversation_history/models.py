@@ -3,17 +3,14 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
+from app.privacy.contracts import HistoryDecisionReasonCode
+
 
 class TurnStatus(str, Enum):
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
     PRIVACY_SKIPPED = "privacy_skipped"
-
-
-class PrivacySkipReason(str, Enum):
-    SENSITIVE_CONTENT = "sensitive_content"
-    POLICY_DENIED = "policy_denied"
 
 
 @dataclass(frozen=True)
@@ -31,9 +28,11 @@ class ConversationTurn:
     user_content: str | None
     assistant_content: str | None
     status: TurnStatus
-    privacy_reason_code: PrivacySkipReason | None
+    privacy_reason_code: HistoryDecisionReasonCode | None
     created_at: datetime
     updated_at: datetime
+    sanitizer_version: str | None = None
+    policy_version: str | None = None
 
 
 @dataclass(frozen=True)
@@ -43,8 +42,14 @@ class ProcessingTurnInput:
 
 @dataclass(frozen=True)
 class PrivacySkippedTurnInput:
-    reason_code: PrivacySkipReason
+    reason_code: HistoryDecisionReasonCode
+    sanitizer_version: str
+    policy_version: str
 
     def __post_init__(self) -> None:
-        if not isinstance(self.reason_code, PrivacySkipReason):
-            raise TypeError("reason_code must be a PrivacySkipReason")
+        if not isinstance(self.reason_code, HistoryDecisionReasonCode):
+            raise TypeError("reason_code must be a HistoryDecisionReasonCode")
+        if not self.sanitizer_version.strip():
+            raise ValueError("sanitizer_version must not be empty")
+        if not self.policy_version.strip():
+            raise ValueError("policy_version must not be empty")

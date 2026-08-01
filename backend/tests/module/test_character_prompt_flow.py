@@ -21,6 +21,7 @@ from tests.character_card_test_support import (
     use_character_repo_root,
     write_character_card,
 )
+from tests.conversation_history_test_support import CONVERSATION_ID
 
 
 class UnitTokenCounter:
@@ -111,6 +112,7 @@ def test_should_send_builder_messages_from_http_entrypoint(
     response.raise_for_status.return_value = None
     response.json.return_value = {
         "message": {"role": "assistant", "content": "応答"},
+        "prompt_eval_count": 1,
     }
     monkeypatch.setenv("RAG_ENABLED", "false")
 
@@ -121,7 +123,11 @@ def test_should_send_builder_messages_from_http_entrypoint(
         with TestClient(app) as client:
             result = client.post(
                 "/chat",
-                json={"character": "miori", "message": "HTTP_CURRENT_USER"},
+                json={
+                    "character": "miori",
+                    "conversation_id": str(CONVERSATION_ID),
+                    "message": "HTTP_CURRENT_USER",
+                },
             )
 
     assert result.status_code == 200

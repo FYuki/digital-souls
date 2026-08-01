@@ -13,11 +13,15 @@ from app.audio_pipeline import (
     create_audio_pipeline_service,
     resolve_audio_runtime_config,
 )
+from app.chat_prompt import build_chat_prompt
+from app.characters.loader import load_character_card
 from app.conversation_history.config import resolve_conversation_history_config
 from app.conversation_history.repository import ConversationHistoryRepository
-from app.conversation_history.service import ConversationHistoryService
 from app.conversation_history.schema import initialize_conversation_history_schema
+from app.conversation_history.service import ConversationHistoryService
+from app.llm.router import count_input_tokens, generate_response
 from app.memory.memory_policy import resolved_memory_policy
+from app.prompting import BuiltPrompt, CharacterPrompt, PromptMessage
 from app.privacy.history_sanitizer import create_history_sanitizer
 from app.privacy.scanner import create_privacy_scanner
 from app.routers.chat import router as chat_router
@@ -26,6 +30,22 @@ from app.routers.ws import router as ws_router
 load_dotenv()
 
 RAG_MEMORY_WORKERS = _chat_runtime.DEFAULT_RAG_MEMORY_WORKERS
+
+
+def _load_character_prompt(character: str) -> CharacterPrompt:
+    return load_character_card(character).to_character_prompt()
+
+
+def _generate_llm_response(
+    prompt: BuiltPrompt,
+    *,
+    max_output_tokens: int,
+) -> str:
+    return generate_response(prompt, max_output_tokens=max_output_tokens)
+
+
+def _count_llm_input_tokens(messages: tuple[PromptMessage, ...]) -> int:
+    return count_input_tokens(messages)
 
 
 def _app_chat_service(app: FastAPI) -> _chat_runtime.ChatService:
@@ -70,6 +90,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             ConversationHistoryService(
                 conversation_history_repository,
                 history_sanitizer,
+            ),
+            _chat_runtime.ChatRuntimeDependencies(
+                character_prompt_loader=_load_character_prompt,
+                prompt_builder=build_chat_prompt,
+                llm_response_generator=_generate_llm_response,
+                input_token_counter=_count_llm_input_tokens,
             ),
         )
         app.state.chat_service = app_chat_service

@@ -12,15 +12,16 @@ from app.conversation_history.errors import (
 from app.conversation_history.models import (
     Conversation,
     ConversationTurn,
-    PrivacySkipReason,
     TurnStatus,
 )
+from app.privacy.contracts import HistoryDecisionReasonCode
 
 ConnectionFactory = Callable[[Path], sqlite3.Connection]
 DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 TURN_COLUMNS = (
     "turn_id, character_id, conversation_id, user_content, "
-    "assistant_content, status, privacy_reason_code, created_at, updated_at"
+    "assistant_content, status, privacy_reason_code, sanitizer_version, "
+    "policy_version, created_at, updated_at"
 )
 
 
@@ -99,10 +100,12 @@ def turn_from_row(row: sqlite3.Row) -> ConversationTurn:
         assistant_content=None if row[4] is None else str(row[4]),
         status=TurnStatus(str(row[5])),
         privacy_reason_code=(
-            None if row[6] is None else PrivacySkipReason(str(row[6]))
+            None if row[6] is None else HistoryDecisionReasonCode(str(row[6]))
         ),
-        created_at=parse_datetime(str(row[7])),
-        updated_at=parse_datetime(str(row[8])),
+        sanitizer_version=None if row[7] is None else str(row[7]),
+        policy_version=None if row[8] is None else str(row[8]),
+        created_at=parse_datetime(str(row[9])),
+        updated_at=parse_datetime(str(row[10])),
     )
 
 

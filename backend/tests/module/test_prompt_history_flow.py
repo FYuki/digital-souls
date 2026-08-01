@@ -9,6 +9,7 @@ from app.prompting import (
     PromptRole,
     RagContext,
 )
+from app.chat_prompt import build_chat_prompt
 from tests.prompt_test_support import prompt_build_input, prompt_builder
 from app.conversation_history.models import ProcessingTurnInput
 from app.conversation_history.service import ConversationHistorySession
@@ -310,7 +311,11 @@ class _RuntimeHistoryService:
     def __init__(self, session: ConversationHistorySession) -> None:
         self._session = session
 
-    def open_session(self, character_id: str) -> ConversationHistorySession:
+    def open_session(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+    ) -> ConversationHistorySession:
         return self._session
 
 
@@ -368,21 +373,11 @@ def test_runtime_should_inject_history_when_rag_is_disabled(
     card.to_character_prompt.return_value = CharacterPrompt(
         "", "", "", "system", "", ""
     )
-    monkeypatch.setattr(
-        _chat_runtime._character_loader,
-        "load_character_card",
-        lambda character: card,
-    )
     retrieve = MagicMock()
     monkeypatch.setattr(
         _chat_runtime._rag_service,
         "retrieve_prompt_memories",
         retrieve,
-    )
-    monkeypatch.setattr(
-        _chat_runtime._llm_router,
-        "count_input_tokens",
-        lambda messages: len(messages),
     )
     captured: dict[str, object] = {}
 
@@ -391,7 +386,6 @@ def test_runtime_should_inject_history_when_rag_is_disabled(
         captured["max_output_tokens"] = max_output_tokens
         return "reply"
 
-    monkeypatch.setattr(_chat_runtime._llm_router, "generate_response", generate)
     service = _chat_runtime.ChatService(
         _chat_runtime.ChatRuntimeConfig(
             rag_enabled=False,
@@ -401,11 +395,21 @@ def test_runtime_should_inject_history_when_rag_is_disabled(
         ),
         _IgnoringTaskQueue(),
         _RuntimeHistoryService(session),
+        _chat_runtime.ChatRuntimeDependencies(
+            character_prompt_loader=lambda character: card.to_character_prompt(),
+            prompt_builder=build_chat_prompt,
+            llm_response_generator=generate,
+            input_token_counter=lambda messages: len(messages),
+        ),
     )
 
-    result = service.generate_chat_reply("miori", "RAW_RUNTIME_CURRENT")
+    result = service.generate_chat_reply(
+        "miori",
+        CONVERSATION_ID,
+        "RAW_RUNTIME_CURRENT",
+    )
 
-    assert result == "reply"
+    assert result.response == "reply"
     retrieve.assert_not_called()
     prompt = captured["prompt"]
     assert [message.content for message in prompt.messages[-3:]] == [

@@ -51,17 +51,20 @@ def _insert_turn(
         "%Y-%m-%dT%H:%M:%S.%fZ"
     )
     user_content = None if status is TurnStatus.PRIVACY_SKIPPED else f"user-{turn_id}"
-    privacy_reason = (
-        "sensitive_content" if status is TurnStatus.PRIVACY_SKIPPED else None
+    privacy_reason = "SCAN_FAILURE" if status is TurnStatus.PRIVACY_SKIPPED else None
+    sanitizer_version = (
+        "test-sanitizer-v1" if status is TurnStatus.PRIVACY_SKIPPED else None
     )
+    policy_version = "test-policy-v1" if status is TurnStatus.PRIVACY_SKIPPED else None
     if status in {TurnStatus.PROCESSING, TurnStatus.PRIVACY_SKIPPED}:
         assistant_content = None
     with sqlite3.connect(database_path) as connection:
         connection.execute(
             "INSERT INTO conversation_turns "
             "(turn_id, character_id, conversation_id, user_content, "
-            "assistant_content, status, privacy_reason_code, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "assistant_content, status, privacy_reason_code, sanitizer_version, "
+            "policy_version, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 str(turn_id),
                 character_id,
@@ -70,6 +73,8 @@ def _insert_turn(
                 assistant_content,
                 status.value,
                 privacy_reason,
+                sanitizer_version,
+                policy_version,
                 timestamp,
                 timestamp,
             ),

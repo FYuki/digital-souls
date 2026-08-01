@@ -71,7 +71,7 @@ class TestConversationHistorySchema:
             future.result()
 
         with _connect(database_path) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 1
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
             assert {
                 row[0]
                 for row in connection.execute(

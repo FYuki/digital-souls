@@ -1,4 +1,6 @@
 import pytest
+from app.chat_service import ChatReply
+from tests.conversation_history_test_support import TURN_ID
 
 
 class _StubTranscriber:
@@ -130,11 +132,11 @@ class TestAudioPipelineSession:
 
         transcript, reply, audio = session.generate_response_audio(
             b"\x01\x00",
-            lambda message: f"応答:{message}",
+            lambda message: ChatReply(f"応答:{message}", TURN_ID),
         )
 
         assert transcript == "今日の音声"
-        assert reply == "応答:今日の音声"
+        assert reply == ChatReply("応答:今日の音声", TURN_ID)
         assert audio == b"RIFF synthesized"
         assert voicevox_client.synthesize_calls == [("応答:今日の音声", 14)]
 
@@ -172,7 +174,10 @@ class TestAudioPipelineSession:
         )
 
         with pytest.raises(audio_pipeline.AudioPipelineStepError) as exc_info:
-            session.generate_response_audio(b"\x01\x00", lambda message: "応答")
+            session.generate_response_audio(
+                b"\x01\x00",
+                lambda message: ChatReply("応答", TURN_ID),
+            )
 
         assert exc_info.value.status_code == 502
         assert exc_info.value.detail == "STT request failed"
@@ -192,7 +197,10 @@ class TestAudioPipelineSession:
         )
 
         with pytest.raises(audio_pipeline.AudioPipelineStepError) as exc_info:
-            session.generate_response_audio(b"\x01\x00", lambda message: "応答")
+            session.generate_response_audio(
+                b"\x01\x00",
+                lambda message: ChatReply("応答", TURN_ID),
+            )
 
         assert exc_info.value.status_code == 502
         assert exc_info.value.detail == "VOICEVOX request failed"
@@ -201,7 +209,7 @@ class TestAudioPipelineSession:
         import app.audio_pipeline as audio_pipeline
         from app.characters.loader import VoicevoxTtsConfig
 
-        def failing_reply_generator(message: str) -> str:
+        def failing_reply_generator(message: str) -> ChatReply:
             raise RuntimeError("llm failed")
 
         voicevox_client = _StubVoicevoxClient()

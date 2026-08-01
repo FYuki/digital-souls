@@ -4,9 +4,23 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from app.chat_service import ChatReply
+from tests.conversation_history_test_support import CONVERSATION_ID, TURN_ID
 
 
 _BACKEND_DIR = Path(__file__).parent.parent.parent
+_WS_URL = f"/ws/miori?conversation_id={CONVERSATION_ID}"
+
+
+class _StubDeliverySession:
+    def mark_delivered(self, turn_id):
+        return None
+
+    def mark_delivery_failed(self, turn_id):
+        return None
+
+    def close(self):
+        return None
 
 
 class TestRuntimeConfiguration:
@@ -192,23 +206,28 @@ class TestRuntimeConfiguration:
     def test_chat_and_ws_routes_delegate_to_same_app_chat_service(self):
         import app.main as main
 
-        class StubSession:
+        class StubSession(_StubDeliverySession):
             def __init__(self, service):
                 self._service = service
 
-            def generate_reply(self, message: str) -> str:
+            def generate_reply(self, message: str) -> ChatReply:
                 self._service.calls.append(("ws-reply", "miori", message))
-                return f"ws:{message}"
+                return ChatReply(f"ws:{message}", TURN_ID)
 
         class StubChatService:
             def __init__(self):
                 self.calls = []
 
-            def generate_chat_reply(self, character: str, message: str) -> str:
+            def generate_chat_reply(
+                self,
+                character: str,
+                conversation_id,
+                message: str,
+            ) -> ChatReply:
                 self.calls.append(("http", character, message))
-                return f"http:{message}"
+                return ChatReply(f"http:{message}", TURN_ID)
 
-            async def create_chat_session(self, character: str):
+            async def create_chat_session(self, character: str, conversation_id):
                 self.calls.append(("ws-open", character))
                 return StubSession(self)
 
@@ -217,9 +236,13 @@ class TestRuntimeConfiguration:
             main.app.state.chat_service = stub_service
             http_response = client.post(
                 "/chat",
-                json={"character": "miori", "message": "hello"},
+                json={
+                    "character": "miori",
+                    "conversation_id": str(CONVERSATION_ID),
+                    "message": "hello",
+                },
             )
-            with client.websocket_connect("/ws/miori") as websocket:
+            with client.websocket_connect(_WS_URL) as websocket:
                 websocket.send_json({"type": "text", "message": "hello"})
                 ws_response = websocket.receive_json()
 
@@ -235,16 +258,20 @@ class TestRuntimeConfiguration:
     def test_ws_route_uses_app_audio_pipeline_service_for_audio_frames(self):
         import app.main as main
 
-        class StubChatSession:
+        class StubChatSession(_StubDeliverySession):
             def __init__(self) -> None:
                 self.messages = []
 
-            def generate_reply(self, message: str) -> str:
+            def generate_reply(self, message: str) -> ChatReply:
                 self.messages.append(message)
-                return f"reply:{message}"
+                return ChatReply(f"reply:{message}", TURN_ID)
 
         class StubChatService:
-            async def create_chat_session(self, character: str) -> StubChatSession:
+            async def create_chat_session(
+                self,
+                character: str,
+                conversation_id,
+            ) -> StubChatSession:
                 return StubChatSession()
 
         class StubAudioSession:
@@ -272,7 +299,7 @@ class TestRuntimeConfiguration:
         with TestClient(main.app) as client:
             main.app.state.chat_service = StubChatService()
             main.app.state.audio_pipeline_service = audio_service
-            with client.websocket_connect("/ws/miori") as websocket:
+            with client.websocket_connect(_WS_URL) as websocket:
                 websocket.send_bytes(b"\x01\x00")
                 user_text = websocket.receive_json()
                 miori_text = websocket.receive_json()
@@ -288,7 +315,9 @@ class TestRuntimeConfiguration:
         assert len(audio_service.sessions) == 1
         character, session = audio_service.sessions[0]
         assert character == "miori"
-        assert session.calls == [(b"\x01\x00", "reply:transcribed")]
+        assert session.calls == [
+            (b"\x01\x00", ChatReply("reply:transcribed", TURN_ID))
+        ]
 
     def test_audio_pipeline_session_runs_audio_steps_and_logs_latency(
         self,
@@ -328,11 +357,11 @@ class TestRuntimeConfiguration:
         with caplog.at_level("INFO", logger="app.audio_pipeline"):
             transcript, reply, audio = session.generate_response_audio(
                 b"\x01\x00",
-                lambda message: f"応答:{message}",
+                lambda message: ChatReply(f"応答:{message}", TURN_ID),
             )
 
         assert transcript == "音声入力"
-        assert reply == "応答:音声入力"
+        assert reply == ChatReply("応答:音声入力", TURN_ID)
         assert audio == b"RIFF synthesized"
         assert transcriber.calls == [b"\x01\x00"]
         assert voicevox_client.synthesize_calls == [
@@ -390,7 +419,7 @@ class TestRuntimeConfiguration:
         assert not hasattr(audio_pipeline, "AudioPipelineResponse")
         assert not hasattr(audio_pipeline, "_AudioPipelineResponse")
         assert inspect.signature(session.generate_response_audio).return_annotation == tuple[
-            str, str, bytes
+            str, ChatReply, bytes
         ]
 
     def test_audio_pipeline_does_not_depend_on_httpx_transport_errors(self):
@@ -472,7 +501,7 @@ class TestRuntimeConfiguration:
         assert not hasattr(main.app.state, "audio_pipeline_service")
         assert executor.shutdown_called is True
         with pytest.raises(chat_service.ChatServiceError):
-            chat_service.generate_chat_reply("miori", "hello")
+            chat_service.generate_chat_reply("miori", CONVERSATION_ID, "hello")
 
     def test_main_lifespan_shuts_down_chat_service_task_queue_executor(self, monkeypatch):
         import app.main as main
@@ -520,8 +549,10 @@ class TestRuntimeConfiguration:
             runtime_config,
             _memory_task_queue,
             _conversation_history_service,
+            dependencies,
         ):
             captured["runtime_config"] = runtime_config
+            captured["dependencies"] = dependencies
             return StubChatService()
 
         monkeypatch.setattr(
@@ -540,6 +571,11 @@ class TestRuntimeConfiguration:
             prompt_config.assistant_max_generation_tokens,
             prompt_config.context_token_limit,
         ) == (4, 1300, 650, 750, 9000)
+        dependencies = captured["dependencies"]
+        assert dependencies.character_prompt_loader is main._load_character_prompt
+        assert dependencies.prompt_builder is main.build_chat_prompt
+        assert dependencies.llm_response_generator is main._generate_llm_response
+        assert dependencies.input_token_counter is main._count_llm_input_tokens
 
     def test_main_lifespan_cleans_runtime_when_config_resolution_fails(self, monkeypatch):
         import app.chat_service as chat_service
@@ -578,7 +614,7 @@ class TestRuntimeConfiguration:
         assert not hasattr(main.app.state, "privacy_scanner")
         assert not hasattr(main.app.state, "history_sanitizer")
         with pytest.raises(chat_service.ChatServiceError):
-            chat_service.generate_chat_reply("miori", "hello")
+            chat_service.generate_chat_reply("miori", CONVERSATION_ID, "hello")
 
     def test_main_lifespan_owns_chat_service_state_and_cleans_it_up(self):
         import app.main as main
@@ -608,15 +644,22 @@ class TestRuntimeConfiguration:
         import app.main as main
 
         class StubChatService:
-            def generate_chat_reply(self, character: str, message: str) -> str:
-                return f"{character}:{message}"
+            def generate_chat_reply(
+                self,
+                character: str,
+                conversation_id,
+                message: str,
+            ) -> ChatReply:
+                return ChatReply(f"{character}:{message}", TURN_ID)
 
-            async def create_chat_session(self, character: str):
+            async def create_chat_session(self, character: str, conversation_id):
                 raise AssertionError("not used")
 
         with TestClient(main.app):
             main.app.state.chat_service = StubChatService()
-            assert chat_service.generate_chat_reply("miori", "hello") == "miori:hello"
+            assert chat_service.generate_chat_reply(
+                "miori", CONVERSATION_ID, "hello"
+            ).response == "miori:hello"
 
     def test_memory_modules_do_not_reference_character_memory_policy_markdown(self):
         memory_dir = _BACKEND_DIR / "app" / "memory"

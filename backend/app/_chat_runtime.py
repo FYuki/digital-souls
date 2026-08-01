@@ -6,17 +6,16 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Protocol
+from uuid import UUID
 
 import httpx
 
 from app import chat_service
-from app.chat_prompt import build_chat_prompt
 from app.conversation_history.service import (
     HistoryService,
     HistorySession,
+    StartedHistoryTurn,
 )
-from app.characters import loader as _character_loader
-from app.llm import router as _llm_router
 from app.memory import memory_policy as _memory_policy
 from app.memory import rag_service as _rag_service
 from app.privacy.contracts import PrivacyScanner
@@ -24,8 +23,10 @@ from app.prompting import (
     BuiltPrompt,
     CharacterPrompt,
     CurrentUserMessage,
+    PromptMessage,
     RagContext,
     RagItem,
+    TokenCounter,
 )
 from app.prompting.config import (
     PromptRuntimeConfig,
@@ -50,6 +51,56 @@ class MemoryTaskQueue(Protocol):
         **kwargs: object,
     ) -> None:
         ...
+
+
+class CharacterPromptLoader(Protocol):
+    def __call__(self, character: str) -> CharacterPrompt:
+        ...
+
+
+class ChatPromptBuilder(Protocol):
+    def __call__(
+        self,
+        *,
+        character: CharacterPrompt,
+        rag: RagContext,
+        current_user: CurrentUserMessage,
+        history_session: HistorySession,
+        config: PromptRuntimeConfig,
+        token_counter: TokenCounter,
+    ) -> BuiltPrompt:
+        ...
+
+
+class LlmResponseGenerator(Protocol):
+    def __call__(
+        self,
+        prompt: BuiltPrompt,
+        *,
+        max_output_tokens: int,
+    ) -> str:
+        ...
+
+
+class InputTokenCounter(Protocol):
+    def __call__(self, messages: tuple[PromptMessage, ...]) -> int:
+        ...
+
+
+@dataclass(frozen=True)
+class ChatRuntimeDependencies:
+    character_prompt_loader: CharacterPromptLoader
+    prompt_builder: ChatPromptBuilder
+    llm_response_generator: LlmResponseGenerator
+    input_token_counter: InputTokenCounter
+
+
+@dataclass(frozen=True)
+class _ChatTokenCounter:
+    count_tokens: InputTokenCounter
+
+    def count_input_tokens(self, messages: tuple[PromptMessage, ...]) -> int:
+        return self.count_tokens(messages)
 
 
 class ThreadPoolMemoryTaskQueue:
@@ -113,18 +164,50 @@ class _ResolvedChatContext:
     prompt_config: PromptRuntimeConfig
 
 
-@dataclass(frozen=True)
+@dataclass
 class _ChatSession:
     character: str
-    chat_service: "ChatService"
+    _service: "ChatService"
     history_session: HistorySession
+    _pending_turns: dict[UUID, StartedHistoryTurn]
+    _lock: threading.Lock
+    _closed: bool
 
-    def generate_reply(self, message: str) -> str:
-        return self.chat_service._generate_chat_reply(
+    def generate_reply(self, message: str) -> chat_service.ChatReply:
+        reply, delivery_turn = self._service._generate_chat_reply(
             self.character,
             message,
             self.history_session,
         )
+        fail_after_close = False
+        with self._lock:
+            if self._closed:
+                fail_after_close = True
+            elif delivery_turn is not None:
+                self._pending_turns[reply.turn_id] = delivery_turn
+        if fail_after_close and delivery_turn is not None:
+            self.history_session.fail_turn(delivery_turn)
+        return reply
+
+    def mark_delivered(self, turn_id: UUID) -> None:
+        with self._lock:
+            self._pending_turns.pop(turn_id, None)
+
+    def mark_delivery_failed(self, turn_id: UUID) -> None:
+        with self._lock:
+            started_turn = self._pending_turns.pop(turn_id, None)
+        if started_turn is not None:
+            self.history_session.fail_turn(started_turn)
+
+    def close(self) -> None:
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            pending = tuple(self._pending_turns.values())
+            self._pending_turns.clear()
+        for started_turn in pending:
+            self.history_session.fail_turn(started_turn)
 
 
 class ChatService:
@@ -133,6 +216,7 @@ class ChatService:
         runtime_config: ChatRuntimeConfig,
         memory_task_queue: MemoryTaskQueue,
         conversation_history_service: HistoryService,
+        dependencies: ChatRuntimeDependencies,
     ) -> None:
         if runtime_config.rag_enabled and runtime_config.memory_policy is None:
             raise ValueError("memory policy is required when RAG is enabled")
@@ -140,57 +224,81 @@ class ChatService:
             raise ValueError("privacy scanner is required when RAG is enabled")
         if not runtime_config.rag_enabled and runtime_config.memory_policy is not None:
             raise ValueError("memory policy must be omitted when RAG is disabled")
-        if not runtime_config.rag_enabled and runtime_config.privacy_scanner is not None:
+        if (
+            not runtime_config.rag_enabled
+            and runtime_config.privacy_scanner is not None
+        ):
             raise ValueError("privacy scanner must be omitted when RAG is disabled")
         self._runtime_config = runtime_config
         self._memory_task_queue = memory_task_queue
         self._conversation_history_service = conversation_history_service
+        self._dependencies = dependencies
 
     def generate_chat_reply(
         self,
         character: str,
+        conversation_id: UUID,
         message: str,
-    ) -> str:
+    ) -> chat_service.ChatReply:
         context = _resolve_chat_context(
             character,
             self._runtime_config,
             self._memory_task_queue,
+            self._dependencies,
         )
-        history_session = self._conversation_history_service.open_session(character)
-        return _generate_recorded_reply(
+        history_session = self._conversation_history_service.open_session(
+            character,
+            conversation_id,
+        )
+        reply, _ = _generate_recorded_reply(
             character,
             message,
             context,
             history_session,
+            self._dependencies,
         )
+        return reply
 
     def _generate_chat_reply(
         self,
         character: str,
         message: str,
         history_session: HistorySession,
-    ) -> str:
+    ) -> tuple[chat_service.ChatReply, StartedHistoryTurn | None]:
         context = _resolve_chat_context(
             character,
             self._runtime_config,
             self._memory_task_queue,
+            self._dependencies,
         )
         return _generate_recorded_reply(
             character,
             message,
             context,
             history_session,
+            self._dependencies,
         )
 
     async def create_chat_session(
         self,
         character: str,
+        conversation_id: UUID,
     ) -> chat_service.ChatReplySession:
-        await asyncio.to_thread(_load_character_prompt, character)
+        await asyncio.to_thread(
+            _load_character_prompt,
+            character,
+            self._dependencies.character_prompt_loader,
+        )
         return _ChatSession(
             character=character,
-            chat_service=self,
-            history_session=self._conversation_history_service.open_session(character),
+            _service=self,
+            history_session=self._conversation_history_service.open_session(
+                character,
+                conversation_id,
+            ),
+            _pending_turns={},
+            _lock=threading.Lock(),
+            _closed=False,
         )
 
 
@@ -211,11 +319,13 @@ def create_chat_service(
     runtime_config: ChatRuntimeConfig,
     memory_task_queue: MemoryTaskQueue,
     conversation_history_service: HistoryService,
+    dependencies: ChatRuntimeDependencies,
 ) -> ChatService:
     return ChatService(
         runtime_config,
         memory_task_queue,
         conversation_history_service,
+        dependencies,
     )
 
 
@@ -243,7 +353,9 @@ def default_chat_service() -> ChatService:
     resolver = _current_default_service_resolver()
     if resolver is not None:
         return resolver()
-    raise chat_service.ChatServiceError("default ChatService resolver is not configured")
+    raise chat_service.ChatServiceError(
+        "default ChatService resolver is not configured"
+    )
 
 
 def _current_default_service_resolver() -> Callable[[], ChatService] | None:
@@ -253,11 +365,12 @@ def _current_default_service_resolver() -> Callable[[], ChatService] | None:
         return _default_service_resolvers[-1]
 
 
-def _load_character_prompt(character: str) -> CharacterPrompt:
+def _load_character_prompt(
+    character: str,
+    loader: CharacterPromptLoader,
+) -> CharacterPrompt:
     try:
-        return _character_loader.load_character_card(
-            character
-        ).to_character_prompt()
+        return loader(character)
     except FileNotFoundError as exc:
         raise chat_service.CharacterNotFoundError(character) from exc
 
@@ -266,8 +379,12 @@ def _resolve_chat_context(
     character: str,
     runtime_config: ChatRuntimeConfig,
     memory_task_queue: MemoryTaskQueue,
+    dependencies: ChatRuntimeDependencies,
 ) -> _ResolvedChatContext:
-    character_prompt = _load_character_prompt(character)
+    character_prompt = _load_character_prompt(
+        character,
+        dependencies.character_prompt_loader,
+    )
     if not runtime_config.rag_enabled:
         return _ResolvedChatContext(
             character_prompt=character_prompt,
@@ -307,9 +424,13 @@ def _rag_context_for_reply(
     )
 
 
-def _call_llm(prompt: BuiltPrompt, max_output_tokens: int) -> str:
+def _call_llm(
+    prompt: BuiltPrompt,
+    max_output_tokens: int,
+    generator: LlmResponseGenerator,
+) -> str:
     try:
-        reply = _llm_router.generate_response(
+        reply = generator(
             prompt,
             max_output_tokens=max_output_tokens,
         )
@@ -345,19 +466,26 @@ def _generate_reply(
     message: str,
     context: _ResolvedChatContext,
     history_session: HistorySession,
+    dependencies: ChatRuntimeDependencies,
 ) -> str:
-    prompt = build_chat_prompt(
-        character=context.character_prompt,
-        rag=_rag_context_for_reply(character, message, context),
-        current_user=CurrentUserMessage(message),
-        history_session=history_session,
-        config=context.prompt_config,
-    )
+    try:
+        prompt = dependencies.prompt_builder(
+            character=context.character_prompt,
+            rag=_rag_context_for_reply(character, message, context),
+            current_user=CurrentUserMessage(message),
+            history_session=history_session,
+            config=context.prompt_config,
+            token_counter=_ChatTokenCounter(dependencies.input_token_counter),
+        )
+    except httpx.TimeoutException as exc:
+        raise chat_service.ChatTimeoutError() from exc
+    except httpx.HTTPError as exc:
+        raise chat_service.ChatBackendError() from exc
     reply = _call_llm(
         prompt,
         context.prompt_config.assistant_max_generation_tokens,
+        dependencies.llm_response_generator,
     )
-    _record_user_memory_candidate(character, message, context)
     return reply
 
 
@@ -366,7 +494,8 @@ def _generate_recorded_reply(
     message: str,
     context: _ResolvedChatContext,
     history_session: HistorySession,
-) -> str:
+    dependencies: ChatRuntimeDependencies,
+) -> tuple[chat_service.ChatReply, StartedHistoryTurn | None]:
     started_turn = history_session.start_turn(message)
     try:
         reply = _generate_reply(
@@ -374,8 +503,10 @@ def _generate_recorded_reply(
             message,
             context,
             history_session,
+            dependencies,
         )
-        history_session.complete_turn(started_turn, reply)
+        delivery_trackable = history_session.complete_turn(started_turn, reply)
+        _record_user_memory_candidate(character, message, context)
     except Exception:
         try:
             history_session.fail_turn(started_turn)
@@ -385,4 +516,5 @@ def _generate_recorded_reply(
                 cleanup_error.__class__.__name__,
             )
         raise
-    return reply
+    delivery_turn = started_turn if delivery_trackable else None
+    return chat_service.ChatReply(reply, started_turn.turn_id), delivery_turn

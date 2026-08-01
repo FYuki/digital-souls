@@ -20,7 +20,9 @@
   }
 
   const AUDIO_WS_PATH = '/ws/miori'
+  const CONVERSATION_ID_QUERY_KEY = 'conversation_id'
   const ERROR_MESSAGE = '応答の取得に失敗しました。'
+  const conversationId = crypto.randomUUID()
   type PendingRequest = 'text' | 'audio' | null
   let messages: ChatMessage[] = []
   let nextMessageId = 1
@@ -62,8 +64,11 @@
   const resolveAudioWebSocketUrl = (): string => {
     const { protocol, host } = window.location
     const webSocketProtocol = protocol === 'https:' ? 'wss:' : 'ws:'
+    const query = new URLSearchParams({
+      [CONVERSATION_ID_QUERY_KEY]: conversationId,
+    })
 
-    return `${webSocketProtocol}//${host}${AUDIO_WS_PATH}`
+    return `${webSocketProtocol}//${host}${AUDIO_WS_PATH}?${query}`
   }
 
   const handleTransportError = (_error: BackendErrorMessage) => {

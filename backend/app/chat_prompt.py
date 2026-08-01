@@ -1,8 +1,5 @@
-import httpx
-
 from app import chat_service
 from app.conversation_history.service import HistorySession
-from app.llm import router as _llm_router
 from app.prompting import (
     BuiltPrompt,
     CharacterPrompt,
@@ -12,23 +9,13 @@ from app.prompting import (
     PromptBuildInput,
     PromptBuilder,
     PromptInputLimitError,
-    PromptMessage,
     RagContext,
     TokenBudget,
+    TokenCounter,
 )
 from app.prompting.config import PromptRuntimeConfig
 
 _PROMPT_HISTORY_PAGE_SIZE = 32
-
-
-class _ChatTokenCounter:
-    def count_input_tokens(self, messages: tuple[PromptMessage, ...]) -> int:
-        try:
-            return _llm_router.count_input_tokens(messages)
-        except httpx.TimeoutException as exc:
-            raise chat_service.ChatTimeoutError() from exc
-        except httpx.HTTPError as exc:
-            raise chat_service.ChatBackendError() from exc
 
 
 def build_chat_prompt(
@@ -38,8 +25,8 @@ def build_chat_prompt(
     current_user: CurrentUserMessage,
     history_session: HistorySession,
     config: PromptRuntimeConfig,
+    token_counter: TokenCounter,
 ) -> BuiltPrompt:
-    token_counter = _ChatTokenCounter()
     try:
         prompt_input = _build_prompt_input(
             character=character,
