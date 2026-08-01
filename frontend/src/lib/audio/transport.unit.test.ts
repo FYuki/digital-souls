@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { WebSocketAudioTransport, type TransportCallbacks } from './transport'
 
 const AUDIO_WS_URL = 'ws://backend.test/ws/miori'
+const CONVERSATION_ID = 'e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = []
@@ -45,7 +46,7 @@ const createCallbacks = (): TransportCallbacks => ({
 })
 
 const connectTransport = async (callbacks: TransportCallbacks) => {
-  const transport = new WebSocketAudioTransport(AUDIO_WS_URL, callbacks)
+  const transport = new WebSocketAudioTransport(AUDIO_WS_URL, CONVERSATION_ID, callbacks)
   const connection = transport.connect()
   const socket = FakeWebSocket.instances[0]
 
@@ -76,10 +77,43 @@ describe('WebSocketAudioTransport', () => {
 
     const { transport, socket } = await connectTransport(callbacks)
 
-    expect(socket.url).toBe(AUDIO_WS_URL)
+    expect(socket.url).toBe(`${AUDIO_WS_URL}?conversation_id=${CONVERSATION_ID}`)
     expect(socket.binaryType).toBe('arraybuffer')
     expect(transport.connected).toBe(true)
     expect(callbacks.onOpen).toHaveBeenCalledTimes(1)
+  })
+
+  test('should preserve existing query parameters when adding the conversation ID', () => {
+    const transport = new WebSocketAudioTransport(
+      `${AUDIO_WS_URL}?token=a%2Fb&mode=voice`,
+      CONVERSATION_ID,
+      createCallbacks(),
+    )
+
+    void transport.connect()
+
+    const socket = FakeWebSocket.instances[0]
+    if (socket === undefined) throw new Error('WebSocket instance is required')
+    const url = new URL(socket.url)
+    expect(url.searchParams.get('conversation_id')).toBe(CONVERSATION_ID)
+    expect(url.searchParams.get('token')).toBe('a/b')
+    expect(url.searchParams.get('mode')).toBe('voice')
+  })
+
+  test('should replace a stale conversation_id query parameter with the injected ID', () => {
+    const transport = new WebSocketAudioTransport(
+      `${AUDIO_WS_URL}?conversation_id=stale&token=kept`,
+      CONVERSATION_ID,
+      createCallbacks(),
+    )
+
+    void transport.connect()
+
+    const socket = FakeWebSocket.instances[0]
+    if (socket === undefined) throw new Error('WebSocket instance is required')
+    const url = new URL(socket.url)
+    expect(url.searchParams.getAll('conversation_id')).toEqual([CONVERSATION_ID])
+    expect(url.searchParams.get('token')).toBe('kept')
   })
 
   test('should send audio as a binary frame without a JSON envelope', async () => {
@@ -90,27 +124,6 @@ describe('WebSocketAudioTransport', () => {
     transport.sendAudio(pcm)
 
     expect(socket.sent).toEqual([pcm])
-  })
-
-  test('should send text through the same WebSocket as a text message frame', async () => {
-    const callbacks = createCallbacks()
-    const { transport, socket } = await connectTransport(callbacks)
-
-    transport.sendText('ただいま')
-
-    expect(socket.sent).toEqual([JSON.stringify({ type: 'text', message: 'ただいま' })])
-  })
-
-  test('should route legacy backend text messages as miori replies', async () => {
-    const callbacks = createCallbacks()
-    const { socket } = await connectTransport(callbacks)
-
-    socket.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify({ type: 'text', response: 'おかえりなさい。' }),
-      }),
-    )
-    expect(callbacks.onTextMessage).toHaveBeenCalledWith('miori', 'おかえりなさい。')
   })
 
   test('should route user speaker text frames with the message field', async () => {
@@ -328,24 +341,19 @@ describe('WebSocketAudioTransport', () => {
 
     expect(transport.connected).toBe(true)
     expect(reconnectedSocket.sent).toEqual([secondPcm])
+    expect(new URL(reconnectedSocket.url).searchParams.get('conversation_id')).toBe(CONVERSATION_ID)
     expect(callbacks.onClose).toHaveBeenCalledTimes(1)
   })
 
   test('should fail fast when sending audio before the socket is open', () => {
-    const transport = new WebSocketAudioTransport(AUDIO_WS_URL, createCallbacks())
+    const transport = new WebSocketAudioTransport(AUDIO_WS_URL, CONVERSATION_ID, createCallbacks())
 
     expect(() => transport.sendAudio(new ArrayBuffer(2))).toThrow('WebSocket is not connected')
   })
 
-  test('should fail fast when sending text before the socket is open', () => {
-    const transport = new WebSocketAudioTransport(AUDIO_WS_URL, createCallbacks())
-
-    expect(() => transport.sendText('未接続です')).toThrow('WebSocket is not connected')
-  })
-
   test('should not keep audio pending when sending before the socket is open', async () => {
     const callbacks = createCallbacks()
-    const transport = new WebSocketAudioTransport(AUDIO_WS_URL, callbacks)
+    const transport = new WebSocketAudioTransport(AUDIO_WS_URL, CONVERSATION_ID, callbacks)
     const connection = transport.connect()
     const socket = FakeWebSocket.instances[0]
 

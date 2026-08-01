@@ -11,6 +11,8 @@ type MockWebSocketBackend = {
 
 export const installMockWebSocketBackend = async (page: Page, backend: MockWebSocketBackend) => {
   await page.addInitScript((mockBackend) => {
+    let observedUrls: string[] = []
+    Object.defineProperty(window, '__mockWebSocketUrls', { get: () => observedUrls })
     const createFrameData = (frame: MockWebSocketFrame): string | ArrayBuffer => {
       if (frame.kind === 'text') {
         return frame.data
@@ -39,6 +41,7 @@ export const installMockWebSocketBackend = async (page: Page, backend: MockWebSo
       constructor(url: string | URL) {
         super()
         this.url = String(url)
+        observedUrls = [...observedUrls, this.url]
         window.setTimeout(() => {
           this.readyState = MockWebSocket.OPEN
           const event = new Event('open')

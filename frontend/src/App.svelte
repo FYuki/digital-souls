@@ -3,6 +3,7 @@
 
   import AudioPlayer from './lib/AudioPlayer.svelte'
   import AudioRecorder from './lib/AudioRecorder.svelte'
+  import CharacterSwitcher from './lib/CharacterSwitcher.svelte'
   import ChatWindow from './lib/ChatWindow.svelte'
   import InputBar from './lib/InputBar.svelte'
   import {
@@ -12,6 +13,8 @@
     type TextMessageSpeaker,
     type TransportCallbacks,
   } from './lib/audio/transport'
+  import { sendChatMessage } from './lib/chat/client'
+  import { createConversationSessionManager } from './lib/conversation-session'
 
   type ChatMessage = {
     id: number
@@ -19,12 +22,12 @@
     text: string
   }
 
-  const AUDIO_WS_PATH = '/ws/miori'
-  const CONVERSATION_ID_QUERY_KEY = 'conversation_id'
+  const INITIAL_CHARACTER_ID = 'miori'
   const ERROR_MESSAGE = '応答の取得に失敗しました。'
-  const conversationId = crypto.randomUUID()
+  const conversationSessionManager = createConversationSessionManager()
   type PendingRequest = 'text' | 'audio' | null
   let messages: ChatMessage[] = []
+  let currentCharacter = INITIAL_CHARACTER_ID
   let nextMessageId = 1
   let pendingRequest: PendingRequest = null
   let isConnected = false
@@ -64,21 +67,17 @@
   const resolveAudioWebSocketUrl = (): string => {
     const { protocol, host } = window.location
     const webSocketProtocol = protocol === 'https:' ? 'wss:' : 'ws:'
-    const query = new URLSearchParams({
-      [CONVERSATION_ID_QUERY_KEY]: conversationId,
-    })
-
-    return `${webSocketProtocol}//${host}${AUDIO_WS_PATH}?${query}`
+    return `${webSocketProtocol}//${host}/ws/${encodeURIComponent(currentCharacter)}`
   }
 
   const handleTransportError = (_error: BackendErrorMessage) => {
     appendErrorMessage(new Error('WebSocket transport reported an error'))
-    clearPendingRequest()
+    clearAudioPendingRequest()
   }
 
   const handleTransportRuntimeError = (error: Error) => {
     appendErrorMessage(error)
-    clearPendingRequest()
+    clearAudioPendingRequest()
   }
 
   const clearPendingRequest = () => {
@@ -98,9 +97,6 @@
       }
 
       appendMessage(createMessage(speaker, text))
-      if (pendingRequest === 'text' && speaker === 'miori') {
-        clearPendingRequest()
-      }
     },
     onAudioMessage: (audio: ArrayBuffer) => {
       if (!isCurrentTransport()) {
@@ -137,14 +133,15 @@
       }
 
       isConnected = false
-      clearPendingRequest()
+      clearAudioPendingRequest()
     },
   })
 
   const connectTransport = () => {
     let nextTransport: AudioTransport
     const callbacks = createTransportCallbacks(() => transport === nextTransport)
-    nextTransport = new WebSocketAudioTransport(resolveAudioWebSocketUrl(), callbacks)
+    const conversationId = conversationSessionManager.getConversationId(currentCharacter)
+    nextTransport = new WebSocketAudioTransport(resolveAudioWebSocketUrl(), conversationId, callbacks)
     transport = nextTransport
     void nextTransport.connect().catch((error) => {
       if (transport !== nextTransport) {
@@ -153,7 +150,7 @@
 
       appendErrorMessage(error)
       isConnected = false
-      clearPendingRequest()
+      clearAudioPendingRequest()
     })
   }
 
@@ -165,7 +162,7 @@
     }
   })
 
-  const handleSend = (message: string) => {
+  const handleSend = async (message: string) => {
     const text = message.trim()
 
     if (text.length === 0 || pendingRequest !== null) {
@@ -175,11 +172,30 @@
     appendMessage(createMessage('user', text))
     pendingRequest = 'text'
     try {
-      getTransport().sendText(text)
+      const response = await sendChatMessage({
+        character: currentCharacter,
+        conversationId: conversationSessionManager.getConversationId(currentCharacter),
+        message: text,
+      })
+      appendMessage(createMessage('miori', response.response))
     } catch (error) {
       appendErrorMessage(error)
+    } finally {
       clearPendingRequest()
     }
+  }
+
+  const handleCharacterSwitch = (character: string) => {
+    if (pendingRequest !== null || character === currentCharacter) {
+      return
+    }
+
+    const previousTransport = transport
+    transport = null
+    currentCharacter = character
+    isConnected = false
+    previousTransport?.disconnect()
+    connectTransport()
   }
 
   const handleAudioCaptured = (pcmData: ArrayBuffer) => {
@@ -207,11 +223,16 @@
     <header class="chat-header">
       <p class="eyebrow">digital-souls</p>
       <h1>光織</h1>
+      <CharacterSwitcher
+        {currentCharacter}
+        disabled={pendingRequest !== null}
+        onSwitch={handleCharacterSwitch}
+      />
     </header>
 
     <ChatWindow {messages} />
     <div class="input-area">
-      <InputBar onSend={handleSend} disabled={pendingRequest !== null || !isConnected} />
+      <InputBar onSend={handleSend} disabled={pendingRequest !== null} />
       <AudioRecorder
         disabled={pendingRequest !== null || !isConnected}
         forceOff={!isConnected}
