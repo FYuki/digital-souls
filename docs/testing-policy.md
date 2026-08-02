@@ -36,6 +36,9 @@ npm run test:integration:backend
 npm run test:e2e:mocked
 npm run test:integration:text
 npm run test:integration:voice
+npm run lint:python
+npm run check
+npm run build
 ```
 
 `npm run test:integration:backend` は ChromaDB パッケージ、Ollama、`nomic-embed-text:latest` モデルを必要とする。

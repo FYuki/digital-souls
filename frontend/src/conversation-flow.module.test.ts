@@ -24,7 +24,7 @@ class FakeWebSocket {
 }
 
 const callbacks: TransportCallbacks = {
-  onTextMessage: vi.fn(), onAudioMessage: vi.fn(), onError: vi.fn(),
+  onTurnMessage: vi.fn(), onAudioMessage: vi.fn(), onError: vi.fn(),
   onTransportError: vi.fn(), onOpen: vi.fn(), onClose: vi.fn(),
 }
 
@@ -37,18 +37,23 @@ afterEach(() => {
 
 test('should propagate isolated session IDs through A to B to A HTTP and WebSocket calls', async () => {
   let bodies: Record<string, string>[] = []
-  vi.stubGlobal('crypto', {
-    randomUUID: vi.fn()
-      .mockReturnValueOnce(CONVERSATION_ID_A)
-      .mockReturnValueOnce(CONVERSATION_ID_B),
-  })
   vi.stubGlobal('WebSocket', FakeWebSocket)
   vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
     const body = JSON.parse(String(init.body)) as Record<string, string>
     bodies = [...bodies, body]
-    return new Response(JSON.stringify({ character: body.character, response: '応答' }), { status: 200 })
+    return new Response(JSON.stringify({
+      character: body.character,
+      turn: {
+        kind: 'content',
+        turn_id: body.conversation_id,
+        user_content: body.message,
+        assistant_content: '応答',
+      },
+    }), { status: 200 })
   }))
   const manager = createConversationSessionManager()
+  manager.selectConversation('miori', CONVERSATION_ID_A)
+  manager.selectConversation('mock-character-b', CONVERSATION_ID_B)
 
   for (const [character, message] of [
     ['miori', 'first A message'],
@@ -56,7 +61,8 @@ test('should propagate isolated session IDs through A to B to A HTTP and WebSock
     ['mock-character-b', 'B message'],
     ['miori', 'returned A message'],
   ] as const) {
-    const conversationId = manager.getConversationId(character)
+    const conversationId = manager.getSelectedConversationId(character)
+    if (conversationId === null) throw new Error('Selected conversation is required')
     await sendChatMessage({ character, conversationId, message })
     new WebSocketAudioTransport(
       `ws://backend.test/ws/${character}?token=kept`, conversationId, callbacks,

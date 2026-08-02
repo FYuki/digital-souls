@@ -2,6 +2,7 @@ from contextlib import ExitStack, asynccontextmanager
 from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+import sqlite3
 from typing import cast
 from uuid import uuid4
 
@@ -16,15 +17,18 @@ from app.audio_pipeline import (
 from app.chat_prompt import build_chat_prompt
 from app.characters.loader import load_character_card
 from app.conversation_history.config import resolve_conversation_history_config
+from app.conversation_history.lifecycle_service import ConversationLifecycleService
 from app.conversation_history.repository import ConversationHistoryRepository
 from app.conversation_history.schema import initialize_conversation_history_schema
 from app.conversation_history.service import ConversationHistoryService
+from app.conversation_history.wal_cleanup import ConversationWalCleanup
 from app.llm.router import count_input_tokens, generate_response
 from app.memory.memory_policy import resolved_memory_policy
 from app.prompting import BuiltPrompt, CharacterPrompt, PromptMessage
 from app.privacy.history_sanitizer import create_history_sanitizer
 from app.privacy.scanner import create_privacy_scanner
 from app.routers.chat import router as chat_router
+from app.routers.conversations import router as conversations_router
 from app.routers.ws import router as ws_router
 
 load_dotenv()
@@ -61,24 +65,38 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     initialize_conversation_history_schema(
         conversation_history_config.database_path,
     )
+    clock = lambda: datetime.now(UTC)
+    wal_cleanup = ConversationWalCleanup(
+        database_path=conversation_history_config.database_path,
+        clock=clock,
+        connection_factory=sqlite3.connect,
+    )
     conversation_history_repository = ConversationHistoryRepository(
         database_path=conversation_history_config.database_path,
         stale_after=conversation_history_config.stale_after,
         retention=conversation_history_config.retention,
-        clock=lambda: datetime.now(UTC),
+        clock=clock,
         uuid_factory=uuid4,
+        wal_cleanup=wal_cleanup,
     )
     conversation_history_repository.recover_stale_processing()
+    wal_cleanup.retry_pending()
+    conversation_lifecycle_service = ConversationLifecycleService(
+        conversation_history_repository
+    )
     executor = None
     memory_task_queue = None
     chat_service_resolver = None
     repository_state_set = False
+    lifecycle_service_state_set = False
     resolver_registered = False
     chat_service_state_set = False
     audio_pipeline_state_set = False
     try:
         app.state.conversation_history_repository = conversation_history_repository
         repository_state_set = True
+        app.state.conversation_lifecycle_service = conversation_lifecycle_service
+        lifecycle_service_state_set = True
         executor = ThreadPoolExecutor(
             max_workers=RAG_MEMORY_WORKERS,
             thread_name_prefix=_chat_runtime.RAG_MEMORY_THREAD_PREFIX,
@@ -130,11 +148,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     app.state,
                     "conversation_history_repository",
                 )
+            if lifecycle_service_state_set:
+                cleanup.callback(
+                    delattr,
+                    app.state,
+                    "conversation_lifecycle_service",
+                )
 
 
 app = FastAPI(lifespan=lifespan)
 
 app.include_router(chat_router)
+app.include_router(conversations_router)
 app.include_router(ws_router)
 
 

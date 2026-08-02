@@ -3,17 +3,20 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from app.conversation_history._sqlite import (
     TURN_COLUMNS,
     SqliteSession,
+    conversation_not_found_error,
+    conversation_from_row,
     format_datetime,
     select_conversation,
     select_turn,
     turn_from_row,
 )
 from app.conversation_history.errors import (
+    ConversationNotFoundError,
     InvalidConversationIdError,
     InvalidUtcDatetimeError,
 )
@@ -25,6 +28,7 @@ from app.conversation_history.models import (
     TurnStatus,
 )
 from app.conversation_history.turn_state import require_turn_transition
+from app.conversation_history.wal_cleanup import ConversationWalCleanup
 from app.privacy.contracts import HistoryDecisionReasonCode
 
 ConnectionFactory = Callable[[Path], sqlite3.Connection]
@@ -32,6 +36,10 @@ Clock = Callable[[], datetime]
 UuidFactory = Callable[[], UUID]
 MIN_PROMPT_PAGE_SIZE = 1
 MAX_PROMPT_PAGE_SIZE = 100
+CONVERSATION_SELECT_COLUMNS = (
+    "c.character_id, c.conversation_id, c.created_at, "
+    "COALESCE(MAX(t.updated_at), c.created_at), c.archived_at"
+)
 
 
 @dataclass(frozen=True)
@@ -56,6 +64,7 @@ class ConversationHistoryRepository:
         retention: timedelta,
         clock: Clock,
         uuid_factory: UuidFactory,
+        wal_cleanup: ConversationWalCleanup,
         connection_factory: ConnectionFactory = sqlite3.connect,
     ) -> None:
         if stale_after <= timedelta(0):
@@ -66,6 +75,7 @@ class ConversationHistoryRepository:
         self._retention = retention
         self._clock = clock
         self._uuid_factory = uuid_factory
+        self._wal_cleanup = wal_cleanup
         self._database = SqliteSession(database_path, connection_factory)
 
     def create_conversation(self, character_id: str) -> Conversation:
@@ -93,21 +103,93 @@ class ConversationHistoryRepository:
         with self._database.connection() as connection:
             return select_conversation(connection, character_id, conversation_id)
 
-    def ensure_conversation(
+    def list_active_conversations(self, character_id: str) -> list[Conversation]:
+        _require_non_empty(character_id, "character_id")
+        return self._select_conversations(
+            character_id,
+            archived_clause="IS NULL",
+        )
+
+    def list_archived_conversations(self, character_id: str) -> list[Conversation]:
+        _require_non_empty(character_id, "character_id")
+        return self._select_conversations(
+            character_id,
+            archived_clause="IS NOT NULL",
+        )
+
+    def archive_conversation(
         self,
         character_id: str,
         conversation_id: UUID,
     ) -> Conversation:
-        _require_non_empty(character_id, "character_id")
         _require_uuid4(conversation_id)
-        now = self._now()
         with self._database.transaction() as connection:
-            connection.execute(
-                "INSERT OR IGNORE INTO conversations "
-                "(character_id, conversation_id, created_at) VALUES (?, ?, ?)",
-                (character_id, str(conversation_id), format_datetime(now)),
+            current = self._select_conversation_for_lifecycle(
+                connection,
+                character_id,
+                conversation_id,
             )
-            return select_conversation(connection, character_id, conversation_id)
+            if current.archived_at is not None:
+                raise ConversationNotFoundError()
+            connection.execute(
+                "UPDATE conversations SET archived_at = ? "
+                "WHERE character_id = ? AND conversation_id = ?",
+                (format_datetime(self._now()), character_id, str(conversation_id)),
+            )
+            return self._select_conversation_for_lifecycle(
+                connection,
+                character_id,
+                conversation_id,
+            )
+
+    def unarchive_conversation(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+    ) -> Conversation:
+        _require_uuid4(conversation_id)
+        with self._database.transaction() as connection:
+            current = self._select_conversation_for_lifecycle(
+                connection,
+                character_id,
+                conversation_id,
+            )
+            if current.archived_at is None:
+                raise ConversationNotFoundError()
+            connection.execute(
+                "UPDATE conversations SET archived_at = NULL "
+                "WHERE character_id = ? AND conversation_id = ?",
+                (character_id, str(conversation_id)),
+            )
+            return self._select_conversation_for_lifecycle(
+                connection,
+                character_id,
+                conversation_id,
+            )
+
+    def hard_delete_conversation(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+    ) -> None:
+        _require_uuid4(conversation_id)
+        with self._database.transaction() as connection:
+            self._select_conversation_for_lifecycle(
+                connection,
+                character_id,
+                conversation_id,
+            )
+            connection.execute(
+                "DELETE FROM conversation_turns WHERE character_id = ? "
+                "AND conversation_id = ?",
+                (character_id, str(conversation_id)),
+            )
+            connection.execute(
+                "DELETE FROM conversations WHERE character_id = ? "
+                "AND conversation_id = ?",
+                (character_id, str(conversation_id)),
+            )
+        self._wal_cleanup.after_hard_delete(character_id, conversation_id)
 
     def create_processing_turn(
         self,
@@ -156,6 +238,7 @@ class ConversationHistoryRepository:
         )
         now = self._now()
         with self._database.transaction() as connection:
+            select_conversation(connection, character_id, conversation_id)
             current = select_turn(
                 connection,
                 character_id,
@@ -191,6 +274,7 @@ class ConversationHistoryRepository:
     ) -> ConversationTurn:
         now = self._now()
         with self._database.transaction() as connection:
+            select_conversation(connection, character_id, conversation_id)
             current = select_turn(
                 connection,
                 character_id,
@@ -225,6 +309,7 @@ class ConversationHistoryRepository:
     ) -> ConversationTurn:
         now = self._now()
         with self._database.transaction() as connection:
+            select_conversation(connection, character_id, conversation_id)
             current = select_turn(
                 connection,
                 character_id,
@@ -264,6 +349,10 @@ class ConversationHistoryRepository:
             rows = connection.execute(
                 f"SELECT {TURN_COLUMNS} FROM conversation_turns "
                 "WHERE status = ? AND updated_at < ? "
+                "AND EXISTS (SELECT 1 FROM conversations AS c "
+                "WHERE c.character_id = conversation_turns.character_id "
+                "AND c.conversation_id = conversation_turns.conversation_id "
+                "AND c.archived_at IS NULL) "
                 "ORDER BY updated_at, turn_id",
                 (TurnStatus.PROCESSING.value, cutoff),
             ).fetchall()
@@ -274,6 +363,10 @@ class ConversationHistoryRepository:
             connection.execute(
                 "UPDATE conversation_turns SET status = ?, updated_at = ? "
                 f"WHERE status = ? AND updated_at < ? "
+                "AND EXISTS (SELECT 1 FROM conversations AS c "
+                "WHERE c.character_id = conversation_turns.character_id "
+                "AND c.conversation_id = conversation_turns.conversation_id "
+                "AND c.archived_at IS NULL) "
                 f"AND turn_id IN ({placeholders})",
                 (
                     TurnStatus.FAILED.value,
@@ -310,6 +403,31 @@ class ConversationHistoryRepository:
                 (character_id, str(conversation_id), cutoff),
             ).fetchall()
             return [turn_from_row(row) for row in rows]
+
+    def list_history_turns(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+    ) -> list[ConversationTurn]:
+        _require_uuid4(conversation_id)
+        self.recover_stale_processing()
+        cutoff = format_datetime(self._now() - self._retention)
+        with self._database.connection() as connection:
+            select_conversation(connection, character_id, conversation_id)
+            rows = connection.execute(
+                f"SELECT {TURN_COLUMNS} FROM conversation_turns "
+                "WHERE character_id = ? AND conversation_id = ? "
+                "AND status IN (?, ?) AND created_at >= ? "
+                "ORDER BY created_at, turn_id",
+                (
+                    character_id,
+                    str(conversation_id),
+                    TurnStatus.COMPLETED.value,
+                    TurnStatus.PRIVACY_SKIPPED.value,
+                    cutoff,
+                ),
+            ).fetchall()
+        return [turn_from_row(row) for row in rows]
 
     def list_prompt_turns_page(
         self,
@@ -379,11 +497,11 @@ class ConversationHistoryRepository:
         policy_version: str | None,
     ) -> ConversationTurn:
         _require_uuid4(conversation_id)
-        turn_id = self._new_uuid4()
         now = self._now()
         timestamp = format_datetime(now)
         with self._database.transaction() as connection:
             select_conversation(connection, character_id, conversation_id)
+            turn_id = self._new_uuid4()
             connection.execute(
                 "INSERT INTO conversation_turns "
                 f"({TURN_COLUMNS}) VALUES "
@@ -409,6 +527,49 @@ class ConversationHistoryRepository:
                 conversation_id,
                 turn_id,
             )
+
+    def _select_conversations(
+        self,
+        character_id: str,
+        *,
+        archived_clause: str,
+    ) -> list[Conversation]:
+        with self._database.connection() as connection:
+            rows = connection.execute(
+                f"SELECT {CONVERSATION_SELECT_COLUMNS} "
+                "FROM conversations AS c LEFT JOIN conversation_turns AS t "
+                "ON t.character_id = c.character_id "
+                "AND t.conversation_id = c.conversation_id "
+                f"WHERE c.character_id = ? AND c.archived_at {archived_clause} "
+                "GROUP BY c.character_id, c.conversation_id "
+                "ORDER BY COALESCE(MAX(t.updated_at), c.created_at) DESC, "
+                "c.conversation_id DESC",
+                (character_id,),
+            ).fetchall()
+        return [conversation_from_row(row) for row in rows]
+
+    def _select_conversation_for_lifecycle(
+        self,
+        connection: sqlite3.Connection,
+        character_id: str,
+        conversation_id: UUID,
+    ) -> Conversation:
+        row = connection.execute(
+            f"SELECT {CONVERSATION_SELECT_COLUMNS} "
+            "FROM conversations AS c LEFT JOIN conversation_turns AS t "
+            "ON t.character_id = c.character_id "
+            "AND t.conversation_id = c.conversation_id "
+            "WHERE c.character_id = ? AND c.conversation_id = ? "
+            "GROUP BY c.character_id, c.conversation_id",
+            (character_id, str(conversation_id)),
+        ).fetchone()
+        if row is None:
+            raise conversation_not_found_error(
+                connection,
+                character_id,
+                conversation_id,
+            )
+        return conversation_from_row(row)
 
     def _new_uuid4(self) -> UUID:
         value = self._uuid_factory()

@@ -1,19 +1,26 @@
 <script lang="ts">
-  type ChatMessage = {
-    id: number
-    speaker: 'user' | 'miori'
-    text: string
-  }
+  import type { ConversationTurn } from './conversations/types'
 
-  export let messages: ChatMessage[]
+  export let turns: ConversationTurn[]
 </script>
 
 <div class="messages" aria-live="polite">
-  {#each messages as message (message.id)}
-    <article class:user={message.speaker === 'user'} class="message">
-      <span class="speaker">{message.speaker === 'user' ? 'あなた' : '光織'}</span>
-      <p>{message.text}</p>
-    </article>
+  {#each turns as turn (turn.turn_id)}
+    {#if turn.kind === 'content'}
+      <article class="message user" data-turn-id={turn.turn_id}>
+        <span class="speaker">あなた</span>
+        <p>{turn.user_content}</p>
+      </article>
+      <article class="message" data-turn-id={turn.turn_id}>
+        <span class="speaker">光織</span>
+        <p>{turn.assistant_content}</p>
+      </article>
+    {:else}
+      <article class="message privacy" data-turn-id={turn.turn_id}>
+        <span class="speaker">保存されなかったターン</span>
+        <p>{turn.reason_code}</p>
+      </article>
+    {/if}
   {/each}
 </div>
 

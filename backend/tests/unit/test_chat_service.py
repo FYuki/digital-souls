@@ -1,6 +1,7 @@
 import asyncio
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 from uuid import UUID
 
@@ -24,12 +25,14 @@ from app.chat_service import (
     ChatTimeoutError,
 )
 from app.conversation_history.prompt_history import RestoredHistoryTurn
+from app.conversation_history.models import ConversationTurn, TurnStatus
 from app.conversation_history.service import StartedHistoryTurn
 from app.llm import router as llm_router
 from app.memory.chroma_store import MemorySearchResult
 from app.prompting import CharacterPrompt, PromptInputLimitError
 from app.prompting.config import PromptRuntimeConfig
 from tests.conversation_history_test_support import CONVERSATION_ID
+from tests.chat_reply_test_support import persisted_reply
 
 
 _LOAD_PERSONALITY = "app.characters.loader.load_character_card"
@@ -42,6 +45,24 @@ _RECORD_USER_MEMORY_CANDIDATE = (
 )
 _BUILD_PROMPT = "app.chat_prompt.PromptBuilder.build"
 _PROMPT_CONFIG = PromptRuntimeConfig(10, 4096, 8192, 4096, 32768)
+
+
+def _completed_turn(
+    started_turn: StartedHistoryTurn,
+    assistant_content: str,
+) -> ConversationTurn:
+    timestamp = datetime(2026, 8, 1, tzinfo=UTC)
+    return ConversationTurn(
+        turn_id=started_turn.turn_id,
+        character_id="miori",
+        conversation_id=CONVERSATION_ID,
+        user_content="saved user content",
+        assistant_content=assistant_content,
+        status=TurnStatus.COMPLETED,
+        privacy_reason_code=None,
+        created_at=timestamp,
+        updated_at=timestamp,
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -96,6 +117,11 @@ def _generated_contents(generate: MagicMock) -> list[str]:
     return [message.content for message in prompt.messages]
 
 
+def _assistant_content(reply: chat_service.ChatReply) -> str:
+    assert isinstance(reply.persisted_turn, chat_service.PersistedContentTurn)
+    return reply.persisted_turn.assistant_content
+
+
 class _CollectingTaskQueue:
     def __init__(self) -> None:
         self.tasks: list[tuple[object, tuple[object, ...], dict[str, object]]] = []
@@ -115,8 +141,8 @@ class _IgnoringHistorySession:
         self,
         started_turn: StartedHistoryTurn,
         assistant_content: str,
-    ) -> bool:
-        return True
+    ) -> ConversationTurn:
+        return _completed_turn(started_turn, assistant_content)
 
     def fail_turn(self, started_turn: StartedHistoryTurn) -> None:
         return None
@@ -153,9 +179,9 @@ class _RecordingHistorySession:
         self,
         started_turn: StartedHistoryTurn,
         assistant_content: str,
-    ) -> bool:
+    ) -> ConversationTurn:
         self.complete_calls.append((started_turn, assistant_content))
-        return True
+        return _completed_turn(started_turn, assistant_content)
 
     def fail_turn(self, started_turn: StartedHistoryTurn) -> None:
         self.fail_calls.append(started_turn)
@@ -173,7 +199,7 @@ class _FailingCompleteHistorySession(_RecordingHistorySession):
         self,
         started_turn: StartedHistoryTurn,
         assistant_content: str,
-    ) -> bool:
+    ) -> ConversationTurn:
         super().complete_turn(started_turn, assistant_content)
         raise self.error
 
@@ -273,7 +299,7 @@ class TestChatServiceErrorContract:
             "hello",
         )
 
-        assert reply.response == "injected reply"
+        assert _assistant_content(reply) == "injected reply"
         load_prompt.assert_called_once_with("miori")
         prompt_builder.assert_called_once()
         assert prompt_builder.call_args.kwargs["character"] is character_prompt
@@ -588,7 +614,7 @@ class TestChatServiceErrorContract:
             with patch(_GENERATE_RESPONSE, return_value="reply"):
                 reply = service.generate_chat_reply("miori", CONVERSATION_ID, "hello")
 
-        assert reply.response == "reply"
+        assert _assistant_content(reply) == "reply"
         assert session.start_calls == ["hello"]
         assert session.complete_calls == [(session.started_turn, "reply")]
         assert session.fail_calls == []
@@ -610,7 +636,7 @@ class TestChatServiceErrorContract:
 
         reply = asyncio.run(run_session_flow())
 
-        assert reply.response == "reply"
+        assert _assistant_content(reply) == "reply"
         assert session.complete_calls == [(session.started_turn, "reply")]
         assert session.fail_calls == [session.started_turn]
 
@@ -625,7 +651,7 @@ class TestChatServiceErrorContract:
         finally:
             _chat_runtime.clear_default_chat_service_resolver(resolver)
 
-        assert reply.response == "reply"
+        assert _assistant_content(reply) == "reply"
         mock_load.assert_called_once_with("miori")
         assert _generated_contents(mock_gen) == ["## 応答方針\n# prompt", "hello"]
 
@@ -645,7 +671,7 @@ class TestChatServiceErrorContract:
 
         reply, mock_gen = asyncio.run(run_session_flow())
 
-        assert reply.response == "reply"
+        assert _assistant_content(reply) == "reply"
         assert _generated_contents(mock_gen) == ["## 応答方針\n# prompt", "hello"]
 
     def test_public_entrypoints_fail_fast_without_registered_service(self):
@@ -655,7 +681,7 @@ class TestChatServiceErrorContract:
     def test_public_entrypoints_follow_registered_app_state_service(self):
         class StubSession:
             def generate_reply(self, message: str) -> chat_service.ChatReply:
-                return chat_service.ChatReply(f"ws:{message}", CONVERSATION_ID)
+                return persisted_reply(f"ws:{message}", CONVERSATION_ID)
 
             def mark_delivered(self, turn_id: UUID) -> None:
                 return None
@@ -677,7 +703,7 @@ class TestChatServiceErrorContract:
                 message: str,
             ) -> chat_service.ChatReply:
                 self.calls.append(("http", character, message))
-                return chat_service.ChatReply(f"http:{message}", CONVERSATION_ID)
+                return persisted_reply(f"http:{message}", CONVERSATION_ID)
 
             async def create_chat_session(
                 self,
@@ -696,9 +722,11 @@ class TestChatServiceErrorContract:
 
         _chat_runtime.register_default_chat_service_resolver(resolver)
         try:
-            assert chat_service.generate_chat_reply(
-                "miori", CONVERSATION_ID, "hello"
-            ).response == "http:hello"
+            assert _assistant_content(
+                chat_service.generate_chat_reply(
+                    "miori", CONVERSATION_ID, "hello"
+                )
+            ) == "http:hello"
             state["service"] = second
             session = asyncio.run(chat_service.create_chat_session("miori", CONVERSATION_ID))
         finally:
@@ -709,7 +737,7 @@ class TestChatServiceErrorContract:
         session.mark_delivery_failed(reply.turn_id)
         session.close()
 
-        assert reply.response == "ws:again"
+        assert _assistant_content(reply) == "ws:again"
         assert first.calls == [("http", "miori", "hello")]
         assert second.calls == [("ws-open", "miori", "")]
 
@@ -724,7 +752,7 @@ class TestChatServiceErrorContract:
                 conversation_id: UUID,
                 message: str,
             ) -> chat_service.ChatReply:
-                return chat_service.ChatReply(
+                return persisted_reply(
                     f"{self.label}:{character}:{message}",
                     conversation_id,
                 )
@@ -745,19 +773,19 @@ class TestChatServiceErrorContract:
         try:
             _chat_runtime.register_default_chat_service_resolver(second_resolver)
             try:
-                assert chat_service.generate_chat_reply(
-                    "miori", CONVERSATION_ID, "hello"
-                ).response == (
-                    "second:miori:hello"
-                )
+                assert _assistant_content(
+                    chat_service.generate_chat_reply(
+                        "miori", CONVERSATION_ID, "hello"
+                    )
+                ) == "second:miori:hello"
             finally:
                 _chat_runtime.clear_default_chat_service_resolver(second_resolver)
 
-            assert chat_service.generate_chat_reply(
-                "miori", CONVERSATION_ID, "again"
-            ).response == (
-                "first:miori:again"
-            )
+            assert _assistant_content(
+                chat_service.generate_chat_reply(
+                    "miori", CONVERSATION_ID, "again"
+                )
+            ) == "first:miori:again"
         finally:
             _chat_runtime.clear_default_chat_service_resolver(first_resolver)
 
@@ -776,7 +804,7 @@ class TestChatServiceRagContract:
                     with patch(_RECORD_USER_MEMORY_CANDIDATE):
                         reply = service.generate_chat_reply("miori", CONVERSATION_ID, "hello")
 
-        assert reply.response == "reply"
+        assert _assistant_content(reply) == "reply"
         mock_build.assert_called_once_with("miori", "hello", policy)
         assert _generated_contents(mock_gen) == [
             "## 応答方針\n# prompt",
@@ -794,7 +822,7 @@ class TestChatServiceRagContract:
                     with patch(_RECORD_USER_MEMORY_CANDIDATE) as mock_record:
                         reply = service.generate_chat_reply("miori", CONVERSATION_ID, "hello")
 
-        assert reply.response == "reply"
+        assert _assistant_content(reply) == "reply"
         mock_record.assert_called_once()
         args, kwargs = mock_record.call_args
         assert args[:2] == ("miori", "hello")
@@ -812,7 +840,7 @@ class TestChatServiceRagContract:
                     with patch(_RECORD_USER_MEMORY_CANDIDATE) as mock_record:
                         reply = service.generate_chat_reply("miori", CONVERSATION_ID, "hello")
 
-        assert reply.response == "reply"
+        assert _assistant_content(reply) == "reply"
         mock_record.assert_called_once()
         assert hasattr(mock_record.call_args.args[3], "add_task")
         assert hasattr(mock_record.call_args.kwargs["privacy_scanner"], "scan")
@@ -825,7 +853,7 @@ class TestChatServiceRagContract:
                     with patch(_RECORD_USER_MEMORY_CANDIDATE) as mock_record:
                         reply = service.generate_chat_reply("miori", CONVERSATION_ID, "hello")
 
-        assert reply.response == "reply"
+        assert _assistant_content(reply) == "reply"
         mock_build.assert_not_called()
         assert _generated_contents(mock_gen) == ["## 応答方針\n# prompt", "hello"]
         mock_record.assert_not_called()
@@ -867,8 +895,8 @@ class TestChatServiceRagContract:
             mock_record,
         ) = asyncio.run(run_session_flow())
 
-        assert first_reply.response == "reply 1"
-        assert second_reply.response == "reply 2"
+        assert _assistant_content(first_reply) == "reply 1"
+        assert _assistant_content(second_reply) == "reply 2"
         assert mock_build.call_count == 2
         mock_build.assert_any_call("miori", "hello", policy)
         mock_build.assert_any_call("miori", "again", policy)

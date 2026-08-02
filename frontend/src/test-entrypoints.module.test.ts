@@ -20,6 +20,7 @@ describe('test execution entrypoints', () => {
       'test:e2e:mocked': expect.stringContaining('test:e2e:mocked'),
       'test:integration:text': expect.stringContaining('test:integration:text'),
       'test:integration:voice': expect.stringContaining('test:integration:voice'),
+      'lint:python': expect.stringMatching(/backend\/app/),
     }))
   })
 
@@ -54,13 +55,19 @@ describe('test execution entrypoints', () => {
     expect(source).not.toMatch(/npm run test:integration:(backend|text|voice)/)
   })
 
-  test('the CI check entrypoint includes strict Backend and Frontend type checks', async () => {
+  test('should use the project virtual environment for every Python entrypoint', async () => {
     const manifest = await readJson<PackageManifest>(join(process.cwd(), '..', 'package.json'))
-    const check = manifest.scripts?.check
+    if (manifest.scripts === undefined) {
+      throw new Error('repository package scripts are required')
+    }
 
-    expect(check).toMatch(
-      /python3 -m mypy --config-file backend\/mypy\.ini backend\/app environments/,
-    )
-    expect(check).toMatch(/npm --prefix frontend run check/)
+    expect(manifest.scripts).toEqual(expect.objectContaining({
+      'test:unit': expect.stringMatching(/^backend\/\.venv\/bin\/python -m pytest backend\/tests\/unit/),
+      'test:module': expect.stringMatching(/^backend\/\.venv\/bin\/python -m pytest backend\/tests\/module/),
+      'test:integration:backend': expect.stringMatching(/^backend\/\.venv\/bin\/python -m pytest backend\/tests\/integration$/),
+      'lint:python': expect.stringMatching(/^backend\/\.venv\/bin\/python -m ruff /),
+      check: expect.stringMatching(/^backend\/\.venv\/bin\/python -m mypy /),
+    }))
+    expect(manifest.scripts.check).toMatch(/npm --prefix frontend run check/)
   })
 })

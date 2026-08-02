@@ -65,6 +65,48 @@ class TestConversationLifecycle:
         with pytest.raises(ConversationNotFoundError):
             repository.resume_conversation("akira", CONVERSATION_ID)
 
+    def test_should_classify_other_character_resume_separately_from_missing(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        database_path = tmp_path / "history.db"
+        repository = create_repository(database_path)
+        repository.create_conversation("miori")
+
+        with pytest.raises(ConversationNotFoundError) as boundary:
+            repository.resume_conversation("akira", CONVERSATION_ID)
+        with pytest.raises(ConversationNotFoundError) as missing:
+            repository.resume_conversation("akira", OTHER_CONVERSATION_ID)
+
+        assert type(boundary.value) is not type(missing.value)
+
+    def test_should_classify_other_character_lifecycle_separately_from_missing(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        database_path = tmp_path / "history.db"
+        repository = create_repository(database_path)
+        repository.create_conversation("miori")
+
+        with pytest.raises(ConversationNotFoundError) as boundary:
+            repository.archive_conversation("akira", CONVERSATION_ID)
+        with pytest.raises(ConversationNotFoundError) as missing:
+            repository.archive_conversation("akira", OTHER_CONVERSATION_ID)
+
+        assert type(boundary.value) is not type(missing.value)
+
+    def test_should_keep_missing_conversation_classified_as_not_found(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        database_path = tmp_path / "history.db"
+        repository = create_repository(database_path)
+
+        with pytest.raises(ConversationNotFoundError) as missing:
+            repository.resume_conversation("miori", CONVERSATION_ID)
+
+        assert type(missing.value) is ConversationNotFoundError
+
     def test_should_reject_non_uuid4_conversation_id(self, tmp_path: Path) -> None:
         database_path = tmp_path / "history.db"
         repository = create_repository(database_path)

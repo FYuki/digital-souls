@@ -11,6 +11,7 @@ from uuid import UUID
 import httpx
 
 from app import chat_service
+from app.conversation_history.models import ConversationTurn, TurnStatus
 from app.conversation_history.service import (
     HistoryService,
     HistorySession,
@@ -505,7 +506,7 @@ def _generate_recorded_reply(
             history_session,
             dependencies,
         )
-        delivery_trackable = history_session.complete_turn(started_turn, reply)
+        persisted_turn = history_session.complete_turn(started_turn, reply)
         _record_user_memory_candidate(character, message, context)
     except Exception:
         try:
@@ -516,5 +517,33 @@ def _generate_recorded_reply(
                 cleanup_error.__class__.__name__,
             )
         raise
-    delivery_turn = started_turn if delivery_trackable else None
-    return chat_service.ChatReply(reply, started_turn.turn_id), delivery_turn
+    delivery_turn = (
+        started_turn if persisted_turn.status is TurnStatus.COMPLETED else None
+    )
+    return _persisted_chat_reply(persisted_turn), delivery_turn
+
+
+def _persisted_chat_reply(turn: ConversationTurn) -> chat_service.ChatReply:
+    persisted: chat_service.PersistedTurn
+    if turn.status is TurnStatus.PRIVACY_SKIPPED:
+        if (
+            turn.privacy_reason_code is None
+            or turn.sanitizer_version is None
+            or turn.policy_version is None
+        ):
+            raise ValueError("privacy_skipped turn requires metadata")
+        persisted = chat_service.PersistedPrivacySkippedTurn(
+            turn_id=turn.turn_id,
+            reason_code=turn.privacy_reason_code,
+            sanitizer_version=turn.sanitizer_version,
+            policy_version=turn.policy_version,
+        )
+        return chat_service.ChatReply(turn.turn_id, persisted)
+    if turn.user_content is None or turn.assistant_content is None:
+        raise ValueError("completed turn requires persisted content")
+    persisted = chat_service.PersistedContentTurn(
+        turn_id=turn.turn_id,
+        user_content=turn.user_content,
+        assistant_content=turn.assistant_content,
+    )
+    return chat_service.ChatReply(turn.turn_id, persisted)

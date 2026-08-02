@@ -84,9 +84,15 @@ describe('suite-specific Playwright configuration', () => {
 
   test.each(suites)('$suite uses the environment startup boundary without reusing a server', async (suite) => {
     const config = await loadConfig(suite.config)
+    const resultDir = join(process.cwd(), 'test-results', suite.suite)
 
     expect(config.webServer).toEqual(expect.objectContaining({
       command: '../environments/up.sh',
+      env: {
+        DS_PROFILE: suite.profile,
+        DS_PROFILE_REPORT: join(resultDir, 'resolved-profile.json'),
+        DS_ENVIRONMENT_RUN_REPORT: join(resultDir, 'environment-run.json'),
+      },
       reuseExistingServer: false,
       timeout: 600_000,
       gracefulShutdown: { signal: 'SIGTERM', timeout: 60_000 },

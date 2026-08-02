@@ -27,6 +27,10 @@ class ConversationNotFoundError(ConversationHistoryError):
         super().__init__("conversation was not found")
 
 
+class ConversationCharacterBoundaryError(ConversationNotFoundError):
+    pass
+
+
 class TurnNotFoundError(ConversationHistoryError):
     def __init__(self) -> None:
         super().__init__("turn was not found")

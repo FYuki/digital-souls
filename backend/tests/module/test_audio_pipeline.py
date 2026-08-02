@@ -1,5 +1,6 @@
 import pytest
 from app.chat_service import ChatReply
+from tests.chat_reply_test_support import persisted_reply
 from tests.conversation_history_test_support import TURN_ID
 
 
@@ -132,11 +133,11 @@ class TestAudioPipelineSession:
 
         transcript, reply, audio = session.generate_response_audio(
             b"\x01\x00",
-            lambda message: ChatReply(f"応答:{message}", TURN_ID),
+            lambda message: persisted_reply(f"応答:{message}", TURN_ID),
         )
 
         assert transcript == "今日の音声"
-        assert reply == ChatReply("応答:今日の音声", TURN_ID)
+        assert reply == persisted_reply("応答:今日の音声", TURN_ID)
         assert audio == b"RIFF synthesized"
         assert voicevox_client.synthesize_calls == [("応答:今日の音声", 14)]
 
@@ -176,7 +177,7 @@ class TestAudioPipelineSession:
         with pytest.raises(audio_pipeline.AudioPipelineStepError) as exc_info:
             session.generate_response_audio(
                 b"\x01\x00",
-                lambda message: ChatReply("応答", TURN_ID),
+                lambda message: persisted_reply("応答", TURN_ID),
             )
 
         assert exc_info.value.status_code == 502
@@ -199,7 +200,7 @@ class TestAudioPipelineSession:
         with pytest.raises(audio_pipeline.AudioPipelineStepError) as exc_info:
             session.generate_response_audio(
                 b"\x01\x00",
-                lambda message: ChatReply("応答", TURN_ID),
+                lambda message: persisted_reply("応答", TURN_ID),
             )
 
         assert exc_info.value.status_code == 502

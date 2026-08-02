@@ -15,6 +15,7 @@ import {
 
 const MOCK_TRANSCRIPT_TEXT = 'テスト音声です'
 const MOCK_RESPONSE_TEXT = 'テスト音声に応答します。'
+const MOCK_CONVERSATION_ID = 'e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'
 let resolvedProfile: ResolvedProfile
 
 const createMockAudioResponse = (): Buffer => {
@@ -56,11 +57,35 @@ test.beforeEach(async ({ page }, testInfo) => {
 })
 
 const installMockBackend = async (page: Page) => {
+  await page.route('**/api/characters/**', async (route) => {
+    const request = route.request()
+    const url = new URL(request.url())
+    if (url.pathname.endsWith('/turns')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+      return
+    }
+    const conversation = {
+      character_id: 'miori',
+      conversation_id: MOCK_CONVERSATION_ID,
+      created_at: '2026-08-01T12:00:00.000000Z',
+      updated_at: '2026-08-01T12:00:00.000000Z',
+      archived_at: null,
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(request.method() === 'POST' ? conversation : []),
+    })
+  })
   await installMockWebSocketBackend(page, {
     textFrames: [],
     binaryFrames: [
-      { kind: 'text', data: JSON.stringify({ type: 'text', speaker: 'user', message: MOCK_TRANSCRIPT_TEXT }) },
-      { kind: 'text', data: JSON.stringify({ type: 'text', speaker: 'miori', response: MOCK_RESPONSE_TEXT }) },
+      { kind: 'text', data: JSON.stringify({ type: 'text', turn: {
+        kind: 'content',
+        turn_id: '9e70795d-e5d5-431d-baa2-67f884403010',
+        user_content: MOCK_TRANSCRIPT_TEXT,
+        assistant_content: MOCK_RESPONSE_TEXT,
+      } }) },
       { kind: 'binary', data: Array.from(createMockAudioResponse()) },
     ],
   })
@@ -102,7 +127,7 @@ test('音声応答はuser text、miori text、audio binaryの順で受信する'
   await driver.enableMicrophone(page)
   await driver.waitForSpeechCompletion(page)
   await driver.expectMessages(page)
-  await expect(driver.waitForFrameOrder(page)).resolves.toEqual(['user-text', 'miori-text', 'audio'])
+  await expect(driver.waitForFrameOrder(page)).resolves.toEqual(['persisted-turn', 'audio'])
 })
 
 test('音声応答のバイナリフレームを受信するとブラウザで音声再生を開始する', async ({ page }) => {

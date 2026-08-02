@@ -5,216 +5,182 @@
   import AudioRecorder from './lib/AudioRecorder.svelte'
   import CharacterSwitcher from './lib/CharacterSwitcher.svelte'
   import ChatWindow from './lib/ChatWindow.svelte'
+  import ConversationSidebar from './lib/ConversationSidebar.svelte'
+  import HardDeleteDialog from './lib/HardDeleteDialog.svelte'
   import InputBar from './lib/InputBar.svelte'
   import {
     WebSocketAudioTransport,
     type AudioTransport,
     type BackendErrorMessage,
-    type TextMessageSpeaker,
     type TransportCallbacks,
   } from './lib/audio/transport'
   import { sendChatMessage } from './lib/chat/client'
   import { createConversationSessionManager } from './lib/conversation-session'
-
-  type ChatMessage = {
-    id: number
-    speaker: 'user' | 'miori'
-    text: string
-  }
+  import {
+    archiveConversation,
+    createConversation,
+    hardDeleteConversation,
+    listActiveConversations,
+    listArchivedConversations,
+    listConversationTurns,
+    unarchiveConversation,
+  } from './lib/conversations/client'
+  import {
+    createConversationController,
+    type SelectedConversationContext,
+  } from './lib/conversations/controller'
+  import type { ConversationTurn } from './lib/conversations/types'
 
   const INITIAL_CHARACTER_ID = 'miori'
   const ERROR_MESSAGE = '応答の取得に失敗しました。'
-  const conversationSessionManager = createConversationSessionManager()
+  const conversationController = createConversationController(
+    INITIAL_CHARACTER_ID,
+    ERROR_MESSAGE,
+    {
+      listActive: listActiveConversations,
+      listArchived: listArchivedConversations,
+      listTurns: listConversationTurns,
+      create: createConversation,
+      archive: archiveConversation,
+      unarchive: unarchiveConversation,
+      hardDelete: hardDeleteConversation,
+    },
+    createConversationSessionManager(),
+  )
   type PendingRequest = 'text' | 'audio' | null
-  let messages: ChatMessage[] = []
-  let currentCharacter = INITIAL_CHARACTER_ID
-  let nextMessageId = 1
+
   let pendingRequest: PendingRequest = null
   let isConnected = false
   let audioData: ArrayBuffer | null = null
   let transport: AudioTransport | null = null
+  let transportConversationKey: string | null = null
+  let applicationError: string | null = null
 
-  const createMessage = (speaker: ChatMessage['speaker'], text: string): ChatMessage => {
-    const message = {
-      id: nextMessageId,
-      speaker,
-      text,
-    }
-    nextMessageId += 1
-    return message
+  $: interactionsDisabled = pendingRequest !== null
+    || $conversationController.pending
+    || $conversationController.deleteCandidate !== null
+  $: syncTransport(
+    $conversationController.character,
+    $conversationController.selectedConversationId,
+  )
+
+  const appendApplicationError = () => {
+    applicationError = ERROR_MESSAGE
   }
 
-  const appendMessage = (message: ChatMessage) => {
-    messages = [...messages, message]
+  const disconnectTransport = () => {
+    const previous = transport
+    transport = null
+    transportConversationKey = null
+    isConnected = false
+    previous?.disconnect()
   }
 
-  const appendErrorMessage = (error: unknown) => {
-    if (!(error instanceof Error)) {
-      throw error
-    }
-
-    appendMessage(createMessage('miori', ERROR_MESSAGE))
-  }
-
-  const getTransport = (): AudioTransport => {
-    if (transport === null) {
-      throw new Error('Audio transport is not initialized')
-    }
-
-    return transport
-  }
-
-  const resolveAudioWebSocketUrl = (): string => {
+  const resolveAudioWebSocketUrl = (character: string): string => {
     const { protocol, host } = window.location
     const webSocketProtocol = protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${webSocketProtocol}//${host}/ws/${encodeURIComponent(currentCharacter)}`
+    return `${webSocketProtocol}//${host}/ws/${encodeURIComponent(character)}`
   }
 
-  const handleTransportError = (_error: BackendErrorMessage) => {
-    appendErrorMessage(new Error('WebSocket transport reported an error'))
-    clearAudioPendingRequest()
-  }
-
-  const handleTransportRuntimeError = (error: Error) => {
-    appendErrorMessage(error)
-    clearAudioPendingRequest()
-  }
-
-  const clearPendingRequest = () => {
-    pendingRequest = null
-  }
-
-  const clearAudioPendingRequest = () => {
-    if (pendingRequest === 'audio') {
-      clearPendingRequest()
-    }
-  }
-
-  const createTransportCallbacks = (isCurrentTransport: () => boolean): TransportCallbacks => ({
-    onTextMessage: (speaker: TextMessageSpeaker, text: string) => {
-      if (!isCurrentTransport()) {
-        return
-      }
-
-      appendMessage(createMessage(speaker, text))
+  const createTransportCallbacks = (
+    context: SelectedConversationContext,
+    isCurrent: () => boolean,
+  ): TransportCallbacks => ({
+    onTurnMessage: (turn: ConversationTurn) => {
+      if (!isCurrent()) return
+      conversationController.appendTurn(context, turn)
+      if (turn.kind === 'privacy_skipped') pendingRequest = null
     },
     onAudioMessage: (audio: ArrayBuffer) => {
-      if (!isCurrentTransport()) {
-        return
-      }
-
+      if (!isCurrent()) return
       audioData = audio
-      clearAudioPendingRequest()
+      pendingRequest = null
     },
-    onError: (error: BackendErrorMessage) => {
-      if (!isCurrentTransport()) {
-        return
-      }
-
-      handleTransportError(error)
+    onError: (_error: BackendErrorMessage) => {
+      if (!isCurrent()) return
+      appendApplicationError()
+      pendingRequest = null
     },
-    onTransportError: (error: Error) => {
-      if (!isCurrentTransport()) {
-        return
-      }
-
-      handleTransportRuntimeError(error)
+    onTransportError: (_error: Error) => {
+      if (!isCurrent()) return
+      appendApplicationError()
+      pendingRequest = null
     },
-    onOpen: () => {
-      if (!isCurrentTransport()) {
-        return
-      }
-
-      isConnected = true
-    },
+    onOpen: () => { if (isCurrent()) isConnected = true },
     onClose: () => {
-      if (!isCurrentTransport()) {
-        return
-      }
-
+      if (!isCurrent()) return
       isConnected = false
-      clearAudioPendingRequest()
+      if (pendingRequest === 'audio') pendingRequest = null
     },
   })
 
-  const connectTransport = () => {
+  function syncTransport(character: string, conversationId: string | null) {
+    const nextKey = conversationId === null ? null : `${character}:${conversationId}`
+    if (nextKey === transportConversationKey) return
+    disconnectTransport()
+    if (conversationId === null) return
+    const context = conversationController.selectedContext()
+    if (context === null) return
     let nextTransport: AudioTransport
-    const callbacks = createTransportCallbacks(() => transport === nextTransport)
-    const conversationId = conversationSessionManager.getConversationId(currentCharacter)
-    nextTransport = new WebSocketAudioTransport(resolveAudioWebSocketUrl(), conversationId, callbacks)
+    const callbacks = createTransportCallbacks(context, () => transport === nextTransport)
+    nextTransport = new WebSocketAudioTransport(
+      resolveAudioWebSocketUrl(character),
+      conversationId,
+      callbacks,
+    )
     transport = nextTransport
-    void nextTransport.connect().catch((error) => {
-      if (transport !== nextTransport) {
-        return
-      }
-
-      appendErrorMessage(error)
+    transportConversationKey = nextKey
+    void nextTransport.connect().catch(() => {
+      if (transport !== nextTransport) return
+      appendApplicationError()
       isConnected = false
-      clearAudioPendingRequest()
     })
   }
 
   onMount(() => {
-    connectTransport()
-
-    return () => {
-      transport?.disconnect()
-    }
+    void conversationController.loadCharacter(INITIAL_CHARACTER_ID)
+    return disconnectTransport
   })
 
   const handleSend = async (message: string) => {
     const text = message.trim()
-
-    if (text.length === 0 || pendingRequest !== null) {
-      return
-    }
-
-    appendMessage(createMessage('user', text))
+    const context = conversationController.selectedContext()
+    if (text.length === 0 || interactionsDisabled || context === null) return
     pendingRequest = 'text'
+    applicationError = null
     try {
       const response = await sendChatMessage({
-        character: currentCharacter,
-        conversationId: conversationSessionManager.getConversationId(currentCharacter),
+        character: context.character,
+        conversationId: context.conversationId,
         message: text,
       })
-      appendMessage(createMessage('miori', response.response))
-    } catch (error) {
-      appendErrorMessage(error)
+      conversationController.appendTurn(context, response.turn)
+    } catch {
+      conversationController.reportConversationError(context)
     } finally {
-      clearPendingRequest()
+      if (conversationController.selectedContext()?.version === context.version) pendingRequest = null
     }
   }
 
   const handleCharacterSwitch = (character: string) => {
-    if (pendingRequest !== null || character === currentCharacter) {
-      return
-    }
+    if (interactionsDisabled || character === $conversationController.character) return
+    void conversationController.loadCharacter(character)
+  }
 
-    const previousTransport = transport
-    transport = null
-    currentCharacter = character
-    isConnected = false
-    previousTransport?.disconnect()
-    connectTransport()
+  const handleSelectConversation = (conversationId: string) => {
+    if (interactionsDisabled) return
+    void conversationController.selectConversation(conversationId)
   }
 
   const handleAudioCaptured = (pcmData: ArrayBuffer) => {
-    if (!isConnected || pendingRequest !== null) {
-      return
-    }
-
+    if (!isConnected || interactionsDisabled || transport === null) return
     pendingRequest = 'audio'
     try {
-      getTransport().sendAudio(pcmData)
-    } catch (error) {
-      appendErrorMessage(error)
-      clearAudioPendingRequest()
+      transport.sendAudio(pcmData)
+    } catch {
+      appendApplicationError()
+      pendingRequest = null
     }
-  }
-
-  const handleAudioError = (error: Error) => {
-    appendErrorMessage(error)
-    clearAudioPendingRequest()
   }
 </script>
 
@@ -223,29 +189,46 @@
     <header class="chat-header">
       <p class="eyebrow">digital-souls</p>
       <h1>光織</h1>
-      <CharacterSwitcher
-        {currentCharacter}
-        disabled={pendingRequest !== null}
-        onSwitch={handleCharacterSwitch}
-      />
+      <CharacterSwitcher currentCharacter={$conversationController.character} disabled={interactionsDisabled} onSwitch={handleCharacterSwitch} />
     </header>
-
-    <ChatWindow {messages} />
+    <ConversationSidebar
+      active={$conversationController.active}
+      archived={$conversationController.archived}
+      showingArchived={$conversationController.showingArchived}
+      disabled={interactionsDisabled}
+      onShowActive={conversationController.showActive}
+      onShowArchived={conversationController.showArchived}
+      onCreate={conversationController.createConversation}
+      onSelect={handleSelectConversation}
+      onArchive={conversationController.archiveConversation}
+      onUnarchive={conversationController.unarchiveConversation}
+      onDelete={conversationController.requestHardDelete}
+    />
+    <ChatWindow turns={$conversationController.turns} />
+    {#if applicationError !== null || $conversationController.error !== null}
+      <p class="application-error" role="alert">{applicationError ?? $conversationController.error}</p>
+    {/if}
     <div class="input-area">
-      <InputBar onSend={handleSend} disabled={pendingRequest !== null} />
+      <InputBar onSend={handleSend} disabled={interactionsDisabled || $conversationController.selectedConversationId === null} />
       <AudioRecorder
-        disabled={pendingRequest !== null || !isConnected}
+        disabled={interactionsDisabled || !isConnected}
         forceOff={!isConnected}
         onAudioCaptured={handleAudioCaptured}
-        onError={handleAudioError}
+        onError={appendApplicationError}
       />
     </div>
-    <AudioPlayer
-      {audioData}
-      onError={handleAudioError}
-    />
+    <AudioPlayer {audioData} onError={appendApplicationError} />
   </section>
 </main>
+
+{#if $conversationController.deleteCandidate !== null}
+  <HardDeleteDialog
+    conversationId={$conversationController.deleteCandidate}
+    disabled={$conversationController.pending}
+    onConfirm={conversationController.confirmHardDelete}
+    onCancel={conversationController.cancelHardDelete}
+  />
+{/if}
 
 <style>
   .app-shell {
@@ -299,6 +282,12 @@
     padding: 16px 24px 20px;
     border-top: 1px solid rgba(144, 67, 47, 0.16);
     background: #fff4ec;
+  }
+
+  .application-error {
+    margin: 0;
+    padding: 8px 24px;
+    color: #8a211b;
   }
 
   :global(.input-area .input-bar) {

@@ -23,6 +23,8 @@ from tests.character_card_test_support import (
 )
 from tests.conversation_history_test_support import CONVERSATION_ID
 
+pytestmark = pytest.mark.usefixtures("existing_chat_conversations")
+
 
 class UnitTokenCounter:
     def count_input_tokens(self, messages: tuple[PromptMessage, ...]) -> int:
