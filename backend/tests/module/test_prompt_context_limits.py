@@ -1,4 +1,5 @@
 import importlib
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 from uuid import UUID
 
@@ -6,6 +7,7 @@ import pytest
 
 from app import chat_service
 from app.chat_prompt import build_chat_prompt
+from app.conversation_history.models import ConversationTurn, TurnStatus
 from app.conversation_history.service import StartedHistoryTurn
 from app.prompting import CharacterPrompt
 from tests.conversation_history_test_support import CONVERSATION_ID
@@ -21,8 +23,23 @@ class _HistorySession:
             content_skipped=False,
         )
 
-    def complete_turn(self, started_turn, assistant_content: str) -> bool:
-        return True
+    def complete_turn(
+        self,
+        started_turn: StartedHistoryTurn,
+        assistant_content: str,
+    ) -> ConversationTurn:
+        timestamp = datetime(2026, 8, 2, tzinfo=UTC)
+        return ConversationTurn(
+            turn_id=started_turn.turn_id,
+            character_id="miori",
+            conversation_id=CONVERSATION_ID,
+            user_content="MASKED_USER",
+            assistant_content=assistant_content,
+            status=TurnStatus.COMPLETED,
+            privacy_reason_code=None,
+            created_at=timestamp,
+            updated_at=timestamp,
+        )
 
     def fail_turn(self, started_turn) -> None:
         return None
@@ -108,6 +125,25 @@ def test_should_reject_user_input_using_formal_provider_count(
     assert exc_info.value.used == 2
     assert exc_info.value.limit == 1
     generate.assert_not_called()
+
+
+def test_should_return_persisted_reply_with_history_session_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("USER_INPUT_TOKEN_LIMIT", "10")
+    monkeypatch.setenv("ASSISTANT_MAX_GENERATION_TOKENS", "10")
+    monkeypatch.setenv("LLM_CONTEXT_TOKEN_LIMIT", "100")
+    generate = MagicMock(return_value="MASKED_ASSISTANT")
+
+    reply = _service(
+        turns=(),
+        count_input_tokens=lambda messages: len(messages),
+        generate_response=generate,
+    ).generate_chat_reply("miori", CONVERSATION_ID, "RAW_CURRENT")
+
+    assert isinstance(reply.persisted_turn, chat_service.PersistedContentTurn)
+    assert reply.persisted_turn.user_content == "MASKED_USER"
+    assert reply.persisted_turn.assistant_content == "MASKED_ASSISTANT"
 
 
 def test_should_reserve_assistant_tokens_and_keep_latest_completed_or_fail(

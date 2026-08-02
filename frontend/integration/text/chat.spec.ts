@@ -6,6 +6,7 @@ import {
   readResolvedProfile,
   type ResolvedProfile,
 } from '../../playwright/resolved-profile'
+import { hardDeleteSelectedConversation } from '../../playwright/conversation-cleanup'
 
 let resolvedProfile: ResolvedProfile
 const REAL_RESPONSE_TIMEOUT_MS = 60_000
@@ -25,14 +26,22 @@ test.beforeEach(async ({}, testInfo) => {
   }
 })
 
+test.afterEach(async ({ page }) => {
+  await hardDeleteSelectedConversation(page, 'miori')
+})
+
 test('実サービスから受け取った光織の応答がチャット画面に表示される', async ({ page }) => {
   await page.goto('/')
 
   const input = page.getByLabel('メッセージ')
+  await page.getByRole('button', { name: '新規スレッド' }).click()
+  await expect(input).toBeEnabled()
   await input.fill('こんにちは')
   await page.getByRole('button', { name: '送信' }).click()
 
-  await expect(page.getByText('こんにちは', { exact: true })).toBeVisible()
+  await expect(page.getByText('こんにちは', { exact: true })).toBeVisible({
+    timeout: REAL_RESPONSE_TIMEOUT_MS,
+  })
   const mioriMessage = page.locator('article.message').nth(1)
   await expect(mioriMessage).toBeVisible({ timeout: REAL_RESPONSE_TIMEOUT_MS })
   await expect(mioriMessage.locator('.speaker')).toHaveText('光織')

@@ -45,11 +45,9 @@ const installPlaybackProbe = async (page: Page) => {
         protocols === undefined ? super(url) : super(url, protocols)
         this.addEventListener('message', (event) => {
           if (typeof event.data === 'string') {
-            const parsed = JSON.parse(event.data) as { type?: unknown; speaker?: unknown }
-            if (parsed.type === 'text' && parsed.speaker === 'user') {
-              window.__voiceChatE2E.frameOrder.push('user-text')
-            } else if (parsed.type === 'text' && parsed.speaker === 'miori') {
-              window.__voiceChatE2E.frameOrder.push('miori-text')
+            const parsed = JSON.parse(event.data) as { type?: unknown; turn?: unknown }
+            if (parsed.type === 'text' && parsed.turn !== undefined) {
+              window.__voiceChatE2E.frameOrder.push('persisted-turn')
             }
           } else if (isAudioFrame(event.data)) {
             window.__voiceChatE2E.frameOrder.push('audio')
@@ -150,6 +148,7 @@ export const createVoiceChatDriver = () => {
   const openVoiceChat = async (page: Page) => {
     await installPlaybackProbe(page)
     await page.goto('/')
+    await page.getByRole('button', { name: '新規スレッド' }).click()
     const button = page.getByRole('button', { name: /マイクを(オン|オフ)にする/ })
     await expect(button).toBeEnabled()
     return button
@@ -195,8 +194,8 @@ export const createVoiceChatDriver = () => {
 
   const waitForFrameOrder = async (page: Page) => {
     const handle = await page.waitForFunction(
-      () => window.__voiceChatE2E.frameOrder.length >= 3
-        ? window.__voiceChatE2E.frameOrder.slice(0, 3)
+      () => window.__voiceChatE2E.frameOrder.length >= 2
+        ? window.__voiceChatE2E.frameOrder.slice(0, 2)
         : null,
       undefined,
       { timeout: VOICE_RESPONSE_TIMEOUT_MS },

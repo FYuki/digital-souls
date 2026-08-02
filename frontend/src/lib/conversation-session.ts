@@ -2,20 +2,9 @@ const STORAGE_KEY_PREFIX = 'digital-souls:conversation:'
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export type ConversationSessionManager = {
-  getConversationId: (character: string) => string
-}
-
-const createConversationId = (): string => {
-  if (typeof globalThis.crypto?.randomUUID !== 'function') {
-    throw new Error('crypto.randomUUID is required to create a conversation ID')
-  }
-
-  const conversationId = globalThis.crypto.randomUUID()
-  if (!UUID_V4_PATTERN.test(conversationId)) {
-    throw new Error('crypto.randomUUID returned an invalid UUIDv4')
-  }
-
-  return conversationId
+  getSelectedConversationId: (character: string) => string | null
+  selectConversation: (character: string, conversationId: string) => void
+  clearConversation: (character: string, conversationId: string) => void
 }
 
 const resolveStorage = (): Storage | null => {
@@ -49,27 +38,35 @@ export const createConversationSessionManager = (): ConversationSessionManager =
     try {
       storage.setItem(storageKey, conversationId)
     } catch {
-      // 永続化だけが失敗した場合も、生成済みIDはメモリ上で再利用する。
       storage = null
     }
   }
 
   return {
-    getConversationId(character: string): string {
+    getSelectedConversationId(character: string): string | null {
       const inMemoryId = conversationIds.get(character)
       if (inMemoryId !== undefined) return inMemoryId
-
       const storageKey = `${STORAGE_KEY_PREFIX}${encodeURIComponent(character)}`
       const persistedId = readPersistedId(storageKey)
-      if (persistedId !== null && UUID_V4_PATTERN.test(persistedId)) {
-        conversationIds.set(character, persistedId)
-        return persistedId
-      }
-
-      const conversationId = createConversationId()
+      if (persistedId === null || !UUID_V4_PATTERN.test(persistedId)) return null
+      conversationIds.set(character, persistedId)
+      return persistedId
+    },
+    selectConversation(character: string, conversationId: string): void {
+      if (!UUID_V4_PATTERN.test(conversationId)) throw new Error('conversationId must be UUIDv4')
+      const storageKey = `${STORAGE_KEY_PREFIX}${encodeURIComponent(character)}`
       conversationIds.set(character, conversationId)
       persistId(storageKey, conversationId)
-      return conversationId
+    },
+    clearConversation(character: string, conversationId: string): void {
+      if (conversationIds.get(character) === conversationId) conversationIds.delete(character)
+      const storageKey = `${STORAGE_KEY_PREFIX}${encodeURIComponent(character)}`
+      if (storage === null || readPersistedId(storageKey) !== conversationId) return
+      try {
+        storage.removeItem(storageKey)
+      } catch {
+        storage = null
+      }
     },
   }
 }

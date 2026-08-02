@@ -1,9 +1,11 @@
 import inspect
+import sqlite3
 from pathlib import Path
 
 import pytest
 
 from app.conversation_history.errors import (
+    ConversationNotFoundError,
     InvalidStateTransitionError,
     TurnNotFoundError,
 )
@@ -131,6 +133,49 @@ class TestTurnTransitions:
         assert failed.status is TurnStatus.FAILED
         assert failed.assistant_content == "送信済みの完全回答"
 
+    @pytest.mark.parametrize(
+        "operation",
+        ["complete", "fail", "privacy_skip"],
+    )
+    def test_should_reject_every_turn_transition_after_archive(
+        self,
+        tmp_path: Path,
+        operation: str,
+    ) -> None:
+        database_path = tmp_path / "history.db"
+        repository = _processing_turn(database_path)
+        repository.archive_conversation("miori", CONVERSATION_ID)
+
+        with pytest.raises(ConversationNotFoundError):
+            if operation == "complete":
+                repository.complete_turn(
+                    "miori",
+                    CONVERSATION_ID,
+                    TURN_ID,
+                    sanitized_assistant_content="保存してはいけない回答",
+                )
+            elif operation == "fail":
+                repository.fail_turn("miori", CONVERSATION_ID, TURN_ID)
+            else:
+                repository.skip_processing_turn_for_privacy(
+                    "miori",
+                    CONVERSATION_ID,
+                    TURN_ID,
+                    PrivacySkippedTurnInput(
+                        reason_code=HistoryDecisionReasonCode.SCAN_FAILURE,
+                        sanitizer_version="test-sanitizer-v1",
+                        policy_version="test-policy-v1",
+                    ),
+                )
+
+        with sqlite3.connect(database_path) as connection:
+            stored = connection.execute(
+                "SELECT status, assistant_content FROM conversation_turns "
+                "WHERE turn_id = ?",
+                (str(TURN_ID),),
+            ).fetchone()
+        assert stored == (TurnStatus.PROCESSING.value, None)
+
     @pytest.mark.parametrize("terminal_status", ["failed", "privacy_skipped"])
     def test_should_reject_transition_from_terminal_status(
         self,
@@ -196,11 +241,15 @@ class TestTurnTransitions:
     ) -> None:
         repository = _processing_turn(tmp_path / "history.db")
 
-        with pytest.raises(TurnNotFoundError):
+        with pytest.raises(ConversationNotFoundError):
             repository.fail_turn("akira", CONVERSATION_ID, TURN_ID)
 
-        remaining = repository.list_turns("miori", CONVERSATION_ID)
-        assert remaining[0].status is TurnStatus.PROCESSING
+        with sqlite3.connect(tmp_path / "history.db") as connection:
+            remaining_status = connection.execute(
+                "SELECT status FROM conversation_turns WHERE turn_id = ?",
+                (str(TURN_ID),),
+            ).fetchone()[0]
+        assert remaining_status == TurnStatus.PROCESSING.value
 
     def test_should_not_update_turn_through_other_conversation_boundary(
         self,
@@ -227,8 +276,12 @@ class TestTurnTransitions:
         with pytest.raises(TurnNotFoundError):
             repository.fail_turn("miori", OTHER_CONVERSATION_ID, TURN_ID)
 
-        remaining = repository.list_turns("miori", CONVERSATION_ID)
-        assert remaining[0].status is TurnStatus.PROCESSING
+        with sqlite3.connect(database_path) as connection:
+            remaining_status = connection.execute(
+                "SELECT status FROM conversation_turns WHERE turn_id = ?",
+                (str(TURN_ID),),
+            ).fetchone()[0]
+        assert remaining_status == TurnStatus.PROCESSING.value
 
     def test_should_not_expose_streaming_fragment_operation(self) -> None:
         from app.conversation_history.repository import ConversationHistoryRepository
@@ -244,14 +297,19 @@ class TestTurnTransitions:
 
         assert public_methods == {
             "create_conversation",
-            "ensure_conversation",
             "resume_conversation",
             "create_processing_turn",
             "create_privacy_skipped_turn",
+            "archive_conversation",
             "complete_turn",
             "fail_turn",
+            "hard_delete_conversation",
+            "list_active_conversations",
+            "list_archived_conversations",
             "skip_processing_turn_for_privacy",
             "recover_stale_processing",
+            "unarchive_conversation",
             "list_turns",
+            "list_history_turns",
             "list_prompt_turns_page",
         }

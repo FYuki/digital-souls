@@ -1,22 +1,13 @@
 import { CONVERSATION_ID_FIELD } from '../conversation-contract'
+import type { ConversationTurn } from '../conversations/types'
+import { parsePersistedTurn } from '../conversations/turn-parser'
 
 const TEXT_MESSAGE_TYPE = 'text'
 const ERROR_MESSAGE_TYPE = 'error'
-const USER_SPEAKER = 'user'
-const MIORI_SPEAKER = 'miori'
 
-export type TextMessageSpeaker = typeof USER_SPEAKER | typeof MIORI_SPEAKER
-
-type BackendUserTextMessage = {
+type BackendPersistedTurnMessage = {
   type: typeof TEXT_MESSAGE_TYPE
-  speaker: typeof USER_SPEAKER
-  message: string
-}
-
-type BackendMioriTextMessage = {
-  type: typeof TEXT_MESSAGE_TYPE
-  speaker: typeof MIORI_SPEAKER
-  response: string
+  turn: ConversationTurn
 }
 
 export type BackendErrorMessage = {
@@ -29,7 +20,7 @@ type BackendErrorEnvelope = BackendErrorMessage & {
 }
 
 export type TransportCallbacks = {
-  onTextMessage: (speaker: TextMessageSpeaker, text: string) => void
+  onTurnMessage: (turn: ConversationTurn) => void
   onAudioMessage: (audio: ArrayBuffer) => void
   onError: (error: BackendErrorMessage) => void
   onTransportError: (error: Error) => void
@@ -48,24 +39,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null
 }
 
-const isBackendUserTextMessage = (value: unknown): value is BackendUserTextMessage => {
-  return (
-    isRecord(value) &&
-    value.type === TEXT_MESSAGE_TYPE &&
-    value.speaker === USER_SPEAKER &&
-    typeof value.message === 'string'
-  )
-}
-
-const isBackendMioriTextMessage = (value: unknown): value is BackendMioriTextMessage => {
-  return (
-    isRecord(value) &&
-    value.type === TEXT_MESSAGE_TYPE &&
-    value.speaker === MIORI_SPEAKER &&
-    typeof value.response === 'string'
-  )
-}
-
 const isBackendErrorEnvelope = (value: unknown): value is BackendErrorEnvelope => {
   return (
     isRecord(value) &&
@@ -73,6 +46,11 @@ const isBackendErrorEnvelope = (value: unknown): value is BackendErrorEnvelope =
     typeof value.status === 'number' &&
     typeof value.detail === 'string'
   )
+}
+
+const persistedTurnMessage = (value: unknown): BackendPersistedTurnMessage | null => {
+  if (!isRecord(value) || value.type !== TEXT_MESSAGE_TYPE || !('turn' in value)) return null
+  return { type: TEXT_MESSAGE_TYPE, turn: parsePersistedTurn(value.turn) }
 }
 
 export class WebSocketAudioTransport implements AudioTransport {
@@ -166,13 +144,9 @@ export class WebSocketAudioTransport implements AudioTransport {
   private handleTextFrame(data: string): void {
     const parsed = parseBackendMessage(data)
 
-    if (isBackendUserTextMessage(parsed)) {
-      this.callbacks.onTextMessage(parsed.speaker, parsed.message)
-      return
-    }
-
-    if (isBackendMioriTextMessage(parsed)) {
-      this.callbacks.onTextMessage(parsed.speaker, parsed.response)
+    const persisted = persistedTurnMessage(parsed)
+    if (persisted !== null) {
+      this.callbacks.onTurnMessage(persisted.turn)
       return
     }
 

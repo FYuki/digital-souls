@@ -34,7 +34,11 @@ class TestConversationHistorySchema:
             }
             user_version = connection.execute("PRAGMA user_version").fetchone()[0]
 
-        assert tables == {"conversations", "conversation_turns"}
+        assert tables == {
+            "conversations",
+            "conversation_turns",
+            "wal_cleanup_jobs",
+        }
         assert user_version > 0
 
     def test_should_be_idempotent_for_current_schema(self, tmp_path: Path) -> None:
@@ -55,6 +59,35 @@ class TestConversationHistorySchema:
             "conversation_turns",
         }
 
+    def test_should_recreate_empty_current_schema_after_database_file_is_deleted(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        database_path = tmp_path / "conversation-history.db"
+        initialize_conversation_history_schema(database_path)
+        with _connect(database_path) as connection:
+            connection.execute(
+                "INSERT INTO conversations "
+                "(character_id, conversation_id, created_at) VALUES (?, ?, ?)",
+                (
+                    "miori",
+                    "e98d6c65-1ae9-4d6f-a8c8-d59b0ad09001",
+                    "2026-07-24T00:00:00.000000Z",
+                ),
+            )
+
+        database_path.unlink()
+        initialize_conversation_history_schema(database_path)
+
+        with _connect(database_path) as connection:
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+            assert connection.execute(
+                "SELECT COUNT(*) FROM conversations"
+            ).fetchone()[0] == 0
+            assert connection.execute(
+                "SELECT COUNT(*) FROM conversation_turns"
+            ).fetchone()[0] == 0
+
     def test_should_serialize_concurrent_initialization(self, tmp_path: Path) -> None:
         database_path = tmp_path / "conversation-history.db"
         worker_count = 8
@@ -71,14 +104,18 @@ class TestConversationHistorySchema:
             future.result()
 
         with _connect(database_path) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
             assert {
                 row[0]
                 for row in connection.execute(
                     "SELECT name FROM sqlite_master "
                     "WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
                 )
-            } == {"conversations", "conversation_turns"}
+            } == {
+                "conversations",
+                "conversation_turns",
+                "wal_cleanup_jobs",
+            }
 
     def test_should_reject_schema_with_matching_columns_but_missing_constraints(
         self,
@@ -119,6 +156,18 @@ class TestConversationHistorySchema:
         initialize_conversation_history_schema(database_path)
         with _connect(database_path) as connection:
             connection.execute("DROP INDEX conversation_turns_history_idx")
+
+        with pytest.raises(LegacySchemaError):
+            initialize_conversation_history_schema(database_path)
+
+    def test_should_reject_current_schema_with_unknown_table(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        database_path = tmp_path / "unknown-table.db"
+        initialize_conversation_history_schema(database_path)
+        with _connect(database_path) as connection:
+            connection.execute("CREATE TABLE unexpected_table (id TEXT)")
 
         with pytest.raises(LegacySchemaError):
             initialize_conversation_history_schema(database_path)

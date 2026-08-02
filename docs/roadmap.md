@@ -67,20 +67,20 @@ MVP完了時点で判明したギャップ（多ターン会話、RAG本稼働�
 
 ### Wave 1: 会話が「続く」（短期記憶・基盤整備）
 
-- [ ] SQLite会話履歴schema（既存テストDBは移行せず削除し、`conversations` / `conversation_turns`を空状態から作成）
+- [x] SQLite会話履歴schema（開発用テストDBは削除して現行schemaを空状態から再作成。正式なschema v2はconversation／turnを保持して、`conversations.archived_at`とWAL後処理の再試行metadataを含むv3へmigrationし、契約外schemaは起動時に拒否）
 - [ ] 共通privacy scannerと履歴sanitizer（直接識別値を保存前にマスクし、マスク不能時は本文を保存しない）
 - [x] 会話履歴のプロンプト注入（同じ`character_id` / `conversation_id`の直近N往復だけを復元してLLMへ渡す。RAG無効時も履歴を記録する）
 - [x] PromptBuilderによる合成の一元化（Character Card V3 / RAG記憶 / マスク済み会話履歴 / 現在発言 / 最終指示の順序とtoken budgetを固定）
 - [ ] 設定のenv化（`OLLAMA_CHAT_MODEL` 等、Whisperモデルサイズ、履歴注入数N）
-- [ ] Backend／Frontendのconversation lifecycle統合
-- [ ] スレッド一覧・再開・アーカイブ・物理削除インターフェース
+- [x] Backend／Frontendのconversation lifecycle統合
+- [x] スレッド一覧・再開・アーカイブ・物理削除インターフェース（物理削除はSQLite上のconversationと全turnだけが対象。RAG長期記憶は変更せず、既存backup・snapshot・ファイル複製の消去は保証しない）
 
 ### Wave 2: 「覚えている」（RAG本稼働）
 
 - [ ] 文脈依存の機微情報assessment基盤（health、心理状態、金融状況、第三者情報等を交換可能なclassifierと固定corpusで判定し、保存可否とは分離）
 - [ ] RAG admission policy（共通scannerと`PrivacyAssessment`を再利用し、positive allowlist型だけを許可）
 - [ ] 承認済み記憶schema（SQLite `approved_memories`を正本とし、全レコードへ`character_id`と`policy_version`を付与）
-- [ ] transactional outbox（SQLite hard delete後にChromaを同期削除し、失敗時はmetadata-only outboxと定期reconciliationでSQLite正本へ収束させる）
+- [ ] transactional outbox（SQLiteの`approved_memories` hard delete後にChromaを同期削除し、失敗時はmetadata-only outboxと定期reconciliationでSQLite正本へ収束させる）
 - [ ] Chroma派生index化（承認済み記憶だけを登録し、取得時にSQLiteの状態・TTL・policy versionと絶対禁止findingを再検証）
 - [ ] RAG検索品質検証 → `RAG_ENABLED=true` デフォルト化
 - [ ] positive allowlist型の記憶候補抽出（絶対禁止・機微情報判定を通過した構造化候補だけを扱う）

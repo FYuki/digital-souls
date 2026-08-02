@@ -7,6 +7,7 @@ import pytest
 
 from app.conversation_history.models import TurnStatus
 from app.conversation_history.repository import ConversationHistoryRepository
+from app.conversation_history.wal_cleanup import ConversationWalCleanup
 from app.conversation_history.schema import initialize_conversation_history_schema
 from tests.conversation_history_test_support import (
     CONVERSATION_ID,
@@ -192,6 +193,11 @@ class TestPromptHistoryPage:
             retention=timedelta(days=365),
             clock=lambda: current_time[0],
             uuid_factory=SequenceUuidFactory(CONVERSATION_ID),
+            wal_cleanup=ConversationWalCleanup(
+                database_path=database_path,
+                clock=lambda: current_time[0],
+                connection_factory=sqlite3.connect,
+            ),
         )
         initialize_conversation_history_schema(database_path)
         repository.create_conversation("miori")

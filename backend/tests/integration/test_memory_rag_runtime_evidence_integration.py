@@ -87,6 +87,14 @@ def _wait_until(predicate, timeout: float = 5.0) -> None:
     raise AssertionError("condition was not met before timeout")
 
 
+def _create_conversation(client: TestClient, character: str) -> str:
+    response = client.post(f"/characters/{character}/conversations")
+    assert response.status_code == 201
+    conversation_id = response.json()["conversation_id"]
+    assert isinstance(conversation_id, str)
+    return conversation_id
+
+
 class TestRagRuntimeEvidenceIntegration:
     def test_real_chat_store_chroma_query_and_prompt_injection_reach_llm(
         self, tmp_path, monkeypatch
@@ -100,8 +108,8 @@ class TestRagRuntimeEvidenceIntegration:
         from app.memory.embedder import embed_text
 
         chroma_store = modules["app.memory.chroma_store"]
-        chat_runtime = modules["app._chat_runtime"]
-        app = modules["app.main"].app
+        main_module = modules["app.main"]
+        app = main_module.app
         character = f"miori{uuid4().hex[:8]}"
         system_prompt = "# 光織\nあなたは光織です。"
         stored_memory = "農業日誌: 保存して。2026-06-23はトマト畑に水やりした"
@@ -125,18 +133,26 @@ class TestRagRuntimeEvidenceIntegration:
             return "前回はトマト畑に水やりしました。"
 
         monkeypatch.setattr(
-            chat_runtime._llm_router,
+            main_module,
             "generate_response",
             capture_generate_response,
         )
 
         with TestClient(app) as client:
+            conversation_id = _create_conversation(client, character)
             save_response = client.post(
                 "/chat",
-                json={"character": character, "message": stored_memory},
+                json={
+                    "character": character,
+                    "conversation_id": conversation_id,
+                    "message": stored_memory,
+                },
             )
             assert save_response.status_code == 200
-            assert save_response.json()["response"] == "農業日誌として保存しました。"
+            assert (
+                save_response.json()["turn"]["assistant_content"]
+                == "農業日誌として保存しました。"
+            )
 
             query_embedding = embed_text("前回の畑作業は?")
             query_results = []
@@ -151,11 +167,18 @@ class TestRagRuntimeEvidenceIntegration:
 
             response = client.post(
                 "/chat",
-                json={"character": character, "message": "前回の畑作業は?"},
+                json={
+                    "character": character,
+                    "conversation_id": conversation_id,
+                    "message": "前回の畑作業は?",
+                },
             )
 
         assert response.status_code == 200
-        assert response.json()["response"] == "前回はトマト畑に水やりしました。"
+        assert (
+            response.json()["turn"]["assistant_content"]
+            == "前回はトマト畑に水やりしました。"
+        )
         contents = [
             message.content
             for message in captured_llm_calls[-1].messages
@@ -176,8 +199,8 @@ class TestRagRuntimeEvidenceIntegration:
         import chromadb
 
         rag_service = modules["app.memory.rag_service"]
-        chat_runtime = modules["app._chat_runtime"]
-        app = modules["app.main"].app
+        main_module = modules["app.main"]
+        app = main_module.app
         system_prompt = "# 光織\nあなたは光織です。"
         user_message = "農業日誌: 保存して。2026-06-23はナスに追肥した"
         _write_character(tmp_path, "miori", system_prompt)
@@ -214,21 +237,31 @@ class TestRagRuntimeEvidenceIntegration:
             return "農業日誌として保存しました。"
 
         monkeypatch.setattr(
-            chat_runtime._llm_router,
+            main_module,
             "generate_response",
             capture_generate_response,
         )
 
         with TestClient(app) as client:
+            conversation_id = _create_conversation(client, "miori")
             response = client.post(
                 "/chat",
-                json={"character": "miori", "message": user_message},
+                json={
+                    "character": "miori",
+                    "conversation_id": conversation_id,
+                    "message": user_message,
+                },
             )
 
         assert response.status_code == 200
         assert response.json() == {
             "character": "miori",
-            "response": "農業日誌として保存しました。",
+            "turn": {
+                "kind": "content",
+                "turn_id": response.json()["turn"]["turn_id"],
+                "user_content": user_message,
+                "assistant_content": "農業日誌として保存しました。",
+            },
         }
 
         assert not tmp_path.joinpath("data", "failed-memories.jsonl").exists()

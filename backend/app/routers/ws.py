@@ -25,26 +25,26 @@ from app.chat_service import (
     ChatReplySession,
     ChatTimeoutError,
 )
+from app.conversation_history.errors import ConversationNotFoundError
 from app.audio_pipeline import (
     AudioPipelineConfigError,
     AudioPipelineService,
     AudioPipelineSession,
     AudioPipelineStepError,
 )
+from app.routers.conversation_contracts import persisted_turn_response
+from app.routers.validation import CONVERSATION_NOT_FOUND_DETAIL
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 MESSAGE_TYPE_FIELD = "type"
 MESSAGE_FIELD = "message"
-RESPONSE_FIELD = "response"
-SPEAKER_FIELD = "speaker"
+TURN_FIELD = "turn"
 STATUS_FIELD = "status"
 DETAIL_FIELD = "detail"
 TEXT_MESSAGE_TYPE = "text"
 ERROR_MESSAGE_TYPE = "error"
-USER_SPEAKER = "user"
-MIORI_SPEAKER = "miori"
 WEBSOCKET_TEXT_FIELD = "text"
 WEBSOCKET_BYTES_FIELD = "bytes"
 WEBSOCKET_TYPE_FIELD = "type"
@@ -102,6 +102,7 @@ class _ConnectionChatSession:
 def _map_chat_error(
     error: (
         CharacterNotFoundError
+        | ConversationNotFoundError
         | ChatInputLimitError
         | ChatTimeoutError
         | ChatBackendError
@@ -109,6 +110,8 @@ def _map_chat_error(
 ) -> tuple[int, str]:
     if isinstance(error, CharacterNotFoundError):
         return 404, error.detail
+    if isinstance(error, ConversationNotFoundError):
+        return 404, CONVERSATION_NOT_FOUND_DETAIL
     if isinstance(error, ChatInputLimitError):
         return 422, error.detail
     if isinstance(error, ChatTimeoutError):
@@ -284,7 +287,7 @@ async def _open_chat_session(
             conversation_id,
         )
         return cast(ChatReplySession, chat_session)
-    except CharacterNotFoundError as exc:
+    except (CharacterNotFoundError, ConversationNotFoundError) as exc:
         status, detail = _map_chat_error(exc)
         await _send_error_and_close(websocket, send_lock, status, detail)
         return None
@@ -319,7 +322,7 @@ async def _handle_text_frame(
 
     try:
         reply = await _generate_reply(websocket, send_lock, chat_session, message)
-    except CharacterNotFoundError as exc:
+    except (CharacterNotFoundError, ConversationNotFoundError) as exc:
         status, detail = _map_chat_error(exc)
         await _send_error_and_close(websocket, send_lock, status, detail)
         return False
@@ -328,14 +331,13 @@ async def _handle_text_frame(
         return True
 
     try:
-        await _send_json(
-            websocket,
-            send_lock,
-            {
-                MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
-                RESPONSE_FIELD: reply.response,
-            },
-        )
+        response_payload: dict[str, object] = {
+            MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
+            TURN_FIELD: persisted_turn_response(reply.persisted_turn).model_dump(
+                mode="json"
+            ),
+        }
+        await _send_json(websocket, send_lock, response_payload)
     except BaseException:
         chat_session.mark_delivery_failed(reply.turn_id)
         raise
@@ -395,7 +397,7 @@ async def _handle_audio_payload(
         return generated_reply
 
     try:
-        transcript, reply, response_audio = await run_in_threadpool(
+        _transcript, reply, response_audio = await run_in_threadpool(
             audio_session.generate_response_audio,
             audio,
             generate_tracked_reply,
@@ -405,7 +407,7 @@ async def _handle_audio_payload(
             chat_session.mark_delivery_failed(generated_reply.turn_id)
         await _send_error(websocket, send_lock, exc.status_code, exc.detail)
         return True
-    except CharacterNotFoundError as exc:
+    except (CharacterNotFoundError, ConversationNotFoundError) as exc:
         status, detail = _map_chat_error(exc)
         await _send_error_and_close(websocket, send_lock, status, detail)
         return False
@@ -423,19 +425,13 @@ async def _handle_audio_payload(
                 websocket,
                 {
                     MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
-                    SPEAKER_FIELD: USER_SPEAKER,
-                    MESSAGE_FIELD: transcript,
+                    TURN_FIELD: persisted_turn_response(
+                        reply.persisted_turn
+                    ).model_dump(mode="json"),
                 },
             )
-            await _send_json_unlocked(
-                websocket,
-                {
-                    MESSAGE_TYPE_FIELD: TEXT_MESSAGE_TYPE,
-                    SPEAKER_FIELD: MIORI_SPEAKER,
-                    RESPONSE_FIELD: reply.response,
-                },
-            )
-            await _send_bytes_unlocked(websocket, response_audio)
+            if response_audio:
+                await _send_bytes_unlocked(websocket, response_audio)
     except BaseException:
         chat_session.mark_delivery_failed(generated_reply.turn_id)
         raise

@@ -1,4 +1,6 @@
 import { CONVERSATION_ID_FIELD } from '../conversation-contract'
+import type { ConversationTurn } from '../conversations/types'
+import { parsePersistedTurn } from '../conversations/turn-parser'
 
 const CHAT_ENDPOINT = '/api/chat'
 
@@ -10,7 +12,7 @@ type SendChatMessageInput = {
 
 type ChatResponse = {
   character: string
-  response: string
+  turn: ConversationTurn
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -23,14 +25,14 @@ const parseChatResponse = async (response: Response, expectedCharacter: string):
   }
 
   const body: unknown = await response.json()
-  if (!isRecord(body) || typeof body.character !== 'string' || typeof body.response !== 'string') {
+  if (!isRecord(body) || typeof body.character !== 'string' || !('turn' in body)) {
     throw new Error('Chat response shape is invalid')
   }
   if (body.character !== expectedCharacter) {
     throw new Error('Chat response character does not match the request')
   }
 
-  return { character: body.character, response: body.response }
+  return { character: body.character, turn: parsePersistedTurn(body.turn) }
 }
 
 export const sendChatMessage = async (input: SendChatMessageInput): Promise<ChatResponse> => {

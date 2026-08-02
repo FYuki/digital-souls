@@ -11,6 +11,7 @@ from app.conversation_history.config import ConversationHistoryConfig
 from app.conversation_history.config import resolve_conversation_history_config
 from app.conversation_history.models import ProcessingTurnInput, TurnStatus
 from app.conversation_history.repository import ConversationHistoryRepository
+from app.conversation_history.wal_cleanup import ConversationWalCleanup
 from app.conversation_history.schema import initialize_conversation_history_schema
 from tests.conversation_history_test_support import set_turn_times
 
@@ -87,7 +88,11 @@ class TestConversationHistoryRuntime:
                     "WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
                 )
             }
-        assert tables == {"conversations", "conversation_turns"}
+        assert tables == {
+            "conversations",
+            "conversation_turns",
+            "wal_cleanup_jobs",
+        }
 
     def test_should_recover_stale_processing_during_startup(
         self,
@@ -108,6 +113,11 @@ class TestConversationHistoryRuntime:
             retention=timedelta(days=365),
             clock=lambda: datetime.now(UTC),
             uuid_factory=uuid4,
+            wal_cleanup=ConversationWalCleanup(
+                database_path=database_path,
+                clock=lambda: datetime.now(UTC),
+                connection_factory=sqlite3.connect,
+            ),
         )
         conversation = seed_repository.create_conversation("miori")
         turn = seed_repository.create_processing_turn(
@@ -126,6 +136,7 @@ class TestConversationHistoryRuntime:
 
         with TestClient(main.app):
             assert hasattr(main.app.state, "conversation_history_repository")
+            assert hasattr(main.app.state, "conversation_lifecycle_service")
 
         with sqlite3.connect(database_path) as connection:
             status = connection.execute(
@@ -153,6 +164,11 @@ class TestConversationHistoryRuntime:
             retention=timedelta(days=500),
             clock=lambda: datetime.now(UTC),
             uuid_factory=uuid4,
+            wal_cleanup=ConversationWalCleanup(
+                database_path=database_path,
+                clock=lambda: datetime.now(UTC),
+                connection_factory=sqlite3.connect,
+            ),
         )
         conversation = seed_repository.create_conversation("miori")
         turn = seed_repository.create_processing_turn(
@@ -191,8 +207,10 @@ class TestConversationHistoryRuntime:
 
         with TestClient(main.app):
             assert hasattr(main.app.state, "conversation_history_repository")
+            assert hasattr(main.app.state, "conversation_lifecycle_service")
 
         assert not hasattr(main.app.state, "conversation_history_repository")
+        assert not hasattr(main.app.state, "conversation_lifecycle_service")
 
     def test_should_remove_repository_state_when_executor_creation_fails(
         self,

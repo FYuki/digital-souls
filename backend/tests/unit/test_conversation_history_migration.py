@@ -1,0 +1,218 @@
+import sqlite3
+from pathlib import Path
+
+import pytest
+
+from app.conversation_history import schema
+from app.conversation_history.errors import LegacySchemaError
+from app.conversation_history.schema import (
+    CONVERSATION_TURNS_SQL,
+    HISTORY_INDEX_SQL,
+    STALE_INDEX_SQL,
+    initialize_conversation_history_schema,
+)
+
+CHARACTER_ID = "miori"
+CONVERSATION_ID = "e98d6c65-1ae9-4d6f-a8c8-d59b0ad09001"
+TURN_ID = "9e70795d-e5d5-431d-baa2-67f884403001"
+CREATED_AT = "2026-07-24T00:00:00.000000Z"
+
+VERSION_TWO_CONVERSATIONS_SQL = """
+CREATE TABLE conversations (
+    character_id TEXT NOT NULL,
+    conversation_id TEXT NOT NULL CHECK (
+        length(conversation_id) = 36
+        AND length(replace(conversation_id, '-', '')) = 32
+        AND substr(conversation_id, 9, 1) = '-'
+        AND substr(conversation_id, 14, 1) = '-'
+        AND substr(conversation_id, 15, 1) = '4'
+        AND substr(conversation_id, 19, 1) = '-'
+        AND substr(conversation_id, 20, 1) IN ('8', '9', 'a', 'b')
+        AND substr(conversation_id, 24, 1) = '-'
+        AND lower(conversation_id) = conversation_id
+        AND replace(conversation_id, '-', '') NOT GLOB '*[^0-9a-f]*'
+    ),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (character_id, conversation_id)
+)
+"""
+
+
+def _create_version_two_database(database_path: Path) -> None:
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(VERSION_TWO_CONVERSATIONS_SQL)
+        connection.execute(CONVERSATION_TURNS_SQL)
+        connection.execute(HISTORY_INDEX_SQL)
+        connection.execute(STALE_INDEX_SQL)
+        connection.execute(
+            "INSERT INTO conversations "
+            "(character_id, conversation_id, created_at) VALUES (?, ?, ?)",
+            (CHARACTER_ID, CONVERSATION_ID, CREATED_AT),
+        )
+        connection.execute(
+            "INSERT INTO conversation_turns "
+            "(turn_id, character_id, conversation_id, user_content, "
+            "assistant_content, status, privacy_reason_code, sanitizer_version, "
+            "policy_version, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, 'completed', NULL, NULL, NULL, ?, ?)",
+            (
+                TURN_ID,
+                CHARACTER_ID,
+                CONVERSATION_ID,
+                "マスク済みユーザー本文",
+                "マスク済みアシスタント本文",
+                CREATED_AT,
+                CREATED_AT,
+            ),
+        )
+        connection.execute("PRAGMA user_version = 2")
+
+
+def _schema_state(database_path: Path) -> tuple[int, tuple[str, ...], set[str]]:
+    with sqlite3.connect(database_path) as connection:
+        version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+        columns = tuple(
+            str(row[1])
+            for row in connection.execute("PRAGMA table_info(conversations)")
+        )
+        tables = {
+            str(row[0])
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            )
+        }
+    return version, columns, tables
+
+
+def test_should_migrate_canonical_version_two_database_to_version_three(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "history.db"
+    _create_version_two_database(database_path)
+
+    initialize_conversation_history_schema(database_path)
+
+    version, conversation_columns, tables = _schema_state(database_path)
+
+    assert version == 3
+    assert conversation_columns == (
+        "character_id",
+        "conversation_id",
+        "created_at",
+        "archived_at",
+    )
+    assert tables == {"conversations", "conversation_turns", "wal_cleanup_jobs"}
+
+
+def test_should_preserve_existing_rows_when_migrating_version_two_database(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "history.db"
+    _create_version_two_database(database_path)
+
+    initialize_conversation_history_schema(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        conversation = connection.execute(
+            "SELECT character_id, conversation_id, created_at, archived_at "
+            "FROM conversations"
+        ).fetchone()
+        turn = connection.execute(
+            "SELECT turn_id, character_id, conversation_id, user_content, "
+            "assistant_content, status FROM conversation_turns"
+        ).fetchone()
+
+    assert conversation == (CHARACTER_ID, CONVERSATION_ID, CREATED_AT, None)
+    assert turn == (
+        TURN_ID,
+        CHARACTER_ID,
+        CONVERSATION_ID,
+        "マスク済みユーザー本文",
+        "マスク済みアシスタント本文",
+        "completed",
+    )
+
+
+def test_should_be_idempotent_after_migrating_version_two_database(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "history.db"
+    _create_version_two_database(database_path)
+    initialize_conversation_history_schema(database_path)
+
+    initialize_conversation_history_schema(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        conversation_count = connection.execute(
+            "SELECT COUNT(*) FROM conversations"
+        ).fetchone()[0]
+        turn_count = connection.execute(
+            "SELECT COUNT(*) FROM conversation_turns"
+        ).fetchone()[0]
+    assert conversation_count == 1
+    assert turn_count == 1
+
+
+def test_should_keep_version_two_database_unchanged_when_migration_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = tmp_path / "history.db"
+    _create_version_two_database(database_path)
+    original_connect = sqlite3.connect
+
+    class FailingMigrationConnection(sqlite3.Connection):
+        def execute(
+            self,
+            sql: str,
+            parameters: tuple[object, ...] = (),
+        ) -> sqlite3.Cursor:
+            if sql == "PRAGMA user_version = 3":
+                raise sqlite3.OperationalError("injected migration failure")
+            return super().execute(sql, parameters)
+
+    def failing_connect(path: Path) -> sqlite3.Connection:
+        return original_connect(path, factory=FailingMigrationConnection)
+
+    monkeypatch.setattr(schema.sqlite3, "connect", failing_connect)
+
+    with pytest.raises(sqlite3.OperationalError, match="injected migration failure"):
+        initialize_conversation_history_schema(database_path)
+
+    with original_connect(database_path) as connection:
+        conversation_count = connection.execute(
+            "SELECT COUNT(*) FROM conversations"
+        ).fetchone()[0]
+        turn_count = connection.execute(
+            "SELECT COUNT(*) FROM conversation_turns"
+        ).fetchone()[0]
+    assert _schema_state(database_path) == (
+        2,
+        ("character_id", "conversation_id", "created_at"),
+        {"conversations", "conversation_turns"},
+    )
+    assert conversation_count == 1
+    assert turn_count == 1
+
+
+def test_should_reject_noncanonical_version_two_database(tmp_path: Path) -> None:
+    database_path = tmp_path / "history.db"
+    _create_version_two_database(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("DROP INDEX conversation_turns_history_idx")
+
+    with pytest.raises(
+        LegacySchemaError,
+        match="existing database does not use current schema",
+    ):
+        initialize_conversation_history_schema(database_path)
+
+    version, conversation_columns, tables = _schema_state(database_path)
+    assert version == 2
+    assert conversation_columns == (
+        "character_id",
+        "conversation_id",
+        "created_at",
+    )
+    assert tables == {"conversations", "conversation_turns"}
