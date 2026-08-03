@@ -76,7 +76,7 @@ def _assert_privacy_skipped_turn(turn: dict[str, object]) -> None:
 def test_should_return_the_persisted_masked_turn_from_http_chat(client) -> None:
     conversation = _create_conversation(client)
 
-    with patch("app.main.generate_response", return_value=RAW_ASSISTANT):
+    with patch("app.main.llm_router.generate_response", return_value=RAW_ASSISTANT):
         response = client.post(
             "/chat",
             json=_chat_body(conversation.conversation_id, RAW_USER),
@@ -92,7 +92,7 @@ def test_should_return_the_persisted_masked_turn_from_http_chat(client) -> None:
 def test_should_return_metadata_only_when_http_chat_storage_is_skipped(client) -> None:
     conversation = _create_conversation(client)
 
-    with patch("app.main.generate_response", return_value=RAW_ASSISTANT):
+    with patch("app.main.llm_router.generate_response", return_value=RAW_ASSISTANT):
         response = client.post(
             "/chat",
             json=_chat_body(conversation.conversation_id, STORAGE_OPT_OUT),
@@ -108,7 +108,7 @@ def test_should_return_metadata_only_when_http_chat_storage_is_skipped(client) -
 def test_should_send_the_persisted_masked_turn_from_text_websocket(client) -> None:
     conversation = _create_conversation(client)
 
-    with patch("app.main.generate_response", return_value=RAW_ASSISTANT):
+    with patch("app.main.llm_router.generate_response", return_value=RAW_ASSISTANT):
         with client.websocket_connect(
             f"/ws/miori?conversation_id={conversation.conversation_id}"
         ) as websocket:
@@ -123,7 +123,7 @@ def test_should_send_the_persisted_masked_turn_from_text_websocket(client) -> No
 def test_should_send_metadata_only_for_privacy_skipped_text_websocket(client) -> None:
     conversation = _create_conversation(client)
 
-    with patch("app.main.generate_response", return_value=RAW_ASSISTANT):
+    with patch("app.main.llm_router.generate_response", return_value=RAW_ASSISTANT):
         with client.websocket_connect(
             f"/ws/miori?conversation_id={conversation.conversation_id}"
         ) as websocket:
@@ -143,7 +143,7 @@ def test_should_synthesize_only_the_persisted_masked_assistant_content(client) -
         synthesizer,
     )
 
-    with patch("app.main.generate_response", return_value=RAW_ASSISTANT):
+    with patch("app.main.llm_router.generate_response", return_value=RAW_ASSISTANT):
         with client.websocket_connect(
             f"/ws/miori?conversation_id={conversation.conversation_id}"
         ) as websocket:
@@ -161,7 +161,7 @@ def test_should_not_synthesize_content_for_privacy_skipped_audio_turn(client) ->
         synthesizer,
     )
 
-    with patch("app.main.generate_response", return_value=RAW_ASSISTANT):
+    with patch("app.main.llm_router.generate_response", return_value=RAW_ASSISTANT):
         with client.websocket_connect(
             f"/ws/miori?conversation_id={conversation.conversation_id}"
         ) as websocket:

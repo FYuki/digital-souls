@@ -8,6 +8,11 @@ import os
 import sys
 from pathlib import Path
 
+BACKEND_DIR = Path(__file__).resolve().parent.parent / "backend"
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+from app.model_settings import MODEL_ENVIRONMENT_KEYS
 from profile_report import (
     create_legacy_report,
     load_resolved_report,
@@ -33,6 +38,7 @@ def _parser() -> argparse.ArgumentParser:
     get = commands.add_parser("get")
     get.add_argument("--report", required=True)
     get.add_argument("--path", required=True)
+    commands.add_parser("model-environment-keys")
     return parser
 
 
@@ -56,6 +62,10 @@ def _get_command(arguments: argparse.Namespace) -> None:
         print(value)
 
 
+def _model_environment_keys_command() -> None:
+    print("\n".join(MODEL_ENVIRONMENT_KEYS))
+
+
 def main() -> int:
     arguments = _parser().parse_args()
     try:
@@ -65,8 +75,10 @@ def main() -> int:
             load_resolved_report(Path(arguments.report))
         elif arguments.command == "resolve":
             _resolve_command(arguments)
-        else:
+        elif arguments.command == "get":
             _get_command(arguments)
+        else:
+            _model_environment_keys_command()
     except ProfileError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1

@@ -229,7 +229,7 @@ def test_should_return_nonzero_and_json_when_external_service_is_unreachable(
     assert "external service is not ready: frontend" in result.stderr
 
 
-def test_should_require_ollama_model_through_verify_entrypoint(
+def test_should_allow_managed_ollama_model_preparation_through_verify_entrypoint(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ):
     import adapters.ollama
@@ -245,7 +245,9 @@ def test_should_require_ollama_model_through_verify_entrypoint(
     profile["dependencies"] = dependencies
     registry = create_service_registry(tmp_path)
     monkeypatch.setattr(verify_command, "resolve_profile", lambda env, default: profile)
-    monkeypatch.setattr(verify_command, "create_service_registry", lambda root: registry)
+    monkeypatch.setattr(
+        verify_command, "create_service_registry", lambda root, **settings: registry
+    )
     monkeypatch.setattr(
         "adapters.base.probe_http",
         lambda url, timeout_seconds: ReadinessResult(url, 1, 0.001, "ready"),
@@ -255,18 +257,24 @@ def test_should_require_ollama_model_through_verify_entrypoint(
         "_fetch_json",
         lambda url: {"models": [{"name": "other:latest"}]},
     )
+    monkeypatch.setattr(
+        adapters.ollama.shutil,
+        "which",
+        lambda _command: "/usr/bin/ollama",
+    )
 
-    from environment_verification import EnvironmentVerificationError
-
-    with pytest.raises(EnvironmentVerificationError) as error:
-        verify_command.verify_environment(tmp_path, None)
+    exit_code = verify_command.verify_environment(tmp_path, None)
 
     result = json.loads(capsys.readouterr().out)
-    assert error.value.category == "preparation"
+    assert exit_code == 0
     ollama = result["services"]["ollama"]
     assert ollama["classification"] == "preparation_required"
     assert ollama["readiness"]["result"] == "ready"
-    assert any("gemma4:e4b" in check["message"] for check in ollama["checks"])
+    model_check = next(
+        check for check in ollama["checks"] if check["name"] == "ollama-readiness-validation"
+    )
+    assert model_check["canPrepare"] is True
+    assert "gemma4:e4b" in model_check["message"]
 
 
 def test_should_require_ollama_model_for_external_service(
@@ -286,7 +294,9 @@ def test_should_require_ollama_model_for_external_service(
     profile["dependencies"] = dependencies
     registry = create_service_registry(tmp_path)
     monkeypatch.setattr(verify_command, "resolve_profile", lambda env, default: profile)
-    monkeypatch.setattr(verify_command, "create_service_registry", lambda root: registry)
+    monkeypatch.setattr(
+        verify_command, "create_service_registry", lambda root, **settings: registry
+    )
     monkeypatch.setattr(
         "adapters.base.probe_http",
         lambda url, timeout_seconds: ReadinessResult(url, 1, 0.001, "ready"),
@@ -305,4 +315,8 @@ def test_should_require_ollama_model_for_external_service(
     result = json.loads(capsys.readouterr().out)["services"]["ollama"]
     assert error.value.category == "preparation"
     assert result["classification"] == "preparation_required"
-    assert any("gemma4:e4b" in check["message"] for check in result["checks"])
+    model_check = next(
+        check for check in result["checks"] if check["name"] == "ollama-readiness-validation"
+    )
+    assert model_check["canPrepare"] is False
+    assert "gemma4:e4b" in model_check["message"]

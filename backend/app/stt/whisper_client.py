@@ -10,10 +10,7 @@ from app.audio.constants import (
     PCM_SAMPLE_RATE_HZ,
     PCM_SAMPLE_WIDTH_BYTES,
 )
-from app.model_settings import WHISPER_MODEL_NAME, whisper_model_cache
-
 WHISPER_LANGUAGE = "ja"
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 
 class WhisperSegment(Protocol):
@@ -31,7 +28,9 @@ class WhisperModel(Protocol):
 
 
 class WhisperTranscriber:
-    def __init__(self) -> None:
+    def __init__(self, *, model_name: str, download_root: Path) -> None:
+        self._model_name = model_name
+        self._download_root = download_root
         self._model: WhisperModel | None = None
         self._model_lock = threading.Lock()
 
@@ -54,8 +53,8 @@ class WhisperTranscriber:
             self._model = cast(
                 WhisperModel,
                 FasterWhisperModel(
-                    WHISPER_MODEL_NAME,
-                    download_root=str(whisper_model_cache(REPOSITORY_ROOT)),
+                    self._model_name,
+                    download_root=str(self._download_root),
                 ),
             )
         return self._model

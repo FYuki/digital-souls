@@ -26,6 +26,11 @@ from profile_types import (
     ResolvedReport,
 )
 from profile_validation import load_profile, validate_http_origin
+from app.model_settings import (
+    ModelSettings,
+    model_settings_environment,
+    resolve_model_settings,
+)
 
 
 REPORT_SCHEMA_VERSION: Literal[1] = 1
@@ -155,7 +160,10 @@ def derive_capabilities(dependencies: ResolvedDependencies) -> list[Capability]:
     return [capability for capability, is_enabled in enabled if is_enabled]
 
 
-def derive_environment(dependencies: ResolvedDependencies) -> dict[str, str]:
+def derive_environment(
+    dependencies: ResolvedDependencies,
+    model_settings: ModelSettings | None = None,
+) -> dict[str, str]:
     dependency_map = cast(dict[str, ResolvedDependency], dependencies)
     real_service_urls = {
         environment_name: dependency_map[dependency_name]["baseUrl"]
@@ -166,9 +174,15 @@ def derive_environment(dependencies: ResolvedDependencies) -> dict[str, str]:
         )
         if dependency_map[dependency_name]["mode"] == "real"
     }
-    return {
+    environment = {
         RAG_ENABLED_ENV: str(dependencies["chroma"]["mode"] == "real").lower(),
         **real_service_urls,
+    }
+    if model_settings is None or dependencies["backend"]["mode"] != "real":
+        return environment
+    return {
+        **environment,
+        **model_settings_environment(model_settings),
     }
 
 
@@ -187,6 +201,10 @@ def resolve_profile(env: dict[str, str], default_profile: str | None) -> Resolve
     profile = load_profile(selected)
     dependencies, used_override = _apply_backend_override(profile, env)
     resolved_dependencies = resolve_dependencies(dependencies)
+    try:
+        model_settings = resolve_model_settings(env)
+    except ValueError as error:
+        raise ProfileError(str(error)) from error
     return {
         "reportSchemaVersion": REPORT_SCHEMA_VERSION,
         "generatedAt": datetime.now(timezone.utc).astimezone().isoformat(),
@@ -196,6 +214,8 @@ def resolve_profile(env: dict[str, str], default_profile: str | None) -> Resolve
         "profile": {"schemaVersion": 1, "name": profile["name"]},
         "dependencies": resolved_dependencies,
         "capabilities": derive_capabilities(resolved_dependencies),
-        "derivedEnvironment": derive_environment(resolved_dependencies),
+        "derivedEnvironment": derive_environment(
+            resolved_dependencies, model_settings
+        ),
         "compatibility": _compatibility(env, [*used_legacy, *used_override]),
     }

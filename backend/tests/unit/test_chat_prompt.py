@@ -10,7 +10,7 @@ from app.prompting import (
     RagContext,
     RagItem,
 )
-from app.prompting.config import PromptRuntimeConfig
+from app.model_settings import resolve_model_settings
 from tests.prompt_test_support import UnitTokenCounter
 
 EXPECTED_HISTORY_PAGE_SIZE = 32
@@ -31,13 +31,42 @@ class _HistorySession:
         return iter(self._turns)
 
 
+def test_should_budget_prompt_from_runtime_context_not_model_maximum() -> None:
+    config = resolve_model_settings(
+        {
+            "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "2",
+            "CONVERSATION_HISTORY_TOKEN_LIMIT": "10",
+            "USER_INPUT_TOKEN_LIMIT": "10",
+            "OLLAMA_RESPONSE_RESERVE_TOKENS": "3",
+            "OLLAMA_CONTEXT_TOKENS": "20",
+            "LLM_CONTEXT_TOKEN_LIMIT": "100",
+        }
+    )
+
+    prompt_input = chat_prompt._build_prompt_input(
+        character=CharacterPrompt("", "", "", "SYSTEM", "", ""),
+        rag=RagContext(items=()),
+        current_user=CurrentUserMessage("RAW_CURRENT_USER"),
+        history_session=_HistorySession(()),
+        config=config,
+    )
+
+    assert prompt_input.budget.total == 17
+    assert prompt_input.budget.character == 17
+    assert prompt_input.budget.post_history == 17
+    assert prompt_input.budget.history == 10
+    assert prompt_input.budget.current_user == 10
+
+
 def test_should_coordinate_history_budget_and_existing_prompt_builder() -> None:
-    config = PromptRuntimeConfig(
-        max_completed_turns=2,
-        history_token_limit=10,
-        user_input_token_limit=10,
-        assistant_max_generation_tokens=3,
-        context_token_limit=20,
+    config = resolve_model_settings(
+        {
+            "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "2",
+            "CONVERSATION_HISTORY_TOKEN_LIMIT": "10",
+            "USER_INPUT_TOKEN_LIMIT": "10",
+            "OLLAMA_RESPONSE_RESERVE_TOKENS": "3",
+            "OLLAMA_CONTEXT_TOKENS": "20",
+        }
     )
     history_session = _HistorySession(
         (
@@ -70,12 +99,14 @@ def test_should_coordinate_history_budget_and_existing_prompt_builder() -> None:
 
 
 def test_should_rebuild_same_prompt_input_with_fresh_history_iterator() -> None:
-    config = PromptRuntimeConfig(
-        max_completed_turns=2,
-        history_token_limit=10,
-        user_input_token_limit=10,
-        assistant_max_generation_tokens=3,
-        context_token_limit=20,
+    config = resolve_model_settings(
+        {
+            "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "2",
+            "CONVERSATION_HISTORY_TOKEN_LIMIT": "10",
+            "USER_INPUT_TOKEN_LIMIT": "10",
+            "OLLAMA_RESPONSE_RESERVE_TOKENS": "3",
+            "OLLAMA_CONTEXT_TOKENS": "20",
+        }
     )
     history_session = _HistorySession(
         (

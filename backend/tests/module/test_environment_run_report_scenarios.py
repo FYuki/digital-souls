@@ -227,7 +227,9 @@ def test_should_record_failed_teardown_when_voicevox_rollback_fails(
         "resolve_and_write_profile",
         lambda env, default, path, legacy: profile,
     )
-    monkeypatch.setattr(up_command, "create_service_registry", lambda root: registry)
+    monkeypatch.setattr(
+        up_command, "create_service_registry", lambda root, **settings: registry
+    )
     monkeypatch.setattr(
         environment_runtime,
         "verification_checks",

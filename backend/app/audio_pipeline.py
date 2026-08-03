@@ -2,6 +2,7 @@ import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 import logging
+from pathlib import Path
 from time import perf_counter
 from typing import Callable, Iterator, Protocol
 
@@ -12,6 +13,7 @@ from app.chat_service import (
     PersistedContentTurn,
     PersistedPrivacySkippedTurn,
 )
+from app.model_settings import ModelSettings, whisper_model_cache
 from app.tts.speech_synthesizer import SpeechSynthesizer
 from app.tts.voicevox_client import (
     DEFAULT_VOICEVOX_BASE_URL,
@@ -63,6 +65,8 @@ def _validate_pcm16_audio(audio: bytes) -> None:
 @dataclass(frozen=True)
 class AudioRuntimeConfig:
     voicevox_base_url: str
+    model_settings: ModelSettings
+    whisper_download_root: str
 
 
 class AudioPipelineSession:
@@ -159,13 +163,18 @@ class AudioPipelineService:
         self._speech_synthesizer.close()
 
 
-def resolve_audio_runtime_config() -> AudioRuntimeConfig:
+def resolve_audio_runtime_config(model_settings: ModelSettings) -> AudioRuntimeConfig:
     configured_url = os.environ.get(VOICEVOX_BASE_URL_ENV)
     if not configured_url:
         voicevox_base_url = DEFAULT_VOICEVOX_BASE_URL
     else:
         voicevox_base_url = configured_url.rstrip("/")
-    return AudioRuntimeConfig(voicevox_base_url=voicevox_base_url)
+    repository_root = Path(__file__).resolve().parents[2]
+    return AudioRuntimeConfig(
+        voicevox_base_url=voicevox_base_url,
+        model_settings=model_settings,
+        whisper_download_root=str(whisper_model_cache(repository_root)),
+    )
 
 
 def create_audio_pipeline_service(
@@ -174,6 +183,9 @@ def create_audio_pipeline_service(
     from app.stt.whisper_client import WhisperTranscriber
 
     return AudioPipelineService(
-        WhisperTranscriber(),
+        WhisperTranscriber(
+            model_name=runtime_config.model_settings.whisper_model,
+            download_root=Path(runtime_config.whisper_download_root),
+        ),
         create_voicevox_client(runtime_config.voicevox_base_url),
     )

@@ -108,19 +108,23 @@ class TestRagRuntimeEvidenceIntegration:
         from app.memory.embedder import embed_text
 
         chroma_store = modules["app.memory.chroma_store"]
-        main_module = modules["app.main"]
-        app = main_module.app
+        main = modules["app.main"]
+        app = main.app
         character = f"miori{uuid4().hex[:8]}"
         system_prompt = "# 光織\nあなたは光織です。"
         stored_memory = "農業日誌: 保存して。2026-06-23はトマト畑に水やりした"
+        conversation_id = str(uuid4())
         _write_character(tmp_path, character, system_prompt)
         monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
         monkeypatch.setenv("RAG_ENABLED", "true")
 
         captured_llm_calls = []
 
-        def capture_generate_response(prompt, *, max_output_tokens: int) -> str:
-            assert max_output_tokens == 4096
+        def capture_generate_response(
+            prompt, *, max_output_tokens: int, settings
+        ) -> str:
+            assert max_output_tokens == 1024
+            assert settings.assistant_max_generation_tokens == 1024
             messages = prompt.messages
             user_message = next(
                 message.content
@@ -133,7 +137,7 @@ class TestRagRuntimeEvidenceIntegration:
             return "前回はトマト畑に水やりしました。"
 
         monkeypatch.setattr(
-            main_module,
+            main.llm_router,
             "generate_response",
             capture_generate_response,
         )
@@ -199,10 +203,11 @@ class TestRagRuntimeEvidenceIntegration:
         import chromadb
 
         rag_service = modules["app.memory.rag_service"]
-        main_module = modules["app.main"]
-        app = main_module.app
+        main = modules["app.main"]
+        app = main.app
         system_prompt = "# 光織\nあなたは光織です。"
         user_message = "農業日誌: 保存して。2026-06-23はナスに追肥した"
+        conversation_id = str(uuid4())
         _write_character(tmp_path, "miori", system_prompt)
         monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
         monkeypatch.setenv("RAG_ENABLED", "true")
@@ -229,15 +234,18 @@ class TestRagRuntimeEvidenceIntegration:
 
         monkeypatch.setattr(chromadb, "PersistentClient", AddFailureClient)
 
-        def capture_generate_response(prompt, *, max_output_tokens: int) -> str:
-            assert max_output_tokens == 4096
+        def capture_generate_response(
+            prompt, *, max_output_tokens: int, settings
+        ) -> str:
+            assert max_output_tokens == 1024
+            assert settings.assistant_max_generation_tokens == 1024
             contents = [message.content for message in prompt.messages]
             assert system_prompt in contents[0]
             assert contents[-1] == user_message
             return "農業日誌として保存しました。"
 
         monkeypatch.setattr(
-            main_module,
+            main.llm_router,
             "generate_response",
             capture_generate_response,
         )

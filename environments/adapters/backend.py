@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Mapping
 
 from app.model_settings import (
-    WHISPER_MODEL_CACHE_DIRECTORY,
     WHISPER_MODEL_NAME,
     whisper_model_cache,
 )
@@ -24,17 +23,19 @@ from adapters.base import (
 WHISPER_REQUIRED_ARTIFACTS = (
     "config.json",
     "model.bin",
+    "preprocessor_config.json",
     "tokenizer.json",
     "vocabulary.json",
+)
+WHISPER_CACHE_LOOKUP = (
+    "import sys; from faster_whisper.utils import download_model; "
+    "print(download_model(sys.argv[1], cache_dir=sys.argv[2], local_files_only=True))"
 )
 
 
 def _whisper_model_is_ready(model_cache: Path) -> bool:
-    snapshots = model_cache / "snapshots"
-    return snapshots.is_dir() and any(
-        snapshot.is_dir()
-        and all((snapshot / artifact).is_file() for artifact in WHISPER_REQUIRED_ARTIFACTS)
-        for snapshot in snapshots.iterdir()
+    return model_cache.is_dir() and all(
+        (model_cache / artifact).is_file() for artifact in WHISPER_REQUIRED_ARTIFACTS
     )
 
 
@@ -74,8 +75,36 @@ def _chroma_storage_check(chroma_path: Path) -> Check:
 
 
 class BackendAdapter(ProcessServiceOperations):
-    def __init__(self, root_dir: Path, runner: CommandRunner | None = None) -> None:
+    def __init__(
+        self,
+        root_dir: Path,
+        runner: CommandRunner | None = None,
+        *,
+        whisper_model_name: str = WHISPER_MODEL_NAME,
+    ) -> None:
         super().__init__(root_dir, "backend", runner)
+        self._whisper_model_name = whisper_model_name
+
+    def _cached_whisper_model(self) -> Path | None:
+        python = self.root_dir / "backend" / ".venv" / "bin" / "python"
+        if not _is_executable_file(python):
+            return None
+        result = self.runner.run(
+            (
+                str(python),
+                "-c",
+                WHISPER_CACHE_LOOKUP,
+                self._whisper_model_name,
+                str(whisper_model_cache(self.root_dir)),
+            ),
+            self.root_dir,
+        )
+        if not command_succeeded(result):
+            return None
+        stdout = result.get("stdout")
+        if not isinstance(stdout, str) or not stdout.strip():
+            return None
+        return Path(stdout.strip())
 
     def verify(
         self,
@@ -129,16 +158,17 @@ class BackendAdapter(ProcessServiceOperations):
             ),
         ]
         if context.whisper_enabled:
-            model_cache = whisper_model_cache(self.root_dir) / WHISPER_MODEL_CACHE_DIRECTORY
+            model_cache = self._cached_whisper_model()
             checks.append(
                 Check(
-                    "whisper-model-medium",
+                    f"whisper-model-{self._whisper_model_name}",
                     (
                         "ready"
-                        if _whisper_model_is_ready(model_cache)
+                        if model_cache is not None
+                        and _whisper_model_is_ready(model_cache)
                         else "preparation_required"
                     ),
-                    "faster-whisper medium model cache",
+                    f"faster-whisper {self._whisper_model_name} model cache",
                     True,
                 )
             )
@@ -158,13 +188,15 @@ class BackendAdapter(ProcessServiceOperations):
             raise RuntimeError(f"backend preparation failed: {result.get('stderr', '')}")
         if context.whisper_enabled:
             model_cache = whisper_model_cache(self.root_dir)
-            cached_model = model_cache / WHISPER_MODEL_CACHE_DIRECTORY
-            if not _whisper_model_is_ready(cached_model):
+            cached_model = self._cached_whisper_model()
+            if cached_model is None or not _whisper_model_is_ready(cached_model):
                 command = (
                     str(self.root_dir / "backend" / ".venv" / "bin" / "python"),
                     "-c",
-                    "from faster_whisper import WhisperModel; "
-                    f"WhisperModel({WHISPER_MODEL_NAME!r}, download_root={str(model_cache)!r})",
+                    "import sys; from faster_whisper import WhisperModel; "
+                    "WhisperModel(sys.argv[1], download_root=sys.argv[2])",
+                    self._whisper_model_name,
+                    str(model_cache),
                 )
                 download = self.runner.run(command, self.root_dir)
                 if not command_succeeded(download):

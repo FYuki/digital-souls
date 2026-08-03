@@ -18,6 +18,7 @@ from app.conversation_history.service import (
     StartedHistoryTurn,
 )
 from app.memory import memory_policy as _memory_policy
+from app.model_settings import ModelSettings
 from app.memory import rag_service as _rag_service
 from app.privacy.contracts import PrivacyScanner
 from app.prompting import (
@@ -28,10 +29,6 @@ from app.prompting import (
     RagContext,
     RagItem,
     TokenCounter,
-)
-from app.prompting.config import (
-    PromptRuntimeConfig,
-    resolve_prompt_config,
 )
 
 RAG_ENABLED_ENV = "RAG_ENABLED"
@@ -67,7 +64,7 @@ class ChatPromptBuilder(Protocol):
         rag: RagContext,
         current_user: CurrentUserMessage,
         history_session: HistorySession,
-        config: PromptRuntimeConfig,
+        config: ModelSettings,
         token_counter: TokenCounter,
     ) -> BuiltPrompt:
         ...
@@ -153,7 +150,7 @@ class ChatRuntimeConfig:
     rag_enabled: bool
     memory_policy: _memory_policy.MemoryPolicy | None
     privacy_scanner: PrivacyScanner | None
-    prompt_config: PromptRuntimeConfig
+    prompt_config: ModelSettings
 
 
 @dataclass(frozen=True)
@@ -162,7 +159,7 @@ class _ResolvedChatContext:
     memory_policy: _memory_policy.MemoryPolicy | None
     privacy_scanner: PrivacyScanner | None
     memory_task_queue: MemoryTaskQueue
-    prompt_config: PromptRuntimeConfig
+    prompt_config: ModelSettings
 
 
 @dataclass
@@ -306,13 +303,14 @@ class ChatService:
 def resolve_chat_runtime_config(
     policy: _memory_policy.MemoryPolicy,
     privacy_scanner: PrivacyScanner,
+    prompt_config: ModelSettings,
 ) -> ChatRuntimeConfig:
     rag_enabled = os.environ.get(RAG_ENABLED_ENV) == RAG_ENABLED_VALUE
     return ChatRuntimeConfig(
         rag_enabled=rag_enabled,
         memory_policy=policy if rag_enabled else None,
         privacy_scanner=privacy_scanner if rag_enabled else None,
-        prompt_config=resolve_prompt_config(),
+        prompt_config=prompt_config,
     )
 
 

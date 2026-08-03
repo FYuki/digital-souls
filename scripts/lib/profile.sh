@@ -40,6 +40,10 @@ profile_export_derived_environment() {
   local ollama_base_url
   local voicevox_base_url
   local backend_origin
+  local model_environment_keys
+  local key
+  local value
+  model_environment_keys="$(python3 "$PROFILE_RESOLVER" model-environment-keys)" || return $?
   rag_enabled="$(profile_get derivedEnvironment.RAG_ENABLED)" || return $?
   ollama_mode="$(profile_get dependencies.ollama.mode)" || return $?
   voicevox_mode="$(profile_get dependencies.voicevox.mode)" || return $?
@@ -55,6 +59,9 @@ profile_export_derived_environment() {
   fi
 
   unset OLLAMA_BASE_URL VOICEVOX_BASE_URL DS_BACKEND_ORIGIN
+  for key in $model_environment_keys; do
+    unset "$key"
+  done
   export RAG_ENABLED="$rag_enabled"
   if [ "$ollama_mode" = "real" ]; then
     export OLLAMA_BASE_URL="$ollama_base_url"
@@ -64,6 +71,10 @@ profile_export_derived_environment() {
   fi
   if [ "$backend_mode" = "real" ]; then
     export DS_BACKEND_ORIGIN="$backend_origin"
+    for key in $model_environment_keys; do
+      value="$(profile_get "derivedEnvironment.$key")" || return $?
+      export "$key=$value"
+    done
   fi
 }
 

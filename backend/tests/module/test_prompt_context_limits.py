@@ -1,4 +1,5 @@
 import importlib
+import os
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 from uuid import UUID
@@ -77,7 +78,9 @@ def _service(
     card.to_character_prompt.return_value = CharacterPrompt(
         "", "", "", "system", "", ""
     )
-    config = importlib.import_module("app.prompting.config").resolve_prompt_config()
+    config = importlib.import_module("app.model_settings").resolve_model_settings(
+        os.environ
+    )
     return _chat_runtime.ChatService(
         _chat_runtime.ChatRuntimeConfig(
             rag_enabled=False,
@@ -103,6 +106,7 @@ def test_should_reject_user_input_using_formal_provider_count(
 
     monkeypatch.setenv("USER_INPUT_TOKEN_LIMIT", "1")
     monkeypatch.setenv("ASSISTANT_MAX_GENERATION_TOKENS", "1")
+    monkeypatch.setenv("OLLAMA_CONTEXT_TOKENS", "20")
     monkeypatch.setenv("LLM_CONTEXT_TOKEN_LIMIT", "20")
 
     def count(messages) -> int:
@@ -132,6 +136,7 @@ def test_should_return_persisted_reply_with_history_session_contract(
 ) -> None:
     monkeypatch.setenv("USER_INPUT_TOKEN_LIMIT", "10")
     monkeypatch.setenv("ASSISTANT_MAX_GENERATION_TOKENS", "10")
+    monkeypatch.setenv("OLLAMA_CONTEXT_TOKENS", "100")
     monkeypatch.setenv("LLM_CONTEXT_TOKEN_LIMIT", "100")
     generate = MagicMock(return_value="MASKED_ASSISTANT")
 
@@ -153,6 +158,7 @@ def test_should_reserve_assistant_tokens_and_keep_latest_completed_or_fail(
 
     monkeypatch.setenv("USER_INPUT_TOKEN_LIMIT", "10")
     monkeypatch.setenv("ASSISTANT_MAX_GENERATION_TOKENS", "18")
+    monkeypatch.setenv("OLLAMA_CONTEXT_TOKENS", "20")
     monkeypatch.setenv("LLM_CONTEXT_TOKEN_LIMIT", "20")
     restored_type = getattr(
         importlib.import_module("app.conversation_history.prompt_history"),

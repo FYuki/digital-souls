@@ -42,9 +42,6 @@ def up_environment(
     registry: ServiceRegistry | None = None,
     timing: EnvironmentTiming | None = None,
 ) -> int:
-    resolved_registry = (
-        registry if registry is not None else create_service_registry(root_dir)
-    )
     resolved_timing = timing if timing is not None else EnvironmentTiming()
     run_id = str(uuid.uuid4())
     started_at = current_timestamp()
@@ -86,6 +83,25 @@ def up_environment(
             paths.profile_report,
             paths.legacy_report,
         )
+        derived = profile.get("derivedEnvironment")
+        if not isinstance(derived, dict):
+            raise ValueError("resolved derived environment is required")
+        dependencies = profile.get("dependencies")
+        if not isinstance(dependencies, dict):
+            raise ValueError("resolved dependencies are required")
+        backend = dependencies.get("backend")
+        if not isinstance(backend, dict):
+            raise ValueError("resolved backend dependency is required")
+        if registry is not None:
+            resolved_registry = registry
+        elif backend.get("mode") == "real":
+            resolved_registry = create_service_registry(
+                root_dir,
+                ollama_model_name=derived["OLLAMA_CHAT_MODEL"],
+                whisper_model_name=derived["WHISPER_MODEL"],
+            )
+        else:
+            resolved_registry = create_service_registry(root_dir)
         report = create_initial_report(
             run_id=run_id,
             started_at=started_at,

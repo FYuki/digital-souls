@@ -1,4 +1,5 @@
 from contextlib import ExitStack, asynccontextmanager
+import os
 from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
@@ -22,8 +23,9 @@ from app.conversation_history.repository import ConversationHistoryRepository
 from app.conversation_history.schema import initialize_conversation_history_schema
 from app.conversation_history.service import ConversationHistoryService
 from app.conversation_history.wal_cleanup import ConversationWalCleanup
-from app.llm.router import count_input_tokens, generate_response
+from app.llm import router as llm_router
 from app.memory.memory_policy import resolved_memory_policy
+from app.model_settings import resolve_model_settings
 from app.prompting import BuiltPrompt, CharacterPrompt, PromptMessage
 from app.privacy.history_sanitizer import create_history_sanitizer
 from app.privacy.scanner import create_privacy_scanner
@@ -40,24 +42,26 @@ def _load_character_prompt(character: str) -> CharacterPrompt:
     return load_character_card(character).to_character_prompt()
 
 
-def _generate_llm_response(
-    prompt: BuiltPrompt,
-    *,
-    max_output_tokens: int,
-) -> str:
-    return generate_response(prompt, max_output_tokens=max_output_tokens)
-
-
-def _count_llm_input_tokens(messages: tuple[PromptMessage, ...]) -> int:
-    return count_input_tokens(messages)
-
-
 def _app_chat_service(app: FastAPI) -> _chat_runtime.ChatService:
     return cast(_chat_runtime.ChatService, app.state.chat_service)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    model_settings = resolve_model_settings(os.environ)
+
+    def generate_llm_response(
+        prompt: BuiltPrompt, *, max_output_tokens: int
+    ) -> str:
+        return llm_router.generate_response(
+            prompt,
+            max_output_tokens=max_output_tokens,
+            settings=model_settings,
+        )
+
+    def count_llm_input_tokens(messages: tuple[PromptMessage, ...]) -> int:
+        return llm_router.count_input_tokens(messages, settings=model_settings)
+
     policy = resolved_memory_policy()
     privacy_scanner = create_privacy_scanner(policy.privacy)
     history_sanitizer = create_history_sanitizer(privacy_scanner, policy.privacy)
@@ -103,7 +107,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         memory_task_queue = _chat_runtime.create_thread_pool_memory_task_queue(executor)
         app_chat_service = _chat_runtime.create_chat_service(
-            _chat_runtime.resolve_chat_runtime_config(policy, privacy_scanner),
+            _chat_runtime.resolve_chat_runtime_config(
+                policy, privacy_scanner, model_settings
+            ),
             memory_task_queue,
             ConversationHistoryService(
                 conversation_history_repository,
@@ -112,14 +118,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             _chat_runtime.ChatRuntimeDependencies(
                 character_prompt_loader=_load_character_prompt,
                 prompt_builder=build_chat_prompt,
-                llm_response_generator=_generate_llm_response,
-                input_token_counter=_count_llm_input_tokens,
+                llm_response_generator=generate_llm_response,
+                input_token_counter=count_llm_input_tokens,
             ),
         )
         app.state.chat_service = app_chat_service
         chat_service_state_set = True
         app.state.audio_pipeline_service = create_audio_pipeline_service(
-            resolve_audio_runtime_config(),
+            resolve_audio_runtime_config(model_settings),
         )
         audio_pipeline_state_set = True
         chat_service_resolver = lambda: _app_chat_service(app)

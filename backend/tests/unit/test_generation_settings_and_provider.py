@@ -18,11 +18,11 @@ PROMPT_ENV_KEYS = (
 _BACKEND_DIR = Path(__file__).parent.parent.parent
 
 
-def _prompt_config_module():
-    return importlib.import_module("app.prompting.config")
+def _model_settings_module():
+    return importlib.import_module("app.model_settings")
 
 
-class TestPromptConfig:
+class TestModelSettings:
     def test_chat_runtime_should_require_resolved_prompt_config(self) -> None:
         from app._chat_runtime import ChatRuntimeConfig
 
@@ -34,10 +34,14 @@ class TestPromptConfig:
         lines = (_BACKEND_DIR / ".env.example").read_text().splitlines()
 
         assert {
+            "OLLAMA_CHAT_MODEL=gemma4:e4b",
+            "WHISPER_MODEL=medium",
+            "OLLAMA_CONTEXT_TOKENS=8192",
+            "OLLAMA_RESPONSE_RESERVE_TOKENS=1024",
             "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS=10",
             "CONVERSATION_HISTORY_TOKEN_LIMIT=4096",
             "USER_INPUT_TOKEN_LIMIT=8192",
-            "ASSISTANT_MAX_GENERATION_TOKENS=4096",
+            "ASSISTANT_MAX_GENERATION_TOKENS=1024",
             "LLM_CONTEXT_TOKEN_LIMIT=32768",
         }.issubset(lines)
 
@@ -45,16 +49,17 @@ class TestPromptConfig:
         for key in PROMPT_ENV_KEYS:
             monkeypatch.delenv(key, raising=False)
 
-        config = _prompt_config_module().resolve_prompt_config()
+        config = _model_settings_module().resolve_model_settings({})
 
         assert config.max_completed_turns == 10
         assert config.history_token_limit == 4096
         assert config.user_input_token_limit == 8192
-        assert config.assistant_max_generation_tokens == 4096
-        assert config.context_token_limit == 32768
+        assert config.assistant_max_generation_tokens == 1024
+        assert config.model_context_token_limit == 32768
 
     def test_should_propagate_environment_overrides(self, monkeypatch: pytest.MonkeyPatch) -> None:
         values = {
+            "OLLAMA_CONTEXT_TOKENS": "7000",
             "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "3",
             "CONVERSATION_HISTORY_TOKEN_LIMIT": "1200",
             "USER_INPUT_TOKEN_LIMIT": "600",
@@ -64,14 +69,14 @@ class TestPromptConfig:
         for key, value in values.items():
             monkeypatch.setenv(key, value)
 
-        config = _prompt_config_module().resolve_prompt_config()
+        config = _model_settings_module().resolve_model_settings(values)
 
         assert (
             config.max_completed_turns,
             config.history_token_limit,
             config.user_input_token_limit,
             config.assistant_max_generation_tokens,
-            config.context_token_limit,
+            config.model_context_token_limit,
         ) == (3, 1200, 600, 700, 8000)
 
     @pytest.mark.parametrize("key", PROMPT_ENV_KEYS)
@@ -87,17 +92,24 @@ class TestPromptConfig:
         monkeypatch.setenv(key, value)
 
         with pytest.raises(ValueError, match=key):
-            _prompt_config_module().resolve_prompt_config()
+            _model_settings_module().resolve_model_settings({key: value})
 
     def test_should_reject_generation_reservation_equal_to_context_limit(
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("ASSISTANT_MAX_GENERATION_TOKENS", "1024")
+        monkeypatch.setenv("OLLAMA_CONTEXT_TOKENS", "1024")
         monkeypatch.setenv("LLM_CONTEXT_TOKEN_LIMIT", "1024")
 
         with pytest.raises(ValueError, match="ASSISTANT_MAX_GENERATION_TOKENS"):
-            _prompt_config_module().resolve_prompt_config()
+            _model_settings_module().resolve_model_settings(
+                {
+                    "ASSISTANT_MAX_GENERATION_TOKENS": "1024",
+                    "OLLAMA_CONTEXT_TOKENS": "1024",
+                    "LLM_CONTEXT_TOKEN_LIMIT": "1024",
+                }
+            )
 
 
 def _ollama_response(*, content: str = "reply", prompt_eval_count: object = 7):
@@ -148,7 +160,10 @@ class TestOllamaInputTokens:
             "app.llm.ollama_client.httpx.post",
             return_value=_ollama_response(prompt_eval_count=13),
         ) as post:
-            result = OllamaClient().count_input_tokens(messages)
+            result = OllamaClient(
+                model_name="gemma4:e4b",
+                context_tokens=8192,
+            ).count_input_tokens(messages)
 
         assert result == 13
         assert post.call_args.kwargs["json"]["messages"] == [
@@ -166,7 +181,10 @@ class TestOllamaInputTokens:
             return_value=_ollama_response(prompt_eval_count=value),
         ):
             with pytest.raises(ValueError, match="prompt_eval_count"):
-                OllamaClient().count_input_tokens(
+                OllamaClient(
+                    model_name="gemma4:e4b",
+                    context_tokens=8192,
+                ).count_input_tokens(
                     (PromptMessage(PromptRole.USER, "user"),)
                 )
 
@@ -179,7 +197,10 @@ class TestOllamaInputTokens:
             "app.llm.ollama_client.httpx.post",
             return_value=_ollama_response(),
         ) as post:
-            OllamaClient().generate(prompt, max_output_tokens=777)
+            OllamaClient(
+                model_name="gemma4:e4b",
+                context_tokens=8192,
+            ).generate(prompt, max_output_tokens=777)
 
         assert post.call_args.kwargs["json"]["options"]["num_predict"] == 777
 
@@ -194,7 +215,10 @@ class TestOllamaInputTokens:
                 return_value=_ollama_response(),
             ) as post,
         ):
-            client = ollama_client.OllamaClient()
+            client = ollama_client.OllamaClient(
+                model_name="gemma4:e4b",
+                context_tokens=8192,
+            )
             client.count_input_tokens(prompt.messages)
             client.generate(prompt, max_output_tokens=777)
 
@@ -211,9 +235,14 @@ class TestOllamaInputTokens:
         client = MagicMock()
         client.count_input_tokens.return_value = 9
         client.generate.return_value = "reply"
+        from app.model_settings import resolve_model_settings
+
+        settings = resolve_model_settings({})
         with patch.object(router, "_create_llm_client", return_value=client):
-            counted = router.count_input_tokens(prompt.messages)
-            generated = router.generate_response(prompt, max_output_tokens=321)
+            counted = router.count_input_tokens(prompt.messages, settings=settings)
+            generated = router.generate_response(
+                prompt, max_output_tokens=321, settings=settings
+            )
 
         assert counted == 9
         assert generated == "reply"

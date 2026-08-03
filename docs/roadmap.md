@@ -71,7 +71,7 @@ MVP完了時点で判明したギャップ（多ターン会話、RAG本稼働�
 - [ ] 共通privacy scannerと履歴sanitizer（直接識別値を保存前にマスクし、マスク不能時は本文を保存しない）
 - [x] 会話履歴のプロンプト注入（同じ`character_id` / `conversation_id`の直近N往復だけを復元してLLMへ渡す。RAG無効時も履歴を記録する）
 - [x] PromptBuilderによる合成の一元化（Character Card V3 / RAG記憶 / マスク済み会話履歴 / 現在発言 / 最終指示の順序とtoken budgetを固定）
-- [ ] 設定のenv化（`OLLAMA_CHAT_MODEL` 等、Whisperモデルサイズ、履歴注入数N）
+- [x] 設定のenv化（Ollamaのモデル・context・応答予約量、Whisperモデル、履歴・入出力のtoken上限）
 - [x] Backend／Frontendのconversation lifecycle統合
 - [x] スレッド一覧・再開・アーカイブ・物理削除インターフェース（物理削除はSQLite上のconversationと全turnだけが対象。RAG長期記憶は変更せず、既存backup・snapshot・ファイル複製の消去は保証しない）
 

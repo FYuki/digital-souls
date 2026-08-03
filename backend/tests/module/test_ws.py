@@ -29,8 +29,8 @@ from tests.conversation_history_test_support import (
 )
 
 _LOAD_PERSONALITY = "app.main.load_character_card"
-_GENERATE_RESPONSE = "app.main.generate_response"
-_COUNT_INPUT_TOKENS = "app.main.count_input_tokens"
+_GENERATE_RESPONSE = "app.llm.router.generate_response"
+_COUNT_INPUT_TOKENS = "app.llm.router.count_input_tokens"
 _BUILD_AUGMENTED_SYSTEM_PROMPT = (
     "app._chat_runtime._rag_service.retrieve_prompt_memories"
 )
@@ -49,7 +49,9 @@ _LLM_REPLY = "光織です。よろしくお願いします。"
 
 @pytest.fixture(autouse=True)
 def _formal_token_counter(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(_COUNT_INPUT_TOKENS, lambda messages: len(messages))
+    monkeypatch.setattr(
+        _COUNT_INPUT_TOKENS, lambda messages, *, settings: len(messages)
+    )
 _PCM_AUDIO = b"\x01\x00\x02\x00"
 _ODD_LENGTH_PCM_AUDIO = b"\x01\x00\x03"
 _TTS_CONFIG_MISSING_MESSAGE = "'tts_config' field is missing in character card data"
@@ -313,7 +315,9 @@ class TestWebSocketEndpoint:
     def test_empty_voicevox_base_url_uses_default_runtime_config(self, monkeypatch):
         monkeypatch.setenv("VOICEVOX_BASE_URL", "")
 
-        runtime_config = resolve_audio_runtime_config()
+        from app.model_settings import resolve_model_settings
+
+        runtime_config = resolve_audio_runtime_config(resolve_model_settings({}))
 
         assert runtime_config.voicevox_base_url == DEFAULT_VOICEVOX_BASE_URL
 
@@ -2317,8 +2321,8 @@ class TestWebSocketFlow:
         other_conversation_user = "別会話の内容"
         other_character_user = "別キャラクターの内容"
 
-        def generate(prompt, *, max_output_tokens):
-            del max_output_tokens
+        def generate(prompt, *, max_output_tokens, settings):
+            del max_output_tokens, settings
             current = prompt.messages[-1].content
             if current == target_user:
                 return target_assistant

@@ -593,13 +593,13 @@ class TestRuntimeConfiguration:
             prompt_config.history_token_limit,
             prompt_config.user_input_token_limit,
             prompt_config.assistant_max_generation_tokens,
-            prompt_config.context_token_limit,
+            prompt_config.model_context_token_limit,
         ) == (4, 1300, 650, 750, 9000)
         dependencies = captured["dependencies"]
         assert dependencies.character_prompt_loader is main._load_character_prompt
         assert dependencies.prompt_builder is main.build_chat_prompt
-        assert dependencies.llm_response_generator is main._generate_llm_response
-        assert dependencies.input_token_counter is main._count_llm_input_tokens
+        assert callable(dependencies.llm_response_generator)
+        assert callable(dependencies.input_token_counter)
 
     def test_main_lifespan_cleans_runtime_when_config_resolution_fails(self, monkeypatch):
         import app.chat_service as chat_service
@@ -617,7 +617,7 @@ class TestRuntimeConfiguration:
         def executor_factory(*args, **kwargs):
             return executor
 
-        def fail_config_resolution(_policy, _privacy_scanner):
+        def fail_config_resolution(_policy, _privacy_scanner, _prompt_config):
             raise ValueError("invalid memory policy")
 
         monkeypatch.setattr(main, "ThreadPoolExecutor", executor_factory)

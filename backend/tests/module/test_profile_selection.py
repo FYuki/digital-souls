@@ -1,21 +1,18 @@
 import json
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+from tests.environment_entrypoint_test_support import copy_environment_runtime
 
 
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
-ENVIRONMENTS_DIR = ROOT_DIR / "environments"
 
 
 def _copy_environments(tmp_path: Path) -> Path:
-    target = tmp_path / "environments"
-    shutil.copytree(ENVIRONMENTS_DIR, target)
-    return target
+    return copy_environment_runtime(tmp_path)
 
 
 def _resolve(

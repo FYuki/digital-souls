@@ -1,23 +1,31 @@
 import json
 import os
-import shutil
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 
 import pytest
+from tests.environment_entrypoint_test_support import copy_environment_runtime
 
 
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
-ENVIRONMENTS_DIR = ROOT_DIR / "environments"
 DEPENDENCY_NAMES = {"frontend", "backend", "ollama", "voicevox", "whisper", "chroma"}
+MODEL_DEFAULT_ENVIRONMENT = {
+    "OLLAMA_CHAT_MODEL": "gemma4:e4b",
+    "WHISPER_MODEL": "medium",
+    "OLLAMA_CONTEXT_TOKENS": "8192",
+    "OLLAMA_RESPONSE_RESERVE_TOKENS": "1024",
+    "ASSISTANT_MAX_GENERATION_TOKENS": "1024",
+    "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "10",
+    "CONVERSATION_HISTORY_TOKEN_LIMIT": "4096",
+    "USER_INPUT_TOKEN_LIMIT": "8192",
+    "LLM_CONTEXT_TOKEN_LIMIT": "32768",
+}
 
 
 def _copy_environments(tmp_path: Path) -> Path:
-    target = tmp_path / "environments"
-    shutil.copytree(ENVIRONMENTS_DIR, target)
-    return target
+    return copy_environment_runtime(tmp_path)
 
 
 def _clean_env(**overrides: str) -> dict[str, str]:
@@ -28,6 +36,7 @@ def _clean_env(**overrides: str) -> dict[str, str]:
         "CHAT_E2E_BACKEND",
         "CHAT_E2E_BACKEND_ORIGIN",
         "VOICE_CHAT_E2E_BACKEND_REPORT",
+        *MODEL_DEFAULT_ENVIRONMENT,
     }
     env = {key: value for key, value in os.environ.items() if key not in blocked}
     env.update(overrides)
@@ -270,6 +279,7 @@ def test_should_allowlist_derived_environment_and_exclude_process_secrets(tmp_pa
         "VOICEVOX_BASE_URL",
         "RAG_ENABLED",
         "DS_BACKEND_ORIGIN",
+        *MODEL_DEFAULT_ENVIRONMENT,
     }
     serialized = json.dumps(report)
     assert secret not in serialized
@@ -287,6 +297,7 @@ def test_should_allowlist_derived_environment_and_exclude_process_secrets(tmp_pa
                 "OLLAMA_BASE_URL": "http://localhost:11434",
                 "RAG_ENABLED": "false",
                 "DS_BACKEND_ORIGIN": "http://localhost:8000",
+                **MODEL_DEFAULT_ENVIRONMENT,
             },
         ),
     ],

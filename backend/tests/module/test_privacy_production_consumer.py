@@ -9,13 +9,15 @@ from tests.conversation_history_test_support import CONVERSATION_ID
 pytestmark = pytest.mark.usefixtures("existing_chat_conversations")
 
 
-_GENERATE_RESPONSE = "app.main.generate_response"
-_COUNT_INPUT_TOKENS = "app.main.count_input_tokens"
+_GENERATE_RESPONSE = "app.llm.router.generate_response"
+_COUNT_INPUT_TOKENS = "app.llm.router.count_input_tokens"
 
 
 @pytest.fixture(autouse=True)
 def _formal_token_counter(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(_COUNT_INPUT_TOKENS, lambda messages: len(messages))
+    monkeypatch.setattr(
+        _COUNT_INPUT_TOKENS, lambda messages, *, settings: len(messages)
+    )
 
 
 def _stored_turn(database_path: Path) -> tuple[object, ...]:

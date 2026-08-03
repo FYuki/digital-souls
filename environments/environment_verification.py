@@ -9,6 +9,7 @@ from service_registry import (
     ServiceRegistry,
     operation_context_for,
     require_service_operations,
+    resolve_runtime_services,
 )
 
 
@@ -31,6 +32,9 @@ def verification_checks(
     dependencies = profile["dependencies"]
     if not isinstance(dependencies, dict):
         raise ValueError("resolved dependencies are required")
+    preparable_services = set(
+        resolve_runtime_services(profile, registry).available_prepare_order
+    )
     services: dict[str, dict[str, object]] = {}
     for name in DEPENDENCY_NAMES:
         dependency = dependencies[name]
@@ -81,7 +85,7 @@ def verification_checks(
                     "name": f"{name}-readiness-validation",
                     "classification": classification,
                     "message": validation.message,
-                    "canPrepare": False,
+                    "canPrepare": name in preparable_services,
                 }
             )
         services[name] = {

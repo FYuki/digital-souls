@@ -13,7 +13,7 @@ from app.prompting import (
     TokenBudget,
     TokenCounter,
 )
-from app.prompting.config import PromptRuntimeConfig
+from app.model_settings import ModelSettings
 
 _PROMPT_HISTORY_PAGE_SIZE = 32
 
@@ -24,7 +24,7 @@ def build_chat_prompt(
     rag: RagContext,
     current_user: CurrentUserMessage,
     history_session: HistorySession,
-    config: PromptRuntimeConfig,
+    config: ModelSettings,
     token_counter: TokenCounter,
 ) -> BuiltPrompt:
     try:
@@ -46,7 +46,7 @@ def _build_prompt_input(
     rag: RagContext,
     current_user: CurrentUserMessage,
     history_session: HistorySession,
-    config: PromptRuntimeConfig,
+    config: ModelSettings,
 ) -> PromptBuildInput:
     history = HistoryCandidates(
         newest_first_factory=lambda: (
@@ -62,7 +62,9 @@ def _build_prompt_input(
         ),
         omitted_turns=0,
     )
-    input_limit = config.context_token_limit - config.assistant_max_generation_tokens
+    input_limit = (
+        config.ollama_context_tokens - config.assistant_max_generation_tokens
+    )
     return PromptBuildInput(
         character=character,
         rag=rag,
@@ -81,13 +83,13 @@ def _build_prompt_input(
 
 def _input_limit_error(
     error: PromptInputLimitError,
-    config: PromptRuntimeConfig,
+    config: ModelSettings,
 ) -> chat_service.ChatInputLimitError:
     used = error.used
     limit = error.limit
     if error.region == "total":
         used += config.assistant_max_generation_tokens
-        limit = config.context_token_limit
+        limit = config.ollama_context_tokens
     return chat_service.ChatInputLimitError(
         region=error.region,
         used=used,

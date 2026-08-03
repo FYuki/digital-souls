@@ -74,7 +74,7 @@ DS_PROFILE=test-mocked scripts/start-voice-chat-e2e.sh
 
 起動スクリプトはサービス起動前に中央 resolver で Profile を検証する。`scripts/start-all.sh` の既定出力先は `.runtime/environments/<run-id>/resolved-profile.json` である。Playwright はスイート別入口 `npm run test:e2e:mocked`、`npm run test:integration:text`、`npm run test:integration:voice` を使用し、それぞれ `frontend/test-results/mocked-e2e/resolved-profile.json`、`frontend/test-results/integration-text/resolved-profile.json`、`frontend/test-results/integration-voice/resolved-profile.json` に保存する。この report には選択元、6依存の解決済み `mode` / `source` / 接続先、Capability、子プロセスへ渡す `derivedEnvironment` が記録される。`scripts/start-all.sh` では `DS_PROFILE_REPORT` を指定すると出力先を変更できる。
 
-`derivedEnvironment` の `OLLAMA_BASE_URL`、`VOICEVOX_BASE_URL`、`RAG_ENABLED`、`DS_BACKEND_ORIGIN` は resolver の解決結果から起動対象へ渡される。Backend は `backend/.env` の実行時設定も読み込むが、この4項目は読み込み後に resolved report の値を再適用するため、Profile の構成が優先される。
+`derivedEnvironment` の接続先に加え、`OLLAMA_CHAT_MODEL`、`WHISPER_MODEL`、`OLLAMA_CONTEXT_TOKENS`、応答予約量、履歴・入力・モデルcontext上限は resolver の解決結果から起動対象へ渡される。`scripts/start-backend.sh` は `backend/.env` をProfile解決前に読み込む。`DS_PROFILE_REPORT`で既存のresolved reportを指定しない場合は`.env`のモデル設定を解決結果へ取り込み、指定した場合はreportの解決済み設定を優先する。不正な文字列、正でない整数、応答予約量が実行時context以上、または実行時contextがモデル最大contextを超える指定は、サービス起動前に拒否される。
 
 依存の `source` が `managed` の場合は対応するローカルプロセスまたはコンテナを起動して readiness を待つ。`external` の場合は起動せず、Profile の `readinessUrl` で外部サービスの準備完了だけを確認する。`disabled` の依存は起動しない。
 
@@ -112,9 +112,10 @@ Backend 単体起動では Ollama や VOICEVOX を準備・起動しない。VOI
 - TTS は `VOICEVOX_BASE_URL` を参照し、未設定または空文字時は `http://localhost:50021` に接続する
 - `VoicevoxClient` は `/audio_query` と `/synthesis` を呼び出す
 - 共通環境オーケストレーターの VOICEVOX adapter は Profile の `readinessUrl` で `/version` を確認する
-- Whisper は外部サービスではなく Backend プロセス内で `faster-whisper` の `WhisperModel("medium")` を初回利用時にロードする
+- Whisper は外部サービスではなく Backend プロセス内で `WHISPER_MODEL`（既定 `medium`）を初回利用時にロードする
 - 共通環境オーケストレーターは prepare で Whisper モデルをリポジトリ内の `.cache/huggingface/hub` へ準備し、Backend 実行時も同じ保存先を使う
 - `.cache/huggingface/` は Git 管理対象外である。Backend を単体起動する場合は初回利用時に取得が発生し得るため、オフライン環境では事前にこのキャッシュを用意する
+- `WHISPER_MODEL` を変更した場合、prepare時のcache名・ダウンロード対象・Backend実行モデルが一緒に切り替わる
 
 ## ChromaDB
 

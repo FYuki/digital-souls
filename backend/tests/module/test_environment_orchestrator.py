@@ -17,6 +17,7 @@ def test_should_register_adapters_and_dependency_order_in_one_registry(tmp_path:
     assert set(registry.services) == set(DEPENDENCY_NAMES)
     assert registry.prepare_order == ("backend", "frontend")
     assert registry.start_order == ("ollama", "voicevox", "backend", "frontend")
+    assert registry.available_prepare_order == ("ollama",)
     assert registry.services["whisper"].contained_by == "backend"
     assert registry.services["chroma"].contained_by == "backend"
 

@@ -6,6 +6,12 @@ BACKEND_DIR="$SCRIPT_DIR/../backend"
 VENV_BIN_DIR="$BACKEND_DIR/.venv/bin"
 source "$SCRIPT_DIR/lib/profile.sh"
 
+if [ -f "$BACKEND_DIR/.env" ]; then
+  set -a
+  source "$BACKEND_DIR/.env"
+  set +a
+fi
+
 profile_use_resolved_report_or_resolve "dev"
 profile_require_managed_dependency backend
 RESOLVED_PROFILE_REPORT="$DS_PROFILE_REPORT"
@@ -21,12 +27,6 @@ if [ ! -x "$VENV_BIN_DIR/uvicorn" ]; then
 fi
 
 source "$VENV_BIN_DIR/activate"
-
-if [ -f "$BACKEND_DIR/.env" ]; then
-  set -a
-  source "$BACKEND_DIR/.env"
-  set +a
-fi
 
 export DS_PROFILE_REPORT="$RESOLVED_PROFILE_REPORT"
 profile_export_derived_environment
