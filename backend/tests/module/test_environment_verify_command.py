@@ -257,6 +257,11 @@ def test_should_allow_managed_ollama_model_preparation_through_verify_entrypoint
         "_fetch_json",
         lambda url: {"models": [{"name": "other:latest"}]},
     )
+    monkeypatch.setattr(
+        adapters.ollama.shutil,
+        "which",
+        lambda _command: "/usr/bin/ollama",
+    )
 
     exit_code = verify_command.verify_environment(tmp_path, None)
 

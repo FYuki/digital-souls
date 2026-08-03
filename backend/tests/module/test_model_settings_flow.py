@@ -270,6 +270,11 @@ def test_should_only_pull_the_profile_model_when_managed_ollama_is_missing_it(
         "wait_for_http",
         lambda url, **_options: ReadinessResult(url, 1, 0.001, "ready"),
     )
+    monkeypatch.setattr(
+        ollama.shutil,
+        "which",
+        lambda _command: "/usr/bin/ollama",
+    )
 
     current_report = create_initial_report(
         run_id="model-settings-flow",
