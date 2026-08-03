@@ -1,8 +1,4 @@
-from collections.abc import Callable, Coroutine
-
-from fastapi import APIRouter, HTTPException, Request, Response
-from fastapi.exceptions import RequestValidationError
-from fastapi.routing import APIRoute
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import UUID4, BaseModel, Field
 
 from app.chat_service import (
@@ -11,34 +7,10 @@ from app.chat_service import (
     ChatInputLimitError,
     ChatTimeoutError,
 )
+from app.routers.validation import ConversationRoute
+from app.routers.conversation_contracts import TurnResponse, persisted_turn_response
 
-PUBLIC_VALIDATION_ERROR_FIELDS = frozenset({"type", "loc", "msg"})
-
-
-class _SafeValidationRoute(APIRoute):
-    def get_route_handler(
-        self,
-    ) -> Callable[[Request], Coroutine[object, object, Response]]:
-        route_handler = super().get_route_handler()
-
-        async def safe_route_handler(request: Request) -> Response:
-            try:
-                return await route_handler(request)
-            except RequestValidationError as exc:
-                detail = [
-                    {
-                        key: value
-                        for key, value in error.items()
-                        if key in PUBLIC_VALIDATION_ERROR_FIELDS
-                    }
-                    for error in exc.errors()
-                ]
-                raise HTTPException(status_code=422, detail=detail) from exc
-
-        return safe_route_handler
-
-
-router = APIRouter(route_class=_SafeValidationRoute)
+router = APIRouter(route_class=ConversationRoute)
 
 
 class ChatRequest(BaseModel):
@@ -47,13 +19,16 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
 
 
-class ChatResponse(BaseModel):
+class PersistedChatResponse(BaseModel):
     character: str
-    response: str
+    turn: TurnResponse
 
 
-@router.post("/chat", response_model=ChatResponse)
-def chat(payload: ChatRequest, request: Request) -> ChatResponse:
+@router.post("/chat", response_model=PersistedChatResponse)
+def chat(
+    payload: ChatRequest,
+    request: Request,
+) -> PersistedChatResponse:
     try:
         reply = request.app.state.chat_service.generate_chat_reply(
             payload.character,
@@ -71,4 +46,7 @@ def chat(payload: ChatRequest, request: Request) -> ChatResponse:
         raise HTTPException(status_code=504, detail=exc.detail) from exc
     except ChatBackendError as exc:
         raise HTTPException(status_code=502, detail=exc.detail) from exc
-    return ChatResponse(character=payload.character, response=reply.response)
+    return PersistedChatResponse(
+        character=payload.character,
+        turn=persisted_turn_response(reply.persisted_turn),
+    )

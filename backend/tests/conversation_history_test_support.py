@@ -6,6 +6,7 @@ from uuid import UUID
 
 from app.conversation_history.repository import ConversationHistoryRepository
 from app.conversation_history.schema import initialize_conversation_history_schema
+from app.conversation_history.wal_cleanup import ConversationWalCleanup
 
 
 FIXED_NOW = datetime(2026, 7, 24, 12, 0, tzinfo=UTC)
@@ -50,6 +51,12 @@ def create_repository(
     }
     if connection_factory is not None:
         arguments["connection_factory"] = connection_factory
+    resolved_connection_factory = connection_factory or sqlite3.connect
+    arguments["wal_cleanup"] = ConversationWalCleanup(
+        database_path=database_path,
+        clock=lambda: now,
+        connection_factory=resolved_connection_factory,
+    )
     return ConversationHistoryRepository(**arguments)
 
 

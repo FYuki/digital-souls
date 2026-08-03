@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
+from app.chat_service import ChatReply, PersistedContentTurn
 from app.routers.chat import router as chat_router
 from app.audio_pipeline import AudioPipelineStepError
 from app.routers.ws import router as ws_router
@@ -17,6 +18,15 @@ from tests.conversation_history_test_support import CONVERSATION_ID, TURN_ID
 
 
 UUID_V1 = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+
+
+def _persisted_reply() -> ChatReply:
+    turn = PersistedContentTurn(
+        turn_id=TURN_ID,
+        user_content="保存済みの質問",
+        assistant_content="完全な回答",
+    )
+    return ChatReply(TURN_ID, turn)
 
 
 def _chat_client(service: MagicMock) -> TestClient:
@@ -63,16 +73,14 @@ def test_should_reject_invalid_http_conversation_id_before_service_call(
 
 def test_should_pass_http_ids_to_the_shared_lifecycle_service() -> None:
     service = MagicMock()
-    service.generate_chat_reply.return_value = SimpleNamespace(
-        response="応答です",
-        turn_id=TURN_ID,
-    )
+    service.generate_chat_reply.return_value = _persisted_reply()
 
     with _chat_client(service) as client:
         response = client.post("/chat", json=_valid_body())
 
     assert response.status_code == 200
-    assert response.json() == {"character": "miori", "response": "応答です"}
+    assert response.json()["character"] == "miori"
+    assert response.json()["turn"]["assistant_content"] == "完全な回答"
     service.generate_chat_reply.assert_called_once_with(
         "miori",
         CONVERSATION_ID,
@@ -145,9 +153,9 @@ class _DeliverySession:
         self.delivered: list[UUID] = []
         self.failed: list[UUID] = []
 
-    def generate_reply(self, message: str) -> SimpleNamespace:
+    def generate_reply(self, message: str) -> ChatReply:
         assert message == "こんにちは"
-        return SimpleNamespace(response="完全な回答", turn_id=TURN_ID)
+        return _persisted_reply()
 
     def mark_delivered(self, turn_id: UUID) -> None:
         self.delivered.append(turn_id)
@@ -183,7 +191,7 @@ class _StageFailingWebSocket:
         self.sent: list[tuple[str, object]] = []
 
     async def send_json(self, payload: dict[str, object]) -> None:
-        stage = "user_transcript" if payload.get("speaker") == "user" else "assistant_text"
+        stage = "persisted_turn"
         if self.failing_stage == stage:
             raise RuntimeError(f"synthetic {stage} send failure")
         self.sent.append((stage, payload))
@@ -209,7 +217,8 @@ def test_should_acknowledge_text_turn_only_after_websocket_send_succeeds() -> No
     )
 
     assert keep_open is True
-    assert websocket.sent == [{"type": "text", "response": "完全な回答"}]
+    assert websocket.sent[0]["type"] == "text"
+    assert websocket.sent[0]["turn"]["assistant_content"] == "完全な回答"
     assert session.delivered == [TURN_ID]
     assert session.failed == []
 
@@ -266,17 +275,8 @@ def test_should_fail_generated_audio_turn_when_tts_fails() -> None:
 @pytest.mark.parametrize(
     ("failing_stage", "sent_stages"),
     [
-        pytest.param("user_transcript", [], id="user-transcript"),
-        pytest.param(
-            "assistant_text",
-            ["user_transcript"],
-            id="assistant-text",
-        ),
-        pytest.param(
-            "audio_bytes",
-            ["user_transcript", "assistant_text"],
-            id="audio-bytes",
-        ),
+        pytest.param("persisted_turn", [], id="persisted-turn"),
+        pytest.param("audio_bytes", ["persisted_turn"], id="audio-bytes"),
     ],
 )
 def test_should_fail_generated_audio_turn_at_each_send_stage(
@@ -320,8 +320,7 @@ def test_should_acknowledge_audio_turn_only_after_all_send_stages_succeed() -> N
 
     assert keep_open is True
     assert [stage for stage, _ in websocket.sent] == [
-        "user_transcript",
-        "assistant_text",
+        "persisted_turn",
         "audio_bytes",
     ]
     assert session.delivered == [TURN_ID]
@@ -365,7 +364,7 @@ def test_should_not_terminalize_a_turn_twice_when_send_failure_and_close_overlap
             self.pending: set[UUID] = set()
             self.close_calls = 0
 
-        def generate_reply(self, message: str) -> SimpleNamespace:
+        def generate_reply(self, message: str) -> ChatReply:
             reply = super().generate_reply(message)
             self.pending.add(reply.turn_id)
             return reply
@@ -427,6 +426,7 @@ def test_should_fail_late_generated_turn_once_when_disconnect_closes_session() -
     from app.routers.ws import websocket_chat
 
     generation_started = threading.Event()
+    generation_finished = threading.Event()
     release_generation = threading.Event()
 
     class RacingSession(_DeliverySession):
@@ -435,14 +435,17 @@ def test_should_fail_late_generated_turn_once_when_disconnect_closes_session() -
             self.closed = False
             self.close_calls = 0
 
-        def generate_reply(self, message: str) -> SimpleNamespace:
+        def generate_reply(self, message: str) -> ChatReply:
             generation_started.set()
-            if not release_generation.wait(timeout=2):
-                raise RuntimeError("test generation release timed out")
-            reply = super().generate_reply(message)
-            if self.closed and reply.turn_id not in self.failed:
-                self.failed.append(reply.turn_id)
-            return reply
+            try:
+                if not release_generation.wait(timeout=2):
+                    raise RuntimeError("test generation release timed out")
+                reply = super().generate_reply(message)
+                if self.closed and reply.turn_id not in self.failed:
+                    self.failed.append(reply.turn_id)
+                return reply
+            finally:
+                generation_finished.set()
 
         def close(self) -> None:
             self.close_calls += 1
@@ -491,6 +494,7 @@ def test_should_fail_late_generated_turn_once_when_disconnect_closes_session() -
         CONVERSATION_ID,
     )
 
+    assert generation_finished.wait(timeout=2)
     assert session.close_calls == 1
     assert session.failed == [TURN_ID]
     assert session.delivered == []

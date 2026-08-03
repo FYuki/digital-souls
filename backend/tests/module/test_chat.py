@@ -43,6 +43,8 @@ _VALID_BODY = {
 _PERSONALITY = "# 光織\n穏やかなAIです。"
 _LLM_REPLY = "光織です。よろしくお願いします。"
 
+pytestmark = pytest.mark.usefixtures("existing_chat_conversations")
+
 
 @pytest.fixture(autouse=True)
 def _formal_token_counter(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -231,19 +233,19 @@ class TestChatEndpoint:
 
         assert "character" in response.json()
 
-    def test_response_has_response_key(self, client):
+    def test_response_has_persisted_turn_key(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                 response = client.post("/chat", json=_VALID_BODY)
 
-        assert "response" in response.json()
+        assert "turn" in response.json()
 
     def test_response_body_has_exactly_two_keys(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                 response = client.post("/chat", json=_VALID_BODY)
 
-        assert set(response.json().keys()) == {"character", "response"}
+        assert set(response.json().keys()) == {"character", "turn"}
 
     def test_response_character_echoes_request_character(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
@@ -252,13 +254,13 @@ class TestChatEndpoint:
 
         assert response.json()["character"] == _VALID_BODY["character"]
 
-    def test_response_field_contains_llm_output(self, client):
+    def test_persisted_turn_contains_masked_llm_output(self, client):
         expected = "こんにちは、光織です。"
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=expected):
                 response = client.post("/chat", json=_VALID_BODY)
 
-        assert response.json()["response"] == expected
+        assert response.json()["turn"]["assistant_content"] == expected
 
     def test_load_personality_called_with_character_name(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()) as mock_load:
@@ -365,6 +367,70 @@ class TestChatEndpoint:
             response = client.post("/chat", json=_VALID_BODY)
 
         assert response.status_code == 404
+
+    @pytest.mark.parametrize("operation", ["archive", "hard_delete"])
+    def test_returns_safe_404_when_conversation_is_unavailable(
+        self,
+        client,
+        operation: str,
+    ):
+        repository = client.app.state.conversation_history_repository
+        conversation = repository.create_conversation("miori")
+        repository.archive_conversation("miori", conversation.conversation_id)
+        if operation == "hard_delete":
+            repository.hard_delete_conversation(
+                "miori",
+                conversation.conversation_id,
+            )
+        payload = {
+            **_VALID_BODY,
+            "conversation_id": str(conversation.conversation_id),
+        }
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
+                response = client.post("/chat", json=payload)
+
+        assert response.status_code == 404
+        assert response.json() == {"detail": "conversation was not found"}
+        mock_gen.assert_not_called()
+
+    def test_returns_safe_404_without_creating_an_unknown_conversation(
+        self,
+        client,
+        unknown_chat_conversation,
+    ):
+        repository = client.app.state.conversation_history_repository
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
+                response = client.post("/chat", json=_VALID_BODY)
+
+        assert response.status_code == 404
+        assert response.json() == {"detail": "conversation was not found"}
+        assert repository.list_active_conversations("miori") == []
+        mock_gen.assert_not_called()
+
+    def test_hides_cross_character_conversation_as_the_same_safe_404(
+        self,
+        client,
+    ):
+        repository = client.app.state.conversation_history_repository
+        conversation = repository.create_conversation("miori")
+        payload = {
+            **_VALID_BODY,
+            "character": "akira",
+            "conversation_id": str(conversation.conversation_id),
+        }
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
+                response = client.post("/chat", json=payload)
+
+        assert response.status_code == 404
+        assert response.json() == {"detail": "conversation was not found"}
+        assert repository.list_active_conversations("akira") == []
+        mock_gen.assert_not_called()
 
     def test_does_not_call_llm_when_character_not_found(self, client):
         with patch(_LOAD_PERSONALITY, side_effect=FileNotFoundError("character not found")):
@@ -529,7 +595,8 @@ class TestChatFlow:
             )
 
         assert response.status_code == 200
-        assert response.json() == {"character": "miori", "response": expected_reply}
+        assert response.json()["character"] == "miori"
+        assert response.json()["turn"]["assistant_content"] == expected_reply
 
         payload = mock_post.call_args.kwargs["json"]
         assert payload["messages"] == [
@@ -575,7 +642,8 @@ class TestChatFlow:
                             )
 
         assert response.status_code == 200
-        assert response.json() == {"character": "miori", "response": expected_reply}
+        assert response.json()["character"] == "miori"
+        assert response.json()["turn"]["assistant_content"] == expected_reply
         mock_policy.assert_called_once_with()
         mock_build.assert_called_once_with(
             "miori",
@@ -639,7 +707,8 @@ class TestChatFlow:
                 )
 
         assert response.status_code == 200
-        assert response.json() == {"character": "miori", "response": expected_reply}
+        assert response.json()["character"] == "miori"
+        assert response.json()["turn"]["assistant_content"] == expected_reply
         payload = mock_post.call_args.kwargs["json"]
         assert payload["messages"] == [
             {"role": "system", "content": f"## 応答方針\n{system_prompt}"},

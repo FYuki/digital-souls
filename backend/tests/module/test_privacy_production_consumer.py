@@ -6,6 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 from tests.conversation_history_test_support import CONVERSATION_ID
 
+pytestmark = pytest.mark.usefixtures("existing_chat_conversations")
+
 
 _GENERATE_RESPONSE = "app.llm.router.generate_response"
 _COUNT_INPUT_TOKENS = "app.llm.router.count_input_tokens"

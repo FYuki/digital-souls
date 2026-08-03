@@ -20,7 +20,15 @@ describe('sendChatMessage', () => {
   test('should post character, conversation_id, and message in the root JSON request body', async () => {
     const fetchMock = vi.fn<
       (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
-    >(async () => response({ character: 'miori', response: 'おかえりなさい。' }))
+    >(async () => response({
+      character: 'miori',
+      turn: {
+        kind: 'content',
+        turn_id: CONVERSATION_ID,
+        user_content: 'ただいま',
+        assistant_content: 'おかえりなさい。',
+      },
+    }))
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await sendChatMessage({
@@ -43,7 +51,7 @@ describe('sendChatMessage', () => {
       conversation_id: CONVERSATION_ID,
       message: 'ただいま',
     })
-    expect(result).toEqual({ character: 'miori', response: 'おかえりなさい。' })
+    expect(result.turn).toMatchObject({ assistant_content: 'おかえりなさい。' })
   })
 
   test('should reject a non-success HTTP response', async () => {
@@ -69,7 +77,15 @@ describe('sendChatMessage', () => {
   })
 
   test('should reject a response for a different character', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => response({ character: 'other', response: '混入' })))
+    vi.stubGlobal('fetch', vi.fn(async () => response({
+      character: 'other',
+      turn: {
+        kind: 'content',
+        turn_id: CONVERSATION_ID,
+        user_content: '混入',
+        assistant_content: '混入',
+      },
+    })))
 
     await expect(
       sendChatMessage({ character: 'miori', conversationId: CONVERSATION_ID, message: '応答して' }),

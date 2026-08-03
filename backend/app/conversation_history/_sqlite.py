@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import UUID
 
 from app.conversation_history.errors import (
+    ConversationCharacterBoundaryError,
     ConversationNotFoundError,
     TurnNotFoundError,
 )
@@ -39,6 +40,7 @@ class SqliteSession:
         connection = self._connection_factory(self._database_path)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA secure_delete = ON")
         try:
             yield connection
         finally:
@@ -62,16 +64,59 @@ def select_conversation(
     conversation_id: UUID,
 ) -> Conversation:
     row = connection.execute(
-        "SELECT character_id, conversation_id, created_at FROM conversations "
-        "WHERE character_id = ? AND conversation_id = ?",
+        "SELECT c.character_id, c.conversation_id, c.created_at, "
+        "COALESCE(MAX(t.updated_at), c.created_at), c.archived_at "
+        "FROM conversations AS c LEFT JOIN conversation_turns AS t "
+        "ON t.character_id = c.character_id "
+        "AND t.conversation_id = c.conversation_id "
+        "WHERE c.character_id = ? AND c.conversation_id = ? "
+        "AND c.archived_at IS NULL GROUP BY c.character_id, c.conversation_id",
         (character_id, str(conversation_id)),
     ).fetchone()
     if row is None:
-        raise ConversationNotFoundError()
+        raise conversation_not_found_error(
+            connection,
+            character_id,
+            conversation_id,
+        )
     return Conversation(
         character_id=str(row[0]),
         conversation_id=UUID(str(row[1])),
         created_at=parse_datetime(str(row[2])),
+        updated_at=parse_datetime(str(row[3])),
+        archived_at=None,
+    )
+
+
+def conversation_not_found_error(
+    connection: sqlite3.Connection,
+    character_id: str,
+    conversation_id: UUID,
+) -> ConversationNotFoundError:
+    inside_boundary = connection.execute(
+        "SELECT 1 FROM conversations WHERE character_id = ? "
+        "AND conversation_id = ? LIMIT 1",
+        (character_id, str(conversation_id)),
+    ).fetchone()
+    if inside_boundary is not None:
+        return ConversationNotFoundError()
+    outside_boundary = connection.execute(
+        "SELECT 1 FROM conversations WHERE character_id <> ? "
+        "AND conversation_id = ? LIMIT 1",
+        (character_id, str(conversation_id)),
+    ).fetchone()
+    if outside_boundary is not None:
+        return ConversationCharacterBoundaryError()
+    return ConversationNotFoundError()
+
+
+def conversation_from_row(row: sqlite3.Row) -> Conversation:
+    return Conversation(
+        character_id=str(row[0]),
+        conversation_id=UUID(str(row[1])),
+        created_at=parse_datetime(str(row[2])),
+        updated_at=parse_datetime(str(row[3])),
+        archived_at=None if row[4] is None else parse_datetime(str(row[4])),
     )
 
 

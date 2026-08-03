@@ -10,6 +10,7 @@ from app.prompting import (
     RagContext,
 )
 from app.chat_prompt import build_chat_prompt
+from app.chat_service import PersistedContentTurn
 from tests.prompt_test_support import prompt_build_input, prompt_builder
 from app.conversation_history.models import ProcessingTurnInput
 from app.conversation_history.service import ConversationHistorySession
@@ -409,7 +410,8 @@ def test_runtime_should_inject_history_when_rag_is_disabled(
         "RAW_RUNTIME_CURRENT",
     )
 
-    assert result.response == "reply"
+    assert isinstance(result.persisted_turn, PersistedContentTurn)
+    assert result.persisted_turn.assistant_content == "MASKED_RUNTIME_REPLY"
     retrieve.assert_not_called()
     prompt = captured["prompt"]
     assert [message.content for message in prompt.messages[-3:]] == [

@@ -54,8 +54,9 @@ MVP（テキスト+音声チャット、RAG基盤）完了後の開発を、Wave
 
 ### 1. SQLite会話履歴schema
 
-既存SQLiteはテストデータのためmigrationせず削除し、`conversations`と`conversation_turns`を
-空状態から作成する。UI上のスレッドIDは実装上の`conversation_id`へ統一する。
+開発用SQLiteの既存レコードはテストデータのため削除し、現行schemaを空状態から作成する。
+一方、正式な旧schema v2のDBは既存conversationとturnを保持してv3へmigrationする。
+契約外schemaは自動migrationしない。UI上のスレッドIDは実装上の`conversation_id`へ統一する。
 
 ### 2. 共通privacy scannerと履歴sanitizer
 

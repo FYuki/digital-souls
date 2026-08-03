@@ -6,6 +6,7 @@ import {
   readResolvedProfile,
   type ResolvedProfile,
 } from '../../playwright/resolved-profile'
+import { hardDeleteSelectedConversation } from '../../playwright/conversation-cleanup'
 import {
   createVoiceChatDriver,
   createVoiceTestUseOptions,
@@ -22,6 +23,10 @@ test.beforeEach(async ({}, testInfo) => {
   await attachProfileEvidence(testInfo, resolvedProfile)
   const reason = getCapabilitySkipReason(resolvedProfile, 'voice-chat-real')
   if (reason !== null) test.skip(true, reason)
+})
+
+test.afterEach(async ({ page }) => {
+  await hardDeleteSelectedConversation(page, 'miori')
 })
 
 test.use(createVoiceTestUseOptions())
@@ -53,7 +58,7 @@ test('実音声応答はuser text、miori text、audio binaryの順で受信す�
   await driver.enableMicrophone(page)
   await driver.waitForSpeechCompletion(page)
   await driver.expectMessages(page)
-  await expect(driver.waitForFrameOrder(page)).resolves.toEqual(['user-text', 'miori-text', 'audio'])
+  await expect(driver.waitForFrameOrder(page)).resolves.toEqual(['persisted-turn', 'audio'])
 })
 
 test('実音声応答のバイナリフレームを受信するとブラウザで音声再生を開始する', async ({ page }) => {

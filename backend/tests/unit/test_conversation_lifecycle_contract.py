@@ -40,9 +40,9 @@ def _session(repository: MagicMock, sanitizer: MagicMock) -> ConversationHistory
     )
 
 
-def test_should_open_the_client_selected_character_conversation_boundary() -> None:
+def test_should_resume_the_client_selected_character_conversation_boundary() -> None:
     repository = MagicMock()
-    repository.ensure_conversation.return_value = SimpleNamespace(
+    repository.resume_conversation.return_value = SimpleNamespace(
         character_id="miori",
         conversation_id=CONVERSATION_ID,
     )
@@ -50,7 +50,7 @@ def test_should_open_the_client_selected_character_conversation_boundary() -> No
 
     session = service.open_session("miori", CONVERSATION_ID)
 
-    repository.ensure_conversation.assert_called_once_with("miori", CONVERSATION_ID)
+    repository.resume_conversation.assert_called_once_with("miori", CONVERSATION_ID)
     assert isinstance(session, ConversationHistorySession)
 
 
@@ -119,12 +119,12 @@ def test_should_sanitize_complete_assistant_reply_even_after_user_content_skip()
     session = _session(repository, sanitizer)
     started = session.start_turn("このターンは履歴に残さないで")
 
-    delivery_trackable = session.complete_turn(started, "完全な回答")
+    persisted_turn = session.complete_turn(started, "完全な回答")
 
     sanitizer.sanitize_assistant.assert_called_once_with("完全な回答")
     repository.complete_turn.assert_not_called()
     repository.skip_processing_turn_for_privacy.assert_not_called()
-    assert delivery_trackable is False
+    assert persisted_turn is repository.create_privacy_skipped_turn.return_value
 
 
 def test_should_atomically_erase_processing_content_on_assistant_scan_failure() -> None:
@@ -139,7 +139,7 @@ def test_should_atomically_erase_processing_content_on_assistant_scan_failure() 
     session = _session(repository, sanitizer)
     started = SimpleNamespace(turn_id=TURN_ID, content_skipped=False)
 
-    delivery_trackable = session.complete_turn(started, raw_assistant_secret)
+    persisted_turn = session.complete_turn(started, raw_assistant_secret)
 
     persisted = repository.skip_processing_turn_for_privacy.call_args.args[3]
     assert persisted.reason_code is HistoryDecisionReasonCode.SCAN_FAILURE
@@ -147,4 +147,4 @@ def test_should_atomically_erase_processing_content_on_assistant_scan_failure() 
     assert persisted.policy_version == POLICY_VERSION
     assert raw_assistant_secret not in repr(repository.mock_calls)
     repository.complete_turn.assert_not_called()
-    assert delivery_trackable is False
+    assert persisted_turn is repository.skip_processing_turn_for_privacy.return_value

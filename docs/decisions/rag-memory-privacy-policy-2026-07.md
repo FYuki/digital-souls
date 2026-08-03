@@ -245,7 +245,8 @@ conversation単位の操作では、アーカイブと物理削除を分離す�
 SQLiteへ保持したまま通常一覧、prompt注入、追記対象から除外し、明示的なunarchive後に同じ
 `conversation_id`で再開できる。物理削除はconversationと全turnを同一transactionでhard deleteし、
 RAG長期記憶は暗黙削除しない。SQLiteでは`secure_delete`を有効にし、WAL利用時は削除後の
-checkpoint／truncateを行う。backup、snapshot、OS／ストレージ層の削除保証は別途管理する。
+checkpoint／truncateを行う。既存のbackup、snapshot、ファイルシステム上の複製からの消去は
+保証しない。RAG長期記憶の閲覧・訂正・物理削除とChroma同期削除はWave 2で実装する。
 
 ### 7. 保存先ごとに機微情報の扱いを分ける
 
@@ -474,6 +475,10 @@ false-negative rate、false-positive rateを含む本格評価へ拡張する。
 6. 新しい`approved_memories`だけをChromaへ登録
 
 旧SQLiteの生会話からChromaを再構築しない。
+
+この切替手順は開発用テストデータの破棄を定める。正式な会話履歴schema v2のDBは、
+conversationとturnを保持したまま`archived_at`とWAL後処理用metadataを持つschema v3へ
+runtime migrationする。version番号だけが一致する契約外schemaはmigrationせず拒否する。
 
 ## MVPで実装しない項目
 

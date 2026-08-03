@@ -16,6 +16,7 @@ from app.memory.chroma_store import MemorySearchResult
 from app.prompting import CharacterPrompt, PromptInputLimitError
 from app.prompting.builder import PromptBuilder
 from app.tts.voicevox_client import DEFAULT_VOICEVOX_BASE_URL
+from tests.chat_reply_test_support import persisted_reply
 from tests.character_card_test_support import (
     character_card_data,
     character_card_document,
@@ -55,6 +56,8 @@ _PCM_AUDIO = b"\x01\x00\x02\x00"
 _ODD_LENGTH_PCM_AUDIO = b"\x01\x00\x03"
 _TTS_CONFIG_MISSING_MESSAGE = "'tts_config' field is missing in character card data"
 _WS_URL = f"/ws/miori?conversation_id={CONVERSATION_ID}"
+
+pytestmark = pytest.mark.usefixtures("existing_chat_conversations")
 
 
 class _StubDeliverySession:
@@ -100,6 +103,25 @@ def _generated_user_messages(generate: MagicMock) -> list[str]:
 def _wait_for_event(event: threading.Event, label: str, timeout: float = 5.0) -> None:
     if not event.wait(timeout=timeout):
         raise AssertionError(f"{label} was not observed before timeout")
+
+
+def _assert_persisted_content_frame(payload: dict, assistant_content: str) -> None:
+    assert set(payload) == {"type", "turn"}
+    assert payload["type"] == "text"
+    assert payload["turn"]["kind"] == "content"
+    assert payload["turn"]["assistant_content"] == assistant_content
+
+
+def _persisted_content_frame(assistant_content: str) -> dict:
+    return {
+        "type": "text",
+        "turn": {
+            "kind": "content",
+            "turn_id": str(TURN_ID),
+            "user_content": "saved user content",
+            "assistant_content": assistant_content,
+        },
+    }
 
 
 def _tts_config():
@@ -187,7 +209,7 @@ class TestWebSocketEndpoint:
                 "region=current_user used=8193 limit=8192"
             ),
         }
-        assert normal_response == {"type": "text", "response": _LLM_REPLY}
+        _assert_persisted_content_frame(normal_response, _LLM_REPLY)
         assert secret not in str(limit_response)
         assert secret not in caplog.text
 
@@ -239,7 +261,7 @@ class TestWebSocketEndpoint:
                 "region=current_user used=8193 limit=8192"
             ),
         }
-        assert normal_response == {"type": "text", "response": _LLM_REPLY}
+        _assert_persisted_content_frame(normal_response, _LLM_REPLY)
         assert secret not in str(limit_response)
         assert secret not in caplog.text
         mock_tts.assert_not_called()
@@ -308,7 +330,7 @@ class TestWebSocketEndpoint:
                     )
                     response = websocket.receive_json()
 
-        assert response == {"type": "text", "response": _LLM_REPLY}
+        _assert_persisted_content_frame(response, _LLM_REPLY)
 
     def test_loads_personality_from_path_character_name(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()) as mock_load:
@@ -375,7 +397,7 @@ class TestWebSocketEndpoint:
                                     )
                                     response = websocket.receive_json()
 
-        assert response == {"type": "text", "response": _LLM_REPLY}
+        _assert_persisted_content_frame(response, _LLM_REPLY)
         mock_build.assert_called_once_with(
             "miori",
             user_message,
@@ -483,6 +505,134 @@ class TestWebSocketEndpoint:
             "detail": "Character 'unknown' not found",
         }
         mock_gen.assert_not_called()
+
+    @pytest.mark.parametrize("operation", ["archive", "hard_delete"])
+    def test_returns_safe_404_when_conversation_is_unavailable(
+        self,
+        client,
+        operation: str,
+    ):
+        repository = client.app.state.conversation_history_repository
+        conversation = repository.create_conversation("miori")
+        repository.archive_conversation("miori", conversation.conversation_id)
+        if operation == "hard_delete":
+            repository.hard_delete_conversation(
+                "miori",
+                conversation.conversation_id,
+            )
+        ws_url = f"/ws/miori?conversation_id={conversation.conversation_id}"
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
+                with client.websocket_connect(ws_url) as websocket:
+                    response = websocket.receive_json()
+                    with pytest.raises(WebSocketDisconnect):
+                        websocket.receive_json()
+
+        assert response == {
+            "type": "error",
+            "status": 404,
+            "detail": "conversation was not found",
+        }
+        mock_gen.assert_not_called()
+
+    def test_returns_safe_404_for_unknown_conversation_without_creating_it(
+        self,
+        client,
+        unknown_chat_conversation,
+    ):
+        repository = client.app.state.conversation_history_repository
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
+                with client.websocket_connect(_WS_URL) as websocket:
+                    websocket.send_json({"type": "text", "message": "こんにちは"})
+                    response = websocket.receive_json()
+
+        assert response == {
+            "type": "error",
+            "status": 404,
+            "detail": "conversation was not found",
+        }
+        assert repository.list_active_conversations("miori") == []
+        mock_gen.assert_not_called()
+
+    def test_returns_safe_404_when_conversation_is_archived_after_session_open(
+        self,
+        client,
+    ):
+        repository = client.app.state.conversation_history_repository
+        conversation = repository.create_conversation("miori")
+        ws_url = f"/ws/miori?conversation_id={conversation.conversation_id}"
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
+                with client.websocket_connect(ws_url) as websocket:
+                    repository.archive_conversation(
+                        "miori",
+                        conversation.conversation_id,
+                    )
+                    websocket.send_json({"type": "text", "message": "こんにちは"})
+                    response = websocket.receive_json()
+                    with pytest.raises(WebSocketDisconnect):
+                        websocket.receive_json()
+
+        assert response == {
+            "type": "error",
+            "status": 404,
+            "detail": "conversation was not found",
+        }
+        mock_gen.assert_not_called()
+
+    def test_audio_handler_returns_safe_404_when_conversation_becomes_unavailable(
+        self,
+    ):
+        import asyncio
+
+        from app.conversation_history.errors import ConversationNotFoundError
+        from app.routers.ws import _handle_audio_payload
+
+        class RecordingWebSocket:
+            def __init__(self):
+                self.sent_json = []
+                self.closed = False
+
+            async def send_json(self, payload):
+                self.sent_json.append(payload)
+
+            async def close(self):
+                self.closed = True
+
+        class MissingConversationSession:
+            def generate_reply(self, message):
+                raise ConversationNotFoundError()
+
+        class CallbackAudioSession:
+            def generate_response_audio(self, audio, generate_reply):
+                generate_reply("保存してはいけない文字起こし")
+
+        async def run_handler():
+            websocket = RecordingWebSocket()
+            keep_open = await _handle_audio_payload(
+                websocket,
+                asyncio.Lock(),
+                MissingConversationSession(),
+                CallbackAudioSession(),
+                _PCM_AUDIO,
+            )
+            return keep_open, websocket
+
+        keep_open, websocket = anyio.run(run_handler)
+
+        assert keep_open is False
+        assert websocket.sent_json == [
+            {
+                "type": "error",
+                "status": 404,
+                "detail": "conversation was not found",
+            }
+        ]
+        assert websocket.closed is True
 
     def test_should_use_shared_mapping_when_opening_chat_session_fails(
         self,
@@ -739,7 +889,7 @@ class TestWebSocketEndpoint:
             "status": 422,
             "detail": "WebSocket audio frame must be bytes",
         }
-        assert second_response == {"type": "text", "response": _LLM_REPLY}
+        _assert_persisted_content_frame(second_response, _LLM_REPLY)
         assert _generated_contents(mock_gen)[-1] == "続けてください"
 
     def test_returns_504_error_when_llm_request_times_out(self, client):
@@ -869,7 +1019,7 @@ class TestWebSocketEndpoint:
                     second_response = websocket.receive_json()
 
         assert first_response == expected_response
-        assert second_response == {"type": "text", "response": _LLM_REPLY}
+        _assert_persisted_content_frame(second_response, _LLM_REPLY)
 
     @pytest.mark.parametrize(
         ("llm_error", "expected_response"),
@@ -921,7 +1071,7 @@ class TestWebSocketEndpoint:
                                 text_response = websocket.receive_json()
 
         assert audio_error == expected_response
-        assert text_response == {"type": "text", "response": _LLM_REPLY}
+        _assert_persisted_content_frame(text_response, _LLM_REPLY)
         assert _generated_user_messages(mock_gen) == [
             "audio question",
             "continue",
@@ -940,16 +1090,10 @@ class TestWebSocketEndpoint:
                             with patch(_SYNTHESIZE, return_value=output_audio) as mock_tts:
                                 with client.websocket_connect(_WS_URL) as websocket:
                                     websocket.send_bytes(_PCM_AUDIO)
-                                    user_text = websocket.receive_json()
-                                    miori_text = websocket.receive_json()
+                                    persisted_turn = websocket.receive_json()
                                     response = websocket.receive_bytes()
 
-        assert user_text == {"type": "text", "speaker": "user", "message": "こんにちは"}
-        assert miori_text == {
-            "type": "text",
-            "speaker": "miori",
-            "response": _LLM_REPLY,
-        }
+        _assert_persisted_content_frame(persisted_turn, _LLM_REPLY)
         assert response == output_audio
         mock_transcribe.assert_called_once_with(_PCM_AUDIO)
         assert _generated_contents(mock_gen)[-1] == "こんにちは"
@@ -973,7 +1117,6 @@ class TestWebSocketEndpoint:
                                 with client.websocket_connect(_WS_URL) as websocket:
                                     websocket.send_bytes(audio_frame)
                                     websocket.receive_json()
-                                    websocket.receive_json()
                                     response = websocket.receive_bytes()
 
         assert response == output_audio
@@ -994,16 +1137,10 @@ class TestWebSocketEndpoint:
                             with patch(_SYNTHESIZE, return_value=output_audio):
                                 with client.websocket_connect(_WS_URL) as websocket:
                                     websocket.send_bytes(audio_frame)
-                                    user_text = websocket.receive_json()
-                                    miori_text = websocket.receive_json()
+                                    persisted_turn = websocket.receive_json()
                                     response = websocket.receive_bytes()
 
-        assert user_text == {"type": "text", "speaker": "user", "message": "上限ちょうど"}
-        assert miori_text == {
-            "type": "text",
-            "speaker": "miori",
-            "response": _LLM_REPLY,
-        }
+        _assert_persisted_content_frame(persisted_turn, _LLM_REPLY)
         assert response == output_audio
         mock_transcribe.assert_called_once_with(audio_frame)
 
@@ -1046,22 +1183,16 @@ class TestWebSocketEndpoint:
                             with patch(_SYNTHESIZE, return_value=output_audio):
                                 with client.websocket_connect(_WS_URL) as websocket:
                                     websocket.send_bytes(_PCM_AUDIO)
-                                    user_text = websocket.receive_json()
-                                    miori_text = websocket.receive_json()
+                                    persisted_turn = websocket.receive_json()
                                     response = websocket.receive_bytes()
 
-        assert user_text == {"type": "text", "speaker": "user", "message": "音声入力"}
-        assert miori_text == {
-            "type": "text",
-            "speaker": "miori",
-            "response": "応答:音声入力",
-        }
+        _assert_persisted_content_frame(persisted_turn, "応答:音声入力")
         assert response == output_audio
 
     def test_creates_audio_session_in_threadpool(self):
         class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return ChatReply(f"reply:{message}", TURN_ID)
+                return persisted_reply(f"reply:{message}", TURN_ID)
 
         class RecordingChatService:
             def __init__(self):
@@ -1096,7 +1227,6 @@ class TestWebSocketEndpoint:
             with client.websocket_connect(_WS_URL) as websocket:
                 websocket.send_bytes(_PCM_AUDIO)
                 websocket.receive_json()
-                websocket.receive_json()
                 response = websocket.receive_bytes()
 
         assert response == b"RIFF output"
@@ -1124,8 +1254,7 @@ class TestWebSocketEndpoint:
                             ) as mock_tts:
                                 with client.websocket_connect(_WS_URL) as websocket:
                                     websocket.send_bytes(_PCM_AUDIO)
-                                    first_user_text = websocket.receive_json()
-                                    first_miori_text = websocket.receive_json()
+                                    first_turn = websocket.receive_json()
                                     first_response = websocket.receive_bytes()
 
                                     monkeypatch.setenv(
@@ -1133,22 +1262,11 @@ class TestWebSocketEndpoint:
                                         "http://changed.local:50021",
                                     )
                                     websocket.send_bytes(_PCM_AUDIO)
-                                    second_user_text = websocket.receive_json()
-                                    second_miori_text = websocket.receive_json()
+                                    second_turn = websocket.receive_json()
                                     second_response = websocket.receive_bytes()
 
-        assert first_user_text == {"type": "text", "speaker": "user", "message": "1つ目の質問"}
-        assert first_miori_text == {
-            "type": "text",
-            "speaker": "miori",
-            "response": "1つ目の応答",
-        }
-        assert second_user_text == {"type": "text", "speaker": "user", "message": "2つ目の質問"}
-        assert second_miori_text == {
-            "type": "text",
-            "speaker": "miori",
-            "response": "2つ目の応答",
-        }
+        _assert_persisted_content_frame(first_turn, "1つ目の応答")
+        _assert_persisted_content_frame(second_turn, "2つ目の応答")
         assert first_response == b"RIFF first"
         assert second_response == b"RIFF second"
         mock_config.assert_called_once_with("miori")
@@ -1177,7 +1295,7 @@ class TestWebSocketEndpoint:
             "status": 502,
             "detail": "STT request failed",
         }
-        assert second_response == {"type": "text", "response": _LLM_REPLY}
+        _assert_persisted_content_frame(second_response, _LLM_REPLY)
         assert _generated_contents(mock_gen)[-1] == "続けてください"
         mock_tts.assert_not_called()
 
@@ -1203,7 +1321,7 @@ class TestWebSocketEndpoint:
             "status": 422,
             "detail": "Audio length must be a multiple of 2 bytes, got 3",
         }
-        assert second_response == {"type": "text", "response": _LLM_REPLY}
+        _assert_persisted_content_frame(second_response, _LLM_REPLY)
         assert _generated_contents(mock_gen)[-1] == "続けてください"
         mock_transcribe.assert_not_called()
         mock_tts.assert_not_called()
@@ -1233,7 +1351,7 @@ class TestWebSocketEndpoint:
             "status": 502,
             "detail": "STT request failed",
         }
-        assert second_response == {"type": "text", "response": _LLM_REPLY}
+        _assert_persisted_content_frame(second_response, _LLM_REPLY)
         assert _generated_contents(mock_gen)[-1] == "続けてください"
         mock_tts.assert_not_called()
 
@@ -1265,7 +1383,7 @@ class TestWebSocketEndpoint:
             "status": 502,
             "detail": "VOICEVOX request failed",
         }
-        assert second_response == {"type": "text", "response": "テキスト応答"}
+        _assert_persisted_content_frame(second_response, "テキスト応答")
         assert _generated_user_messages(mock_gen) == [
             "音声の質問",
             "続けてください",
@@ -1287,17 +1405,11 @@ class TestWebSocketEndpoint:
                                 text_response = websocket.receive_json()
 
                                 websocket.send_bytes(_PCM_AUDIO)
-                                user_text = websocket.receive_json()
-                                miori_text = websocket.receive_json()
+                                audio_turn = websocket.receive_json()
                                 audio_response = websocket.receive_bytes()
 
-        assert text_response == {"type": "text", "response": "テキスト応答"}
-        assert user_text == {"type": "text", "speaker": "user", "message": "音声の質問"}
-        assert miori_text == {
-            "type": "text",
-            "speaker": "miori",
-            "response": "音声応答",
-        }
+        _assert_persisted_content_frame(text_response, "テキスト応答")
+        _assert_persisted_content_frame(audio_turn, "音声応答")
         assert audio_response == b"RIFF voice"
         assert _generated_user_messages(mock_gen) == [
             "テキストの質問",
@@ -1315,7 +1427,7 @@ class TestWebSocketEndpoint:
                         websocket.send_json({"type": "text", "message": "こんにちは"})
                         response = websocket.receive_json()
 
-        assert response == {"type": "text", "response": _LLM_REPLY}
+        _assert_persisted_content_frame(response, _LLM_REPLY)
 
     def test_returns_500_when_tts_config_is_missing_for_audio_frame(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
@@ -1407,7 +1519,6 @@ class TestWebSocketEndpoint:
                                 with client.websocket_connect(_WS_URL) as websocket:
                                     websocket.send_bytes(_PCM_AUDIO)
                                     websocket.receive_json()
-                                    websocket.receive_json()
                                     websocket.receive_bytes()
 
         messages = [record.getMessage() for record in caplog.records]
@@ -1473,7 +1584,7 @@ class TestWebSocketEndpoint:
 
         class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return ChatReply(f"reply:{message}", TURN_ID)
+                return persisted_reply(f"reply:{message}", TURN_ID)
 
         class FailingAudioSession:
             def generate_response_audio(self, audio, reply_generator):
@@ -1518,7 +1629,7 @@ class TestWebSocketEndpoint:
 
         class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return ChatReply(f"reply:{message}", TURN_ID)
+                return persisted_reply(f"reply:{message}", TURN_ID)
 
         class StubAudioSession:
             def generate_response_audio(self, audio, reply_generator):
@@ -1534,7 +1645,7 @@ class TestWebSocketEndpoint:
 
             async def send_json(self, payload):
                 self.sent.append(("json", payload))
-                if payload.get("speaker") == "user":
+                if "turn" in payload:
                     self.first_audio_sent.set()
                     await self.release_first_audio.wait()
                     await anyio.sleep(0)
@@ -1574,22 +1685,7 @@ class TestWebSocketEndpoint:
 
         assert keep_open is True
         assert sent == [
-            (
-                "json",
-                {
-                    "type": "text",
-                    "speaker": "user",
-                    "message": "transcript:audio",
-                },
-            ),
-            (
-                "json",
-                {
-                    "type": "text",
-                    "speaker": "miori",
-                    "response": "reply:transcript:audio",
-                },
-            ),
+            ("json", _persisted_content_frame("reply:transcript:audio")),
             ("bytes", b"RIFF audio"),
             ("json", {"type": "text", "response": "text while audio sends"}),
         ]
@@ -1597,7 +1693,7 @@ class TestWebSocketEndpoint:
     def test_audio_worker_unexpected_error_sends_500_and_closes(self):
         class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return ChatReply(f"reply:{message}", TURN_ID)
+                return persisted_reply(f"reply:{message}", TURN_ID)
 
         class StubChatService:
             async def create_chat_session(self, character_name, conversation_id):
@@ -1632,7 +1728,7 @@ class TestWebSocketEndpoint:
 
         class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return ChatReply(f"reply:{message}", TURN_ID)
+                return persisted_reply(f"reply:{message}", TURN_ID)
 
         class StubChatService:
             async def create_chat_session(self, character_name, conversation_id):
@@ -1698,7 +1794,7 @@ class TestWebSocketEndpoint:
 
             def generate_reply(self, message):
                 self.messages.append(message)
-                return ChatReply(f"reply:{message}", TURN_ID)
+                return persisted_reply(f"reply:{message}", TURN_ID)
 
         class StubChatService:
             async def create_chat_session(self, character_name, conversation_id):
@@ -1749,12 +1845,14 @@ class TestWebSocketEndpoint:
                     audio_session.release.set()
                     receiver.join(timeout=5)
 
-        assert text_response == [{"type": "text", "response": "reply:text while audio runs"}]
+        assert text_response == [
+            _persisted_content_frame("reply:text while audio runs")
+        ]
 
     def test_audio_queue_processes_only_latest_pending_frame(self):
         class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return ChatReply(f"reply:{message}", TURN_ID)
+                return persisted_reply(f"reply:{message}", TURN_ID)
 
         class StubChatService:
             async def create_chat_session(self, character_name, conversation_id):
@@ -1810,38 +1908,19 @@ class TestWebSocketEndpoint:
                     _wait_for_event(barrier_received, "barrier text response")
                     audio_session.release_first.set()
                     receiver.join(timeout=5)
-                    first_user_text = websocket.receive_json()
-                    first_miori_text = websocket.receive_json()
+                    first_turn = websocket.receive_json()
                     first_audio = websocket.receive_bytes()
-                    latest_user_text = websocket.receive_json()
-                    latest_miori_text = websocket.receive_json()
+                    latest_turn = websocket.receive_json()
                     latest_audio = websocket.receive_bytes()
                 finally:
                     audio_session.release_first.set()
                     receiver.join(timeout=5)
 
-        assert barrier_responses == [{"type": "text", "response": "reply:barrier"}]
-        assert first_user_text == {
-            "type": "text",
-            "speaker": "user",
-            "message": "transcript:first",
-        }
-        assert first_miori_text == {
-            "type": "text",
-            "speaker": "miori",
-            "response": "reply:transcript:first",
-        }
+        assert len(barrier_responses) == 1
+        _assert_persisted_content_frame(barrier_responses[0], "reply:barrier")
+        _assert_persisted_content_frame(first_turn, "reply:transcript:first")
         assert first_audio == b"RIFF first"
-        assert latest_user_text == {
-            "type": "text",
-            "speaker": "user",
-            "message": "transcript:latest",
-        }
-        assert latest_miori_text == {
-            "type": "text",
-            "speaker": "miori",
-            "response": "reply:transcript:latest",
-        }
+        _assert_persisted_content_frame(latest_turn, "reply:transcript:latest")
         assert latest_audio == b"RIFF latest"
         assert audio_session.calls == [b"first", b"latest"]
 
@@ -1850,7 +1929,7 @@ class TestWebSocketEndpoint:
 
         class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return ChatReply(f"reply:{message}", TURN_ID)
+                return persisted_reply(f"reply:{message}", TURN_ID)
 
         class StubChatService:
             async def create_chat_session(self, character_name, conversation_id):
@@ -1926,7 +2005,7 @@ class TestWebSocketEndpoint:
 
         class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return ChatReply(f"reply:{message}", TURN_ID)
+                return persisted_reply(f"reply:{message}", TURN_ID)
 
         class StubChatService:
             async def create_chat_session(self, character_name, conversation_id):
@@ -2126,7 +2205,7 @@ class TestWebSocketEndpoint:
 
         class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
-                return ChatReply(f"reply:{message}", TURN_ID)
+                return persisted_reply(f"reply:{message}", TURN_ID)
 
         class StubChatService:
             async def create_chat_session(self, character_name, conversation_id):
@@ -2226,7 +2305,7 @@ class TestWebSocketEndpoint:
             "status": 500,
             "detail": _TTS_CONFIG_MISSING_MESSAGE,
         }
-        assert response_text == {"type": "text", "response": _LLM_REPLY}
+        _assert_persisted_content_frame(response_text, _LLM_REPLY)
 
 
 class TestWebSocketFlow:
@@ -2272,7 +2351,7 @@ class TestWebSocketFlow:
                         websocket.send_json({"type": "text", "message": current_user})
                         response = websocket.receive_json()
 
-        assert response == {"type": "text", "response": "確認しました"}
+        _assert_persisted_content_frame(response, "確認しました")
         prompt = mock_generate.call_args.args[0]
         assert [message.content for message in prompt.messages[-3:]] == [
             "password: [PASSWORD]",
@@ -2317,7 +2396,7 @@ class TestWebSocketFlow:
                 )
                 response = websocket.receive_json()
 
-        assert response == {"type": "text", "response": expected_reply}
+        _assert_persisted_content_frame(response, expected_reply)
 
         payload = mock_post.call_args.kwargs["json"]
         assert payload["messages"] == [
@@ -2390,8 +2469,8 @@ class TestWebSocketFlow:
                     )
                     second_response = websocket.receive_json()
 
-        assert first_response == {"type": "text", "response": "記録しました。"}
-        assert second_response == {"type": "text", "response": "記録しました。"}
+        _assert_persisted_content_frame(first_response, "記録しました。")
+        _assert_persisted_content_frame(second_response, "記録しました。")
         rag_prompt = llm_payloads[-1]["messages"][1]["content"]
         assert "関連する記憶" in rag_prompt
         assert "2026-06-23はトマト畑に水やりした" in rag_prompt
@@ -2440,10 +2519,10 @@ class TestWebSocketFlow:
                     release_timer.cancel()
                     assert add_started.wait(timeout=5)
                     assert not release_add.is_set()
-                    assert response == {
-                        "type": "text",
-                        "response": "農業日誌として保存しました。",
-                    }
+                    _assert_persisted_content_frame(
+                        response,
+                        "農業日誌として保存しました。",
+                    )
                     release_add.set()
 
         assert not tmp_path.joinpath("data", "failed-memories.jsonl").exists()

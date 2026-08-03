@@ -87,6 +87,14 @@ def _wait_until(predicate, timeout: float = 5.0) -> None:
     raise AssertionError("condition was not met before timeout")
 
 
+def _create_conversation(client: TestClient, character: str) -> str:
+    response = client.post(f"/characters/{character}/conversations")
+    assert response.status_code == 201
+    conversation_id = response.json()["conversation_id"]
+    assert isinstance(conversation_id, str)
+    return conversation_id
+
+
 class TestRagRuntimeEvidenceIntegration:
     def test_real_chat_store_chroma_query_and_prompt_injection_reach_llm(
         self, tmp_path, monkeypatch
@@ -135,6 +143,7 @@ class TestRagRuntimeEvidenceIntegration:
         )
 
         with TestClient(app) as client:
+            conversation_id = _create_conversation(client, character)
             save_response = client.post(
                 "/chat",
                 json={
@@ -144,7 +153,10 @@ class TestRagRuntimeEvidenceIntegration:
                 },
             )
             assert save_response.status_code == 200
-            assert save_response.json()["response"] == "農業日誌として保存しました。"
+            assert (
+                save_response.json()["turn"]["assistant_content"]
+                == "農業日誌として保存しました。"
+            )
 
             query_embedding = embed_text("前回の畑作業は?")
             query_results = []
@@ -167,7 +179,10 @@ class TestRagRuntimeEvidenceIntegration:
             )
 
         assert response.status_code == 200
-        assert response.json()["response"] == "前回はトマト畑に水やりしました。"
+        assert (
+            response.json()["turn"]["assistant_content"]
+            == "前回はトマト畑に水やりしました。"
+        )
         contents = [
             message.content
             for message in captured_llm_calls[-1].messages
@@ -236,6 +251,7 @@ class TestRagRuntimeEvidenceIntegration:
         )
 
         with TestClient(app) as client:
+            conversation_id = _create_conversation(client, "miori")
             response = client.post(
                 "/chat",
                 json={
@@ -248,7 +264,12 @@ class TestRagRuntimeEvidenceIntegration:
         assert response.status_code == 200
         assert response.json() == {
             "character": "miori",
-            "response": "農業日誌として保存しました。",
+            "turn": {
+                "kind": "content",
+                "turn_id": response.json()["turn"]["turn_id"],
+                "user_content": user_message,
+                "assistant_content": "農業日誌として保存しました。",
+            },
         }
 
         assert not tmp_path.joinpath("data", "failed-memories.jsonl").exists()

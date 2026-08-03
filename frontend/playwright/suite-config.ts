@@ -61,9 +61,11 @@ export const getSuiteDefinition = (suite: SuiteName): SuiteDefinition => {
 export const createSuiteConfig = (suiteName: SuiteName): PlaywrightTestConfig => {
   const suite = getSuiteDefinition(suiteName)
   const isCollectionOnly = process.argv.includes('--list')
+  const profileReportPath = join(suite.resultDir, 'resolved-profile.json')
+  const environmentRunReportPath = join(suite.resultDir, 'environment-run.json')
   process.env[PROFILE_ENV] = suite.profile
-  process.env[PROFILE_REPORT_ENV] = join(suite.resultDir, 'resolved-profile.json')
-  process.env[ENVIRONMENT_RUN_REPORT_ENV] = join(suite.resultDir, 'environment-run.json')
+  process.env[PROFILE_REPORT_ENV] = profileReportPath
+  process.env[ENVIRONMENT_RUN_REPORT_ENV] = environmentRunReportPath
 
   return defineConfig({
     testDir: suite.testDir,
@@ -84,6 +86,11 @@ export const createSuiteConfig = (suiteName: SuiteName): PlaywrightTestConfig =>
     },
     webServer: {
       command: '../environments/up.sh',
+      env: {
+        [PROFILE_ENV]: suite.profile,
+        [PROFILE_REPORT_ENV]: profileReportPath,
+        [ENVIRONMENT_RUN_REPORT_ENV]: environmentRunReportPath,
+      },
       url: 'http://127.0.0.1:4174/ready',
       reuseExistingServer: false,
       timeout: 600_000,

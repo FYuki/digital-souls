@@ -4,12 +4,21 @@ from pathlib import Path
 from app.conversation_history.errors import LegacySchemaError
 from app.privacy.contracts import HistoryDecisionReasonCode
 
-SCHEMA_VERSION = 2
-CURRENT_TABLES = frozenset({"conversations", "conversation_turns"})
+SCHEMA_VERSION = 3
+_VERSION_TWO_SCHEMA_VERSION = 2
+CURRENT_TABLES = frozenset(
+    {
+        "conversations",
+        "conversation_turns",
+        "wal_cleanup_jobs",
+    }
+)
+_VERSION_TWO_TABLES = frozenset({"conversations", "conversation_turns"})
 CONVERSATIONS_COLUMNS = (
     "character_id",
     "conversation_id",
     "created_at",
+    "archived_at",
 )
 CONVERSATION_TURNS_COLUMNS = (
     "turn_id",
@@ -51,6 +60,36 @@ CREATE TABLE conversations (
         {_uuid4_check("conversation_id")}
     ),
     created_at TEXT NOT NULL,
+    archived_at TEXT,
+    PRIMARY KEY (character_id, conversation_id)
+)
+"""
+
+_VERSION_TWO_CONVERSATIONS_SQL = f"""
+CREATE TABLE conversations (
+    character_id TEXT NOT NULL,
+    conversation_id TEXT NOT NULL CHECK (
+        {_uuid4_check("conversation_id")}
+    ),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (character_id, conversation_id)
+)
+"""
+
+_MIGRATED_CONVERSATIONS_SQL = _VERSION_TWO_CONVERSATIONS_SQL.replace(
+    "created_at TEXT NOT NULL,",
+    "created_at TEXT NOT NULL, archived_at TEXT,",
+)
+
+WAL_CLEANUP_JOBS_SQL = f"""
+CREATE TABLE wal_cleanup_jobs (
+    character_id TEXT NOT NULL,
+    conversation_id TEXT NOT NULL CHECK (
+        {_uuid4_check("conversation_id")}
+    ),
+    reason_code TEXT NOT NULL CHECK (reason_code = 'WAL_CHECKPOINT_FAILED'),
+    created_at TEXT NOT NULL,
+    attempt_count INTEGER NOT NULL CHECK (attempt_count > 0),
     PRIMARY KEY (character_id, conversation_id)
 )
 """
@@ -161,22 +200,59 @@ def _schema_object_sql(
 
 
 def _has_current_definitions(connection: sqlite3.Connection) -> bool:
+    conversations_definition = _schema_object_sql(
+        connection,
+        "table",
+        "conversations",
+    )
     expected_definitions = (
-        ("table", "conversations", CONVERSATIONS_SQL),
+        ("table", "conversation_turns", CONVERSATION_TURNS_SQL),
+        ("table", "wal_cleanup_jobs", WAL_CLEANUP_JOBS_SQL),
+        ("index", "conversation_turns_history_idx", HISTORY_INDEX_SQL),
+        ("index", "conversation_turns_stale_processing_idx", STALE_INDEX_SQL),
+    )
+    return conversations_definition in {
+        _normalized_sql(CONVERSATIONS_SQL),
+        _normalized_sql(_MIGRATED_CONVERSATIONS_SQL),
+    } and all(
+        _schema_object_sql(connection, object_type, name) == _normalized_sql(sql)
+        for object_type, name, sql in expected_definitions
+    )
+
+
+def _is_version_two_schema(connection: sqlite3.Connection) -> bool:
+    expected_definitions = (
+        ("table", "conversations", _VERSION_TWO_CONVERSATIONS_SQL),
         ("table", "conversation_turns", CONVERSATION_TURNS_SQL),
         ("index", "conversation_turns_history_idx", HISTORY_INDEX_SQL),
         ("index", "conversation_turns_stale_processing_idx", STALE_INDEX_SQL),
     )
-    return all(
-        _schema_object_sql(connection, object_type, name) == _normalized_sql(sql)
-        for object_type, name, sql in expected_definitions
+    return (
+        _user_tables(connection) == _VERSION_TWO_TABLES
+        and _column_names(connection, "conversations")
+        == CONVERSATIONS_COLUMNS[:-1]
+        and _column_names(connection, "conversation_turns")
+        == CONVERSATION_TURNS_COLUMNS
+        and connection.execute("PRAGMA user_version").fetchone()[0]
+        == _VERSION_TWO_SCHEMA_VERSION
+        and all(
+            _schema_object_sql(connection, object_type, name)
+            == _normalized_sql(sql)
+            for object_type, name, sql in expected_definitions
+        )
     )
 
 
 def _is_current_schema(connection: sqlite3.Connection) -> bool:
     return (
         _user_tables(connection) == CURRENT_TABLES
-        and _column_names(connection, "conversations") == CONVERSATIONS_COLUMNS
+        and _has_current_schema_contract(connection)
+    )
+
+
+def _has_current_schema_contract(connection: sqlite3.Connection) -> bool:
+    return (
+        _column_names(connection, "conversations") == CONVERSATIONS_COLUMNS
         and _column_names(connection, "conversation_turns")
         == CONVERSATION_TURNS_COLUMNS
         and connection.execute("PRAGMA user_version").fetchone()[0]
@@ -185,20 +261,34 @@ def _is_current_schema(connection: sqlite3.Connection) -> bool:
     )
 
 
+def _migrate_version_two_schema(connection: sqlite3.Connection) -> None:
+    connection.execute("ALTER TABLE conversations ADD COLUMN archived_at TEXT")
+    connection.execute(WAL_CLEANUP_JOBS_SQL)
+    connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+    if not _is_current_schema(connection):
+        raise LegacySchemaError("version two migration did not create current schema")
+
+
 def initialize_conversation_history_schema(database_path: Path) -> None:
     database_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(database_path)
     try:
         connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA secure_delete = ON")
         connection.execute("BEGIN IMMEDIATE")
         tables = _user_tables(connection)
         if tables:
-            if not _is_current_schema(connection):
-                raise LegacySchemaError("existing database does not use current schema")
-            connection.commit()
-            return
+            if _is_current_schema(connection):
+                connection.commit()
+                return
+            if _is_version_two_schema(connection):
+                _migrate_version_two_schema(connection)
+                connection.commit()
+                return
+            raise LegacySchemaError("existing database does not use current schema")
         connection.execute(CONVERSATIONS_SQL)
         connection.execute(CONVERSATION_TURNS_SQL)
+        connection.execute(WAL_CLEANUP_JOBS_SQL)
         connection.execute(HISTORY_INDEX_SQL)
         connection.execute(STALE_INDEX_SQL)
         connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")

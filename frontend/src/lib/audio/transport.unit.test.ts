@@ -37,7 +37,7 @@ class FakeWebSocket {
 }
 
 const createCallbacks = (): TransportCallbacks => ({
-  onTextMessage: vi.fn(),
+  onTurnMessage: vi.fn(),
   onAudioMessage: vi.fn(),
   onError: vi.fn(),
   onTransportError: vi.fn(),
@@ -126,58 +126,6 @@ describe('WebSocketAudioTransport', () => {
     expect(socket.sent).toEqual([pcm])
   })
 
-  test('should route user speaker text frames with the message field', async () => {
-    const callbacks = createCallbacks()
-    const { socket } = await connectTransport(callbacks)
-
-    socket.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify({ type: 'text', speaker: 'user', message: '今日は晴れています' }),
-      }),
-    )
-
-    expect(callbacks.onTextMessage).toHaveBeenCalledWith('user', '今日は晴れています')
-  })
-
-  test('should route miori speaker text frames with the response field', async () => {
-    const callbacks = createCallbacks()
-    const { socket } = await connectTransport(callbacks)
-
-    socket.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify({ type: 'text', speaker: 'miori', response: '散歩日和ですね。' }),
-      }),
-    )
-
-    expect(callbacks.onTextMessage).toHaveBeenCalledWith('miori', '散歩日和ですね。')
-  })
-
-  test('should reject miori speaker text frames without a response field', async () => {
-    const callbacks = createCallbacks()
-    const { socket } = await connectTransport(callbacks)
-
-    expect(() => {
-      socket.onmessage?.(
-        new MessageEvent('message', {
-          data: JSON.stringify({ type: 'text', speaker: 'miori', message: '取り違えた本文' }),
-        }),
-      )
-    }).toThrow('WebSocket message shape is invalid')
-  })
-
-  test('should reject user speaker text frames without a message field', async () => {
-    const callbacks = createCallbacks()
-    const { socket } = await connectTransport(callbacks)
-
-    expect(() => {
-      socket.onmessage?.(
-        new MessageEvent('message', {
-          data: JSON.stringify({ type: 'text', speaker: 'user', response: '取り違えた本文' }),
-        }),
-      )
-    }).toThrow('WebSocket message shape is invalid')
-  })
-
   test('should route WAV binary messages to the audio callback', async () => {
     const callbacks = createCallbacks()
     const { transport, socket } = await connectTransport(callbacks)
@@ -215,7 +163,7 @@ describe('WebSocketAudioTransport', () => {
     expect(callbacks.onError).toHaveBeenCalledWith({ status: 404, detail: 'Character not found' })
   })
 
-  test('should keep text frame routing independent from repeated audio sends', async () => {
+  test('should route persisted turns independently from repeated audio sends', async () => {
     const callbacks = createCallbacks()
     const { transport, socket } = await connectTransport(callbacks)
     const firstPcm = new ArrayBuffer(2)
@@ -225,12 +173,15 @@ describe('WebSocketAudioTransport', () => {
     transport.sendAudio(firstPcm)
     socket.onmessage?.(
       new MessageEvent('message', {
-        data: JSON.stringify({ type: 'text', speaker: 'user', message: '音声の質問' }),
-      }),
-    )
-    socket.onmessage?.(
-      new MessageEvent('message', {
-        data: JSON.stringify({ type: 'text', speaker: 'miori', response: '音声の応答です。' }),
+        data: JSON.stringify({
+          type: 'text',
+          turn: {
+            kind: 'content',
+            turn_id: '9e70795d-e5d5-431d-baa2-67f884403010',
+            user_content: '音声の質問',
+            assistant_content: '音声の応答です。',
+          },
+        }),
       }),
     )
 
@@ -238,10 +189,27 @@ describe('WebSocketAudioTransport', () => {
 
     socket.onmessage?.(new MessageEvent('message', { data: wav }))
 
-    expect(callbacks.onTextMessage).toHaveBeenNthCalledWith(1, 'user', '音声の質問')
-    expect(callbacks.onTextMessage).toHaveBeenNthCalledWith(2, 'miori', '音声の応答です。')
+    expect(callbacks.onTurnMessage).toHaveBeenCalledWith({
+      kind: 'content',
+      turn_id: '9e70795d-e5d5-431d-baa2-67f884403010',
+      user_content: '音声の質問',
+      assistant_content: '音声の応答です。',
+    })
     expect(callbacks.onAudioMessage).toHaveBeenCalledWith(wav)
     expect(socket.sent).toEqual([firstPcm, secondPcm])
+  })
+
+  test('should reject legacy text frames that are not persisted turns', async () => {
+    const callbacks = createCallbacks()
+    const { socket } = await connectTransport(callbacks)
+
+    expect(() => {
+      socket.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'text', speaker: 'miori', response: '未保存の応答' }),
+        }),
+      )
+    }).toThrow('WebSocket message shape is invalid')
   })
 
   test('should reject broken JSON text frames', async () => {

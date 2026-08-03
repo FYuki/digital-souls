@@ -8,7 +8,11 @@ from typing import Callable, Iterator, Protocol
 
 from app.audio.constants import PCM_SAMPLE_WIDTH_BYTES
 from app.characters.loader import VoicevoxTtsConfig, load_tts_config
-from app.chat_service import ChatReply
+from app.chat_service import (
+    ChatReply,
+    PersistedContentTurn,
+    PersistedPrivacySkippedTurn,
+)
 from app.model_settings import ModelSettings, whisper_model_cache
 from app.tts.speech_synthesizer import SpeechSynthesizer
 from app.tts.voicevox_client import (
@@ -83,8 +87,15 @@ class AudioPipelineSession:
     ) -> tuple[str, ChatReply, bytes]:
         message = self._transcribe_audio(audio)
         reply = self._generate_reply(reply_generator, message)
-        response_audio = self._synthesize_reply(reply.response)
+        response_audio = self._response_audio(reply)
         return message, reply, response_audio
+
+    def _response_audio(self, reply: ChatReply) -> bytes:
+        if isinstance(reply.persisted_turn, PersistedPrivacySkippedTurn):
+            return b""
+        if not isinstance(reply.persisted_turn, PersistedContentTurn):
+            raise TypeError("unsupported persisted turn")
+        return self._synthesize_reply(reply.persisted_turn.assistant_content)
 
     def _transcribe_audio(self, audio: bytes) -> str:
         _validate_pcm16_audio(audio)

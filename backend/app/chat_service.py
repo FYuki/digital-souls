@@ -2,12 +2,16 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
+from app.privacy.contracts import HistoryDecisionReasonCode
+
 __all__ = [
     "CharacterNotFoundError",
     "ChatBackendError",
     "ChatInputLimitError",
     "ChatReply",
     "ChatReplySession",
+    "PersistedContentTurn",
+    "PersistedPrivacySkippedTurn",
     "ChatServiceError",
     "ChatTimeoutError",
     "create_chat_session",
@@ -51,9 +55,27 @@ class ChatInputLimitError(ChatServiceError):
 
 
 @dataclass(frozen=True)
-class ChatReply:
-    response: str
+class PersistedContentTurn:
     turn_id: UUID
+    user_content: str
+    assistant_content: str
+
+
+@dataclass(frozen=True)
+class PersistedPrivacySkippedTurn:
+    turn_id: UUID
+    reason_code: HistoryDecisionReasonCode
+    sanitizer_version: str
+    policy_version: str
+
+
+PersistedTurn = PersistedContentTurn | PersistedPrivacySkippedTurn
+
+
+@dataclass(frozen=True)
+class ChatReply:
+    turn_id: UUID
+    persisted_turn: PersistedTurn
 
 
 class ChatReplySession(Protocol):

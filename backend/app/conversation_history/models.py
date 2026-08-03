@@ -18,6 +18,8 @@ class Conversation:
     character_id: str
     conversation_id: UUID
     created_at: datetime
+    updated_at: datetime
+    archived_at: datetime | None
 
 
 @dataclass(frozen=True)

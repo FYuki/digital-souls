@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from app.chat_service import ChatReply
+from app.chat_service import ChatReply, PersistedContentTurn
+from tests.chat_reply_test_support import persisted_reply
 from tests.conversation_history_test_support import CONVERSATION_ID, TURN_ID
 
 
@@ -21,6 +22,11 @@ class _StubDeliverySession:
 
     def close(self):
         return None
+
+
+def _assistant_content(reply: ChatReply) -> str:
+    assert isinstance(reply.persisted_turn, PersistedContentTurn)
+    return reply.persisted_turn.assistant_content
 
 
 class TestRuntimeConfiguration:
@@ -212,7 +218,7 @@ class TestRuntimeConfiguration:
 
             def generate_reply(self, message: str) -> ChatReply:
                 self._service.calls.append(("ws-reply", "miori", message))
-                return ChatReply(f"ws:{message}", TURN_ID)
+                return persisted_reply(f"ws:{message}", TURN_ID)
 
         class StubChatService:
             def __init__(self):
@@ -225,7 +231,7 @@ class TestRuntimeConfiguration:
                 message: str,
             ) -> ChatReply:
                 self.calls.append(("http", character, message))
-                return ChatReply(f"http:{message}", TURN_ID)
+                return persisted_reply(f"http:{message}", TURN_ID)
 
             async def create_chat_session(self, character: str, conversation_id):
                 self.calls.append(("ws-open", character))
@@ -247,8 +253,24 @@ class TestRuntimeConfiguration:
                 ws_response = websocket.receive_json()
 
         assert http_response.status_code == 200
-        assert http_response.json() == {"character": "miori", "response": "http:hello"}
-        assert ws_response == {"type": "text", "response": "ws:hello"}
+        assert http_response.json() == {
+            "character": "miori",
+            "turn": {
+                "kind": "content",
+                "turn_id": str(TURN_ID),
+                "user_content": "saved user content",
+                "assistant_content": "http:hello",
+            },
+        }
+        assert ws_response == {
+            "type": "text",
+            "turn": {
+                "kind": "content",
+                "turn_id": str(TURN_ID),
+                "user_content": "saved user content",
+                "assistant_content": "ws:hello",
+            },
+        }
         assert stub_service.calls == [
             ("http", "miori", "hello"),
             ("ws-open", "miori"),
@@ -264,7 +286,7 @@ class TestRuntimeConfiguration:
 
             def generate_reply(self, message: str) -> ChatReply:
                 self.messages.append(message)
-                return ChatReply(f"reply:{message}", TURN_ID)
+                return persisted_reply(f"reply:{message}", TURN_ID)
 
         class StubChatService:
             async def create_chat_session(
@@ -301,22 +323,24 @@ class TestRuntimeConfiguration:
             main.app.state.audio_pipeline_service = audio_service
             with client.websocket_connect(_WS_URL) as websocket:
                 websocket.send_bytes(b"\x01\x00")
-                user_text = websocket.receive_json()
-                miori_text = websocket.receive_json()
+                persisted_turn = websocket.receive_json()
                 response = websocket.receive_bytes()
 
-        assert user_text == {"type": "text", "speaker": "user", "message": "transcribed"}
-        assert miori_text == {
+        assert persisted_turn == {
             "type": "text",
-            "speaker": "miori",
-            "response": "reply:transcribed",
+            "turn": {
+                "kind": "content",
+                "turn_id": str(TURN_ID),
+                "user_content": "saved user content",
+                "assistant_content": "reply:transcribed",
+            },
         }
         assert response == b"RIFF delegated"
         assert len(audio_service.sessions) == 1
         character, session = audio_service.sessions[0]
         assert character == "miori"
         assert session.calls == [
-            (b"\x01\x00", ChatReply("reply:transcribed", TURN_ID))
+            (b"\x01\x00", persisted_reply("reply:transcribed", TURN_ID))
         ]
 
     def test_audio_pipeline_session_runs_audio_steps_and_logs_latency(
@@ -357,11 +381,11 @@ class TestRuntimeConfiguration:
         with caplog.at_level("INFO", logger="app.audio_pipeline"):
             transcript, reply, audio = session.generate_response_audio(
                 b"\x01\x00",
-                lambda message: ChatReply(f"応答:{message}", TURN_ID),
+                lambda message: persisted_reply(f"応答:{message}", TURN_ID),
             )
 
         assert transcript == "音声入力"
-        assert reply == ChatReply("応答:音声入力", TURN_ID)
+        assert reply == persisted_reply("応答:音声入力", TURN_ID)
         assert audio == b"RIFF synthesized"
         assert transcriber.calls == [b"\x01\x00"]
         assert voicevox_client.synthesize_calls == [
@@ -650,16 +674,18 @@ class TestRuntimeConfiguration:
                 conversation_id,
                 message: str,
             ) -> ChatReply:
-                return ChatReply(f"{character}:{message}", TURN_ID)
+                return persisted_reply(f"{character}:{message}", TURN_ID)
 
             async def create_chat_session(self, character: str, conversation_id):
                 raise AssertionError("not used")
 
         with TestClient(main.app):
             main.app.state.chat_service = StubChatService()
-            assert chat_service.generate_chat_reply(
-                "miori", CONVERSATION_ID, "hello"
-            ).response == "miori:hello"
+            assert _assistant_content(
+                chat_service.generate_chat_reply(
+                    "miori", CONVERSATION_ID, "hello"
+                )
+            ) == "miori:hello"
 
     def test_memory_modules_do_not_reference_character_memory_policy_markdown(self):
         memory_dir = _BACKEND_DIR / "app" / "memory"
