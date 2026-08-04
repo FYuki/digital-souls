@@ -43,6 +43,22 @@ repo/
 * リポジトリ運用方針
 * 技術選定メモ
 
+### 文書ごとの責務
+
+同じ内容を複数の文書へ詳細に複製せず、次の責務で分ける。
+
+| 文書 | 責務 |
+|---|---|
+| `roadmap.md` | Phase／Wave単位の目標と進捗を簡潔に示す。実装条件やschema versionは書かず、詳細文書とIssueを参照する |
+| `enhancement-plan.md` | 機能の分解、依存関係、実施順序、完了イメージを示す |
+| `system-architecture.md` | 現在のコードで実現している構成、責務境界、runtimeの挙動を現在形で示す |
+| `decisions/` | 判断の背景、選択肢、決定事項、不変条件を記録する。タスクの進捗は管理しない |
+| GitHub Issues | 具体的な実装・文書作業の範囲、依存、テスト、完了条件を管理する。完了後は当時の実装契約の記録として扱う |
+| 運用手順書 | backup、migration、rollback、障害対応等の実行手順を扱う。実運用開始時に必要な文書を追加する |
+
+schemaやデータ保持の方針はADR、現在実装されているschemaとruntime挙動は
+`system-architecture.md`、対応作業はIssueへ記載する。`roadmap.md`には完了状態と参照先だけを残す。
+
 ## characters
 
 `characters/` には人格ごとの設定を格納する。

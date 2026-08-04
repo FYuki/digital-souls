@@ -34,73 +34,65 @@
 
 [x] Windows + WSL2で開発環境を構築する
 [x] Docker利用方針を決める
-[x] Ollamaで軽量LLMを検証する
-[x] Gemma 4B級モデルの応答品質と速度を検証する
+[x] ローカル軽量LLMの開発・検証環境を整える
 [x] 将来のMac mini移行手順を整理する
 
 ### Phase 3: テキストチャット基盤（自作BE/FE）
 
-[x] リポジトリ構成を自作BE/FE用に整備する（backend/, frontend/）
-[x] FastAPI プロジェクト基盤を構築する（Ollama接続・キャラクターロード）
-[x] Vite + Svelte テキストチャットUIを実装する
-[x] キャラクター指定方式（リクエストパラメータ・ステートレス）を実装する
+[x] 自作Backend／Frontendのチャット基盤を構築する
+[x] テキストチャットUIを実装する
+[x] キャラクターを指定して会話できるようにする
 
 ### Phase 4: 音声対応
 
-[x] BEにWebSocketエンドポイントを追加する
-[x] STT（Whisper）+ TTS（VOICEVOX）パイプラインを実装する
-[x] FEにマイク入力（VAD対応）・音声再生UIを実装する（テキスト/音声をWS接続に統合、#14）
-[x] BEのWS音声フレームに処理中キュー（1件保持・上書き）を実装する
+[x] ブラウザから音声で会話できるようにする
+[x] ローカルSTT／TTSによる音声処理基盤を構築する
+[x] テキストチャットと音声チャットを統合する
 
-Phase 4の未完了項目だった「WebSocketの遅延を計測し、LiveKit移行の必要性を判断する」は、
-新プロトコル設計（会話状態管理）を前提に判断する必要があるため **Wave 3** へ移動した。
+Phase 4の未完了項目だった音声遅延の計測と通信方式の再評価は、**Wave 3** へ移動した。
 
-RAG（Chroma + nomic-embed-text）のMVP構成は実装済みだが、`RAG_ENABLED=false` がデフォルトのため
-現状は無効化されている。本稼働化は **Wave 2** で扱う。
+RAG基盤はMVPで構築済みとし、本稼働化は **Wave 2** で扱う。
 
 ## Post-MVP: Wave 1〜4
 
-MVP完了時点で判明したギャップ（多ターン会話、RAG本稼働、
-`character_id`スキーマ統一、LLM/TTSの逐次処理による遅延 等）を踏まえ、
+MVP完了時点で判明したギャップ（多ターン会話、RAG本稼働、応答遅延等）を踏まえ、
 「続く → 覚えている → 自然に話せる → 役に立つ」の順で再編する。
 各Waveの詳細タスク・完了イメージ・依存関係は `docs/enhancement-plan.md` を参照。
 
 ### Wave 1: 会話が「続く」（短期記憶・基盤整備）
 
-- [x] SQLite会話履歴schema（開発用テストDBは削除して現行schemaを空状態から再作成。正式なschema v2はconversation／turnを保持して、`conversations.archived_at`とWAL後処理の再試行metadataを含むv3へmigrationし、契約外schemaは起動時に拒否）
-- [ ] 共通privacy scannerと履歴sanitizer（直接識別値を保存前にマスクし、マスク不能時は本文を保存しない）
-- [x] 会話履歴のプロンプト注入（同じ`character_id` / `conversation_id`の直近N往復だけを復元してLLMへ渡す。RAG無効時も履歴を記録する）
-- [x] PromptBuilderによる合成の一元化（Character Card V3 / RAG記憶 / マスク済み会話履歴 / 現在発言 / 最終指示の順序とtoken budgetを固定）
-- [x] 設定のenv化（Ollamaのモデル・context・応答予約量、Whisperモデル、履歴・入出力のtoken上限）
-- [x] Backend／Frontendのconversation lifecycle統合
-- [x] スレッド一覧・再開・アーカイブ・物理削除インターフェース（物理削除はSQLite上のconversationと全turnだけが対象。RAG長期記憶は変更せず、既存backup・snapshot・ファイル複製の消去は保証しない）
+親Issue: #5
+
+- [x] 会話履歴とスレッドの保存基盤（#23、#34）
+- [x] 会話履歴のprivacy保護（#25、#26）
+- [x] 会話履歴を利用した複数ターン会話（#6、#24）
+- [x] 実行時設定の外部化（#7）
+- [x] Backend／Frontendの会話ライフサイクル統合（#26、#27）
+- [x] スレッド管理インターフェース（#34）
 
 ### Wave 2: 「覚えている」（RAG本稼働）
 
-- [ ] 文脈依存の機微情報assessment基盤（health、心理状態、金融状況、第三者情報等を交換可能なclassifierと固定corpusで判定し、保存可否とは分離）
-- [ ] RAG admission policy（共通scannerと`PrivacyAssessment`を再利用し、positive allowlist型だけを許可）
-- [ ] 承認済み記憶schema（SQLite `approved_memories`を正本とし、全レコードへ`character_id`と`policy_version`を付与）
-- [ ] transactional outbox（SQLiteの`approved_memories` hard delete後にChromaを同期削除し、失敗時はmetadata-only outboxと定期reconciliationでSQLite正本へ収束させる）
-- [ ] Chroma派生index化（承認済み記憶だけを登録し、取得時にSQLiteの状態・TTL・policy versionと絶対禁止findingを再検証）
-- [ ] RAG検索品質検証 → `RAG_ENABLED=true` デフォルト化
-- [ ] positive allowlist型の記憶候補抽出（絶対禁止・機微情報判定を通過した構造化候補だけを扱う）
-- [ ] 自動記憶昇格（会話サマリ→長期記憶候補化、光織が確認し、未確認候補はRAGへ保存しない）
-- [ ] 時系列照合（日付メタデータ+時期検索）
-- [ ] 記憶の閲覧・訂正・物理削除インターフェース
+親Issue: #28
+
+- [ ] 文脈依存の機微情報判定（#22）
+- [ ] 長期記憶の保存判定（#33）
+- [ ] 承認済み長期記憶と検索基盤（#8、#29、#30、#31）
+- [ ] RAG検索品質の検証と本稼働化（#9）
+- [ ] 会話からの記憶候補化と確認保存（#10）
+- [ ] 記憶の時系列照合（#11）
+- [ ] 長期記憶の閲覧・訂正・削除（#12）
 
 ### Wave 3: 「自然に話せる」（会話状態管理による双方向会話）
 
-- [ ] 会話状態マシン（idle/listening/thinking/speakingをBEが管理）
-- [ ] WSプロトコル拡張（state / text_delta / audio_chunk / audio_end / cancel）
-- [ ] LLMストリーミング（Ollama stream:true）
-- [ ] 文単位ストリーミングTTS
-- [ ] barge-in（割り込み対応、エコー対策含む）
-- [ ] 遅延計測の指標化 → LiveKit移行判断（Phase 4からの移動タスク）
-- [ ] 既存の音声1件保持キューの再設計
+- [ ] 双方向会話の状態・通信設計（#13）
+- [ ] 応答テキストの逐次配信（#14）
+- [ ] 音声の逐次合成・再生（#15）
+- [ ] 発話割り込みへの対応（#16）
+- [ ] 音声遅延の評価と通信方式の判断（#17）
 
 ### Wave 4: 「役に立つ」（後続・優先度低）
 
-- [ ] ツール実行基盤+農業日誌
-- [ ] ClaudeClient実装・プロバイダ切替
-- [ ] 2人目キャラクター検証
-- [ ] Discord Bot / Mac mini常時稼働 / Live2D
+- [ ] パーソナルAI向けツール連携
+- [ ] LLMプロバイダの拡張
+- [ ] 複数キャラクター対応の検証
+- [ ] クライアント・常時稼働・アバター連携の拡張
