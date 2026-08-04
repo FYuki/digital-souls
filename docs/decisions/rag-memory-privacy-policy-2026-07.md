@@ -461,9 +461,10 @@ model、prompt、policyのいずれかを変更した場合は、このcorpusを
 複数ユーザー化、cloud利用、外部文書RAG等へ進む前に、カテゴリ別recall、precision、
 false-negative rate、false-positive rateを含む本格評価へ拡張する。
 
-### 14. 既存テストデータは移行せず削除する
+### 14. 開発・検証データは移行せず削除する
 
-既存SQLite会話履歴と既存Chroma collectionはテスト用データであるため、新schemaへ移行しない。
+実運用を開始するまで、開発環境は検証環境を兼ね、既存SQLite会話履歴と既存Chroma collectionは
+テスト用データとして扱う。schema変更時のデータmigrationは互換性要件とせず、新schemaへ移行しない。
 
 実装切り替え時に次を行う。
 
@@ -476,9 +477,11 @@ false-negative rate、false-positive rateを含む本格評価へ拡張する。
 
 旧SQLiteの生会話からChromaを再構築しない。
 
-この切替手順は開発用テストデータの破棄を定める。正式な会話履歴schema v2のDBは、
-conversationとturnを保持したまま`archived_at`とWAL後処理用metadataを持つschema v3へ
-runtime migrationする。version番号だけが一致する契約外schemaはmigrationせず拒否する。
+現在のコードが限定された旧schemaからのmigration処理を持つ場合も、運用開始前のデータ互換性として
+保証しない。将来のschema変更で既存migration処理を維持・拡張することも必須としない。
+
+実データを保持する運用へ移行する際に、移行時点のschemaと保存データを基準として、対応する
+旧schema、backup、migration、検証、rollbackの方針を別途決定し、運用手順を作成する。
 
 ## MVPで実装しない項目
 

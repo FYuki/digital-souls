@@ -52,13 +52,16 @@ MVP（テキスト+音声チャット、RAG基盤）完了後の開発を、Wave
 
 ## Wave 1: 会話が「続く」（短期記憶・基盤整備）
 
-### 1. SQLite会話履歴schema
+### 1. SQLite会話履歴schema（実装済み）
 
-開発用SQLiteの既存レコードはテストデータのため削除し、現行schemaを空状態から作成する。
-一方、正式な旧schema v2のDBは既存conversationとturnを保持してv3へmigrationする。
-契約外schemaは自動migrationしない。UI上のスレッドIDは実装上の`conversation_id`へ統一する。
+UI上のスレッドIDは実装上の`conversation_id`へ統一し、conversationとturnをSQLiteへ保存する。
+開発環境が検証環境を兼ねる間、既存レコードはテストデータとして扱い、schema変更時の
+データmigrationは保証せず、現行schemaを空状態から再作成できるものとする。
+実データを保持する運用へ移行する際に、backup、対応schema、rollbackを含むmigration方針を
+その時点のschemaに基づいて決定する。データ切替の方針は
+`docs/decisions/rag-memory-privacy-policy-2026-07.md`を参照する。
 
-### 2. 共通privacy scannerと履歴sanitizer
+### 2. 共通privacy scannerと履歴sanitizer（実装済み）
 
 決定論的privacy scannerは保存先に依存しない型付きfindingを返し、履歴とRAGで再利用する。
 APIキー、password、秘密鍵、決済認証、口座番号、政府ID、私用連絡先、正確な住所等は
@@ -98,7 +101,7 @@ SQLiteから同じ`character_id`と`conversation_id`の直近N往復だけを復
 
 RAGを切った状態でも、直前のやり取りを踏まえた応答を生成できる。
 
-### 5. 会話ライフサイクルとスレッド管理
+### 5. 会話ライフサイクルとスレッド管理（実装済み）
 
 HTTPとWebSocketで同じ`character_id` / `conversation_id`、状態遷移、privacy処理順序を使用する。
 Frontendはcharacter単位のconversation IDを保持し、スレッド一覧、再開、アーカイブ、復元、
