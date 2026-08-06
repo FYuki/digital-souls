@@ -15,7 +15,7 @@ Wave 1〜4構成として再計画した。本ファイルはその意思決定�
 
 - 会話が完全ステートレスで、直前のやりとりすらプロンプトに含まれず多ターン会話が成立しない
 - RAGは実装済みだが `RAG_ENABLED=false` がデフォルトで機能していない
-- SQLiteが `character` カラムのままで、`docs/decisions/Multi-character-db-2026-06.md` の
+- SQLiteが `character` カラムのままで、`docs/decisions/archive/Multi-character-db-2026-06.md` の
   決定事項（全レコードに `character_id` を付与する）と不整合
 - LLM/TTSが逐次処理（全文生成待ち→一括合成）で体感遅延が大きい
 - 音声チャットがターン形式のままで、双方向・割り込み可能な会話になっていない
@@ -71,5 +71,6 @@ Wave 3の会話状態管理部分は、旧Phaseには対応項目がない新規
 
 - `docs/roadmap.md` — post-MVPのWave構成をチェックリスト形式で反映
 - `docs/enhancement-plan.md` — Wave 1〜4の詳細タスク・依存関係・設計方針
-- `docs/decisions/Multi-character-db-2026-06.md` — `character_id`統一の元になった決定事項
-- `docs/decisions/miori-memory-policy-2026-06.md` — 記憶方針（Wave 2の自動記憶昇格・削除インターフェースの根拠）
+- `docs/decisions/archive/Multi-character-db-2026-06.md` — `character_id`統一の元になった初期検討履歴
+- `docs/decisions/wave2-memory-formation-retrieval-2026-08.md` — Wave 2の現行記憶・記録モデル
+- `docs/decisions/archive/miori-memory-policy-2026-06.md` — 初期検討の履歴ADR

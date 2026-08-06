@@ -1,5 +1,13 @@
 # 光織 Memory Policy
 
+## 状態
+
+**ARCHIVED**。初期検討の履歴として保持する。
+
+現行の人格記憶とdomain recordの分類、保存同意、形成・検索・管理方針は
+`docs/decisions/wave2-memory-formation-retrieval-2026-08.md`へ統合した。
+本書の「中期記憶」、農業日誌・レシピを人格記憶とする分類、保存前の個別確認等は実装仕様に使わない。
+
 ## 目的
 
 光織の長期記憶を、安全かつ実用的に扱うための方針を定義する。
@@ -10,6 +18,8 @@
 `backend/app/memory/memory_policy.json`で管理する。この文書は人間向けの方針説明であり、
 実行時設定のSource of Truthではない。RAG privacyの不変条件と、設定でも緩和できない
 絶対禁止は`docs/decisions/rag-memory-privacy-policy-2026-07.md`を正本とする。
+
+以下は2026-06時点の検討内容である。
 
 ## 記憶の分類
 

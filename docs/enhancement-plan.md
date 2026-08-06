@@ -22,7 +22,7 @@ MVP（テキスト+音声チャット、RAG基盤）完了後の開発を、Wave
 2. **RAGが眠っている**: 実装済みだが `RAG_ENABLED=false` がデフォルト。長期記憶化も
    明示マーカー（「農業日誌:」等）付き発言のみが対象
 3. **スキーマ不整合**: SQLiteは `character` カラムのままで、決定事項
-   （`docs/decisions/Multi-character-db-2026-06.md` の「全レコードに `character_id` を付与する」）
+   （`docs/decisions/archive/Multi-character-db-2026-06.md` の初期判断。現行仕様はWave 2 ADRへ統合済み）
    と食い違っている。Chromaはコレクション名分離のみで、メタデータへの `character_id` 付与がない
 4. **応答生成が全文待ち**: LLMは `stream:false`（全文生成を待ってから返す）、
    TTSも全文確定後に一括合成するため、体感遅延が大きい
@@ -74,9 +74,10 @@ userとassistantへ同じscannerとsanitizerを適用し、原文、原文hash�
 
 scannerは`ScanSuccess`またはmetadata-onlyの`ScanFailure`を返し、findingのspanはNFKC等の
 正規化viewから原文の半開区間へ復元する。MVPは日本と米国の固定corpusから開始する。
-保存拒否findingは`RAG`、`HISTORY`、`BOTH`のscopeを持ち、current userのcurrent turnだけへ
-適用する。assistant側が`SKIP_CONTENT`の場合は、保存済みuser本文も原子的に消去して
-turn全体を`privacy_skipped`へ遷移する。
+Wave 1で実装した保存拒否findingは`RAG`、`HISTORY`、`BOTH`のscopeを持つ。
+Wave 2では短期記憶から長期記憶を形成する方針に合わせ、`HISTORY`を廃止し、
+「履歴に残さないで」を`BOTH`へ移行する。この契約変更は#33でscanner、policy、履歴sanitizer、
+テストを一緒に更新する。効力はcurrent userのcurrent turnだけとする。
 
 ### 3. プロンプト合成の一元設計（実装済み）
 
@@ -122,80 +123,41 @@ conversationとturnをSQLiteからhard deleteする。
 
 ## Wave 2: 「覚えている」（RAG本稼働 = 旧Phase 5の実質的完遂）
 
-### 1. 文脈依存の機微情報assessment基盤
+Wave 2の設計詳細はこの計画書で重複管理しない。現行の設計上の正本は次とする。
 
-policy管理の決定論的screenerと実装交換可能な意味分類器を組み合わせる。health、心理状態、
-自傷、虐待・性的被害、金融状況、第三者の非公開情報、暗示的な機微情報を対象とする。ローカルLLM、
-spaCy／GiNZA等のparser、専用分類器を候補とし、日英の固定conformance corpusで検出品質、
-過検知、初期化時間、判定時間、メモリ使用量を比較する。MVPでは1方式を選定する。
+- `docs/decisions/wave2-memory-formation-retrieval-2026-08.md` — 記憶／記録のモデル、形成、検索、評価
+- `docs/decisions/rag-memory-privacy-policy-2026-07.md` — Wave 1から継続するprivacy不変条件
+- 親Issue #28 — 子Issueの進捗、依存順、最終受入条件
 
-分類結果は保存許可と分離し、カテゴリ、本人・第三者・一般の対象、判定結果、reason code、
-実装versionを共通`PrivacyAssessment`として型付きで返す。SQLiteやChromaへ書き込まず、
-RAG admissionへassessmentを渡す。
+実装は次の依存順で進める。
 
-### 2. RAG admission policy
+```text
+#25（完了）
+  -> #22
+  -> #33
+  -> #8
+  -> (#29 || #30)
+  -> #31
+  -> #9
+  -> #10
+  -> (#11 || #12)
+  -> #28の受入確認
+```
 
-Wave 1の共通privacy scannerと文脈依存`PrivacyAssessment`を再利用する。絶対禁止scanner、
-scope付き保存拒否指示、positive allowlist型の候補抽出、候補全体の機微情報再検査、
-必要なユーザー確認を順に行う。
-scannerは保存可否を決めず、決定的なapplication policy evaluatorだけが
-`RagAdmissionDecision`を返す。秘密値をマスクした候補をRAG保存へ昇格させない。
+Wave 2で達成する成果は次に限定する。
 
-### 3. SQLiteを長期記憶の正本にする
+- 会話履歴、人格記憶、domain record、検索機構の責務を分離する
+- `SemanticPrivacyClassifier`は文脈だけを分類し、決定論的な`RagAdmissionEvaluator`が保存を決める
+- allowlistを保存同意として扱い、個別確認・保存通知なしで安全な構造化候補だけを非同期保存する
+- conversation由来の長期記憶は、元turnの履歴本文が保存済みの場合だけ形成する
+- SQLiteを正本、Chromaを派生indexとし、outboxとreconciliationで収束させる
+- 機微なcurrent queryではRAG検索をskipする
+- 検索順位は意味的関連度を主、`last_user_mentioned_at`を同等関連度内のtie-breakとする
+- access count、時間減衰、固定複合重みはMVPへ入れない
+- ユーザーが人格記憶と暫定domain recordを一覧、訂正、物理削除できるようにする
 
-- `approved_memories`へ許可型、正規化本文、`character_id`、`source_conversation_id`、
-  `policy_version`、状態、日時を保存する
-- 訂正はSQLite正本を更新し、失効は`expires_at`／状態で取得対象外にする
-- ユーザー削除は`approved_memories`行をSQLiteからhard deleteする
-- 既存のSQLite／Chromaテストデータは移行せず、空状態から開始する
-- `docs/decisions/Multi-character-db-2026-06.md`の決定事項どおり、全レコードを
-  `character_id`で分離する
-
-### 4. transactional outboxとChroma派生index
-
-- `approved_memories`保存と`memory_index_outbox`作成を同じSQLite transactionで行う
-- Chromaへ`memory_id`単位で冪等にupsert／deleteする
-- hard deleteでは`character_id`と`memory_id`を持つ`DELETE` outboxを先に作成し、
-  削除済みSQLite本文の再読に依存せずChromaを削除する
-- SQLite commit後の同じ削除操作でChroma deleteを同期試行し、失敗時はoutboxで再試行する
-- 定期reconciliationでSQLiteにないChroma orphanの削除、欠落entryの再作成、
-  metadata不一致の修復を行う
-- outbox・application log・fallbackファイルへ本文やembeddingを複製しない
-- 旧`failed-memories.jsonl`を廃止する
-
-### 5. ingestion時・取得時のprivacy境界
-
-- ingestion時は共通scanner、意味分類、許可型抽出、ユーザー確認、policy evaluatorを通す
-- `ALLOW_STRUCTURED`だけを`approved_memories`とoutboxへ保存する
-- 取得時はChromaの`memory_id`をSQLiteで引き直し、`character_id`、状態、TTL、
-  `policy_version`を検証し、SQLite本文へ決定論的絶対禁止scannerを再適用する
-- 一般質問が機微情報でないことを、RAG保存許可の根拠にしない
-
-### 6. RAG検索品質検証 → デフォルト有効化
-
-- 検証セットを用意し、無関係な記憶がプロンプトを汚染しないかを確認する
-- Embeddingモデル・チャンク戦略を必要に応じて調整する
-- 問題ないことを確認した上で `RAG_ENABLED=true` をデフォルトにする
-
-### 7. positive allowlistと自動記憶昇格
-
-- 会話サマリから許可型の長期記憶候補を生成する
-- `docs/decisions/miori-memory-policy-2026-06.md` の「重要な長期記憶は原則確認してから保存する」方針に沿い、
-  光織がユーザーに確認してから保存するフローを実装する
-- 明示的な「覚えて」は確認済み候補として扱うが、絶対禁止と機微情報判定は省略しない
-- 未確認候補はRAGへ保存しない
-- 現状の「明示マーカー付き発言のみ長期記憶化」という制約を緩和する
-
-### 8. 時系列照合
-
-- 記憶に日付メタデータを付与し、時期指定での検索を可能にする
-- 「昨年もこの時期に〜」のような応答を実現する
-- Character Cardが定義する長期パートナー性の中核体験にあたる機能
-
-### 9. 記憶の閲覧・訂正・物理削除インターフェース
-
-- `docs/decisions/miori-memory-policy-2026-06.md` の「削除・訂正依頼は優先対応する」方針の実装担保
-- ユーザーが記憶内容を閲覧・訂正・物理削除できるインターフェースを用意する
+各IssueにはそのIssue固有の入出力、テスト、完了条件だけを記載し、共通仕様はADRを参照する。
+idle時のpersona memory consolidationはWave 2受入後の#48で行い、親#28の完了条件には含めない。
 
 ## Wave 3: 「自然に話せる」（会話状態管理による双方向会話）
 

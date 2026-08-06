@@ -91,5 +91,6 @@ characters/example-character/
 - `characters/miori/miori.card.json`
 - `characters/miori/personality.md`（非runtimeの編集補助）
 - `characters/miori/world.md`
-- `docs/decisions/miori-memory-policy-2026-06.md`
+- `docs/decisions/wave2-memory-formation-retrieval-2026-08.md`
+- `docs/decisions/archive/miori-memory-policy-2026-06.md`（初期検討の履歴ADR）
 - `backend/app/memory/memory_policy.json`

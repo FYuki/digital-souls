@@ -1,10 +1,17 @@
 # 複数キャラクター運用時のDB構成・ハードウェア限界 議事録 (2026-06)
 
+## 状態
+
+**ARCHIVED**。本書から継続採用した`character_id`による人格分離と
+SQLite／Chromaから開始する判断は、現行アーキテクチャと
+`docs/decisions/wave2-memory-formation-retrieval-2026-08.md`へ統合済みである。
+現行仕様の根拠として本書を直接使用しない。
+
 ## 概要
 
 AITuber/AIキャラクター向けRAG構成の標準パターンを起点に、`digital-souls` で複数キャラクターを並行運用する場合のDB構成（Chroma/SQLite vs Qdrant/PostgreSQL）と、Mac mini M4 Pro 48GBでのハードウェア限界について検討した。
 
-決定事項・設計指針は `docs/decisions/multi-character-db-2026-06.md` に反映済み。本ファイルは検討の過程をやり取り単位で残す議事録。
+本ファイルは2026-06時点の検討過程をやり取り単位で残す議事録である。
 
 ---
 
@@ -154,7 +161,7 @@ DB層（Chroma/SQLite vs Qdrant/PostgreSQL）の分岐点は、このモデル�
 
 ## 関連
 
-- `docs/decisions/multi-character-db-2026-06.md` — 本議事録の決定事項を反映した検討記録
+- `docs/decisions/wave2-memory-formation-retrieval-2026-08.md` — 現行の記憶・検索モデル
 - `docs/infrastructure-policy.md` — インフラ全体方針（Mac mini本番構成）
 - `docs/system-architecture.md` — RAG/DBの位置づけ
 - `characters/README.md` — 複数人格管理の方針

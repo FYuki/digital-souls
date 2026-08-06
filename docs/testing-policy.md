@@ -45,6 +45,20 @@ npm run build
 
 CI は単体テスト、結合テスト、モックE2E、型チェック、ビルドを実行する。実接続スイートは外部サービスを必要とするため自動実行せず、Pull Request の検証欄へローカル実行結果または未実行状態を記録する。
 
+## LLM classifier conformance
+
+意味分類器の品質評価は、通常のpytest unit testと分離したpromptfoo suiteで行う。
+
+- pytest unitはprompt組立、schema、parser、fail-closed、決定論的evaluatorをfakeで検証する
+- promptfooは固定した合成caseで実modelとproduction providerを評価する
+- 実ユーザー本文をcase、結果、logへコピーしない
+- 機微caseが`NOT_SENSITIVE`になることを許容せず、判定不能は`ABSTAIN`として保存を拒否する
+- model、prompt、policyのversionを固定し、重要な変更は対象suiteを3回反復してから全suiteを実行する
+- 外部serviceを必要とするため通常CIへ混在させず、release時の実接続証跡として扱う
+
+配置、prompt tuningとproduction conformanceの分離、合格基準は
+`docs/decisions/wave2-memory-formation-retrieval-2026-08.md`を正本とする。
+
 ## Capability不足と失敗
 
 スイートの要求Capabilityが resolved Profile にない場合、テストは不足Capabilityと解決済み依存を理由に `skip` する。スイートを明示的に開始した後の次の失敗は skip に変換しない。

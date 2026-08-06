@@ -2,10 +2,19 @@
 
 ## 状態
 
-採用。
+**ACTIVE**。一部の判断は後続ADRで改定済み。
 
 本ADRはMVPで守る不変条件と、利用範囲の拡大時に追加する防御を定める。
 完成形の防御をMVPですべて実装することは求めず、後から安全に拡張できる境界を先に固定する。
+
+2026-08に、allowlistを保存同意として扱う方式、個別確認の廃止、記憶とdomain recordの分離、
+保存拒否scope、意味分類器と検索順位のMVP方式を
+`wave2-memory-formation-retrieval-2026-08.md`で改定した。該当範囲で競合する記述は同ADRを優先する。
+
+本ADRから継続して採用する正本範囲は、絶対保存禁止、Wave 1の決定論的scannerと履歴sanitizer、
+SQLite正本／Chroma派生index、transactional outbox、metadata-only log、物理削除と失効の分離である。
+記憶ontology、allowlist、個別確認、保存拒否scope、classifier構成、非同期形成、検索順位、
+conformance testは2026-08 ADRへ統合した。以下の本文は2026-07時点の判断履歴を含む。
 
 ## 背景
 
@@ -551,8 +560,9 @@ false-negative rate、false-positive rateを含む本格評価へ拡張する。
 
 ## 関連
 
-- `docs/decisions/miori-memory-policy-2026-06.md` — 光織の長期記憶方針
-- `docs/decisions/Multi-character-db-2026-06.md` — キャラクターごとの記憶分離
+- `docs/decisions/wave2-memory-formation-retrieval-2026-08.md` — 現行の記憶・記録モデル
+- `docs/decisions/archive/miori-memory-policy-2026-06.md` — 初期検討の履歴ADR
+- `docs/decisions/archive/Multi-character-db-2026-06.md` — キャラクターごとの記憶分離に関する初期検討履歴
 - `docs/system-architecture.md` — SQLite・Chromaを含むシステム構成
 - `docs/testing-policy.md` — 単体・結合・実接続テストの区分
 - `backend/app/memory/memory_policy.json` — 認識語彙・pattern・閾値・追加禁止設定の実行時Source of Truth
