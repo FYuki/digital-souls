@@ -55,10 +55,12 @@ MVP（テキスト+音声チャット、RAG基盤）完了後の開発を、Wave
 ### 1. SQLite会話履歴schema（実装済み）
 
 UI上のスレッドIDは実装上の`conversation_id`へ統一し、conversationとturnをSQLiteへ保存する。
-開発環境が検証環境を兼ねる間、既存レコードはテストデータとして扱い、schema変更時の
-データmigrationは保証せず、現行schemaを空状態から再作成できるものとする。
-実データを保持する運用へ移行する際に、backup、対応schema、rollbackを含むmigration方針を
-その時点のschemaに基づいて決定する。データ切替の方針は
+dev／testの既存レコードはテストデータとして扱い、schema変更時のmigrationを保証せず、
+現行schemaを空状態から再作成できるものとする。
+
+dogfoodは実conversation historyを保持する運用相当環境である。schema変更前のbackup、対応schema、
+migration、検証、rollbackを必須とし、dev／testの破棄契約を適用しない。データ切替の方針は
+`docs/decisions/local-dogfood-environment-2026-08.md`と
 `docs/decisions/rag-memory-privacy-policy-2026-07.md`を参照する。
 
 ### 2. 共通privacy scannerと履歴sanitizer（実装済み）
@@ -121,6 +123,22 @@ conversationとturnをSQLiteからhard deleteする。
 
 モデル差し替え・チューニングをコード変更なしで行える。
 
+## Wave 2先行基盤: dogfood環境分離
+
+親Issue: #50
+
+TAKTによる開発と安定版の継続利用を並行するため、#22完了後、#33より先にdogfood環境を分離する。
+
+- #52 runtime data rootと環境identity
+- #51 managedサービスのport分離とdogfood Profile
+- #53 Ubuntu-dogfoodと共通推論サービス
+- #54 deploy、rollback、常駐運用
+- #55 backup、restore
+- #56 TAKTとの並行稼働・データ分離受入
+
+Wave 2受入まではdogfoodのRAGを無効にし、conversation historyだけを実データとして保持する。
+dogfoodのSQLite schema変更へdev／testの「削除して再作成」を適用しない。
+
 ## Wave 2: 「覚えている」（RAG本稼働 = 旧Phase 5の実質的完遂）
 
 Wave 2の設計詳細はこの計画書で重複管理しない。現行の設計上の正本は次とする。
@@ -134,6 +152,7 @@ Wave 2の設計詳細はこの計画書で重複管理しない。現行の設�
 ```text
 #25（完了）
   -> #22
+  -> #50（dogfood環境分離）
   -> #33
   -> #8
   -> (#29 || #30)

@@ -18,6 +18,10 @@ RAG privacyの絶対禁止、SQLite正本、Chroma派生index、transactional ou
 
 上記の範囲で記述が競合する場合は、本ADRを優先する。
 
+開発とdogfoodの実行境界、data root、backup、migration、rollbackは
+`local-dogfood-environment-2026-08.md`を正本とする。Wave 2のSQLite／Chroma実装は同ADRの
+環境identityとデータ保持契約を前提にする。
+
 ## 背景
 
 既存文書では、RAGの検索方式、人格が保持する記憶、農業日誌等の正確な記録が「長期記憶」として
@@ -523,6 +527,7 @@ metadata-onlyで観測する。
 ```text
 #25（Wave 1 privacy scanner、完了）
   -> #22
+  -> #50（dogfood環境分離）
   -> #33
   -> #8
   -> (#29 || #30)
@@ -535,6 +540,9 @@ metadata-onlyで観測する。
 
 判断理由は、先に意味分類と決定論的admissionを確立し、その後にSQLite正本、Chroma同期、検索を
 構築する必要があるためである。
+また、#8以降で運用相当のSQLite／Chromaを実装する前に、dev／testとdogfoodのdata root、port、
+process ownership、backup／migration境界を固定し、TAKTからdogfoodデータへ到達できないことを
+#50で受け入れる必要がある。
 自動記憶形成は安全な保存境界と取得境界が完成してから接続する。時系列照合と管理UIは、共通の
 schemaとrepositoryが完成した後で並行して進めてよい。nightly consolidationはこの依存列の
 完了後に別Issueとして追加する。

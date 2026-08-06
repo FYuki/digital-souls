@@ -470,12 +470,12 @@ model、prompt、policyのいずれかを変更した場合は、このcorpusを
 複数ユーザー化、cloud利用、外部文書RAG等へ進む前に、カテゴリ別recall、precision、
 false-negative rate、false-positive rateを含む本格評価へ拡張する。
 
-### 14. 開発・検証データは移行せず削除する
+### 14. dev／testデータとdogfoodデータの保持契約を分ける
 
-実運用を開始するまで、開発環境は検証環境を兼ね、既存SQLite会話履歴と既存Chroma collectionは
-テスト用データとして扱う。schema変更時のデータmigrationは互換性要件とせず、新schemaへ移行しない。
+dev／testの既存SQLite会話履歴と既存Chroma collectionはテスト用データとして扱う。
+schema変更時のmigrationは互換性要件とせず、新schemaへ移行しない。
 
-実装切り替え時に次を行う。
+dev／testの実装切り替え時に次を行う。
 
 1. 旧SQLite・Chromaへの書き込みを停止
 2. 既存`conversations.db`を削除
@@ -486,11 +486,17 @@ false-negative rate、false-positive rateを含む本格評価へ拡張する。
 
 旧SQLiteの生会話からChromaを再構築しない。
 
-現在のコードが限定された旧schemaからのmigration処理を持つ場合も、運用開始前のデータ互換性として
+現在のコードが限定された旧schemaからのmigration処理を持つ場合も、dev／testのデータ互換性として
 保証しない。将来のschema変更で既存migration処理を維持・拡張することも必須としない。
 
-実データを保持する運用へ移行する際に、移行時点のschemaと保存データを基準として、対応する
-旧schema、backup、migration、検証、rollbackの方針を別途決定し、運用手順を作成する。
+dogfoodは実conversation historyを保持する運用相当環境であり、上記の削除契約を適用しない。
+dogfoodのschema変更では、移行時点のschemaと保存データを基準として、対応する旧schema、backup、
+migration、検証、rollbackを必須にする。data rootと環境identityをdev／testから分離し、起動時に
+不一致を拒否する。詳細は`local-dogfood-environment-2026-08.md`を正本とする。
+
+Wave 2親Issue #28の受入まではdogfoodのRAGを無効にし、旧Chromaデータを作らない。
+Wave 2のpersona memory SQLiteは空状態から開始し、dogfoodのconversation historyは保持する。
+Chromaは承認済みpersona memoryのSQLite正本だけから構築する。
 
 ## MVPで実装しない項目
 
