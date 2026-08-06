@@ -1,5 +1,9 @@
 # AIRI Docker方針 (2026-06)
 
+> [!WARNING]
+> **ARCHIVED** — AIRIフォーク利用の取りやめにより失効した。
+> Docker全体の現行方針は`docs/decisions/docker-policy-2026-06.md`を参照する。
+
 ## 決定内容
 
 **AIRIはDockerに含めない。WSL2上で直接起動するサイドカー構成とする。**

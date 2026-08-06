@@ -9,7 +9,7 @@
 | フロントエンド | Vite + Svelte + TypeScript | テキストチャットUI → 音声UIへ拡張 |
 | LLM (small) | Ollama + gemma4:e4b | ローカル開発・常用想定 |
 | LLM (medium/large) | Claude / GPT（クラウド） | LLM振り分けルーターの枠のみ用意、初期はダミー |
-| 長期記憶 | RAG（Chroma + nomic-embed-text） + SQLite | キャラクターごとに完全独立。`character_id`を全レコードに付与。詳細は `docs/decisions/Multi-character-db-2026-06.md` |
+| 長期記憶 | RAG（Chroma + nomic-embed-text） + SQLite | キャラクターごとに完全独立。`character_id`を全レコードに付与。詳細は `docs/decisions/wave2-memory-formation-retrieval-2026-08.md` |
 | 音声通信（初期） | WebSocket | ローカル環境では遅延差がほぼ出ないため |
 | 音声通信（将来） | LiveKit | 抽象レイヤー（AudioTransport）で差し替え可能にしておく |
 | STT | Whisper（faster-whisper, WSL2ローカル） | |

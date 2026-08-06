@@ -19,7 +19,9 @@ digital-souls の自作バックエンド（FastAPI）。
 Chroma 同期削除は Wave 2 で実装する。既存の backup、snapshot、ファイルシステム上の
 複製からの消去は保証しない。
 
-実装は [#10](https://github.com/FYuki/digital-souls/issues/10) から開始する。
+Wave 2の実装順と受入条件は
+[#28](https://github.com/FYuki/digital-souls/issues/28)および
+`docs/decisions/wave2-memory-formation-retrieval-2026-08.md`を参照する。
 
 ## セットアップ
 

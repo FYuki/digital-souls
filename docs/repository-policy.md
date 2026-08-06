@@ -89,12 +89,13 @@ runtimeは`{id}.card.json`を直接読み込み、`personality.md`から人格�
 ## docs/decisions
 
 `docs/decisions/` には、検討経緯と意思決定ログを残す。
+現行ADRは直下、完全に置換・失効したADRは`docs/decisions/archive/`へ配置する。
+状態タグとarchive運用の詳細は`docs/decisions/README.md`を参照する。
 
 ファイル命名規則: `<topic>-YYYY-MM.md`
 
 想定ファイル例:
 
-* `airi-2026-06.md` — AIRI採用方針
 * `character-miori-2026-06.md` — 光織キャラクター設定補正
 * `infrastructure-2026-07.md` — インフラ構成選定
 

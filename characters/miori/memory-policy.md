@@ -1,6 +1,9 @@
 # 光織 Memory Policy
 
-光織の記憶方針本文は `docs/decisions/miori-memory-policy-2026-06.md` に移動した。
+光織の現行の記憶・記録モデル、保存同意、形成・検索方針は
+`docs/decisions/wave2-memory-formation-retrieval-2026-08.md`を正本とする。
+
+`docs/decisions/archive/miori-memory-policy-2026-06.md`は初期検討時の履歴ADRとして保持する。
 
 認識語彙・pattern・閾値等の実行時Source of Truthは
 `backend/app/memory/memory_policy.json`。

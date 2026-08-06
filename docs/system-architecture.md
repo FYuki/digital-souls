@@ -142,20 +142,24 @@ large:
 UI上のスレッドはBackendの`conversation_id`に対応する。同じ`character_id`と
 `conversation_id`の履歴だけを復元し、別conversationの生会話は検索しない。
 
+会話履歴を短期記憶、`approved_memories`を人格の長期記憶として扱う。conversation由来の
+長期記憶は保存済み会話履歴からだけ形成する。農業日誌やレシピ等の正確なdomain recordは
+人格記憶へ混在させず、暫定providerまたはaddon DBが所有する。
+
 ```text
 受信した会話
-  ├─ 現在ターンの応答生成（原文は処理中だけ利用）
-  ├─ Wave 1: 共通の決定論的privacy scanner
-  │    ├─ 履歴用policy
-  │    │    ├─ MASK / STORE
-  │    │    └─ SKIP_CONTENT
-  │    │         └─ SQLite: conversations / conversation_turns
-  │    └─ Wave 2へfindingを提供
-  └─ Wave 2: 文脈依存PrivacyAssessment
-       └─ RAG admission policy
-            └─ ALLOW_STRUCTURED
-                 └─ SQLite: approved_memories + memory_index_outbox
-                      └─ Chroma: 承認済み記憶の派生index
+  └─ Wave 1: 共通の決定論的privacy scanner
+       ├─ 現在ターンの応答生成（原文は処理中だけ利用）
+       └─ 履歴用policy + assistant応答のsanitizer
+            ├─ SKIP_CONTENT / privacy_skipped
+            └─ MASK / STORE
+                 └─ SQLite: completedなconversation_turns
+                      └─ 非同期の長期記憶形成
+                           └─ Wave 2: 文脈依存PrivacyAssessment
+                                └─ RAG admission policy
+                                     └─ ALLOW_STRUCTURED
+                                          └─ SQLite: approved_memories + memory_index_outbox
+                                               └─ Chroma: 承認済み記憶の派生index
 ```
 
 共通privacy scannerは保存先を決めず、カテゴリ、原文上の半開区間、reason code、version、
@@ -168,9 +172,10 @@ metadata-onlyの`ScanFailure`を返す。NFKC等の認識用viewと原文spanの
 userとassistantの双方へ同じscannerとsanitizerを適用し、原文、検出値、マスク前本文を
 SQLiteやapplication logへ残さない。
 
-保存拒否findingは`RAG`、`HISTORY`、`BOTH`のscopeを持ち、current userのcurrent turnだけへ
-適用する。assistant側で`SKIP_CONTENT`になった場合は、保存済みuser本文も同一transactionで
-消去し、turn全体を`privacy_skipped`へ遷移する。
+保存拒否findingはMVPでは`RAG`または`BOTH`のscopeを持ち、current userのcurrent turnだけへ
+適用する。「履歴に残さないで」は履歴だけでなくRAG記憶形成も拒否する`BOTH`として扱う。
+assistant側で`SKIP_CONTENT`になった場合は、保存済みuser本文も同一transactionで消去し、
+turn全体を`privacy_skipped`へ遷移する。
 
 文脈依存`PrivacyAssessment`はWave 2でhealth、心理状態、自傷、虐待・性的被害、金融状況、
 第三者の非公開情報、暗示的な機微情報を分類する。classifierは保存可否を返さず、
@@ -184,8 +189,10 @@ conversationのアーカイブは履歴をSQLiteへ保持したまま通常一�
 DBを空状態から再作成できるものとする。実データを保持する運用開始時に、対応schema、backup、
 migration、rollbackの運用契約を別途定める。
 
-RAG長期記憶はpositive allowlist方式とし、許可型へ正規化され、機微情報検査と必要なユーザー確認を
-通過した`ApprovedMemoryCandidate`だけをSQLiteへ保存する。SQLiteを正本、Chromaを派生indexとし、
+RAG長期記憶はpositive allowlist方式とし、allowlistを保存同意として扱う。許可型へ正規化され、
+機微情報検査を通過し、current turnに保存拒否がない`ApprovedMemoryCandidate`だけをSQLiteへ
+自動保存する。候補ごとの確認と保存通知は行わない。SQLiteを正本、Chromaを派生indexとし、
+conversation由来の候補は元turnの履歴本文が保存済みの場合だけ長期記憶へ形成する。
 SQLiteへの承認済み記憶保存とoutbox作成を同一transactionで行う。Chroma登録失敗時は本文を
 別ファイルへ退避せず、outboxの`memory_id`でSQLiteの承認済み記憶を再読して冪等に再試行する。
 
@@ -200,17 +207,28 @@ Chromaから冪等に削除する。SQLite commit後の同じ削除操作でChro
 `character_id`、状態、TTL、policy versionを確認する。さらにSQLiteの`normalized_text`へ
 共通の決定論的絶対禁止scannerを再適用し、検出した記憶をpromptへ渡さない。
 
+current user queryに絶対禁止finding、意味分類の`SENSITIVE`／`ABSTAIN`、または判定障害がある場合は
+RAG検索自体をskipし、RAGなしで会話を続ける。検索順位は意味的関連度を主とし、関連度が同等の
+候補間だけ`last_user_mentioned_at`をtie-breakに使う。検索やassistantの言及では同日時を更新しない。
+
 詳細な不変条件とMVP境界は
-`docs/decisions/rag-memory-privacy-policy-2026-07.md`を参照する。
+`docs/decisions/rag-memory-privacy-policy-2026-07.md`および
+`docs/decisions/wave2-memory-formation-retrieval-2026-08.md`を参照する。
 
-初期ツール候補:
+promptへcontextを供給する境界は次に分ける。
 
-* 農業日誌
-* アレンジレシピ管理
-* メモ管理
-* タスク管理
-* 配信ログ
-* キャラクター記憶
+```text
+ContextProvider
+├─ ConversationHistoryProvider
+├─ PersonaMemoryProvider
+└─ AddonRecordProvider
+```
+
+初期domain provider候補:
+
+- `core`: 人格記憶
+- `temporary:agriculture`: addon完成前の農業記録
+- `temporary:recipe`: addon完成前のレシピ記録
 
 記憶は人格ごとに分離できるようにする。
 
@@ -223,7 +241,8 @@ characters/
    └─ memory-policy.md  # 方針本文と実装設定への案内
 ```
 
-光織の記憶方針本文は`docs/decisions/miori-memory-policy-2026-06.md`、RAG privacyの不変条件は
-`docs/decisions/rag-memory-privacy-policy-2026-07.md`で管理する。
+現行の記憶・記録モデルは`docs/decisions/wave2-memory-formation-retrieval-2026-08.md`、
+RAG privacyの不変条件は`docs/decisions/rag-memory-privacy-policy-2026-07.md`で管理する。
+`docs/decisions/archive/miori-memory-policy-2026-06.md`は初期検討の履歴ADRとして保持する。
 `backend/app/memory/memory_policy.json`は認識語彙・pattern・閾値・追加禁止設定の実行時Source of
 Truthとするが、ADRとtyped policy schemaが定める絶対禁止を削除・許可へ反転できない。

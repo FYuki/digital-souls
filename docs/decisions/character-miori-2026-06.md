@@ -79,4 +79,4 @@ Phase 1 で作成した初期設定（`characters/miori/`）が、コアコン�
 
 - `characters/miori/personality.md` — 役割・コンセプト・性格・新セクション3つを追加
 - `characters/miori/world.md` — 世界観・用語体系・記録の比喩・演出例を全面改訂
-- `docs/decisions/miori-memory-policy-2026-06.md` — RAG構築時の考慮事項を記録
+- `docs/decisions/archive/miori-memory-policy-2026-06.md` — RAG構築時の初期検討履歴

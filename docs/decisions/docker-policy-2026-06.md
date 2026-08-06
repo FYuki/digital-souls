@@ -29,7 +29,7 @@ moeru-ai/airi のアーキテクチャ調査の結果、以下が判明した。
   Dockerに入れると設定が複雑になる
 - 人格反映はCharacter Card（JSON）で完結し、ソースコード改変が不要
 
-詳細は `docs/decisions/docker-airi-policy-2026-06.md` を参照。
+当時の詳細は `docs/decisions/archive/docker-airi-policy-2026-06.md` を参照。
 
 **バージョン管理について**
 
@@ -59,4 +59,4 @@ Dockerが真価を発揮するのは以下の状況であり、現プロジェ�
 
 - `docs/development-environment.md` — 直接インストール構成の詳細
 - `docs/infrastructure-policy.md` — インフラ全体方針
-- `docs/decisions/docker-airi-policy-2026-06.md` — AIRI個別の検討経緯
+- `docs/decisions/archive/docker-airi-policy-2026-06.md` — 失効したAIRI個別方針の検討履歴
