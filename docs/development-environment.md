@@ -18,6 +18,23 @@
 
 PostgreSQL / Qdrant / Redis / AIRI は現行の通常起動フローでは使用しない。
 
+## dogfood環境との境界
+
+本書の既存コマンドは`Ubuntu-dev`上の開発・テスト環境を対象とする。継続利用するdogfoodは
+Issue #50で別WSL distribution、別port、独立clone、専用data rootへ分離する。
+
+| 環境 | Frontend | Backend | ready gate | データ |
+|---|---:|---:|---:|---|
+| dev／TAKT | 5173 | 8000 | 4174 | 破棄・再作成可能 |
+| dogfood | 15173 | 18000 | 14174 | backup・migration対象 |
+
+dogfood実装が完了するまでは、`dev` Profileやmain checkoutをdogfood用途へ流用しない。
+実装後もdev／testのsetup、fixture、cleanupからdogfood data rootを指定しない。
+
+Wave 2親Issue #28の受入まではdogfoodのRAGを無効にし、実データとして保持するのは
+conversation historyだけとする。詳細は
+`docs/decisions/local-dogfood-environment-2026-08.md`を参照する。
+
 ## 初期セットアップ
 
 ```bash
@@ -122,6 +139,9 @@ Backend 単体起動では Ollama や VOICEVOX を準備・起動しない。VOI
 ChromaDB は外部プロセスではなく、Backend プロセス内で `chromadb.PersistentClient` として利用する。永続化先は `backend/app/data/chroma` で、初回利用時に `backend/app/data` が作成される。
 
 リポジトリ配下に永続データが作られるため、開発環境では作業ユーザーが `backend/app/data` を作成・書き込みできる権限を持っている必要がある。
+
+上記は現行dev環境の挙動である。Issue #52でdata rootと環境identityを外部設定化し、dogfoodでは
+リポジトリ外の専用pathを必須にする。dogfood ChromaはWave 2受入後にSQLite正本から構築する。
 
 ## テストとの関係
 

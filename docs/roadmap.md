@@ -76,6 +76,14 @@ MVP完了時点で判明したギャップ（多ターン会話、RAG本稼働�
 
 設計上の正本: `docs/decisions/wave2-memory-formation-retrieval-2026-08.md`
 
+Wave 2先行基盤として、#22完了後、#33より先にTAKTと並行可能なdogfood環境分離（#50）を行う。
+
+- [ ] runtime data root・port・環境identityの分離（#51、#52）
+- [ ] Ubuntu-dogfood・共通推論・deploy・backupの構築（#53、#54、#55）
+- [ ] TAKTとの並行稼働・データ非混入の受入（#56）
+
+Wave 2受入まではdogfoodのRAGを無効にし、実conversation historyだけを保持する。
+
 - [ ] 文脈依存の機微情報判定（#22）
 - [ ] 長期記憶の保存判定（#33）
 - [ ] 承認済み長期記憶と検索基盤（#8、#29、#30、#31）

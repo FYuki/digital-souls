@@ -15,6 +15,20 @@
 
 モックを使用する単体・結合・E2Eテストの結果は、外部サービスとの実接続に成功した一次証跡として扱わない。
 
+## dogfood環境との分離
+
+unit、module、E2E、integrationの全テストはdev／test専用Profileとdata rootを使用し、
+dogfoodのFrontend、Backend、SQLite、Chromaをテスト対象またはfixtureとして使用しない。
+
+- dogfoodのFrontend `:15173`、Backend `:18000`、ready gate `:14174`へ接続しない
+- `DS_ENVIRONMENT_ID=dogfood`またはdogfood identity markerを持つdata rootではテストを開始しない
+- テストsetup、DB再作成、cleanup、Playwright teardownからdogfood data rootを操作しない
+- Ollama／VOICEVOXを共通推論サービスとして実接続する場合も、テストrunはそのprocessを所有・停止しない
+- 実接続証跡へdogfoodの会話本文、prompt、SQLite row、Chroma documentを複製しない
+
+Issue #56で、dogfood稼働中のintegration testとcleanupを含む横断受入を実施する。
+環境分離の正本は`docs/decisions/local-dogfood-environment-2026-08.md`とする。
+
 ## Playwright スイート
 
 | コマンド | 配置 | Profile | 要求Capability | 結果ディレクトリ |

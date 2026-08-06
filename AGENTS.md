@@ -21,10 +21,14 @@
 ## 環境
 
 - OS: Windows 11
-- WSL2 Ubuntu: メイン開発環境（Ollama / Whisper / VOICEVOX / FastAPI）
+- WSL2 Ubuntu-dev: メイン開発環境（TAKT / FastAPI / Vite / テスト。データは破棄可能）
+- WSL2 Ubuntu-dogfood（#50で構築）: 運用相当の安定環境（実会話履歴 / Ollama / VOICEVOX）
 - WindowsメインPC: RTX搭載、重いAI処理・配信処理専用（必要時のみ起動）
 - Mac mini（将来）: 常時稼働サーバー（M4 Pro 48GB想定。軽量LLM・Whisper・記憶DB・生活支援ツール）
 - Cloud GPU/VM: WindowsメインPC未起動時のフォールバック
+
+開発とdogfoodの分離、データ保持、Wave 2との依存順は
+`docs/decisions/local-dogfood-environment-2026-08.md`を参照する。
 
 ## 現在の開発フェーズ
 

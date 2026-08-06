@@ -14,10 +14,11 @@
 - 基本の姿はLive2Dとし、パーソナルAI用途では静止画UIも許容する
 - 配信時のみ、必要に応じてVRMを利用する
 - 常時稼働サーバーは将来的にMac miniを想定する
-- Mac mini調達まではWindows + WSL2で開発を進める
+- Mac mini調達まではWindows + WSL2を使い、開発用`Ubuntu-dev`と運用相当の`Ubuntu-dogfood`を分ける
 - 重いAI処理はWindowsメインPCまたはクラウドGPU/VMへ委譲する
 
-方針の詳細・経緯は [システムアーキテクチャ](docs/system-architecture.md)・[インフラ方針](docs/infrastructure-policy.md)・`docs/decisions/` を参照。
+方針の詳細・経緯は [システムアーキテクチャ](docs/system-architecture.md)・[インフラ方針](docs/infrastructure-policy.md)・
+[dogfood環境分離ADR](docs/decisions/local-dogfood-environment-2026-08.md)・`docs/decisions/` を参照。
 
 現在の開発状況は [開発ロードマップ](docs/roadmap.md) を参照。
 
@@ -27,6 +28,7 @@
 - [システムアーキテクチャ](docs/system-architecture.md)
 - [インフラ方針](docs/infrastructure-policy.md)
 - [開発環境](docs/development-environment.md)
+- [テスト方針](docs/testing-policy.md)
 - [リポジトリ運用方針](docs/repository-policy.md)
 
 ## 人格
