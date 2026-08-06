@@ -2,7 +2,6 @@ import json
 import os
 import shlex
 import subprocess
-import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -13,6 +12,7 @@ from tests.environment_test_support import (
     RecordingRunner,
     orchestrator_identity,
     resolved_profile,
+    resolved_runtime_paths,
 )
 
 
@@ -28,13 +28,14 @@ MODEL_ENVIRONMENT = {
 }
 
 
-def test_should_resolve_profile_overrides_into_canonical_child_environment() -> None:
+def _resolve_profile(environment: dict[str, str], root_dir: Path = Path("/test/repository")):
     from profile_resolution import resolve_profile
 
-    report = resolve_profile(
-        {"DS_PROFILE": "integration-voice", **MODEL_ENVIRONMENT},
-        default_profile=None,
-    )
+    return resolve_profile(environment, None, resolved_runtime_paths(root_dir))
+
+
+def test_should_resolve_profile_overrides_into_canonical_child_environment() -> None:
+    report = _resolve_profile({"DS_PROFILE": "integration-voice", **MODEL_ENVIRONMENT})
 
     derived = report["derivedEnvironment"]
     assert {key: derived[key] for key in MODEL_ENVIRONMENT} == MODEL_ENVIRONMENT
@@ -42,9 +43,7 @@ def test_should_resolve_profile_overrides_into_canonical_child_environment() -> 
 
 
 def test_should_emit_model_defaults_for_profile_when_overrides_are_absent() -> None:
-    from profile_resolution import resolve_profile
-
-    report = resolve_profile({"DS_PROFILE": "integration-text"}, default_profile=None)
+    report = _resolve_profile({"DS_PROFILE": "integration-text"})
 
     derived = report["derivedEnvironment"]
     assert derived["OLLAMA_CHAT_MODEL"] == "gemma4:e4b"
@@ -56,22 +55,17 @@ def test_should_emit_model_defaults_for_profile_when_overrides_are_absent() -> N
 def test_should_export_all_model_keys_and_unset_them_when_switching_to_mock_backend(
     tmp_path: Path,
 ) -> None:
-    from profile_resolution import resolve_profile
-
     real_report = tmp_path / "real-profile.json"
     mock_report = tmp_path / "mock-profile.json"
     real_report.write_text(
         json.dumps(
-            resolve_profile(
-                {"DS_PROFILE": "integration-text", **MODEL_ENVIRONMENT},
-                default_profile=None,
-            )
+            _resolve_profile({"DS_PROFILE": "integration-text", **MODEL_ENVIRONMENT})
         ),
         encoding="utf-8",
     )
     mock_report.write_text(
         json.dumps(
-            resolve_profile({"DS_PROFILE": "test-mocked"}, default_profile=None)
+            _resolve_profile({"DS_PROFILE": "test-mocked"})
         ),
         encoding="utf-8",
     )
@@ -100,9 +94,8 @@ def test_should_export_all_model_keys_and_unset_them_when_switching_to_mock_back
     )
 
     assert result.returncode == 0, result.stderr
-    expected_real_environment = resolve_profile(
-        {"DS_PROFILE": "integration-text", **MODEL_ENVIRONMENT},
-        default_profile=None,
+    expected_real_environment = _resolve_profile(
+        {"DS_PROFILE": "integration-text", **MODEL_ENVIRONMENT}
     )["derivedEnvironment"]
     assert result.stdout.splitlines() == [
         *[
@@ -114,17 +107,15 @@ def test_should_export_all_model_keys_and_unset_them_when_switching_to_mock_back
 
 
 def test_should_reject_invalid_model_settings_before_writing_resolved_values() -> None:
-    from profile_resolution import resolve_profile
     from profile_types import ProfileError
 
     with pytest.raises(ProfileError) as exc_info:
-        resolve_profile(
+        _resolve_profile(
             {
                 "DS_PROFILE": "integration-text",
                 "OLLAMA_CONTEXT_TOKENS": "1024",
                 "OLLAMA_RESPONSE_RESERVE_TOKENS": "1024",
             },
-            default_profile=None,
         )
 
     message = str(exc_info.value)
@@ -137,7 +128,6 @@ def test_should_route_profile_ollama_model_to_readiness_validation(
     tmp_path: Path,
 ) -> None:
     from adapters import ollama
-    from profile_resolution import resolve_profile
     from service_registry import create_service_registry, require_service_operations
 
     monkeypatch.setattr(
@@ -145,13 +135,14 @@ def test_should_route_profile_ollama_model_to_readiness_validation(
         "_fetch_json",
         lambda _url: {"models": [{"name": MODEL_ENVIRONMENT["OLLAMA_CHAT_MODEL"]}]},
     )
-    report = resolve_profile(
-        {"DS_PROFILE": "integration-voice", **MODEL_ENVIRONMENT},
-        default_profile=None,
+    runtime_paths = resolved_runtime_paths(tmp_path)
+    report = _resolve_profile(
+        {"DS_PROFILE": "integration-voice", **MODEL_ENVIRONMENT}, tmp_path
     )
     derived = report["derivedEnvironment"]
     registry = create_service_registry(
         tmp_path,
+        runtime_paths,
         ollama_model_name=derived["OLLAMA_CHAT_MODEL"],
         whisper_model_name=derived["WHISPER_MODEL"],
     )
@@ -166,12 +157,12 @@ def test_should_route_profile_ollama_model_to_readiness_validation(
 
 def test_should_route_profile_whisper_model_to_cache_check(tmp_path: Path) -> None:
     from adapters.base import OperationContext
-    from profile_resolution import resolve_profile
     from service_registry import create_service_registry, require_service_operations
 
     snapshot = (
         tmp_path
-        / ".cache"
+        / "runtime-data"
+        / "cache"
         / "huggingface"
         / "hub"
         / "models--Systran--faster-whisper-large-v3"
@@ -193,17 +184,18 @@ def test_should_route_profile_whisper_model_to_cache_check(tmp_path: Path) -> No
     python = tmp_path / "backend" / ".venv" / "bin" / "python"
     python.parent.mkdir(parents=True)
     python.write_text(
-        f"#!/bin/sh\nexec {shlex.quote(sys.executable)} \"$@\"\n",
+        f"#!/bin/sh\nprintf '%s\\n' {shlex.quote(str(snapshot))}\n",
         encoding="utf-8",
     )
     python.chmod(0o755)
-    report = resolve_profile(
-        {"DS_PROFILE": "integration-voice", **MODEL_ENVIRONMENT},
-        default_profile=None,
+    runtime_paths = resolved_runtime_paths(tmp_path)
+    report = _resolve_profile(
+        {"DS_PROFILE": "integration-voice", **MODEL_ENVIRONMENT}, tmp_path
     )
     derived = report["derivedEnvironment"]
     registry = create_service_registry(
         tmp_path,
+        runtime_paths,
         ollama_model_name=derived["OLLAMA_CHAT_MODEL"],
         whisper_model_name=derived["WHISPER_MODEL"],
     )
@@ -233,13 +225,12 @@ def test_should_only_pull_the_profile_model_when_managed_ollama_is_missing_it(
     from environment_runtime import EnvironmentRun
     from environment_timing import EnvironmentTiming
     from http_readiness import ReadinessResult
-    from profile_resolution import resolve_profile
     from run_report import create_initial_report
     from service_registry import create_service_registry
 
-    report = resolve_profile(
-        {"DS_PROFILE": "integration-voice", **MODEL_ENVIRONMENT},
-        default_profile=None,
+    runtime_paths = resolved_runtime_paths(tmp_path)
+    report = _resolve_profile(
+        {"DS_PROFILE": "integration-voice", **MODEL_ENVIRONMENT}, tmp_path
     )
     derived = report["derivedEnvironment"]
     report = {
@@ -254,6 +245,7 @@ def test_should_only_pull_the_profile_model_when_managed_ollama_is_missing_it(
     runner = RecordingRunner()
     registry = create_service_registry(
         tmp_path,
+        runtime_paths,
         runner,
         ollama_model_name=derived["OLLAMA_CHAT_MODEL"],
         whisper_model_name=derived["WHISPER_MODEL"],
@@ -282,6 +274,7 @@ def test_should_only_pull_the_profile_model_when_managed_ollama_is_missing_it(
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=report,
         orchestrator_identity=orchestrator_identity(),
+        runtime=report["runtime"],
     )
     store = MagicMock()
 
@@ -325,17 +318,17 @@ def test_should_only_pull_the_profile_model_when_managed_ollama_is_missing_it(
 
 def test_should_prepare_the_same_profile_whisper_model(tmp_path: Path) -> None:
     from adapters.base import OperationContext
-    from profile_resolution import resolve_profile
     from service_registry import create_service_registry, require_service_operations
 
-    report = resolve_profile(
-        {"DS_PROFILE": "integration-voice", **MODEL_ENVIRONMENT},
-        default_profile=None,
+    runtime_paths = resolved_runtime_paths(tmp_path)
+    report = _resolve_profile(
+        {"DS_PROFILE": "integration-voice", **MODEL_ENVIRONMENT}, tmp_path
     )
     derived = report["derivedEnvironment"]
     runner = RecordingRunner()
     registry = create_service_registry(
         tmp_path,
+        runtime_paths,
         runner,
         ollama_model_name=derived["OLLAMA_CHAT_MODEL"],
         whisper_model_name=derived["WHISPER_MODEL"],
@@ -354,5 +347,5 @@ def test_should_prepare_the_same_profile_whisper_model(tmp_path: Path) -> None:
     )
     assert download_command[3] == "large-v3"
     assert download_command[4] == str(
-        tmp_path / ".cache" / "huggingface" / "hub"
+        runtime_paths.whisper_cache_path
     )

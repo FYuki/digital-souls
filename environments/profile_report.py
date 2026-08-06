@@ -6,6 +6,13 @@ from pathlib import Path
 from typing import cast
 
 from app.model_settings import MODEL_ENVIRONMENT_KEYS, resolve_model_settings
+from app.runtime_paths import (
+    CACHE_DIRECTORY,
+    CHROMA_DIRECTORY,
+    RUNTIME_DIRECTORY,
+    SQLITE_FILENAME,
+    SUPPORTED_ENVIRONMENT_IDS,
+)
 from profile_constants import PROFILE_ENV
 from profile_resolution import derive_capabilities, derive_environment, resolve_dependencies
 from profile_types import (
@@ -28,6 +35,7 @@ REPORT_FIELDS = {
     "dependencies",
     "capabilities",
     "derivedEnvironment",
+    "runtime",
     "compatibility",
 }
 RESOLVED_DEPENDENCY_FIELDS = DEPENDENCY_FIELDS | {"readinessUrl"}
@@ -182,6 +190,33 @@ def validate_resolved_report(raw: object) -> ResolvedReport:
     if capabilities != derive_capabilities(dependencies):
         raise ProfileError("capabilities must match the resolved dependencies")
     derived_environment = _require_record(report["derivedEnvironment"], "derivedEnvironment")
+    runtime = _require_record(report["runtime"], "runtime")
+    runtime_fields = {
+        "environmentId", "dataRoot", "sqlitePath", "chromaPath",
+        "runtimeReportDirectory", "cachePath",
+    }
+    _reject_unknown_fields(runtime, runtime_fields, "runtime")
+    if set(runtime) != runtime_fields:
+        raise ProfileError("runtime must define every resolved path")
+    for name, value in runtime.items():
+        _require_string(value, f"runtime.{name}")
+    data_root = Path(cast(str, runtime["dataRoot"]))
+    expected_paths = {
+        "sqlitePath": data_root / SQLITE_FILENAME,
+        "chromaPath": data_root / CHROMA_DIRECTORY,
+        "runtimeReportDirectory": data_root / RUNTIME_DIRECTORY,
+        "cachePath": data_root / CACHE_DIRECTORY,
+    }
+    if not data_root.is_absolute() or data_root.resolve(strict=False) != data_root:
+        raise ProfileError("runtime.dataRoot must be a normalized absolute path")
+    if runtime["environmentId"] not in SUPPORTED_ENVIRONMENT_IDS:
+        raise ProfileError("runtime.environmentId is unsupported")
+    if any(runtime[name] != str(path) for name, path in expected_paths.items()):
+        raise ProfileError("runtime paths must be derived from runtime.dataRoot")
+    if derived_environment.get("DS_ENVIRONMENT_ID") != runtime["environmentId"]:
+        raise ProfileError("derivedEnvironment identity must match runtime")
+    if derived_environment.get("DS_DATA_DIR") != runtime["dataRoot"]:
+        raise ProfileError("derivedEnvironment data root must match runtime")
     model_environment = {
         key: value
         for key, value in derived_environment.items()
@@ -206,6 +241,11 @@ def validate_resolved_report(raw: object) -> ResolvedReport:
         )
     except ValueError as error:
         raise ProfileError(str(error)) from error
+    expected_environment = {
+        **expected_environment,
+        "DS_ENVIRONMENT_ID": runtime["environmentId"],
+        "DS_DATA_DIR": str(data_root),
+    }
     if derived_environment != expected_environment:
         raise ProfileError("derivedEnvironment must match the resolved dependencies")
     _validate_compatibility(report["compatibility"])

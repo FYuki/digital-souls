@@ -53,10 +53,12 @@ def _import_chroma_store(
 
     chroma_store = importlib.import_module("app.memory.chroma_store")
     module = importlib.reload(chroma_store)
-    monkeypatch.setattr(module, "DATA_DIR", tmp_path / "data")
-    monkeypatch.setattr(module, "CHROMA_PATH", tmp_path / "data" / "chroma")
     FakePersistentClient.instances.clear()
     return module
+
+
+def _chroma_path(tmp_path: Path) -> Path:
+    return tmp_path / "data" / "chroma"
 
 
 class TestChromaStore:
@@ -77,6 +79,7 @@ class TestChromaStore:
             [0.1, 0.2],
             "畑の相談",
             metadata,
+            chroma_path=_chroma_path(tmp_path),
         )
 
         client = FakePersistentClient.instances[0]
@@ -98,7 +101,9 @@ class TestChromaStore:
     ):
         chroma_store = _import_chroma_store(monkeypatch, tmp_path)
 
-        memories = chroma_store.query_memories("miori", [0.3, 0.4], n_results=5)
+        memories = chroma_store.query_memories(
+            "miori", [0.3, 0.4], n_results=5, chroma_path=_chroma_path(tmp_path)
+        )
 
         client = FakePersistentClient.instances[0]
         collection_name = next(iter(client.collections))
@@ -135,8 +140,11 @@ class TestChromaStore:
                 "role": "user",
                 "timestamp": "2026-06-23T00:00:00+00:00",
             },
+            chroma_path=_chroma_path(tmp_path),
         )
-        chroma_store.query_memories("光織/mi", [0.3, 0.4], n_results=5)
+        chroma_store.query_memories(
+            "光織/mi", [0.3, 0.4], n_results=5, chroma_path=_chroma_path(tmp_path)
+        )
 
         add_client = FakePersistentClient.instances[0]
         query_client = FakePersistentClient.instances[1]
@@ -169,8 +177,11 @@ class TestChromaStore:
                 "role": "user",
                 "timestamp": "2026-06-23T00:00:00+00:00",
             },
+            chroma_path=_chroma_path(tmp_path),
         )
-        chroma_store.query_memories("miori", [0.3, 0.4], n_results=5)
+        chroma_store.query_memories(
+            "miori", [0.3, 0.4], n_results=5, chroma_path=_chroma_path(tmp_path)
+        )
 
         add_client = FakePersistentClient.instances[0]
         query_client = FakePersistentClient.instances[1]
@@ -200,8 +211,14 @@ class TestChromaStore:
                 "role": "user",
                 "timestamp": "2026-06-23T00:00:00+00:00",
             },
+            chroma_path=_chroma_path(tmp_path),
         )
-        memories = chroma_store.query_memories(character, [0.3, 0.4], n_results=5)
+        memories = chroma_store.query_memories(
+            character,
+            [0.3, 0.4],
+            n_results=5,
+            chroma_path=_chroma_path(tmp_path),
+        )
 
         add_client = FakePersistentClient.instances[0]
         query_client = FakePersistentClient.instances[1]
@@ -223,7 +240,9 @@ class TestChromaStore:
         chroma_store = _import_chroma_store(monkeypatch, tmp_path)
 
         with pytest.raises(ValueError, match="character must not be empty"):
-            chroma_store.query_memories(" ", [0.3, 0.4], n_results=5)
+            chroma_store.query_memories(
+                " ", [0.3, 0.4], n_results=5, chroma_path=_chroma_path(tmp_path)
+            )
 
         assert FakePersistentClient.instances == []
 

@@ -11,6 +11,29 @@ if TYPE_CHECKING:
     from service_registry import ServiceRegistry
 
 
+def runtime_projection(data_root: Path = Path("/test/runtime-data")) -> dict[str, str]:
+    return {
+        "environmentId": "test",
+        "dataRoot": str(data_root),
+        "sqlitePath": str(data_root / "conversation-history.db"),
+        "chromaPath": str(data_root / "chroma"),
+        "runtimeReportDirectory": str(data_root / "runtime"),
+        "cachePath": str(data_root / "cache"),
+    }
+
+
+def resolved_runtime_paths(root_dir: Path):
+    from app.runtime_paths import resolve_runtime_paths
+
+    return resolve_runtime_paths(
+        {
+            "DS_ENVIRONMENT_ID": "test",
+            "DS_DATA_DIR": str(root_dir / "runtime-data"),
+        },
+        root_dir,
+    )
+
+
 def single_adapter_registry(
     service: str, adapter: ServiceOperations
 ) -> ServiceRegistry:
@@ -96,7 +119,10 @@ def resolved_profile(profile_name: str = "integration-voice") -> ResolvedReport:
             "CONVERSATION_HISTORY_TOKEN_LIMIT": "4096",
             "USER_INPUT_TOKEN_LIMIT": "8192",
             "LLM_CONTEXT_TOKEN_LIMIT": "32768",
+            "DS_ENVIRONMENT_ID": "test",
+            "DS_DATA_DIR": "/test/runtime-data",
         },
+        "runtime": runtime_projection(),
         "compatibility": {"usedEnvironmentVariables": [], "warnings": []},
     })
 

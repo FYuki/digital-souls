@@ -43,6 +43,16 @@ def _clean_env(**overrides: str) -> dict[str, str]:
     return env
 
 
+def _report_path(tmp_path: Path) -> Path:
+    data_root = tmp_path / "runtime-data"
+    runtime_dir = data_root / "runtime"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    (data_root / ".environment-identity.json").write_text(
+        '{"schemaVersion":1,"environmentId":"test"}\n', encoding="utf-8"
+    )
+    return runtime_dir / "resolved.json"
+
+
 def _run(
     environments_dir: Path,
     *arguments: str,
@@ -50,7 +60,11 @@ def _run(
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(environments_dir / "profile.py"), *arguments],
-        env=_clean_env() if env is None else env,
+        env={
+            **(_clean_env() if env is None else env),
+            "DS_ENVIRONMENT_ID": "test",
+            "DS_DATA_DIR": str(environments_dir.parent / "runtime-data"),
+        },
         capture_output=True,
         text=True,
     )
@@ -89,7 +103,7 @@ def test_should_derive_capabilities_from_dependencies(
     tmp_path: Path,
 ):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
 
     result = _resolve(environments_dir, report_path, profile)
 
@@ -103,7 +117,7 @@ def test_should_derive_rag_capability_for_real_in_process_chroma(tmp_path: Path)
     profile = _read_json(profile_path)
     profile["dependencies"]["chroma"] = {"mode": "real", "source": "in_process"}
     profile_path.write_text(json.dumps(profile), encoding="utf-8")
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
 
     result = _resolve(environments_dir, report_path, "integration-text")
 
@@ -113,7 +127,7 @@ def test_should_derive_rag_capability_for_real_in_process_chroma(tmp_path: Path)
 
 def test_should_write_complete_v1_report_with_timezone_timestamp(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
 
     result = _resolve(environments_dir, report_path, "integration-voice")
 
@@ -130,7 +144,7 @@ def test_should_write_complete_v1_report_with_timezone_timestamp(tmp_path: Path)
 
 def test_should_derive_readiness_urls_from_base_urls_and_paths(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
 
     result = _resolve(environments_dir, report_path, "integration-voice")
 
@@ -153,7 +167,7 @@ def test_should_append_validated_readiness_path_without_query_or_fragment(tmp_pa
     backend["baseUrl"] = "https://backend.example/api"
     backend["readinessPath"] = "/health/%20"
     profile_path.write_text(json.dumps(profile), encoding="utf-8")
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
 
     result = _resolve(environments_dir, report_path, "integration-text")
 
@@ -179,7 +193,7 @@ def test_should_reject_unsafe_readiness_path_without_replacing_report(
     backend["source"] = "external"
     backend["readinessPath"] = readiness_path
     profile_path.write_text(json.dumps(profile), encoding="utf-8")
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
     original = b'{"knownGood":true}\n'
     report_path.write_bytes(original)
 
@@ -193,7 +207,7 @@ def test_should_reject_unsafe_readiness_path_without_replacing_report(
 
 def test_should_apply_backend_origin_override_to_report_and_derived_environment(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
     override = "http://127.0.0.1:18000"
 
     result = _resolve(
@@ -213,7 +227,7 @@ def test_should_apply_backend_origin_override_to_report_and_derived_environment(
 
 def test_should_reject_backend_origin_override_for_mock_backend(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
 
     result = _resolve(
         environments_dir,
@@ -241,7 +255,7 @@ def test_should_reject_secret_bearing_or_non_origin_backend_override_without_rep
     tmp_path: Path,
 ):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
     original = b'{"knownGood":true}\n'
     report_path.write_bytes(original)
 
@@ -260,7 +274,7 @@ def test_should_reject_secret_bearing_or_non_origin_backend_override_without_rep
 
 def test_should_allowlist_derived_environment_and_exclude_process_secrets(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
     secret = "must-not-be-copied"
     env = _clean_env(DS_PROFILE="integration-voice", API_SECRET=secret, UNRELATED_VALUE=secret)
 
@@ -279,6 +293,8 @@ def test_should_allowlist_derived_environment_and_exclude_process_secrets(tmp_pa
         "VOICEVOX_BASE_URL",
         "RAG_ENABLED",
         "DS_BACKEND_ORIGIN",
+        "DS_ENVIRONMENT_ID",
+        "DS_DATA_DIR",
         *MODEL_DEFAULT_ENVIRONMENT,
     }
     serialized = json.dumps(report)
@@ -308,17 +324,21 @@ def test_should_emit_only_environment_values_used_by_selected_profile(
     tmp_path: Path,
 ):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
 
     result = _resolve(environments_dir, report_path, profile)
 
     assert result.returncode == 0, result.stderr
-    assert _read_json(report_path)["derivedEnvironment"] == expected_environment
+    assert _read_json(report_path)["derivedEnvironment"] == {
+        **expected_environment,
+        "DS_ENVIRONMENT_ID": "test",
+        "DS_DATA_DIR": str(tmp_path / "runtime-data"),
+    }
 
 
 def test_should_replace_existing_report_atomically(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
     report_path.write_text('{"old": true}', encoding="utf-8")
     old_inode = report_path.stat().st_ino
 
@@ -332,7 +352,7 @@ def test_should_replace_existing_report_atomically(tmp_path: Path):
 
 def test_should_preserve_existing_report_when_resolution_fails(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
     original = b'{"knownGood":true}\n'
     report_path.write_bytes(original)
 
@@ -349,8 +369,8 @@ def test_should_preserve_existing_report_when_resolution_fails(tmp_path: Path):
 
 def test_should_preserve_resolved_report_when_legacy_report_cannot_be_written(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
-    legacy_report_path = tmp_path / "legacy-report"
+    report_path = _report_path(tmp_path)
+    legacy_report_path = report_path.parent / "legacy-report"
     original = b'{"knownGood":true}\n'
     report_path.write_bytes(original)
     legacy_report_path.mkdir()
@@ -389,8 +409,8 @@ def test_should_restore_legacy_report_when_resolved_report_cannot_be_committed(t
 
 def test_should_write_legacy_backend_report_next_to_resolved_report(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
-    legacy_report_path = tmp_path / "voice-chat-backend.json"
+    report_path = _report_path(tmp_path)
+    legacy_report_path = report_path.parent / "voice-chat-backend.json"
 
     result = _resolve(environments_dir, report_path, "integration-voice")
 
@@ -403,8 +423,9 @@ def test_should_write_legacy_backend_report_next_to_resolved_report(tmp_path: Pa
 
 def test_should_separate_resolved_report_from_legacy_report_path(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    legacy_report_path = tmp_path / "voice-chat-backend.json"
-    resolved_report_path = tmp_path / "resolved-profile.json"
+    runtime_dir = _report_path(tmp_path).parent
+    legacy_report_path = runtime_dir / "voice-chat-backend.json"
+    resolved_report_path = runtime_dir / "resolved-profile.json"
     env = _clean_env(
         DS_PROFILE="test-mocked",
         VOICE_CHAT_E2E_BACKEND_REPORT=str(legacy_report_path),
@@ -423,8 +444,11 @@ def test_should_separate_resolved_report_from_legacy_report_path(tmp_path: Path)
 
 def test_should_preserve_reports_when_resolved_and_legacy_paths_collide(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    shared_report_path = tmp_path / "shared.json"
-    aliased_report_path = tmp_path / "reports" / ".." / shared_report_path.name
+    runtime_dir = _report_path(tmp_path).parent
+    shared_report_path = runtime_dir / "shared.json"
+    reports_dir = runtime_dir / "reports"
+    reports_dir.mkdir()
+    aliased_report_path = reports_dir / ".." / shared_report_path.name
     original = b'{"knownGood":true}\n'
     shared_report_path.write_bytes(original)
     env = _clean_env(

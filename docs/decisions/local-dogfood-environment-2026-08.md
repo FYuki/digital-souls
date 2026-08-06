@@ -69,11 +69,15 @@ deploy前にbackupを作成し、依存準備、Frontend build、service restart
 
 ### 4. 環境identityとdata rootを必須にする
 
-少なくとも`dev`、`test`、`dogfood`を区別する`DS_ENVIRONMENT_ID`と、SQLite、Chroma等の保存先を
-一元解決する`DS_DATA_DIR`を導入する。dogfoodはリポジトリ外の専用data rootを使用する。
+`dev`、`test`、`dogfood`を区別する`DS_ENVIRONMENT_ID`と、SQLite、Chroma、runtime report、cacheの
+保存先を一元解決する`DS_DATA_DIR`を使用する。dogfoodはリポジトリ外の専用data rootを使用する。
 
 data rootには環境identity markerを持たせ、Profile、設定、markerが一致しない場合はSQLite／Chromaを
 開く前にfail closedする。dev／testのsetup、fixture、cleanupからdogfood data rootを操作できないようにする。
+
+dogfood cloneを更新・再作成するときは、リポジトリ外の`DS_DATA_DIR`とmarkerを保持し、新cloneにも
+同じ`DS_ENVIRONMENT_ID=dogfood`と絶対パスを設定する。起動前検証を通過してからサービスを切り替え、
+data root自体をcloneの削除対象へ含めない。
 
 ### 5. dev／testとdogfoodの保持契約を分ける
 

@@ -288,7 +288,9 @@ class TestChatEndpoint:
         assert _PERSONALITY in contents[0]
         assert user_message == contents[-1]
 
-    def test_generate_response_uses_rag_augmented_system_prompt(self, monkeypatch):
+    def test_generate_response_uses_rag_augmented_system_prompt(
+        self, monkeypatch, runtime_paths
+    ):
         policy = _rag_policy()
         monkeypatch.setenv("RAG_ENABLED", "true")
         with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
@@ -306,6 +308,7 @@ class TestChatEndpoint:
             "miori",
             _VALID_BODY["message"],
             policy,
+            chroma_path=runtime_paths.chroma_path,
         )
         prompt = mock_gen.call_args.args[0]
         assert "前回は畑の話をした" in prompt.messages[1].content
@@ -605,7 +608,7 @@ class TestChatFlow:
         ]
 
     def test_rag_augmented_prompt_reaches_ollama_and_reply_is_recorded(
-        self, tmp_path, monkeypatch
+        self, tmp_path, monkeypatch, runtime_paths
     ):
         import app.characters.loader as loader_module
 
@@ -649,6 +652,7 @@ class TestChatFlow:
             "miori",
             "前回なんの話をしたっけ？",
             policy,
+            chroma_path=runtime_paths.chroma_path,
         )
         mock_record.assert_called_once()
         assert mock_record.call_args.args[:2] == (
@@ -661,6 +665,7 @@ class TestChatFlow:
             mock_record.call_args.kwargs["privacy_scanner"],
             "scan",
         )
+        assert mock_record.call_args.kwargs["chroma_path"] == runtime_paths.chroma_path
 
         payload = mock_post.call_args.kwargs["json"]
         assert payload["messages"] == [

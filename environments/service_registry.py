@@ -12,6 +12,7 @@ from adapters.ollama import OllamaAdapter
 from adapters.voicevox import VoicevoxAdapter
 from environment_constants import DEPENDENCY_NAMES
 from app.model_settings import OLLAMA_MODEL_NAME, WHISPER_MODEL_NAME
+from app.runtime_paths import RuntimePaths
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,7 @@ class RuntimeServices:
 
 def create_service_registry(
     root_dir: Path,
+    runtime_paths: RuntimePaths,
     runner: CommandRunner | None = None,
     *,
     ollama_model_name: str = OLLAMA_MODEL_NAME,
@@ -53,7 +55,10 @@ def create_service_registry(
         "backend": ServiceRegistration(
             "backend",
             BackendAdapter(
-                root_dir, runner, whisper_model_name=whisper_model_name
+                root_dir,
+                runtime_paths,
+                runner,
+                whisper_model_name=whisper_model_name,
             ),
             None,
         ),

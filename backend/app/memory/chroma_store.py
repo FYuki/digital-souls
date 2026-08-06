@@ -5,8 +5,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, cast
 
-DATA_DIR = Path(__file__).resolve().parents[1] / "data"
-CHROMA_PATH = DATA_DIR / "chroma"
 COLLECTION_NAME_PREFIX = "character"
 COLLECTION_NAME_MAX_LENGTH = 63
 COLLECTION_NAME_DIGEST_LENGTH = 12
@@ -69,11 +67,11 @@ def _collection_name(character: str) -> str:
     return f"{COLLECTION_NAME_PREFIX}-{digest}"
 
 
-def _collection(character: str) -> _ChromaCollection:
+def _collection(character: str, chroma_path: Path) -> _ChromaCollection:
     collection_name = _collection_name(character)
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    chroma_path.mkdir(parents=True, exist_ok=True)
     chromadb = importlib.import_module("chromadb")
-    client = cast(_ChromaClient, chromadb.PersistentClient(path=str(CHROMA_PATH)))
+    client = cast(_ChromaClient, chromadb.PersistentClient(path=str(chroma_path)))
     return client.get_or_create_collection(name=collection_name)
 
 
@@ -83,8 +81,10 @@ def add_memory(
     embedding: list[float],
     content: str,
     metadata: dict[str, str],
+    *,
+    chroma_path: Path,
 ) -> None:
-    _collection(character).add(
+    _collection(character, chroma_path).add(
         ids=[record_id],
         embeddings=[embedding],
         documents=[content],
@@ -96,8 +96,10 @@ def query_memories(
     character: str,
     embedding: list[float],
     n_results: int,
+    *,
+    chroma_path: Path,
 ) -> list[MemorySearchResult]:
-    result = _collection(character).query(
+    result = _collection(character, chroma_path).query(
         query_embeddings=[embedding],
         n_results=n_results,
     )

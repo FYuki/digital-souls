@@ -21,7 +21,12 @@ def _copy_backend_scripts(tmp_path: Path) -> tuple[Path, Path, Path]:
     backend_app = backend / "app"
     backend_app.mkdir(parents=True)
     (backend_app / "__init__.py").write_text("", encoding="utf-8")
-    for name in ("environment.py", "model_settings.py"):
+    for name in (
+        "environment.py",
+        "model_settings.py",
+        "runtime_paths.py",
+        "runtime_data_root.py",
+    ):
         shutil.copy2(ROOT_DIR / "backend" / "app" / name, backend_app / name)
     for name in ("setup-backend.sh", "start-backend.sh"):
         shutil.copy2(ROOT_DIR / "scripts" / name, scripts / name)
@@ -138,10 +143,10 @@ def test_should_import_backend_clients_without_repository_root_on_pythonpath():
 
 
 def test_should_exclude_repository_local_whisper_cache_from_git():
-    from app.model_settings import whisper_model_cache
+    from app.runtime_paths import resolve_runtime_paths
 
     generated_model = (
-        whisper_model_cache(ROOT_DIR)
+        resolve_runtime_paths({}, ROOT_DIR).whisper_cache_path
         / "models--example--converted-whisper"
         / "snapshots"
         / "generated-model"
@@ -222,7 +227,8 @@ def test_should_preserve_resolved_profile_values_when_dotenv_conflicts(tmp_path:
         f"open({str(captured)!r}, 'w'))\n"
         "PY\n",
     )
-    report = tmp_path / "resolved-profile.json"
+    data_root = tmp_path / "runtime-data"
+    report = data_root / "runtime" / "standalone" / "resolved-profile.json"
     resolve = subprocess.run(
         [
             "python3",
@@ -235,6 +241,8 @@ def test_should_preserve_resolved_profile_values_when_dotenv_conflicts(tmp_path:
         ],
         env={
             **os.environ,
+            "DS_ENVIRONMENT_ID": "test",
+            "DS_DATA_DIR": str(data_root),
             "OLLAMA_CHAT_MODEL": "profile-chat:12b",
             "WHISPER_MODEL": "large-v3",
             "OLLAMA_CONTEXT_TOKENS": "12288",
@@ -246,7 +254,12 @@ def test_should_preserve_resolved_profile_values_when_dotenv_conflicts(tmp_path:
 
     result = subprocess.run(
         [str(start)],
-        env={**os.environ, "DS_PROFILE_REPORT": str(report)},
+        env={
+            **os.environ,
+            "DS_ENVIRONMENT_ID": "test",
+            "DS_DATA_DIR": str(data_root),
+            "DS_PROFILE_REPORT": str(report),
+        },
         capture_output=True,
         text=True,
     )

@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -12,14 +13,46 @@ if str(ENVIRONMENTS_DIR) not in sys.path:
     sys.path.insert(0, str(ENVIRONMENTS_DIR))
 
 
+def _refuse_protected_runtime_data(repository_root: Path) -> None:
+    if os.environ.get("DS_ENVIRONMENT_ID") == "dogfood":
+        raise pytest.UsageError("pytest fixture refuses dogfood runtime data")
+    configured_data_root = os.environ.get("DS_DATA_DIR")
+    if configured_data_root is None:
+        return
+    from app.runtime_data_root import validate_existing_runtime_data_root
+    from app.runtime_paths import resolve_runtime_paths
+
+    input_paths = resolve_runtime_paths(os.environ, repository_root)
+    if not input_paths.identity_marker_path.exists():
+        return
+    try:
+        validate_existing_runtime_data_root(input_paths, repository_root)
+    except ValueError as error:
+        raise pytest.UsageError("pytest fixture refuses protected runtime data") from error
+
+
 @pytest.fixture(autouse=True)
 def conversation_history_database_path(tmp_path, monkeypatch) -> Path:
-    database_path = tmp_path / "conversation-history.db"
-    monkeypatch.setattr(
-        "app.conversation_history.config.DEFAULT_DATABASE_PATH",
-        database_path,
+    repository_root = Path(__file__).resolve().parents[2]
+    _refuse_protected_runtime_data(repository_root)
+    data_root = tmp_path / "runtime-data"
+    monkeypatch.setenv("DS_ENVIRONMENT_ID", "test")
+    monkeypatch.setenv("DS_DATA_DIR", str(data_root))
+    from app.runtime_data_root import initialize_runtime_data_root
+    from app.runtime_paths import resolve_runtime_paths
+
+    initialize_runtime_data_root(
+        resolve_runtime_paths(os.environ, repository_root), repository_root
     )
-    return database_path
+    return data_root / "conversation-history.db"
+
+
+@pytest.fixture
+def runtime_paths():
+    from app.runtime_paths import resolve_runtime_paths
+
+    repository_root = Path(__file__).resolve().parents[2]
+    return resolve_runtime_paths(os.environ, repository_root)
 
 
 @pytest.fixture

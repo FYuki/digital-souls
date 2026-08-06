@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from pathlib import Path
@@ -22,6 +23,7 @@ from adapters.base import (  # noqa: E402
 from environment_timing import EnvironmentTiming  # noqa: E402
 from http_readiness import ReadinessResult  # noqa: E402
 from profile_resolution import resolve_profile  # noqa: E402
+from app.runtime_paths import resolve_runtime_paths  # noqa: E402
 from service_registry import ServiceRegistration, ServiceRegistry  # noqa: E402
 
 
@@ -62,7 +64,10 @@ class SignalAdapter(ProcessServiceOperations):
         return result
 
 
-profile = dict(resolve_profile({"DS_PROFILE": "test-mocked"}, None))
+runtime_paths = resolve_runtime_paths(dict(os.environ), root)
+profile = dict(
+    resolve_profile({**dict(os.environ), "DS_PROFILE": "test-mocked"}, None, runtime_paths)
+)
 profile["dependencies"] = {
     **profile["dependencies"],
     "backend": {
@@ -74,7 +79,7 @@ profile["dependencies"] = {
     },
 }
 up_command.resolve_and_write_profile = (
-    lambda environment, default, report, legacy: profile
+    lambda environment, default, report, legacy, runtime: profile
 )
 adapters = {
     name: SignalAdapter(root, name, None) for name in ("frontend", "backend")
@@ -100,7 +105,6 @@ arguments = argparse.Namespace(
 raise SystemExit(
     up_command.up_environment(
         root,
-        root / ".runtime",
         arguments,
         registry=registry,
         timing=EnvironmentTiming(

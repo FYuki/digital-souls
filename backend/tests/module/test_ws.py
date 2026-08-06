@@ -155,14 +155,6 @@ def _write_character(tmp_path, character: str, system_prompt: str) -> None:
     )
 
 
-def _isolate_memory_paths(tmp_path, monkeypatch) -> None:
-    import app.memory.chroma_store as chroma_store
-
-    data_dir = tmp_path / "data"
-    monkeypatch.setattr(chroma_store, "DATA_DIR", data_dir)
-    monkeypatch.setattr(chroma_store, "CHROMA_PATH", data_dir / "chroma")
-
-
 def _wait_until(predicate, timeout: float = 5.0) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -312,12 +304,16 @@ class TestWebSocketEndpoint:
 
         assert result == (expected_status, expected_detail)
 
-    def test_empty_voicevox_base_url_uses_default_runtime_config(self, monkeypatch):
+    def test_empty_voicevox_base_url_uses_default_runtime_config(
+        self, monkeypatch, runtime_paths
+    ):
         monkeypatch.setenv("VOICEVOX_BASE_URL", "")
 
         from app.model_settings import resolve_model_settings
 
-        runtime_config = resolve_audio_runtime_config(resolve_model_settings({}))
+        runtime_config = resolve_audio_runtime_config(
+            resolve_model_settings({}), runtime_paths
+        )
 
         assert runtime_config.voicevox_base_url == DEFAULT_VOICEVOX_BASE_URL
 
@@ -365,7 +361,7 @@ class TestWebSocketEndpoint:
         assert _generated_contents(mock_gen)[-1] == user_message
 
     def test_rag_enabled_uses_prompt_and_records_user_memory_candidate(
-        self, monkeypatch
+        self, monkeypatch, runtime_paths
     ):
         user_message = "前回なんの話をしたっけ？"
         from app.memory.memory_policy import resolved_memory_policy
@@ -402,6 +398,7 @@ class TestWebSocketEndpoint:
             "miori",
             user_message,
             policy,
+            chroma_path=runtime_paths.chroma_path,
         )
         assert "前回は畑の話をした" in _generated_contents(mock_gen)[1]
         mock_record.assert_called_once()
@@ -410,6 +407,7 @@ class TestWebSocketEndpoint:
         assert args[2] is policy
         assert hasattr(args[3], "add_task")
         assert hasattr(kwargs["privacy_scanner"], "scan")
+        assert kwargs["chroma_path"] == runtime_paths.chroma_path
 
     def test_returns_422_when_payload_is_not_json_object(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
@@ -2411,7 +2409,6 @@ class TestWebSocketFlow:
         import app.memory.rag_service as rag_service
 
         monkeypatch.setenv("RAG_ENABLED", "true")
-        _isolate_memory_paths(tmp_path, monkeypatch)
         system_prompt = "# 光織\nあなたは光織です。"
         _write_character(tmp_path, "miori", system_prompt)
         monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
@@ -2422,7 +2419,9 @@ class TestWebSocketFlow:
         def fake_embed_text(content: str) -> list[float]:
             return [float(len(content))]
 
-        def fake_add_memory(character, record_id, embedding, content, metadata):
+        def fake_add_memory(
+            character, record_id, embedding, content, metadata, *, chroma_path
+        ):
             stored_memories.append(
                 {
                     "character": character,
@@ -2433,7 +2432,9 @@ class TestWebSocketFlow:
                 }
             )
 
-        def fake_query_memories(character, embedding, n_results):
+        def fake_query_memories(
+            character, embedding, n_results, *, chroma_path
+        ):
             return [
                 MemorySearchResult(
                     content=memory["content"],
@@ -2485,7 +2486,6 @@ class TestWebSocketFlow:
         import app.memory.rag_service as rag_service
 
         monkeypatch.setenv("RAG_ENABLED", "true")
-        _isolate_memory_paths(tmp_path, monkeypatch)
         system_prompt = "# 光織\nあなたは光織です。"
         user_message = "農業日誌: 2026-06-23はナスに追肥した"
         _write_character(tmp_path, "miori", system_prompt)
@@ -2497,7 +2497,9 @@ class TestWebSocketFlow:
         def fake_embed_text(content: str) -> list[float]:
             return [float(len(content))]
 
-        def failing_add_memory(character, record_id, embedding, content, metadata):
+        def failing_add_memory(
+            character, record_id, embedding, content, metadata, *, chroma_path
+        ):
             add_started.set()
             release_add.wait(timeout=5)
             raise RuntimeError("injected chroma add failure")

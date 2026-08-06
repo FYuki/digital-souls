@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 from uuid import UUID
+from pathlib import Path
 
 import httpx
 import pytest
@@ -33,6 +34,9 @@ from app.prompting import CharacterPrompt, PromptInputLimitError
 from app.model_settings import resolve_model_settings
 from tests.conversation_history_test_support import CONVERSATION_ID
 from tests.chat_reply_test_support import persisted_reply
+
+
+_CHROMA_PATH = Path("/test/runtime-data/chroma")
 
 
 _LOAD_PERSONALITY = "app.characters.loader.load_character_card"
@@ -254,6 +258,7 @@ def _chat_service(rag_enabled: bool, policy=None) -> ChatService:
             memory_policy=policy,
             privacy_scanner=privacy_scanner,
             prompt_config=_PROMPT_CONFIG,
+            chroma_path=_CHROMA_PATH,
         ),
         _CollectingTaskQueue(),
         _IgnoringHistoryService(),
@@ -268,6 +273,7 @@ def _chat_service_with_history(session: _RecordingHistorySession) -> ChatService
             memory_policy=None,
             privacy_scanner=None,
             prompt_config=_PROMPT_CONFIG,
+            chroma_path=_CHROMA_PATH,
         ),
         _CollectingTaskQueue(),
         _RecordingHistoryService(session),
@@ -288,6 +294,7 @@ class TestChatServiceErrorContract:
                 memory_policy=None,
                 privacy_scanner=None,
                 prompt_config=_PROMPT_CONFIG,
+                chroma_path=_CHROMA_PATH,
             ),
             _CollectingTaskQueue(),
             _IgnoringHistoryService(),
@@ -388,6 +395,7 @@ class TestChatServiceErrorContract:
                 memory_policy=MagicMock(),
                 privacy_scanner=MagicMock(),
                 prompt_config=_PROMPT_CONFIG,
+                chroma_path=_CHROMA_PATH,
             ),
             _CollectingTaskQueue(),
             _RecordingHistoryService(session),
@@ -559,6 +567,7 @@ class TestChatServiceErrorContract:
                 memory_policy=object(),
                 privacy_scanner=MagicMock(),
                 prompt_config=_PROMPT_CONFIG,
+                chroma_path=_CHROMA_PATH,
             ),
             _CollectingTaskQueue(),
             _RecordingHistoryService(session),
@@ -811,7 +820,9 @@ class TestChatServiceRagContract:
                         reply = service.generate_chat_reply("miori", CONVERSATION_ID, "hello")
 
         assert _assistant_content(reply) == "reply"
-        mock_build.assert_called_once_with("miori", "hello", policy)
+        mock_build.assert_called_once_with(
+            "miori", "hello", policy, chroma_path=_CHROMA_PATH
+        )
         assert _generated_contents(mock_gen) == [
             "## 応答方針\n# prompt",
             "## 関連する記憶\n[2026-07-31T00:00:00+00:00] (user) 畑の話",
@@ -904,8 +915,12 @@ class TestChatServiceRagContract:
         assert _assistant_content(first_reply) == "reply 1"
         assert _assistant_content(second_reply) == "reply 2"
         assert mock_build.call_count == 2
-        mock_build.assert_any_call("miori", "hello", policy)
-        mock_build.assert_any_call("miori", "again", policy)
+        mock_build.assert_any_call(
+            "miori", "hello", policy, chroma_path=_CHROMA_PATH
+        )
+        mock_build.assert_any_call(
+            "miori", "again", policy, chroma_path=_CHROMA_PATH
+        )
         assert mock_gen.call_count == 2
         assert mock_record.call_count == 2
         assert [call.args[:2] for call in mock_record.call_args_list] == [
@@ -915,6 +930,7 @@ class TestChatServiceRagContract:
         for call in mock_record.call_args_list:
             assert hasattr(call.args[3], "add_task")
             assert hasattr(call.kwargs["privacy_scanner"], "scan")
+            assert call.kwargs["chroma_path"] == _CHROMA_PATH
 
     def test_runtime_config_fails_fast_for_inconsistent_rag_policy(self):
         with pytest.raises(ValueError, match="memory policy is required"):
@@ -928,6 +944,7 @@ class TestChatServiceRagContract:
                     memory_policy=object(),
                     privacy_scanner=None,
                     prompt_config=_PROMPT_CONFIG,
+                    chroma_path=_CHROMA_PATH,
                 ),
                 _CollectingTaskQueue(),
                 _IgnoringHistoryService(),
@@ -940,6 +957,7 @@ class TestChatServiceRagContract:
                     memory_policy=None,
                     privacy_scanner=MagicMock(),
                     prompt_config=_PROMPT_CONFIG,
+                    chroma_path=_CHROMA_PATH,
                 ),
                 _CollectingTaskQueue(),
                 _IgnoringHistoryService(),

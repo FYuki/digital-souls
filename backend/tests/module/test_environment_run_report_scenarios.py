@@ -67,6 +67,7 @@ def test_should_persist_schema_valid_readiness_timeout_from_up_command(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     environment_report_validator,
+    runtime_paths,
 ):
     import commands.up_command as up_command
     from environment_timing import EnvironmentTiming
@@ -80,11 +81,11 @@ def test_should_persist_schema_valid_readiness_timeout_from_up_command(
         chroma=disabled,
     )
     adapter = _NeverReadyOperations()
-    report_path = tmp_path / "environment-run.json"
+    report_path = runtime_paths.runtime_report_dir / "readiness" / "environment-run.json"
     monkeypatch.setattr(
         up_command,
         "resolve_and_write_profile",
-        lambda environment, default, report, legacy: profile,
+        lambda environment, default, report, legacy, runtime: profile,
     )
     arguments = argparse.Namespace(
         run_report=str(report_path),
@@ -94,7 +95,6 @@ def test_should_persist_schema_valid_readiness_timeout_from_up_command(
 
     exit_code = up_command.up_environment(
         tmp_path,
-        tmp_path / ".runtime",
         arguments,
         registry=single_adapter_registry("frontend", adapter),
         timing=EnvironmentTiming(
@@ -122,6 +122,7 @@ def test_should_persist_managed_exit_as_schema_valid_supervision_failure(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     environment_report_validator,
+    runtime_paths,
 ):
     import commands.up_command as up_command
     from environment_timing import EnvironmentTiming
@@ -135,11 +136,11 @@ def test_should_persist_managed_exit_as_schema_valid_supervision_failure(
         chroma=disabled,
     )
     adapter = _ExitedFrontendOperations()
-    report_path = tmp_path / "environment-run.json"
+    report_path = runtime_paths.runtime_report_dir / "supervision" / "environment-run.json"
     monkeypatch.setattr(
         up_command,
         "resolve_and_write_profile",
-        lambda environment, default, report, legacy: profile,
+        lambda environment, default, report, legacy, runtime: profile,
     )
     arguments = argparse.Namespace(
         run_report=str(report_path),
@@ -149,7 +150,6 @@ def test_should_persist_managed_exit_as_schema_valid_supervision_failure(
 
     exit_code = up_command.up_environment(
         tmp_path,
-        tmp_path / ".runtime",
         arguments,
         registry=single_adapter_registry("frontend", adapter),
         timing=EnvironmentTiming(
@@ -178,7 +178,7 @@ def test_should_persist_managed_exit_as_schema_valid_supervision_failure(
 
 
 def test_should_record_failed_teardown_when_voicevox_rollback_fails(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, environment_report_validator
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, environment_report_validator, runtime_paths
 ):
     import commands.up_command as up_command
     import environment_runtime
@@ -221,14 +221,14 @@ def test_should_record_failed_teardown_when_voicevox_rollback_fails(
     )
     adapter = VoicevoxAdapter(tmp_path, runner)
     registry = single_adapter_registry("voicevox", adapter)
-    report_path = tmp_path / "environment-run.json"
+    report_path = runtime_paths.runtime_report_dir / "rollback" / "environment-run.json"
     monkeypatch.setattr(
         up_command,
         "resolve_and_write_profile",
-        lambda env, default, path, legacy: profile,
+        lambda env, default, path, legacy, runtime: profile,
     )
     monkeypatch.setattr(
-        up_command, "create_service_registry", lambda root, **settings: registry
+        up_command, "create_service_registry", lambda root, runtime, **settings: registry
     )
     monkeypatch.setattr(
         environment_runtime,
@@ -247,7 +247,7 @@ def test_should_record_failed_teardown_when_voicevox_rollback_fails(
         default_profile="integration-voice",
     )
 
-    exit_code = up_command.up_environment(tmp_path, tmp_path / ".runtime", arguments)
+    exit_code = up_command.up_environment(tmp_path, arguments)
 
     report = json.loads(report_path.read_text(encoding="utf-8"))
     environment_report_validator.validate(report)

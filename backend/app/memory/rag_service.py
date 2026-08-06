@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Callable
+from pathlib import Path
 from typing import Protocol
 
 import httpx
@@ -43,9 +44,10 @@ def _enqueue_memory_candidate(
     record: MemoryCandidateRecord,
     policy: MemoryPolicy,
     task_queue: _BackgroundTaskQueue,
+    chroma_path: Path,
 ) -> None:
     if is_long_term_memory_candidate(record, policy):
-        task_queue.add_task(_embed_and_store, record)
+        task_queue.add_task(_embed_and_store, record, chroma_path)
 
 
 def record_user_memory_candidate(
@@ -55,13 +57,14 @@ def record_user_memory_candidate(
     task_queue: _BackgroundTaskQueue,
     *,
     privacy_scanner: PrivacyScanner,
+    chroma_path: Path,
 ) -> None:
     if not _allows_rag_storage(privacy_scanner.scan(user_message)):
         return
     if contains_non_storable_memory(user_message, policy):
         return
     record = create_memory_candidate_record(character, user_message)
-    _enqueue_memory_candidate(record, policy, task_queue)
+    _enqueue_memory_candidate(record, policy, task_queue, chroma_path)
 
 
 def _allows_rag_storage(result: ScanResult) -> bool:
@@ -79,6 +82,8 @@ def retrieve_prompt_memories(
     character: str,
     user_message: str,
     policy: MemoryPolicy,
+    *,
+    chroma_path: Path,
 ) -> tuple[MemorySearchResult, ...]:
     if contains_sensitive_memory(user_message, policy):
         logger.warning("Skipped RAG memory lookup for sensitive content")
@@ -89,6 +94,7 @@ def retrieve_prompt_memories(
             character,
             embedding,
             n_results=rag_service_policy(policy).max_retrieved_memories,
+            chroma_path=chroma_path,
         )
     except RAG_OPERATION_ERRORS as exc:
         logger.warning("RAG memory lookup failed: %s", exc.__class__.__name__)
@@ -96,7 +102,7 @@ def retrieve_prompt_memories(
     return tuple(memories)
 
 
-def _embed_and_store(record: MemoryCandidateRecord) -> None:
+def _embed_and_store(record: MemoryCandidateRecord, chroma_path: Path) -> None:
     try:
         embedding = embed_text(record.content)
         add_memory(
@@ -109,6 +115,7 @@ def _embed_and_store(record: MemoryCandidateRecord) -> None:
                 "role": record.role,
                 "timestamp": record.timestamp,
             },
+            chroma_path=chroma_path,
         )
     except RAG_OPERATION_ERRORS as exc:
         logger.warning(

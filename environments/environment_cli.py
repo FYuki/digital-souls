@@ -20,9 +20,6 @@ from commands.voicevox_command import start_voicevox
 from profile_types import ProfileError
 
 
-DEFAULT_RUNTIME_DIR = ROOT_DIR / ".runtime" / "environments"
-
-
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Digital Souls environment lifecycle")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -45,7 +42,7 @@ def _parser() -> argparse.ArgumentParser:
 
 def _dispatch(arguments: argparse.Namespace) -> int:
     if arguments.command == "up":
-        return up_environment(ROOT_DIR, DEFAULT_RUNTIME_DIR, arguments)
+        return up_environment(ROOT_DIR, arguments)
     if arguments.command == "down":
         return down_environment(ROOT_DIR, arguments.run_report)
     if arguments.command == "voicevox":

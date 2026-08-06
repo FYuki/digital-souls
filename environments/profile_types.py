@@ -59,6 +59,15 @@ class Compatibility(TypedDict):
     warnings: list[str]
 
 
+class RuntimeProjection(TypedDict):
+    environmentId: str
+    dataRoot: str
+    sqlitePath: str
+    chromaPath: str
+    runtimeReportDirectory: str
+    cachePath: str
+
+
 class ResolvedReport(TypedDict):
     reportSchemaVersion: Literal[1]
     generatedAt: str
@@ -69,6 +78,7 @@ class ResolvedReport(TypedDict):
     dependencies: ResolvedDependencies
     capabilities: list[Capability]
     derivedEnvironment: dict[str, str]
+    runtime: RuntimeProjection
     compatibility: Compatibility
 
 

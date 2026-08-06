@@ -24,6 +24,8 @@ def copy_environment_runtime(tmp_path: Path) -> Path:
         ROOT_DIR / "backend" / "app" / "model_settings.py",
         backend_app / "model_settings.py",
     )
+    for name in ("runtime_paths.py", "runtime_data_root.py"):
+        shutil.copy2(ROOT_DIR / "backend" / "app" / name, backend_app / name)
     return environments
 
 

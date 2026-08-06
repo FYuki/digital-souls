@@ -142,7 +142,10 @@ def test_should_run_resolved_profile_through_ready_and_owned_cleanup(
     from profile_resolution import resolve_profile
     from run_report import create_initial_report
 
-    profile = dict(resolve_profile({"DS_PROFILE": "test-mocked"}, None))
+    profile = dict(resolve_profile(
+        {"DS_PROFILE": "test-mocked"}, None,
+        tests.environment_test_support.resolved_runtime_paths(tmp_path),
+    ))
     report_path = tmp_path / "environment-run.json"
     store = RecordingReportStore(report_path)
     report = create_initial_report(
@@ -151,6 +154,7 @@ def test_should_run_resolved_profile_through_ready_and_owned_cleanup(
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
         orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+        runtime=profile["runtime"],
     )
     store.save(report)
     monkeypatch.setattr(
@@ -195,15 +199,18 @@ def test_should_run_resolved_profile_through_ready_and_owned_cleanup(
 
 
 def test_should_preserve_playwright_result_written_after_ready_gate_opens(
-    tmp_path: Path,
+    tmp_path: Path, runtime_paths,
 ):
     from commands.test_result_command import record_playwright_result
     from environment_runtime import EnvironmentRun
     from profile_resolution import resolve_profile
     from run_report import create_initial_report, record_ready
 
-    profile = dict(resolve_profile({"DS_PROFILE": "test-mocked"}, None))
-    report_path = tmp_path / "environment-run.json"
+    profile = dict(resolve_profile(
+        {"DS_PROFILE": "test-mocked"}, None,
+        tests.environment_test_support.resolved_runtime_paths(tmp_path),
+    ))
+    report_path = runtime_paths.runtime_report_dir / "writer" / "environment-run.json"
     store = RecordingReportStore(report_path)
     report = record_ready(
         create_initial_report(
@@ -212,6 +219,7 @@ def test_should_preserve_playwright_result_written_after_ready_gate_opens(
             resolved_profile_path=tmp_path / "resolved-profile.json",
             effective_profile=profile,
             orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+            runtime=profile["runtime"],
         ),
         ready_at="2026-07-17T00:00:30+00:00",
     )
@@ -255,13 +263,17 @@ def test_should_finalize_report_and_stop_owned_service_when_ready_gate_close_fai
         def close(self) -> None:
             raise RuntimeError("ready gate close failed")
 
-    profile = dict(resolve_profile({"DS_PROFILE": "test-mocked"}, None))
+    profile = dict(resolve_profile(
+        {"DS_PROFILE": "test-mocked"}, None,
+        tests.environment_test_support.resolved_runtime_paths(tmp_path),
+    ))
     report = create_initial_report(
         run_id="ready-gate-close-failure",
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
         orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+        runtime=profile["runtime"],
     )
     report = update_service(
         report,
@@ -340,13 +352,17 @@ def test_should_stop_owned_service_when_cleanup_phase_update_fails(tmp_path: Pat
             self.stopped = True
             return StopResult("stopped_term")
 
-    profile = dict(resolve_profile({"DS_PROFILE": "test-mocked"}, None))
+    profile = dict(resolve_profile(
+        {"DS_PROFILE": "test-mocked"}, None,
+        tests.environment_test_support.resolved_runtime_paths(tmp_path),
+    ))
     report = create_initial_report(
         run_id="cleanup-report-update-failure",
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
         orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+        runtime=profile["runtime"],
     )
     report = update_service(
         report,
@@ -403,13 +419,17 @@ def test_should_persist_started_ownership_before_delivering_pending_signal(tmp_p
             identity = {"pid": 41, "pgid": 41, "sessionId": 41, "startTime": 82}
             return ServiceStartResult("started", True, identity)
 
-    profile = dict(resolve_profile({"DS_PROFILE": "test-mocked"}, None))
+    profile = dict(resolve_profile(
+        {"DS_PROFILE": "test-mocked"}, None,
+        tests.environment_test_support.resolved_runtime_paths(tmp_path),
+    ))
     report = create_initial_report(
         run_id="signal-during-start",
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
         orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+        runtime=profile["runtime"],
     )
     store = RecordingReportStore(tmp_path / "environment-run.json")
     store.save(report)
@@ -483,13 +503,17 @@ def test_should_persist_in_memory_ownership_in_final_report_when_start_update_fa
             self.stopped_service = service
             return StopResult("stopped_term")
 
-    profile = dict(resolve_profile({"DS_PROFILE": "test-mocked"}, None))
+    profile = dict(resolve_profile(
+        {"DS_PROFILE": "test-mocked"}, None,
+        tests.environment_test_support.resolved_runtime_paths(tmp_path),
+    ))
     report = create_initial_report(
         run_id=f"ownership-update-failure-{adapter_fails}",
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
         orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+        runtime=profile["runtime"],
     )
     store = FailingOwnershipUpdateStore(tmp_path / "environment-run.json")
     store.save(report)
@@ -572,7 +596,10 @@ def test_should_persist_external_probe_observation_when_verification_fails(
     from profile_resolution import resolve_profile
     from run_report import create_initial_report
 
-    profile = dict(resolve_profile({"DS_PROFILE": "test-mocked"}, None))
+    profile = dict(resolve_profile(
+        {"DS_PROFILE": "test-mocked"}, None,
+        tests.environment_test_support.resolved_runtime_paths(tmp_path),
+    ))
     dependencies = deepcopy(profile["dependencies"])
     dependencies["frontend"] = {
         **dependencies["frontend"],
@@ -588,6 +615,7 @@ def test_should_persist_external_probe_observation_when_verification_fails(
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
         orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+        runtime=profile["runtime"],
     )
     store.save(report)
     monkeypatch.setattr(
@@ -625,7 +653,10 @@ def test_should_fail_verification_before_start_for_unpreparable_dependency(
     from profile_resolution import resolve_profile
     from run_report import create_initial_report
 
-    profile = dict(resolve_profile({"DS_PROFILE": "test-mocked"}, None))
+    profile = dict(resolve_profile(
+        {"DS_PROFILE": "test-mocked"}, None,
+        tests.environment_test_support.resolved_runtime_paths(tmp_path),
+    ))
     store = RecordingReportStore(tmp_path / "environment-run.json")
     report = create_initial_report(
         run_id="verification-failure",
@@ -633,6 +664,7 @@ def test_should_fail_verification_before_start_for_unpreparable_dependency(
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
         orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+        runtime=profile["runtime"],
     )
     store.save(report)
     monkeypatch.setattr(
@@ -690,13 +722,16 @@ def test_should_reach_backend_prepare_when_whisper_cache_is_missing(
         path = scripts / launcher
         path.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
         path.chmod(0o755)
-    adapter = BackendAdapter(tmp_path, runner)
+    from tests.environment_test_support import resolved_runtime_paths
+
+    adapter = BackendAdapter(tmp_path, resolved_runtime_paths(tmp_path), runner)
     report = create_initial_report(
         run_id="whisper-prepare",
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
         orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+        runtime=profile["runtime"],
     )
     store = RecordingReportStore(tmp_path / "environment-run.json")
     store.save(report)
@@ -734,7 +769,10 @@ def test_should_persist_ollama_observation_before_model_validation_failure(
     from profile_resolution import resolve_profile
     from run_report import create_initial_report
 
-    profile = dict(resolve_profile({"DS_PROFILE": "test-mocked"}, None))
+    profile = dict(resolve_profile(
+        {"DS_PROFILE": "test-mocked"}, None,
+        tests.environment_test_support.resolved_runtime_paths(tmp_path),
+    ))
     dependencies = deepcopy(profile["dependencies"])
     dependencies["frontend"] = {"mode": "disabled", "source": None}
     dependencies["ollama"] = {
@@ -752,6 +790,7 @@ def test_should_persist_ollama_observation_before_model_validation_failure(
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
         orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+        runtime=profile["runtime"],
     )
     store.save(report)
     monkeypatch.setattr(
@@ -800,7 +839,10 @@ def test_should_persist_ollama_observation_before_tags_request_failure(
     from profile_resolution import resolve_profile
     from run_report import create_initial_report
 
-    profile = dict(resolve_profile({"DS_PROFILE": "test-mocked"}, None))
+    profile = dict(resolve_profile(
+        {"DS_PROFILE": "test-mocked"}, None,
+        tests.environment_test_support.resolved_runtime_paths(tmp_path),
+    ))
     dependencies = deepcopy(profile["dependencies"])
     dependencies["frontend"] = {"mode": "disabled", "source": None}
     dependencies["ollama"] = {
@@ -818,6 +860,7 @@ def test_should_persist_ollama_observation_before_tags_request_failure(
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
         orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+        runtime=profile["runtime"],
     )
     store.save(report)
     monkeypatch.setattr(
@@ -862,7 +905,10 @@ def test_should_detect_later_registered_process_exit_during_readiness(
     from profile_resolution import resolve_profile
     from run_report import create_initial_report, update_service
 
-    profile = dict(resolve_profile({"DS_PROFILE": "test-mocked"}, None))
+    profile = dict(resolve_profile(
+        {"DS_PROFILE": "test-mocked"}, None,
+        tests.environment_test_support.resolved_runtime_paths(tmp_path),
+    ))
     dependencies = deepcopy(profile["dependencies"])
     dependencies["backend"] = {
         "mode": "real",
@@ -878,6 +924,7 @@ def test_should_detect_later_registered_process_exit_during_readiness(
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
         orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+        runtime=profile["runtime"],
     )
     identity = {"pid": 10, "pgid": 10, "sessionId": 10, "startTime": 10}
     report = update_service(
@@ -924,13 +971,17 @@ def test_should_not_report_service_exit_as_failure_when_stop_is_requested_during
             stop_requested = True
             return False
 
-    profile = dict(resolve_profile({"DS_PROFILE": "test-mocked"}, None))
+    profile = dict(resolve_profile(
+        {"DS_PROFILE": "test-mocked"}, None,
+        tests.environment_test_support.resolved_runtime_paths(tmp_path),
+    ))
     report = create_initial_report(
         run_id="intentional-stop-race",
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
         orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+        runtime=profile["runtime"],
     )
     report = update_service(
         report,
@@ -969,7 +1020,10 @@ def test_should_reuse_ollama_through_runtime_without_starting_placeholder(
         def start(self, dependency, environment):
             raise AssertionError("reused Ollama must not start a process")
 
-    profile = dict(resolve_profile({"DS_PROFILE": "test-mocked"}, None))
+    profile = dict(resolve_profile(
+        {"DS_PROFILE": "test-mocked"}, None,
+        tests.environment_test_support.resolved_runtime_paths(tmp_path),
+    ))
     dependencies = deepcopy(profile["dependencies"])
     dependencies["frontend"] = {"mode": "disabled", "source": None}
     dependencies["ollama"] = {
@@ -987,6 +1041,7 @@ def test_should_reuse_ollama_through_runtime_without_starting_placeholder(
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
         orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+        runtime=profile["runtime"],
     )
     store = RecordingReportStore(tmp_path / "environment-run.json")
     store.save(report)
@@ -1021,7 +1076,10 @@ def test_should_not_invoke_docker_for_external_voicevox_runtime(
     from profile_resolution import resolve_profile
     from run_report import create_initial_report
 
-    profile = dict(resolve_profile({"DS_PROFILE": "test-mocked"}, None))
+    profile = dict(resolve_profile(
+        {"DS_PROFILE": "test-mocked"}, None,
+        tests.environment_test_support.resolved_runtime_paths(tmp_path),
+    ))
     dependencies = deepcopy(profile["dependencies"])
     dependencies["frontend"] = {"mode": "disabled", "source": None}
     dependencies["voicevox"] = {
@@ -1040,6 +1098,7 @@ def test_should_not_invoke_docker_for_external_voicevox_runtime(
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
         orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+        runtime=profile["runtime"],
     )
     store = RecordingReportStore(tmp_path / "environment-run.json")
     store.save(report)

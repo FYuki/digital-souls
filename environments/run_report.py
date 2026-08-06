@@ -43,6 +43,7 @@ def create_pending_report(
     started_at: str,
     resolved_profile_path: Path,
     orchestrator_identity: Mapping[str, int],
+    runtime: Mapping[str, str],
 ) -> dict[str, object]:
     report = {
         "schemaVersion": RUN_REPORT_SCHEMA_VERSION,
@@ -52,6 +53,7 @@ def create_pending_report(
         "endedAt": None,
         "resolvedProfilePath": str(resolved_profile_path),
         "orchestratorIdentity": dict(orchestrator_identity),
+        "runtime": dict(runtime),
         "effectiveProfile": None,
         "phase": "resolve",
         "status": "running",
@@ -72,6 +74,7 @@ def create_initial_report(
     resolved_profile_path: Path,
     effective_profile: Mapping[str, object],
     orchestrator_identity: Mapping[str, int],
+    runtime: Mapping[str, str],
 ) -> dict[str, object]:
     dependencies = effective_profile.get("dependencies")
     if not isinstance(dependencies, dict) or set(dependencies) != set(DEPENDENCY_NAMES):
@@ -81,6 +84,7 @@ def create_initial_report(
         started_at=started_at,
         resolved_profile_path=resolved_profile_path,
         orchestrator_identity=orchestrator_identity,
+        runtime=runtime,
     )
     report = {
         **pending,

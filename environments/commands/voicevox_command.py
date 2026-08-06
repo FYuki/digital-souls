@@ -26,6 +26,7 @@ from service_registry import (
     operation_context_for,
     require_service_operations,
 )
+from app.runtime_paths import resolve_runtime_paths
 
 
 def start_voicevox(
@@ -35,14 +36,13 @@ def start_voicevox(
     registry: ServiceRegistry | None = None,
     timing: EnvironmentTiming | None = None,
 ) -> int:
-    resolved_registry = (
-        registry if registry is not None else create_service_registry(root_dir)
-    )
+    runtime_paths = resolve_runtime_paths(os.environ, root_dir)
+    resolved_registry = registry or create_service_registry(root_dir, runtime_paths)
     resolved_timing = timing if timing is not None else EnvironmentTiming()
     ownership: ServiceStartResult | None = None
     _was_interrupted, previous_handlers = install_interrupt_handlers()
     try:
-        profile = resolve_profile(dict(os.environ), default_profile)
+        profile = resolve_profile(dict(os.environ), default_profile, runtime_paths)
         dependencies = profile["dependencies"]
         if not isinstance(dependencies, dict):
             raise ValueError("resolved dependencies are required")

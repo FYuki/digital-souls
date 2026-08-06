@@ -46,7 +46,7 @@ def test_should_stop_owned_voicevox_after_sigterm_during_single_service_readines
 
 @pytest.mark.parametrize("interrupt_point", ["before_save", "during_save"])
 def test_should_block_sigterm_until_orchestrator_identity_is_published(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, interrupt_point: str
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, interrupt_point: str, runtime_paths
 ):
     import commands.up_command as up_command
     from run_report_store import RunReportStore
@@ -73,7 +73,7 @@ def test_should_block_sigterm_until_orchestrator_identity_is_published(
             super()._save_unlocked(report)
 
     monkeypatch.setattr(up_command, "RunReportStore", InterruptingReportStore)
-    report_path = tmp_path / "environment-run.json"
+    report_path = runtime_paths.runtime_report_dir / "signal-block" / "environment-run.json"
     arguments = argparse.Namespace(
         run_report=str(report_path),
         profile_report=None,
@@ -81,9 +81,7 @@ def test_should_block_sigterm_until_orchestrator_identity_is_published(
     )
 
     try:
-        exit_code = up_command.up_environment(
-            ROOT_DIR, tmp_path / ".runtime", arguments
-        )
+        exit_code = up_command.up_environment(ROOT_DIR, arguments)
     finally:
         worker_stop.set()
         worker.join(timeout=5)
@@ -97,10 +95,9 @@ def test_should_block_sigterm_until_orchestrator_identity_is_published(
 
 
 def test_should_publish_report_when_sigterm_arrives_during_identity_capture(
-    tmp_path: Path,
+    tmp_path: Path, runtime_paths,
 ):
-    report_path = tmp_path / "environment-run.json"
-    runtime_path = tmp_path / ".runtime"
+    report_path = runtime_paths.runtime_report_dir / "identity" / "environment-run.json"
     harness = (
         ROOT_DIR / "backend" / "tests" / "harnesses" / "identity_capture_signal.py"
     )
@@ -111,7 +108,6 @@ def test_should_publish_report_when_sigterm_arrives_during_identity_capture(
             str(harness),
             str(ROOT_DIR),
             str(report_path),
-            str(runtime_path),
         ],
         capture_output=True,
         text=True,
@@ -128,10 +124,10 @@ def test_should_publish_report_when_sigterm_arrives_during_identity_capture(
 
 
 def test_should_delegate_live_down_cleanup_to_up_even_after_additional_sigterm(
-    tmp_path: Path, environment_report_validator
+    tmp_path: Path, environment_report_validator, runtime_paths
 ):
     stop_log = tmp_path / "stop-order.log"
-    report_path = tmp_path / "environment-run.json"
+    report_path = runtime_paths.runtime_report_dir / "delegated" / "environment-run.json"
     harness = ROOT_DIR / "backend" / "tests" / "harnesses" / "environment_signal.py"
     environment = {
         **os.environ,

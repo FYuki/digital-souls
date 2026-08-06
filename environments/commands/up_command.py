@@ -32,11 +32,12 @@ from run_report import create_initial_report, create_pending_report, record_clea
 from run_report_store import RunReportStore
 from run_report_timestamps import current_timestamp, next_lifecycle_timestamp
 from service_registry import ServiceRegistry, create_service_registry
+from app.runtime_data_root import initialize_runtime_data_root
+from app.runtime_paths import resolve_runtime_paths, runtime_paths_projection
 
 
 def up_environment(
     root_dir: Path,
-    default_runtime_dir: Path,
     arguments: argparse.Namespace,
     *,
     registry: ServiceRegistry | None = None,
@@ -45,12 +46,14 @@ def up_environment(
     resolved_timing = timing if timing is not None else EnvironmentTiming()
     run_id = str(uuid.uuid4())
     started_at = current_timestamp()
+    runtime_paths = resolve_runtime_paths(os.environ, root_dir)
+    initialize_runtime_data_root(runtime_paths, root_dir)
     paths = resolve_output_paths(
         run_report_argument=arguments.run_report,
         profile_report_argument=arguments.profile_report,
         environment=os.environ,
         run_id=run_id,
-        default_runtime_dir=default_runtime_dir,
+        runtime_paths=runtime_paths,
     )
     configured_ready_gate = os.environ.get(READY_GATE_ENV)
     ready_gate_url = (
@@ -73,6 +76,7 @@ def up_environment(
                     started_at=started_at,
                     resolved_profile_path=paths.profile_report,
                     orchestrator_identity=orchestrator_identity,
+                    runtime=runtime_paths_projection(runtime_paths),
                 )
                 store.save(report)
         paths.profile_report.unlink(missing_ok=True)
@@ -82,6 +86,7 @@ def up_environment(
             arguments.default_profile,
             paths.profile_report,
             paths.legacy_report,
+            runtime_paths,
         )
         derived = profile.get("derivedEnvironment")
         if not isinstance(derived, dict):
@@ -97,17 +102,19 @@ def up_environment(
         elif backend.get("mode") == "real":
             resolved_registry = create_service_registry(
                 root_dir,
+                runtime_paths,
                 ollama_model_name=derived["OLLAMA_CHAT_MODEL"],
                 whisper_model_name=derived["WHISPER_MODEL"],
             )
         else:
-            resolved_registry = create_service_registry(root_dir)
+            resolved_registry = create_service_registry(root_dir, runtime_paths)
         report = create_initial_report(
             run_id=run_id,
             started_at=started_at,
             resolved_profile_path=paths.profile_report,
             effective_profile=profile,
             orchestrator_identity=orchestrator_identity,
+            runtime=runtime_paths_projection(runtime_paths),
         )
         store.save(report)
         environment_run = EnvironmentRun(
@@ -138,6 +145,8 @@ def up_environment(
             raise
         current = environment_run.report if environment_run is not None else report
         if not (was_interrupted() and current.get("status") == "ready"):
+            failure_category = _failure_category(error, phase)
+            failure_message = str(error)
             try:
                 store.update(
                     lambda stored: (
@@ -145,8 +154,8 @@ def up_environment(
                         if stored.get("failure") is not None
                         else record_failure(
                             stored,
-                            category=_failure_category(error, phase),
-                            message=str(error),
+                            category=failure_category,
+                            message=failure_message,
                         )
                     )
                 )

@@ -13,7 +13,8 @@ from app.chat_service import (
     PersistedContentTurn,
     PersistedPrivacySkippedTurn,
 )
-from app.model_settings import ModelSettings, whisper_model_cache
+from app.model_settings import ModelSettings
+from app.runtime_paths import RuntimePaths
 from app.tts.speech_synthesizer import SpeechSynthesizer
 from app.tts.voicevox_client import (
     DEFAULT_VOICEVOX_BASE_URL,
@@ -163,17 +164,18 @@ class AudioPipelineService:
         self._speech_synthesizer.close()
 
 
-def resolve_audio_runtime_config(model_settings: ModelSettings) -> AudioRuntimeConfig:
+def resolve_audio_runtime_config(
+    model_settings: ModelSettings, runtime_paths: RuntimePaths
+) -> AudioRuntimeConfig:
     configured_url = os.environ.get(VOICEVOX_BASE_URL_ENV)
     if not configured_url:
         voicevox_base_url = DEFAULT_VOICEVOX_BASE_URL
     else:
         voicevox_base_url = configured_url.rstrip("/")
-    repository_root = Path(__file__).resolve().parents[2]
     return AudioRuntimeConfig(
         voicevox_base_url=voicevox_base_url,
         model_settings=model_settings,
-        whisper_download_root=str(whisper_model_cache(repository_root)),
+        whisper_download_root=str(runtime_paths.whisper_cache_path),
     )
 
 

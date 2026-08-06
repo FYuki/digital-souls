@@ -51,17 +51,6 @@ def _load_runtime_modules() -> dict[str, object]:
     }
 
 
-def _isolate_memory_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    import app.memory.chroma_store as chroma_store
-    import app.memory.rag_service as rag_service
-
-    data_dir = tmp_path / "data"
-    monkeypatch.setattr(chroma_store, "DATA_DIR", data_dir)
-    monkeypatch.setattr(chroma_store, "CHROMA_PATH", data_dir / "chroma")
-    monkeypatch.setattr(rag_service, "add_memory", chroma_store.add_memory)
-    monkeypatch.setattr(rag_service, "query_memories", chroma_store.query_memories)
-
-
 def _write_character(tmp_path: Path, character: str, system_prompt: str) -> None:
     data = character_card_data(
         description="",
@@ -97,12 +86,11 @@ def _create_conversation(client: TestClient, character: str) -> str:
 
 class TestRagRuntimeEvidenceIntegration:
     def test_real_chat_store_chroma_query_and_prompt_injection_reach_llm(
-        self, tmp_path, monkeypatch
+        self, tmp_path, monkeypatch, runtime_paths
     ):
         monkeypatch.setenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:latest")
         _require_runtime_evidence_dependencies()
         modules = _load_runtime_modules()
-        _isolate_memory_paths(tmp_path, monkeypatch)
 
         import app.characters.loader as loader_module
         from app.memory.embedder import embed_text
@@ -163,7 +151,12 @@ class TestRagRuntimeEvidenceIntegration:
 
             def memory_was_persisted() -> bool:
                 nonlocal query_results
-                query_results = chroma_store.query_memories(character, query_embedding, 5)
+                query_results = chroma_store.query_memories(
+                    character,
+                    query_embedding,
+                    5,
+                    chroma_path=runtime_paths.chroma_path,
+                )
                 return any(result.content == stored_memory for result in query_results)
 
             _wait_until(memory_was_persisted)
@@ -192,12 +185,11 @@ class TestRagRuntimeEvidenceIntegration:
         assert any(stored_memory in content for content in contents)
 
     def test_real_storage_failure_chat_continues_without_failed_memory_file(
-        self, tmp_path, monkeypatch
+        self, tmp_path, monkeypatch, runtime_paths
     ):
         monkeypatch.setenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:latest")
         _require_runtime_evidence_dependencies()
         modules = _load_runtime_modules()
-        _isolate_memory_paths(tmp_path, monkeypatch)
 
         import app.characters.loader as loader_module
         import chromadb

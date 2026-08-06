@@ -11,6 +11,10 @@ from tests.environment_entrypoint_test_support import copy_environment_runtime
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
 
 
+def _report_path(tmp_path: Path) -> Path:
+    return tmp_path / "runtime-data" / "runtime" / "resolved.json"
+
+
 def _copy_environments(tmp_path: Path) -> Path:
     return copy_environment_runtime(tmp_path)
 
@@ -25,6 +29,10 @@ def _run(environments_dir: Path, *arguments: str) -> subprocess.CompletedProcess
         "VOICE_CHAT_E2E_BACKEND_REPORT",
     }
     env = {key: value for key, value in os.environ.items() if key not in blocked}
+    env.update(
+        DS_ENVIRONMENT_ID="test",
+        DS_DATA_DIR=str(environments_dir.parent / "runtime-data"),
+    )
     return subprocess.run(
         [sys.executable, str(environments_dir / "profile.py"), *arguments],
         env=env,
@@ -56,7 +64,7 @@ def _write_mocked_report(environments_dir: Path, report_path: Path) -> None:
 )
 def test_should_get_scalar_report_value(path: str, expected: str, tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
     _write_mocked_report(environments_dir, report_path)
 
     result = _run(
@@ -84,7 +92,7 @@ def test_should_list_backend_owned_model_environment_keys(tmp_path: Path):
 @pytest.mark.parametrize("path", ["dependencies.missing.mode", "dependencies"])
 def test_should_reject_missing_or_non_scalar_get_path(path: str, tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
     _write_mocked_report(environments_dir, report_path)
 
     result = _run(

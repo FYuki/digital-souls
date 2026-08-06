@@ -25,6 +25,14 @@ from run_report_contract import (
 
 
 SCHEMA_PATH = Path(__file__).parent / "schemas" / "environment-run-v1.schema.json"
+RUNTIME_FIELDS = {
+    "environmentId",
+    "dataRoot",
+    "sqlitePath",
+    "chromaPath",
+    "runtimeReportDirectory",
+    "cachePath",
+}
 
 
 def _date_time_pattern() -> re.Pattern[str]:
@@ -179,6 +187,13 @@ def _validate_top_level(report: Mapping[str, object]) -> None:
         raise RunReportError("invalid lifecycle timestamp")
     if not isinstance(report["resolvedProfilePath"], str) or not report["resolvedProfilePath"]:
         raise RunReportError("invalid resolvedProfilePath")
+    runtime = report["runtime"]
+    if (
+        not isinstance(runtime, dict)
+        or set(runtime) != RUNTIME_FIELDS
+        or any(not isinstance(value, str) or not value for value in runtime.values())
+    ):
+        raise RunReportError("invalid runtime projection")
     orchestrator_identity = report["orchestratorIdentity"]
     if not _is_process_identity(orchestrator_identity):
         raise RunReportError("invalid orchestratorIdentity")

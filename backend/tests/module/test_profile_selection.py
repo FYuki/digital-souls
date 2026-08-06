@@ -11,6 +11,10 @@ from tests.environment_entrypoint_test_support import copy_environment_runtime
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
 
 
+def _report_path(tmp_path: Path) -> Path:
+    return tmp_path / "runtime-data" / "runtime" / "resolved.json"
+
+
 def _copy_environments(tmp_path: Path) -> Path:
     return copy_environment_runtime(tmp_path)
 
@@ -33,6 +37,10 @@ def _resolve(
     env = {key: value for key, value in os.environ.items() if key not in blocked}
     if env_overrides is not None:
         env.update(env_overrides)
+    env.update(
+        DS_ENVIRONMENT_ID="test",
+        DS_DATA_DIR=str(environments_dir.parent / "runtime-data"),
+    )
     arguments = ["resolve", "--report", str(report_path)]
     if default_profile is not None:
         arguments.extend(["--default-profile", default_profile])
@@ -50,7 +58,7 @@ def _read_report(path: Path) -> dict[str, object]:
 
 def test_should_select_ds_profile_before_matching_legacy_selector(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
 
     result = _resolve(
         environments_dir,
@@ -70,7 +78,7 @@ def test_should_select_ds_profile_before_matching_legacy_selector(tmp_path: Path
 
 def test_should_allow_different_profile_names_with_same_effective_dependencies(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
 
     result = _resolve(
         environments_dir,
@@ -86,7 +94,7 @@ def test_should_allow_different_profile_names_with_same_effective_dependencies(t
 
 def test_should_select_explicit_default_when_no_environment_selector_exists(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
 
     result = _resolve(environments_dir, report_path, default_profile="integration-text")
 
@@ -98,7 +106,7 @@ def test_should_select_explicit_default_when_no_environment_selector_exists(tmp_
 
 def test_should_fail_without_any_profile_selection_source(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
 
     result = _resolve(environments_dir, report_path)
 
@@ -109,7 +117,7 @@ def test_should_fail_without_any_profile_selection_source(tmp_path: Path):
 
 def test_should_reject_empty_ds_profile_instead_of_using_default(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
 
     result = _resolve(
         environments_dir,
@@ -139,7 +147,7 @@ def test_should_convert_each_legacy_selector(
     tmp_path: Path,
 ):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
 
     result = _resolve(
         environments_dir,
@@ -157,7 +165,7 @@ def test_should_convert_each_legacy_selector(
 
 def test_should_reject_conflicting_new_and_legacy_selectors(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
 
     result = _resolve(
         environments_dir,
@@ -173,7 +181,7 @@ def test_should_reject_conflicting_new_and_legacy_selectors(tmp_path: Path):
 
 def test_should_resolve_compatible_real_legacy_selectors_to_voice_profile(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
 
     result = _resolve(
         environments_dir,
@@ -190,7 +198,7 @@ def test_should_resolve_compatible_real_legacy_selectors_to_voice_profile(tmp_pa
 
 def test_should_reject_legacy_selectors_that_cannot_form_one_profile(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
 
     result = _resolve(
         environments_dir,
@@ -208,7 +216,7 @@ def test_should_reject_legacy_selectors_that_cannot_form_one_profile(tmp_path: P
 
 def test_should_reject_unknown_legacy_selector_value(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
-    report_path = tmp_path / "resolved.json"
+    report_path = _report_path(tmp_path)
 
     result = _resolve(
         environments_dir,

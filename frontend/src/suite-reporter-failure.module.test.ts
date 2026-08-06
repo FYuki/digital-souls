@@ -43,6 +43,8 @@ const environmentReport = (overrides: Record<string, unknown> = {}) => ({
 const resolveSuiteForTest = (suite: SuiteName): SuiteDefinition => Object.freeze({
   ...getSuiteDefinition(suite),
   resultDir: outputDir,
+  dataRoot: outputDir,
+  runtimeDir: outputDir,
 })
 
 const createReporter = () => new SuiteReporter(

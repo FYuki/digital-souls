@@ -1,9 +1,11 @@
 from contextlib import ExitStack, asynccontextmanager
+import logging
 import os
 from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 import sqlite3
+from pathlib import Path
 from typing import cast
 from uuid import uuid4
 
@@ -32,6 +34,12 @@ from app.privacy.scanner import create_privacy_scanner
 from app.routers.chat import router as chat_router
 from app.routers.conversations import router as conversations_router
 from app.routers.ws import router as ws_router
+from app.runtime_data_root import initialize_runtime_data_root
+from app.runtime_paths import (
+    RuntimePaths,
+    resolve_runtime_paths,
+    runtime_paths_projection,
+)
 
 load_dotenv()
 
@@ -46,9 +54,19 @@ def _app_chat_service(app: FastAPI) -> _chat_runtime.ChatService:
     return cast(_chat_runtime.ChatService, app.state.chat_service)
 
 
+def log_runtime_configuration(paths: RuntimePaths) -> None:
+    logging.getLogger(__name__).info(
+        "Runtime configuration: %s", runtime_paths_projection(paths)
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     model_settings = resolve_model_settings(os.environ)
+    repository_root = Path(__file__).resolve().parents[2]
+    runtime_paths = resolve_runtime_paths(os.environ, repository_root)
+    initialize_runtime_data_root(runtime_paths, repository_root)
+    log_runtime_configuration(runtime_paths)
 
     def generate_llm_response(
         prompt: BuiltPrompt, *, max_output_tokens: int
@@ -65,7 +83,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     policy = resolved_memory_policy()
     privacy_scanner = create_privacy_scanner(policy.privacy)
     history_sanitizer = create_history_sanitizer(privacy_scanner, policy.privacy)
-    conversation_history_config = resolve_conversation_history_config()
+    conversation_history_config = resolve_conversation_history_config(runtime_paths)
     initialize_conversation_history_schema(
         conversation_history_config.database_path,
     )
@@ -108,7 +126,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         memory_task_queue = _chat_runtime.create_thread_pool_memory_task_queue(executor)
         app_chat_service = _chat_runtime.create_chat_service(
             _chat_runtime.resolve_chat_runtime_config(
-                policy, privacy_scanner, model_settings
+                policy, privacy_scanner, model_settings, runtime_paths
             ),
             memory_task_queue,
             ConversationHistoryService(
@@ -125,7 +143,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.chat_service = app_chat_service
         chat_service_state_set = True
         app.state.audio_pipeline_service = create_audio_pipeline_service(
-            resolve_audio_runtime_config(model_settings),
+            resolve_audio_runtime_config(model_settings, runtime_paths),
         )
         audio_pipeline_state_set = True
         chat_service_resolver = lambda: _app_chat_service(app)

@@ -2,6 +2,13 @@
 
 digital-souls の自作バックエンド（FastAPI）。
 
+## runtimeデータ
+
+`DS_DATA_DIR`をSQLite、Chroma、runtime report、cacheの単一data rootとして使用する。
+`DS_ENVIRONMENT_ID`は`dev`、`test`、`dogfood`のいずれかで、未指定時は`dev`、未指定時のdata rootは
+`backend/app/data`である。dogfoodはリポジトリ外の絶対パスを指定する。起動時に
+`.environment-identity.json`を検証し、不一致ならデータストアを開く前に終了する。
+
 - Ollama（gemma4:e4b）への接続
 - キャラクター（`characters/`）のロード
 - `GET /` のヘルスチェック
