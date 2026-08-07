@@ -349,7 +349,7 @@ def test_should_preserve_resolved_profile_values_when_dotenv_conflicts(tmp_path:
     assert result.returncode == 0, result.stderr
     assert json.loads(captured.read_text(encoding="utf-8")) == {
         "OLLAMA_BASE_URL": "http://localhost:11434",
-        "VOICEVOX_BASE_URL": "http://localhost:50021",
+        "VOICEVOX_BASE_URL": "http://127.0.0.1:50021",
         "RAG_ENABLED": "false",
         "OLLAMA_CHAT_MODEL": "profile-chat:12b",
         "WHISPER_MODEL": "large-v3",

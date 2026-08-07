@@ -153,7 +153,7 @@ def test_should_derive_readiness_urls_from_base_urls_and_paths(tmp_path: Path):
     assert dependencies["frontend"]["readinessUrl"] == "http://localhost:5173/"
     assert dependencies["backend"]["readinessUrl"] == "http://localhost:8000/"
     assert dependencies["ollama"]["readinessUrl"] == "http://localhost:11434/api/tags"
-    assert dependencies["voicevox"]["readinessUrl"] == "http://localhost:50021/version"
+    assert dependencies["voicevox"]["readinessUrl"] == "http://127.0.0.1:50021/version"
     assert "readinessUrl" not in dependencies["whisper"]
     assert "readinessUrl" not in dependencies["chroma"]
 

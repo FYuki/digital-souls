@@ -39,25 +39,6 @@ def test_should_delegate_wrapper_arguments_and_default_profile_to_common_up(
         str(tmp_path / "run.json"),
     ]
 
-
-def test_should_delegate_voicevox_wrapper_to_single_service_adapter_cli(tmp_path: Path):
-    wrapper = ROOT_DIR / "scripts" / "start-voicevox.sh"
-
-    process, stdout, stderr, arguments, child_pid = _run_with_recording_python(
-        wrapper, ["--example", "value"], tmp_path, 23
-    )
-
-    assert process.returncode == 23, (stdout, stderr)
-    assert child_pid == process.pid
-    assert arguments[1:] == [
-        "voicevox",
-        "--default-profile",
-        "dev",
-        "--example",
-        "value",
-    ]
-
-
 @pytest.mark.parametrize("script_name", ["up.sh", "down.sh", "verify.sh"])
 def test_should_route_environment_shell_entrypoint_to_python_cli(
     script_name: str,

@@ -10,8 +10,8 @@
 |---|---|---|
 | Node.js | Frontend 開発サーバー | `scripts/start-frontend.sh` |
 | Python 3 | FastAPI Backend | `scripts/setup-backend.sh` 後に `scripts/start-backend.sh` |
-| Ollama | テキストチャットの LLM 推論 | `scripts/start-all.sh` または `scripts/start-ollama.sh` |
-| Docker | VOICEVOX コンテナ実行 | `scripts/start-all.sh` または `scripts/start-voicevox.sh` |
+| Ollama | テキストチャットの LLM 推論 | Ubuntu-dogfoodのsystemdが所有。dev／integrationは起動済みendpointを再利用 |
+| Docker | VOICEVOX コンテナ実行 | Ubuntu-dogfoodのsystemdがCompose stackを操作し、Composeが実行中containerを所有 |
 | VOICEVOX | 音声チャットの TTS | `voicevox_engine` コンテナ |
 | Whisper | 音声チャットの STT | Backend プロセス内で `faster-whisper` がロード |
 | ChromaDB | 会話記憶のベクトルストア | Backend プロセス内の永続ストア |
@@ -55,14 +55,14 @@ dogfoodではリポジトリ外の専用絶対パスが必須である。
 
 ```bash
 export DS_ENVIRONMENT_ID=dogfood
-export DS_DATA_DIR=/var/lib/digital-souls/dogfood
+export DS_DATA_DIR=/var/lib/digital-souls/data
 ```
 
 dogfoodの操作入口は`DS_PROFILE`と`DS_ENVIRONMENT_ID`を`dogfood`へ固定し、同じdata root内の
 所有reportをstart／stop／statusで共有する。
 
 ```bash
-export DS_DATA_DIR=/var/lib/digital-souls/dogfood
+export DOGFOOD_ENV_FILE=/etc/digital-souls/dogfood.env
 scripts/start-dogfood.sh
 scripts/status-dogfood.sh
 scripts/stop-dogfood.sh
@@ -73,34 +73,27 @@ dogfood Frontend／Backend／ready gateはそれぞれ15173／18000／14174を�
 VOICEVOXは`external`であり、dogfood runの所有対象にも`stop`の対象にもならない。
 Chroma／RAGはWave 2受入まで無効で、起動・probe・所有を行わない。
 
-## 初期セットアップ
+## Ubuntu-devの初期セットアップ
 
 ```bash
 sudo apt update
-sudo apt install -y git curl build-essential docker.io python3 python3-venv
+sudo apt install -y git curl build-essential python3 python3-venv
 
 # Node.js（LTS）
 curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
 sudo apt install -y nodejs
 
-# Ollama
-curl -fsSL https://ollama.com/install.sh | sh
-
 # Backend 仮想環境
 scripts/setup-backend.sh
 ```
 
-VOICEVOX は `voicevox_engine` という名前の既存コンテナを `docker start` で起動する。初回は次のように作成する。
-
-```bash
-docker run -d --name voicevox_engine -p 50021:50021 voicevox/voicevox_engine:cpu-latest
-```
+Ollama、Docker、VOICEVOXの導入と起動はUbuntu-dogfood側で行う。別distributionの作成、systemd有効化、専用service user、独立clone、data／state／log directoryの構築手順は`infra/dogfood/README.md`を参照する。
 
 疎通確認:
 
 ```bash
 curl http://localhost:11434/api/tags
-curl http://localhost:50021/version
+curl http://127.0.0.1:50021/version
 ```
 
 ## 通常起動
@@ -122,10 +115,10 @@ Profile は次の5種類である。各依存の完全な接続先と readiness 
 
 | Profile | 用途 | 有効な依存 |
 |---|---|---|
-| `dev` | 通常のローカル開発 | Frontend、Backend、Ollama、VOICEVOX、Whisper |
+| `dev` | 通常のローカル開発 | Frontend、Backend、external Ollama／VOICEVOX、Whisper |
 | `test-mocked` | ブラウザ内 mock を使う独立 E2E | Frontend、browser mock Backend |
-| `integration-text` | 実テキストチャット | Frontend、Backend、Ollama |
-| `integration-voice` | 実音声チャット | Frontend、Backend、Ollama、VOICEVOX、Whisper |
+| `integration-text` | 実テキストチャット | Frontend、Backend、external Ollama |
+| `integration-voice` | 実音声チャット | Frontend、Backend、external Ollama／VOICEVOX、Whisper |
 | `dogfood` | 継続利用する運用相当環境 | Frontend、Backend、external Ollama／VOICEVOX、Whisper |
 
 起動スクリプトはサービス起動前に中央 resolver で Profile を検証する。runtime reportとresolved Profileは解決済みdata rootの`runtime/`配下にのみ保存する。Playwrightは各スイート専用のtest data rootを設定し、`runtime/standalone/`へ環境reportを、`frontend/test-results/<suite>/`へテスト証跡を保存する。reportには環境IDと正規化済みpathを記録し、秘密値や会話本文は記録しない。
@@ -137,12 +130,12 @@ Profile は次の5種類である。各依存の完全な接続先と readiness 
 `dev` では次の順序で起動確認を行う。
 
 1. `scripts/setup-backend.sh` で Backend の仮想環境と依存関係を準備する
-2. Ollama を起動し、`http://localhost:11434/api/tags` を確認する
-3. VOICEVOX コンテナ `voicevox_engine` を起動し、`http://localhost:50021/version` を確認する
+2. Ubuntu-dogfood所有のOllamaについて`http://localhost:11434/api/tags`のreadinessを確認する
+3. Ubuntu-dogfood所有のVOICEVOXについて`http://127.0.0.1:50021/version`のreadinessを確認する
 4. managed adapterが`start-backend.sh --host localhost --port 8000 --reload`で FastAPI Backend を起動し、`http://localhost:8000` を確認する
 5. Frontend 開発サーバーを起動する
 
-VOICEVOX コンテナが未作成の場合、`dev` または `integration-voice` の起動は Backend / Frontend を起動せず、初回セットアップ用の `docker run` 例を表示して終了する。
+OllamaまたはVOICEVOXが未起動の場合、`dev`または`integration-*`は共通serviceを作成・起動せずreadiness失敗として終了する。構築と復旧は`infra/dogfood/README.md`に従う。
 
 `VOICE_CHAT_E2E_BACKEND`、`CHAT_E2E_BACKEND`、`CHAT_E2E_BACKEND_ORIGIN`、`VOICE_CHAT_E2E_BACKEND_REPORT` は中央 resolver だけが解釈する非推奨の互換入口である。新しい起動・テスト設定では `DS_PROFILE` と `DS_PROFILE_REPORT` を使用する。`DS_PROFILE` と旧指定が異なる構成を示す場合や、複数の旧指定を単一 Profile に変換できない場合は、サービス起動前にエラーとなる。
 
@@ -153,8 +146,6 @@ VOICEVOX コンテナが未作成の場合、`dev` または `integration-voice`
 | `scripts/setup-backend.sh` | Backend の `.venv` を作成し、`backend/requirements.txt` をインストールする |
 | `scripts/start-backend.sh` | resolved Profile由来の明示的な`--host`、`--port`、任意の`--reload`を受け、FastAPIを起動する |
 | `scripts/start-frontend.sh` | Frontend 開発サーバーを起動する |
-| `scripts/start-ollama.sh` | `ollama serve` を起動する |
-| `scripts/start-voicevox.sh` | `dev` Profile の VOICEVOX adapter だけを起動する単体入口 |
 | `scripts/start-voice-chat-e2e.sh` | 音声チャット E2E 用。`DS_PROFILE` 未指定時は `integration-voice` を選択し、`test-mocked` では Frontend のみを起動する |
 | `scripts/start-dogfood.sh` | dogfood Profileとidentityを固定して起動する |
 | `scripts/status-dogfood.sh` | dogfoodのowned managedとunowned externalを区別して表示する |
@@ -162,13 +153,13 @@ VOICEVOX コンテナが未作成の場合、`dev` または `integration-voice`
 
 `scripts/start-backend.sh` は仮想環境の作成や依存インストールを自動実行しない。初回または依存関係の更新時は `scripts/setup-backend.sh` を別に実行する。セットアップ失敗は `Backend setup failed` と失敗工程、起動環境の不足は `start-backend.sh` の対象ファイル名を含むエラーで判別できる。Backend プロセスの起動後は、その終了ステータスが呼び出し元へ伝播する。
 
-Backend 単体起動では Ollama や VOICEVOX を準備・起動しない。VOICEVOX だけを起動する場合は `scripts/start-voicevox.sh`、音声チャットの全依存を起動する場合は `scripts/start-all.sh` を使う。開発用の `scripts/start-all.sh` と実 Backend を使う E2E 用の `scripts/start-voice-chat-e2e.sh` は、どちらも準備段階で `scripts/setup-backend.sh` を実行し、起動段階で共通の `scripts/start-backend.sh` を使う。
+Backend単体起動とdev／integrationの`scripts/start-all.sh`はOllamaやVOICEVOXを準備・起動・停止しない。共通推論serviceの操作はUbuntu-dogfoodの`scripts/dogfood/`入口だけを使う。開発用の`scripts/start-all.sh`と実Backendを使うE2E用の`scripts/start-voice-chat-e2e.sh`は、どちらも準備段階で`scripts/setup-backend.sh`を実行し、起動段階で共通の`scripts/start-backend.sh`を使う。
 
 ## 音声チャットの依存関係
 
 音声チャットでは Backend の `AudioPipelineService` が STT、LLM、TTS を順に実行する。
 
-- TTS は `VOICEVOX_BASE_URL` を参照し、未設定または空文字時は `http://localhost:50021` に接続する
+- TTS は `VOICEVOX_BASE_URL` を参照し、未設定または空文字時は `http://127.0.0.1:50021` に接続する
 - `VoicevoxClient` は `/audio_query` と `/synthesis` を呼び出す
 - 共通環境オーケストレーターの VOICEVOX adapter は Profile の `readinessUrl` で `/version` を確認する
 - Whisper は外部サービスではなく Backend プロセス内で `WHISPER_MODEL`（既定 `medium`）を初回利用時にロードする

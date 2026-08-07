@@ -11,7 +11,6 @@ from app.model_settings import MODEL_ENVIRONMENT_KEYS
 from tests.environment_test_support import (
     RecordingRunner,
     orchestrator_identity,
-    resolved_profile,
     resolved_runtime_paths,
 )
 
@@ -28,7 +27,9 @@ MODEL_ENVIRONMENT = {
 }
 
 
-def _resolve_profile(environment: dict[str, str], root_dir: Path = Path("/test/repository")):
+def _resolve_profile(
+    environment: dict[str, str], root_dir: Path = Path("/test/repository")
+):
     from profile_resolution import resolve_profile
 
     return resolve_profile(environment, None, resolved_runtime_paths(root_dir))
@@ -64,9 +65,7 @@ def test_should_export_all_model_keys_and_unset_them_when_switching_to_mock_back
         encoding="utf-8",
     )
     mock_report.write_text(
-        json.dumps(
-            _resolve_profile({"DS_PROFILE": "test-mocked"})
-        ),
+        json.dumps(_resolve_profile({"DS_PROFILE": "test-mocked"})),
         encoding="utf-8",
     )
     key_list = " ".join(MODEL_ENVIRONMENT_KEYS)
@@ -148,7 +147,7 @@ def test_should_route_profile_ollama_model_to_readiness_validation(
     )
 
     result = require_service_operations(registry, "ollama").validate_readiness(
-        resolved_profile()["dependencies"]["ollama"]
+        report["dependencies"]["ollama"]
     )
 
     assert result.classification == "ready"
@@ -201,7 +200,7 @@ def test_should_route_profile_whisper_model_to_cache_check(tmp_path: Path) -> No
     )
 
     result = require_service_operations(registry, "backend").verify(
-        resolved_profile()["dependencies"]["backend"],
+        report["dependencies"]["backend"],
         OperationContext(whisper_enabled=True, chroma_enabled=False),
     )
 
@@ -212,12 +211,10 @@ def test_should_route_profile_whisper_model_to_cache_check(tmp_path: Path) -> No
     assert "large-v3" in whisper_check.message
 
 
-@pytest.mark.parametrize("availability_path", ["reused", "started"])
 @pytest.mark.parametrize("model_is_available", [True, False])
-def test_should_only_pull_the_profile_model_when_managed_ollama_is_missing_it(
+def test_should_validate_but_not_prepare_the_profile_model_for_external_ollama(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
-    availability_path: str,
     model_is_available: bool,
 ) -> None:
     from adapters import ollama
@@ -232,7 +229,6 @@ def test_should_only_pull_the_profile_model_when_managed_ollama_is_missing_it(
     report = _resolve_profile(
         {"DS_PROFILE": "integration-voice", **MODEL_ENVIRONMENT}, tmp_path
     )
-    derived = report["derivedEnvironment"]
     report = {
         **report,
         "dependencies": {
@@ -242,6 +238,7 @@ def test_should_only_pull_the_profile_model_when_managed_ollama_is_missing_it(
             for name, dependency in report["dependencies"].items()
         },
     }
+    derived = report["derivedEnvironment"]
     runner = RecordingRunner()
     registry = create_service_registry(
         tmp_path,
@@ -262,12 +259,12 @@ def test_should_only_pull_the_profile_model_when_managed_ollama_is_missing_it(
         "wait_for_http",
         lambda url, **_options: ReadinessResult(url, 1, 0.001, "ready"),
     )
-    monkeypatch.setattr(
-        ollama.shutil,
-        "which",
-        lambda _command: "/usr/bin/ollama",
+    models = (
+        [{"name": MODEL_ENVIRONMENT["OLLAMA_CHAT_MODEL"]}]
+        if model_is_available
+        else [{"name": "other:latest"}]
     )
-
+    monkeypatch.setattr(ollama, "_fetch_json", lambda _url: {"models": models})
     current_report = create_initial_report(
         run_id="model-settings-flow",
         started_at="2026-08-02T00:00:00+00:00",
@@ -284,16 +281,6 @@ def test_should_only_pull_the_profile_model_when_managed_ollama_is_missing_it(
         return current_report
 
     store.update.side_effect = update
-    available_model: dict[str, object] = {
-        "models": [{"name": MODEL_ENVIRONMENT["OLLAMA_CHAT_MODEL"]}]
-    }
-
-    def fetch_models(_url: str) -> dict[str, object]:
-        if model_is_available or runner.calls:
-            return available_model
-        return {"models": [{"name": "other:latest"}]}
-
-    monkeypatch.setattr(ollama, "_fetch_json", fetch_models)
     run = EnvironmentRun(
         profile=dict(report),
         profile_path=tmp_path / "resolved-profile.json",
@@ -304,16 +291,20 @@ def test_should_only_pull_the_profile_model_when_managed_ollama_is_missing_it(
         registry=registry,
         timing=EnvironmentTiming(),
     )
-    if availability_path == "reused":
-        run.verify()
-        run.pre_probe()
-    else:
-        run.wait_until_ready()
 
-    expected_calls = [] if model_is_available else [
-        ("ollama", "pull", MODEL_ENVIRONMENT["OLLAMA_CHAT_MODEL"])
-    ]
-    assert runner.calls == expected_calls
+    decisions = run.pre_probe()
+
+    assert decisions == {"ollama": "external"}
+    assert current_report["services"]["ollama"]["state"] == "external"
+    assert current_report["services"]["ollama"]["owned"] is False
+
+    if model_is_available:
+        run.wait_until_ready()
+    else:
+        with pytest.raises(RuntimeError):
+            run.wait_until_ready()
+
+    assert runner.calls == []
 
 
 def test_should_prepare_the_same_profile_whisper_model(tmp_path: Path) -> None:
@@ -346,6 +337,4 @@ def test_should_prepare_the_same_profile_whisper_model(tmp_path: Path) -> None:
         "-c",
     )
     assert download_command[3] == "large-v3"
-    assert download_command[4] == str(
-        runtime_paths.whisper_cache_path
-    )
+    assert download_command[4] == str(runtime_paths.whisper_cache_path)

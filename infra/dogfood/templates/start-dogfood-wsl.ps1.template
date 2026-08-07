@@ -1,0 +1,5 @@
+$ErrorActionPreference = "Stop"
+$DogfoodDistribution = "@DOGFOOD_WSL_DISTRO@"
+$DogfoodEnvironmentFile = "@DOGFOOD_CONFIG_DIR@/dogfood.env"
+$DogfoodStartScript = "@DOGFOOD_CLONE_DIR@/scripts/dogfood/start-services.sh"
+wsl.exe --distribution $DogfoodDistribution --user root --exec env "DOGFOOD_ENV_FILE=$DogfoodEnvironmentFile" $DogfoodStartScript

@@ -1,0 +1,7 @@
+services:
+  voicevox:
+    image: ${DOGFOOD_VOICEVOX_IMAGE}
+    container_name: ${DOGFOOD_VOICEVOX_CONTAINER}
+    restart: unless-stopped
+    ports:
+      - "${VOICEVOX_HOST}:${VOICEVOX_PORT}:50021"

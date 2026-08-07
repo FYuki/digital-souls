@@ -10,12 +10,10 @@ from starlette.websockets import WebSocketDisconnect
 from unittest.mock import MagicMock, patch
 
 from app.audio_pipeline import resolve_audio_runtime_config
-from app.chat_service import ChatReply
 from app.main import app
 from app.memory.chroma_store import MemorySearchResult
 from app.prompting import CharacterPrompt, PromptInputLimitError
 from app.prompting.builder import PromptBuilder
-from app.tts.voicevox_client import DEFAULT_VOICEVOX_BASE_URL
 from tests.chat_reply_test_support import persisted_reply
 from tests.character_card_test_support import (
     character_card_data,
@@ -304,7 +302,20 @@ class TestWebSocketEndpoint:
 
         assert result == (expected_status, expected_detail)
 
-    def test_empty_voicevox_base_url_uses_default_runtime_config(
+    def test_unset_voicevox_base_url_uses_canonical_runtime_config(
+        self, monkeypatch, runtime_paths
+    ):
+        monkeypatch.delenv("VOICEVOX_BASE_URL", raising=False)
+
+        from app.model_settings import resolve_model_settings
+
+        runtime_config = resolve_audio_runtime_config(
+            resolve_model_settings({}), runtime_paths
+        )
+
+        assert runtime_config.voicevox_base_url == "http://127.0.0.1:50021"
+
+    def test_empty_voicevox_base_url_uses_canonical_runtime_config(
         self, monkeypatch, runtime_paths
     ):
         monkeypatch.setenv("VOICEVOX_BASE_URL", "")
@@ -315,7 +326,20 @@ class TestWebSocketEndpoint:
             resolve_model_settings({}), runtime_paths
         )
 
-        assert runtime_config.voicevox_base_url == DEFAULT_VOICEVOX_BASE_URL
+        assert runtime_config.voicevox_base_url == "http://127.0.0.1:50021"
+
+    def test_explicit_voicevox_base_url_removes_trailing_slash(
+        self, monkeypatch, runtime_paths
+    ):
+        monkeypatch.setenv("VOICEVOX_BASE_URL", "http://voicevox.local:50021/")
+
+        from app.model_settings import resolve_model_settings
+
+        runtime_config = resolve_audio_runtime_config(
+            resolve_model_settings({}), runtime_paths
+        )
+
+        assert runtime_config.voicevox_base_url == "http://voicevox.local:50021"
 
     def test_returns_text_response_for_text_message(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
