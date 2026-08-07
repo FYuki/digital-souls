@@ -17,9 +17,7 @@ SCRIPT_NAMES = (
     "start-all.sh",
     "start-backend.sh",
     "start-frontend.sh",
-    "start-ollama.sh",
     "start-voice-chat-e2e.sh",
-    "start-voicevox.sh",
 )
 LIBRARY_NAMES = ("lib/profile.sh",)
 ENVIRONMENT_ENTRYPOINT_NAMES = ("up.sh", "down.sh", "verify.sh")

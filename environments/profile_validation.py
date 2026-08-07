@@ -7,7 +7,14 @@ from typing import cast
 from urllib.parse import urlsplit
 
 from managed_endpoint import resolve_managed_http_origin
-from profile_types import Dependencies, Dependency, DependencyMode, DependencySource, Profile, ProfileError
+from profile_types import (
+    Dependencies,
+    Dependency,
+    DependencyMode,
+    DependencySource,
+    Profile,
+    ProfileError,
+)
 
 
 PROFILE_SCHEMA_VERSION = 1
@@ -41,8 +48,6 @@ MANAGED_HTTP_DEPENDENCY_CONTRACTS = {
         {
             "http://127.0.0.1:50021",
             "http://127.0.0.1:50021/",
-            "http://localhost:50021",
-            "http://localhost:50021/",
         },
         "/version",
     ),
@@ -58,7 +63,7 @@ def _require_record(value: object, path: str) -> dict[str, object]:
 def _reject_unknown_fields(record: dict[str, object], allowed: set[str], path: str) -> None:
     unknown = record.keys() - allowed
     if unknown:
-        field = sorted(unknown)[0]
+        field = min(unknown)
         qualified = f"{path}.{field}" if path else field
         raise ProfileError(f"unknown field: {qualified}")
 
@@ -110,19 +115,22 @@ def _validate_mode_source(name: str, dependency: Dependency, path: str) -> None:
             raise ProfileError(f"{path}.baseUrl is required for real/{source}")
         if "readinessPath" not in dependency:
             raise ProfileError(f"{path}.readinessPath is required for real/{source}")
-    if mode == "real" and source == "managed":
+    if mode == "real" and name in MANAGED_HTTP_DEPENDENCY_CONTRACTS:
+        fixed_base_urls, fixed_readiness_path = MANAGED_HTTP_DEPENDENCY_CONTRACTS[name]
+        if dependency["baseUrl"] not in fixed_base_urls:
+            raise ProfileError(
+                f"{path}.baseUrl must identify the fixed local inference service"
+            )
+        if dependency["readinessPath"] != fixed_readiness_path:
+            raise ProfileError(
+                f"{path}.readinessPath must be {fixed_readiness_path}"
+            )
+    elif mode == "real" and source == "managed":
         if name in {"frontend", "backend"}:
             resolve_managed_http_origin(dependency["baseUrl"], f"{path}.baseUrl")
-            managed_readiness_path = "/"
-        else:
-            managed_base_urls, managed_readiness_path = MANAGED_HTTP_DEPENDENCY_CONTRACTS[name]
-            if dependency["baseUrl"] not in managed_base_urls:
-                raise ProfileError(
-                    f"{path}.baseUrl must identify the local service managed by its launcher"
-                )
-        if dependency["readinessPath"] != managed_readiness_path:
+        if dependency["readinessPath"] != "/":
             raise ProfileError(
-                f"{path}.readinessPath must be {managed_readiness_path} when source is managed"
+                f"{path}.readinessPath must be / when source is managed"
             )
     if name == "backend" and source == "managed":
         if not isinstance(dependency.get("reload"), bool):

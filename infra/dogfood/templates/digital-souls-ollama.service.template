@@ -1,0 +1,21 @@
+[Unit]
+Description=Digital Souls Ollama
+PartOf=digital-souls-inference.target
+After=network.target
+
+[Service]
+Type=simple
+User=@DOGFOOD_SERVICE_USER@
+Group=@DOGFOOD_SERVICE_GROUP@
+EnvironmentFile=@DOGFOOD_CONFIG_DIR@/dogfood.env
+Environment="DOGFOOD_ENV_FILE=@DOGFOOD_CONFIG_DIR@/dogfood.env" "WSL_DISTRO_NAME=@DOGFOOD_WSL_DISTRO@"
+ExecStart=@DOGFOOD_CLONE_DIR@/scripts/dogfood/run-ollama.sh
+Restart=on-failure
+RestartSec=5s
+KillSignal=SIGTERM
+TimeoutStopSec=30s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=digital-souls-inference.target

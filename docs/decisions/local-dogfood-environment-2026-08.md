@@ -56,6 +56,7 @@ network namespace、CPU、kernel、memory、swapを共有するため、別WSL�
 FrontendとBackendはloopbackだけへbindする。LAN公開、TLS、認証は別の判断とする。
 
 OllamaとVOICEVOXはdogfoodのenvironment runとは別の共通推論サービスとして運用する。
+OllamaはUbuntu-dogfoodのsystemdをprocess ownerとする。VOICEVOXはsystemdをCompose stackの操作入口、Composeを実行中containerの再起動ownerとする。dev／integration／TAKTは`external` dependencyとして同じloopback endpointを再利用する。構築、起動、停止、metadata-only観測、WSL終了後の復旧は`infra/dogfood/README.md`に集約する。
 dogfood Profileは両者をexternal dependencyとして扱い、dogfoodの所有reportへ登録せず、
 stop／cleanupでも停止しない。GPU、CPU、memoryは共有資源として競合し得るため、並行稼働テストで観測する。
 

@@ -17,10 +17,13 @@ from adapters.base import (  # noqa: E402
     StopResult,
     VerificationResult,
 )
-from commands.voicevox_command import start_voicevox  # noqa: E402
+from commands import voicevox_command  # noqa: E402
 from environment_timing import EnvironmentTiming  # noqa: E402
 from http_readiness import ReadinessResult  # noqa: E402
-from tests.environment_test_support import single_adapter_registry  # noqa: E402
+from tests.environment_test_support import (  # noqa: E402
+    resolved_profile,
+    single_adapter_registry,
+)
 
 
 class SignalVoicevox:
@@ -57,8 +60,9 @@ class SignalVoicevox:
 
 adapter = SignalVoicevox()
 registry = single_adapter_registry("voicevox", adapter)
+voicevox_command.resolve_profile = lambda _env, _default, _paths: resolved_profile()
 raise SystemExit(
-    start_voicevox(
+    voicevox_command.start_voicevox(
         root,
         "dev",
         registry=registry,

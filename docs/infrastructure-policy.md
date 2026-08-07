@@ -67,6 +67,8 @@ dogfoodのconversation historyは実データとして保持する。Wave 2開�
 Dockerは環境分離の必須条件にしない。VOICEVOX containerには引き続き使用できる。
 Backend、Frontend、Ollamaを含む全面的なDocker Compose化は、必要性が明確になった時点で判断する。
 
+Ollamaのprocess lifecycleはUbuntu-dogfoodのsystemdが所有する。VOICEVOXではsystemdがCompose stackの起動・停止入口を担い、Composeが実行中containerの再起動を所有する。dev、integration、TAKTはProfileのexternal endpointをreadiness確認して再利用し、起動、停止、restart、container操作を行わない。Ubuntu-dogfoodの標準配置、metadata-only観測、Windows再起動後の復旧手順は`infra/dogfood/README.md`を正とする。
+
 ## ミニPC調達後の構成
 
 ミニPCは人格、記憶、軽量推論、Web UI等の常時稼働先とする。dogfoodで確立した独立clone、
