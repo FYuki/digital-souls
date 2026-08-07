@@ -9,7 +9,6 @@ from pathlib import Path
 
 root = Path(sys.argv[1])
 report_path = sys.argv[2]
-runtime_path = Path(sys.argv[3])
 sys.path[:0] = [str(root / "environments"), str(root / "backend")]
 
 import commands.up_command as up_command  # noqa: E402
@@ -29,4 +28,4 @@ arguments = argparse.Namespace(
     profile_report=None,
     default_profile="test-mocked",
 )
-raise SystemExit(up_command.up_environment(root, runtime_path, arguments))
+raise SystemExit(up_command.up_environment(root, arguments))

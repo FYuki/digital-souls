@@ -6,8 +6,9 @@ from typing import Mapping
 
 from app.model_settings import (
     WHISPER_MODEL_NAME,
-    whisper_model_cache,
 )
+from app.runtime_data_root import initialize_runtime_data_root
+from app.runtime_paths import RuntimePaths
 from adapters.base import (
     Check,
     CommandRunner,
@@ -78,11 +79,13 @@ class BackendAdapter(ProcessServiceOperations):
     def __init__(
         self,
         root_dir: Path,
+        runtime_paths: RuntimePaths,
         runner: CommandRunner | None = None,
         *,
         whisper_model_name: str = WHISPER_MODEL_NAME,
     ) -> None:
         super().__init__(root_dir, "backend", runner)
+        self._runtime_paths = runtime_paths
         self._whisper_model_name = whisper_model_name
 
     def _cached_whisper_model(self) -> Path | None:
@@ -95,7 +98,7 @@ class BackendAdapter(ProcessServiceOperations):
                 "-c",
                 WHISPER_CACHE_LOOKUP,
                 self._whisper_model_name,
-                str(whisper_model_cache(self.root_dir)),
+                str(self._runtime_paths.whisper_cache_path),
             ),
             self.root_dir,
         )
@@ -173,8 +176,7 @@ class BackendAdapter(ProcessServiceOperations):
                 )
             )
         if context.chroma_enabled:
-            chroma_path = self.root_dir / "backend" / "app" / "data" / "chroma"
-            checks.append(_chroma_storage_check(chroma_path))
+            checks.append(_chroma_storage_check(self._runtime_paths.chroma_path))
         return VerificationResult(tuple(checks))
 
     def prepare(
@@ -183,11 +185,12 @@ class BackendAdapter(ProcessServiceOperations):
         context: OperationContext,
     ) -> None:
         require_managed_endpoint(dependency, service="backend", port=8000)
+        initialize_runtime_data_root(self._runtime_paths, self.root_dir)
         result = self.runner.run((str(self.root_dir / "scripts" / "setup-backend.sh"),), self.root_dir)
         if not command_succeeded(result):
             raise RuntimeError(f"backend preparation failed: {result.get('stderr', '')}")
         if context.whisper_enabled:
-            model_cache = whisper_model_cache(self.root_dir)
+            model_cache = self._runtime_paths.whisper_cache_path
             cached_model = self._cached_whisper_model()
             if cached_model is None or not _whisper_model_is_ready(cached_model):
                 command = (
@@ -204,7 +207,7 @@ class BackendAdapter(ProcessServiceOperations):
                         f"Whisper model preparation failed: {download.get('stderr', '')}"
                     )
         if context.chroma_enabled:
-            (self.root_dir / "backend" / "app" / "data" / "chroma").mkdir(parents=True, exist_ok=True)
+            self._runtime_paths.chroma_path.mkdir(parents=True, exist_ok=True)
 
     def start_specification(self, dependency: Mapping[str, object]) -> StartSpecification:
         require_managed_endpoint(dependency, service="backend", port=8000)

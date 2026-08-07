@@ -8,7 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from tests.environment_test_support import RecordingRunner, resolved_profile
+from tests.environment_test_support import (
+    RecordingRunner,
+    resolved_profile,
+    resolved_runtime_paths,
+)
 from adapters.base import Check, OperationContext
 
 
@@ -29,19 +33,20 @@ def _write_cached_whisper_model(
 ) -> None:
     python = root_dir / "backend" / ".venv" / "bin" / "python"
     python.parent.mkdir(parents=True)
-    python.write_text(
-        f"#!/bin/sh\nexec {shlex.quote(sys.executable)} \"$@\"\n",
-        encoding="utf-8",
-    )
-    python.chmod(0o755)
     repository_cache = (
         root_dir
-        / ".cache"
+        / "runtime-data"
+        / "cache"
         / "huggingface"
         / "hub"
         / f"models--{repository_id.replace('/', '--')}"
     )
     snapshot = repository_cache / "snapshots" / "revision"
+    python.write_text(
+        f"#!/bin/sh\nprintf '%s\\n' {shlex.quote(str(snapshot))}\n",
+        encoding="utf-8",
+    )
+    python.chmod(0o755)
     snapshot.mkdir(parents=True)
     refs = repository_cache / "refs"
     refs.mkdir()
@@ -208,7 +213,9 @@ def test_should_keep_backend_setup_in_prepare_and_uvicorn_in_start(tmp_path: Pat
     from adapters.backend import BackendAdapter
 
     runner = RecordingRunner()
-    adapter = BackendAdapter(root_dir=tmp_path, runner=runner)
+    adapter = BackendAdapter(
+        root_dir=tmp_path, runtime_paths=resolved_runtime_paths(tmp_path), runner=runner
+    )
     dependency = resolved_profile()["dependencies"]["backend"]
 
     adapter.prepare(dependency, OPERATION_CONTEXT)
@@ -221,7 +228,11 @@ def test_should_keep_backend_setup_in_prepare_and_uvicorn_in_start(tmp_path: Pat
 def test_should_classify_missing_whisper_cache_as_preparation_required(tmp_path: Path):
     from adapters.backend import BackendAdapter
 
-    result = BackendAdapter(root_dir=tmp_path, runner=RecordingRunner()).verify(
+    result = BackendAdapter(
+        root_dir=tmp_path,
+        runtime_paths=resolved_runtime_paths(tmp_path),
+        runner=RecordingRunner(),
+    ).verify(
         resolved_profile()["dependencies"]["backend"],
         OperationContext(whisper_enabled=True, chroma_enabled=False),
     )
@@ -232,10 +243,13 @@ def test_should_classify_missing_whisper_cache_as_preparation_required(tmp_path:
 
 def test_should_prepare_whisper_model_in_cache_used_by_backend_runtime(tmp_path: Path):
     from adapters.backend import BackendAdapter
-    from app.model_settings import WHISPER_MODEL_NAME, whisper_model_cache
+    from app.model_settings import WHISPER_MODEL_NAME
 
     runner = RecordingRunner()
-    adapter = BackendAdapter(root_dir=tmp_path, runner=runner)
+    runtime_paths = resolved_runtime_paths(tmp_path)
+    adapter = BackendAdapter(
+        root_dir=tmp_path, runtime_paths=runtime_paths, runner=runner
+    )
 
     adapter.prepare(
         resolved_profile()["dependencies"]["backend"],
@@ -245,13 +259,17 @@ def test_should_prepare_whisper_model_in_cache_used_by_backend_runtime(tmp_path:
     assert runner.calls[0] == (str(tmp_path / "scripts" / "setup-backend.sh"),)
     assert runner.calls[1][0] == str(tmp_path / "backend" / ".venv" / "bin" / "python")
     assert runner.calls[1][3] == WHISPER_MODEL_NAME
-    assert runner.calls[1][4] == str(whisper_model_cache(tmp_path))
+    assert runner.calls[1][4] == str(runtime_paths.whisper_cache_path)
 
 
 def test_should_mark_missing_whisper_cache_as_preparable(tmp_path: Path):
     from adapters.backend import BackendAdapter
 
-    result = BackendAdapter(root_dir=tmp_path, runner=RecordingRunner()).verify(
+    result = BackendAdapter(
+        root_dir=tmp_path,
+        runtime_paths=resolved_runtime_paths(tmp_path),
+        runner=RecordingRunner(),
+    ).verify(
         resolved_profile()["dependencies"]["backend"],
         OperationContext(whisper_enabled=True, chroma_enabled=False),
     )
@@ -277,7 +295,11 @@ def test_should_verify_cache_resolved_by_faster_whisper(
 
     _write_cached_whisper_model(tmp_path, repository_id)
 
-    result = BackendAdapter(root_dir=tmp_path, whisper_model_name=model_name).verify(
+    result = BackendAdapter(
+        root_dir=tmp_path,
+        runtime_paths=resolved_runtime_paths(tmp_path),
+        whisper_model_name=model_name,
+    ).verify(
         resolved_profile()["dependencies"]["backend"],
         OperationContext(whisper_enabled=True, chroma_enabled=False),
     )
@@ -295,7 +317,9 @@ def test_should_treat_empty_whisper_cache_as_preparation_required(tmp_path: Path
         tmp_path, "Systran/faster-whisper-medium", complete=False
     )
 
-    result = BackendAdapter(root_dir=tmp_path).verify(
+    result = BackendAdapter(
+        root_dir=tmp_path, runtime_paths=resolved_runtime_paths(tmp_path)
+    ).verify(
         resolved_profile()["dependencies"]["backend"],
         OperationContext(whisper_enabled=True, chroma_enabled=False),
     )
@@ -318,7 +342,11 @@ def test_should_require_executable_backend_launchers_during_verify(tmp_path: Pat
     for executable in ("python", "uvicorn"):
         (venv_bin / executable).write_text("", encoding="utf-8")
 
-    result = BackendAdapter(root_dir=tmp_path, runner=RecordingRunner()).verify(
+    result = BackendAdapter(
+        root_dir=tmp_path,
+        runtime_paths=resolved_runtime_paths(tmp_path),
+        runner=RecordingRunner(),
+    ).verify(
         resolved_profile()["dependencies"]["backend"],
         OperationContext(whisper_enabled=False, chroma_enabled=False),
     )
@@ -337,8 +365,12 @@ def test_should_require_executable_backend_launchers_during_verify(tmp_path: Pat
 def test_should_prepare_chroma_directory_only_in_prepare(tmp_path: Path):
     from adapters.backend import BackendAdapter
 
-    chroma_path = tmp_path / "backend" / "app" / "data" / "chroma"
-    adapter = BackendAdapter(root_dir=tmp_path, runner=RecordingRunner())
+    chroma_path = resolved_runtime_paths(tmp_path).chroma_path
+    adapter = BackendAdapter(
+        root_dir=tmp_path,
+        runtime_paths=resolved_runtime_paths(tmp_path),
+        runner=RecordingRunner(),
+    )
 
     verify = adapter.verify(
         resolved_profile()["dependencies"]["backend"],
@@ -364,11 +396,15 @@ def test_should_prepare_chroma_directory_only_in_prepare(tmp_path: Path):
 def test_should_classify_chroma_file_collision_as_not_preparable(tmp_path: Path):
     from adapters.backend import BackendAdapter
 
-    chroma_path = tmp_path / "backend" / "app" / "data" / "chroma"
-    chroma_path.parent.mkdir(parents=True)
+    chroma_path = resolved_runtime_paths(tmp_path).chroma_path
+    chroma_path.parent.mkdir(parents=True, exist_ok=True)
     chroma_path.write_text("not a directory", encoding="utf-8")
 
-    result = BackendAdapter(root_dir=tmp_path, runner=RecordingRunner()).verify(
+    result = BackendAdapter(
+        root_dir=tmp_path,
+        runtime_paths=resolved_runtime_paths(tmp_path),
+        runner=RecordingRunner(),
+    ).verify(
         resolved_profile()["dependencies"]["backend"],
         OperationContext(whisper_enabled=False, chroma_enabled=True),
     )
@@ -409,7 +445,7 @@ def test_should_classify_unwritable_chroma_directory_as_not_preparable(
     from adapters.backend import BackendAdapter
     import adapters.backend
 
-    chroma_path = tmp_path / "backend" / "app" / "data" / "chroma"
+    chroma_path = resolved_runtime_paths(tmp_path).chroma_path
     chroma_path.mkdir(parents=True)
     real_access = adapters.backend.os.access
     monkeypatch.setattr(
@@ -418,7 +454,11 @@ def test_should_classify_unwritable_chroma_directory_as_not_preparable(
         lambda path, mode: False if path == chroma_path else real_access(path, mode),
     )
 
-    result = BackendAdapter(root_dir=tmp_path, runner=RecordingRunner()).verify(
+    result = BackendAdapter(
+        root_dir=tmp_path,
+        runtime_paths=resolved_runtime_paths(tmp_path),
+        runner=RecordingRunner(),
+    ).verify(
         resolved_profile()["dependencies"]["backend"],
         OperationContext(whisper_enabled=False, chroma_enabled=True),
     )

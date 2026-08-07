@@ -5,6 +5,7 @@ import threading
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
@@ -19,6 +20,7 @@ from app.conversation_history.service import (
 )
 from app.memory import memory_policy as _memory_policy
 from app.model_settings import ModelSettings
+from app.runtime_paths import RuntimePaths
 from app.memory import rag_service as _rag_service
 from app.privacy.contracts import PrivacyScanner
 from app.prompting import (
@@ -151,6 +153,7 @@ class ChatRuntimeConfig:
     memory_policy: _memory_policy.MemoryPolicy | None
     privacy_scanner: PrivacyScanner | None
     prompt_config: ModelSettings
+    chroma_path: Path
 
 
 @dataclass(frozen=True)
@@ -160,6 +163,7 @@ class _ResolvedChatContext:
     privacy_scanner: PrivacyScanner | None
     memory_task_queue: MemoryTaskQueue
     prompt_config: ModelSettings
+    chroma_path: Path
 
 
 @dataclass
@@ -304,6 +308,7 @@ def resolve_chat_runtime_config(
     policy: _memory_policy.MemoryPolicy,
     privacy_scanner: PrivacyScanner,
     prompt_config: ModelSettings,
+    runtime_paths: RuntimePaths,
 ) -> ChatRuntimeConfig:
     rag_enabled = os.environ.get(RAG_ENABLED_ENV) == RAG_ENABLED_VALUE
     return ChatRuntimeConfig(
@@ -311,6 +316,7 @@ def resolve_chat_runtime_config(
         memory_policy=policy if rag_enabled else None,
         privacy_scanner=privacy_scanner if rag_enabled else None,
         prompt_config=prompt_config,
+        chroma_path=runtime_paths.chroma_path,
     )
 
 
@@ -391,6 +397,7 @@ def _resolve_chat_context(
             privacy_scanner=None,
             memory_task_queue=memory_task_queue,
             prompt_config=runtime_config.prompt_config,
+            chroma_path=runtime_config.chroma_path,
         )
     return _ResolvedChatContext(
         character_prompt=character_prompt,
@@ -398,6 +405,7 @@ def _resolve_chat_context(
         privacy_scanner=runtime_config.privacy_scanner,
         memory_task_queue=memory_task_queue,
         prompt_config=runtime_config.prompt_config,
+        chroma_path=runtime_config.chroma_path,
     )
 
 
@@ -412,6 +420,7 @@ def _rag_context_for_reply(
         character,
         message,
         context.memory_policy,
+        chroma_path=context.chroma_path,
     )
     return RagContext(
         items=tuple(
@@ -457,6 +466,7 @@ def _record_user_memory_candidate(
         context.memory_policy,
         context.memory_task_queue,
         privacy_scanner=context.privacy_scanner,
+        chroma_path=context.chroma_path,
     )
 
 

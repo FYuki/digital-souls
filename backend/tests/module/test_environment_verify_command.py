@@ -43,6 +43,11 @@ def _write_success_profile(environments: Path) -> None:
     }
     profile_path = environments / "profiles" / f"{_SUCCESS_PROFILE}.json"
     profile_path.write_text(json.dumps(profile), encoding="utf-8")
+    data_root = environments.parent / "backend" / "app" / "data"
+    data_root.mkdir(parents=True)
+    (data_root / ".environment-identity.json").write_text(
+        '{"schemaVersion":1,"environmentId":"dev"}\n', encoding="utf-8"
+    )
 
 
 def _run_successful_verify(
@@ -185,7 +190,9 @@ def test_should_verify_without_creating_files_or_running_mutating_commands(
     operations = NonMutatingOperations()
     registry = single_adapter_registry("frontend", operations)
     monkeypatch.setattr(
-        verify_command, "resolve_profile", lambda environment, default: profile
+        verify_command,
+        "resolve_profile",
+        lambda environment, default, runtime: profile,
     )
     before = {path.relative_to(tmp_path) for path in tmp_path.rglob("*")}
 
@@ -236,17 +243,21 @@ def test_should_allow_managed_ollama_model_preparation_through_verify_entrypoint
     import commands.verify_command as verify_command
     from http_readiness import ReadinessResult
     from service_registry import create_service_registry
-    from tests.environment_test_support import resolved_profile
+    from tests.environment_test_support import resolved_profile, resolved_runtime_paths
 
     profile = resolved_profile()
     dependencies = deepcopy(profile["dependencies"])
     for name in ("frontend", "backend", "voicevox", "whisper", "chroma"):
         dependencies[name] = {"mode": "disabled", "source": None}
     profile["dependencies"] = dependencies
-    registry = create_service_registry(tmp_path)
-    monkeypatch.setattr(verify_command, "resolve_profile", lambda env, default: profile)
+    registry = create_service_registry(tmp_path, resolved_runtime_paths(tmp_path))
     monkeypatch.setattr(
-        verify_command, "create_service_registry", lambda root, **settings: registry
+        verify_command, "resolve_profile", lambda env, default, runtime: profile
+    )
+    monkeypatch.setattr(
+        verify_command,
+        "create_service_registry",
+        lambda root, runtime, **settings: registry,
     )
     monkeypatch.setattr(
         "adapters.base.probe_http",
@@ -284,7 +295,7 @@ def test_should_require_ollama_model_for_external_service(
     import commands.verify_command as verify_command
     from http_readiness import ReadinessResult
     from service_registry import create_service_registry
-    from tests.environment_test_support import resolved_profile
+    from tests.environment_test_support import resolved_profile, resolved_runtime_paths
 
     profile = resolved_profile()
     dependencies = deepcopy(profile["dependencies"])
@@ -292,10 +303,14 @@ def test_should_require_ollama_model_for_external_service(
         dependencies[name] = {"mode": "disabled", "source": None}
     dependencies["ollama"] = {**dependencies["ollama"], "source": "external"}
     profile["dependencies"] = dependencies
-    registry = create_service_registry(tmp_path)
-    monkeypatch.setattr(verify_command, "resolve_profile", lambda env, default: profile)
+    registry = create_service_registry(tmp_path, resolved_runtime_paths(tmp_path))
     monkeypatch.setattr(
-        verify_command, "create_service_registry", lambda root, **settings: registry
+        verify_command, "resolve_profile", lambda env, default, runtime: profile
+    )
+    monkeypatch.setattr(
+        verify_command,
+        "create_service_registry",
+        lambda root, runtime, **settings: registry,
     )
     monkeypatch.setattr(
         "adapters.base.probe_http",

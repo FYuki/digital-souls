@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from unittest.mock import MagicMock
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -24,6 +25,7 @@ def _patch_privacy_startup(monkeypatch: pytest.MonkeyPatch):
             memory_policy=None,
             privacy_scanner=None,
             prompt_config=resolve_model_settings({}),
+            chroma_path=Path("/test/runtime-data/chroma"),
         )
     )
     monkeypatch.setattr(main, "resolved_memory_policy", resolve_policy)

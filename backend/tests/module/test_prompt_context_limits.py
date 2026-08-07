@@ -1,5 +1,6 @@
 import importlib
 import os
+from pathlib import Path
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 from uuid import UUID
@@ -87,6 +88,7 @@ def _service(
             memory_policy=None,
             privacy_scanner=None,
             prompt_config=config,
+            chroma_path=Path("/test/runtime-data/chroma"),
         ),
         _TaskQueue(),
         _HistoryService(_HistorySession(turns)),

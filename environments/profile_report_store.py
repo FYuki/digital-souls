@@ -8,12 +8,14 @@ from pathlib import Path
 
 from profile_constants import LEGACY_REPORT_ENV, PROFILE_REPORT_ENV
 from profile_types import LegacyBackendReport, ProfileError, ResolvedReport
+from app.runtime_paths import RuntimePaths
 
 
 def resolve_report_paths(
     argument: str | None,
     env: dict[str, str],
     default_report: str | None,
+    runtime_paths: RuntimePaths,
 ) -> tuple[Path, Path]:
     if argument is not None:
         report_path = Path(argument)
@@ -28,7 +30,11 @@ def resolve_report_paths(
     elif default_report is not None:
         report_path = Path(default_report)
     else:
-        raise ProfileError("resolve requires --report or DS_PROFILE_REPORT")
+        report_path = (
+            runtime_paths.runtime_report_dir
+            / "standalone"
+            / "resolved-profile.json"
+        )
 
     legacy_path = (
         Path(env[LEGACY_REPORT_ENV])
@@ -38,12 +44,22 @@ def resolve_report_paths(
     if LEGACY_REPORT_ENV in env and not env[LEGACY_REPORT_ENV]:
         raise ProfileError(f"{LEGACY_REPORT_ENV} must not be empty")
     try:
+        runtime_report_dir = runtime_paths.runtime_report_dir
+        if runtime_report_dir.is_symlink():
+            raise ProfileError("runtime directory must not be a symlink")
+        canonical_root = runtime_paths.data_root.resolve(strict=False)
+        canonical_runtime_dir = runtime_report_dir.resolve(strict=False)
+        if not canonical_runtime_dir.is_relative_to(canonical_root):
+            raise ProfileError("runtime directory must be inside the data root")
         report_path = report_path.resolve()
         legacy_path = legacy_path.resolve()
     except (OSError, RuntimeError) as error:
         raise ProfileError(f"report path cannot be resolved: {error}") from error
     if report_path == legacy_path:
         raise ProfileError(f"resolved report and legacy backend report use the same path: {legacy_path}")
+    for path in (report_path, legacy_path):
+        if not path.is_relative_to(canonical_runtime_dir):
+            raise ProfileError("profile report path must be inside runtime directory")
     return report_path, legacy_path
 
 

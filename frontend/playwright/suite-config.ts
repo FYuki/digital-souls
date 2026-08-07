@@ -9,6 +9,8 @@ const frontendDir = join(configDir, '..')
 
 export const ENVIRONMENT_RUN_REPORT_ENV = 'DS_ENVIRONMENT_RUN_REPORT'
 export const PROFILE_ENV = 'DS_PROFILE'
+export const ENVIRONMENT_ID_ENV = 'DS_ENVIRONMENT_ID'
+export const DATA_DIR_ENV = 'DS_DATA_DIR'
 
 export type SuiteName = 'mocked-e2e' | 'integration-text' | 'integration-voice'
 type TestLayer = 'e2e' | 'integration'
@@ -21,6 +23,8 @@ export type SuiteDefinition = Readonly<{
   testDir: string
   resultDir: string
   artifactDir: string
+  dataRoot: string
+  runtimeDir: string
 }>
 
 const suiteDefinitions: Readonly<Record<SuiteName, Readonly<{
@@ -50,20 +54,25 @@ export const getSuiteDefinition = (suite: SuiteName): SuiteDefinition => {
   if (definition === undefined) {
     throw new Error(`unknown Playwright suite: ${String(suite)}`)
   }
+  const dataRoot = join(frontendDir, 'test-results', 'runtime-data', suite)
   return Object.freeze({
     suite,
     ...definition,
     resultDir: join(frontendDir, 'test-results', suite),
     artifactDir: join(frontendDir, 'test-results', 'playwright-artifacts', suite),
+    dataRoot,
+    runtimeDir: join(dataRoot, 'runtime', 'standalone'),
   })
 }
 
 export const createSuiteConfig = (suiteName: SuiteName): PlaywrightTestConfig => {
   const suite = getSuiteDefinition(suiteName)
   const isCollectionOnly = process.argv.includes('--list')
-  const profileReportPath = join(suite.resultDir, 'resolved-profile.json')
-  const environmentRunReportPath = join(suite.resultDir, 'environment-run.json')
+  const profileReportPath = join(suite.runtimeDir, 'resolved-profile.json')
+  const environmentRunReportPath = join(suite.runtimeDir, 'environment-run.json')
   process.env[PROFILE_ENV] = suite.profile
+  process.env[ENVIRONMENT_ID_ENV] = 'test'
+  process.env[DATA_DIR_ENV] = suite.dataRoot
   process.env[PROFILE_REPORT_ENV] = profileReportPath
   process.env[ENVIRONMENT_RUN_REPORT_ENV] = environmentRunReportPath
 
@@ -88,6 +97,8 @@ export const createSuiteConfig = (suiteName: SuiteName): PlaywrightTestConfig =>
       command: '../environments/up.sh',
       env: {
         [PROFILE_ENV]: suite.profile,
+        [ENVIRONMENT_ID_ENV]: 'test',
+        [DATA_DIR_ENV]: suite.dataRoot,
         [PROFILE_REPORT_ENV]: profileReportPath,
         [ENVIRONMENT_RUN_REPORT_ENV]: environmentRunReportPath,
       },

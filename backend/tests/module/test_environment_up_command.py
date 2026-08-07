@@ -13,9 +13,9 @@ from tests.environment_entrypoint_test_support import (
     ROOT_DIR,
     copy_environment_runtime as _copy_environment_runtime,
 )
-def test_should_allow_run_report_environment_override_through_up_cli(tmp_path: Path):
+def test_should_allow_run_report_environment_override_through_up_cli(tmp_path: Path, runtime_paths):
     environments = _copy_environment_runtime(tmp_path)
-    report_path = tmp_path / "custom" / "environment-run.json"
+    report_path = runtime_paths.runtime_report_dir / "custom" / "environment-run.json"
     env = {
         **os.environ,
         "DS_PROFILE": "missing-profile",
@@ -36,9 +36,9 @@ def test_should_allow_run_report_environment_override_through_up_cli(tmp_path: P
     assert report["status"] == "failed"
 
 
-def test_should_remove_previous_profile_report_before_profile_resolution(tmp_path: Path):
+def test_should_remove_previous_profile_report_before_profile_resolution(tmp_path: Path, runtime_paths):
     environments = _copy_environment_runtime(tmp_path)
-    report_path = tmp_path / "custom" / "environment-run.json"
+    report_path = runtime_paths.runtime_report_dir / "custom" / "environment-run.json"
     profile_report_path = report_path.parent / "resolved-profile.json"
     profile_report_path.parent.mkdir(parents=True)
     profile_report_path.write_text('{"runId":"stale-run"}', encoding="utf-8")
@@ -62,9 +62,10 @@ def test_should_remove_previous_profile_report_before_profile_resolution(tmp_pat
 
 def test_should_record_profile_failure_when_previous_profile_report_cannot_be_removed(
     tmp_path: Path,
+    runtime_paths,
 ):
     environments = _copy_environment_runtime(tmp_path)
-    report_path = tmp_path / "custom" / "environment-run.json"
+    report_path = runtime_paths.runtime_report_dir / "custom" / "environment-run.json"
     profile_report_path = report_path.parent / "resolved-profile.json"
     profile_report_path.mkdir(parents=True)
     env = {
@@ -92,11 +93,12 @@ def test_should_reject_colliding_environment_output_paths_before_first_write(
     configuration_source: str,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    runtime_paths,
 ):
     import commands.up_command as up_command
     from profile_types import ProfileError
 
-    collision = tmp_path / "colliding-report.json"
+    collision = runtime_paths.runtime_report_dir / "colliding-report.json"
     monkeypatch.delenv("DS_ENVIRONMENT_RUN_REPORT", raising=False)
     monkeypatch.delenv("DS_PROFILE_REPORT", raising=False)
     if configuration_source == "environment":
@@ -114,13 +116,57 @@ def test_should_reject_colliding_environment_output_paths_before_first_write(
     )
 
     with pytest.raises(ProfileError, match="output paths must be distinct"):
-        up_command.up_environment(ROOT_DIR, tmp_path / ".runtime", arguments)
+        up_command.up_environment(ROOT_DIR, arguments)
 
     assert not collision.exists()
 
 
+def test_should_reject_runtime_symlink_before_run_report_store_creation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    import commands.up_command as up_command
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    data_root = tmp_path / "runtime-data"
+    data_root.mkdir(exist_ok=True)
+    marker = data_root / ".environment-identity.json"
+    marker.write_text(
+        json.dumps({"schemaVersion": 1, "environmentId": "test"}),
+        encoding="utf-8",
+    )
+    external = tmp_path / "external"
+    external.mkdir()
+    sentinel = external / "sentinel"
+    sentinel.write_text("keep", encoding="utf-8")
+    (data_root / "runtime").symlink_to(external, target_is_directory=True)
+    store_creations = 0
+
+    class UnexpectedStore:
+        def __init__(self, _path: Path) -> None:
+            nonlocal store_creations
+            store_creations += 1
+
+    monkeypatch.setenv("DS_ENVIRONMENT_ID", "test")
+    monkeypatch.setenv("DS_DATA_DIR", str(data_root))
+    monkeypatch.setattr(up_command, "RunReportStore", UnexpectedStore)
+    arguments = argparse.Namespace(
+        run_report=None,
+        profile_report=None,
+        default_profile="test-mocked",
+    )
+
+    with pytest.raises(ValueError):
+        up_command.up_environment(repository_root, arguments)
+
+    assert store_creations == 0
+    assert sentinel.read_text(encoding="utf-8") == "keep"
+    assert list(external.iterdir()) == [sentinel]
+
+
 def test_should_finalize_interrupted_ready_run_when_wall_clock_moves_backward(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, runtime_paths
 ):
     from tests.environment_test_support import resolved_profile
 
@@ -173,21 +219,21 @@ def test_should_finalize_interrupted_ready_run_when_wall_clock_moves_backward(
     monkeypatch.setattr(
         up_command,
         "resolve_and_write_profile",
-        lambda env, default, path, legacy: resolved_profile("test-mocked"),
+        lambda env, default, path, legacy, runtime: resolved_profile("test-mocked"),
     )
     monkeypatch.setattr(up_command, "EnvironmentRun", InterruptedReadyRun)
     monkeypatch.setattr(
         up_command, "install_interrupt_handlers", lambda: (lambda: True, {})
     )
     monkeypatch.setattr(up_command, "restore_interrupt_handlers", lambda handlers: None)
-    report_path = tmp_path / "environment-run.json"
+    report_path = runtime_paths.runtime_report_dir / "clock" / "environment-run.json"
     arguments = argparse.Namespace(
         run_report=str(report_path),
         profile_report=None,
         default_profile="test-mocked",
     )
 
-    exit_code = up_command.up_environment(ROOT_DIR, tmp_path / ".runtime", arguments)
+    exit_code = up_command.up_environment(ROOT_DIR, arguments)
 
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert exit_code == 0

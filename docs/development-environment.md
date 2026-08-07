@@ -35,6 +35,29 @@ Wave 2親Issue #28の受入まではdogfoodのRAGを無効にし、実データ�
 conversation historyだけとする。詳細は
 `docs/decisions/local-dogfood-environment-2026-08.md`を参照する。
 
+## runtime data root
+
+`DS_ENVIRONMENT_ID`は`dev`、`test`、`dogfood`の実行環境を識別し、未指定時は`dev`となる。
+`DS_DATA_DIR`は絶対パスで指定する単一のdata rootで、未指定のdevでは従来どおり
+`backend/app/data`を使用する。
+
+| 対象 | data rootからの相対パス |
+|---|---|
+| 環境identity marker | `.environment-identity.json` |
+| conversation history SQLite | `conversation-history.db` |
+| Chroma | `chroma/` |
+| runtime report | `runtime/` |
+| cache | `cache/`（Whisperは`cache/huggingface/hub/`） |
+
+起動時はmarkerを作成または検証し、環境IDとの不一致、markerの欠落・破損、相対パス、symlink、
+通常ファイル、書き込み不能な場所、危険な広域パスをSQLite／Chromaの初期化前に拒否する。
+dogfoodではリポジトリ外の専用絶対パスが必須である。
+
+```bash
+export DS_ENVIRONMENT_ID=dogfood
+export DS_DATA_DIR=/var/lib/digital-souls/dogfood
+```
+
 ## 初期セットアップ
 
 ```bash
@@ -89,7 +112,7 @@ DS_PROFILE=test-mocked scripts/start-voice-chat-e2e.sh
 | `integration-text` | 実テキストチャット | Frontend、Backend、Ollama |
 | `integration-voice` | 実音声チャット | Frontend、Backend、Ollama、VOICEVOX、Whisper |
 
-起動スクリプトはサービス起動前に中央 resolver で Profile を検証する。`scripts/start-all.sh` の既定出力先は `.runtime/environments/<run-id>/resolved-profile.json` である。Playwright はスイート別入口 `npm run test:e2e:mocked`、`npm run test:integration:text`、`npm run test:integration:voice` を使用し、それぞれ `frontend/test-results/mocked-e2e/resolved-profile.json`、`frontend/test-results/integration-text/resolved-profile.json`、`frontend/test-results/integration-voice/resolved-profile.json` に保存する。この report には選択元、6依存の解決済み `mode` / `source` / 接続先、Capability、子プロセスへ渡す `derivedEnvironment` が記録される。`scripts/start-all.sh` では `DS_PROFILE_REPORT` を指定すると出力先を変更できる。
+起動スクリプトはサービス起動前に中央 resolver で Profile を検証する。runtime reportとresolved Profileは解決済みdata rootの`runtime/`配下にのみ保存する。Playwrightは各スイート専用のtest data rootを設定し、`runtime/standalone/`へ環境reportを、`frontend/test-results/<suite>/`へテスト証跡を保存する。reportには環境IDと正規化済みpathを記録し、秘密値や会話本文は記録しない。
 
 `derivedEnvironment` の接続先に加え、`OLLAMA_CHAT_MODEL`、`WHISPER_MODEL`、`OLLAMA_CONTEXT_TOKENS`、応答予約量、履歴・入力・モデルcontext上限は resolver の解決結果から起動対象へ渡される。`scripts/start-backend.sh` は `backend/.env` をProfile解決前に読み込む。`DS_PROFILE_REPORT`で既存のresolved reportを指定しない場合は`.env`のモデル設定を解決結果へ取り込み、指定した場合はreportの解決済み設定を優先する。不正な文字列、正でない整数、応答予約量が実行時context以上、または実行時contextがモデル最大contextを超える指定は、サービス起動前に拒否される。
 
@@ -130,18 +153,17 @@ Backend 単体起動では Ollama や VOICEVOX を準備・起動しない。VOI
 - `VoicevoxClient` は `/audio_query` と `/synthesis` を呼び出す
 - 共通環境オーケストレーターの VOICEVOX adapter は Profile の `readinessUrl` で `/version` を確認する
 - Whisper は外部サービスではなく Backend プロセス内で `WHISPER_MODEL`（既定 `medium`）を初回利用時にロードする
-- 共通環境オーケストレーターは prepare で Whisper モデルをリポジトリ内の `.cache/huggingface/hub` へ準備し、Backend 実行時も同じ保存先を使う
-- `.cache/huggingface/` は Git 管理対象外である。Backend を単体起動する場合は初回利用時に取得が発生し得るため、オフライン環境では事前にこのキャッシュを用意する
+- 共通環境オーケストレーターは prepare で Whisper モデルを`<data root>/cache/huggingface/hub`へ準備し、Backend 実行時も同じ保存先を使う
+- `<data root>/cache/huggingface/` は Git 管理対象外である。Backend を単体起動する場合は初回利用時に取得が発生し得るため、オフライン環境では事前にこのキャッシュを用意する
 - `WHISPER_MODEL` を変更した場合、prepare時のcache名・ダウンロード対象・Backend実行モデルが一緒に切り替わる
 
 ## ChromaDB
 
-ChromaDB は外部プロセスではなく、Backend プロセス内で `chromadb.PersistentClient` として利用する。永続化先は `backend/app/data/chroma` で、初回利用時に `backend/app/data` が作成される。
+ChromaDB は外部プロセスではなく、Backend プロセス内で `chromadb.PersistentClient` として利用する。永続化先は解決済みdata rootの`chroma/`である。
 
 リポジトリ配下に永続データが作られるため、開発環境では作業ユーザーが `backend/app/data` を作成・書き込みできる権限を持っている必要がある。
 
-上記は現行dev環境の挙動である。Issue #52でdata rootと環境identityを外部設定化し、dogfoodでは
-リポジトリ外の専用pathを必須にする。dogfood ChromaはWave 2受入後にSQLite正本から構築する。
+dogfood ChromaはWave 2受入後にSQLite正本から構築する。
 
 ## テストとの関係
 

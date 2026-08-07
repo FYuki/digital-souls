@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 from copy import deepcopy
 from pathlib import Path
@@ -12,6 +13,7 @@ from environment_constants import DEPENDENCY_NAMES
 from tests.environment_test_support import (
     orchestrator_identity,
     resolved_profile,
+    runtime_projection,
 )
 
 
@@ -28,6 +30,7 @@ def _initial_report():
         resolved_profile_path=Path("/runtime/resolved-profile.json"),
         effective_profile=resolved_profile(),
         orchestrator_identity=orchestrator_identity(),
+        runtime=runtime_projection(),
     )
 
 
@@ -52,6 +55,7 @@ def test_should_create_schema_valid_report_before_profile_resolution(
         started_at="2026-07-17T00:00:00+00:00",
         resolved_profile_path=Path("/runtime/resolved-profile.json"),
         orchestrator_identity=orchestrator_identity(),
+        runtime=runtime_projection(),
     )
 
     report_validator.validate(report)
@@ -587,7 +591,8 @@ def test_should_not_serialize_process_environment_or_secret_values():
         "readyAt",
         "endedAt",
         "resolvedProfilePath",
-        "orchestratorIdentity",
+            "orchestratorIdentity",
+            "runtime",
         "effectiveProfile",
         "phase",
         "status",
@@ -823,12 +828,24 @@ def test_should_reject_lifecycle_timestamp_before_started_at(
         validate_run_report(report)
 
 
-def test_should_record_playwright_result_through_atomic_cli_api(tmp_path: Path):
+def test_should_record_playwright_result_through_atomic_cli_api(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     from commands.test_result_command import record_playwright_result
     from run_report_store import RunReportStore
+    from app.runtime_data_root import initialize_runtime_data_root
+    from app.runtime_paths import resolve_runtime_paths, runtime_paths_projection
 
-    path = tmp_path / "environment-run.json"
-    RunReportStore(path).save(_initial_report())
+    repository_root = ROOT_DIR
+    data_root = tmp_path / "runtime-data"
+    monkeypatch.setenv("DS_ENVIRONMENT_ID", "test")
+    monkeypatch.setenv("DS_DATA_DIR", str(data_root))
+    paths = resolve_runtime_paths(dict(os.environ), repository_root)
+    initialize_runtime_data_root(paths, repository_root)
+    path = paths.runtime_report_dir / "environment-run.json"
+    report = _initial_report()
+    report["runtime"] = runtime_paths_projection(paths)
+    RunReportStore(path).save(report)
 
     exit_code = record_playwright_result(
         str(path), "failed", "Playwright finished with status timedout"
@@ -838,6 +855,29 @@ def test_should_record_playwright_result_through_atomic_cli_api(tmp_path: Path):
     assert exit_code == 0
     assert report["testResult"]["status"] == "failed"
     assert report["failure"]["category"] == "test"
+
+
+def test_should_reject_report_outside_runtime_before_test_result_store_access(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import commands.test_result_command as test_result_command
+    from profile_types import ProfileError
+
+    store_calls = 0
+
+    class GuardedStore:
+        def __init__(self, _path: Path) -> None:
+            nonlocal store_calls
+            store_calls += 1
+
+    monkeypatch.setattr(test_result_command, "RunReportStore", GuardedStore)
+
+    with pytest.raises(ProfileError):
+        test_result_command.record_playwright_result(
+            str(tmp_path / "outside-report.json"), "passed", "completed"
+        )
+
+    assert store_calls == 0
 
 
 def test_should_serialize_competing_report_updates_without_losing_fields(

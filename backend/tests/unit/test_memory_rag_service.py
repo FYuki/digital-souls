@@ -21,6 +21,9 @@ from app.privacy.contracts import (
 from tests.privacy_test_support import policy_config
 
 
+_CHROMA_PATH = Path("/test/runtime-data/chroma")
+
+
 @dataclass
 class SavedRecord:
     id: str
@@ -54,6 +57,7 @@ def _record_candidate(
         policy,
         background_tasks,
         privacy_scanner=create_privacy_scanner(policy.privacy),
+        chroma_path=_CHROMA_PATH,
     )
 
 
@@ -104,6 +108,7 @@ class TestRagServicePrompt:
             "miori",
             "前回は?",
             _resolved_policy(),
+            chroma_path=_CHROMA_PATH,
         )
 
         assert [memory.content for memory in memories] == [
@@ -111,7 +116,9 @@ class TestRagServicePrompt:
             "雨量を確認した",
         ]
         assert [memory.role for memory in memories] == ["user", "assistant"]
-        rag_service.query_memories.assert_called_once_with("miori", [0.1], n_results=5)
+        rag_service.query_memories.assert_called_once_with(
+            "miori", [0.1], n_results=5, chroma_path=_CHROMA_PATH
+        )
 
     def test_retrieve_prompt_memories_uses_passed_policy_once(
         self, monkeypatch, tmp_path
@@ -166,10 +173,13 @@ class TestRagServicePrompt:
             "miori",
             "前回は?",
             policy,
+            chroma_path=_CHROMA_PATH,
         )
 
         assert len(memories) == 2
-        rag_service.query_memories.assert_called_once_with("miori", [0.1], n_results=2)
+        rag_service.query_memories.assert_called_once_with(
+            "miori", [0.1], n_results=2, chroma_path=_CHROMA_PATH
+        )
         rag_service.rag_service_policy.assert_called_once_with(policy)
 
     def test_retrieve_prompt_memories_returns_empty_when_search_fails(
@@ -184,6 +194,7 @@ class TestRagServicePrompt:
             "miori",
             "前回は?",
             _resolved_policy(),
+            chroma_path=_CHROMA_PATH,
         )
 
         assert memories == ()
@@ -205,6 +216,7 @@ class TestRagServicePrompt:
             "miori",
             "前回は?",
             _resolved_policy(),
+            chroma_path=_CHROMA_PATH,
         )
 
         assert memories == ()
@@ -226,6 +238,7 @@ class TestRagServicePrompt:
             "miori",
             "前回は?",
             _resolved_policy(),
+            chroma_path=_CHROMA_PATH,
         )
 
         assert memories == ()
@@ -243,6 +256,7 @@ class TestRagServicePrompt:
             "miori",
             "APIキーはabcです",
             _resolved_policy(),
+            chroma_path=_CHROMA_PATH,
         )
 
         assert memories == ()
@@ -262,6 +276,7 @@ class TestRagServiceRecording:
             "policy",
             "task_queue",
             "privacy_scanner",
+            "chroma_path",
         ]
         assert not hasattr(rag_service, "_BACKGROUND_TASK_QUEUE")
         assert not hasattr(rag_service, "_configure_memory_task_queue")
@@ -285,6 +300,7 @@ class TestRagServiceRecording:
             policy,
             background_tasks,
             privacy_scanner=scanner,
+            chroma_path=_CHROMA_PATH,
         )
 
         scanner.scan.assert_called_once_with("農業日誌: トマトに水やり")
@@ -319,6 +335,7 @@ class TestRagServiceRecording:
             policy,
             background_tasks,
             privacy_scanner=scanner,
+            chroma_path=_CHROMA_PATH,
         )
 
         rag_service.create_memory_candidate_record.assert_not_called()
@@ -351,6 +368,7 @@ class TestRagServiceRecording:
             policy,
             background_tasks,
             privacy_scanner=scanner,
+            chroma_path=_CHROMA_PATH,
         )
 
         rag_service.create_memory_candidate_record.assert_not_called()
@@ -392,6 +410,7 @@ class TestRagServiceRecording:
             policy,
             background_tasks,
             privacy_scanner=scanner,
+            chroma_path=_CHROMA_PATH,
         )
 
         rag_service.create_memory_candidate_record.assert_called_once_with(
@@ -428,6 +447,7 @@ class TestRagServiceRecording:
             policy,
             background_tasks,
             privacy_scanner=scanner,
+            chroma_path=_CHROMA_PATH,
         )
 
         rag_service.create_memory_candidate_record.assert_called_once_with(
@@ -566,7 +586,7 @@ class TestRagServiceRecording:
         )
 
         with caplog.at_level(logging.WARNING, logger=rag_service.__name__):
-            rag_service._embed_and_store(record)
+            rag_service._embed_and_store(record, _CHROMA_PATH)
 
         assert not failed_path.exists()
         file_open.assert_not_called()
@@ -593,7 +613,7 @@ class TestRagServiceRecording:
             MagicMock(side_effect=AssertionError("worker must not recheck policy")),
         )
 
-        rag_service._embed_and_store(record)
+        rag_service._embed_and_store(record, _CHROMA_PATH)
 
         rag_service.add_memory.assert_called_once()
         rag_service.is_long_term_memory_candidate.assert_not_called()
@@ -985,6 +1005,7 @@ class TestMemoryPolicyConfiguration:
             "miori",
             sensitive_content,
             policy,
+            chroma_path=_CHROMA_PATH,
         )
         _record_candidate(
             rag_service,

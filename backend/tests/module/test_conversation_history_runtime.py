@@ -35,7 +35,7 @@ def _patch_runtime_config(monkeypatch, config: ConversationHistoryConfig) -> Non
     monkeypatch.setattr(
         main,
         "resolve_conversation_history_config",
-        lambda: config,
+        lambda _runtime_paths: config,
     )
     monkeypatch.setenv("RAG_ENABLED", "false")
 
@@ -44,8 +44,9 @@ class TestConversationHistoryRuntime:
     def test_should_isolate_default_database_for_each_test(
         self,
         conversation_history_database_path: Path,
+        runtime_paths,
     ) -> None:
-        config = resolve_conversation_history_config()
+        config = resolve_conversation_history_config(runtime_paths)
 
         assert config.database_path == conversation_history_database_path
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
 
 OLLAMA_CHAT_MODEL_ENV = "OLLAMA_CHAT_MODEL"
 WHISPER_MODEL_ENV = "WHISPER_MODEL"
@@ -89,10 +88,6 @@ def model_settings_environment(settings: ModelSettings) -> dict[str, str]:
         USER_INPUT_TOKEN_LIMIT_ENV: str(settings.user_input_token_limit),
         MODEL_CONTEXT_TOKEN_LIMIT_ENV: str(settings.model_context_token_limit),
     }
-
-
-def whisper_model_cache(repository_root: Path) -> Path:
-    return repository_root / ".cache" / "huggingface" / "hub"
 
 
 def _string_value(

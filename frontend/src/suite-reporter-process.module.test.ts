@@ -12,14 +12,26 @@ type ProcessResult = {
 type ProcessRunner = {
   runnerDir: string
   resultDir: string
+  runtimeDir: string
+  dataRoot: string
   configPath: string
 }
 
-const executePlaywright = (configPath: string): Promise<ProcessResult> => new Promise((resolve) => {
+const executePlaywright = (
+  configPath: string,
+  dataRoot: string,
+): Promise<ProcessResult> => new Promise((resolve) => {
   execFile(
     join(process.cwd(), 'node_modules', '.bin', 'playwright'),
     ['test', 'passing.spec.ts', '--config', configPath],
-    { cwd: process.cwd() },
+    {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        DS_ENVIRONMENT_ID: 'test',
+        DS_DATA_DIR: dataRoot,
+      },
+    },
     (error, _stdout, stderr) => resolve({ error, stderr }),
   )
 })
@@ -29,6 +41,8 @@ const prepareRunner = async (): Promise<ProcessRunner> => {
   const workspaceRoot = join(runnerDir, 'workspace')
   const workspaceFrontend = join(workspaceRoot, 'frontend')
   const resultDir = join(workspaceFrontend, 'test-results', 'integration-text')
+  const dataRoot = join(workspaceFrontend, 'test-results', 'runtime-data', 'integration-text')
+  const runtimeDir = join(dataRoot, 'runtime', 'standalone')
   await mkdir(workspaceFrontend, { recursive: true })
   await Promise.all([
     cp(join(process.cwd(), 'playwright'), join(workspaceFrontend, 'playwright'), {
@@ -45,7 +59,15 @@ const prepareRunner = async (): Promise<ProcessRunner> => {
       join(workspaceFrontend, 'resolved-profile.ts'),
     ),
   ])
-  await mkdir(resultDir, { recursive: true })
+  await Promise.all([
+    mkdir(resultDir, { recursive: true }),
+    mkdir(runtimeDir, { recursive: true }),
+  ])
+  await writeFile(
+    join(dataRoot, '.environment-identity.json'),
+    JSON.stringify({ schemaVersion: 1, environmentId: 'test' }),
+    'utf-8',
+  )
   const configPath = join(runnerDir, 'playwright.config.mjs')
   const reporterPath = join(workspaceFrontend, 'playwright', 'suite-reporter-entrypoint.ts')
   await writeFile(
@@ -63,7 +85,7 @@ const prepareRunner = async (): Promise<ProcessRunner> => {
      test('passes before reporter finalization', () => expect(true).toBe(true))`,
     'utf-8',
   )
-  return { runnerDir, resultDir, configPath }
+  return { runnerDir, resultDir, runtimeDir, dataRoot, configPath }
 }
 
 const service = (mode: 'real' | 'disabled', source: 'managed' | null) => ({
@@ -76,7 +98,7 @@ const service = (mode: 'real' | 'disabled', source: 'managed' | null) => ({
   readiness: null,
 })
 
-const validEnvironmentReport = () => {
+const validEnvironmentReport = (dataRoot: string) => {
   const dependencies = {
     frontend: { mode: 'real', source: 'managed' },
     backend: { mode: 'real', source: 'managed' },
@@ -97,6 +119,14 @@ const validEnvironmentReport = () => {
       pgid: 2_147_483_647,
       sessionId: 2_147_483_647,
       startTime: 1,
+    },
+    runtime: {
+      environmentId: 'test',
+      dataRoot,
+      sqlitePath: join(dataRoot, 'conversation-history.db'),
+      chromaPath: join(dataRoot, 'chroma'),
+      runtimeReportDirectory: join(dataRoot, 'runtime'),
+      cachePath: join(dataRoot, 'cache'),
     },
     effectiveProfile: { effectiveProfile: 'integration-text', dependencies },
     phase: 'verify',
@@ -121,9 +151,9 @@ describe('Playwright suite reporter process boundary', () => {
     const runner = await prepareRunner()
 
     try {
-      await writeFile(join(runner.resultDir, 'environment-run.json'), '{', 'utf-8')
+      await writeFile(join(runner.runtimeDir, 'environment-run.json'), '{', 'utf-8')
 
-      const execution = await executePlaywright(runner.configPath)
+      const execution = await executePlaywright(runner.configPath, runner.dataRoot)
       const evidence = JSON.parse(
         await readFile(join(runner.resultDir, 'evidence.json'), 'utf-8'),
       ) as Record<string, unknown>
@@ -148,14 +178,14 @@ describe('Playwright suite reporter process boundary', () => {
     try {
       await Promise.all([
         writeFile(
-          join(runner.resultDir, 'environment-run.json'),
-          JSON.stringify(validEnvironmentReport()),
+          join(runner.runtimeDir, 'environment-run.json'),
+          JSON.stringify(validEnvironmentReport(runner.dataRoot)),
           'utf-8',
         ),
-        writeFile(join(runner.resultDir, 'resolved-profile.json'), '{}', 'utf-8'),
+        writeFile(join(runner.runtimeDir, 'resolved-profile.json'), '{}', 'utf-8'),
       ])
 
-      const execution = await executePlaywright(runner.configPath)
+      const execution = await executePlaywright(runner.configPath, runner.dataRoot)
       const evidence = JSON.parse(
         await readFile(join(runner.resultDir, 'evidence.json'), 'utf-8'),
       ) as Record<string, unknown>

@@ -39,9 +39,13 @@ def test_should_stop_owned_voicevox_when_single_service_readiness_fails(
 
     adapter = OwnedVoicevox()
     monkeypatch.setattr(
-        voicevox_command, "resolve_profile", lambda env, default: resolved_profile()
+        voicevox_command,
+        "resolve_profile",
+        lambda env, default, runtime: resolved_profile(),
     )
-    monkeypatch.setattr(voicevox_command, "create_service_registry", lambda root: object())
+    monkeypatch.setattr(
+        voicevox_command, "create_service_registry", lambda root, runtime: object()
+    )
     monkeypatch.setattr(
         voicevox_command, "require_service_operations", lambda registry, name: adapter
     )
@@ -105,9 +109,13 @@ def test_should_preserve_voicevox_readiness_failure_when_cleanup_raises(
 
     adapter = FailingCleanupVoicevox()
     monkeypatch.setattr(
-        voicevox_command, "resolve_profile", lambda env, default: resolved_profile()
+        voicevox_command,
+        "resolve_profile",
+        lambda env, default, runtime: resolved_profile(),
     )
-    monkeypatch.setattr(voicevox_command, "create_service_registry", lambda root: object())
+    monkeypatch.setattr(
+        voicevox_command, "create_service_registry", lambda root, runtime: object()
+    )
     monkeypatch.setattr(
         voicevox_command, "require_service_operations", lambda registry, name: adapter
     )
@@ -175,9 +183,13 @@ def test_should_retry_voicevox_cleanup_from_startup_error_ownership(
 
     adapter = StartupFailureVoicevox()
     monkeypatch.setattr(
-        voicevox_command, "resolve_profile", lambda env, default: resolved_profile()
+        voicevox_command,
+        "resolve_profile",
+        lambda env, default, runtime: resolved_profile(),
     )
-    monkeypatch.setattr(voicevox_command, "create_service_registry", lambda root: object())
+    monkeypatch.setattr(
+        voicevox_command, "create_service_registry", lambda root, runtime: object()
+    )
     monkeypatch.setattr(
         voicevox_command, "require_service_operations", lambda registry, name: adapter
     )

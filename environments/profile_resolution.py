@@ -24,6 +24,7 @@ from profile_types import (
     ResolvedDependencies,
     ResolvedDependency,
     ResolvedReport,
+    RuntimeProjection,
 )
 from profile_validation import load_profile, validate_http_origin
 from app.model_settings import (
@@ -31,6 +32,7 @@ from app.model_settings import (
     model_settings_environment,
     resolve_model_settings,
 )
+from app.runtime_paths import RuntimePaths, runtime_paths_projection
 
 
 REPORT_SCHEMA_VERSION: Literal[1] = 1
@@ -196,7 +198,11 @@ def _compatibility(env: dict[str, str], used: list[str]) -> Compatibility:
     return {"usedEnvironmentVariables": used_variables, "warnings": warnings}
 
 
-def resolve_profile(env: dict[str, str], default_profile: str | None) -> ResolvedReport:
+def resolve_profile(
+    env: dict[str, str],
+    default_profile: str | None,
+    runtime_paths: RuntimePaths,
+) -> ResolvedReport:
     selected, source, used_legacy = _select_profile(env, default_profile)
     profile = load_profile(selected)
     dependencies, used_override = _apply_backend_override(profile, env)
@@ -214,8 +220,13 @@ def resolve_profile(env: dict[str, str], default_profile: str | None) -> Resolve
         "profile": {"schemaVersion": 1, "name": profile["name"]},
         "dependencies": resolved_dependencies,
         "capabilities": derive_capabilities(resolved_dependencies),
-        "derivedEnvironment": derive_environment(
-            resolved_dependencies, model_settings
+        "derivedEnvironment": {
+            **derive_environment(resolved_dependencies, model_settings),
+            "DS_ENVIRONMENT_ID": runtime_paths.environment_id,
+            "DS_DATA_DIR": str(runtime_paths.data_root),
+        },
+        "runtime": cast(
+            RuntimeProjection, runtime_paths_projection(runtime_paths)
         ),
         "compatibility": _compatibility(env, [*used_legacy, *used_override]),
     }

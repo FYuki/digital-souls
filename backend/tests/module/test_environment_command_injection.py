@@ -6,7 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from tests.environment_test_support import resolved_profile, single_adapter_registry
+from tests.environment_test_support import (
+    resolved_profile,
+    single_adapter_registry,
+)
 
 
 def test_should_pass_injected_registry_and_timing_from_up_command_to_runtime(
@@ -65,18 +68,19 @@ def test_should_pass_injected_registry_and_timing_from_up_command_to_runtime(
     monkeypatch.setattr(
         up_command,
         "resolve_and_write_profile",
-        lambda environment, default, report, legacy: resolved_profile("test-mocked"),
+        lambda environment, default, report, legacy, runtime: resolved_profile(
+            "test-mocked"
+        ),
     )
     monkeypatch.setattr(up_command, "EnvironmentRun", SuccessfulRun)
     arguments = argparse.Namespace(
-        run_report=str(tmp_path / "environment-run.json"),
+        run_report=str(tmp_path / "runtime-data" / "runtime" / "environment-run.json"),
         profile_report=None,
         default_profile="test-mocked",
     )
 
     exit_code = up_command.up_environment(
         tmp_path,
-        tmp_path / ".runtime",
         arguments,
         registry=registry,
         timing=timing,
@@ -138,7 +142,7 @@ def test_should_use_injected_registry_probe_and_timing_for_voicevox_command(
     monkeypatch.setattr(
         voicevox_command,
         "resolve_profile",
-        lambda environment, default: resolved_profile("integration-voice"),
+        lambda environment, default, runtime: resolved_profile("integration-voice"),
     )
 
     exit_code = voicevox_command.start_voicevox(
@@ -181,7 +185,7 @@ def test_should_use_injected_registry_and_request_timeout_for_verify_command(
     monkeypatch.setattr(
         verify_command,
         "resolve_profile",
-        lambda environment, default: profile,
+        lambda environment, default, runtime: profile,
     )
     monkeypatch.setattr(verify_command, "verification_checks", verification_checks)
 

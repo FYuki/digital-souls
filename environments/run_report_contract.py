@@ -4,7 +4,7 @@ from __future__ import annotations
 REPORT_FIELDS = {
     "schemaVersion", "runId", "startedAt", "readyAt", "endedAt",
     "resolvedProfilePath", "orchestratorIdentity", "effectiveProfile", "phase", "status",
-    "startSequence", "services", "testResult", "failure", "teardown",
+    "runtime", "startSequence", "services", "testResult", "failure", "teardown",
 }
 STATES = {
     "pending", "started", "reused", "external", "in_process", "browser", "disabled",

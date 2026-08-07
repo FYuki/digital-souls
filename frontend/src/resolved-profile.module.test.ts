@@ -274,6 +274,8 @@ describe('resolved profile reader', () => {
   })
 
   test('should read the report produced by the public profile CLI', async () => {
+    const dataRoot = join(tempDir, 'runtime-data')
+    const publicReportPath = join(dataRoot, 'runtime', 'resolved.json')
     const env = Object.fromEntries(
       Object.entries(process.env).filter(([name]) => ![
         'VOICE_CHAT_E2E_BACKEND',
@@ -283,12 +285,16 @@ describe('resolved profile reader', () => {
       ].includes(name)),
     ) as NodeJS.ProcessEnv
     env.DS_PROFILE = 'test-mocked'
+    env.DS_ENVIRONMENT_ID = 'test'
+    env.DS_DATA_DIR = dataRoot
 
     await execFileAsync(
       'python3',
-      ['../environments/profile.py', 'resolve', '--report', reportPath],
+      ['../environments/profile.py', 'resolve', '--report', publicReportPath],
       { cwd: process.cwd(), env },
     )
+    reportPath = publicReportPath
+    vi.stubEnv(PROFILE_REPORT_ENV, reportPath)
     const report = await readResolvedProfile()
 
     expect(report.effectiveProfile).toBe('test-mocked')

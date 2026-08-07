@@ -151,6 +151,7 @@ def test_should_apply_one_timing_object_to_verification_preprobe_and_readiness(
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
         orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+        runtime=profile["runtime"],
     )
     store = RunReportStore(tmp_path / "environment-run.json")
     store.save(report)
@@ -198,6 +199,7 @@ def test_should_apply_injected_supervision_interval(
         resolved_profile_path=tmp_path / "resolved-profile.json",
         effective_profile=profile,
         orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+        runtime=profile["runtime"],
     )
     store = RunReportStore(tmp_path / "environment-run.json")
     store.save(report)

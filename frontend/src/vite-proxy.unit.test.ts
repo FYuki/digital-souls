@@ -83,7 +83,8 @@ describe('vite proxy', () => {
   test('should read the resolver-normalized report after the frontend working directory changes', async () => {
     const resolverWorkingDirectory = join(tempDir, 'resolver-cwd')
     const frontendWorkingDirectory = join(tempDir, 'frontend')
-    const relativeReportPath = join('reports', 'run.json')
+    const dataRoot = join(resolverWorkingDirectory, 'runtime-data')
+    const relativeReportPath = join('runtime-data', 'runtime', 'run.json')
     await mkdir(resolverWorkingDirectory)
     await mkdir(frontendWorkingDirectory)
     const resolverPath = join(process.cwd(), '..', 'environments', 'profile.py')
@@ -98,6 +99,8 @@ describe('vite proxy', () => {
     ]) {
       delete resolverEnvironment[key]
     }
+    resolverEnvironment.DS_ENVIRONMENT_ID = 'test'
+    resolverEnvironment.DS_DATA_DIR = dataRoot
     const normalizedReportPath = execFileSync(
       'python3',
       [

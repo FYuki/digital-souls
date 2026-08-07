@@ -26,6 +26,10 @@ dogfoodのFrontend、Backend、SQLite、Chromaをテスト対象またはfixture
 - Ollama／VOICEVOXを共通推論サービスとして実接続する場合も、テストrunはそのprocessを所有・停止しない
 - 実接続証跡へdogfoodの会話本文、prompt、SQLite row、Chroma documentを複製しない
 
+pytest fixtureは各テストの一時ディレクトリへ`DS_ENVIRONMENT_ID=test`と`DS_DATA_DIR`を設定し、
+identity markerを初期化する。Playwrightもスイートごとに独立したtest data rootを使い、環境reportは
+その`runtime/standalone/`配下へ限定する。fixture開始時にdogfood環境IDを検出した場合はfail closedする。
+
 Issue #56で、dogfood稼働中のintegration testとcleanupを含む横断受入を実施する。
 環境分離の正本は`docs/decisions/local-dogfood-environment-2026-08.md`とする。
 

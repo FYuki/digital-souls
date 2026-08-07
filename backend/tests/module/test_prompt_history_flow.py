@@ -393,6 +393,7 @@ def test_runtime_should_inject_history_when_rag_is_disabled(
             memory_policy=None,
             privacy_scanner=None,
             prompt_config=prompt_config,
+            chroma_path=Path("/test/runtime-data/chroma"),
         ),
         _IgnoringTaskQueue(),
         _RuntimeHistoryService(session),

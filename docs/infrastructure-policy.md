@@ -49,6 +49,11 @@ dogfood構成はIssue #50で実装する。完了までは現行`dev` Profileを
 dogfoodは独立cloneを明示deployで更新し、mainへのmergeだけでは実行commitを変更しない。
 SQLiteとChromaはリポジトリ外のdogfood専用data rootへ置き、環境identity不一致を起動前に拒否する。
 
+全環境の永続・実行データは`DS_DATA_DIR`を唯一のdata rootとし、SQLiteを
+`conversation-history.db`、Chromaを`chroma/`、runtime reportを`runtime/`、cacheを`cache/`へ置く。
+`.environment-identity.json`と`DS_ENVIRONMENT_ID`（`dev` / `test` / `dogfood`）をストア初期化前に
+照合する。dogfoodではリポジトリ内data root、dev／testではdogfood markerを拒否する。
+
 ## Wave 2との関係
 
 Issue #22の完了後、Issue #50のdogfood分離を完了してから#33以降を再開する。

@@ -6,13 +6,13 @@ from pathlib import Path
 import pytest
 
 from environment_constants import DEPENDENCY_NAMES
-from tests.environment_test_support import resolved_profile
+from tests.environment_test_support import resolved_profile, resolved_runtime_paths
 
 
 def test_should_register_adapters_and_dependency_order_in_one_registry(tmp_path: Path):
     from service_registry import create_service_registry
 
-    registry = create_service_registry(tmp_path)
+    registry = create_service_registry(tmp_path, resolved_runtime_paths(tmp_path))
 
     assert set(registry.services) == set(DEPENDENCY_NAMES)
     assert registry.prepare_order == ("backend", "frontend")
@@ -28,7 +28,9 @@ def test_should_inject_one_command_runner_into_every_concrete_adapter(tmp_path: 
 
     runner = RecordingRunner()
 
-    registry = create_service_registry(tmp_path, runner=runner)
+    registry = create_service_registry(
+        tmp_path, resolved_runtime_paths(tmp_path), runner=runner
+    )
 
     adapters = [
         registry.services[name].adapter
@@ -67,7 +69,9 @@ def test_should_select_only_enabled_runtime_services(tmp_path: Path):
         "chroma": {"mode": "disabled", "source": None},
     }
 
-    runtime = resolve_runtime_services(profile, create_service_registry(tmp_path))
+    runtime = resolve_runtime_services(
+        profile, create_service_registry(tmp_path, resolved_runtime_paths(tmp_path))
+    )
 
     assert runtime.start_order == ("frontend",)
 
@@ -81,7 +85,7 @@ def test_should_derive_backend_operation_context_from_registry_containment(tmp_p
     )
 
     profile = resolved_profile()
-    original = create_service_registry(tmp_path)
+    original = create_service_registry(tmp_path, resolved_runtime_paths(tmp_path))
     whisper = original.services["whisper"]
     services = {
         **original.services,

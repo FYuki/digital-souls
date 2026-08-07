@@ -617,7 +617,9 @@ class TestRuntimeConfiguration:
         def executor_factory(*args, **kwargs):
             return executor
 
-        def fail_config_resolution(_policy, _privacy_scanner, _prompt_config):
+        def fail_config_resolution(
+            _policy, _privacy_scanner, _prompt_config, _runtime_paths
+        ):
             raise ValueError("invalid memory policy")
 
         monkeypatch.setattr(main, "ThreadPoolExecutor", executor_factory)

@@ -2,7 +2,6 @@
 
 PROFILE_LIBRARY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILE_RESOLVER="$PROFILE_LIBRARY_DIR/../../environments/profile.py"
-PROFILE_DEFAULT_REPORT="$PROFILE_LIBRARY_DIR/../../frontend/test-results/resolved-profile.json"
 
 profile_get() {
   python3 "$PROFILE_RESOLVER" get --report "$DS_PROFILE_REPORT" --path "$1"
@@ -16,7 +15,6 @@ profile_resolve() {
   local default_profile="$1"
   local report_path
   report_path="$(python3 "$PROFILE_RESOLVER" resolve \
-    --default-report "$PROFILE_DEFAULT_REPORT" \
     --default-profile "$default_profile")" || return $?
   export DS_PROFILE_REPORT="$report_path"
   profile_export_derived_environment
@@ -43,11 +41,15 @@ profile_export_derived_environment() {
   local model_environment_keys
   local key
   local value
+  local environment_id
+  local data_dir
   model_environment_keys="$(python3 "$PROFILE_RESOLVER" model-environment-keys)" || return $?
   rag_enabled="$(profile_get derivedEnvironment.RAG_ENABLED)" || return $?
   ollama_mode="$(profile_get dependencies.ollama.mode)" || return $?
   voicevox_mode="$(profile_get dependencies.voicevox.mode)" || return $?
   backend_mode="$(profile_get dependencies.backend.mode)" || return $?
+  environment_id="$(profile_get derivedEnvironment.DS_ENVIRONMENT_ID)" || return $?
+  data_dir="$(profile_get derivedEnvironment.DS_DATA_DIR)" || return $?
   if [ "$ollama_mode" = "real" ]; then
     ollama_base_url="$(profile_get derivedEnvironment.OLLAMA_BASE_URL)" || return $?
   fi
@@ -63,6 +65,8 @@ profile_export_derived_environment() {
     unset "$key"
   done
   export RAG_ENABLED="$rag_enabled"
+  export DS_ENVIRONMENT_ID="$environment_id"
+  export DS_DATA_DIR="$data_dir"
   if [ "$ollama_mode" = "real" ]; then
     export OLLAMA_BASE_URL="$ollama_base_url"
   fi

@@ -58,11 +58,15 @@ describe('suite-specific Playwright configuration', () => {
 
   test.each(suites)('$suite fixes its profile, collection root, and report paths', async (suite) => {
     vi.stubEnv('DS_PROFILE', 'caller-must-not-select-a-different-profile')
+    vi.stubEnv('DS_ENVIRONMENT_ID', 'dogfood')
+    vi.stubEnv('DS_DATA_DIR', '/tmp/caller-runtime-data')
     vi.stubEnv('DS_PROFILE_REPORT', '/tmp/caller-profile.json')
     vi.stubEnv('DS_ENVIRONMENT_RUN_REPORT', '/tmp/caller-environment.json')
 
     const config = await loadConfig(suite.config)
     const resultDir = join(process.cwd(), 'test-results', suite.suite)
+    const dataRoot = join(process.cwd(), 'test-results', 'runtime-data', suite.suite)
+    const runtimeDir = join(dataRoot, 'runtime', 'standalone')
 
     expect(config.testDir).toBe(suite.testDir)
     expect(config.outputDir).toBe(join(
@@ -72,8 +76,10 @@ describe('suite-specific Playwright configuration', () => {
       suite.suite,
     ))
     expect(process.env.DS_PROFILE).toBe(suite.profile)
-    expect(process.env.DS_PROFILE_REPORT).toBe(join(resultDir, 'resolved-profile.json'))
-    expect(process.env.DS_ENVIRONMENT_RUN_REPORT).toBe(join(resultDir, 'environment-run.json'))
+    expect(process.env.DS_ENVIRONMENT_ID).toBe('test')
+    expect(process.env.DS_DATA_DIR).toBe(dataRoot)
+    expect(process.env.DS_PROFILE_REPORT).toBe(join(runtimeDir, 'resolved-profile.json'))
+    expect(process.env.DS_ENVIRONMENT_RUN_REPORT).toBe(join(runtimeDir, 'environment-run.json'))
     expect(config.reporter).toEqual(expect.arrayContaining([
       ['json', { outputFile: join(resultDir, 'playwright-results.json') }],
       ['./playwright/suite-reporter-entrypoint.ts', {
@@ -84,14 +90,17 @@ describe('suite-specific Playwright configuration', () => {
 
   test.each(suites)('$suite uses the environment startup boundary without reusing a server', async (suite) => {
     const config = await loadConfig(suite.config)
-    const resultDir = join(process.cwd(), 'test-results', suite.suite)
+    const dataRoot = join(process.cwd(), 'test-results', 'runtime-data', suite.suite)
+    const runtimeDir = join(dataRoot, 'runtime', 'standalone')
 
     expect(config.webServer).toEqual(expect.objectContaining({
       command: '../environments/up.sh',
       env: {
         DS_PROFILE: suite.profile,
-        DS_PROFILE_REPORT: join(resultDir, 'resolved-profile.json'),
-        DS_ENVIRONMENT_RUN_REPORT: join(resultDir, 'environment-run.json'),
+        DS_ENVIRONMENT_ID: 'test',
+        DS_DATA_DIR: dataRoot,
+        DS_PROFILE_REPORT: join(runtimeDir, 'resolved-profile.json'),
+        DS_ENVIRONMENT_RUN_REPORT: join(runtimeDir, 'environment-run.json'),
       },
       reuseExistingServer: false,
       timeout: 600_000,

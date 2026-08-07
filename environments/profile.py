@@ -13,6 +13,8 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app.model_settings import MODEL_ENVIRONMENT_KEYS
+from app.runtime_data_root import initialize_runtime_data_root
+from app.runtime_paths import resolve_runtime_paths
 from profile_report import (
     create_legacy_report,
     load_resolved_report,
@@ -44,8 +46,16 @@ def _parser() -> argparse.ArgumentParser:
 
 def _resolve_command(arguments: argparse.Namespace) -> None:
     env = dict(os.environ)
-    report_path, legacy_path = resolve_report_paths(arguments.report, env, arguments.default_report)
-    report = resolve_profile(env, arguments.default_profile)
+    repository_root = Path(__file__).resolve().parent.parent
+    runtime_paths = resolve_runtime_paths(env, repository_root)
+    initialize_runtime_data_root(runtime_paths, repository_root)
+    report_path, legacy_path = resolve_report_paths(
+        arguments.report,
+        env,
+        arguments.default_report,
+        runtime_paths,
+    )
+    report = resolve_profile(env, arguments.default_profile, runtime_paths)
     write_reports(report_path, report, legacy_path, create_legacy_report(report))
     for warning in report["compatibility"]["warnings"]:
         print(f"WARNING: {warning}", file=sys.stderr)

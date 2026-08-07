@@ -116,7 +116,7 @@ export default class SuiteReporter implements Reporter {
 
   async onEnd(result: FullResult): Promise<void> {
     const testStatus = result.status === 'passed' ? 'passed' : 'failed'
-    const environmentReportPath = join(this.suite.resultDir, ENVIRONMENT_REPORT_FILE)
+    const environmentReportPath = join(this.suite.runtimeDir, ENVIRONMENT_REPORT_FILE)
     await this.recordTestResult(environmentReportPath, testStatus, result.status)
     const reportText = await this.readEnvironmentReport(environmentReportPath, testStatus)
     const reportValue = await this.parseEnvironmentReportJson(reportText, testStatus)
