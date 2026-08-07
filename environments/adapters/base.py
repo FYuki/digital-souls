@@ -202,7 +202,19 @@ def _process_identity(
     return identity
 
 
-def require_managed_endpoint(
+def require_resolved_managed_endpoint(
+    dependency: Mapping[str, object], *, service: str
+) -> tuple[str, int]:
+    host = dependency.get("host")
+    port = dependency.get("port")
+    if not isinstance(host, str) or not host:
+        raise AdapterError(f"{service} resolved host is required")
+    if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+        raise AdapterError(f"{service} resolved port is required")
+    return host, port
+
+
+def require_fixed_managed_endpoint(
     dependency: Mapping[str, object], *, service: str, port: int
 ) -> tuple[str, int]:
     base_url = dependency.get("baseUrl")
@@ -218,9 +230,7 @@ def require_managed_endpoint(
         or parsed.fragment
         or parsed.username is not None
     ):
-        raise AdapterError(
-            f"{service} managed baseUrl must be http://localhost:{port} or http://127.0.0.1:{port}"
-        )
+        raise AdapterError(f"{service} managed endpoint is invalid")
     return parsed.hostname, parsed.port
 
 

@@ -12,7 +12,7 @@ from adapters.base import (
     StartSpecification,
     VerificationResult,
     command_succeeded,
-    require_managed_endpoint,
+    require_resolved_managed_endpoint,
 )
 
 
@@ -23,7 +23,7 @@ class FrontendAdapter(ProcessServiceOperations):
     def verify(
         self, dependency: Mapping[str, object], context: OperationContext
     ) -> VerificationResult:
-        require_managed_endpoint(dependency, service="frontend", port=5173)
+        require_resolved_managed_endpoint(dependency, service="frontend")
         frontend_dir = self.root_dir / "frontend"
         checks = (
             Check(
@@ -50,7 +50,7 @@ class FrontendAdapter(ProcessServiceOperations):
     def prepare(
         self, dependency: Mapping[str, object], context: OperationContext
     ) -> None:
-        require_managed_endpoint(dependency, service="frontend", port=5173)
+        require_resolved_managed_endpoint(dependency, service="frontend")
         frontend_dir = self.root_dir / "frontend"
         if not (frontend_dir / "node_modules").is_dir():
             result = self.runner.run(("npm", "install", "--prefix", str(frontend_dir)), self.root_dir)
@@ -58,7 +58,7 @@ class FrontendAdapter(ProcessServiceOperations):
                 raise RuntimeError(f"frontend dependency installation failed: {result.get('stderr', '')}")
 
     def start_specification(self, dependency: Mapping[str, object]) -> StartSpecification:
-        host, port = require_managed_endpoint(dependency, service="frontend", port=5173)
+        host, port = require_resolved_managed_endpoint(dependency, service="frontend")
         frontend_dir = self.root_dir / "frontend"
         return StartSpecification(
             command=(

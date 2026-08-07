@@ -10,6 +10,7 @@ from app.model_settings import (
 from app.runtime_data_root import initialize_runtime_data_root
 from app.runtime_paths import RuntimePaths
 from adapters.base import (
+    AdapterError,
     Check,
     CommandRunner,
     OperationContext,
@@ -17,7 +18,7 @@ from adapters.base import (
     StartSpecification,
     VerificationResult,
     command_succeeded,
-    require_managed_endpoint,
+    require_resolved_managed_endpoint,
 )
 
 
@@ -114,7 +115,7 @@ class BackendAdapter(ProcessServiceOperations):
         dependency: Mapping[str, object],
         context: OperationContext,
     ) -> VerificationResult:
-        require_managed_endpoint(dependency, service="backend", port=8000)
+        require_resolved_managed_endpoint(dependency, service="backend")
         venv = self.root_dir / "backend" / ".venv"
         setup_launcher = self.root_dir / "scripts" / "setup-backend.sh"
         start_launcher = self.root_dir / "scripts" / "start-backend.sh"
@@ -184,7 +185,7 @@ class BackendAdapter(ProcessServiceOperations):
         dependency: Mapping[str, object],
         context: OperationContext,
     ) -> None:
-        require_managed_endpoint(dependency, service="backend", port=8000)
+        require_resolved_managed_endpoint(dependency, service="backend")
         initialize_runtime_data_root(self._runtime_paths, self.root_dir)
         result = self.runner.run((str(self.root_dir / "scripts" / "setup-backend.sh"),), self.root_dir)
         if not command_succeeded(result):
@@ -210,8 +211,20 @@ class BackendAdapter(ProcessServiceOperations):
             self._runtime_paths.chroma_path.mkdir(parents=True, exist_ok=True)
 
     def start_specification(self, dependency: Mapping[str, object]) -> StartSpecification:
-        require_managed_endpoint(dependency, service="backend", port=8000)
+        host, port = require_resolved_managed_endpoint(dependency, service="backend")
+        reload_enabled = dependency.get("reload")
+        if not isinstance(reload_enabled, bool):
+            raise AdapterError("backend resolved reload is required")
+        command = [
+            str(self.root_dir / "scripts" / "start-backend.sh"),
+            "--host",
+            host,
+            "--port",
+            str(port),
+        ]
+        if reload_enabled:
+            command.append("--reload")
         return StartSpecification(
-            command=(str(self.root_dir / "scripts" / "start-backend.sh"),),
+            command=tuple(command),
             cwd=self.root_dir,
         )

@@ -55,9 +55,9 @@ network namespace、CPU、kernel、memory、swapを共有するため、別WSL�
 
 FrontendとBackendはloopbackだけへbindする。LAN公開、TLS、認証は別の判断とする。
 
-OllamaとVOICEVOXはdogfood側が共通推論サービスとして所有する。dev／TAKTは起動済みendpointを
-external dependencyとして利用し、環境cleanupで停止しない。GPU、CPU、memoryは共有資源として
-競合し得るため、並行稼働テストで観測する。
+OllamaとVOICEVOXはdogfoodのenvironment runとは別の共通推論サービスとして運用する。
+dogfood Profileは両者をexternal dependencyとして扱い、dogfoodの所有reportへ登録せず、
+stop／cleanupでも停止しない。GPU、CPU、memoryは共有資源として競合し得るため、並行稼働テストで観測する。
 
 ### 3. codeとdeployを分ける
 

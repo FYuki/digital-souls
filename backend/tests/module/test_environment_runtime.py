@@ -173,7 +173,7 @@ def test_should_run_resolved_profile_through_ready_and_owned_cleanup(
         store=store,
         report=report,
         timing=EnvironmentTiming(),
-        ready_gate_url="http://127.0.0.1:0/ready",
+        ready_gate={"baseUrl": "http://127.0.0.1:0", "host": "127.0.0.1", "port": 0},
         was_interrupted=lambda: False,
         registry=single_adapter_registry("frontend", FakeFrontendOperations()),
     )
@@ -230,7 +230,7 @@ def test_should_preserve_playwright_result_written_after_ready_gate_opens(
         store=store,
         report=report,
         timing=EnvironmentTiming(),
-        ready_gate_url="http://127.0.0.1:0/ready",
+        ready_gate={"baseUrl": "http://127.0.0.1:0", "host": "127.0.0.1", "port": 0},
         was_interrupted=lambda: False,
         registry=single_adapter_registry("frontend", FakeFrontendOperations()),
     )
@@ -292,7 +292,7 @@ def test_should_finalize_report_and_stop_owned_service_when_ready_gate_close_fai
         store=store,
         report=report,
         timing=EnvironmentTiming(),
-        ready_gate_url="http://127.0.0.1:0/ready",
+        ready_gate={"baseUrl": "http://127.0.0.1:0", "host": "127.0.0.1", "port": 0},
         was_interrupted=lambda: False,
         registry=single_adapter_registry("frontend", operations),
     )
@@ -380,7 +380,7 @@ def test_should_stop_owned_service_when_cleanup_phase_update_fails(tmp_path: Pat
         store=store,
         report=report,
         timing=EnvironmentTiming(),
-        ready_gate_url="http://127.0.0.1:0/ready",
+        ready_gate={"baseUrl": "http://127.0.0.1:0", "host": "127.0.0.1", "port": 0},
         was_interrupted=lambda: False,
         registry=single_adapter_registry("frontend", operations),
     )
@@ -439,7 +439,7 @@ def test_should_persist_started_ownership_before_delivering_pending_signal(tmp_p
         store=store,
         report=report,
         timing=EnvironmentTiming(),
-        ready_gate_url="http://127.0.0.1:0/ready",
+        ready_gate={"baseUrl": "http://127.0.0.1:0", "host": "127.0.0.1", "port": 0},
         was_interrupted=lambda: False,
         registry=single_adapter_registry("frontend", InterruptingOperations()),
     )
@@ -524,7 +524,7 @@ def test_should_persist_in_memory_ownership_in_final_report_when_start_update_fa
         store=store,
         report=report,
         timing=EnvironmentTiming(),
-        ready_gate_url="http://127.0.0.1:0/ready",
+        ready_gate={"baseUrl": "http://127.0.0.1:0", "host": "127.0.0.1", "port": 0},
         was_interrupted=lambda: False,
         registry=single_adapter_registry("frontend", operations),
     )
@@ -628,7 +628,7 @@ def test_should_persist_external_probe_observation_when_verification_fails(
         store=store,
         report=report,
         timing=EnvironmentTiming(),
-        ready_gate_url="http://127.0.0.1:0/ready",
+        ready_gate={"baseUrl": "http://127.0.0.1:0", "host": "127.0.0.1", "port": 0},
         was_interrupted=lambda: False,
         registry=single_adapter_registry("frontend", FakeFrontendOperations()),
     )
@@ -689,7 +689,7 @@ def test_should_fail_verification_before_start_for_unpreparable_dependency(
         store=store,
         report=report,
         timing=EnvironmentTiming(),
-        ready_gate_url="http://127.0.0.1:0/ready",
+        ready_gate={"baseUrl": "http://127.0.0.1:0", "host": "127.0.0.1", "port": 0},
         was_interrupted=lambda: False,
         registry=single_adapter_registry("frontend", FakeFrontendOperations()),
     )
@@ -745,7 +745,7 @@ def test_should_reach_backend_prepare_when_whisper_cache_is_missing(
         store=store,
         report=report,
         timing=EnvironmentTiming(),
-        ready_gate_url="http://127.0.0.1:0/ready",
+        ready_gate={"baseUrl": "http://127.0.0.1:0", "host": "127.0.0.1", "port": 0},
         was_interrupted=lambda: False,
         registry=single_adapter_registry("backend", adapter),
     )
@@ -809,7 +809,7 @@ def test_should_persist_ollama_observation_before_model_validation_failure(
         store=store,
         report=report,
         timing=EnvironmentTiming(),
-        ready_gate_url="http://127.0.0.1:0/ready",
+        ready_gate={"baseUrl": "http://127.0.0.1:0", "host": "127.0.0.1", "port": 0},
         was_interrupted=lambda: False,
         registry=single_adapter_registry("ollama", adapter),
     )
@@ -880,7 +880,7 @@ def test_should_persist_ollama_observation_before_tags_request_failure(
         store=store,
         report=report,
         timing=EnvironmentTiming(),
-        ready_gate_url="http://127.0.0.1:0/ready",
+        ready_gate={"baseUrl": "http://127.0.0.1:0", "host": "127.0.0.1", "port": 0},
         was_interrupted=lambda: False,
         registry=single_adapter_registry("ollama", OllamaAdapter(tmp_path)),
     )
@@ -947,7 +947,7 @@ def test_should_detect_later_registered_process_exit_during_readiness(
         store=store,
         report=report,
         timing=EnvironmentTiming(),
-        ready_gate_url="http://127.0.0.1:0/ready",
+        ready_gate={"baseUrl": "http://127.0.0.1:0", "host": "127.0.0.1", "port": 0},
         was_interrupted=lambda: False,
         registry=_two_process_registry(),
     )
@@ -998,7 +998,7 @@ def test_should_not_report_service_exit_as_failure_when_stop_is_requested_during
         store=store,
         report=report,
         timing=EnvironmentTiming(),
-        ready_gate_url="http://127.0.0.1:0/ready",
+        ready_gate={"baseUrl": "http://127.0.0.1:0", "host": "127.0.0.1", "port": 0},
         was_interrupted=lambda: stop_requested,
         registry=single_adapter_registry("frontend", StopRaceOperations()),
     )
@@ -1055,7 +1055,7 @@ def test_should_reuse_ollama_through_runtime_without_starting_placeholder(
         store=store,
         report=report,
         timing=EnvironmentTiming(),
-        ready_gate_url="http://127.0.0.1:0/ready",
+        ready_gate={"baseUrl": "http://127.0.0.1:0", "host": "127.0.0.1", "port": 0},
         was_interrupted=lambda: False,
         registry=single_adapter_registry("ollama", adapter),
     )
@@ -1114,7 +1114,7 @@ def test_should_not_invoke_docker_for_external_voicevox_runtime(
         store=store,
         report=report,
         timing=EnvironmentTiming(),
-        ready_gate_url="http://127.0.0.1:0/ready",
+        ready_gate={"baseUrl": "http://127.0.0.1:0", "host": "127.0.0.1", "port": 0},
         was_interrupted=lambda: False,
         registry=single_adapter_registry("voicevox", adapter),
     )

@@ -17,7 +17,7 @@ from adapters.base import (
     SubprocessRunner,
     VerificationResult,
     command_succeeded,
-    require_managed_endpoint,
+    require_fixed_managed_endpoint,
 )
 from environment_constants import VOICEVOX_CONTAINER_NAME, VOICEVOX_SETUP_COMMAND
 
@@ -79,7 +79,7 @@ class VoicevoxAdapter(HttpServiceOperations):
     def verify(
         self, dependency: Mapping[str, object], context: OperationContext
     ) -> VerificationResult:
-        require_managed_endpoint(dependency, service="voicevox", port=50021)
+        require_fixed_managed_endpoint(dependency, service="voicevox", port=50021)
         if shutil.which("docker") is None:
             classification = "preparation_required"
             message = "Docker command is required"
@@ -101,12 +101,12 @@ class VoicevoxAdapter(HttpServiceOperations):
     def prepare(
         self, dependency: Mapping[str, object], context: OperationContext
     ) -> None:
-        require_managed_endpoint(dependency, service="voicevox", port=50021)
+        require_fixed_managed_endpoint(dependency, service="voicevox", port=50021)
 
     def start(
         self, dependency: Mapping[str, object], environment: Mapping[str, str]
     ) -> ServiceStartResult:
-        require_managed_endpoint(dependency, service="voicevox", port=50021)
+        require_fixed_managed_endpoint(dependency, service="voicevox", port=50021)
         identity, running = self._inspect()
         if running:
             return ServiceStartResult(

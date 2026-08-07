@@ -33,7 +33,10 @@ def classify_failure(phase: str) -> dict[str, str]:
 
 
 def classify_preprobe(
-    dependency: Mapping[str, object], observation: Mapping[str, object]
+    dependency: Mapping[str, object],
+    observation: Mapping[str, object],
+    *,
+    exclusive: bool = True,
 ) -> PreprobeResult:
     source = dependency.get("source")
     ready = observation.get("result") == "ready"
@@ -41,6 +44,8 @@ def classify_preprobe(
         return PreprobeResult("external", None if ready else "readiness")
     if source != "managed":
         raise ValueError("pre-probe only accepts managed or external HTTP services")
+    if ready and exclusive:
+        return PreprobeResult("endpoint_conflict", "startup")
     if ready:
         return PreprobeResult("reused", None)
     return PreprobeResult("start_required", None)

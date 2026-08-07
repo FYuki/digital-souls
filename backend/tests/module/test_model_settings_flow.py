@@ -299,7 +299,7 @@ def test_should_only_pull_the_profile_model_when_managed_ollama_is_missing_it(
         profile_path=tmp_path / "resolved-profile.json",
         store=store,
         report=current_report,
-        ready_gate_url="http://127.0.0.1:0/ready",
+        ready_gate={"baseUrl": "http://127.0.0.1:0", "host": "127.0.0.1", "port": 0},
         was_interrupted=lambda: False,
         registry=registry,
         timing=EnvironmentTiming(),

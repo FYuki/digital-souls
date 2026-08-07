@@ -6,10 +6,29 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from tests.environment_entrypoint_test_support import write_executable
 
 
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
+
+
+def _start_command(start: Path) -> list[str]:
+    return [str(start), "--host", "localhost", "--port", "8000", "--reload"]
+
+
+def _dogfood_start_command(start: Path) -> list[str]:
+    return [str(start), "--host", "localhost", "--port", "18000"]
+
+
+def _profile_environment(profile_name: str) -> dict[str, str]:
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in {"DS_PROFILE", "DS_PROFILE_REPORT"}
+    }
+    return {**environment, "DS_PROFILE": profile_name}
 
 
 def _copy_backend_scripts(tmp_path: Path) -> tuple[Path, Path, Path]:
@@ -71,7 +90,7 @@ def test_should_start_prepared_backend_as_foreground_process(tmp_path: Path):
     pid_log = tmp_path / "uvicorn.pid"
     write_executable(venv_bin / "uvicorn", f'printf "%s" "$$" > "{pid_log}"')
 
-    process = subprocess.Popen([str(start)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process = subprocess.Popen(_start_command(start), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     process.communicate(timeout=10)
 
     assert process.returncode == 0
@@ -92,15 +111,78 @@ def test_should_delegate_complete_uvicorn_arguments(tmp_path: Path):
         "PY\n",
     )
 
-    result = subprocess.run([str(start)], capture_output=True, text=True)
+    result = subprocess.run(_start_command(start), capture_output=True, text=True)
 
     assert result.returncode == 0, result.stderr
     assert json.loads(arguments_log.read_text(encoding="utf-8")) == [
         "--app-dir",
         str(backend.parent / "scripts" / ".." / "backend"),
         "app.main:app",
+        "--host",
+        "localhost",
+        "--port",
+        "8000",
         "--reload",
     ]
+
+
+def test_should_delegate_dogfood_uvicorn_arguments_without_reload(tmp_path: Path):
+    _setup, start, backend = _copy_backend_scripts(tmp_path)
+    venv_bin = backend / ".venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    (venv_bin / "activate").write_text("", encoding="utf-8")
+    arguments_log = tmp_path / "uvicorn-arguments.json"
+    write_executable(
+        venv_bin / "uvicorn",
+        "python3 - \"$@\" <<'PY'\n"
+        "import json, sys\n"
+        f"json.dump(sys.argv[1:], open({str(arguments_log)!r}, 'w'))\n"
+        "PY\n",
+    )
+
+    result = subprocess.run(
+        _dogfood_start_command(start),
+        env=_profile_environment("dogfood"),
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    arguments = json.loads(arguments_log.read_text(encoding="utf-8"))
+    assert arguments == [
+        "--app-dir",
+        str(backend.parent / "scripts" / ".." / "backend"),
+        "app.main:app",
+        "--host",
+        "localhost",
+        "--port",
+        "18000",
+    ]
+    assert all(argument != "--reload" for argument in arguments)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--host", "127.0.0.1", "--port", "18000"],
+        ["--host", "localhost", "--port", "8000"],
+        ["--host", "localhost", "--port", "18000", "--reload"],
+    ],
+)
+def test_should_reject_backend_arguments_that_differ_from_resolved_profile(
+    tmp_path: Path,
+    arguments: list[str],
+) -> None:
+    _setup, start, _backend = _copy_backend_scripts(tmp_path)
+
+    result = subprocess.run(
+        [str(start), *arguments],
+        env=_profile_environment("dogfood"),
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
 
 
 def test_should_preserve_callers_pythonpath_when_starting_backend(tmp_path: Path):
@@ -114,7 +196,7 @@ def test_should_preserve_callers_pythonpath_when_starting_backend(tmp_path: Path
     )
     environment = {**os.environ, "PYTHONPATH": "/caller/import/root"}
 
-    result = subprocess.run([str(start)], env=environment, capture_output=True, text=True)
+    result = subprocess.run(_start_command(start), env=environment, capture_output=True, text=True)
 
     assert result.returncode == 0, result.stderr
     assert pythonpath_log.read_text(encoding="utf-8") == "/caller/import/root"
@@ -163,7 +245,7 @@ def test_should_exclude_repository_local_whisper_cache_from_git():
 def test_should_fail_fast_when_backend_environment_is_not_prepared(tmp_path: Path):
     _setup, start, _backend = _copy_backend_scripts(tmp_path)
 
-    result = subprocess.run([str(start)], capture_output=True, text=True)
+    result = subprocess.run(_start_command(start), capture_output=True, text=True)
 
     assert result.returncode != 0
     assert "setup-backend.sh" in result.stderr
@@ -176,7 +258,7 @@ def test_should_propagate_backend_process_status(tmp_path: Path):
     (venv_bin / "activate").write_text("", encoding="utf-8")
     write_executable(venv_bin / "uvicorn", "exit 29\n")
 
-    result = subprocess.run([str(start)], capture_output=True, text=True)
+    result = subprocess.run(_start_command(start), capture_output=True, text=True)
 
     assert result.returncode == 29
 
@@ -253,7 +335,7 @@ def test_should_preserve_resolved_profile_values_when_dotenv_conflicts(tmp_path:
     assert resolve.returncode == 0, resolve.stderr
 
     result = subprocess.run(
-        [str(start)],
+        _start_command(start),
         env={
             **os.environ,
             "DS_ENVIRONMENT_ID": "test",
@@ -311,7 +393,7 @@ def test_should_resolve_dotenv_model_settings_before_starting_backend(tmp_path: 
     }
 
     result = subprocess.run(
-        [str(start)], env=environment, capture_output=True, text=True
+        _start_command(start), env=environment, capture_output=True, text=True
     )
 
     assert result.returncode == 0, result.stderr

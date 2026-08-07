@@ -2,9 +2,10 @@
   "schemaVersion": 1,
   "name": "integration-text",
   "description": "テキストチャットの実サービス統合テスト環境",
+  "readyGate": { "baseUrl": "http://127.0.0.1:4174" },
   "dependencies": {
     "frontend": { "mode": "real", "source": "managed", "baseUrl": "http://localhost:5173", "readinessPath": "/" },
-    "backend": { "mode": "real", "source": "managed", "baseUrl": "http://localhost:8000", "readinessPath": "/" },
+    "backend": { "mode": "real", "source": "managed", "baseUrl": "http://localhost:8000", "readinessPath": "/", "reload": true },
     "ollama": { "mode": "real", "source": "managed", "baseUrl": "http://localhost:11434", "readinessPath": "/api/tags" },
     "voicevox": { "mode": "disabled", "source": null },
     "whisper": { "mode": "disabled", "source": null },

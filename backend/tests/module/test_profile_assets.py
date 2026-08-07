@@ -23,6 +23,24 @@ def _dependencies(profile: dict[str, object]) -> dict[str, dict[str, object]]:
     return cast(dict[str, dict[str, object]], profile["dependencies"])
 
 
+def _compressed_ipv4_embedded_loopback_origins() -> tuple[str, ...]:
+    origins: list[str] = []
+    zero_hextets = ("0", "00", "000", "0000")
+    for before_count in range(6):
+        for after_count in range(6 - before_count):
+            before = ":".join(
+                zero_hextets[index % len(zero_hextets)]
+                for index in range(before_count)
+            )
+            after = "".join(
+                f"{zero_hextets[(before_count + index) % len(zero_hextets)]}:"
+                for index in range(after_count)
+            )
+            host = f"{before}::{after}0.0.0.1" if before else f"::{after}0.0.0.1"
+            origins.append(f"http://[{host}]:8000")
+    return tuple(origins)
+
+
 @pytest.fixture
 def profile_validator() -> Draft202012Validator:
     schema = _read_json(ENVIRONMENTS_DIR / "schemas" / "profile-v1.schema.json")
@@ -83,6 +101,7 @@ def test_should_reject_invalid_dependency_contracts_with_draft_2020_12_validator
     ("base_url", "expected_valid"),
     [
         ("http://localhost:8000", True),
+        ("HTTP://example.com/api", True),
         ("https://example.com/api", True),
         ("http://user:password@localhost:8000", False),
         ("http://localhost:8000?token=secret", False),
@@ -111,6 +130,7 @@ def test_should_apply_the_same_http_url_contract_in_schema_and_central_validator
     candidate = deepcopy(profile)
     _dependencies(candidate)["backend"]["source"] = "external"
     _dependencies(candidate)["backend"]["baseUrl"] = base_url
+    _dependencies(candidate)["backend"].pop("reload")
 
     schema_accepts = not list(profile_validator.iter_errors(candidate))
     try:
@@ -150,6 +170,7 @@ def test_should_apply_the_same_rfc3986_readiness_path_contract(
     backend = _dependencies(candidate)["backend"]
     backend["source"] = "external"
     backend["readinessPath"] = readiness_path
+    backend.pop("reload")
 
     schema_accepts = not list(profile_validator.iter_errors(candidate))
     try:
@@ -192,6 +213,8 @@ def test_should_require_external_source_for_urls_not_managed_by_the_launcher(
     dependency = _dependencies(candidate)[dependency_name]
     dependency["source"] = source
     dependency["baseUrl"] = base_url
+    if dependency_name == "backend" and source == "external":
+        dependency.pop("reload")
 
     schema_accepts = not list(profile_validator.iter_errors(candidate))
     try:
@@ -202,6 +225,86 @@ def test_should_require_external_source_for_urls_not_managed_by_the_launcher(
 
     assert schema_accepts is expected_valid
     assert central_accepts is expected_valid
+
+
+@pytest.mark.parametrize(
+    ("endpoint_path", "base_url", "expected_valid"),
+    [
+        ("readyGate", "HTTP://localhost:4174", True),
+        ("frontend", "hTtP://localhost:5173", True),
+        ("backend", "Http://localhost:8000", True),
+        ("readyGate", "http://127.1.2.3:1", True),
+        ("frontend", "http://[::1]:65535", True),
+        ("backend", "http://127.255.255.255:18000", True),
+        ("readyGate", "http://[1]:4174", False),
+        ("frontend", "http://[0:0:0:0:0:0:0:1]:5173", True),
+        ("backend", "http://[::01]:8000", True),
+        ("readyGate", "http://[::0.0.0.1]:4174", True),
+        ("frontend", "http://[0:0:0:0:0:0:0.0.0.1]:5173", True),
+        ("backend", "http://[0:0:0:0:0::0.0.0.1]:8000", True),
+        ("readyGate", "http://[::127.0.0.1]:4174", False),
+        ("frontend", "http://[::ffff:127.0.0.1]:5173", False),
+        ("backend", "http://[0:0:0:0:0:0:0.0.0.2]:8000", False),
+        ("readyGate", "http://[::1:0.0.0.1]:4174", False),
+        ("frontend", "http://[::0:00:000:0000:0:0000:0.0.0.1]:5173", False),
+        ("backend", "http://[0:0:0:0:0:0:0:0.0.0.1]:8000", False),
+        ("readyGate", "http://localhost:04174", False),
+        ("frontend", "http://127.0.0.1:05173", False),
+        ("backend", "http://localhost:08000", False),
+        ("readyGate", "http://127.0.0.1:0", False),
+        ("frontend", "http://127.0.0.1:65536", False),
+        ("backend", "http://128.0.0.1:8000", False),
+    ],
+)
+def test_should_apply_managed_endpoint_contract_at_each_profile_entry(
+    profile_validator: Draft202012Validator,
+    profile_module: ModuleType,
+    endpoint_path: str,
+    base_url: str,
+    expected_valid: bool,
+) -> None:
+    profile = _read_json(ENVIRONMENTS_DIR / "profiles" / "integration-voice.json")
+    candidate = deepcopy(profile)
+    if endpoint_path == "readyGate":
+        cast(dict[str, object], candidate["readyGate"])["baseUrl"] = base_url
+    else:
+        _dependencies(candidate)[endpoint_path]["baseUrl"] = base_url
+
+    schema_accepts = not list(profile_validator.iter_errors(candidate))
+    try:
+        profile_module.validate_profile(candidate, "integration-voice")
+        central_accepts = True
+    except profile_module.ProfileError:
+        central_accepts = False
+
+    assert schema_accepts is expected_valid
+    assert central_accepts is expected_valid
+
+
+@pytest.mark.parametrize("endpoint_path", ["readyGate", "frontend", "backend"])
+@pytest.mark.parametrize("base_url", _compressed_ipv4_embedded_loopback_origins())
+def test_should_accept_every_compressed_ipv4_embedded_loopback_at_each_profile_entry(
+    profile_validator: Draft202012Validator,
+    profile_module: ModuleType,
+    endpoint_path: str,
+    base_url: str,
+) -> None:
+    profile = _read_json(ENVIRONMENTS_DIR / "profiles" / "integration-voice.json")
+    candidate = deepcopy(profile)
+    if endpoint_path == "readyGate":
+        cast(dict[str, object], candidate["readyGate"])["baseUrl"] = base_url
+    else:
+        _dependencies(candidate)[endpoint_path]["baseUrl"] = base_url
+
+    schema_accepts = not list(profile_validator.iter_errors(candidate))
+    try:
+        profile_module.validate_profile(candidate, "integration-voice")
+        central_accepts = True
+    except profile_module.ProfileError:
+        central_accepts = False
+
+    assert schema_accepts is True
+    assert central_accepts is True
 
 
 @pytest.mark.parametrize("dependency_name", ["frontend", "backend", "ollama", "voicevox"])

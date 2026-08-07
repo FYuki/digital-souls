@@ -15,6 +15,7 @@ for import_root in (ROOT_DIR, BACKEND_DIR):
 from commands.down_command import down_environment
 from commands.test_result_command import record_playwright_result
 from commands.up_command import up_environment
+from commands.status_command import status_environment
 from commands.verify_command import verify_environment
 from commands.voicevox_command import start_voicevox
 from profile_types import ProfileError
@@ -29,6 +30,8 @@ def _parser() -> argparse.ArgumentParser:
     up.add_argument("--profile-report")
     down = commands.add_parser("down")
     down.add_argument("--run-report")
+    status = commands.add_parser("status")
+    status.add_argument("--run-report")
     verify = commands.add_parser("verify")
     verify.add_argument("--default-profile")
     voicevox = commands.add_parser("voicevox")
@@ -45,6 +48,8 @@ def _dispatch(arguments: argparse.Namespace) -> int:
         return up_environment(ROOT_DIR, arguments)
     if arguments.command == "down":
         return down_environment(ROOT_DIR, arguments.run_report)
+    if arguments.command == "status":
+        return status_environment(ROOT_DIR, arguments.run_report)
     if arguments.command == "voicevox":
         return start_voicevox(ROOT_DIR, arguments.default_profile)
     if arguments.command == "test-result":

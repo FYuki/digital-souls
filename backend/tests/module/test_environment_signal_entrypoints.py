@@ -132,7 +132,6 @@ def test_should_delegate_live_down_cleanup_to_up_even_after_additional_sigterm(
     environment = {
         **os.environ,
         "DS_PROFILE": "test-mocked",
-        "DS_ENVIRONMENT_READY_URL": "http://127.0.0.1:0/ready",
         "TEST_STOP_LOG": str(stop_log),
     }
     process = subprocess.Popen(

@@ -249,7 +249,7 @@ def test_should_mark_environment_ready_when_every_active_http_service_is_ready()
     assert readiness_complete(resolved_profile(), observations) is True
 
 
-def test_should_preprobe_managed_service_into_reused_state():
+def test_should_preprobe_ready_exclusive_managed_service_as_conflict():
     from orchestrator import classify_preprobe
 
     result = classify_preprobe(
@@ -257,7 +257,8 @@ def test_should_preprobe_managed_service_into_reused_state():
         {"result": "ready", "attempts": 1, "elapsedSeconds": 0.001},
     )
 
-    assert result.state == "reused"
+    assert result.state == "endpoint_conflict"
+    assert result.failure_category == "startup"
 
 
 def test_should_preprobe_stopped_managed_service_into_start_required_state():

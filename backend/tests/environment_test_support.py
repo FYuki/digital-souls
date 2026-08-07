@@ -71,6 +71,8 @@ def resolved_profile(profile_name: str = "integration-voice") -> ResolvedReport:
             "baseUrl": "http://localhost:5173",
             "readinessPath": "/",
             "readinessUrl": "http://localhost:5173/",
+            "host": "localhost",
+            "port": 5173,
         },
         "backend": {
             "mode": "real",
@@ -78,6 +80,9 @@ def resolved_profile(profile_name: str = "integration-voice") -> ResolvedReport:
             "baseUrl": "http://localhost:8000",
             "readinessPath": "/",
             "readinessUrl": "http://localhost:8000/",
+            "host": "localhost",
+            "port": 8000,
+            "reload": True,
         },
         "ollama": {
             "mode": "real",
@@ -103,6 +108,11 @@ def resolved_profile(profile_name: str = "integration-voice") -> ResolvedReport:
         "effectiveProfile": profile_name,
         "selectionSource": "DS_PROFILE",
         "profile": {"schemaVersion": 1, "name": profile_name},
+        "readyGate": {
+            "baseUrl": "http://127.0.0.1:4174",
+            "host": "127.0.0.1",
+            "port": 4174,
+        },
         "dependencies": dependencies,
         "capabilities": ["text-chat-real", "voice-chat-real"],
         "derivedEnvironment": {

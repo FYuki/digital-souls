@@ -54,7 +54,7 @@ class EnvironmentRun:
         profile_path: Path,
         store: ReportStore,
         report: dict[str, object],
-        ready_gate_url: str,
+        ready_gate: Mapping[str, object],
         was_interrupted: Callable[[], bool],
         registry: ServiceRegistry,
         timing: EnvironmentTiming,
@@ -71,7 +71,7 @@ class EnvironmentRun:
             raise ValueError("resolved dependencies are required")
         self.dependencies = dependencies
         self.cleanup_failures: list[dict[str, object]] = []
-        self.ready_gate = ReadyGate(ready_gate_url)
+        self.ready_gate = ReadyGate(ready_gate)
         self.ready_gate_open = False
         self.was_interrupted = was_interrupted
 
@@ -125,10 +125,17 @@ class EnvironmentRun:
                     readiness=observation_report,
                 )
             )
-            decision = classify_preprobe(dependency, observation_report)
+            decision = classify_preprobe(
+                dependency,
+                observation_report,
+                exclusive=name in {"frontend", "backend"},
+            )
             decisions[name] = decision.state
             if decision.failure_category is not None:
-                raise RuntimeError(f"external service is not ready: {name}")
+                raise AdapterOperationError(
+                    decision.failure_category,
+                    f"service endpoint is unavailable for this run: {name}",
+                )
             if decision.state == "reused":
                 self._validate_service_readiness(name, dependency)
                 self._update_report(

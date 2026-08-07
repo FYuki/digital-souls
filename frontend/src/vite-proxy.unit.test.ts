@@ -10,11 +10,19 @@ import { API_PROXY_PREFIX, WS_PROXY_PREFIX, createBackendProxy } from '../vite.p
 
 let tempDir: string
 let reportPath: string
+const resolvedReadyGate = {
+  baseUrl: 'http://127.0.0.1:4174',
+  host: '127.0.0.1',
+  port: 4174,
+}
 
 const writeBackendReport = async (
   backend: { mode: 'real' | 'mock' | 'disabled'; baseUrl?: string },
 ) => {
   const realBackend = backend.mode === 'real'
+  const backendEndpoint = realBackend && backend.baseUrl !== undefined
+    ? new URL(backend.baseUrl)
+    : undefined
   await writeReport({
     reportSchemaVersion: 1,
     generatedAt: '2026-07-16T12:00:00+09:00',
@@ -22,11 +30,23 @@ const writeBackendReport = async (
     effectiveProfile: 'test-profile',
     selectionSource: 'DS_PROFILE',
     profile: { schemaVersion: 1, name: 'test-profile' },
+    readyGate: resolvedReadyGate,
     dependencies: {
-      frontend: { mode: 'real', source: 'managed' },
+      frontend: {
+        mode: 'real',
+        source: 'managed',
+        baseUrl: 'http://localhost:5173',
+        host: 'localhost',
+        port: 5173,
+      },
       backend: {
         source: backend.mode === 'mock' ? 'browser' : realBackend ? 'managed' : null,
         ...backend,
+        ...(backendEndpoint === undefined ? {} : {
+          host: backendEndpoint.hostname,
+          port: Number(backendEndpoint.port),
+          reload: true,
+        }),
       },
       ollama: realBackend
         ? { mode: 'real', source: 'managed', baseUrl: 'http://localhost:11434' }
@@ -159,6 +179,7 @@ describe('vite proxy', () => {
     await writeReport({
       reportSchemaVersion: 1,
       effectiveProfile: 'incomplete',
+      readyGate: resolvedReadyGate,
       dependencies: {
         frontend: { mode: 'real', source: 'managed' },
         backend: { mode: 'mock', source: 'browser' },
@@ -178,6 +199,7 @@ describe('vite proxy', () => {
     await writeReport({
       reportSchemaVersion: 1,
       effectiveProfile: 'invalid-source',
+      readyGate: resolvedReadyGate,
       dependencies: {
         frontend: { mode: 'real', source: 'managed' },
         backend: { mode: 'mock' },

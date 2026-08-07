@@ -32,6 +32,11 @@ const createReport = (overrides: Record<string, unknown> = {}) => ({
   effectiveProfile: 'integration-voice',
   selectionSource: 'DS_PROFILE',
   profile: { schemaVersion: 1, name: 'integration-voice' },
+  readyGate: {
+    baseUrl: 'http://127.0.0.1:4174',
+    host: '127.0.0.1',
+    port: 4174,
+  },
   dependencies: {
     frontend: dependency('real', 'managed'),
     backend: dependency('real', 'managed'),
@@ -50,6 +55,37 @@ const createReport = (overrides: Record<string, unknown> = {}) => ({
   compatibility: { usedEnvironmentVariables: [], warnings: [] },
   ...overrides,
 })
+
+const createResolvedEndpointReport = () => {
+  const report = createReport()
+  return createReport({
+    readyGate: {
+      baseUrl: 'http://127.0.0.1:14174',
+      host: '127.0.0.1',
+      port: 14174,
+    },
+    dependencies: {
+      ...report.dependencies,
+      frontend: {
+        ...report.dependencies.frontend,
+        baseUrl: 'http://localhost:15173',
+        host: 'localhost',
+        port: 15173,
+        readinessPath: '/',
+        readinessUrl: 'http://localhost:15173/',
+      },
+      backend: {
+        ...report.dependencies.backend,
+        baseUrl: 'http://localhost:18000',
+        host: 'localhost',
+        port: 18000,
+        reload: false,
+        readinessPath: '/',
+        readinessUrl: 'http://localhost:18000/',
+      },
+    },
+  })
+}
 
 const createIntegrationTextReport = () => {
   const report = createReport()
@@ -89,6 +125,28 @@ describe('resolved profile reader', () => {
     expect(report.effectiveProfile).toBe('integration-voice')
     expect(report.dependencies.backend.mode).toBe('real')
     expect(report.capabilities).toEqual(['text-chat-real', 'voice-chat-real'])
+  })
+
+  test('should retain resolved endpoints and backend reload for runtime consumers', async () => {
+    await writeReport(createResolvedEndpointReport())
+
+    const report = await readResolvedProfile()
+
+    expect(report.dependencies.frontend).toEqual(expect.objectContaining({
+      baseUrl: 'http://localhost:15173',
+      host: 'localhost',
+      port: 15173,
+    }))
+    expect(report.dependencies.backend).toEqual(expect.objectContaining({
+      host: 'localhost',
+      port: 18000,
+      reload: false,
+    }))
+    expect(report.readyGate).toEqual({
+      baseUrl: 'http://127.0.0.1:14174',
+      host: '127.0.0.1',
+      port: 14174,
+    })
   })
 
   test('should fail clearly when DS_PROFILE_REPORT is unset', async () => {
