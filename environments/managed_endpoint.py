@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from ipaddress import ip_address
+from ipaddress import IPv6Address, ip_address
 from urllib.parse import urlsplit
 
 from profile_types import ProfileError
@@ -43,6 +43,9 @@ def _is_loopback(host: str) -> bool:
     if "%" in host:
         return False
     try:
-        return ip_address(host).is_loopback
+        parsed_host = ip_address(host)
     except ValueError:
         return False
+    if isinstance(parsed_host, IPv6Address) and parsed_host.ipv4_mapped is not None:
+        return False
+    return parsed_host.is_loopback
