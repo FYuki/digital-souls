@@ -26,6 +26,7 @@ from profile_types import (
     ResolvedReport,
     RuntimeProjection,
 )
+from managed_endpoint import resolve_managed_http_origin
 from profile_validation import load_profile, validate_http_origin
 from app.model_settings import (
     ModelSettings,
@@ -94,6 +95,7 @@ def _copy_dependency(dependency: Dependency) -> Dependency:
             if "readinessPath" in dependency
             else {}
         ),
+        **({"reload": dependency["reload"]} if "reload" in dependency else {}),
     })
 
 
@@ -111,12 +113,16 @@ def _apply_backend_override(profile: Profile, env: dict[str, str]) -> tuple[Depe
         raise ProfileError(f"{BACKEND_ORIGIN_ENV} requires a real backend")
     overridden = {
         **dependencies,
-        "backend": {**backend, "source": "external", "baseUrl": origin},
+        "backend": {
+            key: value
+            for key, value in {**backend, "source": "external", "baseUrl": origin}.items()
+            if key != "reload"
+        },
     }
     return cast(Dependencies, overridden), [BACKEND_ORIGIN_ENV]
 
 
-def _resolve_dependency(dependency: Dependency) -> ResolvedDependency:
+def _resolve_dependency(name: str, dependency: Dependency) -> ResolvedDependency:
     has_readiness = "baseUrl" in dependency and "readinessPath" in dependency
     readiness = (
         {
@@ -126,13 +132,21 @@ def _resolve_dependency(dependency: Dependency) -> ResolvedDependency:
         if has_readiness
         else {}
     )
-    return cast(ResolvedDependency, {**dependency, **readiness})
+    endpoint = (
+        resolve_managed_http_origin(dependency["baseUrl"], f"dependencies.{name}.baseUrl")
+        if dependency.get("source") == "managed" and name in {"frontend", "backend"}
+        else None
+    )
+    resolved_endpoint = (
+        {"host": endpoint.host, "port": endpoint.port} if endpoint is not None else {}
+    )
+    return cast(ResolvedDependency, {**dependency, **resolved_endpoint, **readiness})
 
 
 def resolve_dependencies(dependencies: Dependencies) -> ResolvedDependencies:
     dependency_map = cast(dict[str, Dependency], dependencies)
     return cast(ResolvedDependencies, {
-        name: _resolve_dependency(dependency)
+        name: _resolve_dependency(name, dependency)
         for name, dependency in dependency_map.items()
     })
 
@@ -207,6 +221,9 @@ def resolve_profile(
     profile = load_profile(selected)
     dependencies, used_override = _apply_backend_override(profile, env)
     resolved_dependencies = resolve_dependencies(dependencies)
+    ready_gate = resolve_managed_http_origin(
+        profile["readyGate"]["baseUrl"], "readyGate.baseUrl"
+    )
     try:
         model_settings = resolve_model_settings(env)
     except ValueError as error:
@@ -218,6 +235,11 @@ def resolve_profile(
         "effectiveProfile": selected,
         "selectionSource": source,
         "profile": {"schemaVersion": 1, "name": profile["name"]},
+        "readyGate": {
+            "baseUrl": ready_gate.base_url,
+            "host": ready_gate.host,
+            "port": ready_gate.port,
+        },
         "dependencies": resolved_dependencies,
         "capabilities": derive_capabilities(resolved_dependencies),
         "derivedEnvironment": {

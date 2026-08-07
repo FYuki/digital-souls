@@ -23,6 +23,7 @@ from profile_types import (
     ResolvedReport,
 )
 from profile_validation import DEPENDENCY_FIELDS, DEPENDENCY_NAMES, validate_profile
+from managed_endpoint import resolve_managed_http_origin
 
 
 REPORT_FIELDS = {
@@ -32,13 +33,14 @@ REPORT_FIELDS = {
     "effectiveProfile",
     "selectionSource",
     "profile",
+    "readyGate",
     "dependencies",
     "capabilities",
     "derivedEnvironment",
     "runtime",
     "compatibility",
 }
-RESOLVED_DEPENDENCY_FIELDS = DEPENDENCY_FIELDS | {"readinessUrl"}
+RESOLVED_DEPENDENCY_FIELDS = DEPENDENCY_FIELDS | {"readinessUrl", "host", "port"}
 SELECTION_SOURCES = {PROFILE_ENV, "default-profile", "legacy-environment"}
 
 
@@ -112,7 +114,9 @@ def _validate_compatibility(value: object) -> None:
         _require_string_list(compatibility[field], f"compatibility.{field}")
 
 
-def _validate_dependencies(value: object, profile_name: str) -> ResolvedDependencies:
+def _validate_dependencies(
+    value: object, profile_name: str, ready_gate_base_url: str
+) -> ResolvedDependencies:
     dependencies = _require_record(value, "dependencies")
     _reject_unknown_fields(dependencies, set(DEPENDENCY_NAMES), "dependencies")
     dependency_records = {
@@ -130,7 +134,7 @@ def _validate_dependencies(value: object, profile_name: str) -> ResolvedDependen
         name: {
             field: field_value
             for field, field_value in dependency.items()
-            if field != "readinessUrl"
+            if field not in {"readinessUrl", "host", "port"}
         }
         for name, dependency in dependency_records.items()
     }
@@ -145,6 +149,7 @@ def _validate_dependencies(value: object, profile_name: str) -> ResolvedDependen
             "schemaVersion": 1,
             "name": profile_name,
             "description": "resolved report",
+            "readyGate": {"baseUrl": ready_gate_base_url},
             "dependencies": unresolved,
         },
         profile_name,
@@ -158,7 +163,28 @@ def _validate_dependencies(value: object, profile_name: str) -> ResolvedDependen
             raise ProfileError(
                 f"dependencies.{name}.readinessUrl must match baseUrl and readinessPath"
             )
+        expected_host = resolved_map[name].get("host")
+        expected_port = resolved_map[name].get("port")
+        actual_host = dependency_records[name].get("host")
+        actual_port = dependency_records[name].get("port")
+        if (expected_host is None and "host" in dependency_records[name]) or actual_host != expected_host:
+            raise ProfileError(f"dependencies.{name}.host must match baseUrl")
+        if (expected_port is None and "port" in dependency_records[name]) or actual_port != expected_port:
+            raise ProfileError(f"dependencies.{name}.port must match baseUrl")
     return resolved
+
+
+def _validate_ready_gate(value: object) -> dict[str, object]:
+    ready_gate = _require_record(value, "readyGate")
+    _reject_unknown_fields(ready_gate, {"baseUrl", "host", "port"}, "readyGate")
+    if set(ready_gate) != {"baseUrl", "host", "port"}:
+        raise ProfileError("readyGate must define baseUrl, host, and port")
+    endpoint = resolve_managed_http_origin(ready_gate["baseUrl"], "readyGate.baseUrl")
+    if ready_gate["host"] != endpoint.host:
+        raise ProfileError("readyGate.host must match baseUrl")
+    if ready_gate["port"] != endpoint.port:
+        raise ProfileError("readyGate.port must match baseUrl")
+    return ready_gate
 
 
 def validate_resolved_report(raw: object) -> ResolvedReport:
@@ -185,7 +211,10 @@ def validate_resolved_report(raw: object) -> ResolvedReport:
     if identity.get("name") != effective_profile:
         raise ProfileError("profile.name must match effectiveProfile")
 
-    dependencies = _validate_dependencies(report["dependencies"], effective_profile)
+    ready_gate = _validate_ready_gate(report["readyGate"])
+    dependencies = _validate_dependencies(
+        report["dependencies"], effective_profile, cast(str, ready_gate["baseUrl"])
+    )
     capabilities = _require_string_list(report["capabilities"], "capabilities")
     if capabilities != derive_capabilities(dependencies):
         raise ProfileError("capabilities must match the resolved dependencies")

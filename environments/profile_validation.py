@@ -6,19 +6,20 @@ from pathlib import Path
 from typing import cast
 from urllib.parse import urlsplit
 
+from managed_endpoint import resolve_managed_http_origin
 from profile_types import Dependencies, Dependency, DependencyMode, DependencySource, Profile, ProfileError
 
 
 PROFILE_SCHEMA_VERSION = 1
 DEPENDENCY_NAMES = ("frontend", "backend", "ollama", "voicevox", "whisper", "chroma")
 DOWNSTREAM_DEPENDENCIES = ("ollama", "voicevox", "whisper", "chroma")
-PROFILE_FIELDS = {"schemaVersion", "name", "description", "dependencies"}
-DEPENDENCY_FIELDS = {"mode", "source", "baseUrl", "readinessPath"}
+PROFILE_FIELDS = {"schemaVersion", "name", "description", "readyGate", "dependencies"}
+DEPENDENCY_FIELDS = {"mode", "source", "baseUrl", "readinessPath", "reload"}
 MODES = {"real", "mock", "disabled"}
 SOURCES = {"managed", "external", "in_process", "browser", None}
 PROFILE_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 HTTP_URL_PATTERN = re.compile(
-    r"^https?://(?:\[(?![^\]]*:::)[0-9A-Fa-f.]*:[0-9A-Fa-f:.]+\]|[^/?#\s:@\[\]]+)"
+    r"^[hH][tT][tT][pP][sS]?://(?:\[(?![^\]]*:::)[0-9A-Fa-f.]*:[0-9A-Fa-f:.]+\]|[^/?#\s:@\[\]]+)"
     r"(?::[0-9]+)?(?:/[^?#\s]*)?$"
 )
 INVALID_PERCENT_ENCODING = re.compile(r"%(?![0-9A-Fa-f]{2})")
@@ -27,16 +28,6 @@ READINESS_PATH_PATTERN = re.compile(
     r"(?:/(?:[A-Za-z0-9._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})*)*$|^/$"
 )
 MANAGED_HTTP_DEPENDENCY_CONTRACTS = {
-    "frontend": ({"http://localhost:5173", "http://localhost:5173/"}, "/"),
-    "backend": (
-        {
-            "http://127.0.0.1:8000",
-            "http://127.0.0.1:8000/",
-            "http://localhost:8000",
-            "http://localhost:8000/",
-        },
-        "/",
-    ),
     "ollama": (
         {
             "http://127.0.0.1:11434",
@@ -120,15 +111,24 @@ def _validate_mode_source(name: str, dependency: Dependency, path: str) -> None:
         if "readinessPath" not in dependency:
             raise ProfileError(f"{path}.readinessPath is required for real/{source}")
     if mode == "real" and source == "managed":
-        managed_base_urls, managed_readiness_path = MANAGED_HTTP_DEPENDENCY_CONTRACTS[name]
-        if dependency["baseUrl"] not in managed_base_urls:
-            raise ProfileError(
-                f"{path}.baseUrl must identify the local service managed by its launcher"
-            )
+        if name in {"frontend", "backend"}:
+            resolve_managed_http_origin(dependency["baseUrl"], f"{path}.baseUrl")
+            managed_readiness_path = "/"
+        else:
+            managed_base_urls, managed_readiness_path = MANAGED_HTTP_DEPENDENCY_CONTRACTS[name]
+            if dependency["baseUrl"] not in managed_base_urls:
+                raise ProfileError(
+                    f"{path}.baseUrl must identify the local service managed by its launcher"
+                )
         if dependency["readinessPath"] != managed_readiness_path:
             raise ProfileError(
                 f"{path}.readinessPath must be {managed_readiness_path} when source is managed"
             )
+    if name == "backend" and source == "managed":
+        if not isinstance(dependency.get("reload"), bool):
+            raise ProfileError(f"{path}.reload must be a boolean when source is managed")
+    elif "reload" in dependency:
+        raise ProfileError(f"{path}.reload is only valid for a managed backend")
 
 
 def _validate_dependency(profile_name: str, name: str, raw: object) -> Dependency:
@@ -155,6 +155,7 @@ def _validate_dependency(profile_name: str, name: str, raw: object) -> Dependenc
             else {}
         ),
         **_validated_readiness_path(record, path),
+        **({"reload": record["reload"]} if "reload" in record else {}),
     })
     _validate_mode_source(name, dependency, path)
     return dependency
@@ -185,6 +186,13 @@ def validate_profile(raw_profile: object, expected_name: str) -> Profile:
     description = record["description"]
     if not isinstance(description, str) or not description:
         raise ProfileError(f"{expected_name}: description must be a non-empty string")
+    ready_gate = _require_record(record["readyGate"], f"{expected_name}.readyGate")
+    _reject_unknown_fields(ready_gate, {"baseUrl"}, f"{expected_name}.readyGate")
+    if "baseUrl" not in ready_gate:
+        raise ProfileError(f"{expected_name}.readyGate.baseUrl is required")
+    ready_gate_endpoint = resolve_managed_http_origin(
+        ready_gate["baseUrl"], f"{expected_name}.readyGate.baseUrl"
+    )
     raw_dependencies = _require_record(record["dependencies"], f"{expected_name}.dependencies")
     _reject_unknown_fields(raw_dependencies, set(DEPENDENCY_NAMES), f"{expected_name}.dependencies")
     for name in DEPENDENCY_NAMES:
@@ -206,6 +214,7 @@ def validate_profile(raw_profile: object, expected_name: str) -> Profile:
         "schemaVersion": 1,
         "name": expected_name,
         "description": description,
+        "readyGate": {"baseUrl": ready_gate_endpoint.base_url},
         "dependencies": dependencies,
     }
 

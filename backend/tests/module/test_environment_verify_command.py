@@ -32,6 +32,7 @@ def _write_success_profile(environments: Path) -> None:
         "schemaVersion": 1,
         "name": _SUCCESS_PROFILE,
         "description": "外部サービスを使わないverify entrypointテスト",
+        "readyGate": {"baseUrl": "http://127.0.0.1:4174"},
         "dependencies": {
             "frontend": disabled,
             "backend": {"mode": "mock", "source": "browser"},

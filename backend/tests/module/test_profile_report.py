@@ -164,6 +164,7 @@ def test_should_append_validated_readiness_path_without_query_or_fragment(tmp_pa
     profile = _read_json(profile_path)
     backend = profile["dependencies"]["backend"]
     backend["source"] = "external"
+    backend.pop("reload")
     backend["baseUrl"] = "https://backend.example/api"
     backend["readinessPath"] = "/health/%20"
     profile_path.write_text(json.dumps(profile), encoding="utf-8")

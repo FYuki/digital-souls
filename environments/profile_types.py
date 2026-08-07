@@ -18,10 +18,22 @@ class Dependency(TypedDict):
     source: DependencySource
     baseUrl: NotRequired[str]
     readinessPath: NotRequired[str]
+    reload: NotRequired[bool]
 
 
 class ResolvedDependency(Dependency):
     readinessUrl: NotRequired[str]
+    host: NotRequired[str]
+    port: NotRequired[int]
+
+
+class ReadyGate(TypedDict):
+    baseUrl: str
+
+
+class ResolvedReadyGate(ReadyGate):
+    host: str
+    port: int
 
 
 class Dependencies(TypedDict):
@@ -46,6 +58,7 @@ class Profile(TypedDict):
     schemaVersion: Literal[1]
     name: str
     description: str
+    readyGate: ReadyGate
     dependencies: Dependencies
 
 
@@ -75,6 +88,7 @@ class ResolvedReport(TypedDict):
     effectiveProfile: str
     selectionSource: str
     profile: ProfileIdentity
+    readyGate: ResolvedReadyGate
     dependencies: ResolvedDependencies
     capabilities: list[Capability]
     derivedEnvironment: dict[str, str]

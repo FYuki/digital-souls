@@ -43,10 +43,10 @@ scripts/setup-backend.sh
 ## 起動
 
 ```bash
-scripts/start-backend.sh
+scripts/start-backend.sh --host localhost --port 8000 --reload
 ```
 
-`start-backend.sh` は構築済みの `backend/.venv` を使って Backend だけを foreground で起動する。環境がない場合にセットアップは自動実行されず、`setup-backend.sh` の実行を促すエラーで終了する。Backend プロセス自身が終了した場合は、その終了ステータスが呼び出し元へ伝播する。
+`start-backend.sh` は解決済みの dev Profile（`localhost:8000`、reload有効）と一致するhost、port、reload設定を明示して実行する。構築済みの `backend/.venv` を使って Backend だけを foreground で起動し、環境がない場合にセットアップは自動実行されず、`setup-backend.sh` の実行を促すエラーで終了する。Backend プロセス自身が終了した場合は、その終了ステータスが呼び出し元へ伝播する。
 
 LLM・Whisper・prompt予算は `backend/.env.example` の環境変数で変更できる。`OLLAMA_CONTEXT_TOKENS` はOllamaの実行時context、`LLM_CONTEXT_TOKEN_LIMIT` はモデル自体の最大context、`OLLAMA_RESPONSE_RESERVE_TOKENS` はassistant応答の予約量である。応答予約量は実行時context未満、実行時contextはモデル最大context以下でなければならない。`ASSISTANT_MAX_GENERATION_TOKENS` は応答予約量の既存契約名で、同時指定時は同値が必要になる。不正値は起動時に設定名を含むエラーとなる。
 

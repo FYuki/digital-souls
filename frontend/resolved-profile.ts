@@ -12,11 +12,21 @@ export type ResolvedDependency = {
   baseUrl?: string
   readinessPath?: string
   readinessUrl?: string
+  host?: string
+  port?: number
+  reload?: boolean
+}
+
+export type ResolvedEndpoint = {
+  baseUrl: string
+  host: string
+  port: number
 }
 
 export type ResolvedProfile = {
   reportSchemaVersion: 1
   effectiveProfile: string
+  readyGate: ResolvedEndpoint
   dependencies: Record<DependencyName, ResolvedDependency>
   capabilities: Capability[]
 }
@@ -67,13 +77,36 @@ const parseDependency = (value: unknown, path: string): ResolvedDependency => {
       throw new Error(`${path}.${field} must be a string`)
     }
   }
+  if ('host' in dependency && typeof dependency.host !== 'string') {
+    throw new Error(`${path}.host must be a string`)
+  }
+  if ('port' in dependency && (!Number.isInteger(dependency.port) || Number(dependency.port) < 1)) {
+    throw new Error(`${path}.port must be a positive integer`)
+  }
+  if ('reload' in dependency && typeof dependency.reload !== 'boolean') {
+    throw new Error(`${path}.reload must be a boolean`)
+  }
   return {
     mode: dependency.mode as DependencyMode,
     source: dependency.source as DependencySource,
     ...typeof dependency.baseUrl === 'string' ? { baseUrl: dependency.baseUrl } : {},
     ...typeof dependency.readinessPath === 'string' ? { readinessPath: dependency.readinessPath } : {},
     ...typeof dependency.readinessUrl === 'string' ? { readinessUrl: dependency.readinessUrl } : {},
+    ...typeof dependency.host === 'string' ? { host: dependency.host } : {},
+    ...typeof dependency.port === 'number' ? { port: dependency.port } : {},
+    ...typeof dependency.reload === 'boolean' ? { reload: dependency.reload } : {},
   }
+}
+
+const parseResolvedEndpoint = (value: unknown, path: string): ResolvedEndpoint => {
+  const endpoint = requireRecord(value, path)
+  if (typeof endpoint.baseUrl !== 'string' || typeof endpoint.host !== 'string') {
+    throw new Error(`${path} must define string baseUrl and host`)
+  }
+  if (!Number.isInteger(endpoint.port) || Number(endpoint.port) < 1) {
+    throw new Error(`${path}.port must be a positive integer`)
+  }
+  return { baseUrl: endpoint.baseUrl, host: endpoint.host, port: Number(endpoint.port) }
 }
 
 const parseDependencies = (value: unknown): Record<DependencyName, ResolvedDependency> => {
@@ -113,6 +146,7 @@ export const parseResolvedProfile = (value: unknown): ResolvedProfile => {
   return {
     reportSchemaVersion: 1,
     effectiveProfile: report.effectiveProfile,
+    readyGate: parseResolvedEndpoint(report.readyGate, 'readyGate'),
     dependencies: parseDependencies(report.dependencies),
     capabilities: parseCapabilities(report.capabilities),
   }

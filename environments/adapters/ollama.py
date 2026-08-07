@@ -16,7 +16,7 @@ from adapters.base import (
     ReadinessValidationResult,
     StartSpecification,
     VerificationResult,
-    require_managed_endpoint,
+    require_fixed_managed_endpoint,
 )
 
 
@@ -60,7 +60,7 @@ class OllamaAdapter(ProcessServiceOperations):
     def verify(
         self, dependency: Mapping[str, object], context: OperationContext
     ) -> VerificationResult:
-        require_managed_endpoint(dependency, service="ollama", port=11434)
+        require_fixed_managed_endpoint(dependency, service="ollama", port=11434)
         return VerificationResult(
             (
                 Check(
@@ -75,7 +75,7 @@ class OllamaAdapter(ProcessServiceOperations):
     def prepare(
         self, dependency: Mapping[str, object], context: OperationContext
     ) -> None:
-        require_managed_endpoint(dependency, service="ollama", port=11434)
+        require_fixed_managed_endpoint(dependency, service="ollama", port=11434)
         result = self.runner.run(("ollama", "pull", self._model_name), self.root_dir)
         if result.get("returncode") != 0:
             raise OllamaPreparationError(
@@ -83,7 +83,7 @@ class OllamaAdapter(ProcessServiceOperations):
             )
 
     def start_specification(self, dependency: Mapping[str, object]) -> StartSpecification:
-        require_managed_endpoint(dependency, service="ollama", port=11434)
+        require_fixed_managed_endpoint(dependency, service="ollama", port=11434)
         return StartSpecification(command=("ollama", "serve"), cwd=self.root_dir)
 
     def validate_readiness(

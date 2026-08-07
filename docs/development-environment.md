@@ -28,8 +28,8 @@ Issue #50で別WSL distribution、別port、独立clone、専用data rootへ分�
 | dev／TAKT | 5173 | 8000 | 4174 | 破棄・再作成可能 |
 | dogfood | 15173 | 18000 | 14174 | backup・migration対象 |
 
-dogfood実装が完了するまでは、`dev` Profileやmain checkoutをdogfood用途へ流用しない。
-実装後もdev／testのsetup、fixture、cleanupからdogfood data rootを指定しない。
+dogfoodは専用Profileと操作入口を使用し、`dev` Profileやmain checkoutをdogfood用途へ流用しない。
+dev／testのsetup、fixture、cleanupからdogfood data rootを指定しない。
 
 Wave 2親Issue #28の受入まではdogfoodのRAGを無効にし、実データとして保持するのは
 conversation historyだけとする。詳細は
@@ -57,6 +57,21 @@ dogfoodではリポジトリ外の専用絶対パスが必須である。
 export DS_ENVIRONMENT_ID=dogfood
 export DS_DATA_DIR=/var/lib/digital-souls/dogfood
 ```
+
+dogfoodの操作入口は`DS_PROFILE`と`DS_ENVIRONMENT_ID`を`dogfood`へ固定し、同じdata root内の
+所有reportをstart／stop／statusで共有する。
+
+```bash
+export DS_DATA_DIR=/var/lib/digital-souls/dogfood
+scripts/start-dogfood.sh
+scripts/status-dogfood.sh
+scripts/stop-dogfood.sh
+```
+
+dogfood Frontend／Backend／ready gateはそれぞれ15173／18000／14174を使うため、
+5173／8000／4174を使うdev・integration Profileと同時起動できる。dogfoodのOllamaと
+VOICEVOXは`external`であり、dogfood runの所有対象にも`stop`の対象にもならない。
+Chroma／RAGはWave 2受入まで無効で、起動・probe・所有を行わない。
 
 ## 初期セットアップ
 
@@ -103,7 +118,7 @@ DS_PROFILE=integration-text scripts/start-all.sh
 DS_PROFILE=test-mocked scripts/start-voice-chat-e2e.sh
 ```
 
-初期 Profile は次の4種類である。各依存の完全な接続先と readiness path は `environments/profiles/*.json` を参照する。
+Profile は次の5種類である。各依存の完全な接続先と readiness path は `environments/profiles/*.json` を参照する。
 
 | Profile | 用途 | 有効な依存 |
 |---|---|---|
@@ -111,6 +126,7 @@ DS_PROFILE=test-mocked scripts/start-voice-chat-e2e.sh
 | `test-mocked` | ブラウザ内 mock を使う独立 E2E | Frontend、browser mock Backend |
 | `integration-text` | 実テキストチャット | Frontend、Backend、Ollama |
 | `integration-voice` | 実音声チャット | Frontend、Backend、Ollama、VOICEVOX、Whisper |
+| `dogfood` | 継続利用する運用相当環境 | Frontend、Backend、external Ollama／VOICEVOX、Whisper |
 
 起動スクリプトはサービス起動前に中央 resolver で Profile を検証する。runtime reportとresolved Profileは解決済みdata rootの`runtime/`配下にのみ保存する。Playwrightは各スイート専用のtest data rootを設定し、`runtime/standalone/`へ環境reportを、`frontend/test-results/<suite>/`へテスト証跡を保存する。reportには環境IDと正規化済みpathを記録し、秘密値や会話本文は記録しない。
 
@@ -123,7 +139,7 @@ DS_PROFILE=test-mocked scripts/start-voice-chat-e2e.sh
 1. `scripts/setup-backend.sh` で Backend の仮想環境と依存関係を準備する
 2. Ollama を起動し、`http://localhost:11434/api/tags` を確認する
 3. VOICEVOX コンテナ `voicevox_engine` を起動し、`http://localhost:50021/version` を確認する
-4. `scripts/start-backend.sh` で FastAPI Backend を起動し、`http://localhost:8000` を確認する
+4. managed adapterが`start-backend.sh --host localhost --port 8000 --reload`で FastAPI Backend を起動し、`http://localhost:8000` を確認する
 5. Frontend 開発サーバーを起動する
 
 VOICEVOX コンテナが未作成の場合、`dev` または `integration-voice` の起動は Backend / Frontend を起動せず、初回セットアップ用の `docker run` 例を表示して終了する。
@@ -135,11 +151,14 @@ VOICEVOX コンテナが未作成の場合、`dev` または `integration-voice`
 | スクリプト | 役割 |
 |---|---|
 | `scripts/setup-backend.sh` | Backend の `.venv` を作成し、`backend/requirements.txt` をインストールする |
-| `scripts/start-backend.sh` | `.venv` と `backend/.env` を読み、FastAPI を `uvicorn --reload` で起動する |
+| `scripts/start-backend.sh` | resolved Profile由来の明示的な`--host`、`--port`、任意の`--reload`を受け、FastAPIを起動する |
 | `scripts/start-frontend.sh` | Frontend 開発サーバーを起動する |
 | `scripts/start-ollama.sh` | `ollama serve` を起動する |
 | `scripts/start-voicevox.sh` | `dev` Profile の VOICEVOX adapter だけを起動する単体入口 |
 | `scripts/start-voice-chat-e2e.sh` | 音声チャット E2E 用。`DS_PROFILE` 未指定時は `integration-voice` を選択し、`test-mocked` では Frontend のみを起動する |
+| `scripts/start-dogfood.sh` | dogfood Profileとidentityを固定して起動する |
+| `scripts/status-dogfood.sh` | dogfoodのowned managedとunowned externalを区別して表示する |
+| `scripts/stop-dogfood.sh` | dogfoodの所有reportに記録されたmanagedプロセスだけを停止する |
 
 `scripts/start-backend.sh` は仮想環境の作成や依存インストールを自動実行しない。初回または依存関係の更新時は `scripts/setup-backend.sh` を別に実行する。セットアップ失敗は `Backend setup failed` と失敗工程、起動環境の不足は `start-backend.sh` の対象ファイル名を含むエラーで判別できる。Backend プロセスの起動後は、その終了ステータスが呼び出し元へ伝播する。
 

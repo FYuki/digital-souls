@@ -222,7 +222,14 @@ def test_should_keep_backend_setup_in_prepare_and_uvicorn_in_start(tmp_path: Pat
     start = adapter.start_specification(dependency)
 
     assert runner.calls == [(str(tmp_path / "scripts" / "setup-backend.sh"),)]
-    assert start.command == (str(tmp_path / "scripts" / "start-backend.sh"),)
+    assert start.command == (
+        str(tmp_path / "scripts" / "start-backend.sh"),
+        "--host",
+        "localhost",
+        "--port",
+        "8000",
+        "--reload",
+    )
 
 
 def test_should_classify_missing_whisper_cache_as_preparation_required(tmp_path: Path):

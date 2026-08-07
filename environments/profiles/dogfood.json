@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "name": "dogfood",
+  "description": "実会話データを保持するdogfood環境",
+  "readyGate": { "baseUrl": "http://127.0.0.1:14174" },
+  "dependencies": {
+    "frontend": { "mode": "real", "source": "managed", "baseUrl": "http://localhost:15173", "readinessPath": "/" },
+    "backend": { "mode": "real", "source": "managed", "baseUrl": "http://localhost:18000", "readinessPath": "/", "reload": false },
+    "ollama": { "mode": "real", "source": "external", "baseUrl": "http://localhost:11434", "readinessPath": "/api/tags" },
+    "voicevox": { "mode": "real", "source": "external", "baseUrl": "http://localhost:50021", "readinessPath": "/version" },
+    "whisper": { "mode": "real", "source": "in_process" },
+    "chroma": { "mode": "disabled", "source": null }
+  }
+}

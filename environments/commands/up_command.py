@@ -8,11 +8,7 @@ from pathlib import Path
 from adapters.base import AdapterOperationError
 from commands.profile_command import resolve_and_write_profile
 from environment_options import resolve_output_paths
-from environment_constants import (
-    DEFAULT_READY_GATE_URL,
-    READY_GATE_ENV,
-    RUN_REPORT_CLEANUP_TARGET,
-)
+from environment_constants import RUN_REPORT_CLEANUP_TARGET
 from environment_runtime import (
     EnvironmentRun,
     SupervisionError,
@@ -54,12 +50,6 @@ def up_environment(
         environment=os.environ,
         run_id=run_id,
         runtime_paths=runtime_paths,
-    )
-    configured_ready_gate = os.environ.get(READY_GATE_ENV)
-    ready_gate_url = (
-        DEFAULT_READY_GATE_URL
-        if not configured_ready_gate
-        else configured_ready_gate
     )
     store = RunReportStore(paths.run_report)
     phase = "resolve"
@@ -108,6 +98,9 @@ def up_environment(
             )
         else:
             resolved_registry = create_service_registry(root_dir, runtime_paths)
+        ready_gate = profile.get("readyGate")
+        if not isinstance(ready_gate, dict):
+            raise ValueError("resolved ready gate is required")
         report = create_initial_report(
             run_id=run_id,
             started_at=started_at,
@@ -122,7 +115,7 @@ def up_environment(
             profile_path=paths.profile_report,
             store=store,
             report=report,
-            ready_gate_url=ready_gate_url,
+            ready_gate=ready_gate,
             was_interrupted=was_interrupted,
             registry=resolved_registry,
             timing=resolved_timing,

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -35,6 +36,15 @@ const suites: SuiteExpectation[] = [
 ]
 
 const originalArgv = [...process.argv]
+const injectedFrontendBaseUrl = 'http://127.0.0.1:25173'
+const injectedReadyGateBaseUrl = 'http://localhost:24174'
+
+const createProfileLoader = (readyGateBaseUrl = injectedReadyGateBaseUrl) => vi.fn(() => ({
+  readyGate: { baseUrl: readyGateBaseUrl },
+  dependencies: {
+    frontend: { baseUrl: injectedFrontendBaseUrl },
+  },
+}))
 
 const loadConfig = async (fileName: string) => {
   vi.resetModules()
@@ -45,6 +55,7 @@ const loadConfig = async (fileName: string) => {
     testDir?: string
     outputDir?: string
     reporter?: Array<[string, Record<string, unknown>?]>
+    use?: { baseURL?: string }
     webServer?: Record<string, unknown>
   }
 }
@@ -90,6 +101,10 @@ describe('suite-specific Playwright configuration', () => {
 
   test.each(suites)('$suite uses the environment startup boundary without reusing a server', async (suite) => {
     const config = await loadConfig(suite.config)
+    const profile = JSON.parse(await readFile(
+      join(process.cwd(), '..', 'environments', 'profiles', `${suite.profile}.json`),
+      'utf-8',
+    )) as { readyGate: { baseUrl: string }, dependencies: { frontend: { baseUrl: string } } }
     const dataRoot = join(process.cwd(), 'test-results', 'runtime-data', suite.suite)
     const runtimeDir = join(dataRoot, 'runtime', 'standalone')
 
@@ -106,6 +121,33 @@ describe('suite-specific Playwright configuration', () => {
       timeout: 600_000,
       gracefulShutdown: { signal: 'SIGTERM', timeout: 60_000 },
     }))
+    expect(config.use?.baseURL).toBe(profile.dependencies.frontend.baseUrl)
+    expect(config.webServer?.url).toBe(`${profile.readyGate.baseUrl}/ready`)
+  })
+
+  test('should use the selected profile as the only source of the browser base URL', () => {
+    const loadProfile = createProfileLoader()
+
+    const config = createSuiteConfig('mocked-e2e', { loadProfile })
+
+    expect(config.use?.baseURL).toBe(injectedFrontendBaseUrl)
+    expect(loadProfile).toHaveBeenCalledOnce()
+    expect(loadProfile).toHaveBeenCalledWith('test-mocked')
+  })
+
+  test.each([
+    injectedReadyGateBaseUrl,
+    `${injectedReadyGateBaseUrl}/`,
+  ])('should resolve the ready gate path when the profile origin is %s', (readyGateBaseUrl) => {
+    const loadProfile = createProfileLoader(readyGateBaseUrl)
+
+    const config = createSuiteConfig('mocked-e2e', { loadProfile })
+
+    expect(Array.isArray(config.webServer)).toBe(false)
+    const webServer = Array.isArray(config.webServer) ? undefined : config.webServer
+    expect(webServer?.url).toBe('http://localhost:24174/ready')
+    expect(loadProfile).toHaveBeenCalledOnce()
+    expect(loadProfile).toHaveBeenCalledWith('test-mocked')
   })
 
   test.each(suites)('$suite disables state-changing reporters in collection mode', async (suite) => {
