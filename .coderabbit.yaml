@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: ja-JP
+
+reviews:
+  profile: assertive
+  poem: false
+
+  path_instructions:
+    - path: "**"
+      instructions: |
+        レビュー時は次の手順で進めること。
+
+        Step 1: knowledge_base に登録されたプロジェクト固有のガイドラインから、
+                今回の差分に関係する規約・設計上の不変条件を網羅的に参照する。
+        Step 2: 関係する各ルール・禁止事項・判定基準を、差分へ一つずつ照合する。
+        Step 3: 違反が見つかった場合は、根拠となるガイドラインのファイルと
+                ルールを明示して指摘する。
+        Step 4: 一般的なベストプラクティスとプロジェクト固有のガイドラインが
+                競合する場合は、プロジェクト固有のガイドラインを優先する。
+
+  auto_review:
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT MERGE"
+    ignore_usernames:
+      - "dependabot[bot]"
+      - "github-actions[bot]"
+      - "renovate[bot]"
+
+chat:
+  art: false
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "docs/repository-policy.md"
+      - "docs/testing-policy.md"
+      - "docs/infrastructure-policy.md"
+      - "docs/development-environment.md"
+      - "docs/system-architecture.md"
+      - "docs/decisions/*.md"
+      - "characters/*/memory-policy.md"

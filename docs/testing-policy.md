@@ -63,6 +63,14 @@ npm run build
 
 CI は単体テスト、結合テスト、モックE2E、型チェック、ビルドを実行する。実接続スイートは外部サービスを必要とするため自動実行せず、Pull Request の検証欄へローカル実行結果または未実行状態を記録する。
 
+## Pull Requestレビュー
+
+Pull RequestではGitHub ActionsのCIに加え、GitHub Appとして導入したCodeRabbitによる自動レビューを実行する。レビュー設定の正本はリポジトリルートの`.coderabbit.yaml`とし、`AGENTS.md`および同設定の`knowledge_base.code_guidelines.filePatterns`に登録した規約・設計文書をレビュー基準として使用する。
+
+有効化時はリポジトリ管理者がCodeRabbitのGitHub Appに当該リポジトリへのアクセスを許可する。CodeRabbitはPull RequestイベントをGitHub Appとして処理するため、GitHub ActionsのworkflowへCodeRabbit用jobやsecretは追加しない。
+
+CodeRabbitの指摘はコードレビューの補助であり、GitHub Actionsやローカルで実行したテスト結果の代替にはしない。特に、CodeRabbitのレビュー完了を外部サービスとの実接続に成功した一次証跡として扱わない。
+
 ## LLM classifier conformance
 
 意味分類器の品質評価は、通常のpytest unit testと分離したpromptfoo suiteで行う。
