@@ -6,7 +6,7 @@
   "dependencies": {
     "frontend": { "mode": "real", "source": "managed", "baseUrl": "http://localhost:5173", "readinessPath": "/" },
     "backend": { "mode": "real", "source": "managed", "baseUrl": "http://localhost:8000", "readinessPath": "/", "reload": true },
-    "ollama": { "mode": "real", "source": "managed", "baseUrl": "http://localhost:11434", "readinessPath": "/api/tags" },
+    "ollama": { "mode": "real", "source": "external", "baseUrl": "http://localhost:11434", "readinessPath": "/api/tags" },
     "voicevox": { "mode": "disabled", "source": null },
     "whisper": { "mode": "disabled", "source": null },
     "chroma": { "mode": "disabled", "source": null }

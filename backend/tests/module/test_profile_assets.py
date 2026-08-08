@@ -194,13 +194,13 @@ def test_should_apply_the_same_rfc3986_readiness_path_contract(
         ("backend", "external", "http://backend.example:8000", True),
         ("ollama", "managed", "http://127.0.0.1:11434/", True),
         ("ollama", "managed", "http://ollama.example:11434", False),
-        ("ollama", "external", "http://ollama.example:11434", True),
+        ("ollama", "external", "http://ollama.example:11434", False),
         ("voicevox", "managed", "http://127.0.0.1:50021/", True),
         ("voicevox", "managed", "http://voicevox.example:50021", False),
-        ("voicevox", "external", "http://voicevox.example:50021", True),
+        ("voicevox", "external", "http://voicevox.example:50021", False),
     ],
 )
-def test_should_require_external_source_for_urls_not_managed_by_the_launcher(
+def test_should_apply_dependency_endpoint_contracts_for_each_source(
     profile_validator: Draft202012Validator,
     profile_module: ModuleType,
     dependency_name: str,
@@ -225,6 +225,68 @@ def test_should_require_external_source_for_urls_not_managed_by_the_launcher(
 
     assert schema_accepts is expected_valid
     assert central_accepts is expected_valid
+
+
+@pytest.mark.parametrize("source", ["managed", "external"])
+@pytest.mark.parametrize(
+    ("dependency_name", "field", "invalid_value"),
+    [
+        ("ollama", "baseUrl", "http://127.0.0.7:11434"),
+        ("ollama", "baseUrl", "http://localhost:21134"),
+        ("ollama", "readinessPath", "/health"),
+        ("voicevox", "baseUrl", "http://127.0.0.8:50021"),
+        ("voicevox", "baseUrl", "http://127.0.0.1:20021"),
+        ("voicevox", "readinessPath", "/health"),
+    ],
+)
+def test_should_reject_inference_endpoint_registry_deviations_for_each_source(
+    profile_validator: Draft202012Validator,
+    profile_module: ModuleType,
+    source: str,
+    dependency_name: str,
+    field: str,
+    invalid_value: str,
+) -> None:
+    profile = _read_json(ENVIRONMENTS_DIR / "profiles" / "integration-voice.json")
+    candidate = deepcopy(profile)
+    dependency = _dependencies(candidate)[dependency_name]
+    dependency["source"] = source
+    dependency[field] = invalid_value
+
+    assert list(profile_validator.iter_errors(candidate))
+    with pytest.raises(profile_module.ProfileError):
+        profile_module.validate_profile(candidate, "integration-voice")
+
+
+@pytest.mark.parametrize("source", ["managed", "external"])
+@pytest.mark.parametrize(
+    ("dependency_name", "base_url", "readiness_path"),
+    [
+        ("ollama", "http://localhost:11434", "/api/tags"),
+        ("ollama", "http://localhost:11434/", "/api/tags"),
+        ("ollama", "http://127.0.0.1:11434", "/api/tags"),
+        ("ollama", "http://127.0.0.1:11434/", "/api/tags"),
+        ("voicevox", "http://127.0.0.1:50021", "/version"),
+        ("voicevox", "http://127.0.0.1:50021/", "/version"),
+    ],
+)
+def test_should_accept_every_registered_inference_endpoint_for_each_source(
+    profile_validator: Draft202012Validator,
+    profile_module: ModuleType,
+    source: str,
+    dependency_name: str,
+    base_url: str,
+    readiness_path: str,
+) -> None:
+    profile = _read_json(ENVIRONMENTS_DIR / "profiles" / "integration-voice.json")
+    candidate = deepcopy(profile)
+    dependency = _dependencies(candidate)[dependency_name]
+    dependency["source"] = source
+    dependency["baseUrl"] = base_url
+    dependency["readinessPath"] = readiness_path
+
+    profile_validator.validate(candidate)
+    profile_module.validate_profile(candidate, "integration-voice")
 
 
 @pytest.mark.parametrize(
@@ -315,7 +377,9 @@ def test_should_require_the_launcher_readiness_path_for_managed_dependencies(
 ):
     profile = _read_json(ENVIRONMENTS_DIR / "profiles" / "integration-voice.json")
     candidate = deepcopy(profile)
-    _dependencies(candidate)[dependency_name]["readinessPath"] = "/health"
+    dependency = _dependencies(candidate)[dependency_name]
+    dependency["source"] = "managed"
+    dependency["readinessPath"] = "/health"
 
     assert list(profile_validator.iter_errors(candidate))
     with pytest.raises(profile_module.ProfileError, match=rf"{dependency_name}\.readinessPath"):
@@ -403,8 +467,19 @@ def test_should_require_disabled_downstream_dependencies_when_backend_is_not_rea
             {
                 "frontend": ("real", "managed"),
                 "backend": ("real", "managed"),
-                "ollama": ("real", "managed"),
-                "voicevox": ("real", "managed"),
+                "ollama": ("real", "external"),
+                "voicevox": ("real", "external"),
+                "whisper": ("real", "in_process"),
+                "chroma": ("disabled", None),
+            },
+        ),
+        (
+            "dogfood",
+            {
+                "frontend": ("real", "managed"),
+                "backend": ("real", "managed"),
+                "ollama": ("real", "external"),
+                "voicevox": ("real", "external"),
                 "whisper": ("real", "in_process"),
                 "chroma": ("disabled", None),
             },
@@ -425,7 +500,7 @@ def test_should_require_disabled_downstream_dependencies_when_backend_is_not_rea
             {
                 "frontend": ("real", "managed"),
                 "backend": ("real", "managed"),
-                "ollama": ("real", "managed"),
+                "ollama": ("real", "external"),
                 "voicevox": ("disabled", None),
                 "whisper": ("disabled", None),
                 "chroma": ("disabled", None),
@@ -436,18 +511,18 @@ def test_should_require_disabled_downstream_dependencies_when_backend_is_not_rea
             {
                 "frontend": ("real", "managed"),
                 "backend": ("real", "managed"),
-                "ollama": ("real", "managed"),
-                "voicevox": ("real", "managed"),
+                "ollama": ("real", "external"),
+                "voicevox": ("real", "external"),
                 "whisper": ("real", "in_process"),
                 "chroma": ("disabled", None),
             },
         ),
     ],
 )
-def test_should_define_initial_profile_dependency_modes(
+def test_should_define_profile_dependency_contracts(
     profile_name: str,
     expected_dependencies: dict[str, tuple[str, str | None]],
-):
+) -> None:
     profile = _read_json(ENVIRONMENTS_DIR / "profiles" / f"{profile_name}.json")
     dependencies = _dependencies(profile)
 
@@ -466,7 +541,7 @@ def test_should_define_initial_profile_dependency_modes(
         ("frontend", "http://localhost:5173", "/"),
         ("backend", "http://localhost:8000", "/"),
         ("ollama", "http://localhost:11434", "/api/tags"),
-        ("voicevox", "http://localhost:50021", "/version"),
+        ("voicevox", "http://127.0.0.1:50021", "/version"),
     ],
 )
 def test_should_use_existing_service_connection_contracts(

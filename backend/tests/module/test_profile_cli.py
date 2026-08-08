@@ -147,13 +147,13 @@ def test_should_reject_unknown_dependency_fields_with_identifiable_path(tmp_path
         ),
         (
             lambda profile: profile["dependencies"]["voicevox"].update(
-                baseUrl="http://voicevox.example:50021"
+                source="managed", baseUrl="http://voicevox.example:50021"
             ),
             "dependencies.voicevox.baseUrl",
         ),
         (
             lambda profile: profile["dependencies"]["voicevox"].update(
-                readinessPath="/health"
+                source="managed", readinessPath="/health"
             ),
             "dependencies.voicevox.readinessPath",
         ),

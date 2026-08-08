@@ -1,0 +1,302 @@
+from __future__ import annotations
+
+import configparser
+import os
+import re
+import subprocess
+from pathlib import Path
+
+from tests.dogfood_infrastructure_test_support import render_nondefault_dogfood_assets
+
+
+ROOT_DIR = Path(__file__).parent.parent.parent.parent
+DOGFOOD_INFRA_DIR = ROOT_DIR / "infra" / "dogfood"
+DOGFOOD_SCRIPTS_DIR = ROOT_DIR / "scripts" / "dogfood"
+ENV_EXAMPLE_PATH = DOGFOOD_INFRA_DIR / "env.example"
+REQUIRED_ENV_KEYS = {
+    "DS_ENVIRONMENT_ID",
+    "DOGFOOD_WSL_DISTRO",
+    "DOGFOOD_SERVICE_USER",
+    "DOGFOOD_SERVICE_GROUP",
+    "DOGFOOD_REPOSITORY_URL",
+    "DOGFOOD_REPOSITORY_REVISION",
+    "DOGFOOD_CLONE_DIR",
+    "DOGFOOD_CONFIG_DIR",
+    "DS_DATA_DIR",
+    "DOGFOOD_STATE_DIR",
+    "DOGFOOD_LOG_DIR",
+    "DOGFOOD_VOICEVOX_IMAGE",
+    "DOGFOOD_VOICEVOX_CONTAINER",
+}
+SHELL_ENTRYPOINTS = (
+    "bootstrap.sh",
+    "start-services.sh",
+    "stop-services.sh",
+    "restart-services.sh",
+    "status.sh",
+)
+
+
+def _read_environment_example() -> dict[str, str]:
+    assert ENV_EXAMPLE_PATH.is_file(), "dogfood environment example is required"
+    values: dict[str, str] = {}
+    for line in ENV_EXAMPLE_PATH.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        key, separator, value = stripped.partition("=")
+        assert separator, f"環境設定例の行がKEY=VALUE形式ではありません: {line}"
+        assert key not in values, f"環境設定キーが重複しています: {key}"
+        values[key] = value.strip("'\"")
+    return values
+
+
+def _read_unit(path: Path) -> configparser.ConfigParser:
+    parser = configparser.ConfigParser(interpolation=None, strict=True)
+    parser.optionxform = str
+    parser.read(path, encoding="utf-8")
+    return parser
+
+
+def _single_systemd_asset(pattern: str) -> Path:
+    matches = tuple((DOGFOOD_INFRA_DIR / "systemd").glob(pattern))
+    assert len(matches) == 1, f"{pattern} は1つだけ必要です: {matches}"
+    return matches[0]
+
+
+def _assert_finite_stop_timeout(service: configparser.SectionProxy) -> None:
+    timeout = service["TimeoutStopSec"]
+
+    assert re.fullmatch(r"[1-9]\d*(?:ms|s|min)?", timeout)
+
+
+def test_should_define_separate_dogfood_identity_clone_and_runtime_paths() -> None:
+    values = _read_environment_example()
+
+    assert REQUIRED_ENV_KEYS <= values.keys()
+    assert values["DS_ENVIRONMENT_ID"] == "dogfood"
+    assert values["DOGFOOD_WSL_DISTRO"] == "Ubuntu-dogfood"
+    assert values["DOGFOOD_SERVICE_USER"]
+    assert values["DOGFOOD_SERVICE_GROUP"]
+    assert not values["DOGFOOD_REPOSITORY_URL"].startswith(("/", "file:"))
+    assert re.fullmatch(r"[0-9a-f]{40}", values["DOGFOOD_REPOSITORY_REVISION"])
+
+    path_keys = (
+        "DOGFOOD_CLONE_DIR",
+        "DOGFOOD_CONFIG_DIR",
+        "DS_DATA_DIR",
+        "DOGFOOD_STATE_DIR",
+        "DOGFOOD_LOG_DIR",
+    )
+    paths = {key: Path(values[key]) for key in path_keys}
+    assert all(path.is_absolute() for path in paths.values())
+    assert len(set(paths.values())) == len(paths)
+    assert all(
+        not path.is_relative_to(ROOT_DIR) and not ROOT_DIR.is_relative_to(path)
+        for path in paths.values()
+    )
+    clone_dir = paths["DOGFOOD_CLONE_DIR"]
+    assert all(
+        not path.is_relative_to(clone_dir) and not clone_dir.is_relative_to(path)
+        for key, path in paths.items()
+        if key != "DOGFOOD_CLONE_DIR"
+    )
+
+
+def test_should_keep_dogfood_shell_entrypoints_executable_strict_and_syntax_valid() -> None:
+    paths = tuple(DOGFOOD_SCRIPTS_DIR / name for name in SHELL_ENTRYPOINTS)
+
+    for path in paths:
+        assert path.is_file()
+        content = path.read_text(encoding="utf-8")
+        assert os.access(path, os.X_OK)
+        assert "set -euo pipefail" in content
+
+    result = subprocess.run(
+        ["bash", "-n", *map(str, paths)],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_should_apply_declared_ownership_and_restricted_directory_permissions() -> None:
+    bootstrap_path = DOGFOOD_SCRIPTS_DIR / "bootstrap.sh"
+    assert bootstrap_path.is_file(), "dogfood bootstrap entrypoint is required"
+    source = bootstrap_path.read_text(encoding="utf-8")
+    shell_sources = "\n".join(
+        (DOGFOOD_SCRIPTS_DIR / name).read_text(encoding="utf-8")
+        for name in SHELL_ENTRYPOINTS
+    )
+
+    for variable in (
+        "DOGFOOD_SERVICE_USER",
+        "DOGFOOD_SERVICE_GROUP",
+        "DOGFOOD_CLONE_DIR",
+        "DOGFOOD_CONFIG_DIR",
+        "DS_DATA_DIR",
+        "DOGFOOD_STATE_DIR",
+        "DOGFOOD_LOG_DIR",
+    ):
+        assert f"${{{variable}}}" in source or f"${variable}" in source
+    assert "chown" in source or "install -d" in source
+    assert re.search(r"(?:-m|chmod)\s+0?7[0-7][0-7]", source)
+    assert all(
+        not line.strip().startswith("eval ") for line in shell_sources.splitlines()
+    )
+
+
+def test_should_separate_application_identity_from_docker_operations() -> None:
+    source = (DOGFOOD_SCRIPTS_DIR / "bootstrap.sh").read_text(encoding="utf-8")
+
+    assert "usermod" not in source
+    assert "runuser" not in source
+    assert re.search(
+        r'gpasswd --delete "\$DOGFOOD_SERVICE_USER" docker',
+        source,
+    )
+    assert re.search(r'chown -R "root:\$DOGFOOD_SERVICE_GROUP" "\$DOGFOOD_CLONE_DIR"', source)
+    assert re.search(r'chmod -R g-w,o-rwx "\$DOGFOOD_CLONE_DIR"', source)
+    assert re.search(r'chmod 0750 "\$DOGFOOD_CLONE_DIR"', source)
+
+
+def test_should_configure_ollama_systemd_ownership_from_the_shared_environment(
+    tmp_path: Path,
+) -> None:
+    values, generated_dir = render_nondefault_dogfood_assets(tmp_path)
+    unit_path = generated_dir / "digital-souls-ollama.service"
+    unit = _read_unit(unit_path)
+
+    assert unit["Service"]["User"] == values["DOGFOOD_SERVICE_USER"]
+    assert unit["Service"]["Group"] == values["DOGFOOD_SERVICE_GROUP"]
+    assert unit["Service"]["EnvironmentFile"] == (
+        f"{values['DOGFOOD_CONFIG_DIR']}/dogfood.env"
+    )
+    assert unit["Service"]["Restart"] == "on-failure"
+    assert "ExecStart" in unit["Service"]
+    assert unit["Service"]["ExecStart"] == (
+        f"{values['DOGFOOD_CLONE_DIR']}/scripts/dogfood/run-ollama.sh"
+    )
+    environment = unit["Service"]["Environment"]
+    assert f"DOGFOOD_ENV_FILE={values['DOGFOOD_CONFIG_DIR']}/dogfood.env" in environment
+    assert f"WSL_DISTRO_NAME={values['DOGFOOD_WSL_DISTRO']}" in environment
+    assert "PartOf" in unit["Unit"]
+    assert "After" in unit["Unit"]
+    assert "target" in unit["Unit"]["PartOf"]
+
+
+def test_should_stop_ollama_with_sigterm_before_a_finite_timeout(
+    tmp_path: Path,
+) -> None:
+    _, generated_dir = render_nondefault_dogfood_assets(tmp_path)
+    unit_path = generated_dir / "digital-souls-ollama.service"
+    service = _read_unit(unit_path)["Service"]
+
+    assert service["KillSignal"] == "SIGTERM"
+    _assert_finite_stop_timeout(service)
+
+
+def test_should_configure_voicevox_systemd_compose_lifecycle(
+    tmp_path: Path,
+) -> None:
+    values, generated_dir = render_nondefault_dogfood_assets(tmp_path)
+    unit_path = generated_dir / "digital-souls-voicevox.service"
+    unit = _read_unit(unit_path)
+    service = unit["Service"]
+
+    assert service["User"] == "root"
+    assert service["Group"] == "root"
+    assert service["EnvironmentFile"] == f"{values['DOGFOOD_CONFIG_DIR']}/dogfood.env"
+    assert "compose" in service["ExecStart"] and " up " in service["ExecStart"]
+    assert service["ExecStart"].startswith(values["DOGFOOD_CLONE_DIR"])
+    assert service["ExecStop"].startswith(values["DOGFOOD_CLONE_DIR"])
+    assert service["RemainAfterExit"] == "yes"
+    assert "Restart" not in service
+    assert "RestartSec" not in service
+    assert "PartOf" in unit["Unit"]
+
+
+def test_should_stop_voicevox_compose_before_a_finite_timeout(
+    tmp_path: Path,
+) -> None:
+    _, generated_dir = render_nondefault_dogfood_assets(tmp_path)
+    unit_path = generated_dir / "digital-souls-voicevox.service"
+    service = _read_unit(unit_path)["Service"]
+
+    assert "compose" in service["ExecStop"]
+    assert "down" in service["ExecStop"].split()
+    _assert_finite_stop_timeout(service)
+
+
+def test_should_define_one_inference_target_for_both_owned_services() -> None:
+    target_path = _single_systemd_asset("*.target")
+    target = _read_unit(target_path)
+    service_names = {
+        "digital-souls-ollama.service",
+        "digital-souls-voicevox.service",
+    }
+
+    wants = set(target["Unit"]["Wants"].split())
+
+    assert wants == service_names
+
+
+def test_should_route_service_lifecycle_entrypoints_through_the_inference_target() -> None:
+    target_name = _single_systemd_asset("*.target").name
+
+    for script_name, action in (
+        ("start-services.sh", "start"),
+        ("stop-services.sh", "stop"),
+        ("restart-services.sh", "restart"),
+    ):
+        source = (DOGFOOD_SCRIPTS_DIR / script_name).read_text(encoding="utf-8")
+        systemctl_lines = [
+            line.strip()
+            for line in source.splitlines()
+            if "systemctl" in line and not line.lstrip().startswith("#")
+        ]
+
+        assert len(systemctl_lines) == 1
+        assert action in systemctl_lines[0].split()
+        assert target_name in systemctl_lines[0]
+
+
+def test_should_limit_compose_to_loopback_voicevox_only() -> None:
+    compose_paths = tuple((DOGFOOD_INFRA_DIR / "voicevox").glob("*.y*ml"))
+    assert len(compose_paths) == 1
+    content = compose_paths[0].read_text(encoding="utf-8")
+    service_block = re.search(
+        r"(?ms)^services:\s*\n(?P<body>(?:^[ \t]+.*\n?)*)",
+        content,
+    )
+    assert service_block is not None
+    service_names = re.findall(r"(?m)^  ([A-Za-z0-9_.-]+):\s*$", service_block["body"])
+
+    assert service_names == ["voicevox"]
+    assert "${VOICEVOX_HOST}" in content
+    assert "${VOICEVOX_PORT}" in content
+    assert "0.0.0.0" not in content
+    assert not re.search(r"(?m)^  (frontend|backend|ollama):", service_block["body"])
+
+
+def test_should_delegate_voicevox_container_recovery_to_compose() -> None:
+    compose_path = DOGFOOD_INFRA_DIR / "voicevox" / "compose.yaml"
+    content = compose_path.read_text(encoding="utf-8")
+
+    assert re.search(r'(?m)^    restart:\s+["\']?unless-stopped["\']?\s*$', content)
+
+
+def test_should_generate_a_windows_entrypoint_from_the_shared_environment(
+    tmp_path: Path,
+) -> None:
+    values, generated_dir = render_nondefault_dogfood_assets(tmp_path)
+    source = (generated_dir / "start-dogfood-wsl.ps1").read_text(encoding="utf-8")
+
+    assert "wsl.exe" in source
+    assert values["DOGFOOD_WSL_DISTRO"] in source
+    assert values["DOGFOOD_CLONE_DIR"] in source
+    assert values["DOGFOOD_CONFIG_DIR"] in source
+    assert re.search(r"wsl\.exe\s+.*--user\s+root(?:\s|$)", source)
+    assert "DOGFOOD_ENV_FILE=" in source
+    assert "start-services.sh" in source or "systemctl" in source

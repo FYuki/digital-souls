@@ -112,25 +112,23 @@
     },
     "voicevoxDependency": {
       "oneOf": [
-        { "$ref": "#/$defs/voicevoxManagedDependency" },
-        { "$ref": "#/$defs/httpExternalDependency" },
+        { "$ref": "#/$defs/voicevoxHttpDependency" },
         { "$ref": "#/$defs/disabledDependency" }
       ]
     },
     "ollamaDependency": {
       "oneOf": [
-        { "$ref": "#/$defs/ollamaManagedDependency" },
-        { "$ref": "#/$defs/httpExternalDependency" },
+        { "$ref": "#/$defs/ollamaHttpDependency" },
         { "$ref": "#/$defs/disabledDependency" }
       ]
     },
-    "ollamaManagedDependency": {
+    "ollamaHttpDependency": {
       "type": "object",
       "additionalProperties": false,
       "required": ["mode", "source", "baseUrl", "readinessPath"],
       "properties": {
         "mode": { "const": "real" },
-        "source": { "const": "managed" },
+        "source": { "enum": ["managed", "external"] },
         "baseUrl": {
           "enum": [
             "http://localhost:11434",
@@ -142,17 +140,15 @@
         "readinessPath": { "const": "/api/tags" }
       }
     },
-    "voicevoxManagedDependency": {
+    "voicevoxHttpDependency": {
       "type": "object",
       "additionalProperties": false,
       "required": ["mode", "source", "baseUrl", "readinessPath"],
       "properties": {
         "mode": { "const": "real" },
-        "source": { "const": "managed" },
+        "source": { "enum": ["managed", "external"] },
         "baseUrl": {
           "enum": [
-            "http://localhost:50021",
-            "http://localhost:50021/",
             "http://127.0.0.1:50021",
             "http://127.0.0.1:50021/"
           ]

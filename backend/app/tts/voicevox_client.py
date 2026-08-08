@@ -5,7 +5,7 @@ import httpx
 from app.tts.speech_synthesizer import SpeechSynthesisError
 
 VOICEVOX_BASE_URL_ENV = "VOICEVOX_BASE_URL"
-DEFAULT_VOICEVOX_BASE_URL = "http://localhost:50021"
+DEFAULT_VOICEVOX_BASE_URL = "http://127.0.0.1:50021"
 VOICEVOX_TIMEOUT_SECONDS = 30.0
 AUDIO_QUERY_PATH = "/audio_query"
 SYNTHESIS_PATH = "/synthesis"
