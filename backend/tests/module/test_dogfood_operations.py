@@ -125,8 +125,10 @@ def _run_bootstrap(
     environment_id: str,
     wsl_distribution: str,
     backup_output: str | None = None,
+    env_mode: int = 0o600,
 ) -> tuple[subprocess.CompletedProcess[str], tuple[str, ...]]:
     env_path, _ = write_dogfood_env(tmp_path)
+    env_path.chmod(env_mode)
     if database_exists:
         (tmp_path / "data" / "conversation-history.db").write_bytes(
             b"existing database"
@@ -641,3 +643,52 @@ def test_should_stop_bootstrap_before_changes_when_identity_does_not_match(
     assert calls == ()
     for path in ("clone", "config", "state", "log"):
         assert not (tmp_path / path).exists()
+
+
+def test_secret_env_01_stops_bootstrap_before_persistent_side_effects_for_exposed_env(
+    tmp_path: Path,
+) -> None:
+    secret = "ab" * 32
+
+    result, calls = _run_bootstrap(
+        tmp_path,
+        None,
+        False,
+        "initial",
+        database_exists=False,
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+        env_mode=0o640,
+    )
+
+    assert result.returncode != 0
+    assert calls == ()
+    assert secret not in result.stdout
+    assert secret not in result.stderr
+    for path in ("clone", "config", "state", "log", "backups"):
+        assert not (tmp_path / path).exists()
+
+
+def test_bootstrap_secret_keep_does_not_expose_authentication_key(
+    tmp_path: Path,
+) -> None:
+    secret = "ab" * 32
+
+    result, calls = _run_bootstrap(
+        tmp_path,
+        None,
+        True,
+        "existing",
+        database_exists=False,
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert secret not in result.stdout
+    assert secret not in result.stderr
+    assert all(secret not in call for call in calls)
+    assert (
+        "install\t-m 0640 -o root -g digital-souls "
+        f"{tmp_path / 'dogfood.env'} {tmp_path / 'config' / 'dogfood.env'}"
+    ) in calls

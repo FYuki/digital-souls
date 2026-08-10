@@ -156,3 +156,130 @@ def test_bkp_verify_01_persists_generation_before_and_after_publication(
         "publish",
         "directory-fsync",
     ]
+
+
+def test_dur_uncertain_01_keeps_replaced_database_when_data_root_fsync_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import RestoreDurabilityUncertainError, restore_backup
+    from app.backup_restore import service
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths, generation = _closed_backup_generation(tmp_path, repository_root)
+    artifact = generation / "conversation-history.db"
+    expected_database = artifact.read_bytes()
+    paths.sqlite_path.write_bytes(b"old destination")
+    replace = Mock(wraps=os.replace)
+    original_fsync_directory = service._fsync_directory
+
+    def fail_data_root_fsync(path: Path) -> None:
+        if path == paths.data_root:
+            raise OSError("injected data root fsync failure")
+        original_fsync_directory(path)
+
+    monkeypatch.setattr(service, "_fsync_directory", fail_data_root_fsync)
+    monkeypatch.setattr(service.os, "replace", replace)
+
+    with pytest.raises(RestoreDurabilityUncertainError):
+        restore_backup(
+            runtime_paths=paths,
+            repository_root=repository_root,
+            backup_directory=generation,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+        )
+
+    replace.assert_called_once()
+    assert paths.sqlite_path.read_bytes() == expected_database
+    assert not tuple(paths.data_root.glob(".conversation-history.db.staging-*"))
+
+
+def test_dur_uncertain_01_keeps_published_generation_and_skips_retention(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import BackupPublicationUncertainError, create_backup
+    from app.backup_restore import service
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths = initialized_runtime(tmp_path, repository_root)
+    connection = create_history_database(paths, wal=False)
+    backup_root = tmp_path / "backups"
+    published = False
+    original_rename = Path.rename
+    original_fsync_directory = service._fsync_directory
+
+    def record_publish(source: Path, destination: Path) -> Path:
+        nonlocal published
+        result = original_rename(source, destination)
+        published = True
+        return result
+
+    def fail_publication_fsync(path: Path) -> None:
+        if path == backup_root and published:
+            raise OSError("injected publication fsync failure")
+        original_fsync_directory(path)
+
+    prune = Mock()
+    monkeypatch.setattr(Path, "rename", record_publish)
+    monkeypatch.setattr(service, "_fsync_directory", fail_publication_fsync)
+    monkeypatch.setattr(service, "_prune_backup_generations", prune)
+    try:
+        with pytest.raises(BackupPublicationUncertainError):
+            create_backup(
+                runtime_paths=paths,
+                repository_root=repository_root,
+                backup_root=backup_root,
+                retention_count=1,
+                authentication_key=TEST_AUTHENTICATION_KEY,
+                git_commit=FIXED_COMMIT,
+                created_at=FIXED_BACKUP_TIME,
+            )
+    finally:
+        connection.close()
+
+    prune.assert_not_called()
+    generations = tuple(backup_root.glob("backup-*"))
+    assert len(generations) == 1
+    assert (generations[0] / "conversation-history.db").is_file()
+    assert not tuple(backup_root.glob(".backup-staging-*"))
+
+
+def test_dur_uncertain_01_does_not_classify_prepublication_failure_as_uncertain(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import BackupPublicationUncertainError, create_backup
+    from app.backup_restore import service
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths = initialized_runtime(tmp_path, repository_root)
+    connection = create_history_database(paths, wal=False)
+    backup_root = tmp_path / "backups"
+    original_fsync_directory = service._fsync_directory
+
+    def fail_staging_directory_fsync(path: Path) -> None:
+        if path.name.startswith(".backup-staging-"):
+            raise OSError("injected staging directory fsync failure")
+        original_fsync_directory(path)
+
+    monkeypatch.setattr(service, "_fsync_directory", fail_staging_directory_fsync)
+    try:
+        with pytest.raises(OSError) as captured:
+            create_backup(
+                runtime_paths=paths,
+                repository_root=repository_root,
+                backup_root=backup_root,
+                retention_count=1,
+                authentication_key=TEST_AUTHENTICATION_KEY,
+                git_commit=FIXED_COMMIT,
+                created_at=FIXED_BACKUP_TIME,
+            )
+    finally:
+        connection.close()
+
+    assert not isinstance(captured.value, BackupPublicationUncertainError)
+    assert not tuple(backup_root.glob("backup-*"))

@@ -38,15 +38,11 @@ def _copy_backend_scripts(tmp_path: Path) -> tuple[Path, Path, Path]:
     shutil.copytree(ROOT_DIR / "environments", tmp_path / "environments")
     backend = tmp_path / "backend"
     backend_app = backend / "app"
-    backend_app.mkdir(parents=True)
-    (backend_app / "__init__.py").write_text("", encoding="utf-8")
-    for name in (
-        "environment.py",
-        "model_settings.py",
-        "runtime_paths.py",
-        "runtime_data_root.py",
-    ):
-        shutil.copy2(ROOT_DIR / "backend" / "app" / name, backend_app / name)
+    shutil.copytree(
+        ROOT_DIR / "backend" / "app",
+        backend_app,
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "data"),
+    )
     for name in ("setup-backend.sh", "start-backend.sh"):
         shutil.copy2(ROOT_DIR / "scripts" / name, scripts / name)
     return scripts / "setup-backend.sh", scripts / "start-backend.sh", backend

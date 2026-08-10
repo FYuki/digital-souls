@@ -2,9 +2,11 @@ from app.backup_restore.models import (
     BackupAuthenticationKey,
     BackupArtifactError,
     BackupIdentityError,
+    BackupPublicationUncertainError,
     BackupSchemaError,
     BackupVerification,
     RestoreSafetyError,
+    RestoreDurabilityUncertainError,
     resolve_backup_authentication_key,
 )
 from app.backup_restore.service import (
@@ -18,9 +20,11 @@ __all__ = (
     "BackupArtifactError",
     "BackupAuthenticationKey",
     "BackupIdentityError",
+    "BackupPublicationUncertainError",
     "BackupSchemaError",
     "BackupVerification",
     "RestoreSafetyError",
+    "RestoreDurabilityUncertainError",
     "create_backup",
     "resolve_backup_authentication_key",
     "restore_backup",

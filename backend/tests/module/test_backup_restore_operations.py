@@ -4,6 +4,7 @@ import os
 import sqlite3
 from argparse import Namespace
 from pathlib import Path
+from time import perf_counter
 from unittest.mock import Mock
 
 import pytest
@@ -14,6 +15,25 @@ from tests.backup_restore_test_support import (
     create_version_two_database,
     initialized_runtime,
 )
+
+
+SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
+
+
+def _files_snapshot(directory: Path) -> dict[Path, bytes]:
+    return {
+        path.relative_to(directory): path.read_bytes()
+        for path in directory.rglob("*")
+        if path.is_file()
+    }
+
+
+def _sqlite_snapshot(database: Path) -> dict[str, bytes | None]:
+    snapshot: dict[str, bytes | None] = {}
+    for suffix in ("", *SQLITE_SIDECAR_SUFFIXES):
+        path = database.with_name(database.name + suffix)
+        snapshot[suffix] = path.read_bytes() if path.exists() else None
+    return snapshot
 
 
 @pytest.mark.parametrize(
@@ -123,6 +143,8 @@ def test_cli_ops_01_returns_distinct_exit_codes_for_rejection_classes(
         "BackupArtifactError",
         "BackupSchemaError",
         "RestoreSafetyError",
+        "BackupPublicationUncertainError",
+        "RestoreDurabilityUncertainError",
     ):
         error_type = getattr(backup_restore, error_name)
         monkeypatch.setattr(
@@ -133,9 +155,9 @@ def test_cli_ops_01_returns_distinct_exit_codes_for_rejection_classes(
         exit_codes.append(environment_cli.main())
 
     assert all(exit_code != 0 for exit_code in exit_codes)
-    assert len(set(exit_codes)) == 4
+    assert exit_codes == [10, 11, 12, 13, 14, 15]
     captured = capsys.readouterr()
-    assert "safe classification" in captured.err
+    assert "safe classification" not in captured.err
     assert captured.out == ""
 
 
@@ -207,6 +229,88 @@ async def test_schema_gate_01_backup_failure_prevents_schema_initialization(
 
     backup_gate.assert_called_once_with(paths, repository_root)
     initialize_schema.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_sqlite_lease_01_stops_startup_before_sqlite_open_during_maintenance(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from app import main
+    from app.conversation_history.sqlite_lease import (
+        SQLiteLeaseUnavailableError,
+        acquire_maintenance_lease,
+    )
+
+    repository_root = Path(__file__).resolve().parents[3]
+    paths = initialized_runtime(tmp_path, repository_root, name="runtime")
+    inspect_schema = Mock(side_effect=AssertionError("SQLite must not be opened"))
+    monkeypatch.setattr(main, "resolve_model_settings", lambda *_args: object())
+    monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
+    monkeypatch.setattr(main, "initialize_runtime_data_root", lambda *_args: None)
+    monkeypatch.setattr(main, "inspect_conversation_history_schema", inspect_schema)
+
+    with acquire_maintenance_lease(paths.sqlite_path):
+        with pytest.raises(SQLiteLeaseUnavailableError):
+            async with main.lifespan(FastAPI()):
+                pytest.fail("startup must stop before SQLite is opened")
+
+    inspect_schema.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_sqlite_lease_01_lifespan_rejects_restore_without_side_effects(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from app import main
+    from app.backup_restore import RestoreSafetyError, create_backup, restore_backup
+    from app.conversation_history.schema import initialize_conversation_history_schema
+    from app.conversation_history.sqlite_lease import acquire_maintenance_lease
+
+    repository_root = Path(__file__).resolve().parents[3]
+    paths = initialized_runtime(tmp_path, repository_root, name="runtime")
+    initialize_conversation_history_schema(paths.sqlite_path)
+    backup_root = tmp_path / "backups"
+    generation = create_backup(
+        runtime_paths=paths,
+        repository_root=repository_root,
+        backup_root=backup_root,
+        retention_count=2,
+        authentication_key=TEST_AUTHENTICATION_KEY,
+        git_commit="0123456789abcdef0123456789abcdef01234567",
+    )
+    audio_service = Mock()
+    monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
+    monkeypatch.setattr(main, "initialize_runtime_data_root", lambda *_args: None)
+    monkeypatch.setattr(main._chat_runtime, "create_chat_service", Mock())
+    monkeypatch.setattr(
+        main, "create_audio_pipeline_service", Mock(return_value=audio_service)
+    )
+
+    async with main.lifespan(FastAPI()):
+        for suffix in SQLITE_SIDECAR_SUFFIXES:
+            paths.sqlite_path.with_name(paths.sqlite_path.name + suffix).write_bytes(
+                f"sidecar-{suffix}".encode()
+            )
+        sqlite_before = _sqlite_snapshot(paths.sqlite_path)
+        generation_before = _files_snapshot(generation)
+        started_at = perf_counter()
+
+        with pytest.raises(RestoreSafetyError):
+            restore_backup(
+                runtime_paths=paths,
+                repository_root=repository_root,
+                backup_directory=generation,
+                authentication_key=TEST_AUTHENTICATION_KEY,
+            )
+
+        assert perf_counter() - started_at < 1
+        assert _sqlite_snapshot(paths.sqlite_path) == sqlite_before
+        assert _files_snapshot(generation) == generation_before
+
+    with acquire_maintenance_lease(paths.sqlite_path):
+        pass
 
 
 def test_should_create_then_verify_backup_for_dogfood_version_two_schema(
@@ -458,6 +562,7 @@ async def test_should_restore_verified_generation_when_schema_initialization_fai
     generation = verify_spy.call_args.kwargs["backup_directory"]
     assert restore_spy.call_args.kwargs["backup_directory"] == generation
     assert restore_verify_spy.call_args.kwargs["backup_directory"] == generation
+    assert restore_spy.call_args.kwargs["maintenance_lease"] is not None
     assert (
         restore_spy.call_args.kwargs["authentication_key"]
         == restore_verify_spy.call_args.kwargs["authentication_key"]
@@ -472,14 +577,14 @@ async def test_should_restore_verified_generation_when_schema_initialization_fai
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("failure_stage", ("restore", "restore-verify"))
+@pytest.mark.parametrize("failure_stage", ("restore", "verification"))
 async def test_should_stop_startup_when_schema_rollback_fails(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     failure_stage: str,
 ) -> None:
     from app import main
-    from app.backup_restore import restore_backup
+    from app.backup_restore import RestoreDurabilityUncertainError, restore_backup
     from app.conversation_history.schema import initialize_conversation_history_schema
 
     repository_root = Path(__file__).resolve().parents[3]
@@ -488,16 +593,23 @@ async def test_should_stop_startup_when_schema_rollback_fails(
     )
     create_version_two_database(paths.sqlite_path)
 
+    migration_error = RuntimeError("schema initialization failed")
+    compensation_error = (
+        RestoreDurabilityUncertainError("restore durability is uncertain")
+        if failure_stage == "restore"
+        else RuntimeError("verification failed")
+    )
+
     def initialize_then_fail(database_path: Path) -> None:
         initialize_conversation_history_schema(database_path)
-        raise RuntimeError("schema initialization failed")
+        raise migration_error
 
     restore = Mock(wraps=restore_backup)
     restore_verify = Mock()
     if failure_stage == "restore":
-        restore.side_effect = RuntimeError("restore failed")
+        restore.side_effect = compensation_error
     else:
-        restore_verify.side_effect = RuntimeError("restore-verify failed")
+        restore_verify.side_effect = compensation_error
     monkeypatch.setenv("DOGFOOD_BACKUP_DIR", str(tmp_path / "backups"))
     monkeypatch.setenv("DOGFOOD_BACKUP_RETENTION_COUNT", "2")
     monkeypatch.setenv("DOGFOOD_BACKUP_AUTHENTICATION_KEY", "ab" * 32)
@@ -510,10 +622,13 @@ async def test_should_stop_startup_when_schema_rollback_fails(
     monkeypatch.setattr(main, "restore_backup", restore)
     monkeypatch.setattr(main, "verify_restored_backup", restore_verify)
 
-    with pytest.raises(RuntimeError, match=f"{failure_stage} failed"):
+    with pytest.raises(RuntimeError) as captured:
         async with main.lifespan(FastAPI()):
             pytest.fail("startup must stop when rollback fails")
 
+    assert captured.value.primary_error is migration_error
+    assert captured.value.compensation_error is compensation_error
+    assert captured.value.compensation_stage == failure_stage
     restore.assert_called_once()
     if failure_stage == "restore":
         restore_verify.assert_not_called()

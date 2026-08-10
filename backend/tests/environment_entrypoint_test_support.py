@@ -18,14 +18,12 @@ def copy_environment_runtime(tmp_path: Path) -> Path:
     environments = tmp_path / "environments"
     shutil.copytree(ROOT_DIR / "environments", environments)
     backend_app = tmp_path / "backend" / "app"
-    backend_app.mkdir(parents=True)
-    shutil.copy2(ROOT_DIR / "backend" / "app" / "__init__.py", backend_app / "__init__.py")
-    shutil.copy2(
-        ROOT_DIR / "backend" / "app" / "model_settings.py",
-        backend_app / "model_settings.py",
+    backend_app.parent.mkdir(parents=True)
+    shutil.copytree(
+        ROOT_DIR / "backend" / "app",
+        backend_app,
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "data"),
     )
-    for name in ("runtime_paths.py", "runtime_data_root.py"):
-        shutil.copy2(ROOT_DIR / "backend" / "app" / name, backend_app / name)
     return environments
 
 

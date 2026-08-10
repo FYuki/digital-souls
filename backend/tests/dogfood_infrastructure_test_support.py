@@ -37,6 +37,7 @@ def write_dogfood_env(tmp_path: Path) -> tuple[Path, Path]:
         ),
         encoding="utf-8",
     )
+    env_path.chmod(0o600)
     return env_path, data_dir
 
 

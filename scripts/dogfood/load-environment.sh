@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 DOGFOOD_DEFAULT_ENV_FILE=/etc/digital-souls/dogfood.env
+DOGFOOD_TEMPORARY_ENV_FORBIDDEN_MODE_MASK=077
 DOGFOOD_ALLOWED_ENV_KEYS=(
   DS_ENVIRONMENT_ID DOGFOOD_WSL_DISTRO DOGFOOD_SERVICE_USER
   DOGFOOD_SERVICE_GROUP DOGFOOD_REPOSITORY_URL DOGFOOD_REPOSITORY_REVISION
@@ -33,6 +34,14 @@ dogfood_load_environment() {
   if [ ! -f "$env_file" ]; then
     echo "ERROR: dogfood設定ファイルがありません: $env_file" >&2
     return 2
+  fi
+  if [ "$env_file" != "$DOGFOOD_DEFAULT_ENV_FILE" ]; then
+    local env_mode
+    env_mode=$(stat --format=%a -- "$env_file")
+    if (( (8#$env_mode & DOGFOOD_TEMPORARY_ENV_FORBIDDEN_MODE_MASK) != 0 )); then
+      echo "ERROR: bootstrap用一時設定ファイルの権限が安全ではありません" >&2
+      return 2
+    fi
   fi
   export DOGFOOD_RESOLVED_ENV_FILE="$env_file"
   for allowed in "${DOGFOOD_ALLOWED_ENV_KEYS[@]}"; do

@@ -28,13 +28,21 @@ from app.backup_restore.models import (
     BackupArtifactError,
     BackupError,
     BackupIdentityError,
+    BackupPublicationUncertainError,
     BackupVerification,
+    RestoreDurabilityUncertainError,
     RestoreSafetyError,
     VerifiedGeneration,
 )
 from app.backup_restore.sqlite_snapshot import (
     create_sqlite_snapshot,
     verify_sqlite_database,
+)
+from app.backup_restore.sqlite_sidecars import converge_sqlite_sidecars
+from app.conversation_history.sqlite_lease import (
+    SQLiteLease,
+    SQLiteLeaseUnavailableError,
+    acquire_maintenance_lease,
 )
 from app.runtime_data_root import validate_existing_runtime_data_root
 from app.runtime_paths import RuntimePaths
@@ -97,7 +105,12 @@ def create_backup(
         except Exception:
             shutil.rmtree(staging)
             raise
-        _fsync_directory(backup_root)
+        try:
+            _fsync_directory(backup_root)
+        except OSError as error:
+            raise BackupPublicationUncertainError(
+                "backup publication durability is uncertain"
+            ) from error
         _prune_backup_generations(
             backup_root, retention_count, authentication_key
         )
@@ -121,13 +134,28 @@ def restore_backup(
     repository_root: Path,
     backup_directory: Path,
     authentication_key: BackupAuthenticationKey,
+    maintenance_lease: SQLiteLease | None = None,
 ) -> BackupVerification:
     validate_existing_runtime_data_root(runtime_paths, repository_root)
     generation = _preflight(backup_directory, authentication_key)
     if generation.environment_id != runtime_paths.environment_id:
         raise BackupIdentityError("backup environment identity does not match destination")
-    _reject_destination_with_sqlite_sidecars(runtime_paths.sqlite_path)
+    try:
+        lease_context = _restore_maintenance_lease(
+            runtime_paths.sqlite_path, maintenance_lease
+        )
+        with lease_context:
+            converge_sqlite_sidecars(runtime_paths.sqlite_path)
+            return _replace_database(runtime_paths, generation)
+    except SQLiteLeaseUnavailableError as error:
+        raise RestoreSafetyError("restore rejected while SQLite is in use") from error
+
+
+def _replace_database(
+    runtime_paths: RuntimePaths, generation: VerifiedGeneration
+) -> BackupVerification:
     staging = runtime_paths.data_root / f".{ARTIFACT_FILENAME}.staging-{uuid4().hex}"
+    replaced = False
     try:
         shutil.copyfile(generation.artifact_path, staging)
         if sha256_file(staging) != generation.artifact_sha256:
@@ -137,8 +165,13 @@ def restore_backup(
             raise BackupArtifactError("copied backup validation does not match backup")
         _fsync_file(staging)
         os.replace(staging, runtime_paths.sqlite_path)
+        replaced = True
         _fsync_directory(runtime_paths.data_root)
     except Exception as error:
+        if replaced:
+            raise RestoreDurabilityUncertainError(
+                "restore durability is uncertain"
+            ) from error
         _remove_sqlite_staging_files(staging)
         if isinstance(error, (BackupArtifactError, BackupIdentityError)):
             raise
@@ -148,6 +181,18 @@ def restore_backup(
             raise
         raise RestoreSafetyError("restore database replacement failed safely") from error
     return result
+
+
+@contextmanager
+def _restore_maintenance_lease(
+    database: Path, existing: SQLiteLease | None
+) -> Iterator[SQLiteLease]:
+    if existing is not None:
+        existing.require_maintenance_for(database)
+        yield existing
+        return
+    with acquire_maintenance_lease(database) as acquired:
+        yield acquired
 
 
 def _remove_sqlite_staging_files(staging: Path) -> None:
@@ -165,16 +210,6 @@ def _fsync_directory(path: Path) -> None:
         os.fsync(file_descriptor)
     finally:
         os.close(file_descriptor)
-
-
-def _reject_destination_with_sqlite_sidecars(database: Path) -> None:
-    if any(
-        os.path.lexists(database.with_name(database.name + suffix))
-        for suffix in SQLITE_SIDECAR_SUFFIXES
-    ):
-        raise RestoreSafetyError(
-            "restore destination contains SQLite sidecar files"
-        )
 
 
 def _remove_sqlite_database_files(database: Path) -> None:

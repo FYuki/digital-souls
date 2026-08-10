@@ -15,23 +15,31 @@ BACKUP_AUTHENTICATION_KEY_ENV = "DOGFOOD_BACKUP_AUTHENTICATION_KEY"
 
 
 class BackupError(RuntimeError):
-    pass
+    public_message = "backup operation failed"
 
 
 class BackupIdentityError(BackupError):
-    pass
+    public_message = "backup environment identity is invalid"
 
 
 class BackupArtifactError(BackupError):
-    pass
+    public_message = "backup artifact is invalid"
 
 
 class BackupSchemaError(BackupError):
-    pass
+    public_message = "backup schema is invalid"
 
 
 class RestoreSafetyError(BackupError):
-    pass
+    public_message = "restore was rejected safely"
+
+
+class BackupPublicationUncertainError(BackupError):
+    public_message = "backup publication durability is uncertain"
+
+
+class RestoreDurabilityUncertainError(BackupError):
+    public_message = "restore durability is uncertain"
 
 
 @dataclass(frozen=True, repr=False)

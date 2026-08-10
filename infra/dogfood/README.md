@@ -42,13 +42,16 @@ sudo systemctl enable --now docker.service
 
 ## 設定とbootstrap
 
-`env.example`をdogfood専用の一時pathへコピーし、repository URL、配備する完全なcommit SHA、VOICEVOX imageを実環境に合わせる。推論portはここへ追加せず、`environments/profiles/dogfood.json`を唯一の参照元にする。
+`env.example`をdogfood専用の一時pathへmode `0600`で作成し、repository URL、配備する完全なcommit SHA、VOICEVOX imageを実環境に合わせる。単純な`cp infra/dogfood/env.example /tmp/dogfood.env`のまま使用してはならない。推論portはここへ追加せず、`environments/profiles/dogfood.json`を唯一の参照元にする。
 
 ```bash
-cp infra/dogfood/env.example /tmp/dogfood.env
+install -m 0600 infra/dogfood/env.example /tmp/dogfood.env
 sudo env DOGFOOD_ENV_FILE=/tmp/dogfood.env WSL_DISTRO_NAME=Ubuntu-dogfood \
   scripts/dogfood/bootstrap.sh
+rm -- /tmp/dogfood.env
 ```
+
+bootstrap用一時envの`0600`は、内容を読み込む前の秘密保護契約である。bootstrapが正規配置する`/etc/digital-souls/dogfood.env`の`0640 root:digital-souls`とは別の契約であり、一時envへ`0640`を使用しない。bootstrapの成否を確認した後、一時envは削除する。
 
 bootstrapはdistribution名と`DS_ENVIRONMENT_ID=dogfood`、必須設定、絶対path、pathの非重複、HTTPS repository URL、完全なcommit SHAを配置前に検証する。初回と再実行のどちらもrootで指定revisionを取得し、origin、commit一致、detached HEAD、変更のないworking treeを検証してから生成資材を配置する。既存DBがある場合は、指定revisionの一時cloneへBackend実行環境を構築し、その環境でbackupと独立検証を完了してから配備用cloneのfetchへ進む。検証後のcloneはroot所有に収束し、application service userは変更できない。暗黙のpull、reset、deployは行わない。
 
@@ -92,7 +95,7 @@ sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY -u digital-souls env \
   --backup-directory /var/lib/digital-souls/backups/backup-YYYYMMDDTHHMMSSZ-COMMIT-UNIQUEID
 ```
 
-CLIは成功時に0、identity不一致は10、artifact不正は11、schema不一致は12、非破壊切替失敗は13、その他の入力・OSエラーは1を返す。出力する証跡は環境ID、UTC日時、commit、schema version、conversation件数、検証結果に限定する。metadata、manifest、標準出力、標準エラー、作業logへconversation本文、DB本文、環境変数全体、秘密値を転記しない。
+CLIは成功時に0、identity不一致は10、artifact不正は11、schema不一致は12、非破壊切替失敗は13、backup公開結果不確定は14、restore durability不確定は15、その他の入力・OSエラーは1を返す。出力する証跡は環境ID、UTC日時、commit、schema version、conversation件数、検証結果に限定する。metadata、manifest、標準出力、標準エラー、作業logへconversation本文、DB本文、環境変数全体、秘密値を転記しない。
 
 ### schema変更失敗時のrollback
 

@@ -499,6 +499,7 @@ def test_rst_safe_01_preflight_failure_preserves_existing_database_bytes(
     tmp_path: Path,
 ) -> None:
     from app.backup_restore import BackupArtifactError, restore_backup
+    from app.conversation_history.sqlite_lease import SQLITE_LEASE_FILENAME_SUFFIX
 
     repository_root = tmp_path / "repository"
     repository_root.mkdir()
@@ -524,6 +525,7 @@ def test_rst_safe_01_preflight_failure_preserves_existing_database_bytes(
         assert {entry.name for entry in destination.data_root.iterdir()} == {
             ".environment-identity.json",
             ".environment-identity.lock",
+            SQLITE_LEASE_FILENAME_SUFFIX,
             "conversation-history.db",
         }
     finally:

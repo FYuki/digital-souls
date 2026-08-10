@@ -38,12 +38,32 @@ def _replace_setting(env_path: Path, key: str, value: str) -> None:
 
 def test_should_continue_after_loading_valid_dogfood_environment(tmp_path: Path) -> None:
     env_path, _ = write_dogfood_env(tmp_path)
+    assert env_path.stat().st_mode & 0o777 == 0o600
     sentinel_path = tmp_path / "valid.sentinel"
 
     result = _run_loader(env_path, sentinel_path)
 
     assert result.returncode == 0, result.stderr
     assert sentinel_path.is_file()
+
+
+@pytest.mark.parametrize("mode", (0o640, 0o604, 0o666), ids=("group", "other", "both"))
+def test_secret_env_01_rejects_exposed_temporary_env_before_reading_it(
+    tmp_path: Path,
+    mode: int,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    secret = "ab" * 32
+    assert secret in env_path.read_text(encoding="utf-8")
+    env_path.chmod(mode)
+    sentinel_path = tmp_path / "permission-rejected.sentinel"
+
+    result = _run_loader(env_path, sentinel_path)
+
+    assert result.returncode != 0
+    assert not sentinel_path.exists()
+    assert secret not in result.stdout
+    assert secret not in result.stderr
 
 
 @pytest.mark.parametrize(

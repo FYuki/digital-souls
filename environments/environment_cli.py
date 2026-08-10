@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
@@ -12,21 +11,32 @@ for import_root in (ROOT_DIR, BACKEND_DIR):
     if str(import_root) not in sys.path:
         sys.path.insert(0, str(import_root))
 
+from app.backup_restore import (
+    BackupArtifactError,
+    BackupIdentityError,
+    BackupPublicationUncertainError,
+    BackupSchemaError,
+    RestoreDurabilityUncertainError,
+    RestoreSafetyError,
+)
+from app.backup_restore.models import BackupError
 from commands.down_command import down_environment
 from commands.status_command import status_environment
 from commands.test_result_command import record_playwright_result
 from commands.up_command import up_environment
 from commands.verify_command import verify_environment
 from commands.voicevox_command import start_voicevox
-from profile_types import ProfileError
 
-BACKUP_ERROR_MODULE_PREFIX = "app.backup_restore"
-BACKUP_ERROR_EXIT_CODES = {
-    "BackupIdentityError": 10,
-    "BackupArtifactError": 11,
-    "BackupSchemaError": 12,
-    "RestoreSafetyError": 13,
-}
+BACKUP_ERROR_EXIT_CODES = (
+    (BackupIdentityError, 10),
+    (BackupArtifactError, 11),
+    (BackupSchemaError, 12),
+    (RestoreSafetyError, 13),
+    (BackupPublicationUncertainError, 14),
+    (RestoreDurabilityUncertainError, 15),
+)
+UNKNOWN_BACKUP_ERROR_MESSAGE = "backup operation failed"
+UNKNOWN_ENVIRONMENT_ERROR_MESSAGE = "environment operation failed"
 
 
 def backup_environment(
@@ -145,16 +155,15 @@ def _dispatch(arguments: argparse.Namespace) -> int:
 def main() -> int:
     try:
         return _dispatch(_parser().parse_args())
-    except RuntimeError as error:
-        if not error.__class__.__module__.startswith(BACKUP_ERROR_MODULE_PREFIX):
-            print(f"ERROR: {error}", file=sys.stderr)
-            return 1
-        detail = str(error)
-        suffix = f": {detail}" if re.fullmatch(r"[A-Za-z ]+", detail) else ""
-        print(f"ERROR: {error.__class__.__name__}{suffix}", file=sys.stderr)
-        return BACKUP_ERROR_EXIT_CODES[error.__class__.__name__]
-    except (ProfileError, ValueError, OSError) as error:
-        print(f"ERROR: {error}", file=sys.stderr)
+    except BackupError as error:
+        for error_type, exit_code in BACKUP_ERROR_EXIT_CODES:
+            if isinstance(error, error_type):
+                print(f"ERROR: {error.public_message}", file=sys.stderr)
+                return exit_code
+        print(f"ERROR: {UNKNOWN_BACKUP_ERROR_MESSAGE}", file=sys.stderr)
+        return 1
+    except Exception:
+        print(f"ERROR: {UNKNOWN_ENVIRONMENT_ERROR_MESSAGE}", file=sys.stderr)
         return 1
 
 

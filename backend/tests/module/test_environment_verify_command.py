@@ -234,7 +234,7 @@ def test_should_return_nonzero_and_json_when_external_service_is_unreachable(
     payload = json.loads(result.stdout)
     assert result.returncode == 1
     assert payload["services"]["frontend"]["classification"] == "readiness"
-    assert "external service is not ready: frontend" in result.stderr
+    assert result.stderr == "ERROR: environment operation failed\n"
 
 
 def test_should_allow_managed_ollama_model_preparation_through_verify_entrypoint(
