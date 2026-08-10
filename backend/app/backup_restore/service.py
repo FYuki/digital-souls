@@ -22,6 +22,8 @@ from app.backup_restore.models import (
     ARTIFACT_FILENAME,
     FORMAT_VERSION,
     GENERATION_PREFIX,
+    MANIFEST_FILENAME,
+    METADATA_FILENAME,
     BackupAuthenticationKey,
     BackupArtifactError,
     BackupError,
@@ -87,10 +89,15 @@ def create_backup(
                 backup_directory=staging,
                 authentication_key=authentication_key,
             )
+            _fsync_file(artifact)
+            _fsync_file(staging / METADATA_FILENAME)
+            _fsync_file(staging / MANIFEST_FILENAME)
+            _fsync_directory(staging)
             staging.rename(generation)
         except Exception:
             shutil.rmtree(staging)
             raise
+        _fsync_directory(backup_root)
         _prune_backup_generations(
             backup_root, retention_count, authentication_key
         )
@@ -128,7 +135,9 @@ def restore_backup(
         result = verify_sqlite_database(staging)
         if result != generation.verification:
             raise BackupArtifactError("copied backup validation does not match backup")
+        _fsync_file(staging)
         os.replace(staging, runtime_paths.sqlite_path)
+        _fsync_directory(runtime_paths.data_root)
     except Exception as error:
         _remove_sqlite_staging_files(staging)
         if isinstance(error, (BackupArtifactError, BackupIdentityError)):
@@ -143,6 +152,19 @@ def restore_backup(
 
 def _remove_sqlite_staging_files(staging: Path) -> None:
     _remove_sqlite_database_files(staging)
+
+
+def _fsync_file(path: Path) -> None:
+    with path.open("rb") as file:
+        os.fsync(file.fileno())
+
+
+def _fsync_directory(path: Path) -> None:
+    file_descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(file_descriptor)
+    finally:
+        os.close(file_descriptor)
 
 
 def _reject_destination_with_sqlite_sidecars(database: Path) -> None:
