@@ -29,6 +29,59 @@ else
   mkdir -p "$DOGFOOD_CLONE_DIR"
   git clone --no-checkout "$DOGFOOD_REPOSITORY_URL" "$DOGFOOD_CLONE_DIR"
 fi
+install -d -m 0750 -o "$DOGFOOD_SERVICE_USER" -g "$DOGFOOD_SERVICE_GROUP" \
+  "$DOGFOOD_BACKUP_DIR"
+if [ -f "$DS_DATA_DIR/conversation-history.db" ]; then
+  backup_clone=$(mktemp -d)
+  trap 'rm -rf -- "$backup_clone"' EXIT
+  chown "root:$DOGFOOD_SERVICE_GROUP" "$backup_clone"
+  chmod 2750 "$backup_clone"
+  (
+    umask 0027
+    git clone --no-checkout "$DOGFOOD_REPOSITORY_URL" "$backup_clone"
+  )
+  git -C "$backup_clone" fetch --depth 1 origin "$DOGFOOD_REPOSITORY_REVISION"
+  backup_revision=$(git -C "$backup_clone" rev-parse --verify "$DOGFOOD_REPOSITORY_REVISION^{commit}")
+  if [ "$backup_revision" != "$DOGFOOD_REPOSITORY_REVISION" ]; then
+    echo "ERROR: backup用cloneのcommitがDOGFOOD_REPOSITORY_REVISIONと一致しません" >&2
+    exit 2
+  fi
+  git -c core.hooksPath=/dev/null -C "$backup_clone" checkout --detach "$DOGFOOD_REPOSITORY_REVISION"
+  checked_out_backup_revision=$(git -C "$backup_clone" rev-parse HEAD)
+  if [ "$checked_out_backup_revision" != "$DOGFOOD_REPOSITORY_REVISION" ]; then
+    echo "ERROR: backup用cloneのcheckout後commitがDOGFOOD_REPOSITORY_REVISIONと一致しません" >&2
+    exit 2
+  fi
+  (
+    umask 0027
+    "$backup_clone/scripts/setup-backend.sh"
+  )
+  backup_python="$backup_clone/backend/.venv/bin/python"
+  backup_result=$(sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY \
+    -u "$DOGFOOD_SERVICE_USER" env \
+    DS_ENVIRONMENT_ID="$DS_ENVIRONMENT_ID" \
+    DS_DATA_DIR="$DS_DATA_DIR" \
+    "$backup_python" \
+    "$backup_clone/environments/environment_cli.py" backup \
+    --environment "$DS_ENVIRONMENT_ID" \
+    --repository-root "$backup_clone" \
+    --backup-root "$DOGFOOD_BACKUP_DIR" \
+    --retention-count "$DOGFOOD_BACKUP_RETENTION_COUNT")
+  backup_directory=$(printf '%s\n' "$backup_result" | \
+    "$backup_python" -c \
+    'import json, sys
+payload = json.load(sys.stdin)
+if set(payload) != {"status", "backupDirectory"} or payload["status"] != "ok" or not isinstance(payload["backupDirectory"], str) or not payload["backupDirectory"]:
+    raise SystemExit(1)
+print(payload["backupDirectory"])')
+  sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY \
+    -u "$DOGFOOD_SERVICE_USER" env \
+    "$backup_python" \
+    "$backup_clone/environments/environment_cli.py" backup-verify \
+    --backup-directory "$backup_directory"
+  rm -rf -- "$backup_clone"
+  trap - EXIT
+fi
 git -C "$DOGFOOD_CLONE_DIR" fetch --depth 1 origin "$DOGFOOD_REPOSITORY_REVISION"
 resolved_revision=$(git -C "$DOGFOOD_CLONE_DIR" rev-parse --verify "$DOGFOOD_REPOSITORY_REVISION^{commit}")
 if [ "$resolved_revision" != "$DOGFOOD_REPOSITORY_REVISION" ]; then

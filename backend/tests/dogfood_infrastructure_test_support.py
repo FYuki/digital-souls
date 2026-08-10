@@ -26,6 +26,9 @@ def write_dogfood_env(tmp_path: Path) -> tuple[Path, Path]:
                 f"DOGFOOD_CLONE_DIR={tmp_path / 'clone'}",
                 f"DOGFOOD_CONFIG_DIR={tmp_path / 'config'}",
                 f"DS_DATA_DIR={data_dir}",
+                f"DOGFOOD_BACKUP_DIR={tmp_path / 'backups'}",
+                "DOGFOOD_BACKUP_RETENTION_COUNT=7",
+                f"DOGFOOD_BACKUP_AUTHENTICATION_KEY={'ab' * 32}",
                 f"DOGFOOD_STATE_DIR={tmp_path / 'state'}",
                 f"DOGFOOD_LOG_DIR={tmp_path / 'log'}",
                 "DOGFOOD_VOICEVOX_IMAGE=voicevox/voicevox_engine:test",
@@ -109,6 +112,50 @@ def prepare_initial_bootstrap_clone_assets(tmp_path: Path) -> Path:
     return clone_assets_dir
 
 
+def prepare_target_bootstrap_clone_assets(tmp_path: Path) -> Path:
+    clone_assets_dir = tmp_path / "target-clone-assets"
+    (clone_assets_dir / ".git").mkdir(parents=True)
+    setup_backend = clone_assets_dir / "scripts" / "setup-backend.sh"
+    setup_backend.parent.mkdir(parents=True)
+    write_executable(
+        setup_backend,
+        '[ "${BOOTSTRAP_FAILURE-}" != "backend-setup" ]\n'
+        'printf "backend-setup\\n" >> "$BOOTSTRAP_CALL_LOG"\n'
+        'script_dir=$(dirname "$0")\n'
+        'python=$(dirname "$script_dir")/backend/.venv/bin/python\n'
+        'mkdir -p "$(dirname "$python")"\n'
+        'cat > "$python" <<\'PYTHON\'\n'
+        '#!/usr/bin/env bash\n'
+        'set -eu\n'
+        'printf "python\\t%s\\n" "$*" >> "$BOOTSTRAP_CALL_LOG"\n'
+        'if [ "$1" = "-c" ]; then exec /usr/bin/python3 "$@"; fi\n'
+        'script=$1\n'
+        'shift\n'
+        'exec bash "$script" "$@"\n'
+        'PYTHON\n'
+        'chmod 0750 "$python"\n',
+    )
+    cli = clone_assets_dir / "environments" / "environment_cli.py"
+    cli.parent.mkdir(parents=True)
+    write_executable(
+        cli,
+        '[ "$BOOTSTRAP_EFFECTIVE_USER" = "$DOGFOOD_SERVICE_USER" ]\n'
+        'repository_root=$(dirname "$(dirname "$0")")\n'
+        '[ "$(stat -c %a "$repository_root")" = "2750" ]\n'
+        '[ -z "$(find "$repository_root" -type d ! -perm -g=rx -print -quit)" ]\n'
+        '[ -z "$(find "$repository_root" -type f ! -perm -g=r -print -quit)" ]\n'
+        '[ -d "$DOGFOOD_BACKUP_DIR" ]\n'
+        'printf "target-cli\\t%s\\n" "$*" >> "$BOOTSTRAP_CALL_LOG"\n'
+        'case "$1" in\n'
+        '  backup)\n'
+        '    [ "${BOOTSTRAP_FAILURE-}" != "backup" ]\n'
+        '    printf \'%s\\n\' "$BOOTSTRAP_BACKUP_OUTPUT" ;;\n'
+        '  backup-verify) [ "${BOOTSTRAP_FAILURE-}" != "verify" ] ;;\n'
+        'esac\n',
+    )
+    return clone_assets_dir
+
+
 def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
     bin_dir = tmp_path / "bootstrap-bin"
     bin_dir.mkdir()
@@ -123,8 +170,30 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
         + 'then printf "digital-souls docker\\n"; fi\n',
     )
     write_executable(bin_dir / "getent", recorder)
-    for command in ("gpasswd", "chown", "chmod", "install", "systemctl"):
+    for command in ("gpasswd", "chown", "systemctl"):
         write_executable(bin_dir / command, recorder)
+    write_executable(bin_dir / "chmod", recorder + 'exec /bin/chmod "$@"\n')
+    write_executable(
+        bin_dir / "install",
+        recorder
+        + 'if [ "${1-}" = "-d" ]; then\n'
+        + "  shift\n"
+        + '  while [ "$#" -gt 0 ]; do\n'
+        + '    case "$1" in\n'
+        + '      -m) mode=$2; shift 2 ;;\n'
+        + '      -o|-g) shift 2 ;;\n'
+        + '      *) mkdir -p "$1"; /bin/chmod "$mode" "$1"; shift ;;\n'
+        + "    esac\n"
+        + "  done\n"
+        + "fi\n",
+    )
+    write_executable(
+        bin_dir / "sudo",
+        recorder
+        + 'if [ "${1-}" = "--preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY" ]; then shift; fi\n'
+        + 'if [ "${1-}" = "-u" ]; then export BOOTSTRAP_EFFECTIVE_USER=$2; shift 2; fi\n'
+        + 'exec "$@"\n',
+    )
     write_executable(
         bin_dir / "git",
         recorder
@@ -132,13 +201,19 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
         + '  *"clone --no-checkout"*)\n'
         + '    [ "${BOOTSTRAP_FAILURE-}" != "clone" ] || exit 1\n'
         + '    clone_target=${@: -1}\n'
-        + '    cp -R "$BOOTSTRAP_INITIAL_CLONE_ASSETS/." "$clone_target" ;;\n'
+        + '    if [ "$clone_target" = "$DOGFOOD_CLONE_DIR" ]; then\n'
+        + '      cp -R "$BOOTSTRAP_INITIAL_CLONE_ASSETS/." "$clone_target"\n'
+        + "    else\n"
+        + '      cp -R "$BOOTSTRAP_TARGET_CLONE_ASSETS/." "$clone_target"\n'
+        + "    fi ;;\n"
         + '  *"remote get-url origin"*)\n'
         + '    if [ "${BOOTSTRAP_FAILURE-}" = "origin" ]; then printf "https://example.invalid/other.git\\n"; '
         + 'else printf "%s\\n" "$DOGFOOD_REPOSITORY_URL"; fi ;;\n'
         + '  *"fetch --depth 1"*) [ "${BOOTSTRAP_FAILURE-}" != "fetch" ] ;;\n'
         + '  *"rev-parse --verify"*)\n'
-        + '    if [ "${BOOTSTRAP_FAILURE-}" = "revision" ]; then printf "ffffffffffffffffffffffffffffffffffffffff\\n"; '
+        + '    if [ "${BOOTSTRAP_FAILURE-}" = "revision" ] || '
+        + '       { [ "${BOOTSTRAP_FAILURE-}" = "target-revision" ] && [[ "$*" != *"-C $DOGFOOD_CLONE_DIR "* ]]; }; '
+        + 'then printf "ffffffffffffffffffffffffffffffffffffffff\\n"; '
         + 'else printf "%s\\n" "$DOGFOOD_REPOSITORY_REVISION"; fi ;;\n'
         + '  *"rev-parse HEAD"*) printf "%s\\n" "$DOGFOOD_REPOSITORY_REVISION" ;;\n'
         + '  *"symbolic-ref --quiet HEAD"*) [ "${BOOTSTRAP_FAILURE-}" = "branch" ] ;;\n'

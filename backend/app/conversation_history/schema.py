@@ -1,4 +1,5 @@
 import sqlite3
+from dataclasses import dataclass
 from pathlib import Path
 
 from app.conversation_history.errors import LegacySchemaError
@@ -13,6 +14,28 @@ CURRENT_TABLES = frozenset(
         "wal_cleanup_jobs",
     }
 )
+
+
+@dataclass(frozen=True)
+class SchemaInspection:
+    schema_version: int
+    tables: frozenset[str]
+    is_current: bool
+    migration_required: bool
+
+
+def inspect_conversation_history_schema(database_path: Path) -> SchemaInspection:
+    if not database_path.is_file():
+        return SchemaInspection(0, frozenset(), False, False)
+    with sqlite3.connect(f"file:{database_path}?mode=ro", uri=True) as connection:
+        tables = _user_tables(connection)
+        version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+        return SchemaInspection(
+            schema_version=version,
+            tables=tables,
+            is_current=_is_current_schema(connection),
+            migration_required=_is_version_two_schema(connection),
+        )
 _VERSION_TWO_TABLES = frozenset({"conversations", "conversation_turns"})
 CONVERSATIONS_COLUMNS = (
     "character_id",

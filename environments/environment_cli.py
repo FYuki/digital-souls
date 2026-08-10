@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
-
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 BACKEND_DIR = ROOT_DIR / "backend"
@@ -13,12 +13,59 @@ for import_root in (ROOT_DIR, BACKEND_DIR):
         sys.path.insert(0, str(import_root))
 
 from commands.down_command import down_environment
+from commands.status_command import status_environment
 from commands.test_result_command import record_playwright_result
 from commands.up_command import up_environment
-from commands.status_command import status_environment
 from commands.verify_command import verify_environment
 from commands.voicevox_command import start_voicevox
 from profile_types import ProfileError
+
+BACKUP_ERROR_MODULE_PREFIX = "app.backup_restore"
+BACKUP_ERROR_EXIT_CODES = {
+    "BackupIdentityError": 10,
+    "BackupArtifactError": 11,
+    "BackupSchemaError": 12,
+    "RestoreSafetyError": 13,
+}
+
+
+def backup_environment(
+    environment_id: str,
+    repository_root: str,
+    backup_root: str,
+    retention_count: int,
+) -> int:
+    from commands.backup_restore_command import backup_environment as operation
+
+    return operation(environment_id, repository_root, backup_root, retention_count)
+
+
+def verify_environment_backup(backup_directory: str) -> int:
+    from commands.backup_restore_command import verify_environment_backup as operation
+
+    return operation(backup_directory)
+
+
+def restore_environment_backup(
+    environment_id: str,
+    repository_root: str,
+    backup_directory: str,
+) -> int:
+    from commands.backup_restore_command import restore_environment_backup as operation
+
+    return operation(environment_id, repository_root, backup_directory)
+
+
+def verify_restored_environment_backup(
+    environment_id: str,
+    repository_root: str,
+    backup_directory: str,
+) -> int:
+    from commands.backup_restore_command import (
+        verify_restored_environment_backup as operation,
+    )
+
+    return operation(environment_id, repository_root, backup_directory)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -40,10 +87,46 @@ def _parser() -> argparse.ArgumentParser:
     test_result.add_argument("--run-report", required=True)
     test_result.add_argument("--status", choices=("passed", "failed"), required=True)
     test_result.add_argument("--message", required=True)
+    backup = commands.add_parser("backup")
+    backup.add_argument("--environment", required=True)
+    backup.add_argument("--repository-root", required=True)
+    backup.add_argument("--backup-root", required=True)
+    backup.add_argument("--retention-count", required=True, type=int)
+    backup_verify = commands.add_parser("backup-verify")
+    backup_verify.add_argument("--backup-directory", required=True)
+    restore = commands.add_parser("restore")
+    restore.add_argument("--environment", required=True)
+    restore.add_argument("--repository-root", required=True)
+    restore.add_argument("--backup-directory", required=True)
+    restore_verify = commands.add_parser("restore-verify")
+    restore_verify.add_argument("--environment", required=True)
+    restore_verify.add_argument("--repository-root", required=True)
+    restore_verify.add_argument("--backup-directory", required=True)
     return parser
 
 
 def _dispatch(arguments: argparse.Namespace) -> int:
+    if arguments.command == "backup":
+        return backup_environment(
+            arguments.environment,
+            arguments.repository_root,
+            arguments.backup_root,
+            arguments.retention_count,
+        )
+    if arguments.command == "backup-verify":
+        return verify_environment_backup(arguments.backup_directory)
+    if arguments.command == "restore":
+        return restore_environment_backup(
+            arguments.environment,
+            arguments.repository_root,
+            arguments.backup_directory,
+        )
+    if arguments.command == "restore-verify":
+        return verify_restored_environment_backup(
+            arguments.environment,
+            arguments.repository_root,
+            arguments.backup_directory,
+        )
     if arguments.command == "up":
         return up_environment(ROOT_DIR, arguments)
     if arguments.command == "down":
@@ -62,7 +145,15 @@ def _dispatch(arguments: argparse.Namespace) -> int:
 def main() -> int:
     try:
         return _dispatch(_parser().parse_args())
-    except (ProfileError, ValueError, RuntimeError, OSError) as error:
+    except RuntimeError as error:
+        if not error.__class__.__module__.startswith(BACKUP_ERROR_MODULE_PREFIX):
+            print(f"ERROR: {error}", file=sys.stderr)
+            return 1
+        detail = str(error)
+        suffix = f": {detail}" if re.fullmatch(r"[A-Za-z ]+", detail) else ""
+        print(f"ERROR: {error.__class__.__name__}{suffix}", file=sys.stderr)
+        return BACKUP_ERROR_EXIT_CODES[error.__class__.__name__]
+    except (ProfileError, ValueError, OSError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
 

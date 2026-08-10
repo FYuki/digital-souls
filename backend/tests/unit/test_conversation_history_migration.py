@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,8 @@ from app.conversation_history.schema import (
     STALE_INDEX_SQL,
     initialize_conversation_history_schema,
 )
+from app.runtime_data_root import initialize_runtime_data_root
+from app.runtime_paths import resolve_runtime_paths
 
 CHARACTER_ID = "miori"
 CONVERSATION_ID = "e98d6c65-1ae9-4d6f-a8c8-d59b0ad09001"
@@ -216,3 +219,40 @@ def test_should_reject_noncanonical_version_two_database(tmp_path: Path) -> None
         "created_at",
     )
     assert tables == {"conversations", "conversation_turns"}
+
+
+def test_should_create_verified_backup_before_version_two_migration(
+    tmp_path: Path,
+) -> None:
+    from app.backup_restore import create_backup, verify_backup
+    from tests.backup_restore_test_support import TEST_AUTHENTICATION_KEY
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths = resolve_runtime_paths(
+        {
+            "DS_ENVIRONMENT_ID": "dogfood",
+            "DS_DATA_DIR": str(tmp_path / "runtime"),
+        },
+        repository_root,
+    )
+    initialize_runtime_data_root(paths, repository_root)
+    _create_version_two_database(paths.sqlite_path)
+
+    generation = create_backup(
+        runtime_paths=paths,
+        repository_root=repository_root,
+        backup_root=tmp_path / "backups",
+        retention_count=2,
+        authentication_key=TEST_AUTHENTICATION_KEY,
+        git_commit="0123456789abcdef0123456789abcdef01234567",
+        created_at=datetime(2026, 8, 10, tzinfo=UTC),
+    )
+    result = verify_backup(
+        backup_directory=generation,
+        authentication_key=TEST_AUTHENTICATION_KEY,
+    )
+
+    assert result.schema_version == 2
+    assert result.required_tables == {"conversations", "conversation_turns"}
+    assert result.conversation_count == 1

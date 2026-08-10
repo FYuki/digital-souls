@@ -23,6 +23,9 @@ REQUIRED_ENV_KEYS = {
     "DOGFOOD_CLONE_DIR",
     "DOGFOOD_CONFIG_DIR",
     "DS_DATA_DIR",
+    "DOGFOOD_BACKUP_DIR",
+    "DOGFOOD_BACKUP_RETENTION_COUNT",
+    "DOGFOOD_BACKUP_AUTHENTICATION_KEY",
     "DOGFOOD_STATE_DIR",
     "DOGFOOD_LOG_DIR",
     "DOGFOOD_VOICEVOX_IMAGE",
@@ -85,6 +88,7 @@ def test_should_define_separate_dogfood_identity_clone_and_runtime_paths() -> No
         "DOGFOOD_CLONE_DIR",
         "DOGFOOD_CONFIG_DIR",
         "DS_DATA_DIR",
+        "DOGFOOD_BACKUP_DIR",
         "DOGFOOD_STATE_DIR",
         "DOGFOOD_LOG_DIR",
     )
@@ -136,6 +140,7 @@ def test_should_apply_declared_ownership_and_restricted_directory_permissions() 
         "DOGFOOD_CLONE_DIR",
         "DOGFOOD_CONFIG_DIR",
         "DS_DATA_DIR",
+        "DOGFOOD_BACKUP_DIR",
         "DOGFOOD_STATE_DIR",
         "DOGFOOD_LOG_DIR",
     ):

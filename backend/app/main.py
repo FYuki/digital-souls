@@ -3,6 +3,7 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import UTC, datetime
 import sqlite3
 from pathlib import Path
@@ -19,10 +20,21 @@ from app.audio_pipeline import (
 )
 from app.chat_prompt import build_chat_prompt
 from app.characters.loader import load_character_card
+from app.backup_restore import (
+    BackupAuthenticationKey,
+    create_backup,
+    resolve_backup_authentication_key,
+    restore_backup,
+    verify_backup,
+    verify_restored_backup,
+)
 from app.conversation_history.config import resolve_conversation_history_config
 from app.conversation_history.lifecycle_service import ConversationLifecycleService
 from app.conversation_history.repository import ConversationHistoryRepository
-from app.conversation_history.schema import initialize_conversation_history_schema
+from app.conversation_history.schema import (
+    initialize_conversation_history_schema,
+    inspect_conversation_history_schema,
+)
 from app.conversation_history.service import ConversationHistoryService
 from app.conversation_history.wal_cleanup import ConversationWalCleanup
 from app.llm import router as llm_router
@@ -44,6 +56,73 @@ from app.runtime_paths import (
 load_dotenv()
 
 RAG_MEMORY_WORKERS = _chat_runtime.DEFAULT_RAG_MEMORY_WORKERS
+DOGFOOD_BACKUP_DIR_ENV = "DOGFOOD_BACKUP_DIR"
+DOGFOOD_BACKUP_RETENTION_COUNT_ENV = "DOGFOOD_BACKUP_RETENTION_COUNT"
+
+
+@dataclass(frozen=True)
+class _SchemaRollbackContext:
+    generation: Path
+    authentication_key: BackupAuthenticationKey
+
+
+def ensure_schema_backup_gate(
+    paths: RuntimePaths, repository_root: Path
+) -> _SchemaRollbackContext | None:
+    inspection = inspect_conversation_history_schema(paths.sqlite_path)
+    if paths.environment_id != "dogfood" or not inspection.migration_required:
+        return None
+    backup_root_value = os.environ.get(DOGFOOD_BACKUP_DIR_ENV)
+    retention_value = os.environ.get(DOGFOOD_BACKUP_RETENTION_COUNT_ENV)
+    if not backup_root_value or retention_value is None:
+        raise RuntimeError("dogfood schema backup configuration is required")
+    try:
+        retention_count = int(retention_value)
+    except ValueError as error:
+        raise RuntimeError("dogfood backup retention count is invalid") from error
+    if retention_count <= 0:
+        raise RuntimeError("dogfood backup retention count is invalid")
+    authentication_key = resolve_backup_authentication_key(os.environ)
+    generation = create_backup(
+        runtime_paths=paths,
+        repository_root=repository_root,
+        backup_root=Path(backup_root_value),
+        retention_count=retention_count,
+        authentication_key=authentication_key,
+    )
+    verify_backup(
+        backup_directory=generation,
+        authentication_key=authentication_key,
+    )
+    return _SchemaRollbackContext(generation, authentication_key)
+
+
+def _initialize_schema_with_rollback(
+    *,
+    database_path: Path,
+    runtime_paths: RuntimePaths,
+    repository_root: Path,
+    rollback: _SchemaRollbackContext | None,
+) -> None:
+    if rollback is None:
+        initialize_conversation_history_schema(database_path)
+        return
+    try:
+        initialize_conversation_history_schema(database_path)
+    except Exception:
+        restore_backup(
+            runtime_paths=runtime_paths,
+            repository_root=repository_root,
+            backup_directory=rollback.generation,
+            authentication_key=rollback.authentication_key,
+        )
+        verify_restored_backup(
+            runtime_paths=runtime_paths,
+            repository_root=repository_root,
+            backup_directory=rollback.generation,
+            authentication_key=rollback.authentication_key,
+        )
+        raise
 
 
 def _load_character_prompt(character: str) -> CharacterPrompt:
@@ -84,8 +163,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     privacy_scanner = create_privacy_scanner(policy.privacy)
     history_sanitizer = create_history_sanitizer(privacy_scanner, policy.privacy)
     conversation_history_config = resolve_conversation_history_config(runtime_paths)
-    initialize_conversation_history_schema(
-        conversation_history_config.database_path,
+    rollback = ensure_schema_backup_gate(runtime_paths, repository_root)
+    _initialize_schema_with_rollback(
+        database_path=conversation_history_config.database_path,
+        runtime_paths=runtime_paths,
+        repository_root=repository_root,
+        rollback=rollback,
     )
     clock = lambda: datetime.now(UTC)
     wal_cleanup = ConversationWalCleanup(

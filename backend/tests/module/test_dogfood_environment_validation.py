@@ -102,6 +102,56 @@ def test_should_reject_missing_required_setting_before_following_operation(
 
 
 @pytest.mark.parametrize(
+    "key",
+    (
+        "DOGFOOD_BACKUP_DIR",
+        "DOGFOOD_BACKUP_RETENTION_COUNT",
+        "DOGFOOD_BACKUP_AUTHENTICATION_KEY",
+    ),
+)
+def test_should_reject_missing_required_backup_setting_before_following_operation(
+    tmp_path: Path,
+    key: str,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    source = env_path.read_text(encoding="utf-8")
+    env_path.write_text(
+        "\n".join(
+            line for line in source.splitlines() if not line.startswith(f"{key}=")
+        ),
+        encoding="utf-8",
+    )
+    sentinel_path = tmp_path / "missing-backup-setting.sentinel"
+
+    result = _run_loader(env_path, sentinel_path)
+
+    assert result.returncode != 0
+    assert not sentinel_path.exists()
+
+
+@pytest.mark.parametrize(
+    "key",
+    (
+        "DOGFOOD_BACKUP_DIR",
+        "DOGFOOD_BACKUP_RETENTION_COUNT",
+        "DOGFOOD_BACKUP_AUTHENTICATION_KEY",
+    ),
+)
+def test_should_reject_empty_backup_setting_before_following_operation(
+    tmp_path: Path,
+    key: str,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    _replace_setting(env_path, key, "")
+    sentinel_path = tmp_path / "empty-backup-setting.sentinel"
+
+    result = _run_loader(env_path, sentinel_path)
+
+    assert result.returncode != 0
+    assert not sentinel_path.exists()
+
+
+@pytest.mark.parametrize(
     ("key", "invalid_value"),
     (
         ("DOGFOOD_WSL_DISTRO", "Ubuntu dogfood"),
@@ -110,6 +160,9 @@ def test_should_reject_missing_required_setting_before_following_operation(
         ("DOGFOOD_CLONE_DIR", "relative/clone"),
         ("DOGFOOD_REPOSITORY_URL", "http://example.invalid/repository.git"),
         ("DOGFOOD_REPOSITORY_REVISION", "0123456789abcdef"),
+        ("DOGFOOD_BACKUP_RETENTION_COUNT", "0"),
+        ("DOGFOOD_BACKUP_RETENTION_COUNT", "seven"),
+        ("DOGFOOD_BACKUP_AUTHENTICATION_KEY", "0123456789abcdef"),
     ),
     ids=(
         "wsl-distribution",
@@ -118,6 +171,9 @@ def test_should_reject_missing_required_setting_before_following_operation(
         "absolute-path",
         "repository-url",
         "repository-revision",
+        "backup-retention-count",
+        "backup-retention-nonnumeric",
+        "backup-authentication-key",
     ),
 )
 def test_should_reject_invalid_setting_format_before_following_operation(
@@ -141,8 +197,14 @@ def test_should_reject_invalid_setting_format_before_following_operation(
         ("DOGFOOD_CLONE_DIR", "DOGFOOD_LOG_DIR"),
         ("DOGFOOD_CONFIG_DIR", "DS_DATA_DIR"),
         ("DS_DATA_DIR", "DOGFOOD_STATE_DIR"),
+        ("DS_DATA_DIR", "DOGFOOD_BACKUP_DIR"),
     ),
-    ids=("first-and-last", "adjacent-middle", "middle-and-later"),
+    ids=(
+        "first-and-last",
+        "adjacent-middle",
+        "middle-and-later",
+        "data-and-backup",
+    ),
 )
 def test_should_reject_overlapping_paths_before_following_operation(
     tmp_path: Path,

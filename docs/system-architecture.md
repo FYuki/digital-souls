@@ -184,10 +184,14 @@ RAG admission evaluatorだけが決定論的findingとassessmentから保存可�
 conversationのアーカイブは履歴をSQLiteへ保持したまま通常一覧、prompt注入、追記対象から
 除外する。物理削除はconversationとturnをSQLiteからhard deleteし、RAG長期記憶は暗黙削除しない。
 
-会話履歴DBの現行schema versionは3である。runtimeにはversion 2からversion 3への限定migrationが
-実装されているが、開発環境が検証環境を兼ねる間のデータ互換性は保証せず、schema変更時は
-DBを空状態から再作成できるものとする。実データを保持する運用開始時に、対応schema、backup、
-migration、rollbackの運用契約を別途定める。
+会話履歴DBの現行schema versionは3である。SQLiteを正本、Chromaを再構築可能な派生indexとし、
+backup artifactにはSQLiteと検証用JSONだけを含める。WAL稼働中のbackupはSQLite公式backup APIで
+整合snapshotを作成する。restoreはchecksum、schema、environment identityを切替前に検証し、
+検証済みstaging SQLiteを単一のatomic置換で切り替える。切替前の検証・置換失敗時は既存DBを
+維持し、自動rollbackは行わない。復旧操作は`infra/dogfood/README.md`の手動restore手順に従う。
+dogfoodのdeployとschema migrationは
+事前backupの成功を後続処理の開始条件とする。操作手順とIssue #56のrestore drillは
+`infra/dogfood/README.md`を正本とする。
 
 RAG長期記憶はpositive allowlist方式とし、allowlistを保存同意として扱う。許可型へ正規化され、
 機微情報検査を通過し、current turnに保存拒否がない`ApprovedMemoryCandidate`だけをSQLiteへ
