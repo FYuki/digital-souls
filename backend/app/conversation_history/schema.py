@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,7 +28,9 @@ class SchemaInspection:
 def inspect_conversation_history_schema(database_path: Path) -> SchemaInspection:
     if not database_path.is_file():
         return SchemaInspection(0, frozenset(), False, False)
-    with sqlite3.connect(f"file:{database_path}?mode=ro", uri=True) as connection:
+    with closing(
+        sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
+    ) as connection:
         tables = _user_tables(connection)
         version = int(connection.execute("PRAGMA user_version").fetchone()[0])
         return SchemaInspection(

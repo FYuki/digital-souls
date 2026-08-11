@@ -38,7 +38,10 @@ from app.backup_restore.sqlite_snapshot import (
     create_sqlite_snapshot,
     verify_sqlite_database,
 )
-from app.backup_restore.sqlite_sidecars import converge_sqlite_sidecars
+from app.backup_restore.sqlite_sidecars import (
+    remove_replaced_sqlite_sidecars,
+    validate_sqlite_sidecars_for_restore,
+)
 from app.conversation_history.sqlite_lease import (
     SQLiteLease,
     SQLiteLeaseUnavailableError,
@@ -145,7 +148,6 @@ def restore_backup(
             runtime_paths.sqlite_path, maintenance_lease
         )
         with lease_context:
-            converge_sqlite_sidecars(runtime_paths.sqlite_path)
             return _replace_database(runtime_paths, generation)
     except SQLiteLeaseUnavailableError as error:
         raise RestoreSafetyError("restore rejected while SQLite is in use") from error
@@ -164,8 +166,10 @@ def _replace_database(
         if result != generation.verification:
             raise BackupArtifactError("copied backup validation does not match backup")
         _fsync_file(staging)
+        validate_sqlite_sidecars_for_restore(runtime_paths.sqlite_path)
         os.replace(staging, runtime_paths.sqlite_path)
         replaced = True
+        remove_replaced_sqlite_sidecars(runtime_paths.sqlite_path)
         _fsync_directory(runtime_paths.data_root)
     except Exception as error:
         if replaced:
@@ -173,7 +177,9 @@ def _replace_database(
                 "restore durability is uncertain"
             ) from error
         _remove_sqlite_staging_files(staging)
-        if isinstance(error, (BackupArtifactError, BackupIdentityError)):
+        if isinstance(
+            error, (BackupArtifactError, BackupIdentityError, RestoreSafetyError)
+        ):
             raise
         from app.backup_restore.models import BackupSchemaError
 

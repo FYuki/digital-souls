@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import os
 import sqlite3
 from argparse import Namespace
@@ -18,6 +19,20 @@ from tests.backup_restore_test_support import (
 
 
 SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
+
+
+def _require_sqlite_lease_contract() -> None:
+    assert importlib.util.find_spec("app.conversation_history.sqlite_lease") is not None, (
+        "SQLITE-LEASE-01 requires the conversation-history lease module"
+    )
+
+
+def _require_restore_uncertainty_contract() -> None:
+    import app.backup_restore as backup_restore
+
+    assert hasattr(backup_restore, "RestoreDurabilityUncertainError"), (
+        "DUR-UNCERTAIN-01 requires a post-replace uncertainty error"
+    )
 
 
 def _files_snapshot(directory: Path) -> dict[Path, bytes]:
@@ -236,6 +251,7 @@ async def test_sqlite_lease_01_stops_startup_before_sqlite_open_during_maintenan
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    _require_sqlite_lease_contract()
     from app import main
     from app.conversation_history.sqlite_lease import (
         SQLiteLeaseUnavailableError,
@@ -263,6 +279,7 @@ async def test_sqlite_lease_01_lifespan_rejects_restore_without_side_effects(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    _require_sqlite_lease_contract()
     from app import main
     from app.backup_restore import RestoreSafetyError, create_backup, restore_backup
     from app.conversation_history.schema import initialize_conversation_history_schema
@@ -583,6 +600,7 @@ async def test_should_stop_startup_when_schema_rollback_fails(
     tmp_path: Path,
     failure_stage: str,
 ) -> None:
+    _require_restore_uncertainty_contract()
     from app import main
     from app.backup_restore import RestoreDurabilityUncertainError, restore_backup
     from app.conversation_history.schema import initialize_conversation_history_schema

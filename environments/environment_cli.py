@@ -162,7 +162,7 @@ def main() -> int:
                 return exit_code
         print(f"ERROR: {UNKNOWN_BACKUP_ERROR_MESSAGE}", file=sys.stderr)
         return 1
-    except Exception:
+    except Exception:  # noqa: BLE001 - 未知例外の本文をCLIへ露出させない境界
         print(f"ERROR: {UNKNOWN_ENVIRONMENT_ERROR_MESSAGE}", file=sys.stderr)
         return 1
 

@@ -86,7 +86,12 @@ def test_cli_error_01_classifies_registered_subclass_and_uses_public_message(
 
     safe_message = "バックアップ成果物エラー12"
     secret = "secret-from-arbitrary-exception-body"
-    monkeypatch.setattr(BackupArtifactError, "public_message", safe_message)
+    monkeypatch.setattr(
+        BackupArtifactError,
+        "public_message",
+        safe_message,
+        raising=False,
+    )
     monkeypatch.setattr(
         environment_cli,
         "backup_environment",

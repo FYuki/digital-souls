@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import importlib.util
 import shutil
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 from time import monotonic
 
@@ -17,6 +20,12 @@ from app.runtime_paths import RuntimePaths
 
 
 SQLITE_SUFFIXES = ("", "-wal", "-shm", "-journal")
+
+
+def _require_sqlite_lease_contract() -> None:
+    assert importlib.util.find_spec("app.conversation_history.sqlite_lease") is not None, (
+        "SQLITE-LEASE-01 requires the conversation-history lease module"
+    )
 
 
 def _create_generation(
@@ -63,6 +72,7 @@ def _directory_snapshot(directory: Path) -> dict[str, bytes | None]:
 def test_sqlite_lease_01_rejects_restore_without_modifying_files_while_runtime_holds_lease(
     tmp_path: Path,
 ) -> None:
+    _require_sqlite_lease_contract()
     from app.backup_restore import RestoreSafetyError, restore_backup
     from app.conversation_history.sqlite_lease import acquire_runtime_lease
 
@@ -102,6 +112,7 @@ def test_sqlite_lease_01_does_not_process_sidecars_before_maintenance_lease(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _require_sqlite_lease_contract()
     from app.backup_restore import RestoreSafetyError, restore_backup
     from app.backup_restore import service as backup_restore_service
     from app.conversation_history.sqlite_lease import acquire_runtime_lease
@@ -129,7 +140,7 @@ def test_sqlite_lease_01_does_not_process_sidecars_before_maintenance_lease(
 
     monkeypatch.setattr(
         backup_restore_service,
-        "converge_sqlite_sidecars",
+        "validate_sqlite_sidecars_for_restore",
         record_sidecar_processing,
     )
     try:
@@ -151,6 +162,7 @@ def test_sqlite_lease_01_does_not_process_sidecars_before_maintenance_lease(
 def test_sqlite_lease_01_does_not_modify_any_sqlite_file_when_maintenance_is_unavailable(
     tmp_path: Path,
 ) -> None:
+    _require_sqlite_lease_contract()
     from app.conversation_history.sqlite_lease import (
         acquire_maintenance_lease,
         acquire_runtime_lease,
@@ -174,6 +186,7 @@ def test_sqlite_lease_01_does_not_modify_any_sqlite_file_when_maintenance_is_una
 def test_sqlite_lease_01_rejects_runtime_before_sqlite_is_opened_during_maintenance(
     tmp_path: Path,
 ) -> None:
+    _require_sqlite_lease_contract()
     from app.conversation_history.sqlite_lease import (
         acquire_maintenance_lease,
         acquire_runtime_lease,
@@ -194,10 +207,11 @@ def test_sqlite_lease_01_rejects_runtime_before_sqlite_is_opened_during_maintena
     assert runtime_acquired_after_release is True
 
 
-def test_sqlite_lease_01_blocks_runtime_acquisition_during_sidecar_convergence(
+def test_sqlite_lease_01_blocks_runtime_acquisition_during_sidecar_validation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _require_sqlite_lease_contract()
     from app.backup_restore import restore_backup
     from app.backup_restore import service as backup_restore_service
     from app.conversation_history.sqlite_lease import acquire_runtime_lease
@@ -216,20 +230,22 @@ def test_sqlite_lease_01_blocks_runtime_acquisition_during_sidecar_convergence(
         source = wal_source.sqlite_path.with_name(wal_source.sqlite_path.name + suffix)
         target = destination.sqlite_path.with_name(destination.sqlite_path.name + suffix)
         shutil.copyfile(source, target)
-    converge_sqlite_sidecars = backup_restore_service.converge_sqlite_sidecars
-    runtime_rejected_during_convergence = False
+    validate_sqlite_sidecars = (
+        backup_restore_service.validate_sqlite_sidecars_for_restore
+    )
+    runtime_rejected_during_validation = False
 
     def observe_lease_boundary(database: Path) -> None:
-        nonlocal runtime_rejected_during_convergence
+        nonlocal runtime_rejected_during_validation
         with pytest.raises(RuntimeError):
             with acquire_runtime_lease(database):
-                pytest.fail("runtime lease must not be acquired during convergence")
-        runtime_rejected_during_convergence = True
-        converge_sqlite_sidecars(database)
+                pytest.fail("runtime lease must not be acquired during validation")
+        runtime_rejected_during_validation = True
+        validate_sqlite_sidecars(database)
 
     monkeypatch.setattr(
         backup_restore_service,
-        "converge_sqlite_sidecars",
+        "validate_sqlite_sidecars_for_restore",
         observe_lease_boundary,
     )
     try:
@@ -242,7 +258,7 @@ def test_sqlite_lease_01_blocks_runtime_acquisition_during_sidecar_convergence(
     finally:
         connection.close()
 
-    assert runtime_rejected_during_convergence is True
+    assert runtime_rejected_during_validation is True
 
 
 def test_sqlite_sidecar_01_restores_after_converging_quiesced_valid_wal(
@@ -275,6 +291,48 @@ def test_sqlite_sidecar_01_restores_after_converging_quiesced_valid_wal(
         backup_directory=generation,
         authentication_key=TEST_AUTHENTICATION_KEY,
     )
+
+    assert result.conversation_count == 1
+    assert not destination.sqlite_path.with_name(
+        destination.sqlite_path.name + "-wal"
+    ).exists()
+    assert not destination.sqlite_path.with_name(
+        destination.sqlite_path.name + "-shm"
+    ).exists()
+
+
+def test_sqlite_sidecar_01_restores_valid_wal_without_shm(
+    tmp_path: Path,
+) -> None:
+    from app.backup_restore import restore_backup
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    _source_paths, generation = _create_generation(tmp_path, repository_root)
+    destination = initialized_runtime(
+        tmp_path, repository_root, environment_id="test", name="destination"
+    )
+    wal_source = initialized_runtime(
+        tmp_path, repository_root, environment_id="test", name="wal-only-source"
+    )
+    connection = create_history_database(wal_source, wal=True)
+    for suffix in ("", "-wal"):
+        source = wal_source.sqlite_path.with_name(wal_source.sqlite_path.name + suffix)
+        target = destination.sqlite_path.with_name(destination.sqlite_path.name + suffix)
+        shutil.copyfile(source, target)
+    before = _sqlite_snapshot(destination.sqlite_path)
+    assert before["-wal"] is not None
+    assert before["-shm"] is None
+
+    try:
+        result = restore_backup(
+            runtime_paths=destination,
+            repository_root=repository_root,
+            backup_directory=generation,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+        )
+    finally:
+        connection.close()
 
     assert result.conversation_count == 1
     assert not destination.sqlite_path.with_name(
@@ -331,7 +389,17 @@ def test_sqlite_sidecar_01_preserves_database_with_foreign_valid_wal(
     foreign = initialized_runtime(
         tmp_path, repository_root, environment_id="test", name="foreign"
     )
-    foreign_connection = create_history_database(foreign, wal=True)
+    with closing(sqlite3.connect(foreign.sqlite_path)) as setup_connection:
+        setup_connection.execute("PRAGMA page_size = 8192")
+        setup_connection.execute("VACUUM")
+        setup_connection.execute("CREATE TABLE foreign_data (value TEXT NOT NULL)")
+    foreign_connection = sqlite3.connect(foreign.sqlite_path)
+    assert (
+        foreign_connection.execute("PRAGMA journal_mode = WAL").fetchone()[0] == "wal"
+    )
+    foreign_connection.execute("PRAGMA wal_autocheckpoint = 0")
+    foreign_connection.execute("INSERT INTO foreign_data VALUES ('foreign')")
+    foreign_connection.commit()
     foreign_wal = foreign.sqlite_path.with_name(foreign.sqlite_path.name + "-wal")
     destination_wal = destination.sqlite_path.with_name(
         destination.sqlite_path.name + "-wal"
