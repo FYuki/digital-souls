@@ -17,6 +17,7 @@ from app.backup_restore import (
     BackupPublicationUncertainError,
     BackupSchemaError,
     RestoreDurabilityUncertainError,
+    RestoreRecoveryRequiredError,
     RestoreSafetyError,
 )
 from app.backup_restore.models import BackupError
@@ -34,6 +35,7 @@ BACKUP_ERROR_EXIT_CODES = (
     (RestoreSafetyError, 13),
     (BackupPublicationUncertainError, 14),
     (RestoreDurabilityUncertainError, 15),
+    (RestoreRecoveryRequiredError, 16),
 )
 UNKNOWN_BACKUP_ERROR_MESSAGE = "backup operation failed"
 UNKNOWN_ENVIRONMENT_ERROR_MESSAGE = "environment operation failed"

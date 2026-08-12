@@ -3,9 +3,11 @@ from __future__ import annotations
 import importlib.util
 import shutil
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from pathlib import Path
 from time import monotonic
+from unittest.mock import Mock
 
 import pytest
 
@@ -205,6 +207,72 @@ def test_sqlite_lease_01_rejects_runtime_before_sqlite_is_opened_during_maintena
     with acquire_runtime_lease(database):
         runtime_acquired_after_release = True
     assert runtime_acquired_after_release is True
+
+
+def test_restore_startup_block_01_rechecks_marker_with_runtime_lease_before_open(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import RestoreRecoveryRequiredError
+    from app.conversation_history._sqlite import SqliteSession
+    from app.conversation_history.sqlite_lease import acquire_maintenance_lease
+    from app import restore_intent
+
+    database = tmp_path / "conversation-history.db"
+    marker = tmp_path / ".conversation-history.restore-intent.json"
+    connection_factory = Mock(side_effect=AssertionError("SQLite must stay closed"))
+    require_sqlite_available = restore_intent.require_sqlite_available
+    check_count = 0
+
+    def persist_marker_after_runtime_lease(database_path: Path) -> None:
+        nonlocal check_count
+        check_count += 1
+        if check_count == 1:
+            with pytest.raises(RuntimeError):
+                with acquire_maintenance_lease(database_path):
+                    pytest.fail("maintenance lease must be excluded")
+            marker.write_bytes(b"restore recovery required")
+        require_sqlite_available(database_path)
+
+    session = SqliteSession(database, connection_factory)
+    monkeypatch.setattr(
+        restore_intent,
+        "require_sqlite_available",
+        persist_marker_after_runtime_lease,
+    )
+
+    with pytest.raises(RestoreRecoveryRequiredError):
+        with session.connection():
+            pytest.fail("SQLite connection must not be yielded")
+
+    assert check_count == 1
+    connection_factory.assert_not_called()
+
+
+def test_restore_startup_block_01_does_not_open_after_concurrent_restore_marks_intent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import RestoreRecoveryRequiredError
+    from app.conversation_history import schema
+    from app.conversation_history.sqlite_lease import acquire_maintenance_lease
+
+    database = tmp_path / "conversation-history.db"
+    marker = tmp_path / ".conversation-history.restore-intent.json"
+    sqlite_connect = Mock(side_effect=AssertionError("SQLite must stay closed"))
+    monkeypatch.setattr(schema.sqlite3, "connect", sqlite_connect)
+
+    with acquire_maintenance_lease(database):
+        marker.write_bytes(b"restore recovery required")
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(
+                schema.inspect_conversation_history_schema,
+                database,
+            )
+            with pytest.raises(RestoreRecoveryRequiredError):
+                future.result()
+
+    sqlite_connect.assert_not_called()
 
 
 def test_sqlite_lease_01_blocks_runtime_acquisition_during_sidecar_validation(

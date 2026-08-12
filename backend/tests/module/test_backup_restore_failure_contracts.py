@@ -22,6 +22,15 @@ def _backup_arguments() -> Namespace:
     )
 
 
+def _restore_arguments() -> Namespace:
+    return Namespace(
+        command="restore",
+        environment="test",
+        repository_root="/tmp/repository",
+        backup_directory="/tmp/backups/backup-generation",
+    )
+
+
 def test_rollback_dual_01_keeps_both_failures_without_rendering_secrets(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -139,6 +148,38 @@ def test_cli_error_01_maps_unregistered_backup_error_to_safe_generic_failure(
     captured = capsys.readouterr()
     assert exit_code == 1
     assert "backup" in captured.err.lower()
+    assert secret not in captured.err
+    assert captured.out == ""
+
+
+def test_restore_recovery_required_maps_to_exit_code_16_without_rendering_secrets(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import app.backup_restore as backup_restore
+    import environment_cli
+
+    assert hasattr(backup_restore, "RestoreRecoveryRequiredError"), (
+        "CLI-ERROR-01 requires the restore recovery error to be publicly available"
+    )
+    error_type = backup_restore.RestoreRecoveryRequiredError
+    secret = "marker-secret /private/conversations/miori.db conversation-body"
+    monkeypatch.setattr(
+        environment_cli,
+        "restore_environment_backup",
+        Mock(side_effect=error_type(secret)),
+    )
+    monkeypatch.setattr(
+        environment_cli,
+        "_parser",
+        lambda: Mock(parse_args=_restore_arguments),
+    )
+
+    exit_code = environment_cli.main()
+
+    captured = capsys.readouterr()
+    assert exit_code == 16
+    assert captured.err == "ERROR: interrupted restore recovery is required\n"
     assert secret not in captured.err
     assert captured.out == ""
 

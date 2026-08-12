@@ -42,6 +42,10 @@ class RestoreDurabilityUncertainError(BackupError):
     public_message = "restore durability is uncertain"
 
 
+class RestoreRecoveryRequiredError(BackupError):
+    public_message = "interrupted restore recovery is required"
+
+
 @dataclass(frozen=True, repr=False)
 class BackupAuthenticationKey:
     value: bytes = field(repr=False)
@@ -71,4 +75,5 @@ class VerifiedGeneration:
     generation_sequence: int
     artifact_path: Path
     artifact_sha256: str
+    generation_identity_sha256: str
     verification: BackupVerification

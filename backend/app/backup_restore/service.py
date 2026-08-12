@@ -31,6 +31,7 @@ from app.backup_restore.models import (
     BackupPublicationUncertainError,
     BackupVerification,
     RestoreDurabilityUncertainError,
+    RestoreRecoveryRequiredError,
     RestoreSafetyError,
     VerifiedGeneration,
 )
@@ -46,9 +47,18 @@ from app.conversation_history.sqlite_lease import (
     SQLiteLease,
     SQLiteLeaseUnavailableError,
     acquire_maintenance_lease,
+    normal_sqlite_access,
 )
 from app.runtime_data_root import validate_existing_runtime_data_root
 from app.runtime_paths import RuntimePaths
+from app.restore_intent import (
+    RestoreIntent,
+    complete_restore_intent,
+    intent_for_generation,
+    persist_restore_intent,
+    read_restore_intent,
+    restore_intent_exists,
+)
 
 SQLITE_SIDECAR_SUFFIXES = ("-journal", "-shm", "-wal")
 GENERATION_LOCK_FILENAME = ".backup-generation.lock"
@@ -65,59 +75,62 @@ def create_backup(
     created_at: datetime | None = None,
 ) -> Path:
     validate_existing_runtime_data_root(runtime_paths, repository_root)
-    _validate_backup_root(backup_root, runtime_paths.data_root)
-    if retention_count <= 0:
-        raise ValueError("retention count must be positive")
-    commit = _git_commit(repository_root) if git_commit is None else git_commit
-    timestamp = datetime.now(UTC) if created_at is None else created_at
-    if timestamp.tzinfo is None or timestamp.utcoffset() is None:
-        raise ValueError("backup creation time must include a timezone")
-    backup_root.mkdir(parents=True, exist_ok=True)
-    with _generation_lock(backup_root):
-        generation_sequence = _next_generation_sequence(
-            backup_root, authentication_key
-        )
-        staging = backup_root / f".backup-staging-{uuid4().hex}"
-        generation = backup_root / _generation_name(timestamp, commit, uuid4().hex)
-        staging.mkdir()
-        try:
-            artifact = staging / ARTIFACT_FILENAME
-            create_sqlite_snapshot(runtime_paths.sqlite_path, artifact)
-            verification = verify_sqlite_database(artifact)
-            metadata: dict[str, JsonValue] = {
-                "formatVersion": FORMAT_VERSION,
-                "environmentId": runtime_paths.environment_id,
-                "gitCommit": commit,
-                "schemaVersion": verification.schema_version,
-                "createdAt": timestamp.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "generationSequence": generation_sequence,
-                "sqliteValidation": verification.integrity_check,
-                "conversationCount": verification.conversation_count,
-                "artifactSha256": sha256_file(artifact),
-            }
-            write_contract_files(staging, metadata, authentication_key)
-            verify_backup(
-                backup_directory=staging,
-                authentication_key=authentication_key,
+    with normal_sqlite_access(runtime_paths.sqlite_path):
+        _validate_backup_root(backup_root, runtime_paths.data_root)
+        if retention_count <= 0:
+            raise ValueError("retention count must be positive")
+        commit = _git_commit(repository_root) if git_commit is None else git_commit
+        timestamp = datetime.now(UTC) if created_at is None else created_at
+        if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+            raise ValueError("backup creation time must include a timezone")
+        backup_root.mkdir(parents=True, exist_ok=True)
+        with _generation_lock(backup_root):
+            generation_sequence = _next_generation_sequence(
+                backup_root, authentication_key
             )
-            _fsync_file(artifact)
-            _fsync_file(staging / METADATA_FILENAME)
-            _fsync_file(staging / MANIFEST_FILENAME)
-            _fsync_directory(staging)
-            staging.rename(generation)
-        except Exception:
-            shutil.rmtree(staging)
-            raise
-        try:
-            _fsync_directory(backup_root)
-        except OSError as error:
-            raise BackupPublicationUncertainError(
-                "backup publication durability is uncertain"
-            ) from error
-        _prune_backup_generations(
-            backup_root, retention_count, authentication_key
-        )
-    return generation
+            staging = backup_root / f".backup-staging-{uuid4().hex}"
+            generation = backup_root / _generation_name(timestamp, commit, uuid4().hex)
+            staging.mkdir()
+            try:
+                artifact = staging / ARTIFACT_FILENAME
+                create_sqlite_snapshot(runtime_paths.sqlite_path, artifact)
+                verification = verify_sqlite_database(artifact)
+                metadata: dict[str, JsonValue] = {
+                    "formatVersion": FORMAT_VERSION,
+                    "environmentId": runtime_paths.environment_id,
+                    "gitCommit": commit,
+                    "schemaVersion": verification.schema_version,
+                    "createdAt": timestamp.astimezone(UTC).strftime(
+                        "%Y-%m-%dT%H:%M:%SZ"
+                    ),
+                    "generationSequence": generation_sequence,
+                    "sqliteValidation": verification.integrity_check,
+                    "conversationCount": verification.conversation_count,
+                    "artifactSha256": sha256_file(artifact),
+                }
+                write_contract_files(staging, metadata, authentication_key)
+                verify_backup(
+                    backup_directory=staging,
+                    authentication_key=authentication_key,
+                )
+                _fsync_file(artifact)
+                _fsync_file(staging / METADATA_FILENAME)
+                _fsync_file(staging / MANIFEST_FILENAME)
+                _fsync_directory(staging)
+                staging.rename(generation)
+            except Exception:
+                shutil.rmtree(staging)
+                raise
+            try:
+                _fsync_directory(backup_root)
+            except OSError as error:
+                raise BackupPublicationUncertainError(
+                    "backup publication durability is uncertain"
+                ) from error
+            _prune_backup_generations(
+                backup_root, retention_count, authentication_key
+            )
+        return generation
 
 
 def verify_backup(
@@ -140,53 +153,130 @@ def restore_backup(
     maintenance_lease: SQLiteLease | None = None,
 ) -> BackupVerification:
     validate_existing_runtime_data_root(runtime_paths, repository_root)
-    generation = _preflight(backup_directory, authentication_key)
-    if generation.environment_id != runtime_paths.environment_id:
-        raise BackupIdentityError("backup environment identity does not match destination")
+    marker_existed = restore_intent_exists(runtime_paths.restore_intent_path)
+    generation = None
+    if not marker_existed:
+        generation = _preflight(backup_directory, authentication_key)
+        _require_destination_identity(runtime_paths, generation)
     try:
         lease_context = _restore_maintenance_lease(
             runtime_paths.sqlite_path, maintenance_lease
         )
         with lease_context:
-            return _replace_database(runtime_paths, generation)
+            marker_exists_under_lease = restore_intent_exists(
+                runtime_paths.restore_intent_path
+            )
+            if marker_exists_under_lease:
+                intent = read_restore_intent(runtime_paths.restore_intent_path)
+                generation = _preflight(backup_directory, authentication_key)
+                _require_matching_recovery(runtime_paths, generation, intent)
+                return _replace_database(runtime_paths, generation, intent)
+            if marker_existed or generation is None:
+                raise RestoreRecoveryRequiredError(
+                    RestoreRecoveryRequiredError.public_message
+                )
+            return _replace_database(runtime_paths, generation, None)
     except SQLiteLeaseUnavailableError as error:
         raise RestoreSafetyError("restore rejected while SQLite is in use") from error
 
 
 def _replace_database(
-    runtime_paths: RuntimePaths, generation: VerifiedGeneration
+    runtime_paths: RuntimePaths,
+    generation: VerifiedGeneration,
+    existing_intent: RestoreIntent | None,
 ) -> BackupVerification:
     staging = runtime_paths.data_root / f".{ARTIFACT_FILENAME}.staging-{uuid4().hex}"
-    replaced = False
     try:
-        shutil.copyfile(generation.artifact_path, staging)
-        if sha256_file(staging) != generation.artifact_sha256:
-            raise BackupArtifactError("copied backup artifact checksum is invalid")
-        result = verify_sqlite_database(staging)
-        if result != generation.verification:
-            raise BackupArtifactError("copied backup validation does not match backup")
-        _fsync_file(staging)
-        validate_sqlite_sidecars_for_restore(runtime_paths.sqlite_path)
+        _prepare_restore_staging(runtime_paths, generation, staging)
+        sqlite_before = _sqlite_asset_snapshot(runtime_paths.sqlite_path)
+        intent = existing_intent
+        if intent is None:
+            intent = intent_for_generation(runtime_paths.environment_id, generation)
+            persist_restore_intent(runtime_paths.restore_intent_path, intent)
+    except Exception as error:
+        _remove_sqlite_staging_files(staging)
+        if isinstance(error, BackupError):
+            raise
+        raise RestoreSafetyError("restore preparation failed safely") from error
+    return _commit_restore(runtime_paths, generation, staging, intent, sqlite_before)
+
+
+def _prepare_restore_staging(
+    runtime_paths: RuntimePaths,
+    generation: VerifiedGeneration,
+    staging: Path,
+) -> None:
+    shutil.copyfile(generation.artifact_path, staging)
+    if sha256_file(staging) != generation.artifact_sha256:
+        raise BackupArtifactError("copied backup artifact checksum is invalid")
+    result = verify_sqlite_database(staging)
+    if result != generation.verification:
+        raise BackupArtifactError("copied backup validation does not match backup")
+    _fsync_file(staging)
+    validate_sqlite_sidecars_for_restore(runtime_paths.sqlite_path)
+
+
+def _commit_restore(
+    runtime_paths: RuntimePaths,
+    generation: VerifiedGeneration,
+    staging: Path,
+    intent: RestoreIntent,
+    sqlite_before: dict[str, bytes | None],
+) -> BackupVerification:
+    try:
         os.replace(staging, runtime_paths.sqlite_path)
-        replaced = True
+    except OSError as error:
+        _remove_sqlite_staging_files(staging)
+        if _sqlite_asset_snapshot(runtime_paths.sqlite_path) != sqlite_before:
+            raise RestoreDurabilityUncertainError(
+                RestoreDurabilityUncertainError.public_message
+            ) from error
+        complete_restore_intent(runtime_paths.restore_intent_path, intent)
+        raise RestoreSafetyError("restore database replacement failed safely") from error
+    try:
         remove_replaced_sqlite_sidecars(runtime_paths.sqlite_path)
         _fsync_directory(runtime_paths.data_root)
-    except Exception as error:
-        if replaced:
-            raise RestoreDurabilityUncertainError(
-                "restore durability is uncertain"
-            ) from error
-        _remove_sqlite_staging_files(staging)
-        if isinstance(
-            error, (BackupArtifactError, BackupIdentityError, RestoreSafetyError)
+        result = verify_sqlite_database(runtime_paths.sqlite_path)
+        if (
+            result != generation.verification
+            or sha256_file(runtime_paths.sqlite_path) != generation.artifact_sha256
         ):
-            raise
-        from app.backup_restore.models import BackupSchemaError
+            raise BackupArtifactError("restored database validation does not match backup")
+        complete_restore_intent(runtime_paths.restore_intent_path, intent)
+        return result
+    except RestoreDurabilityUncertainError:
+        raise
+    except Exception as error:
+        raise RestoreDurabilityUncertainError(
+            RestoreDurabilityUncertainError.public_message
+        ) from error
 
-        if isinstance(error, BackupSchemaError):
-            raise
-        raise RestoreSafetyError("restore database replacement failed safely") from error
-    return result
+
+def _sqlite_asset_snapshot(database: Path) -> dict[str, bytes | None]:
+    return {
+        suffix: path.read_bytes() if os.path.lexists(path) else None
+        for suffix in ("", "-wal", "-shm", "-journal")
+        for path in (database.with_name(database.name + suffix),)
+    }
+
+
+def _require_destination_identity(
+    runtime_paths: RuntimePaths, generation: VerifiedGeneration
+) -> None:
+    if generation.environment_id != runtime_paths.environment_id:
+        raise BackupIdentityError("backup environment identity does not match destination")
+
+
+def _require_matching_recovery(
+    runtime_paths: RuntimePaths,
+    generation: VerifiedGeneration,
+    intent: RestoreIntent,
+) -> None:
+    expected = intent_for_generation(runtime_paths.environment_id, generation)
+    if intent != expected:
+        raise RestoreRecoveryRequiredError(
+            RestoreRecoveryRequiredError.public_message
+        )
 
 
 @contextmanager
@@ -231,13 +321,16 @@ def verify_restored_backup(
     authentication_key: BackupAuthenticationKey,
 ) -> BackupVerification:
     validate_existing_runtime_data_root(runtime_paths, repository_root)
-    generation = _preflight(backup_directory, authentication_key)
-    if generation.environment_id != runtime_paths.environment_id:
-        raise BackupIdentityError("backup environment identity does not match destination")
-    verification = verify_sqlite_database(runtime_paths.sqlite_path)
-    if verification != generation.verification:
-        raise BackupArtifactError("restored database validation does not match backup")
-    return verification
+    with normal_sqlite_access(runtime_paths.sqlite_path):
+        generation = _preflight(backup_directory, authentication_key)
+        if generation.environment_id != runtime_paths.environment_id:
+            raise BackupIdentityError(
+                "backup environment identity does not match destination"
+            )
+        verification = verify_sqlite_database(runtime_paths.sqlite_path)
+        if verification != generation.verification:
+            raise BackupArtifactError("restored database validation does not match backup")
+        return verification
 
 
 def _prune_backup_generations(

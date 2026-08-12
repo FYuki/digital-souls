@@ -289,7 +289,14 @@ def test_rst_safe_01_persists_staging_then_replaces_then_persists_data_root(
         authentication_key=TEST_AUTHENTICATION_KEY,
     )
 
-    assert events == ["staging-fsync", "replace", "data-root-fsync"]
+    assert events == [
+        "staging-fsync",
+        "staging-fsync",
+        "data-root-fsync",
+        "replace",
+        "data-root-fsync",
+        "data-root-fsync",
+    ]
 
 
 def test_bkp_verify_01_persists_generation_before_and_after_publication(

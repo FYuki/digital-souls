@@ -159,6 +159,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     repository_root = Path(__file__).resolve().parents[2]
     runtime_paths = resolve_runtime_paths(os.environ, repository_root)
     initialize_runtime_data_root(runtime_paths, repository_root)
+    from app.restore_intent import require_no_restore_intent
+
+    require_no_restore_intent(runtime_paths.restore_intent_path)
     log_runtime_configuration(runtime_paths)
 
     def generate_llm_response(

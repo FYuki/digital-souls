@@ -116,8 +116,13 @@ def verified_generation(
         generation_sequence=cast(int, metadata["generationSequence"]),
         artifact_path=artifact,
         artifact_sha256=str(metadata["artifactSha256"]),
+        generation_identity_sha256=generation_identity_sha256(metadata),
         verification=verification,
     )
+
+
+def generation_identity_sha256(metadata: dict[str, JsonValue]) -> str:
+    return hashlib.sha256(_canonical_json(metadata)).hexdigest()
 
 
 def _read_object(path: Path, label: str) -> dict[str, JsonValue]:

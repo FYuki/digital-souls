@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from fcntl import LOCK_EX, LOCK_NB, LOCK_SH, LOCK_UN, flock
 from pathlib import Path
@@ -36,6 +37,11 @@ class SQLiteLease:
         self._file.close()
 
 
+_CURRENT_SQLITE_LEASE: ContextVar[SQLiteLease | None] = ContextVar(
+    "current_sqlite_lease", default=None
+)
+
+
 def _lease_path(database_path: Path) -> Path:
     return database_path.parent / SQLITE_LEASE_FILENAME_SUFFIX
 
@@ -64,16 +70,38 @@ def _acquire(
 @contextmanager
 def acquire_maintenance_lease(database_path: Path) -> Iterator[SQLiteLease]:
     lease = _acquire(database_path, "maintenance")
+    token = _CURRENT_SQLITE_LEASE.set(lease)
     try:
         yield lease
     finally:
+        _CURRENT_SQLITE_LEASE.reset(token)
         lease.close()
 
 
 @contextmanager
 def acquire_runtime_lease(database_path: Path) -> Iterator[SQLiteLease]:
     lease = _acquire(database_path, "runtime")
+    token = _CURRENT_SQLITE_LEASE.set(lease)
     try:
         yield lease
     finally:
+        _CURRENT_SQLITE_LEASE.reset(token)
         lease.close()
+
+
+@contextmanager
+def normal_sqlite_access(database_path: Path) -> Iterator[SQLiteLease]:
+    from app.restore_intent import require_sqlite_available
+
+    current = _CURRENT_SQLITE_LEASE.get()
+    if current is not None and current.database_path == database_path:
+        require_sqlite_available(database_path)
+        yield current
+        return
+    try:
+        with acquire_runtime_lease(database_path) as lease:
+            require_sqlite_available(database_path)
+            yield lease
+    except SQLiteLeaseUnavailableError:
+        require_sqlite_available(database_path)
+        raise

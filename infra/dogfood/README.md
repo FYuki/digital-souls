@@ -95,7 +95,7 @@ sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY -u digital-souls env \
   --backup-directory /var/lib/digital-souls/backups/backup-YYYYMMDDTHHMMSSZ-COMMIT-UNIQUEID
 ```
 
-CLIは成功時に0、identity不一致は10、artifact不正は11、schema不一致は12、非破壊切替失敗は13、backup公開結果不確定は14、restore durability不確定は15、その他の入力・OSエラーは1を返す。出力する証跡は環境ID、UTC日時、commit、schema version、conversation件数、検証結果に限定する。metadata、manifest、標準出力、標準エラー、作業logへconversation本文、DB本文、環境変数全体、秘密値を転記しない。
+CLIは成功時に0、identity不一致は10、artifact不正は11、schema不一致は12、非破壊切替失敗は13、backup公開結果不確定は14、restore durability不確定は15、restore中断からの復旧要求は16、その他の入力・OSエラーは1を返す。出力する証跡は環境ID、UTC日時、commit、schema version、conversation件数、検証結果に限定する。metadata、manifest、標準出力、標準エラー、作業logへconversation本文、DB本文、環境変数全体、秘密値を転記しない。
 
 ### schema変更失敗時のrollback
 
@@ -118,6 +118,14 @@ sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY -u digital-souls env \
 ```
 
 identityエラーでは選択した環境と`.environment-identity.json`を照合する。artifact／schemaエラーでは対象世代を使用せず、直前の検証済み世代へ切り替える。restore safetyエラーではサービスを起動せず、既存DBが維持されていることを確認してから再試行する。
+
+### restore中断markerからの復旧
+
+runtime data root直下の`.conversation-history.restore-intent.json`は、restoreのDB切替が完了したと確認できない状態を示す。markerが存在する間はBackendを起動せず、通常のbackup、schema操作、会話履歴DBの参照も行わない。markerは旧WALが復元済みDBへ適用されることを防ぐ安全機構であるため、手動で削除、編集、移動しない。
+
+復旧には、中断したrestoreで指定したものと同一のbackup generationを使い、Backendを停止したまま上記の`restore`コマンドを再実行する。認証済みmetadata、artifact checksum、environment identityがmarkerと一致した場合だけ、同じartifactによる切替とsidecar除去が再実行される。成功後に`restore-verify`を実行してからBackendを起動する。
+
+終了コード16、異なるgeneration、または不正なmarkerが報告された場合は復旧操作を停止する。別generationへの切替やmarkerの手動修復は行わず、runtime data rootと使用したgenerationを変更しない状態で保全して調査へ引き渡す。証跡にはconversation本文、backup認証鍵、marker本文を貼り付けず、終了コード、環境ID、generation名、UTC日時だけを記録する。
 
 ### Issue #56 restore drill
 
