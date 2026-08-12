@@ -45,11 +45,16 @@ def _marker_snapshot(marker: Path) -> tuple[bool, bool, bytes | str | None]:
 
 
 def _create_generation(
-    tmp_path: Path, repository_root: Path
+    tmp_path: Path, repository_root: Path, environment_id: str = "test"
 ) -> tuple[RuntimePaths, Path]:
     from app.backup_restore import create_backup
 
-    source = initialized_runtime(tmp_path, repository_root, name="source")
+    source = initialized_runtime(
+        tmp_path,
+        repository_root,
+        environment_id=environment_id,
+        name=f"source-{environment_id}",
+    )
     connection = create_history_database(source, wal=False)
     try:
         generation = create_backup(
@@ -207,6 +212,34 @@ def test_restore_intent_01_rejects_different_generation_without_mutation(
             runtime_paths=destination,
             repository_root=repository_root,
             backup_directory=generation_b,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+        )
+
+    assert _sqlite_snapshot(destination.sqlite_path) == sqlite_before
+    assert _marker_snapshot(marker) == marker_before
+
+
+def test_restore_intent_01_rejects_foreign_generation_without_mutation(
+    tmp_path: Path,
+) -> None:
+    from app.backup_restore import restore_backup
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    _source, generation = _create_generation(
+        tmp_path, repository_root, environment_id="dev"
+    )
+    destination = _create_destination(tmp_path, repository_root)
+    destination.sqlite_path.write_bytes(b"foreign-generation-destination")
+    marker = _write_marker(destination, generation)
+    sqlite_before = _sqlite_snapshot(destination.sqlite_path)
+    marker_before = _marker_snapshot(marker)
+
+    with pytest.raises(_recovery_error_type()):
+        restore_backup(
+            runtime_paths=destination,
+            repository_root=repository_root,
+            backup_directory=generation,
             authentication_key=TEST_AUTHENTICATION_KEY,
         )
 

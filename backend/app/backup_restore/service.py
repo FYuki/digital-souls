@@ -169,6 +169,12 @@ def restore_backup(
             if marker_exists_under_lease:
                 intent = read_restore_intent(runtime_paths.restore_intent_path)
                 generation = _preflight(backup_directory, authentication_key)
+                try:
+                    _require_destination_identity(runtime_paths, generation)
+                except BackupIdentityError as error:
+                    raise RestoreRecoveryRequiredError(
+                        RestoreRecoveryRequiredError.public_message
+                    ) from error
                 _require_matching_recovery(runtime_paths, generation, intent)
                 return _replace_database(runtime_paths, generation, intent)
             if marker_existed or generation is None:
