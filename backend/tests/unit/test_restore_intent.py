@@ -562,6 +562,54 @@ def test_restore_intent_01_keeps_marker_when_replace_failure_cleanup_is_uncertai
     assert _intent_path(destination).is_file()
 
 
+def test_restore_crash_recovery_01_should_keep_existing_intent_when_replacement_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import RestoreSafetyError, restore_backup
+    from app.backup_restore import service
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    _source, generation = _create_generation(tmp_path, repository_root)
+    destination = _create_destination(tmp_path, repository_root)
+    marker = _write_marker(destination, generation)
+    sqlite_before = _sqlite_snapshot(destination.sqlite_path)
+    marker_before = marker.read_bytes()
+    remove_sidecars = Mock(
+        side_effect=AssertionError("sidecar cleanup must follow replacement")
+    )
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            service.os,
+            "replace",
+            Mock(side_effect=OSError("injected recovery replace failure")),
+        )
+        patch.setattr(service, "remove_replaced_sqlite_sidecars", remove_sidecars)
+
+        with pytest.raises(RestoreSafetyError):
+            restore_backup(
+                runtime_paths=destination,
+                repository_root=repository_root,
+                backup_directory=generation,
+                authentication_key=TEST_AUTHENTICATION_KEY,
+            )
+
+    assert _sqlite_snapshot(destination.sqlite_path) == sqlite_before
+    assert marker.read_bytes() == marker_before
+    remove_sidecars.assert_not_called()
+
+    result = restore_backup(
+        runtime_paths=destination,
+        repository_root=repository_root,
+        backup_directory=generation,
+        authentication_key=TEST_AUTHENTICATION_KEY,
+    )
+
+    assert result.conversation_count == 1
+    assert not marker.exists()
+
+
 def test_restore_intent_01_persists_full_commit_order(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

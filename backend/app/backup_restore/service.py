@@ -193,22 +193,35 @@ def _replace_database(
 ) -> BackupVerification:
     staging = runtime_paths.data_root / f".{ARTIFACT_FILENAME}.staging-{uuid4().hex}"
     try:
-        _prepare_restore_staging(runtime_paths, generation, staging)
+        _prepare_restore_staging(generation, staging)
+        if existing_intent is None:
+            validate_sqlite_sidecars_for_restore(runtime_paths.sqlite_path)
         sqlite_before = _sqlite_asset_snapshot(runtime_paths.sqlite_path)
-        intent = existing_intent
-        if intent is None:
-            intent = intent_for_generation(runtime_paths.environment_id, generation)
-            persist_restore_intent(runtime_paths.restore_intent_path, intent)
+        if existing_intent is None:
+            active_intent = intent_for_generation(
+                runtime_paths.environment_id, generation
+            )
+            persist_restore_intent(runtime_paths.restore_intent_path, active_intent)
+            replace_failure_cleanup_intent = active_intent
+        else:
+            active_intent = existing_intent
+            replace_failure_cleanup_intent = None
     except Exception as error:
         _remove_sqlite_staging_files(staging)
         if isinstance(error, BackupError):
             raise
         raise RestoreSafetyError("restore preparation failed safely") from error
-    return _commit_restore(runtime_paths, generation, staging, intent, sqlite_before)
+    return _commit_restore(
+        runtime_paths,
+        generation,
+        staging,
+        active_intent,
+        replace_failure_cleanup_intent,
+        sqlite_before,
+    )
 
 
 def _prepare_restore_staging(
-    runtime_paths: RuntimePaths,
     generation: VerifiedGeneration,
     staging: Path,
 ) -> None:
@@ -219,7 +232,6 @@ def _prepare_restore_staging(
     if result != generation.verification:
         raise BackupArtifactError("copied backup validation does not match backup")
     _fsync_file(staging)
-    validate_sqlite_sidecars_for_restore(runtime_paths.sqlite_path)
 
 
 def _commit_restore(
@@ -227,6 +239,7 @@ def _commit_restore(
     generation: VerifiedGeneration,
     staging: Path,
     intent: RestoreIntent,
+    replace_failure_cleanup_intent: RestoreIntent | None,
     sqlite_before: dict[str, bytes | None],
 ) -> BackupVerification:
     try:
@@ -237,7 +250,10 @@ def _commit_restore(
             raise RestoreDurabilityUncertainError(
                 RestoreDurabilityUncertainError.public_message
             ) from error
-        complete_restore_intent(runtime_paths.restore_intent_path, intent)
+        if replace_failure_cleanup_intent is not None:
+            complete_restore_intent(
+                runtime_paths.restore_intent_path, replace_failure_cleanup_intent
+            )
         raise RestoreSafetyError("restore database replacement failed safely") from error
     try:
         remove_replaced_sqlite_sidecars(runtime_paths.sqlite_path)
