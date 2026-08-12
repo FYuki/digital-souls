@@ -100,10 +100,10 @@ def read_verified_generation(
 
 def verified_generation(
     directory: Path,
+    metadata: dict[str, JsonValue],
+    artifact: Path,
     verification: BackupVerification,
-    authentication_key: BackupAuthenticationKey,
 ) -> VerifiedGeneration:
-    metadata, artifact = read_verified_generation(directory, authentication_key)
     if metadata["schemaVersion"] != verification.schema_version:
         from app.backup_restore.models import BackupSchemaError
 

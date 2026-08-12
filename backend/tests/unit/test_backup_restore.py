@@ -3,8 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import shutil
 import sqlite3
 import time
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from pathlib import Path
@@ -50,6 +52,53 @@ def _data_root_snapshot(data_root: Path) -> dict[str, bytes | None]:
         str(path.relative_to(data_root)): path.read_bytes() if path.is_file() else None
         for path in data_root.rglob("*")
     }
+
+
+def _record_authentication_comparisons(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[None]:
+    from app.backup_restore import contracts
+
+    compare_digest = contracts.hmac.compare_digest
+    calls: list[None] = []
+
+    def record_authentication_comparison(
+        actual: str | bytes, expected: str | bytes
+    ) -> bool:
+        calls.append(None)
+        return compare_digest(actual, expected)
+
+    monkeypatch.setattr(
+        contracts.hmac, "compare_digest", record_authentication_comparison
+    )
+    return calls
+
+
+def test_should_authenticate_staging_generation_once_per_backup_creation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import create_backup
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths = initialized_runtime(tmp_path, repository_root)
+    connection = create_history_database(paths, wal=False)
+    authentication_comparisons = _record_authentication_comparisons(monkeypatch)
+    try:
+        create_backup(
+            runtime_paths=paths,
+            repository_root=repository_root,
+            backup_root=tmp_path / "backups",
+            retention_count=1,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+            git_commit=FIXED_COMMIT,
+            created_at=FIXED_BACKUP_TIME,
+        )
+
+        assert len(authentication_comparisons) == 1
+    finally:
+        connection.close()
 
 
 def test_bkp_wal_01_includes_committed_uncheckpointed_wal_rows(tmp_path: Path) -> None:
@@ -163,6 +212,29 @@ def test_bkp_verify_01_reports_integrity_schema_tables_and_counts(tmp_path: Path
         assert result.schema_version == SCHEMA_VERSION
         assert result.required_tables == CURRENT_TABLES
         assert result.conversation_count == 1
+    finally:
+        live_connection.close()
+
+
+def test_should_authenticate_generation_once_per_operation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import verify_backup
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    _paths, live_connection, _backup_root, generation = _create_backup(
+        tmp_path, repository_root
+    )
+    authentication_comparisons = _record_authentication_comparisons(monkeypatch)
+    try:
+        verify_backup(
+            backup_directory=generation,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+        )
+
+        assert len(authentication_comparisons) == 1
     finally:
         live_connection.close()
 
@@ -388,6 +460,32 @@ def test_rst_preflight_01_rejects_tampered_or_incomplete_generation_before_write
             )
 
         assert _data_root_snapshot(destination.data_root) == before
+    finally:
+        live_connection.close()
+
+
+def test_should_authenticate_generation_once_during_restore_preflight(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import restore_backup
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    _source, live_connection, _backup_root, generation = _create_backup(
+        tmp_path, repository_root
+    )
+    destination = initialized_runtime(tmp_path, repository_root, name="destination")
+    authentication_comparisons = _record_authentication_comparisons(monkeypatch)
+    try:
+        restore_backup(
+            runtime_paths=destination,
+            repository_root=repository_root,
+            backup_directory=generation,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+        )
+
+        assert len(authentication_comparisons) == 1
     finally:
         live_connection.close()
 
@@ -808,6 +906,10 @@ def test_retention_01_removes_only_old_complete_generations(tmp_path: Path) -> N
     unknown_directory.mkdir()
     incomplete = backup_root / "backup-incomplete"
     incomplete.mkdir()
+    corrupt = backup_root / "backup-corrupt"
+    shutil.copytree(generations[-1], corrupt)
+    with (corrupt / "conversation-history.db").open("ab") as artifact:
+        artifact.write(b"corrupt")
     symlink = backup_root / "backup-20260801T000000Z-symlink"
     symlink.symlink_to(generations[-1], target_is_directory=True)
 
@@ -830,8 +932,55 @@ def test_retention_01_removes_only_old_complete_generations(tmp_path: Path) -> N
     assert unknown_file.is_file()
     assert unknown_directory.is_dir()
     assert incomplete.is_dir()
+    assert corrupt.is_dir()
     assert symlink.is_symlink()
     connection.close()
+
+
+def test_should_scan_existing_generations_once_per_backup_creation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import create_backup
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths = initialized_runtime(tmp_path, repository_root)
+    connection = create_history_database(paths, wal=False)
+    backup_root = tmp_path / "backups"
+    create_backup(
+        runtime_paths=paths,
+        repository_root=repository_root,
+        backup_root=backup_root,
+        retention_count=2,
+        authentication_key=TEST_AUTHENTICATION_KEY,
+        git_commit=FIXED_COMMIT,
+        created_at=FIXED_BACKUP_TIME,
+    )
+    iterdir = Path.iterdir
+    existing_generation_scans = 0
+
+    def count_existing_generation_scan(path: Path) -> Iterator[Path]:
+        nonlocal existing_generation_scans
+        if path == backup_root:
+            existing_generation_scans += 1
+        return iterdir(path)
+
+    monkeypatch.setattr(Path, "iterdir", count_existing_generation_scan)
+    try:
+        create_backup(
+            runtime_paths=paths,
+            repository_root=repository_root,
+            backup_root=backup_root,
+            retention_count=2,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+            git_commit=FIXED_COMMIT,
+            created_at=FIXED_BACKUP_TIME + timedelta(days=1),
+        )
+
+        assert existing_generation_scans == 1
+    finally:
+        connection.close()
 
 
 def test_should_not_prune_existing_generations_when_backup_creation_fails(

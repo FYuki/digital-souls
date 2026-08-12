@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import UTC, datetime
 from fcntl import LOCK_EX, LOCK_UN, flock
 from pathlib import Path
@@ -85,9 +86,10 @@ def create_backup(
             raise ValueError("backup creation time must include a timezone")
         backup_root.mkdir(parents=True, exist_ok=True)
         with _generation_lock(backup_root):
-            generation_sequence = _next_generation_sequence(
+            existing_generations = _verified_generations(
                 backup_root, authentication_key
             )
+            generation_sequence = _next_generation_sequence(existing_generations)
             staging = backup_root / f".backup-staging-{uuid4().hex}"
             generation = backup_root / _generation_name(timestamp, commit, uuid4().hex)
             staging.mkdir()
@@ -109,10 +111,7 @@ def create_backup(
                     "artifactSha256": sha256_file(artifact),
                 }
                 write_contract_files(staging, metadata, authentication_key)
-                verify_backup(
-                    backup_directory=staging,
-                    authentication_key=authentication_key,
-                )
+                staged_generation = _preflight(staging, authentication_key)
                 _fsync_file(artifact)
                 _fsync_file(staging / METADATA_FILENAME)
                 _fsync_file(staging / MANIFEST_FILENAME)
@@ -127,8 +126,13 @@ def create_backup(
                 raise BackupPublicationUncertainError(
                     "backup publication durability is uncertain"
                 ) from error
+            published_generation = replace(
+                staged_generation,
+                directory=generation,
+                artifact_path=generation / ARTIFACT_FILENAME,
+            )
             _prune_backup_generations(
-                backup_root, retention_count, authentication_key
+                (*existing_generations, published_generation), retention_count
             )
         return generation
 
@@ -136,12 +140,7 @@ def create_backup(
 def verify_backup(
     *, backup_directory: Path, authentication_key: BackupAuthenticationKey
 ) -> BackupVerification:
-    _metadata, artifact = read_verified_generation(
-        backup_directory, authentication_key
-    )
-    verification = verify_sqlite_database(artifact)
-    verified_generation(backup_directory, verification, authentication_key)
-    return verification
+    return _preflight(backup_directory, authentication_key).verification
 
 
 def restore_backup(
@@ -356,15 +355,14 @@ def verify_restored_backup(
 
 
 def _prune_backup_generations(
-    backup_root: Path,
+    generations: tuple[VerifiedGeneration, ...],
     retention_count: int,
-    authentication_key: BackupAuthenticationKey,
 ) -> tuple[Path, ...]:
-    generations = sorted(
-        _verified_generations(backup_root, authentication_key),
+    sorted_generations = sorted(
+        generations,
         key=lambda generation: generation.generation_sequence,
     )
-    removed = tuple(generations[:-retention_count])
+    removed = tuple(sorted_generations[:-retention_count])
     for generation in removed:
         shutil.rmtree(generation.directory)
     return tuple(generation.directory for generation in removed)
@@ -384,13 +382,14 @@ def _generation_lock(backup_root: Path) -> Iterator[None]:
 def _preflight(
     backup_directory: Path, authentication_key: BackupAuthenticationKey
 ) -> VerifiedGeneration:
-    _metadata, artifact = read_verified_generation(
+    metadata, artifact = read_verified_generation(
         backup_directory, authentication_key
     )
     return verified_generation(
         backup_directory,
+        metadata,
+        artifact,
         verify_sqlite_database(artifact),
-        authentication_key,
     )
 
 
@@ -409,9 +408,8 @@ def _generation_name(timestamp: datetime, commit: str, unique_id: str) -> str:
 
 
 def _next_generation_sequence(
-    backup_root: Path, authentication_key: BackupAuthenticationKey
+    existing: tuple[VerifiedGeneration, ...],
 ) -> int:
-    existing = _verified_generations(backup_root, authentication_key)
     next_existing = max(
         (generation.generation_sequence for generation in existing),
         default=0,
