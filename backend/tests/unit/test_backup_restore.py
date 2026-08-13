@@ -74,7 +74,7 @@ def _record_authentication_comparisons(
     return calls
 
 
-def test_should_authenticate_staging_generation_once_per_backup_creation(
+def test_should_authenticate_staging_and_published_generation_once_each(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -96,7 +96,46 @@ def test_should_authenticate_staging_generation_once_per_backup_creation(
             created_at=FIXED_BACKUP_TIME,
         )
 
-        assert len(authentication_comparisons) == 1
+        assert len(authentication_comparisons) == 2
+    finally:
+        connection.close()
+
+
+def test_should_verify_new_generation_once_per_safety_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import create_backup
+    from app.backup_restore import service
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths = initialized_runtime(tmp_path, repository_root)
+    connection = create_history_database(paths, wal=False)
+    verify_sqlite_database = service.verify_sqlite_database
+    verified_artifacts: list[Path] = []
+
+    def record_sqlite_verification(artifact: Path):
+        verified_artifacts.append(artifact)
+        return verify_sqlite_database(artifact)
+
+    monkeypatch.setattr(
+        service, "verify_sqlite_database", record_sqlite_verification
+    )
+    try:
+        create_backup(
+            runtime_paths=paths,
+            repository_root=repository_root,
+            backup_root=tmp_path / "backups",
+            retention_count=1,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+            git_commit=FIXED_COMMIT,
+            created_at=FIXED_BACKUP_TIME,
+        )
+
+        assert len(verified_artifacts) == 2
+        assert verified_artifacts[0].parent.name.startswith(".backup-staging-")
+        assert verified_artifacts[1].parent.name.startswith("backup-")
     finally:
         connection.close()
 
@@ -937,6 +976,250 @@ def test_retention_01_removes_only_old_complete_generations(tmp_path: Path) -> N
     connection.close()
 
 
+def test_should_not_prune_last_valid_generation_when_published_generation_is_corrupted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import create_backup
+    from app.backup_restore import service
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths = initialized_runtime(tmp_path, repository_root)
+    connection = create_history_database(paths, wal=False)
+    backup_root = tmp_path / "backups"
+    previous = create_backup(
+        runtime_paths=paths,
+        repository_root=repository_root,
+        backup_root=backup_root,
+        retention_count=2,
+        authentication_key=TEST_AUTHENTICATION_KEY,
+        git_commit=FIXED_COMMIT,
+        created_at=FIXED_BACKUP_TIME,
+    )
+    fsync_directory = service._fsync_directory
+    published: Path | None = None
+
+    def corrupt_after_publication(path: Path) -> None:
+        nonlocal published
+        fsync_directory(path)
+        if path != backup_root or published is not None:
+            return
+        published = next(
+            generation
+            for generation in backup_root.glob("backup-*")
+            if generation != previous
+        )
+        with (published / "conversation-history.db").open("ab") as artifact:
+            artifact.write(b"corrupt-after-publication")
+
+    monkeypatch.setattr(service, "_fsync_directory", corrupt_after_publication)
+    try:
+        created = create_backup(
+            runtime_paths=paths,
+            repository_root=repository_root,
+            backup_root=backup_root,
+            retention_count=1,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+            git_commit=FIXED_COMMIT,
+            created_at=FIXED_BACKUP_TIME + timedelta(days=1),
+        )
+
+        assert published == created
+        assert previous.is_dir()
+        assert created.is_dir()
+    finally:
+        connection.close()
+
+
+def test_should_not_prune_last_valid_generation_when_published_generation_is_replaced(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import create_backup
+    from app.backup_restore import service
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths = initialized_runtime(tmp_path, repository_root)
+    connection = create_history_database(paths, wal=False)
+    backup_root = tmp_path / "backups"
+    previous = create_backup(
+        runtime_paths=paths,
+        repository_root=repository_root,
+        backup_root=backup_root,
+        retention_count=2,
+        authentication_key=TEST_AUTHENTICATION_KEY,
+        git_commit=FIXED_COMMIT,
+        created_at=FIXED_BACKUP_TIME,
+    )
+    replacement = create_backup(
+        runtime_paths=paths,
+        repository_root=repository_root,
+        backup_root=tmp_path / "replacement-backups",
+        retention_count=1,
+        authentication_key=TEST_AUTHENTICATION_KEY,
+        git_commit=FIXED_COMMIT,
+        created_at=FIXED_BACKUP_TIME + timedelta(days=2),
+    )
+    replacement_metadata = (replacement / "metadata.json").read_bytes()
+    fsync_directory = service._fsync_directory
+    published: Path | None = None
+
+    def replace_after_publication(path: Path) -> None:
+        nonlocal published
+        fsync_directory(path)
+        if path != backup_root or published is not None:
+            return
+        published = next(
+            generation
+            for generation in backup_root.glob("backup-*")
+            if generation != previous
+        )
+        shutil.rmtree(published)
+        shutil.copytree(replacement, published)
+
+    monkeypatch.setattr(service, "_fsync_directory", replace_after_publication)
+    try:
+        created = create_backup(
+            runtime_paths=paths,
+            repository_root=repository_root,
+            backup_root=backup_root,
+            retention_count=1,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+            git_commit=FIXED_COMMIT,
+            created_at=FIXED_BACKUP_TIME + timedelta(days=1),
+        )
+
+        assert published == created
+        assert previous.is_dir()
+        assert created.is_dir()
+        assert (created / "metadata.json").read_bytes() == replacement_metadata
+    finally:
+        connection.close()
+
+
+def test_should_not_delete_candidate_corrupted_after_initial_verification(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import create_backup
+    from app.backup_restore import service
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths = initialized_runtime(tmp_path, repository_root)
+    connection = create_history_database(paths, wal=False)
+    backup_root = tmp_path / "backups"
+    generations = tuple(
+        create_backup(
+            runtime_paths=paths,
+            repository_root=repository_root,
+            backup_root=backup_root,
+            retention_count=3,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+            git_commit=FIXED_COMMIT,
+            created_at=FIXED_BACKUP_TIME + timedelta(days=index),
+        )
+        for index in range(2)
+    )
+    candidate = generations[0]
+    preflight = service._preflight
+    changed = False
+
+    def corrupt_after_initial_verification(path: Path, authentication_key):
+        nonlocal changed
+        verified = preflight(path, authentication_key)
+        if path == candidate and not changed:
+            changed = True
+            with (candidate / "conversation-history.db").open("ab") as artifact:
+                artifact.write(b"corrupt-before-delete")
+        return verified
+
+    monkeypatch.setattr(service, "_preflight", corrupt_after_initial_verification)
+    try:
+        create_backup(
+            runtime_paths=paths,
+            repository_root=repository_root,
+            backup_root=backup_root,
+            retention_count=1,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+            git_commit=FIXED_COMMIT,
+            created_at=FIXED_BACKUP_TIME + timedelta(days=2),
+        )
+
+        assert changed
+        assert candidate.is_dir()
+    finally:
+        connection.close()
+
+
+def test_should_not_delete_candidate_replaced_after_initial_verification(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import create_backup
+    from app.backup_restore import service
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths = initialized_runtime(tmp_path, repository_root)
+    connection = create_history_database(paths, wal=False)
+    backup_root = tmp_path / "backups"
+    generations = tuple(
+        create_backup(
+            runtime_paths=paths,
+            repository_root=repository_root,
+            backup_root=backup_root,
+            retention_count=3,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+            git_commit=FIXED_COMMIT,
+            created_at=FIXED_BACKUP_TIME + timedelta(days=index),
+        )
+        for index in range(2)
+    )
+    candidate = generations[0]
+    replacement = create_backup(
+        runtime_paths=paths,
+        repository_root=repository_root,
+        backup_root=tmp_path / "replacement-backups",
+        retention_count=1,
+        authentication_key=TEST_AUTHENTICATION_KEY,
+        git_commit=FIXED_COMMIT,
+        created_at=FIXED_BACKUP_TIME + timedelta(days=3),
+    )
+    replacement_metadata = (replacement / "metadata.json").read_bytes()
+    preflight = service._preflight
+    changed = False
+
+    def replace_after_initial_verification(path: Path, authentication_key):
+        nonlocal changed
+        verified = preflight(path, authentication_key)
+        if path == candidate and not changed:
+            changed = True
+            shutil.rmtree(candidate)
+            shutil.copytree(replacement, candidate)
+        return verified
+
+    monkeypatch.setattr(service, "_preflight", replace_after_initial_verification)
+    try:
+        create_backup(
+            runtime_paths=paths,
+            repository_root=repository_root,
+            backup_root=backup_root,
+            retention_count=1,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+            git_commit=FIXED_COMMIT,
+            created_at=FIXED_BACKUP_TIME + timedelta(days=2),
+        )
+
+        assert changed
+        assert candidate.is_dir()
+        assert (candidate / "metadata.json").read_bytes() == replacement_metadata
+    finally:
+        connection.close()
+
+
 def test_should_scan_existing_generations_once_per_backup_creation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -972,7 +1255,7 @@ def test_should_scan_existing_generations_once_per_backup_creation(
             runtime_paths=paths,
             repository_root=repository_root,
             backup_root=backup_root,
-            retention_count=2,
+            retention_count=1,
             authentication_key=TEST_AUTHENTICATION_KEY,
             git_commit=FIXED_COMMIT,
             created_at=FIXED_BACKUP_TIME + timedelta(days=1),

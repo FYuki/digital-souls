@@ -4,7 +4,6 @@ import os
 import shutil
 import subprocess
 from contextlib import contextmanager
-from dataclasses import replace
 from datetime import UTC, datetime
 from fcntl import LOCK_EX, LOCK_UN, flock
 from pathlib import Path
@@ -111,7 +110,15 @@ def create_backup(
                     "artifactSha256": sha256_file(artifact),
                 }
                 write_contract_files(staging, metadata, authentication_key)
-                staged_generation = _preflight(staging, authentication_key)
+                verified_metadata, verified_artifact = read_verified_generation(
+                    staging, authentication_key
+                )
+                staged_generation = verified_generation(
+                    staging,
+                    verified_metadata,
+                    verified_artifact,
+                    verification,
+                )
                 _fsync_file(artifact)
                 _fsync_file(staging / METADATA_FILENAME)
                 _fsync_file(staging / MANIFEST_FILENAME)
@@ -126,13 +133,16 @@ def create_backup(
                 raise BackupPublicationUncertainError(
                     "backup publication durability is uncertain"
                 ) from error
-            published_generation = replace(
-                staged_generation,
-                directory=generation,
-                artifact_path=generation / ARTIFACT_FILENAME,
+            published_generation = _revalidate_generation(
+                staged_generation, generation, authentication_key
             )
+            retention_generations = existing_generations
+            if published_generation is not None:
+                retention_generations = (*retention_generations, published_generation)
             _prune_backup_generations(
-                (*existing_generations, published_generation), retention_count
+                retention_generations,
+                retention_count,
+                authentication_key,
             )
         return generation
 
@@ -357,15 +367,37 @@ def verify_restored_backup(
 def _prune_backup_generations(
     generations: tuple[VerifiedGeneration, ...],
     retention_count: int,
+    authentication_key: BackupAuthenticationKey,
 ) -> tuple[Path, ...]:
     sorted_generations = sorted(
         generations,
         key=lambda generation: generation.generation_sequence,
     )
-    removed = tuple(sorted_generations[:-retention_count])
-    for generation in removed:
-        shutil.rmtree(generation.directory)
-    return tuple(generation.directory for generation in removed)
+    candidates = tuple(sorted_generations[:-retention_count])
+    removed: list[Path] = []
+    for candidate in candidates:
+        verified_candidate = _revalidate_generation(
+            candidate, candidate.directory, authentication_key
+        )
+        if verified_candidate is None:
+            continue
+        shutil.rmtree(verified_candidate.directory)
+        removed.append(verified_candidate.directory)
+    return tuple(removed)
+
+
+def _revalidate_generation(
+    expected: VerifiedGeneration,
+    directory: Path,
+    authentication_key: BackupAuthenticationKey,
+) -> VerifiedGeneration | None:
+    try:
+        actual = _preflight(directory, authentication_key)
+    except (BackupError, OSError):
+        return None
+    if actual.generation_identity_sha256 != expected.generation_identity_sha256:
+        return None
+    return actual
 
 
 @contextmanager
