@@ -11,17 +11,17 @@ from unittest.mock import Mock
 import pytest
 from fastapi import FastAPI
 
-from app.runtime_paths import RuntimePaths
+from app.runtime_paths import RESTORE_INTENT_FILENAME, RuntimePaths
 from tests.backup_restore_test_support import (
     FIXED_BACKUP_TIME,
     FIXED_COMMIT,
     TEST_AUTHENTICATION_KEY,
     create_history_database,
+    generation_identity_sha256,
     initialized_runtime,
 )
 
 
-RESTORE_INTENT_FILENAME = ".conversation-history.restore-intent.json"
 SQLITE_SUFFIXES = ("", "-wal", "-shm", "-journal")
 SECOND_CONVERSATION_ID = "bb82c80b-d4fe-4d20-b860-9f3847b58bd1"
 EXIT_BEFORE_REPLACE = 70
@@ -293,14 +293,7 @@ def test_restore_crash_recovery_01_recovers_after_process_exit_between_intent_an
         "generationIdentitySha256",
     }
     metadata = json.loads((generation / "metadata.json").read_text(encoding="utf-8"))
-    expected_generation_identity = hashlib.sha256(
-        json.dumps(
-            metadata,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-    ).hexdigest()
+    expected_generation_identity = generation_identity_sha256(metadata)
     assert marker_value["generationIdentitySha256"] == expected_generation_identity
     assert _sqlite_snapshot(destination.sqlite_path) == sqlite_before
     _assert_backend_startup_is_blocked_before_sqlite_open(destination, monkeypatch)

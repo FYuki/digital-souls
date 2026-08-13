@@ -171,6 +171,16 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
         + 'then printf "digital-souls docker\\n"; fi\n',
     )
     write_executable(bin_dir / "getent", recorder)
+    write_executable(
+        bin_dir / "python3",
+        recorder
+        + 'if [ "$#" -eq 2 ] && [ "$1" = "-" ] '
+        + '&& [ -n "${BOOTSTRAP_RESOLVED_SQLITE_PATH-}" ]; then\n'
+        + '  printf "%s\\n" "$BOOTSTRAP_RESOLVED_SQLITE_PATH"\n'
+        + "  exit 0\n"
+        + "fi\n"
+        + 'exec /usr/bin/python3 "$@"\n',
+    )
     for command in ("gpasswd", "chown", "systemctl"):
         write_executable(bin_dir / command, recorder)
     write_executable(bin_dir / "chmod", recorder + 'exec /bin/chmod "$@"\n')

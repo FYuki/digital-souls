@@ -161,7 +161,45 @@ def test_rst_safe_01_preserves_all_sqlite_assets_when_scratch_checkpoint_fails(
     checkpoint.assert_called_once()
     scratch_database = checkpoint.call_args.args[0]
     assert scratch_database != paths.sqlite_path
-    assert scratch_database.parent.parent == paths.sqlite_path.parent
+    assert not scratch_database.is_relative_to(paths.data_root)
+    assert not scratch_database.parent.exists()
+    replace.assert_not_called()
+    assert _sqlite_snapshot(paths.sqlite_path) == sqlite_before
+
+
+def test_rst_safe_01_rejects_restore_without_external_scratch_area(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import RestoreSafetyError, restore_backup
+    from app.backup_restore import service, sqlite_sidecars
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths, generation = _closed_backup_generation(tmp_path, repository_root)
+    connection = _place_valid_wal_sidecars(
+        tmp_path, repository_root, paths.sqlite_path
+    )
+    sqlite_before = _sqlite_snapshot(paths.sqlite_path)
+    replace = Mock(wraps=os.replace)
+
+    monkeypatch.setattr(
+        sqlite_sidecars.os,
+        "access",
+        lambda path, _mode: Path(path).resolve() == paths.data_root.resolve(),
+    )
+    monkeypatch.setattr(service.os, "replace", replace)
+    try:
+        with pytest.raises(RestoreSafetyError):
+            restore_backup(
+                runtime_paths=paths,
+                repository_root=repository_root,
+                backup_directory=generation,
+                authentication_key=TEST_AUTHENTICATION_KEY,
+            )
+    finally:
+        connection.close()
+
     replace.assert_not_called()
     assert _sqlite_snapshot(paths.sqlite_path) == sqlite_before
 
@@ -196,6 +234,69 @@ def test_rst_safe_01_preserves_all_sqlite_assets_when_replace_fails(
 
     replace.assert_called_once()
     assert _sqlite_snapshot(paths.sqlite_path) == sqlite_before
+
+
+def test_rst_safe_01_compares_rollback_assets_without_reading_entire_database(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import RestoreSafetyError, restore_backup
+    from app.backup_restore import service
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths, generation = _closed_backup_generation(tmp_path, repository_root)
+    original_read_bytes = Path.read_bytes
+
+    def reject_sqlite_asset_read_bytes(path: Path) -> bytes:
+        if path.name == "conversation-history.db" or path.name.startswith(
+            "conversation-history.db-"
+        ):
+            raise AssertionError("SQLite assets must be compared incrementally")
+        return original_read_bytes(path)
+
+    replace = Mock(side_effect=OSError("injected replace failure"))
+    monkeypatch.setattr(Path, "read_bytes", reject_sqlite_asset_read_bytes)
+    monkeypatch.setattr(service.os, "replace", replace)
+
+    with pytest.raises(RestoreSafetyError):
+        restore_backup(
+            runtime_paths=paths,
+            repository_root=repository_root,
+            backup_directory=generation,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+        )
+
+    replace.assert_called_once()
+
+
+def test_dur_uncertain_01_detects_database_changed_before_replace_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import RestoreDurabilityUncertainError, restore_backup
+    from app.backup_restore import service
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths, generation = _closed_backup_generation(tmp_path, repository_root)
+    original_database = paths.sqlite_path.read_bytes()
+
+    def change_destination_then_fail(source: Path, destination: Path) -> None:
+        shutil.copyfile(source, destination)
+        raise OSError("injected failure after destination changed")
+
+    monkeypatch.setattr(service.os, "replace", change_destination_then_fail)
+
+    with pytest.raises(RestoreDurabilityUncertainError):
+        restore_backup(
+            runtime_paths=paths,
+            repository_root=repository_root,
+            backup_directory=generation,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+        )
+
+    assert paths.sqlite_path.read_bytes() != original_database
 
 
 def test_rst_safe_01_preserves_wal_without_shm_when_replace_fails(

@@ -47,7 +47,11 @@ def _lease_path(database_path: Path) -> Path:
 
 
 def ensure_sqlite_lease_file(database_path: Path) -> None:
-    descriptor = os.open(_lease_path(database_path), os.O_WRONLY | os.O_CREAT, 0o600)
+    descriptor = os.open(
+        _lease_path(database_path),
+        os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW,
+        0o600,
+    )
     os.close(descriptor)
 
 
@@ -56,8 +60,16 @@ def _acquire(
 ) -> SQLiteLease:
     lease_path = _lease_path(database_path)
     lease_path.parent.mkdir(parents=True, exist_ok=True)
-    ensure_sqlite_lease_file(database_path)
-    lease_file = lease_path.open("a", encoding="utf-8")
+    descriptor = os.open(
+        lease_path,
+        os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW,
+        0o600,
+    )
+    try:
+        lease_file = os.fdopen(descriptor, "a", encoding="utf-8")
+    except BaseException:
+        os.close(descriptor)
+        raise
     operation = LOCK_EX if mode == "maintenance" else LOCK_SH
     try:
         flock(lease_file.fileno(), operation | LOCK_NB)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from datetime import UTC, datetime
@@ -132,6 +133,16 @@ def read_json(path: Path) -> dict[str, JsonValue]:
     value: object = json.loads(path.read_text(encoding="utf-8"))
     assert _is_json_object(value)
     return value
+
+
+def generation_identity_sha256(metadata: dict[str, JsonValue]) -> str:
+    canonical = json.dumps(
+        metadata,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 
 
 def database_projection(database_path: Path) -> tuple[int, int, str]:

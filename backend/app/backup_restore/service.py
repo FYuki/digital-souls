@@ -162,7 +162,14 @@ def restore_backup(
     authentication_key: BackupAuthenticationKey,
     maintenance_lease: SQLiteLease | None = None,
 ) -> BackupVerification:
-    validate_existing_runtime_data_root(runtime_paths, repository_root)
+    try:
+        validate_existing_runtime_data_root(runtime_paths, repository_root)
+    except ValueError as error:
+        if runtime_paths.restore_intent_path.is_symlink():
+            raise RestoreRecoveryRequiredError(
+                RestoreRecoveryRequiredError.public_message
+            ) from error
+        raise
     marker_existed = restore_intent_exists(runtime_paths.restore_intent_path)
     generation = None
     if not marker_existed:
@@ -250,7 +257,7 @@ def _commit_restore(
     staging: Path,
     intent: RestoreIntent,
     replace_failure_cleanup_intent: RestoreIntent | None,
-    sqlite_before: dict[str, bytes | None],
+    sqlite_before: dict[str, str | None],
 ) -> BackupVerification:
     try:
         os.replace(staging, runtime_paths.sqlite_path)
@@ -284,9 +291,9 @@ def _commit_restore(
         ) from error
 
 
-def _sqlite_asset_snapshot(database: Path) -> dict[str, bytes | None]:
+def _sqlite_asset_snapshot(database: Path) -> dict[str, str | None]:
     return {
-        suffix: path.read_bytes() if os.path.lexists(path) else None
+        suffix: sha256_file(path) if os.path.lexists(path) else None
         for suffix in ("", "-wal", "-shm", "-journal")
         for path in (database.with_name(database.name + suffix),)
     }

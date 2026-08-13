@@ -45,10 +45,11 @@ sudo systemctl enable --now docker.service
 `env.example`をdogfood専用の一時pathへmode `0600`で作成し、repository URL、配備する完全なcommit SHA、VOICEVOX imageを実環境に合わせる。単純な`cp infra/dogfood/env.example /tmp/dogfood.env`のまま使用してはならない。推論portはここへ追加せず、`environments/profiles/dogfood.json`を唯一の参照元にする。
 
 ```bash
-install -m 0600 infra/dogfood/env.example /tmp/dogfood.env
-sudo env DOGFOOD_ENV_FILE=/tmp/dogfood.env WSL_DISTRO_NAME=Ubuntu-dogfood \
+dogfood_env=$(mktemp)
+install -m 0600 infra/dogfood/env.example "$dogfood_env"
+sudo env DOGFOOD_ENV_FILE="$dogfood_env" WSL_DISTRO_NAME=Ubuntu-dogfood \
   scripts/dogfood/bootstrap.sh
-rm -- /tmp/dogfood.env
+rm -f -- "$dogfood_env"
 ```
 
 bootstrap用一時envの`0600`は、内容を読み込む前の秘密保護契約である。bootstrapが正規配置する`/etc/digital-souls/dogfood.env`の`0640 root:digital-souls`とは別の契約であり、一時envへ`0640`を使用しない。bootstrapの成否を確認した後、一時envは削除する。

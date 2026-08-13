@@ -54,6 +54,8 @@ def validate_runtime_projection(
 
 
 def _validate_path_contract(paths: RuntimePaths, repository_root: Path) -> None:
+    if paths.environment_id not in SUPPORTED_ENVIRONMENT_IDS:
+        raise ValueError("runtime environment identity is invalid")
     data_root = paths.data_root
     if data_root.is_symlink():
         raise ValueError("runtime data root must not be a symlink")
@@ -82,6 +84,7 @@ def _validate_derived_paths(paths: RuntimePaths) -> None:
         paths.cache_path,
         paths.whisper_cache_path,
         paths.identity_marker_path,
+        paths.restore_intent_path,
         paths.data_root / IDENTITY_LOCK_FILENAME,
         paths.data_root / SQLITE_LEASE_FILENAME_SUFFIX,
     )

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 import sqlite3
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from pathlib import Path
@@ -11,6 +13,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from app.runtime_paths import RESTORE_INTENT_FILENAME, RuntimePaths
 from tests.backup_restore_test_support import (
     FIXED_BACKUP_TIME,
     FIXED_COMMIT,
@@ -18,7 +21,6 @@ from tests.backup_restore_test_support import (
     create_history_database,
     initialized_runtime,
 )
-from app.runtime_paths import RuntimePaths
 
 
 SQLITE_SUFFIXES = ("", "-wal", "-shm", "-journal")
@@ -219,7 +221,7 @@ def test_restore_startup_block_01_rechecks_marker_with_runtime_lease_before_open
     from app import restore_intent
 
     database = tmp_path / "conversation-history.db"
-    marker = tmp_path / ".conversation-history.restore-intent.json"
+    marker = tmp_path / RESTORE_INTENT_FILENAME
     connection_factory = Mock(side_effect=AssertionError("SQLite must stay closed"))
     require_sqlite_available = restore_intent.require_sqlite_available
     check_count = 0
@@ -258,7 +260,7 @@ def test_restore_startup_block_01_does_not_open_after_concurrent_restore_marks_i
     from app.conversation_history.sqlite_lease import acquire_maintenance_lease
 
     database = tmp_path / "conversation-history.db"
-    marker = tmp_path / ".conversation-history.restore-intent.json"
+    marker = tmp_path / RESTORE_INTENT_FILENAME
     sqlite_connect = Mock(side_effect=AssertionError("SQLite must stay closed"))
     monkeypatch.setattr(schema.sqlite3, "connect", sqlite_connect)
 
@@ -331,8 +333,10 @@ def test_sqlite_lease_01_blocks_runtime_acquisition_during_sidecar_validation(
 
 def test_sqlite_sidecar_01_restores_after_converging_quiesced_valid_wal(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app.backup_restore import restore_backup
+    from app.backup_restore import sqlite_sidecars
 
     repository_root = tmp_path / "repository"
     repository_root.mkdir()
@@ -352,6 +356,9 @@ def test_sqlite_sidecar_01_restores_after_converging_quiesced_valid_wal(
         target = destination.sqlite_path.with_name(destination.sqlite_path.name + suffix)
         shutil.copyfile(source, target)
     connection.close()
+    checkpoint = Mock(wraps=sqlite_sidecars._checkpoint)
+    monkeypatch.setattr(sqlite_sidecars, "_checkpoint", checkpoint)
+    monkeypatch.setattr(tempfile, "tempdir", str(destination.data_root))
 
     result = restore_backup(
         runtime_paths=destination,
@@ -367,6 +374,73 @@ def test_sqlite_sidecar_01_restores_after_converging_quiesced_valid_wal(
     assert not destination.sqlite_path.with_name(
         destination.sqlite_path.name + "-shm"
     ).exists()
+    checkpoint.assert_called_once()
+    scratch_database = checkpoint.call_args.args[0]
+    assert not scratch_database.is_relative_to(destination.data_root)
+    assert not scratch_database.parent.exists()
+
+
+def test_sqlite_sidecar_01_accepts_empty_checkpoint_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.backup_restore import sqlite_sidecars
+
+    database = tmp_path / "conversation-history.db"
+    connection = Mock()
+    connection.execute.side_effect = (
+        Mock(fetchone=Mock(return_value=(0, 0, 0))),
+        Mock(fetchone=Mock(return_value=(0, 0, 0))),
+        Mock(fetchone=Mock(return_value=("ok",))),
+    )
+    monkeypatch.setattr(sqlite_sidecars.sqlite3, "connect", Mock(return_value=connection))
+
+    sqlite_sidecars._checkpoint(database)
+
+    connection.close.assert_called_once_with()
+
+
+@pytest.mark.parametrize("checkpoint", ((1, 1, 1), (0, 2, 1), (0, -1, -1)))
+def test_sqlite_sidecar_01_rejects_unsafe_checkpoint_result(
+    checkpoint: tuple[int, int, int],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import RestoreSafetyError, sqlite_sidecars
+
+    connection = Mock()
+    connection.execute.side_effect = (
+        Mock(fetchone=Mock(return_value=checkpoint)),
+        Mock(fetchone=Mock(return_value=(0, 0, 0))),
+        Mock(fetchone=Mock(return_value=("ok",))),
+    )
+    monkeypatch.setattr(sqlite_sidecars.sqlite3, "connect", Mock(return_value=connection))
+
+    with pytest.raises(RestoreSafetyError):
+        sqlite_sidecars._checkpoint(tmp_path / "conversation-history.db")
+
+
+def test_sqlite_lease_01_closes_descriptor_when_fdopen_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.conversation_history import sqlite_lease
+
+    opened_descriptors: list[int] = []
+
+    def fail_fdopen(descriptor: int, *_args: object, **_kwargs: object) -> None:
+        opened_descriptors.append(descriptor)
+        raise OSError("injected fdopen failure")
+
+    monkeypatch.setattr(sqlite_lease.os, "fdopen", fail_fdopen)
+
+    with pytest.raises(OSError, match="injected fdopen failure"):
+        with sqlite_lease.acquire_maintenance_lease(
+            tmp_path / "conversation-history.db"
+        ):
+            pytest.fail("lease acquisition must fail")
+
+    assert len(opened_descriptors) == 1
+    with pytest.raises(OSError):
+        os.fstat(opened_descriptors[0])
 
 
 def test_sqlite_sidecar_01_restores_valid_wal_without_shm(
@@ -409,6 +483,110 @@ def test_sqlite_sidecar_01_restores_valid_wal_without_shm(
     assert not destination.sqlite_path.with_name(
         destination.sqlite_path.name + "-shm"
     ).exists()
+
+
+def test_sqlite_sidecar_01_accepts_an_empty_wal_for_restore(tmp_path: Path) -> None:
+    from app.backup_restore.sqlite_sidecars import validate_sqlite_sidecars_for_restore
+
+    database = tmp_path / "conversation-history.db"
+    with closing(sqlite3.connect(database)) as connection:
+        connection.execute("CREATE TABLE sentinel (value TEXT NOT NULL)")
+        connection.commit()
+    wal = database.with_name(database.name + "-wal")
+    wal.touch()
+
+    validate_sqlite_sidecars_for_restore(database)
+
+    assert database.is_file()
+    assert not wal.exists() or wal.stat().st_size == 0
+
+
+@pytest.mark.parametrize("suffix", ("-wal", "-shm"))
+@pytest.mark.parametrize("sidecar_type", ("fifo", "directory"))
+def test_sqlite_sidecar_01_rejects_non_regular_sidecar(
+    tmp_path: Path,
+    suffix: str,
+    sidecar_type: str,
+) -> None:
+    from app.backup_restore import RestoreSafetyError
+    from app.backup_restore.sqlite_sidecars import validate_sqlite_sidecars_for_restore
+
+    database = tmp_path / "conversation-history.db"
+    with closing(sqlite3.connect(database)) as connection:
+        connection.execute("CREATE TABLE sentinel (value TEXT NOT NULL)")
+        connection.commit()
+    wal = database.with_name(database.name + "-wal")
+    wal.touch()
+    sidecar = database.with_name(database.name + suffix)
+    if sidecar_type == "fifo":
+        if sidecar == wal:
+            wal.unlink()
+        os.mkfifo(sidecar)
+    else:
+        if sidecar == wal:
+            wal.unlink()
+        sidecar.mkdir()
+
+    with pytest.raises(RestoreSafetyError):
+        validate_sqlite_sidecars_for_restore(database)
+
+    assert database.is_file()
+    assert sidecar.exists()
+
+
+def test_sqlite_sidecar_01_restores_with_an_empty_regular_wal(tmp_path: Path) -> None:
+    from app.backup_restore import restore_backup
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    _source_paths, generation = _create_generation(tmp_path, repository_root)
+    destination = initialized_runtime(
+        tmp_path, repository_root, environment_id="test", name="destination"
+    )
+    connection = create_history_database(destination, wal=False)
+    connection.close()
+    wal = destination.sqlite_path.with_name(destination.sqlite_path.name + "-wal")
+    shm = destination.sqlite_path.with_name(destination.sqlite_path.name + "-shm")
+    wal.touch()
+
+    result = restore_backup(
+        runtime_paths=destination,
+        repository_root=repository_root,
+        backup_directory=generation,
+        authentication_key=TEST_AUTHENTICATION_KEY,
+    )
+
+    assert result.conversation_count == 1
+    assert not wal.exists()
+    assert not shm.exists()
+
+
+@pytest.mark.parametrize("operation", ["ensure", "acquire"])
+def test_sqlite_lease_01_rejects_symlink_without_changing_target(
+    operation: str,
+    tmp_path: Path,
+) -> None:
+    from app.conversation_history.sqlite_lease import (
+        SQLITE_LEASE_FILENAME_SUFFIX,
+        acquire_maintenance_lease,
+        ensure_sqlite_lease_file,
+    )
+
+    database = tmp_path / "conversation-history.db"
+    target = tmp_path / "external-lease-target"
+    target.write_text("keep", encoding="utf-8")
+    lease_path = tmp_path / SQLITE_LEASE_FILENAME_SUFFIX
+    lease_path.symlink_to(target)
+
+    with pytest.raises(OSError):
+        if operation == "ensure":
+            ensure_sqlite_lease_file(database)
+        else:
+            with acquire_maintenance_lease(database):
+                pytest.fail("symlinked lease must not be acquired")
+
+    assert lease_path.is_symlink()
+    assert target.read_text(encoding="utf-8") == "keep"
 
 
 @pytest.mark.parametrize("suffix", ("-wal", "-shm", "-journal"))

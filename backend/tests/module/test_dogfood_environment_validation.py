@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import fcntl
 import os
 import subprocess
 from pathlib import Path
+from typing import TextIO
 
 import pytest
 
@@ -12,7 +14,24 @@ from tests.dogfood_infrastructure_test_support import (
 )
 
 
-def _run_loader(env_path: Path, sentinel_path: Path) -> subprocess.CompletedProcess[str]:
+def _open_fixed_env_test_lock(lock_path: Path) -> TextIO:
+    descriptor = os.open(
+        lock_path,
+        os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW,
+        0o600,
+    )
+    return os.fdopen(descriptor, "r+", encoding="utf-8")
+
+
+def _run_loader(
+    env_path: Path | str,
+    sentinel_path: Path,
+    *,
+    path_environment: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    environment = {**os.environ, "DOGFOOD_ENV_FILE": str(env_path)}
+    if path_environment is not None:
+        environment["PATH"] = path_environment
     return subprocess.run(
         [
             "bash",
@@ -22,7 +41,7 @@ def _run_loader(env_path: Path, sentinel_path: Path) -> subprocess.CompletedProc
             str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
             str(sentinel_path),
         ],
-        env={**os.environ, "DOGFOOD_ENV_FILE": str(env_path)},
+        env=environment,
         capture_output=True,
         text=True,
         timeout=10,
@@ -64,6 +83,267 @@ def test_secret_env_01_rejects_exposed_temporary_env_before_reading_it(
     assert not sentinel_path.exists()
     assert secret not in result.stdout
     assert secret not in result.stderr
+
+
+def test_secret_env_01_rejects_symlink_before_reading_secrets(tmp_path: Path) -> None:
+    target, _ = write_dogfood_env(tmp_path)
+    secret = "ab" * 32
+    link = tmp_path / "linked-dogfood.env"
+    link.symlink_to(target)
+    sentinel_path = tmp_path / "symlink-rejected.sentinel"
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; DOGFOOD_DEFAULT_ENV_FILE=$2; '
+            'unset DOGFOOD_ENV_FILE; dogfood_load_environment && touch "$3"',
+            "bash",
+            str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+            str(link),
+            str(sentinel_path),
+        ],
+        env={**os.environ, "DOGFOOD_ENV_FILE": str(link)},
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode != 0
+    assert not sentinel_path.exists()
+    assert secret not in result.stdout
+    assert secret not in result.stderr
+
+
+def test_secret_env_01_cannot_bypass_mode_validation_with_fake_stat(
+    tmp_path: Path,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    env_path.chmod(0o666)
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_stat = fake_bin / "stat"
+    fake_stat_sentinel = tmp_path / "fake-stat-called.sentinel"
+    fake_stat.write_text(
+        "#!/usr/bin/env bash\n"
+        f'touch "{fake_stat_sentinel}"\n'
+        "printf 'regular file:0:1\\n'\n",
+        encoding="utf-8",
+    )
+    fake_stat.chmod(0o755)
+    validation_sentinel = tmp_path / "validation.sentinel"
+    export_sentinel = tmp_path / "export.sentinel"
+    following_sentinel = tmp_path / "following.sentinel"
+    environment = {
+        **os.environ,
+        "DOGFOOD_ENV_FILE": str(env_path),
+        "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+    }
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; '
+            "unset DS_ENVIRONMENT_ID DOGFOOD_RESOLVED_ENV_FILE; "
+            'dogfood_validate_environment() { touch "$2"; }; '
+            "dogfood_load_environment; status=$?; "
+            '[ -z "${DS_ENVIRONMENT_ID-}${DOGFOOD_RESOLVED_ENV_FILE-}" ] '
+            '|| touch "$3"; '
+            '[ "$status" -ne 0 ] || touch "$4"; '
+            'exit "$status"',
+            "bash",
+            str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+            str(validation_sentinel),
+            str(export_sentinel),
+            str(following_sentinel),
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode != 0
+    assert not fake_stat_sentinel.exists()
+    assert not validation_sentinel.exists()
+    assert not export_sentinel.exists()
+    assert not following_sentinel.exists()
+
+
+def test_secret_env_01_does_not_open_symlink_swapped_after_file_check(
+    tmp_path: Path,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    original_path = tmp_path / "original-dogfood.env"
+    fifo_path = tmp_path / "swapped-dogfood.env"
+    opened_sentinel = tmp_path / "opened.sentinel"
+    validation_sentinel = tmp_path / "validation.sentinel"
+    export_sentinel = tmp_path / "export.sentinel"
+    following_sentinel = tmp_path / "following.sentinel"
+    swap_sentinel = tmp_path / "swapped.sentinel"
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; '
+            'mkfifo "$3"; '
+            '( exec 3>"$3"; touch "$4"; exec 3>&- ) & writer=$!; '
+            'dogfood_validate_environment() { touch "$5"; }; '
+            'swap_original=$2; swap_fifo=$3; swap_marker=$8; '
+            "dogfood_swap_after_file_check() { "
+            "  local command=$1; "
+            '  if [ "${swap_armed-}" = 1 ]; then '
+            "    trap - DEBUG; "
+            '    mv -- "$DOGFOOD_ENV_FILE" "$swap_original"; '
+            '    ln -s -- "$swap_fifo" "$DOGFOOD_ENV_FILE"; '
+            '    touch "$swap_marker"; '
+            "    return; "
+            "  fi; "
+            "  if [ \"$command\" = '[ ! -f \"$env_file\" ]' ]; then "
+            "    swap_armed=1; "
+            "  fi; "
+            "}; "
+            "set -T; trap 'dogfood_swap_after_file_check \"$BASH_COMMAND\"' DEBUG; "
+            "dogfood_load_environment; status=$?; "
+            'kill "$writer" 2>/dev/null || true; wait "$writer" 2>/dev/null || true; '
+            '[ "${DS_ENVIRONMENT_ID-}" != "dogfood" ] || touch "$6"; '
+            '[ "$status" -ne 0 ] || touch "$7"; '
+            'exit "$status"',
+            "bash",
+            str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+            str(original_path),
+            str(fifo_path),
+            str(opened_sentinel),
+            str(validation_sentinel),
+            str(export_sentinel),
+            str(following_sentinel),
+            str(swap_sentinel),
+        ],
+        env={**os.environ, "DOGFOOD_ENV_FILE": str(env_path)},
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert swap_sentinel.is_file()
+    assert result.returncode != 0
+    assert not opened_sentinel.exists()
+    assert not validation_sentinel.exists()
+    assert not export_sentinel.exists()
+    assert not following_sentinel.exists()
+
+
+@pytest.mark.parametrize(
+    "fixed_path_text",
+    (
+        "/tmp/dogfood.env",
+        "/tmp/./dogfood.env",
+        "/tmp/x/../dogfood.env",
+    ),
+    ids=("direct", "current-directory", "parent-directory"),
+)
+def test_secret_env_01_rejects_the_deprecated_fixed_temporary_path_aliases(
+    tmp_path: Path,
+    fixed_path_text: str,
+) -> None:
+    source, _ = write_dogfood_env(tmp_path)
+    fixed_path = Path("/tmp/dogfood.env")
+    intermediate_path = Path("/tmp/x")
+    lock_path = Path("/tmp/digital-souls-dogfood-env-test.lock")
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_python = fake_bin / "python3"
+    descriptor_read_sentinel = tmp_path / "descriptor-read.sentinel"
+    fake_python.write_text(
+        "#!/usr/bin/env bash\n"
+        f'touch "{descriptor_read_sentinel}"\n'
+        "exit 99\n",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+    read_sentinel = tmp_path / "environment-read.sentinel"
+    validation_sentinel = tmp_path / "validation.sentinel"
+    export_sentinel = tmp_path / "resolved-path-export.sentinel"
+    following_sentinel = tmp_path / "fixed-path-rejected.sentinel"
+    created_intermediate = False
+
+    with _open_fixed_env_test_lock(lock_path) as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        if fixed_path.exists() or fixed_path.is_symlink():
+            pytest.skip("/tmp/dogfood.env is already owned by another process")
+        if fixed_path_text == "/tmp/x/../dogfood.env":
+            if intermediate_path.is_symlink() or (
+                intermediate_path.exists() and not intermediate_path.is_dir()
+            ):
+                pytest.skip("/tmp/x is not available as a regular directory")
+            if not intermediate_path.exists():
+                intermediate_path.mkdir(mode=0o700)
+                created_intermediate = True
+        descriptor = os.open(
+            fixed_path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o600,
+        )
+        try:
+            with os.fdopen(descriptor, "wb") as destination:
+                destination.write(source.read_bytes())
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    'source "$1"; '
+                    "unset DOGFOOD_RESOLVED_ENV_FILE; "
+                    'dogfood_read_environment() { touch "$2"; }; '
+                    'dogfood_validate_environment() { touch "$3"; }; '
+                    "dogfood_load_environment; status=$?; "
+                    '[ -z "${DOGFOOD_RESOLVED_ENV_FILE+x}" ] || touch "$4"; '
+                    '[ "$status" -ne 0 ] || touch "$5"; '
+                    'exit "$status"',
+                    "bash",
+                    str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+                    str(read_sentinel),
+                    str(validation_sentinel),
+                    str(export_sentinel),
+                    str(following_sentinel),
+                ],
+                env={
+                    **os.environ,
+                    "DOGFOOD_ENV_FILE": fixed_path_text,
+                    "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+                },
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+
+            assert result.returncode != 0
+            assert not descriptor_read_sentinel.exists()
+            assert not read_sentinel.exists()
+            assert not validation_sentinel.exists()
+            assert not export_sentinel.exists()
+            assert not following_sentinel.exists()
+        finally:
+            fixed_path.unlink(missing_ok=True)
+            if created_intermediate:
+                intermediate_path.rmdir()
+
+
+def test_should_reject_symlink_test_lock_without_changing_target(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "lock-target"
+    original_content = "must remain unchanged"
+    target.write_text(original_content, encoding="utf-8")
+    lock_path = tmp_path / "fixed-env-test.lock"
+    lock_path.symlink_to(target)
+
+    with pytest.raises(OSError):
+        _open_fixed_env_test_lock(lock_path)
+
+    assert target.read_text(encoding="utf-8") == original_content
 
 
 @pytest.mark.parametrize(

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import traceback
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -27,6 +28,8 @@ from commands.test_result_command import record_playwright_result
 from commands.up_command import up_environment
 from commands.verify_command import verify_environment
 from commands.voicevox_command import start_voicevox
+from environment_verification import EnvironmentVerificationError
+from run_report_contract import RunReportError
 
 BACKUP_ERROR_EXIT_CODES = (
     (BackupIdentityError, 10),
@@ -155,8 +158,9 @@ def _dispatch(arguments: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    arguments = _parser().parse_args()
     try:
-        return _dispatch(_parser().parse_args())
+        return _dispatch(arguments)
     except BackupError as error:
         for error_type, exit_code in BACKUP_ERROR_EXIT_CODES:
             if isinstance(error, error_type):
@@ -164,8 +168,19 @@ def main() -> int:
                 return exit_code
         print(f"ERROR: {UNKNOWN_BACKUP_ERROR_MESSAGE}", file=sys.stderr)
         return 1
-    except Exception:  # noqa: BLE001 - 未知例外の本文をCLIへ露出させない境界
+    except (EnvironmentVerificationError, RunReportError):
         print(f"ERROR: {UNKNOWN_ENVIRONMENT_ERROR_MESSAGE}", file=sys.stderr)
+        return 1
+    except Exception:  # noqa: BLE001 - CLI境界で診断方針を操作種別ごとに固定する
+        if arguments.command in {
+            "backup",
+            "backup-verify",
+            "restore",
+            "restore-verify",
+        }:
+            print(f"ERROR: {UNKNOWN_ENVIRONMENT_ERROR_MESSAGE}", file=sys.stderr)
+        else:
+            traceback.print_exc()
         return 1
 
 

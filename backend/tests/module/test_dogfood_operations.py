@@ -126,13 +126,16 @@ def _run_bootstrap(
     wsl_distribution: str,
     backup_output: str | None = None,
     env_mode: int = 0o600,
+    resolved_database_path: Path | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], tuple[str, ...]]:
     env_path, _ = write_dogfood_env(tmp_path)
     env_path.chmod(env_mode)
     if database_exists:
-        (tmp_path / "data" / "conversation-history.db").write_bytes(
-            b"existing database"
+        database_path = resolved_database_path or (
+            tmp_path / "data" / "conversation-history.db"
         )
+        database_path.parent.mkdir(parents=True, exist_ok=True)
+        database_path.write_bytes(b"existing database")
     source = env_path.read_text(encoding="utf-8").replace(
         "DS_ENVIRONMENT_ID=dogfood",
         f"DS_ENVIRONMENT_ID={environment_id}",
@@ -159,6 +162,10 @@ def _run_bootstrap(
         if backup_output is None
         else backup_output
     )
+    if resolved_database_path is not None:
+        environment["BOOTSTRAP_RESOLVED_SQLITE_PATH"] = str(
+            resolved_database_path
+        )
     if failure is not None:
         environment["BOOTSTRAP_FAILURE"] = failure
     if docker_member:
@@ -386,6 +393,46 @@ def test_should_use_target_revision_cli_before_fetching_existing_clone(
         f"--backup-directory {tmp_path / 'backups' / 'backup-test-generation'}"
     )
     assert not backup_clone.exists()
+
+
+def test_bkp_path_ssot_01_uses_resolved_nondefault_database_for_backup_gate(
+    tmp_path: Path,
+) -> None:
+    resolved_database = tmp_path / "nondefault-data" / "history.sqlite3"
+
+    result, calls = _run_bootstrap(
+        tmp_path,
+        None,
+        False,
+        "existing",
+        database_exists=True,
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+        resolved_database_path=resolved_database,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert resolved_database.is_file()
+    assert len(_target_backup_calls(calls)) == 1
+
+
+def test_secret_env_01_removes_temporary_environment_after_successful_bootstrap(
+    tmp_path: Path,
+) -> None:
+    temporary_environment = tmp_path / "dogfood.env"
+
+    result, _calls = _run_bootstrap(
+        tmp_path,
+        None,
+        False,
+        "existing",
+        database_exists=False,
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not temporary_environment.exists()
 
 
 def test_should_verify_backup_before_fetching_initial_clone_with_existing_database(
@@ -640,7 +687,9 @@ def test_should_stop_bootstrap_before_changes_when_identity_does_not_match(
     )
 
     assert result.returncode != 0
-    assert calls == ()
+    assert len(calls) == 1
+    assert calls[0].startswith("python3\t- ")
+    assert _post_gate_side_effect_calls(calls, ()) == ()
     for path in ("clone", "config", "state", "log"):
         assert not (tmp_path / path).exists()
 
@@ -662,7 +711,9 @@ def test_secret_env_01_stops_bootstrap_before_persistent_side_effects_for_expose
     )
 
     assert result.returncode != 0
-    assert calls == ()
+    assert len(calls) == 1
+    assert calls[0].startswith("python3\t- ")
+    assert _post_gate_side_effect_calls(calls, ()) == ()
     assert secret not in result.stdout
     assert secret not in result.stderr
     for path in ("clone", "config", "state", "log", "backups"):

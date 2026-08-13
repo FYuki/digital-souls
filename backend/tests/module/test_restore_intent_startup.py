@@ -8,6 +8,7 @@ from uuid import UUID
 import pytest
 from fastapi import FastAPI
 
+from app.runtime_paths import RESTORE_INTENT_FILENAME
 from tests.backup_restore_test_support import (
     FIXED_BACKUP_TIME,
     FIXED_COMMIT,
@@ -17,7 +18,6 @@ from tests.backup_restore_test_support import (
 )
 
 
-RESTORE_INTENT_FILENAME = ".conversation-history.restore-intent.json"
 PUBLIC_RECOVERY_MESSAGE = "interrupted restore recovery is required"
 
 

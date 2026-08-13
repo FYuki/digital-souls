@@ -6,6 +6,25 @@ source "$SCRIPT_DIR/load-environment.sh"
 dogfood_load_environment
 dogfood_require_identity
 
+bootstrap_temporary_environment=
+backup_clone=
+generated_assets=
+if [ "$DOGFOOD_RESOLVED_ENV_FILE" != "$DOGFOOD_DEFAULT_ENV_FILE" ]; then
+  bootstrap_temporary_environment=$DOGFOOD_RESOLVED_ENV_FILE
+fi
+cleanup_bootstrap() {
+  if [ -n "$generated_assets" ]; then
+    rm -rf -- "$generated_assets"
+  fi
+  if [ -n "$backup_clone" ]; then
+    rm -rf -- "$backup_clone"
+  fi
+  if [ -n "$bootstrap_temporary_environment" ]; then
+    rm -f -- "$bootstrap_temporary_environment"
+  fi
+}
+trap cleanup_bootstrap EXIT
+
 if [ "$(id -u)" -ne 0 ]; then
   echo "ERROR: bootstrapはroot権限で実行してください" >&2
   exit 2
@@ -31,9 +50,21 @@ else
 fi
 install -d -m 0750 -o "$DOGFOOD_SERVICE_USER" -g "$DOGFOOD_SERVICE_GROUP" \
   "$DOGFOOD_BACKUP_DIR"
-if [ -f "$DS_DATA_DIR/conversation-history.db" ]; then
+repository_root=$(realpath --canonicalize-existing -- "$SCRIPT_DIR/../..")
+resolved_sqlite_path=$(python3 - "$repository_root" <<'PYTHON'
+import os
+import sys
+from pathlib import Path
+
+repository_root = Path(sys.argv[1])
+sys.path.insert(0, str(repository_root / "backend"))
+from app.runtime_paths import resolve_runtime_paths
+
+print(resolve_runtime_paths(os.environ, repository_root).sqlite_path)
+PYTHON
+)
+if [ -f "$resolved_sqlite_path" ]; then
   backup_clone=$(mktemp -d)
-  trap 'rm -rf -- "$backup_clone"' EXIT
   chown "root:$DOGFOOD_SERVICE_GROUP" "$backup_clone"
   chmod 2750 "$backup_clone"
   (
@@ -80,7 +111,7 @@ print(payload["backupDirectory"])')
     "$backup_clone/environments/environment_cli.py" backup-verify \
     --backup-directory "$backup_directory"
   rm -rf -- "$backup_clone"
-  trap - EXIT
+  backup_clone=
 fi
 git -C "$DOGFOOD_CLONE_DIR" fetch --depth 1 origin "$DOGFOOD_REPOSITORY_REVISION"
 resolved_revision=$(git -C "$DOGFOOD_CLONE_DIR" rev-parse --verify "$DOGFOOD_REPOSITORY_REVISION^{commit}")
@@ -110,7 +141,6 @@ install -d -m 0750 -o "$DOGFOOD_SERVICE_USER" -g "$DOGFOOD_SERVICE_GROUP" \
   "$DS_DATA_DIR" "$DOGFOOD_STATE_DIR" "$DOGFOOD_LOG_DIR"
 install -d -m 0750 -o root -g "$DOGFOOD_SERVICE_GROUP" "$DOGFOOD_CONFIG_DIR"
 generated_assets=$(mktemp -d)
-trap 'rm -rf -- "$generated_assets"' EXIT
 "$DOGFOOD_CLONE_DIR/scripts/dogfood/render-assets.sh" \
   "$DOGFOOD_CLONE_DIR/infra/dogfood/templates" "$generated_assets"
 install -m 0640 -o root -g "$DOGFOOD_SERVICE_GROUP" "$DOGFOOD_RESOLVED_ENV_FILE" "$DOGFOOD_CONFIG_DIR/dogfood.env"

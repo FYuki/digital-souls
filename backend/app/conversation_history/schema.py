@@ -28,10 +28,12 @@ class SchemaInspection:
 
 def inspect_conversation_history_schema(database_path: Path) -> SchemaInspection:
     with normal_sqlite_access(database_path):
-        return _inspect_sqlite_schema_for_restore(database_path)
+        return inspect_conversation_history_artifact_schema(database_path)
 
 
-def _inspect_sqlite_schema_for_restore(database_path: Path) -> SchemaInspection:
+def inspect_conversation_history_artifact_schema(
+    database_path: Path,
+) -> SchemaInspection:
     if not database_path.is_file():
         return SchemaInspection(0, frozenset(), False, False)
     with closing(

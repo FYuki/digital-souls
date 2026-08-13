@@ -5,7 +5,9 @@ from contextlib import closing
 from pathlib import Path
 
 from app.backup_restore.models import BackupSchemaError, BackupVerification
-from app.conversation_history.schema import _inspect_sqlite_schema_for_restore
+from app.conversation_history.schema import (
+    inspect_conversation_history_artifact_schema,
+)
 
 
 def create_sqlite_snapshot(source: Path, destination: Path) -> None:
@@ -34,7 +36,7 @@ def verify_sqlite_database(database_path: Path) -> BackupVerification:
         raise
     except sqlite3.Error as error:
         raise BackupSchemaError("SQLite schema validation failed") from error
-    inspection = _inspect_sqlite_schema_for_restore(database_path)
+    inspection = inspect_conversation_history_artifact_schema(database_path)
     if not inspection.is_current and not inspection.migration_required:
         raise BackupSchemaError("SQLite schema version or table contract does not match")
     return BackupVerification(

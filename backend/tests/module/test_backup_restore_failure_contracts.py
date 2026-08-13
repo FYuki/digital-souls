@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from argparse import Namespace
 from pathlib import Path
 from unittest.mock import Mock
@@ -39,6 +40,7 @@ def test_rollback_dual_01_keeps_both_failures_without_rendering_secrets(
 ) -> None:
     from app import main
 
+    debug_capture_probe = "rollback-debug-capture-probe"
     repository_root = tmp_path / "repository"
     repository_root.mkdir()
     paths = initialized_runtime(
@@ -62,17 +64,20 @@ def test_rollback_dual_01_keeps_both_failures_without_rendering_secrets(
         Mock(side_effect=compensation_error),
     )
 
-    with pytest.raises(RuntimeError) as captured:
-        main._initialize_schema_with_rollback(
-            database_path=paths.sqlite_path,
-            runtime_paths=paths,
-            repository_root=repository_root,
-            rollback=rollback,
-        )
+    with caplog.at_level(logging.DEBUG):
+        logging.getLogger(main.__name__).debug(debug_capture_probe)
+        with pytest.raises(RuntimeError) as captured:
+            main._initialize_schema_with_rollback(
+                database_path=paths.sqlite_path,
+                runtime_paths=paths,
+                repository_root=repository_root,
+                rollback=rollback,
+            )
 
     assert captured.value.primary_error is migration_error
     assert captured.value.compensation_error is compensation_error
     assert captured.value.compensation_stage == "restore"
+    assert debug_capture_probe in caplog.text
     rendered = str(captured.value)
     assert migration_secret not in rendered
     assert compensation_secret not in rendered
@@ -81,6 +86,34 @@ def test_rollback_dual_01_keeps_both_failures_without_rendering_secrets(
     assert compensation_secret not in output.out + output.err
     assert migration_secret not in caplog.text
     assert compensation_secret not in caplog.text
+
+
+def test_cli_error_01_keeps_diagnostics_for_non_backup_commands(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import environment_cli
+
+    diagnostic = "systemd unit digital-souls.service was not found"
+    arguments = Namespace(command="down", run_report=None)
+    monkeypatch.setattr(
+        environment_cli,
+        "down_environment",
+        Mock(side_effect=RuntimeError(diagnostic)),
+    )
+    monkeypatch.setattr(
+        environment_cli,
+        "_parser",
+        lambda: Mock(parse_args=lambda: arguments),
+    )
+
+    exit_code = environment_cli.main()
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "RuntimeError" in captured.err
+    assert diagnostic in captured.err
+    assert captured.out == ""
 
 
 def test_cli_error_01_classifies_registered_subclass_and_uses_public_message(

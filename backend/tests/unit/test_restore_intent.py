@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import hashlib
 import os
 import stat
 from pathlib import Path
@@ -9,18 +8,18 @@ from unittest.mock import Mock
 
 import pytest
 
-from app.runtime_paths import RuntimePaths
+from app.runtime_paths import RESTORE_INTENT_FILENAME, RuntimePaths
 from tests.backup_restore_test_support import (
     FIXED_BACKUP_TIME,
     FIXED_COMMIT,
     TEST_AUTHENTICATION_KEY,
     create_history_database,
+    generation_identity_sha256,
     initialized_runtime,
     read_json,
 )
 
 
-RESTORE_INTENT_FILENAME = ".conversation-history.restore-intent.json"
 SQLITE_SUFFIXES = ("", "-wal", "-shm", "-journal")
 
 
@@ -82,20 +81,13 @@ def _create_destination(
 
 def _valid_marker(paths: RuntimePaths, generation: Path) -> dict[str, object]:
     metadata = read_json(generation / "metadata.json")
-    generation_identity_sha256 = hashlib.sha256(
-        json.dumps(
-            metadata,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-    ).hexdigest()
+    identity_sha256 = generation_identity_sha256(metadata)
     return {
         "formatVersion": 1,
         "environmentId": paths.environment_id,
         "generationSequence": metadata["generationSequence"],
         "artifactSha256": metadata["artifactSha256"],
-        "generationIdentitySha256": generation_identity_sha256,
+        "generationIdentitySha256": identity_sha256,
     }
 
 
