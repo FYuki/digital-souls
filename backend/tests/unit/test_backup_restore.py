@@ -976,11 +976,11 @@ def test_retention_01_removes_only_old_complete_generations(tmp_path: Path) -> N
     connection.close()
 
 
-def test_should_not_prune_last_valid_generation_when_published_generation_is_corrupted(
+def test_should_fail_creation_without_pruning_when_published_generation_is_corrupted(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.backup_restore import create_backup
+    from app.backup_restore import BackupArtifactError, create_backup
     from app.backup_restore import service
 
     repository_root = tmp_path / "repository"
@@ -1015,28 +1015,29 @@ def test_should_not_prune_last_valid_generation_when_published_generation_is_cor
 
     monkeypatch.setattr(service, "_fsync_directory", corrupt_after_publication)
     try:
-        created = create_backup(
-            runtime_paths=paths,
-            repository_root=repository_root,
-            backup_root=backup_root,
-            retention_count=1,
-            authentication_key=TEST_AUTHENTICATION_KEY,
-            git_commit=FIXED_COMMIT,
-            created_at=FIXED_BACKUP_TIME + timedelta(days=1),
-        )
+        with pytest.raises(BackupArtifactError):
+            create_backup(
+                runtime_paths=paths,
+                repository_root=repository_root,
+                backup_root=backup_root,
+                retention_count=1,
+                authentication_key=TEST_AUTHENTICATION_KEY,
+                git_commit=FIXED_COMMIT,
+                created_at=FIXED_BACKUP_TIME + timedelta(days=1),
+            )
 
-        assert published == created
+        assert published is not None
         assert previous.is_dir()
-        assert created.is_dir()
+        assert published.is_dir()
     finally:
         connection.close()
 
 
-def test_should_not_prune_last_valid_generation_when_published_generation_is_replaced(
+def test_should_fail_creation_without_pruning_when_published_generation_is_replaced(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.backup_restore import create_backup
+    from app.backup_restore import BackupArtifactError, create_backup
     from app.backup_restore import service
 
     repository_root = tmp_path / "repository"
@@ -1081,20 +1082,21 @@ def test_should_not_prune_last_valid_generation_when_published_generation_is_rep
 
     monkeypatch.setattr(service, "_fsync_directory", replace_after_publication)
     try:
-        created = create_backup(
-            runtime_paths=paths,
-            repository_root=repository_root,
-            backup_root=backup_root,
-            retention_count=1,
-            authentication_key=TEST_AUTHENTICATION_KEY,
-            git_commit=FIXED_COMMIT,
-            created_at=FIXED_BACKUP_TIME + timedelta(days=1),
-        )
+        with pytest.raises(BackupArtifactError):
+            create_backup(
+                runtime_paths=paths,
+                repository_root=repository_root,
+                backup_root=backup_root,
+                retention_count=1,
+                authentication_key=TEST_AUTHENTICATION_KEY,
+                git_commit=FIXED_COMMIT,
+                created_at=FIXED_BACKUP_TIME + timedelta(days=1),
+            )
 
-        assert published == created
+        assert published is not None
         assert previous.is_dir()
-        assert created.is_dir()
-        assert (created / "metadata.json").read_bytes() == replacement_metadata
+        assert published.is_dir()
+        assert (published / "metadata.json").read_bytes() == replacement_metadata
     finally:
         connection.close()
 

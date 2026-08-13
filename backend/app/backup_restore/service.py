@@ -136,11 +136,12 @@ def create_backup(
             published_generation = _revalidate_generation(
                 staged_generation, generation, authentication_key
             )
-            retention_generations = existing_generations
-            if published_generation is not None:
-                retention_generations = (*retention_generations, published_generation)
+            if published_generation is None:
+                raise BackupArtifactError(
+                    "published backup generation verification failed"
+                )
             _prune_backup_generations(
-                retention_generations,
+                (*existing_generations, published_generation),
                 retention_count,
                 authentication_key,
             )

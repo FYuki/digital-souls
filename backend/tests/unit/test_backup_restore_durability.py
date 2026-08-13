@@ -451,6 +451,73 @@ def test_dur_uncertain_01_keeps_published_generation_and_skips_retention(
     assert not tuple(backup_root.glob(".backup-staging-*"))
 
 
+def test_should_fail_creation_and_skip_retention_when_published_generation_is_invalid(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.backup_restore import BackupArtifactError, create_backup
+    from app.backup_restore import service
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths = initialized_runtime(tmp_path, repository_root)
+    connection = create_history_database(paths, wal=False)
+    backup_root = tmp_path / "backups"
+    existing_generations = tuple(
+        create_backup(
+            runtime_paths=paths,
+            repository_root=repository_root,
+            backup_root=backup_root,
+            retention_count=8,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+            git_commit=FIXED_COMMIT,
+            created_at=FIXED_BACKUP_TIME.replace(day=index + 1),
+        )
+        for index in range(8)
+    )
+    fsync_directory = service._fsync_directory
+    prune = Mock(wraps=service._prune_backup_generations)
+    published_generation: Path | None = None
+
+    def invalidate_after_publication(path: Path) -> None:
+        nonlocal published_generation
+        fsync_directory(path)
+        if path != backup_root or published_generation is not None:
+            return
+        published_generation = next(
+            generation
+            for generation in backup_root.glob("backup-*")
+            if generation not in existing_generations
+        )
+        with (published_generation / "conversation-history.db").open("ab") as artifact:
+            artifact.write(b"invalid-after-publication")
+
+    monkeypatch.setattr(service, "_fsync_directory", invalidate_after_publication)
+    monkeypatch.setattr(service, "_prune_backup_generations", prune)
+    try:
+        with pytest.raises(BackupArtifactError):
+            create_backup(
+                runtime_paths=paths,
+                repository_root=repository_root,
+                backup_root=backup_root,
+                retention_count=7,
+                authentication_key=TEST_AUTHENTICATION_KEY,
+                git_commit=FIXED_COMMIT,
+                created_at=FIXED_BACKUP_TIME.replace(day=9),
+            )
+    finally:
+        connection.close()
+
+    prune.assert_not_called()
+    assert all(generation.is_dir() for generation in existing_generations)
+    assert published_generation is not None
+    assert published_generation.is_dir()
+    assert set(backup_root.glob("backup-*")) == {
+        *existing_generations,
+        published_generation,
+    }
+
+
 def test_dur_uncertain_01_does_not_classify_prepublication_failure_as_uncertain(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
