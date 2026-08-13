@@ -23,7 +23,10 @@ def _run_entrypoint(
     capture_path = tmp_path / f"{script_name}.json"
     write_executable(
         bin_dir / "python3",
-        f"""{sys.executable} - \"$@\" <<'PY'
+        f"""if [ \"${{1-}}\" = \"-\" ]; then
+  exec {sys.executable} \"$@\"
+fi
+{sys.executable} - \"$@\" <<'PY'
 import json, os, sys
 json.dump({{
     'arguments': sys.argv[1:],
@@ -75,6 +78,9 @@ def _run_entrypoint_with_mismatched_identity(
     capture_path = tmp_path / f"{script_name}.rejected"
     write_executable(
         bin_dir / "python3",
+        f'if [ "${{1-}}" = "-" ]; then\n'
+        f'  exec {sys.executable} "$@"\n'
+        "fi\n"
         f'printf "%s\\n" "$*" > "{capture_path}"\n',
     )
     env_path, _ = write_dogfood_env(tmp_path)
