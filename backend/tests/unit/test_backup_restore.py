@@ -79,14 +79,24 @@ def test_should_authenticate_staging_and_published_generation_once_each(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app.backup_restore import create_backup
+    from app.backup_restore import service
 
     repository_root = tmp_path / "repository"
     repository_root.mkdir()
     paths = initialized_runtime(tmp_path, repository_root)
     connection = create_history_database(paths, wal=False)
-    authentication_comparisons = _record_authentication_comparisons(monkeypatch)
+    read_verified_generation = service.read_verified_generation
+    authenticated_directories: list[Path] = []
+
+    def record_authenticated_directory(directory: Path, authentication_key):
+        authenticated_directories.append(directory)
+        return read_verified_generation(directory, authentication_key)
+
+    monkeypatch.setattr(
+        service, "read_verified_generation", record_authenticated_directory
+    )
     try:
-        create_backup(
+        generation = create_backup(
             runtime_paths=paths,
             repository_root=repository_root,
             backup_root=tmp_path / "backups",
@@ -96,7 +106,15 @@ def test_should_authenticate_staging_and_published_generation_once_each(
             created_at=FIXED_BACKUP_TIME,
         )
 
-        assert len(authentication_comparisons) == 2
+        staging_directories = [
+            directory
+            for directory in authenticated_directories
+            if directory.name.startswith(".backup-staging-")
+        ]
+        assert len(authenticated_directories) == 2
+        assert len(staging_directories) == 1
+        assert authenticated_directories.count(staging_directories[0]) == 1
+        assert authenticated_directories.count(generation) == 1
     finally:
         connection.close()
 
