@@ -19,7 +19,6 @@ REQUIRED_ENV_KEYS = {
     "DOGFOOD_SERVICE_USER",
     "DOGFOOD_SERVICE_GROUP",
     "DOGFOOD_REPOSITORY_URL",
-    "DOGFOOD_REPOSITORY_REVISION",
     "DOGFOOD_CLONE_DIR",
     "DOGFOOD_CONFIG_DIR",
     "DS_DATA_DIR",
@@ -33,6 +32,8 @@ REQUIRED_ENV_KEYS = {
 }
 SHELL_ENTRYPOINTS = (
     "bootstrap.sh",
+    "deploy.sh",
+    "rollback.sh",
     "start-services.sh",
     "stop-services.sh",
     "restart-services.sh",
@@ -82,7 +83,7 @@ def test_should_define_separate_dogfood_identity_clone_and_runtime_paths() -> No
     assert values["DOGFOOD_SERVICE_USER"]
     assert values["DOGFOOD_SERVICE_GROUP"]
     assert not values["DOGFOOD_REPOSITORY_URL"].startswith(("/", "file:"))
-    assert re.fullmatch(r"[0-9a-f]{40}", values["DOGFOOD_REPOSITORY_REVISION"])
+    assert "DOGFOOD_REPOSITORY_REVISION" not in values
 
     path_keys = (
         "DOGFOOD_CLONE_DIR",
@@ -107,7 +108,9 @@ def test_should_define_separate_dogfood_identity_clone_and_runtime_paths() -> No
     )
 
 
-def test_should_keep_dogfood_shell_entrypoints_executable_strict_and_syntax_valid() -> None:
+def test_should_keep_dogfood_shell_entrypoints_executable_strict_and_syntax_valid() -> (
+    None
+):
     paths = tuple(DOGFOOD_SCRIPTS_DIR / name for name in SHELL_ENTRYPOINTS)
 
     for path in paths:
@@ -161,7 +164,9 @@ def test_should_separate_application_identity_from_docker_operations() -> None:
         r'gpasswd --delete "\$DOGFOOD_SERVICE_USER" docker',
         source,
     )
-    assert re.search(r'chown -R "root:\$DOGFOOD_SERVICE_GROUP" "\$DOGFOOD_CLONE_DIR"', source)
+    assert re.search(
+        r'chown -R "root:\$DOGFOOD_SERVICE_GROUP" "\$DOGFOOD_CLONE_DIR"', source
+    )
     assert re.search(r'chmod -R g-w,o-rwx "\$DOGFOOD_CLONE_DIR"', source)
     assert re.search(r'chmod 0750 "\$DOGFOOD_CLONE_DIR"', source)
 
@@ -247,7 +252,9 @@ def test_should_define_one_inference_target_for_both_owned_services() -> None:
     assert wants == service_names
 
 
-def test_should_route_service_lifecycle_entrypoints_through_the_inference_target() -> None:
+def test_should_route_service_lifecycle_entrypoints_through_the_inference_target() -> (
+    None
+):
     target_name = _single_systemd_asset("*.target").name
 
     for script_name, action in (

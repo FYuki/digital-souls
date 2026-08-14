@@ -70,6 +70,24 @@ def test_should_return_not_ready_for_connection_refusal():
     assert result.attempts == 1
 
 
+def test_should_report_not_ready_when_any_profile_service_probe_fails(
+    http_endpoint,
+):
+    from http_readiness import probe_http_services
+
+    services, ready = probe_http_services(
+        {
+            "frontend": http_endpoint(204),
+            "backend": "http://127.0.0.1:1/",
+        },
+        timeout_seconds=0.05,
+    )
+
+    assert not ready
+    assert services["frontend"]["result"] == "ready"
+    assert services["backend"]["result"] == "not_ready"
+
+
 def test_should_retry_until_ready_and_report_exact_attempt_count(http_endpoint):
     from http_readiness import wait_for_http
 

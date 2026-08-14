@@ -14,9 +14,15 @@ done
 : "${OLLAMA_PORT:?Ollama portを解決できません}"
 : "${VOICEVOX_PORT:?VOICEVOX portを解決できません}"
 
-printf 'environment identity: %s\nruntime root: %s\n' "$DS_ENVIRONMENT_ID" "$DS_DATA_DIR"
+running_commit=$(git -C "$DOGFOOD_CLONE_DIR" rev-parse HEAD)
+printf 'environment identity: %s\nprofile: %s\nruntime root: %s\nrunning commit: %s\n' \
+  "$DS_ENVIRONMENT_ID" "$DS_ENVIRONMENT_ID" "$DS_DATA_DIR" "$running_commit"
 systemctl show digital-souls-inference.target digital-souls-ollama.service digital-souls-voicevox.service \
-  --property=Id,LoadState,ActiveState,SubState,MainPID,MemoryCurrent,CPUUsageNSec
+  --property=Id,LoadState,ActiveState,SubState,MainPID,MemoryCurrent,CPUUsageNSec,ActiveEnterTimestamp
+readiness_status=0
+"$DOGFOOD_CLONE_DIR/backend/.venv/bin/python" \
+  "$DOGFOOD_CLONE_DIR/environments/environment_cli.py" readiness \
+  --profile "$DS_ENVIRONMENT_ID" || readiness_status=$?
 ss -ltnp "sport = :$OLLAMA_PORT or sport = :$VOICEVOX_PORT"
 ps -eo pid,pcpu,pmem,comm
 free -h
@@ -25,3 +31,4 @@ if ! nvidia-smi --query-gpu=name,utilization.gpu,memory.used,memory.total --form
   printf '%s\n' 'GPU metadata: 利用できません'
 fi
 docker ps --filter "name=$DOGFOOD_VOICEVOX_CONTAINER" --format '{{.Names}} {{.Status}} {{.Ports}}'
+exit "$readiness_status"

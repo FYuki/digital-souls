@@ -7,13 +7,29 @@ from pathlib import Path
 
 import pytest
 
-from tests.dogfood_infrastructure_test_support import write_dogfood_env
+from tests.dogfood_infrastructure_test_support import (
+    TEST_REVISION,
+    TEST_SECRET_SENTINEL,
+    command_with_root_owned_revision,
+    write_dogfood_env,
+)
 from tests.environment_entrypoint_test_support import ROOT_DIR, write_executable
 
 
 DOGFOOD_SCRIPTS_DIR = ROOT_DIR / "scripts" / "dogfood"
-READ_ONLY_COMMANDS = {"systemctl", "ss", "ps", "free", "nvidia-smi", "docker"}
+READ_ONLY_COMMANDS = {
+    "systemctl",
+    "ss",
+    "ps",
+    "free",
+    "nvidia-smi",
+    "docker",
+    "git",
+    "readiness",
+}
 FORBIDDEN_STATUS_COMMANDS = {"curl", "wget", "journalctl", "nc", "lsof"}
+CONVERSATION_SENTINEL = "会話本文をstatusへ出力してはならない"
+PROMPT_SENTINEL = "promptをstatusへ出力してはならない"
 
 
 def _recording_command(bin_dir: Path, name: str, log_path: Path, output: str) -> None:
@@ -30,9 +46,8 @@ def _run_status(
     environment_id: str = "dogfood",
     wsl_distribution: str = "Ubuntu-dogfood",
     gpu_exit_code: int = 0,
-) -> tuple[
-    subprocess.CompletedProcess[str], list[tuple[str, str]], Path, Path, Path
-]:
+    readiness_exit_code: int = 0,
+) -> tuple[subprocess.CompletedProcess[str], list[tuple[str, str]], Path, Path, Path]:
     runtime_dir = tmp_path / "status-runtime"
     runtime_dir.mkdir()
     for script_name in ("status.sh", "load-environment.sh"):
@@ -52,13 +67,16 @@ def _run_status(
         ),
         encoding="utf-8",
     )
-    secret = "会話本文をstatusへ出力してはならない"
-    (data_dir / "conversation-history.db").write_text(secret, encoding="utf-8")
+    (data_dir / "conversation-history.db").write_text(
+        CONVERSATION_SENTINEL,
+        encoding="utf-8",
+    )
+    (data_dir / "private-prompt").write_text(PROMPT_SENTINEL, encoding="utf-8")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     log_path = tmp_path / "commands.log"
     outputs = {
-        "systemctl": "ActiveState=active",
+        "systemctl": "ActiveState=active\\nActiveEnterTimestamp=Fri 2026-08-14 12:00:00 JST",
         "ss": "LISTEN 0 4096 127.0.0.1:12345",
         "ps": "PID %CPU %MEM COMMAND",
         "free": "Mem: 1024 512 512",
@@ -66,6 +84,22 @@ def _run_status(
     }
     for name, output in outputs.items():
         _recording_command(bin_dir, name, log_path, output)
+    _recording_command(bin_dir, "git", log_path, TEST_REVISION)
+    clone_cli = tmp_path / "clone" / "environments" / "environment_cli.py"
+    clone_cli.parent.mkdir(parents=True)
+    write_executable(
+        clone_cli,
+        f'printf "readiness\\t%s\\n" "$*" >> "{log_path}"\n'
+        "printf '%s\\n' "
+        '\'{"status":"ready","profile":"dogfood","services":{}}\'\n'
+        f"exit {readiness_exit_code}\n",
+    )
+    venv_python = tmp_path / "clone" / "backend" / ".venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    write_executable(
+        venv_python,
+        'exec "$@"\n',
+    )
     for name in FORBIDDEN_STATUS_COMMANDS:
         _recording_command(bin_dir, name, log_path, "forbidden")
     write_executable(
@@ -75,7 +109,9 @@ def _run_status(
     )
 
     result = subprocess.run(
-        [str(status_script)],
+        command_with_root_owned_revision(
+            tmp_path / "config" / "dogfood.revision", [str(status_script)]
+        ),
         env={
             **os.environ,
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
@@ -110,17 +146,32 @@ def test_should_report_only_runtime_metadata_with_read_only_commands(
         if name == "systemctl"
     )
     assert all(
-        arguments.startswith("ps ")
-        for name, arguments in calls
-        if name == "docker"
+        arguments.startswith("ps ") for name, arguments in calls if name == "docker"
     )
     assert "dogfood" in result.stdout
     assert str(data_dir) in result.stdout
-    assert "会話本文をstatusへ出力してはならない" not in result.stdout
+    assert TEST_REVISION in result.stdout
+    assert "Fri 2026-08-14 12:00:00 JST" in result.stdout
+    assert '"status":"ready"' in result.stdout.replace(" ", "")
     ss_arguments = " ".join(arguments for name, arguments in calls if name == "ss")
     assert "11434" in ss_arguments
     assert "50021" in ss_arguments
     assert resolver_log.read_text(encoding="utf-8") == "resolver\n"
+    readiness_calls = [arguments for name, arguments in calls if name == "readiness"]
+    assert readiness_calls == ["readiness --profile dogfood"]
+
+
+def test_should_not_expose_private_content_in_status_output(tmp_path: Path) -> None:
+    result, _, _, _, _ = _run_status(tmp_path)
+
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    for observation in (result.stdout, result.stderr):
+        for sentinel in (
+            TEST_SECRET_SENTINEL,
+            CONVERSATION_SENTINEL,
+            PROMPT_SENTINEL,
+        ):
+            assert sentinel not in observation
 
 
 def test_should_keep_status_available_when_gpu_metadata_command_is_unavailable(
@@ -131,6 +182,19 @@ def test_should_keep_status_available_when_gpu_metadata_command_is_unavailable(
     assert result.returncode == 0, (result.stdout, result.stderr)
     assert any(name == "nvidia-smi" for name, _ in calls)
     assert "GPU" in result.stdout
+
+
+def test_should_report_all_metadata_before_returning_not_ready(
+    tmp_path: Path,
+) -> None:
+    result, calls, data_dir, _, _ = _run_status(tmp_path, readiness_exit_code=1)
+
+    assert result.returncode == 1
+    assert str(data_dir) in result.stdout
+    assert TEST_REVISION in result.stdout
+    assert {"ss", "ps", "free", "nvidia-smi", "docker"} <= {
+        name for name, _ in calls
+    }
 
 
 @pytest.mark.parametrize(

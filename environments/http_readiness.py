@@ -4,7 +4,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Callable, Mapping, Protocol
 
 
 class ReadinessConfigurationError(ValueError):
@@ -50,6 +50,16 @@ def probe_http(url: str, *, timeout_seconds: float) -> ReadinessResult:
     except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError):
         return ReadinessResult(url, 1, time.monotonic() - started, result)
     return ReadinessResult(url, 1, time.monotonic() - started, result)
+
+
+def probe_http_services(
+    service_urls: Mapping[str, str], *, timeout_seconds: float
+) -> tuple[dict[str, dict[str, object]], bool]:
+    services = {
+        name: probe_http(url, timeout_seconds=timeout_seconds).to_report()
+        for name, url in service_urls.items()
+    }
+    return services, all(service["result"] == "ready" for service in services.values())
 
 
 def wait_for_http(
