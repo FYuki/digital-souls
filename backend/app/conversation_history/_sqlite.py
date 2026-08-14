@@ -43,10 +43,10 @@ class SqliteSession:
     def connection(self) -> Iterator[sqlite3.Connection]:
         with normal_sqlite_access(self._database_path):
             connection = self._connection_factory(self._database_path)
-            connection.row_factory = sqlite3.Row
-            connection.execute("PRAGMA foreign_keys = ON")
-            connection.execute("PRAGMA secure_delete = ON")
             try:
+                connection.row_factory = sqlite3.Row
+                connection.execute("PRAGMA foreign_keys = ON")
+                connection.execute("PRAGMA secure_delete = ON")
                 yield connection
             finally:
                 connection.close()

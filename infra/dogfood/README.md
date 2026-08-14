@@ -81,6 +81,16 @@ backupの真正性検証にはgeneration外の`DOGFOOD_BACKUP_AUTHENTICATION_KEY
 
 以下はすべて`digital-souls` userで実行する。backupと独立検証はdeploy前およびWave 2 #8のschema変更前に必須であり、どちらかが失敗した場合は後続のdeploy／migrationを開始しない。
 
+実行前に履歴記録を一時停止し、rootだけが読める正規設定から認証鍵を呼び出し元shellへ読み込む。値を端末へ表示しない。backup／restore作業が終わったら必ず変数を破棄し、履歴記録を戻す。
+
+```bash
+set +o history
+DOGFOOD_BACKUP_AUTHENTICATION_KEY=$(sudo awk -F= \
+  '/^DOGFOOD_BACKUP_AUTHENTICATION_KEY=/{print substr($0, index($0, "=") + 1)}' \
+  /etc/digital-souls/dogfood.env)
+export DOGFOOD_BACKUP_AUTHENTICATION_KEY
+```
+
 ```bash
 sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY -u digital-souls env \
   DS_ENVIRONMENT_ID=dogfood DS_DATA_DIR=/var/lib/digital-souls/data \
@@ -94,6 +104,9 @@ sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY -u digital-souls env \
   /opt/digital-souls/current/backend/.venv/bin/python \
   /opt/digital-souls/current/environments/environment_cli.py backup-verify \
   --backup-directory /var/lib/digital-souls/backups/backup-YYYYMMDDTHHMMSSZ-COMMIT-UNIQUEID
+
+unset DOGFOOD_BACKUP_AUTHENTICATION_KEY
+set -o history
 ```
 
 CLIは成功時に0、identity不一致は10、artifact不正は11、schema不一致は12、非破壊切替失敗は13、backup公開結果不確定は14、restore durability不確定は15、restore中断からの復旧要求は16、その他の入力・OSエラーは1を返す。出力する証跡は環境ID、UTC日時、commit、schema version、conversation件数、検証結果に限定する。metadata、manifest、標準出力、標準エラー、作業logへconversation本文、DB本文、環境変数全体、秘密値を転記しない。
@@ -101,6 +114,7 @@ CLIは成功時に0、identity不一致は10、artifact不正は11、schema不�
 ### schema変更失敗時のrollback
 
 Backendを停止し、変更前backupの`backup-verify`を成功させてからrestoreする。restoreはmetadata、manifest、checksum、SQLite整合性、schema、環境identityを切替前に検証し、失敗時は既存DBを維持する。
+前段のcleanup後にrestoreを行う場合は、同じ履歴停止・認証鍵読込手順をもう一度実行する。
 
 ```bash
 sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY -u digital-souls env \
@@ -116,6 +130,9 @@ sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY -u digital-souls env \
   /opt/digital-souls/current/environments/environment_cli.py restore-verify \
   --environment dogfood --repository-root /opt/digital-souls/current \
   --backup-directory /var/lib/digital-souls/backups/backup-YYYYMMDDTHHMMSSZ-COMMIT-UNIQUEID
+
+unset DOGFOOD_BACKUP_AUTHENTICATION_KEY
+set -o history
 ```
 
 identityエラーでは選択した環境と`.environment-identity.json`を照合する。artifact／schemaエラーでは対象世代を使用せず、直前の検証済み世代へ切り替える。restore safetyエラーではサービスを起動せず、既存DBが維持されていることを確認してから再試行する。

@@ -187,8 +187,11 @@ conversationのアーカイブは履歴をSQLiteへ保持したまま通常一�
 会話履歴DBの現行schema versionは3である。SQLiteを正本、Chromaを再構築可能な派生indexとし、
 backup artifactにはSQLiteと検証用JSONだけを含める。WAL稼働中のbackupはSQLite公式backup APIで
 整合snapshotを作成する。restoreはchecksum、schema、environment identityを切替前に検証し、
-検証済みstaging SQLiteを単一のatomic置換で切り替える。切替前の検証・置換失敗時は既存DBを
-維持し、自動rollbackは行わない。復旧操作は`infra/dogfood/README.md`の手動restore手順に従う。
+検証済みstaging SQLiteを単一のatomic置換で切り替える。通常の手動restoreでは、切替前の検証・
+置換失敗時に既存DBを維持し、自動rollbackは行わない。dogfood起動時のschema migration失敗では
+直前に作成・検証したbackupへ自動rollbackし、rollback自体も失敗した場合はmigrationとrollbackの
+両方の失敗を保持して起動を中止する。その他の復旧操作は`infra/dogfood/README.md`の手動restore
+手順に従う。
 dogfoodのdeployとschema migrationは
 事前backupの成功を後続処理の開始条件とする。操作手順とIssue #56のrestore drillは
 `infra/dogfood/README.md`を正本とする。

@@ -443,6 +443,91 @@ def test_sqlite_lease_01_closes_descriptor_when_fdopen_fails(
         os.fstat(opened_descriptors[0])
 
 
+def test_sqlite_lease_01_closes_file_when_flock_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.conversation_history import sqlite_lease
+
+    opened_files = []
+    original_fdopen = sqlite_lease.os.fdopen
+
+    def record_fdopen(*args, **kwargs):
+        lease_file = original_fdopen(*args, **kwargs)
+        opened_files.append(lease_file)
+        return lease_file
+
+    monkeypatch.setattr(sqlite_lease.os, "fdopen", record_fdopen)
+    monkeypatch.setattr(
+        sqlite_lease,
+        "flock",
+        Mock(side_effect=OSError("injected flock failure")),
+    )
+
+    with pytest.raises(OSError, match="injected flock failure"):
+        with sqlite_lease.acquire_maintenance_lease(
+            tmp_path / "conversation-history.db"
+        ):
+            pytest.fail("lease acquisition must fail")
+
+    assert len(opened_files) == 1
+    assert opened_files[0].closed
+
+
+def test_sqlite_lease_01_closes_file_when_unlock_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.conversation_history import sqlite_lease
+
+    lease_path = tmp_path / "lease"
+    lease_file = lease_path.open("w", encoding="utf-8")
+    lease = sqlite_lease.SQLiteLease(tmp_path / "database", lease_file, "maintenance")
+    monkeypatch.setattr(
+        sqlite_lease,
+        "flock",
+        Mock(side_effect=OSError("injected unlock failure")),
+    )
+
+    with pytest.raises(OSError, match="injected unlock failure"):
+        lease.close()
+
+    assert lease_file.closed
+
+
+def test_sqlite_session_01_closes_connection_when_pragma_setup_fails(
+    tmp_path: Path,
+) -> None:
+    from app.conversation_history._sqlite import SqliteSession
+
+    connection = Mock()
+    connection.execute.side_effect = sqlite3.OperationalError("injected pragma failure")
+    session = SqliteSession(tmp_path / "conversation-history.db", Mock(return_value=connection))
+
+    with pytest.raises(sqlite3.OperationalError, match="injected pragma failure"):
+        with session.connection():
+            pytest.fail("connection setup must fail")
+
+    connection.close.assert_called_once_with()
+
+
+def test_sqlite_sidecar_01_treats_unavailable_proc_as_in_use(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.backup_restore import sqlite_sidecars
+
+    original_iterdir = Path.iterdir
+
+    def fail_proc_iterdir(path: Path):
+        if path == Path("/proc/self/fd"):
+            raise FileNotFoundError("injected missing proc")
+        return original_iterdir(path)
+
+    monkeypatch.setattr(Path, "iterdir", fail_proc_iterdir)
+
+    assert sqlite_sidecars._has_open_sqlite_descriptor(
+        tmp_path / "conversation-history.db"
+    )
+
+
 def test_sqlite_sidecar_01_restores_valid_wal_without_shm(
     tmp_path: Path,
 ) -> None:

@@ -138,10 +138,13 @@ def _has_open_sqlite_descriptor(database: Path) -> bool:
         _sidecar(database, SQLITE_WAL_SUFFIX).resolve(),
         _sidecar(database, SQLITE_SHM_SUFFIX).resolve(),
     }
-    for descriptor in Path("/proc/self/fd").iterdir():
-        try:
-            if descriptor.resolve() in sqlite_paths:
-                return True
-        except FileNotFoundError:
-            continue
+    try:
+        for descriptor in Path("/proc/self/fd").iterdir():
+            try:
+                if descriptor.resolve() in sqlite_paths:
+                    return True
+            except FileNotFoundError:
+                continue
+    except OSError:
+        return True
     return False

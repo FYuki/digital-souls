@@ -11,7 +11,7 @@ from unittest.mock import Mock
 import pytest
 from fastapi import FastAPI
 
-from app.runtime_paths import RESTORE_INTENT_FILENAME, RuntimePaths
+from app.runtime_paths import RuntimePaths
 from tests.backup_restore_test_support import (
     FIXED_BACKUP_TIME,
     FIXED_COMMIT,
@@ -19,6 +19,7 @@ from tests.backup_restore_test_support import (
     create_history_database,
     generation_identity_sha256,
     initialized_runtime,
+    restore_intent_path as _intent_path,
 )
 
 
@@ -31,10 +32,6 @@ EXIT_AFTER_WAL_UNLINK = 73
 EXIT_AFTER_SHM_UNLINK = 74
 EXIT_AFTER_JOURNAL_UNLINK = 75
 JOURNAL_SENTINEL = b"restore-cleanup-journal"
-
-
-def _intent_path(paths: RuntimePaths) -> Path:
-    return paths.data_root / RESTORE_INTENT_FILENAME
 
 
 def _sqlite_snapshot(database: Path) -> dict[str, bytes | None]:
@@ -292,8 +289,7 @@ def test_restore_crash_recovery_01_recovers_after_process_exit_between_intent_an
         "artifactSha256",
         "generationIdentitySha256",
     }
-    metadata = json.loads((generation / "metadata.json").read_text(encoding="utf-8"))
-    expected_generation_identity = generation_identity_sha256(metadata)
+    expected_generation_identity = generation_identity_sha256(generation)
     assert marker_value["generationIdentitySha256"] == expected_generation_identity
     assert _sqlite_snapshot(destination.sqlite_path) == sqlite_before
     _assert_backend_startup_is_blocked_before_sqlite_open(destination, monkeypatch)

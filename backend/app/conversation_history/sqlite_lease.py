@@ -33,8 +33,10 @@ class SQLiteLease:
             raise RuntimeError("matching SQLite maintenance lease is required")
 
     def close(self) -> None:
-        flock(self._file.fileno(), LOCK_UN)
-        self._file.close()
+        try:
+            flock(self._file.fileno(), LOCK_UN)
+        finally:
+            self._file.close()
 
 
 _CURRENT_SQLITE_LEASE: ContextVar[SQLiteLease | None] = ContextVar(
@@ -76,6 +78,9 @@ def _acquire(
     except BlockingIOError as error:
         lease_file.close()
         raise SQLiteLeaseUnavailableError("SQLite lease is unavailable") from error
+    except OSError:
+        lease_file.close()
+        raise
     return SQLiteLease(database_path, lease_file, mode)
 
 

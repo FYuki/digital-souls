@@ -10,10 +10,14 @@ from app.conversation_history.schema import (
 )
 
 
+def _read_only_uri(database_path: Path) -> str:
+    return f"{database_path.resolve().as_uri()}?mode=ro"
+
+
 def create_sqlite_snapshot(source: Path, destination: Path) -> None:
     try:
         with closing(
-            sqlite3.connect(f"file:{source}?mode=ro", uri=True)
+            sqlite3.connect(_read_only_uri(source), uri=True)
         ) as source_connection:
             with closing(sqlite3.connect(destination)) as destination_connection:
                 source_connection.backup(destination_connection)
@@ -24,7 +28,7 @@ def create_sqlite_snapshot(source: Path, destination: Path) -> None:
 def verify_sqlite_database(database_path: Path) -> BackupVerification:
     try:
         with closing(
-            sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
+            sqlite3.connect(_read_only_uri(database_path), uri=True)
         ) as connection:
             integrity = str(connection.execute("PRAGMA integrity_check").fetchone()[0])
             if integrity != "ok":

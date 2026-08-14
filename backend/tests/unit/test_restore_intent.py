@@ -17,14 +17,12 @@ from tests.backup_restore_test_support import (
     generation_identity_sha256,
     initialized_runtime,
     read_json,
+    restore_intent_path as _intent_path,
+    restore_recovery_error_type as _recovery_error_type,
 )
 
 
 SQLITE_SUFFIXES = ("", "-wal", "-shm", "-journal")
-
-
-def _intent_path(paths: RuntimePaths) -> Path:
-    return paths.data_root / RESTORE_INTENT_FILENAME
 
 
 def _sqlite_snapshot(database: Path) -> dict[str, bytes | None]:
@@ -81,7 +79,7 @@ def _create_destination(
 
 def _valid_marker(paths: RuntimePaths, generation: Path) -> dict[str, object]:
     metadata = read_json(generation / "metadata.json")
-    identity_sha256 = generation_identity_sha256(metadata)
+    identity_sha256 = generation_identity_sha256(generation)
     return {
         "formatVersion": 1,
         "environmentId": paths.environment_id,
@@ -106,15 +104,6 @@ def _write_marker(
     return marker_path
 
 
-def _recovery_error_type():
-    import app.backup_restore as backup_restore
-
-    assert hasattr(backup_restore, "RestoreRecoveryRequiredError"), (
-        "RESTORE-INTENT-01 requires a typed recovery-required error"
-    )
-    return backup_restore.RestoreRecoveryRequiredError
-
-
 def _assert_sqlite_session_remains_blocked(paths: RuntimePaths) -> None:
     from app.conversation_history._sqlite import SqliteSession
 
@@ -137,6 +126,36 @@ def test_restore_intent_01_exposes_dedicated_runtime_marker_path(
         paths.sqlite_path,
         paths.identity_marker_path,
     }
+
+
+def test_restore_intent_01_closes_read_descriptor_when_fdopen_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app import restore_intent
+
+    marker = tmp_path / "restore-intent.json"
+    marker.write_text("{}", encoding="utf-8")
+    opened_descriptors: list[int] = []
+    original_open = restore_intent.os.open
+
+    def record_open(*args, **kwargs) -> int:
+        descriptor = original_open(*args, **kwargs)
+        opened_descriptors.append(descriptor)
+        return descriptor
+
+    monkeypatch.setattr(restore_intent.os, "open", record_open)
+    monkeypatch.setattr(
+        restore_intent.os,
+        "fdopen",
+        Mock(side_effect=OSError("injected fdopen failure")),
+    )
+
+    with pytest.raises(_recovery_error_type()):
+        restore_intent.read_restore_intent(marker)
+
+    assert len(opened_descriptors) == 1
+    with pytest.raises(OSError):
+        os.fstat(opened_descriptors[0])
 
 
 def test_restore_intent_01_resumes_same_generation_idempotently(
@@ -250,6 +269,7 @@ def test_restore_intent_01_rejects_foreign_generation_without_mutation(
         "field-set",
         "format-version-type",
         "environment-id-type",
+        "unsupported-environment-id",
         "generation-sequence-type",
         "artifact-sha256-type",
         "generation-identity-sha256-type",
@@ -288,6 +308,7 @@ def test_restore_intent_01_rejects_invalid_marker_without_mutation(
             "field-set": {"unexpected": "field"},
             "format-version-type": {"formatVersion": "1"},
             "environment-id-type": {"environmentId": 1},
+            "unsupported-environment-id": {"environmentId": "staging"},
             "generation-sequence-type": {"generationSequence": True},
             "artifact-sha256-type": {"artifactSha256": 0},
             "generation-identity-sha256-type": {

@@ -57,13 +57,18 @@ dogfood_read_environment() {
 
 dogfood_load_environment() {
   local env_file=${DOGFOOD_ENV_FILE:-$DOGFOOD_DEFAULT_ENV_FILE}
-  local environment_contents expected_owner normalized_env_file read_status
+  local environment_contents expected_owner normalized_default_env_file
+  local normalized_env_file read_status
   if ! normalized_env_file=$(realpath --canonicalize-missing -- "$env_file"); then
     echo "ERROR: dogfood設定ファイルpathを正規化できません: $env_file" >&2
     return 2
   fi
   if [ "$normalized_env_file" = "$DOGFOOD_DEPRECATED_FIXED_ENV_FILE" ]; then
     echo "ERROR: 固定されたbootstrap用一時設定pathは使用できません" >&2
+    return 2
+  fi
+  if ! normalized_default_env_file=$(realpath --canonicalize-missing -- "$DOGFOOD_DEFAULT_ENV_FILE"); then
+    echo "ERROR: dogfood既定設定ファイルpathを正規化できません" >&2
     return 2
   fi
   if [ ! -f "$env_file" ]; then
@@ -74,17 +79,24 @@ dogfood_load_environment() {
   if [ "$EUID" -eq 0 ] && [[ "${SUDO_UID-}" =~ ^[0-9]+$ ]]; then
     expected_owner=$SUDO_UID
   fi
-  if [ "$env_file" = "$DOGFOOD_DEFAULT_ENV_FILE" ]; then
+  if [ "$normalized_env_file" = "$normalized_default_env_file" ]; then
     expected_owner=0
   fi
   if ! environment_contents=$(
-    python3 - "$env_file" "$expected_owner" "$DOGFOOD_DEFAULT_ENV_FILE" \
+    python3 - "$env_file" "$normalized_env_file" "$expected_owner" \
+      "$normalized_default_env_file" \
       "$DOGFOOD_TEMPORARY_ENV_FORBIDDEN_MODE_MASK" <<'PYTHON'
 import os
 import stat
 import sys
 
-env_file, expected_owner, default_env_file, forbidden_mode_mask = sys.argv[1:]
+(
+    env_file,
+    normalized_env_file,
+    expected_owner,
+    default_env_file,
+    forbidden_mode_mask,
+) = sys.argv[1:]
 try:
     descriptor = os.open(env_file, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
 except OSError:
@@ -107,7 +119,7 @@ try:
         print("ERROR: dogfood設定ファイルの所有者が不正です", file=sys.stderr)
         raise SystemExit(2)
 
-    if env_file != default_env_file:
+    if normalized_env_file != default_env_file:
         if stat.S_IMODE(descriptor_status.st_mode) & int(forbidden_mode_mask, 8):
             print(
                 "ERROR: bootstrap用一時設定ファイルの権限が安全ではありません",
@@ -126,9 +138,10 @@ PYTHON
   ); then
     return 2
   fi
-  export DOGFOOD_RESOLVED_ENV_FILE="$env_file"
+  export DOGFOOD_RESOLVED_ENV_FILE="$normalized_env_file"
   read_status=0
-  dogfood_read_environment <<< "$environment_contents" || read_status=$?
+  dogfood_read_environment < <(printf '%s\n' "$environment_contents") \
+    || read_status=$?
   if [ "$read_status" -ne 0 ]; then
     return "$read_status"
   fi

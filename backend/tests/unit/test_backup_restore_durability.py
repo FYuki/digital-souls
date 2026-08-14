@@ -20,6 +20,58 @@ from tests.backup_restore_test_support import (
 SQLITE_SUFFIXES = ("", "-wal", "-shm", "-journal")
 
 
+def test_rst_safe_01_snapshots_broken_symlink_without_following_it(
+    tmp_path: Path,
+) -> None:
+    from app.backup_restore import service
+
+    database = tmp_path / "conversation-history.db"
+    database.symlink_to(tmp_path / "missing-database")
+
+    snapshot = service._sqlite_asset_snapshot(database)
+
+    assert snapshot[""] is not None
+
+
+def test_bkp_cleanup_01_preserves_primary_error_when_staging_cleanup_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.backup_restore import BackupSchemaError, create_backup
+    from app.backup_restore import service
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths = initialized_runtime(tmp_path, repository_root)
+    connection = create_history_database(paths, wal=False)
+    primary_error = BackupSchemaError("injected schema failure")
+    monkeypatch.setattr(
+        service,
+        "verify_sqlite_database",
+        Mock(side_effect=primary_error),
+    )
+    monkeypatch.setattr(
+        service.shutil,
+        "rmtree",
+        Mock(side_effect=OSError("injected cleanup failure")),
+    )
+
+    try:
+        with pytest.raises(BackupSchemaError) as captured:
+            create_backup(
+                runtime_paths=paths,
+                repository_root=repository_root,
+                backup_root=tmp_path / "backups",
+                retention_count=3,
+                authentication_key=TEST_AUTHENTICATION_KEY,
+                git_commit=FIXED_COMMIT,
+                created_at=FIXED_BACKUP_TIME,
+            )
+    finally:
+        connection.close()
+
+    assert captured.value is primary_error
+
+
 def _closed_backup_generation(tmp_path: Path, repository_root: Path):
     from app.backup_restore import create_backup
 

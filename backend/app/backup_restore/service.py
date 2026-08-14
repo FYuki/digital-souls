@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import UTC, datetime
 from fcntl import LOCK_EX, LOCK_UN, flock
 from pathlib import Path
@@ -125,7 +125,8 @@ def create_backup(
                 _fsync_directory(staging)
                 staging.rename(generation)
             except Exception:
-                shutil.rmtree(staging)
+                with suppress(OSError):
+                    shutil.rmtree(staging)
                 raise
             try:
                 _fsync_directory(backup_root)
@@ -257,7 +258,7 @@ def _commit_restore(
     staging: Path,
     intent: RestoreIntent,
     replace_failure_cleanup_intent: RestoreIntent | None,
-    sqlite_before: dict[str, str | None],
+    sqlite_before: dict[str, tuple[int, int, int, int, int] | None],
 ) -> BackupVerification:
     try:
         os.replace(staging, runtime_paths.sqlite_path)
@@ -291,12 +292,28 @@ def _commit_restore(
         ) from error
 
 
-def _sqlite_asset_snapshot(database: Path) -> dict[str, str | None]:
+def _sqlite_asset_snapshot(
+    database: Path,
+) -> dict[str, tuple[int, int, int, int, int] | None]:
     return {
-        suffix: sha256_file(path) if os.path.lexists(path) else None
+        suffix: _sqlite_asset_identity(path)
         for suffix in ("", "-wal", "-shm", "-journal")
         for path in (database.with_name(database.name + suffix),)
     }
+
+
+def _sqlite_asset_identity(path: Path) -> tuple[int, int, int, int, int] | None:
+    try:
+        status = os.stat(path, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    return (
+        status.st_mode,
+        status.st_dev,
+        status.st_ino,
+        status.st_size,
+        status.st_mtime_ns,
+    )
 
 
 def _require_destination_identity(

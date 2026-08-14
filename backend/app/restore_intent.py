@@ -13,7 +13,7 @@ from app.backup_restore.models import (
     RestoreRecoveryRequiredError,
     VerifiedGeneration,
 )
-from app.runtime_paths import RESTORE_INTENT_FILENAME
+from app.runtime_paths import RESTORE_INTENT_FILENAME, SUPPORTED_ENVIRONMENT_IDS
 
 RESTORE_INTENT_FORMAT_VERSION = 1
 RESTORE_INTENT_FIELDS = frozenset(
@@ -72,7 +72,12 @@ def read_restore_intent(marker_path: Path) -> RestoreIntent:
     flags = os.O_RDONLY | os.O_NOFOLLOW
     try:
         descriptor = os.open(marker_path, flags)
-        with os.fdopen(descriptor, "r", encoding="utf-8") as marker_file:
+        try:
+            marker_file = os.fdopen(descriptor, "r", encoding="utf-8")
+        except BaseException:
+            os.close(descriptor)
+            raise
+        with marker_file:
             if not stat.S_ISREG(os.fstat(marker_file.fileno()).st_mode):
                 raise RestoreRecoveryRequiredError(
                     RestoreRecoveryRequiredError.public_message
@@ -99,7 +104,12 @@ def persist_restore_intent(marker_path: Path, intent: RestoreIntent) -> None:
             RestoreRecoveryRequiredError.public_message
         ) from error
     try:
-        with os.fdopen(descriptor, "wb") as marker_file:
+        try:
+            marker_file = os.fdopen(descriptor, "wb")
+        except BaseException:
+            os.close(descriptor)
+            raise
+        with marker_file:
             os.fchmod(marker_file.fileno(), 0o600)
             marker_file.write(payload)
             marker_file.flush()
@@ -155,7 +165,10 @@ def _parse_restore_intent(raw: object) -> RestoreIntent:
         raise RestoreRecoveryRequiredError(
             RestoreRecoveryRequiredError.public_message
         )
-    if not isinstance(environment_id, str) or not environment_id:
+    if (
+        not isinstance(environment_id, str)
+        or environment_id not in SUPPORTED_ENVIRONMENT_IDS
+    ):
         raise RestoreRecoveryRequiredError(
             RestoreRecoveryRequiredError.public_message
         )

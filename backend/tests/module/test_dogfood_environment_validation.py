@@ -66,6 +66,32 @@ def test_should_continue_after_loading_valid_dogfood_environment(tmp_path: Path)
     assert sentinel_path.is_file()
 
 
+def test_secret_env_01_exports_normalized_temporary_environment_path(
+    tmp_path: Path,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    alias_parent = tmp_path / "alias"
+    alias_parent.mkdir()
+    aliased_path = alias_parent / ".." / env_path.name
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; dogfood_load_environment; printf "%s" "$DOGFOOD_RESOLVED_ENV_FILE"',
+            "bash",
+            str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+        ],
+        env={**os.environ, "DOGFOOD_ENV_FILE": str(aliased_path)},
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == str(env_path.resolve())
+
+
 @pytest.mark.parametrize("mode", (0o640, 0o604, 0o666), ids=("group", "other", "both"))
 def test_secret_env_01_rejects_exposed_temporary_env_before_reading_it(
     tmp_path: Path,

@@ -12,22 +12,12 @@ from app.runtime_paths import RESTORE_INTENT_FILENAME
 from tests.backup_restore_test_support import (
     FIXED_BACKUP_TIME,
     FIXED_COMMIT,
+    RESTORE_RECOVERY_MESSAGE,
     TEST_AUTHENTICATION_KEY,
     create_history_database,
     initialized_runtime,
+    restore_recovery_error_type as _recovery_error_type,
 )
-
-
-PUBLIC_RECOVERY_MESSAGE = "interrupted restore recovery is required"
-
-
-def _recovery_error_type():
-    import app.backup_restore as backup_restore
-
-    assert hasattr(backup_restore, "RestoreRecoveryRequiredError"), (
-        "RESTORE-STARTUP-BLOCK-01 requires a typed recovery-required error"
-    )
-    return backup_restore.RestoreRecoveryRequiredError
 
 
 def _place_marker(data_root: Path) -> Path:
@@ -87,7 +77,7 @@ async def test_restore_startup_block_01_stops_before_any_sqlite_open_when_intent
     monkeypatch.setattr(main, "ConversationHistoryRepository", create_repository)
     monkeypatch.setattr(main, "ConversationWalCleanup", create_wal_cleanup)
 
-    with pytest.raises(_recovery_error_type(), match=PUBLIC_RECOVERY_MESSAGE):
+    with pytest.raises(_recovery_error_type(), match=RESTORE_RECOVERY_MESSAGE):
         async with main.lifespan(FastAPI()):
             pytest.fail("startup must not become ready while restore recovery is required")
 
@@ -181,7 +171,7 @@ def test_restore_startup_block_01_rejects_normal_sqlite_entry(
             return
         SqliteSession(destination.sqlite_path, connection_factory)
 
-    with pytest.raises(_recovery_error_type(), match=PUBLIC_RECOVERY_MESSAGE):
+    with pytest.raises(_recovery_error_type(), match=RESTORE_RECOVERY_MESSAGE):
         invoke_entry()
 
     connection_factory.assert_not_called()

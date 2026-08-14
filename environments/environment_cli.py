@@ -42,6 +42,7 @@ BACKUP_ERROR_EXIT_CODES = (
 )
 UNKNOWN_BACKUP_ERROR_MESSAGE = "backup operation failed"
 UNKNOWN_ENVIRONMENT_ERROR_MESSAGE = "environment operation failed"
+BACKUP_COMMANDS = ("backup", "backup-verify", "restore", "restore-verify")
 
 
 def backup_environment(
@@ -102,18 +103,17 @@ def _parser() -> argparse.ArgumentParser:
     test_result.add_argument("--run-report", required=True)
     test_result.add_argument("--status", choices=("passed", "failed"), required=True)
     test_result.add_argument("--message", required=True)
-    backup = commands.add_parser("backup")
+    backup, backup_verify, restore, restore_verify = (
+        commands.add_parser(command) for command in BACKUP_COMMANDS
+    )
     backup.add_argument("--environment", required=True)
     backup.add_argument("--repository-root", required=True)
     backup.add_argument("--backup-root", required=True)
     backup.add_argument("--retention-count", required=True, type=int)
-    backup_verify = commands.add_parser("backup-verify")
     backup_verify.add_argument("--backup-directory", required=True)
-    restore = commands.add_parser("restore")
     restore.add_argument("--environment", required=True)
     restore.add_argument("--repository-root", required=True)
     restore.add_argument("--backup-directory", required=True)
-    restore_verify = commands.add_parser("restore-verify")
     restore_verify.add_argument("--environment", required=True)
     restore_verify.add_argument("--repository-root", required=True)
     restore_verify.add_argument("--backup-directory", required=True)
@@ -172,12 +172,7 @@ def main() -> int:
         print(f"ERROR: {UNKNOWN_ENVIRONMENT_ERROR_MESSAGE}", file=sys.stderr)
         return 1
     except Exception:  # noqa: BLE001 - CLI境界で診断方針を操作種別ごとに固定する
-        if arguments.command in {
-            "backup",
-            "backup-verify",
-            "restore",
-            "restore-verify",
-        }:
+        if arguments.command in BACKUP_COMMANDS:
             print(f"ERROR: {UNKNOWN_ENVIRONMENT_ERROR_MESSAGE}", file=sys.stderr)
         else:
             traceback.print_exc()

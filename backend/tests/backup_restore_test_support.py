@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TypeAlias, TypeGuard
 
-from app.backup_restore import BackupAuthenticationKey
+from app.backup_restore import BackupAuthenticationKey, RestoreRecoveryRequiredError
 from app.conversation_history.schema import initialize_conversation_history_schema
 from app.conversation_history.schema import (
     CONVERSATION_TURNS_SQL,
@@ -25,6 +25,7 @@ TURN_ID = "9e70795d-e5d5-431d-baa2-67f884403010"
 CONVERSATION_SENTINEL = "本文にだけ存在する秘密の会話"
 SECRET_SENTINEL = "sk-test-backup-secret"
 TEST_AUTHENTICATION_KEY = BackupAuthenticationKey(bytes.fromhex("ab" * 32))
+RESTORE_RECOVERY_MESSAGE = RestoreRecoveryRequiredError.public_message
 
 JsonValue: TypeAlias = (
     str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
@@ -135,7 +136,8 @@ def read_json(path: Path) -> dict[str, JsonValue]:
     return value
 
 
-def generation_identity_sha256(metadata: dict[str, JsonValue]) -> str:
+def generation_identity_sha256(generation: Path) -> str:
+    metadata = read_json(generation / "metadata.json")
     canonical = json.dumps(
         metadata,
         ensure_ascii=False,
@@ -143,6 +145,14 @@ def generation_identity_sha256(metadata: dict[str, JsonValue]) -> str:
         sort_keys=True,
     ).encode("utf-8")
     return hashlib.sha256(canonical).hexdigest()
+
+
+def restore_recovery_error_type() -> type[RestoreRecoveryRequiredError]:
+    return RestoreRecoveryRequiredError
+
+
+def restore_intent_path(paths: RuntimePaths) -> Path:
+    return paths.restore_intent_path
 
 
 def database_projection(database_path: Path) -> tuple[int, int, str]:

@@ -37,7 +37,7 @@ def inspect_conversation_history_artifact_schema(
     if not database_path.is_file():
         return SchemaInspection(0, frozenset(), False, False)
     with closing(
-        sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
+        sqlite3.connect(f"{database_path.resolve().as_uri()}?mode=ro", uri=True)
     ) as connection:
         tables = _user_tables(connection)
         version = int(connection.execute("PRAGMA user_version").fetchone()[0])
