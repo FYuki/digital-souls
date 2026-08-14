@@ -18,11 +18,38 @@ Ubuntu-dogfood内で`/etc/wsl.conf`に次を設定し、Windows側で`wsl.exe --
 systemd=true
 ```
 
-Ubuntu-dogfood内でGit、Python、Docker、Ollamaを導入する。Ollamaは版とSHA-256を固定した公式GitHub Release資材を一般ユーザーで取得・検証し、検証成功後だけrootで展開する。SHA-256は[Ollama公式GitHub Release v0.32.5](https://github.com/ollama/ollama/releases/tag/v0.32.5)の対象asset欄を正本とする。次はx86-64用の固定例である。
+Ubuntu-dogfood内でGit、Python、Docker、Ollamaを導入する。Dockerは公式apt repositoryからCompose pluginを含めて導入する。
 
 ```bash
 sudo apt update
-sudo apt install -y git python3 python3-venv docker.io curl ca-certificates zstd
+sudo apt install -y ca-certificates curl git python3 python3-venv zstd
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl --proto '=https' --tlsv1.2 --fail --location \
+  https://download.docker.com/linux/ubuntu/gpg \
+  --output /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+. /etc/os-release
+printf '%s\n' \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${UBUNTU_CODENAME:-$VERSION_CODENAME} stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io \
+  docker-buildx-plugin docker-compose-plugin
+sudo systemctl enable --now docker.service
+docker compose version
+sudo docker info
+```
+
+`docker.io`または`docker-compose`を導入済みの場合は、公式repository追加前に競合packageを削除する。既存container imageとvolumeの保全要否を確認してから実行し、導入後は上記の`docker compose version`と`sudo docker info`を両方成功させる。
+
+```bash
+sudo apt remove -y docker.io docker-compose docker-compose-v2 docker-doc \
+  podman-docker containerd runc
+```
+
+Ollamaは版とSHA-256を固定した公式GitHub Release資材を一般ユーザーで取得・検証し、検証成功後だけrootで展開する。SHA-256は[Ollama公式GitHub Release v0.32.5](https://github.com/ollama/ollama/releases/tag/v0.32.5)の対象asset欄を正本とする。次はx86-64用の固定例である。
+
+```bash
 (
   set -euo pipefail
   OLLAMA_VERSION=v0.32.5
@@ -35,7 +62,6 @@ sudo apt install -y git python3 python3-venv docker.io curl ca-certificates zstd
   sudo tar --zstd -C /usr -xf "/tmp/$OLLAMA_ARCHIVE"
   rm "/tmp/$OLLAMA_ARCHIVE"
 )
-sudo systemctl enable --now docker.service
 ```
 
 固定版を更新する場合は、Ollama公式GitHub Releasesの対象tagを開き、対象architectureのasset欄にGitHubが表示するSHA-256を取得する。tag付きURL、asset名、SHA-256を同時に更新し、`sha256sum`が失敗した場合は`sudo tar`を実行しない。`latest` URLや未検証の`install.sh`をrootで実行しない。
@@ -58,7 +84,9 @@ rm -f -- "$dogfood_env"
 
 bootstrap用一時envの`0600`は、内容を読み込む前の秘密保護契約である。bootstrapが正規配置する`/etc/digital-souls/dogfood.env`の`0640 root:digital-souls`とは別の契約であり、一時envへ`0640`を使用しない。bootstrapの成否を確認した後、一時envは削除する。
 
-bootstrapはdistribution名と`DS_ENVIRONMENT_ID=dogfood`、必須設定、絶対path、pathの非重複、HTTPS repository URL、revisionファイルの完全なcommit SHAを配置前に検証する。初回だけ指定revisionを取得し、origin、commit一致、detached HEAD、変更のないworking treeを検証してcloneを作成する。再実行時は既存cloneのoriginだけを検証し、checkoutやservice restartを行わない。検証後のcloneはroot所有に収束し、application service userは変更できない。
+bootstrapはdistribution名と`DS_ENVIRONMENT_ID=dogfood`、必須設定、絶対path、pathの非重複、HTTPS repository URL、revisionファイルの完全なcommit SHA、Docker group、`docker compose version`を配置前に検証する。初回だけ指定revisionを取得し、origin、commit一致、detached HEAD、変更のないworking treeを検証してcloneを作成する。再実行時は既存cloneのoriginだけを検証し、checkoutやservice restartを行わない。検証後のcloneはroot所有に収束し、application service userは変更できない。
+
+service userのhomeは`DOGFOOD_SERVICE_HOME_DIR`、Ollama modelは`DOGFOOD_OLLAMA_MODELS_DIR`へ分離する。既存userではhome、primary group、shellだけを収束し、旧homeのfileは移動・削除しない。bootstrapは現在revisionのBackend venv準備とFrontend buildまで行うが、サービスは起動しない。初回はbootstrap後に`start-services.sh`と`start-dogfood.sh`を実行し、Backend起動によって`conversation-history.db`を作成する。
 
 bootstrapは検証済み設定からsystemd unitとWindows launcherを生成する。生成されたlauncherは`DOGFOOD_CONFIG_DIR/start-dogfood-wsl.ps1`に配置されるため、Windows側から`\\wsl$`経由でコピーして使用する。unitのservice user、group、設定file、clone内runner、WSL distributionは同じ設定値から生成される。
 
@@ -69,6 +97,8 @@ bootstrapは検証済み設定からsystemd unitとWindows launcherを生成す�
 | clone | `/opt/digital-souls/current` | `root:digital-souls` | dogfood専用の読み取り専用clone |
 | 設定 | `/etc/digital-souls` | `root:digital-souls` | `dogfood.env`、`dogfood.revision`（ともに`0640`） |
 | data | `/var/lib/digital-souls/data` | `digital-souls:digital-souls` | SQLite、Chroma等の永続data root |
+| service home | `/var/lib/digital-souls/home` | `digital-souls:digital-souls` | Ollama設定・鍵などのhome生成物 |
+| Ollama model | `/var/lib/digital-souls/models/ollama` | `digital-souls:digital-souls` | DL済みmodel |
 | backup | `/var/lib/digital-souls/backups` | `digital-souls:digital-souls` | SQLite backup世代 |
 | state | `/var/lib/digital-souls/state` | `root:digital-souls` | deployment state |
 | log | `/var/log/digital-souls` | `digital-souls:digital-souls` | file log用directory |
@@ -86,7 +116,7 @@ sudo scripts/dogfood/rollback.sh
 sudo scripts/dogfood/rollback.sh --to <保存済みcommit SHA>
 ```
 
-deployはdirty checkout、origin/main上で解決できないcommit、設定不足を拒否する。毎回backupとbackup-verifyを完了してからmanifestとrevisionを更新し、detached checkout、Backend依存準備、Frontend build、権限再適用、service restart、Profile準拠readinessの順で実行する。readiness失敗時は既定で直前commitへ自動rollbackし、`--no-auto-rollback`指定時だけ現在状態を維持して停止する。backupを省略するオプションはない。
+deployはdirty checkout、origin/main上で解決できないcommit、設定不足を拒否する。backup前に現在HEADのBackend依存を準備し、`conversation-history.db`がなければ初回起動を案内して、backup、manifest、revision、checkoutを変更せず停止する。DBが存在する場合だけbackupとbackup-verifyを完了してからmanifestとrevisionを更新し、detached checkout、Backend依存準備、Frontend build、権限再適用、service restart、Profile準拠readinessの順で実行する。readiness失敗時は既定で直前commitへ自動rollbackし、`--no-auto-rollback`指定時だけ現在状態を維持して停止する。backupを省略するオプションはない。
 
 rollbackは引数なしで現在manifestの直前commitへ、`--to`で保存済みmanifestが存在する任意commitへ戻す。rollback先manifestのSQLite data schemaと現在DBのschemaが一致しない場合は、保存済みbackupを検証・restoreするまでcommitの切替を拒否する。どちらも再build、restart、readiness確認を行うため数分かかる場合がある。
 
@@ -191,6 +221,78 @@ dogfood applicationはservice userで起動する。
 sudo -u digital-souls env DOGFOOD_ENV_FILE=/etc/digital-souls/dogfood.env \
   /opt/digital-souls/current/scripts/start-dogfood.sh
 ```
+
+## 共通推論サービスとmodel移行
+
+VRAM制約下でdevとdogfoodを並行稼働するため、OllamaとVOICEVOXはUbuntu-dogfood側の1 instanceへ集約する。これは#50の環境別サービス分離に対する明示的な例外である。`dev.json`と`dogfood.json`は両サービスを`source: external`、同じport（Ollama `11434`、VOICEVOX `50021`）で参照済みのため、Profile変更は不要である。Ubuntu-dev側は共通サービスを起動・停止・cleanupせず、Ubuntu-devに別途導入済みのOllama systemd unitは停止・無効化する。
+
+```bash
+sudo systemctl disable --now ollama
+```
+
+会話履歴、SQLite、Chroma、data rootの分離は、従来どおり環境ごとの`DS_DATA_DIR`とidentity markerで維持する。VOICEVOXは`voicevox/voicevox_engine:cpu-*`を既定とする。GPU版への移行は専用GPU確保後に別Issueで扱い、本タスクではGPU化もIssue起票も行わない。
+
+旧`$DS_DATA_DIR/ollama/models`のmodelはbootstrapが移動しない。既存modelを使う場合はサービス停止後に`blobs`と`manifests`を新保存先へ手動で移動し、所有権を収束させる。
+
+```bash
+sudo systemctl stop digital-souls-ollama.service
+sudo mv /var/lib/digital-souls/data/ollama/models/blobs \
+  /var/lib/digital-souls/models/ollama/
+sudo mv /var/lib/digital-souls/data/ollama/models/manifests \
+  /var/lib/digital-souls/models/ollama/
+sudo chown -R digital-souls:digital-souls \
+  /var/lib/digital-souls/models/ollama
+```
+
+再取得する場合は旧modelを動かさず、新HOMEとmodel保存先を明示して必要なmodelをpullする。
+
+```bash
+sudo -u digital-souls env HOME=/var/lib/digital-souls/home \
+  OLLAMA_MODELS=/var/lib/digital-souls/models/ollama \
+  ollama pull <model名>
+```
+
+旧homeだったdata root直下の`.ollama`、`.cache`等は自動削除しない。`sudo ls -la /var/lib/digital-souls/data`で内容と必要性を利用者が確認し、保全後に個別判断する。
+
+## partial構築環境のin-place復旧
+
+distributionの作り直しではなく、次の順序で既存環境を収束させる。root操作と実Ubuntu-dogfoodへの適用は利用者が実施し、AI／TAKTは実行しない。
+
+1. `stop-services.sh`で推論targetとVOICEVOX containerを停止する。
+
+   ```bash
+   sudo scripts/dogfood/stop-services.sh
+   ```
+
+2. 収束操作より前に、`/etc/digital-souls/dogfood.env`、`dogfood.revision`、`$DS_DATA_DIR`、`/var/lib/digital-souls/backups`、DL済みOllama modelを別の保全先へ退避する。特に`DOGFOOD_BACKUP_AUTHENTICATION_KEY`を失うと既存backupを永久に検証・restoreできないため、秘密を表示せずmode `0600`で保全する。
+3. 上記の競合package削除手順を経てDocker公式repositoryとCompose pluginへ移行する。
+4. 修正版`bootstrap.sh`をrootで再実行し、service user、home、model保存先、所有権、権限を冪等に収束させる。
+
+   ```bash
+   sudo scripts/dogfood/bootstrap.sh
+   ```
+
+5. 推論serviceはrootで起動し、Backendはservice userで起動して、Backend初回起動でSQLiteを作成する。
+
+   ```bash
+   sudo scripts/dogfood/start-services.sh
+   sudo -u digital-souls env DOGFOOD_ENV_FILE=/etc/digital-souls/dogfood.env \
+     /opt/digital-souls/current/scripts/start-dogfood.sh
+   ```
+
+6. root権限でserviceとDocker daemonの状態を確認する。
+
+   ```bash
+   sudo scripts/dogfood/status.sh
+   sudo docker compose version
+   sudo docker info
+   ```
+
+7. data root直下の`.ollama`、`.cache`等の旧home残骸を手動確認し、必要なものを保全してから個別に整理する。
+
+in-place復旧が失敗した場合だけ、保全物を維持したまま別名のdogfood distributionを新規作成し、設定とdataを検証しながら復元する。元distributionは復元完了まで削除しない。
+
+非rootかつ非対話実行などroot操作を継続できない場合、スクリプトは終了コード`3`と貼り付け可能な`sudo env ...`コマンドを表示する。設定・identity等の検証失敗を表す終了コード`2`とは区別する。表示されたrootコマンドは利用者が内容を確認して実行する。
 
 ## WSL終了・Windows再起動後の復旧
 

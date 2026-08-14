@@ -27,6 +27,25 @@ from tests.environment_entrypoint_test_support import copy_environment_runtime
 NEXT_REVISION = "89abcdef0123456789abcdef0123456789abcdef"
 CONVERSATION_SENTINEL = "会話本文をdeploymentへ出力してはならない"
 PROMPT_SENTINEL = "promptをdeploymentへ出力してはならない"
+ROOT_OPERATION_CASES = (
+    ("bootstrap.sh", ()),
+    ("deploy.sh", ("--commit", NEXT_REVISION)),
+    ("rollback.sh", ("--to", NEXT_REVISION)),
+)
+ROOT_GUARD_POST_COMMANDS = (
+    "chmod",
+    "chown",
+    "docker",
+    "getent",
+    "git",
+    "gpasswd",
+    "groupadd",
+    "install",
+    "npm",
+    "systemctl",
+    "useradd",
+    "usermod",
+)
 
 
 def test_should_check_current_profile_readiness_without_starting_processes(
@@ -104,6 +123,7 @@ def _prepare_deploy_scenario(
     failure: str | None = None,
     generation_count: int = 0,
     backup_output: str | None = None,
+    database_exists: bool = True,
 ) -> tuple[dict[str, str], Path]:
     env_path, data_dir = write_dogfood_env(tmp_path)
     clone_dir = tmp_path / "clone"
@@ -156,8 +176,9 @@ def _prepare_deploy_scenario(
     profile.parent.mkdir(parents=True)
     profile.write_text(json.dumps({"schemaVersion": 1}), encoding="utf-8")
     database = data_dir / "conversation-history.db"
-    with sqlite3.connect(database) as connection:
-        connection.execute("PRAGMA user_version = 3")
+    if database_exists:
+        with sqlite3.connect(database) as connection:
+            connection.execute("PRAGMA user_version = 3")
     (data_dir / "private-sentinels").write_text(
         f"{CONVERSATION_SENTINEL}\n{PROMPT_SENTINEL}\n",
         encoding="utf-8",
@@ -269,12 +290,14 @@ def _run_deploy(
     no_auto_rollback: bool = False,
     generation_count: int = 0,
     backup_output: str | None = None,
+    database_exists: bool = True,
 ) -> tuple[subprocess.CompletedProcess[str], tuple[str, ...]]:
     environment, call_log = _prepare_deploy_scenario(
         tmp_path,
         failure=failure,
         generation_count=generation_count,
         backup_output=backup_output,
+        database_exists=database_exists,
     )
     arguments = ["--commit", NEXT_REVISION]
     if no_auto_rollback:
@@ -311,19 +334,31 @@ def test_should_deploy_only_after_backup_verify_and_record_a_safe_manifest(
     result, calls = _run_deploy(tmp_path)
 
     assert result.returncode == 0, (result.stdout, result.stderr)
-    operations = tuple(
-        next(index for index, call in enumerate(calls) if marker in call)
-        for marker in (
-            "cli\tbackup ",
-            "cli\tbackup-verify ",
-            "manifest-write",
-            "revision-update",
-            "checkout --detach",
-            "backend-setup",
-            "frontend-build",
-            "restart",
-            "cli\treadiness ",
-        )
+    backend_setups = tuple(
+        index for index, call in enumerate(calls) if call == "backend-setup"
+    )
+    assert len(backend_setups) == 2
+    operations = (
+        backend_setups[0],
+        *(
+            next(index for index, call in enumerate(calls) if marker in call)
+            for marker in (
+                "cli\tbackup ",
+                "cli\tbackup-verify ",
+                "manifest-write",
+                "revision-update",
+                "checkout --detach",
+            )
+        ),
+        backend_setups[1],
+        *(
+            next(index for index, call in enumerate(calls) if marker in call)
+            for marker in (
+                "frontend-build",
+                "restart",
+                "cli\treadiness ",
+            )
+        ),
     )
     assert operations == tuple(sorted(operations))
     assert (tmp_path / "config" / "dogfood.revision").read_text(
@@ -349,6 +384,27 @@ def test_should_deploy_only_after_backup_verify_and_record_a_safe_manifest(
         and "/.manifest.ready." in call
         for call in calls
     )
+
+
+def test_should_reject_missing_database_without_deployment_side_effects(
+    tmp_path: Path,
+) -> None:
+    result, calls = _run_deploy(tmp_path, database_exists=False)
+
+    assert result.returncode != 0
+    assert calls.count("backend-setup") == 1
+    assert not any(
+        call.startswith("git\t") and " fetch " in call for call in calls
+    )
+    assert not any(call.startswith("cli\tbackup ") for call in calls)
+    assert tuple((tmp_path / "state" / "deployments").glob("*.json")) == ()
+    assert (tmp_path / "config" / "dogfood.revision").read_text(
+        encoding="utf-8"
+    ) == f"{TEST_REVISION}\n"
+    assert (tmp_path / "head").read_text(encoding="utf-8") == TEST_REVISION
+    assert not any("checkout --detach" in call for call in calls)
+    assert "start-services.sh" in result.stderr
+    assert "start-dogfood.sh" in result.stderr
 
 
 def test_should_not_expose_private_content_in_deploy_outputs(
@@ -385,7 +441,9 @@ def test_should_stop_before_checkout_when_a_deploy_gate_fails(
 
     assert result.returncode != 0
     assert not any("checkout --detach" in call for call in calls)
-    assert not any(call in {"backend-setup", "restart"} for call in calls)
+    expected_backend_setups = 0 if failure == "dirty" else 1
+    assert calls.count("backend-setup") == expected_backend_setups
+    assert "restart" not in calls
     assert (tmp_path / "config" / "dogfood.revision").read_text(
         encoding="utf-8"
     ) == f"{TEST_REVISION}\n"
@@ -394,7 +452,6 @@ def test_should_stop_before_checkout_when_a_deploy_gate_fails(
 @pytest.mark.parametrize(
     ("failure", "last_operation"),
     (
-        ("backend-setup", "backend-setup"),
         ("frontend-build", "frontend-build"),
         ("chown", "chown\t"),
         ("chmod", "chmod\t"),
@@ -414,6 +471,21 @@ def test_should_stop_deploy_at_the_first_activation_failure(
     diagnostic = result.stdout + result.stderr
     assert f"現在のrevision: {NEXT_REVISION}" in diagnostic
     assert f"現在のHEAD: {NEXT_REVISION}" in diagnostic
+
+
+def test_should_stop_before_backup_when_current_backend_setup_fails(
+    tmp_path: Path,
+) -> None:
+    result, calls = _run_deploy(tmp_path, failure="backend-setup")
+
+    assert result.returncode != 0
+    assert calls.count("backend-setup") == 1
+    assert not any(call.startswith("cli\tbackup ") for call in calls)
+    assert not tuple((tmp_path / "state" / "deployments").glob("*.json"))
+    assert (tmp_path / "config" / "dogfood.revision").read_text(
+        encoding="utf-8"
+    ) == f"{TEST_REVISION}\n"
+    assert not any("checkout --detach" in call for call in calls)
 
 
 @pytest.mark.parametrize("unsafe_entry", ("deployments", "manifest"))
@@ -547,7 +619,8 @@ def test_should_stop_before_backup_verify_when_backup_output_breaks_its_contract
     assert any(call.startswith("cli\tbackup ") for call in calls)
     assert not any(call.startswith("cli\tbackup-verify ") for call in calls)
     assert not any("checkout --detach" in call for call in calls)
-    assert not any(call in {"backend-setup", "restart"} for call in calls)
+    assert calls.count("backend-setup") == 1
+    assert "restart" not in calls
     assert not tuple((tmp_path / "state" / "deployments").glob("*.json"))
     assert (tmp_path / "config" / "dogfood.revision").read_text(
         encoding="utf-8"
@@ -578,6 +651,7 @@ def test_should_automatically_restore_the_previous_revision_after_readiness_fail
         if marker in call
     )
     assert activation_operations == (
+        "backend-setup",
         "checkout",
         "backend-setup",
         "frontend-build",
@@ -732,6 +806,181 @@ def test_should_reject_invalid_deploy_invocations_before_external_side_effects(
 
     assert result.returncode != 0
     assert not call_log.exists()
+
+
+@pytest.mark.parametrize(
+    ("script_name", "arguments"),
+    ROOT_OPERATION_CASES,
+    ids=("bootstrap", "deploy", "rollback"),
+)
+def test_should_handoff_noninteractive_root_operation_with_exit_code_three(
+    tmp_path: Path,
+    script_name: str,
+    arguments: tuple[str, ...],
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    bin_dir = tmp_path / "handoff-bin"
+    bin_dir.mkdir()
+    sudo_log = tmp_path / "sudo.calls"
+    write_executable(
+        bin_dir / "id",
+        'if [ "${1-}" = "-u" ]; then printf "1000\\n"; else exit 1; fi\n',
+    )
+    write_executable(
+        bin_dir / "sudo",
+        f'printf "%s\\n" "$*" >> {str(sudo_log)!r}\n[ "$*" = "-n true" ]\nexit 1\n',
+    )
+
+    result = subprocess.run(
+        command_with_root_owned_revision(
+            tmp_path / "config" / "dogfood.revision",
+            [
+                str(DOGFOOD_SCRIPTS_DIR / script_name),
+                *arguments,
+            ],
+        ),
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "DOGFOOD_ENV_FILE": str(env_path),
+            "WSL_DISTRO_NAME": "Ubuntu-dogfood",
+        },
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 3
+    diagnostic = result.stdout + result.stderr
+    assert "sudo env " in diagnostic
+    assert f"DOGFOOD_ENV_FILE={env_path}" in diagnostic
+    assert "WSL_DISTRO_NAME=Ubuntu-dogfood" in diagnostic
+    assert str(DOGFOOD_SCRIPTS_DIR / script_name) in diagnostic
+    if arguments:
+        assert " ".join(arguments) in diagnostic
+    assert TEST_SECRET_SENTINEL not in diagnostic
+    assert env_path.is_file()
+    if sudo_log.exists():
+        assert sudo_log.read_text(encoding="utf-8").splitlines() == ["-n true"]
+
+
+@pytest.mark.parametrize(
+    ("script_name", "arguments"),
+    ROOT_OPERATION_CASES,
+    ids=("bootstrap", "deploy", "rollback"),
+)
+def test_should_reject_without_handoff_when_non_root_operation_is_interactive(
+    tmp_path: Path,
+    script_name: str,
+    arguments: tuple[str, ...],
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    bin_dir = tmp_path / "interactive-root-bin"
+    bin_dir.mkdir()
+    side_effect_log = tmp_path / "post-root-guard.calls"
+    write_executable(
+        bin_dir / "id",
+        'if [ "${1-}" = "-u" ]; then printf "1000\\n"; else exit 1; fi\n',
+    )
+    write_executable(
+        bin_dir / "sudo",
+        '[ "$*" = "-n true" ]\n',
+    )
+    for command in ROOT_GUARD_POST_COMMANDS:
+        write_executable(
+            bin_dir / command,
+            f'printf "%s\\n" "{command}" >> {str(side_effect_log)!r}\nexit 99\n',
+        )
+    master_fd, slave_fd = os.openpty()
+    try:
+        result = subprocess.run(
+            command_with_root_owned_revision(
+                tmp_path / "config" / "dogfood.revision",
+                [str(DOGFOOD_SCRIPTS_DIR / script_name), *arguments],
+            ),
+            env={
+                **os.environ,
+                "PATH": f"{bin_dir}:{os.environ['PATH']}",
+                "DOGFOOD_ENV_FILE": str(env_path),
+                "WSL_DISTRO_NAME": "Ubuntu-dogfood",
+            },
+            stdin=slave_fd,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    finally:
+        os.close(slave_fd)
+        os.close(master_fd)
+
+    assert result.returncode == 2
+    diagnostic = result.stdout + result.stderr
+    assert "dogfood配備操作はroot権限で実行してください" in diagnostic
+    assert "sudo env " not in diagnostic
+    assert not side_effect_log.exists()
+
+
+@pytest.mark.parametrize(
+    ("script_name", "arguments"),
+    ROOT_OPERATION_CASES,
+    ids=("bootstrap", "deploy", "rollback"),
+)
+def test_should_handoff_interactive_root_operation_when_sudo_probe_fails(
+    tmp_path: Path,
+    script_name: str,
+    arguments: tuple[str, ...],
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    bin_dir = tmp_path / "interactive-handoff-bin"
+    bin_dir.mkdir()
+    sudo_log = tmp_path / "sudo.calls"
+    side_effect_log = tmp_path / "post-root-guard.calls"
+    write_executable(
+        bin_dir / "id",
+        'if [ "${1-}" = "-u" ]; then printf "1000\\n"; else exit 1; fi\n',
+    )
+    write_executable(
+        bin_dir / "sudo",
+        f'printf "%s\\n" "$*" >> {str(sudo_log)!r}\nexit 1\n',
+    )
+    for command in ROOT_GUARD_POST_COMMANDS:
+        write_executable(
+            bin_dir / command,
+            f'printf "%s\\n" "{command}" >> {str(side_effect_log)!r}\nexit 99\n',
+        )
+    master_fd, slave_fd = os.openpty()
+    try:
+        result = subprocess.run(
+            command_with_root_owned_revision(
+                tmp_path / "config" / "dogfood.revision",
+                [str(DOGFOOD_SCRIPTS_DIR / script_name), *arguments],
+            ),
+            env={
+                **os.environ,
+                "PATH": f"{bin_dir}:{os.environ['PATH']}",
+                "DOGFOOD_ENV_FILE": str(env_path),
+                "WSL_DISTRO_NAME": "Ubuntu-dogfood",
+            },
+            stdin=slave_fd,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    finally:
+        os.close(slave_fd)
+        os.close(master_fd)
+
+    assert result.returncode == 3
+    assert sudo_log.read_text(encoding="utf-8").splitlines() == ["-n true"]
+    diagnostic = result.stdout + result.stderr
+    assert "sudo env " in diagnostic
+    assert f"DOGFOOD_ENV_FILE={env_path}" in diagnostic
+    assert "WSL_DISTRO_NAME=Ubuntu-dogfood" in diagnostic
+    assert str(DOGFOOD_SCRIPTS_DIR / script_name) in diagnostic
+    if arguments:
+        assert " ".join(arguments) in diagnostic
+    assert TEST_SECRET_SENTINEL not in diagnostic
+    assert not side_effect_log.exists()
 
 
 def test_should_leave_revision_and_checkout_unchanged_when_only_main_changes(

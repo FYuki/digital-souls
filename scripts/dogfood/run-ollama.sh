@@ -13,5 +13,6 @@ done
 : "${OLLAMA_HOST:?Ollama hostを解決できません}"
 : "${OLLAMA_PORT:?Ollama portを解決できません}"
 export OLLAMA_HOST="$OLLAMA_HOST:$OLLAMA_PORT"
-export OLLAMA_MODELS="$DS_DATA_DIR/ollama/models"
+export HOME="$DOGFOOD_SERVICE_HOME_DIR"
+export OLLAMA_MODELS="$DOGFOOD_OLLAMA_MODELS_DIR"
 exec ollama serve

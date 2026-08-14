@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+rollback_arguments=("$@")
 requested_target=
 if [ "$#" -gt 0 ]; then
   if [ "$#" -ne 2 ] || [ "$1" != "--to" ]; then
@@ -19,7 +20,7 @@ source "$SCRIPT_DIR/load-environment.sh"
 source "$SCRIPT_DIR/deployment-lib.sh"
 dogfood_load_environment
 dogfood_require_identity
-dogfood_require_root
+dogfood_require_root "${rollback_arguments[@]}"
 dogfood_validate_deployment_storage
 
 current_manifest="$DOGFOOD_STATE_DIR/deployments/current.json"

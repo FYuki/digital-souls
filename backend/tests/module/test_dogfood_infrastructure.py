@@ -22,6 +22,8 @@ REQUIRED_ENV_KEYS = {
     "DOGFOOD_CLONE_DIR",
     "DOGFOOD_CONFIG_DIR",
     "DS_DATA_DIR",
+    "DOGFOOD_SERVICE_HOME_DIR",
+    "DOGFOOD_OLLAMA_MODELS_DIR",
     "DOGFOOD_BACKUP_DIR",
     "DOGFOOD_BACKUP_RETENTION_COUNT",
     "DOGFOOD_BACKUP_AUTHENTICATION_KEY",
@@ -82,6 +84,10 @@ def test_should_define_separate_dogfood_identity_clone_and_runtime_paths() -> No
     assert values["DOGFOOD_WSL_DISTRO"] == "Ubuntu-dogfood"
     assert values["DOGFOOD_SERVICE_USER"]
     assert values["DOGFOOD_SERVICE_GROUP"]
+    assert values["DOGFOOD_SERVICE_HOME_DIR"] == "/var/lib/digital-souls/home"
+    assert values["DOGFOOD_OLLAMA_MODELS_DIR"] == (
+        "/var/lib/digital-souls/models/ollama"
+    )
     assert not values["DOGFOOD_REPOSITORY_URL"].startswith(("/", "file:"))
     assert "DOGFOOD_REPOSITORY_REVISION" not in values
 
@@ -89,6 +95,8 @@ def test_should_define_separate_dogfood_identity_clone_and_runtime_paths() -> No
         "DOGFOOD_CLONE_DIR",
         "DOGFOOD_CONFIG_DIR",
         "DS_DATA_DIR",
+        "DOGFOOD_SERVICE_HOME_DIR",
+        "DOGFOOD_OLLAMA_MODELS_DIR",
         "DOGFOOD_BACKUP_DIR",
         "DOGFOOD_STATE_DIR",
         "DOGFOOD_LOG_DIR",
@@ -158,7 +166,6 @@ def test_should_apply_declared_ownership_and_restricted_directory_permissions() 
 def test_should_separate_application_identity_from_docker_operations() -> None:
     source = (DOGFOOD_SCRIPTS_DIR / "bootstrap.sh").read_text(encoding="utf-8")
 
-    assert "usermod" not in source
     assert "runuser" not in source
     assert re.search(
         r'gpasswd --delete "\$DOGFOOD_SERVICE_USER" docker',

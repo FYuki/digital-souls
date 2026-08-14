@@ -117,6 +117,12 @@ dogfoodのconversation historyは削除せず、対応schemaのbackup、migratio
 VOICEVOXは既存どおりDocker containerを利用できる。Backend、Frontend、Ollamaを含む全面的な
 Docker Compose化は、今回のdogfood分離とミニPC移行の完了条件に含めない。
 
+### 8. 推論サービスだけをUbuntu-dogfoodへ集約する
+
+#50のサービス分離方針に対する明示的な例外として、OllamaとVOICEVOXはUbuntu-dogfood側の1 instanceだけを運用し、Ubuntu-devからもexternal dependencyとして再利用する。devとdogfoodを別instanceにすると、VRAM制約下での並行稼働要件を満たせず、共有network namespace上の同一port（Ollama `11434`、VOICEVOX `50021`）とも競合するためである。
+
+`dev.json`と`dogfood.json`は両サービスを`source: external`かつ同一portで定義済みのため、Profileは変更しない。Ubuntu-devは推論サービスのprocess lifecycleを所有せず、起動、停止、restart、cleanupを行わない。Ubuntu-dev側のOllama systemd自動起動も無効化する。一方、会話履歴、SQLite、Chroma、data rootは共有せず、環境ごとの`DS_DATA_DIR`とidentity markerによる分離を維持する。
+
 ## 子Issue
 
 - #52 runtime data rootと環境identity
