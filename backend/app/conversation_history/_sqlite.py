@@ -15,6 +15,7 @@ from app.conversation_history.models import (
     ConversationTurn,
     TurnStatus,
 )
+from app.conversation_history.sqlite_lease import normal_sqlite_access
 from app.privacy.contracts import HistoryDecisionReasonCode
 
 ConnectionFactory = Callable[[Path], sqlite3.Connection]
@@ -32,19 +33,23 @@ class SqliteSession:
         database_path: Path,
         connection_factory: ConnectionFactory,
     ) -> None:
+        from app.restore_intent import require_sqlite_available
+
+        require_sqlite_available(database_path)
         self._database_path = database_path
         self._connection_factory = connection_factory
 
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:
-        connection = self._connection_factory(self._database_path)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA secure_delete = ON")
-        try:
-            yield connection
-        finally:
-            connection.close()
+        with normal_sqlite_access(self._database_path):
+            connection = self._connection_factory(self._database_path)
+            try:
+                connection.row_factory = sqlite3.Row
+                connection.execute("PRAGMA foreign_keys = ON")
+                connection.execute("PRAGMA secure_delete = ON")
+                yield connection
+            finally:
+                connection.close()
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:

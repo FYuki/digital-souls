@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import argparse
 import sys
+import traceback
 from pathlib import Path
-
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 BACKEND_DIR = ROOT_DIR / "backend"
@@ -12,13 +12,76 @@ for import_root in (ROOT_DIR, BACKEND_DIR):
     if str(import_root) not in sys.path:
         sys.path.insert(0, str(import_root))
 
+from app.backup_restore import (
+    BackupArtifactError,
+    BackupIdentityError,
+    BackupPublicationUncertainError,
+    BackupSchemaError,
+    RestoreDurabilityUncertainError,
+    RestoreRecoveryRequiredError,
+    RestoreSafetyError,
+)
+from app.backup_restore.models import BackupError
 from commands.down_command import down_environment
+from commands.status_command import status_environment
 from commands.test_result_command import record_playwright_result
 from commands.up_command import up_environment
-from commands.status_command import status_environment
 from commands.verify_command import verify_environment
 from commands.voicevox_command import start_voicevox
-from profile_types import ProfileError
+from environment_verification import EnvironmentVerificationError
+from run_report_contract import RunReportError
+
+BACKUP_ERROR_EXIT_CODES = (
+    (BackupIdentityError, 10),
+    (BackupArtifactError, 11),
+    (BackupSchemaError, 12),
+    (RestoreSafetyError, 13),
+    (BackupPublicationUncertainError, 14),
+    (RestoreDurabilityUncertainError, 15),
+    (RestoreRecoveryRequiredError, 16),
+)
+UNKNOWN_BACKUP_ERROR_MESSAGE = "backup operation failed"
+UNKNOWN_ENVIRONMENT_ERROR_MESSAGE = "environment operation failed"
+BACKUP_COMMANDS = ("backup", "backup-verify", "restore", "restore-verify")
+
+
+def backup_environment(
+    environment_id: str,
+    repository_root: str,
+    backup_root: str,
+    retention_count: int,
+) -> int:
+    from commands.backup_restore_command import backup_environment as operation
+
+    return operation(environment_id, repository_root, backup_root, retention_count)
+
+
+def verify_environment_backup(backup_directory: str) -> int:
+    from commands.backup_restore_command import verify_environment_backup as operation
+
+    return operation(backup_directory)
+
+
+def restore_environment_backup(
+    environment_id: str,
+    repository_root: str,
+    backup_directory: str,
+) -> int:
+    from commands.backup_restore_command import restore_environment_backup as operation
+
+    return operation(environment_id, repository_root, backup_directory)
+
+
+def verify_restored_environment_backup(
+    environment_id: str,
+    repository_root: str,
+    backup_directory: str,
+) -> int:
+    from commands.backup_restore_command import (
+        verify_restored_environment_backup as operation,
+    )
+
+    return operation(environment_id, repository_root, backup_directory)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -40,10 +103,45 @@ def _parser() -> argparse.ArgumentParser:
     test_result.add_argument("--run-report", required=True)
     test_result.add_argument("--status", choices=("passed", "failed"), required=True)
     test_result.add_argument("--message", required=True)
+    backup, backup_verify, restore, restore_verify = (
+        commands.add_parser(command) for command in BACKUP_COMMANDS
+    )
+    backup.add_argument("--environment", required=True)
+    backup.add_argument("--repository-root", required=True)
+    backup.add_argument("--backup-root", required=True)
+    backup.add_argument("--retention-count", required=True, type=int)
+    backup_verify.add_argument("--backup-directory", required=True)
+    restore.add_argument("--environment", required=True)
+    restore.add_argument("--repository-root", required=True)
+    restore.add_argument("--backup-directory", required=True)
+    restore_verify.add_argument("--environment", required=True)
+    restore_verify.add_argument("--repository-root", required=True)
+    restore_verify.add_argument("--backup-directory", required=True)
     return parser
 
 
 def _dispatch(arguments: argparse.Namespace) -> int:
+    if arguments.command == "backup":
+        return backup_environment(
+            arguments.environment,
+            arguments.repository_root,
+            arguments.backup_root,
+            arguments.retention_count,
+        )
+    if arguments.command == "backup-verify":
+        return verify_environment_backup(arguments.backup_directory)
+    if arguments.command == "restore":
+        return restore_environment_backup(
+            arguments.environment,
+            arguments.repository_root,
+            arguments.backup_directory,
+        )
+    if arguments.command == "restore-verify":
+        return verify_restored_environment_backup(
+            arguments.environment,
+            arguments.repository_root,
+            arguments.backup_directory,
+        )
     if arguments.command == "up":
         return up_environment(ROOT_DIR, arguments)
     if arguments.command == "down":
@@ -60,10 +158,24 @@ def _dispatch(arguments: argparse.Namespace) -> int:
 
 
 def main() -> int:
+    arguments = _parser().parse_args()
     try:
-        return _dispatch(_parser().parse_args())
-    except (ProfileError, ValueError, RuntimeError, OSError) as error:
-        print(f"ERROR: {error}", file=sys.stderr)
+        return _dispatch(arguments)
+    except BackupError as error:
+        for error_type, exit_code in BACKUP_ERROR_EXIT_CODES:
+            if isinstance(error, error_type):
+                print(f"ERROR: {error.public_message}", file=sys.stderr)
+                return exit_code
+        print(f"ERROR: {UNKNOWN_BACKUP_ERROR_MESSAGE}", file=sys.stderr)
+        return 1
+    except (EnvironmentVerificationError, RunReportError):
+        print(f"ERROR: {UNKNOWN_ENVIRONMENT_ERROR_MESSAGE}", file=sys.stderr)
+        return 1
+    except Exception:  # noqa: BLE001 - CLI境界で診断方針を操作種別ごとに固定する
+        if arguments.command in BACKUP_COMMANDS:
+            print(f"ERROR: {UNKNOWN_ENVIRONMENT_ERROR_MESSAGE}", file=sys.stderr)
+        else:
+            traceback.print_exc()
         return 1
 
 

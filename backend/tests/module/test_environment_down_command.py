@@ -173,7 +173,7 @@ def test_should_report_invalid_raw_test_result_without_traceback(tmp_path: Path,
     )
 
     assert result.returncode == 1
-    assert "ERROR: invalid testResult" in result.stderr
+    assert result.stderr == "ERROR: environment operation failed\n"
     assert "Traceback" not in result.stderr
 
 

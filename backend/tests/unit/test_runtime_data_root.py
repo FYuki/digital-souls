@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from app.runtime_paths import RESTORE_INTENT_FILENAME
+
 
 def _paths(data_root: Path, repository_root: Path, environment_id: str = "test"):
     from app.runtime_paths import resolve_runtime_paths
@@ -224,6 +226,32 @@ def test_rt_safe_01_rejects_unwritable_existing_data_root(
     assert not paths.identity_marker_path.exists()
 
 
+@pytest.mark.parametrize("operation", ["initialize", "validate"])
+def test_should_reject_invalid_environment_id_before_creating_runtime_files(
+    operation: str,
+    tmp_path: Path,
+) -> None:
+    from app.runtime_data_root import (
+        initialize_runtime_data_root,
+        validate_existing_runtime_data_root,
+    )
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    data_root = tmp_path / "data"
+    paths = replace(_paths(data_root, repository_root), environment_id="production")
+    selected_operation = (
+        initialize_runtime_data_root
+        if operation == "initialize"
+        else validate_existing_runtime_data_root
+    )
+
+    with pytest.raises(ValueError):
+        selected_operation(paths, repository_root)
+
+    assert not data_root.exists()
+
+
 @pytest.mark.parametrize(
     ("relative_path", "target_is_directory"),
     [
@@ -234,6 +262,7 @@ def test_rt_safe_01_rejects_unwritable_existing_data_root(
         ("cache/huggingface/hub", True),
         (".environment-identity.json", False),
         (".environment-identity.lock", False),
+        (RESTORE_INTENT_FILENAME, False),
     ],
 )
 @pytest.mark.parametrize("operation", ["initialize", "validate"])
@@ -294,6 +323,7 @@ def test_rt_safe_02_rejects_derived_path_symlink_before_marker_access(
         "cache_path",
         "whisper_cache_path",
         "identity_marker_path",
+        "restore_intent_path",
     ],
 )
 @pytest.mark.parametrize("operation", ["initialize", "validate"])

@@ -1,4 +1,5 @@
 from uuid import UUID
+from typing import Literal
 
 from app.conversation_history.models import TurnStatus
 
@@ -9,6 +10,21 @@ class ConversationHistoryError(Exception):
 
 class LegacySchemaError(ConversationHistoryError):
     """現行schema以外のDBが指定された。"""
+
+
+class SchemaRollbackError(RuntimeError):
+    """schema migrationと補償処理がともに失敗した。"""
+
+    def __init__(
+        self,
+        primary_error: Exception,
+        compensation_error: Exception,
+        compensation_stage: Literal["restore", "verification"],
+    ) -> None:
+        super().__init__("schema migration rollback failed")
+        self.primary_error = primary_error
+        self.compensation_error = compensation_error
+        self.compensation_stage = compensation_stage
 
 
 class InvalidConversationIdError(ConversationHistoryError):

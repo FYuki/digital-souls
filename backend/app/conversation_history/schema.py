@@ -1,7 +1,10 @@
 import sqlite3
+from contextlib import closing
+from dataclasses import dataclass
 from pathlib import Path
 
 from app.conversation_history.errors import LegacySchemaError
+from app.conversation_history.sqlite_lease import normal_sqlite_access
 from app.privacy.contracts import HistoryDecisionReasonCode
 
 SCHEMA_VERSION = 3
@@ -13,6 +16,37 @@ CURRENT_TABLES = frozenset(
         "wal_cleanup_jobs",
     }
 )
+
+
+@dataclass(frozen=True)
+class SchemaInspection:
+    schema_version: int
+    tables: frozenset[str]
+    is_current: bool
+    migration_required: bool
+
+
+def inspect_conversation_history_schema(database_path: Path) -> SchemaInspection:
+    with normal_sqlite_access(database_path):
+        return inspect_conversation_history_artifact_schema(database_path)
+
+
+def inspect_conversation_history_artifact_schema(
+    database_path: Path,
+) -> SchemaInspection:
+    if not database_path.is_file():
+        return SchemaInspection(0, frozenset(), False, False)
+    with closing(
+        sqlite3.connect(f"{database_path.resolve().as_uri()}?mode=ro", uri=True)
+    ) as connection:
+        tables = _user_tables(connection)
+        version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+        return SchemaInspection(
+            schema_version=version,
+            tables=tables,
+            is_current=_is_current_schema(connection),
+            migration_required=_is_version_two_schema(connection),
+        )
 _VERSION_TWO_TABLES = frozenset({"conversations", "conversation_turns"})
 CONVERSATIONS_COLUMNS = (
     "character_id",
@@ -270,31 +304,32 @@ def _migrate_version_two_schema(connection: sqlite3.Connection) -> None:
 
 
 def initialize_conversation_history_schema(database_path: Path) -> None:
-    database_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(database_path)
-    try:
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA secure_delete = ON")
-        connection.execute("BEGIN IMMEDIATE")
-        tables = _user_tables(connection)
-        if tables:
-            if _is_current_schema(connection):
-                connection.commit()
-                return
-            if _is_version_two_schema(connection):
-                _migrate_version_two_schema(connection)
-                connection.commit()
-                return
-            raise LegacySchemaError("existing database does not use current schema")
-        connection.execute(CONVERSATIONS_SQL)
-        connection.execute(CONVERSATION_TURNS_SQL)
-        connection.execute(WAL_CLEANUP_JOBS_SQL)
-        connection.execute(HISTORY_INDEX_SQL)
-        connection.execute(STALE_INDEX_SQL)
-        connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-        connection.commit()
-    except BaseException:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
+    with normal_sqlite_access(database_path):
+        database_path.parent.mkdir(parents=True, exist_ok=True)
+        connection = sqlite3.connect(database_path)
+        try:
+            connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute("PRAGMA secure_delete = ON")
+            connection.execute("BEGIN IMMEDIATE")
+            tables = _user_tables(connection)
+            if tables:
+                if _is_current_schema(connection):
+                    connection.commit()
+                    return
+                if _is_version_two_schema(connection):
+                    _migrate_version_two_schema(connection)
+                    connection.commit()
+                    return
+                raise LegacySchemaError("existing database does not use current schema")
+            connection.execute(CONVERSATIONS_SQL)
+            connection.execute(CONVERSATION_TURNS_SQL)
+            connection.execute(WAL_CLEANUP_JOBS_SQL)
+            connection.execute(HISTORY_INDEX_SQL)
+            connection.execute(STALE_INDEX_SQL)
+            connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()

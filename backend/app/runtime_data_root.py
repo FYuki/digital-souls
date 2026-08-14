@@ -8,11 +8,17 @@ from pathlib import Path
 from typing import Final, Iterator
 
 from app.runtime_paths import RuntimePaths, SUPPORTED_ENVIRONMENT_IDS
+from app.conversation_history.sqlite_lease import (
+    SQLITE_LEASE_FILENAME_SUFFIX,
+    ensure_sqlite_lease_file,
+)
 
 
 MARKER_SCHEMA_VERSION: Final = 1
 IDENTITY_LOCK_FILENAME = ".environment-identity.lock"
-IGNORED_SCAFFOLDING_NAMES = frozenset({".gitkeep", IDENTITY_LOCK_FILENAME})
+IGNORED_SCAFFOLDING_NAMES = frozenset(
+    {".gitkeep", IDENTITY_LOCK_FILENAME, SQLITE_LEASE_FILENAME_SUFFIX}
+)
 
 
 def initialize_runtime_data_root(
@@ -20,6 +26,7 @@ def initialize_runtime_data_root(
 ) -> None:
     _validate_path_contract(paths, repository_root)
     with _identity_lock(paths.data_root):
+        ensure_sqlite_lease_file(paths.sqlite_path)
         if paths.identity_marker_path.exists():
             _validate_identity_marker(paths)
             return
@@ -47,6 +54,8 @@ def validate_runtime_projection(
 
 
 def _validate_path_contract(paths: RuntimePaths, repository_root: Path) -> None:
+    if paths.environment_id not in SUPPORTED_ENVIRONMENT_IDS:
+        raise ValueError("runtime environment identity is invalid")
     data_root = paths.data_root
     if data_root.is_symlink():
         raise ValueError("runtime data root must not be a symlink")
@@ -75,7 +84,9 @@ def _validate_derived_paths(paths: RuntimePaths) -> None:
         paths.cache_path,
         paths.whisper_cache_path,
         paths.identity_marker_path,
+        paths.restore_intent_path,
         paths.data_root / IDENTITY_LOCK_FILENAME,
+        paths.data_root / SQLITE_LEASE_FILENAME_SUFFIX,
     )
     for path in derived_paths:
         _validate_derived_path(path, paths.data_root)

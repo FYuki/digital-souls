@@ -8,6 +8,7 @@ from pathlib import Path
 ENVIRONMENT_ID_ENV = "DS_ENVIRONMENT_ID"
 DATA_DIR_ENV = "DS_DATA_DIR"
 IDENTITY_MARKER_FILENAME = ".environment-identity.json"
+RESTORE_INTENT_FILENAME = ".conversation-history.restore-intent.json"
 SQLITE_FILENAME = "conversation-history.db"
 CHROMA_DIRECTORY = "chroma"
 RUNTIME_DIRECTORY = "runtime"
@@ -26,6 +27,7 @@ class RuntimePaths:
     cache_path: Path
     whisper_cache_path: Path
     identity_marker_path: Path
+    restore_intent_path: Path
 
 
 def resolve_runtime_paths(
@@ -46,6 +48,7 @@ def resolve_runtime_paths(
         cache_path=cache_path,
         whisper_cache_path=cache_path.joinpath(*WHISPER_CACHE_PARTS),
         identity_marker_path=data_root / IDENTITY_MARKER_FILENAME,
+        restore_intent_path=data_root / RESTORE_INTENT_FILENAME,
     )
 
 
@@ -98,4 +101,3 @@ def _reject_symlink_components(path: Path) -> None:
         if current.is_symlink():
             raise ValueError(f"{DATA_DIR_ENV} must not contain symlinks")
         current = current.parent
-
