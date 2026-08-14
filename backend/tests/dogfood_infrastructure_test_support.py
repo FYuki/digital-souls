@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import grp
 import json
 import os
-import grp
 import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -76,7 +76,6 @@ def render_nondefault_dogfood_assets(tmp_path: Path) -> tuple[dict[str, str], Pa
     replacements = {
         "DOGFOOD_WSL_DISTRO=Ubuntu-dogfood": "DOGFOOD_WSL_DISTRO=Saab-dogfood",
         "DOGFOOD_SERVICE_USER=digital-souls": "DOGFOOD_SERVICE_USER=soul-service",
-        f"DOGFOOD_SERVICE_GROUP={TEST_SERVICE_GROUP}": "DOGFOOD_SERVICE_GROUP=soul-group",
     }
     source = env_path.read_text(encoding="utf-8")
     for current, replacement in replacements.items():
@@ -84,17 +83,21 @@ def render_nondefault_dogfood_assets(tmp_path: Path) -> tuple[dict[str, str], Pa
     env_path.write_text(source, encoding="utf-8")
     output_dir = tmp_path / "generated"
     output_dir.mkdir()
+    revision_path = tmp_path / "config" / "dogfood.revision"
     result = subprocess.run(
-        [
-            "bash",
-            "-c",
-            'source "$1"; dogfood_load_environment; "$2" "$3" "$4"',
-            "bash",
-            str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
-            str(DOGFOOD_SCRIPTS_DIR / "render-assets.sh"),
-            str(DOGFOOD_INFRA_DIR / "templates"),
-            str(output_dir),
-        ],
+        command_with_root_owned_revision(
+            revision_path,
+            [
+                "bash",
+                "-c",
+                'source "$1"; dogfood_load_environment && "$2" "$3" "$4"',
+                "bash",
+                str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+                str(DOGFOOD_SCRIPTS_DIR / "render-assets.sh"),
+                str(DOGFOOD_INFRA_DIR / "templates"),
+                str(output_dir),
+            ],
+        ),
         env={**os.environ, "DOGFOOD_ENV_FILE": str(env_path)},
         capture_output=True,
         text=True,
@@ -267,7 +270,8 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
         + '  *"remote get-url origin"*)\n'
         + '    if [ "${BOOTSTRAP_FAILURE-}" = "origin" ]; then printf "https://example.invalid/other.git\\n"; '
         + 'else printf "%s\\n" "$DOGFOOD_REPOSITORY_URL"; fi ;;\n'
-        + '  *"fetch --depth 1"*) [ "${BOOTSTRAP_FAILURE-}" != "fetch" ] ;;\n'
+        + '  *"rev-parse --is-shallow-repository"*) printf "false\\n" ;;\n'
+        + '  *"fetch origin"*) [ "${BOOTSTRAP_FAILURE-}" != "fetch" ] ;;\n'
         + '  *"rev-parse --verify"*)\n'
         + '    if [ "${BOOTSTRAP_FAILURE-}" = "revision" ]; '
         + 'then printf "ffffffffffffffffffffffffffffffffffffffff\\n"; '

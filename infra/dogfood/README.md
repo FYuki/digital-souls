@@ -88,7 +88,7 @@ sudo scripts/dogfood/rollback.sh --to <保存済みcommit SHA>
 
 deployはdirty checkout、origin/main上で解決できないcommit、設定不足を拒否する。毎回backupとbackup-verifyを完了してからmanifestとrevisionを更新し、detached checkout、Backend依存準備、Frontend build、権限再適用、service restart、Profile準拠readinessの順で実行する。readiness失敗時は既定で直前commitへ自動rollbackし、`--no-auto-rollback`指定時だけ現在状態を維持して停止する。backupを省略するオプションはない。
 
-rollbackは引数なしで現在manifestの直前commitへ、`--to`で保存済みmanifestが存在する任意commitへ戻す。どちらも再build、restart、readiness確認を行うため数分かかる場合がある。
+rollbackは引数なしで現在manifestの直前commitへ、`--to`で保存済みmanifestが存在する任意commitへ戻す。rollback先manifestのSQLite data schemaと現在DBのschemaが一致しない場合は、保存済みbackupを検証・restoreするまでcommitの切替を拒否する。どちらも再build、restart、readiness確認を行うため数分かかる場合がある。
 
 deployment manifestは`DOGFOOD_STATE_DIR/deployments/`へ`root:digital-souls`、`0640`で保存する。1操作1 JSON、`current.json`が最新状態を表し、履歴は新しい20世代だけを保持する。commit、Profile schema、SQLite data schema、backup ID、UTC deploy時刻だけを記録し、会話本文、prompt、秘密値は保存しない。`dogfood.env`はdeploy、rollback、manifest、logへ複製しない。
 

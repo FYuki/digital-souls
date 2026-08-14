@@ -33,21 +33,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/load-environment.sh"
 source "$SCRIPT_DIR/deployment-lib.sh"
 
-report_current_deployment_state() {
-  local current_revision current_head
-  if dogfood_read_revision; then
-    current_revision=$DOGFOOD_REPOSITORY_REVISION
-    echo "現在のrevision: $current_revision" >&2
-  else
-    echo "現在のrevision: 取得不能" >&2
-  fi
-  if current_head=$(git -C "$DOGFOOD_CLONE_DIR" rev-parse HEAD); then
-    echo "現在のHEAD: $current_head" >&2
-  else
-    echo "現在のHEAD: 取得不能" >&2
-  fi
-}
-
 dogfood_load_environment
 dogfood_require_identity
 dogfood_require_root
@@ -63,6 +48,7 @@ dogfood_write_manifest "$manifest" "$target"
 
 if ! dogfood_activate_revision "$target"; then
   echo "ERROR: deploy処理がreadiness確認前に失敗しました: $target" >&2
+  dogfood_report_current_deployment_state
   exit 1
 fi
 if dogfood_check_readiness; then
@@ -82,5 +68,5 @@ if dogfood_activate_revision "$previous" && dogfood_check_readiness; then
   exit 1
 fi
 echo "ERROR: 自動rollbackにも失敗しました。現在状態を確認してください" >&2
-report_current_deployment_state
+dogfood_report_current_deployment_state
 exit 1

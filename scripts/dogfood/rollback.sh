@@ -39,13 +39,20 @@ else
 fi
 dogfood_require_commit_sha "$target"
 backup_id=$(dogfood_manifest_field "$saved_manifest" backupId)
+dogfood_require_rollback_schema "$saved_manifest"
 
 dogfood_verify_origin
 dogfood_require_clean_checkout
 dogfood_fetch_and_resolve_commit "$target"
 previous=$(git -C "$DOGFOOD_CLONE_DIR" rev-parse HEAD)
-if ! dogfood_activate_revision "$target" || ! dogfood_check_readiness; then
+if ! dogfood_activate_revision "$target"; then
+  echo "ERROR: rollback処理がreadiness確認前に失敗しました: $target" >&2
+  dogfood_report_current_deployment_state
+  exit 1
+fi
+if ! dogfood_check_readiness; then
   echo "ERROR: rollback後のreadiness確認に失敗しました: $target" >&2
+  dogfood_report_current_deployment_state
   exit 1
 fi
 manifest=$(dogfood_manifest_metadata "$previous" "$target" "$backup_id")

@@ -29,14 +29,20 @@ def _rollback_command(tmp_path: Path, arguments: tuple[str, ...] = ()) -> list[s
     )
 
 
-def _write_manifest(path: Path, previous: str, target: str) -> None:
+def _write_manifest(
+    path: Path,
+    previous: str,
+    target: str,
+    *,
+    data_schema_version: int = 3,
+) -> None:
     path.write_text(
         json.dumps(
             {
                 "previousCommit": previous,
                 "targetCommit": target,
                 "profileSchemaVersion": 1,
-                "dataSchemaVersion": 0,
+                "dataSchemaVersion": data_schema_version,
                 "backupId": "backup-test-generation",
                 "deployedAt": "2026-08-14T00:00:00Z",
             }
@@ -91,7 +97,9 @@ def _rollback_environment(
     readiness.parent.mkdir(parents=True, exist_ok=True)
     write_executable(
         readiness,
-        f'printf "cli\\t%s\\n" "$*" >> "{call_log}"\n[ "$1" = "readiness" ]\n',
+        f'printf "cli\\t%s\\n" "$*" >> "{call_log}"\n'
+        '[ "$1" = "readiness" ]\n'
+        '[ "${ROLLBACK_FAILURE-}" != "readiness" ]\n',
     )
     python = clone_dir / "backend" / ".venv" / "bin" / "python"
     python.parent.mkdir(parents=True)
@@ -106,6 +114,7 @@ def _rollback_environment(
         '  *"remote get-url origin"*) printf "%s\\n" "$DOGFOOD_REPOSITORY_URL" ;;\n'
         '  *"status --porcelain"*) true ;;\n'
         '  *"merge-base --is-ancestor"*) true ;;\n'
+        '  *"rev-parse --is-shallow-repository"*) printf "false\\n" ;;\n'
         f'  *"rev-parse HEAD"*) cat "{head_path}" ;;\n'
         '  *"rev-parse --verify"*) printf "%s\\n" "$ROLLBACK_TARGET" ;;\n'
         '  *"symbolic-ref --quiet HEAD"*) exit 1 ;;\n'
@@ -123,7 +132,13 @@ def _rollback_environment(
         f'printf "install\\t%s\\n" "$*" >> "{call_log}"\n'
         'arguments=()\nwhile [ "$#" -gt 0 ]; do\n'
         '  case "$1" in -o|-g) shift 2 ;; *) arguments+=("$1"); shift ;; esac\n'
-        'done\nexec /usr/bin/install "${arguments[@]}"\n',
+        'done\n'
+        'destination="${arguments[${#arguments[@]}-1]}"\n'
+        '/usr/bin/install "${arguments[@]}"\n'
+        'case "$destination" in\n'
+        f'  "{tmp_path / "config"}/.dogfood.revision.ready."*) '
+        f'/usr/bin/chown "0:{os.getgid()}" "$destination" ;;\n'
+        'esac\n',
     )
     for command in ("npm", "systemctl", "chown", "chmod"):
         write_executable(
@@ -298,8 +313,66 @@ def test_should_stop_rollback_at_the_first_activation_failure(
 
     assert result.returncode != 0
     calls = tuple(call_log.read_text(encoding="utf-8").splitlines())
-    assert last_operation in calls[-1]
+    assert any(last_operation in call for call in calls)
     assert not any(call.startswith("cli\treadiness ") for call in calls)
+    diagnostic = result.stdout + result.stderr
+    assert f"現在のrevision: {OLDER_REVISION}" in diagnostic
+    assert f"現在のHEAD: {OLDER_REVISION}" in diagnostic
+
+
+def test_should_not_publish_a_manifest_when_rollback_readiness_fails(
+    tmp_path: Path,
+) -> None:
+    environment, call_log = _rollback_environment(tmp_path, failure="readiness")
+    deployments = tmp_path / "state" / "deployments"
+    current = deployments / "current.json"
+    current_before = current.read_bytes()
+    generations_before = set(deployments.glob("*.json"))
+
+    result = subprocess.run(
+        _rollback_command(tmp_path),
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode != 0
+    calls = tuple(call_log.read_text(encoding="utf-8").splitlines())
+    assert any(call.startswith("cli\treadiness ") for call in calls)
+    assert set(deployments.glob("*.json")) == generations_before
+    assert current.read_bytes() == current_before
+    diagnostic = result.stdout + result.stderr
+    assert f"現在のrevision: {OLDER_REVISION}" in diagnostic
+    assert f"現在のHEAD: {OLDER_REVISION}" in diagnostic
+
+
+def test_should_reject_rollback_until_the_saved_data_schema_is_restored(
+    tmp_path: Path,
+) -> None:
+    environment, call_log = _rollback_environment(tmp_path)
+    current = tmp_path / "state" / "deployments" / "current.json"
+    _write_manifest(
+        current,
+        OLDER_REVISION,
+        TEST_REVISION,
+        data_schema_version=2,
+    )
+    revision_before = (tmp_path / "config" / "dogfood.revision").read_bytes()
+
+    result = subprocess.run(
+        _rollback_command(tmp_path),
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode != 0
+    assert not call_log.exists()
+    assert (tmp_path / "config" / "dogfood.revision").read_bytes() == revision_before
+    assert "target=2 current=3" in result.stderr
+    assert "restore" in result.stderr
 
 
 def test_should_reject_a_symlinked_manifest_before_rollback_side_effects(

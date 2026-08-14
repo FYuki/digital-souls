@@ -18,6 +18,7 @@ from tests.dogfood_infrastructure_test_support import (
     command_with_root_owned_revision,
     read_valid_deployment_manifest,
     write_dogfood_env,
+    write_dogfood_revision,
     write_executable,
 )
 from tests.environment_entrypoint_test_support import copy_environment_runtime
@@ -194,6 +195,7 @@ def _prepare_deploy_scenario(
         '  *"remote get-url origin"*) printf "%s\\n" "$DOGFOOD_REPOSITORY_URL" ;;\n'
         '  *"status --porcelain"*) [ "${DEPLOY_FAILURE-}" != "dirty" ] || printf " M dirty\\n" ;;\n'
         '  *"merge-base --is-ancestor"*) [ "${DEPLOY_FAILURE-}" != "unresolved" ] ;;\n'
+        '  *"rev-parse --is-shallow-repository"*) printf "false\\n" ;;\n'
         f'  *"rev-parse HEAD"*) count=$(cat "{head_read_count_path}" 2>/dev/null || printf 0); '
         f'count=$((count + 1)); printf "%s" "$count" > "{head_read_count_path}"; '
         '[ "${DEPLOY_FAILURE-}" != "rollback-readiness-head-unavailable" ] '
@@ -407,8 +409,11 @@ def test_should_stop_deploy_at_the_first_activation_failure(
     result, calls = _run_deploy(tmp_path, failure=failure)
 
     assert result.returncode != 0
-    assert last_operation in calls[-1]
+    assert any(last_operation in call for call in calls)
     assert not any(call.startswith("cli\treadiness ") for call in calls)
+    diagnostic = result.stdout + result.stderr
+    assert f"現在のrevision: {NEXT_REVISION}" in diagnostic
+    assert f"現在のHEAD: {NEXT_REVISION}" in diagnostic
 
 
 @pytest.mark.parametrize("unsafe_entry", ("deployments", "manifest"))
@@ -732,7 +737,7 @@ def test_should_reject_invalid_deploy_invocations_before_external_side_effects(
 def test_should_leave_revision_and_checkout_unchanged_when_only_main_changes(
     tmp_path: Path,
 ) -> None:
-    write_dogfood_env(tmp_path)
+    env_path, _ = write_dogfood_env(tmp_path)
     origin = tmp_path / "origin.git"
     source = tmp_path / "source"
     clone_dir = tmp_path / "clone"
@@ -769,14 +774,14 @@ def test_should_leave_revision_and_checkout_unchanged_when_only_main_changes(
         check=True,
         capture_output=True,
     )
-    revision_path = tmp_path / "config" / "dogfood.revision"
-    before_revision = revision_path.read_bytes()
     before_checkout = subprocess.run(
         ["git", "-C", str(clone_dir), "rev-parse", "HEAD"],
         check=True,
         capture_output=True,
         text=True,
     ).stdout
+    revision_path = write_dogfood_revision(tmp_path, before_checkout.strip())
+    before_revision = revision_path.read_bytes()
 
     (source / "version").write_text("two", encoding="utf-8")
     subprocess.run(
@@ -790,16 +795,101 @@ def test_should_leave_revision_and_checkout_unchanged_when_only_main_changes(
         capture_output=True,
     )
 
+    observed = subprocess.run(
+        command_with_root_owned_revision(
+            revision_path,
+            [
+                "bash",
+                "-c",
+                'source "$1"; dogfood_load_environment; '
+                'printf "%s\\n" "$DOGFOOD_REPOSITORY_REVISION"; '
+                'git -C "$DOGFOOD_CLONE_DIR" rev-parse HEAD',
+                "bash",
+                str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+            ],
+        ),
+        env={**os.environ, "DOGFOOD_ENV_FILE": str(env_path)},
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert observed.returncode == 0, (observed.stdout, observed.stderr)
+    assert observed.stdout.splitlines() == [
+        before_checkout.strip(),
+        before_checkout.strip(),
+    ]
     assert revision_path.read_bytes() == before_revision
-    assert (
+
+
+def test_should_restore_full_history_before_checking_main_ancestry(
+    tmp_path: Path,
+) -> None:
+    origin = tmp_path / "origin.git"
+    source = tmp_path / "source"
+    clone_dir = tmp_path / "clone"
+    subprocess.run(
+        ["git", "init", "--bare", str(origin)], check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "init", "-b", "main", str(source)], check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "-C", str(source), "config", "user.name", "test"], check=True
+    )
+    subprocess.run(
+        ["git", "-C", str(source), "config", "user.email", "test@example.invalid"],
+        check=True,
+    )
+    for value in ("one", "two"):
+        (source / "version").write_text(value, encoding="utf-8")
+        subprocess.run(["git", "-C", str(source), "add", "version"], check=True)
         subprocess.run(
-            ["git", "-C", str(clone_dir), "rev-parse", "HEAD"],
+            ["git", "-C", str(source), "commit", "-m", value],
             check=True,
             capture_output=True,
-            text=True,
-        ).stdout
-        == before_checkout
+        )
+    subprocess.run(
+        ["git", "-C", str(source), "remote", "add", "origin", str(origin)], check=True
     )
+    subprocess.run(
+        ["git", "-C", str(source), "push", "origin", "main"],
+        check=True,
+        capture_output=True,
+    )
+    origin_url = origin.as_uri()
+    subprocess.run(
+        ["git", "clone", "--depth", "1", "--branch", "main", origin_url, str(clone_dir)],
+        check=True,
+        capture_output=True,
+    )
+    target = subprocess.run(
+        ["git", "-C", str(clone_dir), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert (clone_dir / ".git" / "shallow").is_file()
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; DOGFOOD_CLONE_DIR=$2; DOGFOOD_REPOSITORY_URL=$3; '
+            'dogfood_verify_origin; dogfood_fetch_and_resolve_commit "$4"',
+            "bash",
+            str(DOGFOOD_SCRIPTS_DIR / "deployment-lib.sh"),
+            str(clone_dir),
+            origin_url,
+            target,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert not (clone_dir / ".git" / "shallow").exists()
 
 
 def test_should_publish_revision_only_after_the_complete_sha_is_ready(
@@ -848,14 +938,19 @@ def test_should_publish_revision_only_after_the_complete_sha_is_ready(
             "ATOMIC_INSTALL_RELEASE": str(install_release),
         },
     )
-    deadline = time.monotonic() + 10
-    while not install_ready.exists() and time.monotonic() < deadline:
-        time.sleep(0.01)
-    assert install_ready.exists()
-    observed = {revision.read_text(encoding="utf-8")}
-    install_release.touch()
-    assert process.wait(timeout=10) == 0
-    observed.add(revision.read_text(encoding="utf-8"))
+    try:
+        deadline = time.monotonic() + 10
+        while not install_ready.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert install_ready.exists()
+        observed = {revision.read_text(encoding="utf-8")}
+        install_release.touch()
+        assert process.wait(timeout=10) == 0
+        observed.add(revision.read_text(encoding="utf-8"))
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=10)
 
     assert observed <= {f"{TEST_REVISION}\n", f"{NEXT_REVISION}\n"}
     assert f"{NEXT_REVISION}\n" in observed
@@ -915,3 +1010,133 @@ def test_should_keep_distinct_manifests_for_repeated_same_revision_operations(
     assert len(generations) == 2
     assert len({path.name for path in generations}) == 2
     assert json.loads((deployments / "current.json").read_text(encoding="utf-8")) == json.loads(manifest)
+
+
+@pytest.mark.parametrize("failed_install", (1, 2), ids=("generation", "current"))
+def test_should_remove_manifest_temporaries_when_install_fails(
+    tmp_path: Path,
+    failed_install: int,
+) -> None:
+    deployments = tmp_path / "state" / "deployments"
+    deployments.mkdir(parents=True)
+    (tmp_path / "state").chmod(0o750)
+    deployments.chmod(0o750)
+    bin_dir = tmp_path / "manifest-failure-bin"
+    bin_dir.mkdir()
+    install_count = tmp_path / "install-count"
+    write_executable(
+        bin_dir / "install",
+        'count=$(cat "$MANIFEST_INSTALL_COUNT" 2>/dev/null || printf 0)\n'
+        'count=$((count + 1)); printf "%s" "$count" > "$MANIFEST_INSTALL_COUNT"\n'
+        'arguments=()\n'
+        'while [ "$#" -gt 0 ]; do\n'
+        '  case "$1" in -o|-g) shift 2 ;; *) arguments+=("$1"); shift ;; esac\n'
+        'done\n'
+        'destination="${arguments[${#arguments[@]}-1]}"\n'
+        'if [ "$count" -eq "$MANIFEST_FAILED_INSTALL" ]; then\n'
+        '  : > "$destination"\n'
+        '  exit 1\n'
+        'fi\n'
+        'exec /usr/bin/install "${arguments[@]}"\n',
+    )
+    manifest = json.dumps(
+        {
+            "previousCommit": TEST_REVISION,
+            "targetCommit": NEXT_REVISION,
+            "profileSchemaVersion": 1,
+            "dataSchemaVersion": 3,
+            "backupId": "/backups/failure",
+            "deployedAt": "2026-08-14T00:00:00Z",
+        },
+        separators=(",", ":"),
+    )
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; DOGFOOD_STATE_DIR=$2; DOGFOOD_SERVICE_GROUP=$3; '
+            'dogfood_write_manifest "$4" "$5"',
+            "bash",
+            str(DOGFOOD_SCRIPTS_DIR / "deployment-lib.sh"),
+            str(tmp_path / "state"),
+            TEST_SERVICE_GROUP,
+            manifest,
+            NEXT_REVISION,
+        ],
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "MANIFEST_INSTALL_COUNT": str(install_count),
+            "MANIFEST_FAILED_INSTALL": str(failed_install),
+        },
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode != 0
+    assert not tuple(deployments.glob(".*"))
+
+
+def test_should_stop_manifest_generation_after_finite_link_attempts(
+    tmp_path: Path,
+) -> None:
+    deployments = tmp_path / "state" / "deployments"
+    deployments.mkdir(parents=True)
+    (tmp_path / "state").chmod(0o750)
+    deployments.chmod(0o750)
+    bin_dir = tmp_path / "manifest-link-bin"
+    bin_dir.mkdir()
+    link_log = tmp_path / "link-attempts"
+    write_executable(
+        bin_dir / "install",
+        'arguments=()\n'
+        'while [ "$#" -gt 0 ]; do\n'
+        '  case "$1" in -o|-g) shift 2 ;; *) arguments+=("$1"); shift ;; esac\n'
+        'done\n'
+        'exec /usr/bin/install "${arguments[@]}"\n',
+    )
+    write_executable(
+        bin_dir / "ln",
+        'printf "attempt\\n" >> "$MANIFEST_LINK_LOG"\nexit 1\n',
+    )
+    manifest = json.dumps(
+        {
+            "previousCommit": TEST_REVISION,
+            "targetCommit": NEXT_REVISION,
+            "profileSchemaVersion": 1,
+            "dataSchemaVersion": 3,
+            "backupId": "/backups/link-failure",
+            "deployedAt": "2026-08-14T00:00:00Z",
+        },
+        separators=(",", ":"),
+    )
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; DOGFOOD_STATE_DIR=$2; DOGFOOD_SERVICE_GROUP=$3; '
+            'dogfood_write_manifest "$4" "$5"',
+            "bash",
+            str(DOGFOOD_SCRIPTS_DIR / "deployment-lib.sh"),
+            str(tmp_path / "state"),
+            TEST_SERVICE_GROUP,
+            manifest,
+            NEXT_REVISION,
+        ],
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "MANIFEST_LINK_LOG": str(link_log),
+        },
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode != 0
+    assert link_log.read_text(encoding="utf-8").splitlines() == ["attempt"] * 16
+    assert not tuple(deployments.glob("*.json"))
+    assert not tuple(deployments.glob(".*"))

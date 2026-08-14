@@ -174,10 +174,14 @@ def _run_bootstrap(
             "fakeroot",
             "bash",
             "-c",
-            'owner=$1; shift; /usr/bin/chown 1234 "$owner"; exec "$@"',
+            '/usr/bin/chown "0:$1" "$2" 2>/dev/null '
+            '|| [ "$(/usr/bin/stat -c %u:%g "$2")" = "0:$1" ]; '
+            '/usr/bin/chown 1234 "$3"; shift 3; exec "$@"',
             "bash",
+            str(os.getgid()),
+            str(revision_path),
             str(non_root_parent),
-            *command,
+            str(DOGFOOD_SCRIPTS_DIR / "bootstrap.sh"),
         ]
     result = subprocess.run(
         command,
@@ -215,7 +219,7 @@ def _git_fetch_calls(calls: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(
         call
         for call in calls
-        if call.startswith("git\t") and " fetch --depth 1 origin " in call
+        if call.startswith("git\t") and " fetch origin " in call
     )
 
 
@@ -366,7 +370,7 @@ def test_should_place_assets_after_initial_clone_trust_checks_succeed(
     )
     required_git_operations = (
         "clone --no-checkout",
-        "fetch --depth 1",
+        "fetch origin",
         "rev-parse --verify",
         "checkout --detach",
         "rev-parse HEAD",

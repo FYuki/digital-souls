@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import fcntl
+import grp
 import os
 import subprocess
 from pathlib import Path
@@ -237,16 +238,13 @@ def test_should_reject_a_revision_file_owned_by_a_different_group(
     tmp_path: Path,
 ) -> None:
     env_path, _ = write_dogfood_env(tmp_path)
-    source = env_path.read_text(encoding="utf-8")
-    env_path.write_text(
-        "\n".join(
-            "DOGFOOD_SERVICE_GROUP=root"
-            if line.startswith("DOGFOOD_SERVICE_GROUP=")
-            else line
-            for line in source.splitlines()
-        ),
-        encoding="utf-8",
+    different_group = next(
+        (entry.gr_name for entry in grp.getgrall() if entry.gr_gid != os.getgid()),
+        None,
     )
+    if different_group is None:
+        pytest.skip("実行GIDと異なる既存groupがありません")
+    _replace_setting(env_path, "DOGFOOD_SERVICE_GROUP", different_group)
     sentinel_path = tmp_path / "revision-group.sentinel"
 
     result = _run_loader(env_path, sentinel_path)
