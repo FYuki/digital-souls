@@ -42,11 +42,15 @@ sudo systemctl enable --now docker.service
 
 ## 設定とbootstrap
 
-`env.example`をdogfood専用の一時pathへmode `0600`で作成し、repository URL、配備する完全なcommit SHA、VOICEVOX imageを実環境に合わせる。単純な`cp infra/dogfood/env.example /tmp/dogfood.env`のまま使用してはならない。推論portはここへ追加せず、`environments/profiles/dogfood.json`を唯一の参照元にする。
+`env.example`をdogfood専用の一時pathへmode `0600`で作成し、repository URLとVOICEVOX imageを実環境に合わせる。revisionは秘密設定と分離した`/etc/digital-souls/dogfood.revision`へ完全なcommit SHA 1行だけを書き込む。単純な`cp infra/dogfood/env.example /tmp/dogfood.env`のまま使用してはならない。推論portはここへ追加せず、`environments/profiles/dogfood.json`を唯一の参照元にする。
 
 ```bash
 dogfood_env=$(mktemp)
 install -m 0600 infra/dogfood/env.example "$dogfood_env"
+sudo groupadd --force --system digital-souls
+sudo install -d -m 0750 -o root -g digital-souls /etc/digital-souls
+printf '%s\n' '<検証済みmain commit SHA>' | sudo install -m 0640 \
+  -o root -g digital-souls /dev/stdin /etc/digital-souls/dogfood.revision
 sudo env DOGFOOD_ENV_FILE="$dogfood_env" WSL_DISTRO_NAME=Ubuntu-dogfood \
   scripts/dogfood/bootstrap.sh
 rm -f -- "$dogfood_env"
@@ -54,7 +58,7 @@ rm -f -- "$dogfood_env"
 
 bootstrap用一時envの`0600`は、内容を読み込む前の秘密保護契約である。bootstrapが正規配置する`/etc/digital-souls/dogfood.env`の`0640 root:digital-souls`とは別の契約であり、一時envへ`0640`を使用しない。bootstrapの成否を確認した後、一時envは削除する。
 
-bootstrapはdistribution名と`DS_ENVIRONMENT_ID=dogfood`、必須設定、絶対path、pathの非重複、HTTPS repository URL、完全なcommit SHAを配置前に検証する。初回と再実行のどちらもrootで指定revisionを取得し、origin、commit一致、detached HEAD、変更のないworking treeを検証してから生成資材を配置する。既存DBがある場合は、指定revisionの一時cloneへBackend実行環境を構築し、その環境でbackupと独立検証を完了してから配備用cloneのfetchへ進む。検証後のcloneはroot所有に収束し、application service userは変更できない。暗黙のpull、reset、deployは行わない。
+bootstrapはdistribution名と`DS_ENVIRONMENT_ID=dogfood`、必須設定、絶対path、pathの非重複、HTTPS repository URL、revisionファイルの完全なcommit SHAを配置前に検証する。初回だけ指定revisionを取得し、origin、commit一致、detached HEAD、変更のないworking treeを検証してcloneを作成する。再実行時は既存cloneのoriginだけを検証し、checkoutやservice restartを行わない。検証後のcloneはroot所有に収束し、application service userは変更できない。
 
 bootstrapは検証済み設定からsystemd unitとWindows launcherを生成する。生成されたlauncherは`DOGFOOD_CONFIG_DIR/start-dogfood-wsl.ps1`に配置されるため、Windows側から`\\wsl$`経由でコピーして使用する。unitのservice user、group、設定file、clone内runner、WSL distributionは同じ設定値から生成される。
 
@@ -63,13 +67,30 @@ bootstrapは検証済み設定からsystemd unitとWindows launcherを生成す�
 | 対象 | 標準path | 所有者 | 用途 |
 |------|----------|--------|------|
 | clone | `/opt/digital-souls/current` | `root:digital-souls` | dogfood専用の読み取り専用clone |
-| 設定 | `/etc/digital-souls` | `root:digital-souls` | `dogfood.env` |
+| 設定 | `/etc/digital-souls` | `root:digital-souls` | `dogfood.env`、`dogfood.revision`（ともに`0640`） |
 | data | `/var/lib/digital-souls/data` | `digital-souls:digital-souls` | SQLite、Chroma等の永続data root |
 | backup | `/var/lib/digital-souls/backups` | `digital-souls:digital-souls` | SQLite backup世代 |
-| state | `/var/lib/digital-souls/state` | `digital-souls:digital-souls` | service state |
+| state | `/var/lib/digital-souls/state` | `root:digital-souls` | deployment state |
 | log | `/var/log/digital-souls` | `digital-souls:digital-souls` | file log用directory |
 
-directoryは`0750`、設定ファイルは`0640`を基準とする。application service userは`docker`補助groupへ所属させず、VOICEVOX Composeはroot所有のsystemd unitとroot所有cloneのrunnerだけが操作する。data、state、logをclone配下、Ubuntu-devのruntime root、TAKT worktreeへ置かない。
+directoryは`0750`、設定ファイルは`0640`を基準とする。stateとその親pathはrootが管理し、symlinkやservice userが書き換え可能なpath要素を使用しない。application service userは`docker`補助groupへ所属させず、VOICEVOX Composeはroot所有のsystemd unitとroot所有cloneのrunnerだけが操作する。data、state、logをclone配下、Ubuntu-devのruntime root、TAKT worktreeへ置かない。
+
+## deployとrollback
+
+bootstrap後の昇格は、検証済みmain commitを明示して実行する。mainへのmergeだけではclone、revision、processは変化しない。
+
+```bash
+sudo scripts/dogfood/deploy.sh --commit <完全なcommit SHA>
+sudo scripts/dogfood/deploy.sh --commit <完全なcommit SHA> --no-auto-rollback
+sudo scripts/dogfood/rollback.sh
+sudo scripts/dogfood/rollback.sh --to <保存済みcommit SHA>
+```
+
+deployはdirty checkout、origin/main上で解決できないcommit、設定不足を拒否する。毎回backupとbackup-verifyを完了してからmanifestとrevisionを更新し、detached checkout、Backend依存準備、Frontend build、権限再適用、service restart、Profile準拠readinessの順で実行する。readiness失敗時は既定で直前commitへ自動rollbackし、`--no-auto-rollback`指定時だけ現在状態を維持して停止する。backupを省略するオプションはない。
+
+rollbackは引数なしで現在manifestの直前commitへ、`--to`で保存済みmanifestが存在する任意commitへ戻す。rollback先manifestのSQLite data schemaと現在DBのschemaが一致しない場合は、保存済みbackupを検証・restoreするまでcommitの切替を拒否する。どちらも再build、restart、readiness確認を行うため数分かかる場合がある。
+
+deployment manifestは`DOGFOOD_STATE_DIR/deployments/`へ`root:digital-souls`、`0640`で保存する。1操作1 JSON、`current.json`が最新状態を表し、履歴は新しい20世代だけを保持する。commit、Profile schema、SQLite data schema、backup ID、UTC deploy時刻だけを記録し、会話本文、prompt、秘密値は保存しない。`dogfood.env`はdeploy、rollback、manifest、logへ複製しない。
 
 ## Conversation historyのbackup／restore
 

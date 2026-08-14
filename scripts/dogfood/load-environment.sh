@@ -5,8 +5,7 @@ DOGFOOD_DEPRECATED_FIXED_ENV_FILE=/tmp/dogfood.env
 DOGFOOD_TEMPORARY_ENV_FORBIDDEN_MODE_MASK=077
 DOGFOOD_ALLOWED_ENV_KEYS=(
   DS_ENVIRONMENT_ID DOGFOOD_WSL_DISTRO DOGFOOD_SERVICE_USER
-  DOGFOOD_SERVICE_GROUP DOGFOOD_REPOSITORY_URL DOGFOOD_REPOSITORY_REVISION
-  DOGFOOD_CLONE_DIR
+  DOGFOOD_SERVICE_GROUP DOGFOOD_REPOSITORY_URL DOGFOOD_CLONE_DIR
   DOGFOOD_CONFIG_DIR DS_DATA_DIR DOGFOOD_BACKUP_DIR
   DOGFOOD_BACKUP_RETENTION_COUNT DOGFOOD_BACKUP_AUTHENTICATION_KEY
   DOGFOOD_STATE_DIR DOGFOOD_LOG_DIR
@@ -56,6 +55,11 @@ dogfood_read_environment() {
 }
 
 dogfood_load_environment() {
+  dogfood_load_environment_settings || return
+  dogfood_read_revision
+}
+
+dogfood_load_environment_settings() {
   local env_file=${DOGFOOD_ENV_FILE:-$DOGFOOD_DEFAULT_ENV_FILE}
   local environment_contents expected_owner normalized_default_env_file
   local normalized_env_file read_status
@@ -148,6 +152,70 @@ PYTHON
   dogfood_validate_environment
 }
 
+dogfood_read_revision() {
+  local revision_file="$DOGFOOD_CONFIG_DIR/dogfood.revision"
+  local revision
+  if ! revision=$(python3 - "$revision_file" "$DOGFOOD_SERVICE_GROUP" <<'PYTHON'
+import grp
+import os
+import stat
+import sys
+
+revision_file, expected_group = sys.argv[1:]
+try:
+    expected_group_id = grp.getgrnam(expected_group).gr_gid
+except KeyError:
+    print("ERROR: dogfood service groupを解決できません", file=sys.stderr)
+    raise SystemExit(2)
+try:
+    descriptor = os.open(revision_file, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+except OSError:
+    print("ERROR: dogfood revisionファイルを安全に開けません", file=sys.stderr)
+    raise SystemExit(2)
+
+try:
+    descriptor_status = os.fstat(descriptor)
+    path_status = os.stat(revision_file, follow_symlinks=False)
+    if (
+        not stat.S_ISREG(descriptor_status.st_mode)
+        or not stat.S_ISREG(path_status.st_mode)
+        or (descriptor_status.st_dev, descriptor_status.st_ino)
+        != (path_status.st_dev, path_status.st_ino)
+    ):
+        print("ERROR: dogfood revisionファイルが検証中に変更されました", file=sys.stderr)
+        raise SystemExit(2)
+    if descriptor_status.st_uid != 0:
+        print("ERROR: dogfood revisionファイルの所有者が不正です", file=sys.stderr)
+        raise SystemExit(2)
+    if descriptor_status.st_gid != expected_group_id:
+        print("ERROR: dogfood revisionファイルのgroupが不正です", file=sys.stderr)
+        raise SystemExit(2)
+    if stat.S_IMODE(descriptor_status.st_mode) != 0o640:
+        print("ERROR: dogfood revisionファイルの権限が不正です", file=sys.stderr)
+        raise SystemExit(2)
+    with os.fdopen(descriptor, "r", encoding="ascii", closefd=False) as source:
+        value = source.read()
+except (OSError, UnicodeError):
+    print("ERROR: dogfood revisionファイルを読み取れません", file=sys.stderr)
+    raise SystemExit(2)
+finally:
+    os.close(descriptor)
+
+if not value.endswith("\n") or value.count("\n") != 1:
+    print("ERROR: dogfood revisionファイルはcommit SHA 1行で指定してください", file=sys.stderr)
+    raise SystemExit(2)
+print(value[:-1], end="")
+PYTHON
+  ); then
+    return 2
+  fi
+  if ! [[ "$revision" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "ERROR: dogfood revisionファイルは完全なcommit SHAで指定してください" >&2
+    return 2
+  fi
+  export DOGFOOD_REPOSITORY_REVISION="$revision"
+}
+
 dogfood_validate_environment() {
   local key left_key right_key left right
   local left_index right_index
@@ -192,10 +260,6 @@ dogfood_validate_environment() {
   done
   if ! [[ "$DOGFOOD_REPOSITORY_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?/[A-Za-z0-9._~/%+-]+(/[A-Za-z0-9._~/%+-]+)*$ ]]; then
     echo "ERROR: DOGFOOD_REPOSITORY_URLはhttps URLで指定してください" >&2
-    return 2
-  fi
-  if ! [[ "$DOGFOOD_REPOSITORY_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
-    echo "ERROR: DOGFOOD_REPOSITORY_REVISIONは完全なcommit SHAで指定してください" >&2
     return 2
   fi
   if ! [[ "$DOGFOOD_BACKUP_RETENTION_COUNT" =~ ^[1-9][0-9]*$ ]]; then

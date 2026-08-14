@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import fcntl
+import grp
 import os
 import subprocess
 from pathlib import Path
@@ -10,7 +11,12 @@ import pytest
 
 from tests.dogfood_infrastructure_test_support import (
     DOGFOOD_SCRIPTS_DIR,
+    TEST_REVISION,
+    command_as_service_user,
+    command_with_root_owned_revision,
+    command_with_root_owned_revision_as_service_user,
     write_dogfood_env,
+    write_dogfood_revision,
 )
 
 
@@ -32,15 +38,19 @@ def _run_loader(
     environment = {**os.environ, "DOGFOOD_ENV_FILE": str(env_path)}
     if path_environment is not None:
         environment["PATH"] = path_environment
+    revision_path = Path(env_path).parent / "config" / "dogfood.revision"
     return subprocess.run(
-        [
+        command_with_root_owned_revision(
+            revision_path,
+            [
             "bash",
             "-c",
             'source "$1"; dogfood_load_environment && touch "$2"',
             "bash",
             str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
             str(sentinel_path),
-        ],
+            ],
+        ),
         env=environment,
         capture_output=True,
         text=True,
@@ -51,11 +61,15 @@ def _run_loader(
 def _replace_setting(env_path: Path, key: str, value: str) -> None:
     source = env_path.read_text(encoding="utf-8")
     lines = source.splitlines()
-    updated = [f"{key}={value}" if line.startswith(f"{key}=") else line for line in lines]
+    updated = [
+        f"{key}={value}" if line.startswith(f"{key}=") else line for line in lines
+    ]
     env_path.write_text("\n".join(updated), encoding="utf-8")
 
 
-def test_should_continue_after_loading_valid_dogfood_environment(tmp_path: Path) -> None:
+def test_should_continue_after_loading_valid_dogfood_environment(
+    tmp_path: Path,
+) -> None:
     env_path, _ = write_dogfood_env(tmp_path)
     assert env_path.stat().st_mode & 0o777 == 0o600
     sentinel_path = tmp_path / "valid.sentinel"
@@ -64,6 +78,179 @@ def test_should_continue_after_loading_valid_dogfood_environment(tmp_path: Path)
 
     assert result.returncode == 0, result.stderr
     assert sentinel_path.is_file()
+
+
+def test_should_export_revision_loaded_from_the_separate_revision_file(
+    tmp_path: Path,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+
+    result = subprocess.run(
+        command_with_root_owned_revision(
+            tmp_path / "config" / "dogfood.revision",
+            [
+            "bash",
+            "-c",
+            'set -e; source "$1"; dogfood_load_environment; '
+            'printf "%s" "$DOGFOOD_REPOSITORY_REVISION"',
+            "bash",
+            str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+            ],
+        ),
+        env={**os.environ, "DOGFOOD_ENV_FILE": str(env_path)},
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == TEST_REVISION
+
+
+def test_should_accept_root_owned_revision_when_loader_runs_as_service_user(
+    tmp_path: Path,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    loader_uid_path = tmp_path / "service-user.uid"
+    sentinel_path = tmp_path / "service-user.sentinel"
+
+    result = subprocess.run(
+        command_with_root_owned_revision_as_service_user(
+            tmp_path / "config" / "dogfood.revision",
+            [
+                "bash",
+                "-c",
+                "loader_uid=$(/usr/bin/awk '/^Uid:/{print $2}' /proc/$$/status); "
+                'printf "%s\\n" "$loader_uid" > "$2"; '
+                '[ "$loader_uid" -ne 0 ]; source "$1"; '
+                'dogfood_load_environment && touch "$3"',
+                "bash",
+                str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+                str(loader_uid_path),
+                str(sentinel_path),
+            ],
+        ),
+        env={**os.environ, "DOGFOOD_ENV_FILE": str(env_path)},
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert int(loader_uid_path.read_text(encoding="utf-8")) != 0
+    assert sentinel_path.is_file()
+
+
+def test_should_reject_revision_owned_by_service_user(tmp_path: Path) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    sentinel_path = tmp_path / "service-owned-revision.sentinel"
+
+    result = subprocess.run(
+        command_as_service_user(
+            [
+                "bash",
+                "-c",
+                'source "$1"; dogfood_load_environment && touch "$2"',
+                "bash",
+                str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+                str(sentinel_path),
+            ]
+        ),
+        env={**os.environ, "DOGFOOD_ENV_FILE": str(env_path)},
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode != 0
+    assert not sentinel_path.exists()
+
+
+@pytest.mark.parametrize(
+    "revision",
+    ("", "abc", f"{TEST_REVISION}\n{TEST_REVISION}", TEST_REVISION.upper()),
+    ids=("empty", "short", "multiple-lines", "uppercase"),
+)
+def test_should_reject_revision_files_that_do_not_contain_one_complete_sha(
+    tmp_path: Path,
+    revision: str,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    write_dogfood_revision(tmp_path, revision)
+    sentinel_path = tmp_path / "invalid-revision.sentinel"
+
+    result = _run_loader(env_path, sentinel_path)
+
+    assert result.returncode != 0
+    assert not sentinel_path.exists()
+
+
+def test_should_reject_the_removed_revision_environment_key(tmp_path: Path) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    env_path.write_text(
+        f"{env_path.read_text(encoding='utf-8')}\n"
+        f"DOGFOOD_REPOSITORY_REVISION={TEST_REVISION}\n",
+        encoding="utf-8",
+    )
+    sentinel_path = tmp_path / "legacy-env.sentinel"
+
+    result = _run_loader(env_path, sentinel_path)
+
+    assert result.returncode != 0
+    assert not sentinel_path.exists()
+
+
+@pytest.mark.parametrize("revision_state", ("missing", "symlink"))
+def test_should_reject_an_untrusted_revision_file(
+    tmp_path: Path,
+    revision_state: str,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    revision_path = tmp_path / "config" / "dogfood.revision"
+    revision_path.unlink()
+    if revision_state == "symlink":
+        target = tmp_path / "revision-target"
+        target.write_text(f"{TEST_REVISION}\n", encoding="utf-8")
+        revision_path.symlink_to(target)
+    sentinel_path = tmp_path / "untrusted-revision.sentinel"
+
+    result = _run_loader(env_path, sentinel_path)
+
+    assert result.returncode != 0
+    assert not sentinel_path.exists()
+
+
+def test_should_reject_a_revision_file_with_noncanonical_permissions(
+    tmp_path: Path,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    revision_path = tmp_path / "config" / "dogfood.revision"
+    revision_path.chmod(0o600)
+    sentinel_path = tmp_path / "revision-mode.sentinel"
+
+    result = _run_loader(env_path, sentinel_path)
+
+    assert result.returncode != 0
+    assert not sentinel_path.exists()
+
+
+def test_should_reject_a_revision_file_owned_by_a_different_group(
+    tmp_path: Path,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    different_group = next(
+        (entry.gr_name for entry in grp.getgrall() if entry.gr_gid != os.getgid()),
+        None,
+    )
+    if different_group is None:
+        pytest.skip("実行GIDと異なる既存groupがありません")
+    _replace_setting(env_path, "DOGFOOD_SERVICE_GROUP", different_group)
+    sentinel_path = tmp_path / "revision-group.sentinel"
+
+    result = _run_loader(env_path, sentinel_path)
+
+    assert result.returncode != 0
+    assert not sentinel_path.exists()
 
 
 def test_secret_env_01_exports_normalized_temporary_environment_path(
@@ -217,7 +404,7 @@ def test_secret_env_01_does_not_open_symlink_swapped_after_file_check(
             'mkfifo "$3"; '
             '( exec 3>"$3"; touch "$4"; exec 3>&- ) & writer=$!; '
             'dogfood_validate_environment() { touch "$5"; }; '
-            'swap_original=$2; swap_fifo=$3; swap_marker=$8; '
+            "swap_original=$2; swap_fifo=$3; swap_marker=$8; "
             "dogfood_swap_after_file_check() { "
             "  local command=$1; "
             '  if [ "${swap_armed-}" = 1 ]; then '
@@ -227,7 +414,7 @@ def test_secret_env_01_does_not_open_symlink_swapped_after_file_check(
             '    touch "$swap_marker"; '
             "    return; "
             "  fi; "
-            "  if [ \"$command\" = '[ ! -f \"$env_file\" ]' ]; then "
+            '  if [ "$command" = \'[ ! -f "$env_file" ]\' ]; then '
             "    swap_armed=1; "
             "  fi; "
             "}; "
@@ -283,9 +470,7 @@ def test_secret_env_01_rejects_the_deprecated_fixed_temporary_path_aliases(
     fake_python = fake_bin / "python3"
     descriptor_read_sentinel = tmp_path / "descriptor-read.sentinel"
     fake_python.write_text(
-        "#!/usr/bin/env bash\n"
-        f'touch "{descriptor_read_sentinel}"\n'
-        "exit 99\n",
+        f'#!/usr/bin/env bash\ntouch "{descriptor_read_sentinel}"\nexit 99\n',
         encoding="utf-8",
     )
     fake_python.chmod(0o755)
@@ -485,7 +670,6 @@ def test_should_reject_empty_backup_setting_before_following_operation(
         ("DOGFOOD_SERVICE_GROUP", "digital souls"),
         ("DOGFOOD_CLONE_DIR", "relative/clone"),
         ("DOGFOOD_REPOSITORY_URL", "http://example.invalid/repository.git"),
-        ("DOGFOOD_REPOSITORY_REVISION", "0123456789abcdef"),
         ("DOGFOOD_BACKUP_RETENTION_COUNT", "0"),
         ("DOGFOOD_BACKUP_RETENTION_COUNT", "seven"),
         ("DOGFOOD_BACKUP_AUTHENTICATION_KEY", "0123456789abcdef"),
@@ -496,7 +680,6 @@ def test_should_reject_empty_backup_setting_before_following_operation(
         "service-group",
         "absolute-path",
         "repository-url",
-        "repository-revision",
         "backup-retention-count",
         "backup-retention-nonnumeric",
         "backup-authentication-key",

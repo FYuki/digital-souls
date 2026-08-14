@@ -9,7 +9,10 @@ from typing import cast
 
 import pytest
 
-from tests.dogfood_infrastructure_test_support import write_dogfood_env
+from tests.dogfood_infrastructure_test_support import (
+    command_with_root_owned_revision,
+    write_dogfood_env,
+)
 from tests.environment_entrypoint_test_support import ROOT_DIR, write_executable
 
 
@@ -47,7 +50,9 @@ PY
     )
     env_path.write_text(source, encoding="utf-8")
     result = subprocess.run(
-        [str(entrypoint)],
+        command_with_root_owned_revision(
+            tmp_path / "config" / "dogfood.revision", [str(entrypoint)]
+        ),
         env={
             **os.environ,
             "PATH": f"{bin_dir}:{os.environ['PATH']}",

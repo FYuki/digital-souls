@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import traceback
+from collections.abc import Mapping
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -29,6 +31,10 @@ from commands.up_command import up_environment
 from commands.verify_command import verify_environment
 from commands.voicevox_command import start_voicevox
 from environment_verification import EnvironmentVerificationError
+from http_readiness import probe_http_services
+from profile_resolution import resolve_dependencies
+from profile_types import ProfileError
+from profile_validation import load_profile
 from run_report_contract import RunReportError
 
 BACKUP_ERROR_EXIT_CODES = (
@@ -43,6 +49,15 @@ BACKUP_ERROR_EXIT_CODES = (
 UNKNOWN_BACKUP_ERROR_MESSAGE = "backup operation failed"
 UNKNOWN_ENVIRONMENT_ERROR_MESSAGE = "environment operation failed"
 BACKUP_COMMANDS = ("backup", "backup-verify", "restore", "restore-verify")
+
+
+def _require_readiness_url(
+    service_name: str, dependency: Mapping[str, object]
+) -> str:
+    readiness_url = dependency.get("readinessUrl")
+    if not isinstance(readiness_url, str) or not readiness_url:
+        raise ProfileError(f"{service_name} readinessUrl is required")
+    return readiness_url
 
 
 def backup_environment(
@@ -103,6 +118,8 @@ def _parser() -> argparse.ArgumentParser:
     test_result.add_argument("--run-report", required=True)
     test_result.add_argument("--status", choices=("passed", "failed"), required=True)
     test_result.add_argument("--message", required=True)
+    readiness = commands.add_parser("readiness")
+    readiness.add_argument("--profile", required=True)
     backup, backup_verify, restore, restore_verify = (
         commands.add_parser(command) for command in BACKUP_COMMANDS
     )
@@ -154,6 +171,21 @@ def _dispatch(arguments: argparse.Namespace) -> int:
         return record_playwright_result(
             arguments.run_report, arguments.status, arguments.message
         )
+    if arguments.command == "readiness":
+        profile = load_profile(arguments.profile)
+        dependencies = resolve_dependencies(profile["dependencies"])
+        service_urls = {
+            "frontend": _require_readiness_url("frontend", dependencies["frontend"]),
+            "backend": _require_readiness_url("backend", dependencies["backend"]),
+        }
+        services, ready = probe_http_services(service_urls, timeout_seconds=2.0)
+        report = {
+            "status": "ready" if ready else "not_ready",
+            "profile": profile["name"],
+            "services": services,
+        }
+        print(json.dumps(report, ensure_ascii=False, separators=(",", ":")))
+        return 0 if ready else 1
     return verify_environment(ROOT_DIR, arguments.default_profile)
 
 
@@ -168,7 +200,7 @@ def main() -> int:
                 return exit_code
         print(f"ERROR: {UNKNOWN_BACKUP_ERROR_MESSAGE}", file=sys.stderr)
         return 1
-    except (EnvironmentVerificationError, RunReportError):
+    except (EnvironmentVerificationError, ProfileError, RunReportError):
         print(f"ERROR: {UNKNOWN_ENVIRONMENT_ERROR_MESSAGE}", file=sys.stderr)
         return 1
     except Exception:  # noqa: BLE001 - CLI境界で診断方針を操作種別ごとに固定する

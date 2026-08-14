@@ -11,7 +11,10 @@ from pathlib import Path
 
 import pytest
 
-from tests.dogfood_infrastructure_test_support import write_dogfood_env
+from tests.dogfood_infrastructure_test_support import (
+    command_with_root_owned_revision,
+    write_dogfood_env,
+)
 from tests.environment_entrypoint_test_support import (
     ROOT_DIR,
     copy_environment_runtime,
@@ -38,10 +41,23 @@ def _copy_runtime(tmp_path: Path) -> tuple[Path, Path, Path]:
         f"DOGFOOD_CLONE_DIR={runtime_root}",
     )
     env_path.write_text(env_source, encoding="utf-8")
+    write_executable(
+        runtime_root / "environments" / "environment_cli.py",
+        "[ \"$1\" = readiness ]\n"
+        "printf '%s\\n' '{\"status\":\"ready\",\"profile\":\"dogfood\",\"services\":{}}'\n",
+    )
+    venv_python = runtime_root / "backend" / ".venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    write_executable(
+        venv_python,
+        'exec "$@"\n',
+    )
     generated_dir = tmp_path / "generated"
     generated_dir.mkdir()
     render_result = subprocess.run(
-        [
+        command_with_root_owned_revision(
+            tmp_path / "config" / "dogfood.revision",
+            [
             "bash",
             "-c",
             'source "$1"; dogfood_load_environment; "$2" "$3" "$4"',
@@ -50,7 +66,8 @@ def _copy_runtime(tmp_path: Path) -> tuple[Path, Path, Path]:
             str(runtime_root / "scripts" / "dogfood" / "render-assets.sh"),
             str(runtime_root / "infra" / "dogfood" / "templates"),
             str(generated_dir),
-        ],
+            ],
+        ),
         env={**os.environ, "DOGFOOD_ENV_FILE": str(env_path)},
         capture_output=True,
         text=True,
@@ -84,6 +101,7 @@ def _install_recording_commands(tmp_path: Path) -> tuple[Path, Path]:
             bin_dir / name,
             f'printf "%s\\t%s\\n" "{name}" "$*" >> "{command_log}"\n',
         )
+    write_executable(bin_dir / "git", "printf '%040d\\n' 0\n")
     write_executable(
         bin_dir / "docker",
         f'printf "docker\\t%s\\t%s\\t%s\\n" "$*" '
@@ -116,14 +134,20 @@ def test_should_propagate_profile_endpoints_to_compose_and_status(
     }
 
     status_result = subprocess.run(
-        [str(runtime_root / "scripts" / "dogfood" / "status.sh")],
+        command_with_root_owned_revision(
+            tmp_path / "config" / "dogfood.revision",
+            [str(runtime_root / "scripts" / "dogfood" / "status.sh")],
+        ),
         env=execution_environment,
         capture_output=True,
         text=True,
         timeout=10,
     )
     voicevox_result = subprocess.run(
-        [str(_voicevox_runner(runtime_root, generated_dir))],
+        command_with_root_owned_revision(
+            tmp_path / "config" / "dogfood.revision",
+            [str(_voicevox_runner(runtime_root, generated_dir))],
+        ),
         env=execution_environment,
         capture_output=True,
         text=True,
