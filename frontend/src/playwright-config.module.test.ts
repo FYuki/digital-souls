@@ -99,7 +99,7 @@ describe('suite-specific Playwright configuration', () => {
     ]))
   })
 
-  test.each(suites)('$suite keeps the environment orchestrator attached without reusing a server', async (suite) => {
+  test.each(suites)('$suite は環境オーケストレーターを接続したままサーバーを再利用しない', async (suite) => {
     const config = await loadConfig(suite.config)
     const profile = JSON.parse(await readFile(
       join(process.cwd(), '..', 'environments', 'profiles', `${suite.profile}.json`),
