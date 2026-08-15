@@ -19,13 +19,15 @@ fi
 render_template() {
   local source_path=$1
   local output_path=$2
+  local escaped_data_dir
+  escaped_data_dir=$(printf '%s' "$DS_DATA_DIR" | sed 's/[\\&|]/\\&/g')
   sed \
     -e "s|@DOGFOOD_SERVICE_USER@|$DOGFOOD_SERVICE_USER|g" \
     -e "s|@DOGFOOD_SERVICE_GROUP@|$DOGFOOD_SERVICE_GROUP|g" \
     -e "s|@DOGFOOD_CONFIG_DIR@|$DOGFOOD_CONFIG_DIR|g" \
     -e "s|@DOGFOOD_CLONE_DIR@|$DOGFOOD_CLONE_DIR|g" \
     -e "s|@DOGFOOD_WSL_DISTRO@|$DOGFOOD_WSL_DISTRO|g" \
-    -e "s|@DS_DATA_DIR@|$DS_DATA_DIR|g" \
+    -e "s|@DS_DATA_DIR@|$escaped_data_dir|g" \
     "$source_path" > "$output_path"
 }
 

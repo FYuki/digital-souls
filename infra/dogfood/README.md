@@ -227,7 +227,7 @@ sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/stop-services.sh
 
 `digital-souls-inference.target`がOllamaとVOICEVOXをまとめる。Ollama unitは失敗時再起動を担い、VOICEVOX unitはrootでCompose stackを起動・停止するoneshotの入口に限定する。実行中のVOICEVOX containerはComposeの`unless-stopped`方針で異常終了後に再起動する。停止timeoutは両unitとも有限であり、OllamaはSIGTERM、VOICEVOXは`docker compose down`で正常停止する。`restart-services.sh`またはVOICEVOX unitの手動restartでは同じrunnerを通じてdown／upする。Composeが所有するのはVOICEVOXだけで、Backend／Frontendはcontainer化しない。
 
-`digital-souls-dogfood.target`は推論targetと`digital-souls-application.service`を`Requires`／`After`で束ねる。application unitはservice userで`environments/up.sh`と`environments/down.sh`へ委譲するoneshot unitである。通常起動は上記`start-services.sh`またはWindows launcherを使う。どちらも`systemctl start digital-souls-dogfood.target`へ委譲するため、PC／WSL再起動後も事前停止なしで同じ入口を実行でき、起動済みならno-opとなる。
+`digital-souls-dogfood.target`は推論targetと`digital-souls-application.service`を`Requires`／`After`で束ねる。application unitは推論targetの起動後、service userで`environments/up.sh`と`environments/down.sh`へ委譲するoneshot unitである。application processへはProfile、environment ID、data rootとreport pathだけを明示し、`DOGFOOD_BACKUP_AUTHENTICATION_KEY`を含む`dogfood.env`全体は環境に渡さない。通常起動は上記`start-services.sh`またはWindows launcherを使う。どちらも`systemctl start digital-souls-dogfood.target`へ委譲するため、PC／WSL再起動後も事前停止なしで同じ入口を実行でき、起動済みならno-opとなる。Windows launcherは`wsl.exe`の非ゼロ終了を失敗として通知する。
 
 `status.sh`はidentity、runtime root、unit、orchestratorのprocess identity、listen port、CPU、memory、GPU、VOICEVOX containerのmetadataだけを表示する。会話、DB、永続data、journal本文は読まない。application unitがactiveなのにrun reportのpid／pgid／sessionId／startTimeと実processが一致しない場合は異常終了し、`restart-services.sh`を案内する。
 

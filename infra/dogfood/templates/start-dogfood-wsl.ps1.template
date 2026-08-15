@@ -1,3 +1,6 @@
 $ErrorActionPreference = "Stop"
 $DogfoodDistribution = "@DOGFOOD_WSL_DISTRO@"
 wsl.exe --distribution $DogfoodDistribution --user root --exec systemctl start digital-souls-dogfood.target
+if ($LASTEXITCODE -ne 0) {
+    throw "digital-souls-dogfood.target の起動に失敗しました (終了コード: $LASTEXITCODE)"
+}

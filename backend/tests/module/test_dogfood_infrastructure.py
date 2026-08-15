@@ -3,6 +3,7 @@ from __future__ import annotations
 import configparser
 import os
 import re
+import signal
 import shutil
 import subprocess
 from pathlib import Path
@@ -73,6 +74,37 @@ def _assert_finite_stop_timeout(service: configparser.SectionProxy) -> None:
     timeout = service["TimeoutStopSec"]
 
     assert re.fullmatch(r"[1-9]\d*(?:ms|s|min)?", timeout)
+
+
+def _run_compose_command(
+    command: list[str], environment: dict[str, str], timeout: float
+) -> subprocess.CompletedProcess[str]:
+    process = subprocess.Popen(
+        command,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.communicate()
+        raise
+    assert process.returncode is not None
+    return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
 
 
 def test_should_define_separate_dogfood_identity_clone_and_runtime_paths() -> None:
@@ -316,10 +348,11 @@ def test_should_mount_only_voicevox_local_share_as_tmpfs() -> None:
     service = compose["services"]["voicevox"]
     tmpfs = service.get("tmpfs")
 
-    assert tmpfs == ["/home/user/.local/share:uid=1000,gid=1000"]
+    assert tmpfs == ["/home/user/.local/share:uid=1000,gid=1000,size=64m"]
     assert "user" not in service
     assert tmpfs is not None
     assert all(entry.split(":", maxsplit=1)[0] != "/home/user" for entry in tmpfs)
+    assert "UID/GID 1000" in compose_path.read_text(encoding="utf-8")
 
 
 def test_should_keep_voicevox_cpu_runtime_and_existing_user_package_available(
@@ -351,26 +384,47 @@ def test_should_keep_voicevox_cpu_runtime_and_existing_user_package_available(
         "VOICEVOX_HOST": "127.0.0.1",
         "VOICEVOX_PORT": "0",
     }
+    image = subprocess.run(
+        ["docker", "image", "inspect", environment["DOGFOOD_VOICEVOX_IMAGE"]],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if image.returncode != 0:
+        pytest.skip("VOICEVOX imageが未取得のためruntime検証を省略します")
 
     try:
-        started = subprocess.run(
+        started = _run_compose_command(
             [*compose_command, "up", "--detach"],
-            env=environment,
-            capture_output=True,
-            text=True,
+            environment,
             timeout=120,
         )
         assert started.returncode == 0, (started.stdout, started.stderr)
-        running = subprocess.run(
+        running = _run_compose_command(
             [*compose_command, "ps", "--status", "running", "--services"],
-            env=environment,
-            capture_output=True,
-            text=True,
+            environment,
             timeout=10,
         )
         assert running.returncode == 0, (running.stdout, running.stderr)
         assert running.stdout.splitlines() == ["voicevox"]
-        package = subprocess.run(
+        published = _run_compose_command(
+            [*compose_command, "port", "voicevox", "50021"],
+            environment,
+            timeout=10,
+        )
+        assert published.returncode == 0, (published.stdout, published.stderr)
+        published_port = published.stdout.strip().rsplit(":", maxsplit=1)[-1]
+        assert published_port.isdigit(), published.stdout
+        from http_readiness import wait_for_http
+
+        readiness = wait_for_http(
+            f"http://127.0.0.1:{published_port}/version",
+            max_attempts=120,
+            interval_seconds=0.5,
+            request_timeout_seconds=1.0,
+        )
+        assert readiness.result == "ready", readiness
+        package = _run_compose_command(
             [
                 *compose_command,
                 "exec",
@@ -382,27 +436,21 @@ def test_should_keep_voicevox_cpu_runtime_and_existing_user_package_available(
                 "-c",
                 "import pyopenjtalk; print(pyopenjtalk.__file__)",
             ],
-            env=environment,
-            capture_output=True,
-            text=True,
+            environment,
             timeout=30,
         )
         assert package.returncode == 0, (package.stdout, package.stderr)
         assert "/home/user/.local/lib/" in package.stdout
-        logs = subprocess.run(
+        logs = _run_compose_command(
             [*compose_command, "logs", "--no-color", "voicevox"],
-            env=environment,
-            capture_output=True,
-            text=True,
+            environment,
             timeout=10,
         )
         assert logs.returncode == 0, (logs.stdout, logs.stderr)
         assert "PermissionError" not in f"{logs.stdout}\n{logs.stderr}"
-        still_running = subprocess.run(
+        still_running = _run_compose_command(
             [*compose_command, "ps", "--status", "running", "--services"],
-            env=environment,
-            capture_output=True,
-            text=True,
+            environment,
             timeout=10,
         )
         assert still_running.returncode == 0, (
@@ -411,13 +459,10 @@ def test_should_keep_voicevox_cpu_runtime_and_existing_user_package_available(
         )
         assert still_running.stdout.splitlines() == ["voicevox"]
     finally:
-        subprocess.run(
+        _run_compose_command(
             [*compose_command, "down", "--volumes", "--remove-orphans"],
-            env=environment,
-            capture_output=True,
-            text=True,
+            environment,
             timeout=30,
-            check=False,
         )
 
 
@@ -426,6 +471,39 @@ def test_should_delegate_voicevox_container_recovery_to_compose() -> None:
     content = compose_path.read_text(encoding="utf-8")
 
     assert re.search(r'(?m)^    restart:\s+["\']?unless-stopped["\']?\s*$', content)
+
+
+def test_should_preserve_data_directory_when_rendering_sed_metacharacters(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "generated"
+    output_dir.mkdir()
+    data_dir = r"/srv/dog&food|segment\leaf"
+    result = subprocess.run(
+        [
+            str(DOGFOOD_SCRIPTS_DIR / "render-assets.sh"),
+            str(DOGFOOD_INFRA_DIR / "templates"),
+            str(output_dir),
+        ],
+        env={
+            **os.environ,
+            "DOGFOOD_SERVICE_USER": "digital-souls",
+            "DOGFOOD_SERVICE_GROUP": "digital-souls",
+            "DOGFOOD_CONFIG_DIR": "/etc/digital-souls",
+            "DOGFOOD_CLONE_DIR": "/opt/digital-souls/current",
+            "DOGFOOD_WSL_DISTRO": "Ubuntu-dogfood",
+            "DS_DATA_DIR": data_dir,
+        },
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    application = (output_dir / "digital-souls-application.service").read_text(
+        encoding="utf-8"
+    )
+    assert f'DS_DATA_DIR={data_dir}"' in application
 
 
 def test_should_generate_a_windows_entrypoint_from_the_shared_environment(
@@ -438,6 +516,9 @@ def test_should_generate_a_windows_entrypoint_from_the_shared_environment(
     assert values["DOGFOOD_WSL_DISTRO"] in source
     assert re.search(r"wsl\.exe\s+.*--user\s+root(?:\s|$)", source)
     assert "systemctl start digital-souls-dogfood.target" in source
+    assert "$LASTEXITCODE -ne 0" in source
+    assert source.index("wsl.exe") < source.index("$LASTEXITCODE -ne 0")
+    assert "throw" in source
     assert "start-services.sh" not in source
     assert not re.search(r"\bsystemctl\s+(?:stop|restart|is-active|show)\b", source)
 
@@ -457,7 +538,13 @@ def test_should_delegate_application_lifecycle_to_one_oneshot_systemd_unit(
     assert service["Group"] == values["DOGFOOD_SERVICE_GROUP"]
     assert service["ExecStart"] == f"{values['DOGFOOD_CLONE_DIR']}/environments/up.sh"
     assert service["ExecStop"] == f"{values['DOGFOOD_CLONE_DIR']}/environments/down.sh"
+    assert "EnvironmentFile" not in service
+    assert "DS_ENVIRONMENT_ID=dogfood" in service["Environment"]
     assert f"DS_DATA_DIR={values['DS_DATA_DIR']}" in service["Environment"]
+    assert "DOGFOOD_BACKUP_AUTHENTICATION_KEY" not in unit_path.read_text(
+        encoding="utf-8"
+    )
+    assert "digital-souls-inference.target" in unit["Unit"]["After"].split()
     assert "Restart" not in service
 
 
