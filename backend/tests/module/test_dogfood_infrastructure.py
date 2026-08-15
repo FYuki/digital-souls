@@ -606,6 +606,64 @@ def test_should_document_executable_pull_command_for_backend_default_model() -> 
     )
 
 
+def test_should_document_executable_commands_when_running_restore_drill() -> None:
+    source = README_PATH.read_text(encoding="utf-8")
+    drill_section = source.split("### Issue #56 restore drill", maxsplit=1)[1].split(
+        "\n## ", maxsplit=1
+    )[0]
+    command_blocks = re.findall(r"```bash\n(.*?)```", drill_section, flags=re.DOTALL)
+    commands: list[str] = []
+    for block in command_blocks:
+        continued_lines: list[str] = []
+        for line in block.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            continued_lines.append(stripped.rstrip("\\").rstrip())
+            if not stripped.endswith("\\"):
+                commands.append(" ".join(continued_lines))
+                continued_lines = []
+        assert continued_lines == []
+
+    install_command = next(command for command in commands if "install -d" in command)
+    init_command = next(
+        command for command in commands if "environment_cli.py init-data-root" in command
+    )
+    restore_command = next(
+        command
+        for command in commands
+        if "environment_cli.py restore " in command
+    )
+    verify_command = next(
+        command
+        for command in commands
+        if "environment_cli.py restore-verify " in command
+    )
+
+    assert commands.index(install_command) < commands.index(init_command)
+    assert commands.index(init_command) < commands.index(restore_command)
+    assert commands.index(restore_command) < commands.index(verify_command)
+    assert install_command == (
+        "sudo install -d -m 0750 -o digital-souls -g digital-souls "
+        "/var/lib/digital-souls/restore-drill"
+    )
+    assert "sudo -u digital-souls env" in init_command
+    assert "DS_ENVIRONMENT_ID=dogfood" in init_command
+    assert "DS_DATA_DIR=/var/lib/digital-souls/restore-drill" in init_command
+    assert "/opt/digital-souls/current/backend/.venv/bin/python" in init_command
+    assert "--environment dogfood" in init_command
+    assert "--repository-root /opt/digital-souls/current" in init_command
+    for command in (restore_command, verify_command):
+        assert "DS_ENVIRONMENT_ID=dogfood" in command
+        assert "DS_DATA_DIR=/var/lib/digital-souls/restore-drill" in command
+        assert "--environment dogfood" in command
+        assert "--repository-root /opt/digital-souls/current" in command
+    executable_commands = " ".join(commands)
+    assert "python -c" not in executable_commands
+    assert "sys.path" not in executable_commands
+    assert "initialize_runtime_data_root" not in executable_commands
+
+
 def test_should_require_inference_and_application_from_dogfood_target() -> None:
     target_path = DOGFOOD_INFRA_DIR / "systemd" / "digital-souls-dogfood.target"
     assert target_path.is_file()

@@ -11,7 +11,28 @@ from app.backup_restore import (
     verify_backup,
     verify_restored_backup,
 )
+from app.runtime_data_root import initialize_runtime_data_root
 from app.runtime_paths import DATA_DIR_ENV, ENVIRONMENT_ID_ENV, resolve_runtime_paths
+
+
+def initialize_environment_data_root(
+    environment_id: str, repository_root_value: str
+) -> int:
+    repository_root = Path(repository_root_value)
+    paths = resolve_runtime_paths(
+        _runtime_environment(environment_id), repository_root
+    )
+    initialize_runtime_data_root(paths, repository_root)
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "environmentId": paths.environment_id,
+                "dataRoot": str(paths.data_root),
+            }
+        )
+    )
+    return 0
 
 
 def backup_environment(
