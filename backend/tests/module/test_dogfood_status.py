@@ -47,6 +47,7 @@ def _run_status(
     wsl_distribution: str = "Ubuntu-dogfood",
     gpu_exit_code: int = 0,
     readiness_exit_code: int = 0,
+    orchestrator_state: str = "alive",
 ) -> tuple[subprocess.CompletedProcess[str], list[tuple[str, str]], Path, Path, Path]:
     runtime_dir = tmp_path / "status-runtime"
     runtime_dir.mkdir()
@@ -90,6 +91,7 @@ def _run_status(
     write_executable(
         clone_cli,
         f'printf "readiness\\t%s\\n" "$*" >> "{log_path}"\n'
+        f"printf '%s\\n' 'orchestrator state={orchestrator_state}'\n"
         "printf '%s\\n' "
         '\'{"status":"ready","profile":"dogfood","services":{}}\'\n'
         f"exit {readiness_exit_code}\n",
@@ -131,6 +133,19 @@ def _run_status(
         else []
     )
     return result, calls, data_dir, resolver_log, log_path
+
+
+def test_should_report_active_unit_with_dead_orchestrator_as_inconsistent(
+    tmp_path: Path,
+) -> None:
+    result, calls, _, _, _ = _run_status(tmp_path, orchestrator_state="dead")
+
+    assert result.returncode != 0
+    assert any(
+        name == "systemctl" and "digital-souls-application.service" in arguments
+        for name, arguments in calls
+    )
+    assert "restart-services.sh" in result.stderr
 
 
 def test_should_report_only_runtime_metadata_with_read_only_commands(

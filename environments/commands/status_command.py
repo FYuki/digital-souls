@@ -12,6 +12,7 @@ from app.runtime_paths import resolve_runtime_paths
 from environment_constants import DEPENDENCY_NAMES, RUN_REPORT_ENV
 from environment_options import resolve_existing_run_report_path
 from http_readiness import probe_http
+from process_control import ProcessIdentity, process_identity_matches
 from run_report_store import RunReportStore
 
 
@@ -49,15 +50,32 @@ def status_environment(root_dir: Path, run_report_argument: str | None) -> int:
     )
     if not configured:
         raise ValueError("status requires an explicit run report path")
-    runtime_paths = resolve_runtime_paths(os.environ, root_dir)
-    validate_existing_runtime_data_root(runtime_paths, root_dir)
-    report_path = resolve_existing_run_report_path(configured, runtime_paths)
-    report = RunReportStore(report_path).load()
-    validate_runtime_projection(report.get("runtime"), runtime_paths)
+    report = load_environment_report(root_dir, configured)
     live_states = _observe_http_services(report)
     for line in render_environment_status(report, live_states):
         print(line)
+    print(render_orchestrator_status(report))
     return 0
+
+
+def load_environment_report(
+    root_dir: Path, configured_path: str
+) -> Mapping[str, object]:
+    runtime_paths = resolve_runtime_paths(os.environ, root_dir)
+    validate_existing_runtime_data_root(runtime_paths, root_dir)
+    report_path = resolve_existing_run_report_path(configured_path, runtime_paths)
+    report = RunReportStore(report_path).load()
+    validate_runtime_projection(report.get("runtime"), runtime_paths)
+    return report
+
+
+def render_orchestrator_status(report: Mapping[str, object]) -> str:
+    identity_record = _require_mapping(
+        report.get("orchestratorIdentity"), "orchestratorIdentity"
+    )
+    identity = ProcessIdentity.from_report(identity_record)
+    state = "alive" if process_identity_matches(identity) else "dead"
+    return f"orchestrator state={state}"
 
 
 def _observe_http_services(report: Mapping[str, object]) -> dict[str, str]:

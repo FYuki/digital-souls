@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import traceback
 from collections.abc import Mapping
@@ -25,11 +26,17 @@ from app.backup_restore import (
 )
 from app.backup_restore.models import BackupError
 from commands.down_command import down_environment
-from commands.status_command import status_environment
+from commands.start_command import start_environment
+from commands.status_command import (
+    load_environment_report,
+    render_orchestrator_status,
+    status_environment,
+)
 from commands.test_result_command import record_playwright_result
 from commands.up_command import up_environment
 from commands.verify_command import verify_environment
 from commands.voicevox_command import start_voicevox
+from environment_constants import RUN_REPORT_ENV
 from environment_verification import EnvironmentVerificationError
 from http_readiness import probe_http_services
 from profile_resolution import resolve_dependencies
@@ -106,6 +113,10 @@ def _parser() -> argparse.ArgumentParser:
     up.add_argument("--default-profile")
     up.add_argument("--run-report")
     up.add_argument("--profile-report")
+    start = commands.add_parser("start")
+    start.add_argument("--default-profile")
+    start.add_argument("--run-report")
+    start.add_argument("--profile-report")
     down = commands.add_parser("down")
     down.add_argument("--run-report")
     status = commands.add_parser("status")
@@ -161,6 +172,8 @@ def _dispatch(arguments: argparse.Namespace) -> int:
         )
     if arguments.command == "up":
         return up_environment(ROOT_DIR, arguments)
+    if arguments.command == "start":
+        return start_environment(ROOT_DIR, arguments)
     if arguments.command == "down":
         return down_environment(ROOT_DIR, arguments.run_report)
     if arguments.command == "status":
@@ -172,6 +185,10 @@ def _dispatch(arguments: argparse.Namespace) -> int:
             arguments.run_report, arguments.status, arguments.message
         )
     if arguments.command == "readiness":
+        configured_report = os.environ.get(RUN_REPORT_ENV)
+        if configured_report is not None:
+            report = load_environment_report(ROOT_DIR, configured_report)
+            print(render_orchestrator_status(report))
         profile = load_profile(arguments.profile)
         dependencies = resolve_dependencies(profile["dependencies"])
         service_urls = {

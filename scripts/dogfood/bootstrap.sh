@@ -32,6 +32,24 @@ if ! docker compose version >/dev/null 2>&1; then
   echo "ERROR: bootstrap前にDocker Compose pluginをインストールしてください" >&2
   exit 2
 fi
+if ! command -v node >/dev/null 2>&1; then
+  echo "ERROR: bootstrap前にnode（Node.js 22）が必要です" >&2
+  exit 2
+fi
+if ! command -v npm >/dev/null 2>&1; then
+  echo "ERROR: bootstrap前にnpmが必要です" >&2
+  exit 2
+fi
+if ! node_version=$(node --version); then
+  echo "ERROR: Node.js versionを検出できません。Node.js major version 22が必要です" >&2
+  exit 2
+fi
+node_major=${node_version#v}
+node_major=${node_major%%.*}
+if [ "$node_major" != 22 ]; then
+  echo "ERROR: Node.js major version 22が必要です（検出: $node_version）" >&2
+  exit 2
+fi
 getent group "$DOGFOOD_SERVICE_GROUP" >/dev/null || groupadd --system "$DOGFOOD_SERVICE_GROUP"
 if current_passwd=$(getent passwd "$DOGFOOD_SERVICE_USER"); then
   IFS=: read -r _ _ _ _ _ current_home current_shell \
@@ -57,6 +75,12 @@ fi
 initial_clone=false
 if [ -d "$DOGFOOD_CLONE_DIR/.git" ]; then
   dogfood_verify_origin
+  dogfood_fetch_and_resolve_commit "$DOGFOOD_REPOSITORY_REVISION"
+  dogfood_require_detached_clean_checkout_for_convergence \
+    "$DOGFOOD_REPOSITORY_REVISION"
+  git -c core.hooksPath=/dev/null -C "$DOGFOOD_CLONE_DIR" checkout --detach \
+    "$DOGFOOD_REPOSITORY_REVISION"
+  dogfood_verify_detached_clean_revision "$DOGFOOD_REPOSITORY_REVISION"
 else
   initial_clone=true
   mkdir -p "$DOGFOOD_CLONE_DIR"
@@ -88,15 +112,19 @@ install -m 0644 -o root -g "$DOGFOOD_SERVICE_GROUP" \
 install -m 0644 \
   "$DOGFOOD_CLONE_DIR/infra/dogfood/systemd/digital-souls-inference.target" \
   /etc/systemd/system/
+install -m 0644 \
+  "$DOGFOOD_CLONE_DIR/infra/dogfood/systemd/digital-souls-dogfood.target" \
+  /etc/systemd/system/
 install -m 0644 "$generated_assets"/*.service /etc/systemd/system/
 dogfood_prepare_backend
-npm --prefix "$DOGFOOD_CLONE_DIR/frontend" install
+npm --prefix "$DOGFOOD_CLONE_DIR/frontend" ci
+dogfood_require_clean_checkout
 npm --prefix "$DOGFOOD_CLONE_DIR/frontend" run build
 chown -R "root:$DOGFOOD_SERVICE_GROUP" "$DOGFOOD_CLONE_DIR"
 chmod -R g-w,o-rwx "$DOGFOOD_CLONE_DIR"
 systemctl daemon-reload
-systemctl enable digital-souls-inference.target
+systemctl enable digital-souls-dogfood.target
 if [ "$initial_clone" = true ]; then
   echo "初期cloneをrevisionへ固定しました。"
 fi
-echo "bootstrapが完了しました。サービス起動はstart-services.shで明示的に実行してください。"
+echo "bootstrapが完了しました。digital-souls-dogfood.targetを起動し、Backendによるconversation-history.db作成後にdeployしてください。"

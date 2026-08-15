@@ -9,6 +9,8 @@ from typing import Literal
 import pytest
 
 from tests.dogfood_infrastructure_test_support import (
+    TEST_REVISION,
+    TEST_SECRET_SENTINEL,
     TEST_SERVICE_GROUP,
     command_with_root_owned_revision,
     install_bootstrap_command_fakes,
@@ -88,7 +90,7 @@ def test_should_reach_systemctl_when_dogfood_identity_matches(
 
     assert result.returncode == 0, result.stderr
     assert call_log.read_text(encoding="utf-8") == (
-        f"{action} digital-souls-inference.target\n"
+        f"{action} digital-souls-dogfood.target\n"
     )
 
 
@@ -132,6 +134,12 @@ def _run_bootstrap(
     rerun: bool = False,
     initial_user_state: tuple[str, str, str] | None = None,
     data_root_residuals: dict[str, str] | None = None,
+    node_version: str = "v22.0.0",
+    node_version_exit_code: int = 0,
+    missing_command: Literal["node", "npm"] | None = None,
+    current_head: str | None = None,
+    npm_dirty: bool = False,
+    persistent_sentinels: dict[str, str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], tuple[str, ...]]:
     env_path, data_dir = write_dogfood_env(tmp_path)
     if data_root_residuals is not None:
@@ -146,6 +154,20 @@ def _run_bootstrap(
         "DS_ENVIRONMENT_ID=dogfood",
         f"DS_ENVIRONMENT_ID={environment_id}",
     )
+    if persistent_sentinels is not None:
+        source += (
+            f"\nDOGFOOD_SERVICE_HOME_DIR={tmp_path / 'service-home'}"
+            f"\nDOGFOOD_OLLAMA_MODELS_DIR={tmp_path / 'ollama-models'}\n"
+        )
+        sentinel_roots = {
+            "data": data_dir,
+            "backup": tmp_path / "backups",
+            "model": tmp_path / "ollama-models",
+        }
+        for asset, content in persistent_sentinels.items():
+            sentinel = sentinel_roots[asset] / f"{asset}.sentinel"
+            sentinel.parent.mkdir(parents=True, exist_ok=True)
+            sentinel.write_text(content, encoding="utf-8")
     if state_path is not None:
         source = source.replace(
             f"DOGFOOD_STATE_DIR={tmp_path / 'state'}",
@@ -159,6 +181,8 @@ def _run_bootstrap(
     else:
         initial_clone_assets = prepare_initial_bootstrap_clone_assets(tmp_path)
     fake_bin, call_log = install_bootstrap_command_fakes(tmp_path)
+    if missing_command is not None:
+        (fake_bin / missing_command).unlink()
     user_state_path = tmp_path / "service-user.state"
     user_state = initial_user_state or (
         "/var/lib/digital-souls/home",
@@ -173,8 +197,20 @@ def _run_bootstrap(
         "BOOTSTRAP_CALL_LOG": str(call_log),
         "BOOTSTRAP_GROUP_CREATED": str(tmp_path / "service-group.created"),
         "BOOTSTRAP_USER_STATE": str(user_state_path),
-        "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+        "BOOTSTRAP_NODE_VERSION": node_version,
+        "BOOTSTRAP_NODE_VERSION_EXIT_CODE": str(node_version_exit_code),
+        "BOOTSTRAP_CHECKED_OUT_MARKER": str(tmp_path / "checkout.complete"),
+        "BOOTSTRAP_NPM_DIRTY_MARKER": str(tmp_path / "npm.dirty"),
+        "PATH": (
+            f"{fake_bin}{os.pathsep}/usr/bin"
+            if missing_command is not None
+            else f"{fake_bin}{os.pathsep}{os.environ['PATH']}"
+        ),
     }
+    if current_head is not None:
+        environment["BOOTSTRAP_CURRENT_HEAD"] = current_head
+    if npm_dirty:
+        environment["BOOTSTRAP_NPM_DIRTY"] = "1"
     if failure is not None:
         environment["BOOTSTRAP_FAILURE"] = failure
     if docker_member:
@@ -290,7 +326,7 @@ def test_should_place_assets_only_after_bootstrap_trust_checks_succeed(
     assert "gpasswd\t--delete digital-souls docker" in calls
     assert any(call.startswith("install\t") for call in calls)
     assert "systemctl\tdaemon-reload" in calls
-    assert "systemctl\tenable digital-souls-inference.target" in calls
+    assert "systemctl\tenable digital-souls-dogfood.target" in calls
 
 
 def test_should_prepare_backend_and_frontend_without_starting_services(
@@ -307,9 +343,7 @@ def test_should_prepare_backend_and_frontend_without_starting_services(
 
     assert result.returncode == 0, result.stderr
     assert calls.count("backend-setup") == 1
-    assert any(
-        call.startswith("npm\t") and " install " in f" {call} " for call in calls
-    )
+    assert any(call.startswith("npm\t") and " ci " in f" {call} " for call in calls)
     assert any(call.startswith("npm\t") and " run build" in call for call in calls)
     systemctl_actions = tuple(
         call.partition("\t")[2] for call in calls if call.startswith("systemctl\t")
@@ -383,6 +417,62 @@ def test_should_reject_bootstrap_before_changes_when_compose_plugin_is_missing(
 
     assert result.returncode == 2
     assert "docker\tcompose version" in calls
+    assert _post_gate_side_effect_calls(calls, ()) == ()
+
+
+def test_should_reject_node_major_other_than_22_before_changes(tmp_path: Path) -> None:
+    result, calls = _run_bootstrap(
+        tmp_path,
+        None,
+        False,
+        "existing",
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+        node_version="v20.19.0",
+    )
+
+    assert result.returncode == 2
+    assert "v20.19.0" in result.stderr
+    assert "22" in result.stderr
+    assert _post_gate_side_effect_calls(calls, ()) == ()
+
+
+def test_should_reject_failed_node_version_detection_before_changes(
+    tmp_path: Path,
+) -> None:
+    result, calls = _run_bootstrap(
+        tmp_path,
+        None,
+        False,
+        "existing",
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+        node_version_exit_code=17,
+    )
+
+    assert result.returncode == 2
+    assert "Node.js" in result.stderr
+    assert "22" in result.stderr
+    assert _post_gate_side_effect_calls(calls, ()) == ()
+
+
+@pytest.mark.parametrize("missing_command", ("node", "npm"))
+def test_should_reject_missing_node_or_npm_before_changes(
+    tmp_path: Path,
+    missing_command: Literal["node", "npm"],
+) -> None:
+    result, calls = _run_bootstrap(
+        tmp_path,
+        None,
+        False,
+        "existing",
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+        missing_command=missing_command,
+    )
+
+    assert result.returncode == 2
+    assert missing_command in result.stderr
     assert _post_gate_side_effect_calls(calls, ()) == ()
 
 
@@ -462,6 +552,124 @@ def test_should_stop_before_fetch_when_bootstrap_origin_does_not_match(
     assert _git_fetch_calls(calls) == ()
 
 
+def test_should_converge_clean_detached_existing_clone_to_requested_revision(
+    tmp_path: Path,
+) -> None:
+    old_revision = "1" * 40
+    sentinels = {
+        "data": "conversation data remains unchanged\n",
+        "backup": "backup remains unchanged\n",
+        "model": "ollama model remains unchanged\n",
+    }
+    result, calls = _run_bootstrap(
+        tmp_path,
+        None,
+        False,
+        "existing",
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+        current_head=old_revision,
+        persistent_sentinels=sentinels,
+    )
+
+    assert result.returncode == 0, result.stderr
+    git_calls = tuple(call for call in calls if call.startswith("git\t"))
+    fetch_calls = tuple(call for call in git_calls if " fetch origin " in call)
+    checkout_calls = tuple(call for call in git_calls if "checkout --detach" in call)
+    assert fetch_calls
+    assert checkout_calls
+    fetch_index = git_calls.index(fetch_calls[0])
+    checkout_index = git_calls.index(checkout_calls[0])
+    assert fetch_index < checkout_index
+    assert any("rev-parse HEAD" in call for call in git_calls[:checkout_index])
+    assert any("rev-parse HEAD" in call for call in git_calls[checkout_index + 1 :])
+    sentinel_directories = {
+        "data": "data",
+        "backup": "backups",
+        "model": "ollama-models",
+    }
+    for asset, content in sentinels.items():
+        root = tmp_path / sentinel_directories[asset]
+        assert (root / f"{asset}.sentinel").read_text(encoding="utf-8") == content
+    assert TEST_SECRET_SENTINEL not in result.stdout
+    assert TEST_SECRET_SENTINEL not in result.stderr
+    assert all(TEST_SECRET_SENTINEL not in call for call in calls)
+
+
+def test_should_report_dirty_existing_clone_without_checkout_or_destructive_git(
+    tmp_path: Path,
+) -> None:
+    result, calls = _run_bootstrap(
+        tmp_path,
+        "dirty",
+        False,
+        "existing",
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+        current_head="1" * 40,
+    )
+
+    assert result.returncode != 0
+    assert "M modified" in result.stderr or "M modified" in result.stdout
+    git_arguments = tuple(call.partition("\t")[2] for call in calls if call.startswith("git\t"))
+    assert not any("checkout" in arguments for arguments in git_arguments)
+    assert not any(
+        forbidden in arguments
+        for arguments in git_arguments
+        for forbidden in ("reset --hard", "clean -fdx")
+    )
+
+
+def test_should_report_branched_existing_clone_without_checkout_or_destructive_git(
+    tmp_path: Path,
+) -> None:
+    current_head = "1" * 40
+    result, calls = _run_bootstrap(
+        tmp_path,
+        "branch",
+        False,
+        "existing",
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+        current_head=current_head,
+    )
+
+    assert result.returncode != 0
+    diagnostics = f"{result.stdout}\n{result.stderr}"
+    assert current_head in diagnostics
+    assert TEST_REVISION in diagnostics
+    git_arguments = tuple(
+        call.partition("\t")[2] for call in calls if call.startswith("git\t")
+    )
+    assert not any("checkout" in arguments for arguments in git_arguments)
+    assert not any(
+        forbidden in arguments
+        for arguments in git_arguments
+        for forbidden in ("reset --hard", "clean -fdx")
+    )
+
+
+def test_should_stop_when_npm_ci_leaves_checkout_dirty(tmp_path: Path) -> None:
+    result, calls = _run_bootstrap(
+        tmp_path,
+        None,
+        False,
+        "existing",
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+        npm_dirty=True,
+    )
+
+    assert result.returncode != 0
+    assert any(call.startswith("npm\t") and " ci " in f" {call} " for call in calls)
+    assert "frontend/package-lock.json" in result.stderr or "frontend/package-lock.json" in result.stdout
+    assert not any(
+        forbidden in call
+        for call in calls
+        for forbidden in ("reset --hard", "clean -fdx")
+    )
+
+
 def test_secret_env_01_removes_temporary_environment_after_successful_bootstrap(
     tmp_path: Path,
 ) -> None:
@@ -515,7 +723,7 @@ def test_should_place_assets_after_initial_clone_trust_checks_succeed(
     assert calls.index("renderer") > dirty_check_index
     assert any(call.startswith("install\t") for call in calls)
     assert "systemctl\tdaemon-reload" in calls
-    assert "systemctl\tenable digital-souls-inference.target" in calls
+    assert "systemctl\tenable digital-souls-dogfood.target" in calls
 
 
 def test_should_create_initial_identity_before_reading_revision(

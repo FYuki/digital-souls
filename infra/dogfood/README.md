@@ -18,12 +18,22 @@ Ubuntu-dogfood内で`/etc/wsl.conf`に次を設定し、Windows側で`wsl.exe --
 systemd=true
 ```
 
-Ubuntu-dogfood内でGit、Python、Docker、Ollamaを導入する。Dockerは公式apt repositoryからCompose pluginを含めて導入する。
+Ubuntu-dogfood内でGit、Python、Node.js 22、Docker、Ollamaを導入する。Node.jsはNodeSource公式apt repositoryをkeyring方式で追加し、Dockerは公式apt repositoryからCompose pluginを含めて導入する。
 
 ```bash
 sudo apt update
-sudo apt install -y ca-certificates curl git python3 python3-venv zstd
+sudo apt install -y ca-certificates curl git gnupg python3 python3-venv zstd
 sudo install -m 0755 -d /etc/apt/keyrings
+curl --proto '=https' --tlsv1.2 --fail --location \
+  https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+  | sudo gpg --dearmor --yes --output /etc/apt/keyrings/nodesource.gpg
+printf '%s\n' \
+  'deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main' \
+  | sudo tee /etc/apt/sources.list.d/nodesource.list >/dev/null
+sudo apt update
+sudo apt install -y nodejs
+node --version
+npm --version
 sudo curl --proto '=https' --tlsv1.2 --fail --location \
   https://download.docker.com/linux/ubuntu/gpg \
   --output /etc/apt/keyrings/docker.asc
@@ -84,9 +94,11 @@ rm -f -- "$dogfood_env"
 
 bootstrap用一時envの`0600`は、内容を読み込む前の秘密保護契約である。bootstrapが正規配置する`/etc/digital-souls/dogfood.env`の`0640 root:digital-souls`とは別の契約であり、一時envへ`0640`を使用しない。bootstrapの成否を確認した後、一時envは削除する。
 
-bootstrapはdistribution名と`DS_ENVIRONMENT_ID=dogfood`、必須設定、絶対path、pathの非重複、HTTPS repository URL、revisionファイルの完全なcommit SHA、Docker group、`docker compose version`を配置前に検証する。初回だけ指定revisionを取得し、origin、commit一致、detached HEAD、変更のないworking treeを検証してcloneを作成する。再実行時は既存cloneのoriginだけを検証し、checkoutやservice restartを行わない。検証後のcloneはroot所有に収束し、application service userは変更できない。
+bootstrapはdistribution名と`DS_ENVIRONMENT_ID=dogfood`、必須設定、絶対path、pathの非重複、HTTPS repository URL、revisionファイルの完全なcommit SHA、Docker group、`docker compose version`、`node`、`npm`、Node.js major version 22を配置前に検証する。初回は指定revisionを取得し、origin、commit一致、detached HEAD、変更のないworking treeを検証してcloneを作成する。再実行時もoriginを検証してrevisionをfetch・解決し、既存cloneがcleanかつdetached HEADの場合だけ指定revisionへcheckoutする。差分またはbranchを検出した場合は内容を報告し、resetやcleanを行わず停止する。
 
-service userのhomeは`DOGFOOD_SERVICE_HOME_DIR`、Ollama modelは`DOGFOOD_OLLAMA_MODELS_DIR`へ分離する。既存userではhome、primary group、shellだけを収束し、旧homeのfileは移動・削除しない。bootstrapは現在revisionのBackend venv準備とFrontend buildまで行うが、サービスは起動しない。初回はbootstrap後に`start-services.sh`と`start-dogfood.sh`を実行し、Backend起動によって`conversation-history.db`を作成する。
+service userのhomeは`DOGFOOD_SERVICE_HOME_DIR`、Ollama modelは`DOGFOOD_OLLAMA_MODELS_DIR`へ分離する。既存userではhome、primary group、shellだけを収束し、旧homeのfileは移動・削除しない。bootstrapは現在revisionのBackend venv準備、`npm ci`、Frontend buildまで行い、依存準備後もcheckoutがcleanであることを検証するが、サービスは起動しない。初回はbootstrap後に`digital-souls-dogfood.target`を起動し、application unitから委譲されたBackend起動によって`conversation-history.db`を作成する。
+
+更新時は、運用者の作業コピーにある新revisionの`bootstrap.sh`を実行する。bootstrapがdogfood cloneを指定revisionへ収束させた後に、そのrevisionのloaderで正規envを配置する。この順序により、旧revisionの`load-environment.sh`へ新しいenvキーを先に渡す過渡状態を避ける。
 
 bootstrapは検証済み設定からsystemd unitとWindows launcherを生成する。生成されたlauncherは`DOGFOOD_CONFIG_DIR/start-dogfood-wsl.ps1`に配置されるため、Windows側から`\\wsl$`経由でコピーして使用する。unitのservice user、group、設定file、clone内runner、WSL distributionは同じ設定値から生成される。
 
@@ -215,14 +227,9 @@ sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/stop-services.sh
 
 `digital-souls-inference.target`がOllamaとVOICEVOXをまとめる。Ollama unitは失敗時再起動を担い、VOICEVOX unitはrootでCompose stackを起動・停止するoneshotの入口に限定する。実行中のVOICEVOX containerはComposeの`unless-stopped`方針で異常終了後に再起動する。停止timeoutは両unitとも有限であり、OllamaはSIGTERM、VOICEVOXは`docker compose down`で正常停止する。`restart-services.sh`またはVOICEVOX unitの手動restartでは同じrunnerを通じてdown／upする。Composeが所有するのはVOICEVOXだけで、Backend／Frontendはcontainer化しない。
 
-`status.sh`はidentity、runtime root、unit、listen port、CPU、memory、GPU、VOICEVOX containerのmetadataだけを表示する。会話、DB、永続data、journal本文は読まない。
+`digital-souls-dogfood.target`は推論targetと`digital-souls-application.service`を`Requires`／`After`で束ねる。application unitはservice userで`environments/up.sh`と`environments/down.sh`へ委譲するoneshot unitである。通常起動は上記`start-services.sh`またはWindows launcherを使う。どちらも`systemctl start digital-souls-dogfood.target`へ委譲するため、PC／WSL再起動後も事前停止なしで同じ入口を実行でき、起動済みならno-opとなる。
 
-dogfood applicationはservice userで起動する。
-
-```bash
-sudo -u digital-souls env DOGFOOD_ENV_FILE=/etc/digital-souls/dogfood.env \
-  /opt/digital-souls/current/scripts/start-dogfood.sh
-```
+`status.sh`はidentity、runtime root、unit、orchestratorのprocess identity、listen port、CPU、memory、GPU、VOICEVOX containerのmetadataだけを表示する。会話、DB、永続data、journal本文は読まない。application unitがactiveなのにrun reportのpid／pgid／sessionId／startTimeと実processが一致しない場合は異常終了し、`restart-services.sh`を案内する。
 
 ## 共通推論サービスとmodel移行
 
@@ -260,7 +267,7 @@ sudo -u digital-souls env HOME=/var/lib/digital-souls/home \
 
 distributionの作り直しではなく、次の順序で既存環境を収束させる。root操作と実Ubuntu-dogfoodへの適用は利用者が実施し、AI／TAKTは実行しない。
 
-1. `stop-services.sh`で推論targetとVOICEVOX containerを停止する。
+1. `stop-services.sh`でapplicationと推論層を含むdogfood target全体を停止する。
 
    ```bash
    sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/stop-services.sh
@@ -274,12 +281,10 @@ distributionの作り直しではなく、次の順序で既存環境を収束�
    sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/bootstrap.sh
    ```
 
-5. 推論serviceはrootで起動し、Backendはservice userで起動して、Backend初回起動でSQLiteを作成する。
+5. dogfood targetをrootで起動する。application unitはservice userでBackend／Frontendを起動し、Backend初回起動でSQLiteを作成する。
 
    ```bash
    sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/start-services.sh
-   sudo -u digital-souls env DOGFOOD_ENV_FILE=/etc/digital-souls/dogfood.env \
-     /opt/digital-souls/current/scripts/start-dogfood.sh
    ```
 
 6. root権限でserviceとDocker daemonの状態を確認する。
@@ -301,9 +306,9 @@ in-place復旧が失敗した場合だけ、保全物を維持したまま別名
 systemd unitのenableだけではWSL instanceの常時維持やWindows起動時のdistribution起動を保証しない。Windows再起動後は次の順序で復旧する。
 
 1. Windowsからbootstrapが`DOGFOOD_CONFIG_DIR`へ生成した`start-dogfood-wsl.ps1`を実行し、設定したdogfood distributionを明示起動する。
-2. `systemctl is-system-running`と`systemctl show digital-souls-inference.target --property=ActiveState,SubState`を確認する。
-3. `scripts/dogfood/status.sh`でOllama／VOICEVOXのunit、port、container metadataを確認する。
-4. Ubuntu-dogfood内で`scripts/start-dogfood.sh`を起動する。
+2. launcherは冪等な`systemctl start digital-souls-dogfood.target`だけを実行するため、事前停止せず同じlauncherを再実行する。
+3. `systemctl is-system-running`と`systemctl show digital-souls-dogfood.target --property=ActiveState,SubState`を確認する。
+4. `scripts/dogfood/status.sh`でapplication／推論unit、orchestrator、port、container metadataを確認する。
 5. dogfood ProfileのFrontend／Backend ready gateを確認する。
 
 ## 障害診断と個別復旧
@@ -320,8 +325,15 @@ sudo systemctl restart digital-souls-voicevox.service
 scripts/dogfood/status.sh
 ```
 
+`status.sh`が「application unitはactiveだがorchestrator processが存在しない」と報告した場合は、次を実行してtarget全体を再起動し、もう一度状態を確認する。
+
+```bash
+sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/restart-services.sh
+sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/status.sh
+```
+
 VOICEVOX processの異常終了はComposeがcontainerを再起動する。復旧しない場合やDocker daemon自体の障害では`docker ps --filter name=digital-souls-voicevox`とDocker serviceを確認し、VOICEVOX unitだけを再起動してCompose stackをdown／upする。意図的に停止する場合はVOICEVOX unitまたはinference targetをstopし、`docker compose down`でstackを削除する。dev／integration／TAKTから共通推論serviceをstopまたはrestartしない。
 
 ## 手動作業と自動検証の境界
 
-distribution作成、Linux user／permission設定、bootstrap成功、systemd／Docker／Ollama／VOICEVOXの実起動、実会話、WSL／Windows再起動後の実復旧は利用者が手動確認する。自動テストは一時directory、fake command、静的資材だけを使い、実dogfood filesystem、process、systemd、Docker daemon、endpointへ接続しない。実会話と再起動後の受入はIssue #56へ引き渡す。
+distribution作成、Linux user／permission設定、bootstrap成功、systemd／Docker／Ollama／VOICEVOXの実起動、実会話、WSL／Windows再起動後の実復旧は利用者が手動確認する。自動テストは一時directory、fake command、静的資材に加え、隔離したVOICEVOX runtime testで開発環境のDocker daemonとDocker Composeを使用するが、実Ubuntu-dogfoodのfilesystem、process、systemd、endpointは操作しない。実会話と再起動後の受入はIssue #56へ引き渡す。

@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -86,6 +87,74 @@ def test_should_record_profile_failure_when_previous_profile_report_cannot_be_re
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["failure"]["category"] == "profile"
     assert report["status"] == "failed"
+
+
+def test_should_return_after_child_orchestrator_is_ready_and_leave_down_cleanup_to_it(
+    tmp_path: Path,
+    runtime_paths,
+) -> None:
+    from process_control import (
+        ProcessIdentity,
+        process_identity_matches,
+        request_process_stop,
+    )
+
+    environments = ROOT_DIR / "environments"
+    report_path = runtime_paths.runtime_report_dir / "detached" / "environment-run.json"
+    env = {
+        **os.environ,
+        "DS_PROFILE": "test-mocked",
+        "DS_ENVIRONMENT_RUN_REPORT": str(report_path),
+    }
+
+    stdout_path = tmp_path / "start.stdout"
+    stderr_path = tmp_path / "start.stderr"
+    identity: ProcessIdentity | None = None
+    start_process: subprocess.Popen[bytes] | None = None
+    try:
+        with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
+            start_process = subprocess.Popen(
+                [str(environments / "up.sh")],
+                env=env,
+                stdout=stdout,
+                stderr=stderr,
+            )
+            start_process.wait(timeout=10)
+        ready_report = json.loads(report_path.read_text(encoding="utf-8"))
+        identity = ProcessIdentity.from_report(ready_report["orchestratorIdentity"])
+
+        assert start_process.returncode == 0, (
+            stdout_path.read_text(encoding="utf-8"),
+            stderr_path.read_text(encoding="utf-8"),
+        )
+        assert ready_report["status"] == "ready"
+        assert identity.pid != start_process.pid
+        assert process_identity_matches(identity)
+
+        down_result = subprocess.run(
+            [str(environments / "down.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert down_result.returncode == 0, (down_result.stdout, down_result.stderr)
+
+        deadline = time.monotonic() + 10
+        while process_identity_matches(identity) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert not process_identity_matches(identity)
+        completed_report = json.loads(report_path.read_text(encoding="utf-8"))
+        assert completed_report["status"] == "completed"
+    finally:
+        if start_process is not None and start_process.poll() is None:
+            start_process.terminate()
+            start_process.wait(timeout=5)
+        if identity is None and report_path.is_file():
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            identity = ProcessIdentity.from_report(report["orchestratorIdentity"])
+        if identity is not None and process_identity_matches(identity):
+            request_process_stop(identity)
 
 
 @pytest.mark.parametrize("configuration_source", ["cli", "environment"])

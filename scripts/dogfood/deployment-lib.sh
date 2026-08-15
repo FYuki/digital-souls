@@ -41,6 +41,25 @@ dogfood_require_clean_checkout() {
   worktree_status=$(git -C "$DOGFOOD_CLONE_DIR" status --porcelain --untracked-files=all)
   if [ -n "$worktree_status" ]; then
     echo "ERROR: repositoryのworking treeに変更があります" >&2
+    printf '%s\n' "$worktree_status" >&2
+    return 2
+  fi
+}
+
+dogfood_require_detached_clean_checkout_for_convergence() {
+  local target=$1
+  local current_head worktree_status
+  current_head=$(git -C "$DOGFOOD_CLONE_DIR" rev-parse HEAD)
+  worktree_status=$(git -C "$DOGFOOD_CLONE_DIR" status --porcelain --untracked-files=all)
+  if [ -n "$worktree_status" ]; then
+    echo "ERROR: 既存cloneのworking treeに変更があるためrevisionへ収束できません" >&2
+    printf '%s\n' "$worktree_status" >&2
+    printf '現在のHEAD: %s\n期待するrevision: %s\n' "$current_head" "$target" >&2
+    return 2
+  fi
+  if git -C "$DOGFOOD_CLONE_DIR" symbolic-ref --quiet HEAD >/dev/null; then
+    echo "ERROR: 既存cloneがdetached HEADではないためrevisionへ収束できません" >&2
+    printf '現在のHEAD: %s\n期待するrevision: %s\n' "$current_head" "$target" >&2
     return 2
   fi
 }

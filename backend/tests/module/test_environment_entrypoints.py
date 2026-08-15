@@ -32,16 +32,20 @@ def test_should_delegate_wrapper_arguments_and_default_profile_to_common_up(
     assert process.returncode == 23, (stdout, stderr)
     assert child_pid == process.pid
     assert arguments[1:] == [
-        "up",
+        "start",
         "--default-profile",
         expected_profile,
         "--run-report",
         str(tmp_path / "run.json"),
     ]
 
-@pytest.mark.parametrize("script_name", ["up.sh", "down.sh", "verify.sh"])
+@pytest.mark.parametrize(
+    ("script_name", "command"),
+    [("up.sh", "start"), ("down.sh", "down"), ("verify.sh", "verify")],
+)
 def test_should_route_environment_shell_entrypoint_to_python_cli(
     script_name: str,
+    command: str,
     tmp_path: Path,
 ):
     entrypoint = ROOT_DIR / "environments" / script_name
@@ -53,7 +57,7 @@ def test_should_route_environment_shell_entrypoint_to_python_cli(
     assert process.returncode == 31, (stdout, stderr)
     assert child_pid == process.pid
     assert arguments[-3:] == [
-        script_name.removesuffix(".sh"),
+        command,
         "--example",
         "value",
     ]

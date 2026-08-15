@@ -76,6 +76,7 @@ def test_should_read_live_status_without_mutating_the_selected_report(
     import commands.status_command as status_command
     from app.runtime_data_root import initialize_runtime_data_root
     from http_readiness import ReadinessResult
+    from process_control import ProcessIdentity
     from run_report import create_initial_report
     from run_report_store import RunReportStore
     from tests.environment_test_support import resolved_runtime_paths
@@ -109,9 +110,21 @@ def test_should_read_live_status_without_mutating_the_selected_report(
         "probe_http",
         lambda url, timeout_seconds: ReadinessResult(url, 1, 0.0, "ready"),
     )
+    observed_identities: list[ProcessIdentity] = []
+    monkeypatch.setattr(
+        status_command,
+        "process_identity_matches",
+        lambda identity: observed_identities.append(identity) or False,
+        raising=False,
+    )
 
     exit_code = status_command.status_environment(tmp_path, str(report_path))
 
     assert exit_code == 0
-    assert "frontend source=managed ownership=unowned state=ready" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "frontend source=managed ownership=unowned state=ready" in output
+    assert "orchestrator state=dead" in output
+    assert observed_identities == [
+        ProcessIdentity.from_report(orchestrator_identity())
+    ]
     assert report_path.read_bytes() == before

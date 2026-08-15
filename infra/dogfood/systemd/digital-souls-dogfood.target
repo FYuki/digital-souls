@@ -1,0 +1,7 @@
+[Unit]
+Description=Digital Souls dogfood services
+Requires=digital-souls-inference.target digital-souls-application.service
+After=digital-souls-inference.target digital-souls-application.service
+
+[Install]
+WantedBy=multi-user.target

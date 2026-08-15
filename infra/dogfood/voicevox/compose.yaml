@@ -3,5 +3,7 @@ services:
     image: ${DOGFOOD_VOICEVOX_IMAGE}
     container_name: ${DOGFOOD_VOICEVOX_CONTAINER}
     restart: unless-stopped
+    tmpfs:
+      - "/home/user/.local/share:uid=1000,gid=1000"
     ports:
       - "${VOICEVOX_HOST}:${VOICEVOX_PORT}:50021"
