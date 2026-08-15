@@ -124,7 +124,8 @@ export const createSuiteConfig = (
       trace: 'on-first-retry',
     },
     webServer: {
-      command: '../environments/up.sh',
+      // PlaywrightがSIGTERMで後始末できるよう、orchestratorをforegroundで維持する。
+      command: 'python3 ../environments/environment_cli.py up',
       env: {
         [PROFILE_ENV]: suite.profile,
         [ENVIRONMENT_ID_ENV]: 'test',

@@ -99,7 +99,7 @@ describe('suite-specific Playwright configuration', () => {
     ]))
   })
 
-  test.each(suites)('$suite uses the environment startup boundary without reusing a server', async (suite) => {
+  test.each(suites)('$suite keeps the environment orchestrator attached without reusing a server', async (suite) => {
     const config = await loadConfig(suite.config)
     const profile = JSON.parse(await readFile(
       join(process.cwd(), '..', 'environments', 'profiles', `${suite.profile}.json`),
@@ -109,7 +109,7 @@ describe('suite-specific Playwright configuration', () => {
     const runtimeDir = join(dataRoot, 'runtime', 'standalone')
 
     expect(config.webServer).toEqual(expect.objectContaining({
-      command: '../environments/up.sh',
+      command: 'python3 ../environments/environment_cli.py up',
       env: {
         DS_PROFILE: suite.profile,
         DS_ENVIRONMENT_ID: 'test',
