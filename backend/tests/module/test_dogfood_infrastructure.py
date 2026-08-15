@@ -13,6 +13,7 @@ ROOT_DIR = Path(__file__).parent.parent.parent.parent
 DOGFOOD_INFRA_DIR = ROOT_DIR / "infra" / "dogfood"
 DOGFOOD_SCRIPTS_DIR = ROOT_DIR / "scripts" / "dogfood"
 ENV_EXAMPLE_PATH = DOGFOOD_INFRA_DIR / "env.example"
+README_PATH = DOGFOOD_INFRA_DIR / "README.md"
 REQUIRED_ENV_KEYS = {
     "DS_ENVIRONMENT_ID",
     "DOGFOOD_WSL_DISTRO",
@@ -134,6 +135,18 @@ def test_should_keep_dogfood_shell_entrypoints_executable_strict_and_syntax_vali
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_should_preserve_wsl_identity_in_direct_sudo_runbook_commands() -> None:
+    source = README_PATH.read_text(encoding="utf-8")
+
+    assert not re.search(r"(?m)^\s*sudo scripts/dogfood/", source)
+    for script_name in SHELL_ENTRYPOINTS:
+        if f"scripts/dogfood/{script_name}" in source:
+            assert (
+                f"sudo env WSL_DISTRO_NAME=Ubuntu-dogfood "
+                f"scripts/dogfood/{script_name}"
+            ) in source
 
 
 def test_should_apply_declared_ownership_and_restricted_directory_permissions() -> None:

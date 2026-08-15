@@ -392,7 +392,7 @@ def test_should_reject_missing_database_without_deployment_side_effects(
     result, calls = _run_deploy(tmp_path, database_exists=False)
 
     assert result.returncode != 0
-    assert calls.count("backend-setup") == 1
+    assert calls.count("backend-setup") == 0
     assert not any(
         call.startswith("git\t") and " fetch " in call for call in calls
     )

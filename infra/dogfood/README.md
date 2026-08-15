@@ -110,13 +110,15 @@ directoryは`0750`、設定ファイルは`0640`を基準とする。stateとそ
 bootstrap後の昇格は、検証済みmain commitを明示して実行する。mainへのmergeだけではclone、revision、processは変化しない。
 
 ```bash
-sudo scripts/dogfood/deploy.sh --commit <完全なcommit SHA>
-sudo scripts/dogfood/deploy.sh --commit <完全なcommit SHA> --no-auto-rollback
-sudo scripts/dogfood/rollback.sh
-sudo scripts/dogfood/rollback.sh --to <保存済みcommit SHA>
+sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/deploy.sh --commit <完全なcommit SHA>
+sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/deploy.sh --commit <完全なcommit SHA> --no-auto-rollback
+sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/rollback.sh
+sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/rollback.sh --to <保存済みcommit SHA>
 ```
 
-deployはdirty checkout、origin/main上で解決できないcommit、設定不足を拒否する。backup前に現在HEADのBackend依存を準備し、`conversation-history.db`がなければ初回起動を案内して、backup、manifest、revision、checkoutを変更せず停止する。DBが存在する場合だけbackupとbackup-verifyを完了してからmanifestとrevisionを更新し、detached checkout、Backend依存準備、Frontend build、権限再適用、service restart、Profile準拠readinessの順で実行する。readiness失敗時は既定で直前commitへ自動rollbackし、`--no-auto-rollback`指定時だけ現在状態を維持して停止する。backupを省略するオプションはない。
+`sudo`は既定で`WSL_DISTRO_NAME`を引き継がないため、rootで直接実行する手順では明示的に渡す。`wslinfo --name`は利用可能な環境でだけfallbackとして使用し、distributionを解決できない場合は推測せず拒否する。
+
+deployはdirty checkout、origin/main上で解決できないcommit、設定不足を拒否する。`conversation-history.db`がなければBackend依存の準備より前に初回起動を案内して、backup、manifest、revision、checkoutを変更せず停止する。DBが存在する場合だけ、backup前に現在HEADのBackend依存を準備し、backupとbackup-verifyを完了してからmanifestとrevisionを更新する。その後、detached checkout、Backend依存準備、Frontend build、権限再適用、service restart、Profile準拠readinessの順で実行する。readiness失敗時は既定で直前commitへ自動rollbackし、`--no-auto-rollback`指定時だけ現在状態を維持して停止する。backupを省略するオプションはない。
 
 rollbackは引数なしで現在manifestの直前commitへ、`--to`で保存済みmanifestが存在する任意commitへ戻す。rollback先manifestのSQLite data schemaと現在DBのschemaが一致しない場合は、保存済みbackupを検証・restoreするまでcommitの切替を拒否する。どちらも再build、restart、readiness確認を行うため数分かかる場合がある。
 
@@ -205,10 +207,10 @@ runtime data root直下の`.conversation-history.restore-intent.json`は、resto
 ## 起動・停止・状態確認
 
 ```bash
-sudo scripts/dogfood/start-services.sh
-sudo scripts/dogfood/status.sh
-sudo scripts/dogfood/restart-services.sh
-sudo scripts/dogfood/stop-services.sh
+sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/start-services.sh
+sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/status.sh
+sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/restart-services.sh
+sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/stop-services.sh
 ```
 
 `digital-souls-inference.target`がOllamaとVOICEVOXをまとめる。Ollama unitは失敗時再起動を担い、VOICEVOX unitはrootでCompose stackを起動・停止するoneshotの入口に限定する。実行中のVOICEVOX containerはComposeの`unless-stopped`方針で異常終了後に再起動する。停止timeoutは両unitとも有限であり、OllamaはSIGTERM、VOICEVOXは`docker compose down`で正常停止する。`restart-services.sh`またはVOICEVOX unitの手動restartでは同じrunnerを通じてdown／upする。Composeが所有するのはVOICEVOXだけで、Backend／Frontendはcontainer化しない。
@@ -261,7 +263,7 @@ distributionの作り直しではなく、次の順序で既存環境を収束�
 1. `stop-services.sh`で推論targetとVOICEVOX containerを停止する。
 
    ```bash
-   sudo scripts/dogfood/stop-services.sh
+   sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/stop-services.sh
    ```
 
 2. 収束操作より前に、`/etc/digital-souls/dogfood.env`、`dogfood.revision`、`$DS_DATA_DIR`、`/var/lib/digital-souls/backups`、DL済みOllama modelを別の保全先へ退避する。特に`DOGFOOD_BACKUP_AUTHENTICATION_KEY`を失うと既存backupを永久に検証・restoreできないため、秘密を表示せずmode `0600`で保全する。
@@ -269,13 +271,13 @@ distributionの作り直しではなく、次の順序で既存環境を収束�
 4. 修正版`bootstrap.sh`をrootで再実行し、service user、home、model保存先、所有権、権限を冪等に収束させる。
 
    ```bash
-   sudo scripts/dogfood/bootstrap.sh
+   sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/bootstrap.sh
    ```
 
 5. 推論serviceはrootで起動し、Backendはservice userで起動して、Backend初回起動でSQLiteを作成する。
 
    ```bash
-   sudo scripts/dogfood/start-services.sh
+   sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/start-services.sh
    sudo -u digital-souls env DOGFOOD_ENV_FILE=/etc/digital-souls/dogfood.env \
      /opt/digital-souls/current/scripts/start-dogfood.sh
    ```
@@ -283,7 +285,7 @@ distributionの作り直しではなく、次の順序で既存環境を収束�
 6. root権限でserviceとDocker daemonの状態を確認する。
 
    ```bash
-   sudo scripts/dogfood/status.sh
+   sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/status.sh
    sudo docker compose version
    sudo docker info
    ```
