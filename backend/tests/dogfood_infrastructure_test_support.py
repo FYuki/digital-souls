@@ -168,6 +168,12 @@ def command_with_root_owned_revision_as_service_user(
 
 
 def _write_bootstrap_clone_assets(clone_dir: Path) -> None:
+    setup_backend = clone_dir / "scripts" / "setup-backend.sh"
+    setup_backend.parent.mkdir(parents=True, exist_ok=True)
+    write_executable(
+        setup_backend,
+        'printf "backend-setup\\n" >> "$BOOTSTRAP_CALL_LOG"\n',
+    )
     renderer = clone_dir / "scripts" / "dogfood" / "render-assets.sh"
     renderer.parent.mkdir(parents=True)
     write_executable(
@@ -182,6 +188,7 @@ def _write_bootstrap_clone_assets(clone_dir: Path) -> None:
         "[Unit]\nDescription=test\n",
         encoding="utf-8",
     )
+    (clone_dir / "frontend").mkdir()
 
 
 def prepare_bootstrap_clone(tmp_path: Path) -> Path:
@@ -208,6 +215,7 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
         bin_dir / "id",
         recorder
         + 'if [ "${1-}" = "-u" ]; then printf "0\\n"; '
+        + 'elif [ "${1-}" = "-gn" ]; then cut -d "|" -f 2 "$BOOTSTRAP_USER_STATE"; '
         + 'elif [ "${1-}" = "-nG" ] && [ "${BOOTSTRAP_DOCKER_MEMBER-}" = "1" ]; '
         + 'then printf "digital-souls docker\\n"; fi\n',
     )
@@ -219,6 +227,9 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
         + '&& [ "${2-}" = "$DOGFOOD_SERVICE_GROUP" ]; then\n'
         + '  [ "${BOOTSTRAP_SERVICE_GROUP_MISSING-}" != "1" ] '
         + '|| [ -f "$BOOTSTRAP_GROUP_CREATED" ]\n'
+        + 'elif [ "${1-}" = "passwd" ] && [ "${2-}" = "$DOGFOOD_SERVICE_USER" ]; then\n'
+        + '  IFS="|" read -r home _group shell < "$BOOTSTRAP_USER_STATE"\n'
+        + '  printf "%s:x:999:999::%s:%s\\n" "$DOGFOOD_SERVICE_USER" "$home" "$shell"\n'
         + "fi\n",
     )
     write_executable(
@@ -234,6 +245,16 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
     for command in ("gpasswd", "chown", "systemctl", "useradd"):
         write_executable(bin_dir / command, recorder)
     write_executable(
+        bin_dir / "usermod",
+        recorder
+        + "home= group= shell=\n"
+        + 'while [ "$#" -gt 1 ]; do\n'
+        + '  case "$1" in --home) home=$2 ;; --gid) group=$2 ;; --shell) shell=$2 ;; esac\n'
+        + "  shift 2\n"
+        + "done\n"
+        + 'printf "%s|%s|%s\\n" "$home" "$group" "$shell" > "$BOOTSTRAP_USER_STATE"\n',
+    )
+    write_executable(
         bin_dir / "groupadd",
         recorder + 'touch "$BOOTSTRAP_GROUP_CREATED"\n',
     )
@@ -247,6 +268,7 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
         + '    case "$1" in\n'
         + "      -m) mode=$2; shift 2 ;;\n"
         + "      -o|-g) shift 2 ;;\n"
+        + "      /var/lib/digital-souls/*) shift ;;\n"
         + '      *) mkdir -p "$1"; /bin/chmod "$mode" "$1"; shift ;;\n'
         + "    esac\n"
         + "  done\n"
@@ -258,6 +280,16 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
         + 'if [ "${1-}" = "--preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY" ]; then shift; fi\n'
         + 'if [ "${1-}" = "-u" ]; then export BOOTSTRAP_EFFECTIVE_USER=$2; shift 2; fi\n'
         + 'exec "$@"\n',
+    )
+    write_executable(
+        bin_dir / "docker",
+        recorder
+        + '[ "$*" = "compose version" ]\n'
+        + '[ "${BOOTSTRAP_COMPOSE_AVAILABLE-}" = "1" ]\n',
+    )
+    write_executable(
+        bin_dir / "npm",
+        recorder + 'mkdir -p "$DOGFOOD_CLONE_DIR/frontend/node_modules"\n',
     )
     write_executable(
         bin_dir / "git",

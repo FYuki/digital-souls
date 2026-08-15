@@ -13,6 +13,7 @@ ROOT_DIR = Path(__file__).parent.parent.parent.parent
 DOGFOOD_INFRA_DIR = ROOT_DIR / "infra" / "dogfood"
 DOGFOOD_SCRIPTS_DIR = ROOT_DIR / "scripts" / "dogfood"
 ENV_EXAMPLE_PATH = DOGFOOD_INFRA_DIR / "env.example"
+README_PATH = DOGFOOD_INFRA_DIR / "README.md"
 REQUIRED_ENV_KEYS = {
     "DS_ENVIRONMENT_ID",
     "DOGFOOD_WSL_DISTRO",
@@ -22,6 +23,8 @@ REQUIRED_ENV_KEYS = {
     "DOGFOOD_CLONE_DIR",
     "DOGFOOD_CONFIG_DIR",
     "DS_DATA_DIR",
+    "DOGFOOD_SERVICE_HOME_DIR",
+    "DOGFOOD_OLLAMA_MODELS_DIR",
     "DOGFOOD_BACKUP_DIR",
     "DOGFOOD_BACKUP_RETENTION_COUNT",
     "DOGFOOD_BACKUP_AUTHENTICATION_KEY",
@@ -82,6 +85,10 @@ def test_should_define_separate_dogfood_identity_clone_and_runtime_paths() -> No
     assert values["DOGFOOD_WSL_DISTRO"] == "Ubuntu-dogfood"
     assert values["DOGFOOD_SERVICE_USER"]
     assert values["DOGFOOD_SERVICE_GROUP"]
+    assert values["DOGFOOD_SERVICE_HOME_DIR"] == "/var/lib/digital-souls/home"
+    assert values["DOGFOOD_OLLAMA_MODELS_DIR"] == (
+        "/var/lib/digital-souls/models/ollama"
+    )
     assert not values["DOGFOOD_REPOSITORY_URL"].startswith(("/", "file:"))
     assert "DOGFOOD_REPOSITORY_REVISION" not in values
 
@@ -89,6 +96,8 @@ def test_should_define_separate_dogfood_identity_clone_and_runtime_paths() -> No
         "DOGFOOD_CLONE_DIR",
         "DOGFOOD_CONFIG_DIR",
         "DS_DATA_DIR",
+        "DOGFOOD_SERVICE_HOME_DIR",
+        "DOGFOOD_OLLAMA_MODELS_DIR",
         "DOGFOOD_BACKUP_DIR",
         "DOGFOOD_STATE_DIR",
         "DOGFOOD_LOG_DIR",
@@ -128,6 +137,18 @@ def test_should_keep_dogfood_shell_entrypoints_executable_strict_and_syntax_vali
     assert result.returncode == 0, result.stderr
 
 
+def test_should_preserve_wsl_identity_in_direct_sudo_runbook_commands() -> None:
+    source = README_PATH.read_text(encoding="utf-8")
+
+    assert not re.search(r"(?m)^\s*sudo scripts/dogfood/", source)
+    for script_name in SHELL_ENTRYPOINTS:
+        if f"scripts/dogfood/{script_name}" in source:
+            assert (
+                f"sudo env WSL_DISTRO_NAME=Ubuntu-dogfood "
+                f"scripts/dogfood/{script_name}"
+            ) in source
+
+
 def test_should_apply_declared_ownership_and_restricted_directory_permissions() -> None:
     bootstrap_path = DOGFOOD_SCRIPTS_DIR / "bootstrap.sh"
     assert bootstrap_path.is_file(), "dogfood bootstrap entrypoint is required"
@@ -158,7 +179,6 @@ def test_should_apply_declared_ownership_and_restricted_directory_permissions() 
 def test_should_separate_application_identity_from_docker_operations() -> None:
     source = (DOGFOOD_SCRIPTS_DIR / "bootstrap.sh").read_text(encoding="utf-8")
 
-    assert "usermod" not in source
     assert "runuser" not in source
     assert re.search(
         r'gpasswd --delete "\$DOGFOOD_SERVICE_USER" docker',

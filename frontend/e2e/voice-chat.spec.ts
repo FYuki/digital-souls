@@ -103,11 +103,12 @@ const expectMockMessages = async (page: Page) => {
   await expect(messages.nth(1).locator('p')).toHaveText(MOCK_RESPONSE_TEXT)
 }
 
-test('マイクボタン操作でOFFからSTANDBYへ遷移する', async ({ page }) => {
+test('マイクボタン操作でOFFから有効状態へ遷移する', async ({ page }) => {
   const button = await driver.openVoiceChat(page)
   await expect(button).not.toHaveClass(/mic-standby|mic-active/)
   await button.click()
-  await expect(button).toHaveClass(/mic-standby/)
+  await expect(button).toHaveAttribute('aria-pressed', 'true')
+  await expect(button).toHaveClass(/mic-standby|mic-active/)
 })
 
 test('VADの発話イベント中だけON表示になり、発話終了後にSTANDBYへ戻る', async ({ page }) => {

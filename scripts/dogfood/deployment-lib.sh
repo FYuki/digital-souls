@@ -4,10 +4,20 @@ DOGFOOD_DEPLOYMENT_RETENTION=20
 DOGFOOD_MANIFEST_GENERATION_ATTEMPTS=16
 
 dogfood_require_root() {
-  if [ "$(id -u)" -ne 0 ]; then
+  if [ "$(id -u)" -eq 0 ]; then
+    return
+  fi
+  if [ -t 0 ] && sudo -n true 2>/dev/null; then
     echo "ERROR: dogfood配備操作はroot権限で実行してください" >&2
     return 2
   fi
+  printf 'ERROR: root操作をユーザーへ引き渡します。次を実行してください:\n  sudo env DOGFOOD_ENV_FILE=%q WSL_DISTRO_NAME=%q %q' \
+    "$DOGFOOD_RESOLVED_ENV_FILE" "$DOGFOOD_RESOLVED_WSL_DISTRO" "$0" >&2
+  if [ "$#" -gt 0 ]; then
+    printf ' %q' "$@" >&2
+  fi
+  printf '\n' >&2
+  return 3
 }
 
 dogfood_require_commit_sha() {
@@ -99,15 +109,19 @@ dogfood_update_revision() {
   export DOGFOOD_REPOSITORY_REVISION="$target"
 }
 
+dogfood_prepare_backend() {
+  (
+    umask 0027
+    "$DOGFOOD_CLONE_DIR/scripts/setup-backend.sh"
+  )
+}
+
 dogfood_activate_revision() {
   local target=$1
   dogfood_update_revision "$target" || return
   git -c core.hooksPath=/dev/null -C "$DOGFOOD_CLONE_DIR" checkout --detach "$target" || return
   dogfood_verify_detached_clean_revision "$target" || return
-  (
-    umask 0027
-    "$DOGFOOD_CLONE_DIR/scripts/setup-backend.sh"
-  ) || return
+  dogfood_prepare_backend || return
   npm --prefix "$DOGFOOD_CLONE_DIR/frontend" run build || return
   chown -R "root:$DOGFOOD_SERVICE_GROUP" "$DOGFOOD_CLONE_DIR" || return
   chmod -R g-w,o-rwx "$DOGFOOD_CLONE_DIR" || return

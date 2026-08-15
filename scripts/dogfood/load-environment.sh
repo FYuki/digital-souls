@@ -3,17 +3,20 @@
 DOGFOOD_DEFAULT_ENV_FILE=/etc/digital-souls/dogfood.env
 DOGFOOD_DEPRECATED_FIXED_ENV_FILE=/tmp/dogfood.env
 DOGFOOD_TEMPORARY_ENV_FORBIDDEN_MODE_MASK=077
+DOGFOOD_DEFAULT_SERVICE_HOME_DIR=/var/lib/digital-souls/home
+DOGFOOD_DEFAULT_OLLAMA_MODELS_DIR=/var/lib/digital-souls/models/ollama
 DOGFOOD_ALLOWED_ENV_KEYS=(
   DS_ENVIRONMENT_ID DOGFOOD_WSL_DISTRO DOGFOOD_SERVICE_USER
   DOGFOOD_SERVICE_GROUP DOGFOOD_REPOSITORY_URL DOGFOOD_CLONE_DIR
-  DOGFOOD_CONFIG_DIR DS_DATA_DIR DOGFOOD_BACKUP_DIR
+  DOGFOOD_CONFIG_DIR DS_DATA_DIR DOGFOOD_SERVICE_HOME_DIR
+  DOGFOOD_OLLAMA_MODELS_DIR DOGFOOD_BACKUP_DIR
   DOGFOOD_BACKUP_RETENTION_COUNT DOGFOOD_BACKUP_AUTHENTICATION_KEY
   DOGFOOD_STATE_DIR DOGFOOD_LOG_DIR
   DOGFOOD_VOICEVOX_IMAGE DOGFOOD_VOICEVOX_CONTAINER
 )
 DOGFOOD_PATH_KEYS=(
-  DOGFOOD_CLONE_DIR DOGFOOD_CONFIG_DIR DS_DATA_DIR DOGFOOD_BACKUP_DIR
-  DOGFOOD_STATE_DIR DOGFOOD_LOG_DIR
+  DOGFOOD_CLONE_DIR DOGFOOD_CONFIG_DIR DS_DATA_DIR DOGFOOD_SERVICE_HOME_DIR
+  DOGFOOD_OLLAMA_MODELS_DIR DOGFOOD_BACKUP_DIR DOGFOOD_STATE_DIR DOGFOOD_LOG_DIR
 )
 
 dogfood_is_allowed_key() {
@@ -149,6 +152,12 @@ PYTHON
   if [ "$read_status" -ne 0 ]; then
     return "$read_status"
   fi
+  if [ -z "${DOGFOOD_SERVICE_HOME_DIR+x}" ]; then
+    export DOGFOOD_SERVICE_HOME_DIR="$DOGFOOD_DEFAULT_SERVICE_HOME_DIR"
+  fi
+  if [ -z "${DOGFOOD_OLLAMA_MODELS_DIR+x}" ]; then
+    export DOGFOOD_OLLAMA_MODELS_DIR="$DOGFOOD_DEFAULT_OLLAMA_MODELS_DIR"
+  fi
   dogfood_validate_environment
 }
 
@@ -272,12 +281,34 @@ dogfood_validate_environment() {
   fi
 }
 
+dogfood_resolve_wsl_distro() {
+  local explicit=${WSL_DISTRO_NAME-}
+  local detected=
+  if command -v wslinfo >/dev/null 2>&1; then
+    detected=$(wslinfo --name 2>/dev/null) || detected=
+  fi
+  if [ -n "$explicit" ] && [ -n "$detected" ] && [ "$explicit" != "$detected" ]; then
+    echo "ERROR: WSL_DISTRO_NAMEとwslinfoのdistributionが一致しません" >&2
+    return 2
+  fi
+  if [ -n "$explicit" ]; then
+    DOGFOOD_RESOLVED_WSL_DISTRO=$explicit
+  elif [ -n "$detected" ]; then
+    DOGFOOD_RESOLVED_WSL_DISTRO=$detected
+  else
+    echo "ERROR: WSL distributionを解決できません" >&2
+    return 2
+  fi
+  export DOGFOOD_RESOLVED_WSL_DISTRO
+}
+
 dogfood_require_identity() {
   if [ "$DS_ENVIRONMENT_ID" != "dogfood" ]; then
     echo "ERROR: DS_ENVIRONMENT_IDがdogfoodではありません" >&2
     return 2
   fi
-  if [ "${WSL_DISTRO_NAME-}" != "$DOGFOOD_WSL_DISTRO" ]; then
+  dogfood_resolve_wsl_distro || return
+  if [ "$DOGFOOD_RESOLVED_WSL_DISTRO" != "$DOGFOOD_WSL_DISTRO" ]; then
     echo "ERROR: WSL distributionがDOGFOOD_WSL_DISTROと一致しません" >&2
     return 2
   fi

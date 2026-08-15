@@ -6,6 +6,7 @@ source "$SCRIPT_DIR/load-environment.sh"
 source "$SCRIPT_DIR/deployment-lib.sh"
 dogfood_load_environment_settings
 dogfood_require_identity
+dogfood_require_root "$@"
 
 bootstrap_temporary_environment=
 generated_assets=
@@ -22,16 +23,32 @@ cleanup_bootstrap() {
 }
 trap cleanup_bootstrap EXIT
 
-dogfood_require_root
 dogfood_validate_deployment_storage_location
 if ! getent group docker >/dev/null; then
   echo "ERROR: bootstrap前にDockerをインストールしてください" >&2
   exit 2
 fi
+if ! docker compose version >/dev/null 2>&1; then
+  echo "ERROR: bootstrap前にDocker Compose pluginをインストールしてください" >&2
+  exit 2
+fi
 getent group "$DOGFOOD_SERVICE_GROUP" >/dev/null || groupadd --system "$DOGFOOD_SERVICE_GROUP"
-id "$DOGFOOD_SERVICE_USER" >/dev/null 2>&1 || useradd --system \
-  --gid "$DOGFOOD_SERVICE_GROUP" --home-dir "$DS_DATA_DIR" \
-  --shell /usr/sbin/nologin "$DOGFOOD_SERVICE_USER"
+if current_passwd=$(getent passwd "$DOGFOOD_SERVICE_USER"); then
+  IFS=: read -r _ _ _ _ _ current_home current_shell \
+    <<< "$current_passwd"
+  current_group=$(id -gn "$DOGFOOD_SERVICE_USER")
+  if [ "$current_home" != "$DOGFOOD_SERVICE_HOME_DIR" ] \
+    || [ "$current_group" != "$DOGFOOD_SERVICE_GROUP" ] \
+    || [ "$current_shell" != /usr/sbin/nologin ]; then
+    usermod --home "$DOGFOOD_SERVICE_HOME_DIR" \
+      --gid "$DOGFOOD_SERVICE_GROUP" --shell /usr/sbin/nologin \
+      "$DOGFOOD_SERVICE_USER"
+  fi
+else
+  useradd --system --gid "$DOGFOOD_SERVICE_GROUP" \
+    --home-dir "$DOGFOOD_SERVICE_HOME_DIR" --shell /usr/sbin/nologin \
+    "$DOGFOOD_SERVICE_USER"
+fi
 dogfood_read_revision
 if id -nG "$DOGFOOD_SERVICE_USER" | tr ' ' '\n' | grep --fixed-strings --line-regexp --quiet docker; then
   gpasswd --delete "$DOGFOOD_SERVICE_USER" docker
@@ -54,7 +71,8 @@ chown -R "root:$DOGFOOD_SERVICE_GROUP" "$DOGFOOD_CLONE_DIR"
 chmod -R g-w,o-rwx "$DOGFOOD_CLONE_DIR"
 chmod 0750 "$DOGFOOD_CLONE_DIR"
 install -d -m 0750 -o "$DOGFOOD_SERVICE_USER" -g "$DOGFOOD_SERVICE_GROUP" \
-  "$DS_DATA_DIR" "$DOGFOOD_BACKUP_DIR" "$DOGFOOD_LOG_DIR"
+  "$DS_DATA_DIR" "$DOGFOOD_SERVICE_HOME_DIR" "$DOGFOOD_OLLAMA_MODELS_DIR" \
+  "$DOGFOOD_BACKUP_DIR" "$DOGFOOD_LOG_DIR"
 install -d -m 0750 -o root -g "$DOGFOOD_SERVICE_GROUP" \
   "$DOGFOOD_STATE_DIR" "$DOGFOOD_STATE_DIR/deployments"
 dogfood_validate_deployment_storage
@@ -71,6 +89,11 @@ install -m 0644 \
   "$DOGFOOD_CLONE_DIR/infra/dogfood/systemd/digital-souls-inference.target" \
   /etc/systemd/system/
 install -m 0644 "$generated_assets"/*.service /etc/systemd/system/
+dogfood_prepare_backend
+npm --prefix "$DOGFOOD_CLONE_DIR/frontend" install
+npm --prefix "$DOGFOOD_CLONE_DIR/frontend" run build
+chown -R "root:$DOGFOOD_SERVICE_GROUP" "$DOGFOOD_CLONE_DIR"
+chmod -R g-w,o-rwx "$DOGFOOD_CLONE_DIR"
 systemctl daemon-reload
 systemctl enable digital-souls-inference.target
 if [ "$initial_clone" = true ]; then

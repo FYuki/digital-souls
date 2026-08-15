@@ -166,6 +166,50 @@ def test_should_propagate_profile_endpoints_to_compose_and_status(
     assert f"\t{VOICEVOX_ENDPOINT[0]}\t{VOICEVOX_ENDPOINT[1]}" in calls
 
 
+def test_should_pass_the_dedicated_model_directory_to_ollama(tmp_path: Path) -> None:
+    env_path, data_dir = write_dogfood_env(tmp_path)
+    with env_path.open("a", encoding="utf-8") as env_file:
+        env_file.write(
+            f"\nDOGFOOD_SERVICE_HOME_DIR={tmp_path / 'service-home'}\n"
+            f"DOGFOOD_OLLAMA_MODELS_DIR={tmp_path / 'models' / 'ollama'}\n"
+        )
+    bin_dir = tmp_path / "ollama-bin"
+    bin_dir.mkdir()
+    capture_path = tmp_path / "ollama-environment.json"
+    legacy_model = data_dir / "ollama" / "models" / "legacy-model"
+    legacy_model.parent.mkdir(parents=True)
+    legacy_model.write_text("preserve", encoding="utf-8")
+    write_executable(
+        bin_dir / "ollama",
+        '[ "$1" = serve ]\n'
+        f'printf \'%s\\n%s\\n\' "$HOME" "$OLLAMA_MODELS" > {str(capture_path)!r}\n',
+    )
+
+    result = subprocess.run(
+        command_with_root_owned_revision(
+            tmp_path / "config" / "dogfood.revision",
+            [str(DOGFOOD_SCRIPTS_DIR / "run-ollama.sh")],
+        ),
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "DOGFOOD_ENV_FILE": str(env_path),
+            "WSL_DISTRO_NAME": "Ubuntu-dogfood",
+            "HOME": str(tmp_path / "service-home"),
+        },
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert capture_path.read_text(encoding="utf-8").splitlines() == [
+        str(tmp_path / "service-home"),
+        str(tmp_path / "models" / "ollama"),
+    ]
+    assert legacy_model.read_text(encoding="utf-8") == "preserve"
+
+
 @pytest.mark.parametrize(
     ("dependency_name", "field", "value"),
     [

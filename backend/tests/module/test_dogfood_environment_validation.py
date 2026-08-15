@@ -17,6 +17,7 @@ from tests.dogfood_infrastructure_test_support import (
     command_with_root_owned_revision_as_service_user,
     write_dogfood_env,
     write_dogfood_revision,
+    write_executable,
 )
 
 
@@ -78,6 +79,121 @@ def test_should_continue_after_loading_valid_dogfood_environment(
 
     assert result.returncode == 0, result.stderr
     assert sentinel_path.is_file()
+
+
+def test_should_supply_defaults_when_new_storage_settings_are_absent(
+    tmp_path: Path,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+
+    result = subprocess.run(
+        command_with_root_owned_revision(
+            tmp_path / "config" / "dogfood.revision",
+            [
+                "bash",
+                "-c",
+                'source "$1"; dogfood_load_environment; '
+                'printf "%s\\n%s\\n" "$DOGFOOD_SERVICE_HOME_DIR" '
+                '"$DOGFOOD_OLLAMA_MODELS_DIR"',
+                "bash",
+                str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+            ],
+        ),
+        env={**os.environ, "DOGFOOD_ENV_FILE": str(env_path)},
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "/var/lib/digital-souls/home",
+        "/var/lib/digital-souls/models/ollama",
+    ]
+
+
+@pytest.mark.parametrize(
+    "key",
+    ("DOGFOOD_SERVICE_HOME_DIR", "DOGFOOD_OLLAMA_MODELS_DIR"),
+)
+def test_should_reject_explicitly_empty_optional_storage_setting(
+    tmp_path: Path,
+    key: str,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    with env_path.open("a", encoding="utf-8") as env_file:
+        env_file.write(f"\n{key}=\n")
+    sentinel_path = tmp_path / "empty-optional-storage.sentinel"
+
+    result = _run_loader(env_path, sentinel_path)
+
+    assert result.returncode == 2
+    assert not sentinel_path.exists()
+
+
+@pytest.mark.parametrize(
+    ("explicit_distro", "wslinfo_distro", "wslinfo_succeeds", "expected_code"),
+    (
+        ("Ubuntu-dogfood", "Ubuntu-dogfood", True, 0),
+        (None, "Ubuntu-dogfood", True, 0),
+        ("Ubuntu-dogfood", "Ubuntu-dev", True, 2),
+        ("Ubuntu-dogfood", None, False, 0),
+        (None, None, False, 2),
+    ),
+    ids=(
+        "matching-explicit",
+        "wslinfo-fallback",
+        "candidate-mismatch",
+        "explicit-with-unavailable-wslinfo",
+        "unresolved",
+    ),
+)
+def test_should_resolve_wsl_identity_without_guessing(
+    tmp_path: Path,
+    explicit_distro: str | None,
+    wslinfo_distro: str | None,
+    wslinfo_succeeds: bool,
+    expected_code: int,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    bin_dir = tmp_path / "identity-bin"
+    bin_dir.mkdir()
+    if wslinfo_succeeds:
+        assert wslinfo_distro is not None
+        write_executable(
+            bin_dir / "wslinfo",
+            f'[ "$*" = "--name" ]\nprintf "%s\\n" {wslinfo_distro!r}\n',
+        )
+    else:
+        write_executable(bin_dir / "wslinfo", "exit 1\n")
+    environment = {
+        **os.environ,
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        "DOGFOOD_ENV_FILE": str(env_path),
+    }
+    if explicit_distro is None:
+        environment.pop("WSL_DISTRO_NAME", None)
+    else:
+        environment["WSL_DISTRO_NAME"] = explicit_distro
+
+    result = subprocess.run(
+        command_with_root_owned_revision(
+            tmp_path / "config" / "dogfood.revision",
+            [
+                "bash",
+                "-c",
+                'source "$1"; dogfood_load_environment; dogfood_require_identity',
+                "bash",
+                str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+            ],
+        ),
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == expected_code, (result.stdout, result.stderr)
 
 
 def test_should_export_revision_loaded_from_the_separate_revision_file(

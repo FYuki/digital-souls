@@ -128,8 +128,17 @@ def _run_bootstrap(
     state_path: Path | None = None,
     non_root_parent: Path | None = None,
     service_group_missing: bool = False,
+    compose_available: bool = True,
+    rerun: bool = False,
+    initial_user_state: tuple[str, str, str] | None = None,
+    data_root_residuals: dict[str, str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], tuple[str, ...]]:
-    env_path, _ = write_dogfood_env(tmp_path)
+    env_path, data_dir = write_dogfood_env(tmp_path)
+    if data_root_residuals is not None:
+        for relative_path, content in data_root_residuals.items():
+            residual = data_dir / relative_path
+            residual.parent.mkdir(parents=True, exist_ok=True)
+            residual.write_text(content, encoding="utf-8")
     if state_symlink_target is not None:
         (tmp_path / "state").symlink_to(state_symlink_target, target_is_directory=True)
     env_path.chmod(env_mode)
@@ -143,18 +152,27 @@ def _run_bootstrap(
             f"DOGFOOD_STATE_DIR={state_path}",
         )
     env_path.write_text(source, encoding="utf-8")
+    environment_source = env_path.read_text(encoding="utf-8")
     initial_clone_assets: Path | None = None
     if clone_scenario == "existing":
         prepare_bootstrap_clone(tmp_path)
     else:
         initial_clone_assets = prepare_initial_bootstrap_clone_assets(tmp_path)
     fake_bin, call_log = install_bootstrap_command_fakes(tmp_path)
+    user_state_path = tmp_path / "service-user.state"
+    user_state = initial_user_state or (
+        "/var/lib/digital-souls/home",
+        TEST_SERVICE_GROUP,
+        "/usr/sbin/nologin",
+    )
+    user_state_path.write_text(f"{'|'.join(user_state)}\n", encoding="utf-8")
     environment = {
         **os.environ,
         "DOGFOOD_ENV_FILE": str(env_path),
         "WSL_DISTRO_NAME": wsl_distribution,
         "BOOTSTRAP_CALL_LOG": str(call_log),
         "BOOTSTRAP_GROUP_CREATED": str(tmp_path / "service-group.created"),
+        "BOOTSTRAP_USER_STATE": str(user_state_path),
         "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
     }
     if failure is not None:
@@ -165,6 +183,8 @@ def _run_bootstrap(
         environment["BOOTSTRAP_INITIAL_CLONE_ASSETS"] = str(initial_clone_assets)
     if service_group_missing:
         environment["BOOTSTRAP_SERVICE_GROUP_MISSING"] = "1"
+    if compose_available:
+        environment["BOOTSTRAP_COMPOSE_AVAILABLE"] = "1"
     revision_path = tmp_path / "config" / "dogfood.revision"
     command = command_with_root_owned_revision(
         revision_path, [str(DOGFOOD_SCRIPTS_DIR / "bootstrap.sh")]
@@ -189,6 +209,15 @@ def _run_bootstrap(
         capture_output=True,
         text=True,
     )
+    if rerun and result.returncode == 0:
+        env_path.write_text(environment_source, encoding="utf-8")
+        env_path.chmod(env_mode)
+        result = subprocess.run(
+            command,
+            env=environment,
+            capture_output=True,
+            text=True,
+        )
     calls = tuple(call_log.read_text(encoding="utf-8").splitlines())
     return result, calls
 
@@ -254,6 +283,7 @@ def test_should_place_assets_only_after_bootstrap_trust_checks_succeed(
     )
 
     assert result.returncode == 0, result.stderr
+    assert "docker\tcompose version" in calls
     assert "renderer" in calls
     assert _backup_calls(calls) == ()
     assert _target_cli_calls(calls) == ()
@@ -261,6 +291,99 @@ def test_should_place_assets_only_after_bootstrap_trust_checks_succeed(
     assert any(call.startswith("install\t") for call in calls)
     assert "systemctl\tdaemon-reload" in calls
     assert "systemctl\tenable digital-souls-inference.target" in calls
+
+
+def test_should_prepare_backend_and_frontend_without_starting_services(
+    tmp_path: Path,
+) -> None:
+    result, calls = _run_bootstrap(
+        tmp_path,
+        None,
+        False,
+        "existing",
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert calls.count("backend-setup") == 1
+    assert any(
+        call.startswith("npm\t") and " install " in f" {call} " for call in calls
+    )
+    assert any(call.startswith("npm\t") and " run build" in call for call in calls)
+    systemctl_actions = tuple(
+        call.partition("\t")[2] for call in calls if call.startswith("systemctl\t")
+    )
+    assert not any(
+        action.startswith(("start ", "restart ")) for action in systemctl_actions
+    )
+
+
+def test_should_converge_existing_user_and_directories_only_once_across_reruns(
+    tmp_path: Path,
+) -> None:
+    residuals = {
+        ".ollama/identity.sentinel": "ollama identity remains unchanged\n",
+        ".cache/runtime.sentinel": "cache remains unchanged\n",
+    }
+    result, calls = _run_bootstrap(
+        tmp_path,
+        None,
+        False,
+        "existing",
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+        rerun=True,
+        initial_user_state=(str(tmp_path / "data"), "legacy-group", "/bin/bash"),
+        data_root_residuals=residuals,
+    )
+
+    assert result.returncode == 0, result.stderr
+    usermod_calls = tuple(call for call in calls if call.startswith("usermod\t"))
+    assert usermod_calls == (
+        "usermod\t"
+        f"--home /var/lib/digital-souls/home --gid {TEST_SERVICE_GROUP} "
+        "--shell /usr/sbin/nologin digital-souls",
+    )
+    assert " -m " not in f" {usermod_calls[0]} "
+    assert (tmp_path / "service-user.state").read_text(encoding="utf-8") == (
+        f"/var/lib/digital-souls/home|{TEST_SERVICE_GROUP}|/usr/sbin/nologin\n"
+    )
+    directory_installs = tuple(
+        call for call in calls if call.startswith("install\t-d -m 0750")
+    )
+    assert (
+        sum("/var/lib/digital-souls/home" in call for call in directory_installs) == 2
+    )
+    assert (
+        sum(
+            "/var/lib/digital-souls/models/ollama" in call
+            for call in directory_installs
+        )
+        == 2
+    )
+    for relative_path, content in residuals.items():
+        residual = tmp_path / "data" / relative_path
+        assert residual.is_file()
+        assert residual.read_text(encoding="utf-8") == content
+
+
+def test_should_reject_bootstrap_before_changes_when_compose_plugin_is_missing(
+    tmp_path: Path,
+) -> None:
+    result, calls = _run_bootstrap(
+        tmp_path,
+        None,
+        False,
+        "existing",
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+        compose_available=False,
+    )
+
+    assert result.returncode == 2
+    assert "docker\tcompose version" in calls
+    assert _post_gate_side_effect_calls(calls, ()) == ()
 
 
 def test_should_reject_a_symlinked_manifest_root_before_bootstrap_changes(
