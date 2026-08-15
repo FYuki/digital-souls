@@ -83,17 +83,32 @@ def _wait_for_frontend(url: str, process: subprocess.Popen[str]) -> None:
     raise AssertionError("frontend did not become ready")
 
 
-def _start_built_frontend(port: int, backend_port: int) -> subprocess.Popen[str]:
+def _write_built_frontend_fixture(tmp_path: Path) -> Path:
+    frontend = tmp_path / "frontend"
+    dist = frontend / "dist"
+    dist.mkdir(parents=True)
+    frontend.joinpath("built-frontend-server.mjs").write_bytes(
+        ROOT_DIR.joinpath("frontend", "built-frontend-server.mjs").read_bytes()
+    )
+    dist.joinpath("index.html").write_text(
+        "<!doctype html><title>dogfood</title>", encoding="utf-8"
+    )
+    return frontend
+
+
+def _start_built_frontend(
+    frontend: Path, port: int, backend_port: int
+) -> subprocess.Popen[str]:
     return subprocess.Popen(
         (
             "node",
-            str(ROOT_DIR / "frontend" / "built-frontend-server.mjs"),
+            str(frontend / "built-frontend-server.mjs"),
             "--host",
             "127.0.0.1",
             "--port",
             str(port),
         ),
-        cwd=ROOT_DIR / "frontend",
+        cwd=frontend,
         env={
             **os.environ,
             "DS_BACKEND_ORIGIN": f"http://127.0.0.1:{backend_port}",
@@ -518,10 +533,13 @@ def test_should_serve_built_frontend_without_writing_to_read_only_clone(
 
 @pytest.mark.parametrize("path", ("/%00", "/%00/foo"))
 def test_should_reject_nul_static_path_and_continue_serving(
-    path: str,
+    tmp_path: Path, path: str,
 ) -> None:
+    frontend = _write_built_frontend_fixture(tmp_path)
     frontend_port = _available_local_port()
-    process = _start_built_frontend(frontend_port, _available_local_port())
+    process = _start_built_frontend(
+        frontend, frontend_port, _available_local_port()
+    )
     try:
         _wait_for_frontend(f"http://127.0.0.1:{frontend_port}/", process)
 
@@ -535,10 +553,11 @@ def test_should_reject_nul_static_path_and_continue_serving(
         _stop_process(process)
 
 
-def test_should_proxy_http_and_websocket_to_backend() -> None:
+def test_should_proxy_http_and_websocket_to_backend(tmp_path: Path) -> None:
+    frontend = _write_built_frontend_fixture(tmp_path)
     backend = _ProxyBackendFixture()
     frontend_port = _available_local_port()
-    process = _start_built_frontend(frontend_port, backend.port)
+    process = _start_built_frontend(frontend, frontend_port, backend.port)
     try:
         _wait_for_frontend(f"http://127.0.0.1:{frontend_port}/", process)
 
