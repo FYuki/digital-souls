@@ -390,6 +390,42 @@ def test_should_deploy_only_after_backup_verify_and_record_a_safe_manifest(
     )
 
 
+@pytest.mark.parametrize("failure", (None, "readiness"), ids=("deploy", "rollback"))
+def test_should_check_build_output_before_applying_read_only_clone_permissions(
+    tmp_path: Path, failure: str | None
+) -> None:
+    result, calls = _run_deploy(tmp_path, failure=failure)
+
+    build_indexes = tuple(
+        index for index, call in enumerate(calls) if call.startswith("frontend-build\t")
+    )
+    assert build_indexes
+    for build_index in build_indexes:
+        next_checkout = next(
+            (
+                index
+                for index in range(build_index + 1, len(calls))
+                if "checkout --detach" in calls[index]
+            ),
+            len(calls),
+        )
+        following_activation_calls = calls[build_index + 1 : next_checkout]
+        clean_indexes = tuple(
+            index
+            for index, call in enumerate(following_activation_calls)
+            if call.startswith("git\t") and " status --porcelain" in call
+        )
+        permission_index = next(
+            index
+            for index, call in enumerate(following_activation_calls)
+            if call.startswith(("chown\t", "chmod\t"))
+        )
+        assert clean_indexes, "frontend build後のclean checkout確認が必要です"
+        assert clean_indexes[0] < permission_index
+
+    assert result.returncode == (0 if failure is None else 1)
+
+
 def test_should_reject_missing_database_without_deployment_side_effects(
     tmp_path: Path,
 ) -> None:

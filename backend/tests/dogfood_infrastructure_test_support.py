@@ -107,6 +107,7 @@ def render_nondefault_dogfood_assets(tmp_path: Path) -> tuple[dict[str, str], Pa
     source = env_path.read_text(encoding="utf-8")
     for current, replacement in replacements.items():
         source = source.replace(current, replacement)
+    source += f"\nDOGFOOD_SERVICE_HOME_DIR={tmp_path / 'nondefault-service-home'}\n"
     env_path.write_text(source, encoding="utf-8")
     output_dir = tmp_path / "generated"
     revision_path = tmp_path / "config" / "dogfood.revision"
@@ -312,7 +313,11 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
         recorder
         + 'mkdir -p "$DOGFOOD_CLONE_DIR/frontend/node_modules"\n'
         + 'if [ "${BOOTSTRAP_NPM_DIRTY-}" = "1" ]; then '
-        + 'touch "$BOOTSTRAP_NPM_DIRTY_MARKER"; fi\n',
+        + 'touch "$BOOTSTRAP_NPM_DIRTY_MARKER"; fi\n'
+        + 'if [ "${BOOTSTRAP_BUILD_DIRTY-}" = "1" ] '
+        + '&& [ "$*" = "--prefix $DOGFOOD_CLONE_DIR/frontend run build" ]; then '
+        + '  touch "$BOOTSTRAP_BUILD_DIRTY_MARKER"\n'
+        + "fi\n",
     )
     write_executable(
         bin_dir / "git",
@@ -339,7 +344,8 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
         + '  *"symbolic-ref --quiet HEAD"*) [ "${BOOTSTRAP_FAILURE-}" = "branch" ] ;;\n'
         + '  *"status --porcelain"*)\n'
         + '    if [ "${BOOTSTRAP_FAILURE-}" = "dirty" ]; then printf " M modified\\n"; '
-        + 'elif [ -f "$BOOTSTRAP_NPM_DIRTY_MARKER" ]; then printf " M frontend/package-lock.json\\n"; fi ;;\n'
+        + 'elif [ -f "$BOOTSTRAP_NPM_DIRTY_MARKER" ]; then printf " M frontend/package-lock.json\\n"; '
+        + 'elif [ -f "$BOOTSTRAP_BUILD_DIRTY_MARKER" ]; then printf "?? frontend/build-runtime-artifact\\n"; fi ;;\n'
         + "esac\n",
     )
     return bin_dir, call_log
