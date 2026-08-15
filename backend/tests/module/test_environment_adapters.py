@@ -93,7 +93,7 @@ def test_should_prepare_missing_frontend_dependencies_without_starting_service(t
         resolved_profile()["dependencies"]["frontend"], OPERATION_CONTEXT
     )
 
-    assert runner.calls == [("npm", "install", "--prefix", str(frontend))]
+    assert runner.calls == [("npm", "ci", "--prefix", str(frontend))]
 
 
 def test_should_start_frontend_in_foreground_without_install_command(tmp_path: Path):

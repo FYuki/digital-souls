@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 
 from tests.dogfood_infrastructure_test_support import (
     DOGFOOD_SCRIPTS_DIR,
@@ -17,6 +18,7 @@ from tests.dogfood_infrastructure_test_support import (
     TEST_SERVICE_GROUP,
     command_with_root_owned_revision,
     read_valid_deployment_manifest,
+    render_dogfood_assets,
     write_dogfood_env,
     write_dogfood_revision,
     write_executable,
@@ -124,6 +126,7 @@ def _prepare_deploy_scenario(
     generation_count: int = 0,
     backup_output: str | None = None,
     database_exists: bool = True,
+    private_sentinels: bool = True,
 ) -> tuple[dict[str, str], Path]:
     env_path, data_dir = write_dogfood_env(tmp_path)
     clone_dir = tmp_path / "clone"
@@ -179,10 +182,11 @@ def _prepare_deploy_scenario(
     if database_exists:
         with sqlite3.connect(database) as connection:
             connection.execute("PRAGMA user_version = 3")
-    (data_dir / "private-sentinels").write_text(
-        f"{CONVERSATION_SENTINEL}\n{PROMPT_SENTINEL}\n",
-        encoding="utf-8",
-    )
+    if private_sentinels:
+        (data_dir / "private-sentinels").write_text(
+            f"{CONVERSATION_SENTINEL}\n{PROMPT_SENTINEL}\n",
+            encoding="utf-8",
+        )
     (tmp_path / "log").mkdir()
     deployments = tmp_path / "state" / "deployments"
     deployments.mkdir(parents=True)
@@ -403,8 +407,59 @@ def test_should_reject_missing_database_without_deployment_side_effects(
     ) == f"{TEST_REVISION}\n"
     assert (tmp_path / "head").read_text(encoding="utf-8") == TEST_REVISION
     assert not any("checkout --detach" in call for call in calls)
-    assert "start-services.sh" in result.stderr
-    assert "start-dogfood.sh" in result.stderr
+    assert "digital-souls-dogfood.target" in result.stderr
+    assert "conversation-history.db" in result.stderr
+
+
+@pytest.mark.anyio
+async def test_should_create_database_on_application_start_before_deploy_preparation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app import main
+
+    environment, call_log = _prepare_deploy_scenario(
+        tmp_path,
+        database_exists=False,
+        private_sentinels=False,
+    )
+    generated_dir = tmp_path / "generated"
+    render_dogfood_assets(
+        tmp_path / "dogfood.env",
+        tmp_path / "config" / "dogfood.revision",
+        generated_dir,
+    )
+    application_unit_path = generated_dir / "digital-souls-application.service"
+    assert application_unit_path.is_file()
+    application_unit = application_unit_path.read_text(encoding="utf-8")
+    data_dir = tmp_path / "data"
+
+    assert not (data_dir / "conversation-history.db").exists()
+    assert (
+        f"ExecStart={tmp_path / 'clone' / 'environments' / 'up.sh'}"
+        in application_unit
+    )
+    assert f"DS_DATA_DIR={data_dir}" in application_unit
+    monkeypatch.setenv("DS_ENVIRONMENT_ID", "dogfood")
+    monkeypatch.setenv("DS_DATA_DIR", str(data_dir))
+    monkeypatch.setenv("RAG_ENABLED", "false")
+    async with main.lifespan(FastAPI()):
+        assert (data_dir / "conversation-history.db").is_file()
+
+    result = subprocess.run(
+        command_with_root_owned_revision(
+            tmp_path / "config" / "dogfood.revision",
+            [str(DOGFOOD_SCRIPTS_DIR / "deploy.sh"), "--commit", NEXT_REVISION],
+        ),
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    calls = tuple(call_log.read_text(encoding="utf-8").splitlines())
+
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert calls.count("backend-setup") == 2
 
 
 def test_should_not_expose_private_content_in_deploy_outputs(

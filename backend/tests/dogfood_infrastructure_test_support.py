@@ -71,19 +71,12 @@ def write_dogfood_env(tmp_path: Path) -> tuple[Path, Path]:
     return env_path, data_dir
 
 
-def render_nondefault_dogfood_assets(tmp_path: Path) -> tuple[dict[str, str], Path]:
-    env_path, _ = write_dogfood_env(tmp_path)
-    replacements = {
-        "DOGFOOD_WSL_DISTRO=Ubuntu-dogfood": "DOGFOOD_WSL_DISTRO=Saab-dogfood",
-        "DOGFOOD_SERVICE_USER=digital-souls": "DOGFOOD_SERVICE_USER=soul-service",
-    }
-    source = env_path.read_text(encoding="utf-8")
-    for current, replacement in replacements.items():
-        source = source.replace(current, replacement)
-    env_path.write_text(source, encoding="utf-8")
-    output_dir = tmp_path / "generated"
+def render_dogfood_assets(
+    env_path: Path,
+    revision_path: Path,
+    output_dir: Path,
+) -> None:
     output_dir.mkdir()
-    revision_path = tmp_path / "config" / "dogfood.revision"
     result = subprocess.run(
         command_with_root_owned_revision(
             revision_path,
@@ -103,6 +96,21 @@ def render_nondefault_dogfood_assets(tmp_path: Path) -> tuple[dict[str, str], Pa
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def render_nondefault_dogfood_assets(tmp_path: Path) -> tuple[dict[str, str], Path]:
+    env_path, _ = write_dogfood_env(tmp_path)
+    replacements = {
+        "DOGFOOD_WSL_DISTRO=Ubuntu-dogfood": "DOGFOOD_WSL_DISTRO=Saab-dogfood",
+        "DOGFOOD_SERVICE_USER=digital-souls": "DOGFOOD_SERVICE_USER=soul-service",
+    }
+    source = env_path.read_text(encoding="utf-8")
+    for current, replacement in replacements.items():
+        source = source.replace(current, replacement)
+    env_path.write_text(source, encoding="utf-8")
+    output_dir = tmp_path / "generated"
+    revision_path = tmp_path / "config" / "dogfood.revision"
+    render_dogfood_assets(env_path, revision_path, output_dir)
     values = {
         line.partition("=")[0]: line.partition("=")[2] for line in source.splitlines()
     }
@@ -180,11 +188,16 @@ def _write_bootstrap_clone_assets(clone_dir: Path) -> None:
         renderer,
         'printf "renderer\\n" >> "$BOOTSTRAP_CALL_LOG"\n'
         'touch "$2/digital-souls-ollama.service" '
-        '"$2/digital-souls-voicevox.service" "$2/start-dogfood-wsl.ps1"\n',
+        '"$2/digital-souls-voicevox.service" '
+        '"$2/digital-souls-application.service" "$2/start-dogfood-wsl.ps1"\n',
     )
     target = clone_dir / "infra" / "dogfood" / "systemd"
     target.mkdir(parents=True)
     (target / "digital-souls-inference.target").write_text(
+        "[Unit]\nDescription=test\n",
+        encoding="utf-8",
+    )
+    (target / "digital-souls-dogfood.target").write_text(
         "[Unit]\nDescription=test\n",
         encoding="utf-8",
     )
@@ -288,8 +301,18 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
         + '[ "${BOOTSTRAP_COMPOSE_AVAILABLE-}" = "1" ]\n',
     )
     write_executable(
+        bin_dir / "node",
+        recorder
+        + '[ "${BOOTSTRAP_NODE_VERSION_EXIT_CODE-0}" -eq 0 ] || '
+        + 'exit "$BOOTSTRAP_NODE_VERSION_EXIT_CODE"\n'
+        + 'printf "%s\\n" "${BOOTSTRAP_NODE_VERSION-v22.0.0}"\n',
+    )
+    write_executable(
         bin_dir / "npm",
-        recorder + 'mkdir -p "$DOGFOOD_CLONE_DIR/frontend/node_modules"\n',
+        recorder
+        + 'mkdir -p "$DOGFOOD_CLONE_DIR/frontend/node_modules"\n'
+        + 'if [ "${BOOTSTRAP_NPM_DIRTY-}" = "1" ]; then '
+        + 'touch "$BOOTSTRAP_NPM_DIRTY_MARKER"; fi\n',
     )
     write_executable(
         bin_dir / "git",
@@ -308,9 +331,15 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
         + '    if [ "${BOOTSTRAP_FAILURE-}" = "revision" ]; '
         + 'then printf "ffffffffffffffffffffffffffffffffffffffff\\n"; '
         + 'else printf "%s\\n" "$DOGFOOD_REPOSITORY_REVISION"; fi ;;\n'
-        + '  *"rev-parse HEAD"*) printf "%s\\n" "$DOGFOOD_REPOSITORY_REVISION" ;;\n'
+        + '  *"checkout --detach"*) touch "$BOOTSTRAP_CHECKED_OUT_MARKER" ;;\n'
+        + '  *"rev-parse HEAD"*)\n'
+        + '    if [ -f "$BOOTSTRAP_CHECKED_OUT_MARKER" ]; then '
+        + 'printf "%s\\n" "$DOGFOOD_REPOSITORY_REVISION"; '
+        + 'else printf "%s\\n" "${BOOTSTRAP_CURRENT_HEAD-$DOGFOOD_REPOSITORY_REVISION}"; fi ;;\n'
         + '  *"symbolic-ref --quiet HEAD"*) [ "${BOOTSTRAP_FAILURE-}" = "branch" ] ;;\n'
-        + '  *"status --porcelain"*) if [ "${BOOTSTRAP_FAILURE-}" = "dirty" ]; then printf " M modified\\n"; fi ;;\n'
+        + '  *"status --porcelain"*)\n'
+        + '    if [ "${BOOTSTRAP_FAILURE-}" = "dirty" ]; then printf " M modified\\n"; '
+        + 'elif [ -f "$BOOTSTRAP_NPM_DIRTY_MARKER" ]; then printf " M frontend/package-lock.json\\n"; fi ;;\n'
         + "esac\n",
     )
     return bin_dir, call_log

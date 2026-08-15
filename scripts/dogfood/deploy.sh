@@ -41,7 +41,7 @@ dogfood_validate_deployment_storage
 dogfood_verify_origin
 dogfood_require_clean_checkout
 if [ ! -f "$DS_DATA_DIR/conversation-history.db" ]; then
-  echo "ERROR: conversation history DBがありません。先にstart-services.shとstart-dogfood.shで初回起動してください" >&2
+  echo "ERROR: conversation-history.dbがありません。先にdigital-souls-dogfood.targetを起動してBackendの初回DB作成を完了してください" >&2
   exit 2
 fi
 dogfood_prepare_backend

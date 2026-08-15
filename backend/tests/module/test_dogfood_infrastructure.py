@@ -3,8 +3,13 @@ from __future__ import annotations
 import configparser
 import os
 import re
+import signal
+import shutil
 import subprocess
 from pathlib import Path
+
+import pytest
+import yaml
 
 from tests.dogfood_infrastructure_test_support import render_nondefault_dogfood_assets
 
@@ -65,16 +70,41 @@ def _read_unit(path: Path) -> configparser.ConfigParser:
     return parser
 
 
-def _single_systemd_asset(pattern: str) -> Path:
-    matches = tuple((DOGFOOD_INFRA_DIR / "systemd").glob(pattern))
-    assert len(matches) == 1, f"{pattern} は1つだけ必要です: {matches}"
-    return matches[0]
-
-
 def _assert_finite_stop_timeout(service: configparser.SectionProxy) -> None:
     timeout = service["TimeoutStopSec"]
 
     assert re.fullmatch(r"[1-9]\d*(?:ms|s|min)?", timeout)
+
+
+def _run_compose_command(
+    command: list[str], environment: dict[str, str], timeout: float
+) -> subprocess.CompletedProcess[str]:
+    process = subprocess.Popen(
+        command,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.communicate()
+        raise
+    assert process.returncode is not None
+    return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
 
 
 def test_should_define_separate_dogfood_identity_clone_and_runtime_paths() -> None:
@@ -260,7 +290,7 @@ def test_should_stop_voicevox_compose_before_a_finite_timeout(
 
 
 def test_should_define_one_inference_target_for_both_owned_services() -> None:
-    target_path = _single_systemd_asset("*.target")
+    target_path = DOGFOOD_INFRA_DIR / "systemd" / "digital-souls-inference.target"
     target = _read_unit(target_path)
     service_names = {
         "digital-souls-ollama.service",
@@ -272,10 +302,10 @@ def test_should_define_one_inference_target_for_both_owned_services() -> None:
     assert wants == service_names
 
 
-def test_should_route_service_lifecycle_entrypoints_through_the_inference_target() -> (
+def test_should_route_service_lifecycle_entrypoints_through_the_dogfood_target() -> (
     None
 ):
-    target_name = _single_systemd_asset("*.target").name
+    target_name = "digital-souls-dogfood.target"
 
     for script_name, action in (
         ("start-services.sh", "start"),
@@ -312,11 +342,168 @@ def test_should_limit_compose_to_loopback_voicevox_only() -> None:
     assert not re.search(r"(?m)^  (frontend|backend|ollama):", service_block["body"])
 
 
+def test_should_mount_only_voicevox_local_share_as_tmpfs() -> None:
+    compose_path = DOGFOOD_INFRA_DIR / "voicevox" / "compose.yaml"
+    compose = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
+    service = compose["services"]["voicevox"]
+    tmpfs = service.get("tmpfs")
+
+    assert tmpfs == ["/home/user/.local/share:uid=1000,gid=1000,size=64m"]
+    assert "user" not in service
+    assert tmpfs is not None
+    assert all(entry.split(":", maxsplit=1)[0] != "/home/user" for entry in tmpfs)
+    assert "UID/GID 1000" in compose_path.read_text(encoding="utf-8")
+
+
+def test_should_keep_voicevox_cpu_runtime_and_existing_user_package_available(
+    tmp_path: Path,
+) -> None:
+    if shutil.which("docker") is None:
+        pytest.skip("Docker CLIが利用できないためVOICEVOX runtime検証を省略します")
+    daemon = subprocess.run(
+        ["docker", "info"],
+        capture_output=True,
+        text=True,
+    )
+    if daemon.returncode != 0:
+        pytest.skip("Docker daemonが利用できないためVOICEVOX runtime検証を省略します")
+    compose_path = DOGFOOD_INFRA_DIR / "voicevox" / "compose.yaml"
+    project = re.sub(r"[^a-z0-9_-]", "-", f"voicevox-{tmp_path.name}".lower())
+    compose_command = [
+        "docker",
+        "compose",
+        "--project-name",
+        project,
+        "--file",
+        str(compose_path),
+    ]
+    environment = {
+        **os.environ,
+        "DOGFOOD_VOICEVOX_IMAGE": "voicevox/voicevox_engine:cpu-ubuntu20.04-latest",
+        "DOGFOOD_VOICEVOX_CONTAINER": project,
+        "VOICEVOX_HOST": "127.0.0.1",
+        "VOICEVOX_PORT": "0",
+    }
+    image = subprocess.run(
+        ["docker", "image", "inspect", environment["DOGFOOD_VOICEVOX_IMAGE"]],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if image.returncode != 0:
+        pytest.skip("VOICEVOX imageが未取得のためruntime検証を省略します")
+
+    try:
+        started = _run_compose_command(
+            [*compose_command, "up", "--detach"],
+            environment,
+            timeout=120,
+        )
+        assert started.returncode == 0, (started.stdout, started.stderr)
+        running = _run_compose_command(
+            [*compose_command, "ps", "--status", "running", "--services"],
+            environment,
+            timeout=10,
+        )
+        assert running.returncode == 0, (running.stdout, running.stderr)
+        assert running.stdout.splitlines() == ["voicevox"]
+        published = _run_compose_command(
+            [*compose_command, "port", "voicevox", "50021"],
+            environment,
+            timeout=10,
+        )
+        assert published.returncode == 0, (published.stdout, published.stderr)
+        published_port = published.stdout.strip().rsplit(":", maxsplit=1)[-1]
+        assert published_port.isdigit(), published.stdout
+        from http_readiness import wait_for_http
+
+        readiness = wait_for_http(
+            f"http://127.0.0.1:{published_port}/version",
+            max_attempts=120,
+            interval_seconds=0.5,
+            request_timeout_seconds=1.0,
+        )
+        assert readiness.result == "ready", readiness
+        package = _run_compose_command(
+            [
+                *compose_command,
+                "exec",
+                "--no-TTY",
+                "--user",
+                "user",
+                "voicevox",
+                "/opt/python/bin/python3",
+                "-c",
+                "import pyopenjtalk; print(pyopenjtalk.__file__)",
+            ],
+            environment,
+            timeout=30,
+        )
+        assert package.returncode == 0, (package.stdout, package.stderr)
+        assert "/home/user/.local/lib/" in package.stdout
+        logs = _run_compose_command(
+            [*compose_command, "logs", "--no-color", "voicevox"],
+            environment,
+            timeout=10,
+        )
+        assert logs.returncode == 0, (logs.stdout, logs.stderr)
+        assert "PermissionError" not in f"{logs.stdout}\n{logs.stderr}"
+        still_running = _run_compose_command(
+            [*compose_command, "ps", "--status", "running", "--services"],
+            environment,
+            timeout=10,
+        )
+        assert still_running.returncode == 0, (
+            still_running.stdout,
+            still_running.stderr,
+        )
+        assert still_running.stdout.splitlines() == ["voicevox"]
+    finally:
+        _run_compose_command(
+            [*compose_command, "down", "--volumes", "--remove-orphans"],
+            environment,
+            timeout=30,
+        )
+
+
 def test_should_delegate_voicevox_container_recovery_to_compose() -> None:
     compose_path = DOGFOOD_INFRA_DIR / "voicevox" / "compose.yaml"
     content = compose_path.read_text(encoding="utf-8")
 
     assert re.search(r'(?m)^    restart:\s+["\']?unless-stopped["\']?\s*$', content)
+
+
+def test_should_preserve_data_directory_when_rendering_sed_metacharacters(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "generated"
+    output_dir.mkdir()
+    data_dir = r"/srv/dog&food|segment\leaf"
+    result = subprocess.run(
+        [
+            str(DOGFOOD_SCRIPTS_DIR / "render-assets.sh"),
+            str(DOGFOOD_INFRA_DIR / "templates"),
+            str(output_dir),
+        ],
+        env={
+            **os.environ,
+            "DOGFOOD_SERVICE_USER": "digital-souls",
+            "DOGFOOD_SERVICE_GROUP": "digital-souls",
+            "DOGFOOD_CONFIG_DIR": "/etc/digital-souls",
+            "DOGFOOD_CLONE_DIR": "/opt/digital-souls/current",
+            "DOGFOOD_WSL_DISTRO": "Ubuntu-dogfood",
+            "DS_DATA_DIR": data_dir,
+        },
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    application = (output_dir / "digital-souls-application.service").read_text(
+        encoding="utf-8"
+    )
+    assert f'DS_DATA_DIR={data_dir}"' in application
 
 
 def test_should_generate_a_windows_entrypoint_from_the_shared_environment(
@@ -327,8 +514,60 @@ def test_should_generate_a_windows_entrypoint_from_the_shared_environment(
 
     assert "wsl.exe" in source
     assert values["DOGFOOD_WSL_DISTRO"] in source
-    assert values["DOGFOOD_CLONE_DIR"] in source
-    assert values["DOGFOOD_CONFIG_DIR"] in source
     assert re.search(r"wsl\.exe\s+.*--user\s+root(?:\s|$)", source)
-    assert "DOGFOOD_ENV_FILE=" in source
-    assert "start-services.sh" in source or "systemctl" in source
+    assert "systemctl start digital-souls-dogfood.target" in source
+    assert "$LASTEXITCODE -ne 0" in source
+    assert source.index("wsl.exe") < source.index("$LASTEXITCODE -ne 0")
+    assert "throw" in source
+    assert "start-services.sh" not in source
+    assert not re.search(r"\bsystemctl\s+(?:stop|restart|is-active|show)\b", source)
+
+
+def test_should_delegate_application_lifecycle_to_one_oneshot_systemd_unit(
+    tmp_path: Path,
+) -> None:
+    values, generated_dir = render_nondefault_dogfood_assets(tmp_path)
+    unit_path = generated_dir / "digital-souls-application.service"
+    assert unit_path.is_file()
+    unit = _read_unit(unit_path)
+    service = unit["Service"]
+
+    assert service["Type"] == "oneshot"
+    assert service["RemainAfterExit"] == "yes"
+    assert service["User"] == values["DOGFOOD_SERVICE_USER"]
+    assert service["Group"] == values["DOGFOOD_SERVICE_GROUP"]
+    assert service["ExecStart"] == f"{values['DOGFOOD_CLONE_DIR']}/environments/up.sh"
+    assert service["ExecStop"] == f"{values['DOGFOOD_CLONE_DIR']}/environments/down.sh"
+    assert "EnvironmentFile" not in service
+    assert "DS_ENVIRONMENT_ID=dogfood" in service["Environment"]
+    assert f"DS_DATA_DIR={values['DS_DATA_DIR']}" in service["Environment"]
+    assert "DOGFOOD_BACKUP_AUTHENTICATION_KEY" not in unit_path.read_text(
+        encoding="utf-8"
+    )
+    assert "digital-souls-inference.target" in unit["Unit"]["After"].split()
+    assert "Restart" not in service
+
+
+def test_should_require_inference_and_application_from_dogfood_target() -> None:
+    target_path = DOGFOOD_INFRA_DIR / "systemd" / "digital-souls-dogfood.target"
+    assert target_path.is_file()
+    target = _read_unit(target_path)["Unit"]
+    dependencies = {
+        "digital-souls-inference.target",
+        "digital-souls-application.service",
+    }
+
+    assert set(target["Requires"].split()) == dependencies
+    assert set(target["After"].split()) == dependencies
+
+
+def test_should_stop_application_and_inference_with_dogfood_target() -> None:
+    application = _read_unit(
+        DOGFOOD_INFRA_DIR / "templates" / "digital-souls-application.service.template"
+    )["Unit"]
+    inference = _read_unit(
+        DOGFOOD_INFRA_DIR / "systemd" / "digital-souls-inference.target"
+    )["Unit"]
+
+    assert application["PartOf"] == "digital-souls-dogfood.target"
+    assert inference["PartOf"] == "digital-souls-dogfood.target"

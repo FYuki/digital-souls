@@ -53,7 +53,7 @@ class FrontendAdapter(ProcessServiceOperations):
         require_resolved_managed_endpoint(dependency, service="frontend")
         frontend_dir = self.root_dir / "frontend"
         if not (frontend_dir / "node_modules").is_dir():
-            result = self.runner.run(("npm", "install", "--prefix", str(frontend_dir)), self.root_dir)
+            result = self.runner.run(("npm", "ci", "--prefix", str(frontend_dir)), self.root_dir)
             if not command_succeeded(result):
                 raise RuntimeError(f"frontend dependency installation failed: {result.get('stderr', '')}")
 

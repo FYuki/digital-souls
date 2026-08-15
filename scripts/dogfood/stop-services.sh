@@ -4,4 +4,4 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/load-environment.sh"
 dogfood_load_environment
 dogfood_require_identity
-systemctl stop digital-souls-inference.target
+systemctl stop digital-souls-dogfood.target

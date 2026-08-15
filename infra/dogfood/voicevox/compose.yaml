@@ -3,5 +3,8 @@ services:
     image: ${DOGFOOD_VOICEVOX_IMAGE}
     container_name: ${DOGFOOD_VOICEVOX_CONTAINER}
     restart: unless-stopped
+    tmpfs:
+      # VOICEVOX image内のuserがUID/GID 1000であることを前提とする。
+      - "/home/user/.local/share:uid=1000,gid=1000,size=64m"
     ports:
       - "${VOICEVOX_HOST}:${VOICEVOX_PORT}:50021"

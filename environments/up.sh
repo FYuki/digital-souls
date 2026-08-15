@@ -10,4 +10,4 @@ case "$SCRIPT_DIR" in
   /*) ;;
   *) SCRIPT_DIR="$PWD/$SCRIPT_DIR" ;;
 esac
-exec python3 "$SCRIPT_DIR/environment_cli.py" up "$@"
+exec python3 "$SCRIPT_DIR/environment_cli.py" start "$@"
