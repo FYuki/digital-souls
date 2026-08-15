@@ -87,17 +87,25 @@ def up_environment(
         backend = dependencies.get("backend")
         if not isinstance(backend, dict):
             raise ValueError("resolved backend dependency is required")
+        effective_profile = profile.get("effectiveProfile")
+        if not isinstance(effective_profile, str) or not effective_profile:
+            raise ValueError("resolved effective profile is required")
         if registry is not None:
             resolved_registry = registry
         elif backend.get("mode") == "real":
             resolved_registry = create_service_registry(
                 root_dir,
                 runtime_paths,
+                effective_profile=effective_profile,
                 ollama_model_name=derived["OLLAMA_CHAT_MODEL"],
                 whisper_model_name=derived["WHISPER_MODEL"],
             )
         else:
-            resolved_registry = create_service_registry(root_dir, runtime_paths)
+            resolved_registry = create_service_registry(
+                root_dir,
+                runtime_paths,
+                effective_profile=effective_profile,
+            )
         ready_gate = profile.get("readyGate")
         if not isinstance(ready_gate, dict):
             raise ValueError("resolved ready gate is required")

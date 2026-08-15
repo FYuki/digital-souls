@@ -30,11 +30,16 @@ def verify_environment(
         resolved_registry = create_service_registry(
             root_dir,
             runtime_paths,
+            effective_profile=profile["effectiveProfile"],
             ollama_model_name=derived["OLLAMA_CHAT_MODEL"],
             whisper_model_name=derived["WHISPER_MODEL"],
         )
     else:
-        resolved_registry = create_service_registry(root_dir, runtime_paths)
+        resolved_registry = create_service_registry(
+            root_dir,
+            runtime_paths,
+            effective_profile=profile["effectiveProfile"],
+        )
     services = verification_checks(
         profile,
         resolved_registry,

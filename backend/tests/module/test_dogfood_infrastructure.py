@@ -11,6 +11,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from app.model_settings import OLLAMA_MODEL_NAME
+
 from tests.dogfood_infrastructure_test_support import render_nondefault_dogfood_assets
 
 
@@ -479,6 +481,7 @@ def test_should_preserve_data_directory_when_rendering_sed_metacharacters(
     output_dir = tmp_path / "generated"
     output_dir.mkdir()
     data_dir = r"/srv/dog&food|segment\leaf"
+    service_home_dir = r"/srv/home&food|segment\leaf"
     result = subprocess.run(
         [
             str(DOGFOOD_SCRIPTS_DIR / "render-assets.sh"),
@@ -492,6 +495,7 @@ def test_should_preserve_data_directory_when_rendering_sed_metacharacters(
             "DOGFOOD_CONFIG_DIR": "/etc/digital-souls",
             "DOGFOOD_CLONE_DIR": "/opt/digital-souls/current",
             "DOGFOOD_WSL_DISTRO": "Ubuntu-dogfood",
+            "DOGFOOD_SERVICE_HOME_DIR": service_home_dir,
             "DS_DATA_DIR": data_dir,
         },
         capture_output=True,
@@ -504,6 +508,35 @@ def test_should_preserve_data_directory_when_rendering_sed_metacharacters(
         encoding="utf-8"
     )
     assert f'DS_DATA_DIR={data_dir}"' in application
+    assert f'HOME={service_home_dir}"' in application
+
+
+def test_should_require_service_home_when_rendering_assets(tmp_path: Path) -> None:
+    output_dir = tmp_path / "generated"
+    output_dir.mkdir()
+
+    result = subprocess.run(
+        [
+            str(DOGFOOD_SCRIPTS_DIR / "render-assets.sh"),
+            str(DOGFOOD_INFRA_DIR / "templates"),
+            str(output_dir),
+        ],
+        env={
+            **os.environ,
+            "DOGFOOD_SERVICE_USER": "digital-souls",
+            "DOGFOOD_SERVICE_GROUP": "digital-souls",
+            "DOGFOOD_CONFIG_DIR": "/etc/digital-souls",
+            "DOGFOOD_CLONE_DIR": "/opt/digital-souls/current",
+            "DOGFOOD_WSL_DISTRO": "Ubuntu-dogfood",
+            "DS_DATA_DIR": "/var/lib/digital-souls",
+        },
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode != 0
+    assert "DOGFOOD_SERVICE_HOME_DIR" in result.stderr
 
 
 def test_should_generate_a_windows_entrypoint_from_the_shared_environment(
@@ -541,11 +574,36 @@ def test_should_delegate_application_lifecycle_to_one_oneshot_systemd_unit(
     assert "EnvironmentFile" not in service
     assert "DS_ENVIRONMENT_ID=dogfood" in service["Environment"]
     assert f"DS_DATA_DIR={values['DS_DATA_DIR']}" in service["Environment"]
+    assert f"HOME={values['DOGFOOD_SERVICE_HOME_DIR']}" in service["Environment"]
+    assert f"XDG_CACHE_HOME={values['DS_DATA_DIR']}/cache" in service["Environment"]
+    assert (
+        f"npm_config_cache={values['DS_DATA_DIR']}/cache/npm" in service["Environment"]
+    )
     assert "DOGFOOD_BACKUP_AUTHENTICATION_KEY" not in unit_path.read_text(
         encoding="utf-8"
     )
     assert "digital-souls-inference.target" in unit["Unit"]["After"].split()
     assert "Restart" not in service
+
+
+def test_should_document_executable_pull_command_for_backend_default_model() -> None:
+    source = README_PATH.read_text(encoding="utf-8")
+    command_blocks = re.findall(r"```bash\n(.*?)```", source, flags=re.DOTALL)
+    pull_commands = [
+        " ".join(line.rstrip("\\").strip() for line in block.splitlines())
+        for block in command_blocks
+        if "ollama pull" in block
+    ]
+
+    expected_parts = (
+        "sudo -u digital-souls env",
+        "HOME=/var/lib/digital-souls/home",
+        "OLLAMA_MODELS=/var/lib/digital-souls/models/ollama",
+        f"ollama pull {OLLAMA_MODEL_NAME}",
+    )
+    assert any(
+        all(part in command for part in expected_parts) for command in pull_commands
+    )
 
 
 def test_should_require_inference_and_application_from_dogfood_target() -> None:

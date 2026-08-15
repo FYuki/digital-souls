@@ -58,6 +58,42 @@ class _NeverReadyOperations:
         return StopResult("stopped")
 
 
+def test_should_route_effective_profile_to_up_service_registry(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import commands.up_command as up_command
+    from tests.environment_test_support import resolved_profile
+
+    profile = resolved_profile("dogfood")
+    captured_settings: dict[str, object] = {}
+
+    class ExpectedStop(RuntimeError):
+        pass
+
+    def create_registry(root, runtime, **settings):
+        captured_settings.update(settings)
+        raise ExpectedStop("registry captured")
+
+    monkeypatch.setenv("DS_ENVIRONMENT_ID", "test")
+    monkeypatch.setenv("DS_DATA_DIR", str(tmp_path / "runtime-data"))
+    monkeypatch.setattr(
+        up_command,
+        "resolve_and_write_profile",
+        lambda env, default, path, legacy, runtime: profile,
+    )
+    monkeypatch.setattr(up_command, "create_service_registry", create_registry)
+    report_dir = tmp_path / "runtime-data" / "runtime" / "test"
+    arguments = argparse.Namespace(
+        run_report=str(report_dir / "environment-run.json"),
+        profile_report=str(report_dir / "resolved-profile.json"),
+        default_profile="dogfood",
+    )
+
+    exit_code = up_command.up_environment(tmp_path, arguments)
+
+    assert exit_code == 1
+    assert captured_settings["effective_profile"] == "dogfood"
+
 class _ExitedFrontendOperations(_NeverReadyOperations):
     def is_running(self, service):
         return False

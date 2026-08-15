@@ -142,6 +142,7 @@ dogfood_activate_revision() {
   dogfood_verify_detached_clean_revision "$target" || return
   dogfood_prepare_backend || return
   npm --prefix "$DOGFOOD_CLONE_DIR/frontend" run build || return
+  dogfood_require_clean_checkout || return
   chown -R "root:$DOGFOOD_SERVICE_GROUP" "$DOGFOOD_CLONE_DIR" || return
   chmod -R g-w,o-rwx "$DOGFOOD_CLONE_DIR" || return
   "$DOGFOOD_CLONE_DIR/scripts/dogfood/restart-services.sh" || return

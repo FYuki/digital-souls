@@ -39,6 +39,11 @@ def test_should_distinguish_unpreparable_verification_failure() -> None:
         record_and_validate_verification,
     )
 
+    recovery = (
+        "sudo -u digital-souls env HOME=/var/lib/digital-souls/home "
+        "OLLAMA_MODELS=/var/lib/digital-souls/models/ollama "
+        "ollama pull custom-chat:model"
+    )
     with pytest.raises(EnvironmentVerificationError) as error:
         record_and_validate_verification(
             {
@@ -48,6 +53,7 @@ def test_should_distinguish_unpreparable_verification_failure() -> None:
                         {
                             "classification": "preparation_required",
                             "canPrepare": False,
+                            "message": recovery,
                         }
                     ],
                 }
@@ -56,6 +62,7 @@ def test_should_distinguish_unpreparable_verification_failure() -> None:
         )
 
     assert error.value.category == "preparation"
+    assert recovery in str(error.value)
 
 
 @pytest.mark.parametrize(

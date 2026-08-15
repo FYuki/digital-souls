@@ -91,9 +91,6 @@ else
   dogfood_verify_detached_clean_revision "$DOGFOOD_REPOSITORY_REVISION"
 fi
 
-chown -R "root:$DOGFOOD_SERVICE_GROUP" "$DOGFOOD_CLONE_DIR"
-chmod -R g-w,o-rwx "$DOGFOOD_CLONE_DIR"
-chmod 0750 "$DOGFOOD_CLONE_DIR"
 install -d -m 0750 -o "$DOGFOOD_SERVICE_USER" -g "$DOGFOOD_SERVICE_GROUP" \
   "$DS_DATA_DIR" "$DOGFOOD_SERVICE_HOME_DIR" "$DOGFOOD_OLLAMA_MODELS_DIR" \
   "$DOGFOOD_BACKUP_DIR" "$DOGFOOD_LOG_DIR"
@@ -120,8 +117,10 @@ dogfood_prepare_backend
 npm --prefix "$DOGFOOD_CLONE_DIR/frontend" ci
 dogfood_require_clean_checkout
 npm --prefix "$DOGFOOD_CLONE_DIR/frontend" run build
+dogfood_require_clean_checkout
 chown -R "root:$DOGFOOD_SERVICE_GROUP" "$DOGFOOD_CLONE_DIR"
 chmod -R g-w,o-rwx "$DOGFOOD_CLONE_DIR"
+chmod 0750 "$DOGFOOD_CLONE_DIR"
 systemctl daemon-reload
 systemctl enable digital-souls-dogfood.target
 if [ "$initial_clone" = true ]; then

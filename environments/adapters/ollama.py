@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import shlex
 import shutil
 from pathlib import Path
 from typing import Mapping
 from urllib.request import urlopen
 
 from app.model_settings import OLLAMA_MODEL_NAME
+
 from adapters.base import (
     AdapterOperationError,
     Check,
@@ -43,7 +45,13 @@ def verify_required_model(
         if isinstance(models, list) and isinstance(model, dict)
     } if isinstance(models, list) else set()
     if model_name not in names:
-        raise OllamaPreparationError(f"Ollama model {model_name} is required")
+        raise OllamaPreparationError(
+            f"Ollama model {model_name} is required. Run: "
+            "sudo -u digital-souls env "
+            "HOME=/var/lib/digital-souls/home "
+            "OLLAMA_MODELS=/var/lib/digital-souls/models/ollama "
+            f"ollama pull {shlex.quote(model_name)}"
+        )
 
 
 class OllamaAdapter(ProcessServiceOperations):

@@ -253,13 +253,20 @@ sudo chown -R digital-souls:digital-souls \
   /var/lib/digital-souls/models/ollama
 ```
 
-再取得する場合は旧modelを動かさず、新HOMEとmodel保存先を明示して必要なmodelをpullする。
+再取得する場合は旧modelを動かさず、新HOMEとmodel保存先を明示してBackend既定のchat modelをpullする。
+`source: external`のserviceはorchestratorの自動prepare対象ではないため、modelのpullは初回起動前に運用者が行う。
 
 ```bash
-sudo -u digital-souls env HOME=/var/lib/digital-souls/home \
+sudo -u digital-souls env \
+  HOME=/var/lib/digital-souls/home \
   OLLAMA_MODELS=/var/lib/digital-souls/models/ollama \
-  ollama pull <model名>
+  ollama pull gemma4:e4b
 ```
+
+required model名の正本は`backend/app/model_settings.py`の`OLLAMA_MODEL_NAME`であり、未指定時の
+`OLLAMA_CHAT_MODEL`へ使われる。既定値を変更する場合は、このpullコマンドを同時に更新する。
+環境変数で`OLLAMA_CHAT_MODEL`を上書きする場合は、上記コマンド末尾をeffectiveなmodel名へ置き換える。
+readiness検証も解決済みの`OLLAMA_CHAT_MODEL`を使用するため、既定値と上書きのどちらでも不足model名を表示する。
 
 旧homeだったdata root直下の`.ollama`、`.cache`等は自動削除しない。`sudo ls -la /var/lib/digital-souls/data`で内容と必要性を利用者が確認し、保全後に個別判断する。
 

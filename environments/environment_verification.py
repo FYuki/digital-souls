@@ -136,8 +136,16 @@ def _require_preparable_service(
         and check.get("canPrepare") is not True
     ]
     if blocking:
+        recovery_messages = [
+            check["message"]
+            for check in blocking
+            if isinstance(check.get("message"), str) and check["message"]
+        ]
+        details = (
+            f"; {'; '.join(recovery_messages)}" if recovery_messages else ""
+        )
         raise EnvironmentVerificationError(
-            "preparation", f"service preparation is required: {name}"
+            "preparation", f"service preparation is required: {name}{details}"
         )
 
 

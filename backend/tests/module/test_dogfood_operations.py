@@ -139,6 +139,7 @@ def _run_bootstrap(
     missing_command: Literal["node", "npm"] | None = None,
     current_head: str | None = None,
     npm_dirty: bool = False,
+    build_dirty: bool = False,
     persistent_sentinels: dict[str, str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], tuple[str, ...]]:
     env_path, data_dir = write_dogfood_env(tmp_path)
@@ -201,6 +202,7 @@ def _run_bootstrap(
         "BOOTSTRAP_NODE_VERSION_EXIT_CODE": str(node_version_exit_code),
         "BOOTSTRAP_CHECKED_OUT_MARKER": str(tmp_path / "checkout.complete"),
         "BOOTSTRAP_NPM_DIRTY_MARKER": str(tmp_path / "npm.dirty"),
+        "BOOTSTRAP_BUILD_DIRTY_MARKER": str(tmp_path / "build.dirty"),
         "PATH": (
             f"{fake_bin}{os.pathsep}/usr/bin"
             if missing_command is not None
@@ -211,6 +213,8 @@ def _run_bootstrap(
         environment["BOOTSTRAP_CURRENT_HEAD"] = current_head
     if npm_dirty:
         environment["BOOTSTRAP_NPM_DIRTY"] = "1"
+    if build_dirty:
+        environment["BOOTSTRAP_BUILD_DIRTY"] = "1"
     if failure is not None:
         environment["BOOTSTRAP_FAILURE"] = failure
     if docker_member:
@@ -667,6 +671,34 @@ def test_should_stop_when_npm_ci_leaves_checkout_dirty(tmp_path: Path) -> None:
         forbidden in call
         for call in calls
         for forbidden in ("reset --hard", "clean -fdx")
+    )
+
+
+def test_should_stop_before_read_only_permissions_when_frontend_build_is_dirty(
+    tmp_path: Path,
+) -> None:
+    result, calls = _run_bootstrap(
+        tmp_path,
+        None,
+        False,
+        "existing",
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+        build_dirty=True,
+    )
+
+    build_index = next(
+        index
+        for index, call in enumerate(calls)
+        if call.startswith("npm\t") and " run build" in call
+    )
+    later_calls = calls[build_index + 1 :]
+    assert result.returncode != 0
+    assert "frontend/build-runtime-artifact" in result.stderr
+    assert not any(
+        call.startswith(("chown\t", "chmod\t"))
+        and str(tmp_path / "clone") in call
+        for call in later_calls
     )
 
 

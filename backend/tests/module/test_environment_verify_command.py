@@ -26,6 +26,40 @@ _SUCCESS_CLASSIFICATIONS = {
 }
 
 
+def test_should_route_effective_profile_to_verify_service_registry(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import commands.verify_command as verify_command
+    from tests.environment_test_support import resolved_profile
+
+    profile = resolved_profile("dogfood")
+    captured_settings: dict[str, object] = {}
+
+    def create_registry(root, runtime, **settings):
+        captured_settings.update(settings)
+        return object()
+
+    monkeypatch.setenv("DS_ENVIRONMENT_ID", "test")
+    monkeypatch.setenv("DS_DATA_DIR", str(tmp_path / "runtime-data"))
+    monkeypatch.setattr(
+        verify_command, "validate_existing_runtime_data_root", lambda runtime, root: None
+    )
+    monkeypatch.setattr(
+        verify_command, "resolve_profile", lambda env, default, runtime: profile
+    )
+    monkeypatch.setattr(verify_command, "create_service_registry", create_registry)
+    monkeypatch.setattr(
+        verify_command,
+        "verification_checks",
+        lambda checked_profile, registry, *, request_timeout_seconds: {},
+    )
+
+    exit_code = verify_command.verify_environment(tmp_path, None)
+
+    assert exit_code == 0
+    assert captured_settings["effective_profile"] == "dogfood"
+
+
 def _write_success_profile(environments: Path) -> None:
     disabled = {"mode": "disabled", "source": None}
     profile = {

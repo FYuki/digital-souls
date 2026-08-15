@@ -45,12 +45,17 @@ def create_service_registry(
     runtime_paths: RuntimePaths,
     runner: CommandRunner | None = None,
     *,
+    effective_profile: str = "dev",
     ollama_model_name: str = OLLAMA_MODEL_NAME,
     whisper_model_name: str = WHISPER_MODEL_NAME,
 ) -> ServiceRegistry:
     services = {
         "frontend": ServiceRegistration(
-            "frontend", FrontendAdapter(root_dir, runner), None
+            "frontend",
+            FrontendAdapter(
+                root_dir, runner, effective_profile=effective_profile
+            ),
+            None,
         ),
         "backend": ServiceRegistration(
             "backend",
