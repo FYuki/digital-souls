@@ -475,13 +475,20 @@ def test_should_delegate_voicevox_container_recovery_to_compose() -> None:
     assert re.search(r'(?m)^    restart:\s+["\']?unless-stopped["\']?\s*$', content)
 
 
-def test_should_preserve_data_directory_when_rendering_sed_metacharacters(
+def test_should_preserve_all_placeholders_when_rendering_sed_metacharacters(
     tmp_path: Path,
 ) -> None:
     output_dir = tmp_path / "generated"
     output_dir.mkdir()
-    data_dir = r"/srv/dog&food|segment\leaf"
-    service_home_dir = r"/srv/home&food|segment\leaf"
+    values = {
+        "DOGFOOD_SERVICE_USER": r"service&user|segment\leaf",
+        "DOGFOOD_SERVICE_GROUP": r"service&group|segment\leaf",
+        "DOGFOOD_CONFIG_DIR": r"/srv/config&dog|segment\leaf",
+        "DOGFOOD_CLONE_DIR": r"/srv/clone&dog|segment\leaf",
+        "DOGFOOD_WSL_DISTRO": r"Ubuntu&dogfood|segment\leaf",
+        "DOGFOOD_SERVICE_HOME_DIR": r"/srv/home&food|segment\leaf",
+        "DS_DATA_DIR": r"/srv/dog&food|segment\leaf",
+    }
     result = subprocess.run(
         [
             str(DOGFOOD_SCRIPTS_DIR / "render-assets.sh"),
@@ -490,13 +497,7 @@ def test_should_preserve_data_directory_when_rendering_sed_metacharacters(
         ],
         env={
             **os.environ,
-            "DOGFOOD_SERVICE_USER": "digital-souls",
-            "DOGFOOD_SERVICE_GROUP": "digital-souls",
-            "DOGFOOD_CONFIG_DIR": "/etc/digital-souls",
-            "DOGFOOD_CLONE_DIR": "/opt/digital-souls/current",
-            "DOGFOOD_WSL_DISTRO": "Ubuntu-dogfood",
-            "DOGFOOD_SERVICE_HOME_DIR": service_home_dir,
-            "DS_DATA_DIR": data_dir,
+            **values,
         },
         capture_output=True,
         text=True,
@@ -504,11 +505,10 @@ def test_should_preserve_data_directory_when_rendering_sed_metacharacters(
     )
 
     assert result.returncode == 0, result.stderr
-    application = (output_dir / "digital-souls-application.service").read_text(
-        encoding="utf-8"
+    rendered = "\n".join(
+        path.read_text(encoding="utf-8") for path in output_dir.iterdir()
     )
-    assert f'DS_DATA_DIR={data_dir}"' in application
-    assert f'HOME={service_home_dir}"' in application
+    assert all(value in rendered for value in values.values())
 
 
 def test_should_require_service_home_when_rendering_assets(tmp_path: Path) -> None:

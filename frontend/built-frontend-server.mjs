@@ -31,6 +31,7 @@ const backendOrigin = new URL(backendOriginValue)
 if (backendOrigin.protocol !== 'http:') {
   throw new Error('DS_BACKEND_ORIGIN must use http')
 }
+const backendProxyTimeoutMs = 30_000
 
 const frontendDirectory = fileURLToPath(new URL('.', import.meta.url))
 const distDirectory = resolve(frontendDirectory, 'dist')
@@ -54,6 +55,7 @@ const proxyHeaders = (headers) => ({
 })
 
 const proxyHttp = (incoming, outgoing, targetPath) => {
+  let timedOut = false
   const proxy = createProxyRequest(
     backendOrigin,
     {
@@ -66,9 +68,26 @@ const proxyHttp = (incoming, outgoing, targetPath) => {
       response.pipe(outgoing)
     },
   )
+  const timeout = setTimeout(() => {
+    timedOut = true
+    proxy.destroy(new Error('Backend proxy timed out'))
+  }, backendProxyTimeoutMs)
+  timeout.unref()
+  proxy.once('close', () => clearTimeout(timeout))
   proxy.on('error', (error) => {
-    if (!outgoing.headersSent) outgoing.writeHead(502)
+    if (outgoing.destroyed || outgoing.writableEnded) return
+    if (outgoing.headersSent) {
+      outgoing.destroy()
+      return
+    }
+    outgoing.writeHead(timedOut ? 504 : 502)
     outgoing.end(`Backend proxy failed: ${error.message}`)
+  })
+  const abortProxy = () => proxy.destroy()
+  incoming.on('aborted', abortProxy)
+  incoming.on('error', abortProxy)
+  outgoing.on('close', () => {
+    if (!outgoing.writableEnded) abortProxy()
   })
   incoming.pipe(proxy)
 }
@@ -139,6 +158,7 @@ const server = createServer((request, response) => {
 })
 
 server.on('upgrade', (request, socket, head) => {
+  socket.on('error', () => socket.destroy())
   if (request.url === undefined) {
     socket.destroy()
     return
@@ -154,6 +174,12 @@ server.on('upgrade', (request, socket, head) => {
     headers: proxyHeaders(request.headers),
   })
   proxy.on('upgrade', (response, proxySocket, proxyHead) => {
+    proxySocket.on('error', () => {
+      proxySocket.destroy()
+      socket.destroy()
+    })
+    socket.on('close', () => proxySocket.destroy())
+    proxySocket.on('close', () => socket.destroy())
     const headers = response.rawHeaders.reduce(
       (lines, value, index) => index % 2 === 0
         ? [...lines, `${value}: ${response.rawHeaders[index + 1]}`]
@@ -172,4 +198,8 @@ server.on('upgrade', (request, socket, head) => {
   proxy.end()
 })
 
+server.on('error', (error) => {
+  process.stderr.write(`frontend server failed: ${error.message}\n`)
+  process.exitCode = 1
+})
 server.listen(port, values.host)

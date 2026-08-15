@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import os
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Mapping
 
 from adapters.base import (
     Check,
@@ -25,7 +24,10 @@ def _dogfood_asset_check(name: str, path: Path) -> Check:
             f"dogfood Frontend asset is missing: {path}",
             False,
         )
-    if not os.access(path, os.R_OK):
+    try:
+        with path.open("rb") as asset:
+            asset.read(1)
+    except OSError:
         return Check(
             name,
             "preparation_required",

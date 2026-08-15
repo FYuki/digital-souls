@@ -553,12 +553,27 @@ def test_should_reject_nul_static_path_and_continue_serving(
         _stop_process(process)
 
 
+def test_should_report_frontend_listen_failure(tmp_path: Path) -> None:
+    frontend = _write_built_frontend_fixture(tmp_path)
+    with closing(socket.socket()) as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        port = int(listener.getsockname()[1])
+        process = _start_built_frontend(frontend, port, _available_local_port())
+        _stdout, stderr = process.communicate(timeout=5)
+
+    assert process.returncode != 0
+    assert "frontend server failed" in stderr
+    assert "EADDRINUSE" in stderr
+
+
 def test_should_proxy_http_and_websocket_to_backend(tmp_path: Path) -> None:
     frontend = _write_built_frontend_fixture(tmp_path)
     backend = _ProxyBackendFixture()
-    frontend_port = _available_local_port()
-    process = _start_built_frontend(frontend, frontend_port, backend.port)
+    process = None
     try:
+        frontend_port = _available_local_port()
+        process = _start_built_frontend(frontend, frontend_port, backend.port)
         _wait_for_frontend(f"http://127.0.0.1:{frontend_port}/", process)
 
         with urlopen(
@@ -589,8 +604,11 @@ def test_should_proxy_http_and_websocket_to_backend(tmp_path: Path) -> None:
         assert backend.websocket_target == "/ws/channel?x=1"
         assert backend.websocket_payload == "from-frontend"
     finally:
-        _stop_process(process)
-        backend.close()
+        try:
+            if process is not None:
+                _stop_process(process)
+        finally:
+            backend.close()
 
 
 def test_should_preserve_identity_mismatch_skip_without_waiting_or_signaling(
@@ -971,7 +989,7 @@ def test_should_require_gemma_model_after_started_ollama_becomes_http_ready(
     assert result.message is not None and "gemma4:e4b" in result.message
 
 
-def test_should_guide_missing_effective_ollama_model_to_dogfood_pull_command(
+def test_should_guide_missing_effective_ollama_model_to_external_service_pull(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     import adapters.ollama
@@ -990,10 +1008,10 @@ def test_should_guide_missing_effective_ollama_model_to_dogfood_pull_command(
 
     assert result.classification == "preparation"
     assert result.message is not None
-    assert "sudo -u digital-souls env" in result.message
-    assert "HOME=/var/lib/digital-souls/home" in result.message
-    assert "OLLAMA_MODELS=/var/lib/digital-souls/models/ollama" in result.message
     assert f"ollama pull {effective_model}" in result.message
+    assert "service account, HOME, and OLLAMA_MODELS" in result.message
+    assert "digital-souls" not in result.message
+    assert "/var/lib" not in result.message
 
 
 def test_should_quote_effective_ollama_model_in_recovery_command(
