@@ -98,6 +98,7 @@ def test_rt_cache_01_backend_adapter_uses_the_same_resolved_cache(
 ) -> None:
     from adapters.backend import BackendAdapter
     from adapters.base import OperationContext
+
     from tests.environment_test_support import RecordingRunner, resolved_profile
 
     paths = _runtime_paths(tmp_path)
@@ -114,6 +115,7 @@ def test_rt_cache_01_backend_adapter_uses_the_same_resolved_cache(
     )
 
     assert runner.calls[1][4] == str(paths.whisper_cache_path)
+    assert runner.calls[2][4] == str(paths.whisper_cache_path)
 
 
 def test_rt_clean_01_backend_prepare_rejects_dogfood_marker_before_side_effects(
@@ -121,6 +123,7 @@ def test_rt_clean_01_backend_prepare_rejects_dogfood_marker_before_side_effects(
 ) -> None:
     from adapters.backend import BackendAdapter
     from adapters.base import OperationContext
+
     from tests.environment_test_support import RecordingRunner, resolved_profile
 
     paths = _runtime_paths(tmp_path)
@@ -157,6 +160,7 @@ def test_rt_clean_02_backend_prepare_rejects_cache_symlink_before_side_effects(
 ) -> None:
     from adapters.backend import BackendAdapter
     from adapters.base import OperationContext
+
     from tests.environment_test_support import RecordingRunner, resolved_profile
 
     paths = _runtime_paths(tmp_path)
@@ -274,8 +278,9 @@ def test_rt_clean_01_down_rejects_dogfood_marker_before_stop_or_report_update(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     import commands.down_command as down_command
-    from app.runtime_paths import runtime_paths_projection
     from run_report import create_initial_report
+
+    from app.runtime_paths import runtime_paths_projection
     from tests.environment_test_support import orchestrator_identity, resolved_profile
 
     paths = _runtime_paths(tmp_path)

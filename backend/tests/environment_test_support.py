@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -32,6 +33,41 @@ def resolved_runtime_paths(root_dir: Path):
         },
         root_dir,
     )
+
+
+def write_cached_whisper_model(
+    root_dir: Path, repository_id: str, *, complete: bool = True
+) -> Path:
+    python = root_dir / "backend" / ".venv" / "bin" / "python"
+    python.parent.mkdir(parents=True, exist_ok=True)
+    repository_cache = (
+        root_dir
+        / "runtime-data"
+        / "cache"
+        / "huggingface"
+        / "hub"
+        / f"models--{repository_id.replace('/', '--')}"
+    )
+    snapshot = repository_cache / "snapshots" / "revision"
+    python.write_text(
+        f"#!/bin/sh\nprintf '%s\\n' {shlex.quote(str(snapshot))}\n",
+        encoding="utf-8",
+    )
+    python.chmod(0o755)
+    snapshot.mkdir(parents=True)
+    refs = repository_cache / "refs"
+    refs.mkdir()
+    (refs / "main").write_text("revision", encoding="utf-8")
+    if complete:
+        for artifact in (
+            "config.json",
+            "model.bin",
+            "preprocessor_config.json",
+            "tokenizer.json",
+            "vocabulary.json",
+        ):
+            (snapshot / artifact).write_text("fixture", encoding="utf-8")
+    return snapshot
 
 
 def single_adapter_registry(
@@ -149,10 +185,12 @@ def profile_with_dependencies(**overrides: ResolvedDependency) -> ResolvedReport
 class RecordingRunner:
     def __init__(self, responses: list[dict[str, object]] | None = None) -> None:
         self.calls: list[tuple[str, ...]] = []
+        self.cwds: list[Path] = []
         self.responses = list([] if responses is None else responses)
 
     def run(self, command: tuple[str, ...], cwd: Path) -> dict[str, object]:
         self.calls.append(command)
+        self.cwds.append(cwd)
         if self.responses:
             return self.responses.pop(0)
         return {"returncode": 0, "stdout": "", "stderr": ""}

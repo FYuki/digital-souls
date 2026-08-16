@@ -1,5 +1,6 @@
 import importlib
 import io
+import logging
 import sys
 import threading
 import time
@@ -17,12 +18,16 @@ class _FakeWhisperModel:
     instances = []
     creation_delay = 0.0
     transcribe_delay = 0.0
+    cuda_available = False
 
     def __init__(self, *args, **kwargs) -> None:
         if _FakeWhisperModel.creation_delay:
             time.sleep(_FakeWhisperModel.creation_delay)
         self.init_args = args
         self.init_kwargs = kwargs
+        self.selected_device = kwargs.get(
+            "device", "cuda" if _FakeWhisperModel.cuda_available else "cpu"
+        )
         self.transcribe_calls = []
         self.concurrent_transcribe_count = 0
         self.max_concurrent_transcribe_count = 0
@@ -58,6 +63,7 @@ def _import_client_with_fake_whisper(monkeypatch):
     _FakeWhisperModel.instances.clear()
     _FakeWhisperModel.creation_delay = 0.0
     _FakeWhisperModel.transcribe_delay = 0.0
+    _FakeWhisperModel.cuda_available = False
     return importlib.import_module("app.stt.whisper_client")
 
 
@@ -69,6 +75,49 @@ def _transcriber(client):
 
 
 class TestWhisperClientTranscribe:
+    def test_should_create_model_with_cpu_and_int8_when_transcribing(
+        self, monkeypatch
+    ) -> None:
+        client = _import_client_with_fake_whisper(monkeypatch)
+        transcriber = _transcriber(client)
+
+        transcriber.transcribe(b"\x01\x00\x02\x00")
+
+        model = _FakeWhisperModel.instances[0]
+        assert model.init_kwargs["device"] == "cpu"
+        assert model.init_kwargs["compute_type"] == "int8"
+
+    def test_should_keep_cpu_when_cuda_is_available(self, monkeypatch) -> None:
+        client = _import_client_with_fake_whisper(monkeypatch)
+        _FakeWhisperModel.cuda_available = True
+        transcriber = _transcriber(client)
+
+        transcriber.transcribe(b"\x01\x00\x02\x00")
+
+        assert _FakeWhisperModel.instances[0].selected_device == "cpu"
+
+    def test_should_expose_resolved_device_and_compute_type(self, monkeypatch) -> None:
+        client = _import_client_with_fake_whisper(monkeypatch)
+
+        transcriber = _transcriber(client)
+
+        assert transcriber.device == "cpu"
+        assert transcriber.compute_type == "int8"
+
+    def test_should_log_resolved_device_and_compute_type_on_initialization(
+        self, monkeypatch, caplog
+    ) -> None:
+        client = _import_client_with_fake_whisper(monkeypatch)
+
+        with caplog.at_level(logging.INFO, logger=client.__name__):
+            _transcriber(client)
+
+        assert any(
+            "cpu" in record.getMessage() and "int8" in record.getMessage()
+            for record in caplog.records
+            if record.name == client.__name__
+        )
+
     def test_uses_injected_model_and_download_root(self, monkeypatch, tmp_path):
         client = _import_client_with_fake_whisper(monkeypatch)
         transcriber = client.WhisperTranscriber(

@@ -14,7 +14,6 @@ from tests.environment_test_support import (
     resolved_runtime_paths,
 )
 
-
 MODEL_ENVIRONMENT = {
     "OLLAMA_CHAT_MODEL": "profile-chat:12b",
     "WHISPER_MODEL": "large-v3",
@@ -217,8 +216,8 @@ def test_should_validate_but_not_prepare_the_profile_model_for_external_ollama(
     tmp_path: Path,
     model_is_available: bool,
 ) -> None:
-    from adapters import ollama
     import environment_runtime
+    from adapters import ollama
     from environment_runtime import EnvironmentRun
     from environment_timing import EnvironmentTiming
     from http_readiness import ReadinessResult
@@ -330,7 +329,7 @@ def test_should_prepare_the_same_profile_whisper_model(tmp_path: Path) -> None:
         OperationContext(whisper_enabled=True, chroma_enabled=False),
     )
 
-    assert len(runner.calls) == 2
+    assert len(runner.calls) == 3
     download_command = runner.calls[1]
     assert download_command[:2] == (
         str(tmp_path / "backend" / ".venv" / "bin" / "python"),
@@ -338,3 +337,8 @@ def test_should_prepare_the_same_profile_whisper_model(tmp_path: Path) -> None:
     )
     assert download_command[3] == "large-v3"
     assert download_command[4] == str(runtime_paths.whisper_cache_path)
+    inference_command = runner.calls[2]
+    assert inference_command[:2] == download_command[:2]
+    assert inference_command[3] == "large-v3"
+    assert inference_command[4] == str(runtime_paths.whisper_cache_path)
+    assert ".transcribe(" in inference_command[2]

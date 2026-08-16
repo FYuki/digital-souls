@@ -17,10 +17,12 @@ from urllib.request import urlopen
 
 import pytest
 from adapters.base import Check, OperationContext
+
 from tests.environment_test_support import (
     RecordingRunner,
     resolved_profile,
     resolved_runtime_paths,
+    write_cached_whisper_model,
 )
 
 
@@ -248,40 +250,6 @@ class _ProxyBackendFixture:
         self.stopped.set()
         self.listener.close()
         self.thread.join(timeout=2)
-
-
-def _write_cached_whisper_model(
-    root_dir: Path, repository_id: str, *, complete: bool = True
-) -> None:
-    python = root_dir / "backend" / ".venv" / "bin" / "python"
-    python.parent.mkdir(parents=True)
-    repository_cache = (
-        root_dir
-        / "runtime-data"
-        / "cache"
-        / "huggingface"
-        / "hub"
-        / f"models--{repository_id.replace('/', '--')}"
-    )
-    snapshot = repository_cache / "snapshots" / "revision"
-    python.write_text(
-        f"#!/bin/sh\nprintf '%s\\n' {shlex.quote(str(snapshot))}\n",
-        encoding="utf-8",
-    )
-    python.chmod(0o755)
-    snapshot.mkdir(parents=True)
-    refs = repository_cache / "refs"
-    refs.mkdir()
-    (refs / "main").write_text("revision", encoding="utf-8")
-    if complete:
-        for artifact in (
-            "config.json",
-            "model.bin",
-            "preprocessor_config.json",
-            "tokenizer.json",
-            "vocabulary.json",
-        ):
-            (snapshot / artifact).write_text("fixture", encoding="utf-8")
 
 
 def test_should_import_adapter_contract_without_loading_concrete_adapters():
@@ -737,6 +705,7 @@ def test_should_classify_missing_whisper_cache_as_preparation_required(tmp_path:
 
 def test_should_prepare_whisper_model_in_cache_used_by_backend_runtime(tmp_path: Path):
     from adapters.backend import BackendAdapter
+
     from app.model_settings import WHISPER_MODEL_NAME
 
     runner = RecordingRunner()
@@ -754,6 +723,85 @@ def test_should_prepare_whisper_model_in_cache_used_by_backend_runtime(tmp_path:
     assert runner.calls[1][0] == str(tmp_path / "backend" / ".venv" / "bin" / "python")
     assert runner.calls[1][3] == WHISPER_MODEL_NAME
     assert runner.calls[1][4] == str(runtime_paths.whisper_cache_path)
+    assert "device=" in runner.calls[1][2]
+    assert "compute_type=" in runner.calls[1][2]
+    assert runner.cwds == [
+        tmp_path,
+        tmp_path / "backend",
+        tmp_path / "backend",
+    ]
+
+
+def test_should_run_silent_whisper_inference_when_model_is_cached(tmp_path: Path):
+    from adapters.backend import BackendAdapter
+
+    snapshot = write_cached_whisper_model(
+        tmp_path, "Systran/faster-whisper-medium"
+    )
+    runner = RecordingRunner(
+        [
+            {"returncode": 0, "stdout": "", "stderr": ""},
+            {"returncode": 0, "stdout": f"{snapshot}\n", "stderr": ""},
+            {"returncode": 0, "stdout": "", "stderr": ""},
+        ]
+    )
+    runtime_paths = resolved_runtime_paths(tmp_path)
+    adapter = BackendAdapter(tmp_path, runtime_paths, runner)
+
+    adapter.prepare(
+        resolved_profile()["dependencies"]["backend"],
+        OperationContext(whisper_enabled=True, chroma_enabled=False),
+    )
+
+    inference_command = runner.calls[2]
+    assert inference_command[:2] == (
+        str(tmp_path / "backend" / ".venv" / "bin" / "python"),
+        "-c",
+    )
+    assert "WhisperTranscriber" in inference_command[2]
+    assert ".transcribe(" in inference_command[2]
+    assert "PCM_SAMPLE_RATE_HZ" in inference_command[2]
+    assert "PCM_CHANNELS" in inference_command[2]
+    assert "PCM_SAMPLE_WIDTH_BYTES" in inference_command[2]
+    assert runner.cwds == [
+        tmp_path,
+        tmp_path,
+        tmp_path / "backend",
+    ]
+
+
+def test_should_hard_fail_with_diagnostics_when_whisper_inference_fails(
+    tmp_path: Path,
+) -> None:
+    from adapters.backend import BackendAdapter
+
+    snapshot = write_cached_whisper_model(
+        tmp_path, "Systran/faster-whisper-medium"
+    )
+    missing_library = "Library libcublas.so.12 is not found or cannot be loaded"
+    runner = RecordingRunner(
+        [
+            {"returncode": 0, "stdout": "", "stderr": ""},
+            {"returncode": 0, "stdout": f"{snapshot}\n", "stderr": ""},
+            {"returncode": 1, "stdout": "", "stderr": missing_library},
+        ]
+    )
+    adapter = BackendAdapter(tmp_path, resolved_runtime_paths(tmp_path), runner)
+
+    with pytest.raises(RuntimeError) as error:
+        adapter.prepare(
+            resolved_profile()["dependencies"]["backend"],
+            OperationContext(whisper_enabled=True, chroma_enabled=False),
+        )
+
+    message = str(error.value)
+    assert "Whisper" in message
+    assert "inference" in message.lower()
+    assert "device=cpu" in message
+    assert "compute_type=int8" in message
+    assert missing_library in message
+    assert "scripts/setup-backend.sh" in message
+    assert "environments/up.sh" in message
 
 
 def test_should_mark_missing_whisper_cache_as_preparable(tmp_path: Path):
@@ -787,7 +835,7 @@ def test_should_verify_cache_resolved_by_faster_whisper(
 ) -> None:
     from adapters.backend import BackendAdapter
 
-    _write_cached_whisper_model(tmp_path, repository_id)
+    write_cached_whisper_model(tmp_path, repository_id)
 
     result = BackendAdapter(
         root_dir=tmp_path,
@@ -807,7 +855,7 @@ def test_should_verify_cache_resolved_by_faster_whisper(
 def test_should_treat_empty_whisper_cache_as_preparation_required(tmp_path: Path):
     from adapters.backend import BackendAdapter
 
-    _write_cached_whisper_model(
+    write_cached_whisper_model(
         tmp_path, "Systran/faster-whisper-medium", complete=False
     )
 

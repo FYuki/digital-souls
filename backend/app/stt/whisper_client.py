@@ -1,16 +1,22 @@
 import io
+import logging
 import threading
 import wave
 from collections.abc import Iterable
-from typing import Protocol, cast
 from pathlib import Path
+from typing import Protocol, cast
 
 from app.audio.constants import (
     PCM_CHANNELS,
     PCM_SAMPLE_RATE_HZ,
     PCM_SAMPLE_WIDTH_BYTES,
 )
+
 WHISPER_LANGUAGE = "ja"
+WHISPER_DEVICE = "cpu"
+WHISPER_COMPUTE_TYPE = "int8"
+
+logger = logging.getLogger(__name__)
 
 
 class WhisperSegment(Protocol):
@@ -33,6 +39,19 @@ class WhisperTranscriber:
         self._download_root = download_root
         self._model: WhisperModel | None = None
         self._model_lock = threading.Lock()
+        logger.info(
+            "Whisper transcriber initialized: device=%s compute_type=%s",
+            self.device,
+            self.compute_type,
+        )
+
+    @property
+    def device(self) -> str:
+        return WHISPER_DEVICE
+
+    @property
+    def compute_type(self) -> str:
+        return WHISPER_COMPUTE_TYPE
 
     def transcribe(self, audio: bytes) -> str:
         audio_source = _pcm16_16khz_to_wav(audio)
@@ -55,6 +74,8 @@ class WhisperTranscriber:
                 FasterWhisperModel(
                     self._model_name,
                     download_root=str(self._download_root),
+                    device=self.device,
+                    compute_type=self.compute_type,
                 ),
             )
         return self._model
