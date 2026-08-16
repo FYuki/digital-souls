@@ -21,8 +21,7 @@ def wait_for_inference_services(
     profile = load_profile(profile_name)
     dependencies = resolve_dependencies(profile["dependencies"])
     dependency_map = cast(Mapping[str, Mapping[str, object]], dependencies)
-    observations: dict[str, dict[str, object]] = {}
-    ready = True
+    validated_services: list[tuple[str, str]] = []
 
     for name in service_names:
         if name not in INFERENCE_SERVICE_NAMES:
@@ -37,6 +36,11 @@ def wait_for_inference_services(
         readiness_url = dependency.get("readinessUrl")
         if not isinstance(readiness_url, str) or not readiness_url:
             raise ProfileError(f"{name} readinessUrl is required")
+        validated_services.append((name, readiness_url))
+
+    observations: dict[str, dict[str, object]] = {}
+    ready = True
+    for name, readiness_url in validated_services:
         observation = wait_for_http(
             readiness_url,
             max_attempts=timing.readiness_attempts,

@@ -181,11 +181,11 @@ def test_should_report_missing_inference_dependency_as_profile_error(
         lambda name: {
             "name": name,
             "dependencies": {
-                "voicevox": {
+                "ollama": {
                     "mode": "real",
                     "source": "external",
-                    "baseUrl": "http://127.0.0.1:50021",
-                    "readinessPath": "/version",
+                    "baseUrl": "http://localhost:11434",
+                    "readinessPath": "/api/tags",
                 }
             },
         },
@@ -198,10 +198,10 @@ def test_should_report_missing_inference_dependency_as_profile_error(
 
     monkeypatch.setattr(command, "wait_for_http", unexpected_wait)
 
-    with pytest.raises(ProfileError, match="ollama dependency is required"):
+    with pytest.raises(ProfileError, match="voicevox dependency is required"):
         command.wait_for_inference_services(
             "dogfood",
-            ("ollama",),
+            ("ollama", "voicevox"),
             EnvironmentTiming(),
         )
 
