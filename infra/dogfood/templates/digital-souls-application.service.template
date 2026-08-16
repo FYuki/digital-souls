@@ -8,9 +8,11 @@ Type=oneshot
 User=@DOGFOOD_SERVICE_USER@
 Group=@DOGFOOD_SERVICE_GROUP@
 Environment="DS_ENVIRONMENT_ID=dogfood" "DS_PROFILE=dogfood" "DS_DATA_DIR=@DS_DATA_DIR@" "DS_ENVIRONMENT_RUN_REPORT=@DS_DATA_DIR@/runtime/dogfood/environment-run.json" "DS_PROFILE_REPORT=@DS_DATA_DIR@/runtime/dogfood/resolved-profile.json" "HOME=@DOGFOOD_SERVICE_HOME_DIR@" "XDG_CACHE_HOME=@DS_DATA_DIR@/cache" "npm_config_cache=@DS_DATA_DIR@/cache/npm"
+ExecStartPre=@DOGFOOD_CLONE_DIR@/scripts/dogfood/wait-inference.sh
 ExecStart=@DOGFOOD_CLONE_DIR@/environments/up.sh
 ExecStop=@DOGFOOD_CLONE_DIR@/environments/down.sh
 RemainAfterExit=yes
+TimeoutStartSec=180s
 TimeoutStopSec=60s
 
 [Install]

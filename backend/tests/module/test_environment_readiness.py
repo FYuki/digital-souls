@@ -1,11 +1,211 @@
 from __future__ import annotations
 
+import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
 import tests.environment_test_support
+
+
+def test_should_dispatch_bounded_inference_readiness_wait(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import environment_cli
+
+    calls: list[tuple[str, list[str], object]] = []
+    monkeypatch.setattr(
+        environment_cli,
+        "wait_for_inference_services",
+        lambda profile, services, timing: calls.append(
+            (profile, services, timing)
+        )
+        or 0,
+    )
+    arguments = environment_cli._parser().parse_args(
+        [
+            "wait-readiness",
+            "--profile",
+            "dogfood",
+            "--service",
+            "ollama",
+            "--service",
+            "voicevox",
+            "--max-attempts",
+            "30",
+            "--interval-seconds",
+            "1",
+            "--request-timeout-seconds",
+            "1",
+        ]
+    )
+
+    result = environment_cli._dispatch(arguments)
+
+    assert result == 0
+    profile, services, timing = calls[0]
+    assert profile == "dogfood"
+    assert services == ["ollama", "voicevox"]
+    assert timing.readiness_attempts == 30
+    assert timing.readiness_interval_seconds == 1
+    assert timing.request_timeout_seconds == 1
+
+
+def test_should_retry_each_external_inference_service_until_ready(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import commands.readiness_wait_command as command
+    from environment_timing import EnvironmentTiming
+    from http_readiness import ReadinessResult
+
+    monkeypatch.setattr(
+        command,
+        "load_profile",
+        lambda name: {
+            "name": name,
+            "dependencies": {
+                "ollama": {
+                    "mode": "real",
+                    "source": "external",
+                    "baseUrl": "http://localhost:11434",
+                    "readinessPath": "/api/tags",
+                },
+                "voicevox": {
+                    "mode": "real",
+                    "source": "external",
+                    "baseUrl": "http://127.0.0.1:50021",
+                    "readinessPath": "/version",
+                },
+            },
+        },
+    )
+    calls: list[tuple[str, int, float, float]] = []
+
+    def fake_wait(
+        url: str,
+        *,
+        max_attempts: int,
+        interval_seconds: float,
+        request_timeout_seconds: float,
+    ) -> ReadinessResult:
+        calls.append((url, max_attempts, interval_seconds, request_timeout_seconds))
+        return ReadinessResult(url, 3, 2.0, "ready")
+
+    monkeypatch.setattr(command, "wait_for_http", fake_wait)
+
+    result = command.wait_for_inference_services(
+        "dogfood",
+        ("ollama", "voicevox"),
+        EnvironmentTiming(
+            readiness_attempts=30,
+            readiness_interval_seconds=1,
+            request_timeout_seconds=1,
+        ),
+    )
+
+    assert result == 0
+    assert calls == [
+        ("http://localhost:11434/api/tags", 30, 1, 1),
+        ("http://127.0.0.1:50021/version", 30, 1, 1),
+    ]
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "ready"
+    assert report["services"]["ollama"]["attempts"] == 3
+
+
+def test_should_fail_inference_gate_after_bounded_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import commands.readiness_wait_command as command
+    from environment_timing import EnvironmentTiming
+    from http_readiness import ReadinessResult
+
+    monkeypatch.setattr(
+        command,
+        "load_profile",
+        lambda name: {
+            "name": name,
+            "dependencies": {
+                "ollama": {
+                    "mode": "real",
+                    "source": "external",
+                    "baseUrl": "http://localhost:11434",
+                    "readinessPath": "/api/tags",
+                },
+                "voicevox": {
+                    "mode": "real",
+                    "source": "external",
+                    "baseUrl": "http://127.0.0.1:50021",
+                    "readinessPath": "/version",
+                },
+            },
+        },
+    )
+    monkeypatch.setattr(
+        command,
+        "wait_for_http",
+        lambda url, **kwargs: ReadinessResult(url, 30, 30.0, "timeout"),
+    )
+
+    result = command.wait_for_inference_services(
+        "dogfood",
+        ("ollama", "voicevox"),
+        EnvironmentTiming(
+            readiness_attempts=30,
+            readiness_interval_seconds=1,
+            request_timeout_seconds=1,
+        ),
+    )
+
+    assert result == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "not_ready"
+    assert all(
+        service["result"] == "timeout" for service in report["services"].values()
+    )
+
+
+def test_should_report_missing_inference_dependency_as_profile_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import commands.readiness_wait_command as command
+    from environment_timing import EnvironmentTiming
+    from profile_types import ProfileError
+
+    monkeypatch.setattr(
+        command,
+        "load_profile",
+        lambda name: {
+            "name": name,
+            "dependencies": {
+                "ollama": {
+                    "mode": "real",
+                    "source": "external",
+                    "baseUrl": "http://localhost:11434",
+                    "readinessPath": "/api/tags",
+                }
+            },
+        },
+    )
+    wait_called = False
+
+    def unexpected_wait(*args: object, **kwargs: object) -> None:
+        nonlocal wait_called
+        wait_called = True
+
+    monkeypatch.setattr(command, "wait_for_http", unexpected_wait)
+
+    with pytest.raises(ProfileError, match="voicevox dependency is required"):
+        command.wait_for_inference_services(
+            "dogfood",
+            ("ollama", "voicevox"),
+            EnvironmentTiming(),
+        )
+
+    assert wait_called is False
 
 
 class _Handler(BaseHTTPRequestHandler):

@@ -26,6 +26,10 @@ from app.backup_restore import (
 )
 from app.backup_restore.models import BackupError
 from commands.down_command import down_environment
+from commands.readiness_wait_command import (
+    INFERENCE_SERVICE_NAMES,
+    wait_for_inference_services,
+)
 from commands.start_command import start_environment
 from commands.status_command import (
     load_environment_report,
@@ -37,6 +41,7 @@ from commands.up_command import up_environment
 from commands.verify_command import verify_environment
 from commands.voicevox_command import start_voicevox
 from environment_constants import RUN_REPORT_ENV
+from environment_timing import EnvironmentTiming
 from environment_verification import EnvironmentVerificationError
 from http_readiness import probe_http_services
 from profile_resolution import resolve_dependencies
@@ -57,6 +62,7 @@ UNKNOWN_BACKUP_ERROR_MESSAGE = "backup operation failed"
 UNKNOWN_ENVIRONMENT_ERROR_MESSAGE = "environment operation failed"
 INIT_DATA_ROOT_COMMAND = "init-data-root"
 BACKUP_COMMANDS = ("backup", "backup-verify", "restore", "restore-verify")
+WAIT_READINESS_COMMAND = "wait-readiness"
 
 
 def _require_readiness_url(
@@ -142,6 +148,19 @@ def _parser() -> argparse.ArgumentParser:
     test_result.add_argument("--message", required=True)
     readiness = commands.add_parser("readiness")
     readiness.add_argument("--profile", required=True)
+    wait_readiness = commands.add_parser(WAIT_READINESS_COMMAND)
+    wait_readiness.add_argument("--profile", required=True)
+    wait_readiness.add_argument(
+        "--service",
+        action="append",
+        choices=INFERENCE_SERVICE_NAMES,
+        required=True,
+    )
+    wait_readiness.add_argument("--max-attempts", type=int, required=True)
+    wait_readiness.add_argument("--interval-seconds", type=float, required=True)
+    wait_readiness.add_argument(
+        "--request-timeout-seconds", type=float, required=True
+    )
     init_data_root = commands.add_parser(INIT_DATA_ROOT_COMMAND)
     init_data_root.add_argument("--environment", required=True)
     init_data_root.add_argument("--repository-root", required=True)
@@ -163,6 +182,16 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _dispatch(arguments: argparse.Namespace) -> int:
+    if arguments.command == WAIT_READINESS_COMMAND:
+        return wait_for_inference_services(
+            arguments.profile,
+            arguments.service,
+            EnvironmentTiming(
+                readiness_attempts=arguments.max_attempts,
+                readiness_interval_seconds=arguments.interval_seconds,
+                request_timeout_seconds=arguments.request_timeout_seconds,
+            ),
+        )
     if arguments.command == INIT_DATA_ROOT_COMMAND:
         return initialize_environment_data_root(
             arguments.environment, arguments.repository_root
