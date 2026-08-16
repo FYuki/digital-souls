@@ -48,6 +48,11 @@ dogfood_prepare_backend
 dogfood_fetch_and_resolve_commit "$target"
 
 previous=$(git -C "$DOGFOOD_CLONE_DIR" rev-parse HEAD)
+current_manifest="$DOGFOOD_STATE_DIR/deployments/current.json"
+if [ "$previous" = "$target" ] && [ -f "$current_manifest" ]; then
+  previous=$(dogfood_manifest_field "$current_manifest" targetCommit)
+  dogfood_require_commit_sha "$previous"
+fi
 backup_directory=$(dogfood_backup)
 manifest=$(dogfood_manifest_metadata "$previous" "$target" "$backup_directory")
 dogfood_write_manifest "$manifest" "$target"

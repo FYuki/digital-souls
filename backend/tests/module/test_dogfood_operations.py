@@ -143,6 +143,24 @@ def _run_bootstrap(
     persistent_sentinels: dict[str, str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], tuple[str, ...]]:
     env_path, data_dir = write_dogfood_env(tmp_path)
+
+    def write_persistent_sentinels() -> None:
+        assert persistent_sentinels is not None
+        sentinel_paths = {
+            "data": data_dir / "data.sentinel",
+            "backup": tmp_path / "backups" / "backup.sentinel",
+            "model": tmp_path / "ollama-models" / "model.sentinel",
+            "state": tmp_path / "state" / "deployments" / "current.json",
+        }
+        for asset, content in persistent_sentinels.items():
+            sentinel = sentinel_paths[asset]
+            sentinel.parent.mkdir(parents=True, exist_ok=True)
+            sentinel.write_text(content, encoding="utf-8")
+        if "state" in persistent_sentinels:
+            (tmp_path / "state").chmod(0o750)
+            (tmp_path / "state" / "deployments").chmod(0o750)
+            sentinel_paths["state"].chmod(0o640)
+
     if data_root_residuals is not None:
         for relative_path, content in data_root_residuals.items():
             residual = data_dir / relative_path
@@ -158,15 +176,8 @@ def _run_bootstrap(
     source += f"\nDOGFOOD_SERVICE_HOME_DIR={tmp_path / 'service-home'}\n"
     if persistent_sentinels is not None:
         source += f"DOGFOOD_OLLAMA_MODELS_DIR={tmp_path / 'ollama-models'}\n"
-        sentinel_roots = {
-            "data": data_dir,
-            "backup": tmp_path / "backups",
-            "model": tmp_path / "ollama-models",
-        }
-        for asset, content in persistent_sentinels.items():
-            sentinel = sentinel_roots[asset] / f"{asset}.sentinel"
-            sentinel.parent.mkdir(parents=True, exist_ok=True)
-            sentinel.write_text(content, encoding="utf-8")
+        if not rerun:
+            write_persistent_sentinels()
     if state_path is not None:
         source = source.replace(
             f"DOGFOOD_STATE_DIR={tmp_path / 'state'}",
@@ -248,6 +259,8 @@ def _run_bootstrap(
         text=True,
     )
     if rerun and result.returncode == 0:
+        if persistent_sentinels is not None:
+            write_persistent_sentinels()
         env_path.write_text(environment_source, encoding="utf-8")
         env_path.chmod(env_mode)
         result = subprocess.run(
@@ -645,6 +658,38 @@ def test_should_converge_clean_detached_existing_clone_to_requested_revision(
     assert TEST_SECRET_SENTINEL not in result.stdout
     assert TEST_SECRET_SENTINEL not in result.stderr
     assert all(TEST_SECRET_SENTINEL not in call for call in calls)
+
+
+def test_should_preserve_persistent_assets_when_rebootstrapping_existing_clone(
+    tmp_path: Path,
+) -> None:
+    sentinels = {
+        "data": "conversation data remains unchanged\n",
+        "backup": "backup remains unchanged\n",
+        "model": "ollama model remains unchanged\n",
+        "state": "deployment state remains unchanged\n",
+    }
+
+    result, _calls = _run_bootstrap(
+        tmp_path,
+        None,
+        False,
+        "existing",
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+        persistent_sentinels=sentinels,
+        rerun=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    sentinel_paths = {
+        "data": tmp_path / "data" / "data.sentinel",
+        "backup": tmp_path / "backups" / "backup.sentinel",
+        "model": tmp_path / "ollama-models" / "model.sentinel",
+        "state": tmp_path / "state" / "deployments" / "current.json",
+    }
+    for asset, content in sentinels.items():
+        assert sentinel_paths[asset].read_text(encoding="utf-8") == content
 
 
 def test_should_report_dirty_existing_clone_without_checkout_or_destructive_git(

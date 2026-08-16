@@ -76,6 +76,65 @@ Ollamaは版とSHA-256を固定した公式GitHub Release資材を一般ユー�
 
 固定版を更新する場合は、Ollama公式GitHub Releasesの対象tagを開き、対象architectureのasset欄にGitHubが表示するSHA-256を取得する。tag付きURL、asset名、SHA-256を同時に更新し、`sha256sum`が失敗した場合は`sudo tar`を実行しない。`latest` URLや未検証の`install.sh`をrootで実行しない。
 
+## 更新経路の選択
+
+変更内容を次の表に照らし、経路①〜③のいずれかを選ぶ。distributionの作り直しは既存環境で3経路を完了できない場合の最終手段であり、3経路と同列の更新手段には含めない。変更が複数行に該当する場合や判定に迷う場合は、安全側の経路②を選ぶ。
+
+| 変更種別・環境の状態 | 使用する更新経路 |
+|---|---|
+| Backend／Frontendアプリコード | 経路① |
+| `scripts/setup-backend.sh` | 経路① |
+| `environments/profiles/dogfood.json` | 経路① |
+| `scripts/dogfood/bootstrap.sh`／`load-environment.sh`／`render-assets.sh` | 経路② |
+| `deployment-lib.sh`のうちbootstrapが使用する関数 | 経路② |
+| `infra/dogfood/templates/*`／`infra/dogfood/systemd/*` | 経路② |
+| `infra/dogfood/env.example`のenvキー契約の増減 | 経路② |
+| service user／group／home／標準pathの定義 | 経路② |
+| Docker／Compose／Node.js 22などの依存ツール要件 | 経路② |
+| partial構築または破損した環境 | 経路③ |
+
+Backend／Frontendと`scripts/setup-backend.sh`は、deployが`dogfood_prepare_backend`とFrontend buildを再実行するため経路①で反映できる。`environments/profiles/dogfood.json`も実行時に読み込まれるため経路①とする。
+
+## 経路①: 通常のアプリケーション更新
+
+bootstrap管理資材を変更せず、正常稼働している環境へアプリケーション変更を反映する場合は、`deploy.sh --commit <SHA>`だけで完結させる。具体的なコマンド、rollback、manifestの契約は「deployとrollback」に従う。
+
+通常deployはdataディレクトリもbackupディレクトリも削除・再作成しない。既存世代を保持したまま検証済みの論理backupを追加する。ただし、サービス再起動後のmigrationや通常処理はdataを更新し得るため、実機検証前には「実機検証時のデータ保全」も実施する。
+
+## 経路②: bootstrap管理資材のin-place更新
+
+正常稼働環境へbootstrap管理資材を反映するときは、次の固定順序を変更しない。
+
+1. 論理backupを作成し、`backup-verify`を成功させる。
+2. `stop-services.sh`でサービスを停止する。
+3. 新revisionの`bootstrap.sh`を実行する。
+4. `deploy.sh --commit <同一SHA>`を実行する。
+5. `status.sh`とreadinessで確認する。
+
+事前backupが必要なのは、deployによるbackupがbootstrap後にしか実行されず、bootstrapの失敗や中断を保護できないためである。事前停止は、bootstrapがsystemd unitの差し替え、Frontend build、clone全体のchown/chmodを行い、稼働中プロセスと競合することを防ぐ。
+
+bootstrapはcheckoutを変更するが、backup、manifest更新、restartを行わない。bootstrap後に同一SHAのdeployを必ず実行し、deployがbackup、manifest、rollback履歴、restart、readinessを担うことで、deployment stateとサービスの状態を整合させる。readiness失敗時は、deployが既定で直前commitへ自動rollbackする。
+
+対象SHAは`origin/main`の祖先commitだけに限定する。実機検証で問題が判明した場合は、未mergeのrevisionへ切り替えず、修正commitをmainへ積んで同じ経路を再実行する前進復旧を行う。
+
+## 実機検証時のデータ保全
+
+bootstrap／deploy変更の実機検証を始める前に論理backupを作成し、`backup-verify`を成功させる。会話本文、backup認証鍵、秘密値はコマンド出力、Issue、検証logへ記録しない。
+
+`stop-services.sh`でサービスを停止した後に、filesystem単位の退避を実施する。稼働中SQLiteの単純コピーは禁止する。少なくとも次を保全対象とする。
+
+- `dogfood.env`
+- backup認証鍵
+- `dogfood.revision`
+- data root
+- backup generations
+- deployment state
+- Ollama model
+
+`/var/lib/digital-souls`の全削除を通常の検証・復旧手段としない。やむを得ず再構成する場合の退避先は、`/var/lib/digital-souls`外かつdata root外の独立path（例: `/var/tmp/digital-souls-preserve-<UTC timestamp>`）とし、root所有、mode `0700`にする。
+
+復元時は所有者と権限を標準配置へ再適用する。元データは、`backup-verify`、environment identityの確認、`status.sh`、readinessがすべて成功するまで削除しない。退避先も復元成功を確認するまで維持する。
+
 ## 設定とbootstrap
 
 `env.example`をdogfood専用の一時pathへmode `0600`で作成し、repository URLとVOICEVOX imageを実環境に合わせる。revisionは秘密設定と分離した`/etc/digital-souls/dogfood.revision`へ完全なcommit SHA 1行だけを書き込む。単純な`cp infra/dogfood/env.example /tmp/dogfood.env`のまま使用してはならない。推論portはここへ追加せず、`environments/profiles/dogfood.json`を唯一の参照元にする。
@@ -361,31 +420,34 @@ readiness検証も解決済みの`OLLAMA_CHAT_MODEL`を使用するため、既�
 
 旧homeだったdata root直下の`.ollama`、`.cache`等は自動削除しない。`sudo ls -la /var/lib/digital-souls/data`で内容と必要性を利用者が確認し、保全後に個別判断する。
 
-## partial構築環境のin-place復旧
+## 経路③: partial構築／破損状態からの障害復旧
 
 distributionの作り直しではなく、次の順序で既存環境を収束させる。root操作と実Ubuntu-dogfoodへの適用は利用者が実施し、AI／TAKTは実行しない。
 
-1. `stop-services.sh`でapplicationと推論層を含むdogfood target全体を停止する。
+1. 収束操作より前に論理backupを作成し、`backup-verify`を成功させる。検証に失敗した場合は復旧を開始しない。
+2. `stop-services.sh`でapplicationと推論層を含むdogfood target全体を停止する。
 
    ```bash
    sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/stop-services.sh
    ```
 
-2. 収束操作より前に、`/etc/digital-souls/dogfood.env`、`dogfood.revision`、`$DS_DATA_DIR`、`/var/lib/digital-souls/backups`、DL済みOllama modelを別の保全先へ退避する。特に`DOGFOOD_BACKUP_AUTHENTICATION_KEY`を失うと既存backupを永久に検証・restoreできないため、秘密を表示せずmode `0600`で保全する。
-3. 上記の競合package削除手順を経てDocker公式repositoryとCompose pluginへ移行する。
-4. 修正版`bootstrap.sh`をrootで再実行し、service user、home、model保存先、所有権、権限を冪等に収束させる。
+3. 「実機検証時のデータ保全」に従い、停止後にfilesystem単位で同節の7項目を独立した保全先へ退避する。特に`DOGFOOD_BACKUP_AUTHENTICATION_KEY`を失うと既存backupを永久に検証・restoreできないため、秘密を表示せずmode `0600`で保全する。稼働中SQLiteの単純コピーは行わない。
+4. 上記の競合package削除手順を経てDocker公式repositoryとCompose pluginへ移行する。
+5. 修正版`bootstrap.sh`をrootで再実行し、service user、home、model保存先、所有権、権限を冪等に収束させる。
 
    ```bash
    sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/bootstrap.sh
    ```
 
-5. dogfood targetをrootで起動する。application unitはservice userでBackend／Frontendを起動し、Backend初回起動でSQLiteを作成する。
+6. `conversation-history.db`が存在しない場合だけ、dogfood targetをrootで起動してBackendの初回DB作成を完了する。DBが存在する場合はこの手順を省略する。deployはDBが存在しなければbackup、manifest、revision、checkoutを変更せず停止するため、次の手順へ進む前にDBの存在を確認する。
 
    ```bash
    sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/start-services.sh
    ```
 
-6. root権限でserviceとDocker daemonの状態を確認する。
+7. bootstrapがcheckoutした同一SHAを指定して`deploy.sh --commit <同一SHA>`を実行する。これによりbackup、manifest、rollback履歴、restart、readinessと、readiness失敗時の既定の自動rollbackを正規deploy経路へ戻す。
+
+8. root権限で`status.sh`とreadinessを確認し、Docker daemonとCompose pluginの状態も確認する。
 
    ```bash
    sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/status.sh
@@ -393,7 +455,7 @@ distributionの作り直しではなく、次の順序で既存環境を収束�
    sudo docker info
    ```
 
-7. data root直下の`.ollama`、`.cache`等の旧home残骸を手動確認し、必要なものを保全してから個別に整理する。
+9. data root直下の`.ollama`、`.cache`等の旧home残骸を手動確認し、必要なものを保全してから個別に整理する。
 
 in-place復旧が失敗した場合だけ、保全物を維持したまま別名のdogfood distributionを新規作成し、設定とdataを検証しながら復元する。元distributionは復元完了まで削除しない。
 
