@@ -155,11 +155,9 @@ def _run_bootstrap(
         "DS_ENVIRONMENT_ID=dogfood",
         f"DS_ENVIRONMENT_ID={environment_id}",
     )
+    source += f"\nDOGFOOD_SERVICE_HOME_DIR={tmp_path / 'service-home'}\n"
     if persistent_sentinels is not None:
-        source += (
-            f"\nDOGFOOD_SERVICE_HOME_DIR={tmp_path / 'service-home'}"
-            f"\nDOGFOOD_OLLAMA_MODELS_DIR={tmp_path / 'ollama-models'}\n"
-        )
+        source += f"DOGFOOD_OLLAMA_MODELS_DIR={tmp_path / 'ollama-models'}\n"
         sentinel_roots = {
             "data": data_dir,
             "backup": tmp_path / "backups",
@@ -186,7 +184,7 @@ def _run_bootstrap(
         (fake_bin / missing_command).unlink()
     user_state_path = tmp_path / "service-user.state"
     user_state = initial_user_state or (
-        "/var/lib/digital-souls/home",
+        str(tmp_path / "service-home"),
         TEST_SERVICE_GROUP,
         "/usr/sbin/nologin",
     )
@@ -380,19 +378,17 @@ def test_should_converge_existing_user_and_directories_only_once_across_reruns(
     usermod_calls = tuple(call for call in calls if call.startswith("usermod\t"))
     assert usermod_calls == (
         "usermod\t"
-        f"--home /var/lib/digital-souls/home --gid {TEST_SERVICE_GROUP} "
+        f"--home {tmp_path / 'service-home'} --gid {TEST_SERVICE_GROUP} "
         "--shell /usr/sbin/nologin digital-souls",
     )
     assert " -m " not in f" {usermod_calls[0]} "
     assert (tmp_path / "service-user.state").read_text(encoding="utf-8") == (
-        f"/var/lib/digital-souls/home|{TEST_SERVICE_GROUP}|/usr/sbin/nologin\n"
+        f"{tmp_path / 'service-home'}|{TEST_SERVICE_GROUP}|/usr/sbin/nologin\n"
     )
     directory_installs = tuple(
         call for call in calls if call.startswith("install\t-d -m 0750")
     )
-    assert (
-        sum("/var/lib/digital-souls/home" in call for call in directory_installs) == 2
-    )
+    assert sum(str(tmp_path / "service-home") in call for call in directory_installs) == 2
     assert (
         sum(
             "/var/lib/digital-souls/models/ollama" in call
@@ -404,6 +400,57 @@ def test_should_converge_existing_user_and_directories_only_once_across_reruns(
         residual = tmp_path / "data" / relative_path
         assert residual.is_file()
         assert residual.read_text(encoding="utf-8") == content
+
+
+@pytest.mark.parametrize("clone_scenario", ("existing", "initial"))
+def test_should_converge_service_git_trust_after_clone_and_home_are_ready(
+    tmp_path: Path,
+    clone_scenario: Literal["existing", "initial"],
+) -> None:
+    result, calls = _run_bootstrap(
+        tmp_path,
+        None,
+        False,
+        clone_scenario,
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+        persistent_sentinels={},
+    )
+
+    assert result.returncode == 0, result.stderr
+    service_home = tmp_path / "service-home"
+    service_gitconfig = service_home / ".gitconfig"
+    assert service_gitconfig.is_file()
+    safe_directories = subprocess.run(
+        [
+            "git",
+            "config",
+            "--file",
+            str(service_gitconfig),
+            "--get-all",
+            "safe.directory",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert safe_directories == [str((tmp_path / "clone").resolve())]
+    clone_ready_index = max(
+        index
+        for index, call in enumerate(calls)
+        if call.startswith("git\t") and "rev-parse HEAD" in call
+    )
+    home_ready_index = next(
+        index
+        for index, call in enumerate(calls)
+        if call.startswith("install\t-d ") and str(service_home) in call
+    )
+    trust_index = next(
+        index
+        for index, call in enumerate(calls)
+        if call.startswith("git\tconfig --file ")
+    )
+    assert clone_ready_index < home_ready_index < trust_index
 
 
 def test_should_reject_bootstrap_before_changes_when_compose_plugin_is_missing(
