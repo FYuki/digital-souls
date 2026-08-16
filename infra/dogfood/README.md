@@ -98,6 +98,17 @@ bootstrapはdistribution名と`DS_ENVIRONMENT_ID=dogfood`、必須設定、絶�
 
 service userのhomeは`DOGFOOD_SERVICE_HOME_DIR`、Ollama modelは`DOGFOOD_OLLAMA_MODELS_DIR`へ分離する。既存userではhome、primary group、shellだけを収束し、旧homeのfileは移動・削除しない。backupとbackup-verifyは`GIT_CONFIG_GLOBAL`を明示し、service userのglobal Git設定としてこのhome直下の`.gitconfig`だけを使用する。bootstrapを唯一の収束点とし、`safe.directory`は`realpath`で正規化した`DOGFOOD_CLONE_DIR` 1件へ毎回上書きするため、手動追加した別pathや`*`は次回bootstrapで除去される。`.gitconfig`内の他キーは維持し、所有者をservice user、modeを`0640`へ収束する。
 
+ただし、service userの`.gitconfig`がsymlinkの場合は`ERROR: service userの.gitconfigにsymlinkは使用できません`、存在するが通常ファイルでない場合は`ERROR: service userの.gitconfigが通常ファイルではありません`として、bootstrapは自動修復せず停止する。また、`.gitconfig`の`[include]`または`[includeIf]`が参照する別ファイルに`safe.directory`がある場合も、`ERROR: include経由のsafe.directoryは使用できません`として停止する。通常ファイルの`.gitconfig`へ直接記述された`safe.directory`だけが上書き対象であり、これらの異常配置は除去対象に含まれない。
+
+失敗時は表示された`ERROR`を確認し、対象を保全してから復旧する。symlinkまたは非通常ファイルはリンク先や内容を確認・退避したうえでその特殊な配置を取り除き、service user所有の通常ファイルとして`.gitconfig`を用意する。include経由の場合は、次の読取専用コマンドで各値の定義元を確認し、include元ファイルから`safe.directory`だけを取り除く。他のGit設定とinclude自体は維持する。修正後は上記と同じ手順で一時envを作り直し、bootstrapを再実行する。
+
+```bash
+sudo -u digital-souls env \
+  HOME=/var/lib/digital-souls/home \
+  GIT_CONFIG_GLOBAL=/var/lib/digital-souls/home/.gitconfig \
+  git config --global --includes --show-origin --get-all safe.directory
+```
+
 bootstrapは現在revisionのBackend venv準備、`npm ci`、Frontend buildまで行い、依存準備後もcheckoutがcleanであることを検証するが、サービスは起動しない。初回はbootstrap後に`digital-souls-dogfood.target`を起動し、application unitから委譲されたBackend起動によって`conversation-history.db`を作成する。
 
 更新時は、運用者の作業コピーにある新revisionの`bootstrap.sh`を実行する。bootstrapがdogfood cloneを指定revisionへ収束させた後に、そのrevisionのloaderで正規envを配置する。この順序により、旧revisionの`load-environment.sh`へ新しいenvキーを先に渡す過渡状態を避ける。
