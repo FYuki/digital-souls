@@ -239,22 +239,19 @@ def _prepare_deploy_scenario(
             encoding="utf-8",
         )
         generation.chmod(0o640)
-    if current_deployment_revision is not None:
-        current_manifest = deployments / "current.json"
-        current_manifest.write_text(
-            json.dumps(
-                {
-                    "previousCommit": TEST_REVISION,
-                    "targetCommit": current_deployment_revision,
-                    "profileSchemaVersion": 1,
-                    "dataSchemaVersion": 3,
-                    "backupId": "backup-current",
-                    "deployedAt": "2026-07-31T00:00:00Z",
-                }
-            ),
-            encoding="utf-8",
+    if (
+        current_deployment_revision is not None
+        and current_manifest_payload is not None
+    ):
+        raise ValueError(
+            "current_deployment_revisionとcurrent_manifest_payloadは"
+            "同時に指定できません"
         )
-        current_manifest.chmod(0o640)
+    if current_deployment_revision is not None:
+        current_manifest_payload = _manifest_payload(
+            TEST_REVISION,
+            current_deployment_revision,
+        )
     if current_manifest_payload is not None:
         current_manifest = deployments / "current.json"
         current_manifest.write_text(
@@ -1660,6 +1657,24 @@ def test_should_not_rollback_when_readiness_failure_is_explicitly_suppressed(
     assert (tmp_path / "config" / "dogfood.revision").read_text(
         encoding="utf-8"
     ) == f"{NEXT_REVISION}\n"
+
+
+def test_should_prioritize_explicit_rollback_suppression_on_initial_deploy_failure(
+    tmp_path: Path,
+) -> None:
+    result, calls = _run_deploy(
+        tmp_path,
+        failure="readiness",
+        no_auto_rollback=True,
+        target_revision=TEST_REVISION,
+        deployment_revision=None,
+    )
+
+    diagnostic = result.stdout + result.stderr
+    assert result.returncode == 1
+    assert "自動rollbackは抑止されています" in diagnostic
+    assert "初回 deploy" not in diagnostic
+    assert sum("checkout --detach" in call for call in calls) == 1
 
 
 def test_should_report_observed_state_when_automatic_rollback_fails(

@@ -128,12 +128,12 @@ if dogfood_check_readiness; then
   exit 0
 fi
 
-if [ -z "$previous" ]; then
-  echo "ERROR: 初回 deploy のため自動 rollback できない状態です。readiness 失敗の原因調査後、--to <SHA> での明示 rollback か再 deploy を行ってください" >&2
-  exit 1
-fi
 if [ "$auto_rollback" = false ]; then
   echo "ERROR: readiness確認に失敗しました。自動rollbackは抑止されています: $target" >&2
+  exit 1
+fi
+if [ -z "$previous" ]; then
+  echo "ERROR: 初回 deploy のため自動 rollback できない状態です。readiness 失敗の原因調査後、--to <SHA> での明示 rollback か再 deploy を行ってください" >&2
   exit 1
 fi
 echo "ERROR: readiness確認に失敗したためrollbackします: $target -> $previous" >&2
