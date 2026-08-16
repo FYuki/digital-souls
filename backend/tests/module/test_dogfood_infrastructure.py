@@ -639,9 +639,6 @@ def test_should_document_executable_commands_when_running_restore_drill() -> Non
         for command in commands
         if "environment_cli.py restore-verify " in command
     )
-    disable_history_command = next(
-        command for command in commands if command == "set +o history"
-    )
     load_key_command = next(
         command
         for command in commands
@@ -652,23 +649,11 @@ def test_should_document_executable_commands_when_running_restore_drill() -> Non
         for command in commands
         if command == "export DOGFOOD_BACKUP_AUTHENTICATION_KEY"
     )
-    unset_key_command = next(
-        command
-        for command in commands
-        if command == "unset DOGFOOD_BACKUP_AUTHENTICATION_KEY"
-    )
-    enable_history_command = next(
-        command for command in commands if command == "set -o history"
-    )
-
     assert commands.index(install_command) < commands.index(init_command)
-    assert commands.index(init_command) < commands.index(disable_history_command)
-    assert commands.index(disable_history_command) < commands.index(load_key_command)
+    assert commands.index(init_command) < commands.index(load_key_command)
     assert commands.index(load_key_command) < commands.index(export_key_command)
     assert commands.index(export_key_command) < commands.index(restore_command)
     assert commands.index(restore_command) < commands.index(verify_command)
-    assert commands.index(verify_command) < commands.index(unset_key_command)
-    assert commands.index(unset_key_command) < commands.index(enable_history_command)
     assert install_command == (
         "sudo install -d -m 0750 -o digital-souls -g digital-souls "
         "/var/lib/digital-souls/restore-drill"
@@ -680,12 +665,40 @@ def test_should_document_executable_commands_when_running_restore_drill() -> Non
     assert "--environment dogfood" in init_command
     assert "--repository-root /opt/digital-souls/current" in init_command
     for command in (restore_command, verify_command):
+        assert "sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY" in command
         assert "DS_ENVIRONMENT_ID=dogfood" in command
         assert "DS_DATA_DIR=/var/lib/digital-souls/restore-drill" in command
         assert "--environment dogfood" in command
         assert "--repository-root /opt/digital-souls/current" in command
+        assert "--backup-directory " in command
+    backup_generation = (
+        "/var/lib/digital-souls/backups/"
+        "backup-YYYYMMDDTHHMMSSZ-COMMIT-UNIQUEID"
+    )
+    assert restore_command.split("--backup-directory ", maxsplit=1)[1] == (
+        backup_generation
+    )
+    assert verify_command.split("--backup-directory ", maxsplit=1)[1] == (
+        backup_generation
+    )
     assert "/etc/digital-souls/dogfood.env" in load_key_command
     assert "DOGFOOD_BACKUP_AUTHENTICATION_KEY=" in load_key_command
+    history_state_position = drill_section.index("case $- in")
+    disable_history_position = drill_section.index(
+        "set +o history", history_state_position
+    )
+    load_key_position = drill_section.index(
+        "DOGFOOD_BACKUP_AUTHENTICATION_KEY=$(sudo awk"
+    )
+    assert history_state_position < disable_history_position < load_key_position
+    assert "unset DOGFOOD_BACKUP_AUTHENTICATION_KEY" in drill_section
+    assert 'if [ "$DOGFOOD_RESTORE_DRILL_HISTORY_ENABLED" = true ]' in drill_section
+    assert "trap dogfood_restore_drill_cleanup EXIT" in drill_section
+    assert "trap 'dogfood_restore_drill_abort 130' INT" in drill_section
+    assert "trap 'dogfood_restore_drill_abort 143' TERM" in drill_section
+    assert "trap 'dogfood_restore_drill_abort 129' HUP" in drill_section
+    assert "trap - EXIT INT TERM HUP" in drill_section
+    assert "dogfood_restore_drill_cleanup\n  trap - EXIT INT TERM HUP" in drill_section
     executable_commands = " ".join(commands)
     assert "python -c" not in executable_commands
     assert "sys.path" not in executable_commands
