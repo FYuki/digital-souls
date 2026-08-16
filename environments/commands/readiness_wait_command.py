@@ -27,6 +27,8 @@ def wait_for_inference_services(
     for name in service_names:
         if name not in INFERENCE_SERVICE_NAMES:
             raise ProfileError(f"unsupported inference readiness service: {name}")
+        if name not in dependency_map:
+            raise ProfileError(f"{name} dependency is required")
         dependency = dependency_map[name]
         if dependency.get("mode") != "real" or dependency.get("source") != "external":
             raise ProfileError(

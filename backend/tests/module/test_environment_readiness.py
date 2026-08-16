@@ -168,6 +168,46 @@ def test_should_fail_inference_gate_after_bounded_timeout(
     )
 
 
+def test_should_report_missing_inference_dependency_as_profile_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import commands.readiness_wait_command as command
+    from environment_timing import EnvironmentTiming
+    from profile_types import ProfileError
+
+    monkeypatch.setattr(
+        command,
+        "load_profile",
+        lambda name: {
+            "name": name,
+            "dependencies": {
+                "voicevox": {
+                    "mode": "real",
+                    "source": "external",
+                    "baseUrl": "http://127.0.0.1:50021",
+                    "readinessPath": "/version",
+                }
+            },
+        },
+    )
+    wait_called = False
+
+    def unexpected_wait(*args: object, **kwargs: object) -> None:
+        nonlocal wait_called
+        wait_called = True
+
+    monkeypatch.setattr(command, "wait_for_http", unexpected_wait)
+
+    with pytest.raises(ProfileError, match="ollama dependency is required"):
+        command.wait_for_inference_services(
+            "dogfood",
+            ("ollama",),
+            EnvironmentTiming(),
+        )
+
+    assert wait_called is False
+
+
 class _Handler(BaseHTTPRequestHandler):
     statuses: list[int] = []
 
