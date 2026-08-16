@@ -9,6 +9,8 @@ from app.model_settings import (
 )
 from app.runtime_data_root import initialize_runtime_data_root
 from app.runtime_paths import RuntimePaths
+from app.stt.whisper_client import WHISPER_COMPUTE_TYPE, WHISPER_DEVICE
+
 from adapters.base import (
     AdapterError,
     Check,
@@ -21,7 +23,6 @@ from adapters.base import (
     require_resolved_managed_endpoint,
 )
 
-
 WHISPER_REQUIRED_ARTIFACTS = (
     "config.json",
     "model.bin",
@@ -32,6 +33,21 @@ WHISPER_REQUIRED_ARTIFACTS = (
 WHISPER_CACHE_LOOKUP = (
     "import sys; from faster_whisper.utils import download_model; "
     "print(download_model(sys.argv[1], cache_dir=sys.argv[2], local_files_only=True))"
+)
+WHISPER_MODEL_PREPARATION = (
+    "import sys; from faster_whisper import WhisperModel; "
+    "from app.stt.whisper_client import WHISPER_COMPUTE_TYPE, WHISPER_DEVICE; "
+    "WhisperModel(sys.argv[1], download_root=sys.argv[2], "
+    "device=WHISPER_DEVICE, compute_type=WHISPER_COMPUTE_TYPE)"
+)
+WHISPER_MINIMAL_INFERENCE = (
+    "import sys; from pathlib import Path; "
+    "from app.audio.constants import "
+    "PCM_CHANNELS, PCM_SAMPLE_RATE_HZ, PCM_SAMPLE_WIDTH_BYTES; "
+    "from app.stt.whisper_client import WhisperTranscriber; "
+    "silence = bytes(PCM_SAMPLE_RATE_HZ * PCM_CHANNELS * PCM_SAMPLE_WIDTH_BYTES // 10); "
+    "WhisperTranscriber(model_name=sys.argv[1], download_root=Path(sys.argv[2]))"
+    ".transcribe(silence)"
 )
 
 
@@ -192,21 +208,39 @@ class BackendAdapter(ProcessServiceOperations):
             raise RuntimeError(f"backend preparation failed: {result.get('stderr', '')}")
         if context.whisper_enabled:
             model_cache = self._runtime_paths.whisper_cache_path
+            backend_dir = self.root_dir / "backend"
             cached_model = self._cached_whisper_model()
             if cached_model is None or not _whisper_model_is_ready(cached_model):
                 command = (
                     str(self.root_dir / "backend" / ".venv" / "bin" / "python"),
                     "-c",
-                    "import sys; from faster_whisper import WhisperModel; "
-                    "WhisperModel(sys.argv[1], download_root=sys.argv[2])",
+                    WHISPER_MODEL_PREPARATION,
                     self._whisper_model_name,
                     str(model_cache),
                 )
-                download = self.runner.run(command, self.root_dir)
+                download = self.runner.run(command, backend_dir)
                 if not command_succeeded(download):
                     raise RuntimeError(
                         f"Whisper model preparation failed: {download.get('stderr', '')}"
                     )
+            inference = self.runner.run(
+                (
+                    str(self.root_dir / "backend" / ".venv" / "bin" / "python"),
+                    "-c",
+                    WHISPER_MINIMAL_INFERENCE,
+                    self._whisper_model_name,
+                    str(model_cache),
+                ),
+                backend_dir,
+            )
+            if not command_succeeded(inference):
+                raise RuntimeError(
+                    "Whisper minimal inference failed "
+                    f"(device={WHISPER_DEVICE}, compute_type={WHISPER_COMPUTE_TYPE}): "
+                    f"{inference.get('stderr', '')}. "
+                    "Restore Backend dependencies with scripts/setup-backend.sh, "
+                    "then retry with environments/up.sh."
+                )
         if context.chroma_enabled:
             self._runtime_paths.chroma_path.mkdir(parents=True, exist_ok=True)
 

@@ -330,6 +330,8 @@ sudo systemctl disable --now ollama
 
 会話履歴、SQLite、Chroma、data rootの分離は、従来どおり環境ごとの`DS_DATA_DIR`とidentity markerで維持する。VOICEVOXは`voicevox/voicevox_engine:cpu-*`を既定とする。GPU版への移行は専用GPU確保後に別Issueで扱い、本タスクではGPU化もIssue起票も行わない。
 
+Whisperもdogfoodでは`device=cpu`、`compute_type=int8`に固定する。WSL2からはWindows側のNVIDIA driverを利用し、WSL内へLinux display driverを導入しない。WhisperのGPU実行とCUDA runtimeの導入は後続タスクで扱う。
+
 旧`$DS_DATA_DIR/ollama/models`のmodelはbootstrapが移動しない。既存modelを使う場合はサービス停止後に`blobs`と`manifests`を新保存先へ手動で移動し、所有権を収束させる。
 
 ```bash

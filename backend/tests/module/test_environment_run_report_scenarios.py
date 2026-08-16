@@ -5,11 +5,12 @@ import json
 from pathlib import Path
 
 import pytest
-
 from environment_constants import DEPENDENCY_NAMES
+
 from tests.environment_test_support import (
     profile_with_dependencies,
     single_adapter_registry,
+    write_cached_whisper_model,
 )
 
 
@@ -62,6 +63,7 @@ def test_should_route_effective_profile_to_up_service_registry(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     import commands.up_command as up_command
+
     from tests.environment_test_support import resolved_profile
 
     profile = resolved_profile("dogfood")
@@ -97,6 +99,78 @@ def test_should_route_effective_profile_to_up_service_registry(
 class _ExitedFrontendOperations(_NeverReadyOperations):
     def is_running(self, service):
         return False
+
+
+def test_should_abort_up_during_preparation_when_whisper_inference_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    environment_report_validator,
+    runtime_paths,
+) -> None:
+    import commands.up_command as up_command
+    from adapters.backend import BackendAdapter
+    from http_readiness import ReadinessResult
+
+    from tests.environment_test_support import RecordingRunner
+
+    disabled = {"mode": "disabled", "source": None}
+    profile = profile_with_dependencies(
+        frontend=disabled,
+        ollama=disabled,
+        voicevox=disabled,
+        chroma=disabled,
+    )
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    for launcher in ("setup-backend.sh", "start-backend.sh"):
+        path = scripts / launcher
+        path.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+        path.chmod(0o755)
+    venv_bin = tmp_path / "backend" / ".venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    for executable in ("python", "uvicorn"):
+        path = venv_bin / executable
+        path.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+        path.chmod(0o755)
+    snapshot = write_cached_whisper_model(
+        tmp_path, "Systran/faster-whisper-medium"
+    )
+    missing_library = "Library libcublas.so.12 is not found or cannot be loaded"
+    runner = RecordingRunner(
+        [
+            {"returncode": 0, "stdout": f"{snapshot}\n", "stderr": ""},
+            {"returncode": 0, "stdout": "", "stderr": ""},
+            {"returncode": 0, "stdout": f"{snapshot}\n", "stderr": ""},
+            {"returncode": 1, "stdout": "", "stderr": missing_library},
+        ]
+    )
+    registry = single_adapter_registry(
+        "backend", BackendAdapter(tmp_path, runtime_paths, runner)
+    )
+    report_path = runtime_paths.runtime_report_dir / "whisper" / "environment-run.json"
+    monkeypatch.setattr(
+        up_command,
+        "resolve_and_write_profile",
+        lambda environment, default, report, legacy, runtime: profile,
+    )
+    monkeypatch.setattr(
+        "adapters.base.probe_http",
+        lambda url, timeout_seconds: ReadinessResult(url, 1, 0.001, "not_ready"),
+    )
+    arguments = argparse.Namespace(
+        run_report=str(report_path),
+        profile_report=None,
+        default_profile="integration-voice",
+    )
+
+    exit_code = up_command.up_environment(tmp_path, arguments, registry=registry)
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    environment_report_validator.validate(report)
+    assert exit_code == 1
+    assert report["failure"]["category"] == "preparation"
+    assert missing_library in report["failure"]["message"]
+    assert report["startSequence"] == []
 
 
 def test_should_persist_schema_valid_readiness_timeout_from_up_command(
@@ -220,6 +294,7 @@ def test_should_record_failed_teardown_when_voicevox_rollback_fails(
     import environment_runtime
     from adapters.voicevox import VoicevoxAdapter
     from http_readiness import ReadinessResult
+
     from tests.environment_test_support import RecordingRunner, resolved_profile
 
     profile = resolved_profile()
