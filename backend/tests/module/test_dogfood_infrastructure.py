@@ -48,6 +48,7 @@ SHELL_ENTRYPOINTS = (
     "stop-services.sh",
     "restart-services.sh",
     "status.sh",
+    "wait-inference.sh",
 )
 
 
@@ -589,6 +590,9 @@ def test_should_delegate_application_lifecycle_to_one_oneshot_systemd_unit(
     assert service["User"] == values["DOGFOOD_SERVICE_USER"]
     assert service["Group"] == values["DOGFOOD_SERVICE_GROUP"]
     assert service["ExecStart"] == f"{values['DOGFOOD_CLONE_DIR']}/environments/up.sh"
+    assert service["ExecStartPre"] == (
+        f"{values['DOGFOOD_CLONE_DIR']}/scripts/dogfood/wait-inference.sh"
+    )
     assert service["ExecStop"] == f"{values['DOGFOOD_CLONE_DIR']}/environments/down.sh"
     assert "EnvironmentFile" not in service
     assert "DS_ENVIRONMENT_ID=dogfood" in service["Environment"]
@@ -603,6 +607,18 @@ def test_should_delegate_application_lifecycle_to_one_oneshot_systemd_unit(
     )
     assert "digital-souls-inference.target" in unit["Unit"]["After"].split()
     assert "Restart" not in service
+    assert service["TimeoutStartSec"] == "180s"
+
+
+def test_should_bound_inference_cold_start_wait_before_application_start() -> None:
+    source = (DOGFOOD_SCRIPTS_DIR / "wait-inference.sh").read_text(encoding="utf-8")
+
+    assert "wait-readiness" in source
+    assert "--service ollama" in source
+    assert "--service voicevox" in source
+    assert "--max-attempts 30" in source
+    assert "--interval-seconds 1" in source
+    assert "--request-timeout-seconds 1" in source
 
 
 def test_should_document_executable_pull_command_for_backend_default_model() -> None:
