@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import pwd
 import sqlite3
 import subprocess
 import sys
@@ -129,6 +130,11 @@ def _prepare_deploy_scenario(
     private_sentinels: bool = True,
 ) -> tuple[dict[str, str], Path]:
     env_path, data_dir = write_dogfood_env(tmp_path)
+    env_path.write_text(
+        env_path.read_text(encoding="utf-8")
+        + f"\nDOGFOOD_SERVICE_HOME_DIR={tmp_path / 'service-home'}\n",
+        encoding="utf-8",
+    )
     clone_dir = tmp_path / "clone"
     (clone_dir / ".git").mkdir(parents=True)
     call_log = tmp_path / "deploy.calls"
@@ -155,6 +161,8 @@ def _prepare_deploy_scenario(
     write_executable(
         cli,
         f'printf "cli\\t%s\\n" "$*" >> "{call_log}"\n'
+        f'printf "cli-home\\t%s\\t%s\\n" "$1" "$HOME" >> "{call_log}"\n'
+        f'printf "cli-gitconfig\\t%s\\t%s\\n" "$1" "${{GIT_CONFIG_GLOBAL-}}" >> "{call_log}"\n'
         'case "$1" in\n'
         '  backup) [ "${DEPLOY_FAILURE-}" != "backup" ]; '
         "printf '%s\\n' \"$DEPLOY_BACKUP_OUTPUT\" ;;\n"
@@ -329,6 +337,412 @@ def _read_log_records(log_dir: Path) -> tuple[str, ...]:
         path.read_text(encoding="utf-8")
         for path in log_dir.rglob("*")
         if path.is_file()
+    )
+
+
+def _run_service_git_trust_convergence(
+    service_home: Path,
+    clone_dir: Path,
+    environment: dict[str, str],
+    *,
+    repeat: bool,
+) -> subprocess.CompletedProcess[str]:
+    service_user = pwd.getpwuid(os.getuid()).pw_name
+    convergence_calls = (
+        "dogfood_converge_service_git_trust; " if repeat else ""
+    ) + "dogfood_converge_service_git_trust"
+    return subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; DOGFOOD_SERVICE_HOME_DIR=$2; DOGFOOD_CLONE_DIR=$3; '
+            "DOGFOOD_SERVICE_USER=$4; DOGFOOD_SERVICE_GROUP=$5; " + convergence_calls,
+            "bash",
+            str(DOGFOOD_SCRIPTS_DIR / "deployment-lib.sh"),
+            str(service_home),
+            str(clone_dir),
+            service_user,
+            TEST_SERVICE_GROUP,
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+
+def _read_effective_global_safe_directories(
+    service_home: Path,
+    clone_dir: Path,
+) -> list[str]:
+    return subprocess.run(
+        [
+            "git",
+            "-C",
+            str(clone_dir),
+            "config",
+            "--global",
+            "--includes",
+            "--get-all",
+            "safe.directory",
+        ],
+        env={
+            **os.environ,
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "HOME": str(service_home),
+            "GIT_CONFIG_GLOBAL": str(service_home / ".gitconfig"),
+            "XDG_CONFIG_HOME": str(service_home / ".config"),
+        },
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+
+
+def test_should_select_service_git_config_for_backup_and_backup_verify(
+    tmp_path: Path,
+) -> None:
+    result, calls = _run_deploy(tmp_path)
+
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    backup_home_observations = tuple(
+        call
+        for call in calls
+        if call.startswith(("cli-home\tbackup\t", "cli-home\tbackup-verify\t"))
+    )
+    service_home = tmp_path / "service-home"
+    assert backup_home_observations == (
+        f"cli-home\tbackup\t{service_home}",
+        f"cli-home\tbackup-verify\t{service_home}",
+    )
+    backup_gitconfig_observations = tuple(
+        call
+        for call in calls
+        if call.startswith(("cli-gitconfig\tbackup\t", "cli-gitconfig\tbackup-verify\t"))
+    )
+    service_gitconfig = service_home / ".gitconfig"
+    assert backup_gitconfig_observations == (
+        f"cli-gitconfig\tbackup\t{service_gitconfig}",
+        f"cli-gitconfig\tbackup-verify\t{service_gitconfig}",
+    )
+
+
+def test_should_exclude_xdg_safe_directory_from_selected_service_git_config(
+    tmp_path: Path,
+) -> None:
+    service_home = tmp_path / "service-home"
+    service_home.mkdir()
+    clone_dir = tmp_path / "clone"
+    clone_dir.mkdir()
+    service_gitconfig = service_home / ".gitconfig"
+    service_gitconfig.write_text(
+        f"[safe]\n\tdirectory = {clone_dir}\n",
+        encoding="utf-8",
+    )
+    xdg_gitconfig = service_home / ".config" / "git" / "config"
+    xdg_gitconfig.parent.mkdir(parents=True)
+    xdg_gitconfig.write_text("[safe]\n\tdirectory = *\n", encoding="utf-8")
+
+    safe_directories = _read_effective_global_safe_directories(
+        service_home,
+        clone_dir,
+    )
+
+    assert safe_directories == [str(clone_dir)]
+
+
+def test_should_converge_only_the_normalized_clone_in_service_git_config(
+    tmp_path: Path,
+) -> None:
+    service_home = tmp_path / "service-home"
+    service_home.mkdir()
+    actual_clone = tmp_path / "actual-clone"
+    actual_clone.mkdir()
+    configured_clone = tmp_path / "configured-clone"
+    configured_clone.symlink_to(actual_clone, target_is_directory=True)
+    service_gitconfig = service_home / ".gitconfig"
+    subprocess.run(
+        [
+            "git",
+            "config",
+            "--file",
+            str(service_gitconfig),
+            "user.name",
+            "preserved-user",
+        ],
+        check=True,
+    )
+    for unsafe_value in ("*", str(tmp_path / "other-clone")):
+        subprocess.run(
+            [
+                "git",
+                "config",
+                "--file",
+                str(service_gitconfig),
+                "--add",
+                "safe.directory",
+                unsafe_value,
+            ],
+            check=True,
+        )
+    service_gitconfig.chmod(0o666)
+    ambient_home = tmp_path / "ambient-home"
+    ambient_home.mkdir()
+    ambient_gitconfig = ambient_home / ".gitconfig"
+    ambient_gitconfig.write_text("[user]\n\tname = ambient-user\n", encoding="utf-8")
+    ambient_before = ambient_gitconfig.read_bytes()
+    result = _run_service_git_trust_convergence(
+        service_home,
+        configured_clone,
+        {**os.environ, "HOME": str(ambient_home)},
+        repeat=True,
+    )
+
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    safe_directories = _read_effective_global_safe_directories(
+        service_home,
+        actual_clone,
+    )
+    assert safe_directories == [str(actual_clone.resolve())]
+    preserved_name = subprocess.run(
+        [
+            "git",
+            "config",
+            "--file",
+            str(service_gitconfig),
+            "--get",
+            "user.name",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert preserved_name == "preserved-user"
+    assert ambient_gitconfig.read_bytes() == ambient_before
+    metadata = service_gitconfig.stat()
+    assert metadata.st_uid == os.getuid()
+    assert metadata.st_gid == os.getgid()
+    assert metadata.st_mode & 0o777 == 0o640
+
+
+def test_should_preserve_service_git_config_when_clone_cannot_be_resolved(
+    tmp_path: Path,
+) -> None:
+    service_home = tmp_path / "service-home"
+    service_home.mkdir()
+    service_gitconfig = service_home / ".gitconfig"
+    service_gitconfig.write_text(
+        "[safe]\n\tdirectory = *\n[user]\n\tname = preserved-user\n",
+        encoding="utf-8",
+    )
+    config_before = service_gitconfig.read_bytes()
+    result = _run_service_git_trust_convergence(
+        service_home,
+        tmp_path / "missing-parent" / "missing-clone",
+        os.environ.copy(),
+        repeat=False,
+    )
+
+    assert result.returncode != 0
+    assert service_gitconfig.read_bytes() == config_before
+
+
+def test_should_reject_service_git_config_symlink_without_changing_its_target(
+    tmp_path: Path,
+) -> None:
+    service_home = tmp_path / "service-home"
+    service_home.mkdir()
+    clone_dir = tmp_path / "clone"
+    clone_dir.mkdir()
+    symlink_target = tmp_path / "protected-config"
+    symlink_target.write_text("protected\n", encoding="utf-8")
+    symlink_target.chmod(0o600)
+    target_before = (symlink_target.read_bytes(), symlink_target.stat())
+    (service_home / ".gitconfig").symlink_to(symlink_target)
+
+    result = _run_service_git_trust_convergence(
+        service_home,
+        clone_dir,
+        os.environ.copy(),
+        repeat=False,
+    )
+
+    assert result.returncode != 0
+    assert (service_home / ".gitconfig").is_symlink()
+    target_after = symlink_target.stat()
+    assert symlink_target.read_bytes() == target_before[0]
+    assert (target_after.st_uid, target_after.st_gid, target_after.st_mode) == (
+        target_before[1].st_uid,
+        target_before[1].st_gid,
+        target_before[1].st_mode,
+    )
+
+
+def test_should_reject_service_git_config_replaced_by_symlink_during_convergence(
+    tmp_path: Path,
+) -> None:
+    service_home = tmp_path / "service-home"
+    service_home.mkdir()
+    service_gitconfig = service_home / ".gitconfig"
+    service_gitconfig.write_text("[user]\n\tname = preserved-user\n", encoding="utf-8")
+    clone_dir = tmp_path / "clone"
+    clone_dir.mkdir()
+    symlink_target = tmp_path / "protected-config"
+    symlink_target.write_text("protected\n", encoding="utf-8")
+    symlink_target.chmod(0o600)
+    target_before = (symlink_target.read_bytes(), symlink_target.stat())
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    write_executable(
+        fake_bin / "git",
+        '/usr/bin/git "$@"\nln -sfn "$GITCONFIG_SWAP_TARGET" "$SERVICE_GITCONFIG"\n',
+    )
+
+    result = _run_service_git_trust_convergence(
+        service_home,
+        clone_dir,
+        {
+            **os.environ,
+            "GITCONFIG_SWAP_TARGET": str(symlink_target),
+            "SERVICE_GITCONFIG": str(service_gitconfig),
+            "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+        },
+        repeat=False,
+    )
+
+    assert result.returncode != 0
+    assert service_gitconfig.is_symlink()
+    target_after = symlink_target.stat()
+    assert symlink_target.read_bytes() == target_before[0]
+    assert (target_after.st_uid, target_after.st_gid, target_after.st_mode) == (
+        target_before[1].st_uid,
+        target_before[1].st_gid,
+        target_before[1].st_mode,
+    )
+
+
+def test_should_reject_service_home_symlink_without_changing_its_target(
+    tmp_path: Path,
+) -> None:
+    protected_home = tmp_path / "protected-home"
+    protected_home.mkdir()
+    protected_gitconfig = protected_home / ".gitconfig"
+    protected_gitconfig.write_text("protected\n", encoding="utf-8")
+    protected_gitconfig.chmod(0o600)
+    target_before = (protected_gitconfig.read_bytes(), protected_gitconfig.stat())
+    service_home = tmp_path / "service-home"
+    service_home.symlink_to(protected_home, target_is_directory=True)
+    clone_dir = tmp_path / "clone"
+    clone_dir.mkdir()
+
+    result = _run_service_git_trust_convergence(
+        service_home,
+        clone_dir,
+        os.environ.copy(),
+        repeat=False,
+    )
+
+    assert result.returncode != 0
+    assert service_home.is_symlink()
+    target_after = protected_gitconfig.stat()
+    assert protected_gitconfig.read_bytes() == target_before[0]
+    assert (target_after.st_uid, target_after.st_gid, target_after.st_mode) == (
+        target_before[1].st_uid,
+        target_before[1].st_gid,
+        target_before[1].st_mode,
+    )
+
+
+def test_should_reject_service_home_replaced_by_symlink_during_convergence(
+    tmp_path: Path,
+) -> None:
+    service_home = tmp_path / "service-home"
+    service_home.mkdir()
+    original_home = tmp_path / "original-home"
+    protected_home = tmp_path / "protected-home"
+    protected_home.mkdir()
+    protected_gitconfig = protected_home / ".gitconfig"
+    protected_gitconfig.write_text("protected\n", encoding="utf-8")
+    protected_gitconfig.chmod(0o600)
+    target_before = (protected_gitconfig.read_bytes(), protected_gitconfig.stat())
+    clone_dir = tmp_path / "clone"
+    clone_dir.mkdir()
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    write_executable(
+        fake_bin / "mv",
+        '/usr/bin/mv -- "$SERVICE_HOME" "$ORIGINAL_HOME"\n'
+        'ln -s -- "$PROTECTED_HOME" "$SERVICE_HOME"\n'
+        'exec /usr/bin/mv "$@"\n',
+    )
+
+    result = _run_service_git_trust_convergence(
+        service_home,
+        clone_dir,
+        {
+            **os.environ,
+            "ORIGINAL_HOME": str(original_home),
+            "PROTECTED_HOME": str(protected_home),
+            "SERVICE_HOME": str(service_home),
+            "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+        },
+        repeat=False,
+    )
+
+    assert result.returncode != 0
+    assert service_home.is_symlink()
+    assert original_home.is_dir()
+    target_after = protected_gitconfig.stat()
+    assert protected_gitconfig.read_bytes() == target_before[0]
+    assert (target_after.st_uid, target_after.st_gid, target_after.st_mode) == (
+        target_before[1].st_uid,
+        target_before[1].st_gid,
+        target_before[1].st_mode,
+    )
+
+
+@pytest.mark.parametrize("unsafe_value", ("*", "other-clone"))
+def test_should_reject_included_safe_directory_without_changing_primary_config(
+    tmp_path: Path,
+    unsafe_value: str,
+) -> None:
+    service_home = tmp_path / "service-home"
+    service_home.mkdir()
+    clone_dir = tmp_path / "clone"
+    clone_dir.mkdir()
+    included_gitconfig = service_home / "included.gitconfig"
+    included_value = (
+        unsafe_value if unsafe_value == "*" else str(tmp_path / unsafe_value)
+    )
+    included_gitconfig.write_text(
+        f"[safe]\n\tdirectory = {included_value}\n",
+        encoding="utf-8",
+    )
+    service_gitconfig = service_home / ".gitconfig"
+    service_gitconfig.write_text(
+        "[include]\n\tpath = included.gitconfig\n[user]\n\tname = preserved-user\n",
+        encoding="utf-8",
+    )
+    service_gitconfig.chmod(0o600)
+    config_before = (service_gitconfig.read_bytes(), service_gitconfig.stat())
+    assert _read_effective_global_safe_directories(service_home, clone_dir) == [
+        included_value
+    ]
+
+    result = _run_service_git_trust_convergence(
+        service_home,
+        clone_dir,
+        os.environ.copy(),
+        repeat=False,
+    )
+
+    assert result.returncode != 0
+    config_after = service_gitconfig.stat()
+    assert service_gitconfig.read_bytes() == config_before[0]
+    assert (config_after.st_uid, config_after.st_gid, config_after.st_mode) == (
+        config_before[1].st_uid,
+        config_before[1].st_gid,
+        config_before[1].st_mode,
     )
 
 

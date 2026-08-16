@@ -115,6 +115,116 @@ dogfood_verify_detached_clean_revision() {
   dogfood_require_clean_checkout
 }
 
+dogfood_converge_service_git_trust() (
+  local service_gitconfig="$DOGFOOD_SERVICE_HOME_DIR/.gitconfig"
+  local normalized_clone staging_dir staged_gitconfig effective_safe_directories
+  local git_config_status origin _value
+  normalized_clone=$(realpath -- "$DOGFOOD_CLONE_DIR") || return
+
+  if [ -L "$DOGFOOD_SERVICE_HOME_DIR" ] || [ ! -d "$DOGFOOD_SERVICE_HOME_DIR" ]; then
+    echo "ERROR: service userのhomeが通常ディレクトリではありません" >&2
+    return 2
+  fi
+  if [ -L "$service_gitconfig" ]; then
+    echo "ERROR: service userの.gitconfigにsymlinkは使用できません" >&2
+    return 2
+  fi
+  if [ -e "$service_gitconfig" ] && [ ! -f "$service_gitconfig" ]; then
+    echo "ERROR: service userの.gitconfigが通常ファイルではありません" >&2
+    return 2
+  fi
+
+  staging_dir=$(mktemp -d "$(dirname -- "$DOGFOOD_SERVICE_HOME_DIR")/.gitconfig.tmp.XXXXXX") \
+    || return
+  staged_gitconfig="$staging_dir/config"
+  effective_safe_directories="$staging_dir/effective-safe-directories"
+  trap 'rm -f -- "$staged_gitconfig" "$staged_gitconfig.lock" "$effective_safe_directories"; rmdir -- "$staging_dir"' EXIT
+
+  if [ -e "$service_gitconfig" ]; then
+    cp --no-dereference -- "$service_gitconfig" "$staged_gitconfig" || return
+    if [ -L "$staged_gitconfig" ] || [ ! -f "$staged_gitconfig" ]; then
+      echo "ERROR: service userの.gitconfigが通常ファイルではありません" >&2
+      return 2
+    fi
+  else
+    : > "$staged_gitconfig"
+  fi
+
+  HOME="$DOGFOOD_SERVICE_HOME_DIR" git config --file "$staged_gitconfig" \
+    --replace-all safe.directory "$normalized_clone" || return
+
+  if [ -L "$DOGFOOD_SERVICE_HOME_DIR" ] || [ ! -d "$DOGFOOD_SERVICE_HOME_DIR" ]; then
+    echo "ERROR: service userのhomeが処理中に通常ディレクトリ以外へ変更されました" >&2
+    return 2
+  fi
+  if [ -e "$service_gitconfig" ]; then
+    if HOME="$DOGFOOD_SERVICE_HOME_DIR" \
+      GIT_CONFIG_GLOBAL="$service_gitconfig" \
+      git -C "$normalized_clone" config --global --includes --show-origin --null \
+        --get-all safe.directory > "$effective_safe_directories"; then
+      git_config_status=0
+    else
+      git_config_status=$?
+    fi
+    if [ "$git_config_status" -ne 0 ] && [ "$git_config_status" -ne 1 ]; then
+      return "$git_config_status"
+    fi
+    while IFS= read -r -d '' origin && IFS= read -r -d '' _value; do
+      if [ "$origin" != "file:$service_gitconfig" ]; then
+        echo "ERROR: include経由のsafe.directoryは使用できません" >&2
+        return 2
+      fi
+    done < "$effective_safe_directories"
+  fi
+
+  chown "$DOGFOOD_SERVICE_USER:$DOGFOOD_SERVICE_GROUP" "$staged_gitconfig" || return
+  chmod 0640 "$staged_gitconfig" || return
+
+  if [ -L "$DOGFOOD_SERVICE_HOME_DIR" ] || [ ! -d "$DOGFOOD_SERVICE_HOME_DIR" ]; then
+    echo "ERROR: service userのhomeが処理中に通常ディレクトリ以外へ変更されました" >&2
+    return 2
+  fi
+  if [ -L "$service_gitconfig" ]; then
+    echo "ERROR: service userの.gitconfigが処理中にsymlinkへ変更されました" >&2
+    return 2
+  fi
+  python3 - "$staged_gitconfig" "$DOGFOOD_SERVICE_HOME_DIR" <<'PYTHON'
+import os
+import stat
+import subprocess
+import sys
+
+staged_gitconfig, service_home = sys.argv[1:]
+service_home_fd = os.open(
+    service_home,
+    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+)
+try:
+    opened_home = os.fstat(service_home_fd)
+    current_home = os.stat(service_home, follow_symlinks=False)
+    opened_identity = (opened_home.st_dev, opened_home.st_ino)
+    current_identity = (current_home.st_dev, current_home.st_ino)
+    if not stat.S_ISDIR(current_home.st_mode) or current_identity != opened_identity:
+        raise SystemExit(2)
+
+    destination = f"/proc/self/fd/{service_home_fd}/.gitconfig"
+    placement = subprocess.run(
+        ["mv", "-T", "--", staged_gitconfig, destination],
+        pass_fds=(service_home_fd,),
+        check=False,
+    )
+    if placement.returncode != 0:
+        raise SystemExit(placement.returncode)
+
+    current_home = os.stat(service_home, follow_symlinks=False)
+    current_identity = (current_home.st_dev, current_home.st_ino)
+    if not stat.S_ISDIR(current_home.st_mode) or current_identity != opened_identity:
+        raise SystemExit(2)
+finally:
+    os.close(service_home_fd)
+PYTHON
+)
+
 dogfood_update_revision() {
   local target=$1
   local temporary prepared
@@ -160,6 +270,8 @@ dogfood_backup() {
   local backup_result backup_directory
   backup_result=$(sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY \
     -u "$DOGFOOD_SERVICE_USER" env \
+    HOME="$DOGFOOD_SERVICE_HOME_DIR" \
+    GIT_CONFIG_GLOBAL="$DOGFOOD_SERVICE_HOME_DIR/.gitconfig" \
     DS_ENVIRONMENT_ID="$DS_ENVIRONMENT_ID" \
     DS_DATA_DIR="$DS_DATA_DIR" \
     "$python" "$cli" backup \
@@ -183,6 +295,8 @@ print(payload["backupDirectory"])
 ') || return
   sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY \
     -u "$DOGFOOD_SERVICE_USER" env \
+    HOME="$DOGFOOD_SERVICE_HOME_DIR" \
+    GIT_CONFIG_GLOBAL="$DOGFOOD_SERVICE_HOME_DIR/.gitconfig" \
     "$python" "$cli" backup-verify --backup-directory "$backup_directory" || return
   printf '%s\n' "$backup_directory"
 }

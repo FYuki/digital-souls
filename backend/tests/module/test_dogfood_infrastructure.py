@@ -181,6 +181,25 @@ def test_should_preserve_wsl_identity_in_direct_sudo_runbook_commands() -> None:
             ) in source
 
 
+def test_should_document_service_gitconfig_failure_recovery() -> None:
+    source = README_PATH.read_text(encoding="utf-8")
+
+    for error_message in (
+        "ERROR: service userの.gitconfigにsymlinkは使用できません",
+        "ERROR: service userの.gitconfigが通常ファイルではありません",
+        "ERROR: include経由のsafe.directoryは使用できません",
+    ):
+        assert error_message in source
+    assert "リンク先や内容を確認・退避" in source
+    assert "include元ファイルから`safe.directory`だけを取り除く" in source
+    assert "他のGit設定とinclude自体は維持" in source
+    assert "bootstrapを再実行" in source
+    assert (
+        "git -C /opt/digital-souls/current config "
+        "--global --includes --show-origin --get-all safe.directory"
+    ) in " ".join(line.rstrip("\\").strip() for line in source.splitlines())
+
+
 def test_should_apply_declared_ownership_and_restricted_directory_permissions() -> None:
     bootstrap_path = DOGFOOD_SCRIPTS_DIR / "bootstrap.sh"
     assert bootstrap_path.is_file(), "dogfood bootstrap entrypoint is required"

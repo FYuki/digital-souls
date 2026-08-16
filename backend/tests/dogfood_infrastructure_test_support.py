@@ -272,7 +272,10 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
         bin_dir / "groupadd",
         recorder + 'touch "$BOOTSTRAP_GROUP_CREATED"\n',
     )
-    write_executable(bin_dir / "chmod", recorder + 'exec /bin/chmod "$@"\n')
+    write_executable(
+        bin_dir / "chmod",
+        recorder + 'exec /bin/chmod "$@"\n',
+    )
     write_executable(
         bin_dir / "install",
         recorder
@@ -323,6 +326,7 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
         bin_dir / "git",
         recorder
         + 'case "$*" in\n'
+        + '  "config --file "*) exec /usr/bin/git "$@" ;;\n'
         + '  *"clone --no-checkout"*)\n'
         + '    [ "${BOOTSTRAP_FAILURE-}" != "clone" ] || exit 1\n'
         + "    clone_target=${@: -1}\n"

@@ -94,6 +94,7 @@ fi
 install -d -m 0750 -o "$DOGFOOD_SERVICE_USER" -g "$DOGFOOD_SERVICE_GROUP" \
   "$DS_DATA_DIR" "$DOGFOOD_SERVICE_HOME_DIR" "$DOGFOOD_OLLAMA_MODELS_DIR" \
   "$DOGFOOD_BACKUP_DIR" "$DOGFOOD_LOG_DIR"
+dogfood_converge_service_git_trust
 install -d -m 0750 -o root -g "$DOGFOOD_SERVICE_GROUP" \
   "$DOGFOOD_STATE_DIR" "$DOGFOOD_STATE_DIR/deployments"
 dogfood_validate_deployment_storage
