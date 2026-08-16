@@ -214,6 +214,72 @@ runtime data root直下の`.conversation-history.restore-intent.json`は、resto
 
 実drillは本タスクの自動テストでは行わずIssue #56で実施する。読み取り専用cloneは`/opt/digital-souls/current`（`root:digital-souls`）、実data rootは`/var/lib/digital-souls/data`（`digital-souls:digital-souls`）である。上記backupを作成・検証後、`digital-souls:digital-souls`所有の空の別data rootを用意し、同じenvironment identity markerを初期化したうえで、`DS_DATA_DIR`だけを別rootへ差し替えてrestoreとrestore-verifyを実行する。
 
+```bash
+sudo install -d -m 0750 -o digital-souls -g digital-souls \
+  /var/lib/digital-souls/restore-drill
+```
+
+```bash
+sudo -u digital-souls env \
+  DS_ENVIRONMENT_ID=dogfood DS_DATA_DIR=/var/lib/digital-souls/restore-drill \
+  /opt/digital-souls/current/backend/.venv/bin/python \
+  /opt/digital-souls/current/environments/environment_cli.py init-data-root \
+  --environment dogfood --repository-root /opt/digital-souls/current
+```
+
+認証鍵の読込、restore、restore-verifyは以下をまとめて同じshellへ貼り付けて実行する。サブシェル内でのみ認証鍵をexportし、正常終了時と割り込み時のどちらでも認証鍵を破棄してhistory設定を開始時の状態へ戻す。
+
+```bash
+(
+set +x
+DOGFOOD_RESTORE_DRILL_HISTORY_STATE=$(
+  set -o | awk '$1 == "history" {print $2}'
+)
+
+dogfood_restore_drill_cleanup() {
+  unset DOGFOOD_BACKUP_AUTHENTICATION_KEY
+  if [ "$DOGFOOD_RESTORE_DRILL_HISTORY_STATE" = on ]; then
+    set -o history
+  else
+    set +o history
+  fi
+}
+
+dogfood_restore_drill_abort() {
+  status=$1
+  dogfood_restore_drill_cleanup
+  trap - EXIT INT TERM HUP
+  exit "$status"
+}
+
+trap dogfood_restore_drill_cleanup EXIT
+trap 'dogfood_restore_drill_abort 130' INT
+trap 'dogfood_restore_drill_abort 143' TERM
+trap 'dogfood_restore_drill_abort 129' HUP
+
+set +o history
+DOGFOOD_BACKUP_AUTHENTICATION_KEY=$(sudo awk -F= \
+  '/^DOGFOOD_BACKUP_AUTHENTICATION_KEY=/{print substr($0, index($0, "=") + 1)}' \
+  /etc/digital-souls/dogfood.env)
+export DOGFOOD_BACKUP_AUTHENTICATION_KEY
+
+sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY -u digital-souls env \
+  DS_ENVIRONMENT_ID=dogfood DS_DATA_DIR=/var/lib/digital-souls/restore-drill \
+  /opt/digital-souls/current/backend/.venv/bin/python \
+  /opt/digital-souls/current/environments/environment_cli.py restore \
+  --environment dogfood --repository-root /opt/digital-souls/current \
+  --backup-directory /var/lib/digital-souls/backups/backup-YYYYMMDDTHHMMSSZ-COMMIT-UNIQUEID \
+  || dogfood_restore_drill_abort $?
+
+sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY -u digital-souls env \
+  DS_ENVIRONMENT_ID=dogfood DS_DATA_DIR=/var/lib/digital-souls/restore-drill \
+  /opt/digital-souls/current/backend/.venv/bin/python \
+  /opt/digital-souls/current/environments/environment_cli.py restore-verify \
+  --environment dogfood --repository-root /opt/digital-souls/current \
+  --backup-directory /var/lib/digital-souls/backups/backup-YYYYMMDDTHHMMSSZ-COMMIT-UNIQUEID
+)
+```
+
 一次証跡にはenvironment ID、UTC日時、commit、schema、conversation件数、検証結果だけを残す。その後Backendを別rootで起動し、readiness、schema、件数、既存conversationを指定した履歴再開が成功することを確認する。会話本文や秘密値は端末logやIssue本文へ記録しない。drill終了後に通常rootへ戻し、再度readinessを確認する。
 
 ## 起動・停止・状態確認

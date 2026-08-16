@@ -55,6 +55,7 @@ BACKUP_ERROR_EXIT_CODES = (
 )
 UNKNOWN_BACKUP_ERROR_MESSAGE = "backup operation failed"
 UNKNOWN_ENVIRONMENT_ERROR_MESSAGE = "environment operation failed"
+INIT_DATA_ROOT_COMMAND = "init-data-root"
 BACKUP_COMMANDS = ("backup", "backup-verify", "restore", "restore-verify")
 
 
@@ -76,6 +77,16 @@ def backup_environment(
     from commands.backup_restore_command import backup_environment as operation
 
     return operation(environment_id, repository_root, backup_root, retention_count)
+
+
+def initialize_environment_data_root(
+    environment_id: str, repository_root: str
+) -> int:
+    from commands.backup_restore_command import (
+        initialize_environment_data_root as operation,
+    )
+
+    return operation(environment_id, repository_root)
 
 
 def verify_environment_backup(backup_directory: str) -> int:
@@ -131,6 +142,9 @@ def _parser() -> argparse.ArgumentParser:
     test_result.add_argument("--message", required=True)
     readiness = commands.add_parser("readiness")
     readiness.add_argument("--profile", required=True)
+    init_data_root = commands.add_parser(INIT_DATA_ROOT_COMMAND)
+    init_data_root.add_argument("--environment", required=True)
+    init_data_root.add_argument("--repository-root", required=True)
     backup, backup_verify, restore, restore_verify = (
         commands.add_parser(command) for command in BACKUP_COMMANDS
     )
@@ -149,6 +163,10 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _dispatch(arguments: argparse.Namespace) -> int:
+    if arguments.command == INIT_DATA_ROOT_COMMAND:
+        return initialize_environment_data_root(
+            arguments.environment, arguments.repository_root
+        )
     if arguments.command == "backup":
         return backup_environment(
             arguments.environment,
@@ -220,8 +238,15 @@ def main() -> int:
     except (EnvironmentVerificationError, ProfileError, RunReportError):
         print(f"ERROR: {UNKNOWN_ENVIRONMENT_ERROR_MESSAGE}", file=sys.stderr)
         return 1
-    except Exception:  # noqa: BLE001 - CLI境界で診断方針を操作種別ごとに固定する
-        if arguments.command in BACKUP_COMMANDS:
+    except Exception as error:  # noqa: BLE001 - CLI境界で診断方針を操作種別ごとに固定する
+        if arguments.command == INIT_DATA_ROOT_COMMAND:
+            message = (
+                str(error)
+                if isinstance(error, ValueError)
+                else UNKNOWN_ENVIRONMENT_ERROR_MESSAGE
+            )
+            print(f"ERROR: {message}", file=sys.stderr)
+        elif arguments.command in BACKUP_COMMANDS:
             print(f"ERROR: {UNKNOWN_ENVIRONMENT_ERROR_MESSAGE}", file=sys.stderr)
         else:
             traceback.print_exc()

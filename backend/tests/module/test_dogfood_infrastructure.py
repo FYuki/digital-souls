@@ -606,6 +606,163 @@ def test_should_document_executable_pull_command_for_backend_default_model() -> 
     )
 
 
+def test_should_document_executable_commands_when_running_restore_drill() -> None:
+    source = README_PATH.read_text(encoding="utf-8")
+    drill_section = source.split("### Issue #56 restore drill", maxsplit=1)[1].split(
+        "\n## ", maxsplit=1
+    )[0]
+    command_blocks = re.findall(r"```bash\n(.*?)```", drill_section, flags=re.DOTALL)
+    protected_block = next(
+        block
+        for block in command_blocks
+        if "DOGFOOD_BACKUP_AUTHENTICATION_KEY=$(sudo awk" in block
+    )
+    assert protected_block.startswith("(\n")
+    assert protected_block.endswith(")\n")
+    commands: list[str] = []
+    for block in command_blocks:
+        continued_lines: list[str] = []
+        for line in block.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            continued_lines.append(stripped.rstrip("\\").rstrip())
+            if not stripped.endswith("\\"):
+                commands.append(" ".join(continued_lines))
+                continued_lines = []
+        assert continued_lines == []
+
+    install_command = next(command for command in commands if "install -d" in command)
+    init_command = next(
+        command for command in commands if "environment_cli.py init-data-root" in command
+    )
+    restore_command = next(
+        command
+        for command in commands
+        if "environment_cli.py restore " in command
+    )
+    verify_command = next(
+        command
+        for command in commands
+        if "environment_cli.py restore-verify " in command
+    )
+    load_key_command = next(
+        command
+        for command in commands
+        if command.startswith("DOGFOOD_BACKUP_AUTHENTICATION_KEY=$(sudo awk")
+    )
+    export_key_command = next(
+        command
+        for command in commands
+        if command == "export DOGFOOD_BACKUP_AUTHENTICATION_KEY"
+    )
+    assert commands.index(install_command) < commands.index(init_command)
+    assert commands.index(init_command) < commands.index(load_key_command)
+    assert commands.index(load_key_command) < commands.index(export_key_command)
+    assert commands.index(export_key_command) < commands.index(restore_command)
+    assert commands.index(restore_command) < commands.index(verify_command)
+    assert install_command == (
+        "sudo install -d -m 0750 -o digital-souls -g digital-souls "
+        "/var/lib/digital-souls/restore-drill"
+    )
+    assert "sudo -u digital-souls env" in init_command
+    assert "DS_ENVIRONMENT_ID=dogfood" in init_command
+    assert "DS_DATA_DIR=/var/lib/digital-souls/restore-drill" in init_command
+    assert "/opt/digital-souls/current/backend/.venv/bin/python" in init_command
+    assert "--environment dogfood" in init_command
+    assert "--repository-root /opt/digital-souls/current" in init_command
+    for command in (restore_command, verify_command):
+        assert "sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY" in command
+        assert "DS_ENVIRONMENT_ID=dogfood" in command
+        assert "DS_DATA_DIR=/var/lib/digital-souls/restore-drill" in command
+        assert "--environment dogfood" in command
+        assert "--repository-root /opt/digital-souls/current" in command
+        assert "--backup-directory " in command
+    backup_generation = (
+        "/var/lib/digital-souls/backups/"
+        "backup-YYYYMMDDTHHMMSSZ-COMMIT-UNIQUEID"
+    )
+    assert restore_command.split("--backup-directory ", maxsplit=1)[1] == (
+        f"{backup_generation} || dogfood_restore_drill_abort $?"
+    )
+    assert verify_command.split("--backup-directory ", maxsplit=1)[1] == (
+        backup_generation
+    )
+    assert "/etc/digital-souls/dogfood.env" in load_key_command
+    assert "DOGFOOD_BACKUP_AUTHENTICATION_KEY=" in load_key_command
+    history_state_position = protected_block.index(
+        "DOGFOOD_RESTORE_DRILL_HISTORY_STATE=$("
+    )
+    disable_xtrace_position = protected_block.index("set +x")
+    disable_history_position = protected_block.index(
+        "set +o history", history_state_position
+    )
+    load_key_position = protected_block.index(
+        "DOGFOOD_BACKUP_AUTHENTICATION_KEY=$(sudo awk"
+    )
+    assert history_state_position < disable_history_position < load_key_position
+    assert disable_xtrace_position < history_state_position
+    assert 'set -o | awk \'$1 == "history" {print $2}\'' in protected_block
+    assert protected_block.index("export DOGFOOD_BACKUP_AUTHENTICATION_KEY") < (
+        protected_block.index("environment_cli.py restore ")
+    )
+    assert protected_block.index("environment_cli.py restore ") < (
+        protected_block.index("environment_cli.py restore-verify ")
+    )
+    assert "unset DOGFOOD_BACKUP_AUTHENTICATION_KEY" in drill_section
+    assert 'if [ "$DOGFOOD_RESTORE_DRILL_HISTORY_STATE" = on ]' in drill_section
+    assert "trap dogfood_restore_drill_cleanup EXIT" in drill_section
+    assert "trap 'dogfood_restore_drill_abort 130' INT" in drill_section
+    assert "trap 'dogfood_restore_drill_abort 143' TERM" in drill_section
+    assert "trap 'dogfood_restore_drill_abort 129' HUP" in drill_section
+    assert "trap - EXIT INT TERM HUP" in drill_section
+    assert "dogfood_restore_drill_cleanup\n  trap - EXIT INT TERM HUP" in drill_section
+    executable_commands = " ".join(commands)
+    assert "python -c" not in executable_commands
+    assert "sys.path" not in executable_commands
+    assert "initialize_runtime_data_root" not in executable_commands
+
+
+@pytest.mark.parametrize("initial_state", ("on", "off"))
+def test_should_restore_initial_history_state_after_restore_drill_cleanup(
+    initial_state: str,
+) -> None:
+    source = README_PATH.read_text(encoding="utf-8")
+    drill_section = source.split("### Issue #56 restore drill", maxsplit=1)[1].split(
+        "\n## ", maxsplit=1
+    )[0]
+    command_blocks = re.findall(r"```bash\n(.*?)```", drill_section, flags=re.DOTALL)
+    protected_block = next(
+        block
+        for block in command_blocks
+        if "DOGFOOD_BACKUP_AUTHENTICATION_KEY=$(sudo awk" in block
+    )
+    protected_preamble = protected_block.split(
+        "DOGFOOD_BACKUP_AUTHENTICATION_KEY=$(sudo awk", maxsplit=1
+    )[0]
+    history_setup = (
+        "set -o history\n" if initial_state == "on" else "set +o history\n"
+    )
+    script = (
+        history_setup
+        + protected_preamble
+        + "dogfood_restore_drill_cleanup\n"
+        + "trap - EXIT INT TERM HUP\n"
+        + "set -o | awk '$1 == \"history\" {print $2}'\n"
+        + ")\n"
+    )
+
+    completed = subprocess.run(
+        ["bash", "--noprofile", "--norc", "-c", script],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.stdout.strip() == initial_state
+    assert completed.stderr == ""
+
+
 def test_should_require_inference_and_application_from_dogfood_target() -> None:
     target_path = DOGFOOD_INFRA_DIR / "systemd" / "digital-souls-dogfood.target"
     assert target_path.is_file()

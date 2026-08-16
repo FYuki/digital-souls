@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Mapping
 from pathlib import Path
 
 from app.backup_restore import (
@@ -11,7 +12,26 @@ from app.backup_restore import (
     verify_backup,
     verify_restored_backup,
 )
+from app.runtime_data_root import initialize_runtime_data_root
 from app.runtime_paths import DATA_DIR_ENV, ENVIRONMENT_ID_ENV, resolve_runtime_paths
+
+
+def initialize_environment_data_root(
+    environment_id: str, repository_root_value: str
+) -> int:
+    repository_root = Path(repository_root_value)
+    paths = resolve_runtime_paths(
+        _runtime_environment(environment_id), repository_root
+    )
+    initialize_runtime_data_root(paths, repository_root)
+    _print_json(
+        {
+            "status": "ok",
+            "environmentId": paths.environment_id,
+            "dataRoot": str(paths.data_root),
+        }
+    )
+    return 0
 
 
 def backup_environment(
@@ -32,7 +52,7 @@ def backup_environment(
         retention_count=retention_count,
         authentication_key=authentication_key,
     )
-    print(json.dumps({"status": "ok", "backupDirectory": str(generation)}))
+    _print_json({"status": "ok", "backupDirectory": str(generation)})
     return 0
 
 
@@ -91,12 +111,14 @@ def _runtime_environment(environment_id: str) -> dict[str, str]:
 
 
 def _print_verification(schema_version: int, conversation_count: int) -> None:
-    print(
-        json.dumps(
-            {
-                "status": "ok",
-                "schemaVersion": schema_version,
-                "conversationCount": conversation_count,
-            }
-        )
+    _print_json(
+        {
+            "status": "ok",
+            "schemaVersion": schema_version,
+            "conversationCount": conversation_count,
+        }
     )
+
+
+def _print_json(payload: Mapping[str, object]) -> None:
+    print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
