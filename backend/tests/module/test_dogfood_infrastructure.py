@@ -690,7 +690,9 @@ def test_should_document_executable_commands_when_running_restore_drill() -> Non
     )
     assert "/etc/digital-souls/dogfood.env" in load_key_command
     assert "DOGFOOD_BACKUP_AUTHENTICATION_KEY=" in load_key_command
-    history_state_position = protected_block.index("case $- in")
+    history_state_position = protected_block.index(
+        "DOGFOOD_RESTORE_DRILL_HISTORY_STATE=$("
+    )
     disable_xtrace_position = protected_block.index("set +x")
     disable_history_position = protected_block.index(
         "set +o history", history_state_position
@@ -699,7 +701,8 @@ def test_should_document_executable_commands_when_running_restore_drill() -> Non
         "DOGFOOD_BACKUP_AUTHENTICATION_KEY=$(sudo awk"
     )
     assert history_state_position < disable_history_position < load_key_position
-    assert disable_xtrace_position < load_key_position
+    assert disable_xtrace_position < history_state_position
+    assert 'set -o | awk \'$1 == "history" {print $2}\'' in protected_block
     assert protected_block.index("export DOGFOOD_BACKUP_AUTHENTICATION_KEY") < (
         protected_block.index("environment_cli.py restore ")
     )
@@ -707,7 +710,7 @@ def test_should_document_executable_commands_when_running_restore_drill() -> Non
         protected_block.index("environment_cli.py restore-verify ")
     )
     assert "unset DOGFOOD_BACKUP_AUTHENTICATION_KEY" in drill_section
-    assert 'if [ "$DOGFOOD_RESTORE_DRILL_HISTORY_ENABLED" = true ]' in drill_section
+    assert 'if [ "$DOGFOOD_RESTORE_DRILL_HISTORY_STATE" = on ]' in drill_section
     assert "trap dogfood_restore_drill_cleanup EXIT" in drill_section
     assert "trap 'dogfood_restore_drill_abort 130' INT" in drill_section
     assert "trap 'dogfood_restore_drill_abort 143' TERM" in drill_section
@@ -718,6 +721,46 @@ def test_should_document_executable_commands_when_running_restore_drill() -> Non
     assert "python -c" not in executable_commands
     assert "sys.path" not in executable_commands
     assert "initialize_runtime_data_root" not in executable_commands
+
+
+@pytest.mark.parametrize("initial_state", ("on", "off"))
+def test_should_restore_initial_history_state_after_restore_drill_cleanup(
+    initial_state: str,
+) -> None:
+    source = README_PATH.read_text(encoding="utf-8")
+    drill_section = source.split("### Issue #56 restore drill", maxsplit=1)[1].split(
+        "\n## ", maxsplit=1
+    )[0]
+    command_blocks = re.findall(r"```bash\n(.*?)```", drill_section, flags=re.DOTALL)
+    protected_block = next(
+        block
+        for block in command_blocks
+        if "DOGFOOD_BACKUP_AUTHENTICATION_KEY=$(sudo awk" in block
+    )
+    protected_preamble = protected_block.split(
+        "DOGFOOD_BACKUP_AUTHENTICATION_KEY=$(sudo awk", maxsplit=1
+    )[0]
+    history_setup = (
+        "set -o history\n" if initial_state == "on" else "set +o history\n"
+    )
+    script = (
+        history_setup
+        + protected_preamble
+        + "dogfood_restore_drill_cleanup\n"
+        + "trap - EXIT INT TERM HUP\n"
+        + "set -o | awk '$1 == \"history\" {print $2}'\n"
+        + ")\n"
+    )
+
+    completed = subprocess.run(
+        ["bash", "--noprofile", "--norc", "-c", script],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.stdout.strip() == initial_state
+    assert completed.stderr == ""
 
 
 def test_should_require_inference_and_application_from_dogfood_target() -> None:

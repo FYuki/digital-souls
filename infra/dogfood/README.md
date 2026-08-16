@@ -231,14 +231,14 @@ sudo -u digital-souls env \
 
 ```bash
 (
-case $- in
-  *h*) DOGFOOD_RESTORE_DRILL_HISTORY_ENABLED=true ;;
-  *) DOGFOOD_RESTORE_DRILL_HISTORY_ENABLED=false ;;
-esac
+set +x
+DOGFOOD_RESTORE_DRILL_HISTORY_STATE=$(
+  set -o | awk '$1 == "history" {print $2}'
+)
 
 dogfood_restore_drill_cleanup() {
   unset DOGFOOD_BACKUP_AUTHENTICATION_KEY
-  if [ "$DOGFOOD_RESTORE_DRILL_HISTORY_ENABLED" = true ]; then
+  if [ "$DOGFOOD_RESTORE_DRILL_HISTORY_STATE" = on ]; then
     set -o history
   else
     set +o history
@@ -257,7 +257,6 @@ trap 'dogfood_restore_drill_abort 130' INT
 trap 'dogfood_restore_drill_abort 143' TERM
 trap 'dogfood_restore_drill_abort 129' HUP
 
-set +x
 set +o history
 DOGFOOD_BACKUP_AUTHENTICATION_KEY=$(sudo awk -F= \
   '/^DOGFOOD_BACKUP_AUTHENTICATION_KEY=/{print substr($0, index($0, "=") + 1)}' \
