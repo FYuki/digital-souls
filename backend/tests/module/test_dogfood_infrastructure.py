@@ -612,6 +612,13 @@ def test_should_document_executable_commands_when_running_restore_drill() -> Non
         "\n## ", maxsplit=1
     )[0]
     command_blocks = re.findall(r"```bash\n(.*?)```", drill_section, flags=re.DOTALL)
+    protected_block = next(
+        block
+        for block in command_blocks
+        if "DOGFOOD_BACKUP_AUTHENTICATION_KEY=$(sudo awk" in block
+    )
+    assert protected_block.startswith("(\n")
+    assert protected_block.endswith(")\n")
     commands: list[str] = []
     for block in command_blocks:
         continued_lines: list[str] = []
@@ -676,21 +683,29 @@ def test_should_document_executable_commands_when_running_restore_drill() -> Non
         "backup-YYYYMMDDTHHMMSSZ-COMMIT-UNIQUEID"
     )
     assert restore_command.split("--backup-directory ", maxsplit=1)[1] == (
-        backup_generation
+        f"{backup_generation} || dogfood_restore_drill_abort $?"
     )
     assert verify_command.split("--backup-directory ", maxsplit=1)[1] == (
         backup_generation
     )
     assert "/etc/digital-souls/dogfood.env" in load_key_command
     assert "DOGFOOD_BACKUP_AUTHENTICATION_KEY=" in load_key_command
-    history_state_position = drill_section.index("case $- in")
-    disable_history_position = drill_section.index(
+    history_state_position = protected_block.index("case $- in")
+    disable_xtrace_position = protected_block.index("set +x")
+    disable_history_position = protected_block.index(
         "set +o history", history_state_position
     )
-    load_key_position = drill_section.index(
+    load_key_position = protected_block.index(
         "DOGFOOD_BACKUP_AUTHENTICATION_KEY=$(sudo awk"
     )
     assert history_state_position < disable_history_position < load_key_position
+    assert disable_xtrace_position < load_key_position
+    assert protected_block.index("export DOGFOOD_BACKUP_AUTHENTICATION_KEY") < (
+        protected_block.index("environment_cli.py restore ")
+    )
+    assert protected_block.index("environment_cli.py restore ") < (
+        protected_block.index("environment_cli.py restore-verify ")
+    )
     assert "unset DOGFOOD_BACKUP_AUTHENTICATION_KEY" in drill_section
     assert 'if [ "$DOGFOOD_RESTORE_DRILL_HISTORY_ENABLED" = true ]' in drill_section
     assert "trap dogfood_restore_drill_cleanup EXIT" in drill_section

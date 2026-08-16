@@ -257,6 +257,7 @@ trap 'dogfood_restore_drill_abort 130' INT
 trap 'dogfood_restore_drill_abort 143' TERM
 trap 'dogfood_restore_drill_abort 129' HUP
 
+set +x
 set +o history
 DOGFOOD_BACKUP_AUTHENTICATION_KEY=$(sudo awk -F= \
   '/^DOGFOOD_BACKUP_AUTHENTICATION_KEY=/{print substr($0, index($0, "=") + 1)}' \
@@ -268,7 +269,8 @@ sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY -u digital-souls env \
   /opt/digital-souls/current/backend/.venv/bin/python \
   /opt/digital-souls/current/environments/environment_cli.py restore \
   --environment dogfood --repository-root /opt/digital-souls/current \
-  --backup-directory /var/lib/digital-souls/backups/backup-YYYYMMDDTHHMMSSZ-COMMIT-UNIQUEID
+  --backup-directory /var/lib/digital-souls/backups/backup-YYYYMMDDTHHMMSSZ-COMMIT-UNIQUEID \
+  || dogfood_restore_drill_abort $?
 
 sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY -u digital-souls env \
   DS_ENVIRONMENT_ID=dogfood DS_DATA_DIR=/var/lib/digital-souls/restore-drill \
