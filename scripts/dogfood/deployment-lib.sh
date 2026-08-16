@@ -318,7 +318,7 @@ profile = json.loads(Path(profile_path).read_text(encoding="utf-8"))
 with sqlite3.connect(f"file:{database_path}?mode=ro", uri=True) as connection:
     data_schema = connection.execute("PRAGMA user_version").fetchone()[0]
 print(json.dumps({
-    "previousCommit": previous,
+    "previousCommit": previous if previous else None,
     "targetCommit": target,
     "profileSchemaVersion": profile["schemaVersion"],
     "dataSchemaVersion": data_schema,
@@ -452,7 +452,7 @@ dogfood_validate_deployment_storage_location() {
 }
 
 dogfood_validate_deployment_storage() {
-  dogfood_validate_deployment_storage_path reject
+  dogfood_validate_deployment_storage_path reject || return
   python3 - "$DOGFOOD_STATE_DIR/deployments" "$EUID" <<'PYTHON'
 import os
 import stat
@@ -478,16 +478,19 @@ for entry in entries:
 PYTHON
 }
 
-dogfood_manifest_field() {
+_dogfood_manifest_string_field() {
   local manifest=$1
   local field=$2
-  python3 - "$manifest" "$field" <<'PYTHON'
+  local null_policy=$3
+  python3 - "$manifest" "$field" "$null_policy" <<'PYTHON'
 import json
 import os
 import stat
 import sys
 
-path, field = sys.argv[1:]
+path, field, null_policy = sys.argv[1:]
+if null_policy not in {"allow", "reject"}:
+    raise SystemExit(2)
 try:
     descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
     status = os.fstat(descriptor)
@@ -503,10 +506,20 @@ try:
         value = json.load(source)[field]
 except (OSError, json.JSONDecodeError, KeyError):
     raise SystemExit(1)
+if value is None and null_policy == "allow":
+    raise SystemExit(0)
 if not isinstance(value, str) or not value:
     raise SystemExit(1)
 print(value)
 PYTHON
+}
+
+dogfood_manifest_field() {
+  _dogfood_manifest_string_field "$1" "$2" reject
+}
+
+dogfood_manifest_nullable_commit_field() {
+  _dogfood_manifest_string_field "$1" "$2" allow
 }
 
 dogfood_manifest_schema_version() {

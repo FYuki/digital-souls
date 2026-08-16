@@ -29,7 +29,11 @@ if [ ! -f "$current_manifest" ]; then
   exit 2
 fi
 if [ -z "$requested_target" ]; then
-  target=$(dogfood_manifest_field "$current_manifest" previousCommit)
+  if ! target=$(dogfood_manifest_nullable_commit_field \
+    "$current_manifest" previousCommit) || [ -z "$target" ]; then
+    echo 'ERROR: rollback 元が未設定です。`--to <SHA>` で保存済み世代を明示指定してください' >&2
+    exit 2
+  fi
   saved_manifest=$current_manifest
 else
   target=$requested_target
