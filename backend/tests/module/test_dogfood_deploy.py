@@ -128,6 +128,8 @@ def _prepare_deploy_scenario(
     backup_output: str | None = None,
     database_exists: bool = True,
     private_sentinels: bool = True,
+    target_revision: str = NEXT_REVISION,
+    current_deployment_revision: str | None = None,
 ) -> tuple[dict[str, str], Path]:
     env_path, data_dir = write_dogfood_env(tmp_path)
     env_path.write_text(
@@ -217,6 +219,22 @@ def _prepare_deploy_scenario(
             encoding="utf-8",
         )
         generation.chmod(0o640)
+    if current_deployment_revision is not None:
+        current_manifest = deployments / "current.json"
+        current_manifest.write_text(
+            json.dumps(
+                {
+                    "previousCommit": TEST_REVISION,
+                    "targetCommit": current_deployment_revision,
+                    "profileSchemaVersion": 1,
+                    "dataSchemaVersion": 3,
+                    "backupId": "backup-current",
+                    "deployedAt": "2026-07-31T00:00:00Z",
+                }
+            ),
+            encoding="utf-8",
+        )
+        current_manifest.chmod(0o640)
 
     bin_dir = tmp_path / "deploy-bin"
     bin_dir.mkdir()
@@ -280,7 +298,7 @@ def _prepare_deploy_scenario(
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
         "DOGFOOD_ENV_FILE": str(env_path),
         "WSL_DISTRO_NAME": "Ubuntu-dogfood",
-        "DEPLOY_TARGET": NEXT_REVISION,
+        "DEPLOY_TARGET": target_revision,
         "DEPLOY_BACKUP_OUTPUT": backup_output
         if backup_output is not None
         else json.dumps(
@@ -303,6 +321,8 @@ def _run_deploy(
     generation_count: int = 0,
     backup_output: str | None = None,
     database_exists: bool = True,
+    target_revision: str = NEXT_REVISION,
+    current_deployment_revision: str | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], tuple[str, ...]]:
     environment, call_log = _prepare_deploy_scenario(
         tmp_path,
@@ -310,8 +330,10 @@ def _run_deploy(
         generation_count=generation_count,
         backup_output=backup_output,
         database_exists=database_exists,
+        target_revision=target_revision,
+        current_deployment_revision=current_deployment_revision,
     )
-    arguments = ["--commit", NEXT_REVISION]
+    arguments = ["--commit", target_revision]
     if no_auto_rollback:
         arguments.append("--no-auto-rollback")
     result = subprocess.run(
@@ -802,6 +824,67 @@ def test_should_deploy_only_after_backup_verify_and_record_a_safe_manifest(
         and "/.manifest.ready." in call
         for call in calls
     )
+
+
+def test_should_record_deployment_when_target_matches_current_head(
+    tmp_path: Path,
+) -> None:
+    result, calls = _run_deploy(tmp_path, target_revision=TEST_REVISION)
+
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    required_operations = (
+        "cli\tbackup ",
+        "cli\tbackup-verify ",
+        "manifest-write",
+        "restart",
+        "cli\treadiness ",
+    )
+    assert all(any(marker in call for call in calls) for marker in required_operations)
+    generations = tuple((tmp_path / "state" / "deployments").glob("*.json"))
+    generation = next(path for path in generations if path.name != "current.json")
+    expected_manifest = {
+        "previousCommit": TEST_REVISION,
+        "targetCommit": TEST_REVISION,
+        "profileSchemaVersion": 1,
+        "dataSchemaVersion": 3,
+        "backupId": str(tmp_path / "backups" / "backup-test-generation"),
+    }
+    read_valid_deployment_manifest(generation, expected_manifest)
+    read_valid_deployment_manifest(
+        tmp_path / "state" / "deployments" / "current.json",
+        expected_manifest,
+    )
+
+
+def test_should_restore_deployment_state_revision_when_bootstrap_target_matches_head(
+    tmp_path: Path,
+) -> None:
+    result, calls = _run_deploy(
+        tmp_path,
+        failure="readiness",
+        target_revision=TEST_REVISION,
+        current_deployment_revision=NEXT_REVISION,
+    )
+
+    assert result.returncode != 0
+    deployments = tmp_path / "state" / "deployments"
+    generation_payloads = tuple(
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in deployments.glob("*.json")
+        if path.name != "current.json"
+    )
+    deploy_manifest = next(
+        payload
+        for payload in generation_payloads
+        if payload["targetCommit"] == TEST_REVISION
+    )
+    assert deploy_manifest["previousCommit"] == NEXT_REVISION
+    checkout_calls = tuple(call for call in calls if "checkout --detach" in call)
+    assert checkout_calls[-1].endswith(NEXT_REVISION)
+    assert (tmp_path / "head").read_text(encoding="utf-8") == NEXT_REVISION
+    assert (tmp_path / "config" / "dogfood.revision").read_text(
+        encoding="utf-8"
+    ) == f"{NEXT_REVISION}\n"
 
 
 @pytest.mark.parametrize("failure", (None, "readiness"), ids=("deploy", "rollback"))
