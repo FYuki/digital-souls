@@ -207,6 +207,10 @@ deployはdirty checkout、origin/main上で解決できないcommit、設定不�
 
 rollbackは引数なしで現在manifestの直前commitへ、`--to`で保存済みmanifestが存在する任意commitへ戻す。rollback先manifestのSQLite data schemaと現在DBのschemaが一致しない場合は、保存済みbackupを検証・restoreするまでcommitの切替を拒否する。どちらも再build、restart、readiness確認を行うため数分かかる場合がある。
 
+自己参照manifest（`previousCommit == targetCommit`）を発見した場合は、引数なしrollbackを実行せず、manifestも手編集しない。保存済み世代から復旧対象を確認し、そのmanifestのschemaとcommit SHAを検証したうえで、`rollback.sh --to <SHA>`により明示的にrollbackする。
+
+初回deployでは、直前のcommitが存在しないことを`previousCommit: null`で表す。この状態では引数なしrollbackもreadiness失敗時の自動rollbackも実行できない。原因調査後、検証済みの保存世代があれば`rollback.sh --to <SHA>`で明示的に戻し、保存世代がなければ問題を修正して再deployする。
+
 deployment manifestは`DOGFOOD_STATE_DIR/deployments/`へ`root:digital-souls`、`0640`で保存する。1操作1 JSON、`current.json`が最新状態を表し、履歴は新しい20世代だけを保持する。commit、Profile schema、SQLite data schema、backup ID、UTC deploy時刻だけを記録し、会話本文、prompt、秘密値は保存しない。`dogfood.env`はdeploy、rollback、manifest、logへ複製しない。
 
 ## Conversation historyのbackup／restore

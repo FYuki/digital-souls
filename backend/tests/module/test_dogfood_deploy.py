@@ -28,6 +28,7 @@ from tests.environment_entrypoint_test_support import copy_environment_runtime
 
 
 NEXT_REVISION = "89abcdef0123456789abcdef0123456789abcdef"
+THIRD_REVISION = "fedcba9876543210fedcba9876543210fedcba98"
 CONVERSATION_SENTINEL = "会話本文をdeploymentへ出力してはならない"
 PROMPT_SENTINEL = "promptをdeploymentへ出力してはならない"
 ROOT_OPERATION_CASES = (
@@ -49,6 +50,22 @@ ROOT_GUARD_POST_COMMANDS = (
     "useradd",
     "usermod",
 )
+
+
+def _manifest_payload(
+    previous_commit: object,
+    target_commit: object,
+    *,
+    data_schema_version: object = 3,
+) -> dict[str, object]:
+    return {
+        "previousCommit": previous_commit,
+        "targetCommit": target_commit,
+        "profileSchemaVersion": 1,
+        "dataSchemaVersion": data_schema_version,
+        "backupId": "backup-current",
+        "deployedAt": "2026-07-31T00:00:00Z",
+    }
 
 
 def test_should_check_current_profile_readiness_without_starting_processes(
@@ -129,7 +146,10 @@ def _prepare_deploy_scenario(
     database_exists: bool = True,
     private_sentinels: bool = True,
     target_revision: str = NEXT_REVISION,
+    head_revision: str = TEST_REVISION,
     current_deployment_revision: str | None = None,
+    deployment_revision: str | None = TEST_REVISION,
+    current_manifest_payload: dict[str, object] | str | None = None,
 ) -> tuple[dict[str, str], Path]:
     env_path, data_dir = write_dogfood_env(tmp_path)
     env_path.write_text(
@@ -143,7 +163,7 @@ def _prepare_deploy_scenario(
     head_path = tmp_path / "head"
     head_read_count_path = tmp_path / "head-read-count"
     checkout_count_path = tmp_path / "checkout-count"
-    head_path.write_text(TEST_REVISION, encoding="utf-8")
+    head_path.write_text(head_revision, encoding="utf-8")
     setup_backend = clone_dir / "scripts" / "setup-backend.sh"
     setup_backend.parent.mkdir(parents=True)
     write_executable(
@@ -219,22 +239,35 @@ def _prepare_deploy_scenario(
             encoding="utf-8",
         )
         generation.chmod(0o640)
+    if (
+        current_deployment_revision is not None
+        and current_manifest_payload is not None
+    ):
+        raise ValueError(
+            "current_deployment_revisionとcurrent_manifest_payloadは"
+            "同時に指定できません"
+        )
     if current_deployment_revision is not None:
+        current_manifest_payload = _manifest_payload(
+            TEST_REVISION,
+            current_deployment_revision,
+        )
+    if current_manifest_payload is not None:
         current_manifest = deployments / "current.json"
         current_manifest.write_text(
-            json.dumps(
-                {
-                    "previousCommit": TEST_REVISION,
-                    "targetCommit": current_deployment_revision,
-                    "profileSchemaVersion": 1,
-                    "dataSchemaVersion": 3,
-                    "backupId": "backup-current",
-                    "deployedAt": "2026-07-31T00:00:00Z",
-                }
-            ),
+            current_manifest_payload
+            if isinstance(current_manifest_payload, str)
+            else json.dumps(current_manifest_payload),
             encoding="utf-8",
         )
         current_manifest.chmod(0o640)
+
+    revision_path = tmp_path / "config" / "dogfood.revision"
+    if deployment_revision is None:
+        revision_path.unlink()
+    else:
+        revision_path.write_text(f"{deployment_revision}\n", encoding="utf-8")
+        revision_path.chmod(0o640)
 
     bin_dir = tmp_path / "deploy-bin"
     bin_dir.mkdir()
@@ -322,7 +355,10 @@ def _run_deploy(
     backup_output: str | None = None,
     database_exists: bool = True,
     target_revision: str = NEXT_REVISION,
+    head_revision: str = TEST_REVISION,
     current_deployment_revision: str | None = None,
+    deployment_revision: str | None = TEST_REVISION,
+    current_manifest_payload: dict[str, object] | str | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], tuple[str, ...]]:
     environment, call_log = _prepare_deploy_scenario(
         tmp_path,
@@ -331,20 +367,19 @@ def _run_deploy(
         backup_output=backup_output,
         database_exists=database_exists,
         target_revision=target_revision,
+        head_revision=head_revision,
         current_deployment_revision=current_deployment_revision,
+        deployment_revision=deployment_revision,
+        current_manifest_payload=current_manifest_payload,
     )
     arguments = ["--commit", target_revision]
     if no_auto_rollback:
         arguments.append("--no-auto-rollback")
-    result = subprocess.run(
-        command_with_root_owned_revision(
-            tmp_path / "config" / "dogfood.revision",
-            [str(DOGFOOD_SCRIPTS_DIR / "deploy.sh"), *arguments],
-        ),
-        env=environment,
-        capture_output=True,
-        text=True,
-        timeout=10,
+    result = _invoke_deploy(
+        tmp_path,
+        environment,
+        arguments,
+        deployment_revision is not None,
     )
     calls = (
         tuple(call_log.read_text(encoding="utf-8").splitlines())
@@ -352,6 +387,28 @@ def _run_deploy(
         else ()
     )
     return result, calls
+
+
+def _invoke_deploy(
+    tmp_path: Path,
+    environment: dict[str, str],
+    arguments: list[str],
+    revision_exists: bool,
+) -> subprocess.CompletedProcess[str]:
+    command = [str(DOGFOOD_SCRIPTS_DIR / "deploy.sh"), *arguments]
+    if revision_exists:
+        command = command_with_root_owned_revision(
+            tmp_path / "config" / "dogfood.revision", command
+        )
+    else:
+        command = ["fakeroot", *command]
+    return subprocess.run(
+        command,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
 
 
 def _read_log_records(log_dir: Path) -> tuple[str, ...]:
@@ -826,10 +883,14 @@ def test_should_deploy_only_after_backup_verify_and_record_a_safe_manifest(
     )
 
 
-def test_should_record_deployment_when_target_matches_current_head(
+def test_should_record_null_previous_commit_on_the_true_initial_deploy(
     tmp_path: Path,
 ) -> None:
-    result, calls = _run_deploy(tmp_path, target_revision=TEST_REVISION)
+    result, calls = _run_deploy(
+        tmp_path,
+        target_revision=TEST_REVISION,
+        deployment_revision=None,
+    )
 
     assert result.returncode == 0, (result.stdout, result.stderr)
     required_operations = (
@@ -843,7 +904,7 @@ def test_should_record_deployment_when_target_matches_current_head(
     generations = tuple((tmp_path / "state" / "deployments").glob("*.json"))
     generation = next(path for path in generations if path.name != "current.json")
     expected_manifest = {
-        "previousCommit": TEST_REVISION,
+        "previousCommit": None,
         "targetCommit": TEST_REVISION,
         "profileSchemaVersion": 1,
         "dataSchemaVersion": 3,
@@ -854,6 +915,298 @@ def test_should_record_deployment_when_target_matches_current_head(
         tmp_path / "state" / "deployments" / "current.json",
         expected_manifest,
     )
+
+
+def test_should_restore_previous_commit_from_revision_after_bootstrap_checkout(
+    tmp_path: Path,
+) -> None:
+    result, _ = _run_deploy(
+        tmp_path,
+        head_revision=NEXT_REVISION,
+        deployment_revision=TEST_REVISION,
+    )
+
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    manifest = json.loads(
+        (tmp_path / "state" / "deployments" / "current.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert manifest["previousCommit"] == TEST_REVISION
+    assert manifest["targetCommit"] == NEXT_REVISION
+
+
+def test_should_keep_null_previous_commit_when_redeploying_the_initial_sha(
+    tmp_path: Path,
+) -> None:
+    environment, _ = _prepare_deploy_scenario(
+        tmp_path,
+        target_revision=TEST_REVISION,
+        deployment_revision=None,
+    )
+
+    first_result = _invoke_deploy(
+        tmp_path,
+        environment,
+        ["--commit", TEST_REVISION],
+        revision_exists=False,
+    )
+    second_result = _invoke_deploy(
+        tmp_path,
+        environment,
+        ["--commit", TEST_REVISION],
+        revision_exists=True,
+    )
+
+    assert first_result.returncode == 0, (first_result.stdout, first_result.stderr)
+    assert second_result.returncode == 0, (
+        second_result.stdout,
+        second_result.stderr,
+    )
+    manifest = json.loads(
+        (tmp_path / "state" / "deployments" / "current.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert manifest["previousCommit"] is None
+    assert manifest["targetCommit"] == TEST_REVISION
+
+
+def test_should_keep_the_true_previous_commit_across_repeated_same_sha_deploys(
+    tmp_path: Path,
+) -> None:
+    current_manifest = _manifest_payload(TEST_REVISION, NEXT_REVISION)
+    environment, _ = _prepare_deploy_scenario(
+        tmp_path,
+        head_revision=NEXT_REVISION,
+        deployment_revision=NEXT_REVISION,
+        current_manifest_payload=current_manifest,
+    )
+
+    results = tuple(
+        _invoke_deploy(
+            tmp_path,
+            environment,
+            ["--commit", NEXT_REVISION],
+            revision_exists=True,
+        )
+        for _ in range(2)
+    )
+
+    assert all(result.returncode == 0 for result in results), tuple(
+        (result.stdout, result.stderr) for result in results
+    )
+    manifest = json.loads(
+        (tmp_path / "state" / "deployments" / "current.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert manifest["previousCommit"] == TEST_REVISION
+    assert manifest["targetCommit"] == NEXT_REVISION
+
+
+def test_should_use_manifest_target_when_it_differs_from_the_requested_target(
+    tmp_path: Path,
+) -> None:
+    result, _ = _run_deploy(
+        tmp_path,
+        head_revision=NEXT_REVISION,
+        deployment_revision=NEXT_REVISION,
+        current_manifest_payload=_manifest_payload(THIRD_REVISION, TEST_REVISION),
+    )
+
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    manifest = json.loads(
+        (tmp_path / "state" / "deployments" / "current.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert manifest["previousCommit"] == TEST_REVISION
+    assert manifest["targetCommit"] == NEXT_REVISION
+
+
+def test_should_reject_a_self_referencing_manifest_before_deploy_side_effects(
+    tmp_path: Path,
+) -> None:
+    result, calls = _run_deploy(
+        tmp_path,
+        head_revision=NEXT_REVISION,
+        deployment_revision=NEXT_REVISION,
+        current_manifest_payload=_manifest_payload(NEXT_REVISION, NEXT_REVISION),
+    )
+
+    diagnostic = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "引数なし" in diagnostic
+    assert "手編集" in diagnostic
+    assert "--to <SHA>" in diagnostic
+    assert "infra/dogfood/README.md" in diagnostic
+    assert not any(call.startswith("cli\tbackup ") for call in calls)
+    assert not any("checkout --detach" in call for call in calls)
+    assert {
+        path.name for path in (tmp_path / "state" / "deployments").glob("*.json")
+    } == {"current.json"}
+
+
+def test_should_reject_a_self_referencing_revision_before_deploy_side_effects(
+    tmp_path: Path,
+) -> None:
+    result, calls = _run_deploy(
+        tmp_path,
+        head_revision=NEXT_REVISION,
+        deployment_revision=NEXT_REVISION,
+    )
+
+    diagnostic = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "--to <SHA>" in diagnostic
+    assert "infra/dogfood/README.md" in diagnostic
+    assert not any(call.startswith("cli\tbackup ") for call in calls)
+    assert not any("checkout --detach" in call for call in calls)
+    assert not tuple((tmp_path / "state" / "deployments").glob("*.json"))
+
+
+def test_should_repair_a_self_referencing_manifest_during_a_normal_deploy(
+    tmp_path: Path,
+) -> None:
+    result, _ = _run_deploy(
+        tmp_path,
+        current_manifest_payload=_manifest_payload(NEXT_REVISION, NEXT_REVISION),
+    )
+
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    manifest = json.loads(
+        (tmp_path / "state" / "deployments" / "current.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert manifest["previousCommit"] == TEST_REVISION
+    assert manifest["targetCommit"] == NEXT_REVISION
+
+
+@pytest.mark.parametrize(
+    "manifest_payload",
+    (
+        {
+            "previousCommit": TEST_REVISION,
+            "profileSchemaVersion": 1,
+            "dataSchemaVersion": 3,
+            "backupId": "backup-current",
+            "deployedAt": "2026-07-31T00:00:00Z",
+        },
+        {
+            "targetCommit": NEXT_REVISION,
+            "profileSchemaVersion": 1,
+            "dataSchemaVersion": 3,
+            "backupId": "backup-current",
+            "deployedAt": "2026-07-31T00:00:00Z",
+        },
+        "{not-json",
+        _manifest_payload(
+            TEST_REVISION,
+            NEXT_REVISION,
+            data_schema_version=4,
+        ),
+    ),
+    ids=(
+        "missing-target-commit",
+        "missing-previous-commit",
+        "invalid-json",
+        "schema-mismatch",
+    ),
+)
+def test_should_reject_an_invalid_manifest_before_deploy_side_effects(
+    tmp_path: Path,
+    manifest_payload: dict[str, object] | str,
+) -> None:
+    result, calls = _run_deploy(
+        tmp_path,
+        head_revision=NEXT_REVISION,
+        deployment_revision=NEXT_REVISION,
+        current_manifest_payload=manifest_payload,
+    )
+
+    diagnostic = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "--to <SHA>" in diagnostic
+    assert "infra/dogfood/README.md" in diagnostic
+    assert not any(call.startswith("cli\tbackup ") for call in calls)
+    assert not any("checkout --detach" in call for call in calls)
+
+
+def test_should_reject_an_unreadable_manifest_before_deploy_side_effects(
+    tmp_path: Path,
+) -> None:
+    environment, call_log = _prepare_deploy_scenario(
+        tmp_path,
+        head_revision=NEXT_REVISION,
+        deployment_revision=NEXT_REVISION,
+        current_manifest_payload=_manifest_payload(TEST_REVISION, NEXT_REVISION),
+    )
+    (tmp_path / "state" / "deployments" / "current.json").chmod(0o000)
+
+    result = _invoke_deploy(
+        tmp_path,
+        environment,
+        ["--commit", NEXT_REVISION],
+        revision_exists=True,
+    )
+
+    calls = (
+        tuple(call_log.read_text(encoding="utf-8").splitlines())
+        if call_log.exists()
+        else ()
+    )
+    diagnostic = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "--to <SHA>" in diagnostic
+    assert "infra/dogfood/README.md" in diagnostic
+    assert not any(call.startswith("cli\tbackup ") for call in calls)
+    assert not any("checkout --detach" in call for call in calls)
+
+
+@pytest.mark.parametrize(
+    "manifest_payload",
+    (
+        _manifest_payload(None, NEXT_REVISION),
+        {
+            "targetCommit": NEXT_REVISION,
+            "profileSchemaVersion": 1,
+            "dataSchemaVersion": 3,
+            "backupId": "backup-current",
+            "deployedAt": "2026-07-31T00:00:00Z",
+        },
+    ),
+    ids=("null", "missing"),
+)
+def test_should_report_an_unset_previous_commit_for_implicit_rollback(
+    tmp_path: Path,
+    manifest_payload: dict[str, object],
+) -> None:
+    environment, _ = _prepare_deploy_scenario(
+        tmp_path,
+        head_revision=NEXT_REVISION,
+        deployment_revision=NEXT_REVISION,
+        current_manifest_payload=manifest_payload,
+    )
+
+    result = subprocess.run(
+        command_with_root_owned_revision(
+            tmp_path / "config" / "dogfood.revision",
+            [str(DOGFOOD_SCRIPTS_DIR / "rollback.sh")],
+        ),
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 2
+    assert (
+        "rollback 元が未設定です。`--to <SHA>` で保存済み世代を明示指定してください"
+        in result.stdout + result.stderr
+    )
+    assert not (tmp_path / "checkout-count").exists()
 
 
 def test_should_restore_deployment_state_revision_when_bootstrap_target_matches_head(
@@ -1262,6 +1615,34 @@ def test_should_automatically_restore_the_previous_revision_after_readiness_fail
     ) == f"{TEST_REVISION}\n"
 
 
+def test_should_keep_the_initial_target_when_readiness_fails_without_a_previous_commit(
+    tmp_path: Path,
+) -> None:
+    result, calls = _run_deploy(
+        tmp_path,
+        failure="readiness",
+        target_revision=TEST_REVISION,
+        deployment_revision=None,
+    )
+
+    diagnostic = result.stdout + result.stderr
+    assert result.returncode == 1
+    assert "初回 deploy" in diagnostic
+    assert "自動 rollback できない" in diagnostic
+    assert "原因調査" in diagnostic
+    assert "--to <SHA>" in diagnostic
+    assert "再 deploy" in diagnostic
+    assert sum("checkout --detach" in call for call in calls) == 1
+    assert (tmp_path / "head").read_text(encoding="utf-8") == TEST_REVISION
+    manifest = json.loads(
+        (tmp_path / "state" / "deployments" / "current.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert manifest["previousCommit"] is None
+    assert manifest["targetCommit"] == TEST_REVISION
+
+
 def test_should_not_rollback_when_readiness_failure_is_explicitly_suppressed(
     tmp_path: Path,
 ) -> None:
@@ -1276,6 +1657,24 @@ def test_should_not_rollback_when_readiness_failure_is_explicitly_suppressed(
     assert (tmp_path / "config" / "dogfood.revision").read_text(
         encoding="utf-8"
     ) == f"{NEXT_REVISION}\n"
+
+
+def test_should_prioritize_explicit_rollback_suppression_on_initial_deploy_failure(
+    tmp_path: Path,
+) -> None:
+    result, calls = _run_deploy(
+        tmp_path,
+        failure="readiness",
+        no_auto_rollback=True,
+        target_revision=TEST_REVISION,
+        deployment_revision=None,
+    )
+
+    diagnostic = result.stdout + result.stderr
+    assert result.returncode == 1
+    assert "自動rollbackは抑止されています" in diagnostic
+    assert "初回 deploy" not in diagnostic
+    assert sum("checkout --detach" in call for call in calls) == 1
 
 
 def test_should_report_observed_state_when_automatic_rollback_fails(
