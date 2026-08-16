@@ -106,7 +106,8 @@ service userのhomeは`DOGFOOD_SERVICE_HOME_DIR`、Ollama modelは`DOGFOOD_OLLAM
 sudo -u digital-souls env \
   HOME=/var/lib/digital-souls/home \
   GIT_CONFIG_GLOBAL=/var/lib/digital-souls/home/.gitconfig \
-  git config --global --includes --show-origin --get-all safe.directory
+  git -C /opt/digital-souls/current config \
+  --global --includes --show-origin --get-all safe.directory
 ```
 
 bootstrapは現在revisionのBackend venv準備、`npm ci`、Frontend buildまで行い、依存準備後もcheckoutがcleanであることを検証するが、サービスは起動しない。初回はbootstrap後に`digital-souls-dogfood.target`を起動し、application unitから委譲されたBackend起動によって`conversation-history.db`を作成する。

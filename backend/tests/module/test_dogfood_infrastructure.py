@@ -194,9 +194,10 @@ def test_should_document_service_gitconfig_failure_recovery() -> None:
     assert "include元ファイルから`safe.directory`だけを取り除く" in source
     assert "他のGit設定とinclude自体は維持" in source
     assert "bootstrapを再実行" in source
-    assert "git config --global --includes --show-origin --get-all safe.directory" in (
-        source
-    )
+    assert (
+        "git -C /opt/digital-souls/current config "
+        "--global --includes --show-origin --get-all safe.directory"
+    ) in " ".join(line.rstrip("\\").strip() for line in source.splitlines())
 
 
 def test_should_apply_declared_ownership_and_restricted_directory_permissions() -> None:
