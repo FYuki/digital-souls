@@ -135,7 +135,7 @@ def test_should_delegate_once_when_data_root_is_resolved_from_environment(
 
     repository_root = tmp_path / "repository"
     repository_root.mkdir()
-    data_root = tmp_path / "selected-data"
+    data_root = tmp_path / "選択-data"
     resolved_paths = Mock(environment_id="test", data_root=data_root)
     resolver = Mock(return_value=resolved_paths)
     initializer = Mock()
@@ -156,11 +156,10 @@ def test_should_delegate_once_when_data_root_is_resolved_from_environment(
         repository_root,
     )
     initializer.assert_called_once_with(resolved_paths, repository_root)
-    assert json.loads(captured.out) == {
-        "status": "ok",
-        "environmentId": "test",
-        "dataRoot": str(data_root),
-    }
+    assert captured.out == (
+        '{"status":"ok","environmentId":"test",'
+        f'"dataRoot":"{data_root}"}}\n'
+    )
     assert captured.err == ""
 
 
