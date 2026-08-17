@@ -83,7 +83,8 @@ Wave 2先行基盤として、TAKTと並行可能なdogfood環境分離（#50、
 - [x] Ubuntu-dogfood・共通推論・deploy・backupの構築（#53、#54、#55）
 - [x] TAKTとの並行稼働・データ非混入の受入（#56）
 
-Wave 2受入まではdogfoodのRAGを無効にし、実conversation historyだけを保持する。
+Wave 2親Issue #28の受入まではdogfoodのRAGを無効にし、旧Chromaデータを作らず、
+実conversation historyだけを保持する。
 
 - [ ] 文脈依存の機微情報判定（#22）
 - [ ] 長期記憶の保存判定（#33）

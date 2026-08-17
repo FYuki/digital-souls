@@ -137,7 +137,8 @@ Issue #50と子Issue #51〜#56は2026-08-17に手動受入まで完了してお�
 - [x] #55 backup、restore
 - [x] #56 TAKTとの並行稼働・データ分離受入
 
-Wave 2受入まではdogfoodのRAGを無効にし、conversation historyだけを実データとして保持する。
+Wave 2親Issue #28の受入まではdogfoodのRAGを無効にし、旧Chromaデータを作らず、
+conversation historyだけを実データとして保持する。
 dogfoodのSQLite schema変更へdev／testの「削除して再作成」を適用しない。
 
 ## Wave 2: 「覚えている」（RAG本稼働 = 旧Phase 5の実質的完遂）
