@@ -189,6 +189,7 @@ def test_promptfoo_is_pinned_and_eval_commands_use_the_wrapper() -> None:
     scripts = package["scripts"]
     for mode in ("prompt-lab", "conformance"):
         arguments = shlex.split(scripts[f"eval:privacy:{mode}"])
+        assert arguments[0] == "python3"
         assert arguments[-2:] == ["scripts/eval_privacy_conformance.py", mode]
         assert all("promptfoo" not in argument for argument in arguments)
         assert all(argument not in {"--share", "--no-share"} for argument in arguments)

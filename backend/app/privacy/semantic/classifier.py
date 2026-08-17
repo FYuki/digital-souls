@@ -3,8 +3,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 import json
 import logging
+from threading import Lock
 import time
-from typing import Protocol, TypedDict
+from typing import Callable, Protocol, TypedDict
 
 import httpx
 
@@ -25,6 +26,7 @@ from app.privacy.semantic.ollama_classifier_client import (
 
 SEMANTIC_CLASSIFIER_VERSION = "semantic-privacy-classifier-v1"
 SEMANTIC_PROMPT_VERSION = "semantic-privacy-prompt-v2"
+UNRESOLVED_MODEL_DIGEST = "unresolved"
 SEMANTIC_FEW_SHOT_TEXTS = (
     "通院の予定が変わって少し不安です",
     "What are common ways to improve sleep hygiene?",
@@ -73,17 +75,32 @@ class OllamaSemanticPrivacyClassifier:
         client: SemanticClassifierClient,
         privacy_policy: PrivacyPolicy,
         model_id: str,
-        model_digest: str,
+        model_digest: str | None = None,
+        model_digest_resolver: Callable[[float], str] | None = None,
     ) -> None:
+        if model_digest is None and model_digest_resolver is None:
+            raise ValueError("model digest or resolver is required")
+        if model_digest is not None and not model_digest.strip():
+            raise ValueError("model digest must not be blank")
         self._client = client
         self._policy_version = privacy_policy.policy_version
         self._model_id = model_id
         self._model_digest = model_digest
+        self._model_digest_resolver = model_digest_resolver
+        self._model_digest_lock = Lock()
 
     def classify(
         self, text: str, profile: SemanticClassifierCallProfile
     ) -> PrivacyAssessment:
         started_at = time.monotonic()
+        digest_failure = self._resolve_model_digest(profile, started_at)
+        if digest_failure is not None:
+            return self._log_result(
+                self._fail_closed(digest_failure),
+                profile=profile,
+                attempt_count=0,
+                started_at=started_at,
+            )
         messages = _build_messages(text)
         final = self._fail_closed(SemanticAssessmentReasonCode.MODEL_UNAVAILABLE)
         attempt_count = 0
@@ -98,11 +115,7 @@ class OllamaSemanticPrivacyClassifier:
             if remaining_seconds <= 0:
                 break
             attempt_count += 1
-            timeout_seconds = (
-                profile.timeout_seconds
-                if attempt == 0
-                else min(profile.timeout_seconds, remaining_seconds)
-            )
+            timeout_seconds = min(profile.timeout_seconds, remaining_seconds)
             final = self._classify_once(
                 messages,
                 timeout_seconds,
@@ -112,6 +125,65 @@ class OllamaSemanticPrivacyClassifier:
                 or final.reason_code not in _RETRYABLE_REASON_CODES
             ):
                 break
+        return self._log_result(
+            final,
+            profile=profile,
+            attempt_count=attempt_count,
+            started_at=started_at,
+        )
+
+    def _resolve_model_digest(
+        self,
+        profile: SemanticClassifierCallProfile,
+        started_at: float,
+    ) -> SemanticAssessmentReasonCode | None:
+        if self._model_digest is not None:
+            return None
+        remaining_seconds = self._remaining_seconds(profile, started_at)
+        if remaining_seconds <= 0:
+            return SemanticAssessmentReasonCode.TIMEOUT
+        if not self._model_digest_lock.acquire(timeout=remaining_seconds):
+            return SemanticAssessmentReasonCode.TIMEOUT
+        try:
+            if self._model_digest is not None:
+                return (
+                    None
+                    if self._remaining_seconds(profile, started_at) > 0
+                    else SemanticAssessmentReasonCode.TIMEOUT
+                )
+            resolver = self._model_digest_resolver
+            if resolver is None:
+                return SemanticAssessmentReasonCode.MODEL_UNAVAILABLE
+            remaining_seconds = self._remaining_seconds(profile, started_at)
+            if remaining_seconds <= 0:
+                return SemanticAssessmentReasonCode.TIMEOUT
+            try:
+                model_digest = resolver(remaining_seconds)
+                if not isinstance(model_digest, str) or not model_digest.strip():
+                    return SemanticAssessmentReasonCode.INVALID_OUTPUT
+                self._model_digest = model_digest
+                if self._remaining_seconds(profile, started_at) <= 0:
+                    return SemanticAssessmentReasonCode.TIMEOUT
+            except (TimeoutError, httpx.TimeoutException):
+                return SemanticAssessmentReasonCode.TIMEOUT
+            except OllamaModelNotLoadedError:
+                return SemanticAssessmentReasonCode.MODEL_NOT_LOADED
+            except OllamaInvalidResponseError:
+                return SemanticAssessmentReasonCode.INVALID_OUTPUT
+            except Exception:
+                return SemanticAssessmentReasonCode.MODEL_UNAVAILABLE
+        finally:
+            self._model_digest_lock.release()
+        return None
+
+    @staticmethod
+    def _log_result(
+        final: PrivacyAssessment,
+        *,
+        profile: SemanticClassifierCallProfile,
+        attempt_count: int,
+        started_at: float,
+    ) -> PrivacyAssessment:
         elapsed_ms = max(0, round((time.monotonic() - started_at) * 1_000))
         logger.info(
             "Semantic privacy classification completed: "
@@ -166,6 +238,9 @@ class OllamaSemanticPrivacyClassifier:
             category = SemanticPrivacyCategory(payload["category"])
         except ValueError:
             return self._fail_closed(SemanticAssessmentReasonCode.UNKNOWN_CATEGORY)
+        model_digest = self._model_digest
+        if model_digest is None:
+            return self._fail_closed(SemanticAssessmentReasonCode.MODEL_UNAVAILABLE)
         try:
             assessment = PrivacyAssessment(
                 classification=SemanticClassification(payload["classification"]),
@@ -174,7 +249,7 @@ class OllamaSemanticPrivacyClassifier:
                 reason_code=SemanticAssessmentReasonCode(payload["reason_code"]),
                 classifier_version=SEMANTIC_CLASSIFIER_VERSION,
                 model_id=self._model_id,
-                model_digest=self._model_digest,
+                model_digest=model_digest,
                 prompt_version=SEMANTIC_PROMPT_VERSION,
                 policy_version=self._policy_version,
             )
@@ -192,7 +267,7 @@ class OllamaSemanticPrivacyClassifier:
             reason_code=reason_code,
             classifier_version=SEMANTIC_CLASSIFIER_VERSION,
             model_id=self._model_id,
-            model_digest=self._model_digest,
+            model_digest=self._model_digest or UNRESOLVED_MODEL_DIGEST,
             prompt_version=SEMANTIC_PROMPT_VERSION,
             policy_version=self._policy_version,
         )

@@ -21,6 +21,8 @@ PROTECTED_PROMPTFOO_OPTIONS = {
     "--config",
     "-c",
     "--no-write",
+    "--cache",
+    "--no-cache",
     "--output",
     "-o",
     "--share",
@@ -101,19 +103,32 @@ def run(
     environment["PROMPTFOO_CONFIG_DIR"] = str(
         artifact_directory / "promptfoo-config"
     )
-    environment["PYTHONPATH"] = str(REPOSITORY_ROOT / "backend")
+    backend_pythonpath = str(REPOSITORY_ROOT / "backend")
+    existing_pythonpath = environment.get("PYTHONPATH")
+    environment["PYTHONPATH"] = (
+        os.pathsep.join((backend_pythonpath, existing_pythonpath))
+        if existing_pythonpath
+        else backend_pythonpath
+    )
     try:
-        promptfoo = subprocess.run(
-            _promptfoo_command(
-                mode,
-                output_path,
-                filter_first_n,
-                promptfoo_arguments,
-            ),
-            cwd=REPOSITORY_ROOT,
-            env=environment,
-            check=False,
-        )
+        try:
+            promptfoo = subprocess.run(
+                _promptfoo_command(
+                    mode,
+                    output_path,
+                    filter_first_n,
+                    promptfoo_arguments,
+                ),
+                cwd=REPOSITORY_ROOT,
+                env=environment,
+                check=False,
+            )
+        except FileNotFoundError:
+            print(
+                "Promptfoo CLIが見つかりません。リポジトリルートでnpm ciを実行してください。",
+                file=sys.stderr,
+            )
+            return 127
         if promptfoo.returncode != 0:
             return promptfoo.returncode
         gate = subprocess.run(

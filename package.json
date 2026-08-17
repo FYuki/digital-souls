@@ -14,7 +14,7 @@
     "lint:python": "backend/.venv/bin/python -m ruff check --config backend/ruff.toml backend/app",
     "check": "backend/.venv/bin/python -m mypy --config-file backend/mypy.ini backend/app environments && npm --prefix frontend run check",
     "build": "npm --prefix frontend run build",
-    "eval:privacy:prompt-lab": "python scripts/eval_privacy_conformance.py prompt-lab",
-    "eval:privacy:conformance": "python scripts/eval_privacy_conformance.py conformance"
+    "eval:privacy:prompt-lab": "python3 scripts/eval_privacy_conformance.py prompt-lab",
+    "eval:privacy:conformance": "python3 scripts/eval_privacy_conformance.py conformance"
   }
 }

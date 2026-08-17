@@ -59,9 +59,14 @@ class OllamaAdapter(ProcessServiceOperations):
         runner: CommandRunner | None = None,
         *,
         model_name: str = OLLAMA_MODEL_NAME,
+        classifier_model_name: str | None = None,
     ) -> None:
         super().__init__(root_dir, "ollama", runner)
-        self._model_name = model_name
+        self._model_names = tuple(
+            dict.fromkeys(
+                (model_name, classifier_model_name or model_name)
+            )
+        )
 
     def verify(
         self, dependency: Mapping[str, object], context: OperationContext
@@ -82,11 +87,13 @@ class OllamaAdapter(ProcessServiceOperations):
         self, dependency: Mapping[str, object], context: OperationContext
     ) -> None:
         require_fixed_managed_endpoint(dependency, service="ollama", port=11434)
-        result = self.runner.run(("ollama", "pull", self._model_name), self.root_dir)
-        if result.get("returncode") != 0:
-            raise OllamaPreparationError(
-                f"Ollama model preparation failed: {result.get('stderr', '')}"
-            )
+        for model_name in self._model_names:
+            result = self.runner.run(("ollama", "pull", model_name), self.root_dir)
+            if result.get("returncode") != 0:
+                raise OllamaPreparationError(
+                    "Ollama model preparation failed "
+                    f"for {model_name}: {result.get('stderr', '')}"
+                )
 
     def start_specification(self, dependency: Mapping[str, object]) -> StartSpecification:
         require_fixed_managed_endpoint(dependency, service="ollama", port=11434)
@@ -101,8 +108,9 @@ class OllamaAdapter(ProcessServiceOperations):
             return ReadinessValidationResult(
                 "readiness", f"Ollama tags request failed: {error}"
             )
-        try:
-            verify_required_model(payload, self._model_name)
-        except OllamaPreparationError as error:
-            return ReadinessValidationResult("preparation", str(error))
+        for model_name in self._model_names:
+            try:
+                verify_required_model(payload, model_name)
+            except OllamaPreparationError as error:
+                return ReadinessValidationResult("preparation", str(error))
         return ReadinessValidationResult("ready")

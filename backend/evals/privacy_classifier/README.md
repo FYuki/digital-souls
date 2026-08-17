@@ -21,3 +21,13 @@ npm run eval:privacy:conformance
 - policy: `backend/app/memory/memory_policy.json` の `policy_version`
 
 比較結果には上記4種類の provenance を併記し、いずれかが異なる実行を同一条件として集計しない。`provider.py` は評価プロセスの起動時に policy と model digest を一度だけ解決する。
+
+## 品質指標と暫定閾値
+
+- `abstain_rate`: 全ケースのうち`ABSTAIN`になった割合
+- `false_negative_rate`: 機微ケースを`NOT_SENSITIVE`と判定した割合
+- `false_positive_rate`: 非機微ケースを`SENSITIVE`と判定した割合
+
+`thresholds.json`の各50%は評価基盤を導入するための暫定基準であり、最終的な品質目標ではない。
+後続issueでプロンプトを調整し、少なくとも偽陽性率20%以下を目標として段階的に厳格化する。
+後続issueの起票後に、本節へissue番号と確定した各指標の目標値を追記する。

@@ -40,6 +40,7 @@ class EvaluationResult:
 class ProfileReport:
     cases: int
     case_failures: int
+    failed_case_ids: tuple[str, ...]
     abstain_rate: float
     false_negative_rate: float
     false_positive_rate: float
@@ -252,17 +253,19 @@ def build_reports(
     for profile, items in grouped.items():
         sensitive = [item for item in items if item[1].sensitive]
         not_sensitive = [item for item in items if not item[1].sensitive]
-        case_failures = sum(
-            record.classification not in expected.allowed_classifications
+        failed_case_ids = tuple(
+            record.case_id
+            for record, expected in items
+            if record.classification not in expected.allowed_classifications
             or (
                 record.classification != "ABSTAIN"
                 and record.subject_scope != expected.expected_subject_scope
             )
-            for record, expected in items
         )
         reports[profile] = ProfileReport(
             cases=len(items),
-            case_failures=case_failures,
+            case_failures=len(failed_case_ids),
+            failed_case_ids=failed_case_ids,
             abstain_rate=_rate(
                 sum(record.classification == "ABSTAIN" for record, _ in items),
                 len(items),
@@ -343,7 +346,8 @@ def conformance_failures(
     thresholds: Mapping[str, Mapping[str, float]],
 ) -> list[str]:
     failures = [
-        f"{profile}.case_failures={report.case_failures}"
+        f"{profile}.case_failures={report.case_failures} "
+        f"case_ids={','.join(report.failed_case_ids)}"
         for profile, report in reports.items()
         if report.case_failures
     ]

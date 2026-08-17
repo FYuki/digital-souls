@@ -121,9 +121,9 @@ Profile は次の5種類である。各依存の完全な接続先と readiness 
 | `integration-voice` | 実音声チャット | Frontend、Backend、external Ollama／VOICEVOX、Whisper |
 | `dogfood` | 継続利用する運用相当環境 | Frontend、Backend、external Ollama／VOICEVOX、Whisper |
 
-起動スクリプトはサービス起動前に中央 resolver で Profile を検証する。runtime reportとresolved Profileは解決済みdata rootの`runtime/`配下にのみ保存する。Playwrightは各スイート専用のtest data rootを設定し、`runtime/standalone/`へ環境reportを、`frontend/test-results/<suite>/`へテスト証跡を保存する。reportには環境IDと正規化済みpathを記録し、秘密値や会話本文は記録しない。
+起動スクリプトはサービス起動前に中央の解決処理でProfileを検証する。実行時レポートと解決済みProfileは解決済みデータルートの`runtime/`配下にのみ保存する。Playwrightは各スイート専用のテスト用データルートを設定し、`runtime/standalone/`へ環境レポートを、`frontend/test-results/<suite>/`へテスト証跡を保存する。レポートには環境IDと正規化済みパスを記録し、秘密値や会話本文は記録しない。
 
-`derivedEnvironment` の接続先に加え、`OLLAMA_CHAT_MODEL`、`OLLAMA_CLASSIFIER_MODEL`、`WHISPER_MODEL`、`OLLAMA_CONTEXT_TOKENS`、応答予約量、履歴・入力・モデルcontext上限は resolver の解決結果から起動対象へ渡される。`scripts/start-backend.sh` は `backend/.env` をProfile解決前に読み込む。`DS_PROFILE_REPORT`で既存のresolved reportを指定しない場合は`.env`のモデル設定を解決結果へ取り込み、指定した場合はreportの解決済み設定を優先する。不正な文字列、正でない整数、応答予約量が実行時context以上、または実行時contextがモデル最大contextを超える指定は、サービス起動前に拒否される。
+`derivedEnvironment`の接続先に加え、`OLLAMA_CHAT_MODEL`、`OLLAMA_CLASSIFIER_MODEL`、`WHISPER_MODEL`、`OLLAMA_CONTEXT_TOKENS`、応答予約量、履歴・入力・モデルコンテキスト上限は中央の解決結果から起動対象へ渡される。`scripts/start-backend.sh`は`backend/.env`をProfile解決前に読み込む。`DS_PROFILE_REPORT`で既存の解決済みレポートを指定しない場合は`.env`のモデル設定を解決結果へ取り込み、指定した場合はレポートの解決済み設定を優先する。不正な文字列、正でない整数、応答予約量が実行時コンテキスト以上、または実行時コンテキストがモデル最大コンテキストを超える指定は、サービス起動前に拒否される。
 
 依存の `source` が `managed` の場合は対応するローカルプロセスまたはコンテナを起動して readiness を待つ。`external` の場合は起動せず、Profile の `readinessUrl` で外部サービスの準備完了だけを確認する。`disabled` の依存は起動しない。
 

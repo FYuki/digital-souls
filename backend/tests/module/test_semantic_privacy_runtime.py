@@ -80,3 +80,31 @@ def test_startup_resolves_semantic_dependencies_once_and_cleans_up_state(
     assert requested_models == ["classifier-only:4b", "classifier-only:4b"]
     assert len(closed_clients) == 1
     assert not hasattr(main.app.state, "semantic_privacy_classifier")
+
+
+def test_startup_continues_when_semantic_model_digest_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.main as main
+    from app.privacy.semantic.contracts import QUERY_GATE
+
+    monkeypatch.setenv("RAG_ENABLED", "false")
+    monkeypatch.setattr(
+        main.OllamaClassifierClient,
+        "resolve_model_digest",
+        lambda _client, **_kwargs: (_ for _ in ()).throw(
+            TimeoutError("lookup timeout")
+        ),
+    )
+
+    async def exercise_lifespan() -> None:
+        async with main.lifespan(main.app):
+            assessment = main.app.state.semantic_privacy_classifier.classify(
+                "合成した健康情報", QUERY_GATE
+            )
+            assert assessment.classification.value == "ABSTAIN"
+            assert assessment.reason_code.value == "TIMEOUT"
+
+    asyncio.run(exercise_lifespan())
+
+    assert not hasattr(main.app.state, "semantic_privacy_classifier")

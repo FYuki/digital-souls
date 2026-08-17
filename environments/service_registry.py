@@ -47,6 +47,7 @@ def create_service_registry(
     *,
     effective_profile: str = "dev",
     ollama_model_name: str = OLLAMA_MODEL_NAME,
+    ollama_classifier_model_name: str | None = None,
     whisper_model_name: str = WHISPER_MODEL_NAME,
 ) -> ServiceRegistry:
     services = {
@@ -69,7 +70,12 @@ def create_service_registry(
         ),
         "ollama": ServiceRegistration(
             "ollama",
-            OllamaAdapter(root_dir, runner, model_name=ollama_model_name),
+            OllamaAdapter(
+                root_dir,
+                runner,
+                model_name=ollama_model_name,
+                classifier_model_name=ollama_classifier_model_name,
+            ),
             None,
         ),
         "voicevox": ServiceRegistration(

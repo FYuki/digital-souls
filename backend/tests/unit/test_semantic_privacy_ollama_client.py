@@ -103,6 +103,19 @@ def test_client_closes_owned_http_connection_pool() -> None:
     http_client.close.assert_called_once_with()
 
 
+def test_owned_http_client_ignores_proxy_environment() -> None:
+    from app.privacy.semantic.ollama_classifier_client import OllamaClassifierClient
+
+    http_client = MagicMock(spec=httpx.Client)
+    with patch(
+        "app.privacy.semantic.ollama_classifier_client.httpx.Client",
+        return_value=http_client,
+    ) as client_factory:
+        OllamaClassifierClient(model_id="gemma4:e4b")
+
+    client_factory.assert_called_once_with(trust_env=False)
+
+
 def test_http_404_maps_to_model_not_loaded() -> None:
     from app.privacy.semantic.ollama_classifier_client import (
         OllamaClassifierClient,

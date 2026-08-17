@@ -29,7 +29,7 @@ def isolate_semantic_model_digest(
     monkeypatch.setattr(
         OllamaClassifierClient,
         "resolve_model_digest",
-        lambda _client: _MODEL_DIGEST,
+        lambda _client, **_kwargs: _MODEL_DIGEST,
     )
 
 

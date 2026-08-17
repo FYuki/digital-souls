@@ -264,6 +264,7 @@ def test_gate_fails_for_disallowed_classification_within_rate_limits(
 
     assert result.returncode != 0
     assert "ADMISSION.case_failures=1" in result.stderr
+    assert "case_ids=safe-2" in result.stderr
 
 
 def test_gate_fails_for_non_abstain_subject_scope_mismatch(
@@ -285,6 +286,7 @@ def test_gate_fails_for_non_abstain_subject_scope_mismatch(
 
     assert result.returncode != 0
     assert "QUERY_GATE.case_failures=1" in result.stderr
+    assert "case_ids=sensitive-2" in result.stderr
 
 
 def test_latency_statistics_do_not_fail_conformance(tmp_path: Path) -> None:

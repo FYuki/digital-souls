@@ -91,6 +91,7 @@ Path(os.environ["FAKE_PROMPTFOO_LOG"]).write_text(
         "arguments": arguments,
         "output_path": str(output_path),
         "telemetry": os.environ.get("PROMPTFOO_DISABLE_TELEMETRY"),
+        "pythonpath": os.environ.get("PYTHONPATH"),
     }),
     encoding="utf-8",
 )
@@ -136,6 +137,7 @@ def _run_wrapper(
             "FAKE_PROMPTFOO_LOG": str(log_path),
             "FAKE_PROMPTFOO_PAYLOAD": str(payload_path),
             "FAKE_PROMPTFOO_EXIT": str(promptfoo_exit),
+            "PYTHONPATH": "/caller/import/root",
         }
     )
     if keep_artifacts:
@@ -175,6 +177,9 @@ def test_wrapper_uses_private_temporary_output_and_cleans_it_after_success(
     assert "--share" not in arguments
     assert "--no-share" not in arguments
     assert invocation["telemetry"] == "1"
+    assert invocation["pythonpath"] == os.pathsep.join(
+        (str(REPOSITORY_ROOT / "backend"), "/caller/import/root")
+    )
     output_path = Path(str(invocation["output_path"]))
     assert not output_path.is_relative_to(REPOSITORY_ROOT)
     assert not output_path.parent.exists()
@@ -217,3 +222,34 @@ def test_prompt_lab_wrapper_reports_threshold_breaches_without_failing(
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "PROMPT_LAB: cases=1" in result.stdout
+
+
+def test_wrapper_rejects_cache_options() -> None:
+    for option in ("--cache", "--no-cache"):
+        result = subprocess.run(
+            [sys.executable, str(WRAPPER_PATH), "conformance", option],
+            cwd=REPOSITORY_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        assert result.returncode == 2
+        assert f"{option} is controlled" in result.stderr
+
+
+def test_wrapper_reports_missing_promptfoo_cli(tmp_path: Path) -> None:
+    env = os.environ.copy()
+    env["PATH"] = str(tmp_path)
+
+    result = subprocess.run(
+        [sys.executable, str(WRAPPER_PATH), "conformance"],
+        cwd=REPOSITORY_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 127
+    assert "Promptfoo CLIが見つかりません" in result.stderr

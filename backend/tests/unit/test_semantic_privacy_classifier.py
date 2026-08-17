@@ -300,7 +300,32 @@ def test_query_gate_does_not_retry_and_uses_its_timeout() -> None:
 
     _classifier(client).classify(SENSITIVE_TEXT, QUERY_GATE)
 
-    assert [timeout for _messages, timeout in client.calls] == [2.0]
+    assert len(client.calls) == 1
+    assert 0 < client.calls[0][1] <= 2.0
+
+
+def test_first_attempt_is_limited_by_remaining_total_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.privacy.semantic.contracts import SemanticClassifierCallProfile
+
+    clock = iter((100.0, 101.5, 101.5))
+    monkeypatch.setattr(
+        "app.privacy.semantic.classifier.time.monotonic",
+        lambda: next(clock),
+    )
+    profile = SemanticClassifierCallProfile(
+        name="TEST",
+        timeout_seconds=2.0,
+        max_retries=0,
+        retry_backoff_seconds=0.0,
+        total_timeout_seconds=2.0,
+    )
+    client = FakeClassifierClient([_response()])
+
+    _classifier(client).classify(SENSITIVE_TEXT, profile)
+
+    assert client.calls[0][1] == pytest.approx(0.5)
 
 
 def test_admission_retries_only_up_to_its_bound_and_uses_exponential_backoff(
@@ -320,8 +345,44 @@ def test_admission_retries_only_up_to_its_bound_and_uses_exponential_backoff(
     assessment = _classifier(client).classify(SENSITIVE_TEXT, ADMISSION)
 
     assert assessment.classification is SemanticClassification.SENSITIVE
-    assert [timeout for _messages, timeout in client.calls] == [15.0, 15.0, 15.0]
+    assert len(client.calls) == 3
+    assert all(0 < timeout <= 15.0 for _messages, timeout in client.calls)
     assert sleeps == [1.0, 2.0]
+
+
+def test_digest_lookup_failure_is_fail_closed_and_recovers_lazily() -> None:
+    from app.memory.memory_policy import resolved_memory_policy
+    from app.privacy.semantic.classifier import OllamaSemanticPrivacyClassifier
+    from app.privacy.semantic.contracts import QUERY_GATE
+
+    digest_outcomes: list[str | BaseException] = [
+        TimeoutError("lookup timeout"),
+        "sha256:" + "d" * 64,
+    ]
+
+    def resolve_digest(_timeout_seconds: float) -> str:
+        outcome = digest_outcomes.pop(0)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return outcome
+
+    client = FakeClassifierClient([_response()])
+    classifier = OllamaSemanticPrivacyClassifier(
+        client=client,
+        privacy_policy=resolved_memory_policy().privacy,
+        model_id="gemma4:e4b",
+        model_digest_resolver=resolve_digest,
+    )
+
+    first = classifier.classify(SENSITIVE_TEXT, QUERY_GATE)
+    second = classifier.classify(SENSITIVE_TEXT, QUERY_GATE)
+
+    assert first.classification.value == "ABSTAIN"
+    assert first.reason_code.value == "TIMEOUT"
+    assert first.model_digest == "unresolved"
+    assert second.classification.value == "SENSITIVE"
+    assert second.model_digest == "sha256:" + "d" * 64
+    assert len(client.calls) == 1
 
 
 def test_final_retry_outcome_alone_controls_fail_closed_assessment(

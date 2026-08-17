@@ -35,7 +35,7 @@ class OllamaClassifierClient:
         self._model_id = model_id
         self._base_url = resolve_ollama_base_url().rstrip("/")
         self._model_digest: str | None = None
-        self._http_client = http_client or httpx.Client()
+        self._http_client = http_client or httpx.Client(trust_env=False)
         self._owns_http_client = http_client is None
 
     def close(self) -> None:
@@ -77,14 +77,20 @@ class OllamaClassifierClient:
             raise OllamaInvalidResponseError("semantic classifier response is invalid")
         return content
 
-    def resolve_model_digest(self) -> str:
+    def resolve_model_digest(
+        self,
+        *,
+        timeout_seconds: float = MODEL_LOOKUP_TIMEOUT_SECONDS,
+    ) -> str:
         if self._model_digest is not None:
             return self._model_digest
         try:
             response = self._post(
                 f"{self._base_url}/api/show",
                 json={"model": self._model_id},
-                timeout=httpx.Timeout(MODEL_LOOKUP_TIMEOUT_SECONDS),
+                timeout=httpx.Timeout(
+                    min(timeout_seconds, MODEL_LOOKUP_TIMEOUT_SECONDS)
+                ),
             )
             response.raise_for_status()
         except httpx.TimeoutException as error:

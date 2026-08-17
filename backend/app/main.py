@@ -233,7 +233,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 client=semantic_classifier_client,
                 privacy_policy=policy.privacy,
                 model_id=model_settings.ollama_classifier_model,
-                model_digest=semantic_classifier_client.resolve_model_digest(),
+                model_digest_resolver=lambda timeout_seconds: (
+                    semantic_classifier_client.resolve_model_digest(
+                        timeout_seconds=timeout_seconds
+                    )
+                ),
             )
             app.state.semantic_privacy_classifier = semantic_privacy_classifier
             semantic_classifier_state_set = True
