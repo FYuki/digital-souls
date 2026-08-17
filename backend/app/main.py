@@ -45,6 +45,8 @@ from app.model_settings import resolve_model_settings
 from app.prompting import BuiltPrompt, CharacterPrompt, PromptMessage
 from app.privacy.history_sanitizer import create_history_sanitizer
 from app.privacy.scanner import create_privacy_scanner
+from app.privacy.semantic.classifier import OllamaSemanticPrivacyClassifier
+from app.privacy.semantic.ollama_classifier_client import OllamaClassifierClient
 from app.routers.chat import router as chat_router
 from app.routers.conversations import router as conversations_router
 from app.routers.ws import router as ws_router
@@ -217,11 +219,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         resolver_registered = False
         chat_service_state_set = False
         audio_pipeline_state_set = False
+        semantic_classifier_state_set = False
         try:
             app.state.conversation_history_repository = conversation_history_repository
             repository_state_set = True
             app.state.conversation_lifecycle_service = conversation_lifecycle_service
             lifecycle_service_state_set = True
+            semantic_classifier_client = OllamaClassifierClient(
+                model_id=model_settings.ollama_chat_model
+            )
+            semantic_privacy_classifier = OllamaSemanticPrivacyClassifier(
+                client=semantic_classifier_client,
+                privacy_policy=policy.privacy,
+                model_id=model_settings.ollama_chat_model,
+                model_digest=semantic_classifier_client.resolve_model_digest(),
+            )
+            app.state.semantic_privacy_classifier = semantic_privacy_classifier
+            semantic_classifier_state_set = True
             executor = ThreadPoolExecutor(
                 max_workers=RAG_MEMORY_WORKERS,
                 thread_name_prefix=_chat_runtime.RAG_MEMORY_THREAD_PREFIX,
@@ -282,6 +296,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         delattr,
                         app.state,
                         "conversation_lifecycle_service",
+                    )
+                if semantic_classifier_state_set:
+                    cleanup.callback(
+                        delattr,
+                        app.state,
+                        "semantic_privacy_classifier",
                     )
 
 

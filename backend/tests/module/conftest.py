@@ -4,10 +4,33 @@ import pytest
 
 from app.conversation_history.schema import initialize_conversation_history_schema
 from app.llm import router
+from app.privacy.semantic.ollama_classifier_client import OllamaClassifierClient
 from tests.conversation_history_test_support import (
     CONVERSATION_ID,
     OTHER_CONVERSATION_ID,
 )
+
+
+_MODEL_DIGEST = "sha256:" + "f" * 64
+
+
+@pytest.fixture
+def semantic_model_digest_http() -> None:
+    return None
+
+
+@pytest.fixture(autouse=True)
+def isolate_semantic_model_digest(
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> None:
+    if "semantic_model_digest_http" in request.fixturenames:
+        return
+    monkeypatch.setattr(
+        OllamaClassifierClient,
+        "resolve_model_digest",
+        lambda _client: _MODEL_DIGEST,
+    )
 
 
 @pytest.fixture(autouse=True)

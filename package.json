@@ -1,6 +1,9 @@
 {
   "name": "digital-souls",
   "private": true,
+  "devDependencies": {
+    "promptfoo": "0.117.2"
+  },
   "scripts": {
     "test:unit": "backend/.venv/bin/python -m pytest backend/tests/unit && npm --prefix frontend run test:unit",
     "test:module": "backend/.venv/bin/python -m pytest backend/tests/module && npm --prefix frontend run test:module",
@@ -10,6 +13,8 @@
     "test:integration:voice": "npm --prefix frontend run test:integration:voice",
     "lint:python": "backend/.venv/bin/python -m ruff check --config backend/ruff.toml backend/app",
     "check": "backend/.venv/bin/python -m mypy --config-file backend/mypy.ini backend/app environments && npm --prefix frontend run check",
-    "build": "npm --prefix frontend run build"
+    "build": "npm --prefix frontend run build",
+    "eval:privacy:prompt-lab": "PYTHONPATH=backend promptfoo eval --config backend/evals/privacy_classifier/prompt-lab.yaml --no-cache --no-share",
+    "eval:privacy:conformance": "PYTHONPATH=backend promptfoo eval --config backend/evals/privacy_classifier/conformance.yaml --no-cache --no-share"
   }
 }
