@@ -32,6 +32,7 @@ def verify_environment(
             runtime_paths,
             effective_profile=profile["effectiveProfile"],
             ollama_model_name=derived["OLLAMA_CHAT_MODEL"],
+            ollama_classifier_model_name=derived["OLLAMA_CLASSIFIER_MODEL"],
             whisper_model_name=derived["WHISPER_MODEL"],
         )
     else:

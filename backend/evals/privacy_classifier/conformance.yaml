@@ -1,0 +1,16 @@
+description: Production semantic privacy classifier conformance
+prompts:
+  - "{{text}}"
+providers:
+  - id: file://provider.py
+    label: ADMISSION
+    config:
+      profile: ADMISSION
+  - id: file://provider.py
+    label: QUERY_GATE
+    config:
+      profile: QUERY_GATE
+defaultTest:
+  assert:
+    - type: is-json
+tests: cases.jsonl

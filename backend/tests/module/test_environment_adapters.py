@@ -1097,6 +1097,52 @@ def test_should_fail_ollama_preparation_when_model_pull_fails(tmp_path: Path) ->
     assert runner.calls == [("ollama", "pull", "gemma4:e4b")]
 
 
+def test_should_prepare_distinct_chat_and_classifier_models(tmp_path: Path) -> None:
+    from adapters.ollama import OllamaAdapter
+
+    runner = RecordingRunner(
+        [
+            {"returncode": 0, "stdout": "", "stderr": ""},
+            {"returncode": 0, "stdout": "", "stderr": ""},
+        ]
+    )
+
+    OllamaAdapter(
+        root_dir=tmp_path,
+        runner=runner,
+        model_name="chat-only:9b",
+        classifier_model_name="classifier-only:4b",
+    ).prepare(resolved_profile()["dependencies"]["ollama"], OPERATION_CONTEXT)
+
+    assert runner.calls == [
+        ("ollama", "pull", "chat-only:9b"),
+        ("ollama", "pull", "classifier-only:4b"),
+    ]
+
+
+def test_should_require_distinct_classifier_model_at_readiness(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import adapters.ollama
+    from adapters.ollama import OllamaAdapter
+
+    monkeypatch.setattr(
+        adapters.ollama,
+        "_fetch_json",
+        lambda _url: {"models": [{"name": "chat-only:9b"}]},
+    )
+
+    result = OllamaAdapter(
+        tmp_path,
+        model_name="chat-only:9b",
+        classifier_model_name="classifier-only:4b",
+    ).validate_readiness(resolved_profile()["dependencies"]["ollama"])
+
+    assert result.classification == "preparation"
+    assert result.message is not None
+    assert "classifier-only:4b" in result.message
+
+
 def test_should_reuse_running_voicevox_without_ownership(tmp_path: Path):
     from adapters.voicevox import VoicevoxAdapter
 
