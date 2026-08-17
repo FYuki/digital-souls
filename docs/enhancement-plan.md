@@ -127,14 +127,15 @@ conversationとturnをSQLiteからhard deleteする。
 
 親Issue: #50
 
-TAKTによる開発と安定版の継続利用を並行するため、#22完了後、#33より先にdogfood環境を分離する。
+TAKTによる開発と安定版の継続利用を並行するため、#22の再開前提としてdogfood環境を分離した。
+#50と子Issue #51〜#56は2026-08-17に手動受入まで完了しており、#22をcleanなmainから再開できる。
 
-- #52 runtime data rootと環境identity
-- #51 managedサービスのport分離とdogfood Profile
-- #53 Ubuntu-dogfoodと共通推論サービス
-- #54 deploy、rollback、常駐運用
-- #55 backup、restore
-- #56 TAKTとの並行稼働・データ分離受入
+- [x] #52 runtime data rootと環境identity
+- [x] #51 managedサービスのport分離とdogfood Profile
+- [x] #53 Ubuntu-dogfoodと共通推論サービス
+- [x] #54 deploy、rollback、常駐運用
+- [x] #55 backup、restore
+- [x] #56 TAKTとの並行稼働・データ分離受入
 
 Wave 2受入まではdogfoodのRAGを無効にし、conversation historyだけを実データとして保持する。
 dogfoodのSQLite schema変更へdev／testの「削除して再作成」を適用しない。
@@ -151,8 +152,8 @@ Wave 2の設計詳細はこの計画書で重複管理しない。現行の設�
 
 ```text
 #25（完了）
+  -> #50（dogfood環境分離、完了）
   -> #22
-  -> #50（dogfood環境分離）
   -> #33
   -> #8
   -> (#29 || #30)

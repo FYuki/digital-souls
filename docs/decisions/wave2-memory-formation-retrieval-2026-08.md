@@ -526,8 +526,8 @@ metadata-onlyで観測する。
 
 ```text
 #25（Wave 1 privacy scanner、完了）
+  -> #50（dogfood環境分離、完了）
   -> #22
-  -> #50（dogfood環境分離）
   -> #33
   -> #8
   -> (#29 || #30)
@@ -538,11 +538,10 @@ metadata-onlyで観測する。
   -> #28の受入確認
 ```
 
-判断理由は、先に意味分類と決定論的admissionを確立し、その後にSQLite正本、Chroma同期、検索を
-構築する必要があるためである。
-また、#8以降で運用相当のSQLite／Chromaを実装する前に、dev／testとdogfoodのdata root、port、
-process ownership、backup／migration境界を固定し、TAKTからdogfoodデータへ到達できないことを
-#50で受け入れる必要がある。
+判断理由は、#22の再開前に、dev／testとdogfoodのdata root、port、process ownership、
+backup／migration境界を固定し、TAKTからdogfoodデータへ到達できないことを#50で受け入れる
+必要があったためである。#50は2026-08-17に手動受入まで完了した。
+その後は意味分類と決定論的admissionを確立し、SQLite正本、Chroma同期、検索を構築する。
 自動記憶形成は安全な保存境界と取得境界が完成してから接続する。時系列照合と管理UIは、共通の
 schemaとrepositoryが完成した後で並行して進めてよい。nightly consolidationはこの依存列の
 完了後に別Issueとして追加する。

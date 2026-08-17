@@ -56,7 +56,8 @@ SQLiteとChromaはリポジトリ外のdogfood専用data rootへ置き、環境i
 
 ## Wave 2との関係
 
-Issue #22の完了後、Issue #50のdogfood分離を完了してから#33以降を再開する。
+Issue #50のdogfood分離と手動受入は2026-08-17に完了した。
+#22をcleanなmainから再開し、その完了後に#33以降へ進む。
 Wave 2親Issue #28の受入まではdogfoodのRAGを無効にし、旧Chromaデータを作らない。
 
 dogfoodのconversation historyは実データとして保持する。Wave 2開始後のpersona memoryはSQLiteを
