@@ -104,8 +104,8 @@ dogfoodのconversation historyは削除せず、対応schemaのbackup、migratio
 実施順序は次とする。
 
 ```text
-#22
-  -> #50（#51〜#56）
+#50（#51〜#56、2026-08-17完了）
+  -> #22
   -> #33
   -> #8
   -> (#29 || #30)
@@ -125,12 +125,12 @@ Docker Compose化は、今回のdogfood分離とミニPC移行の完了条件に
 
 ## 子Issue
 
-- #52 runtime data rootと環境identity
-- #51 managedサービスのport分離とdogfood Profile
-- #53 Ubuntu-dogfoodと共通推論サービス
-- #54 deploy、rollback、常駐運用
-- #55 backup、restore
-- #56 TAKTとの並行稼働・データ分離受入
+- [x] #52 runtime data rootと環境identity
+- [x] #51 managedサービスのport分離とdogfood Profile
+- [x] #53 Ubuntu-dogfoodと共通推論サービス
+- [x] #54 deploy、rollback、常駐運用
+- [x] #55 backup、restore
+- [x] #56 TAKTとの並行稼働・データ分離受入
 
 ## 結果
 
