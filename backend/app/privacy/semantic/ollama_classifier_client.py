@@ -8,6 +8,7 @@ from app.llm.ollama_config import resolve_ollama_base_url
 
 
 _DIGEST_PATTERN = re.compile(r"sha256[:-]([0-9a-fA-F]{64})")
+MODEL_LOOKUP_TIMEOUT_SECONDS = 15.0
 
 
 class OllamaClassifierError(RuntimeError):
@@ -23,12 +24,23 @@ class OllamaInvalidResponseError(OllamaClassifierError):
 
 
 class OllamaClassifierClient:
-    def __init__(self, *, model_id: str) -> None:
+    def __init__(
+        self,
+        *,
+        model_id: str,
+        http_client: httpx.Client | None = None,
+    ) -> None:
         if not model_id.strip():
             raise ValueError("classifier model id must not be blank")
         self._model_id = model_id
         self._base_url = resolve_ollama_base_url().rstrip("/")
         self._model_digest: str | None = None
+        self._http_client = http_client or httpx.Client()
+        self._owns_http_client = http_client is None
+
+    def close(self) -> None:
+        if self._owns_http_client:
+            self._http_client.close()
 
     def chat(
         self,
@@ -37,7 +49,7 @@ class OllamaClassifierClient:
         timeout_seconds: float,
     ) -> str:
         try:
-            response = httpx.post(
+            response = self._post(
                 f"{self._base_url}/api/chat",
                 json={
                     "model": self._model_id,
@@ -69,10 +81,10 @@ class OllamaClassifierClient:
         if self._model_digest is not None:
             return self._model_digest
         try:
-            response = httpx.post(
+            response = self._post(
                 f"{self._base_url}/api/show",
                 json={"model": self._model_id},
-                timeout=httpx.Timeout(15.0),
+                timeout=httpx.Timeout(MODEL_LOOKUP_TIMEOUT_SECONDS),
             )
             response.raise_for_status()
         except httpx.TimeoutException as error:
@@ -92,6 +104,15 @@ class OllamaClassifierClient:
             raise OllamaInvalidResponseError("semantic classifier model metadata is invalid")
         self._model_digest = f"sha256:{match.group(1).lower()}"
         return self._model_digest
+
+    def _post(
+        self,
+        url: str,
+        *,
+        json: dict[str, object],
+        timeout: httpx.Timeout,
+    ) -> httpx.Response:
+        return self._http_client.post(url, json=json, timeout=timeout)
 
     @staticmethod
     def _response_object(response: httpx.Response) -> dict[str, object]:

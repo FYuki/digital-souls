@@ -198,7 +198,19 @@ def test_assessment_rejects_blank_provenance(field_name: str, value: str) -> Non
 def test_call_profiles_are_immutable_and_define_bounded_attempts() -> None:
     from app.privacy.semantic.contracts import ADMISSION, QUERY_GATE
 
-    assert (QUERY_GATE.timeout_seconds, QUERY_GATE.max_retries) == (2.0, 0)
-    assert (ADMISSION.timeout_seconds, ADMISSION.max_retries) == (15.0, 2)
+    assert (
+        QUERY_GATE.name,
+        QUERY_GATE.timeout_seconds,
+        QUERY_GATE.max_retries,
+        QUERY_GATE.retry_backoff_seconds,
+        QUERY_GATE.total_timeout_seconds,
+    ) == ("QUERY_GATE", 2.0, 0, 0.0, 2.0)
+    assert (
+        ADMISSION.name,
+        ADMISSION.timeout_seconds,
+        ADMISSION.max_retries,
+        ADMISSION.retry_backoff_seconds,
+        ADMISSION.total_timeout_seconds,
+    ) == ("ADMISSION", 15.0, 2, 1.0, 35.0)
     with pytest.raises(FrozenInstanceError):
         QUERY_GATE.max_retries = 1

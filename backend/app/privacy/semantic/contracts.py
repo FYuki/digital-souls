@@ -102,15 +102,36 @@ class PrivacyAssessment:
 
 @dataclass(frozen=True)
 class SemanticClassifierCallProfile:
+    name: str
     timeout_seconds: float
     max_retries: int
+    retry_backoff_seconds: float
+    total_timeout_seconds: float
 
     def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ValueError("classifier profile name must not be blank")
         if self.timeout_seconds <= 0:
             raise ValueError("classifier timeout must be positive")
         if self.max_retries < 0:
             raise ValueError("classifier retry bound must not be negative")
+        if self.retry_backoff_seconds < 0:
+            raise ValueError("classifier retry backoff must not be negative")
+        if self.total_timeout_seconds < self.timeout_seconds:
+            raise ValueError("classifier total timeout must cover one attempt")
 
 
-QUERY_GATE = SemanticClassifierCallProfile(timeout_seconds=2.0, max_retries=0)
-ADMISSION = SemanticClassifierCallProfile(timeout_seconds=15.0, max_retries=2)
+QUERY_GATE = SemanticClassifierCallProfile(
+    name="QUERY_GATE",
+    timeout_seconds=2.0,
+    max_retries=0,
+    retry_backoff_seconds=0.0,
+    total_timeout_seconds=2.0,
+)
+ADMISSION = SemanticClassifierCallProfile(
+    name="ADMISSION",
+    timeout_seconds=15.0,
+    max_retries=2,
+    retry_backoff_seconds=1.0,
+    total_timeout_seconds=35.0,
+)

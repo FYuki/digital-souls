@@ -15,9 +15,9 @@ npm run eval:privacy:conformance
 
 ## バージョン固定
 
-- model: `OLLAMA_CHAT_MODEL`。既定は `gemma4:e4b`。起動時に `/api/show` から digest を解決する。
+- model: `OLLAMA_CLASSIFIER_MODEL`。既定は `gemma4:e4b`。起動時に `/api/show` から digest を解決する。
 - classifier: `semantic-privacy-classifier-v1`
-- prompt: `semantic-privacy-prompt-v1`
+- prompt: `semantic-privacy-prompt-v2`
 - policy: `backend/app/memory/memory_policy.json` の `policy_version`
 
 比較結果には上記4種類の provenance を併記し、いずれかが異なる実行を同一条件として集計しない。`provider.py` は評価プロセスの起動時に policy と model digest を一度だけ解決する。

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import atexit
 import json
 import os
 
@@ -13,11 +14,12 @@ from app.privacy.semantic.ollama_classifier_client import OllamaClassifierClient
 def _classifier() -> OllamaSemanticPrivacyClassifier:
     policy = resolved_memory_policy()
     settings = resolve_model_settings(os.environ)
-    client = OllamaClassifierClient(model_id=settings.ollama_chat_model)
+    client = OllamaClassifierClient(model_id=settings.ollama_classifier_model)
+    atexit.register(client.close)
     return OllamaSemanticPrivacyClassifier(
         client=client,
         privacy_policy=policy.privacy,
-        model_id=settings.ollama_chat_model,
+        model_id=settings.ollama_classifier_model,
         model_digest=client.resolve_model_digest(),
     )
 

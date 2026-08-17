@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 OLLAMA_CHAT_MODEL_ENV = "OLLAMA_CHAT_MODEL"
+OLLAMA_CLASSIFIER_MODEL_ENV = "OLLAMA_CLASSIFIER_MODEL"
 WHISPER_MODEL_ENV = "WHISPER_MODEL"
 OLLAMA_CONTEXT_TOKENS_ENV = "OLLAMA_CONTEXT_TOKENS"
 OLLAMA_RESPONSE_RESERVE_TOKENS_ENV = "OLLAMA_RESPONSE_RESERVE_TOKENS"
@@ -14,6 +15,7 @@ ASSISTANT_MAX_GENERATION_TOKENS_ENV = "ASSISTANT_MAX_GENERATION_TOKENS"
 MODEL_CONTEXT_TOKEN_LIMIT_ENV = "LLM_CONTEXT_TOKEN_LIMIT"
 MODEL_ENVIRONMENT_KEYS = (
     OLLAMA_CHAT_MODEL_ENV,
+    OLLAMA_CLASSIFIER_MODEL_ENV,
     WHISPER_MODEL_ENV,
     OLLAMA_CONTEXT_TOKENS_ENV,
     OLLAMA_RESPONSE_RESERVE_TOKENS_ENV,
@@ -25,6 +27,7 @@ MODEL_ENVIRONMENT_KEYS = (
 )
 
 OLLAMA_MODEL_NAME = "gemma4:e4b"
+OLLAMA_CLASSIFIER_MODEL_NAME = "gemma4:e4b"
 WHISPER_MODEL_NAME = "medium"
 DEFAULT_OLLAMA_CONTEXT_TOKENS = 8_192
 DEFAULT_RESPONSE_RESERVE_TOKENS = 1_024
@@ -37,6 +40,7 @@ DEFAULT_MODEL_CONTEXT_TOKEN_LIMIT = 32_768
 @dataclass(frozen=True)
 class ModelSettings:
     ollama_chat_model: str
+    ollama_classifier_model: str
     whisper_model: str
     ollama_context_tokens: int
     assistant_max_generation_tokens: int
@@ -50,6 +54,11 @@ def resolve_model_settings(environment: Mapping[str, str]) -> ModelSettings:
     settings = ModelSettings(
         ollama_chat_model=_string_value(
             environment, OLLAMA_CHAT_MODEL_ENV, OLLAMA_MODEL_NAME
+        ),
+        ollama_classifier_model=_string_value(
+            environment,
+            OLLAMA_CLASSIFIER_MODEL_ENV,
+            OLLAMA_CLASSIFIER_MODEL_NAME,
         ),
         whisper_model=_string_value(environment, WHISPER_MODEL_ENV, WHISPER_MODEL_NAME),
         ollama_context_tokens=_positive_integer(
@@ -79,6 +88,7 @@ def model_settings_environment(settings: ModelSettings) -> dict[str, str]:
     reservation = str(settings.assistant_max_generation_tokens)
     return {
         OLLAMA_CHAT_MODEL_ENV: settings.ollama_chat_model,
+        OLLAMA_CLASSIFIER_MODEL_ENV: settings.ollama_classifier_model,
         WHISPER_MODEL_ENV: settings.whisper_model,
         OLLAMA_CONTEXT_TOKENS_ENV: str(settings.ollama_context_tokens),
         OLLAMA_RESPONSE_RESERVE_TOKENS_ENV: reservation,

@@ -157,6 +157,7 @@ def resolved_profile(profile_name: str = "integration-voice") -> ResolvedReport:
             "DS_BACKEND_ORIGIN": "http://localhost:8000",
             "RAG_ENABLED": "false",
             "OLLAMA_CHAT_MODEL": "gemma4:e4b",
+            "OLLAMA_CLASSIFIER_MODEL": "gemma4:e4b",
             "WHISPER_MODEL": "medium",
             "OLLAMA_CONTEXT_TOKENS": "8192",
             "OLLAMA_RESPONSE_RESERVE_TOKENS": "1024",

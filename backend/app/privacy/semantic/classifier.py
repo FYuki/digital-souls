@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 import json
+import logging
+import time
 from typing import Protocol, TypedDict
 
 import httpx
@@ -22,22 +24,31 @@ from app.privacy.semantic.ollama_classifier_client import (
 
 
 SEMANTIC_CLASSIFIER_VERSION = "semantic-privacy-classifier-v1"
-SEMANTIC_PROMPT_VERSION = "semantic-privacy-prompt-v1"
+SEMANTIC_PROMPT_VERSION = "semantic-privacy-prompt-v2"
 SEMANTIC_FEW_SHOT_TEXTS = (
     "通院の予定が変わって少し不安です",
     "What are common ways to improve sleep hygiene?",
     "友人が借金の返済に困っていると打ち明けた",
     "I prefer tea without sugar.",
 )
+_RETRYABLE_REASON_CODES = {
+    SemanticAssessmentReasonCode.TIMEOUT,
+    SemanticAssessmentReasonCode.MODEL_UNAVAILABLE,
+}
+logger = logging.getLogger(__name__)
 
 
 class SemanticPrivacyClassifier(Protocol):
+    """呼び出し用途別の制限内で意味的な機微情報を分類する公開契約。"""
+
     def classify(
         self, text: str, profile: SemanticClassifierCallProfile
     ) -> PrivacyAssessment: ...
 
 
 class SemanticClassifierClient(Protocol):
+    """分類器が利用するローカルモデル通信を抽象化する契約。"""
+
     def chat(
         self,
         messages: tuple[dict[str, str], ...],
@@ -54,6 +65,8 @@ class _ResponsePayload(TypedDict):
 
 
 class OllamaSemanticPrivacyClassifier:
+    """固定したpolicyとprovenanceでOllama出力を安全側へ正規化する。"""
+
     def __init__(
         self,
         *,
@@ -70,13 +83,54 @@ class OllamaSemanticPrivacyClassifier:
     def classify(
         self, text: str, profile: SemanticClassifierCallProfile
     ) -> PrivacyAssessment:
+        started_at = time.monotonic()
         messages = _build_messages(text)
         final = self._fail_closed(SemanticAssessmentReasonCode.MODEL_UNAVAILABLE)
-        for _attempt in range(profile.max_retries + 1):
-            final = self._classify_once(messages, profile.timeout_seconds)
-            if final.classification is not SemanticClassification.ABSTAIN:
-                return final
+        attempt_count = 0
+        for attempt in range(profile.max_retries + 1):
+            if attempt:
+                backoff_seconds = profile.retry_backoff_seconds * (2 ** (attempt - 1))
+                remaining_seconds = self._remaining_seconds(profile, started_at)
+                if remaining_seconds <= backoff_seconds:
+                    break
+                time.sleep(backoff_seconds)
+            remaining_seconds = self._remaining_seconds(profile, started_at)
+            if remaining_seconds <= 0:
+                break
+            attempt_count += 1
+            timeout_seconds = (
+                profile.timeout_seconds
+                if attempt == 0
+                else min(profile.timeout_seconds, remaining_seconds)
+            )
+            final = self._classify_once(
+                messages,
+                timeout_seconds,
+            )
+            if (
+                final.classification is not SemanticClassification.ABSTAIN
+                or final.reason_code not in _RETRYABLE_REASON_CODES
+            ):
+                break
+        elapsed_ms = max(0, round((time.monotonic() - started_at) * 1_000))
+        logger.info(
+            "Semantic privacy classification completed: "
+            "classification=%s reason_code=%s profile=%s "
+            "attempt_count=%d elapsed_ms=%d",
+            final.classification.value,
+            final.reason_code.value,
+            profile.name,
+            attempt_count,
+            elapsed_ms,
+        )
         return final
+
+    @staticmethod
+    def _remaining_seconds(
+        profile: SemanticClassifierCallProfile,
+        started_at: float,
+    ) -> float:
+        return profile.total_timeout_seconds - (time.monotonic() - started_at)
 
     def _classify_once(
         self,
@@ -168,36 +222,78 @@ def _response_payload(value: object) -> _ResponsePayload | None:
 
 
 def _build_messages(text: str) -> tuple[dict[str, str], ...]:
+    classification_values = ", ".join(item.value for item in SemanticClassification)
+    scope_values = ", ".join(item.value for item in SubjectScope)
+    category_values = ", ".join(item.value for item in SemanticPrivacyCategory)
+    reason_values = ", ".join(item.value for item in SemanticAssessmentReasonCode)
     system = (
         f"Semantic privacy classifier. Prompt version: {SEMANTIC_PROMPT_VERSION}. "
         "Return exactly one JSON object with classification, subject_scope, category, "
-        "and reason_code. Use ABSTAIN, UNKNOWN, UNKNOWN, UNKNOWN_LANGUAGE when the "
-        "language cannot be understood."
+        "and reason_code. "
+        f"Allowed classification values: [{classification_values}]. "
+        f"Allowed subject_scope values: [{scope_values}]. "
+        f"Allowed category values: [{category_values}]. "
+        f"Allowed reason_code values: [{reason_values}]. "
+        "When the language cannot be understood, use classification=ABSTAIN, "
+        "subject_scope=UNKNOWN, category=UNKNOWN, and reason_code=UNKNOWN_LANGUAGE."
     )
     examples = (
         {"role": "user", "content": SEMANTIC_FEW_SHOT_TEXTS[0]},
         {
             "role": "assistant",
-            "content": '{"classification":"SENSITIVE","subject_scope":"SELF",'
-            '"category":"MENTAL_STATE","reason_code":"SENSITIVE_CONTENT"}',
+            "content": _example_response(
+                SemanticClassification.SENSITIVE,
+                SubjectScope.SELF,
+                SemanticPrivacyCategory.MENTAL_STATE,
+                SemanticAssessmentReasonCode.SENSITIVE_CONTENT,
+            ),
         },
         {"role": "user", "content": SEMANTIC_FEW_SHOT_TEXTS[1]},
         {
             "role": "assistant",
-            "content": '{"classification":"NOT_SENSITIVE","subject_scope":"GENERAL",'
-            '"category":"NONE","reason_code":"NO_SENSITIVE_CONTENT"}',
+            "content": _example_response(
+                SemanticClassification.NOT_SENSITIVE,
+                SubjectScope.GENERAL,
+                SemanticPrivacyCategory.NONE,
+                SemanticAssessmentReasonCode.NO_SENSITIVE_CONTENT,
+            ),
         },
         {"role": "user", "content": SEMANTIC_FEW_SHOT_TEXTS[2]},
         {
             "role": "assistant",
-            "content": '{"classification":"SENSITIVE","subject_scope":"THIRD_PARTY",'
-            '"category":"FINANCIAL_SITUATION","reason_code":"SENSITIVE_CONTENT"}',
+            "content": _example_response(
+                SemanticClassification.SENSITIVE,
+                SubjectScope.THIRD_PARTY,
+                SemanticPrivacyCategory.FINANCIAL_SITUATION,
+                SemanticAssessmentReasonCode.SENSITIVE_CONTENT,
+            ),
         },
         {"role": "user", "content": SEMANTIC_FEW_SHOT_TEXTS[3]},
         {
             "role": "assistant",
-            "content": '{"classification":"NOT_SENSITIVE","subject_scope":"SELF",'
-            '"category":"NONE","reason_code":"NO_SENSITIVE_CONTENT"}',
+            "content": _example_response(
+                SemanticClassification.NOT_SENSITIVE,
+                SubjectScope.SELF,
+                SemanticPrivacyCategory.NONE,
+                SemanticAssessmentReasonCode.NO_SENSITIVE_CONTENT,
+            ),
         },
     )
     return ({"role": "system", "content": system}, *examples, {"role": "user", "content": text})
+
+
+def _example_response(
+    classification: SemanticClassification,
+    subject_scope: SubjectScope,
+    category: SemanticPrivacyCategory,
+    reason_code: SemanticAssessmentReasonCode,
+) -> str:
+    return json.dumps(
+        {
+            "classification": classification.value,
+            "subject_scope": subject_scope.value,
+            "category": category.value,
+            "reason_code": reason_code.value,
+        },
+        separators=(",", ":"),
+    )

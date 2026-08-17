@@ -220,18 +220,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         chat_service_state_set = False
         audio_pipeline_state_set = False
         semantic_classifier_state_set = False
+        semantic_classifier_client = None
         try:
             app.state.conversation_history_repository = conversation_history_repository
             repository_state_set = True
             app.state.conversation_lifecycle_service = conversation_lifecycle_service
             lifecycle_service_state_set = True
             semantic_classifier_client = OllamaClassifierClient(
-                model_id=model_settings.ollama_chat_model
+                model_id=model_settings.ollama_classifier_model
             )
             semantic_privacy_classifier = OllamaSemanticPrivacyClassifier(
                 client=semantic_classifier_client,
                 privacy_policy=policy.privacy,
-                model_id=model_settings.ollama_chat_model,
+                model_id=model_settings.ollama_classifier_model,
                 model_digest=semantic_classifier_client.resolve_model_digest(),
             )
             app.state.semantic_privacy_classifier = semantic_privacy_classifier
@@ -303,6 +304,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         app.state,
                         "semantic_privacy_classifier",
                     )
+                if semantic_classifier_client is not None:
+                    cleanup.callback(semantic_classifier_client.close)
 
 
 app = FastAPI(lifespan=lifespan)

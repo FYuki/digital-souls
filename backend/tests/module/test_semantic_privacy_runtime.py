@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import MagicMock
 
-from fastapi.testclient import TestClient
 import pytest
 
 
@@ -20,9 +20,15 @@ def test_startup_resolves_semantic_dependencies_once_and_cleans_up_state(
     resolve_policy = MagicMock(return_value=actual_policy)
     create_scanner = MagicMock(wraps=main.create_privacy_scanner)
     requests: list[str] = []
+    requested_models: list[str] = []
+    closed_clients: list[object] = []
+    original_close = main.OllamaClassifierClient.close
 
-    def post(url: str, **kwargs: object) -> MagicMock:
+    def post(_client: object, url: str, **kwargs: object) -> MagicMock:
         requests.append(url)
+        payload = kwargs["json"]
+        assert isinstance(payload, dict)
+        requested_models.append(str(payload["model"]))
         response = MagicMock()
         response.raise_for_status.return_value = None
         if url.endswith("/api/show"):
@@ -43,20 +49,34 @@ def test_startup_resolves_semantic_dependencies_once_and_cleans_up_state(
             raise AssertionError(f"unexpected Ollama endpoint: {url}")
         return response
 
+    def close(client: object) -> None:
+        closed_clients.append(client)
+        original_close(client)
+
     monkeypatch.setenv("RAG_ENABLED", "false")
+    monkeypatch.setenv("OLLAMA_CHAT_MODEL", "chat-only:9b")
+    monkeypatch.setenv("OLLAMA_CLASSIFIER_MODEL", "classifier-only:4b")
     monkeypatch.setattr(main, "resolved_memory_policy", resolve_policy)
     monkeypatch.setattr(main, "create_privacy_scanner", create_scanner)
     monkeypatch.setattr(
-        "app.privacy.semantic.ollama_classifier_client.httpx.post", post
+        "app.privacy.semantic.ollama_classifier_client.OllamaClassifierClient._post",
+        post,
     )
+    monkeypatch.setattr(main.OllamaClassifierClient, "close", close)
 
-    with TestClient(main.app):
-        classifier = main.app.state.semantic_privacy_classifier
-        assessment = classifier.classify("合成した健康情報", QUERY_GATE)
-        assert assessment.policy_version == actual_policy.policy_version
+    async def exercise_lifespan() -> None:
+        async with main.lifespan(main.app):
+            classifier = main.app.state.semantic_privacy_classifier
+            assessment = classifier.classify("合成した健康情報", QUERY_GATE)
+            assert assessment.policy_version == actual_policy.policy_version
+            assert assessment.model_id == "classifier-only:4b"
+
+    asyncio.run(exercise_lifespan())
 
     resolve_policy.assert_called_once_with()
     create_scanner.assert_called_once_with(actual_policy.privacy)
     assert sum(url.endswith("/api/show") for url in requests) == 1
     assert sum(url.endswith("/api/chat") for url in requests) == 1
+    assert requested_models == ["classifier-only:4b", "classifier-only:4b"]
+    assert len(closed_clients) == 1
     assert not hasattr(main.app.state, "semantic_privacy_classifier")

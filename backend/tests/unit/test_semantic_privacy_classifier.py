@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 
 import pytest
@@ -73,6 +74,29 @@ def test_classifier_builds_versioned_few_shot_prompt_and_keeps_target_separate()
     assert messages[-1] == {"role": "user", "content": SENSITIVE_TEXT}
     assert [message["role"] for message in messages[:-1]].count("assistant") >= 2
     assert [message["role"] for message in messages[:-1]].count("user") >= 2
+
+
+def test_classifier_prompt_lists_contract_enum_values_explicitly() -> None:
+    from app.privacy.semantic.contracts import (
+        QUERY_GATE,
+        SemanticAssessmentReasonCode,
+        SemanticClassification,
+        SemanticPrivacyCategory,
+        SubjectScope,
+    )
+
+    client = FakeClassifierClient([_response()])
+
+    _classifier(client).classify(SENSITIVE_TEXT, QUERY_GATE)
+
+    system_prompt = client.calls[0][0][0]["content"]
+    for enum_type in (
+        SemanticClassification,
+        SubjectScope,
+        SemanticPrivacyCategory,
+        SemanticAssessmentReasonCode,
+    ):
+        assert all(item.value in system_prompt for item in enum_type)
 
 
 def test_classifier_parses_valid_response_and_propagates_provenance() -> None:
@@ -198,6 +222,61 @@ def test_classifier_failures_are_fail_closed(
     assert assessment.reason_code.value == expected_reason
 
 
+@pytest.mark.parametrize(
+    "outcome",
+    [
+        "not-json",
+        _response(category="FUTURE_PRIVATE_KIND"),
+        _response(
+            classification="ABSTAIN",
+            subject_scope="UNKNOWN",
+            category="UNKNOWN",
+            reason_code="UNKNOWN_LANGUAGE",
+        ),
+    ],
+)
+def test_admission_does_not_retry_deterministic_abstentions(outcome: str) -> None:
+    from app.privacy.semantic.contracts import ADMISSION
+
+    client = FakeClassifierClient([outcome])
+
+    _classifier(client).classify(SENSITIVE_TEXT, ADMISSION)
+
+    assert len(client.calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("classification", "subject_scope", "category", "reason_code"),
+    [
+        ("NOT_SENSITIVE", "SELF", "HEALTH", "SENSITIVE_CONTENT"),
+        ("SENSITIVE", "SELF", "HEALTH", "NO_SENSITIVE_CONTENT"),
+    ],
+)
+def test_classifier_rejects_internally_inconsistent_enum_combinations(
+    classification: str,
+    subject_scope: str,
+    category: str,
+    reason_code: str,
+) -> None:
+    from app.privacy.semantic.contracts import QUERY_GATE
+
+    assessment = _classifier(
+        FakeClassifierClient(
+            [
+                _response(
+                    classification=classification,
+                    subject_scope=subject_scope,
+                    category=category,
+                    reason_code=reason_code,
+                )
+            ]
+        )
+    ).classify(SENSITIVE_TEXT, QUERY_GATE)
+
+    assert assessment.classification.value == "ABSTAIN"
+    assert assessment.reason_code.value == "INVALID_OUTPUT"
+
+
 def test_model_not_loaded_is_fail_closed() -> None:
     from app.privacy.semantic.contracts import QUERY_GATE
     from app.privacy.semantic.ollama_classifier_client import (
@@ -224,9 +303,16 @@ def test_query_gate_does_not_retry_and_uses_its_timeout() -> None:
     assert [timeout for _messages, timeout in client.calls] == [2.0]
 
 
-def test_admission_retries_only_up_to_its_bound() -> None:
+def test_admission_retries_only_up_to_its_bound_and_uses_exponential_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from app.privacy.semantic.contracts import ADMISSION, SemanticClassification
 
+    sleeps: list[float] = []
+    monkeypatch.setattr(
+        "app.privacy.semantic.classifier.time.sleep",
+        sleeps.append,
+    )
     client = FakeClassifierClient(
         [TimeoutError("one"), TimeoutError("two"), _response()]
     )
@@ -235,11 +321,18 @@ def test_admission_retries_only_up_to_its_bound() -> None:
 
     assert assessment.classification is SemanticClassification.SENSITIVE
     assert [timeout for _messages, timeout in client.calls] == [15.0, 15.0, 15.0]
+    assert sleeps == [1.0, 2.0]
 
 
-def test_final_retry_outcome_alone_controls_fail_closed_assessment() -> None:
+def test_final_retry_outcome_alone_controls_fail_closed_assessment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from app.privacy.semantic.contracts import ADMISSION
 
+    monkeypatch.setattr(
+        "app.privacy.semantic.classifier.time.sleep",
+        lambda _seconds: None,
+    )
     client = FakeClassifierClient(
         [
             TimeoutError("first"),
@@ -261,6 +354,7 @@ def test_sensitive_material_is_absent_from_logs_and_exception_text(
 ) -> None:
     from app.privacy.semantic.contracts import QUERY_GATE
 
+    caplog.set_level(logging.DEBUG)
     secret_hash = "8f6a28d55e4f5f2e"
     client = FakeClassifierClient(
         [RuntimeError(f"{SENSITIVE_TEXT} {secret_hash} {RAW_OUTPUT_SENTINEL} {PARSER_SENTINEL}")]
@@ -277,3 +371,8 @@ def test_sensitive_material_is_absent_from_logs_and_exception_text(
         PARSER_SENTINEL,
     ):
         assert forbidden.casefold() not in observed.casefold()
+
+    assert "classification=ABSTAIN" in caplog.text
+    assert "reason_code=MODEL_UNAVAILABLE" in caplog.text
+    assert "profile=QUERY_GATE" in caplog.text
+    assert "attempt_count=1" in caplog.text

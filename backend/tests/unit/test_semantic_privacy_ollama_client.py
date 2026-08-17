@@ -7,7 +7,9 @@ import httpx
 import pytest
 
 
-_PATCH_POST = "app.privacy.semantic.ollama_classifier_client.httpx.post"
+_PATCH_POST = (
+    "app.privacy.semantic.ollama_classifier_client.OllamaClassifierClient._post"
+)
 _DIGEST_HEX = "c" * 64
 _PRIVATE_SENTINELS = (
     "private-raw-text-sentinel",
@@ -66,6 +68,72 @@ def test_model_digest_is_resolved_once_and_cached() -> None:
     post.assert_called_once()
     assert post.call_args.args[0].endswith("/api/show")
     assert post.call_args.kwargs["json"] == {"model": "gemma4:e4b"}
+
+
+def test_client_reuses_one_injected_http_connection_pool() -> None:
+    from app.privacy.semantic.ollama_classifier_client import OllamaClassifierClient
+
+    http_client = MagicMock(spec=httpx.Client)
+    http_client.post.return_value = _response({"message": {"content": "{}"}})
+    client = OllamaClassifierClient(
+        model_id="gemma4:e4b",
+        http_client=http_client,
+    )
+
+    client.chat(({"role": "user", "content": "first"},), timeout_seconds=2.0)
+    client.chat(({"role": "user", "content": "second"},), timeout_seconds=2.0)
+    client.close()
+
+    assert http_client.post.call_count == 2
+    http_client.close.assert_not_called()
+
+
+def test_client_closes_owned_http_connection_pool() -> None:
+    from app.privacy.semantic.ollama_classifier_client import OllamaClassifierClient
+
+    http_client = MagicMock(spec=httpx.Client)
+    with patch(
+        "app.privacy.semantic.ollama_classifier_client.httpx.Client",
+        return_value=http_client,
+    ):
+        client = OllamaClassifierClient(model_id="gemma4:e4b")
+
+    client.close()
+
+    http_client.close.assert_called_once_with()
+
+
+def test_http_404_maps_to_model_not_loaded() -> None:
+    from app.privacy.semantic.ollama_classifier_client import (
+        OllamaClassifierClient,
+        OllamaModelNotLoadedError,
+    )
+
+    request = httpx.Request("POST", "http://localhost:11434/api/chat")
+    response = _response({"error": "model not found"})
+    response.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "not found",
+        request=request,
+        response=httpx.Response(404, request=request),
+    )
+
+    with patch(_PATCH_POST, return_value=response):
+        with pytest.raises(OllamaModelNotLoadedError):
+            OllamaClassifierClient(model_id="gemma4:e4b").chat(
+                ({"role": "user", "content": "synthetic input"},),
+                timeout_seconds=2.0,
+            )
+
+
+def test_http_timeout_maps_to_builtin_timeout_error() -> None:
+    from app.privacy.semantic.ollama_classifier_client import OllamaClassifierClient
+
+    with patch(_PATCH_POST, side_effect=httpx.ReadTimeout("timeout")):
+        with pytest.raises(TimeoutError):
+            OllamaClassifierClient(model_id="gemma4:e4b").chat(
+                ({"role": "user", "content": "synthetic input"},),
+                timeout_seconds=2.0,
+            )
 
 
 def test_http_error_does_not_expose_response_body_or_prompt() -> None:

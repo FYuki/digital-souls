@@ -35,6 +35,7 @@ class TestModelSettings:
 
         assert {
             "OLLAMA_CHAT_MODEL=gemma4:e4b",
+            "OLLAMA_CLASSIFIER_MODEL=gemma4:e4b",
             "WHISPER_MODEL=medium",
             "OLLAMA_CONTEXT_TOKENS=8192",
             "OLLAMA_RESPONSE_RESERVE_TOKENS=1024",

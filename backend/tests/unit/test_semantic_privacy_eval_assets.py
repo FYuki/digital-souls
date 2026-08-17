@@ -40,6 +40,18 @@ def test_corpus_is_synthetic_normal_case_data_with_japanese_english_pairs() -> N
     assert all(languages == {"ja", "en"} for languages in pairs.values())
 
 
+def test_case_vars_match_top_level_prompt_and_expectations() -> None:
+    for case in _cases():
+        variables = case["vars"]
+        assert isinstance(variables, dict)
+        assert variables["text"] == case["text"]
+        assert (
+            variables["expected_subject_scope"]
+            == case["expected_subject_scope"]
+        )
+        assert variables["allowed_classifications"] == case["allowed_classifications"]
+
+
 def test_corpus_covers_required_sensitive_category_and_scope_product() -> None:
     observed = {
         (str(case["topic_category"]), str(case["expected_subject_scope"]))
