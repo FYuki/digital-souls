@@ -128,7 +128,7 @@ conversationとturnをSQLiteからhard deleteする。
 親Issue: #50
 
 TAKTによる開発と安定版の継続利用を並行するため、#22の再開前提としてdogfood環境を分離した。
-#50と子Issue #51〜#56は2026-08-17に手動受入まで完了しており、#22をcleanなmainから再開できる。
+Issue #50と子Issue #51〜#56は2026-08-17に手動受入まで完了しており、#22をcleanなmainから再開できる。
 
 - [x] #52 runtime data rootと環境identity
 - [x] #51 managedサービスのport分離とdogfood Profile

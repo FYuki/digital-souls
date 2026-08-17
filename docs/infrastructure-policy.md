@@ -35,7 +35,7 @@ dogfoodは使用感を継続確認する運用相当環境であり、実convers
 別WSLでもnetwork namespaceと物理資源は共有されるため、portを分け、Ollama／VOICEVOXの
 ownershipとcleanup境界を明示する。
 
-dogfood構成はIssue #50で実装する。完了までは現行`dev` Profileをdogfood用途へ流用しない。
+dogfood構成はIssue #50で実装済みである。現行`dev` Profileをdogfood用途へ流用しない。
 
 ## 環境ごとの責務
 
@@ -57,7 +57,7 @@ SQLiteとChromaはリポジトリ外のdogfood専用data rootへ置き、環境i
 ## Wave 2との関係
 
 Issue #50のdogfood分離と手動受入は2026-08-17に完了した。
-#22をcleanなmainから再開し、その完了後に#33以降へ進む。
+Issue #22をcleanなmainから再開し、その完了後に#33以降へ進む。
 Wave 2親Issue #28の受入まではdogfoodのRAGを無効にし、旧Chromaデータを作らない。
 
 dogfoodのconversation historyは実データとして保持する。Wave 2開始後のpersona memoryはSQLiteを
