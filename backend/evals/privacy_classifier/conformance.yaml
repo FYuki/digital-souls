@@ -3,15 +3,14 @@ prompts:
   - "{{text}}"
 providers:
   - id: file://provider.py
+    label: ADMISSION
+    config:
+      profile: ADMISSION
+  - id: file://provider.py
+    label: QUERY_GATE
+    config:
+      profile: QUERY_GATE
 defaultTest:
   assert:
     - type: is-json
-    - type: javascript
-      value: |
-        (() => {
-          const result = JSON.parse(output);
-          return context.vars.allowed_classifications.includes(result.classification)
-            && (result.classification === 'ABSTAIN'
-              || result.subject_scope === context.vars.expected_subject_scope);
-        })()
 tests: cases.jsonl

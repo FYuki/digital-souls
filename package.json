@@ -14,7 +14,7 @@
     "lint:python": "backend/.venv/bin/python -m ruff check --config backend/ruff.toml backend/app",
     "check": "backend/.venv/bin/python -m mypy --config-file backend/mypy.ini backend/app environments && npm --prefix frontend run check",
     "build": "npm --prefix frontend run build",
-    "eval:privacy:prompt-lab": "PYTHONPATH=backend promptfoo eval --config backend/evals/privacy_classifier/prompt-lab.yaml --no-cache --no-share",
-    "eval:privacy:conformance": "PYTHONPATH=backend promptfoo eval --config backend/evals/privacy_classifier/conformance.yaml --no-cache --no-share"
+    "eval:privacy:prompt-lab": "python scripts/eval_privacy_conformance.py prompt-lab",
+    "eval:privacy:conformance": "python scripts/eval_privacy_conformance.py conformance"
   }
 }

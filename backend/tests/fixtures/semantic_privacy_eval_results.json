@@ -1,0 +1,71 @@
+{
+  "version": 3,
+  "results": {
+    "results": [
+      {
+        "provider": {"id": "file://provider.py", "label": "ADMISSION"},
+        "vars": {"text": "sensitive one", "case_id": "sensitive-1"},
+        "response": {
+          "output": "{\"case_id\":\"sensitive-1\",\"profile\":\"ADMISSION\",\"classification\":\"ABSTAIN\",\"subject_scope\":\"UNKNOWN\",\"category\":\"UNKNOWN\",\"reason_code\":\"INVALID_OUTPUT\",\"classifier_version\":\"semantic-v1\",\"model_id\":\"stub-model\",\"model_digest\":\"sha256:fixture\",\"prompt_version\":\"semantic-v1\",\"policy_version\":\"fixture-policy\",\"latency_seconds\":1.0}",
+          "latencyMs": 1000
+        }
+      },
+      {
+        "provider": {"id": "file://provider.py", "label": "ADMISSION"},
+        "vars": {"text": "sensitive two", "case_id": "sensitive-2"},
+        "response": {
+          "output": "{\"case_id\":\"sensitive-2\",\"profile\":\"ADMISSION\",\"classification\":\"NOT_SENSITIVE\",\"subject_scope\":\"SELF\",\"category\":\"NONE\",\"reason_code\":\"NONE\",\"classifier_version\":\"semantic-v1\",\"model_id\":\"stub-model\",\"model_digest\":\"sha256:fixture\",\"prompt_version\":\"semantic-v1\",\"policy_version\":\"fixture-policy\",\"latency_seconds\":2.0}",
+          "latencyMs": 2000
+        }
+      },
+      {
+        "provider": {"id": "file://provider.py", "label": "ADMISSION"},
+        "vars": {"text": "safe one", "case_id": "safe-1"},
+        "response": {
+          "output": "{\"case_id\":\"safe-1\",\"profile\":\"ADMISSION\",\"classification\":\"SENSITIVE\",\"subject_scope\":\"GENERAL\",\"category\":\"HEALTH\",\"reason_code\":\"SEMANTIC_MATCH\",\"classifier_version\":\"semantic-v1\",\"model_id\":\"stub-model\",\"model_digest\":\"sha256:fixture\",\"prompt_version\":\"semantic-v1\",\"policy_version\":\"fixture-policy\",\"latency_seconds\":3.0}",
+          "latencyMs": 3000
+        }
+      },
+      {
+        "provider": {"id": "file://provider.py", "label": "ADMISSION"},
+        "vars": {"text": "safe two", "case_id": "safe-2"},
+        "response": {
+          "output": "{\"case_id\":\"safe-2\",\"profile\":\"ADMISSION\",\"classification\":\"NOT_SENSITIVE\",\"subject_scope\":\"GENERAL\",\"category\":\"NONE\",\"reason_code\":\"NONE\",\"classifier_version\":\"semantic-v1\",\"model_id\":\"stub-model\",\"model_digest\":\"sha256:fixture\",\"prompt_version\":\"semantic-v1\",\"policy_version\":\"fixture-policy\",\"latency_seconds\":100.0}",
+          "latencyMs": 100000
+        }
+      },
+      {
+        "provider": {"id": "file://provider.py", "label": "QUERY_GATE"},
+        "vars": {"text": "sensitive one", "case_id": "sensitive-1"},
+        "response": {
+          "output": "{\"case_id\":\"sensitive-1\",\"profile\":\"QUERY_GATE\",\"classification\":\"SENSITIVE\",\"subject_scope\":\"SELF\",\"category\":\"HEALTH\",\"reason_code\":\"SEMANTIC_MATCH\",\"classifier_version\":\"semantic-v1\",\"model_id\":\"stub-model\",\"model_digest\":\"sha256:fixture\",\"prompt_version\":\"semantic-v1\",\"policy_version\":\"fixture-policy\",\"latency_seconds\":0.1}",
+          "latencyMs": 100
+        }
+      },
+      {
+        "provider": {"id": "file://provider.py", "label": "QUERY_GATE"},
+        "vars": {"text": "sensitive two", "case_id": "sensitive-2"},
+        "response": {
+          "output": "{\"case_id\":\"sensitive-2\",\"profile\":\"QUERY_GATE\",\"classification\":\"SENSITIVE\",\"subject_scope\":\"THIRD_PARTY\",\"category\":\"HEALTH\",\"reason_code\":\"SEMANTIC_MATCH\",\"classifier_version\":\"semantic-v1\",\"model_id\":\"stub-model\",\"model_digest\":\"sha256:fixture\",\"prompt_version\":\"semantic-v1\",\"policy_version\":\"fixture-policy\",\"latency_seconds\":0.2}",
+          "latencyMs": 200
+        }
+      },
+      {
+        "provider": {"id": "file://provider.py", "label": "QUERY_GATE"},
+        "vars": {"text": "safe one", "case_id": "safe-1"},
+        "response": {
+          "output": "{\"case_id\":\"safe-1\",\"profile\":\"QUERY_GATE\",\"classification\":\"ABSTAIN\",\"subject_scope\":\"UNKNOWN\",\"category\":\"UNKNOWN\",\"reason_code\":\"INVALID_OUTPUT\",\"classifier_version\":\"semantic-v1\",\"model_id\":\"stub-model\",\"model_digest\":\"sha256:fixture\",\"prompt_version\":\"semantic-v1\",\"policy_version\":\"fixture-policy\",\"latency_seconds\":0.3}",
+          "latencyMs": 300
+        }
+      },
+      {
+        "provider": {"id": "file://provider.py", "label": "QUERY_GATE"},
+        "vars": {"text": "safe two", "case_id": "safe-2"},
+        "response": {
+          "output": "{\"case_id\":\"safe-2\",\"profile\":\"QUERY_GATE\",\"classification\":\"SENSITIVE\",\"subject_scope\":\"GENERAL\",\"category\":\"HEALTH\",\"reason_code\":\"SEMANTIC_MATCH\",\"classifier_version\":\"semantic-v1\",\"model_id\":\"stub-model\",\"model_digest\":\"sha256:fixture\",\"prompt_version\":\"semantic-v1\",\"policy_version\":\"fixture-policy\",\"latency_seconds\":0.4}",
+          "latencyMs": 400
+        }
+      }
+    ]
+  }
+}

@@ -6,17 +6,10 @@ prompts:
       Text: {{text}}
 providers:
   - id: ollama:chat:gemma4:e4b
+    label: PROMPT_LAB
     config:
       format: json
 defaultTest:
   assert:
     - type: is-json
-    - type: javascript
-      value: |
-        (() => {
-          const result = JSON.parse(output);
-          return context.vars.allowed_classifications.includes(result.classification)
-            && (result.classification === 'ABSTAIN'
-              || result.subject_scope === context.vars.expected_subject_scope);
-        })()
 tests: cases.jsonl
