@@ -10,6 +10,7 @@ DATA_DIR_ENV = "DS_DATA_DIR"
 IDENTITY_MARKER_FILENAME = ".environment-identity.json"
 RESTORE_INTENT_FILENAME = ".conversation-history.restore-intent.json"
 SQLITE_FILENAME = "conversation-history.db"
+PERSONA_MEMORY_SQLITE_FILENAME = "persona-memory.db"
 CHROMA_DIRECTORY = "chroma"
 RUNTIME_DIRECTORY = "runtime"
 CACHE_DIRECTORY = "cache"
@@ -22,6 +23,7 @@ class RuntimePaths:
     environment_id: str
     data_root: Path
     sqlite_path: Path
+    persona_memory_sqlite_path: Path
     chroma_path: Path
     runtime_report_dir: Path
     cache_path: Path
@@ -43,6 +45,7 @@ def resolve_runtime_paths(
         environment_id=environment_id,
         data_root=data_root,
         sqlite_path=data_root / SQLITE_FILENAME,
+        persona_memory_sqlite_path=data_root / PERSONA_MEMORY_SQLITE_FILENAME,
         chroma_path=data_root / CHROMA_DIRECTORY,
         runtime_report_dir=data_root / RUNTIME_DIRECTORY,
         cache_path=cache_path,
@@ -57,6 +60,7 @@ def runtime_paths_projection(paths: RuntimePaths) -> dict[str, str]:
         "environmentId": paths.environment_id,
         "dataRoot": str(paths.data_root),
         "sqlitePath": str(paths.sqlite_path),
+        "personaMemorySqlitePath": str(paths.persona_memory_sqlite_path),
         "chromaPath": str(paths.chroma_path),
         "runtimeReportDirectory": str(paths.runtime_report_dir),
         "cachePath": str(paths.cache_path),

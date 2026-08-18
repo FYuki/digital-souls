@@ -88,6 +88,7 @@ def test_should_read_live_status_without_mutating_the_selected_report(
         "environmentId": runtime_paths.environment_id,
         "dataRoot": str(runtime_paths.data_root),
         "sqlitePath": str(runtime_paths.sqlite_path),
+        "personaMemorySqlitePath": str(runtime_paths.persona_memory_sqlite_path),
         "chromaPath": str(runtime_paths.chroma_path),
         "runtimeReportDirectory": str(runtime_paths.runtime_report_dir),
         "cachePath": str(runtime_paths.cache_path),

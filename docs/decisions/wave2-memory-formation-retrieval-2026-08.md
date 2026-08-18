@@ -154,6 +154,13 @@ temporary:recipe
 
 ### 4. SQLite正本のschemaは用途を明示する
 
+persona memory系の`approved_memories`、`memory_sources`、`memory_lineage`、
+`memory_write_receipts`、`memory_index_outbox`、`temporary_provider_records`は、
+専用の`persona-memory.db`に配置する。
+`conversation-history.db`とはファイルを分け、会話履歴schemaの変更やpersona memory側の
+ロールバックによる履歴の巻き戻しを発生させない。memory行とoutbox行は同一ファイル内で
+更新し、トランザクション原子性を保つ。
+
 `approved_memories`は少なくとも次を持つ。
 
 ```text
@@ -174,7 +181,8 @@ model_digest
 prompt_version
 content_version
 status: ACTIVE / INACTIVE
-idempotency_key: unique
+idempotency_key: character_id単位で一意
+last_write_idempotency_key: nullable
 effective_at
 effective_timezone
 temporal_precision
@@ -197,6 +205,15 @@ provider record等との関係を保持する。複数のsourceから形成さ�
 - `CONSOLIDATED_FROM`
 - `SUPERSEDES`
 - `DUPLICATE_OF`
+
+Issue #8では、永続化用の`MemoryWriteContext`が型付きsource識別子と任意のlineageを受け取る。
+`save`／`correct`は`approved_memories`、`memory_sources`、`memory_lineage`、
+`memory_write_receipts`、`memory_index_outbox`を同一トランザクションで更新する。
+候補抽出（#10）、runtime統合（#29）、nightly consolidation（#48）はこの境界へ入力を供給するが、
+provenanceとlineageの永続化経路そのものはIssue #8で提供する。
+
+`memory_write_receipts`は初回保存と訂正の冪等性キーを`character_id`単位で不変記録する。
+これにより、後続の訂正後に過去の訂正が再試行されても、本文の再更新とoutboxの重複作成を防ぐ。
 
 ChromaにはSQLiteの`memory_id`、`normalized_text`、embeddingと検索filterに必要な最小metadataだけを
 mirrorする。`last_user_mentioned_at`だけが変わる場合、Chromaは更新しない。

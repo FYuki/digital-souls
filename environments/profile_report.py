@@ -9,6 +9,7 @@ from app.model_settings import MODEL_ENVIRONMENT_KEYS, resolve_model_settings
 from app.runtime_paths import (
     CACHE_DIRECTORY,
     CHROMA_DIRECTORY,
+    PERSONA_MEMORY_SQLITE_FILENAME,
     RUNTIME_DIRECTORY,
     SQLITE_FILENAME,
     SUPPORTED_ENVIRONMENT_IDS,
@@ -221,17 +222,22 @@ def validate_resolved_report(raw: object) -> ResolvedReport:
     derived_environment = _require_record(report["derivedEnvironment"], "derivedEnvironment")
     runtime = _require_record(report["runtime"], "runtime")
     runtime_fields = {
-        "environmentId", "dataRoot", "sqlitePath", "chromaPath",
+        "environmentId", "dataRoot", "sqlitePath", "personaMemorySqlitePath", "chromaPath",
         "runtimeReportDirectory", "cachePath",
     }
+    legacy_runtime_fields = runtime_fields - {"personaMemorySqlitePath"}
     _reject_unknown_fields(runtime, runtime_fields, "runtime")
-    if set(runtime) != runtime_fields:
+    if frozenset(runtime) not in {
+        frozenset(runtime_fields),
+        frozenset(legacy_runtime_fields),
+    }:
         raise ProfileError("runtime must define every resolved path")
     for name, value in runtime.items():
         _require_string(value, f"runtime.{name}")
     data_root = Path(cast(str, runtime["dataRoot"]))
     expected_paths = {
         "sqlitePath": data_root / SQLITE_FILENAME,
+        "personaMemorySqlitePath": data_root / PERSONA_MEMORY_SQLITE_FILENAME,
         "chromaPath": data_root / CHROMA_DIRECTORY,
         "runtimeReportDirectory": data_root / RUNTIME_DIRECTORY,
         "cachePath": data_root / CACHE_DIRECTORY,
@@ -240,7 +246,11 @@ def validate_resolved_report(raw: object) -> ResolvedReport:
         raise ProfileError("runtime.dataRoot must be a normalized absolute path")
     if runtime["environmentId"] not in SUPPORTED_ENVIRONMENT_IDS:
         raise ProfileError("runtime.environmentId is unsupported")
-    if any(runtime[name] != str(path) for name, path in expected_paths.items()):
+    if any(
+        runtime[name] != str(path)
+        for name, path in expected_paths.items()
+        if name in runtime
+    ):
         raise ProfileError("runtime paths must be derived from runtime.dataRoot")
     if derived_environment.get("DS_ENVIRONMENT_ID") != runtime["environmentId"]:
         raise ProfileError("derivedEnvironment identity must match runtime")

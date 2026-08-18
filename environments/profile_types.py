@@ -76,6 +76,7 @@ class RuntimeProjection(TypedDict):
     environmentId: str
     dataRoot: str
     sqlitePath: str
+    personaMemorySqlitePath: str
     chromaPath: str
     runtimeReportDirectory: str
     cachePath: str
