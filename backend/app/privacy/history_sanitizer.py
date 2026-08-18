@@ -62,7 +62,7 @@ class HistorySanitizer:
             return self._skip(HistoryDecisionReasonCode.INVALID_FINDING)
         if activate_opt_out and any(
             finding.category is PrivacyCategory.STORAGE_OPT_OUT
-            and finding.storage_scope in {StorageScope.HISTORY, StorageScope.BOTH}
+            and finding.storage_scope is StorageScope.BOTH
             for finding in findings
         ):
             return self._skip(HistoryDecisionReasonCode.STORAGE_OPT_OUT)

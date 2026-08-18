@@ -94,7 +94,7 @@ def test_should_define_exactly_the_fixed_privacy_categories() -> None:
 def test_should_define_only_fixed_storage_scopes() -> None:
     from app.privacy.contracts import StorageScope
 
-    assert {scope.value for scope in StorageScope} == {"RAG", "HISTORY", "BOTH"}
+    assert {scope.value for scope in StorageScope} == {"RAG", "BOTH"}
 
 
 def test_should_represent_reason_codes_as_closed_enums() -> None:

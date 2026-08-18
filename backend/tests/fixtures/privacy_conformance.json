@@ -7,7 +7,7 @@
     "placeholder": "[EMAIL]",
     "storage_scope": null,
     "recognizer_version": "contact-v1",
-    "policy_version": "2026-07-wave1-v1"
+    "policy_version": "2026-08-wave2-v1"
   },
   {
     "case_id": "jp-phone-domestic",
@@ -17,7 +17,7 @@
     "placeholder": "[PHONE]",
     "storage_scope": null,
     "recognizer_version": "contact-v1",
-    "policy_version": "2026-07-wave1-v1"
+    "policy_version": "2026-08-wave2-v1"
   },
   {
     "case_id": "jp-phone-country-code",
@@ -27,7 +27,7 @@
     "placeholder": "[PHONE]",
     "storage_scope": null,
     "recognizer_version": "contact-v1",
-    "policy_version": "2026-07-wave1-v1"
+    "policy_version": "2026-08-wave2-v1"
   },
   {
     "case_id": "us-phone-country-code",
@@ -37,7 +37,7 @@
     "placeholder": "[PHONE]",
     "storage_scope": null,
     "recognizer_version": "contact-v1",
-    "policy_version": "2026-07-wave1-v1"
+    "policy_version": "2026-08-wave2-v1"
   },
   {
     "case_id": "payment-card-luhn",
@@ -47,7 +47,7 @@
     "placeholder": "[PAYMENT_CARD]",
     "storage_scope": null,
     "recognizer_version": "financial-v1",
-    "policy_version": "2026-07-wave1-v1"
+    "policy_version": "2026-08-wave2-v1"
   },
   {
     "case_id": "jp-postal-address",
@@ -57,7 +57,7 @@
     "placeholder": "[ADDRESS]",
     "storage_scope": null,
     "recognizer_version": "location-v1",
-    "policy_version": "2026-07-wave1-v1"
+    "policy_version": "2026-08-wave2-v1"
   },
   {
     "case_id": "us-zip-address",
@@ -67,7 +67,7 @@
     "placeholder": "[ADDRESS]",
     "storage_scope": null,
     "recognizer_version": "location-v1",
-    "policy_version": "2026-07-wave1-v1"
+    "policy_version": "2026-08-wave2-v1"
   },
   {
     "case_id": "us-ssn",
@@ -77,7 +77,7 @@
     "placeholder": "[GOVERNMENT_ID]",
     "storage_scope": null,
     "recognizer_version": "government-v1",
-    "policy_version": "2026-07-wave1-v1"
+    "policy_version": "2026-08-wave2-v1"
   },
   {
     "case_id": "precise-location",
@@ -87,7 +87,7 @@
     "placeholder": "[LOCATION]",
     "storage_scope": null,
     "recognizer_version": "location-v1",
-    "policy_version": "2026-07-wave1-v1"
+    "policy_version": "2026-08-wave2-v1"
   },
   {
     "case_id": "storage-opt-out-rag",
@@ -97,17 +97,27 @@
     "placeholder": null,
     "storage_scope": "RAG",
     "recognizer_version": "configured-v1",
-    "policy_version": "2026-07-wave1-v1"
+    "policy_version": "2026-08-wave2-v1"
   },
   {
-    "case_id": "storage-opt-out-history",
+    "case_id": "storage-opt-out-history-wording",
     "text": "この話は履歴に残さないで",
     "category": "STORAGE_OPT_OUT",
     "matched_text": "履歴に残さないで",
     "placeholder": null,
-    "storage_scope": "HISTORY",
+    "storage_scope": "BOTH",
     "recognizer_version": "configured-v1",
-    "policy_version": "2026-07-wave1-v1"
+    "policy_version": "2026-08-wave2-v1"
+  },
+  {
+    "case_id": "storage-opt-out-history-inclusive-wording",
+    "text": "この話は履歴にも残さないで",
+    "category": "STORAGE_OPT_OUT",
+    "matched_text": "履歴にも残さないで",
+    "placeholder": null,
+    "storage_scope": "BOTH",
+    "recognizer_version": "configured-v1",
+    "policy_version": "2026-08-wave2-v1"
   },
   {
     "case_id": "storage-opt-out-both",
@@ -117,7 +127,7 @@
     "placeholder": null,
     "storage_scope": "BOTH",
     "recognizer_version": "configured-v1",
-    "policy_version": "2026-07-wave1-v1"
+    "policy_version": "2026-08-wave2-v1"
   },
   {
     "case_id": "policy-added-sensitive",
@@ -127,6 +137,6 @@
     "placeholder": "[SENSITIVE]",
     "storage_scope": null,
     "recognizer_version": "configured-v1",
-    "policy_version": "2026-07-wave1-v1"
+    "policy_version": "2026-08-wave2-v1"
   }
 ]

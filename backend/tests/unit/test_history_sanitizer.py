@@ -282,17 +282,14 @@ def test_should_convert_scan_failure_to_skip_content() -> None:
     _assert_skip_content(decision)
 
 
-@pytest.mark.parametrize("scope", ["HISTORY", "BOTH"])
-def test_should_skip_current_user_content_for_history_effective_opt_out(
-    scope: str,
-) -> None:
+def test_should_skip_current_user_content_for_both_scope_opt_out() -> None:
     sanitizer, _scanner = _sanitizer(
         _success(
             _finding(
                 category="STORAGE_OPT_OUT",
                 start=0,
                 end=5,
-                scope=scope,
+                scope="BOTH",
             )
         )
     )
@@ -320,7 +317,7 @@ def test_should_not_block_history_for_rag_only_opt_out() -> None:
     _assert_store_masked(decision, text)
 
 
-@pytest.mark.parametrize("scope", ["RAG", "HISTORY", "BOTH"])
+@pytest.mark.parametrize("scope", ["RAG", "BOTH"])
 def test_should_not_activate_storage_opt_out_from_assistant_text(scope: str) -> None:
     text = "保存しないで"
     sanitizer, _scanner = _sanitizer(

@@ -1,5 +1,5 @@
 {
-  "policy_version": "2026-07-wave1-v1",
+  "policy_version": "2026-08-wave2-v1",
   "common": {
     "sensitive_terms": [
       "password",
@@ -122,13 +122,13 @@
         "patterns": ["(?:do not|don't) remember"]
       },
       {
-        "scope": "HISTORY",
-        "phrases": ["履歴に残さないで", "履歴にも残さないで"],
-        "patterns": []
-      },
-      {
         "scope": "BOTH",
-        "phrases": ["保存しないで", "記録しないで"],
+        "phrases": [
+          "履歴に残さないで",
+          "履歴にも残さないで",
+          "保存しないで",
+          "記録しないで"
+        ],
         "patterns": ["(?:do not|don't) save"]
       }
     ],

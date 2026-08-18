@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Protocol
 
 
-POLICY_VERSION = "2026-07-wave1-v1"
+POLICY_VERSION = "2026-08-wave2-v1"
 SANITIZER_VERSION = "history-sanitizer-v1"
 
 
@@ -100,13 +100,13 @@ def policy_config() -> dict[str, object]:
             "storage_opt_out_rules": [
                 {"scope": "RAG", "phrases": ["覚えないで"], "patterns": []},
                 {
-                    "scope": "HISTORY",
-                    "phrases": ["履歴に残さないで", "履歴にも残さないで"],
-                    "patterns": [],
-                },
-                {
                     "scope": "BOTH",
-                    "phrases": ["保存しないで", "記録しないで"],
+                    "phrases": [
+                        "履歴に残さないで",
+                        "履歴にも残さないで",
+                        "保存しないで",
+                        "記録しないで",
+                    ],
                     "patterns": [],
                 },
             ],

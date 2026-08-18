@@ -248,7 +248,7 @@ def test_should_reject_duplicate_opt_out_patterns_within_scope(
 
 @pytest.mark.parametrize(
     ("first_scope_index", "second_scope_index"),
-    [(0, 1), (0, 2), (1, 2)],
+    [(0, 1)],
 )
 def test_should_accept_normalization_equivalent_opt_out_phrases_across_scopes(
     first_scope_index: int,
@@ -292,11 +292,11 @@ def test_should_accept_exact_duplicate_opt_out_phrases_across_scopes(
     rules = privacy["storage_opt_out_rules"]
     assert isinstance(rules, list)
     rag_rule = rules[0]
-    history_rule = rules[1]
+    both_rule = rules[1]
     assert isinstance(rag_rule, dict)
-    assert isinstance(history_rule, dict)
+    assert isinstance(both_rule, dict)
     rag_rule["phrases"] = ["DO NOT REMEMBER"]
-    history_rule["phrases"] = ["DO NOT REMEMBER"]
+    both_rule["phrases"] = ["DO NOT REMEMBER"]
 
     policy = _load_from(monkeypatch, tmp_path / "policy.json", config)
 
@@ -318,11 +318,11 @@ def test_should_accept_exact_duplicate_opt_out_patterns_across_scopes(
     rules = privacy["storage_opt_out_rules"]
     assert isinstance(rules, list)
     rag_rule = rules[0]
-    history_rule = rules[1]
+    both_rule = rules[1]
     assert isinstance(rag_rule, dict)
-    assert isinstance(history_rule, dict)
+    assert isinstance(both_rule, dict)
     rag_rule["patterns"] = ["DO NOT REMEMBER"]
-    history_rule["patterns"] = ["DO NOT REMEMBER"]
+    both_rule["patterns"] = ["DO NOT REMEMBER"]
 
     policy = _load_from(monkeypatch, tmp_path / "policy.json", config)
 
@@ -344,11 +344,11 @@ def test_should_accept_patterns_that_differ_only_by_case_across_scopes(
     rules = privacy["storage_opt_out_rules"]
     assert isinstance(rules, list)
     rag_rule = rules[0]
-    history_rule = rules[1]
+    both_rule = rules[1]
     assert isinstance(rag_rule, dict)
-    assert isinstance(history_rule, dict)
+    assert isinstance(both_rule, dict)
     rag_rule["patterns"] = ["DO NOT REMEMBER"]
-    history_rule["patterns"] = ["do not remember"]
+    both_rule["patterns"] = ["do not remember"]
 
     policy = _load_from(monkeypatch, tmp_path / "policy.json", config)
 
@@ -383,11 +383,11 @@ def test_should_accept_valid_opt_out_pattern_regardless_of_phrase_semantics(
     rules = privacy["storage_opt_out_rules"]
     assert isinstance(rules, list)
     rag_rule = rules[0]
-    history_rule = rules[1]
+    both_rule = rules[1]
     assert isinstance(rag_rule, dict)
-    assert isinstance(history_rule, dict)
+    assert isinstance(both_rule, dict)
     rag_rule["phrases"] = ["ALPHA"]
-    history_rule["patterns"] = [pattern]
+    both_rule["patterns"] = [pattern]
 
     policy = _load_from(monkeypatch, tmp_path / "policy.json", config)
 
@@ -754,7 +754,7 @@ def test_should_supply_scoped_opt_out_and_regional_patterns_from_typed_policy(
 
     assert {
         rule.scope.value for rule in policy.privacy.storage_opt_out_rules
-    } == {"RAG", "HISTORY", "BOTH"}
+    } == {"RAG", "BOTH"}
     assert policy.privacy.regional_patterns[0].name == (
         "synthetic_us_driver_license"
     )

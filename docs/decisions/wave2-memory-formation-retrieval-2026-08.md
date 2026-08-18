@@ -108,6 +108,14 @@ MVPのpositive allowlistである`memory_type`は次に限定する。
 - `OUTCOME`
 - `CHANGE`
 
+`structured_value`は、`EPISODIC_EVENT`では`event_type`、`subject`、`topic`、
+`USER_PREFERENCE`では`polarity`、`object`、必要な場合の`alternative`、
+`INTERACTION_PREFERENCE`では`aspect`、`value`だけを持つ。`EPISODIC_EVENT.subject`は
+`USER`と`SHARED`に限定し、`THIRD_PARTY`は設けない。`OUTCOME`と`CHANGE`を含む
+すべてのevent typeを`topic`単一スロットで表現し、`outcome`スロットは設けない。
+
+構造化enumの追加は文の骨格が変わる場合に限り、追加時は本ADRを改訂する。
+
 `reflection`は記憶種別ではなく形成方法、`autobiographical`は必要になった場合のscope／subtypeとして
 扱う。意味分類できない内容を受け入れる`GENERAL_MEMORY`は作らない。
 
@@ -314,6 +322,8 @@ policy_version
 ```
 
 Wave 1 scannerの結果だけで終了しclassifierを呼ばなかった場合、semantic provenanceは`NULL`とする。
+本Wave 2契約のpolicy versionは`2026-08-wave2-v1`とし、`HISTORY` scopeの削除と
+同じバージョンで管理する。
 
 判断理由は、機微な本文を外部APIへ送らず、既存の常用modelを流用してMVPの構成とmemory使用量を
 小さくするためである。最初からinstanceを分けず、会話との競合をlatencyとtimeoutで観測してから
@@ -356,7 +366,8 @@ completedかつ履歴本文保存済みのsanitized source turn
 
 候補抽出器はclassifierとは別componentとする。現在user turnと、省略表現の解決に必要な直近の
 sanitized turnだけをsourceにし、RAG検索結果を新規候補の根拠にしない。出力は型付きschema、
-最大3候補、決定的な生成設定から開始し、`normalized_text`は構造化値からapplicationが生成する。
+最大3候補、決定的な生成設定から開始し、`normalized_text`はIssue #33の
+admissionが構造化値から決定的に生成する。候補抽出器や永続化層は生成しない。
 確認待ち候補や生source本文は永続化しない。
 
 非同期classifierはbounded retryを行う。初期値は1回15秒、最大2回、全体35秒以内、queue滞留
