@@ -155,10 +155,11 @@ temporary:recipe
 ### 4. SQLite正本のschemaは用途を明示する
 
 persona memory系の`approved_memories`、`memory_sources`、`memory_lineage`、
-`memory_index_outbox`、`temporary_provider_records`は、専用の`persona-memory.db`に配置する。
+`memory_write_receipts`、`memory_index_outbox`、`temporary_provider_records`は、
+専用の`persona-memory.db`に配置する。
 `conversation-history.db`とはファイルを分け、会話履歴schemaの変更やpersona memory側の
-rollbackによる履歴の巻き戻しを発生させない。memory行とoutbox行は同一ファイル内で
-更新し、transaction原子性を保つ。
+ロールバックによる履歴の巻き戻しを発生させない。memory行とoutbox行は同一ファイル内で
+更新し、トランザクション原子性を保つ。
 
 `approved_memories`は少なくとも次を持つ。
 
@@ -180,7 +181,7 @@ model_digest
 prompt_version
 content_version
 status: ACTIVE / INACTIVE
-idempotency_key: unique
+idempotency_key: character_id単位でunique
 last_write_idempotency_key: nullable
 effective_at
 effective_timezone
@@ -205,12 +206,14 @@ provider record等との関係を保持する。複数のsourceから形成さ�
 - `SUPERSEDES`
 - `DUPLICATE_OF`
 
-Issue #8では`memory_sources`と`memory_lineage`はtable定義だけを提供し、書き込み経路は
-後続Issueへ分離する。source情報の供給元である候補抽出（#10）とruntime統合（#29）が未実装で、
-現行の`ApprovedMemoryCandidate`もsource識別子を保持しないためである。後続Issueでは`save`／
-`correct`の公開APIへsource引数を追加し、`approved_memories`と`memory_sources`を同一transactionで
-書き込む。`CONSOLIDATED_FROM`／`SUPERSEDES`／`DUPLICATE_OF`はnightly consolidation（#48）だけが
-生成するため、`memory_lineage`の書き込みも同Issueへ分離する。
+Issue #8では、永続化用の`MemoryWriteContext`が型付きsource識別子と任意のlineageを受け取る。
+`save`／`correct`は`approved_memories`、`memory_sources`、`memory_lineage`、
+`memory_write_receipts`、`memory_index_outbox`を同一トランザクションで更新する。
+候補抽出（#10）、runtime統合（#29）、nightly consolidation（#48）はこの境界へ入力を供給するが、
+provenanceとlineageの永続化経路そのものはIssue #8で提供する。
+
+`memory_write_receipts`は初回保存と訂正の冪等性キーを`character_id`単位で不変記録する。
+これにより、後続の訂正後に過去の訂正が再試行されても、本文の再更新とoutboxの重複作成を防ぐ。
 
 ChromaにはSQLiteの`memory_id`、`normalized_text`、embeddingと検索filterに必要な最小metadataだけを
 mirrorする。`last_user_mentioned_at`だけが変わる場合、Chromaは更新しない。

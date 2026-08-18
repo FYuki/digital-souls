@@ -225,8 +225,12 @@ def validate_resolved_report(raw: object) -> ResolvedReport:
         "environmentId", "dataRoot", "sqlitePath", "personaMemorySqlitePath", "chromaPath",
         "runtimeReportDirectory", "cachePath",
     }
+    legacy_runtime_fields = runtime_fields - {"personaMemorySqlitePath"}
     _reject_unknown_fields(runtime, runtime_fields, "runtime")
-    if set(runtime) != runtime_fields:
+    if frozenset(runtime) not in {
+        frozenset(runtime_fields),
+        frozenset(legacy_runtime_fields),
+    }:
         raise ProfileError("runtime must define every resolved path")
     for name, value in runtime.items():
         _require_string(value, f"runtime.{name}")
@@ -242,7 +246,11 @@ def validate_resolved_report(raw: object) -> ResolvedReport:
         raise ProfileError("runtime.dataRoot must be a normalized absolute path")
     if runtime["environmentId"] not in SUPPORTED_ENVIRONMENT_IDS:
         raise ProfileError("runtime.environmentId is unsupported")
-    if any(runtime[name] != str(path) for name, path in expected_paths.items()):
+    if any(
+        runtime[name] != str(path)
+        for name, path in expected_paths.items()
+        if name in runtime
+    ):
         raise ProfileError("runtime paths must be derived from runtime.dataRoot")
     if derived_environment.get("DS_ENVIRONMENT_ID") != runtime["environmentId"]:
         raise ProfileError("derivedEnvironment identity must match runtime")

@@ -110,7 +110,7 @@
     "runtimeProjection": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["environmentId", "dataRoot", "sqlitePath", "personaMemorySqlitePath", "chromaPath", "runtimeReportDirectory", "cachePath"],
+      "required": ["environmentId", "dataRoot", "sqlitePath", "chromaPath", "runtimeReportDirectory", "cachePath"],
       "properties": {
         "environmentId": { "enum": ["dev", "test", "dogfood"] },
         "dataRoot": { "type": "string", "minLength": 1 },

@@ -299,8 +299,8 @@ MVPでは、第三者の情報をRAG長期記憶へ保存しない。
 SQLiteには承認済み記憶の構造、状態、policy version、訂正・失効情報を保存する。
 Chromaには、SQLiteの承認済み記憶から生成した検索用documentとembeddingだけを登録する。
 persona memoryの正本は`persona-memory.db`に配置し、会話履歴の正本である
-`conversation-history.db`と分離する。persona memoryの全tableとoutboxは同一の
-`persona-memory.db`に置き、記憶の更新とoutbox作成のtransaction原子性は維持する。
+`conversation-history.db`と分離する。persona memoryの全テーブルとoutboxは同一の
+`persona-memory.db`に置き、記憶の更新とoutbox作成のトランザクション原子性は維持する。
 
 ```text
 conversations

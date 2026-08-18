@@ -52,7 +52,13 @@ def validate_runtime_projection(
 ) -> None:
     from app.runtime_paths import runtime_paths_projection
 
-    if projection != runtime_paths_projection(paths):
+    current_projection = runtime_paths_projection(paths)
+    legacy_projection = {
+        key: value
+        for key, value in current_projection.items()
+        if key != "personaMemorySqlitePath"
+    }
+    if projection not in (current_projection, legacy_projection):
         raise ValueError("runtime projection does not match resolved runtime paths")
 
 

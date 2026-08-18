@@ -33,6 +33,8 @@ def _candidate(text: str = "ユーザーは短い回答を好む") -> ApprovedMe
 def _context(*, expires_at: datetime | None = None):
     from app.memory.persistence.contracts import (
         FormationMethod,
+        MemorySourceInput,
+        MemorySourceType,
         MemoryWriteContext,
         TemporalPrecision,
     )
@@ -49,6 +51,13 @@ def _context(*, expires_at: datetime | None = None):
         model_id="gemma4:e4b",
         model_digest="model-digest",
         prompt_version="prompt-v1",
+        sources=(
+            MemorySourceInput(
+                source_type=MemorySourceType.CONVERSATION_TURN,
+                source_provider_id="core",
+                source_ref="conversation-1:turn-1",
+            ),
+        ),
     )
 
 
@@ -129,6 +138,78 @@ def test_save_retry_returns_the_existing_memory_without_duplicate_rows(
     assert len(_rows(database_path, "memory_index_outbox")) == 1
 
 
+def test_same_idempotency_key_is_independent_between_characters(
+    tmp_path: Path,
+) -> None:
+    repository, database_path = _repository(tmp_path)
+
+    miori = repository.save(
+        character_id="miori", candidate=_candidate(), context=_context()
+    )
+    other = repository.save(
+        character_id="other", candidate=_candidate(), context=_context()
+    )
+
+    assert miori.id != other.id
+    assert {row["character_id"] for row in _rows(database_path, "approved_memories")} == {
+        "miori",
+        "other",
+    }
+    assert len(_rows(database_path, "memory_index_outbox")) == 2
+
+
+def test_save_persists_typed_sources_and_lineage_in_the_same_transaction(
+    tmp_path: Path,
+) -> None:
+    from app.memory.persistence.contracts import (
+        MemoryLineageInput,
+        MemoryLineageRelation,
+        MemorySourceInput,
+        MemorySourceType,
+    )
+
+    repository, database_path = _repository(tmp_path)
+    original = repository.save(
+        character_id="miori", candidate=_candidate(), context=_context()
+    )
+    derived_context = replace(
+        _context(),
+        idempotency_key="consolidation-1",
+        sources=(
+            MemorySourceInput(
+                source_type=MemorySourceType.PROVIDER_RECORD,
+                source_provider_id="temporary:recipe",
+                source_ref="recipe-1",
+            ),
+        ),
+        lineage=(
+            MemoryLineageInput(
+                related_memory_id=original.id,
+                relation=MemoryLineageRelation.CONSOLIDATED_FROM,
+            ),
+        ),
+    )
+
+    derived = repository.save(
+        character_id="miori",
+        candidate=_candidate("統合された記憶"),
+        context=derived_context,
+    )
+
+    source = _rows(database_path, "memory_sources")[-1]
+    lineage = _rows(database_path, "memory_lineage")[0]
+    assert (source["memory_id"], source["source_type"], source["source_provider_id"]) == (
+        str(derived.id),
+        "PROVIDER_RECORD",
+        "temporary:recipe",
+    )
+    assert (lineage["memory_id"], lineage["related_memory_id"], lineage["relation"]) == (
+        str(derived.id),
+        str(original.id),
+        "CONSOLIDATED_FROM",
+    )
+
+
 def test_save_normalizes_instants_to_utc_and_preserves_temporal_metadata(
     tmp_path: Path,
 ) -> None:
@@ -177,6 +258,29 @@ def test_save_rolls_back_memory_when_outbox_insert_fails(tmp_path: Path) -> None
     assert _rows(database_path, "memory_index_outbox") == []
 
 
+def test_save_rolls_back_memory_and_receipt_when_source_insert_fails(
+    tmp_path: Path,
+) -> None:
+    repository, database_path = _repository(tmp_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "CREATE TRIGGER reject_source BEFORE INSERT ON memory_sources "
+            "BEGIN SELECT RAISE(ABORT, 'source rejected'); END"
+        )
+
+    with pytest.raises(sqlite3.IntegrityError):
+        repository.save(
+            character_id="miori",
+            candidate=_candidate(),
+            context=_context(),
+        )
+
+    assert _rows(database_path, "approved_memories") == []
+    assert _rows(database_path, "memory_write_receipts") == []
+    assert _rows(database_path, "memory_sources") == []
+    assert _rows(database_path, "memory_index_outbox") == []
+
+
 def test_content_api_rejects_unapproved_candidates(tmp_path: Path) -> None:
     repository, database_path = _repository(tmp_path)
     unapproved = MemoryCandidate(
@@ -202,6 +306,8 @@ def test_content_api_rejects_unapproved_candidates(tmp_path: Path) -> None:
 def test_correct_updates_content_version_and_creates_another_pending_upsert(
     tmp_path: Path,
 ) -> None:
+    from app.memory.persistence.contracts import MemorySourceInput, MemorySourceType
+
     repository, database_path = _repository(tmp_path)
     memory = repository.save(
         character_id="miori", candidate=_candidate(), context=_context()
@@ -214,14 +320,26 @@ def test_correct_updates_content_version_and_creates_another_pending_upsert(
         context=replace(
             _context(),
             idempotency_key="conversation-2:turn-2:0:extractor-v1",
+            sources=(
+                MemorySourceInput(
+                    source_type=MemorySourceType.CONVERSATION_TURN,
+                    source_provider_id="core",
+                    source_ref="conversation-2:turn-2",
+                ),
+            ),
         ),
     )
 
     outbox_rows = _rows(database_path, "memory_index_outbox")
+    source_rows = _rows(database_path, "memory_sources")
     assert corrected.normalized_text == "ユーザーは簡潔な回答を好む"
     assert corrected.content_version == 2
     assert [row["operation"] for row in outbox_rows] == ["UPSERT", "UPSERT"]
     assert [row["status"] for row in outbox_rows] == ["PENDING", "PENDING"]
+    assert [row["source_ref"] for row in source_rows] == [
+        "conversation-1:turn-1",
+        "conversation-2:turn-2",
+    ]
 
 
 def test_save_retry_after_correction_returns_the_corrected_memory_without_duplicates(
@@ -271,6 +389,50 @@ def test_correct_preserves_the_save_key_and_records_the_correction_key(
     row = _rows(database_path, "approved_memories")[0]
     assert row["idempotency_key"] == original_context.idempotency_key
     assert row["last_write_idempotency_key"] == "correction-key"
+
+
+def test_correct_retry_remains_idempotent_after_a_later_correction(
+    tmp_path: Path,
+) -> None:
+    repository, database_path = _repository(tmp_path)
+    memory = repository.save(
+        character_id="miori", candidate=_candidate(), context=_context()
+    )
+    first_context = replace(_context(), idempotency_key="correction-key-1")
+    second_context = replace(_context(), idempotency_key="correction-key-2")
+
+    first = repository.correct(
+        character_id="miori",
+        memory_id=memory.id,
+        candidate=_candidate("最初の訂正"),
+        context=first_context,
+    )
+    retried = repository.correct(
+        character_id="miori",
+        memory_id=memory.id,
+        candidate=_candidate("再試行で上書きしてはいけない"),
+        context=first_context,
+    )
+    second = repository.correct(
+        character_id="miori",
+        memory_id=memory.id,
+        candidate=_candidate("後続の訂正"),
+        context=second_context,
+    )
+    retried_after_second = repository.correct(
+        character_id="miori",
+        memory_id=memory.id,
+        candidate=_candidate("過去キーで上書きしてはいけない"),
+        context=first_context,
+    )
+
+    assert (first.content_version, retried.content_version) == (2, 2)
+    assert retried.normalized_text == "最初の訂正"
+    assert second.content_version == 3
+    assert retried_after_second.content_version == 3
+    assert retried_after_second.normalized_text == "後続の訂正"
+    assert len(_rows(database_path, "memory_write_receipts")) == 3
+    assert len(_rows(database_path, "memory_index_outbox")) == 3
 
 
 def test_correct_rolls_back_content_when_outbox_insert_fails(tmp_path: Path) -> None:

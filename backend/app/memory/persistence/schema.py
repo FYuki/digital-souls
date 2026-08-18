@@ -13,6 +13,7 @@ PERSONA_MEMORY_TABLES = frozenset(
         "approved_memories",
         "memory_sources",
         "memory_lineage",
+        "memory_write_receipts",
         "memory_index_outbox",
         "temporary_provider_records",
     }
@@ -50,7 +51,7 @@ CREATE TABLE approved_memories (
     prompt_version TEXT NOT NULL CHECK (length(trim(prompt_version)) > 0),
     content_version INTEGER NOT NULL CHECK (content_version > 0),
     status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'INACTIVE')),
-    idempotency_key TEXT NOT NULL UNIQUE CHECK (length(trim(idempotency_key)) > 0),
+    idempotency_key TEXT NOT NULL CHECK (length(trim(idempotency_key)) > 0),
     last_write_idempotency_key TEXT CHECK (
         last_write_idempotency_key IS NULL
         OR length(trim(last_write_idempotency_key)) > 0
@@ -66,6 +67,7 @@ CREATE TABLE approved_memories (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     UNIQUE (character_id, id),
+    UNIQUE (character_id, idempotency_key),
     CHECK (
         (memory_type = 'EPISODIC_EVENT' AND memory_kind = 'EPISODIC'
             AND episodic_event_type IS NOT NULL)
@@ -110,6 +112,19 @@ CREATE TABLE memory_lineage (
 )
 """
 
+MEMORY_WRITE_RECEIPTS_SQL = """
+CREATE TABLE memory_write_receipts (
+    character_id TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL CHECK (length(trim(idempotency_key)) > 0),
+    memory_id TEXT NOT NULL,
+    operation TEXT NOT NULL CHECK (operation IN ('SAVE', 'CORRECT')),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (character_id, idempotency_key),
+    FOREIGN KEY (character_id, memory_id)
+        REFERENCES approved_memories (character_id, id) ON DELETE CASCADE
+)
+"""
+
 MEMORY_INDEX_OUTBOX_SQL = """
 CREATE TABLE memory_index_outbox (
     id TEXT PRIMARY KEY,
@@ -141,6 +156,13 @@ CREATE TABLE temporary_provider_records (
 )
 """
 
+INDEX_SQL = (
+    "CREATE INDEX idx_memory_index_outbox_pending "
+    "ON memory_index_outbox (status, created_at)",
+    "CREATE INDEX idx_approved_memories_active "
+    "ON approved_memories (character_id, status, created_at, id)",
+)
+
 
 def initialize_persona_memory_schema(
     paths: RuntimePaths,
@@ -160,8 +182,11 @@ def initialize_persona_memory_schema(
             connection.execute(APPROVED_MEMORIES_SQL)
             connection.execute(MEMORY_SOURCES_SQL)
             connection.execute(MEMORY_LINEAGE_SQL)
+            connection.execute(MEMORY_WRITE_RECEIPTS_SQL)
             connection.execute(MEMORY_INDEX_OUTBOX_SQL)
             connection.execute(TEMPORARY_PROVIDER_RECORDS_SQL)
+            for statement in INDEX_SQL:
+                connection.execute(statement)
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     database.truncate_wal()
 

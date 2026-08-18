@@ -30,6 +30,46 @@ class MemoryStatus(str, Enum):
     INACTIVE = "INACTIVE"
 
 
+class MemorySourceType(str, Enum):
+    CONVERSATION_TURN = "CONVERSATION_TURN"
+    PROVIDER_RECORD = "PROVIDER_RECORD"
+    ADDON_EVENT = "ADDON_EVENT"
+
+
+class MemoryLineageRelation(str, Enum):
+    CONSOLIDATED_FROM = "CONSOLIDATED_FROM"
+    SUPERSEDES = "SUPERSEDES"
+    DUPLICATE_OF = "DUPLICATE_OF"
+
+
+@dataclass(frozen=True)
+class MemorySourceInput:
+    source_type: MemorySourceType
+    source_provider_id: str
+    source_ref: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.source_type, MemorySourceType):
+            raise TypeError("source_type must be a MemorySourceType")
+        _require_non_empty(self.source_provider_id, "source_provider_id")
+        _require_non_empty(self.source_ref, "source_ref")
+
+
+@dataclass(frozen=True)
+class MemoryLineageInput:
+    related_memory_id: UUID
+    relation: MemoryLineageRelation
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.related_memory_id, UUID)
+            or self.related_memory_id.version != 4
+        ):
+            raise ValueError("related_memory_id must be a UUID4")
+        if not isinstance(self.relation, MemoryLineageRelation):
+            raise TypeError("relation must be a MemoryLineageRelation")
+
+
 @dataclass(frozen=True)
 class MemoryWriteContext:
     formation_method: FormationMethod
@@ -43,6 +83,8 @@ class MemoryWriteContext:
     model_id: str
     model_digest: str
     prompt_version: str
+    sources: tuple[MemorySourceInput, ...]
+    lineage: tuple[MemoryLineageInput, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.formation_method, FormationMethod):
@@ -66,6 +108,16 @@ class MemoryWriteContext:
             "prompt_version",
         ):
             _require_non_empty(getattr(self, field_name), field_name)
+        if not self.sources:
+            raise ValueError("sources must contain at least one typed source")
+        if any(not isinstance(source, MemorySourceInput) for source in self.sources):
+            raise TypeError("sources must contain only MemorySourceInput values")
+        if len(set(self.sources)) != len(self.sources):
+            raise ValueError("sources must not contain duplicates")
+        if any(not isinstance(item, MemoryLineageInput) for item in self.lineage):
+            raise TypeError("lineage must contain only MemoryLineageInput values")
+        if len(set(self.lineage)) != len(self.lineage):
+            raise ValueError("lineage must not contain duplicates")
 
 
 @dataclass(frozen=True)

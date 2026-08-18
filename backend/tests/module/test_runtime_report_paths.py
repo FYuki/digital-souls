@@ -45,6 +45,18 @@ def test_rt_report_01_safe_projection_contains_paths_but_not_runtime_inputs(
     assert "prompt" not in serialized.lower()
 
 
+def test_rt_report_01_legacy_v1_projection_without_persona_memory_path_is_accepted(
+    tmp_path: Path,
+) -> None:
+    from app.runtime_data_root import validate_runtime_projection
+
+    paths = _runtime_paths(tmp_path)
+    legacy_projection = _runtime_projection(paths.data_root)
+    legacy_projection.pop("personaMemorySqlitePath")
+
+    validate_runtime_projection(legacy_projection, paths)
+
+
 def test_rt_report_01_resolved_profile_adds_only_safe_runtime_projection(
     tmp_path: Path,
 ) -> None:
@@ -69,6 +81,21 @@ def test_rt_report_01_resolved_profile_adds_only_safe_runtime_projection(
     assert "secret-value" not in serialized
     assert "会話本文" not in serialized
     assert "prompt-value" not in serialized
+
+
+def test_rt_report_01_legacy_v1_resolved_profile_remains_readable(
+    tmp_path: Path,
+) -> None:
+    from profile_report import validate_resolved_report
+    from profile_resolution import resolve_profile
+
+    paths = _runtime_paths(tmp_path)
+    report = dict(resolve_profile({"DS_PROFILE": "test-mocked"}, None, paths))
+    runtime = dict(report["runtime"])
+    runtime.pop("personaMemorySqlitePath")
+    report["runtime"] = runtime
+
+    validate_resolved_report(report)
 
 
 def test_rt_report_01_run_report_roundtrip_preserves_runtime_projection(

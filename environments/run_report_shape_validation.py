@@ -34,6 +34,7 @@ RUNTIME_FIELDS = {
     "runtimeReportDirectory",
     "cachePath",
 }
+LEGACY_RUNTIME_FIELDS = RUNTIME_FIELDS - {"personaMemorySqlitePath"}
 
 
 def _date_time_pattern() -> re.Pattern[str]:
@@ -191,7 +192,10 @@ def _validate_top_level(report: Mapping[str, object]) -> None:
     runtime = report["runtime"]
     if (
         not isinstance(runtime, dict)
-        or set(runtime) != RUNTIME_FIELDS
+        or frozenset(runtime) not in {
+            frozenset(RUNTIME_FIELDS),
+            frozenset(LEGACY_RUNTIME_FIELDS),
+        }
         or any(not isinstance(value, str) or not value for value in runtime.values())
     ):
         raise RunReportError("invalid runtime projection")

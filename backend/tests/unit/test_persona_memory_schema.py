@@ -8,6 +8,7 @@ EXPECTED_TABLES = {
     "approved_memories",
     "memory_sources",
     "memory_lineage",
+    "memory_write_receipts",
     "memory_index_outbox",
     "temporary_provider_records",
 }
@@ -94,7 +95,7 @@ def _insert_approved(connection: sqlite3.Connection, values: tuple[object, ...])
     )
 
 
-def test_schema_creates_only_the_five_persona_memory_tables(tmp_path: Path) -> None:
+def test_schema_creates_only_the_persona_memory_tables(tmp_path: Path) -> None:
     paths = _initialize(tmp_path)
 
     with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
@@ -166,7 +167,7 @@ def test_approved_memory_rejects_allowlisted_values_that_violate_cross_field_con
             )
 
 
-def test_approved_memory_requires_character_and_unique_idempotency_key(
+def test_approved_memory_requires_character_and_character_scoped_idempotency_key(
     tmp_path: Path,
 ) -> None:
     paths = _initialize(tmp_path)
@@ -178,6 +179,13 @@ def test_approved_memory_requires_character_and_unique_idempotency_key(
                 connection,
                 _approved_values(memory_id=MEMORY_TWO),
             )
+        _insert_approved(
+            connection,
+            _approved_values(
+                memory_id=MEMORY_TWO,
+                character_id="other",
+            ),
+        )
         with pytest.raises(sqlite3.IntegrityError):
             _insert_approved(
                 connection,
@@ -187,6 +195,21 @@ def test_approved_memory_requires_character_and_unique_idempotency_key(
                     idempotency_key="different-key",
                 ),
             )
+
+
+def test_schema_creates_worker_and_active_memory_indexes(tmp_path: Path) -> None:
+    paths = _initialize(tmp_path)
+
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        indexes = {
+            str(row[0])
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index'"
+            )
+        }
+
+    assert "idx_memory_index_outbox_pending" in indexes
+    assert "idx_approved_memories_active" in indexes
 
 
 def test_sources_and_lineage_enforce_memory_foreign_keys_and_relation_allowlist(

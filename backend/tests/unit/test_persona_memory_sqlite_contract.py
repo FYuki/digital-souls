@@ -63,6 +63,8 @@ def _candidate() -> ApprovedMemoryCandidate:
 def _context(*, effective_at: datetime = NOW, expires_at: datetime | None = None):
     from app.memory.persistence.contracts import (
         FormationMethod,
+        MemorySourceInput,
+        MemorySourceType,
         MemoryWriteContext,
         TemporalPrecision,
     )
@@ -79,6 +81,13 @@ def _context(*, effective_at: datetime = NOW, expires_at: datetime | None = None
         model_id="gemma4:e4b",
         model_digest="model-digest",
         prompt_version="prompt-v1",
+        sources=(
+            MemorySourceInput(
+                source_type=MemorySourceType.CONVERSATION_TURN,
+                source_provider_id="core",
+                source_ref="conversation-1:turn-1",
+            ),
+        ),
     )
 
 

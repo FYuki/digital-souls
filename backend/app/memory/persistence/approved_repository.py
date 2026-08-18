@@ -23,6 +23,8 @@ from app.memory.admission.contracts import (
 )
 from app.memory.persistence.contracts import (
     ApprovedMemory,
+    MemoryLineageInput,
+    MemorySourceInput,
     MemoryStatus,
     MemoryWriteContext,
     TemporalPrecision,
@@ -41,6 +43,9 @@ APPROVED_COLUMNS = (
     "id, character_id, memory_type, structured_value, normalized_text, "
     "content_version, status, effective_at, effective_timezone, "
     "temporal_precision, expires_at, last_user_mentioned_at, created_at, updated_at"
+)
+QUALIFIED_APPROVED_COLUMNS = ", ".join(
+    f"m.{column.strip()}" for column in APPROVED_COLUMNS.split(",")
 )
 
 
@@ -74,6 +79,13 @@ class ApprovedMemoryRepository:
             candidate
         )
         with self._database.transaction() as connection:
+            existing = _select_memory_by_write_key(
+                connection,
+                character_id,
+                context.idempotency_key,
+            )
+            if existing is not None:
+                return existing
             insert_result = connection.execute(
                 "INSERT INTO approved_memories ("
                 "id, character_id, provider_id, memory_kind, memory_type, "
@@ -85,7 +97,7 @@ class ApprovedMemoryRepository:
                 "last_user_mentioned_at, last_consolidated_at, created_at, updated_at"
                 ") VALUES (?, ?, 'core', ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, "
                 "1, 'ACTIVE', ?, ?, ?, ?, ?, ?, NULL, ?, ?) "
-                "ON CONFLICT(idempotency_key) DO NOTHING",
+                "ON CONFLICT(character_id, idempotency_key) DO NOTHING",
                 (
                     str(memory_id),
                     character_id,
@@ -110,12 +122,27 @@ class ApprovedMemoryRepository:
                     format_datetime(now),
                 ),
             )
-            memory = _select_memory_by_idempotency_key(
-                connection,
-                character_id,
-                context.idempotency_key,
-            )
             if insert_result.rowcount == 1:
+                self._insert_write_receipt(
+                    connection,
+                    memory_id,
+                    character_id,
+                    context.idempotency_key,
+                    "SAVE",
+                    now,
+                )
+                self._insert_sources(
+                    connection,
+                    memory_id,
+                    character_id,
+                    context.sources,
+                )
+                self._insert_lineage(
+                    connection,
+                    memory_id,
+                    character_id,
+                    context.lineage,
+                )
                 self._insert_outbox(
                     connection,
                     memory_id,
@@ -123,7 +150,7 @@ class ApprovedMemoryRepository:
                     "UPSERT",
                     now,
                 )
-            return memory
+            return _select_memory(connection, character_id, memory_id)
 
     def correct(
         self,
@@ -141,7 +168,16 @@ class ApprovedMemoryRepository:
             candidate
         )
         with self._database.transaction() as connection:
-            _select_memory(connection, character_id, memory_id)
+            current = _select_memory(connection, character_id, memory_id)
+            existing = _select_memory_by_write_key(
+                connection,
+                character_id,
+                context.idempotency_key,
+            )
+            if existing is not None:
+                if existing.id != memory_id:
+                    raise ValueError("idempotency key belongs to another memory")
+                return current
             connection.execute(
                 "UPDATE approved_memories SET memory_kind = ?, memory_type = ?, "
                 "episodic_event_type = ?, formation_method = ?, normalized_text = ?, "
@@ -173,6 +209,26 @@ class ApprovedMemoryRepository:
                     character_id,
                     str(memory_id),
                 ),
+            )
+            self._insert_write_receipt(
+                connection,
+                memory_id,
+                character_id,
+                context.idempotency_key,
+                "CORRECT",
+                now,
+            )
+            self._insert_sources(
+                connection,
+                memory_id,
+                character_id,
+                context.sources,
+            )
+            self._insert_lineage(
+                connection,
+                memory_id,
+                character_id,
+                context.lineage,
             )
             self._insert_outbox(connection, memory_id, character_id, "UPSERT", now)
             return _select_memory(connection, character_id, memory_id)
@@ -281,6 +337,77 @@ class ApprovedMemoryRepository:
             ),
         )
 
+    def _insert_write_receipt(
+        self,
+        connection: sqlite3.Connection,
+        memory_id: UUID,
+        character_id: str,
+        idempotency_key: str,
+        operation: str,
+        now: datetime,
+    ) -> None:
+        connection.execute(
+            "INSERT INTO memory_write_receipts "
+            "(character_id, idempotency_key, memory_id, operation, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                character_id,
+                idempotency_key,
+                str(memory_id),
+                operation,
+                format_datetime(now),
+            ),
+        )
+
+    def _insert_sources(
+        self,
+        connection: sqlite3.Connection,
+        memory_id: UUID,
+        character_id: str,
+        sources: tuple[MemorySourceInput, ...],
+    ) -> None:
+        connection.executemany(
+            "INSERT INTO memory_sources "
+            "(character_id, memory_id, source_type, source_provider_id, source_ref) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(character_id, memory_id, source_type, "
+            "source_provider_id, source_ref) DO NOTHING",
+            (
+                (
+                    character_id,
+                    str(memory_id),
+                    source.source_type.value,
+                    source.source_provider_id,
+                    source.source_ref,
+                )
+                for source in sources
+            ),
+        )
+
+    def _insert_lineage(
+        self,
+        connection: sqlite3.Connection,
+        memory_id: UUID,
+        character_id: str,
+        lineage: tuple[MemoryLineageInput, ...],
+    ) -> None:
+        connection.executemany(
+            "INSERT INTO memory_lineage "
+            "(character_id, memory_id, related_memory_id, relation) "
+            "VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(character_id, memory_id, related_memory_id, relation) "
+            "DO NOTHING",
+            (
+                (
+                    character_id,
+                    str(memory_id),
+                    str(item.related_memory_id),
+                    item.relation.value,
+                )
+                for item in lineage
+            ),
+        )
+
     def _new_uuid(self, factory: UuidFactory) -> UUID:
         value = factory()
         _require_uuid4(value)
@@ -308,19 +435,20 @@ def _select_memory(
     return _memory_from_row(row)
 
 
-def _select_memory_by_idempotency_key(
+def _select_memory_by_write_key(
     connection: sqlite3.Connection,
     character_id: str,
     idempotency_key: str,
-) -> ApprovedMemory:
+) -> ApprovedMemory | None:
     row = connection.execute(
-        f"SELECT {APPROVED_COLUMNS} FROM approved_memories "
-        "WHERE character_id = ? AND idempotency_key = ?",
+        f"SELECT {QUALIFIED_APPROVED_COLUMNS} "
+        "FROM memory_write_receipts AS receipt "
+        "JOIN approved_memories AS m "
+        "ON m.character_id = receipt.character_id AND m.id = receipt.memory_id "
+        "WHERE receipt.character_id = ? AND receipt.idempotency_key = ?",
         (character_id, idempotency_key),
     ).fetchone()
-    if row is None:
-        raise LookupError("approved memory was not found")
-    return _memory_from_row(row)
+    return None if row is None else _memory_from_row(row)
 
 
 def _memory_from_row(row: sqlite3.Row) -> ApprovedMemory:
