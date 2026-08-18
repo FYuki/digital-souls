@@ -156,11 +156,17 @@ CREATE TABLE temporary_provider_records (
 )
 """
 
-INDEX_SQL = (
-    "CREATE INDEX IF NOT EXISTS idx_memory_index_outbox_pending "
-    "ON memory_index_outbox (status, created_at)",
-    "CREATE INDEX IF NOT EXISTS idx_approved_memories_active "
-    "ON approved_memories (character_id, status, created_at, id)",
+INDEX_DEFINITIONS = (
+    (
+        "idx_memory_index_outbox_pending",
+        "memory_index_outbox",
+        ("status", "created_at"),
+    ),
+    (
+        "idx_approved_memories_active",
+        "approved_memories",
+        ("character_id", "status", "created_at", "id"),
+    ),
 )
 
 
@@ -186,8 +192,7 @@ def initialize_persona_memory_schema(
             connection.execute(MEMORY_INDEX_OUTBOX_SQL)
             connection.execute(TEMPORARY_PROVIDER_RECORDS_SQL)
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-        for statement in INDEX_SQL:
-            connection.execute(statement)
+        _ensure_indexes(connection)
     database.truncate_wal()
 
 
@@ -197,3 +202,22 @@ def _user_tables(connection: sqlite3.Connection) -> frozenset[str]:
         "WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
     )
     return frozenset(str(row[0]) for row in rows)
+
+
+def _ensure_indexes(connection: sqlite3.Connection) -> None:
+    for name, table, columns in INDEX_DEFINITIONS:
+        existing = connection.execute(
+            "SELECT tbl_name FROM sqlite_master WHERE type = 'index' AND name = ?",
+            (name,),
+        ).fetchone()
+        if existing is not None:
+            actual_columns = tuple(
+                str(row[2])
+                for row in connection.execute(f'PRAGMA index_info("{name}")')
+            )
+            if str(existing[0]) != table or actual_columns != columns:
+                connection.execute(f'DROP INDEX "{name}"')
+        column_list = ", ".join(columns)
+        connection.execute(
+            f'CREATE INDEX IF NOT EXISTS "{name}" ON "{table}" ({column_list})'
+        )

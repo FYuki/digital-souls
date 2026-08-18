@@ -235,6 +235,45 @@ def test_schema_recreates_missing_indexes_for_an_existing_v1_database(
     assert "idx_approved_memories_active" in indexes
 
 
+@pytest.mark.parametrize(
+    "wrong_definition",
+    [
+        "CREATE INDEX idx_memory_index_outbox_pending "
+        "ON approved_memories (status)",
+        "CREATE INDEX idx_memory_index_outbox_pending "
+        "ON memory_index_outbox (created_at, status)",
+    ],
+)
+def test_schema_recreates_an_existing_index_when_its_definition_is_wrong(
+    wrong_definition: str,
+    tmp_path: Path,
+) -> None:
+    from app.memory.persistence.schema import initialize_persona_memory_schema
+
+    paths = _initialize(tmp_path)
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        connection.execute("DROP INDEX idx_memory_index_outbox_pending")
+        connection.execute(wrong_definition)
+
+    initialize_persona_memory_schema(paths, tmp_path / "repository")
+
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        owner = connection.execute(
+            "SELECT tbl_name FROM sqlite_master "
+            "WHERE type = 'index' AND name = ?",
+            ("idx_memory_index_outbox_pending",),
+        ).fetchone()
+        columns = tuple(
+            str(row[2])
+            for row in connection.execute(
+                'PRAGMA index_info("idx_memory_index_outbox_pending")'
+            )
+        )
+
+    assert owner == ("memory_index_outbox",)
+    assert columns == ("status", "created_at")
+
+
 def test_sources_and_lineage_enforce_memory_foreign_keys_and_relation_allowlist(
     tmp_path: Path,
 ) -> None:
