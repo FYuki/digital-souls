@@ -157,9 +157,9 @@ CREATE TABLE temporary_provider_records (
 """
 
 INDEX_SQL = (
-    "CREATE INDEX idx_memory_index_outbox_pending "
+    "CREATE INDEX IF NOT EXISTS idx_memory_index_outbox_pending "
     "ON memory_index_outbox (status, created_at)",
-    "CREATE INDEX idx_approved_memories_active "
+    "CREATE INDEX IF NOT EXISTS idx_approved_memories_active "
     "ON approved_memories (character_id, status, created_at, id)",
 )
 
@@ -185,9 +185,9 @@ def initialize_persona_memory_schema(
             connection.execute(MEMORY_WRITE_RECEIPTS_SQL)
             connection.execute(MEMORY_INDEX_OUTBOX_SQL)
             connection.execute(TEMPORARY_PROVIDER_RECORDS_SQL)
-            for statement in INDEX_SQL:
-                connection.execute(statement)
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        for statement in INDEX_SQL:
+            connection.execute(statement)
     database.truncate_wal()
 
 

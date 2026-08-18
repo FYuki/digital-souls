@@ -39,13 +39,27 @@ from app.memory.persistence.sqlite import (
 
 Clock = Callable[[], datetime]
 UuidFactory = Callable[[], UUID]
-APPROVED_COLUMNS = (
-    "id, character_id, memory_type, structured_value, normalized_text, "
-    "content_version, status, effective_at, effective_timezone, "
-    "temporal_precision, expires_at, last_user_mentioned_at, created_at, updated_at"
+APPROVED_COLUMN_NAMES = (
+    "id",
+    "character_id",
+    "memory_type",
+    "structured_value",
+    "normalized_text",
+    "content_version",
+    "status",
+    "effective_at",
+    "effective_timezone",
+    "temporal_precision",
+    "expires_at",
+    "last_user_mentioned_at",
+    "created_at",
+    "updated_at",
+)
+APPROVED_COLUMNS = ", ".join(
+    f"{column} AS {column}" for column in APPROVED_COLUMN_NAMES
 )
 QUALIFIED_APPROVED_COLUMNS = ", ".join(
-    f"m.{column.strip()}" for column in APPROVED_COLUMNS.split(",")
+    f"m.{column} AS {column}" for column in APPROVED_COLUMN_NAMES
 )
 
 

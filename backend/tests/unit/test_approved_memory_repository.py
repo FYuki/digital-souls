@@ -61,7 +61,7 @@ def _context(*, expires_at: datetime | None = None):
     )
 
 
-def _repository(tmp_path: Path):
+def _repository(tmp_path: Path, *, connection_factory=sqlite3.connect):
     from app.memory.persistence.approved_repository import ApprovedMemoryRepository
     from app.memory.persistence.schema import initialize_persona_memory_schema
     from app.runtime_paths import resolve_runtime_paths
@@ -86,6 +86,7 @@ def _repository(tmp_path: Path):
         outbox_uuid_factory=lambda: UUID(
             f"10000000-0000-4000-8000-{next(uuid_sequence):012d}"
         ),
+        connection_factory=connection_factory,
     )
     return repository, paths.persona_memory_sqlite_path
 
@@ -136,6 +137,30 @@ def test_save_retry_returns_the_existing_memory_without_duplicate_rows(
     assert [memory.id for memory in memories] == [memories[0].id] * 3
     assert len(_rows(database_path, "approved_memories")) == 1
     assert len(_rows(database_path, "memory_index_outbox")) == 1
+
+
+def test_save_retry_uses_stable_row_names_with_qualified_column_pragmas(
+    tmp_path: Path,
+) -> None:
+    def connection_factory(path: Path) -> sqlite3.Connection:
+        connection = sqlite3.connect(path)
+        connection.execute("PRAGMA full_column_names = ON")
+        connection.execute("PRAGMA short_column_names = OFF")
+        return connection
+
+    repository, _database_path = _repository(
+        tmp_path,
+        connection_factory=connection_factory,
+    )
+
+    first = repository.save(
+        character_id="miori", candidate=_candidate(), context=_context()
+    )
+    retried = repository.save(
+        character_id="miori", candidate=_candidate(), context=_context()
+    )
+
+    assert retried == first
 
 
 def test_same_idempotency_key_is_independent_between_characters(

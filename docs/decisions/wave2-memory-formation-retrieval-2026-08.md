@@ -181,7 +181,7 @@ model_digest
 prompt_version
 content_version
 status: ACTIVE / INACTIVE
-idempotency_key: character_id単位でunique
+idempotency_key: character_id単位で一意
 last_write_idempotency_key: nullable
 effective_at
 effective_timezone

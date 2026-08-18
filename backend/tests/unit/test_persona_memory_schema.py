@@ -212,6 +212,29 @@ def test_schema_creates_worker_and_active_memory_indexes(tmp_path: Path) -> None
     assert "idx_approved_memories_active" in indexes
 
 
+def test_schema_recreates_missing_indexes_for_an_existing_v1_database(
+    tmp_path: Path,
+) -> None:
+    from app.memory.persistence.schema import initialize_persona_memory_schema
+
+    paths = _initialize(tmp_path)
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        connection.execute("DROP INDEX idx_memory_index_outbox_pending")
+        connection.execute("DROP INDEX idx_approved_memories_active")
+
+    initialize_persona_memory_schema(paths, tmp_path / "repository")
+
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        indexes = {
+            str(row[0])
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index'"
+            )
+        }
+    assert "idx_memory_index_outbox_pending" in indexes
+    assert "idx_approved_memories_active" in indexes
+
+
 def test_sources_and_lineage_enforce_memory_foreign_keys_and_relation_allowlist(
     tmp_path: Path,
 ) -> None:
