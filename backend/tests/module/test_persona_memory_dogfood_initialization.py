@@ -72,6 +72,7 @@ def test_persona_schema_initialization_preserves_existing_conversation_database(
         "approved_memories",
         "memory_sources",
         "memory_lineage",
+        "memory_write_receipts",
         "memory_index_outbox",
         "temporary_provider_records",
     }
