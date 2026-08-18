@@ -72,6 +72,7 @@ def test_rt_path_01_resolves_every_persistent_path_from_one_data_root(
 
     assert paths.data_root == data_root
     assert paths.sqlite_path == data_root / "conversation-history.db"
+    assert paths.persona_memory_sqlite_path == data_root / "persona-memory.db"
     assert paths.chroma_path == data_root / "chroma"
     assert paths.runtime_report_dir == data_root / "runtime"
     assert paths.cache_path == data_root / "cache"
@@ -101,6 +102,9 @@ def test_rt_path_01_keeps_existing_dev_sqlite_and_chroma_defaults(
 
     assert paths.sqlite_path == (
         repository_root / "backend" / "app" / "data" / "conversation-history.db"
+    )
+    assert paths.persona_memory_sqlite_path == (
+        repository_root / "backend" / "app" / "data" / "persona-memory.db"
     )
     assert paths.chroma_path == repository_root / "backend" / "app" / "data" / "chroma"
 

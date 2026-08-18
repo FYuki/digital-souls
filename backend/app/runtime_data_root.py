@@ -25,14 +25,17 @@ def initialize_runtime_data_root(
     paths: RuntimePaths, repository_root: Path
 ) -> None:
     _validate_path_contract(paths, repository_root)
+    if paths.identity_marker_path.exists():
+        _validate_identity_marker(paths)
     with _identity_lock(paths.data_root):
-        ensure_sqlite_lease_file(paths.sqlite_path)
         if paths.identity_marker_path.exists():
             _validate_identity_marker(paths)
-            return
-        if _contains_persistent_data(paths.data_root):
-            raise ValueError("runtime data root identity marker is missing")
-        _create_identity_marker(paths)
+        else:
+            if _contains_persistent_data(paths.data_root):
+                raise ValueError("runtime data root identity marker is missing")
+            _create_identity_marker(paths)
+        ensure_sqlite_lease_file(paths.sqlite_path)
+        ensure_sqlite_lease_file(paths.persona_memory_sqlite_path)
 
 
 def validate_existing_runtime_data_root(
@@ -79,6 +82,7 @@ def _validate_path_contract(paths: RuntimePaths, repository_root: Path) -> None:
 def _validate_derived_paths(paths: RuntimePaths) -> None:
     derived_paths = (
         paths.sqlite_path,
+        paths.persona_memory_sqlite_path,
         paths.chroma_path,
         paths.runtime_report_dir,
         paths.cache_path,

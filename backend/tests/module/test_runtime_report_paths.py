@@ -23,6 +23,7 @@ def _runtime_projection(data_root: Path) -> dict[str, str]:
         "environmentId": "test",
         "dataRoot": str(data_root),
         "sqlitePath": str(data_root / "conversation-history.db"),
+        "personaMemorySqlitePath": str(data_root / "persona-memory.db"),
         "chromaPath": str(data_root / "chroma"),
         "runtimeReportDirectory": str(data_root / "runtime"),
         "cachePath": str(data_root / "cache"),

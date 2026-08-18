@@ -154,6 +154,12 @@ temporary:recipe
 
 ### 4. SQLite正本のschemaは用途を明示する
 
+persona memory系の`approved_memories`、`memory_sources`、`memory_lineage`、
+`memory_index_outbox`、`temporary_provider_records`は、専用の`persona-memory.db`に配置する。
+`conversation-history.db`とはファイルを分け、会話履歴schemaの変更やpersona memory側の
+rollbackによる履歴の巻き戻しを発生させない。memory行とoutbox行は同一ファイル内で
+更新し、transaction原子性を保つ。
+
 `approved_memories`は少なくとも次を持つ。
 
 ```text

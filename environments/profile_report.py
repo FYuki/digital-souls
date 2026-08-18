@@ -9,6 +9,7 @@ from app.model_settings import MODEL_ENVIRONMENT_KEYS, resolve_model_settings
 from app.runtime_paths import (
     CACHE_DIRECTORY,
     CHROMA_DIRECTORY,
+    PERSONA_MEMORY_SQLITE_FILENAME,
     RUNTIME_DIRECTORY,
     SQLITE_FILENAME,
     SUPPORTED_ENVIRONMENT_IDS,
@@ -221,7 +222,7 @@ def validate_resolved_report(raw: object) -> ResolvedReport:
     derived_environment = _require_record(report["derivedEnvironment"], "derivedEnvironment")
     runtime = _require_record(report["runtime"], "runtime")
     runtime_fields = {
-        "environmentId", "dataRoot", "sqlitePath", "chromaPath",
+        "environmentId", "dataRoot", "sqlitePath", "personaMemorySqlitePath", "chromaPath",
         "runtimeReportDirectory", "cachePath",
     }
     _reject_unknown_fields(runtime, runtime_fields, "runtime")
@@ -232,6 +233,7 @@ def validate_resolved_report(raw: object) -> ResolvedReport:
     data_root = Path(cast(str, runtime["dataRoot"]))
     expected_paths = {
         "sqlitePath": data_root / SQLITE_FILENAME,
+        "personaMemorySqlitePath": data_root / PERSONA_MEMORY_SQLITE_FILENAME,
         "chromaPath": data_root / CHROMA_DIRECTORY,
         "runtimeReportDirectory": data_root / RUNTIME_DIRECTORY,
         "cachePath": data_root / CACHE_DIRECTORY,

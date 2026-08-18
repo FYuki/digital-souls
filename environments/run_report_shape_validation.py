@@ -29,6 +29,7 @@ RUNTIME_FIELDS = {
     "environmentId",
     "dataRoot",
     "sqlitePath",
+    "personaMemorySqlitePath",
     "chromaPath",
     "runtimeReportDirectory",
     "cachePath",

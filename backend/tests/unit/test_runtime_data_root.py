@@ -61,6 +61,26 @@ def test_rt_id_01_accepts_an_existing_matching_marker_without_rewriting_it(
     assert paths.identity_marker_path.read_text(encoding="utf-8") == marker_text
 
 
+def test_rt_id_01_prepares_leases_for_both_sqlite_databases(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from app import runtime_data_root
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths = _paths(tmp_path / "data", repository_root)
+    leased_paths: list[Path] = []
+    monkeypatch.setattr(
+        runtime_data_root,
+        "ensure_sqlite_lease_file",
+        lambda database_path: leased_paths.append(database_path),
+    )
+
+    _initialize(paths, repository_root)
+
+    assert leased_paths == [paths.sqlite_path, paths.persona_memory_sqlite_path]
+
+
 @pytest.mark.parametrize(
     "marker",
     [
@@ -130,6 +150,32 @@ def test_rt_id_01_rejects_cross_environment_marker_without_rewriting_it(
 
     assert json.loads(paths.identity_marker_path.read_text(encoding="utf-8")) == marker
     assert sentinel.read_text(encoding="utf-8") == "keep"
+
+
+def test_rt_id_01_rejects_cross_environment_marker_before_preparing_sqlite_leases(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from app import runtime_data_root
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths = _paths(tmp_path / "data", repository_root)
+    paths.data_root.mkdir()
+    paths.identity_marker_path.write_text(
+        json.dumps({"schemaVersion": 1, "environmentId": "dogfood"}),
+        encoding="utf-8",
+    )
+    leased_paths: list[Path] = []
+    monkeypatch.setattr(
+        runtime_data_root,
+        "ensure_sqlite_lease_file",
+        lambda database_path: leased_paths.append(database_path),
+    )
+
+    with pytest.raises(ValueError, match="environment identity"):
+        _initialize(paths, repository_root)
+
+    assert leased_paths == []
 
 
 def test_rt_safe_01_rejects_symlink_data_root_without_touching_target(
@@ -256,6 +302,7 @@ def test_should_reject_invalid_environment_id_before_creating_runtime_files(
     ("relative_path", "target_is_directory"),
     [
         ("conversation-history.db", False),
+        ("persona-memory.db", False),
         ("chroma", True),
         ("runtime", True),
         ("cache", True),
@@ -318,6 +365,7 @@ def test_rt_safe_02_rejects_derived_path_symlink_before_marker_access(
     "field_name",
     [
         "sqlite_path",
+        "persona_memory_sqlite_path",
         "chroma_path",
         "runtime_report_dir",
         "cache_path",
