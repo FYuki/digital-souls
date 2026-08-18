@@ -32,7 +32,6 @@ class PrivacyCategory(str, Enum):
 
 class StorageScope(str, Enum):
     RAG = "RAG"
-    HISTORY = "HISTORY"
     BOTH = "BOTH"
 
 

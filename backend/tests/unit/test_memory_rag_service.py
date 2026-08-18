@@ -374,51 +374,6 @@ class TestRagServiceRecording:
         rag_service.create_memory_candidate_record.assert_not_called()
         background_tasks.add_task.assert_not_called()
 
-    def test_record_user_memory_candidate_allows_history_only_opt_out(
-        self,
-        monkeypatch,
-    ):
-        rag_service = importlib.import_module("app.memory.rag_service")
-        policy = _resolved_policy()
-        scanner = MagicMock()
-        scanner.scan.return_value = ScanSuccess(
-            (
-                _finding(
-                    policy.policy_version,
-                    PrivacyCategory.STORAGE_OPT_OUT,
-                    StorageScope.HISTORY,
-                ),
-            )
-        )
-        background_tasks = MagicMock()
-        record = SavedRecord(
-            _record_id(41),
-            "miori",
-            "user",
-            "農業日誌: トマトに水やり",
-            "2026-06-23T00:00:00+00:00",
-        )
-        monkeypatch.setattr(
-            rag_service,
-            "create_memory_candidate_record",
-            MagicMock(return_value=record),
-        )
-
-        rag_service.record_user_memory_candidate(
-            "miori",
-            record.content,
-            policy,
-            background_tasks,
-            privacy_scanner=scanner,
-            chroma_path=_CHROMA_PATH,
-        )
-
-        rag_service.create_memory_candidate_record.assert_called_once_with(
-            "miori",
-            record.content,
-        )
-        background_tasks.add_task.assert_called_once()
-
     def test_record_user_memory_candidate_allows_empty_scan_success(
         self,
         monkeypatch,
