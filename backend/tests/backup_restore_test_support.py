@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TypeAlias, TypeGuard
@@ -14,6 +15,7 @@ from app.conversation_history.schema import (
     HISTORY_INDEX_SQL,
     STALE_INDEX_SQL,
 )
+from app.memory.persistence.schema import initialize_persona_memory_schema
 from app.runtime_data_root import initialize_runtime_data_root
 from app.runtime_paths import RuntimePaths, resolve_runtime_paths
 
@@ -101,7 +103,7 @@ def create_history_database(paths: RuntimePaths, *, wal: bool) -> sqlite3.Connec
 
 
 def create_version_two_database(database_path: Path) -> None:
-    with sqlite3.connect(database_path) as connection:
+    with closing(sqlite3.connect(database_path)) as connection:
         connection.execute(VERSION_TWO_CONVERSATIONS_SQL)
         connection.execute(CONVERSATION_TURNS_SQL)
         connection.execute(HISTORY_INDEX_SQL)
@@ -112,6 +114,7 @@ def create_version_two_database(database_path: Path) -> None:
             ("miori", CONVERSATION_ID, "2026-08-08T01:00:00.000000Z"),
         )
         connection.execute("PRAGMA user_version = 2")
+        connection.commit()
 
 
 def _is_json_object(value: object) -> TypeGuard[dict[str, JsonValue]]:
@@ -156,7 +159,7 @@ def restore_intent_path(paths: RuntimePaths) -> Path:
 
 
 def database_projection(database_path: Path) -> tuple[int, int, str]:
-    with sqlite3.connect(database_path) as connection:
+    with closing(sqlite3.connect(database_path)) as connection:
         schema_version = int(connection.execute("PRAGMA user_version").fetchone()[0])
         conversation_count = int(
             connection.execute("SELECT COUNT(*) FROM conversations").fetchone()[0]
@@ -168,3 +171,52 @@ def database_projection(database_path: Path) -> tuple[int, int, str]:
             ).fetchone()[0]
         )
     return schema_version, conversation_count, content
+
+
+def create_persona_memory_database(
+    paths: RuntimePaths,
+    repository_root: Path,
+    *,
+    with_approved_memory: bool,
+) -> None:
+    initialize_persona_memory_schema(paths, repository_root)
+    if not with_approved_memory:
+        return
+    with closing(sqlite3.connect(paths.persona_memory_sqlite_path)) as connection:
+        connection.execute(
+            "INSERT INTO approved_memories ("
+            "id, character_id, provider_id, memory_kind, memory_type, "
+            "episodic_event_type, formation_method, schema_version, "
+            "normalized_text, structured_value, policy_version, "
+            "classifier_version, model_id, model_digest, prompt_version, "
+            "content_version, status, idempotency_key, "
+            "last_write_idempotency_key, effective_at, effective_timezone, "
+            "temporal_precision, expires_at, last_user_mentioned_at, "
+            "last_consolidated_at, created_at, updated_at"
+            ") VALUES (?, ?, 'core', 'SEMANTIC', 'USER_PREFERENCE', NULL, "
+            "'DIRECT', 1, ?, '{}', 'policy-v1', 'classifier-v1', "
+            "'test-model', 'test-digest', 'prompt-v1', 1, 'ACTIVE', ?, "
+            "NULL, ?, 'Asia/Tokyo', 'SECOND', NULL, NULL, NULL, ?, ?)",
+            (
+                "memory-backup-sentinel",
+                "miori",
+                "バックアップ対象の記憶",
+                "memory-backup-idempotency",
+                "2026-08-08T01:00:00.000000Z",
+                "2026-08-08T01:00:00.000000Z",
+                "2026-08-08T01:00:00.000000Z",
+            ),
+        )
+        connection.commit()
+
+
+def persona_memory_projection(database_path: Path) -> tuple[int, int]:
+    with closing(sqlite3.connect(database_path)) as connection:
+        return (
+            int(connection.execute("PRAGMA user_version").fetchone()[0]),
+            int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM approved_memories"
+                ).fetchone()[0]
+            ),
+        )

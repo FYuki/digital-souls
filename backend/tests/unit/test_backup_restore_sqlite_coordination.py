@@ -13,6 +13,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from app.backup_restore.models import CONVERSATION_ARTIFACT_FILENAME
 from app.runtime_paths import RESTORE_INTENT_FILENAME, RuntimePaths
 from tests.backup_restore_test_support import (
     FIXED_BACKUP_TIME,
@@ -367,7 +368,7 @@ def test_sqlite_sidecar_01_restores_after_converging_quiesced_valid_wal(
         authentication_key=TEST_AUTHENTICATION_KEY,
     )
 
-    assert result.conversation_count == 1
+    assert result.artifact(CONVERSATION_ARTIFACT_FILENAME).record_count == 1
     assert not destination.sqlite_path.with_name(
         destination.sqlite_path.name + "-wal"
     ).exists()
@@ -561,7 +562,7 @@ def test_sqlite_sidecar_01_restores_valid_wal_without_shm(
     finally:
         connection.close()
 
-    assert result.conversation_count == 1
+    assert result.artifact(CONVERSATION_ARTIFACT_FILENAME).record_count == 1
     assert not destination.sqlite_path.with_name(
         destination.sqlite_path.name + "-wal"
     ).exists()
@@ -641,7 +642,7 @@ def test_sqlite_sidecar_01_restores_with_an_empty_regular_wal(tmp_path: Path) ->
         authentication_key=TEST_AUTHENTICATION_KEY,
     )
 
-    assert result.conversation_count == 1
+    assert result.artifact(CONVERSATION_ARTIFACT_FILENAME).record_count == 1
     assert not wal.exists()
     assert not shm.exists()
 

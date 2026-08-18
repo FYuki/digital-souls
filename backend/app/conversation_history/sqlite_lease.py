@@ -10,6 +10,7 @@ from typing import IO, Iterator, Literal
 
 
 SQLITE_LEASE_FILENAME_SUFFIX = ".conversation-history.lease"
+PERSONA_MEMORY_SQLITE_LEASE_FILENAME_SUFFIX = ".persona-memory.lease"
 
 
 class SQLiteLeaseUnavailableError(RuntimeError):
@@ -45,7 +46,7 @@ _CURRENT_SQLITE_LEASE: ContextVar[SQLiteLease | None] = ContextVar(
 
 
 def _lease_path(database_path: Path) -> Path:
-    return database_path.parent / SQLITE_LEASE_FILENAME_SUFFIX
+    return database_path.parent / f".{database_path.stem}.lease"
 
 
 def ensure_sqlite_lease_file(database_path: Path) -> None:

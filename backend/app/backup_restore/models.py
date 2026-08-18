@@ -6,8 +6,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-FORMAT_VERSION = 2
-ARTIFACT_FILENAME = "conversation-history.db"
+FORMAT_VERSION = 3
+CONVERSATION_ARTIFACT_FILENAME = "conversation-history.db"
+PERSONA_MEMORY_ARTIFACT_FILENAME = "persona-memory.db"
+ARTIFACT_FILENAMES = (
+    CONVERSATION_ARTIFACT_FILENAME,
+    PERSONA_MEMORY_ARTIFACT_FILENAME,
+)
 METADATA_FILENAME = "metadata.json"
 MANIFEST_FILENAME = "manifest.json"
 GENERATION_PREFIX = "backup-"
@@ -62,10 +67,30 @@ def resolve_backup_authentication_key(
 
 @dataclass(frozen=True)
 class BackupVerification:
+    filename: str
     integrity_check: str
     schema_version: int
     required_tables: frozenset[str]
-    conversation_count: int
+    record_count: int
+
+
+@dataclass(frozen=True)
+class BackupVerificationSet:
+    artifacts: tuple[BackupVerification, ...]
+
+    def artifact(self, filename: str) -> BackupVerification:
+        for artifact in self.artifacts:
+            if artifact.filename == filename:
+                return artifact
+        raise KeyError(filename)
+
+
+@dataclass(frozen=True)
+class VerifiedArtifact:
+    filename: str
+    path: Path
+    sha256: str
+    verification: BackupVerification
 
 
 @dataclass(frozen=True)
@@ -73,7 +98,6 @@ class VerifiedGeneration:
     directory: Path
     environment_id: str
     generation_sequence: int
-    artifact_path: Path
-    artifact_sha256: str
+    artifacts: tuple[VerifiedArtifact, ...]
     generation_identity_sha256: str
-    verification: BackupVerification
+    verification: BackupVerificationSet

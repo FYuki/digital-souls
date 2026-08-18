@@ -380,13 +380,33 @@ def test_should_restore_and_verify_when_root_is_initialized_through_public_cli(
     assert verify_result[0] == 0
     assert json.loads(restore_result[1]) == {
         "status": "ok",
-        "schemaVersion": SCHEMA_VERSION,
-        "conversationCount": 1,
+        "artifacts": [
+            {
+                "filename": "conversation-history.db",
+                "schemaVersion": SCHEMA_VERSION,
+                "recordCount": 1,
+            },
+            {
+                "filename": "persona-memory.db",
+                "schemaVersion": 1,
+                "recordCount": 0,
+            },
+        ],
     }
     assert json.loads(verify_result[1]) == {
         "status": "ok",
-        "schemaVersion": SCHEMA_VERSION,
-        "conversationCount": 1,
+        "artifacts": [
+            {
+                "filename": "conversation-history.db",
+                "schemaVersion": SCHEMA_VERSION,
+                "recordCount": 1,
+            },
+            {
+                "filename": "persona-memory.db",
+                "schemaVersion": 1,
+                "recordCount": 0,
+            },
+        ],
     }
     assert init_result[2] + restore_result[2] + verify_result[2] == ""
     cli_output = "".join((*init_result[1:], *restore_result[1:], *verify_result[1:]))

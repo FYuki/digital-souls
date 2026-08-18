@@ -24,7 +24,10 @@ class PersonaMemorySqlite:
 
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:
+        from app.restore_intent import require_sqlite_available
+
         with acquire_runtime_lease(self._database_path):
+            require_sqlite_available(self._database_path)
             connection = self._connection_factory(self._database_path)
             try:
                 connection.row_factory = sqlite3.Row

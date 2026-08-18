@@ -8,13 +8,15 @@ from pathlib import Path
 from typing import TypeAlias, cast
 
 from app.backup_restore.models import (
-    ARTIFACT_FILENAME,
+    ARTIFACT_FILENAMES,
     FORMAT_VERSION,
     MANIFEST_FILENAME,
     METADATA_FILENAME,
     BackupAuthenticationKey,
     BackupArtifactError,
     BackupVerification,
+    BackupVerificationSet,
+    VerifiedArtifact,
     VerifiedGeneration,
 )
 from app.runtime_paths import SUPPORTED_ENVIRONMENT_IDS
@@ -27,12 +29,9 @@ METADATA_FIELDS = frozenset(
         "formatVersion",
         "environmentId",
         "gitCommit",
-        "schemaVersion",
         "createdAt",
         "generationSequence",
-        "sqliteValidation",
-        "conversationCount",
-        "artifactSha256",
+        "artifacts",
     }
 )
 MANIFEST_FIELDS = frozenset(
@@ -61,7 +60,7 @@ def write_contract_files(
     )
     files: list[JsonValue] = [
         {"path": name, "sha256": sha256_file(directory / name)}
-        for name in (ARTIFACT_FILENAME, METADATA_FILENAME)
+        for name in (*ARTIFACT_FILENAMES, METADATA_FILENAME)
     ]
     unsigned_manifest: dict[str, JsonValue] = {
         "formatVersion": FORMAT_VERSION,
@@ -85,39 +84,57 @@ def write_contract_files(
 
 def read_verified_generation(
     directory: Path, authentication_key: BackupAuthenticationKey
-) -> tuple[dict[str, JsonValue], Path]:
+) -> tuple[dict[str, JsonValue], tuple[Path, ...]]:
     if directory.is_symlink() or not directory.is_dir():
         raise BackupArtifactError("backup artifact directory is invalid")
     metadata = _read_object(directory / METADATA_FILENAME, "metadata")
     manifest = _read_object(directory / MANIFEST_FILENAME, "manifest")
     _validate_metadata(metadata)
     _validate_manifest(directory, metadata, manifest, authentication_key)
-    artifact = directory / ARTIFACT_FILENAME
-    if metadata["artifactSha256"] != sha256_file(artifact):
-        raise BackupArtifactError("artifact checksum does not match metadata")
-    return metadata, artifact
+    artifact_metadata = _artifact_metadata(metadata)
+    artifacts = tuple(directory / filename for filename in ARTIFACT_FILENAMES)
+    for values, artifact in zip(artifact_metadata, artifacts, strict=True):
+        if values["sha256"] != sha256_file(artifact):
+            raise BackupArtifactError("artifact checksum does not match metadata")
+    return metadata, artifacts
 
 
 def verified_generation(
     directory: Path,
     metadata: dict[str, JsonValue],
-    artifact: Path,
-    verification: BackupVerification,
+    artifacts: tuple[Path, ...],
+    verifications: tuple[BackupVerification, ...],
 ) -> VerifiedGeneration:
-    if metadata["schemaVersion"] != verification.schema_version:
-        from app.backup_restore.models import BackupSchemaError
+    from app.backup_restore.models import BackupSchemaError
 
-        raise BackupSchemaError("backup schema metadata does not match artifact")
-    if metadata["conversationCount"] != verification.conversation_count:
-        raise BackupArtifactError("backup metadata validation values do not match")
+    artifact_metadata = _artifact_metadata(metadata)
+    verified_artifacts: list[VerifiedArtifact] = []
+    for values, path, verification in zip(
+        artifact_metadata, artifacts, verifications, strict=True
+    ):
+        if values["schemaVersion"] != verification.schema_version:
+            raise BackupSchemaError("backup schema metadata does not match artifact")
+        if (
+            values["integrityCheck"] != verification.integrity_check
+            or values["requiredTables"] != sorted(verification.required_tables)
+            or values["recordCount"] != verification.record_count
+        ):
+            raise BackupArtifactError("backup metadata validation values do not match")
+        verified_artifacts.append(
+            VerifiedArtifact(
+                filename=verification.filename,
+                path=path,
+                sha256=cast(str, values["sha256"]),
+                verification=verification,
+            )
+        )
     return VerifiedGeneration(
         directory=directory,
         environment_id=str(metadata["environmentId"]),
         generation_sequence=cast(int, metadata["generationSequence"]),
-        artifact_path=artifact,
-        artifact_sha256=str(metadata["artifactSha256"]),
+        artifacts=tuple(verified_artifacts),
         generation_identity_sha256=generation_identity_sha256(metadata),
-        verification=verification,
+        verification=BackupVerificationSet(verifications),
     )
 
 
@@ -136,20 +153,19 @@ def _read_object(path: Path, label: str) -> dict[str, JsonValue]:
 
 
 def _validate_metadata(metadata: dict[str, JsonValue]) -> None:
+    if metadata.get("formatVersion") != FORMAT_VERSION:
+        raise BackupArtifactError("backup metadata format is unsupported")
     if set(metadata) != METADATA_FIELDS:
         raise BackupArtifactError("backup metadata fields are invalid")
-    if metadata["formatVersion"] != FORMAT_VERSION:
-        raise BackupArtifactError("backup metadata format is unsupported")
-    string_fields = ("environmentId", "gitCommit", "createdAt", "sqliteValidation")
+    string_fields = ("environmentId", "gitCommit", "createdAt")
     if any(not isinstance(metadata[field], str) for field in string_fields):
         raise BackupArtifactError("backup metadata value types are invalid")
-    integer_fields = ("schemaVersion", "conversationCount", "generationSequence")
+    integer_fields = ("generationSequence",)
     if any(
         isinstance(metadata[field], bool) or not isinstance(metadata[field], int)
         for field in integer_fields
     ):
         raise BackupArtifactError("backup metadata value types are invalid")
-    checksum = metadata["artifactSha256"]
     commit = metadata["gitCommit"]
     created_at = metadata["createdAt"]
     if metadata["environmentId"] not in SUPPORTED_ENVIRONMENT_IDS:
@@ -161,15 +177,6 @@ def _validate_metadata(metadata: dict[str, JsonValue]) -> None:
         created_at,
     ) is None:
         raise BackupArtifactError("backup metadata creation time is invalid")
-    if metadata["sqliteValidation"] != "ok":
-        raise BackupArtifactError("backup metadata SQLite validation is invalid")
-    conversation_count = metadata["conversationCount"]
-    if (
-        isinstance(conversation_count, bool)
-        or not isinstance(conversation_count, int)
-        or conversation_count < 0
-    ):
-        raise BackupArtifactError("backup metadata conversation count is invalid")
     generation_sequence = metadata["generationSequence"]
     if (
         isinstance(generation_sequence, bool)
@@ -177,8 +184,58 @@ def _validate_metadata(metadata: dict[str, JsonValue]) -> None:
         or generation_sequence <= 0
     ):
         raise BackupArtifactError("backup metadata generation sequence is invalid")
-    if not isinstance(checksum, str) or re.fullmatch(r"[0-9a-f]{64}", checksum) is None:
-        raise BackupArtifactError("backup metadata checksum is invalid")
+    _artifact_metadata(metadata)
+
+
+def _artifact_metadata(
+    metadata: dict[str, JsonValue],
+) -> tuple[dict[str, JsonValue], ...]:
+    raw_artifacts = metadata.get("artifacts")
+    if not isinstance(raw_artifacts, list) or len(raw_artifacts) != len(
+        ARTIFACT_FILENAMES
+    ):
+        raise BackupArtifactError("backup metadata artifact list is invalid")
+    artifacts: list[dict[str, JsonValue]] = []
+    fields = {
+        "filename",
+        "schemaVersion",
+        "sha256",
+        "integrityCheck",
+        "requiredTables",
+        "recordCount",
+    }
+    for raw, filename in zip(raw_artifacts, ARTIFACT_FILENAMES, strict=True):
+        if not isinstance(raw, dict) or set(raw) != fields:
+            raise BackupArtifactError("backup metadata artifact is invalid")
+        artifact = raw
+        schema_version = artifact["schemaVersion"]
+        record_count = artifact["recordCount"]
+        required_tables = artifact["requiredTables"]
+        checksum = artifact["sha256"]
+        if artifact["filename"] != filename or artifact["integrityCheck"] != "ok":
+            raise BackupArtifactError("backup metadata artifact is invalid")
+        if (
+            isinstance(schema_version, bool)
+            or not isinstance(schema_version, int)
+            or schema_version <= 0
+            or isinstance(record_count, bool)
+            or not isinstance(record_count, int)
+            or record_count < 0
+        ):
+            raise BackupArtifactError("backup metadata artifact values are invalid")
+        if not isinstance(required_tables, list) or not required_tables or not all(
+            isinstance(table, str) and table for table in required_tables
+        ):
+            raise BackupArtifactError("backup metadata required tables are invalid")
+        tables = cast(list[str], required_tables)
+        if tables != sorted(set(tables)):
+            raise BackupArtifactError("backup metadata required tables are invalid")
+        if not isinstance(checksum, str) or re.fullmatch(
+            r"[0-9a-f]{64}", checksum
+        ) is None:
+            raise BackupArtifactError("backup metadata checksum is invalid")
+        artifacts.append(artifact)
+    return tuple(artifacts)
 
 
 def _validate_manifest(
@@ -192,9 +249,9 @@ def _validate_manifest(
     if manifest["formatVersion"] != FORMAT_VERSION or manifest["complete"] is not True:
         raise BackupArtifactError("backup manifest is incomplete or unsupported")
     files = manifest["files"]
-    if not isinstance(files, list) or len(files) != 2:
+    if not isinstance(files, list) or len(files) != 3:
         raise BackupArtifactError("backup manifest file list is invalid")
-    expected = (ARTIFACT_FILENAME, METADATA_FILENAME)
+    expected = (*ARTIFACT_FILENAMES, METADATA_FILENAME)
     for entry, expected_name in zip(files, expected, strict=True):
         if not isinstance(entry, dict) or set(entry) != {"path", "sha256"}:
             raise BackupArtifactError("backup manifest entry is invalid")
@@ -229,10 +286,14 @@ def _authentication_hmac(
     authentication_key: BackupAuthenticationKey,
 ) -> str:
     digest = hmac.new(authentication_key.value, digestmod=hashlib.sha256)
-    digest.update(b"digital-souls-backup-v2\0artifact\0")
-    with (directory / ARTIFACT_FILENAME).open("rb") as artifact:
-        for block in iter(lambda: artifact.read(1024 * 1024), b""):
-            digest.update(block)
+    digest.update(b"digital-souls-backup-v3")
+    for filename in ARTIFACT_FILENAMES:
+        digest.update(b"\0artifact\0")
+        digest.update(filename.encode("utf-8"))
+        digest.update(b"\0")
+        with (directory / filename).open("rb") as artifact:
+            for block in iter(lambda: artifact.read(1024 * 1024), b""):
+                digest.update(block)
     digest.update(b"\0metadata\0")
     digest.update(_canonical_json(metadata))
     digest.update(b"\0manifest\0")

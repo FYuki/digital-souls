@@ -326,7 +326,7 @@ def test_dur_uncertain_01_detects_database_changed_before_replace_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.backup_restore import RestoreDurabilityUncertainError, restore_backup
+    from app.backup_restore import RestoreRecoveryRequiredError, restore_backup
     from app.backup_restore import service
 
     repository_root = tmp_path / "repository"
@@ -340,7 +340,7 @@ def test_dur_uncertain_01_detects_database_changed_before_replace_failure(
 
     monkeypatch.setattr(service.os, "replace", change_destination_then_fail)
 
-    with pytest.raises(RestoreDurabilityUncertainError):
+    with pytest.raises(RestoreRecoveryRequiredError):
         restore_backup(
             runtime_paths=paths,
             repository_root=repository_root,
@@ -349,6 +349,7 @@ def test_dur_uncertain_01_detects_database_changed_before_replace_failure(
         )
 
     assert paths.sqlite_path.read_bytes() != original_database
+    assert paths.restore_intent_path.is_file()
 
 
 def test_rst_safe_01_preserves_wal_without_shm_when_replace_fails(
@@ -445,7 +446,9 @@ def test_rst_safe_01_persists_staging_then_replaces_then_persists_data_root(
     assert events == [
         "staging-fsync",
         "staging-fsync",
+        "staging-fsync",
         "data-root-fsync",
+        "replace",
         "replace",
         "data-root-fsync",
         "data-root-fsync",
@@ -491,6 +494,7 @@ def test_bkp_verify_01_persists_generation_before_and_after_publication(
 
     assert events == [
         "artifact-fsync",
+        "staging-fsync",
         "json-fsync",
         "json-fsync",
         "directory-fsync",
@@ -539,7 +543,7 @@ def test_dur_uncertain_01_keeps_replaced_database_when_data_root_fsync_fails(
             authentication_key=TEST_AUTHENTICATION_KEY,
         )
 
-    replace.assert_called_once()
+    assert replace.call_count == 2
     assert paths.sqlite_path.read_bytes() == expected_database
     assert not tuple(paths.data_root.glob(".conversation-history.db.staging-*"))
 

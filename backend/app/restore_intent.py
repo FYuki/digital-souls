@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import cast
 
 from app.backup_restore.models import (
+    ARTIFACT_FILENAMES,
     RestoreDurabilityUncertainError,
     RestoreRecoveryRequiredError,
     VerifiedGeneration,
@@ -21,7 +22,7 @@ RESTORE_INTENT_FIELDS = frozenset(
         "formatVersion",
         "environmentId",
         "generationSequence",
-        "artifactSha256",
+        "artifacts",
         "generationIdentitySha256",
     }
 )
@@ -29,11 +30,17 @@ _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 
 
 @dataclass(frozen=True)
+class RestoreIntentArtifact:
+    filename: str
+    sha256: str
+
+
+@dataclass(frozen=True)
 class RestoreIntent:
     formatVersion: int
     environmentId: str
     generationSequence: int
-    artifactSha256: str
+    artifacts: tuple[RestoreIntentArtifact, ...]
     generationIdentitySha256: str
 
 
@@ -44,7 +51,10 @@ def intent_for_generation(
         formatVersion=RESTORE_INTENT_FORMAT_VERSION,
         environmentId=environment_id,
         generationSequence=generation.generation_sequence,
-        artifactSha256=generation.artifact_sha256,
+        artifacts=tuple(
+            RestoreIntentArtifact(artifact.filename, artifact.sha256)
+            for artifact in generation.artifacts
+        ),
         generationIdentitySha256=generation.generation_identity_sha256,
     )
 
@@ -155,7 +165,7 @@ def _parse_restore_intent(raw: object) -> RestoreIntent:
     format_version = values["formatVersion"]
     environment_id = values["environmentId"]
     generation_sequence = values["generationSequence"]
-    artifact_sha256 = values["artifactSha256"]
+    raw_artifacts = values["artifacts"]
     generation_identity_sha256 = values["generationIdentitySha256"]
     if (
         isinstance(format_version, bool)
@@ -180,9 +190,25 @@ def _parse_restore_intent(raw: object) -> RestoreIntent:
         raise RestoreRecoveryRequiredError(
             RestoreRecoveryRequiredError.public_message
         )
-    if not isinstance(artifact_sha256, str) or not _is_sha256(artifact_sha256):
+    if not isinstance(raw_artifacts, list) or len(raw_artifacts) != 2:
         raise RestoreRecoveryRequiredError(
             RestoreRecoveryRequiredError.public_message
+        )
+    artifacts: list[RestoreIntentArtifact] = []
+    for raw_artifact, filename in zip(
+        raw_artifacts, ARTIFACT_FILENAMES, strict=True
+    ):
+        if (
+            not isinstance(raw_artifact, dict)
+            or set(raw_artifact) != {"filename", "sha256"}
+            or raw_artifact["filename"] != filename
+            or not _is_sha256(raw_artifact["sha256"])
+        ):
+            raise RestoreRecoveryRequiredError(
+                RestoreRecoveryRequiredError.public_message
+            )
+        artifacts.append(
+            RestoreIntentArtifact(filename, cast(str, raw_artifact["sha256"]))
         )
     if not isinstance(generation_identity_sha256, str) or not _is_sha256(
         generation_identity_sha256
@@ -194,7 +220,7 @@ def _parse_restore_intent(raw: object) -> RestoreIntent:
         formatVersion=format_version,
         environmentId=environment_id,
         generationSequence=generation_sequence,
-        artifactSha256=artifact_sha256,
+        artifacts=tuple(artifacts),
         generationIdentitySha256=generation_identity_sha256,
     )
 

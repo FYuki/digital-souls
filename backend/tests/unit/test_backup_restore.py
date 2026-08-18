@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import shutil
 import sqlite3
 import time
@@ -11,11 +12,14 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from pathlib import Path
 from threading import Barrier
+from unittest.mock import Mock
 from uuid import UUID
 
 import pytest
 
+from app.backup_restore.models import CONVERSATION_ARTIFACT_FILENAME
 from app.conversation_history.schema import CURRENT_TABLES, SCHEMA_VERSION
+from app.memory.persistence.schema import initialize_persona_memory_schema
 from tests.backup_restore_test_support import (
     CONVERSATION_SENTINEL,
     FIXED_BACKUP_TIME,
@@ -133,9 +137,9 @@ def test_should_verify_new_generation_once_per_safety_boundary(
     verify_sqlite_database = service.verify_sqlite_database
     verified_artifacts: list[Path] = []
 
-    def record_sqlite_verification(artifact: Path):
+    def record_sqlite_verification(artifact: Path, filename: str):
         verified_artifacts.append(artifact)
-        return verify_sqlite_database(artifact)
+        return verify_sqlite_database(artifact, filename)
 
     monkeypatch.setattr(
         service, "verify_sqlite_database", record_sqlite_verification
@@ -151,9 +155,11 @@ def test_should_verify_new_generation_once_per_safety_boundary(
             created_at=FIXED_BACKUP_TIME,
         )
 
-        assert len(verified_artifacts) == 2
-        assert verified_artifacts[0].parent.name.startswith(".backup-staging-")
-        assert verified_artifacts[1].parent.name.startswith("backup-")
+        assert len(verified_artifacts) == 4
+        assert all(
+            artifact.parent.name.startswith((".backup-staging-", "backup-"))
+            for artifact in verified_artifacts
+        )
     finally:
         connection.close()
 
@@ -190,27 +196,30 @@ def test_bkp_meta_01_writes_strict_safe_metadata_and_manifest(tmp_path: Path) ->
             "formatVersion",
             "environmentId",
             "gitCommit",
-            "schemaVersion",
             "createdAt",
             "generationSequence",
-            "sqliteValidation",
-            "conversationCount",
-            "artifactSha256",
+            "artifacts",
         }
-        assert metadata["formatVersion"] == 2
+        assert metadata["formatVersion"] == 3
         assert metadata["environmentId"] == paths.environment_id
         assert metadata["gitCommit"] == FIXED_COMMIT
-        assert metadata["schemaVersion"] == SCHEMA_VERSION
         assert metadata["createdAt"] == "2026-08-08T01:02:03Z"
         assert isinstance(metadata["generationSequence"], int)
         assert metadata["generationSequence"] > 0
-        assert metadata["sqliteValidation"] == "ok"
-        assert metadata["conversationCount"] == 1
-        assert len(metadata["artifactSha256"]) == 64
-        assert manifest["formatVersion"] == 2
+        artifacts = metadata["artifacts"]
+        assert [artifact["filename"] for artifact in artifacts] == [
+            "conversation-history.db",
+            "persona-memory.db",
+        ]
+        assert artifacts[0]["schemaVersion"] == SCHEMA_VERSION
+        assert artifacts[0]["integrityCheck"] == "ok"
+        assert artifacts[0]["recordCount"] == 1
+        assert all(len(artifact["sha256"]) == 64 for artifact in artifacts)
+        assert manifest["formatVersion"] == 3
         assert manifest["complete"] is True
         assert [entry["path"] for entry in manifest["files"]] == [
             "conversation-history.db",
+            "persona-memory.db",
             "metadata.json",
         ]
         assert all(len(entry["sha256"]) == 64 for entry in manifest["files"])
@@ -264,11 +273,12 @@ def test_bkp_verify_01_reports_integrity_schema_tables_and_counts(tmp_path: Path
             backup_directory=generation,
             authentication_key=TEST_AUTHENTICATION_KEY,
         )
+        conversation = result.artifact(CONVERSATION_ARTIFACT_FILENAME)
 
-        assert result.integrity_check == "ok"
-        assert result.schema_version == SCHEMA_VERSION
-        assert result.required_tables == CURRENT_TABLES
-        assert result.conversation_count == 1
+        assert conversation.integrity_check == "ok"
+        assert conversation.schema_version == SCHEMA_VERSION
+        assert conversation.required_tables == CURRENT_TABLES
+        assert conversation.record_count == 1
     finally:
         live_connection.close()
 
@@ -377,7 +387,7 @@ def test_should_create_distinct_verified_generations_for_same_time_and_commit(
             verify_backup(
                 backup_directory=generation,
                 authentication_key=TEST_AUTHENTICATION_KEY,
-            ).conversation_count
+            ).artifact(CONVERSATION_ARTIFACT_FILENAME).record_count
             == 1
             for generation in generations
         )
@@ -461,6 +471,7 @@ def test_bkp_chroma_01_only_packages_sqlite_and_contract_json(tmp_path: Path) ->
 
         assert {entry.name for entry in generation.iterdir()} == {
             "conversation-history.db",
+            "persona-memory.db",
             "metadata.json",
             "manifest.json",
         }
@@ -600,7 +611,9 @@ def test_rst_preflight_01_rejects_coherently_tampered_generation_before_write(
         with sqlite3.connect(artifact) as connection:
             connection.execute("PRAGMA user_version = 2")
         metadata = read_json(metadata_path)
-        metadata["artifactSha256"] = hashlib.sha256(artifact.read_bytes()).hexdigest()
+        metadata["artifacts"][0]["sha256"] = hashlib.sha256(
+            artifact.read_bytes()
+        ).hexdigest()
         metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
         manifest = read_json(manifest_path)
         for entry in manifest["files"]:
@@ -634,7 +647,7 @@ def test_rst_preflight_01_rejects_authenticated_schema_metadata_mismatch(
     )
     destination = initialized_runtime(tmp_path, repository_root, name="destination")
     metadata = read_json(generation / "metadata.json")
-    metadata["schemaVersion"] = 2
+    metadata["artifacts"][0]["schemaVersion"] = 2
     write_contract_files(generation, metadata, TEST_AUTHENTICATION_KEY)
     try:
         with pytest.raises(BackupSchemaError, match="schema"):
@@ -654,7 +667,10 @@ def test_rst_safe_01_preflight_failure_preserves_existing_database_bytes(
     tmp_path: Path,
 ) -> None:
     from app.backup_restore import BackupArtifactError, restore_backup
-    from app.conversation_history.sqlite_lease import SQLITE_LEASE_FILENAME_SUFFIX
+    from app.conversation_history.sqlite_lease import (
+        PERSONA_MEMORY_SQLITE_LEASE_FILENAME_SUFFIX,
+        SQLITE_LEASE_FILENAME_SUFFIX,
+    )
 
     repository_root = tmp_path / "repository"
     repository_root.mkdir()
@@ -681,6 +697,7 @@ def test_rst_safe_01_preflight_failure_preserves_existing_database_bytes(
             ".environment-identity.json",
             ".environment-identity.lock",
             SQLITE_LEASE_FILENAME_SUFFIX,
+            PERSONA_MEMORY_SQLITE_LEASE_FILENAME_SUFFIX,
             "conversation-history.db",
         }
     finally:
@@ -795,12 +812,25 @@ def test_should_reject_destination_with_active_wal_before_replacement(
         source_connection.close()
 
 
-@pytest.mark.parametrize("suffix", ("-journal", "-shm", "-wal"))
+@pytest.mark.parametrize(
+    ("database_name", "suffix"),
+    (
+        ("conversation-history.db", "-journal"),
+        ("conversation-history.db", "-shm"),
+        ("conversation-history.db", "-wal"),
+        ("persona-memory.db", "-journal"),
+        ("persona-memory.db", "-shm"),
+        ("persona-memory.db", "-wal"),
+    ),
+)
 def test_should_reject_malformed_destination_sidecar_before_replacement(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    database_name: str,
     suffix: str,
 ) -> None:
     from app.backup_restore import RestoreSafetyError, restore_backup
+    from app.backup_restore import service
 
     repository_root = tmp_path / "repository"
     repository_root.mkdir()
@@ -810,10 +840,12 @@ def test_should_reject_malformed_destination_sidecar_before_replacement(
     destination = initialized_runtime(tmp_path, repository_root, name="destination")
     destination_connection = create_history_database(destination, wal=False)
     destination_connection.close()
-    destination.sqlite_path.with_name(destination.sqlite_path.name + suffix).write_bytes(
-        b"malformed-sidecar"
-    )
+    initialize_persona_memory_schema(destination, repository_root)
+    database_path = destination.data_root / database_name
+    database_path.with_name(database_path.name + suffix).write_bytes(b"malformed-sidecar")
     before = _data_root_snapshot(destination.data_root)
+    replace = Mock(wraps=os.replace)
+    monkeypatch.setattr(service.os, "replace", replace)
     try:
         with pytest.raises(RestoreSafetyError, match="sidecar"):
             restore_backup(
@@ -823,6 +855,7 @@ def test_should_reject_malformed_destination_sidecar_before_replacement(
                 authentication_key=TEST_AUTHENTICATION_KEY,
             )
 
+        replace.assert_not_called()
         assert _data_root_snapshot(destination.data_root) == before
     finally:
         source_connection.close()
@@ -882,12 +915,14 @@ def test_rst_post_01_restores_to_initialized_empty_root_and_revalidates(tmp_path
             backup_directory=generation,
             authentication_key=TEST_AUTHENTICATION_KEY,
         )
+        restored_conversation = restored.artifact(CONVERSATION_ARTIFACT_FILENAME)
+        verified_conversation = verified.artifact(CONVERSATION_ARTIFACT_FILENAME)
 
-        assert restored.schema_version == SCHEMA_VERSION
-        assert restored.conversation_count == 1
-        assert verified.schema_version == SCHEMA_VERSION
-        assert verified.required_tables == CURRENT_TABLES
-        assert verified.conversation_count == 1
+        assert restored_conversation.schema_version == SCHEMA_VERSION
+        assert restored_conversation.record_count == 1
+        assert verified_conversation.schema_version == SCHEMA_VERSION
+        assert verified_conversation.required_tables == CURRENT_TABLES
+        assert verified_conversation.record_count == 1
         assert database_projection(destination.sqlite_path)[2] == CONVERSATION_SENTINEL
     finally:
         live_connection.close()
@@ -965,7 +1000,7 @@ def test_retention_01_removes_only_old_complete_generations(tmp_path: Path) -> N
     incomplete.mkdir()
     corrupt = backup_root / "backup-corrupt"
     shutil.copytree(generations[-1], corrupt)
-    with (corrupt / "conversation-history.db").open("ab") as artifact:
+    with (corrupt / "persona-memory.db").open("ab") as artifact:
         artifact.write(b"corrupt")
     symlink = backup_root / "backup-20260801T000000Z-symlink"
     symlink.symlink_to(generations[-1], target_is_directory=True)

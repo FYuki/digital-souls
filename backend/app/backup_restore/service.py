@@ -8,7 +8,8 @@ from datetime import UTC, datetime
 from fcntl import LOCK_EX, LOCK_UN, flock
 from pathlib import Path
 from time import time_ns
-from typing import Iterator
+from collections.abc import Iterable
+from typing import Iterator, cast
 from uuid import uuid4
 
 from app.backup_restore.contracts import (
@@ -19,20 +20,24 @@ from app.backup_restore.contracts import (
     write_contract_files,
 )
 from app.backup_restore.models import (
-    ARTIFACT_FILENAME,
+    ARTIFACT_FILENAMES,
+    CONVERSATION_ARTIFACT_FILENAME,
     FORMAT_VERSION,
     GENERATION_PREFIX,
     MANIFEST_FILENAME,
     METADATA_FILENAME,
+    PERSONA_MEMORY_ARTIFACT_FILENAME,
     BackupAuthenticationKey,
     BackupArtifactError,
     BackupError,
     BackupIdentityError,
     BackupPublicationUncertainError,
     BackupVerification,
+    BackupVerificationSet,
     RestoreDurabilityUncertainError,
     RestoreRecoveryRequiredError,
     RestoreSafetyError,
+    VerifiedArtifact,
     VerifiedGeneration,
 )
 from app.backup_restore.sqlite_snapshot import (
@@ -49,6 +54,7 @@ from app.conversation_history.sqlite_lease import (
     acquire_maintenance_lease,
     normal_sqlite_access,
 )
+from app.memory.persistence.schema import initialize_persona_memory_schema
 from app.runtime_data_root import validate_existing_runtime_data_root
 from app.runtime_paths import RuntimePaths
 from app.restore_intent import (
@@ -75,7 +81,9 @@ def create_backup(
     created_at: datetime | None = None,
 ) -> Path:
     validate_existing_runtime_data_root(runtime_paths, repository_root)
-    with normal_sqlite_access(runtime_paths.sqlite_path):
+    with normal_sqlite_access(runtime_paths.sqlite_path), normal_sqlite_access(
+        runtime_paths.persona_memory_sqlite_path
+    ):
         _validate_backup_root(backup_root, runtime_paths.data_root)
         if retention_count <= 0:
             raise ValueError("retention count must be positive")
@@ -85,6 +93,8 @@ def create_backup(
             raise ValueError("backup creation time must include a timezone")
         backup_root.mkdir(parents=True, exist_ok=True)
         with _generation_lock(backup_root):
+            if not runtime_paths.persona_memory_sqlite_path.exists():
+                initialize_persona_memory_schema(runtime_paths, repository_root)
             existing_generations = _verified_generations(
                 backup_root, authentication_key
             )
@@ -93,33 +103,54 @@ def create_backup(
             generation = backup_root / _generation_name(timestamp, commit, uuid4().hex)
             staging.mkdir()
             try:
-                artifact = staging / ARTIFACT_FILENAME
-                create_sqlite_snapshot(runtime_paths.sqlite_path, artifact)
-                verification = verify_sqlite_database(artifact)
+                source_paths = (
+                    runtime_paths.sqlite_path,
+                    runtime_paths.persona_memory_sqlite_path,
+                )
+                verifications: list[BackupVerification] = []
+                artifact_metadata: list[JsonValue] = []
+                for filename, source_path in zip(
+                    ARTIFACT_FILENAMES, source_paths, strict=True
+                ):
+                    artifact = staging / filename
+                    create_sqlite_snapshot(source_path, artifact)
+                    verification = verify_sqlite_database(artifact, filename)
+                    verifications.append(verification)
+                    artifact_metadata.append(
+                        {
+                            "filename": filename,
+                            "schemaVersion": verification.schema_version,
+                            "sha256": sha256_file(artifact),
+                            "integrityCheck": verification.integrity_check,
+                            "requiredTables": cast(
+                                list[JsonValue],
+                                sorted(verification.required_tables),
+                            ),
+                            "recordCount": verification.record_count,
+                        }
+                    )
                 metadata: dict[str, JsonValue] = {
                     "formatVersion": FORMAT_VERSION,
                     "environmentId": runtime_paths.environment_id,
                     "gitCommit": commit,
-                    "schemaVersion": verification.schema_version,
                     "createdAt": timestamp.astimezone(UTC).strftime(
                         "%Y-%m-%dT%H:%M:%SZ"
                     ),
                     "generationSequence": generation_sequence,
-                    "sqliteValidation": verification.integrity_check,
-                    "conversationCount": verification.conversation_count,
-                    "artifactSha256": sha256_file(artifact),
+                    "artifacts": artifact_metadata,
                 }
                 write_contract_files(staging, metadata, authentication_key)
-                verified_metadata, verified_artifact = read_verified_generation(
+                verified_metadata, verified_artifacts = read_verified_generation(
                     staging, authentication_key
                 )
                 staged_generation = verified_generation(
                     staging,
                     verified_metadata,
-                    verified_artifact,
-                    verification,
+                    verified_artifacts,
+                    tuple(verifications),
                 )
-                _fsync_file(artifact)
+                for artifact in verified_artifacts:
+                    _fsync_file(artifact)
                 _fsync_file(staging / METADATA_FILENAME)
                 _fsync_file(staging / MANIFEST_FILENAME)
                 _fsync_directory(staging)
@@ -151,7 +182,7 @@ def create_backup(
 
 def verify_backup(
     *, backup_directory: Path, authentication_key: BackupAuthenticationKey
-) -> BackupVerification:
+) -> BackupVerificationSet:
     return _preflight(backup_directory, authentication_key).verification
 
 
@@ -162,7 +193,7 @@ def restore_backup(
     backup_directory: Path,
     authentication_key: BackupAuthenticationKey,
     maintenance_lease: SQLiteLease | None = None,
-) -> BackupVerification:
+) -> BackupVerificationSet:
     try:
         validate_existing_runtime_data_root(runtime_paths, repository_root)
     except ValueError as error:
@@ -177,9 +208,7 @@ def restore_backup(
         generation = _preflight(backup_directory, authentication_key)
         _require_destination_identity(runtime_paths, generation)
     try:
-        lease_context = _restore_maintenance_lease(
-            runtime_paths.sqlite_path, maintenance_lease
-        )
+        lease_context = _restore_maintenance_leases(runtime_paths, maintenance_lease)
         with lease_context:
             marker_exists_under_lease = restore_intent_exists(
                 runtime_paths.restore_intent_path
@@ -208,13 +237,32 @@ def _replace_database(
     runtime_paths: RuntimePaths,
     generation: VerifiedGeneration,
     existing_intent: RestoreIntent | None,
-) -> BackupVerification:
-    staging = runtime_paths.data_root / f".{ARTIFACT_FILENAME}.staging-{uuid4().hex}"
+) -> BackupVerificationSet:
+    staging = {
+        artifact.filename: runtime_paths.data_root
+        / f".{artifact.filename}.staging-{uuid4().hex}"
+        for artifact in generation.artifacts
+    }
     try:
-        _prepare_restore_staging(generation, staging)
+        pending_artifacts = (
+            generation.artifacts
+            if existing_intent is None
+            else tuple(
+                artifact
+                for artifact in generation.artifacts
+                if not _database_matches_artifact(
+                    _database_path(runtime_paths, artifact.filename), artifact.sha256
+                )
+            )
+        )
+        _prepare_restore_staging(pending_artifacts, staging)
         if existing_intent is None:
-            validate_sqlite_sidecars_for_restore(runtime_paths.sqlite_path)
-        sqlite_before = _sqlite_asset_snapshot(runtime_paths.sqlite_path)
+            for database in _database_paths(runtime_paths):
+                validate_sqlite_sidecars_for_restore(database)
+        sqlite_before = {
+            database: _sqlite_asset_snapshot(database)
+            for database in _database_paths(runtime_paths)
+        }
         if existing_intent is None:
             active_intent = intent_for_generation(
                 runtime_paths.environment_id, generation
@@ -225,7 +273,7 @@ def _replace_database(
             active_intent = existing_intent
             replace_failure_cleanup_intent = None
     except Exception as error:
-        _remove_sqlite_staging_files(staging)
+        _remove_sqlite_staging_files(staging.values())
         if isinstance(error, BackupError):
             raise
         raise RestoreSafetyError("restore preparation failed safely") from error
@@ -233,6 +281,7 @@ def _replace_database(
         runtime_paths,
         generation,
         staging,
+        pending_artifacts,
         active_intent,
         replace_failure_cleanup_intent,
         sqlite_before,
@@ -240,33 +289,44 @@ def _replace_database(
 
 
 def _prepare_restore_staging(
-    generation: VerifiedGeneration,
-    staging: Path,
+    artifacts: tuple[VerifiedArtifact, ...],
+    staging: dict[str, Path],
 ) -> None:
-    shutil.copyfile(generation.artifact_path, staging)
-    if sha256_file(staging) != generation.artifact_sha256:
-        raise BackupArtifactError("copied backup artifact checksum is invalid")
-    result = verify_sqlite_database(staging)
-    if result != generation.verification:
-        raise BackupArtifactError("copied backup validation does not match backup")
-    _fsync_file(staging)
+    for artifact in artifacts:
+        staged_path = staging[artifact.filename]
+        shutil.copyfile(artifact.path, staged_path)
+        if sha256_file(staged_path) != artifact.sha256:
+            raise BackupArtifactError("copied backup artifact checksum is invalid")
+        result = verify_sqlite_database(staged_path, artifact.filename)
+        if result != artifact.verification:
+            raise BackupArtifactError("copied backup validation does not match backup")
+        _fsync_file(staged_path)
 
 
 def _commit_restore(
     runtime_paths: RuntimePaths,
     generation: VerifiedGeneration,
-    staging: Path,
+    staging: dict[str, Path],
+    pending_artifacts: tuple[VerifiedArtifact, ...],
     intent: RestoreIntent,
     replace_failure_cleanup_intent: RestoreIntent | None,
-    sqlite_before: dict[str, tuple[int, int, int, int, int] | None],
-) -> BackupVerification:
+    sqlite_before: dict[Path, dict[str, tuple[int, int, int, int, int] | None]],
+) -> BackupVerificationSet:
     try:
-        os.replace(staging, runtime_paths.sqlite_path)
+        for artifact in pending_artifacts:
+            os.replace(
+                staging[artifact.filename],
+                _database_path(runtime_paths, artifact.filename),
+            )
     except OSError as error:
-        _remove_sqlite_staging_files(staging)
-        if _sqlite_asset_snapshot(runtime_paths.sqlite_path) != sqlite_before:
-            raise RestoreDurabilityUncertainError(
-                RestoreDurabilityUncertainError.public_message
+        _remove_sqlite_staging_files(staging.values())
+        changed = any(
+            _sqlite_asset_snapshot(database) != before
+            for database, before in sqlite_before.items()
+        )
+        if changed:
+            raise RestoreRecoveryRequiredError(
+                RestoreRecoveryRequiredError.public_message
             ) from error
         if replace_failure_cleanup_intent is not None:
             complete_restore_intent(
@@ -274,16 +334,18 @@ def _commit_restore(
             )
         raise RestoreSafetyError("restore database replacement failed safely") from error
     try:
-        remove_replaced_sqlite_sidecars(runtime_paths.sqlite_path)
+        for database in _database_paths(runtime_paths):
+            remove_replaced_sqlite_sidecars(database)
         _fsync_directory(runtime_paths.data_root)
-        result = verify_sqlite_database(runtime_paths.sqlite_path)
-        if (
-            result != generation.verification
-            or sha256_file(runtime_paths.sqlite_path) != generation.artifact_sha256
-        ):
-            raise BackupArtifactError("restored database validation does not match backup")
+        for artifact in generation.artifacts:
+            database = _database_path(runtime_paths, artifact.filename)
+            result = verify_sqlite_database(database, artifact.filename)
+            if result != artifact.verification or sha256_file(database) != artifact.sha256:
+                raise BackupArtifactError(
+                    "restored database validation does not match backup"
+                )
         complete_restore_intent(runtime_paths.restore_intent_path, intent)
-        return result
+        return generation.verification
     except RestoreDurabilityUncertainError:
         raise
     except Exception as error:
@@ -336,19 +398,26 @@ def _require_matching_recovery(
 
 
 @contextmanager
-def _restore_maintenance_lease(
-    database: Path, existing: SQLiteLease | None
-) -> Iterator[SQLiteLease]:
+def _restore_maintenance_leases(
+    runtime_paths: RuntimePaths, existing: SQLiteLease | None
+) -> Iterator[tuple[SQLiteLease, SQLiteLease]]:
     if existing is not None:
-        existing.require_maintenance_for(database)
-        yield existing
+        existing.require_maintenance_for(runtime_paths.sqlite_path)
+        with acquire_maintenance_lease(
+            runtime_paths.persona_memory_sqlite_path
+        ) as persona_lease:
+            yield existing, persona_lease
         return
-    with acquire_maintenance_lease(database) as acquired:
-        yield acquired
+    with acquire_maintenance_lease(runtime_paths.sqlite_path) as conversation_lease:
+        with acquire_maintenance_lease(
+            runtime_paths.persona_memory_sqlite_path
+        ) as persona_lease:
+            yield conversation_lease, persona_lease
 
 
-def _remove_sqlite_staging_files(staging: Path) -> None:
-    _remove_sqlite_database_files(staging)
+def _remove_sqlite_staging_files(staging_paths: Iterable[Path]) -> None:
+    for staging in staging_paths:
+        _remove_sqlite_database_files(staging)
 
 
 def _fsync_file(path: Path) -> None:
@@ -375,18 +444,25 @@ def verify_restored_backup(
     repository_root: Path,
     backup_directory: Path,
     authentication_key: BackupAuthenticationKey,
-) -> BackupVerification:
+) -> BackupVerificationSet:
     validate_existing_runtime_data_root(runtime_paths, repository_root)
-    with normal_sqlite_access(runtime_paths.sqlite_path):
+    with normal_sqlite_access(runtime_paths.sqlite_path), normal_sqlite_access(
+        runtime_paths.persona_memory_sqlite_path
+    ):
         generation = _preflight(backup_directory, authentication_key)
         if generation.environment_id != runtime_paths.environment_id:
             raise BackupIdentityError(
                 "backup environment identity does not match destination"
             )
-        verification = verify_sqlite_database(runtime_paths.sqlite_path)
-        if verification != generation.verification:
+        verifications = tuple(
+            verify_sqlite_database(
+                _database_path(runtime_paths, artifact.filename), artifact.filename
+            )
+            for artifact in generation.artifacts
+        )
+        if verifications != generation.verification.artifacts:
             raise BackupArtifactError("restored database validation does not match backup")
-        return verification
+        return generation.verification
 
 
 def _prune_backup_generations(
@@ -439,15 +515,38 @@ def _generation_lock(backup_root: Path) -> Iterator[None]:
 def _preflight(
     backup_directory: Path, authentication_key: BackupAuthenticationKey
 ) -> VerifiedGeneration:
-    metadata, artifact = read_verified_generation(
+    metadata, artifacts = read_verified_generation(
         backup_directory, authentication_key
+    )
+    verifications = tuple(
+        verify_sqlite_database(artifact, filename)
+        for filename, artifact in zip(ARTIFACT_FILENAMES, artifacts, strict=True)
     )
     return verified_generation(
         backup_directory,
         metadata,
-        artifact,
-        verify_sqlite_database(artifact),
+        artifacts,
+        verifications,
     )
+
+
+def _database_paths(runtime_paths: RuntimePaths) -> tuple[Path, Path]:
+    return runtime_paths.sqlite_path, runtime_paths.persona_memory_sqlite_path
+
+
+def _database_path(runtime_paths: RuntimePaths, filename: str) -> Path:
+    if filename == CONVERSATION_ARTIFACT_FILENAME:
+        return runtime_paths.sqlite_path
+    if filename == PERSONA_MEMORY_ARTIFACT_FILENAME:
+        return runtime_paths.persona_memory_sqlite_path
+    raise BackupArtifactError("backup artifact filename is unsupported")
+
+
+def _database_matches_artifact(database: Path, expected_sha256: str) -> bool:
+    try:
+        return sha256_file(database) == expected_sha256
+    except FileNotFoundError:
+        return False
 
 
 def _validate_backup_root(backup_root: Path, data_root: Path) -> None:

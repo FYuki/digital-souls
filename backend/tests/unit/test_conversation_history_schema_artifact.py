@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from app.backup_restore.models import CONVERSATION_ARTIFACT_FILENAME
 from app.conversation_history import schema
 from tests.backup_restore_test_support import create_version_two_database
 
@@ -45,7 +46,9 @@ def test_schema_api_01_uses_encoded_sqlite_uris(
 
     inspection = schema.inspect_conversation_history_artifact_schema(source)
     create_sqlite_snapshot(source, destination)
-    verification = verify_sqlite_database(destination)
+    verification = verify_sqlite_database(
+        destination, CONVERSATION_ARTIFACT_FILENAME
+    )
 
     assert inspection.migration_required is True
     assert verification.schema_version == 2
