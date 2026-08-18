@@ -51,6 +51,10 @@ CREATE TABLE approved_memories (
     content_version INTEGER NOT NULL CHECK (content_version > 0),
     status TEXT NOT NULL CHECK (status IN ('ACTIVE', 'INACTIVE')),
     idempotency_key TEXT NOT NULL UNIQUE CHECK (length(trim(idempotency_key)) > 0),
+    last_write_idempotency_key TEXT CHECK (
+        last_write_idempotency_key IS NULL
+        OR length(trim(last_write_idempotency_key)) > 0
+    ),
     effective_at TEXT NOT NULL,
     effective_timezone TEXT NOT NULL CHECK (length(trim(effective_timezone)) > 0),
     temporal_precision TEXT NOT NULL CHECK (

@@ -74,7 +74,7 @@ class ApprovedMemoryRepository:
             candidate
         )
         with self._database.transaction() as connection:
-            connection.execute(
+            insert_result = connection.execute(
                 "INSERT INTO approved_memories ("
                 "id, character_id, provider_id, memory_kind, memory_type, "
                 "episodic_event_type, formation_method, schema_version, "
@@ -84,7 +84,8 @@ class ApprovedMemoryRepository:
                 "effective_timezone, temporal_precision, expires_at, "
                 "last_user_mentioned_at, last_consolidated_at, created_at, updated_at"
                 ") VALUES (?, ?, 'core', ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, "
-                "1, 'ACTIVE', ?, ?, ?, ?, ?, ?, NULL, ?, ?)",
+                "1, 'ACTIVE', ?, ?, ?, ?, ?, ?, NULL, ?, ?) "
+                "ON CONFLICT(idempotency_key) DO NOTHING",
                 (
                     str(memory_id),
                     character_id,
@@ -109,8 +110,20 @@ class ApprovedMemoryRepository:
                     format_datetime(now),
                 ),
             )
-            self._insert_outbox(connection, memory_id, character_id, "UPSERT", now)
-            return _select_memory(connection, character_id, memory_id)
+            memory = _select_memory_by_idempotency_key(
+                connection,
+                character_id,
+                context.idempotency_key,
+            )
+            if insert_result.rowcount == 1:
+                self._insert_outbox(
+                    connection,
+                    memory_id,
+                    character_id,
+                    "UPSERT",
+                    now,
+                )
+            return memory
 
     def correct(
         self,
@@ -134,7 +147,8 @@ class ApprovedMemoryRepository:
                 "episodic_event_type = ?, formation_method = ?, normalized_text = ?, "
                 "structured_value = ?, policy_version = ?, classifier_version = ?, "
                 "model_id = ?, model_digest = ?, prompt_version = ?, "
-                "content_version = content_version + 1, idempotency_key = ?, "
+                "content_version = content_version + 1, "
+                "last_write_idempotency_key = ?, "
                 "effective_at = ?, effective_timezone = ?, temporal_precision = ?, "
                 "expires_at = ?, updated_at = ? "
                 "WHERE character_id = ? AND id = ?",
@@ -294,25 +308,49 @@ def _select_memory(
     return _memory_from_row(row)
 
 
+def _select_memory_by_idempotency_key(
+    connection: sqlite3.Connection,
+    character_id: str,
+    idempotency_key: str,
+) -> ApprovedMemory:
+    row = connection.execute(
+        f"SELECT {APPROVED_COLUMNS} FROM approved_memories "
+        "WHERE character_id = ? AND idempotency_key = ?",
+        (character_id, idempotency_key),
+    ).fetchone()
+    if row is None:
+        raise LookupError("approved memory was not found")
+    return _memory_from_row(row)
+
+
 def _memory_from_row(row: sqlite3.Row) -> ApprovedMemory:
-    memory_type = MemoryType(str(row[2]))
+    memory_type = MemoryType(str(row["memory_type"]))
     return ApprovedMemory(
-        id=UUID(str(row[0])),
-        character_id=str(row[1]),
+        id=UUID(str(row["id"])),
+        character_id=str(row["character_id"]),
         memory_type=memory_type,
-        structured_value=_deserialize_structured_value(memory_type, str(row[3])),
-        normalized_text=str(row[4]),
-        content_version=int(row[5]),
-        status=MemoryStatus(str(row[6])),
-        effective_at=parse_datetime(str(row[7])),
-        effective_timezone=str(row[8]),
-        temporal_precision=TemporalPrecision(str(row[9])),
-        expires_at=None if row[10] is None else parse_datetime(str(row[10])),
-        last_user_mentioned_at=(
-            None if row[11] is None else parse_datetime(str(row[11]))
+        structured_value=_deserialize_structured_value(
+            memory_type,
+            str(row["structured_value"]),
         ),
-        created_at=parse_datetime(str(row[12])),
-        updated_at=parse_datetime(str(row[13])),
+        normalized_text=str(row["normalized_text"]),
+        content_version=int(row["content_version"]),
+        status=MemoryStatus(str(row["status"])),
+        effective_at=parse_datetime(str(row["effective_at"])),
+        effective_timezone=str(row["effective_timezone"]),
+        temporal_precision=TemporalPrecision(str(row["temporal_precision"])),
+        expires_at=(
+            None
+            if row["expires_at"] is None
+            else parse_datetime(str(row["expires_at"]))
+        ),
+        last_user_mentioned_at=(
+            None
+            if row["last_user_mentioned_at"] is None
+            else parse_datetime(str(row["last_user_mentioned_at"]))
+        ),
+        created_at=parse_datetime(str(row["created_at"])),
+        updated_at=parse_datetime(str(row["updated_at"])),
     )
 
 

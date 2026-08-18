@@ -133,6 +133,8 @@ def build_conversation_idempotency_key(
         (extractor_version, "extractor_version"),
     ):
         _require_non_empty(value, field_name)
+        if ":" in value:
+            raise ValueError(f"{field_name} must not contain ':'")
     if (
         isinstance(candidate_index, bool)
         or not isinstance(candidate_index, int)

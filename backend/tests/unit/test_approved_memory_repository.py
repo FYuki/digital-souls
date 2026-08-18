@@ -110,6 +110,25 @@ def test_save_accepts_an_approved_candidate_and_creates_pending_upsert_atomicall
     assert outbox_rows[0]["status"] == "PENDING"
 
 
+def test_save_retry_returns_the_existing_memory_without_duplicate_rows(
+    tmp_path: Path,
+) -> None:
+    repository, database_path = _repository(tmp_path)
+
+    memories = [
+        repository.save(
+            character_id="miori",
+            candidate=_candidate(),
+            context=_context(),
+        )
+        for _ in range(3)
+    ]
+
+    assert [memory.id for memory in memories] == [memories[0].id] * 3
+    assert len(_rows(database_path, "approved_memories")) == 1
+    assert len(_rows(database_path, "memory_index_outbox")) == 1
+
+
 def test_save_normalizes_instants_to_utc_and_preserves_temporal_metadata(
     tmp_path: Path,
 ) -> None:
@@ -203,6 +222,55 @@ def test_correct_updates_content_version_and_creates_another_pending_upsert(
     assert corrected.content_version == 2
     assert [row["operation"] for row in outbox_rows] == ["UPSERT", "UPSERT"]
     assert [row["status"] for row in outbox_rows] == ["PENDING", "PENDING"]
+
+
+def test_save_retry_after_correction_returns_the_corrected_memory_without_duplicates(
+    tmp_path: Path,
+) -> None:
+    repository, database_path = _repository(tmp_path)
+    original_context = _context()
+    memory = repository.save(
+        character_id="miori", candidate=_candidate(), context=original_context
+    )
+    repository.correct(
+        character_id="miori",
+        memory_id=memory.id,
+        candidate=_candidate("ユーザーは簡潔な回答を好む"),
+        context=replace(original_context, idempotency_key="correction-key"),
+    )
+
+    retried = repository.save(
+        character_id="miori",
+        candidate=_candidate(),
+        context=original_context,
+    )
+
+    assert retried.id == memory.id
+    assert retried.normalized_text == "ユーザーは簡潔な回答を好む"
+    assert retried.content_version == 2
+    assert len(_rows(database_path, "approved_memories")) == 1
+    assert len(_rows(database_path, "memory_index_outbox")) == 2
+
+
+def test_correct_preserves_the_save_key_and_records_the_correction_key(
+    tmp_path: Path,
+) -> None:
+    repository, database_path = _repository(tmp_path)
+    original_context = _context()
+    memory = repository.save(
+        character_id="miori", candidate=_candidate(), context=original_context
+    )
+
+    repository.correct(
+        character_id="miori",
+        memory_id=memory.id,
+        candidate=_candidate("ユーザーは簡潔な回答を好む"),
+        context=replace(original_context, idempotency_key="correction-key"),
+    )
+
+    row = _rows(database_path, "approved_memories")[0]
+    assert row["idempotency_key"] == original_context.idempotency_key
+    assert row["last_write_idempotency_key"] == "correction-key"
 
 
 def test_correct_rolls_back_content_when_outbox_insert_fails(tmp_path: Path) -> None:
@@ -361,10 +429,8 @@ def test_character_boundary_applies_to_read_correct_touch_and_delete(
         lambda: repository.hard_delete(character_id="other", memory_id=memory.id),
     )
     for operation in operations:
-        try:
+        with pytest.raises(LookupError):
             operation()
-        except Exception:
-            continue
 
     assert len(_rows(database_path, "approved_memories")) == 1
     assert len(_rows(database_path, "memory_index_outbox")) == 1
@@ -436,3 +502,49 @@ def test_idempotency_key_is_deterministic_from_source_metadata() -> None:
         candidate_index=0,
         extractor_version="extractor-v1",
     )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    (
+        ("character_id", "mi:ori"),
+        ("conversation_id", "conversation:1"),
+        ("turn_id", "turn:1"),
+        ("extractor_version", "extractor:v1"),
+    ),
+)
+def test_idempotency_key_rejects_delimiters_in_string_components(
+    field_name: str,
+    value: str,
+) -> None:
+    from app.memory.persistence.contracts import build_conversation_idempotency_key
+
+    arguments = {
+        "character_id": "miori",
+        "conversation_id": "conversation-1",
+        "turn_id": "turn-1",
+        "candidate_index": 0,
+        "extractor_version": "extractor-v1",
+    }
+    arguments[field_name] = value
+
+    with pytest.raises(ValueError):
+        build_conversation_idempotency_key(**arguments)
+
+
+def test_idempotency_key_rejects_ambiguous_component_boundaries() -> None:
+    from app.memory.persistence.contracts import build_conversation_idempotency_key
+
+    ambiguous_inputs = (
+        {"character_id": "a:b", "conversation_id": "c"},
+        {"character_id": "a", "conversation_id": "b:c"},
+    )
+
+    for component_values in ambiguous_inputs:
+        with pytest.raises(ValueError):
+            build_conversation_idempotency_key(
+                **component_values,
+                turn_id="turn-1",
+                candidate_index=0,
+                extractor_version="extractor-v1",
+            )

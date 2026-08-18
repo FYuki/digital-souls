@@ -181,6 +181,7 @@ prompt_version
 content_version
 status: ACTIVE / INACTIVE
 idempotency_key: unique
+last_write_idempotency_key: nullable
 effective_at
 effective_timezone
 temporal_precision
@@ -203,6 +204,13 @@ provider record等との関係を保持する。複数のsourceから形成さ�
 - `CONSOLIDATED_FROM`
 - `SUPERSEDES`
 - `DUPLICATE_OF`
+
+Issue #8では`memory_sources`と`memory_lineage`はtable定義だけを提供し、書き込み経路は
+後続Issueへ分離する。source情報の供給元である候補抽出（#10）とruntime統合（#29）が未実装で、
+現行の`ApprovedMemoryCandidate`もsource識別子を保持しないためである。後続Issueでは`save`／
+`correct`の公開APIへsource引数を追加し、`approved_memories`と`memory_sources`を同一transactionで
+書き込む。`CONSOLIDATED_FROM`／`SUPERSEDES`／`DUPLICATE_OF`はnightly consolidation（#48）だけが
+生成するため、`memory_lineage`の書き込みも同Issueへ分離する。
 
 ChromaにはSQLiteの`memory_id`、`normalized_text`、embeddingと検索filterに必要な最小metadataだけを
 mirrorする。`last_user_mentioned_at`だけが変わる場合、Chromaは更新しない。

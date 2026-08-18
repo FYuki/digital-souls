@@ -123,15 +123,15 @@ def _select_record(
     if row is None:
         raise LookupError("temporary provider record was not found")
     return TemporaryProviderRecord(
-        id=UUID(str(row[0])),
-        character_id=str(row[1]),
-        provider_id=str(row[2]),
-        source_ref=str(row[3]),
-        record_type=str(row[4]),
-        structured_value=str(row[5]),
-        effective_at=parse_datetime(str(row[6])),
-        created_at=parse_datetime(str(row[7])),
-        updated_at=parse_datetime(str(row[8])),
+        id=UUID(str(row["id"])),
+        character_id=str(row["character_id"]),
+        provider_id=str(row["provider_id"]),
+        source_ref=str(row["source_ref"]),
+        record_type=str(row["record_type"]),
+        structured_value=str(row["structured_value"]),
+        effective_at=parse_datetime(str(row["effective_at"])),
+        created_at=parse_datetime(str(row["created_at"])),
+        updated_at=parse_datetime(str(row["updated_at"])),
     )
 
 

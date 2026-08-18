@@ -157,10 +157,8 @@ def test_temporary_delete_requires_character_and_provider_boundaries(
         ),
     )
     for operation in operations:
-        try:
+        with pytest.raises(LookupError):
             operation()
-        except Exception:
-            continue
 
     with sqlite3.connect(database_path) as connection:
         remaining = connection.execute(
