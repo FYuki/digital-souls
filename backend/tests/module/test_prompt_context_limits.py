@@ -62,11 +62,6 @@ class _HistoryService:
         return self._session
 
 
-class _TaskQueue:
-    def add_task(self, func, *args, **kwargs) -> None:
-        return None
-
-
 def _service(
     *,
     turns: tuple[object, ...],
@@ -86,11 +81,9 @@ def _service(
         _chat_runtime.ChatRuntimeConfig(
             rag_enabled=False,
             memory_policy=None,
-            privacy_scanner=None,
             prompt_config=config,
             chroma_path=Path("/test/runtime-data/chroma"),
         ),
-        _TaskQueue(),
         _HistoryService(_HistorySession(turns)),
         _chat_runtime.ChatRuntimeDependencies(
             character_prompt_loader=lambda character: card.to_character_prompt(),
@@ -104,8 +97,6 @@ def _service(
 def test_should_reject_user_input_using_formal_provider_count(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app import _chat_runtime
-
     monkeypatch.setenv("USER_INPUT_TOKEN_LIMIT", "1")
     monkeypatch.setenv("ASSISTANT_MAX_GENERATION_TOKENS", "1")
     monkeypatch.setenv("OLLAMA_CONTEXT_TOKENS", "20")
@@ -156,8 +147,6 @@ def test_should_return_persisted_reply_with_history_session_contract(
 def test_should_reserve_assistant_tokens_and_keep_latest_completed_or_fail(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app import _chat_runtime
-
     monkeypatch.setenv("USER_INPUT_TOKEN_LIMIT", "10")
     monkeypatch.setenv("ASSISTANT_MAX_GENERATION_TOKENS", "18")
     monkeypatch.setenv("OLLAMA_CONTEXT_TOKENS", "20")

@@ -1,4 +1,5 @@
 import os
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 def positive_integer_environment_value(key: str, default: int) -> int:
@@ -11,4 +12,16 @@ def positive_integer_environment_value(key: str, default: int) -> int:
         raise ValueError(f"{key} must be a positive integer") from exc
     if value < 1 or str(value) != raw_value:
         raise ValueError(f"{key} must be a positive integer")
+    return value
+
+
+def iana_timezone_environment_value(key: str, default: str) -> str:
+    raw_value = os.getenv(key)
+    value = default if raw_value is None else raw_value
+    try:
+        timezone = ZoneInfo(value)
+    except (TypeError, ValueError, ZoneInfoNotFoundError) as exc:
+        raise ValueError(f"{key} must be an IANA timezone name") from exc
+    if timezone.key != value:
+        raise ValueError(f"{key} must be an IANA timezone name")
     return value

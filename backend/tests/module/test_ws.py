@@ -32,9 +32,6 @@ _COUNT_INPUT_TOKENS = "app.llm.router.count_input_tokens"
 _BUILD_AUGMENTED_SYSTEM_PROMPT = (
     "app._chat_runtime._rag_service.retrieve_prompt_memories"
 )
-_RECORD_USER_MEMORY_CANDIDATE = (
-    "app._chat_runtime._rag_service.record_user_memory_candidate"
-)
 _RESOLVED_MEMORY_POLICY = "app.main.resolved_memory_policy"
 _LOAD_TTS_CONFIG = "app.audio_pipeline.load_tts_config"
 _TRANSCRIBE = "app.stt.whisper_client.WhisperTranscriber.transcribe"
@@ -384,7 +381,7 @@ class TestWebSocketEndpoint:
 
         assert _generated_contents(mock_gen)[-1] == user_message
 
-    def test_rag_enabled_uses_prompt_and_records_user_memory_candidate(
+    def test_rag_enabled_uses_retrieved_memories_in_the_prompt(
         self, monkeypatch, runtime_paths
     ):
         user_message = "前回なんの話をしたっけ？"
@@ -408,14 +405,11 @@ class TestWebSocketEndpoint:
                         ),
                     ) as mock_build:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
-                            with patch(
-                                _RECORD_USER_MEMORY_CANDIDATE
-                            ) as mock_record:
-                                with client.websocket_connect(_WS_URL) as websocket:
-                                    websocket.send_json(
-                                        {"type": "text", "message": user_message},
-                                    )
-                                    response = websocket.receive_json()
+                            with client.websocket_connect(_WS_URL) as websocket:
+                                websocket.send_json(
+                                    {"type": "text", "message": user_message},
+                                )
+                                response = websocket.receive_json()
 
         _assert_persisted_content_frame(response, _LLM_REPLY)
         mock_build.assert_called_once_with(
@@ -425,14 +419,6 @@ class TestWebSocketEndpoint:
             chroma_path=runtime_paths.chroma_path,
         )
         assert "前回は畑の話をした" in _generated_contents(mock_gen)[1]
-        mock_record.assert_called_once()
-        args, kwargs = mock_record.call_args
-        assert args[:2] == ("miori", user_message)
-        assert args[2] is policy
-        assert hasattr(args[3], "add_task")
-        assert hasattr(kwargs["privacy_scanner"], "scan")
-        assert kwargs["chroma_path"] == runtime_paths.chroma_path
-
     def test_returns_422_when_payload_is_not_json_object(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
@@ -2425,130 +2411,3 @@ class TestWebSocketFlow:
             {"role": "system", "content": f"## 応答方針\n{system_prompt}"},
             {"role": "user", "content": "自己紹介してください"},
         ]
-
-    def test_rag_search_injection_and_recording_flow_through_websocket(
-        self, tmp_path, monkeypatch
-    ):
-        import app.characters.loader as loader_module
-        import app.memory.rag_service as rag_service
-
-        monkeypatch.setenv("RAG_ENABLED", "true")
-        system_prompt = "# 光織\nあなたは光織です。"
-        _write_character(tmp_path, "miori", system_prompt)
-        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
-
-        stored_memories = []
-        llm_payloads = []
-
-        def fake_embed_text(content: str) -> list[float]:
-            return [float(len(content))]
-
-        def fake_add_memory(
-            character, record_id, embedding, content, metadata, *, chroma_path
-        ):
-            stored_memories.append(
-                {
-                    "character": character,
-                    "record_id": record_id,
-                    "embedding": embedding,
-                    "content": content,
-                    "metadata": metadata,
-                }
-            )
-
-        def fake_query_memories(
-            character, embedding, n_results, *, chroma_path
-        ):
-            return [
-                MemorySearchResult(
-                    content=memory["content"],
-                    timestamp=memory["metadata"]["timestamp"],
-                    role=memory["metadata"]["role"],
-                )
-                for memory in stored_memories[:n_results]
-                if memory["character"] == character
-            ]
-
-        def capture_post(*args, **kwargs):
-            llm_payloads.append(kwargs["json"])
-            return _ollama_response("記録しました。")
-
-        monkeypatch.setattr(rag_service, "embed_text", fake_embed_text)
-        monkeypatch.setattr(rag_service, "add_memory", fake_add_memory)
-        monkeypatch.setattr(rag_service, "query_memories", fake_query_memories)
-
-        with patch("app.llm.ollama_client.httpx.post", side_effect=capture_post):
-            with TestClient(app) as client:
-                with client.websocket_connect(_WS_URL) as websocket:
-                    websocket.send_json(
-                        {
-                            "type": "text",
-                            "message": "農業日誌: 2026-06-23はトマト畑に水やりした",
-                        },
-                    )
-                    first_response = websocket.receive_json()
-                    _wait_until(lambda: len(stored_memories) == 1)
-
-                    websocket.send_json(
-                        {"type": "text", "message": "前回の畑作業は?"},
-                    )
-                    second_response = websocket.receive_json()
-
-        _assert_persisted_content_frame(first_response, "記録しました。")
-        _assert_persisted_content_frame(second_response, "記録しました。")
-        rag_prompt = llm_payloads[-1]["messages"][1]["content"]
-        assert "関連する記憶" in rag_prompt
-        assert "2026-06-23はトマト畑に水やりした" in rag_prompt
-        assert stored_memories[0]["content"] == (
-            "農業日誌: 2026-06-23はトマト畑に水やりした"
-        )
-
-    def test_rag_storage_failure_does_not_block_or_write_fallback(
-        self, tmp_path, monkeypatch
-    ):
-        import app.characters.loader as loader_module
-        import app.memory.rag_service as rag_service
-
-        monkeypatch.setenv("RAG_ENABLED", "true")
-        system_prompt = "# 光織\nあなたは光織です。"
-        user_message = "農業日誌: 2026-06-23はナスに追肥した"
-        _write_character(tmp_path, "miori", system_prompt)
-        monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
-
-        add_started = threading.Event()
-        release_add = threading.Event()
-
-        def fake_embed_text(content: str) -> list[float]:
-            return [float(len(content))]
-
-        def failing_add_memory(
-            character, record_id, embedding, content, metadata, *, chroma_path
-        ):
-            add_started.set()
-            release_add.wait(timeout=5)
-            raise RuntimeError("injected chroma add failure")
-
-        monkeypatch.setattr(rag_service, "embed_text", fake_embed_text)
-        monkeypatch.setattr(rag_service, "query_memories", lambda *args, **kwargs: [])
-        monkeypatch.setattr(rag_service, "add_memory", failing_add_memory)
-
-        with patch(
-            "app.llm.ollama_client.httpx.post",
-            return_value=_ollama_response("農業日誌として保存しました。"),
-        ):
-            with TestClient(app) as client:
-                with client.websocket_connect(_WS_URL) as websocket:
-                    release_timer = threading.Timer(1.0, release_add.set)
-                    release_timer.start()
-                    websocket.send_json({"type": "text", "message": user_message})
-                    response = websocket.receive_json()
-                    release_timer.cancel()
-                    assert add_started.wait(timeout=5)
-                    assert not release_add.is_set()
-                    _assert_persisted_content_frame(
-                        response,
-                        "農業日誌として保存しました。",
-                    )
-                    release_add.set()
-
-        assert not tmp_path.joinpath("data", "failed-memories.jsonl").exists()

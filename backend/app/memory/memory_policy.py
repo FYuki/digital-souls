@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from re import Pattern
 
-from app.memory.rag_record import MemoryCandidateRecord
 from app.privacy.contracts import PrivacyCategory, StorageScope
 from app.privacy.normalization import build_normalized_view
 
@@ -444,24 +443,3 @@ def contains_sensitive_memory(content: str, policy: MemoryPolicy) -> bool:
     terms = policy.terms
     normalized = content.lower()
     return any(term.lower() in normalized for term in terms.sensitive_terms)
-
-
-def contains_non_storable_memory(content: str, policy: MemoryPolicy) -> bool:
-    terms = policy.terms
-    normalized = content.lower()
-    return contains_sensitive_memory(content, policy) or any(
-        term.lower() in normalized for term in terms.do_not_store_terms
-    )
-
-
-def is_long_term_memory_candidate(
-    record: MemoryCandidateRecord,
-    policy: MemoryPolicy,
-) -> bool:
-    terms = policy.terms
-    normalized = record.content.lower()
-    if contains_non_storable_memory(record.content, policy):
-        return False
-    return any(term.lower() in normalized for term in terms.explicit_memory_terms) or any(
-        marker in record.content for marker in terms.long_term_memory_markers
-    )

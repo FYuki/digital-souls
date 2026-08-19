@@ -208,6 +208,21 @@ class ConversationHistoryRepository:
             policy_version=None,
         )
 
+    def get_turn(
+        self,
+        conversation_id: UUID,
+        turn_id: UUID,
+    ) -> ConversationTurn | None:
+        _require_uuid4(conversation_id)
+        _require_uuid4(turn_id)
+        with self._database.connection() as connection:
+            row = connection.execute(
+                f"SELECT {TURN_COLUMNS} FROM conversation_turns "
+                "WHERE conversation_id = ? AND turn_id = ?",
+                (str(conversation_id), str(turn_id)),
+            ).fetchone()
+        return None if row is None else turn_from_row(row)
+
     def create_privacy_skipped_turn(
         self,
         character_id: str,

@@ -105,7 +105,7 @@ class RagAdmissionEvaluator:
             return self._result(RagAdmissionDecision.NOT_MEMORY_WORTHY)
         if not isinstance(candidate_slot_scans, Mapping):
             return self._result(RagAdmissionDecision.ABSTAIN_UNKNOWN)
-        if set(candidate_slot_scans) != set(self._slot_values(structured_value)):
+        if set(candidate_slot_scans) != set(self.slot_values(structured_value)):
             return self._result(RagAdmissionDecision.ABSTAIN_UNKNOWN)
         scans = tuple(candidate_slot_scans.values())
         if any(isinstance(scan, ScanFailure) for scan in scans):
@@ -117,7 +117,7 @@ class RagAdmissionEvaluator:
             return self._result(RagAdmissionDecision.DENY_SENSITIVE)
         if any(
             placeholder in slot_value
-            for slot_value in self._slot_values(structured_value).values()
+            for slot_value in self.slot_values(structured_value).values()
             for placeholder in self._placeholders
         ):
             return self._result(RagAdmissionDecision.DENY_SENSITIVE)
@@ -162,7 +162,7 @@ class RagAdmissionEvaluator:
         return None
 
     @staticmethod
-    def _slot_values(value: StructuredValue) -> dict[str, str]:
+    def slot_values(value: StructuredValue) -> dict[str, str]:
         if isinstance(value, EpisodicEventValue):
             return {"topic": value.topic}
         if isinstance(value, UserPreferenceValue):

@@ -497,25 +497,11 @@ class TestRuntimeConfiguration:
             def close(self) -> None:
                 raise RuntimeError("audio close failed")
 
-        class RecordingExecutor:
-            def __init__(self, *args, **kwargs):
-                self.shutdown_called = False
-
-            def shutdown(self, wait: bool) -> None:
-                self.shutdown_called = wait
-
-        executor = RecordingExecutor()
         monkeypatch.setattr(
             main,
             "create_audio_pipeline_service",
             lambda _runtime_config: FailingAudioPipelineService(),
         )
-        monkeypatch.setattr(
-            main,
-            "ThreadPoolExecutor",
-            lambda *args, **kwargs: executor,
-        )
-
         with pytest.raises(RuntimeError, match="audio close failed"):
             with TestClient(main.app):
                 assert hasattr(main.app.state, "audio_pipeline_service")
@@ -523,31 +509,8 @@ class TestRuntimeConfiguration:
         assert not hasattr(main.app.state, "conversation_history_repository")
         assert not hasattr(main.app.state, "chat_service")
         assert not hasattr(main.app.state, "audio_pipeline_service")
-        assert executor.shutdown_called is True
         with pytest.raises(chat_service.ChatServiceError):
             chat_service.generate_chat_reply("miori", CONVERSATION_ID, "hello")
-
-    def test_main_lifespan_shuts_down_chat_service_task_queue_executor(self, monkeypatch):
-        import app.main as main
-
-        class RecordingExecutor:
-            def __init__(self, *args, **kwargs):
-                self.shutdown_called = False
-
-            def shutdown(self, wait: bool) -> None:
-                self.shutdown_called = wait
-
-        executor = RecordingExecutor()
-
-        def executor_factory(*args, **kwargs):
-            return executor
-
-        monkeypatch.setattr(main, "ThreadPoolExecutor", executor_factory)
-
-        with TestClient(main.app):
-            assert executor.shutdown_called is False
-
-        assert executor.shutdown_called is True
 
     def test_main_lifespan_propagates_prompt_environment_to_chat_runtime_config(
         self,
@@ -571,7 +534,6 @@ class TestRuntimeConfiguration:
 
         def create_chat_service_stub(
             runtime_config,
-            _memory_task_queue,
             _conversation_history_service,
             dependencies,
         ):
@@ -605,24 +567,11 @@ class TestRuntimeConfiguration:
         import app.chat_service as chat_service
         import app.main as main
 
-        class RecordingExecutor:
-            def __init__(self, *args, **kwargs):
-                self.shutdown_called = False
-
-            def shutdown(self, wait: bool) -> None:
-                self.shutdown_called = wait
-
-        executor = RecordingExecutor()
-
-        def executor_factory(*args, **kwargs):
-            return executor
-
         def fail_config_resolution(
-            _policy, _privacy_scanner, _prompt_config, _runtime_paths
+            _policy, _prompt_config, _runtime_paths
         ):
             raise ValueError("invalid memory policy")
 
-        monkeypatch.setattr(main, "ThreadPoolExecutor", executor_factory)
         monkeypatch.setattr(
             main._chat_runtime,
             "resolve_chat_runtime_config",
@@ -633,7 +582,6 @@ class TestRuntimeConfiguration:
             with TestClient(main.app):
                 raise AssertionError("startup should fail before yielding")
 
-        assert executor.shutdown_called is True
         assert not hasattr(main.app.state, "conversation_history_repository")
         assert not hasattr(main.app.state, "chat_service")
         assert not hasattr(main.app.state, "audio_pipeline_service")

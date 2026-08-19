@@ -3,7 +3,6 @@ import logging
 import os
 import threading
 from collections.abc import Callable
-from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -22,7 +21,6 @@ from app.memory import memory_policy as _memory_policy
 from app.model_settings import ModelSettings
 from app.runtime_paths import RuntimePaths
 from app.memory import rag_service as _rag_service
-from app.privacy.contracts import PrivacyScanner
 from app.prompting import (
     BuiltPrompt,
     CharacterPrompt,
@@ -35,22 +33,10 @@ from app.prompting import (
 
 RAG_ENABLED_ENV = "RAG_ENABLED"
 RAG_ENABLED_VALUE = "true"
-RAG_MEMORY_THREAD_PREFIX = "rag-memory"
-DEFAULT_RAG_MEMORY_WORKERS = 4
 logger = logging.getLogger(__name__)
 
 _default_service_lock = threading.Lock()
 _default_service_resolvers: list[Callable[[], "ChatService"]] = []
-
-
-class MemoryTaskQueue(Protocol):
-    def add_task(
-        self,
-        func: Callable[..., object],
-        *args: object,
-        **kwargs: object,
-    ) -> None:
-        ...
 
 
 class CharacterPromptLoader(Protocol):
@@ -103,55 +89,10 @@ class _ChatTokenCounter:
         return self.count_tokens(messages)
 
 
-class ThreadPoolMemoryTaskQueue:
-    def __init__(self, executor: ThreadPoolExecutor) -> None:
-        self._executor = executor
-        self._futures: set[Future[object]] = set()
-        self._lock = threading.Lock()
-
-    def add_task(
-        self,
-        func: Callable[..., object],
-        *args: object,
-        **kwargs: object,
-    ) -> None:
-        future = self._executor.submit(func, *args, **kwargs)
-        with self._lock:
-            self._futures.add(future)
-        future.add_done_callback(_log_task_failure)
-        future.add_done_callback(self._discard_future)
-
-    def drain(self) -> None:
-        while True:
-            with self._lock:
-                futures = tuple(self._futures)
-            if not futures:
-                return
-            for future in futures:
-                future.result()
-
-    def shutdown(self) -> None:
-        self.drain()
-        self._executor.shutdown(wait=True)
-
-    def _discard_future(self, future: Future[object]) -> None:
-        with self._lock:
-            self._futures.discard(future)
-
-
-def _log_task_failure(future: Future[object]) -> None:
-    if future.cancelled():
-        return
-    exception = future.exception()
-    if exception is not None:
-        logger.warning("RAG background task failed: %s", exception.__class__.__name__)
-
-
 @dataclass(frozen=True)
 class ChatRuntimeConfig:
     rag_enabled: bool
     memory_policy: _memory_policy.MemoryPolicy | None
-    privacy_scanner: PrivacyScanner | None
     prompt_config: ModelSettings
     chroma_path: Path
 
@@ -160,8 +101,6 @@ class ChatRuntimeConfig:
 class _ResolvedChatContext:
     character_prompt: CharacterPrompt
     memory_policy: _memory_policy.MemoryPolicy | None
-    privacy_scanner: PrivacyScanner | None
-    memory_task_queue: MemoryTaskQueue
     prompt_config: ModelSettings
     chroma_path: Path
 
@@ -216,23 +155,14 @@ class ChatService:
     def __init__(
         self,
         runtime_config: ChatRuntimeConfig,
-        memory_task_queue: MemoryTaskQueue,
         conversation_history_service: HistoryService,
         dependencies: ChatRuntimeDependencies,
     ) -> None:
         if runtime_config.rag_enabled and runtime_config.memory_policy is None:
             raise ValueError("memory policy is required when RAG is enabled")
-        if runtime_config.rag_enabled and runtime_config.privacy_scanner is None:
-            raise ValueError("privacy scanner is required when RAG is enabled")
         if not runtime_config.rag_enabled and runtime_config.memory_policy is not None:
             raise ValueError("memory policy must be omitted when RAG is disabled")
-        if (
-            not runtime_config.rag_enabled
-            and runtime_config.privacy_scanner is not None
-        ):
-            raise ValueError("privacy scanner must be omitted when RAG is disabled")
         self._runtime_config = runtime_config
-        self._memory_task_queue = memory_task_queue
         self._conversation_history_service = conversation_history_service
         self._dependencies = dependencies
 
@@ -245,7 +175,6 @@ class ChatService:
         context = _resolve_chat_context(
             character,
             self._runtime_config,
-            self._memory_task_queue,
             self._dependencies,
         )
         history_session = self._conversation_history_service.open_session(
@@ -270,7 +199,6 @@ class ChatService:
         context = _resolve_chat_context(
             character,
             self._runtime_config,
-            self._memory_task_queue,
             self._dependencies,
         )
         return _generate_recorded_reply(
@@ -306,7 +234,6 @@ class ChatService:
 
 def resolve_chat_runtime_config(
     policy: _memory_policy.MemoryPolicy,
-    privacy_scanner: PrivacyScanner,
     prompt_config: ModelSettings,
     runtime_paths: RuntimePaths,
 ) -> ChatRuntimeConfig:
@@ -314,7 +241,6 @@ def resolve_chat_runtime_config(
     return ChatRuntimeConfig(
         rag_enabled=rag_enabled,
         memory_policy=policy if rag_enabled else None,
-        privacy_scanner=privacy_scanner if rag_enabled else None,
         prompt_config=prompt_config,
         chroma_path=runtime_paths.chroma_path,
     )
@@ -322,22 +248,14 @@ def resolve_chat_runtime_config(
 
 def create_chat_service(
     runtime_config: ChatRuntimeConfig,
-    memory_task_queue: MemoryTaskQueue,
     conversation_history_service: HistoryService,
     dependencies: ChatRuntimeDependencies,
 ) -> ChatService:
     return ChatService(
         runtime_config,
-        memory_task_queue,
         conversation_history_service,
         dependencies,
     )
-
-
-def create_thread_pool_memory_task_queue(
-    executor: ThreadPoolExecutor,
-) -> ThreadPoolMemoryTaskQueue:
-    return ThreadPoolMemoryTaskQueue(executor)
 
 
 def register_default_chat_service_resolver(
@@ -383,7 +301,6 @@ def _load_character_prompt(
 def _resolve_chat_context(
     character: str,
     runtime_config: ChatRuntimeConfig,
-    memory_task_queue: MemoryTaskQueue,
     dependencies: ChatRuntimeDependencies,
 ) -> _ResolvedChatContext:
     character_prompt = _load_character_prompt(
@@ -394,16 +311,12 @@ def _resolve_chat_context(
         return _ResolvedChatContext(
             character_prompt=character_prompt,
             memory_policy=None,
-            privacy_scanner=None,
-            memory_task_queue=memory_task_queue,
             prompt_config=runtime_config.prompt_config,
             chroma_path=runtime_config.chroma_path,
         )
     return _ResolvedChatContext(
         character_prompt=character_prompt,
         memory_policy=runtime_config.memory_policy,
-        privacy_scanner=runtime_config.privacy_scanner,
-        memory_task_queue=memory_task_queue,
         prompt_config=runtime_config.prompt_config,
         chroma_path=runtime_config.chroma_path,
     )
@@ -451,25 +364,6 @@ def _call_llm(
     return reply
 
 
-def _record_user_memory_candidate(
-    character: str,
-    message: str,
-    context: _ResolvedChatContext,
-) -> None:
-    if context.memory_policy is None:
-        return
-    if context.privacy_scanner is None:
-        raise ValueError("privacy scanner is required for RAG memory recording")
-    _rag_service.record_user_memory_candidate(
-        character,
-        message,
-        context.memory_policy,
-        context.memory_task_queue,
-        privacy_scanner=context.privacy_scanner,
-        chroma_path=context.chroma_path,
-    )
-
-
 def _generate_reply(
     character: str,
     message: str,
@@ -515,7 +409,6 @@ def _generate_recorded_reply(
             dependencies,
         )
         persisted_turn = history_session.complete_turn(started_turn, reply)
-        _record_user_memory_candidate(character, message, context)
     except Exception:
         try:
             history_session.fail_turn(started_turn)

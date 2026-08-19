@@ -1,9 +1,8 @@
 import sqlite3
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-from fastapi.testclient import TestClient
 from tests.conversation_history_test_support import CONVERSATION_ID
 
 pytestmark = pytest.mark.usefixtures("existing_chat_conversations")
@@ -101,33 +100,3 @@ def test_should_mark_turn_failed_for_empty_assistant_response(
         "failed",
         None,
     )
-
-
-def test_should_reject_policy_sensitive_content_at_rag_storage_entry(
-    monkeypatch,
-) -> None:
-    import app.main as main
-    import app.memory.rag_service as rag_service
-
-    user_message = "PROJECT-SECRET-0001 を覚えて"
-    create_record = MagicMock()
-    monkeypatch.setenv("RAG_ENABLED", "true")
-    monkeypatch.setattr(rag_service, "create_memory_candidate_record", create_record)
-
-    with patch(
-        "app._chat_runtime._rag_service.retrieve_prompt_memories",
-        return_value=(),
-    ):
-        with patch(_GENERATE_RESPONSE, return_value="承知しました"):
-            with TestClient(main.app) as client:
-                response = client.post(
-                    "/chat",
-                    json={
-                        "character": "miori",
-                        "conversation_id": str(CONVERSATION_ID),
-                        "message": user_message,
-                    },
-                )
-
-    assert response.status_code == 200
-    create_record.assert_not_called()

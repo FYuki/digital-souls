@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from contextlib import contextmanager
 from fcntl import LOCK_EX, LOCK_UN, flock
 from pathlib import Path
@@ -17,6 +18,7 @@ from app.conversation_history.sqlite_lease import (
 
 MARKER_SCHEMA_VERSION: Final = 1
 IDENTITY_LOCK_FILENAME = ".environment-identity.lock"
+_CHROMA_INDEX_CUTOVER_MARKER_FILENAME = ".legacy-chroma-index-removed"
 IGNORED_SCAFFOLDING_NAMES = frozenset(
     {
         ".gitkeep",
@@ -51,6 +53,25 @@ def validate_existing_runtime_data_root(
     if not paths.identity_marker_path.exists():
         raise ValueError("runtime data root identity marker is missing")
     _validate_identity_marker(paths)
+
+
+def remove_legacy_chroma_index_once(
+    paths: RuntimePaths,
+    repository_root: Path,
+) -> None:
+    _validate_path_contract(paths, repository_root)
+    completion_marker = paths.data_root / _CHROMA_INDEX_CUTOVER_MARKER_FILENAME
+    with _identity_lock(paths.data_root):
+        if completion_marker.exists():
+            if not completion_marker.is_file():
+                raise ValueError("Chroma index cutover marker must be a file")
+            return
+        chroma_path = paths.chroma_path
+        if chroma_path.is_dir():
+            shutil.rmtree(chroma_path)
+        elif chroma_path.exists():
+            chroma_path.unlink()
+        _create_chroma_index_cutover_marker(completion_marker)
 
 
 def validate_runtime_projection(
@@ -101,6 +122,7 @@ def _validate_derived_paths(paths: RuntimePaths) -> None:
         paths.whisper_cache_path,
         paths.identity_marker_path,
         paths.restore_intent_path,
+        paths.data_root / _CHROMA_INDEX_CUTOVER_MARKER_FILENAME,
         paths.data_root / IDENTITY_LOCK_FILENAME,
         paths.data_root / SQLITE_LEASE_FILENAME_SUFFIX,
         paths.data_root / PERSONA_MEMORY_SQLITE_LEASE_FILENAME_SUFFIX,
@@ -166,6 +188,18 @@ def _create_identity_marker(paths: RuntimePaths) -> None:
         return
     with os.fdopen(descriptor, "w", encoding="utf-8") as marker:
         marker.write(payload)
+        marker.flush()
+        os.fsync(marker.fileno())
+
+
+def _create_chroma_index_cutover_marker(marker_path: Path) -> None:
+    descriptor = os.open(
+        marker_path,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+        0o600,
+    )
+    with os.fdopen(descriptor, "w", encoding="utf-8") as marker:
+        marker.write("completed\n")
         marker.flush()
         os.fsync(marker.fileno())
 

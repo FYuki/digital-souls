@@ -1,10 +1,8 @@
-import ast
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
-import pytest
 from fastapi.testclient import TestClient
 
 from app.conversation_history.config import ConversationHistoryConfig
@@ -212,69 +210,3 @@ class TestConversationHistoryRuntime:
 
         assert not hasattr(main.app.state, "conversation_history_repository")
         assert not hasattr(main.app.state, "conversation_lifecycle_service")
-
-    def test_should_remove_repository_state_when_executor_creation_fails(
-        self,
-        tmp_path: Path,
-        monkeypatch,
-    ) -> None:
-        import app.main as main
-
-        _patch_runtime_config(
-            monkeypatch,
-            _runtime_config(tmp_path / "runtime-history.db"),
-        )
-
-        def fail_executor_creation(*_args, **_kwargs):
-            raise RuntimeError("executor creation failed")
-
-        monkeypatch.setattr(main, "ThreadPoolExecutor", fail_executor_creation)
-
-        with pytest.raises(RuntimeError, match="executor creation failed"):
-            with TestClient(main.app):
-                raise AssertionError("startup should fail before yielding")
-
-        assert not hasattr(main.app.state, "conversation_history_repository")
-
-
-class TestRagHistorySeparation:
-    def test_should_keep_rag_operations_separate_from_history_tables(self) -> None:
-        import app.memory.rag_service as rag_service
-        import app.memory.memory_policy as memory_policy
-
-        syntax_trees = [
-            ast.parse(Path(module.__file__).read_text(encoding="utf-8"))
-            for module in (rag_service, memory_policy)
-        ]
-        imported_modules = {
-            node.module
-            for syntax_tree in syntax_trees
-            for node in ast.walk(syntax_tree)
-            if isinstance(node, ast.ImportFrom)
-            and node.module is not None
-        }
-        string_literals = {
-            node.value.lower()
-            for syntax_tree in syntax_trees
-            for node in ast.walk(syntax_tree)
-            if isinstance(node, ast.Constant) and isinstance(node.value, str)
-        }
-
-        forbidden_imports = {
-            module
-            for module in imported_modules
-            if module.startswith("app.conversation_history")
-            or module == "app.memory.conversation_log"
-        }
-        forbidden_sql = {
-            value
-            for value in string_literals
-            if "conversation_turns" in value
-            or "insert into conversations" in value
-            or "from conversations" in value
-        }
-
-        assert callable(rag_service.retrieve_prompt_memories)
-        assert callable(rag_service.record_user_memory_candidate)
-        assert forbidden_imports == set()
-        assert forbidden_sql == set()
