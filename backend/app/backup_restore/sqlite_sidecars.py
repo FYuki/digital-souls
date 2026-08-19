@@ -37,7 +37,7 @@ def validate_sqlite_sidecars_for_restore(database: Path) -> None:
         shm_status is not None and not stat.S_ISREG(shm_status.st_mode)
     ):
         raise RestoreSafetyError("restore destination SQLite sidecar state is uncertain")
-    if wal_status.st_size == 0 and shm_status is None:
+    if wal_status.st_size == 0:
         return
     _validate_wal_shape(wal, wal_status.st_size)
     _verify_on_scratch(database)
@@ -59,9 +59,6 @@ def _verify_on_scratch(database: Path) -> None:
             )
         for suffix in ("", SQLITE_WAL_SUFFIX):
             shutil.copyfile(_sidecar(database, suffix), _sidecar(scratch, suffix))
-        source_shm = _sidecar(database, SQLITE_SHM_SUFFIX)
-        if source_shm.exists():
-            shutil.copyfile(source_shm, _sidecar(scratch, SQLITE_SHM_SUFFIX))
         _checkpoint(scratch)
         scratch_wal = _sidecar(scratch, SQLITE_WAL_SUFFIX)
         if scratch_wal.exists() and scratch_wal.stat().st_size != 0:

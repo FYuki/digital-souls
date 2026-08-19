@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import sqlite3
 from argparse import Namespace
+from contextlib import closing
 from pathlib import Path
 from time import perf_counter
 from unittest.mock import Mock
@@ -11,10 +13,16 @@ from unittest.mock import Mock
 import pytest
 from fastapi import FastAPI
 
+from app.backup_restore.models import CONVERSATION_ARTIFACT_FILENAME
 from tests.backup_restore_test_support import (
+    FIXED_BACKUP_TIME,
+    FIXED_COMMIT,
     TEST_AUTHENTICATION_KEY,
+    create_history_database,
+    create_persona_memory_database,
     create_version_two_database,
     initialized_runtime,
+    persona_memory_projection,
 )
 
 
@@ -212,6 +220,57 @@ def test_cli_ops_01_uses_runtime_path_resolver_once_for_backup(
     )
 
 
+@pytest.mark.parametrize("operation", ("verify", "restore"))
+def test_cli_ops_01_prints_verification_for_both_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    operation: str,
+) -> None:
+    from app.backup_restore import create_backup
+    from commands import backup_restore_command
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    source = initialized_runtime(tmp_path, repository_root, name="source")
+    history = create_history_database(source, wal=False)
+    create_persona_memory_database(
+        source, repository_root, with_approved_memory=True
+    )
+    try:
+        generation = create_backup(
+            runtime_paths=source,
+            repository_root=repository_root,
+            backup_root=tmp_path / "backups",
+            retention_count=2,
+            authentication_key=TEST_AUTHENTICATION_KEY,
+            git_commit=FIXED_COMMIT,
+            created_at=FIXED_BACKUP_TIME,
+        )
+    finally:
+        history.close()
+    monkeypatch.setenv("DOGFOOD_BACKUP_AUTHENTICATION_KEY", "ab" * 32)
+
+    if operation == "verify":
+        exit_code = backup_restore_command.verify_environment_backup(str(generation))
+    else:
+        destination = initialized_runtime(
+            tmp_path, repository_root, name="destination"
+        )
+        monkeypatch.setenv("DS_DATA_DIR", str(destination.data_root))
+        exit_code = backup_restore_command.restore_environment_backup(
+            "test", str(repository_root), str(generation)
+        )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert [artifact["filename"] for artifact in payload["artifacts"]] == [
+        "conversation-history.db",
+        "persona-memory.db",
+    ]
+    assert [artifact["recordCount"] for artifact in payload["artifacts"]] == [1, 1]
+
+
 @pytest.mark.anyio
 async def test_schema_gate_01_backup_failure_prevents_schema_initialization(
     monkeypatch: pytest.MonkeyPatch,
@@ -363,10 +422,13 @@ def test_should_create_then_verify_backup_for_dogfood_version_two_schema(
     assert rollback is not None
     assert rollback.generation == generations[0]
     assert rollback.authentication_key == TEST_AUTHENTICATION_KEY
-    assert verify_backup(
+    verification = verify_backup(
         backup_directory=generations[0],
         authentication_key=TEST_AUTHENTICATION_KEY,
-    ).schema_version == 2
+    )
+    assert (
+        verification.artifact(CONVERSATION_ARTIFACT_FILENAME).schema_version == 2
+    )
 
 
 @pytest.mark.parametrize(
@@ -536,6 +598,9 @@ async def test_should_restore_verified_generation_when_schema_initialization_fai
         tmp_path, repository_root, environment_id="dogfood", name="runtime"
     )
     create_version_two_database(paths.sqlite_path)
+    create_persona_memory_database(
+        paths, repository_root, with_approved_memory=True
+    )
     operations = Mock()
     create_spy = Mock(wraps=create_backup)
     verify_spy = Mock(wraps=verify_backup)
@@ -549,6 +614,9 @@ async def test_should_restore_verified_generation_when_schema_initialization_fai
     def initialize_then_fail(database_path: Path) -> None:
         operations.initialize(database_path)
         initialize_conversation_history_schema(database_path)
+        with closing(sqlite3.connect(paths.persona_memory_sqlite_path)) as connection:
+            connection.execute("DELETE FROM approved_memories")
+            connection.commit()
         raise RuntimeError("schema initialization failed")
 
     monkeypatch.setenv("DOGFOOD_BACKUP_DIR", str(tmp_path / "backups"))
@@ -591,6 +659,7 @@ async def test_should_restore_verified_generation_when_schema_initialization_fai
             "SELECT COUNT(*) FROM conversations"
         ).fetchone()[0]
         assert conversation_count == 1
+    assert persona_memory_projection(paths.persona_memory_sqlite_path) == (1, 1)
 
 
 @pytest.mark.anyio

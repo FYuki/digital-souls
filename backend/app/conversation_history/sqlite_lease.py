@@ -8,8 +8,17 @@ from fcntl import LOCK_EX, LOCK_NB, LOCK_SH, LOCK_UN, flock
 from pathlib import Path
 from typing import IO, Iterator, Literal
 
+from app.runtime_paths import PERSONA_MEMORY_SQLITE_FILENAME, SQLITE_FILENAME
 
-SQLITE_LEASE_FILENAME_SUFFIX = ".conversation-history.lease"
+
+def sqlite_lease_filename(database_filename: str) -> str:
+    return f".{Path(database_filename).stem}.lease"
+
+
+SQLITE_LEASE_FILENAME_SUFFIX = sqlite_lease_filename(SQLITE_FILENAME)
+PERSONA_MEMORY_SQLITE_LEASE_FILENAME_SUFFIX = sqlite_lease_filename(
+    PERSONA_MEMORY_SQLITE_FILENAME
+)
 
 
 class SQLiteLeaseUnavailableError(RuntimeError):
@@ -45,7 +54,7 @@ _CURRENT_SQLITE_LEASE: ContextVar[SQLiteLease | None] = ContextVar(
 
 
 def _lease_path(database_path: Path) -> Path:
-    return database_path.parent / SQLITE_LEASE_FILENAME_SUFFIX
+    return database_path.parent / sqlite_lease_filename(database_path.name)
 
 
 def ensure_sqlite_lease_file(database_path: Path) -> None:

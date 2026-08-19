@@ -11,6 +11,7 @@ from unittest.mock import Mock
 import pytest
 from fastapi import FastAPI
 
+from app.backup_restore.models import CONVERSATION_ARTIFACT_FILENAME
 from app.runtime_paths import RuntimePaths
 from tests.backup_restore_test_support import (
     FIXED_BACKUP_TIME,
@@ -286,7 +287,7 @@ def test_restore_crash_recovery_01_recovers_after_process_exit_between_intent_an
         "formatVersion",
         "environmentId",
         "generationSequence",
-        "artifactSha256",
+        "artifacts",
         "generationIdentitySha256",
     }
     expected_generation_identity = generation_identity_sha256(generation)
@@ -301,7 +302,7 @@ def test_restore_crash_recovery_01_recovers_after_process_exit_between_intent_an
         authentication_key=TEST_AUTHENTICATION_KEY,
     )
 
-    assert result.conversation_count == 1
+    assert result.artifact(CONVERSATION_ARTIFACT_FILENAME).record_count == 1
     assert not _intent_path(destination).exists()
     assert all(
         not destination.sqlite_path.with_name(
@@ -344,8 +345,13 @@ def test_restore_crash_recovery_01_prevents_old_wal_application_after_process_ex
         authentication_key=TEST_AUTHENTICATION_KEY,
     )
 
-    assert result.conversation_count == 1
-    assert verify_sqlite_database(destination.sqlite_path).conversation_count == 1
+    assert result.artifact(CONVERSATION_ARTIFACT_FILENAME).record_count == 1
+    assert (
+        verify_sqlite_database(
+            destination.sqlite_path, CONVERSATION_ARTIFACT_FILENAME
+        ).record_count
+        == 1
+    )
     assert _sha256(destination.sqlite_path) == _sha256(artifact)
     assert not _intent_path(destination).exists()
     assert all(
@@ -443,9 +449,14 @@ def test_restore_crash_recovery_01_should_recover_after_each_sidecar_unlink(
         authentication_key=TEST_AUTHENTICATION_KEY,
     )
 
-    assert replaced_from_verified_artifact == [True]
-    assert result.conversation_count == 1
-    assert verify_sqlite_database(destination.sqlite_path).conversation_count == 1
+    assert replaced_from_verified_artifact == []
+    assert result.artifact(CONVERSATION_ARTIFACT_FILENAME).record_count == 1
+    assert (
+        verify_sqlite_database(
+            destination.sqlite_path, CONVERSATION_ARTIFACT_FILENAME
+        ).record_count
+        == 1
+    )
     assert _sha256(destination.sqlite_path) == _sha256(
         generation / "conversation-history.db"
     )

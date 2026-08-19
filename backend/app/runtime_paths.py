@@ -8,7 +8,7 @@ from pathlib import Path
 ENVIRONMENT_ID_ENV = "DS_ENVIRONMENT_ID"
 DATA_DIR_ENV = "DS_DATA_DIR"
 IDENTITY_MARKER_FILENAME = ".environment-identity.json"
-RESTORE_INTENT_FILENAME = ".conversation-history.restore-intent.json"
+RESTORE_INTENT_FILENAME = ".sqlite-restore-intent.json"
 SQLITE_FILENAME = "conversation-history.db"
 PERSONA_MEMORY_SQLITE_FILENAME = "persona-memory.db"
 CHROMA_DIRECTORY = "chroma"

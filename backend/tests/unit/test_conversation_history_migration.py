@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from app.backup_restore.models import CONVERSATION_ARTIFACT_FILENAME
 from app.conversation_history import schema
 from app.conversation_history.errors import LegacySchemaError
 from app.conversation_history.schema import (
@@ -252,7 +253,8 @@ def test_should_create_verified_backup_before_version_two_migration(
         backup_directory=generation,
         authentication_key=TEST_AUTHENTICATION_KEY,
     )
+    conversation = result.artifact(CONVERSATION_ARTIFACT_FILENAME)
 
-    assert result.schema_version == 2
-    assert result.required_tables == {"conversations", "conversation_turns"}
-    assert result.conversation_count == 1
+    assert conversation.schema_version == 2
+    assert conversation.required_tables == {"conversations", "conversation_turns"}
+    assert conversation.record_count == 1

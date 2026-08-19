@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from app.backup_restore import (
+    BackupVerificationSet,
     create_backup,
     resolve_backup_authentication_key,
     restore_backup,
@@ -61,7 +62,7 @@ def verify_environment_backup(backup_directory_value: str) -> int:
         backup_directory=Path(backup_directory_value),
         authentication_key=resolve_backup_authentication_key(os.environ),
     )
-    _print_verification(result.schema_version, result.conversation_count)
+    _print_verification(result)
     return 0
 
 
@@ -80,7 +81,7 @@ def restore_environment_backup(
         backup_directory=Path(backup_directory_value),
         authentication_key=authentication_key,
     )
-    _print_verification(result.schema_version, result.conversation_count)
+    _print_verification(result)
     return 0
 
 
@@ -99,7 +100,7 @@ def verify_restored_environment_backup(
         backup_directory=Path(backup_directory_value),
         authentication_key=authentication_key,
     )
-    _print_verification(result.schema_version, result.conversation_count)
+    _print_verification(result)
     return 0
 
 
@@ -110,12 +111,18 @@ def _runtime_environment(environment_id: str) -> dict[str, str]:
     }
 
 
-def _print_verification(schema_version: int, conversation_count: int) -> None:
+def _print_verification(result: BackupVerificationSet) -> None:
     _print_json(
         {
             "status": "ok",
-            "schemaVersion": schema_version,
-            "conversationCount": conversation_count,
+            "artifacts": [
+                {
+                    "filename": artifact.filename,
+                    "schemaVersion": artifact.schema_version,
+                    "recordCount": artifact.record_count,
+                }
+                for artifact in result.artifacts
+            ],
         }
     )
 

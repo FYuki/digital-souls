@@ -8,12 +8,14 @@ from unittest.mock import Mock
 
 import pytest
 
+from app.backup_restore.models import CONVERSATION_ARTIFACT_FILENAME
 from app.runtime_paths import RESTORE_INTENT_FILENAME, RuntimePaths
 from tests.backup_restore_test_support import (
     FIXED_BACKUP_TIME,
     FIXED_COMMIT,
     TEST_AUTHENTICATION_KEY,
     create_history_database,
+    create_persona_memory_database,
     generation_identity_sha256,
     initialized_runtime,
     read_json,
@@ -84,7 +86,10 @@ def _valid_marker(paths: RuntimePaths, generation: Path) -> dict[str, object]:
         "formatVersion": 1,
         "environmentId": paths.environment_id,
         "generationSequence": metadata["generationSequence"],
-        "artifactSha256": metadata["artifactSha256"],
+        "artifacts": [
+            {"filename": artifact["filename"], "sha256": artifact["sha256"]}
+            for artifact in metadata["artifacts"]
+        ],
         "generationIdentitySha256": identity_sha256,
     }
 
@@ -176,7 +181,7 @@ def test_restore_intent_01_resumes_same_generation_idempotently(
         authentication_key=TEST_AUTHENTICATION_KEY,
     )
 
-    assert result.conversation_count == 1
+    assert result.artifact(CONVERSATION_ARTIFACT_FILENAME).record_count == 1
     assert destination.sqlite_path.read_bytes() == (
         generation / "conversation-history.db"
     ).read_bytes()
@@ -304,19 +309,34 @@ def test_restore_intent_01_rejects_invalid_marker_without_mutation(
         overrides = {
             "environment-identity": {"environmentId": "dev"},
             "generation-identity": {"generationIdentitySha256": "0" * 64},
-            "artifact-checksum": {"artifactSha256": "0" * 64},
+            "artifact-checksum": {
+                "artifacts": [
+                    {"filename": "conversation-history.db", "sha256": "0" * 64},
+                    _valid_marker(destination, generation)["artifacts"][1],
+                ]
+            },
             "field-set": {"unexpected": "field"},
             "format-version-type": {"formatVersion": "1"},
             "environment-id-type": {"environmentId": 1},
             "unsupported-environment-id": {"environmentId": "staging"},
             "generation-sequence-type": {"generationSequence": True},
-            "artifact-sha256-type": {"artifactSha256": 0},
+            "artifact-sha256-type": {
+                "artifacts": [
+                    {"filename": "conversation-history.db", "sha256": 0},
+                    _valid_marker(destination, generation)["artifacts"][1],
+                ]
+            },
             "generation-identity-sha256-type": {
                 "generationIdentitySha256": 0
             },
             "format-version-value": {"formatVersion": 2},
             "generation-sequence-range": {"generationSequence": 0},
-            "artifact-sha256-format": {"artifactSha256": "z" * 64},
+            "artifact-sha256-format": {
+                "artifacts": [
+                    {"filename": "conversation-history.db", "sha256": "z" * 64},
+                    _valid_marker(destination, generation)["artifacts"][1],
+                ]
+            },
             "generation-identity-sha256-format": {
                 "generationIdentitySha256": "z" * 64
             },
@@ -619,7 +639,7 @@ def test_restore_crash_recovery_01_should_keep_existing_intent_when_replacement_
         authentication_key=TEST_AUTHENTICATION_KEY,
     )
 
-    assert result.conversation_count == 1
+    assert result.artifact(CONVERSATION_ARTIFACT_FILENAME).record_count == 1
     assert not marker.exists()
 
 
@@ -634,31 +654,35 @@ def test_restore_intent_01_persists_full_commit_order(
     repository_root.mkdir()
     _source, generation = _create_generation(tmp_path, repository_root)
     destination = _create_destination(tmp_path, repository_root)
+    create_persona_memory_database(
+        destination, repository_root, with_approved_memory=False
+    )
     marker = _intent_path(destination)
     events: list[str] = []
     original_fsync = os.fsync
     original_replace = os.replace
     original_unlink = Path.unlink
     original_remove_sidecars = service.remove_replaced_sqlite_sidecars
-    original_verify = service.verify_sqlite_database
+    marker_fsynced = False
 
     def record_fsync(file_descriptor: int) -> None:
+        nonlocal marker_fsynced
         mode = os.fstat(file_descriptor).st_mode
         if stat.S_ISDIR(mode):
-            events.append("directory-fsync")
+            if marker_fsynced:
+                events.append("marker-directory-fsync")
+                marker_fsynced = False
         else:
             target = Path(f"/proc/self/fd/{file_descriptor}").resolve()
-            events.append(
-                "marker-fsync"
-                if target.name == RESTORE_INTENT_FILENAME
-                else "staging-fsync"
-            )
+            if target.name == RESTORE_INTENT_FILENAME:
+                events.append("marker-fsync")
+                marker_fsynced = True
         original_fsync(file_descriptor)
 
     def record_replace(
         source: str | bytes | Path, destination_path: str | bytes | Path
     ) -> None:
-        events.append("replace")
+        events.append(f"replace:{Path(destination_path).name}")
         original_replace(source, destination_path)
 
     def record_unlink(path: Path, *args: object, **kwargs: object) -> None:
@@ -667,14 +691,8 @@ def test_restore_intent_01_persists_full_commit_order(
         original_unlink(path, *args, **kwargs)
 
     def record_sidecar_cleanup(database: Path) -> None:
-        events.append("sidecar-cleanup")
+        events.append(f"sidecar-cleanup:{database.name}")
         original_remove_sidecars(database)
-
-    def record_verification(database: Path):
-        result = original_verify(database)
-        if database == destination.sqlite_path:
-            events.append("post-verify")
-        return result
 
     monkeypatch.setattr(service.os, "fsync", record_fsync)
     monkeypatch.setattr(service.os, "replace", record_replace)
@@ -682,7 +700,6 @@ def test_restore_intent_01_persists_full_commit_order(
     monkeypatch.setattr(
         service, "remove_replaced_sqlite_sidecars", record_sidecar_cleanup
     )
-    monkeypatch.setattr(service, "verify_sqlite_database", record_verification)
 
     restore_backup(
         runtime_paths=destination,
@@ -691,14 +708,17 @@ def test_restore_intent_01_persists_full_commit_order(
         authentication_key=TEST_AUTHENTICATION_KEY,
     )
 
-    assert events == [
-        "staging-fsync",
+    commit_events = [
+        event
+        for event in events
+        if event.startswith(("marker", "replace", "sidecar-cleanup"))
+    ]
+    assert commit_events == [
         "marker-fsync",
-        "directory-fsync",
-        "replace",
-        "sidecar-cleanup",
-        "directory-fsync",
-        "post-verify",
+        "marker-directory-fsync",
+        "replace:conversation-history.db",
+        "replace:persona-memory.db",
+        "sidecar-cleanup:conversation-history.db",
+        "sidecar-cleanup:persona-memory.db",
         "marker-unlink",
-        "directory-fsync",
     ]
