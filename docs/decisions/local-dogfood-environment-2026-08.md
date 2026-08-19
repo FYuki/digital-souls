@@ -92,6 +92,11 @@ data root自体をcloneの削除対象へ含めない。
 dogfoodのbackupはSQLite WALを考慮した整合性を持ち、環境ID、commit、schema version、作成日時、
 検証結果をmetadataとして保持する。restoreは空の別data rootで定期的に実証する。
 
+複数SQLite artifact対応への移行後、`backup-verify`、`restore`、`restore-verify`の成功時JSONは、
+従来のトップレベル`schemaVersion`と`conversationCount`を返さない。代わりに`artifacts`配列の
+各要素が`filename`、`schemaVersion`、`recordCount`を返す。旧fieldを参照する運用scriptは、
+対象の`filename`で配列要素を選択して新fieldを読むよう移行する。
+
 ### 6. Wave 2受入まではdogfoodのRAGを無効にする
 
 dogfood環境の利用はWave 2より先に開始してよいが、Wave 2親Issue #28の受入までは
