@@ -213,9 +213,9 @@ rollbackは引数なしで現在manifestの直前commitへ、`--to`で保存済�
 
 deployment manifestは`DOGFOOD_STATE_DIR/deployments/`へ`root:digital-souls`、`0640`で保存する。1操作1 JSON、`current.json`が最新状態を表し、履歴は新しい20世代だけを保持する。commit、Profile schema、SQLite data schema、backup ID、UTC deploy時刻だけを記録し、会話本文、prompt、秘密値は保存しない。`dogfood.env`はdeploy、rollback、manifest、logへ複製しない。
 
-## Conversation historyのbackup／restore
+## SQLite artifactのbackup／restore
 
-SQLiteの`conversation-history.db`を会話履歴の正本とする。backupはSQLite公式backup APIで作成するため、WALへcommit済みで未checkpointの履歴も整合したsnapshotへ含まれる。Chromaは再構築可能な派生indexであり、backupへ含めない。
+SQLiteの`conversation-history.db`を会話履歴、`persona-memory.db`を人格記憶の正本とし、同じgenerationで一組としてbackup／restoreする。backupはSQLite公式backup APIで作成するため、WALへcommit済みで未checkpointのデータも整合したsnapshotへ含まれる。Chromaは再構築可能な派生indexであり、backupへ含めない。
 
 保存先はruntime data rootと分離した`DOGFOOD_BACKUP_DIR=/var/lib/digital-souls/backups`である。世代名は`backup-YYYYMMDDTHHMMSSZ-COMMIT先頭12文字-一意ID先頭12文字`、保持数は`DOGFOOD_BACKUP_RETENTION_COUNT=7`とする。完成済みの正規世代だけが古い順に整理され、不明なfile、手動directory、作業中世代は削除されない。
 
@@ -255,7 +255,7 @@ unset DOGFOOD_BACKUP_AUTHENTICATION_KEY
 set -o history
 ```
 
-CLIは成功時に0、identity不一致は10、artifact不正は11、schema不一致は12、非破壊切替失敗は13、backup公開結果不確定は14、restore durability不確定は15、restore中断からの復旧要求は16、その他の入力・OSエラーは1を返す。出力する証跡は環境ID、UTC日時、commit、schema version、conversation件数、検証結果に限定する。metadata、manifest、標準出力、標準エラー、作業logへconversation本文、DB本文、環境変数全体、秘密値を転記しない。
+CLIは成功時に0、identity不一致は10、artifact不正は11、schema不一致は12、非破壊切替失敗は13、backup公開結果不確定は14、restore durability不確定は15、restore中断からの復旧要求は16、その他の入力・OSエラーは1を返す。`backup-verify`、`restore`、`restore-verify`の成功時JSONは、従来のトップレベル`schemaVersion`と`conversationCount`を返さず、`artifacts`配列の各要素に`filename`、`schemaVersion`、`recordCount`を返す。既存の運用scriptや手順で旧fieldを参照している場合は、対象artifactの`filename`で配列要素を選択して新fieldを読むよう更新する。出力する証跡は環境ID、UTC日時、commit、artifactごとのschema version、record件数、検証結果に限定する。metadata、manifest、標準出力、標準エラー、作業logへconversation本文、DB本文、環境変数全体、秘密値を転記しない。
 
 ### schema変更失敗時のrollback
 
@@ -287,7 +287,7 @@ identityエラーでは選択した環境と`.environment-identity.json`を照�
 
 ### restore中断markerからの復旧
 
-runtime data root直下の`.conversation-history.restore-intent.json`は、restoreのDB切替が完了したと確認できない状態を示す。markerが存在する間はBackendを起動せず、通常のbackup、schema操作、会話履歴DBの参照も行わない。markerは旧WALが復元済みDBへ適用されることを防ぐ安全機構であるため、手動で削除、編集、移動しない。
+runtime data root直下の`.sqlite-restore-intent.json`は、restoreのDB切替が完了したと確認できない状態を示す。markerが存在する間はBackendを起動せず、通常のbackup、schema操作、会話履歴DBと人格記憶DBの参照も行わない。markerは旧WALが復元済みDBへ適用されることを防ぐ安全機構であるため、手動で削除、編集、移動しない。
 
 復旧には、中断したrestoreで指定したものと同一のbackup generationを使い、Backendを停止したまま上記の`restore`コマンドを再実行する。認証済みmetadata、artifact checksum、environment identityがmarkerと一致した場合だけ、同じartifactによる切替とsidecar除去が再実行される。成功後に`restore-verify`を実行してからBackendを起動する。
 

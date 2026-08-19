@@ -3,13 +3,13 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager, suppress
 from datetime import UTC, datetime
 from fcntl import LOCK_EX, LOCK_UN, flock
 from pathlib import Path
 from time import time_ns
-from collections.abc import Iterable
-from typing import Iterator, cast
+from typing import cast
 from uuid import uuid4
 
 from app.backup_restore.contracts import (

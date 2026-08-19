@@ -30,7 +30,18 @@ def create_sqlite_snapshot(source: Path, destination: Path) -> None:
         ) as source_connection:
             with closing(sqlite3.connect(destination)) as destination_connection:
                 source_connection.backup(destination_connection)
-                destination_connection.execute("PRAGMA journal_mode = DELETE")
+                journal_mode_row = destination_connection.execute(
+                    "PRAGMA journal_mode = DELETE"
+                ).fetchone()
+                journal_mode = (
+                    None
+                    if journal_mode_row is None
+                    else str(journal_mode_row[0]).lower()
+                )
+                if journal_mode != "delete":
+                    raise BackupSchemaError(
+                        "SQLite snapshot journal mode could not be set"
+                    )
     except sqlite3.Error as error:
         raise BackupSchemaError("SQLite snapshot could not be created") from error
 
@@ -70,7 +81,7 @@ def verify_sqlite_database(
             )
         schema_version = inspection.schema_version
         tables = inspection.tables
-    else:
+    elif artifact_filename == PERSONA_MEMORY_ARTIFACT_FILENAME:
         with closing(
             sqlite3.connect(_read_only_uri(database_path), uri=True)
         ) as connection:
@@ -89,6 +100,8 @@ def verify_sqlite_database(
             raise BackupSchemaError(
                 "SQLite schema version or table contract does not match"
             )
+    else:
+        raise BackupSchemaError("SQLite artifact type is unsupported")
     return BackupVerification(
         filename=artifact_filename,
         integrity_check=integrity,

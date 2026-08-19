@@ -190,7 +190,9 @@ def _parse_restore_intent(raw: object) -> RestoreIntent:
         raise RestoreRecoveryRequiredError(
             RestoreRecoveryRequiredError.public_message
         )
-    if not isinstance(raw_artifacts, list) or len(raw_artifacts) != 2:
+    if not isinstance(raw_artifacts, list) or len(raw_artifacts) != len(
+        ARTIFACT_FILENAMES
+    ):
         raise RestoreRecoveryRequiredError(
             RestoreRecoveryRequiredError.public_message
         )

@@ -14,6 +14,7 @@ from app.backup_restore.models import (
     METADATA_FILENAME,
     BackupAuthenticationKey,
     BackupArtifactError,
+    BackupSchemaError,
     BackupVerification,
     BackupVerificationSet,
     VerifiedArtifact,
@@ -105,8 +106,6 @@ def verified_generation(
     artifacts: tuple[Path, ...],
     verifications: tuple[BackupVerification, ...],
 ) -> VerifiedGeneration:
-    from app.backup_restore.models import BackupSchemaError
-
     artifact_metadata = _artifact_metadata(metadata)
     verified_artifacts: list[VerifiedArtifact] = []
     for values, path, verification in zip(
@@ -248,10 +247,10 @@ def _validate_manifest(
         raise BackupArtifactError("backup manifest fields are invalid")
     if manifest["formatVersion"] != FORMAT_VERSION or manifest["complete"] is not True:
         raise BackupArtifactError("backup manifest is incomplete or unsupported")
-    files = manifest["files"]
-    if not isinstance(files, list) or len(files) != 3:
-        raise BackupArtifactError("backup manifest file list is invalid")
     expected = (*ARTIFACT_FILENAMES, METADATA_FILENAME)
+    files = manifest["files"]
+    if not isinstance(files, list) or len(files) != len(expected):
+        raise BackupArtifactError("backup manifest file list is invalid")
     for entry, expected_name in zip(files, expected, strict=True):
         if not isinstance(entry, dict) or set(entry) != {"path", "sha256"}:
             raise BackupArtifactError("backup manifest entry is invalid")

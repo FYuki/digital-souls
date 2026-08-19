@@ -323,6 +323,9 @@ def test_should_restore_and_verify_when_root_is_initialized_through_public_cli(
 ) -> None:
     from app.backup_restore import create_backup
     from app.conversation_history.schema import SCHEMA_VERSION
+    from app.memory.persistence.schema import (
+        SCHEMA_VERSION as PERSONA_SCHEMA_VERSION,
+    )
 
     repository_root = Path(__file__).resolve().parents[3]
     source_paths = initialized_runtime(tmp_path, repository_root, name="source")
@@ -378,7 +381,7 @@ def test_should_restore_and_verify_when_root_is_initialized_through_public_cli(
     assert init_result[0] == 0
     assert restore_result[0] == 0
     assert verify_result[0] == 0
-    assert json.loads(restore_result[1]) == {
+    expected_payload = {
         "status": "ok",
         "artifacts": [
             {
@@ -388,26 +391,13 @@ def test_should_restore_and_verify_when_root_is_initialized_through_public_cli(
             },
             {
                 "filename": "persona-memory.db",
-                "schemaVersion": 1,
+                "schemaVersion": PERSONA_SCHEMA_VERSION,
                 "recordCount": 0,
             },
         ],
     }
-    assert json.loads(verify_result[1]) == {
-        "status": "ok",
-        "artifacts": [
-            {
-                "filename": "conversation-history.db",
-                "schemaVersion": SCHEMA_VERSION,
-                "recordCount": 1,
-            },
-            {
-                "filename": "persona-memory.db",
-                "schemaVersion": 1,
-                "recordCount": 0,
-            },
-        ],
-    }
+    assert json.loads(restore_result[1]) == expected_payload
+    assert json.loads(verify_result[1]) == expected_payload
     assert init_result[2] + restore_result[2] + verify_result[2] == ""
     cli_output = "".join((*init_result[1:], *restore_result[1:], *verify_result[1:]))
     assert CONVERSATION_SENTINEL not in cli_output

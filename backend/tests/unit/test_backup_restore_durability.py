@@ -9,6 +9,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from app.backup_restore.models import ARTIFACT_FILENAMES
 from tests.backup_restore_test_support import (
     FIXED_BACKUP_TIME,
     FIXED_COMMIT,
@@ -95,7 +96,7 @@ def _fsync_target(file_descriptor: int) -> str:
     if stat.S_ISDIR(mode):
         return "directory"
     target = Path(f"/proc/self/fd/{file_descriptor}").resolve()
-    if target.name == "conversation-history.db":
+    if target.name in ARTIFACT_FILENAMES:
         return "artifact"
     if target.suffix == ".json":
         return "json"
@@ -494,7 +495,7 @@ def test_bkp_verify_01_persists_generation_before_and_after_publication(
 
     assert events == [
         "artifact-fsync",
-        "staging-fsync",
+        "artifact-fsync",
         "json-fsync",
         "json-fsync",
         "directory-fsync",

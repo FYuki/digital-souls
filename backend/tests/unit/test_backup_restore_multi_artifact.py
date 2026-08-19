@@ -6,6 +6,7 @@ import os
 import shutil
 import sqlite3
 from collections.abc import Callable
+from contextlib import closing
 from pathlib import Path
 from typing import cast
 from unittest.mock import Mock
@@ -381,8 +382,9 @@ def test_backup_rejects_schema_version_mismatch_for_each_artifact(
     paths = initialized_runtime(tmp_path, repository_root, name="source")
     history = create_history_database(paths, wal=False)
     create_persona_memory_database(paths, repository_root, with_approved_memory=False)
-    with sqlite3.connect(paths.data_root / database_name) as connection:
+    with closing(sqlite3.connect(paths.data_root / database_name)) as connection:
         connection.execute("PRAGMA user_version = 999")
+        connection.commit()
 
     try:
         with pytest.raises(BackupSchemaError):
@@ -510,6 +512,11 @@ def test_non_current_format_generation_is_explicitly_rejected(
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     metadata["formatVersion"] = format_version
     metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    destination = (
+        None
+        if operation == "verify"
+        else initialized_runtime(tmp_path, repository_root, name="destination")
+    )
 
     with pytest.raises(BackupArtifactError, match="unsupported"):
         if operation == "verify":
@@ -518,9 +525,7 @@ def test_non_current_format_generation_is_explicitly_rejected(
                 authentication_key=TEST_AUTHENTICATION_KEY,
             )
         else:
-            destination = initialized_runtime(
-                tmp_path, repository_root, name="destination"
-            )
+            assert destination is not None
             restore_backup(
                 runtime_paths=destination,
                 repository_root=repository_root,
