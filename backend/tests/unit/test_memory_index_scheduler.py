@@ -15,7 +15,7 @@ class RecordingSync:
         self.calls.append("worker")
         self.active -= 1
 
-    def reconcile_once(self) -> None:
+    def reconcile_once(self, *, should_stop=None) -> None:
         self.active += 1
         self.max_active = max(self.max_active, self.active)
         self.calls.append("reconcile")
@@ -59,7 +59,7 @@ def test_scheduler_keeps_event_loop_responsive_while_worker_is_blocked() -> None
             self.worker_started.set()
             self.worker_observed_release = self.release_worker.wait(timeout=1)
 
-        def reconcile_once(self) -> None:
+        def reconcile_once(self, *, should_stop=None) -> None:
             return None
 
     async def exercise() -> BlockingSync:
@@ -94,7 +94,7 @@ def test_scheduler_stop_waits_for_blocking_tick() -> None:
             self.started.set()
             self.release.wait(timeout=1)
 
-        def reconcile_once(self) -> None:
+        def reconcile_once(self, *, should_stop=None) -> None:
             raise AssertionError("停止通知後に新しい tick を開始してはならない")
 
     async def exercise() -> None:
@@ -177,49 +177,34 @@ def test_scheduler_stop_does_not_start_a_periodic_tick_waiting_for_a_thread(
     assert sync.calls == ["worker", "reconcile"]
 
 
-def test_scheduler_stop_cannot_be_requested_between_final_check_and_tick_start() -> (
-    None
-):
-    from app.memory import index_scheduler
+def test_scheduler_stop_interrupts_reconciliation_at_a_cooperative_boundary() -> None:
+    from app.memory.index_scheduler import MemoryIndexScheduler
 
-    class PausingLock:
+    class CooperativeSync:
         def __init__(self) -> None:
-            self._lock = threading.Lock()
-            self.worker_boundary_reached = threading.Event()
-            self.release_worker = threading.Event()
+            self.reconciliation_started = threading.Event()
+            self.stop_observed = False
 
-        def __enter__(self) -> None:
-            self._lock.acquire()
+        def run_worker_once(self) -> None:
+            return None
 
-        def __exit__(self, *_args: object) -> None:
-            self._lock.release()
-            if threading.current_thread() is not threading.main_thread():
-                self.worker_boundary_reached.set()
-                self.release_worker.wait(timeout=1)
+        def reconcile_once(self, *, should_stop=None) -> None:
+            assert should_stop is not None
+            self.reconciliation_started.set()
+            while not should_stop():
+                threading.Event().wait(0.01)
+            self.stop_observed = True
 
-    async def exercise() -> bool:
-        scheduler = index_scheduler.MemoryIndexScheduler(RecordingSync())
-        lock = PausingLock()
-        # tick開始と停止要求の境界を固定するため、内部同期点へ意図的にアクセスする。
-        scheduler._tick_start_lock = lock
-        stop_requested_at_tick_start = False
+    async def exercise() -> CooperativeSync:
+        sync = CooperativeSync()
+        scheduler = MemoryIndexScheduler(sync)
+        scheduler.start()
+        started = await asyncio.to_thread(sync.reconciliation_started.wait, 1)
+        assert started
+        await asyncio.wait_for(scheduler.stop(), timeout=1)
+        return sync
 
-        def operation() -> None:
-            nonlocal stop_requested_at_tick_start
-            stop_requested_at_tick_start = scheduler._stop_requested.is_set()
-
-        tick = asyncio.create_task(scheduler._run_tick(operation))
-        scheduler.task = tick
-        while not lock.worker_boundary_reached.is_set():
-            await asyncio.sleep(0.01)
-        stopping = asyncio.create_task(scheduler.stop())
-        await asyncio.sleep(0)
-        lock.release_worker.set()
-        await tick
-        await stopping
-        return stop_requested_at_tick_start
-
-    assert asyncio.run(exercise()) is False
+    assert asyncio.run(exercise()).stop_observed is True
 
 
 def test_scheduler_logs_tick_exception_type_and_continues(
@@ -234,7 +219,7 @@ def test_scheduler_logs_tick_exception_type_and_continues(
         def run_worker_once(self) -> None:
             raise RuntimeError("本文を含む秘密")
 
-        def reconcile_once(self) -> None:
+        def reconcile_once(self, *, should_stop=None) -> None:
             self.reconciliation_completed.set()
 
     async def exercise() -> None:
@@ -248,7 +233,12 @@ def test_scheduler_logs_tick_exception_type_and_continues(
     caplog.set_level("WARNING", logger="app.memory.index_scheduler")
     asyncio.run(exercise())
 
-    assert [record.getMessage() for record in caplog.records] == [
+    scheduler_records = [
+        record
+        for record in caplog.records
+        if record.name == "app.memory.index_scheduler"
+    ]
+    assert [record.getMessage() for record in scheduler_records] == [
         "memory index scheduler tick failed: RuntimeError"
     ]
-    assert "秘密" not in "\n".join(record.getMessage() for record in caplog.records)
+    assert "秘密" not in "\n".join(record.getMessage() for record in scheduler_records)

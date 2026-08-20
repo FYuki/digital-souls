@@ -42,7 +42,7 @@ class MemoryIndexScheduler:
     async def _run(self) -> None:
         if not await self._run_tick(self._sync.run_worker_once):
             return
-        if not await self._run_tick(self._sync.reconcile_once):
+        if not await self._run_tick(self._reconcile_once):
             return
         loop = asyncio.get_running_loop()
         next_reconciliation = loop.time() + RECONCILIATION_INTERVAL_SECONDS
@@ -58,7 +58,7 @@ class MemoryIndexScheduler:
             if not await self._run_tick(self._sync.run_worker_once):
                 return
             if loop.time() >= next_reconciliation:
-                if not await self._run_tick(self._sync.reconcile_once):
+                if not await self._run_tick(self._reconcile_once):
                     return
                 next_reconciliation = loop.time() + RECONCILIATION_INTERVAL_SECONDS
 
@@ -70,13 +70,16 @@ class MemoryIndexScheduler:
         with self._tick_start_lock:
             if self._stop_requested.is_set():
                 return False
-            try:
-                operation()
-            except Exception as error:
-                logger.warning(
-                    "memory index scheduler tick failed: %s", type(error).__name__
-                )
+        try:
+            operation()
+        except Exception as error:
+            logger.warning(
+                "memory index scheduler tick failed: %s", type(error).__name__
+            )
         return True
+
+    def _reconcile_once(self) -> None:
+        self._sync.reconcile_once(should_stop=self._stop_requested.is_set)
 
     def _request_stop(self) -> None:
         with self._tick_start_lock:

@@ -486,6 +486,31 @@ def test_reconciliation_keeps_partial_progress_and_converges_after_restart(
     assert recovered_report["last_success_at"] == "2026-08-20T12:00:00.000000Z"
 
 
+def test_reconciliation_stops_between_characters_without_recording_full_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service, approved, _database_path, records, _deleted = _sync(
+        tmp_path, monkeypatch, lambda _text: [0.1]
+    )
+    first = approved.save(
+        character_id="miori", candidate=_candidate("最初"), context=_context()
+    )
+    approved.save(
+        character_id="other",
+        candidate=_candidate("未処理"),
+        context=replace(_context(), idempotency_key="other-key"),
+    )
+    stop_checks = iter((False, True))
+
+    service.reconcile_once(should_stop=lambda: next(stop_checks))
+
+    assert set(records) == {("miori", str(first.id))}
+    report_path = tmp_path / "data" / "runtime-reports" / "memory-index-sync.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["last_error_code"] is None
+    assert report["last_success_at"] is None
+
+
 def test_reconciliation_recovers_attempt_limit_and_writes_metadata_only_report(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -667,6 +692,9 @@ def test_runtime_report_keeps_previous_json_when_publication_fails(
     service.reconcile_once()
 
     assert json.loads(report_path.read_text(encoding="utf-8")) == json.loads(previous)
-    assert [record.getMessage() for record in caplog.records] == [
+    sync_records = [
+        record for record in caplog.records if record.name == "app.memory.index_sync"
+    ]
+    assert [record.getMessage() for record in sync_records] == [
         "memory index runtime report publication failed: OSError"
     ]

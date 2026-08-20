@@ -39,6 +39,9 @@ class FakeCollection:
         for record_id in ids:
             self.records.pop(record_id, None)
 
+    def count(self) -> int:
+        return len(self.records)
+
     def get(self, **kwargs: object) -> dict[str, object]:
         self.get_calls.append(kwargs)
         ids_arg = kwargs.get("ids")
@@ -306,10 +309,11 @@ def test_query_excludes_expired_records(
     )
 
     memories = chroma_store.query_memories(
-        "miori", [0.3, 0.4], n_results=5, chroma_path=tmp_path / "data" / "chroma"
+        "miori", [0.3, 0.4], n_results=1, chroma_path=tmp_path / "data" / "chroma"
     )
 
     assert [memory.memory_id for memory in memories] == ["active"]
+    assert [call["n_results"] for call in _only_collection().query_calls] == [1, 2]
 
 
 @pytest.mark.parametrize(

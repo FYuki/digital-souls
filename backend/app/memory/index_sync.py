@@ -78,13 +78,17 @@ class MemoryIndexSync:
                 self._outbox_repository.mark_completed(outbox_id=entry.id)
                 self._record_success()
 
-    def reconcile_once(self) -> None:
+    def reconcile_once(self, *, should_stop: Callable[[], bool] | None = None) -> None:
         primary_error_code: str | None = None
+        interrupted = False
         character_ids = (
             self._approved_repository.list_character_ids()
             | self._outbox_repository.list_character_ids()
         )
         for character_id in sorted(character_ids):
+            if should_stop is not None and should_stop():
+                interrupted = True
+                break
             active = {
                 str(memory.id): memory
                 for memory in self._approved_repository.list_active(
@@ -143,7 +147,7 @@ class MemoryIndexSync:
                         operation="UPSERT",
                     )
 
-        if primary_error_code is None:
+        if primary_error_code is None and not interrupted:
             self._last_success_at = format_datetime(self._now())
             self._record_success()
         self._write_runtime_report(primary_error_code)

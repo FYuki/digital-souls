@@ -33,6 +33,8 @@ class MemorySearchResult:
 
 
 class _ChromaCollection(Protocol):
+    def count(self) -> int: ...
+
     def upsert(
         self,
         *,
@@ -136,9 +138,29 @@ def query_memories(
     *,
     chroma_path: Path,
 ) -> list[MemorySearchResult]:
-    result = _collection(character, chroma_path).query(
-        query_embeddings=[embedding], n_results=n_results
+    collection = _collection(character, chroma_path)
+    now = datetime.now(UTC)
+    memories = _query_memory_candidates(
+        collection, embedding=embedding, n_results=n_results, now=now
     )
+    if len(memories) >= n_results:
+        return memories[:n_results]
+    candidate_count = collection.count()
+    if candidate_count <= n_results:
+        return memories
+    return _query_memory_candidates(
+        collection, embedding=embedding, n_results=candidate_count, now=now
+    )[:n_results]
+
+
+def _query_memory_candidates(
+    collection: _ChromaCollection,
+    *,
+    embedding: list[float],
+    n_results: int,
+    now: datetime,
+) -> list[MemorySearchResult]:
+    result = collection.query(query_embeddings=[embedding], n_results=n_results)
     ids = _first_result_list(result, "ids")
     documents = _first_result_list(result, "documents")
     metadatas = _first_result_list(result, "metadatas")
@@ -146,7 +168,6 @@ def query_memories(
         return []
     if len(ids) != len(documents) or len(documents) != len(metadatas):
         raise ValueError("Chroma query result ids, documents and metadatas must match")
-    now = datetime.now(UTC)
     memories = (
         _memory_search_result(memory_id, document, metadata, now=now)
         for memory_id, document, metadata in zip(ids, documents, metadatas, strict=True)

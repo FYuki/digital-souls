@@ -323,6 +323,7 @@ class TestChatEndpoint:
             "documents": [[]],
             "metadatas": [[]],
         }
+        chroma_collection.count.return_value = 0
         chroma_client = MagicMock()
         chroma_client.get_or_create_collection.return_value = chroma_collection
         fake_chromadb = ModuleType("chromadb")
