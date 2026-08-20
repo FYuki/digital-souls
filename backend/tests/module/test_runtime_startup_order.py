@@ -155,6 +155,7 @@ async def test_rt_sqlite_01_startup_passes_one_path_to_schema_wal_and_repository
 
     monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
     monkeypatch.setattr(main, "initialize_runtime_data_root", lambda *_args: None)
+    monkeypatch.setattr(main, "remove_legacy_chroma_index_once", lambda *_args: None)
     monkeypatch.setattr(main, "initialize_conversation_history_schema", record_schema)
     monkeypatch.setattr(main, "ConversationWalCleanup", RecordingWal)
     monkeypatch.setattr(main, "ConversationHistoryRepository", record_repository)

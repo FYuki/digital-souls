@@ -23,7 +23,6 @@ def _patch_privacy_startup(monkeypatch: pytest.MonkeyPatch):
         return_value=main._chat_runtime.ChatRuntimeConfig(
             rag_enabled=False,
             memory_policy=None,
-            privacy_scanner=None,
             prompt_config=resolve_model_settings({}),
             chroma_path=Path("/test/runtime-data/chroma"),
         )
@@ -80,8 +79,8 @@ def test_should_resolve_policy_once_and_inject_same_instance_at_startup(
     create_history_service.assert_called_once_with(repository, sanitizer)
     assert history_service is not None
     resolve_chat.assert_called_once()
-    assert resolve_chat.call_args.args[:2] == (policy, scanner)
-    assert resolve_chat.call_args.args[2].ollama_chat_model == "gemma4:e4b"
+    assert resolve_chat.call_args.args[0] is policy
+    assert resolve_chat.call_args.args[1].ollama_chat_model == "gemma4:e4b"
 
 
 def test_should_initialize_privacy_even_when_rag_is_disabled(

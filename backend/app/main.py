@@ -2,7 +2,6 @@ from contextlib import ExitStack, asynccontextmanager
 import logging
 import os
 from collections.abc import AsyncIterator
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import sqlite3
@@ -39,8 +38,12 @@ from app.conversation_history.schema import (
 from app.conversation_history.service import ConversationHistoryService
 from app.conversation_history.sqlite_lease import SQLiteLease, acquire_maintenance_lease
 from app.conversation_history.wal_cleanup import ConversationWalCleanup
+from app.environment import iana_timezone_environment_value
 from app.llm import router as llm_router
 from app.memory.memory_policy import resolved_memory_policy
+from app.memory.admission.evaluator import create_rag_admission_evaluator
+from app.memory.admission_service import RagAdmissionService
+from app.memory.persistence.approved_repository import ApprovedMemoryRepository
 from app.model_settings import resolve_model_settings
 from app.prompting import BuiltPrompt, CharacterPrompt, PromptMessage
 from app.privacy.history_sanitizer import create_history_sanitizer
@@ -50,7 +53,10 @@ from app.privacy.semantic.ollama_classifier_client import OllamaClassifierClient
 from app.routers.chat import router as chat_router
 from app.routers.conversations import router as conversations_router
 from app.routers.ws import router as ws_router
-from app.runtime_data_root import initialize_runtime_data_root
+from app.runtime_data_root import (
+    initialize_runtime_data_root,
+    remove_legacy_chroma_index_once,
+)
 from app.runtime_paths import (
     RuntimePaths,
     resolve_runtime_paths,
@@ -59,7 +65,8 @@ from app.runtime_paths import (
 
 load_dotenv()
 
-RAG_MEMORY_WORKERS = _chat_runtime.DEFAULT_RAG_MEMORY_WORKERS
+MEMORY_EFFECTIVE_TIMEZONE_ENV = "MEMORY_EFFECTIVE_TIMEZONE"
+DEFAULT_MEMORY_EFFECTIVE_TIMEZONE = "Asia/Tokyo"
 DOGFOOD_BACKUP_DIR_ENV = "DOGFOOD_BACKUP_DIR"
 DOGFOOD_BACKUP_RETENTION_COUNT_ENV = "DOGFOOD_BACKUP_RETENTION_COUNT"
 
@@ -158,12 +165,18 @@ def log_runtime_configuration(paths: RuntimePaths) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     model_settings = resolve_model_settings(os.environ)
+    effective_timezone = iana_timezone_environment_value(
+        MEMORY_EFFECTIVE_TIMEZONE_ENV,
+        DEFAULT_MEMORY_EFFECTIVE_TIMEZONE,
+    )
     repository_root = Path(__file__).resolve().parents[2]
     runtime_paths = resolve_runtime_paths(os.environ, repository_root)
     initialize_runtime_data_root(runtime_paths, repository_root)
     from app.restore_intent import require_no_restore_intent
 
     require_no_restore_intent(runtime_paths.restore_intent_path)
+    policy = resolved_memory_policy()
+    remove_legacy_chroma_index_once(runtime_paths, repository_root)
     log_runtime_configuration(runtime_paths)
 
     def generate_llm_response(
@@ -178,7 +191,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     def count_llm_input_tokens(messages: tuple[PromptMessage, ...]) -> int:
         return llm_router.count_input_tokens(messages, settings=model_settings)
 
-    policy = resolved_memory_policy()
     privacy_scanner = create_privacy_scanner(policy.privacy)
     history_sanitizer = create_history_sanitizer(privacy_scanner, policy.privacy)
     conversation_history_config = resolve_conversation_history_config(runtime_paths)
@@ -192,6 +204,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             maintenance_lease=lease,
         )
         lease.transition_to_runtime()
+        from app.memory.persistence.schema import initialize_persona_memory_schema
+
+        initialize_persona_memory_schema(runtime_paths, repository_root)
         clock = lambda: datetime.now(UTC)
         wal_cleanup = ConversationWalCleanup(
             database_path=conversation_history_config.database_path,
@@ -211,8 +226,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         conversation_lifecycle_service = ConversationLifecycleService(
             conversation_history_repository
         )
-        executor = None
-        memory_task_queue = None
+        approved_memory_repository = ApprovedMemoryRepository(
+            database_path=runtime_paths.persona_memory_sqlite_path,
+            clock=clock,
+            uuid_factory=uuid4,
+            outbox_uuid_factory=uuid4,
+        )
         chat_service_resolver = None
         repository_state_set = False
         lifecycle_service_state_set = False
@@ -220,6 +239,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         chat_service_state_set = False
         audio_pipeline_state_set = False
         semantic_classifier_state_set = False
+        rag_admission_service_state_set = False
         semantic_classifier_client = None
         try:
             app.state.conversation_history_repository = conversation_history_repository
@@ -241,18 +261,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             )
             app.state.semantic_privacy_classifier = semantic_privacy_classifier
             semantic_classifier_state_set = True
-            executor = ThreadPoolExecutor(
-                max_workers=RAG_MEMORY_WORKERS,
-                thread_name_prefix=_chat_runtime.RAG_MEMORY_THREAD_PREFIX,
+            app.state.rag_admission_service = RagAdmissionService(
+                conversation_repository=conversation_history_repository,
+                approved_repository=approved_memory_repository,
+                privacy_scanner=privacy_scanner,
+                semantic_classifier=semantic_privacy_classifier,
+                evaluator=create_rag_admission_evaluator(policy.privacy),
+                effective_timezone=effective_timezone,
             )
-            memory_task_queue = _chat_runtime.create_thread_pool_memory_task_queue(
-                executor
-            )
+            rag_admission_service_state_set = True
             app_chat_service = _chat_runtime.create_chat_service(
                 _chat_runtime.resolve_chat_runtime_config(
-                    policy, privacy_scanner, model_settings, runtime_paths
+                    policy, model_settings, runtime_paths
                 ),
-                memory_task_queue,
                 ConversationHistoryService(
                     conversation_history_repository,
                     history_sanitizer,
@@ -276,10 +297,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             yield
         finally:
             with ExitStack() as cleanup:
-                if memory_task_queue is not None:
-                    cleanup.callback(memory_task_queue.shutdown)
-                elif executor is not None:
-                    cleanup.callback(executor.shutdown, wait=True)
                 if chat_service_state_set:
                     cleanup.callback(delattr, app.state, "chat_service")
                 if audio_pipeline_state_set:
@@ -307,6 +324,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         delattr,
                         app.state,
                         "semantic_privacy_classifier",
+                    )
+                if rag_admission_service_state_set:
+                    cleanup.callback(
+                        delattr,
+                        app.state,
+                        "rag_admission_service",
                     )
                 if semantic_classifier_client is not None:
                     cleanup.callback(semantic_classifier_client.close)

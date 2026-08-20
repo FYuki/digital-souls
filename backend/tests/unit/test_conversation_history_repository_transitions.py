@@ -1,6 +1,7 @@
 import inspect
 import sqlite3
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
@@ -37,6 +38,26 @@ def _processing_turn(database_path: Path):
 
 
 class TestTurnTransitions:
+    def test_get_turn_returns_the_authoritative_turn_or_none(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        repository = _processing_turn(tmp_path / "history.db")
+        completed = repository.complete_turn(
+            "miori",
+            CONVERSATION_ID,
+            TURN_ID,
+            sanitized_assistant_content="完全な回答です。",
+        )
+
+        assert repository.get_turn("miori", CONVERSATION_ID, TURN_ID) == completed
+        assert repository.get_turn("akira", CONVERSATION_ID, TURN_ID) is None
+        assert repository.get_turn(
+            "miori",
+            CONVERSATION_ID,
+            UUID("30000000-0000-4000-8000-000000000001"),
+        ) is None
+
     @pytest.mark.parametrize(
         ("current", "requested"),
         [
@@ -303,6 +324,7 @@ class TestTurnTransitions:
             "archive_conversation",
             "complete_turn",
             "fail_turn",
+            "get_turn",
             "hard_delete_conversation",
             "list_active_conversations",
             "list_archived_conversations",

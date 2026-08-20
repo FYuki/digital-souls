@@ -320,11 +320,6 @@ class _RuntimeHistoryService:
         return self._session
 
 
-class _IgnoringTaskQueue:
-    def add_task(self, func, *args, **kwargs) -> None:
-        return None
-
-
 def test_runtime_should_inject_history_when_rag_is_disabled(
     monkeypatch,
     tmp_path: Path,
@@ -391,11 +386,9 @@ def test_runtime_should_inject_history_when_rag_is_disabled(
         _chat_runtime.ChatRuntimeConfig(
             rag_enabled=False,
             memory_policy=None,
-            privacy_scanner=None,
             prompt_config=prompt_config,
             chroma_path=Path("/test/runtime-data/chroma"),
         ),
-        _IgnoringTaskQueue(),
         _RuntimeHistoryService(session),
         _chat_runtime.ChatRuntimeDependencies(
             character_prompt_loader=lambda character: card.to_character_prompt(),

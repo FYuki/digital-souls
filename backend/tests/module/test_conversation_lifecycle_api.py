@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from unittest.mock import patch
-
 import pytest
 
 from app.conversation_history.models import PrivacySkippedTurnInput, ProcessingTurnInput
@@ -169,34 +167,6 @@ def test_should_expose_archive_transitions_through_public_api(
     assert response.status_code == 200
     expected_archived = operation == "archive"
     assert (response.json()["archived_at"] is not None) is expected_archived
-
-
-@pytest.mark.parametrize("operation", ["archive", "unarchive", "hard_delete"])
-def test_should_apply_lifecycle_operation_without_mutating_rag(
-    client,
-    operation: str,
-) -> None:
-    conversation = _create_completed_conversation(client)
-    if operation in {"unarchive", "hard_delete"}:
-        archived = client.post(f"{BASE_PATH}/{conversation.conversation_id}/archive")
-        assert archived.status_code == 200
-
-    with patch(
-        "app._chat_runtime._rag_service.retrieve_prompt_memories"
-    ) as retrieve_memories:
-        with patch(
-            "app._chat_runtime._rag_service.record_user_memory_candidate"
-        ) as record_memory:
-            if operation == "hard_delete":
-                response = client.delete(f"{BASE_PATH}/{conversation.conversation_id}")
-            else:
-                response = client.post(
-                    f"{BASE_PATH}/{conversation.conversation_id}/{operation}"
-                )
-
-    assert response.status_code == (204 if operation == "hard_delete" else 200)
-    retrieve_memories.assert_not_called()
-    record_memory.assert_not_called()
 
 
 def test_should_not_log_persisted_content_during_lifecycle_operations(

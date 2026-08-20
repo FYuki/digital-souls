@@ -1,4 +1,6 @@
 import sqlite3
+import sys
+from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -25,9 +27,6 @@ _GENERATE_RESPONSE = "app.llm.router.generate_response"
 _COUNT_INPUT_TOKENS = "app.llm.router.count_input_tokens"
 _BUILD_AUGMENTED_SYSTEM_PROMPT = (
     "app._chat_runtime._rag_service.retrieve_prompt_memories"
-)
-_RECORD_USER_MEMORY_CANDIDATE = (
-    "app._chat_runtime._rag_service.record_user_memory_candidate"
 )
 _RESOLVED_MEMORY_POLICY = "app.main.resolved_memory_policy"
 _BUILD_PROMPT = "app.chat_prompt.PromptBuilder.build"
@@ -301,8 +300,7 @@ class TestChatEndpoint:
                         return_value=(_rag_memory("前回は畑の話をした"),),
                     ) as mock_build:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
-                            with patch(_RECORD_USER_MEMORY_CANDIDATE):
-                                client.post("/chat", json=_VALID_BODY)
+                            client.post("/chat", json=_VALID_BODY)
 
         mock_build.assert_called_once_with(
             "miori",
@@ -313,26 +311,48 @@ class TestChatEndpoint:
         prompt = mock_gen.call_args.args[0]
         assert "前回は畑の話をした" in prompt.messages[1].content
 
-    def test_records_user_memory_candidate_after_llm_reply(self, monkeypatch):
-        policy = _rag_policy()
+    def test_completed_http_turn_does_not_write_raw_conversation_to_chroma(
+        self,
+        monkeypatch,
+    ):
+        from app.memory.memory_policy import resolved_memory_policy
+
         monkeypatch.setenv("RAG_ENABLED", "true")
+        policy = resolved_memory_policy()
+        chroma_collection = MagicMock()
+        chroma_collection.query.return_value = {
+            "documents": [[]],
+            "metadatas": [[]],
+        }
+        chroma_client = MagicMock()
+        chroma_client.get_or_create_collection.return_value = chroma_collection
+        fake_chromadb = ModuleType("chromadb")
+        setattr(
+            fake_chromadb,
+            "PersistentClient",
+            MagicMock(return_value=chroma_client),
+        )
+        monkeypatch.setitem(sys.modules, "chromadb", fake_chromadb)
+
         with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
-            with TestClient(app) as client:
-                with patch(_LOAD_PERSONALITY, return_value=_character_card()):
-                    with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT, return_value=()):
-                        with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
-                            with patch(
-                                _RECORD_USER_MEMORY_CANDIDATE
-                            ) as mock_record:
-                                response = client.post("/chat", json=_VALID_BODY)
+            with patch("app.memory.rag_service.embed_text", return_value=[0.1]):
+                with patch("app.memory.chroma_store.add_memory") as add_memory:
+                    with TestClient(app) as client:
+                        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+                            with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
+                                response = client.post(
+                                    "/chat",
+                                    json={
+                                        **_VALID_BODY,
+                                        "message": "農業日誌: トマト畑に水やりした",
+                                    },
+                                )
 
         assert response.status_code == 200
-        mock_record.assert_called_once()
-        args, kwargs = mock_record.call_args
-        assert args[:2] == ("miori", _VALID_BODY["message"])
-        assert args[2] is policy
-        assert hasattr(args[3], "add_task")
-        assert hasattr(kwargs["privacy_scanner"], "scan")
+        assert response.json()["turn"]["assistant_content"] == _LLM_REPLY
+        chroma_collection.query.assert_called_once()
+        add_memory.assert_not_called()
+        chroma_collection.add.assert_not_called()
 
     def test_rag_disabled_resolves_policy_for_privacy_but_does_not_record(
         self, monkeypatch
@@ -346,24 +366,11 @@ class TestChatEndpoint:
                 with patch(_LOAD_PERSONALITY, return_value=_character_card()):
                     with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT) as mock_build:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
-                            with patch(
-                                _RECORD_USER_MEMORY_CANDIDATE
-                            ) as mock_record:
-                                response = client.post("/chat", json=_VALID_BODY)
+                            response = client.post("/chat", json=_VALID_BODY)
 
         assert response.status_code == 200
         mock_policy.assert_called_once_with()
         mock_build.assert_not_called()
-        mock_record.assert_not_called()
-
-    def test_does_not_record_user_memory_candidate_when_llm_fails(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
-            with patch(_GENERATE_RESPONSE, side_effect=httpx.HTTPError("boom")):
-                with patch(_RECORD_USER_MEMORY_CANDIDATE) as mock_record:
-                    response = client.post("/chat", json=_VALID_BODY)
-
-        assert response.status_code == 502
-        mock_record.assert_not_called()
 
     def test_returns_404_when_character_not_found(self, client):
         with patch(_LOAD_PERSONALITY, side_effect=FileNotFoundError("character not found")):
@@ -628,21 +635,18 @@ class TestChatFlow:
                 return_value=(_rag_memory("前回は畑の話をした"),),
             ) as mock_build:
                 with patch(
-                    "app._chat_runtime._rag_service.record_user_memory_candidate"
-                ) as mock_record:
-                    with patch(
-                        "app.llm.ollama_client.httpx.post",
-                        return_value=_ollama_response(expected_reply),
-                    ) as mock_post:
-                        with TestClient(app) as client:
-                            response = client.post(
-                                "/chat",
-                                json={
-                                    "character": "miori",
-                                    "conversation_id": str(CONVERSATION_ID),
-                                    "message": "前回なんの話をしたっけ？",
-                                },
-                            )
+                    "app.llm.ollama_client.httpx.post",
+                    return_value=_ollama_response(expected_reply),
+                ) as mock_post:
+                    with TestClient(app) as client:
+                        response = client.post(
+                            "/chat",
+                            json={
+                                "character": "miori",
+                                "conversation_id": str(CONVERSATION_ID),
+                                "message": "前回なんの話をしたっけ？",
+                            },
+                        )
 
         assert response.status_code == 200
         assert response.json()["character"] == "miori"
@@ -654,19 +658,6 @@ class TestChatFlow:
             policy,
             chroma_path=runtime_paths.chroma_path,
         )
-        mock_record.assert_called_once()
-        assert mock_record.call_args.args[:2] == (
-            "miori",
-            "前回なんの話をしたっけ？",
-        )
-        assert mock_record.call_args.args[2] is policy
-        assert hasattr(mock_record.call_args.args[3], "add_task")
-        assert hasattr(
-            mock_record.call_args.kwargs["privacy_scanner"],
-            "scan",
-        )
-        assert mock_record.call_args.kwargs["chroma_path"] == runtime_paths.chroma_path
-
         payload = mock_post.call_args.kwargs["json"]
         assert payload["messages"] == [
             {"role": "system", "content": f"## 応答方針\n{system_prompt}"},
