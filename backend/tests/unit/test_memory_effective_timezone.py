@@ -46,3 +46,42 @@ def test_memory_effective_timezone_rejects_invalid_or_unnormalized_names(
             "MEMORY_EFFECTIVE_TIMEZONE",
             "Asia/Tokyo",
         )
+
+
+def test_memory_effective_timezone_uses_canonical_names_with_only_bundled_tzdata(
+    monkeypatch,
+) -> None:
+    from app import environment
+
+    monkeypatch.setattr(environment.zoneinfo, "TZPATH", ())
+    monkeypatch.setattr(
+        environment.zoneinfo,
+        "available_timezones",
+        lambda: {"Etc/UTC", "US/Eastern"},
+    )
+    monkeypatch.setattr(environment.zoneinfo, "ZoneInfo", lambda _value: object())
+    monkeypatch.setattr(
+        environment,
+        "_bundled_tzdata_source",
+        lambda: "Z Etc/UTC 0 - UTC\nL America/New_York US/Eastern\n",
+    )
+    environment._canonical_iana_timezone_names.cache_clear()
+
+    try:
+        monkeypatch.setenv("MEMORY_EFFECTIVE_TIMEZONE", "Etc/UTC")
+        assert (
+            environment.iana_timezone_environment_value(
+                "MEMORY_EFFECTIVE_TIMEZONE",
+                "Asia/Tokyo",
+            )
+            == "Etc/UTC"
+        )
+
+        monkeypatch.setenv("MEMORY_EFFECTIVE_TIMEZONE", "US/Eastern")
+        with pytest.raises(ValueError, match="MEMORY_EFFECTIVE_TIMEZONE"):
+            environment.iana_timezone_environment_value(
+                "MEMORY_EFFECTIVE_TIMEZONE",
+                "Asia/Tokyo",
+            )
+    finally:
+        environment._canonical_iana_timezone_names.cache_clear()
