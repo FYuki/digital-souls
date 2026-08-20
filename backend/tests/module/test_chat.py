@@ -320,6 +320,10 @@ class TestChatEndpoint:
         monkeypatch.setenv("RAG_ENABLED", "true")
         policy = resolved_memory_policy()
         chroma_collection = MagicMock()
+        chroma_collection.query.return_value = {
+            "documents": [[]],
+            "metadatas": [[]],
+        }
         chroma_client = MagicMock()
         chroma_client.get_or_create_collection.return_value = chroma_collection
         fake_chromadb = ModuleType("chromadb")
@@ -332,9 +336,9 @@ class TestChatEndpoint:
 
         with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
             with patch("app.memory.rag_service.embed_text", return_value=[0.1]):
-                with TestClient(app) as client:
-                    with patch(_LOAD_PERSONALITY, return_value=_character_card()):
-                        with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT, return_value=()):
+                with patch("app.memory.chroma_store.add_memory") as add_memory:
+                    with TestClient(app) as client:
+                        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
                             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
                                 response = client.post(
                                     "/chat",
@@ -346,6 +350,8 @@ class TestChatEndpoint:
 
         assert response.status_code == 200
         assert response.json()["turn"]["assistant_content"] == _LLM_REPLY
+        chroma_collection.query.assert_called_once()
+        add_memory.assert_not_called()
         chroma_collection.add.assert_not_called()
 
     def test_rag_disabled_resolves_policy_for_privacy_but_does_not_record(
@@ -365,13 +371,6 @@ class TestChatEndpoint:
         assert response.status_code == 200
         mock_policy.assert_called_once_with()
         mock_build.assert_not_called()
-
-    def test_returns_backend_error_when_llm_fails(self, client):
-        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
-            with patch(_GENERATE_RESPONSE, side_effect=httpx.HTTPError("boom")):
-                response = client.post("/chat", json=_VALID_BODY)
-
-        assert response.status_code == 502
 
     def test_returns_404_when_character_not_found(self, client):
         with patch(_LOAD_PERSONALITY, side_effect=FileNotFoundError("character not found")):

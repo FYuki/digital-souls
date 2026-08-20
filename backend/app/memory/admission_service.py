@@ -34,6 +34,7 @@ EXTRACTOR_VERSION = "rag-extractor-v1"
 class ConversationTurnRepository(Protocol):
     def get_turn(
         self,
+        character_id: str,
         conversation_id: UUID,
         turn_id: UUID,
     ) -> ConversationTurn | None: ...
@@ -82,11 +83,16 @@ class RagAdmissionService:
         self,
         candidate: MemoryCandidate,
         *,
+        character_id: str,
         conversation_id: UUID,
         turn_id: UUID,
         candidate_index: int,
     ) -> RagAdmissionResult:
-        source_turn = self._valid_source_turn(conversation_id, turn_id)
+        source_turn = self._valid_source_turn(
+            character_id,
+            conversation_id,
+            turn_id,
+        )
         if source_turn is None:
             return RagAdmissionResult(RagAdmissionDecision.ABSTAIN_UNKNOWN, None)
         source_text = cast(str, source_turn.user_content)
@@ -126,7 +132,11 @@ class RagAdmissionService:
         active_memories = self._approved_repository.list_active(
             character_id=source_turn.character_id
         )
-        validated_turn = self._valid_source_turn(conversation_id, turn_id)
+        validated_turn = self._valid_source_turn(
+            character_id,
+            conversation_id,
+            turn_id,
+        )
         if validated_turn is None:
             return RagAdmissionResult(RagAdmissionDecision.ABSTAIN_UNKNOWN, None)
         if validated_turn.character_id != source_turn.character_id:
@@ -164,12 +174,18 @@ class RagAdmissionService:
 
     def _valid_source_turn(
         self,
+        character_id: str,
         conversation_id: UUID,
         turn_id: UUID,
     ) -> ConversationTurn | None:
-        turn = self._conversation_repository.get_turn(conversation_id, turn_id)
+        turn = self._conversation_repository.get_turn(
+            character_id,
+            conversation_id,
+            turn_id,
+        )
         if (
             turn is None
+            or turn.character_id != character_id
             or turn.status is not TurnStatus.COMPLETED
             or turn.user_content is None
             or turn.assistant_content is None

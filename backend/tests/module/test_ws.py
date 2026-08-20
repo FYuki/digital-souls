@@ -419,6 +419,7 @@ class TestWebSocketEndpoint:
             chroma_path=runtime_paths.chroma_path,
         )
         assert "前回は畑の話をした" in _generated_contents(mock_gen)[1]
+
     def test_returns_422_when_payload_is_not_json_object(self, client):
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:

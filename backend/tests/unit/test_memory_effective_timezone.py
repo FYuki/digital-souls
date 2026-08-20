@@ -31,7 +31,7 @@ def test_memory_effective_timezone_accepts_an_iana_name(monkeypatch) -> None:
 
 @pytest.mark.parametrize(
     "value",
-    ["", "Not/A_Timezone", "Asia/Tokyo "],
+    ["", "Not/A_Timezone", "Asia/Tokyo ", "US/Eastern"],
 )
 def test_memory_effective_timezone_rejects_invalid_or_unnormalized_names(
     value: str,

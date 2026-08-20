@@ -210,16 +210,18 @@ class ConversationHistoryRepository:
 
     def get_turn(
         self,
+        character_id: str,
         conversation_id: UUID,
         turn_id: UUID,
     ) -> ConversationTurn | None:
+        _require_non_empty(character_id, "character_id")
         _require_uuid4(conversation_id)
         _require_uuid4(turn_id)
         with self._database.connection() as connection:
             row = connection.execute(
                 f"SELECT {TURN_COLUMNS} FROM conversation_turns "
-                "WHERE conversation_id = ? AND turn_id = ?",
-                (str(conversation_id), str(turn_id)),
+                "WHERE character_id = ? AND conversation_id = ? AND turn_id = ?",
+                (character_id, str(conversation_id), str(turn_id)),
             ).fetchone()
         return None if row is None else turn_from_row(row)
 
@@ -596,6 +598,7 @@ class ConversationHistoryRepository:
         if value.tzinfo is None or value.utcoffset() is None:
             raise InvalidUtcDatetimeError()
         return value.astimezone(UTC)
+
 
 def _require_uuid4(value: UUID) -> None:
     if value.version != 4:

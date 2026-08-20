@@ -175,6 +175,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from app.restore_intent import require_no_restore_intent
 
     require_no_restore_intent(runtime_paths.restore_intent_path)
+    policy = resolved_memory_policy()
     remove_legacy_chroma_index_once(runtime_paths, repository_root)
     log_runtime_configuration(runtime_paths)
 
@@ -190,7 +191,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     def count_llm_input_tokens(messages: tuple[PromptMessage, ...]) -> int:
         return llm_router.count_input_tokens(messages, settings=model_settings)
 
-    policy = resolved_memory_policy()
     privacy_scanner = create_privacy_scanner(policy.privacy)
     history_sanitizer = create_history_sanitizer(privacy_scanner, policy.privacy)
     conversation_history_config = resolve_conversation_history_config(runtime_paths)

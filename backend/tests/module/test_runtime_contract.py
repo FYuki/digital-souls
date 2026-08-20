@@ -597,6 +597,7 @@ class TestRuntimeConfiguration:
         assert not hasattr(main.app.state, "chat_runtime")
         assert not hasattr(main.app.state, "chat_service")
         assert not hasattr(main.app.state, "audio_pipeline_service")
+        assert not hasattr(main.app.state, "rag_admission_service")
         assert not hasattr(main.app.state, "privacy_scanner")
         assert not hasattr(main.app.state, "history_sanitizer")
         with TestClient(main.app):
@@ -604,12 +605,14 @@ class TestRuntimeConfiguration:
             assert not hasattr(main.app.state, "chat_runtime")
             assert hasattr(main.app.state, "chat_service")
             assert hasattr(main.app.state, "audio_pipeline_service")
+            assert hasattr(main.app.state, "rag_admission_service")
             assert not hasattr(main.app.state, "privacy_scanner")
             assert not hasattr(main.app.state, "history_sanitizer")
         assert not hasattr(main.app.state, "memory_task_queue")
         assert not hasattr(main.app.state, "chat_runtime")
         assert not hasattr(main.app.state, "chat_service")
         assert not hasattr(main.app.state, "audio_pipeline_service")
+        assert not hasattr(main.app.state, "rag_admission_service")
         assert not hasattr(main.app.state, "privacy_scanner")
         assert not hasattr(main.app.state, "history_sanitizer")
 

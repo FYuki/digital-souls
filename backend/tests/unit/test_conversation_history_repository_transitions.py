@@ -50,8 +50,10 @@ class TestTurnTransitions:
             sanitized_assistant_content="完全な回答です。",
         )
 
-        assert repository.get_turn(CONVERSATION_ID, TURN_ID) == completed
+        assert repository.get_turn("miori", CONVERSATION_ID, TURN_ID) == completed
+        assert repository.get_turn("akira", CONVERSATION_ID, TURN_ID) is None
         assert repository.get_turn(
+            "miori",
             CONVERSATION_ID,
             UUID("30000000-0000-4000-8000-000000000001"),
         ) is None

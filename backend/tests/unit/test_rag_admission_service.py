@@ -53,6 +53,7 @@ MEMORY_ID = UUID("30000000-0000-4000-8000-000000000001")
 SOURCE_TEXT = "紅茶が好きです"
 ASSISTANT_TEXT = "紅茶がお好きなのですね"
 SECRET_SLOT_TEXT = "slot-secret-value"
+CHARACTER_ID = "miori"
 
 
 def _candidate(
@@ -140,14 +141,15 @@ def _finding(
 class _TurnRepository:
     def __init__(self, turns: list[ConversationTurn | None]) -> None:
         self._turns = iter(turns)
-        self.calls: list[tuple[UUID, UUID]] = []
+        self.calls: list[tuple[str, UUID, UUID]] = []
 
     def get_turn(
         self,
+        character_id: str,
         conversation_id: UUID,
         turn_id: UUID,
     ) -> ConversationTurn | None:
-        self.calls.append((conversation_id, turn_id))
+        self.calls.append((character_id, conversation_id, turn_id))
         return next(self._turns)
 
 
@@ -240,6 +242,7 @@ def _service(
 def _admit(service, candidate: MemoryCandidate | None = None):
     return service.admit(
         candidate or _candidate(),
+        character_id=CHARACTER_ID,
         conversation_id=CONVERSATION_ID,
         turn_id=TURN_ID,
         candidate_index=2,
@@ -340,8 +343,16 @@ def test_classifier_is_not_called_when_deterministic_checks_finish_the_decision(
         _turn(status=TurnStatus.PROCESSING, assistant_content=None),
         _turn(user_content=None),
         _turn(assistant_content=None),
+        _turn(character_id="akira"),
     ],
-    ids=["missing", "privacy-skipped", "not-completed", "user-missing", "assistant-missing"],
+    ids=[
+        "missing",
+        "privacy-skipped",
+        "not-completed",
+        "user-missing",
+        "assistant-missing",
+        "other-character",
+    ],
 )
 def test_invalid_source_at_initial_validation_has_no_processing_or_persistence(
     invalid_turn: ConversationTurn | None,
@@ -353,7 +364,7 @@ def test_invalid_source_at_initial_validation_has_no_processing_or_persistence(
     result = _admit(service)
 
     assert result.decision is RagAdmissionDecision.ABSTAIN_UNKNOWN
-    assert turns.calls == [(CONVERSATION_ID, TURN_ID)]
+    assert turns.calls == [(CHARACTER_ID, CONVERSATION_ID, TURN_ID)]
     scanner.scan.assert_not_called()
     classifier.classify.assert_not_called()
     assert repository.list_active_calls == []
@@ -369,8 +380,16 @@ def test_invalid_source_at_initial_validation_has_no_processing_or_persistence(
         _turn(status=TurnStatus.PROCESSING, assistant_content=None),
         _turn(user_content=None),
         _turn(assistant_content=None),
+        _turn(character_id="akira"),
     ],
-    ids=["deleted", "privacy-skipped", "not-completed", "user-missing", "assistant-missing"],
+    ids=[
+        "deleted",
+        "privacy-skipped",
+        "not-completed",
+        "user-missing",
+        "assistant-missing",
+        "other-character",
+    ],
 )
 def test_invalid_source_at_transaction_validation_blocks_save_and_touch(
     invalid_turn: ConversationTurn | None,
@@ -383,8 +402,8 @@ def test_invalid_source_at_transaction_validation_blocks_save_and_touch(
 
     assert result.decision is RagAdmissionDecision.ABSTAIN_UNKNOWN
     assert turns.calls == [
-        (CONVERSATION_ID, TURN_ID),
-        (CONVERSATION_ID, TURN_ID),
+        (CHARACTER_ID, CONVERSATION_ID, TURN_ID),
+        (CHARACTER_ID, CONVERSATION_ID, TURN_ID),
     ]
     assert repository.list_active_calls == ["miori"]
     assert repository.save_calls == []

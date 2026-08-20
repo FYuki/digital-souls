@@ -88,3 +88,27 @@ async def test_startup_rejects_invalid_memory_effective_timezone(
     with pytest.raises(ValueError, match="MEMORY_EFFECTIVE_TIMEZONE"):
         async with main.lifespan(FastAPI()):
             pytest.fail("invalid timezone must prevent startup")
+
+
+@pytest.mark.anyio
+async def test_invalid_memory_policy_preserves_legacy_chroma_index(
+    runtime_paths,
+) -> None:
+    from app import main
+
+    runtime_paths.chroma_path.mkdir(parents=True)
+    legacy_index = runtime_paths.chroma_path / "legacy-index.bin"
+    legacy_index.write_bytes(b"legacy")
+    cutover_marker = runtime_paths.data_root / ".legacy-chroma-index-removed"
+
+    with patch.object(
+        main,
+        "resolved_memory_policy",
+        side_effect=ValueError("invalid memory policy"),
+    ):
+        with pytest.raises(ValueError, match="invalid memory policy"):
+            async with main.lifespan(FastAPI()):
+                pytest.fail("invalid policy must prevent startup")
+
+    assert legacy_index.read_bytes() == b"legacy"
+    assert not cutover_marker.exists()
