@@ -43,7 +43,7 @@ def test_rt_chroma_01_upsert_and_query_use_the_explicit_same_chroma_path(
     fake_chromadb = ModuleType("chromadb")
     setattr(fake_chromadb, "PersistentClient", FakePersistentClient)
     monkeypatch.setitem(sys.modules, "chromadb", fake_chromadb)
-    sys.modules.pop("app.memory.chroma_store", None)
+    monkeypatch.delitem(sys.modules, "app.memory.chroma_store", raising=False)
     chroma_store = importlib.import_module("app.memory.chroma_store")
     FakePersistentClient.instances.clear()
     paths = _runtime_paths(tmp_path)
@@ -61,13 +61,10 @@ def test_rt_chroma_01_upsert_and_query_use_the_explicit_same_chroma_path(
         expires_at=None,
         chroma_path=paths.chroma_path,
     )
-    chroma_store.query_memories(
-        "miori", [0.1, 0.2], 3, chroma_path=paths.chroma_path
-    )
+    chroma_store.query_memories("miori", [0.1, 0.2], 3, chroma_path=paths.chroma_path)
 
     assert [client.path for client in FakePersistentClient.instances] == [
-        str(paths.chroma_path),
-        str(paths.chroma_path),
+        str(paths.chroma_path)
     ]
 
 
@@ -93,7 +90,7 @@ def test_rt_chroma_01_resolved_environment_paths_keep_indexes_isolated(
     fake_chromadb = ModuleType("chromadb")
     setattr(fake_chromadb, "PersistentClient", FakePersistentClient)
     monkeypatch.setitem(sys.modules, "chromadb", fake_chromadb)
-    sys.modules.pop("app.memory.chroma_store", None)
+    monkeypatch.delitem(sys.modules, "app.memory.chroma_store", raising=False)
     chroma_store = importlib.import_module("app.memory.chroma_store")
     FakePersistentClient.collections_by_path.clear()
     FakePersistentClient.instances.clear()
@@ -119,9 +116,12 @@ def test_rt_chroma_01_resolved_environment_paths_keep_indexes_isolated(
     assert chroma_store.list_memory_index_ids(
         character_id="miori", chroma_path=dev.chroma_path
     ) == {"dev-memory"}
-    assert chroma_store.list_memory_index_ids(
-        character_id="miori", chroma_path=dogfood.chroma_path
-    ) == set()
+    assert (
+        chroma_store.list_memory_index_ids(
+            character_id="miori", chroma_path=dogfood.chroma_path
+        )
+        == set()
+    )
     assert dev.chroma_path != dogfood.chroma_path
 
 

@@ -2,6 +2,7 @@ import json
 import importlib
 import logging
 import sqlite3
+from contextlib import closing
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ NOW = datetime(2026, 8, 20, 12, 0, tzinfo=UTC)
 
 
 def _sync(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, embedder):
+    # backup/restore側が共有SQLite leaseを登録する副作用を先に反映する。
     importlib.import_module("app.backup_restore.service")
     from app.memory import index_sync
     from app.memory.persistence.index_outbox_repository import IndexOutboxRepository
@@ -25,10 +27,12 @@ def _sync(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, embedder):
     deleted: list[tuple[str, str]] = []
 
     def upsert_memory_index_entry(**entry: object) -> None:
+        assert entry["chroma_path"] == tmp_path / "data" / "chroma"
         key = (str(entry["character_id"]), str(entry["memory_id"]))
         records[key] = dict(entry)
 
     def delete_memory_index_entry(**entry: object) -> None:
+        assert entry["chroma_path"] == tmp_path / "data" / "chroma"
         key = (str(entry["character_id"]), str(entry["memory_id"]))
         deleted.append(key)
         records.pop(key, None)
@@ -82,11 +86,18 @@ def _sync(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, embedder):
 
 
 def _outbox_rows(database_path: Path) -> list[sqlite3.Row]:
-    with sqlite3.connect(database_path) as connection:
+    with closing(sqlite3.connect(database_path)) as connection:
         connection.row_factory = sqlite3.Row
         return list(
             connection.execute("SELECT * FROM memory_index_outbox ORDER BY rowid")
         )
+
+
+def _log_text(records: list[logging.LogRecord]) -> str:
+    return "\n".join(
+        f"{record.getMessage()}\n{record.exc_text or ''}\n{record.args!r}"
+        for record in records
+    )
 
 
 def test_worker_rereads_latest_sqlite_memory_and_is_idempotent(
@@ -99,17 +110,19 @@ def test_worker_rereads_latest_sqlite_memory_and_is_idempotent(
     original = approved.save(
         character_id="miori", candidate=_candidate("古い本文"), context=_context()
     )
-    with sqlite3.connect(database_path) as connection:
-        connection.execute(
-            "UPDATE approved_memories SET normalized_text = ? WHERE id = ?",
-            ("SQLiteの最新本文", str(original.id)),
-        )
+    with closing(sqlite3.connect(database_path)) as connection:
+        with connection:
+            connection.execute(
+                "UPDATE approved_memories SET normalized_text = ? WHERE id = ?",
+                ("SQLiteの最新本文", str(original.id)),
+            )
 
     service.run_worker_once()
-    with sqlite3.connect(database_path) as connection:
-        connection.execute(
-            "UPDATE memory_index_outbox SET status = 'FAILED', attempt_count = 1"
-        )
+    with closing(sqlite3.connect(database_path)) as connection:
+        with connection:
+            connection.execute(
+                "UPDATE memory_index_outbox SET status = 'FAILED', attempt_count = 1"
+            )
     service.run_worker_once()
 
     record = records[("miori", str(original.id))]
@@ -163,7 +176,7 @@ def test_worker_classifies_sqlite_read_failure_and_continues_batch(
         for value in dict(row).values()
         if value is not None
     )
-    log_text = "\n".join(record.getMessage() for record in caplog.records)
+    log_text = _log_text(caplog.records)
     assert secret not in outbox_projection
     assert secret not in log_text
 
@@ -181,11 +194,12 @@ def test_worker_delete_can_be_reprocessed_without_changing_the_result(
     approved.hard_delete(character_id="miori", memory_id=memory.id)
 
     service.run_worker_once()
-    with sqlite3.connect(database_path) as connection:
-        connection.execute(
-            "UPDATE memory_index_outbox SET status = 'FAILED', attempt_count = 1 "
-            "WHERE operation = 'DELETE'"
-        )
+    with closing(sqlite3.connect(database_path)) as connection:
+        with connection:
+            connection.execute(
+                "UPDATE memory_index_outbox SET status = 'FAILED', attempt_count = 1 "
+                "WHERE operation = 'DELETE'"
+            )
     service.run_worker_once()
 
     assert ("miori", str(memory.id)) not in records
@@ -227,13 +241,13 @@ def test_worker_stops_retrying_after_five_metadata_only_failures(
     outbox_projection = " ".join(
         str(value) for value in dict(row).values() if value is not None
     )
-    log_text = "\n".join(record.getMessage() for record in caplog.records)
+    log_text = _log_text(caplog.records)
     assert secret not in outbox_projection
     assert secret not in log_text
     assert all("[9.9]" not in record.getMessage() for record in caplog.records)
 
 
-def test_worker_classifies_missing_sqlite_memory_without_exposing_outbox_payload(
+def test_worker_classifies_missing_sqlite_memory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     service, approved, database_path, _records, _deleted = _sync(
@@ -242,11 +256,12 @@ def test_worker_classifies_missing_sqlite_memory_without_exposing_outbox_payload
     memory = approved.save(
         character_id="miori", candidate=_candidate(), context=_context()
     )
-    with sqlite3.connect(database_path) as connection:
-        connection.execute(
-            "DELETE FROM approved_memories WHERE character_id = ? AND id = ?",
-            ("miori", str(memory.id)),
-        )
+    with closing(sqlite3.connect(database_path)) as connection:
+        with connection:
+            connection.execute(
+                "DELETE FROM approved_memories WHERE character_id = ? AND id = ?",
+                ("miori", str(memory.id)),
+            )
 
     service.run_worker_once()
 
@@ -282,6 +297,56 @@ def test_worker_classifies_chroma_write_failure(
     )
 
 
+def test_reconciliation_classifies_chroma_id_read_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service, approved, _database_path, _records, _deleted = _sync(
+        tmp_path, monkeypatch, lambda _text: [0.1]
+    )
+    approved.save(character_id="miori", candidate=_candidate(), context=_context())
+    from app.memory import index_sync
+
+    def fail_id_read(**_kwargs: object) -> set[str]:
+        raise RuntimeError("private body")
+
+    monkeypatch.setattr(index_sync, "list_memory_index_ids", fail_id_read)
+
+    service.reconcile_once()
+
+    report_path = tmp_path / "data" / "runtime-reports" / "memory-index-sync.json"
+    assert json.loads(report_path.read_text(encoding="utf-8"))["last_error_code"] == (
+        "CHROMA_READ_FAILED"
+    )
+
+
+def test_reconciliation_classifies_chroma_metadata_read_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service, approved, database_path, records, _deleted = _sync(
+        tmp_path, monkeypatch, lambda _text: [0.1]
+    )
+    memory = approved.save(
+        character_id="miori", candidate=_candidate(), context=_context()
+    )
+    records[("miori", str(memory.id))] = {"character_id": "miori"}
+    with closing(sqlite3.connect(database_path)) as connection:
+        with connection:
+            connection.execute("UPDATE memory_index_outbox SET status = 'COMPLETED'")
+    from app.memory import index_sync
+
+    def fail_metadata_read(**_kwargs: object) -> dict[str, str] | None:
+        raise RuntimeError("private body")
+
+    monkeypatch.setattr(index_sync, "get_memory_index_metadata", fail_metadata_read)
+
+    service.reconcile_once()
+
+    report_path = tmp_path / "data" / "runtime-reports" / "memory-index-sync.json"
+    assert json.loads(report_path.read_text(encoding="utf-8"))["last_error_code"] == (
+        "CHROMA_READ_FAILED"
+    )
+
+
 def test_failure_warning_is_emitted_once_at_three_and_success_logs_one_recovery(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -311,10 +376,11 @@ def test_failure_warning_is_emitted_once_at_three_and_success_logs_one_recovery(
     for _ in range(4):
         service.run_worker_once()
 
-    warnings = [
-        record for record in caplog.records if record.levelno == logging.WARNING
+    sync_records = [
+        record for record in caplog.records if record.name == "app.memory.index_sync"
     ]
-    recoveries = [record for record in caplog.records if record.levelno == logging.INFO]
+    warnings = [record for record in sync_records if record.levelno == logging.WARNING]
+    recoveries = [record for record in sync_records if record.levelno == logging.INFO]
     assert len(warnings) == 1
     assert (
         warnings[0].getMessage()
@@ -348,24 +414,25 @@ def test_reconciliation_repairs_only_approved_memory_entries(
         "normalized_text": "古い本文",
         "policy_version": "old-policy",
     }
-    with sqlite3.connect(database_path) as connection:
-        connection.execute(
-            "INSERT INTO temporary_provider_records "
-            "(id, character_id, provider_id, source_ref, record_type, "
-            "structured_value, effective_at, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                "20000000-0000-4000-8000-000000000001",
-                "other",
-                "temporary:recipe",
-                "recipe-secret",
-                "recipe",
-                "temporary-private-body",
-                "2026-08-20T12:00:00.000000Z",
-                "2026-08-20T12:00:00.000000Z",
-                "2026-08-20T12:00:00.000000Z",
-            ),
-        )
+    with closing(sqlite3.connect(database_path)) as connection:
+        with connection:
+            connection.execute(
+                "INSERT INTO temporary_provider_records "
+                "(id, character_id, provider_id, source_ref, record_type, "
+                "structured_value, effective_at, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "20000000-0000-4000-8000-000000000001",
+                    "other",
+                    "temporary:recipe",
+                    "recipe-secret",
+                    "recipe",
+                    "temporary-private-body",
+                    "2026-08-20T12:00:00.000000Z",
+                    "2026-08-20T12:00:00.000000Z",
+                    "2026-08-20T12:00:00.000000Z",
+                ),
+            )
 
     service.reconcile_once()
 
@@ -429,11 +496,12 @@ def test_reconciliation_recovers_attempt_limit_and_writes_metadata_only_report(
     memory = approved.save(
         character_id="miori", candidate=_candidate(secret), context=_context()
     )
-    with sqlite3.connect(database_path) as connection:
-        connection.execute(
-            "UPDATE memory_index_outbox SET status = 'FAILED', attempt_count = 5, "
-            "last_error_code = 'EMBEDDING_UNAVAILABLE'"
-        )
+    with closing(sqlite3.connect(database_path)) as connection:
+        with connection:
+            connection.execute(
+                "UPDATE memory_index_outbox SET status = 'FAILED', attempt_count = 5, "
+                "last_error_code = 'EMBEDDING_UNAVAILABLE'"
+            )
 
     service.reconcile_once()
 
@@ -493,7 +561,7 @@ def test_worker_removes_expired_memory_from_index(
     assert _outbox_rows(database_path)[0]["status"] == "COMPLETED"
 
 
-def test_reconciliation_does_not_complete_stale_document_upsert(
+def test_reconciliation_repairs_stale_document_and_completes_upsert(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     service, approved, database_path, records, _deleted = _sync(
@@ -527,10 +595,11 @@ def test_reconciliation_completes_hard_deleted_memory_outbox(
     memory = approved.save(
         character_id="miori", candidate=_candidate(), context=_context()
     )
-    with sqlite3.connect(database_path) as connection:
-        connection.execute(
-            "UPDATE memory_index_outbox SET status = 'FAILED', attempt_count = 5"
-        )
+    with closing(sqlite3.connect(database_path)) as connection:
+        with connection:
+            connection.execute(
+                "UPDATE memory_index_outbox SET status = 'FAILED', attempt_count = 5"
+            )
     approved.hard_delete(character_id="miori", memory_id=memory.id)
 
     service.reconcile_once()
@@ -552,15 +621,16 @@ def test_reconciliation_completes_absent_delete_after_attempt_limit(
         character_id="miori", candidate=_candidate(), context=_context()
     )
     approved.hard_delete(character_id="miori", memory_id=memory.id)
-    with sqlite3.connect(database_path) as connection:
-        connection.execute(
-            "UPDATE memory_index_outbox SET status = 'COMPLETED' "
-            "WHERE operation = 'UPSERT'"
-        )
-        connection.execute(
-            "UPDATE memory_index_outbox SET status = 'FAILED', attempt_count = 5, "
-            "last_error_code = 'CHROMA_WRITE_FAILED' WHERE operation = 'DELETE'"
-        )
+    with closing(sqlite3.connect(database_path)) as connection:
+        with connection:
+            connection.execute(
+                "UPDATE memory_index_outbox SET status = 'COMPLETED' "
+                "WHERE operation = 'UPSERT'"
+            )
+            connection.execute(
+                "UPDATE memory_index_outbox SET status = 'FAILED', attempt_count = 5, "
+                "last_error_code = 'CHROMA_WRITE_FAILED' WHERE operation = 'DELETE'"
+            )
 
     service.reconcile_once()
 
@@ -576,7 +646,9 @@ def test_reconciliation_completes_absent_delete_after_attempt_limit(
 
 
 def test_runtime_report_keeps_previous_json_when_publication_fails(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     service, _approved, _database_path, _records, _deleted = _sync(
         tmp_path, monkeypatch, lambda _text: [0.1]
@@ -591,7 +663,10 @@ def test_runtime_report_keeps_previous_json_when_publication_fails(
 
     monkeypatch.setattr(index_sync.os, "replace", fail_replace)
 
-    with pytest.raises(OSError, match="publication failed"):
-        service.reconcile_once()
+    caplog.set_level(logging.WARNING, logger="app.memory.index_sync")
+    service.reconcile_once()
 
     assert json.loads(report_path.read_text(encoding="utf-8")) == json.loads(previous)
+    assert [record.getMessage() for record in caplog.records] == [
+        "memory index runtime report publication failed: OSError"
+    ]

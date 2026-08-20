@@ -11,6 +11,7 @@ from app.memory.index_sync import MemoryIndexSync
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
 from app.memory.persistence.index_outbox_repository import IndexOutboxRepository
 from app.memory.persistence.schema import initialize_persona_memory_schema
+from app.restore_intent import require_no_restore_intent
 from app.runtime_paths import resolve_runtime_paths
 
 
@@ -20,6 +21,7 @@ def main(argv: list[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
     repository_root = Path(__file__).resolve().parents[3]
     runtime_paths = resolve_runtime_paths(os.environ, repository_root)
+    require_no_restore_intent(runtime_paths.restore_intent_path)
     initialize_persona_memory_schema(runtime_paths, repository_root)
     clock = lambda: datetime.now(UTC)
     sync = MemoryIndexSync(

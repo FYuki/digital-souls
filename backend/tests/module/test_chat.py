@@ -148,12 +148,8 @@ class TestChatEndpoint:
             assert prompt_input.character.system_prompt == secrets["character"]
             assert prompt_input.rag.items[0].content.endswith(secrets["rag"])
             history = tuple(prompt_input.history.newest_first_factory())
-            assert history[0].user_content == secrets[
-                "history_user"
-            ]
-            assert history[0].assistant_content == secrets[
-                "history_assistant"
-            ]
+            assert history[0].user_content == secrets["history_user"]
+            assert history[0].assistant_content == secrets["history_assistant"]
             assert prompt_input.current_user.content == secrets["current_user"]
             raise PromptInputLimitError("current_user", 8193, 8192)
 
@@ -300,7 +296,9 @@ class TestChatEndpoint:
                         _BUILD_AUGMENTED_SYSTEM_PROMPT,
                         return_value=(_rag_memory("前回は畑の話をした"),),
                     ) as mock_build:
-                        with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
+                        with patch(
+                            _GENERATE_RESPONSE, return_value=_LLM_REPLY
+                        ) as mock_gen:
                             client.post("/chat", json=_VALID_BODY)
 
         mock_build.assert_called_once_with(
@@ -356,6 +354,7 @@ class TestChatEndpoint:
         chroma_collection.query.assert_called_once()
         upsert_memory_index_entry.assert_not_called()
         chroma_collection.upsert.assert_not_called()
+        chroma_collection.delete.assert_not_called()
 
     def test_rag_disabled_resolves_policy_for_privacy_but_does_not_record(
         self, monkeypatch
@@ -376,7 +375,9 @@ class TestChatEndpoint:
         mock_build.assert_not_called()
 
     def test_returns_404_when_character_not_found(self, client):
-        with patch(_LOAD_PERSONALITY, side_effect=FileNotFoundError("character not found")):
+        with patch(
+            _LOAD_PERSONALITY, side_effect=FileNotFoundError("character not found")
+        ):
             response = client.post("/chat", json=_VALID_BODY)
 
         assert response.status_code == 404
@@ -446,7 +447,9 @@ class TestChatEndpoint:
         mock_gen.assert_not_called()
 
     def test_does_not_call_llm_when_character_not_found(self, client):
-        with patch(_LOAD_PERSONALITY, side_effect=FileNotFoundError("character not found")):
+        with patch(
+            _LOAD_PERSONALITY, side_effect=FileNotFoundError("character not found")
+        ):
             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
                 client.post("/chat", json=_VALID_BODY)
 

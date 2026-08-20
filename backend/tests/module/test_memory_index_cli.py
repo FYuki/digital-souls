@@ -86,7 +86,9 @@ def test_cli_worker_processes_outbox_once(
             "SELECT status FROM memory_index_outbox"
         ).fetchone()[0]
     assert status == "COMPLETED"
-    assert records[("miori", str(memory.id))]["normalized_text"] == memory.normalized_text
+    assert (
+        records[("miori", str(memory.id))]["normalized_text"] == memory.normalized_text
+    )
 
 
 def test_cli_reconcile_rebuilds_missing_index_once(
@@ -102,4 +104,33 @@ def test_cli_reconcile_rebuilds_missing_index_once(
 
     assert index_cli.main(["reconcile"]) == 0
 
-    assert records[("miori", str(memory.id))]["normalized_text"] == memory.normalized_text
+    assert (
+        records[("miori", str(memory.id))]["normalized_text"] == memory.normalized_text
+    )
+
+
+def test_cli_rejects_pending_restore_before_schema_initialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.memory import index_cli
+
+    class RestorePendingError(Exception):
+        pass
+
+    observed: list[Path] = []
+
+    def reject_restore(marker_path: Path) -> None:
+        observed.append(marker_path)
+        raise RestorePendingError
+
+    monkeypatch.setattr(index_cli, "require_no_restore_intent", reject_restore)
+    monkeypatch.setattr(
+        index_cli,
+        "initialize_persona_memory_schema",
+        lambda *_args: pytest.fail("復元保留中にスキーマを初期化してはならない"),
+    )
+
+    with pytest.raises(RestorePendingError):
+        index_cli.main(["worker"])
+
+    assert len(observed) == 1

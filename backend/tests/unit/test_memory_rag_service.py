@@ -17,9 +17,7 @@ def _resolved_policy():
 
 
 class TestRagServicePrompt:
-    def test_retrieve_prompt_memories_returns_retrieved_memories(
-        self, monkeypatch
-    ):
+    def test_retrieve_prompt_memories_returns_retrieved_memories(self, monkeypatch):
         rag_service = importlib.import_module("app.memory.rag_service")
 
         monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
@@ -56,6 +54,14 @@ class TestRagServicePrompt:
             "雨量を確認した",
         ]
         assert [memory.memory_id for memory in memories] == ["memory-1", "memory-2"]
+        assert [memory.effective_at for memory in memories] == [
+            "2026-06-20T00:00:00.000000Z",
+            "2026-06-21T00:00:00.000000Z",
+        ]
+        assert [memory.memory_type for memory in memories] == [
+            "USER_PREFERENCE",
+            "EPISODIC_EVENT",
+        ]
         rag_service.query_memories.assert_called_once_with(
             "miori", [0.1], n_results=5, chroma_path=_CHROMA_PATH
         )
@@ -129,7 +135,9 @@ class TestRagServicePrompt:
     ):
         rag_service = importlib.import_module("app.memory.rag_service")
 
-        monkeypatch.setattr(rag_service, "embed_text", MagicMock(side_effect=RuntimeError))
+        monkeypatch.setattr(
+            rag_service, "embed_text", MagicMock(side_effect=RuntimeError)
+        )
         monkeypatch.setattr(rag_service, "query_memories", MagicMock())
 
         memories = rag_service.retrieve_prompt_memories(
@@ -220,9 +228,7 @@ def _write_memory_policy_config(config_path, common, services):
 
 
 class TestMemoryPolicyConfiguration:
-    def test_sensitive_terms_are_loaded_from_config_file(
-        self, tmp_path, monkeypatch
-    ):
+    def test_sensitive_terms_are_loaded_from_config_file(self, tmp_path, monkeypatch):
         memory_policy = importlib.import_module("app.memory.memory_policy")
         config_path = tmp_path / "memory_policy.json"
         _write_memory_policy_config(
@@ -388,4 +394,6 @@ class TestMemoryPolicyConfiguration:
 
         second_policy = memory_policy.resolved_memory_policy()
         assert memory_policy.contains_sensitive_memory("beta-secret", second_policy)
-        assert not memory_policy.contains_sensitive_memory("alpha-secret", second_policy)
+        assert not memory_policy.contains_sensitive_memory(
+            "alpha-secret", second_policy
+        )

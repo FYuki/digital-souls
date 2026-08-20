@@ -36,7 +36,9 @@ class IndexOutboxRepository:
         self._clock = clock
         self._database = PersonaMemorySqlite(database_path, connection_factory)
 
-    def list_processable(self, *, limit: int, attempt_limit: int) -> list[IndexOutboxEntry]:
+    def list_processable(
+        self, *, limit: int, attempt_limit: int
+    ) -> list[IndexOutboxEntry]:
         with self._database.connection() as connection:
             rows = connection.execute(
                 "SELECT id, memory_id, character_id, operation, attempt_count "
@@ -73,17 +75,21 @@ class IndexOutboxRepository:
                 (error_code, format_datetime(self._now()), outbox_id),
             )
 
-    def list_incomplete_operations(
-        self, *, character_id: str, memory_id: str
-    ) -> set[str]:
+    def list_incomplete_operations_by_memory(
+        self, *, character_id: str
+    ) -> dict[str, set[str]]:
         with self._database.connection() as connection:
             rows = connection.execute(
-                "SELECT DISTINCT operation FROM memory_index_outbox "
-                "WHERE character_id = ? AND memory_id = ? "
-                "AND status IN ('PENDING', 'FAILED')",
-                (character_id, memory_id),
+                "SELECT memory_id, operation FROM memory_index_outbox "
+                "WHERE character_id = ? AND status IN ('PENDING', 'FAILED')",
+                (character_id,),
             ).fetchall()
-        return {str(row["operation"]) for row in rows}
+        operations_by_memory: dict[str, set[str]] = {}
+        for row in rows:
+            operations_by_memory.setdefault(str(row["memory_id"]), set()).add(
+                str(row["operation"])
+            )
+        return operations_by_memory
 
     def mark_memory_operation_completed(
         self, *, character_id: str, memory_id: str, operation: str
@@ -103,15 +109,6 @@ class IndexOutboxRepository:
                 "SELECT DISTINCT character_id FROM memory_index_outbox"
             ).fetchall()
         return {str(row["character_id"]) for row in rows}
-
-    def list_memory_ids(self, *, character_id: str) -> set[str]:
-        with self._database.connection() as connection:
-            rows = connection.execute(
-                "SELECT DISTINCT memory_id FROM memory_index_outbox "
-                "WHERE character_id = ? AND status IN ('PENDING', 'FAILED')",
-                (character_id,),
-            ).fetchall()
-        return {str(row["memory_id"]) for row in rows}
 
     def status_counts(self) -> tuple[int, int]:
         with self._database.connection() as connection:

@@ -4,8 +4,12 @@ import hashlib
 import importlib
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Protocol, cast
+
+from app.memory.persistence.sqlite import parse_datetime
 
 
 COLLECTION_NAME_PREFIX = "character"
@@ -18,7 +22,6 @@ COLLECTION_NAME_MAX_SLUG_LENGTH = (
     - COLLECTION_NAME_DIGEST_LENGTH
     - COLLECTION_NAME_SEPARATOR_COUNT
 )
-LIST_PAGE_SIZE = 100
 
 
 @dataclass(frozen=True)
@@ -47,6 +50,7 @@ class _ChromaCollection(Protocol):
         ids: list[str] | None = None,
         limit: int | None = None,
         offset: int | None = None,
+        include: list[str] | None = None,
     ) -> dict[str, object]: ...
 
     def query(
@@ -75,15 +79,15 @@ def upsert_memory_index_entry(
     expires_at: str | None,
     chroma_path: Path,
 ) -> None:
-    metadata = {
-        "character_id": character_id,
-        "provider_id": provider_id,
-        "memory_kind": memory_kind,
-        "memory_type": memory_type,
-        "policy_version": policy_version,
-        "effective_at": effective_at,
-        **({"expires_at": expires_at} if expires_at is not None else {}),
-    }
+    metadata = memory_index_metadata(
+        character_id=character_id,
+        provider_id=provider_id,
+        memory_kind=memory_kind,
+        memory_type=memory_type,
+        policy_version=policy_version,
+        effective_at=effective_at,
+        expires_at=expires_at,
+    )
     collection = _collection(character_id, chroma_path)
     # Chroma の版によらず、訂正前の metadata キーを残さないため置換する。
     collection.delete(ids=[memory_id])
@@ -102,16 +106,8 @@ def delete_memory_index_entry(
 
 
 def list_memory_index_ids(*, character_id: str, chroma_path: Path) -> set[str]:
-    collection = _collection(character_id, chroma_path)
-    found: set[str] = set()
-    offset = 0
-    while True:
-        result = collection.get(limit=LIST_PAGE_SIZE, offset=offset)
-        page = _flat_string_list(result, "ids")
-        found.update(page)
-        if len(page) < LIST_PAGE_SIZE:
-            return found
-        offset += len(page)
+    result = _collection(character_id, chroma_path).get(include=[])
+    return set(_flat_string_list(result, "ids"))
 
 
 def get_memory_index_metadata(
@@ -125,7 +121,10 @@ def get_memory_index_metadata(
     if len(ids) != 1 or len(metadatas) != 1:
         raise ValueError("Chroma get result ids and metadatas must match")
     metadata = metadatas[0]
-    if not all(isinstance(key, str) and isinstance(value, str) for key, value in metadata.items()):
+    if not all(
+        isinstance(key, str) and isinstance(value, str)
+        for key, value in metadata.items()
+    ):
         raise ValueError("Chroma memory metadata must contain only strings")
     return cast(dict[str, str], metadata)
 
@@ -147,18 +146,45 @@ def query_memories(
         return []
     if len(ids) != len(documents) or len(documents) != len(metadatas):
         raise ValueError("Chroma query result ids, documents and metadatas must match")
-    return [
-        _memory_search_result(memory_id, document, metadata)
+    now = datetime.now(UTC)
+    memories = (
+        _memory_search_result(memory_id, document, metadata, now=now)
         for memory_id, document, metadata in zip(ids, documents, metadatas, strict=True)
-    ]
+    )
+    return [memory for memory in memories if memory is not None]
 
 
 def _collection(character: str, chroma_path: Path) -> _ChromaCollection:
     collection_name = _collection_name(character)
     chroma_path.mkdir(parents=True, exist_ok=True)
+    return _client(str(chroma_path)).get_or_create_collection(name=collection_name)
+
+
+@lru_cache(maxsize=None)
+def _client(chroma_path: str) -> _ChromaClient:
     chromadb = importlib.import_module("chromadb")
-    client = cast(_ChromaClient, chromadb.PersistentClient(path=str(chroma_path)))
-    return client.get_or_create_collection(name=collection_name)
+    return cast(_ChromaClient, chromadb.PersistentClient(path=chroma_path))
+
+
+def memory_index_metadata(
+    *,
+    character_id: str,
+    provider_id: str,
+    memory_kind: str,
+    memory_type: str,
+    policy_version: str,
+    effective_at: str,
+    expires_at: str | None,
+) -> dict[str, str]:
+    return {
+        "character_id": character_id,
+        "provider_id": provider_id,
+        "memory_kind": memory_kind,
+        "memory_type": memory_type,
+        "policy_version": policy_version,
+        "effective_at": effective_at,
+        **({"expires_at": expires_at} if expires_at is not None else {}),
+    }
 
 
 def _collection_name(character: str) -> str:
@@ -203,13 +229,19 @@ def _first_result_list(result: dict[str, object], field_name: str) -> list[objec
         return []
     first_result = value[0]
     if not isinstance(first_result, list):
-        raise ValueError(f"Chroma query result '{field_name}' must contain result lists")
+        raise ValueError(
+            f"Chroma query result '{field_name}' must contain result lists"
+        )
     return cast(list[object], first_result)
 
 
 def _memory_search_result(
-    memory_id: object, document: object, metadata: object
-) -> MemorySearchResult:
+    memory_id: object,
+    document: object,
+    metadata: object,
+    *,
+    now: datetime,
+) -> MemorySearchResult | None:
     if not isinstance(memory_id, str) or not isinstance(document, str):
         raise ValueError("Chroma memory ids and documents must be strings")
     if not isinstance(metadata, dict):
@@ -218,6 +250,12 @@ def _memory_search_result(
     memory_type = metadata.get("memory_type")
     if not isinstance(effective_at, str) or not isinstance(memory_type, str):
         raise ValueError("Chroma memory metadata is incomplete")
+    expires_at = metadata.get("expires_at")
+    if expires_at is not None:
+        if not isinstance(expires_at, str):
+            raise ValueError("Chroma memory expiration must be a string")
+        if parse_datetime(expires_at) <= now:
+            return None
     return MemorySearchResult(
         memory_id=memory_id,
         normalized_text=document,

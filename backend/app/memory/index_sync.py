@@ -13,6 +13,7 @@ from app.memory.chroma_store import (
     delete_memory_index_entry,
     get_memory_index_metadata,
     list_memory_index_ids,
+    memory_index_metadata,
     upsert_memory_index_entry,
 )
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
@@ -59,7 +60,6 @@ class MemoryIndexSync:
         self._clock = clock
         self._consecutive_error_code: str | None = None
         self._consecutive_failure_count = 0
-        self._warning_emitted = False
         self._last_success_at: str | None = None
 
     def run_worker_once(self) -> None:
@@ -96,20 +96,17 @@ class MemoryIndexSync:
                     character_id=character_id, chroma_path=self._chroma_path
                 )
             except Exception:
-                primary_error_code = primary_error_code or "CHROMA_WRITE_FAILED"
-                self._record_failure("CHROMA_WRITE_FAILED")
+                primary_error_code = primary_error_code or "CHROMA_READ_FAILED"
+                self._record_failure("CHROMA_READ_FAILED")
                 continue
 
-            incomplete_by_memory = {
-                memory_id: self._outbox_repository.list_incomplete_operations(
-                    character_id=character_id, memory_id=memory_id
+            incomplete_by_memory = (
+                self._outbox_repository.list_incomplete_operations_by_memory(
+                    character_id=character_id
                 )
-                for memory_id in (
-                    indexed_ids
-                    | active.keys()
-                    | self._outbox_repository.list_memory_ids(character_id=character_id)
-                )
-            }
+            )
+            for memory_id in indexed_ids | active.keys():
+                incomplete_by_memory.setdefault(memory_id, set())
 
             for memory_id in sorted(indexed_ids - active.keys()):
                 try:
@@ -201,7 +198,7 @@ class MemoryIndexSync:
                     chroma_path=self._chroma_path,
                 )
             except Exception as error:
-                raise _SyncFailure("CHROMA_WRITE_FAILED") from error
+                raise _SyncFailure("CHROMA_READ_FAILED") from error
             if metadata == _memory_metadata(memory):
                 return
         self._upsert_memory(memory)
@@ -247,24 +244,18 @@ class MemoryIndexSync:
         else:
             self._consecutive_error_code = error_code
             self._consecutive_failure_count = 1
-            self._warning_emitted = False
-        if (
-            self._consecutive_failure_count == FAILURE_WARNING_THRESHOLD
-            and not self._warning_emitted
-        ):
+        if self._consecutive_failure_count == FAILURE_WARNING_THRESHOLD:
             logger.warning(
                 "memory index sync failure: %s count=%d",
                 error_code,
                 self._consecutive_failure_count,
             )
-            self._warning_emitted = True
 
     def _record_success(self) -> None:
         if self._consecutive_error_code is not None:
             logger.info("memory index sync recovered: %s", self._consecutive_error_code)
         self._consecutive_error_code = None
         self._consecutive_failure_count = 0
-        self._warning_emitted = False
 
     def _write_runtime_report(self, last_error_code: str | None) -> None:
         pending_count, failed_count = self._outbox_repository.status_counts()
@@ -274,11 +265,11 @@ class MemoryIndexSync:
             "last_error_code": last_error_code,
             "last_success_at": self._last_success_at,
         }
-        self._runtime_report_dir.mkdir(parents=True, exist_ok=True)
-        report_path = self._runtime_report_dir / RUNTIME_REPORT_FILENAME
-        serialized = json.dumps(report, ensure_ascii=False, separators=(",", ":"))
         temporary_path: Path | None = None
         try:
+            self._runtime_report_dir.mkdir(parents=True, exist_ok=True)
+            report_path = self._runtime_report_dir / RUNTIME_REPORT_FILENAME
+            serialized = json.dumps(report, ensure_ascii=False, separators=(",", ":"))
             with tempfile.NamedTemporaryFile(
                 mode="w",
                 encoding="utf-8",
@@ -292,9 +283,20 @@ class MemoryIndexSync:
                 temporary_path = Path(temporary.name)
             os.replace(temporary_path, report_path)
             temporary_path = None
+        except OSError as error:
+            logger.warning(
+                "memory index runtime report publication failed: %s",
+                type(error).__name__,
+            )
         finally:
             if temporary_path is not None:
-                temporary_path.unlink(missing_ok=True)
+                try:
+                    temporary_path.unlink(missing_ok=True)
+                except OSError as error:
+                    logger.warning(
+                        "memory index runtime report cleanup failed: %s",
+                        type(error).__name__,
+                    )
 
     def _now(self) -> datetime:
         value = self._clock()
@@ -304,16 +306,14 @@ class MemoryIndexSync:
 
 
 def _memory_metadata(memory: ApprovedMemory) -> dict[str, str]:
-    return {
-        "character_id": memory.character_id,
-        "provider_id": memory.provider_id,
-        "memory_kind": memory.memory_kind,
-        "memory_type": memory.memory_type.value,
-        "policy_version": memory.policy_version,
-        "effective_at": format_datetime(memory.effective_at),
-        **(
-            {}
-            if memory.expires_at is None
-            else {"expires_at": format_datetime(memory.expires_at)}
+    return memory_index_metadata(
+        character_id=memory.character_id,
+        provider_id=memory.provider_id,
+        memory_kind=memory.memory_kind,
+        memory_type=memory.memory_type.value,
+        policy_version=memory.policy_version,
+        effective_at=format_datetime(memory.effective_at),
+        expires_at=(
+            None if memory.expires_at is None else format_datetime(memory.expires_at)
         ),
-    }
+    )

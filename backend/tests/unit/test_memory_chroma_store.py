@@ -10,6 +10,7 @@ import pytest
 class FakeCollection:
     def __init__(self) -> None:
         self.records: dict[str, dict[str, object]] = {}
+        self.get_calls: list[dict[str, object]] = []
         self.query_calls: list[dict[str, object]] = []
 
     def upsert(self, **kwargs: object) -> None:
@@ -39,6 +40,7 @@ class FakeCollection:
             self.records.pop(record_id, None)
 
     def get(self, **kwargs: object) -> dict[str, object]:
+        self.get_calls.append(kwargs)
         ids_arg = kwargs.get("ids")
         matching_ids = (
             list(self.records)
@@ -52,11 +54,19 @@ class FakeCollection:
             if limit_arg is None
             else matching_ids[offset : offset + int(limit_arg)]
         )
-        return {
-            "ids": ids,
-            "documents": [self.records[record_id]["document"] for record_id in ids],
-            "metadatas": [self.records[record_id]["metadata"] for record_id in ids],
-        }
+        result: dict[str, object] = {"ids": ids}
+        if kwargs.get("include") != []:
+            result.update(
+                {
+                    "documents": [
+                        self.records[record_id]["document"] for record_id in ids
+                    ],
+                    "metadatas": [
+                        self.records[record_id]["metadata"] for record_id in ids
+                    ],
+                }
+            )
+        return result
 
     def query(self, **kwargs: object) -> dict[str, object]:
         self.query_calls.append(kwargs)
@@ -85,7 +95,7 @@ def _import_chroma_store(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     fake_chromadb = ModuleType("chromadb")
     setattr(fake_chromadb, "PersistentClient", FakePersistentClient)
     monkeypatch.setitem(sys.modules, "chromadb", fake_chromadb)
-    sys.modules.pop("app.memory.chroma_store", None)
+    monkeypatch.delitem(sys.modules, "app.memory.chroma_store", raising=False)
     chroma_store = importlib.import_module("app.memory.chroma_store")
     FakePersistentClient.collections_by_path.clear()
     FakePersistentClient.instances.clear()
@@ -158,9 +168,9 @@ def test_upsert_includes_expires_at_only_when_present(
         expires_at="2026-07-23T00:00:00.000000Z",
     )
 
-    assert _only_collection().records[
-        "00000000-0000-4000-8000-000000000042"
-    ]["metadata"] == {
+    assert _only_collection().records["00000000-0000-4000-8000-000000000042"][
+        "metadata"
+    ] == {
         "character_id": "miori",
         "provider_id": "core",
         "memory_kind": "SEMANTIC",
@@ -180,15 +190,22 @@ def test_delete_is_idempotent_and_character_scoped(
     _upsert(chroma_store, tmp_path, character_id="other")
 
     chroma_store.delete_memory_index_entry(
-        character_id="miori", memory_id=memory_id, chroma_path=tmp_path / "data" / "chroma"
+        character_id="miori",
+        memory_id=memory_id,
+        chroma_path=tmp_path / "data" / "chroma",
     )
     chroma_store.delete_memory_index_entry(
-        character_id="miori", memory_id=memory_id, chroma_path=tmp_path / "data" / "chroma"
+        character_id="miori",
+        memory_id=memory_id,
+        chroma_path=tmp_path / "data" / "chroma",
     )
 
-    assert chroma_store.list_memory_index_ids(
-        character_id="miori", chroma_path=tmp_path / "data" / "chroma"
-    ) == set()
+    assert (
+        chroma_store.list_memory_index_ids(
+            character_id="miori", chroma_path=tmp_path / "data" / "chroma"
+        )
+        == set()
+    )
     assert chroma_store.list_memory_index_ids(
         character_id="other", chroma_path=tmp_path / "data" / "chroma"
     ) == {memory_id}
@@ -205,17 +222,24 @@ def test_list_ids_and_get_metadata_observe_the_character_collection(
         character_id="miori", chroma_path=tmp_path / "data" / "chroma"
     )
     metadata = chroma_store.get_memory_index_metadata(
-        character_id="miori", memory_id=memory_id, chroma_path=tmp_path / "data" / "chroma"
+        character_id="miori",
+        memory_id=memory_id,
+        chroma_path=tmp_path / "data" / "chroma",
     )
 
     assert ids == {memory_id}
     assert metadata == _only_collection().records[memory_id]["metadata"]
-    assert chroma_store.get_memory_index_metadata(
-        character_id="miori", memory_id="missing", chroma_path=tmp_path / "data" / "chroma"
-    ) is None
+    assert (
+        chroma_store.get_memory_index_metadata(
+            character_id="miori",
+            memory_id="missing",
+            chroma_path=tmp_path / "data" / "chroma",
+        )
+        is None
+    )
 
 
-def test_list_ids_returns_every_page(
+def test_list_ids_returns_all_ids_without_loading_payloads(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     chroma_store = _import_chroma_store(monkeypatch)
@@ -228,6 +252,20 @@ def test_list_ids_returns_every_page(
     )
 
     assert ids == expected_ids
+    assert _only_collection().get_calls == [{"include": []}]
+
+
+def test_persistent_client_is_reused_for_the_same_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+
+    _upsert(chroma_store, tmp_path)
+    chroma_store.query_memories(
+        "miori", [0.3, 0.4], n_results=5, chroma_path=tmp_path / "data" / "chroma"
+    )
+
+    assert len(FakePersistentClient.instances) == 1
 
 
 def test_query_returns_new_retrieval_contract_from_one_record(
@@ -250,6 +288,77 @@ def test_query_returns_new_retrieval_contract_from_one_record(
     ]
 
 
+def test_query_excludes_expired_records(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+    _upsert(
+        chroma_store,
+        tmp_path,
+        memory_id="expired",
+        expires_at="2000-01-01T00:00:00.000000Z",
+    )
+    _upsert(
+        chroma_store,
+        tmp_path,
+        memory_id="active",
+        expires_at="2999-01-01T00:00:00.000000Z",
+    )
+
+    memories = chroma_store.query_memories(
+        "miori", [0.3, 0.4], n_results=5, chroma_path=tmp_path / "data" / "chroma"
+    )
+
+    assert [memory.memory_id for memory in memories] == ["active"]
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    (
+        {"memory_type": "USER_PREFERENCE"},
+        {"effective_at": "2026-06-23T00:00:00.000000Z"},
+        {"timestamp": "legacy", "role": "user"},
+    ),
+)
+def test_query_rejects_incomplete_or_legacy_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    metadata: dict[str, str],
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+    _upsert(chroma_store, tmp_path)
+    _only_collection().records["00000000-0000-4000-8000-000000000042"]["metadata"] = (
+        metadata
+    )
+
+    with pytest.raises(ValueError, match="metadata is incomplete"):
+        chroma_store.query_memories(
+            "miori", [0.3, 0.4], n_results=5, chroma_path=tmp_path / "data" / "chroma"
+        )
+
+
+def test_query_rejects_mismatched_result_lengths(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+    _upsert(chroma_store, tmp_path)
+    collection = _only_collection()
+    monkeypatch.setattr(
+        collection,
+        "query",
+        lambda **_kwargs: {
+            "ids": [["memory-1"]],
+            "documents": [["本文"]],
+            "metadatas": [[]],
+        },
+    )
+
+    with pytest.raises(ValueError, match="must match"):
+        chroma_store.query_memories(
+            "miori", [0.3, 0.4], n_results=5, chroma_path=tmp_path / "data" / "chroma"
+        )
+
+
 def test_character_names_remain_safe_and_isolated(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -263,7 +372,9 @@ def test_character_names_remain_safe_and_isolated(
     assert all(_is_chroma_safe_name(name) for name in names)
 
 
-def test_chroma_path_is_required(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_chroma_path_is_required(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     chroma_store = _import_chroma_store(monkeypatch)
 
     with pytest.raises(TypeError):

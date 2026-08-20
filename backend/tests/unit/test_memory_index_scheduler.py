@@ -69,7 +69,7 @@ def test_scheduler_keeps_event_loop_responsive_while_worker_is_blocked() -> None
 
         async def release_from_event_loop() -> None:
             while not sync.worker_started.is_set():
-                await asyncio.sleep(0)
+                await asyncio.sleep(0.01)
             sync.release_worker.set()
 
         event_loop_probe = asyncio.create_task(release_from_event_loop())
@@ -102,9 +102,18 @@ def test_scheduler_stop_waits_for_blocking_tick() -> None:
         scheduler = MemoryIndexScheduler(sync)
         scheduler.start()
         while not sync.started.is_set():
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.01)
         stopping = asyncio.create_task(scheduler.stop())
         await asyncio.sleep(0)
+        event_loop_responded = False
+
+        async def probe_event_loop() -> None:
+            nonlocal event_loop_responded
+            await asyncio.sleep(0)
+            event_loop_responded = True
+
+        await asyncio.wait_for(probe_event_loop(), timeout=0.1)
+        assert event_loop_responded
         assert not stopping.done()
         assert scheduler.task is not None
         sync.release.set()
@@ -149,6 +158,7 @@ def test_scheduler_stop_does_not_start_a_periodic_tick_waiting_for_a_thread(
             if to_thread_calls == 3:
                 periodic_tick_scheduled.set()
                 await release_periodic_tick.wait()
+            # このテストは停止後の開始順序だけを検証し、実スレッド間の競合は扱わない。
             return operation(*args)
 
         monkeypatch.setattr(index_scheduler.asyncio, "to_thread", delayed_to_thread)
@@ -167,7 +177,9 @@ def test_scheduler_stop_does_not_start_a_periodic_tick_waiting_for_a_thread(
     assert sync.calls == ["worker", "reconcile"]
 
 
-def test_scheduler_stop_cannot_be_requested_between_final_check_and_tick_start() -> None:
+def test_scheduler_stop_cannot_be_requested_between_final_check_and_tick_start() -> (
+    None
+):
     from app.memory import index_scheduler
 
     class PausingLock:
@@ -188,6 +200,7 @@ def test_scheduler_stop_cannot_be_requested_between_final_check_and_tick_start()
     async def exercise() -> bool:
         scheduler = index_scheduler.MemoryIndexScheduler(RecordingSync())
         lock = PausingLock()
+        # tick開始と停止要求の境界を固定するため、内部同期点へ意図的にアクセスする。
         scheduler._tick_start_lock = lock
         stop_requested_at_tick_start = False
 
@@ -198,7 +211,7 @@ def test_scheduler_stop_cannot_be_requested_between_final_check_and_tick_start()
         tick = asyncio.create_task(scheduler._run_tick(operation))
         scheduler.task = tick
         while not lock.worker_boundary_reached.is_set():
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.01)
         stopping = asyncio.create_task(scheduler.stop())
         await asyncio.sleep(0)
         lock.release_worker.set()
@@ -207,3 +220,35 @@ def test_scheduler_stop_cannot_be_requested_between_final_check_and_tick_start()
         return stop_requested_at_tick_start
 
     assert asyncio.run(exercise()) is False
+
+
+def test_scheduler_logs_tick_exception_type_and_continues(
+    caplog,
+) -> None:
+    from app.memory.index_scheduler import MemoryIndexScheduler
+
+    class FailingSync:
+        def __init__(self) -> None:
+            self.reconciliation_completed = threading.Event()
+
+        def run_worker_once(self) -> None:
+            raise RuntimeError("本文を含む秘密")
+
+        def reconcile_once(self) -> None:
+            self.reconciliation_completed.set()
+
+    async def exercise() -> None:
+        sync = FailingSync()
+        scheduler = MemoryIndexScheduler(sync)
+        scheduler.start()
+        completed = await asyncio.to_thread(sync.reconciliation_completed.wait, 1)
+        assert completed
+        await scheduler.stop()
+
+    caplog.set_level("WARNING", logger="app.memory.index_scheduler")
+    asyncio.run(exercise())
+
+    assert [record.getMessage() for record in caplog.records] == [
+        "memory index scheduler tick failed: RuntimeError"
+    ]
+    assert "秘密" not in "\n".join(record.getMessage() for record in caplog.records)
