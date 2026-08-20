@@ -35,7 +35,7 @@ def test_rt_sqlite_01_conversation_config_uses_resolved_sqlite_path(
     assert config.database_path == paths.sqlite_path
 
 
-def test_rt_chroma_01_add_and_query_use_the_explicit_same_chroma_path(
+def test_rt_chroma_01_upsert_and_query_use_the_explicit_same_chroma_path(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from tests.unit.test_memory_chroma_store import FakePersistentClient
@@ -48,12 +48,17 @@ def test_rt_chroma_01_add_and_query_use_the_explicit_same_chroma_path(
     FakePersistentClient.instances.clear()
     paths = _runtime_paths(tmp_path)
 
-    chroma_store.add_memory(
-        "miori",
-        "00000000-0000-4000-8000-000000000052",
-        [0.1, 0.2],
-        "記憶本文",
-        {"role": "user", "timestamp": "2026-08-07T00:00:00+00:00"},
+    chroma_store.upsert_memory_index_entry(
+        character_id="miori",
+        memory_id="00000000-0000-4000-8000-000000000052",
+        embedding=[0.1, 0.2],
+        normalized_text="記憶本文",
+        provider_id="core",
+        memory_kind="SEMANTIC",
+        memory_type="USER_PREFERENCE",
+        policy_version="policy-v1",
+        effective_at="2026-08-07T00:00:00.000000Z",
+        expires_at=None,
         chroma_path=paths.chroma_path,
     )
     chroma_store.query_memories(
@@ -78,6 +83,46 @@ def test_rt_chroma_01_requires_a_resolved_path_instead_of_module_default(
 
     with pytest.raises(TypeError):
         chroma_store.query_memories("miori", [0.1], 1)
+
+
+def test_rt_chroma_01_resolved_environment_paths_keep_indexes_isolated(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from tests.unit.test_memory_chroma_store import FakePersistentClient
+
+    fake_chromadb = ModuleType("chromadb")
+    setattr(fake_chromadb, "PersistentClient", FakePersistentClient)
+    monkeypatch.setitem(sys.modules, "chromadb", fake_chromadb)
+    sys.modules.pop("app.memory.chroma_store", None)
+    chroma_store = importlib.import_module("app.memory.chroma_store")
+    FakePersistentClient.collections_by_path.clear()
+    FakePersistentClient.instances.clear()
+    (tmp_path / "dev").mkdir()
+    (tmp_path / "dogfood").mkdir()
+    dev = _runtime_paths(tmp_path / "dev", "dev")
+    dogfood = _runtime_paths(tmp_path / "dogfood", "dogfood")
+
+    chroma_store.upsert_memory_index_entry(
+        character_id="miori",
+        memory_id="dev-memory",
+        embedding=[0.1],
+        normalized_text="開発環境の記憶",
+        provider_id="core",
+        memory_kind="SEMANTIC",
+        memory_type="USER_PREFERENCE",
+        policy_version="policy-v1",
+        effective_at="2026-08-20T00:00:00.000000Z",
+        expires_at=None,
+        chroma_path=dev.chroma_path,
+    )
+
+    assert chroma_store.list_memory_index_ids(
+        character_id="miori", chroma_path=dev.chroma_path
+    ) == {"dev-memory"}
+    assert chroma_store.list_memory_index_ids(
+        character_id="miori", chroma_path=dogfood.chroma_path
+    ) == set()
+    assert dev.chroma_path != dogfood.chroma_path
 
 
 def test_rt_cache_01_audio_runtime_uses_resolved_whisper_cache(

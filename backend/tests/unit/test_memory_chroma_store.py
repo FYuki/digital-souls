@@ -9,242 +9,267 @@ import pytest
 
 class FakeCollection:
     def __init__(self) -> None:
-        self.add_calls: list[dict[str, object]] = []
+        self.records: dict[str, dict[str, object]] = {}
         self.query_calls: list[dict[str, object]] = []
-        self.query_result: dict[str, list[list[object]]] = {
-            "documents": [["雨の話", "畑の話"]],
-            "metadatas": [
-                [
-                    {"role": "user", "timestamp": "2026-06-20T00:00:00+00:00"},
-                    {"role": "assistant", "timestamp": "2026-06-21T00:00:00+00:00"},
-                ]
-            ],
+
+    def upsert(self, **kwargs: object) -> None:
+        ids = kwargs["ids"]
+        documents = kwargs["documents"]
+        embeddings = kwargs["embeddings"]
+        metadatas = kwargs["metadatas"]
+        assert isinstance(ids, list)
+        assert isinstance(documents, list)
+        assert isinstance(embeddings, list)
+        assert isinstance(metadatas, list)
+        for record_id, document, embedding, metadata in zip(
+            ids, documents, embeddings, metadatas, strict=True
+        ):
+            assert isinstance(record_id, str)
+            assert isinstance(metadata, dict)
+            current = self.records.get(record_id, {})
+            self.records[record_id] = {
+                **current,
+                "document": document,
+                "embedding": embedding,
+                "metadata": {**current.get("metadata", {}), **metadata},
+            }
+
+    def delete(self, *, ids: list[str]) -> None:
+        for record_id in ids:
+            self.records.pop(record_id, None)
+
+    def get(self, **kwargs: object) -> dict[str, object]:
+        ids_arg = kwargs.get("ids")
+        matching_ids = (
+            list(self.records)
+            if ids_arg is None
+            else [record_id for record_id in ids_arg if record_id in self.records]
+        )
+        offset = int(kwargs.get("offset", 0))
+        limit_arg = kwargs.get("limit")
+        ids = (
+            matching_ids[offset:]
+            if limit_arg is None
+            else matching_ids[offset : offset + int(limit_arg)]
+        )
+        return {
+            "ids": ids,
+            "documents": [self.records[record_id]["document"] for record_id in ids],
+            "metadatas": [self.records[record_id]["metadata"] for record_id in ids],
         }
 
-    def add(self, **kwargs: object) -> None:
-        self.add_calls.append(kwargs)
-
-    def query(self, **kwargs: object) -> dict[str, list[list[object]]]:
+    def query(self, **kwargs: object) -> dict[str, object]:
         self.query_calls.append(kwargs)
-        return self.query_result
+        ids = list(self.records)[: int(kwargs["n_results"])]
+        return {
+            "ids": [ids],
+            "documents": [[self.records[record_id]["document"] for record_id in ids]],
+            "metadatas": [[self.records[record_id]["metadata"] for record_id in ids]],
+        }
 
 
 class FakePersistentClient:
+    collections_by_path: dict[str, dict[str, FakeCollection]] = {}
     instances: list["FakePersistentClient"] = []
 
     def __init__(self, path: str) -> None:
         self.path = path
-        self.collections: dict[str, FakeCollection] = {}
-        FakePersistentClient.instances.append(self)
+        self.collections = self.collections_by_path.setdefault(path, {})
+        self.instances.append(self)
 
     def get_or_create_collection(self, name: str) -> FakeCollection:
-        collection = self.collections.setdefault(name, FakeCollection())
-        return collection
+        return self.collections.setdefault(name, FakeCollection())
 
 
-def _import_chroma_store(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> ModuleType:
+def _import_chroma_store(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     fake_chromadb = ModuleType("chromadb")
     setattr(fake_chromadb, "PersistentClient", FakePersistentClient)
     monkeypatch.setitem(sys.modules, "chromadb", fake_chromadb)
     sys.modules.pop("app.memory.chroma_store", None)
-
     chroma_store = importlib.import_module("app.memory.chroma_store")
-    module = importlib.reload(chroma_store)
+    FakePersistentClient.collections_by_path.clear()
     FakePersistentClient.instances.clear()
-    return module
+    return chroma_store
 
 
-def _chroma_path(tmp_path: Path) -> Path:
-    return tmp_path / "data" / "chroma"
+def _upsert(chroma_store: ModuleType, tmp_path: Path, **overrides: object) -> None:
+    values: dict[str, object] = {
+        "character_id": "miori",
+        "memory_id": "00000000-0000-4000-8000-000000000042",
+        "embedding": [0.1, 0.2],
+        "normalized_text": "畑の相談",
+        "provider_id": "core",
+        "memory_kind": "SEMANTIC",
+        "memory_type": "USER_PREFERENCE",
+        "policy_version": "policy-v1",
+        "effective_at": "2026-06-23T00:00:00.000000Z",
+        "expires_at": None,
+        "chroma_path": tmp_path / "data" / "chroma",
+    }
+    values.update(overrides)
+    chroma_store.upsert_memory_index_entry(**values)
 
 
-class TestChromaStore:
-    def test_add_memory_uses_safe_character_collection_and_required_payload(
-        self, monkeypatch, tmp_path
-    ):
-        chroma_store = _import_chroma_store(monkeypatch, tmp_path)
-        metadata = {
-            "character": "miori",
-            "role": "user",
-            "timestamp": "2026-06-23T00:00:00+00:00",
+def _only_collection() -> FakeCollection:
+    collections = next(iter(FakePersistentClient.collections_by_path.values()))
+    return next(iter(collections.values()))
+
+
+def test_upsert_exactly_replaces_record_with_approved_memory_payload(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+    _upsert(chroma_store, tmp_path)
+    collection = _only_collection()
+    record_id = "00000000-0000-4000-8000-000000000042"
+    collection.records[record_id]["metadata"] = {
+        **collection.records[record_id]["metadata"],
+        "role": "user",
+        "timestamp": "legacy",
+        "last_user_mentioned_at": "private-marker",
+    }
+
+    _upsert(chroma_store, tmp_path, normalized_text="訂正後の畑の相談")
+
+    assert collection.records == {
+        record_id: {
+            "document": "訂正後の畑の相談",
+            "embedding": [0.1, 0.2],
+            "metadata": {
+                "character_id": "miori",
+                "provider_id": "core",
+                "memory_kind": "SEMANTIC",
+                "memory_type": "USER_PREFERENCE",
+                "policy_version": "policy-v1",
+                "effective_at": "2026-06-23T00:00:00.000000Z",
+            },
         }
+    }
 
-        record_id = "00000000-0000-4000-8000-000000000042"
-        chroma_store.add_memory(
-            "miori",
-            record_id,
-            [0.1, 0.2],
-            "畑の相談",
-            metadata,
-            chroma_path=_chroma_path(tmp_path),
+
+def test_upsert_includes_expires_at_only_when_present(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+
+    _upsert(
+        chroma_store,
+        tmp_path,
+        expires_at="2026-07-23T00:00:00.000000Z",
+    )
+
+    assert _only_collection().records[
+        "00000000-0000-4000-8000-000000000042"
+    ]["metadata"] == {
+        "character_id": "miori",
+        "provider_id": "core",
+        "memory_kind": "SEMANTIC",
+        "memory_type": "USER_PREFERENCE",
+        "policy_version": "policy-v1",
+        "effective_at": "2026-06-23T00:00:00.000000Z",
+        "expires_at": "2026-07-23T00:00:00.000000Z",
+    }
+
+
+def test_delete_is_idempotent_and_character_scoped(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+    memory_id = "00000000-0000-4000-8000-000000000042"
+    _upsert(chroma_store, tmp_path)
+    _upsert(chroma_store, tmp_path, character_id="other")
+
+    chroma_store.delete_memory_index_entry(
+        character_id="miori", memory_id=memory_id, chroma_path=tmp_path / "data" / "chroma"
+    )
+    chroma_store.delete_memory_index_entry(
+        character_id="miori", memory_id=memory_id, chroma_path=tmp_path / "data" / "chroma"
+    )
+
+    assert chroma_store.list_memory_index_ids(
+        character_id="miori", chroma_path=tmp_path / "data" / "chroma"
+    ) == set()
+    assert chroma_store.list_memory_index_ids(
+        character_id="other", chroma_path=tmp_path / "data" / "chroma"
+    ) == {memory_id}
+
+
+def test_list_ids_and_get_metadata_observe_the_character_collection(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+    memory_id = "00000000-0000-4000-8000-000000000042"
+    _upsert(chroma_store, tmp_path)
+
+    ids = chroma_store.list_memory_index_ids(
+        character_id="miori", chroma_path=tmp_path / "data" / "chroma"
+    )
+    metadata = chroma_store.get_memory_index_metadata(
+        character_id="miori", memory_id=memory_id, chroma_path=tmp_path / "data" / "chroma"
+    )
+
+    assert ids == {memory_id}
+    assert metadata == _only_collection().records[memory_id]["metadata"]
+    assert chroma_store.get_memory_index_metadata(
+        character_id="miori", memory_id="missing", chroma_path=tmp_path / "data" / "chroma"
+    ) is None
+
+
+def test_list_ids_returns_every_page(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+    expected_ids = {f"memory-{index:03d}" for index in range(125)}
+    for memory_id in expected_ids:
+        _upsert(chroma_store, tmp_path, memory_id=memory_id)
+
+    ids = chroma_store.list_memory_index_ids(
+        character_id="miori", chroma_path=tmp_path / "data" / "chroma"
+    )
+
+    assert ids == expected_ids
+
+
+def test_query_returns_new_retrieval_contract_from_one_record(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+    _upsert(chroma_store, tmp_path)
+
+    memories = chroma_store.query_memories(
+        "miori", [0.3, 0.4], n_results=5, chroma_path=tmp_path / "data" / "chroma"
+    )
+
+    assert memories == [
+        chroma_store.MemorySearchResult(
+            memory_id="00000000-0000-4000-8000-000000000042",
+            normalized_text="畑の相談",
+            effective_at="2026-06-23T00:00:00.000000Z",
+            memory_type="USER_PREFERENCE",
         )
+    ]
 
-        client = FakePersistentClient.instances[0]
-        collection_name = next(iter(client.collections))
-        collection = client.collections[collection_name]
-        assert client.path == str(tmp_path / "data" / "chroma")
-        assert collection_name.startswith("character-miori-")
-        assert collection.add_calls == [
-            {
-                "ids": [record_id],
-                "embeddings": [[0.1, 0.2]],
-                "documents": ["畑の相談"],
-                "metadatas": [metadata],
-            }
-        ]
 
-    def test_query_memories_returns_timestamped_results_from_character_collection(
-        self, monkeypatch, tmp_path
-    ):
-        chroma_store = _import_chroma_store(monkeypatch, tmp_path)
+def test_character_names_remain_safe_and_isolated(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+    _upsert(chroma_store, tmp_path, character_id="Miori")
+    _upsert(chroma_store, tmp_path, character_id="miori")
+    _upsert(chroma_store, tmp_path, character_id="光織/mi")
 
-        memories = chroma_store.query_memories(
-            "miori", [0.3, 0.4], n_results=5, chroma_path=_chroma_path(tmp_path)
-        )
+    names = list(next(iter(FakePersistentClient.collections_by_path.values())))
+    assert len(set(names)) == 3
+    assert all(_is_chroma_safe_name(name) for name in names)
 
-        client = FakePersistentClient.instances[0]
-        collection_name = next(iter(client.collections))
-        collection = client.collections[collection_name]
-        assert collection_name.startswith("character-miori-")
-        assert memories == [
-            chroma_store.MemorySearchResult(
-                content="雨の話",
-                timestamp="2026-06-20T00:00:00+00:00",
-                role="user",
-            ),
-            chroma_store.MemorySearchResult(
-                content="畑の話",
-                timestamp="2026-06-21T00:00:00+00:00",
-                role="assistant",
-            ),
-        ]
-        assert collection.query_calls == [
-            {"query_embeddings": [[0.3, 0.4]], "n_results": 5}
-        ]
 
-    def test_short_and_symbol_character_names_use_chroma_safe_collections(
-        self, monkeypatch, tmp_path
-    ):
-        chroma_store = _import_chroma_store(monkeypatch, tmp_path)
+def test_chroma_path_is_required(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
 
-        chroma_store.add_memory(
-            "mi",
-            "00000000-0000-4000-8000-000000000043",
-            [0.1, 0.2],
-            "短いキャラクター名の記憶",
-            {
-                "character": "mi",
-                "role": "user",
-                "timestamp": "2026-06-23T00:00:00+00:00",
-            },
-            chroma_path=_chroma_path(tmp_path),
-        )
-        chroma_store.query_memories(
-            "光織/mi", [0.3, 0.4], n_results=5, chroma_path=_chroma_path(tmp_path)
-        )
+    with pytest.raises(TypeError):
+        chroma_store.list_memory_index_ids(character_id="miori")
 
-        add_client = FakePersistentClient.instances[0]
-        query_client = FakePersistentClient.instances[1]
-        add_name = next(iter(add_client.collections))
-        query_name = next(iter(query_client.collections))
-        assert add_name.startswith("character-mi-")
-        assert query_name.startswith("character-mi-")
-        assert add_name != query_name
-        assert _is_chroma_safe_name(add_name)
-        assert _is_chroma_safe_name(query_name)
-        assert add_client.collections[add_name].add_calls[0]["ids"] == [
-            "00000000-0000-4000-8000-000000000043"
-        ]
-        assert query_client.collections[query_name].query_calls == [
-            {"query_embeddings": [[0.3, 0.4]], "n_results": 5}
-        ]
-
-    def test_case_variant_character_names_keep_separate_collection_boundaries(
-        self, monkeypatch, tmp_path
-    ):
-        chroma_store = _import_chroma_store(monkeypatch, tmp_path)
-
-        chroma_store.add_memory(
-            "Miori",
-            "00000000-0000-4000-8000-000000000044",
-            [0.1, 0.2],
-            "別キャラクターの記憶",
-            {
-                "character": "Miori",
-                "role": "user",
-                "timestamp": "2026-06-23T00:00:00+00:00",
-            },
-            chroma_path=_chroma_path(tmp_path),
-        )
-        chroma_store.query_memories(
-            "miori", [0.3, 0.4], n_results=5, chroma_path=_chroma_path(tmp_path)
-        )
-
-        add_client = FakePersistentClient.instances[0]
-        query_client = FakePersistentClient.instances[1]
-        add_name = next(iter(add_client.collections))
-        query_name = next(iter(query_client.collections))
-        assert add_name != query_name
-        assert add_client.collections[add_name].add_calls[0]["ids"] == [
-            "00000000-0000-4000-8000-000000000044"
-        ]
-        assert query_client.collections[query_name].query_calls == [
-            {"query_embeddings": [[0.3, 0.4]], "n_results": 5}
-        ]
-
-    def test_long_character_name_stays_chroma_safe_for_add_and_query(
-        self, monkeypatch, tmp_path
-    ):
-        chroma_store = _import_chroma_store(monkeypatch, tmp_path)
-        character = "a" * 80
-
-        chroma_store.add_memory(
-            character,
-            "00000000-0000-4000-8000-000000000045",
-            [0.1, 0.2],
-            "長いキャラクター名の記憶",
-            {
-                "character": character,
-                "role": "user",
-                "timestamp": "2026-06-23T00:00:00+00:00",
-            },
-            chroma_path=_chroma_path(tmp_path),
-        )
-        memories = chroma_store.query_memories(
-            character,
-            [0.3, 0.4],
-            n_results=5,
-            chroma_path=_chroma_path(tmp_path),
-        )
-
-        add_client = FakePersistentClient.instances[0]
-        query_client = FakePersistentClient.instances[1]
-        add_name = next(iter(add_client.collections))
-        query_name = next(iter(query_client.collections))
-        assert add_name == query_name
-        assert _is_chroma_safe_name(add_name)
-        assert add_client.collections[add_name].add_calls[0]["ids"] == [
-            "00000000-0000-4000-8000-000000000045"
-        ]
-        assert query_client.collections[query_name].query_calls == [
-            {"query_embeddings": [[0.3, 0.4]], "n_results": 5}
-        ]
-        assert memories[0].content == "雨の話"
-
-    def test_empty_character_name_is_rejected_before_client_access(
-        self, monkeypatch, tmp_path
-    ):
-        chroma_store = _import_chroma_store(monkeypatch, tmp_path)
-
-        with pytest.raises(ValueError, match="character must not be empty"):
-            chroma_store.query_memories(
-                " ", [0.3, 0.4], n_results=5, chroma_path=_chroma_path(tmp_path)
-            )
-
-        assert FakePersistentClient.instances == []
+    assert FakePersistentClient.instances == []
 
 
 def _is_chroma_safe_name(collection_name: str) -> bool:

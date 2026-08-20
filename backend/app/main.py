@@ -43,7 +43,11 @@ from app.llm import router as llm_router
 from app.memory.memory_policy import resolved_memory_policy
 from app.memory.admission.evaluator import create_rag_admission_evaluator
 from app.memory.admission_service import RagAdmissionService
+from app.memory.embedder import embed_text
+from app.memory.index_scheduler import MemoryIndexScheduler
+from app.memory.index_sync import MemoryIndexSync
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
+from app.memory.persistence.index_outbox_repository import IndexOutboxRepository
 from app.model_settings import resolve_model_settings
 from app.prompting import BuiltPrompt, CharacterPrompt, PromptMessage
 from app.privacy.history_sanitizer import create_history_sanitizer
@@ -232,6 +236,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             uuid_factory=uuid4,
             outbox_uuid_factory=uuid4,
         )
+        memory_index_sync = MemoryIndexSync(
+            approved_repository=approved_memory_repository,
+            outbox_repository=IndexOutboxRepository(
+                database_path=runtime_paths.persona_memory_sqlite_path,
+                clock=clock,
+            ),
+            chroma_path=runtime_paths.chroma_path,
+            runtime_report_dir=runtime_paths.runtime_report_dir,
+            embedder=embed_text,
+            clock=clock,
+        )
+        memory_index_scheduler = MemoryIndexScheduler(memory_index_sync)
         chat_service_resolver = None
         repository_state_set = False
         lifecycle_service_state_set = False
@@ -241,6 +257,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         semantic_classifier_state_set = False
         rag_admission_service_state_set = False
         semantic_classifier_client = None
+        memory_index_scheduler_started = False
         try:
             app.state.conversation_history_repository = conversation_history_repository
             repository_state_set = True
@@ -294,8 +311,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             chat_service_resolver = lambda: _app_chat_service(app)
             _chat_runtime.register_default_chat_service_resolver(chat_service_resolver)
             resolver_registered = True
+            memory_index_scheduler.start()
+            memory_index_scheduler_started = True
             yield
         finally:
+            if memory_index_scheduler_started:
+                await memory_index_scheduler.stop()
             with ExitStack() as cleanup:
                 if chat_service_state_set:
                     cleanup.callback(delattr, app.state, "chat_service")

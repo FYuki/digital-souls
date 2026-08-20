@@ -182,6 +182,8 @@ def _approved_memory(
     return ApprovedMemory(
         id=MEMORY_ID,
         character_id="miori",
+        provider_id="core",
+        memory_kind="SEMANTIC",
         memory_type=MemoryType.USER_PREFERENCE,
         structured_value=structured_value
         or UserPreferenceValue(
@@ -194,6 +196,7 @@ def _approved_memory(
             and structured_value.polarity is PreferencePolarity.DISLIKE
             else "ユーザーは紅茶を好む。"
         ),
+        policy_version="policy-v1",
         content_version=1,
         status=MemoryStatus.ACTIVE,
         effective_at=CREATED_AT,

@@ -83,9 +83,10 @@ def _write_card(tmp_path, system_prompt: str) -> None:
 
 def _rag_memory(content: str) -> MemorySearchResult:
     return MemorySearchResult(
-        content=content,
-        timestamp="2026-07-31T00:00:00+00:00",
-        role="user",
+        memory_id="memory-1",
+        normalized_text=content,
+        effective_at="2026-07-31T00:00:00.000000Z",
+        memory_type="USER_PREFERENCE",
     )
 
 
@@ -336,7 +337,9 @@ class TestChatEndpoint:
 
         with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
             with patch("app.memory.rag_service.embed_text", return_value=[0.1]):
-                with patch("app.memory.chroma_store.add_memory") as add_memory:
+                with patch(
+                    "app.memory.chroma_store.upsert_memory_index_entry"
+                ) as upsert_memory_index_entry:
                     with TestClient(app) as client:
                         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
                             with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
@@ -351,8 +354,8 @@ class TestChatEndpoint:
         assert response.status_code == 200
         assert response.json()["turn"]["assistant_content"] == _LLM_REPLY
         chroma_collection.query.assert_called_once()
-        add_memory.assert_not_called()
-        chroma_collection.add.assert_not_called()
+        upsert_memory_index_entry.assert_not_called()
+        chroma_collection.upsert.assert_not_called()
 
     def test_rag_disabled_resolves_policy_for_privacy_but_does_not_record(
         self, monkeypatch
@@ -664,7 +667,7 @@ class TestChatFlow:
             {
                 "role": "system",
                 "content": "## 関連する記憶\n"
-                "[2026-07-31T00:00:00+00:00] (user) 前回は畑の話をした",
+                "[2026-07-31T00:00:00.000000Z] 前回は畑の話をした",
             },
             {"role": "user", "content": "前回なんの話をしたっけ？"},
         ]

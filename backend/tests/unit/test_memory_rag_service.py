@@ -29,14 +29,16 @@ class TestRagServicePrompt:
             MagicMock(
                 return_value=[
                     rag_service.MemorySearchResult(
-                        content="前回は畑の土壌について話した",
-                        timestamp="2026-06-20T00:00:00+00:00",
-                        role="user",
+                        memory_id="memory-1",
+                        normalized_text="前回は畑の土壌について話した",
+                        effective_at="2026-06-20T00:00:00.000000Z",
+                        memory_type="USER_PREFERENCE",
                     ),
                     rag_service.MemorySearchResult(
-                        content="雨量を確認した",
-                        timestamp="2026-06-21T00:00:00+00:00",
-                        role="assistant",
+                        memory_id="memory-2",
+                        normalized_text="雨量を確認した",
+                        effective_at="2026-06-21T00:00:00.000000Z",
+                        memory_type="EPISODIC_EVENT",
                     ),
                 ]
             ),
@@ -49,11 +51,11 @@ class TestRagServicePrompt:
             chroma_path=_CHROMA_PATH,
         )
 
-        assert [memory.content for memory in memories] == [
+        assert [memory.normalized_text for memory in memories] == [
             "前回は畑の土壌について話した",
             "雨量を確認した",
         ]
-        assert [memory.role for memory in memories] == ["user", "assistant"]
+        assert [memory.memory_id for memory in memories] == ["memory-1", "memory-2"]
         rag_service.query_memories.assert_called_once_with(
             "miori", [0.1], n_results=5, chroma_path=_CHROMA_PATH
         )
@@ -89,14 +91,16 @@ class TestRagServicePrompt:
             MagicMock(
                 return_value=[
                     rag_service.MemorySearchResult(
-                        content="前回は畑の土壌について話した",
-                        timestamp="2026-06-20T00:00:00+00:00",
-                        role="user",
+                        memory_id="memory-1",
+                        normalized_text="前回は畑の土壌について話した",
+                        effective_at="2026-06-20T00:00:00.000000Z",
+                        memory_type="USER_PREFERENCE",
                     ),
                     rag_service.MemorySearchResult(
-                        content="雨量を確認した",
-                        timestamp="2026-06-21T00:00:00+00:00",
-                        role="assistant",
+                        memory_id="memory-2",
+                        normalized_text="雨量を確認した",
+                        effective_at="2026-06-21T00:00:00.000000Z",
+                        memory_type="EPISODIC_EVENT",
                     ),
                 ]
             ),

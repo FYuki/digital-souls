@@ -110,9 +110,10 @@ def _runtime_dependencies() -> ChatRuntimeDependencies:
 
 def _rag_memory(content: str) -> MemorySearchResult:
     return MemorySearchResult(
-        content=content,
-        timestamp="2026-07-31T00:00:00+00:00",
-        role="user",
+        memory_id="memory-1",
+        normalized_text=content,
+        effective_at="2026-07-31T00:00:00.000000Z",
+        memory_type="USER_PREFERENCE",
     )
 
 
@@ -769,7 +770,7 @@ class TestChatServiceRagContract:
         )
         assert _generated_contents(mock_gen) == [
             "## 応答方針\n# prompt",
-            "## 関連する記憶\n[2026-07-31T00:00:00+00:00] (user) 畑の話",
+            "## 関連する記憶\n[2026-07-31T00:00:00.000000Z] 畑の話",
             "hello",
         ]
 

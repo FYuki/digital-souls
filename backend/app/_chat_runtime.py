@@ -337,9 +337,7 @@ def _rag_context_for_reply(
     )
     return RagContext(
         items=tuple(
-            RagItem(
-                f"[{memory.timestamp}] ({memory.role}) {memory.content}"
-            )
+            RagItem(f"[{memory.effective_at}] {memory.normalized_text}")
             for memory in memories
         )
     )

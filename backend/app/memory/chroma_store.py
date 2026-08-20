@@ -1,9 +1,12 @@
-import importlib
+from __future__ import annotations
+
 import hashlib
+import importlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, cast
+
 
 COLLECTION_NAME_PREFIX = "character"
 COLLECTION_NAME_MAX_LENGTH = 63
@@ -15,81 +18,116 @@ COLLECTION_NAME_MAX_SLUG_LENGTH = (
     - COLLECTION_NAME_DIGEST_LENGTH
     - COLLECTION_NAME_SEPARATOR_COUNT
 )
+LIST_PAGE_SIZE = 100
 
 
 @dataclass(frozen=True)
 class MemorySearchResult:
-    content: str
-    timestamp: str
-    role: str
+    memory_id: str
+    normalized_text: str
+    effective_at: str
+    memory_type: str
 
 
 class _ChromaCollection(Protocol):
-    def add(
+    def upsert(
         self,
         *,
         ids: list[str],
         embeddings: list[list[float]],
         documents: list[str],
         metadatas: list[dict[str, str]],
-    ) -> None:
-        ...
+    ) -> None: ...
+
+    def delete(self, *, ids: list[str]) -> None: ...
+
+    def get(
+        self,
+        *,
+        ids: list[str] | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> dict[str, object]: ...
 
     def query(
         self,
         *,
         query_embeddings: list[list[float]],
         n_results: int,
-    ) -> dict[str, object]:
-        ...
+    ) -> dict[str, object]: ...
 
 
 class _ChromaClient(Protocol):
-    def get_or_create_collection(self, name: str) -> _ChromaCollection:
-        ...
+    def get_or_create_collection(self, name: str) -> _ChromaCollection: ...
 
 
-def _validate_character_collection_name(character: str) -> None:
-    if not character.strip():
-        raise ValueError("character must not be empty")
-
-
-def _collection_name(character: str) -> str:
-    normalized = character.strip()
-    _validate_character_collection_name(normalized)
-    slug = re.sub(r"[^a-z0-9_-]+", "-", normalized.lower()).strip("-_")
-    slug = slug[:COLLECTION_NAME_MAX_SLUG_LENGTH].strip("-_")
-    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[
-        :COLLECTION_NAME_DIGEST_LENGTH
-    ]
-    if slug:
-        return f"{COLLECTION_NAME_PREFIX}-{slug}-{digest}"
-    return f"{COLLECTION_NAME_PREFIX}-{digest}"
-
-
-def _collection(character: str, chroma_path: Path) -> _ChromaCollection:
-    collection_name = _collection_name(character)
-    chroma_path.mkdir(parents=True, exist_ok=True)
-    chromadb = importlib.import_module("chromadb")
-    client = cast(_ChromaClient, chromadb.PersistentClient(path=str(chroma_path)))
-    return client.get_or_create_collection(name=collection_name)
-
-
-def add_memory(
-    character: str,
-    record_id: str,
-    embedding: list[float],
-    content: str,
-    metadata: dict[str, str],
+def upsert_memory_index_entry(
     *,
+    character_id: str,
+    memory_id: str,
+    embedding: list[float],
+    normalized_text: str,
+    provider_id: str,
+    memory_kind: str,
+    memory_type: str,
+    policy_version: str,
+    effective_at: str,
+    expires_at: str | None,
     chroma_path: Path,
 ) -> None:
-    _collection(character, chroma_path).add(
-        ids=[record_id],
+    metadata = {
+        "character_id": character_id,
+        "provider_id": provider_id,
+        "memory_kind": memory_kind,
+        "memory_type": memory_type,
+        "policy_version": policy_version,
+        "effective_at": effective_at,
+        **({"expires_at": expires_at} if expires_at is not None else {}),
+    }
+    collection = _collection(character_id, chroma_path)
+    # Chroma の版によらず、訂正前の metadata キーを残さないため置換する。
+    collection.delete(ids=[memory_id])
+    collection.upsert(
+        ids=[memory_id],
         embeddings=[embedding],
-        documents=[content],
+        documents=[normalized_text],
         metadatas=[metadata],
     )
+
+
+def delete_memory_index_entry(
+    *, character_id: str, memory_id: str, chroma_path: Path
+) -> None:
+    _collection(character_id, chroma_path).delete(ids=[memory_id])
+
+
+def list_memory_index_ids(*, character_id: str, chroma_path: Path) -> set[str]:
+    collection = _collection(character_id, chroma_path)
+    found: set[str] = set()
+    offset = 0
+    while True:
+        result = collection.get(limit=LIST_PAGE_SIZE, offset=offset)
+        page = _flat_string_list(result, "ids")
+        found.update(page)
+        if len(page) < LIST_PAGE_SIZE:
+            return found
+        offset += len(page)
+
+
+def get_memory_index_metadata(
+    *, character_id: str, memory_id: str, chroma_path: Path
+) -> dict[str, str] | None:
+    result = _collection(character_id, chroma_path).get(ids=[memory_id])
+    ids = _flat_string_list(result, "ids")
+    if not ids:
+        return None
+    metadatas = _flat_object_list(result, "metadatas")
+    if len(ids) != 1 or len(metadatas) != 1:
+        raise ValueError("Chroma get result ids and metadatas must match")
+    metadata = metadatas[0]
+    if not all(isinstance(key, str) and isinstance(value, str) for key, value in metadata.items()):
+        raise ValueError("Chroma memory metadata must contain only strings")
+    return cast(dict[str, str], metadata)
 
 
 def query_memories(
@@ -100,19 +138,59 @@ def query_memories(
     chroma_path: Path,
 ) -> list[MemorySearchResult]:
     result = _collection(character, chroma_path).query(
-        query_embeddings=[embedding],
-        n_results=n_results,
+        query_embeddings=[embedding], n_results=n_results
     )
+    ids = _first_result_list(result, "ids")
     documents = _first_result_list(result, "documents")
     metadatas = _first_result_list(result, "metadatas")
     if not documents:
         return []
-    if len(documents) != len(metadatas):
-        raise ValueError("Chroma query result documents and metadatas must match")
+    if len(ids) != len(documents) or len(documents) != len(metadatas):
+        raise ValueError("Chroma query result ids, documents and metadatas must match")
     return [
-        _memory_search_result(document, metadata)
-        for document, metadata in zip(documents, metadatas, strict=True)
+        _memory_search_result(memory_id, document, metadata)
+        for memory_id, document, metadata in zip(ids, documents, metadatas, strict=True)
     ]
+
+
+def _collection(character: str, chroma_path: Path) -> _ChromaCollection:
+    collection_name = _collection_name(character)
+    chroma_path.mkdir(parents=True, exist_ok=True)
+    chromadb = importlib.import_module("chromadb")
+    client = cast(_ChromaClient, chromadb.PersistentClient(path=str(chroma_path)))
+    return client.get_or_create_collection(name=collection_name)
+
+
+def _collection_name(character: str) -> str:
+    normalized = character.strip()
+    if not normalized:
+        raise ValueError("character must not be empty")
+    slug = re.sub(r"[^a-z0-9_-]+", "-", normalized.lower()).strip("-_")
+    slug = slug[:COLLECTION_NAME_MAX_SLUG_LENGTH].strip("-_")
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[
+        :COLLECTION_NAME_DIGEST_LENGTH
+    ]
+    return (
+        f"{COLLECTION_NAME_PREFIX}-{slug}-{digest}"
+        if slug
+        else f"{COLLECTION_NAME_PREFIX}-{digest}"
+    )
+
+
+def _flat_string_list(result: dict[str, object], field_name: str) -> list[str]:
+    value = result.get(field_name)
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise ValueError(f"Chroma result '{field_name}' must be a string list")
+    return cast(list[str], value)
+
+
+def _flat_object_list(
+    result: dict[str, object], field_name: str
+) -> list[dict[object, object]]:
+    value = result.get(field_name)
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        raise ValueError(f"Chroma result '{field_name}' must be an object list")
+    return cast(list[dict[object, object]], value)
 
 
 def _first_result_list(result: dict[str, object], field_name: str) -> list[object]:
@@ -125,24 +203,24 @@ def _first_result_list(result: dict[str, object], field_name: str) -> list[objec
         return []
     first_result = value[0]
     if not isinstance(first_result, list):
-        raise ValueError(
-            f"Chroma query result '{field_name}' must contain result lists"
-        )
+        raise ValueError(f"Chroma query result '{field_name}' must contain result lists")
     return cast(list[object], first_result)
 
 
 def _memory_search_result(
-    document: object,
-    metadata: object,
+    memory_id: object, document: object, metadata: object
 ) -> MemorySearchResult:
-    if not isinstance(document, str):
-        raise ValueError("Chroma query result documents must be strings")
+    if not isinstance(memory_id, str) or not isinstance(document, str):
+        raise ValueError("Chroma memory ids and documents must be strings")
     if not isinstance(metadata, dict):
         raise ValueError("Chroma query result metadatas must be objects")
-    timestamp = metadata.get("timestamp")
-    role = metadata.get("role")
-    if not isinstance(timestamp, str):
-        raise ValueError("Chroma query result metadata.timestamp must be a string")
-    if not isinstance(role, str):
-        raise ValueError("Chroma query result metadata.role must be a string")
-    return MemorySearchResult(content=document, timestamp=timestamp, role=role)
+    effective_at = metadata.get("effective_at")
+    memory_type = metadata.get("memory_type")
+    if not isinstance(effective_at, str) or not isinstance(memory_type, str):
+        raise ValueError("Chroma memory metadata is incomplete")
+    return MemorySearchResult(
+        memory_id=memory_id,
+        normalized_text=document,
+        effective_at=effective_at,
+        memory_type=memory_type,
+    )
