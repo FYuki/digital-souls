@@ -317,6 +317,34 @@ def test_semantic_gate_only_allows_not_sensitive_queries(
     query.assert_not_called()
 
 
+def test_invalid_semantic_assessment_returns_empty_with_fixed_warning(
+    monkeypatch, caplog
+):
+    from app.memory import rag_service
+
+    scanner, classifier, repository = _dependencies()
+    classifier.classify.return_value = object()
+    embed = MagicMock()
+    query = MagicMock()
+    monkeypatch.setattr(rag_service, "embed_text", embed)
+    monkeypatch.setattr(rag_service, "query_memories", query)
+
+    with caplog.at_level("WARNING", logger=rag_service.__name__):
+        memories = _retrieve(
+            rag_service,
+            scanner=scanner,
+            classifier=classifier,
+            repository=repository,
+        )
+
+    assert memories == ()
+    assert [record.getMessage() for record in caplog.records] == [
+        "Skipped RAG memory lookup: invalid semantic assessment"
+    ]
+    embed.assert_not_called()
+    query.assert_not_called()
+
+
 def test_safe_query_returns_only_scanned_sqlite_text_with_raw_distance(monkeypatch):
     from app.memory import rag_service
 

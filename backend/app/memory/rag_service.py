@@ -18,7 +18,12 @@ from app.memory.persistence.contracts import ApprovedMemory, MemoryStatus
 from app.memory.persistence.sqlite import format_datetime
 from app.privacy.contracts import PrivacyScanner, ScanFailure, ScanSuccess
 from app.privacy.semantic.classifier import SemanticPrivacyClassifier
-from app.privacy.semantic.contracts import QUERY_GATE, SemanticClassification
+from app.privacy.semantic.contracts import (
+    QUERY_GATE,
+    PrivacyAssessment,
+    SemanticAssessmentReasonCode,
+    SemanticClassification,
+)
 
 logger = logging.getLogger(__name__)
 RAG_OPERATION_ERRORS = (
@@ -46,6 +51,13 @@ def retrieve_prompt_memories(
         if _scan_blocks_retrieval(query_scan, policy):
             return ()
         assessment = classifier.classify(user_message, QUERY_GATE)
+        if (
+            not isinstance(assessment, PrivacyAssessment)
+            or not isinstance(assessment.classification, SemanticClassification)
+            or not isinstance(assessment.reason_code, SemanticAssessmentReasonCode)
+        ):
+            logger.warning("Skipped RAG memory lookup: invalid semantic assessment")
+            return ()
         if assessment.classification is not SemanticClassification.NOT_SENSITIVE:
             logger.warning(
                 "Skipped RAG memory lookup: semantic_reason_code=%s",
