@@ -90,7 +90,9 @@ def test_should_build_system_rag_saved_history_then_current_user() -> None:
             mes_example="",
             post_history_instructions="final instruction",
         ),
-        rag=RagContext(items=(prompting.RagItem("RAG_CONTEXT"),)),
+        rag=RagContext(
+            items=(prompting.RagItem("RAG_CONTEXT", raw_distance=1.25),)
+        ),
         history=prompting.HistoryCandidates(
             newest_first_factory=lambda: reversed(history.turns),
             omitted_turns=history.omitted_turns,
@@ -395,6 +397,9 @@ def test_runtime_should_inject_history_when_rag_is_disabled(
             prompt_builder=build_chat_prompt,
             llm_response_generator=generate,
             input_token_counter=lambda messages: len(messages),
+            privacy_scanner=MagicMock(),
+            semantic_classifier=MagicMock(),
+            approved_memory_repository=MagicMock(),
         ),
     )
 

@@ -34,10 +34,13 @@ class CharacterPrompt:
 @dataclass(frozen=True, repr=False)
 class RagItem:
     content: str
+    raw_distance: float
 
     def __post_init__(self) -> None:
         if not isinstance(self.content, str):
             raise TypeError("content must be a string")
+        if not isinstance(self.raw_distance, float):
+            raise TypeError("raw_distance must be a float")
 
 
 @dataclass(frozen=True, repr=False)

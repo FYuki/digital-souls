@@ -79,7 +79,7 @@ def test_should_coordinate_history_budget_and_existing_prompt_builder() -> None:
     )
     result = chat_prompt.build_chat_prompt(
         character=CharacterPrompt("", "", "", "SYSTEM", "", ""),
-        rag=RagContext(items=(RagItem("RAG"),)),
+        rag=RagContext(items=(RagItem("RAG", raw_distance=1.25),)),
         current_user=CurrentUserMessage("RAW_CURRENT_USER"),
         history_session=history_session,
         config=config,

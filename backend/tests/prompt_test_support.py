@@ -70,7 +70,11 @@ def prompt_build_input(
             mes_example="会話例",
             post_history_instructions="最終指示",
         ),
-        rag=rag if rag is not None else RagContext(items=(RagItem("RAG本文"),)),
+        rag=(
+            rag
+            if rag is not None
+            else RagContext(items=(RagItem("RAG本文", raw_distance=1.25),))
+        ),
         history=HistoryCandidates(
             newest_first_factory=lambda: reversed(masked_history.turns),
             omitted_turns=masked_history.omitted_turns,

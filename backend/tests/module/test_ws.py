@@ -7,7 +7,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 from app.audio_pipeline import resolve_audio_runtime_config
 from app.main import app
@@ -402,6 +402,7 @@ class TestWebSocketEndpoint:
                                 normalized_text="前回は畑の話をした",
                                 effective_at="2026-07-31T00:00:00.000000Z",
                                 memory_type="USER_PREFERENCE",
+                                raw_distance=1.25,
                             ),
                         ),
                     ) as mock_build:
@@ -417,6 +418,9 @@ class TestWebSocketEndpoint:
             "miori",
             user_message,
             policy,
+            scanner=ANY,
+            classifier=ANY,
+            approved_repository=ANY,
             chroma_path=runtime_paths.chroma_path,
         )
         assert "前回は畑の話をした" in _generated_contents(mock_gen)[1]

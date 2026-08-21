@@ -13,13 +13,14 @@ COMMON_SECTION_KEY = "common"
 SERVICES_SECTION_KEY = "services"
 PRIVACY_SECTION_KEY = "privacy"
 RAG_SERVICE_KEY = "rag_service"
-SENSITIVE_TERMS_KEY = "sensitive_terms"
+RETRIEVAL_COMPATIBLE_POLICY_VERSIONS_KEY = (
+    "retrieval_compatible_policy_versions"
+)
 DO_NOT_STORE_TERMS_KEY = "do_not_store_terms"
 EXPLICIT_MEMORY_TERMS_KEY = "explicit_memory_terms"
 LONG_TERM_MEMORY_MARKERS_KEY = "long_term_memory_markers"
 MAX_RETRIEVED_MEMORIES_KEY = "max_retrieved_memories"
 POLICY_TERM_KEYS = (
-    SENSITIVE_TERMS_KEY,
     DO_NOT_STORE_TERMS_KEY,
     EXPLICIT_MEMORY_TERMS_KEY,
     LONG_TERM_MEMORY_MARKERS_KEY,
@@ -52,7 +53,6 @@ ABSOLUTE_DENY_CATEGORIES = frozenset(
 
 @dataclass(frozen=True)
 class MemoryPolicyTerms:
-    sensitive_terms: tuple[str, ...]
     do_not_store_terms: tuple[str, ...]
     explicit_memory_terms: tuple[str, ...]
     long_term_memory_markers: tuple[str, ...]
@@ -96,6 +96,7 @@ class PrivacyPolicy:
 @dataclass(frozen=True)
 class MemoryPolicy:
     policy_version: str
+    retrieval_compatible_policy_versions: tuple[str, ...]
     terms: MemoryPolicyTerms
     rag_service: RagServicePolicy
     privacy: PrivacyPolicy
@@ -182,7 +183,6 @@ def _terms_with_service_override(
         resolved[key] = _string_terms(source, key)
 
     return MemoryPolicyTerms(
-        sensitive_terms=resolved[SENSITIVE_TERMS_KEY],
         do_not_store_terms=resolved[DO_NOT_STORE_TERMS_KEY],
         explicit_memory_terms=resolved[EXPLICIT_MEMORY_TERMS_KEY],
         long_term_memory_markers=resolved[LONG_TERM_MEMORY_MARKERS_KEY],
@@ -418,10 +418,24 @@ def _load_policy(path: Path) -> MemoryPolicy:
         config.get(POLICY_VERSION_KEY),
         POLICY_VERSION_KEY,
     )
+    compatible_versions = _string_array(
+        config.get(RETRIEVAL_COMPATIBLE_POLICY_VERSIONS_KEY),
+        RETRIEVAL_COMPATIBLE_POLICY_VERSIONS_KEY,
+    )
+    _require_unique(
+        compatible_versions,
+        RETRIEVAL_COMPATIBLE_POLICY_VERSIONS_KEY,
+    )
+    if not compatible_versions or policy_version not in compatible_versions:
+        raise ValueError(
+            "memory policy config 'retrieval_compatible_policy_versions' "
+            "must include the current policy_version"
+        )
     common = _section(config, COMMON_SECTION_KEY)
     services = _service_sections(_section(config, SERVICES_SECTION_KEY))
     return MemoryPolicy(
         policy_version=policy_version,
+        retrieval_compatible_policy_versions=compatible_versions,
         terms=_terms_with_service_override(common, services, RAG_SERVICE_KEY),
         rag_service=_required_rag_service_policy(services),
         privacy=_privacy_policy(
@@ -437,9 +451,3 @@ def resolved_memory_policy() -> MemoryPolicy:
 
 def rag_service_policy(policy: MemoryPolicy) -> RagServicePolicy:
     return policy.rag_service
-
-
-def contains_sensitive_memory(content: str, policy: MemoryPolicy) -> bool:
-    terms = policy.terms
-    normalized = content.lower()
-    return any(term.lower() in normalized for term in terms.sensitive_terms)

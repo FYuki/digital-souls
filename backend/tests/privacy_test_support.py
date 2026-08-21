@@ -36,8 +36,8 @@ def load_conformance_cases() -> tuple[ConformanceCase, ...]:
 def policy_config() -> dict[str, object]:
     return {
         "policy_version": POLICY_VERSION,
+        "retrieval_compatible_policy_versions": [POLICY_VERSION],
         "common": {
-            "sensitive_terms": ["apiキー", "パスワード"],
             "do_not_store_terms": ["保存しないで"],
             "explicit_memory_terms": ["覚えて"],
             "long_term_memory_markers": ["重要"],

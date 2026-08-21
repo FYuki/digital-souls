@@ -21,6 +21,7 @@ from app.memory import memory_policy as _memory_policy
 from app.model_settings import ModelSettings
 from app.runtime_paths import RuntimePaths
 from app.memory import rag_service as _rag_service
+from app.memory.persistence.approved_repository import ApprovedMemoryRepository
 from app.prompting import (
     BuiltPrompt,
     CharacterPrompt,
@@ -30,6 +31,8 @@ from app.prompting import (
     RagItem,
     TokenCounter,
 )
+from app.privacy.contracts import PrivacyScanner
+from app.privacy.semantic.classifier import SemanticPrivacyClassifier
 
 RAG_ENABLED_ENV = "RAG_ENABLED"
 RAG_ENABLED_VALUE = "true"
@@ -79,6 +82,9 @@ class ChatRuntimeDependencies:
     prompt_builder: ChatPromptBuilder
     llm_response_generator: LlmResponseGenerator
     input_token_counter: InputTokenCounter
+    privacy_scanner: PrivacyScanner
+    semantic_classifier: SemanticPrivacyClassifier
+    approved_memory_repository: ApprovedMemoryRepository
 
 
 @dataclass(frozen=True)
@@ -326,6 +332,7 @@ def _rag_context_for_reply(
     character: str,
     message: str,
     context: _ResolvedChatContext,
+    dependencies: ChatRuntimeDependencies,
 ) -> RagContext:
     if context.memory_policy is None:
         return RagContext(items=())
@@ -333,11 +340,17 @@ def _rag_context_for_reply(
         character,
         message,
         context.memory_policy,
+        scanner=dependencies.privacy_scanner,
+        classifier=dependencies.semantic_classifier,
+        approved_repository=dependencies.approved_memory_repository,
         chroma_path=context.chroma_path,
     )
     return RagContext(
         items=tuple(
-            RagItem(f"[{memory.effective_at}] {memory.normalized_text}")
+            RagItem(
+                f"[{memory.effective_at}] {memory.normalized_text}",
+                raw_distance=memory.raw_distance,
+            )
             for memory in memories
         )
     )
@@ -372,7 +385,7 @@ def _generate_reply(
     try:
         prompt = dependencies.prompt_builder(
             character=context.character_prompt,
-            rag=_rag_context_for_reply(character, message, context),
+            rag=_rag_context_for_reply(character, message, context, dependencies),
             current_user=CurrentUserMessage(message),
             history_session=history_session,
             config=context.prompt_config,
