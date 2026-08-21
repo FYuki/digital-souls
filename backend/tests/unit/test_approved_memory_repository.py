@@ -111,7 +111,10 @@ def test_save_accepts_an_approved_candidate_and_creates_pending_upsert_atomicall
     memory_rows = _rows(database_path, "approved_memories")
     outbox_rows = _rows(database_path, "memory_index_outbox")
     assert memory.character_id == "miori"
+    assert memory.provider_id == "core"
+    assert memory.memory_kind == "SEMANTIC"
     assert memory.normalized_text == "ユーザーは短い回答を好む"
+    assert memory.policy_version == "policy-v1"
     assert len(memory_rows) == 1
     assert (outbox_rows[0]["memory_id"], outbox_rows[0]["operation"]) == (
         str(memory.id),

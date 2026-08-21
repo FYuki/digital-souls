@@ -42,9 +42,12 @@ UuidFactory = Callable[[], UUID]
 APPROVED_COLUMN_NAMES = (
     "id",
     "character_id",
+    "provider_id",
+    "memory_kind",
     "memory_type",
     "structured_value",
     "normalized_text",
+    "policy_version",
     "content_version",
     "status",
     "effective_at",
@@ -314,6 +317,13 @@ class ApprovedMemoryRepository:
             ).fetchall()
         return [_memory_from_row(row) for row in rows]
 
+    def list_character_ids(self) -> set[str]:
+        with self._database.connection() as connection:
+            rows = connection.execute(
+                "SELECT DISTINCT character_id FROM approved_memories"
+            ).fetchall()
+        return {str(row["character_id"]) for row in rows}
+
     def hard_delete(self, *, character_id: str, memory_id: UUID) -> None:
         _require_character_id(character_id)
         _require_uuid4(memory_id)
@@ -470,12 +480,15 @@ def _memory_from_row(row: sqlite3.Row) -> ApprovedMemory:
     return ApprovedMemory(
         id=UUID(str(row["id"])),
         character_id=str(row["character_id"]),
+        provider_id=str(row["provider_id"]),
+        memory_kind=str(row["memory_kind"]),
         memory_type=memory_type,
         structured_value=_deserialize_structured_value(
             memory_type,
             str(row["structured_value"]),
         ),
         normalized_text=str(row["normalized_text"]),
+        policy_version=str(row["policy_version"]),
         content_version=int(row["content_version"]),
         status=MemoryStatus(str(row["status"])),
         effective_at=parse_datetime(str(row["effective_at"])),

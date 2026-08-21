@@ -124,9 +124,12 @@ class MemoryWriteContext:
 class ApprovedMemory:
     id: UUID
     character_id: str
+    provider_id: str
+    memory_kind: str
     memory_type: MemoryType
     structured_value: StructuredValue
     normalized_text: str
+    policy_version: str
     content_version: int
     status: MemoryStatus
     effective_at: datetime

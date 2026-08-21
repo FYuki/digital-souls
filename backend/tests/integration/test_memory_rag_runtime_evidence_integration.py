@@ -1,4 +1,8 @@
 import importlib
+from datetime import UTC, datetime
+from itertools import count
+from pathlib import Path
+from uuid import UUID
 from uuid import uuid4
 
 import httpx
@@ -37,25 +41,50 @@ class TestRagRuntimeEvidenceIntegration:
         monkeypatch.setenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:latest")
         _require_runtime_evidence_dependencies()
 
-        from app.memory.chroma_store import add_memory
+        from app.memory.index_sync import MemoryIndexSync
         from app.memory.embedder import embed_text
         from app.memory.memory_policy import resolved_memory_policy
+        from app.memory.persistence.approved_repository import ApprovedMemoryRepository
+        from app.memory.persistence.index_outbox_repository import IndexOutboxRepository
+        from app.memory.persistence.schema import initialize_persona_memory_schema
         from app.memory.rag_service import retrieve_prompt_memories
+        from tests.unit.test_approved_memory_repository import _candidate, _context
 
+        importlib.import_module("app.backup_restore.service")
         character_id = f"miori{uuid4().hex[:8]}"
         content = "ユーザーは紅茶を好む。"
-        add_memory(
-            character_id,
-            str(uuid4()),
-            embed_text(content),
-            content,
-            {
-                "character": character_id,
-                "role": "user",
-                "timestamp": "2026-08-20T00:00:00+00:00",
-            },
-            chroma_path=runtime_paths.chroma_path,
+        repository_root = Path(__file__).resolve().parents[2]
+        initialize_persona_memory_schema(runtime_paths, repository_root)
+        ids = count(1)
+        approved = ApprovedMemoryRepository(
+            database_path=runtime_paths.persona_memory_sqlite_path,
+            clock=lambda: datetime(2026, 8, 20, tzinfo=UTC),
+            uuid_factory=lambda: UUID(
+                f"00000000-0000-4000-8000-{next(ids):012d}"
+            ),
+            outbox_uuid_factory=lambda: UUID(
+                f"10000000-0000-4000-8000-{next(ids):012d}"
+            ),
         )
+        approved.save(
+            character_id=character_id,
+            candidate=_candidate(content),
+            context=_context(),
+        )
+        sync = MemoryIndexSync(
+            approved_repository=approved,
+            outbox_repository=IndexOutboxRepository(
+                database_path=runtime_paths.persona_memory_sqlite_path,
+                clock=lambda: datetime(2026, 8, 20, tzinfo=UTC),
+            ),
+            chroma_path=runtime_paths.chroma_path,
+            runtime_report_dir=runtime_paths.runtime_report_dir,
+            embedder=embed_text,
+            clock=lambda: datetime(2026, 8, 20, tzinfo=UTC),
+        )
+        assert not runtime_paths.chroma_path.exists()
+
+        sync.reconcile_once()
 
         memories = retrieve_prompt_memories(
             character_id,
@@ -64,4 +93,4 @@ class TestRagRuntimeEvidenceIntegration:
             chroma_path=runtime_paths.chroma_path,
         )
 
-        assert any(memory.content == content for memory in memories)
+        assert any(memory.normalized_text == content for memory in memories)

@@ -398,9 +398,10 @@ class TestWebSocketEndpoint:
                         _BUILD_AUGMENTED_SYSTEM_PROMPT,
                         return_value=(
                             MemorySearchResult(
-                                content="前回は畑の話をした",
-                                timestamp="2026-07-31T00:00:00+00:00",
-                                role="user",
+                                memory_id="memory-1",
+                                normalized_text="前回は畑の話をした",
+                                effective_at="2026-07-31T00:00:00.000000Z",
+                                memory_type="USER_PREFERENCE",
                             ),
                         ),
                     ) as mock_build:
