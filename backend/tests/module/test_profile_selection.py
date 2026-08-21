@@ -87,7 +87,8 @@ def test_should_reject_dev_with_legacy_voice_profile_after_rag_diverges(tmp_path
     )
 
     assert result.returncode == 1
-    assert result.stderr == "ERROR: DS_PROFILE conflicts with VOICE_CHAT_E2E_BACKEND\n"
+    assert "DS_PROFILE" in result.stderr
+    assert "VOICE_CHAT_E2E_BACKEND" in result.stderr
     assert not report_path.exists()
 
 

@@ -288,7 +288,7 @@ def test_should_preserve_resolved_profile_values_when_dotenv_conflicts(tmp_path:
     (backend / ".env").write_text(
         "OLLAMA_BASE_URL=http://dotenv.invalid:11434\n"
         "VOICEVOX_BASE_URL=http://dotenv.invalid:50021\n"
-        "RAG_ENABLED=true\n"
+        "RAG_ENABLED=false\n"
         "OLLAMA_CHAT_MODEL=dotenv-invalid:1b\n"
         "OLLAMA_CLASSIFIER_MODEL=dotenv-invalid-classifier:1b\n"
         "WHISPER_MODEL=tiny\n"

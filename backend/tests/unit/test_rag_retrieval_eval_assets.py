@@ -49,6 +49,7 @@ def _write_manifest(
     expected_ids: list[str],
     candidates: list[dict[str, object]],
     failure: str | None = None,
+    character_id: str = "miori",
 ) -> Path:
     case: dict[str, object] = {
         "case_id": "minimal",
@@ -66,6 +67,7 @@ def _write_manifest(
             {
                 "schema_version": 1,
                 "evaluated_at": "2026-08-21T00:00:00+00:00",
+                "character_id": character_id,
                 "policy_version": "current",
                 "ranking": {
                     "candidate_pool_size": candidate_pool_size,
@@ -82,14 +84,18 @@ def _write_manifest(
 
 
 def _candidate(
-    memory_id: str, embedding: float, *, provider_id: str = "core"
+    memory_id: str,
+    embedding: float,
+    *,
+    provider_id: str = "core",
+    character_id: str = "miori",
 ) -> dict[str, object]:
     return {
         "id": memory_id,
         "text": memory_id,
         "memory_type": "EPISODIC_EVENT",
         "embedding": [embedding],
-        "character_id": "miori",
+        "character_id": character_id,
         "provider_id": provider_id,
         "status": "ACTIVE",
         "expires_at": None,
@@ -99,6 +105,23 @@ def _candidate(
         "last_user_mentioned_at": None,
         "created_at": "2026-08-01T00:00:00+00:00",
     }
+
+
+def _runtime_paths(tmp_path: Path):
+    from app.runtime_paths import RuntimePaths
+
+    return RuntimePaths(
+        environment_id="test",
+        data_root=tmp_path,
+        sqlite_path=tmp_path / "history.db",
+        persona_memory_sqlite_path=tmp_path / "memory.db",
+        chroma_path=tmp_path / "chroma",
+        runtime_report_dir=tmp_path / "runtime",
+        cache_path=tmp_path / "cache",
+        whisper_cache_path=tmp_path / "cache" / "whisper",
+        identity_marker_path=tmp_path / "identity.json",
+        restore_intent_path=tmp_path / "restore.json",
+    )
 
 
 def test_synthetic_manifest_covers_required_ranking_and_safety_cases() -> None:
@@ -154,6 +177,8 @@ def test_deterministic_manifest_evaluation_meets_quality_contract() -> None:
     assert result.unverified_fallbacks == 0
     assert result.tie_break_accuracy == 1.0
     assert result.recall >= 0.8
+    assert result.precision == 1.0
+    assert result.irrelevant_memory_rate == 0.0
 
 
 def test_deterministic_evaluation_applies_candidate_pool_before_ranking(
@@ -197,6 +222,25 @@ def test_evaluation_revalidates_core_provider_before_ranking(tmp_path: Path) -> 
     assert result.recall == 1.0
     assert result.precision == 1.0
     assert result.retrieved_items == 1
+
+
+def test_evaluation_uses_manifest_character_id(tmp_path: Path) -> None:
+    from evals.rag_retrieval.evaluator import evaluate_manifest
+
+    path = _write_manifest(
+        tmp_path / "character.json",
+        candidate_pool_size=1,
+        expected_ids=["another-memory"],
+        candidates=[
+            _candidate("another-memory", 0.1, character_id="another-character")
+        ],
+        character_id="another-character",
+    )
+
+    result = evaluate_manifest(path)
+
+    assert result.recall == 1.0
+    assert result.character_boundary_violations == 0
 
 
 def test_declared_search_failure_calls_provider_and_ends_without_fallback(
@@ -255,7 +299,6 @@ def test_real_evaluator_passes_manifest_candidate_pool_to_chroma(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from app.memory.chroma_store import MemorySearchCandidate
-    from app.runtime_paths import RuntimePaths
     from evals.rag_retrieval import real_evaluator
 
     path = _write_manifest(
@@ -265,6 +308,7 @@ def test_real_evaluator_passes_manifest_candidate_pool_to_chroma(
         candidates=[_candidate("core", 0.1)],
     )
     observed_n_results: list[int] = []
+    deleted_collections: list[str] = []
 
     def query_memories(
         _character_id: str,
@@ -281,23 +325,85 @@ def test_real_evaluator_passes_manifest_candidate_pool_to_chroma(
     monkeypatch.setattr(real_evaluator, "embed_text", lambda _text: [0.0])
     monkeypatch.setattr(real_evaluator, "upsert_memory_index_entry", lambda **_kwargs: None)
     monkeypatch.setattr(real_evaluator, "delete_memory_index_entry", lambda **_kwargs: None)
-    monkeypatch.setattr(real_evaluator, "query_memories", query_memories)
-    runtime_paths = RuntimePaths(
-        environment_id="test",
-        data_root=tmp_path,
-        sqlite_path=tmp_path / "history.db",
-        persona_memory_sqlite_path=tmp_path / "memory.db",
-        chroma_path=tmp_path / "chroma",
-        runtime_report_dir=tmp_path / "runtime",
-        cache_path=tmp_path / "cache",
-        whisper_cache_path=tmp_path / "cache" / "whisper",
-        identity_marker_path=tmp_path / "identity.json",
-        restore_intent_path=tmp_path / "restore.json",
+    monkeypatch.setattr(
+        real_evaluator,
+        "delete_memory_index_collection",
+        lambda **kwargs: deleted_collections.append(str(kwargs["character_id"])),
     )
+    monkeypatch.setattr(real_evaluator, "query_memories", query_memories)
+    runtime_paths = _runtime_paths(tmp_path)
 
     result = real_evaluator.evaluate_real_manifest(
         path, runtime_paths=runtime_paths, embedding_model="model"
     )
 
     assert observed_n_results == [7]
+    assert len(deleted_collections) == 1
+    assert deleted_collections[0].startswith("rag-eval-")
     assert result.recall == 1.0
+
+
+def test_real_evaluator_rejects_embedding_model_mismatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from evals.rag_retrieval import real_evaluator
+
+    monkeypatch.setattr(
+        real_evaluator, "resolve_ollama_embedding_model", lambda: "resolved-model"
+    )
+    runtime_paths = _runtime_paths(tmp_path)
+
+    with pytest.raises(ValueError, match="must match the resolved Ollama model"):
+        real_evaluator.evaluate_real_manifest(
+            MANIFEST_PATH,
+            runtime_paths=runtime_paths,
+            embedding_model="different-model",
+        )
+
+
+@pytest.mark.parametrize("failure_stage", ("index", "query"))
+def test_real_evaluator_deletes_collection_after_chroma_failure(
+    failure_stage: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from evals.rag_retrieval import real_evaluator
+
+    path = _write_manifest(
+        tmp_path / "cleanup.json",
+        candidate_pool_size=1,
+        expected_ids=["core"],
+        candidates=[_candidate("core", 0.1)],
+    )
+    deleted_collections: list[str] = []
+
+    def upsert_memory_index_entry(**_kwargs: object) -> None:
+        if failure_stage == "index":
+            raise RuntimeError("index failure")
+
+    def query_memories(*_args: object, **_kwargs: object) -> list[object]:
+        raise RuntimeError("query failure")
+
+    monkeypatch.setattr(
+        real_evaluator, "resolve_ollama_embedding_model", lambda: "model"
+    )
+    monkeypatch.setattr(real_evaluator, "embed_text", lambda _text: [0.0])
+    monkeypatch.setattr(
+        real_evaluator, "upsert_memory_index_entry", upsert_memory_index_entry
+    )
+    monkeypatch.setattr(real_evaluator, "delete_memory_index_entry", lambda **_kwargs: None)
+    monkeypatch.setattr(real_evaluator, "query_memories", query_memories)
+    monkeypatch.setattr(
+        real_evaluator,
+        "delete_memory_index_collection",
+        lambda **kwargs: deleted_collections.append(str(kwargs["character_id"])),
+    )
+    runtime_paths = _runtime_paths(tmp_path)
+
+    with pytest.raises(RuntimeError, match=f"{failure_stage} failure"):
+        real_evaluator.evaluate_real_manifest(
+            path, runtime_paths=runtime_paths, embedding_model="model"
+        )
+
+    assert len(deleted_collections) == 1
+    assert deleted_collections[0].startswith("rag-eval-")

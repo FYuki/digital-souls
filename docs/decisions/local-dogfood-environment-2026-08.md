@@ -104,6 +104,10 @@ fallbackが0件、tie-break正解率100%、recall 0.8以上を確認したため
 `real`とし、profileから`RAG_ENABLED=true`を導出する。dogfood利用者は開発者とデバッグ協力者に
 限定する。
 
+評価条件と結果は`docs/rag-retrieval-evaluation-2026-08.md`に記録する。決定的評価に加え、
+`npm run eval:rag:real`の実行ログと、`npm run test:integration:backend`で実行するopt-in
+integration suiteの実行ログを一次証跡とする。
+
 Wave 2ではpersona memory SQLiteを新しい正本として空状態から開始し、Chromaはその正本だけから構築する。
 dogfoodのconversation historyは削除せず、対応schemaのbackup、migration、検証、rollbackを適用する。
 

@@ -66,6 +66,8 @@ class TestRagRuntimeEvidenceIntegration:
         assert result.unverified_fallbacks == 0
         assert result.tie_break_accuracy == 1.0
         assert result.recall >= 0.8
+        assert result.precision == 1.0
+        assert result.irrelevant_memory_rate == 0.0
 
     def test_rebuildable_index_remains_available_to_the_retrieval_path(
         self,

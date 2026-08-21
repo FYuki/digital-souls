@@ -71,12 +71,14 @@ def evaluate_manifest(
         margin=_number(ranking.get("equivalence_margin"), "equivalence_margin"),
     )
     evaluated_at = _datetime(manifest.get("evaluated_at"), "evaluated_at")
+    character_id = _string(manifest.get("character_id"), "character_id")
     policy_version = _string(manifest.get("policy_version"), "policy_version")
     cases = _objects(manifest.get("cases"), "cases")
     outcomes = [
         _evaluate_case(
             case,
             evaluated_at=evaluated_at,
+            character_id=character_id,
             policy_version=policy_version,
             ranking=resolved_ranking,
             candidate_distance_provider=candidate_distance_provider,
@@ -104,6 +106,7 @@ def _evaluate_case(
     case: dict[str, object],
     *,
     evaluated_at: datetime,
+    character_id: str,
     policy_version: str,
     ranking: _ResolvedRanking,
     candidate_distance_provider: CandidateDistanceProvider | None,
@@ -146,6 +149,7 @@ def _evaluate_case(
         if _is_verified(
             candidate,
             evaluated_at=evaluated_at,
+            character_id=character_id,
             policy_version=policy_version,
         )
     ]
@@ -184,10 +188,17 @@ def _evaluate_case(
         expected=expected,
         retrieved=retrieved,
         privacy_violations=sum(item.get("privacy_safe") is not True for item in returned),
-        character_violations=sum(item.get("character_id") != "miori" for item in returned),
+        character_violations=sum(
+            item.get("character_id") != character_id for item in returned
+        ),
         threshold_violations=sum(item.relevance < ranking.threshold for item in ranked),
         unverified_fallbacks=sum(
-            not _is_verified(item, evaluated_at=evaluated_at, policy_version=policy_version)
+            not _is_verified(
+                item,
+                evaluated_at=evaluated_at,
+                character_id=character_id,
+                policy_version=policy_version,
+            )
             for item in returned
         ),
         search_latency_ms=search_latency_ms,
@@ -220,12 +231,16 @@ def _fixed_distances(
 
 
 def _is_verified(
-    candidate: dict[str, object], *, evaluated_at: datetime, policy_version: str
+    candidate: dict[str, object],
+    *,
+    evaluated_at: datetime,
+    character_id: str,
+    policy_version: str,
 ) -> bool:
     expires_at = _optional_datetime(candidate.get("expires_at"), "expires_at")
     return (
         candidate.get("persisted") is True
-        and candidate.get("character_id") == "miori"
+        and candidate.get("character_id") == character_id
         and candidate.get("provider_id") == "core"
         and candidate.get("status") == "ACTIVE"
         and (expires_at is None or expires_at > evaluated_at)

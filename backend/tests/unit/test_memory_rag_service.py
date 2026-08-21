@@ -789,7 +789,7 @@ def test_retrieval_filters_below_threshold_and_orders_by_relevance(monkeypatch):
     ("relevance_gap", "input_first", "expected_first"),
     (
         (0.0019, "relevant", "recent"),
-        (0.0020, "relevant", "recent"),
+        (0.0020000000005, "recent", "relevant"),
         (0.0021, "recent", "relevant"),
     ),
 )
@@ -837,6 +837,13 @@ def test_mention_tie_break_applies_only_within_margin_boundary(
 
     expected_id = recent_id if expected_first == "recent" else relevant_id
     assert results[0].memory_id == str(expected_id)
+
+
+def test_equivalence_margin_uses_only_the_configured_inclusive_boundary():
+    from app.memory.ranking import _within_equivalence_margin
+
+    assert _within_equivalence_margin(0.002, 0.002)
+    assert not _within_equivalence_margin(0.0020000000005, 0.002)
 
 
 def test_equivalence_band_does_not_chain_margin_across_candidates(monkeypatch):

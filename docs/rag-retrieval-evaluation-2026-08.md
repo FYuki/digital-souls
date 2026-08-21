@@ -43,8 +43,8 @@ region上限またはtotal上限を超えた場合はranking済みprefixを保�
 - 無関係memory混入率: 0.0
 - tie-break正解率: 1.0（100%）
 - privacy・character境界違反、threshold未満混入、未検証fallback: 各0件
-- latency（9 cases合計）: 実embedding＋Chroma検索2343.86 ms、SQLite契約再検証0.04 ms、
-  ranking 0.20 ms、prompt用RAG message合成0.01 ms
+- latency（9 cases合計）: 実embedding＋Chroma検索2470.05 ms、SQLite契約再検証0.06 ms、
+  ranking 0.26 ms、prompt用RAG message合成0.02 ms
 - context token使用量: 9 itemsを`gemma4:e4b`の実tokenizerで一括計測し147 token
 
 manifest runnerのSQLite契約再検証は固定recordに対する決定的評価である。実SQLiteからの再取得と
@@ -55,4 +55,6 @@ latencyとcontext token使用量は環境・modelに依存する記録値であ�
 ## 実行方法
 
 通常CIの決定的層は`python3 -m pytest backend/tests/unit/test_rag_retrieval_eval_assets.py`、実連携層は
-`npm run eval:rag:real`で実行する。実連携層はChromaと、取得済みのOllama embedding modelを必要とする。
+`npm run eval:rag:real`で実行する。実SQLite再取得を含むopt-in integration suiteは
+`npm run test:integration:backend`で実行する。実連携層はChromaと、取得済みのOllama embedding modelを
+必要とする。

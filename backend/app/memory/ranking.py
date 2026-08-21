@@ -52,7 +52,7 @@ def rank_retrieval_candidates(
 
 
 def _within_equivalence_margin(gap: float, margin: float) -> bool:
-    return gap <= margin or math.isclose(gap, margin, abs_tol=1e-12)
+    return gap <= margin
 
 
 def _tie_break_key(

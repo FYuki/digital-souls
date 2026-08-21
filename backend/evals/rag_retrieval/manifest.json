@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "evaluated_at": "2026-08-21T00:00:00+00:00",
+  "character_id": "miori",
   "policy_version": "2026-08-wave2-v1",
   "ranking": {
     "candidate_pool_size": 20,
@@ -83,7 +84,7 @@
         {"id": "valid-current", "text": "今週は畑を耕す", "memory_type": "EPISODIC_EVENT", "embedding": [0.2], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": "2026-08-20T00:00:00+00:00", "created_at": "2026-08-20T00:00:00+00:00"},
         {"id": "non-core", "text": "core以外の高関連候補", "memory_type": "EPISODIC_EVENT", "embedding": [0.001], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "external", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": "2026-08-21T00:00:00+00:00", "created_at": "2026-08-21T00:00:00+00:00"},
         {"id": "near-irrelevant", "text": "似た単語だが無関係", "memory_type": "EPISODIC_EVENT", "embedding": [20.0], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"},
-        {"id": "wrong-period", "text": "昨年の畑予定", "memory_type": "EPISODIC_EVENT", "embedding": [0.22], "character_id": "miori", "status": "INACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": null, "created_at": "2025-08-01T00:00:00+00:00"},
+        {"id": "wrong-period", "text": "昨年の冬に海辺を散歩した", "memory_type": "EPISODIC_EVENT", "embedding": [20.5], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": null, "created_at": "2025-08-01T00:00:00+00:00"},
         {"id": "other-character", "text": "別人格の記憶", "memory_type": "EPISODIC_EVENT", "embedding": [0.01], "character_id": "other", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"},
         {"id": "deleted", "text": "削除済み", "memory_type": "EPISODIC_EVENT", "embedding": [0.01], "character_id": "miori", "status": "DELETED", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"},
         {"id": "inactive", "text": "無効", "memory_type": "EPISODIC_EVENT", "embedding": [0.01], "character_id": "miori", "status": "INACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"},

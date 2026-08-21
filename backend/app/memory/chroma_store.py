@@ -69,6 +69,8 @@ class _ChromaCollection(Protocol):
 class _ChromaClient(Protocol):
     def get_or_create_collection(self, name: str) -> _ChromaCollection: ...
 
+    def delete_collection(self, name: str) -> None: ...
+
 
 def upsert_memory_index_entry(
     *,
@@ -108,6 +110,10 @@ def delete_memory_index_entry(
     *, character_id: str, memory_id: str, chroma_path: Path
 ) -> None:
     _collection(character_id, chroma_path).delete(ids=[memory_id])
+
+
+def delete_memory_index_collection(*, character_id: str, chroma_path: Path) -> None:
+    _client(str(chroma_path)).delete_collection(name=_collection_name(character_id))
 
 
 def list_memory_index_ids(*, character_id: str, chroma_path: Path) -> set[str]:

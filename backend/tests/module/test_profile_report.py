@@ -93,6 +93,8 @@ def _read_json(path: Path) -> dict[str, object]:
 @pytest.mark.parametrize(
     ("profile", "capabilities"),
     [
+        ("dev", ["text-chat-real", "voice-chat-real", "rag-real"]),
+        ("dogfood", ["text-chat-real", "voice-chat-real", "rag-real"]),
         ("test-mocked", ["mocked-e2e"]),
         ("integration-text", ["text-chat-real", "rag-real"]),
         ("integration-voice", ["text-chat-real", "voice-chat-real"]),

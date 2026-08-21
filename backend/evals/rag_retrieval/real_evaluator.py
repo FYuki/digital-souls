@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from app.llm.ollama_config import resolve_ollama_embedding_model
 from app.memory.chroma_store import (
+    delete_memory_index_collection,
     delete_memory_index_entry,
     query_memories,
     upsert_memory_index_entry,
@@ -36,15 +37,18 @@ def evaluate_real_manifest(
         if case.get("failure") == "chroma":
             raise SearchBoundaryFailure("injected Chroma search failure")
         character_id = f"rag-eval-{uuid4().hex}"
+        collection_started = False
         indexed_ids: list[str] = []
         try:
             for candidate in candidates:
                 memory_id = _required_string(candidate.get("id"), "candidate.id")
                 text = _required_string(candidate.get("text"), "candidate.text")
+                embedding = embed_text(text)
+                collection_started = True
                 upsert_memory_index_entry(
                     character_id=character_id,
                     memory_id=memory_id,
-                    embedding=embed_text(text),
+                    embedding=embedding,
                     normalized_text=text,
                     provider_id="core",
                     memory_kind="persona",
@@ -62,20 +66,29 @@ def evaluate_real_manifest(
                 )
                 indexed_ids.append(memory_id)
             query = _required_string(case.get("query"), "case.query")
+            query_embedding = embed_text(query)
+            collection_started = True
             results = query_memories(
                 character_id,
-                embed_text(query),
+                query_embedding,
                 n_results=candidate_pool_size,
                 chroma_path=runtime_paths.chroma_path,
             )
             return {result.memory_id: result.raw_distance for result in results}
         finally:
-            for memory_id in indexed_ids:
-                delete_memory_index_entry(
-                    character_id=character_id,
-                    memory_id=memory_id,
-                    chroma_path=runtime_paths.chroma_path,
-                )
+            try:
+                for memory_id in indexed_ids:
+                    delete_memory_index_entry(
+                        character_id=character_id,
+                        memory_id=memory_id,
+                        chroma_path=runtime_paths.chroma_path,
+                    )
+            finally:
+                if collection_started:
+                    delete_memory_index_collection(
+                        character_id=character_id,
+                        chroma_path=runtime_paths.chroma_path,
+                    )
 
     return evaluate_manifest(path, candidate_distance_provider=real_distances)
 
