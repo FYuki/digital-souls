@@ -400,6 +400,7 @@ def test_runtime_should_inject_history_when_rag_is_disabled(
             privacy_scanner=MagicMock(),
             semantic_classifier=MagicMock(),
             approved_memory_repository=MagicMock(),
+            memory_formation_submitter=MagicMock(),
         ),
     )
 

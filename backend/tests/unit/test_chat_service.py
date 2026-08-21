@@ -29,6 +29,7 @@ from app.llm import router as llm_router
 from app.memory.chroma_store import MemorySearchResult
 from app.prompting import CharacterPrompt, PromptInputLimitError
 from app.model_settings import resolve_model_settings
+from app.privacy.contracts import HistoryDecisionReasonCode
 from tests.conversation_history_test_support import CONVERSATION_ID
 from tests.chat_reply_test_support import persisted_reply
 
@@ -85,7 +86,9 @@ def _character_card(system_prompt: str = "# prompt") -> MagicMock:
     return card
 
 
-def _runtime_dependencies() -> ChatRuntimeDependencies:
+def _runtime_dependencies(
+    memory_formation_submitter: object | None = None,
+) -> ChatRuntimeDependencies:
     from app.model_settings import resolve_model_settings
 
     settings = resolve_model_settings({})
@@ -109,6 +112,11 @@ def _runtime_dependencies() -> ChatRuntimeDependencies:
         privacy_scanner=MagicMock(),
         semantic_classifier=MagicMock(),
         approved_memory_repository=MagicMock(),
+        memory_formation_submitter=(
+            memory_formation_submitter
+            if memory_formation_submitter is not None
+            else MagicMock()
+        ),
     )
 
 
@@ -206,6 +214,29 @@ class _FailingCompleteHistorySession(_RecordingHistorySession):
         raise self.error
 
 
+class _PrivacySkippedHistorySession(_RecordingHistorySession):
+    def complete_turn(
+        self,
+        started_turn: StartedHistoryTurn,
+        assistant_content: str,
+    ) -> ConversationTurn:
+        self.complete_calls.append((started_turn, assistant_content))
+        timestamp = datetime(2026, 8, 1, tzinfo=UTC)
+        return ConversationTurn(
+            turn_id=started_turn.turn_id,
+            character_id="miori",
+            conversation_id=CONVERSATION_ID,
+            user_content=None,
+            assistant_content=None,
+            status=TurnStatus.PRIVACY_SKIPPED,
+            privacy_reason_code=HistoryDecisionReasonCode.SCAN_FAILURE,
+            sanitizer_version="test-sanitizer-v1",
+            policy_version="test-policy-v1",
+            created_at=timestamp,
+            updated_at=timestamp,
+        )
+
+
 class _FailingCleanupHistorySession(_RecordingHistorySession):
     def __init__(self, error: RuntimeError) -> None:
         super().__init__()
@@ -291,6 +322,7 @@ class TestChatServiceErrorContract:
                 privacy_scanner=MagicMock(),
                 semantic_classifier=MagicMock(),
                 approved_memory_repository=MagicMock(),
+                memory_formation_submitter=MagicMock(),
             ),
         )
 
@@ -548,6 +580,73 @@ class TestChatServiceErrorContract:
         assert session.start_calls == ["hello"]
         assert session.complete_calls == [(session.started_turn, "reply")]
         assert session.fail_calls == [session.started_turn]
+
+    def test_completed_persisted_turn_submits_identifier_only_formation_job(self):
+        from dataclasses import asdict
+
+        submitter = MagicMock()
+        session = _RecordingHistorySession()
+        service = ChatService(
+            ChatRuntimeConfig(
+                rag_enabled=False,
+                memory_policy=None,
+                prompt_config=_PROMPT_CONFIG,
+                chroma_path=_CHROMA_PATH,
+            ),
+            _RecordingHistoryService(session),
+            _runtime_dependencies(submitter),
+        )
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_GENERATE_RESPONSE, return_value="reply"):
+                service.generate_chat_reply("miori", CONVERSATION_ID, "hello")
+
+        submitter.submit.assert_called_once()
+        assert asdict(submitter.submit.call_args.args[0]) == {
+            "character_id": "miori",
+            "conversation_id": CONVERSATION_ID,
+            "turn_id": session.started_turn.turn_id,
+        }
+
+    def test_history_persistence_failure_never_submits_formation_job(self):
+        submitter = MagicMock()
+        session = _FailingCompleteHistorySession(RuntimeError("completion failed"))
+        service = ChatService(
+            ChatRuntimeConfig(
+                rag_enabled=False,
+                memory_policy=None,
+                prompt_config=_PROMPT_CONFIG,
+                chroma_path=_CHROMA_PATH,
+            ),
+            _RecordingHistoryService(session),
+            _runtime_dependencies(submitter),
+        )
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_GENERATE_RESPONSE, return_value="reply"):
+                with pytest.raises(RuntimeError, match="completion failed"):
+                    service.generate_chat_reply("miori", CONVERSATION_ID, "hello")
+
+        submitter.submit.assert_not_called()
+
+    def test_privacy_skipped_turn_never_submits_formation_job(self):
+        submitter = MagicMock()
+        service = ChatService(
+            ChatRuntimeConfig(
+                rag_enabled=False,
+                memory_policy=None,
+                prompt_config=_PROMPT_CONFIG,
+                chroma_path=_CHROMA_PATH,
+            ),
+            _RecordingHistoryService(_PrivacySkippedHistorySession()),
+            _runtime_dependencies(submitter),
+        )
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_GENERATE_RESPONSE, return_value="reply"):
+                service.generate_chat_reply("miori", CONVERSATION_ID, "hello")
+
+        submitter.submit.assert_not_called()
 
     def test_cleanup_failure_does_not_replace_generate_reply_error(self):
         original_error = RuntimeError("generation failed")

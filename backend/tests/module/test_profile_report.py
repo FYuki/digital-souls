@@ -14,6 +14,7 @@ DEPENDENCY_NAMES = {"frontend", "backend", "ollama", "voicevox", "whisper", "chr
 MODEL_DEFAULT_ENVIRONMENT = {
     "OLLAMA_CHAT_MODEL": "gemma4:e4b",
     "OLLAMA_CLASSIFIER_MODEL": "gemma4:e4b",
+    "OLLAMA_EXTRACTOR_MODEL": "gemma4:e4b",
     "WHISPER_MODEL": "medium",
     "OLLAMA_CONTEXT_TOKENS": "8192",
     "OLLAMA_RESPONSE_RESERVE_TOKENS": "1024",

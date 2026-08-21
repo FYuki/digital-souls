@@ -8,6 +8,7 @@ import pytest
 MODEL_ENV_KEYS = (
     "OLLAMA_CHAT_MODEL",
     "OLLAMA_CLASSIFIER_MODEL",
+    "OLLAMA_EXTRACTOR_MODEL",
     "WHISPER_MODEL",
     "OLLAMA_CONTEXT_TOKENS",
     "OLLAMA_RESPONSE_RESERVE_TOKENS",
@@ -17,7 +18,7 @@ MODEL_ENV_KEYS = (
     "ASSISTANT_MAX_GENERATION_TOKENS",
     "LLM_CONTEXT_TOKEN_LIMIT",
 )
-NUMERIC_ENV_KEYS = MODEL_ENV_KEYS[3:]
+NUMERIC_ENV_KEYS = MODEL_ENV_KEYS[4:]
 BACKEND_DIR = Path(__file__).parents[2]
 
 
@@ -33,6 +34,7 @@ def test_should_resolve_all_documented_model_defaults() -> None:
 
     assert settings.ollama_chat_model == "gemma4:e4b"
     assert settings.ollama_classifier_model == "gemma4:e4b"
+    assert settings.ollama_extractor_model == "gemma4:e4b"
     assert settings.whisper_model == "medium"
     assert settings.ollama_context_tokens == 8192
     assert settings.assistant_max_generation_tokens == 1024
@@ -48,6 +50,7 @@ def test_env_example_should_match_executable_setting_defaults() -> None:
     assert {
         "OLLAMA_CHAT_MODEL=gemma4:e4b",
         "OLLAMA_CLASSIFIER_MODEL=gemma4:e4b",
+        "OLLAMA_EXTRACTOR_MODEL=gemma4:e4b",
         "WHISPER_MODEL=medium",
         "OLLAMA_CONTEXT_TOKENS=8192",
         "OLLAMA_RESPONSE_RESERVE_TOKENS=1024",
@@ -64,6 +67,7 @@ def test_should_resolve_every_environment_override_from_one_mapping() -> None:
         {
             "OLLAMA_CHAT_MODEL": "custom-chat:9b",
             "OLLAMA_CLASSIFIER_MODEL": "custom-classifier:4b",
+            "OLLAMA_EXTRACTOR_MODEL": "custom-extractor:4b",
             "WHISPER_MODEL": "large-v3",
             "OLLAMA_CONTEXT_TOKENS": "12000",
             "OLLAMA_RESPONSE_RESERVE_TOKENS": "1500",
@@ -76,6 +80,7 @@ def test_should_resolve_every_environment_override_from_one_mapping() -> None:
 
     assert settings.ollama_chat_model == "custom-chat:9b"
     assert settings.ollama_classifier_model == "custom-classifier:4b"
+    assert settings.ollama_extractor_model == "custom-extractor:4b"
     assert settings.whisper_model == "large-v3"
     assert settings.ollama_context_tokens == 12000
     assert settings.assistant_max_generation_tokens == 1500
@@ -85,7 +90,7 @@ def test_should_resolve_every_environment_override_from_one_mapping() -> None:
     assert settings.model_context_token_limit == 16000
 
 
-@pytest.mark.parametrize("key", MODEL_ENV_KEYS[:3])
+@pytest.mark.parametrize("key", MODEL_ENV_KEYS[:4])
 @pytest.mark.parametrize("value", ["", " ", " medium", "medium "])
 def test_should_reject_empty_or_noncanonical_string_settings(
     key: str,

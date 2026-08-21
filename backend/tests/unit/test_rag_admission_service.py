@@ -54,6 +54,7 @@ SOURCE_TEXT = "紅茶が好きです"
 ASSISTANT_TEXT = "紅茶がお好きなのですね"
 SECRET_SLOT_TEXT = "slot-secret-value"
 CHARACTER_ID = "miori"
+EXTRACTOR_VERSION = "memory-formation-test-v7"
 
 
 def _candidate(
@@ -238,6 +239,7 @@ def _service(
             resolved_memory_policy().privacy
         ),
         effective_timezone="Asia/Tokyo",
+        extractor_version=EXTRACTOR_VERSION,
     )
     return service, turn_repository, approved_repository, scanner, classifier
 
@@ -433,8 +435,13 @@ def test_allow_save_uses_authoritative_turn_and_assessment_provenance() -> None:
         str(TURN_ID),
         "2",
     ]
-    assert len(idempotency_parts) == 5
-    assert idempotency_parts[4]
+    assert idempotency_parts == [
+        "miori",
+        str(CONVERSATION_ID),
+        str(TURN_ID),
+        "2",
+        EXTRACTOR_VERSION,
+    ]
     assert context.effective_at == CREATED_AT
     assert context.effective_timezone == "Asia/Tokyo"
     assert context.temporal_precision is TemporalPrecision.SECOND

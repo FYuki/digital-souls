@@ -28,9 +28,6 @@ from app.privacy.semantic.classifier import SemanticPrivacyClassifier
 from app.privacy.semantic.contracts import ADMISSION, PrivacyAssessment
 
 
-EXTRACTOR_VERSION = "rag-extractor-v1"
-
-
 class ConversationTurnRepository(Protocol):
     def get_turn(
         self,
@@ -71,6 +68,7 @@ class RagAdmissionService:
         semantic_classifier: SemanticPrivacyClassifier,
         evaluator: RagAdmissionEvaluator,
         effective_timezone: str,
+        extractor_version: str,
     ) -> None:
         self._conversation_repository = conversation_repository
         self._approved_repository = approved_repository
@@ -78,6 +76,9 @@ class RagAdmissionService:
         self._semantic_classifier = semantic_classifier
         self._evaluator = evaluator
         self._effective_timezone = effective_timezone
+        if not extractor_version.strip():
+            raise ValueError("extractor_version must not be blank")
+        self._extractor_version = extractor_version
 
     def admit(
         self,
@@ -208,7 +209,7 @@ class RagAdmissionService:
                 conversation_id=str(conversation_id),
                 turn_id=str(turn_id),
                 candidate_index=candidate_index,
-                extractor_version=EXTRACTOR_VERSION,
+                extractor_version=self._extractor_version,
             ),
             effective_at=turn.created_at,
             effective_timezone=self._effective_timezone,

@@ -46,6 +46,11 @@ from app.memory.admission_service import RagAdmissionService
 from app.memory.embedder import embed_text
 from app.memory.index_scheduler import MemoryIndexScheduler
 from app.memory.index_sync import MemoryIndexSync
+from app.memory.formation.config import resolve_memory_formation_settings
+from app.memory.formation.extractor import EXTRACTOR_VERSION, MemoryCandidateExtractor
+from app.memory.formation.ollama_client import OllamaMemoryExtractorClient
+from app.memory.formation.scheduler import MemoryFormationScheduler
+from app.memory.formation.worker import MemoryFormationWorker
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
 from app.memory.persistence.index_outbox_repository import IndexOutboxRepository
 from app.model_settings import resolve_model_settings
@@ -248,6 +253,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             clock=clock,
         )
         memory_index_scheduler = MemoryIndexScheduler(memory_index_sync)
+        formation_settings = resolve_memory_formation_settings(os.environ)
         chat_service_resolver = None
         repository_state_set = False
         lifecycle_service_state_set = False
@@ -258,6 +264,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         rag_admission_service_state_set = False
         semantic_classifier_client = None
         memory_index_scheduler_started = False
+        memory_formation_scheduler_started = False
+        memory_extractor_client = None
         try:
             app.state.conversation_history_repository = conversation_history_repository
             repository_state_set = True
@@ -285,8 +293,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 semantic_classifier=semantic_privacy_classifier,
                 evaluator=create_rag_admission_evaluator(policy.privacy),
                 effective_timezone=effective_timezone,
+                extractor_version=EXTRACTOR_VERSION,
             )
             rag_admission_service_state_set = True
+            memory_extractor_client = OllamaMemoryExtractorClient(
+                model_id=model_settings.ollama_extractor_model
+            )
+            memory_candidate_extractor = MemoryCandidateExtractor(
+                client=memory_extractor_client,
+                settings=formation_settings,
+            )
+            memory_formation_scheduler = MemoryFormationScheduler(
+                worker=MemoryFormationWorker(
+                    conversation_repository=conversation_history_repository,
+                    extractor=memory_candidate_extractor,
+                    admission_service=app.state.rag_admission_service,
+                    domain_router=None,
+                ),
+                max_queue_age_seconds=formation_settings.max_queue_age_seconds,
+            )
+            await memory_formation_scheduler.start()
+            memory_formation_scheduler_started = True
             app_chat_service = _chat_runtime.create_chat_service(
                 _chat_runtime.resolve_chat_runtime_config(
                     policy, model_settings, runtime_paths
@@ -303,6 +330,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     privacy_scanner=privacy_scanner,
                     semantic_classifier=semantic_privacy_classifier,
                     approved_memory_repository=approved_memory_repository,
+                    memory_formation_submitter=memory_formation_scheduler,
                 ),
             )
             app.state.chat_service = app_chat_service
@@ -318,6 +346,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             memory_index_scheduler_started = True
             yield
         finally:
+            if memory_formation_scheduler_started:
+                await memory_formation_scheduler.stop()
             if memory_index_scheduler_started:
                 await memory_index_scheduler.stop()
             with ExitStack() as cleanup:
@@ -357,6 +387,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     )
                 if semantic_classifier_client is not None:
                     cleanup.callback(semantic_classifier_client.close)
+                if memory_extractor_client is not None:
+                    cleanup.callback(memory_extractor_client.close)
 
 
 app = FastAPI(lifespan=lifespan)

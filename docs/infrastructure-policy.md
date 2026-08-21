@@ -80,7 +80,7 @@ WindowsメインPCは大型LLM、Whisperの高負荷処理、画像生成、Comf
 
 ## ローカルモデル設定
 
-Ollamaのチャットモデルは`OLLAMA_CHAT_MODEL`、意味プライバシー分類モデルは`OLLAMA_CLASSIFIER_MODEL`、実行時コンテキストは`OLLAMA_CONTEXT_TOKENS`で指定する。
+Ollamaのチャットモデルは`OLLAMA_CHAT_MODEL`、意味プライバシー分類モデルは`OLLAMA_CLASSIFIER_MODEL`、persona memory抽出モデルは`OLLAMA_EXTRACTOR_MODEL`、実行時コンテキストは`OLLAMA_CONTEXT_TOKENS`で指定する。
 Profile解決処理、Ollamaの準備完了確認／準備処理、Backendへの入力は同じ解決値を使用する。
 モデル最大コンテキストは`LLM_CONTEXT_TOKEN_LIMIT`として分離し、プロンプト予算は実行時コンテキストから
 `OLLAMA_RESPONSE_RESERVE_TOKENS`を差し引く。Whisperは`WHISPER_MODEL`をBackend実行と

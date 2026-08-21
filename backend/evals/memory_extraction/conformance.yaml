@@ -1,0 +1,16 @@
+description: Production memory extraction conformance
+prompts:
+  - "{{text}}"
+providers:
+  - id: file://provider.py
+    label: MEMORY_EXTRACTION
+defaultTest:
+  assert:
+    - type: is-json
+    - type: javascript
+      metric: enum_match_rate
+      value: |
+        const parsed = JSON.parse(output);
+        const actual = parsed.candidates.length === 0 ? 'NONE' : parsed.candidates[0].memory_type;
+        return actual === context.vars.expected_memory_type;
+tests: cases.jsonl
