@@ -1,4 +1,5 @@
 import json
+import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,9 @@ DO_NOT_STORE_TERMS_KEY = "do_not_store_terms"
 EXPLICIT_MEMORY_TERMS_KEY = "explicit_memory_terms"
 LONG_TERM_MEMORY_MARKERS_KEY = "long_term_memory_markers"
 MAX_RETRIEVED_MEMORIES_KEY = "max_retrieved_memories"
+CANDIDATE_POOL_SIZE_KEY = "candidate_pool_size"
+RELEVANCE_THRESHOLD_KEY = "relevance_threshold"
+EQUIVALENCE_MARGIN_KEY = "equivalence_margin"
 POLICY_TERM_KEYS = (
     DO_NOT_STORE_TERMS_KEY,
     EXPLICIT_MEMORY_TERMS_KEY,
@@ -61,6 +65,9 @@ class MemoryPolicyTerms:
 @dataclass(frozen=True)
 class RagServicePolicy:
     max_retrieved_memories: int
+    candidate_pool_size: int
+    relevance_threshold: float
+    equivalence_margin: float
 
 
 @dataclass(frozen=True)
@@ -192,12 +199,50 @@ def _terms_with_service_override(
 def _rag_service_policy_from_section(
     rag_service: dict[str, object],
 ) -> RagServicePolicy:
-    value = rag_service.get(MAX_RETRIEVED_MEMORIES_KEY)
-    if not isinstance(value, int) or value < 1:
+    max_retrieved_memories = rag_service.get(MAX_RETRIEVED_MEMORIES_KEY)
+    if (
+        not isinstance(max_retrieved_memories, int)
+        or isinstance(max_retrieved_memories, bool)
+        or max_retrieved_memories < 1
+    ):
         raise ValueError(
             "memory policy config 'max_retrieved_memories' must be a positive integer"
         )
-    return RagServicePolicy(max_retrieved_memories=value)
+    candidate_pool_size = rag_service.get(CANDIDATE_POOL_SIZE_KEY)
+    if (
+        not isinstance(candidate_pool_size, int)
+        or isinstance(candidate_pool_size, bool)
+        or candidate_pool_size < max_retrieved_memories
+    ):
+        raise ValueError(
+            "memory policy config 'candidate_pool_size' must be an integer greater "
+            "than or equal to max_retrieved_memories"
+        )
+    relevance_threshold = _unit_interval_number(
+        rag_service.get(RELEVANCE_THRESHOLD_KEY), RELEVANCE_THRESHOLD_KEY
+    )
+    equivalence_margin = _unit_interval_number(
+        rag_service.get(EQUIVALENCE_MARGIN_KEY), EQUIVALENCE_MARGIN_KEY
+    )
+    return RagServicePolicy(
+        max_retrieved_memories=max_retrieved_memories,
+        candidate_pool_size=candidate_pool_size,
+        relevance_threshold=relevance_threshold,
+        equivalence_margin=equivalence_margin,
+    )
+
+
+def _unit_interval_number(value: object, label: str) -> float:
+    if (
+        not isinstance(value, (int, float))
+        or isinstance(value, bool)
+        or not math.isfinite(value)
+        or not 0.0 <= value <= 1.0
+    ):
+        raise ValueError(
+            f"memory policy config '{label}' must be a finite number from 0 to 1"
+        )
+    return float(value)
 
 
 def _required_rag_service_policy(

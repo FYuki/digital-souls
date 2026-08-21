@@ -470,7 +470,7 @@ def test_should_require_disabled_downstream_dependencies_when_backend_is_not_rea
                 "ollama": ("real", "external"),
                 "voicevox": ("real", "external"),
                 "whisper": ("real", "in_process"),
-                "chroma": ("disabled", None),
+                "chroma": ("real", "in_process"),
             },
         ),
         (
@@ -481,7 +481,7 @@ def test_should_require_disabled_downstream_dependencies_when_backend_is_not_rea
                 "ollama": ("real", "external"),
                 "voicevox": ("real", "external"),
                 "whisper": ("real", "in_process"),
-                "chroma": ("disabled", None),
+                "chroma": ("real", "in_process"),
             },
         ),
         (
@@ -503,7 +503,7 @@ def test_should_require_disabled_downstream_dependencies_when_backend_is_not_rea
                 "ollama": ("real", "external"),
                 "voicevox": ("disabled", None),
                 "whisper": ("disabled", None),
-                "chroma": ("disabled", None),
+                "chroma": ("real", "in_process"),
             },
         ),
         (

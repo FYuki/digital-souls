@@ -92,6 +92,9 @@ class FakePersistentClient:
     def get_or_create_collection(self, name: str) -> FakeCollection:
         return self.collections.setdefault(name, FakeCollection())
 
+    def delete_collection(self, name: str) -> None:
+        self.collections.pop(name, None)
+
 
 def _import_chroma_store(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     fake_chromadb = ModuleType("chromadb")
@@ -270,6 +273,42 @@ def test_persistent_client_is_reused_for_the_same_path(
     assert len(FakePersistentClient.instances) == 1
 
 
+def test_delete_collection_removes_the_character_index(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+    chroma_path = tmp_path / "data" / "chroma"
+    _upsert(chroma_store, tmp_path)
+
+    chroma_store.delete_memory_index_collection(
+        character_id="miori", chroma_path=chroma_path
+    )
+
+    assert FakePersistentClient.collections_by_path[str(chroma_path)] == {}
+
+    chroma_store.delete_memory_index_collection(
+        character_id="miori", chroma_path=chroma_path
+    )
+
+
+def test_delete_collection_preserves_non_missing_failures(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+    _upsert(chroma_store, tmp_path)
+    client = FakePersistentClient.instances[0]
+    monkeypatch.setattr(
+        client,
+        "delete_collection",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("delete failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="delete failed"):
+        chroma_store.delete_memory_index_collection(
+            character_id="miori", chroma_path=tmp_path / "data" / "chroma"
+        )
+
+
 def test_query_returns_only_memory_id_and_unchanged_raw_distance(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -327,6 +366,7 @@ def test_query_preserves_chroma_order_without_threshold_or_tie_break(
         {"ids": [["memory-1"]], "distances": [[]]},
         {"ids": [["memory-1"]], "distances": [["not-a-number"]]},
         {"ids": [["memory-1"]], "distances": [[float("inf")]]},
+        {"ids": [["memory-1"]], "distances": [[-0.01]]},
     ),
 )
 def test_query_rejects_mismatched_or_invalid_distances(

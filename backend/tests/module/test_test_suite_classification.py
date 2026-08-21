@@ -1,4 +1,5 @@
 import ast
+import json
 from pathlib import Path
 
 import httpx
@@ -7,6 +8,7 @@ import pytest
 
 BACKEND_TESTS = Path(__file__).resolve().parents[1]
 FRONTEND_SOURCE = Path(__file__).resolve().parents[3] / "frontend" / "src"
+ROOT_DIR = BACKEND_TESTS.parents[1]
 
 
 def test_backend_tests_are_classified_by_directory() -> None:
@@ -77,6 +79,16 @@ def test_backend_integration_dependency_connection_failure_is_not_skipped(
 
     with pytest.raises(httpx.ConnectError, match="Ollama is not available"):
         test_memory_rag_runtime_evidence_integration._require_runtime_evidence_dependencies()
+
+
+def test_real_rag_evaluation_has_a_registered_opt_in_entrypoint() -> None:
+    pytest_config = (ROOT_DIR / "backend" / "pytest.ini").read_text(encoding="utf-8")
+    package = json.loads((ROOT_DIR / "package.json").read_text(encoding="utf-8"))
+
+    assert "rag_retrieval_real" in pytest_config
+    command = package["scripts"]["eval:rag:real"]
+    assert "backend/tests/integration" in command
+    assert "-m rag_retrieval_real" in command
 
 
 def test_frontend_vitest_files_declare_unit_or_module_layer() -> None:

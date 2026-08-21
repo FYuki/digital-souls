@@ -9,6 +9,6 @@
     "ollama": { "mode": "real", "source": "external", "baseUrl": "http://localhost:11434", "readinessPath": "/api/tags" },
     "voicevox": { "mode": "disabled", "source": null },
     "whisper": { "mode": "disabled", "source": null },
-    "chroma": { "mode": "disabled", "source": null }
+    "chroma": { "mode": "real", "source": "in_process" }
   }
 }

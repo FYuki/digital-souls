@@ -76,7 +76,7 @@ def test_should_select_ds_profile_before_matching_legacy_selector(tmp_path: Path
     assert report["compatibility"]["warnings"]
 
 
-def test_should_allow_different_profile_names_with_same_effective_dependencies(tmp_path: Path):
+def test_should_reject_dev_with_legacy_voice_profile_after_rag_diverges(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
     report_path = _report_path(tmp_path)
 
@@ -86,10 +86,10 @@ def test_should_allow_different_profile_names_with_same_effective_dependencies(t
         env_overrides={"DS_PROFILE": "dev", "VOICE_CHAT_E2E_BACKEND": "real"},
     )
 
-    assert result.returncode == 0, result.stderr
-    report = _read_report(report_path)
-    assert report["effectiveProfile"] == "dev"
-    assert report["compatibility"]["warnings"]
+    assert result.returncode == 1
+    assert "DS_PROFILE" in result.stderr
+    assert "VOICE_CHAT_E2E_BACKEND" in result.stderr
+    assert not report_path.exists()
 
 
 def test_should_select_explicit_default_when_no_environment_selector_exists(tmp_path: Path):

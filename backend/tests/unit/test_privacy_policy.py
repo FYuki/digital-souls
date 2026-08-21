@@ -99,6 +99,70 @@ def test_should_preserve_existing_rag_policy_sections(
     assert policy.rag_service.max_retrieved_memories == 5
 
 
+def test_should_resolve_complete_rag_ranking_policy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    policy = _load_from(monkeypatch, tmp_path / "policy.json", policy_config())
+
+    assert policy.rag_service.candidate_pool_size == 20
+    assert policy.rag_service.relevance_threshold == 0.05
+    assert policy.rag_service.equivalence_margin == 0.002
+
+
+@pytest.mark.parametrize(
+    "missing_key",
+    ("candidate_pool_size", "relevance_threshold", "equivalence_margin"),
+)
+def test_should_reject_missing_rag_ranking_policy_key(
+    missing_key: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = policy_config()
+    services = config["services"]
+    assert isinstance(services, dict)
+    rag_service = services["rag_service"]
+    assert isinstance(rag_service, dict)
+    del rag_service[missing_key]
+
+    with pytest.raises(ValueError, match=missing_key):
+        _load_from(monkeypatch, tmp_path / "policy.json", config)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "invalid_value"),
+    (
+        ("candidate_pool_size", True),
+        ("candidate_pool_size", 0),
+        ("candidate_pool_size", 4),
+        ("relevance_threshold", True),
+        ("relevance_threshold", -0.01),
+        ("relevance_threshold", 1.01),
+        ("relevance_threshold", float("nan")),
+        ("equivalence_margin", True),
+        ("equivalence_margin", -0.01),
+        ("equivalence_margin", 1.01),
+        ("equivalence_margin", float("inf")),
+    ),
+)
+def test_should_reject_invalid_rag_ranking_policy_value(
+    field_name: str,
+    invalid_value: object,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = policy_config()
+    services = config["services"]
+    assert isinstance(services, dict)
+    rag_service = services["rag_service"]
+    assert isinstance(rag_service, dict)
+    rag_service[field_name] = invalid_value
+
+    with pytest.raises(ValueError, match=field_name):
+        _load_from(monkeypatch, tmp_path / "policy.json", config)
+
+
 def test_should_resolve_nested_privacy_policy_as_immutable_values(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -93,8 +93,10 @@ def _read_json(path: Path) -> dict[str, object]:
 @pytest.mark.parametrize(
     ("profile", "capabilities"),
     [
+        ("dev", ["text-chat-real", "voice-chat-real", "rag-real"]),
+        ("dogfood", ["text-chat-real", "voice-chat-real", "rag-real"]),
         ("test-mocked", ["mocked-e2e"]),
-        ("integration-text", ["text-chat-real"]),
+        ("integration-text", ["text-chat-real", "rag-real"]),
         ("integration-voice", ["text-chat-real", "voice-chat-real"]),
     ],
 )
@@ -313,7 +315,7 @@ def test_should_allowlist_derived_environment_and_exclude_process_secrets(tmp_pa
             "integration-text",
             {
                 "OLLAMA_BASE_URL": "http://localhost:11434",
-                "RAG_ENABLED": "false",
+                "RAG_ENABLED": "true",
                 "DS_BACKEND_ORIGIN": "http://localhost:8000",
                 **MODEL_DEFAULT_ENVIRONMENT,
             },

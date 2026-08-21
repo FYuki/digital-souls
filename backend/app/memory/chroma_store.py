@@ -69,6 +69,8 @@ class _ChromaCollection(Protocol):
 class _ChromaClient(Protocol):
     def get_or_create_collection(self, name: str) -> _ChromaCollection: ...
 
+    def delete_collection(self, name: str) -> None: ...
+
 
 def upsert_memory_index_entry(
     *,
@@ -108,6 +110,15 @@ def delete_memory_index_entry(
     *, character_id: str, memory_id: str, chroma_path: Path
 ) -> None:
     _collection(character_id, chroma_path).delete(ids=[memory_id])
+
+
+def delete_memory_index_collection(*, character_id: str, chroma_path: Path) -> None:
+    collection_name = _collection_name(character_id)
+    try:
+        _client(str(chroma_path)).delete_collection(name=collection_name)
+    except Exception as exc:
+        if not _is_missing_collection_error(exc):
+            raise
 
 
 def list_memory_index_ids(*, character_id: str, chroma_path: Path) -> set[str]:
@@ -180,6 +191,16 @@ def _collection(character: str, chroma_path: Path) -> _ChromaCollection:
 def _client(chroma_path: str) -> _ChromaClient:
     chromadb = importlib.import_module("chromadb")
     return cast(_ChromaClient, chromadb.PersistentClient(path=chroma_path))
+
+
+def _is_missing_collection_error(error: Exception) -> bool:
+    if isinstance(error, ValueError):
+        return "does not exist" in str(error)
+    if error.__class__.__name__ != "NotFoundError":
+        return False
+    chroma_errors = importlib.import_module("chromadb.errors")
+    not_found_error = getattr(chroma_errors, "NotFoundError", None)
+    return isinstance(not_found_error, type) and isinstance(error, not_found_error)
 
 
 def memory_index_metadata(
@@ -261,8 +282,9 @@ def _memory_search_candidate(
         not isinstance(distance, (int, float))
         or isinstance(distance, bool)
         or not math.isfinite(distance)
+        or distance < 0
     ):
-        raise ValueError("Chroma memory distances must be finite numbers")
+        raise ValueError("Chroma memory distances must be non-negative finite numbers")
     return MemorySearchCandidate(
         memory_id=memory_id,
         raw_distance=float(distance),

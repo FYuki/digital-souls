@@ -42,7 +42,14 @@ def policy_config() -> dict[str, object]:
             "explicit_memory_terms": ["覚えて"],
             "long_term_memory_markers": ["重要"],
         },
-        "services": {"rag_service": {"max_retrieved_memories": 5}},
+        "services": {
+            "rag_service": {
+                "max_retrieved_memories": 5,
+                "candidate_pool_size": 20,
+                "relevance_threshold": 0.05,
+                "equivalence_margin": 0.002,
+            }
+        },
         "privacy": {
             "required_recognizers": [
                 "credentials",
