@@ -106,6 +106,9 @@ def _runtime_dependencies() -> ChatRuntimeDependencies:
         input_token_counter=lambda messages: llm_router.count_input_tokens(
             messages, settings=settings
         ),
+        privacy_scanner=MagicMock(),
+        semantic_classifier=MagicMock(),
+        approved_memory_repository=MagicMock(),
     )
 
 
@@ -115,6 +118,7 @@ def _rag_memory(content: str, memory_id: str = "memory-1") -> MemorySearchResult
         normalized_text=content,
         effective_at="2026-07-31T00:00:00.000000Z",
         memory_type="USER_PREFERENCE",
+        raw_distance=1.25,
     )
 
 
@@ -284,6 +288,9 @@ class TestChatServiceErrorContract:
                 prompt_builder=prompt_builder,
                 llm_response_generator=generate,
                 input_token_counter=count,
+                privacy_scanner=MagicMock(),
+                semantic_classifier=MagicMock(),
+                approved_memory_repository=MagicMock(),
             ),
         )
 
@@ -386,6 +393,7 @@ class TestChatServiceErrorContract:
         def reject_prompt(prompt_input):
             assert prompt_input.character.system_prompt == secrets["character"]
             assert prompt_input.rag.items[0].content.endswith(secrets["rag"])
+            assert prompt_input.rag.items[0].raw_distance == 1.25
             history = tuple(prompt_input.history.newest_first_factory())
             assert history[0].user_content == secrets["history_user"]
             assert history[0].assistant_content == secrets["history_assistant"]
@@ -771,6 +779,20 @@ class TestChatServiceErrorContract:
 
 
 class TestChatServiceRagContract:
+    def test_rag_skip_continues_normal_reply_without_memory(self):
+        policy = object()
+        service = _chat_service(True, policy)
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT, return_value=()):
+                with patch(_GENERATE_RESPONSE, return_value="reply") as generate:
+                    reply = service.generate_chat_reply(
+                        "miori", CONVERSATION_ID, "hello"
+                    )
+
+        assert _assistant_content(reply) == "reply"
+        assert _generated_contents(generate) == ["## 応答方針\n# prompt", "hello"]
+
     def test_two_argument_reply_uses_rag_augmented_prompt_when_enabled(self):
         policy = object()
         base_prompt = "# prompt"
@@ -787,7 +809,13 @@ class TestChatServiceRagContract:
 
         assert _assistant_content(reply) == "reply"
         mock_build.assert_called_once_with(
-            "miori", "hello", policy, chroma_path=_CHROMA_PATH
+            "miori",
+            "hello",
+            policy,
+            scanner=service._dependencies.privacy_scanner,
+            classifier=service._dependencies.semantic_classifier,
+            approved_repository=service._dependencies.approved_memory_repository,
+            chroma_path=_CHROMA_PATH,
         )
         assert _generated_contents(mock_gen) == [
             "## 応答方針\n# prompt",
@@ -852,8 +880,14 @@ class TestChatServiceRagContract:
         assert _assistant_content(first_reply) == "reply 1"
         assert _assistant_content(second_reply) == "reply 2"
         assert mock_build.call_count == 2
-        mock_build.assert_any_call("miori", "hello", policy, chroma_path=_CHROMA_PATH)
-        mock_build.assert_any_call("miori", "again", policy, chroma_path=_CHROMA_PATH)
+        retrieval_dependencies = {
+            "scanner": service._dependencies.privacy_scanner,
+            "classifier": service._dependencies.semantic_classifier,
+            "approved_repository": service._dependencies.approved_memory_repository,
+            "chroma_path": _CHROMA_PATH,
+        }
+        mock_build.assert_any_call("miori", "hello", policy, **retrieval_dependencies)
+        mock_build.assert_any_call("miori", "again", policy, **retrieval_dependencies)
         assert mock_gen.call_count == 2
 
     def test_runtime_config_fails_fast_for_inconsistent_rag_policy(self):

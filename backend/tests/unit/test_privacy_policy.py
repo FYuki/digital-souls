@@ -36,6 +36,47 @@ def test_should_load_policy_version_as_required_root_field(
     assert policy.privacy.policy_version == POLICY_VERSION
 
 
+def test_should_resolve_retrieval_compatible_policy_versions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    policy = _load_from(monkeypatch, tmp_path / "policy.json", policy_config())
+
+    assert policy.retrieval_compatible_policy_versions == (POLICY_VERSION,)
+    assert policy.terms.do_not_store_terms == ("保存しないで",)
+
+
+def test_should_reject_policy_that_cannot_retrieve_its_current_version(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = config_with(
+        policy_config(),
+        root={"retrieval_compatible_policy_versions": ["older-policy"]},
+    )
+
+    with pytest.raises(ValueError, match="retrieval_compatible_policy_versions"):
+        _load_from(monkeypatch, tmp_path / "policy.json", config)
+
+
+@pytest.mark.parametrize(
+    "invalid_versions",
+    (None, [], [POLICY_VERSION, POLICY_VERSION]),
+)
+def test_should_reject_invalid_retrieval_compatibility_list(
+    invalid_versions: object,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = config_with(
+        policy_config(),
+        root={"retrieval_compatible_policy_versions": invalid_versions},
+    )
+
+    with pytest.raises(ValueError, match="retrieval_compatible_policy_versions"):
+        _load_from(monkeypatch, tmp_path / "policy.json", config)
+
+
 @pytest.mark.parametrize("invalid_version", [None, "", "   ", 1])
 def test_should_reject_missing_blank_or_non_string_policy_version(
     invalid_version: object,

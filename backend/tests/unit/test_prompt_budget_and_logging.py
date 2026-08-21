@@ -55,7 +55,7 @@ def _prompt_input_with_secret_bodies(budget: TokenBudget) -> PromptBuildInput:
             mes_example=mes_example,
             post_history_instructions=post_history,
         ),
-        rag=RagContext(items=(RagItem(rag),)),
+        rag=RagContext(items=(RagItem(rag, raw_distance=1.25),)),
         history=MaskedHistory(
             turns=(MaskedHistoryTurn(history_user, history_assistant, True),),
             omitted_turns=0,

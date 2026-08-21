@@ -90,6 +90,9 @@ def _service(
             prompt_builder=build_chat_prompt,
             llm_response_generator=generate_response,
             input_token_counter=count_input_tokens,
+            privacy_scanner=MagicMock(),
+            semantic_classifier=MagicMock(),
+            approved_memory_repository=MagicMock(),
         ),
     )
 

@@ -1,7 +1,9 @@
 import importlib
+from dataclasses import replace
 from datetime import UTC, datetime
 from itertools import count
 from pathlib import Path
+from unittest.mock import MagicMock
 from uuid import UUID
 from uuid import uuid4
 
@@ -43,11 +45,20 @@ class TestRagRuntimeEvidenceIntegration:
 
         from app.memory.index_sync import MemoryIndexSync
         from app.memory.embedder import embed_text
+        from app.memory.chroma_store import query_memories, upsert_memory_index_entry
         from app.memory.memory_policy import resolved_memory_policy
         from app.memory.persistence.approved_repository import ApprovedMemoryRepository
         from app.memory.persistence.index_outbox_repository import IndexOutboxRepository
         from app.memory.persistence.schema import initialize_persona_memory_schema
         from app.memory.rag_service import retrieve_prompt_memories
+        from app.privacy.scanner import create_privacy_scanner
+        from app.privacy.semantic.contracts import (
+            PrivacyAssessment,
+            SemanticAssessmentReasonCode,
+            SemanticClassification,
+            SemanticPrivacyCategory,
+            SubjectScope,
+        )
         from tests.unit.test_approved_memory_repository import _candidate, _context
 
         importlib.import_module("app.backup_restore.service")
@@ -66,10 +77,11 @@ class TestRagRuntimeEvidenceIntegration:
                 f"10000000-0000-4000-8000-{next(ids):012d}"
             ),
         )
-        approved.save(
+        policy = resolved_memory_policy()
+        saved = approved.save(
             character_id=character_id,
             candidate=_candidate(content),
-            context=_context(),
+            context=replace(_context(), policy_version=policy.policy_version),
         )
         sync = MemoryIndexSync(
             approved_repository=approved,
@@ -86,11 +98,50 @@ class TestRagRuntimeEvidenceIntegration:
 
         sync.reconcile_once()
 
+        query_embedding = embed_text("紅茶の好みは？")
+        upsert_memory_index_entry(
+            character_id=character_id,
+            memory_id=str(saved.id),
+            embedding=query_embedding,
+            normalized_text="改ざんされたChroma本文",
+            provider_id=saved.provider_id,
+            memory_kind=saved.memory_kind,
+            memory_type=saved.memory_type.value,
+            policy_version=saved.policy_version,
+            effective_at=saved.effective_at.isoformat(),
+            expires_at=None,
+            chroma_path=runtime_paths.chroma_path,
+        )
+        indexed = query_memories(
+            character_id,
+            query_embedding,
+            n_results=5,
+            chroma_path=runtime_paths.chroma_path,
+        )
+        assert len(indexed) == 1
+        classifier = MagicMock()
+        classifier.classify.return_value = PrivacyAssessment(
+            classification=SemanticClassification.NOT_SENSITIVE,
+            subject_scope=SubjectScope.GENERAL,
+            category=SemanticPrivacyCategory.NONE,
+            reason_code=SemanticAssessmentReasonCode.NO_SENSITIVE_CONTENT,
+            classifier_version="integration-fake-v1",
+            model_id="integration-fake",
+            model_digest="sha256:integration-fake",
+            prompt_version="integration-fake-v1",
+            policy_version=policy.policy_version,
+        )
+
         memories = retrieve_prompt_memories(
             character_id,
             "紅茶の好みは？",
-            resolved_memory_policy(),
+            policy,
+            scanner=create_privacy_scanner(policy.privacy),
+            classifier=classifier,
+            approved_repository=approved,
             chroma_path=runtime_paths.chroma_path,
         )
 
-        assert any(memory.normalized_text == content for memory in memories)
+        assert [(memory.normalized_text, memory.raw_distance) for memory in memories] == [
+            (content, indexed[0].raw_distance)
+        ]

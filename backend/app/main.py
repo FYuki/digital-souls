@@ -300,6 +300,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     prompt_builder=build_chat_prompt,
                     llm_response_generator=generate_llm_response,
                     input_token_counter=count_llm_input_tokens,
+                    privacy_scanner=privacy_scanner,
+                    semantic_classifier=semantic_privacy_classifier,
+                    approved_memory_repository=approved_memory_repository,
                 ),
             )
             app.state.chat_service = app_chat_service

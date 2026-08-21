@@ -1,7 +1,7 @@
 import sqlite3
 import sys
 from types import ModuleType
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import httpx
 import pytest
@@ -11,6 +11,13 @@ from app.conversation_history.prompt_history import RestoredHistoryTurn
 from app.main import app
 from app.memory.chroma_store import MemorySearchResult
 from app.prompting import CharacterPrompt, PromptInputLimitError
+from app.privacy.semantic.contracts import (
+    PrivacyAssessment,
+    SemanticAssessmentReasonCode,
+    SemanticClassification,
+    SemanticPrivacyCategory,
+    SubjectScope,
+)
 from tests.character_card_test_support import (
     character_card_data,
     character_card_document,
@@ -87,6 +94,7 @@ def _rag_memory(content: str) -> MemorySearchResult:
         normalized_text=content,
         effective_at="2026-07-31T00:00:00.000000Z",
         memory_type="USER_PREFERENCE",
+        raw_distance=1.25,
     )
 
 
@@ -305,6 +313,9 @@ class TestChatEndpoint:
             "miori",
             _VALID_BODY["message"],
             policy,
+            scanner=ANY,
+            classifier=ANY,
+            approved_repository=ANY,
             chroma_path=runtime_paths.chroma_path,
         )
         prompt = mock_gen.call_args.args[0]
@@ -320,8 +331,8 @@ class TestChatEndpoint:
         policy = resolved_memory_policy()
         chroma_collection = MagicMock()
         chroma_collection.query.return_value = {
-            "documents": [[]],
-            "metadatas": [[]],
+            "ids": [[]],
+            "distances": [[]],
         }
         chroma_collection.count.return_value = 0
         chroma_client = MagicMock()
@@ -333,22 +344,42 @@ class TestChatEndpoint:
             MagicMock(return_value=chroma_client),
         )
         monkeypatch.setitem(sys.modules, "chromadb", fake_chromadb)
+        safe_assessment = PrivacyAssessment(
+            classification=SemanticClassification.NOT_SENSITIVE,
+            subject_scope=SubjectScope.GENERAL,
+            category=SemanticPrivacyCategory.NONE,
+            reason_code=SemanticAssessmentReasonCode.NO_SENSITIVE_CONTENT,
+            classifier_version="test-classifier-v1",
+            model_id="test-model",
+            model_digest="sha256:test",
+            prompt_version="test-prompt-v1",
+            policy_version=policy.policy_version,
+        )
 
         with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
-            with patch("app.memory.rag_service.embed_text", return_value=[0.1]):
-                with patch(
-                    "app.memory.chroma_store.upsert_memory_index_entry"
-                ) as upsert_memory_index_entry:
-                    with TestClient(app) as client:
-                        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
-                            with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
-                                response = client.post(
-                                    "/chat",
-                                    json={
-                                        **_VALID_BODY,
-                                        "message": "農業日誌: トマト畑に水やりした",
-                                    },
-                                )
+            with patch(
+                "app.privacy.semantic.classifier."
+                "OllamaSemanticPrivacyClassifier.classify",
+                return_value=safe_assessment,
+            ):
+                with patch("app.memory.rag_service.embed_text", return_value=[0.1]):
+                    with patch(
+                        "app.memory.chroma_store.upsert_memory_index_entry"
+                    ) as upsert_memory_index_entry:
+                        with TestClient(app) as client:
+                            with patch(
+                                _LOAD_PERSONALITY, return_value=_character_card()
+                            ):
+                                with patch(
+                                    _GENERATE_RESPONSE, return_value=_LLM_REPLY
+                                ):
+                                    response = client.post(
+                                        "/chat",
+                                        json={
+                                            **_VALID_BODY,
+                                            "message": "農業日誌: トマト畑に水やりした",
+                                        },
+                                    )
 
         assert response.status_code == 200
         assert response.json()["turn"]["assistant_content"] == _LLM_REPLY
@@ -663,6 +694,9 @@ class TestChatFlow:
             "miori",
             "前回なんの話をしたっけ？",
             policy,
+            scanner=ANY,
+            classifier=ANY,
+            approved_repository=ANY,
             chroma_path=runtime_paths.chroma_path,
         )
         payload = mock_post.call_args.kwargs["json"]

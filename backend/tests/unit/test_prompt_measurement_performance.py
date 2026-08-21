@@ -102,7 +102,10 @@ def _build_chat_prompt(
             post_history_instructions="post-history",
         ),
         rag=RagContext(
-            items=tuple(RagItem(f"rag-{index}") for index in range(1, rag_count + 1))
+            items=tuple(
+                RagItem(f"rag-{index}", raw_distance=float(index))
+                for index in range(1, rag_count + 1)
+            )
         ),
         current_user=CurrentUserMessage("current-user"),
         history_session=history_session,
@@ -309,7 +312,12 @@ def test_should_stream_many_failed_turns_without_materializing_or_measuring_all(
 def test_should_find_rag_limit_without_measuring_every_cumulative_prefix() -> None:
     counter = RecordingMessageCounter()
     prompt_input = prompt_build_input(
-        rag=RagContext(items=tuple(RagItem(f"rag-{index}") for index in range(8))),
+        rag=RagContext(
+            items=tuple(
+                RagItem(f"rag-{index}", raw_distance=float(index))
+                for index in range(8)
+            )
+        ),
         history=MaskedHistory(turns=(), omitted_turns=0),
         budget=token_budget(total=100, rag=3),
     )
@@ -351,7 +359,12 @@ def test_should_fit_total_limit_without_remeasuring_prompt_after_each_removal() 
         omitted_turns=0,
     )
     prompt_input = prompt_build_input(
-        rag=RagContext(items=tuple(RagItem(f"rag-{index}") for index in range(6))),
+        rag=RagContext(
+            items=tuple(
+                RagItem(f"rag-{index}", raw_distance=float(index))
+                for index in range(6)
+            )
+        ),
         history=history,
         budget=token_budget(total=10, rag=20, history=20),
     )

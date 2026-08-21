@@ -178,11 +178,19 @@ class TestRuntimeConfiguration:
 
         config = json.loads(config_path.read_text(encoding="utf-8"))
 
-        assert set(config) == {"policy_version", "common", "services", "privacy"}
+        assert set(config) == {
+            "policy_version",
+            "retrieval_compatible_policy_versions",
+            "common",
+            "services",
+            "privacy",
+        }
         assert isinstance(config["policy_version"], str)
         assert config["policy_version"]
+        assert config["retrieval_compatible_policy_versions"] == [
+            config["policy_version"]
+        ]
         assert set(config["common"]) == {
-            "sensitive_terms",
             "do_not_store_terms",
             "explicit_memory_terms",
             "long_term_memory_markers",

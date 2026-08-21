@@ -2,15 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import math
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Protocol, cast
-
-from app.memory.persistence.sqlite import parse_datetime
-
 
 COLLECTION_NAME_PREFIX = "character"
 COLLECTION_NAME_MAX_LENGTH = 63
@@ -25,16 +22,21 @@ COLLECTION_NAME_MAX_SLUG_LENGTH = (
 
 
 @dataclass(frozen=True)
+class MemorySearchCandidate:
+    memory_id: str
+    raw_distance: float
+
+
+@dataclass(frozen=True)
 class MemorySearchResult:
     memory_id: str
     normalized_text: str
     effective_at: str
     memory_type: str
+    raw_distance: float
 
 
 class _ChromaCollection(Protocol):
-    def count(self) -> int: ...
-
     def upsert(
         self,
         *,
@@ -60,6 +62,7 @@ class _ChromaCollection(Protocol):
         *,
         query_embeddings: list[list[float]],
         n_results: int,
+        include: list[str],
     ) -> dict[str, object]: ...
 
 
@@ -137,20 +140,11 @@ def query_memories(
     n_results: int,
     *,
     chroma_path: Path,
-) -> list[MemorySearchResult]:
+) -> list[MemorySearchCandidate]:
     collection = _collection(character, chroma_path)
-    now = datetime.now(UTC)
-    memories = _query_memory_candidates(
-        collection, embedding=embedding, n_results=n_results, now=now
-    )
-    if len(memories) >= n_results:
-        return memories[:n_results]
-    candidate_count = collection.count()
-    if candidate_count <= n_results:
-        return memories
     return _query_memory_candidates(
-        collection, embedding=embedding, n_results=candidate_count, now=now
-    )[:n_results]
+        collection, embedding=embedding, n_results=n_results
+    )
 
 
 def _query_memory_candidates(
@@ -158,21 +152,22 @@ def _query_memory_candidates(
     *,
     embedding: list[float],
     n_results: int,
-    now: datetime,
-) -> list[MemorySearchResult]:
-    result = collection.query(query_embeddings=[embedding], n_results=n_results)
-    ids = _first_result_list(result, "ids")
-    documents = _first_result_list(result, "documents")
-    metadatas = _first_result_list(result, "metadatas")
-    if not documents:
-        return []
-    if len(ids) != len(documents) or len(documents) != len(metadatas):
-        raise ValueError("Chroma query result ids, documents and metadatas must match")
-    memories = (
-        _memory_search_result(memory_id, document, metadata, now=now)
-        for memory_id, document, metadata in zip(ids, documents, metadatas, strict=True)
+) -> list[MemorySearchCandidate]:
+    result = collection.query(
+        query_embeddings=[embedding],
+        n_results=n_results,
+        include=["distances"],
     )
-    return [memory for memory in memories if memory is not None]
+    ids = _first_result_list(result, "ids")
+    distances = _first_result_list(result, "distances")
+    if not ids:
+        return []
+    if len(ids) != len(distances):
+        raise ValueError("Chroma query result ids and distances must match")
+    return [
+        _memory_search_candidate(memory_id, distance)
+        for memory_id, distance in zip(ids, distances, strict=True)
+    ]
 
 
 def _collection(character: str, chroma_path: Path) -> _ChromaCollection:
@@ -256,30 +251,19 @@ def _first_result_list(result: dict[str, object], field_name: str) -> list[objec
     return cast(list[object], first_result)
 
 
-def _memory_search_result(
+def _memory_search_candidate(
     memory_id: object,
-    document: object,
-    metadata: object,
-    *,
-    now: datetime,
-) -> MemorySearchResult | None:
-    if not isinstance(memory_id, str) or not isinstance(document, str):
-        raise ValueError("Chroma memory ids and documents must be strings")
-    if not isinstance(metadata, dict):
-        raise ValueError("Chroma query result metadatas must be objects")
-    effective_at = metadata.get("effective_at")
-    memory_type = metadata.get("memory_type")
-    if not isinstance(effective_at, str) or not isinstance(memory_type, str):
-        raise ValueError("Chroma memory metadata is incomplete")
-    expires_at = metadata.get("expires_at")
-    if expires_at is not None:
-        if not isinstance(expires_at, str):
-            raise ValueError("Chroma memory expiration must be a string")
-        if parse_datetime(expires_at) <= now:
-            return None
-    return MemorySearchResult(
+    distance: object,
+) -> MemorySearchCandidate:
+    if not isinstance(memory_id, str):
+        raise ValueError("Chroma memory ids must be strings")
+    if (
+        not isinstance(distance, (int, float))
+        or isinstance(distance, bool)
+        or not math.isfinite(distance)
+    ):
+        raise ValueError("Chroma memory distances must be finite numbers")
+    return MemorySearchCandidate(
         memory_id=memory_id,
-        normalized_text=document,
-        effective_at=effective_at,
-        memory_type=memory_type,
+        raw_distance=float(distance),
     )

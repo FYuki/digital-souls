@@ -76,8 +76,7 @@ class FakeCollection:
         ids = list(self.records)[: int(kwargs["n_results"])]
         return {
             "ids": [ids],
-            "documents": [[self.records[record_id]["document"] for record_id in ids]],
-            "metadatas": [[self.records[record_id]["metadata"] for record_id in ids]],
+            "distances": [[1.25 + index for index, _record_id in enumerate(ids)]],
         }
 
 
@@ -271,7 +270,7 @@ def test_persistent_client_is_reused_for_the_same_path(
     assert len(FakePersistentClient.instances) == 1
 
 
-def test_query_returns_new_retrieval_contract_from_one_record(
+def test_query_returns_only_memory_id_and_unchanged_raw_distance(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     chroma_store = _import_chroma_store(monkeypatch)
@@ -282,82 +281,65 @@ def test_query_returns_new_retrieval_contract_from_one_record(
     )
 
     assert memories == [
-        chroma_store.MemorySearchResult(
+        chroma_store.MemorySearchCandidate(
             memory_id="00000000-0000-4000-8000-000000000042",
-            normalized_text="畑の相談",
-            effective_at="2026-06-23T00:00:00.000000Z",
-            memory_type="USER_PREFERENCE",
+            raw_distance=1.25,
         )
+    ]
+    assert _only_collection().query_calls == [
+        {
+            "query_embeddings": [[0.3, 0.4]],
+            "n_results": 5,
+            "include": ["distances"],
+        }
     ]
 
 
-def test_query_excludes_expired_records(
+def test_query_preserves_chroma_order_without_threshold_or_tie_break(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     chroma_store = _import_chroma_store(monkeypatch)
-    _upsert(
-        chroma_store,
-        tmp_path,
-        memory_id="expired",
-        expires_at="2000-01-01T00:00:00.000000Z",
-    )
-    _upsert(
-        chroma_store,
-        tmp_path,
-        memory_id="active",
-        expires_at="2999-01-01T00:00:00.000000Z",
-    )
-
-    memories = chroma_store.query_memories(
-        "miori", [0.3, 0.4], n_results=1, chroma_path=tmp_path / "data" / "chroma"
-    )
-
-    assert [memory.memory_id for memory in memories] == ["active"]
-    assert [call["n_results"] for call in _only_collection().query_calls] == [1, 2]
-
-
-@pytest.mark.parametrize(
-    "metadata",
-    (
-        {"memory_type": "USER_PREFERENCE"},
-        {"effective_at": "2026-06-23T00:00:00.000000Z"},
-        {"timestamp": "legacy", "role": "user"},
-    ),
-)
-def test_query_rejects_incomplete_or_legacy_metadata(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    metadata: dict[str, str],
-) -> None:
-    chroma_store = _import_chroma_store(monkeypatch)
-    _upsert(chroma_store, tmp_path)
-    _only_collection().records["00000000-0000-4000-8000-000000000042"]["metadata"] = (
-        metadata
-    )
-
-    with pytest.raises(ValueError, match="metadata is incomplete"):
-        chroma_store.query_memories(
-            "miori", [0.3, 0.4], n_results=5, chroma_path=tmp_path / "data" / "chroma"
-        )
-
-
-def test_query_rejects_mismatched_result_lengths(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    chroma_store = _import_chroma_store(monkeypatch)
-    _upsert(chroma_store, tmp_path)
+    _upsert(chroma_store, tmp_path, memory_id="farther")
+    _upsert(chroma_store, tmp_path, memory_id="nearer")
     collection = _only_collection()
     monkeypatch.setattr(
         collection,
         "query",
-        lambda **_kwargs: {
-            "ids": [["memory-1"]],
-            "documents": [["本文"]],
-            "metadatas": [[]],
-        },
+        lambda **kwargs: (
+            collection.query_calls.append(kwargs)
+            or {"ids": [["farther", "nearer"]], "distances": [[1.75, 0.25]]}
+        ),
     )
 
-    with pytest.raises(ValueError, match="must match"):
+    memories = chroma_store.query_memories(
+        "miori", [0.3, 0.4], n_results=2, chroma_path=tmp_path / "data" / "chroma"
+    )
+
+    assert [(item.memory_id, item.raw_distance) for item in memories] == [
+        ("farther", 1.75),
+        ("nearer", 0.25),
+    ]
+    assert len(collection.query_calls) == 1
+
+
+@pytest.mark.parametrize(
+    "response",
+    (
+        {"ids": [["memory-1"]], "distances": [[]]},
+        {"ids": [["memory-1"]], "distances": [["not-a-number"]]},
+        {"ids": [["memory-1"]], "distances": [[float("inf")]]},
+    ),
+)
+def test_query_rejects_mismatched_or_invalid_distances(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    response: dict[str, object],
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+    _upsert(chroma_store, tmp_path)
+    monkeypatch.setattr(_only_collection(), "query", lambda **_kwargs: response)
+
+    with pytest.raises(ValueError):
         chroma_store.query_memories(
             "miori", [0.3, 0.4], n_results=5, chroma_path=tmp_path / "data" / "chroma"
         )
