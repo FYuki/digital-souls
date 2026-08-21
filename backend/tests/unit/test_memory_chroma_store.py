@@ -302,14 +302,12 @@ def test_query_preserves_chroma_order_without_threshold_or_tie_break(
     _upsert(chroma_store, tmp_path, memory_id="farther")
     _upsert(chroma_store, tmp_path, memory_id="nearer")
     collection = _only_collection()
-    monkeypatch.setattr(
-        collection,
-        "query",
-        lambda **kwargs: (
-            collection.query_calls.append(kwargs)
-            or {"ids": [["farther", "nearer"]], "distances": [[1.75, 0.25]]}
-        ),
-    )
+
+    def fake_query(**kwargs: object) -> dict[str, object]:
+        collection.query_calls.append(kwargs)
+        return {"ids": [["farther", "nearer"]], "distances": [[1.75, 0.25]]}
+
+    monkeypatch.setattr(collection, "query", fake_query)
 
     memories = chroma_store.query_memories(
         "miori", [0.3, 0.4], n_results=2, chroma_path=tmp_path / "data" / "chroma"
@@ -325,6 +323,7 @@ def test_query_preserves_chroma_order_without_threshold_or_tie_break(
 @pytest.mark.parametrize(
     "response",
     (
+        {"ids": [[]], "distances": [[0.25]]},
         {"ids": [["memory-1"]], "distances": [[]]},
         {"ids": [["memory-1"]], "distances": [["not-a-number"]]},
         {"ids": [["memory-1"]], "distances": [[float("inf")]]},

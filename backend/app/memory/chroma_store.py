@@ -160,10 +160,10 @@ def _query_memory_candidates(
     )
     ids = _first_result_list(result, "ids")
     distances = _first_result_list(result, "distances")
-    if not ids:
-        return []
     if len(ids) != len(distances):
         raise ValueError("Chroma query result ids and distances must match")
+    if not ids:
+        return []
     return [
         _memory_search_candidate(memory_id, distance)
         for memory_id, distance in zip(ids, distances, strict=True)

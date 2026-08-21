@@ -218,6 +218,29 @@ def test_query_scan_failure_skips_classifier_embedding_and_chroma(monkeypatch):
     query.assert_not_called()
 
 
+def test_query_scanner_exception_returns_empty_without_starting_rag(monkeypatch):
+    from app.memory import rag_service
+
+    scanner, classifier, repository = _dependencies()
+    scanner.scan.side_effect = RuntimeError("scanner unavailable")
+    embed = MagicMock()
+    query = MagicMock()
+    monkeypatch.setattr(rag_service, "embed_text", embed)
+    monkeypatch.setattr(rag_service, "query_memories", query)
+
+    memories = _retrieve(
+        rag_service,
+        scanner=scanner,
+        classifier=classifier,
+        repository=repository,
+    )
+
+    assert memories == ()
+    classifier.classify.assert_not_called()
+    embed.assert_not_called()
+    query.assert_not_called()
+
+
 def test_scan_failure_warning_contains_metadata_only(monkeypatch, caplog):
     from app.memory import rag_service
 
@@ -392,6 +415,25 @@ def test_retrieval_scan_failure_or_absolute_deny_excludes_whole_candidate(
     from app.memory import rag_service
 
     scanner, classifier, repository = _dependencies(body_scan=body_scan)
+    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+    monkeypatch.setattr(
+        rag_service, "query_memories", MagicMock(return_value=[_candidate()])
+    )
+
+    memories = _retrieve(
+        rag_service,
+        scanner=scanner,
+        classifier=classifier,
+        repository=repository,
+    )
+
+    assert memories == ()
+
+
+def test_unsupported_retrieved_body_scan_result_discards_rag_result(monkeypatch):
+    from app.memory import rag_service
+
+    scanner, classifier, repository = _dependencies(body_scan=object())
     monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
     monkeypatch.setattr(
         rag_service, "query_memories", MagicMock(return_value=[_candidate()])

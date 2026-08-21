@@ -25,6 +25,7 @@ RAG_OPERATION_ERRORS = (
     httpx.HTTPError,
     OSError,
     RuntimeError,
+    TypeError,
     ValueError,
     sqlite3.Error,
 )
@@ -40,11 +41,10 @@ def retrieve_prompt_memories(
     approved_repository: ApprovedMemoryRepository,
     chroma_path: Path,
 ) -> tuple[MemorySearchResult, ...]:
-    query_scan = scanner.scan(user_message)
-    if _scan_blocks_retrieval(query_scan, policy):
-        return ()
-
     try:
+        query_scan = scanner.scan(user_message)
+        if _scan_blocks_retrieval(query_scan, policy):
+            return ()
         assessment = classifier.classify(user_message, QUERY_GATE)
         if assessment.classification is not SemanticClassification.NOT_SENSITIVE:
             logger.warning(
