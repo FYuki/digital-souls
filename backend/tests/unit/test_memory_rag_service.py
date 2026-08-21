@@ -693,3 +693,342 @@ def test_retrieval_filter_is_read_only(monkeypatch):
     repository.deactivate.assert_not_called()
     repository.hard_delete.assert_not_called()
     delete_index.assert_not_called()
+
+
+def _ranking_dependencies(
+    memories: dict[UUID, ApprovedMemory | None],
+):
+    scanner, classifier, repository = _dependencies(memories=memories)
+    scanner.scan.side_effect = None
+    scanner.scan.return_value = ScanSuccess(())
+    return scanner, classifier, repository
+
+
+def _distance_for_relevance(relevance: float) -> float:
+    return (1.0 / relevance - 1.0) ** 2
+
+
+def test_retrieval_uses_candidate_pool_before_sqlite_verification(monkeypatch):
+    from app.memory import rag_service
+
+    valid_id = UUID("00000000-0000-4000-8000-000000000049")
+    invalid_ids = tuple(
+        UUID(f"00000000-0000-4000-8000-{index:012d}")
+        for index in range(43, 48)
+    )
+    memories = {memory_id: None for memory_id in invalid_ids}
+    memories[valid_id] = _approved_memory(id=valid_id)
+    scanner, classifier, repository = _ranking_dependencies(memories)
+    candidates = [
+        *(_candidate(memory_id, 0.01) for memory_id in invalid_ids),
+        _candidate(valid_id, 0.02),
+    ]
+    query = MagicMock(
+        side_effect=lambda _character, _embedding, n_results, **_kwargs: candidates[
+            :n_results
+        ]
+    )
+    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+    monkeypatch.setattr(rag_service, "query_memories", query)
+
+    results = _retrieve(
+        rag_service,
+        scanner=scanner,
+        classifier=classifier,
+        repository=repository,
+    )
+
+    assert [result.memory_id for result in results] == [str(valid_id)]
+    assert query.call_args.kwargs["n_results"] == 20
+
+
+def test_retrieval_filters_below_threshold_and_orders_by_relevance(monkeypatch):
+    from app.memory import rag_service
+
+    exact_id = UUID("00000000-0000-4000-8000-000000000042")
+    high_id = UUID("00000000-0000-4000-8000-000000000043")
+    low_id = UUID("00000000-0000-4000-8000-000000000044")
+    below_id = UUID("00000000-0000-4000-8000-000000000045")
+    scanner, classifier, repository = _ranking_dependencies(
+        {
+            exact_id: _approved_memory(id=exact_id),
+            high_id: _approved_memory(id=high_id),
+            low_id: _approved_memory(id=low_id),
+            below_id: _approved_memory(id=below_id),
+        }
+    )
+    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+    monkeypatch.setattr(
+        rag_service,
+        "query_memories",
+            MagicMock(
+                return_value=[
+                    _candidate(below_id, _distance_for_relevance(0.0499)),
+                    _candidate(low_id, _distance_for_relevance(0.05)),
+                    _candidate(high_id, _distance_for_relevance(0.80)),
+                    _candidate(exact_id, _distance_for_relevance(1.0)),
+                ]
+            ),
+        )
+
+    results = _retrieve(
+        rag_service,
+        scanner=scanner,
+        classifier=classifier,
+        repository=repository,
+    )
+
+    assert [result.memory_id for result in results] == [
+        str(exact_id),
+        str(high_id),
+        str(low_id),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("relevance_gap", "input_first", "expected_first"),
+    (
+        (0.0019, "relevant", "recent"),
+        (0.0020, "relevant", "recent"),
+        (0.0021, "recent", "relevant"),
+    ),
+)
+def test_mention_tie_break_applies_only_within_margin_boundary(
+    monkeypatch,
+    relevance_gap: float,
+    input_first: str,
+    expected_first: str,
+):
+    from app.memory import rag_service
+
+    relevant_id = UUID("00000000-0000-4000-8000-000000000043")
+    recent_id = UUID("00000000-0000-4000-8000-000000000044")
+    scanner, classifier, repository = _ranking_dependencies(
+        {
+            relevant_id: _approved_memory(
+                id=relevant_id,
+                last_user_mentioned_at=datetime(2026, 8, 1, tzinfo=UTC),
+            ),
+            recent_id: _approved_memory(
+                id=recent_id,
+                last_user_mentioned_at=datetime(2026, 8, 20, tzinfo=UTC),
+            ),
+        }
+    )
+    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+    candidates = [
+        _candidate(relevant_id, _distance_for_relevance(0.8)),
+        _candidate(recent_id, _distance_for_relevance(0.8 - relevance_gap)),
+    ]
+    if input_first == "recent":
+        candidates.reverse()
+    monkeypatch.setattr(
+        rag_service,
+        "query_memories",
+        MagicMock(return_value=candidates),
+    )
+
+    results = _retrieve(
+        rag_service,
+        scanner=scanner,
+        classifier=classifier,
+        repository=repository,
+    )
+
+    expected_id = recent_id if expected_first == "recent" else relevant_id
+    assert results[0].memory_id == str(expected_id)
+
+
+def test_equivalence_band_does_not_chain_margin_across_candidates(monkeypatch):
+    from app.memory import rag_service
+
+    leader_id = UUID("00000000-0000-4000-8000-000000000043")
+    bridge_id = UUID("00000000-0000-4000-8000-000000000044")
+    outside_id = UUID("00000000-0000-4000-8000-000000000045")
+    scanner, classifier, repository = _ranking_dependencies(
+        {
+            leader_id: _approved_memory(
+                id=leader_id,
+                last_user_mentioned_at=datetime(2026, 8, 1, tzinfo=UTC),
+            ),
+            bridge_id: _approved_memory(
+                id=bridge_id,
+                last_user_mentioned_at=datetime(2026, 8, 10, tzinfo=UTC),
+            ),
+            outside_id: _approved_memory(
+                id=outside_id,
+                last_user_mentioned_at=datetime(2026, 8, 20, tzinfo=UTC),
+            ),
+        }
+    )
+    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+    monkeypatch.setattr(
+        rag_service,
+        "query_memories",
+        MagicMock(
+            return_value=[
+                _candidate(leader_id, _distance_for_relevance(0.8)),
+                _candidate(bridge_id, _distance_for_relevance(0.799)),
+                _candidate(outside_id, _distance_for_relevance(0.7979)),
+            ]
+        ),
+    )
+
+    results = _retrieve(
+        rag_service,
+        scanner=scanner,
+        classifier=classifier,
+        repository=repository,
+    )
+
+    assert [result.memory_id for result in results] == [
+        str(bridge_id),
+        str(leader_id),
+        str(outside_id),
+    ]
+
+
+def test_tie_break_places_null_mention_after_mentioned_memory(monkeypatch):
+    from app.memory import rag_service
+
+    null_id = UUID("00000000-0000-4000-8000-000000000043")
+    mentioned_id = UUID("00000000-0000-4000-8000-000000000044")
+    scanner, classifier, repository = _ranking_dependencies(
+        {
+            null_id: _approved_memory(id=null_id, last_user_mentioned_at=None),
+            mentioned_id: _approved_memory(
+                id=mentioned_id,
+                last_user_mentioned_at=datetime(2026, 8, 1, tzinfo=UTC),
+            ),
+        }
+    )
+    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+    monkeypatch.setattr(
+        rag_service,
+        "query_memories",
+        MagicMock(
+            return_value=[
+                _candidate(null_id, _distance_for_relevance(0.8)),
+                _candidate(mentioned_id, _distance_for_relevance(0.8)),
+            ]
+        ),
+    )
+
+    results = _retrieve(
+        rag_service,
+        scanner=scanner,
+        classifier=classifier,
+        repository=repository,
+    )
+
+    assert [result.memory_id for result in results] == [
+        str(mentioned_id),
+        str(null_id),
+    ]
+
+
+def test_equal_candidates_are_stabilized_by_created_at_then_id(monkeypatch):
+    from app.memory import rag_service
+
+    older_id = UUID("00000000-0000-4000-8000-000000000045")
+    later_id = UUID("00000000-0000-4000-8000-000000000044")
+    earlier_id = UUID("00000000-0000-4000-8000-000000000043")
+    old_created = datetime(2026, 8, 1, tzinfo=UTC)
+    new_created = datetime(2026, 8, 2, tzinfo=UTC)
+    scanner, classifier, repository = _ranking_dependencies(
+        {
+            older_id: _approved_memory(id=older_id, created_at=old_created),
+            later_id: _approved_memory(id=later_id, created_at=new_created),
+            earlier_id: _approved_memory(id=earlier_id, created_at=new_created),
+        }
+    )
+    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+    monkeypatch.setattr(
+        rag_service,
+        "query_memories",
+        MagicMock(
+            return_value=[
+                _candidate(older_id, _distance_for_relevance(0.8)),
+                _candidate(later_id, _distance_for_relevance(0.8)),
+                _candidate(earlier_id, _distance_for_relevance(0.8)),
+            ]
+        ),
+    )
+
+    results = _retrieve(
+        rag_service,
+        scanner=scanner,
+        classifier=classifier,
+        repository=repository,
+    )
+
+    assert [result.memory_id for result in results] == [
+        str(earlier_id),
+        str(later_id),
+        str(older_id),
+    ]
+
+
+def test_retrieval_limits_results_after_ranking(monkeypatch):
+    from app.memory import rag_service
+
+    ids = tuple(
+        UUID(f"00000000-0000-4000-8000-{index:012d}")
+        for index in range(43, 49)
+    )
+    scanner, classifier, repository = _ranking_dependencies(
+        {memory_id: _approved_memory(id=memory_id) for memory_id in ids}
+    )
+    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+    monkeypatch.setattr(
+        rag_service,
+        "query_memories",
+        MagicMock(
+            return_value=[
+                _candidate(memory_id, _distance_for_relevance(relevance))
+                for memory_id, relevance in zip(
+                    reversed(ids),
+                    (0.5, 0.55, 0.6, 0.65, 0.7, 0.75),
+                    strict=True,
+                )
+            ]
+        ),
+    )
+
+    results = _retrieve(
+        rag_service,
+        scanner=scanner,
+        classifier=classifier,
+        repository=repository,
+    )
+
+    assert [result.memory_id for result in results] == [
+        str(ids[0]),
+        str(ids[1]),
+        str(ids[2]),
+        str(ids[3]),
+        str(ids[4]),
+    ]
+
+
+def test_retrieval_does_not_update_last_user_mentioned_at(monkeypatch):
+    from app.memory import rag_service
+
+    scanner, classifier, repository = _ranking_dependencies(
+        {_MEMORY_ID: _approved_memory()}
+    )
+    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+    monkeypatch.setattr(
+        rag_service,
+        "query_memories",
+        MagicMock(return_value=[_candidate(_MEMORY_ID, 0.01)]),
+    )
+
+    _retrieve(
+        rag_service,
+        scanner=scanner,
+        classifier=classifier,
+        repository=repository,
+    )
+
+    repository.touch.assert_not_called()

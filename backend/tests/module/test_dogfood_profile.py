@@ -124,7 +124,9 @@ def test_should_validate_each_resolved_managed_endpoint_from_its_base_url(
     assert validated_endpoint["port"] == port
 
 
-def test_should_define_dogfood_external_dependencies_without_rag(tmp_path: Path) -> None:
+def test_should_enable_dogfood_rag_without_external_chroma_process(
+    tmp_path: Path,
+) -> None:
     from service_registry import (
         create_service_registry,
         operation_context_for,
@@ -139,11 +141,11 @@ def test_should_define_dogfood_external_dependencies_without_rag(tmp_path: Path)
 
     assert dependencies["ollama"]["source"] == "external"
     assert dependencies["voicevox"]["source"] == "external"
-    assert dependencies["chroma"] == {"mode": "disabled", "source": None}
-    assert report["derivedEnvironment"]["RAG_ENABLED"] == "false"
+    assert dependencies["chroma"] == {"mode": "real", "source": "in_process"}
+    assert report["derivedEnvironment"]["RAG_ENABLED"] == "true"
     assert runtime.start_order == ("backend", "frontend")
     assert "chroma" not in runtime.prepare_order
-    assert backend_context.chroma_enabled is False
+    assert backend_context.chroma_enabled is True
 
 
 def test_should_accept_dogfood_asset_with_profile_schema_and_central_validator() -> None:

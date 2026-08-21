@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "evaluated_at": "2026-08-21T00:00:00+00:00",
+  "policy_version": "2026-08-wave2-v1",
+  "ranking": {
+    "candidate_pool_size": 20,
+    "max_retrieved_memories": 5,
+    "relevance_threshold": 0.05,
+    "equivalence_margin": 0.002
+  },
+  "embedding": {
+    "model": "fixed-vector-rag-eval-v1",
+    "digest": "sha256:4bca86f7266e66c973d16a92f3cf0b033a92791f350536b86eb748c6f6b3e56a",
+    "distance_metric": "squared_l2"
+  },
+  "cases": [
+    {
+      "case_id": "episodic-event-recall",
+      "coverage": ["memory_type:EPISODIC_EVENT"],
+      "query": "先週の畑仕事は？",
+      "query_embedding": [0.0],
+      "search_expected": true,
+      "expected_ids": ["episodic"],
+      "candidates": [
+        {"id": "episodic", "text": "先週は畑を耕した", "memory_type": "EPISODIC_EVENT", "embedding": [0.2], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": "2026-08-10T00:00:00+00:00", "created_at": "2026-08-01T00:00:00+00:00"}
+      ]
+    },
+    {
+      "case_id": "user-preference-recall",
+      "coverage": ["memory_type:USER_PREFERENCE"],
+      "query": "飲み物の好みは？",
+      "query_embedding": [0.0],
+      "search_expected": true,
+      "expected_ids": ["preference"],
+      "candidates": [
+        {"id": "preference", "text": "紅茶を好む", "memory_type": "USER_PREFERENCE", "embedding": [0.25], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": "2026-08-11T00:00:00+00:00", "created_at": "2026-08-02T00:00:00+00:00"}
+      ]
+    },
+    {
+      "case_id": "interaction-preference-recall",
+      "coverage": ["memory_type:INTERACTION_PREFERENCE"],
+      "query": "説明の長さは？",
+      "query_embedding": [0.0],
+      "search_expected": true,
+      "expected_ids": ["interaction"],
+      "candidates": [
+        {"id": "interaction", "text": "説明は短めを好む", "memory_type": "INTERACTION_PREFERENCE", "embedding": [0.3], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": null, "created_at": "2026-08-03T00:00:00+00:00"}
+      ]
+    },
+    {
+      "case_id": "relevance-wins-over-recency",
+      "coverage": ["ranking:relevance_over_mention"],
+      "query": "紅茶の好みは？",
+      "query_embedding": [0.0],
+      "search_expected": true,
+      "expected_ids": ["relevant", "recent-but-weaker"],
+      "candidates": [
+        {"id": "recent-but-weaker", "text": "音楽を聴いた", "memory_type": "EPISODIC_EVENT", "embedding": [0.4285714286], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": "2026-08-20T00:00:00+00:00", "created_at": "2026-08-20T00:00:00+00:00"},
+        {"id": "relevant", "text": "紅茶を好む", "memory_type": "USER_PREFERENCE", "embedding": [0.25], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": "2026-08-01T00:00:00+00:00", "created_at": "2026-08-01T00:00:00+00:00"}
+      ]
+    },
+    {
+      "case_id": "mention-tie-break-and-null",
+      "coverage": ["ranking:mention_tie_break", "ranking:null_mention"],
+      "query": "畑の予定は？",
+      "query_embedding": [0.0],
+      "search_expected": true,
+      "expected_ids": ["recent-tie", "old-tie", "null-tie"],
+      "candidates": [
+        {"id": "null-tie", "text": "畑の予定", "memory_type": "EPISODIC_EVENT", "embedding": [0.25], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": null, "created_at": "2026-08-03T00:00:00+00:00"},
+        {"id": "old-tie", "text": "畑の予定", "memory_type": "EPISODIC_EVENT", "embedding": [0.25], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": "2026-08-01T00:00:00+00:00", "created_at": "2026-08-01T00:00:00+00:00"},
+        {"id": "recent-tie", "text": "畑の予定", "memory_type": "EPISODIC_EVENT", "embedding": [0.2505], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": "2026-08-20T00:00:00+00:00", "created_at": "2026-08-02T00:00:00+00:00"}
+      ]
+    },
+    {
+      "case_id": "sqlite-and-character-exclusions",
+      "coverage": ["negative:near_irrelevant", "negative:wrong_period", "boundary:other_character", "sqlite:deleted", "sqlite:inactive", "sqlite:expired", "sqlite:old_policy", "sqlite:non_core_provider", "chroma:orphan"],
+      "query": "現在の畑の予定は？",
+      "query_embedding": [0.0],
+      "search_expected": true,
+      "expected_ids": ["valid-current"],
+      "candidates": [
+        {"id": "valid-current", "text": "今週は畑を耕す", "memory_type": "EPISODIC_EVENT", "embedding": [0.2], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": "2026-08-20T00:00:00+00:00", "created_at": "2026-08-20T00:00:00+00:00"},
+        {"id": "non-core", "text": "core以外の高関連候補", "memory_type": "EPISODIC_EVENT", "embedding": [0.001], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "external", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": "2026-08-21T00:00:00+00:00", "created_at": "2026-08-21T00:00:00+00:00"},
+        {"id": "near-irrelevant", "text": "似た単語だが無関係", "memory_type": "EPISODIC_EVENT", "embedding": [20.0], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"},
+        {"id": "wrong-period", "text": "昨年の畑予定", "memory_type": "EPISODIC_EVENT", "embedding": [0.22], "character_id": "miori", "status": "INACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": null, "created_at": "2025-08-01T00:00:00+00:00"},
+        {"id": "other-character", "text": "別人格の記憶", "memory_type": "EPISODIC_EVENT", "embedding": [0.01], "character_id": "other", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"},
+        {"id": "deleted", "text": "削除済み", "memory_type": "EPISODIC_EVENT", "embedding": [0.01], "character_id": "miori", "status": "DELETED", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"},
+        {"id": "inactive", "text": "無効", "memory_type": "EPISODIC_EVENT", "embedding": [0.01], "character_id": "miori", "status": "INACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"},
+        {"id": "expired", "text": "期限切れ", "memory_type": "EPISODIC_EVENT", "embedding": [0.01], "character_id": "miori", "status": "ACTIVE", "expires_at": "2026-08-20T00:00:00+00:00", "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"},
+        {"id": "old-policy", "text": "旧policy", "memory_type": "EPISODIC_EVENT", "embedding": [0.01], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "old-policy", "provider_id": "core", "persisted": true, "privacy_safe": true, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"},
+        {"id": "orphan", "text": "Chromaだけに存在", "memory_type": "EPISODIC_EVENT", "embedding": [0.01], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": false, "privacy_safe": true, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"}
+      ]
+    },
+    {
+      "case_id": "privacy-exclusions",
+      "coverage": ["privacy:api_key", "privacy:health", "privacy:financial", "privacy:address", "privacy:third_party", "privacy:abstain"],
+      "query": "安全な一般質問",
+      "query_embedding": [0.0],
+      "search_expected": true,
+      "expected_ids": [],
+      "candidates": [
+        {"id": "api-key", "text": "API key", "memory_type": "USER_PREFERENCE", "embedding": [0.01], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": false, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"},
+        {"id": "health", "text": "健康情報", "memory_type": "USER_PREFERENCE", "embedding": [0.02], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": false, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"},
+        {"id": "financial", "text": "金融情報", "memory_type": "USER_PREFERENCE", "embedding": [0.03], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": false, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"},
+        {"id": "address", "text": "住所", "memory_type": "USER_PREFERENCE", "embedding": [0.04], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": false, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"},
+        {"id": "third-party", "text": "第三者情報", "memory_type": "USER_PREFERENCE", "embedding": [0.05], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": false, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"},
+        {"id": "abstain", "text": "判定不能", "memory_type": "USER_PREFERENCE", "embedding": [0.06], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": true, "privacy_safe": false, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"}
+      ]
+    },
+    {
+      "case_id": "sensitive-current-query",
+      "coverage": ["query:skip_sensitive"],
+      "query": "機微情報を含む質問",
+      "query_embedding": [0.0],
+      "search_expected": false,
+      "expected_ids": [],
+      "candidates": []
+    },
+    {
+      "case_id": "rag-failure",
+      "coverage": ["failure:no_rag_fallback"],
+      "query": "障害時の質問",
+      "query_embedding": [0.0],
+      "search_expected": true,
+      "failure": "chroma",
+      "expected_ids": [],
+      "candidates": [
+        {"id": "unverified-fallback", "text": "未検証候補", "memory_type": "EPISODIC_EVENT", "embedding": [0.0], "character_id": "miori", "status": "ACTIVE", "expires_at": null, "policy_version": "2026-08-wave2-v1", "provider_id": "core", "persisted": false, "privacy_safe": true, "last_user_mentioned_at": null, "created_at": "2026-08-01T00:00:00+00:00"}
+      ]
+    }
+  ]
+}

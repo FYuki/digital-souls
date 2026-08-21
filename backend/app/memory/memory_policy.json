@@ -41,7 +41,10 @@
   },
   "services": {
     "rag_service": {
-      "max_retrieved_memories": 5
+      "max_retrieved_memories": 5,
+      "candidate_pool_size": 20,
+      "relevance_threshold": 0.05,
+      "equivalence_margin": 0.002
     }
   },
   "privacy": {

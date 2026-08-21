@@ -261,8 +261,9 @@ def _memory_search_candidate(
         not isinstance(distance, (int, float))
         or isinstance(distance, bool)
         or not math.isfinite(distance)
+        or distance < 0
     ):
-        raise ValueError("Chroma memory distances must be finite numbers")
+        raise ValueError("Chroma memory distances must be non-negative finite numbers")
     return MemorySearchCandidate(
         memory_id=memory_id,
         raw_distance=float(distance),

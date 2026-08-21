@@ -15,6 +15,7 @@
     "check": "backend/.venv/bin/python -m mypy --config-file backend/mypy.ini backend/app environments && npm --prefix frontend run check",
     "build": "npm --prefix frontend run build",
     "eval:privacy:prompt-lab": "python3 scripts/eval_privacy_conformance.py prompt-lab",
-    "eval:privacy:conformance": "python3 scripts/eval_privacy_conformance.py conformance"
+    "eval:privacy:conformance": "python3 scripts/eval_privacy_conformance.py conformance",
+    "eval:rag:real": "backend/.venv/bin/python -m pytest backend/tests/integration -m rag_retrieval_real"
   }
 }

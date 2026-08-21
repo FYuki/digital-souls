@@ -1,5 +1,6 @@
 import logging
 import sqlite3
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
@@ -16,6 +17,7 @@ from app.memory.memory_policy import MemoryPolicy, rag_service_policy
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
 from app.memory.persistence.contracts import ApprovedMemory, MemoryStatus
 from app.memory.persistence.sqlite import format_datetime
+from app.memory.ranking import RetrievalRankingCandidate, rank_retrieval_candidates
 from app.privacy.contracts import PrivacyScanner, ScanFailure, ScanSuccess
 from app.privacy.semantic.classifier import SemanticPrivacyClassifier
 from app.privacy.semantic.contracts import (
@@ -34,6 +36,12 @@ RAG_OPERATION_ERRORS = (
     ValueError,
     sqlite3.Error,
 )
+
+
+@dataclass(frozen=True)
+class _VerifiedCandidate:
+    candidate: MemorySearchCandidate
+    memory: ApprovedMemory
 
 
 def retrieve_prompt_memories(
@@ -64,19 +72,29 @@ def retrieve_prompt_memories(
                 assessment.reason_code.value,
             )
             return ()
+        ranking_policy = rag_service_policy(policy)
         candidates = query_memories(
             character,
             embed_text(user_message),
-            n_results=rag_service_policy(policy).max_retrieved_memories,
+            n_results=ranking_policy.candidate_pool_size,
             chroma_path=chroma_path,
         )
-        return _verified_memories(
+        verified = _verified_candidates(
             candidates,
             character=character,
             policy=policy,
             scanner=scanner,
             approved_repository=approved_repository,
             now=datetime.now(UTC),
+        )
+        ranked = _rank_candidates(
+            verified,
+            relevance_threshold=ranking_policy.relevance_threshold,
+            equivalence_margin=ranking_policy.equivalence_margin,
+        )
+        return tuple(
+            _search_result(item)
+            for item in ranked[: ranking_policy.max_retrieved_memories]
         )
     except RAG_OPERATION_ERRORS as exc:
         logger.warning("RAG memory lookup failed: %s", exc.__class__.__name__)
@@ -104,7 +122,7 @@ def _scan_blocks_retrieval(scan: object, policy: MemoryPolicy) -> bool:
     return blocked
 
 
-def _verified_memories(
+def _verified_candidates(
     candidates: list[MemorySearchCandidate],
     *,
     character: str,
@@ -112,8 +130,8 @@ def _verified_memories(
     scanner: PrivacyScanner,
     approved_repository: ApprovedMemoryRepository,
     now: datetime,
-) -> tuple[MemorySearchResult, ...]:
-    verified: list[MemorySearchResult] = []
+) -> tuple[_VerifiedCandidate, ...]:
+    verified: list[_VerifiedCandidate] = []
     for candidate in candidates:
         try:
             memory_id = UUID(candidate.memory_id)
@@ -137,15 +155,46 @@ def _verified_memories(
         if _scan_blocks_retrieval(body_scan, policy):
             continue
         verified.append(
-            MemorySearchResult(
-                memory_id=str(memory.id),
-                normalized_text=memory.normalized_text,
-                effective_at=format_datetime(memory.effective_at),
-                memory_type=memory.memory_type.value,
-                raw_distance=candidate.raw_distance,
+            _VerifiedCandidate(
+                candidate=candidate,
+                memory=memory,
             )
         )
     return tuple(verified)
+
+
+def _rank_candidates(
+    candidates: tuple[_VerifiedCandidate, ...],
+    *,
+    relevance_threshold: float,
+    equivalence_margin: float,
+) -> tuple[_VerifiedCandidate, ...]:
+    by_id = {str(candidate.memory.id): candidate for candidate in candidates}
+    ranked = rank_retrieval_candidates(
+        tuple(
+            RetrievalRankingCandidate(
+                memory_id=str(candidate.memory.id),
+                raw_distance=candidate.candidate.raw_distance,
+                last_user_mentioned_at=candidate.memory.last_user_mentioned_at,
+                created_at=candidate.memory.created_at,
+            )
+            for candidate in candidates
+        ),
+        relevance_threshold=relevance_threshold,
+        equivalence_margin=equivalence_margin,
+    )
+    return tuple(by_id[candidate.memory_id] for candidate in ranked)
+
+
+def _search_result(candidate: _VerifiedCandidate) -> MemorySearchResult:
+    memory = candidate.memory
+    return MemorySearchResult(
+        memory_id=str(memory.id),
+        normalized_text=memory.normalized_text,
+        effective_at=format_datetime(memory.effective_at),
+        memory_type=memory.memory_type.value,
+        raw_distance=candidate.candidate.raw_distance,
+    )
 
 
 def _is_retrieval_compatible(

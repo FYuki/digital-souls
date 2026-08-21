@@ -327,6 +327,7 @@ def test_query_preserves_chroma_order_without_threshold_or_tie_break(
         {"ids": [["memory-1"]], "distances": [[]]},
         {"ids": [["memory-1"]], "distances": [["not-a-number"]]},
         {"ids": [["memory-1"]], "distances": [[float("inf")]]},
+        {"ids": [["memory-1"]], "distances": [[-0.01]]},
     ),
 )
 def test_query_rejects_mismatched_or_invalid_distances(

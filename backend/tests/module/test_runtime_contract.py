@@ -82,7 +82,7 @@ class TestRuntimeConfiguration:
     def test_env_example_declares_rag_enabled_switch(self):
         lines = (_BACKEND_DIR / ".env.example").read_text().splitlines()
 
-        assert "RAG_ENABLED=false" in lines
+        assert "RAG_ENABLED=true" in lines
 
     def test_rag_enabled_is_not_resolved_inside_memory_service(self):
         import app.memory.rag_service as rag_service
@@ -198,7 +198,12 @@ class TestRuntimeConfiguration:
         assert isinstance(config["services"], dict)
         assert "rag_service" in config["services"]
         assert isinstance(config["services"]["rag_service"], dict)
-        assert "max_retrieved_memories" in config["services"]["rag_service"]
+        assert set(config["services"]["rag_service"]) == {
+            "max_retrieved_memories",
+            "candidate_pool_size",
+            "relevance_threshold",
+            "equivalence_margin",
+        }
         assert isinstance(config["privacy"], dict)
         assert "required_recognizers" in config["privacy"]
         assert "placeholders" in config["privacy"]

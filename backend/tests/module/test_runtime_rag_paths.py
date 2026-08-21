@@ -49,6 +49,6 @@ def test_rt_chroma_01_rag_lookup_uses_resolved_chroma_path(
     rag_service.query_memories.assert_called_once_with(
         "miori",
         [0.5],
-        n_results=5,
+        n_results=20,
         chroma_path=chroma_path,
     )

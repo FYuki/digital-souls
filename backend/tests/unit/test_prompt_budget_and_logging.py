@@ -98,6 +98,50 @@ class TestPromptBuilderBudget:
         assert result.usage.omitted_rag_items == 1
         assert result.usage.omitted_history_exchanges == 0
 
+    def test_should_keep_ranked_rag_prefix_at_region_limit(self) -> None:
+        rag = RagContext(
+            items=(
+                RagItem("順位1", raw_distance=0.01),
+                RagItem("順位2", raw_distance=0.02),
+                RagItem("順位3", raw_distance=0.03),
+            )
+        )
+
+        result = prompt_builder().build(
+            prompt_build_input(rag=rag, budget=token_budget(rag=2))
+        )
+
+        selected_items = [
+            message.content.rsplit("\n", maxsplit=1)[-1]
+            for message in result.messages
+            if message.content.endswith(("順位1", "順位2", "順位3"))
+        ]
+        assert selected_items == ["順位1", "順位2"]
+        assert result.usage.omitted_rag_items == 1
+
+    def test_should_keep_ranked_rag_prefix_when_total_limit_reduces_rag(
+        self,
+    ) -> None:
+        rag = RagContext(
+            items=(
+                RagItem("順位1", raw_distance=0.01),
+                RagItem("順位2", raw_distance=0.02),
+                RagItem("順位3", raw_distance=0.03),
+            )
+        )
+
+        result = prompt_builder().build(
+            prompt_build_input(rag=rag, budget=token_budget(total=7))
+        )
+
+        selected_items = [
+            message.content.rsplit("\n", maxsplit=1)[-1]
+            for message in result.messages
+            if message.content.endswith(("順位1", "順位2", "順位3"))
+        ]
+        assert selected_items == ["順位1", "順位2"]
+        assert result.usage.omitted_rag_items == 1
+
     def test_should_drop_oldest_history_while_preserving_latest_exchange(
         self,
     ) -> None:

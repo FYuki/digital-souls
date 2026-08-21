@@ -11,6 +11,15 @@ import httpx
 import pytest
 
 
+pytestmark = pytest.mark.rag_retrieval_real
+RAG_EVAL_MANIFEST = (
+    Path(__file__).resolve().parents[2]
+    / "evals"
+    / "rag_retrieval"
+    / "manifest.json"
+)
+
+
 def _require_runtime_evidence_dependencies() -> None:
     importlib.import_module("chromadb")
 
@@ -35,6 +44,29 @@ def _require_runtime_evidence_dependencies() -> None:
 
 
 class TestRagRuntimeEvidenceIntegration:
+    def test_real_chroma_and_resolved_ollama_run_the_shared_manifest(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        runtime_paths,
+    ) -> None:
+        monkeypatch.setenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:latest")
+        _require_runtime_evidence_dependencies()
+        from app.llm.ollama_config import resolve_ollama_embedding_model
+        from evals.rag_retrieval.real_evaluator import evaluate_real_manifest
+
+        result = evaluate_real_manifest(
+            RAG_EVAL_MANIFEST,
+            runtime_paths=runtime_paths,
+            embedding_model=resolve_ollama_embedding_model(),
+        )
+
+        assert result.privacy_boundary_violations == 0
+        assert result.character_boundary_violations == 0
+        assert result.threshold_violations == 0
+        assert result.unverified_fallbacks == 0
+        assert result.tie_break_accuracy == 1.0
+        assert result.recall >= 0.8
+
     def test_rebuildable_index_remains_available_to_the_retrieval_path(
         self,
         monkeypatch: pytest.MonkeyPatch,

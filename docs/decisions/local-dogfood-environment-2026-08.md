@@ -97,11 +97,12 @@ dogfoodのbackupはSQLite WALを考慮した整合性を持ち、環境ID、comm
 各要素が`filename`、`schemaVersion`、`recordCount`を返す。旧fieldを参照する運用scriptは、
 対象の`filename`で配列要素を選択して新fieldを読むよう移行する。
 
-### 6. Wave 2受入まではdogfoodのRAGを無効にする
+### 6. Wave 2受入後はdogfoodのRAGを有効にする
 
-dogfood環境の利用はWave 2より先に開始してよいが、Wave 2親Issue #28の受入までは
-`RAG_ENABLED=false`とする。この期間に実データとして保持するのはconversation historyだけであり、
-旧Chromaへ会話本文を保存しない。
+Issue #9の固定corpus評価でprivacy・character境界違反、threshold未満混入、未検証memoryへの
+fallbackが0件、tie-break正解率100%、recall 0.8以上を確認したため、dogfood profileのChromaを
+`real`とし、profileから`RAG_ENABLED=true`を導出する。dogfood利用者は開発者とデバッグ協力者に
+限定する。
 
 Wave 2ではpersona memory SQLiteを新しい正本として空状態から開始し、Chromaはその正本だけから構築する。
 dogfoodのconversation historyは削除せず、対応schemaのbackup、migration、検証、rollbackを適用する。

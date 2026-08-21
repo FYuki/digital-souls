@@ -670,7 +670,10 @@ class TestChatFlow:
         ) as mock_policy:
             with patch(
                 "app._chat_runtime._rag_service.retrieve_prompt_memories",
-                return_value=(_rag_memory("前回は畑の話をした"),),
+                return_value=(
+                    _rag_memory("順位1の記憶"),
+                    _rag_memory("順位2の記憶"),
+                ),
             ) as mock_build:
                 with patch(
                     "app.llm.ollama_client.httpx.post",
@@ -705,7 +708,12 @@ class TestChatFlow:
             {
                 "role": "system",
                 "content": "## 関連する記憶\n"
-                "[2026-07-31T00:00:00.000000Z] 前回は畑の話をした",
+                "[2026-07-31T00:00:00.000000Z] 順位1の記憶",
+            },
+            {
+                "role": "system",
+                "content": "## 関連する記憶\n"
+                "[2026-07-31T00:00:00.000000Z] 順位2の記憶",
             },
             {"role": "user", "content": "前回なんの話をしたっけ？"},
         ]
