@@ -113,7 +113,12 @@ def delete_memory_index_entry(
 
 
 def delete_memory_index_collection(*, character_id: str, chroma_path: Path) -> None:
-    _client(str(chroma_path)).delete_collection(name=_collection_name(character_id))
+    collection_name = _collection_name(character_id)
+    try:
+        _client(str(chroma_path)).delete_collection(name=collection_name)
+    except Exception as exc:
+        if not _is_missing_collection_error(exc):
+            raise
 
 
 def list_memory_index_ids(*, character_id: str, chroma_path: Path) -> set[str]:
@@ -186,6 +191,16 @@ def _collection(character: str, chroma_path: Path) -> _ChromaCollection:
 def _client(chroma_path: str) -> _ChromaClient:
     chromadb = importlib.import_module("chromadb")
     return cast(_ChromaClient, chromadb.PersistentClient(path=chroma_path))
+
+
+def _is_missing_collection_error(error: Exception) -> bool:
+    if isinstance(error, ValueError):
+        return "does not exist" in str(error)
+    if error.__class__.__name__ != "NotFoundError":
+        return False
+    chroma_errors = importlib.import_module("chromadb.errors")
+    not_found_error = getattr(chroma_errors, "NotFoundError", None)
+    return isinstance(not_found_error, type) and isinstance(error, not_found_error)
 
 
 def memory_index_metadata(

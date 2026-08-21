@@ -93,7 +93,7 @@ class FakePersistentClient:
         return self.collections.setdefault(name, FakeCollection())
 
     def delete_collection(self, name: str) -> None:
-        del self.collections[name]
+        self.collections.pop(name, None)
 
 
 def _import_chroma_store(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
@@ -285,6 +285,28 @@ def test_delete_collection_removes_the_character_index(
     )
 
     assert FakePersistentClient.collections_by_path[str(chroma_path)] == {}
+
+    chroma_store.delete_memory_index_collection(
+        character_id="miori", chroma_path=chroma_path
+    )
+
+
+def test_delete_collection_preserves_non_missing_failures(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+    _upsert(chroma_store, tmp_path)
+    client = FakePersistentClient.instances[0]
+    monkeypatch.setattr(
+        client,
+        "delete_collection",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("delete failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="delete failed"):
+        chroma_store.delete_memory_index_collection(
+            character_id="miori", chroma_path=tmp_path / "data" / "chroma"
+        )
 
 
 def test_query_returns_only_memory_id_and_unchanged_raw_distance(
