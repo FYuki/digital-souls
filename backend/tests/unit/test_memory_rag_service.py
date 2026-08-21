@@ -477,6 +477,56 @@ def test_unsupported_retrieved_body_scan_result_discards_rag_result(monkeypatch)
     assert memories == ()
 
 
+def test_unsupported_body_scan_result_excludes_only_current_candidate(monkeypatch):
+    from app.memory import rag_service
+
+    second_id = UUID("00000000-0000-4000-8000-000000000043")
+    third_id = UUID("00000000-0000-4000-8000-000000000044")
+    scanner, classifier, repository = _dependencies(
+        memories={
+            _MEMORY_ID: _approved_memory(),
+            second_id: _approved_memory(
+                id=second_id,
+                normalized_text="契約外scan結果の候補",
+            ),
+            third_id: _approved_memory(
+                id=third_id,
+                normalized_text="後続の有効な候補",
+            ),
+        }
+    )
+    scanner.scan.side_effect = [
+        ScanSuccess(()),
+        ScanSuccess(()),
+        object(),
+        ScanSuccess(()),
+    ]
+    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+    monkeypatch.setattr(
+        rag_service,
+        "query_memories",
+        MagicMock(
+            return_value=[
+                _candidate(),
+                _candidate(second_id, 2.0),
+                _candidate(third_id, 2.25),
+            ]
+        ),
+    )
+
+    memories = _retrieve(
+        rag_service,
+        scanner=scanner,
+        classifier=classifier,
+        repository=repository,
+    )
+
+    assert [memory.memory_id for memory in memories] == [
+        str(_MEMORY_ID),
+        str(third_id),
+    ]
+
+
 def test_storage_opt_out_in_retrieved_text_does_not_exclude_candidate(monkeypatch):
     from app.memory import rag_service
 

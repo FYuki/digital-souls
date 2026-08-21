@@ -129,6 +129,11 @@ def _verified_memories(
             continue
         assert memory is not None
         body_scan = scanner.scan(memory.normalized_text)
+        if not isinstance(body_scan, (ScanFailure, ScanSuccess)):
+            logger.warning(
+                "Excluded RAG memory candidate: unsupported privacy scan result"
+            )
+            continue
         if _scan_blocks_retrieval(body_scan, policy):
             continue
         verified.append(
