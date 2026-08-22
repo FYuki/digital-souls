@@ -3,6 +3,8 @@ from pathlib import Path
 
 import pytest
 
+from app.memory.persistence.contracts import MemorySourceType
+
 
 EXPECTED_TABLES = {
     "approved_memories",
@@ -119,12 +121,7 @@ def test_schema_creates_only_the_persona_memory_tables(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "source_type",
-    [
-        "CONVERSATION_TURN",
-        "PROVIDER_RECORD",
-        "ADDON_EVENT",
-        "USER_CORRECTION",
-    ],
+    [source_type.value for source_type in MemorySourceType],
 )
 def test_memory_sources_accept_every_supported_source_type(
     source_type: str, tmp_path: Path
@@ -139,8 +136,6 @@ def test_memory_sources_accept_every_supported_source_type(
             "VALUES (?, ?, ?, ?, ?)",
             ("miori", MEMORY_ONE, source_type, "core", f"source-{source_type}"),
         )
-
-    from app.memory.persistence.contracts import MemorySourceType
 
     assert MemorySourceType(source_type).value == source_type
 

@@ -16,6 +16,7 @@ from app.memory.admission.contracts import (
     UserPreferenceValue,
 )
 from app.memory.persistence.contracts import (
+    ApprovedMemoryDetail,
     FormationMethod,
     MemorySourceType,
 )
@@ -26,7 +27,7 @@ from app.privacy.semantic.contracts import (
     SemanticPrivacyCategory,
     SubjectScope,
 )
-from tests.unit.test_memory_rag_service import _approved_memory
+from tests.unit._helpers import approved_memory
 
 
 MEMORY_ID = UUID("00000000-0000-4000-8000-000000000012")
@@ -63,8 +64,8 @@ def _provider(*, result: RagAdmissionResult, assessment: PrivacyAssessment):
     from app.memory.providers import PersonaMemoryProvider
 
     repository = MagicMock()
-    repository.get.return_value = _approved_memory(id=MEMORY_ID)
-    repository.correct.return_value = _approved_memory(
+    repository.get.return_value = approved_memory(id=MEMORY_ID)
+    repository.correct.return_value = approved_memory(
         id=MEMORY_ID,
         normalized_text="ユーザーは紅茶が好き",
         content_version=2,
@@ -159,3 +160,33 @@ def test_rejected_persona_correction_returns_only_reason_and_changes_nothing(
     repository.correct.assert_not_called()
     repository.hard_delete.assert_not_called()
     index_sync.delete_after_commit.assert_not_called()
+
+
+def test_persona_list_uses_bulk_details_and_skips_concurrently_deleted_memory() -> None:
+    approved = approved_memory(id=MEMORY_ID)
+    deleted_id = UUID("00000000-0000-4000-8000-000000000013")
+    deleted = approved_memory(id=deleted_id)
+    provider, repository, _index_sync = _provider(
+        result=RagAdmissionResult(RagAdmissionDecision.ABSTAIN_UNKNOWN, None),
+        assessment=_assessment(),
+    )
+    repository.list_by_provider.return_value = [approved, deleted]
+    repository.get_details.return_value = {
+        MEMORY_ID: ApprovedMemoryDetail(approved, (), ())
+    }
+    repository.pending_index_memory_ids.return_value = frozenset({MEMORY_ID})
+
+    results = provider.list(character_id="miori", status="ACTIVE")
+
+    assert [result["id"] for result in results] == [MEMORY_ID]
+    assert results[0]["index_pending"] is True
+    repository.get_detail.assert_not_called()
+    repository.is_index_pending.assert_not_called()
+    repository.get_details.assert_called_once_with(
+        character_id="miori",
+        provider_id="core",
+        memory_ids=(MEMORY_ID, deleted_id),
+    )
+    repository.pending_index_memory_ids.assert_called_once_with(
+        character_id="miori", memory_ids=(MEMORY_ID,)
+    )

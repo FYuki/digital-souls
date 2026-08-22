@@ -4,6 +4,7 @@ import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 from uuid import UUID
 
 from app.memory.persistence.contracts import (
@@ -187,11 +188,12 @@ def _find_record(
     provider_id: str,
     record_id: UUID,
 ) -> sqlite3.Row | None:
-    return connection.execute(
+    row = connection.execute(
         f"SELECT {TEMPORARY_COLUMNS} FROM temporary_provider_records "
         "WHERE character_id = ? AND provider_id = ? AND id = ?",
         (character_id, provider_id, str(record_id)),
     ).fetchone()
+    return cast(sqlite3.Row | None, row)
 
 
 def _record_from_row(row: sqlite3.Row) -> TemporaryProviderRecord:

@@ -230,7 +230,9 @@ def test_delete_after_commit_synchronously_deletes_chroma_and_completes_outbox(
 
 
 def test_delete_after_commit_failure_keeps_recoverable_outbox(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     from app.memory import index_sync
 
@@ -248,6 +250,7 @@ def test_delete_after_commit_failure_keeps_recoverable_outbox(
 
     successful_delete = index_sync.delete_memory_index_entry
     monkeypatch.setattr(index_sync, "delete_memory_index_entry", fail_delete)
+    caplog.set_level(logging.DEBUG, logger=index_sync.__name__)
 
     service.delete_after_commit(character_id="miori", memory_id=memory.id)
 
@@ -257,10 +260,17 @@ def test_delete_after_commit_failure_keeps_recoverable_outbox(
         row for row in _outbox_rows(database_path) if row["operation"] == "DELETE"
     ][0]
     assert delete_row["status"] in {"PENDING", "FAILED"}
+    assert "RuntimeError" in caplog.text
+    assert "secret body must not escape" not in caplog.text
+    assert _candidate().normalized_text not in caplog.text
 
     monkeypatch.setattr(index_sync, "delete_memory_index_entry", successful_delete)
     service.reconcile_once()
     assert ("miori", str(memory.id)) not in records
+    delete_row = [
+        row for row in _outbox_rows(database_path) if row["operation"] == "DELETE"
+    ][0]
+    assert delete_row["status"] == "COMPLETED"
 
 
 def test_delete_after_commit_completion_failure_is_recovered_by_reconciliation(

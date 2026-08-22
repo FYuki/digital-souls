@@ -438,19 +438,24 @@ def test_manual_correction_can_be_allowed_without_conversation_source() -> None:
 
 
 @pytest.mark.parametrize(
-    "assessment",
+    ("assessment", "expected_decision"),
     [
-        _assessment(
-            classification=SemanticClassification.SENSITIVE,
-            category=SemanticPrivacyCategory.HEALTH,
-            reason_code=SemanticAssessmentReasonCode.SENSITIVE_CONTENT,
+        (
+            _assessment(
+                classification=SemanticClassification.SENSITIVE,
+                category=SemanticPrivacyCategory.HEALTH,
+                reason_code=SemanticAssessmentReasonCode.SENSITIVE_CONTENT,
+            ),
+            "DENY_SENSITIVE",
         ),
-        None,
+        (None, "ABSTAIN_UNKNOWN"),
     ],
     ids=["sensitive", "missing-assessment"],
 )
 @_with_admission_contract
-def test_manual_correction_rejects_every_non_allow_decision(assessment) -> None:
+def test_manual_correction_rejects_sensitive_and_missing_assessment(
+    assessment: PrivacyAssessment | None, expected_decision: str
+) -> None:
     evaluator = create_rag_admission_evaluator(resolved_memory_policy().privacy)
     candidate = replace(_preference_candidate(), source=None)
 
@@ -460,7 +465,7 @@ def test_manual_correction_rejects_every_non_allow_decision(assessment) -> None:
         candidate=candidate,
     )
 
-    assert result.decision is not RagAdmissionDecision.ALLOW_STRUCTURED
+    assert result.decision is RagAdmissionDecision[expected_decision]
     assert result.candidate is None
 
 

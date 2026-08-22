@@ -8,12 +8,18 @@ const RECORD_ID = '10000000-0000-4000-8000-000000000012'
 
 describe('記憶管理画面', () => {
   let personaPatchRejected = false
+  let personaPatchStatus = 422
+  let personaPatchBodies: Array<Record<string, unknown>> = []
+  let personaPatchWait: Promise<void> | null = null
   let temporaryPatchBody: unknown = null
   let temporaryDeleteCalled = false
 
   beforeEach(() => {
     localStorage.clear()
     personaPatchRejected = false
+    personaPatchStatus = 422
+    personaPatchBodies = []
+    personaPatchWait = null
     temporaryPatchBody = null
     temporaryDeleteCalled = false
     vi.stubGlobal('WebSocket', class {
@@ -22,8 +28,15 @@ describe('記憶管理画面', () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
       if (url.endsWith(`/persona-memories/${MEMORY_ID}`) && init?.method === 'PATCH') {
-        personaPatchRejected = true
-        return new Response(JSON.stringify({ reason_code: 'DENY_SENSITIVE' }), { status: 422 })
+        personaPatchBodies.push(JSON.parse(String(init.body)) as Record<string, unknown>)
+        const wait = personaPatchWait
+        personaPatchWait = null
+        if (wait !== null) await wait
+        personaPatchRejected = personaPatchStatus === 422
+        return new Response(
+          JSON.stringify(personaPatchStatus === 422 ? { reason_code: 'DENY_SENSITIVE' } : {}),
+          { status: personaPatchStatus },
+        )
       }
       if (url.endsWith(`/temporary-records/temporary:recipe/${RECORD_ID}`) && init?.method === 'PATCH') {
         temporaryPatchBody = JSON.parse(String(init.body))
@@ -115,6 +128,53 @@ describe('記憶管理画面', () => {
     expect(await screen.findByText('DENY_SENSITIVE')).toBeTruthy()
     expect(screen.getByRole('button', { name: '再編集' })).toBeTruthy()
     expect(screen.getByRole('button', { name: `削除 ${MEMORY_ID}` })).toBeTruthy()
+  })
+
+  test('一時的な失敗後の再送で同じ冪等性キーを使い処理中は保存を無効化する', async () => {
+    personaPatchStatus = 500
+    let releasePatch: () => void = () => {}
+    personaPatchWait = new Promise((resolve) => { releasePatch = resolve })
+    render(App)
+    await fireEvent.click(screen.getByRole('button', { name: '記憶管理' }))
+    await fireEvent.click(await screen.findByRole('button', { name: `詳細・訂正 ${MEMORY_ID}` }))
+    const save = screen.getByRole('button', { name: '訂正を保存' }) as HTMLButtonElement
+
+    const firstSave = fireEvent.click(save)
+    await waitFor(() => expect(save.disabled).toBe(true))
+    releasePatch()
+    await firstSave
+    await waitFor(() => expect(personaPatchBodies).toHaveLength(1))
+    await waitFor(() => expect(save.disabled).toBe(false))
+    await fireEvent.click(save)
+    await waitFor(() => expect(personaPatchBodies).toHaveLength(2))
+
+    expect(personaPatchBodies[0].idempotency_key).toBeTruthy()
+    expect(personaPatchBodies[1].idempotency_key).toBe(
+      personaPatchBodies[0].idempotency_key,
+    )
+  })
+
+  test('両方の削除dialogでfocusを閉じ込めcancel後に起動元へ戻す', async () => {
+    render(App)
+    await fireEvent.click(screen.getByRole('button', { name: '記憶管理' }))
+
+    for (const id of [MEMORY_ID, RECORD_ID]) {
+      const trigger = await screen.findByRole('button', { name: `削除 ${id}` })
+      await fireEvent.click(trigger)
+      const dialog = screen.getByRole('dialog')
+      const cancel = within(dialog).getByRole('button', { name: 'キャンセル' })
+      const confirm = within(dialog).getByRole('button', { name: '完全に削除' })
+      expect(document.activeElement).toBe(cancel)
+
+      confirm.focus()
+      await fireEvent.keyDown(dialog, { key: 'Tab' })
+      expect(document.activeElement).toBe(cancel)
+      await fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true })
+      expect(document.activeElement).toBe(confirm)
+
+      await fireEvent.click(cancel)
+      expect(document.activeElement).toBe(trigger)
+    }
   })
 
   test('暫定記録を訂正し明示削除できる', async () => {

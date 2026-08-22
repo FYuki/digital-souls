@@ -407,6 +407,90 @@ class ApprovedMemoryRepository:
             ),
         )
 
+    def get_details(
+        self,
+        *,
+        character_id: str,
+        provider_id: str,
+        memory_ids: tuple[UUID, ...],
+    ) -> dict[UUID, ApprovedMemoryDetail]:
+        _require_character_id(character_id)
+        _require_core_provider(provider_id)
+        for memory_id in memory_ids:
+            _require_uuid4(memory_id)
+        if not memory_ids:
+            return {}
+        placeholders = ", ".join("?" for _ in memory_ids)
+        id_values = tuple(str(memory_id) for memory_id in memory_ids)
+        with self._database.connection() as connection:
+            memory_rows = connection.execute(
+                f"SELECT {APPROVED_COLUMNS} FROM approved_memories "
+                "WHERE character_id = ? AND provider_id = ? "
+                f"AND id IN ({placeholders})",
+                (character_id, provider_id, *id_values),
+            ).fetchall()
+            if not memory_rows:
+                return {}
+            found_ids = tuple(str(row["id"]) for row in memory_rows)
+            found_placeholders = ", ".join("?" for _ in found_ids)
+            source_rows = connection.execute(
+                "SELECT memory_id, source_type, source_provider_id, source_ref "
+                "FROM memory_sources WHERE character_id = ? "
+                f"AND memory_id IN ({found_placeholders}) "
+                "ORDER BY memory_id, source_type, source_provider_id, source_ref",
+                (character_id, *found_ids),
+            ).fetchall()
+            lineage_rows = connection.execute(
+                "SELECT memory_id, related_memory_id, relation FROM memory_lineage "
+                "WHERE character_id = ? "
+                f"AND memory_id IN ({found_placeholders}) "
+                "ORDER BY memory_id, relation, related_memory_id",
+                (character_id, *found_ids),
+            ).fetchall()
+        sources_by_memory: dict[str, list[MemorySourceInput]] = {}
+        for source in source_rows:
+            sources_by_memory.setdefault(str(source["memory_id"]), []).append(
+                MemorySourceInput(
+                    source_type=MemorySourceType(str(source["source_type"])),
+                    source_provider_id=str(source["source_provider_id"]),
+                    source_ref=str(source["source_ref"]),
+                )
+            )
+        lineage_by_memory: dict[str, list[MemoryLineageInput]] = {}
+        for item in lineage_rows:
+            lineage_by_memory.setdefault(str(item["memory_id"]), []).append(
+                MemoryLineageInput(
+                    related_memory_id=UUID(str(item["related_memory_id"])),
+                    relation=MemoryLineageRelation(str(item["relation"])),
+                )
+            )
+        return {
+            memory.id: ApprovedMemoryDetail(
+                memory=memory,
+                sources=tuple(sources_by_memory.get(str(memory.id), ())),
+                lineage=tuple(lineage_by_memory.get(str(memory.id), ())),
+            )
+            for memory in (_memory_from_row(row) for row in memory_rows)
+        }
+
+    def pending_index_memory_ids(
+        self, *, character_id: str, memory_ids: tuple[UUID, ...]
+    ) -> frozenset[UUID]:
+        _require_character_id(character_id)
+        for memory_id in memory_ids:
+            _require_uuid4(memory_id)
+        if not memory_ids:
+            return frozenset()
+        placeholders = ", ".join("?" for _ in memory_ids)
+        with self._database.connection() as connection:
+            rows = connection.execute(
+                "SELECT DISTINCT memory_id FROM memory_index_outbox "
+                "WHERE character_id = ? AND status IN ('PENDING', 'FAILED') "
+                f"AND memory_id IN ({placeholders})",
+                (character_id, *(str(memory_id) for memory_id in memory_ids)),
+            ).fetchall()
+        return frozenset(UUID(str(row["memory_id"])) for row in rows)
+
     def is_index_pending(self, *, character_id: str, memory_id: UUID) -> bool:
         _require_character_id(character_id)
         _require_uuid4(memory_id)

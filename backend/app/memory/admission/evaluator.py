@@ -76,27 +76,11 @@ class RagAdmissionEvaluator:
         assessment: PrivacyAssessment | None,
         candidate: MemoryCandidate,
     ) -> RagAdmissionResult:
-        structured_value = self._allowlist_value(candidate)
-        if structured_value is None:
-            return self._result(RagAdmissionDecision.NOT_MEMORY_WORTHY)
-        if not isinstance(candidate_slot_scans, Mapping):
-            return self._result(RagAdmissionDecision.ABSTAIN_UNKNOWN)
-        if set(candidate_slot_scans) != set(self.slot_values(structured_value)):
-            return self._result(RagAdmissionDecision.ABSTAIN_UNKNOWN)
-        scans = tuple(candidate_slot_scans.values())
-        if any(isinstance(scan, ScanFailure) for scan in scans):
-            return self._result(RagAdmissionDecision.ABSTAIN_UNKNOWN)
-        if any(not isinstance(scan, ScanSuccess) for scan in scans):
-            return self._result(RagAdmissionDecision.ABSTAIN_UNKNOWN)
-        successful_scans = cast(tuple[ScanSuccess, ...], scans)
-        if any(scan.findings for scan in successful_scans):
-            return self._result(RagAdmissionDecision.DENY_SENSITIVE)
-        if any(
-            placeholder in slot_value
-            for slot_value in self.slot_values(structured_value).values()
-            for placeholder in self._placeholders
-        ):
-            return self._result(RagAdmissionDecision.DENY_SENSITIVE)
+        deterministic_result = self._candidate_scan_result(
+            candidate_slot_scans, candidate
+        )
+        if deterministic_result is not None:
+            return deterministic_result
         return self._evaluate_assessment(assessment, candidate)
 
     def _evaluate_assessment(
@@ -137,6 +121,22 @@ class RagAdmissionEvaluator:
         source_result = self._source_scan_result(source_scan)
         if source_result is not None:
             return source_result
+        candidate_result = self._candidate_scan_result(candidate_slot_scans, candidate)
+        if candidate_result is not None:
+            return candidate_result
+        if (
+            candidate.source is None
+            or candidate.source.turn_status is not TurnStatus.COMPLETED
+            or not candidate.source.history_content_stored
+        ):
+            return self._result(RagAdmissionDecision.ABSTAIN_UNKNOWN)
+        return None
+
+    def _candidate_scan_result(
+        self,
+        candidate_slot_scans: Mapping[str, ScanResult],
+        candidate: MemoryCandidate,
+    ) -> RagAdmissionResult | None:
         structured_value = self._allowlist_value(candidate)
         if structured_value is None:
             return self._result(RagAdmissionDecision.NOT_MEMORY_WORTHY)
@@ -145,8 +145,6 @@ class RagAdmissionEvaluator:
         if set(candidate_slot_scans) != set(self.slot_values(structured_value)):
             return self._result(RagAdmissionDecision.ABSTAIN_UNKNOWN)
         scans = tuple(candidate_slot_scans.values())
-        if any(isinstance(scan, ScanFailure) for scan in scans):
-            return self._result(RagAdmissionDecision.ABSTAIN_UNKNOWN)
         if any(not isinstance(scan, ScanSuccess) for scan in scans):
             return self._result(RagAdmissionDecision.ABSTAIN_UNKNOWN)
         successful_scans = cast(tuple[ScanSuccess, ...], scans)
@@ -158,12 +156,6 @@ class RagAdmissionEvaluator:
             for placeholder in self._placeholders
         ):
             return self._result(RagAdmissionDecision.DENY_SENSITIVE)
-        if (
-            candidate.source is None
-            or candidate.source.turn_status is not TurnStatus.COMPLETED
-            or not candidate.source.history_content_stored
-        ):
-            return self._result(RagAdmissionDecision.ABSTAIN_UNKNOWN)
         return None
 
     @staticmethod

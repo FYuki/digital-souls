@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -16,6 +16,7 @@ from app.memory.admission.contracts import (
     MemoryCandidate,
     MemoryType,
     PreferencePolarity,
+    StructuredValue,
     UserPreferenceValue,
 )
 from app.memory.persistence.contracts import (
@@ -23,7 +24,11 @@ from app.memory.persistence.contracts import (
     TemporaryProviderRecord,
     TemporaryProviderRecordCorrection,
 )
-from app.memory.providers import MemoryCorrectionRejected
+from app.memory.providers import (
+    AddonRecordProvider,
+    MemoryCorrectionRejected,
+    PersonaMemoryProvider,
+)
 from app.memory.persistence.sqlite import format_datetime
 from app.routers.validation import CanonicalUuid4, SafeValidationRoute
 
@@ -62,6 +67,7 @@ class PersonaCorrectionRequest(BaseModel):
 
     def to_candidate(self) -> MemoryCandidate:
         value = self.structured_value
+        structured: StructuredValue
         if self.memory_type is MemoryType.EPISODIC_EVENT:
             structured = EpisodicEventValue(
                 event_type=EpisodicEventType(str(value.get("event_type", ""))),
@@ -107,12 +113,12 @@ def _required_string(values: dict[str, object], key: str) -> str:
     return value
 
 
-def _persona_provider(request: Request):
-    return request.app.state.persona_memory_provider
+def _persona_provider(request: Request) -> PersonaMemoryProvider:
+    return cast(PersonaMemoryProvider, request.app.state.persona_memory_provider)
 
 
-def _addon_provider(request: Request):
-    return request.app.state.addon_record_provider
+def _addon_provider(request: Request) -> AddonRecordProvider:
+    return cast(AddonRecordProvider, request.app.state.addon_record_provider)
 
 
 def _validate_temporary_provider(provider_id: str) -> None:
@@ -123,7 +129,7 @@ def _validate_temporary_provider(provider_id: str) -> None:
 @router.get(PERSONA_COLLECTION)
 def list_persona_memories(
     character_id: str, request: Request, status: str = "ACTIVE"
-) -> list[object]:
+) -> list[dict[str, object]]:
     return _persona_provider(request).list(character_id=character_id, status=status)
 
 

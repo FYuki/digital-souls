@@ -70,12 +70,13 @@ export const correctPersonaMemory = async (
   character: string,
   memory: PersonaMemory,
   structuredValue: Record<string, unknown>,
+  idempotencyKey: string,
 ): Promise<PersonaMemory> => (
   requestJson(`${basePath(character)}/persona-memories/${memory.id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      idempotency_key: crypto.randomUUID(),
+      idempotency_key: idempotencyKey,
       memory_type: memory.memory_type,
       structured_value: structuredValue,
     }),

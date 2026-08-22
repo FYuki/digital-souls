@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
 
   import {
     MemoryCorrectionRejected,
@@ -23,12 +23,18 @@
   let deletePersonaCandidate: PersonaMemory | null = null
   let deleteTemporaryCandidate: TemporaryRecord | null = null
   let reasonCode: string | null = null
+  let personaCorrectionKey: string | null = null
+  let correctionSaving = false
   let correctionText = ''
   let temporaryRecordType = ''
   let temporaryStructuredValue = ''
   let temporaryEffectiveAt = ''
   let loading = true
   let error: string | null = null
+  let personaDialog: HTMLElement
+  let temporaryDialog: HTMLElement
+  let personaDeleteTrigger: HTMLButtonElement | null = null
+  let temporaryDeleteTrigger: HTMLButtonElement | null = null
 
   onMount(async () => {
     try {
@@ -46,9 +52,21 @@
     }
   })
 
-  const saveCorrection = async () => {
-    if (selectedMemory === null) return
+  const editPersonaMemory = (memory: PersonaMemory) => {
+    selectedMemory = memory
+    selectedRecord = null
+    correctionText = JSON.stringify(
+      memory.structured_value ?? { polarity: 'LIKE', object: memory.normalized_text },
+    )
     reasonCode = null
+    personaCorrectionKey = crypto.randomUUID()
+    correctionSaving = false
+  }
+
+  const saveCorrection = async () => {
+    if (selectedMemory === null || personaCorrectionKey === null || correctionSaving) return
+    reasonCode = null
+    correctionSaving = true
     try {
       const parsed: unknown = JSON.parse(correctionText)
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
@@ -58,17 +76,91 @@
         character,
         selectedMemory,
         parsed as Record<string, unknown>,
+        personaCorrectionKey,
       )
       personaMemories = personaMemories.map((memory) => (
         memory.id === corrected.id ? corrected : memory
       ))
-      selectedMemory = corrected
+      selectedMemory = null
+      personaCorrectionKey = null
     } catch (caught) {
       if (caught instanceof MemoryCorrectionRejected) {
         reasonCode = caught.reasonCode
+        personaCorrectionKey = null
         return
       }
       error = '訂正に失敗しました。'
+    } finally {
+      correctionSaving = false
+    }
+  }
+
+  const retryPersonaCorrection = () => {
+    reasonCode = null
+    personaCorrectionKey = crypto.randomUUID()
+  }
+
+  const focusFirstDialogAction = async (dialog: () => HTMLElement) => {
+    await tick()
+    dialog().querySelector<HTMLButtonElement>('button')?.focus()
+  }
+
+  const openPersonaDelete = async (
+    memory: PersonaMemory,
+    trigger: HTMLButtonElement,
+  ) => {
+    personaDeleteTrigger = trigger
+    deletePersonaCandidate = memory
+    await focusFirstDialogAction(() => personaDialog)
+  }
+
+  const openTemporaryDelete = async (
+    record: TemporaryRecord,
+    trigger: HTMLButtonElement,
+  ) => {
+    temporaryDeleteTrigger = trigger
+    deleteTemporaryCandidate = record
+    await focusFirstDialogAction(() => temporaryDialog)
+  }
+
+  const closePersonaDelete = async () => {
+    deletePersonaCandidate = null
+    await tick()
+    personaDeleteTrigger?.focus()
+    personaDeleteTrigger = null
+  }
+
+  const closeTemporaryDelete = async () => {
+    deleteTemporaryCandidate = null
+    await tick()
+    temporaryDeleteTrigger?.focus()
+    temporaryDeleteTrigger = null
+  }
+
+  const trapDialogFocus = (event: KeyboardEvent) => {
+    if (event.key !== 'Tab') return
+    const dialog = deletePersonaCandidate !== null
+      ? personaDialog
+      : deleteTemporaryCandidate !== null
+        ? temporaryDialog
+        : null
+    if (dialog === null) return
+    const actions = Array.from(
+      dialog.querySelectorAll<HTMLButtonElement>('button:not([disabled])'),
+    )
+    if (actions.length === 0) return
+    const first = actions[0]
+    const last = actions[actions.length - 1]
+    if (!dialog.contains(document.activeElement)) {
+      event.preventDefault()
+      const target = event.shiftKey ? last : first
+      target.focus()
+    } else if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
     }
   }
 
@@ -124,6 +216,8 @@
   }
 </script>
 
+<svelte:window on:keydown={trapDialogFocus} />
+
 <section class="memory-management" aria-label="記憶管理">
   <header>
     <div>
@@ -146,8 +240,8 @@
           <time datetime={memory.effective_at}>{memory.effective_at}</time>
           {#if memory.index_pending}<p class="pending">index反映待ち</p>{/if}
           <div class="actions">
-            <button type="button" aria-label={`詳細・訂正 ${memory.id}`} on:click={() => { selectedMemory = memory; selectedRecord = null; correctionText = JSON.stringify(memory.structured_value ?? { polarity: 'LIKE', object: memory.normalized_text }); reasonCode = null }}>詳細・訂正</button>
-            <button type="button" aria-label={`削除 ${memory.id}`} on:click={() => { deletePersonaCandidate = memory }}>削除</button>
+            <button type="button" aria-label={`詳細・訂正 ${memory.id}`} on:click={() => { editPersonaMemory(memory) }}>詳細・訂正</button>
+            <button type="button" aria-label={`削除 ${memory.id}`} on:click={(event) => { openPersonaDelete(memory, event.currentTarget) }}>削除</button>
           </div>
         </article>
       {/each}
@@ -163,7 +257,7 @@
           <time datetime={record.updated_at}>{record.updated_at}</time>
           <div class="actions">
             <button type="button" aria-label={`詳細・訂正 ${record.id}`} on:click={() => { selectedRecord = record; selectedMemory = null; temporaryRecordType = record.record_type; temporaryStructuredValue = record.structured_value; temporaryEffectiveAt = record.effective_at }}>詳細・訂正</button>
-            <button type="button" aria-label={`削除 ${record.id}`} on:click={() => { deleteTemporaryCandidate = record }}>削除</button>
+            <button type="button" aria-label={`削除 ${record.id}`} on:click={(event) => { openTemporaryDelete(record, event.currentTarget) }}>削除</button>
           </div>
         </article>
       {/each}
@@ -177,9 +271,9 @@
     <label>正規化内容<textarea bind:value={correctionText}></textarea></label>
     {#if reasonCode !== null}
       <p role="alert">{reasonCode}</p>
-      <button type="button" on:click={() => { reasonCode = null }}>再編集</button>
+      <button type="button" on:click={retryPersonaCorrection}>再編集</button>
     {/if}
-    <button type="button" on:click={saveCorrection}>訂正を保存</button>
+    <button type="button" disabled={correctionSaving || personaCorrectionKey === null} on:click={saveCorrection}>訂正を保存</button>
   </section>
 {/if}
 
@@ -195,11 +289,11 @@
 
 {#if deletePersonaCandidate !== null}
   <div class="backdrop" role="presentation">
-    <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="memory-delete-title">
+    <section bind:this={personaDialog} class="dialog" role="dialog" aria-modal="true" aria-labelledby="memory-delete-title" tabindex="-1">
       <h2 id="memory-delete-title">記憶を完全に削除しますか</h2>
       <p>削除後は復元できません。</p>
       <div class="actions">
-        <button type="button" on:click={() => { deletePersonaCandidate = null }}>キャンセル</button>
+        <button type="button" on:click={closePersonaDelete}>キャンセル</button>
         <button type="button" class="danger" on:click={confirmDelete}>完全に削除</button>
       </div>
     </section>
@@ -208,11 +302,11 @@
 
 {#if deleteTemporaryCandidate !== null}
   <div class="backdrop" role="presentation">
-    <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="record-delete-title">
+    <section bind:this={temporaryDialog} class="dialog" role="dialog" aria-modal="true" aria-labelledby="record-delete-title" tabindex="-1">
       <h2 id="record-delete-title">暫定記録を完全に削除しますか</h2>
       <p>削除後は復元できません。</p>
       <div class="actions">
-        <button type="button" on:click={() => { deleteTemporaryCandidate = null }}>キャンセル</button>
+        <button type="button" on:click={closeTemporaryDelete}>キャンセル</button>
         <button type="button" class="danger" on:click={confirmTemporaryDelete}>完全に削除</button>
       </div>
     </section>

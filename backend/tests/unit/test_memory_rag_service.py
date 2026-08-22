@@ -8,7 +8,6 @@ import pytest
 
 from app.memory.admission.contracts import (
     ApprovedMemoryCandidate,
-    MemoryType,
     PreferencePolarity,
     UserPreferenceValue,
 )
@@ -36,6 +35,7 @@ from app.privacy.semantic.contracts import (
     SemanticPrivacyCategory,
     SubjectScope,
 )
+from tests.unit._helpers import approved_memory as _approved_memory
 
 
 _CHROMA_PATH = Path("/test/runtime-data/chroma")
@@ -66,35 +66,6 @@ def _assessment(
         prompt_version="prompt-v1",
         policy_version=resolved_memory_policy().policy_version,
     )
-
-
-def _approved_memory(**overrides: object) -> ApprovedMemory:
-    now = datetime(2026, 8, 20, tzinfo=UTC)
-    values: dict[str, object] = {
-        "id": _MEMORY_ID,
-        "character_id": "miori",
-        "provider_id": "core",
-        "memory_kind": "SEMANTIC",
-        "memory_type": MemoryType.USER_PREFERENCE,
-        "structured_value": UserPreferenceValue(
-            polarity=PreferencePolarity.LIKE,
-            object="紅茶",
-        ),
-        "normalized_text": "SQLiteに保存された紅茶の好み",
-        "policy_version": resolved_memory_policy().policy_version,
-        "content_version": 1,
-        "status": MemoryStatus.ACTIVE,
-        "occurred_at": now,
-        "occurred_timezone": "Asia/Tokyo",
-        "occurred_precision": TemporalPrecision.SECOND,
-        "stated_at": now,
-        "expires_at": datetime(2999, 1, 1, tzinfo=UTC),
-        "last_user_mentioned_at": None,
-        "created_at": now,
-        "updated_at": now,
-    }
-    values.update(overrides)
-    return ApprovedMemory(**values)  # type: ignore[arg-type]
 
 
 def _candidate(
@@ -722,9 +693,10 @@ def test_hard_deleted_memory_is_excluded_when_chroma_still_returns_its_id(
         context=MemoryWriteContext(
             formation_method=FormationMethod.EXTRACTED,
             idempotency_key="conversation-1:turn-1:0:extractor-v1",
-            effective_at=datetime(2026, 8, 20, tzinfo=UTC),
-            effective_timezone="Asia/Tokyo",
-            temporal_precision=TemporalPrecision.SECOND,
+            occurred_at=datetime(2026, 8, 20, tzinfo=UTC),
+            occurred_timezone="Asia/Tokyo",
+            occurred_precision=TemporalPrecision.SECOND,
+            stated_at=datetime(2026, 8, 20, tzinfo=UTC),
             expires_at=None,
             policy_version=policy.policy_version,
             classifier_version="classifier-v1",

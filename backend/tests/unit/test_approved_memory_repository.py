@@ -994,6 +994,17 @@ def test_management_detail_contains_sources_lineage_and_content_version(
     assert detail.memory.content_version == 1
     assert detail.sources == (source,)
     assert detail.lineage == (lineage,)
+    details = repository.get_details(
+        character_id="miori",
+        provider_id="core",
+        memory_ids=(original.id, derived.id),
+    )
+    assert list(details) == [original.id, derived.id]
+    assert details[derived.id].sources == (source,)
+    assert details[derived.id].lineage == (lineage,)
+    assert repository.pending_index_memory_ids(
+        character_id="miori", memory_ids=(original.id, derived.id)
+    ) == frozenset({original.id, derived.id})
     assert repository.get_detail(
         character_id="other", provider_id="core", memory_id=derived.id
     ) is None

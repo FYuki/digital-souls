@@ -17,6 +17,7 @@ from app.memory.persistence.contracts import (
     ApprovedMemory,
     ApprovedMemoryDetail,
     FormationMethod,
+    MemoryLineageInput,
     MemorySourceInput,
     MemorySourceType,
     MemoryStatus,
@@ -60,17 +61,24 @@ class PersonaMemoryProvider:
             provider_id="core",
             status=MemoryStatus(status),
         )
-        responses: list[dict[str, object]] = []
-        for memory in memories:
-            detail = self._repository.get_detail(
-                character_id=character_id,
-                provider_id="core",
-                memory_id=memory.id,
+        memory_ids = tuple(memory.id for memory in memories)
+        details = self._repository.get_details(
+            character_id=character_id,
+            provider_id="core",
+            memory_ids=memory_ids,
+        )
+        pending_ids = self._repository.pending_index_memory_ids(
+            character_id=character_id,
+            memory_ids=tuple(details),
+        )
+        return [
+            self._detail_response(
+                detail,
+                index_pending=memory.id in pending_ids,
             )
-            if detail is None:
-                raise RuntimeError("listed memory could not be read")
-            responses.append(self._detail_response(detail))
-        return responses
+            for memory in memories
+            if (detail := details.get(memory.id)) is not None
+        ]
 
     def get(self, *, character_id: str, memory_id: UUID) -> dict[str, object] | None:
         detail = self._repository.get_detail(
@@ -80,7 +88,12 @@ class PersonaMemoryProvider:
         )
         if detail is None:
             return None
-        return self._detail_response(detail)
+        return self._detail_response(
+            detail,
+            index_pending=self._repository.is_index_pending(
+                character_id=character_id, memory_id=memory_id
+            ),
+        )
 
     def correct(
         self,
@@ -143,11 +156,23 @@ class PersonaMemoryProvider:
             character_id=character_id, memory_id=memory_id
         )
 
-    def _detail_response(self, detail: ApprovedMemoryDetail) -> dict[str, object]:
-        return self._memory_response(detail.memory, detail.sources, detail.lineage)
+    def _detail_response(
+        self, detail: ApprovedMemoryDetail, *, index_pending: bool
+    ) -> dict[str, object]:
+        return self._memory_response(
+            detail.memory,
+            detail.sources,
+            detail.lineage,
+            index_pending=index_pending,
+        )
 
     def _memory_response(
-        self, memory: ApprovedMemory, sources: tuple[object, ...], lineage: tuple[object, ...]
+        self,
+        memory: ApprovedMemory,
+        sources: tuple[MemorySourceInput, ...],
+        lineage: tuple[MemoryLineageInput, ...],
+        *,
+        index_pending: bool,
     ) -> dict[str, object]:
         return {
             "id": memory.id,
@@ -160,9 +185,7 @@ class PersonaMemoryProvider:
             "effective_at": memory.occurred_at,
             "status": memory.status.value,
             "content_version": memory.content_version,
-            "index_pending": self._repository.is_index_pending(
-                character_id=memory.character_id, memory_id=memory.id
-            ),
+            "index_pending": index_pending,
             "sources": sources,
             "lineage": lineage,
         }
