@@ -143,6 +143,51 @@ class TimingOutExtractorRequest:
         )
 
 
+def _is_extractor_request(payload: dict[str, object]) -> bool:
+    response_format = payload.get("format")
+    if not isinstance(response_format, dict):
+        return False
+    properties = response_format.get("properties")
+    return isinstance(properties, dict) and "candidates" in properties
+
+
+def _privacy_response(url: str) -> httpx.Response:
+    content = json.dumps(
+        {
+            "classification": "NOT_SENSITIVE",
+            "subject_scope": "SELF",
+            "category": "NONE",
+            "reason_code": "NO_SENSITIVE_CONTENT",
+        }
+    )
+    return httpx.Response(
+        200,
+        json={"message": {"content": content}},
+        request=httpx.Request("POST", url),
+    )
+
+
+def _route_ollama_post(extractor_request):
+    def ollama_post(
+        _client: httpx.Client,
+        url: str,
+        *,
+        json: dict[str, object],
+        timeout: httpx.Timeout,
+    ) -> httpx.Response:
+        if url.endswith("/api/show"):
+            return httpx.Response(
+                200,
+                json={"modelfile": "FROM /models/blobs/sha256-" + "0" * 64},
+                request=httpx.Request("POST", url),
+            )
+        if _is_extractor_request(json):
+            return extractor_request(url, json=json, timeout=timeout)
+        return _privacy_response(url)
+
+    return ollama_post
+
+
 def _character_card() -> MagicMock:
     card = MagicMock()
     card.to_character_prompt.return_value = CharacterPrompt(
@@ -246,7 +291,7 @@ def test_chat_response_does_not_wait_for_memory_extraction(
     monkeypatch.setattr(
         httpx.Client,
         "post",
-        lambda _client, url, **kwargs: extractor_request(url, **kwargs),
+        _route_ollama_post(extractor_request),
     )
     response_received = threading.Event()
     responses: list[object] = []
@@ -415,11 +460,7 @@ def test_http_turn_extracts_each_allowlisted_type_to_automatic_persistence(
         timeout: httpx.Timeout,
     ) -> httpx.Response:
         del timeout
-        content = (
-            extractor_response
-            if isinstance(json.get("format"), dict)
-            else privacy_response
-        )
+        content = extractor_response if _is_extractor_request(json) else privacy_response
         return httpx.Response(
             200,
             json={"message": {"content": content}},
@@ -482,11 +523,7 @@ def test_noop_domain_dispatch_preserves_automatic_persona_admission(
         timeout: httpx.Timeout,
     ) -> httpx.Response:
         del timeout
-        content = (
-            extractor_response
-            if isinstance(json.get("format"), dict)
-            else privacy_response
-        )
+        content = extractor_response if _is_extractor_request(json) else privacy_response
         return httpx.Response(
             200,
             json={"message": {"content": content}},
@@ -520,7 +557,7 @@ def test_extractor_failure_logs_metadata_without_private_values(
     monkeypatch.setattr(
         httpx.Client,
         "post",
-        lambda _client, url, **kwargs: extractor_request(url, **kwargs),
+        _route_ollama_post(extractor_request),
     )
     caplog.set_level(logging.DEBUG)
 
@@ -600,7 +637,7 @@ def test_invalid_extractor_batch_is_not_automatically_persisted(
         json: dict[str, object],
         timeout: httpx.Timeout,
     ) -> httpx.Response:
-        if isinstance(json.get("format"), dict):
+        if _is_extractor_request(json):
             return extractor_request(url, json=json, timeout=timeout)
         return httpx.Response(
             200,
@@ -629,7 +666,7 @@ def test_extractor_receives_only_current_user_and_latest_completed_turn(
     monkeypatch.setattr(
         httpx.Client,
         "post",
-        lambda _client, url, **kwargs: extractor_request(url, **kwargs),
+        _route_ollama_post(extractor_request),
     )
 
     with patch("app.main.load_character_card", return_value=_character_card()):
@@ -666,7 +703,7 @@ def test_runtime_passes_schema_zero_temperature_and_configured_output_limit(
     monkeypatch.setattr(
         httpx.Client,
         "post",
-        lambda _client, url, **kwargs: extractor_request(url, **kwargs),
+        _route_ollama_post(extractor_request),
     )
 
     with patch("app.main.load_character_card", return_value=_character_card()):
@@ -702,7 +739,7 @@ def test_timeout_retries_to_configured_limit_without_persistence(
     monkeypatch.setattr(
         httpx.Client,
         "post",
-        lambda _client, url, **kwargs: extractor_request(url, **kwargs),
+        _route_ollama_post(extractor_request),
     )
 
     with patch("app.main.load_character_card", return_value=_character_card()):
@@ -728,7 +765,7 @@ def test_single_worker_processes_queued_jobs_serially(
     monkeypatch.setattr(
         httpx.Client,
         "post",
-        lambda _client, url, **kwargs: extractor_request(url, **kwargs),
+        _route_ollama_post(extractor_request),
     )
 
     with patch("app.main.load_character_card", return_value=_character_card()):
@@ -741,12 +778,16 @@ def test_single_worker_processes_queued_jobs_serially(
                     timeout=0.1
                 )
                 extractor_request.release.set()
+                second_started_after_release = extractor_request.entered[1].wait(
+                    timeout=1
+                )
 
     assert (
         first_started,
         second_started_while_first_blocked,
+        second_started_after_release,
         len(extractor_request.calls),
-    ) == (True, False, 2)
+    ) == (True, False, True, 2)
 
 
 def test_worker_rereads_queued_turn_and_skips_deleted_source(
@@ -760,7 +801,7 @@ def test_worker_rereads_queued_turn_and_skips_deleted_source(
     monkeypatch.setattr(
         httpx.Client,
         "post",
-        lambda _client, url, **kwargs: extractor_request(url, **kwargs),
+        _route_ollama_post(extractor_request),
     )
 
     with patch("app.main.load_character_card", return_value=_character_card()):

@@ -336,8 +336,10 @@ def threshold_failures(
         for name in RATE_NAMES:
             observed = getattr(report, name)
             limit = thresholds[profile][name]
-            if observed > limit:
-                failures.append(f"{profile}.{name}={observed:.6f} exceeds {limit:.6f}")
+            if observed >= limit:
+                failures.append(
+                    f"{profile}.{name}={observed:.6f} meets or exceeds {limit:.6f}"
+                )
     return failures
 
 

@@ -1,12 +1,12 @@
 {
   "ADMISSION": {
-    "abstain_rate": 0.5,
-    "false_negative_rate": 0.5,
-    "false_positive_rate": 0.5
+    "abstain_rate": 0.1,
+    "false_negative_rate": 0.05,
+    "false_positive_rate": 0.2
   },
   "QUERY_GATE": {
-    "abstain_rate": 0.5,
-    "false_negative_rate": 0.5,
-    "false_positive_rate": 0.5
+    "abstain_rate": 0.1,
+    "false_negative_rate": 0.05,
+    "false_positive_rate": 0.2
   }
 }

@@ -171,9 +171,9 @@ def test_conformance_thresholds_are_profile_specific_rate_limits() -> None:
 
     assert thresholds == {
         profile: {
-            "abstain_rate": 0.5,
-            "false_negative_rate": 0.5,
-            "false_positive_rate": 0.5,
+            "abstain_rate": 0.1,
+            "false_negative_rate": 0.05,
+            "false_positive_rate": 0.2,
         }
         for profile in ("ADMISSION", "QUERY_GATE")
     }

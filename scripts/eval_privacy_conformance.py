@@ -25,6 +25,7 @@ PROTECTED_PROMPTFOO_OPTIONS = {
     "--no-cache",
     "--output",
     "-o",
+    "--max-concurrency",
     "--share",
     "--no-share",
 }
@@ -57,6 +58,8 @@ def _promptfoo_command(
         str(CONFIG_PATHS[mode]),
         "--no-cache",
         "--no-write",
+        "--max-concurrency",
+        "1",
         "--output",
         str(output_path),
         *(
