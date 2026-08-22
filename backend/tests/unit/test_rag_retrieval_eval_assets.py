@@ -316,7 +316,8 @@ def test_real_evaluator_passes_manifest_candidate_pool_to_chroma(
         expected_ids=["core"],
         candidates=[
             _candidate("core", 0.1)
-            | {"occurred_at": "2026-07-31T15:30:00+00:00"}
+            | {"occurred_at": "2026-07-31T15:30:00+00:00"},
+            _candidate("unknown", 0.2) | {"occurred_at": None},
         ],
     )
     observed_n_results: list[int] = []
@@ -355,7 +356,7 @@ def test_real_evaluator_passes_manifest_candidate_pool_to_chroma(
     )
 
     assert observed_n_results == [7]
-    assert indexed_occurrences == ["2026-07-31T15:30:00+00:00"]
+    assert indexed_occurrences == ["2026-07-31T15:30:00+00:00", None]
     assert len(deleted_collections) == 1
     assert deleted_collections[0].startswith("rag-eval-")
     assert result.recall == 1.0

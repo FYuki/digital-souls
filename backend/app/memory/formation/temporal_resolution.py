@@ -68,7 +68,17 @@ def resolve_occurred_at(
         local, precision = _resolve_expression(primary, stated_at.astimezone(zone))
     except (OverflowError, ValueError):
         return OccurredAtResolution(None, None, None)
+    if not _round_trips_through_utc(local, zone):
+        return OccurredAtResolution(None, None, None)
     return OccurredAtResolution(local.astimezone(UTC), timezone, precision)
+
+
+def _round_trips_through_utc(local: datetime, zone: ZoneInfo) -> bool:
+    round_trip = local.astimezone(UTC).astimezone(zone)
+    return (
+        local.replace(tzinfo=None) == round_trip.replace(tzinfo=None)
+        and local.fold == round_trip.fold
+    )
 
 
 def _resolve_expression(

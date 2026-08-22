@@ -286,6 +286,36 @@ def test_unknown_timezone_is_rejected() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "expression",
+    [
+        AbsoluteDateExpression(
+            role=DateExpressionRole.PRIMARY,
+            year=2011,
+            month=12,
+            day=30,
+        ),
+        RelativeDateExpression(
+            role=DateExpressionRole.PRIMARY,
+            day_offset=1,
+        ),
+    ],
+    ids=["absolute", "relative"],
+)
+def test_nonexistent_local_date_is_unresolved(
+    expression: AbsoluteDateExpression | RelativeDateExpression,
+) -> None:
+    result = resolve_occurred_at(
+        (expression,),
+        stated_at=datetime(2011, 12, 29, 12, 0, tzinfo=UTC),
+        timezone="Pacific/Apia",
+    )
+
+    assert result.occurred_at is None
+    assert result.occurred_timezone is None
+    assert result.occurred_precision is None
+
+
 def test_last_month_crosses_the_year_boundary_in_the_runtime_timezone() -> None:
     result = resolve_occurred_at(
         (
