@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
 import yaml
 
 
@@ -74,6 +75,9 @@ def test_conformance_and_prompt_lab_use_their_declared_execution_boundaries() ->
 
 
 def test_eval_assertions_separate_enum_topic_and_hallucination_judgements() -> None:
+    conformance = yaml.safe_load(
+        (EVAL_ROOT / "conformance.yaml").read_text(encoding="utf-8")
+    )
     prompt_lab = yaml.safe_load(
         (EVAL_ROOT / "prompt-lab.yaml").read_text(encoding="utf-8")
     )
@@ -93,6 +97,20 @@ def test_eval_assertions_separate_enum_topic_and_hallucination_judgements() -> N
     assert {rubric["provider"] for rubric in rubrics} == declared_judges
     assert all("{{text}}" in rubric["value"] for rubric in rubrics)
     assert "Do not wrap the JSON in Markdown code fences" in prompt_lab["prompts"][0]
+
+    conformance_rubrics = [
+        assertion
+        for assertion in conformance["defaultTest"]["assert"]
+        if assertion["type"] == "llm-rubric"
+    ]
+    assert {rubric["metric"] for rubric in conformance_rubrics} == {
+        "topic_validity_rate",
+        "hallucination_free_rate",
+    }
+    assert all(
+        str(rubric["provider"]).startswith("ollama:chat:")
+        for rubric in conformance_rubrics
+    )
 
 
 def test_thresholds_define_independent_pass_rates() -> None:
@@ -194,3 +212,65 @@ def test_gate_can_enforce_the_conformance_enum_metric_alone(tmp_path: Path) -> N
     )
 
     assert result.returncode == 0
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        {},
+        {"gradingResult": {}},
+        {"gradingResult": {"componentResults": []}},
+        {
+            "gradingResult": {
+                "componentResults": [
+                    {
+                        "pass": True,
+                        "assertion": {"metric": "enum_match_rate"},
+                    }
+                ]
+            }
+        },
+        {
+            "gradingResult": {
+                "componentResults": [
+                    {
+                        "assertion": {"metric": "enum_match_rate"},
+                    },
+                    {
+                        "pass": True,
+                        "assertion": {"metric": "topic_validity_rate"},
+                    },
+                    {
+                        "pass": True,
+                        "assertion": {"metric": "hallucination_free_rate"},
+                    },
+                ]
+            }
+        },
+    ],
+    ids=[
+        "missing-grading",
+        "missing-components",
+        "empty-components",
+        "missing-required-metrics",
+        "missing-pass",
+    ],
+)
+def test_gate_rejects_incomplete_evaluation_rows(
+    tmp_path: Path,
+    row: dict[str, object],
+) -> None:
+    results_path = tmp_path / "results.json"
+    results_path.write_text(
+        json.dumps({"results": {"results": [row]}}),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(EVAL_ROOT / "gate.py"), str(results_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0

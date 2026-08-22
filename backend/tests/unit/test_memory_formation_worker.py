@@ -197,6 +197,61 @@ def test_absent_or_noop_domain_router_does_not_change_persona_admission(
     assert admission.admit.call_args.args == (candidate,)
 
 
+@pytest.mark.parametrize(
+    "previous",
+    [
+        _turn(turn_id=PREVIOUS_TURN_ID, user_content=None),
+        _turn(turn_id=PREVIOUS_TURN_ID, assistant_content=None),
+    ],
+    ids=["user-erased", "assistant-erased"],
+)
+def test_incomplete_previous_turn_is_ignored_without_losing_current_candidates(
+    previous: ConversationTurn,
+) -> None:
+    current = _turn()
+    repository = FakeRepository(current=current, previous=previous)
+    candidate = _candidate("紅茶")
+    extractor = MagicMock()
+    extractor.extract.return_value = (candidate,)
+    admission = MagicMock()
+
+    _worker(repository, extractor, admission, None).process(_job())
+
+    extractor.extract.assert_called_once_with(
+        current_turn=current,
+        previous_turn=None,
+    )
+    admission.admit.assert_called_once_with(
+        candidate,
+        character_id="miori",
+        conversation_id=CONVERSATION_ID,
+        turn_id=TURN_ID,
+        candidate_index=0,
+    )
+
+
+def test_admission_failure_is_isolated_to_its_candidate(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    candidates = (
+        _candidate("紅茶"),
+        _candidate(PRIVATE_CANDIDATE),
+        _candidate("短い返答"),
+    )
+    extractor = MagicMock()
+    extractor.extract.return_value = candidates
+    admission = MagicMock()
+    admission.admit.side_effect = [None, RuntimeError(PRIVATE_CANDIDATE), None]
+    caplog.set_level(logging.DEBUG)
+
+    _worker(FakeRepository(current=_turn()), extractor, admission, None).process(_job())
+
+    assert [call.args[0] for call in admission.admit.call_args_list] == list(candidates)
+    assert "candidate_index=1" in caplog.text
+    assert "memory_type=USER_PREFERENCE" in caplog.text
+    assert PRIVATE_CANDIDATE not in caplog.text
+
+
 def test_worker_logs_metadata_only_when_extraction_fails(
     caplog: pytest.LogCaptureFixture,
 ) -> None:

@@ -13,4 +13,23 @@ defaultTest:
         const parsed = JSON.parse(output);
         const actual = parsed.candidates.length === 0 ? 'NONE' : parsed.candidates[0].memory_type;
         return actual === context.vars.expected_memory_type;
+    - type: llm-rubric
+      metric: topic_validity_rate
+      provider: ollama:chat:gemma4:e4b
+      value: >-
+        原文「{{text}}」、期待種別「{{expected_memory_type}}」、期待要点
+        「{{expected_topic}}」と抽出結果を比較する。期待種別がNONEなら候補が空のとき、
+        それ以外なら抽出値のtopic/object/valueが期待要点と同じ出来事または嗜好を
+        過不足なく表すときだけ合格とする。表現の言い換えは許容する。
+    - type: llm-rubric
+      metric: hallucination_free_rate
+      provider: ollama:chat:gemma4:e4b
+      value: >-
+        原文「{{text}}」と抽出結果を比較し、原文から導けない人物、対象、出来事、嗜好、
+        理由、時期を追加していないかだけを評価する。原文の情報を省略したことは、この
+        hallucination評価では失格理由にしない。候補が空なら追加情報はないので合格とする。
+        memory_type、structured_value、event_type、subject、polarity、object、alternative、
+        aspect、value、topicというスキーマのキーはすべて許可され、追加情報ではない。
+        スキーマのenumも原文の意味に合う分類なら追加情報ではない。自由記述値とenumが
+        原文にない具体的事実を作っていないかだけを評価する。
 tests: cases.jsonl

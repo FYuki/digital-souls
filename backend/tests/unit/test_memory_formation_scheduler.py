@@ -5,6 +5,8 @@ import threading
 from dataclasses import dataclass, field
 from uuid import UUID
 
+import pytest
+
 
 @dataclass
 class BlockingWorker:
@@ -41,7 +43,11 @@ def test_scheduler_submit_is_thread_safe_non_blocking_and_has_one_consumer() -> 
 
     async def exercise() -> BlockingWorker:
         worker = BlockingWorker()
-        scheduler = MemoryFormationScheduler(worker=worker, max_queue_age_seconds=300)
+        scheduler = MemoryFormationScheduler(
+            worker=worker,
+            max_queue_age_seconds=300,
+            queue_maxsize=100,
+        )
         await scheduler.start()
 
         submit_thread = threading.Thread(
@@ -82,6 +88,7 @@ def test_expired_queue_job_is_discarded_without_worker_side_effects() -> None:
         scheduler = MemoryFormationScheduler(
             worker=worker,
             max_queue_age_seconds=300,
+            queue_maxsize=100,
             monotonic_clock=lambda: current_time[0],
         )
         await scheduler.start()
@@ -95,3 +102,100 @@ def test_expired_queue_job_is_discarded_without_worker_side_effects() -> None:
     worker = asyncio.run(exercise())
 
     assert worker.calls == [_job(2)]
+
+
+def test_stop_discards_queued_jobs_and_waits_only_for_the_running_job() -> None:
+    from app.memory.formation.scheduler import MemoryFormationScheduler
+
+    async def exercise() -> BlockingWorker:
+        worker = BlockingWorker()
+        scheduler = MemoryFormationScheduler(
+            worker=worker,
+            max_queue_age_seconds=300,
+            queue_maxsize=100,
+        )
+        await scheduler.start()
+        scheduler.submit(_job(1))
+        assert await asyncio.to_thread(worker.entered.wait, 1)
+        scheduler.submit(_job(2))
+        scheduler.submit(_job(3))
+        await asyncio.sleep(0)
+        stop_task = asyncio.create_task(scheduler.stop())
+        await asyncio.sleep(0)
+        worker.release.set()
+        await stop_task
+        return worker
+
+    worker = asyncio.run(exercise())
+
+    assert worker.calls == [_job(1)]
+
+
+def test_worker_exception_does_not_stop_later_jobs() -> None:
+    from app.memory.formation.scheduler import MemoryFormationScheduler
+
+    class FailingOnceWorker:
+        def __init__(self) -> None:
+            self.calls: list[object] = []
+            self.completed = threading.Event()
+
+        def process(self, job: object) -> None:
+            self.calls.append(job)
+            if len(self.calls) == 1:
+                raise RuntimeError("synthetic failure")
+            self.completed.set()
+
+    async def exercise() -> FailingOnceWorker:
+        worker = FailingOnceWorker()
+        scheduler = MemoryFormationScheduler(
+            worker=worker,
+            max_queue_age_seconds=300,
+            queue_maxsize=100,
+        )
+        await scheduler.start()
+        scheduler.submit(_job(1))
+        scheduler.submit(_job(2))
+        assert await asyncio.to_thread(worker.completed.wait, 1)
+        await scheduler.stop()
+        return worker
+
+    worker = asyncio.run(exercise())
+
+    assert worker.calls == [_job(1), _job(2)]
+
+
+def test_full_queue_drops_the_newest_job_without_blocking_submit() -> None:
+    from app.memory.formation.scheduler import MemoryFormationScheduler
+
+    async def exercise() -> BlockingWorker:
+        worker = BlockingWorker()
+        scheduler = MemoryFormationScheduler(
+            worker=worker,
+            max_queue_age_seconds=300,
+            queue_maxsize=1,
+        )
+        await scheduler.start()
+        scheduler.submit(_job(1))
+        assert await asyncio.to_thread(worker.entered.wait, 1)
+        scheduler.submit(_job(2))
+        scheduler.submit(_job(3))
+        await asyncio.sleep(0)
+        worker.release.set()
+        assert await asyncio.to_thread(worker.second_entered.wait, 1)
+        await scheduler.stop()
+        return worker
+
+    worker = asyncio.run(exercise())
+
+    assert worker.calls == [_job(1), _job(2)]
+
+
+def test_scheduler_rejects_an_unbounded_queue_configuration() -> None:
+    from app.memory.formation.scheduler import MemoryFormationScheduler
+
+    with pytest.raises(ValueError, match="queue maxsize"):
+        MemoryFormationScheduler(
+            worker=BlockingWorker(),
+            max_queue_age_seconds=300,
+            queue_maxsize=0,
+        )

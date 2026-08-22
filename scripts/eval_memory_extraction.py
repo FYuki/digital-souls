@@ -66,8 +66,6 @@ def main() -> int:
             str(EVAL_ROOT / "gate.py"),
             str(output_path),
         ]
-        if arguments.mode == "conformance":
-            gate_command.extend(("--metric", "enum_match_rate"))
         return subprocess.run(
             gate_command,
             cwd=REPOSITORY_ROOT,

@@ -38,9 +38,10 @@ class RecordingFormationScheduler:
 
 
 class ConfigRecordingFormationScheduler(RecordingFormationScheduler):
-    def __init__(self, *, max_queue_age_seconds: int) -> None:
+    def __init__(self, *, max_queue_age_seconds: int, queue_maxsize: int) -> None:
         super().__init__()
         self.max_queue_age_seconds = max_queue_age_seconds
+        self.queue_maxsize = queue_maxsize
 
 
 class FailingExtractorRequest:
@@ -204,12 +205,14 @@ def test_runtime_passes_configured_queue_age_to_the_job_scheduler(
     def scheduler_factory(*args, **kwargs) -> ConfigRecordingFormationScheduler:
         del args
         scheduler = ConfigRecordingFormationScheduler(
-            max_queue_age_seconds=kwargs["max_queue_age_seconds"]
+            max_queue_age_seconds=kwargs["max_queue_age_seconds"],
+            queue_maxsize=kwargs["queue_maxsize"],
         )
         schedulers.append(scheduler)
         return scheduler
 
     monkeypatch.setenv("MEMORY_FORMATION_MAX_QUEUE_AGE_SECONDS", "45")
+    monkeypatch.setenv("MEMORY_FORMATION_QUEUE_MAXSIZE", "25")
     monkeypatch.setattr(
         main,
         "MemoryFormationScheduler",
@@ -225,12 +228,13 @@ def test_runtime_passes_configured_queue_age_to_the_job_scheduler(
     observed = (
         (
             schedulers[0].max_queue_age_seconds,
+            schedulers[0].queue_maxsize,
             len(schedulers[0].jobs),
         )
         if schedulers
-        else (None, 0)
+        else (None, None, 0)
     )
-    assert observed == (45, 1)
+    assert observed == (45, 25, 1)
 
 
 @pytest.mark.parametrize("transport", ["http", "websocket"])

@@ -39,22 +39,32 @@ def main() -> int:
             raise ValueError("result row must be an object")
         grading = row.get("gradingResult")
         if not isinstance(grading, dict):
-            continue
+            raise ValueError("result row must contain gradingResult")
         components = grading.get("componentResults")
         if not isinstance(components, list):
-            continue
+            raise ValueError("gradingResult must contain componentResults")
+        seen_metrics: set[str] = set()
         for component in components:
             if not isinstance(component, dict):
-                continue
+                raise ValueError("component result must be an object")
             assertion = component.get("assertion")
             if not isinstance(assertion, dict):
-                continue
+                raise ValueError("component result must contain an assertion")
             metric = assertion.get("metric")
             if metric not in totals:
                 continue
+            if not isinstance(component.get("pass"), bool):
+                raise ValueError(f"component result for {metric} must contain pass")
+            seen_metrics.add(metric)
             totals[metric] += 1
             if component.get("pass") is True:
                 passed[metric] += 1
+        missing_metrics = set(required_metrics) - seen_metrics
+        if missing_metrics:
+            raise ValueError(
+                "result row is missing required metrics: "
+                + ", ".join(sorted(missing_metrics))
+            )
     if any(total == 0 for total in totals.values()):
         raise ValueError("results do not contain every required metric")
     metrics = {name: passed[name] / totals[name] for name in required_metrics}

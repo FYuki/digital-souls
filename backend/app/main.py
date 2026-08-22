@@ -311,6 +311,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     domain_router=None,
                 ),
                 max_queue_age_seconds=formation_settings.max_queue_age_seconds,
+                queue_maxsize=formation_settings.queue_maxsize,
             )
             await memory_formation_scheduler.start()
             memory_formation_scheduler_started = True

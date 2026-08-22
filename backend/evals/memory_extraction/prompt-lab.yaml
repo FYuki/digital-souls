@@ -34,6 +34,40 @@ defaultTest:
         const parsed = JSON.parse(output);
         const actual = parsed.candidates.length === 0 ? 'NONE' : parsed.candidates[0].memory_type;
         return actual === context.vars.expected_memory_type;
+    - type: javascript
+      metric: enum_match_rate
+      value: |
+        const parsed = JSON.parse(output);
+        const exactKeys = (value, keys) =>
+          value !== null && typeof value === 'object' && !Array.isArray(value) &&
+          Object.keys(value).sort().join(',') === [...keys].sort().join(',');
+        const shortText = (value) =>
+          typeof value === 'string' && value.trim().length > 0 && value.length <= 60;
+        if (!exactKeys(parsed, ['candidates']) || !Array.isArray(parsed.candidates) || parsed.candidates.length > 3) {
+          return false;
+        }
+        return parsed.candidates.every((candidate) => {
+          if (!exactKeys(candidate, ['memory_type', 'structured_value'])) return false;
+          const structured = candidate.structured_value;
+          if (candidate.memory_type === 'EPISODIC_EVENT') {
+            return exactKeys(structured, ['event_type', 'subject', 'topic']) &&
+              ['SHARED_MILESTONE', 'ACHIEVEMENT', 'DECISION', 'OUTCOME', 'CHANGE'].includes(structured.event_type) &&
+              ['USER', 'SHARED'].includes(structured.subject) && shortText(structured.topic);
+          }
+          if (candidate.memory_type === 'USER_PREFERENCE') {
+            if (!['LIKE', 'DISLIKE', 'PREFER_OVER'].includes(structured?.polarity) || !shortText(structured.object)) return false;
+            if (structured.polarity === 'PREFER_OVER') {
+              return exactKeys(structured, ['polarity', 'object', 'alternative']) && shortText(structured.alternative);
+            }
+            return exactKeys(structured, ['polarity', 'object']);
+          }
+          if (candidate.memory_type === 'INTERACTION_PREFERENCE') {
+            return exactKeys(structured, ['aspect', 'value']) &&
+              ['ADDRESSING', 'TONE', 'RESPONSE_FORMAT', 'RESPONSE_LENGTH', 'LANGUAGE'].includes(structured.aspect) &&
+              shortText(structured.value);
+          }
+          return false;
+        });
     - type: llm-rubric
       metric: topic_validity_rate
       provider: ollama:chat:gemma4:e4b

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Protocol, TypeGuard
+from typing import Protocol
 from uuid import UUID
 
 from app.conversation_history.models import ConversationTurn, TurnStatus
@@ -61,11 +61,15 @@ class MemoryFormationWorker:
         current = self._repository.get_turn(
             job.character_id, job.conversation_id, job.turn_id
         )
-        if not _is_eligible(current):
+        if current is None or not _is_eligible(current):
             return
         previous = self._repository.get_previous_completed_turn(
             job.character_id, job.conversation_id, job.turn_id
         )
+        if previous is not None and (
+            previous.user_content is None or previous.assistant_content is None
+        ):
+            previous = None
         try:
             candidates = self._extractor.extract(
                 current_turn=current,
@@ -73,7 +77,14 @@ class MemoryFormationWorker:
             )
             if self._domain_router is not None:
                 self._domain_router.dispatch(current)
-            for index, candidate in enumerate(candidates):
+        except Exception as error:
+            logger.warning(
+                "memory formation job failed: error_type=%s",
+                type(error).__name__,
+            )
+            return
+        for index, candidate in enumerate(candidates):
+            try:
                 self._admission.admit(
                     candidate,
                     character_id=job.character_id,
@@ -81,17 +92,19 @@ class MemoryFormationWorker:
                     turn_id=job.turn_id,
                     candidate_index=index,
                 )
-        except Exception as error:
-            logger.warning(
-                "memory formation job failed: error_type=%s",
-                type(error).__name__,
-            )
+            except Exception as error:
+                logger.warning(
+                    "memory candidate admission failed: candidate_index=%d "
+                    "memory_type=%s error_type=%s",
+                    index,
+                    candidate.memory_type.value,
+                    type(error).__name__,
+                )
 
 
-def _is_eligible(turn: ConversationTurn | None) -> TypeGuard[ConversationTurn]:
+def _is_eligible(turn: ConversationTurn) -> bool:
     return (
-        turn is not None
-        and turn.status is TurnStatus.COMPLETED
+        turn.status is TurnStatus.COMPLETED
         and turn.user_content is not None
         and turn.assistant_content is not None
     )

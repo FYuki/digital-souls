@@ -142,29 +142,44 @@ def _parse_candidate(value: object) -> MemoryCandidate:
     if memory_type is MemoryType.EPISODIC_EVENT:
         if set(structured) != {"event_type", "subject", "topic"}:
             raise ValueError("invalid episodic event")
+        topic = structured["topic"]
+        if not isinstance(topic, str):
+            raise ValueError("invalid episodic event topic")
         parsed: StructuredValue = EpisodicEventValue(
             EpisodicEventType(structured["event_type"]),
             EpisodicSubject(structured["subject"]),
-            structured["topic"],
+            topic,
         )
     elif memory_type is MemoryType.USER_PREFERENCE:
         allowed = {"polarity", "object", "alternative"}
         if not {"polarity", "object"} <= set(structured) or not set(structured) <= allowed:
             raise ValueError("invalid user preference")
+        polarity = PreferencePolarity(structured["polarity"])
+        object_value = structured["object"]
+        if not isinstance(object_value, str):
+            raise ValueError("invalid user preference object")
+        has_alternative = "alternative" in structured
         alternative = structured.get("alternative")
         if "alternative" in structured and not isinstance(alternative, str):
             raise ValueError("invalid user preference alternative")
+        if polarity is PreferencePolarity.PREFER_OVER and not has_alternative:
+            raise ValueError("PREFER_OVER requires alternative")
+        if polarity is not PreferencePolarity.PREFER_OVER and has_alternative:
+            raise ValueError("alternative is only valid for PREFER_OVER")
         parsed = UserPreferenceValue(
-            PreferencePolarity(structured["polarity"]),
-            structured["object"],
+            polarity,
+            object_value,
             alternative,
         )
     else:
         if set(structured) != {"aspect", "value"}:
             raise ValueError("invalid interaction preference")
+        interaction_value = structured["value"]
+        if not isinstance(interaction_value, str):
+            raise ValueError("invalid interaction preference value")
         parsed = InteractionPreferenceValue(
             InteractionAspect(structured["aspect"]),
-            structured["value"],
+            interaction_value,
         )
     return MemoryCandidate(
         memory_type,

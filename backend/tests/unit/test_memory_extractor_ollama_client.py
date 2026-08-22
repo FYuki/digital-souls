@@ -58,7 +58,10 @@ def test_client_requests_strict_schema_at_temperature_zero_with_output_limit() -
 def test_transport_and_response_failures_never_expose_private_values(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    from app.memory.formation.ollama_client import OllamaMemoryExtractorClient
+    from app.memory.formation.ollama_client import (
+        OllamaMemoryExtractorClient,
+        OllamaMemoryExtractorError,
+    )
 
     response = _response({"message": " ".join(PRIVATE_VALUES)})
     caplog.set_level("DEBUG")
@@ -67,7 +70,7 @@ def test_transport_and_response_failures_never_expose_private_values(
         "app.memory.formation.ollama_client.httpx.Client.post",
         return_value=response,
     ):
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(OllamaMemoryExtractorError) as exc_info:
             OllamaMemoryExtractorClient(model_id="gemma4:e4b").chat(
                 ({"role": "user", "content": PRIVATE_VALUES[0]},),
                 json_schema={"type": "object"},
@@ -78,3 +81,19 @@ def test_transport_and_response_failures_never_expose_private_values(
     observed = "\n".join((str(exc_info.value), repr(exc_info.value), caplog.text))
     for private_value in PRIVATE_VALUES:
         assert private_value not in observed
+
+
+def test_transport_timeout_is_translated_to_timeout_error() -> None:
+    from app.memory.formation.ollama_client import OllamaMemoryExtractorClient
+
+    with patch(
+        "app.memory.formation.ollama_client.httpx.Client.post",
+        side_effect=httpx.ReadTimeout("synthetic timeout"),
+    ):
+        with pytest.raises(TimeoutError):
+            OllamaMemoryExtractorClient(model_id="gemma4:e4b").chat(
+                ({"role": "user", "content": "synthetic input"},),
+                json_schema={"type": "object"},
+                timeout_seconds=15,
+                max_output_tokens=321,
+            )

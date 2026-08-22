@@ -200,6 +200,47 @@ def test_extractor_transfers_only_current_user_and_one_previous_sanitized_turn()
             }
         ),
         _response(
+            {
+                "memory_type": "EPISODIC_EVENT",
+                "structured_value": {
+                    "event_type": "ACHIEVEMENT",
+                    "subject": "USER",
+                    "topic": 123,
+                },
+            }
+        ),
+        _response(
+            {
+                "memory_type": "USER_PREFERENCE",
+                "structured_value": {"polarity": "LIKE", "object": {"tea": True}},
+            }
+        ),
+        _response(
+            {
+                "memory_type": "INTERACTION_PREFERENCE",
+                "structured_value": {"aspect": "TONE", "value": ["穏やか"]},
+            }
+        ),
+        _response(
+            {
+                "memory_type": "USER_PREFERENCE",
+                "structured_value": {
+                    "polarity": "LIKE",
+                    "object": "紅茶",
+                    "alternative": "コーヒー",
+                },
+            }
+        ),
+        _response(
+            {
+                "memory_type": "USER_PREFERENCE",
+                "structured_value": {
+                    "polarity": "PREFER_OVER",
+                    "object": "紅茶",
+                },
+            }
+        ),
+        _response(
             *(
                 {
                     "memory_type": "USER_PREFERENCE",
@@ -215,6 +256,11 @@ def test_extractor_transfers_only_current_user_and_one_previous_sanitized_turn()
         "missing-field",
         "extra-field",
         "null-alternative",
+        "non-string-topic",
+        "non-string-object",
+        "non-string-value",
+        "unexpected-alternative",
+        "missing-prefer-over-alternative",
         "over-limit",
     ],
 )
