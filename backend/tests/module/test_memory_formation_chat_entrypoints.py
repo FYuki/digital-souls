@@ -175,6 +175,12 @@ def _route_ollama_post(extractor_request):
         json: dict[str, object],
         timeout: httpx.Timeout,
     ) -> httpx.Response:
+        if url.endswith("/api/show"):
+            return httpx.Response(
+                200,
+                json={"modelfile": "FROM /models/blobs/sha256-" + "0" * 64},
+                request=httpx.Request("POST", url),
+            )
         if _is_extractor_request(json):
             return extractor_request(url, json=json, timeout=timeout)
         return _privacy_response(url)

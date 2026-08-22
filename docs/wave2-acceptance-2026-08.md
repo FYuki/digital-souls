@@ -40,23 +40,33 @@ classifier v2、prompt v11、policy `2026-08-wave2-v1`、cache無効、concurren
 ## Wave 2横断確認
 
 Ubuntu-devの開発依存と、Ubuntu-dogfoodの実Ollama・VOICEVOX・Whisperを使用した。
-実接続用データは独立した一時data rootを使い、dogfoodの会話履歴とpersona memoryへ接続していない。
+実接続用データは`DS_ENVIRONMENT_ID=test`の専用data rootを使い、dogfoodの会話履歴と
+persona memoryへ接続していない。正規化済みの実行パスは次のとおりであり、秘密値と会話本文は
+証跡へ記録していない。
 
-| 確認 | 結果 |
-|---|---|
-| backend unit | 1517 passed |
-| frontend unit | 153 passed |
-| backend module | 1289 passed |
-| frontend module | 89 passed |
-| backend integration（実Ollama・実Chroma） | 3 passed |
-| frontend mocked E2E | 20 passed |
-| frontend integration text（実BE・FE・Ollama・Chroma） | 1 passed |
-| frontend integration voice（実BE・FE・Ollama・VOICEVOX・Whisper） | 6 passed |
-| mypy | 144 source files、問題なし |
-| Svelte／TypeScript check | error 0、warning 0 |
-| Ruff | 成功 |
-| frontend production build | 成功、106 modules |
-| `git diff --check` | 成功 |
+- backend integrationの一時領域:
+  `/home/asa/dev/digital-souls/.runtime/environments/wave2-acceptance/backend-integration/pytest-tmp`
+- mocked E2E:
+  `/home/asa/dev/digital-souls/frontend/test-results/runtime-data/mocked-e2e`
+- text integration:
+  `/home/asa/dev/digital-souls/frontend/test-results/runtime-data/integration-text`
+- voice integration:
+  `/home/asa/dev/digital-souls/frontend/test-results/runtime-data/integration-voice`
+
+可変のテスト件数、mypy対象ファイル数、build module数は受け入れ条件に固定せず、各コマンドの
+成功可否を判定する。GitHub CIについてはPR #98のcurrent HEADに対応する
+[checksの実行ログ](https://github.com/FYuki/digital-souls/pull/98/checks)、実接続についてはローカルに
+保存した次の実行ログを一次証跡とする。
+
+| 確認 | 結果 | 一次証跡 |
+|---|---|---|
+| backend unit／module、mypy、Ruff | 成功 | PR #98 `backend` check |
+| frontend unit／module、Svelte／TypeScript check、production build | 成功 | PR #98 `frontend` check |
+| frontend mocked E2E | 成功 | PR #98 `mocked-e2e` check |
+| backend integration（実Ollama・実Chroma） | 成功 | `.runtime/environments/wave2-acceptance/backend-integration/pytest.xml` |
+| frontend integration text（実BE・FE・Ollama・Chroma） | 成功 | `frontend/test-results/integration-text/evidence.json`、`playwright-results.json` |
+| frontend integration voice（実BE・FE・Ollama・VOICEVOX・Whisper） | 成功 | `frontend/test-results/integration-voice/evidence.json`、`playwright-results.json` |
+| `git diff --check` | 成功 | コミット前のローカル実行結果 |
 
 実Chroma integrationでは固定manifest、SQLite正本からの再構築、改ざんされたChroma本文を採用しない
 取得経路を通過した。mocked E2Eでは記憶管理、会話履歴privacy metadata、text／voiceの既存UI回帰を
