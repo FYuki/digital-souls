@@ -75,10 +75,7 @@ def resolve_occurred_at(
 
 def _round_trips_through_utc(local: datetime, zone: ZoneInfo) -> bool:
     round_trip = local.astimezone(UTC).astimezone(zone)
-    return (
-        local.replace(tzinfo=None) == round_trip.replace(tzinfo=None)
-        and local.fold == round_trip.fold
-    )
+    return local.replace(tzinfo=None) == round_trip.replace(tzinfo=None)
 
 
 def _resolve_expression(

@@ -316,6 +316,25 @@ def test_nonexistent_local_date_is_unresolved(
     assert result.occurred_precision is None
 
 
+def test_fold_from_dst_transition_does_not_reject_a_normal_absolute_date() -> None:
+    result = resolve_occurred_at(
+        (
+            AbsoluteDateExpression(
+                role=DateExpressionRole.PRIMARY,
+                year=2026,
+                month=6,
+                day=1,
+            ),
+        ),
+        stated_at=datetime(2026, 11, 1, 9, 30, tzinfo=UTC),
+        timezone="America/Los_Angeles",
+    )
+
+    assert result.occurred_at == datetime(2026, 6, 1, 7, 0, tzinfo=UTC)
+    assert result.occurred_timezone == "America/Los_Angeles"
+    assert result.occurred_precision is TemporalPrecision.DAY
+
+
 def test_last_month_crosses_the_year_boundary_in_the_runtime_timezone() -> None:
     result = resolve_occurred_at(
         (
