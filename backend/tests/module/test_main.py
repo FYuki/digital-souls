@@ -78,14 +78,14 @@ async def test_should_validate_model_settings_before_startup_side_effects(
 
 
 @pytest.mark.anyio
-async def test_startup_rejects_invalid_memory_effective_timezone(
+async def test_startup_rejects_invalid_memory_occurred_timezone(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app import main
 
-    monkeypatch.setenv("MEMORY_EFFECTIVE_TIMEZONE", "Not/A_Timezone")
+    monkeypatch.setenv("MEMORY_OCCURRED_TIMEZONE", "Not/A_Timezone")
 
-    with pytest.raises(ValueError, match="MEMORY_EFFECTIVE_TIMEZONE"):
+    with pytest.raises(ValueError, match="MEMORY_OCCURRED_TIMEZONE"):
         async with main.lifespan(FastAPI()):
             pytest.fail("invalid timezone must prevent startup")
 

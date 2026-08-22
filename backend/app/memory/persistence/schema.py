@@ -18,7 +18,7 @@ PERSONA_MEMORY_TABLES = frozenset(
         "temporary_provider_records",
     }
 )
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 APPROVED_MEMORIES_SQL = """
 CREATE TABLE approved_memories (
@@ -56,11 +56,16 @@ CREATE TABLE approved_memories (
         last_write_idempotency_key IS NULL
         OR length(trim(last_write_idempotency_key)) > 0
     ),
-    effective_at TEXT NOT NULL,
-    effective_timezone TEXT NOT NULL CHECK (length(trim(effective_timezone)) > 0),
-    temporal_precision TEXT NOT NULL CHECK (
-        temporal_precision IN ('YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND')
+    occurred_at TEXT,
+    occurred_timezone TEXT CHECK (
+        occurred_timezone IS NULL OR length(trim(occurred_timezone)) > 0
     ),
+    occurred_precision TEXT CHECK (
+        occurred_precision IS NULL OR occurred_precision IN (
+            'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND'
+        )
+    ),
+    stated_at TEXT NOT NULL,
     expires_at TEXT,
     last_user_mentioned_at TEXT,
     last_consolidated_at TEXT,
@@ -74,6 +79,13 @@ CREATE TABLE approved_memories (
         OR
         (memory_type IN ('USER_PREFERENCE', 'INTERACTION_PREFERENCE')
             AND memory_kind = 'SEMANTIC' AND episodic_event_type IS NULL)
+    ),
+    CHECK (
+        (occurred_at IS NULL AND occurred_timezone IS NULL
+            AND occurred_precision IS NULL)
+        OR
+        (occurred_at IS NOT NULL AND occurred_timezone IS NOT NULL
+            AND occurred_precision IS NOT NULL)
     )
 )
 """
@@ -168,6 +180,11 @@ INDEX_DEFINITIONS = (
         "idx_approved_memories_active",
         "approved_memories",
         ("character_id", "status", "created_at", "id"),
+    ),
+    (
+        "idx_approved_memories_occurred_range",
+        "approved_memories",
+        ("character_id", "status", "occurred_at"),
     ),
 )
 

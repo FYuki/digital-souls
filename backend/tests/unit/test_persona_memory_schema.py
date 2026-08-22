@@ -45,6 +45,10 @@ def _approved_values(
     formation_method: str = "EXTRACTED",
     status: str = "ACTIVE",
     idempotency_key: str = "conversation-1:turn-1:0:extractor-v1",
+    occurred_at: str | None = "2026-08-18T00:00:00.000000Z",
+    occurred_timezone: str | None = "Asia/Tokyo",
+    occurred_precision: str | None = "SECOND",
+    stated_at: str | None = "2026-08-20T00:00:00.000000Z",
 ) -> tuple[object, ...]:
     timestamp = "2026-08-18T00:00:00.000000Z"
     return (
@@ -66,9 +70,10 @@ def _approved_values(
         1,
         status,
         idempotency_key,
-        timestamp,
-        "Asia/Tokyo",
-        "SECOND",
+        occurred_at,
+        occurred_timezone,
+        occurred_precision,
+        stated_at,
         None,
         timestamp,
         None,
@@ -82,7 +87,7 @@ APPROVED_COLUMNS = (
     "episodic_event_type, formation_method, schema_version, normalized_text, "
     "structured_value, policy_version, classifier_version, model_id, "
     "model_digest, prompt_version, content_version, status, idempotency_key, "
-    "effective_at, effective_timezone, temporal_precision, expires_at, "
+    "occurred_at, occurred_timezone, occurred_precision, stated_at, expires_at, "
     "last_user_mentioned_at, last_consolidated_at, created_at, updated_at"
 )
 
@@ -252,9 +257,82 @@ def test_schema_creates_worker_and_active_memory_indexes(tmp_path: Path) -> None
 
     assert "idx_memory_index_outbox_pending" in indexes
     assert "idx_approved_memories_active" in indexes
+    assert "idx_approved_memories_occurred_range" in indexes
 
 
-def test_schema_recreates_missing_indexes_for_an_existing_v1_database(
+def test_schema_v2_exposes_four_distinct_memory_dates(tmp_path: Path) -> None:
+    from app.memory.persistence.schema import SCHEMA_VERSION
+
+    paths = _initialize(tmp_path)
+
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+        columns = {
+            str(row[1]): {"not_null": bool(row[3])}
+            for row in connection.execute("PRAGMA table_info(approved_memories)")
+        }
+
+    assert SCHEMA_VERSION == 2
+    assert version == 2
+    assert columns["occurred_at"]["not_null"] is False
+    assert columns["occurred_timezone"]["not_null"] is False
+    assert columns["occurred_precision"]["not_null"] is False
+    assert columns["stated_at"]["not_null"] is True
+    assert columns["created_at"]["not_null"] is True
+    assert columns["last_user_mentioned_at"]["not_null"] is False
+
+
+@pytest.mark.parametrize(
+    ("occurred_at", "occurred_timezone", "occurred_precision"),
+    [
+        (None, "Asia/Tokyo", "DAY"),
+        ("2026-08-18T00:00:00.000000Z", None, "DAY"),
+        ("2026-08-18T00:00:00.000000Z", "Asia/Tokyo", None),
+    ],
+)
+def test_approved_memory_rejects_partially_known_occurred_date(
+    occurred_at: str | None,
+    occurred_timezone: str | None,
+    occurred_precision: str | None,
+    tmp_path: Path,
+) -> None:
+    paths = _initialize(tmp_path)
+
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        with pytest.raises(sqlite3.IntegrityError):
+            _insert_approved(
+                connection,
+                _approved_values(
+                    occurred_at=occurred_at,
+                    occurred_timezone=occurred_timezone,
+                    occurred_precision=occurred_precision,
+                ),
+            )
+
+
+def test_approved_memory_accepts_unknown_occurred_date(tmp_path: Path) -> None:
+    paths = _initialize(tmp_path)
+
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        _insert_approved(
+            connection,
+            _approved_values(
+                occurred_at=None,
+                occurred_timezone=None,
+                occurred_precision=None,
+            ),
+        )
+
+
+def test_approved_memory_requires_stated_at(tmp_path: Path) -> None:
+    paths = _initialize(tmp_path)
+
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        with pytest.raises(sqlite3.IntegrityError):
+            _insert_approved(connection, _approved_values(stated_at=None))
+
+
+def test_schema_recreates_missing_indexes_for_an_existing_v2_database(
     tmp_path: Path,
 ) -> None:
     from app.memory.persistence.schema import initialize_persona_memory_schema
@@ -263,6 +341,7 @@ def test_schema_recreates_missing_indexes_for_an_existing_v1_database(
     with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
         connection.execute("DROP INDEX idx_memory_index_outbox_pending")
         connection.execute("DROP INDEX idx_approved_memories_active")
+        connection.execute("DROP INDEX idx_approved_memories_occurred_range")
 
     initialize_persona_memory_schema(paths, tmp_path / "repository")
 
@@ -275,6 +354,23 @@ def test_schema_recreates_missing_indexes_for_an_existing_v1_database(
         }
     assert "idx_memory_index_outbox_pending" in indexes
     assert "idx_approved_memories_active" in indexes
+    assert "idx_approved_memories_occurred_range" in indexes
+
+
+def test_schema_rejects_v1_without_migration_using_the_existing_error_contract(
+    tmp_path: Path,
+) -> None:
+    from app.memory.persistence.schema import initialize_persona_memory_schema
+
+    paths = _initialize(tmp_path)
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        connection.execute("PRAGMA user_version = 1")
+
+    with pytest.raises(
+        ValueError,
+        match="existing persona memory database has an unknown schema",
+    ):
+        initialize_persona_memory_schema(paths, tmp_path / "repository")
 
 
 @pytest.mark.parametrize(

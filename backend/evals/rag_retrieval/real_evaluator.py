@@ -43,6 +43,8 @@ def evaluate_real_manifest(
             for candidate in candidates:
                 memory_id = _required_string(candidate.get("id"), "candidate.id")
                 text = _required_string(candidate.get("text"), "candidate.text")
+                if "occurred_at" not in candidate:
+                    raise ValueError("candidate.occurred_at is required")
                 embedding = embed_text(text)
                 collection_started = True
                 upsert_memory_index_entry(
@@ -58,8 +60,8 @@ def evaluate_real_manifest(
                     policy_version=_required_string(
                         candidate.get("policy_version"), "candidate.policy_version"
                     ),
-                    effective_at=_required_string(
-                        candidate.get("created_at"), "candidate.created_at"
+                    occurred_at=_optional_string(
+                        candidate["occurred_at"], "candidate.occurred_at"
                     ),
                     expires_at=None,
                     chroma_path=runtime_paths.chroma_path,
@@ -97,3 +99,9 @@ def _required_string(value: object, label: str) -> str:
     if not isinstance(value, str) or not value:
         raise ValueError(f"{label} must be a non-empty string")
     return value
+
+
+def _optional_string(value: object, label: str) -> str | None:
+    if value is None:
+        return None
+    return _required_string(value, label)

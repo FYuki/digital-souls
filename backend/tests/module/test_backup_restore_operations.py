@@ -659,7 +659,7 @@ async def test_should_restore_verified_generation_when_schema_initialization_fai
             "SELECT COUNT(*) FROM conversations"
         ).fetchone()[0]
         assert conversation_count == 1
-    assert persona_memory_projection(paths.persona_memory_sqlite_path) == (1, 1)
+    assert persona_memory_projection(paths.persona_memory_sqlite_path) == (2, 1)
 
 
 @pytest.mark.anyio

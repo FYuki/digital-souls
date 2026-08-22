@@ -251,7 +251,11 @@ class MemoryIndexSync:
                 memory_kind=memory.memory_kind,
                 memory_type=memory.memory_type.value,
                 policy_version=memory.policy_version,
-                effective_at=format_datetime(memory.effective_at),
+                occurred_at=(
+                    None
+                    if memory.occurred_at is None
+                    else format_datetime(memory.occurred_at)
+                ),
                 expires_at=(
                     None
                     if memory.expires_at is None
@@ -337,7 +341,11 @@ def _memory_metadata(memory: ApprovedMemory) -> dict[str, str]:
         memory_kind=memory.memory_kind,
         memory_type=memory.memory_type.value,
         policy_version=memory.policy_version,
-        effective_at=format_datetime(memory.effective_at),
+        occurred_at=(
+            None
+            if memory.occurred_at is None
+            else format_datetime(memory.occurred_at)
+        ),
         expires_at=(
             None if memory.expires_at is None else format_datetime(memory.expires_at)
         ),

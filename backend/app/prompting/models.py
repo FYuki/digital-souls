@@ -1,5 +1,6 @@
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 
 
@@ -7,6 +8,14 @@ class PromptRole(str, Enum):
     SYSTEM = "system"
     USER = "user"
     ASSISTANT = "assistant"
+
+
+@dataclass(frozen=True, repr=False)
+class PromptMemoryReference:
+    memory_id: str
+    occurred_at: datetime | None
+    occurred_precision: str | None
+    match_kind: str
 
 
 @dataclass(frozen=True, repr=False)
@@ -35,6 +44,7 @@ class CharacterPrompt:
 class RagItem:
     content: str
     raw_distance: float
+    reference: PromptMemoryReference | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.content, str):
@@ -46,10 +56,13 @@ class RagItem:
 @dataclass(frozen=True, repr=False)
 class RagContext:
     items: tuple[RagItem, ...]
+    required_instruction: str = ""
 
     def __post_init__(self) -> None:
         if not all(isinstance(item, RagItem) for item in self.items):
             raise TypeError("items must contain only RagItem values")
+        if not isinstance(self.required_instruction, str):
+            raise TypeError("required_instruction must be a string")
 
 
 @dataclass(frozen=True, repr=False)
@@ -149,6 +162,7 @@ class PromptBuildInput:
 class PromptMessage:
     role: PromptRole
     content: str
+    memory_reference: PromptMemoryReference | None = None
 
 
 @dataclass(frozen=True)

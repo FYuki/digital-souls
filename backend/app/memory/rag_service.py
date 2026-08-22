@@ -4,20 +4,31 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 
 from app.memory.chroma_store import (
     MemorySearchCandidate,
     MemorySearchResult,
+    RetrievalMatchKind,
     query_memories,
 )
 from app.memory.embedder import embed_text
 from app.memory.memory_policy import MemoryPolicy, rag_service_policy
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
-from app.memory.persistence.contracts import ApprovedMemory, MemoryStatus
-from app.memory.persistence.sqlite import format_datetime
+from app.memory.persistence.contracts import (
+    ApprovedMemory,
+    MemoryStatus,
+    TemporalPrecision,
+)
 from app.memory.ranking import RetrievalRankingCandidate, rank_retrieval_candidates
+from app.memory.temporal_query import (
+    TemporalQuery,
+    TemporalQueryKind,
+    match_season,
+    parse_temporal_query,
+)
 from app.privacy.contracts import PrivacyScanner, ScanFailure, ScanSuccess
 from app.privacy.semantic.classifier import SemanticPrivacyClassifier
 from app.privacy.semantic.contracts import (
@@ -44,6 +55,12 @@ class _VerifiedCandidate:
     memory: ApprovedMemory
 
 
+@dataclass(frozen=True)
+class RetrievalOutcome:
+    memories: tuple[MemorySearchResult, ...]
+    no_match: bool
+
+
 def retrieve_prompt_memories(
     character: str,
     user_message: str,
@@ -53,11 +70,13 @@ def retrieve_prompt_memories(
     classifier: SemanticPrivacyClassifier,
     approved_repository: ApprovedMemoryRepository,
     chroma_path: Path,
-) -> tuple[MemorySearchResult, ...]:
+    now: datetime,
+    timezone: str,
+) -> RetrievalOutcome:
     try:
         query_scan = scanner.scan(user_message)
         if _scan_blocks_retrieval(query_scan, policy):
-            return ()
+            return RetrievalOutcome((), False)
         assessment = classifier.classify(user_message, QUERY_GATE)
         if (
             not isinstance(assessment, PrivacyAssessment)
@@ -65,14 +84,31 @@ def retrieve_prompt_memories(
             or not isinstance(assessment.reason_code, SemanticAssessmentReasonCode)
         ):
             logger.warning("Skipped RAG memory lookup: invalid semantic assessment")
-            return ()
+            return RetrievalOutcome((), False)
         if assessment.classification is not SemanticClassification.NOT_SENSITIVE:
             logger.warning(
                 "Skipped RAG memory lookup: semantic_reason_code=%s",
                 assessment.reason_code.value,
             )
-            return ()
+            return RetrievalOutcome((), False)
         ranking_policy = rag_service_policy(policy)
+        temporal_query = parse_temporal_query(
+            user_message,
+            now=now,
+            timezone=timezone,
+        )
+        period_memories = (
+            []
+            if temporal_query is None
+            else approved_repository.search_by_occurred_range(
+                character_id=character,
+                start=temporal_query.start,
+                end=temporal_query.end,
+                compatible_policy_versions=(
+                    frozenset(policy.retrieval_compatible_policy_versions)
+                ),
+            )
+        )
         candidates = query_memories(
             character,
             embed_text(user_message),
@@ -85,20 +121,40 @@ def retrieve_prompt_memories(
             policy=policy,
             scanner=scanner,
             approved_repository=approved_repository,
-            now=datetime.now(UTC),
+            now=now.astimezone(UTC),
         )
         ranked = _rank_candidates(
             verified,
             relevance_threshold=ranking_policy.relevance_threshold,
             equivalence_margin=ranking_policy.equivalence_margin,
         )
-        return tuple(
-            _search_result(item)
-            for item in ranked[: ranking_policy.max_retrieved_memories]
+        if temporal_query is None:
+            return RetrievalOutcome(
+                tuple(
+                    _search_result(item, RetrievalMatchKind.SEMANTIC)
+                    for item in ranked[: ranking_policy.max_retrieved_memories]
+                ),
+                False,
+            )
+        period_memories = _verified_period_memories(
+            period_memories,
+            character=character,
+            policy=policy,
+            scanner=scanner,
+            now=now.astimezone(UTC),
         )
+        period_memories = _filter_period_memories(period_memories, temporal_query)
+        combined = _rank_temporal_candidates(ranked, period_memories)
+        memories = tuple(
+            _search_result(candidate, match_kind)
+            for candidate, match_kind in combined[
+                : ranking_policy.max_retrieved_memories
+            ]
+        )
+        return RetrievalOutcome(memories, not memories)
     except RAG_OPERATION_ERRORS as exc:
         logger.warning("RAG memory lookup failed: %s", exc.__class__.__name__)
-        return ()
+        return RetrievalOutcome((), False)
 
 
 def _scan_blocks_retrieval(scan: object, policy: MemoryPolicy) -> bool:
@@ -186,15 +242,132 @@ def _rank_candidates(
     return tuple(by_id[candidate.memory_id] for candidate in ranked)
 
 
-def _search_result(candidate: _VerifiedCandidate) -> MemorySearchResult:
+def _filter_period_memories(
+    memories: list[ApprovedMemory], query: TemporalQuery
+) -> list[ApprovedMemory]:
+    if query.kind is TemporalQueryKind.SEASON:
+        return [
+            memory
+            for memory in memories
+            if match_season(
+                query,
+                occurred_at=memory.occurred_at,
+                occurred_precision=memory.occurred_precision,
+                occurred_timezone=memory.occurred_timezone,
+            ).matched
+        ]
+    allowed_precisions = (
+        frozenset(
+            {
+                TemporalPrecision.MONTH,
+                TemporalPrecision.DAY,
+                TemporalPrecision.HOUR,
+                TemporalPrecision.MINUTE,
+                TemporalPrecision.SECOND,
+            }
+        )
+        if query.kind is TemporalQueryKind.MONTH
+        else frozenset(
+            {
+                TemporalPrecision.DAY,
+                TemporalPrecision.HOUR,
+                TemporalPrecision.MINUTE,
+                TemporalPrecision.SECOND,
+            }
+        )
+    )
+    return [
+        memory
+        for memory in memories
+        if memory.occurred_precision in allowed_precisions
+    ]
+
+
+def _verified_period_memories(
+    memories: list[ApprovedMemory],
+    *,
+    character: str,
+    policy: MemoryPolicy,
+    scanner: PrivacyScanner,
+    now: datetime,
+) -> list[ApprovedMemory]:
+    verified: list[ApprovedMemory] = []
+    for memory in memories:
+        if not _is_retrieval_compatible(memory, character, policy, now):
+            continue
+        body_scan = scanner.scan(memory.normalized_text)
+        if not isinstance(body_scan, (ScanFailure, ScanSuccess)):
+            continue
+        if not _scan_blocks_retrieval(body_scan, policy):
+            verified.append(memory)
+    return verified
+
+
+def _rank_temporal_candidates(
+    semantic: tuple[_VerifiedCandidate, ...],
+    period: list[ApprovedMemory],
+) -> tuple[tuple[_VerifiedCandidate, RetrievalMatchKind], ...]:
+    semantic_by_id = {candidate.memory.id: candidate for candidate in semantic}
+    period_by_id = {memory.id: memory for memory in period}
+    both = tuple(
+        (candidate, RetrievalMatchKind.BOTH)
+        for candidate in semantic
+        if candidate.memory.id in period_by_id
+    )
+    semantic_only = tuple(
+        (candidate, RetrievalMatchKind.SEMANTIC)
+        for candidate in semantic
+        if candidate.memory.id not in period_by_id
+    )
+    period_only_memories = sorted(
+        (
+            memory
+            for memory in period
+            if memory.id not in semantic_by_id
+        ),
+        key=lambda memory: (
+            memory.last_user_mentioned_at or datetime.min.replace(tzinfo=UTC),
+            memory.created_at,
+            str(memory.id),
+        ),
+        reverse=True,
+    )
+    period_only = tuple(
+        (
+            _VerifiedCandidate(
+                MemorySearchCandidate(str(memory.id), float("inf")),
+                memory,
+            ),
+            RetrievalMatchKind.PERIOD,
+        )
+        for memory in period_only_memories
+    )
+    return (*both, *semantic_only, *period_only)
+
+
+def _search_result(
+    candidate: _VerifiedCandidate, match_kind: RetrievalMatchKind
+) -> MemorySearchResult:
     memory = candidate.memory
     return MemorySearchResult(
         memory_id=str(memory.id),
         normalized_text=memory.normalized_text,
-        effective_at=format_datetime(memory.effective_at),
+        occurred_at=_format_occurred_at(memory),
+        occurred_precision=memory.occurred_precision,
+        match_kind=match_kind,
         memory_type=memory.memory_type.value,
         raw_distance=candidate.candidate.raw_distance,
     )
+
+
+def _format_occurred_at(memory: ApprovedMemory) -> str | None:
+    if memory.occurred_at is None or memory.occurred_timezone is None:
+        return None
+    try:
+        zone = ZoneInfo(memory.occurred_timezone)
+    except ZoneInfoNotFoundError:
+        return None
+    return memory.occurred_at.astimezone(zone).isoformat()
 
 
 def _is_retrieval_compatible(

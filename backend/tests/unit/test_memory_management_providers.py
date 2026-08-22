@@ -108,6 +108,12 @@ def test_allowed_persona_correction_uses_existing_receipt_and_manual_context() -
     context = repository.correct.call_args.kwargs["context"]
     assert context.formation_method is FormationMethod.DIRECT
     assert context.idempotency_key == str(OPERATION_ID)
+    current = repository.get.return_value
+    assert context.occurred_at == current.occurred_at
+    assert context.occurred_timezone == current.occurred_timezone
+    assert context.occurred_precision is current.occurred_precision
+    assert context.stated_at == current.stated_at
+    assert context.expires_at == current.expires_at
     assert context.policy_version == assessment.policy_version
     assert context.classifier_version == assessment.classifier_version
     assert context.model_id == assessment.model_id

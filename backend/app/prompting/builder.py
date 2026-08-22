@@ -11,6 +11,7 @@ from app.prompting.models import (
     PromptMessage,
     PromptRole,
     PromptUsage,
+    RagContext,
     RagItem,
 )
 
@@ -29,6 +30,7 @@ RAG_HEADING = "## 関連する記憶"
 @dataclass(frozen=True, repr=False)
 class _SelectedRegions:
     character: PromptMessage | None
+    rag_instruction: PromptMessage | None
     rag: tuple[PromptMessage, ...]
     history: tuple[MaskedHistoryTurn, ...]
     current_user: PromptMessage
@@ -84,7 +86,7 @@ class PromptBuilder:
             measurements=measured_user.measurements,
             token_limit=prompt_input.budget.history,
         )
-        rag, omitted_rag, measurements = self._select_rag(
+        rag_instruction, rag, omitted_rag, measurements = self._select_rag(
             prompt_input, selected_history.measurements
         )
         post_history, measurements = self._post_history_message(
@@ -92,6 +94,7 @@ class PromptBuilder:
         )
         selected = _SelectedRegions(
             character=character,
+            rag_instruction=rag_instruction,
             rag=rag,
             history=selected_history.history.turns,
             current_user=current_user,
@@ -129,19 +132,37 @@ class PromptBuilder:
         self,
         prompt_input: PromptBuildInput,
         measurements: TokenMeasurements,
-    ) -> tuple[tuple[PromptMessage, ...], int, TokenMeasurements]:
+    ) -> tuple[
+        PromptMessage | None,
+        tuple[PromptMessage, ...],
+        int,
+        TokenMeasurements,
+    ]:
+        instruction = self._rag_instruction_message(prompt_input.rag)
+        instruction_count = 0
+        if instruction is not None:
+            measured_instruction = measurements.measure((instruction,))
+            instruction_count = measured_instruction.count
+            self._require_within(
+                "rag",
+                instruction_count,
+                prompt_input.budget.rag,
+            )
+            measurements = measured_instruction.measurements
         messages = tuple(self._rag_message(item) for item in prompt_input.rag.items)
         if not messages:
-            return (), 0, measurements
+            return instruction, (), 0, measurements
+        item_limit = prompt_input.budget.rag - instruction_count
         measured = measurements.measure(messages)
-        if measured.count <= prompt_input.budget.rag:
-            return messages, 0, measured.measurements
+        if measured.count <= item_limit:
+            return instruction, messages, 0, measured.measurements
         selected_count, measurements = self._largest_fitting_message_prefix(
             messages,
-            prompt_input.budget.rag,
+            item_limit,
             measured.measurements,
         )
         return (
+            instruction,
             messages[:selected_count],
             len(messages) - selected_count,
             measurements,
@@ -319,7 +340,11 @@ class PromptBuilder:
         character, measurements = self._measure_optional(
             selected.character, measured.measurements
         )
-        rag = measurements.measure(selected.rag)
+        rag_messages = (
+            (() if selected.rag_instruction is None else (selected.rag_instruction,))
+            + selected.rag
+        )
+        rag = measurements.measure(rag_messages)
         history = rag.measurements.measure(self._history_messages(selected.history))
         current_user = history.measurements.measure((selected.current_user,))
         post_history, measurements = self._measure_optional(
@@ -339,11 +364,17 @@ class PromptBuilder:
 
     def _messages(self, selected: _SelectedRegions) -> tuple[PromptMessage, ...]:
         character = () if selected.character is None else (selected.character,)
+        rag_instruction = (
+            ()
+            if selected.rag_instruction is None
+            else (selected.rag_instruction,)
+        )
         post_history = (
             () if selected.post_history is None else (selected.post_history,)
         )
         return (
             *character,
+            *rag_instruction,
             *selected.rag,
             *self._history_messages(selected.history),
             *post_history,
@@ -355,6 +386,11 @@ class PromptBuilder:
         selected: _SelectedRegions,
     ) -> tuple[PromptMessage, ...]:
         character = () if selected.character is None else (selected.character,)
+        rag_instruction = (
+            ()
+            if selected.rag_instruction is None
+            else (selected.rag_instruction,)
+        )
         latest_completed = next(
             (turn for turn in reversed(selected.history) if turn.is_completed),
             None,
@@ -362,7 +398,7 @@ class PromptBuilder:
         completed = (
             () if latest_completed is None else turn_messages(latest_completed)
         )
-        return (*character, *completed, selected.current_user)
+        return (*character, *rag_instruction, *completed, selected.current_user)
 
     @staticmethod
     def _removable_history_indices(
@@ -403,7 +439,18 @@ class PromptBuilder:
 
     @staticmethod
     def _rag_message(item: RagItem) -> PromptMessage:
-        return PromptMessage(PromptRole.SYSTEM, f"{RAG_HEADING}\n{item.content}")
+        return PromptMessage(
+            PromptRole.SYSTEM,
+            f"{RAG_HEADING}\n{item.content}",
+            memory_reference=item.reference,
+        )
+
+    @staticmethod
+    def _rag_instruction_message(rag: RagContext) -> PromptMessage | None:
+        content = rag.required_instruction.strip()
+        if not content:
+            return None
+        return PromptMessage(PromptRole.SYSTEM, content)
 
     @staticmethod
     def _require_within(region: str, used: int, limit: int) -> None:

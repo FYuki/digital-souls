@@ -58,6 +58,7 @@ def _sync(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, embedder):
                 "memory_kind",
                 "memory_type",
                 "policy_version",
+                "occurred_at",
                 "effective_at",
                 "expires_at",
             }
@@ -688,7 +689,7 @@ def test_worker_removes_expired_memory_from_index(
     assert _outbox_rows(database_path)[0]["status"] == "COMPLETED"
 
 
-def test_reconciliation_repairs_stale_document_and_completes_upsert(
+def test_reconciliation_replaces_legacy_date_metadata_and_stale_document(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     service, approved, database_path, records, _deleted = _sync(
@@ -710,6 +711,10 @@ def test_reconciliation_repairs_stale_document_and_completes_upsert(
     service.reconcile_once()
 
     assert records[("miori", str(memory.id))]["normalized_text"] == "現在の本文"
+    assert records[("miori", str(memory.id))]["occurred_at"] == (
+        "2026-08-16T12:00:00.000000Z"
+    )
+    assert "effective_at" not in records[("miori", str(memory.id))]
     assert _outbox_rows(database_path)[0]["status"] == "COMPLETED"
 
 

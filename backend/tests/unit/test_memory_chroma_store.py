@@ -117,7 +117,7 @@ def _upsert(chroma_store: ModuleType, tmp_path: Path, **overrides: object) -> No
         "memory_kind": "SEMANTIC",
         "memory_type": "USER_PREFERENCE",
         "policy_version": "policy-v1",
-        "effective_at": "2026-06-23T00:00:00.000000Z",
+        "occurred_at": "2026-06-23T00:00:00.000000Z",
         "expires_at": None,
         "chroma_path": tmp_path / "data" / "chroma",
     }
@@ -156,7 +156,7 @@ def test_upsert_exactly_replaces_record_with_approved_memory_payload(
                 "memory_kind": "SEMANTIC",
                 "memory_type": "USER_PREFERENCE",
                 "policy_version": "policy-v1",
-                "effective_at": "2026-06-23T00:00:00.000000Z",
+                "occurred_at": "2026-06-23T00:00:00.000000Z",
             },
         }
     }
@@ -181,9 +181,23 @@ def test_upsert_includes_expires_at_only_when_present(
         "memory_kind": "SEMANTIC",
         "memory_type": "USER_PREFERENCE",
         "policy_version": "policy-v1",
-        "effective_at": "2026-06-23T00:00:00.000000Z",
+        "occurred_at": "2026-06-23T00:00:00.000000Z",
         "expires_at": "2026-07-23T00:00:00.000000Z",
     }
+
+
+def test_upsert_omits_occurred_at_when_the_event_date_is_unknown(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+
+    _upsert(chroma_store, tmp_path, occurred_at=None)
+
+    metadata = _only_collection().records[
+        "00000000-0000-4000-8000-000000000042"
+    ]["metadata"]
+    assert isinstance(metadata, dict)
+    assert "occurred_at" not in metadata
 
 
 def test_delete_is_idempotent_and_character_scoped(

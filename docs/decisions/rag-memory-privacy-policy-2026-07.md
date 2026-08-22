@@ -326,7 +326,8 @@ source_conversation_id
 policy_version
 status
 created_at
-effective_at
+occurred_at: nullable
+stated_at
 expires_at
 ```
 
@@ -338,9 +339,11 @@ Chromaには生会話を入れず、次だけを保存する。
 - `character_id`
 - `memory_type`
 - `policy_version`
-- 検索に必要な有効日時metadata
+- 検索補助用の出来事日時metadata
 
 Chromaは削除・破損してもSQLiteから再構築できるものとし、正本として扱わない。
+時系列照合の期間、timezone、精度の判断もSQLiteを正本とし、Chromaの日時metadataだけで
+候補の採否を決めない。詳細な列定義と2経路検索順位は2026-08 ADRのIssue #11更新を優先する。
 
 訂正、失効、ユーザー削除は次のように区別する。
 

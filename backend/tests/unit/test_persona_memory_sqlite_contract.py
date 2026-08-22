@@ -60,7 +60,7 @@ def _candidate() -> ApprovedMemoryCandidate:
     )
 
 
-def _context(*, effective_at: datetime = NOW, expires_at: datetime | None = None):
+def _context(*, occurred_at: datetime = NOW, expires_at: datetime | None = None):
     from app.memory.persistence.contracts import (
         FormationMethod,
         MemorySourceInput,
@@ -72,9 +72,10 @@ def _context(*, effective_at: datetime = NOW, expires_at: datetime | None = None
     return MemoryWriteContext(
         formation_method=FormationMethod.EXTRACTED,
         idempotency_key="conversation-1:turn-1:0:extractor-v1",
-        effective_at=effective_at,
-        effective_timezone="Asia/Tokyo",
-        temporal_precision=TemporalPrecision.SECOND,
+        occurred_at=occurred_at,
+        occurred_timezone="Asia/Tokyo",
+        occurred_precision=TemporalPrecision.SECOND,
+        stated_at=NOW,
         expires_at=expires_at,
         policy_version="policy-v1",
         classifier_version="classifier-v1",
@@ -139,7 +140,7 @@ def test_hard_delete_finishes_with_a_truncated_wal(tmp_path: Path) -> None:
 def test_write_context_rejects_timezone_naive_datetimes(
 ) -> None:
     with pytest.raises(ValueError):
-        _context(effective_at=datetime(2026, 8, 18, 12, 0))
+        _context(occurred_at=datetime(2026, 8, 18, 12, 0))
 
 
 def test_write_context_rejects_timezone_naive_expiration() -> None:

@@ -349,6 +349,7 @@ def _valid_preference_response() -> str:
                 {
                     "memory_type": "USER_PREFERENCE",
                     "structured_value": {"polarity": "LIKE", "object": "紅茶"},
+                    "date_expressions": [],
                 }
             ]
         },
@@ -394,7 +395,7 @@ def test_http_turn_extracts_each_allowlisted_type_to_automatic_persistence(
     expected_memory_type: str,
 ) -> None:
     extractor_response = json.dumps(
-        {"candidates": [candidate]},
+        {"candidates": [{**candidate, "date_expressions": []}]},
         ensure_ascii=False,
     )
     privacy_response = json.dumps(

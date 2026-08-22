@@ -12,6 +12,7 @@ from unittest.mock import ANY, MagicMock, patch
 from app.audio_pipeline import resolve_audio_runtime_config
 from app.main import app
 from app.memory.chroma_store import MemorySearchResult
+from app.memory.rag_service import RetrievalOutcome
 from app.prompting import CharacterPrompt, PromptInputLimitError
 from app.prompting.builder import PromptBuilder
 from tests.chat_reply_test_support import persisted_reply
@@ -396,14 +397,17 @@ class TestWebSocketEndpoint:
                 with patch(_LOAD_PERSONALITY, return_value=_character_card()):
                     with patch(
                         _BUILD_AUGMENTED_SYSTEM_PROMPT,
-                        return_value=(
-                            MemorySearchResult(
+                        return_value=RetrievalOutcome(
+                            (
+                                MemorySearchResult(
                                 memory_id="memory-1",
                                 normalized_text="前回は畑の話をした",
-                                effective_at="2026-07-31T00:00:00.000000Z",
+                                occurred_at="2026-07-31T00:00:00.000000Z",
                                 memory_type="USER_PREFERENCE",
                                 raw_distance=1.25,
+                                ),
                             ),
+                            False,
                         ),
                     ) as mock_build:
                         with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY) as mock_gen:
@@ -422,6 +426,8 @@ class TestWebSocketEndpoint:
             classifier=ANY,
             approved_repository=ANY,
             chroma_path=runtime_paths.chroma_path,
+            now=ANY,
+            timezone="Asia/Tokyo",
         )
         assert "前回は畑の話をした" in _generated_contents(mock_gen)[1]
 

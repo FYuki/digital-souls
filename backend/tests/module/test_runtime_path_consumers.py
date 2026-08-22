@@ -57,7 +57,7 @@ def test_rt_chroma_01_upsert_and_query_use_the_explicit_same_chroma_path(
         memory_kind="SEMANTIC",
         memory_type="USER_PREFERENCE",
         policy_version="policy-v1",
-        effective_at="2026-08-07T00:00:00.000000Z",
+        occurred_at="2026-08-07T00:00:00.000000Z",
         expires_at=None,
         chroma_path=paths.chroma_path,
     )
@@ -108,7 +108,7 @@ def test_rt_chroma_01_resolved_environment_paths_keep_indexes_isolated(
         memory_kind="SEMANTIC",
         memory_type="USER_PREFERENCE",
         policy_version="policy-v1",
-        effective_at="2026-08-20T00:00:00.000000Z",
+        occurred_at="2026-08-20T00:00:00.000000Z",
         expires_at=None,
         chroma_path=dev.chroma_path,
     )

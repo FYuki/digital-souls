@@ -117,9 +117,10 @@ class PersonaMemoryProvider:
             context=MemoryWriteContext(
                 formation_method=FormationMethod.DIRECT,
                 idempotency_key=str(idempotency_key),
-                effective_at=current.effective_at,
-                effective_timezone=current.effective_timezone,
-                temporal_precision=current.temporal_precision,
+                occurred_at=current.occurred_at,
+                occurred_timezone=current.occurred_timezone,
+                occurred_precision=current.occurred_precision,
+                stated_at=current.stated_at,
                 expires_at=current.expires_at,
                 policy_version=assessment.policy_version,
                 classifier_version=assessment.classifier_version,
@@ -156,7 +157,7 @@ class PersonaMemoryProvider:
             "memory_type": memory.memory_type.value,
             "normalized_text": memory.normalized_text,
             "structured_value": asdict(memory.structured_value),
-            "effective_at": memory.effective_at,
+            "effective_at": memory.occurred_at,
             "status": memory.status.value,
             "content_version": memory.content_version,
             "index_pending": self._repository.is_index_pending(

@@ -84,9 +84,10 @@ def _approved_memory(**overrides: object) -> ApprovedMemory:
         "policy_version": resolved_memory_policy().policy_version,
         "content_version": 1,
         "status": MemoryStatus.ACTIVE,
-        "effective_at": now,
-        "effective_timezone": "Asia/Tokyo",
-        "temporal_precision": TemporalPrecision.SECOND,
+        "occurred_at": now,
+        "occurred_timezone": "Asia/Tokyo",
+        "occurred_precision": TemporalPrecision.SECOND,
+        "stated_at": now,
         "expires_at": datetime(2999, 1, 1, tzinfo=UTC),
         "last_user_mentioned_at": None,
         "created_at": now,
@@ -132,7 +133,7 @@ def _retrieve(
     repository,
     user_message: str = "紅茶の好みは？",
 ):
-    return rag_service.retrieve_prompt_memories(
+    outcome = rag_service.retrieve_prompt_memories(
         "miori",
         user_message,
         resolved_memory_policy(),
@@ -140,7 +141,10 @@ def _retrieve(
         classifier=classifier,
         approved_repository=repository,
         chroma_path=_CHROMA_PATH,
+        now=datetime(2026, 8, 20, 3, 30, tzinfo=UTC),
+        timezone="Asia/Tokyo",
     )
+    return outcome.memories
 
 
 def _absolute_deny_finding(category: PrivacyCategory) -> PrivacyFinding:
@@ -176,20 +180,23 @@ def test_query_absolute_deny_uses_resolved_policy_before_any_search(monkeypatch)
     monkeypatch.setattr(rag_service, "embed_text", embed)
     monkeypatch.setattr(rag_service, "query_memories", query)
 
-    memories = rag_service.retrieve_prompt_memories(
+    outcome = rag_service.retrieve_prompt_memories(
         "miori",
-        "x",
+        "去年3月の連絡先 user@example.com を教えて",
         policy,
         scanner=scanner,
         classifier=classifier,
         approved_repository=repository,
         chroma_path=_CHROMA_PATH,
+        now=datetime(2026, 8, 20, 3, 30, tzinfo=UTC),
+        timezone="Asia/Tokyo",
     )
 
-    assert memories == ()
+    assert outcome.memories == ()
     classifier.classify.assert_not_called()
     embed.assert_not_called()
     query.assert_not_called()
+    repository.search_by_occurred_range.assert_not_called()
 
 
 def test_query_scan_failure_skips_classifier_embedding_and_chroma(monkeypatch):
@@ -217,6 +224,7 @@ def test_query_scan_failure_skips_classifier_embedding_and_chroma(monkeypatch):
     classifier.classify.assert_not_called()
     embed.assert_not_called()
     query.assert_not_called()
+    repository.search_by_occurred_range.assert_not_called()
 
 
 def test_query_scanner_exception_returns_empty_without_starting_rag(monkeypatch):
@@ -1122,3 +1130,217 @@ def test_retrieval_does_not_update_last_user_mentioned_at(monkeypatch):
     )
 
     repository.touch.assert_not_called()
+
+
+def test_temporal_retrieval_unions_both_paths_and_ranks_by_one_match_kind(
+    monkeypatch,
+) -> None:
+    from app.memory import rag_service
+    from app.memory.rag_service import RetrievalMatchKind
+
+    both_id = UUID("00000000-0000-4000-8000-000000000043")
+    semantic_id = UUID("00000000-0000-4000-8000-000000000044")
+    period_id = UUID("00000000-0000-4000-8000-000000000045")
+    memories = {
+        both_id: _approved_memory(
+            id=both_id,
+            normalized_text="静岡へ旅行した",
+            occurred_at=datetime(2025, 3, 10, tzinfo=UTC),
+            occurred_precision=TemporalPrecision.DAY,
+        ),
+        semantic_id: _approved_memory(
+            id=semantic_id,
+            normalized_text="静岡へ旅行した",
+            occurred_at=datetime(2025, 5, 4, tzinfo=UTC),
+            occurred_precision=TemporalPrecision.DAY,
+        ),
+        period_id: _approved_memory(
+            id=period_id,
+            normalized_text="長野ではなく静岡へ旅行した",
+            occurred_at=datetime(2025, 3, 20, tzinfo=UTC),
+            occurred_precision=TemporalPrecision.DAY,
+        ),
+    }
+    scanner, classifier, repository = _dependencies(memories=memories)
+    scanner.scan.side_effect = None
+    scanner.scan.return_value = ScanSuccess(())
+    repository.search_by_occurred_range.return_value = [
+        memories[both_id],
+        memories[period_id],
+    ]
+    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+    monkeypatch.setattr(
+        rag_service,
+        "query_memories",
+        MagicMock(
+            return_value=[
+                _candidate(semantic_id, 0.01),
+                _candidate(both_id, 0.02),
+            ]
+        ),
+    )
+
+    outcome = rag_service.retrieve_prompt_memories(
+        "miori",
+        "昨年3月の静岡旅行を教えて",
+        resolved_memory_policy(),
+        scanner=scanner,
+        classifier=classifier,
+        approved_repository=repository,
+        chroma_path=_CHROMA_PATH,
+        now=datetime(2026, 3, 25, tzinfo=UTC),
+        timezone="Asia/Tokyo",
+    )
+
+    assert [memory.memory_id for memory in outcome.memories] == [
+        str(both_id),
+        str(semantic_id),
+        str(period_id),
+    ]
+    assert [memory.match_kind for memory in outcome.memories] == [
+        RetrievalMatchKind.BOTH,
+        RetrievalMatchKind.SEMANTIC,
+        RetrievalMatchKind.PERIOD,
+    ]
+    assert outcome.memories[1].occurred_at == "2025-05-04T09:00:00+09:00"
+    assert outcome.memories[1].occurred_precision is TemporalPrecision.DAY
+    repository.touch.assert_not_called()
+
+
+def test_temporal_retrieval_reports_no_match_only_after_both_paths_succeed(
+    monkeypatch,
+) -> None:
+    from app.memory import rag_service
+
+    scanner, classifier, repository = _dependencies(memories={})
+    scanner.scan.side_effect = None
+    scanner.scan.return_value = ScanSuccess(())
+    repository.search_by_occurred_range.return_value = []
+    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+    monkeypatch.setattr(rag_service, "query_memories", MagicMock(return_value=[]))
+
+    outcome = rag_service.retrieve_prompt_memories(
+        "miori",
+        "昨年3月の旅行を教えて",
+        resolved_memory_policy(),
+        scanner=scanner,
+        classifier=classifier,
+        approved_repository=repository,
+        chroma_path=_CHROMA_PATH,
+        now=datetime(2026, 3, 25, tzinfo=UTC),
+        timezone="Asia/Tokyo",
+    )
+
+    assert outcome.memories == ()
+    assert outcome.no_match is True
+
+
+def test_temporal_retrieval_failure_is_not_reported_as_no_match(monkeypatch) -> None:
+    from app.memory import rag_service
+
+    scanner, classifier, repository = _dependencies(memories={})
+    scanner.scan.side_effect = None
+    scanner.scan.return_value = ScanSuccess(())
+    repository.search_by_occurred_range.return_value = []
+    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+    monkeypatch.setattr(
+        rag_service,
+        "query_memories",
+        MagicMock(side_effect=RuntimeError("synthetic Chroma failure")),
+    )
+
+    outcome = rag_service.retrieve_prompt_memories(
+        "miori",
+        "昨年3月の旅行を教えて",
+        resolved_memory_policy(),
+        scanner=scanner,
+        classifier=classifier,
+        approved_repository=repository,
+        chroma_path=_CHROMA_PATH,
+        now=datetime(2026, 3, 25, tzinfo=UTC),
+        timezone="Asia/Tokyo",
+    )
+
+    assert outcome.memories == ()
+    assert outcome.no_match is False
+    repository.search_by_occurred_range.assert_called_once()
+
+
+def test_unparseable_temporal_text_keeps_chroma_primary_without_range_search(
+    monkeypatch,
+) -> None:
+    from app.memory import rag_service
+
+    scanner, classifier, repository = _dependencies()
+    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+    monkeypatch.setattr(
+        rag_service,
+        "query_memories",
+        MagicMock(return_value=[_candidate()]),
+    )
+
+    memories = _retrieve(
+        rag_service,
+        scanner=scanner,
+        classifier=classifier,
+        repository=repository,
+        user_message="いつか行った旅行を教えて",
+    )
+
+    assert [memory.memory_id for memory in memories] == [str(_MEMORY_ID)]
+    repository.search_by_occurred_range.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("query_text", "allowed_precisions"),
+    [
+        (
+            "2025年3月の出来事",
+            {
+                TemporalPrecision.MONTH,
+                TemporalPrecision.DAY,
+                TemporalPrecision.HOUR,
+                TemporalPrecision.MINUTE,
+                TemporalPrecision.SECOND,
+            },
+        ),
+        (
+            "2025-03-01から2025-03-31の出来事",
+            {
+                TemporalPrecision.DAY,
+                TemporalPrecision.HOUR,
+                TemporalPrecision.MINUTE,
+                TemporalPrecision.SECOND,
+            },
+        ),
+    ],
+)
+def test_period_filter_excludes_memories_with_too_coarse_or_unknown_precision(
+    query_text: str,
+    allowed_precisions: set[TemporalPrecision],
+) -> None:
+    from app.memory import rag_service
+    from app.memory.temporal_query import parse_temporal_query
+
+    query = parse_temporal_query(
+        query_text,
+        now=datetime(2026, 8, 20, tzinfo=UTC),
+        timezone="Asia/Tokyo",
+    )
+    assert query is not None
+    memories = [
+        _approved_memory(occurred_precision=precision)
+        for precision in (*TemporalPrecision, None)
+    ]
+
+    result = rag_service._filter_period_memories(memories, query)
+
+    assert {memory.occurred_precision for memory in result} == allowed_precisions
+
+
+def test_occurrence_formatting_degrades_unknown_timezone_to_unknown_date() -> None:
+    from app.memory import rag_service
+
+    memory = _approved_memory(occurred_timezone="Asia/Nowhere")
+
+    assert rag_service._format_occurred_at(memory) is None

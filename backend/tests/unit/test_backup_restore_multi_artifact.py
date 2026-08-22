@@ -143,7 +143,7 @@ def test_backup_creates_fixed_pair_and_initializes_missing_persona_database(
         assert artifact["schemaVersion"] == schema_version
         assert artifact["requiredTables"] == required_tables
         assert artifact["recordCount"] == record_count
-    assert persona_memory_projection(generation / "persona-memory.db") == (1, 0)
+    assert persona_memory_projection(generation / "persona-memory.db") == (2, 0)
 
 
 def test_persona_artifact_cannot_be_reauthenticated_by_rewriting_unsigned_values(
@@ -207,7 +207,7 @@ def test_backup_restore_round_trip_restores_both_sqlite_files_without_chroma(
     )
 
     assert database_projection(destination.sqlite_path)[2] == CONVERSATION_SENTINEL
-    assert persona_memory_projection(destination.persona_memory_sqlite_path) == (1, 1)
+    assert persona_memory_projection(destination.persona_memory_sqlite_path) == (2, 1)
     assert chroma_sentinel.read_text(encoding="utf-8") == "restore対象外"
 
 
@@ -439,7 +439,7 @@ def test_second_replace_failure_requires_roll_forward_and_retry_completes_pair(
     ]
     assert not destination.restore_intent_path.exists()
     assert database_projection(destination.sqlite_path)[2] == CONVERSATION_SENTINEL
-    assert persona_memory_projection(destination.persona_memory_sqlite_path) == (1, 1)
+    assert persona_memory_projection(destination.persona_memory_sqlite_path) == (2, 1)
 
 
 def test_interrupted_restore_intent_records_fixed_pair(
