@@ -325,6 +325,7 @@ class TestTurnTransitions:
             "complete_turn",
             "fail_turn",
             "get_turn",
+            "get_previous_completed_turn",
             "hard_delete_conversation",
             "list_active_conversations",
             "list_archived_conversations",

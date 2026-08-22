@@ -225,6 +225,40 @@ class ConversationHistoryRepository:
             ).fetchone()
         return None if row is None else turn_from_row(row)
 
+    def get_previous_completed_turn(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+        turn_id: UUID,
+    ) -> ConversationTurn | None:
+        _require_non_empty(character_id, "character_id")
+        _require_uuid4(conversation_id)
+        _require_uuid4(turn_id)
+        cutoff = format_datetime(self._now() - self._retention)
+        with self._database.connection() as connection:
+            anchor = connection.execute(
+                "SELECT created_at, rowid FROM conversation_turns "
+                "WHERE character_id = ? AND conversation_id = ? AND turn_id = ?",
+                (character_id, str(conversation_id), str(turn_id)),
+            ).fetchone()
+            if anchor is None:
+                return None
+            row = connection.execute(
+                f"SELECT {TURN_COLUMNS} FROM conversation_turns "
+                "WHERE character_id = ? AND conversation_id = ? AND status = ? "
+                "AND created_at >= ? AND (created_at, rowid) < (?, ?) "
+                "ORDER BY created_at DESC, rowid DESC LIMIT 1",
+                (
+                    character_id,
+                    str(conversation_id),
+                    TurnStatus.COMPLETED.value,
+                    cutoff,
+                    str(anchor[0]),
+                    int(anchor[1]),
+                ),
+            ).fetchone()
+        return None if row is None else turn_from_row(row)
+
     def create_privacy_skipped_turn(
         self,
         character_id: str,

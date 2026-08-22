@@ -17,6 +17,7 @@ from tests.environment_test_support import (
 MODEL_ENVIRONMENT = {
     "OLLAMA_CHAT_MODEL": "profile-chat:12b",
     "OLLAMA_CLASSIFIER_MODEL": "profile-classifier:4b",
+    "OLLAMA_EXTRACTOR_MODEL": "profile-extractor:4b",
     "WHISPER_MODEL": "large-v3",
     "OLLAMA_CONTEXT_TOKENS": "12288",
     "OLLAMA_RESPONSE_RESERVE_TOKENS": "1536",
@@ -49,6 +50,7 @@ def test_should_emit_model_defaults_for_profile_when_overrides_are_absent() -> N
     derived = report["derivedEnvironment"]
     assert derived["OLLAMA_CHAT_MODEL"] == "gemma4:e4b"
     assert derived["OLLAMA_CLASSIFIER_MODEL"] == "gemma4:e4b"
+    assert derived["OLLAMA_EXTRACTOR_MODEL"] == "gemma4:e4b"
     assert derived["WHISPER_MODEL"] == "medium"
     assert derived["OLLAMA_CONTEXT_TOKENS"] == "8192"
     assert derived["OLLAMA_RESPONSE_RESERVE_TOKENS"] == "1024"

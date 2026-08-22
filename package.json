@@ -16,6 +16,8 @@
     "build": "npm --prefix frontend run build",
     "eval:privacy:prompt-lab": "python3 scripts/eval_privacy_conformance.py prompt-lab",
     "eval:privacy:conformance": "python3 scripts/eval_privacy_conformance.py conformance",
+    "eval:memory:prompt-lab": "python3 scripts/eval_memory_extraction.py prompt-lab",
+    "eval:memory:conformance": "python3 scripts/eval_memory_extraction.py conformance",
     "eval:rag:real": "backend/.venv/bin/python -m pytest backend/tests/integration -m rag_retrieval_real"
   }
 }

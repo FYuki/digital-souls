@@ -22,6 +22,7 @@ from app.model_settings import ModelSettings
 from app.runtime_paths import RuntimePaths
 from app.memory import rag_service as _rag_service
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
+from app.memory.formation.contracts import MemoryFormationJob
 from app.prompting import (
     BuiltPrompt,
     CharacterPrompt,
@@ -76,6 +77,10 @@ class InputTokenCounter(Protocol):
         ...
 
 
+class MemoryFormationSubmitter(Protocol):
+    def submit(self, job: MemoryFormationJob) -> None: ...
+
+
 @dataclass(frozen=True)
 class ChatRuntimeDependencies:
     character_prompt_loader: CharacterPromptLoader
@@ -85,6 +90,7 @@ class ChatRuntimeDependencies:
     privacy_scanner: PrivacyScanner
     semantic_classifier: SemanticPrivacyClassifier
     approved_memory_repository: ApprovedMemoryRepository
+    memory_formation_submitter: MemoryFormationSubmitter
 
 
 @dataclass(frozen=True)
@@ -429,6 +435,14 @@ def _generate_recorded_reply(
                 cleanup_error.__class__.__name__,
             )
         raise
+    if persisted_turn.status is TurnStatus.COMPLETED:
+        dependencies.memory_formation_submitter.submit(
+            MemoryFormationJob(
+                character_id=persisted_turn.character_id,
+                conversation_id=persisted_turn.conversation_id,
+                turn_id=persisted_turn.turn_id,
+            )
+        )
     delivery_turn = (
         started_turn if persisted_turn.status is TurnStatus.COMPLETED else None
     )

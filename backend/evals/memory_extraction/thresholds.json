@@ -1,0 +1,5 @@
+{
+  "enum_match_rate": 0.9,
+  "topic_validity_rate": 0.85,
+  "hallucination_free_rate": 0.95
+}

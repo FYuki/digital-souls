@@ -73,10 +73,10 @@ CodeRabbitの指摘はコードレビューの補助であり、GitHub Actions�
 
 ## LLM classifier conformance
 
-意味分類器の品質評価は、通常のpytest unit testと分離したpromptfoo suiteで行う。
+意味分類器とpersona memory抽出器の品質評価は、通常のpytest unit testと分離したpromptfoo suiteで行う。抽出器はenum一致を決定論的に評価し、topic妥当性とhallucination非発生を独立したローカルOllama judgeで評価する。
 
 - pytest unitはprompt組立、schema、parser、fail-closed、決定論的evaluatorをfakeで検証する
-- promptfooは固定した合成caseで実modelとproduction providerを評価する
+- conformanceは固定した合成caseで実modelとproduction providerを評価し、prompt-labは同じ固定modelで候補promptと独立rubricを評価する
 - 実ユーザー本文をcase、結果、logへコピーしない
 - 機微caseが`NOT_SENSITIVE`になることを許容せず、判定不能は`ABSTAIN`として保存を拒否する
 - model、prompt、policyのversionを固定し、重要な変更は対象suiteを3回反復してから全suiteを実行する

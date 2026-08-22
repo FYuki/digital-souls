@@ -93,6 +93,7 @@ def _service(
             privacy_scanner=MagicMock(),
             semantic_classifier=MagicMock(),
             approved_memory_repository=MagicMock(),
+            memory_formation_submitter=MagicMock(),
         ),
     )
 
