@@ -9,18 +9,18 @@ from app.conversation_history.models import ConversationTurn, TurnStatus
 from app.memory.admission.contracts import (
     ApprovedMemoryCandidate,
     ConversationSource,
-    MemoryCandidate,
     RagAdmissionDecision,
     RagAdmissionResult,
 )
 from app.memory.admission.evaluator import RagAdmissionEvaluator
+from app.memory.formation.contracts import ExtractedMemoryCandidate
+from app.memory.formation.temporal_resolution import resolve_occurred_at
 from app.memory.persistence.contracts import (
     ApprovedMemory,
     FormationMethod,
     MemorySourceInput,
     MemorySourceType,
     MemoryWriteContext,
-    TemporalPrecision,
     build_conversation_idempotency_key,
 )
 from app.privacy.contracts import PrivacyScanner
@@ -67,7 +67,7 @@ class RagAdmissionService:
         privacy_scanner: PrivacyScanner,
         semantic_classifier: SemanticPrivacyClassifier,
         evaluator: RagAdmissionEvaluator,
-        effective_timezone: str,
+        occurred_timezone: str,
         extractor_version: str,
     ) -> None:
         self._conversation_repository = conversation_repository
@@ -75,14 +75,14 @@ class RagAdmissionService:
         self._privacy_scanner = privacy_scanner
         self._semantic_classifier = semantic_classifier
         self._evaluator = evaluator
-        self._effective_timezone = effective_timezone
+        self._occurred_timezone = occurred_timezone
         if not extractor_version.strip():
             raise ValueError("extractor_version must not be blank")
         self._extractor_version = extractor_version
 
     def admit(
         self,
-        candidate: MemoryCandidate,
+        extracted: ExtractedMemoryCandidate,
         *,
         character_id: str,
         conversation_id: UUID,
@@ -99,7 +99,7 @@ class RagAdmissionService:
         source_text = cast(str, source_turn.user_content)
 
         authoritative_candidate = replace(
-            candidate,
+            extracted.candidate,
             source=ConversationSource(TurnStatus.COMPLETED, True),
         )
         source_scan = self._privacy_scanner.scan(source_text)
@@ -164,6 +164,7 @@ class RagAdmissionService:
             character_id=validated_turn.character_id,
             candidate=result.candidate,
             context=self._write_context(
+                extracted,
                 validated_turn,
                 conversation_id,
                 turn_id,
@@ -196,12 +197,18 @@ class RagAdmissionService:
 
     def _write_context(
         self,
+        extracted: ExtractedMemoryCandidate,
         turn: ConversationTurn,
         conversation_id: UUID,
         turn_id: UUID,
         candidate_index: int,
         assessment: PrivacyAssessment,
     ) -> MemoryWriteContext:
+        occurrence = resolve_occurred_at(
+            extracted.date_expressions,
+            stated_at=turn.created_at,
+            timezone=self._occurred_timezone,
+        )
         return MemoryWriteContext(
             formation_method=FormationMethod.EXTRACTED,
             idempotency_key=build_conversation_idempotency_key(
@@ -211,9 +218,10 @@ class RagAdmissionService:
                 candidate_index=candidate_index,
                 extractor_version=self._extractor_version,
             ),
-            effective_at=turn.created_at,
-            effective_timezone=self._effective_timezone,
-            temporal_precision=TemporalPrecision.SECOND,
+            occurred_at=occurrence.occurred_at,
+            occurred_timezone=occurrence.occurred_timezone,
+            occurred_precision=occurrence.occurred_precision,
+            stated_at=turn.created_at,
             expires_at=None,
             policy_version=assessment.policy_version,
             classifier_version=assessment.classifier_version,

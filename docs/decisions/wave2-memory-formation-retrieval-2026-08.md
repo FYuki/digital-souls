@@ -183,9 +183,10 @@ content_version
 status: ACTIVE / INACTIVE
 idempotency_key: character_id単位で一意
 last_write_idempotency_key: nullable
-effective_at
-effective_timezone
-temporal_precision
+occurred_at: nullable
+occurred_timezone: nullable
+occurred_precision: nullable
+stated_at
 expires_at: nullable
 last_user_mentioned_at: nullable
 last_consolidated_at: nullable
@@ -193,8 +194,15 @@ created_at
 updated_at
 ```
 
-`effective_at`は出来事が発生した時刻、`last_user_mentioned_at`はユーザーがその内容を最後に
-言及した時刻であり、別の意味を持つ。
+`created_at`はSQLite登録日（有効化日）、`occurred_at`は出来事が発生した時刻、`stated_at`は
+根拠となった発言turnの時刻、`last_user_mentioned_at`はユーザーがその内容を最後に明示言及した
+時刻であり、それぞれ別の意味を持つ。出来事の日付が不明な場合は`occurred_at`、
+`occurred_timezone`、`occurred_precision`をすべて`NULL`にし、`stated_at`では補完しない。
+出来事日が既知の場合は3列をすべて設定する。`stated_at`は常にtimezone-awareな値を保存する。
+
+Issue #11でpersona memory schemaをversion 2へ更新する。version 1からのmigrationは実装せず、
+既存dogfoodのpersona memory DBは再作成する。`temporary_provider_records`と将来のaddon recordは
+この時系列照合の対象外とし、同tableの`effective_at`契約は変更しない。
 
 provenanceは自由形式JSONだけに埋めず、型付き`memory_sources`で会話turn、addon event、
 provider record等との関係を保持する。複数のsourceから形成される記憶に対応するため、
@@ -387,6 +395,11 @@ sanitized turnだけをsourceにし、RAG検索結果を新規候補の根拠に
 admissionが構造化値から決定的に生成する。候補抽出器や永続化層は生成しない。
 確認待ち候補や生source本文は永続化しない。
 
+Issue #11以降、候補抽出器は相対・絶対・複数の日付表現だけを型付きで返し、絶対日時への変換は
+行わない。applicationが`stated_at`を基準点、起動時に解決したtimezoneを基準として、月末、
+年末、閏年、年跨ぎを含め決定論的に`occurred_*`へ解決する。日付表現がない、または解決不能な
+場合は`occurred_*`を3列とも`NULL`にする。
+
 非同期classifierはbounded retryを行う。初期値は1回15秒、最大2回、全体35秒以内、queue滞留
 5分以内とし、設定で変更可能にする。上限を超えた候補は`ABSTAIN_UNKNOWN`として破棄する。
 
@@ -438,6 +451,23 @@ semantic_relevance DESC
 
 「同等関連度」の許容幅はIssue #9の固定検索corpusで決め、設定値として持つ。最近言及されたことを
 理由に、明確に関連度の低い記憶を繰り上げない。
+
+Issue #11以降、時間条件を決定論的パーサで抽出できたqueryは、SQLiteの`occurred_at`期間検索と
+Chroma意味検索を両方実行してunionする。一致種別の優先順位は、両方一致、意味一致、期間一致の
+順とする。同じ一致種別では意味的関連度を主とし、意味距離を持たない期間一致同士では
+`last_user_mentioned_at`をtie-breakに用いる。時間条件なし、またはパース失敗時は従来どおり
+Chroma一次、SQLite再検証へ縮退する。query解析の同期経路へLLM往復は追加しない。
+
+日時検索の判断根拠はSQLite正本だけとし、Chromaの`occurred_at` metadataはindex整合確認の補助に
+限る。Chroma由来候補もSQLiteで再検証し、promptにはSQLite検証済みの`occurred_at`と精度を併記する。
+出来事日不明の記憶は日時ラベルなしで提示する。両経路が正常終了して0件の場合は、該当なしと
+推測禁止を明示する。検索で使用したmemory ID、出来事日時、精度、一致種別はmetadata-onlyで
+追跡し、query本文とmemory本文はlogへ残さない。
+
+季節は`occurred_at`の月から決定論的に導出し、春を3〜5月、夏を6〜8月、秋を9〜11月、冬を
+12〜2月とする。冬は年を跨ぎ、「去年の冬」は前年12月から当年2月までとする。
+`occurred_precision`が`YEAR`または`NULL`の記憶は季節照合からreason code付きで除外する。
+`TemporalPrecision`は`YEAR`から`SECOND`までの既存6値を維持し、季節値を追加しない。
 
 `last_user_mentioned_at`はユーザーが明示的に新規言及、再言及、訂正した場合だけ更新する。
 検索、prompt注入、assistantによる言及、addon recordの更新、consolidationでは更新しない。

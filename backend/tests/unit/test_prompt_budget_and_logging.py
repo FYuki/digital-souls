@@ -1,4 +1,5 @@
 import logging
+from datetime import UTC, datetime
 
 import pytest
 
@@ -11,6 +12,7 @@ from app.prompting import (
     PromptInputLimitError,
     RagContext,
     RagItem,
+    PromptMemoryReference,
     TokenBudget,
 )
 from tests.prompt_test_support import (
@@ -117,6 +119,39 @@ class TestPromptBuilderBudget:
             if message.content.endswith(("順位1", "順位2", "順位3"))
         ]
         assert selected_items == ["順位1", "順位2"]
+        assert result.usage.omitted_rag_items == 1
+
+    def test_should_propagate_references_only_for_rag_items_selected_by_budget(
+        self,
+    ) -> None:
+        first = PromptMemoryReference(
+            memory_id="00000000-0000-4000-8000-000000000043",
+            occurred_at=datetime(2025, 3, 1, tzinfo=UTC),
+            occurred_precision="DAY",
+            match_kind="BOTH",
+        )
+        omitted = PromptMemoryReference(
+            memory_id="00000000-0000-4000-8000-000000000044",
+            occurred_at=None,
+            occurred_precision=None,
+            match_kind="SEMANTIC",
+        )
+        rag = RagContext(
+            items=(
+                RagItem("順位1", raw_distance=0.01, reference=first),
+                RagItem("順位2", raw_distance=0.02, reference=omitted),
+            )
+        )
+
+        result = prompt_builder().build(
+            prompt_build_input(rag=rag, budget=token_budget(rag=1))
+        )
+
+        assert tuple(
+            message.memory_reference
+            for message in result.messages
+            if message.memory_reference is not None
+        ) == (first,)
         assert result.usage.omitted_rag_items == 1
 
     def test_should_keep_ranked_rag_prefix_when_total_limit_reduces_rag(

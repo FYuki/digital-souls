@@ -92,10 +92,16 @@ def _rag_memory(content: str) -> MemorySearchResult:
     return MemorySearchResult(
         memory_id="memory-1",
         normalized_text=content,
-        effective_at="2026-07-31T00:00:00.000000Z",
+        occurred_at="2026-07-31T00:00:00.000000Z",
         memory_type="USER_PREFERENCE",
         raw_distance=1.25,
     )
+
+
+def _rag_outcome(*memories: MemorySearchResult):
+    from app.memory.rag_service import RetrievalOutcome
+
+    return RetrievalOutcome(memories, False)
 
 
 def _rag_policy() -> MagicMock:
@@ -167,7 +173,7 @@ class TestChatEndpoint:
         ):
             with patch(
                 _BUILD_AUGMENTED_SYSTEM_PROMPT,
-                return_value=[_rag_memory(secrets["rag"])],
+                return_value=_rag_outcome(_rag_memory(secrets["rag"])),
             ):
                 with patch(
                     _PROMPT_TURNS,
@@ -302,7 +308,7 @@ class TestChatEndpoint:
                 with patch(_LOAD_PERSONALITY, return_value=_character_card()):
                     with patch(
                         _BUILD_AUGMENTED_SYSTEM_PROMPT,
-                        return_value=(_rag_memory("前回は畑の話をした"),),
+                        return_value=_rag_outcome(_rag_memory("前回は畑の話をした")),
                     ) as mock_build:
                         with patch(
                             _GENERATE_RESPONSE, return_value=_LLM_REPLY
@@ -317,6 +323,8 @@ class TestChatEndpoint:
             classifier=ANY,
             approved_repository=ANY,
             chroma_path=runtime_paths.chroma_path,
+            now=ANY,
+            timezone="Asia/Tokyo",
         )
         prompt = mock_gen.call_args.args[0]
         assert "前回は畑の話をした" in prompt.messages[1].content
@@ -670,7 +678,7 @@ class TestChatFlow:
         ) as mock_policy:
             with patch(
                 "app._chat_runtime._rag_service.retrieve_prompt_memories",
-                return_value=(
+                return_value=_rag_outcome(
                     _rag_memory("順位1の記憶"),
                     _rag_memory("順位2の記憶"),
                 ),
@@ -701,6 +709,8 @@ class TestChatFlow:
             classifier=ANY,
             approved_repository=ANY,
             chroma_path=runtime_paths.chroma_path,
+            now=ANY,
+            timezone="Asia/Tokyo",
         )
         payload = mock_post.call_args.kwargs["json"]
         assert payload["messages"] == [

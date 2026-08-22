@@ -4,6 +4,7 @@ import os
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 from uuid import UUID
@@ -21,13 +22,16 @@ from app.memory import memory_policy as _memory_policy
 from app.model_settings import ModelSettings
 from app.runtime_paths import RuntimePaths
 from app.memory import rag_service as _rag_service
+from app.memory.chroma_store import MemorySearchResult
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
+from app.memory.persistence.sqlite import format_datetime
 from app.memory.formation.contracts import MemoryFormationJob
 from app.prompting import (
     BuiltPrompt,
     CharacterPrompt,
     CurrentUserMessage,
     PromptMessage,
+    PromptMemoryReference,
     RagContext,
     RagItem,
     TokenCounter,
@@ -91,6 +95,7 @@ class ChatRuntimeDependencies:
     semantic_classifier: SemanticPrivacyClassifier
     approved_memory_repository: ApprovedMemoryRepository
     memory_formation_submitter: MemoryFormationSubmitter
+    clock: Callable[[], datetime] = lambda: datetime.now(UTC)
 
 
 @dataclass(frozen=True)
@@ -107,6 +112,7 @@ class ChatRuntimeConfig:
     memory_policy: _memory_policy.MemoryPolicy | None
     prompt_config: ModelSettings
     chroma_path: Path
+    occurred_timezone: str = "Asia/Tokyo"
 
 
 @dataclass(frozen=True)
@@ -115,6 +121,7 @@ class _ResolvedChatContext:
     memory_policy: _memory_policy.MemoryPolicy | None
     prompt_config: ModelSettings
     chroma_path: Path
+    occurred_timezone: str
 
 
 @dataclass
@@ -248,6 +255,7 @@ def resolve_chat_runtime_config(
     policy: _memory_policy.MemoryPolicy,
     prompt_config: ModelSettings,
     runtime_paths: RuntimePaths,
+    occurred_timezone: str = "Asia/Tokyo",
 ) -> ChatRuntimeConfig:
     rag_enabled = os.environ.get(RAG_ENABLED_ENV) == RAG_ENABLED_VALUE
     return ChatRuntimeConfig(
@@ -255,6 +263,7 @@ def resolve_chat_runtime_config(
         memory_policy=policy if rag_enabled else None,
         prompt_config=prompt_config,
         chroma_path=runtime_paths.chroma_path,
+        occurred_timezone=occurred_timezone,
     )
 
 
@@ -325,12 +334,14 @@ def _resolve_chat_context(
             memory_policy=None,
             prompt_config=runtime_config.prompt_config,
             chroma_path=runtime_config.chroma_path,
+            occurred_timezone=runtime_config.occurred_timezone,
         )
     return _ResolvedChatContext(
         character_prompt=character_prompt,
         memory_policy=runtime_config.memory_policy,
         prompt_config=runtime_config.prompt_config,
         chroma_path=runtime_config.chroma_path,
+        occurred_timezone=runtime_config.occurred_timezone,
     )
 
 
@@ -342,7 +353,7 @@ def _rag_context_for_reply(
 ) -> RagContext:
     if context.memory_policy is None:
         return RagContext(items=())
-    memories = _rag_service.retrieve_prompt_memories(
+    outcome = _rag_service.retrieve_prompt_memories(
         character,
         message,
         context.memory_policy,
@@ -350,16 +361,53 @@ def _rag_context_for_reply(
         classifier=dependencies.semantic_classifier,
         approved_repository=dependencies.approved_memory_repository,
         chroma_path=context.chroma_path,
+        now=dependencies.clock(),
+        timezone=context.occurred_timezone,
     )
+    if outcome.no_match:
+        return RagContext(
+            items=(
+                RagItem(
+                    "指定された期間に該当する記憶はありません。"
+                    "推測で補完しないでください。",
+                    raw_distance=0.0,
+                ),
+            )
+        )
     return RagContext(
         items=tuple(
             RagItem(
-                f"[{memory.effective_at}] {memory.normalized_text}",
+                _memory_prompt_content(memory),
                 raw_distance=memory.raw_distance,
+                reference=PromptMemoryReference(
+                    memory_id=memory.memory_id,
+                    occurred_at=(
+                        None
+                        if memory.occurred_at is None
+                        else datetime.fromisoformat(memory.occurred_at)
+                    ),
+                    occurred_precision=(
+                        None
+                        if memory.occurred_precision is None
+                        else memory.occurred_precision.value
+                    ),
+                    match_kind=memory.match_kind.value,
+                ),
             )
-            for memory in memories
+            for memory in outcome.memories
         )
     )
+
+
+def _memory_prompt_content(memory: MemorySearchResult) -> str:
+    if memory.occurred_at is None:
+        return memory.normalized_text
+    precision = (
+        ""
+        if memory.occurred_precision is None
+        else f" {memory.occurred_precision.value}"
+    )
+    return f"[{memory.occurred_at}{precision}] {memory.normalized_text}"
 
 
 def _call_llm(
@@ -406,6 +454,28 @@ def _generate_reply(
         context.prompt_config.assistant_max_generation_tokens,
         dependencies.llm_response_generator,
     )
+    references = tuple(
+        message.memory_reference
+        for message in prompt.messages
+        if message.memory_reference is not None
+    )
+    if references:
+        logger.info(
+            "Prompt memories selected: references=%s",
+            tuple(
+                {
+                    "memory_id": reference.memory_id,
+                    "occurred_at": (
+                        None
+                        if reference.occurred_at is None
+                        else format_datetime(reference.occurred_at)
+                    ),
+                    "occurred_precision": reference.occurred_precision,
+                    "match_kind": reference.match_kind,
+                }
+                for reference in references
+            ),
+        )
     return reply
 
 

@@ -581,7 +581,7 @@ class TestRuntimeConfiguration:
         import app.main as main
 
         def fail_config_resolution(
-            _policy, _prompt_config, _runtime_paths
+            _policy, _prompt_config, _runtime_paths, _occurred_timezone
         ):
             raise ValueError("invalid memory policy")
 

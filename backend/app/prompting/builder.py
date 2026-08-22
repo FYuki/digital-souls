@@ -403,7 +403,11 @@ class PromptBuilder:
 
     @staticmethod
     def _rag_message(item: RagItem) -> PromptMessage:
-        return PromptMessage(PromptRole.SYSTEM, f"{RAG_HEADING}\n{item.content}")
+        return PromptMessage(
+            PromptRole.SYSTEM,
+            f"{RAG_HEADING}\n{item.content}",
+            memory_reference=item.reference,
+        )
 
     @staticmethod
     def _require_within(region: str, used: int, limit: int) -> None:

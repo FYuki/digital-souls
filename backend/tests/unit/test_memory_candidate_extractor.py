@@ -89,7 +89,15 @@ def _extractor(client: FakeExtractorClient, **settings: str):
 
 
 def _response(*candidates: dict[str, object]) -> str:
-    return json.dumps({"candidates": list(candidates)}, ensure_ascii=False)
+    return json.dumps(
+        {
+            "candidates": [
+                {**candidate, "date_expressions": candidate.get("date_expressions", [])}
+                for candidate in candidates
+            ]
+        },
+        ensure_ascii=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -142,11 +150,59 @@ def test_extracts_each_allowlisted_persona_memory_type(
     )
 
     assert len(result) == 1
-    assert result[0].memory_type is expected_type
-    assert isinstance(result[0].structured_value, expected_value_type)
-    assert result[0].source is not None
-    assert result[0].source.turn_status is TurnStatus.COMPLETED
-    assert result[0].source.history_content_stored is True
+    assert result[0].candidate.memory_type is expected_type
+    assert isinstance(result[0].candidate.structured_value, expected_value_type)
+    assert result[0].candidate.source is not None
+    assert result[0].candidate.source.turn_status is TurnStatus.COMPLETED
+    assert result[0].candidate.source.history_content_stored is True
+    assert result[0].date_expressions == ()
+
+
+def test_extractor_returns_typed_date_expressions_without_resolving_timestamps() -> None:
+    from app.memory.formation.temporal_resolution import (
+        DateExpressionRole,
+        RelativeDateExpression,
+    )
+
+    client = FakeExtractorClient(
+        [
+            _response(
+                {
+                    "memory_type": "EPISODIC_EVENT",
+                    "structured_value": {
+                        "event_type": "ACHIEVEMENT",
+                        "subject": "USER",
+                        "topic": "資格試験への合格",
+                    },
+                    "date_expressions": [
+                        {
+                            "kind": "RELATIVE",
+                            "role": "PRIMARY",
+                            "year_offset": -1,
+                            "month": 3,
+                        }
+                    ],
+                }
+            )
+        ]
+    )
+
+    result = _extractor(client).extract(
+        current_turn=_turn(
+            TURN_ID,
+            user_content="去年3月に資格試験へ合格した",
+            assistant_content=CURRENT_ASSISTANT,
+        ),
+        previous_turn=None,
+    )
+
+    assert result[0].date_expressions == (
+        RelativeDateExpression(
+            role=DateExpressionRole.PRIMARY,
+            year_offset=-1,
+            month=3,
+        ),
+    )
 
 
 def test_extractor_transfers_only_current_user_and_one_previous_sanitized_turn() -> None:

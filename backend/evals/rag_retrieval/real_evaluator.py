@@ -58,7 +58,7 @@ def evaluate_real_manifest(
                     policy_version=_required_string(
                         candidate.get("policy_version"), "candidate.policy_version"
                     ),
-                    effective_at=_required_string(
+                    occurred_at=_required_string(
                         candidate.get("created_at"), "candidate.created_at"
                     ),
                     expires_at=None,

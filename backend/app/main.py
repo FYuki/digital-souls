@@ -74,8 +74,8 @@ from app.runtime_paths import (
 
 load_dotenv()
 
-MEMORY_EFFECTIVE_TIMEZONE_ENV = "MEMORY_EFFECTIVE_TIMEZONE"
-DEFAULT_MEMORY_EFFECTIVE_TIMEZONE = "Asia/Tokyo"
+MEMORY_OCCURRED_TIMEZONE_ENV = "MEMORY_OCCURRED_TIMEZONE"
+DEFAULT_MEMORY_OCCURRED_TIMEZONE = "Asia/Tokyo"
 DOGFOOD_BACKUP_DIR_ENV = "DOGFOOD_BACKUP_DIR"
 DOGFOOD_BACKUP_RETENTION_COUNT_ENV = "DOGFOOD_BACKUP_RETENTION_COUNT"
 
@@ -174,9 +174,9 @@ def log_runtime_configuration(paths: RuntimePaths) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     model_settings = resolve_model_settings(os.environ)
-    effective_timezone = iana_timezone_environment_value(
-        MEMORY_EFFECTIVE_TIMEZONE_ENV,
-        DEFAULT_MEMORY_EFFECTIVE_TIMEZONE,
+    occurred_timezone = iana_timezone_environment_value(
+        MEMORY_OCCURRED_TIMEZONE_ENV,
+        DEFAULT_MEMORY_OCCURRED_TIMEZONE,
     )
     repository_root = Path(__file__).resolve().parents[2]
     runtime_paths = resolve_runtime_paths(os.environ, repository_root)
@@ -292,7 +292,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 privacy_scanner=privacy_scanner,
                 semantic_classifier=semantic_privacy_classifier,
                 evaluator=create_rag_admission_evaluator(policy.privacy),
-                effective_timezone=effective_timezone,
+                occurred_timezone=occurred_timezone,
                 extractor_version=EXTRACTOR_VERSION,
             )
             rag_admission_service_state_set = True
@@ -317,7 +317,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             memory_formation_scheduler_started = True
             app_chat_service = _chat_runtime.create_chat_service(
                 _chat_runtime.resolve_chat_runtime_config(
-                    policy, model_settings, runtime_paths
+                    policy, model_settings, runtime_paths, occurred_timezone
                 ),
                 ConversationHistoryService(
                     conversation_history_repository,
@@ -332,6 +332,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     semantic_classifier=semantic_privacy_classifier,
                     approved_memory_repository=approved_memory_repository,
                     memory_formation_submitter=memory_formation_scheduler,
+                    clock=clock,
                 ),
             )
             app.state.chat_service = app_chat_service

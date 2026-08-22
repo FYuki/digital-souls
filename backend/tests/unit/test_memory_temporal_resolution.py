@@ -1,0 +1,227 @@
+from datetime import UTC, datetime
+
+import pytest
+
+from app.memory.formation.temporal_resolution import (
+    AbsoluteDateExpression,
+    DateExpressionRole,
+    RelativeDateExpression,
+    resolve_occurred_at,
+)
+from app.memory.persistence.contracts import TemporalPrecision
+
+
+STATED_AT = datetime(2026, 8, 20, 3, 30, tzinfo=UTC)
+
+
+def test_resolves_last_year_march_from_stated_at_in_runtime_timezone() -> None:
+    result = resolve_occurred_at(
+        (
+            RelativeDateExpression(
+                role=DateExpressionRole.PRIMARY,
+                year_offset=-1,
+                month=3,
+            ),
+        ),
+        stated_at=STATED_AT,
+        timezone="Asia/Tokyo",
+    )
+
+    assert result.occurred_at == datetime(2025, 2, 28, 15, 0, tzinfo=UTC)
+    assert result.occurred_timezone == "Asia/Tokyo"
+    assert result.occurred_precision is TemporalPrecision.MONTH
+
+
+@pytest.mark.parametrize(
+    ("expression", "expected_at", "expected_precision"),
+    [
+        (
+            RelativeDateExpression(
+                role=DateExpressionRole.PRIMARY,
+                month_offset=-1,
+            ),
+            datetime(2026, 6, 30, 15, 0, tzinfo=UTC),
+            TemporalPrecision.MONTH,
+        ),
+        (
+            RelativeDateExpression(
+                role=DateExpressionRole.PRIMARY,
+                week_offset=-1,
+                weekday=6,
+            ),
+            datetime(2026, 8, 15, 15, 0, tzinfo=UTC),
+            TemporalPrecision.DAY,
+        ),
+        (
+            AbsoluteDateExpression(
+                role=DateExpressionRole.PRIMARY,
+                year=2024,
+                month=2,
+                day=29,
+            ),
+            datetime(2024, 2, 28, 15, 0, tzinfo=UTC),
+            TemporalPrecision.DAY,
+        ),
+    ],
+)
+def test_resolves_relative_and_absolute_boundaries_deterministically(
+    expression: object,
+    expected_at: datetime,
+    expected_precision: TemporalPrecision,
+) -> None:
+    result = resolve_occurred_at(
+        (expression,),
+        stated_at=STATED_AT,
+        timezone="Asia/Tokyo",
+    )
+
+    assert result.occurred_at == expected_at
+    assert result.occurred_timezone == "Asia/Tokyo"
+    assert result.occurred_precision is expected_precision
+
+
+def test_multiple_dates_use_the_primary_expression_for_the_single_saved_occurrence() -> None:
+    result = resolve_occurred_at(
+        (
+            AbsoluteDateExpression(
+                role=DateExpressionRole.START,
+                year=2025,
+                month=3,
+                day=1,
+            ),
+            AbsoluteDateExpression(
+                role=DateExpressionRole.END,
+                year=2025,
+                month=3,
+                day=31,
+            ),
+            AbsoluteDateExpression(
+                role=DateExpressionRole.PRIMARY,
+                year=2025,
+                month=3,
+                day=15,
+            ),
+        ),
+        stated_at=STATED_AT,
+        timezone="Asia/Tokyo",
+    )
+
+    assert result.occurred_at == datetime(2025, 3, 14, 15, 0, tzinfo=UTC)
+    assert result.occurred_precision is TemporalPrecision.DAY
+
+
+def test_no_date_expression_does_not_fall_back_to_stated_at() -> None:
+    result = resolve_occurred_at(
+        (),
+        stated_at=STATED_AT,
+        timezone="Asia/Tokyo",
+    )
+
+    assert result.occurred_at is None
+    assert result.occurred_timezone is None
+    assert result.occurred_precision is None
+
+
+def test_primary_absence_returns_all_unknown_when_only_range_roles_exist() -> None:
+    result = resolve_occurred_at(
+        (
+            AbsoluteDateExpression(
+                role=DateExpressionRole.START,
+                year=2025,
+                month=3,
+                day=1,
+            ),
+            AbsoluteDateExpression(
+                role=DateExpressionRole.END,
+                year=2025,
+                month=3,
+                day=31,
+            ),
+        ),
+        stated_at=STATED_AT,
+        timezone="Asia/Tokyo",
+    )
+
+    assert result.occurred_at is None
+    assert result.occurred_timezone is None
+    assert result.occurred_precision is None
+
+
+@pytest.mark.parametrize(("second_month", "second_day"), [(5, 4), (3, 15)])
+def test_multiple_primary_expressions_return_all_unknown_regardless_of_value(
+    second_month: int,
+    second_day: int,
+) -> None:
+    result = resolve_occurred_at(
+        (
+            AbsoluteDateExpression(
+                role=DateExpressionRole.PRIMARY,
+                year=2025,
+                month=3,
+                day=15,
+            ),
+            AbsoluteDateExpression(
+                role=DateExpressionRole.PRIMARY,
+                year=2025,
+                month=second_month,
+                day=second_day,
+            ),
+        ),
+        stated_at=STATED_AT,
+        timezone="Asia/Tokyo",
+    )
+
+    assert result.occurred_at is None
+    assert result.occurred_timezone is None
+    assert result.occurred_precision is None
+
+
+def test_day_offset_uses_local_day_boundary_and_day_precision() -> None:
+    result = resolve_occurred_at(
+        (
+            RelativeDateExpression(
+                role=DateExpressionRole.PRIMARY,
+                day_offset=-1,
+            ),
+        ),
+        stated_at=STATED_AT,
+        timezone="Asia/Tokyo",
+    )
+
+    assert result.occurred_at == datetime(2026, 8, 18, 15, 0, tzinfo=UTC)
+    assert result.occurred_timezone == "Asia/Tokyo"
+    assert result.occurred_precision is TemporalPrecision.DAY
+
+
+def test_zero_day_offset_alone_preserves_second_precision() -> None:
+    result = resolve_occurred_at(
+        (
+            RelativeDateExpression(
+                role=DateExpressionRole.PRIMARY,
+                day_offset=0,
+            ),
+        ),
+        stated_at=STATED_AT,
+        timezone="Asia/Tokyo",
+    )
+
+    assert result.occurred_at == STATED_AT
+    assert result.occurred_timezone == "Asia/Tokyo"
+    assert result.occurred_precision is TemporalPrecision.SECOND
+
+
+def test_last_month_crosses_the_year_boundary_in_the_runtime_timezone() -> None:
+    result = resolve_occurred_at(
+        (
+            RelativeDateExpression(
+                role=DateExpressionRole.PRIMARY,
+                month_offset=-1,
+            ),
+        ),
+        stated_at=datetime(2026, 1, 15, 3, 0, tzinfo=UTC),
+        timezone="Pacific/Chatham",
+    )
+
+    assert result.occurred_at == datetime(2025, 11, 30, 10, 15, tzinfo=UTC)
+    assert result.occurred_timezone == "Pacific/Chatham"
+    assert result.occurred_precision is TemporalPrecision.MONTH
