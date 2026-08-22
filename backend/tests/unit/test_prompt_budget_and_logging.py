@@ -177,6 +177,24 @@ class TestPromptBuilderBudget:
         assert selected_items == ["順位1", "順位2"]
         assert result.usage.omitted_rag_items == 1
 
+    def test_should_keep_required_rag_instruction_when_all_items_are_omitted(
+        self,
+    ) -> None:
+        instruction = "期間内の記憶がないため推測で補完しない"
+        rag = RagContext(
+            items=(RagItem("削除対象", raw_distance=0.01),),
+            required_instruction=instruction,
+        )
+
+        result = prompt_builder().build(
+            prompt_build_input(rag=rag, budget=token_budget(rag=1, total=5))
+        )
+
+        contents = [message.content for message in result.messages]
+        assert instruction in contents
+        assert all("削除対象" not in content for content in contents)
+        assert result.usage.omitted_rag_items == 1
+
     def test_should_drop_oldest_history_while_preserving_latest_exchange(
         self,
     ) -> None:

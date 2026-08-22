@@ -464,6 +464,18 @@ def test_correct_updates_occurrence_and_stated_dates_but_not_registration_date(
         }
     ) == 4
 
+    corrected_after_touch = repository.correct(
+        character_id="miori",
+        memory_id=touched.id,
+        candidate=_candidate("ユーザーは静岡へ再び旅行した"),
+        context=replace(
+            _context(stated_at=datetime(2026, 8, 18, tzinfo=UTC)),
+            idempotency_key="conversation-3:turn-3:0:extractor-v1",
+        ),
+    )
+
+    assert corrected_after_touch.last_user_mentioned_at == last_mentioned_at
+
 
 def test_range_search_uses_half_open_sqlite_occurrence_range_and_compatibility_filters(
     tmp_path: Path,

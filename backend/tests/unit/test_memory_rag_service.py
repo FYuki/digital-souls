@@ -1206,3 +1206,58 @@ def test_unparseable_temporal_text_keeps_chroma_primary_without_range_search(
 
     assert [memory.memory_id for memory in memories] == [str(_MEMORY_ID)]
     repository.search_by_occurred_range.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("query_text", "allowed_precisions"),
+    [
+        (
+            "2025年3月の出来事",
+            {
+                TemporalPrecision.MONTH,
+                TemporalPrecision.DAY,
+                TemporalPrecision.HOUR,
+                TemporalPrecision.MINUTE,
+                TemporalPrecision.SECOND,
+            },
+        ),
+        (
+            "2025-03-01から2025-03-31の出来事",
+            {
+                TemporalPrecision.DAY,
+                TemporalPrecision.HOUR,
+                TemporalPrecision.MINUTE,
+                TemporalPrecision.SECOND,
+            },
+        ),
+    ],
+)
+def test_period_filter_excludes_memories_with_too_coarse_or_unknown_precision(
+    query_text: str,
+    allowed_precisions: set[TemporalPrecision],
+) -> None:
+    from app.memory import rag_service
+    from app.memory.temporal_query import parse_temporal_query
+
+    query = parse_temporal_query(
+        query_text,
+        now=datetime(2026, 8, 20, tzinfo=UTC),
+        timezone="Asia/Tokyo",
+    )
+    assert query is not None
+    memories = [
+        _approved_memory(occurred_precision=precision)
+        for precision in (*TemporalPrecision, None)
+    ]
+
+    result = rag_service._filter_period_memories(memories, query)
+
+    assert {memory.occurred_precision for memory in result} == allowed_precisions
+
+
+def test_occurrence_formatting_degrades_unknown_timezone_to_unknown_date() -> None:
+    from app.memory import rag_service
+
+    memory = _approved_memory(occurred_timezone="Asia/Nowhere")
+
+    assert rag_service._format_occurred_at(memory) is None

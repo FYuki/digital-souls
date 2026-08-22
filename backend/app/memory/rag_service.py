@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 
@@ -17,7 +17,11 @@ from app.memory.chroma_store import (
 from app.memory.embedder import embed_text
 from app.memory.memory_policy import MemoryPolicy, rag_service_policy
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
-from app.memory.persistence.contracts import ApprovedMemory, MemoryStatus
+from app.memory.persistence.contracts import (
+    ApprovedMemory,
+    MemoryStatus,
+    TemporalPrecision,
+)
 from app.memory.ranking import RetrievalRankingCandidate, rank_retrieval_candidates
 from app.memory.temporal_query import (
     TemporalQuery,
@@ -241,17 +245,41 @@ def _rank_candidates(
 def _filter_period_memories(
     memories: list[ApprovedMemory], query: TemporalQuery
 ) -> list[ApprovedMemory]:
-    if query.kind is not TemporalQueryKind.SEASON:
-        return memories
+    if query.kind is TemporalQueryKind.SEASON:
+        return [
+            memory
+            for memory in memories
+            if match_season(
+                query,
+                occurred_at=memory.occurred_at,
+                occurred_precision=memory.occurred_precision,
+                occurred_timezone=memory.occurred_timezone,
+            ).matched
+        ]
+    allowed_precisions = (
+        frozenset(
+            {
+                TemporalPrecision.MONTH,
+                TemporalPrecision.DAY,
+                TemporalPrecision.HOUR,
+                TemporalPrecision.MINUTE,
+                TemporalPrecision.SECOND,
+            }
+        )
+        if query.kind is TemporalQueryKind.MONTH
+        else frozenset(
+            {
+                TemporalPrecision.DAY,
+                TemporalPrecision.HOUR,
+                TemporalPrecision.MINUTE,
+                TemporalPrecision.SECOND,
+            }
+        )
+    )
     return [
         memory
         for memory in memories
-        if match_season(
-            query,
-            occurred_at=memory.occurred_at,
-            occurred_precision=memory.occurred_precision,
-            occurred_timezone=memory.occurred_timezone,
-        ).matched
+        if memory.occurred_precision in allowed_precisions
     ]
 
 
@@ -335,7 +363,11 @@ def _search_result(
 def _format_occurred_at(memory: ApprovedMemory) -> str | None:
     if memory.occurred_at is None or memory.occurred_timezone is None:
         return None
-    return memory.occurred_at.astimezone(ZoneInfo(memory.occurred_timezone)).isoformat()
+    try:
+        zone = ZoneInfo(memory.occurred_timezone)
+    except ZoneInfoNotFoundError:
+        return None
+    return memory.occurred_at.astimezone(zone).isoformat()
 
 
 def _is_retrieval_compatible(

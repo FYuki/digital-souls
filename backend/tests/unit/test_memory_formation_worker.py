@@ -189,7 +189,8 @@ def test_absent_or_noop_domain_router_does_not_change_persona_admission(
 
     extractor = MagicMock()
     candidate = _candidate("紅茶")
-    extractor.extract.return_value = (candidate,)
+    extracted = ExtractedMemoryCandidate(candidate, ())
+    extractor.extract.return_value = (extracted,)
     admission = MagicMock()
     resolved_router = None if router is None else NoOpDomainRecordRouter()
 
@@ -198,7 +199,7 @@ def test_absent_or_noop_domain_router_does_not_change_persona_admission(
     )
 
     admission.admit.assert_called_once()
-    assert admission.admit.call_args.args == (candidate,)
+    assert admission.admit.call_args.args == (extracted,)
 
 
 @pytest.mark.parametrize(
@@ -215,8 +216,9 @@ def test_incomplete_previous_turn_is_ignored_without_losing_current_candidates(
     current = _turn()
     repository = FakeRepository(current=current, previous=previous)
     candidate = _candidate("紅茶")
+    extracted = ExtractedMemoryCandidate(candidate, ())
     extractor = MagicMock()
-    extractor.extract.return_value = (candidate,)
+    extractor.extract.return_value = (extracted,)
     admission = MagicMock()
 
     _worker(repository, extractor, admission, None).process(_job())
@@ -226,7 +228,7 @@ def test_incomplete_previous_turn_is_ignored_without_losing_current_candidates(
         previous_turn=None,
     )
     admission.admit.assert_called_once_with(
-        candidate,
+        extracted,
         character_id="miori",
         conversation_id=CONVERSATION_ID,
         turn_id=TURN_ID,

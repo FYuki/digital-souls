@@ -205,6 +205,105 @@ def test_extractor_returns_typed_date_expressions_without_resolving_timestamps()
     )
 
 
+def test_extractor_preserves_explicit_zero_offset_as_specified() -> None:
+    from app.memory.formation.temporal_resolution import (
+        DateExpressionRole,
+        RelativeDateExpression,
+    )
+
+    client = FakeExtractorClient(
+        [
+            _response(
+                {
+                    "memory_type": "EPISODIC_EVENT",
+                    "structured_value": {
+                        "event_type": "ACHIEVEMENT",
+                        "subject": "USER",
+                        "topic": "資格試験への合格",
+                    },
+                    "date_expressions": [
+                        {
+                            "kind": "RELATIVE",
+                            "role": "PRIMARY",
+                            "day_offset": 0,
+                        }
+                    ],
+                }
+            )
+        ]
+    )
+
+    result = _extractor(client).extract(
+        current_turn=_turn(
+            TURN_ID,
+            user_content=CURRENT_USER,
+            assistant_content=CURRENT_ASSISTANT,
+        ),
+        previous_turn=None,
+    )
+
+    assert result[0].date_expressions == (
+        RelativeDateExpression(
+            role=DateExpressionRole.PRIMARY,
+            day_offset=0,
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "date_expressions",
+    [
+        [
+            {
+                "kind": "ABSOLUTE",
+                "role": "PRIMARY",
+                "year": 2025,
+                "month": 2,
+                "day": 30,
+            }
+        ],
+        [
+            {
+                "kind": "RELATIVE",
+                "role": "PRIMARY",
+                "day_offset": offset,
+            }
+            for offset in range(4)
+        ],
+    ],
+    ids=["invalid-calendar-date", "too-many-date-expressions"],
+)
+def test_invalid_date_expression_batch_is_discarded(
+    date_expressions: list[dict[str, object]],
+) -> None:
+    client = FakeExtractorClient(
+        [
+            _response(
+                {
+                    "memory_type": "EPISODIC_EVENT",
+                    "structured_value": {
+                        "event_type": "ACHIEVEMENT",
+                        "subject": "USER",
+                        "topic": "資格試験への合格",
+                    },
+                    "date_expressions": date_expressions,
+                }
+            )
+        ]
+    )
+
+    result = _extractor(client).extract(
+        current_turn=_turn(
+            TURN_ID,
+            user_content=CURRENT_USER,
+            assistant_content=CURRENT_ASSISTANT,
+        ),
+        previous_turn=None,
+    )
+
+    assert result == ()
+
+
 def test_extractor_transfers_only_current_user_and_one_previous_sanitized_turn() -> None:
     client = FakeExtractorClient([_response()])
 
@@ -408,6 +507,12 @@ def test_extractor_uses_json_schema_output_limit_and_declared_version() -> None:
     schema = client.calls[0]["json_schema"]
     assert isinstance(schema, dict)
     assert schema["type"] == "object"
+    candidates = schema["properties"]["candidates"]  # type: ignore[index]
+    variants = candidates["items"]["oneOf"]  # type: ignore[index]
+    assert all(
+        variant["properties"]["date_expressions"]["maxItems"] == 3
+        for variant in variants
+    )
     assert client.calls[0]["max_output_tokens"] == 321
     assert isinstance(EXTRACTOR_VERSION, str)
     assert EXTRACTOR_VERSION.strip()

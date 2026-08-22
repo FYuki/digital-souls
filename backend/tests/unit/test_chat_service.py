@@ -940,9 +940,30 @@ class TestChatServiceRagContract:
         )
         assert _generated_contents(mock_gen) == [
             "## 応答方針\n# prompt",
-            "## 関連する記憶\n[2026-07-31T00:00:00.000000Z DAY] 畑の話",
+            "## 関連する記憶\n[2026-07-31T09:00:00+09:00 DAY] 畑の話",
             "hello",
         ]
+
+    def test_memory_date_is_displayed_in_the_runtime_occurrence_timezone(self):
+        policy = object()
+        service = _chat_service(True, policy)
+        memory = _rag_memory(
+            "月境界の旅行",
+            occurred_at="2026-07-31T15:30:00+00:00",
+        )
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(
+                _BUILD_AUGMENTED_SYSTEM_PROMPT,
+                return_value=_rag_outcome(memory),
+            ):
+                with patch(_GENERATE_RESPONSE, return_value="reply") as generate:
+                    service.generate_chat_reply("miori", CONVERSATION_ID, "旅行の話")
+
+        assert any(
+            "[2026-08-01T00:30:00+09:00 DAY] 月境界の旅行" in content
+            for content in _generated_contents(generate)
+        )
 
     def test_success_logs_only_metadata_for_memories_selected_into_prompt(
         self,

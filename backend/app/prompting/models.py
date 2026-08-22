@@ -56,10 +56,13 @@ class RagItem:
 @dataclass(frozen=True, repr=False)
 class RagContext:
     items: tuple[RagItem, ...]
+    required_instruction: str = ""
 
     def __post_init__(self) -> None:
         if not all(isinstance(item, RagItem) for item in self.items):
             raise TypeError("items must contain only RagItem values")
+        if not isinstance(self.required_instruction, str):
+            raise TypeError("required_instruction must be a string")
 
 
 @dataclass(frozen=True, repr=False)

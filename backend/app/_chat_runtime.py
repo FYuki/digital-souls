@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -366,18 +367,17 @@ def _rag_context_for_reply(
     )
     if outcome.no_match:
         return RagContext(
-            items=(
-                RagItem(
-                    "指定された期間に該当する記憶はありません。"
-                    "推測で補完しないでください。",
-                    raw_distance=0.0,
-                ),
-            )
+            items=(),
+            required_instruction=(
+                "## 関連する記憶\n"
+                "指定された期間に該当する記憶はありません。"
+                "推測で補完しないでください。"
+            ),
         )
     return RagContext(
         items=tuple(
             RagItem(
-                _memory_prompt_content(memory),
+                _memory_prompt_content(memory, context.occurred_timezone),
                 raw_distance=memory.raw_distance,
                 reference=PromptMemoryReference(
                     memory_id=memory.memory_id,
@@ -399,15 +399,18 @@ def _rag_context_for_reply(
     )
 
 
-def _memory_prompt_content(memory: MemorySearchResult) -> str:
+def _memory_prompt_content(memory: MemorySearchResult, timezone: str) -> str:
     if memory.occurred_at is None:
         return memory.normalized_text
+    occurred_at = datetime.fromisoformat(memory.occurred_at).astimezone(
+        ZoneInfo(timezone)
+    )
     precision = (
         ""
         if memory.occurred_precision is None
         else f" {memory.occurred_precision.value}"
     )
-    return f"[{memory.occurred_at}{precision}] {memory.normalized_text}"
+    return f"[{occurred_at.isoformat()}{precision}] {memory.normalized_text}"
 
 
 def _call_llm(

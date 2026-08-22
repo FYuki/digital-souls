@@ -85,7 +85,12 @@ def parse_temporal_query(
     season_match = _SEASON_PATTERN.search(text)
     if season_match is not None:
         season = _SEASONS[season_match.group("season")]
-        year = local_now.year - (season_match.group("year") != "今年")
+        current_start_year = (
+            local_now.year - 1
+            if season is Season.WINTER and local_now.month in (1, 2)
+            else local_now.year
+        )
+        year = current_start_year - (season_match.group("year") != "今年")
         return _season_query(year, season, zone)
     if "前年同季節" in text or "昨年同季節" in text or "去年の同じ季節" in text:
         current_season = season_for_month(local_now.month)

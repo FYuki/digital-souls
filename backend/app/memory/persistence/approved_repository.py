@@ -234,7 +234,12 @@ class ApprovedMemoryRepository:
                     ),
                     format_datetime(context.stated_at),
                     _format_optional_datetime(context.expires_at),
-                    format_datetime(context.stated_at),
+                    format_datetime(
+                        max(
+                            context.stated_at,
+                            current.last_user_mentioned_at or context.stated_at,
+                        )
+                    ),
                     format_datetime(now),
                     character_id,
                     str(memory_id),

@@ -103,6 +103,7 @@ def _candidate(
         "persisted": True,
         "privacy_safe": True,
         "last_user_mentioned_at": None,
+        "occurred_at": None,
         "created_at": "2026-08-01T00:00:00+00:00",
     }
 
@@ -164,6 +165,14 @@ def test_synthetic_manifest_declares_reproducible_fixed_embeddings() -> None:
         and case["query_embedding"]
         for case in searchable
     )
+    candidates = [
+        candidate
+        for case in searchable
+        if isinstance(case.get("candidates"), list)
+        for candidate in case["candidates"]
+        if isinstance(candidate, dict)
+    ]
+    assert all("occurred_at" in candidate for candidate in candidates)
 
 
 def test_deterministic_manifest_evaluation_meets_quality_contract() -> None:
@@ -305,9 +314,13 @@ def test_real_evaluator_passes_manifest_candidate_pool_to_chroma(
         tmp_path / "real-provider.json",
         candidate_pool_size=7,
         expected_ids=["core"],
-        candidates=[_candidate("core", 0.1)],
+        candidates=[
+            _candidate("core", 0.1)
+            | {"occurred_at": "2026-07-31T15:30:00+00:00"}
+        ],
     )
     observed_n_results: list[int] = []
+    indexed_occurrences: list[object] = []
     deleted_collections: list[str] = []
 
     def query_memories(
@@ -323,7 +336,11 @@ def test_real_evaluator_passes_manifest_candidate_pool_to_chroma(
 
     monkeypatch.setattr(real_evaluator, "resolve_ollama_embedding_model", lambda: "model")
     monkeypatch.setattr(real_evaluator, "embed_text", lambda _text: [0.0])
-    monkeypatch.setattr(real_evaluator, "upsert_memory_index_entry", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        real_evaluator,
+        "upsert_memory_index_entry",
+        lambda **kwargs: indexed_occurrences.append(kwargs["occurred_at"]),
+    )
     monkeypatch.setattr(real_evaluator, "delete_memory_index_entry", lambda **_kwargs: None)
     monkeypatch.setattr(
         real_evaluator,
@@ -338,6 +355,7 @@ def test_real_evaluator_passes_manifest_candidate_pool_to_chroma(
     )
 
     assert observed_n_results == [7]
+    assert indexed_occurrences == ["2026-07-31T15:30:00+00:00"]
     assert len(deleted_collections) == 1
     assert deleted_collections[0].startswith("rag-eval-")
     assert result.recall == 1.0

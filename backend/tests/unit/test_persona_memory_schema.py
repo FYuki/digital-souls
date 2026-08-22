@@ -299,6 +299,7 @@ def test_schema_recreates_missing_indexes_for_an_existing_v2_database(
     with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
         connection.execute("DROP INDEX idx_memory_index_outbox_pending")
         connection.execute("DROP INDEX idx_approved_memories_active")
+        connection.execute("DROP INDEX idx_approved_memories_occurred_range")
 
     initialize_persona_memory_schema(paths, tmp_path / "repository")
 
@@ -311,6 +312,7 @@ def test_schema_recreates_missing_indexes_for_an_existing_v2_database(
         }
     assert "idx_memory_index_outbox_pending" in indexes
     assert "idx_approved_memories_active" in indexes
+    assert "idx_approved_memories_occurred_range" in indexes
 
 
 def test_schema_rejects_v1_without_migration_using_the_existing_error_contract(

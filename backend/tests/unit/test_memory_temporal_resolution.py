@@ -193,7 +193,7 @@ def test_day_offset_uses_local_day_boundary_and_day_precision() -> None:
     assert result.occurred_precision is TemporalPrecision.DAY
 
 
-def test_zero_day_offset_alone_preserves_second_precision() -> None:
+def test_explicit_zero_day_offset_uses_local_day_precision() -> None:
     result = resolve_occurred_at(
         (
             RelativeDateExpression(
@@ -205,9 +205,85 @@ def test_zero_day_offset_alone_preserves_second_precision() -> None:
         timezone="Asia/Tokyo",
     )
 
-    assert result.occurred_at == STATED_AT
+    assert result.occurred_at == datetime(2026, 8, 19, 15, 0, tzinfo=UTC)
     assert result.occurred_timezone == "Asia/Tokyo"
-    assert result.occurred_precision is TemporalPrecision.SECOND
+    assert result.occurred_precision is TemporalPrecision.DAY
+
+
+@pytest.mark.parametrize(
+    ("expression", "expected_at", "expected_precision"),
+    [
+        (
+            RelativeDateExpression(
+                role=DateExpressionRole.PRIMARY,
+                month_offset=0,
+            ),
+            datetime(2026, 7, 31, 15, 0, tzinfo=UTC),
+            TemporalPrecision.MONTH,
+        ),
+        (
+            RelativeDateExpression(
+                role=DateExpressionRole.PRIMARY,
+                year_offset=0,
+            ),
+            datetime(2025, 12, 31, 15, 0, tzinfo=UTC),
+            TemporalPrecision.YEAR,
+        ),
+    ],
+)
+def test_explicit_zero_offsets_preserve_their_declared_precision(
+    expression: RelativeDateExpression,
+    expected_at: datetime,
+    expected_precision: TemporalPrecision,
+) -> None:
+    result = resolve_occurred_at(
+        (expression,),
+        stated_at=STATED_AT,
+        timezone="Asia/Tokyo",
+    )
+
+    assert result.occurred_at == expected_at
+    assert result.occurred_precision is expected_precision
+
+
+def test_role_only_relative_expression_is_unresolved() -> None:
+    result = resolve_occurred_at(
+        (RelativeDateExpression(role=DateExpressionRole.PRIMARY),),
+        stated_at=STATED_AT,
+        timezone="Asia/Tokyo",
+    )
+
+    assert result.occurred_at is None
+    assert result.occurred_timezone is None
+    assert result.occurred_precision is None
+
+
+def test_invalid_absolute_calendar_date_is_unresolved() -> None:
+    result = resolve_occurred_at(
+        (
+            AbsoluteDateExpression(
+                role=DateExpressionRole.PRIMARY,
+                year=2025,
+                month=2,
+                day=30,
+            ),
+        ),
+        stated_at=STATED_AT,
+        timezone="Asia/Tokyo",
+    )
+
+    assert result.occurred_at is None
+    assert result.occurred_timezone is None
+    assert result.occurred_precision is None
+
+
+def test_unknown_timezone_is_rejected() -> None:
+    with pytest.raises(ValueError, match="IANA timezone"):
+        resolve_occurred_at(
+            (),
+            stated_at=STATED_AT,
+            timezone="Asia/Nowhere",
+        )
 
 
 def test_last_month_crosses_the_year_boundary_in_the_runtime_timezone() -> None:

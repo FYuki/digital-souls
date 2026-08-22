@@ -131,3 +131,87 @@ def test_unsupported_or_invalid_expression_degrades_to_no_temporal_condition(
     text: str,
 ) -> None:
     assert parse_temporal_query(text, now=NOW, timezone="Asia/Tokyo") is None
+
+
+def test_leap_year_february_ends_at_march_first_local_midnight() -> None:
+    result = parse_temporal_query(
+        "2024年2月の出来事",
+        now=NOW,
+        timezone="Asia/Tokyo",
+    )
+
+    assert result is not None
+    assert result.start == datetime(2024, 1, 31, 15, 0, tzinfo=UTC)
+    assert result.end == datetime(2024, 2, 29, 15, 0, tzinfo=UTC)
+
+
+def test_last_month_in_january_crosses_to_the_previous_year() -> None:
+    result = parse_temporal_query(
+        "先月の出来事",
+        now=datetime(2026, 1, 15, tzinfo=UTC),
+        timezone="Asia/Tokyo",
+    )
+
+    assert result is not None
+    assert result.start == datetime(2025, 11, 30, 15, 0, tzinfo=UTC)
+    assert result.end == datetime(2025, 12, 31, 15, 0, tzinfo=UTC)
+
+
+def test_this_winter_in_january_starts_in_the_previous_calendar_year() -> None:
+    result = parse_temporal_query(
+        "今年の冬の出来事",
+        now=datetime(2026, 1, 15, tzinfo=UTC),
+        timezone="Asia/Tokyo",
+    )
+
+    assert result is not None
+    assert result.start == datetime(2025, 11, 30, 15, 0, tzinfo=UTC)
+    assert result.end == datetime(2026, 2, 28, 15, 0, tzinfo=UTC)
+
+
+def test_temporal_query_rejects_naive_now() -> None:
+    with pytest.raises(ValueError, match="timezone-aware"):
+        parse_temporal_query(
+            "先月",
+            now=datetime(2026, 8, 20),
+            timezone="Asia/Tokyo",
+        )
+
+
+def test_temporal_query_rejects_unknown_timezone() -> None:
+    with pytest.raises(ValueError, match="IANA timezone"):
+        parse_temporal_query("先月", now=NOW, timezone="Asia/Nowhere")
+
+
+@pytest.mark.parametrize(
+    ("occurred_at", "matched", "reason_code"),
+    [
+        (
+            datetime(2025, 12, 15, tzinfo=UTC),
+            True,
+            SeasonMatchReasonCode.MATCHED,
+        ),
+        (
+            datetime(2026, 3, 15, tzinfo=UTC),
+            False,
+            SeasonMatchReasonCode.OUTSIDE_RANGE,
+        ),
+    ],
+)
+def test_season_match_reports_matched_and_outside_range(
+    occurred_at: datetime,
+    matched: bool,
+    reason_code: SeasonMatchReasonCode,
+) -> None:
+    query = parse_temporal_query("去年の冬", now=NOW, timezone="Asia/Tokyo")
+    assert query is not None
+
+    result = match_season(
+        query,
+        occurred_at=occurred_at,
+        occurred_precision=TemporalPrecision.DAY,
+        occurred_timezone="Asia/Tokyo",
+    )
+
+    assert result.matched is matched
+    assert result.reason_code is reason_code
