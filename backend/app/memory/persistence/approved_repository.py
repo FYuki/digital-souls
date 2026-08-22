@@ -50,9 +50,10 @@ APPROVED_COLUMN_NAMES = (
     "policy_version",
     "content_version",
     "status",
-    "effective_at",
-    "effective_timezone",
-    "temporal_precision",
+    "occurred_at",
+    "occurred_timezone",
+    "occurred_precision",
+    "stated_at",
     "expires_at",
     "last_user_mentioned_at",
     "created_at",
@@ -109,11 +110,11 @@ class ApprovedMemoryRepository:
                 "episodic_event_type, formation_method, schema_version, "
                 "normalized_text, structured_value, policy_version, "
                 "classifier_version, model_id, model_digest, prompt_version, "
-                "content_version, status, idempotency_key, effective_at, "
-                "effective_timezone, temporal_precision, expires_at, "
+                "content_version, status, idempotency_key, occurred_at, "
+                "occurred_timezone, occurred_precision, stated_at, expires_at, "
                 "last_user_mentioned_at, last_consolidated_at, created_at, updated_at"
                 ") VALUES (?, ?, 'core', ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, "
-                "1, 'ACTIVE', ?, ?, ?, ?, ?, ?, NULL, ?, ?) "
+                "1, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?) "
                 "ON CONFLICT(character_id, idempotency_key) DO NOTHING",
                 (
                     str(memory_id),
@@ -130,11 +131,16 @@ class ApprovedMemoryRepository:
                     context.model_digest,
                     context.prompt_version,
                     context.idempotency_key,
-                    format_datetime(context.effective_at),
-                    context.effective_timezone,
-                    context.temporal_precision.value,
+                    _format_optional_datetime(context.occurred_at),
+                    context.occurred_timezone,
+                    (
+                        None
+                        if context.occurred_precision is None
+                        else context.occurred_precision.value
+                    ),
+                    format_datetime(context.stated_at),
                     _format_optional_datetime(context.expires_at),
-                    format_datetime(now),
+                    format_datetime(context.stated_at),
                     format_datetime(now),
                     format_datetime(now),
                 ),
@@ -202,8 +208,9 @@ class ApprovedMemoryRepository:
                 "model_id = ?, model_digest = ?, prompt_version = ?, "
                 "content_version = content_version + 1, "
                 "last_write_idempotency_key = ?, "
-                "effective_at = ?, effective_timezone = ?, temporal_precision = ?, "
-                "expires_at = ?, updated_at = ? "
+                "occurred_at = ?, occurred_timezone = ?, occurred_precision = ?, "
+                "stated_at = ?, expires_at = ?, last_user_mentioned_at = ?, "
+                "updated_at = ? "
                 "WHERE character_id = ? AND id = ?",
                 (
                     memory_kind,
@@ -218,10 +225,21 @@ class ApprovedMemoryRepository:
                     context.model_digest,
                     context.prompt_version,
                     context.idempotency_key,
-                    format_datetime(context.effective_at),
-                    context.effective_timezone,
-                    context.temporal_precision.value,
+                    _format_optional_datetime(context.occurred_at),
+                    context.occurred_timezone,
+                    (
+                        None
+                        if context.occurred_precision is None
+                        else context.occurred_precision.value
+                    ),
+                    format_datetime(context.stated_at),
                     _format_optional_datetime(context.expires_at),
+                    format_datetime(
+                        max(
+                            context.stated_at,
+                            current.last_user_mentioned_at or context.stated_at,
+                        )
+                    ),
                     format_datetime(now),
                     character_id,
                     str(memory_id),
@@ -314,6 +332,43 @@ class ApprovedMemoryRepository:
                 "AND (expires_at IS NULL OR expires_at > ?) "
                 "ORDER BY created_at, id",
                 (character_id, now),
+            ).fetchall()
+        return [_memory_from_row(row) for row in rows]
+
+    def search_by_occurred_range(
+        self,
+        *,
+        character_id: str,
+        start: datetime,
+        end: datetime,
+        compatible_policy_versions: frozenset[str],
+    ) -> list[ApprovedMemory]:
+        _require_character_id(character_id)
+        for value, field_name in ((start, "start"), (end, "end")):
+            if value.tzinfo is None or value.utcoffset() is None:
+                raise ValueError(f"{field_name} must be timezone-aware")
+        if start >= end:
+            raise ValueError("start must be before end")
+        if not compatible_policy_versions:
+            return []
+        placeholders = ", ".join("?" for _ in compatible_policy_versions)
+        parameters = (
+            character_id,
+            format_datetime(start),
+            format_datetime(end),
+            format_datetime(self._now()),
+            *sorted(compatible_policy_versions),
+        )
+        with self._database.connection() as connection:
+            rows = connection.execute(
+                f"SELECT {APPROVED_COLUMNS} FROM approved_memories "
+                "WHERE character_id = ? AND provider_id = 'core' "
+                "AND status = 'ACTIVE' AND occurred_at IS NOT NULL "
+                "AND occurred_at >= ? AND occurred_at < ? "
+                "AND (expires_at IS NULL OR expires_at > ?) "
+                f"AND policy_version IN ({placeholders}) "
+                "ORDER BY occurred_at, id",
+                parameters,
             ).fetchall()
         return [_memory_from_row(row) for row in rows]
 
@@ -491,9 +546,22 @@ def _memory_from_row(row: sqlite3.Row) -> ApprovedMemory:
         policy_version=str(row["policy_version"]),
         content_version=int(row["content_version"]),
         status=MemoryStatus(str(row["status"])),
-        effective_at=parse_datetime(str(row["effective_at"])),
-        effective_timezone=str(row["effective_timezone"]),
-        temporal_precision=TemporalPrecision(str(row["temporal_precision"])),
+        occurred_at=(
+            None
+            if row["occurred_at"] is None
+            else parse_datetime(str(row["occurred_at"]))
+        ),
+        occurred_timezone=(
+            None
+            if row["occurred_timezone"] is None
+            else str(row["occurred_timezone"])
+        ),
+        occurred_precision=(
+            None
+            if row["occurred_precision"] is None
+            else TemporalPrecision(str(row["occurred_precision"]))
+        ),
+        stated_at=parse_datetime(str(row["stated_at"])),
         expires_at=(
             None
             if row["expires_at"] is None

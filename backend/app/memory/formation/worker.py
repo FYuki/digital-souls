@@ -5,8 +5,7 @@ from typing import Protocol
 from uuid import UUID
 
 from app.conversation_history.models import ConversationTurn, TurnStatus
-from app.memory.admission.contracts import MemoryCandidate
-from app.memory.formation.contracts import MemoryFormationJob
+from app.memory.formation.contracts import ExtractedMemoryCandidate, MemoryFormationJob
 from app.memory.formation.domain_router import DomainRecordRouter
 
 logger = logging.getLogger(__name__)
@@ -28,13 +27,13 @@ class CandidateExtractor(Protocol):
         *,
         current_turn: ConversationTurn,
         previous_turn: ConversationTurn | None,
-    ) -> tuple[MemoryCandidate, ...]: ...
+    ) -> tuple[ExtractedMemoryCandidate, ...]: ...
 
 
 class AdmissionService(Protocol):
     def admit(
         self,
-        candidate: MemoryCandidate,
+        candidate: ExtractedMemoryCandidate,
         *,
         character_id: str,
         conversation_id: UUID,
@@ -97,7 +96,7 @@ class MemoryFormationWorker:
                     "memory candidate admission failed: candidate_index=%d "
                     "memory_type=%s error_type=%s",
                     index,
-                    candidate.memory_type.value,
+                    candidate.candidate.memory_type.value,
                     type(error).__name__,
                 )
 

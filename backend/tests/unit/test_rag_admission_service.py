@@ -29,6 +29,11 @@ from app.memory.persistence.contracts import (
     MemoryStatus,
     TemporalPrecision,
 )
+from app.memory.formation.contracts import ExtractedMemoryCandidate
+from app.memory.formation.temporal_resolution import (
+    DateExpressionRole,
+    RelativeDateExpression,
+)
 from app.privacy.contracts import (
     FindingReasonCode,
     PrivacyCategory,
@@ -200,9 +205,10 @@ def _approved_memory(
         policy_version="policy-v1",
         content_version=1,
         status=MemoryStatus.ACTIVE,
-        effective_at=CREATED_AT,
-        effective_timezone="Asia/Tokyo",
-        temporal_precision=TemporalPrecision.SECOND,
+        occurred_at=CREATED_AT,
+        occurred_timezone="Asia/Tokyo",
+        occurred_precision=TemporalPrecision.SECOND,
+        stated_at=CREATED_AT,
         expires_at=None,
         last_user_mentioned_at=CREATED_AT,
         created_at=CREATED_AT,
@@ -238,15 +244,20 @@ def _service(
         evaluator=create_rag_admission_evaluator(
             resolved_memory_policy().privacy
         ),
-        effective_timezone="Asia/Tokyo",
+        occurred_timezone="Asia/Tokyo",
         extractor_version=EXTRACTOR_VERSION,
     )
     return service, turn_repository, approved_repository, scanner, classifier
 
 
-def _admit(service, candidate: MemoryCandidate | None = None):
+def _admit(
+    service,
+    candidate: MemoryCandidate | None = None,
+    *,
+    date_expressions: tuple[object, ...] = (),
+):
     return service.admit(
-        candidate or _candidate(),
+        ExtractedMemoryCandidate(candidate or _candidate(), date_expressions),
         character_id=CHARACTER_ID,
         conversation_id=CONVERSATION_ID,
         turn_id=TURN_ID,
@@ -442,9 +453,10 @@ def test_allow_save_uses_authoritative_turn_and_assessment_provenance() -> None:
         "2",
         EXTRACTOR_VERSION,
     ]
-    assert context.effective_at == CREATED_AT
-    assert context.effective_timezone == "Asia/Tokyo"
-    assert context.temporal_precision is TemporalPrecision.SECOND
+    assert context.occurred_at is None
+    assert context.occurred_timezone is None
+    assert context.occurred_precision is None
+    assert context.stated_at == CREATED_AT
     assert context.expires_at is None
     assert context.lineage == ()
     assert (
@@ -464,6 +476,28 @@ def test_allow_save_uses_authoritative_turn_and_assessment_provenance() -> None:
     assert context.sources[0].source_type is MemorySourceType.CONVERSATION_TURN
     assert context.sources[0].source_provider_id == "core"
     assert context.sources[0].source_ref == str(TURN_ID)
+
+
+def test_allow_save_resolves_extracted_date_from_authoritative_turn_time() -> None:
+    service, _turns, repository, _scanner, _classifier = _service()
+
+    result = _admit(
+        service,
+        date_expressions=(
+            RelativeDateExpression(
+                role=DateExpressionRole.PRIMARY,
+                year_offset=-1,
+                month=3,
+            ),
+        ),
+    )
+
+    assert result.decision is RagAdmissionDecision.ALLOW_STRUCTURED
+    context = repository.save_calls[0]["context"]
+    assert context.occurred_at == datetime(2025, 2, 28, 15, 0, tzinfo=UTC)
+    assert context.occurred_timezone == "Asia/Tokyo"
+    assert context.occurred_precision is TemporalPrecision.MONTH
+    assert context.stated_at == CREATED_AT
 
 
 def test_exact_active_match_is_touched_at_the_source_turn_time() -> None:

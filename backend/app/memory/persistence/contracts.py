@@ -74,9 +74,10 @@ class MemoryLineageInput:
 class MemoryWriteContext:
     formation_method: FormationMethod
     idempotency_key: str
-    effective_at: datetime
-    effective_timezone: str
-    temporal_precision: TemporalPrecision
+    occurred_at: datetime | None
+    occurred_timezone: str | None
+    occurred_precision: TemporalPrecision | None
+    stated_at: datetime
     expires_at: datetime | None
     policy_version: str
     classifier_version: str
@@ -89,17 +90,31 @@ class MemoryWriteContext:
     def __post_init__(self) -> None:
         if not isinstance(self.formation_method, FormationMethod):
             raise TypeError("formation_method must be a FormationMethod")
-        if not isinstance(self.temporal_precision, TemporalPrecision):
-            raise TypeError("temporal_precision must be a TemporalPrecision")
-        _require_aware_datetime(self.effective_at, "effective_at")
+        occurred_values = (
+            self.occurred_at,
+            self.occurred_timezone,
+            self.occurred_precision,
+        )
+        if any(value is None for value in occurred_values) and not all(
+            value is None for value in occurred_values
+        ):
+            raise ValueError("occurred date fields must be all known or all unknown")
+        if self.occurred_at is not None:
+            _require_aware_datetime(self.occurred_at, "occurred_at")
+            if not isinstance(self.occurred_precision, TemporalPrecision):
+                raise TypeError("occurred_precision must be a TemporalPrecision")
+            assert self.occurred_timezone is not None
+            _require_non_empty(self.occurred_timezone, "occurred_timezone")
+            try:
+                ZoneInfo(self.occurred_timezone)
+            except ZoneInfoNotFoundError as error:
+                raise ValueError(
+                    "occurred_timezone must be an IANA timezone"
+                ) from error
+        _require_aware_datetime(self.stated_at, "stated_at")
         if self.expires_at is not None:
             _require_aware_datetime(self.expires_at, "expires_at")
         _require_non_empty(self.idempotency_key, "idempotency_key")
-        _require_non_empty(self.effective_timezone, "effective_timezone")
-        try:
-            ZoneInfo(self.effective_timezone)
-        except ZoneInfoNotFoundError as error:
-            raise ValueError("effective_timezone must be an IANA timezone") from error
         for field_name in (
             "policy_version",
             "classifier_version",
@@ -132,9 +147,10 @@ class ApprovedMemory:
     policy_version: str
     content_version: int
     status: MemoryStatus
-    effective_at: datetime
-    effective_timezone: str
-    temporal_precision: TemporalPrecision
+    occurred_at: datetime | None
+    occurred_timezone: str | None
+    occurred_precision: TemporalPrecision | None
+    stated_at: datetime
     expires_at: datetime | None
     last_user_mentioned_at: datetime | None
     created_at: datetime

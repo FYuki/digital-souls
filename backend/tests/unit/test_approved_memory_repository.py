@@ -15,6 +15,7 @@ from app.memory.admission.contracts import (
     PreferencePolarity,
     UserPreferenceValue,
 )
+from app.memory.persistence.contracts import TemporalPrecision
 
 
 NOW = datetime(2026, 8, 18, 12, 0, tzinfo=UTC)
@@ -30,21 +31,28 @@ def _candidate(text: str = "ユーザーは短い回答を好む") -> ApprovedMe
     )
 
 
-def _context(*, expires_at: datetime | None = None):
+def _context(
+    *,
+    occurred_at: datetime | None = NOW - timedelta(days=2),
+    occurred_timezone: str | None = "Asia/Tokyo",
+    occurred_precision: TemporalPrecision | None = TemporalPrecision.DAY,
+    stated_at: datetime = NOW - timedelta(days=1),
+    expires_at: datetime | None = None,
+):
     from app.memory.persistence.contracts import (
         FormationMethod,
         MemorySourceInput,
         MemorySourceType,
         MemoryWriteContext,
-        TemporalPrecision,
     )
 
     return MemoryWriteContext(
         formation_method=FormationMethod.EXTRACTED,
         idempotency_key="conversation-1:turn-1:0:extractor-v1",
-        effective_at=NOW,
-        effective_timezone="Asia/Tokyo",
-        temporal_precision=TemporalPrecision.SECOND,
+        occurred_at=occurred_at,
+        occurred_timezone=occurred_timezone,
+        occurred_precision=occurred_precision,
+        stated_at=stated_at,
         expires_at=expires_at,
         policy_version="policy-v1",
         classifier_version="classifier-v1",
@@ -245,26 +253,57 @@ def test_save_normalizes_instants_to_utc_and_preserves_temporal_metadata(
 
     repository, database_path = _repository(tmp_path)
     chatham_timezone = ZoneInfo("Pacific/Chatham")
-    effective_at = datetime(2026, 8, 18, 21, 34, 56, tzinfo=chatham_timezone)
+    occurred_at = datetime(2026, 8, 18, 21, 34, 56, tzinfo=chatham_timezone)
+    stated_at = datetime(2026, 8, 20, 21, 34, 56, tzinfo=chatham_timezone)
     expires_at = datetime(2026, 8, 25, 21, 34, 56, tzinfo=chatham_timezone)
 
-    repository.save(
+    memory = repository.save(
         character_id="miori",
         candidate=_candidate(),
         context=replace(
             _context(),
-            effective_at=effective_at,
-            effective_timezone="Pacific/Chatham",
-            temporal_precision=TemporalPrecision.DAY,
+            occurred_at=occurred_at,
+            occurred_timezone="Pacific/Chatham",
+            occurred_precision=TemporalPrecision.DAY,
+            stated_at=stated_at,
             expires_at=expires_at,
         ),
     )
 
     row = _rows(database_path, "approved_memories")[0]
-    assert row["effective_at"] == "2026-08-18T08:49:56.000000Z"
+    assert row["occurred_at"] == "2026-08-18T08:49:56.000000Z"
+    assert row["stated_at"] == "2026-08-20T08:49:56.000000Z"
     assert row["expires_at"] == "2026-08-25T08:49:56.000000Z"
-    assert row["effective_timezone"] == "Pacific/Chatham"
-    assert row["temporal_precision"] == "DAY"
+    assert row["occurred_timezone"] == "Pacific/Chatham"
+    assert row["occurred_precision"] == "DAY"
+    assert memory.last_user_mentioned_at == stated_at.astimezone(UTC)
+    assert row["last_user_mentioned_at"] == "2026-08-20T08:49:56.000000Z"
+    assert memory.created_at == NOW
+
+
+def test_save_preserves_unknown_occurred_date_without_using_stated_at(
+    tmp_path: Path,
+) -> None:
+    repository, database_path = _repository(tmp_path)
+
+    memory = repository.save(
+        character_id="miori",
+        candidate=_candidate(),
+        context=_context(
+            occurred_at=None,
+            occurred_timezone=None,
+            occurred_precision=None,
+        ),
+    )
+
+    row = _rows(database_path, "approved_memories")[0]
+    assert memory.occurred_at is None
+    assert memory.occurred_timezone is None
+    assert memory.occurred_precision is None
+    assert row["occurred_at"] is None
+    assert row["occurred_timezone"] is None
+    assert row["occurred_precision"] is None
+    assert row["stated_at"] == "2026-08-17T12:00:00.000000Z"
 
 
 def test_save_rolls_back_memory_when_outbox_insert_fails(tmp_path: Path) -> None:
@@ -368,6 +407,127 @@ def test_correct_updates_content_version_and_creates_another_pending_upsert(
         "conversation-1:turn-1",
         "conversation-2:turn-2",
     ]
+
+
+def test_correct_updates_occurrence_and_stated_dates_but_not_registration_date(
+    tmp_path: Path,
+) -> None:
+    repository, _database_path = _repository(tmp_path)
+    original = repository.save(
+        character_id="miori",
+        candidate=_candidate(),
+        context=_context(
+            occurred_at=datetime(2025, 3, 12, tzinfo=UTC),
+            stated_at=datetime(2026, 8, 17, tzinfo=UTC),
+        ),
+    )
+    corrected_stated_at = datetime(2026, 8, 19, tzinfo=UTC)
+
+    corrected = repository.correct(
+        character_id="miori",
+        memory_id=original.id,
+        candidate=_candidate("ユーザーは静岡へ旅行した"),
+        context=replace(
+            _context(
+                occurred_at=datetime(2025, 5, 4, tzinfo=UTC),
+                stated_at=corrected_stated_at,
+            ),
+            idempotency_key="conversation-2:turn-2:0:extractor-v1",
+        ),
+    )
+
+    corrected_row = _rows(_database_path, "approved_memories")[0]
+    assert corrected.created_at == original.created_at
+    assert corrected.last_user_mentioned_at == corrected_stated_at
+    assert corrected_row["last_user_mentioned_at"] == (
+        "2026-08-19T00:00:00.000000Z"
+    )
+
+    last_mentioned_at = datetime(2026, 8, 20, tzinfo=UTC)
+    touched = repository.touch(
+        character_id="miori",
+        memory_id=corrected.id,
+        candidate=_candidate("ユーザーは静岡へ旅行した"),
+        mentioned_at=last_mentioned_at,
+    )
+
+    assert touched.created_at == original.created_at
+    assert touched.occurred_at == datetime(2025, 5, 4, tzinfo=UTC)
+    assert touched.stated_at == corrected_stated_at
+    assert touched.last_user_mentioned_at == last_mentioned_at
+    assert len(
+        {
+            touched.occurred_at,
+            touched.created_at,
+            touched.stated_at,
+            touched.last_user_mentioned_at,
+        }
+    ) == 4
+
+    corrected_after_touch = repository.correct(
+        character_id="miori",
+        memory_id=touched.id,
+        candidate=_candidate("ユーザーは静岡へ再び旅行した"),
+        context=replace(
+            _context(stated_at=datetime(2026, 8, 18, tzinfo=UTC)),
+            idempotency_key="conversation-3:turn-3:0:extractor-v1",
+        ),
+    )
+
+    assert corrected_after_touch.last_user_mentioned_at == last_mentioned_at
+
+
+def test_range_search_uses_half_open_sqlite_occurrence_range_and_compatibility_filters(
+    tmp_path: Path,
+) -> None:
+    repository, _database_path = _repository(tmp_path)
+
+    def save(
+        key: str,
+        occurred_at: datetime | None,
+        *,
+        character_id: str = "miori",
+        expires_at: datetime | None = None,
+        policy_version: str = "policy-v1",
+    ):
+        return repository.save(
+            character_id=character_id,
+            candidate=_candidate(key),
+            context=replace(
+                _context(
+                    occurred_at=occurred_at,
+                    occurred_timezone=None if occurred_at is None else "Asia/Tokyo",
+                    occurred_precision=(
+                        None if occurred_at is None else TemporalPrecision.DAY
+                    ),
+                    expires_at=expires_at,
+                ),
+                idempotency_key=key,
+                policy_version=policy_version,
+            ),
+        )
+
+    included = save("included", datetime(2025, 3, 1, tzinfo=UTC))
+    save("exclusive-end", datetime(2025, 4, 1, tzinfo=UTC))
+    inactive = save("inactive", datetime(2025, 3, 2, tzinfo=UTC))
+    repository.deactivate(character_id="miori", memory_id=inactive.id)
+    save(
+        "expired",
+        datetime(2025, 3, 3, tzinfo=UTC),
+        expires_at=NOW - timedelta(seconds=1),
+    )
+    save("old-policy", datetime(2025, 3, 4, tzinfo=UTC), policy_version="policy-v0")
+    save("other-character", datetime(2025, 3, 5, tzinfo=UTC), character_id="other")
+    save("unknown", None)
+
+    result = repository.search_by_occurred_range(
+        character_id="miori",
+        start=datetime(2025, 3, 1, tzinfo=UTC),
+        end=datetime(2025, 4, 1, tzinfo=UTC),
+        compatible_policy_versions=frozenset({"policy-v1"}),
+    )
+
+    assert [memory.id for memory in result] == [included.id]
 
 
 def test_save_retry_after_correction_returns_the_corrected_memory_without_duplicates(

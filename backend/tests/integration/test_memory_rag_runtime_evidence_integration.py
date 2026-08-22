@@ -142,7 +142,7 @@ class TestRagRuntimeEvidenceIntegration:
             memory_kind=saved.memory_kind,
             memory_type=saved.memory_type.value,
             policy_version=saved.policy_version,
-            effective_at=saved.effective_at.isoformat(),
+            occurred_at=saved.occurred_at.isoformat(),
             expires_at=None,
             chroma_path=runtime_paths.chroma_path,
         )
@@ -166,7 +166,7 @@ class TestRagRuntimeEvidenceIntegration:
             policy_version=policy.policy_version,
         )
 
-        memories = retrieve_prompt_memories(
+        outcome = retrieve_prompt_memories(
             character_id,
             "紅茶の好みは？",
             policy,
@@ -174,8 +174,13 @@ class TestRagRuntimeEvidenceIntegration:
             classifier=classifier,
             approved_repository=approved,
             chroma_path=runtime_paths.chroma_path,
+            now=datetime(2026, 8, 20, tzinfo=UTC),
+            timezone="Asia/Tokyo",
         )
 
-        assert [(memory.normalized_text, memory.raw_distance) for memory in memories] == [
+        assert [
+            (memory.normalized_text, memory.raw_distance)
+            for memory in outcome.memories
+        ] == [
             (content, indexed[0].raw_distance)
         ]

@@ -1,6 +1,6 @@
 import asyncio
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 from uuid import UUID
 from pathlib import Path
 
@@ -120,14 +120,32 @@ def _runtime_dependencies(
     )
 
 
-def _rag_memory(content: str, memory_id: str = "memory-1") -> MemorySearchResult:
+def _rag_memory(
+    content: str,
+    memory_id: str = "memory-1",
+    *,
+    occurred_at: str | None = "2026-07-31T00:00:00.000000Z",
+) -> MemorySearchResult:
+    from app.memory.persistence.contracts import TemporalPrecision
+    from app.memory.rag_service import RetrievalMatchKind
+
     return MemorySearchResult(
         memory_id=memory_id,
         normalized_text=content,
-        effective_at="2026-07-31T00:00:00.000000Z",
+        occurred_at=occurred_at,
+        occurred_precision=(
+            TemporalPrecision.DAY if occurred_at is not None else None
+        ),
+        match_kind=RetrievalMatchKind.SEMANTIC,
         memory_type="USER_PREFERENCE",
         raw_distance=1.25,
     )
+
+
+def _rag_outcome(*memories: MemorySearchResult, no_match: bool = False):
+    from app.memory.rag_service import RetrievalOutcome
+
+    return RetrievalOutcome(memories, no_match)
 
 
 def _generated_contents(generate: MagicMock) -> list[str]:
@@ -438,7 +456,7 @@ class TestChatServiceErrorContract:
         ):
             with patch(
                 _BUILD_AUGMENTED_SYSTEM_PROMPT,
-                return_value=[_rag_memory(secrets["rag"])],
+                return_value=_rag_outcome(_rag_memory(secrets["rag"])),
             ):
                 with patch(
                     _BUILD_PROMPT,
@@ -883,7 +901,9 @@ class TestChatServiceRagContract:
         service = _chat_service(True, policy)
 
         with patch(_LOAD_PERSONALITY, return_value=_character_card()):
-            with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT, return_value=()):
+            with patch(
+                _BUILD_AUGMENTED_SYSTEM_PROMPT, return_value=_rag_outcome()
+            ):
                 with patch(_GENERATE_RESPONSE, return_value="reply") as generate:
                     reply = service.generate_chat_reply(
                         "miori", CONVERSATION_ID, "hello"
@@ -899,7 +919,7 @@ class TestChatServiceRagContract:
         with patch(_LOAD_PERSONALITY, return_value=_character_card(base_prompt)):
             with patch(
                 _BUILD_AUGMENTED_SYSTEM_PROMPT,
-                return_value=(_rag_memory("畑の話"),),
+                return_value=_rag_outcome(_rag_memory("畑の話")),
             ) as mock_build:
                 with patch(_GENERATE_RESPONSE, return_value="reply") as mock_gen:
                     reply = service.generate_chat_reply(
@@ -915,11 +935,128 @@ class TestChatServiceRagContract:
             classifier=service._dependencies.semantic_classifier,
             approved_repository=service._dependencies.approved_memory_repository,
             chroma_path=_CHROMA_PATH,
+            now=ANY,
+            timezone="Asia/Tokyo",
         )
         assert _generated_contents(mock_gen) == [
             "## 応答方針\n# prompt",
-            "## 関連する記憶\n[2026-07-31T00:00:00.000000Z] 畑の話",
+            "## 関連する記憶\n[2026-07-31T09:00:00+09:00 DAY] 畑の話",
             "hello",
+        ]
+
+    def test_memory_date_is_displayed_in_the_runtime_occurrence_timezone(self):
+        policy = object()
+        service = _chat_service(True, policy)
+        memory = _rag_memory(
+            "月境界の旅行",
+            occurred_at="2026-07-31T15:30:00+00:00",
+        )
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(
+                _BUILD_AUGMENTED_SYSTEM_PROMPT,
+                return_value=_rag_outcome(memory),
+            ):
+                with patch(_GENERATE_RESPONSE, return_value="reply") as generate:
+                    service.generate_chat_reply("miori", CONVERSATION_ID, "旅行の話")
+
+        assert any(
+            "[2026-08-01T00:30:00+09:00 DAY] 月境界の旅行" in content
+            for content in _generated_contents(generate)
+        )
+
+    def test_success_logs_only_metadata_for_memories_selected_into_prompt(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        policy = object()
+        memory_id = "00000000-0000-4000-8000-000000000043"
+        private_body = "PRIVATE_MEMORY_BODY_4C62"
+        private_query = "PRIVATE_QUERY_BODY_9A17"
+        outcome = MagicMock()
+        outcome.memories = (_rag_memory(private_body, memory_id),)
+        outcome.no_match = False
+        service = _chat_service(True, policy)
+        caplog.set_level("INFO")
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT, return_value=outcome):
+                with patch(_GENERATE_RESPONSE, return_value="reply"):
+                    service.generate_chat_reply(
+                        "miori",
+                        CONVERSATION_ID,
+                        private_query,
+                    )
+
+        assert memory_id in caplog.text
+        assert "2026-07-31T00:00:00.000000Z" in caplog.text
+        assert private_body not in caplog.text
+        assert private_query not in caplog.text
+
+    def test_failed_llm_response_does_not_log_prompt_memory_metadata(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        policy = object()
+        memory_id = "00000000-0000-4000-8000-000000000044"
+        service = _chat_service(True, policy)
+        caplog.set_level("INFO")
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(
+                _BUILD_AUGMENTED_SYSTEM_PROMPT,
+                return_value=_rag_outcome(_rag_memory("非公開本文", memory_id)),
+            ):
+                with patch(
+                    _GENERATE_RESPONSE,
+                    side_effect=httpx.HTTPError("synthetic failure"),
+                ):
+                    with pytest.raises(ChatBackendError):
+                        service.generate_chat_reply(
+                            "miori",
+                            CONVERSATION_ID,
+                            "非公開query",
+                        )
+
+        assert memory_id not in caplog.text
+        assert "2026-07-31T00:00:00.000000Z" not in caplog.text
+
+    def test_successful_temporal_no_match_adds_explicit_non_inference_instruction(
+        self,
+    ) -> None:
+        policy = object()
+        outcome = MagicMock()
+        outcome.memories = ()
+        outcome.no_match = True
+        service = _chat_service(True, policy)
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT, return_value=outcome):
+                with patch(_GENERATE_RESPONSE, return_value="reply") as generate:
+                    service.generate_chat_reply("miori", CONVERSATION_ID, "昨年3月の旅行")
+
+        assert _generated_contents(generate) == [
+            "## 応答方針\n# prompt",
+            "## 関連する記憶\n指定された期間に該当する記憶はありません。推測で補完しないでください。",
+            "昨年3月の旅行",
+        ]
+
+    def test_unknown_occurrence_is_injected_without_a_date_label(self) -> None:
+        policy = object()
+        outcome = MagicMock()
+        outcome.memories = (_rag_memory("日付不明の旅行", occurred_at=None),)
+        outcome.no_match = False
+        service = _chat_service(True, policy)
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_BUILD_AUGMENTED_SYSTEM_PROMPT, return_value=outcome):
+                with patch(_GENERATE_RESPONSE, return_value="reply") as generate:
+                    service.generate_chat_reply("miori", CONVERSATION_ID, "旅行の話")
+
+        assert _generated_contents(generate) == [
+            "## 応答方針\n# prompt",
+            "## 関連する記憶\n日付不明の旅行",
+            "旅行の話",
         ]
 
     def test_rag_disabled_keeps_plain_prompt_without_memory_work(self):
@@ -952,8 +1089,8 @@ class TestChatServiceRagContract:
                 with patch(
                     _BUILD_AUGMENTED_SYSTEM_PROMPT,
                     side_effect=[
-                        (_rag_memory("memory 1", "memory-1"),),
-                        (_rag_memory("memory 2", "memory-2"),),
+                        _rag_outcome(_rag_memory("memory 1", "memory-1")),
+                        _rag_outcome(_rag_memory("memory 2", "memory-2")),
                     ],
                 ) as mock_build:
                     with patch(
@@ -984,6 +1121,8 @@ class TestChatServiceRagContract:
             "classifier": service._dependencies.semantic_classifier,
             "approved_repository": service._dependencies.approved_memory_repository,
             "chroma_path": _CHROMA_PATH,
+            "now": ANY,
+            "timezone": "Asia/Tokyo",
         }
         mock_build.assert_any_call("miori", "hello", policy, **retrieval_dependencies)
         mock_build.assert_any_call("miori", "again", policy, **retrieval_dependencies)

@@ -190,18 +190,19 @@ def create_persona_memory_database(
             "normalized_text, structured_value, policy_version, "
             "classifier_version, model_id, model_digest, prompt_version, "
             "content_version, status, idempotency_key, "
-            "last_write_idempotency_key, effective_at, effective_timezone, "
-            "temporal_precision, expires_at, last_user_mentioned_at, "
+            "last_write_idempotency_key, occurred_at, occurred_timezone, "
+            "occurred_precision, stated_at, expires_at, last_user_mentioned_at, "
             "last_consolidated_at, created_at, updated_at"
             ") VALUES (?, ?, 'core', 'SEMANTIC', 'USER_PREFERENCE', NULL, "
             "'DIRECT', 1, ?, '{}', 'policy-v1', 'classifier-v1', "
             "'test-model', 'test-digest', 'prompt-v1', 1, 'ACTIVE', ?, "
-            "NULL, ?, 'Asia/Tokyo', 'SECOND', NULL, NULL, NULL, ?, ?)",
+            "NULL, ?, 'Asia/Tokyo', 'SECOND', ?, NULL, NULL, NULL, ?, ?)",
             (
                 "memory-backup-sentinel",
                 "miori",
                 "バックアップ対象の記憶",
                 "memory-backup-idempotency",
+                "2026-08-08T01:00:00.000000Z",
                 "2026-08-08T01:00:00.000000Z",
                 "2026-08-08T01:00:00.000000Z",
                 "2026-08-08T01:00:00.000000Z",

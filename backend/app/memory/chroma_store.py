@@ -5,9 +5,18 @@ import importlib
 import math
 import re
 from dataclasses import dataclass
+from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Protocol, cast
+
+from app.memory.persistence.contracts import TemporalPrecision
+
+
+class RetrievalMatchKind(str, Enum):
+    BOTH = "BOTH"
+    SEMANTIC = "SEMANTIC"
+    PERIOD = "PERIOD"
 
 COLLECTION_NAME_PREFIX = "character"
 COLLECTION_NAME_MAX_LENGTH = 63
@@ -31,9 +40,11 @@ class MemorySearchCandidate:
 class MemorySearchResult:
     memory_id: str
     normalized_text: str
-    effective_at: str
+    occurred_at: str | None
     memory_type: str
     raw_distance: float
+    occurred_precision: TemporalPrecision | None = None
+    match_kind: RetrievalMatchKind = RetrievalMatchKind.SEMANTIC
 
 
 class _ChromaCollection(Protocol):
@@ -82,7 +93,7 @@ def upsert_memory_index_entry(
     memory_kind: str,
     memory_type: str,
     policy_version: str,
-    effective_at: str,
+    occurred_at: str | None,
     expires_at: str | None,
     chroma_path: Path,
 ) -> None:
@@ -92,7 +103,7 @@ def upsert_memory_index_entry(
         memory_kind=memory_kind,
         memory_type=memory_type,
         policy_version=policy_version,
-        effective_at=effective_at,
+        occurred_at=occurred_at,
         expires_at=expires_at,
     )
     collection = _collection(character_id, chroma_path)
@@ -210,7 +221,7 @@ def memory_index_metadata(
     memory_kind: str,
     memory_type: str,
     policy_version: str,
-    effective_at: str,
+    occurred_at: str | None,
     expires_at: str | None,
 ) -> dict[str, str]:
     return {
@@ -219,7 +230,7 @@ def memory_index_metadata(
         "memory_kind": memory_kind,
         "memory_type": memory_type,
         "policy_version": policy_version,
-        "effective_at": effective_at,
+        **({"occurred_at": occurred_at} if occurred_at is not None else {}),
         **({"expires_at": expires_at} if expires_at is not None else {}),
     }
 

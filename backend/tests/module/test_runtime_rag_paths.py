@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from unittest.mock import MagicMock
+from datetime import UTC, datetime
 
 from app.privacy.contracts import ScanSuccess
 from app.privacy.semantic.contracts import (
@@ -44,6 +45,8 @@ def test_rt_chroma_01_rag_lookup_uses_resolved_chroma_path(
         classifier=classifier,
         approved_repository=MagicMock(),
         chroma_path=chroma_path,
+        now=datetime(2026, 8, 20, tzinfo=UTC),
+        timezone="Asia/Tokyo",
     )
 
     rag_service.query_memories.assert_called_once_with(

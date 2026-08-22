@@ -16,6 +16,7 @@ from app.memory.admission.contracts import (
     PreferencePolarity,
     UserPreferenceValue,
 )
+from app.memory.formation.contracts import ExtractedMemoryCandidate
 
 
 CONVERSATION_ID = UUID("10000000-0000-4000-8000-000000000001")
@@ -113,7 +114,10 @@ def test_worker_rereads_source_and_previous_then_admits_candidates_serially() ->
     current = _turn()
     previous = _turn(turn_id=PREVIOUS_TURN_ID, user_content="previous user")
     repository = FakeRepository(current=current, previous=previous)
-    candidates = (_candidate("紅茶"), _candidate("静かな場所"), _candidate("短い返答"))
+    candidates = tuple(
+        ExtractedMemoryCandidate(_candidate(value), ())
+        for value in ("紅茶", "静かな場所", "短い返答")
+    )
     extractor = MagicMock()
     extractor.extract.return_value = candidates
     admission = MagicMock()
@@ -185,7 +189,8 @@ def test_absent_or_noop_domain_router_does_not_change_persona_admission(
 
     extractor = MagicMock()
     candidate = _candidate("紅茶")
-    extractor.extract.return_value = (candidate,)
+    extracted = ExtractedMemoryCandidate(candidate, ())
+    extractor.extract.return_value = (extracted,)
     admission = MagicMock()
     resolved_router = None if router is None else NoOpDomainRecordRouter()
 
@@ -194,7 +199,7 @@ def test_absent_or_noop_domain_router_does_not_change_persona_admission(
     )
 
     admission.admit.assert_called_once()
-    assert admission.admit.call_args.args == (candidate,)
+    assert admission.admit.call_args.args == (extracted,)
 
 
 @pytest.mark.parametrize(
@@ -211,8 +216,9 @@ def test_incomplete_previous_turn_is_ignored_without_losing_current_candidates(
     current = _turn()
     repository = FakeRepository(current=current, previous=previous)
     candidate = _candidate("紅茶")
+    extracted = ExtractedMemoryCandidate(candidate, ())
     extractor = MagicMock()
-    extractor.extract.return_value = (candidate,)
+    extractor.extract.return_value = (extracted,)
     admission = MagicMock()
 
     _worker(repository, extractor, admission, None).process(_job())
@@ -222,7 +228,7 @@ def test_incomplete_previous_turn_is_ignored_without_losing_current_candidates(
         previous_turn=None,
     )
     admission.admit.assert_called_once_with(
-        candidate,
+        extracted,
         character_id="miori",
         conversation_id=CONVERSATION_ID,
         turn_id=TURN_ID,
@@ -233,10 +239,9 @@ def test_incomplete_previous_turn_is_ignored_without_losing_current_candidates(
 def test_admission_failure_is_isolated_to_its_candidate(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    candidates = (
-        _candidate("紅茶"),
-        _candidate(PRIVATE_CANDIDATE),
-        _candidate("短い返答"),
+    candidates = tuple(
+        ExtractedMemoryCandidate(_candidate(value), ())
+        for value in ("紅茶", PRIVATE_CANDIDATE, "短い返答")
     )
     extractor = MagicMock()
     extractor.extract.return_value = candidates
