@@ -78,6 +78,27 @@ class MemoryIndexSync:
                 self._outbox_repository.mark_completed(outbox_id=entry.id)
                 self._record_success()
 
+    def delete_after_commit(self, *, character_id: str, memory_id: UUID) -> None:
+        try:
+            delete_memory_index_entry(
+                character_id=character_id,
+                memory_id=str(memory_id),
+                chroma_path=self._chroma_path,
+            )
+        except Exception as error:
+            self._record_failure("CHROMA_WRITE_FAILED", type(error).__name__)
+            return
+        try:
+            self._outbox_repository.mark_memory_operation_completed(
+                character_id=character_id,
+                memory_id=str(memory_id),
+                operation="DELETE",
+            )
+        except Exception as error:
+            self._record_failure("SQLITE_WRITE_FAILED", type(error).__name__)
+            return
+        self._record_success()
+
     def reconcile_once(self, *, should_stop: Callable[[], bool] | None = None) -> None:
         primary_error_code: str | None = None
         interrupted = False
@@ -245,8 +266,12 @@ class MemoryIndexSync:
         except Exception as error:
             raise _SyncFailure("CHROMA_WRITE_FAILED") from error
 
-    def _record_failure(self, error_code: str) -> None:
-        logger.debug("memory index sync failure: %s", error_code)
+    def _record_failure(self, error_code: str, error_type: str | None = None) -> None:
+        logger.debug(
+            "memory index sync failure: %s error_type=%s",
+            error_code,
+            error_type or "none",
+        )
         if self._consecutive_error_code == error_code:
             self._consecutive_failure_count += 1
         else:

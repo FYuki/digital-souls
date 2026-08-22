@@ -7,7 +7,7 @@ from uuid import UUID
 import pytest
 
 from app.memory.admission.contracts import (
-    MemoryType,
+    ApprovedMemoryCandidate,
     PreferencePolarity,
     UserPreferenceValue,
 )
@@ -35,6 +35,7 @@ from app.privacy.semantic.contracts import (
     SemanticPrivacyCategory,
     SubjectScope,
 )
+from tests.unit._helpers import approved_memory as _approved_memory
 
 
 _CHROMA_PATH = Path("/test/runtime-data/chroma")
@@ -65,35 +66,6 @@ def _assessment(
         prompt_version="prompt-v1",
         policy_version=resolved_memory_policy().policy_version,
     )
-
-
-def _approved_memory(**overrides: object) -> ApprovedMemory:
-    now = datetime(2026, 8, 20, tzinfo=UTC)
-    values: dict[str, object] = {
-        "id": _MEMORY_ID,
-        "character_id": "miori",
-        "provider_id": "core",
-        "memory_kind": "SEMANTIC",
-        "memory_type": MemoryType.USER_PREFERENCE,
-        "structured_value": UserPreferenceValue(
-            polarity=PreferencePolarity.LIKE,
-            object="紅茶",
-        ),
-        "normalized_text": "SQLiteに保存された紅茶の好み",
-        "policy_version": resolved_memory_policy().policy_version,
-        "content_version": 1,
-        "status": MemoryStatus.ACTIVE,
-        "occurred_at": now,
-        "occurred_timezone": "Asia/Tokyo",
-        "occurred_precision": TemporalPrecision.SECOND,
-        "stated_at": now,
-        "expires_at": datetime(2999, 1, 1, tzinfo=UTC),
-        "last_user_mentioned_at": None,
-        "created_at": now,
-        "updated_at": now,
-    }
-    values.update(overrides)
-    return ApprovedMemory(**values)  # type: ignore[arg-type]
 
 
 def _candidate(
@@ -672,6 +644,89 @@ def test_chroma_failure_returns_no_unverified_memory(monkeypatch):
 
     assert memories == ()
     repository.get.assert_not_called()
+
+
+def test_hard_deleted_memory_is_excluded_when_chroma_still_returns_its_id(
+    tmp_path: Path, monkeypatch
+):
+    from app.memory import rag_service
+    from app.memory.persistence.approved_repository import ApprovedMemoryRepository
+    from app.memory.persistence.contracts import (
+        FormationMethod,
+        MemorySourceInput,
+        MemorySourceType,
+        MemoryWriteContext,
+        TemporalPrecision,
+    )
+    from app.memory.persistence.schema import initialize_persona_memory_schema
+    from app.runtime_paths import resolve_runtime_paths
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths = resolve_runtime_paths(
+        {"DS_ENVIRONMENT_ID": "test", "DS_DATA_DIR": str(tmp_path / "data")},
+        repository_root,
+    )
+    initialize_persona_memory_schema(paths, repository_root)
+    outbox_ids = iter(
+        (
+            UUID("10000000-0000-4000-8000-000000000042"),
+            UUID("10000000-0000-4000-8000-000000000043"),
+        )
+    )
+    repository = ApprovedMemoryRepository(
+        database_path=paths.persona_memory_sqlite_path,
+        clock=lambda: datetime(2026, 8, 20, tzinfo=UTC),
+        uuid_factory=lambda: _MEMORY_ID,
+        outbox_uuid_factory=lambda: next(outbox_ids),
+    )
+    policy = resolved_memory_policy()
+    memory = repository.save(
+        character_id="miori",
+        candidate=ApprovedMemoryCandidate(
+            structured_value=UserPreferenceValue(
+                polarity=PreferencePolarity.LIKE,
+                object="紅茶",
+            ),
+            normalized_text="削除対象の紅茶の好み",
+        ),
+        context=MemoryWriteContext(
+            formation_method=FormationMethod.EXTRACTED,
+            idempotency_key="conversation-1:turn-1:0:extractor-v1",
+            occurred_at=datetime(2026, 8, 20, tzinfo=UTC),
+            occurred_timezone="Asia/Tokyo",
+            occurred_precision=TemporalPrecision.SECOND,
+            stated_at=datetime(2026, 8, 20, tzinfo=UTC),
+            expires_at=None,
+            policy_version=policy.policy_version,
+            classifier_version="classifier-v1",
+            model_id="model-v1",
+            model_digest="sha256:test",
+            prompt_version="prompt-v1",
+            sources=(
+                MemorySourceInput(
+                    source_type=MemorySourceType.CONVERSATION_TURN,
+                    source_provider_id="core",
+                    source_ref="conversation-1:turn-1",
+                ),
+            ),
+        ),
+    )
+    repository.hard_delete(character_id="miori", memory_id=memory.id)
+    scanner, classifier, _ = _dependencies()
+    stale_query = MagicMock(return_value=[_candidate(memory.id)])
+    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
+    monkeypatch.setattr(rag_service, "query_memories", stale_query)
+
+    memories = _retrieve(
+        rag_service,
+        scanner=scanner,
+        classifier=classifier,
+        repository=repository,
+    )
+
+    stale_query.assert_called_once()
+    assert memories == ()
 
 
 def test_retrieval_filter_is_read_only(monkeypatch):

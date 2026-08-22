@@ -34,6 +34,7 @@ class MemorySourceType(str, Enum):
     CONVERSATION_TURN = "CONVERSATION_TURN"
     PROVIDER_RECORD = "PROVIDER_RECORD"
     ADDON_EVENT = "ADDON_EVENT"
+    USER_CORRECTION = "USER_CORRECTION"
 
 
 class MemoryLineageRelation(str, Enum):
@@ -158,6 +159,13 @@ class ApprovedMemory:
 
 
 @dataclass(frozen=True)
+class ApprovedMemoryDetail:
+    memory: ApprovedMemory
+    sources: tuple[MemorySourceInput, ...]
+    lineage: tuple[MemoryLineageInput, ...]
+
+
+@dataclass(frozen=True)
 class TemporaryProviderRecordInput:
     provider_id: str
     source_ref: str
@@ -173,6 +181,18 @@ class TemporaryProviderRecordInput:
             "structured_value",
         ):
             _require_non_empty(getattr(self, field_name), field_name)
+        _require_aware_datetime(self.effective_at, "effective_at")
+
+
+@dataclass(frozen=True)
+class TemporaryProviderRecordCorrection:
+    record_type: str
+    structured_value: str
+    effective_at: datetime
+
+    def __post_init__(self) -> None:
+        _require_non_empty(self.record_type, "record_type")
+        _require_non_empty(self.structured_value, "structured_value")
         _require_aware_datetime(self.effective_at, "effective_at")
 
 

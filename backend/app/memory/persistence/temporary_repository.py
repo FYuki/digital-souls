@@ -4,10 +4,12 @@ import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 from uuid import UUID
 
 from app.memory.persistence.contracts import (
     TemporaryProviderRecord,
+    TemporaryProviderRecordCorrection,
     TemporaryProviderRecordInput,
 )
 from app.memory.persistence.sqlite import (
@@ -78,7 +80,67 @@ class TemporaryProviderRecordRepository:
                 record_id,
             )
 
-    def hard_delete_after_migration(
+    def list_by_provider(
+        self, *, character_id: str, provider_id: str
+    ) -> list[TemporaryProviderRecord]:
+        _require_character_id(character_id)
+        _require_provider_id(provider_id)
+        with self._database.connection() as connection:
+            rows = connection.execute(
+                f"SELECT {TEMPORARY_COLUMNS} FROM temporary_provider_records "
+                "WHERE character_id = ? AND provider_id = ? ORDER BY created_at, id",
+                (character_id, provider_id),
+            ).fetchall()
+        return [_record_from_row(row) for row in rows]
+
+    def get(
+        self, *, character_id: str, provider_id: str, record_id: UUID
+    ) -> TemporaryProviderRecord | None:
+        _require_character_id(character_id)
+        _require_provider_id(provider_id)
+        _require_uuid4(record_id)
+        with self._database.connection() as connection:
+            row = _find_record(connection, character_id, provider_id, record_id)
+        return None if row is None else _record_from_row(row)
+
+    def correct(
+        self,
+        *,
+        character_id: str,
+        provider_id: str,
+        record_id: UUID,
+        correction: TemporaryProviderRecordCorrection,
+    ) -> TemporaryProviderRecord:
+        _require_character_id(character_id)
+        _require_provider_id(provider_id)
+        _require_uuid4(record_id)
+        if not isinstance(correction, TemporaryProviderRecordCorrection):
+            raise TypeError("correction must be a TemporaryProviderRecordCorrection")
+        with self._database.transaction() as connection:
+            current = _select_record(connection, character_id, provider_id, record_id)
+            if (
+                current.record_type == correction.record_type
+                and current.structured_value == correction.structured_value
+                and current.effective_at == correction.effective_at
+            ):
+                return current
+            connection.execute(
+                "UPDATE temporary_provider_records SET record_type = ?, "
+                "structured_value = ?, effective_at = ?, updated_at = ? "
+                "WHERE character_id = ? AND provider_id = ? AND id = ?",
+                (
+                    correction.record_type,
+                    correction.structured_value,
+                    format_datetime(correction.effective_at),
+                    format_datetime(self._now()),
+                    character_id,
+                    provider_id,
+                    str(record_id),
+                ),
+            )
+            return _select_record(connection, character_id, provider_id, record_id)
+
+    def hard_delete(
         self,
         *,
         character_id: str,
@@ -89,7 +151,6 @@ class TemporaryProviderRecordRepository:
         _require_provider_id(provider_id)
         _require_uuid4(record_id)
         with self._database.transaction() as connection:
-            _select_record(connection, character_id, provider_id, record_id)
             connection.execute(
                 "DELETE FROM temporary_provider_records "
                 "WHERE character_id = ? AND provider_id = ? AND id = ?",
@@ -115,13 +176,27 @@ def _select_record(
     provider_id: str,
     record_id: UUID,
 ) -> TemporaryProviderRecord:
+    row = _find_record(connection, character_id, provider_id, record_id)
+    if row is None:
+        raise LookupError("temporary provider record was not found")
+    return _record_from_row(row)
+
+
+def _find_record(
+    connection: sqlite3.Connection,
+    character_id: str,
+    provider_id: str,
+    record_id: UUID,
+) -> sqlite3.Row | None:
     row = connection.execute(
         f"SELECT {TEMPORARY_COLUMNS} FROM temporary_provider_records "
         "WHERE character_id = ? AND provider_id = ? AND id = ?",
         (character_id, provider_id, str(record_id)),
     ).fetchone()
-    if row is None:
-        raise LookupError("temporary provider record was not found")
+    return cast(sqlite3.Row | None, row)
+
+
+def _record_from_row(row: sqlite3.Row) -> TemporaryProviderRecord:
     return TemporaryProviderRecord(
         id=UUID(str(row["id"])),
         character_id=str(row["character_id"]),

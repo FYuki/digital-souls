@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from itertools import count
 from pathlib import Path
 from uuid import UUID
@@ -11,6 +11,10 @@ NOW = datetime(2026, 8, 18, 12, 0, tzinfo=UTC)
 
 
 def _repository(tmp_path: Path):
+    return _repository_with_clock(tmp_path, clock=lambda: NOW)
+
+
+def _repository_with_clock(tmp_path: Path, *, clock):
     from app.memory.persistence.schema import initialize_persona_memory_schema
     from app.memory.persistence.temporary_repository import (
         TemporaryProviderRecordRepository,
@@ -30,7 +34,7 @@ def _repository(tmp_path: Path):
     identifiers = count(1)
     repository = TemporaryProviderRecordRepository(
         database_path=paths.persona_memory_sqlite_path,
-        clock=lambda: NOW,
+        clock=clock,
         uuid_factory=lambda: UUID(
             f"00000000-0000-4000-8000-{next(identifiers):012d}"
         ),
@@ -106,7 +110,7 @@ def test_temporary_save_and_delete_never_create_persona_outbox_rows(
         ),
     )
 
-    repository.hard_delete_after_migration(
+    repository.hard_delete(
         character_id="miori",
         provider_id="temporary:recipe",
         record_id=saved.id,
@@ -145,23 +149,224 @@ def test_temporary_delete_requires_character_and_provider_boundaries(
     )
 
     operations = (
-        lambda: repository.hard_delete_after_migration(
+        lambda: repository.hard_delete(
             character_id="other",
             provider_id="temporary:agriculture",
             record_id=saved.id,
         ),
-        lambda: repository.hard_delete_after_migration(
+        lambda: repository.hard_delete(
             character_id="miori",
             provider_id="temporary:recipe",
             record_id=saved.id,
         ),
     )
     for operation in operations:
-        with pytest.raises(LookupError):
-            operation()
+        operation()
 
     with sqlite3.connect(database_path) as connection:
         remaining = connection.execute(
             "SELECT character_id, provider_id FROM temporary_provider_records"
         ).fetchone()
     assert remaining == ("miori", "temporary:agriculture")
+
+
+def test_temporary_list_and_get_are_scoped_by_character_and_provider(
+    tmp_path: Path,
+) -> None:
+    from app.memory.persistence.contracts import TemporaryProviderRecordInput
+
+    repository, _database_path = _repository(tmp_path)
+    recipe = repository.save(
+        character_id="miori",
+        record=TemporaryProviderRecordInput(
+            provider_id="temporary:recipe",
+            source_ref="recipe-1",
+            record_type="RECIPE",
+            structured_value='{"name":"カレー"}',
+            effective_at=NOW,
+        ),
+    )
+    repository.save(
+        character_id="miori",
+        record=TemporaryProviderRecordInput(
+            provider_id="temporary:agriculture",
+            source_ref="crop-1",
+            record_type="CROP",
+            structured_value='{"name":"トマト"}',
+            effective_at=NOW,
+        ),
+    )
+    repository.save(
+        character_id="other",
+        record=TemporaryProviderRecordInput(
+            provider_id="temporary:recipe",
+            source_ref="recipe-2",
+            record_type="RECIPE",
+            structured_value='{"name":"スープ"}',
+            effective_at=NOW,
+        ),
+    )
+
+    records = repository.list_by_provider(
+        character_id="miori", provider_id="temporary:recipe"
+    )
+
+    assert records == [recipe]
+    assert repository.get(
+        character_id="miori",
+        provider_id="temporary:recipe",
+        record_id=recipe.id,
+    ) == recipe
+    assert repository.get(
+        character_id="other",
+        provider_id="temporary:recipe",
+        record_id=recipe.id,
+    ) is None
+    assert repository.get(
+        character_id="miori",
+        provider_id="temporary:agriculture",
+        record_id=recipe.id,
+    ) is None
+
+
+def test_temporary_correction_updates_only_changed_content_and_has_natural_idempotency(
+    tmp_path: Path,
+) -> None:
+    from app.memory.persistence.contracts import (
+        TemporaryProviderRecordCorrection,
+        TemporaryProviderRecordInput,
+    )
+
+    timestamps = iter(
+        (NOW, NOW + timedelta(minutes=1), NOW + timedelta(minutes=2))
+    )
+    repository, database_path = _repository_with_clock(
+        tmp_path, clock=lambda: next(timestamps)
+    )
+    saved = repository.save(
+        character_id="miori",
+        record=TemporaryProviderRecordInput(
+            provider_id="temporary:recipe",
+            source_ref="recipe-1",
+            record_type="DRAFT",
+            structured_value='{"name":"旧レシピ"}',
+            effective_at=NOW,
+        ),
+    )
+    correction = TemporaryProviderRecordCorrection(
+        record_type="RECIPE",
+        structured_value='{"name":"新レシピ"}',
+        effective_at=datetime(2026, 8, 19, 12, 0, tzinfo=UTC),
+    )
+
+    corrected = repository.correct(
+        character_id="miori",
+        provider_id="temporary:recipe",
+        record_id=saved.id,
+        correction=correction,
+    )
+    retried = repository.correct(
+        character_id="miori",
+        provider_id="temporary:recipe",
+        record_id=saved.id,
+        correction=correction,
+    )
+
+    assert corrected == retried
+    assert corrected.source_ref == "recipe-1"
+    assert corrected.record_type == "RECIPE"
+    assert corrected.structured_value == '{"name":"新レシピ"}'
+    assert corrected.effective_at == datetime(2026, 8, 19, 12, 0, tzinfo=UTC)
+    assert corrected.updated_at == NOW + timedelta(minutes=1)
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM memory_index_outbox"
+        ).fetchone()[0] == 0
+
+
+@pytest.mark.parametrize(
+    ("character_id", "provider_id"),
+    [
+        ("other", "temporary:recipe"),
+        ("miori", "temporary:agriculture"),
+    ],
+    ids=["other-character", "other-provider"],
+)
+def test_temporary_correction_requires_character_and_provider_boundaries(
+    character_id: str,
+    provider_id: str,
+    tmp_path: Path,
+) -> None:
+    from app.memory.persistence.contracts import (
+        TemporaryProviderRecordCorrection,
+        TemporaryProviderRecordInput,
+    )
+
+    repository, database_path = _repository(tmp_path)
+    saved = repository.save(
+        character_id="miori",
+        record=TemporaryProviderRecordInput(
+            provider_id="temporary:recipe",
+            source_ref="recipe-1",
+            record_type="DRAFT",
+            structured_value='{"name":"元のレシピ"}',
+            effective_at=NOW,
+        ),
+    )
+    with sqlite3.connect(database_path) as connection:
+        record_rows_before = connection.execute(
+            "SELECT * FROM temporary_provider_records ORDER BY rowid"
+        ).fetchall()
+        outbox_rows_before = connection.execute(
+            "SELECT * FROM memory_index_outbox ORDER BY rowid"
+        ).fetchall()
+
+    with pytest.raises(LookupError):
+        repository.correct(
+            character_id=character_id,
+            provider_id=provider_id,
+            record_id=saved.id,
+            correction=TemporaryProviderRecordCorrection(
+                record_type="RECIPE",
+                structured_value='{"name":"越境した訂正"}',
+                effective_at=NOW + timedelta(days=1),
+            ),
+        )
+
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT * FROM temporary_provider_records ORDER BY rowid"
+        ).fetchall() == record_rows_before
+        assert connection.execute(
+            "SELECT * FROM memory_index_outbox ORDER BY rowid"
+        ).fetchall() == outbox_rows_before
+
+
+def test_temporary_delete_is_repeatable_and_removes_plaintext_from_sqlite_files(
+    tmp_path: Path,
+) -> None:
+    from app.memory.persistence.contracts import TemporaryProviderRecordInput
+
+    marker = "TEMPORARY_SECRET_MARKER_12"
+    repository, database_path = _repository(tmp_path)
+    saved = repository.save(
+        character_id="miori",
+        record=TemporaryProviderRecordInput(
+            provider_id="temporary:recipe",
+            source_ref="recipe-secret",
+            record_type="RECIPE",
+            structured_value=f'{{"secret":"{marker}"}}',
+            effective_at=NOW,
+        ),
+    )
+
+    for _ in range(2):
+        repository.hard_delete(
+            character_id="miori",
+            provider_id="temporary:recipe",
+            record_id=saved.id,
+        )
+
+    assert marker.encode() not in database_path.read_bytes()
+    wal_path = database_path.with_name(f"{database_path.name}-wal")
+    assert not wal_path.exists() or marker.encode() not in wal_path.read_bytes()

@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import importlib
 import logging
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -418,6 +419,53 @@ def test_slot_scan_keys_must_exactly_match_candidate_slots(slot_scans) -> None:
     result = _evaluate(slot_scans=slot_scans)
 
     assert result.decision is RagAdmissionDecision.ABSTAIN_UNKNOWN
+
+
+@_with_admission_contract
+def test_manual_correction_can_be_allowed_without_conversation_source() -> None:
+    evaluator = create_rag_admission_evaluator(resolved_memory_policy().privacy)
+    candidate = _preference_candidate()
+    candidate = replace(candidate, source=None)
+
+    result = evaluator.evaluate_manual_correction(
+        candidate_slot_scans={"object": _clean_scan()},
+        assessment=_assessment(),
+        candidate=candidate,
+    )
+
+    assert result.decision is RagAdmissionDecision.ALLOW_STRUCTURED
+    assert result.candidate is not None
+
+
+@pytest.mark.parametrize(
+    ("assessment", "expected_decision"),
+    [
+        (
+            _assessment(
+                classification=SemanticClassification.SENSITIVE,
+                category=SemanticPrivacyCategory.HEALTH,
+                reason_code=SemanticAssessmentReasonCode.SENSITIVE_CONTENT,
+            ),
+            "DENY_SENSITIVE",
+        ),
+        (None, "ABSTAIN_UNKNOWN"),
+    ],
+    ids=["sensitive", "missing-assessment"],
+)
+@_with_admission_contract
+def test_manual_correction_rejects_sensitive_and_missing_assessment(
+    assessment: PrivacyAssessment | None, expected_decision: str
+) -> None:
+    evaluator = create_rag_admission_evaluator(resolved_memory_policy().privacy)
+    candidate = replace(_preference_candidate(), source=None)
+
+    result = evaluator.evaluate_manual_correction(
+        candidate_slot_scans={"object": _clean_scan()},
+        assessment=assessment,
+        candidate=candidate,
+    )
+
+    assert result.decision is RagAdmissionDecision[expected_decision]
     assert result.candidate is None
 
 

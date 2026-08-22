@@ -8,6 +8,7 @@
   import ConversationSidebar from './lib/ConversationSidebar.svelte'
   import HardDeleteDialog from './lib/HardDeleteDialog.svelte'
   import InputBar from './lib/InputBar.svelte'
+  import MemoryManagement from './lib/MemoryManagement.svelte'
   import {
     WebSocketAudioTransport,
     type AudioTransport,
@@ -55,6 +56,7 @@
   let transport: AudioTransport | null = null
   let transportConversationKey: string | null = null
   let applicationError: string | null = null
+  let showingMemoryManagement = false
 
   $: interactionsDisabled = pendingRequest !== null
     || $conversationController.pending
@@ -185,11 +187,15 @@
 </script>
 
 <main class="app-shell">
+  {#if showingMemoryManagement}
+    <MemoryManagement character={$conversationController.character} onClose={() => { showingMemoryManagement = false }} />
+  {:else}
   <section class="chat-panel" aria-label="光織とのチャット">
     <header class="chat-header">
       <p class="eyebrow">digital-souls</p>
       <h1>光織</h1>
       <CharacterSwitcher currentCharacter={$conversationController.character} disabled={interactionsDisabled} onSwitch={handleCharacterSwitch} />
+      <button type="button" on:click={() => { showingMemoryManagement = true }}>記憶管理</button>
     </header>
     <ConversationSidebar
       active={$conversationController.active}
@@ -219,6 +225,7 @@
     </div>
     <AudioPlayer {audioData} onError={appendApplicationError} />
   </section>
+  {/if}
 </main>
 
 {#if $conversationController.deleteCandidate !== null}
