@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "issue": 28,
+  "evaluated_at": "2026-08-23T03:00:00+09:00",
+  "conditions": {
+    "ollama_version": "0.32.5",
+    "model_id": "gemma4:e4b",
+    "model_digest": "sha256:4c27e0f5b5adf02ac956c7322bd2ee7636fe3f45a8512c9aba5385242cb6e09a",
+    "classifier_version": "semantic-privacy-classifier-v2",
+    "prompt_version": "semantic-privacy-prompt-v11",
+    "policy_version": "2026-08-wave2-v1",
+    "cache": false,
+    "max_concurrency": 1,
+    "think": false,
+    "temperature": 0
+  },
+  "criteria": {
+    "abstain_rate": { "operator": "<", "limit": 0.1 },
+    "false_negative_rate": { "operator": "<", "limit": 0.05 },
+    "false_positive_rate": { "operator": "<", "limit": 0.2 }
+  },
+  "runs": [
+    {
+      "run": 1,
+      "duration_seconds": 171,
+      "profiles": {
+        "ADMISSION": {
+          "cases": 60,
+          "case_failures": 0,
+          "abstain_rate": 0.0,
+          "false_negative_rate": 0.0,
+          "false_positive_rate": 0.0,
+          "latency_median_seconds": 0.612454,
+          "latency_p95_seconds": 0.689923
+        },
+        "QUERY_GATE": {
+          "cases": 60,
+          "case_failures": 0,
+          "abstain_rate": 0.0,
+          "false_negative_rate": 0.0,
+          "false_positive_rate": 0.0,
+          "latency_median_seconds": 0.586736,
+          "latency_p95_seconds": 0.692722
+        }
+      }
+    },
+    {
+      "run": 2,
+      "duration_seconds": 165,
+      "profiles": {
+        "ADMISSION": {
+          "cases": 60,
+          "case_failures": 0,
+          "abstain_rate": 0.0,
+          "false_negative_rate": 0.0,
+          "false_positive_rate": 0.0,
+          "latency_median_seconds": 0.60638,
+          "latency_p95_seconds": 0.659247
+        },
+        "QUERY_GATE": {
+          "cases": 60,
+          "case_failures": 0,
+          "abstain_rate": 0.0,
+          "false_negative_rate": 0.0,
+          "false_positive_rate": 0.0,
+          "latency_median_seconds": 0.576799,
+          "latency_p95_seconds": 0.623469
+        }
+      }
+    },
+    {
+      "run": 3,
+      "duration_seconds": 165,
+      "profiles": {
+        "ADMISSION": {
+          "cases": 60,
+          "case_failures": 0,
+          "abstain_rate": 0.0,
+          "false_negative_rate": 0.0,
+          "false_positive_rate": 0.0,
+          "latency_median_seconds": 0.601718,
+          "latency_p95_seconds": 0.662602
+        },
+        "QUERY_GATE": {
+          "cases": 60,
+          "case_failures": 0,
+          "abstain_rate": 0.0,
+          "false_negative_rate": 0.0,
+          "false_positive_rate": 0.0,
+          "latency_median_seconds": 0.573707,
+          "latency_p95_seconds": 0.612095
+        }
+      }
+    }
+  ],
+  "accepted": true
+}

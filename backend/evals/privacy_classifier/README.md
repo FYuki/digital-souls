@@ -22,12 +22,19 @@ npm run eval:privacy:conformance
 
 比較結果には上記4種類の provenance を併記し、いずれかが異なる実行を同一条件として集計しない。`provider.py` は評価プロセスの起動時に policy と model digest を一度だけ解決する。
 
-## 品質指標と暫定閾値
+## 品質指標と受け入れ基準
 
 - `abstain_rate`: 全ケースのうち`ABSTAIN`になった割合
 - `false_negative_rate`: 機微ケースを`NOT_SENSITIVE`と判定した割合
 - `false_positive_rate`: 非機微ケースを`SENSITIVE`と判定した割合
 
-`thresholds.json`の各50%は評価基盤を導入するための暫定基準であり、最終的な品質目標ではない。
-後続issueでプロンプトを調整し、少なくとも偽陽性率20%以下を目標として段階的に厳格化する。
-後続issueの起票後に、本節へissue番号と確定した各指標の目標値を追記する。
+Issue #28のWave 2受け入れでは、ADMISSIONとQUERY_GATEをそれぞれ独立して評価し、
+`abstain_rate` 10%未満、`false_negative_rate` 5%未満、`false_positive_rate` 20%未満を
+目標とする。同一model digest、prompt version、policy versionかつcache無効・concurrency 1の
+全case評価を3回実行し、各回が個別に目標を満たした場合だけ受け入れる。3回の平均値では判定しない。
+
+`thresholds.json`には各指標の上限値を保持する。固定corpusは1 profileあたり60件であるため、
+厳密な「未満」の最終判定ではABSTAINは最大5件、偽陰性は機微40件中最大1件、偽陽性は
+非機微20件中最大3件となる。gateは集計値が境界値と一致した場合も不合格にする。
+
+Issue #28の同一条件3回の受け入れ結果は`acceptance-2026-08-23.json`に保持する。

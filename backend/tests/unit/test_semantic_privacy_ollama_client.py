@@ -42,12 +42,14 @@ def test_chat_uses_json_format_local_endpoint_and_per_call_timeout(
 
     assert result == "{}"
     assert post.call_args.args[0] == "http://local-ollama:11434/api/chat"
-    assert post.call_args.kwargs["json"] == {
-        "model": "gemma4:e4b",
-        "stream": False,
-        "format": "json",
-        "messages": list(messages),
-    }
+    payload = post.call_args.kwargs["json"]
+    assert payload["model"] == "gemma4:e4b"
+    assert payload["stream"] is False
+    assert payload["think"] is False
+    assert payload["messages"] == list(messages)
+    assert payload["options"] == {"temperature": 0}
+    assert payload["format"]["type"] == "object"
+    assert len(payload["format"]["oneOf"]) == 3
     timeout = post.call_args.kwargs["timeout"]
     assert isinstance(timeout, httpx.Timeout)
     assert timeout.read == 2.0

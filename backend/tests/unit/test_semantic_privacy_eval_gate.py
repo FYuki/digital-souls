@@ -194,13 +194,13 @@ def test_gate_reports_defined_metrics_per_provider_label(
         assert f"{name}={value}" in profile_line
 
 
-def test_gate_succeeds_when_rates_are_at_their_upper_limits(tmp_path: Path) -> None:
+def test_gate_fails_when_rates_equal_their_strict_upper_limits(tmp_path: Path) -> None:
     results_path = tmp_path / "conforming-results.json"
     _write_conforming_results(results_path)
 
     result = _run_gate(tmp_path, threshold=0.25, results_path=results_path)
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode != 0
 
 
 def test_gate_rejects_a_case_missing_from_both_profiles(tmp_path: Path) -> None:
@@ -221,8 +221,26 @@ def test_gate_rejects_a_case_missing_from_both_profiles(tmp_path: Path) -> None:
 def test_gate_accepts_the_expected_first_case_for_a_partial_run(
     tmp_path: Path,
 ) -> None:
+    classification_path = tmp_path / "classified-first-case-results.json"
+    scoped_path = tmp_path / "scoped-first-case-results.json"
     results_path = tmp_path / "first-case-results.json"
-    _keep_result_cases(RESULTS_FIXTURE, results_path, {"sensitive-1"})
+    _change_result(
+        RESULTS_FIXTURE,
+        classification_path,
+        profile="ADMISSION",
+        case_id="sensitive-1",
+        field="classification",
+        value="SENSITIVE",
+    )
+    _change_result(
+        classification_path,
+        scoped_path,
+        profile="ADMISSION",
+        case_id="sensitive-1",
+        field="subject_scope",
+        value="SELF",
+    )
+    _keep_result_cases(scoped_path, results_path, {"sensitive-1"})
 
     result = _run_gate(
         tmp_path,
