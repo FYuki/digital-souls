@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from app.conversation_history.models import PrivacySkippedTurnInput, ProcessingTurnInput
@@ -187,6 +189,17 @@ def test_should_not_log_persisted_content_during_lifecycle_operations(
     assert archived.status_code == 200
     assert deleted.status_code == 204
     assert SENSITIVE_VALUE not in caplog.text
+
+
+def test_conversation_delete_does_not_invoke_persona_memory_deletion(client) -> None:
+    conversation = _create_completed_conversation(client)
+    persona_memory_provider = MagicMock()
+    client.app.state.persona_memory_provider = persona_memory_provider
+
+    response = client.delete(f"{BASE_PATH}/{conversation.conversation_id}")
+
+    assert response.status_code == 204
+    persona_memory_provider.hard_delete.assert_not_called()
 
 
 def test_should_not_use_another_conversation_history_for_prompt(client) -> None:

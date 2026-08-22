@@ -206,6 +206,108 @@ def test_worker_delete_can_be_reprocessed_without_changing_the_result(
     assert deleted.count(("miori", str(memory.id))) == 2
 
 
+def test_delete_after_commit_synchronously_deletes_chroma_and_completes_outbox(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service, approved, database_path, records, deleted = _sync(
+        tmp_path, monkeypatch, lambda _text: [0.1]
+    )
+    memory = approved.save(
+        character_id="miori", candidate=_candidate(), context=_context()
+    )
+    service.run_worker_once()
+    approved.hard_delete(character_id="miori", memory_id=memory.id)
+
+    service.delete_after_commit(character_id="miori", memory_id=memory.id)
+
+    assert ("miori", str(memory.id)) not in records
+    assert deleted[-1] == ("miori", str(memory.id))
+    delete_row = [
+        row for row in _outbox_rows(database_path) if row["operation"] == "DELETE"
+    ][0]
+    assert delete_row["status"] == "COMPLETED"
+
+
+def test_delete_after_commit_failure_keeps_recoverable_outbox(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.memory import index_sync
+
+    service, approved, database_path, records, _deleted = _sync(
+        tmp_path, monkeypatch, lambda _text: [0.1]
+    )
+    memory = approved.save(
+        character_id="miori", candidate=_candidate(), context=_context()
+    )
+    service.run_worker_once()
+    approved.hard_delete(character_id="miori", memory_id=memory.id)
+
+    def fail_delete(**_entry: object) -> None:
+        raise RuntimeError("secret body must not escape")
+
+    successful_delete = index_sync.delete_memory_index_entry
+    monkeypatch.setattr(index_sync, "delete_memory_index_entry", fail_delete)
+
+    service.delete_after_commit(character_id="miori", memory_id=memory.id)
+
+    assert approved.get(character_id="miori", memory_id=memory.id) is None
+    assert ("miori", str(memory.id)) in records
+    delete_row = [
+        row for row in _outbox_rows(database_path) if row["operation"] == "DELETE"
+    ][0]
+    assert delete_row["status"] in {"PENDING", "FAILED"}
+
+    monkeypatch.setattr(index_sync, "delete_memory_index_entry", successful_delete)
+    service.reconcile_once()
+    assert ("miori", str(memory.id)) not in records
+
+
+def test_delete_after_commit_completion_failure_is_recovered_by_reconciliation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.memory.persistence.index_outbox_repository import IndexOutboxRepository
+
+    service, approved, database_path, records, _deleted = _sync(
+        tmp_path, monkeypatch, lambda _text: [0.1]
+    )
+    memory = approved.save(
+        character_id="miori", candidate=_candidate(), context=_context()
+    )
+    service.run_worker_once()
+    approved.hard_delete(character_id="miori", memory_id=memory.id)
+    complete_operation = IndexOutboxRepository.mark_memory_operation_completed
+
+    def fail_completion(_repository: object, **_operation: object) -> None:
+        raise sqlite3.OperationalError("completion failed")
+
+    monkeypatch.setattr(
+        IndexOutboxRepository,
+        "mark_memory_operation_completed",
+        fail_completion,
+    )
+
+    service.delete_after_commit(character_id="miori", memory_id=memory.id)
+
+    assert approved.get(character_id="miori", memory_id=memory.id) is None
+    assert ("miori", str(memory.id)) not in records
+    delete_row = [
+        row for row in _outbox_rows(database_path) if row["operation"] == "DELETE"
+    ][0]
+    assert delete_row["status"] in {"PENDING", "FAILED"}
+
+    monkeypatch.setattr(
+        IndexOutboxRepository,
+        "mark_memory_operation_completed",
+        complete_operation,
+    )
+    service.reconcile_once()
+
+    delete_row = [
+        row for row in _outbox_rows(database_path) if row["operation"] == "DELETE"
+    ][0]
+    assert delete_row["status"] == "COMPLETED"
+
+
 def test_worker_stops_retrying_after_five_metadata_only_failures(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

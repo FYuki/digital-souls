@@ -53,6 +53,8 @@ from app.memory.formation.scheduler import MemoryFormationScheduler
 from app.memory.formation.worker import MemoryFormationWorker
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
 from app.memory.persistence.index_outbox_repository import IndexOutboxRepository
+from app.memory.persistence.temporary_repository import TemporaryProviderRecordRepository
+from app.memory.providers import AddonRecordProvider, PersonaMemoryProvider
 from app.model_settings import resolve_model_settings
 from app.prompting import BuiltPrompt, CharacterPrompt, PromptMessage
 from app.privacy.history_sanitizer import create_history_sanitizer
@@ -61,6 +63,7 @@ from app.privacy.semantic.classifier import OllamaSemanticPrivacyClassifier
 from app.privacy.semantic.ollama_classifier_client import OllamaClassifierClient
 from app.routers.chat import router as chat_router
 from app.routers.conversations import router as conversations_router
+from app.routers.memory_management import router as memory_management_router
 from app.routers.ws import router as ws_router
 from app.runtime_data_root import (
     initialize_runtime_data_root,
@@ -252,6 +255,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             embedder=embed_text,
             clock=clock,
         )
+        temporary_record_repository = TemporaryProviderRecordRepository(
+            database_path=runtime_paths.persona_memory_sqlite_path,
+            clock=clock,
+            uuid_factory=uuid4,
+        )
         memory_index_scheduler = MemoryIndexScheduler(memory_index_sync)
         formation_settings = resolve_memory_formation_settings(os.environ)
         chat_service_resolver = None
@@ -261,6 +269,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         chat_service_state_set = False
         audio_pipeline_state_set = False
         semantic_classifier_state_set = False
+        persona_memory_provider_state_set = False
+        addon_record_provider_state_set = False
         rag_admission_service_state_set = False
         semantic_classifier_client = None
         memory_index_scheduler_started = False
@@ -286,6 +296,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             )
             app.state.semantic_privacy_classifier = semantic_privacy_classifier
             semantic_classifier_state_set = True
+            app.state.persona_memory_provider = PersonaMemoryProvider(
+                approved_repository=approved_memory_repository,
+                scanner=privacy_scanner,
+                classifier=semantic_privacy_classifier,
+                admission_evaluator=create_rag_admission_evaluator(policy.privacy),
+                index_sync=memory_index_sync,
+                clock=clock,
+            )
+            persona_memory_provider_state_set = True
+            app.state.addon_record_provider = AddonRecordProvider(
+                temporary_record_repository
+            )
+            addon_record_provider_state_set = True
             app.state.rag_admission_service = RagAdmissionService(
                 conversation_repository=conversation_history_repository,
                 approved_repository=approved_memory_repository,
@@ -380,6 +403,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         app.state,
                         "semantic_privacy_classifier",
                     )
+                if persona_memory_provider_state_set:
+                    cleanup.callback(delattr, app.state, "persona_memory_provider")
+                if addon_record_provider_state_set:
+                    cleanup.callback(delattr, app.state, "addon_record_provider")
                 if rag_admission_service_state_set:
                     cleanup.callback(
                         delattr,
@@ -396,6 +423,7 @@ app = FastAPI(lifespan=lifespan)
 
 app.include_router(chat_router)
 app.include_router(conversations_router)
+app.include_router(memory_management_router)
 app.include_router(ws_router)
 
 

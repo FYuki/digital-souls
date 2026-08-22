@@ -601,6 +601,12 @@ def test_character_boundary_applies_to_read_correct_touch_and_delete(
     memory = repository.save(
         character_id="miori", candidate=_candidate(), context=_context()
     )
+    memory_rows_before = [
+        dict(row) for row in _rows(database_path, "approved_memories")
+    ]
+    outbox_rows_before = [
+        dict(row) for row in _rows(database_path, "memory_index_outbox")
+    ]
 
     assert repository.get(character_id="other", memory_id=memory.id) is None
     operations = (
@@ -616,14 +622,18 @@ def test_character_boundary_applies_to_read_correct_touch_and_delete(
             candidate=_candidate(),
             mentioned_at=NOW + timedelta(minutes=5),
         ),
-        lambda: repository.hard_delete(character_id="other", memory_id=memory.id),
     )
     for operation in operations:
         with pytest.raises(LookupError):
             operation()
+    repository.hard_delete(character_id="other", memory_id=memory.id)
 
-    assert len(_rows(database_path, "approved_memories")) == 1
-    assert len(_rows(database_path, "memory_index_outbox")) == 1
+    assert [dict(row) for row in _rows(database_path, "approved_memories")] == (
+        memory_rows_before
+    )
+    assert [dict(row) for row in _rows(database_path, "memory_index_outbox")] == (
+        outbox_rows_before
+    )
 
 
 def test_hard_delete_removes_memory_and_leaves_pending_delete_outbox(
@@ -738,3 +748,137 @@ def test_idempotency_key_rejects_ambiguous_component_boundaries() -> None:
                 candidate_index=0,
                 extractor_version="extractor-v1",
             )
+
+
+def test_management_list_filters_character_provider_and_status_without_expiry(
+    tmp_path: Path,
+) -> None:
+    from app.memory.persistence.contracts import MemoryStatus
+
+    repository, database_path = _repository(tmp_path)
+    active = repository.save(
+        character_id="miori",
+        candidate=_candidate("active"),
+        context=replace(
+            _context(), idempotency_key="active-key", expires_at=NOW - timedelta(days=1)
+        ),
+    )
+    inactive = repository.save(
+        character_id="miori",
+        candidate=_candidate("inactive"),
+        context=replace(_context(), idempotency_key="inactive-key"),
+    )
+    repository.save(
+        character_id="other",
+        candidate=_candidate("other"),
+        context=replace(_context(), idempotency_key="other-key"),
+    )
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "UPDATE approved_memories SET status = 'INACTIVE' WHERE id = ?",
+            (str(inactive.id),),
+        )
+
+    assert repository.list_by_provider(
+        character_id="miori", provider_id="core", status=MemoryStatus.ACTIVE
+    ) == [active]
+    assert [
+        memory.id
+        for memory in repository.list_by_provider(
+            character_id="miori", provider_id="core", status=MemoryStatus.INACTIVE
+        )
+    ] == [inactive.id]
+
+
+def test_management_detail_contains_sources_lineage_and_content_version(
+    tmp_path: Path,
+) -> None:
+    from app.memory.persistence.contracts import (
+        MemoryLineageInput,
+        MemoryLineageRelation,
+        MemorySourceInput,
+        MemorySourceType,
+    )
+
+    repository, _database_path = _repository(tmp_path)
+    original = repository.save(
+        character_id="miori", candidate=_candidate(), context=_context()
+    )
+    source = MemorySourceInput(
+        source_type=MemorySourceType.PROVIDER_RECORD,
+        source_provider_id="temporary:recipe",
+        source_ref="recipe-1",
+    )
+    lineage = MemoryLineageInput(
+        related_memory_id=original.id,
+        relation=MemoryLineageRelation.CONSOLIDATED_FROM,
+    )
+    derived = repository.save(
+        character_id="miori",
+        candidate=_candidate("統合された記憶"),
+        context=replace(
+            _context(),
+            idempotency_key="derived-key",
+            sources=(source,),
+            lineage=(lineage,),
+        ),
+    )
+
+    detail = repository.get_detail(
+        character_id="miori", provider_id="core", memory_id=derived.id
+    )
+
+    assert detail is not None
+    assert detail.memory.id == derived.id
+    assert detail.memory.normalized_text == "統合された記憶"
+    assert detail.memory.content_version == 1
+    assert detail.sources == (source,)
+    assert detail.lineage == (lineage,)
+    assert repository.get_detail(
+        character_id="other", provider_id="core", memory_id=derived.id
+    ) is None
+
+
+def test_hard_delete_is_repeatable_and_removes_plaintext_from_sqlite_files(
+    tmp_path: Path,
+) -> None:
+    marker = "PERSONA_SECRET_MARKER_12"
+    repository, database_path = _repository(tmp_path)
+    memory = repository.save(
+        character_id="miori", candidate=_candidate(marker), context=_context()
+    )
+
+    repository.hard_delete(character_id="miori", memory_id=memory.id)
+    repository.hard_delete(character_id="miori", memory_id=memory.id)
+
+    assert repository.get(character_id="miori", memory_id=memory.id) is None
+    delete_rows = [
+        row
+        for row in _rows(database_path, "memory_index_outbox")
+        if row["operation"] == "DELETE"
+    ]
+    assert len(delete_rows) == 1
+    assert delete_rows[0]["status"] == "PENDING"
+    assert marker.encode() not in database_path.read_bytes()
+    wal_path = database_path.with_name(f"{database_path.name}-wal")
+    assert not wal_path.exists() or marker.encode() not in wal_path.read_bytes()
+
+
+def test_hard_delete_immediately_excludes_memory_from_management_reads(
+    tmp_path: Path,
+) -> None:
+    from app.memory.persistence.contracts import MemoryStatus
+
+    repository, _database_path = _repository(tmp_path)
+    memory = repository.save(
+        character_id="miori", candidate=_candidate(), context=_context()
+    )
+
+    repository.hard_delete(character_id="miori", memory_id=memory.id)
+
+    assert repository.list_by_provider(
+        character_id="miori", provider_id="core", status=MemoryStatus.ACTIVE
+    ) == []
+    assert repository.get_detail(
+        character_id="miori", provider_id="core", memory_id=memory.id
+    ) is None

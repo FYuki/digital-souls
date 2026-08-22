@@ -23,8 +23,11 @@ from app.memory.admission.contracts import (
 )
 from app.memory.persistence.contracts import (
     ApprovedMemory,
+    ApprovedMemoryDetail,
     MemoryLineageInput,
+    MemoryLineageRelation,
     MemorySourceInput,
+    MemorySourceType,
     MemoryStatus,
     MemoryWriteContext,
     TemporalPrecision,
@@ -317,6 +320,86 @@ class ApprovedMemoryRepository:
             ).fetchall()
         return [_memory_from_row(row) for row in rows]
 
+    def list_by_provider(
+        self,
+        *,
+        character_id: str,
+        provider_id: str,
+        status: MemoryStatus,
+    ) -> list[ApprovedMemory]:
+        _require_character_id(character_id)
+        _require_core_provider(provider_id)
+        if not isinstance(status, MemoryStatus):
+            raise TypeError("status must be a MemoryStatus")
+        with self._database.connection() as connection:
+            rows = connection.execute(
+                f"SELECT {APPROVED_COLUMNS} FROM approved_memories "
+                "WHERE character_id = ? AND provider_id = ? AND status = ? "
+                "ORDER BY created_at, id",
+                (character_id, provider_id, status.value),
+            ).fetchall()
+        return [_memory_from_row(row) for row in rows]
+
+    def get_detail(
+        self,
+        *,
+        character_id: str,
+        provider_id: str,
+        memory_id: UUID,
+    ) -> ApprovedMemoryDetail | None:
+        _require_character_id(character_id)
+        _require_core_provider(provider_id)
+        _require_uuid4(memory_id)
+        with self._database.connection() as connection:
+            row = connection.execute(
+                f"SELECT {APPROVED_COLUMNS} FROM approved_memories "
+                "WHERE character_id = ? AND provider_id = ? AND id = ?",
+                (character_id, provider_id, str(memory_id)),
+            ).fetchone()
+            if row is None:
+                return None
+            source_rows = connection.execute(
+                "SELECT source_type, source_provider_id, source_ref "
+                "FROM memory_sources WHERE character_id = ? AND memory_id = ? "
+                "ORDER BY source_type, source_provider_id, source_ref",
+                (character_id, str(memory_id)),
+            ).fetchall()
+            lineage_rows = connection.execute(
+                "SELECT related_memory_id, relation FROM memory_lineage "
+                "WHERE character_id = ? AND memory_id = ? "
+                "ORDER BY relation, related_memory_id",
+                (character_id, str(memory_id)),
+            ).fetchall()
+        return ApprovedMemoryDetail(
+            memory=_memory_from_row(row),
+            sources=tuple(
+                MemorySourceInput(
+                    source_type=MemorySourceType(str(source["source_type"])),
+                    source_provider_id=str(source["source_provider_id"]),
+                    source_ref=str(source["source_ref"]),
+                )
+                for source in source_rows
+            ),
+            lineage=tuple(
+                MemoryLineageInput(
+                    related_memory_id=UUID(str(item["related_memory_id"])),
+                    relation=MemoryLineageRelation(str(item["relation"])),
+                )
+                for item in lineage_rows
+            ),
+        )
+
+    def is_index_pending(self, *, character_id: str, memory_id: UUID) -> bool:
+        _require_character_id(character_id)
+        _require_uuid4(memory_id)
+        with self._database.connection() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM memory_index_outbox WHERE character_id = ? "
+                "AND memory_id = ? AND status IN ('PENDING', 'FAILED') LIMIT 1",
+                (character_id, str(memory_id)),
+            ).fetchone()
+        return row is not None
+
     def list_character_ids(self) -> set[str]:
         with self._database.connection() as connection:
             rows = connection.execute(
@@ -329,7 +412,12 @@ class ApprovedMemoryRepository:
         _require_uuid4(memory_id)
         now = self._now()
         with self._database.transaction() as connection:
-            _select_memory(connection, character_id, memory_id)
+            row = connection.execute(
+                "SELECT 1 FROM approved_memories WHERE character_id = ? AND id = ?",
+                (character_id, str(memory_id)),
+            ).fetchone()
+            if row is None:
+                return
             self._insert_outbox(connection, memory_id, character_id, "DELETE", now)
             connection.execute(
                 "DELETE FROM approved_memories WHERE character_id = ? AND id = ?",
@@ -567,6 +655,11 @@ def _require_approved_candidate(candidate: object) -> None:
 def _require_character_id(character_id: str) -> None:
     if not isinstance(character_id, str) or not character_id.strip():
         raise ValueError("character_id must not be empty")
+
+
+def _require_core_provider(provider_id: str) -> None:
+    if provider_id != "core":
+        raise ValueError("provider_id must be core")
 
 
 def _require_uuid4(value: UUID) -> None:

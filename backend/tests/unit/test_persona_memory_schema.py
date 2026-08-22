@@ -113,6 +113,48 @@ def test_schema_creates_only_the_persona_memory_tables(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
+    "source_type",
+    [
+        "CONVERSATION_TURN",
+        "PROVIDER_RECORD",
+        "ADDON_EVENT",
+        "USER_CORRECTION",
+    ],
+)
+def test_memory_sources_accept_every_supported_source_type(
+    source_type: str, tmp_path: Path
+) -> None:
+    paths = _initialize(tmp_path)
+
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        _insert_approved(connection, _approved_values())
+        connection.execute(
+            "INSERT INTO memory_sources "
+            "(character_id, memory_id, source_type, source_provider_id, source_ref) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("miori", MEMORY_ONE, source_type, "core", f"source-{source_type}"),
+        )
+
+    from app.memory.persistence.contracts import MemorySourceType
+
+    assert MemorySourceType(source_type).value == source_type
+
+
+def test_memory_sources_reject_an_unknown_source_type(tmp_path: Path) -> None:
+    paths = _initialize(tmp_path)
+
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        _insert_approved(connection, _approved_values())
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                "INSERT INTO memory_sources "
+                "(character_id, memory_id, source_type, source_provider_id, source_ref) "
+                "VALUES (?, ?, ?, ?, ?)",
+                ("miori", MEMORY_ONE, "UNKNOWN", "core", "source-unknown"),
+            )
+
+
+@pytest.mark.parametrize(
     ("overrides"),
     [
         {"memory_kind": "PROCEDURAL"},

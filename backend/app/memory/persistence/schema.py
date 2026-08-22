@@ -83,7 +83,9 @@ CREATE TABLE memory_sources (
     character_id TEXT NOT NULL,
     memory_id TEXT NOT NULL,
     source_type TEXT NOT NULL CHECK (
-        source_type IN ('CONVERSATION_TURN', 'PROVIDER_RECORD', 'ADDON_EVENT')
+        source_type IN (
+            'CONVERSATION_TURN', 'PROVIDER_RECORD', 'ADDON_EVENT', 'USER_CORRECTION'
+        )
     ),
     source_provider_id TEXT NOT NULL CHECK (length(trim(source_provider_id)) > 0),
     source_ref TEXT NOT NULL CHECK (length(trim(source_ref)) > 0),

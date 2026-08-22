@@ -67,6 +67,43 @@ class RagAdmissionEvaluator:
         )
         if deterministic_result is not None:
             return deterministic_result
+        return self._evaluate_assessment(assessment, candidate)
+
+    def evaluate_manual_correction(
+        self,
+        *,
+        candidate_slot_scans: Mapping[str, ScanResult],
+        assessment: PrivacyAssessment | None,
+        candidate: MemoryCandidate,
+    ) -> RagAdmissionResult:
+        structured_value = self._allowlist_value(candidate)
+        if structured_value is None:
+            return self._result(RagAdmissionDecision.NOT_MEMORY_WORTHY)
+        if not isinstance(candidate_slot_scans, Mapping):
+            return self._result(RagAdmissionDecision.ABSTAIN_UNKNOWN)
+        if set(candidate_slot_scans) != set(self.slot_values(structured_value)):
+            return self._result(RagAdmissionDecision.ABSTAIN_UNKNOWN)
+        scans = tuple(candidate_slot_scans.values())
+        if any(isinstance(scan, ScanFailure) for scan in scans):
+            return self._result(RagAdmissionDecision.ABSTAIN_UNKNOWN)
+        if any(not isinstance(scan, ScanSuccess) for scan in scans):
+            return self._result(RagAdmissionDecision.ABSTAIN_UNKNOWN)
+        successful_scans = cast(tuple[ScanSuccess, ...], scans)
+        if any(scan.findings for scan in successful_scans):
+            return self._result(RagAdmissionDecision.DENY_SENSITIVE)
+        if any(
+            placeholder in slot_value
+            for slot_value in self.slot_values(structured_value).values()
+            for placeholder in self._placeholders
+        ):
+            return self._result(RagAdmissionDecision.DENY_SENSITIVE)
+        return self._evaluate_assessment(assessment, candidate)
+
+    def _evaluate_assessment(
+        self,
+        assessment: PrivacyAssessment | None,
+        candidate: MemoryCandidate,
+    ) -> RagAdmissionResult:
         if (
             assessment is None
             or not isinstance(assessment, PrivacyAssessment)
