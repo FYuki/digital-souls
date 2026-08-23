@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 from uuid import UUID
 
 import pytest
+from fastapi.encoders import jsonable_encoder
 
 from app.memory.admission.contracts import (
     ApprovedMemoryCandidate,
@@ -18,6 +19,7 @@ from app.memory.admission.contracts import (
 from app.memory.persistence.contracts import (
     ApprovedMemoryDetail,
     FormationMethod,
+    MemorySourceInput,
     MemorySourceType,
 )
 from app.privacy.semantic.contracts import (
@@ -190,3 +192,38 @@ def test_persona_list_uses_bulk_details_and_skips_concurrently_deleted_memory() 
     repository.pending_index_memory_ids.assert_called_once_with(
         character_id="miori", memory_ids=(MEMORY_ID,)
     )
+
+
+def test_persona_get_preserves_consolidation_source_for_management_serialization() -> (
+    None
+):
+    source_memory_id = UUID("00000000-0000-4000-8000-000000000014")
+    source = MemorySourceInput(
+        source_type=MemorySourceType.CONSOLIDATION,
+        source_provider_id="core",
+        source_ref=str(source_memory_id),
+    )
+    memory = approved_memory(id=MEMORY_ID)
+    provider, repository, _index_sync = _provider(
+        result=RagAdmissionResult(RagAdmissionDecision.ABSTAIN_UNKNOWN, None),
+        assessment=_assessment(),
+    )
+    repository.get_detail.return_value = ApprovedMemoryDetail(memory, (source,), ())
+    repository.is_index_pending.return_value = False
+
+    result = provider.get(character_id="miori", memory_id=MEMORY_ID)
+
+    assert result is not None
+    sources = result["sources"]
+    assert isinstance(sources, tuple)
+    assert sources == (source,)
+    returned_source = sources[0]
+    assert isinstance(returned_source, MemorySourceInput)
+    serialized = jsonable_encoder(result)
+    assert serialized["sources"] == [
+        {
+            "source_type": "CONSOLIDATION",
+            "source_provider_id": "core",
+            "source_ref": str(source_memory_id),
+        }
+    ]

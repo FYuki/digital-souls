@@ -78,7 +78,8 @@ def test_startup_resolves_semantic_dependencies_once_and_cleans_up_state(
     assert sum(url.endswith("/api/show") for url in requests) == 1
     assert sum(url.endswith("/api/chat") for url in requests) == 1
     assert requested_models == ["classifier-only:4b", "classifier-only:4b"]
-    assert len(closed_clients) == 1
+    assert len(closed_clients) == 2
+    assert closed_clients[0] is not closed_clients[1]
     assert not hasattr(main.app.state, "semantic_privacy_classifier")
 
 

@@ -11,6 +11,7 @@ from app.conversation_history._sqlite import (
     conversation_not_found_error,
     conversation_from_row,
     format_datetime,
+    parse_datetime,
     select_conversation,
     select_turn,
     turn_from_row,
@@ -207,6 +208,18 @@ class ConversationHistoryRepository:
             sanitizer_version=None,
             policy_version=None,
         )
+
+    def consolidation_activity(self) -> tuple[int, datetime | None]:
+        with self._database.connection() as connection:
+            row = connection.execute(
+                "SELECT COUNT(CASE WHEN status = ? THEN 1 END), MAX(updated_at) "
+                "FROM conversation_turns",
+                (TurnStatus.PROCESSING.value,),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("conversation activity query returned no row")
+        latest = None if row[1] is None else parse_datetime(str(row[1]))
+        return int(row[0]), latest
 
     def get_turn(
         self,

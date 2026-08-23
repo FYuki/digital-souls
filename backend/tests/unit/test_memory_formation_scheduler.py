@@ -70,6 +70,31 @@ def test_scheduler_submit_is_thread_safe_non_blocking_and_has_one_consumer() -> 
     assert worker.maximum_active == 1
 
 
+def test_scheduler_reports_busy_while_a_formation_job_is_running() -> None:
+    from app.memory.formation.scheduler import MemoryFormationScheduler
+
+    async def exercise() -> tuple[bool, bool]:
+        worker = BlockingWorker()
+        scheduler = MemoryFormationScheduler(
+            worker=worker,
+            max_queue_age_seconds=300,
+            queue_maxsize=100,
+        )
+        await scheduler.start()
+        idle = scheduler.is_busy()
+        scheduler.submit(_job(1))
+        assert await asyncio.to_thread(worker.entered.wait, 1)
+        busy = scheduler.is_busy()
+        worker.release.set()
+        await scheduler.stop()
+        return idle, busy
+
+    idle, busy = asyncio.run(exercise())
+
+    assert idle is False
+    assert busy is True
+
+
 def test_expired_queue_job_is_discarded_without_worker_side_effects() -> None:
     from app.memory.formation.scheduler import MemoryFormationScheduler
 

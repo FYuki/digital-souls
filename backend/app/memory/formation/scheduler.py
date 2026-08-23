@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
@@ -41,6 +42,8 @@ class MemoryFormationScheduler:
         self._queue: asyncio.Queue[_QueuedJob | None] | None = None
         self._task: asyncio.Task[None] | None = None
         self._accepting_submissions = False
+        self._active_lock = threading.Lock()
+        self._active_jobs = 0
 
     async def start(self) -> None:
         if self._task is not None:
@@ -60,6 +63,12 @@ class MemoryFormationScheduler:
             raise RuntimeError("memory formation scheduler is not running")
         queued = _QueuedJob(job, self._clock())
         self._loop.call_soon_threadsafe(self._enqueue_or_drop, self._queue, queued)
+
+    def is_busy(self) -> bool:
+        with self._active_lock:
+            active = self._active_jobs > 0
+        queue = self._queue
+        return active or (queue is not None and not queue.empty())
 
     def _enqueue_or_drop(
         self, queue: asyncio.Queue[_QueuedJob | None], queued: _QueuedJob
@@ -117,7 +126,13 @@ class MemoryFormationScheduler:
                 logger.info("memory formation job expired")
                 continue
             try:
-                await asyncio.to_thread(self._worker.process, queued.job)
+                with self._active_lock:
+                    self._active_jobs += 1
+                try:
+                    await asyncio.to_thread(self._worker.process, queued.job)
+                finally:
+                    with self._active_lock:
+                        self._active_jobs -= 1
             except Exception as error:
                 logger.warning(
                     "memory formation job raised: error_type=%s "

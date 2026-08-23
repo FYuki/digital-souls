@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -35,6 +36,26 @@ class MemorySourceType(str, Enum):
     PROVIDER_RECORD = "PROVIDER_RECORD"
     ADDON_EVENT = "ADDON_EVENT"
     USER_CORRECTION = "USER_CORRECTION"
+    CONSOLIDATION = "CONSOLIDATION"
+
+
+class ConsolidationOperation(str, Enum):
+    KEEP = "KEEP"
+    MERGE = "MERGE"
+    SUPERSEDE = "SUPERSEDE"
+    DELETE_EXACT_DUPLICATE = "DELETE_EXACT_DUPLICATE"
+
+
+class ConsolidationConflictError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class ConsolidationReceiptContext:
+    idempotency_key: str
+
+    def __post_init__(self) -> None:
+        _require_non_empty(self.idempotency_key, "idempotency_key")
 
 
 class MemoryLineageRelation(str, Enum):
@@ -154,6 +175,7 @@ class ApprovedMemory:
     stated_at: datetime
     expires_at: datetime | None
     last_user_mentioned_at: datetime | None
+    last_consolidated_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -163,6 +185,24 @@ class ApprovedMemoryDetail:
     memory: ApprovedMemory
     sources: tuple[MemorySourceInput, ...]
     lineage: tuple[MemoryLineageInput, ...]
+
+
+@dataclass(frozen=True)
+class ConsolidationInputSnapshot:
+    memory_id: UUID
+    content_version: int
+    sources: tuple[MemorySourceInput, ...]
+    lineage: tuple[MemoryLineageInput, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.memory_id, UUID) or self.memory_id.version != 4:
+            raise ValueError("memory_id must be a UUID4")
+        if (
+            isinstance(self.content_version, bool)
+            or not isinstance(self.content_version, int)
+            or self.content_version < 1
+        ):
+            raise ValueError("content_version must be a positive integer")
 
 
 @dataclass(frozen=True)
@@ -240,6 +280,48 @@ def build_conversation_idempotency_key(
             str(candidate_index),
             extractor_version,
         )
+    )
+
+
+def build_consolidation_idempotency_key(
+    *,
+    character_id: str,
+    plan_type: str,
+    memories: tuple[tuple[UUID, int], ...],
+    prompt_version: str,
+) -> str:
+    _require_non_empty(character_id, "character_id")
+    _require_non_empty(prompt_version, "prompt_version")
+    if ":" in character_id or ":" in prompt_version:
+        raise ValueError("character_id and prompt_version must not contain ':'")
+    try:
+        operation = ConsolidationOperation(plan_type)
+    except ValueError:
+        raise ValueError("plan_type must be a mutating consolidation operation") from None
+    if operation is ConsolidationOperation.KEEP or not memories:
+        raise ValueError("plan_type must be a mutating consolidation operation")
+    normalized: list[tuple[str, int]] = []
+    seen: set[UUID] = set()
+    for memory_id, content_version in memories:
+        if not isinstance(memory_id, UUID) or memory_id.version != 4:
+            raise ValueError("memory_id must be a UUID4")
+        if memory_id in seen:
+            raise ValueError("memories must not contain duplicate ids")
+        if (
+            isinstance(content_version, bool)
+            or not isinstance(content_version, int)
+            or content_version < 1
+        ):
+            raise ValueError("content_version must be a positive integer")
+        seen.add(memory_id)
+        normalized.append((str(memory_id), content_version))
+    digest_input = "\n".join(
+        f"{memory_id}:{content_version}"
+        for memory_id, content_version in sorted(normalized)
+    )
+    digest = hashlib.sha256(digest_input.encode("utf-8")).hexdigest()
+    return ":".join(
+        ("consolidation", character_id, operation.value, prompt_version, digest)
     )
 
 

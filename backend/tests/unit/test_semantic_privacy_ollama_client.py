@@ -55,6 +55,26 @@ def test_chat_uses_json_format_local_endpoint_and_per_call_timeout(
     assert timeout.read == 2.0
 
 
+def test_chat_uses_explicit_base_url_without_re_resolving_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.privacy.semantic.ollama_classifier_client import OllamaClassifierClient
+
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://shared-ollama:11434")
+    response = _response({"message": {"content": "{}"}})
+
+    with patch(_PATCH_POST, return_value=response) as post:
+        OllamaClassifierClient(
+            model_id="gemma4:e4b",
+            base_url="http://127.0.0.1:11434/",
+        ).chat(
+            ({"role": "user", "content": "synthetic input"},),
+            timeout_seconds=2.0,
+        )
+
+    assert post.call_args.args[0] == "http://127.0.0.1:11434/api/chat"
+
+
 def test_model_digest_is_resolved_once_and_cached() -> None:
     from app.privacy.semantic.ollama_classifier_client import OllamaClassifierClient
 

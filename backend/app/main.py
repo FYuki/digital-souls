@@ -8,6 +8,7 @@ import sqlite3
 from pathlib import Path
 from typing import cast
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -46,9 +47,20 @@ from app.memory.admission_service import RagAdmissionService
 from app.memory.embedder import embed_text
 from app.memory.index_scheduler import MemoryIndexScheduler
 from app.memory.index_sync import MemoryIndexSync
+from app.memory.consolidation.config import resolve_memory_consolidation_settings
+from app.memory.consolidation.local_llm import require_local_ollama_base_url
+from app.memory.consolidation.planner import ConsolidationPlanner
+from app.memory.consolidation.privacy import ConsolidationPrivacyReviewer
+from app.memory.consolidation.scheduler import (
+    ConsolidationPriorityProbe,
+    MemoryConsolidationScheduler,
+    is_consolidation_eligible,
+)
+from app.memory.consolidation.service import MemoryConsolidationService
 from app.memory.formation.config import resolve_memory_formation_settings
 from app.memory.formation.extractor import EXTRACTOR_VERSION, MemoryCandidateExtractor
 from app.memory.formation.ollama_client import OllamaMemoryExtractorClient
+from app.llm.ollama_config import resolve_ollama_base_url
 from app.memory.formation.scheduler import MemoryFormationScheduler
 from app.memory.formation.worker import MemoryFormationWorker
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
@@ -81,6 +93,7 @@ MEMORY_OCCURRED_TIMEZONE_ENV = "MEMORY_OCCURRED_TIMEZONE"
 DEFAULT_MEMORY_OCCURRED_TIMEZONE = "Asia/Tokyo"
 DOGFOOD_BACKUP_DIR_ENV = "DOGFOOD_BACKUP_DIR"
 DOGFOOD_BACKUP_RETENTION_COUNT_ENV = "DOGFOOD_BACKUP_RETENTION_COUNT"
+CONSOLIDATION_PROMPT_VERSION = "consolidation-v1"
 
 
 @dataclass(frozen=True)
@@ -219,7 +232,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from app.memory.persistence.schema import initialize_persona_memory_schema
 
         initialize_persona_memory_schema(runtime_paths, repository_root)
-        clock = lambda: datetime.now(UTC)
+        def clock() -> datetime:
+            return datetime.now(UTC)
         wal_cleanup = ConversationWalCleanup(
             database_path=conversation_history_config.database_path,
             clock=clock,
@@ -244,12 +258,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             uuid_factory=uuid4,
             outbox_uuid_factory=uuid4,
         )
+        outbox_repository = IndexOutboxRepository(
+            database_path=runtime_paths.persona_memory_sqlite_path,
+            clock=clock,
+        )
         memory_index_sync = MemoryIndexSync(
             approved_repository=approved_memory_repository,
-            outbox_repository=IndexOutboxRepository(
-                database_path=runtime_paths.persona_memory_sqlite_path,
-                clock=clock,
-            ),
+            outbox_repository=outbox_repository,
             chroma_path=runtime_paths.chroma_path,
             runtime_report_dir=runtime_paths.runtime_report_dir,
             embedder=embed_text,
@@ -262,6 +277,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         memory_index_scheduler = MemoryIndexScheduler(memory_index_sync)
         formation_settings = resolve_memory_formation_settings(os.environ)
+        consolidation_settings = resolve_memory_consolidation_settings(os.environ)
         chat_service_resolver = None
         repository_state_set = False
         lifecycle_service_state_set = False
@@ -275,7 +291,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         semantic_classifier_client = None
         memory_index_scheduler_started = False
         memory_formation_scheduler_started = False
+        memory_consolidation_scheduler_started = False
         memory_extractor_client = None
+        memory_consolidation_client = None
+        memory_consolidation_classifier_client = None
         try:
             app.state.conversation_history_repository = conversation_history_repository
             repository_state_set = True
@@ -322,6 +341,29 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             memory_extractor_client = OllamaMemoryExtractorClient(
                 model_id=model_settings.ollama_extractor_model
             )
+            consolidation_ollama_base_url = require_local_ollama_base_url(
+                resolve_ollama_base_url()
+            )
+            memory_consolidation_client = OllamaMemoryExtractorClient(
+                model_id=model_settings.ollama_extractor_model,
+                base_url=consolidation_ollama_base_url,
+            )
+            memory_consolidation_classifier_client = OllamaClassifierClient(
+                model_id=model_settings.ollama_classifier_model,
+                base_url=consolidation_ollama_base_url,
+            )
+            memory_consolidation_privacy_classifier = (
+                OllamaSemanticPrivacyClassifier(
+                    client=memory_consolidation_classifier_client,
+                    privacy_policy=policy.privacy,
+                    model_id=model_settings.ollama_classifier_model,
+                    model_digest_resolver=lambda timeout_seconds: (
+                        memory_consolidation_classifier_client.resolve_model_digest(
+                            timeout_seconds=timeout_seconds
+                        )
+                    ),
+                )
+            )
             memory_candidate_extractor = MemoryCandidateExtractor(
                 client=memory_extractor_client,
                 settings=formation_settings,
@@ -338,6 +380,44 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             )
             await memory_formation_scheduler.start()
             memory_formation_scheduler_started = True
+            consolidation_priority = ConsolidationPriorityProbe(
+                conversation_repository=conversation_history_repository,
+                formation_scheduler=memory_formation_scheduler,
+                outbox_repository=outbox_repository,
+            )
+            memory_consolidation_scheduler = MemoryConsolidationScheduler(
+                service=MemoryConsolidationService(
+                    repository=approved_memory_repository,
+                    planner=ConsolidationPlanner(
+                        client=memory_consolidation_client,
+                        max_output_tokens=consolidation_settings.max_output_tokens,
+                        model_id=model_settings.ollama_extractor_model,
+                        prompt_version=CONSOLIDATION_PROMPT_VERSION,
+                        policy_version=policy.policy_version,
+                    ),
+                    privacy_reviewer=ConsolidationPrivacyReviewer(
+                        scanner=privacy_scanner,
+                        classifier=memory_consolidation_privacy_classifier,
+                        evaluator=create_rag_admission_evaluator(policy.privacy),
+                    ),
+                    batch_size=consolidation_settings.batch_size,
+                    llm_timeout_seconds=consolidation_settings.llm_timeout_seconds,
+                    clock=clock,
+                    model_id=model_settings.ollama_extractor_model,
+                    prompt_version=CONSOLIDATION_PROMPT_VERSION,
+                    policy_version=policy.policy_version,
+                    reprocess_interval_seconds=consolidation_settings.interval_seconds,
+                ),
+                interval_seconds=consolidation_settings.interval_seconds,
+                max_runtime_seconds=consolidation_settings.max_runtime_seconds,
+                priority_probe=lambda: is_consolidation_eligible(
+                    now=clock().astimezone(ZoneInfo(occurred_timezone)),
+                    priority=consolidation_priority.read(),
+                    idle_seconds=consolidation_settings.idle_seconds,
+                    nightly_start_hour=0,
+                    nightly_end_hour=6,
+                ),
+            )
             app_chat_service = _chat_runtime.create_chat_service(
                 _chat_runtime.resolve_chat_runtime_config(
                     policy, model_settings, runtime_paths, occurred_timezone
@@ -369,8 +449,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             resolver_registered = True
             memory_index_scheduler.start()
             memory_index_scheduler_started = True
+            await memory_consolidation_scheduler.start()
+            memory_consolidation_scheduler_started = True
             yield
         finally:
+            if memory_consolidation_scheduler_started:
+                await memory_consolidation_scheduler.stop()
             if memory_formation_scheduler_started:
                 await memory_formation_scheduler.stop()
             if memory_index_scheduler_started:
@@ -418,6 +502,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     cleanup.callback(semantic_classifier_client.close)
                 if memory_extractor_client is not None:
                     cleanup.callback(memory_extractor_client.close)
+                if memory_consolidation_client is not None:
+                    cleanup.callback(memory_consolidation_client.close)
+                if memory_consolidation_classifier_client is not None:
+                    cleanup.callback(memory_consolidation_classifier_client.close)
 
 
 app = FastAPI(lifespan=lifespan)
