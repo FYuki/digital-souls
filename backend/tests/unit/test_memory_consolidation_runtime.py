@@ -278,6 +278,35 @@ class BlockingService:
         self.active -= 1
 
 
+def test_scheduler_cleans_up_periodic_task_when_initial_probe_fails() -> None:
+    from app.memory.consolidation.scheduler import MemoryConsolidationScheduler
+
+    async def exercise() -> None:
+        probe_fails = True
+
+        def priority_probe() -> bool:
+            if probe_fails:
+                raise RuntimeError("synthetic probe failure")
+            return False
+
+        scheduler = MemoryConsolidationScheduler(
+            service=Mock(),
+            interval_seconds=60,
+            max_runtime_seconds=60,
+            priority_probe=priority_probe,
+        )
+        with pytest.raises(RuntimeError, match="synthetic probe failure"):
+            await scheduler.start()
+        assert scheduler._periodic_task is None
+
+        probe_fails = False
+        await scheduler.start()
+        assert scheduler._periodic_task is not None
+        await scheduler.stop()
+
+    asyncio.run(exercise())
+
+
 def test_scheduler_uses_one_worker_and_stops_cooperatively() -> None:
     from app.memory.consolidation.scheduler import MemoryConsolidationScheduler
 

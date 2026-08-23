@@ -147,17 +147,62 @@ def test_parser_rejects_untrusted_reason_code_even_when_its_shape_is_safe() -> N
         )
 
 
+def test_response_schema_constrains_plan_and_memory_reference_shapes() -> None:
+    from app.memory.consolidation.planner import _response_schema
+
+    schema = _response_schema()
+    plans = schema["properties"]["plans"]
+    plan = plans["items"]
+    properties = plan["properties"]
+
+    assert properties["plan_type"]["enum"] == [
+        "KEEP",
+        "MERGE",
+        "SUPERSEDE",
+        "DELETE_EXACT_DUPLICATE",
+        "CONFLICT",
+        "NOOP",
+    ]
+    assert plan["required"] == ["plan_type", "reason_code", "memories"]
+    assert plan["additionalProperties"] is False
+    assert properties["memories"] == {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+            "type": "object",
+            "properties": {
+                "memory_id": {"type": "string"},
+                "content_version": {"type": "integer", "minimum": 1},
+            },
+            "required": ["memory_id", "content_version"],
+            "additionalProperties": False,
+        },
+    }
+
+
 @pytest.mark.parametrize(
     "payload",
     (
         {
             "plans": [
-                {"plan_type": "ERASE", "reason_code": "MODEL_SELECTED", "memories": []}
+                {
+                    "plan_type": "ERASE",
+                    "reason_code": "MODEL_SELECTED",
+                    "memories": [
+                        {"memory_id": str(MEMORY_ONE), "content_version": 1}
+                    ],
+                }
             ]
         },
         {
             "plans": [
-                {"plan_type": "KEEP", "reason_code": "FREE FORM BODY", "memories": []}
+                {
+                    "plan_type": "KEEP",
+                    "reason_code": "FREE FORM BODY",
+                    "memories": [
+                        {"memory_id": str(MEMORY_ONE), "content_version": 1}
+                    ],
+                }
             ]
         },
         {
@@ -165,14 +210,22 @@ def test_parser_rejects_untrusted_reason_code_even_when_its_shape_is_safe() -> N
                 {
                     "plan_type": "KEEP",
                     "reason_code": "MODEL_SELECTED",
-                    "memories": [],
+                    "memories": [
+                        {"memory_id": str(MEMORY_ONE), "content_version": 1}
+                    ],
                     "unexpected": True,
                 }
             ]
         },
         {
             "plans": [
-                {"plan_type": "MERGE", "reason_code": "MODEL_SELECTED", "memories": []}
+                {
+                    "plan_type": "MERGE",
+                    "reason_code": "MODEL_SELECTED",
+                    "memories": [
+                        {"memory_id": str(MEMORY_ONE), "content_version": 1}
+                    ],
+                }
             ]
         },
     ),

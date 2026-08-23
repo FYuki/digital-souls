@@ -43,7 +43,7 @@ class MemoryFormationScheduler:
         self._task: asyncio.Task[None] | None = None
         self._accepting_submissions = False
         self._active_lock = threading.Lock()
-        self._active_jobs = 0
+        self._pending_jobs = 0
 
     async def start(self) -> None:
         if self._task is not None:
@@ -66,9 +66,7 @@ class MemoryFormationScheduler:
 
     def is_busy(self) -> bool:
         with self._active_lock:
-            active = self._active_jobs > 0
-        queue = self._queue
-        return active or (queue is not None and not queue.empty())
+            return self._pending_jobs > 0
 
     def _enqueue_or_drop(
         self, queue: asyncio.Queue[_QueuedJob | None], queued: _QueuedJob
@@ -78,7 +76,9 @@ class MemoryFormationScheduler:
             logger.info("memory formation job dropped: reason=shutdown")
             return
         try:
-            queue.put_nowait(queued)
+            with self._active_lock:
+                queue.put_nowait(queued)
+                self._pending_jobs += 1
         except asyncio.QueueFull:
             logger.warning(
                 "memory formation job dropped: reason=queue_full "
@@ -100,6 +100,8 @@ class MemoryFormationScheduler:
                 break
             if queued is not None:
                 discarded += 1
+                with self._active_lock:
+                    self._pending_jobs -= 1
         if discarded:
             logger.info(
                 "memory formation jobs discarded on shutdown: count=%d",
@@ -122,23 +124,21 @@ class MemoryFormationScheduler:
             queued = await queue.get()
             if queued is None:
                 return
-            if self._clock() - queued.submitted_at > self._max_queue_age_seconds:
-                logger.info("memory formation job expired")
-                continue
             try:
-                with self._active_lock:
-                    self._active_jobs += 1
+                if self._clock() - queued.submitted_at > self._max_queue_age_seconds:
+                    logger.info("memory formation job expired")
+                    continue
                 try:
                     await asyncio.to_thread(self._worker.process, queued.job)
-                finally:
-                    with self._active_lock:
-                        self._active_jobs -= 1
-            except Exception as error:
-                logger.warning(
-                    "memory formation job raised: error_type=%s "
-                    "character_id=%s conversation_id=%s turn_id=%s",
-                    type(error).__name__,
-                    queued.job.character_id,
-                    queued.job.conversation_id,
-                    queued.job.turn_id,
-                )
+                except Exception as error:
+                    logger.warning(
+                        "memory formation job raised: error_type=%s "
+                        "character_id=%s conversation_id=%s turn_id=%s",
+                        type(error).__name__,
+                        queued.job.character_id,
+                        queued.job.conversation_id,
+                        queued.job.turn_id,
+                    )
+            finally:
+                with self._active_lock:
+                    self._pending_jobs -= 1

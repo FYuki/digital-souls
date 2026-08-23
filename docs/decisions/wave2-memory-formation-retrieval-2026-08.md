@@ -624,10 +624,17 @@ kind／type、content version、privacy、source、lineageをSQLite正本から�
 単一SQLite transactionで確定する。旧行にも`UPSERT` outboxを作り、index workerがinactive行を
 Chromaから削除する。
 
-consolidationのidempotency keyは`consolidation`、character id、plan種別、
-`consolidation-v1`、memory idとcontent versionを昇順に並べた値のSHA-256から構成する。
-同じ入力snapshotの再実行では新規行やDELETE outboxを重複生成しない。`SCHEMA_VERSION`は2のまま
-維持し、既存DBの`memory_sources` CHECK制約だけを行を保持したまま更新する。
+consolidationのidempotency keyは、固定接頭辞`consolidation`、character id、plan種別、
+prompt version（`consolidation-v1`）、digestを`:`で連結する。digestはmemory idと
+content versionの組を昇順に並べ、各組を`<memory_id>:<content_version>`として改行で連結した
+文字列だけのSHA-256とする。character idとprompt versionには`:`を許可せず、memory idはkeyへ
+平文で含めない。同じ入力snapshotの再実行では新規行やDELETE outboxを重複生成しない。
+
+`SCHEMA_VERSION`は2のまま維持する。既存DBの更新要否は`sqlite_master`に保存された
+`memory_sources`の`CREATE TABLE`文に`CONSOLIDATION`が含まれるかで判別する。含まれる場合は
+更新済みとして何もせず、含まれない場合だけ同一transaction内で旧tableをrenameし、新しい
+CHECK制約でtableを再作成して全行を移送した後、旧tableを削除する。途中で失敗した場合は
+transactionをrollbackし、次回起動時に同じ判定から再実行することで更新を冪等にする。
 
 ログは件数、plan種別、latency、reason code、model／prompt／policy versionに限定し、
 CONFLICT時だけ対象memory idを記録する。memory本文、prompt、model出力全文は記録しない。

@@ -163,6 +163,7 @@ def test_exact_duplicate_requires_every_persisted_content_and_temporal_value_to_
     None
 ):
     from app.memory.consolidation.validation import is_exact_duplicate
+    from app.memory.persistence.contracts import ApprovedMemoryDetail
 
     baseline = approved_memory(
         id=MEMORY_ONE,
@@ -182,10 +183,49 @@ def test_exact_duplicate_requires_every_persisted_content_and_temporal_value_to_
         ),
     )
 
+    def detail(memory):
+        return ApprovedMemoryDetail(memory=memory, sources=(), lineage=())
+
+    assert is_exact_duplicate((detail(baseline), detail(exact))) is True
+    assert is_exact_duplicate((detail(baseline), detail(paraphrase))) is False
+    assert is_exact_duplicate((detail(baseline), detail(different_time))) is False
+    assert is_exact_duplicate((detail(baseline), detail(different_structure))) is False
+
+
+@pytest.mark.parametrize("changed_field", ("sources", "lineage"))
+def test_exact_duplicate_requires_identical_provenance_and_lineage(
+    changed_field: str,
+) -> None:
+    from app.memory.consolidation.validation import is_exact_duplicate
+    from app.memory.persistence.contracts import (
+        MemoryLineageInput,
+        MemoryLineageRelation,
+        MemorySourceInput,
+        MemorySourceType,
+    )
+
+    baseline = _detail(MEMORY_ONE)
+    exact = replace(baseline, memory=replace(baseline.memory, id=MEMORY_TWO))
+    replacement = {
+        "sources": (
+            MemorySourceInput(
+                source_type=MemorySourceType.CONVERSATION_TURN,
+                source_provider_id="core",
+                source_ref="different-source",
+            ),
+        ),
+        "lineage": (
+            MemoryLineageInput(
+                related_memory_id=MEMORY_THREE,
+                relation=MemoryLineageRelation.CONSOLIDATED_FROM,
+            ),
+        ),
+    }[changed_field]
+
     assert is_exact_duplicate((baseline, exact)) is True
-    assert is_exact_duplicate((baseline, paraphrase)) is False
-    assert is_exact_duplicate((baseline, different_time)) is False
-    assert is_exact_duplicate((baseline, different_structure)) is False
+    assert is_exact_duplicate(
+        (baseline, replace(exact, **{changed_field: replacement}))
+    ) is False
 
 
 def test_non_exact_duplicate_delete_plan_never_reaches_repository() -> None:
@@ -559,6 +599,14 @@ def test_deadline_gate_prevents_every_non_content_repository_write(
     from app.memory.consolidation.service import apply_validated_plan
 
     planned = (_detail(MEMORY_ONE), _detail(MEMORY_TWO))
+    if plan_type == "DELETE_EXACT_DUPLICATE":
+        planned = (
+            planned[0],
+            replace(
+                planned[0],
+                memory=replace(planned[0].memory, id=MEMORY_TWO),
+            ),
+        )
     repository = Mock()
     privacy_reviewer = Mock()
 

@@ -274,7 +274,49 @@ def _build_messages(memories: tuple[ApprovedMemory, ...]) -> tuple[dict[str, str
 def _response_schema() -> dict[str, object]:
     return {
         "type": "object",
-        "properties": {"plans": {"type": "array", "minItems": 1}},
+        "properties": {
+            "plans": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "plan_type": {
+                            "type": "string",
+                            "enum": [item.value for item in ConsolidationPlanType],
+                        },
+                        "reason_code": {
+                            "type": "string",
+                            "enum": sorted(_LLM_REASON_CODES),
+                        },
+                        "memories": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "memory_id": {"type": "string"},
+                                    "content_version": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                    },
+                                },
+                                "required": ["memory_id", "content_version"],
+                                "additionalProperties": False,
+                            },
+                        },
+                        "memory_type": {
+                            "type": "string",
+                            "enum": [item.value for item in MemoryType],
+                        },
+                        "structured_value": {"type": "object"},
+                        "canonical_memory_id": {"type": "string"},
+                    },
+                    "required": ["plan_type", "reason_code", "memories"],
+                    "additionalProperties": False,
+                },
+            }
+        },
         "required": ["plans"],
         "additionalProperties": False,
     }

@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import replace
 
 from app.memory.persistence.contracts import (
-    ApprovedMemory,
     ApprovedMemoryDetail,
     MemoryStatus,
 )
@@ -52,20 +51,21 @@ def validate_plan(
         return _noop(plan, "MEMORY_TYPE_BOUNDARY")
     if (
         plan.plan_type is ConsolidationPlanType.DELETE_EXACT_DUPLICATE
-        and not is_exact_duplicate(tuple(detail.memory for detail in current))
+        and not is_exact_duplicate(current)
     ):
         return _noop(plan, "NOT_EXACT_DUPLICATE")
     return plan
 
 
-def is_exact_duplicate(memories: tuple[ApprovedMemory, ...]) -> bool:
-    if len(memories) < 2:
+def is_exact_duplicate(details: tuple[ApprovedMemoryDetail, ...]) -> bool:
+    if len(details) < 2:
         return False
-    baseline = _exact_content(memories[0])
-    return all(_exact_content(memory) == baseline for memory in memories[1:])
+    baseline = _exact_content(details[0])
+    return all(_exact_content(detail) == baseline for detail in details[1:])
 
 
-def _exact_content(memory: ApprovedMemory) -> tuple[object, ...]:
+def _exact_content(detail: ApprovedMemoryDetail) -> tuple[object, ...]:
+    memory = detail.memory
     return (
         memory.character_id,
         memory.provider_id,
@@ -80,6 +80,8 @@ def _exact_content(memory: ApprovedMemory) -> tuple[object, ...]:
         memory.stated_at,
         memory.expires_at,
         memory.last_user_mentioned_at,
+        detail.sources,
+        detail.lineage,
     )
 
 

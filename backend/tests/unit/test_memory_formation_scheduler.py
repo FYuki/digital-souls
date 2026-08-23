@@ -95,6 +95,41 @@ def test_scheduler_reports_busy_while_a_formation_job_is_running() -> None:
     assert busy is True
 
 
+def test_scheduler_clears_busy_state_after_all_queued_jobs_complete() -> None:
+    from app.memory.formation.scheduler import MemoryFormationScheduler
+
+    class RecordingWorker:
+        def __init__(self) -> None:
+            self.completed = threading.Event()
+            self.calls = 0
+
+        def process(self, _job: object) -> None:
+            self.calls += 1
+            if self.calls == 2:
+                self.completed.set()
+
+    async def exercise() -> bool:
+        worker = RecordingWorker()
+        scheduler = MemoryFormationScheduler(
+            worker=worker,
+            max_queue_age_seconds=300,
+            queue_maxsize=100,
+        )
+        await scheduler.start()
+        scheduler.submit(_job(1))
+        scheduler.submit(_job(2))
+        assert await asyncio.to_thread(worker.completed.wait, 1)
+        for _ in range(10):
+            if not scheduler.is_busy():
+                break
+            await asyncio.sleep(0)
+        busy = scheduler.is_busy()
+        await scheduler.stop()
+        return busy
+
+    assert asyncio.run(exercise()) is False
+
+
 def test_expired_queue_job_is_discarded_without_worker_side_effects() -> None:
     from app.memory.formation.scheduler import MemoryFormationScheduler
 

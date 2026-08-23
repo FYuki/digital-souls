@@ -111,7 +111,11 @@ class MemoryConsolidationScheduler:
             raise RuntimeError("memory consolidation scheduler is already running")
         self._stopping = False
         self._periodic_task = asyncio.create_task(self._run_periodically())
-        await self.start_if_eligible()
+        try:
+            await self.start_if_eligible()
+        except BaseException:
+            await self.stop()
+            raise
 
     async def start_if_eligible(self) -> None:
         if self._periodic_task is None or self._stopping:
