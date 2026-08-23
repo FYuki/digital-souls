@@ -604,6 +604,41 @@ backup／migration境界を固定し、TAKTからdogfoodデータへ到達でき
 schemaとrepositoryが完成した後で並行して進めてよい。nightly consolidationはこの依存列の
 完了後に別Issueとして追加する。
 
+### 16. core persona memoryをidle時に原子的にconsolidationする
+
+Issue #48では、`provider_id=core`のactive persona memoryだけをcharacterとmemory typeごとに
+分離し、夜間または一定idle時間後にconcurrency 1で整理する。会話処理、非同期admission、
+Chroma outboxに未処理作業がある間は起動せず、実行中に優先作業が生じた場合は次のmemory単位へ
+進む前に停止する。
+
+planは`KEEP`、`MERGE`、`SUPERSEDE`、`DELETE_EXACT_DUPLICATE`、`CONFLICT`、`NOOP`の
+6種に限定する。LLMはローカルOllamaだけを使用し、applicationがcharacter、provider、memory
+kind／type、content version、privacy、source、lineageをSQLite正本から再検証する。
+`CONFLICT`と`NOOP`はDBを変更せず、物理削除は本文・構造化値・時間情報が完全一致する場合だけ
+許可する。
+
+`MERGE`と`SUPERSEDE`は`formation_method=CONSOLIDATED`の新規行を作り、元行を
+`INACTIVE`にする。新行から元行へ`CONSOLIDATED_FROM`または`SUPERSEDES`のlineageを張り、
+`memory_sources.source_type=CONSOLIDATION`、`source_provider_id=core`、元memory idの
+`source_ref`を保存する。新規行、source、lineage、write receipt、旧行状態変更、新旧outboxは
+単一SQLite transactionで確定する。旧行にも`UPSERT` outboxを作り、index workerがinactive行を
+Chromaから削除する。
+
+consolidationのidempotency keyは、固定接頭辞`consolidation`、character id、plan種別、
+prompt version（`consolidation-v1`）、digestを`:`で連結する。digestはmemory idと
+content versionの組を昇順に並べ、各組を`<memory_id>:<content_version>`として改行で連結した
+文字列だけのSHA-256とする。character idとprompt versionには`:`を許可せず、memory idはkeyへ
+平文で含めない。同じ入力snapshotの再実行では新規行やDELETE outboxを重複生成しない。
+
+`SCHEMA_VERSION`は2のまま維持する。既存DBの更新要否は`sqlite_master`に保存された
+`memory_sources`の`CREATE TABLE`文に`CONSOLIDATION`が含まれるかで判別する。含まれる場合は
+更新済みとして何もせず、含まれない場合だけ同一transaction内で旧tableをrenameし、新しい
+CHECK制約でtableを再作成して全行を移送した後、旧tableを削除する。途中で失敗した場合は
+transactionをrollbackし、次回起動時に同じ判定から再実行することで更新を冪等にする。
+
+ログは件数、plan種別、latency、reason code、model／prompt／policy versionに限定し、
+CONFLICT時だけ対象memory idを記録する。memory本文、prompt、model出力全文は記録しない。
+
 ## MVPで実装しない項目
 
 - 候補ごとの同意確認、保存通知、確認待ち状態

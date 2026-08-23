@@ -335,4 +335,5 @@ class TestTurnTransitions:
             "list_turns",
             "list_history_turns",
             "list_prompt_turns_page",
+            "consolidation_activity",
         }

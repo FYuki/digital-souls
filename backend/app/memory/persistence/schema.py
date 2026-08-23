@@ -96,7 +96,8 @@ CREATE TABLE memory_sources (
     memory_id TEXT NOT NULL,
     source_type TEXT NOT NULL CHECK (
         source_type IN (
-            'CONVERSATION_TURN', 'PROVIDER_RECORD', 'ADDON_EVENT', 'USER_CORRECTION'
+            'CONVERSATION_TURN', 'PROVIDER_RECORD', 'ADDON_EVENT', 'USER_CORRECTION',
+            'CONSOLIDATION'
         )
     ),
     source_provider_id TEXT NOT NULL CHECK (length(trim(source_provider_id)) > 0),
@@ -203,6 +204,7 @@ def initialize_persona_memory_schema(
             version = int(connection.execute("PRAGMA user_version").fetchone()[0])
             if version != SCHEMA_VERSION:
                 raise ValueError("existing persona memory database has an unknown schema")
+            _ensure_consolidation_source_type(connection)
         else:
             connection.execute(APPROVED_MEMORIES_SQL)
             connection.execute(MEMORY_SOURCES_SQL)
@@ -240,3 +242,22 @@ def _ensure_indexes(connection: sqlite3.Connection) -> None:
         connection.execute(
             f'CREATE INDEX IF NOT EXISTS "{name}" ON "{table}" ({column_list})'
         )
+
+
+def _ensure_consolidation_source_type(connection: sqlite3.Connection) -> None:
+    row = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memory_sources'"
+    ).fetchone()
+    if row is None or not isinstance(row[0], str):
+        raise ValueError("memory_sources schema is missing")
+    if "'CONSOLIDATION'" in row[0]:
+        return
+    connection.execute("ALTER TABLE memory_sources RENAME TO memory_sources_legacy")
+    connection.execute(MEMORY_SOURCES_SQL)
+    connection.execute(
+        "INSERT INTO memory_sources "
+        "(character_id, memory_id, source_type, source_provider_id, source_ref) "
+        "SELECT character_id, memory_id, source_type, source_provider_id, source_ref "
+        "FROM memory_sources_legacy"
+    )
+    connection.execute("DROP TABLE memory_sources_legacy")

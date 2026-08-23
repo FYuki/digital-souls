@@ -33,6 +33,9 @@ class RecordingFormationScheduler:
         assert self.started
         self.jobs.append(job)
 
+    def is_busy(self) -> bool:
+        return False
+
     async def stop(self) -> None:
         self.stopped = True
 

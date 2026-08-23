@@ -70,6 +70,66 @@ def test_scheduler_submit_is_thread_safe_non_blocking_and_has_one_consumer() -> 
     assert worker.maximum_active == 1
 
 
+def test_scheduler_reports_busy_while_a_formation_job_is_running() -> None:
+    from app.memory.formation.scheduler import MemoryFormationScheduler
+
+    async def exercise() -> tuple[bool, bool]:
+        worker = BlockingWorker()
+        scheduler = MemoryFormationScheduler(
+            worker=worker,
+            max_queue_age_seconds=300,
+            queue_maxsize=100,
+        )
+        await scheduler.start()
+        idle = scheduler.is_busy()
+        scheduler.submit(_job(1))
+        assert await asyncio.to_thread(worker.entered.wait, 1)
+        busy = scheduler.is_busy()
+        worker.release.set()
+        await scheduler.stop()
+        return idle, busy
+
+    idle, busy = asyncio.run(exercise())
+
+    assert idle is False
+    assert busy is True
+
+
+def test_scheduler_clears_busy_state_after_all_queued_jobs_complete() -> None:
+    from app.memory.formation.scheduler import MemoryFormationScheduler
+
+    class RecordingWorker:
+        def __init__(self) -> None:
+            self.completed = threading.Event()
+            self.calls = 0
+
+        def process(self, _job: object) -> None:
+            self.calls += 1
+            if self.calls == 2:
+                self.completed.set()
+
+    async def exercise() -> bool:
+        worker = RecordingWorker()
+        scheduler = MemoryFormationScheduler(
+            worker=worker,
+            max_queue_age_seconds=300,
+            queue_maxsize=100,
+        )
+        await scheduler.start()
+        scheduler.submit(_job(1))
+        scheduler.submit(_job(2))
+        assert await asyncio.to_thread(worker.completed.wait, 1)
+        for _ in range(10):
+            if not scheduler.is_busy():
+                break
+            await asyncio.sleep(0)
+        busy = scheduler.is_busy()
+        await scheduler.stop()
+        return busy
+
+    assert asyncio.run(exercise()) is False
+
+
 def test_expired_queue_job_is_discarded_without_worker_side_effects() -> None:
     from app.memory.formation.scheduler import MemoryFormationScheduler
 

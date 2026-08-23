@@ -88,12 +88,14 @@ class OllamaClassifierClient:
         self,
         *,
         model_id: str,
+        base_url: str | None = None,
         http_client: httpx.Client | None = None,
     ) -> None:
         if not model_id.strip():
             raise ValueError("classifier model id must not be blank")
         self._model_id = model_id
-        self._base_url = resolve_ollama_base_url().rstrip("/")
+        resolved_base_url = resolve_ollama_base_url() if base_url is None else base_url
+        self._base_url = resolved_base_url.rstrip("/")
         self._model_digest: str | None = None
         self._http_client = http_client or httpx.Client(trust_env=False)
         self._owns_http_client = http_client is None

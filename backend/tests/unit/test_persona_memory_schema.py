@@ -154,6 +154,53 @@ def test_memory_sources_reject_an_unknown_source_type(tmp_path: Path) -> None:
             )
 
 
+def test_existing_v2_database_adds_consolidation_source_without_losing_rows(
+    tmp_path: Path,
+) -> None:
+    from app.memory.persistence.schema import initialize_persona_memory_schema
+
+    paths = _initialize(tmp_path)
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        _insert_approved(connection, _approved_values())
+        connection.execute(
+            "INSERT INTO memory_sources "
+            "(character_id, memory_id, source_type, source_provider_id, source_ref) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("miori", MEMORY_ONE, "CONVERSATION_TURN", "core", "existing-source"),
+        )
+        connection.execute("ALTER TABLE memory_sources RENAME TO memory_sources_new")
+        connection.execute(
+            "CREATE TABLE memory_sources ("
+            "character_id TEXT NOT NULL, memory_id TEXT NOT NULL, "
+            "source_type TEXT NOT NULL CHECK (source_type IN ("
+            "'CONVERSATION_TURN', 'PROVIDER_RECORD', 'ADDON_EVENT', 'USER_CORRECTION'"
+            ")), source_provider_id TEXT NOT NULL, source_ref TEXT NOT NULL, "
+            "PRIMARY KEY (character_id, memory_id, source_type, source_provider_id, source_ref), "
+            "FOREIGN KEY (character_id, memory_id) REFERENCES approved_memories (character_id, id) ON DELETE CASCADE)"
+        )
+        connection.execute(
+            "INSERT INTO memory_sources SELECT * FROM memory_sources_new"
+        )
+        connection.execute("DROP TABLE memory_sources_new")
+
+    initialize_persona_memory_schema(paths, tmp_path / "repository")
+
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        preserved = connection.execute(
+            "SELECT source_type, source_ref FROM memory_sources"
+        ).fetchall()
+        connection.execute(
+            "INSERT INTO memory_sources "
+            "(character_id, memory_id, source_type, source_provider_id, source_ref) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("miori", MEMORY_ONE, "CONSOLIDATION", "core", MEMORY_ONE),
+        )
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+
+    assert preserved == [("CONVERSATION_TURN", "existing-source")]
+    assert version == 2
+
+
 @pytest.mark.parametrize(
     ("overrides"),
     [

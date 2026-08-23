@@ -172,6 +172,23 @@ class TestTurnCreation:
         assert turn.status is TurnStatus.PROCESSING
         assert repository.list_turns("miori", CONVERSATION_ID) == [turn]
 
+    def test_consolidation_activity_returns_only_processing_count_and_latest_time(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        repository = create_repository(tmp_path / "history.db")
+        conversation = repository.create_conversation("miori")
+        turn = repository.create_processing_turn(
+            "miori",
+            conversation.conversation_id,
+            ProcessingTurnInput(sanitized_user_content="metadataには返さない本文"),
+        )
+
+        processing_count, latest_activity_at = repository.consolidation_activity()
+
+        assert processing_count == 1
+        assert latest_activity_at == turn.updated_at
+
     def test_should_create_privacy_skipped_turn_with_reason_only(
         self,
         tmp_path: Path,

@@ -211,6 +211,7 @@ def _approved_memory(
         stated_at=CREATED_AT,
         expires_at=None,
         last_user_mentioned_at=CREATED_AT,
+        last_consolidated_at=None,
         created_at=CREATED_AT,
         updated_at=CREATED_AT,
     )

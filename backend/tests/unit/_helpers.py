@@ -39,6 +39,7 @@ def approved_memory(**overrides: object) -> ApprovedMemory:
         "stated_at": now,
         "expires_at": datetime(2999, 1, 1, tzinfo=UTC),
         "last_user_mentioned_at": None,
+        "last_consolidated_at": None,
         "created_at": now,
         "updated_at": now,
     }

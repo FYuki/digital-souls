@@ -24,6 +24,10 @@ from app.memory.admission.contracts import (
 from app.memory.persistence.contracts import (
     ApprovedMemory,
     ApprovedMemoryDetail,
+    ConsolidationConflictError,
+    ConsolidationInputSnapshot,
+    ConsolidationOperation,
+    ConsolidationReceiptContext,
     MemoryLineageInput,
     MemoryLineageRelation,
     MemorySourceInput,
@@ -59,6 +63,7 @@ APPROVED_COLUMN_NAMES = (
     "stated_at",
     "expires_at",
     "last_user_mentioned_at",
+    "last_consolidated_at",
     "created_at",
     "updated_at",
 )
@@ -96,9 +101,6 @@ class ApprovedMemoryRepository:
         _require_approved_candidate(candidate)
         memory_id = self._new_uuid(self._uuid_factory)
         now = self._now()
-        memory_type, memory_kind, episodic_event_type = _candidate_classification(
-            candidate
-        )
         with self._database.transaction() as connection:
             existing = _select_memory_by_write_key(
                 connection,
@@ -107,46 +109,13 @@ class ApprovedMemoryRepository:
             )
             if existing is not None:
                 return existing
-            insert_result = connection.execute(
-                "INSERT INTO approved_memories ("
-                "id, character_id, provider_id, memory_kind, memory_type, "
-                "episodic_event_type, formation_method, schema_version, "
-                "normalized_text, structured_value, policy_version, "
-                "classifier_version, model_id, model_digest, prompt_version, "
-                "content_version, status, idempotency_key, occurred_at, "
-                "occurred_timezone, occurred_precision, stated_at, expires_at, "
-                "last_user_mentioned_at, last_consolidated_at, created_at, updated_at"
-                ") VALUES (?, ?, 'core', ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, "
-                "1, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?) "
-                "ON CONFLICT(character_id, idempotency_key) DO NOTHING",
-                (
-                    str(memory_id),
-                    character_id,
-                    memory_kind,
-                    memory_type.value,
-                    episodic_event_type,
-                    context.formation_method.value,
-                    candidate.normalized_text,
-                    _serialize_structured_value(candidate.structured_value),
-                    context.policy_version,
-                    context.classifier_version,
-                    context.model_id,
-                    context.model_digest,
-                    context.prompt_version,
-                    context.idempotency_key,
-                    _format_optional_datetime(context.occurred_at),
-                    context.occurred_timezone,
-                    (
-                        None
-                        if context.occurred_precision is None
-                        else context.occurred_precision.value
-                    ),
-                    format_datetime(context.stated_at),
-                    _format_optional_datetime(context.expires_at),
-                    format_datetime(context.stated_at),
-                    format_datetime(now),
-                    format_datetime(now),
-                ),
+            insert_result = self._insert_approved_memory(
+                connection,
+                memory_id=memory_id,
+                character_id=character_id,
+                candidate=candidate,
+                context=context,
+                now=now,
             )
             if insert_result.rowcount == 1:
                 self._insert_write_receipt(
@@ -230,11 +199,7 @@ class ApprovedMemoryRepository:
                     context.idempotency_key,
                     _format_optional_datetime(context.occurred_at),
                     context.occurred_timezone,
-                    (
-                        None
-                        if context.occurred_precision is None
-                        else context.occurred_precision.value
-                    ),
+                    _format_optional_precision(context.occurred_precision),
                     format_datetime(context.stated_at),
                     _format_optional_datetime(context.expires_at),
                     format_datetime(
@@ -270,6 +235,160 @@ class ApprovedMemoryRepository:
             )
             self._insert_outbox(connection, memory_id, character_id, "UPSERT", now)
             return _select_memory(connection, character_id, memory_id)
+
+    def apply_consolidation(
+        self,
+        *,
+        character_id: str,
+        operation: ConsolidationOperation,
+        inputs: tuple[ConsolidationInputSnapshot, ...],
+        candidate: ApprovedMemoryCandidate | None,
+        context: MemoryWriteContext | ConsolidationReceiptContext | None,
+        canonical_memory_id: UUID | None,
+        consolidated_at: datetime,
+    ) -> ApprovedMemory:
+        _require_character_id(character_id)
+        if not isinstance(operation, ConsolidationOperation):
+            raise TypeError("operation must be a ConsolidationOperation")
+        _require_consolidation_inputs(inputs)
+        consolidated_at_text = format_datetime(consolidated_at)
+        now = self._now()
+        result: ApprovedMemory
+        hard_deleted = False
+        with self._database.transaction() as connection:
+            if context is not None:
+                existing = _select_memory_by_write_key(
+                    connection, character_id, context.idempotency_key
+                )
+                if existing is not None:
+                    return existing
+            current = tuple(
+                _select_memory_detail(connection, character_id, item.memory_id)
+                for item in inputs
+            )
+            for snapshot, detail in zip(inputs, current, strict=True):
+                if (
+                    detail.memory.provider_id != "core"
+                    or detail.memory.status is not MemoryStatus.ACTIVE
+                    or detail.memory.content_version != snapshot.content_version
+                    or detail.sources != snapshot.sources
+                    or detail.lineage != snapshot.lineage
+                ):
+                    raise ConsolidationConflictError(
+                        "consolidation input changed during planning"
+                    )
+
+            if operation is ConsolidationOperation.KEEP:
+                if candidate is not None or context is not None:
+                    raise ValueError("KEEP must not contain write content")
+                if canonical_memory_id is None:
+                    raise ValueError("KEEP requires canonical_memory_id")
+                _require_canonical_input(canonical_memory_id, inputs)
+                connection.executemany(
+                    "UPDATE approved_memories SET last_consolidated_at = ? "
+                    "WHERE character_id = ? AND id = ?",
+                    (
+                        (consolidated_at_text, character_id, str(item.memory_id))
+                        for item in inputs
+                    ),
+                )
+                result = _select_memory(connection, character_id, canonical_memory_id)
+            elif operation in {
+                ConsolidationOperation.MERGE,
+                ConsolidationOperation.SUPERSEDE,
+            }:
+                if candidate is None or not isinstance(context, MemoryWriteContext):
+                    raise ValueError("content consolidation requires candidate and context")
+                _require_approved_candidate(candidate)
+                _require_consolidation_context(context)
+                memory_id = self._new_uuid(self._uuid_factory)
+                inserted = self._insert_approved_memory(
+                    connection,
+                    memory_id=memory_id,
+                    character_id=character_id,
+                    candidate=candidate,
+                    context=context,
+                    now=now,
+                )
+                if inserted.rowcount != 1:
+                    raise ConsolidationConflictError(
+                        "consolidation idempotency key changed concurrently"
+                    )
+                self._insert_write_receipt(
+                    connection,
+                    memory_id,
+                    character_id,
+                    context.idempotency_key,
+                    "SAVE",
+                    now,
+                )
+                self._insert_sources(connection, memory_id, character_id, context.sources)
+                self._insert_lineage(connection, memory_id, character_id, context.lineage)
+                self._insert_outbox(connection, memory_id, character_id, "UPSERT", now)
+                connection.execute(
+                    "UPDATE approved_memories SET last_consolidated_at = ? "
+                    "WHERE character_id = ? AND id = ?",
+                    (consolidated_at_text, character_id, str(memory_id)),
+                )
+                connection.executemany(
+                    "UPDATE approved_memories SET status = 'INACTIVE', "
+                    "last_consolidated_at = ?, updated_at = ? "
+                    "WHERE character_id = ? AND id = ?",
+                    (
+                        (
+                            consolidated_at_text,
+                            format_datetime(now),
+                            character_id,
+                            str(item.memory_id),
+                        )
+                        for item in inputs
+                    ),
+                )
+                for item in inputs:
+                    self._insert_outbox(
+                        connection, item.memory_id, character_id, "UPSERT", now
+                    )
+                result = _select_memory(connection, character_id, memory_id)
+            else:
+                if candidate is not None or context is None:
+                    raise ValueError(
+                        "DELETE_EXACT_DUPLICATE requires context and no candidate"
+                    )
+                _require_consolidation_context(context)
+                if canonical_memory_id is None:
+                    raise ValueError(
+                        "DELETE_EXACT_DUPLICATE requires canonical_memory_id"
+                    )
+                _require_canonical_input(canonical_memory_id, inputs)
+                connection.execute(
+                    "UPDATE approved_memories SET last_consolidated_at = ? "
+                    "WHERE character_id = ? AND id = ?",
+                    (consolidated_at_text, character_id, str(canonical_memory_id)),
+                )
+                self._insert_write_receipt(
+                    connection,
+                    canonical_memory_id,
+                    character_id,
+                    context.idempotency_key,
+                    "SAVE",
+                    now,
+                )
+                for item in inputs:
+                    if item.memory_id == canonical_memory_id:
+                        continue
+                    self._insert_outbox(
+                        connection, item.memory_id, character_id, "DELETE", now
+                    )
+                    connection.execute(
+                        "DELETE FROM approved_memories "
+                        "WHERE character_id = ? AND id = ?",
+                        (character_id, str(item.memory_id)),
+                    )
+                    hard_deleted = True
+                result = _select_memory(connection, character_id, canonical_memory_id)
+        if hard_deleted:
+            self._database.truncate_wal()
+        return result
 
     def touch(
         self,
@@ -564,6 +683,57 @@ class ApprovedMemoryRepository:
             )
         self._database.truncate_wal()
 
+    def _insert_approved_memory(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        memory_id: UUID,
+        character_id: str,
+        candidate: ApprovedMemoryCandidate,
+        context: MemoryWriteContext,
+        now: datetime,
+    ) -> sqlite3.Cursor:
+        memory_type, memory_kind, episodic_event_type = _candidate_classification(
+            candidate
+        )
+        return connection.execute(
+            "INSERT INTO approved_memories ("
+            "id, character_id, provider_id, memory_kind, memory_type, "
+            "episodic_event_type, formation_method, schema_version, "
+            "normalized_text, structured_value, policy_version, "
+            "classifier_version, model_id, model_digest, prompt_version, "
+            "content_version, status, idempotency_key, occurred_at, "
+            "occurred_timezone, occurred_precision, stated_at, expires_at, "
+            "last_user_mentioned_at, last_consolidated_at, created_at, updated_at"
+            ") VALUES (?, ?, 'core', ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, "
+            "1, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?) "
+            "ON CONFLICT(character_id, idempotency_key) DO NOTHING",
+            (
+                str(memory_id),
+                character_id,
+                memory_kind,
+                memory_type.value,
+                episodic_event_type,
+                context.formation_method.value,
+                candidate.normalized_text,
+                _serialize_structured_value(candidate.structured_value),
+                context.policy_version,
+                context.classifier_version,
+                context.model_id,
+                context.model_digest,
+                context.prompt_version,
+                context.idempotency_key,
+                _format_optional_datetime(context.occurred_at),
+                context.occurred_timezone,
+                _format_optional_precision(context.occurred_precision),
+                format_datetime(context.stated_at),
+                _format_optional_datetime(context.expires_at),
+                format_datetime(context.stated_at),
+                format_datetime(now),
+                format_datetime(now),
+            ),
+        )
+
     def _insert_outbox(
         self,
         connection: sqlite3.Connection,
@@ -744,6 +914,11 @@ def _memory_from_row(row: sqlite3.Row) -> ApprovedMemory:
             if row["last_user_mentioned_at"] is None
             else parse_datetime(str(row["last_user_mentioned_at"]))
         ),
+        last_consolidated_at=(
+            None
+            if row["last_consolidated_at"] is None
+            else parse_datetime(str(row["last_consolidated_at"]))
+        ),
         created_at=parse_datetime(str(row["created_at"])),
         updated_at=parse_datetime(str(row["updated_at"])),
     )
@@ -797,6 +972,80 @@ def _deserialize_structured_value(
 
 def _format_optional_datetime(value: datetime | None) -> str | None:
     return None if value is None else format_datetime(value)
+
+
+def _format_optional_precision(value: TemporalPrecision | None) -> str | None:
+    return None if value is None else value.value
+
+
+def _select_memory_detail(
+    connection: sqlite3.Connection,
+    character_id: str,
+    memory_id: UUID,
+) -> ApprovedMemoryDetail:
+    memory = _select_memory(connection, character_id, memory_id)
+    source_rows = connection.execute(
+        "SELECT source_type, source_provider_id, source_ref FROM memory_sources "
+        "WHERE character_id = ? AND memory_id = ? "
+        "ORDER BY source_type, source_provider_id, source_ref",
+        (character_id, str(memory_id)),
+    ).fetchall()
+    lineage_rows = connection.execute(
+        "SELECT related_memory_id, relation FROM memory_lineage "
+        "WHERE character_id = ? AND memory_id = ? "
+        "ORDER BY relation, related_memory_id",
+        (character_id, str(memory_id)),
+    ).fetchall()
+    return ApprovedMemoryDetail(
+        memory=memory,
+        sources=tuple(
+            MemorySourceInput(
+                source_type=MemorySourceType(str(row["source_type"])),
+                source_provider_id=str(row["source_provider_id"]),
+                source_ref=str(row["source_ref"]),
+            )
+            for row in source_rows
+        ),
+        lineage=tuple(
+            MemoryLineageInput(
+                related_memory_id=UUID(str(row["related_memory_id"])),
+                relation=MemoryLineageRelation(str(row["relation"])),
+            )
+            for row in lineage_rows
+        ),
+    )
+
+
+def _require_consolidation_inputs(
+    inputs: tuple[ConsolidationInputSnapshot, ...],
+) -> None:
+    if not inputs or any(
+        not isinstance(item, ConsolidationInputSnapshot) for item in inputs
+    ):
+        raise ValueError("inputs must contain consolidation snapshots")
+    if len({item.memory_id for item in inputs}) != len(inputs):
+        raise ValueError("inputs must not contain duplicate memory ids")
+
+
+def _require_canonical_input(
+    canonical_memory_id: UUID,
+    inputs: tuple[ConsolidationInputSnapshot, ...],
+) -> None:
+    _require_uuid4(canonical_memory_id)
+    if canonical_memory_id not in {item.memory_id for item in inputs}:
+        raise ValueError("canonical_memory_id must identify an input memory")
+
+
+def _require_consolidation_context(
+    context: MemoryWriteContext | ConsolidationReceiptContext,
+) -> None:
+    from app.memory.persistence.contracts import FormationMethod
+
+    if (
+        isinstance(context, MemoryWriteContext)
+        and context.formation_method is not FormationMethod.CONSOLIDATED
+    ):
+        raise ValueError("consolidation context must use CONSOLIDATED formation")
 
 
 def _require_approved_candidate(candidate: object) -> None:
