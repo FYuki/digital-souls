@@ -131,7 +131,7 @@ Wave 3の会話状態管理部分は、旧Phaseには対応項目がない新規
 
 ## 関連
 
-- `docs/roadmap.md` — post-MVPのWave構成をチェックリスト形式で反映
+- `docs/roadmap.md` — post-MVPのWave構成と実現する機能を簡潔に記載
 - `docs/enhancement-plan.md` — Wave 1〜4の詳細タスク・依存関係・設計方針
 - `docs/decisions/archive/Multi-character-db-2026-06.md` — `character_id`統一の元になった初期検討履歴
 - `docs/decisions/wave2-memory-formation-retrieval-2026-08.md` — Wave 2の現行記憶・記録モデル
