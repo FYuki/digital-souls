@@ -10,8 +10,8 @@
 | LLM (small) | Ollama + gemma4:e4b | ローカル開発・常用想定 |
 | LLM (medium/large) | Claude / GPT（クラウド） | LLM振り分けルーターの枠のみ用意、初期はダミー |
 | 長期記憶 | RAG（Chroma + nomic-embed-text） + SQLite | キャラクターごとに完全独立。`character_id`を全レコードに付与。詳細は `docs/decisions/wave2-memory-formation-retrieval-2026-08.md` |
-| 音声通信（初期） | WebSocket | ローカル環境では遅延差がほぼ出ないため |
-| 音声通信（将来） | LiveKit | 抽象レイヤー（AudioTransport）で差し替え可能にしておく |
+| 音声通信（現行） | WebSocket | Wave 3移行前のターン形式とbaseline計測に使用 |
+| 音声通信（Wave 3） | LiveKit | 採用済み。AudioTransport境界でConversation Coreから分離する |
 | STT | Whisper（faster-whisper, WSL2ローカル） | |
 | TTS | VOICEVOX（WSL2ローカル） | 日本語対応 |
 | アバター（標準） | Live2D | VTube Studio / OBS連携、Phase 7〜 |

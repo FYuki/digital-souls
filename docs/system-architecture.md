@@ -73,7 +73,7 @@
 
 ### フロントエンド（Vite + Svelte, `frontend/src/`）
 
-* `lib/audio/transport.ts` — WebSocket通信を抽象化する `AudioTransport`（将来のLiveKit移行に備えたシーム）
+* `lib/audio/transport.ts` — 現行WebSocket通信を抽象化する `AudioTransport`。現在はturn、audio、error、open、close callbackと発話単位audio送信を提供する
 * `lib/audio/pcm-worklet-recorder.ts` / `lib/audio/vad-assets.ts` — AudioWorkletによるPCM録音とVAD（発話区間検出）
 * `lib/AudioRecorder.svelte` / `lib/AudioPlayer.svelte` — マイク入力UI・音声再生UI
 * `lib/ChatWindow.svelte` / `lib/InputBar.svelte` — テキストチャットUI
