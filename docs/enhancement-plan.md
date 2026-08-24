@@ -180,73 +180,66 @@ Wave 2で達成する成果は次に限定する。
 各IssueにはそのIssue固有の入出力、テスト、完了条件だけを記載し、共通仕様はADRを参照する。
 idle時のpersona memory consolidationはWave 2受入後の#48で行い、親#28の完了条件には含めない。
 
-## Wave 3: 「自然に話せる」（会話状態管理による双方向会話）
+## Wave 3: 「自然に話せる」（LiveKitによる双方向音声会話）
 
-現状のターン形式（FE VAD検出→一括送信→BE一括処理→3フレーム一括返信）から、
-状態管理された双方向会話へ移行する。
+現状のターン形式（Frontend VAD検出→発話単位PCMをWebSocket送信→Backend一括処理→
+turn JSONと単一WAVを返信）から、LiveKit / WebRTC上の継続音声sessionへ移行する。
+LiveKit採用は決定済みであり、現行WebSocketは変更前baselineの計測対象に限定する。
 
-### 会話状態マシン
+### 責務境界
 
-セッション単位で以下の状態を管理する。BE側が正とし、状態変化のたびにFEへ状態フレームで通知する。
-FE側UIも状態表示に対応させる。
+- LiveKitはRoom、Participant、Track、WebRTC media、再接続を担当する。
+- Frontendはmicrophoneを継続publishし、VAD検出主体として
+  `speech_started` / `speech_stopped` eventを通知する。
+- Conversation Coreはspeech eventのcontract、utterance確定、`should_response`、response開始、
+  cancel、STT、LLM、VOICEVOX、履歴、privacy、記憶の意味論を管理する。
+- LiveKit固有identityと `session_id` / `utterance_id` / `response_id` を分離する。
+- mediaはLiveKit AudioTrack、response deltaやcancel等のcontrol eventはtransport非依存contractとし、
+  LiveKitのdata/RPC等へmappingする。
 
-```text
-idle      : 待機中
-listening : ユーザー発話を受信中
-thinking  : LLM生成中
-speaking  : 応答音声を再生中
-```
+### 独立したlifecycleと世代管理
 
-### WSプロトコル拡張
+voice session、user utterance、assistant response、client playbackを独立して管理する。
+listeningとspeakingは同時に成立でき、`speech_stopped`、utterance確定、`should_response`、
+response開始を同一eventとして扱わない。
 
-既存のフレームに加えて以下を追加する。既存フレームとの互換方針（バージョニング、フォールバック）も
-実装時に確定する。
+responseにはIDとsequenceを付け、generation、synthesis、deliveryを途中cancelできるようにする。
+cancel済みresponseの遅延text、control event、audioは世代gateで破棄し、完了・中断・失敗を
+履歴上で区別する。中断・失敗したresponseから長期記憶を形成しない。
 
-| フレーム | 方向 | 用途 |
-|---|---|---|
-| `{type:"state"}` | BE→FE | 状態遷移の通知 |
-| `{type:"text_delta"}` | BE→FE | LLM応答のストリーミング差分 |
-| `{type:"audio_chunk"}` | BE→FE | 文単位で合成された音声チャンク |
-| `{type:"audio_end"}` | BE→FE | 音声送出の終端通知 |
-| `{type:"cancel"}` | FE→BE | ユーザーによる割り込み（barge-in）通知 |
+### 継続入力と漸進的応答
 
-### LLMストリーミング
-
-Ollamaを `stream:true` で呼び出し、生成デルタを `text_delta` フレームでFEへ逐次送信する。
-FE側は受信したデルタを逐次表示する。
-
-### 文単位ストリーミングTTS
-
-文が確定するごとにVOICEVOXで合成し、`audio_chunk` として逐次送出・再生する。
-`speaking` 状態をさらに細分化し、途中で割り込み可能にする。
+音声session中はAIの思考・発話状態にかかわらずmicrophone trackとFrontend VADを継続する。
+Ollamaの生成deltaを逐次表示し、意味のある文・節が確定するごとにVOICEVOXで合成して
+Character AudioTrackへ順序どおりpublishする。生成、合成、publishの速度差にはqueue上限と
+backpressureを設ける。
 
 ### barge-in（割り込み対応）
 
-`speaking` 中にユーザー発話を検出した場合、以下を行う。
+Character発話中にFrontend VADが利用者のspeech startを検出した場合、server round tripを待たず
+local再生を停止し、active responseを指定してConversation Coreへcancelを通知する。
+割り込み発話は新しいutteranceとして冒頭から扱い、最新意図を優先する。
 
-1. 再生中の音声を停止する
-2. BE側の生成処理をキャンセルする（`cancel` フレーム受信）
-3. `listening` 状態へ遷移する
+browser echo cancellationとnoise suppressionを維持し、speaker音による自己割り込みを抑制する。
 
-エコー対策（`echoCancellation` の有効化、`speaking` 中のVAD制御）を課題として明記する。
-マイク入力が自身の再生音声を拾って誤発火しないようにする検討が必要。
+### LiveKit接続と回復
 
-### 遅延計測の指標化 → LiveKit移行判断
+Room作成、join token、Participant identity、Track publish / subscribeの境界を設ける。
+再接続後は古いsession / responseを復活させず、track再購読による二重再生を防ぐ。
+STT、LLM、TTS、audio publish / playbackの一時障害後も次の発話を処理できる状態へ収束させる。
 
-旧Phase 4の残タスク「WebSocketの遅延を計測し、LiveKit移行の必要性を判断する」をここへ移動する。
-新プロトコル（状態マシン・ストリーミング）を前提に遅延を計測し、その上でLiveKit移行を判断する。
-FE側の `AudioTransport` 抽象化（`frontend/src/lib/audio/transport.ts`）は、
-どちらの判断になっても差し替えられるよう温存する。
+### 計測と受入
 
-### 既存の音声1件保持キューの再設計
-
-`backend/app/routers/ws.py` に実装済みの処理中キュー（1件保持・上書き）は、
-状態マシン導入に合わせて再設計する（`listening`/`thinking` 状態との整合を取る）。
+最初に現行WebSocket一括pipelineのbaselineを取得し、同じ指標でLiveKit版Wave 3を評価する。
+計測は採否判断ではなく、TTFA、barge-in停止・cancel遅延、冒頭欠落、stale出力、再接続、
+audio delivery gapの受入目標を定義するために行う。自動受入後、実LiveKit、Whisper、Ollama、
+VOICEVOX、browser microphone / speakerを使ってdogfood受入する。
 
 ### 依存関係
 
-LLMストリーミングと文単位TTSは、会話状態マシン・WSプロトコル拡張の設計が確定した後に着手する
-（フレーム種別・状態遷移が先に決まっていないと、ストリーミング実装がやり直しになるため）。
+現行WebSocket baseline取得を開始した後、transport非依存contractとLiveKit基盤設計を並行する。
+その後、response世代管理、継続入力、中断履歴を基盤として、逐次text、逐次audio、barge-in、
+再接続・障害回復、自動受入、dogfood受入の順に進める。詳細な進捗と完了条件はGitHub Issuesで管理する。
 
 ## Wave 4: 「役に立つ」（後続・優先度低）
 
@@ -254,14 +247,16 @@ LLMストリーミングと文単位TTSは、会話状態マシン・WSプロト
 
 1. ツール実行基盤 + 農業日誌
 2. `ClaudeClient` 実装・プロバイダ切替（現状は `NotImplementedError` スタブ）
-3. 2人目キャラクターでの複数キャラクター運用検証
-4. Discord Bot / Mac mini常時稼働 / Live2D
+3. Discord Bot / Mac mini常時稼働 / Live2D
+
+複数キャラクター会話はEpic CとしてWave 3・4から分離し、テキストグループチャット、
+Character別episodic memory、LiveKit複数Character音声統合の順に進める。
 
 ## 旧Phase → Wave 対応表
 
 | 旧Phase | 内容 | 移行先 |
 |---|---|---|
-| Phase 4（未完了分） | WebSocketの遅延計測・LiveKit移行判断 | Wave 3 |
+| Phase 4（未完了分） | WebSocketの遅延baseline取得・LiveKit対応 | Wave 3（LiveKit採用済み） |
 | Phase 5 | 長期記憶（RAG） | Wave 2 |
 | Phase 6 | パーソナルAI機能（農業日誌・レシピ管理等） | Wave 4 |
 | Phase 7 | 表現・配信連携（Live2D・VRM等） | Wave 4 |

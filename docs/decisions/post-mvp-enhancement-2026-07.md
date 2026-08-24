@@ -53,8 +53,9 @@ LiveKitへ移す二段階実装は、media delivery、再接続、再生停止�
 LiveKit対応を1つの実装計画へ統合する**。
 
 LiveKitの責務はRoom、Participant、Track、WebRTC media、再接続に限定する。
-VAD、turn-taking、utterance / response / cancel lifecycle、STT、LLM、VOICEVOX、履歴、privacy、
-記憶の意味論はdigital-soulsのConversation Coreが所有する。LiveKit固有identityと
+FrontendはVADの検出主体として `speech_started` / `speech_stopped` を通知し、Conversation Coreは
+そのevent contract、turn-taking、utterance確定、`should_response`、response / cancel lifecycle、
+STT、LLM、VOICEVOX、履歴、privacy、記憶の意味論を所有する。LiveKit固有identityと
 Conversation Coreの `session_id` / `utterance_id` / `response_id` は分離する。
 
 音声とcontrol eventも分離する。microphoneとCharacter音声はLiveKit AudioTrackで継続配送し、
@@ -65,7 +66,7 @@ Conversation Coreの `session_id` / `utterance_id` / `response_id` は分離す�
 
 現行WebSocket一括pipelineは移行前baselineとして計測するが、採否判断の対象にはしない。
 変更前の比較値を残すため#17のbaseline取得を最初に開始し、#13のConversation contractと
-#113のLiveKit基盤設計を並行する。以降はresponse世代管理、継続入力、中断履歴、逐次text/audio、
+Issue #113のLiveKit基盤設計を並行する。以降はresponse世代管理、継続入力、中断履歴、逐次text/audio、
 barge-in、再接続・障害回復、自動受入、dogfood受入の順に進める。
 
 FE側の `AudioTransport` 抽象化は、Conversation Coreへtransport固有APIを漏らさない境界として
