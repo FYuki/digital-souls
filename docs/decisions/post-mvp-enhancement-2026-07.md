@@ -58,6 +58,13 @@ FrontendはVADの検出主体として `speech_started` / `speech_stopped` を�
 STT、LLM、VOICEVOX、履歴、privacy、記憶の意味論を所有する。LiveKit固有identityと
 Conversation Coreの `session_id` / `utterance_id` / `response_id` は分離する。
 
+`conversation_id`はUIスレッドと永続履歴の単位として音声sessionをまたいで維持する。
+`session_id`は1回のactive voice session開始時に生成し、1つの`character_id`と`conversation_id`へ
+拘束する。回復可能な一時切断では同じsessionを再接続し、明示終了またはterminal error後の再開では
+同じ`conversation_id`上に新しい`session_id`を生成する。各`utterance_id`は1つのsession、各
+`response_id`は原因となる1つのutteranceと同じsessionに所属する。LiveKitのRoom、Participant、
+Track identityはこれらのIDへadapterで対応付け、永続履歴キーとして使用しない。
+
 音声とcontrol eventも分離する。microphoneとCharacter音声はLiveKit AudioTrackで継続配送し、
 `speech_started` / `speech_stopped`、response delta、cancel等はtransport非依存contractとして
 定義してLiveKitのdata/RPC等へmappingする。`speech_stopped`、utterance確定、
@@ -71,6 +78,9 @@ barge-in、再接続・障害回復、自動受入、dogfood受入の順に進�
 
 FE側の `AudioTransport` 抽象化は、Conversation Coreへtransport固有APIを漏らさない境界として
 維持する。ただし、その目的はWave 3でWebSocketとLiveKitの採否を保留することではない。
+Wave 3ではmedia deliveryとcontrol event contractを分離し、barge-in時のlocal playback停止も
+transportとは別のplayback contractとして扱う。WebSocket baseline用adapterとLiveKit adapterは、
+共通fixtureによるcontract testで同じcontrol eventの意味論を検証する。
 
 ### 3. RealtimeAgentは全面採用せず、設計を参照する
 

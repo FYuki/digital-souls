@@ -196,6 +196,10 @@ LiveKit採用は決定済みであり、現行WebSocketは変更前baselineの�
 - LiveKit固有identityと `session_id` / `utterance_id` / `response_id` を分離する。
 - mediaはLiveKit AudioTrack、response deltaやcancel等のcontrol eventはtransport非依存contractとし、
   LiveKitのdata/RPC等へmappingする。
+- `conversation_id`はUIスレッド・履歴の単位としてsessionをまたいで維持し、`session_id`は
+  1回のactive voice sessionごとに生成して1つの`character_id`と`conversation_id`へ拘束する。
+- 一時切断からの回復は同じsessionへ再接続し、終了後の再開は同じconversation上の新しいsessionとする。
+  `utterance_id`はsession、`response_id`は原因utteranceと同じsessionに所属する。
 
 ### 独立したlifecycleと世代管理
 
@@ -206,6 +210,11 @@ response開始を同一eventとして扱わない。
 responseにはIDとsequenceを付け、generation、synthesis、deliveryを途中cancelできるようにする。
 cancel済みresponseの遅延text、control event、audioは世代gateで破棄し、完了・中断・失敗を
 履歴上で区別する。中断・失敗したresponseから長期記憶を形成しない。
+
+`AudioTransport`はmedia deliveryを担当し、speech event、response delta、cancel等は別の
+transport非依存control contractとして定義する。barge-in時のlocal再生停止は`AudioPlayer`側の
+playback contractとする。WebSocket baseline用adapterとLiveKit adapterに共通fixtureを適用し、
+control eventのmapping、ID、順序、cancel、終端をcontract testで検証する。
 
 ### 継続入力と漸進的応答
 
@@ -230,10 +239,16 @@ STT、LLM、TTS、audio publish / playbackの一時障害後も次の発話を�
 
 ### 計測と受入
 
-最初に現行WebSocket一括pipelineのbaselineを取得し、同じ指標でLiveKit版Wave 3を評価する。
-計測は採否判断ではなく、TTFA、barge-in停止・cancel遅延、冒頭欠落、stale出力、再接続、
-audio delivery gapの受入目標を定義するために行う。自動受入後、実LiveKit、Whisper、Ollama、
-VOICEVOX、browser microphone / speakerを使ってdogfood受入する。
+最初に現行WebSocket一括pipelineで測定可能なbaselineを取得する。TTFA、処理失敗率、
+発話単位送受信の冒頭欠落等は直接測定し、現行経路に存在しないbarge-in停止・cancel遅延、
+response世代管理によるstale出力排除、LiveKit再接続、継続audio delivery gapはN/Aとする。
+各指標を直接比較、参考比較、N/Aのいずれかに分類し、測定シナリオとLiveKit版との比較方法を
+Issue #17で定義する。計測は採否判断ではなく、LiveKit版の受入目標を定義するために行う。
+
+自動受入後、実LiveKit、Whisper、Ollama、VOICEVOX、browser microphone / speakerを使って
+dogfood受入する。受入開始前にIssue #112と
+`docs/decisions/local-dogfood-environment-2026-08.md`が定める独立cloneからの明示deploy、
+実行commit、data root、dogfood環境identityの一致を確認する。
 
 ### 依存関係
 
