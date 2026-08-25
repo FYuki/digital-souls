@@ -17,7 +17,10 @@ def _validator() -> Draft202012Validator:
     with schema_path.open(encoding="utf-8") as source:
         schema = json.load(source)
     Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema)
+    return Draft202012Validator(
+        schema,
+        format_checker=Draft202012Validator.FORMAT_CHECKER,
+    )
 
 
 def parse_voice_session_event(value: object) -> VoiceSessionEvent:

@@ -2,9 +2,7 @@
 
 ## 状態
 
-**ACTIVE**。
-
-本 ADR は Wave 3 の transport 非依存 Conversation Core が扱う音声セッション契約と、JSON Schema から FE/BE 型を生成する試験導入を定める。実動作、LiveKit 認証、VAD、streaming LLM/TTS は後続 Issue で実装する。
+**ACTIVE**。現行範囲は Wave 3 の transport 非依存 Conversation Core が扱う音声セッション契約と、JSON Schema から FE/BE 型を生成する試験導入に限定する。実動作、LiveKit 認証、VAD、streaming LLM/TTS は後続 Issue とその ADR で定める。
 
 ## 背景
 

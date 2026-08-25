@@ -35,8 +35,14 @@
   "$defs": {
     "ProtocolVersion": { "type": "string", "const": "1.0" },
     "Identifier": { "type": "string", "format": "uuid" },
-    "MonotonicTimestamp": { "type": "integer", "minimum": 0 },
-    "Sequence": { "type": "integer", "minimum": 1 },
+    "NonNegativeSafeInteger": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "MonotonicTimestamp": { "$ref": "#/$defs/NonNegativeSafeInteger" },
+    "Sequence": {
+      "allOf": [
+        { "$ref": "#/$defs/NonNegativeSafeInteger" },
+        { "type": "integer", "minimum": 1 }
+      ]
+    },
     "Speaker": {
       "type": "object",
       "additionalProperties": false,
@@ -53,8 +59,8 @@
       "additionalProperties": false,
       "required": ["start", "end"],
       "properties": {
-        "start": { "type": "integer", "minimum": 0 },
-        "end": { "type": "integer", "minimum": 0 }
+        "start": { "$ref": "#/$defs/NonNegativeSafeInteger" },
+        "end": { "$ref": "#/$defs/NonNegativeSafeInteger" }
       }
     },
     "SessionStartRequested": {
@@ -63,7 +69,7 @@
       "properties": {
         "type": { "const": "session_start_requested" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
         "event_id": { "$ref": "#/$defs/Identifier" }, "session_id": { "$ref": "#/$defs/Identifier" },
-        "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }, "reconnect_grace_ms": { "type": "integer", "minimum": 0 }
+        "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }, "reconnect_grace_ms": { "$ref": "#/$defs/NonNegativeSafeInteger" }
       }
     },
     "SessionStarted": {
@@ -263,7 +269,7 @@
         "type": { "const": "playback_stopped" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
         "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" },
         "reason": { "type": "string", "enum": ["barge_in", "session_ended", "disconnect", "decode_failure"] },
-        "last_played_sequence": { "type": "integer", "minimum": 0 }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
+        "last_played_sequence": { "$ref": "#/$defs/NonNegativeSafeInteger" }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
     "PlaybackCompleted": {

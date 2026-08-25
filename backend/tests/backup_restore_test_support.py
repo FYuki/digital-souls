@@ -9,8 +9,13 @@ from pathlib import Path
 from typing import TypeAlias, TypeGuard
 
 from app.backup_restore import BackupAuthenticationKey, RestoreRecoveryRequiredError
-from app.conversation_history.schema import initialize_conversation_history_schema
-from app.conversation_history.schema import HISTORY_INDEX_SQL, STALE_INDEX_SQL
+from app.conversation_history.schema import (
+    HISTORY_INDEX_SQL,
+    STALE_INDEX_SQL,
+    VERSION_THREE_CONVERSATION_TURNS_SQL,
+    VERSION_TWO_CONVERSATIONS_SQL,
+    initialize_conversation_history_schema,
+)
 from app.memory.persistence.schema import initialize_persona_memory_schema
 from app.runtime_data_root import initialize_runtime_data_root
 from app.runtime_paths import RuntimePaths, resolve_runtime_paths
@@ -28,91 +33,6 @@ RESTORE_RECOVERY_MESSAGE = RestoreRecoveryRequiredError.public_message
 JsonValue: TypeAlias = (
     str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
 )
-
-VERSION_TWO_CONVERSATIONS_SQL = """
-CREATE TABLE conversations (
-    character_id TEXT NOT NULL,
-    conversation_id TEXT NOT NULL CHECK (
-        length(conversation_id) = 36
-        AND length(replace(conversation_id, '-', '')) = 32
-        AND substr(conversation_id, 9, 1) = '-'
-        AND substr(conversation_id, 14, 1) = '-'
-        AND substr(conversation_id, 15, 1) = '4'
-        AND substr(conversation_id, 19, 1) = '-'
-        AND substr(conversation_id, 20, 1) IN ('8', '9', 'a', 'b')
-        AND substr(conversation_id, 24, 1) = '-'
-        AND lower(conversation_id) = conversation_id
-        AND replace(conversation_id, '-', '') NOT GLOB '*[^0-9a-f]*'
-    ),
-    created_at TEXT NOT NULL,
-    PRIMARY KEY (character_id, conversation_id)
-)
-"""
-
-VERSION_TWO_CONVERSATION_TURNS_SQL = """
-CREATE TABLE conversation_turns (
-    turn_id TEXT PRIMARY KEY CHECK (
-        length(turn_id) = 36
-        AND length(replace(turn_id, '-', '')) = 32
-        AND substr(turn_id, 9, 1) = '-'
-        AND substr(turn_id, 14, 1) = '-'
-        AND substr(turn_id, 15, 1) = '4'
-        AND substr(turn_id, 19, 1) = '-'
-        AND substr(turn_id, 20, 1) IN ('8', '9', 'a', 'b')
-        AND substr(turn_id, 24, 1) = '-'
-        AND lower(turn_id) = turn_id
-        AND replace(turn_id, '-', '') NOT GLOB '*[^0-9a-f]*'
-    ),
-    character_id TEXT NOT NULL,
-    conversation_id TEXT NOT NULL,
-    user_content TEXT,
-    assistant_content TEXT,
-    status TEXT NOT NULL CHECK (
-        status IN ('processing', 'completed', 'failed', 'privacy_skipped')
-    ),
-    privacy_reason_code TEXT,
-    sanitizer_version TEXT,
-    policy_version TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    FOREIGN KEY (character_id, conversation_id)
-        REFERENCES conversations (character_id, conversation_id),
-    CHECK (
-        (
-            status = 'processing'
-            AND user_content IS NOT NULL
-            AND assistant_content IS NULL
-            AND privacy_reason_code IS NULL
-            AND sanitizer_version IS NULL
-            AND policy_version IS NULL
-        )
-        OR (
-            status = 'completed'
-            AND user_content IS NOT NULL
-            AND assistant_content IS NOT NULL
-            AND privacy_reason_code IS NULL
-            AND sanitizer_version IS NULL
-            AND policy_version IS NULL
-        )
-        OR (
-            status = 'failed'
-            AND user_content IS NOT NULL
-            AND privacy_reason_code IS NULL
-            AND sanitizer_version IS NULL
-            AND policy_version IS NULL
-        )
-        OR (
-            status = 'privacy_skipped'
-            AND user_content IS NULL
-            AND assistant_content IS NULL
-            AND privacy_reason_code IN ('UNCHANGED', 'MASKED', 'STORAGE_OPT_OUT', 'SCAN_FAILURE', 'INVALID_FINDING')
-            AND length(trim(sanitizer_version)) > 0
-            AND length(trim(policy_version)) > 0
-        )
-    )
-)
-"""
-
 
 def initialized_runtime(
     tmp_path: Path,
@@ -165,7 +85,7 @@ def create_history_database(paths: RuntimePaths, *, wal: bool) -> sqlite3.Connec
 def create_version_two_database(database_path: Path) -> None:
     with closing(sqlite3.connect(database_path)) as connection:
         connection.execute(VERSION_TWO_CONVERSATIONS_SQL)
-        connection.execute(VERSION_TWO_CONVERSATION_TURNS_SQL)
+        connection.execute(VERSION_THREE_CONVERSATION_TURNS_SQL)
         connection.execute(HISTORY_INDEX_SQL)
         connection.execute(STALE_INDEX_SQL)
         connection.execute(

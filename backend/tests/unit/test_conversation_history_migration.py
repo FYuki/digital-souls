@@ -10,6 +10,8 @@ from app.conversation_history.errors import LegacySchemaError
 from app.conversation_history.schema import (
     HISTORY_INDEX_SQL,
     STALE_INDEX_SQL,
+    VERSION_THREE_CONVERSATION_TURNS_SQL,
+    VERSION_TWO_CONVERSATIONS_SQL,
     initialize_conversation_history_schema,
 )
 from app.runtime_data_root import initialize_runtime_data_root
@@ -19,91 +21,6 @@ CHARACTER_ID = "miori"
 CONVERSATION_ID = "e98d6c65-1ae9-4d6f-a8c8-d59b0ad09001"
 TURN_ID = "9e70795d-e5d5-431d-baa2-67f884403001"
 CREATED_AT = "2026-07-24T00:00:00.000000Z"
-
-VERSION_TWO_CONVERSATIONS_SQL = """
-CREATE TABLE conversations (
-    character_id TEXT NOT NULL,
-    conversation_id TEXT NOT NULL CHECK (
-        length(conversation_id) = 36
-        AND length(replace(conversation_id, '-', '')) = 32
-        AND substr(conversation_id, 9, 1) = '-'
-        AND substr(conversation_id, 14, 1) = '-'
-        AND substr(conversation_id, 15, 1) = '4'
-        AND substr(conversation_id, 19, 1) = '-'
-        AND substr(conversation_id, 20, 1) IN ('8', '9', 'a', 'b')
-        AND substr(conversation_id, 24, 1) = '-'
-        AND lower(conversation_id) = conversation_id
-        AND replace(conversation_id, '-', '') NOT GLOB '*[^0-9a-f]*'
-    ),
-    created_at TEXT NOT NULL,
-    PRIMARY KEY (character_id, conversation_id)
-)
-"""
-
-VERSION_THREE_CONVERSATION_TURNS_SQL = """
-CREATE TABLE conversation_turns (
-    turn_id TEXT PRIMARY KEY CHECK (
-        length(turn_id) = 36
-        AND length(replace(turn_id, '-', '')) = 32
-        AND substr(turn_id, 9, 1) = '-'
-        AND substr(turn_id, 14, 1) = '-'
-        AND substr(turn_id, 15, 1) = '4'
-        AND substr(turn_id, 19, 1) = '-'
-        AND substr(turn_id, 20, 1) IN ('8', '9', 'a', 'b')
-        AND substr(turn_id, 24, 1) = '-'
-        AND lower(turn_id) = turn_id
-        AND replace(turn_id, '-', '') NOT GLOB '*[^0-9a-f]*'
-    ),
-    character_id TEXT NOT NULL,
-    conversation_id TEXT NOT NULL,
-    user_content TEXT,
-    assistant_content TEXT,
-    status TEXT NOT NULL CHECK (
-        status IN ('processing', 'completed', 'failed', 'privacy_skipped')
-    ),
-    privacy_reason_code TEXT,
-    sanitizer_version TEXT,
-    policy_version TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    FOREIGN KEY (character_id, conversation_id)
-        REFERENCES conversations (character_id, conversation_id),
-    CHECK (
-        (
-            status = 'processing'
-            AND user_content IS NOT NULL
-            AND assistant_content IS NULL
-            AND privacy_reason_code IS NULL
-            AND sanitizer_version IS NULL
-            AND policy_version IS NULL
-        )
-        OR (
-            status = 'completed'
-            AND user_content IS NOT NULL
-            AND assistant_content IS NOT NULL
-            AND privacy_reason_code IS NULL
-            AND sanitizer_version IS NULL
-            AND policy_version IS NULL
-        )
-        OR (
-            status = 'failed'
-            AND user_content IS NOT NULL
-            AND privacy_reason_code IS NULL
-            AND sanitizer_version IS NULL
-            AND policy_version IS NULL
-        )
-        OR (
-            status = 'privacy_skipped'
-            AND user_content IS NULL
-            AND assistant_content IS NULL
-            AND privacy_reason_code IN ('UNCHANGED', 'MASKED', 'STORAGE_OPT_OUT', 'SCAN_FAILURE', 'INVALID_FINDING')
-            AND length(trim(sanitizer_version)) > 0
-            AND length(trim(policy_version)) > 0
-        )
-    )
-)
-"""
-
 
 def _create_version_two_database(database_path: Path) -> None:
     with sqlite3.connect(database_path) as connection:
@@ -254,6 +171,30 @@ def test_should_migrate_version_three_to_four_without_losing_rows(
         "マスク済みアシスタント本文",
         "completed",
     )
+
+
+def test_should_reject_version_three_migration_with_dependent_view(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "history.db"
+    _create_version_three_database(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "CREATE VIEW completed_turns AS "
+            "SELECT turn_id FROM conversation_turns WHERE status = 'completed'"
+        )
+
+    with pytest.raises(
+        LegacySchemaError,
+        match="conversation_turns migration does not support dependent views",
+    ):
+        initialize_conversation_history_schema(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert connection.execute("SELECT turn_id FROM completed_turns").fetchone() == (
+            TURN_ID,
+        )
 
 
 def test_should_be_idempotent_after_migrating_version_two_database(

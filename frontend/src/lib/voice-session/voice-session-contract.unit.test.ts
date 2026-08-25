@@ -139,4 +139,11 @@ describe('voice session shared contract', () => {
 
     expect(() => parseVoiceSessionEvent(loaded.event)).toThrow()
   })
+
+  it('JavaScript安全整数上限を超えるeventをtyped eventへ変換しない', async () => {
+    const { parseVoiceSessionEvent } = await loadValidationModule()
+    const loaded = fixture('unsafe-integer.json')
+
+    expect(() => parseVoiceSessionEvent(loaded.event)).toThrow()
+  })
 })

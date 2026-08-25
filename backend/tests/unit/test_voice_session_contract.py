@@ -27,7 +27,10 @@ def _fixture(name: str) -> dict[str, object]:
 def _validator() -> Draft202012Validator:
     schema = _load_json(CONTRACT_ROOT / "voice-session.schema.json")
     Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema)
+    return Draft202012Validator(
+        schema,
+        format_checker=Draft202012Validator.FORMAT_CHECKER,
+    )
 
 
 def _normal_response_event(event_type: str) -> dict[str, object]:
@@ -133,6 +136,16 @@ def test_backend_boundary_rejects_reversed_text_ranges(event_type: str) -> None:
     assert event["text_range"] == {"start": 0, "end": 4}
 
 
+def test_backend_boundary_rejects_uuid_enclosed_in_braces() -> None:
+    parser = importlib.import_module("app.voice_session.validation")
+    event = _normal_response_event("response_delta")
+
+    with pytest.raises(ValueError):
+        parser.parse_voice_session_event(
+            {**event, "event_id": f"{{{event['event_id']}}}"}
+        )
+
+
 def test_cancelled_response_discards_late_delta_without_changing_state() -> None:
     fixture = _fixture("cancel-race.json")
     events = fixture["events"]
@@ -160,6 +173,13 @@ def test_cancelled_response_discards_late_delta_without_changing_state() -> None
 def test_protocol_mismatch_is_rejected_at_parser_boundary() -> None:
     parser = importlib.import_module("app.voice_session.validation")
     fixture = _fixture("protocol-version-mismatch.json")
+    with pytest.raises(ValueError):
+        parser.parse_voice_session_event(fixture["event"])
+
+
+def test_unsafe_integer_is_rejected_at_parser_boundary() -> None:
+    parser = importlib.import_module("app.voice_session.validation")
+    fixture = _fixture("unsafe-integer.json")
     with pytest.raises(ValueError):
         parser.parse_voice_session_event(fixture["event"])
 

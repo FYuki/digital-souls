@@ -38,12 +38,6 @@ def _processing_turn(database_path: Path):
 
 
 class TestTurnTransitions:
-    def test_should_allow_processing_to_interrupted_transition(self) -> None:
-        require_turn_transition(
-            TurnStatus.PROCESSING,
-            TurnStatus("interrupted"),
-        )
-
     def test_get_turn_returns_the_authoritative_turn_or_none(
         self,
         tmp_path: Path,

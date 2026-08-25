@@ -71,6 +71,18 @@ class HistoryService(Protocol):
         ...
 
 
+class _AssistantTurnPersistence(Protocol):
+    def __call__(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+        turn_id: UUID,
+        *,
+        sanitized_assistant_content: str,
+    ) -> ConversationTurn:
+        ...
+
+
 class ConversationHistorySession:
     def __init__(
         self,
@@ -115,25 +127,10 @@ class ConversationHistorySession:
         started_turn: StartedHistoryTurn,
         assistant_content: str,
     ) -> ConversationTurn:
-        decision = self._sanitizer.sanitize_assistant(assistant_content)
-        if started_turn.content_skipped:
-            if started_turn.initial_turn is None:
-                raise ValueError("privacy-skipped started turn requires persisted turn")
-            return started_turn.initial_turn
-        if decision.action is ConversationHistoryAction.SKIP_CONTENT:
-            return self._repository.skip_processing_turn_for_privacy(
-                self._character_id,
-                self._conversation_id,
-                started_turn.turn_id,
-                _privacy_skip_input(decision),
-            )
-        if decision.content is None:
-            raise ValueError("STORE_MASKED decision requires content")
-        return self._repository.complete_turn(
-            self._character_id,
-            self._conversation_id,
-            started_turn.turn_id,
-            sanitized_assistant_content=decision.content,
+        return self._persist_assistant_content(
+            started_turn,
+            assistant_content,
+            self._repository.complete_turn,
         )
 
     def fail_turn(self, started_turn: StartedHistoryTurn) -> None:
@@ -157,7 +154,19 @@ class ConversationHistorySession:
             response_audio_chunks,
             last_played_sequence=last_played_sequence,
         )
-        decision = self._sanitizer.sanitize_assistant(played_content)
+        return self._persist_assistant_content(
+            started_turn,
+            played_content,
+            self._repository.interrupt_turn,
+        )
+
+    def _persist_assistant_content(
+        self,
+        started_turn: StartedHistoryTurn,
+        assistant_content: str,
+        persist: _AssistantTurnPersistence,
+    ) -> ConversationTurn:
+        decision = self._sanitizer.sanitize_assistant(assistant_content)
         if started_turn.content_skipped:
             if started_turn.initial_turn is None:
                 raise ValueError("privacy-skipped started turn requires persisted turn")
@@ -171,7 +180,7 @@ class ConversationHistorySession:
             )
         if decision.content is None:
             raise ValueError("STORE_MASKED decision requires content")
-        return self._repository.interrupt_turn(
+        return persist(
             self._character_id,
             self._conversation_id,
             started_turn.turn_id,

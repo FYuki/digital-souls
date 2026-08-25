@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from enum import Enum
 from unittest.mock import MagicMock
 from uuid import uuid4
 
@@ -11,6 +10,7 @@ from app.conversation_history.models import (
     ConversationTurn,
     PrivacySkippedTurnInput,
     ProcessingTurnInput,
+    TurnStatus,
 )
 from app.privacy.contracts import HistoryDecisionReasonCode
 
@@ -115,18 +115,7 @@ def test_should_return_only_persisted_masked_turn_content(client) -> None:
 
 def test_should_serialize_interrupted_partial_as_existing_content_response(
     client,
-    monkeypatch,
 ) -> None:
-    from app.routers import conversation_contracts
-
-    class ApiTurnStatus(str, Enum):
-        PROCESSING = "processing"
-        COMPLETED = "completed"
-        INTERRUPTED = "interrupted"
-        FAILED = "failed"
-        PRIVACY_SKIPPED = "privacy_skipped"
-
-    monkeypatch.setattr(conversation_contracts, "TurnStatus", ApiTurnStatus)
     conversation_id = uuid4()
     turn_id = uuid4()
     now = datetime.now(UTC)
@@ -136,7 +125,7 @@ def test_should_serialize_interrupted_partial_as_existing_content_response(
         conversation_id=conversation_id,
         user_content="中断前の質問",
         assistant_content="実際に再生された部分",
-        status=ApiTurnStatus.INTERRUPTED,  # type: ignore[arg-type]
+        status=TurnStatus.INTERRUPTED,
         privacy_reason_code=None,
         created_at=now,
         updated_at=now,

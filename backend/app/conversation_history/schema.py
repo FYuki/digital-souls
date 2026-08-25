@@ -103,7 +103,7 @@ CREATE TABLE conversations (
 )
 """
 
-_VERSION_TWO_CONVERSATIONS_SQL = f"""
+VERSION_TWO_CONVERSATIONS_SQL = f"""
 CREATE TABLE conversations (
     character_id TEXT NOT NULL,
     conversation_id TEXT NOT NULL CHECK (
@@ -114,7 +114,7 @@ CREATE TABLE conversations (
 )
 """
 
-_MIGRATED_CONVERSATIONS_SQL = _VERSION_TWO_CONVERSATIONS_SQL.replace(
+_MIGRATED_CONVERSATIONS_SQL = VERSION_TWO_CONVERSATIONS_SQL.replace(
     "created_at TEXT NOT NULL,",
     "created_at TEXT NOT NULL, archived_at TEXT,",
 )
@@ -132,7 +132,7 @@ CREATE TABLE wal_cleanup_jobs (
 )
 """
 
-_VERSION_THREE_CONVERSATION_TURNS_SQL = f"""
+VERSION_THREE_CONVERSATION_TURNS_SQL = f"""
 CREATE TABLE conversation_turns (
     turn_id TEXT PRIMARY KEY CHECK (
         {_uuid4_check("turn_id")}
@@ -187,12 +187,43 @@ CREATE TABLE conversation_turns (
 )
 """
 
-CONVERSATION_TURNS_SQL = _VERSION_THREE_CONVERSATION_TURNS_SQL.replace(
-    "status IN ('processing', 'completed', 'failed', 'privacy_skipped')",
-    "status IN ('processing', 'completed', 'interrupted', 'failed', 'privacy_skipped')",
-).replace(
-    "        OR (\n            status = 'privacy_skipped'",
-    """        OR (
+CONVERSATION_TURNS_SQL = f"""
+CREATE TABLE conversation_turns (
+    turn_id TEXT PRIMARY KEY CHECK (
+        {_uuid4_check("turn_id")}
+    ),
+    character_id TEXT NOT NULL,
+    conversation_id TEXT NOT NULL,
+    user_content TEXT,
+    assistant_content TEXT,
+    status TEXT NOT NULL CHECK (
+        status IN ('processing', 'completed', 'interrupted', 'failed', 'privacy_skipped')
+    ),
+    privacy_reason_code TEXT,
+    sanitizer_version TEXT,
+    policy_version TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (character_id, conversation_id)
+        REFERENCES conversations (character_id, conversation_id),
+    CHECK (
+        (
+            status = 'processing'
+            AND user_content IS NOT NULL
+            AND assistant_content IS NULL
+            AND privacy_reason_code IS NULL
+            AND sanitizer_version IS NULL
+            AND policy_version IS NULL
+        )
+        OR (
+            status = 'completed'
+            AND user_content IS NOT NULL
+            AND assistant_content IS NOT NULL
+            AND privacy_reason_code IS NULL
+            AND sanitizer_version IS NULL
+            AND policy_version IS NULL
+        )
+        OR (
             status = 'interrupted'
             AND user_content IS NOT NULL
             AND assistant_content IS NOT NULL
@@ -201,8 +232,23 @@ CONVERSATION_TURNS_SQL = _VERSION_THREE_CONVERSATION_TURNS_SQL.replace(
             AND policy_version IS NULL
         )
         OR (
-            status = 'privacy_skipped'""",
+            status = 'failed'
+            AND user_content IS NOT NULL
+            AND privacy_reason_code IS NULL
+            AND sanitizer_version IS NULL
+            AND policy_version IS NULL
+        )
+        OR (
+            status = 'privacy_skipped'
+            AND user_content IS NULL
+            AND assistant_content IS NULL
+            AND privacy_reason_code IN ({PRIVACY_SKIP_REASON_VALUES_SQL})
+            AND length(trim(sanitizer_version)) > 0
+            AND length(trim(policy_version)) > 0
+        )
+    )
 )
+"""
 
 HISTORY_INDEX_SQL = """
 CREATE INDEX conversation_turns_history_idx
@@ -277,8 +323,8 @@ def _has_current_definitions(connection: sqlite3.Connection) -> bool:
 
 def _is_version_two_schema(connection: sqlite3.Connection) -> bool:
     expected_definitions = (
-        ("table", "conversations", _VERSION_TWO_CONVERSATIONS_SQL),
-        ("table", "conversation_turns", _VERSION_THREE_CONVERSATION_TURNS_SQL),
+        ("table", "conversations", VERSION_TWO_CONVERSATIONS_SQL),
+        ("table", "conversation_turns", VERSION_THREE_CONVERSATION_TURNS_SQL),
         ("index", "conversation_turns_history_idx", HISTORY_INDEX_SQL),
         ("index", "conversation_turns_stale_processing_idx", STALE_INDEX_SQL),
     )
@@ -307,7 +353,7 @@ def _is_current_schema(connection: sqlite3.Connection) -> bool:
 
 def _is_version_three_schema(connection: sqlite3.Connection) -> bool:
     expected_definitions = (
-        ("table", "conversation_turns", _VERSION_THREE_CONVERSATION_TURNS_SQL),
+        ("table", "conversation_turns", VERSION_THREE_CONVERSATION_TURNS_SQL),
         ("table", "wal_cleanup_jobs", WAL_CLEANUP_JOBS_SQL),
         ("index", "conversation_turns_history_idx", HISTORY_INDEX_SQL),
         ("index", "conversation_turns_stale_processing_idx", STALE_INDEX_SQL),
@@ -352,6 +398,16 @@ def _migrate_version_two_schema(connection: sqlite3.Connection) -> None:
 
 
 def _migrate_turn_contract_to_version_four(connection: sqlite3.Connection) -> None:
+    dependent_view = connection.execute(
+        "SELECT name FROM sqlite_master "
+        "WHERE type = 'view' AND sql IS NOT NULL "
+        "AND instr(lower(sql), lower(?)) > 0 LIMIT 1",
+        ("conversation_turns",),
+    ).fetchone()
+    if dependent_view is not None:
+        raise LegacySchemaError(
+            "conversation_turns migration does not support dependent views"
+        )
     connection.execute("DROP INDEX conversation_turns_history_idx")
     connection.execute("DROP INDEX conversation_turns_stale_processing_idx")
     connection.execute(

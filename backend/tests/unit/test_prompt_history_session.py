@@ -23,7 +23,7 @@ def _turn(
     timestamp = datetime(2026, 7, 24, 12, index, tzinfo=UTC)
     if status is TurnStatus.COMPLETED and assistant_content is None:
         assistant_content = f"assistant-{index}"
-    if status.value == "interrupted" and assistant_content is None:
+    if status is TurnStatus.INTERRUPTED and assistant_content is None:
         assistant_content = f"heard-assistant-{index}"
     return ConversationTurn(
         turn_id=TURN_IDS[index],
