@@ -36,7 +36,7 @@ describe('AudioPlayer', () => {
 
     render(AudioPlayer, {
       props: {
-        audioData,
+        request: { audioData, onFirstPlayback: vi.fn() },
         onError: vi.fn(),
       },
     })
@@ -47,10 +47,28 @@ describe('AudioPlayer', () => {
     expect(start).toHaveBeenCalledTimes(1)
   })
 
+  test('should report the first playback at the source start boundary', async () => {
+    const onFirstPlayback = vi.fn()
+    const props = {
+      request: { audioData: new ArrayBuffer(12), onFirstPlayback },
+      onError: vi.fn(),
+    }
+
+    render(AudioPlayer, {
+      props,
+    })
+
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(1))
+    expect(onFirstPlayback).toHaveBeenCalledTimes(1)
+    expect(start.mock.invocationCallOrder[0]).toBeLessThan(
+      onFirstPlayback.mock.invocationCallOrder[0],
+    )
+  })
+
   test('should not create an AudioContext when there is no audio data', () => {
     render(AudioPlayer, {
       props: {
-        audioData: null,
+        request: null,
         onError: vi.fn(),
       },
     })
@@ -67,7 +85,7 @@ describe('AudioPlayer', () => {
 
     render(AudioPlayer, {
       props: {
-        audioData,
+        request: { audioData, onFirstPlayback: vi.fn() },
         onError,
       },
     })
@@ -81,7 +99,7 @@ describe('AudioPlayer', () => {
     const audioData = new ArrayBuffer(12)
     const rendered = render(AudioPlayer, {
       props: {
-        audioData,
+        request: { audioData, onFirstPlayback: vi.fn() },
         onError: vi.fn(),
       },
     })

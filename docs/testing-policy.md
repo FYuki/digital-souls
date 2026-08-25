@@ -54,12 +54,15 @@ npm run test:integration:backend
 npm run test:e2e:mocked
 npm run test:integration:text
 npm run test:integration:voice
+npm run baseline:websocket
 npm run lint:python
 npm run check
 npm run build
 ```
 
 `npm run test:integration:backend` は ChromaDB パッケージ、Ollama、`nomic-embed-text:latest` モデルを必要とする。
+音声品質の指標、clock、artifact schema、WebSocket baseline条件は
+[`voice-quality-measurement.md`](voice-quality-measurement.md) を参照する。
 
 CI は単体テスト、結合テスト、モックE2E、型チェック、ビルドを実行する。実接続スイートは外部サービスを必要とするため自動実行せず、Pull Request の検証欄へローカル実行結果または未実行状態を記録する。
 

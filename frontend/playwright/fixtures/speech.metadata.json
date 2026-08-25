@@ -1,0 +1,9 @@
+{
+  "fixture_version": "speech-v2",
+  "audio_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+  "sample_rate_hz": 48000,
+  "speech_start_sample": 15840,
+  "speech_end_sample": 45120,
+  "expected_transcript": "こんにちは",
+  "boundary_method": "first utterance 10ms RMS window greater than 200 PCM16 units; following silence exceeds 600ms"
+}

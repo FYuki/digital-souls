@@ -74,6 +74,20 @@ const findReachableTypescriptSources = async (entries: string[]): Promise<Map<st
 }
 
 describe('Playwright suite boundaries', () => {
+  test('controlled baseline config collects only the dedicated real-service spec', async () => {
+    const executable = join(process.cwd(), 'node_modules', '.bin', 'playwright')
+    const { stdout } = await execFileAsync(
+      executable,
+      ['test', '--list', '--config', 'playwright.controlled-baseline.config.ts'],
+      { cwd: process.cwd() },
+    )
+    const collectedLines = stdout.split('\n').filter((line) => line.includes('.spec.ts:'))
+
+    expect(collectedLines.length).toBe(1)
+    expect(collectedLines[0]).toContain('[controlled-baseline/chromium]')
+    expect(collectedLines[0]).toContain('websocket-baseline.spec.ts')
+  }, 20_000)
+
   test.each(suiteCases)('$directory specs require only $capability', async ({ directory, capability }) => {
     const specs = await findSpecs(directory)
     expect(specs.length).toBeGreaterThan(0)

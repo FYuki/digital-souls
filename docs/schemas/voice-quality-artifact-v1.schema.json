@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digital-souls.local/schemas/voice-quality-artifact-v1.schema.json",
+  "title": "音声品質集計artifact v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "measurement_kind", "transport", "run_id", "profile",
+    "fixture_version", "quantile_method", "clocks", "run_counts", "metrics",
+    "stage_outcomes", "whisper", "hardware", "resources", "network"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "measurement_kind": {
+      "enum": ["automated_test", "controlled_baseline", "dogfood"]
+    },
+    "transport": { "enum": ["websocket", "livekit"] },
+    "run_id": { "type": "string", "minLength": 1 },
+    "profile": { "type": "string", "minLength": 1 },
+    "fixture_version": { "type": "string", "minLength": 1 },
+    "quantile_method": { "const": "hyndman_fan_type_7" },
+    "clocks": { "type": "array", "items": { "$ref": "#/$defs/clock" } },
+    "run_counts": { "$ref": "#/$defs/runCounts" },
+    "metrics": { "type": "array", "items": { "$ref": "#/$defs/metric" } },
+    "stage_outcomes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/stageOutcome" }
+    },
+    "whisper": { "$ref": "#/$defs/whisper" },
+    "hardware": { "$ref": "#/$defs/hardware" },
+    "resources": { "$ref": "#/$defs/resources" },
+    "network": { "$ref": "#/$defs/network" }
+  },
+  "$defs": {
+    "clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain", "method", "unit"],
+      "properties": {
+        "domain": { "type": "string" },
+        "method": { "type": "string" },
+        "unit": { "type": "string" }
+      }
+    },
+    "runCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["warmup", "measured", "success", "failure", "excluded"],
+      "properties": {
+        "warmup": { "type": "integer", "minimum": 0 },
+        "measured": { "type": "integer", "minimum": 0 },
+        "success": { "type": "integer", "minimum": 0 },
+        "failure": { "type": "integer", "minimum": 0 },
+        "excluded": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name", "status", "unit", "start_point", "end_point", "trial_count",
+        "success_count", "failure_count", "missing_count", "not_applicable_count",
+        "excluded_count", "rate_denominator", "failure_rate_basis_points", "p50",
+        "p95", "not_applicable_reason", "excluded_outcomes"
+      ],
+      "properties": {
+        "name": { "type": "string" },
+        "status": {
+          "enum": ["measured", "not_applicable", "missing", "failed", "excluded"]
+        },
+        "unit": { "type": "string" },
+        "start_point": { "type": "string" },
+        "end_point": { "type": "string" },
+        "trial_count": { "type": "integer", "minimum": 0 },
+        "success_count": { "type": "integer", "minimum": 0 },
+        "failure_count": { "type": "integer", "minimum": 0 },
+        "missing_count": { "type": "integer", "minimum": 0 },
+        "not_applicable_count": { "type": "integer", "minimum": 0 },
+        "excluded_count": { "type": "integer", "minimum": 0 },
+        "rate_denominator": { "type": "integer", "minimum": 0 },
+        "failure_rate_basis_points": { "type": ["integer", "null"] },
+        "p50": { "type": ["number", "null"] },
+        "p95": { "type": ["number", "null"] },
+        "not_applicable_reason": { "type": ["string", "null"] },
+        "excluded_outcomes": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "not_applicable" } } },
+          "then": {
+            "properties": {
+              "not_applicable_reason": { "type": "string", "minLength": 1 }
+            }
+          },
+          "else": {
+            "properties": { "not_applicable_reason": { "type": "null" } }
+          }
+        }
+      ]
+    },
+    "stageOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "stage", "reason_code"],
+      "properties": {
+        "status": { "enum": ["success", "failed", "excluded"] },
+        "stage": { "type": ["string", "null"] },
+        "reason_code": { "type": ["string", "null"] }
+      }
+    },
+    "whisper": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "device", "compute_type"],
+      "properties": {
+        "model": { "type": "string" },
+        "device": { "type": "string" },
+        "compute_type": { "type": "string" }
+      }
+    },
+    "hardware": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description"],
+      "properties": { "description": { "type": "string" } }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "value", "reason"],
+      "properties": {
+        "status": { "enum": ["measured", "not_applicable", "missing"] },
+        "value": { "type": ["number", "null"] },
+        "reason": { "type": ["string", "null"] }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu_percent", "memory_bytes"],
+      "properties": {
+        "cpu_percent": { "$ref": "#/$defs/diagnostic" },
+        "memory_bytes": { "$ref": "#/$defs/diagnostic" }
+      }
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sent_bytes", "received_bytes", "packet_loss_basis_points", "condition"
+      ],
+      "properties": {
+        "sent_bytes": { "$ref": "#/$defs/diagnostic" },
+        "received_bytes": { "$ref": "#/$defs/diagnostic" },
+        "packet_loss_basis_points": { "$ref": "#/$defs/diagnostic" },
+        "condition": { "type": "string" }
+      }
+    }
+  }
+}

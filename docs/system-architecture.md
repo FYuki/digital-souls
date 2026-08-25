@@ -60,7 +60,8 @@
 ### バックエンド（FastAPI, `backend/app/`）
 
 * `routers/chat.py` — テキストチャットのHTTPエンドポイント
-* `routers/ws.py` — 音声チャット用WebSocketエンドポイント（STT→LLM→TTSの一連の処理、音声フレームの処理中キューを含む）
+* `routers/ws.py` — 音声チャット用WebSocketエンドポイント（STT→LLM→TTSの一連の処理、音声フレームの処理中キュー、session・utterance・response相関を含む）
+* `voice_metrics.py` — transport非依存のmetadata-only trace、集計artifact、保持、LiveKit受入目標判定
 * `chat_service.py` / `_chat_runtime.py` — チャットセッションの生成・応答生成のエントリポイント
 * `characters/loader.py` — `characters/` 配下のCharacter Card V3の検証・ロードと、`extensions.digital_souls`の型付き設定読み取り
 * `prompting/` — Character Card、RAG、保存済み履歴、現在発言を順序とtoken budgetに従って合成する単一境界
@@ -73,7 +74,7 @@
 
 ### フロントエンド（Vite + Svelte, `frontend/src/`）
 
-* `lib/audio/transport.ts` — 現行WebSocket通信を抽象化する `AudioTransport`。現在はturn、audio、error、open、close callbackと発話単位audio送信を提供する
+* `lib/audio/transport.ts` — 現行WebSocket通信を抽象化する `AudioTransport`。turn、audio、相関metadata、error、open、close callbackと発話単位audio送信を提供する
 * `lib/audio/pcm-worklet-recorder.ts` / `lib/audio/vad-assets.ts` — AudioWorkletによるPCM録音とVAD（発話区間検出）
 * `lib/AudioRecorder.svelte` / `lib/AudioPlayer.svelte` — マイク入力UI・音声再生UI
 * `lib/ChatWindow.svelte` / `lib/InputBar.svelte` — テキストチャットUI

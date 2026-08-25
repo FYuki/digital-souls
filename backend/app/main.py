@@ -86,6 +86,15 @@ from app.runtime_paths import (
     resolve_runtime_paths,
     runtime_paths_projection,
 )
+from app.voice_metrics import (
+    JsonlTraceRecorder,
+    MeasurementKind,
+    cleanup_expired_raw_traces,
+    resolve_raw_trace_root,
+)
+
+VOICE_MEASUREMENT_KIND_ENV = "VOICE_MEASUREMENT_KIND"
+VOICE_CONTROLLED_TRACE_PATH_ENV = "VOICE_CONTROLLED_TRACE_PATH"
 
 load_dotenv()
 
@@ -197,6 +206,33 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     repository_root = Path(__file__).resolve().parents[2]
     runtime_paths = resolve_runtime_paths(os.environ, repository_root)
     initialize_runtime_data_root(runtime_paths, repository_root)
+    voice_trace_recorder = None
+    voice_measurement_kind: MeasurementKind = "automated_test"
+    configured_measurement_kind = os.environ.get(VOICE_MEASUREMENT_KIND_ENV)
+    if configured_measurement_kind is not None:
+        if configured_measurement_kind != "controlled_baseline":
+            raise ValueError("VOICE_MEASUREMENT_KIND must be controlled_baseline")
+        controlled_trace_path = os.environ.get(VOICE_CONTROLLED_TRACE_PATH_ENV)
+        if controlled_trace_path is None:
+            raise ValueError("VOICE_CONTROLLED_TRACE_PATH is required")
+        trace_path = Path(controlled_trace_path).resolve()
+        data_root = runtime_paths.data_root.resolve()
+        if data_root != trace_path.parent and data_root not in trace_path.parents:
+            raise ValueError("controlled trace must be inside the controlled data root")
+        voice_trace_recorder = JsonlTraceRecorder(trace_path)
+        voice_measurement_kind = "controlled_baseline"
+    elif runtime_paths.environment_id == "dogfood":
+        raw_trace_root = resolve_raw_trace_root(
+            repository_root=repository_root,
+            data_root=runtime_paths.data_root,
+            measurement_kind="dogfood",
+        )
+        raw_trace_root.mkdir(parents=True, exist_ok=True)
+        cleanup_expired_raw_traces(raw_trace_root, now=datetime.now(UTC))
+        voice_trace_recorder = JsonlTraceRecorder(
+            raw_trace_root / f"{uuid4()}.jsonl"
+        )
+        voice_measurement_kind = "dogfood"
     from app.restore_intent import require_no_restore_intent
 
     require_no_restore_intent(runtime_paths.restore_intent_path)
@@ -288,6 +324,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         persona_memory_provider_state_set = False
         addon_record_provider_state_set = False
         rag_admission_service_state_set = False
+        voice_trace_recorder_state_set = False
+        voice_measurement_kind_state_set = False
         semantic_classifier_client = None
         memory_index_scheduler_started = False
         memory_formation_scheduler_started = False
@@ -296,6 +334,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         memory_consolidation_client = None
         memory_consolidation_classifier_client = None
         try:
+            app.state.voice_measurement_kind = voice_measurement_kind
+            voice_measurement_kind_state_set = True
+            if voice_trace_recorder is not None:
+                app.state.voice_trace_recorder = voice_trace_recorder
+                voice_trace_recorder_state_set = True
             app.state.conversation_history_repository = conversation_history_repository
             repository_state_set = True
             app.state.conversation_lifecycle_service = conversation_lifecycle_service
@@ -460,6 +503,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             if memory_index_scheduler_started:
                 await memory_index_scheduler.stop()
             with ExitStack() as cleanup:
+                if voice_trace_recorder_state_set:
+                    cleanup.callback(delattr, app.state, "voice_trace_recorder")
+                if voice_measurement_kind_state_set:
+                    cleanup.callback(delattr, app.state, "voice_measurement_kind")
                 if chat_service_state_set:
                     cleanup.callback(delattr, app.state, "chat_service")
                 if audio_pipeline_state_set:

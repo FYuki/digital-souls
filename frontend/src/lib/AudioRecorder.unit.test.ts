@@ -49,7 +49,7 @@ vi.mock('./audio/pcm-worklet-recorder', () => ({
 }))
 
 const createCaptureMock = () => {
-  return vi.fn((_pcmData: ArrayBuffer): void => undefined)
+  return vi.fn((_pcmData: ArrayBuffer, _metadata: object): void => undefined)
 }
 
 describe('AudioRecorder', () => {
@@ -179,9 +179,18 @@ describe('AudioRecorder', () => {
     const button = screen.getByRole('button', { name: 'マイクをオンにする' })
     await fireEvent.click(button)
     await waitFor(() => expect(vadStart).toHaveBeenCalledTimes(1))
+    vadOptions.onSpeechStart()
     vadOptions.onSpeechEnd()
 
-    await waitFor(() => expect(onAudioCaptured).toHaveBeenCalledWith(capturedPcmData))
+    await waitFor(() => expect(onAudioCaptured).toHaveBeenCalledWith(
+      capturedPcmData,
+      {
+        capturedAudioStartClientMs: expect.any(Number),
+        vadSpeechEndClientMs: expect.any(Number),
+        utteranceFinalizedClientMs: expect.any(Number),
+        requiredManualOperations: 0,
+      },
+    ))
     expect(recorderStopAndTake).toHaveBeenCalledTimes(1)
     expect(recorderClose).not.toHaveBeenCalled()
     expect(button.classList.contains('mic-standby')).toBe(true)

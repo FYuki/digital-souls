@@ -1,5 +1,9 @@
+import inspect
+from types import SimpleNamespace
+
 import pytest
-from app.chat_service import ChatReply
+from app.chat_service import ChatReply, PersistedPrivacySkippedTurn
+from app.privacy.contracts import HistoryDecisionReasonCode
 from tests.chat_reply_test_support import persisted_reply
 from tests.conversation_history_test_support import TURN_ID
 
@@ -120,6 +124,127 @@ class TestAudioPipelineService:
 
 
 class TestAudioPipelineSession:
+    def test_records_privacy_skip_as_an_excluded_response(self):
+        import app.audio_pipeline as audio_pipeline
+        from app.characters.loader import VoicevoxTtsConfig
+
+        recorded = []
+        measurement = SimpleNamespace(
+            measurement_kind="automated_test",
+            session_id="session-1",
+            utterance_id="utterance-1",
+            response_id="response-1",
+            record=recorded.append,
+            clock_ns=iter(range(1_000_000, 20_000_000, 1_000_000)).__next__,
+        )
+        privacy_turn = PersistedPrivacySkippedTurn(
+            turn_id=TURN_ID,
+            reason_code=HistoryDecisionReasonCode.STORAGE_OPT_OUT,
+            sanitizer_version="sanitizer-v1",
+            policy_version="policy-v1",
+        )
+        session = audio_pipeline.AudioPipelineSession(
+            tts_config=VoicevoxTtsConfig(speaker_id=14),
+            transcriber=_StubTranscriber(),
+            speech_synthesizer=_StubVoicevoxClient(),
+            measurement=measurement,
+        )
+
+        _message, _reply, audio = session.generate_response_audio(
+            b"\x01\x00",
+            lambda _message: ChatReply(turn_id=TURN_ID, persisted_turn=privacy_turn),
+        )
+
+        assert audio == b""
+        excluded = recorded[-1]
+        assert excluded.outcome == "excluded"
+        assert excluded.reason_code == "privacy_skip"
+        assert (excluded.session_id, excluded.utterance_id, excluded.response_id) == (
+            "session-1",
+            "utterance-1",
+            "response-1",
+        )
+
+    def test_records_correlated_stt_llm_and_tts_stage_events(self):
+        import app.audio_pipeline as audio_pipeline
+        from app.characters.loader import VoicevoxTtsConfig
+
+        recorded = []
+        measurement = SimpleNamespace(
+            measurement_kind="automated_test",
+            session_id="session-1",
+            utterance_id="utterance-1",
+            response_id="response-1",
+            record=recorded.append,
+            clock_ns=iter(range(1_000_000, 20_000_000, 1_000_000)).__next__,
+        )
+        assert "measurement" in inspect.signature(
+            audio_pipeline.AudioPipelineSession
+        ).parameters, "AudioPipelineSessionに計測依存の注入経路がありません"
+        session = audio_pipeline.AudioPipelineSession(
+            tts_config=VoicevoxTtsConfig(speaker_id=14),
+            transcriber=_StubTranscriber("今日の音声"),
+            speech_synthesizer=_StubVoicevoxClient(),
+            measurement=measurement,
+        )
+
+        session.generate_response_audio(
+            b"\x01\x00",
+            lambda message: persisted_reply(f"応答:{message}", TURN_ID),
+        )
+
+        assert [event.name for event in recorded] == [
+            "stt_started",
+            "stt_completed",
+            "llm_started",
+            "first_text_delta",
+            "llm_completed",
+            "tts_started",
+            "tts_completed",
+        ]
+        assert all(event.session_id == "session-1" for event in recorded)
+        assert all(event.utterance_id == "utterance-1" for event in recorded)
+        assert all(event.response_id == "response-1" for event in recorded)
+
+    def test_records_a_safe_failed_stage_outcome(self):
+        import app.audio_pipeline as audio_pipeline
+        from app.characters.loader import VoicevoxTtsConfig
+
+        class FailingTranscriber:
+            def transcribe(self, audio: bytes) -> str:
+                raise ValueError("SECRET_TRANSCRIBER_DETAIL_07D1")
+
+        recorded = []
+        measurement = SimpleNamespace(
+            measurement_kind="automated_test",
+            session_id="session-1",
+            utterance_id="utterance-1",
+            response_id="response-1",
+            record=recorded.append,
+            clock_ns=iter(range(1_000_000, 20_000_000, 1_000_000)).__next__,
+        )
+        if "measurement" not in inspect.signature(
+            audio_pipeline.AudioPipelineSession
+        ).parameters:
+            pytest.skip("計測依存の注入経路が実装された後にfailure outcomeを検証します")
+        session = audio_pipeline.AudioPipelineSession(
+            tts_config=VoicevoxTtsConfig(speaker_id=14),
+            transcriber=FailingTranscriber(),
+            speech_synthesizer=_StubVoicevoxClient(),
+            measurement=measurement,
+        )
+
+        with pytest.raises(audio_pipeline.AudioPipelineStepError):
+            session.generate_response_audio(
+                b"\x01\x00",
+                lambda message: persisted_reply("応答", TURN_ID),
+            )
+
+        assert [event.name for event in recorded] == ["stt_started", "stt_failed"]
+        assert recorded[-1].outcome == "failure"
+        assert recorded[-1].reason_code == "stt_upstream_failed"
+        assert "SECRET_TRANSCRIBER_DETAIL_07D1" not in str(recorded[-1])
+
     def test_returns_transcript_reply_and_audio(self):
         import app.audio_pipeline as audio_pipeline
         from app.characters.loader import VoicevoxTtsConfig

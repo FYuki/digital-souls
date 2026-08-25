@@ -30,6 +30,9 @@ frontend/.playwright-cache/
 # ログ
 *.log
 
+# 音声品質計測の生trace（匿名化済みaggregateのみ個別に追跡する）
+voice-metrics/raw/
+
 # Python 生成物
 __pycache__/
 *.py[cod]

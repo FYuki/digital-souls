@@ -14,7 +14,8 @@
     "test:module": "vitest run .module.test.ts",
     "test:e2e:mocked": "playwright test --config playwright.mocked.config.ts",
     "test:integration:text": "playwright test --config playwright.integration-text.config.ts",
-    "test:integration:voice": "playwright test --config playwright.integration-voice.config.ts"
+    "test:integration:voice": "playwright test --config playwright.integration-voice.config.ts",
+    "baseline:websocket": "playwright test --config playwright.controlled-baseline.config.ts && PYTHONPATH=../backend python3 -m app.voice_baseline finalize --manifest test-results/controlled-baseline/trial-manifest.json --trace test-results/controlled-baseline/runtime-data/voice-metrics/controlled-trace.jsonl --output ../docs/artifacts/websocket-baseline-v1.json --schema ../docs/schemas/voice-quality-artifact-v1.schema.json"
   },
   "dependencies": {
     "@ricky0123/vad-web": "^0.0.30",

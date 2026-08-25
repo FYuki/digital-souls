@@ -1,3 +1,12 @@
+<script context="module" lang="ts">
+  export type AudioCaptureMetadata = {
+    capturedAudioStartClientMs: number
+    vadSpeechEndClientMs: number
+    utteranceFinalizedClientMs: number
+    requiredManualOperations: number
+  }
+</script>
+
 <script lang="ts">
   import { onDestroy } from 'svelte'
   import { MicVAD, type RealTimeVADOptions } from '@ricky0123/vad-web'
@@ -14,13 +23,17 @@
 
   export let disabled: boolean
   export let forceOff: boolean
-  export let onAudioCaptured: (pcmData: ArrayBuffer) => void
+  export let onAudioCaptured: (
+    pcmData: ArrayBuffer,
+    metadata: AudioCaptureMetadata,
+  ) => void
   export let onError: (error: Error) => void
 
   let vad: MicVadInstance | null = null
   let recorder: AudioWorkletPcmRecorder | null = null
   let status: MicStatus = 'off'
   let isLoading = false
+  let capturedAudioStartClientMs: number | null = null
 
   const requestMicrophoneStream = (): Promise<MediaStream> => {
     return navigator.mediaDevices.getUserMedia({
@@ -41,6 +54,7 @@
     pauseStream: async () => undefined,
     onSpeechStart: () => {
       try {
+        capturedAudioStartClientMs = performance.now()
         getRecorder().start()
         setStatus('on')
       } catch (error) {
@@ -124,9 +138,20 @@
   }
 
   const handleSpeechEnd = async () => {
+    const vadSpeechEndClientMs = performance.now()
     try {
+      if (capturedAudioStartClientMs === null) {
+        throw new Error('Speech start timestamp is not available')
+      }
       const pcmData = await getRecorder().stopAndTake()
-      onAudioCaptured(pcmData)
+      const utteranceFinalizedClientMs = performance.now()
+      onAudioCaptured(pcmData, {
+        capturedAudioStartClientMs,
+        vadSpeechEndClientMs,
+        utteranceFinalizedClientMs,
+        requiredManualOperations: 0,
+      })
+      capturedAudioStartClientMs = null
 
       setStatus('standby')
     } catch (error) {

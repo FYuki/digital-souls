@@ -20,6 +20,7 @@ describe('test execution entrypoints', () => {
       'test:e2e:mocked': expect.stringContaining('test:e2e:mocked'),
       'test:integration:text': expect.stringContaining('test:integration:text'),
       'test:integration:voice': expect.stringContaining('test:integration:voice'),
+      'baseline:websocket': expect.stringContaining('baseline:websocket'),
       'lint:python': expect.stringMatching(/backend\/app/),
     }))
   })
@@ -33,6 +34,7 @@ describe('test execution entrypoints', () => {
       'test:e2e:mocked': expect.stringContaining('playwright.mocked.config.ts'),
       'test:integration:text': expect.stringContaining('playwright.integration-text.config.ts'),
       'test:integration:voice': expect.stringContaining('playwright.integration-voice.config.ts'),
+      'baseline:websocket': expect.stringContaining('playwright.controlled-baseline.config.ts'),
     }))
     expect(manifest.scripts).not.toHaveProperty('test:e2e')
   })

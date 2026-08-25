@@ -122,6 +122,22 @@ const latestSocket = (): FakeWebSocket => {
   return socket
 }
 
+const expectCorrelatedAudioSent = (socket: FakeWebSocket) => {
+  expect(socket.sent).toHaveLength(2)
+  expect(JSON.parse(String(socket.sent[0]))).toEqual({
+    type: 'audio_metadata',
+    event_id: TURN_ID,
+    session_id: TURN_ID,
+    utterance_id: TURN_ID,
+    captured_audio_start_client_ms: expect.any(Number),
+    vad_speech_end_client_ms: expect.any(Number),
+    utterance_finalized_client_ms: expect.any(Number),
+    response_decision_client_ms: expect.any(Number),
+    required_manual_operations: 0,
+  })
+  expect(socket.sent[1]).toBe(audioMocks.pcmData)
+}
+
 const selectConversation = async (): Promise<FakeWebSocket> => {
   await fireEvent.click(
     await screen.findByRole('button', { name: new RegExp(`^${CONVERSATION_ID}$`) }),
@@ -141,6 +157,24 @@ const audioTurnFrame = (userContent: string, assistantContent: string): MessageE
     data: JSON.stringify({ type: 'text', turn: persistedTurn(userContent, assistantContent) }),
   })
 )
+
+const audioMetadataFrame = (
+  sessionId: string,
+  utteranceId: string,
+  responseId: string,
+): MessageEvent => new MessageEvent('message', {
+  data: JSON.stringify({
+    type: 'audio_response_metadata',
+    session_id: sessionId,
+    utterance_id: utteranceId,
+    response_id: responseId,
+  }),
+})
+
+const measurementEvents = (socket: FakeWebSocket) => socket.sent
+  .filter((frame): frame is string => typeof frame === 'string')
+  .map((frame) => JSON.parse(frame) as Record<string, unknown>)
+  .filter((frame) => frame.type === 'measurement_event')
 
 describe('App conversation lifecycle', () => {
   beforeEach(() => {
@@ -731,8 +765,9 @@ describe('App conversation lifecycle', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
     await waitFor(() => expect(audioMocks.vadStart).toHaveBeenCalledTimes(1))
     if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
+    audioMocks.vadOptions.onSpeechStart()
     audioMocks.vadOptions.onSpeechEnd()
-    await waitFor(() => expect(socket.sent).toEqual([audioMocks.pcmData]))
+    await waitFor(() => expectCorrelatedAudioSent(socket))
 
     expect(screen.getByRole<HTMLButtonElement>('button', { name: SECOND_CONVERSATION_ID }).disabled).toBe(true)
     expect(screen.getByRole<HTMLButtonElement>('button', { name: `アーカイブ ${CONVERSATION_ID}` }).disabled).toBe(true)
@@ -803,8 +838,9 @@ describe('App conversation lifecycle', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
     await waitFor(() => expect(audioMocks.vadStart).toHaveBeenCalledTimes(1))
     if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
+    audioMocks.vadOptions.onSpeechStart()
     audioMocks.vadOptions.onSpeechEnd()
-    await waitFor(() => expect(socket.sent).toEqual([audioMocks.pcmData]))
+    await waitFor(() => expectCorrelatedAudioSent(socket))
 
     socket.onerror?.()
 
@@ -870,7 +906,7 @@ describe('App conversation lifecycle', () => {
     if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
     audioMocks.vadOptions.onSpeechStart()
     audioMocks.vadOptions.onSpeechEnd()
-    await waitFor(() => expect(socket.sent).toEqual([audioMocks.pcmData]))
+    await waitFor(() => expectCorrelatedAudioSent(socket))
 
     socket.onmessage?.(audioTurnFrame('明日の予定を教えて', '明日は午前中が空いています。'))
     socket.onmessage?.(new MessageEvent('message', { data: wav }))
@@ -881,14 +917,65 @@ describe('App conversation lifecycle', () => {
     expect(start).toHaveBeenCalledTimes(1)
   })
 
+  test('音声受信と再生開始を同じ応答IDで送信する', async () => {
+    render(App)
+    const socket = await openSocket()
+    const ids = {
+      sessionId: '01992f57-8c65-79d0-924f-e2cd79bc01cd',
+      utteranceId: '01992f57-8c65-79d0-924f-e2cd79bc02de',
+      responseId: '01992f57-8c65-79d0-924f-e2cd79bc03ef',
+    }
+
+    socket.onmessage?.(audioMetadataFrame(ids.sessionId, ids.utteranceId, ids.responseId))
+    socket.onmessage?.(new MessageEvent('message', { data: new ArrayBuffer(12) }))
+
+    await waitFor(() => expect(measurementEvents(socket)).toHaveLength(2))
+    expect(measurementEvents(socket).map((event) => event.name)).toEqual([
+      'client_audio_received',
+      'first_playback',
+    ])
+    for (const event of measurementEvents(socket)) {
+      expect(event).toMatchObject({
+        session_id: ids.sessionId,
+        utterance_id: ids.utteranceId,
+        response_id: ids.responseId,
+      })
+    }
+  })
+
+  test('連続応答のデコード中も各再生要求の応答IDを保持する', async () => {
+    const decoders: Array<(value: { duration: number }) => void> = []
+    decodeAudioData.mockImplementation(() => new Promise((resolve) => decoders.push(resolve)))
+    render(App)
+    const socket = await openSocket()
+    const responseA = '01992f57-8c65-79d0-924f-e2cd79bc03aa'
+    const responseB = '01992f57-8c65-79d0-924f-e2cd79bc03bb'
+
+    socket.onmessage?.(audioMetadataFrame(TURN_ID, TURN_ID, responseA))
+    socket.onmessage?.(new MessageEvent('message', { data: new ArrayBuffer(12) }))
+    await waitFor(() => expect(decoders).toHaveLength(1))
+    socket.onmessage?.(audioMetadataFrame(TURN_ID, TURN_ID, responseB))
+    socket.onmessage?.(new MessageEvent('message', { data: new ArrayBuffer(16) }))
+    await waitFor(() => expect(decoders).toHaveLength(2))
+    await act(() => decoders[0]({ duration: 1 }))
+    await act(() => decoders[1]({ duration: 1 }))
+
+    await waitFor(() => expect(measurementEvents(socket)).toHaveLength(4))
+    const playbackResponses = measurementEvents(socket)
+      .filter((event) => event.name === 'first_playback')
+      .map((event) => event.response_id)
+    expect(playbackResponses).toEqual([responseA, responseB])
+  })
+
   test('保存済みturn到着後も音声バイナリ到着までは入力を無効にする', async () => {
     render(App)
     const socket = await openSocket()
     await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
     await waitFor(() => expect(audioMocks.vadStart).toHaveBeenCalledTimes(1))
     if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
+    audioMocks.vadOptions.onSpeechStart()
     audioMocks.vadOptions.onSpeechEnd()
-    await waitFor(() => expect(socket.sent).toHaveLength(1))
+    await waitFor(() => expectCorrelatedAudioSent(socket))
 
     socket.onmessage?.(audioTurnFrame('音声の途中です', '再生準備中です。'))
 
@@ -904,8 +991,9 @@ describe('App conversation lifecycle', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
     await waitFor(() => expect(audioMocks.vadStart).toHaveBeenCalledTimes(1))
     if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
+    audioMocks.vadOptions.onSpeechStart()
     audioMocks.vadOptions.onSpeechEnd()
-    await waitFor(() => expect(socket.sent).toHaveLength(1))
+    await waitFor(() => expectCorrelatedAudioSent(socket))
 
     const microphone = screen.getByRole<HTMLButtonElement>('button', { name: 'マイクをオフにする' })
     expect(microphone.disabled).toBe(true)
@@ -999,8 +1087,9 @@ describe('App conversation lifecycle', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
     await waitFor(() => expect(audioMocks.vadStart).toHaveBeenCalledTimes(1))
     if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
+    audioMocks.vadOptions.onSpeechStart()
     audioMocks.vadOptions.onSpeechEnd()
-    await waitFor(() => expect(socket.sent).toHaveLength(1))
+    await waitFor(() => expectCorrelatedAudioSent(socket))
 
     expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(true)
     socket.onmessage?.(audioTurnFrame('音声の質問', '音声の応答です。'))
@@ -1014,8 +1103,9 @@ describe('App conversation lifecycle', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
     await waitFor(() => expect(audioMocks.vadStart).toHaveBeenCalledTimes(1))
     if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
+    audioMocks.vadOptions.onSpeechStart()
     audioMocks.vadOptions.onSpeechEnd()
-    await waitFor(() => expect(socket.sent).toHaveLength(1))
+    await waitFor(() => expectCorrelatedAudioSent(socket))
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'マイクをオフにする' }).disabled).toBe(true)
 
     socket.onmessage?.(new MessageEvent('message', { data: new ArrayBuffer(12) }))
@@ -1030,8 +1120,9 @@ describe('App conversation lifecycle', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
     await waitFor(() => expect(audioMocks.vadStart).toHaveBeenCalledTimes(1))
     if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
+    audioMocks.vadOptions.onSpeechStart()
     audioMocks.vadOptions.onSpeechEnd()
-    await waitFor(() => expect(socket.sent).toHaveLength(1))
+    await waitFor(() => expectCorrelatedAudioSent(socket))
 
     socket.onmessage?.(new MessageEvent('message', { data: new ArrayBuffer(12) }))
 

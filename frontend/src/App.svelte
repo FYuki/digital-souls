@@ -3,6 +3,7 @@
 
   import AudioPlayer from './lib/AudioPlayer.svelte'
   import AudioRecorder from './lib/AudioRecorder.svelte'
+  import type { AudioCaptureMetadata } from './lib/AudioRecorder.svelte'
   import CharacterSwitcher from './lib/CharacterSwitcher.svelte'
   import ChatWindow from './lib/ChatWindow.svelte'
   import ConversationSidebar from './lib/ConversationSidebar.svelte'
@@ -12,6 +13,7 @@
   import {
     WebSocketAudioTransport,
     type AudioTransport,
+    type AudioResponseMetadata,
     type BackendErrorMessage,
     type TransportCallbacks,
   } from './lib/audio/transport'
@@ -49,13 +51,19 @@
     createConversationSessionManager(),
   )
   type PendingRequest = 'text' | 'audio' | null
+  type AudioPlaybackRequest = {
+    audioData: ArrayBuffer
+    onFirstPlayback: () => void
+  }
 
   let pendingRequest: PendingRequest = null
   let isConnected = false
-  let audioData: ArrayBuffer | null = null
+  let playbackRequest: AudioPlaybackRequest | null = null
   let transport: AudioTransport | null = null
   let transportConversationKey: string | null = null
   let applicationError: string | null = null
+  let transportSessionId: string | null = null
+  let responseMetadata: AudioResponseMetadata | null = null
   let showingMemoryManagement = false
 
   $: interactionsDisabled = pendingRequest !== null
@@ -74,6 +82,8 @@
     const previous = transport
     transport = null
     transportConversationKey = null
+    transportSessionId = null
+    responseMetadata = null
     isConnected = false
     previous?.disconnect()
   }
@@ -87,6 +97,7 @@
   const createTransportCallbacks = (
     context: SelectedConversationContext,
     isCurrent: () => boolean,
+    sourceTransport: () => AudioTransport,
   ): TransportCallbacks => ({
     onTurnMessage: (turn: ConversationTurn) => {
       if (!isCurrent()) return
@@ -95,8 +106,34 @@
     },
     onAudioMessage: (audio: ArrayBuffer) => {
       if (!isCurrent()) return
-      audioData = audio
+      const metadata = responseMetadata
+      responseMetadata = null
+      const source = sourceTransport()
+      if (metadata !== null) {
+        source.sendMeasurementEvent({
+          ...metadata,
+          eventId: crypto.randomUUID(),
+          name: 'client_audio_received',
+          timestamp: performance.now(),
+        })
+      }
+      playbackRequest = {
+        audioData: audio,
+        onFirstPlayback: () => {
+          if (metadata === null || transport !== source) return
+          source.sendMeasurementEvent({
+            ...metadata,
+            eventId: crypto.randomUUID(),
+            name: 'first_playback',
+            timestamp: performance.now(),
+          })
+        },
+      }
       pendingRequest = null
+    },
+    onAudioResponseMetadata: (metadata: AudioResponseMetadata) => {
+      if (!isCurrent()) return
+      responseMetadata = metadata
     },
     onError: (_error: BackendErrorMessage) => {
       if (!isCurrent()) return
@@ -124,13 +161,19 @@
     const context = conversationController.selectedContext()
     if (context === null) return
     let nextTransport: AudioTransport
-    const callbacks = createTransportCallbacks(context, () => transport === nextTransport)
+    const nextSessionId = crypto.randomUUID()
+    const callbacks = createTransportCallbacks(
+      context,
+      () => transport === nextTransport,
+      () => nextTransport,
+    )
     nextTransport = new WebSocketAudioTransport(
       resolveAudioWebSocketUrl(character),
       conversationId,
       callbacks,
     )
     transport = nextTransport
+    transportSessionId = nextSessionId
     transportConversationKey = nextKey
     void nextTransport.connect().catch(() => {
       if (transport !== nextTransport) return
@@ -174,11 +217,26 @@
     void conversationController.selectConversation(conversationId)
   }
 
-  const handleAudioCaptured = (pcmData: ArrayBuffer) => {
-    if (!isConnected || interactionsDisabled || transport === null) return
+  const handleAudioCaptured = (
+    pcmData: ArrayBuffer,
+    capture: AudioCaptureMetadata,
+  ) => {
+    if (
+      !isConnected
+      || interactionsDisabled
+      || transport === null
+      || transportSessionId === null
+    ) return
     pendingRequest = 'audio'
     try {
-      transport.sendAudio(pcmData)
+      responseMetadata = null
+      transport.sendAudio(pcmData, {
+        eventId: crypto.randomUUID(),
+        sessionId: transportSessionId,
+        utteranceId: crypto.randomUUID(),
+        ...capture,
+        responseDecisionClientMs: performance.now(),
+      })
     } catch {
       appendApplicationError()
       pendingRequest = null
@@ -223,7 +281,10 @@
         onError={appendApplicationError}
       />
     </div>
-    <AudioPlayer {audioData} onError={appendApplicationError} />
+    <AudioPlayer
+      request={playbackRequest}
+      onError={appendApplicationError}
+    />
   </section>
   {/if}
 </main>
