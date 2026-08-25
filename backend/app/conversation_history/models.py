@@ -9,6 +9,7 @@ from app.privacy.contracts import HistoryDecisionReasonCode
 class TurnStatus(str, Enum):
     PROCESSING = "processing"
     COMPLETED = "completed"
+    INTERRUPTED = "interrupted"
     FAILED = "failed"
     PRIVACY_SKIPPED = "privacy_skipped"
 

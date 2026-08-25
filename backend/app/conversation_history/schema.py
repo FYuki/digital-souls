@@ -7,8 +7,9 @@ from app.conversation_history.errors import LegacySchemaError
 from app.conversation_history.sqlite_lease import normal_sqlite_access
 from app.privacy.contracts import HistoryDecisionReasonCode
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 _VERSION_TWO_SCHEMA_VERSION = 2
+_VERSION_THREE_SCHEMA_VERSION = 3
 CURRENT_TABLES = frozenset(
     {
         "conversations",
@@ -45,7 +46,10 @@ def inspect_conversation_history_artifact_schema(
             schema_version=version,
             tables=tables,
             is_current=_is_current_schema(connection),
-            migration_required=_is_version_two_schema(connection),
+            migration_required=(
+                _is_version_two_schema(connection)
+                or _is_version_three_schema(connection)
+            ),
         )
 _VERSION_TWO_TABLES = frozenset({"conversations", "conversation_turns"})
 CONVERSATIONS_COLUMNS = (
@@ -128,7 +132,7 @@ CREATE TABLE wal_cleanup_jobs (
 )
 """
 
-CONVERSATION_TURNS_SQL = f"""
+_VERSION_THREE_CONVERSATION_TURNS_SQL = f"""
 CREATE TABLE conversation_turns (
     turn_id TEXT PRIMARY KEY CHECK (
         {_uuid4_check("turn_id")}
@@ -182,6 +186,23 @@ CREATE TABLE conversation_turns (
     )
 )
 """
+
+CONVERSATION_TURNS_SQL = _VERSION_THREE_CONVERSATION_TURNS_SQL.replace(
+    "status IN ('processing', 'completed', 'failed', 'privacy_skipped')",
+    "status IN ('processing', 'completed', 'interrupted', 'failed', 'privacy_skipped')",
+).replace(
+    "        OR (\n            status = 'privacy_skipped'",
+    """        OR (
+            status = 'interrupted'
+            AND user_content IS NOT NULL
+            AND assistant_content IS NOT NULL
+            AND privacy_reason_code IS NULL
+            AND sanitizer_version IS NULL
+            AND policy_version IS NULL
+        )
+        OR (
+            status = 'privacy_skipped'""",
+)
 
 HISTORY_INDEX_SQL = """
 CREATE INDEX conversation_turns_history_idx
@@ -257,7 +278,7 @@ def _has_current_definitions(connection: sqlite3.Connection) -> bool:
 def _is_version_two_schema(connection: sqlite3.Connection) -> bool:
     expected_definitions = (
         ("table", "conversations", _VERSION_TWO_CONVERSATIONS_SQL),
-        ("table", "conversation_turns", CONVERSATION_TURNS_SQL),
+        ("table", "conversation_turns", _VERSION_THREE_CONVERSATION_TURNS_SQL),
         ("index", "conversation_turns_history_idx", HISTORY_INDEX_SQL),
         ("index", "conversation_turns_stale_processing_idx", STALE_INDEX_SQL),
     )
@@ -284,6 +305,33 @@ def _is_current_schema(connection: sqlite3.Connection) -> bool:
     )
 
 
+def _is_version_three_schema(connection: sqlite3.Connection) -> bool:
+    expected_definitions = (
+        ("table", "conversation_turns", _VERSION_THREE_CONVERSATION_TURNS_SQL),
+        ("table", "wal_cleanup_jobs", WAL_CLEANUP_JOBS_SQL),
+        ("index", "conversation_turns_history_idx", HISTORY_INDEX_SQL),
+        ("index", "conversation_turns_stale_processing_idx", STALE_INDEX_SQL),
+    )
+    return (
+        _user_tables(connection) == CURRENT_TABLES
+        and _schema_object_sql(connection, "table", "conversations")
+        in {
+            _normalized_sql(CONVERSATIONS_SQL),
+            _normalized_sql(_MIGRATED_CONVERSATIONS_SQL),
+        }
+        and _column_names(connection, "conversations") == CONVERSATIONS_COLUMNS
+        and _column_names(connection, "conversation_turns")
+        == CONVERSATION_TURNS_COLUMNS
+        and connection.execute("PRAGMA user_version").fetchone()[0]
+        == _VERSION_THREE_SCHEMA_VERSION
+        and all(
+            _schema_object_sql(connection, object_type, name)
+            == _normalized_sql(sql)
+            for object_type, name, sql in expected_definitions
+        )
+    )
+
+
 def _has_current_schema_contract(connection: sqlite3.Connection) -> bool:
     return (
         _column_names(connection, "conversations") == CONVERSATIONS_COLUMNS
@@ -298,9 +346,33 @@ def _has_current_schema_contract(connection: sqlite3.Connection) -> bool:
 def _migrate_version_two_schema(connection: sqlite3.Connection) -> None:
     connection.execute("ALTER TABLE conversations ADD COLUMN archived_at TEXT")
     connection.execute(WAL_CLEANUP_JOBS_SQL)
-    connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+    _migrate_turn_contract_to_version_four(connection)
     if not _is_current_schema(connection):
         raise LegacySchemaError("version two migration did not create current schema")
+
+
+def _migrate_turn_contract_to_version_four(connection: sqlite3.Connection) -> None:
+    connection.execute("DROP INDEX conversation_turns_history_idx")
+    connection.execute("DROP INDEX conversation_turns_stale_processing_idx")
+    connection.execute(
+        "ALTER TABLE conversation_turns RENAME TO conversation_turns_version_three"
+    )
+    connection.execute(CONVERSATION_TURNS_SQL)
+    columns = ", ".join(CONVERSATION_TURNS_COLUMNS)
+    connection.execute(
+        f"INSERT INTO conversation_turns ({columns}) "
+        f"SELECT {columns} FROM conversation_turns_version_three"
+    )
+    connection.execute("DROP TABLE conversation_turns_version_three")
+    connection.execute(HISTORY_INDEX_SQL)
+    connection.execute(STALE_INDEX_SQL)
+    connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
+
+def _migrate_version_three_schema(connection: sqlite3.Connection) -> None:
+    _migrate_turn_contract_to_version_four(connection)
+    if not _is_current_schema(connection):
+        raise LegacySchemaError("version three migration did not create current schema")
 
 
 def initialize_conversation_history_schema(database_path: Path) -> None:
@@ -318,6 +390,10 @@ def initialize_conversation_history_schema(database_path: Path) -> None:
                     return
                 if _is_version_two_schema(connection):
                     _migrate_version_two_schema(connection)
+                    connection.commit()
+                    return
+                if _is_version_three_schema(connection):
+                    _migrate_version_three_schema(connection)
                     connection.commit()
                     return
                 raise LegacySchemaError("existing database does not use current schema")

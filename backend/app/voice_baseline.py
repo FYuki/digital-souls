@@ -250,7 +250,7 @@ def finalize_baseline(
         raise ValueError("aggregate must contain exactly 100 measured trials")
     serialized = artifact.model_dump(mode="json")
     _assert_anonymous(serialized)
-    from jsonschema import Draft202012Validator  # type: ignore[import-untyped]
+    from jsonschema import Draft202012Validator
 
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     Draft202012Validator.check_schema(schema)

@@ -8,7 +8,6 @@ from app.backup_restore.models import CONVERSATION_ARTIFACT_FILENAME
 from app.conversation_history import schema
 from app.conversation_history.errors import LegacySchemaError
 from app.conversation_history.schema import (
-    CONVERSATION_TURNS_SQL,
     HISTORY_INDEX_SQL,
     STALE_INDEX_SQL,
     initialize_conversation_history_schema,
@@ -41,11 +40,75 @@ CREATE TABLE conversations (
 )
 """
 
+VERSION_THREE_CONVERSATION_TURNS_SQL = """
+CREATE TABLE conversation_turns (
+    turn_id TEXT PRIMARY KEY CHECK (
+        length(turn_id) = 36
+        AND length(replace(turn_id, '-', '')) = 32
+        AND substr(turn_id, 9, 1) = '-'
+        AND substr(turn_id, 14, 1) = '-'
+        AND substr(turn_id, 15, 1) = '4'
+        AND substr(turn_id, 19, 1) = '-'
+        AND substr(turn_id, 20, 1) IN ('8', '9', 'a', 'b')
+        AND substr(turn_id, 24, 1) = '-'
+        AND lower(turn_id) = turn_id
+        AND replace(turn_id, '-', '') NOT GLOB '*[^0-9a-f]*'
+    ),
+    character_id TEXT NOT NULL,
+    conversation_id TEXT NOT NULL,
+    user_content TEXT,
+    assistant_content TEXT,
+    status TEXT NOT NULL CHECK (
+        status IN ('processing', 'completed', 'failed', 'privacy_skipped')
+    ),
+    privacy_reason_code TEXT,
+    sanitizer_version TEXT,
+    policy_version TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (character_id, conversation_id)
+        REFERENCES conversations (character_id, conversation_id),
+    CHECK (
+        (
+            status = 'processing'
+            AND user_content IS NOT NULL
+            AND assistant_content IS NULL
+            AND privacy_reason_code IS NULL
+            AND sanitizer_version IS NULL
+            AND policy_version IS NULL
+        )
+        OR (
+            status = 'completed'
+            AND user_content IS NOT NULL
+            AND assistant_content IS NOT NULL
+            AND privacy_reason_code IS NULL
+            AND sanitizer_version IS NULL
+            AND policy_version IS NULL
+        )
+        OR (
+            status = 'failed'
+            AND user_content IS NOT NULL
+            AND privacy_reason_code IS NULL
+            AND sanitizer_version IS NULL
+            AND policy_version IS NULL
+        )
+        OR (
+            status = 'privacy_skipped'
+            AND user_content IS NULL
+            AND assistant_content IS NULL
+            AND privacy_reason_code IN ('UNCHANGED', 'MASKED', 'STORAGE_OPT_OUT', 'SCAN_FAILURE', 'INVALID_FINDING')
+            AND length(trim(sanitizer_version)) > 0
+            AND length(trim(policy_version)) > 0
+        )
+    )
+)
+"""
+
 
 def _create_version_two_database(database_path: Path) -> None:
     with sqlite3.connect(database_path) as connection:
         connection.execute(VERSION_TWO_CONVERSATIONS_SQL)
-        connection.execute(CONVERSATION_TURNS_SQL)
+        connection.execute(VERSION_THREE_CONVERSATION_TURNS_SQL)
         connection.execute(HISTORY_INDEX_SQL)
         connection.execute(STALE_INDEX_SQL)
         connection.execute(
@@ -72,6 +135,37 @@ def _create_version_two_database(database_path: Path) -> None:
         connection.execute("PRAGMA user_version = 2")
 
 
+def _create_version_three_database(database_path: Path) -> None:
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(schema.CONVERSATIONS_SQL)
+        connection.execute(VERSION_THREE_CONVERSATION_TURNS_SQL)
+        connection.execute(schema.WAL_CLEANUP_JOBS_SQL)
+        connection.execute(schema.HISTORY_INDEX_SQL)
+        connection.execute(schema.STALE_INDEX_SQL)
+        connection.execute(
+            "INSERT INTO conversations "
+            "(character_id, conversation_id, created_at) VALUES (?, ?, ?)",
+            (CHARACTER_ID, CONVERSATION_ID, CREATED_AT),
+        )
+        connection.execute(
+            "INSERT INTO conversation_turns "
+            "(turn_id, character_id, conversation_id, user_content, "
+            "assistant_content, status, privacy_reason_code, sanitizer_version, "
+            "policy_version, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, 'completed', NULL, NULL, NULL, ?, ?)",
+            (
+                TURN_ID,
+                CHARACTER_ID,
+                CONVERSATION_ID,
+                "マスク済みユーザー本文",
+                "マスク済みアシスタント本文",
+                CREATED_AT,
+                CREATED_AT,
+            ),
+        )
+        connection.execute("PRAGMA user_version = 3")
+
+
 def _schema_state(database_path: Path) -> tuple[int, tuple[str, ...], set[str]]:
     with sqlite3.connect(database_path) as connection:
         version = int(connection.execute("PRAGMA user_version").fetchone()[0])
@@ -89,7 +183,7 @@ def _schema_state(database_path: Path) -> tuple[int, tuple[str, ...], set[str]]:
     return version, columns, tables
 
 
-def test_should_migrate_canonical_version_two_database_to_version_three(
+def test_should_migrate_canonical_version_two_database_to_version_four(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "history.db"
@@ -99,7 +193,7 @@ def test_should_migrate_canonical_version_two_database_to_version_three(
 
     version, conversation_columns, tables = _schema_state(database_path)
 
-    assert version == 3
+    assert version == 4
     assert conversation_columns == (
         "character_id",
         "conversation_id",
@@ -132,6 +226,30 @@ def test_should_preserve_existing_rows_when_migrating_version_two_database(
         TURN_ID,
         CHARACTER_ID,
         CONVERSATION_ID,
+        "マスク済みユーザー本文",
+        "マスク済みアシスタント本文",
+        "completed",
+    )
+
+
+def test_should_migrate_version_three_to_four_without_losing_rows(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "history.db"
+    _create_version_three_database(database_path)
+
+    initialize_conversation_history_schema(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+        turn = connection.execute(
+            "SELECT turn_id, user_content, assistant_content, status "
+            "FROM conversation_turns"
+        ).fetchone()
+
+    assert version == 4
+    assert turn == (
+        TURN_ID,
         "マスク済みユーザー本文",
         "マスク済みアシスタント本文",
         "completed",
@@ -172,7 +290,7 @@ def test_should_keep_version_two_database_unchanged_when_migration_fails(
             sql: str,
             parameters: tuple[object, ...] = (),
         ) -> sqlite3.Cursor:
-            if sql == "PRAGMA user_version = 3":
+            if sql == "PRAGMA user_version = 4":
                 raise sqlite3.OperationalError("injected migration failure")
             return super().execute(sql, parameters)
 

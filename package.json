@@ -5,6 +5,8 @@
     "promptfoo": "0.117.2"
   },
   "scripts": {
+    "generate:voice-session": "npm --prefix frontend run generate:voice-session",
+    "check:voice-session-generated": "npm run generate:voice-session && git diff --exit-code -- backend/app/voice_session/generated.py frontend/src/lib/voice-session/generated.ts",
     "test:unit": "backend/.venv/bin/python -m pytest backend/tests/unit && npm --prefix frontend run test:unit",
     "test:module": "backend/.venv/bin/python -m pytest backend/tests/module && npm --prefix frontend run test:module",
     "test:integration:backend": "backend/.venv/bin/python -m pytest backend/tests/integration",

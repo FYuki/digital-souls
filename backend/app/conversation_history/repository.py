@@ -330,6 +330,44 @@ class ConversationHistoryRepository:
                 turn_id,
             )
 
+    def interrupt_turn(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+        turn_id: UUID,
+        *,
+        sanitized_assistant_content: str,
+    ) -> ConversationTurn:
+        now = self._now()
+        with self._database.transaction() as connection:
+            select_conversation(connection, character_id, conversation_id)
+            current = select_turn(
+                connection,
+                character_id,
+                conversation_id,
+                turn_id,
+            )
+            require_turn_transition(current.status, TurnStatus.INTERRUPTED)
+            connection.execute(
+                "UPDATE conversation_turns "
+                "SET assistant_content = ?, status = ?, updated_at = ? "
+                "WHERE character_id = ? AND conversation_id = ? AND turn_id = ?",
+                (
+                    sanitized_assistant_content,
+                    TurnStatus.INTERRUPTED.value,
+                    format_datetime(now),
+                    character_id,
+                    str(conversation_id),
+                    str(turn_id),
+                ),
+            )
+            return select_turn(
+                connection,
+                character_id,
+                conversation_id,
+                turn_id,
+            )
+
     def fail_turn(
         self,
         character_id: str,
@@ -481,12 +519,13 @@ class ConversationHistoryRepository:
             rows = connection.execute(
                 f"SELECT {TURN_COLUMNS} FROM conversation_turns "
                 "WHERE character_id = ? AND conversation_id = ? "
-                "AND status IN (?, ?) AND created_at >= ? "
+                "AND status IN (?, ?, ?) AND created_at >= ? "
                 "ORDER BY created_at, turn_id",
                 (
                     character_id,
                     str(conversation_id),
                     TurnStatus.COMPLETED.value,
+                    TurnStatus.INTERRUPTED.value,
                     TurnStatus.PRIVACY_SKIPPED.value,
                     cutoff,
                 ),
@@ -518,6 +557,7 @@ class ConversationHistoryRepository:
             character_id,
             str(conversation_id),
             TurnStatus.COMPLETED.value,
+            TurnStatus.INTERRUPTED.value,
             TurnStatus.FAILED.value,
             format_datetime(cutoff),
         ]
@@ -533,7 +573,7 @@ class ConversationHistoryRepository:
             rows = connection.execute(
                 f"SELECT {TURN_COLUMNS} FROM conversation_turns "
                 "WHERE character_id = ? AND conversation_id = ? "
-                "AND status IN (?, ?) AND created_at >= ? "
+                "AND status IN (?, ?, ?) AND created_at >= ? "
                 f"{cursor_clause}"
                 "ORDER BY created_at DESC, turn_id DESC LIMIT ?",
                 parameters,

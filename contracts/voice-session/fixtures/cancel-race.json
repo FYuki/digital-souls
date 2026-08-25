@@ -1,0 +1,9 @@
+{
+  "events": [
+    { "type": "response_started", "protocol_version": "1.0", "event_id": "60000000-0000-4000-8000-000000000001", "session_id": "20000000-0000-4000-8000-000000000001", "response_id": "50000000-0000-4000-8000-000000000002", "speaker": { "participant_id": "40000000-0000-4000-8000-000000000002", "role": "character", "character_id": "miori" }, "source_utterance_ids": ["30000000-0000-4000-8000-000000000003"], "monotonic_timestamp_ms": 2000 },
+    { "type": "response_delta", "protocol_version": "1.0", "event_id": "60000000-0000-4000-8000-000000000002", "session_id": "20000000-0000-4000-8000-000000000001", "response_id": "50000000-0000-4000-8000-000000000002", "sequence": 1, "text": "聞こえた", "text_range": { "start": 0, "end": 4 }, "monotonic_timestamp_ms": 2001 },
+    { "type": "response_cancelled", "protocol_version": "1.0", "event_id": "60000000-0000-4000-8000-000000000003", "session_id": "20000000-0000-4000-8000-000000000001", "response_id": "50000000-0000-4000-8000-000000000002", "reason": "barge_in", "monotonic_timestamp_ms": 2002 },
+    { "type": "response_delta", "protocol_version": "1.0", "event_id": "60000000-0000-4000-8000-000000000004", "session_id": "20000000-0000-4000-8000-000000000001", "response_id": "50000000-0000-4000-8000-000000000002", "sequence": 2, "text": "未再生", "text_range": { "start": 4, "end": 7 }, "monotonic_timestamp_ms": 2003 }
+  ],
+  "expected": { "terminal_event": "response_cancelled", "late_event_discarded": true }
+}

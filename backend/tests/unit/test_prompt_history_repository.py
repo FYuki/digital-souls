@@ -104,6 +104,12 @@ class TestPromptHistoryPage:
         _insert_turn(database_path, TURN_IDS[1], status=TurnStatus.FAILED)
         _insert_turn(database_path, TURN_IDS[2], status=TurnStatus.PROCESSING)
         _insert_turn(database_path, TURN_IDS[3], status=TurnStatus.PRIVACY_SKIPPED)
+        _insert_turn(
+            database_path,
+            TURN_IDS[6],
+            status=TurnStatus.INTERRUPTED,
+            assistant_content="実際に聞いた部分",
+        )
         _insert_turn(database_path, TURN_IDS[4], character_id="other")
         _insert_turn(
             database_path,
@@ -115,10 +121,15 @@ class TestPromptHistoryPage:
             "miori", CONVERSATION_ID, page_size=10
         )
 
-        assert [turn.turn_id for turn in page.turns] == [TURN_IDS[1], TURN_IDS[0]]
+        assert [turn.turn_id for turn in page.turns] == [
+            TURN_IDS[6],
+            TURN_IDS[1],
+            TURN_IDS[0],
+        ]
         assert {turn.status for turn in page.turns} == {
             TurnStatus.COMPLETED,
             TurnStatus.FAILED,
+            TurnStatus.INTERRUPTED,
         }
 
     def test_should_page_newest_first_with_a_stable_composite_cursor(

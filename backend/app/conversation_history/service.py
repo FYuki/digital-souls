@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
@@ -20,6 +20,7 @@ from app.privacy.contracts import (
     ConversationHistoryDecision,
 )
 from app.privacy.history_sanitizer import HistorySanitizer
+from app.voice_session.playback_range import played_text_prefix
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,15 @@ class HistorySession(Protocol):
         self,
         started_turn: StartedHistoryTurn,
         assistant_content: str,
+    ) -> ConversationTurn:
+        ...
+
+    def interrupt_turn(
+        self,
+        started_turn: StartedHistoryTurn,
+        generated_text: str,
+        response_audio_chunks: Sequence[Mapping[str, object]],
+        last_played_sequence: int,
     ) -> ConversationTurn:
         ...
 
@@ -133,6 +143,39 @@ class ConversationHistorySession:
             self._character_id,
             self._conversation_id,
             started_turn.turn_id,
+        )
+
+    def interrupt_turn(
+        self,
+        started_turn: StartedHistoryTurn,
+        generated_text: str,
+        response_audio_chunks: Sequence[Mapping[str, object]],
+        last_played_sequence: int,
+    ) -> ConversationTurn:
+        played_content = played_text_prefix(
+            generated_text,
+            response_audio_chunks,
+            last_played_sequence=last_played_sequence,
+        )
+        decision = self._sanitizer.sanitize_assistant(played_content)
+        if started_turn.content_skipped:
+            if started_turn.initial_turn is None:
+                raise ValueError("privacy-skipped started turn requires persisted turn")
+            return started_turn.initial_turn
+        if decision.action is ConversationHistoryAction.SKIP_CONTENT:
+            return self._repository.skip_processing_turn_for_privacy(
+                self._character_id,
+                self._conversation_id,
+                started_turn.turn_id,
+                _privacy_skip_input(decision),
+            )
+        if decision.content is None:
+            raise ValueError("STORE_MASKED decision requires content")
+        return self._repository.interrupt_turn(
+            self._character_id,
+            self._conversation_id,
+            started_turn.turn_id,
+            sanitized_assistant_content=decision.content,
         )
 
     def prompt_turns(
