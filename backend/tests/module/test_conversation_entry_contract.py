@@ -243,7 +243,7 @@ def test_should_fail_generated_text_turn_when_websocket_send_fails() -> None:
 
 
 def test_should_fail_generated_audio_turn_when_tts_fails() -> None:
-    from app.routers.ws import _handle_audio_payload
+    from app.routers.ws import _ConnectionMeasurementState, _handle_audio_payload
 
     class FailingTtsSession:
         def generate_response_audio(self, audio: bytes, reply_generator):
@@ -262,6 +262,7 @@ def test_should_fail_generated_audio_turn_when_tts_fails() -> None:
         session,
         FailingTtsSession(),
         b"\x01\x00",
+        _ConnectionMeasurementState(),
     )
 
     assert keep_open is True
@@ -283,7 +284,7 @@ def test_should_fail_generated_audio_turn_at_each_send_stage(
     failing_stage: str,
     sent_stages: list[str],
 ) -> None:
-    from app.routers.ws import _handle_audio_payload
+    from app.routers.ws import _ConnectionMeasurementState, _handle_audio_payload
 
     session = _DeliverySession()
     websocket = _StageFailingWebSocket(failing_stage)
@@ -296,6 +297,7 @@ def test_should_fail_generated_audio_turn_at_each_send_stage(
             session,
             _AudioResponseSession(),
             b"\x01\x00",
+            _ConnectionMeasurementState(),
         )
 
     assert [stage for stage, _ in websocket.sent] == sent_stages
@@ -304,7 +306,7 @@ def test_should_fail_generated_audio_turn_at_each_send_stage(
 
 
 def test_should_acknowledge_audio_turn_only_after_all_send_stages_succeed() -> None:
-    from app.routers.ws import _handle_audio_payload
+    from app.routers.ws import _ConnectionMeasurementState, _handle_audio_payload
 
     session = _DeliverySession()
     websocket = _StageFailingWebSocket(None)
@@ -316,6 +318,7 @@ def test_should_acknowledge_audio_turn_only_after_all_send_stages_succeed() -> N
         session,
         _AudioResponseSession(),
         b"\x01\x00",
+        _ConnectionMeasurementState(),
     )
 
     assert keep_open is True

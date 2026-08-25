@@ -4,6 +4,7 @@ import { WebSocketAudioTransport, type TransportCallbacks } from './transport'
 
 const AUDIO_WS_URL = 'ws://backend.test/ws/miori'
 const CONVERSATION_ID = 'e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'
+const SESSION_ID = '01992f57-8c65-79d0-924f-e2cd79bc01cd'
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = []
@@ -36,9 +37,14 @@ class FakeWebSocket {
   }
 }
 
-const createCallbacks = (): TransportCallbacks => ({
+type MeasurementCallbacks = TransportCallbacks & {
+  onAudioResponseMetadata: ReturnType<typeof vi.fn>
+}
+
+const createCallbacks = (): MeasurementCallbacks => ({
   onTurnMessage: vi.fn(),
   onAudioMessage: vi.fn(),
+  onAudioResponseMetadata: vi.fn(),
   onError: vi.fn(),
   onTransportError: vi.fn(),
   onOpen: vi.fn(),
@@ -116,14 +122,82 @@ describe('WebSocketAudioTransport', () => {
     expect(url.searchParams.get('token')).toBe('kept')
   })
 
-  test('should send audio as a binary frame without a JSON envelope', async () => {
+  test('should correlate audio metadata with the following binary frame', async () => {
     const callbacks = createCallbacks()
     const { transport, socket } = await connectTransport(callbacks)
     const pcm = new ArrayBuffer(4)
 
-    transport.sendAudio(pcm)
+    const sendCorrelatedAudio = transport.sendAudio.bind(transport) as unknown as (
+      data: ArrayBuffer,
+      metadata: { eventId: string; sessionId: string; utteranceId: string },
+    ) => void
+    sendCorrelatedAudio(pcm, {
+      eventId: '01992f57-8c65-79d0-924f-e2cd79bc03ef',
+      sessionId: SESSION_ID,
+      utteranceId: '01992f57-8c65-79d0-924f-e2cd79bc02de',
+    })
 
-    expect(socket.sent).toEqual([pcm])
+    expect(socket.sent).toEqual([
+      JSON.stringify({
+        type: 'audio_metadata',
+        event_id: '01992f57-8c65-79d0-924f-e2cd79bc03ef',
+        session_id: SESSION_ID,
+        utterance_id: '01992f57-8c65-79d0-924f-e2cd79bc02de',
+      }),
+      pcm,
+    ])
+  })
+
+  test('should deliver response correlation before the WAV payload', async () => {
+    const callbacks = createCallbacks()
+    const { socket } = await connectTransport(callbacks)
+    const wav = new ArrayBuffer(8)
+
+    socket.onmessage?.(new MessageEvent('message', {
+      data: JSON.stringify({
+        type: 'audio_response_metadata',
+        session_id: SESSION_ID,
+        utterance_id: '01992f57-8c65-79d0-924f-e2cd79bc02de',
+        response_id: '01992f57-8c65-79d0-924f-e2cd79bc04fa',
+      }),
+    }))
+    socket.onmessage?.(new MessageEvent('message', { data: wav }))
+
+    expect(callbacks.onAudioResponseMetadata).toHaveBeenCalledWith({
+      sessionId: SESSION_ID,
+      utteranceId: '01992f57-8c65-79d0-924f-e2cd79bc02de',
+      responseId: '01992f57-8c65-79d0-924f-e2cd79bc04fa',
+    })
+    expect(callbacks.onAudioMessage).toHaveBeenCalledWith(wav)
+    expect(callbacks.onAudioResponseMetadata.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(callbacks.onAudioMessage).mock.invocationCallOrder[0],
+    )
+  })
+
+  test('should send playback measurements with one client clock domain', async () => {
+    const callbacks = createCallbacks()
+    const { transport, socket } = await connectTransport(callbacks)
+
+    transport.sendMeasurementEvent({
+      eventId: '01992f57-8c65-79d0-924f-e2cd79bc05ab',
+      sessionId: SESSION_ID,
+      utteranceId: '01992f57-8c65-79d0-924f-e2cd79bc02de',
+      responseId: '01992f57-8c65-79d0-924f-e2cd79bc04fa',
+      name: 'first_playback',
+      timestamp: 1234.5,
+    })
+
+    expect(socket.sent).toEqual([JSON.stringify({
+      type: 'measurement_event',
+      event_id: '01992f57-8c65-79d0-924f-e2cd79bc05ab',
+      session_id: SESSION_ID,
+      utterance_id: '01992f57-8c65-79d0-924f-e2cd79bc02de',
+      response_id: '01992f57-8c65-79d0-924f-e2cd79bc04fa',
+      name: 'first_playback',
+      timestamp: 1234.5,
+      clock_domain: 'client_monotonic',
+      unit: 'millisecond',
+    })])
   })
 
   test('should route WAV binary messages to the audio callback', async () => {

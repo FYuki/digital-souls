@@ -1,7 +1,10 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
 
-  export let audioData: ArrayBuffer | null
+  export let request: {
+    audioData: ArrayBuffer
+    onFirstPlayback: () => void
+  } | null
   export let onError: (error: Error) => void
 
   let audioContext: AudioContext | null = null
@@ -15,15 +18,16 @@
     return audioContext
   }
 
-  const playAudio = async (data: ArrayBuffer) => {
+  const playAudio = async (playbackRequest: NonNullable<typeof request>) => {
     try {
       const context = getAudioContext()
-      const audioBuffer = await context.decodeAudioData(data.slice(0))
+      const audioBuffer = await context.decodeAudioData(playbackRequest.audioData.slice(0))
       const source = context.createBufferSource()
 
       source.buffer = audioBuffer
       source.connect(context.destination)
       source.start()
+      playbackRequest.onFirstPlayback()
     } catch (error) {
       if (!(error instanceof Error)) {
         throw error
@@ -33,8 +37,8 @@
     }
   }
 
-  $: if (audioData !== null) {
-    void playAudio(audioData)
+  $: if (request !== null) {
+    void playAudio(request)
   }
 
   onDestroy(() => {

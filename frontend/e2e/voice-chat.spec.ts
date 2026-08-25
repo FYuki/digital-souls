@@ -16,6 +16,7 @@ import {
 const MOCK_TRANSCRIPT_TEXT = 'テスト音声です'
 const MOCK_RESPONSE_TEXT = 'テスト音声に応答します。'
 const MOCK_CONVERSATION_ID = 'e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'
+const MOCK_RESPONSE_ID = '01992f57-8c65-79d0-924f-e2cd79bc04fa'
 let resolvedProfile: ResolvedProfile
 
 const createMockAudioResponse = (): Buffer => {
@@ -86,6 +87,7 @@ const installMockBackend = async (page: Page) => {
         user_content: MOCK_TRANSCRIPT_TEXT,
         assistant_content: MOCK_RESPONSE_TEXT,
       } }) },
+      { kind: 'audio-response-metadata', responseId: MOCK_RESPONSE_ID },
       { kind: 'binary', data: Array.from(createMockAudioResponse()) },
     ],
   })

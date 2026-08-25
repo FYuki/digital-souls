@@ -161,6 +161,478 @@ def _wait_until(predicate, timeout: float = 5.0) -> None:
 
 
 class TestWebSocketEndpoint:
+    def test_correlates_audio_metadata_with_the_following_binary_response(
+        self,
+        client,
+    ):
+        session_id = "01992f57-8c65-79d0-924f-e2cd79bc01cd"
+        utterance_id = "01992f57-8c65-79d0-924f-e2cd79bc02de"
+        event_id = "01992f57-8c65-79d0-924f-e2cd79bc03ef"
+        url = f"{_WS_URL}&session_id={session_id}"
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
+                with patch(_TRANSCRIBE, return_value="こんにちは"):
+                    with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
+                        with patch(_SYNTHESIZE, return_value=b"RIFF output"):
+                            with client.websocket_connect(url) as websocket:
+                                websocket.send_json(
+                                    {
+                                        "type": "audio_metadata",
+                                        "event_id": event_id,
+                                        "utterance_id": utterance_id,
+                                    }
+                                )
+                                websocket.send_bytes(_PCM_AUDIO)
+                                persisted_turn = websocket.receive_json()
+                                audio_metadata = websocket.receive_json()
+                                response_audio = websocket.receive_bytes()
+                                websocket.send_json(
+                                    {
+                                        "type": "measurement_event",
+                                        "event_id": event_id,
+                                        "session_id": session_id,
+                                        "utterance_id": utterance_id,
+                                        "response_id": audio_metadata["response_id"],
+                                        "name": "first_playback",
+                                        "timestamp": 1234.5,
+                                        "clock_domain": "client_monotonic",
+                                        "unit": "millisecond",
+                                    }
+                                )
+                                websocket.send_json(
+                                    {"type": "text", "message": "continue"}
+                                )
+                                continued_turn = websocket.receive_json()
+
+        _assert_persisted_content_frame(persisted_turn, _LLM_REPLY)
+        assert audio_metadata["type"] == "audio_response_metadata"
+        assert audio_metadata["session_id"] == session_id
+        assert audio_metadata["utterance_id"] == utterance_id
+        assert isinstance(audio_metadata["response_id"], str)
+        assert audio_metadata["response_id"]
+        assert response_audio == b"RIFF output"
+        _assert_persisted_content_frame(continued_turn, _LLM_REPLY)
+
+    def test_records_measurements_while_audio_send_is_still_in_progress(
+        self,
+        client,
+    ):
+        session_id = "01992f57-8c65-79d0-924f-e2cd79bc01cd"
+        utterance_id = "01992f57-8c65-79d0-924f-e2cd79bc02de"
+        request_event_id = "01992f57-8c65-79d0-924f-e2cd79bc0301"
+        received_event_id = "01992f57-8c65-79d0-924f-e2cd79bc0302"
+        playback_event_id = "01992f57-8c65-79d0-924f-e2cd79bc0303"
+        audio_published = threading.Event()
+        release_audio_send = threading.Event()
+        received_recorded = threading.Event()
+        playback_recorded = threading.Event()
+        recorder = MagicMock()
+        url = f"{_WS_URL}&session_id={session_id}"
+
+        async def block_after_audio_publish(websocket, payload):
+            await websocket.send_bytes(payload)
+            audio_published.set()
+            await anyio.to_thread.run_sync(release_audio_send.wait)
+
+        def record_client_event(_websocket, event):
+            recorder.record(event)
+            if event.name == "client_audio_received":
+                received_recorded.set()
+            elif event.name == "first_playback":
+                playback_recorded.set()
+
+        with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+            with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
+                with patch(_TRANSCRIBE, return_value="こんにちは"):
+                    with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
+                        with patch(_SYNTHESIZE, return_value=b"RIFF output"):
+                            with patch(
+                                "app.routers.ws._send_bytes_unlocked",
+                                side_effect=block_after_audio_publish,
+                            ):
+                                with patch(
+                                    "app.routers.ws._record_trace_event",
+                                    side_effect=record_client_event,
+                                ):
+                                    with client.websocket_connect(url) as websocket:
+                                        websocket.send_json({
+                                            "type": "audio_metadata",
+                                            "event_id": request_event_id,
+                                            "utterance_id": utterance_id,
+                                        })
+                                        websocket.send_bytes(_PCM_AUDIO)
+                                        persisted_turn = websocket.receive_json()
+                                        metadata = websocket.receive_json()
+                                        response_audio = websocket.receive_bytes()
+                                        _wait_for_event(audio_published, "audio publish")
+
+                                        def measurement(event_id, name):
+                                            return {
+                                                "type": "measurement_event",
+                                                "event_id": event_id,
+                                                "session_id": session_id,
+                                                "utterance_id": utterance_id,
+                                                "response_id": metadata["response_id"],
+                                                "name": name,
+                                                "timestamp": 1234.5,
+                                                "clock_domain": "client_monotonic",
+                                                "unit": "millisecond",
+                                            }
+
+                                        try:
+                                            websocket.send_json(measurement(
+                                                received_event_id,
+                                                "client_audio_received",
+                                            ))
+                                            websocket.send_json(measurement(
+                                                playback_event_id,
+                                                "first_playback",
+                                            ))
+                                            _wait_for_event(
+                                                received_recorded,
+                                                "client audio receipt measurement",
+                                            )
+                                            _wait_for_event(
+                                                playback_recorded,
+                                                "first playback measurement",
+                                            )
+                                        finally:
+                                            release_audio_send.set()
+
+                                        websocket.send_json(
+                                            {"type": "text", "message": "continue"}
+                                        )
+                                        continued_turn = websocket.receive_json()
+
+        _assert_persisted_content_frame(persisted_turn, _LLM_REPLY)
+        assert metadata["type"] == "audio_response_metadata"
+        assert response_audio == b"RIFF output"
+        _assert_persisted_content_frame(continued_turn, _LLM_REPLY)
+        client_events = [
+            call.args[0]
+            for call in recorder.record.call_args_list
+            if call.args[0].name in {"client_audio_received", "first_playback"}
+        ]
+        assert [event.name for event in client_events] == [
+            "client_audio_received",
+            "first_playback",
+        ]
+        assert all(event.response_id == metadata["response_id"] for event in client_events)
+
+    def test_revoking_response_preserves_other_issued_responses(self):
+        from app.routers.ws import (
+            AudioCorrelation,
+            WebSocketMessageError,
+            _ConnectionMeasurementState,
+        )
+        from app.voice_metrics import TraceEvent
+
+        state = _ConnectionMeasurementState()
+        revoked_response_id = "01992f57-8c65-79d0-924f-e2cd79bc0401"
+        retained_response_id = "01992f57-8c65-79d0-924f-e2cd79bc0402"
+        revoked_correlation = AudioCorrelation(
+            event_id="01992f57-8c65-79d0-924f-e2cd79bc0301",
+            session_id="01992f57-8c65-79d0-924f-e2cd79bc01cd",
+            utterance_id="01992f57-8c65-79d0-924f-e2cd79bc0201",
+            measurement=None,
+        )
+        retained_correlation = AudioCorrelation(
+            event_id="01992f57-8c65-79d0-924f-e2cd79bc0302",
+            session_id="01992f57-8c65-79d0-924f-e2cd79bc01cd",
+            utterance_id="01992f57-8c65-79d0-924f-e2cd79bc0202",
+            measurement=None,
+        )
+
+        def measurement(event_id, response_id, correlation):
+            return TraceEvent(
+                schema_version="1.0",
+                measurement_kind="automated_test",
+                event_id=event_id,
+                session_id=correlation.session_id,
+                utterance_id=correlation.utterance_id,
+                response_id=response_id,
+                name="client_audio_received",
+                stage="transport",
+                outcome="success",
+                timestamp=1234.5,
+                clock_domain="client_monotonic",
+                unit="millisecond",
+            )
+
+        state.issue(revoked_response_id, revoked_correlation)
+        state.issue(retained_response_id, retained_correlation)
+        state.revoke(revoked_response_id)
+
+        with pytest.raises(
+            WebSocketMessageError,
+            match="measurement response_id was not issued",
+        ):
+            state.consume(measurement(
+                "01992f57-8c65-79d0-924f-e2cd79bc0501",
+                revoked_response_id,
+                revoked_correlation,
+            ))
+        state.consume(measurement(
+            "01992f57-8c65-79d0-924f-e2cd79bc0502",
+            retained_response_id,
+            retained_correlation,
+        ))
+
+    @pytest.mark.parametrize(
+        "failure_stage",
+        [
+            pytest.param("metadata", id="metadata"),
+            pytest.param("audio", id="audio"),
+        ],
+    )
+    def test_revokes_measurement_response_when_audio_send_fails(
+        self,
+        failure_stage,
+    ):
+        import asyncio
+
+        from app.routers.ws import (
+            AudioCorrelation,
+            WebSocketMessageError,
+            _ConnectionMeasurementState,
+            _handle_audio_payload,
+        )
+        from app.voice_metrics import TraceEvent
+
+        correlation = AudioCorrelation(
+            event_id="01992f57-8c65-79d0-924f-e2cd79bc0301",
+            session_id="01992f57-8c65-79d0-924f-e2cd79bc01cd",
+            utterance_id="01992f57-8c65-79d0-924f-e2cd79bc02de",
+            measurement=None,
+        )
+        state = _ConnectionMeasurementState()
+
+        class RecordingChatSession(_StubDeliverySession):
+            def __init__(self):
+                self.failed = []
+
+            def generate_reply(self, message):
+                return persisted_reply(f"reply:{message}", TURN_ID)
+
+            def mark_delivery_failed(self, turn_id):
+                self.failed.append(turn_id)
+
+        class StubAudioSession:
+            def generate_response_audio(
+                self,
+                audio,
+                reply_generator,
+                *,
+                measurement,
+            ):
+                del measurement
+                reply = reply_generator(f"transcript:{audio.decode()}")
+                return "transcript", reply, b"RIFF " + audio
+
+        class FailingWebSocket:
+            def __init__(self):
+                self.app = type("App", (), {})()
+                self.app.state = type("State", (), {})()
+                self.app.state.voice_measurement_kind = "automated_test"
+                self.response_id = None
+
+            async def send_json(self, payload):
+                if payload.get("type") == "audio_response_metadata":
+                    self.response_id = payload["response_id"]
+                    if failure_stage == "metadata":
+                        raise RuntimeError("synthetic metadata send failure")
+
+            async def send_bytes(self, payload):
+                assert payload == b"RIFF audio"
+                if failure_stage == "audio":
+                    raise RuntimeError("synthetic audio send failure")
+
+        async def run_handler():
+            websocket = FailingWebSocket()
+            chat_session = RecordingChatSession()
+            with pytest.raises(
+                RuntimeError,
+                match=f"synthetic {failure_stage} send failure",
+            ):
+                await _handle_audio_payload(
+                    websocket,
+                    asyncio.Lock(),
+                    chat_session,
+                    StubAudioSession(),
+                    b"audio",
+                    state,
+                    correlation,
+                    1,
+                )
+            return websocket, chat_session
+
+        websocket, chat_session = anyio.run(run_handler)
+        assert websocket.response_id is not None
+        failed_response_event = TraceEvent(
+            schema_version="1.0",
+            measurement_kind="automated_test",
+            event_id="01992f57-8c65-79d0-924f-e2cd79bc0501",
+            session_id=correlation.session_id,
+            utterance_id=correlation.utterance_id,
+            response_id=websocket.response_id,
+            name="client_audio_received",
+            stage="transport",
+            outcome="success",
+            timestamp=1234.5,
+            clock_domain="client_monotonic",
+            unit="millisecond",
+        )
+        with pytest.raises(
+            WebSocketMessageError,
+            match="measurement response_id was not issued",
+        ):
+            state.consume(failed_response_event)
+        assert chat_session.failed == [TURN_ID]
+
+    def test_records_only_unused_measurements_for_responses_issued_by_connection(
+        self,
+        client,
+    ):
+        session_id = "01992f57-8c65-79d0-924f-e2cd79bc01cd"
+        utterance_id = "01992f57-8c65-79d0-924f-e2cd79bc02de"
+        request_event_id = "01992f57-8c65-79d0-924f-e2cd79bc0301"
+        received_event_id = "01992f57-8c65-79d0-924f-e2cd79bc0302"
+        playback_event_id = "01992f57-8c65-79d0-924f-e2cd79bc0303"
+        recorder = MagicMock()
+        record_event = patch(
+            "app.routers.ws._record_trace_event",
+            side_effect=lambda _websocket, event: recorder.record(event),
+        )
+        url = _WS_URL
+
+        try:
+            record_event.start()
+            with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+                with patch(_LOAD_TTS_CONFIG, return_value=_tts_config()):
+                    with patch(_TRANSCRIBE, return_value="こんにちは"):
+                        with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
+                            with patch(_SYNTHESIZE, return_value=b"RIFF output"):
+                                with client.websocket_connect(url) as websocket:
+                                    websocket.send_json({
+                                        "type": "audio_metadata",
+                                        "event_id": request_event_id,
+                                        "session_id": session_id,
+                                        "utterance_id": utterance_id,
+                                    })
+                                    websocket.send_bytes(_PCM_AUDIO)
+                                    websocket.receive_json()
+                                    metadata = websocket.receive_json()
+                                    websocket.receive_bytes()
+
+                                    def measurement(event_id, name, **overrides):
+                                        payload = {
+                                            "type": "measurement_event",
+                                            "event_id": event_id,
+                                            "session_id": session_id,
+                                            "utterance_id": utterance_id,
+                                            "response_id": metadata["response_id"],
+                                            "name": name,
+                                            "timestamp": 1234.5,
+                                            "clock_domain": "client_monotonic",
+                                            "unit": "millisecond",
+                                        }
+                                        payload.update(overrides)
+                                        return payload
+
+                                    recorded_before_measurements = (
+                                        recorder.record.call_count
+                                    )
+                                    websocket.send_json(measurement(
+                                        "01992f57-8c65-79d0-924f-e2cd79bc0304",
+                                        "client_audio_received",
+                                        session_id=(
+                                            "01992f57-8c65-79d0-924f-e2cd79bc0777"
+                                        ),
+                                    ))
+                                    assert websocket.receive_json()["status"] == 422
+                                    assert (
+                                        recorder.record.call_count
+                                        == recorded_before_measurements
+                                    )
+
+                                    websocket.send_json(measurement(
+                                        received_event_id,
+                                        "client_audio_received",
+                                    ))
+                                    websocket.send_json(measurement(
+                                        received_event_id,
+                                        "first_playback",
+                                    ))
+                                    assert websocket.receive_json()["status"] == 422
+                                    assert (
+                                        recorder.record.call_count
+                                        == recorded_before_measurements + 1
+                                    )
+
+                                    websocket.send_json(measurement(
+                                        playback_event_id,
+                                        "first_playback",
+                                    ))
+                                    websocket.send_json(measurement(
+                                        "01992f57-8c65-79d0-924f-e2cd79bc0305",
+                                        "first_playback",
+                                    ))
+                                    assert websocket.receive_json()["status"] == 422
+                                    assert (
+                                        recorder.record.call_count
+                                        == recorded_before_measurements + 2
+                                    )
+                                    websocket.send_json(measurement(
+                                        "01992f57-8c65-79d0-924f-e2cd79bc0306",
+                                        "client_audio_received",
+                                        response_id="01992f57-8c65-79d0-924f-e2cd79bc0999",
+                                    ))
+                                    assert websocket.receive_json()["status"] == 422
+                                    assert (
+                                        recorder.record.call_count
+                                        == recorded_before_measurements + 2
+                                    )
+                                    websocket.send_json(measurement(
+                                        "01992f57-8c65-79d0-924f-e2cd79bc0307",
+                                        "client_audio_received",
+                                        utterance_id="01992f57-8c65-79d0-924f-e2cd79bc0888",
+                                    ))
+                                    assert websocket.receive_json()["status"] == 422
+                                    assert (
+                                        recorder.record.call_count
+                                        == recorded_before_measurements + 2
+                                    )
+                                    websocket.send_json({
+                                        "type": "text",
+                                        "message": "continue",
+                                    })
+                                    continued_turn = websocket.receive_json()
+        finally:
+            record_event.stop()
+
+        client_events = [
+            call.args[0]
+            for call in recorder.record.call_args_list
+            if call.args[0].name in {"client_audio_received", "first_playback"}
+        ]
+        assert [
+            (event.name, event.event_id, event.response_id)
+            for event in client_events
+        ] == [
+            (
+                "client_audio_received",
+                received_event_id,
+                metadata["response_id"],
+            ),
+            (
+                "first_playback",
+                playback_event_id,
+                metadata["response_id"],
+            ),
+        ]
+        _assert_persisted_content_frame(continued_turn, _LLM_REPLY)
+
     def test_returns_422_and_continues_after_text_prompt_limit(
         self,
         client,
@@ -610,7 +1082,7 @@ class TestWebSocketEndpoint:
         import asyncio
 
         from app.conversation_history.errors import ConversationNotFoundError
-        from app.routers.ws import _handle_audio_payload
+        from app.routers.ws import _ConnectionMeasurementState, _handle_audio_payload
 
         class RecordingWebSocket:
             def __init__(self):
@@ -639,6 +1111,7 @@ class TestWebSocketEndpoint:
                 MissingConversationSession(),
                 CallbackAudioSession(),
                 _PCM_AUDIO,
+                _ConnectionMeasurementState(),
             )
             return keep_open, websocket
 
@@ -1629,6 +2102,7 @@ class TestWebSocketEndpoint:
                 StubChatSession(),
                 FailingAudioSession(),
                 b"audio",
+                ws_module._ConnectionMeasurementState(),
             )
             return keep_open, websocket
 
@@ -1645,7 +2119,11 @@ class TestWebSocketEndpoint:
     def test_audio_response_sends_text_and_bytes_without_interleaving(self):
         import asyncio
 
-        from app.routers.ws import _handle_audio_payload, _send_json
+        from app.routers.ws import (
+            _ConnectionMeasurementState,
+            _handle_audio_payload,
+            _send_json,
+        )
 
         class StubChatSession(_StubDeliverySession):
             def generate_reply(self, message):
@@ -1683,6 +2161,7 @@ class TestWebSocketEndpoint:
                     StubChatSession(),
                     StubAudioSession(),
                     b"audio",
+                    _ConnectionMeasurementState(),
                 )
             )
             await websocket.first_audio_sent.wait()
@@ -2423,3 +2902,67 @@ class TestWebSocketFlow:
             {"role": "system", "content": f"## 応答方針\n{system_prompt}"},
             {"role": "user", "content": "自己紹介してください"},
         ]
+
+
+def test_audio_measurement_metadata_records_pre_response_events() -> None:
+    from app.routers.ws import (
+        _extract_audio_correlation,
+        _record_audio_request_events,
+    )
+    from app.voice_metrics import MeasurementContext
+
+    recorded = []
+    correlation = _extract_audio_correlation(
+        {
+            "type": "audio_metadata",
+            "event_id": "01992f57-8c65-79d0-924f-e2cd79bc03ef",
+            "session_id": "01992f57-8c65-79d0-924f-e2cd79bc01cd",
+            "utterance_id": "01992f57-8c65-79d0-924f-e2cd79bc02de",
+            "captured_audio_start_client_ms": 100.0,
+            "vad_speech_end_client_ms": 200.0,
+            "utterance_finalized_client_ms": 225.0,
+            "response_decision_client_ms": 230.0,
+            "required_manual_operations": 0,
+        },
+        None,
+    )
+    measurement = MeasurementContext(
+        measurement_kind="automated_test",
+        session_id=correlation.session_id,
+        utterance_id=correlation.utterance_id,
+        response_id="01992f57-8c65-79d0-924f-e2cd79bc04fa",
+        record=recorded.append,
+        clock_ns=lambda: 0,
+    )
+
+    _record_audio_request_events(measurement, correlation, 1_000_000)
+
+    assert {event.name for event in recorded} == {
+        "user_audio_received",
+        "captured_audio_start",
+        "vad_speech_end",
+        "utterance_finalized",
+        "response_decision",
+        "manual_operations",
+    }
+    manual = next(event for event in recorded if event.name == "manual_operations")
+    assert manual.value == 0
+    assert next(
+        event for event in recorded if event.name == "user_audio_received"
+    ).clock_domain == "server_monotonic"
+
+
+def test_id_only_audio_metadata_keeps_optional_measurements_missing() -> None:
+    from app.routers.ws import _extract_audio_correlation
+
+    correlation = _extract_audio_correlation(
+        {
+            "type": "audio_metadata",
+            "event_id": "01992f57-8c65-79d0-924f-e2cd79bc03ef",
+            "session_id": "01992f57-8c65-79d0-924f-e2cd79bc01cd",
+            "utterance_id": "01992f57-8c65-79d0-924f-e2cd79bc02de",
+        },
+        None,
+    )
+
+    assert correlation.measurement is None

@@ -4,6 +4,7 @@ import { parsePersistedTurn } from '../conversations/turn-parser'
 
 const TEXT_MESSAGE_TYPE = 'text'
 const ERROR_MESSAGE_TYPE = 'error'
+const AUDIO_RESPONSE_METADATA_MESSAGE_TYPE = 'audio_response_metadata'
 
 type BackendPersistedTurnMessage = {
   type: typeof TEXT_MESSAGE_TYPE
@@ -15,6 +16,29 @@ export type BackendErrorMessage = {
   detail: string
 }
 
+export type AudioRequestMetadata = {
+  eventId: string
+  sessionId: string
+  utteranceId: string
+  capturedAudioStartClientMs?: number
+  vadSpeechEndClientMs?: number
+  utteranceFinalizedClientMs?: number
+  responseDecisionClientMs?: number
+  requiredManualOperations?: number
+}
+
+export type AudioResponseMetadata = {
+  sessionId: string
+  utteranceId: string
+  responseId: string
+}
+
+export type ClientMeasurementEvent = AudioResponseMetadata & {
+  eventId: string
+  name: 'client_audio_received' | 'first_playback'
+  timestamp: number
+}
+
 type BackendErrorEnvelope = BackendErrorMessage & {
   type: typeof ERROR_MESSAGE_TYPE
 }
@@ -22,6 +46,7 @@ type BackendErrorEnvelope = BackendErrorMessage & {
 export type TransportCallbacks = {
   onTurnMessage: (turn: ConversationTurn) => void
   onAudioMessage: (audio: ArrayBuffer) => void
+  onAudioResponseMetadata?: (metadata: AudioResponseMetadata) => void
   onError: (error: BackendErrorMessage) => void
   onTransportError: (error: Error) => void
   onOpen: () => void
@@ -32,7 +57,8 @@ export interface AudioTransport {
   readonly connected: boolean
   connect: () => Promise<void>
   disconnect: () => void
-  sendAudio: (pcmData: ArrayBuffer) => void
+  sendAudio: (pcmData: ArrayBuffer, metadata?: AudioRequestMetadata) => void
+  sendMeasurementEvent: (event: ClientMeasurementEvent) => void
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -51,6 +77,22 @@ const isBackendErrorEnvelope = (value: unknown): value is BackendErrorEnvelope =
 const persistedTurnMessage = (value: unknown): BackendPersistedTurnMessage | null => {
   if (!isRecord(value) || value.type !== TEXT_MESSAGE_TYPE || !('turn' in value)) return null
   return { type: TEXT_MESSAGE_TYPE, turn: parsePersistedTurn(value.turn) }
+}
+
+const audioResponseMetadata = (value: unknown): AudioResponseMetadata | null => {
+  if (
+    !isRecord(value)
+    || value.type !== AUDIO_RESPONSE_METADATA_MESSAGE_TYPE
+    || typeof value.session_id !== 'string'
+    || typeof value.utterance_id !== 'string'
+    || typeof value.response_id !== 'string'
+  ) return null
+
+  return {
+    sessionId: value.session_id,
+    utteranceId: value.utterance_id,
+    responseId: value.response_id,
+  }
 }
 
 export class WebSocketAudioTransport implements AudioTransport {
@@ -113,8 +155,38 @@ export class WebSocketAudioTransport implements AudioTransport {
     this.#connected = false
   }
 
-  sendAudio(pcmData: ArrayBuffer): void {
-    this.getOpenSocket().send(pcmData)
+  sendAudio(pcmData: ArrayBuffer, metadata?: AudioRequestMetadata): void {
+    const socket = this.getOpenSocket()
+    if (metadata !== undefined) {
+      socket.send(JSON.stringify({
+        type: 'audio_metadata',
+        event_id: metadata.eventId,
+        session_id: metadata.sessionId,
+        utterance_id: metadata.utteranceId,
+        ...(metadata.capturedAudioStartClientMs === undefined ? {} : {
+          captured_audio_start_client_ms: metadata.capturedAudioStartClientMs,
+          vad_speech_end_client_ms: metadata.vadSpeechEndClientMs,
+          utterance_finalized_client_ms: metadata.utteranceFinalizedClientMs,
+          response_decision_client_ms: metadata.responseDecisionClientMs,
+          required_manual_operations: metadata.requiredManualOperations,
+        }),
+      }))
+    }
+    socket.send(pcmData)
+  }
+
+  sendMeasurementEvent(event: ClientMeasurementEvent): void {
+    this.getOpenSocket().send(JSON.stringify({
+      type: 'measurement_event',
+      event_id: event.eventId,
+      session_id: event.sessionId,
+      utterance_id: event.utteranceId,
+      response_id: event.responseId,
+      name: event.name,
+      timestamp: event.timestamp,
+      clock_domain: 'client_monotonic',
+      unit: 'millisecond',
+    }))
   }
 
   private getOpenSocket(): WebSocket {
@@ -147,6 +219,12 @@ export class WebSocketAudioTransport implements AudioTransport {
     const persisted = persistedTurnMessage(parsed)
     if (persisted !== null) {
       this.callbacks.onTurnMessage(persisted.turn)
+      return
+    }
+
+    const responseMetadata = audioResponseMetadata(parsed)
+    if (responseMetadata !== null) {
+      this.callbacks.onAudioResponseMetadata?.(responseMetadata)
       return
     }
 

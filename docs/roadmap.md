@@ -85,6 +85,7 @@ MVP完了時点で判明したギャップ（多ターン会話、RAG本稼働�
 ### Wave 3: 「自然に話せる」（LiveKitによる双方向音声会話）
 
 設計判断: `docs/decisions/post-mvp-enhancement-2026-07.md`
+計測契約: `docs/voice-quality-measurement.md`
 
 - LiveKit Room、Participant、Track、接続認証によるrealtime media transport
 - transport非依存の音声session、utterance、response、playback lifecycle
