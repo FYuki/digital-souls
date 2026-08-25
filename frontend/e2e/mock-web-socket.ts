@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 type MockWebSocketFrame =
   | { kind: 'text'; data: string }
   | { kind: 'binary'; data: number[] }
+  | { kind: 'audio-response-metadata'; responseId: string }
 
 type MockWebSocketBackend = {
   textFrames: MockWebSocketFrame[]
@@ -13,9 +14,24 @@ export const installMockWebSocketBackend = async (page: Page, backend: MockWebSo
   await page.addInitScript((mockBackend) => {
     let observedUrls: string[] = []
     Object.defineProperty(window, '__mockWebSocketUrls', { get: () => observedUrls })
-    const createFrameData = (frame: MockWebSocketFrame): string | ArrayBuffer => {
+    type AudioCorrelation = { sessionId: string; utteranceId: string }
+    const createFrameData = (
+      frame: MockWebSocketFrame,
+      correlation: AudioCorrelation | null,
+    ): string | ArrayBuffer => {
       if (frame.kind === 'text') {
         return frame.data
+      }
+      if (frame.kind === 'audio-response-metadata') {
+        if (correlation === null) {
+          throw new Error('audio response metadata requires request correlation')
+        }
+        return JSON.stringify({
+          type: 'audio_response_metadata',
+          session_id: correlation.sessionId,
+          utterance_id: correlation.utteranceId,
+          response_id: frame.responseId,
+        })
       }
 
       return new Uint8Array(frame.data).buffer
@@ -37,6 +53,7 @@ export const installMockWebSocketBackend = async (page: Page, backend: MockWebSo
       onmessage: ((event: MessageEvent) => void) | null = null
       onerror: ((event: Event) => void) | null = null
       onclose: ((event: CloseEvent) => void) | null = null
+      private audioCorrelation: AudioCorrelation | null = null
 
       constructor(url: string | URL) {
         super()
@@ -51,10 +68,28 @@ export const installMockWebSocketBackend = async (page: Page, backend: MockWebSo
       }
 
       send(data: string | ArrayBufferLike | Blob | ArrayBufferView) {
+        if (typeof data === 'string') {
+          const parsed = JSON.parse(data) as {
+            type?: unknown
+            session_id?: unknown
+            utterance_id?: unknown
+          }
+          if (
+            parsed.type === 'audio_metadata'
+            && typeof parsed.session_id === 'string'
+            && typeof parsed.utterance_id === 'string'
+          ) {
+            this.audioCorrelation = {
+              sessionId: parsed.session_id,
+              utteranceId: parsed.utterance_id,
+            }
+          }
+        }
         const frames = typeof data === 'string' ? mockBackend.textFrames : mockBackend.binaryFrames
+        const correlation = this.audioCorrelation
         window.setTimeout(() => {
           for (const frame of frames) {
-            this.dispatchMessage(createFrameData(frame))
+            this.dispatchMessage(createFrameData(frame, correlation))
           }
         }, 0)
       }
