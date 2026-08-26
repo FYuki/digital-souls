@@ -33,7 +33,11 @@
   ],
   "$defs": {
     "ProtocolVersion": { "type": "string", "const": "1.0" },
-    "Identifier": { "type": "string", "format": "uuid" },
+    "Identifier": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
     "NonNegativeSafeInteger": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
     "MonotonicTimestamp": { "$ref": "#/$defs/NonNegativeSafeInteger" },
     "Sequence": {
@@ -312,18 +316,35 @@
         "type": { "const": "observation" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
         "session_id": { "$ref": "#/$defs/Identifier" }, "utterance_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" },
         "measurement": { "type": "string", "enum": ["speech_stopped", "utterance_finalized", "response_started", "first_audio_out", "playback_started"] },
-        "timestamp": { "$ref": "#/$defs/NonNegativeSafeInteger" },
+        "timestamp": {
+          "oneOf": [
+            { "$ref": "#/$defs/NonNegativeSafeInteger" },
+            { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" }
+          ]
+        },
         "clock_domain": { "type": "string", "enum": ["client_monotonic", "server_monotonic"] },
         "unit": { "type": "string", "enum": ["millisecond", "nanosecond"] }
       },
       "allOf": [
         {
           "if": { "properties": { "measurement": { "enum": ["speech_stopped", "playback_started"] } }, "required": ["measurement"] },
-          "then": { "properties": { "clock_domain": { "const": "client_monotonic" }, "unit": { "const": "millisecond" } } }
+          "then": {
+            "properties": {
+              "timestamp": { "$ref": "#/$defs/NonNegativeSafeInteger" },
+              "clock_domain": { "const": "client_monotonic" },
+              "unit": { "const": "millisecond" }
+            }
+          }
         },
         {
           "if": { "properties": { "measurement": { "enum": ["utterance_finalized", "response_started", "first_audio_out"] } }, "required": ["measurement"] },
-          "then": { "properties": { "clock_domain": { "const": "server_monotonic" }, "unit": { "const": "nanosecond" } } }
+          "then": {
+            "properties": {
+              "timestamp": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
+              "clock_domain": { "const": "server_monotonic" },
+              "unit": { "const": "nanosecond" }
+            }
+          }
         }
       ]
     }

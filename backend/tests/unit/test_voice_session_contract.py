@@ -142,13 +142,23 @@ def test_backend_boundary_rejects_reversed_text_ranges(event_type: str) -> None:
     assert event["text_range"] == {"start": 0, "end": 4}
 
 
-def test_backend_boundary_rejects_uuid_enclosed_in_braces() -> None:
+@pytest.mark.parametrize(
+    "invalid_event_id",
+    [
+        "{10000000-0000-4000-8000-000000000010}",
+        "urn:uuid:10000000-0000-4000-8000-000000000010",
+    ],
+)
+def test_backend_boundary_accepts_plain_uuid_and_rejects_noncanonical_wire_form(
+    invalid_event_id: str,
+) -> None:
     parser = importlib.import_module("app.voice_session.validation")
     event = _normal_response_event("response_delta")
 
+    assert str(parser.parse_voice_session_event(event).event_id) == event["event_id"]
     with pytest.raises(ValueError):
         parser.parse_voice_session_event(
-            {**event, "event_id": f"{{{event['event_id']}}}"}
+            {**event, "event_id": invalid_event_id}
         )
 
 
@@ -300,6 +310,38 @@ def test_observation_uses_one_clock_domain_for_ttfa() -> None:
     ]
     assert first_audio_out["clock_domain"] == "server_monotonic"
     assert first_audio_out["unit"] == "nanosecond"
+    assert isinstance(first_audio_out["timestamp"], str)
+
+
+def test_observation_preserves_server_nanoseconds_beyond_safe_integer() -> None:
+    parser = importlib.import_module("app.voice_session.validation")
+    events = _fixture("normal.json")["events"]
+    assert isinstance(events, list)
+    server_observation = next(
+        event
+        for event in events
+        if event["type"] == "observation"
+        and event["measurement"] == "first_audio_out"
+    )
+    client_observation = next(
+        event
+        for event in events
+        if event["type"] == "observation"
+        and event["measurement"] == "playback_started"
+    )
+
+    parsed = parser.parse_voice_session_event(
+        {**server_observation, "timestamp": "18446744073709551615"}
+    )
+    assert parsed.timestamp == "18446744073709551615"
+    with pytest.raises(ValueError):
+        parser.parse_voice_session_event(
+            {**server_observation, "timestamp": 9007199254740991}
+        )
+    with pytest.raises(ValueError):
+        parser.parse_voice_session_event(
+            {**client_observation, "timestamp": "1080"}
+        )
 
 
 def test_observation_rejects_measurement_from_wrong_clock_domain() -> None:

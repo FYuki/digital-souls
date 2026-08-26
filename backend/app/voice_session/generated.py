@@ -1,7 +1,7 @@
 from enum import Enum
 from pydantic import BaseModel
 from uuid import UUID
-from typing import Optional, List
+from typing import Optional, List, Union
 
 
 class Classification(Enum):
@@ -128,5 +128,5 @@ class VoiceSessionEvent(BaseModel):
     user_state: Optional[UserState] = None
     clock_domain: Optional[ClockDomain] = None
     measurement: Optional[Measurement] = None
-    timestamp: Optional[int] = None
+    timestamp: Optional[Union[int, str]] = None
     unit: Optional[Unit] = None

@@ -408,6 +408,23 @@ def _migrate_turn_contract_to_version_four(connection: sqlite3.Connection) -> No
         raise LegacySchemaError(
             "conversation_turns migration does not support dependent views"
         )
+    unsupported_schema_object = connection.execute(
+        "SELECT type, name FROM sqlite_master WHERE sql IS NOT NULL AND ("
+        "(type = 'index' AND tbl_name = 'conversation_turns' "
+        "AND name NOT IN (?, ?)) OR "
+        "(type = 'trigger' AND (tbl_name = 'conversation_turns' "
+        "OR instr(lower(sql), lower(?)) > 0))"
+        ") LIMIT 1",
+        (
+            "conversation_turns_history_idx",
+            "conversation_turns_stale_processing_idx",
+            "conversation_turns",
+        ),
+    ).fetchone()
+    if unsupported_schema_object is not None:
+        raise LegacySchemaError(
+            "conversation_turns migration does not support custom indexes or triggers"
+        )
     connection.execute("DROP INDEX conversation_turns_history_idx")
     connection.execute("DROP INDEX conversation_turns_stale_processing_idx")
     connection.execute(

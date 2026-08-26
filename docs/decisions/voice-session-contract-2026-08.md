@@ -86,7 +86,7 @@ Frontend は `session_start_requested.requested_reconnect_grace_ms` で希望値
 
 ### 7. observation と baseline
 
-`observation` は `session_id`、任意の `utterance_id` / `response_id`、計測点、`timestamp`、`clock_domain`、`unit` だけを持つ。本文、音声、STT 結果は schema の `additionalProperties: false` により拒否する。client は `client_monotonic` / millisecond、Backend は `server_monotonic` / nanosecond を使用し、異なる clock domain を直接減算しない。計測点は `speech_stopped`、`utterance_finalized`、`response_started`、`first_audio_out`、`playback_started` の5点である。
+`observation` は `session_id`、任意の `utterance_id` / `response_id`、計測点、`timestamp`、`clock_domain`、`unit` だけを持つ。本文、音声、STT 結果は schema の `additionalProperties: false` により拒否する。client は `client_monotonic` / millisecond の JavaScript safe integer、Backend は `server_monotonic` / nanosecond の非負10進文字列を使用し、異なる clock domain を直接減算しない。server timestampを文字列とするのは、raw monotonic nanosecondsをJavaScriptの安全整数上限で切り捨てないためである。計測点は `speech_stopped`、`utterance_finalized`、`response_started`、`first_audio_out`、`playback_started` の5点である。
 
 Issue #17 の現行 WebSocket baseline と比較する TTFA は、Frontend の同一 clock 上の `speech_stopped` から `playback_started` までとする。Backend の `first_audio_out` は server clock 上の publish latency 用計測点であり、TTFA の終点にはしない。STT 確定・応答判断などの中間区間は同一 clock domain 内だけで算出し、既存 `ws.py` の計測条件は変更しない。
 

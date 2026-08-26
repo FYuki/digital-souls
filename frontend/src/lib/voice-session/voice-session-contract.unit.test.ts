@@ -61,6 +61,20 @@ describe('voice session shared contract', () => {
     },
   )
 
+  it.each([
+    '{10000000-0000-4000-8000-000000000010}',
+    'urn:uuid:10000000-0000-4000-8000-000000000010',
+  ])('plain UUIDを受理し非canonical wire form %sを拒否する', async (invalidEventId) => {
+    const { parseVoiceSessionEvent } = await loadValidationModule()
+    const event = normalResponseEvent('response_delta')
+
+    expect(parseVoiceSessionEvent(event).event_id).toBe(event.event_id)
+    expect(() => parseVoiceSessionEvent({
+      ...event,
+      event_id: invalidEventId,
+    })).toThrow()
+  })
+
   it.each(['response_delta', 'response_audio_segment'])(
     '%sの逆順text rangeを拒否する',
     async (eventType) => {
@@ -256,6 +270,35 @@ describe('voice session shared contract', () => {
     ).toBe(expected.ttfa_ms)
     expect(firstAudioOut?.clock_domain).toBe('server_monotonic')
     expect(firstAudioOut?.unit).toBe('nanosecond')
+    expect(typeof firstAudioOut?.timestamp).toBe('string')
+  })
+
+  it('safe integerを超えるserver nanosecondsを10進文字列で保持する', async () => {
+    const { parseVoiceSessionEvent } = await loadValidationModule()
+    const events = fixture('normal.json').events as Array<Record<string, unknown>>
+    const serverObservation = events.find(
+      (event) =>
+        event.type === 'observation'
+        && event.measurement === 'first_audio_out',
+    ) as Record<string, unknown>
+    const clientObservation = events.find(
+      (event) =>
+        event.type === 'observation'
+        && event.measurement === 'playback_started',
+    ) as Record<string, unknown>
+
+    expect(parseVoiceSessionEvent({
+      ...serverObservation,
+      timestamp: '18446744073709551615',
+    }).timestamp).toBe('18446744073709551615')
+    expect(() => parseVoiceSessionEvent({
+      ...serverObservation,
+      timestamp: Number.MAX_SAFE_INTEGER,
+    })).toThrow()
+    expect(() => parseVoiceSessionEvent({
+      ...clientObservation,
+      timestamp: '1080',
+    })).toThrow()
   })
 
   it('計測点と異なるclock domainを拒否する', async () => {

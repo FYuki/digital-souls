@@ -197,6 +197,48 @@ def test_should_reject_version_three_migration_with_dependent_view(
         )
 
 
+@pytest.mark.parametrize(
+    ("schema_sql", "object_type", "object_name"),
+    [
+        (
+            "CREATE INDEX conversation_turns_custom_idx "
+            "ON conversation_turns (updated_at)",
+            "index",
+            "conversation_turns_custom_idx",
+        ),
+        (
+            "CREATE TRIGGER conversation_turns_audit "
+            "AFTER UPDATE ON conversation_turns BEGIN SELECT NEW.turn_id; END",
+            "trigger",
+            "conversation_turns_audit",
+        ),
+    ],
+)
+def test_should_reject_version_three_migration_with_custom_schema_object(
+    tmp_path: Path,
+    schema_sql: str,
+    object_type: str,
+    object_name: str,
+) -> None:
+    database_path = tmp_path / "history.db"
+    _create_version_three_database(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(schema_sql)
+
+    with pytest.raises(
+        LegacySchemaError,
+        match="conversation_turns migration does not support custom indexes or triggers",
+    ):
+        initialize_conversation_history_schema(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = ? AND name = ?",
+            (object_type, object_name),
+        ).fetchone() == (object_name,)
+
+
 def test_should_be_idempotent_after_migrating_version_two_database(
     tmp_path: Path,
 ) -> None:

@@ -29,7 +29,7 @@ export interface VoiceSessionEvent {
     user_state?:                   UserState;
     clock_domain?:                 ClockDomain;
     measurement?:                  Measurement;
-    timestamp?:                    number;
+    timestamp?:                    number | string;
     unit?:                         Unit;
 }
 
