@@ -8,9 +8,10 @@ from app.backup_restore.models import CONVERSATION_ARTIFACT_FILENAME
 from app.conversation_history import schema
 from app.conversation_history.errors import LegacySchemaError
 from app.conversation_history.schema import (
-    CONVERSATION_TURNS_SQL,
     HISTORY_INDEX_SQL,
     STALE_INDEX_SQL,
+    VERSION_THREE_CONVERSATION_TURNS_SQL,
+    VERSION_TWO_CONVERSATIONS_SQL,
     initialize_conversation_history_schema,
 )
 from app.runtime_data_root import initialize_runtime_data_root
@@ -21,31 +22,10 @@ CONVERSATION_ID = "e98d6c65-1ae9-4d6f-a8c8-d59b0ad09001"
 TURN_ID = "9e70795d-e5d5-431d-baa2-67f884403001"
 CREATED_AT = "2026-07-24T00:00:00.000000Z"
 
-VERSION_TWO_CONVERSATIONS_SQL = """
-CREATE TABLE conversations (
-    character_id TEXT NOT NULL,
-    conversation_id TEXT NOT NULL CHECK (
-        length(conversation_id) = 36
-        AND length(replace(conversation_id, '-', '')) = 32
-        AND substr(conversation_id, 9, 1) = '-'
-        AND substr(conversation_id, 14, 1) = '-'
-        AND substr(conversation_id, 15, 1) = '4'
-        AND substr(conversation_id, 19, 1) = '-'
-        AND substr(conversation_id, 20, 1) IN ('8', '9', 'a', 'b')
-        AND substr(conversation_id, 24, 1) = '-'
-        AND lower(conversation_id) = conversation_id
-        AND replace(conversation_id, '-', '') NOT GLOB '*[^0-9a-f]*'
-    ),
-    created_at TEXT NOT NULL,
-    PRIMARY KEY (character_id, conversation_id)
-)
-"""
-
-
 def _create_version_two_database(database_path: Path) -> None:
     with sqlite3.connect(database_path) as connection:
         connection.execute(VERSION_TWO_CONVERSATIONS_SQL)
-        connection.execute(CONVERSATION_TURNS_SQL)
+        connection.execute(VERSION_THREE_CONVERSATION_TURNS_SQL)
         connection.execute(HISTORY_INDEX_SQL)
         connection.execute(STALE_INDEX_SQL)
         connection.execute(
@@ -72,6 +52,37 @@ def _create_version_two_database(database_path: Path) -> None:
         connection.execute("PRAGMA user_version = 2")
 
 
+def _create_version_three_database(database_path: Path) -> None:
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(schema.CONVERSATIONS_SQL)
+        connection.execute(VERSION_THREE_CONVERSATION_TURNS_SQL)
+        connection.execute(schema.WAL_CLEANUP_JOBS_SQL)
+        connection.execute(schema.HISTORY_INDEX_SQL)
+        connection.execute(schema.STALE_INDEX_SQL)
+        connection.execute(
+            "INSERT INTO conversations "
+            "(character_id, conversation_id, created_at) VALUES (?, ?, ?)",
+            (CHARACTER_ID, CONVERSATION_ID, CREATED_AT),
+        )
+        connection.execute(
+            "INSERT INTO conversation_turns "
+            "(turn_id, character_id, conversation_id, user_content, "
+            "assistant_content, status, privacy_reason_code, sanitizer_version, "
+            "policy_version, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, 'completed', NULL, NULL, NULL, ?, ?)",
+            (
+                TURN_ID,
+                CHARACTER_ID,
+                CONVERSATION_ID,
+                "マスク済みユーザー本文",
+                "マスク済みアシスタント本文",
+                CREATED_AT,
+                CREATED_AT,
+            ),
+        )
+        connection.execute("PRAGMA user_version = 3")
+
+
 def _schema_state(database_path: Path) -> tuple[int, tuple[str, ...], set[str]]:
     with sqlite3.connect(database_path) as connection:
         version = int(connection.execute("PRAGMA user_version").fetchone()[0])
@@ -89,7 +100,7 @@ def _schema_state(database_path: Path) -> tuple[int, tuple[str, ...], set[str]]:
     return version, columns, tables
 
 
-def test_should_migrate_canonical_version_two_database_to_version_three(
+def test_should_migrate_canonical_version_two_database_to_version_four(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "history.db"
@@ -99,7 +110,7 @@ def test_should_migrate_canonical_version_two_database_to_version_three(
 
     version, conversation_columns, tables = _schema_state(database_path)
 
-    assert version == 3
+    assert version == 4
     assert conversation_columns == (
         "character_id",
         "conversation_id",
@@ -138,6 +149,96 @@ def test_should_preserve_existing_rows_when_migrating_version_two_database(
     )
 
 
+def test_should_migrate_version_three_to_four_without_losing_rows(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "history.db"
+    _create_version_three_database(database_path)
+
+    initialize_conversation_history_schema(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+        turn = connection.execute(
+            "SELECT turn_id, user_content, assistant_content, status "
+            "FROM conversation_turns"
+        ).fetchone()
+
+    assert version == 4
+    assert turn == (
+        TURN_ID,
+        "マスク済みユーザー本文",
+        "マスク済みアシスタント本文",
+        "completed",
+    )
+
+
+def test_should_reject_version_three_migration_with_dependent_view(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "history.db"
+    _create_version_three_database(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "CREATE VIEW completed_turns AS "
+            "SELECT turn_id FROM conversation_turns WHERE status = 'completed'"
+        )
+
+    with pytest.raises(
+        LegacySchemaError,
+        match="conversation_turns migration does not support dependent views",
+    ):
+        initialize_conversation_history_schema(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert connection.execute("SELECT turn_id FROM completed_turns").fetchone() == (
+            TURN_ID,
+        )
+
+
+@pytest.mark.parametrize(
+    ("schema_sql", "object_type", "object_name"),
+    [
+        (
+            "CREATE INDEX conversation_turns_custom_idx "
+            "ON conversation_turns (updated_at)",
+            "index",
+            "conversation_turns_custom_idx",
+        ),
+        (
+            "CREATE TRIGGER conversation_turns_audit "
+            "AFTER UPDATE ON conversation_turns BEGIN SELECT NEW.turn_id; END",
+            "trigger",
+            "conversation_turns_audit",
+        ),
+    ],
+)
+def test_should_reject_version_three_migration_with_custom_schema_object(
+    tmp_path: Path,
+    schema_sql: str,
+    object_type: str,
+    object_name: str,
+) -> None:
+    database_path = tmp_path / "history.db"
+    _create_version_three_database(database_path)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(schema_sql)
+
+    with pytest.raises(
+        LegacySchemaError,
+        match="conversation_turns migration does not support custom indexes or triggers",
+    ):
+        initialize_conversation_history_schema(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = ? AND name = ?",
+            (object_type, object_name),
+        ).fetchone() == (object_name,)
+
+
 def test_should_be_idempotent_after_migrating_version_two_database(
     tmp_path: Path,
 ) -> None:
@@ -172,7 +273,7 @@ def test_should_keep_version_two_database_unchanged_when_migration_fails(
             sql: str,
             parameters: tuple[object, ...] = (),
         ) -> sqlite3.Cursor:
-            if sql == "PRAGMA user_version = 3":
+            if sql == "PRAGMA user_version = 4":
                 raise sqlite3.OperationalError("injected migration failure")
             return super().execute(sql, parameters)
 

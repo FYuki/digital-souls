@@ -80,7 +80,7 @@ class TestConversationHistorySchema:
         initialize_conversation_history_schema(database_path)
 
         with _connect(database_path) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 4
             assert connection.execute(
                 "SELECT COUNT(*) FROM conversations"
             ).fetchone()[0] == 0
@@ -104,7 +104,7 @@ class TestConversationHistorySchema:
             future.result()
 
         with _connect(database_path) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 4
             assert {
                 row[0]
                 for row in connection.execute(
@@ -229,6 +229,82 @@ class TestConversationHistorySchema:
                         "akira",
                         "e98d6c65-1ae9-4d6f-a8c8-d59b0ad09001",
                         "マスク済み本文",
+                        "2026-07-24T00:00:00.000000Z",
+                        "2026-07-24T00:00:00.000000Z",
+                    ),
+                )
+
+    @pytest.mark.parametrize("assistant_content", ["実際に聞いた範囲", ""])
+    def test_should_store_interrupted_turn_with_non_null_heard_content(
+        self,
+        tmp_path: Path,
+        assistant_content: str,
+    ) -> None:
+        database_path = tmp_path / "conversation-history.db"
+        initialize_conversation_history_schema(database_path)
+
+        with _connect(database_path) as connection:
+            connection.execute(
+                "INSERT INTO conversations "
+                "(character_id, conversation_id, created_at) VALUES (?, ?, ?)",
+                (
+                    "miori",
+                    "e98d6c65-1ae9-4d6f-a8c8-d59b0ad09001",
+                    "2026-07-24T00:00:00.000000Z",
+                ),
+            )
+            connection.execute(
+                "INSERT INTO conversation_turns "
+                "(turn_id, character_id, conversation_id, user_content, "
+                "assistant_content, status, privacy_reason_code, "
+                "sanitizer_version, policy_version, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, 'interrupted', NULL, NULL, NULL, ?, ?)",
+                (
+                    "9e70795d-e5d5-431d-baa2-67f884403001",
+                    "miori",
+                    "e98d6c65-1ae9-4d6f-a8c8-d59b0ad09001",
+                    "保存済みの質問",
+                    assistant_content,
+                    "2026-07-24T00:00:00.000000Z",
+                    "2026-07-24T00:00:00.000000Z",
+                ),
+            )
+
+            stored = connection.execute(
+                "SELECT status, assistant_content FROM conversation_turns"
+            ).fetchone()
+
+        assert stored == ("interrupted", assistant_content)
+
+    def test_should_reject_interrupted_turn_without_assistant_content(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        database_path = tmp_path / "conversation-history.db"
+        initialize_conversation_history_schema(database_path)
+
+        with _connect(database_path) as connection:
+            connection.execute(
+                "INSERT INTO conversations "
+                "(character_id, conversation_id, created_at) VALUES (?, ?, ?)",
+                (
+                    "miori",
+                    "e98d6c65-1ae9-4d6f-a8c8-d59b0ad09001",
+                    "2026-07-24T00:00:00.000000Z",
+                ),
+            )
+            with pytest.raises(sqlite3.IntegrityError):
+                connection.execute(
+                    "INSERT INTO conversation_turns "
+                    "(turn_id, character_id, conversation_id, user_content, "
+                    "assistant_content, status, privacy_reason_code, "
+                    "sanitizer_version, policy_version, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, NULL, 'interrupted', NULL, NULL, NULL, ?, ?)",
+                    (
+                        "9e70795d-e5d5-431d-baa2-67f884403001",
+                        "miori",
+                        "e98d6c65-1ae9-4d6f-a8c8-d59b0ad09001",
+                        "保存済みの質問",
                         "2026-07-24T00:00:00.000000Z",
                         "2026-07-24T00:00:00.000000Z",
                     ),

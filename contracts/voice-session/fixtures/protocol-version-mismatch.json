@@ -1,0 +1,11 @@
+{
+  "event": {
+    "type": "session_start_requested",
+    "protocol_version": "2.0",
+    "event_id": "70000000-0000-4000-8000-000000000001",
+    "session_id": "20000000-0000-4000-8000-000000000003",
+    "monotonic_timestamp_ms": 3000,
+    "requested_reconnect_grace_ms": 5000
+  },
+  "expected": { "classification": "terminal", "history_turn_created": false }
+}

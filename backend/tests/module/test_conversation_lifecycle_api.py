@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
+from uuid import uuid4
 
 import pytest
 
-from app.conversation_history.models import PrivacySkippedTurnInput, ProcessingTurnInput
+from app.conversation_history.models import (
+    ConversationTurn,
+    PrivacySkippedTurnInput,
+    ProcessingTurnInput,
+    TurnStatus,
+)
 from app.privacy.contracts import HistoryDecisionReasonCode
 
 
@@ -104,6 +111,39 @@ def test_should_return_only_persisted_masked_turn_content(client) -> None:
     assert response.json()[0]["user_content"] == "連絡先は[REDACTED]です"
     assert response.json()[0]["assistant_content"] == "保存済みの回答です"
     assert SENSITIVE_VALUE not in response.text
+
+
+def test_should_serialize_interrupted_partial_as_existing_content_response(
+    client,
+) -> None:
+    conversation_id = uuid4()
+    turn_id = uuid4()
+    now = datetime.now(UTC)
+    interrupted = ConversationTurn(
+        turn_id=turn_id,
+        character_id="miori",
+        conversation_id=conversation_id,
+        user_content="中断前の質問",
+        assistant_content="実際に再生された部分",
+        status=TurnStatus.INTERRUPTED,
+        privacy_reason_code=None,
+        created_at=now,
+        updated_at=now,
+    )
+    service = client.app.state.conversation_lifecycle_service
+    service.list_conversation_turns = MagicMock(return_value=[interrupted])
+
+    response = client.get(f"{BASE_PATH}/{conversation_id}/turns")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "kind": "content",
+            "turn_id": str(turn_id),
+            "user_content": "中断前の質問",
+            "assistant_content": "実際に再生された部分",
+        }
+    ]
 
 
 def test_should_serialize_privacy_skipped_turn_as_metadata_only(client) -> None:

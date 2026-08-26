@@ -4,6 +4,7 @@ from app.conversation_history.models import TurnStatus
 ALLOWED_TURN_TRANSITIONS = frozenset(
     {
         (TurnStatus.PROCESSING, TurnStatus.COMPLETED),
+        (TurnStatus.PROCESSING, TurnStatus.INTERRUPTED),
         (TurnStatus.PROCESSING, TurnStatus.FAILED),
         (TurnStatus.PROCESSING, TurnStatus.PRIVACY_SKIPPED),
         (TurnStatus.COMPLETED, TurnStatus.FAILED),

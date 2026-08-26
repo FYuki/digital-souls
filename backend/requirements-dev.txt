@@ -3,6 +3,6 @@ pytest>=7.0
 httpx
 mypy
 ruff
-jsonschema>=4.18
 rfc3986-validator==0.1.1
+types-jsonschema>=4.23
 PyYAML>=6.0

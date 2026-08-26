@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
@@ -20,6 +20,7 @@ from app.privacy.contracts import (
     ConversationHistoryDecision,
 )
 from app.privacy.history_sanitizer import HistorySanitizer
+from app.voice_session.playback_range import played_text_prefix
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,15 @@ class HistorySession(Protocol):
         self,
         started_turn: StartedHistoryTurn,
         assistant_content: str,
+    ) -> ConversationTurn:
+        ...
+
+    def interrupt_turn(
+        self,
+        started_turn: StartedHistoryTurn,
+        generated_text: str,
+        response_audio_segments: Sequence[Mapping[str, object]],
+        last_played_audio_sequence: int,
     ) -> ConversationTurn:
         ...
 
@@ -58,6 +68,18 @@ class HistoryService(Protocol):
         character_id: str,
         conversation_id: UUID,
     ) -> HistorySession:
+        ...
+
+
+class _AssistantTurnPersistence(Protocol):
+    def __call__(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+        turn_id: UUID,
+        *,
+        sanitized_assistant_content: str,
+    ) -> ConversationTurn:
         ...
 
 
@@ -105,6 +127,45 @@ class ConversationHistorySession:
         started_turn: StartedHistoryTurn,
         assistant_content: str,
     ) -> ConversationTurn:
+        return self._persist_assistant_content(
+            started_turn,
+            assistant_content,
+            self._repository.complete_turn,
+        )
+
+    def fail_turn(self, started_turn: StartedHistoryTurn) -> None:
+        if started_turn.content_skipped:
+            return
+        self._repository.fail_turn(
+            self._character_id,
+            self._conversation_id,
+            started_turn.turn_id,
+        )
+
+    def interrupt_turn(
+        self,
+        started_turn: StartedHistoryTurn,
+        generated_text: str,
+        response_audio_segments: Sequence[Mapping[str, object]],
+        last_played_audio_sequence: int,
+    ) -> ConversationTurn:
+        played_content = played_text_prefix(
+            generated_text,
+            response_audio_segments,
+            last_played_audio_sequence=last_played_audio_sequence,
+        )
+        return self._persist_assistant_content(
+            started_turn,
+            played_content,
+            self._repository.interrupt_turn,
+        )
+
+    def _persist_assistant_content(
+        self,
+        started_turn: StartedHistoryTurn,
+        assistant_content: str,
+        persist: _AssistantTurnPersistence,
+    ) -> ConversationTurn:
         decision = self._sanitizer.sanitize_assistant(assistant_content)
         if started_turn.content_skipped:
             if started_turn.initial_turn is None:
@@ -119,20 +180,11 @@ class ConversationHistorySession:
             )
         if decision.content is None:
             raise ValueError("STORE_MASKED decision requires content")
-        return self._repository.complete_turn(
+        return persist(
             self._character_id,
             self._conversation_id,
             started_turn.turn_id,
             sanitized_assistant_content=decision.content,
-        )
-
-    def fail_turn(self, started_turn: StartedHistoryTurn) -> None:
-        if started_turn.content_skipped:
-            return
-        self._repository.fail_turn(
-            self._character_id,
-            self._conversation_id,
-            started_turn.turn_id,
         )
 
     def prompt_turns(

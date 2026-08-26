@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "generate:voice-session": "quicktype --src ../contracts/voice-session/voice-session.schema.json --src-lang schema --lang typescript --just-types --prefer-unions --prefer-const-values --top-level VoiceSessionEvent --out src/lib/voice-session/generated.ts && quicktype --src ../contracts/voice-session/voice-session.schema.json --src-lang schema --lang python --just-types --pydantic-base-model --python-version 3.7 --top-level VoiceSessionEvent --out ../backend/app/voice_session/generated.py",
     "dev": "vite",
     "check": "svelte-check --tsconfig ./tsconfig.json && tsc --noEmit -p ./tsconfig.e2e.json",
     "build": "vite build",
@@ -20,6 +21,8 @@
   "dependencies": {
     "@ricky0123/vad-web": "^0.0.30",
     "@sveltejs/vite-plugin-svelte": "^3.1.2",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "onnxruntime-web": "^1.27.0",
     "svelte": "^4.2.20",
     "vite": "^5.4.19"
@@ -30,6 +33,7 @@
     "@testing-library/svelte": "^4.2.3",
     "@tsconfig/svelte": "^5.0.4",
     "jsdom": "^24.1.3",
+    "quicktype": "^23.2.6",
     "svelte-check": "^3.8.6",
     "typescript": "^5.8.3",
     "vitest": "^2.1.9"

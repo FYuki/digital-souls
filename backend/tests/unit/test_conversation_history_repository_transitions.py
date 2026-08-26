@@ -72,13 +72,14 @@ class TestTurnTransitions:
         requested: TurnStatus,
     ) -> None:
         allowed = {
-            (TurnStatus.PROCESSING, TurnStatus.COMPLETED),
-            (TurnStatus.PROCESSING, TurnStatus.FAILED),
-            (TurnStatus.PROCESSING, TurnStatus.PRIVACY_SKIPPED),
-            (TurnStatus.COMPLETED, TurnStatus.FAILED),
+            ("processing", "completed"),
+            ("processing", "failed"),
+            ("processing", "privacy_skipped"),
+            ("processing", "interrupted"),
+            ("completed", "failed"),
         }
 
-        if (current, requested) in allowed:
+        if (current.value, requested.value) in allowed:
             require_turn_transition(current, requested)
             return
 
@@ -114,6 +115,49 @@ class TestTurnTransitions:
 
         assert failed.status is TurnStatus.FAILED
         assert failed.assistant_content is None
+
+    @pytest.mark.parametrize("heard_content", ["再生済みの範囲", ""])
+    def test_should_interrupt_processing_turn_with_only_heard_content(
+        self,
+        tmp_path: Path,
+        heard_content: str,
+    ) -> None:
+        repository = _processing_turn(tmp_path / "history.db")
+
+        interrupted = repository.interrupt_turn(
+            "miori",
+            CONVERSATION_ID,
+            TURN_ID,
+            sanitized_assistant_content=heard_content,
+        )
+
+        assert interrupted.status is TurnStatus.INTERRUPTED
+        assert interrupted.assistant_content == heard_content
+
+    def test_should_reject_interrupting_completed_turn_without_overwrite(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        repository = _processing_turn(tmp_path / "history.db")
+        repository.complete_turn(
+            "miori",
+            CONVERSATION_ID,
+            TURN_ID,
+            sanitized_assistant_content="完了時に保存した回答",
+        )
+
+        with pytest.raises(InvalidStateTransitionError):
+            repository.interrupt_turn(
+                "miori",
+                CONVERSATION_ID,
+                TURN_ID,
+                sanitized_assistant_content="上書きしてはいけない回答",
+            )
+
+        stored = repository.get_turn("miori", CONVERSATION_ID, TURN_ID)
+        assert stored is not None
+        assert stored.status is TurnStatus.COMPLETED
+        assert stored.assistant_content == "完了時に保存した回答"
 
     def test_should_clear_processing_content_when_privacy_sanitization_fails(
         self,
@@ -156,7 +200,7 @@ class TestTurnTransitions:
 
     @pytest.mark.parametrize(
         "operation",
-        ["complete", "fail", "privacy_skip"],
+        ["complete", "fail", "privacy_skip", "interrupt"],
     )
     def test_should_reject_every_turn_transition_after_archive(
         self,
@@ -177,7 +221,7 @@ class TestTurnTransitions:
                 )
             elif operation == "fail":
                 repository.fail_turn("miori", CONVERSATION_ID, TURN_ID)
-            else:
+            elif operation == "privacy_skip":
                 repository.skip_processing_turn_for_privacy(
                     "miori",
                     CONVERSATION_ID,
@@ -188,6 +232,15 @@ class TestTurnTransitions:
                         policy_version="test-policy-v1",
                     ),
                 )
+            elif operation == "interrupt":
+                repository.interrupt_turn(
+                    "miori",
+                    CONVERSATION_ID,
+                    TURN_ID,
+                    sanitized_assistant_content="保存してはいけない回答",
+                )
+            else:
+                raise AssertionError(f"未対応の操作です: {operation}")
 
         with sqlite3.connect(database_path) as connection:
             stored = connection.execute(
@@ -327,6 +380,7 @@ class TestTurnTransitions:
             "get_turn",
             "get_previous_completed_turn",
             "hard_delete_conversation",
+            "interrupt_turn",
             "list_active_conversations",
             "list_archived_conversations",
             "skip_processing_turn_for_privacy",

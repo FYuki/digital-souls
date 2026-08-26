@@ -66,7 +66,7 @@ def history_turn_response(turn: ConversationTurn) -> TurnResponse:
             sanitizer_version=turn.sanitizer_version,
             policy_version=turn.policy_version,
         )
-    if turn.status is not TurnStatus.COMPLETED:
+    if turn.status not in {TurnStatus.COMPLETED, TurnStatus.INTERRUPTED}:
         raise ValueError("only persisted turn states can be returned")
     if turn.user_content is None or turn.assistant_content is None:
         raise ValueError("content turn requires persisted user and assistant content")

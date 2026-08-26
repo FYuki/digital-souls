@@ -1,0 +1,13 @@
+{
+  "events": [
+    { "type": "response_started", "protocol_version": "1.0", "event_id": "81000000-0000-4000-8000-000000000001", "session_id": "20000000-0000-4000-8000-000000000001", "response_id": "51000000-0000-4000-8000-000000000001", "speaker": { "participant_id": "40000000-0000-4000-8000-000000000002", "role": "character", "character_id": "miori" }, "source_utterance_ids": ["30000000-0000-4000-8000-000000000004"], "monotonic_timestamp_ms": 4000 },
+    { "type": "response_delta", "protocol_version": "1.0", "event_id": "81000000-0000-4000-8000-000000000002", "session_id": "20000000-0000-4000-8000-000000000001", "response_id": "51000000-0000-4000-8000-000000000001", "text_sequence": 1, "text": "重複しない", "text_range": { "start": 0, "end": 5 }, "monotonic_timestamp_ms": 4001 },
+    { "type": "response_delta", "protocol_version": "1.0", "event_id": "81000000-0000-4000-8000-000000000002", "session_id": "20000000-0000-4000-8000-000000000001", "response_id": "51000000-0000-4000-8000-000000000001", "text_sequence": 1, "text": "重複しない", "text_range": { "start": 0, "end": 5 }, "monotonic_timestamp_ms": 4001 }
+  ],
+  "conflicting_event": { "type": "response_delta", "protocol_version": "1.0", "event_id": "81000000-0000-4000-8000-000000000002", "session_id": "20000000-0000-4000-8000-000000000001", "response_id": "51000000-0000-4000-8000-000000000001", "text_sequence": 1, "text": "異なるpayload", "text_range": { "start": 0, "end": 5 }, "monotonic_timestamp_ms": 4001 },
+  "expected": {
+    "applied_event_ids": ["81000000-0000-4000-8000-000000000001", "81000000-0000-4000-8000-000000000002"],
+    "assistant_text": "重複しない",
+    "conflicting_duplicate": "terminal_protocol_error"
+  }
+}

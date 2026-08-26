@@ -119,7 +119,8 @@ def test_should_return_after_child_orchestrator_is_ready_and_leave_down_cleanup_
                 stdout=stdout,
                 stderr=stderr,
             )
-            start_process.wait(timeout=10)
+            # clean環境では子オーケストレーターがFrontend依存を導入してから起動する。
+            start_process.wait(timeout=60)
         ready_report = json.loads(report_path.read_text(encoding="utf-8"))
         identity = ProcessIdentity.from_report(ready_report["orchestratorIdentity"])
 

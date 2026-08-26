@@ -11,8 +11,12 @@ class RestoredHistoryTurn:
 
 
 def restore_prompt_turn(turn: ConversationTurn) -> RestoredHistoryTurn:
-    if turn.status not in {TurnStatus.COMPLETED, TurnStatus.FAILED}:
-        raise ValueError("only completed or failed turns can be restored")
+    if turn.status not in {
+        TurnStatus.COMPLETED,
+        TurnStatus.INTERRUPTED,
+        TurnStatus.FAILED,
+    }:
+        raise ValueError("only persisted content turns can be restored")
     if turn.user_content is None:
         raise ValueError("restored history turn requires saved user content")
     assistant_content = (

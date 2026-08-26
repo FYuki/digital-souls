@@ -1,0 +1,19 @@
+{
+  "events": [
+    { "type": "session_started", "protocol_version": "1.0", "event_id": "83000000-0000-4000-8000-000000000001", "session_id": "23000000-0000-4000-8000-000000000001", "monotonic_timestamp_ms": 6000, "reconnect_grace_ms": 5000 },
+    { "type": "response_started", "protocol_version": "1.0", "event_id": "83000000-0000-4000-8000-000000000002", "session_id": "23000000-0000-4000-8000-000000000001", "response_id": "53000000-0000-4000-8000-000000000001", "speaker": { "participant_id": "43000000-0000-4000-8000-000000000002", "role": "character", "character_id": "miori" }, "source_utterance_ids": ["33000000-0000-4000-8000-000000000001"], "monotonic_timestamp_ms": 6010 },
+    { "type": "response_delta", "protocol_version": "1.0", "event_id": "83000000-0000-4000-8000-000000000003", "session_id": "23000000-0000-4000-8000-000000000001", "response_id": "53000000-0000-4000-8000-000000000001", "text_sequence": 1, "text": "途中", "text_range": { "start": 0, "end": 2 }, "monotonic_timestamp_ms": 6011 },
+    { "type": "session_disconnected", "protocol_version": "1.0", "event_id": "83000000-0000-4000-8000-000000000004", "session_id": "23000000-0000-4000-8000-000000000001", "monotonic_timestamp_ms": 6020 },
+    { "type": "response_cancelled", "protocol_version": "1.0", "event_id": "83000000-0000-4000-8000-000000000005", "session_id": "23000000-0000-4000-8000-000000000001", "response_id": "53000000-0000-4000-8000-000000000001", "reason": "disconnect", "monotonic_timestamp_ms": 6021 },
+    { "type": "session_reconnect_requested", "protocol_version": "1.0", "event_id": "83000000-0000-4000-8000-000000000006", "session_id": "23000000-0000-4000-8000-000000000001", "monotonic_timestamp_ms": 6030 },
+    { "type": "session_reconnected", "protocol_version": "1.0", "event_id": "83000000-0000-4000-8000-000000000007", "session_id": "23000000-0000-4000-8000-000000000001", "monotonic_timestamp_ms": 6031 },
+    { "type": "response_delta", "protocol_version": "1.0", "event_id": "83000000-0000-4000-8000-000000000008", "session_id": "23000000-0000-4000-8000-000000000001", "response_id": "53000000-0000-4000-8000-000000000001", "text_sequence": 2, "text": "破棄", "text_range": { "start": 2, "end": 4 }, "monotonic_timestamp_ms": 6032 },
+    { "type": "speech_started", "protocol_version": "1.0", "event_id": "83000000-0000-4000-8000-000000000009", "session_id": "23000000-0000-4000-8000-000000000001", "utterance_id": "33000000-0000-4000-8000-000000000002", "speaker": { "participant_id": "43000000-0000-4000-8000-000000000001", "role": "user" }, "monotonic_timestamp_ms": 6040 }
+  ],
+  "expected": {
+    "session_id_preserved": "23000000-0000-4000-8000-000000000001",
+    "old_response_terminal": "response_cancelled",
+    "late_old_response_event_discarded": true,
+    "new_utterance_id": "33000000-0000-4000-8000-000000000002"
+  }
+}

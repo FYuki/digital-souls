@@ -23,6 +23,8 @@ def _turn(
     timestamp = datetime(2026, 7, 24, 12, index, tzinfo=UTC)
     if status is TurnStatus.COMPLETED and assistant_content is None:
         assistant_content = f"assistant-{index}"
+    if status is TurnStatus.INTERRUPTED and assistant_content is None:
+        assistant_content = f"heard-assistant-{index}"
     return ConversationTurn(
         turn_id=TURN_IDS[index],
         character_id="miori",
@@ -50,6 +52,29 @@ def _session(repository: MagicMock) -> ConversationHistorySession:
 
 
 class TestPromptHistorySession:
+    def test_should_restore_interrupted_partial_without_counting_it_as_completed(
+        self,
+    ) -> None:
+        repository = MagicMock()
+        repository.list_prompt_turns_page.side_effect = [
+            _page((_turn(3, TurnStatus.INTERRUPTED),), "cursor-1"),
+            _page((_turn(2, TurnStatus.COMPLETED),), None),
+        ]
+
+        restored = tuple(
+            _session(repository).prompt_turns(
+                max_completed_turns=1,
+                page_size=1,
+            )
+        )
+
+        assert [turn.assistant_content for turn in restored] == [
+            "heard-assistant-3",
+            "assistant-2",
+        ]
+        assert [turn.is_completed for turn in restored] == [False, True]
+        assert repository.list_prompt_turns_page.call_count == 2
+
     def test_should_count_only_completed_and_stop_at_boundary(self) -> None:
         repository = MagicMock()
         repository.list_prompt_turns_page.side_effect = [
