@@ -9,6 +9,11 @@ class Classification(Enum):
     TERMINAL = "terminal"
 
 
+class ClockDomain(Enum):
+    CLIENT_MONOTONIC = "client_monotonic"
+    SERVER_MONOTONIC = "server_monotonic"
+
+
 class Measurement(Enum):
     FIRST_AUDIO_OUT = "first_audio_out"
     PLAYBACK_STARTED = "playback_started"
@@ -58,7 +63,7 @@ class TypeEnum(Enum):
     PLAYBACK_DECODE_FAILED = "playback_decode_failed"
     PLAYBACK_STARTED = "playback_started"
     PLAYBACK_STOPPED = "playback_stopped"
-    RESPONSE_AUDIO_CHUNK = "response_audio_chunk"
+    RESPONSE_AUDIO_SEGMENT = "response_audio_segment"
     RESPONSE_CANCELLED = "response_cancelled"
     RESPONSE_CANCEL_REQUESTED = "response_cancel_requested"
     RESPONSE_COMPLETED = "response_completed"
@@ -75,10 +80,14 @@ class TypeEnum(Enum):
     SESSION_START_REQUESTED = "session_start_requested"
     SPEECH_STARTED = "speech_started"
     SPEECH_STOPPED = "speech_stopped"
-    UTTERANCE_AUDIO_CHUNK = "utterance_audio_chunk"
     UTTERANCE_DISCARDED = "utterance_discarded"
     UTTERANCE_FINALIZED = "utterance_finalized"
     UTTERANCE_PENDING = "utterance_pending"
+
+
+class Unit(Enum):
+    MILLISECOND = "millisecond"
+    NANOSECOND = "nanosecond"
 
 
 class UserState(Enum):
@@ -93,26 +102,31 @@ class VoiceSessionEvent(BaseModel):
     """transport 非依存の双方向音声セッションイベント契約。音声バイト列はこのイベント契約の外側にある一時 media として扱う。"""
 
     event_id: UUID
-    monotonic_timestamp_ms: int
     protocol_version: ProtocolVersion
     session_id: UUID
     type: TypeEnum
+    monotonic_timestamp_ms: Optional[int] = None
+    requested_reconnect_grace_ms: Optional[int] = None
     reconnect_grace_ms: Optional[int] = None
     reason: Optional[Reason] = None
-    reconnect_deadline_ms: Optional[int] = None
     speaker: Optional[Speaker] = None
     utterance_id: Optional[UUID] = None
-    sequence: Optional[int] = None
-    last_sequence: Optional[int] = None
     should_response: Optional[bool] = None
     transcript: Optional[str] = None
     response_id: Optional[UUID] = None
     source_utterance_ids: Optional[List[UUID]] = None
     text: Optional[str] = None
     text_range: Optional[TextRange] = None
+    text_sequence: Optional[int] = None
+    audio_sequence: Optional[int] = None
+    last_audio_sequence: Optional[int] = None
+    last_text_sequence: Optional[int] = None
     error_code: Optional[str] = None
     recoverable: Optional[bool] = None
-    last_played_sequence: Optional[int] = None
+    last_played_audio_sequence: Optional[int] = None
     classification: Optional[Classification] = None
     user_state: Optional[UserState] = None
+    clock_domain: Optional[ClockDomain] = None
     measurement: Optional[Measurement] = None
+    timestamp: Optional[int] = None
+    unit: Optional[Unit] = None

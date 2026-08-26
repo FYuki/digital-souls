@@ -1,0 +1,11 @@
+{
+  "events": [
+    { "type": "response_delta", "protocol_version": "1.0", "event_id": "82000000-0000-4000-8000-000000000001", "session_id": "20000000-0000-4000-8000-000000000001", "response_id": "52000000-0000-4000-8000-000000000001", "text_sequence": 1, "text": "一", "text_range": { "start": 0, "end": 1 }, "monotonic_timestamp_ms": 5000 },
+    { "type": "response_delta", "protocol_version": "1.0", "event_id": "82000000-0000-4000-8000-000000000002", "session_id": "20000000-0000-4000-8000-000000000001", "response_id": "52000000-0000-4000-8000-000000000001", "text_sequence": 3, "text": "三", "text_range": { "start": 2, "end": 3 }, "monotonic_timestamp_ms": 5001 },
+    { "type": "response_delta", "protocol_version": "1.0", "event_id": "82000000-0000-4000-8000-000000000003", "session_id": "20000000-0000-4000-8000-000000000001", "response_id": "52000000-0000-4000-8000-000000000001", "text_sequence": 2, "text": "二", "text_range": { "start": 1, "end": 2 }, "monotonic_timestamp_ms": 5002 }
+  ],
+  "expected": {
+    "sequence_3_not_applied_before_sequence_2": true,
+    "last_contiguous_sequence_before_recovery": 1
+  }
+}

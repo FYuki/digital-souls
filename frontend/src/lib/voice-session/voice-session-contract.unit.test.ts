@@ -25,7 +25,13 @@ async function loadValidationModule(): Promise<typeof import('./validation')> {
 }
 
 describe('voice session shared contract', () => {
-  it.each(['normal.json', 'cancel-race.json'])(
+  it.each([
+    'normal.json',
+    'cancel-race.json',
+    'duplicate.json',
+    'out-of-order.json',
+    'reconnect.json',
+  ])(
     '共有fixture %s のeventを境界validation後だけ受理する',
     async (fixtureName) => {
       const { parseVoiceSessionEvent } = await loadValidationModule()
@@ -37,7 +43,7 @@ describe('voice session shared contract', () => {
     },
   )
 
-  it.each(['response_delta', 'response_audio_chunk'])(
+  it.each(['response_delta', 'response_audio_segment'])(
     '%sの順序どおりのtext rangeと空区間を受理する',
     async (eventType) => {
       const { parseVoiceSessionEvent } = await loadValidationModule()
@@ -55,7 +61,7 @@ describe('voice session shared contract', () => {
     },
   )
 
-  it.each(['response_delta', 'response_audio_chunk'])(
+  it.each(['response_delta', 'response_audio_segment'])(
     '%sの逆順text rangeを拒否する',
     async (eventType) => {
       const { parseVoiceSessionEvent } = await loadValidationModule()
@@ -131,6 +137,164 @@ describe('voice session shared contract', () => {
     expect(state).toEqual(stateBeforeLateEvent)
     expect(state.terminal).toBe(expected.terminal_event)
     expect(expected.late_event_discarded).toBe(true)
+  })
+
+  it('重複event_idの副作用を一度だけ適用する', () => {
+    const loaded = fixture('duplicate.json')
+    const events = loaded.events as Array<Record<string, unknown>>
+    const expected = loaded.expected as Record<string, unknown>
+    const appliedEventIds = new Set<string>()
+    let assistantText = ''
+
+    for (const event of events) {
+      const eventId = event.event_id as string
+      if (appliedEventIds.has(eventId)) continue
+      appliedEventIds.add(eventId)
+      if (event.type === 'response_delta') assistantText += event.text as string
+    }
+
+    expect([...appliedEventIds].sort()).toEqual(expected.applied_event_ids)
+    expect(assistantText).toBe(expected.assistant_text)
+  })
+
+  it('同じevent_idでpayloadが異なる重複をprotocol errorとする', () => {
+    const loaded = fixture('duplicate.json')
+    const events = loaded.events as Array<Record<string, unknown>>
+    const conflicting = loaded.conflicting_event as Record<string, unknown>
+    const expected = loaded.expected as Record<string, unknown>
+    const receivedPayloadByEventId = new Map<string, Record<string, unknown>>()
+
+    for (const event of events) {
+      const eventId = event.event_id as string
+      const previous = receivedPayloadByEventId.get(eventId)
+      if (previous === undefined) {
+        receivedPayloadByEventId.set(eventId, event)
+        continue
+      }
+      expect(event).toEqual(previous)
+    }
+
+    const classification = JSON.stringify(
+      receivedPayloadByEventId.get(conflicting.event_id as string),
+    ) === JSON.stringify(conflicting)
+      ? 'duplicate'
+      : 'terminal_protocol_error'
+    expect(classification).toBe(
+      expected.conflicting_duplicate,
+    )
+  })
+
+  it('text sequenceの欠番を越えてstreamを進めない', () => {
+    const loaded = fixture('out-of-order.json')
+    const events = loaded.events as Array<Record<string, unknown>>
+    const expected = loaded.expected as Record<string, unknown>
+    let nextSequence = 1
+    let lastContiguousBeforeRecovery = 0
+
+    for (const event of events.slice(0, 2)) {
+      const sequence = event.text_sequence as number
+      if (sequence !== nextSequence) break
+      lastContiguousBeforeRecovery = sequence
+      nextSequence += 1
+    }
+
+    expect(lastContiguousBeforeRecovery).toBe(
+      expected.last_contiguous_sequence_before_recovery,
+    )
+    expect(expected.sequence_3_not_applied_before_sequence_2).toBe(true)
+  })
+
+  it('再接続でsessionを維持し旧responseの遅延eventを破棄する', () => {
+    const loaded = fixture('reconnect.json')
+    const events = loaded.events as Array<Record<string, unknown>>
+    const expected = loaded.expected as Record<string, unknown>
+    const terminalResponseIds = new Set<string>()
+    const lateEvents: Array<Record<string, unknown>> = []
+
+    for (const event of events) {
+      const responseId = event.response_id
+      if (
+        typeof responseId === 'string'
+        && terminalResponseIds.has(responseId)
+      ) {
+        lateEvents.push(event)
+        continue
+      }
+      if (
+        ['response_cancelled', 'response_completed', 'response_failed'].includes(
+          event.type as string,
+        )
+        && typeof responseId === 'string'
+      ) terminalResponseIds.add(responseId)
+    }
+
+    expect(new Set(events.map((event) => event.session_id))).toEqual(
+      new Set([expected.session_id_preserved]),
+    )
+    expect(lateEvents.map((event) => event.type)).toEqual(['response_delta'])
+    expect(expected.late_old_response_event_discarded).toBe(true)
+  })
+
+  it('TTFAをclient monotonic内だけで算出する', () => {
+    const loaded = fixture('normal.json')
+    const events = loaded.events as Array<Record<string, unknown>>
+    const expected = loaded.expected as Record<string, unknown>
+    const observations = new Map(
+      events
+        .filter((event) => event.type === 'observation')
+        .map((event) => [event.measurement, event]),
+    )
+    const speechStopped = observations.get('speech_stopped')
+    const playbackStarted = observations.get('playback_started')
+    const firstAudioOut = observations.get('first_audio_out')
+
+    expect(speechStopped?.clock_domain).toBe('client_monotonic')
+    expect(playbackStarted?.clock_domain).toBe('client_monotonic')
+    expect(
+      (playbackStarted?.timestamp as number)
+      - (speechStopped?.timestamp as number),
+    ).toBe(expected.ttfa_ms)
+    expect(firstAudioOut?.clock_domain).toBe('server_monotonic')
+    expect(firstAudioOut?.unit).toBe('nanosecond')
+  })
+
+  it('計測点と異なるclock domainを拒否する', async () => {
+    const { parseVoiceSessionEvent } = await loadValidationModule()
+    const events = fixture('normal.json').events as Array<Record<string, unknown>>
+    const playbackObservation = events.find(
+      (event) =>
+        event.type === 'observation'
+        && event.measurement === 'playback_started',
+    )
+
+    expect(() => parseVoiceSessionEvent({
+      ...playbackObservation,
+      clock_domain: 'server_monotonic',
+      unit: 'nanosecond',
+    })).toThrow()
+  })
+
+  it('characterだけにcharacter_idを必須とする', async () => {
+    const { parseVoiceSessionEvent } = await loadValidationModule()
+    const responseStarted = normalResponseEvent('response_started')
+    const speechStarted = (fixture('normal.json').events as Array<Record<string, unknown>>)
+      .find((event) => event.type === 'speech_started') as Record<string, unknown>
+    const characterWithoutId = Object.fromEntries(
+      Object.entries(responseStarted.speaker as Record<string, unknown>)
+        .filter(([key]) => key !== 'character_id'),
+    )
+
+    expect(() => parseVoiceSessionEvent({
+      ...responseStarted,
+      speaker: characterWithoutId,
+    })).toThrow()
+    expect(() => parseVoiceSessionEvent({
+      ...speechStarted,
+      speaker: {
+        ...(speechStarted.speaker as Record<string, unknown>),
+        character_id: 'miori',
+      },
+    })).toThrow()
   })
 
   it('非互換protocolをtyped eventへ変換しない', async () => {

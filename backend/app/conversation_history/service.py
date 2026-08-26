@@ -45,8 +45,8 @@ class HistorySession(Protocol):
         self,
         started_turn: StartedHistoryTurn,
         generated_text: str,
-        response_audio_chunks: Sequence[Mapping[str, object]],
-        last_played_sequence: int,
+        response_audio_segments: Sequence[Mapping[str, object]],
+        last_played_audio_sequence: int,
     ) -> ConversationTurn:
         ...
 
@@ -146,13 +146,13 @@ class ConversationHistorySession:
         self,
         started_turn: StartedHistoryTurn,
         generated_text: str,
-        response_audio_chunks: Sequence[Mapping[str, object]],
-        last_played_sequence: int,
+        response_audio_segments: Sequence[Mapping[str, object]],
+        last_played_audio_sequence: int,
     ) -> ConversationTurn:
         played_content = played_text_prefix(
             generated_text,
-            response_audio_chunks,
-            last_played_sequence=last_played_sequence,
+            response_audio_segments,
+            last_played_audio_sequence=last_played_audio_sequence,
         )
         return self._persist_assistant_content(
             started_turn,

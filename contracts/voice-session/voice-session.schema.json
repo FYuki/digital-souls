@@ -13,14 +13,13 @@
     { "$ref": "#/$defs/SessionReconnectRequested" },
     { "$ref": "#/$defs/SessionReconnected" },
     { "$ref": "#/$defs/SpeechStarted" },
-    { "$ref": "#/$defs/UtteranceAudioChunk" },
     { "$ref": "#/$defs/SpeechStopped" },
     { "$ref": "#/$defs/UtteranceFinalized" },
     { "$ref": "#/$defs/UtterancePending" },
     { "$ref": "#/$defs/UtteranceDiscarded" },
     { "$ref": "#/$defs/ResponseStarted" },
     { "$ref": "#/$defs/ResponseDelta" },
-    { "$ref": "#/$defs/ResponseAudioChunk" },
+    { "$ref": "#/$defs/ResponseAudioSegment" },
     { "$ref": "#/$defs/ResponseCompleted" },
     { "$ref": "#/$defs/ResponseCancelRequested" },
     { "$ref": "#/$defs/ResponseCancelled" },
@@ -51,7 +50,20 @@
         "participant_id": { "$ref": "#/$defs/Identifier" },
         "role": { "type": "string", "enum": ["user", "character"] },
         "character_id": { "type": "string", "minLength": 1 }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "role": { "const": "character" } }, "required": ["role"] },
+          "then": {
+            "properties": { "character_id": { "type": "string", "minLength": 1 } },
+            "required": ["character_id"]
+          }
+        },
+        {
+          "if": { "properties": { "role": { "const": "user" } }, "required": ["role"] },
+          "then": { "properties": { "character_id": false } }
+        }
+      ]
     },
     "TextRange": {
       "type": "object",
@@ -65,20 +77,20 @@
     },
     "SessionStartRequested": {
       "type": "object", "additionalProperties": false,
-      "required": ["type", "protocol_version", "event_id", "session_id", "monotonic_timestamp_ms", "reconnect_grace_ms"],
+      "required": ["type", "protocol_version", "event_id", "session_id", "monotonic_timestamp_ms", "requested_reconnect_grace_ms"],
       "properties": {
         "type": { "const": "session_start_requested" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
         "event_id": { "$ref": "#/$defs/Identifier" }, "session_id": { "$ref": "#/$defs/Identifier" },
-        "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }, "reconnect_grace_ms": { "$ref": "#/$defs/NonNegativeSafeInteger" }
+        "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }, "requested_reconnect_grace_ms": { "$ref": "#/$defs/NonNegativeSafeInteger" }
       }
     },
     "SessionStarted": {
       "type": "object", "additionalProperties": false,
-      "required": ["type", "protocol_version", "event_id", "session_id", "monotonic_timestamp_ms"],
+      "required": ["type", "protocol_version", "event_id", "session_id", "monotonic_timestamp_ms", "reconnect_grace_ms"],
       "properties": {
         "type": { "const": "session_started" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
         "event_id": { "$ref": "#/$defs/Identifier" }, "session_id": { "$ref": "#/$defs/Identifier" },
-        "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
+        "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }, "reconnect_grace_ms": { "$ref": "#/$defs/NonNegativeSafeInteger" }
       }
     },
     "SessionMuted": {
@@ -110,11 +122,11 @@
     },
     "SessionDisconnected": {
       "type": "object", "additionalProperties": false,
-      "required": ["type", "protocol_version", "event_id", "session_id", "monotonic_timestamp_ms", "reconnect_deadline_ms"],
+      "required": ["type", "protocol_version", "event_id", "session_id", "monotonic_timestamp_ms"],
       "properties": {
         "type": { "const": "session_disconnected" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
         "event_id": { "$ref": "#/$defs/Identifier" }, "session_id": { "$ref": "#/$defs/Identifier" },
-        "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }, "reconnect_deadline_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
+        "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
     "SessionReconnectRequested": {
@@ -144,22 +156,13 @@
         "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
-    "UtteranceAudioChunk": {
-      "type": "object", "additionalProperties": false,
-      "required": ["type", "protocol_version", "event_id", "session_id", "utterance_id", "speaker", "sequence", "monotonic_timestamp_ms"],
-      "properties": {
-        "type": { "const": "utterance_audio_chunk" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
-        "session_id": { "$ref": "#/$defs/Identifier" }, "utterance_id": { "$ref": "#/$defs/Identifier" }, "speaker": { "$ref": "#/$defs/Speaker" },
-        "sequence": { "$ref": "#/$defs/Sequence" }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
-      }
-    },
     "SpeechStopped": {
       "type": "object", "additionalProperties": false,
-      "required": ["type", "protocol_version", "event_id", "session_id", "utterance_id", "speaker", "last_sequence", "monotonic_timestamp_ms"],
+      "required": ["type", "protocol_version", "event_id", "session_id", "utterance_id", "speaker", "monotonic_timestamp_ms"],
       "properties": {
         "type": { "const": "speech_stopped" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
         "session_id": { "$ref": "#/$defs/Identifier" }, "utterance_id": { "$ref": "#/$defs/Identifier" }, "speaker": { "$ref": "#/$defs/Speaker" },
-        "last_sequence": { "$ref": "#/$defs/Sequence" }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
+        "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
     "UtteranceFinalized": {
@@ -201,28 +204,29 @@
     },
     "ResponseDelta": {
       "type": "object", "additionalProperties": false,
-      "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "sequence", "text", "text_range", "monotonic_timestamp_ms"],
+      "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "text_sequence", "text", "text_range", "monotonic_timestamp_ms"],
       "properties": {
         "type": { "const": "response_delta" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
-        "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" }, "sequence": { "$ref": "#/$defs/Sequence" },
+        "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" }, "text_sequence": { "$ref": "#/$defs/Sequence" },
         "text": { "type": "string", "minLength": 1 }, "text_range": { "$ref": "#/$defs/TextRange" }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
-    "ResponseAudioChunk": {
+    "ResponseAudioSegment": {
       "type": "object", "additionalProperties": false,
-      "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "sequence", "text_range", "monotonic_timestamp_ms"],
+      "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "audio_sequence", "text_range", "monotonic_timestamp_ms"],
       "properties": {
-        "type": { "const": "response_audio_chunk" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
-        "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" }, "sequence": { "$ref": "#/$defs/Sequence" },
+        "type": { "const": "response_audio_segment" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
+        "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" }, "audio_sequence": { "$ref": "#/$defs/Sequence" },
         "text_range": { "$ref": "#/$defs/TextRange" }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
     "ResponseCompleted": {
       "type": "object", "additionalProperties": false,
-      "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "last_sequence", "monotonic_timestamp_ms"],
+      "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "last_text_sequence", "last_audio_sequence", "monotonic_timestamp_ms"],
       "properties": {
         "type": { "const": "response_completed" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
-        "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" }, "last_sequence": { "$ref": "#/$defs/Sequence" },
+        "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" },
+        "last_text_sequence": { "$ref": "#/$defs/Sequence" }, "last_audio_sequence": { "$ref": "#/$defs/NonNegativeSafeInteger" },
         "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
@@ -255,38 +259,38 @@
     },
     "PlaybackStarted": {
       "type": "object", "additionalProperties": false,
-      "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "sequence", "monotonic_timestamp_ms"],
+      "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "audio_sequence", "monotonic_timestamp_ms"],
       "properties": {
         "type": { "const": "playback_started" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
-        "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" }, "sequence": { "$ref": "#/$defs/Sequence" },
+        "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" }, "audio_sequence": { "$ref": "#/$defs/Sequence" },
         "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
     "PlaybackStopped": {
       "type": "object", "additionalProperties": false,
-      "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "reason", "last_played_sequence", "monotonic_timestamp_ms"],
+      "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "reason", "last_played_audio_sequence", "monotonic_timestamp_ms"],
       "properties": {
         "type": { "const": "playback_stopped" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
         "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" },
         "reason": { "type": "string", "enum": ["barge_in", "session_ended", "disconnect", "decode_failure"] },
-        "last_played_sequence": { "$ref": "#/$defs/NonNegativeSafeInteger" }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
+        "last_played_audio_sequence": { "$ref": "#/$defs/NonNegativeSafeInteger" }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
     "PlaybackCompleted": {
       "type": "object", "additionalProperties": false,
-      "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "last_played_sequence", "monotonic_timestamp_ms"],
+      "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "last_played_audio_sequence", "monotonic_timestamp_ms"],
       "properties": {
         "type": { "const": "playback_completed" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
         "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" },
-        "last_played_sequence": { "$ref": "#/$defs/Sequence" }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
+        "last_played_audio_sequence": { "$ref": "#/$defs/Sequence" }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
     "PlaybackDecodeFailed": {
       "type": "object", "additionalProperties": false,
-      "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "sequence", "error_code", "monotonic_timestamp_ms"],
+      "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "audio_sequence", "error_code", "monotonic_timestamp_ms"],
       "properties": {
         "type": { "const": "playback_decode_failed" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
-        "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" }, "sequence": { "$ref": "#/$defs/Sequence" },
+        "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" }, "audio_sequence": { "$ref": "#/$defs/Sequence" },
         "error_code": { "type": "string", "minLength": 1 }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
@@ -303,13 +307,25 @@
     },
     "Observation": {
       "type": "object", "additionalProperties": false,
-      "required": ["type", "protocol_version", "event_id", "session_id", "measurement", "monotonic_timestamp_ms"],
+      "required": ["type", "protocol_version", "event_id", "session_id", "measurement", "timestamp", "clock_domain", "unit"],
       "properties": {
         "type": { "const": "observation" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
         "session_id": { "$ref": "#/$defs/Identifier" }, "utterance_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" },
         "measurement": { "type": "string", "enum": ["speech_stopped", "utterance_finalized", "response_started", "first_audio_out", "playback_started"] },
-        "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
-      }
+        "timestamp": { "$ref": "#/$defs/NonNegativeSafeInteger" },
+        "clock_domain": { "type": "string", "enum": ["client_monotonic", "server_monotonic"] },
+        "unit": { "type": "string", "enum": ["millisecond", "nanosecond"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "measurement": { "enum": ["speech_stopped", "playback_started"] } }, "required": ["measurement"] },
+          "then": { "properties": { "clock_domain": { "const": "client_monotonic" }, "unit": { "const": "millisecond" } } }
+        },
+        {
+          "if": { "properties": { "measurement": { "enum": ["utterance_finalized", "response_started", "first_audio_out"] } }, "required": ["measurement"] },
+          "then": { "properties": { "clock_domain": { "const": "server_monotonic" }, "unit": { "const": "nanosecond" } } }
+        }
+      ]
     }
   }
 }

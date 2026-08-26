@@ -95,15 +95,21 @@ def test_observation_rejects_content_and_audio_payload_fields() -> None:
         assert list(validator.iter_errors(invalid)), forbidden_field
 
 
-def test_backend_boundary_parses_the_shared_normal_and_cancel_fixtures() -> None:
+def test_backend_boundary_parses_every_shared_valid_fixture() -> None:
     parser = importlib.import_module("app.voice_session.validation")
-    for fixture_name in ("normal.json", "cancel-race.json"):
+    for fixture_name in (
+        "normal.json",
+        "cancel-race.json",
+        "duplicate.json",
+        "out-of-order.json",
+        "reconnect.json",
+    ):
         events = _fixture(fixture_name)["events"]
         assert isinstance(events, list)
         assert [parser.parse_voice_session_event(event) for event in events]
 
 
-@pytest.mark.parametrize("event_type", ["response_delta", "response_audio_chunk"])
+@pytest.mark.parametrize("event_type", ["response_delta", "response_audio_segment"])
 def test_backend_boundary_accepts_ordered_and_empty_text_ranges(
     event_type: str,
 ) -> None:
@@ -124,7 +130,7 @@ def test_backend_boundary_accepts_ordered_and_empty_text_ranges(
     assert event["text_range"] == {"start": 0, "end": 4}
 
 
-@pytest.mark.parametrize("event_type", ["response_delta", "response_audio_chunk"])
+@pytest.mark.parametrize("event_type", ["response_delta", "response_audio_segment"])
 def test_backend_boundary_rejects_reversed_text_ranges(event_type: str) -> None:
     parser = importlib.import_module("app.voice_session.validation")
     event = _normal_response_event(event_type)
@@ -168,6 +174,174 @@ def test_cancelled_response_discards_late_delta_without_changing_state() -> None
     assert state == state_before_late_event
     assert state["terminal"] == expected["terminal_event"]
     assert expected["late_event_discarded"] is True
+
+
+def test_duplicate_event_id_has_exactly_once_effect() -> None:
+    fixture = _fixture("duplicate.json")
+    events = fixture["events"]
+    expected = fixture["expected"]
+    assert isinstance(events, list)
+    assert isinstance(expected, dict)
+    applied_event_ids: set[str] = set()
+    assistant_text = ""
+    for event in events:
+        event_id = event["event_id"]
+        assert isinstance(event_id, str)
+        if event_id in applied_event_ids:
+            continue
+        applied_event_ids.add(event_id)
+        if event["type"] == "response_delta":
+            assistant_text += event["text"]
+
+    assert sorted(applied_event_ids) == expected["applied_event_ids"]
+    assert assistant_text == expected["assistant_text"]
+
+
+def test_duplicate_event_id_with_different_payload_is_protocol_error() -> None:
+    fixture = _fixture("duplicate.json")
+    events = fixture["events"]
+    conflicting = fixture["conflicting_event"]
+    expected = fixture["expected"]
+    assert isinstance(events, list)
+    assert isinstance(conflicting, dict)
+    assert isinstance(expected, dict)
+    received_payload_by_event_id: dict[str, dict[str, object]] = {}
+
+    for event in events:
+        assert isinstance(event, dict)
+        event_id = event["event_id"]
+        assert isinstance(event_id, str)
+        previous = received_payload_by_event_id.get(event_id)
+        if previous is None:
+            received_payload_by_event_id[event_id] = event
+            continue
+        assert previous == event
+
+    event_id = conflicting["event_id"]
+    assert isinstance(event_id, str)
+    classification = (
+        "duplicate"
+        if received_payload_by_event_id[event_id] == conflicting
+        else "terminal_protocol_error"
+    )
+    assert classification == expected["conflicting_duplicate"]
+
+
+def test_out_of_order_text_delta_does_not_advance_past_a_gap() -> None:
+    fixture = _fixture("out-of-order.json")
+    events = fixture["events"]
+    expected = fixture["expected"]
+    assert isinstance(events, list)
+    assert isinstance(expected, dict)
+    next_sequence = 1
+    last_contiguous_before_recovery = 0
+    for event in events[:2]:
+        sequence = event["text_sequence"]
+        assert isinstance(sequence, int)
+        if sequence != next_sequence:
+            break
+        last_contiguous_before_recovery = sequence
+        next_sequence += 1
+
+    assert (
+        last_contiguous_before_recovery
+        == expected["last_contiguous_sequence_before_recovery"]
+    )
+    assert expected["sequence_3_not_applied_before_sequence_2"] is True
+
+
+def test_reconnect_keeps_session_but_discards_late_old_response_event() -> None:
+    fixture = _fixture("reconnect.json")
+    events = fixture["events"]
+    expected = fixture["expected"]
+    assert isinstance(events, list)
+    assert isinstance(expected, dict)
+    terminal_response_ids: set[str] = set()
+    late_events: list[dict[str, object]] = []
+    for event in events:
+        response_id = event.get("response_id")
+        if isinstance(response_id, str) and response_id in terminal_response_ids:
+            late_events.append(event)
+            continue
+        if event["type"] in {
+            "response_cancelled",
+            "response_completed",
+            "response_failed",
+        }:
+            assert isinstance(response_id, str)
+            terminal_response_ids.add(response_id)
+
+    assert {event["session_id"] for event in events} == {
+        expected["session_id_preserved"]
+    }
+    assert [event["type"] for event in late_events] == ["response_delta"]
+    assert expected["late_old_response_event_discarded"] is True
+
+
+def test_observation_uses_one_clock_domain_for_ttfa() -> None:
+    fixture = _fixture("normal.json")
+    events = fixture["events"]
+    expected = fixture["expected"]
+    assert isinstance(events, list)
+    assert isinstance(expected, dict)
+    observations = {
+        event["measurement"]: event
+        for event in events
+        if event["type"] == "observation"
+    }
+    speech_stopped = observations["speech_stopped"]
+    playback_started = observations["playback_started"]
+    first_audio_out = observations["first_audio_out"]
+
+    assert speech_stopped["clock_domain"] == "client_monotonic"
+    assert playback_started["clock_domain"] == "client_monotonic"
+    assert playback_started["timestamp"] - speech_stopped["timestamp"] == expected[
+        "ttfa_ms"
+    ]
+    assert first_audio_out["clock_domain"] == "server_monotonic"
+    assert first_audio_out["unit"] == "nanosecond"
+
+
+def test_observation_rejects_measurement_from_wrong_clock_domain() -> None:
+    parser = importlib.import_module("app.voice_session.validation")
+    event = next(
+        event
+        for event in _fixture("normal.json")["events"]
+        if event["type"] == "observation"
+        and event["measurement"] == "playback_started"
+    )
+
+    with pytest.raises(ValueError):
+        parser.parse_voice_session_event(
+            {**event, "clock_domain": "server_monotonic", "unit": "nanosecond"}
+        )
+
+
+def test_speaker_role_requires_only_character_speaker_to_have_character_id() -> None:
+    parser = importlib.import_module("app.voice_session.validation")
+    response_started = _normal_response_event("response_started")
+    speech_started = next(
+        event
+        for event in _fixture("normal.json")["events"]
+        if event["type"] == "speech_started"
+    )
+
+    character = response_started["speaker"]
+    assert isinstance(character, dict)
+    character_without_id = {
+        key: value for key, value in character.items() if key != "character_id"
+    }
+    with pytest.raises(ValueError):
+        parser.parse_voice_session_event(
+            {**response_started, "speaker": character_without_id}
+        )
+
+    user = speech_started["speaker"]
+    assert isinstance(user, dict)
+    with pytest.raises(ValueError):
+        parser.parse_voice_session_event(
+            {**speech_started, "speaker": {**user, "character_id": "miori"}}
+        )
 
 
 def test_protocol_mismatch_is_rejected_at_parser_boundary() -> None:
@@ -241,21 +415,21 @@ def test_standard_codegen_command_reproduces_both_committed_generated_files(
 
 
 @pytest.mark.parametrize(
-    ("chunks", "last_played_sequence", "expected"),
+    ("segments", "last_played_audio_sequence", "expected"),
     [
         (
             [
-                {"sequence": 1, "text_range": {"start": 0, "end": 2}},
-                {"sequence": 2, "text_range": {"start": 2, "end": 4}},
-                {"sequence": 3, "text_range": {"start": 4, "end": 6}},
+                {"audio_sequence": 1, "text_range": {"start": 0, "end": 2}},
+                {"audio_sequence": 2, "text_range": {"start": 2, "end": 4}},
+                {"audio_sequence": 3, "text_range": {"start": 4, "end": 6}},
             ],
             2,
             "光🌟織の",
         ),
         (
             [
-                {"sequence": 1, "text_range": {"start": 0, "end": 2}},
-                {"sequence": 3, "text_range": {"start": 4, "end": 6}},
+                {"audio_sequence": 1, "text_range": {"start": 0, "end": 2}},
+                {"audio_sequence": 3, "text_range": {"start": 4, "end": 6}},
             ],
             3,
             "光🌟",
@@ -264,16 +438,16 @@ def test_standard_codegen_command_reproduces_both_committed_generated_files(
     ],
 )
 def test_played_text_prefix_uses_only_contiguous_completed_sequences(
-    chunks: list[dict[str, object]],
-    last_played_sequence: int,
+    segments: list[dict[str, object]],
+    last_played_audio_sequence: int,
     expected: str,
 ) -> None:
     playback_range = importlib.import_module("app.voice_session.playback_range")
 
     result = playback_range.played_text_prefix(
         "光🌟織の返事",
-        chunks,
-        last_played_sequence=last_played_sequence,
+        segments,
+        last_played_audio_sequence=last_played_audio_sequence,
     )
 
     assert result == expected

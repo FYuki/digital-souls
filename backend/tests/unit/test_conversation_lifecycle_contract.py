@@ -42,20 +42,20 @@ def _session(repository: MagicMock, sanitizer: MagicMock) -> ConversationHistory
     )
 
 
-def _response_audio_chunks(*texts: str) -> tuple[str, list[dict[str, object]]]:
+def _response_audio_segments(*texts: str) -> tuple[str, list[dict[str, object]]]:
     generated_text = "".join(texts)
-    chunks: list[dict[str, object]] = []
+    segments: list[dict[str, object]] = []
     start = 0
     for sequence, text in enumerate(texts, start=1):
         end = start + len(text)
-        chunks.append(
+        segments.append(
             {
-                "sequence": sequence,
+                "audio_sequence": sequence,
                 "text_range": {"start": start, "end": end},
             }
         )
         start = end
-    return generated_text, chunks
+    return generated_text, segments
 
 
 def test_should_resume_the_client_selected_character_conversation_boundary() -> None:
@@ -169,7 +169,7 @@ def test_should_atomically_erase_processing_content_on_assistant_scan_failure() 
 
 
 def test_should_sanitize_interrupted_partial_reply_before_persistence() -> None:
-    generated_text, response_audio_chunks = _response_audio_chunks(
+    generated_text, response_audio_segments = _response_audio_segments(
         "再生",
         "済み",
         " token=raw-assistant-secret-94",
@@ -191,7 +191,7 @@ def test_should_sanitize_interrupted_partial_reply_before_persistence() -> None:
     persisted_turn = session.interrupt_turn(
         started,
         generated_text,
-        response_audio_chunks,
+        response_audio_segments,
         3,
     )
 
@@ -207,7 +207,7 @@ def test_should_sanitize_interrupted_partial_reply_before_persistence() -> None:
 
 
 def test_should_persist_empty_interrupted_reply_when_no_chunk_was_played() -> None:
-    generated_text, response_audio_chunks = _response_audio_chunks(
+    generated_text, response_audio_segments = _response_audio_segments(
         "再生されていない",
         "回答",
     )
@@ -224,7 +224,7 @@ def test_should_persist_empty_interrupted_reply_when_no_chunk_was_played() -> No
     session.interrupt_turn(
         started,
         generated_text,
-        response_audio_chunks,
+        response_audio_segments,
         0,
     )
 
@@ -238,17 +238,17 @@ def test_should_persist_empty_interrupted_reply_when_no_chunk_was_played() -> No
 
 
 def test_should_reject_invalid_playback_range_before_sanitization_or_persistence() -> None:
-    generated_text, response_audio_chunks = _response_audio_chunks("生成済み回答")
+    generated_text, response_audio_segments = _response_audio_segments("生成済み回答")
     repository = MagicMock()
     sanitizer = MagicMock()
     session = _session(repository, sanitizer)
     started = SimpleNamespace(turn_id=TURN_ID, content_skipped=False)
 
-    with pytest.raises(ValueError, match="last_played_sequence must not be negative"):
+    with pytest.raises(ValueError, match="last_played_audio_sequence must not be negative"):
         session.interrupt_turn(
             started,
             generated_text,
-            response_audio_chunks,
+            response_audio_segments,
             -1,
         )
 
@@ -258,7 +258,7 @@ def test_should_reject_invalid_playback_range_before_sanitization_or_persistence
 
 
 def test_should_erase_processing_content_when_interrupted_partial_scan_fails() -> None:
-    generated_text, response_audio_chunks = _response_audio_chunks(
+    generated_text, response_audio_segments = _response_audio_segments(
         "保存禁止の",
         "partial",
         "だけが再生済み",
@@ -278,7 +278,7 @@ def test_should_erase_processing_content_when_interrupted_partial_scan_fails() -
     persisted_turn = session.interrupt_turn(
         started,
         generated_text,
-        response_audio_chunks,
+        response_audio_segments,
         3,
     )
 
