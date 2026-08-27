@@ -76,6 +76,7 @@ export class LiveKitRoomClient {
   private workletReady: Promise<void> | null = null
   private generation = 0
   private audioGraphResetVersion = 0
+  private audioGraphResetTask: Promise<void> = Promise.resolve()
   private readonly subscriptions = new Set<string>()
   private readonly subscribedTracks = new Map<string, RemoteTrack>()
   private readonly pendingMetadata: SegmentMetadata[] = []
@@ -181,7 +182,11 @@ export class LiveKitRoomClient {
             this.playback.setGeneration(frame.generation)
             this.pendingMetadata.length = 0
             const resetVersion = ++this.audioGraphResetVersion
-            void this.resetAudioGraphs(resetVersion).catch(() => this.failTransport())
+            const resetTask = this.audioGraphResetTask.then(
+              () => this.resetAudioGraphs(resetVersion),
+            )
+            this.audioGraphResetTask = resetTask.catch(() => undefined)
+            void resetTask.catch(() => this.failTransport())
           }
           if (frame.sessionPhase === 'ended') {
             this.failTransport()

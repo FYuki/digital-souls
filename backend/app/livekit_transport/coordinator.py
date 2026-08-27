@@ -155,6 +155,7 @@ class ProductionSessionCoordinator:
             or self._mapping.participant_sid(identity) != participant_sid
         ):
             return
+        self._mapping.replace_connection(identity, "")
         self._lifecycle.disconnect(now_ms=self._clock())
         self._notify_core("session_disconnected")
         self._replace_deadline(self._lifecycle.reconnect_grace_ms / 1000)

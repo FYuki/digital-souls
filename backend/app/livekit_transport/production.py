@@ -343,8 +343,14 @@ class ProductionRuntimeManager:
         room.on("participant_connected")(participant_connected)
 
         def participant_disconnected(participant: rtc.RemoteParticipant) -> None:
-            coordinator.participant_disconnected(
-                identity=str(participant.identity), participant_sid=str(participant.sid)
+            async def handle_disconnected() -> None:
+                coordinator.participant_disconnected(
+                    identity=str(participant.identity),
+                    participant_sid=str(participant.sid),
+                )
+
+            self._schedule_serialized_participant_operation(
+                session_id, handle_disconnected
             )
 
         room.on("participant_disconnected")(participant_disconnected)

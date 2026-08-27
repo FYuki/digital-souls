@@ -40,6 +40,7 @@ Issue #56で、dogfood稼働中のintegration testとcleanupを含む横断受�
 | `npm run test:e2e:mocked` | `frontend/e2e/` | `test-mocked` | `mocked-e2e` | `frontend/test-results/mocked-e2e/` |
 | `npm run test:integration:text` | `frontend/integration/text/` | `integration-text` | `text-chat-real` | `frontend/test-results/integration-text/` |
 | `npm run test:integration:voice` | `frontend/integration/voice/` | `integration-voice` | `voice-chat-real` | `frontend/test-results/integration-voice/` |
+| `npm run test:integration:livekit` | `frontend/integration/livekit/` | `livekit/chromium` | マイク権限・実LiveKit接続 | `frontend/test-results/` |
 
 各設定は Profile、収集ディレクトリ、成果物の出力先を固定する。spec 内で環境変数や依存 mode によってモックと実接続を切り替えない。各 spec が受け入れる要求Capabilityは1つだけとする。実接続 spec では mock WebSocket、`page.route`、HARによる外部通信の置換を禁止する。
 

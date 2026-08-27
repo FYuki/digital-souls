@@ -282,7 +282,7 @@ def test_character_runtime_uses_microphone_grant_and_matching_publish_source(
     assert published_tracks[0][1].source == microphone_source
 
 
-def test_participant_registration_precedes_track_observation_without_callback_await(
+def test_serialized_participant_events_handle_track_before_immediate_disconnect(
     monkeypatch,
 ) -> None:
     production = importlib.import_module("app.livekit_transport.production")
@@ -326,10 +326,13 @@ def test_participant_registration_precedes_track_observation_without_callback_aw
             assert token == "character-token"
             connected = callbacks["participant_connected"]
             subscribed = callbacks["track_subscribed"]
+            disconnected = callbacks["participant_disconnected"]
             assert callable(connected)
             assert callable(subscribed)
+            assert callable(disconnected)
             connected(participant)
             subscribed(remote_track, publication, participant)
+            disconnected(participant)
 
         async def disconnect(self) -> None:
             return None
@@ -414,8 +417,18 @@ def test_participant_registration_precedes_track_observation_without_callback_aw
             }
         )
         await asyncio.wait_for(observation_started.wait(), timeout=0.5)
+        coordinator = runtime._coordinators[session_id]
+
+        async def wait_until_disconnected() -> None:
+            while coordinator.phase != "unavailable":
+                await asyncio.sleep(0)
+
+        await asyncio.wait_for(wait_until_disconnected(), timeout=0.5)
 
         assert observations == [(user_identity, "PA_user", remote_track)]
+        assert not coordinator.is_current_participant(
+            identity=user_identity, participant_sid="PA_user"
+        )
         await runtime.stop(session_id)
 
     asyncio.run(exercise())

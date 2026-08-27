@@ -193,15 +193,14 @@ describe('LiveKit Room generation synchronization', () => {
     closeBlockers.push(firstClose)
     emitPrivateFrame(room, authoritativeState(1))
     emitPrivateFrame(room, authoritativeState(2))
-    await vi.waitFor(() => expect(audioContexts).toHaveLength(2))
+    expect(audioContexts).toHaveLength(1)
 
     firstClose.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(audioContexts).toHaveLength(2)
-    expect(audioContexts.reduce((total, context) => total + context.sources.length, 0)).toBe(2)
-    expect(observations.at(-1)).toMatchObject({ activeAudioGraphs: 1 })
+    await vi.waitFor(() => {
+      expect(audioContexts).toHaveLength(2)
+      expect(audioContexts.reduce((total, context) => total + context.sources.length, 0)).toBe(2)
+      expect(observations.at(-1)).toMatchObject({ activeAudioGraphs: 1 })
+    })
     client.disconnect()
   })
 })
