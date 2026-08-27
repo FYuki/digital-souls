@@ -1,0 +1,8 @@
+port: 17880
+rtc:
+  tcp_port: 17881
+  udp_port: 17882
+  use_external_ip: false
+keys:
+  replace-key: replace-secret
+

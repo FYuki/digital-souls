@@ -13,6 +13,7 @@
     "test:e2e:mocked": "npm --prefix frontend run test:e2e:mocked",
     "test:integration:text": "npm --prefix frontend run test:integration:text",
     "test:integration:voice": "npm --prefix frontend run test:integration:voice",
+    "test:integration:livekit": "PYTHONPATH=backend python3 -m pytest backend/tests/integration/test_livekit_transport_integration.py && npm --prefix frontend run test:integration:livekit",
     "baseline:websocket": "npm --prefix frontend run baseline:websocket",
     "lint:python": "backend/.venv/bin/python -m ruff check --config backend/ruff.toml backend/app",
     "check": "backend/.venv/bin/python -m mypy --config-file backend/mypy.ini backend/app environments && npm --prefix frontend run check",

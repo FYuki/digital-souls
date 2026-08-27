@@ -28,6 +28,7 @@ from service_registry import (
     ServiceRegistry,
     operation_context_for,
     require_service_operations,
+    require_readiness_operations,
     resolve_runtime_services,
 )
 
@@ -111,10 +112,12 @@ class EnvironmentRun:
         self._save_phase("pre_probe")
         decisions: dict[str, str] = {}
         for name in HTTP_SERVICE_NAMES:
-            dependency = self.dependencies[name]
+            dependency = self.dependencies.get(name)
+            if dependency is None:
+                continue
             if dependency.get("mode") == "disabled" or dependency.get("source") == "browser":
                 continue
-            observation = require_service_operations(self.registry, name).probe(
+            observation = require_readiness_operations(self.registry, name).probe(
                 dependency, timeout_seconds=self.timing.request_timeout_seconds
             )
             observation_report = observation.to_report()
@@ -160,17 +163,17 @@ class EnvironmentRun:
     def _validate_service_readiness(
         self, name: str, dependency: Mapping[str, object]
     ) -> None:
-        operations = require_service_operations(self.registry, name)
-        validation = operations.validate_readiness(dependency)
+        readiness_operations = require_readiness_operations(self.registry, name)
+        validation = readiness_operations.validate_readiness(dependency)
         if (
             validation.classification == "preparation"
             and name in self.runtime.available_prepare_order
         ):
-            operations.prepare(
+            require_service_operations(self.registry, name).prepare(
                 dependency,
                 operation_context_for(name, self.dependencies, self.registry),
             )
-            validation = operations.validate_readiness(dependency)
+            validation = readiness_operations.validate_readiness(dependency)
         require_service_readiness(validation)
 
     def _service_environment(self) -> dict[str, str]:
@@ -231,10 +234,12 @@ class EnvironmentRun:
         self._save_phase("readiness")
         observations: dict[str, dict[str, object]] = {}
         for name in HTTP_SERVICE_NAMES:
-            dependency = self.dependencies[name]
+            dependency = self.dependencies.get(name)
+            if dependency is None:
+                continue
             if dependency.get("mode") == "disabled" or dependency.get("source") == "browser":
                 continue
-            operations = require_service_operations(self.registry, name)
+            operations = require_readiness_operations(self.registry, name)
 
             def probe_service(
                 url: str,

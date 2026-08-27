@@ -76,6 +76,7 @@ from app.privacy.semantic.ollama_classifier_client import OllamaClassifierClient
 from app.routers.chat import router as chat_router
 from app.routers.conversations import router as conversations_router
 from app.routers.memory_management import router as memory_management_router
+from app.routers.livekit import router as livekit_router
 from app.routers.ws import router as ws_router
 from app.runtime_data_root import (
     initialize_runtime_data_root,
@@ -198,6 +199,9 @@ def log_runtime_configuration(paths: RuntimePaths) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    from app.livekit_transport.production import configure_production_resources
+
+    livekit_api = None
     model_settings = resolve_model_settings(os.environ)
     occurred_timezone = iana_timezone_environment_value(
         MEMORY_OCCURRED_TIMEZONE_ENV,
@@ -343,6 +347,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             repository_state_set = True
             app.state.conversation_lifecycle_service = conversation_lifecycle_service
             lifecycle_service_state_set = True
+            livekit_api = await configure_production_resources(app)
             semantic_classifier_client = OllamaClassifierClient(
                 model_id=model_settings.ollama_classifier_model
             )
@@ -496,6 +501,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             memory_consolidation_scheduler_started = True
             yield
         finally:
+            if livekit_api is not None:
+                await app.state.livekit_runtime_manager.stop_all()
+                await livekit_api.aclose()
             if memory_consolidation_scheduler_started:
                 await memory_consolidation_scheduler.stop()
             if memory_formation_scheduler_started:
@@ -560,6 +568,7 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(chat_router)
 app.include_router(conversations_router)
 app.include_router(memory_management_router)
+app.include_router(livekit_router)
 app.include_router(ws_router)
 
 

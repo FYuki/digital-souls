@@ -14,12 +14,14 @@ def test_should_register_adapters_and_dependency_order_in_one_registry(tmp_path:
 
     registry = create_service_registry(tmp_path, resolved_runtime_paths(tmp_path))
 
-    assert set(registry.services) == set(DEPENDENCY_NAMES)
+    assert set(registry.services) == {*DEPENDENCY_NAMES, "livekit"}
     assert registry.prepare_order == ("backend", "frontend")
     assert registry.start_order == ("ollama", "voicevox", "backend", "frontend")
     assert registry.available_prepare_order == ("ollama",)
     assert registry.services["whisper"].contained_by == "backend"
     assert registry.services["chroma"].contained_by == "backend"
+    assert registry.services["livekit"].adapter is None
+    assert registry.services["livekit"].readiness_adapter is not None
 
 
 def test_should_inject_one_command_runner_into_every_concrete_adapter(tmp_path: Path):

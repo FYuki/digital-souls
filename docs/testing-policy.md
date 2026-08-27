@@ -88,6 +88,10 @@ CodeRabbitの指摘はコードレビューの補助であり、GitHub Actions�
 配置、prompt tuningとproduction conformanceの分離、合格基準は
 `docs/decisions/wave2-memory-formation-retrieval-2026-08.md`を正本とする。
 
+## LiveKit実サーバーsuite
+
+LiveKitの状態遷移、outbox、mapping、再生済みprefixはfake clock/portを使うunit/module testでCI内検証する。実Room、WebRTC media、browser microphoneの結合は`npm run test:integration:livekit`でBackend pytestとPlaywright Chromiumをまとめて実行する。このスイートはself-host LiveKitとUDP到達性が必要なためCIでは自動実行しない。
+
 ## Capability不足と失敗
 
 スイートの要求Capabilityが resolved Profile にない場合、テストは不足Capabilityと解決済み依存を理由に `skip` する。スイートを明示的に開始した後の次の失敗は skip に変換しない。

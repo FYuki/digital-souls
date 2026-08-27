@@ -23,7 +23,12 @@ from profile_types import (
     ResolvedDependencies,
     ResolvedReport,
 )
-from profile_validation import DEPENDENCY_FIELDS, DEPENDENCY_NAMES, validate_profile
+from profile_validation import (
+    DEPENDENCY_FIELDS,
+    DEPENDENCY_NAMES,
+    REQUIRED_DEPENDENCY_NAMES,
+    validate_profile,
+)
 from managed_endpoint import resolve_managed_http_origin
 
 
@@ -127,7 +132,7 @@ def _validate_dependencies(
     }
     for name, dependency in dependency_records.items():
         _reject_unknown_fields(dependency, RESOLVED_DEPENDENCY_FIELDS, f"dependencies.{name}")
-    for name in DEPENDENCY_NAMES:
+    for name in REQUIRED_DEPENDENCY_NAMES:
         if name not in dependencies:
             raise ProfileError(f"dependencies.{name} is required")
 
@@ -157,7 +162,7 @@ def _validate_dependencies(
     )
     resolved = resolve_dependencies(profile["dependencies"])
     resolved_map = cast(dict[str, ResolvedDependency], resolved)
-    for name in DEPENDENCY_NAMES:
+    for name in dependency_records:
         expected = resolved_map[name].get("readinessUrl")
         actual = readiness_urls.get(name)
         if (expected is None and name in readiness_urls) or actual != expected:

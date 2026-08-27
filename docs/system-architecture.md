@@ -254,3 +254,7 @@ RAG privacyの不変条件は`docs/decisions/rag-memory-privacy-policy-2026-07.m
 `docs/decisions/archive/miori-memory-policy-2026-06.md`は初期検討の履歴ADRとして保持する。
 `backend/app/memory/memory_policy.json`は認識語彙・pattern・閾値・追加禁止設定の実行時Source of
 Truthとするが、ADRとtyped policy schemaが定める絶対禁止を削除・許可へ反転できない。
+
+## LiveKit transport
+
+`backend/app/livekit_transport/`がRoom/session binding、内存outbox、ACK/retry、generation、transport私有mappingを所有する。Conversation CoreはLiveKitのRoom、Participant、Trackを知らず、検証済みCore eventとtransport available/unavailableのみを観測する。詳細は`docs/decisions/livekit-transport-2026-08.md`を参照する。

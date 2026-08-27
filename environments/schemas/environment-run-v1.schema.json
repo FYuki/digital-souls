@@ -38,7 +38,8 @@
         "ollama": { "$ref": "#/$defs/processService" },
         "voicevox": { "$ref": "#/$defs/containerService" },
         "whisper": { "$ref": "#/$defs/noIdentityService" },
-        "chroma": { "$ref": "#/$defs/noIdentityService" }
+        "chroma": { "$ref": "#/$defs/noIdentityService" },
+        "livekit": { "$ref": "#/$defs/noIdentityService" }
       }
     },
     "testResult": {
@@ -121,8 +122,8 @@
         "cachePath": { "type": "string", "minLength": 1 }
       }
     },
-    "serviceName": { "enum": ["frontend", "backend", "ollama", "voicevox", "whisper", "chroma"] },
-    "cleanupTargetName": { "enum": ["frontend", "backend", "ollama", "voicevox", "whisper", "chroma", "ready_gate", "run_report"] },
+    "serviceName": { "enum": ["frontend", "backend", "ollama", "voicevox", "whisper", "chroma", "livekit"] },
+    "cleanupTargetName": { "enum": ["frontend", "backend", "ollama", "voicevox", "whisper", "chroma", "livekit", "ready_gate", "run_report"] },
     "processIdentity": {
       "type": "object",
       "additionalProperties": false,

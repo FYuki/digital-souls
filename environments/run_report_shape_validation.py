@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 from environment_constants import (
     CLEANUP_TARGET_NAMES,
     DEPENDENCY_NAMES,
+    OPTIONAL_DEPENDENCY_NAMES,
     RUN_REPORT_SCHEMA_VERSION,
 )
 from run_report_contract import (
@@ -215,13 +216,17 @@ def _validate_top_level(report: Mapping[str, object]) -> None:
 
 def _validate_services(report: Mapping[str, object]) -> None:
     services = report["services"]
-    if not isinstance(services, dict) or set(services) != set(DEPENDENCY_NAMES):
+    allowed_dependencies = set(DEPENDENCY_NAMES + OPTIONAL_DEPENDENCY_NAMES)
+    if (
+        not isinstance(services, dict)
+        or not set(DEPENDENCY_NAMES) <= set(services) <= allowed_dependencies
+    ):
         raise RunReportError("services must contain all dependencies")
     for name, value in services.items():
         _validate_service(name, value)
     sequence = report["startSequence"]
     if not isinstance(sequence, list) or any(
-        not isinstance(service, str) or service not in DEPENDENCY_NAMES
+        not isinstance(service, str) or service not in allowed_dependencies
         for service in sequence
     ):
         raise RunReportError("invalid startSequence")
@@ -242,12 +247,14 @@ def _validate_effective_profile_correlation(report: Mapping[str, object]) -> Non
     if not isinstance(effective_profile, dict):
         raise RunReportError("invalid effectiveProfile")
     dependencies = effective_profile.get("dependencies")
-    if not isinstance(dependencies, dict) or set(dependencies) != set(DEPENDENCY_NAMES):
-        raise RunReportError("effectiveProfile must contain all dependencies")
     services = report["services"]
-    if not isinstance(services, dict):
-        raise RunReportError("services must contain all dependencies")
-    for name in DEPENDENCY_NAMES:
+    if (
+        not isinstance(dependencies, dict)
+        or not isinstance(services, dict)
+        or set(dependencies) != set(services)
+    ):
+        raise RunReportError("effectiveProfile must contain all dependencies")
+    for name in dependencies:
         dependency = dependencies[name]
         service = services[name]
         if not isinstance(dependency, dict) or not isinstance(service, dict):

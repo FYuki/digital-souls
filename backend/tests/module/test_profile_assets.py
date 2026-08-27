@@ -12,9 +12,6 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
 ENVIRONMENTS_DIR = ROOT_DIR / "environments"
-DEPENDENCY_NAMES = ["frontend", "backend", "ollama", "voicevox", "whisper", "chroma"]
-
-
 def _read_json(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -468,7 +465,8 @@ def test_should_require_disabled_downstream_dependencies_when_backend_is_not_rea
                 "frontend": ("real", "managed"),
                 "backend": ("real", "managed"),
                 "ollama": ("real", "external"),
-                "voicevox": ("real", "external"),
+                    "voicevox": ("real", "external"),
+                    "livekit": ("real", "external"),
                 "whisper": ("real", "in_process"),
                 "chroma": ("real", "in_process"),
             },
@@ -479,7 +477,8 @@ def test_should_require_disabled_downstream_dependencies_when_backend_is_not_rea
                 "frontend": ("real", "managed"),
                 "backend": ("real", "managed"),
                 "ollama": ("real", "external"),
-                "voicevox": ("real", "external"),
+                    "voicevox": ("real", "external"),
+                    "livekit": ("real", "external"),
                 "whisper": ("real", "in_process"),
                 "chroma": ("real", "in_process"),
             },
@@ -528,7 +527,7 @@ def test_should_define_profile_dependency_contracts(
 
     assert profile["schemaVersion"] == 1
     assert profile["name"] == profile_name
-    assert set(dependencies) == set(DEPENDENCY_NAMES)
+    assert set(dependencies) == set(expected_dependencies)
     assert {
         name: (dependency["mode"], dependency["source"])
         for name, dependency in dependencies.items()
