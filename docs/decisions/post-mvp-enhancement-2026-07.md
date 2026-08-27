@@ -72,9 +72,10 @@ Track identityはこれらのIDへadapterで対応付け、永続履歴キーと
 状態モデルとする。
 
 現行WebSocket一括pipelineは移行前baselineとして計測するが、採否判断の対象にはしない。
-変更前の比較値を残すため#17のbaseline取得を最初に開始し、#13のConversation contractと
-Issue #113のLiveKit基盤設計を並行する。以降はresponse世代管理、継続入力、中断履歴、逐次text/audio、
-barge-in、再接続・障害回復、自動受入、dogfood受入の順に進める。
+#17のbaseline、#13のConversation contract、Issue #113のLiveKit基盤は完了済みである。
+以降のresponse世代管理、継続入力、中断履歴、逐次text/audio、barge-in、再接続・障害回復、
+自動受入、dogfood受入は最初からLiveKit経路へ実装する。完成後に別工程でtransportを切り替える
+計画は設けない。
 
 FE側の `AudioTransport` 抽象化は、Conversation Coreへtransport固有APIを漏らさない境界として
 維持する。ただし、その目的はWave 3でWebSocketとLiveKitの採否を保留することではない。
