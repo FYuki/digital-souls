@@ -2,7 +2,7 @@
 
 ## 目的
 
-現行 WebSocket pipeline と Wave 3 LiveKit pipeline を同じ定義で比較する。計測は `automated_test`、`controlled_baseline`、`dogfood` を別run・別artifactとし、混在させない。schemaは [voice-quality-artifact-v1.schema.json](schemas/voice-quality-artifact-v1.schema.json) である。
+移行前baselineとして凍結した現行WebSocket pipelineと、正式経路として実装するWave 3 LiveKit pipelineを同じ定義で比較する。比較はtransportの採否判断ではなくLiveKit版の受入判定にのみ使用する。計測は `automated_test`、`controlled_baseline`、`dogfood` を別run・別artifactとし、混在させない。schemaは [voice-quality-artifact-v1.schema.json](schemas/voice-quality-artifact-v1.schema.json) である。
 
 ## trace と clock
 
@@ -45,7 +45,7 @@ LiveKitの絶対p95上限は TTFA 2000ms、local stop 150ms、turn decision 300m
 
 ## controlled WebSocket baseline
 
-Ubuntu-dev の `integration-voice` Profileで Backend、Ollama、Whisper、VOICEVOX、Chromium を起動し、日本語固定fixture `speech-v2`・同一初期状態でwarm-up 5回を行った後、独立session・独立conversationで100回を測定する。fixtureは日本語の単一発話とVAD確定用の後続無音を含み、正解transcriptは実際の発話内容と一致する。外部の Ollama と VOICEVOX を起動してから、repository rootで `npm run baseline:websocket` を実行する。runnerはwarm-up前にfixture version、WAVのSHA-256・sample rate、発話境界、期待transcriptを検証する。各試行では画面に確定した利用者transcriptをUnicode NFKC正規化、前後空白除去、連続空白圧縮して期待値と比較し、不一致なら停止する。通常の `test:integration:voice` とは別の `frontend/test-results/controlled-baseline/` を一時data rootとし、trial manifestにはfixture version、hash、transcript一致結果だけを残す。warm-upはaggregateに入れない。finalizerは回数・独立ID・fixture identity・全試行のtranscript一致・初期状態を再検証し、schema検証と再帰的な匿名性検査を通したaggregateだけを `docs/artifacts/websocket-baseline-v1.json` へ保存する。LiveKit実装後はtransportだけを `livekit` とし、同じfixture、回数、schema、目標値で再実行する。
+Ubuntu-dev の `integration-voice` Profileで Backend、Ollama、Whisper、VOICEVOX、Chromium を起動し、日本語固定fixture `speech-v2`・同一初期状態でwarm-up 5回を行った後、独立session・独立conversationで100回を測定する。fixtureは日本語の単一発話とVAD確定用の後続無音を含み、正解transcriptは実際の発話内容と一致する。外部の Ollama と VOICEVOX を起動してから、repository rootで `npm run baseline:websocket` を実行する。runnerはwarm-up前にfixture version、WAVのSHA-256・sample rate、発話境界、期待transcriptを検証する。各試行では画面に確定した利用者transcriptをUnicode NFKC正規化、前後空白除去、連続空白圧縮して期待値と比較し、不一致なら停止する。通常の `test:integration:voice` とは別の `frontend/test-results/controlled-baseline/` を一時data rootとし、trial manifestにはfixture version、hash、transcript一致結果だけを残す。warm-upはaggregateに入れない。finalizerは回数・独立ID・fixture identity・全試行のtranscript一致・初期状態を再検証し、schema検証と再帰的な匿名性検査を通したaggregateだけを `docs/artifacts/websocket-baseline-v1.json` へ保存する。LiveKit版Wave 3 pipelineが計測可能になった時点でtransportだけを `livekit` とし、同じfixture、回数、schema、目標値で再実行する。
 
 ## 保存と削除
 

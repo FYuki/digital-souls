@@ -2,7 +2,7 @@
 
 ## 状態
 
-**ACTIVE**。現行範囲は Wave 3 の transport 非依存 Conversation Core が扱う音声セッション契約と、JSON Schema から FE/BE 型を生成する試験導入に限定する。実動作、LiveKit 認証、VAD、streaming LLM/TTS は後続 Issue とその ADR で定める。
+**ACTIVE**。Wave 3 の transport 非依存 Conversation Core が扱う音声セッション契約と、JSON Schema から生成する FE/BE 型を定める。LiveKit認証とtransport基盤はIssue #113および`livekit-transport-2026-08.md`で実装済みであり、VAD、streaming LLM/TTS、barge-in等は後続Issueで本契約へ接続する。
 
 ## 背景
 
@@ -113,11 +113,12 @@ generator は quicktype 23.2.6 を選ぶ。Draft 2020-12 JSON Schema から Type
 
 Frontend は Ajv 2020、Backend は `jsonschema.Draft202012Validator` で外部入力を検証し、成功後だけ生成型へ変換する。CI は依存 install 後に `npm run check:voice-session-generated` を実行し、再生成後の2生成物に差分があれば失敗する。
 
-### 10. 段階移行
+### 10. 実装・移行方針
 
-1. 並存: 現行 WebSocket を default と baseline 対象のまま維持し、新契約を使う LiveKit 経路を別入口で実装・評価する。
-2. default 化: 後続 Issue の受入と baseline 比較を完了後、新経路を default にする。非互換 version は新 session を確立せず terminal error とする。
-3. 旧経路削除: default 化後に明示した削除 Issue で、現行 WebSocket と既存 FE 契約を削除する。本 Issue では変更しない。
+1. baseline凍結: 現行WebSocket音声pipelineはIssue #17の移行前baselineとして凍結し、Wave 3機能を追加しない。
+2. LiveKit直接実装: 後続Issueは新契約を使うLiveKit経路へ実装し、通常の会話・conversation UIへ直接統合する。`/voice/livekit`はIssue #113の基盤検証用の一時入口であり、恒久的な別製品経路にしない。
+3. 正式経路: Frontend統合時点からLiveKitをWave 3の正式な音声経路として扱う。実装完了後にdefault transportを切り替える別工程や、WebSocketとLiveKitの採否判断は設けない。
+4. 互換性: 非互換versionは新sessionを確立せずterminal errorとする。旧WebSocketの残存コードを整理する場合も、LiveKitへの切替条件として扱わない。
 
 ## 結果
 

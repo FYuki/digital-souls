@@ -185,6 +185,7 @@ idle時のpersona memory consolidationはWave 2受入後の#48で行い、親#28
 現状のターン形式（Frontend VAD検出→発話単位PCMをWebSocket送信→Backend一括処理→
 turn JSONと単一WAVを返信）から、LiveKit / WebRTC上の継続音声sessionへ移行する。
 LiveKit採用は決定済みであり、現行WebSocketは変更前baselineの計測対象に限定する。
+Wave 3の後続機能は最初からLiveKit経路へ実装し、完成後に別工程でtransportを切り替えない。
 
 ### 責務境界
 
@@ -239,7 +240,7 @@ STT、LLM、TTS、audio publish / playbackの一時障害後も次の発話を�
 
 ### 計測と受入
 
-最初に現行WebSocket一括pipelineで測定可能なbaselineを取得する。TTFA、処理失敗率、
+Issue #17で現行WebSocket一括pipelineの測定可能なbaselineを取得済みである。TTFA、処理失敗率、
 発話単位送受信の冒頭欠落等は直接測定し、現行経路に存在しないbarge-in停止・cancel遅延、
 response世代管理によるstale出力排除、LiveKit再接続、継続audio delivery gapはN/Aとする。
 各指標を直接比較、参考比較、N/Aのいずれかに分類し、測定シナリオとLiveKit版との比較方法を
@@ -252,9 +253,10 @@ dogfood受入する。受入開始前にIssue #112と
 
 ### 依存関係
 
-現行WebSocket baseline取得を開始した後、transport非依存contractとLiveKit基盤設計を並行する。
-その後、response世代管理、継続入力、中断履歴を基盤として、逐次text、逐次audio、barge-in、
-再接続・障害回復、自動受入、dogfood受入の順に進める。詳細な進捗と完了条件はGitHub Issuesで管理する。
+現行WebSocket baseline、transport非依存contract、LiveKit基盤はIssue #17、#13、#113で完了した。
+以降は旧WebSocketを拡張せず、LiveKitを正式経路としてresponse世代管理、継続入力、中断履歴、
+逐次text、逐次audio、barge-in、再接続・障害回復、自動受入、dogfood受入の順に進める。
+詳細な進捗と完了条件はGitHub Issuesで管理する。
 
 ## Wave 4: 「役に立つ」（後続・優先度低）
 

@@ -55,6 +55,7 @@ npm run test:integration:backend
 npm run test:e2e:mocked
 npm run test:integration:text
 npm run test:integration:voice
+npm run test:integration:livekit
 npm run baseline:websocket
 npm run lint:python
 npm run check

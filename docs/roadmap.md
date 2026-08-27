@@ -49,7 +49,7 @@ GitHub Issuesで管理する。ロードマップではチェックボックス�
 - ローカルSTT／TTSによる音声処理基盤
 - テキストチャットと音声チャットの統合
 
-Phase 4の未完了項目だった音声遅延の計測と通信方式の再評価は、**Wave 3** へ移動した。
+Phase 4の未完了項目だった音声遅延のbaseline計測とLiveKitへの移行は、**Wave 3** へ移動した。
 
 RAG基盤はMVPで構築済みとし、本稼働化は **Wave 2** で扱う。
 
@@ -86,6 +86,10 @@ MVP完了時点で判明したギャップ（多ターン会話、RAG本稼働�
 
 設計判断: `docs/decisions/post-mvp-enhancement-2026-07.md`
 計測契約: `docs/voice-quality-measurement.md`
+
+Wave 3の音声機能は最初からLiveKit経路へ実装する。現行WebSocket音声pipelineは
+移行前baselineとして凍結し、Wave 3機能を追加しない。実装完了後に別工程でtransportを
+切り替える計画は設けない。
 
 - LiveKit Room、Participant、Track、接続認証によるrealtime media transport
 - transport非依存の音声session、utterance、response、playback lifecycle

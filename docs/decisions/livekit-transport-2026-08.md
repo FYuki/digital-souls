@@ -2,7 +2,8 @@
 
 ## 状態
 
-ACTIVE。Issue #113の1 user + 1 character実験経路を定める。
+ACTIVE。Issue #113で実装した1 user + 1 characterのLiveKit transport基盤と、
+Wave 3でLiveKitを正式な音声経路として拡張する方針を定める。
 
 ## 決定
 
@@ -12,7 +13,11 @@ character runtimeはFastAPI process内の独立`asyncio` taskとする。session
 
 Core eventは既存schemaで検証し、payloadを単一application topicで配送する。ACKは全control eventを対象とし、session・方向ごとのoutboxを256 eventかつ1 MiBへ制限する。未ACKは1秒、2秒、4秒で再送し、尽きた場合はtransport unavailableとする。再接続時はauthoritative stateと確定済みterminal outcomeだけを再同期する。
 
-`/voice/livekit`は隔離された実験経路であり、既存WebSocket音声UIとdefault transportは変更しない。
+Issue #113で追加した`/voice/livekit`は基盤検証用の一時入口である。Wave 3の後続実装は
+この経路だけに機能を積み上げるのではなく、通常の会話・conversation UIへLiveKit sessionを
+直接統合する。既存WebSocket音声pipelineは移行前baselineとして凍結し、継続listening、
+streaming、barge-in、再接続等のWave 3機能を追加しない。完成後に別工程でdefault transportを
+切り替える計画は設けず、Frontend統合の時点からLiveKitを正式経路として扱う。
 
 ## 運用制約
 

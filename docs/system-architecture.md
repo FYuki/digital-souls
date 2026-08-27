@@ -60,7 +60,8 @@
 ### バックエンド（FastAPI, `backend/app/`）
 
 * `routers/chat.py` — テキストチャットのHTTPエンドポイント
-* `routers/ws.py` — 音声チャット用WebSocketエンドポイント（STT→LLM→TTSの一連の処理、音声フレームの処理中キュー、session・utterance・response相関を含む）
+* `routers/ws.py` — 移行前baselineとして凍結するターン型音声WebSocketエンドポイント。Wave 3機能は追加しない
+* `routers/livekit.py` / `livekit_transport/` — LiveKit join認証、Roomとsessionの対応付け、control event配送、character audio runtimeを担うWave 3の正式な音声transport境界
 * `voice_metrics.py` — transport非依存のmetadata-only trace、集計artifact、保持、LiveKit受入目標判定
 * `chat_service.py` / `_chat_runtime.py` — チャットセッションの生成・応答生成のエントリポイント
 * `characters/loader.py` — `characters/` 配下のCharacter Card V3の検証・ロードと、`extensions.digital_souls`の型付き設定読み取り
@@ -74,7 +75,8 @@
 
 ### フロントエンド（Vite + Svelte, `frontend/src/`）
 
-* `lib/audio/transport.ts` — 現行WebSocket通信を抽象化する `AudioTransport`。turn、audio、相関metadata、error、open、close callbackと発話単位audio送信を提供する
+* `lib/audio/transport.ts` — 移行前baseline用の `WebSocketAudioTransport`。Wave 3の正式経路には使用しない
+* `livekit/` — LiveKit Room接続、microphone publish、Character AudioTrack再生、control event、再接続を担うWave 3音声transport
 * `lib/audio/pcm-worklet-recorder.ts` / `lib/audio/vad-assets.ts` — AudioWorkletによるPCM録音とVAD（発話区間検出）
 * `lib/AudioRecorder.svelte` / `lib/AudioPlayer.svelte` — マイク入力UI・音声再生UI
 * `lib/ChatWindow.svelte` / `lib/InputBar.svelte` — テキストチャットUI
@@ -258,3 +260,8 @@ Truthとするが、ADRとtyped policy schemaが定める絶対禁止を削除�
 ## LiveKitトランスポート
 
 `backend/app/livekit_transport/`がRoomとsessionの対応付け、メモリ上のoutbox、ACK/retry、generation、transport私有mappingを所有する。Conversation CoreはLiveKitのRoom、Participant、Trackを知らず、検証済みCore eventとtransport available/unavailableのみを観測する。詳細は`docs/decisions/livekit-transport-2026-08.md`を参照する。
+
+Issue #113で追加した`/voice/livekit`と`LiveKitPage`は基盤検証用の一時入口である。Wave 3の
+Frontend実装では通常の会話・conversation UIへLiveKitを直接組み込み、その時点から正式な
+音声経路として扱う。既存WebSocket音声pipelineをWave 3完成形へ拡張した後でtransportを
+切り替える二段階実装は行わない。
