@@ -161,8 +161,6 @@ class RoomManager(Protocol):
 
 
 class RuntimeManager(Protocol):
-    manages_owned_cleanup: bool
-
     async def connect(self, session_id: str) -> None: ...
 
     async def wait_until_ready(self, session_id: str) -> None: ...
@@ -307,7 +305,7 @@ class BootstrapService:
     async def _end_once(self, result: BootstrapResult) -> None:
         try:
             await self._runtimes.stop(result.session_id)
-            if not self._runtimes.manages_owned_cleanup:
+            if not self._runtime_manages_owned_cleanup():
                 await self._rooms.delete(result.room)
                 await self._sessions.delete(result.session_id)
             async with self._lock:
@@ -396,7 +394,7 @@ class BootstrapService:
         cleanup_tasks = [session_cleanup]
         if runtime_started:
             cleanup_tasks.append(asyncio.create_task(self._runtimes.stop(session_id)))
-        if room_created and not self._runtimes.manages_owned_cleanup:
+        if room_created and not self._runtime_manages_owned_cleanup():
             cleanup_tasks.append(
                 asyncio.create_task(self._rooms.delete(f"voice-{session_id}"))
             )
@@ -415,6 +413,12 @@ class BootstrapService:
             task.cancel()
             task.add_done_callback(self._consume_cleanup_result)
         return completed
+
+    def _runtime_manages_owned_cleanup(self) -> bool:
+        manages_owned_cleanup = getattr(
+            self._runtimes, "manages_owned_cleanup", False
+        )
+        return manages_owned_cleanup if isinstance(manages_owned_cleanup, bool) else False
 
     @staticmethod
     def _consume_cleanup_result(task: asyncio.Task[None]) -> None:
