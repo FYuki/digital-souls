@@ -6,11 +6,12 @@ from types import MappingProxyType
 from typing import Mapping
 
 from adapters.backend import BackendAdapter
-from adapters.base import CommandRunner, OperationContext, ServiceOperations
+from adapters.base import CommandRunner, OperationContext, ReadinessOperations, ServiceOperations
+from adapters.livekit import LiveKitExternalOperations
 from adapters.frontend import FrontendAdapter
 from adapters.ollama import OllamaAdapter
 from adapters.voicevox import VoicevoxAdapter
-from environment_constants import DEPENDENCY_NAMES
+from environment_constants import DEPENDENCY_NAMES, OPTIONAL_DEPENDENCY_NAMES
 from app.model_settings import OLLAMA_MODEL_NAME, WHISPER_MODEL_NAME
 from app.runtime_paths import RuntimePaths
 
@@ -20,6 +21,7 @@ class ServiceRegistration:
     name: str
     adapter: ServiceOperations | None
     contained_by: str | None
+    readiness_adapter: ReadinessOperations | None = None
 
 
 @dataclass(frozen=True)
@@ -83,6 +85,9 @@ def create_service_registry(
         ),
         "whisper": ServiceRegistration("whisper", None, "backend"),
         "chroma": ServiceRegistration("chroma", None, "backend"),
+        "livekit": ServiceRegistration(
+            "livekit", None, None, LiveKitExternalOperations()
+        ),
     }
     return ServiceRegistry(
         services=services,
@@ -96,7 +101,11 @@ def resolve_runtime_services(
     profile: Mapping[str, object], registry: ServiceRegistry
 ) -> RuntimeServices:
     dependencies = profile.get("dependencies")
-    if not isinstance(dependencies, dict) or set(dependencies) != set(DEPENDENCY_NAMES):
+    if (
+        not isinstance(dependencies, dict)
+        or not set(DEPENDENCY_NAMES) <= set(dependencies)
+        or not set(dependencies) <= set(DEPENDENCY_NAMES + OPTIONAL_DEPENDENCY_NAMES)
+    ):
         raise ValueError("resolved profile must define all dependencies")
     managed = {
         name
@@ -142,3 +151,15 @@ def require_service_operations(
     if registration is None or registration.adapter is None:
         raise ValueError(f"service has no lifecycle adapter: {service}")
     return registration.adapter
+
+
+def require_readiness_operations(
+    registry: ServiceRegistry, service: str
+) -> ReadinessOperations:
+    registration = registry.services.get(service)
+    if registration is None:
+        raise ValueError(f"service is not registered: {service}")
+    operations = registration.readiness_adapter or registration.adapter
+    if operations is None:
+        raise ValueError(f"service has no readiness adapter: {service}")
+    return operations

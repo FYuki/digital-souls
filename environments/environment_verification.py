@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Mapping, Protocol
 
 from adapters.base import ReadinessValidationResult
-from environment_constants import DEPENDENCY_NAMES
 from orchestrator import classify_verification
 from service_registry import (
     ServiceRegistry,
     operation_context_for,
+    require_readiness_operations,
     require_service_operations,
     resolve_runtime_services,
 )
@@ -36,7 +36,7 @@ def verification_checks(
         resolve_runtime_services(profile, registry).available_prepare_order
     )
     services: dict[str, dict[str, object]] = {}
-    for name in DEPENDENCY_NAMES:
+    for name in dependencies:
         dependency = dependencies[name]
         if not isinstance(dependency, dict):
             raise ValueError(f"invalid dependency: {name}")
@@ -45,18 +45,22 @@ def verification_checks(
         if mode == "disabled" or source in {"browser", "in_process"}:
             services[name] = {"classification": str(source or "disabled"), "checks": []}
             continue
-        operations = require_service_operations(registry, name)
+        readiness_operations = require_readiness_operations(registry, name)
+        operations = (
+            None if source == "external" else require_service_operations(registry, name)
+        )
         verification = None
         if source != "external":
+            assert operations is not None
             verification = operations.verify(
                 dependency, operation_context_for(name, dependencies, registry)
             )
-        observation = operations.probe(
+        observation = readiness_operations.probe(
             dependency, timeout_seconds=request_timeout_seconds
         )
         validation = None
         if observation.result == "ready":
-            validation = operations.validate_readiness(dependency)
+            validation = readiness_operations.validate_readiness(dependency)
         classification = (
             "preparation_required"
             if validation is not None and validation.classification == "preparation"

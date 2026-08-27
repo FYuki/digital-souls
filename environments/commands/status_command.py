@@ -9,7 +9,7 @@ from app.runtime_data_root import (
     validate_runtime_projection,
 )
 from app.runtime_paths import resolve_runtime_paths
-from environment_constants import DEPENDENCY_NAMES, RUN_REPORT_ENV
+from environment_constants import RUN_REPORT_ENV
 from environment_options import resolve_existing_run_report_path
 from http_readiness import probe_http
 from process_control import ProcessIdentity, process_identity_matches
@@ -26,7 +26,7 @@ def render_environment_status(
     dependencies = _require_mapping(profile.get("dependencies"), "dependencies")
     services = _require_mapping(report.get("services"), "services")
     lines: list[str] = []
-    for name in DEPENDENCY_NAMES:
+    for name in dependencies:
         dependency = _require_mapping(dependencies.get(name), f"dependencies.{name}")
         service = _require_mapping(services.get(name), f"services.{name}")
         source = dependency.get("source")
@@ -82,7 +82,7 @@ def _observe_http_services(report: Mapping[str, object]) -> dict[str, str]:
     profile = _require_mapping(report.get("effectiveProfile"), "effectiveProfile")
     dependencies = _require_mapping(profile.get("dependencies"), "dependencies")
     observations: dict[str, str] = {}
-    for name in DEPENDENCY_NAMES:
+    for name in dependencies:
         dependency = _require_mapping(dependencies.get(name), f"dependencies.{name}")
         readiness_url = dependency.get("readinessUrl")
         if isinstance(readiness_url, str):

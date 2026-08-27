@@ -1126,3 +1126,71 @@ def test_should_not_invoke_docker_for_external_voicevox_runtime(
 
     assert runner.calls == []
     assert store.load()["services"]["voicevox"]["state"] == "external"
+
+
+@pytest.mark.parametrize(
+    ("profile_name", "expected_url"),
+    (
+        ("dev", "http://127.0.0.1:7880/"),
+        ("dogfood", "http://127.0.0.1:17880/"),
+    ),
+)
+def test_external_livekit_reaches_ready_without_lifecycle_adapter(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    profile_name: str,
+    expected_url: str,
+) -> None:
+    from environment_runtime import EnvironmentRun
+    from http_readiness import ReadinessResult
+    from profile_resolution import resolve_profile
+    from run_report import create_initial_report
+    from service_registry import create_service_registry
+
+    runtime_paths = tests.environment_test_support.resolved_runtime_paths(tmp_path)
+    profile = dict(resolve_profile({"DS_PROFILE": profile_name}, None, runtime_paths))
+    dependencies = deepcopy(profile["dependencies"])
+    for name in dependencies:
+        if name != "livekit":
+            dependencies[name] = {"mode": "disabled", "source": None}
+    profile = {**profile, "dependencies": dependencies}
+    report = create_initial_report(
+        run_id=f"external-livekit-{profile_name}",
+        started_at="2026-07-17T00:00:00+00:00",
+        resolved_profile_path=tmp_path / "resolved-profile.json",
+        effective_profile=profile,
+        orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
+        runtime=profile["runtime"],
+    )
+    store = RecordingReportStore(tmp_path / "environment-run.json")
+    store.save(report)
+    probed_urls: list[str] = []
+
+    def ready(url: str, *, timeout_seconds: float) -> ReadinessResult:
+        del timeout_seconds
+        probed_urls.append(url)
+        return ReadinessResult(url, 1, 0.001, "ready")
+
+    monkeypatch.setattr("adapters.livekit.probe_http", ready)
+    run = EnvironmentRun(
+        profile=profile,
+        profile_path=tmp_path / "resolved-profile.json",
+        store=store,
+        report=report,
+        timing=EnvironmentTiming(),
+        ready_gate={"baseUrl": "http://127.0.0.1:0", "host": "127.0.0.1", "port": 0},
+        was_interrupted=lambda: False,
+        registry=create_service_registry(
+            Path.cwd(), runtime_paths, effective_profile=profile_name
+        ),
+    )
+
+    decisions = run.pre_probe()
+    run.wait_until_ready()
+
+    current_report = store.load()
+    assert decisions == {"livekit": "external"}
+    assert probed_urls == [expected_url, expected_url]
+    assert current_report["services"]["livekit"]["state"] == "external"
+    assert current_report["status"] == "ready"
+    assert current_report["phase"] == "ready"

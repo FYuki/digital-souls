@@ -40,6 +40,7 @@ Issue #56で、dogfood稼働中のintegration testとcleanupを含む横断受�
 | `npm run test:e2e:mocked` | `frontend/e2e/` | `test-mocked` | `mocked-e2e` | `frontend/test-results/mocked-e2e/` |
 | `npm run test:integration:text` | `frontend/integration/text/` | `integration-text` | `text-chat-real` | `frontend/test-results/integration-text/` |
 | `npm run test:integration:voice` | `frontend/integration/voice/` | `integration-voice` | `voice-chat-real` | `frontend/test-results/integration-voice/` |
+| `npm run test:integration:livekit` | `frontend/integration/livekit/` | `livekit/chromium` | マイク権限・実LiveKit接続 | `frontend/test-results/` |
 
 各設定は Profile、収集ディレクトリ、成果物の出力先を固定する。spec 内で環境変数や依存 mode によってモックと実接続を切り替えない。各 spec が受け入れる要求Capabilityは1つだけとする。実接続 spec では mock WebSocket、`page.route`、HARによる外部通信の置換を禁止する。
 
@@ -87,6 +88,10 @@ CodeRabbitの指摘はコードレビューの補助であり、GitHub Actions�
 
 配置、prompt tuningとproduction conformanceの分離、合格基準は
 `docs/decisions/wave2-memory-formation-retrieval-2026-08.md`を正本とする。
+
+## LiveKit実サーバーsuite
+
+LiveKitの状態遷移、outbox、mapping、再生済みprefixはfake clock/portを使うunit/module testでCI内検証する。実Room、WebRTC media、browser microphoneの結合は`LIVEKIT_TEST_FRONTEND_URL`、`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`を設定し、リポジトリルートの`npm run test:integration:livekit`でBackend pytestとPlaywright Chromiumをまとめて実行する。このスイートはself-host LiveKitとUDP到達性が必要なためCIでは自動実行しない。
 
 ## Capability不足と失敗
 

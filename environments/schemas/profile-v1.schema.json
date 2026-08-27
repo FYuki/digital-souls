@@ -29,6 +29,7 @@
         "backend": { "$ref": "#/$defs/backendDependency" },
         "ollama": { "$ref": "#/$defs/ollamaDependency" },
         "voicevox": { "$ref": "#/$defs/voicevoxDependency" },
+        "livekit": { "$ref": "#/$defs/livekitDependency" },
         "whisper": { "$ref": "#/$defs/inProcessDependency" },
         "chroma": { "$ref": "#/$defs/inProcessDependency" }
       },
@@ -47,6 +48,7 @@
             "properties": {
               "ollama": { "$ref": "#/$defs/disabledDependency" },
               "voicevox": { "$ref": "#/$defs/disabledDependency" },
+              "livekit": { "$ref": "#/$defs/disabledDependency" },
               "whisper": { "$ref": "#/$defs/disabledDependency" },
               "chroma": { "$ref": "#/$defs/disabledDependency" }
             }
@@ -113,6 +115,12 @@
     "voicevoxDependency": {
       "oneOf": [
         { "$ref": "#/$defs/voicevoxHttpDependency" },
+        { "$ref": "#/$defs/disabledDependency" }
+      ]
+    },
+    "livekitDependency": {
+      "oneOf": [
+        { "$ref": "#/$defs/httpExternalDependency" },
         { "$ref": "#/$defs/disabledDependency" }
       ]
     },

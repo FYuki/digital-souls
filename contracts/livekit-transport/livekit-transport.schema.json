@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digital-souls.local/contracts/livekit-transport/1.0/livekit-transport.schema.json",
+  "title": "LiveKitTransportFrame",
+  "oneOf": [
+    { "$ref": "#/$defs/Ack" },
+    { "$ref": "#/$defs/StateSyncRequest" },
+    { "$ref": "#/$defs/AuthoritativeState" },
+    { "$ref": "#/$defs/LogicalAudioSegment" },
+    { "$ref": "#/$defs/MicrophoneObservation" }
+  ],
+  "$defs": {
+    "ProtocolVersion": { "type": "string", "const": "1.0" },
+    "Identifier": { "type": "string", "format": "uuid" },
+    "Generation": { "type": "integer", "minimum": 0 },
+    "TerminalOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "session_id", "response_id", "confirmed_audio_sequence"],
+      "properties": {
+        "type": { "const": "response_interrupted" },
+        "session_id": { "$ref": "#/$defs/Identifier" },
+        "response_id": { "$ref": "#/$defs/Identifier" },
+        "confirmed_audio_sequence": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "Ack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_version", "type", "event_id", "generation"],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "ack" },
+        "event_id": { "$ref": "#/$defs/Identifier" },
+        "generation": { "$ref": "#/$defs/Generation" }
+      }
+    },
+    "StateSyncRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_version", "type", "generation"],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "state_sync_request" },
+        "generation": { "$ref": "#/$defs/Generation" }
+      }
+    },
+    "AuthoritativeState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_version", "type", "generation", "session_phase", "terminal_outcomes"],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "authoritative_state" },
+        "generation": { "$ref": "#/$defs/Generation" },
+        "session_phase": { "enum": ["available", "unavailable", "ended"] },
+        "terminal_outcomes": { "type": "array", "items": { "$ref": "#/$defs/TerminalOutcome" } }
+      }
+    },
+    "LogicalAudioSegment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_version", "type", "response_id", "audio_sequence", "generation", "pcm_sample_count"],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "logical_audio_segment" },
+        "response_id": { "$ref": "#/$defs/Identifier" },
+        "audio_sequence": { "type": "integer", "minimum": 0 },
+        "generation": { "$ref": "#/$defs/Generation" },
+        "pcm_sample_count": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "MicrophoneObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_version", "type", "generation", "frame_count", "sample_count", "elapsed_ms", "missing_frames"],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "microphone_observation" },
+        "generation": { "$ref": "#/$defs/Generation" },
+        "frame_count": { "type": "integer", "minimum": 1 },
+        "sample_count": { "type": "integer", "minimum": 1 },
+        "elapsed_ms": { "type": "integer", "minimum": 0 },
+        "missing_frames": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

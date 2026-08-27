@@ -175,6 +175,10 @@ ChromaDB は外部プロセスではなく、Backend プロセス内で `chromad
 
 dogfood ChromaはWave 2受入後にSQLite正本から構築する。
 
+## LiveKit実験環境
+
+devは`infra/livekit/compose.yaml`を起動し、Backendへ`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`を渡す。ブラウザの実験入口は`/voice/livekit`であり、`/`のWebSocket UIと分離する。LiveKit Serverの起動とkey/secret生成は開発者が行う。
+
 ## テストとの関係
 
 テスト層と外部サービス実接続の扱いは `docs/testing-policy.md` を参照する。VOICEVOX / Whisper / ChromaDB / Ollama の実接続を完了条件として報告する場合は、同ドキュメントのインテグレーションテスト方針に従い、実サービスへの接続ログを一次証跡にする。

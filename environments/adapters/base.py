@@ -134,6 +134,16 @@ class ServiceOperations(Protocol):
     def stop(self, service: Mapping[str, object], grace_seconds: float) -> StopResult: ...
 
 
+class ReadinessOperations(Protocol):
+    def probe(
+        self, dependency: Mapping[str, object], timeout_seconds: float
+    ) -> ReadinessResult: ...
+
+    def validate_readiness(
+        self, dependency: Mapping[str, object]
+    ) -> ReadinessValidationResult: ...
+
+
 class HttpServiceOperations:
     def probe(
         self, dependency: Mapping[str, object], timeout_seconds: float

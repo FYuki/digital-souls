@@ -4,7 +4,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Mapping, cast
 
-from environment_constants import DEPENDENCY_NAMES, RUN_REPORT_SCHEMA_VERSION
+from environment_constants import DEPENDENCY_NAMES, OPTIONAL_DEPENDENCY_NAMES, RUN_REPORT_SCHEMA_VERSION
 from run_report_validation import (
     FAILURE_CATEGORIES,
     PHASES,
@@ -77,7 +77,11 @@ def create_initial_report(
     runtime: Mapping[str, str],
 ) -> dict[str, object]:
     dependencies = effective_profile.get("dependencies")
-    if not isinstance(dependencies, dict) or set(dependencies) != set(DEPENDENCY_NAMES):
+    allowed_dependencies = set(DEPENDENCY_NAMES + OPTIONAL_DEPENDENCY_NAMES)
+    if (
+        not isinstance(dependencies, dict)
+        or not set(DEPENDENCY_NAMES) <= set(dependencies) <= allowed_dependencies
+    ):
         raise RunReportError("effective profile must define all dependencies")
     pending = create_pending_report(
         run_id=run_id,
@@ -91,7 +95,8 @@ def create_initial_report(
         "effectiveProfile": deepcopy(dict(effective_profile)),
         "phase": "verify",
         "services": {
-            name: _service_record(dependencies[name]) for name in DEPENDENCY_NAMES
+            name: _service_record(dependency)
+            for name, dependency in dependencies.items()
         },
     }
     validate_run_report(report)

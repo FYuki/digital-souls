@@ -38,7 +38,8 @@
         "ollama": { "$ref": "#/$defs/processService" },
         "voicevox": { "$ref": "#/$defs/containerService" },
         "whisper": { "$ref": "#/$defs/noIdentityService" },
-        "chroma": { "$ref": "#/$defs/noIdentityService" }
+        "chroma": { "$ref": "#/$defs/noIdentityService" },
+        "livekit": { "$ref": "#/$defs/noIdentityService" }
       }
     },
     "testResult": {
@@ -99,6 +100,7 @@
     { "$ref": "#/$defs/voicevoxSequenceInvariant" },
     { "$ref": "#/$defs/whisperSequenceInvariant" },
     { "$ref": "#/$defs/chromaSequenceInvariant" },
+    { "$ref": "#/$defs/livekitSequenceInvariant" },
     { "$ref": "#/$defs/lifecycleInvariant" }
   ],
   "$defs": {
@@ -121,8 +123,8 @@
         "cachePath": { "type": "string", "minLength": 1 }
       }
     },
-    "serviceName": { "enum": ["frontend", "backend", "ollama", "voicevox", "whisper", "chroma"] },
-    "cleanupTargetName": { "enum": ["frontend", "backend", "ollama", "voicevox", "whisper", "chroma", "ready_gate", "run_report"] },
+    "serviceName": { "enum": ["frontend", "backend", "ollama", "voicevox", "whisper", "chroma", "livekit"] },
+    "cleanupTargetName": { "enum": ["frontend", "backend", "ollama", "voicevox", "whisper", "chroma", "livekit", "ready_gate", "run_report"] },
     "processIdentity": {
       "type": "object",
       "additionalProperties": false,
@@ -276,6 +278,29 @@
     "voicevoxSequenceInvariant": { "$ref": "#/$defs/sequenceInvariantTemplate/voicevox" },
     "whisperSequenceInvariant": { "$ref": "#/$defs/sequenceInvariantTemplate/whisper" },
     "chromaSequenceInvariant": { "$ref": "#/$defs/sequenceInvariantTemplate/chroma" },
+    "livekitSequenceInvariant": {
+      "if": {
+        "properties": {
+          "services": { "required": ["livekit"] }
+        }
+      },
+      "then": {
+        "properties": {
+          "services": {
+            "properties": {
+              "livekit": {
+                "properties": {
+                  "source": { "const": "external" },
+                  "owned": { "const": false }
+                },
+                "required": ["source", "owned"]
+              }
+            }
+          },
+          "startSequence": { "not": { "contains": { "const": "livekit" } } }
+        }
+      }
+    },
     "lifecycleInvariant": {
       "allOf": [
         {

@@ -18,7 +18,9 @@ from profile_types import (
 
 
 PROFILE_SCHEMA_VERSION = 1
-DEPENDENCY_NAMES = ("frontend", "backend", "ollama", "voicevox", "whisper", "chroma")
+REQUIRED_DEPENDENCY_NAMES = ("frontend", "backend", "ollama", "voicevox", "whisper", "chroma")
+OPTIONAL_DEPENDENCY_NAMES = ("livekit",)
+DEPENDENCY_NAMES = REQUIRED_DEPENDENCY_NAMES + OPTIONAL_DEPENDENCY_NAMES
 DOWNSTREAM_DEPENDENCIES = ("ollama", "voicevox", "whisper", "chroma")
 PROFILE_FIELDS = {"schemaVersion", "name", "description", "readyGate", "dependencies"}
 DEPENDENCY_FIELDS = {"mode", "source", "baseUrl", "readinessPath", "reload"}
@@ -202,14 +204,23 @@ def validate_profile(raw_profile: object, expected_name: str) -> Profile:
         ready_gate["baseUrl"], f"{expected_name}.readyGate.baseUrl"
     )
     raw_dependencies = _require_record(record["dependencies"], f"{expected_name}.dependencies")
-    _reject_unknown_fields(raw_dependencies, set(DEPENDENCY_NAMES), f"{expected_name}.dependencies")
-    for name in DEPENDENCY_NAMES:
+    _reject_unknown_fields(
+        raw_dependencies,
+        set(DEPENDENCY_NAMES),
+        f"{expected_name}.dependencies",
+    )
+    for name in REQUIRED_DEPENDENCY_NAMES:
         if name not in raw_dependencies:
             raise ProfileError(f"{expected_name}.dependencies.{name} is required")
     dependency_map: dict[str, Dependency] = {
         name: _validate_dependency(expected_name, name, raw_dependencies[name])
-        for name in DEPENDENCY_NAMES
+        for name in REQUIRED_DEPENDENCY_NAMES
     }
+    for name in OPTIONAL_DEPENDENCY_NAMES:
+        if name in raw_dependencies:
+            dependency_map[name] = _validate_dependency(
+                expected_name, name, raw_dependencies[name]
+            )
     dependencies = cast(Dependencies, dependency_map)
     if dependencies["backend"]["mode"] != "real":
         for name in DOWNSTREAM_DEPENDENCIES:
