@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, TypedDict
+
+
+class _InProgressResponse(TypedDict):
+    response_id: str
+    confirmed_audio_sequence: int
 
 
 class SessionLifecycle:
@@ -24,7 +29,7 @@ class SessionLifecycle:
         self.generation = 0
         self._reconnect_deadline_ms: int | None = None
         self._end_result: dict[str, str] | None = None
-        self.in_progress_response: dict[str, object] | None = None
+        self.in_progress_response: _InProgressResponse | None = None
 
     @property
     def session_ended(self) -> bool:
@@ -45,7 +50,7 @@ class SessionLifecycle:
         response = self.in_progress_response
         if response is None or response["response_id"] != response_id:
             return False
-        current_sequence = int(response["confirmed_audio_sequence"])
+        current_sequence = response["confirmed_audio_sequence"]
         if confirmed_audio_sequence <= current_sequence:
             return False
         self.in_progress_response = {

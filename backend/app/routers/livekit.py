@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, cast
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from app.livekit_transport.bootstrap import (
     BindingValidationError,
+    BootstrapService,
     BootstrapConflictError,
     BootstrapTimeoutError,
     JOIN_TOKEN_TTL_SECONDS,
@@ -46,12 +47,12 @@ class EndedSessionResponse(BaseModel):
     phase: str
 
 
-def _configured(request: Request) -> tuple[object, str]:
+def _configured(request: Request) -> tuple[BootstrapService, str]:
     service = getattr(request.app.state, "livekit_bootstrap_service", None)
     livekit_url = getattr(request.app.state, "livekit_url", None)
     if service is None or not isinstance(livekit_url, str) or not livekit_url.strip():
         raise HTTPException(503, detail={"code": "livekit_not_configured"})
-    return service, livekit_url
+    return cast(BootstrapService, service), livekit_url
 
 
 def _conflict(code: str) -> HTTPException:

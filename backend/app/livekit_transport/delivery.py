@@ -127,6 +127,8 @@ class CoreEventDelivery:
         try:
             event = decoded_event if decoded_event is not None else decode_core_event(payload)
             event_id = event["event_id"]
+            if not isinstance(event_id, str):
+                raise TerminalProtocolError("Core event_id must be a string")
             result = self._deduplicator.classify(event_id, payload)
             if result.status == "accepted":
                 self._sequences.accept(event)

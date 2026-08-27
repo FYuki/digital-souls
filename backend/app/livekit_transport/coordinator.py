@@ -33,6 +33,12 @@ OUTBOX_MAX_EVENTS = 256
 OUTBOX_MAX_BYTES = 1024 * 1024
 
 
+def _required_int(value: object, field: str) -> int:
+    if not isinstance(value, int):
+        raise TerminalProtocolError(f"{field} must be an integer")
+    return value
+
+
 @dataclass(frozen=True)
 class SessionCoordinatorDependencies:
     publish_data: Callable[[bytes, str], Awaitable[None]]
@@ -167,8 +173,9 @@ class ProductionSessionCoordinator:
                 if event["type"] in ("playback_completed", "playback_stopped"):
                     self._lifecycle.confirm_playback(
                         response_id=str(event["response_id"]),
-                        confirmed_audio_sequence=int(
-                            event["last_played_audio_sequence"]
+                        confirmed_audio_sequence=_required_int(
+                            event["last_played_audio_sequence"],
+                            "last_played_audio_sequence",
                         ),
                     )
                 await self._publish_private(
@@ -182,7 +189,7 @@ class ProductionSessionCoordinator:
                 return
             if topic == PRIVATE_TOPIC:
                 frame = decode_private_frame(payload)
-                frame_generation = int(frame["generation"])
+                frame_generation = _required_int(frame["generation"], "generation")
                 if frame["type"] == "state_sync_request":
                     if frame_generation > self.generation:
                         return

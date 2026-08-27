@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 import inspect
 import json
 import logging
@@ -8,8 +9,10 @@ import os
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 from uuid import UUID, uuid5
+
+from fastapi import FastAPI
 
 from app.characters.loader import load_character_card
 from app.livekit_transport.bootstrap import (
@@ -28,6 +31,10 @@ from app.livekit_transport.delivery import CoreNotificationPort
 from app.livekit_transport.runtime import MicrophoneTrackObserver, PcmFixturePublisher
 from app.livekit_transport.token import LiveKitTokenSigner
 
+if TYPE_CHECKING:
+    import livekit.api as livekit_api
+    import livekit.rtc as rtc
+
 
 LIVEKIT_URL_ENV = "LIVEKIT_URL"
 LIVEKIT_API_KEY_ENV = "LIVEKIT_API_KEY"
@@ -36,6 +43,26 @@ PCM_SAMPLE_RATE = 48_000
 PCM_CHANNELS = 1
 PCM_FIXTURE_SAMPLES = 4_800
 logger = logging.getLogger(__name__)
+
+
+def _livekit_rtc_module() -> Any:
+    return getattr(importlib.import_module("livekit"), "rtc")
+
+
+def _livekit_api_module() -> Any:
+    return getattr(importlib.import_module("livekit"), "api")
+
+
+def _required_int(value: object, field: str) -> int:
+    if not isinstance(value, int):
+        raise TypeError(f"{field} must be an integer")
+    return value
+
+
+def _required_string_list(value: object, field: str) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise TypeError(f"{field} must be a list of strings")
+    return value
 
 
 def _fixture_response_id(session_id: str, generation: int) -> str:
@@ -47,15 +74,21 @@ class LiveKitConfigurationError(RuntimeError):
 
 
 def resolve_livekit_settings() -> tuple[str, str, str] | None:
-    values = tuple(
-        os.environ.get(name)
-        for name in (LIVEKIT_URL_ENV, LIVEKIT_API_KEY_ENV, LIVEKIT_API_SECRET_ENV)
-    )
-    if values == (None, None, None):
+    livekit_url = os.environ.get(LIVEKIT_URL_ENV)
+    api_key = os.environ.get(LIVEKIT_API_KEY_ENV)
+    api_secret = os.environ.get(LIVEKIT_API_SECRET_ENV)
+    if livekit_url is None and api_key is None and api_secret is None:
         return None
-    if not all(isinstance(value, str) and value.strip() for value in values):
+    if (
+        livekit_url is None
+        or not livekit_url.strip()
+        or api_key is None
+        or not api_key.strip()
+        or api_secret is None
+        or not api_secret.strip()
+    ):
         raise LiveKitConfigurationError("LiveKit configuration is incomplete")
-    return values  # type: ignore[return-value]
+    return livekit_url, api_key, api_secret
 
 
 class ProductionTokenSigner:
@@ -69,28 +102,30 @@ class ProductionTokenSigner:
         return await self.issue(
             identity=str(request["identity"]),
             room=str(request["room"]),
-            ttl_seconds=int(request["ttl_seconds"]),
+            ttl_seconds=_required_int(request["ttl_seconds"], "ttl_seconds"),
             grant={
                 "room_join": True,
                 "can_subscribe": bool(request["can_subscribe"]),
                 "can_publish": bool(request["can_publish"]),
                 "can_publish_data": bool(request["can_publish_data"]),
-                "can_publish_sources": list(request["can_publish_sources"]),
+                "can_publish_sources": _required_string_list(
+                    request["can_publish_sources"], "can_publish_sources"
+                ),
             },
         )
 
 
 class ProductionRoomManager:
-    def __init__(self, livekit_api: object) -> None:
+    def __init__(self, livekit_api: livekit_api.LiveKitAPI) -> None:
         self._api = livekit_api
 
     async def create(self, room_name: str) -> None:
-        from livekit import api
+        api = _livekit_api_module()
 
         await self._api.room.create_room(api.CreateRoomRequest(name=room_name))
 
     async def delete(self, room_name: str) -> None:
-        from livekit import api
+        api = _livekit_api_module()
 
         await self._api.room.delete_room(api.DeleteRoomRequest(room=room_name))
 
@@ -131,7 +166,7 @@ class ProductionCoreEventInbox:
 
 
 class _RtcAudioSource(Protocol):
-    async def capture_frame(self, frame: object) -> None: ...
+    async def capture_frame(self, frame: rtc.AudioFrame) -> None: ...
 
 
 class _LiveKitPcmAudioSource:
@@ -139,10 +174,10 @@ class _LiveKitPcmAudioSource:
         self._source = source
 
     async def publish(self, pcm: bytes) -> None:
-        from livekit import rtc
+        rtc_module = _livekit_rtc_module()
 
         samples_per_channel = len(pcm) // (2 * PCM_CHANNELS)
-        frame = rtc.AudioFrame(
+        frame: rtc.AudioFrame = rtc_module.AudioFrame(
             pcm,
             PCM_SAMPLE_RATE,
             PCM_CHANNELS,
@@ -175,7 +210,7 @@ def _deterministic_pcm_fixture() -> bytes:
 
 @dataclass
 class _SessionCleanupState:
-    room: object | None
+    room: rtc.Room | None
     pending_runtime_tasks: list[asyncio.Task[None]]
     session_binding_deleted: bool = False
     room_deleted: bool = False
@@ -184,7 +219,7 @@ class _SessionCleanupState:
 
 
 class ProductionRuntimeManager:
-    manages_owned_cleanup = True
+    manages_owned_cleanup: bool = True
 
     def __init__(
         self,
@@ -200,7 +235,7 @@ class ProductionRuntimeManager:
         self._room_manager = room_manager
         self._sessions = session_repository
         self._core_port = core_port
-        self._rooms: dict[str, object] = {}
+        self._rooms: dict[str, rtc.Room] = {}
         self._coordinators: dict[str, ProductionSessionCoordinator] = {}
         self._session_tasks: dict[str, set[asyncio.Task[None]]] = {}
         self._ready: dict[str, asyncio.Event] = {}
@@ -219,7 +254,11 @@ class ProductionRuntimeManager:
                 "identity": f"character-{reservation.request['character_id']}-{session_id}",
                 "core_participant_id": str(reservation.request.get("participant_id", session_id)),
                 "reconnect_grace_ms": min(
-                    int(reservation.request["requested_reconnect_grace_ms"]), 60_000
+                    _required_int(
+                        reservation.request["requested_reconnect_grace_ms"],
+                        "requested_reconnect_grace_ms",
+                    ),
+                    60_000,
                 ),
             }
         )
@@ -228,7 +267,7 @@ class ProductionRuntimeManager:
         await self._ready[session_id].wait()
 
     async def start_runtime(self, request: dict[str, object]) -> None:
-        from livekit import rtc
+        rtc_module = _livekit_rtc_module()
 
         session_id = str(request["session_id"])
         room_name = f"voice-{session_id}"
@@ -244,7 +283,7 @@ class ProductionRuntimeManager:
                 "can_publish_sources": ["microphone"],
             }
         )
-        room = rtc.Room()
+        room: rtc.Room = rtc_module.Room()
 
         async def publish_data(payload: bytes, topic: str) -> None:
             await room.local_participant.publish_data(payload, reliable=True, topic=topic)
@@ -259,7 +298,9 @@ class ProductionRuntimeManager:
             session_id=session_id,
             user_identity=user_identity,
             core_participant_id=str(request["core_participant_id"]),
-            reconnect_grace_ms=int(request["reconnect_grace_ms"]),
+            reconnect_grace_ms=_required_int(
+                request["reconnect_grace_ms"], "reconnect_grace_ms"
+            ),
             dependencies=SessionCoordinatorDependencies(
                 publish_data=publish_data,
                 cleanup=cleanup,
@@ -273,8 +314,7 @@ class ProductionRuntimeManager:
         self._ready[session_id] = asyncio.Event()
         self._fixture_locks[session_id] = asyncio.Lock()
 
-        @room.on("participant_connected")
-        def participant_connected(participant: object) -> None:
+        def participant_connected(participant: rtc.RemoteParticipant) -> None:
             reconnected = coordinator.participant_connected(
                 identity=str(participant.identity),
                 participant_sid=str(participant.sid),
@@ -290,14 +330,16 @@ class ProductionRuntimeManager:
 
             self._schedule_task(session_id, handle_connected())
 
-        @room.on("participant_disconnected")
-        def participant_disconnected(participant: object) -> None:
+        room.on("participant_connected")(participant_connected)
+
+        def participant_disconnected(participant: rtc.RemoteParticipant) -> None:
             coordinator.participant_disconnected(
                 identity=str(participant.identity), participant_sid=str(participant.sid)
             )
 
-        @room.on("data_received")
-        def data_received(packet: object) -> None:
+        room.on("participant_disconnected")(participant_disconnected)
+
+        def data_received(packet: rtc.DataPacket) -> None:
             participant = getattr(packet, "participant", None)
             if participant is None:
                 return
@@ -311,10 +353,15 @@ class ProductionRuntimeManager:
                 ),
             )
 
-        @room.on("track_subscribed")
-        def track_subscribed(track: object, publication: object, participant: object) -> None:
+        room.on("data_received")(data_received)
+
+        def track_subscribed(
+            track: rtc.Track,
+            publication: rtc.RemoteTrackPublication,
+            participant: rtc.RemoteParticipant,
+        ) -> None:
             if (
-                publication.source != rtc.TrackSource.SOURCE_MICROPHONE
+                publication.source != rtc_module.TrackSource.SOURCE_MICROPHONE
                 or not coordinator.is_current_participant(
                     identity=str(participant.identity),
                     participant_sid=str(participant.sid),
@@ -334,6 +381,8 @@ class ProductionRuntimeManager:
                 ),
             )
 
+        room.on("track_subscribed")(track_subscribed)
+
         await room.connect(self._livekit_url, token)
         coordinator.start_join_deadline()
         await self._prepare_fixture_track(session_id, room)
@@ -342,14 +391,14 @@ class ProductionRuntimeManager:
     async def _observe_microphone(
         self,
         session_id: str,
-        track: object,
+        track: rtc.Track,
         coordinator: ProductionSessionCoordinator,
         participant_identity: str,
         participant_sid: str,
         generation: int,
         publish_data: Callable[[bytes, str], Awaitable[None]],
     ) -> None:
-        from livekit import rtc
+        rtc_module = _livekit_rtc_module()
 
         observer = MicrophoneTrackObserver(
             observation_port=_ObservationPublisher(
@@ -358,7 +407,9 @@ class ProductionRuntimeManager:
                 lambda coroutine: self._schedule_task(session_id, coroutine),
             )
         )
-        stream = rtc.AudioStream(track, sample_rate=PCM_SAMPLE_RATE, num_channels=1)
+        stream: rtc.AudioStream = rtc_module.AudioStream(
+            track, sample_rate=PCM_SAMPLE_RATE, num_channels=1
+        )
         try:
             async for event in stream:
                 if (
@@ -421,12 +472,14 @@ class ProductionRuntimeManager:
                 exc_info=(type(error), error, error.__traceback__),
             )
 
-    async def _prepare_fixture_track(self, session_id: str, room: object) -> None:
-        from livekit import rtc
+    async def _prepare_fixture_track(self, session_id: str, room: rtc.Room) -> None:
+        rtc_module = _livekit_rtc_module()
 
-        source = rtc.AudioSource(PCM_SAMPLE_RATE, PCM_CHANNELS)
-        track = rtc.LocalAudioTrack.create_audio_track("character-fixture", source)
-        options = rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE)
+        source: rtc.AudioSource = rtc_module.AudioSource(PCM_SAMPLE_RATE, PCM_CHANNELS)
+        track = rtc_module.LocalAudioTrack.create_audio_track("character-fixture", source)
+        options = rtc_module.TrackPublishOptions(
+            source=rtc_module.TrackSource.SOURCE_MICROPHONE
+        )
         await room.local_participant.publish_track(track, options)
         self._fixture_sources[session_id] = _LiveKitPcmAudioSource(source)
 
@@ -475,7 +528,7 @@ class ProductionRuntimeManager:
 
     def _release_runtime_ownership(
         self, session_id: str
-    ) -> tuple[object | None, list[asyncio.Task[None]]]:
+    ) -> tuple[rtc.Room | None, list[asyncio.Task[None]]]:
         self._coordinators.pop(session_id, None)
         tasks = self._session_tasks.pop(session_id, set())
         pending_tasks: list[asyncio.Task[None]] = []
@@ -516,17 +569,15 @@ class ProductionRuntimeManager:
                     asyncio.create_task(self._finish_runtime_tasks(state))
                 )
 
-            if room_cleanup_task is None:
-                local_results = await asyncio.gather(
-                    *local_operations, return_exceptions=True
-                )
-                room_cleanup_result: object = None
-            else:
-                local_results, room_cleanup_result = await asyncio.gather(
-                    asyncio.gather(*local_operations, return_exceptions=True),
-                    asyncio.shield(room_cleanup_task),
-                    return_exceptions=True,
-                )
+            local_results = await asyncio.gather(
+                *local_operations, return_exceptions=True
+            )
+            room_cleanup_result: object = None
+            if room_cleanup_task is not None:
+                try:
+                    await asyncio.shield(room_cleanup_task)
+                except Exception as error:
+                    room_cleanup_result = error
             for result in local_results:
                 if isinstance(result, BaseException):
                     raise result
@@ -582,15 +633,17 @@ class ProductionRuntimeManager:
             task.exception()
 
 
-async def configure_production_resources(app: object) -> object | None:
+async def configure_production_resources(
+    app: FastAPI,
+) -> livekit_api.LiveKitAPI | None:
     settings = resolve_livekit_settings()
     if settings is None:
         return None
     livekit_url, api_key, api_secret = settings
-    from livekit import api
+    api = _livekit_api_module()
 
-    livekit_api = api.LiveKitAPI(livekit_url, api_key, api_secret)
-    room_manager = ProductionRoomManager(livekit_api)
+    client: livekit_api.LiveKitAPI = api.LiveKitAPI(livekit_url, api_key, api_secret)
+    room_manager = ProductionRoomManager(client)
     signer = ProductionTokenSigner(api_key, api_secret)
     sessions = InMemorySessionBindingRepository()
     core_events = ProductionCoreEventInbox()
@@ -620,4 +673,4 @@ async def configure_production_resources(app: object) -> object | None:
     app.state.livekit_bootstrap_service = bootstrap
     app.state.livekit_core_events = core_events
     app.state.livekit_url = livekit_url
-    return livekit_api
+    return client

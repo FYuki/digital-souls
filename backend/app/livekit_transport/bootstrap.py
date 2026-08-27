@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 import time
-from typing import Callable, Mapping, Protocol
+from typing import Callable, Mapping, Protocol, cast
 from uuid import UUID, uuid4
 
 from app.conversation_history.errors import (
@@ -45,8 +45,17 @@ class BindingValidator(Protocol):
     def validate(self, *, character_id: str, conversation_id: UUID) -> None: ...
 
 
+class ConversationRepository(Protocol):
+    def resume_conversation(self, character_id: str, conversation_id: UUID) -> object: ...
+
+
 class CharacterConversationBindingValidator:
-    def __init__(self, *, character_loader: Callable[[str], object], conversations: object) -> None:
+    def __init__(
+        self,
+        *,
+        character_loader: Callable[[str], object],
+        conversations: ConversationRepository,
+    ) -> None:
         self._character_loader = character_loader
         self._conversations = conversations
 
@@ -139,6 +148,39 @@ class InMemorySessionBindingRepository:
         return self._by_session.get(session_id)
 
 
+class SessionBindingRepository(Protocol):
+    async def reserve(self, request: Mapping[str, object]) -> str: ...
+
+    async def delete(self, session_id: str) -> None: ...
+
+
+class RoomManager(Protocol):
+    async def create(self, room_name: str) -> None: ...
+
+    async def delete(self, room_name: str) -> None: ...
+
+
+class RuntimeManager(Protocol):
+    manages_owned_cleanup: bool
+
+    async def connect(self, session_id: str) -> None: ...
+
+    async def wait_until_ready(self, session_id: str) -> None: ...
+
+    async def stop(self, session_id: str) -> None: ...
+
+
+class TokenSigner(Protocol):
+    async def issue(
+        self,
+        *,
+        identity: str,
+        room: str,
+        ttl_seconds: int,
+        grant: dict[str, object],
+    ) -> str: ...
+
+
 @dataclass(frozen=True)
 class BootstrapResult:
     session_id: str
@@ -152,10 +194,10 @@ class BootstrapService:
     def __init__(
         self,
         *,
-        session_repository: object,
-        room_manager: object,
-        runtime_manager: object,
-        token_signer: object,
+        session_repository: SessionBindingRepository,
+        room_manager: RoomManager,
+        runtime_manager: RuntimeManager,
+        token_signer: TokenSigner,
         timeout_seconds: int,
         binding_validator: BindingValidator | None = None,
     ) -> None:
@@ -182,7 +224,14 @@ class BootstrapService:
             )
         if "session_id" in request:
             session_id = str(request["session_id"])
-            reservation = getattr(self._sessions, "get", lambda _value: None)(session_id)
+            get_reservation = getattr(self._sessions, "get", None)
+            reservation = (
+                None
+                if get_reservation is None
+                else cast(
+                    Callable[[str], SessionReservation | None], get_reservation
+                )(session_id)
+            )
             result = self._by_session.get(session_id)
             if reservation is None or result is None:
                 raise UnknownSessionError("session is not owned by this process")
@@ -205,9 +254,10 @@ class BootstrapService:
             completed = self._completed.get(request_id)
             if completed is not None:
                 previous_request, previous_result = completed
-                if not getattr(self._sessions, "contains", lambda _value: True)(
-                    previous_result.session_id
-                ):
+                contains_session = getattr(self._sessions, "contains", None)
+                if contains_session is not None and not cast(
+                    Callable[[str], bool], contains_session
+                )(previous_result.session_id):
                     self._completed.pop(request_id, None)
                     self._by_session.pop(previous_result.session_id, None)
                     completed = None
@@ -257,7 +307,7 @@ class BootstrapService:
     async def _end_once(self, result: BootstrapResult) -> None:
         try:
             await self._runtimes.stop(result.session_id)
-            if not getattr(self._runtimes, "manages_owned_cleanup", False):
+            if not self._runtimes.manages_owned_cleanup:
                 await self._rooms.delete(result.room)
                 await self._sessions.delete(result.session_id)
             async with self._lock:
@@ -296,9 +346,13 @@ class BootstrapService:
                 await self._runtimes.connect(session_id)
                 await self._runtimes.wait_until_ready(session_id)
                 token = await self._issue_user_token(session_id)
+                requested_reconnect_grace_ms = request[
+                    "requested_reconnect_grace_ms"
+                ]
+                if not isinstance(requested_reconnect_grace_ms, int):
+                    raise TypeError("requested_reconnect_grace_ms must be an integer")
                 reconnect_grace_ms = min(
-                    int(request["requested_reconnect_grace_ms"]),
-                    MAX_RECONNECT_GRACE_MS,
+                    requested_reconnect_grace_ms, MAX_RECONNECT_GRACE_MS
                 )
                 return BootstrapResult(
                     session_id=session_id,
@@ -342,9 +396,7 @@ class BootstrapService:
         cleanup_tasks = [session_cleanup]
         if runtime_started:
             cleanup_tasks.append(asyncio.create_task(self._runtimes.stop(session_id)))
-        if room_created and not getattr(
-            self._runtimes, "manages_owned_cleanup", False
-        ):
+        if room_created and not self._runtimes.manages_owned_cleanup:
             cleanup_tasks.append(
                 asyncio.create_task(self._rooms.delete(f"voice-{session_id}"))
             )
