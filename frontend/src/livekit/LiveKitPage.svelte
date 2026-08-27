@@ -67,24 +67,40 @@
     }
   }
 
-  const obtainReconnectToken = async (): Promise<void> => {
-    if (binding === null && pendingInitialToken !== null) {
-      const initial = await pendingInitialToken
-      conversationId = initial.conversationId
-      binding = initial.token
-    }
-    if (binding === null || conversationId === null) return
+  const obtainReconnectToken = async (): Promise<boolean> => {
     errorMessage = ''
     try {
+      if (binding === null && pendingInitialToken !== null) {
+        const initial = await pendingInitialToken
+        conversationId = initial.conversationId
+        binding = initial.token
+      }
+      if (binding === null || conversationId === null) return false
       binding = await getReconnectToken(conversationId, binding.session_id)
+      return true
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : 'token request failed'
+      return false
     }
   }
 
   const connect = async (): Promise<void> => {
     if (binding === null) return
-    await roomClient.connect(binding.livekit_url, binding.token, binding.session_id)
+    errorMessage = ''
+    try {
+      await roomClient.connect(binding.livekit_url, binding.token, binding.session_id)
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'Room connection failed'
+    }
+  }
+
+  const publishMicrophone = async (): Promise<void> => {
+    errorMessage = ''
+    try {
+      await roomClient.publishMicrophone()
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : 'microphone publication failed'
+    }
   }
 
   const disconnect = (): void => {
@@ -96,8 +112,7 @@
   }
 
   const reconnect = async (): Promise<void> => {
-    await obtainReconnectToken()
-    if (binding !== null) {
+    if (await obtainReconnectToken() && binding !== null) {
       await connect()
     }
   }
@@ -110,7 +125,7 @@
   <button on:click={obtainReconnectToken}>再接続token取得</button>
   <button on:click={connect} disabled={binding === null}>Room接続</button>
   <button on:click={disconnect}>切断</button>
-  <button on:click={async () => { await roomClient.publishMicrophone() }} disabled={transport !== 'available'}>microphone開始</button>
+  <button on:click={publishMicrophone} disabled={transport !== 'available'}>microphone開始</button>
   <button on:click={temporaryDisconnect}>一時切断</button>
   <button on:click={reconnect} disabled={binding === null}>再接続</button>
   {#if binding !== null}<p data-testid="session-id">{binding.session_id}</p>{/if}

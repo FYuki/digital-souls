@@ -171,51 +171,66 @@ export class LiveKitRoomClient {
         return
       }
       if (topic !== PRIVATE_TOPIC) return
-      const frame = decodePrivateFrame(payload)
-      if (frame.type === 'authoritative_state') {
-        const generationChanged = frame.generation !== this.generation
-        this.generation = frame.generation
-        this.playback.setGeneration(frame.generation)
-        if (generationChanged) {
-          this.pendingMetadata.length = 0
-          void this.resetAudioGraphs()
-        }
-        if (frame.sessionPhase === 'ended') {
-          this.failTransport()
-          return
-        }
-        this.observe({
-          transport: 'unavailable', control: 'available', audio: 'unavailable', generation: frame.generation,
-          renderedSamples: 0, playedPrefix: -1, activeAudioGraphs: 0,
-          renderedEnergy: 0, confirmedSegments: 0, unassignedRenderedSamples: 0,
-          terminalResponseId: frame.terminalOutcomes.at(-1)?.responseId,
-          terminalConfirmedAudioSequence: frame.terminalOutcomes.at(-1)?.confirmedAudioSequence,
-        })
-      } else if (frame.type === 'ack') {
-        if (frame.generation !== this.generation) return
-        const confirmation = this.controlOutbox?.acknowledge(frame.eventId)
-        if (confirmation !== null && confirmation !== undefined) {
+      try {
+        const frame = decodePrivateFrame(payload)
+        if (frame.type === 'authoritative_state') {
+          const generationChanged = frame.generation !== this.generation
+          this.generation = frame.generation
+          if (generationChanged) {
+            this.playback.setGeneration(frame.generation)
+            this.pendingMetadata.length = 0
+            void this.resetAudioGraphs().catch(() => this.failTransport())
+          }
+          if (frame.sessionPhase === 'ended') {
+            this.failTransport()
+            return
+          }
           this.observe({
-            transport: 'available', control: 'available', audio: 'available',
-            acknowledgedPlaybackPrefix: confirmation.continuousPrefix,
+            transport: frame.sessionPhase === 'available' ? 'available' : 'unavailable',
+            control: 'available',
+            audio: this.audioGraphs.size > 0 ? 'available' : 'unavailable',
+            generation: frame.generation,
+            ...(generationChanged
+              ? {
+                  renderedSamples: 0,
+                  playedPrefix: -1,
+                  activeAudioGraphs: 0,
+                  renderedEnergy: 0,
+                  confirmedSegments: 0,
+                  unassignedRenderedSamples: 0,
+                }
+              : {}),
+            terminalResponseId: frame.terminalOutcomes.at(-1)?.responseId,
+            terminalConfirmedAudioSequence: frame.terminalOutcomes.at(-1)?.confirmedAudioSequence,
+          })
+        } else if (frame.type === 'ack') {
+          if (frame.generation !== this.generation) return
+          const confirmation = this.controlOutbox?.acknowledge(frame.eventId)
+          if (confirmation !== null && confirmation !== undefined) {
+            this.observe({
+              transport: 'available', control: 'available', audio: 'available',
+              acknowledgedPlaybackPrefix: confirmation.continuousPrefix,
+            })
+          }
+        } else if (frame.type === 'logical_audio_segment') {
+          if (frame.generation !== this.generation) return
+          const context = this.audioContext
+          if (context === null) this.pendingMetadata.push(frame)
+          else this.recordMetadataOnContext(frame, context)
+        } else if (
+          frame.type === 'microphone_observation'
+          && frame.generation === this.generation
+        ) {
+          this.observe({
+            transport: 'available',
+            control: 'available',
+            audio: 'available',
+            microphoneFrames: frame.frameCount,
+            microphoneSamples: frame.sampleCount,
           })
         }
-      } else if (frame.type === 'logical_audio_segment') {
-        if (frame.generation !== this.generation) return
-        const context = this.audioContext
-        if (context === null) this.pendingMetadata.push(frame)
-        else this.recordMetadataOnContext(frame, context)
-      } else if (
-        frame.type === 'microphone_observation'
-        && frame.generation === this.generation
-      ) {
-        this.observe({
-          transport: 'available',
-          control: 'available',
-          audio: 'available',
-          microphoneFrames: frame.frameCount,
-          microphoneSamples: frame.sampleCount,
-        })
+      } catch {
+        this.failTransport()
       }
     })
     room.on(
@@ -233,7 +248,7 @@ export class LiveKitRoomClient {
         }
         this.subscriptions.add(key)
         this.subscribedTracks.set(key, track)
-        void this.attachRenderEvidence(track, key)
+        void this.attachRenderEvidence(track, key).catch(() => this.failTransport())
       },
     )
     room.on(RoomEvent.TrackUnsubscribed, (_track, publication) => {
@@ -297,11 +312,17 @@ export class LiveKitRoomClient {
   private async attachRenderEvidence(track: RemoteTrack, key: string): Promise<void> {
     if (!this.subscriptions.has(key)) return
     if (this.audioContext === null) {
-      this.audioContext = new AudioContext()
+      const created = new AudioContext()
+      this.audioContext = created
       const url = URL.createObjectURL(new Blob([workletSource], { type: 'text/javascript' }))
-      this.workletReady = this.audioContext.audioWorklet.addModule(url).finally(() => {
-        URL.revokeObjectURL(url)
-      })
+      this.workletReady = created.audioWorklet.addModule(url)
+        .finally(() => {
+          URL.revokeObjectURL(url)
+        })
+        .catch(async (error: unknown) => {
+          if (this.audioContext === created) await this.disposeAudioContext()
+          throw error
+        })
     }
     const context = this.audioContext
     const workletReady = this.workletReady

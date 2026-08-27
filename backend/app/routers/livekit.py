@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from typing import Annotated, cast
 from uuid import UUID
 
@@ -12,7 +12,6 @@ from app.livekit_transport.bootstrap import (
     BootstrapService,
     BootstrapConflictError,
     BootstrapTimeoutError,
-    JOIN_TOKEN_TTL_SECONDS,
     UnknownSessionError,
 )
 
@@ -28,7 +27,7 @@ class TokenRequest(BaseModel):
     request_id: UUID
     character_id: str
     conversation_id: UUID
-    requested_reconnect_grace_ms: Annotated[int, Field(ge=0)]
+    requested_reconnect_grace_ms: Annotated[int, Field(ge=0, le=MAX_RECONNECT_GRACE_MS)]
     session_id: UUID | None = None
 
 
@@ -87,7 +86,7 @@ async def issue_token(body: TokenRequest, request: Request) -> TokenResponse:
         room=result.room,
         token=result.token,
         livekit_url=livekit_url,
-        expires_at=datetime.now(UTC) + timedelta(seconds=JOIN_TOKEN_TTL_SECONDS),
+        expires_at=result.expires_at,
         reconnect_grace_ms=result.reconnect_grace_ms,
     )
 

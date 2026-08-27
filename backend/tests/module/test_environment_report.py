@@ -629,6 +629,43 @@ def test_should_reject_start_sequence_that_differs_from_owned_services(
     assert list(report_validator.iter_errors(report))
 
 
+def test_livekit_report_is_limited_to_external_unowned_observation(
+    report_validator: Draft202012Validator,
+) -> None:
+    from run_report import RunReportError, create_initial_report, validate_run_report
+
+    effective_profile = deepcopy(resolved_profile())
+    effective_profile["dependencies"]["livekit"] = {
+        "mode": "real",
+        "source": "external",
+        "baseUrl": "http://127.0.0.1:7880",
+        "readinessPath": "/",
+        "readinessUrl": "http://127.0.0.1:7880/",
+    }
+    report = create_initial_report(
+        run_id="livekit-report",
+        started_at="2026-07-17T00:00:00+00:00",
+        resolved_profile_path=Path("/runtime/resolved-profile.json"),
+        effective_profile=effective_profile,
+        orchestrator_identity=orchestrator_identity(),
+        runtime=runtime_projection(),
+    )
+    report_validator.validate(report)
+
+    report["effectiveProfile"]["dependencies"]["livekit"]["source"] = "managed"
+    report["services"]["livekit"].update(
+        source="managed",
+        state="started",
+        owned=True,
+        processIdentity={"pid": 41, "pgid": 41, "sessionId": 41, "startTime": 82},
+    )
+    report["startSequence"].append("livekit")
+
+    with pytest.raises(RunReportError, match="livekit must be external and unowned"):
+        validate_run_report(report)
+    assert list(report_validator.iter_errors(report))
+
+
 def test_should_preserve_failed_playwright_result_through_cleanup(
     report_validator: Draft202012Validator,
 ):

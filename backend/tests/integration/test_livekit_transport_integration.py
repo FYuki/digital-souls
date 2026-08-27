@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 import json
 import os
 from uuid import uuid4
@@ -83,6 +83,36 @@ def _send_core_from_test_app(client, session_id: str, payload: bytes) -> None:
         session_id,
         payload,
     )
+
+
+async def _cleanup_resources(
+    client,
+    *,
+    rooms: tuple[object, ...],
+    session_ids: tuple[str | None, ...],
+    conversation_id: str,
+) -> None:
+    failures: list[BaseException] = []
+    for room in rooms:
+        try:
+            await room.disconnect()
+        except BaseException as error:
+            failures.append(error)
+    for session_id in session_ids:
+        if session_id is None:
+            continue
+        try:
+            client.delete(f"/voice/livekit/sessions/{session_id}").raise_for_status()
+        except BaseException as error:
+            failures.append(error)
+    try:
+        client.delete(
+            f"/characters/{CHARACTER_ID}/conversations/{conversation_id}"
+        ).raise_for_status()
+    except BaseException as error:
+        failures.append(error)
+    if failures:
+        raise failures[0]
 
 
 async def _wait_for_participants(
@@ -203,10 +233,11 @@ def test_real_livekit_bootstrap_joins_user_and_character_to_one_room() -> None:
                     assert set(user_room.remote_participants) == {character_identity}
                     assert identities == {user_identity, character_identity}
                 finally:
-                    await user_room.disconnect()
-                    backend.delete(f"/voice/livekit/sessions/{session_id}")
-                    backend.delete(
-                        f"/characters/{CHARACTER_ID}/conversations/{conversation_id}"
+                    await _cleanup_resources(
+                        backend,
+                        rooms=(user_room,),
+                        session_ids=(session_id,),
+                        conversation_id=conversation_id,
                     )
 
     asyncio.run(exercise())
@@ -231,20 +262,28 @@ def test_real_livekit_rejects_expired_token_and_accepts_reissued_token() -> None
                 binding = initial.json()
                 session_id = binding["session_id"]
                 identity = f"user-{session_id}"
-                expired = await LiveKitTokenSigner(
+                regular = await LiveKitTokenSigner(
                     api_key=api_key,
                     api_secret=api_secret,
-                    utc_now=lambda: datetime.now(UTC) - timedelta(seconds=120),
                 ).issue(
                     identity=identity,
                     room=binding["room"],
                     ttl_seconds=90,
                     grant={"room_join": True, "can_subscribe": True},
                 )
+                import jwt
+
+                expired_claims = jwt.decode(
+                    regular,
+                    options={"verify_signature": False},
+                )
+                expired_claims["nbf"] = int(datetime.now(UTC).timestamp()) - 120
+                expired_claims["exp"] = int(datetime.now(UTC).timestamp()) - 30
+                expired = jwt.encode(expired_claims, api_secret, algorithm="HS256")
                 expired_room = rtc.Room()
                 fresh_room = rtc.Room()
                 try:
-                    with pytest.raises(Exception):
+                    with pytest.raises(rtc.ConnectError):
                         await expired_room.connect(livekit_url, expired)
                     participants = await livekit_api.room.list_participants(
                         api.ListParticipantsRequest(room=binding["room"])
@@ -269,11 +308,11 @@ def test_real_livekit_rejects_expired_token_and_accepts_reissued_token() -> None
                     )
                     assert identity in joined
                 finally:
-                    await expired_room.disconnect()
-                    await fresh_room.disconnect()
-                    backend.delete(f"/voice/livekit/sessions/{session_id}")
-                    backend.delete(
-                        f"/characters/{CHARACTER_ID}/conversations/{conversation_id}"
+                    await _cleanup_resources(
+                        backend,
+                        rooms=(expired_room, fresh_room),
+                        session_ids=(session_id,),
+                        conversation_id=conversation_id,
                     )
 
     asyncio.run(exercise())
@@ -285,6 +324,7 @@ def test_real_livekit_user_grant_rejects_camera_publication() -> None:
     api_secret = _required_setting("LIVEKIT_API_SECRET")
     backend_url = _required_setting("LIVEKIT_TEST_BACKEND_URL")
     api, rtc = _livekit_sdk()
+    from livekit.rtc.participant import PublishTrackError
 
     async def exercise() -> None:
         async with api.LiveKitAPI(livekit_url, api_key, api_secret) as livekit_api:
@@ -301,7 +341,7 @@ def test_real_livekit_user_grant_rejects_camera_publication() -> None:
                     await user_room.connect(livekit_url, binding["token"])
                     source = rtc.VideoSource(320, 240)
                     track = rtc.LocalVideoTrack.create_video_track("forbidden-camera", source)
-                    with pytest.raises(Exception):
+                    with pytest.raises(PublishTrackError):
                         await user_room.local_participant.publish_track(
                             track,
                             rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_CAMERA),
@@ -319,10 +359,11 @@ def test_real_livekit_user_grant_rejects_camera_publication() -> None:
                         for publication in user.tracks
                     )
                 finally:
-                    await user_room.disconnect()
-                    backend.delete(f"/voice/livekit/sessions/{session_id}")
-                    backend.delete(
-                        f"/characters/{CHARACTER_ID}/conversations/{conversation_id}"
+                    await _cleanup_resources(
+                        backend,
+                        rooms=(user_room,),
+                        session_ids=(session_id,),
+                        conversation_id=conversation_id,
                     )
 
     asyncio.run(exercise())
@@ -350,7 +391,7 @@ def test_real_livekit_application_event_receives_private_ack() -> None:
 
             @room.on("data_received")
             def data_received(packet) -> None:
-                if packet.topic != "digital-souls.livekit-transport.v1":
+                if packet.topic != PRIVATE_TOPIC:
                     return
                 frame = json.loads(bytes(packet.data))
                 if frame.get("type") == "ack" and frame.get("event_id") == event_id:
@@ -373,15 +414,16 @@ def test_real_livekit_application_event_receives_private_ack() -> None:
                 await room.local_participant.publish_data(
                     payload,
                     reliable=True,
-                    topic="digital-souls.core.v1",
+                    topic=APPLICATION_TOPIC,
                 )
                 frame = await asyncio.wait_for(ack, timeout=STATE_WAIT_TIMEOUT_SECONDS)
                 assert frame["generation"] == 0
             finally:
-                await room.disconnect()
-                backend.delete(f"/voice/livekit/sessions/{session_id}")
-                backend.delete(
-                    f"/characters/{CHARACTER_ID}/conversations/{conversation_id}"
+                await _cleanup_resources(
+                    backend,
+                    rooms=(room,),
+                    session_ids=(session_id,),
+                    conversation_id=conversation_id,
                 )
 
     asyncio.run(exercise())
@@ -411,10 +453,11 @@ def test_real_livekit_first_ack_stops_backend_outbox_retry(client) -> None:
             with pytest.raises(asyncio.TimeoutError):
                 await asyncio.wait_for(payloads.get(), timeout=1.25)
         finally:
-            await room.disconnect()
-            client.delete(f"/voice/livekit/sessions/{session_id}")
-            client.delete(
-                f"/characters/{CHARACTER_ID}/conversations/{conversation_id}"
+            await _cleanup_resources(
+                client,
+                rooms=(room,),
+                session_ids=(session_id,),
+                conversation_id=conversation_id,
             )
 
     asyncio.run(exercise())
@@ -447,10 +490,11 @@ def test_real_livekit_ack_after_first_retry_stops_remaining_retries(client) -> N
             with pytest.raises(asyncio.TimeoutError):
                 await asyncio.wait_for(payloads.get(), timeout=1.25)
         finally:
-            await room.disconnect()
-            client.delete(f"/voice/livekit/sessions/{session_id}")
-            client.delete(
-                f"/characters/{CHARACTER_ID}/conversations/{conversation_id}"
+            await _cleanup_resources(
+                client,
+                rooms=(room,),
+                session_ids=(session_id,),
+                conversation_id=conversation_id,
             )
 
     asyncio.run(exercise())
@@ -488,10 +532,11 @@ def test_real_livekit_retry_exhaustion_keeps_room_until_terminal_cleanup(client)
             assert reissue.json()["session_id"] == session_id
             assert room.name == binding["room"]
         finally:
-            await room.disconnect()
-            client.delete(f"/voice/livekit/sessions/{session_id}")
-            client.delete(
-                f"/characters/{CHARACTER_ID}/conversations/{conversation_id}"
+            await _cleanup_resources(
+                client,
+                rooms=(room,),
+                session_ids=(session_id,),
+                conversation_id=conversation_id,
             )
 
     asyncio.run(exercise())
@@ -538,10 +583,11 @@ def test_real_livekit_outbox_overflow_keeps_room_until_terminal_cleanup(client) 
                     f"character-{CHARACTER_ID}-{session_id}",
                 }
             finally:
-                await room.disconnect()
-                client.delete(f"/voice/livekit/sessions/{session_id}")
-                client.delete(
-                    f"/characters/{CHARACTER_ID}/conversations/{conversation_id}"
+                await _cleanup_resources(
+                    client,
+                    rooms=(room,),
+                    session_ids=(session_id,),
+                    conversation_id=conversation_id,
                 )
 
     asyncio.run(exercise())
@@ -602,11 +648,11 @@ def test_real_livekit_duplicate_identity_keeps_new_connection_and_session() -> N
                     assert reissue.status_code == 200
                     assert reissue.json()["session_id"] == session_id
                 finally:
-                    await first.disconnect()
-                    await second.disconnect()
-                    backend.delete(f"/voice/livekit/sessions/{session_id}")
-                    backend.delete(
-                        f"/characters/{CHARACTER_ID}/conversations/{conversation_id}"
+                    await _cleanup_resources(
+                        backend,
+                        rooms=(first, second),
+                        session_ids=(session_id,),
+                        conversation_id=conversation_id,
                     )
 
     asyncio.run(exercise())
@@ -706,15 +752,11 @@ def test_real_livekit_grace_timeout_cleans_up_and_requires_a_new_session() -> No
                         f"character-{CHARACTER_ID}-{fresh_session_id}",
                     }
                 finally:
-                    await old_user_room.disconnect()
-                    await fresh_user_room.disconnect()
-                    backend.delete(f"/voice/livekit/sessions/{old_session_id}")
-                    if fresh_session_id is not None:
-                        backend.delete(
-                            f"/voice/livekit/sessions/{fresh_session_id}"
-                        )
-                    backend.delete(
-                        f"/characters/{CHARACTER_ID}/conversations/{conversation_id}"
+                    await _cleanup_resources(
+                        backend,
+                        rooms=(old_user_room, fresh_user_room),
+                        session_ids=(old_session_id, fresh_session_id),
+                        conversation_id=conversation_id,
                     )
 
     asyncio.run(exercise())

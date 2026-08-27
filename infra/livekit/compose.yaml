@@ -3,7 +3,8 @@ services:
     image: livekit/livekit-server:v1.9.7
     network_mode: host
     command: ["--config", "/etc/livekit.yaml"]
+    environment:
+      LIVEKIT_KEYS: ${LIVEKIT_KEYS:?LIVEKIT_KEYS is required}
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml:ro
     restart: unless-stopped
-

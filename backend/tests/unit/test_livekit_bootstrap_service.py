@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import cast
+from datetime import UTC, datetime
 
 import pytest
 
@@ -114,14 +115,16 @@ class FakeTokenSigner:
     issued_tokens: list[dict[str, object]] = field(default_factory=list)
     hang_issue: bool = False
 
-    async def issue(
+    async def issue_with_expiration(
         self,
         *,
         identity: str,
         room: str,
         ttl_seconds: int,
         grant: dict[str, object],
-    ) -> str:
+    ):
+        from app.livekit_transport.token import IssuedToken
+
         self.calls.append("token.issue")
         if self.hang_issue:
             await asyncio.Event().wait()
@@ -134,7 +137,10 @@ class FakeTokenSigner:
                 "grant": grant,
             }
         )
-        return "safe-user-token"
+        return IssuedToken(
+            token="safe-user-token",
+            expires_at=datetime(2026, 8, 27, 0, 1, 30, tzinfo=UTC),
+        )
 
 
 def _request() -> dict[str, object]:
@@ -286,10 +292,10 @@ def test_cleanup_exception_is_not_treated_as_success() -> None:
 
 
 @pytest.mark.parametrize("blocked_cleanup", ["runtime", "room"])
-def test_bootstrap_cleanup_uses_the_original_deadline_and_releases_all_ownership(
+def test_bootstrap_cleanup_uses_an_independent_deadline_and_releases_all_ownership(
     blocked_cleanup: str,
 ) -> None:
-    module = _bootstrap_module("whole-bootstrap deadline including compensation")
+    module = _bootstrap_module("independent compensation deadline")
     calls: list[str] = []
     sessions = FakeSessionRepository(calls)
     rooms = FakeRoomManager(calls, hang_delete=blocked_cleanup == "room")
@@ -308,7 +314,7 @@ def test_bootstrap_cleanup_uses_the_original_deadline_and_releases_all_ownership
     )
 
     with pytest.raises(module.BootstrapTimeoutError, match="bootstrap timed out"):
-        asyncio.run(asyncio.wait_for(service.bootstrap(_request()), timeout=0.5))
+            asyncio.run(asyncio.wait_for(service.bootstrap(_request()), timeout=1.5))
 
     assert "session.delete" in calls
     assert "runtime.stop" in calls

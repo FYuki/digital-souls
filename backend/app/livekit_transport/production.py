@@ -20,7 +20,6 @@ from app.livekit_transport.bootstrap import (
     BootstrapService,
     CharacterConversationBindingValidator,
     InMemorySessionBindingRepository,
-    _RoomCleanupPendingError,
 )
 from app.livekit_transport.coordinator import (
     PRIVATE_TOPIC,
@@ -28,8 +27,9 @@ from app.livekit_transport.coordinator import (
     SessionCoordinatorDependencies,
 )
 from app.livekit_transport.delivery import CoreNotificationPort
+from app.livekit_transport.errors import RoomCleanupPendingError
 from app.livekit_transport.runtime import MicrophoneTrackObserver, PcmFixturePublisher
-from app.livekit_transport.token import LiveKitTokenSigner
+from app.livekit_transport.token import IssuedToken, LiveKitTokenSigner
 
 if TYPE_CHECKING:
     import livekit.api as livekit_api
@@ -46,11 +46,11 @@ logger = logging.getLogger(__name__)
 
 
 def _livekit_rtc_module() -> Any:
-    return getattr(importlib.import_module("livekit"), "rtc")
+    return importlib.import_module("livekit.rtc")
 
 
 def _livekit_api_module() -> Any:
-    return getattr(importlib.import_module("livekit"), "api")
+    return importlib.import_module("livekit.api")
 
 
 def _required_int(value: object, field: str) -> int:
@@ -97,6 +97,9 @@ class ProductionTokenSigner:
 
     async def issue(self, **request: object) -> str:
         return await self._signer.issue(**request)  # type: ignore[arg-type]
+
+    async def issue_with_expiration(self, **request: object) -> IssuedToken:
+        return await self._signer.issue_with_expiration(**request)  # type: ignore[arg-type]
 
     async def issue_token(self, request: dict[str, object]) -> str:
         return await self.issue(
@@ -315,13 +318,18 @@ class ProductionRuntimeManager:
         self._fixture_locks[session_id] = asyncio.Lock()
 
         def participant_connected(participant: rtc.RemoteParticipant) -> None:
-            reconnected = coordinator.participant_connected(
-                identity=str(participant.identity),
-                participant_sid=str(participant.sid),
-                room_sid=str(room.sid),
-            )
-
             async def handle_connected() -> None:
+                room_sid_value = room.sid
+                room_sid = (
+                    str(await room_sid_value)
+                    if inspect.isawaitable(room_sid_value)
+                    else str(room_sid_value)
+                )
+                reconnected = coordinator.participant_connected(
+                    identity=str(participant.identity),
+                    participant_sid=str(participant.sid),
+                    room_sid=room_sid,
+                )
                 if reconnected:
                     await coordinator.synchronize_reconnection()
                 if str(participant.identity) == user_identity:
@@ -329,7 +337,6 @@ class ProductionRuntimeManager:
                     await self._publish_fixture(session_id, coordinator, publish_data)
 
             self._schedule_task(session_id, handle_connected())
-
         room.on("participant_connected")(participant_connected)
 
         def participant_disconnected(participant: rtc.RemoteParticipant) -> None:
@@ -405,7 +412,8 @@ class ProductionRuntimeManager:
                 publish_data,
                 lambda: coordinator.generation,
                 lambda coroutine: self._schedule_task(session_id, coroutine),
-            )
+            ),
+            sample_rate=PCM_SAMPLE_RATE,
         )
         stream: rtc.AudioStream = rtc_module.AudioStream(
             track, sample_rate=PCM_SAMPLE_RATE, num_channels=1
@@ -582,7 +590,7 @@ class ProductionRuntimeManager:
                 if isinstance(result, BaseException):
                     raise result
             if isinstance(room_cleanup_result, BaseException):
-                raise _RoomCleanupPendingError(
+                raise RoomCleanupPendingError(
                     str(room_cleanup_result)
                 ) from room_cleanup_result
             if self._cleanup_states.get(session_id) is state:

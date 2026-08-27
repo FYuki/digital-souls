@@ -216,10 +216,11 @@ def validate_profile(raw_profile: object, expected_name: str) -> Profile:
         name: _validate_dependency(expected_name, name, raw_dependencies[name])
         for name in REQUIRED_DEPENDENCY_NAMES
     }
-    if "livekit" in raw_dependencies:
-        dependency_map["livekit"] = _validate_dependency(
-            expected_name, "livekit", raw_dependencies["livekit"]
-        )
+    for name in OPTIONAL_DEPENDENCY_NAMES:
+        if name in raw_dependencies:
+            dependency_map[name] = _validate_dependency(
+                expected_name, name, raw_dependencies[name]
+            )
     dependencies = cast(Dependencies, dependency_map)
     if dependencies["backend"]["mode"] != "real":
         for name in DOWNSTREAM_DEPENDENCIES:

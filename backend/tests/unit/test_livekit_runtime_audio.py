@@ -46,6 +46,19 @@ class RecordingMetadataPort:
         self.events.append(("metadata", metadata))
 
 
+def _runtime_shell(production):
+    runtime = object.__new__(production.ProductionRuntimeManager)
+    runtime._rooms = {}
+    runtime._coordinators = {}
+    runtime._session_tasks = {}
+    runtime._ready = {}
+    runtime._fixture_sources = {}
+    runtime._fixture_generations = {}
+    runtime._fixture_locks = {}
+    runtime._cleanup_states = {}
+    return runtime
+
+
 def test_microphone_observation_records_metadata_without_audio_bytes() -> None:
     module = _runtime_module("metadata-only microphone observation")
     port = RecordingObservationPort()
@@ -115,14 +128,16 @@ def test_production_fixture_registers_and_publishes_one_response_per_generation(
     production = importlib.import_module("app.livekit_transport.production")
     session_id = "20000000-0000-4000-8000-000000000010"
     events: list[tuple[str, object]] = []
-    runtime = object.__new__(production.ProductionRuntimeManager)
+    runtime = _runtime_shell(production)
     runtime._fixture_generations = {}
     runtime._fixture_sources = {session_id: RecordingAudioSource(events)}
     runtime._fixture_locks = {session_id: asyncio.Lock()}
 
     class RecordingCoordinator:
         generation = 0
-        response_ids: list[str] = []
+
+        def __init__(self) -> None:
+            self.response_ids: list[str] = []
 
         def begin_response(self, *, response_id: str) -> None:
             self.response_ids.append(response_id)
@@ -215,6 +230,7 @@ def test_character_runtime_uses_microphone_grant_and_matching_publish_source(
         TrackSource=SimpleNamespace(SOURCE_MICROPHONE=microphone_source),
     )
     monkeypatch.setitem(sys.modules, "livekit", SimpleNamespace(rtc=rtc))
+    monkeypatch.setitem(sys.modules, "livekit.rtc", rtc)
 
     class Sessions:
         async def delete(self, session_id: str) -> None:
@@ -290,7 +306,7 @@ def test_production_stop_releases_local_ownership_before_external_cleanup_finish
                 delete_started.set()
                 await release_cleanup.wait()
 
-        runtime = object.__new__(production.ProductionRuntimeManager)
+        runtime = _runtime_shell(production)
         runtime._sessions = Sessions()
         runtime._room_manager = Rooms()
         runtime._rooms = {session_id: HangingRoom()}
@@ -346,7 +362,7 @@ def test_production_room_cleanup_survives_cancelled_stop() -> None:
             async def disconnect(self) -> None:
                 return None
 
-        runtime = object.__new__(production.ProductionRuntimeManager)
+        runtime = _runtime_shell(production)
         runtime._sessions = Sessions()
         runtime._room_manager = Rooms()
         runtime._rooms = {session_id: Room()}
@@ -449,7 +465,7 @@ def test_bootstrap_timeout_leaves_room_cleanup_owned_until_it_finishes() -> None
         bootstrap_task = asyncio.create_task(service.bootstrap(request))
         await asyncio.wait_for(delete_started.wait(), timeout=0.5)
         with pytest.raises(bootstrap.BootstrapTimeoutError):
-            await asyncio.wait_for(bootstrap_task, timeout=0.5)
+            await asyncio.wait_for(bootstrap_task, timeout=1.5)
 
         assert sessions.contains(session_id) is False
         assert runtime._rooms == {}
@@ -465,7 +481,6 @@ def test_bootstrap_timeout_leaves_room_cleanup_owned_until_it_finishes() -> None
 
 
 def test_production_stop_all_retries_failed_room_cleanup() -> None:
-    bootstrap = importlib.import_module("app.livekit_transport.bootstrap")
     production = importlib.import_module("app.livekit_transport.production")
     session_id = "20000000-0000-4000-8000-000000000010"
 
@@ -486,7 +501,7 @@ def test_production_stop_all_retries_failed_room_cleanup() -> None:
                 active_rooms.remove(room_name)
 
         rooms = Rooms()
-        runtime = object.__new__(production.ProductionRuntimeManager)
+        runtime = _runtime_shell(production)
         runtime._sessions = Sessions()
         runtime._room_manager = rooms
         runtime._rooms = {}
@@ -498,9 +513,9 @@ def test_production_stop_all_retries_failed_room_cleanup() -> None:
         runtime._fixture_locks = {}
         runtime._cleanup_states = {}
 
-        with pytest.raises(
-            bootstrap._RoomCleanupPendingError, match="room deletion failed"
-        ):
+        from app.livekit_transport.errors import RoomCleanupPendingError
+
+        with pytest.raises(RoomCleanupPendingError, match="room deletion failed"):
             await runtime.stop(session_id)
 
         assert active_rooms == {f"voice-{session_id}"}
@@ -514,7 +529,6 @@ def test_production_stop_all_retries_failed_room_cleanup() -> None:
 
 
 def test_production_stop_does_not_classify_local_failure_as_room_pending() -> None:
-    bootstrap = importlib.import_module("app.livekit_transport.bootstrap")
     production = importlib.import_module("app.livekit_transport.production")
     session_id = "20000000-0000-4000-8000-000000000010"
 
@@ -545,7 +559,7 @@ def test_production_stop_does_not_classify_local_failure_as_room_pending() -> No
                 disconnect_calls += 1
 
         rooms = Rooms()
-        runtime = object.__new__(production.ProductionRuntimeManager)
+        runtime = _runtime_shell(production)
         runtime._sessions = Sessions()
         runtime._room_manager = rooms
         runtime._rooms = {session_id: Room()}
@@ -562,7 +576,9 @@ def test_production_stop_does_not_classify_local_failure_as_room_pending() -> No
         ) as raised:
             await runtime.stop(session_id)
 
-        assert not isinstance(raised.value, bootstrap._RoomCleanupPendingError)
+        from app.livekit_transport.errors import RoomCleanupPendingError
+
+        assert not isinstance(raised.value, RoomCleanupPendingError)
         assert session_id in runtime._cleanup_states
         await runtime.stop_all()
         assert runtime._sessions.calls == 2
@@ -603,7 +619,7 @@ def test_production_stop_retries_only_failed_room_disconnect() -> None:
         sessions = Sessions()
         rooms = Rooms()
         room = Room()
-        runtime = object.__new__(production.ProductionRuntimeManager)
+        runtime = _runtime_shell(production)
         runtime._sessions = sessions
         runtime._room_manager = rooms
         runtime._rooms = {session_id: room}
@@ -659,6 +675,7 @@ def test_production_connect_failure_is_compensated_by_bootstrap_owner(
 
     rtc = SimpleNamespace(Room=FailingRoom)
     monkeypatch.setitem(sys.modules, "livekit", SimpleNamespace(rtc=rtc))
+    monkeypatch.setitem(sys.modules, "livekit.rtc", rtc)
 
     class Signer:
         async def issue_token(self, _request: dict[str, object]) -> str:

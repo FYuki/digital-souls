@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import base64
-from datetime import UTC, datetime
-import hashlib
-import hmac
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+import importlib
 import json
-from typing import Callable
 
 
-def _urlencode(value: bytes) -> str:
-    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
+@dataclass(frozen=True)
+class IssuedToken:
+    token: str
+    expires_at: datetime
 
 
 class LiveKitTokenSigner:
@@ -18,11 +19,9 @@ class LiveKitTokenSigner:
         *,
         api_key: str,
         api_secret: str,
-        utc_now: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._api_key = api_key
         self._api_secret = api_secret
-        self._utc_now = utc_now
 
     async def issue(
         self,
@@ -32,30 +31,53 @@ class LiveKitTokenSigner:
         ttl_seconds: int,
         grant: dict[str, object],
     ) -> str:
-        issued_at = int(self._utc_now().timestamp())
-        video: dict[str, object] = {"room": room}
-        grant_names = {
-            "room_join": "roomJoin",
-            "can_subscribe": "canSubscribe",
-            "can_publish": "canPublish",
-            "can_publish_data": "canPublishData",
-            "can_publish_sources": "canPublishSources",
-        }
-        for source_name, claim_name in grant_names.items():
-            if source_name in grant:
-                video[claim_name] = grant[source_name]
-        header = {"alg": "HS256", "typ": "JWT"}
-        claims = {
-            "iss": self._api_key,
-            "sub": identity,
-            "nbf": issued_at,
-            "exp": issued_at + ttl_seconds,
-            "video": video,
-        }
-        encoded_header = _urlencode(json.dumps(header, separators=(",", ":")).encode())
-        encoded_claims = _urlencode(json.dumps(claims, separators=(",", ":")).encode())
-        signing_input = f"{encoded_header}.{encoded_claims}".encode()
-        signature = hmac.new(
-            self._api_secret.encode(), signing_input, hashlib.sha256
-        ).digest()
-        return f"{encoded_header}.{encoded_claims}.{_urlencode(signature)}"
+        return (
+            await self.issue_with_expiration(
+                identity=identity,
+                room=room,
+                ttl_seconds=ttl_seconds,
+                grant=grant,
+            )
+        ).token
+
+    async def issue_with_expiration(
+        self,
+        *,
+        identity: str,
+        room: str,
+        ttl_seconds: int,
+        grant: dict[str, object],
+    ) -> IssuedToken:
+        api = importlib.import_module("livekit.api")
+        sources = grant.get("can_publish_sources")
+        if sources is not None and (
+            not isinstance(sources, list)
+            or not all(isinstance(source, str) for source in sources)
+        ):
+            raise TypeError("can_publish_sources must be a list of strings")
+        token = (
+            api.AccessToken(self._api_key, self._api_secret)
+            .with_identity(identity)
+            .with_ttl(timedelta(seconds=ttl_seconds))
+            .with_grants(
+                api.VideoGrants(
+                    room=room,
+                    room_join=bool(grant.get("room_join", False)),
+                    can_subscribe=bool(grant.get("can_subscribe", False)),
+                    can_publish=bool(grant.get("can_publish", False)),
+                    can_publish_data=bool(grant.get("can_publish_data", False)),
+                    can_publish_sources=sources,
+                )
+            )
+            .to_jwt()
+        )
+        encoded_claims = token.split(".")[1]
+        padding = "=" * (-len(encoded_claims) % 4)
+        claims = json.loads(base64.urlsafe_b64decode(encoded_claims + padding))
+        expires_at = claims.get("exp") if isinstance(claims, dict) else None
+        if not isinstance(expires_at, int):
+            raise RuntimeError("LiveKit token does not contain an integer expiration")
+        return IssuedToken(
+            token=token,
+            expires_at=datetime.fromtimestamp(expires_at, UTC),
+        )

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from datetime import UTC, datetime
 import importlib
 import json
 from typing import cast
@@ -34,7 +33,6 @@ def test_sdk_user_token_has_fixed_ttl_and_least_privilege_grants() -> None:
     signer = module.LiveKitTokenSigner(
         api_key="test-key",
         api_secret="LIVEKIT_SECRET_SENTINEL",
-        utc_now=lambda: datetime(2026, 8, 27, tzinfo=UTC),
     )
 
     token = asyncio.run(

@@ -100,6 +100,7 @@
     { "$ref": "#/$defs/voicevoxSequenceInvariant" },
     { "$ref": "#/$defs/whisperSequenceInvariant" },
     { "$ref": "#/$defs/chromaSequenceInvariant" },
+    { "$ref": "#/$defs/livekitSequenceInvariant" },
     { "$ref": "#/$defs/lifecycleInvariant" }
   ],
   "$defs": {
@@ -277,6 +278,29 @@
     "voicevoxSequenceInvariant": { "$ref": "#/$defs/sequenceInvariantTemplate/voicevox" },
     "whisperSequenceInvariant": { "$ref": "#/$defs/sequenceInvariantTemplate/whisper" },
     "chromaSequenceInvariant": { "$ref": "#/$defs/sequenceInvariantTemplate/chroma" },
+    "livekitSequenceInvariant": {
+      "if": {
+        "properties": {
+          "services": { "required": ["livekit"] }
+        }
+      },
+      "then": {
+        "properties": {
+          "services": {
+            "properties": {
+              "livekit": {
+                "properties": {
+                  "source": { "const": "external" },
+                  "owned": { "const": false }
+                },
+                "required": ["source", "owned"]
+              }
+            }
+          },
+          "startSequence": { "not": { "contains": { "const": "livekit" } } }
+        }
+      }
+    },
     "lifecycleInvariant": {
       "allOf": [
         {

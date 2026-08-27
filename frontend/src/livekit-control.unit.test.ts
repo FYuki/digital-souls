@@ -65,6 +65,25 @@ describe('LiveKit Core event receiver', () => {
       responseDelta('10000000-0000-4000-8000-000000000011', 2),
     )).toThrow('text_sequence must be contiguous')
   })
+
+  test('受信event履歴の件数上限を超えない', () => {
+    const receiver = new CoreEventReceiver(1, 1_048_576)
+    receiver.receive(responseDelta('10000000-0000-4000-8000-000000000010', 1))
+
+    expect(() => receiver.receive(
+      responseDelta('10000000-0000-4000-8000-000000000011', 2),
+    )).toThrow('capacity exceeded')
+  })
+
+  test('受信event履歴のbyte上限を超えない', () => {
+    const first = responseDelta('10000000-0000-4000-8000-000000000010', 1)
+    const receiver = new CoreEventReceiver(10, first.byteLength)
+    receiver.receive(first)
+
+    expect(() => receiver.receive(
+      responseDelta('10000000-0000-4000-8000-000000000011', 2),
+    )).toThrow('capacity exceeded')
+  })
 })
 
 describe('LiveKit playback confirmation', () => {
@@ -76,12 +95,12 @@ describe('LiveKit playback confirmation', () => {
     )
 
     expect(tracker.create('30000000-0000-4000-8000-000000000010', -1)).toBeNull()
-    const confirmation = tracker.create(
+    const createdConfirmation = tracker.create(
       '30000000-0000-4000-8000-000000000010',
       0,
     )
 
-    expect(confirmation?.event).toMatchObject({
+    expect(createdConfirmation?.event).toMatchObject({
       type: 'playback_completed',
       session_id: '20000000-0000-4000-8000-000000000010',
       response_id: '30000000-0000-4000-8000-000000000010',
@@ -93,6 +112,23 @@ describe('LiveKit playback confirmation', () => {
 })
 
 describe('LiveKit browser control outbox', () => {
+  test('初回publish失敗時にentryとbyte counterを巻き戻す', async () => {
+    vi.useFakeTimers()
+    const outbox = new BrowserControlOutbox(
+      async () => { throw new Error('publish failed') },
+      vi.fn(),
+      retryTimer,
+    )
+
+    await expect(outbox.enqueue(
+      confirmation('event-1'),
+      new Uint8Array([1, 2, 3]),
+    )).rejects.toThrow('publish failed')
+
+    expect(outbox.eventCount).toBe(0)
+    expect(outbox.byteCount).toBe(0)
+  })
+
   test('同じpayloadを1秒、2秒、4秒後に再送して枯渇を通知する', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(10_000)

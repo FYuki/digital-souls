@@ -114,6 +114,10 @@ export function parsePrivateFrame(value: unknown): PrivateFrame {
         elapsedMs: frame.elapsed_ms,
         missingFrames: frame.missing_frames,
       }
+    default: {
+      const unsupported: never = frame
+      throw new Error(`Unsupported LiveKit private frame: ${String(unsupported)}`)
+    }
   }
 }
 

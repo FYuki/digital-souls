@@ -81,4 +81,20 @@ describe('LiveKit experimental page client flow', () => {
     expect(reconnectBody.session_id).toBe(tokenResponse.session_id)
     expect(reconnectBody.requested_reconnect_grace_ms).toBe(60_000)
   })
+
+  test('不完全なtoken応答を接続情報として受理しない', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(conversationResponse), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'incomplete' }), { status: 200 }))
+    await mountLiveKitEntrypoint()
+
+    await fireEvent.click(screen.getByRole('button', { name: 'token取得' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toContain(
+        'LiveKit response field reconnect_grace_ms',
+      )
+    })
+    expect(screen.getByRole('button', { name: 'Room接続' }).hasAttribute('disabled')).toBe(true)
+  })
 })

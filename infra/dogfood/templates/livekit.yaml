@@ -5,4 +5,3 @@ rtc:
   use_external_ip: false
 keys:
   replace-key: replace-secret
-

@@ -2,16 +2,18 @@ import { expect, test } from '@playwright/test'
 
 test.afterEach(async ({ page, context }) => {
   await context.setOffline(false)
-  const sessionId = await page.getByTestId('session-id').textContent().catch(() => null)
-  const conversationId = await page.getByTestId('conversation-id').textContent().catch(() => null)
-  if (sessionId !== null) {
+  const sessionId = await page.getByTestId('session-id').textContent({ timeout: 500 }).catch(() => null)
+  const conversationId = await page.getByTestId('conversation-id').textContent({ timeout: 500 }).catch(() => null)
+  if (sessionId?.trim()) {
     await page.evaluate(async (ownedSessionId) => {
-      await fetch(`/voice/livekit/sessions/${ownedSessionId}`, { method: 'DELETE' })
+      const response = await fetch(`/voice/livekit/sessions/${ownedSessionId}`, { method: 'DELETE' })
+      if (!response.ok) throw new Error(`session cleanup failed: ${response.status}`)
     }, sessionId)
   }
-  if (conversationId !== null) {
+  if (conversationId?.trim()) {
     await page.evaluate(async (ownedConversationId) => {
-      await fetch(`/characters/miori/conversations/${ownedConversationId}`, { method: 'DELETE' })
+      const response = await fetch(`/characters/miori/conversations/${ownedConversationId}`, { method: 'DELETE' })
+      if (!response.ok) throw new Error(`conversation cleanup failed: ${response.status}`)
     }, conversationId)
   }
 })
@@ -39,8 +41,9 @@ test('network interruption resubscribes once and resumes the same session', asyn
   await page.goto('/voice/livekit')
   await page.getByRole('button', { name: 'token取得' }).click()
   await page.getByRole('button', { name: 'Room接続' }).click()
-  const session = await page.getByTestId('session-id').textContent()
-  expect(session).not.toBeNull()
+  const sessionLocator = page.getByTestId('session-id')
+  await expect(sessionLocator).not.toHaveText('')
+  const session = await sessionLocator.textContent()
   await expect(page.getByText('acknowledged playback prefix: 0', { exact: true })).toBeVisible()
   const initialResponse = await page.getByText(/active response ID: [0-9a-f-]{36}/).textContent()
 
@@ -60,5 +63,5 @@ test('network interruption resubscribes once and resumes the same session', asyn
   await expect(page.getByText('terminal confirmed audio sequence: 1', { exact: true })).toBeVisible()
   await expect(page.getByText('acknowledged playback prefix: 0', { exact: true })).toBeVisible()
   await expect(page.getByText(`terminal response ID: ${initialResponse?.split(': ')[1]}`, { exact: true })).toBeVisible()
-  expect(await page.getByText(/active response ID:/).textContent()).not.toBe(initialResponse)
+  await expect(page.getByText(/active response ID:/)).not.toHaveText(initialResponse ?? '')
 })

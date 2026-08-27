@@ -70,9 +70,14 @@ class RecordingTokenSigner:
     api_secret: str = "LIVEKIT_SECRET_SENTINEL"
     token_issues: list[object] = field(default_factory=list)
 
-    async def issue(self, **request: object) -> str:
+    async def issue_with_expiration(self, **request: object):
+        from app.livekit_transport.token import IssuedToken
+
         self.token_issues.append(request)
-        return "safe-user-token"
+        return IssuedToken(
+            token="safe-user-token",
+            expires_at=datetime(2026, 8, 27, 0, 1, 30, tzinfo=UTC),
+        )
 
 
 @dataclass(frozen=True)
@@ -268,7 +273,24 @@ def test_token_api_returns_complete_bootstrap_binding(client, monkeypatch) -> No
     assert livekit_url.netloc
     expires_at = datetime.fromisoformat(payload["expires_at"].replace("Z", "+00:00"))
     assert expires_at.utcoffset() == UTC.utcoffset(expires_at)
+    assert expires_at == datetime(2026, 8, 27, 0, 1, 30, tzinfo=UTC)
     assert payload["reconnect_grace_ms"] == 60_000
+
+
+def test_reconnect_grace_above_public_limit_is_rejected_before_bootstrap(
+    client,
+    monkeypatch,
+) -> None:
+    resources = _install_livekit_resource_ports(client, monkeypatch)
+
+    response = client.post(
+        "/voice/livekit/token",
+        json=_bootstrap_request(requested_reconnect_grace_ms=60_001),
+    )
+
+    assert response.status_code == 422
+    assert resources.session_repository.session_creations == []
+    assert resources.token_signer.token_issues == []
 
 
 def test_incomplete_compensation_returns_bootstrap_timeout_without_token(
@@ -296,7 +318,7 @@ def test_existing_health_endpoint_remains_available(client) -> None:
 
 def test_repeated_session_end_returns_the_same_ended_state(client, monkeypatch) -> None:
     session_id = "20000000-0000-4000-8000-000000000001"
-    resources = _install_livekit_resource_ports(client, monkeypatch)
+    _install_livekit_resource_ports(client, monkeypatch)
 
     first = client.delete(f"/voice/livekit/sessions/{session_id}")
     second = client.delete(f"/voice/livekit/sessions/{session_id}")

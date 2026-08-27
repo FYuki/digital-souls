@@ -1,7 +1,7 @@
 from contextlib import ExitStack, asynccontextmanager
 import logging
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import sqlite3
@@ -501,16 +501,35 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             memory_consolidation_scheduler_started = True
             yield
         finally:
+            cleanup_errors: list[BaseException] = []
+
+            async def run_cleanup(operation: Awaitable[None]) -> None:
+                try:
+                    await operation
+                except BaseException as error:
+                    cleanup_errors.append(error)
+
             if livekit_api is not None:
-                await app.state.livekit_runtime_manager.stop_all()
-                await livekit_api.aclose()
+                await run_cleanup(app.state.livekit_runtime_manager.stop_all())
+                await run_cleanup(livekit_api.aclose())
             if memory_consolidation_scheduler_started:
-                await memory_consolidation_scheduler.stop()
+                await run_cleanup(memory_consolidation_scheduler.stop())
             if memory_formation_scheduler_started:
-                await memory_formation_scheduler.stop()
+                await run_cleanup(memory_formation_scheduler.stop())
             if memory_index_scheduler_started:
-                await memory_index_scheduler.stop()
+                await run_cleanup(memory_index_scheduler.stop())
             with ExitStack() as cleanup:
+                if livekit_api is not None:
+                    for state_name in (
+                        "livekit_room_manager",
+                        "livekit_session_repository",
+                        "livekit_runtime_manager",
+                        "livekit_token_signer",
+                        "livekit_bootstrap_service",
+                        "livekit_core_events",
+                        "livekit_url",
+                    ):
+                        cleanup.callback(delattr, app.state, state_name)
                 if voice_trace_recorder_state_set:
                     cleanup.callback(delattr, app.state, "voice_trace_recorder")
                 if voice_measurement_kind_state_set:
@@ -561,6 +580,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     cleanup.callback(memory_consolidation_client.close)
                 if memory_consolidation_classifier_client is not None:
                     cleanup.callback(memory_consolidation_classifier_client.close)
+            if cleanup_errors:
+                raise cleanup_errors[0]
 
 
 app = FastAPI(lifespan=lifespan)

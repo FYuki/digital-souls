@@ -20,6 +20,10 @@ class SequenceGapError(TerminalProtocolError):
     pass
 
 
+class DeduplicationCapacityExceeded(TerminalProtocolError):
+    pass
+
+
 @dataclass(frozen=True)
 class DeduplicationResult:
     status: str
@@ -27,13 +31,29 @@ class DeduplicationResult:
 
 
 class EventDeduplicator:
-    def __init__(self) -> None:
+    def __init__(
+        self, *, max_events: int = 256, max_bytes: int = 1024 * 1024
+    ) -> None:
+        if max_events < 1 or max_bytes < 1:
+            raise ValueError("deduplication limits must be positive")
         self._payloads: dict[str, bytes] = {}
+        self._max_events = max_events
+        self._max_bytes = max_bytes
+        self._bytes = 0
 
     def classify(self, event_id: str, payload: bytes) -> DeduplicationResult:
         previous = self._payloads.get(event_id)
         if previous is None:
-            self._payloads[event_id] = payload
+            if (
+                len(self._payloads) + 1 > self._max_events
+                or self._bytes + len(payload) > self._max_bytes
+            ):
+                raise DeduplicationCapacityExceeded(
+                    "event deduplication capacity exceeded"
+                )
+            retained = bytes(payload)
+            self._payloads[event_id] = retained
+            self._bytes += len(retained)
             return DeduplicationResult("accepted", payload)
         if previous != payload:
             raise ConflictingDuplicateError("event_id has a conflicting payload")

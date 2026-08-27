@@ -15,8 +15,10 @@ describe('LiveKit real-service suite wiring', () => {
     const command = manifest.scripts?.['test:integration:livekit']
 
     expect(command).toBeDefined()
-    expect(command).toMatch(/backend\/tests\/integration\/test_livekit_transport_integration\.py/)
-    expect(command).toMatch(/test:integration:livekit/)
+    expect(command).toBe(
+      'PYTHONPATH=backend python3 -m pytest backend/tests/integration/test_livekit_transport_integration.py'
+      + ' && npm --prefix frontend run test:integration:livekit',
+    )
   })
 
   test('frontend task selects a dedicated Playwright configuration', async () => {
@@ -24,7 +26,9 @@ describe('LiveKit real-service suite wiring', () => {
     const command = manifest.scripts?.['test:integration:livekit']
 
     expect(command).toBeDefined()
-    expect(command).toContain('playwright.integration-livekit.config.ts')
+    expect(command).toBe(
+      'playwright test --config playwright.integration-livekit.config.ts',
+    )
   })
 
   test('CI does not run the opt-in LiveKit suite', async () => {
@@ -34,5 +38,8 @@ describe('LiveKit real-service suite wiring', () => {
     )
 
     expect(workflow).not.toMatch(/npm run test:integration:livekit/)
+    expect(workflow).not.toContain('test_livekit_transport_integration.py')
+    expect(workflow).not.toContain('playwright.integration-livekit.config.ts')
+    expect(workflow).not.toContain('npm --prefix frontend run test:integration:livekit')
   })
 })

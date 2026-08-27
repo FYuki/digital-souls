@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from datetime import datetime
 import time
 from typing import Callable, Mapping, Protocol, cast
 from uuid import UUID, uuid4
@@ -10,18 +11,16 @@ from app.conversation_history.errors import (
     ConversationCharacterBoundaryError,
     ConversationHistoryError,
 )
+from app.livekit_transport.token import IssuedToken
 
 
 BOOTSTRAP_TIMEOUT_SECONDS = 10
+CLEANUP_TIMEOUT_SECONDS = 1.0
 JOIN_TOKEN_TTL_SECONDS = 90
 MAX_RECONNECT_GRACE_MS = 60_000
 
 
 class BootstrapTimeoutError(RuntimeError):
-    pass
-
-
-class _RoomCleanupPendingError(RuntimeError):
     pass
 
 
@@ -169,14 +168,14 @@ class RuntimeManager(Protocol):
 
 
 class TokenSigner(Protocol):
-    async def issue(
+    async def issue_with_expiration(
         self,
         *,
         identity: str,
         room: str,
         ttl_seconds: int,
         grant: dict[str, object],
-    ) -> str: ...
+    ) -> IssuedToken: ...
 
 
 @dataclass(frozen=True)
@@ -185,6 +184,7 @@ class BootstrapResult:
     participant_id: str
     room: str
     token: str
+    expires_at: datetime
     reconnect_grace_ms: int
 
 
@@ -196,7 +196,7 @@ class BootstrapService:
         room_manager: RoomManager,
         runtime_manager: RuntimeManager,
         token_signer: TokenSigner,
-        timeout_seconds: int,
+        timeout_seconds: float,
         binding_validator: BindingValidator | None = None,
     ) -> None:
         self._sessions = session_repository
@@ -239,12 +239,13 @@ class BootstrapService:
                 != str(request["conversation_id"])
             ):
                 raise BindingValidationError("session_binding_mismatch")
-            token = await self._issue_user_token(session_id)
+            issued_token = await self._issue_user_token(session_id)
             return BootstrapResult(
                 session_id=result.session_id,
                 participant_id=result.participant_id,
                 room=result.room,
-                token=token,
+                token=issued_token.token,
+                expires_at=issued_token.expires_at,
                 reconnect_grace_ms=result.reconnect_grace_ms,
             )
         request_id = str(request["request_id"])
@@ -263,12 +264,13 @@ class BootstrapService:
                 previous_request, previous_result = completed
                 if previous_request != request:
                     raise BootstrapConflictError("request_id payload conflict")
-                token = await self._issue_user_token(previous_result.session_id)
+                issued_token = await self._issue_user_token(previous_result.session_id)
                 return BootstrapResult(
                     session_id=previous_result.session_id,
                     participant_id=previous_result.participant_id,
                     room=previous_result.room,
-                    token=token,
+                    token=issued_token.token,
+                    expires_at=issued_token.expires_at,
                     reconnect_grace_ms=previous_result.reconnect_grace_ms,
                 )
             inflight = self._inflight.get(request_id)
@@ -343,7 +345,7 @@ class BootstrapService:
                 runtime_started = True
                 await self._runtimes.connect(session_id)
                 await self._runtimes.wait_until_ready(session_id)
-                token = await self._issue_user_token(session_id)
+                issued_token = await self._issue_user_token(session_id)
                 requested_reconnect_grace_ms = request[
                     "requested_reconnect_grace_ms"
                 ]
@@ -356,14 +358,14 @@ class BootstrapService:
                     session_id=session_id,
                     participant_id=participant_id,
                     room=room,
-                    token=token,
+                    token=issued_token.token,
+                    expires_at=issued_token.expires_at,
                     reconnect_grace_ms=reconnect_grace_ms,
                 )
         except TimeoutError as error:
             if session_id is not None:
                 await self._compensate(
                     session_id,
-                    deadline=deadline,
                     runtime_started=runtime_started,
                     room_created=room_created,
                 )
@@ -372,7 +374,6 @@ class BootstrapService:
             if session_id is not None:
                 completed = await self._compensate(
                     session_id,
-                    deadline=deadline,
                     runtime_started=runtime_started,
                     room_created=room_created,
                 )
@@ -384,7 +385,6 @@ class BootstrapService:
         self,
         session_id: str,
         *,
-        deadline: float,
         runtime_started: bool,
         room_created: bool,
     ) -> bool:
@@ -399,9 +399,10 @@ class BootstrapService:
                 asyncio.create_task(self._rooms.delete(f"voice-{session_id}"))
             )
 
-        # 各 cleanup を少なくとも開始し、同じ絶対 deadline の残り時間だけ待つ。
+        # bootstrap timeoutとは独立した猶予で、開始済みresourceの補償を待つ。
         await asyncio.sleep(0)
-        remaining = max(0.0, deadline - asyncio.get_running_loop().time())
+        cleanup_deadline = asyncio.get_running_loop().time() + CLEANUP_TIMEOUT_SECONDS
+        remaining = max(0.0, cleanup_deadline - asyncio.get_running_loop().time())
         done, pending = await asyncio.wait(cleanup_tasks, timeout=remaining)
         completed = not pending
         for task in done:
@@ -425,8 +426,8 @@ class BootstrapService:
         if not task.cancelled():
             task.exception()
 
-    async def _issue_user_token(self, session_id: str) -> str:
-        return await self._signer.issue(
+    async def _issue_user_token(self, session_id: str) -> IssuedToken:
+        return await self._signer.issue_with_expiration(
             identity=f"user-{session_id}",
             room=f"voice-{session_id}",
             ttl_seconds=JOIN_TOKEN_TTL_SECONDS,

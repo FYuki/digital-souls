@@ -232,6 +232,13 @@ def _validate_services(report: Mapping[str, object]) -> None:
         raise RunReportError("invalid startSequence")
     if len(sequence) != len(set(sequence)):
         raise RunReportError("startSequence must contain unique services")
+    livekit = services.get("livekit")
+    if isinstance(livekit, dict) and (
+        livekit.get("source") != "external" or livekit.get("owned") is not False
+    ):
+        raise RunReportError("livekit must be external and unowned")
+    if "livekit" in sequence:
+        raise RunReportError("startSequence must not contain external livekit")
     owned_services = {
         name for name, service in services.items()
         if isinstance(service, dict) and service["owned"] is True

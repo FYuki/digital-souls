@@ -77,7 +77,10 @@ class ProductionSessionCoordinator:
             notify=self._record_terminal_outcome,
         )
         self._delivery = CoreEventDelivery(core_port=core_port)
-        self._outbound_deduplicator = EventDeduplicator()
+        self._outbound_deduplicator = EventDeduplicator(
+            max_events=OUTBOX_MAX_EVENTS * 2,
+            max_bytes=OUTBOX_MAX_BYTES * 2,
+        )
         self._outbound_sequences = EventSequenceTracker()
         self._outboxes = InMemoryOutboxManager(
             max_events=OUTBOX_MAX_EVENTS,
@@ -94,6 +97,10 @@ class ProductionSessionCoordinator:
     @property
     def phase(self) -> str:
         return self._lifecycle.phase
+
+    @property
+    def pending_retry_count(self) -> int:
+        return len(self._retry_tasks)
 
     def start_join_deadline(self) -> None:
         self._replace_deadline(90)
@@ -231,9 +238,9 @@ class ProductionSessionCoordinator:
         except OutboxCapacityExceeded:
             await self.mark_unavailable()
             raise
-        await self._dependencies.publish_data(payload, APPLICATION_TOPIC)
         task = asyncio.create_task(self._retry(event_id, payload))
         self._retry_tasks[("character_to_user", event_id)] = task
+        await self._dependencies.publish_data(payload, APPLICATION_TOPIC)
 
     def acknowledge(self, event_id: str, direction: str) -> bool:
         acknowledged = self._outboxes.get(self.session_id, direction).ack(event_id)
@@ -281,9 +288,13 @@ class ProductionSessionCoordinator:
                     return
                 attempt = retry.poll(deadline_ms)
                 if attempt is not None:
-                    await self._dependencies.publish_data(
-                        attempt.payload, APPLICATION_TOPIC
-                    )
+                    try:
+                        await self._dependencies.publish_data(
+                            attempt.payload, APPLICATION_TOPIC
+                        )
+                    except Exception:
+                        # 一時的なpublish失敗でも残りのdeadlineまで再送を継続する。
+                        continue
             if self._outboxes.get(
                 self.session_id, "character_to_user"
             ).contains(event_id):

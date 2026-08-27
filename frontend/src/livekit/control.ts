@@ -8,6 +8,16 @@ const sameBytes = (left: Uint8Array, right: Uint8Array): boolean => (
 export class CoreEventReceiver {
   private readonly payloads = new Map<string, Uint8Array>()
   private readonly sequences = new Map<string, number>()
+  private retainedBytes = 0
+
+  constructor(
+    private readonly maxEvents = 256,
+    private readonly maxBytes = 1_048_576,
+  ) {
+    if (maxEvents < 1 || maxBytes < 1) {
+      throw new Error('deduplication limits must be positive')
+    }
+  }
 
   receive(payload: Uint8Array): { event: VoiceSessionEvent; duplicate: boolean } {
     const event = parseVoiceSessionEvent(
@@ -20,14 +30,23 @@ export class CoreEventReceiver {
       }
       return { event, duplicate: true }
     }
+    if (
+      this.payloads.size + 1 > this.maxEvents
+      || this.retainedBytes + payload.byteLength > this.maxBytes
+    ) {
+      throw new Error('event deduplication capacity exceeded')
+    }
     this.acceptSequence(event)
-    this.payloads.set(event.event_id, payload.slice())
+    const retained = payload.slice()
+    this.payloads.set(event.event_id, retained)
+    this.retainedBytes += retained.byteLength
     return { event, duplicate: false }
   }
 
   clear(): void {
     this.payloads.clear()
     this.sequences.clear()
+    this.retainedBytes = 0
   }
 
   private acceptSequence(event: VoiceSessionEvent): void {

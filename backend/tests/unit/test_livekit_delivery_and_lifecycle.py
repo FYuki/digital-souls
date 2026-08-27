@@ -95,6 +95,31 @@ def test_conflicting_duplicate_is_a_terminal_protocol_error() -> None:
         deduplicator.classify(event_id, b'{"value":2}')
 
 
+@pytest.mark.parametrize(
+    ("max_events", "max_bytes", "payloads"),
+    [
+        (1, 1024, [("event-1", b"a"), ("event-2", b"b")]),
+        (10, 1, [("event-1", b"a"), ("event-2", b"b")]),
+    ],
+)
+def test_event_deduplication_rejects_capacity_overflow(
+    max_events: int,
+    max_bytes: int,
+    payloads: list[tuple[str, bytes]],
+) -> None:
+    module = _livekit_module("delivery", "bounded event deduplication")
+    deduplicator = module.EventDeduplicator(
+        max_events=max_events,
+        max_bytes=max_bytes,
+    )
+    first, overflow = payloads
+
+    deduplicator.classify(*first)
+
+    with pytest.raises(module.DeduplicationCapacityExceeded):
+        deduplicator.classify(*overflow)
+
+
 def test_conflicting_duplicate_cleans_up_the_terminal_session() -> None:
     module = _livekit_module("delivery", "terminal-session cleanup after a conflict")
     cleanup_calls: list[str] = []
@@ -617,7 +642,7 @@ def test_send_core_rejects_inactive_phase_without_delivery_state(
 
         assert coordinator.phase == phase
         assert published == []
-        assert coordinator._retry_tasks == {}
+        assert coordinator.pending_retry_count == 0
         assert coordinator.acknowledge(
             "10000000-0000-4000-8000-000000000010", "character_to_user"
         ) is False
@@ -665,6 +690,64 @@ def test_three_identical_retries_end_unavailable_session(monkeypatch) -> None:
     asyncio.run(exercise())
 
 
+def test_publish_failures_keep_retrying_until_transport_is_unavailable(
+    monkeypatch,
+) -> None:
+    module = _livekit_module("coordinator", "retry after publish failure")
+    original_sleep = asyncio.sleep
+
+    async def immediate_sleep(seconds: float) -> None:
+        if seconds >= 60:
+            await asyncio.Future()
+        await original_sleep(0)
+
+    monkeypatch.setattr(module.asyncio, "sleep", immediate_sleep)
+
+    async def exercise() -> None:
+        attempts = 0
+
+        async def publish(_payload: bytes, _topic: str) -> None:
+            nonlocal attempts
+            attempts += 1
+            raise RuntimeError("temporary publish failure")
+
+        async def cleanup(_session_id: str) -> None:
+            return None
+
+        async def generation_ready() -> None:
+            return None
+
+        coordinator = module.ProductionSessionCoordinator(
+            session_id="20000000-0000-4000-8000-000000000010",
+            user_identity="user-20000000-0000-4000-8000-000000000010",
+            core_participant_id="40000000-0000-4000-8000-000000000010",
+            reconnect_grace_ms=60_000,
+            dependencies=module.SessionCoordinatorDependencies(
+                publish_data=publish,
+                cleanup=cleanup,
+                generation_ready=generation_ready,
+            ),
+            core_port=RecordingCorePort(),
+        )
+        coordinator.participant_connected(
+            identity=coordinator.user_identity,
+            participant_sid="PA_current",
+            room_sid="RM_one",
+        )
+
+        with pytest.raises(RuntimeError, match="temporary publish failure"):
+            await coordinator.send_core(SESSION_STARTED_PAYLOAD)
+        for _ in range(10):
+            await original_sleep(0)
+
+        assert attempts == 4
+        assert coordinator.phase == "unavailable"
+        assert coordinator.pending_retry_count == 0
+        await coordinator.cleanup("test_complete")
+
+    asyncio.run(exercise())
+
+
 def test_ack_after_first_retry_stops_remaining_retries(monkeypatch) -> None:
     module = _livekit_module("coordinator", "ACK-controlled retry termination")
     original_sleep = asyncio.sleep
@@ -695,8 +778,12 @@ def test_ack_after_first_retry_stops_remaining_retries(monkeypatch) -> None:
         await coordinator.send_core(SESSION_STARTED_PAYLOAD)
         await retry_waiting.wait()
         release_retry.set()
-        while len(published) < 2:
+        for _ in range(100):
+            if len(published) >= 2:
+                break
             await original_sleep(0)
+        else:
+            pytest.fail("retry publish did not complete within the bounded wait")
 
         ack = json.dumps(
             {

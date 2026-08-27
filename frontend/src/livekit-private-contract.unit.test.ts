@@ -52,6 +52,15 @@ describe('LiveKit private contract', () => {
     expect(() => parsePrivateFrame(frame)).not.toThrow()
   })
 
+  test.each([
+    { protocol_version: '0.9', type: 'state_sync_request', generation: 1 },
+    { protocol_version: '1.0', type: 'unknown_frame', generation: 1 },
+  ])('protocol不一致と未知typeを拒否する', (frame) => {
+    expect(() => parsePrivateFrame(frame)).toThrow(
+      'LiveKit private frame does not match protocol 1.0',
+    )
+  })
+
   test('authoritative stateのterminal outcomeをconsumer形式へ正規化する', () => {
     expect(parsePrivateFrame(authoritativeState([terminalOutcome]))).toEqual({
       type: 'authoritative_state',

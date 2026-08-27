@@ -8,8 +8,11 @@ class ObservationPort(Protocol):
 
 
 class MicrophoneTrackObserver:
-    def __init__(self, *, observation_port: ObservationPort) -> None:
+    def __init__(
+        self, *, observation_port: ObservationPort, sample_rate: int = 48_000
+    ) -> None:
         self._port = observation_port
+        self._sample_rate = sample_rate
         self._frame_count = 0
         self._sample_count = 0
         self._first_received_at_ms: int | None = None
@@ -30,7 +33,7 @@ class MicrophoneTrackObserver:
         if self._frame_count > 1:
             assert previous_received_at_ms is not None
             assert previous_samples is not None
-            expected_interval_ms = previous_samples * 1000 / 48_000
+            expected_interval_ms = previous_samples * 1000 / self._sample_rate
             elapsed_since_frame = received_at_ms - previous_received_at_ms
             self._missing_frames += max(
                 0, round(elapsed_since_frame / expected_interval_ms) - 1
