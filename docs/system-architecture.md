@@ -257,4 +257,4 @@ Truthとするが、ADRとtyped policy schemaが定める絶対禁止を削除�
 
 ## LiveKitトランスポート
 
-`backend/app/livekit_transport/`がRoom/session binding、メモリ上のoutbox、ACK/retry、generation、transport私有mappingを所有する。Conversation CoreはLiveKitのRoom、Participant、Trackを知らず、検証済みCore eventとtransport available/unavailableのみを観測する。詳細は`docs/decisions/livekit-transport-2026-08.md`を参照する。
+`backend/app/livekit_transport/`がRoomとsessionの対応付け、メモリ上のoutbox、ACK/retry、generation、transport私有mappingを所有する。Conversation CoreはLiveKitのRoom、Participant、Trackを知らず、検証済みCore eventとtransport available/unavailableのみを観測する。詳細は`docs/decisions/livekit-transport-2026-08.md`を参照する。

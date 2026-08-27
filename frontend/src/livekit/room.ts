@@ -75,6 +75,7 @@ export class LiveKitRoomClient {
   private audioContext: AudioContext | null = null
   private workletReady: Promise<void> | null = null
   private generation = 0
+  private audioGraphResetVersion = 0
   private readonly subscriptions = new Set<string>()
   private readonly subscribedTracks = new Map<string, RemoteTrack>()
   private readonly pendingMetadata: SegmentMetadata[] = []
@@ -179,7 +180,8 @@ export class LiveKitRoomClient {
           if (generationChanged) {
             this.playback.setGeneration(frame.generation)
             this.pendingMetadata.length = 0
-            void this.resetAudioGraphs().catch(() => this.failTransport())
+            const resetVersion = ++this.audioGraphResetVersion
+            void this.resetAudioGraphs(resetVersion).catch(() => this.failTransport())
           }
           if (frame.sessionPhase === 'ended') {
             this.failTransport()
@@ -198,10 +200,12 @@ export class LiveKitRoomClient {
                   renderedEnergy: 0,
                   confirmedSegments: 0,
                   unassignedRenderedSamples: 0,
+                  activeResponseId: '',
                 }
               : {}),
-            terminalResponseId: frame.terminalOutcomes.at(-1)?.responseId,
-            terminalConfirmedAudioSequence: frame.terminalOutcomes.at(-1)?.confirmedAudioSequence,
+            terminalResponseId: frame.terminalOutcomes.at(-1)?.responseId ?? '',
+            terminalConfirmedAudioSequence:
+              frame.terminalOutcomes.at(-1)?.confirmedAudioSequence ?? 0,
           })
         } else if (frame.type === 'ack') {
           if (frame.generation !== this.generation) return
@@ -354,18 +358,21 @@ export class LiveKitRoomClient {
     })
   }
 
-  private async resetAudioGraphs(): Promise<void> {
+  private async resetAudioGraphs(resetVersion: number): Promise<void> {
     const tracks = [...this.subscribedTracks.entries()].map(([key, track]) => ({
       key,
       track,
     }))
     await this.disposeAudioContext()
+    if (resetVersion !== this.audioGraphResetVersion) return
     for (const { key, track } of tracks) {
+      if (resetVersion !== this.audioGraphResetVersion) return
       if (this.subscriptions.has(key)) await this.attachRenderEvidence(track, key)
     }
   }
 
   private async closeAudioGraph(): Promise<void> {
+    this.audioGraphResetVersion += 1
     this.subscriptions.clear()
     this.subscribedTracks.clear()
     this.pendingMetadata.length = 0

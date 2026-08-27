@@ -90,7 +90,7 @@ CodeRabbitの指摘はコードレビューの補助であり、GitHub Actions�
 
 ## LiveKit実サーバーsuite
 
-LiveKitの状態遷移、outbox、mapping、再生済みprefixはfake clock/portを使うunit/module testでCI内検証する。実Room、WebRTC media、browser microphoneの結合は`LIVEKIT_TEST_FRONTEND_URL`、`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`を設定し、repository rootの`npm run test:integration:livekit`でBackend pytestとPlaywright Chromiumをまとめて実行する。このスイートはself-host LiveKitとUDP到達性が必要なためCIでは自動実行しない。
+LiveKitの状態遷移、outbox、mapping、再生済みprefixはfake clock/portを使うunit/module testでCI内検証する。実Room、WebRTC media、browser microphoneの結合は`LIVEKIT_TEST_FRONTEND_URL`、`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`を設定し、リポジトリルートの`npm run test:integration:livekit`でBackend pytestとPlaywright Chromiumをまとめて実行する。このスイートはself-host LiveKitとUDP到達性が必要なためCIでは自動実行しない。
 
 ## Capability不足と失敗
 

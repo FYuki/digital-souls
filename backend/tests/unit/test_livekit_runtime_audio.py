@@ -51,6 +51,7 @@ def _runtime_shell(production):
     runtime._rooms = {}
     runtime._coordinators = {}
     runtime._session_tasks = {}
+    runtime._participant_event_tails = {}
     runtime._ready = {}
     runtime._fixture_sources = {}
     runtime._fixture_generations = {}
@@ -279,6 +280,145 @@ def test_character_runtime_uses_microphone_grant_and_matching_publish_source(
     ]
     assert len(published_tracks) == 1
     assert published_tracks[0][1].source == microphone_source
+
+
+def test_participant_registration_precedes_track_observation_without_callback_await(
+    monkeypatch,
+) -> None:
+    production = importlib.import_module("app.livekit_transport.production")
+    session_id = "20000000-0000-4000-8000-000000000010"
+    user_identity = f"user-{session_id}"
+    callbacks: dict[str, object] = {}
+    microphone_source = "microphone"
+    remote_track = object()
+    participant = SimpleNamespace(identity=user_identity, sid="PA_user")
+    publication = SimpleNamespace(source=microphone_source)
+
+    class RecordingSigner:
+        async def issue_token(self, request: dict[str, object]) -> str:
+            del request
+            return "character-token"
+
+    class LocalParticipant:
+        async def publish_data(
+            self, payload: bytes, *, reliable: bool, topic: str
+        ) -> None:
+            del payload, reliable, topic
+
+        async def publish_track(self, track: object, options: object) -> None:
+            del track, options
+
+    class Room:
+        sid = "RM_test"
+
+        def __init__(self) -> None:
+            self.local_participant = LocalParticipant()
+
+        def on(self, event: str):
+            def register(callback):
+                callbacks[event] = callback
+                return callback
+
+            return register
+
+        async def connect(self, url: str, token: str) -> None:
+            assert url == "ws://127.0.0.1:7880"
+            assert token == "character-token"
+            connected = callbacks["participant_connected"]
+            subscribed = callbacks["track_subscribed"]
+            assert callable(connected)
+            assert callable(subscribed)
+            connected(participant)
+            subscribed(remote_track, publication, participant)
+
+        async def disconnect(self) -> None:
+            return None
+
+    class AudioSource:
+        def __init__(self, sample_rate: int, channels: int) -> None:
+            assert sample_rate == production.PCM_SAMPLE_RATE
+            assert channels == production.PCM_CHANNELS
+
+        async def capture_frame(self, frame: object) -> None:
+            del frame
+
+    class LocalAudioTrack:
+        @staticmethod
+        def create_audio_track(name: str, source: object) -> object:
+            return (name, source)
+
+    class TrackPublishOptions:
+        def __init__(self, *, source: str) -> None:
+            self.source = source
+
+    class AudioFrame:
+        def __init__(self, *args: object) -> None:
+            self.args = args
+
+    rtc = SimpleNamespace(
+        Room=Room,
+        AudioSource=AudioSource,
+        AudioFrame=AudioFrame,
+        LocalAudioTrack=LocalAudioTrack,
+        TrackPublishOptions=TrackPublishOptions,
+        TrackSource=SimpleNamespace(SOURCE_MICROPHONE=microphone_source),
+    )
+    monkeypatch.setitem(sys.modules, "livekit", SimpleNamespace(rtc=rtc))
+    monkeypatch.setitem(sys.modules, "livekit.rtc", rtc)
+
+    class Sessions:
+        async def delete(self, owned_session_id: str) -> None:
+            assert owned_session_id == session_id
+
+    class Rooms:
+        async def delete(self, room_name: str) -> None:
+            assert room_name == f"voice-{session_id}"
+
+    class CorePort:
+        def notify(self, payload: bytes) -> None:
+            del payload
+
+    runtime = production.ProductionRuntimeManager(
+        livekit_url="ws://127.0.0.1:7880",
+        signer=RecordingSigner(),
+        room_manager=Rooms(),
+        session_repository=Sessions(),
+        core_port=CorePort(),
+    )
+
+    async def exercise() -> None:
+        observation_started = asyncio.Event()
+        observations: list[tuple[str, str, object]] = []
+
+        async def observe_microphone(
+            owned_session_id: str,
+            track: object,
+            coordinator: object,
+            participant_identity: str,
+            participant_sid: str,
+            generation: int,
+            publish_data: object,
+        ) -> None:
+            del coordinator, generation, publish_data
+            observations.append((participant_identity, participant_sid, track))
+            assert owned_session_id == session_id
+            observation_started.set()
+
+        runtime._observe_microphone = observe_microphone
+        await runtime.start_runtime(
+            {
+                "session_id": session_id,
+                "identity": f"character-miori-{session_id}",
+                "core_participant_id": "40000000-0000-4000-8000-000000000010",
+                "reconnect_grace_ms": 60_000,
+            }
+        )
+        await asyncio.wait_for(observation_started.wait(), timeout=0.5)
+
+        assert observations == [(user_identity, "PA_user", remote_track)]
+        await runtime.stop(session_id)
+
+    asyncio.run(exercise())
 
 
 def test_production_stop_releases_local_ownership_before_external_cleanup_finishes() -> None:

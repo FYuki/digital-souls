@@ -241,6 +241,7 @@ class ProductionRuntimeManager:
         self._rooms: dict[str, rtc.Room] = {}
         self._coordinators: dict[str, ProductionSessionCoordinator] = {}
         self._session_tasks: dict[str, set[asyncio.Task[None]]] = {}
+        self._participant_event_tails: dict[str, asyncio.Task[None]] = {}
         self._ready: dict[str, asyncio.Event] = {}
         self._fixture_sources: dict[str, _LiveKitPcmAudioSource] = {}
         self._fixture_generations: dict[str, int] = {}
@@ -336,7 +337,9 @@ class ProductionRuntimeManager:
                     await self._ready[session_id].wait()
                     await self._publish_fixture(session_id, coordinator, publish_data)
 
-            self._schedule_task(session_id, handle_connected())
+            self._schedule_serialized_participant_operation(
+                session_id, handle_connected
+            )
         room.on("participant_connected")(participant_connected)
 
         def participant_disconnected(participant: rtc.RemoteParticipant) -> None:
@@ -367,25 +370,31 @@ class ProductionRuntimeManager:
             publication: rtc.RemoteTrackPublication,
             participant: rtc.RemoteParticipant,
         ) -> None:
-            if (
-                publication.source != rtc_module.TrackSource.SOURCE_MICROPHONE
-                or not coordinator.is_current_participant(
-                    identity=str(participant.identity),
-                    participant_sid=str(participant.sid),
-                )
-            ):
-                return
-            self._schedule_task(
-                session_id,
-                self._observe_microphone(
+            async def handle_track_subscribed() -> None:
+                if (
+                    publication.source
+                    != rtc_module.TrackSource.SOURCE_MICROPHONE
+                    or not coordinator.is_current_participant(
+                        identity=str(participant.identity),
+                        participant_sid=str(participant.sid),
+                    )
+                ):
+                    return
+                self._schedule_task(
                     session_id,
-                    track,
-                    coordinator,
-                    str(participant.identity),
-                    str(participant.sid),
-                    coordinator.generation,
-                    publish_data,
-                ),
+                    self._observe_microphone(
+                        session_id,
+                        track,
+                        coordinator,
+                        str(participant.identity),
+                        str(participant.sid),
+                        coordinator.generation,
+                        publish_data,
+                    ),
+                )
+
+            self._schedule_serialized_participant_operation(
+                session_id, handle_track_subscribed
             )
 
         room.on("track_subscribed")(track_subscribed)
@@ -407,11 +416,14 @@ class ProductionRuntimeManager:
     ) -> None:
         rtc_module = _livekit_rtc_module()
 
+        def schedule_observation(operation: Awaitable[None]) -> None:
+            self._schedule_task(session_id, operation)
+
         observer = MicrophoneTrackObserver(
             observation_port=_ObservationPublisher(
                 publish_data,
                 lambda: coordinator.generation,
-                lambda coroutine: self._schedule_task(session_id, coroutine),
+                schedule_observation,
             ),
             sample_rate=PCM_SAMPLE_RATE,
         )
@@ -441,17 +453,46 @@ class ProductionRuntimeManager:
 
     def _schedule_task(
         self, session_id: str, coroutine: Awaitable[None]
-    ) -> None:
+    ) -> asyncio.Task[None] | None:
         tasks = self._session_tasks.get(session_id)
         if tasks is None:
             if inspect.iscoroutine(coroutine):
                 coroutine.close()
             elif isinstance(coroutine, asyncio.Future):
                 coroutine.cancel()
-            return
+            return None
         task = asyncio.create_task(self._run_owned_task(session_id, coroutine))
         tasks.add(task)
         task.add_done_callback(lambda completed: self._task_done(tasks, completed))
+        return task
+
+    def _schedule_serialized_participant_operation(
+        self,
+        session_id: str,
+        operation: Callable[[], Awaitable[None]],
+    ) -> None:
+        previous = self._participant_event_tails.get(session_id)
+
+        async def run_serialized() -> None:
+            if previous is not None:
+                await previous
+            await operation()
+
+        task = self._schedule_task(session_id, run_serialized())
+        if task is None:
+            return
+        self._participant_event_tails[session_id] = task
+        task.add_done_callback(
+            lambda completed: self._participant_operation_done(
+                session_id, completed
+            )
+        )
+
+    def _participant_operation_done(
+        self, session_id: str, completed: asyncio.Task[None]
+    ) -> None:
+        if self._participant_event_tails.get(session_id) is completed:
+            self._participant_event_tails.pop(session_id, None)
 
     async def _run_owned_task(
         self, session_id: str, operation: Awaitable[None]
@@ -538,6 +579,7 @@ class ProductionRuntimeManager:
         self, session_id: str
     ) -> tuple[rtc.Room | None, list[asyncio.Task[None]]]:
         self._coordinators.pop(session_id, None)
+        self._participant_event_tails.pop(session_id, None)
         tasks = self._session_tasks.pop(session_id, set())
         pending_tasks: list[asyncio.Task[None]] = []
         for task in tasks:
