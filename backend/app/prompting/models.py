@@ -3,7 +3,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
-from app.characters.lore_selector import CharacterLoreSelection
+from app.characters.lore_selector import (
+    CharacterLoreSelection,
+    LoreSelectionDecision,
+)
 
 
 class PromptRole(str, Enum):
@@ -193,6 +196,7 @@ class PromptUsage:
 class BuiltPrompt:
     messages: tuple[PromptMessage, ...]
     usage: PromptUsage
+    character_lore_decisions: tuple[LoreSelectionDecision, ...]
 
 
 class PromptInputLimitError(ValueError):

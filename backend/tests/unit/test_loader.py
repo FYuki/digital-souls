@@ -210,6 +210,24 @@ class TestLoadCharacterCard:
         assert card.data.character_book is None
         assert "character_book" not in card.data.extra_fields
 
+    def test_should_load_empty_character_book(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        data = character_card_data(
+            character_book=character_book(entries=[]),
+        )
+        write_character_card(tmp_path, "test", character_card_document(data=data))
+        use_character_repo_root(monkeypatch, tmp_path)
+
+        from app.characters.loader import load_character_card
+
+        loaded = load_character_card("test").data.character_book
+
+        assert loaded is not None
+        assert loaded.entries == ()
+
     @pytest.mark.parametrize(
         ("book", "path"),
         [
