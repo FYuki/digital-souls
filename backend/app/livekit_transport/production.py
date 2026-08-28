@@ -21,9 +21,12 @@ from app.conversation_core import ConversationCoreSession, CoreEvent, StageObser
 from app.conversation_core.adapters import (
     ConversationHistoryPersistenceAdapter,
     PromptLlmAdapter,
+    SpeakerSynthesizer,
+    SyncTranscriber,
     VoicevoxTtsAdapter,
     WhisperSttAdapter,
 )
+from app.conversation_core.ports import DeliveryPort
 from app.livekit_transport.bootstrap import (
     BOOTSTRAP_TIMEOUT_SECONDS,
     BootstrapService,
@@ -226,7 +229,7 @@ class _CoreSessionFactory(Protocol):
         session_id: str,
         character_id: str,
         conversation_id: UUID,
-        delivery: object,
+        delivery: DeliveryPort,
     ) -> ConversationCoreSession: ...
 
 
@@ -252,8 +255,8 @@ class ProductionConversationCoreSessionFactory:
     def __init__(
         self,
         *,
-        transcriber: object,
-        synthesizer: object,
+        transcriber: SyncTranscriber,
+        synthesizer: SpeakerSynthesizer,
         history_service: _HistoryService,
         generate_reply: Callable[[str, object, str], str],
     ) -> None:
@@ -268,7 +271,7 @@ class ProductionConversationCoreSessionFactory:
         session_id: str,
         character_id: str,
         conversation_id: UUID,
-        delivery: object,
+        delivery: DeliveryPort,
     ) -> ConversationCoreSession:
         history_session = self._history_service.open_session(
             character_id, conversation_id
@@ -277,19 +280,19 @@ class ProductionConversationCoreSessionFactory:
         return ConversationCoreSession(
             session_id=session_id,
             response_id_factory=lambda: str(uuid4()),
-            delivery=delivery,  # type: ignore[arg-type]
+            delivery=delivery,
             persistence=ConversationHistoryPersistenceAdapter(
                 history_session=history_session  # type: ignore[arg-type]
             ),
             observation=_LoggingCoreObservation(),
-            stt=WhisperSttAdapter(transcriber=self._transcriber),  # type: ignore[arg-type]
+            stt=WhisperSttAdapter(transcriber=self._transcriber),
             llm=PromptLlmAdapter(
                 generate_reply=lambda transcript: self._generate_reply(
                     character_id, history_session, transcript
                 )
             ),
             tts=VoicevoxTtsAdapter(
-                client=self._synthesizer,  # type: ignore[arg-type]
+                client=self._synthesizer,
                 output_sample_rate=PCM_SAMPLE_RATE,
                 output_channels=PCM_CHANNELS,
                 output_sample_width=PCM_SAMPLE_WIDTH_BYTES,
@@ -448,40 +451,61 @@ class _ConversationCoreBridge:
     def receive_microphone(self, pcm: bytes) -> None:
         if not self._user_audio_captures:
             return
-        capture = self._user_audio_captures[0]
+        capture = next(
+            (
+                item
+                for item in self._user_audio_captures
+                if item.finalized and not item.pcm
+            ),
+            self._user_audio_captures[-1],
+        )
         capture.pcm.extend(pcm)
         self._finalize_user_audio_if_ready()
 
     def _finalize_user_audio_if_ready(self) -> None:
-        if not self._user_audio_captures:
-            return
-        capture = self._user_audio_captures[0]
-        if not capture.finalized or not capture.pcm:
-            return
-        utterance_id = capture.utterance_id
-        microphone_pcm = bytes(capture.pcm)
-        self._user_audio_captures.popleft()
-        self._schedule(
-            self._finalize_user_audio(
-                utterance_id=utterance_id,
-                microphone_pcm=microphone_pcm,
+        while self._user_audio_captures:
+            capture = self._user_audio_captures[0]
+            if not capture.finalized:
+                return
+            if not capture.pcm:
+                if not any(item.pcm for item in tuple(self._user_audio_captures)[1:]):
+                    return
+                self._user_audio_captures.popleft()
+                continue
+            utterance_id = capture.utterance_id
+            microphone_pcm = bytes(capture.pcm)
+            self._user_audio_captures.popleft()
+            self._schedule(
+                self._finalize_user_audio(
+                    utterance_id=utterance_id,
+                    microphone_pcm=microphone_pcm,
+                )
             )
-        )
 
     async def _receive(self, event: dict[str, object]) -> None:
         event_type = event["type"]
         if event_type == "response_cancel_requested":
+            response_id = event.get("response_id")
+            reason = event.get("reason")
+            if not isinstance(response_id, str) or not isinstance(reason, str):
+                self._log_invalid_control_event(event_type)
+                return
             await self._session.cancel_response(
-                response_id=str(event["response_id"]),
-                reason=str(event["reason"]),
+                response_id=response_id,
+                reason=reason,
             )
         elif event_type in ("playback_completed", "playback_stopped"):
+            response_id = event.get("response_id")
+            last_played_audio_sequence = event.get("last_played_audio_sequence")
+            if (
+                not isinstance(response_id, str)
+                or type(last_played_audio_sequence) is not int
+            ):
+                self._log_invalid_control_event(event_type)
+                return
             await self._session.confirm_playback(
-                response_id=str(event["response_id"]),
-                last_played_audio_sequence=_required_int(
-                    event["last_played_audio_sequence"],
-                    "last_played_audio_sequence",
-                ),
+                response_id=response_id,
+                last_played_audio_sequence=last_played_audio_sequence,
             )
         elif event_type == "session_disconnected":
             await self._session.disconnect()
@@ -505,6 +529,13 @@ class _ConversationCoreBridge:
 
     async def end(self) -> None:
         await self._session.end()
+
+    @staticmethod
+    def _log_invalid_control_event(event_type: object) -> None:
+        logger.warning(
+            "Invalid Conversation Core control event discarded: type=%s",
+            event_type,
+        )
 
     @staticmethod
     def _consume_task(task: asyncio.Task[object]) -> None:
@@ -779,10 +810,7 @@ class ProductionRuntimeManager:
                 frame = event.frame
                 bridge = self._core_bridges.get(session_id)
                 if bridge is None:
-                    await self._ready[session_id].wait()
-                    bridge = self._core_bridges.get(session_id)
-                    if bridge is None:
-                        return
+                    return
                 pcm = bytes(frame.data)
                 bridge.receive_microphone(pcm)
                 observer.receive_frame(

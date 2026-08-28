@@ -177,7 +177,7 @@ class ConversationCoreSession:
                         "text_sequence is associated with a different payload"
                     )
                 return False
-            expected_sequence = len(self._text_payloads_for(response_id)) + 1
+            expected_sequence = response.last_text_sequence + 1
             if text_sequence != expected_sequence:
                 return False
             expected_range = (
@@ -193,6 +193,7 @@ class ConversationCoreSession:
             self._responses[response_id] = replace(
                 response,
                 generated_text=response.generated_text + text,
+                last_text_sequence=text_sequence,
             )
             event = CoreEvent(
                 type="response_delta",
@@ -301,8 +302,12 @@ class ConversationCoreSession:
             reason=reason,
         )
 
-    async def cancel_response(self, *, response_id: str, reason: str) -> Response:
-        response = self._responses[response_id]
+    async def cancel_response(
+        self, *, response_id: str, reason: str
+    ) -> Response | None:
+        response = self._responses.get(response_id)
+        if response is None:
+            return None
         result = await self._terminate(
             response_id=response_id,
             generation=response.generation,
@@ -316,7 +321,9 @@ class ConversationCoreSession:
         self, *, response_id: str, last_played_audio_sequence: int
     ) -> bool:
         async with self._state_lock:
-            response = self._responses[response_id]
+            response = self._responses.get(response_id)
+            if response is None:
+                return False
             if response.state.is_terminal:
                 return False
             if last_played_audio_sequence <= response.last_played_audio_sequence:
@@ -631,6 +638,7 @@ class ConversationCoreSession:
                 generated_text=response.generated_text,
                 audio_segments=response.audio_segments,
                 last_played_audio_sequence=response.last_played_audio_sequence,
+                last_text_sequence=response.last_text_sequence,
                 source_utterance_ids=response.source_utterance_ids,
             )
             if response_id not in self._persisted_response_ids:
@@ -645,22 +653,24 @@ class ConversationCoreSession:
     async def _run_terminal_effects(self, outcome: TerminalOutcome) -> None:
         start_event = self._response_start_events[outcome.response_id]
         await start_event.wait()
-        await self._persistence.persist(outcome)
         try:
-            await self._publish_delivery(
-                CoreEvent(
-                    type=self._terminal_event_type(outcome.state),
-                    session_id=self.session_id,
-                    response_id=outcome.response_id,
-                    generation=outcome.generation,
-                    reason=outcome.reason,
-                    source_utterance_ids=outcome.source_utterance_ids,
-                    last_text_sequence=len(
-                        self._text_payloads_for(outcome.response_id)
-                    ),
-                    last_audio_sequence=len(outcome.audio_segments),
+            try:
+                await self._persistence.persist(outcome)
+            finally:
+                # 両方が失敗した場合はdelivery失敗を主例外とし、永続化失敗を
+                # exception contextへ残す。
+                await self._publish_delivery(
+                    CoreEvent(
+                        type=self._terminal_event_type(outcome.state),
+                        session_id=self.session_id,
+                        response_id=outcome.response_id,
+                        generation=outcome.generation,
+                        reason=outcome.reason,
+                        source_utterance_ids=outcome.source_utterance_ids,
+                        last_text_sequence=outcome.last_text_sequence,
+                        last_audio_sequence=len(outcome.audio_segments),
+                    )
                 )
-            )
         finally:
             await self._start_pending_after_terminal()
 
@@ -922,13 +932,6 @@ class ConversationCoreSession:
                 "event_id is associated with a different payload"
             )
         return True
-
-    def _text_payloads_for(self, response_id: str) -> tuple[tuple[object, ...], ...]:
-        return tuple(
-            payload
-            for (candidate_id, _sequence), payload in self._text_payloads.items()
-            if candidate_id == response_id
-        )
 
     def _response_containing(self, utterance_id: str) -> Response | None:
         return next(

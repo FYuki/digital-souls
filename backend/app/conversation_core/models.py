@@ -52,6 +52,7 @@ class Response:
     source_utterance_ids: tuple[str, ...]
     state: ResponseState
     generated_text: str = ""
+    last_text_sequence: int = 0
     audio_segments: tuple[AudioSegment, ...] = ()
     last_played_audio_sequence: int = 0
     terminal_reason: str | None = None
@@ -66,6 +67,7 @@ class TerminalOutcome:
     generated_text: str
     audio_segments: tuple[AudioSegment, ...]
     last_played_audio_sequence: int
+    last_text_sequence: int = 0
     source_utterance_ids: tuple[str, ...] = ()
 
 

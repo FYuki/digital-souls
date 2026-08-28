@@ -83,12 +83,17 @@ def _run(exercise: Callable[[], Awaitable[None]]) -> None:
     asyncio.run(exercise())
 
 
-async def _wait_until(predicate: Callable[[], bool]) -> None:
-    for _ in range(20):
-        if predicate():
-            return
-        await asyncio.sleep(0)
-    raise AssertionError("期待した非同期状態へ到達しなかった")
+async def _wait_until(
+    predicate: Callable[[], bool], *, timeout: float = 1.0
+) -> None:
+    async def poll() -> None:
+        while not predicate():
+            await asyncio.sleep(0)
+
+    try:
+        await asyncio.wait_for(poll(), timeout=timeout)
+    except TimeoutError as error:
+        raise AssertionError("期待した非同期状態へ到達しなかった") from error
 
 
 def _response_started_events(delivery: RecordingDelivery) -> list[object]:
@@ -186,6 +191,17 @@ class FirstCallFailingPersistence(RecordingPersistence):
 
 
 @dataclass
+class FirstTerminalFailingPersistence(RecordingPersistence):
+    persist_attempts: int = 0
+
+    async def persist(self, outcome: object) -> None:
+        self.persist_attempts += 1
+        if self.persist_attempts == 1:
+            raise RuntimeError("terminal persistence failure sentinel")
+        await super().persist(outcome)
+
+
+@dataclass
 class BlockingStt:
     started: asyncio.Event = field(default_factory=asyncio.Event)
     cancellation_received: asyncio.Event = field(default_factory=asyncio.Event)
@@ -246,6 +262,7 @@ def test_public_audio_entry_runs_stt_llm_tts_delivery_and_completion() -> None:
         assert tts.calls == ["光織です"]
         assert response.state is module.ResponseState.IN_PROGRESS
         assert session.response(response.response_id).state is module.ResponseState.COMPLETED
+        assert session.response(response.response_id).last_text_sequence == 2
         assert persistence.starts == [(RESPONSE_1, "利用者の発話")]
         assert len(persistence.outcomes) == 1
         assert [event_field(event, "type") for event in delivery.events] == [
@@ -255,6 +272,7 @@ def test_public_audio_entry_runs_stt_llm_tts_delivery_and_completion() -> None:
             "response_audio_segment",
             "response_completed",
         ]
+        assert event_field(delivery.events[-1], "last_text_sequence") == 2
         producer_observations = [
             item
             for item in observation.observations
@@ -457,6 +475,49 @@ def test_response_start_failure_terminates_once_and_allows_the_next_response() -
         assert [event_field(event, "type") for event in _terminal_events(delivery)] == [
             "response_failed"
         ]
+        await session.end()
+
+    _run(exercise)
+
+
+def test_terminal_persistence_failure_still_delivers_and_starts_pending_response() -> None:
+    async def exercise() -> None:
+        module = _core_module()
+        delivery = RecordingDelivery()
+        persistence = FirstTerminalFailingPersistence()
+        session = module.ConversationCoreSession(
+            session_id=SESSION_ID,
+            response_id_factory=response_id_factory(RESPONSE_1, RESPONSE_2),
+            delivery=delivery,
+            persistence=persistence,
+            observation=RecordingObservation(),
+            stt=RecordingStt(),
+            llm=BlockingLlm(),
+            tts=RecordingTts(),
+        )
+        first = await session.finalize_utterance(
+            utterance_id=UTTERANCE_1,
+            transcript="永続化に失敗する入力",
+            should_response=True,
+        )
+        await session.finalize_utterance(
+            utterance_id=UTTERANCE_2,
+            transcript="後続の入力",
+            should_response=True,
+        )
+
+        await session.complete_response(
+            response_id=first.response_id,
+            generation=first.generation,
+        )
+        await _wait_until(lambda: len(_response_started_events(delivery)) == 2)
+
+        assert persistence.persist_attempts == 1
+        assert [event_field(event, "type") for event in _terminal_events(delivery)] == [
+            "response_completed"
+        ]
+        assert session.active_response is not None
+        assert session.active_response.response_id == RESPONSE_2
         await session.end()
 
     _run(exercise)
@@ -719,6 +780,34 @@ def test_repeated_cancel_is_immediate_and_idempotent() -> None:
         ]
         assert len(persistence.outcomes) == 1
         assert event_field(persistence.outcomes[0], "state") is module.ResponseState.CANCELLED
+
+    _run(exercise)
+
+
+def test_unknown_response_control_is_ignored_idempotently() -> None:
+    async def exercise() -> None:
+        _module, session, delivery, persistence, _observation = _session()
+        response = await session.finalize_utterance(
+            utterance_id=UTTERANCE_1,
+            transcript="処理中の入力",
+            should_response=True,
+        )
+
+        cancelled = await session.cancel_response(
+            response_id="50000000-0000-4000-8000-000000000999",
+            reason="barge_in",
+        )
+        playback_confirmed = await session.confirm_playback(
+            response_id="50000000-0000-4000-8000-000000000999",
+            last_played_audio_sequence=1,
+        )
+
+        assert cancelled is None
+        assert playback_confirmed is False
+        assert session.active_response == response
+        assert _terminal_events(delivery) == []
+        assert persistence.outcomes == []
+        await session.end()
 
     _run(exercise)
 
