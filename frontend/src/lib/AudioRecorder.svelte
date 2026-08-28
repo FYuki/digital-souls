@@ -17,6 +17,7 @@
 
   import { AudioWorkletPcmRecorder } from './audio/pcm-worklet-recorder'
   import { VAD_ASSET_ROUTE } from './audio/vad-assets'
+  import { VAD_UTTERANCE_REDEMPTION_MS } from './audio/vad-policy'
 
   type MicStatus = 'off' | 'standby' | 'on'
 
@@ -59,6 +60,7 @@
   const buildVadOptions = (stream: MediaStream): Partial<RealTimeVADOptions> => ({
     baseAssetPath: VAD_ASSET_ROUTE,
     onnxWASMBasePath: VAD_ASSET_ROUTE,
+    redemptionMs: VAD_UTTERANCE_REDEMPTION_MS,
     startOnLoad: false,
     getStream: async () => stream,
     resumeStream: async () => stream,

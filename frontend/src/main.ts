@@ -7,7 +7,7 @@ if (target === null) {
 }
 
 const mount = async (): Promise<void> => {
-  const Root = window.location.pathname === '/voice/livekit'
+  const Root = import.meta.env.DEV && window.location.pathname === '/voice/livekit'
     ? (await import('./livekit/LiveKitPage.svelte')).default
     : (await import('./App.svelte')).default
 

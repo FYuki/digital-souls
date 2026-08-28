@@ -30,6 +30,7 @@ class Reason(Enum):
     BARGE_IN = "barge_in"
     DECODE_FAILURE = "decode_failure"
     DISCONNECT = "disconnect"
+    INPUT_CAPACITY_EXCEEDED = "input_capacity_exceeded"
     INVALID_AUDIO = "invalid_audio"
     PRIVACY = "privacy"
     RECONNECT_TIMEOUT = "reconnect_timeout"

@@ -31,6 +31,7 @@ from app.backup_restore import (
 from app.conversation_history.config import resolve_conversation_history_config
 from app.conversation_history.errors import SchemaRollbackError
 from app.conversation_history.lifecycle_service import ConversationLifecycleService
+from app.conversation_history.models import ConversationTurn, TurnStatus
 from app.conversation_history.repository import ConversationHistoryRepository
 from app.conversation_history.schema import (
     initialize_conversation_history_schema,
@@ -58,6 +59,7 @@ from app.memory.consolidation.scheduler import (
 )
 from app.memory.consolidation.service import MemoryConsolidationService
 from app.memory.formation.config import resolve_memory_formation_settings
+from app.memory.formation.contracts import MemoryFormationJob
 from app.memory.formation.extractor import EXTRACTOR_VERSION, MemoryCandidateExtractor
 from app.memory.formation.ollama_client import OllamaMemoryExtractorClient
 from app.llm.ollama_config import resolve_ollama_base_url
@@ -535,10 +537,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         yield text
                     app_chat_service.record_successful_prompt_references(prompt)
 
+                def submit_completed_core_turn(persisted_turn: object) -> None:
+                    if not isinstance(persisted_turn, ConversationTurn):
+                        raise TypeError("completed Core turn must be a ConversationTurn")
+                    if persisted_turn.status is not TurnStatus.COMPLETED:
+                        return
+                    memory_formation_scheduler.submit(
+                        MemoryFormationJob(
+                            character_id=persisted_turn.character_id,
+                            conversation_id=persisted_turn.conversation_id,
+                            turn_id=persisted_turn.turn_id,
+                        )
+                    )
+
                 core_session_factory = ProductionConversationCoreSessionFactory(
                     transcriber=core_transcriber,
                     synthesizer=core_synthesizer,
                     history_service=conversation_history_service,
+                    completed_turn_observer=submit_completed_core_turn,
                     generate_reply_stream=generate_core_reply_stream,
                 )
             livekit_api = await configure_production_resources(

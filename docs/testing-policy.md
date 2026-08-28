@@ -98,6 +98,9 @@ LiveKitの状態遷移、outbox、mapping、再生済みprefixはfake clock/port
 
 `test:integration:livekit`はtransport単体のRoom、権限、outbox、microphone、AudioTrack購読graph、再接続を検証し、テスト専用character音声はproduction runtimeへ注入しない。Whisper、Ollama、VOICEVOXを含む通常conversation UIの逐次text/audio応答は`test:integration:voice`で検証する。
 
+Wave 3のEpic受入シナリオ、自動testと利用者dogfoodの責務分離、再実行手順は
+[`wave3-acceptance-2026-08.md`](wave3-acceptance-2026-08.md)を正本とする。
+
 ## Capability不足と失敗
 
 スイートの要求Capabilityが resolved Profile にない場合、テストは不足Capabilityと解決済み依存を理由に `skip` する。スイートを明示的に開始した後の次の失敗は skip に変換しない。

@@ -68,6 +68,7 @@ const liveKitMocks = {
   connect: vi.fn(async () => undefined),
   publishMicrophone: vi.fn(async () => undefined),
   muteMicrophone: vi.fn(async () => undefined),
+  stopPlayback: vi.fn(() => 0),
   publishControlEvent: vi.fn(async (event: Record<string, unknown>) => {
     liveKitMocks.controlEvents.push(event)
   }),
@@ -165,6 +166,7 @@ describe('App conversation lifecycle', () => {
     liveKitMocks.connect.mockReset().mockResolvedValue(undefined)
     liveKitMocks.publishMicrophone.mockReset().mockResolvedValue(undefined)
     liveKitMocks.muteMicrophone.mockReset().mockResolvedValue(undefined)
+    liveKitMocks.stopPlayback.mockReset().mockReturnValue(0)
     liveKitMocks.publishControlEvent.mockReset().mockImplementation(
       async (event: Record<string, unknown>) => {
         liveKitMocks.controlEvents.push(event)
@@ -189,6 +191,7 @@ describe('App conversation lifecycle', () => {
           connect: liveKitMocks.connect,
           publishMicrophone: liveKitMocks.publishMicrophone,
           muteMicrophone: liveKitMocks.muteMicrophone,
+          stopPlayback: liveKitMocks.stopPlayback,
           publishControlEvent: liveKitMocks.publishControlEvent,
           disconnect: liveKitMocks.disconnect,
         }
@@ -315,6 +318,58 @@ describe('App conversation lifecycle', () => {
     await waitFor(() => expect(
       fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/turns')).length,
     ).toBeGreaterThanOrEqual(2))
+  })
+
+  test('入力・応答・再生・sessionを独立表示しbarge-inを制御する', async () => {
+    render(App)
+    await startLiveKitSession()
+    await emitCoreEvent({
+      type: 'response_started', response_id: RESPONSE_ID,
+      source_utterance_ids: [TURN_ID],
+    })
+    await act(() => liveKitMocks.observeRoom?.({
+      transport: 'available', control: 'available', audio: 'available',
+      activeResponseId: RESPONSE_ID, renderedEnergy: 1,
+    }))
+
+    expect(screen.getByText('セッション: 接続済み')).toBeTruthy()
+    expect(screen.getByText('入力: 聞き取り中')).toBeTruthy()
+    expect(screen.getByText('応答: 応答生成中')).toBeTruthy()
+    expect(screen.getByText('再生: 再生中')).toBeTruthy()
+    if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
+
+    audioMocks.vadOptions.onSpeechStart()
+    await waitFor(() => expect(liveKitMocks.stopPlayback).toHaveBeenCalledWith(
+      RESPONSE_ID, expect.any(Number),
+    ))
+    await waitFor(() => expect(
+      liveKitMocks.controlEvents.map((event) => event.type),
+    ).toContain('response_cancel_requested'))
+
+    expect(screen.getByText('応答: 割り込み処理中')).toBeTruthy()
+    expect(screen.getByText('再生: 停止済み')).toBeTruthy()
+  })
+
+  test('音声session中のtext送信は音声を終了してからHTTP経路を使う', async () => {
+    render(App)
+    await startLiveKitSession()
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: 'テキストへ切り替える' },
+    })
+    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
+
+    await screen.findByText('HTTP応答です。')
+    expect(liveKitMocks.disconnect).toHaveBeenCalledTimes(1)
+    const requests = fetchMock.mock.calls.map(([input, init]) => ({
+      url: String(input), method: init?.method,
+    }))
+    const endIndex = requests.findIndex((request) => (
+      request.url.includes('/api/voice/livekit/sessions/')
+      && request.method === 'DELETE'
+    ))
+    const chatIndex = requests.findIndex((request) => request.url === '/api/chat')
+    expect(endIndex).toBeGreaterThanOrEqual(0)
+    expect(chatIndex).toBeGreaterThan(endIndex)
   })
 
   test('recoverable音声エラー後もmicを維持して次の応答を処理する', async () => {

@@ -59,6 +59,17 @@ def _runtime_shell(production):
     return runtime
 
 
+async def _drain_asyncio_tasks(tasks: set[asyncio.Task[None]]) -> None:
+    """done callbackが次taskを作る直列queueをevent-loop turn単位で待つ。"""
+    for _ in range(100):
+        await asyncio.sleep(0)
+        if not tasks:
+            await asyncio.sleep(0)
+            if not tasks:
+                return
+    raise AssertionError("asyncio tasks did not drain")
+
+
 def test_microphone_observation_records_metadata_without_audio_bytes() -> None:
     module = _runtime_module("metadata-only microphone observation")
     port = RecordingObservationPort()
@@ -501,8 +512,7 @@ def test_production_core_bridge_routes_microphone_and_control_to_one_session() -
         )
         bridge.notify(json.dumps({**common, "type": "session_disconnected"}).encode())
         bridge.notify(json.dumps({**common, "type": "session_reconnected"}).encode())
-        while tasks:
-            await asyncio.gather(*tuple(tasks))
+        await _drain_asyncio_tasks(tasks)
         await bridge.end()
 
     asyncio.run(exercise())
@@ -523,6 +533,134 @@ def test_production_core_bridge_routes_microphone_and_control_to_one_session() -
         "reconnect",
         "end",
     ])
+
+
+def test_production_core_bridge_stops_server_audio_for_playback_stop() -> None:
+    production = importlib.import_module("app.livekit_transport.production")
+    scheduled: list[Awaitable[None]] = []
+    stopped: list[str] = []
+
+    class RecordingCoreSession:
+        async def confirm_playback(self, **_request: object) -> bool:
+            return True
+
+    bridge = production._ConversationCoreBridge(
+        RecordingCoreSession(),
+        scheduled.append,
+        stop_audio=lambda: stopped.append("stopped"),
+        media_tail_seconds=0,
+    )
+    bridge.notify(
+        json.dumps(
+            {
+                "type": "playback_stopped",
+                "response_id": "50000000-0000-4000-8000-000000000010",
+                "reason": "barge_in",
+                "last_played_audio_sequence": 1,
+            }
+        ).encode()
+    )
+
+    async def exercise() -> None:
+        for operation in scheduled:
+            await operation
+
+    asyncio.run(exercise())
+
+    assert stopped == ["stopped"]
+
+
+def test_production_core_bridge_stops_audio_before_prefix_validation_failure() -> None:
+    production = importlib.import_module("app.livekit_transport.production")
+    scheduled: list[Awaitable[None]] = []
+    operations: list[str] = []
+
+    class RejectingCoreSession:
+        async def confirm_playback(self, **_request: object) -> bool:
+            operations.append("confirm")
+            raise ValueError("invalid playback prefix")
+
+    bridge = production._ConversationCoreBridge(
+        RejectingCoreSession(),
+        scheduled.append,
+        stop_audio=lambda: operations.append("stop"),
+        media_tail_seconds=0,
+    )
+    bridge.notify(
+        json.dumps(
+            {
+                "type": "playback_stopped",
+                "response_id": "50000000-0000-4000-8000-000000000010",
+                "reason": "barge_in",
+                "last_played_audio_sequence": 1,
+            }
+        ).encode()
+    )
+
+    async def exercise() -> None:
+        with pytest.raises(ValueError, match="invalid playback prefix"):
+            await scheduled[0]
+
+    asyncio.run(exercise())
+
+    assert operations == ["stop", "confirm"]
+
+
+def test_production_core_bridge_bounds_waiting_stt_and_discards_overflow() -> None:
+    production = importlib.import_module("app.livekit_transport.production")
+    tasks: set[asyncio.Task[None]] = set()
+    started: list[str] = []
+    discarded: list[tuple[str, str]] = []
+
+    class RecordingCoreSession:
+        accepting_input = True
+
+        def start_transcription(self, **request: object) -> asyncio.Task[None]:
+            async def record() -> None:
+                started.append(str(request["utterance_id"]))
+
+            task = asyncio.create_task(record())
+            tasks.add(task)
+            task.add_done_callback(tasks.discard)
+            return task
+
+        async def discard_utterance(self, **request: str) -> bool:
+            discarded.append((request["utterance_id"], request["reason"]))
+            return True
+
+    def schedule(operation: Awaitable[None]) -> None:
+        task = asyncio.create_task(operation)
+        tasks.add(task)
+        task.add_done_callback(tasks.discard)
+
+    bridge = production._ConversationCoreBridge(
+        RecordingCoreSession(), schedule, media_tail_seconds=0
+    )
+
+    async def exercise() -> None:
+        # active 1件を確保した状態で、待機3件と超過1件を投入する。
+        bridge._transcription_active = True
+        for index in range(5):
+            await bridge._enqueue_user_audio(
+                utterance_id=f"utterance-{index}",
+                microphone_pcm=b"pcm",
+            )
+        bridge._transcription_active = False
+        utterance_id, microphone_pcm = bridge._pending_transcriptions.popleft()
+        bridge._pending_transcription_bytes -= len(microphone_pcm)
+        bridge._start_user_transcription(utterance_id, microphone_pcm)
+        for _ in range(20):
+            if not tasks:
+                break
+            await asyncio.sleep(0)
+
+    asyncio.run(exercise())
+
+    assert started == ["utterance-0", "utterance-1", "utterance-2"]
+    assert discarded == [
+        ("utterance-3", "input_capacity_exceeded"),
+        ("utterance-4", "input_capacity_exceeded"),
+    ]
 
 
 def test_production_core_bridge_discards_media_tail_after_disconnect() -> None:
@@ -567,8 +705,7 @@ def test_production_core_bridge_discards_media_tail_after_disconnect() -> None:
                 }
             ).encode()
         )
-        while tasks:
-            await asyncio.gather(*tuple(tasks))
+        await _drain_asyncio_tasks(tasks)
 
     asyncio.run(exercise())
 
@@ -671,8 +808,7 @@ def test_production_core_bridge_keeps_pcm_owned_by_each_consecutive_utterance() 
         assert len(scheduled) == 2
         await scheduled[0]
         await scheduled[1]
-        while transcription_tasks:
-            await asyncio.gather(*tuple(transcription_tasks))
+        await _drain_asyncio_tasks(transcription_tasks)
 
     asyncio.run(exercise())
 
@@ -769,8 +905,7 @@ def test_production_core_bridge_does_not_assign_current_pcm_to_old_empty_capture
         assert len(scheduled) == 1
         for operation in scheduled:
             await operation
-        while transcription_tasks:
-            await asyncio.gather(*tuple(transcription_tasks))
+        await _drain_asyncio_tasks(transcription_tasks)
 
     asyncio.run(exercise())
 
@@ -825,8 +960,7 @@ def test_production_core_bridge_keeps_delayed_pcm_for_finalized_captures() -> No
         bridge.receive_microphone(b"pcm-two")
         for operation in scheduled:
             await operation
-        while transcription_tasks:
-            await asyncio.gather(*tuple(transcription_tasks))
+        await _drain_asyncio_tasks(transcription_tasks)
 
     asyncio.run(exercise())
 
@@ -883,8 +1017,7 @@ def test_production_core_bridge_separates_overlapping_utterance_pcm() -> None:
         notify("speech_stopped", second_id)
         for operation in scheduled:
             await operation
-        while transcription_tasks:
-            await asyncio.gather(*tuple(transcription_tasks))
+        await _drain_asyncio_tasks(transcription_tasks)
 
     asyncio.run(exercise())
 
@@ -935,8 +1068,7 @@ def test_production_core_bridge_empty_capture_does_not_block_later_audio() -> No
         notify("speech_stopped", second_id)
         for operation in scheduled:
             await operation
-        while transcription_tasks:
-            await asyncio.gather(*tuple(transcription_tasks))
+        await _drain_asyncio_tasks(transcription_tasks)
 
     asyncio.run(exercise())
 
@@ -1006,8 +1138,7 @@ def test_production_core_bridge_starts_transcription_for_either_input_order() ->
 
         for operation in scheduled:
             await operation
-        while transcription_tasks:
-            await asyncio.gather(*tuple(transcription_tasks))
+        await _drain_asyncio_tasks(transcription_tasks)
         return calls
 
     expected = [
@@ -1079,8 +1210,7 @@ def test_production_core_bridge_accepts_pcm_after_prebind_finalized_events() -> 
         bridge.receive_microphone(b"late-pcm")
         for operation in scheduled:
             await operation
-        while transcription_tasks:
-            await asyncio.gather(*tuple(transcription_tasks))
+        await _drain_asyncio_tasks(transcription_tasks)
 
     asyncio.run(exercise())
 

@@ -73,6 +73,8 @@
 * `tts/voicevox_client.py` / `tts/speech_synthesizer.py` — VOICEVOXによる音声合成
 * `audio/transport.py` / `audio_pipeline.py` — 音声フレームの送受信・パイプライン制御
 
+共有VOICEVOX clientは同期HTTP requestを合成全体30秒のdeadline内で実行する。process shutdownでは新規synthesis受付を止め、in-flight requestを既定35秒までdrainしてからclientをcloseする。防御的なdrain timeout時は本文を含まない理由コードを記録してshutdown処理を進めるが、in-flightより先にclientをcloseせず、最後のrequestが終了したthreadで遅延closeする。通常requestは全体30秒deadlineが35秒drainより短いため、このtimeoutはHTTP libraryがdeadlineに従わない異常の識別用である。synthesis lifecycleは`completed`、`request_timeout`、`connection_failed`、`request_failed`を本文なしで記録する。barge-inによるasync response cancelはConversation CoreのTTS stageへ`cancelled`として記録し、process shutdownと区別する。cancel後も同期requestが終了するまではclientを早期closeしない。
+
 ### フロントエンド（Vite + Svelte, `frontend/src/`）
 
 * `lib/audio/transport.ts` — 移行前baseline用の `WebSocketAudioTransport`。Wave 3の正式経路には使用しない

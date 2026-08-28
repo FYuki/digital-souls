@@ -232,8 +232,14 @@ class PromptLlmAdapter:
 
 
 class ConversationHistoryPersistenceAdapter:
-    def __init__(self, *, history_session: HistorySession) -> None:
+    def __init__(
+        self,
+        *,
+        history_session: HistorySession,
+        completed_turn_observer: Callable[[object], None] | None = None,
+    ) -> None:
         self._history_session = history_session
+        self._completed_turn_observer = completed_turn_observer
         self._history_turns: dict[str, object] = {}
         self._persisted_response_ids: set[str] = set()
 
@@ -269,11 +275,13 @@ class ConversationHistoryPersistenceAdapter:
             return
         self._persisted_response_ids.add(outcome.response_id)
         if outcome.state is ResponseState.COMPLETED:
-            await run_sync(
+            persisted_turn = await run_sync(
                 self._history_session.complete_turn,
                 started_turn,
                 outcome.generated_text,
             )
+            if self._completed_turn_observer is not None:
+                self._completed_turn_observer(persisted_turn)
             return
         if outcome.state is ResponseState.CANCELLED:
             segments = [

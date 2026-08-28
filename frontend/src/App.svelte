@@ -63,8 +63,12 @@
   const finalizedUtterances = new Map<string, string>()
   let voiceSnapshot: VoiceSessionSnapshot = {
     phase: 'idle',
+    input: 'inactive',
+    response: 'idle',
+    playback: 'idle',
     context: null,
     sessionId: null,
+    activeResponseId: null,
   }
   const voiceSession = new LiveKitVoiceSessionController(
     (snapshot) => { voiceSnapshot = snapshot },
@@ -166,6 +170,34 @@
   $: voiceRecorderForceOff = $conversationController.selectedConversationId === null
     || endingVoiceSession
     || voiceSnapshot.phase === 'error'
+    || voiceSnapshot.phase === 'ended'
+    || voiceSnapshot.phase === 'reconnecting'
+  $: sessionStatus = ({
+    idle: '停止',
+    connecting: '接続中',
+    listening: '接続済み',
+    muted: '接続済み',
+    reconnecting: '再接続中',
+    ended: '終了',
+    error: 'エラー',
+  } as const)[voiceSnapshot.phase]
+  $: inputStatus = ({
+    inactive: '停止',
+    muted: 'ミュート',
+    listening: '聞き取り中',
+    transcribing: '文字起こし中',
+  } as const)[voiceSnapshot.input]
+  $: responseStatus = ({
+    idle: '待機',
+    thinking: '考え中',
+    generating: '応答生成中',
+    interrupting: '割り込み処理中',
+  } as const)[voiceSnapshot.response]
+  $: playbackStatus = ({
+    idle: '待機',
+    playing: '再生中',
+    stopped: '停止済み',
+  } as const)[voiceSnapshot.playback]
 
   const appendApplicationError = () => {
     applicationError = ERROR_MESSAGE
@@ -190,6 +222,10 @@
     pendingRequest = 'text'
     applicationError = null
     try {
+      if (voiceSnapshot.sessionId !== null || voiceSnapshot.phase === 'reconnecting') {
+        activeUtteranceId = null
+        await voiceSession.end()
+      }
       const response = await sendChatMessage({
         character: context.character,
         conversationId: context.conversationId,
@@ -272,6 +308,14 @@
       endingVoiceSession = false
     }
   }
+
+  const restartVoiceSession = async () => {
+    try {
+      await ensureVoiceSession()
+    } catch {
+      // ensureVoiceSessionが利用者向けerrorを設定する。
+    }
+  }
 </script>
 
 <main class="app-shell">
@@ -301,6 +345,20 @@
     <ChatWindow turns={$conversationController.turns} liveVoiceTurn={liveVoiceTurn} />
     {#if applicationError !== null || $conversationController.error !== null}
       <p class="application-error" role="alert">{applicationError ?? $conversationController.error}</p>
+    {/if}
+    {#if voiceSnapshot.phase !== 'idle'}
+      <section class="voice-status" aria-label="音声会話の状態" aria-live="polite">
+        <span>セッション: {sessionStatus}</span>
+        <span>入力: {inputStatus}</span>
+        <span>応答: {responseStatus}</span>
+        <span>再生: {playbackStatus}</span>
+        {#if voiceSnapshot.phase === 'reconnecting'}
+          <strong>接続を復旧しています。会話履歴は保持されます。</strong>
+        {:else if voiceSnapshot.phase === 'ended' || voiceSnapshot.phase === 'error'}
+          <strong>音声会話は停止しました。テキスト履歴は保持されています。</strong>
+          <button type="button" on:click={() => { void restartVoiceSession() }}>音声会話を再開</button>
+        {/if}
+      </section>
     {/if}
     <div class="input-area">
       <InputBar onSend={handleSend} disabled={interactionsDisabled || $conversationController.selectedConversationId === null} />
@@ -396,6 +454,32 @@
     margin: 0;
     padding: 8px 24px;
     color: #8a211b;
+  }
+
+  .voice-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    padding: 10px 24px;
+    border-top: 1px solid rgba(144, 67, 47, 0.12);
+    color: #63382f;
+    background: #fffaf6;
+    font-size: 0.88rem;
+  }
+
+  .voice-status strong {
+    flex-basis: 100%;
+    font-weight: 600;
+  }
+
+  .voice-status button {
+    min-height: 36px;
+    border: 1px solid rgba(144, 67, 47, 0.28);
+    border-radius: 8px;
+    color: #6e3227;
+    background: #fffdfa;
+    font-weight: 700;
   }
 
   :global(.input-area .input-bar) {

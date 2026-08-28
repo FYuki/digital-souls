@@ -67,6 +67,7 @@ const deferred = (): Deferred => {
 
 const audioContexts: FakeAudioContext[] = []
 const closeBlockers: Deferred[] = []
+const workletFailures: Error[] = []
 
 class FakeAudioSourceNode {
   disconnect = vi.fn()
@@ -89,7 +90,10 @@ class FakeAudioContext {
   readonly destination = {}
   readonly sampleRate = 48_000
   readonly currentTime = 0
-  readonly audioWorklet = { addModule: vi.fn(async () => undefined) }
+  readonly audioWorklet = { addModule: vi.fn(async () => {
+    const failure = workletFailures.shift()
+    if (failure !== undefined) throw failure
+  }) }
   readonly sources: FakeAudioSourceNode[] = []
 
   constructor() {
@@ -98,9 +102,9 @@ class FakeAudioContext {
 
   async resume(): Promise<void> {}
 
-  close(): Promise<void> {
+  readonly close = vi.fn((): Promise<void> => {
     return closeBlockers.shift()?.promise ?? Promise.resolve()
-  }
+  })
 
   createMediaStreamSource(): FakeAudioSourceNode {
     const source = new FakeAudioSourceNode()
@@ -130,11 +134,25 @@ const emitPrivateFrame = (room: InstanceType<typeof livekitMocks.FakeRoom>, payl
   room.emit('dataReceived', payload, undefined, undefined, 'digital-souls.livekit-transport.v1')
 }
 
+const emitCoreEvent = (
+  room: InstanceType<typeof livekitMocks.FakeRoom>,
+  event: Record<string, unknown>,
+) => {
+  room.emit(
+    'dataReceived',
+    new TextEncoder().encode(JSON.stringify(event)),
+    undefined,
+    undefined,
+    'digital-souls.core.v1',
+  )
+}
+
 describe('LiveKit Room generation synchronization', () => {
   beforeEach(() => {
     livekitMocks.rooms.length = 0
     audioContexts.length = 0
     closeBlockers.length = 0
+    workletFailures.length = 0
     vi.stubGlobal('AudioContext', FakeAudioContext)
     vi.stubGlobal('AudioWorkletNode', FakeAudioWorkletNode)
     vi.stubGlobal('MediaStream', class {
@@ -240,6 +258,121 @@ describe('LiveKit Room generation synchronization', () => {
     await vi.waitFor(() => {
       expect(audioContexts).toHaveLength(2)
       expect(audioContexts.reduce((total, context) => total + context.sources.length, 0)).toBe(2)
+      expect(observations.at(-1)).toMatchObject({ activeAudioGraphs: 1 })
+    })
+    client.disconnect()
+  })
+
+  test('重複trackを二重再生せずunsubscribe後の同一track再購読だけを再接続する', async () => {
+    const observations: RoomObservation[] = []
+    const client = new LiveKitRoomClient((observation) => observations.push(observation))
+    await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
+    const room = latestRoom()
+    const firstTrack = { kind: 'audio', mediaStreamTrack: { id: 'first' } }
+    const replacementTrack = { kind: 'audio', mediaStreamTrack: { id: 'replacement' } }
+    const publication = { trackSid: 'TR_audio' }
+
+    room.emit('trackSubscribed', firstTrack, publication, {})
+    await vi.waitFor(() => {
+      expect(audioContexts).toHaveLength(1)
+      expect(audioContexts[0].sources).toHaveLength(1)
+    })
+
+    room.emit('trackSubscribed', replacementTrack, publication, {})
+    expect(audioContexts[0].sources).toHaveLength(1)
+    expect(observations.at(-1)).toMatchObject({
+      duplicateTrackFrames: 1,
+    })
+
+    room.emit('trackUnsubscribed', firstTrack, publication, {})
+    expect(audioContexts[0].sources[0].disconnect).toHaveBeenCalledTimes(1)
+    room.emit('trackSubscribed', replacementTrack, publication, {})
+
+    await vi.waitFor(() => {
+      expect(audioContexts[0].sources).toHaveLength(2)
+      expect(observations.at(-1)).toMatchObject({ activeAudioGraphs: 1 })
+    })
+    client.disconnect()
+  })
+
+  test('audio graph初期化失敗後も再接続したtrackを新しいgraphで再生できる', async () => {
+    const observations: RoomObservation[] = []
+    const client = new LiveKitRoomClient((observation) => observations.push(observation))
+    await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
+    const room = latestRoom()
+    workletFailures.push(new Error('audio worklet initialization failed'))
+
+    room.emit(
+      'trackSubscribed',
+      { kind: 'audio', mediaStreamTrack: { id: 'failed' } },
+      { trackSid: 'TR_failed' },
+      {},
+    )
+    await vi.waitFor(() => {
+      expect(observations.at(-1)).toMatchObject({
+        transport: 'unavailable', control: 'unavailable', audio: 'unavailable',
+      })
+      expect(audioContexts[0].close).toHaveBeenCalledTimes(1)
+    })
+
+    room.emit('reconnected')
+    room.emit(
+      'trackSubscribed',
+      { kind: 'audio', mediaStreamTrack: { id: 'recovered' } },
+      { trackSid: 'TR_recovered' },
+      {},
+    )
+
+    await vi.waitFor(() => {
+      expect(audioContexts).toHaveLength(2)
+      expect(audioContexts[1].sources).toHaveLength(1)
+      expect(observations.at(-1)).toMatchObject({
+        transport: 'available', audio: 'available', activeAudioGraphs: 1,
+      })
+    })
+    client.disconnect()
+  })
+
+  test('barge-inではaudio graphを即時停止し次responseだけで再開する', async () => {
+    const observations: RoomObservation[] = []
+    const client = new LiveKitRoomClient((observation) => observations.push(observation))
+    await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
+    const room = latestRoom()
+    room.emit(
+      'trackSubscribed',
+      { kind: 'audio', mediaStreamTrack: {} },
+      { trackSid: 'TR_audio' },
+      {},
+    )
+    await vi.waitFor(() => {
+      expect(audioContexts).toHaveLength(1)
+      expect(audioContexts[0].sources).toHaveLength(1)
+    })
+
+    expect(client.stopPlayback('50000000-0000-4000-8000-000000000001', 100)).toBe(0)
+    expect(client.stopPlayback('50000000-0000-4000-8000-000000000001', 101)).toBe(0)
+    expect(audioContexts[0].sources[0].disconnect).toHaveBeenCalledTimes(1)
+    expect(observations.at(-1)).toMatchObject({
+      audio: 'unavailable', activeAudioGraphs: 0, speechStartedAtMs: 100,
+    })
+
+    emitCoreEvent(room, {
+      type: 'response_started',
+      protocol_version: '1.0',
+      event_id: '10000000-0000-4000-8000-000000000001',
+      session_id: '20000000-0000-4000-8000-000000000001',
+      response_id: '50000000-0000-4000-8000-000000000002',
+      speaker: {
+        participant_id: '40000000-0000-4000-8000-000000000001',
+        role: 'character',
+        character_id: 'miori',
+      },
+      source_utterance_ids: ['30000000-0000-4000-8000-000000000001'],
+      monotonic_timestamp_ms: 1_000,
+    })
+
+    await vi.waitFor(() => {
+      expect(audioContexts).toHaveLength(2)
       expect(observations.at(-1)).toMatchObject({ activeAudioGraphs: 1 })
     })
     client.disconnect()

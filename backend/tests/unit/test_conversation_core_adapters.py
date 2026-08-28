@@ -208,6 +208,7 @@ class FakeHistorySession:
     )
     failed: list[object] = field(default_factory=list)
     content_skipped: bool = False
+    completed_turn: object = field(default_factory=object)
 
     def start_turn(self, user_content: str) -> object:
         handle = object()
@@ -215,8 +216,9 @@ class FakeHistorySession:
         self.handle = self.StartedTurn(handle, self.content_skipped)
         return self.handle
 
-    def complete_turn(self, started_turn: object, assistant_content: str) -> None:
+    def complete_turn(self, started_turn: object, assistant_content: str) -> object:
         self.completed.append((started_turn, assistant_content))
+        return self.completed_turn
 
     def interrupt_turn(
         self,
@@ -334,8 +336,10 @@ def test_core_starts_and_terminates_the_same_history_turn_once(
     async def exercise() -> None:
         public, adapters = _modules()
         history = FakeHistorySession()
+        formation_candidates: list[object] = []
         persistence = adapters.ConversationHistoryPersistenceAdapter(
-            history_session=history
+            history_session=history,
+            completed_turn_observer=formation_candidates.append,
         )
         response_id = "50000000-0000-4000-8000-000000000902"
         session = public.ConversationCoreSession(
@@ -371,6 +375,9 @@ def test_core_starts_and_terminates_the_same_history_turn_once(
             1 if history_operation == "interrupted" else 0
         )
         assert len(history.failed) == (1 if history_operation == "failed" else 0)
+        assert formation_candidates == (
+            [history.completed_turn] if history_operation == "completed" else []
+        )
         terminal_handles = [item[0] for item in history.completed]
         terminal_handles.extend(item[0] for item in history.interrupted)
         terminal_handles.extend(history.failed)

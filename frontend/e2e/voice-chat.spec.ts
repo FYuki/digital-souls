@@ -30,7 +30,7 @@ test.beforeEach(async ({ page }, testInfo) => {
 })
 
 const installMockBackend = async (page: Page) => {
-  await installMockLiveKit(page, {
+  const liveKit = await installMockLiveKit(page, {
     transcript: MOCK_TRANSCRIPT_TEXT,
     response: MOCK_RESPONSE_TEXT,
   })
@@ -38,7 +38,11 @@ const installMockBackend = async (page: Page) => {
     const request = route.request()
     const url = new URL(request.url())
     if (url.pathname.endsWith('/turns')) {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(liveKit.readTurns()),
+      })
       return
     }
     const conversation = {
@@ -111,4 +115,189 @@ test('音声送信から音声再生開始までの遅延を計測してレポ�
     body: JSON.stringify(cycle, null, 2),
     contentType: 'application/json',
   })
+})
+
+test('通常UIの同一sessionで追加操作なしに3往復を履歴へ確定する', async ({ page }) => {
+  await driver.enableMicrophone(page)
+  await driver.waitForSpeechCompletion(page)
+  await expect(page.locator('article.message')).toHaveCount(2)
+  await expect(page.getByText('応答: 待機')).toBeVisible()
+
+  for (let index = 0; index < 2; index += 1) {
+    await page.evaluate(async () => {
+      const mock = (window as unknown as { __mockLiveKit?: {
+        submitUtterance: () => Promise<void>
+      } }).__mockLiveKit
+      if (mock === undefined) throw new Error('mock LiveKit control is required')
+      await mock.submitUtterance()
+    })
+    await expect(page.locator('article.message')).toHaveCount((index + 2) * 2)
+  }
+
+  await expect(page.getByText(MOCK_TRANSCRIPT_TEXT, { exact: true })).toHaveCount(3)
+  await expect(page.getByText(MOCK_RESPONSE_TEXT, { exact: true })).toHaveCount(3)
+  await expect(page.getByRole('button', { name: 'マイクをオフにする' }))
+    .toHaveAttribute('aria-pressed', 'true')
+})
+
+test('通常UIでmute・再開・終了しRoomとmicrophone resourceを一度ずつ解放する', async ({ page }) => {
+  const button = await driver.enableMicrophone(page)
+
+  await button.click()
+  await expect(button).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByText('入力: ミュート')).toBeVisible()
+
+  await button.click()
+  await expect(button).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByText('セッション: 接続済み')).toBeVisible()
+
+  await page.getByRole('button', { name: '音声会話を終了' }).click()
+  await expect(page.getByRole('button', { name: '音声会話を終了' })).toBeHidden()
+  await expect(page.getByText('セッション: 終了')).toBeVisible()
+  await expect(page.getByText('入力: 停止')).toBeVisible()
+  await expect(button).toHaveAttribute('aria-pressed', 'false')
+
+  await expect.poll(() => page.evaluate(() => {
+    const lifecycle = (window as unknown as { __mockLiveKit?: {
+      lifecycle: {
+        publishMicrophoneCount: number
+        muteMicrophoneCount: number
+        disconnectCount: number
+      }
+    } }).__mockLiveKit?.lifecycle
+    return lifecycle
+  })).toEqual({
+    publishMicrophoneCount: 2,
+    muteMicrophoneCount: 1,
+    disconnectCount: 1,
+  })
+})
+
+test('一時切断中の状態を表示し同じ通常UIへ重複なく復帰する', async ({ page }, testInfo) => {
+  await driver.enableMicrophone(page)
+  const disconnectedAtMs = await page.evaluate(() => {
+    const mock = (window as unknown as { __mockLiveKit?: {
+      disconnect: () => void
+    } }).__mockLiveKit
+    if (mock === undefined) throw new Error('mock LiveKit control is required')
+    mock.disconnect()
+    return performance.now()
+  })
+  await expect(page.getByText('セッション: 再接続中')).toBeVisible()
+  await expect(page.getByText('接続を復旧しています。会話履歴は保持されます。'))
+    .toBeVisible()
+
+  const reconnectedAtMs = await page.evaluate(() => {
+    const mock = (window as unknown as { __mockLiveKit?: {
+      reconnect: () => void
+    } }).__mockLiveKit
+    if (mock === undefined) throw new Error('mock LiveKit control is required')
+    mock.reconnect()
+    return performance.now()
+  })
+
+  await expect(page.getByText('セッション: 接続済み')).toBeVisible()
+  await expect(page.locator('section[aria-label="音声会話の状態"]')).toHaveCount(1)
+  await testInfo.attach('reconnect-latency.mock.json', {
+    body: JSON.stringify({
+      source: 'automated_test',
+      reconnectMs: reconnectedAtMs - disconnectedAtMs,
+      duplicateStateRegions: 0,
+    }, null, 2),
+    contentType: 'application/json',
+  })
+})
+
+test('barge-inでlocal停止とserver cancelを相関し遅延出力を破棄する', async ({ page }, testInfo) => {
+  await driver.enableMicrophone(page)
+  const responseId = await page.evaluate(() => {
+    const mock = (window as unknown as { __mockLiveKit?: {
+      beginInterruptibleResponse: () => string
+    } }).__mockLiveKit
+    if (mock === undefined) throw new Error('mock LiveKit control is required')
+    return mock.beginInterruptibleResponse()
+  })
+  await page.evaluate(async () => {
+    const controller = (window as unknown as { __mockVoiceController?: {
+      speechStarted: (utteranceId: string, atMs: number) => Promise<void>
+    } }).__mockVoiceController
+    if (controller === undefined) throw new Error('mock voice controller is required')
+    await controller.speechStarted(crypto.randomUUID(), performance.now())
+  })
+
+  const evidence = await driver.waitForInterruptionEvidence(page) as {
+    responseId: string
+    speechStartedAtMs: number
+    localPlaybackStoppedAtMs: number
+    cancelConfirmedAtMs: number
+  }
+  expect(evidence.responseId).toBe(responseId)
+  expect(evidence.localPlaybackStoppedAtMs - evidence.speechStartedAtMs).toBeLessThanOrEqual(150)
+  expect(evidence.cancelConfirmedAtMs).toBeGreaterThanOrEqual(
+    evidence.localPlaybackStoppedAtMs,
+  )
+  await expect(page.getByText('破棄対象', { exact: true })).toHaveCount(0)
+  const messageCountBeforeNextTurn = await page.locator('article.message').count()
+  await page.evaluate(async () => {
+    const mock = (window as unknown as { __mockLiveKit?: {
+      submitUtterance: () => Promise<void>
+    } }).__mockLiveKit
+    if (mock === undefined) throw new Error('mock LiveKit control is required')
+    await mock.submitUtterance()
+  })
+  await expect(page.locator('article.message')).toHaveCount(messageCountBeforeNextTurn + 2)
+  await expect(page.getByRole('button', { name: 'マイクをオフにする' }))
+    .toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByText('破棄対象', { exact: true })).toHaveCount(0)
+  await testInfo.attach('barge-in-latency.mock.json', {
+    body: JSON.stringify({ source: 'automated_test', ...evidence }, null, 2),
+    contentType: 'application/json',
+  })
+})
+
+test('連続barge-in後も旧responseを混入させず同じsessionで次の発話を処理する', async ({ page }) => {
+  await driver.enableMicrophone(page)
+
+  const interrupt = async () => page.evaluate(async () => {
+    const mock = (window as unknown as { __mockLiveKit?: {
+      beginInterruptibleResponse: () => string
+    } }).__mockLiveKit
+    const controller = (window as unknown as { __mockVoiceController?: {
+      speechStarted: (utteranceId: string, atMs: number) => Promise<void>
+    } }).__mockVoiceController
+    if (mock === undefined || controller === undefined) {
+      throw new Error('mock LiveKit and voice controller are required')
+    }
+    const responseId = mock.beginInterruptibleResponse()
+    await controller.speechStarted(crypto.randomUUID(), performance.now())
+    return responseId
+  })
+
+  const firstResponseId = await interrupt()
+  await page.waitForFunction(() => (
+    window.__voiceChatE2E.interruptions.filter(
+      (candidate) => candidate.cancelConfirmedAtMs !== null,
+    ).length >= 1
+  ))
+  const secondResponseId = await interrupt()
+  await page.waitForFunction(() => (
+    window.__voiceChatE2E.interruptions.filter(
+      (candidate) => candidate.cancelConfirmedAtMs !== null,
+    ).length >= 2
+  ))
+
+  expect(secondResponseId).not.toBe(firstResponseId)
+  await expect(page.getByText('破棄対象', { exact: true })).toHaveCount(0)
+  const messageCountBeforeNextTurn = await page.locator('article.message').count()
+  await page.evaluate(async () => {
+    const mock = (window as unknown as { __mockLiveKit?: {
+      submitUtterance: () => Promise<void>
+    } }).__mockLiveKit
+    if (mock === undefined) throw new Error('mock LiveKit control is required')
+    await mock.submitUtterance()
+  })
+  await expect(page.locator('article.message')).toHaveCount(messageCountBeforeNextTurn + 2)
+  await expect(page.getByRole('button', { name: 'マイクをオフにする' }))
+    .toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByText('破棄対象', { exact: true })).toHaveCount(0)
 })
