@@ -412,7 +412,6 @@ def test_session_end_retries_failed_room_cleanup_before_returning_ended(
         runtime._session_tasks[owned_session_id] = set()
         runtime._ready[owned_session_id] = asyncio.Event()
         runtime._ready[owned_session_id].set()
-        runtime._fixture_locks[owned_session_id] = asyncio.Lock()
 
     runtime.connect = connect
     service = BootstrapService(
@@ -547,7 +546,6 @@ def test_concurrent_session_end_shares_local_cleanup_result_and_allows_retry(
         runtime._session_tasks[owned_session_id] = set()
         runtime._ready[owned_session_id] = asyncio.Event()
         runtime._ready[owned_session_id].set()
-        runtime._fixture_locks[owned_session_id] = asyncio.Lock()
 
     runtime.connect = connect
     service = BootstrapService(

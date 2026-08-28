@@ -199,7 +199,11 @@ def log_runtime_configuration(paths: RuntimePaths) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    from app.livekit_transport.production import configure_production_resources
+    from app.livekit_transport.production import (
+        ProductionConversationCoreSessionFactory,
+        configure_production_resources,
+        resolve_livekit_settings,
+    )
 
     livekit_api = None
     model_settings = resolve_model_settings(os.environ)
@@ -337,6 +341,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         memory_extractor_client = None
         memory_consolidation_client = None
         memory_consolidation_classifier_client = None
+        core_synthesizer = None
         try:
             app.state.voice_measurement_kind = voice_measurement_kind
             voice_measurement_kind_state_set = True
@@ -347,7 +352,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             repository_state_set = True
             app.state.conversation_lifecycle_service = conversation_lifecycle_service
             lifecycle_service_state_set = True
-            livekit_api = await configure_production_resources(app)
             semantic_classifier_client = OllamaClassifierClient(
                 model_id=model_settings.ollama_classifier_model
             )
@@ -466,14 +470,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     nightly_end_hour=6,
                 ),
             )
+            conversation_history_service = ConversationHistoryService(
+                conversation_history_repository,
+                history_sanitizer,
+            )
             app_chat_service = _chat_runtime.create_chat_service(
                 _chat_runtime.resolve_chat_runtime_config(
                     policy, model_settings, runtime_paths, occurred_timezone
                 ),
-                ConversationHistoryService(
-                    conversation_history_repository,
-                    history_sanitizer,
-                ),
+                conversation_history_service,
                 _chat_runtime.ChatRuntimeDependencies(
                     character_prompt_loader=_load_character_prompt,
                     prompt_builder=build_chat_prompt,
@@ -488,10 +493,41 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             )
             app.state.chat_service = app_chat_service
             chat_service_state_set = True
+            audio_runtime_config = resolve_audio_runtime_config(
+                model_settings, runtime_paths
+            )
             app.state.audio_pipeline_service = create_audio_pipeline_service(
-                resolve_audio_runtime_config(model_settings, runtime_paths),
+                audio_runtime_config,
             )
             audio_pipeline_state_set = True
+            core_session_factory = None
+            if resolve_livekit_settings() is not None:
+                from app.stt.whisper_client import WhisperTranscriber
+                from app.tts.voicevox_client import create_voicevox_client
+
+                core_transcriber = WhisperTranscriber(
+                    model_name=audio_runtime_config.model_settings.whisper_model,
+                    download_root=Path(audio_runtime_config.whisper_download_root),
+                )
+                core_synthesizer = create_voicevox_client(
+                    audio_runtime_config.voicevox_base_url
+                )
+                core_session_factory = ProductionConversationCoreSessionFactory(
+                    transcriber=core_transcriber,
+                    synthesizer=core_synthesizer,
+                    history_service=conversation_history_service,
+                    generate_reply=lambda character, history_session, transcript: (
+                        app_chat_service.generate_unrecorded_reply(
+                            character,
+                            history_session,  # type: ignore[arg-type]
+                            transcript,
+                        )
+                    ),
+                )
+            livekit_api = await configure_production_resources(
+                app,
+                core_session_factory=core_session_factory,
+            )
             chat_service_resolver = lambda: _app_chat_service(app)
             _chat_runtime.register_default_chat_service_resolver(chat_service_resolver)
             resolver_registered = True
@@ -539,6 +575,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 if audio_pipeline_state_set:
                     cleanup.callback(delattr, app.state, "audio_pipeline_service")
                     cleanup.callback(app.state.audio_pipeline_service.close)
+                if core_synthesizer is not None:
+                    cleanup.callback(core_synthesizer.close)
                 if resolver_registered and chat_service_resolver is not None:
                     cleanup.callback(
                         _chat_runtime.clear_default_chat_service_resolver,
