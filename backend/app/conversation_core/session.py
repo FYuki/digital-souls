@@ -804,9 +804,15 @@ class ConversationCoreSession:
         await task
 
     async def _publish_delivery(self, event: CoreEvent) -> None:
+        response_id = event.response_id
+        generation = event.generation
+        if response_id is None or generation is None:
+            raise TerminalProtocolError(
+                "response delivery event requires response identity"
+            )
         await self._record_stage(
-            event.response_id,
-            event.generation,
+            response_id,
+            generation,
             "delivery",
             "started",
         )
@@ -814,23 +820,23 @@ class ConversationCoreSession:
             await self._delivery.publish(event)
         except asyncio.CancelledError:
             await self._record_stage(
-                event.response_id,
-                event.generation,
+                response_id,
+                generation,
                 "delivery",
                 "cancelled",
             )
             raise
         except Exception as error:
             await self._record_stage(
-                event.response_id,
-                event.generation,
+                response_id,
+                generation,
                 "delivery",
                 "failed",
             )
             raise DeliveryError("Core event delivery failed") from error
         await self._record_stage(
-            event.response_id,
-            event.generation,
+            response_id,
+            generation,
             "delivery",
             "completed",
         )

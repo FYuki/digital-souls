@@ -725,9 +725,13 @@ class ProductionRuntimeManager:
             conversation_id=UUID(str(request["conversation_id"])),
             delivery=delivery,
         )
+
+        def schedule_core_operation(operation: Awaitable[None]) -> None:
+            self._schedule_task(session_id, operation)
+
         bridge = _ConversationCoreBridge(
             core_session,
-            lambda operation: self._schedule_task(session_id, operation),
+            schedule_core_operation,
         )
         self._audio_sources[session_id] = audio_source
         self._core_sessions[session_id] = core_session
