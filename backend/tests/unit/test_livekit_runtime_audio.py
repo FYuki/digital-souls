@@ -550,7 +550,7 @@ def test_production_core_bridge_keeps_pcm_owned_by_each_consecutive_utterance() 
     ]
 
 
-def test_production_core_bridge_keeps_late_pcm_with_earliest_utterance() -> None:
+def test_production_core_bridge_does_not_assign_current_pcm_to_old_empty_capture() -> None:
     production = importlib.import_module("app.livekit_transport.production")
     calls: list[dict[str, object]] = []
     scheduled: list[Awaitable[None]] = []
@@ -580,6 +580,7 @@ def test_production_core_bridge_keeps_late_pcm_with_earliest_utterance() -> None
     }
     first_utterance_id = "30000000-0000-4000-8000-000000000010"
     second_utterance_id = "30000000-0000-4000-8000-000000000011"
+    third_utterance_id = "30000000-0000-4000-8000-000000000012"
 
     def notify(event_id: str, event_type: str, utterance_id: str) -> None:
         event: dict[str, object] = {
@@ -608,15 +609,24 @@ def test_production_core_bridge_keeps_late_pcm_with_earliest_utterance() -> None
             "speech_started",
             second_utterance_id,
         )
-        bridge.receive_microphone(b"pcm-one")
         notify(
             "11000000-0000-4000-8000-000000000011",
             "utterance_finalized",
             second_utterance_id,
         )
-        bridge.receive_microphone(b"pcm-two")
+        notify(
+            "10000000-0000-4000-8000-000000000012",
+            "speech_started",
+            third_utterance_id,
+        )
+        bridge.receive_microphone(b"pcm-three")
+        notify(
+            "11000000-0000-4000-8000-000000000012",
+            "utterance_finalized",
+            third_utterance_id,
+        )
 
-        assert len(scheduled) == 2
+        assert len(scheduled) == 1
         for operation in scheduled:
             await operation
         while transcription_tasks:
@@ -626,13 +636,8 @@ def test_production_core_bridge_keeps_late_pcm_with_earliest_utterance() -> None
 
     assert calls == [
         {
-            "utterance_id": first_utterance_id,
-            "audio": b"pcm-one",
-            "should_response": True,
-        },
-        {
-            "utterance_id": second_utterance_id,
-            "audio": b"pcm-two",
+            "utterance_id": third_utterance_id,
+            "audio": b"pcm-three",
             "should_response": True,
         },
     ]
