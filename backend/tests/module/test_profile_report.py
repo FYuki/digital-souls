@@ -10,7 +10,15 @@ from tests.environment_entrypoint_test_support import copy_environment_runtime
 
 
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
-DEPENDENCY_NAMES = {"frontend", "backend", "ollama", "voicevox", "whisper", "chroma"}
+DEPENDENCY_NAMES = {
+    "frontend",
+    "backend",
+    "ollama",
+    "voicevox",
+    "whisper",
+    "chroma",
+    "livekit",
+}
 MODEL_DEFAULT_ENVIRONMENT = {
     "OLLAMA_CHAT_MODEL": "gemma4:e4b",
     "OLLAMA_CLASSIFIER_MODEL": "gemma4:e4b",
@@ -127,6 +135,20 @@ def test_should_derive_rag_capability_for_real_in_process_chroma(tmp_path: Path)
 
     assert result.returncode == 0, result.stderr
     assert _read_json(report_path)["capabilities"] == ["text-chat-real", "rag-real"]
+
+
+def test_should_not_derive_voice_capability_without_livekit(tmp_path: Path):
+    environments_dir = _copy_environments(tmp_path)
+    profile_path = environments_dir / "profiles" / "integration-voice.json"
+    profile = _read_json(profile_path)
+    del profile["dependencies"]["livekit"]
+    profile_path.write_text(json.dumps(profile), encoding="utf-8")
+    report_path = _report_path(tmp_path)
+
+    result = _resolve(environments_dir, report_path, "integration-voice")
+
+    assert result.returncode == 0, result.stderr
+    assert _read_json(report_path)["capabilities"] == ["text-chat-real"]
 
 
 def test_should_write_complete_v1_report_with_timezone_timestamp(tmp_path: Path):

@@ -119,12 +119,18 @@ def test_voicevox_wav_reaches_livekit_as_matching_48khz_pcm_frame(
         def begin_response(self, *, response_id: str) -> None:
             response_ids.append(response_id)
 
+        async def send_logical_audio_segment(self, **metadata: object) -> None:
+            events.append(("logical_metadata", metadata))
+
         async def send_core(self, payload: bytes) -> None:
             events.append(("metadata", json.loads(payload)))
 
     class RtcAudioSource:
         async def capture_frame(self, frame: AudioFrame) -> None:
             events.append(("frame", frame))
+
+        def clear_queue(self) -> None:
+            events.append(("clear", None))
 
     class Synthesizer:
         def synthesize(self, text: str, speaker_id: int) -> bytes:
@@ -231,6 +237,14 @@ def test_voicevox_wav_reaches_livekit_as_matching_48khz_pcm_frame(
     )
     metadata = events[audio_metadata_index][1]
     frame = events[audio_metadata_index + 1][1]
+    assert events[audio_metadata_index - 1] == (
+        "logical_metadata",
+        {
+            "response_id": metadata["response_id"],
+            "audio_sequence": 0,
+            "pcm_sample_count": 7,
+        },
+    )
     assert response_ids == [metadata["response_id"]]
     assert metadata["audio_sequence"] == 1
     assert metadata["text_range"] == {"start": 0, "end": 5}
@@ -241,6 +255,84 @@ def test_voicevox_wav_reaches_livekit_as_matching_48khz_pcm_frame(
     assert frame.sample_rate == 48_000
     assert frame.channels == 1
     assert frame.samples_per_channel == len(frame.data) // 2
+
+
+def test_cancel_clears_character_audio_queue_and_next_response_can_publish(
+    monkeypatch,
+) -> None:
+    production = importlib.import_module("app.livekit_transport.production")
+    operations: list[tuple[str, object]] = []
+
+    class AudioFrame:
+        def __init__(
+            self,
+            data: bytes,
+            sample_rate: int,
+            channels: int,
+            samples_per_channel: int,
+        ) -> None:
+            del sample_rate, channels, samples_per_channel
+            self.data = data
+
+    rtc = SimpleNamespace(AudioFrame=AudioFrame)
+    monkeypatch.setitem(sys.modules, "livekit", SimpleNamespace(rtc=rtc))
+    monkeypatch.setitem(sys.modules, "livekit.rtc", rtc)
+
+    class Coordinator:
+        def begin_response(self, *, response_id: str) -> None:
+            del response_id
+
+        async def send_logical_audio_segment(self, **metadata: object) -> None:
+            operations.append(("logical", metadata))
+
+        async def send_core(self, payload: bytes) -> None:
+            operations.append(("core", json.loads(payload)))
+
+    class RtcAudioSource:
+        async def capture_frame(self, frame: AudioFrame) -> None:
+            operations.append(("frame", frame.data))
+
+        def clear_queue(self) -> None:
+            operations.append(("clear", None))
+
+    delivery = production._ConversationCoreDelivery(
+        coordinator=Coordinator(),
+        audio_source=production._LiveKitPcmAudioSource(RtcAudioSource()),
+        character_participant_id="40000000-0000-4000-8000-000000000010",
+        character_id="miori",
+    )
+
+    async def exercise() -> None:
+        await delivery.publish(production.CoreEvent(
+            type="response_audio_segment",
+            session_id="20000000-0000-4000-8000-000000000010",
+            response_id="50000000-0000-4000-8000-000000000010",
+            audio_sequence=1,
+            audio=b"\x01\x00" * 4,
+            text_range=(0, 2),
+        ))
+        await delivery.publish(production.CoreEvent(
+            type="response_cancelled",
+            session_id="20000000-0000-4000-8000-000000000010",
+            response_id="50000000-0000-4000-8000-000000000010",
+            reason="user_request",
+        ))
+        await delivery.publish(production.CoreEvent(
+            type="response_audio_segment",
+            session_id="20000000-0000-4000-8000-000000000010",
+            response_id="50000000-0000-4000-8000-000000000020",
+            audio_sequence=1,
+            audio=b"\x02\x00" * 3,
+            text_range=(0, 2),
+        ))
+
+    asyncio.run(exercise())
+
+    assert [name for name, _value in operations] == [
+        "logical", "core", "frame", "core", "clear",
+        "core", "logical", "core", "frame", "core",
+    ]
+    assert ("frame", b"\x02\x00" * 3) in operations
 
 
 def test_response_started_character_speaker_passes_schema_validation() -> None:
@@ -350,7 +442,9 @@ def test_production_core_bridge_routes_microphone_and_control_to_one_session() -
         task.add_done_callback(tasks.discard)
 
     session = RecordingCoreSession()
-    bridge = production._ConversationCoreBridge(session, schedule)
+    bridge = production._ConversationCoreBridge(
+        session, schedule, media_tail_seconds=0
+    )
 
     async def exercise() -> None:
         common = {
@@ -374,19 +468,17 @@ def test_production_core_bridge_routes_microphone_and_control_to_one_session() -
         delivery.decode_core_event(speech_started)
         bridge.notify(speech_started)
         bridge.receive_microphone(b"live-pcm")
-        utterance_finalized = json.dumps(
+        speech_stopped = json.dumps(
             {
                 **common,
                 "event_id": "10000000-0000-4000-8000-000000000011",
-                "type": "utterance_finalized",
+                "type": "speech_stopped",
                 "speaker": user_speaker,
                 "utterance_id": "30000000-0000-4000-8000-000000000010",
-                "transcript": "client transcript",
-                "should_response": False,
             }
         ).encode()
-        delivery.decode_core_event(utterance_finalized)
-        bridge.notify(utterance_finalized)
+        delivery.decode_core_event(speech_stopped)
+        bridge.notify(speech_stopped)
         bridge.notify(
             json.dumps(
                 {
@@ -433,6 +525,54 @@ def test_production_core_bridge_routes_microphone_and_control_to_one_session() -
     ])
 
 
+def test_production_core_bridge_discards_media_tail_after_disconnect() -> None:
+    production = importlib.import_module("app.livekit_transport.production")
+    tasks: set[asyncio.Task[None]] = set()
+
+    class DisconnectedCoreSession:
+        accepting_input = False
+
+        def start_transcription(self, **_request: object) -> asyncio.Task[None]:
+            raise AssertionError("切断後の発話をSTTへ渡してはならない")
+
+    def schedule(operation) -> None:
+        task = asyncio.create_task(operation)
+        tasks.add(task)
+        task.add_done_callback(tasks.discard)
+
+    bridge = production._ConversationCoreBridge(
+        DisconnectedCoreSession(), schedule, media_tail_seconds=0
+    )
+
+    async def exercise() -> None:
+        common = {
+            "protocol_version": "1.0",
+            "event_id": "10000000-0000-4000-8000-000000000020",
+            "session_id": "20000000-0000-4000-8000-000000000020",
+            "monotonic_timestamp_ms": 1_000,
+            "speaker": {
+                "participant_id": "40000000-0000-4000-8000-000000000020",
+                "role": "user",
+            },
+            "utterance_id": "30000000-0000-4000-8000-000000000020",
+        }
+        bridge.notify(json.dumps({**common, "type": "speech_started"}).encode())
+        bridge.receive_microphone(b"stale-pcm")
+        bridge.notify(
+            json.dumps(
+                {
+                    **common,
+                    "event_id": "10000000-0000-4000-8000-000000000021",
+                    "type": "speech_stopped",
+                }
+            ).encode()
+        )
+        while tasks:
+            await asyncio.gather(*tuple(tasks))
+
+    asyncio.run(exercise())
+
+
 def test_production_core_bridge_discards_malformed_control_events() -> None:
     production = importlib.import_module("app.livekit_transport.production")
     calls: list[dict[str, object]] = []
@@ -446,7 +586,7 @@ def test_production_core_bridge_discards_malformed_control_events() -> None:
             calls.append(request)
 
     bridge = production._ConversationCoreBridge(
-        RecordingCoreSession(), scheduled.append
+        RecordingCoreSession(), scheduled.append, media_tail_seconds=0
     )
 
     async def exercise() -> None:
@@ -489,7 +629,7 @@ def test_production_core_bridge_keeps_pcm_owned_by_each_consecutive_utterance() 
             return task
 
     bridge = production._ConversationCoreBridge(
-        RecordingCoreSession(), scheduled.append
+        RecordingCoreSession(), scheduled.append, media_tail_seconds=0
     )
     common = {
         "protocol_version": "1.0",
@@ -520,7 +660,7 @@ def test_production_core_bridge_keeps_pcm_owned_by_each_consecutive_utterance() 
                     {
                         **common,
                         "event_id": f"11000000-0000-4000-8000-0000000000{suffix}",
-                        "type": "utterance_finalized",
+                        "type": "speech_stopped",
                         "utterance_id": utterance_id,
                         "transcript": "client transcript",
                         "should_response": False,
@@ -589,7 +729,7 @@ def test_production_core_bridge_does_not_assign_current_pcm_to_old_empty_capture
             "type": event_type,
             "utterance_id": utterance_id,
         }
-        if event_type == "utterance_finalized":
+        if event_type == "speech_stopped":
             event.update(transcript="client transcript", should_response=False)
         bridge.notify(json.dumps(event).encode())
 
@@ -601,7 +741,7 @@ def test_production_core_bridge_does_not_assign_current_pcm_to_old_empty_capture
         )
         notify(
             "11000000-0000-4000-8000-000000000010",
-            "utterance_finalized",
+            "speech_stopped",
             first_utterance_id,
         )
         notify(
@@ -611,7 +751,7 @@ def test_production_core_bridge_does_not_assign_current_pcm_to_old_empty_capture
         )
         notify(
             "11000000-0000-4000-8000-000000000011",
-            "utterance_finalized",
+            "speech_stopped",
             second_utterance_id,
         )
         notify(
@@ -622,7 +762,7 @@ def test_production_core_bridge_does_not_assign_current_pcm_to_old_empty_capture
         bridge.receive_microphone(b"pcm-three")
         notify(
             "11000000-0000-4000-8000-000000000012",
-            "utterance_finalized",
+            "speech_stopped",
             third_utterance_id,
         )
 
@@ -678,9 +818,9 @@ def test_production_core_bridge_keeps_delayed_pcm_for_finalized_captures() -> No
 
     async def exercise() -> None:
         notify("speech_started", first_id)
-        notify("utterance_finalized", first_id)
+        notify("speech_stopped", first_id)
         notify("speech_started", second_id)
-        notify("utterance_finalized", second_id)
+        notify("speech_stopped", second_id)
         bridge.receive_microphone(b"pcm-one")
         bridge.receive_microphone(b"pcm-two")
         for operation in scheduled:
@@ -739,8 +879,8 @@ def test_production_core_bridge_separates_overlapping_utterance_pcm() -> None:
         bridge.receive_microphone(b"pcm-one")
         notify("speech_started", second_id)
         bridge.receive_microphone(b"pcm-two")
-        notify("utterance_finalized", first_id)
-        notify("utterance_finalized", second_id)
+        notify("speech_stopped", first_id)
+        notify("speech_stopped", second_id)
         for operation in scheduled:
             await operation
         while transcription_tasks:
@@ -791,8 +931,8 @@ def test_production_core_bridge_empty_capture_does_not_block_later_audio() -> No
         notify("speech_started", first_id)
         notify("speech_started", second_id)
         bridge.receive_microphone(b"pcm-two")
-        notify("utterance_finalized", first_id)
-        notify("utterance_finalized", second_id)
+        notify("speech_stopped", first_id)
+        notify("speech_stopped", second_id)
         for operation in scheduled:
             await operation
         while transcription_tasks:
@@ -851,7 +991,7 @@ def test_production_core_bridge_starts_transcription_for_either_input_order() ->
             {
                 **common,
                 "event_id": "10000000-0000-4000-8000-000000000011",
-                "type": "utterance_finalized",
+                "type": "speech_stopped",
                 "transcript": "client transcript",
                 "should_response": False,
             }
@@ -927,7 +1067,7 @@ def test_production_core_bridge_accepts_pcm_after_prebind_finalized_events() -> 
             {
                 **common,
                 "event_id": "10000000-0000-4000-8000-000000000011",
-                "type": "utterance_finalized",
+                "type": "speech_stopped",
                 "transcript": "client transcript",
                 "should_response": False,
             }
@@ -996,7 +1136,7 @@ def test_production_core_bridge_does_not_use_client_text_without_pcm() -> None:
                     "event_id": "10000000-0000-4000-8000-000000000011",
                     "session_id": "20000000-0000-4000-8000-000000000010",
                     "monotonic_timestamp_ms": 1_001,
-                    "type": "utterance_finalized",
+                    "type": "speech_stopped",
                     "speaker": user_speaker,
                     "utterance_id": "30000000-0000-4000-8000-000000000010",
                     "transcript": "偽のclient本文",
@@ -1590,6 +1730,33 @@ def test_bootstrap_timeout_leaves_room_cleanup_owned_until_it_finishes() -> None
         assert runtime._cleanup_states == {}
 
     asyncio.run(exercise())
+
+
+def test_production_room_manager_accepts_already_deleted_room(monkeypatch) -> None:
+    production = importlib.import_module("app.livekit_transport.production")
+
+    class MissingRoomError(RuntimeError):
+        code = "not_found"
+        status = 404
+
+    class RoomService:
+        async def delete_room(self, request: object) -> None:
+            assert request == "voice-session"
+            raise MissingRoomError("room does not exist")
+
+    class ApiClient:
+        room = RoomService()
+
+    class ApiModule:
+        @staticmethod
+        def DeleteRoomRequest(*, room: str) -> str:
+            return room
+
+    monkeypatch.setattr(production, "_livekit_api_module", lambda: ApiModule)
+
+    asyncio.run(
+        production.ProductionRoomManager(ApiClient()).delete("voice-session")
+    )
 
 
 def test_production_stop_all_retries_failed_room_cleanup() -> None:

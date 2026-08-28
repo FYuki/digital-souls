@@ -512,6 +512,7 @@ def test_should_require_disabled_downstream_dependencies_when_backend_is_not_rea
                 "backend": ("real", "managed"),
                 "ollama": ("real", "external"),
                 "voicevox": ("real", "external"),
+                "livekit": ("real", "external"),
                 "whisper": ("real", "in_process"),
                 "chroma": ("disabled", None),
             },

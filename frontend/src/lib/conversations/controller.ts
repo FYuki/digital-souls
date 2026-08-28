@@ -49,6 +49,7 @@ export type ConversationController = Readable<ConversationControllerState> & {
   confirmHardDelete: () => Promise<void>
   selectedContext: () => SelectedConversationContext | null
   appendTurn: (context: SelectedConversationContext, turn: ConversationTurn) => void
+  refreshTurns: (context: SelectedConversationContext) => Promise<void>
   reportConversationError: (context: SelectedConversationContext) => void
 }
 
@@ -299,6 +300,22 @@ export const createConversationController = (
     appendTurn: (context, turn) => {
       if (!isSelectedContextCurrent(context)) return
       store.update((state) => ({ ...state, turns: [...state.turns, turn] }))
+    },
+    refreshTurns: async (context) => {
+      if (!isSelectedContextCurrent(context)) return
+      try {
+        const history = await gateway.listTurns(
+          context.character,
+          context.conversationId,
+        )
+        if (!isSelectedContextCurrent(context)) return
+        store.update((state) => ({
+          ...state,
+          turns: mergeLoadedHistory(history, state.turns),
+        }))
+      } catch {
+        if (isSelectedContextCurrent(context)) failCurrent(context.version)
+      }
     },
     reportConversationError: (context) => {
       if (isSelectedContextCurrent(context)) failCurrent(context.version)

@@ -219,6 +219,7 @@ def test_should_verify_without_creating_files_or_running_mutating_commands(
         backend=disabled,
         ollama=disabled,
         voicevox=disabled,
+        livekit=disabled,
         whisper=disabled,
         chroma=disabled,
     )

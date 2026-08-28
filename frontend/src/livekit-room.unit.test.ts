@@ -4,7 +4,7 @@ const livekitMocks = vi.hoisted(() => {
   class FakeRoom {
     readonly handlers = new Map<string, Array<(...args: unknown[]) => void>>()
     readonly localParticipant = {
-      publishData: vi.fn(async () => undefined),
+      publishData: vi.fn(async (_payload: Uint8Array, _options: unknown) => undefined),
       setMicrophoneEnabled: vi.fn(async () => undefined),
     }
 
@@ -171,6 +171,47 @@ describe('LiveKit Room generation synchronization', () => {
       activeResponseId: '',
     })
     client.disconnect()
+  })
+
+  test('microphone publishとmuteでbrowser音声処理設定を維持する', async () => {
+    const client = new LiveKitRoomClient(() => undefined)
+    await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
+    const room = latestRoom()
+
+    await client.publishMicrophone()
+    await client.muteMicrophone()
+
+    expect(room.localParticipant.setMicrophoneEnabled).toHaveBeenNthCalledWith(
+      1,
+      true,
+      {
+        echoCancellation: true,
+        noiseSuppression: true,
+        channelCount: 1,
+      },
+    )
+    expect(room.localParticipant.setMicrophoneEnabled).toHaveBeenNthCalledWith(2, false)
+  })
+
+  test('同一sessionへの明示的な再接続時に状態同期を要求する', async () => {
+    const client = new LiveKitRoomClient(() => undefined)
+    await client.connect('ws://127.0.0.1:7880', 'token-1', 'session-id')
+    const room = latestRoom()
+
+    client.temporaryDisconnect()
+    await client.connect('ws://127.0.0.1:7880', 'token-2', 'session-id')
+
+    expect(room.localParticipant.publishData).toHaveBeenCalledTimes(1)
+    const [payload, options] = room.localParticipant.publishData.mock.calls[0]
+    expect(JSON.parse(new TextDecoder().decode(payload as Uint8Array))).toEqual({
+      protocol_version: '1.0',
+      type: 'state_sync_request',
+      generation: 0,
+    })
+    expect(options).toEqual({
+      reliable: true,
+      topic: 'digital-souls.livekit-transport.v1',
+    })
   })
 
   test('連続する世代変更では古い音声graph再構築を再開しない', async () => {

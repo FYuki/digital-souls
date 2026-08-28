@@ -135,6 +135,13 @@ def resolved_profile(profile_name: str = "integration-voice") -> ResolvedReport:
             "readinessPath": "/version",
             "readinessUrl": "http://localhost:50021/version",
         },
+        "livekit": {
+            "mode": "real",
+            "source": "external",
+            "baseUrl": "http://127.0.0.1:7880",
+            "readinessPath": "/",
+            "readinessUrl": "http://127.0.0.1:7880/",
+        },
         "whisper": {"mode": "real", "source": "in_process"},
         "chroma": {"mode": "disabled", "source": None},
     }

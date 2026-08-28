@@ -2,6 +2,10 @@
   import type { ConversationTurn } from './conversations/types'
 
   export let turns: ConversationTurn[]
+  export let liveVoiceTurn: {
+    userContent: string
+    assistantContent: string
+  } | null = null
 </script>
 
 <div class="messages" aria-live="polite">
@@ -22,6 +26,16 @@
       </article>
     {/if}
   {/each}
+  {#if liveVoiceTurn !== null}
+    <article class="message user" data-live-voice-turn="true">
+      <span class="speaker">あなた</span>
+      <p>{liveVoiceTurn.userContent}</p>
+    </article>
+    <article class="message" data-live-voice-turn="true">
+      <span class="speaker">光織（応答中）</span>
+      <p>{liveVoiceTurn.assistantContent}</p>
+    </article>
+  {/if}
 </div>
 
 <style>

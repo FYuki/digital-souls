@@ -8,6 +8,8 @@ import types
 import wave
 from pathlib import Path
 
+import pytest
+
 
 class _Segment:
     def __init__(self, text: str) -> None:
@@ -228,3 +230,119 @@ class TestWhisperClientTranscribe:
             "こんにちは 光織です",
         ]
         assert model.max_concurrent_transcribe_count == 1
+
+
+class TestIsolatedWhisperTranscriber:
+    def _isolated(self, monkeypatch, *, lock_timeout=0.1, inference_timeout=0.1):
+        _import_client_with_fake_whisper(monkeypatch)
+        sys.modules.pop("app.stt.whisper_isolation", None)
+        isolation = importlib.import_module("app.stt.whisper_isolation")
+        return isolation, isolation.IsolatedWhisperTranscriber(
+            model_name="medium",
+            download_root=Path(__file__).parents[3] / ".cache" / "huggingface" / "hub",
+            lock_timeout_seconds=lock_timeout,
+            inference_timeout_seconds=inference_timeout,
+            process_start_method="fork",
+        )
+
+    def test_inference_timeout_discards_worker_and_next_request_succeeds(
+        self, monkeypatch
+    ) -> None:
+        isolation, transcriber = self._isolated(
+            monkeypatch, inference_timeout=0.03
+        )
+        try:
+            _FakeWhisperModel.transcribe_delay = 0.2
+            with pytest.raises(isolation.WhisperTimeoutError) as caught:
+                transcriber.transcribe(b"\x01\x00\x02\x00")
+            assert caught.value.error_code == "stt_inference_timeout"
+
+            _FakeWhisperModel.transcribe_delay = 0
+            assert transcriber.transcribe(b"\x03\x00\x04\x00") == "こんにちは 光織です"
+        finally:
+            transcriber.close()
+
+    def test_consecutive_timeouts_each_discard_worker_before_recovery(
+        self, monkeypatch, caplog
+    ) -> None:
+        isolation, transcriber = self._isolated(
+            monkeypatch, inference_timeout=0.03
+        )
+        try:
+            _FakeWhisperModel.transcribe_delay = 0.2
+            with caplog.at_level(logging.WARNING, logger=isolation.__name__):
+                for audio in (b"\x01\x00", b"\x02\x00"):
+                    with pytest.raises(isolation.WhisperTimeoutError):
+                        transcriber.transcribe(audio)
+
+            timeout_logs = [
+                record.getMessage()
+                for record in caplog.records
+                if "reason=inference_timeout" in record.getMessage()
+            ]
+            assert len(timeout_logs) == 2
+            assert all("\\x01" not in message for message in timeout_logs)
+
+            _FakeWhisperModel.transcribe_delay = 0
+            assert transcriber.transcribe(b"\x03\x00") == "こんにちは 光織です"
+        finally:
+            transcriber.close()
+
+    def test_worker_recreation_failure_is_logged_and_later_request_recovers(
+        self, monkeypatch, caplog
+    ) -> None:
+        isolation, transcriber = self._isolated(monkeypatch)
+        original_process = transcriber._context.Process
+
+        def fail_process_creation(*args, **kwargs):
+            del args, kwargs
+            raise OSError("test-only process creation failure")
+
+        try:
+            monkeypatch.setattr(transcriber._context, "Process", fail_process_creation)
+            with caplog.at_level(logging.WARNING, logger=isolation.__name__):
+                with pytest.raises(isolation.WhisperIsolationError) as caught:
+                    transcriber.transcribe(b"\x01\x00")
+            assert caught.value.error_code == "stt_worker_failed"
+            assert any(
+                "reason=worker_start_failed" in record.getMessage()
+                and "error_type=OSError" in record.getMessage()
+                and "test-only" not in record.getMessage()
+                for record in caplog.records
+            )
+
+            monkeypatch.setattr(transcriber._context, "Process", original_process)
+            assert transcriber.transcribe(b"\x03\x00") == "こんにちは 光織です"
+        finally:
+            transcriber.close()
+
+    def test_lock_wait_timeout_discards_owner_and_next_request_succeeds(
+        self, monkeypatch
+    ) -> None:
+        isolation, transcriber = self._isolated(
+            monkeypatch, lock_timeout=0.02, inference_timeout=1
+        )
+        _FakeWhisperModel.transcribe_delay = 0.15
+        first_errors: list[Exception] = []
+
+        def first_request() -> None:
+            try:
+                transcriber.transcribe(b"\x01\x00")
+            except Exception as error:
+                first_errors.append(error)
+
+        first = threading.Thread(target=first_request)
+        try:
+            first.start()
+            time.sleep(0.03)
+            with pytest.raises(isolation.WhisperTimeoutError) as caught:
+                transcriber.transcribe(b"\x02\x00")
+            assert caught.value.error_code == "stt_lock_wait_timeout"
+            first.join(timeout=1)
+            assert len(first_errors) == 1
+            assert isinstance(first_errors[0], isolation.WhisperIsolationError)
+
+            _FakeWhisperModel.transcribe_delay = 0
+            assert transcriber.transcribe(b"\x03\x00") == "こんにちは 光織です"
+        finally:
+            transcriber.close()

@@ -239,6 +239,7 @@ def test_should_validate_but_not_prepare_the_profile_model_for_external_ollama(
             if name == "ollama"
             else {"mode": "disabled", "source": None}
             for name, dependency in report["dependencies"].items()
+            if name != "livekit"
         },
     }
     derived = report["derivedEnvironment"]

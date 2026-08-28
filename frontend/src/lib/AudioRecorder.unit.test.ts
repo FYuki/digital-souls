@@ -145,6 +145,36 @@ describe('AudioRecorder', () => {
     await expect(vadOptions.getStream()).resolves.toBe(microphoneStream)
   })
 
+  test('継続modeではPCMを発話単位に停止せずVAD eventだけを通知する', async () => {
+    const onSpeechStarted = vi.fn()
+    const onSpeechStopped = vi.fn()
+    const onMicrophoneEnabled = vi.fn(async () => undefined)
+    render(AudioRecorder, {
+      props: {
+        disabled: false,
+        forceOff: false,
+        continuous: true,
+        onMicrophoneEnabled,
+        onSpeechStarted,
+        onSpeechStopped,
+        onAudioCaptured: createCaptureMock(),
+        onError: vi.fn(),
+      },
+    })
+
+    await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
+    await waitFor(() => expect(vadStart).toHaveBeenCalledTimes(1))
+    vadOptions.onSpeechStart()
+    vadOptions.onSpeechEnd()
+
+    await waitFor(() => expect(onSpeechStopped).toHaveBeenCalledTimes(1))
+    expect(onMicrophoneEnabled).toHaveBeenCalledTimes(1)
+    expect(onSpeechStarted).toHaveBeenCalledWith({ clientMs: expect.any(Number) })
+    expect(recorderInitialize).not.toHaveBeenCalled()
+    expect(recorderStart).not.toHaveBeenCalled()
+    expect(recorderStopAndTake).not.toHaveBeenCalled()
+  })
+
   test('should publish ON status while speech is active', async () => {
     render(AudioRecorder, {
       props: {

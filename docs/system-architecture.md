@@ -134,7 +134,11 @@ large:
 
 ## 音声処理設計
 
-現在の `WhisperTranscriber` は、単一のWhisperモデルインスタンスに対する `transcribe()` 呼び出しをロックで直列化する。想定同時接続ユーザー数は3程度とし、この前提で直列化によるスループット低下を許容する。
+旧WebSocket baselineの`WhisperTranscriber`は、単一のWhisperモデルインスタンスに対する`transcribe()`呼び出しをロックで直列化する。この経路は移行前の計測条件として凍結し、Wave 3の隔離処理を追加しない。
+
+LiveKit Conversation CoreはBackendが所有する専用child processを1つだけ使用し、親processのlockでSTT requestを直列化する。lock待ちまたはnative推論が設定上限を超えた場合はworker/modelをprocessごと破棄し、対象utteranceへrecoverable errorを返す。次requestは新しいworker/modelを生成するため、停止したnative推論が後続発話のresourceを保持し続けない。worker生成失敗もpayloadを含まない理由コード付きログで判別し、次requestで再試行する。
+
+想定同時接続ユーザー数は3程度とし、この前提で単一workerによるスループット低下を許容する。
 
 同時接続ユーザー数が増加した場合は、モデルインスタンスをプール化する設計への切り替えを再検討する。
 

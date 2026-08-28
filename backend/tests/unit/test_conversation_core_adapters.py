@@ -71,6 +71,41 @@ def test_whisper_adapter_exposes_transcription_as_an_independent_async_stage() -
     asyncio.run(exercise())
 
 
+def test_whisper_adapter_rejects_overflow_without_interrupting_active_request() -> None:
+    class BlockingTranscriber:
+        def __init__(self) -> None:
+            self.started = threading.Event()
+            self.release = threading.Event()
+            self.calls: list[bytes] = []
+
+        def transcribe(self, audio: bytes) -> str:
+            self.calls.append(audio)
+            self.started.set()
+            assert self.release.wait(timeout=1)
+            return "書き起こし"
+
+    async def exercise() -> None:
+        _public, adapters = _modules()
+        transcriber = BlockingTranscriber()
+        adapter = adapters.WhisperSttAdapter(
+            transcriber=transcriber, max_inflight=1
+        )
+        first = asyncio.create_task(adapter.transcribe(b"first"))
+        await asyncio.sleep(0.05)
+        assert transcriber.started.is_set()
+
+        with pytest.raises(adapters.SttCapacityError) as caught:
+            await adapter.transcribe(b"overflow")
+        assert caught.value.error_code == "stt_capacity_exceeded"
+
+        transcriber.release.set()
+        assert await first == "書き起こし"
+        assert await adapter.transcribe(b"next") == "書き起こし"
+        assert transcriber.calls == [b"first", b"next"]
+
+    asyncio.run(exercise())
+
+
 def test_voicevox_adapter_normalizes_24khz_wav_to_48khz_pcm_segment() -> None:
     async def exercise() -> None:
         _public, adapters = _modules()
@@ -206,20 +241,6 @@ class FakeHistorySession:
 
 
 @dataclass
-class FirstStartFailingHistorySession(FakeHistorySession):
-    first_start_entered: threading.Event = field(default_factory=threading.Event)
-    release_first_start: threading.Event = field(default_factory=threading.Event)
-
-    def start_turn(self, user_content: str) -> object:
-        if not self.started:
-            self.started.append(user_content)
-            self.first_start_entered.set()
-            self.release_first_start.wait()
-            raise RuntimeError("history start failed")
-        return super().start_turn(user_content)
-
-
-@dataclass
 class TerminalRecordingDelivery(RecordingDelivery):
     next_response_started: asyncio.Event = field(default_factory=asyncio.Event)
 
@@ -341,7 +362,7 @@ def test_core_starts_and_terminates_the_same_history_turn_once(
 
         first = await getattr(session, terminal_method)(**kwargs)
         second = await getattr(session, terminal_method)(**kwargs)
-        await session.end()
+        await asyncio.wait_for(session.end(), timeout=0.5)
 
         assert first == second
         assert history.started == ["履歴へ保存する利用者発話"]
@@ -360,11 +381,28 @@ def test_core_starts_and_terminates_the_same_history_turn_once(
 
 def test_history_start_failure_delivers_failed_and_starts_pending_response() -> None:
     async def exercise() -> None:
-        public, adapters = _modules()
-        history = FirstStartFailingHistorySession()
-        persistence = adapters.ConversationHistoryPersistenceAdapter(
-            history_session=history
-        )
+        public, _adapters = _modules()
+
+        class FirstStartFailingPersistence:
+            def __init__(self) -> None:
+                self.started: list[str] = []
+                self.first_start_entered = asyncio.Event()
+                self.release_first_start = asyncio.Event()
+
+            async def start_response(
+                self, *, response_id: str, user_content: str
+            ) -> object:
+                self.started.append(user_content)
+                if len(self.started) == 1:
+                    self.first_start_entered.set()
+                    await self.release_first_start.wait()
+                    raise RuntimeError("history start failed")
+                return public.ResponseStartResult(content_skipped=False)
+
+            async def persist(self, outcome: object) -> None:
+                return None
+
+        persistence = FirstStartFailingPersistence()
         delivery = TerminalRecordingDelivery()
         first_response_id = "50000000-0000-4000-8000-000000000904"
         second_response_id = "50000000-0000-4000-8000-000000000905"
@@ -389,10 +427,7 @@ def test_history_start_failure_delivers_failed_and_starts_pending_response() -> 
                 should_response=True,
             )
         )
-        await asyncio.wait_for(
-            asyncio.to_thread(history.first_start_entered.wait),
-            timeout=0.5,
-        )
+        await asyncio.wait_for(persistence.first_start_entered.wait(), timeout=0.5)
         try:
             await session.finalize_utterance(
                 utterance_id="30000000-0000-4000-8000-000000000905",
@@ -400,7 +435,7 @@ def test_history_start_failure_delivers_failed_and_starts_pending_response() -> 
                 should_response=True,
             )
         finally:
-            history.release_first_start.set()
+            persistence.release_first_start.set()
 
         first_response = await first_finalize
         await asyncio.wait_for(delivery.next_response_started.wait(), timeout=0.5)
@@ -413,15 +448,14 @@ def test_history_start_failure_delivers_failed_and_starts_pending_response() -> 
         assert first_response.state is public.ResponseState.FAILED
         assert len(failed_events) == 1
         assert failed_events[0].response_id == first_response_id
-        assert history.failed == []
         assert session.active_response is not None
         assert session.active_response.response_id == second_response_id
         assert session.active_response.state is public.ResponseState.IN_PROGRESS
         assert session.active_response.source_utterance_ids == (
             "30000000-0000-4000-8000-000000000905",
         )
-        assert history.started == ["最初の発話", "次の発話"]
+        assert persistence.started == ["最初の発話", "次の発話"]
 
-        await session.end()
+        await asyncio.wait_for(session.end(), timeout=0.5)
 
     asyncio.run(exercise())

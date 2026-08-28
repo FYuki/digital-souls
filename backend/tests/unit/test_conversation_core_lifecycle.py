@@ -266,6 +266,7 @@ def test_public_audio_entry_runs_stt_llm_tts_delivery_and_completion() -> None:
         assert persistence.starts == [(RESPONSE_1, "利用者の発話")]
         assert len(persistence.outcomes) == 1
         assert [event_field(event, "type") for event in delivery.events] == [
+            "utterance_finalized",
             "response_started",
             "response_delta",
             "response_delta",
@@ -282,16 +283,16 @@ def test_public_audio_entry_runs_stt_llm_tts_delivery_and_completion() -> None:
             "stt",
             "stt",
             "llm",
-            "llm",
             "tts",
+            "llm",
             "tts",
         ]
         assert [event_field(item, "outcome") for item in producer_observations] == [
             "started",
             "completed",
             "started",
-            "completed",
             "started",
+            "completed",
             "completed",
         ]
         assert event_field(observation.observations[0], "utterance_id") == UTTERANCE_1

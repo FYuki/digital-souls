@@ -714,6 +714,7 @@ def test_should_reach_backend_prepare_when_whisper_cache_is_missing(
     dependencies = deepcopy(profile["dependencies"])
     for name in ("frontend", "ollama", "voicevox", "chroma"):
         dependencies[name] = {"mode": "disabled", "source": None}
+    dependencies.pop("livekit")
     profile["dependencies"] = dependencies
     runner = RecordingRunner()
     scripts = tmp_path / "scripts"

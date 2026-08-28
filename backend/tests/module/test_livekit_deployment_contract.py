@@ -15,6 +15,7 @@ PROFILE_ROOT = REPOSITORY_ROOT / "environments" / "profiles"
     [
         ("dev", "http://127.0.0.1:7880"),
         ("dogfood", "http://127.0.0.1:17880"),
+        ("integration-voice", "http://127.0.0.1:7880"),
     ],
 )
 def test_profiles_register_livekit_as_an_external_readiness_endpoint(

@@ -152,6 +152,7 @@ def resolve_dependencies(dependencies: Dependencies) -> ResolvedDependencies:
 
 
 def derive_capabilities(dependencies: ResolvedDependencies) -> list[Capability]:
+    dependency_map = cast(dict[str, ResolvedDependency], dependencies)
     frontend_real = dependencies["frontend"]["mode"] == "real"
     backend = dependencies["backend"]
     text_real = (
@@ -169,7 +170,8 @@ def derive_capabilities(dependencies: ResolvedDependencies) -> list[Capability]:
             "voice-chat-real",
             text_real
             and dependencies["voicevox"]["mode"] == "real"
-            and dependencies["whisper"]["mode"] == "real",
+            and dependencies["whisper"]["mode"] == "real"
+            and dependency_map.get("livekit", {"mode": "disabled"})["mode"] == "real",
         ),
         ("rag-real", text_real and dependencies["chroma"]["mode"] == "real"),
     )

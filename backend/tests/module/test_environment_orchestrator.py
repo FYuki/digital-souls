@@ -245,7 +245,7 @@ def test_should_mark_environment_ready_when_every_active_http_service_is_ready()
 
     observations = {
         name: {"result": "ready"}
-        for name in ("frontend", "backend", "ollama", "voicevox")
+        for name in ("frontend", "backend", "ollama", "voicevox", "livekit")
     }
 
     assert readiness_complete(resolved_profile(), observations) is True
