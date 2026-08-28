@@ -571,7 +571,10 @@ class TestRuntimeConfiguration:
             prompt_config.model_context_token_limit,
         ) == (4, 1300, 650, 750, 9000)
         dependencies = captured["dependencies"]
-        assert dependencies.character_prompt_loader is main._load_character_prompt
+        assert (
+            dependencies.character_definition_loader
+            is main._load_character_definition
+        )
         assert dependencies.prompt_builder is main.build_chat_prompt
         assert callable(dependencies.llm_response_generator)
         assert callable(dependencies.input_token_counter)

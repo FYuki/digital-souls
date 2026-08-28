@@ -74,6 +74,10 @@ def _service(
     card.to_character_prompt.return_value = CharacterPrompt(
         "", "", "", "system", "", ""
     )
+    definition = _chat_runtime.CharacterRuntimeDefinition(
+        prompt=card.to_character_prompt(),
+        character_book=None,
+    )
     config = importlib.import_module("app.model_settings").resolve_model_settings(
         os.environ
     )
@@ -86,7 +90,7 @@ def _service(
         ),
         _HistoryService(_HistorySession(turns)),
         _chat_runtime.ChatRuntimeDependencies(
-            character_prompt_loader=lambda character: card.to_character_prompt(),
+            character_definition_loader=lambda character: definition,
             prompt_builder=build_chat_prompt,
             llm_response_generator=generate_response,
             input_token_counter=count_input_tokens,

@@ -38,7 +38,7 @@ characters/
 
 | ファイル | 役割 |
 |---|---|
-| `{id}.card.json` | runtimeで使用する人格・表示名・会話例・応答指示の正本 |
+| `{id}.card.json` | runtimeで使用する人格Core・条件付きCharacter Lore・表示名・会話例・応答指示の正本 |
 | `personality.md` | Character Cardを編集するときの非runtime補助資料 |
 | `world.md` | 世界観、比喩体系、用語、演出方針、応答上の扱い |
 | `memory-policy.md` | 記憶方針本文の移動先と実装設定ファイルへの案内 |
@@ -75,10 +75,12 @@ characters/example-character/
 ## 管理方針
 
 - runtime人格設定はCharacter Cardで管理し、通常の会話ログや一時メモとは分ける
+- 条件付きの世界観・用語・状況設定はCharacter Card V3の`data.character_book`で管理する
 - 人格の核となる設定は、安易に削除・上書きしない
 - 変更する場合は、理由が分かるようにコミットメッセージやIssueに残す
 - 実装コードから参照する場合は、人格IDをキーとして扱う
 - RAGや長期記憶へ人格設定を取り込まず、runtimeではCharacter Cardを直接参照する
+- Character Bookは静的な人格設定としてRAGと分離し、Entry本文やkeyをapplication logへ記録しない
 
 ## 初期人格
 

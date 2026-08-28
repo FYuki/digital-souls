@@ -1,3 +1,4 @@
+from app.characters.lore_selector import CharacterLoreSelection
 from app.prompting import (
     CharacterPrompt,
     CurrentUserMessage,
@@ -22,6 +23,7 @@ def token_budget(
     *,
     total: int = 20,
     character: int = 10,
+    character_lore: int = 10,
     rag: int = 10,
     history: int = 10,
     current_user: int = 10,
@@ -30,6 +32,7 @@ def token_budget(
     return TokenBudget(
         total=total,
         character=character,
+        character_lore=character_lore,
         rag=rag,
         history=history,
         current_user=current_user,
@@ -40,6 +43,7 @@ def token_budget(
 def prompt_build_input(
     *,
     character: CharacterPrompt | None = None,
+    character_lore: CharacterLoreSelection | None = None,
     rag: RagContext | None = None,
     history: MaskedHistory | None = None,
     current_user: CurrentUserMessage | None = None,
@@ -69,6 +73,11 @@ def prompt_build_input(
             system_prompt="システム指示",
             mes_example="会話例",
             post_history_instructions="最終指示",
+        ),
+        character_lore=(
+            character_lore
+            if character_lore is not None
+            else CharacterLoreSelection((), (), None, False)
         ),
         rag=(
             rag

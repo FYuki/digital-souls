@@ -4,6 +4,28 @@ from pathlib import Path
 import pytest
 
 
+def character_book_entry(**overrides: object) -> dict[str, object]:
+    entry: dict[str, object] = {
+        "keys": ["由来"],
+        "content": "合成Character Lore本文",
+        "extensions": {},
+        "enabled": True,
+        "insertion_order": 10,
+        "use_regex": False,
+    }
+    entry.update(overrides)
+    return entry
+
+
+def character_book(**overrides: object) -> dict[str, object]:
+    book: dict[str, object] = {
+        "extensions": {},
+        "entries": [character_book_entry()],
+    }
+    book.update(overrides)
+    return book
+
+
 def character_card_data(**overrides: object) -> dict[str, object]:
     data: dict[str, object] = {
         "name": "テスト人格",

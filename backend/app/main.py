@@ -68,7 +68,7 @@ from app.memory.persistence.index_outbox_repository import IndexOutboxRepository
 from app.memory.persistence.temporary_repository import TemporaryProviderRecordRepository
 from app.memory.providers import AddonRecordProvider, PersonaMemoryProvider
 from app.model_settings import resolve_model_settings
-from app.prompting import BuiltPrompt, CharacterPrompt, PromptMessage
+from app.prompting import BuiltPrompt, PromptMessage
 from app.privacy.history_sanitizer import create_history_sanitizer
 from app.privacy.scanner import create_privacy_scanner
 from app.privacy.semantic.classifier import OllamaSemanticPrivacyClassifier
@@ -183,8 +183,14 @@ def _initialize_schema_with_rollback(
         raise
 
 
-def _load_character_prompt(character: str) -> CharacterPrompt:
-    return load_character_card(character).to_character_prompt()
+def _load_character_definition(
+    character: str,
+) -> _chat_runtime.CharacterRuntimeDefinition:
+    card = load_character_card(character)
+    return _chat_runtime.CharacterRuntimeDefinition(
+        prompt=card.to_character_prompt(),
+        character_book=card.data.character_book,
+    )
 
 
 def _app_chat_service(app: FastAPI) -> _chat_runtime.ChatService:
@@ -475,7 +481,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     history_sanitizer,
                 ),
                 _chat_runtime.ChatRuntimeDependencies(
-                    character_prompt_loader=_load_character_prompt,
+                    character_definition_loader=_load_character_definition,
                     prompt_builder=build_chat_prompt,
                     llm_response_generator=generate_llm_response,
                     input_token_counter=count_llm_input_tokens,

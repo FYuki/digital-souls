@@ -1,6 +1,12 @@
 import logging
 from dataclasses import dataclass, replace
 
+from app.characters.lore_selector import (
+    CharacterLoreSelection,
+    SelectedCharacterLore,
+)
+from app.characters.models import CharacterLorePosition
+from app.prompting.character_lore import character_lore_messages
 from app.prompting.history import select_history_with_measurements, turn_messages
 from app.prompting.measurement import TokenCounter, TokenMeasurement, TokenMeasurements
 from app.prompting.models import (
@@ -29,12 +35,14 @@ RAG_HEADING = "## 関連する記憶"
 
 @dataclass(frozen=True, repr=False)
 class _SelectedRegions:
+    character_lore: tuple[SelectedCharacterLore, ...]
     character: PromptMessage | None
     rag_instruction: PromptMessage | None
     rag: tuple[PromptMessage, ...]
     history: tuple[MaskedHistoryTurn, ...]
     current_user: PromptMessage
     post_history: PromptMessage | None
+    omitted_character_lore_entries: int
     omitted_rag_items: int
     omitted_history_turns: int
 
@@ -59,10 +67,11 @@ class PromptBuilder:
         messages = self._messages(measured.selected)
         usage = self._usage(measured)
         logger.debug(
-            "Prompt built: messages=%d tokens=%d omitted_rag=%d "
+            "Prompt built: messages=%d tokens=%d omitted_lore=%d omitted_rag=%d "
             "omitted_history=%d",
             len(messages),
             usage.total,
+            usage.omitted_character_lore_entries,
             usage.omitted_rag_items,
             usage.omitted_history_exchanges,
         )
@@ -74,6 +83,11 @@ class PromptBuilder:
         measurements: TokenMeasurements,
     ) -> _MeasuredRegions:
         character, measurements = self._character_message(prompt_input, measurements)
+        character_lore, omitted_lore, measurements = self._select_character_lore(
+            prompt_input.character_lore,
+            prompt_input.budget.character_lore,
+            measurements,
+        )
         current_user = PromptMessage(PromptRole.USER, prompt_input.current_user.content)
         measured_user = measurements.measure((current_user,))
         self._require_within(
@@ -93,12 +107,14 @@ class PromptBuilder:
             prompt_input, measurements
         )
         selected = _SelectedRegions(
+            character_lore=character_lore,
             character=character,
             rag_instruction=rag_instruction,
             rag=rag,
             history=selected_history.history.turns,
             current_user=current_user,
             post_history=post_history,
+            omitted_character_lore_entries=omitted_lore,
             omitted_rag_items=omitted_rag,
             omitted_history_turns=(
                 prompt_input.history.omitted_turns
@@ -106,6 +122,36 @@ class PromptBuilder:
             ),
         )
         return _MeasuredRegions(selected, measurements)
+
+    def _select_character_lore(
+        self,
+        selection: CharacterLoreSelection,
+        token_limit: int,
+        measurements: TokenMeasurements,
+    ) -> tuple[
+        tuple[SelectedCharacterLore, ...],
+        int,
+        TokenMeasurements,
+    ]:
+        entries = selection.entries
+        omitted = selection.omitted_by_budget
+        if not entries:
+            return (), omitted, measurements
+        measured = measurements.measure(character_lore_messages(entries))
+        measurements = measured.measurements
+        if measured.count <= token_limit:
+            return entries, omitted, measurements
+        remaining = list(entries)
+        while remaining:
+            removed = min(remaining, key=lambda entry: entry.removal_key)
+            remaining.remove(removed)
+            omitted += 1
+            messages = character_lore_messages(tuple(remaining))
+            measured = measurements.measure(messages)
+            measurements = measured.measurements
+            if measured.count <= token_limit:
+                return tuple(remaining), omitted, measurements
+        return (), omitted, measurements
 
     def _character_message(
         self,
@@ -211,6 +257,11 @@ class PromptBuilder:
         current = _MeasuredRegions(current.selected, current_total.measurements)
         if current_total.count <= total_limit:
             return current
+        current = self._fit_character_lore_to_total(current, total_limit)
+        current_total = self._measure_total(current.selected, current.measurements)
+        current = _MeasuredRegions(current.selected, current_total.measurements)
+        if current_total.count <= total_limit:
+            return current
         selected = current.selected
         if selected.post_history is not None:
             selected = replace(selected, post_history=None)
@@ -285,6 +336,46 @@ class PromptBuilder:
             self._without_oldest_history(selected, removable, upper), measurements
         )
 
+    def _fit_character_lore_to_total(
+        self,
+        measured: _MeasuredRegions,
+        total_limit: int,
+    ) -> _MeasuredRegions:
+        selected = measured.selected
+        if not selected.character_lore:
+            return measured
+        removal_order = tuple(
+            sorted(selected.character_lore, key=lambda entry: entry.removal_key)
+        )
+        all_removed = self._without_character_lore(
+            selected,
+            removal_order,
+            len(removal_order),
+        )
+        all_removed_total = self._measure_total(all_removed, measured.measurements)
+        measurements = all_removed_total.measurements
+        if all_removed_total.count > total_limit:
+            return _MeasuredRegions(all_removed, measurements)
+        lower = 0
+        upper = len(removal_order)
+        while lower + 1 < upper:
+            middle = (lower + upper) // 2
+            candidate = self._without_character_lore(
+                selected,
+                removal_order,
+                middle,
+            )
+            candidate_total = self._measure_total(candidate, measurements)
+            measurements = candidate_total.measurements
+            if candidate_total.count <= total_limit:
+                upper = middle
+            else:
+                lower = middle
+        return _MeasuredRegions(
+            self._without_character_lore(selected, removal_order, upper),
+            measurements,
+        )
+
     @staticmethod
     def _with_rag_prefix(
         selected: _SelectedRegions,
@@ -315,6 +406,27 @@ class PromptBuilder:
         )
 
     @staticmethod
+    def _without_character_lore(
+        selected: _SelectedRegions,
+        removal_order: tuple[SelectedCharacterLore, ...],
+        count: int,
+    ) -> _SelectedRegions:
+        removed_indices = frozenset(
+            entry.source_index for entry in removal_order[:count]
+        )
+        return replace(
+            selected,
+            character_lore=tuple(
+                entry
+                for entry in selected.character_lore
+                if entry.source_index not in removed_indices
+            ),
+            omitted_character_lore_entries=(
+                selected.omitted_character_lore_entries + count
+            ),
+        )
+
+    @staticmethod
     def _largest_fitting_message_prefix(
         messages: tuple[PromptMessage, ...],
         token_limit: int,
@@ -337,8 +449,11 @@ class PromptBuilder:
         measured: _MeasuredRegions,
     ) -> PromptUsage:
         selected = measured.selected
+        lore = measured.measurements.measure(
+            character_lore_messages(selected.character_lore)
+        )
         character, measurements = self._measure_optional(
-            selected.character, measured.measurements
+            selected.character, lore.measurements
         )
         rag_messages = (
             (() if selected.rag_instruction is None else (selected.rag_instruction,))
@@ -354,15 +469,33 @@ class PromptBuilder:
         return PromptUsage(
             total=total.count,
             character=character,
+            character_lore=lore.count,
             rag=rag.count,
             history=history.count,
             current_user=current_user.count,
             post_history=post_history,
+            omitted_character_lore_entries=(
+                selected.omitted_character_lore_entries
+            ),
             omitted_rag_items=selected.omitted_rag_items,
             omitted_history_exchanges=selected.omitted_history_turns,
         )
 
     def _messages(self, selected: _SelectedRegions) -> tuple[PromptMessage, ...]:
+        lore_before = character_lore_messages(
+            tuple(
+                entry
+                for entry in selected.character_lore
+                if entry.position is CharacterLorePosition.BEFORE_CHAR
+            )
+        )
+        lore_after = character_lore_messages(
+            tuple(
+                entry
+                for entry in selected.character_lore
+                if entry.position is CharacterLorePosition.AFTER_CHAR
+            )
+        )
         character = () if selected.character is None else (selected.character,)
         rag_instruction = (
             ()
@@ -373,7 +506,9 @@ class PromptBuilder:
             () if selected.post_history is None else (selected.post_history,)
         )
         return (
+            *lore_before,
             *character,
+            *lore_after,
             *rag_instruction,
             *selected.rag,
             *self._history_messages(selected.history),

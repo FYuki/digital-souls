@@ -1,7 +1,9 @@
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+
+from app.characters.lore_selector import CharacterLoreSelection
 
 
 class PromptRole(str, Enum):
@@ -119,6 +121,7 @@ class CurrentUserMessage:
 class TokenBudget:
     total: int
     character: int
+    character_lore: int
     rag: int
     history: int
     current_user: int
@@ -128,6 +131,7 @@ class TokenBudget:
         values = (
             self.total,
             self.character,
+            self.character_lore,
             self.rag,
             self.history,
             self.current_user,
@@ -144,18 +148,24 @@ class PromptBuildInput:
     history: HistoryCandidates
     current_user: CurrentUserMessage
     budget: TokenBudget
+    character_lore: CharacterLoreSelection = field(
+        default_factory=lambda: CharacterLoreSelection((), (), None, False)
+    )
 
     def __post_init__(self) -> None:
         boundaries = (
             ("character", self.character, CharacterPrompt),
+            ("character_lore", self.character_lore, CharacterLoreSelection),
             ("rag", self.rag, RagContext),
             ("history", self.history, HistoryCandidates),
             ("current_user", self.current_user, CurrentUserMessage),
             ("budget", self.budget, TokenBudget),
         )
-        for field, value, expected_type in boundaries:
+        for field_name, value, expected_type in boundaries:
             if not isinstance(value, expected_type):
-                raise TypeError(f"{field} must be a {expected_type.__name__}")
+                raise TypeError(
+                    f"{field_name} must be a {expected_type.__name__}"
+                )
 
 
 @dataclass(frozen=True, repr=False)
@@ -169,10 +179,12 @@ class PromptMessage:
 class PromptUsage:
     total: int
     character: int
+    character_lore: int
     rag: int
     history: int
     current_user: int
     post_history: int
+    omitted_character_lore_entries: int
     omitted_rag_items: int
     omitted_history_exchanges: int
 

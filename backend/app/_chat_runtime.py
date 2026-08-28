@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from app import chat_service
+from app.characters.models import CharacterBook
 from app.conversation_history.models import ConversationTurn, TurnStatus
 from app.conversation_history.service import (
     HistoryService,
@@ -48,8 +49,14 @@ _default_service_lock = threading.Lock()
 _default_service_resolvers: list[Callable[[], "ChatService"]] = []
 
 
-class CharacterPromptLoader(Protocol):
-    def __call__(self, character: str) -> CharacterPrompt:
+@dataclass(frozen=True, repr=False)
+class CharacterRuntimeDefinition:
+    prompt: CharacterPrompt
+    character_book: CharacterBook | None
+
+
+class CharacterDefinitionLoader(Protocol):
+    def __call__(self, character: str) -> CharacterRuntimeDefinition:
         ...
 
 
@@ -58,6 +65,7 @@ class ChatPromptBuilder(Protocol):
         self,
         *,
         character: CharacterPrompt,
+        character_book: CharacterBook | None,
         rag: RagContext,
         current_user: CurrentUserMessage,
         history_session: HistorySession,
@@ -88,7 +96,7 @@ class MemoryFormationSubmitter(Protocol):
 
 @dataclass(frozen=True)
 class ChatRuntimeDependencies:
-    character_prompt_loader: CharacterPromptLoader
+    character_definition_loader: CharacterDefinitionLoader
     prompt_builder: ChatPromptBuilder
     llm_response_generator: LlmResponseGenerator
     input_token_counter: InputTokenCounter
@@ -119,6 +127,7 @@ class ChatRuntimeConfig:
 @dataclass(frozen=True)
 class _ResolvedChatContext:
     character_prompt: CharacterPrompt
+    character_book: CharacterBook | None
     memory_policy: _memory_policy.MemoryPolicy | None
     prompt_config: ModelSettings
     chroma_path: Path
@@ -235,9 +244,9 @@ class ChatService:
         conversation_id: UUID,
     ) -> chat_service.ChatReplySession:
         await asyncio.to_thread(
-            _load_character_prompt,
+            _load_character_definition,
             character,
-            self._dependencies.character_prompt_loader,
+            self._dependencies.character_definition_loader,
         )
         return _ChatSession(
             character=character,
@@ -310,10 +319,10 @@ def _current_default_service_resolver() -> Callable[[], ChatService] | None:
         return _default_service_resolvers[-1]
 
 
-def _load_character_prompt(
+def _load_character_definition(
     character: str,
-    loader: CharacterPromptLoader,
-) -> CharacterPrompt:
+    loader: CharacterDefinitionLoader,
+) -> CharacterRuntimeDefinition:
     try:
         return loader(character)
     except FileNotFoundError as exc:
@@ -325,20 +334,22 @@ def _resolve_chat_context(
     runtime_config: ChatRuntimeConfig,
     dependencies: ChatRuntimeDependencies,
 ) -> _ResolvedChatContext:
-    character_prompt = _load_character_prompt(
+    character_definition = _load_character_definition(
         character,
-        dependencies.character_prompt_loader,
+        dependencies.character_definition_loader,
     )
     if not runtime_config.rag_enabled:
         return _ResolvedChatContext(
-            character_prompt=character_prompt,
+            character_prompt=character_definition.prompt,
+            character_book=character_definition.character_book,
             memory_policy=None,
             prompt_config=runtime_config.prompt_config,
             chroma_path=runtime_config.chroma_path,
             occurred_timezone=runtime_config.occurred_timezone,
         )
     return _ResolvedChatContext(
-        character_prompt=character_prompt,
+        character_prompt=character_definition.prompt,
+        character_book=character_definition.character_book,
         memory_policy=runtime_config.memory_policy,
         prompt_config=runtime_config.prompt_config,
         chroma_path=runtime_config.chroma_path,
@@ -442,6 +453,7 @@ def _generate_reply(
     try:
         prompt = dependencies.prompt_builder(
             character=context.character_prompt,
+            character_book=context.character_book,
             rag=_rag_context_for_reply(character, message, context, dependencies),
             current_user=CurrentUserMessage(message),
             history_session=history_session,
