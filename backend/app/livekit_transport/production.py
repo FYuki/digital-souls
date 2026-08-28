@@ -457,17 +457,8 @@ class _ConversationCoreBridge:
                 for item in reversed(self._user_audio_captures)
                 if not item.finalized
             ),
-            None,
+            self._user_audio_captures[0],
         )
-        if capture is None:
-            finalized_empty = tuple(
-                item
-                for item in self._user_audio_captures
-                if item.finalized and not item.pcm
-            )
-            if len(finalized_empty) != 1:
-                return
-            capture = finalized_empty[0]
         capture.pcm.extend(pcm)
         self._finalize_user_audio_if_ready()
 

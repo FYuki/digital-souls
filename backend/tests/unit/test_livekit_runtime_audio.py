@@ -643,6 +643,63 @@ def test_production_core_bridge_does_not_assign_current_pcm_to_old_empty_capture
     ]
 
 
+def test_production_core_bridge_keeps_delayed_pcm_for_finalized_captures() -> None:
+    production = importlib.import_module("app.livekit_transport.production")
+    calls: list[dict[str, object]] = []
+    scheduled: list[Awaitable[None]] = []
+    transcription_tasks: set[asyncio.Task[None]] = set()
+
+    class RecordingCoreSession:
+        def start_transcription(self, **request: object) -> asyncio.Task[None]:
+            async def record() -> None:
+                calls.append(request)
+
+            task = asyncio.create_task(record())
+            transcription_tasks.add(task)
+            task.add_done_callback(transcription_tasks.discard)
+            return task
+
+    bridge = production._ConversationCoreBridge(
+        RecordingCoreSession(), scheduled.append
+    )
+    first_id = "30000000-0000-4000-8000-000000000010"
+    second_id = "30000000-0000-4000-8000-000000000011"
+
+    def notify(event_type: str, utterance_id: str) -> None:
+        bridge.notify(
+            json.dumps(
+                {
+                    "type": event_type,
+                    "utterance_id": utterance_id,
+                    "speaker": {"role": "user"},
+                }
+            ).encode()
+        )
+
+    async def exercise() -> None:
+        notify("speech_started", first_id)
+        notify("utterance_finalized", first_id)
+        notify("speech_started", second_id)
+        notify("utterance_finalized", second_id)
+        bridge.receive_microphone(b"pcm-one")
+        bridge.receive_microphone(b"pcm-two")
+        for operation in scheduled:
+            await operation
+        while transcription_tasks:
+            await asyncio.gather(*tuple(transcription_tasks))
+
+    asyncio.run(exercise())
+
+    assert calls == [
+        {"utterance_id": first_id, "audio": b"pcm-one", "should_response": True},
+        {
+            "utterance_id": second_id,
+            "audio": b"pcm-two",
+            "should_response": True,
+        },
+    ]
+
+
 def test_production_core_bridge_separates_overlapping_utterance_pcm() -> None:
     production = importlib.import_module("app.livekit_transport.production")
     calls: list[dict[str, object]] = []
