@@ -283,7 +283,7 @@ def test_should_allow_managed_ollama_model_preparation_through_verify_entrypoint
 
     profile = resolved_profile()
     dependencies = deepcopy(profile["dependencies"])
-    for name in ("frontend", "backend", "voicevox", "whisper", "chroma"):
+    for name in ("frontend", "backend", "voicevox", "livekit", "whisper", "chroma"):
         dependencies[name] = {"mode": "disabled", "source": None}
     profile["dependencies"] = dependencies
     registry = create_service_registry(tmp_path, resolved_runtime_paths(tmp_path))
@@ -335,7 +335,7 @@ def test_should_require_ollama_model_for_external_service(
 
     profile = resolved_profile()
     dependencies = deepcopy(profile["dependencies"])
-    for name in ("frontend", "backend", "voicevox", "whisper", "chroma"):
+    for name in ("frontend", "backend", "voicevox", "livekit", "whisper", "chroma"):
         dependencies[name] = {"mode": "disabled", "source": None}
     dependencies["ollama"] = {**dependencies["ollama"], "source": "external"}
     profile["dependencies"] = dependencies
