@@ -229,6 +229,25 @@ class ChatService:
             self._dependencies,
         )
 
+    def generate_unrecorded_reply(
+        self,
+        character: str,
+        history_session: HistorySession,
+        message: str,
+    ) -> str:
+        context = _resolve_chat_context(
+            character,
+            self._runtime_config,
+            self._dependencies,
+        )
+        return _generate_reply(
+            character,
+            message,
+            context,
+            history_session,
+            self._dependencies,
+        )
+
     async def create_chat_session(
         self,
         character: str,
