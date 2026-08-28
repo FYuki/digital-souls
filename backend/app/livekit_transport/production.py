@@ -7,14 +7,26 @@ import json
 import logging
 import os
 import time
+from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
-from uuid import UUID, uuid5
+from uuid import UUID, uuid4
 
 from fastapi import FastAPI
 
 from app.characters.loader import load_character_card
+from app.characters.loader import load_tts_config
+from app.conversation_core import ConversationCoreSession, CoreEvent, StageObservation
+from app.conversation_core.adapters import (
+    ConversationHistoryPersistenceAdapter,
+    PromptLlmAdapter,
+    SpeakerSynthesizer,
+    SyncTranscriber,
+    VoicevoxTtsAdapter,
+    WhisperSttAdapter,
+)
+from app.conversation_core.ports import DeliveryPort
 from app.livekit_transport.bootstrap import (
     BOOTSTRAP_TIMEOUT_SECONDS,
     BootstrapService,
@@ -28,7 +40,7 @@ from app.livekit_transport.coordinator import (
 )
 from app.livekit_transport.delivery import CoreNotificationPort
 from app.livekit_transport.errors import RoomCleanupPendingError
-from app.livekit_transport.runtime import MicrophoneTrackObserver, PcmFixturePublisher
+from app.livekit_transport.runtime import MicrophoneTrackObserver
 from app.livekit_transport.token import IssuedToken, LiveKitTokenSigner
 
 if TYPE_CHECKING:
@@ -40,8 +52,9 @@ LIVEKIT_URL_ENV = "LIVEKIT_URL"
 LIVEKIT_API_KEY_ENV = "LIVEKIT_API_KEY"
 LIVEKIT_API_SECRET_ENV = "LIVEKIT_API_SECRET"
 PCM_SAMPLE_RATE = 48_000
+STT_SAMPLE_RATE = 16_000
 PCM_CHANNELS = 1
-PCM_FIXTURE_SAMPLES = 4_800
+PCM_SAMPLE_WIDTH_BYTES = 2
 logger = logging.getLogger(__name__)
 
 
@@ -63,10 +76,6 @@ def _required_string_list(value: object, field: str) -> list[str]:
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise TypeError(f"{field} must be a list of strings")
     return value
-
-
-def _fixture_response_id(session_id: str, generation: int) -> str:
-    return str(uuid5(UUID(session_id), f"fixture:{generation}"))
 
 
 class LiveKitConfigurationError(RuntimeError):
@@ -159,13 +168,31 @@ class ProductionCoreEventInbox:
     """Conversation Core が同一process内で消費する検証済みevent入口。"""
 
     def __init__(self) -> None:
-        self._events: asyncio.Queue[bytes] = asyncio.Queue()
+        self._handlers: dict[str, Callable[[bytes], None]] = {}
+        self._pending_by_session: dict[str, deque[bytes]] = {}
 
     def notify(self, payload: bytes) -> None:
-        self._events.put_nowait(payload)
+        value = json.loads(payload)
+        session_id = value.get("session_id") if isinstance(value, dict) else None
+        if isinstance(session_id, str):
+            handler = self._handlers.get(session_id)
+            if handler is not None:
+                handler(payload)
+                return
+            self._pending_by_session.setdefault(session_id, deque()).append(payload)
 
-    async def receive(self) -> bytes:
-        return await self._events.get()
+    def bind(self, session_id: str, handler: Callable[[bytes], None]) -> None:
+        if session_id in self._handlers:
+            raise RuntimeError("Core event handler is already bound")
+        self._handlers[session_id] = handler
+        pending = self._pending_by_session.get(session_id)
+        while pending:
+            handler(pending.popleft())
+        self._pending_by_session.pop(session_id, None)
+
+    def unbind(self, session_id: str) -> None:
+        self._handlers.pop(session_id, None)
+        self._pending_by_session.pop(session_id, None)
 
 
 class _RtcAudioSource(Protocol):
@@ -179,7 +206,9 @@ class _LiveKitPcmAudioSource:
     async def publish(self, pcm: bytes) -> None:
         rtc_module = _livekit_rtc_module()
 
-        samples_per_channel = len(pcm) // (2 * PCM_CHANNELS)
+        samples_per_channel = len(pcm) // (
+            PCM_SAMPLE_WIDTH_BYTES * PCM_CHANNELS
+        )
         frame: rtc.AudioFrame = rtc_module.AudioFrame(
             pcm,
             PCM_SAMPLE_RATE,
@@ -189,26 +218,329 @@ class _LiveKitPcmAudioSource:
         await self._source.capture_frame(frame)
 
 
-class _PrivateSegmentMetadataPublisher:
+class _HistoryService(Protocol):
+    def open_session(self, character_id: str, conversation_id: UUID) -> object: ...
+
+
+class _CoreSessionFactory(Protocol):
+    def create(
+        self,
+        *,
+        session_id: str,
+        character_id: str,
+        conversation_id: UUID,
+        delivery: DeliveryPort,
+    ) -> ConversationCoreSession: ...
+
+
+class _MissingCoreSessionFactory:
+    def create(self, **_request: object) -> ConversationCoreSession:
+        raise RuntimeError("Conversation Core session factory is required")
+
+
+class _LoggingCoreObservation:
+    async def record(self, observation: StageObservation) -> None:
+        logger.info(
+            "Conversation Core stage: session_id=%s response_id=%s generation=%s stage=%s outcome=%s utterance_id=%s",
+            observation.session_id,
+            observation.response_id,
+            observation.generation,
+            observation.stage,
+            observation.outcome,
+            observation.utterance_id,
+        )
+
+
+class ProductionConversationCoreSessionFactory:
     def __init__(
-        self, publish_data: Callable[[bytes, str], Awaitable[None]]
+        self,
+        *,
+        transcriber: SyncTranscriber,
+        synthesizer: SpeakerSynthesizer,
+        history_service: _HistoryService,
+        generate_reply: Callable[[str, object, str], str],
     ) -> None:
-        self._publish_data = publish_data
+        self._transcriber = transcriber
+        self._synthesizer = synthesizer
+        self._history_service = history_service
+        self._generate_reply = generate_reply
 
-    async def publish(self, metadata: dict[str, object]) -> None:
-        frame = {"protocol_version": "1.0", **metadata}
-        await self._publish_data(
-            json.dumps(frame, separators=(",", ":")).encode(), PRIVATE_TOPIC
+    def create(
+        self,
+        *,
+        session_id: str,
+        character_id: str,
+        conversation_id: UUID,
+        delivery: DeliveryPort,
+    ) -> ConversationCoreSession:
+        history_session = self._history_service.open_session(
+            character_id, conversation_id
+        )
+        speaker_id = load_tts_config(character_id).speaker_id
+        return ConversationCoreSession(
+            session_id=session_id,
+            response_id_factory=lambda: str(uuid4()),
+            delivery=delivery,
+            persistence=ConversationHistoryPersistenceAdapter(
+                history_session=history_session  # type: ignore[arg-type]
+            ),
+            observation=_LoggingCoreObservation(),
+            stt=WhisperSttAdapter(transcriber=self._transcriber),
+            llm=PromptLlmAdapter(
+                generate_reply=lambda transcript: self._generate_reply(
+                    character_id, history_session, transcript
+                )
+            ),
+            tts=VoicevoxTtsAdapter(
+                client=self._synthesizer,
+                output_sample_rate=PCM_SAMPLE_RATE,
+                output_channels=PCM_CHANNELS,
+                output_sample_width=PCM_SAMPLE_WIDTH_BYTES,
+                speaker_id=speaker_id,
+            ),
         )
 
 
-def _deterministic_pcm_fixture() -> bytes:
-    return b"".join(
-        (12_000 if (index // 120) % 2 == 0 else -12_000).to_bytes(
-            2, "little", signed=True
+class _ConversationCoreDelivery:
+    def __init__(
+        self,
+        *,
+        coordinator: ProductionSessionCoordinator,
+        audio_source: _LiveKitPcmAudioSource,
+        character_participant_id: str,
+        character_id: str,
+    ) -> None:
+        self._coordinator = coordinator
+        self._audio_source = audio_source
+        self._character_speaker = {
+            "participant_id": character_participant_id,
+            "role": "character",
+            "character_id": character_id,
+        }
+
+    async def publish(self, event: CoreEvent) -> None:
+        if event.type == "response_started":
+            if event.response_id is None:
+                raise ValueError("response_started requires response_id")
+            self._coordinator.begin_response(response_id=event.response_id)
+        if event.type == "response_audio_segment":
+            if event.audio is None:
+                raise ValueError("audio event requires PCM bytes")
+            await self._coordinator.send_core(self._voice_payload(event))
+            await self._audio_source.publish(event.audio)
+            return
+        if event.type == "response_privacy_skipped":
+            if event.source_utterance_ids is None:
+                raise ValueError("privacy event requires source utterance ids")
+            for utterance_id in event.source_utterance_ids:
+                await self._coordinator.send_core(
+                    self._voice_payload(event, utterance_id=utterance_id)
+                )
+            return
+        await self._coordinator.send_core(self._voice_payload(event))
+
+    def _voice_payload(
+        self, event: CoreEvent, *, utterance_id: str | None = None
+    ) -> bytes:
+        payload: dict[str, object] = {
+            "protocol_version": "1.0",
+            "event_id": str(uuid4()),
+            "session_id": event.session_id,
+            "monotonic_timestamp_ms": int(time.monotonic() * 1000),
+        }
+        if event.type == "response_started":
+            if event.source_utterance_ids is None:
+                raise ValueError("response_started requires source utterance ids")
+            payload.update(
+                type=event.type,
+                response_id=event.response_id,
+                speaker=self._character_speaker,
+                source_utterance_ids=list(event.source_utterance_ids),
+            )
+        elif event.type == "response_delta":
+            if event.text_range is None:
+                raise ValueError("response_delta requires text range")
+            payload.update(
+                type=event.type,
+                response_id=event.response_id,
+                text_sequence=event.text_sequence,
+                text=event.text,
+                text_range={
+                    "start": event.text_range[0],
+                    "end": event.text_range[1],
+                },
+            )
+        elif event.type == "response_audio_segment":
+            if event.text_range is None:
+                raise ValueError("response_audio_segment requires text range")
+            payload.update(
+                type=event.type,
+                response_id=event.response_id,
+                audio_sequence=event.audio_sequence,
+                text_range={
+                    "start": event.text_range[0],
+                    "end": event.text_range[1],
+                },
+            )
+        elif event.type == "response_completed":
+            payload.update(
+                type=event.type,
+                response_id=event.response_id,
+                last_text_sequence=event.last_text_sequence,
+                last_audio_sequence=event.last_audio_sequence,
+            )
+        elif event.type == "response_cancelled":
+            payload.update(type=event.type, response_id=event.response_id, reason=event.reason)
+        elif event.type == "response_failed":
+            error_code = (
+                event.reason
+                if event.reason is not None
+                else "conversation_core_failed"
+            )
+            payload.update(
+                type=event.type,
+                response_id=event.response_id,
+                error_code=error_code,
+                recoverable=True,
+            )
+        elif event.type == "response_privacy_skipped":
+            payload.update(
+                type="utterance_discarded",
+                utterance_id=utterance_id,
+                reason="privacy",
+            )
+        else:
+            raise ValueError(f"unsupported Core event type: {event.type}")
+        return json.dumps(payload, separators=(",", ":")).encode()
+
+
+@dataclass
+class _UserAudioCapture:
+    utterance_id: str
+    pcm: bytearray = field(default_factory=bytearray)
+    finalized: bool = False
+
+
+class _ConversationCoreBridge:
+    def __init__(
+        self,
+        session: ConversationCoreSession,
+        schedule: Callable[[Awaitable[None]], None],
+    ) -> None:
+        self._session = session
+        self._schedule = schedule
+        self._user_audio_captures: deque[_UserAudioCapture] = deque()
+
+    def notify(self, payload: bytes) -> None:
+        event = json.loads(payload)
+        if event["type"] == "speech_started" and self._is_user_event(event):
+            self._user_audio_captures.append(
+                _UserAudioCapture(utterance_id=str(event["utterance_id"]))
+            )
+            return
+        if event["type"] == "utterance_finalized" and self._is_user_event(event):
+            utterance_id = str(event["utterance_id"])
+            for capture in self._user_audio_captures:
+                if capture.utterance_id == utterance_id:
+                    capture.finalized = True
+                    self._finalize_user_audio_if_ready()
+                    break
+            return
+        self._schedule(self._receive(event))
+
+    def receive_microphone(self, pcm: bytes) -> None:
+        if not self._user_audio_captures:
+            return
+        capture = next(
+            (
+                item
+                for item in reversed(self._user_audio_captures)
+                if not item.finalized
+            ),
+            self._user_audio_captures[0],
         )
-        for index in range(PCM_FIXTURE_SAMPLES)
-    )
+        capture.pcm.extend(pcm)
+        self._finalize_user_audio_if_ready()
+
+    def _finalize_user_audio_if_ready(self) -> None:
+        while self._user_audio_captures:
+            capture = self._user_audio_captures[0]
+            if not capture.finalized:
+                return
+            if not capture.pcm:
+                if not any(item.pcm for item in tuple(self._user_audio_captures)[1:]):
+                    return
+                self._user_audio_captures.popleft()
+                continue
+            utterance_id = capture.utterance_id
+            microphone_pcm = bytes(capture.pcm)
+            self._user_audio_captures.popleft()
+            self._schedule(
+                self._finalize_user_audio(
+                    utterance_id=utterance_id,
+                    microphone_pcm=microphone_pcm,
+                )
+            )
+
+    async def _receive(self, event: dict[str, object]) -> None:
+        event_type = event["type"]
+        if event_type == "response_cancel_requested":
+            response_id = event.get("response_id")
+            reason = event.get("reason")
+            if not isinstance(response_id, str) or not isinstance(reason, str):
+                self._log_invalid_control_event(event_type)
+                return
+            await self._session.cancel_response(
+                response_id=response_id,
+                reason=reason,
+            )
+        elif event_type in ("playback_completed", "playback_stopped"):
+            response_id = event.get("response_id")
+            last_played_audio_sequence = event.get("last_played_audio_sequence")
+            if (
+                not isinstance(response_id, str)
+                or type(last_played_audio_sequence) is not int
+            ):
+                self._log_invalid_control_event(event_type)
+                return
+            await self._session.confirm_playback(
+                response_id=response_id,
+                last_played_audio_sequence=last_played_audio_sequence,
+            )
+        elif event_type == "session_disconnected":
+            await self._session.disconnect()
+        elif event_type == "session_reconnected":
+            await self._session.reconnect()
+
+    async def _finalize_user_audio(
+        self, *, utterance_id: str, microphone_pcm: bytes
+    ) -> None:
+        task = self._session.start_transcription(
+            utterance_id=utterance_id,
+            audio=microphone_pcm,
+            should_response=True,
+        )
+        task.add_done_callback(self._consume_task)
+
+    @staticmethod
+    def _is_user_event(event: dict[str, object]) -> bool:
+        speaker = event.get("speaker")
+        return isinstance(speaker, dict) and speaker.get("role") == "user"
+
+    async def end(self) -> None:
+        await self._session.end()
+
+    @staticmethod
+    def _log_invalid_control_event(event_type: object) -> None:
+        logger.warning(
+            "Invalid Conversation Core control event discarded: type=%s",
+            event_type,
+        )
+
+    @staticmethod
+    def _consume_task(task: asyncio.Task[object]) -> None:
+        if not task.cancelled():
+            task.exception()
 
 
 @dataclass
@@ -232,20 +564,26 @@ class ProductionRuntimeManager:
         room_manager: ProductionRoomManager,
         session_repository: InMemorySessionBindingRepository,
         core_port: CoreNotificationPort,
+        core_session_factory: _CoreSessionFactory | None = None,
     ) -> None:
         self._livekit_url = livekit_url
         self._signer = signer
         self._room_manager = room_manager
         self._sessions = session_repository
         self._core_port = core_port
+        self._core_session_factory = (
+            core_session_factory
+            if core_session_factory is not None
+            else _MissingCoreSessionFactory()
+        )
         self._rooms: dict[str, rtc.Room] = {}
         self._coordinators: dict[str, ProductionSessionCoordinator] = {}
         self._session_tasks: dict[str, set[asyncio.Task[None]]] = {}
         self._participant_event_tails: dict[str, asyncio.Task[None]] = {}
         self._ready: dict[str, asyncio.Event] = {}
-        self._fixture_sources: dict[str, _LiveKitPcmAudioSource] = {}
-        self._fixture_generations: dict[str, int] = {}
-        self._fixture_locks: dict[str, asyncio.Lock] = {}
+        self._audio_sources: dict[str, _LiveKitPcmAudioSource] = {}
+        self._core_sessions: dict[str, ConversationCoreSession] = {}
+        self._core_bridges: dict[str, _ConversationCoreBridge] = {}
         self._cleanup_states: dict[str, _SessionCleanupState] = {}
 
     async def connect(self, session_id: str) -> None:
@@ -257,6 +595,8 @@ class ProductionRuntimeManager:
                 "session_id": session_id,
                 "identity": f"character-{reservation.request['character_id']}-{session_id}",
                 "core_participant_id": str(reservation.request.get("participant_id", session_id)),
+                "character_id": str(reservation.request["character_id"]),
+                "conversation_id": str(reservation.request["conversation_id"]),
                 "reconnect_grace_ms": min(
                     _required_int(
                         reservation.request["requested_reconnect_grace_ms"],
@@ -296,7 +636,7 @@ class ProductionRuntimeManager:
             await self._cleanup_owned_session(session_id)
 
         async def generation_ready() -> None:
-            await self._publish_fixture(session_id, coordinator, publish_data)
+            return None
 
         coordinator = ProductionSessionCoordinator(
             session_id=session_id,
@@ -316,7 +656,6 @@ class ProductionRuntimeManager:
         self._coordinators[session_id] = coordinator
         self._session_tasks[session_id] = set()
         self._ready[session_id] = asyncio.Event()
-        self._fixture_locks[session_id] = asyncio.Lock()
 
         def participant_connected(participant: rtc.RemoteParticipant) -> None:
             async def handle_connected() -> None:
@@ -333,9 +672,6 @@ class ProductionRuntimeManager:
                 )
                 if reconnected:
                     await coordinator.synchronize_reconnection()
-                if str(participant.identity) == user_identity:
-                    await self._ready[session_id].wait()
-                    await self._publish_fixture(session_id, coordinator, publish_data)
 
             self._schedule_serialized_participant_operation(
                 session_id, handle_connected
@@ -407,7 +743,32 @@ class ProductionRuntimeManager:
 
         await room.connect(self._livekit_url, token)
         coordinator.start_join_deadline()
-        await self._prepare_fixture_track(session_id, room)
+        audio_source = await self._prepare_output_track(room)
+        delivery = _ConversationCoreDelivery(
+            coordinator=coordinator,
+            audio_source=audio_source,
+            character_participant_id=str(uuid4()),
+            character_id=str(request["character_id"]),
+        )
+        core_session = self._core_session_factory.create(
+            session_id=session_id,
+            character_id=str(request["character_id"]),
+            conversation_id=UUID(str(request["conversation_id"])),
+            delivery=delivery,
+        )
+
+        def schedule_core_operation(operation: Awaitable[None]) -> None:
+            self._schedule_task(session_id, operation)
+
+        bridge = _ConversationCoreBridge(
+            core_session,
+            schedule_core_operation,
+        )
+        self._audio_sources[session_id] = audio_source
+        self._core_sessions[session_id] = core_session
+        self._core_bridges[session_id] = bridge
+        if isinstance(self._core_port, ProductionCoreEventInbox):
+            self._core_port.bind(session_id, bridge.notify)
         self._ready[session_id].set()
 
     async def _observe_microphone(
@@ -431,10 +792,10 @@ class ProductionRuntimeManager:
                 lambda: coordinator.generation,
                 schedule_observation,
             ),
-            sample_rate=PCM_SAMPLE_RATE,
+            sample_rate=STT_SAMPLE_RATE,
         )
         stream: rtc.AudioStream = rtc_module.AudioStream(
-            track, sample_rate=PCM_SAMPLE_RATE, num_channels=1
+            track, sample_rate=STT_SAMPLE_RATE, num_channels=1
         )
         try:
             async for event in stream:
@@ -447,8 +808,13 @@ class ProductionRuntimeManager:
                 ):
                     return
                 frame = event.frame
+                bridge = self._core_bridges.get(session_id)
+                if bridge is None:
+                    return
+                pcm = bytes(frame.data)
+                bridge.receive_microphone(pcm)
                 observer.receive_frame(
-                    pcm=bytes(frame.data),
+                    pcm=pcm,
                     sample_count=int(frame.samples_per_channel),
                     received_at_ms=int(time.monotonic() * 1000),
                 )
@@ -527,41 +893,18 @@ class ProductionRuntimeManager:
                 exc_info=(type(error), error, error.__traceback__),
             )
 
-    async def _prepare_fixture_track(self, session_id: str, room: rtc.Room) -> None:
+    async def _prepare_output_track(
+        self, room: rtc.Room
+    ) -> _LiveKitPcmAudioSource:
         rtc_module = _livekit_rtc_module()
 
         source: rtc.AudioSource = rtc_module.AudioSource(PCM_SAMPLE_RATE, PCM_CHANNELS)
-        track = rtc_module.LocalAudioTrack.create_audio_track("character-fixture", source)
+        track = rtc_module.LocalAudioTrack.create_audio_track("character-response", source)
         options = rtc_module.TrackPublishOptions(
             source=rtc_module.TrackSource.SOURCE_MICROPHONE
         )
         await room.local_participant.publish_track(track, options)
-        self._fixture_sources[session_id] = _LiveKitPcmAudioSource(source)
-
-    async def _publish_fixture(
-        self,
-        session_id: str,
-        coordinator: ProductionSessionCoordinator,
-        publish_data: Callable[[bytes, str], Awaitable[None]],
-    ) -> None:
-        async with self._fixture_locks[session_id]:
-            generation = coordinator.generation
-            if self._fixture_generations.get(session_id) == generation:
-                return
-            response_id = _fixture_response_id(session_id, generation)
-            coordinator.begin_response(response_id=response_id)
-            publisher = PcmFixturePublisher(
-                audio_source=self._fixture_sources[session_id],
-                metadata_port=_PrivateSegmentMetadataPublisher(publish_data),
-            )
-            await publisher.publish(
-                response_id=response_id,
-                audio_sequence=0,
-                generation=generation,
-                pcm=_deterministic_pcm_fixture(),
-                sample_count=PCM_FIXTURE_SAMPLES,
-            )
-            self._fixture_generations[session_id] = generation
+        return _LiveKitPcmAudioSource(source)
 
     async def send_core(self, session_id: str, payload: bytes) -> None:
         coordinator = self._coordinators.get(session_id)
@@ -594,14 +937,18 @@ class ProductionRuntimeManager:
                 pending_tasks.append(task)
         room = self._rooms.pop(session_id, None)
         self._ready.pop(session_id, None)
-        self._fixture_sources.pop(session_id, None)
-        self._fixture_generations.pop(session_id, None)
-        self._fixture_locks.pop(session_id, None)
+        self._audio_sources.pop(session_id, None)
+        self._core_bridges.pop(session_id, None)
+        if isinstance(self._core_port, ProductionCoreEventInbox):
+            self._core_port.unbind(session_id)
         return room, pending_tasks
 
     async def _cleanup_owned_session(self, session_id: str) -> None:
         state = self._cleanup_states.get(session_id)
         if state is None:
+            core_session = self._core_sessions.pop(session_id, None)
+            if core_session is not None:
+                await core_session.end()
             room, pending_tasks = self._release_runtime_ownership(session_id)
             state = _SessionCleanupState(
                 room=room,
@@ -691,10 +1038,14 @@ class ProductionRuntimeManager:
 
 async def configure_production_resources(
     app: FastAPI,
+    *,
+    core_session_factory: _CoreSessionFactory | None,
 ) -> livekit_api.LiveKitAPI | None:
     settings = resolve_livekit_settings()
     if settings is None:
         return None
+    if core_session_factory is None:
+        raise RuntimeError("Conversation Core session factory is required")
     livekit_url, api_key, api_secret = settings
     api = _livekit_api_module()
 
@@ -709,6 +1060,7 @@ async def configure_production_resources(
         room_manager=room_manager,
         session_repository=sessions,
         core_port=core_events,
+        core_session_factory=core_session_factory,
     )
     validator = CharacterConversationBindingValidator(
         character_loader=load_character_card,
