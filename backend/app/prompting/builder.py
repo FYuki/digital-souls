@@ -3,6 +3,8 @@ from dataclasses import dataclass, replace
 
 from app.characters.lore_selector import (
     CharacterLoreSelection,
+    LoreSelectionDecision,
+    LoreSelectionReason,
     SelectedCharacterLore,
 )
 from app.characters.models import CharacterLorePosition
@@ -36,13 +38,13 @@ RAG_HEADING = "## 関連する記憶"
 @dataclass(frozen=True, repr=False)
 class _SelectedRegions:
     character_lore: tuple[SelectedCharacterLore, ...]
+    character_lore_decisions: tuple[LoreSelectionDecision, ...]
     character: PromptMessage | None
     rag_instruction: PromptMessage | None
     rag: tuple[PromptMessage, ...]
     history: tuple[MaskedHistoryTurn, ...]
     current_user: PromptMessage
     post_history: PromptMessage | None
-    omitted_character_lore_entries: int
     omitted_rag_items: int
     omitted_history_turns: int
 
@@ -75,7 +77,11 @@ class PromptBuilder:
             usage.omitted_rag_items,
             usage.omitted_history_exchanges,
         )
-        return BuiltPrompt(messages=messages, usage=usage)
+        return BuiltPrompt(
+            messages=messages,
+            usage=usage,
+            character_lore_decisions=measured.selected.character_lore_decisions,
+        )
 
     def _select_regions(
         self,
@@ -83,7 +89,7 @@ class PromptBuilder:
         measurements: TokenMeasurements,
     ) -> _MeasuredRegions:
         character, measurements = self._character_message(prompt_input, measurements)
-        character_lore, omitted_lore, measurements = self._select_character_lore(
+        character_lore, lore_decisions, measurements = self._select_character_lore(
             prompt_input.character_lore,
             prompt_input.budget.character_lore,
             measurements,
@@ -108,13 +114,13 @@ class PromptBuilder:
         )
         selected = _SelectedRegions(
             character_lore=character_lore,
+            character_lore_decisions=lore_decisions,
             character=character,
             rag_instruction=rag_instruction,
             rag=rag,
             history=selected_history.history.turns,
             current_user=current_user,
             post_history=post_history,
-            omitted_character_lore_entries=omitted_lore,
             omitted_rag_items=omitted_rag,
             omitted_history_turns=(
                 prompt_input.history.omitted_turns
@@ -130,28 +136,32 @@ class PromptBuilder:
         measurements: TokenMeasurements,
     ) -> tuple[
         tuple[SelectedCharacterLore, ...],
-        int,
+        tuple[LoreSelectionDecision, ...],
         TokenMeasurements,
     ]:
         entries = selection.entries
-        omitted = selection.omitted_by_budget
+        decisions = selection.decisions
         if not entries:
-            return (), omitted, measurements
+            return (), decisions, measurements
         measured = measurements.measure(character_lore_messages(entries))
         measurements = measured.measurements
         if measured.count <= token_limit:
-            return entries, omitted, measurements
+            return entries, decisions, measurements
         remaining = list(entries)
         while remaining:
             removed = min(remaining, key=lambda entry: entry.removal_key)
             remaining.remove(removed)
-            omitted += 1
+            decisions = self._replace_lore_decision_reasons(
+                decisions,
+                (removed.source_index,),
+                LoreSelectionReason.OMITTED_BY_LORE_BUDGET,
+            )
             messages = character_lore_messages(tuple(remaining))
             measured = measurements.measure(messages)
             measurements = measured.measurements
             if measured.count <= token_limit:
-                return tuple(remaining), omitted, measurements
-        return (), omitted, measurements
+                return tuple(remaining), decisions, measurements
+        return (), decisions, measurements
 
     def _character_message(
         self,
@@ -421,9 +431,34 @@ class PromptBuilder:
                 for entry in selected.character_lore
                 if entry.source_index not in removed_indices
             ),
-            omitted_character_lore_entries=(
-                selected.omitted_character_lore_entries + count
+            character_lore_decisions=(
+                PromptBuilder._replace_lore_decision_reasons(
+                    selected.character_lore_decisions,
+                    removed_indices,
+                    LoreSelectionReason.OMITTED_BY_TOTAL_BUDGET,
+                )
             ),
+        )
+
+    @staticmethod
+    def _replace_lore_decision_reasons(
+        decisions: tuple[LoreSelectionDecision, ...],
+        source_indices: frozenset[int] | tuple[int, ...],
+        reason: LoreSelectionReason,
+    ) -> tuple[LoreSelectionDecision, ...]:
+        target_indices = frozenset(source_indices)
+        known_indices = frozenset(decision.source_index for decision in decisions)
+        missing_indices = target_indices - known_indices
+        if missing_indices:
+            raise ValueError(
+                "character lore decisions are missing selected source indices: "
+                f"{sorted(missing_indices)}"
+            )
+        return tuple(
+            LoreSelectionDecision(decision.source_index, reason)
+            if decision.source_index in target_indices
+            else decision
+            for decision in decisions
         )
 
     @staticmethod
@@ -474,8 +509,13 @@ class PromptBuilder:
             history=history.count,
             current_user=current_user.count,
             post_history=post_history,
-            omitted_character_lore_entries=(
-                selected.omitted_character_lore_entries
+            omitted_character_lore_entries=sum(
+                decision.reason
+                in {
+                    LoreSelectionReason.OMITTED_BY_LORE_BUDGET,
+                    LoreSelectionReason.OMITTED_BY_TOTAL_BUDGET,
+                }
+                for decision in selected.character_lore_decisions
             ),
             omitted_rag_items=selected.omitted_rag_items,
             omitted_history_exchanges=selected.omitted_history_turns,

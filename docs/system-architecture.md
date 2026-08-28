@@ -91,8 +91,10 @@ Bookがある場合、共通ChatServiceはCharacter CoreとBookを同じload結�
 
 Lore照合はRAG検索と分離する。current userを先頭に、同じconversationから復元した
 privacy処理済みuser／assistant messageを新しい順に`scan_depth`件だけ走査する。literal照合は
-message境界を越えず、NFKC正規化後に既定でcase-insensitiveとする。MVPで未対応のregex、
-recursive scanning、Decoratorを含むEntryは、カード上の値を保持したままruntime注入しない。
+message境界を越えず、NFKC正規化後に既定でcase-insensitiveとする。MVPで未対応のregexと
+Decoratorを含むEntryは、カード上の値を保持したままruntime注入しない。
+`recursive_scanning=true`でもliteral／constantによる初期matchingは行うが、選択済みLore本文を
+新しいscan sourceとする再帰scanは行わない。
 
 最終promptの順序は次で固定する。
 

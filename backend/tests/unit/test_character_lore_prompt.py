@@ -8,6 +8,8 @@ from app import chat_prompt
 from app.characters.lore_selector import (
     CharacterLoreSelection,
     LoreActivationKind,
+    LoreSelectionDecision,
+    LoreSelectionReason,
     SelectedCharacterLore,
 )
 from app.characters.models import (
@@ -18,6 +20,7 @@ from app.characters.models import (
 from app.conversation_history.prompt_history import RestoredHistoryTurn
 from app.conversation_history.service import HistorySession
 from app.prompting import (
+    BuiltPrompt,
     CharacterPrompt,
     CurrentUserMessage,
     MaskedHistory,
@@ -57,16 +60,41 @@ def _selection(
     *entries: SelectedCharacterLore,
     omitted_by_book_budget: int = 0,
 ) -> CharacterLoreSelection:
-    from app.characters.lore_selector import (
-        LoreSelectionDecision,
-        LoreSelectionReason,
-    )
-
+    selected_indices = frozenset(entry.source_index for entry in entries)
+    omitted_indices = tuple(
+        index
+        for index in range(len(entries) + omitted_by_book_budget)
+        if index not in selected_indices
+    )[:omitted_by_book_budget]
     decisions = tuple(
-        LoreSelectionDecision(index, LoreSelectionReason.OMITTED_BY_LORE_BUDGET)
-        for index in range(omitted_by_book_budget)
+        sorted(
+            (
+                *(
+                    LoreSelectionDecision(
+                        entry.source_index,
+                        LoreSelectionReason.SELECTED_PRIMARY,
+                    )
+                    for entry in entries
+                ),
+                *(
+                    LoreSelectionDecision(
+                        index,
+                        LoreSelectionReason.OMITTED_BY_LORE_BUDGET,
+                    )
+                    for index in omitted_indices
+                ),
+            ),
+            key=lambda decision: decision.source_index,
+        )
     )
     return CharacterLoreSelection(entries, decisions, None, False)
+
+
+def _decision_reasons(result: BuiltPrompt) -> dict[int, LoreSelectionReason]:
+    return {
+        decision.source_index: decision.reason
+        for decision in result.character_lore_decisions
+    }
 
 
 def test_prompt_composes_lore_around_character_before_rag_and_history() -> None:
@@ -109,6 +137,9 @@ def test_prompt_composes_lore_around_character_before_rag_and_history() -> None:
     ]
     assert result.usage.character_lore == 3
     assert result.usage.omitted_character_lore_entries == 0
+    assert set(_decision_reasons(result).values()) == {
+        LoreSelectionReason.SELECTED_PRIMARY
+    }
 
 
 def test_character_lore_individual_budget_uses_removal_key_without_truncation() -> None:
@@ -139,6 +170,47 @@ def test_character_lore_individual_budget_uses_removal_key_without_truncation() 
     assert all("low" not in message for message in lore_messages)
     assert result.usage.character_lore == 2
     assert result.usage.omitted_character_lore_entries == 2
+    assert _decision_reasons(result) == {
+        0: LoreSelectionReason.OMITTED_BY_LORE_BUDGET,
+        1: LoreSelectionReason.SELECTED_PRIMARY,
+        2: LoreSelectionReason.SELECTED_PRIMARY,
+        3: LoreSelectionReason.OMITTED_BY_LORE_BUDGET,
+    }
+
+
+def test_final_lore_diagnostics_distinguish_lore_and_total_budget() -> None:
+    lore = _selection(
+        _selected_lore("TOTAL_BUDGET_SECRET_LOW", source_index=1, priority=1),
+        _selected_lore("kept", source_index=2, priority=2),
+        omitted_by_book_budget=1,
+    )
+    prompt_input = prompt_build_input(
+        character=CharacterPrompt("", "", "", "required-core", "", ""),
+        character_lore=lore,
+        rag=RagContext(items=()),
+        history=MaskedHistory((), 0),
+        budget=token_budget(
+            total=3,
+            character=20,
+            character_lore=20,
+            rag=20,
+            history=20,
+            current_user=20,
+            post_history=20,
+        ),
+    )
+
+    result = PromptBuilder(UnitTokenCounter()).build(prompt_input)
+
+    assert _decision_reasons(result) == {
+        0: LoreSelectionReason.OMITTED_BY_LORE_BUDGET,
+        1: LoreSelectionReason.OMITTED_BY_TOTAL_BUDGET,
+        2: LoreSelectionReason.SELECTED_PRIMARY,
+    }
+    assert result.usage.omitted_character_lore_entries == 2
+    assert "TOTAL_BUDGET_SECRET_LOW" not in repr(
+        result.character_lore_decisions
+    )
 
 
 @pytest.mark.parametrize(
@@ -209,6 +281,21 @@ def test_total_budget_removes_rag_then_old_history_then_lore_then_post_history(
     assert "latest-user" in contents
     assert "latest-assistant" in contents
     assert result.usage.total <= total_limit
+    reasons = _decision_reasons(result)
+    expected_reasons = {
+        0: (
+            LoreSelectionReason.SELECTED_PRIMARY
+            if expected_lore == 2
+            else LoreSelectionReason.OMITTED_BY_TOTAL_BUDGET
+        ),
+        1: (
+            LoreSelectionReason.OMITTED_BY_TOTAL_BUDGET
+            if expected_lore == 0
+            else LoreSelectionReason.SELECTED_PRIMARY
+        ),
+    }
+    assert reasons == expected_reasons
+    assert result.usage.omitted_character_lore_entries == 2 - expected_lore
 
 
 def test_prompt_log_contains_only_lore_counts_not_lore_body(
@@ -353,3 +440,35 @@ def test_chat_prompt_does_not_scan_history_at_default_depth() -> None:
 
     assert all("キャラクターLore" not in message.content for message in result.messages)
     assert history_session.calls == 1
+
+
+def test_chat_prompt_with_empty_book_does_not_add_lore_messages() -> None:
+    history_session = _RecordingHistorySession(())
+    empty_book = CharacterBook(
+        name=None,
+        description=None,
+        scan_depth=None,
+        token_budget=None,
+        recursive_scanning=None,
+        extensions={},
+        entries=(),
+        extra_fields={},
+    )
+
+    result = chat_prompt.build_chat_prompt(
+        character=CharacterPrompt("", "", "", "core", "", ""),
+        character_book=empty_book,
+        rag=RagContext(items=()),
+        current_user=CurrentUserMessage("RAW_CURRENT"),
+        history_session=cast(HistorySession, history_session),
+        config=resolve_model_settings({}),
+        token_counter=UnitTokenCounter(),
+    )
+
+    assert [(message.role, message.content) for message in result.messages] == [
+        (PromptRole.SYSTEM, "## 応答方針\ncore"),
+        (PromptRole.USER, "RAW_CURRENT"),
+    ]
+    assert result.usage.character_lore == 0
+    assert result.usage.omitted_character_lore_entries == 0
+    assert result.character_lore_decisions == ()
