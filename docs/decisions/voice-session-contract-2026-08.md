@@ -126,3 +126,13 @@ Frontend は Ajv 2020、Backend は `jsonschema.Draft202012Validator` で外部�
 - FE/BE の型、runtime validation、fixture、CI 差分検知が同じ schema を正本とする。
 - 中断履歴は生成全文ではなく利用者が実際に聞いた連続 prefix に一致する。
 - 現行 WebSocket baseline は変更されず、新旧の「発話終了 → 初音」を比較できる。
+
+## 2026-08-28 基盤実装の確定事項（#108、#109、#4、#14、#15）
+
+- 通常のconversation UIはLiveKit Roomを直接開始し、microphone trackを発話間も継続publishする。VADは`utterance_id`付きの`speech_started` / `speech_stopped`だけを送信し、`utterance_finalized`はBackendのSTT成功後に発行する。同一sessionへの明示再接続では、Room接続後に`state_sync_request`を送り、Backend確定世代と未完了応答を復元してから後続eventを扱う。
+- 中断turnはschema version 4の`interrupted`で内部保存するが、#110前の既存HTTP/WebSocket content turn wire contractは変更しない。中断本文はaudio sequence 1からの再生確認済み連続prefixだけを既存sanitizerへ通す。promptにはそのprefixを未完了応答として復元し、memory formationは`completed`だけを受理する。
+- LiveKit経路のWhisperは全sessionで共有する専用processを1つだけ所有し、親processの投入境界でもinflightを1件に制限する。上限超過は待機させず`stt_capacity_exceeded`で対象utteranceだけを破棄する。lock待ちまたは推論timeoutではworker processをterminateし、対象utteranceを破棄して`error(classification=recoverable, error_code=stt_*_timeout)`を通知する。次requestは新worker/modelで処理する。
+- Ollama streamingはprovider adapter内でNDJSONを検証し、Conversation Coreへ本文deltaだけを渡す。Coreが`response_id`、1始まりの`text_sequence`、連続`text_range`を付け、LiveKit control channelへmappingする。既存HTTP text chatは非streaming経路を維持する。
+- CoreはLLMとTTSを上限8件のqueueで接続する。日本語の文末、十分な長さの節、最大80文字のfallbackでsegmentを確定し、VOICEVOX結果を48kHz mono PCM16へ正規化する。transport adapterは各AudioTrack frameより先に`response_id`、0始まりのtransport内部sequence、PCM sample数を`logical_audio_segment`として送り、Coreの1始まり`audio_sequence`へ対応付けてCharacter AudioTrackへ順序publishする。cancel後の遅延結果はresponse generation gateで破棄し、cancelまたはfailed終端ではAudioSourceの未再生queueとFrontendの未割当metadataをresponse単位で破棄する。
+- FrontendはAudioWorkletが報告する無音を含むrender済みsample数でlogical segmentを追跡する。先頭sampleのrenderは`playback_started`の観測に使うが、中断履歴の再生済みprefixへ含めるのは予定sample数をすべてrenderした連続segmentだけとする。
+- schema version 3から4へのmigrationは起動時backup gate内で実行し、失敗時は起動前backupへrollbackする。dogfood SQLiteを開発環境のテスト入力には使用しない。

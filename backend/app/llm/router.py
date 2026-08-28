@@ -1,3 +1,5 @@
+from collections.abc import AsyncIterator
+
 from app.llm.base import LLMClient
 from app.model_settings import ModelSettings
 from app.prompting import BuiltPrompt, PromptMessage
@@ -46,3 +48,16 @@ def count_input_tokens(
 ) -> int:
     client = _create_llm_client(DEFAULT_PROVIDER, settings)
     return client.count_input_tokens(messages)
+
+
+async def stream_response(
+    prompt: BuiltPrompt,
+    *,
+    max_output_tokens: int,
+    settings: ModelSettings,
+) -> AsyncIterator[str]:
+    client = _create_llm_client(DEFAULT_PROVIDER, settings)
+    async for delta in client.stream_generate(
+        prompt, max_output_tokens=max_output_tokens
+    ):
+        yield delta

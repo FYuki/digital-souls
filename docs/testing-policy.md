@@ -44,6 +44,8 @@ Issue #56で、dogfood稼働中のintegration testとcleanupを含む横断受�
 
 各設定は Profile、収集ディレクトリ、成果物の出力先を固定する。spec 内で環境変数や依存 mode によってモックと実接続を切り替えない。各 spec が受け入れる要求Capabilityは1つだけとする。実接続 spec では mock WebSocket、`page.route`、HARによる外部通信の置換を禁止する。
 
+`voice-chat-real`はOllama、Whisper、VOICEVOXに加えてLiveKitのreadinessを要求する。`npm run test:integration:voice`の実行時は、Profileへ秘密値を保存せず、`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`を実行環境からBackendへ渡す。
+
 ## 実行入口
 
 リポジトリルートから次を実行する。
@@ -92,7 +94,9 @@ CodeRabbitの指摘はコードレビューの補助であり、GitHub Actions�
 
 ## LiveKit実サーバーsuite
 
-LiveKitの状態遷移、outbox、mapping、再生済みprefixはfake clock/portを使うunit/module testでCI内検証する。実Room、WebRTC media、browser microphoneの結合は`LIVEKIT_TEST_FRONTEND_URL`、`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`を設定し、リポジトリルートの`npm run test:integration:livekit`でBackend pytestとPlaywright Chromiumをまとめて実行する。このスイートはself-host LiveKitとUDP到達性が必要なためCIでは自動実行しない。
+LiveKitの状態遷移、outbox、mapping、再生済みprefixはfake clock/portを使うunit/module testでCI内検証する。実Room、WebRTC media、browser microphoneの結合は`LIVEKIT_TEST_BACKEND_URL`、`LIVEKIT_TEST_FRONTEND_URL`、`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`を設定し、リポジトリルートの`npm run test:integration:livekit`でBackend pytestとPlaywright Chromiumをまとめて実行する。このスイートはself-host LiveKitとUDP到達性が必要なためCIでは自動実行しない。
+
+`test:integration:livekit`はtransport単体のRoom、権限、outbox、microphone、AudioTrack購読graph、再接続を検証し、テスト専用character音声はproduction runtimeへ注入しない。Whisper、Ollama、VOICEVOXを含む通常conversation UIの逐次text/audio応答は`test:integration:voice`で検証する。
 
 ## Capability不足と失敗
 

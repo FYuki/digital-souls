@@ -440,6 +440,39 @@ def test_coordinator_releases_delivery_state_before_cleanup_dependency_finishes(
     asyncio.run(exercise())
 
 
+def test_coordinator_sends_valid_logical_audio_metadata_on_private_topic() -> None:
+    module = _livekit_module("coordinator", "logical audio metadata delivery")
+
+    async def exercise() -> None:
+        published: list[tuple[bytes, str]] = []
+        coordinator = _coordinator(module, published, [])
+        coordinator.participant_connected(
+            identity="user-20000000-0000-4000-8000-000000000010",
+            participant_sid="PA_current",
+            room_sid="RM_one",
+        )
+
+        await coordinator.send_logical_audio_segment(
+            response_id="30000000-0000-4000-8000-000000000010",
+            audio_sequence=0,
+            pcm_sample_count=960,
+        )
+
+        payload, topic = published[0]
+        assert topic == module.PRIVATE_TOPIC
+        assert json.loads(payload) == {
+            "protocol_version": "1.0",
+            "type": "logical_audio_segment",
+            "response_id": "30000000-0000-4000-8000-000000000010",
+            "audio_sequence": 0,
+            "generation": 0,
+            "pcm_sample_count": 960,
+        }
+        await coordinator.cleanup("test_complete")
+
+    asyncio.run(exercise())
+
+
 def test_disconnect_resynchronizes_the_acknowledged_terminal_outcome() -> None:
     module = _livekit_module("coordinator", "terminal outcome reconnection sync")
 

@@ -52,9 +52,9 @@ describe('LiveKit experimental page client flow', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'token取得' }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('/characters/miori/conversations')
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/characters/miori/conversations')
     const [url, init] = fetchMock.mock.calls[1] ?? []
-    expect(url).toBe('/voice/livekit/token')
+    expect(url).toBe('/api/voice/livekit/token')
     expect(init?.method).toBe('POST')
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>
     expect(body.protocol_version).toBe('1.0')

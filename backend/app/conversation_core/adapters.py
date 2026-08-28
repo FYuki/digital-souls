@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-import audioop
-import asyncio
 import wave
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from io import BytesIO
+import struct
+import threading
 from typing import Protocol, cast
+
+from app.async_worker import SyncWorkerCapacityError, run_sync
 
 from app.conversation_core.models import (
     AudioSegment,
@@ -54,12 +56,34 @@ class HistorySession(Protocol):
 _HISTORY_START_FAILED = object()
 
 
+class SttCapacityError(RuntimeError):
+    """STT隔離workerへ安全に投入できる同時実行上限を超えた。"""
+
+    error_code = "stt_capacity_exceeded"
+
+
 class WhisperSttAdapter:
-    def __init__(self, *, transcriber: SyncTranscriber) -> None:
+    def __init__(
+        self, *, transcriber: SyncTranscriber, max_inflight: int = 1
+    ) -> None:
+        if max_inflight < 1:
+            raise ValueError("max_inflight must be positive")
         self._transcriber = transcriber
+        self._capacity = threading.BoundedSemaphore(max_inflight)
 
     async def transcribe(self, audio: bytes) -> str:
-        return await asyncio.to_thread(self._transcriber.transcribe, audio)
+        try:
+            return await run_sync(self._transcribe_reserved, audio)
+        except SyncWorkerCapacityError as error:
+            raise SttCapacityError("STT worker capacity exceeded") from error
+
+    def _transcribe_reserved(self, audio: bytes) -> str:
+        if not self._capacity.acquire(blocking=False):
+            raise SttCapacityError("STT capacity exceeded")
+        try:
+            return self._transcriber.transcribe(audio)
+        finally:
+            self._capacity.release()
 
 
 class VoicevoxTtsAdapter:
@@ -85,7 +109,7 @@ class VoicevoxTtsAdapter:
         self._output_sample_width = output_sample_width
 
     async def synthesize(self, text: str) -> AsyncIterator[AudioSegment]:
-        audio = await asyncio.to_thread(self._synthesize_pcm, text)
+        audio = await run_sync(self._synthesize_pcm, text)
         yield AudioSegment(audio_sequence=1, audio=audio, text_range=(0, len(text)))
 
     def _synthesize_pcm(self, text: str) -> bytes:
@@ -112,35 +136,99 @@ class VoicevoxTtsAdapter:
                 raise ValueError("VOICEVOX WAV has an unsupported sample width")
             pcm = wav_file.readframes(wav_file.getnframes())
 
-        if input_sample_width == 1:
-            pcm = audioop.bias(pcm, input_sample_width, -128)
-        if input_channels == 2:
-            pcm = audioop.tomono(pcm, input_sample_width, 0.5, 0.5)
-        if input_sample_width != self._output_sample_width:
-            pcm = audioop.lin2lin(
-                pcm,
-                input_sample_width,
-                self._output_sample_width,
-            )
+        samples = _decode_mono_pcm16(
+            pcm,
+            sample_width=input_sample_width,
+            channels=input_channels,
+        )
         if input_sample_rate != self._output_sample_rate:
-            pcm, _state = audioop.ratecv(
-                pcm,
-                self._output_sample_width,
-                self._output_channels,
-                input_sample_rate,
-                self._output_sample_rate,
-                None,
+            samples = _resample_pcm16(
+                samples,
+                input_sample_rate=input_sample_rate,
+                output_sample_rate=self._output_sample_rate,
             )
-        return pcm
+        return struct.pack(f"<{len(samples)}h", *samples)
+
+
+def _decode_mono_pcm16(
+    pcm: bytes, *, sample_width: int, channels: int
+) -> list[int]:
+    frame_width = sample_width * channels
+    samples: list[int] = []
+    for frame_offset in range(0, len(pcm), frame_width):
+        channels_in_frame: list[int] = []
+        for channel in range(channels):
+            offset = frame_offset + channel * sample_width
+            encoded = pcm[offset : offset + sample_width]
+            if len(encoded) != sample_width:
+                raise ValueError("VOICEVOX PCM contains an incomplete frame")
+            if sample_width == 1:
+                value = (encoded[0] - 128) << 8
+            else:
+                raw = int.from_bytes(encoded, "little", signed=True)
+                value = raw >> (8 * (sample_width - 2))
+            channels_in_frame.append(value)
+        mixed = round(sum(channels_in_frame) / len(channels_in_frame))
+        samples.append(max(-32_768, min(32_767, mixed)))
+    return samples
+
+
+def _resample_pcm16(
+    samples: list[int], *, input_sample_rate: int, output_sample_rate: int
+) -> list[int]:
+    if len(samples) < 2:
+        return list(samples)
+    output_count = ((len(samples) - 1) * output_sample_rate) // input_sample_rate + 1
+    output: list[int] = []
+    for output_index in range(output_count):
+        numerator = output_index * input_sample_rate
+        left = numerator // output_sample_rate
+        remainder = numerator % output_sample_rate
+        if left >= len(samples) - 1:
+            output.append(samples[-1])
+            continue
+        ratio = remainder / output_sample_rate
+        interpolated = round(samples[left] * (1 - ratio) + samples[left + 1] * ratio)
+        output.append(max(-32_768, min(32_767, interpolated)))
+    return output
 
 
 class PromptLlmAdapter:
-    def __init__(self, *, generate_reply: Callable[[str], str]) -> None:
+    def __init__(
+        self,
+        *,
+        generate_reply: Callable[[str], str] | None = None,
+        generate_stream: Callable[[str], AsyncIterator[str]] | None = None,
+    ) -> None:
+        if (generate_reply is None) == (generate_stream is None):
+            raise ValueError("exactly one LLM generation source is required")
         self._generate_reply = generate_reply
+        self._generate_stream = generate_stream
 
     async def generate(self, transcript: str) -> AsyncIterator[TextDelta]:
-        text = await asyncio.to_thread(self._generate_reply, transcript)
-        yield TextDelta(text_sequence=1, text=text, text_range=(0, len(text)))
+        if self._generate_stream is None:
+            if self._generate_reply is None:
+                raise RuntimeError("LLM generation source is missing")
+            text = await run_sync(self._generate_reply, transcript)
+            if not text:
+                raise ValueError("LLM response must not be empty")
+            yield TextDelta(text_sequence=1, text=text, text_range=(0, len(text)))
+            return
+        sequence = 0
+        offset = 0
+        async for text in self._generate_stream(transcript):
+            if not text:
+                continue
+            sequence += 1
+            next_offset = offset + len(text)
+            yield TextDelta(
+                text_sequence=sequence,
+                text=text,
+                text_range=(offset, next_offset),
+            )
+            offset = next_offset
+        if sequence == 0:
+            raise ValueError("LLM response must not be empty")
 
 
 class ConversationHistoryPersistenceAdapter:
@@ -155,7 +243,7 @@ class ConversationHistoryPersistenceAdapter:
         if response_id in self._history_turns:
             raise ValueError("response history turn has already started")
         try:
-            started_turn = await asyncio.to_thread(
+            started_turn = await run_sync(
                 self._history_session.start_turn,
                 user_content,
             )
@@ -181,7 +269,7 @@ class ConversationHistoryPersistenceAdapter:
             return
         self._persisted_response_ids.add(outcome.response_id)
         if outcome.state is ResponseState.COMPLETED:
-            await asyncio.to_thread(
+            await run_sync(
                 self._history_session.complete_turn,
                 started_turn,
                 outcome.generated_text,
@@ -198,7 +286,7 @@ class ConversationHistoryPersistenceAdapter:
                 }
                 for segment in outcome.audio_segments
             ]
-            await asyncio.to_thread(
+            await run_sync(
                 self._history_session.interrupt_turn,
                 started_turn,
                 outcome.generated_text,
@@ -206,4 +294,4 @@ class ConversationHistoryPersistenceAdapter:
                 outcome.last_played_audio_sequence,
             )
             return
-        await asyncio.to_thread(self._history_session.fail_turn, started_turn)
+        await run_sync(self._history_session.fail_turn, started_turn)

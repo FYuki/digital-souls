@@ -118,8 +118,10 @@ def test_should_abort_up_during_preparation_when_whisper_inference_fails(
         frontend=disabled,
         ollama=disabled,
         voicevox=disabled,
+        livekit=disabled,
         chroma=disabled,
     )
+    del profile["dependencies"]["livekit"]
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     for launcher in ("setup-backend.sh", "start-backend.sh"):
@@ -187,9 +189,11 @@ def test_should_persist_schema_valid_readiness_timeout_from_up_command(
         backend=disabled,
         ollama=disabled,
         voicevox=disabled,
+        livekit=disabled,
         whisper=disabled,
         chroma=disabled,
     )
+    del profile["dependencies"]["livekit"]
     adapter = _NeverReadyOperations()
     report_path = runtime_paths.runtime_report_dir / "readiness" / "environment-run.json"
     monkeypatch.setattr(
@@ -242,9 +246,11 @@ def test_should_persist_managed_exit_as_schema_valid_supervision_failure(
         backend=disabled,
         ollama=disabled,
         voicevox=disabled,
+        livekit=disabled,
         whisper=disabled,
         chroma=disabled,
     )
+    del profile["dependencies"]["livekit"]
     adapter = _ExitedFrontendOperations()
     report_path = runtime_paths.runtime_report_dir / "supervision" / "environment-run.json"
     monkeypatch.setattr(

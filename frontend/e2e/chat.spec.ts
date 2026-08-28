@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installMockWebSocketBackend } from './mock-web-socket'
+import { installMockLiveKit } from './mock-livekit'
 import {
   attachProfileEvidence,
   getCapabilitySkipReason,
@@ -78,21 +79,6 @@ const openNewChat = async (page: Page, assistantContent: string) => {
   await page.getByRole('button', { name: '新規スレッド' }).click()
 }
 
-const readObservedConversationIds = async (page: Page, character: string): Promise<string[]> => {
-  return page.evaluate((selectedCharacter) => {
-    const urls = (window as unknown as { __mockWebSocketUrls: string[] }).__mockWebSocketUrls
-    return urls.filter((value) => {
-      const url = new URL(value)
-      return url.pathname === `/ws/${selectedCharacter}`
-        && url.searchParams.has('conversation_id')
-    }).map((value) => {
-      const conversationId = new URL(value).searchParams.get('conversation_id')
-      if (conversationId === null) throw new Error('Conversation ID was not observed')
-      return conversationId
-    })
-  }, character)
-}
-
 test('ユーザーが送信したメッセージとモック応答がチャット画面に表示される', async ({ page }) => {
   await openNewChat(page, 'こんにちは、調子はどう？')
 
@@ -134,6 +120,7 @@ test('モックBEがエラーを返した場合にエラーメッセージが表
 
 test('利用者がAからBへ切り替えてAへ戻すとcharacter別UUIDv4をHTTPとvoiceで利用する', async ({ page }) => {
   let requestBodies: Array<Record<string, string>> = []
+  const liveKit = await installMockLiveKit(page)
   await installMockWebSocketBackend(page, { textFrames: [], binaryFrames: [] })
   await installConversationBackend(page)
   await page.route('**/api/chat', async (route) => {
@@ -161,27 +148,28 @@ test('利用者がAからBへ切り替えてAへ戻すとcharacter別UUIDv4をHT
     await page.getByRole('button', { name: '送信' }).click()
     await expect(page.getByText(`応答${index + 1}`)).toBeVisible()
   }
-  await expect.poll(async () => (await readObservedConversationIds(page, 'miori')).length).toBe(1)
-  const [conversationIdA] = await readObservedConversationIds(page, 'miori')
+  await page.getByRole('button', { name: 'マイクをオンにする' }).click()
+  await expect.poll(() => liveKit.readBindings('miori').length).toBe(1)
+  const [conversationIdA] = liveKit.readBindings('miori')
 
   await page.getByLabel('キャラクターID').fill('mock-character-b')
   await page.getByRole('button', { name: '切り替え' }).click()
   await page.getByRole('button', { name: '新規スレッド' }).click()
-  await expect.poll(
-    async () => (await readObservedConversationIds(page, 'mock-character-b')).length,
-  ).toBe(1)
+  await page.getByRole('button', { name: 'マイクをオンにする' }).click()
+  await expect.poll(() => liveKit.readBindings('mock-character-b').length).toBe(1)
   await page.getByLabel('メッセージ').fill('Bへの質問')
   await page.getByRole('button', { name: '送信' }).click()
   await expect(page.getByText('応答3')).toBeVisible()
-  const [conversationIdB] = await readObservedConversationIds(page, 'mock-character-b')
+  const [conversationIdB] = liveKit.readBindings('mock-character-b')
 
   await page.getByLabel('キャラクターID').fill('miori')
   await page.getByRole('button', { name: '切り替え' }).click()
-  await expect.poll(async () => (await readObservedConversationIds(page, 'miori')).length).toBe(2)
+  await page.getByRole('button', { name: 'マイクをオンにする' }).click()
+  await expect.poll(() => liveKit.readBindings('miori').length).toBe(2)
   await page.getByLabel('メッセージ').fill('Aへの再質問')
   await page.getByRole('button', { name: '送信' }).click()
   await expect(page.getByText('応答4')).toBeVisible()
-  const returnedConversationIdsA = await readObservedConversationIds(page, 'miori')
+  const returnedConversationIdsA = liveKit.readBindings('miori')
 
   expect(requestBodies.map((body) => body.character)).toEqual([
     'miori', 'miori', 'mock-character-b', 'miori',

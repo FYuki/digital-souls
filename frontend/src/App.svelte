@@ -1,22 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte'
 
-  import AudioPlayer from './lib/AudioPlayer.svelte'
   import AudioRecorder from './lib/AudioRecorder.svelte'
-  import type { AudioCaptureMetadata } from './lib/AudioRecorder.svelte'
+  import type { SpeechActivity } from './lib/AudioRecorder.svelte'
   import CharacterSwitcher from './lib/CharacterSwitcher.svelte'
   import ChatWindow from './lib/ChatWindow.svelte'
   import ConversationSidebar from './lib/ConversationSidebar.svelte'
   import HardDeleteDialog from './lib/HardDeleteDialog.svelte'
   import InputBar from './lib/InputBar.svelte'
   import MemoryManagement from './lib/MemoryManagement.svelte'
-  import {
-    WebSocketAudioTransport,
-    type AudioTransport,
-    type AudioResponseMetadata,
-    type BackendErrorMessage,
-    type TransportCallbacks,
-  } from './lib/audio/transport'
   import { sendChatMessage } from './lib/chat/client'
   import { createConversationSessionManager } from './lib/conversation-session'
   import {
@@ -30,9 +22,12 @@
   } from './lib/conversations/client'
   import {
     createConversationController,
-    type SelectedConversationContext,
   } from './lib/conversations/controller'
-  import type { ConversationTurn } from './lib/conversations/types'
+  import type { VoiceSessionEvent } from './lib/voice-session/generated'
+  import {
+    LiveKitVoiceSessionController,
+    type VoiceSessionSnapshot,
+  } from './livekit/voice-session'
 
   const INITIAL_CHARACTER_ID = 'miori'
   const ERROR_MESSAGE = '応答の取得に失敗しました。'
@@ -50,141 +45,142 @@
     },
     createConversationSessionManager(),
   )
-  type PendingRequest = 'text' | 'audio' | null
-  type AudioPlaybackRequest = {
-    audioData: ArrayBuffer
-    onFirstPlayback: () => void
-  }
+  type PendingRequest = 'text' | null
 
   let pendingRequest: PendingRequest = null
-  let isConnected = false
-  let playbackRequest: AudioPlaybackRequest | null = null
-  let transport: AudioTransport | null = null
-  let transportConversationKey: string | null = null
   let applicationError: string | null = null
-  let transportSessionId: string | null = null
-  let responseMetadata: AudioResponseMetadata | null = null
   let showingMemoryManagement = false
+  let activeUtteranceId: string | null = null
+  let endingVoiceSession = false
+  type LiveVoiceTurn = {
+    responseId: string | null
+    sourceUtteranceIds: string[]
+    userContent: string
+    assistantContent: string
+    lastTextSequence: number
+  }
+  let liveVoiceTurn: LiveVoiceTurn | null = null
+  const finalizedUtterances = new Map<string, string>()
+  let voiceSnapshot: VoiceSessionSnapshot = {
+    phase: 'idle',
+    context: null,
+    sessionId: null,
+  }
+  const voiceSession = new LiveKitVoiceSessionController(
+    (snapshot) => { voiceSnapshot = snapshot },
+    receiveVoiceCoreEvent,
+  )
+
+  function receiveVoiceCoreEvent(event: VoiceSessionEvent) {
+    if (event.type === 'utterance_finalized' && event.utterance_id !== undefined) {
+      const transcript = event.transcript ?? ''
+      finalizedUtterances.set(event.utterance_id, transcript)
+      if (liveVoiceTurn === null) {
+        liveVoiceTurn = {
+          responseId: null,
+          sourceUtteranceIds: [event.utterance_id],
+          userContent: transcript,
+          assistantContent: '',
+          lastTextSequence: 0,
+        }
+      } else if (liveVoiceTurn.responseId === null) {
+        liveVoiceTurn = {
+          ...liveVoiceTurn,
+          sourceUtteranceIds: [...liveVoiceTurn.sourceUtteranceIds, event.utterance_id],
+          userContent: [liveVoiceTurn.userContent, transcript]
+            .filter((text) => text !== '')
+            .join('\n'),
+        }
+      }
+      return
+    }
+    if (event.type === 'response_started' && event.response_id !== undefined) {
+      const sourceIds = event.source_utterance_ids ?? []
+      liveVoiceTurn = {
+        responseId: event.response_id,
+        sourceUtteranceIds: sourceIds,
+        userContent: sourceIds
+          .map((utteranceId) => finalizedUtterances.get(utteranceId) ?? '')
+          .filter((text) => text !== '')
+          .join('\n'),
+        assistantContent: '',
+        lastTextSequence: 0,
+      }
+      return
+    }
+    if (
+      event.type === 'response_delta'
+      && event.response_id !== undefined
+      && event.text_sequence !== undefined
+      && event.text !== undefined
+      && liveVoiceTurn?.responseId === event.response_id
+      && event.text_sequence === liveVoiceTurn.lastTextSequence + 1
+    ) {
+      liveVoiceTurn = {
+        ...liveVoiceTurn,
+        assistantContent: liveVoiceTurn.assistantContent + event.text,
+        lastTextSequence: event.text_sequence,
+      }
+      return
+    }
+    if (
+      ['response_completed', 'response_cancelled', 'response_failed'].includes(event.type)
+      && liveVoiceTurn !== null
+      && event.response_id === liveVoiceTurn.responseId
+    ) {
+      const persisted = event.type === 'response_completed'
+        || event.type === 'response_cancelled'
+      for (const utteranceId of liveVoiceTurn.sourceUtteranceIds) {
+        finalizedUtterances.delete(utteranceId)
+      }
+      liveVoiceTurn = null
+      if (persisted) {
+        const context = conversationController.selectedContext()
+        if (context !== null) void conversationController.refreshTurns(context)
+      }
+      return
+    }
+    if (event.type === 'error') {
+      if (event.utterance_id !== undefined) finalizedUtterances.delete(event.utterance_id)
+      appendApplicationError()
+      return
+    }
+    if (event.type === 'utterance_discarded' && event.utterance_id !== undefined) {
+      finalizedUtterances.delete(event.utterance_id)
+      if (liveVoiceTurn?.responseId === null) liveVoiceTurn = null
+    }
+  }
 
   $: interactionsDisabled = pendingRequest !== null
     || $conversationController.pending
     || $conversationController.deleteCandidate !== null
-  $: syncTransport(
+  $: syncVoiceSelection(
     $conversationController.character,
     $conversationController.selectedConversationId,
   )
+  $: voiceRecorderDisabled = $conversationController.selectedConversationId === null
+    || $conversationController.pending
+    || $conversationController.deleteCandidate !== null
+    || endingVoiceSession
+    || voiceSnapshot.phase === 'connecting'
+  $: voiceRecorderForceOff = $conversationController.selectedConversationId === null
+    || endingVoiceSession
+    || voiceSnapshot.phase === 'error'
 
   const appendApplicationError = () => {
     applicationError = ERROR_MESSAGE
   }
 
-  const disconnectTransport = () => {
-    const previous = transport
-    transport = null
-    transportConversationKey = null
-    transportSessionId = null
-    responseMetadata = null
-    isConnected = false
-    previous?.disconnect()
-  }
-
-  const resolveAudioWebSocketUrl = (character: string): string => {
-    const { protocol, host } = window.location
-    const webSocketProtocol = protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${webSocketProtocol}//${host}/ws/${encodeURIComponent(character)}`
-  }
-
-  const createTransportCallbacks = (
-    context: SelectedConversationContext,
-    isCurrent: () => boolean,
-    sourceTransport: () => AudioTransport,
-  ): TransportCallbacks => ({
-    onTurnMessage: (turn: ConversationTurn) => {
-      if (!isCurrent()) return
-      conversationController.appendTurn(context, turn)
-      if (turn.kind === 'privacy_skipped') pendingRequest = null
-    },
-    onAudioMessage: (audio: ArrayBuffer) => {
-      if (!isCurrent()) return
-      const metadata = responseMetadata
-      responseMetadata = null
-      const source = sourceTransport()
-      if (metadata !== null) {
-        source.sendMeasurementEvent({
-          ...metadata,
-          eventId: crypto.randomUUID(),
-          name: 'client_audio_received',
-          timestamp: performance.now(),
-        })
-      }
-      playbackRequest = {
-        audioData: audio,
-        onFirstPlayback: () => {
-          if (metadata === null || transport !== source) return
-          source.sendMeasurementEvent({
-            ...metadata,
-            eventId: crypto.randomUUID(),
-            name: 'first_playback',
-            timestamp: performance.now(),
-          })
-        },
-      }
-      pendingRequest = null
-    },
-    onAudioResponseMetadata: (metadata: AudioResponseMetadata) => {
-      if (!isCurrent()) return
-      responseMetadata = metadata
-    },
-    onError: (_error: BackendErrorMessage) => {
-      if (!isCurrent()) return
-      appendApplicationError()
-      pendingRequest = null
-    },
-    onTransportError: (_error: Error) => {
-      if (!isCurrent()) return
-      appendApplicationError()
-      pendingRequest = null
-    },
-    onOpen: () => { if (isCurrent()) isConnected = true },
-    onClose: () => {
-      if (!isCurrent()) return
-      isConnected = false
-      if (pendingRequest === 'audio') pendingRequest = null
-    },
-  })
-
-  function syncTransport(character: string, conversationId: string | null) {
-    const nextKey = conversationId === null ? null : `${character}:${conversationId}`
-    if (nextKey === transportConversationKey) return
-    disconnectTransport()
-    if (conversationId === null) return
-    const context = conversationController.selectedContext()
-    if (context === null) return
-    let nextTransport: AudioTransport
-    const nextSessionId = crypto.randomUUID()
-    const callbacks = createTransportCallbacks(
-      context,
-      () => transport === nextTransport,
-      () => nextTransport,
-    )
-    nextTransport = new WebSocketAudioTransport(
-      resolveAudioWebSocketUrl(character),
-      conversationId,
-      callbacks,
-    )
-    transport = nextTransport
-    transportSessionId = nextSessionId
-    transportConversationKey = nextKey
-    void nextTransport.connect().catch(() => {
-      if (transport !== nextTransport) return
-      appendApplicationError()
-      isConnected = false
-    })
+  function syncVoiceSelection(character: string, conversationId: string | null) {
+    const active = voiceSnapshot.context
+    if (active === null || endingVoiceSession) return
+    if (active.characterId === character && active.conversationId === conversationId) return
+    void endVoiceSession()
   }
 
   onMount(() => {
     void conversationController.loadCharacter(INITIAL_CHARACTER_ID)
-    return disconnectTransport
+    return () => { void voiceSession.end().catch(() => undefined) }
   })
 
   const handleSend = async (message: string) => {
@@ -217,29 +213,63 @@
     void conversationController.selectConversation(conversationId)
   }
 
-  const handleAudioCaptured = (
-    pcmData: ArrayBuffer,
-    capture: AudioCaptureMetadata,
-  ) => {
-    if (
-      !isConnected
-      || interactionsDisabled
-      || transport === null
-      || transportSessionId === null
-    ) return
-    pendingRequest = 'audio'
+  const ensureVoiceSession = async () => {
+    const context = conversationController.selectedContext()
+    if (context === null) throw new Error('Conversation is not selected')
+    applicationError = null
     try {
-      responseMetadata = null
-      transport.sendAudio(pcmData, {
-        eventId: crypto.randomUUID(),
-        sessionId: transportSessionId,
-        utteranceId: crypto.randomUUID(),
-        ...capture,
-        responseDecisionClientMs: performance.now(),
+      await voiceSession.ensureSession({
+        characterId: context.character,
+        conversationId: context.conversationId,
       })
+    } catch (error) {
+      appendApplicationError()
+      throw error
+    }
+  }
+
+  const resumeVoiceMicrophone = async () => {
+    try {
+      await voiceSession.resumeMicrophone()
+    } catch (error) {
+      appendApplicationError()
+      throw error
+    }
+  }
+
+  const muteVoiceMicrophone = async () => {
+    try {
+      activeUtteranceId = null
+      await voiceSession.muteMicrophone()
+    } catch (error) {
+      appendApplicationError()
+      throw error
+    }
+  }
+
+  const handleSpeechStarted = ({ clientMs }: SpeechActivity) => {
+    const utteranceId = crypto.randomUUID()
+    activeUtteranceId = utteranceId
+    void voiceSession.speechStarted(utteranceId, clientMs).catch(appendApplicationError)
+  }
+
+  const handleSpeechStopped = ({ clientMs }: SpeechActivity) => {
+    const utteranceId = activeUtteranceId
+    activeUtteranceId = null
+    if (utteranceId === null) return
+    void voiceSession.speechStopped(utteranceId, clientMs).catch(appendApplicationError)
+  }
+
+  const endVoiceSession = async () => {
+    if (endingVoiceSession) return
+    endingVoiceSession = true
+    activeUtteranceId = null
+    try {
+      await voiceSession.end()
     } catch {
       appendApplicationError()
-      pendingRequest = null
+    } finally {
+      endingVoiceSession = false
     }
   }
 </script>
@@ -268,23 +298,33 @@
       onUnarchive={conversationController.unarchiveConversation}
       onDelete={conversationController.requestHardDelete}
     />
-    <ChatWindow turns={$conversationController.turns} />
+    <ChatWindow turns={$conversationController.turns} liveVoiceTurn={liveVoiceTurn} />
     {#if applicationError !== null || $conversationController.error !== null}
       <p class="application-error" role="alert">{applicationError ?? $conversationController.error}</p>
     {/if}
     <div class="input-area">
       <InputBar onSend={handleSend} disabled={interactionsDisabled || $conversationController.selectedConversationId === null} />
       <AudioRecorder
-        disabled={interactionsDisabled || !isConnected}
-        forceOff={!isConnected}
-        onAudioCaptured={handleAudioCaptured}
+        disabled={voiceRecorderDisabled}
+        forceOff={voiceRecorderForceOff}
+        continuous={true}
+        onBeforeEnable={ensureVoiceSession}
+        onMicrophoneEnabled={resumeVoiceMicrophone}
+        onMicrophoneDisabled={muteVoiceMicrophone}
+        onSpeechStarted={handleSpeechStarted}
+        onSpeechStopped={handleSpeechStopped}
+        onAudioCaptured={() => undefined}
         onError={appendApplicationError}
       />
+      {#if voiceSnapshot.sessionId !== null}
+        <button
+          type="button"
+          class="end-voice-session"
+          disabled={endingVoiceSession}
+          on:click={() => { void endVoiceSession() }}
+        >音声会話を終了</button>
+      {/if}
     </div>
-    <AudioPlayer
-      request={playbackRequest}
-      onError={appendApplicationError}
-    />
   </section>
   {/if}
 </main>
@@ -364,6 +404,16 @@
     padding: 0;
     border-top: 0;
     background: transparent;
+  }
+
+  .end-voice-session {
+    flex: 0 0 auto;
+    min-height: 44px;
+    border: 1px solid rgba(144, 67, 47, 0.28);
+    border-radius: 8px;
+    color: #6e3227;
+    background: #fffdfa;
+    font-weight: 700;
   }
 
   @media (max-width: 640px) {

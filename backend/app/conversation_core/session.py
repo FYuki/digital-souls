@@ -23,6 +23,7 @@ from app.conversation_core.ports import (
     SttPort,
     TtsPort,
 )
+from app.conversation_core.segmentation import JapaneseTextSegmenter, TextSegment
 
 
 TaskResult = TypeVar("TaskResult")
@@ -48,7 +49,10 @@ class ConversationCoreSession:
         stt: SttPort,
         llm: LlmPort,
         tts: TtsPort,
+        tts_queue_maxsize: int = 8,
     ) -> None:
+        if tts_queue_maxsize < 1:
+            raise ValueError("tts_queue_maxsize must be positive")
         self.session_id = session_id
         self._response_id_factory = response_id_factory
         self._delivery = delivery
@@ -57,6 +61,7 @@ class ConversationCoreSession:
         self._stt = stt
         self._llm = llm
         self._tts = tts
+        self._tts_queue_maxsize = tts_queue_maxsize
         self._responses: dict[str, Response] = {}
         self._utterances: dict[str, Utterance] = {}
         self._active_response_id: str | None = None
@@ -92,6 +97,11 @@ class ConversationCoreSession:
         return sum(
             not task.done() for task in self._stage_tasks | self._effect_tasks
         )
+
+    @property
+    def accepting_input(self) -> bool:
+        """新しい発話を受理できる接続状態かを返す。"""
+        return self._connected and not self._ended
 
     def response(self, response_id: str) -> Response:
         return self._responses[response_id]
@@ -315,6 +325,8 @@ class ConversationCoreSession:
             reason=reason,
         )
         self._request_response_task_cancellation(response_id, response.generation)
+        for _ in range(3):
+            await asyncio.sleep(0)
         return result
 
     async def confirm_playback(
@@ -431,14 +443,24 @@ class ConversationCoreSession:
                 response_id=response.response_id,
                 user_content=response_input,
             )
+        except DeliveryError:
+            self._response_start_events[response.response_id].set()
+            await self.stage_cancelled(
+                response_id=response.response_id,
+                generation=response.generation,
+                stage="llm",
+            )
+            raise
         except Exception:
+            # terminal effectを起動する前にstart待ちを解除し、開始失敗時の
+            # 相互待機を作らない。
+            self._response_start_events[response.response_id].set()
             await self.fail_response(
                 response_id=response.response_id,
                 generation=response.generation,
             )
             return self._responses[response.response_id]
-        finally:
-            self._response_start_events[response.response_id].set()
+        self._response_start_events[response.response_id].set()
         if start_result.content_skipped:
             await self.privacy_skip_response(
                 response_id=response.response_id,
@@ -484,31 +506,222 @@ class ConversationCoreSession:
         except asyncio.CancelledError:
             await self._record_utterance_stage(utterance_id, "stt", "cancelled")
             raise
-        except Exception:
+        except Exception as error:
             await self._record_utterance_stage(utterance_id, "stt", "failed")
+            error_code = getattr(error, "error_code", None)
+            if isinstance(error_code, str):
+                await self._discard_failed_utterance(
+                    utterance_id=utterance_id,
+                    should_response=should_response,
+                    reason=error_code,
+                )
+                await self._publish_utterance_delivery(
+                    CoreEvent(
+                        type="error",
+                        session_id=self.session_id,
+                        utterance_id=utterance_id,
+                        classification="recoverable",
+                        error_code=error_code,
+                        recoverable=True,
+                        user_state="listening",
+                    )
+                )
             raise
         await self._record_utterance_stage(utterance_id, "stt", "completed")
+        await self._publish_utterance_delivery(
+            CoreEvent(
+                type="utterance_finalized",
+                session_id=self.session_id,
+                utterance_id=utterance_id,
+                transcript=transcript,
+                should_response=should_response,
+            )
+        )
         return await self.finalize_utterance(
             utterance_id=utterance_id,
             transcript=transcript,
             should_response=should_response,
         )
 
+    async def _discard_failed_utterance(
+        self, *, utterance_id: str, should_response: bool, reason: str
+    ) -> None:
+        async with self._state_lock:
+            existing = self._utterances.get(utterance_id)
+            if existing is not None:
+                return
+            self._utterances[utterance_id] = Utterance(
+                utterance_id=utterance_id,
+                transcript="",
+                should_response=should_response,
+                state=UtteranceState.DISCARDED,
+                discard_reason=reason,
+            )
+
     async def _run_response_pipeline(
         self,
         response: Response,
         response_input: str,
     ) -> None:
-        if not await self._run_llm_stage(response, response_input):
+        queue: asyncio.Queue[TextSegment | None] = asyncio.Queue(
+            maxsize=self._tts_queue_maxsize
+        )
+        llm_task = asyncio.create_task(
+            self._produce_text_segments(response, response_input, queue)
+        )
+        tts_task = asyncio.create_task(self._consume_text_segments(response, queue))
+        try:
+            await asyncio.gather(llm_task, tts_task)
+        except asyncio.CancelledError:
+            llm_task.cancel()
+            tts_task.cancel()
+            await asyncio.gather(llm_task, tts_task, return_exceptions=True)
+            raise
+        except Exception:
+            llm_task.cancel()
+            tts_task.cancel()
+            await asyncio.gather(llm_task, tts_task, return_exceptions=True)
+            if self._gated_response(response.response_id, response.generation) is not None:
+                await self.fail_response(
+                    response_id=response.response_id,
+                    generation=response.generation,
+                    reason="streaming_pipeline_failed",
+                )
             return
-        current = self._gated_response(response.response_id, response.generation)
-        if current is None:
-            return
-        if not await self._run_tts_stage(current):
+        if self._gated_response(response.response_id, response.generation) is None:
             return
         await self.complete_response(
             response_id=response.response_id,
             generation=response.generation,
+        )
+
+    async def _produce_text_segments(
+        self,
+        response: Response,
+        response_input: str,
+        queue: asyncio.Queue[TextSegment | None],
+    ) -> None:
+        await self.stage_started(
+            response_id=response.response_id,
+            generation=response.generation,
+            stage="llm",
+        )
+        segmenter = JapaneseTextSegmenter()
+        try:
+            async for delta in self._llm.generate(response_input):
+                accepted = await self.accept_text_delta(
+                    response_id=response.response_id,
+                    generation=response.generation,
+                    text_sequence=delta.text_sequence,
+                    text=delta.text,
+                    text_range=delta.text_range,
+                )
+                if not accepted:
+                    continue
+                for segment in segmenter.feed(delta.text):
+                    await queue.put(segment)
+            for segment in segmenter.finish():
+                await queue.put(segment)
+            await queue.put(None)
+        except asyncio.CancelledError:
+            await self.stage_cancelled(
+                response_id=response.response_id,
+                generation=response.generation,
+                stage="llm",
+            )
+            raise
+        except DeliveryError:
+            await self.stage_cancelled(
+                response_id=response.response_id,
+                generation=response.generation,
+                stage="llm",
+            )
+            raise
+        except Exception:
+            await self.stage_failed(
+                response_id=response.response_id,
+                generation=response.generation,
+                stage="llm",
+            )
+            raise
+        if self._gated_response(response.response_id, response.generation) is None:
+            await self.stage_cancelled(
+                response_id=response.response_id,
+                generation=response.generation,
+                stage="llm",
+            )
+            return
+        await self.stage_completed(
+            response_id=response.response_id,
+            generation=response.generation,
+            stage="llm",
+        )
+
+    async def _consume_text_segments(
+        self,
+        response: Response,
+        queue: asyncio.Queue[TextSegment | None],
+    ) -> None:
+        await self.stage_started(
+            response_id=response.response_id,
+            generation=response.generation,
+            stage="tts",
+        )
+        audio_sequence = 0
+        try:
+            while True:
+                text_segment = await queue.get()
+                try:
+                    if text_segment is None:
+                        break
+                    async for synthesized in self._tts.synthesize(text_segment.text):
+                        audio_sequence += 1
+                        local_start, local_end = synthesized.text_range
+                        global_range = (
+                            text_segment.text_range[0] + local_start,
+                            text_segment.text_range[0] + local_end,
+                        )
+                        await self.accept_audio_segment(
+                            response_id=response.response_id,
+                            generation=response.generation,
+                            audio_sequence=audio_sequence,
+                            audio=synthesized.audio,
+                            text_range=global_range,
+                        )
+                finally:
+                    queue.task_done()
+        except asyncio.CancelledError:
+            await self.stage_cancelled(
+                response_id=response.response_id,
+                generation=response.generation,
+                stage="tts",
+            )
+            raise
+        except DeliveryError:
+            await self.stage_cancelled(
+                response_id=response.response_id,
+                generation=response.generation,
+                stage="tts",
+            )
+            raise
+        except Exception:
+            await self.stage_failed(
+                response_id=response.response_id,
+                generation=response.generation,
+                stage="tts",
+            )
+            raise
+        if self._gated_response(response.response_id, response.generation) is None:
+            await self.stage_cancelled(
+                response_id=response.response_id,
+                generation=response.generation,
+                stage="tts",
+            )
+            return
+        await self.stage_completed(
+            response_id=response.response_id,
+            generation=response.generation,
+            stage="tts",
         )
 
     async def _run_llm_stage(self, response: Response, response_input: str) -> bool:
@@ -619,7 +832,7 @@ class ConversationCoreSession:
         state: ResponseState,
         reason: str | None,
     ) -> Response:
-        terminal_task: asyncio.Task[object] | None = None
+        terminal_started = False
         async with self._state_lock:
             response = self._responses[response_id]
             if response.state.is_terminal:
@@ -643,10 +856,9 @@ class ConversationCoreSession:
             )
             if response_id not in self._persisted_response_ids:
                 self._persisted_response_ids.add(response_id)
-                terminal_task = self._register_effect_task(
-                    self._run_terminal_effects(outcome)
-                )
-        if terminal_task is not None:
+                self._register_effect_task(self._run_terminal_effects(outcome))
+                terminal_started = True
+        if terminal_started:
             await asyncio.sleep(0)
         return response
 
@@ -850,6 +1062,25 @@ class ConversationCoreSession:
             "delivery",
             "completed",
         )
+
+    async def _publish_utterance_delivery(self, event: CoreEvent) -> None:
+        utterance_id = event.utterance_id
+        if utterance_id is None:
+            raise TerminalProtocolError(
+                "utterance delivery event requires utterance identity"
+            )
+        await self._record_utterance_stage(utterance_id, "delivery", "started")
+        try:
+            await self._delivery.publish(event)
+        except asyncio.CancelledError:
+            await self._record_utterance_stage(
+                utterance_id, "delivery", "cancelled"
+            )
+            raise
+        except Exception as error:
+            await self._record_utterance_stage(utterance_id, "delivery", "failed")
+            raise DeliveryError("Core utterance delivery failed") from error
+        await self._record_utterance_stage(utterance_id, "delivery", "completed")
 
     def _register_stage_task(
         self,

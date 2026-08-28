@@ -64,8 +64,13 @@ export class CoreEventReceiver {
   }
 }
 
-export type PlaybackConfirmation = Readonly<{
+export type BrowserControlMessage = Readonly<{
   event: VoiceSessionEvent
+  responseId?: string
+  continuousPrefix?: number
+}>
+
+export type PlaybackConfirmation = BrowserControlMessage & Readonly<{
   responseId: string
   continuousPrefix: number
 }>
@@ -107,7 +112,7 @@ export type RetryTimer = Readonly<{
 }>
 
 type BrowserOutboxEntry = {
-  confirmation: PlaybackConfirmation
+  message: BrowserControlMessage
   payload: Uint8Array<ArrayBuffer>
   initiallySentAtMs: number
   retryCount: number
@@ -137,7 +142,7 @@ export class BrowserControlOutbox {
   }
 
   async enqueue(
-    confirmation: PlaybackConfirmation,
+    message: BrowserControlMessage,
     encodedPayload: Uint8Array<ArrayBuffer>,
   ): Promise<void> {
     if (
@@ -147,13 +152,13 @@ export class BrowserControlOutbox {
       this.transportUnavailable()
       throw new Error('browser control outbox capacity exceeded')
     }
-    const eventId = confirmation.event.event_id
+    const eventId = message.event.event_id
     if (this.entries.has(eventId)) {
       throw new Error('browser control outbox event_id already exists')
     }
     const payload = encodedPayload.slice()
     const entry: BrowserOutboxEntry = {
-      confirmation,
+      message,
       payload,
       initiallySentAtMs: this.timer.now(),
       retryCount: 0,
@@ -170,8 +175,8 @@ export class BrowserControlOutbox {
     if (this.entries.get(eventId) === entry) this.scheduleRetry(eventId, entry)
   }
 
-  acknowledge(eventId: string): PlaybackConfirmation | null {
-    return this.remove(eventId)?.confirmation ?? null
+  acknowledge(eventId: string): BrowserControlMessage | null {
+    return this.remove(eventId)?.message ?? null
   }
 
   clear(): void {

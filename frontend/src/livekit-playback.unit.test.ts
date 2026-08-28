@@ -28,9 +28,13 @@ interface PlaybackModule {
       responseId: string
       continuousPrefix: number
       renderedSamples: number
+      renderedEnergy: number
+      confirmedSegments: number
+      unassignedRenderedSamples: number
     }) => void,
   ) => {
     setGeneration(generation: number): void
+    discardResponse(responseId: string): void
     recordMetadata(metadata: SegmentMetadata, eligibleAfterFrame: number): void
     recordRenderedInterval(interval: {
       startFrame: number
@@ -150,6 +154,31 @@ describe('LiveKit rendered playback prefix', () => {
     ])
   })
 
+  test('無音frameもsegmentのrender済みsample数へ含める', async () => {
+    const { PlaybackEvidenceController } = await playbackModule('silent PCM render accounting')
+    const observations: Array<{ renderedSamples: number; renderedEnergy: number }> = []
+    const controller = new PlaybackEvidenceController(1, (evidence) => {
+      observations.push(evidence)
+    })
+    controller.recordMetadata({
+      responseId: '30000000-0000-4000-8000-000000000010',
+      audioSequence: 0,
+      generation: 1,
+      pcmSampleCount: 480,
+    }, 0)
+
+    controller.recordRenderedInterval({ startFrame: 0, endFrame: 240, energy: 0 })
+    controller.recordRenderedInterval({ startFrame: 240, endFrame: 480, energy: 2 })
+
+    expect(observations.map(({ renderedSamples, renderedEnergy }) => ({
+      renderedSamples,
+      renderedEnergy,
+    }))).toEqual([
+      { renderedSamples: 240, renderedEnergy: 0 },
+      { renderedSamples: 480, renderedEnergy: 2 },
+    ])
+  })
+
   test('generation更新時に旧metadataと未割当sampleを破棄する', async () => {
     const { PlaybackEvidenceController } = await playbackModule('generation-owned playback evidence')
     const observations: Array<{ continuousPrefix: number; renderedSamples: number }> = []
@@ -177,5 +206,35 @@ describe('LiveKit rendered playback prefix', () => {
     expect(observations.map(({ continuousPrefix, renderedSamples }) => ({
       continuousPrefix, renderedSamples,
     }))).toEqual([{ continuousPrefix: 0, renderedSamples: 480 }])
+  })
+
+  test('cancelされたresponseの未再生metadataを次responseへ割り当てない', async () => {
+    const { PlaybackEvidenceController } = await playbackModule('response-owned queue discard')
+    const observations: Array<{ responseId: string; continuousPrefix: number }> = []
+    const controller = new PlaybackEvidenceController(2, (evidence) => {
+      observations.push(evidence)
+    })
+    controller.recordMetadata({
+      responseId: '30000000-0000-4000-8000-000000000010',
+      audioSequence: 0,
+      generation: 2,
+      pcmSampleCount: 480,
+    }, 0)
+
+    controller.discardResponse('30000000-0000-4000-8000-000000000010')
+    controller.recordMetadata({
+      responseId: '30000000-0000-4000-8000-000000000020',
+      audioSequence: 0,
+      generation: 2,
+      pcmSampleCount: 240,
+    }, 0)
+    controller.recordRenderedInterval({ startFrame: 0, endFrame: 240, energy: 1 })
+
+    expect(observations.map(({ responseId, continuousPrefix }) => ({
+      responseId, continuousPrefix,
+    }))).toEqual([{
+      responseId: '30000000-0000-4000-8000-000000000020',
+      continuousPrefix: 0,
+    }])
   })
 })

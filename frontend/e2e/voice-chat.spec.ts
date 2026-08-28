@@ -5,7 +5,7 @@ import {
   createVoiceTestUseOptions,
   voiceTestTimeout,
 } from '../playwright/voice-chat-suite'
-import { installMockWebSocketBackend } from './mock-web-socket'
+import { installMockLiveKit } from './mock-livekit'
 import {
   attachProfileEvidence,
   getCapabilitySkipReason,
@@ -16,35 +16,7 @@ import {
 const MOCK_TRANSCRIPT_TEXT = 'テスト音声です'
 const MOCK_RESPONSE_TEXT = 'テスト音声に応答します。'
 const MOCK_CONVERSATION_ID = 'e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'
-const MOCK_RESPONSE_ID = '01992f57-8c65-79d0-924f-e2cd79bc04fa'
 let resolvedProfile: ResolvedProfile
-
-const createMockAudioResponse = (): Buffer => {
-  const sampleRate = 16_000
-  const samples = Math.floor(sampleRate * 0.2)
-  const dataSize = samples * 2
-  const buffer = Buffer.alloc(44 + dataSize)
-  buffer.write('RIFF', 0)
-  buffer.writeUInt32LE(36 + dataSize, 4)
-  buffer.write('WAVE', 8)
-  buffer.write('fmt ', 12)
-  buffer.writeUInt32LE(16, 16)
-  buffer.writeUInt16LE(1, 20)
-  buffer.writeUInt16LE(1, 22)
-  buffer.writeUInt32LE(sampleRate, 24)
-  buffer.writeUInt32LE(sampleRate * 2, 28)
-  buffer.writeUInt16LE(2, 32)
-  buffer.writeUInt16LE(16, 34)
-  buffer.write('data', 36)
-  buffer.writeUInt32LE(dataSize, 40)
-  for (let index = 0; index < samples; index += 1) {
-    buffer.writeInt16LE(
-      Math.round(Math.sin((2 * Math.PI * 440 * index) / sampleRate) * 12_000),
-      44 + index * 2,
-    )
-  }
-  return buffer
-}
 
 test.beforeAll(async () => {
   resolvedProfile = await readResolvedProfile()
@@ -58,6 +30,10 @@ test.beforeEach(async ({ page }, testInfo) => {
 })
 
 const installMockBackend = async (page: Page) => {
+  await installMockLiveKit(page, {
+    transcript: MOCK_TRANSCRIPT_TEXT,
+    response: MOCK_RESPONSE_TEXT,
+  })
   await page.route('**/api/characters/**', async (route) => {
     const request = route.request()
     const url = new URL(request.url())
@@ -77,19 +53,6 @@ const installMockBackend = async (page: Page) => {
       contentType: 'application/json',
       body: JSON.stringify(request.method() === 'POST' ? conversation : []),
     })
-  })
-  await installMockWebSocketBackend(page, {
-    textFrames: [],
-    binaryFrames: [
-      { kind: 'text', data: JSON.stringify({ type: 'text', turn: {
-        kind: 'content',
-        turn_id: '9e70795d-e5d5-431d-baa2-67f884403010',
-        user_content: MOCK_TRANSCRIPT_TEXT,
-        assistant_content: MOCK_RESPONSE_TEXT,
-      } }) },
-      { kind: 'audio-response-metadata', responseId: MOCK_RESPONSE_ID },
-      { kind: 'binary', data: Array.from(createMockAudioResponse()) },
-    ],
   })
 }
 
@@ -113,10 +76,11 @@ test('マイクボタン操作でOFFから有効状態へ遷移する', async ({
   await expect(button).toHaveClass(/mic-standby|mic-active/)
 })
 
-test('VADの発話イベント中だけON表示になり、発話終了後にSTANDBYへ戻る', async ({ page }) => {
+test('VADの発話イベント中も継続microphone sessionを維持する', async ({ page }) => {
   const button = await driver.enableMicrophone(page)
   await expect(button).toHaveClass(/mic-active/, { timeout: 15_000 })
-  await driver.expectMicrophoneStandby(page)
+  await page.waitForFunction(() => window.__voiceChatE2E.cycles.length > 0)
+  await expect(button).toHaveAttribute('aria-pressed', 'true')
 })
 
 test('音声応答のuser発話とmiori応答がこの順でチャット欄に表示される', async ({ page }) => {
@@ -126,14 +90,14 @@ test('音声応答のuser発話とmiori応答がこの順でチャット欄に�
   await expectMockMessages(page)
 })
 
-test('音声応答はuser text、miori text、audio binaryの順で受信する', async ({ page }) => {
+test('音声応答はtext delta、audio segmentの順で受信する', async ({ page }) => {
   await driver.enableMicrophone(page)
   await driver.waitForSpeechCompletion(page)
   await driver.expectMessages(page)
-  await expect(driver.waitForFrameOrder(page)).resolves.toEqual(['persisted-turn', 'audio'])
+  await expect(driver.waitForFrameOrder(page)).resolves.toEqual(['text-delta', 'audio'])
 })
 
-test('音声応答のバイナリフレームを受信するとブラウザで音声再生を開始する', async ({ page }) => {
+test('音声segmentを受信すると再生開始観測をresponseへ相関する', async ({ page }) => {
   await driver.enableMicrophone(page)
   await driver.waitForSpeechCompletion(page)
   await driver.waitForCompletedVoiceCycle(page)

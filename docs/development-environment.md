@@ -118,7 +118,7 @@ Profile は次の5種類である。各依存の完全な接続先と readiness 
 | `dev` | 通常のローカル開発 | Frontend、Backend、external Ollama／VOICEVOX、Whisper |
 | `test-mocked` | ブラウザ内 mock を使う独立 E2E | Frontend、browser mock Backend |
 | `integration-text` | 実テキストチャット | Frontend、Backend、external Ollama |
-| `integration-voice` | 実音声チャット | Frontend、Backend、external Ollama／VOICEVOX、Whisper |
+| `integration-voice` | 実音声チャット | Frontend、Backend、external Ollama／VOICEVOX／LiveKit、Whisper |
 | `dogfood` | 継続利用する運用相当環境 | Frontend、Backend、external Ollama／VOICEVOX、Whisper |
 
 起動スクリプトはサービス起動前に中央の解決処理でProfileを検証する。実行時レポートと解決済みProfileは解決済みデータルートの`runtime/`配下にのみ保存する。Playwrightは各スイート専用のテスト用データルートを設定し、`runtime/standalone/`へ環境レポートを、`frontend/test-results/<suite>/`へテスト証跡を保存する。レポートには環境IDと正規化済みパスを記録し、秘密値や会話本文は記録しない。
@@ -162,7 +162,8 @@ Backend単体起動とdev／integrationの`scripts/start-all.sh`はOllamaやVOIC
 - TTS は `VOICEVOX_BASE_URL` を参照し、未設定または空文字時は `http://127.0.0.1:50021` に接続する
 - `VoicevoxClient` は `/audio_query` と `/synthesis` を呼び出す
 - 共通環境オーケストレーターの VOICEVOX adapter は Profile の `readinessUrl` で `/version` を確認する
-- Whisper は外部サービスではなく Backend プロセス内で `WHISPER_MODEL`（既定 `medium`）を初回利用時にロードする
+- Whisper は外部サービスではない。旧WebSocket baselineはBackend main process内、LiveKit Conversation CoreはBackendが所有する専用child process内で`WHISPER_MODEL`（既定`medium`）を初回利用時にロードする
+- LiveKit Conversation CoreのWhisper隔離境界は`WHISPER_LOCK_TIMEOUT_SECONDS`（既定5秒）と`WHISPER_INFERENCE_TIMEOUT_SECONDS`（既定45秒）で調整する。timeout後はworker processを破棄し、次requestでmodelを再生成する。
 - 共通環境オーケストレーターは prepare で Whisper モデルを`<data root>/cache/huggingface/hub`へ準備し、Backend 実行時も同じ保存先を使う
 - `<data root>/cache/huggingface/` は Git 管理対象外である。Backend を単体起動する場合は初回利用時に取得が発生し得るため、オフライン環境では事前にこのキャッシュを用意する
 - `WHISPER_MODEL` を変更した場合、prepare時のcache名・ダウンロード対象・Backend実行モデルが一緒に切り替わる
