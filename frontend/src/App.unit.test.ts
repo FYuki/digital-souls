@@ -372,6 +372,24 @@ describe('App conversation lifecycle', () => {
     expect(chatIndex).toBeGreaterThan(endIndex)
   })
 
+  test('音声session終了APIが失敗してもtext送信を継続する', async () => {
+    fetchMock.mockImplementation(async (input, init) => {
+      if (String(input).startsWith('/api/voice/livekit/sessions/') && init?.method === 'DELETE') {
+        return new Response(null, { status: 503 })
+      }
+      return defaultFetch(input, init)
+    })
+    render(App)
+    await startLiveKitSession()
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: '終了失敗後も送信する' },
+    })
+    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
+
+    expect(await screen.findByText('HTTP応答です。')).toBeTruthy()
+    expect(fetchMock.mock.calls.some(([input]) => String(input) === '/api/chat')).toBe(true)
+  })
+
   test('recoverable音声エラー後もmicを維持して次の応答を処理する', async () => {
     const nextUtteranceId = '30000000-0000-4000-8000-000000000030'
     const nextResponseId = '50000000-0000-4000-8000-000000000030'

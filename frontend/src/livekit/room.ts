@@ -213,9 +213,10 @@ export class LiveKitRoomClient {
     this.audioContext = null
     this.workletReady = null
     if (context !== null) void context.close().catch(() => undefined)
+    const controlAvailable = this.controlOutbox !== null
     this.observe({
-      transport: 'available',
-      control: 'available',
+      transport: this.room === null ? 'idle' : controlAvailable ? 'available' : 'unavailable',
+      control: controlAvailable ? 'available' : 'unavailable',
       audio: 'unavailable',
       activeAudioGraphs: 0,
       activeResponseId: responseId,

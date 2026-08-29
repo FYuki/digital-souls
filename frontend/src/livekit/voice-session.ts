@@ -106,7 +106,7 @@ export class LiveKitVoiceSessionController {
   private binding: TokenResponse | null = null
   private room: VoiceSessionRoom | null = null
   private operationVersion = 0
-  private phaseBeforeReconnect: 'listening' | 'muted' = 'muted'
+  private microphoneEnabled = false
   private controlTail: Promise<void> = Promise.resolve()
   private generatingResponseId: string | null = null
   private playbackResponseId: string | null = null
@@ -179,6 +179,7 @@ export class LiveKitVoiceSessionController {
         requested_reconnect_grace_ms: binding.reconnect_grace_ms,
       }))
       if (version === this.operationVersion) {
+        this.microphoneEnabled = false
         this.input = 'muted'
         this.setPhase('muted')
       }
@@ -187,6 +188,7 @@ export class LiveKitVoiceSessionController {
         this.room?.disconnect()
         this.room = null
         this.binding = null
+        this.microphoneEnabled = false
         this.setPhase('error')
       }
       throw error
@@ -196,8 +198,8 @@ export class LiveKitVoiceSessionController {
   async resumeMicrophone(): Promise<void> {
     const room = this.requiredRoom()
     await room.publishMicrophone()
+    this.microphoneEnabled = true
     await this.publishControlEvent(room, this.event({ type: 'session_resumed' }))
-    this.phaseBeforeReconnect = 'listening'
     this.input = 'listening'
     this.setPhase('listening')
   }
@@ -205,8 +207,8 @@ export class LiveKitVoiceSessionController {
   async muteMicrophone(): Promise<void> {
     const room = this.requiredRoom()
     await room.muteMicrophone()
+    this.microphoneEnabled = false
     await this.publishControlEvent(room, this.event({ type: 'session_muted' }))
-    this.phaseBeforeReconnect = 'muted'
     this.input = 'muted'
     this.setPhase('muted')
   }
@@ -287,6 +289,7 @@ export class LiveKitVoiceSessionController {
     this.playbackLastPlayedSequence = 0
     this.completedPlayback = null
     this.interruptedResponseIds.clear()
+    this.microphoneEnabled = false
     this.input = 'inactive'
     this.response = 'idle'
     this.playback = 'idle'
@@ -340,16 +343,13 @@ export class LiveKitVoiceSessionController {
   private receiveRoomObservation(version: number, observation: RoomObservation): void {
     if (version !== this.operationVersion || this.phase === 'ended') return
     if (observation.transport === 'unavailable') {
-      if (this.phase === 'listening' || this.phase === 'muted') {
-        this.phaseBeforeReconnect = this.phase
-      }
       this.setPhase('reconnecting')
       this.startReconnectTimer(version)
       return
     }
     if (observation.transport === 'available' && this.phase === 'reconnecting') {
       this.clearReconnectTimer()
-      this.setPhase(this.phaseBeforeReconnect)
+      this.setPhase(this.microphoneEnabled ? 'listening' : 'muted')
     }
     if (
       observation.activeResponseId !== undefined
@@ -393,7 +393,7 @@ export class LiveKitVoiceSessionController {
     } else if (event.type === 'response_delta' && event.response_id === this.generatingResponseId) {
       this.response = 'generating'
     } else if (event.type === 'utterance_finalized' || event.type === 'utterance_discarded') {
-      this.input = this.phaseBeforeReconnect === 'muted' ? 'muted' : 'listening'
+      this.input = this.microphoneEnabled ? 'listening' : 'muted'
       if (
         event.type === 'utterance_finalized'
         && event.should_response === true
@@ -430,6 +430,7 @@ export class LiveKitVoiceSessionController {
         this.playback = 'stopped'
       }
     } else if (event.type === 'error') {
+      this.microphoneEnabled = event.user_state !== 'muted'
       this.input = event.user_state === 'muted' ? 'muted' : 'listening'
       if (event.classification === 'terminal') {
         this.terminateTransport('error')
@@ -453,6 +454,7 @@ export class LiveKitVoiceSessionController {
     this.playbackLastPlayedSequence = 0
     this.completedPlayback = null
     this.interruptedResponseIds.clear()
+    this.microphoneEnabled = false
     this.input = 'inactive'
     this.response = 'idle'
     this.playback = 'idle'
@@ -474,11 +476,14 @@ export class LiveKitVoiceSessionController {
       this.playbackResponseId = null
       this.playbackLastPlayedSequence = 0
       this.completedPlayback = null
+      this.microphoneEnabled = false
       this.input = 'inactive'
       this.response = 'idle'
       this.playback = 'idle'
       this.setPhase('ended')
-      if (binding !== null) void this.dependencies.endSession(binding.session_id)
+      if (binding !== null) {
+        void this.dependencies.endSession(binding.session_id).catch(() => undefined)
+      }
     }, graceMs)
   }
 

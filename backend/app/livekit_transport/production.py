@@ -57,6 +57,7 @@ PCM_CHANNELS = 1
 PCM_SAMPLE_WIDTH_BYTES = 2
 logger = logging.getLogger(__name__)
 STT_MAX_PENDING_UTTERANCES = 3
+STT_MAX_OPEN_CAPTURES = STT_MAX_PENDING_UTTERANCES + 1
 STT_MAX_UTTERANCE_PCM_BYTES = STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 30
 STT_MAX_PENDING_PCM_BYTES = STT_MAX_PENDING_UTTERANCES * STT_MAX_UTTERANCE_PCM_BYTES
 
@@ -572,6 +573,19 @@ class _ConversationCoreBridge:
     def notify(self, payload: bytes) -> None:
         event = json.loads(payload)
         if event["type"] == "speech_started" and self._is_user_event(event):
+            open_captures = sum(
+                not capture.finalized for capture in self._user_audio_captures
+            )
+            if open_captures >= STT_MAX_OPEN_CAPTURES:
+                oldest_open = next(
+                    capture
+                    for capture in self._user_audio_captures
+                    if not capture.finalized
+                )
+                self._user_audio_captures.remove(oldest_open)
+                self._schedule(
+                    self._discard_capture_for_capacity(oldest_open.utterance_id)
+                )
             self._user_audio_captures.append(
                 _UserAudioCapture(utterance_id=str(event["utterance_id"]))
             )
@@ -585,6 +599,12 @@ class _ConversationCoreBridge:
                     break
             return
         self._schedule(self._receive_serialized(event))
+
+    async def _discard_capture_for_capacity(self, utterance_id: str) -> None:
+        await self._session.discard_utterance(
+            utterance_id=utterance_id,
+            reason="input_capacity_exceeded",
+        )
 
     async def _receive_serialized(self, event: dict[str, object]) -> None:
         async with self._control_lock:

@@ -37,6 +37,7 @@ class VoicevoxClient:
         self._condition = threading.Condition()
         self._accepting = True
         self._inflight = 0
+        self._client_closing = False
         self._client_closed = False
         self._request_sequence = 0
 
@@ -75,7 +76,7 @@ class VoicevoxClient:
         close_client = False
         with self._condition:
             self._accepting = False
-            while self._inflight > 0:
+            while self._inflight > 0 or self._client_closing:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     logger.warning(
@@ -85,10 +86,10 @@ class VoicevoxClient:
                     return False
                 self._condition.wait(timeout=remaining)
             if not self._client_closed:
-                self._client_closed = True
+                self._client_closing = True
                 close_client = True
         if close_client:
-            self._client.close()
+            self._close_client()
         logger.info("VOICEVOX shutdown lifecycle: outcome=drained inflight=0")
         return True
 
@@ -113,14 +114,31 @@ class VoicevoxClient:
                 raise RuntimeError("VOICEVOX in-flight count became negative")
             if self._inflight == 0:
                 self._condition.notify_all()
-                if not self._accepting and not self._client_closed:
-                    self._client_closed = True
+                if (
+                    not self._accepting
+                    and not self._client_closing
+                    and not self._client_closed
+                ):
+                    self._client_closing = True
                     close_client = True
         if close_client:
-            self._client.close()
+            self._close_client()
             logger.info(
                 "VOICEVOX shutdown lifecycle: outcome=drained_after_timeout inflight=0"
             )
+
+    def _close_client(self) -> None:
+        try:
+            self._client.close()
+        except Exception:
+            with self._condition:
+                self._client_closing = False
+                self._condition.notify_all()
+            raise
+        with self._condition:
+            self._client_closing = False
+            self._client_closed = True
+            self._condition.notify_all()
 
     @staticmethod
     def _remaining_timeout(deadline: float) -> httpx.Timeout:

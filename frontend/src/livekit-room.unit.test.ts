@@ -377,4 +377,20 @@ describe('LiveKit Room generation synchronization', () => {
     })
     client.disconnect()
   })
+
+  test('再接続中のbarge-in観測はtransport unavailableを維持する', async () => {
+    const observations: RoomObservation[] = []
+    const client = new LiveKitRoomClient((observation) => observations.push(observation))
+    await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
+    const room = latestRoom()
+
+    room.emit('reconnecting')
+    client.stopPlayback('50000000-0000-4000-8000-000000000001', 100)
+
+    expect(observations.at(-1)).toMatchObject({
+      transport: 'unavailable', control: 'unavailable', audio: 'unavailable',
+      speechStartedAtMs: 100,
+    })
+    client.disconnect()
+  })
 })

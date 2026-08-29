@@ -187,6 +187,58 @@ class TestVoicevoxClientSynthesize:
         assert shutdown_result == [True]
         close.assert_called_once_with()
 
+    def test_shutdown_success_waits_for_http_client_close_completion(self):
+        from app.tts.voicevox_client import VoicevoxClient
+
+        voicevox_client = VoicevoxClient(
+            "http://voicevox.local:50021",
+            shutdown_drain_seconds=1.0,
+        )
+        request_entered = threading.Event()
+        release_request = threading.Event()
+        close_entered = threading.Event()
+        release_close = threading.Event()
+
+        def blocking_post(url, *_args, **_kwargs):
+            if url.endswith("/audio_query"):
+                request_entered.set()
+                release_request.wait(timeout=1.0)
+                return _json_response({})
+            return _audio_response(b"wav")
+
+        def blocking_close() -> None:
+            close_entered.set()
+            release_close.wait(timeout=1.0)
+
+        with (
+            patch.object(voicevox_client._client, "post", side_effect=blocking_post),
+            patch.object(voicevox_client._client, "close", side_effect=blocking_close),
+        ):
+            synthesis = threading.Thread(
+                target=lambda: voicevox_client.synthesize("こんにちは", 14)
+            )
+            synthesis.start()
+            assert request_entered.wait(timeout=1.0)
+            shutdown_result: list[bool] = []
+            shutdown = threading.Thread(
+                target=lambda: shutdown_result.append(voicevox_client.close())
+            )
+            shutdown.start()
+
+            release_request.set()
+            assert close_entered.wait(timeout=1.0)
+            shutdown.join(timeout=0.05)
+            assert shutdown.is_alive()
+            assert shutdown_result == []
+
+            release_close.set()
+            synthesis.join(timeout=1.0)
+            shutdown.join(timeout=1.0)
+
+        assert not synthesis.is_alive()
+        assert not shutdown.is_alive()
+        assert shutdown_result == [True]
+
     def test_shutdown_timeout_defers_close_until_request_finishes(self, caplog):
         from app.tts.voicevox_client import VoicevoxClient
 

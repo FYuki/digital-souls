@@ -1027,6 +1027,50 @@ def test_production_core_bridge_separates_overlapping_utterance_pcm() -> None:
     ]
 
 
+def test_production_core_bridge_discards_oldest_unfinished_capture_at_limit() -> None:
+    production = importlib.import_module("app.livekit_transport.production")
+    discarded: list[dict[str, object]] = []
+    scheduled: list[Awaitable[None]] = []
+
+    class RecordingCoreSession:
+        async def discard_utterance(self, **request: object) -> None:
+            discarded.append(request)
+
+    bridge = production._ConversationCoreBridge(
+        RecordingCoreSession(), scheduled.append
+    )
+    utterance_ids = [
+        f"30000000-0000-4000-8000-{index:012d}"
+        for index in range(production.STT_MAX_OPEN_CAPTURES + 1)
+    ]
+
+    async def exercise() -> None:
+        for utterance_id in utterance_ids:
+            bridge.notify(
+                json.dumps(
+                    {
+                        "type": "speech_started",
+                        "utterance_id": utterance_id,
+                        "speaker": {"role": "user"},
+                    }
+                ).encode()
+            )
+        for operation in scheduled:
+            await operation
+
+    asyncio.run(exercise())
+
+    assert [capture.utterance_id for capture in bridge._user_audio_captures] == (
+        utterance_ids[1:]
+    )
+    assert discarded == [
+        {
+            "utterance_id": utterance_ids[0],
+            "reason": "input_capacity_exceeded",
+        }
+    ]
+
+
 def test_production_core_bridge_empty_capture_does_not_block_later_audio() -> None:
     production = importlib.import_module("app.livekit_transport.production")
     calls: list[dict[str, object]] = []

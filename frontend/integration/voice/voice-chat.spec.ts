@@ -88,7 +88,9 @@ test('実LiveKit barge-inのlocal停止とcancel確定latencyを記録する', a
   const localStopMs = evidence.localPlaybackStoppedAtMs - evidence.speechStartedAtMs
   const cancelTotalMs = evidence.cancelConfirmedAtMs - evidence.speechStartedAtMs
 
+  expect(localStopMs).toBeGreaterThanOrEqual(0)
   expect(localStopMs).toBeLessThanOrEqual(150)
+  expect(cancelTotalMs).toBeGreaterThanOrEqual(0)
   expect(cancelTotalMs).toBeLessThanOrEqual(500)
   await testInfo.attach('barge-in-latency.real.json', {
     body: JSON.stringify({

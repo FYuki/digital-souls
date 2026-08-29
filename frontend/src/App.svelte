@@ -224,7 +224,7 @@
     try {
       if (voiceSnapshot.sessionId !== null || voiceSnapshot.phase === 'reconnecting') {
         activeUtteranceId = null
-        await voiceSession.end()
+        await voiceSession.end().catch(() => undefined)
       }
       const response = await sendChatMessage({
         character: context.character,

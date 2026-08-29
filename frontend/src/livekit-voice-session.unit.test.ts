@@ -108,6 +108,32 @@ describe('通常会話UI向けLiveKit音声session', () => {
     expect(controller.snapshot().phase).toBe('muted')
   })
 
+  test('reconnect後は独立したmicrophone状態からlisteningへ戻る', async () => {
+    const { controller, observations } = setup()
+    await controller.ensureSession({
+      characterId: 'miori', conversationId: 'conversation-id',
+    })
+    await controller.resumeMicrophone()
+
+    observations[0]({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable' })
+    observations[0]({ transport: 'available', control: 'available', audio: 'available' })
+
+    expect(controller.snapshot().phase).toBe('listening')
+  })
+
+  test('前sessionのmicrophone状態を次sessionへ持ち越さない', async () => {
+    const { controller, observations } = setup()
+    await controller.ensureSession({ characterId: 'miori', conversationId: 'one' })
+    await controller.resumeMicrophone()
+    await controller.end()
+    await controller.ensureSession({ characterId: 'miori', conversationId: 'two' })
+
+    observations[1]({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable' })
+    observations[1]({ transport: 'available', control: 'available', audio: 'available' })
+
+    expect(controller.snapshot().phase).toBe('muted')
+  })
+
   test('conversation切替では旧Roomを終了して新sessionを作る', async () => {
     const { controller, dependencies, room } = setup()
     await controller.ensureSession({ characterId: 'miori', conversationId: 'one' })
@@ -267,6 +293,27 @@ describe('通常会話UI向けLiveKit音声session', () => {
       expect(controller.snapshot()).toMatchObject({
         phase: 'ended', context, sessionId: null, input: 'inactive',
       })
+      expect(dependencies.endSession).toHaveBeenCalledWith(SESSION_ID)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('再接続猶予切れのsession終了失敗を未処理rejectionにしない', async () => {
+    vi.useFakeTimers()
+    try {
+      const { controller, dependencies, observations } = setup()
+      vi.mocked(dependencies.endSession).mockRejectedValue(new Error('end failed'))
+      await controller.ensureSession({
+        characterId: 'miori', conversationId: 'conversation-id',
+      })
+
+      observations[0]({
+        transport: 'unavailable', control: 'unavailable', audio: 'unavailable',
+      })
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      expect(controller.snapshot().phase).toBe('ended')
       expect(dependencies.endSession).toHaveBeenCalledWith(SESSION_ID)
     } finally {
       vi.useRealTimers()
