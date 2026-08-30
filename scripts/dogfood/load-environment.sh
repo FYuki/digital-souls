@@ -66,11 +66,26 @@ dogfood_read_environment() {
 }
 
 dogfood_load_environment() {
-  dogfood_load_environment_settings || return
+  dogfood_load_environment_settings --with-images || return
   dogfood_read_revision
 }
 
 dogfood_load_environment_settings() {
+  local load_active_images=false
+  case "$#" in
+    0) ;;
+    1)
+      if [ "$1" != "--with-images" ]; then
+        echo "ERROR: dogfood_load_environment_settingsの引数は--with-imagesだけです" >&2
+        return 2
+      fi
+      load_active_images=true
+      ;;
+    *)
+      echo "ERROR: dogfood_load_environment_settingsの引数は--with-imagesだけです" >&2
+      return 2
+      ;;
+  esac
   local env_file=${DOGFOOD_ENV_FILE:-$DOGFOOD_DEFAULT_ENV_FILE}
   local environment_contents expected_owner normalized_default_env_file
   local normalized_env_file read_status
@@ -94,7 +109,8 @@ dogfood_load_environment_settings() {
   if [ "$EUID" -eq 0 ] && [[ "${SUDO_UID-}" =~ ^[0-9]+$ ]]; then
     expected_owner=$SUDO_UID
   fi
-  if [ "$normalized_env_file" = "$normalized_default_env_file" ]; then
+  if [ "$load_active_images" = true ] \
+    && [ "$normalized_env_file" = "$normalized_default_env_file" ]; then
     expected_owner=0
   fi
   if ! environment_contents=$(

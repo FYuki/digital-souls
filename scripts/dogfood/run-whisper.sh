@@ -2,7 +2,8 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/load-environment.sh"
-dogfood_load_environment
+dogfood_load_environment_settings --with-images
+dogfood_read_revision
 dogfood_require_identity
 compose_file="$DOGFOOD_CLONE_DIR/infra/whisper/compose.yaml"
 action=${2-${1-up}}

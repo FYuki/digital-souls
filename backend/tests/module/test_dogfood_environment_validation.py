@@ -81,6 +81,73 @@ def test_should_continue_after_loading_valid_dogfood_environment(
     assert sentinel_path.is_file()
 
 
+def test_should_keep_generic_loader_on_root_active_image_contract() -> None:
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; '
+            'dogfood_load_environment_settings() { printf "settings:%s\\n" "$*"; }; '
+            'dogfood_read_revision() { printf "revision\\n"; }; '
+            "dogfood_load_environment",
+            "bash",
+            str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["settings:--with-images", "revision"]
+
+
+def test_should_reject_unknown_active_image_loading_option() -> None:
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; dogfood_load_environment_settings --without-images',
+            "bash",
+            str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 2
+    assert "--with-images" in result.stderr
+
+
+def test_should_skip_unreadable_root_only_active_images_without_option(
+    tmp_path: Path,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    image_path = tmp_path / "config" / "dogfood-images.env"
+    image_path.write_text("root-only active images", encoding="utf-8")
+    image_path.chmod(0o000)
+    sentinel_path = tmp_path / "settings-loaded.sentinel"
+    command = [
+        "fakeroot",
+        "bash",
+        "-c",
+        'chown 0:0 "$2" "$3"; chmod 0600 "$2" "$3"; '
+        'source "$1"; DOGFOOD_DEFAULT_ENV_FILE=$2 DOGFOOD_ENV_FILE=$2; '
+        'dogfood_load_environment_settings; touch "$4"',
+        "bash",
+        str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+        str(env_path),
+        str(image_path),
+        str(sentinel_path),
+    ]
+
+    result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+
+    assert result.returncode == 0, result.stderr
+    assert sentinel_path.is_file()
+
+
 def test_should_accept_every_key_in_checked_in_environment_example() -> None:
     env_example = DOGFOOD_SCRIPTS_DIR.parent.parent / "infra" / "dogfood" / "env.example"
 

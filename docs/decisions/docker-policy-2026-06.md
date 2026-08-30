@@ -123,6 +123,7 @@ commit、schema、backupとimage digestの組を検証して切り替える。ma
 registry更新だけではdogfoodの実行imageを変更しない。
 
 3 imageは`dogfood-images.env`へ原子的に反映し、systemd targetの再起動で同じcommitの組へ切り替える。
+このファイルは`0600 root:root`とし、active digestを必要とするroot control plane、deploy、Whisper runnerだけが読む。Ollama、VOICEVOX、LiveKit runnerはimage digestを使用しないため読み込まず、Ollamaの非root process所有を維持する。
 失敗時は直前manifestのcommitと3 digestを一組で復元する。Whisper image、CUDA runtime、modelまたは
 protocolを変更した場合は、Goal 2でdev／dogfood双方の互換性とGPU実機受入を行う。
 

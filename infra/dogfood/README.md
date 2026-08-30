@@ -169,6 +169,8 @@ sudo -u digital-souls env \
 
 bootstrapはhost側Environment CLI用のBackend venvを準備し、初期3 digestをroot専用の`dogfood-images.env`へ原子的に配置する。アプリケーションimageをhostでbuildせず、サービスも起動しない。初回はbootstrap後に`digital-souls-dogfood.target`を起動し、application containerのBackend起動によって`conversation-history.db`を作成する。
 
+`dogfood-images.env`は`0600 root:root`を維持し、active digestを必要とするroot control planeとWhisper runnerだけが明示的に読み込む。非rootで常駐するOllamaと、固定tag設定を使うVOICEVOX／LiveKit runnerはこのファイルを読み込まない。汎用のroot運用入口は従来どおりactive digestを読み、deployは切替前のdigestを保持するため明示的に読み込む。
+
 更新時は、運用者の作業コピーにある新revisionの`bootstrap.sh`を実行する。bootstrapがdogfood cloneを指定revisionへ収束させた後に、そのrevisionのloaderで正規envを配置する。この順序により、旧revisionの`load-environment.sh`へ新しいenvキーを先に渡す過渡状態を避ける。
 
 bootstrapは検証済み設定からsystemd unit、LiveKit Server設定、Backend専用のLiveKit環境ファイル、Windows launcherを生成する。`livekit.yaml`と`livekit-backend.env`は`DOGFOOD_CONFIG_DIR`へ`0640 root:digital-souls`で配置する。Backend専用ファイルに含めるのは`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`だけであり、backup認証鍵を含む`dogfood.env`全体はapplication processへ渡さない。生成されたlauncherは`DOGFOOD_CONFIG_DIR/start-dogfood-wsl.ps1`に配置されるため、Windows側から`\\wsl$`経由でコピーして使用する。unitのservice user、group、設定file、clone内runner、WSL distributionは同じ設定値から生成される。

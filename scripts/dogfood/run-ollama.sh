@@ -2,7 +2,8 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/load-environment.sh"
-dogfood_load_environment
+dogfood_load_environment_settings
+dogfood_read_revision
 dogfood_require_identity
 export OLLAMA_HOST
 mapfile -t endpoints < <("$SCRIPT_DIR/resolve-inference-endpoints.py")
