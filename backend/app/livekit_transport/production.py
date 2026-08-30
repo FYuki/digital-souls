@@ -56,6 +56,10 @@ STT_SAMPLE_RATE = 16_000
 PCM_CHANNELS = 1
 PCM_SAMPLE_WIDTH_BYTES = 2
 logger = logging.getLogger(__name__)
+STT_MAX_PENDING_UTTERANCES = 3
+STT_MAX_OPEN_CAPTURES = STT_MAX_PENDING_UTTERANCES + 1
+STT_MAX_UTTERANCE_PCM_BYTES = STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 30
+STT_MAX_PENDING_PCM_BYTES = STT_MAX_PENDING_UTTERANCES * STT_MAX_UTTERANCE_PCM_BYTES
 
 
 def _livekit_rtc_module() -> Any:
@@ -273,6 +277,7 @@ class ProductionConversationCoreSessionFactory:
         transcriber: SyncTranscriber,
         synthesizer: SpeakerSynthesizer,
         history_service: _HistoryService,
+        completed_turn_observer: Callable[[object], None] | None = None,
         generate_reply: Callable[[str, object, str], str] | None = None,
         generate_reply_stream: Callable[
             [str, object, str], AsyncIterator[str]
@@ -281,6 +286,7 @@ class ProductionConversationCoreSessionFactory:
         self._stt = WhisperSttAdapter(transcriber=transcriber)
         self._synthesizer = synthesizer
         self._history_service = history_service
+        self._completed_turn_observer = completed_turn_observer
         self._generate_reply = generate_reply
         self._generate_reply_stream = generate_reply_stream
         if (generate_reply is None) == (generate_reply_stream is None):
@@ -303,7 +309,8 @@ class ProductionConversationCoreSessionFactory:
             response_id_factory=lambda: str(uuid4()),
             delivery=delivery,
             persistence=ConversationHistoryPersistenceAdapter(
-                history_session=history_session  # type: ignore[arg-type]
+                history_session=history_session,  # type: ignore[arg-type]
+                completed_turn_observer=self._completed_turn_observer,
             ),
             observation=_LoggingCoreObservation(),
             stt=self._stt,
@@ -469,6 +476,16 @@ class _ConversationCoreDelivery:
                 error_code=event.error_code,
                 user_state=event.user_state,
             )
+        elif event.type == "utterance_discarded":
+            if event.utterance_id is None or event.reason is None:
+                raise ValueError(
+                    "utterance_discarded requires utterance id and reason"
+                )
+            payload.update(
+                type=event.type,
+                utterance_id=event.utterance_id,
+                reason=event.reason,
+            )
         elif event.type == "response_delta":
             if event.text_range is None:
                 raise ValueError("response_delta requires text range")
@@ -532,6 +549,7 @@ class _UserAudioCapture:
     pcm: bytearray = field(default_factory=bytearray)
     finalized: bool = False
     finalization_scheduled: bool = False
+    capacity_exceeded: bool = False
 
 
 class _ConversationCoreBridge:
@@ -539,16 +557,35 @@ class _ConversationCoreBridge:
         self,
         session: ConversationCoreSession,
         schedule: Callable[[Awaitable[None]], None],
+        stop_audio: Callable[[], None] = lambda: None,
         media_tail_seconds: float = 0.15,
     ) -> None:
         self._session = session
         self._schedule = schedule
         self._media_tail_seconds = media_tail_seconds
+        self._stop_audio = stop_audio
         self._user_audio_captures: deque[_UserAudioCapture] = deque()
+        self._pending_transcriptions: deque[tuple[str, bytes]] = deque()
+        self._pending_transcription_bytes = 0
+        self._transcription_active = False
+        self._control_lock = asyncio.Lock()
 
     def notify(self, payload: bytes) -> None:
         event = json.loads(payload)
         if event["type"] == "speech_started" and self._is_user_event(event):
+            open_captures = sum(
+                not capture.finalized for capture in self._user_audio_captures
+            )
+            if open_captures >= STT_MAX_OPEN_CAPTURES:
+                oldest_open = next(
+                    capture
+                    for capture in self._user_audio_captures
+                    if not capture.finalized
+                )
+                self._user_audio_captures.remove(oldest_open)
+                self._schedule(
+                    self._discard_capture_for_capacity(oldest_open.utterance_id)
+                )
             self._user_audio_captures.append(
                 _UserAudioCapture(utterance_id=str(event["utterance_id"]))
             )
@@ -561,7 +598,17 @@ class _ConversationCoreBridge:
                     self._schedule_finalization_if_ready(capture)
                     break
             return
-        self._schedule(self._receive(event))
+        self._schedule(self._receive_serialized(event))
+
+    async def _discard_capture_for_capacity(self, utterance_id: str) -> None:
+        await self._session.discard_utterance(
+            utterance_id=utterance_id,
+            reason="input_capacity_exceeded",
+        )
+
+    async def _receive_serialized(self, event: dict[str, object]) -> None:
+        async with self._control_lock:
+            await self._receive(event)
 
     def receive_microphone(self, pcm: bytes) -> None:
         if not self._user_audio_captures:
@@ -574,7 +621,10 @@ class _ConversationCoreBridge:
             (item for item in self._user_audio_captures if not item.pcm),
             self._user_audio_captures[0],
         )
-        capture.pcm.extend(pcm)
+        if len(capture.pcm) + len(pcm) > STT_MAX_UTTERANCE_PCM_BYTES:
+            capture.capacity_exceeded = True
+        elif not capture.capacity_exceeded:
+            capture.pcm.extend(pcm)
         self._schedule_finalization_if_ready(capture)
 
     def _schedule_finalization_if_ready(self, capture: _UserAudioCapture) -> None:
@@ -610,7 +660,13 @@ class _ConversationCoreBridge:
             utterance_id = capture.utterance_id
             microphone_pcm = bytes(capture.pcm)
             self._user_audio_captures.popleft()
-            await self._finalize_user_audio(
+            if capture.capacity_exceeded:
+                await self._session.discard_utterance(
+                    utterance_id=utterance_id,
+                    reason="input_capacity_exceeded",
+                )
+                continue
+            await self._enqueue_user_audio(
                 utterance_id=utterance_id,
                 microphone_pcm=microphone_pcm,
             )
@@ -636,6 +692,9 @@ class _ConversationCoreBridge:
             ):
                 self._log_invalid_control_event(event_type)
                 return
+            if event_type == "playback_stopped":
+                # prefix検証や永続化が失敗しても、旧音声をlocal graph再接続後へ残さない。
+                self._stop_audio()
             await self._session.confirm_playback(
                 response_id=response_id,
                 last_played_audio_sequence=last_played_audio_sequence,
@@ -645,11 +704,31 @@ class _ConversationCoreBridge:
         elif event_type == "session_reconnected":
             await self._session.reconnect()
 
-    async def _finalize_user_audio(
+    async def _enqueue_user_audio(
         self, *, utterance_id: str, microphone_pcm: bytes
     ) -> None:
         if not getattr(self._session, "accepting_input", True):
             return
+        if self._transcription_active:
+            if (
+                len(self._pending_transcriptions) >= STT_MAX_PENDING_UTTERANCES
+                or self._pending_transcription_bytes + len(microphone_pcm)
+                > STT_MAX_PENDING_PCM_BYTES
+            ):
+                await self._session.discard_utterance(
+                    utterance_id=utterance_id,
+                    reason="input_capacity_exceeded",
+                )
+                return
+            self._pending_transcriptions.append((utterance_id, microphone_pcm))
+            self._pending_transcription_bytes += len(microphone_pcm)
+            return
+        self._start_user_transcription(utterance_id, microphone_pcm)
+
+    def _start_user_transcription(
+        self, utterance_id: str, microphone_pcm: bytes
+    ) -> None:
+        self._transcription_active = True
         try:
             task = self._session.start_transcription(
                 utterance_id=utterance_id,
@@ -659,9 +738,23 @@ class _ConversationCoreBridge:
         except RuntimeError:
             # disconnect/endとmedia tail確定の競合では、旧発話を次世代へ持ち越さない。
             if not getattr(self._session, "accepting_input", True):
+                self._transcription_active = False
                 return
             raise
-        task.add_done_callback(self._consume_task)
+        task.add_done_callback(self._transcription_done)
+
+    def _transcription_done(self, task: asyncio.Task[object]) -> None:
+        self._consume_task(task)
+        self._transcription_active = False
+        if not getattr(self._session, "accepting_input", True):
+            self._pending_transcriptions.clear()
+            self._pending_transcription_bytes = 0
+            return
+        if not self._pending_transcriptions:
+            return
+        utterance_id, microphone_pcm = self._pending_transcriptions.popleft()
+        self._pending_transcription_bytes -= len(microphone_pcm)
+        self._start_user_transcription(utterance_id, microphone_pcm)
 
     @staticmethod
     def _is_user_event(event: dict[str, object]) -> bool:
@@ -905,6 +998,7 @@ class ProductionRuntimeManager:
         bridge = _ConversationCoreBridge(
             core_session,
             schedule_core_operation,
+            stop_audio=audio_source.clear,
         )
         self._audio_sources[session_id] = audio_source
         self._core_sessions[session_id] = core_session

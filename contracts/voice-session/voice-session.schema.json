@@ -193,7 +193,7 @@
       "properties": {
         "type": { "const": "utterance_discarded" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
         "session_id": { "$ref": "#/$defs/Identifier" }, "utterance_id": { "$ref": "#/$defs/Identifier" },
-        "reason": { "type": "string", "enum": ["privacy", "disconnect", "session_ended", "invalid_audio"] }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
+        "reason": { "type": "string", "enum": ["privacy", "disconnect", "session_ended", "invalid_audio", "input_capacity_exceeded"] }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
     "ResponseStarted": {

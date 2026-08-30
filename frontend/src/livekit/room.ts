@@ -40,6 +40,9 @@ export type RoomObservation = Readonly<{
   terminalResponseId?: string
   terminalConfirmedAudioSequence?: number
   activeResponseId?: string
+  speechStartedAtMs?: number
+  localPlaybackStoppedAtMs?: number
+  cancelConfirmedAtMs?: number
 }>
 
 export type MicrophoneCaptureOptions = Readonly<{
@@ -106,6 +109,8 @@ export class LiveKitRoomClient {
   private sessionId: string | null = null
   private explicitDisconnect = false
   private reconnectRequested = false
+  private suppressedResponseId: string | null = null
+  private suppressedLastPlayedAudioSequence = 0
 
   constructor(
     private readonly observe: (observation: RoomObservation) => void,
@@ -180,6 +185,46 @@ export class LiveKitRoomClient {
     }
     const payload = new TextEncoder().encode(JSON.stringify(event))
     await outbox.enqueue({ event }, payload)
+  }
+
+  stopPlayback(responseId: string, speechStartedAtMs: number): number {
+    if (this.suppressedResponseId === responseId) {
+      return this.suppressedLastPlayedAudioSequence
+    }
+    const lastPlayedAudioSequence = Math.max(
+      0,
+      this.playback.continuousPrefix(responseId) + 1,
+    )
+    this.suppressedResponseId = responseId
+    this.suppressedLastPlayedAudioSequence = lastPlayedAudioSequence
+    this.playback.discardResponse(responseId)
+    for (let index = this.pendingMetadata.length - 1; index >= 0; index -= 1) {
+      if (this.pendingMetadata[index].responseId === responseId) {
+        this.pendingMetadata.splice(index, 1)
+      }
+    }
+    this.audioGraphResetVersion += 1
+    for (const graph of this.audioGraphs.values()) {
+      graph.source.disconnect()
+      graph.worklet.disconnect()
+    }
+    this.audioGraphs.clear()
+    const context = this.audioContext
+    this.audioContext = null
+    this.workletReady = null
+    if (context !== null) void context.close().catch(() => undefined)
+    const controlAvailable = this.controlOutbox !== null
+    this.observe({
+      transport: this.room === null ? 'idle' : controlAvailable ? 'available' : 'unavailable',
+      control: controlAvailable ? 'available' : 'unavailable',
+      audio: 'unavailable',
+      activeAudioGraphs: 0,
+      activeResponseId: responseId,
+      playedPrefix: lastPlayedAudioSequence - 1,
+      speechStartedAtMs,
+      localPlaybackStoppedAtMs: Math.floor(performance.now()),
+    })
+    return lastPlayedAudioSequence
   }
 
   disconnect(): void {
@@ -363,10 +408,34 @@ export class LiveKitRoomClient {
     })
     if (!duplicate) {
       if (
+        event.type === 'response_started'
+        && event.response_id !== undefined
+        && this.suppressedResponseId !== null
+        && event.response_id !== this.suppressedResponseId
+      ) {
+        this.suppressedResponseId = null
+        this.suppressedLastPlayedAudioSequence = 0
+        const resetVersion = ++this.audioGraphResetVersion
+        const resetTask = this.audioGraphResetTask.then(
+          () => this.resetAudioGraphs(resetVersion),
+        )
+        this.audioGraphResetTask = resetTask.catch(() => undefined)
+        void resetTask.catch(() => this.failTransport())
+      }
+      if (
         (event.type === 'response_cancelled' || event.type === 'response_failed')
         && event.response_id !== undefined
       ) {
         this.playback.discardResponse(event.response_id)
+      }
+      if (event.type === 'response_cancelled' && event.response_id !== undefined) {
+        this.observe({
+          transport: 'available',
+          control: 'available',
+          audio: 'unavailable',
+          activeResponseId: event.response_id,
+          cancelConfirmedAtMs: Math.floor(performance.now()),
+        })
       }
       this.receiveCoreEvent(event)
     }
@@ -473,6 +542,8 @@ export class LiveKitRoomClient {
     this.subscriptions.clear()
     this.subscribedTracks.clear()
     this.pendingMetadata.length = 0
+    this.suppressedResponseId = null
+    this.suppressedLastPlayedAudioSequence = 0
     this.coreEvents.clear()
     this.clearBrowserDelivery()
     await this.disposeAudioContext()

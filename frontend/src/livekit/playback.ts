@@ -57,6 +57,10 @@ export class PlaybackPrefixTracker {
     }
   }
 
+  discardResponse(responseId: string): void {
+    this.responses.delete(responseId)
+  }
+
   private evidence(responseId: string, sequence: number): SegmentEvidence {
     let response = this.responses.get(responseId)
     if (response === undefined) {
@@ -127,6 +131,11 @@ export class PlaybackEvidenceController {
         this.pending.splice(index, 1)
       }
     }
+    this.tracker.discardResponse(responseId)
+  }
+
+  continuousPrefix(responseId: string): number {
+    return this.tracker.continuousPrefix(responseId)
   }
 
   recordMetadata(metadata: SegmentMetadata, eligibleAfterFrame: number): void {

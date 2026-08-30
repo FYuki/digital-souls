@@ -74,6 +74,7 @@ const prepareRunner = async (): Promise<ProcessRunner> => {
     configPath,
     `export default {
       testDir: ${JSON.stringify(runnerDir)},
+      outputDir: ${JSON.stringify(join(runnerDir, 'playwright-artifacts'))},
       workers: 1,
       reporter: [[${JSON.stringify(reporterPath)}, { suite: 'integration-text' }]],
     }`,

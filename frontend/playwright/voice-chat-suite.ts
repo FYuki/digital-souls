@@ -21,6 +21,15 @@ declare global {
       frameOrder: string[]
       liveKitOrder: string[]
       micStates: ('off' | 'standby' | 'active')[]
+      localStopAt?: number
+      cancelRequestedAt?: number
+      stoppedResponseId?: string
+      interruptions: {
+        responseId: string
+        speechStartedAtMs: number
+        localPlaybackStoppedAtMs: number
+        cancelConfirmedAtMs: number | null
+      }[]
     }
   }
 }
@@ -46,7 +55,13 @@ type CompletedVoiceCycle = {
 
 const installPlaybackProbe = async (page: Page) => {
   await page.addInitScript(() => {
-    window.__voiceChatE2E = { cycles: [], frameOrder: [], liveKitOrder: [], micStates: [] }
+    window.__voiceChatE2E = {
+      cycles: [],
+      frameOrder: [],
+      liveKitOrder: [],
+      micStates: [],
+      interruptions: [],
+    }
     const appendOnce = (entry: string) => {
       if (!window.__voiceChatE2E.liveKitOrder.includes(entry)) {
         window.__voiceChatE2E.liveKitOrder.push(entry)
@@ -75,6 +90,7 @@ const installPlaybackProbe = async (page: Page) => {
       })
       observeMicrophoneState()
     }, { once: true })
+    let fixtureStartedAt: number | null = null
     const testPortTarget = window as typeof window & {
       __digitalSoulsVoiceSessionTestPort?: {
         createRoom?: (...args: never[]) => unknown
@@ -82,10 +98,17 @@ const installPlaybackProbe = async (page: Page) => {
           renderedEnergy?: number
           activeResponseId?: string
           activeAudioGraphs?: number
+          renderedSamples?: number
+          speechStartedAtMs?: number
+          localPlaybackStoppedAtMs?: number
+          cancelConfirmedAtMs?: number
         }) => void
         receiveCoreEvent?: (event: {
           type: string
+          session_id?: string
+          utterance_id?: string
           response_id?: string
+          source_utterance_ids?: string[]
           measurement?: string
         }) => void
       }
@@ -93,14 +116,80 @@ const installPlaybackProbe = async (page: Page) => {
     testPortTarget.__digitalSoulsVoiceSessionTestPort = {
       ...testPortTarget.__digitalSoulsVoiceSessionTestPort,
       observeRoom: (observation) => {
+        if (
+          observation.activeResponseId !== undefined
+          && observation.activeResponseId !== ''
+          && observation.speechStartedAtMs !== undefined
+          && observation.localPlaybackStoppedAtMs !== undefined
+        ) {
+          window.__voiceChatE2E.interruptions.push({
+            responseId: observation.activeResponseId,
+            speechStartedAtMs: observation.speechStartedAtMs,
+            localPlaybackStoppedAtMs: observation.localPlaybackStoppedAtMs,
+            cancelConfirmedAtMs: null,
+          })
+        }
+        if (
+          observation.activeResponseId !== undefined
+          && observation.cancelConfirmedAtMs !== undefined
+        ) {
+          const interruption = [...window.__voiceChatE2E.interruptions]
+            .reverse()
+            .find((candidate) => candidate.responseId === observation.activeResponseId)
+          if (interruption !== undefined) {
+            interruption.cancelConfirmedAtMs = observation.cancelConfirmedAtMs
+          }
+        }
         if ((observation.activeAudioGraphs ?? 0) > 0) appendOnce('room:audio-graph')
         if (
           (observation.renderedEnergy ?? 0) > 0
           && observation.activeResponseId !== undefined
           && observation.activeResponseId !== ''
-        ) appendOnce(`${observation.activeResponseId}:rendered-audio`)
+        ) {
+          appendOnce(`${observation.activeResponseId}:rendered-audio`)
+          const cycle = window.__voiceChatE2E.cycles.find((candidate) => (
+            candidate.responseId === observation.activeResponseId
+            && candidate.startedAt === null
+          ))
+          if (cycle !== undefined) {
+            const now = performance.now()
+            cycle.audioReceivedAt = now
+            cycle.audioDecodeAt = now
+            cycle.startedAt = now
+            cycle.receivedBytes = observation.renderedSamples ?? 1
+          }
+        }
       },
       receiveCoreEvent: (event) => {
+        if (
+          event.type === 'utterance_finalized'
+          && event.utterance_id !== undefined
+          && !window.__voiceChatE2E.cycles.some(
+            (candidate) => candidate.utteranceId === event.utterance_id,
+          )
+        ) {
+          const now = performance.now()
+          window.__voiceChatE2E.cycles.push({
+            fixtureStartedAt: fixtureStartedAt ?? now,
+            sendAt: now,
+            audioReceivedAt: null,
+            audioDecodeAt: null,
+            startedAt: null,
+            sessionId: event.session_id ?? '',
+            utteranceId: event.utterance_id,
+            responseId: null,
+            conversationId: localStorage.getItem('digital-souls:conversation:miori') ?? '',
+            sentBytes: 1,
+            receivedBytes: null,
+          })
+        }
+        if (event.type === 'response_started' && event.response_id !== undefined) {
+          const sourceIds = event.source_utterance_ids ?? []
+          const cycle = window.__voiceChatE2E.cycles.find((candidate) => (
+            candidate.responseId === null && sourceIds.includes(candidate.utteranceId)
+          ))
+          if (cycle !== undefined) cycle.responseId = event.response_id
+        }
         const responseId = event.response_id
         if (responseId === undefined) return
         if (event.type === 'response_delta') appendOnce(`${responseId}:text-delta`)
@@ -110,7 +199,6 @@ const installPlaybackProbe = async (page: Page) => {
         }
       },
     }
-    let fixtureStartedAt: number | null = null
     const nativeGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
     navigator.mediaDevices.getUserMedia = async (constraints) => {
       const stream = await nativeGetUserMedia(constraints)
@@ -351,6 +439,33 @@ export const createVoiceChatDriver = () => {
     })
   }
 
+  const waitForCompletedVoiceCycles = async (page: Page, count: number) => {
+    if (!Number.isInteger(count) || count < 1) {
+      throw new Error('voice cycle count must be positive')
+    }
+    const handle = await page.waitForFunction((requiredCount) => {
+      const completed = window.__voiceChatE2E.cycles.filter((cycle) => (
+        cycle.audioReceivedAt !== null
+        && cycle.audioDecodeAt !== null
+        && cycle.startedAt !== null
+        && cycle.responseId !== null
+        && cycle.receivedBytes !== null
+      ))
+      return completed.length >= requiredCount ? completed.slice(0, requiredCount) : null
+    }, count, { timeout: VOICE_RESPONSE_TIMEOUT_MS * count })
+    return handle.jsonValue()
+  }
+
+  const waitForInterruptionEvidence = async (page: Page) => {
+    const handle = await page.waitForFunction(() => {
+      const evidence = window.__voiceChatE2E.interruptions.find((candidate) => (
+        candidate.cancelConfirmedAtMs !== null
+      ))
+      return evidence ?? null
+    }, undefined, { timeout: VOICE_RESPONSE_TIMEOUT_MS })
+    return handle.jsonValue()
+  }
+
   const readUserTranscript = async (page: Page): Promise<string> => {
     const transcript = await page.locator('article.message').nth(0).locator('p').textContent()
     if (transcript === null) throw new Error('user transcript is not available')
@@ -414,6 +529,8 @@ export const createVoiceChatDriver = () => {
     expectMessages,
     readUserTranscript,
     waitForCompletedVoiceCycle,
+    waitForCompletedVoiceCycles,
+    waitForInterruptionEvidence,
     waitForFrameOrder,
     waitForLiveKitStreamingOrder,
     endVoiceSession,

@@ -9,5 +9,5 @@ class SpeechSynthesizer(Protocol):
     def synthesize(self, text: str, speaker_id: int) -> bytes:
         ...
 
-    def close(self) -> None:
+    def close(self) -> bool | None:
         ...

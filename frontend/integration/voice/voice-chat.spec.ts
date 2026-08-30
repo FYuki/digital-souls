@@ -25,7 +25,8 @@ test.beforeEach(async ({}, testInfo) => {
   if (reason !== null) test.skip(true, reason)
 })
 
-test.afterEach(async ({ page }) => {
+test.afterEach(async ({ page, context }) => {
+  await context.setOffline(false)
   await driver.endVoiceSession(page)
   await hardDeleteSelectedConversation(page, 'miori')
 })
@@ -63,4 +64,60 @@ test('実音声応答のuser発話とmiori応答がこの順でチャット欄�
     'first-audio-out',
     'completed',
   ])
+})
+
+test('通常UIの同一LiveKit sessionで実サービス応答を3往復継続する', async ({ page }) => {
+  test.setTimeout(voiceTestTimeout * 3)
+  await driver.enableMicrophone(page)
+  await driver.waitForCompletedVoiceCycles(page, 3)
+
+  await expect(page.locator('article.message')).toHaveCount(6)
+  await expect(page.getByRole('button', { name: 'マイクをオフにする' }))
+    .toHaveAttribute('aria-pressed', 'true')
+})
+
+test('実LiveKit barge-inのlocal停止とcancel確定latencyを記録する', async ({ page }, testInfo) => {
+  test.setTimeout(voiceTestTimeout * 2)
+  await driver.enableMicrophone(page)
+  const evidence = await driver.waitForInterruptionEvidence(page) as {
+    responseId: string
+    speechStartedAtMs: number
+    localPlaybackStoppedAtMs: number
+    cancelConfirmedAtMs: number
+  }
+  const localStopMs = evidence.localPlaybackStoppedAtMs - evidence.speechStartedAtMs
+  const cancelTotalMs = evidence.cancelConfirmedAtMs - evidence.speechStartedAtMs
+
+  expect(localStopMs).toBeGreaterThanOrEqual(0)
+  expect(localStopMs).toBeLessThanOrEqual(150)
+  expect(cancelTotalMs).toBeGreaterThanOrEqual(0)
+  expect(cancelTotalMs).toBeLessThanOrEqual(500)
+  await testInfo.attach('barge-in-latency.real.json', {
+    body: JSON.stringify({
+      source: 'automated_test',
+      localStopMs,
+      cancelTotalMs,
+      responseId: evidence.responseId,
+    }, null, 2),
+    contentType: 'application/json',
+  })
+})
+
+test('通常UIが実LiveKit一時切断から同じconversationへ復帰する', async ({ page, context }, testInfo) => {
+  await driver.enableMicrophone(page)
+  const disconnectedAtMs = await page.evaluate(() => performance.now())
+  await context.setOffline(true)
+  await expect(page.getByText('セッション: 再接続中')).toBeVisible({ timeout: 15_000 })
+  await context.setOffline(false)
+  await expect(page.getByText('セッション: 接続済み')).toBeVisible({ timeout: 60_000 })
+  const reconnectedAtMs = await page.evaluate(() => performance.now())
+
+  await expect(page.locator('section[aria-label="音声会話の状態"]')).toHaveCount(1)
+  await testInfo.attach('reconnect-latency.real.json', {
+    body: JSON.stringify({
+      source: 'automated_test',
+      reconnectMs: reconnectedAtMs - disconnectedAtMs,
+    }, null, 2),
+    contentType: 'application/json',
+  })
 })

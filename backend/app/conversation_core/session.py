@@ -145,6 +145,29 @@ class ConversationCoreSession:
             return None
         return await start_task
 
+    async def discard_utterance(self, *, utterance_id: str, reason: str) -> bool:
+        """未処理の発話を理由付きで終端し、黙って欠落させない。"""
+        async with self._state_lock:
+            existing = self._utterances.get(utterance_id)
+            if existing is not None:
+                return False
+            self._utterances[utterance_id] = Utterance(
+                utterance_id=utterance_id,
+                transcript="",
+                should_response=False,
+                state=UtteranceState.DISCARDED,
+                discard_reason=reason,
+            )
+        await self._publish_utterance_delivery(
+            CoreEvent(
+                type="utterance_discarded",
+                session_id=self.session_id,
+                utterance_id=utterance_id,
+                reason=reason,
+            )
+        )
+        return True
+
     def start_transcription(
         self,
         *,

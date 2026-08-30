@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 import AudioRecorder from './AudioRecorder.svelte'
 import { VAD_ASSET_ROUTE } from './audio/vad-assets'
+import { VAD_UTTERANCE_REDEMPTION_MS } from './audio/vad-policy'
 
 const vadStart = vi.fn()
 const vadDestroy = vi.fn()
@@ -13,12 +14,14 @@ const recorderStopAndTake = vi.fn()
 const recorderClose = vi.fn()
 const capturedPcmData = new ArrayBuffer(4)
 const getUserMedia = vi.fn()
+const microphoneTrackStop = vi.fn()
 const microphoneStream = {
-  getTracks: () => [],
+  getTracks: () => [{ stop: microphoneTrackStop }],
 } as unknown as MediaStream
 let vadOptions: {
   baseAssetPath: string
   onnxWASMBasePath: string
+  redemptionMs: number
   getStream: () => Promise<MediaStream>
   resumeStream: (stream: MediaStream) => Promise<MediaStream>
   pauseStream: (stream: MediaStream) => Promise<void>
@@ -67,6 +70,7 @@ describe('AudioRecorder', () => {
     recorderClose.mockResolvedValue(undefined)
     getUserMedia.mockReset()
     getUserMedia.mockResolvedValue(microphoneStream)
+    microphoneTrackStop.mockReset()
     vi.stubGlobal('navigator', {
       mediaDevices: {
         getUserMedia,
@@ -118,6 +122,7 @@ describe('AudioRecorder', () => {
     expect(recorderInitialize).toHaveBeenCalledWith(microphoneStream)
     expect(vadOptions.baseAssetPath).toBe(VAD_ASSET_ROUTE)
     expect(vadOptions.onnxWASMBasePath).toBe(VAD_ASSET_ROUTE)
+    expect(vadOptions.redemptionMs).toBe(VAD_UTTERANCE_REDEMPTION_MS)
     expect(vadOptions.startOnLoad).toBe(false)
     await expect(vadOptions.getStream()).resolves.toBe(microphoneStream)
     await expect(vadOptions.resumeStream(microphoneStream)).resolves.toBe(microphoneStream)
@@ -244,6 +249,7 @@ describe('AudioRecorder', () => {
 
     await waitFor(() => expect(vadDestroy).toHaveBeenCalledTimes(1))
     expect(recorderClose).toHaveBeenCalledTimes(1)
+    expect(microphoneTrackStop).toHaveBeenCalledTimes(1)
     await waitFor(() => expect(button.getAttribute('aria-pressed')).toBe('false'))
     expect(button.classList.contains('mic-standby')).toBe(false)
     expect(button.classList.contains('mic-active')).toBe(false)

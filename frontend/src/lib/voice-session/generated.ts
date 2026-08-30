@@ -39,7 +39,7 @@ export type ClockDomain = "client_monotonic" | "server_monotonic";
 
 export type Measurement = "speech_stopped" | "utterance_finalized" | "response_started" | "first_audio_out" | "playback_started";
 
-export type Reason = "user_request" | "terminal_error" | "reconnect_timeout" | "privacy" | "disconnect" | "session_ended" | "invalid_audio" | "barge_in" | "decode_failure";
+export type Reason = "user_request" | "terminal_error" | "reconnect_timeout" | "privacy" | "disconnect" | "session_ended" | "invalid_audio" | "input_capacity_exceeded" | "barge_in" | "decode_failure";
 
 export interface Speaker {
     character_id?:  string;
