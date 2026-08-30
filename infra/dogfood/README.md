@@ -1,6 +1,6 @@
 # Ubuntu-dogfood 構築・運用runbook
 
-Ubuntu-dogfoodはUbuntu-devと別のWSL distribution、Linux filesystem、service user、runtime data rootを使用する。Ollamaのprocessはsystemdが所有し、VOICEVOXとLiveKitの実行中containerはDocker Composeが所有する。systemdは各Compose stackの起動・停止入口を担う。dev／integration／TAKTはProfileに記載された起動済みendpointを再利用する。
+Ubuntu-dogfoodはUbuntu-devと別のWSL distribution、Linux filesystem、service user、runtime data rootを使用する。Ollamaのprocessはsystemdが所有し、Backend、Frontend、Whisper、VOICEVOX、LiveKitの実行中containerはDocker Composeが所有する。systemdはdogfoodの各Compose stackの起動・停止入口を担う。dev／integration／TAKTはProfileに記載された共有推論endpointを再利用する。
 
 ## Windows上でのdistribution作成
 
@@ -18,22 +18,12 @@ Ubuntu-dogfood内で`/etc/wsl.conf`に次を設定し、Windows側で`wsl.exe --
 systemd=true
 ```
 
-Ubuntu-dogfood内でGit、Python、Node.js 22、Docker、Ollamaを導入する。Node.jsはNodeSource公式apt repositoryをkeyring方式で追加し、Dockerは公式apt repositoryからCompose pluginを含めて導入する。
+Ubuntu-dogfood内でGit、Python、Docker、NVIDIA Container Toolkit、Ollamaを導入する。Node.jsはBackend／Frontend containerの実行要件ではない。Dockerは公式apt repositoryからBuildxとCompose pluginを含めて導入する。
 
 ```bash
 sudo apt update
 sudo apt install -y ca-certificates curl git gnupg python3 python3-venv zstd
 sudo install -m 0755 -d /etc/apt/keyrings
-curl --proto '=https' --tlsv1.2 --fail --location \
-  https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
-  | sudo gpg --dearmor --yes --output /etc/apt/keyrings/nodesource.gpg
-printf '%s\n' \
-  'deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main' \
-  | sudo tee /etc/apt/sources.list.d/nodesource.list >/dev/null
-sudo apt update
-sudo apt install -y nodejs
-node --version
-npm --version
 sudo curl --proto '=https' --tlsv1.2 --fail --location \
   https://download.docker.com/linux/ubuntu/gpg \
   --output /etc/apt/keyrings/docker.asc
@@ -47,8 +37,14 @@ sudo apt install -y docker-ce docker-ce-cli containerd.io \
   docker-buildx-plugin docker-compose-plugin
 sudo systemctl enable --now docker.service
 docker compose version
+docker buildx version
 sudo docker info
 ```
+
+NVIDIA Container ToolkitはNVIDIA公式手順でrepositoryとruntimeを設定し、Docker再起動後に
+CUDA containerから`nvidia-smi`が成功することを確認する。WSL内へLinux display driverは導入せず、
+Windows側のNVIDIA driverを使用する。GHCR packageがprivateの場合は、package read権限だけを持つtokenを
+rootのDocker credentialへ`docker login ghcr.io`で登録する。tokenを`dogfood.env`やIssueへ保存しない。
 
 `docker.io`または`docker-compose`を導入済みの場合は、公式repository追加前に競合packageを削除する。既存container imageとvolumeの保全要否を確認してから実行し、導入後は上記の`docker compose version`と`sudo docker info`を両方成功させる。
 
@@ -82,7 +78,7 @@ Ollamaは版とSHA-256を固定した公式GitHub Release資材を一般ユー�
 
 | 変更種別・環境の状態 | 使用する更新経路 |
 |---|---|
-| Backend／Frontendアプリコード | 経路① |
+| Backend／Frontend／Whisperアプリコード | 経路① |
 | `scripts/setup-backend.sh` | 経路① |
 | `environments/profiles/dogfood.json` | 経路① |
 | `scripts/dogfood/bootstrap.sh`／`load-environment.sh`／`render-assets.sh` | 経路② |
@@ -90,10 +86,10 @@ Ollamaは版とSHA-256を固定した公式GitHub Release資材を一般ユー�
 | `infra/dogfood/templates/*`／`infra/dogfood/systemd/*` | 経路② |
 | `infra/dogfood/env.example`のenvキー契約の増減 | 経路② |
 | service user／group／home／標準pathの定義 | 経路② |
-| Docker／Compose／Node.js 22などの依存ツール要件 | 経路② |
+| Docker／Compose／Buildx／NVIDIA Container Toolkitなどの依存ツール要件 | 経路② |
 | partial構築または破損した環境 | 経路③ |
 
-Backend／Frontendと`scripts/setup-backend.sh`は、deployが`dogfood_prepare_backend`とFrontend buildを再実行するため経路①で反映できる。`environments/profiles/dogfood.json`も実行時に読み込まれるため経路①とする。
+Backend／Frontend／Whisper imageはCIがcommit SHA tagでGHCRへ公開し、deployが3 digestを解決するため経路①で反映できる。`scripts/setup-backend.sh`はhost側Environment CLIとbackup／restoreのため`dogfood_prepare_backend`から再実行する。`environments/profiles/dogfood.json`も実行時に読み込まれるため経路①とする。
 
 ## 経路①: 通常のアプリケーション更新
 
@@ -111,7 +107,7 @@ bootstrap管理資材を変更せず、正常稼働している環境へアプ�
 4. `deploy.sh --commit <同一SHA>`を実行する。
 5. `status.sh`とreadinessで確認する。
 
-事前backupが必要なのは、deployによるbackupがbootstrap後にしか実行されず、bootstrapの失敗や中断を保護できないためである。事前停止は、bootstrapがsystemd unitの差し替え、Frontend build、clone全体のchown/chmodを行い、稼働中プロセスと競合することを防ぐ。
+事前backupが必要なのは、deployによるbackupがbootstrap後にしか実行されず、bootstrapの失敗や中断を保護できないためである。事前停止は、bootstrapがsystemd unitの差し替え、active image設定、clone全体のchown/chmodを行い、稼働中containerと競合することを防ぐ。
 
 bootstrapはcheckoutを変更するが、backup、manifest更新、restartを行わない。bootstrap後に同一SHAのdeployを必ず実行し、deployがbackup、manifest、rollback履歴、restart、readinessを担うことで、deployment stateとサービスの状態を整合させる。readiness失敗時は、deployが既定で直前commitへ自動rollbackする。
 
@@ -130,6 +126,8 @@ bootstrap／deploy変更の実機検証を始める前に論理backupを作成�
 - backup generations
 - deployment state
 - Ollama model
+- Whisper model cache
+- `dogfood-images.env`
 
 `/var/lib/digital-souls`の全削除を通常の検証・復旧手段としない。やむを得ず再構成する場合の退避先は、`/var/lib/digital-souls`外かつdata root外の独立path（例: `/var/tmp/digital-souls-preserve-<UTC timestamp>`）とし、root所有、mode `0700`にする。
 
@@ -137,7 +135,7 @@ bootstrap／deploy変更の実機検証を始める前に論理backupを作成�
 
 ## 設定とbootstrap
 
-`env.example`をdogfood専用の一時pathへmode `0600`で作成し、repository URL、VOICEVOX／LiveKit image、LiveKit API key／secretを実環境に合わせる。`LIVEKIT_URL`はdogfood Profileと同じ`ws://127.0.0.1:17880`から変更しない。key／secretは`livekit-server generate-keys`または安全な乱数生成器で新規作成し、端末出力、shell history、Issue、Gitへ残さない。revisionは秘密設定と分離した`/etc/digital-souls/dogfood.revision`へ完全なcommit SHA 1行だけを書き込む。単純な`cp infra/dogfood/env.example /tmp/dogfood.env`のまま使用してはならない。service portはここへ追加せず、`environments/profiles/dogfood.json`を唯一の参照元にする。
+`env.example`をdogfood専用の一時pathへmode `0600`で作成し、repository URL、3つのGHCR repositoryを含む初期immutable digest、VOICEVOX／LiveKit image、LiveKit API key／secretを実環境に合わせる。`LIVEKIT_URL`はdogfood Profileと同じ`ws://127.0.0.1:17880`から変更しない。key／secretは`livekit-server generate-keys`または安全な乱数生成器で新規作成し、端末出力、shell history、Issue、Gitへ残さない。revisionは秘密設定と分離した`/etc/digital-souls/dogfood.revision`へ完全なcommit SHA 1行だけを書き込む。単純な`cp infra/dogfood/env.example /tmp/dogfood.env`のまま使用してはならない。service portはここへ追加せず、`environments/profiles/dogfood.json`を唯一の参照元にする。
 
 ```bash
 dogfood_env=$(mktemp)
@@ -153,7 +151,7 @@ rm -f -- "$dogfood_env"
 
 bootstrap用一時envの`0600`は、内容を読み込む前の秘密保護契約である。bootstrapが正規配置する`/etc/digital-souls/dogfood.env`の`0640 root:digital-souls`とは別の契約であり、一時envへ`0640`を使用しない。bootstrapの成否を確認した後、一時envは削除する。
 
-bootstrapはdistribution名と`DS_ENVIRONMENT_ID=dogfood`、必須設定、絶対path、pathの非重複、HTTPS repository URL、revisionファイルの完全なcommit SHA、Docker group、`docker compose version`、`node`、`npm`、Node.js major version 22を配置前に検証する。初回は指定revisionを取得し、origin、commit一致、detached HEAD、変更のないworking treeを検証してcloneを作成する。再実行時もoriginを検証してrevisionをfetch・解決し、既存cloneがcleanかつdetached HEADの場合だけ指定revisionへcheckoutする。差分またはbranchを検出した場合は内容を報告し、resetやcleanを行わず停止する。
+bootstrapはdistribution名と`DS_ENVIRONMENT_ID=dogfood`、必須設定、絶対path、pathの非重複、HTTPS repository URL、revisionファイルの完全なcommit SHA、3つのGHCR immutable digest、Docker group、`docker compose version`、`docker buildx version`を配置前に検証する。初回は指定revisionを取得し、origin、commit一致、detached HEAD、変更のないworking treeを検証してcloneを作成する。再実行時もoriginを検証してrevisionをfetch・解決し、既存cloneがcleanかつdetached HEADの場合だけ指定revisionへcheckoutする。差分またはbranchを検出した場合は内容を報告し、resetやcleanを行わず停止する。
 
 service userのhomeは`DOGFOOD_SERVICE_HOME_DIR`、Ollama modelは`DOGFOOD_OLLAMA_MODELS_DIR`へ分離する。既存userではhome、primary group、shellだけを収束し、旧homeのfileは移動・削除しない。backupとbackup-verifyは`GIT_CONFIG_GLOBAL`を明示し、service userのglobal Git設定としてこのhome直下の`.gitconfig`だけを使用する。bootstrapを唯一の収束点とし、`safe.directory`は`realpath`で正規化した`DOGFOOD_CLONE_DIR` 1件へ毎回上書きするため、手動追加した別pathや`*`は次回bootstrapで除去される。`.gitconfig`内の他キーは維持し、所有者をservice user、modeを`0640`へ収束する。
 
@@ -169,7 +167,7 @@ sudo -u digital-souls env \
   --global --includes --show-origin --get-all safe.directory
 ```
 
-bootstrapは現在revisionのBackend venv準備、`npm ci`、Frontend buildまで行い、依存準備後もcheckoutがcleanであることを検証するが、サービスは起動しない。初回はbootstrap後に`digital-souls-dogfood.target`を起動し、application unitから委譲されたBackend起動によって`conversation-history.db`を作成する。
+bootstrapはhost側Environment CLI用のBackend venvを準備し、初期3 digestをroot専用の`dogfood-images.env`へ原子的に配置する。アプリケーションimageをhostでbuildせず、サービスも起動しない。初回はbootstrap後に`digital-souls-dogfood.target`を起動し、application containerのBackend起動によって`conversation-history.db`を作成する。
 
 更新時は、運用者の作業コピーにある新revisionの`bootstrap.sh`を実行する。bootstrapがdogfood cloneを指定revisionへ収束させた後に、そのrevisionのloaderで正規envを配置する。この順序により、旧revisionの`load-environment.sh`へ新しいenvキーを先に渡す過渡状態を避ける。
 
@@ -180,15 +178,16 @@ bootstrapは検証済み設定からsystemd unit、LiveKit Server設定、Backen
 | 対象 | 標準path | 所有者 | 用途 |
 |------|----------|--------|------|
 | clone | `/opt/digital-souls/current` | `root:digital-souls` | dogfood専用の読み取り専用clone |
-| 設定 | `/etc/digital-souls` | `root:digital-souls` | `dogfood.env`、`dogfood.revision`、`livekit.yaml`、`livekit-backend.env`（すべて`0640`） |
+| 設定 | `/etc/digital-souls` | `root:digital-souls` | 通常設定は`0640`、active digestと生成container envは`0600 root:root` |
 | data | `/var/lib/digital-souls/data` | `digital-souls:digital-souls` | SQLite、Chroma等の永続data root |
 | service home | `/var/lib/digital-souls/home` | `digital-souls:digital-souls` | `.gitconfig`、Ollama設定・鍵などのhome生成物 |
 | Ollama model | `/var/lib/digital-souls/models/ollama` | `digital-souls:digital-souls` | DL済みmodel |
+| Whisper cache | `/var/lib/digital-souls/models/whisper` | `10001:10001` | 共有Whisper専用cache。会話dataを置かない |
 | backup | `/var/lib/digital-souls/backups` | `digital-souls:digital-souls` | SQLite backup世代 |
 | state | `/var/lib/digital-souls/state` | `root:digital-souls` | deployment state |
 | log | `/var/log/digital-souls` | `digital-souls:digital-souls` | file log用directory |
 
-directoryは`0750`、設定ファイルは`0640`を基準とする。stateとその親pathはrootが管理し、symlinkやservice userが書き換え可能なpath要素を使用しない。application service userは`docker`補助groupへ所属させず、VOICEVOX／LiveKit Composeはroot所有のsystemd unitとroot所有cloneのrunnerだけが操作する。data、state、logをclone配下、Ubuntu-devのruntime root、TAKT worktreeへ置かない。
+directoryは`0750`、設定ファイルは`0640`を基準とする。stateとその親pathはrootが管理し、symlinkやservice userが書き換え可能なpath要素を使用しない。application containerはhostのservice UID／GIDで非root実行し、Docker socketをmountしない。Backend／Frontend／Whisper／VOICEVOX／LiveKit Composeはroot所有のsystemd unitまたはrootのdogfood deployだけが操作する。data、state、logをclone配下、Ubuntu-devのruntime root、TAKT worktreeへ置かない。
 
 ## deployとrollback
 
@@ -203,15 +202,15 @@ sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/rollback.sh --to <保存
 
 `sudo`は既定で`WSL_DISTRO_NAME`を引き継がないため、rootで直接実行する手順では明示的に渡す。`wslinfo --name`は利用可能な環境でだけfallbackとして使用し、distributionを解決できない場合は推測せず拒否する。
 
-deployはdirty checkout、origin/main上で解決できないcommit、設定不足を拒否する。`conversation-history.db`がなければBackend依存の準備より前に初回起動を案内して、backup、manifest、revision、checkoutを変更せず停止する。DBが存在する場合だけ、backup前に現在HEADのBackend依存を準備し、backupとbackup-verifyを完了してからmanifestとrevisionを更新する。その後、detached checkout、Backend依存準備、Frontend build、権限再適用、service restart、Profile準拠readinessの順で実行する。readiness失敗時は既定で直前commitへ自動rollbackし、`--no-auto-rollback`指定時だけ現在状態を維持して停止する。backupを省略するオプションはない。
+deployはdirty checkout、origin/main上で解決できないcommit、設定不足を拒否する。最初に3つのGHCR commit SHA tagをBuildxでimmutable digestへ解決する。`conversation-history.db`がなければBackend依存の準備より前に初回起動を案内して、backup、manifest、revision、checkoutを変更せず停止する。DBが存在する場合だけ、backup前に現在HEADのBackend依存を準備し、backupとbackup-verifyを完了してからmanifestとrevisionを更新する。その後、detached checkout、Backend依存準備、3 digestの原子的配置、権限再適用、service restart、Profile準拠readinessの順で実行する。readiness失敗時は既定で直前commitと3 digestへ自動rollbackし、`--no-auto-rollback`指定時だけ現在状態を維持して停止する。backupを省略するオプションはない。
 
-rollbackは引数なしで現在manifestの直前commitへ、`--to`で保存済みmanifestが存在する任意commitへ戻す。rollback先manifestのSQLite data schemaと現在DBのschemaが一致しない場合は、保存済みbackupを検証・restoreするまでcommitの切替を拒否する。どちらも再build、restart、readiness確認を行うため数分かかる場合がある。
+rollbackは引数なしで現在manifestの直前commitへ、`--to`で保存済みmanifestが存在する任意commitへ戻す。rollback先manifestのSQLite data schemaと現在DBのschemaが一致しない場合は、保存済みbackupを検証・restoreするまでcommitの切替を拒否する。保存済み3 digestが欠落・不正な旧manifestも拒否する。どちらもimage pull、restart、readiness確認を行うため数分かかる場合がある。
 
 自己参照manifest（`previousCommit == targetCommit`）を発見した場合は、引数なしrollbackを実行せず、manifestも手編集しない。保存済み世代から復旧対象を確認し、そのmanifestのschemaとcommit SHAを検証したうえで、`rollback.sh --to <SHA>`により明示的にrollbackする。
 
 初回deployでは、直前のcommitが存在しないことを`previousCommit: null`で表す。この状態では引数なしrollbackもreadiness失敗時の自動rollbackも実行できない。原因調査後、検証済みの保存世代があれば`rollback.sh --to <SHA>`で明示的に戻し、保存世代がなければ問題を修正して再deployする。
 
-deployment manifestは`DOGFOOD_STATE_DIR/deployments/`へ`root:digital-souls`、`0640`で保存する。1操作1 JSON、`current.json`が最新状態を表し、履歴は新しい20世代だけを保持する。commit、Profile schema、SQLite data schema、backup ID、UTC deploy時刻だけを記録し、会話本文、prompt、秘密値は保存しない。`dogfood.env`はdeploy、rollback、manifest、logへ複製しない。
+deployment manifestは`DOGFOOD_STATE_DIR/deployments/`へ`root:digital-souls`、`0640`で保存する。1操作1 JSON、`current.json`が最新状態を表し、履歴は新しい20世代だけを保持する。commit、Profile schema、SQLite data schema、backup ID、Backend／Frontend／Whisper digest、UTC deploy時刻だけを記録し、会話本文、prompt、秘密値は保存しない。`dogfood.env`はdeploy、rollback、manifest、logへ複製しない。
 
 ## SQLite artifactのbackup／restore
 
@@ -377,15 +376,15 @@ sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/restart-services.sh
 sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/stop-services.sh
 ```
 
-`digital-souls-inference.target`がOllamaとVOICEVOXをまとめる。Ollama unitは失敗時再起動を担い、VOICEVOX unitはrootでCompose stackを起動・停止するoneshotの入口に限定する。LiveKitは推論層へ含めず、独立した`digital-souls-livekit.service`がhost networkのCompose stackを操作する。実行中のVOICEVOX／LiveKit containerはComposeの`unless-stopped`方針で異常終了後に再起動する。停止timeoutは各unitとも有限であり、OllamaはSIGTERM、containerは`docker compose down`で正常停止する。Composeが所有するのはVOICEVOXとLiveKitだけで、Backend／Frontendはcontainer化しない。
+`digital-souls-inference.target`がOllama、VOICEVOX、Whisperをまとめる。Ollama unitは失敗時再起動を担い、VOICEVOX／Whisper unitはrootで各Compose stackを起動・停止するoneshotの入口に限定する。LiveKitは推論層へ含めず、独立した`digital-souls-livekit.service`がhost networkのCompose stackを操作する。実行中containerはComposeのrestart方針で異常終了後に再起動する。停止timeoutは各unitとも有限であり、OllamaはSIGTERM、containerは`docker compose down`で正常停止する。Backend／Frontendはenvironment専用のapplication Compose projectとして起動する。
 
-`digital-souls-dogfood.target`は推論target、LiveKit、`digital-souls-application.service`を`Requires`／`After`で束ねる。application unitは前二者の起動後、`wait-inference.sh`でOllama、VOICEVOX、LiveKitのHTTP readinessを有限時間待機してから、service userで`environments/up.sh`と`environments/down.sh`へ委譲するoneshot unitである。target restart直後のOllama GPU検出中に`/api/tags`が一時的な500を返しても、applicationの一発検証を先に実行しない。待機がtimeoutした場合はapplicationを起動せず、systemdとjournalへ失敗を残す。application processへはProfile、environment ID、data root、report pathと専用ファイル内のLiveKit 3設定だけを渡し、`DOGFOOD_BACKUP_AUTHENTICATION_KEY`を含む`dogfood.env`全体は環境に渡さない。通常起動は上記`start-services.sh`またはWindows launcherを使う。どちらも`systemctl start digital-souls-dogfood.target`へ委譲するため、PC／WSL再起動後も事前停止なしで同じ入口を実行でき、起動済みならno-opとなる。Windows launcherは`wsl.exe`の非ゼロ終了を失敗として通知する。
+`digital-souls-dogfood.target`は推論target、LiveKit、`digital-souls-application.service`を`Requires`／`After`で束ねる。application unitは前二者の起動後、`wait-inference.sh`でOllama、VOICEVOX、Whisper、LiveKitのHTTP readinessを有限時間待機してから、rootのhost control planeとして`environments/up.sh`を実行する`Type=simple` unitである。Backend／Frontend container自体はservice UID／GIDで非root実行する。target restart直後のOllama GPU検出中に`/api/tags`が一時的な500を返しても、applicationの一発検証を先に実行しない。待機がtimeoutした場合はapplicationを起動せず、systemdとjournalへ失敗を残す。Backendへ渡す秘密は専用ファイル内のLiveKit 3設定に限定し、Frontendへ`DOGFOOD_BACKUP_AUTHENTICATION_KEY`を渡さない。通常起動は上記`start-services.sh`またはWindows launcherを使う。どちらも`systemctl start digital-souls-dogfood.target`へ委譲するため、PC／WSL再起動後も事前停止なしで同じ入口を実行でき、起動済みならno-opとなる。Windows launcherは`wsl.exe`の非ゼロ終了を失敗として通知する。この常駐型unitへの変更には、起動後に終了してしまう従来のoneshot問題を修正するIssue #134の内容を含む。
 
-`status.sh`はidentity、runtime root、unit、orchestratorのprocess identity、listen port、CPU、memory、GPU、VOICEVOX／LiveKit containerのmetadataだけを表示する。会話、DB、永続data、journal本文、LiveKit資格情報は読まない。application unitがactiveなのにrun reportのpid／pgid／sessionId／startTimeと実processが一致しない場合は異常終了し、`restart-services.sh`を案内する。
+`status.sh`はidentity、runtime root、unit、container identity、listen port、CPU、memory、GPU、各containerのmetadataだけを表示する。会話、DB、永続data、journal本文、LiveKit資格情報は読まない。application unitがactiveなのにrun reportのcontainer ID／起動時刻と実containerが一致しない場合は異常終了し、`restart-services.sh`を案内する。
 
 ## 共通推論サービスとmodel移行
 
-VRAM制約下でdevとdogfoodを並行稼働するため、OllamaとVOICEVOXはUbuntu-dogfood側の1 instanceへ集約する。これは#50の環境別サービス分離に対する明示的な例外である。`dev.json`と`dogfood.json`は両サービスを`source: external`、同じport（Ollama `11434`、VOICEVOX `50021`）で参照済みのため、Profile変更は不要である。Ubuntu-dev側は共通サービスを起動・停止・cleanupせず、Ubuntu-devに別途導入済みのOllama systemd unitは停止・無効化する。
+VRAM制約下でdevとdogfoodを並行稼働するため、Ollama、VOICEVOX、WhisperはUbuntu-dogfood側の1 instanceへ集約する。これは#50の環境別サービス分離に対する明示的な例外である。`dev.json`、`integration-voice.json`、`dogfood.json`は3サービスを`source: external`として同じloopback endpoint（Ollama `11434`、VOICEVOX `50021`、Whisper `50022`）で参照する。Ubuntu-dev側は共通サービスを起動・停止・cleanupせず、Ubuntu-devに別途導入済みのOllama systemd unitは停止・無効化する。
 
 ```bash
 sudo systemctl disable --now ollama
@@ -393,7 +392,9 @@ sudo systemctl disable --now ollama
 
 会話履歴、SQLite、Chroma、data rootの分離は、従来どおり環境ごとの`DS_DATA_DIR`とidentity markerで維持する。VOICEVOXは`voicevox/voicevox_engine:cpu-*`を既定とする。GPU版への移行は専用GPU確保後に別Issueで扱い、本タスクではGPU化もIssue起票も行わない。
 
-Whisperもdogfoodでは`device=cpu`、`compute_type=int8`に固定する。WSL2からはWindows側のNVIDIA driverを利用し、WSL内へLinux display driverを導入しない。WhisperのGPU実行とCUDA runtimeの導入は後続タスクで扱う。
+WhisperはRTX 4070 Ti SUPER 16GB向けに`medium`、`device=cuda`、`compute_type=int8_float16`、device index 0、model instance 1、global inflight 1で固定する。CPU fallbackは行わず、CUDAまたは最小推論に失敗した場合は`/health/ready`を成功させない。model revision、faster-whisper、CTranslate2、CUDA、cuDNN、base imageを固定し、`/version`で本文を含まないruntime情報を確認できる。音声と文字起こし本文は保存・access log出力しない。
+
+同時requestは待ち行列へ入れずcapacity超過でfail fastする。推論timeoutではworkerを破棄し、次requestでmodelを再生成する。model cacheは会話data rootと分離した`DOGFOOD_WHISPER_MODEL_CACHE`へ置く。通常のapplication deployはBackend／Frontend／Whisperの同一commit digestを一組で切り替える。
 
 旧`$DS_DATA_DIR/ollama/models`のmodelはbootstrapが移動しない。既存modelを使う場合はサービス停止後に`blobs`と`manifests`を新保存先へ手動で移動し、所有権を収束させる。
 
@@ -435,7 +436,7 @@ distributionの作り直しではなく、次の順序で既存環境を収束�
    sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/stop-services.sh
    ```
 
-3. 「実機検証時のデータ保全」に従い、停止後にfilesystem単位で同節の7項目を独立した保全先へ退避する。特に`DOGFOOD_BACKUP_AUTHENTICATION_KEY`を失うと既存backupを永久に検証・restoreできないため、秘密を表示せずmode `0600`で保全する。稼働中SQLiteの単純コピーは行わない。
+3. 「実機検証時のデータ保全」に従い、停止後にfilesystem単位で同節の9項目を独立した保全先へ退避する。特に`DOGFOOD_BACKUP_AUTHENTICATION_KEY`を失うと既存backupを永久に検証・restoreできないため、秘密を表示せずmode `0600`で保全する。稼働中SQLiteの単純コピーは行わない。
 4. 上記の競合package削除手順を経てDocker公式repositoryとCompose pluginへ移行する。
 5. 修正版`bootstrap.sh`をrootで再実行し、service user、home、model保存先、所有権、権限を冪等に収束させる。
 
@@ -482,10 +483,13 @@ systemd unitのenableだけではWSL instanceの常時維持やWindows起動時�
 ```bash
 systemctl show digital-souls-ollama.service --property=ActiveState,SubState,Result,ExecMainStatus
 systemctl show digital-souls-voicevox.service --property=ActiveState,SubState,Result,ExecMainStatus
+systemctl show digital-souls-whisper.service --property=ActiveState,SubState,Result,ExecMainStatus
 journalctl -u digital-souls-ollama.service --since today
 journalctl -u digital-souls-voicevox.service --since today
+journalctl -u digital-souls-whisper.service --since today
 sudo systemctl restart digital-souls-ollama.service
 sudo systemctl restart digital-souls-voicevox.service
+sudo systemctl restart digital-souls-whisper.service
 scripts/dogfood/status.sh
 ```
 
@@ -496,8 +500,8 @@ sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/restart-services.sh
 sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/status.sh
 ```
 
-VOICEVOX processの異常終了はComposeがcontainerを再起動する。復旧しない場合やDocker daemon自体の障害では`docker ps --filter name=digital-souls-voicevox`とDocker serviceを確認し、VOICEVOX unitだけを再起動してCompose stackをdown／upする。意図的に停止する場合はVOICEVOX unitまたはinference targetをstopし、`docker compose down`でstackを削除する。dev／integration／TAKTから共通推論serviceをstopまたはrestartしない。
+VOICEVOX／Whisper processの異常終了はComposeがcontainerを再起動する。復旧しない場合やDocker daemon自体の障害では対象containerとDocker serviceを確認し、対象unitだけを再起動してCompose stackをdown／upする。意図的に停止する場合は対象unitまたはinference targetをstopし、`docker compose down`でstackを削除する。dev／integration／TAKTから共通推論serviceをstopまたはrestartしない。
 
 ## 手動作業と自動検証の境界
 
-distribution作成、Linux user／permission設定、bootstrap成功、systemd／Docker／Ollama／VOICEVOXの実起動、実会話、WSL／Windows再起動後の実復旧は利用者が手動確認する。自動テストは一時directory、fake command、静的資材に加え、隔離したVOICEVOX runtime testで開発環境のDocker daemonとDocker Composeを使用するが、実Ubuntu-dogfoodのfilesystem、process、systemd、endpointは操作しない。実会話と再起動後の受入はIssue #56へ引き渡す。
+distribution作成、Linux user／permission設定、bootstrap成功、systemd／Docker／Ollama／VOICEVOX／Whisperの実起動、実会話、WSL／Windows再起動後の実復旧は利用者が手動確認する。Issue #135 Goal 1の自動テストは一時directory、fake command、静的資材、開発環境のDocker Composeを使用するが、実Ubuntu-dogfoodのfilesystem、process、systemd、endpointは操作しない。RTX 4070 Ti SUPER上のCUDA／VRAM、dev・dogfood同時会話、連続会話品質、再起動後の受入はGoal 2へ引き渡す。

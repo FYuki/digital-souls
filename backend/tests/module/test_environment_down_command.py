@@ -209,11 +209,9 @@ def test_should_rerun_down_for_completed_stale_report(
         "backend",
         state="started",
         owned=True,
-        process_identity={
-            "pid": 2_147_483_647,
-            "pgid": 2_147_483_647,
-            "sessionId": 2_147_483_647,
-            "startTime": 1,
+        container_identity={
+            "containerId": "f" * 64,
+            "startedAt": "2026-07-17T00:00:00.000000000Z",
         },
     )
     report = record_ready(report, ready_at="2026-07-17T00:00:30+00:00")

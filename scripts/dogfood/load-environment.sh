@@ -14,11 +14,17 @@ DOGFOOD_ALLOWED_ENV_KEYS=(
   DOGFOOD_STATE_DIR DOGFOOD_LOG_DIR
   DOGFOOD_VOICEVOX_IMAGE DOGFOOD_VOICEVOX_CONTAINER
   DOGFOOD_LIVEKIT_IMAGE DOGFOOD_LIVEKIT_CONTAINER
+  DOGFOOD_BACKEND_IMAGE DOGFOOD_FRONTEND_IMAGE DOGFOOD_WHISPER_IMAGE
+  DOGFOOD_WHISPER_MODEL_CACHE WHISPER_MODEL_REVISION
   LIVEKIT_URL LIVEKIT_API_KEY LIVEKIT_API_SECRET
 )
 DOGFOOD_PATH_KEYS=(
   DOGFOOD_CLONE_DIR DOGFOOD_CONFIG_DIR DS_DATA_DIR DOGFOOD_SERVICE_HOME_DIR
   DOGFOOD_OLLAMA_MODELS_DIR DOGFOOD_BACKUP_DIR DOGFOOD_STATE_DIR DOGFOOD_LOG_DIR
+  DOGFOOD_WHISPER_MODEL_CACHE
+)
+DOGFOOD_IMAGE_KEYS=(
+  DOGFOOD_BACKEND_IMAGE DOGFOOD_FRONTEND_IMAGE DOGFOOD_WHISPER_IMAGE
 )
 
 dogfood_is_allowed_key() {
@@ -160,7 +166,75 @@ PYTHON
   if [ -z "${DOGFOOD_OLLAMA_MODELS_DIR+x}" ]; then
     export DOGFOOD_OLLAMA_MODELS_DIR="$DOGFOOD_DEFAULT_OLLAMA_MODELS_DIR"
   fi
-  dogfood_validate_environment
+  dogfood_validate_environment || return
+  if [ "$normalized_env_file" = "$normalized_default_env_file" ]; then
+    dogfood_load_active_images || return
+    dogfood_validate_images || return
+  fi
+}
+
+dogfood_load_active_images() {
+  local image_file="$DOGFOOD_CONFIG_DIR/dogfood-images.env"
+  local contents key value
+  local -A seen=()
+  [ -e "$image_file" ] || return 0
+  if ! contents=$(python3 - "$image_file" <<'PYTHON'
+import os
+import stat
+import sys
+
+path = sys.argv[1]
+try:
+    descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    opened = os.fstat(descriptor)
+    current = os.stat(path, follow_symlinks=False)
+    if (
+        not stat.S_ISREG(opened.st_mode)
+        or opened.st_uid != 0
+        or stat.S_IMODE(opened.st_mode) != 0o600
+        or (opened.st_dev, opened.st_ino) != (current.st_dev, current.st_ino)
+    ):
+        raise OSError
+    with os.fdopen(descriptor, encoding="utf-8") as source:
+        sys.stdout.write(source.read())
+except (OSError, UnicodeError):
+    print("ERROR: active image設定ファイルを安全に読み取れません", file=sys.stderr)
+    raise SystemExit(2)
+PYTHON
+  ); then
+    return 2
+  fi
+  while IFS='=' read -r key value || [ -n "$key$value" ]; do
+    if [ -z "$key" ] || [[ "$key" == \#* ]]; then
+      continue
+    fi
+    case "$key" in
+      DOGFOOD_BACKEND_IMAGE|DOGFOOD_FRONTEND_IMAGE|DOGFOOD_WHISPER_IMAGE) ;;
+      *) echo "ERROR: active image設定に未知のkeyがあります: $key" >&2; return 2 ;;
+    esac
+    if [ "${seen[$key]+defined}" = defined ] || [ -z "$value" ]; then
+      echo "ERROR: active image設定が重複または空です: $key" >&2
+      return 2
+    fi
+    seen[$key]=defined
+    export "$key=$value"
+  done <<< "$contents"
+  for key in "${DOGFOOD_IMAGE_KEYS[@]}"; do
+    if [ "${seen[$key]+defined}" != defined ]; then
+      echo "ERROR: active image設定がありません: $key" >&2
+      return 2
+    fi
+  done
+}
+
+dogfood_validate_images() {
+  local key
+  for key in "${DOGFOOD_IMAGE_KEYS[@]}"; do
+    if ! [[ "${!key}" =~ ^ghcr\.io/[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$ ]]; then
+      echo "ERROR: $key はGHCRのimmutable digestで指定してください" >&2
+      return 2
+    fi
+  done
 }
 
 dogfood_read_revision() {
@@ -305,6 +379,11 @@ dogfood_validate_environment() {
       return 2
     fi
   done
+  dogfood_validate_images || return
+  if ! [[ "$WHISPER_MODEL_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "ERROR: WHISPER_MODEL_REVISIONは40桁のcommit SHAで指定してください" >&2
+    return 2
+  fi
 }
 
 dogfood_resolve_wsl_distro() {

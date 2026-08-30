@@ -505,14 +505,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             audio_pipeline_state_set = True
             core_session_factory = None
             if resolve_livekit_settings() is not None:
-                from app.stt.whisper_isolation import (
-                    create_isolated_whisper_transcriber,
-                )
+                from app.stt.remote_whisper_client import RemoteWhisperTranscriber
                 from app.tts.voicevox_client import create_voicevox_client
 
-                core_transcriber = create_isolated_whisper_transcriber(
-                    model_name=audio_runtime_config.model_settings.whisper_model,
-                    download_root=Path(audio_runtime_config.whisper_download_root),
+                core_transcriber = RemoteWhisperTranscriber(
+                    audio_runtime_config.whisper_base_url
                 )
                 core_synthesizer = create_voicevox_client(
                     audio_runtime_config.voicevox_base_url

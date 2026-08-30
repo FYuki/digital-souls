@@ -11,6 +11,7 @@ import pytest
 from tests.dogfood_infrastructure_test_support import (
     DOGFOOD_SCRIPTS_DIR,
     TEST_REVISION,
+    TEST_DEPLOYMENT_IMAGES,
     TEST_SERVICE_GROUP,
     command_with_root_owned_revision,
     read_valid_deployment_manifest,
@@ -44,6 +45,7 @@ def _write_manifest(
                 "profileSchemaVersion": 1,
                 "dataSchemaVersion": data_schema_version,
                 "backupId": "backup-test-generation",
+                "images": TEST_DEPLOYMENT_IMAGES,
                 "deployedAt": "2026-08-14T00:00:00Z",
             }
         ),
@@ -188,7 +190,6 @@ def test_should_select_only_a_saved_manifest_for_rollback(
         for marker in (
             "checkout --detach",
             "backend-setup",
-            "npm\t",
             "chown\t",
             "chmod\t",
             "restart",
@@ -198,7 +199,7 @@ def test_should_select_only_a_saved_manifest_for_rollback(
     assert operation_positions == tuple(sorted(operation_positions))
 
 
-def test_should_use_current_manifest_for_first_manual_rollback(
+def test_should_reject_manual_rollback_without_target_image_manifest(
     tmp_path: Path,
 ) -> None:
     environment, _ = _rollback_environment(tmp_path)
@@ -214,10 +215,11 @@ def test_should_use_current_manifest_for_first_manual_rollback(
         timeout=10,
     )
 
-    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "image digest" in result.stderr
     assert (tmp_path / "config" / "dogfood.revision").read_text(
         encoding="utf-8"
-    ) == f"{OLDER_REVISION}\n"
+    ) == f"{TEST_REVISION}\n"
 
 
 def test_should_record_a_new_current_manifest_for_rollback(tmp_path: Path) -> None:
@@ -290,7 +292,6 @@ def test_should_reject_a_revision_without_a_saved_manifest(tmp_path: Path) -> No
     ("failure", "last_operation"),
     (
         ("backend-setup", "backend-setup"),
-        ("npm", "npm\t"),
         ("chown", "chown\t"),
         ("chmod", "chmod\t"),
         ("restart", "restart"),
@@ -351,11 +352,15 @@ def test_should_reject_rollback_until_the_saved_data_schema_is_restored(
     tmp_path: Path,
 ) -> None:
     environment, call_log = _rollback_environment(tmp_path)
-    current = tmp_path / "state" / "deployments" / "current.json"
+    older = next(
+        (tmp_path / "state" / "deployments").glob(
+            f"*-{OLDER_REVISION[:12]}.json"
+        )
+    )
     _write_manifest(
-        current,
+        older,
+        "0" * 40,
         OLDER_REVISION,
-        TEST_REVISION,
         data_schema_version=2,
     )
     revision_before = (tmp_path / "config" / "dogfood.revision").read_bytes()

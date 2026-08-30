@@ -57,7 +57,8 @@ def _run_status(
     write_executable(
         runtime_dir / "resolve-inference-endpoints.py",
         f'printf "resolver\\n" >> "{resolver_log}"\n'
-        "printf '%s\\n' OLLAMA_PORT=11434 VOICEVOX_PORT=50021 LIVEKIT_PORT=17880\n",
+        "printf '%s\\n' OLLAMA_PORT=11434 VOICEVOX_PORT=50021 "
+        "WHISPER_PORT=50022 LIVEKIT_PORT=17880\n",
     )
     status_script = runtime_dir / "status.sh"
     env_path, data_dir = write_dogfood_env(tmp_path)
@@ -171,6 +172,7 @@ def test_should_report_only_runtime_metadata_with_read_only_commands(
     ss_arguments = " ".join(arguments for name, arguments in calls if name == "ss")
     assert "11434" in ss_arguments
     assert "50021" in ss_arguments
+    assert "50022" in ss_arguments
     assert "17880" in ss_arguments
     systemctl_arguments = " ".join(
         arguments for name, arguments in calls if name == "systemctl"

@@ -47,11 +47,9 @@ def _owned_environment_report(
             service,
             state="started",
             owned=True,
-            process_identity={
-                "pid": frontend_port + offset,
-                "pgid": frontend_port + offset,
-                "sessionId": frontend_port + offset,
-                "startTime": 1,
+            container_identity={
+                "containerId": f"{'a' if service == 'backend' else 'b'}" * 64,
+                "startedAt": "2026-08-07T00:00:01Z",
             },
         )
     return report

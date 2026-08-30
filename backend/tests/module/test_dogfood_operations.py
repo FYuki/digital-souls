@@ -344,7 +344,7 @@ def test_should_place_assets_only_after_bootstrap_trust_checks_succeed(
     assert "systemctl\tenable digital-souls-dogfood.target" in calls
 
 
-def test_should_prepare_backend_and_frontend_without_starting_services(
+def test_should_prepare_backend_cli_and_container_image_selection_without_starting(
     tmp_path: Path,
 ) -> None:
     result, calls = _run_bootstrap(
@@ -358,8 +358,8 @@ def test_should_prepare_backend_and_frontend_without_starting_services(
 
     assert result.returncode == 0, result.stderr
     assert calls.count("backend-setup") == 1
-    assert any(call.startswith("npm\t") and " ci " in f" {call} " for call in calls)
-    assert any(call.startswith("npm\t") and " run build" in call for call in calls)
+    assert not any(call.startswith("npm\t") for call in calls)
+    assert (tmp_path / "config" / "dogfood-images.env").is_file()
     systemctl_actions = tuple(
         call.partition("\t")[2] for call in calls if call.startswith("systemctl\t")
     )
@@ -484,7 +484,7 @@ def test_should_reject_bootstrap_before_changes_when_compose_plugin_is_missing(
     assert _post_gate_side_effect_calls(calls, ()) == ()
 
 
-def test_should_reject_node_major_other_than_22_before_changes(tmp_path: Path) -> None:
+def test_should_not_require_host_node_for_containerized_frontend(tmp_path: Path) -> None:
     result, calls = _run_bootstrap(
         tmp_path,
         None,
@@ -495,13 +495,11 @@ def test_should_reject_node_major_other_than_22_before_changes(tmp_path: Path) -
         node_version="v20.19.0",
     )
 
-    assert result.returncode == 2
-    assert "v20.19.0" in result.stderr
-    assert "22" in result.stderr
-    assert _post_gate_side_effect_calls(calls, ()) == ()
+    assert result.returncode == 0, result.stderr
+    assert not any(call.startswith(("node\t", "npm\t")) for call in calls)
 
 
-def test_should_reject_failed_node_version_detection_before_changes(
+def test_should_ignore_host_node_version_detection_failure(
     tmp_path: Path,
 ) -> None:
     result, calls = _run_bootstrap(
@@ -514,14 +512,12 @@ def test_should_reject_failed_node_version_detection_before_changes(
         node_version_exit_code=17,
     )
 
-    assert result.returncode == 2
-    assert "Node.js" in result.stderr
-    assert "22" in result.stderr
-    assert _post_gate_side_effect_calls(calls, ()) == ()
+    assert result.returncode == 0, result.stderr
+    assert not any(call.startswith("node\t") for call in calls)
 
 
 @pytest.mark.parametrize("missing_command", ("node", "npm"))
-def test_should_reject_missing_node_or_npm_before_changes(
+def test_should_allow_missing_host_node_and_npm(
     tmp_path: Path,
     missing_command: Literal["node", "npm"],
 ) -> None:
@@ -535,9 +531,8 @@ def test_should_reject_missing_node_or_npm_before_changes(
         missing_command=missing_command,
     )
 
-    assert result.returncode == 2
-    assert missing_command in result.stderr
-    assert _post_gate_side_effect_calls(calls, ()) == ()
+    assert result.returncode == 0, result.stderr
+    assert not any(call.startswith(f"{missing_command}\t") for call in calls)
 
 
 def test_should_reject_a_symlinked_manifest_root_before_bootstrap_changes(
@@ -745,7 +740,7 @@ def test_should_report_branched_existing_clone_without_checkout_or_destructive_g
     )
 
 
-def test_should_stop_when_npm_ci_leaves_checkout_dirty(tmp_path: Path) -> None:
+def test_should_not_run_npm_ci_during_bootstrap(tmp_path: Path) -> None:
     result, calls = _run_bootstrap(
         tmp_path,
         None,
@@ -756,17 +751,11 @@ def test_should_stop_when_npm_ci_leaves_checkout_dirty(tmp_path: Path) -> None:
         npm_dirty=True,
     )
 
-    assert result.returncode != 0
-    assert any(call.startswith("npm\t") and " ci " in f" {call} " for call in calls)
-    assert "frontend/package-lock.json" in result.stderr or "frontend/package-lock.json" in result.stdout
-    assert not any(
-        forbidden in call
-        for call in calls
-        for forbidden in ("reset --hard", "clean -fdx")
-    )
+    assert result.returncode == 0, result.stderr
+    assert not any(call.startswith("npm\t") for call in calls)
 
 
-def test_should_stop_before_read_only_permissions_when_frontend_build_is_dirty(
+def test_should_not_build_frontend_on_the_dogfood_host(
     tmp_path: Path,
 ) -> None:
     result, calls = _run_bootstrap(
@@ -779,19 +768,8 @@ def test_should_stop_before_read_only_permissions_when_frontend_build_is_dirty(
         build_dirty=True,
     )
 
-    build_index = next(
-        index
-        for index, call in enumerate(calls)
-        if call.startswith("npm\t") and " run build" in call
-    )
-    later_calls = calls[build_index + 1 :]
-    assert result.returncode != 0
-    assert "frontend/build-runtime-artifact" in result.stderr
-    assert not any(
-        call.startswith(("chown\t", "chmod\t"))
-        and str(tmp_path / "clone") in call
-        for call in later_calls
-    )
+    assert result.returncode == 0, result.stderr
+    assert not any(call.startswith("npm\t") for call in calls)
 
 
 def test_secret_env_01_removes_temporary_environment_after_successful_bootstrap(

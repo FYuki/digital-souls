@@ -1,0 +1,47 @@
+name: digital-souls-${DS_ENVIRONMENT_ID:?DS_ENVIRONMENT_ID is required}
+
+services:
+  backend:
+    image: ${DS_BACKEND_IMAGE:-digital-souls/backend:dev}
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+    container_name: digital-souls-${DS_ENVIRONMENT_ID}-backend
+    network_mode: host
+    user: "${DS_RUNTIME_UID:?DS_RUNTIME_UID is required}:${DS_RUNTIME_GID:?DS_RUNTIME_GID is required}"
+    env_file:
+      - ${DS_CONTAINER_ENV_FILE:?DS_CONTAINER_ENV_FILE is required}
+    environment:
+      DS_BACKEND_HOST: ${DS_BACKEND_HOST:?DS_BACKEND_HOST is required}
+      DS_BACKEND_PORT: ${DS_BACKEND_PORT:?DS_BACKEND_PORT is required}
+      DS_BACKEND_RELOAD: ${DS_BACKEND_RELOAD:?DS_BACKEND_RELOAD is required}
+    volumes:
+      - type: bind
+        source: ${DS_DATA_DIR:?DS_DATA_DIR is required}
+        target: ${DS_DATA_DIR:?DS_DATA_DIR is required}
+    restart: "no"
+    init: true
+
+  frontend:
+    image: ${DS_FRONTEND_IMAGE:-digital-souls/frontend:dev}
+    build:
+      context: ../..
+      dockerfile: frontend/Dockerfile
+    container_name: digital-souls-${DS_ENVIRONMENT_ID}-frontend
+    network_mode: host
+    user: "${DS_RUNTIME_UID:?DS_RUNTIME_UID is required}:${DS_RUNTIME_GID:?DS_RUNTIME_GID is required}"
+    env_file:
+      - ${DS_CONTAINER_ENV_FILE:?DS_CONTAINER_ENV_FILE is required}
+    environment:
+      DS_FRONTEND_HOST: ${DS_FRONTEND_HOST:?DS_FRONTEND_HOST is required}
+      DS_FRONTEND_PORT: ${DS_FRONTEND_PORT:?DS_FRONTEND_PORT is required}
+      DS_CONTAINER_MODE: ${DS_CONTAINER_MODE:-production}
+      DS_BACKEND_ORIGIN: ${DS_BACKEND_ORIGIN:?DS_BACKEND_ORIGIN is required}
+      DS_PROFILE_REPORT: ${DS_PROFILE_REPORT:?DS_PROFILE_REPORT is required}
+    volumes:
+      - type: bind
+        source: ${DS_PROFILE_REPORT:?DS_PROFILE_REPORT is required}
+        target: ${DS_PROFILE_REPORT:?DS_PROFILE_REPORT is required}
+        read_only: true
+    restart: "no"
+    init: true

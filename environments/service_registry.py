@@ -56,7 +56,10 @@ def create_service_registry(
         "frontend": ServiceRegistration(
             "frontend",
             FrontendAdapter(
-                root_dir, runner, effective_profile=effective_profile
+                root_dir,
+                runtime_paths,
+                runner,
+                effective_profile=effective_profile,
             ),
             None,
         ),
@@ -66,6 +69,7 @@ def create_service_registry(
                 root_dir,
                 runtime_paths,
                 runner,
+                effective_profile=effective_profile,
                 whisper_model_name=whisper_model_name,
             ),
             None,
@@ -83,7 +87,9 @@ def create_service_registry(
         "voicevox": ServiceRegistration(
             "voicevox", VoicevoxAdapter(root_dir, runner), None
         ),
-        "whisper": ServiceRegistration("whisper", None, "backend"),
+        "whisper": ServiceRegistration(
+            "whisper", None, None, LiveKitExternalOperations()
+        ),
         "chroma": ServiceRegistration("chroma", None, "backend"),
         "livekit": ServiceRegistration(
             "livekit", None, None, LiveKitExternalOperations()

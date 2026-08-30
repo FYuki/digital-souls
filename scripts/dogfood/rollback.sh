@@ -34,7 +34,10 @@ if [ -z "$requested_target" ]; then
     echo 'ERROR: rollback 元が未設定です。`--to <SHA>` で保存済み世代を明示指定してください' >&2
     exit 2
   fi
-  saved_manifest=$current_manifest
+  saved_manifest=$(dogfood_find_saved_manifest "$target") || {
+    echo 'ERROR: rollback先commitのimage digestを持つ保存済みmanifestがありません。`--to <SHA>` で検証済み世代を明示指定してください' >&2
+    exit 2
+  }
 else
   target=$requested_target
   saved_manifest=$(dogfood_find_saved_manifest "$target") || {
@@ -45,12 +48,15 @@ fi
 dogfood_require_commit_sha "$target"
 backup_id=$(dogfood_manifest_field "$saved_manifest" backupId)
 dogfood_require_rollback_schema "$saved_manifest"
+dogfood_read_manifest_images "$saved_manifest"
 
 dogfood_verify_origin
 dogfood_require_clean_checkout
 dogfood_fetch_and_resolve_commit "$target"
 previous=$(git -C "$DOGFOOD_CLONE_DIR" rev-parse HEAD)
-if ! dogfood_activate_revision "$target"; then
+if ! dogfood_activate_revision \
+  "$target" "$DOGFOOD_MANIFEST_BACKEND_IMAGE" \
+  "$DOGFOOD_MANIFEST_FRONTEND_IMAGE" "$DOGFOOD_MANIFEST_WHISPER_IMAGE"; then
   echo "ERROR: rollback処理がreadiness確認前に失敗しました: $target" >&2
   dogfood_report_current_deployment_state
   exit 1
@@ -60,6 +66,9 @@ if ! dogfood_check_readiness; then
   dogfood_report_current_deployment_state
   exit 1
 fi
-manifest=$(dogfood_manifest_metadata "$previous" "$target" "$backup_id")
+manifest=$(dogfood_manifest_metadata \
+  "$previous" "$target" "$backup_id" \
+  "$DOGFOOD_MANIFEST_BACKEND_IMAGE" "$DOGFOOD_MANIFEST_FRONTEND_IMAGE" \
+  "$DOGFOOD_MANIFEST_WHISPER_IMAGE")
 dogfood_write_manifest "$manifest" "$target"
 echo "rollbackが完了しました: $target"

@@ -9,7 +9,14 @@ CLEANUP_TARGET_NAMES = (
     READY_GATE_CLEANUP_TARGET,
     RUN_REPORT_CLEANUP_TARGET,
 )
-HTTP_SERVICE_NAMES = ("frontend", "backend", "ollama", "voicevox", "livekit")
+HTTP_SERVICE_NAMES = (
+    "frontend",
+    "backend",
+    "ollama",
+    "voicevox",
+    "whisper",
+    "livekit",
+)
 RUN_REPORT_ENV = "DS_ENVIRONMENT_RUN_REPORT"
 PROFILE_REPORT_ENV = "DS_PROFILE_REPORT"
 RUN_REPORT_SCHEMA_VERSION = 1

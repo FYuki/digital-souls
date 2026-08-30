@@ -5,6 +5,5 @@ jsonschema>=4.18
 python-dotenv
 tzdata
 chromadb
-faster-whisper
 livekit-api==1.2.0
 livekit==1.1.16

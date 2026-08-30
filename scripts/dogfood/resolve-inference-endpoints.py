@@ -18,6 +18,7 @@ def main() -> None:
     for dependency_name, prefix in (
         ("ollama", "OLLAMA"),
         ("voicevox", "VOICEVOX"),
+        ("whisper", "WHISPER"),
         ("livekit", "LIVEKIT"),
     ):
         dependency = profile["dependencies"][dependency_name]

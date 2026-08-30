@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from tests.dogfood_infrastructure_test_support import (
     DOGFOOD_SCRIPTS_DIR,
     TEST_REVISION,
+    TEST_DEPLOYMENT_IMAGES,
     TEST_SECRET_SENTINEL,
     TEST_SERVICE_GROUP,
     command_with_root_owned_revision,
@@ -64,6 +65,7 @@ def _manifest_payload(
         "profileSchemaVersion": 1,
         "dataSchemaVersion": data_schema_version,
         "backupId": "backup-current",
+        "images": TEST_DEPLOYMENT_IMAGES,
         "deployedAt": "2026-07-31T00:00:00Z",
     }
 
@@ -233,6 +235,7 @@ def _prepare_deploy_scenario(
                     "profileSchemaVersion": 1,
                     "dataSchemaVersion": 3,
                     "backupId": f"backup-{index + 1}",
+                    "images": TEST_DEPLOYMENT_IMAGES,
                     "deployedAt": f"2026-07-{index + 1:02d}T00:00:00Z",
                 }
             ),
@@ -297,6 +300,15 @@ def _prepare_deploy_scenario(
         'while [ "$#" -gt 0 ]; do\n'
         '  case "$1" in --preserve-env=*) shift ;; -u) shift 2 ;; *) break ;; esac\n'
         'done\nexec "$@"\n',
+    )
+    write_executable(
+        bin_dir / "docker",
+        f'printf "docker\\t%s\\n" "$*" >> "{call_log}"\n'
+        'case "$*" in\n'
+        f'  *"digital-souls-backend:"*) printf "sha256:{"1" * 64}\\n" ;;\n'
+        f'  *"digital-souls-frontend:"*) printf "sha256:{"2" * 64}\\n" ;;\n'
+        f'  *"digital-souls-whisper:"*) printf "sha256:{"3" * 64}\\n" ;;\n'
+        'esac\n',
     )
     write_executable(
         bin_dir / "npm",
@@ -851,7 +863,6 @@ def test_should_deploy_only_after_backup_verify_and_record_a_safe_manifest(
         *(
             next(index for index, call in enumerate(calls) if marker in call)
             for marker in (
-                "frontend-build",
                 "restart",
                 "cli\treadiness ",
             )
@@ -861,6 +872,13 @@ def test_should_deploy_only_after_backup_verify_and_record_a_safe_manifest(
     assert (tmp_path / "config" / "dogfood.revision").read_text(
         encoding="utf-8"
     ) == f"{NEXT_REVISION}\n"
+    assert (tmp_path / "config" / "dogfood-images.env").read_text(
+        encoding="utf-8"
+    ) == (
+        f"DOGFOOD_BACKEND_IMAGE={TEST_DEPLOYMENT_IMAGES['backend']}\n"
+        f"DOGFOOD_FRONTEND_IMAGE={TEST_DEPLOYMENT_IMAGES['frontend']}\n"
+        f"DOGFOOD_WHISPER_IMAGE={TEST_DEPLOYMENT_IMAGES['whisper']}\n"
+    )
     generations = tuple((tmp_path / "state" / "deployments").glob("*.json"))
     generation = next(path for path in generations if path.name != "current.json")
     read_valid_deployment_manifest(
@@ -1241,25 +1259,25 @@ def test_should_restore_deployment_state_revision_when_bootstrap_target_matches_
 
 
 @pytest.mark.parametrize("failure", (None, "readiness"), ids=("deploy", "rollback"))
-def test_should_check_build_output_before_applying_read_only_clone_permissions(
+def test_should_check_checkout_before_applying_read_only_clone_permissions(
     tmp_path: Path, failure: str | None
 ) -> None:
     result, calls = _run_deploy(tmp_path, failure=failure)
 
-    build_indexes = tuple(
-        index for index, call in enumerate(calls) if call.startswith("frontend-build\t")
+    checkout_indexes = tuple(
+        index for index, call in enumerate(calls) if "checkout --detach" in call
     )
-    assert build_indexes
-    for build_index in build_indexes:
+    assert checkout_indexes
+    for checkout_index in checkout_indexes:
         next_checkout = next(
             (
                 index
-                for index in range(build_index + 1, len(calls))
+                for index in range(checkout_index + 1, len(calls))
                 if "checkout --detach" in calls[index]
             ),
             len(calls),
         )
-        following_activation_calls = calls[build_index + 1 : next_checkout]
+        following_activation_calls = calls[checkout_index + 1 : next_checkout]
         clean_indexes = tuple(
             index
             for index, call in enumerate(following_activation_calls)
@@ -1270,7 +1288,7 @@ def test_should_check_build_output_before_applying_read_only_clone_permissions(
             for index, call in enumerate(following_activation_calls)
             if call.startswith(("chown\t", "chmod\t"))
         )
-        assert clean_indexes, "frontend build後のclean checkout確認が必要です"
+        assert clean_indexes, "checkout後のclean checkout確認が必要です"
         assert clean_indexes[0] < permission_index
 
     assert result.returncode == (0 if failure is None else 1)
@@ -1393,7 +1411,6 @@ def test_should_stop_before_checkout_when_a_deploy_gate_fails(
 @pytest.mark.parametrize(
     ("failure", "last_operation"),
     (
-        ("frontend-build", "frontend-build"),
         ("chown", "chown\t"),
         ("chmod", "chmod\t"),
         ("restart", "restart"),
@@ -1410,8 +1427,8 @@ def test_should_stop_deploy_at_the_first_activation_failure(
     assert any(last_operation in call for call in calls)
     assert not any(call.startswith("cli\treadiness ") for call in calls)
     diagnostic = result.stdout + result.stderr
-    assert f"現在のrevision: {NEXT_REVISION}" in diagnostic
-    assert f"現在のHEAD: {NEXT_REVISION}" in diagnostic
+    assert f"現在のrevision: {TEST_REVISION}" in diagnostic
+    assert f"現在のHEAD: {TEST_REVISION}" in diagnostic
 
 
 def test_should_stop_before_backup_when_current_backend_setup_fails(
@@ -1577,7 +1594,6 @@ def test_should_automatically_restore_the_previous_revision_after_readiness_fail
     activation_markers = (
         ("checkout --detach", "checkout"),
         ("backend-setup", "backend-setup"),
-        ("frontend-build", "frontend-build"),
         ("chown\t", "chown"),
         ("chmod\t", "chmod"),
         ("restart", "restart"),
@@ -1595,7 +1611,6 @@ def test_should_automatically_restore_the_previous_revision_after_readiness_fail
         "backend-setup",
         "checkout",
         "backend-setup",
-        "frontend-build",
         "chown",
         "chmod",
         "restart",
@@ -1603,7 +1618,6 @@ def test_should_automatically_restore_the_previous_revision_after_readiness_fail
         "readiness-failure",
         "checkout",
         "backend-setup",
-        "frontend-build",
         "chown",
         "chmod",
         "restart",
