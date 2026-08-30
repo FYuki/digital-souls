@@ -57,7 +57,7 @@ def _run_status(
     write_executable(
         runtime_dir / "resolve-inference-endpoints.py",
         f'printf "resolver\\n" >> "{resolver_log}"\n'
-        "printf '%s\\n' OLLAMA_PORT=11434 VOICEVOX_PORT=50021\n",
+        "printf '%s\\n' OLLAMA_PORT=11434 VOICEVOX_PORT=50021 LIVEKIT_PORT=17880\n",
     )
     status_script = runtime_dir / "status.sh"
     env_path, data_dir = write_dogfood_env(tmp_path)
@@ -171,6 +171,13 @@ def test_should_report_only_runtime_metadata_with_read_only_commands(
     ss_arguments = " ".join(arguments for name, arguments in calls if name == "ss")
     assert "11434" in ss_arguments
     assert "50021" in ss_arguments
+    assert "17880" in ss_arguments
+    systemctl_arguments = " ".join(
+        arguments for name, arguments in calls if name == "systemctl"
+    )
+    docker_arguments = " ".join(arguments for name, arguments in calls if name == "docker")
+    assert "digital-souls-livekit.service" in systemctl_arguments
+    assert "digital-souls-livekit" in docker_arguments
     assert resolver_log.read_text(encoding="utf-8") == "resolver\n"
     readiness_calls = [arguments for name, arguments in calls if name == "readiness"]
     assert readiness_calls == ["readiness --profile dogfood"]

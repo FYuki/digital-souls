@@ -62,6 +62,11 @@ def write_dogfood_env(tmp_path: Path) -> tuple[Path, Path]:
                 f"DOGFOOD_LOG_DIR={tmp_path / 'log'}",
                 "DOGFOOD_VOICEVOX_IMAGE=voicevox/voicevox_engine:test",
                 "DOGFOOD_VOICEVOX_CONTAINER=digital-souls-voicevox",
+                "DOGFOOD_LIVEKIT_IMAGE=livekit/livekit-server:v1.9.7",
+                "DOGFOOD_LIVEKIT_CONTAINER=digital-souls-livekit",
+                "LIVEKIT_URL=ws://127.0.0.1:17880",
+                "LIVEKIT_API_KEY=test-livekit-key",
+                "LIVEKIT_API_SECRET=test-livekit-secret-0123456789abcdef",
             )
         ),
         encoding="utf-8",
@@ -190,7 +195,9 @@ def _write_bootstrap_clone_assets(clone_dir: Path) -> None:
         'printf "renderer\\n" >> "$BOOTSTRAP_CALL_LOG"\n'
         'touch "$2/digital-souls-ollama.service" '
         '"$2/digital-souls-voicevox.service" '
-        '"$2/digital-souls-application.service" "$2/start-dogfood-wsl.ps1"\n',
+        '"$2/digital-souls-livekit.service" '
+        '"$2/digital-souls-application.service" "$2/livekit.yaml" '
+        '"$2/livekit-backend.env" "$2/start-dogfood-wsl.ps1"\n',
     )
     target = clone_dir / "infra" / "dogfood" / "systemd"
     target.mkdir(parents=True)

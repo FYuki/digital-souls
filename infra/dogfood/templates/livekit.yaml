@@ -1,7 +1,9 @@
 port: 17880
+bind_addresses:
+  - 127.0.0.1
 rtc:
   tcp_port: 17881
   udp_port: 17882
   use_external_ip: false
 keys:
-  replace-key: replace-secret
+  "@LIVEKIT_API_KEY@": "@LIVEKIT_API_SECRET@"

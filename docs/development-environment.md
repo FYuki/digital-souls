@@ -11,8 +11,9 @@
 | Node.js | Frontend 開発サーバー | `scripts/start-frontend.sh` |
 | Python 3 | FastAPI Backend | `scripts/setup-backend.sh` 後に `scripts/start-backend.sh` |
 | Ollama | テキストチャットの LLM 推論 | Ubuntu-dogfoodのsystemdが所有。dev／integrationは起動済みendpointを再利用 |
-| Docker | VOICEVOX コンテナ実行 | Ubuntu-dogfoodのsystemdがCompose stackを操作し、Composeが実行中containerを所有 |
+| Docker | VOICEVOX／LiveKit コンテナ実行 | Ubuntu-dogfoodのsystemdがCompose stackを操作し、Composeが実行中containerを所有 |
 | VOICEVOX | 音声チャットの TTS | `voicevox_engine` コンテナ |
+| LiveKit | Wave 3音声transport | dogfoodは`digital-souls-livekit.service`、dev integrationは`infra/livekit/compose.yaml` |
 | Whisper | 音声チャットの STT | Backend プロセス内で `faster-whisper` がロード |
 | ChromaDB | 会話記憶のベクトルストア | Backend プロセス内の永続ストア |
 
@@ -23,10 +24,10 @@ PostgreSQL / Qdrant / Redis / AIRI は現行の通常起動フローでは使用
 本書の既存コマンドは`Ubuntu-dev`上の開発・テスト環境を対象とする。継続利用するdogfoodは
 Issue #50で別WSL distribution、別port、独立clone、専用data rootへ分離する。
 
-| 環境 | Frontend | Backend | ready gate | データ |
-|---|---:|---:|---:|---|
-| dev／TAKT | 5173 | 8000 | 4174 | 破棄・再作成可能 |
-| dogfood | 15173 | 18000 | 14174 | backup・migration対象 |
+| 環境 | Frontend | Backend | ready gate | LiveKit | データ |
+|---|---:|---:|---:|---:|---|
+| dev／TAKT | 5173 | 8000 | 4174 | 7880 | 破棄・再作成可能 |
+| dogfood | 15173 | 18000 | 14174 | 17880 | backup・migration対象 |
 
 dogfoodは専用Profileと操作入口を使用し、`dev` Profileやmain checkoutをdogfood用途へ流用しない。
 dev／testのsetup、fixture、cleanupからdogfood data rootを指定しない。
@@ -68,9 +69,9 @@ scripts/status-dogfood.sh
 scripts/stop-dogfood.sh
 ```
 
-dogfood Frontend／Backend／ready gateはそれぞれ15173／18000／14174を使うため、
-5173／8000／4174を使うdev・integration Profileと同時起動できる。dogfoodのOllamaと
-VOICEVOXは`external`であり、dogfood runの所有対象にも`stop`の対象にもならない。
+dogfood Frontend／Backend／ready gate／LiveKitはそれぞれ15173／18000／14174／17880を使うため、
+5173／8000／4174／7880を使うdev・integration Profileと同時起動できる。dogfoodのOllama、
+VOICEVOX、LiveKitはapplication orchestratorから見て`external`であり、environment runの所有対象にも`stop`の対象にもならない。Ubuntu-dogfoodのsystemd targetがこれらのservice lifecycleを別途所有する。
 Chroma／RAGはWave 2受入まで無効で、起動・probe・所有を行わない。
 
 ## Ubuntu-devの初期セットアップ
@@ -115,11 +116,11 @@ Profile は次の5種類である。各依存の完全な接続先と readiness 
 
 | Profile | 用途 | 有効な依存 |
 |---|---|---|
-| `dev` | 通常のローカル開発 | Frontend、Backend、external Ollama／VOICEVOX、Whisper |
+| `dev` | 通常のローカル開発 | Frontend、Backend、external Ollama／VOICEVOX／LiveKit、Whisper |
 | `test-mocked` | ブラウザ内 mock を使う独立 E2E | Frontend、browser mock Backend |
 | `integration-text` | 実テキストチャット | Frontend、Backend、external Ollama |
 | `integration-voice` | 実音声チャット | Frontend、Backend、external Ollama／VOICEVOX／LiveKit、Whisper |
-| `dogfood` | 継続利用する運用相当環境 | Frontend、Backend、external Ollama／VOICEVOX、Whisper |
+| `dogfood` | 継続利用する運用相当環境 | Frontend、Backend、external Ollama／VOICEVOX／LiveKit、Whisper |
 
 起動スクリプトはサービス起動前に中央の解決処理でProfileを検証する。実行時レポートと解決済みProfileは解決済みデータルートの`runtime/`配下にのみ保存する。Playwrightは各スイート専用のテスト用データルートを設定し、`runtime/standalone/`へ環境レポートを、`frontend/test-results/<suite>/`へテスト証跡を保存する。レポートには環境IDと正規化済みパスを記録し、秘密値や会話本文は記録しない。
 

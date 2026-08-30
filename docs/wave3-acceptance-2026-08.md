@@ -58,7 +58,16 @@ Playwrightのrun結果、trace、添付JSONはsuite固有の`frontend/test-resul
 
 ## #112 dogfood引き渡し項目
 
-利用者はUbuntu-dogfoodをbackup後に通常UI `/` から次を実施する。
+### 受入前セットアップ
+
+#112を開始するrevisionはLiveKit dogfood serviceを含むため、通常deployではなく`infra/dogfood/README.md`の「経路②: bootstrap管理資材のin-place更新」で反映する。既存会話データの論理backupと`backup-verify`を成功させ、サービス停止後に、新しいLiveKit API key／secretを設定したmode `0600`の一時envでbootstrapする。続けてbootstrapと同じcommit SHAをdeployし、次をすべて確認してからブラウザ受入へ進む。
+
+- `scripts/dogfood/status.sh`が成功し、`digital-souls-livekit.service`と`digital-souls-livekit` containerがactive／runningである。
+- Profile readinessでOllama、VOICEVOX、LiveKit、Backend、Frontendがreadyである。
+- `/etc/digital-souls/livekit.yaml`と`livekit-backend.env`が`0640 root:digital-souls`であり、資格情報を端末、Issue、Gitへ転記していない。
+- 対象commit、browser、LiveKit／Whisper／Ollama／VOICEVOXのversionだけを受入記録へ残せる状態である。
+
+利用者はUbuntu-dogfoodで通常UI `/` から次を実施する。
 
 1. 音声sessionを開始し、操作を挟まず日本語で3往復以上会話する。
 2. 思考中とCharacter再生中にそれぞれ割り込み、local停止と新しい意図への応答を確認する。
