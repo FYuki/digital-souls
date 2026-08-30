@@ -1,6 +1,6 @@
 # Ubuntu-dogfood 構築・運用runbook
 
-Ubuntu-dogfoodはUbuntu-devと別のWSL distribution、Linux filesystem、service user、runtime data rootを使用する。Ollamaのprocessはsystemdが所有し、VOICEVOXの実行中containerはDocker Composeが所有する。systemdはVOICEVOX Compose stackの起動・停止入口を担う。dev／integration／TAKTはProfileに記載された起動済みendpointを再利用する。
+Ubuntu-dogfoodはUbuntu-devと別のWSL distribution、Linux filesystem、service user、runtime data rootを使用する。Ollamaのprocessはsystemdが所有し、VOICEVOXとLiveKitの実行中containerはDocker Composeが所有する。systemdは各Compose stackの起動・停止入口を担う。dev／integration／TAKTはProfileに記載された起動済みendpointを再利用する。
 
 ## Windows上でのdistribution作成
 
@@ -137,7 +137,7 @@ bootstrap／deploy変更の実機検証を始める前に論理backupを作成�
 
 ## 設定とbootstrap
 
-`env.example`をdogfood専用の一時pathへmode `0600`で作成し、repository URLとVOICEVOX imageを実環境に合わせる。revisionは秘密設定と分離した`/etc/digital-souls/dogfood.revision`へ完全なcommit SHA 1行だけを書き込む。単純な`cp infra/dogfood/env.example /tmp/dogfood.env`のまま使用してはならない。推論portはここへ追加せず、`environments/profiles/dogfood.json`を唯一の参照元にする。
+`env.example`をdogfood専用の一時pathへmode `0600`で作成し、repository URL、VOICEVOX／LiveKit image、LiveKit API key／secretを実環境に合わせる。`LIVEKIT_URL`はdogfood Profileと同じ`ws://127.0.0.1:17880`から変更しない。key／secretは`livekit-server generate-keys`または安全な乱数生成器で新規作成し、端末出力、shell history、Issue、Gitへ残さない。revisionは秘密設定と分離した`/etc/digital-souls/dogfood.revision`へ完全なcommit SHA 1行だけを書き込む。単純な`cp infra/dogfood/env.example /tmp/dogfood.env`のまま使用してはならない。service portはここへ追加せず、`environments/profiles/dogfood.json`を唯一の参照元にする。
 
 ```bash
 dogfood_env=$(mktemp)
@@ -173,14 +173,14 @@ bootstrapは現在revisionのBackend venv準備、`npm ci`、Frontend buildま�
 
 更新時は、運用者の作業コピーにある新revisionの`bootstrap.sh`を実行する。bootstrapがdogfood cloneを指定revisionへ収束させた後に、そのrevisionのloaderで正規envを配置する。この順序により、旧revisionの`load-environment.sh`へ新しいenvキーを先に渡す過渡状態を避ける。
 
-bootstrapは検証済み設定からsystemd unitとWindows launcherを生成する。生成されたlauncherは`DOGFOOD_CONFIG_DIR/start-dogfood-wsl.ps1`に配置されるため、Windows側から`\\wsl$`経由でコピーして使用する。unitのservice user、group、設定file、clone内runner、WSL distributionは同じ設定値から生成される。
+bootstrapは検証済み設定からsystemd unit、LiveKit Server設定、Backend専用のLiveKit環境ファイル、Windows launcherを生成する。`livekit.yaml`と`livekit-backend.env`は`DOGFOOD_CONFIG_DIR`へ`0640 root:digital-souls`で配置する。Backend専用ファイルに含めるのは`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`だけであり、backup認証鍵を含む`dogfood.env`全体はapplication processへ渡さない。生成されたlauncherは`DOGFOOD_CONFIG_DIR/start-dogfood-wsl.ps1`に配置されるため、Windows側から`\\wsl$`経由でコピーして使用する。unitのservice user、group、設定file、clone内runner、WSL distributionは同じ設定値から生成される。
 
 標準配置と所有権は次のとおり。
 
 | 対象 | 標準path | 所有者 | 用途 |
 |------|----------|--------|------|
 | clone | `/opt/digital-souls/current` | `root:digital-souls` | dogfood専用の読み取り専用clone |
-| 設定 | `/etc/digital-souls` | `root:digital-souls` | `dogfood.env`、`dogfood.revision`（ともに`0640`） |
+| 設定 | `/etc/digital-souls` | `root:digital-souls` | `dogfood.env`、`dogfood.revision`、`livekit.yaml`、`livekit-backend.env`（すべて`0640`） |
 | data | `/var/lib/digital-souls/data` | `digital-souls:digital-souls` | SQLite、Chroma等の永続data root |
 | service home | `/var/lib/digital-souls/home` | `digital-souls:digital-souls` | `.gitconfig`、Ollama設定・鍵などのhome生成物 |
 | Ollama model | `/var/lib/digital-souls/models/ollama` | `digital-souls:digital-souls` | DL済みmodel |
@@ -188,7 +188,7 @@ bootstrapは検証済み設定からsystemd unitとWindows launcherを生成す�
 | state | `/var/lib/digital-souls/state` | `root:digital-souls` | deployment state |
 | log | `/var/log/digital-souls` | `digital-souls:digital-souls` | file log用directory |
 
-directoryは`0750`、設定ファイルは`0640`を基準とする。stateとその親pathはrootが管理し、symlinkやservice userが書き換え可能なpath要素を使用しない。application service userは`docker`補助groupへ所属させず、VOICEVOX Composeはroot所有のsystemd unitとroot所有cloneのrunnerだけが操作する。data、state、logをclone配下、Ubuntu-devのruntime root、TAKT worktreeへ置かない。
+directoryは`0750`、設定ファイルは`0640`を基準とする。stateとその親pathはrootが管理し、symlinkやservice userが書き換え可能なpath要素を使用しない。application service userは`docker`補助groupへ所属させず、VOICEVOX／LiveKit Composeはroot所有のsystemd unitとroot所有cloneのrunnerだけが操作する。data、state、logをclone配下、Ubuntu-devのruntime root、TAKT worktreeへ置かない。
 
 ## deployとrollback
 
@@ -377,11 +377,11 @@ sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/restart-services.sh
 sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/stop-services.sh
 ```
 
-`digital-souls-inference.target`がOllamaとVOICEVOXをまとめる。Ollama unitは失敗時再起動を担い、VOICEVOX unitはrootでCompose stackを起動・停止するoneshotの入口に限定する。実行中のVOICEVOX containerはComposeの`unless-stopped`方針で異常終了後に再起動する。停止timeoutは両unitとも有限であり、OllamaはSIGTERM、VOICEVOXは`docker compose down`で正常停止する。`restart-services.sh`またはVOICEVOX unitの手動restartでは同じrunnerを通じてdown／upする。Composeが所有するのはVOICEVOXだけで、Backend／Frontendはcontainer化しない。
+`digital-souls-inference.target`がOllamaとVOICEVOXをまとめる。Ollama unitは失敗時再起動を担い、VOICEVOX unitはrootでCompose stackを起動・停止するoneshotの入口に限定する。LiveKitは推論層へ含めず、独立した`digital-souls-livekit.service`がhost networkのCompose stackを操作する。実行中のVOICEVOX／LiveKit containerはComposeの`unless-stopped`方針で異常終了後に再起動する。停止timeoutは各unitとも有限であり、OllamaはSIGTERM、containerは`docker compose down`で正常停止する。Composeが所有するのはVOICEVOXとLiveKitだけで、Backend／Frontendはcontainer化しない。
 
-`digital-souls-dogfood.target`は推論targetと`digital-souls-application.service`を`Requires`／`After`で束ねる。application unitは推論targetの起動後、`wait-inference.sh`でOllamaとVOICEVOXのHTTP readinessを有限時間待機してから、service userで`environments/up.sh`と`environments/down.sh`へ委譲するoneshot unitである。target restart直後のOllama GPU検出中に`/api/tags`が一時的な500を返しても、applicationの一発検証を先に実行しない。待機がtimeoutした場合はapplicationを起動せず、systemdとjournalへ失敗を残す。application processへはProfile、environment ID、data rootとreport pathだけを明示し、`DOGFOOD_BACKUP_AUTHENTICATION_KEY`を含む`dogfood.env`全体は環境に渡さない。通常起動は上記`start-services.sh`またはWindows launcherを使う。どちらも`systemctl start digital-souls-dogfood.target`へ委譲するため、PC／WSL再起動後も事前停止なしで同じ入口を実行でき、起動済みならno-opとなる。Windows launcherは`wsl.exe`の非ゼロ終了を失敗として通知する。
+`digital-souls-dogfood.target`は推論target、LiveKit、`digital-souls-application.service`を`Requires`／`After`で束ねる。application unitは前二者の起動後、`wait-inference.sh`でOllama、VOICEVOX、LiveKitのHTTP readinessを有限時間待機してから、service userで`environments/up.sh`と`environments/down.sh`へ委譲するoneshot unitである。target restart直後のOllama GPU検出中に`/api/tags`が一時的な500を返しても、applicationの一発検証を先に実行しない。待機がtimeoutした場合はapplicationを起動せず、systemdとjournalへ失敗を残す。application processへはProfile、environment ID、data root、report pathと専用ファイル内のLiveKit 3設定だけを渡し、`DOGFOOD_BACKUP_AUTHENTICATION_KEY`を含む`dogfood.env`全体は環境に渡さない。通常起動は上記`start-services.sh`またはWindows launcherを使う。どちらも`systemctl start digital-souls-dogfood.target`へ委譲するため、PC／WSL再起動後も事前停止なしで同じ入口を実行でき、起動済みならno-opとなる。Windows launcherは`wsl.exe`の非ゼロ終了を失敗として通知する。
 
-`status.sh`はidentity、runtime root、unit、orchestratorのprocess identity、listen port、CPU、memory、GPU、VOICEVOX containerのmetadataだけを表示する。会話、DB、永続data、journal本文は読まない。application unitがactiveなのにrun reportのpid／pgid／sessionId／startTimeと実processが一致しない場合は異常終了し、`restart-services.sh`を案内する。
+`status.sh`はidentity、runtime root、unit、orchestratorのprocess identity、listen port、CPU、memory、GPU、VOICEVOX／LiveKit containerのmetadataだけを表示する。会話、DB、永続data、journal本文、LiveKit資格情報は読まない。application unitがactiveなのにrun reportのpid／pgid／sessionId／startTimeと実processが一致しない場合は異常終了し、`restart-services.sh`を案内する。
 
 ## 共通推論サービスとmodel移行
 

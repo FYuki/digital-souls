@@ -81,6 +81,57 @@ def test_should_continue_after_loading_valid_dogfood_environment(
     assert sentinel_path.is_file()
 
 
+def test_should_accept_every_key_in_checked_in_environment_example() -> None:
+    env_example = DOGFOOD_SCRIPTS_DIR.parent.parent / "infra" / "dogfood" / "env.example"
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; dogfood_read_environment < "$2"',
+            "bash",
+            str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+            str(env_example),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "message"),
+    (
+        ("LIVEKIT_URL", "ws://0.0.0.0:17880", "LIVEKIT_URL"),
+        ("LIVEKIT_API_KEY", "short", "LIVEKIT_API_KEY"),
+        ("LIVEKIT_API_KEY", "replace-with-livekit-api-key", "LIVEKIT_API_KEY"),
+        ("LIVEKIT_API_SECRET", "unsafe secret value", "LIVEKIT_API_SECRET"),
+        (
+            "LIVEKIT_API_SECRET",
+            "replace-with-livekit-api-secret",
+            "LIVEKIT_API_SECRET",
+        ),
+        ("DOGFOOD_LIVEKIT_IMAGE", "livekit image", "DOGFOOD_LIVEKIT_IMAGE"),
+        ("DOGFOOD_LIVEKIT_CONTAINER", "-livekit", "DOGFOOD_LIVEKIT_CONTAINER"),
+    ),
+)
+def test_should_reject_invalid_livekit_settings(
+    tmp_path: Path,
+    key: str,
+    value: str,
+    message: str,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    _replace_setting(env_path, key, value)
+
+    result = _run_loader(env_path, tmp_path / "invalid-livekit.sentinel")
+
+    assert result.returncode == 2
+    assert message in result.stderr
+
+
 def test_should_supply_defaults_when_new_storage_settings_are_absent(
     tmp_path: Path,
 ) -> None:

@@ -13,6 +13,8 @@ DOGFOOD_ALLOWED_ENV_KEYS=(
   DOGFOOD_BACKUP_RETENTION_COUNT DOGFOOD_BACKUP_AUTHENTICATION_KEY
   DOGFOOD_STATE_DIR DOGFOOD_LOG_DIR
   DOGFOOD_VOICEVOX_IMAGE DOGFOOD_VOICEVOX_CONTAINER
+  DOGFOOD_LIVEKIT_IMAGE DOGFOOD_LIVEKIT_CONTAINER
+  LIVEKIT_URL LIVEKIT_API_KEY LIVEKIT_API_SECRET
 )
 DOGFOOD_PATH_KEYS=(
   DOGFOOD_CLONE_DIR DOGFOOD_CONFIG_DIR DS_DATA_DIR DOGFOOD_SERVICE_HOME_DIR
@@ -279,6 +281,30 @@ dogfood_validate_environment() {
     echo "ERROR: DOGFOOD_BACKUP_AUTHENTICATION_KEYは64桁の16進数で指定してください" >&2
     return 2
   fi
+  if [ "$LIVEKIT_URL" != "ws://127.0.0.1:17880" ]; then
+    echo "ERROR: LIVEKIT_URLはdogfood profileのws://127.0.0.1:17880を指定してください" >&2
+    return 2
+  fi
+  if [ "$LIVEKIT_API_KEY" = "replace-with-livekit-api-key" ] \
+    || ! [[ "$LIVEKIT_API_KEY" =~ ^[A-Za-z0-9_-]{8,128}$ ]]; then
+    echo "ERROR: LIVEKIT_API_KEYが不正です" >&2
+    return 2
+  fi
+  if [ "$LIVEKIT_API_SECRET" = "replace-with-livekit-api-secret" ] \
+    || ! [[ "$LIVEKIT_API_SECRET" =~ ^[A-Za-z0-9_-]{32,256}$ ]]; then
+    echo "ERROR: LIVEKIT_API_SECRETが不正です" >&2
+    return 2
+  fi
+  if ! [[ "$DOGFOOD_LIVEKIT_CONTAINER" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
+    echo "ERROR: DOGFOOD_LIVEKIT_CONTAINERが不正です" >&2
+    return 2
+  fi
+  for key in DOGFOOD_VOICEVOX_IMAGE DOGFOOD_VOICEVOX_CONTAINER DOGFOOD_LIVEKIT_IMAGE; do
+    if ! [[ "${!key}" =~ ^[A-Za-z0-9][A-Za-z0-9._/:@-]*$ ]]; then
+      echo "ERROR: $key が不正です" >&2
+      return 2
+    fi
+  done
 }
 
 dogfood_resolve_wsl_distro() {

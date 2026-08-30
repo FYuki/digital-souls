@@ -104,6 +104,11 @@ generated_assets=$(mktemp -d)
   "$DOGFOOD_CLONE_DIR/infra/dogfood/templates" "$generated_assets"
 install -m 0640 -o root -g "$DOGFOOD_SERVICE_GROUP" \
   "$DOGFOOD_RESOLVED_ENV_FILE" "$DOGFOOD_CONFIG_DIR/dogfood.env"
+install -m 0640 -o root -g "$DOGFOOD_SERVICE_GROUP" \
+  "$generated_assets/livekit.yaml" "$DOGFOOD_CONFIG_DIR/livekit.yaml"
+install -m 0640 -o root -g "$DOGFOOD_SERVICE_GROUP" \
+  "$generated_assets/livekit-backend.env" \
+  "$DOGFOOD_CONFIG_DIR/livekit-backend.env"
 install -m 0644 -o root -g "$DOGFOOD_SERVICE_GROUP" \
   "$generated_assets/start-dogfood-wsl.ps1" \
   "$DOGFOOD_CONFIG_DIR/start-dogfood-wsl.ps1"

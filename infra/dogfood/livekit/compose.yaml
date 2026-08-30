@@ -1,0 +1,9 @@
+services:
+  livekit:
+    image: ${DOGFOOD_LIVEKIT_IMAGE}
+    container_name: ${DOGFOOD_LIVEKIT_CONTAINER}
+    restart: unless-stopped
+    network_mode: host
+    command: ["--config", "/etc/livekit.yaml"]
+    volumes:
+      - "${DOGFOOD_CONFIG_DIR}/livekit.yaml:/etc/livekit.yaml:ro"

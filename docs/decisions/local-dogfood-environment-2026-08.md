@@ -133,6 +133,12 @@ Docker Compose化は、今回のdogfood分離とミニPC移行の完了条件に
 
 `dev.json`と`dogfood.json`は両サービスを`source: external`かつ同一portで定義済みのため、Profileは変更しない。Ubuntu-devは推論サービスのprocess lifecycleを所有せず、起動、停止、restart、cleanupを行わない。Ubuntu-dev側のOllama systemd自動起動も無効化する。一方、会話履歴、SQLite、Chroma、data rootは共有せず、環境ごとの`DS_DATA_DIR`とidentity markerによる分離を維持する。
 
+### 9. dogfoodのLiveKit lifecycleと資格情報を分離する
+
+Wave 3のdogfood LiveKitはhost networkの専用Compose stackとし、root所有の`digital-souls-livekit.service`を起動・停止入口にする。`digital-souls-dogfood.target`は推論target、LiveKit、applicationを依存順に束ねる。一方、Environment adapterから見たLiveKitは`source: external`のままとし、Conversation Coreやapplication orchestratorへDocker／systemd固有型とlifecycleを持ち込まない。
+
+bootstrapは同じdogfood設定からLiveKit Server用`livekit.yaml`とBackend用`livekit-backend.env`を別々に生成する。両方を`0640 root:digital-souls`で配置し、BackendにはURL、API key、API secretだけを渡す。backup認証鍵を含む`dogfood.env`全体をapplication processへ渡さず、状態確認にも資格情報を出力しない。設定契約とsystemd資材の更新は通常deployだけでは反映せず、論理backup、停止、bootstrap、同一SHA deploy、readinessの順で適用する。
+
 ## 子Issue
 
 - [x] #52 runtime data rootと環境identity

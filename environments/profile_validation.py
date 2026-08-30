@@ -36,7 +36,7 @@ READINESS_PATH_PATTERN = re.compile(
     r"^/(?:[A-Za-z0-9._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})+"
     r"(?:/(?:[A-Za-z0-9._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})*)*$|^/$"
 )
-MANAGED_HTTP_DEPENDENCY_CONTRACTS = {
+FIXED_LOCAL_HTTP_DEPENDENCY_CONTRACTS = {
     "ollama": (
         {
             "http://127.0.0.1:11434",
@@ -52,6 +52,15 @@ MANAGED_HTTP_DEPENDENCY_CONTRACTS = {
             "http://127.0.0.1:50021/",
         },
         "/version",
+    ),
+    "livekit": (
+        {
+            "http://127.0.0.1:7880",
+            "http://127.0.0.1:7880/",
+            "http://127.0.0.1:17880",
+            "http://127.0.0.1:17880/",
+        },
+        "/",
     ),
 }
 
@@ -117,11 +126,11 @@ def _validate_mode_source(name: str, dependency: Dependency, path: str) -> None:
             raise ProfileError(f"{path}.baseUrl is required for real/{source}")
         if "readinessPath" not in dependency:
             raise ProfileError(f"{path}.readinessPath is required for real/{source}")
-    if mode == "real" and name in MANAGED_HTTP_DEPENDENCY_CONTRACTS:
-        fixed_base_urls, fixed_readiness_path = MANAGED_HTTP_DEPENDENCY_CONTRACTS[name]
+    if mode == "real" and name in FIXED_LOCAL_HTTP_DEPENDENCY_CONTRACTS:
+        fixed_base_urls, fixed_readiness_path = FIXED_LOCAL_HTTP_DEPENDENCY_CONTRACTS[name]
         if dependency["baseUrl"] not in fixed_base_urls:
             raise ProfileError(
-                f"{path}.baseUrl must identify the fixed local inference service"
+                f"{path}.baseUrl must identify the fixed local service"
             )
         if dependency["readinessPath"] != fixed_readiness_path:
             raise ProfileError(
