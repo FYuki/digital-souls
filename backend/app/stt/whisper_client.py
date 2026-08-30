@@ -65,7 +65,7 @@ class WhisperTranscriber:
 
     def _get_or_create_model(self) -> WhisperModel:
         if self._model is None:
-            from faster_whisper import (  # type: ignore[import-untyped]
+            from faster_whisper import (
                 WhisperModel as FasterWhisperModel,
             )
 

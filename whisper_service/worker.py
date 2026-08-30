@@ -62,7 +62,7 @@ def _pcm_to_wav(audio: bytes) -> io.BytesIO:
 
 def _worker_main(connection: Connection, config: WhisperServiceConfig) -> None:
     try:
-        from faster_whisper import WhisperModel as FasterWhisperModel  # type: ignore[import-untyped]
+        from faster_whisper import WhisperModel as FasterWhisperModel
 
         model = cast(
             WhisperModel,
