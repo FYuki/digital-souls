@@ -40,7 +40,7 @@ dogfood_report_unsafe_rollback_history() {
   echo "ERROR: 復旧手順は infra/dogfood/README.md の deployとrollback を参照してください" >&2
 }
 
-dogfood_load_environment_settings
+dogfood_load_environment_settings --with-images
 dogfood_require_identity
 dogfood_require_root "${deploy_arguments[@]}"
 dogfood_validate_deployment_storage || {

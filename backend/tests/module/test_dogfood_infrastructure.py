@@ -176,6 +176,37 @@ def test_should_keep_dogfood_shell_entrypoints_executable_strict_and_syntax_vali
     assert result.returncode == 0, result.stderr
 
 
+def test_should_limit_root_only_active_image_loading_to_digest_consumers() -> None:
+    no_image_runners = ("run-ollama.sh", "run-voicevox.sh", "run-livekit.sh")
+    for script_name in no_image_runners:
+        source = (DOGFOOD_SCRIPTS_DIR / script_name).read_text(encoding="utf-8")
+        assert re.search(r"(?m)^dogfood_load_environment_settings$", source)
+        assert re.search(r"(?m)^dogfood_read_revision$", source)
+        assert not re.search(r"(?m)^dogfood_load_environment$", source)
+        assert "--with-images" not in source
+
+    whisper_source = (DOGFOOD_SCRIPTS_DIR / "run-whisper.sh").read_text(
+        encoding="utf-8"
+    )
+    deploy_source = (DOGFOOD_SCRIPTS_DIR / "deploy.sh").read_text(encoding="utf-8")
+    loader_source = (DOGFOOD_SCRIPTS_DIR / "load-environment.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert re.search(
+        r"(?m)^dogfood_load_environment_settings --with-images$", whisper_source
+    )
+    assert re.search(
+        r"(?m)^dogfood_load_environment_settings --with-images$", deploy_source
+    )
+    assert re.search(
+        r"(?ms)^dogfood_load_environment\(\) \{\n"
+        r"  dogfood_load_environment_settings --with-images \|\| return\n"
+        r"  dogfood_read_revision\n\}",
+        loader_source,
+    )
+
+
 def test_should_preserve_wsl_identity_in_direct_sudo_runbook_commands() -> None:
     source = README_PATH.read_text(encoding="utf-8")
 
