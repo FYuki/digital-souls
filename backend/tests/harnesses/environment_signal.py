@@ -17,6 +17,7 @@ from adapters.base import (  # noqa: E402
     Check,
     ProcessServiceOperations,
     ReadinessValidationResult,
+    ServiceStartResult,
     StartSpecification,
     VerificationResult,
 )
@@ -50,6 +51,22 @@ class SignalAdapter(ProcessServiceOperations):
             (sys.executable, "-c", "import time; time.sleep(60)"), self.root_dir
         )
 
+    def start(self, dependency, environment):
+        started = super().start(dependency, environment)
+        self._legacy_process_identity = started.process_identity
+        return ServiceStartResult(
+            "started",
+            True,
+            container_identity={
+                "containerId": ("a" if self.label == "frontend" else "b") * 64,
+                "startedAt": "2026-08-30T00:00:00.000000000Z",
+            },
+        )
+
+    def is_running(self, service):
+        del service
+        return self._process is not None and self._process.process.poll() is None
+
     def validate_readiness(self, dependency):
         return ReadinessValidationResult("ready")
 
@@ -58,7 +75,12 @@ class SignalAdapter(ProcessServiceOperations):
             log.write(f"begin:{self.label}\n")
             log.flush()
         time.sleep(0.5)
-        result = super().stop(service, grace_seconds)
+        legacy_service = {
+            **service,
+            "processIdentity": self._legacy_process_identity,
+            "containerIdentity": None,
+        }
+        result = super().stop(legacy_service, grace_seconds)
         with stop_log.open("a") as log:
             log.write(f"{self.label}\n")
         return result

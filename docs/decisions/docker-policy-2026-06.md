@@ -7,6 +7,10 @@
 2026-06のDocker限定利用方針を再検討し、Backend、Frontendと共有Whisper推論サービスを
 段階的にDockerへ移行する。本ADRは移行後の目標構成と、移行中も維持する契約を定める。
 
+Issue #135 Goal 1では、コード、設定、CI、dogfood配備資材を実機配備直前まで実装する。
+実Ubuntu-dogfoodへの適用、実GPUでのVRAM／latency計測、連続会話と再起動受入はGoal 2で行う。
+Issue #112は本決定と実装の対象外である。
+
 ## 背景
 
 当初は個人開発・単一マシンであり、FastAPI、Vite、Ollama、WhisperをWSL2上で直接実行する方が
@@ -59,9 +63,8 @@ Environment CLIをホスト側control planeとして残し、managed adapterの�
 Compose container操作へ差し替える。Backend／Frontendのrun reportはcontainer identityを記録し、
 記録したenvironment runが所有するcontainerだけを停止する。
 
-container内のbind先と、ホスト／ブラウザ向け公開URLを分離する。containerは必要なinterfaceへbindし、
-ホストへの公開は引き続きloopbackだけに制限する。containerから共通推論サービスへ接続する内部URLを
-Profile解決時に導出し、公開URLの`localhost`をcontainer内へそのまま渡さない。
+WSL2上の既存loopback URLとportを維持するため、アプリケーションとWhisperのComposeはhost networkを
+使用する。containerはProfileで解決したloopback endpointをそのまま利用し、LANへ公開しない。
 
 ### 3. devとdogfoodの分離をDocker volumeだけへ委ねない
 
@@ -110,7 +113,8 @@ CPUへの暗黙fallbackを許可しない。faster-whisper、CTranslate2、CUDA�
 
 ### 5. dogfood deployをimage単位へ変更する
 
-dogfood deployは、対象commitからBackend／Frontend imageをbuildし、immutableなimage digestを
+GitHub Actionsは対象commitからBackend／Frontend／Whisper imageをbuildしてGHCRへcommit SHA tagで公開する。
+dogfood deployは3 imageのtagをdigestへ解決し、immutableなimage digestを
 deployment manifestへ記録してから切り替える。既存のcommit、Profile schema、SQLite data schema、
 backup ID、deploy日時にimage digestを追加する。
 
@@ -118,9 +122,9 @@ deploy前backup、backup検証、readiness、失敗時rollbackを維持する。
 commit、schema、backupとimage digestの組を検証して切り替える。mainへのmerge、image build、
 registry更新だけではdogfoodの実行imageを変更しない。
 
-Whisperは共通推論サービスであるため、通常のapplication deployでは更新しない。Whisper image、
-CUDA runtime、modelまたはprotocolを変更する場合は、共通推論serviceの独立した更新手順と
-dev／dogfood双方の互換性検証を必要とする。
+3 imageは`dogfood-images.env`へ原子的に反映し、systemd targetの再起動で同じcommitの組へ切り替える。
+失敗時は直前manifestのcommitと3 digestを一組で復元する。Whisper image、CUDA runtime、modelまたは
+protocolを変更した場合は、Goal 2でdev／dogfood双方の互換性とGPU実機受入を行う。
 
 ### 6. 同じEpicで扱い、段階的に切り替える
 
@@ -136,20 +140,26 @@ ownershipを共有するため、同じEpicで設計・受入を管理する。�
 ```
 
 各段階で従来経路または直前のimageへ戻せる状態を保ち、共通Whisperの実接続受入が完了する前に
-Backend内Whisper実装を削除しない。
+Backend内Whisper実装と`backend/requirements-whisper-legacy.txt`を削除しない。legacy依存は通常の
+Backendへインストールせず、明示rollback時だけ使用する。
 
 ## 受入条件
 
+Goal 1の自動・ローカル受入は次を対象とする。
+
 - 既存の起動、status、停止スクリプトとProfile選択が同じ操作で利用できる
-- devとdogfoodのBackend／Frontendが既存portで同時稼働する
+- devとdogfoodのBackend／Frontendが既存portを維持できる
 - dev cleanupがdogfood container、共通Whisper、Ollama、VOICEVOX、LiveKitを停止しない
 - devとdogfoodのSQLite／Chroma／runtime reportが混在しない
 - dogfoodのbackup、restore、deploy失敗時rollbackがimage移行後も成功する
+- 同時STT要求、capacity超過、推論timeout、worker再生成の結果が契約どおりである
+- 音声と文字起こし本文をcontainer log、metrics、永続volumeへ残さない
+
+Goal 2の実Ubuntu-dogfood／GPU受入は次を対象とする。
+
 - devとdogfoodの実音声利用中もGPU上のWhisper model instanceが1つである
 - Whisperが`cuda`／`int8_float16`で動作し、CPUへfallbackしていない
-- 同時STT要求、capacity超過、推論timeout、worker再生成の結果が契約どおりである
 - OllamaとWhisperの同時常駐・連続会話でOOMせず、VRAM使用量と応答latencyを記録できる
-- 音声と文字起こし本文をcontainer log、metrics、永続volumeへ残さない
 - WSL／Docker再起動後にsystemdの所有順序どおり復旧する
 
 ## 旧判断と再検討結果

@@ -67,14 +67,14 @@ dogfoodのconversation historyは実データとして保持する。Wave 2開�
 ## Docker方針
 
 Dockerは環境分離そのものには使用せず、別WSL distribution、別port、独立clone、専用data root、
-環境identityを維持する。その上でBackend、Frontend、共有Whisperを段階的にDockerへ移行し、
+環境identityを維持する。その上でBackend、Frontend、共有WhisperをDockerで実行し、
 再現可能なruntimeとimage単位のdeploy／rollbackに使用する。全サービスを単一Compose projectへ
 統合せず、Ollamaは当面systemd所有の直接実行を継続する。詳細は
 `docs/decisions/docker-policy-2026-06.md`を正本とする。
 
 LiveKit Serverは例外的にhost networkのCompose serviceとし、単一UDP muxでself-hostする。Environment adapterはexternal endpointのreadinessのみを確認し、起動、停止、restartを所有しない。
 
-Ollamaのprocess lifecycleはUbuntu-dogfoodのsystemdが所有する。VOICEVOXと移行後のWhisperではsystemdが
+Ollamaのprocess lifecycleはUbuntu-dogfoodのsystemdが所有する。VOICEVOXとWhisperではsystemdが
 Compose stackの起動・停止入口を担い、Composeが実行中containerの再起動を所有する。dev、integration、
 TAKTはProfileのexternal endpointをreadiness確認して再利用し、起動、停止、restart、container操作を
 行わない。Ubuntu-dogfoodの標準配置、metadata-only観測、Windows再起動後の復旧手順は
@@ -93,7 +93,7 @@ WindowsメインPCは大型LLM、Whisperの高負荷処理、画像生成、Comf
 Ollamaのチャットモデルは`OLLAMA_CHAT_MODEL`、意味プライバシー分類モデルは`OLLAMA_CLASSIFIER_MODEL`、persona memory抽出モデルは`OLLAMA_EXTRACTOR_MODEL`、実行時コンテキストは`OLLAMA_CONTEXT_TOKENS`で指定する。
 Profile解決処理、Ollamaの準備完了確認／準備処理、Backendへの入力は同じ解決値を使用する。
 モデル最大コンテキストは`LLM_CONTEXT_TOKEN_LIMIT`として分離し、プロンプト予算は実行時コンテキストから
-`OLLAMA_RESPONSE_RESERVE_TOKENS`を差し引く。Docker移行後のWhisperは共通GPU serviceが
+`OLLAMA_RESPONSE_RESERVE_TOKENS`を差し引く。Whisperは共通GPU serviceが
 `WHISPER_MODEL`、device、compute type、model cacheとruntime versionを所有し、Backendは解決済みendpointと
 期待するmodel contractを使用する。
 

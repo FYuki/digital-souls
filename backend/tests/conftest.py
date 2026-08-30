@@ -9,8 +9,11 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 
 ENVIRONMENTS_DIR = Path(__file__).resolve().parents[2] / "environments"
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 if str(ENVIRONMENTS_DIR) not in sys.path:
     sys.path.insert(0, str(ENVIRONMENTS_DIR))
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
 
 
 def _refuse_protected_runtime_data(repository_root: Path) -> None:

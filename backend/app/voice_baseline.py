@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from app.model_settings import resolve_model_settings
-from app.stt.whisper_client import WHISPER_COMPUTE_TYPE, WHISPER_DEVICE
+from app.stt.remote_whisper_client import WHISPER_COMPUTE_TYPE, WHISPER_DEVICE
 from app.voice_metrics import (
     ClockMetadata,
     DiagnosticValue,

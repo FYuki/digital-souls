@@ -13,6 +13,7 @@ from profile_constants import (
     RAG_ENABLED_ENV,
     VOICE_BACKEND_ENV,
     VOICEVOX_BASE_URL_ENV,
+    WHISPER_BASE_URL_ENV,
 )
 from profile_types import (
     Capability,
@@ -188,9 +189,11 @@ def derive_environment(
         for dependency_name, environment_name in (
             ("ollama", OLLAMA_BASE_URL_ENV),
             ("voicevox", VOICEVOX_BASE_URL_ENV),
+            ("whisper", WHISPER_BASE_URL_ENV),
             ("backend", BACKEND_DERIVED_ORIGIN_ENV),
         )
         if dependency_map[dependency_name]["mode"] == "real"
+        and "baseUrl" in dependency_map[dependency_name]
     }
     environment = {
         RAG_ENABLED_ENV: str(dependencies["chroma"]["mode"] == "real").lower(),

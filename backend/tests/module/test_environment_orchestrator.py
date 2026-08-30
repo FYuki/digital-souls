@@ -18,7 +18,8 @@ def test_should_register_adapters_and_dependency_order_in_one_registry(tmp_path:
     assert registry.prepare_order == ("backend", "frontend")
     assert registry.start_order == ("ollama", "voicevox", "backend", "frontend")
     assert registry.available_prepare_order == ("ollama",)
-    assert registry.services["whisper"].contained_by == "backend"
+    assert registry.services["whisper"].contained_by is None
+    assert registry.services["whisper"].readiness_adapter is not None
     assert registry.services["chroma"].contained_by == "backend"
     assert registry.services["livekit"].adapter is None
     assert registry.services["livekit"].readiness_adapter is not None
@@ -245,7 +246,14 @@ def test_should_mark_environment_ready_when_every_active_http_service_is_ready()
 
     observations = {
         name: {"result": "ready"}
-        for name in ("frontend", "backend", "ollama", "voicevox", "livekit")
+        for name in (
+            "frontend",
+            "backend",
+            "ollama",
+            "voicevox",
+            "whisper",
+            "livekit",
+        )
     }
 
     assert readiness_complete(resolved_profile(), observations) is True

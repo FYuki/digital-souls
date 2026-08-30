@@ -73,7 +73,7 @@ def test_should_place_route_decision_table_before_bootstrap_and_deploy() -> None
         ("経路②", ("infra/dogfood/templates", "infra/dogfood/systemd")),
         ("経路②", ("infra/dogfood/env.example",)),
         ("経路②", ("service user", "標準path")),
-        ("経路②", ("Docker", "Compose", "Node.js 22")),
+        ("経路②", ("Docker", "Compose", "Buildx", "NVIDIA Container Toolkit")),
         ("経路③", ("partial", "破損")),
     ),
 )
@@ -99,7 +99,7 @@ def test_should_explain_why_application_changes_use_the_normal_route() -> None:
     section = _section(README_PATH.read_text(encoding="utf-8"), r"更新経路の選択")
 
     assert "dogfood_prepare_backend" in section
-    assert re.search(r"Frontend.*build|build.*Frontend", section)
+    assert "GHCR" in section
     assert re.search(r"dogfood.json.*実行時|実行時.*dogfood.json", section)
 
 
@@ -135,7 +135,7 @@ def test_should_keep_deployment_responsibilities_in_same_sha_deploy() -> None:
         assert re.search(rf"bootstrap.*{responsibility}.*行わない", section, re.DOTALL)
     assert re.search(r"bootstrap後.*deploy|deploy.*bootstrap後", section, re.DOTALL)
     assert re.search(r"readiness失敗時.*直前commit.*自動rollback", section)
-    for stop_reason in ("systemd unit", "Frontend build", "chown/chmod"):
+    for stop_reason in ("systemd unit", "active image", "chown/chmod"):
         assert stop_reason in section
 
 
@@ -146,7 +146,7 @@ def test_should_apply_preservation_contract_before_recovery_bootstrap() -> None:
     )
 
     assert "実機検証時のデータ保全" in section
-    assert "7項目" in section
+    assert "9項目" in section
     assert re.search(r"稼働中SQLite.*単純コピー.*行わない", section)
 
     logical_backup = section.index("論理backup")

@@ -30,7 +30,7 @@
         "ollama": { "$ref": "#/$defs/ollamaDependency" },
         "voicevox": { "$ref": "#/$defs/voicevoxDependency" },
         "livekit": { "$ref": "#/$defs/livekitDependency" },
-        "whisper": { "$ref": "#/$defs/inProcessDependency" },
+        "whisper": { "$ref": "#/$defs/whisperDependency" },
         "chroma": { "$ref": "#/$defs/inProcessDependency" }
       },
       "allOf": [
@@ -162,6 +162,29 @@
           ]
         },
         "readinessPath": { "const": "/version" }
+      }
+    },
+    "whisperDependency": {
+      "oneOf": [
+        { "$ref": "#/$defs/whisperExternalDependency" },
+        { "$ref": "#/$defs/inProcessRealDependency" },
+        { "$ref": "#/$defs/disabledDependency" }
+      ]
+    },
+    "whisperExternalDependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "source", "baseUrl", "readinessPath"],
+      "properties": {
+        "mode": { "const": "real" },
+        "source": { "const": "external" },
+        "baseUrl": {
+          "enum": [
+            "http://127.0.0.1:50022",
+            "http://127.0.0.1:50022/"
+          ]
+        },
+        "readinessPath": { "const": "/health/ready" }
       }
     },
     "backendDependency": {

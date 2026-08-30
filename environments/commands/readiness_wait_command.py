@@ -10,7 +10,7 @@ from profile_resolution import resolve_dependencies
 from profile_types import ProfileError
 from profile_validation import load_profile
 
-INFERENCE_SERVICE_NAMES = ("ollama", "voicevox")
+INFERENCE_SERVICE_NAMES = ("ollama", "voicevox", "whisper", "livekit")
 
 
 def wait_for_inference_services(

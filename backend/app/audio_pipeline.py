@@ -2,7 +2,6 @@ import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 import logging
-from pathlib import Path
 from time import perf_counter
 from typing import Callable, Iterator, Protocol
 from uuid import uuid4
@@ -28,6 +27,8 @@ logger = logging.getLogger(__name__)
 ReplyGenerator = Callable[[str], ChatReply]
 CLIENT_INPUT_ERROR_STATUS = 422
 UPSTREAM_SERVICE_ERROR_STATUS = 502
+CAPACITY_ERROR_STATUS = 429
+INFERENCE_TIMEOUT_STATUS = 504
 UNREADABLE_CHARACTER_CARD_MESSAGE = "character card is not readable"
 
 
@@ -69,7 +70,7 @@ def _validate_pcm16_audio(audio: bytes) -> None:
 class AudioRuntimeConfig:
     voicevox_base_url: str
     model_settings: ModelSettings
-    whisper_download_root: str
+    whisper_base_url: str
 
 
 class AudioPipelineSession:
@@ -159,17 +160,31 @@ class AudioPipelineSession:
             try:
                 message = self._transcriber.transcribe(audio)
             except Exception as exc:
+                reason_code = getattr(exc, "error_code", "stt_upstream_failed")
+                status_code, detail = {
+                    "stt_capacity_exceeded": (
+                        CAPACITY_ERROR_STATUS,
+                        "STT capacity exceeded",
+                    ),
+                    "stt_inference_timeout": (
+                        INFERENCE_TIMEOUT_STATUS,
+                        "STT inference timed out",
+                    ),
+                }.get(
+                    reason_code,
+                    (UPSTREAM_SERVICE_ERROR_STATUS, "STT request failed"),
+                )
                 self._record_event(
                     measurement,
                     name="stt_failed",
                     stage="stt",
                     outcome="failure",
-                    reason_code="stt_upstream_failed",
+                    reason_code=reason_code,
                 )
                 logger.exception("STT failed")
                 raise AudioPipelineStepError(
-                    UPSTREAM_SERVICE_ERROR_STATUS,
-                    "STT request failed",
+                    status_code,
+                    detail,
                 ) from exc
         self._record_event(measurement, name="stt_completed", stage="stt")
         return message
@@ -254,12 +269,20 @@ class AudioPipelineService:
         )
 
     def close(self) -> None:
+        close_transcriber = getattr(self._transcriber, "close", None)
+        if callable(close_transcriber):
+            close_transcriber()
         self._speech_synthesizer.close()
 
 
 def resolve_audio_runtime_config(
     model_settings: ModelSettings, runtime_paths: RuntimePaths
 ) -> AudioRuntimeConfig:
+    from app.stt.remote_whisper_client import (
+        DEFAULT_WHISPER_BASE_URL,
+        WHISPER_BASE_URL_ENV,
+    )
+
     configured_url = os.environ.get(VOICEVOX_BASE_URL_ENV)
     if not configured_url:
         voicevox_base_url = DEFAULT_VOICEVOX_BASE_URL
@@ -268,19 +291,18 @@ def resolve_audio_runtime_config(
     return AudioRuntimeConfig(
         voicevox_base_url=voicevox_base_url,
         model_settings=model_settings,
-        whisper_download_root=str(runtime_paths.whisper_cache_path),
+        whisper_base_url=os.environ.get(
+            WHISPER_BASE_URL_ENV, DEFAULT_WHISPER_BASE_URL
+        ).rstrip("/"),
     )
 
 
 def create_audio_pipeline_service(
     runtime_config: AudioRuntimeConfig,
 ) -> AudioPipelineService:
-    from app.stt.whisper_client import WhisperTranscriber
+    from app.stt.remote_whisper_client import RemoteWhisperTranscriber
 
     return AudioPipelineService(
-        WhisperTranscriber(
-            model_name=runtime_config.model_settings.whisper_model,
-            download_root=Path(runtime_config.whisper_download_root),
-        ),
+        RemoteWhisperTranscriber(runtime_config.whisper_base_url),
         create_voicevox_client(runtime_config.voicevox_base_url),
     )

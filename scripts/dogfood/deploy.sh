@@ -56,8 +56,12 @@ if [ ! -f "$DS_DATA_DIR/conversation-history.db" ]; then
 fi
 dogfood_prepare_backend
 dogfood_fetch_and_resolve_commit "$target"
+dogfood_resolve_target_images "$target"
 
 previous=$current_head
+previous_backend_image=$DOGFOOD_BACKEND_IMAGE
+previous_frontend_image=$DOGFOOD_FRONTEND_IMAGE
+previous_whisper_image=$DOGFOOD_WHISPER_IMAGE
 current_manifest="$DOGFOOD_STATE_DIR/deployments/current.json"
 if [ "$current_head" = "$target" ]; then
   if [ -e "$current_manifest" ] || [ -L "$current_manifest" ]; then
@@ -114,31 +118,56 @@ if [ "$current_head" = "$target" ]; then
     exit 2
   fi
 fi
+if [ -n "$previous" ] && [ "$previous" != "$current_head" ]; then
+  if previous_manifest=$(dogfood_find_saved_manifest "$previous"); then
+    dogfood_read_manifest_images "$previous_manifest" || {
+      dogfood_report_unsafe_rollback_history
+      exit 2
+    }
+    previous_backend_image=$DOGFOOD_MANIFEST_BACKEND_IMAGE
+    previous_frontend_image=$DOGFOOD_MANIFEST_FRONTEND_IMAGE
+    previous_whisper_image=$DOGFOOD_MANIFEST_WHISPER_IMAGE
+  fi
+fi
 backup_directory=$(dogfood_backup)
-manifest=$(dogfood_manifest_metadata "$previous" "$target" "$backup_directory")
+manifest=$(dogfood_manifest_metadata \
+  "$previous" "$target" "$backup_directory" \
+  "$DOGFOOD_TARGET_BACKEND_IMAGE" "$DOGFOOD_TARGET_FRONTEND_IMAGE" \
+  "$DOGFOOD_TARGET_WHISPER_IMAGE")
 dogfood_write_manifest "$manifest" "$target"
 
-if ! dogfood_activate_revision "$target"; then
+activation_failed=false
+if ! dogfood_activate_revision \
+  "$target" "$DOGFOOD_TARGET_BACKEND_IMAGE" "$DOGFOOD_TARGET_FRONTEND_IMAGE" \
+  "$DOGFOOD_TARGET_WHISPER_IMAGE"; then
+  activation_failed=true
   echo "ERROR: deploy処理がreadiness確認前に失敗しました: $target" >&2
-  dogfood_report_current_deployment_state
-  exit 1
-fi
-if dogfood_check_readiness; then
+elif dogfood_check_readiness; then
   echo "deployが完了しました: $target"
   exit 0
 fi
 
 if [ "$auto_rollback" = false ]; then
-  echo "ERROR: readiness確認に失敗しました。自動rollbackは抑止されています: $target" >&2
+  echo "ERROR: deployに失敗しました。自動rollbackは抑止されています: $target" >&2
+  dogfood_report_current_deployment_state
   exit 1
 fi
 if [ -z "$previous" ]; then
   echo "ERROR: 初回 deploy のため自動 rollback できない状態です。readiness 失敗の原因調査後、--to <SHA> での明示 rollback か再 deploy を行ってください" >&2
   exit 1
 fi
-echo "ERROR: readiness確認に失敗したためrollbackします: $target -> $previous" >&2
-if dogfood_activate_revision "$previous" && dogfood_check_readiness; then
-  rollback_manifest=$(dogfood_manifest_metadata "$target" "$previous" "$backup_directory")
+if [ "$activation_failed" = true ]; then
+  echo "ERROR: activate失敗のためrollbackします: $target -> $previous" >&2
+else
+  echo "ERROR: readiness確認に失敗したためrollbackします: $target -> $previous" >&2
+fi
+if dogfood_activate_revision \
+  "$previous" "$previous_backend_image" "$previous_frontend_image" \
+  "$previous_whisper_image" && dogfood_check_readiness; then
+  rollback_manifest=$(dogfood_manifest_metadata \
+    "$target" "$previous" "$backup_directory" \
+    "$previous_backend_image" "$previous_frontend_image" \
+    "$previous_whisper_image")
   dogfood_write_manifest "$rollback_manifest" "$previous"
   echo "ERROR: deployは失敗し、直前のcommitへrollbackしました: $previous" >&2
   exit 1

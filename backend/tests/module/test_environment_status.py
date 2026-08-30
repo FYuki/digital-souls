@@ -15,7 +15,7 @@ def test_should_render_owned_managed_and_unowned_external_services_distinctly() 
                 "backend": {"mode": "real", "source": "managed"},
                 "ollama": {"mode": "real", "source": "external"},
                 "voicevox": {"mode": "real", "source": "external"},
-                "whisper": {"mode": "real", "source": "in_process"},
+                "whisper": {"mode": "real", "source": "external"},
                 "chroma": {"mode": "disabled", "source": None},
             }
         },
@@ -24,7 +24,7 @@ def test_should_render_owned_managed_and_unowned_external_services_distinctly() 
             "backend": {"state": "started", "owned": True},
             "ollama": {"state": "external", "owned": False},
             "voicevox": {"state": "external", "owned": False},
-            "whisper": {"state": "in_process", "owned": False},
+            "whisper": {"state": "external", "owned": False},
             "chroma": {"state": "disabled", "owned": False},
         },
     }
@@ -42,7 +42,7 @@ def test_should_render_owned_managed_and_unowned_external_services_distinctly() 
         "backend source=managed ownership=owned state=ready",
         "ollama source=external ownership=unowned state=ready",
         "voicevox source=external ownership=unowned state=unavailable",
-        "whisper source=in_process ownership=unowned state=in_process",
+        "whisper source=external ownership=unowned state=external",
         "chroma source=disabled ownership=unowned state=disabled",
     ]
 

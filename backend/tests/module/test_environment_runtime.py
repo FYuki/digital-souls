@@ -44,6 +44,7 @@ class RecordingReportStore:
 class FakeFrontendOperations:
     def __init__(self, forced_running: bool | None = None) -> None:
         self.forced_running = forced_running
+        self.process_identity = None
 
     def verify(self, dependency, context):
         from adapters.base import Check, VerificationResult
@@ -70,7 +71,15 @@ class FakeFrontendOperations:
             cwd=Path.cwd(),
             env=environment,
         )
-        return ServiceStartResult("started", True, process.identity.to_report())
+        self.process_identity = process.identity
+        return ServiceStartResult(
+            "started",
+            True,
+            container_identity={
+                "containerId": f"{process.identity.pid:064x}",
+                "startedAt": "2026-08-30T00:00:00Z",
+            },
+        )
 
     def validate_readiness(self, dependency):
         from adapters.base import ReadinessValidationResult
@@ -82,26 +91,19 @@ class FakeFrontendOperations:
 
         if self.forced_running is not None:
             return self.forced_running
-        return process_identity_matches(
-            ProcessIdentity.from_report(_process_identity(service))
+        return self.process_identity is not None and process_identity_matches(
+            self.process_identity
         )
 
     def stop(self, service, grace_seconds):
         from adapters.base import StopResult
         from process_control import ProcessIdentity, stop_owned_process
 
-        result = stop_owned_process(
-            ProcessIdentity.from_report(_process_identity(service)),
-            grace_seconds=grace_seconds,
-        )
+        del service
+        if self.process_identity is None:
+            return StopResult("skipped_identity_mismatch")
+        result = stop_owned_process(self.process_identity, grace_seconds=grace_seconds)
         return StopResult(result.result)
-
-
-def _process_identity(service: Mapping[str, object]) -> Mapping[str, object]:
-    identity = service.get("processIdentity")
-    if not isinstance(identity, dict):
-        raise ValueError("test process identity is required")
-    return identity
 
 
 def _two_process_registry():
@@ -280,7 +282,10 @@ def test_should_finalize_report_and_stop_owned_service_when_ready_gate_close_fai
         "frontend",
         state="started",
         owned=True,
-        process_identity={"pid": 41, "pgid": 41, "sessionId": 41, "startTime": 82},
+        container_identity={
+            "containerId": "a" * 64,
+            "startedAt": "2026-08-30T00:00:00Z",
+        },
     )
     report = record_ready(report, ready_at="2026-07-17T00:00:30+00:00")
     store = RecordingReportStore(tmp_path / "environment-run.json")
@@ -369,7 +374,10 @@ def test_should_stop_owned_service_when_cleanup_phase_update_fails(tmp_path: Pat
         "frontend",
         state="started",
         owned=True,
-        process_identity={"pid": 41, "pgid": 41, "sessionId": 41, "startTime": 82},
+        container_identity={
+            "containerId": "a" * 64,
+            "startedAt": "2026-08-30T00:00:00Z",
+        },
     )
     store = FailingCleanupPhaseStore(tmp_path / "environment-run.json")
     store.save(report)
@@ -416,8 +424,13 @@ def test_should_persist_started_ownership_before_delivering_pending_signal(tmp_p
     class InterruptingOperations(FakeFrontendOperations):
         def start(self, dependency, environment):
             os.kill(os.getpid(), signal.SIGTERM)
-            identity = {"pid": 41, "pgid": 41, "sessionId": 41, "startTime": 82}
-            return ServiceStartResult("started", True, identity)
+            identity = {
+                "containerId": "a" * 64,
+                "startedAt": "2026-08-30T00:00:00Z",
+            }
+            return ServiceStartResult(
+                "started", True, container_identity=identity
+            )
 
     profile = dict(resolve_profile(
         {"DS_PROFILE": "test-mocked"}, None,
@@ -453,7 +466,7 @@ def test_should_persist_started_ownership_before_delivering_pending_signal(tmp_p
     frontend = store.load()["services"]["frontend"]
     assert frontend["state"] == "started"
     assert frontend["owned"] is True
-    assert frontend["processIdentity"]["pid"] == 41
+    assert frontend["containerIdentity"]["containerId"] == "a" * 64
 
 
 @pytest.mark.parametrize("adapter_fails", [False, True])
@@ -470,7 +483,10 @@ def test_should_persist_in_memory_ownership_in_final_report_when_start_update_fa
         record_test_result,
     )
 
-    identity = {"pid": 41, "pgid": 41, "sessionId": 41, "startTime": 82}
+    identity = {
+        "containerId": "a" * 64,
+        "startedAt": "2026-08-30T00:00:00Z",
+    }
 
     class FailingOwnershipUpdateStore(RecordingReportStore):
         def __init__(self, path: Path) -> None:
@@ -489,7 +505,9 @@ def test_should_persist_in_memory_ownership_in_final_report_when_start_update_fa
             self.stopped_service = None
 
         def start(self, dependency, environment):
-            ownership = ServiceStartResult("started", True, identity)
+            ownership = ServiceStartResult(
+                "started", True, container_identity=identity
+            )
             if adapter_fails:
                 raise AdapterOperationError(
                     "startup",
@@ -552,15 +570,15 @@ def test_should_persist_in_memory_ownership_in_final_report_when_start_update_fa
         )
     )
 
-    assert operations.stopped_service["processIdentity"] == identity
+    assert operations.stopped_service["containerIdentity"] == identity
     assert cleanup_results[-1] == {"service": "frontend", "result": "stopped_term"}
     assert final_report["services"]["frontend"] == {
         "mode": "real",
         "source": "managed",
         "state": "started",
         "owned": True,
-        "processIdentity": identity,
-        "containerIdentity": None,
+        "processIdentity": None,
+        "containerIdentity": identity,
         "readiness": None,
     }
     assert final_report["startSequence"] == ["frontend"]
@@ -701,7 +719,7 @@ def test_should_fail_verification_before_start_for_unpreparable_dependency(
     assert store.load()["phase"] == "verify"
 
 
-def test_should_reach_backend_prepare_when_whisper_cache_is_missing(
+def test_should_reach_backend_prepare_without_host_whisper_cache(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
     from adapters.backend import BackendAdapter
@@ -712,7 +730,7 @@ def test_should_reach_backend_prepare_when_whisper_cache_is_missing(
 
     profile = resolved_profile()
     dependencies = deepcopy(profile["dependencies"])
-    for name in ("frontend", "ollama", "voicevox", "chroma"):
+    for name in ("frontend", "ollama", "voicevox", "whisper", "chroma"):
         dependencies[name] = {"mode": "disabled", "source": None}
     dependencies.pop("livekit")
     profile["dependencies"] = dependencies
@@ -754,8 +772,7 @@ def test_should_reach_backend_prepare_when_whisper_cache_is_missing(
     run.verify()
     run.prepare()
 
-    assert runner.calls[0] == (str(tmp_path / "scripts" / "setup-backend.sh"),)
-    assert runner.calls[1][0] == str(tmp_path / "backend" / ".venv" / "bin" / "python")
+    assert runner.calls == [("docker", "compose", "version")]
 
 
 def test_should_persist_ollama_observation_before_model_validation_failure(
@@ -927,12 +944,27 @@ def test_should_detect_later_registered_process_exit_during_readiness(
         orchestrator_identity=tests.environment_test_support.orchestrator_identity(),
         runtime=profile["runtime"],
     )
-    identity = {"pid": 10, "pgid": 10, "sessionId": 10, "startTime": 10}
+    frontend_identity = {
+        "containerId": "a" * 64,
+        "startedAt": "2026-08-30T00:00:00Z",
+    }
+    backend_identity = {
+        "containerId": "b" * 64,
+        "startedAt": "2026-08-30T00:00:00Z",
+    }
     report = update_service(
-        report, "frontend", state="started", owned=True, process_identity=identity
+        report,
+        "frontend",
+        state="started",
+        owned=True,
+        container_identity=frontend_identity,
     )
     report = update_service(
-        report, "backend", state="started", owned=True, process_identity=identity
+        report,
+        "backend",
+        state="started",
+        owned=True,
+        container_identity=backend_identity,
     )
     store = RecordingReportStore(tmp_path / "environment-run.json")
     store.save(report)
@@ -989,7 +1021,10 @@ def test_should_not_report_service_exit_as_failure_when_stop_is_requested_during
         "frontend",
         state="started",
         owned=True,
-        process_identity={"pid": 10, "pgid": 10, "sessionId": 10, "startTime": 10},
+        container_identity={
+            "containerId": "a" * 64,
+            "startedAt": "2026-08-30T00:00:00Z",
+        },
     )
     store = RecordingReportStore(tmp_path / "environment-run.json")
     store.save(report)

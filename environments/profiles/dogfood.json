@@ -9,7 +9,7 @@
     "ollama": { "mode": "real", "source": "external", "baseUrl": "http://localhost:11434", "readinessPath": "/api/tags" },
     "voicevox": { "mode": "real", "source": "external", "baseUrl": "http://127.0.0.1:50021", "readinessPath": "/version" },
     "livekit": { "mode": "real", "source": "external", "baseUrl": "http://127.0.0.1:17880", "readinessPath": "/" },
-    "whisper": { "mode": "real", "source": "in_process" },
+    "whisper": { "mode": "real", "source": "external", "baseUrl": "http://127.0.0.1:50022", "readinessPath": "/health/ready" },
     "chroma": { "mode": "real", "source": "in_process" }
   }
 }

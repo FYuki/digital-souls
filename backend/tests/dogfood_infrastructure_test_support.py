@@ -14,6 +14,11 @@ DOGFOOD_SCRIPTS_DIR = ROOT_DIR / "scripts" / "dogfood"
 TEST_REVISION = "0123456789abcdef0123456789abcdef01234567"
 TEST_SECRET_SENTINEL = "ab" * 32
 TEST_SERVICE_GROUP = grp.getgrgid(os.getgid()).gr_name
+TEST_DEPLOYMENT_IMAGES = {
+    "backend": f"ghcr.io/example/digital-souls-backend@sha256:{'1' * 64}",
+    "frontend": f"ghcr.io/example/digital-souls-frontend@sha256:{'2' * 64}",
+    "whisper": f"ghcr.io/example/digital-souls-whisper@sha256:{'3' * 64}",
+}
 
 
 def read_valid_deployment_manifest(
@@ -21,6 +26,10 @@ def read_valid_deployment_manifest(
     expected_metadata: dict[str, object],
 ) -> dict[str, object]:
     manifest = json.loads(path.read_text(encoding="utf-8"))
+    expected_metadata = {
+        **expected_metadata,
+        "images": expected_metadata.get("images", TEST_DEPLOYMENT_IMAGES),
+    }
     assert {key: value for key, value in manifest.items() if key != "deployedAt"} == (
         expected_metadata
     )
@@ -64,6 +73,14 @@ def write_dogfood_env(tmp_path: Path) -> tuple[Path, Path]:
                 "DOGFOOD_VOICEVOX_CONTAINER=digital-souls-voicevox",
                 "DOGFOOD_LIVEKIT_IMAGE=livekit/livekit-server:v1.9.7",
                 "DOGFOOD_LIVEKIT_CONTAINER=digital-souls-livekit",
+                "DOGFOOD_BACKEND_IMAGE=ghcr.io/example/digital-souls-backend@sha256:"
+                + "1" * 64,
+                "DOGFOOD_FRONTEND_IMAGE=ghcr.io/example/digital-souls-frontend@sha256:"
+                + "2" * 64,
+                "DOGFOOD_WHISPER_IMAGE=ghcr.io/example/digital-souls-whisper@sha256:"
+                + "3" * 64,
+                f"DOGFOOD_WHISPER_MODEL_CACHE={tmp_path / 'whisper-models'}",
+                "WHISPER_MODEL_REVISION=08e178d48790749d25932bbc082711ddcfdfbc4f",
                 "LIVEKIT_URL=ws://127.0.0.1:17880",
                 "LIVEKIT_API_KEY=test-livekit-key",
                 "LIVEKIT_API_SECRET=test-livekit-secret-0123456789abcdef",
@@ -96,7 +113,12 @@ def render_dogfood_assets(
                 str(output_dir),
             ],
         ),
-        env={**os.environ, "DOGFOOD_ENV_FILE": str(env_path)},
+        env={
+            **os.environ,
+            "DOGFOOD_ENV_FILE": str(env_path),
+            "DOGFOOD_SERVICE_UID": str(os.getuid()),
+            "DOGFOOD_SERVICE_GID": str(os.getgid()),
+        },
         capture_output=True,
         text=True,
     )
@@ -195,6 +217,7 @@ def _write_bootstrap_clone_assets(clone_dir: Path) -> None:
         'printf "renderer\\n" >> "$BOOTSTRAP_CALL_LOG"\n'
         'touch "$2/digital-souls-ollama.service" '
         '"$2/digital-souls-voicevox.service" '
+        '"$2/digital-souls-whisper.service" '
         '"$2/digital-souls-livekit.service" '
         '"$2/digital-souls-application.service" "$2/livekit.yaml" '
         '"$2/livekit-backend.env" "$2/start-dogfood-wsl.ps1"\n',
@@ -296,6 +319,14 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
         + '      *) mkdir -p "$1"; /bin/chmod "$mode" "$1"; shift ;;\n'
         + "    esac\n"
         + "  done\n"
+        + "else\n"
+        + "  arguments=()\n"
+        + '  while [ "$#" -gt 0 ]; do\n'
+        + '    case "$1" in -o|-g) shift 2 ;; *) arguments+=("$1"); shift ;; esac\n'
+        + "  done\n"
+        + '  destination="${arguments[${#arguments[@]}-1]}"\n'
+        + '  case "$destination" in *.dogfood-images.ready.*) '
+        + 'exec /usr/bin/install "${arguments[@]}" ;; *) exit 0 ;; esac\n'
         + "fi\n",
     )
     write_executable(
@@ -308,7 +339,7 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
     write_executable(
         bin_dir / "docker",
         recorder
-        + '[ "$*" = "compose version" ]\n'
+        + 'case "$*" in "compose version"|"buildx version") ;; *) exit 1 ;; esac\n'
         + '[ "${BOOTSTRAP_COMPOSE_AVAILABLE-}" = "1" ]\n',
     )
     write_executable(

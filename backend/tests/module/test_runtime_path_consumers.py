@@ -125,7 +125,7 @@ def test_rt_chroma_01_resolved_environment_paths_keep_indexes_isolated(
     assert dev.chroma_path != dogfood.chroma_path
 
 
-def test_rt_cache_01_audio_runtime_uses_resolved_whisper_cache(
+def test_rt_cache_01_audio_runtime_uses_shared_whisper_endpoint(
     tmp_path: Path,
 ) -> None:
     from app.audio_pipeline import resolve_audio_runtime_config
@@ -135,10 +135,10 @@ def test_rt_cache_01_audio_runtime_uses_resolved_whisper_cache(
 
     config = resolve_audio_runtime_config(resolve_model_settings({}), paths)
 
-    assert config.whisper_download_root == str(paths.whisper_cache_path)
+    assert config.whisper_base_url == "http://127.0.0.1:50022"
 
 
-def test_rt_cache_01_backend_adapter_uses_the_same_resolved_cache(
+def test_rt_cache_01_backend_adapter_does_not_own_shared_whisper_cache(
     tmp_path: Path,
 ) -> None:
     from adapters.backend import BackendAdapter
@@ -159,8 +159,8 @@ def test_rt_cache_01_backend_adapter_uses_the_same_resolved_cache(
         OperationContext(whisper_enabled=True, chroma_enabled=False),
     )
 
-    assert runner.calls[1][4] == str(paths.whisper_cache_path)
-    assert runner.calls[2][4] == str(paths.whisper_cache_path)
+    assert runner.calls == []
+    assert not paths.whisper_cache_path.exists()
 
 
 def test_rt_clean_01_backend_prepare_rejects_dogfood_marker_before_side_effects(

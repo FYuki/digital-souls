@@ -63,7 +63,7 @@ Playwrightのrun結果、trace、添付JSONはsuite固有の`frontend/test-resul
 #112を開始するrevisionはLiveKit dogfood serviceを含むため、通常deployではなく`infra/dogfood/README.md`の「経路②: bootstrap管理資材のin-place更新」で反映する。既存会話データの論理backupと`backup-verify`を成功させ、サービス停止後に、新しいLiveKit API key／secretを設定したmode `0600`の一時envでbootstrapする。続けてbootstrapと同じcommit SHAをdeployし、次をすべて確認してからブラウザ受入へ進む。
 
 - `scripts/dogfood/status.sh`が成功し、`digital-souls-livekit.service`と`digital-souls-livekit` containerがactive／runningである。
-- Profile readinessでOllama、VOICEVOX、LiveKit、Backend、Frontendがreadyである。
+- Profile readinessでOllama、VOICEVOX、Whisper、LiveKit、Backend、Frontendがreadyである。
 - `/etc/digital-souls/livekit.yaml`と`livekit-backend.env`が`0640 root:digital-souls`であり、資格情報を端末、Issue、Gitへ転記していない。
 - 対象commit、browser、LiveKit／Whisper／Ollama／VOICEVOXのversionだけを受入記録へ残せる状態である。
 

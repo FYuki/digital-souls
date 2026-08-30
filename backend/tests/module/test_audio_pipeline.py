@@ -308,6 +308,43 @@ class TestAudioPipelineSession:
         assert exc_info.value.status_code == 502
         assert exc_info.value.detail == "STT request failed"
 
+    @pytest.mark.parametrize(
+        ("error_code", "status_code", "detail"),
+        (
+            ("stt_capacity_exceeded", 429, "STT capacity exceeded"),
+            ("stt_inference_timeout", 504, "STT inference timed out"),
+        ),
+    )
+    def test_preserves_shared_whisper_capacity_and_timeout_contract(
+        self, error_code: str, status_code: int, detail: str
+    ) -> None:
+        import app.audio_pipeline as audio_pipeline
+        from app.characters.loader import VoicevoxTtsConfig
+
+        class RemoteFailure(RuntimeError):
+            pass
+
+        class FailingTranscriber:
+            def transcribe(self, audio: bytes) -> str:
+                error = RemoteFailure("private upstream detail")
+                error.error_code = error_code  # type: ignore[attr-defined]
+                raise error
+
+        session = audio_pipeline.AudioPipelineSession(
+            tts_config=VoicevoxTtsConfig(speaker_id=14),
+            transcriber=FailingTranscriber(),
+            speech_synthesizer=_StubVoicevoxClient(),
+        )
+
+        with pytest.raises(audio_pipeline.AudioPipelineStepError) as caught:
+            session.generate_response_audio(
+                b"\x01\x00",
+                lambda message: persisted_reply("応答", TURN_ID),
+            )
+
+        assert caught.value.status_code == status_code
+        assert caught.value.detail == detail
+
     def test_wraps_unexpected_tts_errors_as_upstream_step_error(self):
         import app.audio_pipeline as audio_pipeline
         from app.characters.loader import VoicevoxTtsConfig

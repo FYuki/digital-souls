@@ -209,7 +209,7 @@ def test_should_import_backend_clients_without_repository_root_on_pythonpath():
             "python3",
             "-c",
             "from app.llm.ollama_client import OllamaClient; "
-            "from app.stt.whisper_client import WhisperTranscriber",
+            "from app.stt.remote_whisper_client import RemoteWhisperTranscriber",
         ],
         cwd=ROOT_DIR / "backend",
         env=environment,

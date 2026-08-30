@@ -68,8 +68,8 @@ stop／cleanupでも停止しない。GPU、CPU、memoryは共有資源として
 dogfoodはTAKT worktreeやmain checkoutではなく独立cloneを使う。実行commitをdeployment manifestへ
 記録し、明示的なdeployを行うまで変更しない。mainへのmergeだけでdogfoodをreload、restart、更新しない。
 
-deploy前にbackupを作成し、依存準備、Frontend build、service restart、readinessを検証する。
-失敗時は直前commit、設定、data schemaへrollbackできることを完了条件とする。
+deploy前にbackupを作成し、host control planeの依存準備、GHCR上の3 image digest解決、service restart、readinessを検証する。
+失敗時は直前commit、3 image digest、設定、data schemaへrollbackできることを完了条件とする。
 
 ### 4. 環境identityとdata rootを必須にする
 
@@ -133,6 +133,10 @@ Docker volumeだけへdogfoodデータの保護を委ねない。その上でBac
 単一GPU containerとして運用する。既存のVOICEVOX／LiveKit Compose stackは継続し、Ollamaは当面
 systemd所有の直接実行を維持する。詳細は`docker-policy-2026-06.md`を正本とする。
 
+dogfoodの明示deployはGHCR上のBackend／Frontend／Whisper commit SHA tagをimmutable digestへ解決し、
+3 digestをdeployment manifestへcommit、schema、backup IDとともに記録する。rollbackもcommitだけでなく
+同じ3 digestを一組で復元し、mainへのmergeやregistry更新だけでは実行imageを変更しない。
+
 ### 8. 推論サービスをUbuntu-dogfoodへ集約する
 
 #50のサービス分離方針に対する明示的な例外として、Ollama、VOICEVOX、WhisperはUbuntu-dogfood側の
@@ -146,6 +150,10 @@ Ubuntu-devは推論サービスのprocess lifecycleを所有せず、起動、�
 Ubuntu-dev側のOllama／Whisper自動起動も無効化する。一方、会話履歴、SQLite、Chroma、data rootは共有せず、
 環境ごとの`DS_DATA_DIR`とidentity markerによる分離を維持する。Whisper model cacheは会話data rootから分離した
 共通推論service専用pathに置く。
+
+Whisperは`medium`、`cuda`、`int8_float16`、device index 0、単一worker／single-flightを初期契約とする。
+CPU fallbackを許可せず、CUDAと最小推論を通過するまでreadyにしない。競合はcapacity超過でfail fastし、
+推論timeout後はworkerを破棄して次requestで再生成する。実GPU・VRAM・連続会話の受入はIssue #135 Goal 2で行う。
 
 ### 9. dogfoodのLiveKit lifecycleと資格情報を分離する
 
