@@ -32,22 +32,8 @@ if ! docker compose version >/dev/null 2>&1; then
   echo "ERROR: bootstrap前にDocker Compose pluginをインストールしてください" >&2
   exit 2
 fi
-if ! command -v node >/dev/null 2>&1; then
-  echo "ERROR: bootstrap前にnode（Node.js 22）が必要です" >&2
-  exit 2
-fi
-if ! command -v npm >/dev/null 2>&1; then
-  echo "ERROR: bootstrap前にnpmが必要です" >&2
-  exit 2
-fi
-if ! node_version=$(node --version); then
-  echo "ERROR: Node.js versionを検出できません。Node.js major version 22が必要です" >&2
-  exit 2
-fi
-node_major=${node_version#v}
-node_major=${node_major%%.*}
-if [ "$node_major" != 22 ]; then
-  echo "ERROR: Node.js major version 22が必要です（検出: $node_version）" >&2
+if ! docker buildx version >/dev/null 2>&1; then
+  echo "ERROR: bootstrap前にDocker Buildx pluginをインストールしてください" >&2
   exit 2
 fi
 getent group "$DOGFOOD_SERVICE_GROUP" >/dev/null || groupadd --system "$DOGFOOD_SERVICE_GROUP"
@@ -71,6 +57,10 @@ dogfood_read_revision
 if id -nG "$DOGFOOD_SERVICE_USER" | tr ' ' '\n' | grep --fixed-strings --line-regexp --quiet docker; then
   gpasswd --delete "$DOGFOOD_SERVICE_USER" docker
 fi
+export DOGFOOD_SERVICE_UID
+export DOGFOOD_SERVICE_GID
+DOGFOOD_SERVICE_UID=$(id -u "$DOGFOOD_SERVICE_USER")
+DOGFOOD_SERVICE_GID=$(id -g "$DOGFOOD_SERVICE_USER")
 
 initial_clone=false
 if [ -d "$DOGFOOD_CLONE_DIR/.git" ]; then
@@ -94,6 +84,7 @@ fi
 install -d -m 0750 -o "$DOGFOOD_SERVICE_USER" -g "$DOGFOOD_SERVICE_GROUP" \
   "$DS_DATA_DIR" "$DOGFOOD_SERVICE_HOME_DIR" "$DOGFOOD_OLLAMA_MODELS_DIR" \
   "$DOGFOOD_BACKUP_DIR" "$DOGFOOD_LOG_DIR"
+install -d -m 0750 -o 10001 -g 10001 "$DOGFOOD_WHISPER_MODEL_CACHE"
 dogfood_converge_service_git_trust
 install -d -m 0750 -o root -g "$DOGFOOD_SERVICE_GROUP" \
   "$DOGFOOD_STATE_DIR" "$DOGFOOD_STATE_DIR/deployments"
@@ -104,6 +95,13 @@ generated_assets=$(mktemp -d)
   "$DOGFOOD_CLONE_DIR/infra/dogfood/templates" "$generated_assets"
 install -m 0640 -o root -g "$DOGFOOD_SERVICE_GROUP" \
   "$DOGFOOD_RESOLVED_ENV_FILE" "$DOGFOOD_CONFIG_DIR/dogfood.env"
+dogfood_write_active_images \
+  "$DOGFOOD_BACKEND_IMAGE" "$DOGFOOD_FRONTEND_IMAGE" "$DOGFOOD_WHISPER_IMAGE"
+install -m 0640 -o root -g "$DOGFOOD_SERVICE_GROUP" \
+  "$generated_assets/livekit.yaml" "$DOGFOOD_CONFIG_DIR/livekit.yaml"
+install -m 0640 -o root -g "$DOGFOOD_SERVICE_GROUP" \
+  "$generated_assets/livekit-backend.env" \
+  "$DOGFOOD_CONFIG_DIR/livekit-backend.env"
 install -m 0644 -o root -g "$DOGFOOD_SERVICE_GROUP" \
   "$generated_assets/start-dogfood-wsl.ps1" \
   "$DOGFOOD_CONFIG_DIR/start-dogfood-wsl.ps1"
@@ -115,9 +113,6 @@ install -m 0644 \
   /etc/systemd/system/
 install -m 0644 "$generated_assets"/*.service /etc/systemd/system/
 dogfood_prepare_backend
-npm --prefix "$DOGFOOD_CLONE_DIR/frontend" ci
-dogfood_require_clean_checkout
-npm --prefix "$DOGFOOD_CLONE_DIR/frontend" run build
 dogfood_require_clean_checkout
 chown -R "root:$DOGFOOD_SERVICE_GROUP" "$DOGFOOD_CLONE_DIR"
 chmod -R g-w,o-rwx "$DOGFOOD_CLONE_DIR"

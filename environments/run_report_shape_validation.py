@@ -161,9 +161,9 @@ def _validate_service(name: str, value: object) -> None:
         raise RunReportError(f"services.{name} identity requires ownership")
     if all(identity is not None for identity in identities):
         raise RunReportError(f"services.{name} has multiple identities")
-    if name == "voicevox" and value["processIdentity"] is not None:
-        raise RunReportError("services.voicevox requires container identity")
-    if name in {"frontend", "backend", "ollama"} and value["containerIdentity"] is not None:
+    if name in {"frontend", "backend", "voicevox"} and value["processIdentity"] is not None:
+        raise RunReportError(f"services.{name} requires container identity")
+    if name == "ollama" and value["containerIdentity"] is not None:
         raise RunReportError(f"services.{name} requires process identity")
     if name in {"whisper", "chroma"} and any(identity is not None for identity in identities):
         raise RunReportError(f"services.{name} cannot have a runtime identity")

@@ -7,6 +7,8 @@ exec "$REPOSITORY_ROOT/backend/.venv/bin/python" \
   --profile dogfood \
   --service ollama \
   --service voicevox \
+  --service whisper \
+  --service livekit \
   --max-attempts 30 \
   --interval-seconds 1 \
   --request-timeout-seconds 1

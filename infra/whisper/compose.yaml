@@ -1,0 +1,35 @@
+name: digital-souls-whisper
+
+services:
+  whisper:
+    image: ${DOGFOOD_WHISPER_IMAGE:-digital-souls/whisper:dev}
+    build:
+      context: ../..
+      dockerfile: whisper_service/Dockerfile
+    container_name: digital-souls-whisper
+    network_mode: host
+    gpus: all
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "0"
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      WHISPER_MODEL: ${WHISPER_MODEL:-medium}
+      WHISPER_MODEL_REVISION: ${WHISPER_MODEL_REVISION:?WHISPER_MODEL_REVISION is required}
+      WHISPER_MODEL_PATH: /opt/models/whisper-medium
+      WHISPER_MODEL_CACHE: /models/whisper
+      WHISPER_INFERENCE_TIMEOUT_SECONDS: ${WHISPER_INFERENCE_TIMEOUT_SECONDS:-45}
+    volumes:
+      - type: bind
+        source: ${DOGFOOD_WHISPER_MODEL_CACHE:?DOGFOOD_WHISPER_MODEL_CACHE is required}
+        target: /models/whisper
+    restart: unless-stopped
+    init: true
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:50022/health/ready', timeout=2)"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 300s

@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import os
 import threading
@@ -13,6 +12,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from app import chat_service
+from app.async_worker import run_sync
 from app.characters.models import CharacterBook
 from app.conversation_history.models import ConversationTurn, TurnStatus
 from app.conversation_history.service import (
@@ -257,12 +257,35 @@ class ChatService:
             self._dependencies,
         )
 
+    def prepare_unrecorded_generation(
+        self,
+        character: str,
+        history_session: HistorySession,
+        message: str,
+    ) -> tuple[BuiltPrompt, int]:
+        context = _resolve_chat_context(
+            character,
+            self._runtime_config,
+            self._dependencies,
+        )
+        prompt = _build_unrecorded_prompt(
+            character,
+            message,
+            context,
+            history_session,
+            self._dependencies,
+        )
+        return prompt, context.prompt_config.assistant_max_generation_tokens
+
+    def record_successful_prompt_references(self, prompt: BuiltPrompt) -> None:
+        _log_prompt_references(prompt)
+
     async def create_chat_session(
         self,
         character: str,
         conversation_id: UUID,
     ) -> chat_service.ChatReplySession:
-        await asyncio.to_thread(
+        await run_sync(
             _load_character_definition,
             character,
             self._dependencies.character_definition_loader,
@@ -469,6 +492,25 @@ def _generate_reply(
     history_session: HistorySession,
     dependencies: ChatRuntimeDependencies,
 ) -> str:
+    prompt = _build_unrecorded_prompt(
+        character, message, context, history_session, dependencies
+    )
+    reply = _call_llm(
+        prompt,
+        context.prompt_config.assistant_max_generation_tokens,
+        dependencies.llm_response_generator,
+    )
+    _log_prompt_references(prompt)
+    return reply
+
+
+def _build_unrecorded_prompt(
+    character: str,
+    message: str,
+    context: _ResolvedChatContext,
+    history_session: HistorySession,
+    dependencies: ChatRuntimeDependencies,
+) -> BuiltPrompt:
     try:
         prompt = dependencies.prompt_builder(
             character=context.character_prompt,
@@ -483,11 +525,10 @@ def _generate_reply(
         raise chat_service.ChatTimeoutError() from exc
     except httpx.HTTPError as exc:
         raise chat_service.ChatBackendError() from exc
-    reply = _call_llm(
-        prompt,
-        context.prompt_config.assistant_max_generation_tokens,
-        dependencies.llm_response_generator,
-    )
+    return prompt
+
+
+def _log_prompt_references(prompt: BuiltPrompt) -> None:
     references = tuple(
         message.memory_reference
         for message in prompt.messages
@@ -510,7 +551,6 @@ def _generate_reply(
                 for reference in references
             ),
         )
-    return reply
 
 
 def _generate_recorded_reply(

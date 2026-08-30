@@ -80,6 +80,13 @@ class ResponseStartResult:
 class CoreEvent:
     type: str
     session_id: str
+    utterance_id: str | None = None
+    transcript: str | None = None
+    should_response: bool | None = None
+    classification: str | None = None
+    error_code: str | None = None
+    recoverable: bool | None = None
+    user_state: str | None = None
     response_id: str | None = None
     generation: int | None = None
     source_utterance_ids: tuple[str, ...] | None = None

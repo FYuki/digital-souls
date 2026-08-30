@@ -5,6 +5,10 @@
     utteranceFinalizedClientMs: number
     requiredManualOperations: number
   }
+
+  export type SpeechActivity = {
+    clientMs: number
+  }
 </script>
 
 <script lang="ts">
@@ -13,6 +17,7 @@
 
   import { AudioWorkletPcmRecorder } from './audio/pcm-worklet-recorder'
   import { VAD_ASSET_ROUTE } from './audio/vad-assets'
+  import { VAD_UTTERANCE_REDEMPTION_MS } from './audio/vad-policy'
 
   type MicStatus = 'off' | 'standby' | 'on'
 
@@ -28,9 +33,16 @@
     metadata: AudioCaptureMetadata,
   ) => void
   export let onError: (error: Error) => void
+  export let continuous = false
+  export let onBeforeEnable: () => Promise<void> = async () => undefined
+  export let onMicrophoneEnabled: () => Promise<void> = async () => undefined
+  export let onMicrophoneDisabled: () => Promise<void> = async () => undefined
+  export let onSpeechStarted: (activity: SpeechActivity) => void = () => undefined
+  export let onSpeechStopped: (activity: SpeechActivity) => void = () => undefined
 
   let vad: MicVadInstance | null = null
   let recorder: AudioWorkletPcmRecorder | null = null
+  let microphoneStream: MediaStream | null = null
   let status: MicStatus = 'off'
   let isLoading = false
   let capturedAudioStartClientMs: number | null = null
@@ -48,6 +60,7 @@
   const buildVadOptions = (stream: MediaStream): Partial<RealTimeVADOptions> => ({
     baseAssetPath: VAD_ASSET_ROUTE,
     onnxWASMBasePath: VAD_ASSET_ROUTE,
+    redemptionMs: VAD_UTTERANCE_REDEMPTION_MS,
     startOnLoad: false,
     getStream: async () => stream,
     resumeStream: async () => stream,
@@ -55,7 +68,8 @@
     onSpeechStart: () => {
       try {
         capturedAudioStartClientMs = performance.now()
-        getRecorder().start()
+        onSpeechStarted({ clientMs: capturedAudioStartClientMs })
+        if (!continuous) getRecorder().start()
         setStatus('on')
       } catch (error) {
         reportError(error)
@@ -92,6 +106,8 @@
       await recorder.close()
       recorder = null
     }
+    for (const track of microphoneStream?.getTracks() ?? []) track.stop()
+    microphoneStream = null
   }
 
   const setStatus = (nextStatus: MicStatus) => {
@@ -110,14 +126,17 @@
   const enableMicrophone = async () => {
     isLoading = true
     try {
-      if (recorder === null) {
+      await onBeforeEnable()
+      if (!continuous && recorder === null) {
         recorder = new AudioWorkletPcmRecorder()
       }
 
       const stream = await requestMicrophoneStream()
-      await recorder.initialize(stream)
+      microphoneStream = stream
+      if (!continuous) await getRecorder().initialize(stream)
       const activeVad = await getVad(stream)
       await activeVad.start()
+      await onMicrophoneEnabled()
       setStatus('standby')
     } catch (error) {
       try {
@@ -133,8 +152,12 @@
   }
 
   const disableMicrophone = async () => {
-    await releaseMicrophoneResources()
-    setStatus('off')
+    try {
+      await onMicrophoneDisabled()
+    } finally {
+      await releaseMicrophoneResources()
+      setStatus('off')
+    }
   }
 
   const handleSpeechEnd = async () => {
@@ -142,6 +165,12 @@
     try {
       if (capturedAudioStartClientMs === null) {
         throw new Error('Speech start timestamp is not available')
+      }
+      onSpeechStopped({ clientMs: vadSpeechEndClientMs })
+      if (continuous) {
+        capturedAudioStartClientMs = null
+        setStatus('standby')
+        return
       }
       const pcmData = await getRecorder().stopAndTake()
       const utteranceFinalizedClientMs = performance.now()
@@ -182,8 +211,7 @@
   $: isDisabled = isLoading || disabled
 
   onDestroy(() => {
-    void vad?.destroy().catch(reportError)
-    void recorder?.close().catch(reportError)
+    void releaseMicrophoneResources().catch(reportError)
   })
 </script>
 

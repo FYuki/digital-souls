@@ -135,7 +135,20 @@ def resolved_profile(profile_name: str = "integration-voice") -> ResolvedReport:
             "readinessPath": "/version",
             "readinessUrl": "http://localhost:50021/version",
         },
-        "whisper": {"mode": "real", "source": "in_process"},
+        "livekit": {
+            "mode": "real",
+            "source": "external",
+            "baseUrl": "http://127.0.0.1:7880",
+            "readinessPath": "/",
+            "readinessUrl": "http://127.0.0.1:7880/",
+        },
+        "whisper": {
+            "mode": "real",
+            "source": "external",
+            "baseUrl": "http://127.0.0.1:50022",
+            "readinessPath": "/health/ready",
+            "readinessUrl": "http://127.0.0.1:50022/health/ready",
+        },
         "chroma": {"mode": "disabled", "source": None},
     }
     return cast(ResolvedReport, {
@@ -155,6 +168,7 @@ def resolved_profile(profile_name: str = "integration-voice") -> ResolvedReport:
         "derivedEnvironment": {
             "OLLAMA_BASE_URL": "http://localhost:11434",
             "VOICEVOX_BASE_URL": "http://localhost:50021",
+            "WHISPER_BASE_URL": "http://127.0.0.1:50022",
             "DS_BACKEND_ORIGIN": "http://localhost:8000",
             "RAG_ENABLED": "false",
             "OLLAMA_CHAT_MODEL": "gemma4:e4b",

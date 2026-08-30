@@ -69,10 +69,12 @@
 * `prompting/` — Character Core、Character Lore、RAG、保存済み履歴、現在発言を順序とtoken budgetに従って合成する単一境界
 * `llm/` — 完成済みpromptを受け取るLLM振り分けルーターとクライアント実装。`ollama_client.py`（ローカルOllama、常用）、`base.py`（クライアント共通インターフェース）。クラウドLLM（Claude等）向けクライアントは未実装のスタブ
 * `memory/` — 会話履歴と長期記憶の基盤。SQLiteに同一conversation再開用の履歴と承認済み長期記憶を責務分離して保存し、Chromaは承認済み長期記憶だけの派生検索インデックスとして扱う。`memory_policy.py`は`backend/app/memory/memory_policy.json`の認識設定と、アプリケーションの非緩和policyを組み合わせて保存先別に判定する
-* `stt/whisper_client.py` — faster-whisperによる音声認識
+* `stt/remote_whisper_client.py` — 共有GPU Whisper HTTP serviceによる音声認識。旧`whisper_client.py`はGoal 2受入までrollback用に保持する
 * `model_settings.py` — Ollamaモデル・実行時context・応答予約量、Whisperモデル、履歴・入力・モデルcontext上限を環境変数から型付きで一括解決する。Backendはlifespanの先頭で検証し、不正設定ではリクエスト受付前に起動失敗する
 * `tts/voicevox_client.py` / `tts/speech_synthesizer.py` — VOICEVOXによる音声合成
 * `audio/transport.py` / `audio_pipeline.py` — 音声フレームの送受信・パイプライン制御
+
+共有VOICEVOX clientは同期HTTP requestを合成全体30秒のdeadline内で実行する。process shutdownでは新規synthesis受付を止め、in-flight requestを既定35秒までdrainしてからclientをcloseする。防御的なdrain timeout時は本文を含まない理由コードを記録してshutdown処理を進めるが、in-flightより先にclientをcloseせず、最後のrequestが終了したthreadで遅延closeする。通常requestは全体30秒deadlineが35秒drainより短いため、このtimeoutはHTTP libraryがdeadlineに従わない異常の識別用である。synthesis lifecycleは`completed`、`request_timeout`、`connection_failed`、`request_failed`を本文なしで記録する。barge-inによるasync response cancelはConversation CoreのTTS stageへ`cancelled`として記録し、process shutdownと区別する。cancel後も同期requestが終了するまではclientを早期closeしない。
 
 ### フロントエンド（Vite + Svelte, `frontend/src/`）
 
@@ -167,7 +169,9 @@ large:
 
 ## 音声処理設計
 
-現在の `WhisperTranscriber` は、単一のWhisperモデルインスタンスに対する `transcribe()` 呼び出しをロックで直列化する。想定同時接続ユーザー数は3程度とし、この前提で直列化によるスループット低下を許容する。
+旧WebSocket baselineとLiveKit Conversation Coreは、`WHISPER_BASE_URL`で解決した同じ共有GPU Whisper serviceへ音声を送る。BackendはGPU modelを所有しない。共有serviceが単一workerとglobal single-flightを所有し、競合requestは待機させずcapacity超過として返す。推論timeoutではworker/modelをprocessごと破棄し、次requestで再生成する。失敗理由はpayloadを含まないcodeだけで記録する。
+
+想定同時接続ユーザー数は3程度とし、この前提で単一workerによるスループット低下を許容する。
 
 同時接続ユーザー数が増加した場合は、モデルインスタンスをプール化する設計への切り替えを再検討する。
 

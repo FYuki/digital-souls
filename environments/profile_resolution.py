@@ -13,6 +13,7 @@ from profile_constants import (
     RAG_ENABLED_ENV,
     VOICE_BACKEND_ENV,
     VOICEVOX_BASE_URL_ENV,
+    WHISPER_BASE_URL_ENV,
 )
 from profile_types import (
     Capability,
@@ -152,6 +153,7 @@ def resolve_dependencies(dependencies: Dependencies) -> ResolvedDependencies:
 
 
 def derive_capabilities(dependencies: ResolvedDependencies) -> list[Capability]:
+    dependency_map = cast(dict[str, ResolvedDependency], dependencies)
     frontend_real = dependencies["frontend"]["mode"] == "real"
     backend = dependencies["backend"]
     text_real = (
@@ -169,7 +171,8 @@ def derive_capabilities(dependencies: ResolvedDependencies) -> list[Capability]:
             "voice-chat-real",
             text_real
             and dependencies["voicevox"]["mode"] == "real"
-            and dependencies["whisper"]["mode"] == "real",
+            and dependencies["whisper"]["mode"] == "real"
+            and dependency_map.get("livekit", {"mode": "disabled"})["mode"] == "real",
         ),
         ("rag-real", text_real and dependencies["chroma"]["mode"] == "real"),
     )
@@ -186,9 +189,11 @@ def derive_environment(
         for dependency_name, environment_name in (
             ("ollama", OLLAMA_BASE_URL_ENV),
             ("voicevox", VOICEVOX_BASE_URL_ENV),
+            ("whisper", WHISPER_BASE_URL_ENV),
             ("backend", BACKEND_DERIVED_ORIGIN_ENV),
         )
         if dependency_map[dependency_name]["mode"] == "real"
+        and "baseUrl" in dependency_map[dependency_name]
     }
     environment = {
         RAG_ENABLED_ENV: str(dependencies["chroma"]["mode"] == "real").lower(),

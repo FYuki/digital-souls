@@ -31,6 +31,7 @@ from app.backup_restore import (
 from app.conversation_history.config import resolve_conversation_history_config
 from app.conversation_history.errors import SchemaRollbackError
 from app.conversation_history.lifecycle_service import ConversationLifecycleService
+from app.conversation_history.models import ConversationTurn, TurnStatus
 from app.conversation_history.repository import ConversationHistoryRepository
 from app.conversation_history.schema import (
     initialize_conversation_history_schema,
@@ -58,6 +59,7 @@ from app.memory.consolidation.scheduler import (
 )
 from app.memory.consolidation.service import MemoryConsolidationService
 from app.memory.formation.config import resolve_memory_formation_settings
+from app.memory.formation.contracts import MemoryFormationJob
 from app.memory.formation.extractor import EXTRACTOR_VERSION, MemoryCandidateExtractor
 from app.memory.formation.ollama_client import OllamaMemoryExtractorClient
 from app.llm.ollama_config import resolve_ollama_base_url
@@ -347,6 +349,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         memory_extractor_client = None
         memory_consolidation_client = None
         memory_consolidation_classifier_client = None
+        core_transcriber = None
         core_synthesizer = None
         try:
             app.state.voice_measurement_kind = voice_measurement_kind
@@ -508,27 +511,54 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             audio_pipeline_state_set = True
             core_session_factory = None
             if resolve_livekit_settings() is not None:
-                from app.stt.whisper_client import WhisperTranscriber
+                from app.stt.remote_whisper_client import RemoteWhisperTranscriber
                 from app.tts.voicevox_client import create_voicevox_client
 
-                core_transcriber = WhisperTranscriber(
-                    model_name=audio_runtime_config.model_settings.whisper_model,
-                    download_root=Path(audio_runtime_config.whisper_download_root),
+                core_transcriber = RemoteWhisperTranscriber(
+                    audio_runtime_config.whisper_base_url
                 )
                 core_synthesizer = create_voicevox_client(
                     audio_runtime_config.voicevox_base_url
                 )
-                core_session_factory = ProductionConversationCoreSessionFactory(
-                    transcriber=core_transcriber,
-                    synthesizer=core_synthesizer,
-                    history_service=conversation_history_service,
-                    generate_reply=lambda character, history_session, transcript: (
-                        app_chat_service.generate_unrecorded_reply(
+                async def generate_core_reply_stream(
+                    character: str,
+                    history_session: object,
+                    transcript: str,
+                ) -> AsyncIterator[str]:
+                    prompt, max_output_tokens = (
+                        app_chat_service.prepare_unrecorded_generation(
                             character,
                             history_session,  # type: ignore[arg-type]
                             transcript,
                         )
-                    ),
+                    )
+                    async for text in llm_router.stream_response(
+                        prompt,
+                        max_output_tokens=max_output_tokens,
+                        settings=model_settings,
+                    ):
+                        yield text
+                    app_chat_service.record_successful_prompt_references(prompt)
+
+                def submit_completed_core_turn(persisted_turn: object) -> None:
+                    if not isinstance(persisted_turn, ConversationTurn):
+                        raise TypeError("completed Core turn must be a ConversationTurn")
+                    if persisted_turn.status is not TurnStatus.COMPLETED:
+                        return
+                    memory_formation_scheduler.submit(
+                        MemoryFormationJob(
+                            character_id=persisted_turn.character_id,
+                            conversation_id=persisted_turn.conversation_id,
+                            turn_id=persisted_turn.turn_id,
+                        )
+                    )
+
+                core_session_factory = ProductionConversationCoreSessionFactory(
+                    transcriber=core_transcriber,
+                    synthesizer=core_synthesizer,
+                    history_service=conversation_history_service,
+                    completed_turn_observer=submit_completed_core_turn,
+                    generate_reply_stream=generate_core_reply_stream,
                 )
             livekit_api = await configure_production_resources(
                 app,
@@ -583,6 +613,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     cleanup.callback(app.state.audio_pipeline_service.close)
                 if core_synthesizer is not None:
                     cleanup.callback(core_synthesizer.close)
+                if core_transcriber is not None:
+                    cleanup.callback(core_transcriber.close)
                 if resolver_registered and chat_service_resolver is not None:
                     cleanup.callback(
                         _chat_runtime.clear_default_chat_service_resolver,

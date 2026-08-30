@@ -10,7 +10,15 @@ from tests.environment_entrypoint_test_support import copy_environment_runtime
 
 
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
-DEPENDENCY_NAMES = {"frontend", "backend", "ollama", "voicevox", "whisper", "chroma"}
+DEPENDENCY_NAMES = {
+    "frontend",
+    "backend",
+    "ollama",
+    "voicevox",
+    "whisper",
+    "chroma",
+    "livekit",
+}
 MODEL_DEFAULT_ENVIRONMENT = {
     "OLLAMA_CHAT_MODEL": "gemma4:e4b",
     "OLLAMA_CLASSIFIER_MODEL": "gemma4:e4b",
@@ -129,6 +137,20 @@ def test_should_derive_rag_capability_for_real_in_process_chroma(tmp_path: Path)
     assert _read_json(report_path)["capabilities"] == ["text-chat-real", "rag-real"]
 
 
+def test_should_not_derive_voice_capability_without_livekit(tmp_path: Path):
+    environments_dir = _copy_environments(tmp_path)
+    profile_path = environments_dir / "profiles" / "integration-voice.json"
+    profile = _read_json(profile_path)
+    del profile["dependencies"]["livekit"]
+    profile_path.write_text(json.dumps(profile), encoding="utf-8")
+    report_path = _report_path(tmp_path)
+
+    result = _resolve(environments_dir, report_path, "integration-voice")
+
+    assert result.returncode == 0, result.stderr
+    assert _read_json(report_path)["capabilities"] == ["text-chat-real"]
+
+
 def test_should_write_complete_v1_report_with_timezone_timestamp(tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)
     report_path = _report_path(tmp_path)
@@ -158,7 +180,7 @@ def test_should_derive_readiness_urls_from_base_urls_and_paths(tmp_path: Path):
     assert dependencies["backend"]["readinessUrl"] == "http://localhost:8000/"
     assert dependencies["ollama"]["readinessUrl"] == "http://localhost:11434/api/tags"
     assert dependencies["voicevox"]["readinessUrl"] == "http://127.0.0.1:50021/version"
-    assert "readinessUrl" not in dependencies["whisper"]
+    assert dependencies["whisper"]["readinessUrl"] == "http://127.0.0.1:50022/health/ready"
     assert "readinessUrl" not in dependencies["chroma"]
 
 
@@ -296,6 +318,7 @@ def test_should_allowlist_derived_environment_and_exclude_process_secrets(tmp_pa
     assert set(report["derivedEnvironment"]) == {
         "OLLAMA_BASE_URL",
         "VOICEVOX_BASE_URL",
+        "WHISPER_BASE_URL",
         "RAG_ENABLED",
         "DS_BACKEND_ORIGIN",
         "DS_ENVIRONMENT_ID",

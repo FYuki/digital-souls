@@ -243,6 +243,27 @@ class ProductionSessionCoordinator:
         self._retry_tasks[("character_to_user", event_id)] = task
         await self._dependencies.publish_data(payload, APPLICATION_TOPIC)
 
+    async def send_logical_audio_segment(
+        self,
+        *,
+        response_id: str,
+        audio_sequence: int,
+        pcm_sample_count: int,
+    ) -> None:
+        """AudioTrack publish前にtransport内部の再生相関情報を送る。"""
+        if self._lifecycle.phase != "available":
+            raise RuntimeError("session is not available")
+        await self._publish_private(
+            {
+                "protocol_version": "1.0",
+                "type": "logical_audio_segment",
+                "response_id": response_id,
+                "audio_sequence": audio_sequence,
+                "generation": self.generation,
+                "pcm_sample_count": pcm_sample_count,
+            }
+        )
+
     def acknowledge(self, event_id: str, direction: str) -> bool:
         acknowledged = self._outboxes.get(self.session_id, direction).ack(event_id)
         if acknowledged:

@@ -245,16 +245,66 @@ dogfood_prepare_backend() {
   )
 }
 
+dogfood_resolve_target_images() {
+  local target=$1
+  local key current repository digest resolved variable
+  dogfood_require_commit_sha "$target" || return
+  for key in "${DOGFOOD_IMAGE_KEYS[@]}"; do
+    current=${!key}
+    repository=${current%@sha256:*}
+    if [ "$repository" = "$current" ]; then
+      echo "ERROR: $key からGHCR repositoryを解決できません" >&2
+      return 2
+    fi
+    digest=$(docker buildx imagetools inspect "$repository:$target" \
+      --format '{{.Manifest.Digest}}') || {
+      echo "ERROR: $key のtarget imageを解決できません: $target" >&2
+      return 2
+    }
+    if ! [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+      echo "ERROR: $key のmanifest digestが不正です" >&2
+      return 2
+    fi
+    resolved="$repository@$digest"
+    variable="DOGFOOD_TARGET_${key#DOGFOOD_}"
+    printf -v "$variable" '%s' "$resolved"
+    export "$variable"
+  done
+}
+
+dogfood_write_active_images() (
+  set -e
+  local backend_image=$1 frontend_image=$2 whisper_image=$3
+  local destination="$DOGFOOD_CONFIG_DIR/dogfood-images.env"
+  local temporary prepared
+  DOGFOOD_BACKEND_IMAGE=$backend_image
+  DOGFOOD_FRONTEND_IMAGE=$frontend_image
+  DOGFOOD_WHISPER_IMAGE=$whisper_image
+  dogfood_validate_images
+  temporary=$(mktemp "$DOGFOOD_CONFIG_DIR/.dogfood-images.XXXXXX")
+  prepared=$(mktemp "$DOGFOOD_CONFIG_DIR/.dogfood-images.ready.XXXXXX")
+  trap 'rm -f -- "$temporary" "$prepared"' EXIT
+  printf 'DOGFOOD_BACKEND_IMAGE=%s\nDOGFOOD_FRONTEND_IMAGE=%s\nDOGFOOD_WHISPER_IMAGE=%s\n' \
+    "$backend_image" "$frontend_image" "$whisper_image" > "$temporary"
+  install -m 0600 -o root -g root "$temporary" "$prepared"
+  mv -T -- "$prepared" "$destination"
+  prepared=
+)
+
 dogfood_activate_revision() {
   local target=$1
+  local backend_image=$2
+  local frontend_image=$3
+  local whisper_image=$4
   dogfood_update_revision "$target" || return
   git -c core.hooksPath=/dev/null -C "$DOGFOOD_CLONE_DIR" checkout --detach "$target" || return
   dogfood_verify_detached_clean_revision "$target" || return
   dogfood_prepare_backend || return
-  npm --prefix "$DOGFOOD_CLONE_DIR/frontend" run build || return
   dogfood_require_clean_checkout || return
   chown -R "root:$DOGFOOD_SERVICE_GROUP" "$DOGFOOD_CLONE_DIR" || return
   chmod -R g-w,o-rwx "$DOGFOOD_CLONE_DIR" || return
+  dogfood_write_active_images \
+    "$backend_image" "$frontend_image" "$whisper_image" || return
   "$DOGFOOD_CLONE_DIR/scripts/dogfood/restart-services.sh" || return
 }
 
@@ -305,15 +355,28 @@ dogfood_manifest_metadata() {
   local previous=$1
   local target=$2
   local backup_id=$3
+  local backend_image=$4
+  local frontend_image=$5
+  local whisper_image=$6
   python3 - "$DOGFOOD_CLONE_DIR/environments/profiles/dogfood.json" \
-    "$DS_DATA_DIR/conversation-history.db" "$previous" "$target" "$backup_id" <<'PYTHON'
+    "$DS_DATA_DIR/conversation-history.db" "$previous" "$target" "$backup_id" \
+    "$backend_image" "$frontend_image" "$whisper_image" <<'PYTHON'
 import json
 import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-profile_path, database_path, previous, target, backup_id = sys.argv[1:]
+(
+    profile_path,
+    database_path,
+    previous,
+    target,
+    backup_id,
+    backend_image,
+    frontend_image,
+    whisper_image,
+) = sys.argv[1:]
 profile = json.loads(Path(profile_path).read_text(encoding="utf-8"))
 with sqlite3.connect(f"file:{database_path}?mode=ro", uri=True) as connection:
     data_schema = connection.execute("PRAGMA user_version").fetchone()[0]
@@ -323,6 +386,11 @@ print(json.dumps({
     "profileSchemaVersion": profile["schemaVersion"],
     "dataSchemaVersion": data_schema,
     "backupId": backup_id,
+    "images": {
+        "backend": backend_image,
+        "frontend": frontend_image,
+        "whisper": whisper_image,
+    },
     "deployedAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
 }, separators=(",", ":")))
 PYTHON
@@ -520,6 +588,62 @@ dogfood_manifest_field() {
 
 dogfood_manifest_nullable_commit_field() {
   _dogfood_manifest_string_field "$1" "$2" allow
+}
+
+dogfood_manifest_images() {
+  local manifest=$1
+  python3 - "$manifest" <<'PYTHON'
+import json
+import os
+import re
+import stat
+import sys
+
+path = sys.argv[1]
+pattern = re.compile(
+    r"^ghcr\.io/[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$"
+)
+try:
+    descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    status = os.fstat(descriptor)
+    path_status = os.stat(path, follow_symlinks=False)
+    if (
+        not stat.S_ISREG(status.st_mode)
+        or status.st_uid != os.geteuid()
+        or stat.S_IMODE(status.st_mode) != 0o640
+        or (status.st_dev, status.st_ino) != (path_status.st_dev, path_status.st_ino)
+    ):
+        raise OSError
+    with os.fdopen(descriptor, encoding="utf-8") as source:
+        images = json.load(source)["images"]
+except (OSError, json.JSONDecodeError, KeyError):
+    raise SystemExit(1)
+if not isinstance(images, dict) or set(images) != {"backend", "frontend", "whisper"}:
+    raise SystemExit(1)
+for key in ("backend", "frontend", "whisper"):
+    value = images[key]
+    if not isinstance(value, str) or pattern.fullmatch(value) is None:
+        raise SystemExit(1)
+    print(value)
+PYTHON
+}
+
+dogfood_read_manifest_images() {
+  local manifest=$1
+  local output
+  local -a images
+  output=$(dogfood_manifest_images "$manifest") || {
+    echo "ERROR: deployment manifestのimage digestを検証できません" >&2
+    return 2
+  }
+  mapfile -t images <<< "$output"
+  if [ "${#images[@]}" -ne 3 ]; then
+    echo "ERROR: deployment manifestのimage digest数が不正です" >&2
+    return 2
+  fi
+  export DOGFOOD_MANIFEST_BACKEND_IMAGE=${images[0]}
+  export DOGFOOD_MANIFEST_FRONTEND_IMAGE=${images[1]}
+  export DOGFOOD_MANIFEST_WHISPER_IMAGE=${images[2]}
 }
 
 dogfood_manifest_schema_version() {

@@ -55,9 +55,12 @@ network namespace、CPU、kernel、memory、swapを共有するため、別WSL�
 
 FrontendとBackendはloopbackだけへbindする。LAN公開、TLS、認証は別の判断とする。
 
-OllamaとVOICEVOXはdogfoodのenvironment runとは別の共通推論サービスとして運用する。
+Ollama、VOICEVOX、Whisperはdogfoodのenvironment runとは別の共通推論サービスとして運用する。
 OllamaはUbuntu-dogfoodのsystemdをprocess ownerとする。VOICEVOXはsystemdをCompose stackの操作入口、Composeを実行中containerの再起動ownerとする。dev／integration／TAKTは`external` dependencyとして同じloopback endpointを再利用する。構築、起動、停止、metadata-only観測、WSL終了後の復旧は`infra/dogfood/README.md`に集約する。
-dogfood Profileは両者をexternal dependencyとして扱い、dogfoodの所有reportへ登録せず、
+WhisperはRTX 4070 Ti SUPER 16GBを使用する単一GPU containerとし、systemdをCompose stackの操作入口、
+Composeを実行中containerの再起動ownerとする。`medium`、`cuda`、`int8_float16`、global inflight 1を
+初期設定とし、CPUへの暗黙fallbackを許可しない。
+dogfood Profileは3サービスをexternal dependencyとして扱い、dogfoodの所有reportへ登録せず、
 stop／cleanupでも停止しない。GPU、CPU、memoryは共有資源として競合し得るため、並行稼働テストで観測する。
 
 ### 3. codeとdeployを分ける
@@ -65,8 +68,8 @@ stop／cleanupでも停止しない。GPU、CPU、memoryは共有資源として
 dogfoodはTAKT worktreeやmain checkoutではなく独立cloneを使う。実行commitをdeployment manifestへ
 記録し、明示的なdeployを行うまで変更しない。mainへのmergeだけでdogfoodをreload、restart、更新しない。
 
-deploy前にbackupを作成し、依存準備、Frontend build、service restart、readinessを検証する。
-失敗時は直前commit、設定、data schemaへrollbackできることを完了条件とする。
+deploy前にbackupを作成し、host control planeの依存準備、GHCR上の3 image digest解決、service restart、readinessを検証する。
+失敗時は直前commit、3 image digest、設定、data schemaへrollbackできることを完了条件とする。
 
 ### 4. 環境identityとdata rootを必須にする
 
@@ -122,16 +125,41 @@ dogfoodのconversation historyは削除せず、対応schemaのbackup、migratio
   -> Wave 2後続
 ```
 
-### 7. Dockerは環境分離の必須条件にしない
+### 7. Dockerは環境分離を置き換えず、実行・配備境界として採用する
 
-VOICEVOXは既存どおりDocker containerを利用できる。Backend、Frontend、Ollamaを含む全面的な
-Docker Compose化は、今回のdogfood分離とミニPC移行の完了条件に含めない。
+別WSL distribution、別port、独立clone、専用data root、環境identityを引き続き分離境界とし、
+Docker volumeだけへdogfoodデータの保護を委ねない。その上でBackend、Frontend、共有Whisperを
+段階的にDockerへ移行し、Backend／Frontendはenvironmentごとのcontainer、Whisperは共通推論serviceの
+単一GPU containerとして運用する。既存のVOICEVOX／LiveKit Compose stackは継続し、Ollamaは当面
+systemd所有の直接実行を維持する。詳細は`docker-policy-2026-06.md`を正本とする。
 
-### 8. 推論サービスだけをUbuntu-dogfoodへ集約する
+dogfoodの明示deployはGHCR上のBackend／Frontend／Whisper commit SHA tagをimmutable digestへ解決し、
+3 digestをdeployment manifestへcommit、schema、backup IDとともに記録する。rollbackもcommitだけでなく
+同じ3 digestを一組で復元し、mainへのmergeやregistry更新だけでは実行imageを変更しない。
 
-#50のサービス分離方針に対する明示的な例外として、OllamaとVOICEVOXはUbuntu-dogfood側の1 instanceだけを運用し、Ubuntu-devからもexternal dependencyとして再利用する。devとdogfoodを別instanceにすると、VRAM制約下での並行稼働要件を満たせず、共有network namespace上の同一port（Ollama `11434`、VOICEVOX `50021`）とも競合するためである。
+### 8. 推論サービスをUbuntu-dogfoodへ集約する
 
-`dev.json`と`dogfood.json`は両サービスを`source: external`かつ同一portで定義済みのため、Profileは変更しない。Ubuntu-devは推論サービスのprocess lifecycleを所有せず、起動、停止、restart、cleanupを行わない。Ubuntu-dev側のOllama systemd自動起動も無効化する。一方、会話履歴、SQLite、Chroma、data rootは共有せず、環境ごとの`DS_DATA_DIR`とidentity markerによる分離を維持する。
+#50のサービス分離方針に対する明示的な例外として、Ollama、VOICEVOX、WhisperはUbuntu-dogfood側の
+1 instanceだけを運用し、Ubuntu-devからもexternal dependencyとして再利用する。WhisperをBackendごとの
+`in_process`依存にすると、devとdogfoodの同時利用時に同じGPUへmodelが二重ロードされるため、
+共通serviceがmodel、global capacity、推論timeout、worker破棄と再生成を所有する。
+
+Ollama `11434`、VOICEVOX `50021`に加え、Whisperは専用loopback port `50022`を使用する。
+`dev.json`、`integration-voice.json`、`dogfood.json`はWhisperを`source: external`として同じendpointを定義する。
+Ubuntu-devは推論サービスのprocess lifecycleを所有せず、起動、停止、restart、cleanupを行わない。
+Ubuntu-dev側のOllama／Whisper自動起動も無効化する。一方、会話履歴、SQLite、Chroma、data rootは共有せず、
+環境ごとの`DS_DATA_DIR`とidentity markerによる分離を維持する。Whisper model cacheは会話data rootから分離した
+共通推論service専用pathに置く。
+
+Whisperは`medium`、`cuda`、`int8_float16`、device index 0、単一worker／single-flightを初期契約とする。
+CPU fallbackを許可せず、CUDAと最小推論を通過するまでreadyにしない。競合はcapacity超過でfail fastし、
+推論timeout後はworkerを破棄して次requestで再生成する。実GPU・VRAM・連続会話の受入はIssue #135 Goal 2で行う。
+
+### 9. dogfoodのLiveKit lifecycleと資格情報を分離する
+
+Wave 3のdogfood LiveKitはhost networkの専用Compose stackとし、root所有の`digital-souls-livekit.service`を起動・停止入口にする。`digital-souls-dogfood.target`は推論target、LiveKit、applicationを依存順に束ねる。一方、Environment adapterから見たLiveKitは`source: external`のままとし、Conversation Coreやapplication orchestratorへDocker／systemd固有型とlifecycleを持ち込まない。
+
+bootstrapは同じdogfood設定からLiveKit Server用`livekit.yaml`とBackend用`livekit-backend.env`を別々に生成する。両方を`0640 root:digital-souls`で配置し、BackendにはURL、API key、API secretだけを渡す。backup認証鍵を含む`dogfood.env`全体をapplication processへ渡さず、状態確認にも資格情報を出力しない。設定契約とsystemd資材の更新は通常deployだけでは反映せず、論理backup、停止、bootstrap、同一SHA deploy、readinessの順で適用する。
 
 ## 子Issue
 

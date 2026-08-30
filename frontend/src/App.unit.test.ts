@@ -7,6 +7,9 @@ const CONVERSATION_ID = 'e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'
 const SECOND_CONVERSATION_ID = '6ad9a610-02cc-4a41-b02e-503826f7292b'
 const THIRD_CONVERSATION_ID = 'f98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'
 const TURN_ID = '9e70795d-e5d5-431d-baa2-67f884403010'
+const VOICE_SESSION_ID = '20000000-0000-4000-8000-000000000010'
+const VOICE_PARTICIPANT_ID = '40000000-0000-4000-8000-000000000010'
+const RESPONSE_ID = '50000000-0000-4000-8000-000000000010'
 
 const conversation = {
   character_id: 'miori',
@@ -14,28 +17,6 @@ const conversation = {
   created_at: '2026-08-01T12:00:00+00:00',
   updated_at: '2026-08-01T12:01:00+00:00',
   archived_at: null,
-}
-
-class FakeWebSocket {
-  static instances: FakeWebSocket[] = []
-
-  binaryType = ''
-  onopen: (() => void) | null = null
-  onclose: (() => void) | null = null
-  onerror: (() => void) | null = null
-  onmessage: ((event: MessageEvent) => void) | null = null
-  sent: (string | ArrayBuffer)[] = []
-  closeCalls = 0
-
-  constructor(readonly url: string) {
-    FakeWebSocket.instances.push(this)
-  }
-
-  send(data: string | ArrayBuffer) { this.sent.push(data) }
-  close() {
-    this.closeCalls += 1
-    this.onclose?.()
-  }
 }
 
 const audioMocks = vi.hoisted(() => ({
@@ -81,6 +62,22 @@ const start = vi.fn()
 const close = vi.fn()
 const fetchMock = vi.fn()
 
+type CoreEventReceiver = (event: Record<string, unknown>) => void
+type RoomObserver = (event: Record<string, unknown>) => void
+const liveKitMocks = {
+  connect: vi.fn(async () => undefined),
+  publishMicrophone: vi.fn(async () => undefined),
+  muteMicrophone: vi.fn(async () => undefined),
+  stopPlayback: vi.fn(() => 0),
+  publishControlEvent: vi.fn(async (event: Record<string, unknown>) => {
+    liveKitMocks.controlEvents.push(event)
+  }),
+  disconnect: vi.fn(),
+  controlEvents: [] as Record<string, unknown>[],
+  receiveCoreEvent: undefined as CoreEventReceiver | undefined,
+  observeRoom: undefined as RoomObserver | undefined,
+}
+
 class FakeAudioContext {
   destination = {}
   decodeAudioData = decodeAudioData
@@ -99,6 +96,20 @@ const persistedTurn = (userContent: string, assistantContent: string) => ({
 
 const defaultFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = String(input)
+  if (url === '/api/voice/livekit/token') {
+    return new Response(JSON.stringify({
+      session_id: VOICE_SESSION_ID,
+      participant_id: VOICE_PARTICIPANT_ID,
+      room: 'mock-room',
+      token: 'mock-token',
+      livekit_url: 'ws://mock-livekit.invalid',
+      expires_at: '2026-08-28T12:00:00.000Z',
+      reconnect_grace_ms: 60_000,
+    }), { status: 200 })
+  }
+  if (url.startsWith('/api/voice/livekit/sessions/') && init?.method === 'DELETE') {
+    return new Response(null, { status: 204 })
+  }
   if (url === '/api/chat') {
     const body = JSON.parse(String(init?.body)) as Record<string, string>
     return new Response(JSON.stringify({
@@ -116,71 +127,28 @@ const defaultFetch = async (input: RequestInfo | URL, init?: RequestInit): Promi
   return new Response(JSON.stringify([conversation]), { status: 200 })
 }
 
-const latestSocket = (): FakeWebSocket => {
-  const socket = FakeWebSocket.instances.at(-1)
-  if (socket === undefined) throw new Error('WebSocket instance is required')
-  return socket
-}
-
-const expectCorrelatedAudioSent = (socket: FakeWebSocket) => {
-  expect(socket.sent).toHaveLength(2)
-  expect(JSON.parse(String(socket.sent[0]))).toEqual({
-    type: 'audio_metadata',
-    event_id: TURN_ID,
-    session_id: TURN_ID,
-    utterance_id: TURN_ID,
-    captured_audio_start_client_ms: expect.any(Number),
-    vad_speech_end_client_ms: expect.any(Number),
-    utterance_finalized_client_ms: expect.any(Number),
-    response_decision_client_ms: expect.any(Number),
-    required_manual_operations: 0,
-  })
-  expect(socket.sent[1]).toBe(audioMocks.pcmData)
-}
-
-const selectConversation = async (): Promise<FakeWebSocket> => {
+const selectConversation = async (): Promise<void> => {
   await fireEvent.click(
     await screen.findByRole('button', { name: new RegExp(`^${CONVERSATION_ID}$`) }),
   )
-  await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1))
-  return latestSocket()
 }
 
-const openSocket = async (): Promise<FakeWebSocket> => {
-  const socket = await selectConversation()
-  await act(() => socket.onopen?.())
-  return socket
+const startLiveKitSession = async () => {
+  await selectConversation()
+  await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
+  await waitFor(() => expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(1))
 }
 
-const audioTurnFrame = (userContent: string, assistantContent: string): MessageEvent => (
-  new MessageEvent('message', {
-    data: JSON.stringify({ type: 'text', turn: persistedTurn(userContent, assistantContent) }),
-  })
-)
-
-const audioMetadataFrame = (
-  sessionId: string,
-  utteranceId: string,
-  responseId: string,
-): MessageEvent => new MessageEvent('message', {
-  data: JSON.stringify({
-    type: 'audio_response_metadata',
-    session_id: sessionId,
-    utterance_id: utteranceId,
-    response_id: responseId,
-  }),
-})
-
-const measurementEvents = (socket: FakeWebSocket) => socket.sent
-  .filter((frame): frame is string => typeof frame === 'string')
-  .map((frame) => JSON.parse(frame) as Record<string, unknown>)
-  .filter((frame) => frame.type === 'measurement_event')
+const emitCoreEvent = async (event: Record<string, unknown>) => {
+  const receiver = liveKitMocks.receiveCoreEvent
+  if (receiver === undefined) throw new Error('LiveKit core event receiver is required')
+  await act(() => receiver({ session_id: VOICE_SESSION_ID, ...event }))
+}
 
 describe('App conversation lifecycle', () => {
   beforeEach(() => {
     localStorage.clear()
     window.history.replaceState({}, '', '/')
-    FakeWebSocket.instances = []
     turnSequence = 0
     audioMocks.vadOptions = undefined
     audioMocks.vadStart.mockReset().mockResolvedValue(undefined)
@@ -195,13 +163,39 @@ describe('App conversation lifecycle', () => {
     connect.mockReset()
     start.mockReset()
     close.mockReset().mockResolvedValue(undefined)
-    vi.stubGlobal('WebSocket', FakeWebSocket)
+    liveKitMocks.connect.mockReset().mockResolvedValue(undefined)
+    liveKitMocks.publishMicrophone.mockReset().mockResolvedValue(undefined)
+    liveKitMocks.muteMicrophone.mockReset().mockResolvedValue(undefined)
+    liveKitMocks.stopPlayback.mockReset().mockReturnValue(0)
+    liveKitMocks.publishControlEvent.mockReset().mockImplementation(
+      async (event: Record<string, unknown>) => {
+        liveKitMocks.controlEvents.push(event)
+      },
+    )
+    liveKitMocks.disconnect.mockReset()
+    liveKitMocks.controlEvents = []
+    liveKitMocks.receiveCoreEvent = undefined
+    liveKitMocks.observeRoom = undefined
     vi.stubGlobal('crypto', { randomUUID: vi.fn(() => TURN_ID) })
     fetchMock.mockReset().mockImplementation(async (input, init) => defaultFetch(input, init))
     vi.stubGlobal('fetch', fetchMock)
     vi.stubGlobal('AudioContext', FakeAudioContext)
     vi.stubGlobal('navigator', {
       mediaDevices: { getUserMedia: audioMocks.getUserMedia },
+    })
+    vi.stubGlobal('__digitalSoulsVoiceSessionTestPort', {
+      createRoom: (observe: RoomObserver, receiveCoreEvent: CoreEventReceiver) => {
+        liveKitMocks.observeRoom = observe
+        liveKitMocks.receiveCoreEvent = receiveCoreEvent
+        return {
+          connect: liveKitMocks.connect,
+          publishMicrophone: liveKitMocks.publishMicrophone,
+          muteMicrophone: liveKitMocks.muteMicrophone,
+          stopPlayback: liveKitMocks.stopPlayback,
+          publishControlEvent: liveKitMocks.publishControlEvent,
+          disconnect: liveKitMocks.disconnect,
+        }
+      },
     })
   })
 
@@ -220,35 +214,213 @@ describe('App conversation lifecycle', () => {
     expect(localStorage.getItem('digital-souls:conversation:miori')).toBe(CONVERSATION_ID)
   })
 
-  test('履歴取得中に受信したWebSocket turnを履歴応答後も重複なく維持する', async () => {
-    const receivedTurn = persistedTurn('取得中の音声質問', '取得中の音声回答')
-    const historicalTurn = persistedTurn('過去の質問', '過去の回答')
-    let resolveHistory: ((response: Response) => void) | undefined
+  test('通常UIからLiveKit sessionを開始し継続VADと順序付きdeltaを表示する', async () => {
+    render(App)
+    await startLiveKitSession()
+    if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
+
+    audioMocks.vadOptions.onSpeechStart()
+    audioMocks.vadOptions.onSpeechEnd()
+    await waitFor(() => expect(
+      liveKitMocks.controlEvents.map((event) => event.type),
+    ).toEqual([
+      'session_start_requested',
+      'session_resumed',
+      'speech_started',
+      'speech_stopped',
+      'observation',
+    ]))
+    const tokenCall = fetchMock.mock.calls.find(([url]) => String(url) === '/api/voice/livekit/token')
+    expect(JSON.parse(String(tokenCall?.[1]?.body))).toMatchObject({
+      character_id: 'miori',
+      conversation_id: CONVERSATION_ID,
+    })
+
+    await emitCoreEvent({
+      type: 'utterance_finalized',
+      utterance_id: TURN_ID,
+      transcript: '継続入力の質問',
+      should_response: true,
+    })
+    await emitCoreEvent({
+      type: 'response_started',
+      response_id: RESPONSE_ID,
+      source_utterance_ids: [TURN_ID],
+    })
+    await emitCoreEvent({
+      type: 'response_delta', response_id: RESPONSE_ID,
+      text_sequence: 1, text: '逐次',
+    })
+    await emitCoreEvent({
+      type: 'response_delta', response_id: RESPONSE_ID,
+      text_sequence: 1, text: '重複',
+    })
+    await emitCoreEvent({
+      type: 'response_delta', response_id: RESPONSE_ID,
+      text_sequence: 3, text: '順序外',
+    })
+    await emitCoreEvent({
+      type: 'response_delta', response_id: RESPONSE_ID,
+      text_sequence: 2, text: '応答',
+    })
+
+    expect(screen.getByText('継続入力の質問')).toBeTruthy()
+    expect(screen.getByText('逐次応答')).toBeTruthy()
+    expect(screen.queryByText(/重複|順序外/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'マイクをオフにする' })).toBeTruthy()
+    expect(audioMocks.vadStart).toHaveBeenCalledTimes(1)
+    expect(audioMocks.vadDestroy).not.toHaveBeenCalled()
+  })
+
+  test('cancel後の遅延deltaを破棄し、同じsessionで次の発話を表示する', async () => {
+    const nextUtteranceId = '30000000-0000-4000-8000-000000000020'
+    const nextResponseId = '50000000-0000-4000-8000-000000000020'
+    render(App)
+    await startLiveKitSession()
+
+    await emitCoreEvent({
+      type: 'utterance_finalized', utterance_id: TURN_ID,
+      transcript: '中断される質問', should_response: true,
+    })
+    await emitCoreEvent({
+      type: 'response_started', response_id: RESPONSE_ID,
+      source_utterance_ids: [TURN_ID],
+    })
+    await emitCoreEvent({
+      type: 'response_delta', response_id: RESPONSE_ID,
+      text_sequence: 1, text: '古い途中応答',
+    })
+    await emitCoreEvent({ type: 'response_cancelled', response_id: RESPONSE_ID })
+    await emitCoreEvent({
+      type: 'response_delta', response_id: RESPONSE_ID,
+      text_sequence: 2, text: '混入してはいけない',
+    })
+
+    await emitCoreEvent({
+      type: 'utterance_finalized', utterance_id: nextUtteranceId,
+      transcript: '次の質問', should_response: true,
+    })
+    await emitCoreEvent({
+      type: 'response_started', response_id: nextResponseId,
+      source_utterance_ids: [nextUtteranceId],
+    })
+    await emitCoreEvent({
+      type: 'response_delta', response_id: nextResponseId,
+      text_sequence: 1, text: '次の応答',
+    })
+
+    expect(screen.queryByText('古い途中応答')).toBeNull()
+    expect(screen.queryByText('混入してはいけない')).toBeNull()
+    expect(screen.getByText('次の質問')).toBeTruthy()
+    expect(screen.getByText('次の応答')).toBeTruthy()
+    expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(1)
+    expect(audioMocks.vadDestroy).not.toHaveBeenCalled()
+    await waitFor(() => expect(
+      fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/turns')).length,
+    ).toBeGreaterThanOrEqual(2))
+  })
+
+  test('入力・応答・再生・sessionを独立表示しbarge-inを制御する', async () => {
+    render(App)
+    await startLiveKitSession()
+    await emitCoreEvent({
+      type: 'response_started', response_id: RESPONSE_ID,
+      source_utterance_ids: [TURN_ID],
+    })
+    await act(() => liveKitMocks.observeRoom?.({
+      transport: 'available', control: 'available', audio: 'available',
+      activeResponseId: RESPONSE_ID, renderedEnergy: 1,
+    }))
+
+    expect(screen.getByText('セッション: 接続済み')).toBeTruthy()
+    expect(screen.getByText('入力: 聞き取り中')).toBeTruthy()
+    expect(screen.getByText('応答: 応答生成中')).toBeTruthy()
+    expect(screen.getByText('再生: 再生中')).toBeTruthy()
+    if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
+
+    audioMocks.vadOptions.onSpeechStart()
+    await waitFor(() => expect(liveKitMocks.stopPlayback).toHaveBeenCalledWith(
+      RESPONSE_ID, expect.any(Number),
+    ))
+    await waitFor(() => expect(
+      liveKitMocks.controlEvents.map((event) => event.type),
+    ).toContain('response_cancel_requested'))
+
+    expect(screen.getByText('応答: 割り込み処理中')).toBeTruthy()
+    expect(screen.getByText('再生: 停止済み')).toBeTruthy()
+  })
+
+  test('音声session中のtext送信は音声を終了してからHTTP経路を使う', async () => {
+    render(App)
+    await startLiveKitSession()
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: 'テキストへ切り替える' },
+    })
+    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
+
+    await screen.findByText('HTTP応答です。')
+    expect(liveKitMocks.disconnect).toHaveBeenCalledTimes(1)
+    const requests = fetchMock.mock.calls.map(([input, init]) => ({
+      url: String(input), method: init?.method,
+    }))
+    const endIndex = requests.findIndex((request) => (
+      request.url.includes('/api/voice/livekit/sessions/')
+      && request.method === 'DELETE'
+    ))
+    const chatIndex = requests.findIndex((request) => request.url === '/api/chat')
+    expect(endIndex).toBeGreaterThanOrEqual(0)
+    expect(chatIndex).toBeGreaterThan(endIndex)
+  })
+
+  test('音声session終了APIが失敗してもtext送信を継続する', async () => {
     fetchMock.mockImplementation(async (input, init) => {
-      if (String(input).endsWith('/turns')) {
-        return new Promise<Response>((resolve) => { resolveHistory = resolve })
+      if (String(input).startsWith('/api/voice/livekit/sessions/') && init?.method === 'DELETE') {
+        return new Response(null, { status: 503 })
       }
       return defaultFetch(input, init)
     })
     render(App)
-    const socket = await selectConversation()
-    await waitFor(() => expect(resolveHistory).toBeDefined())
+    await startLiveKitSession()
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: '終了失敗後も送信する' },
+    })
+    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
 
-    socket.onmessage?.(new MessageEvent('message', {
-      data: JSON.stringify({ type: 'text', turn: receivedTurn }),
-    }))
-    expect(await screen.findByText('取得中の音声回答')).toBeTruthy()
-    if (resolveHistory === undefined) throw new Error('History resolver is required')
-    const resolveTurns = resolveHistory
-    await act(() => resolveTurns(new Response(
-      JSON.stringify([historicalTurn, receivedTurn]),
-      { status: 200 },
-    )))
-
-    expect(await screen.findByText('過去の回答')).toBeTruthy()
-    expect(screen.getAllByText('取得中の音声質問')).toHaveLength(1)
-    expect(screen.getAllByText('取得中の音声回答')).toHaveLength(1)
+    expect(await screen.findByText('HTTP応答です。')).toBeTruthy()
+    expect(fetchMock.mock.calls.some(([input]) => String(input) === '/api/chat')).toBe(true)
   })
+
+  test('recoverable音声エラー後もmicを維持して次の応答を処理する', async () => {
+    const nextUtteranceId = '30000000-0000-4000-8000-000000000030'
+    const nextResponseId = '50000000-0000-4000-8000-000000000030'
+    render(App)
+    await startLiveKitSession()
+
+    await emitCoreEvent({
+      type: 'error', utterance_id: TURN_ID,
+      error_code: 'stt_inference_timeout', recoverable: true,
+    })
+    expect((await screen.findByRole('alert')).textContent).toBe('応答の取得に失敗しました。')
+    expect(screen.getByRole('button', { name: 'マイクをオフにする' })).toBeTruthy()
+
+    await emitCoreEvent({
+      type: 'utterance_finalized', utterance_id: nextUtteranceId,
+      transcript: '復旧後の質問', should_response: true,
+    })
+    await emitCoreEvent({
+      type: 'response_started', response_id: nextResponseId,
+      source_utterance_ids: [nextUtteranceId],
+    })
+    await emitCoreEvent({
+      type: 'response_delta', response_id: nextResponseId,
+      text_sequence: 1, text: '復旧後の応答',
+    })
+
+    expect(screen.getByText('復旧後の質問')).toBeTruthy()
+    expect(screen.getByText('復旧後の応答')).toBeTruthy()
+    expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(1)
+  })
+
 
   test('履歴取得中に完了したHTTP turnを履歴応答後も維持する', async () => {
     const historicalTurn = persistedTurn('過去の質問', '過去の回答')
@@ -646,24 +818,6 @@ describe('App conversation lifecycle', () => {
     })
   })
 
-  test('同じconversation IDを音声WebSocketとHTTP送信へ使用する', async () => {
-    render(App)
-    const socket = await openSocket()
-
-    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
-      target: { value: 'こんにちは' },
-    })
-    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
-
-    expect(socket.url).toBe(`ws://localhost:3000/ws/miori?conversation_id=${CONVERSATION_ID}`)
-    const chatCall = fetchMock.mock.calls.find(([url]) => String(url) === '/api/chat')
-    expect(JSON.parse(String(chatCall?.[1]?.body))).toEqual({
-      character: 'miori',
-      conversation_id: CONVERSATION_ID,
-      message: 'こんにちは',
-    })
-    expect(await screen.findByText('HTTP応答です。')).toBeTruthy()
-  })
 
   test('HTTP応答待機中はスレッド切替を防ぎ完了後に許可する', async () => {
     const secondConversation = {
@@ -745,75 +899,7 @@ describe('App conversation lifecycle', () => {
     })
   })
 
-  test('音声応答待機中はスレッド操作を無効にする', async () => {
-    const secondConversation = {
-      ...conversation,
-      conversation_id: SECOND_CONVERSATION_ID,
-    }
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (url.endsWith(`/${SECOND_CONVERSATION_ID}/turns`)) {
-        return new Response(JSON.stringify([
-          persistedTurn('切替先の質問', '切替先の回答'),
-        ]), { status: 200 })
-      }
-      if (url.endsWith('/turns') || url.endsWith('/archived')) return defaultFetch(input, init)
-      return new Response(JSON.stringify([conversation, secondConversation]), { status: 200 })
-    })
-    render(App)
-    const socket = await openSocket()
-    await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
-    await waitFor(() => expect(audioMocks.vadStart).toHaveBeenCalledTimes(1))
-    if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
-    audioMocks.vadOptions.onSpeechStart()
-    audioMocks.vadOptions.onSpeechEnd()
-    await waitFor(() => expectCorrelatedAudioSent(socket))
 
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: SECOND_CONVERSATION_ID }).disabled).toBe(true)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: `アーカイブ ${CONVERSATION_ID}` }).disabled).toBe(true)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: '新規スレッド' }).disabled).toBe(true)
-    expect(FakeWebSocket.instances).toHaveLength(1)
-  })
-
-  test('characterをAからBからAへ切り替えても各conversation IDを混同しない', async () => {
-    const conversationIdB = SECOND_CONVERSATION_ID
-    const conversationB = {
-      ...conversation,
-      character_id: 'akira',
-      conversation_id: conversationIdB,
-    }
-    localStorage.setItem('digital-souls:conversation:miori', CONVERSATION_ID)
-    localStorage.setItem('digital-souls:conversation:akira', conversationIdB)
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (url === '/api/chat') return defaultFetch(input, init)
-      if (url.endsWith('/turns') || url.endsWith('/archived')) {
-        return new Response('[]', { status: 200 })
-      }
-      if (url.includes('/characters/akira/')) {
-        return new Response(JSON.stringify([conversationB]), { status: 200 })
-      }
-      return new Response(JSON.stringify([conversation]), { status: 200 })
-    })
-    render(App)
-    await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1))
-    await act(() => latestSocket().onopen?.())
-    const switcher = screen.getByRole('textbox', { name: 'キャラクターID' })
-
-    await fireEvent.input(switcher, { target: { value: 'akira' } })
-    await fireEvent.click(screen.getByRole('button', { name: '切り替え' }))
-    await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(2))
-    await act(() => latestSocket().onopen?.())
-    await fireEvent.input(switcher, { target: { value: 'miori' } })
-    await fireEvent.click(screen.getByRole('button', { name: '切り替え' }))
-    await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(3))
-
-    expect(FakeWebSocket.instances.map((socket) => socket.url)).toEqual([
-      `ws://localhost:3000/ws/miori?conversation_id=${CONVERSATION_ID}`,
-      `ws://localhost:3000/ws/akira?conversation_id=${conversationIdB}`,
-      `ws://localhost:3000/ws/miori?conversation_id=${CONVERSATION_ID}`,
-    ])
-  })
 
   test('HTTP送信失敗時にエラーを表示して入力を再び有効にする', async () => {
     fetchMock.mockImplementation(async (input, init) => {
@@ -832,201 +918,30 @@ describe('App conversation lifecycle', () => {
     expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(false)
   })
 
-  test('音声応答待機中のWebSocketエラーでpending状態を解除する', async () => {
-    render(App)
-    const socket = await openSocket()
-    await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
-    await waitFor(() => expect(audioMocks.vadStart).toHaveBeenCalledTimes(1))
-    if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
-    audioMocks.vadOptions.onSpeechStart()
-    audioMocks.vadOptions.onSpeechEnd()
-    await waitFor(() => expectCorrelatedAudioSent(socket))
 
-    socket.onerror?.()
 
-    expect((await screen.findByRole('alert')).textContent).toBe('応答の取得に失敗しました。')
-    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(false)
-  })
 
-  test('HTTP応答待機中のWebSocketエラーではtext pending状態を維持する', async () => {
-    let resolveChat: ((response: Response) => void) | undefined
-    fetchMock.mockImplementation(async (input, init) => {
-      if (String(input) === '/api/chat') {
-        return new Promise<Response>((resolve) => { resolveChat = resolve })
-      }
-      return defaultFetch(input, init)
-    })
-    render(App)
-    const socket = await openSocket()
-    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
-      target: { value: '待機中' },
-    })
-    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
 
-    socket.onerror?.()
 
-    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(true)
-    resolveChat?.(new Response(JSON.stringify({
-      character: 'miori',
-      turn: persistedTurn('待機中', 'HTTP完了'),
-    }), { status: 200 }))
-    expect(await screen.findByText('HTTP完了')).toBeTruthy()
-    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(false)
-  })
 
-  test('WebSocket接続前はマイクを無効にするがテキスト入力は許可する', async () => {
-    render(App)
-    await selectConversation()
-    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
-      target: { value: '接続前に送信' },
-    })
 
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'マイクをオンにする' }).disabled).toBe(true)
-    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(false)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: '送信' }).disabled).toBe(false)
-  })
 
-  test('初回WebSocket接続失敗後もテキスト操作を維持する', async () => {
-    render(App)
-    const socket = await selectConversation()
 
-    await act(() => socket.onerror?.())
 
-    expect((await screen.findByRole('alert')).textContent).toBe('応答の取得に失敗しました。')
-    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(false)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'マイクをオンにする' }).disabled).toBe(true)
-  })
-
-  test('録音音声を送信し保存済みturnを表示してWAVを再生する', async () => {
-    render(App)
-    const socket = await openSocket()
-    const wav = new ArrayBuffer(12)
-    await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
-    await waitFor(() => expect(audioMocks.vadStart).toHaveBeenCalledTimes(1))
-    if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
-    audioMocks.vadOptions.onSpeechStart()
-    audioMocks.vadOptions.onSpeechEnd()
-    await waitFor(() => expectCorrelatedAudioSent(socket))
-
-    socket.onmessage?.(audioTurnFrame('明日の予定を教えて', '明日は午前中が空いています。'))
-    socket.onmessage?.(new MessageEvent('message', { data: wav }))
-
-    expect(await screen.findByText('明日の予定を教えて')).toBeTruthy()
-    expect(screen.getByText('明日は午前中が空いています。')).toBeTruthy()
-    await waitFor(() => expect(decodeAudioData).toHaveBeenCalledWith(wav.slice(0)))
-    expect(start).toHaveBeenCalledTimes(1)
-  })
-
-  test('音声受信と再生開始を同じ応答IDで送信する', async () => {
-    render(App)
-    const socket = await openSocket()
-    const ids = {
-      sessionId: '01992f57-8c65-79d0-924f-e2cd79bc01cd',
-      utteranceId: '01992f57-8c65-79d0-924f-e2cd79bc02de',
-      responseId: '01992f57-8c65-79d0-924f-e2cd79bc03ef',
-    }
-
-    socket.onmessage?.(audioMetadataFrame(ids.sessionId, ids.utteranceId, ids.responseId))
-    socket.onmessage?.(new MessageEvent('message', { data: new ArrayBuffer(12) }))
-
-    await waitFor(() => expect(measurementEvents(socket)).toHaveLength(2))
-    expect(measurementEvents(socket).map((event) => event.name)).toEqual([
-      'client_audio_received',
-      'first_playback',
-    ])
-    for (const event of measurementEvents(socket)) {
-      expect(event).toMatchObject({
-        session_id: ids.sessionId,
-        utterance_id: ids.utteranceId,
-        response_id: ids.responseId,
-      })
-    }
-  })
-
-  test('連続応答のデコード中も各再生要求の応答IDを保持する', async () => {
-    const decoders: Array<(value: { duration: number }) => void> = []
-    decodeAudioData.mockImplementation(() => new Promise((resolve) => decoders.push(resolve)))
-    render(App)
-    const socket = await openSocket()
-    const responseA = '01992f57-8c65-79d0-924f-e2cd79bc03aa'
-    const responseB = '01992f57-8c65-79d0-924f-e2cd79bc03bb'
-
-    socket.onmessage?.(audioMetadataFrame(TURN_ID, TURN_ID, responseA))
-    socket.onmessage?.(new MessageEvent('message', { data: new ArrayBuffer(12) }))
-    await waitFor(() => expect(decoders).toHaveLength(1))
-    socket.onmessage?.(audioMetadataFrame(TURN_ID, TURN_ID, responseB))
-    socket.onmessage?.(new MessageEvent('message', { data: new ArrayBuffer(16) }))
-    await waitFor(() => expect(decoders).toHaveLength(2))
-    await act(() => decoders[0]({ duration: 1 }))
-    await act(() => decoders[1]({ duration: 1 }))
-
-    await waitFor(() => expect(measurementEvents(socket)).toHaveLength(4))
-    const playbackResponses = measurementEvents(socket)
-      .filter((event) => event.name === 'first_playback')
-      .map((event) => event.response_id)
-    expect(playbackResponses).toEqual([responseA, responseB])
-  })
-
-  test('保存済みturn到着後も音声バイナリ到着までは入力を無効にする', async () => {
-    render(App)
-    const socket = await openSocket()
-    await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
-    await waitFor(() => expect(audioMocks.vadStart).toHaveBeenCalledTimes(1))
-    if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
-    audioMocks.vadOptions.onSpeechStart()
-    audioMocks.vadOptions.onSpeechEnd()
-    await waitFor(() => expectCorrelatedAudioSent(socket))
-
-    socket.onmessage?.(audioTurnFrame('音声の途中です', '再生準備中です。'))
-
-    expect(await screen.findByText('再生準備中です。')).toBeTruthy()
-    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(true)
-    expect(screen.getByRole('button', { name: 'マイクをオフにする' }).classList).toContain('mic-standby')
-  })
-
-  test('音声応答待機中はマイクをstandbyのまま維持する', async () => {
-    render(App)
-    const socket = await openSocket()
-    const closeCallCount = audioMocks.recorderClose.mock.calls.length
-    await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
-    await waitFor(() => expect(audioMocks.vadStart).toHaveBeenCalledTimes(1))
-    if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
-    audioMocks.vadOptions.onSpeechStart()
-    audioMocks.vadOptions.onSpeechEnd()
-    await waitFor(() => expectCorrelatedAudioSent(socket))
-
-    const microphone = screen.getByRole<HTMLButtonElement>('button', { name: 'マイクをオフにする' })
-    expect(microphone.disabled).toBe(true)
-    expect(microphone.getAttribute('aria-pressed')).toBe('true')
-    expect(audioMocks.recorderClose).toHaveBeenCalledTimes(closeCallCount)
-  })
-
-  test('WebSocket切断時にマイクを強制的にオフにする', async () => {
-    render(App)
-    const socket = await openSocket()
-    await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
-    await waitFor(() => expect(audioMocks.vadStart).toHaveBeenCalledTimes(1))
-
-    socket.onclose?.()
-
-    await waitFor(() => expect(audioMocks.recorderClose).toHaveBeenCalledTimes(1))
-    expect(audioMocks.vadDestroy).toHaveBeenCalledTimes(1)
-  })
-
-  test('text応答待機中は入力・マイク・character切替を無効にする', async () => {
+  test('text応答待機中も継続音声入力のマイク操作は維持する', async () => {
     fetchMock.mockImplementation(async (input, init) => {
       if (String(input) === '/api/chat') return new Promise<Response>(() => {})
       return defaultFetch(input, init)
     })
     render(App)
-    await openSocket()
+    await selectConversation()
     await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
       target: { value: '少し待って' },
     })
     await fireEvent.click(screen.getByRole('button', { name: '送信' }))
 
     expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(true)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'マイクをオンにする' }).disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'マイクをオンにする' }).disabled).toBe(false)
     expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'キャラクターID' }).disabled).toBe(true)
     expect(screen.getByRole<HTMLButtonElement>('button', { name: '切り替え' }).disabled).toBe(true)
     expect(screen.getByRole<HTMLButtonElement>('button', { name: CONVERSATION_ID }).disabled).toBe(true)
@@ -1064,69 +979,7 @@ describe('App conversation lifecycle', () => {
     ))
   })
 
-  test('text応答待機中にWebSocketが閉じてもtext入力を無効のままにする', async () => {
-    fetchMock.mockImplementation(async (input, init) => {
-      if (String(input) === '/api/chat') return new Promise<Response>(() => {})
-      return defaultFetch(input, init)
-    })
-    render(App)
-    const socket = await openSocket()
-    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
-      target: { value: '閉じても待って' },
-    })
-    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
 
-    socket.onclose?.()
 
-    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(true)
-  })
 
-  test('音声応答待機中はtext送信を防ぎ、音声完了後に許可する', async () => {
-    render(App)
-    const socket = await openSocket()
-    await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
-    await waitFor(() => expect(audioMocks.vadStart).toHaveBeenCalledTimes(1))
-    if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
-    audioMocks.vadOptions.onSpeechStart()
-    audioMocks.vadOptions.onSpeechEnd()
-    await waitFor(() => expectCorrelatedAudioSent(socket))
-
-    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(true)
-    socket.onmessage?.(audioTurnFrame('音声の質問', '音声の応答です。'))
-    socket.onmessage?.(new MessageEvent('message', { data: new ArrayBuffer(12) }))
-    await waitFor(() => expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(false))
-  })
-
-  test('最初の音声応答が完了するまではマイク操作を無効にする', async () => {
-    render(App)
-    const socket = await openSocket()
-    await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
-    await waitFor(() => expect(audioMocks.vadStart).toHaveBeenCalledTimes(1))
-    if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
-    audioMocks.vadOptions.onSpeechStart()
-    audioMocks.vadOptions.onSpeechEnd()
-    await waitFor(() => expectCorrelatedAudioSent(socket))
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'マイクをオフにする' }).disabled).toBe(true)
-
-    socket.onmessage?.(new MessageEvent('message', { data: new ArrayBuffer(12) }))
-
-    await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'マイクをオフにする' }).disabled).toBe(false))
-  })
-
-  test('受信音声をデコードできない場合にエラーを表示する', async () => {
-    decodeAudioData.mockRejectedValueOnce(new Error('decode failed'))
-    render(App)
-    const socket = await openSocket()
-    await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
-    await waitFor(() => expect(audioMocks.vadStart).toHaveBeenCalledTimes(1))
-    if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
-    audioMocks.vadOptions.onSpeechStart()
-    audioMocks.vadOptions.onSpeechEnd()
-    await waitFor(() => expectCorrelatedAudioSent(socket))
-
-    socket.onmessage?.(new MessageEvent('message', { data: new ArrayBuffer(12) }))
-
-    expect((await screen.findByRole('alert')).textContent).toBe('応答の取得に失敗しました。')
-    expect(start).not.toHaveBeenCalled()
-  })
 })

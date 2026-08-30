@@ -66,6 +66,12 @@ Frontend は mic/VAD と実再生の事実、Backend は session 判定、STT �
 - terminal event は response では `completed` / `cancelled` / `failed`、utterance では consumed 相当の `response_started` または `discarded`、session では `ended` である。終端後に同じ lifecycle ID で届いた delta、audio、完了、cancel は遅延 event として決定論的に破棄する。
 - cancel と完了が競合した場合、Backend が先に受理して終端記録した event が winner となる。後着 event は状態も永続化結果も変更しない。Frontend の再生停止はこの winner 決定を待たない。
 
+barge-inではFrontendがspeech startと同じclient clock上でCharacter audio graphを先に停止し、`playback_stopped`を送る。対象responseがまだgeneratingなら続けて`response_cancel_requested`を一度だけ送る。すでに`response_completed`が確定し、AudioTrackのbufferだけが再生中なら再生だけを止め、完成済み履歴と長期記憶候補をcancelへ戻さない。Backendは`playback_stopped`で対象AudioSourceの未再生queueをclearする。次の`response_started`までFrontendはCharacter audio graphを再接続しない。
+
+同じresponseへの連続speech startはlocal停止とcancelを冪等に扱う。確定発話はSTT実行中1件と待機3件までを到着順に保持し、PCM byteにも上限を設ける。超過した発話は`utterance_discarded(reason=input_capacity_exceeded)`で明示し、黙って上書きしない。
+
+Frontend VADは1,400ms未満の無音を短い間・言い淀みとして同一utteranceへ結合する。1,400msの連続無音で`speech_stopped`を一度だけ確定し、無音中にspeech判定へ戻った場合は猶予を最初から数え直す。この境界はframe fixtureで決定論的に検証する。
+
 ### 4. logical audio segment と本文範囲
 
 `response_audio_segment.audio_sequence` と `text_range` が TTS の logical segment と生成本文を結び付ける。logical segment は VOICEVOX 等へ渡す application 上の合成・再生単位であり、LiveKit AudioTrack や WebRTC media frame ではない。transport は logical segment を AudioSource 等へ publish するが、media frame 自体に Core の `audio_sequence` を付与することは要求しない。
@@ -77,6 +83,8 @@ Frontend は mic/VAD と実再生の事実、Backend は session 判定、STT �
 ### 5. 再接続
 
 猶予時間内なら `session_id` と conversation を維持する。ただし進行中 utterance は `discarded(reason=disconnect)`、進行中 response は実再生範囲まで `interrupted` として終端し、音声を再送して途中状態を復元しない。猶予時間超過後は旧 session を `session_ended(reason=reconnect_timeout)` とし、新しい `session_id` で開始する。
+
+FrontendはSDKの自動再接続をBackendが確定した猶予（上限60秒）の間だけ待ち、独自の再試行回数は持たない。猶予超過後は音声sessionとmic／再生／応答状態を終了するがconversationと確定履歴を保持し、通常UIから新しい音声sessionを開始できるようにする。
 
 Frontend は `session_start_requested.requested_reconnect_grace_ms` で希望値を渡し、Backend は上限を適用した `session_started.reconnect_grace_ms` を確定値として返す。切断時刻と deadline は Backend 自身の monotonic clock で管理し、異なる process の monotonic 絶対値を比較しない。これらの規則は、LiveKit 固有 event ではなく AudioTransport の transport unavailable / available 通知だけで説明できるものとする。
 
@@ -126,3 +134,13 @@ Frontend は Ajv 2020、Backend は `jsonschema.Draft202012Validator` で外部�
 - FE/BE の型、runtime validation、fixture、CI 差分検知が同じ schema を正本とする。
 - 中断履歴は生成全文ではなく利用者が実際に聞いた連続 prefix に一致する。
 - 現行 WebSocket baseline は変更されず、新旧の「発話終了 → 初音」を比較できる。
+
+## 2026-08-28 基盤実装の確定事項（#108、#109、#4、#14、#15）
+
+- 通常のconversation UIはLiveKit Roomを直接開始し、microphone trackを発話間も継続publishする。VADは`utterance_id`付きの`speech_started` / `speech_stopped`だけを送信し、`utterance_finalized`はBackendのSTT成功後に発行する。同一sessionへの明示再接続では、Room接続後に`state_sync_request`を送り、Backend確定世代と未完了応答を復元してから後続eventを扱う。
+- 中断turnはschema version 4の`interrupted`で内部保存するが、#110前の既存HTTP/WebSocket content turn wire contractは変更しない。中断本文はaudio sequence 1からの再生確認済み連続prefixだけを既存sanitizerへ通す。promptにはそのprefixを未完了応答として復元する。LiveKit経路も通常text chatと同じmemory formation schedulerへ永続化済み`completed` turnのIDだけを投入し、`interrupted`、`failed`、`privacy_skipped`は投入しない。
+- LiveKit経路のWhisperは全sessionで共有する専用processを1つだけ所有し、親processの投入境界でもinflightを1件に制限する。上限超過は待機させず`stt_capacity_exceeded`で対象utteranceだけを破棄する。lock待ちまたは推論timeoutではworker processをterminateし、対象utteranceを破棄して`error(classification=recoverable, error_code=stt_*_timeout)`を通知する。次requestは新worker/modelで処理する。
+- Ollama streamingはprovider adapter内でNDJSONを検証し、Conversation Coreへ本文deltaだけを渡す。Coreが`response_id`、1始まりの`text_sequence`、連続`text_range`を付け、LiveKit control channelへmappingする。既存HTTP text chatは非streaming経路を維持する。
+- CoreはLLMとTTSを上限8件のqueueで接続する。日本語の文末、十分な長さの節、最大80文字のfallbackでsegmentを確定し、VOICEVOX結果を48kHz mono PCM16へ正規化する。transport adapterは各AudioTrack frameより先に`response_id`、0始まりのtransport内部sequence、PCM sample数を`logical_audio_segment`として送り、Coreの1始まり`audio_sequence`へ対応付けてCharacter AudioTrackへ順序publishする。cancel後の遅延結果はresponse generation gateで破棄し、cancelまたはfailed終端ではAudioSourceの未再生queueとFrontendの未割当metadataをresponse単位で破棄する。
+- FrontendはAudioWorkletが報告する無音を含むrender済みsample数でlogical segmentを追跡する。先頭sampleのrenderは`playback_started`の観測に使うが、中断履歴の再生済みprefixへ含めるのは予定sample数をすべてrenderした連続segmentだけとする。
+- schema version 3から4へのmigrationは起動時backup gate内で実行し、失敗時は起動前backupへrollbackする。dogfood SQLiteを開発環境のテスト入力には使用しない。

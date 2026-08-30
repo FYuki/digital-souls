@@ -10,7 +10,6 @@ from environment_constants import DEPENDENCY_NAMES
 from tests.environment_test_support import (
     profile_with_dependencies,
     single_adapter_registry,
-    write_cached_whisper_model,
 )
 
 
@@ -41,7 +40,10 @@ class _NeverReadyOperations:
         return ServiceStartResult(
             "started",
             True,
-            process_identity={"pid": 91, "pgid": 91, "sessionId": 91, "startTime": 1},
+            container_identity={
+                "containerId": "a" * 64,
+                "startedAt": "2026-08-30T00:00:00Z",
+            },
         )
 
     def validate_readiness(self, dependency):
@@ -101,7 +103,7 @@ class _ExitedFrontendOperations(_NeverReadyOperations):
         return False
 
 
-def test_should_abort_up_during_preparation_when_whisper_inference_fails(
+def test_should_abort_up_during_preparation_when_docker_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     environment_report_validator,
@@ -118,30 +120,18 @@ def test_should_abort_up_during_preparation_when_whisper_inference_fails(
         frontend=disabled,
         ollama=disabled,
         voicevox=disabled,
+        livekit=disabled,
+        whisper=disabled,
         chroma=disabled,
     )
-    scripts = tmp_path / "scripts"
-    scripts.mkdir()
-    for launcher in ("setup-backend.sh", "start-backend.sh"):
-        path = scripts / launcher
-        path.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
-        path.chmod(0o755)
-    venv_bin = tmp_path / "backend" / ".venv" / "bin"
-    venv_bin.mkdir(parents=True)
-    for executable in ("python", "uvicorn"):
-        path = venv_bin / executable
-        path.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
-        path.chmod(0o755)
-    snapshot = write_cached_whisper_model(
-        tmp_path, "Systran/faster-whisper-medium"
-    )
-    missing_library = "Library libcublas.so.12 is not found or cannot be loaded"
+    del profile["dependencies"]["livekit"]
     runner = RecordingRunner(
         [
-            {"returncode": 0, "stdout": f"{snapshot}\n", "stderr": ""},
-            {"returncode": 0, "stdout": "", "stderr": ""},
-            {"returncode": 0, "stdout": f"{snapshot}\n", "stderr": ""},
-            {"returncode": 1, "stdout": "", "stderr": missing_library},
+            {
+                "returncode": 1,
+                "stdout": "",
+                "stderr": "cannot connect to Docker daemon",
+            },
         ]
     )
     registry = single_adapter_registry(
@@ -169,7 +159,7 @@ def test_should_abort_up_during_preparation_when_whisper_inference_fails(
     environment_report_validator.validate(report)
     assert exit_code == 1
     assert report["failure"]["category"] == "preparation"
-    assert missing_library in report["failure"]["message"]
+    assert "Docker Engine and Compose plugin" in report["failure"]["message"]
     assert report["startSequence"] == []
 
 
@@ -187,9 +177,11 @@ def test_should_persist_schema_valid_readiness_timeout_from_up_command(
         backend=disabled,
         ollama=disabled,
         voicevox=disabled,
+        livekit=disabled,
         whisper=disabled,
         chroma=disabled,
     )
+    del profile["dependencies"]["livekit"]
     adapter = _NeverReadyOperations()
     report_path = runtime_paths.runtime_report_dir / "readiness" / "environment-run.json"
     monkeypatch.setattr(
@@ -242,9 +234,11 @@ def test_should_persist_managed_exit_as_schema_valid_supervision_failure(
         backend=disabled,
         ollama=disabled,
         voicevox=disabled,
+        livekit=disabled,
         whisper=disabled,
         chroma=disabled,
     )
+    del profile["dependencies"]["livekit"]
     adapter = _ExitedFrontendOperations()
     report_path = runtime_paths.runtime_report_dir / "supervision" / "environment-run.json"
     monkeypatch.setattr(

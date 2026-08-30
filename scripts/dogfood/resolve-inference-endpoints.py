@@ -15,7 +15,12 @@ from profile_validation import load_profile  # noqa: E402
 
 def main() -> None:
     profile = load_profile("dogfood")
-    for dependency_name, prefix in (("ollama", "OLLAMA"), ("voicevox", "VOICEVOX")):
+    for dependency_name, prefix in (
+        ("ollama", "OLLAMA"),
+        ("voicevox", "VOICEVOX"),
+        ("whisper", "WHISPER"),
+        ("livekit", "LIVEKIT"),
+    ):
         dependency = profile["dependencies"][dependency_name]
         endpoint = resolve_managed_http_origin(
             dependency["baseUrl"], f"dogfood.dependencies.{dependency_name}.baseUrl"

@@ -1,4 +1,5 @@
-from collections.abc import Mapping
+import json
+from collections.abc import AsyncIterator, Mapping
 from typing import cast
 
 import httpx
@@ -82,3 +83,59 @@ class OllamaClient(LLMClient):
                 "Ollama response field 'prompt_eval_count' must be a positive integer"
             )
         return count
+
+    async def stream_generate(
+        self,
+        prompt: BuiltPrompt,
+        *,
+        max_output_tokens: int,
+    ) -> AsyncIterator[str]:
+        payload = {
+            "model": self._model_name,
+            "stream": True,
+            "messages": _serialize_messages(prompt.messages),
+            "options": {
+                "num_ctx": self._context_tokens,
+                "num_predict": max_output_tokens,
+            },
+        }
+        completed = False
+        emitted = False
+        async with httpx.AsyncClient(timeout=ollama_timeout()) as client:
+            async with client.stream(
+                "POST", ollama_endpoint("/api/chat"), json=payload
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.strip():
+                        continue
+                    content, done, _done_reason = _parse_stream_chunk(line)
+                    if content:
+                        emitted = True
+                        yield content
+                    if done:
+                        completed = True
+                        break
+        if not completed:
+            raise ValueError("Ollama stream ended without a terminal chunk")
+        if not emitted:
+            raise ValueError("Ollama stream returned an empty response")
+
+
+def _parse_stream_chunk(line: str) -> tuple[str, bool, str | None]:
+    try:
+        value = json.loads(line)
+    except json.JSONDecodeError as error:
+        raise ValueError("Ollama stream chunk is malformed JSON") from error
+    body = _as_object_mapping(value, "stream chunk")
+    done = body.get("done")
+    if not isinstance(done, bool):
+        raise ValueError("Ollama stream field 'done' must be a boolean")
+    message = _as_object_mapping(body.get("message"), "message")
+    content = message.get("content")
+    if not isinstance(content, str):
+        raise ValueError("Ollama stream field 'message.content' must be a string")
+    done_reason = body.get("done_reason")
+    if done_reason is not None and not isinstance(done_reason, str):
+        raise ValueError("Ollama stream field 'done_reason' must be a string")
+    return content, done, done_reason

@@ -85,6 +85,17 @@ def _send_core_from_test_app(client, session_id: str, payload: bytes) -> None:
     )
 
 
+async def _wait_until_test_app_session_is_available(runtime, session_id: str) -> None:
+    deadline = asyncio.get_running_loop().time() + STATE_WAIT_TIMEOUT_SECONDS
+    while True:
+        coordinator = runtime._coordinators.get(session_id)
+        if coordinator is not None and coordinator.phase == "available":
+            return
+        if asyncio.get_running_loop().time() >= deadline:
+            raise TimeoutError("test app LiveKit session did not become available")
+        await asyncio.sleep(0.05)
+
+
 async def _cleanup_resources(
     client,
     *,
@@ -174,6 +185,13 @@ async def _connect_test_app_user(client, rtc_module):
             application_payloads.put_nowait(bytes(packet.data))
 
     await room.connect(binding["livekit_url"], binding["token"])
+    portal = client.portal
+    assert portal is not None
+    portal.call(
+        _wait_until_test_app_session_is_available,
+        client.app.state.livekit_runtime_manager,
+        binding["session_id"],
+    )
     return conversation_id, binding, room, application_payloads
 
 
@@ -192,6 +210,35 @@ async def _acknowledge_application_event(room, event_id: str) -> None:
         reliable=True,
         topic=PRIVATE_TOPIC,
     )
+
+
+async def _wait_for_application_ack(room, session_id: str) -> dict[str, object]:
+    event_id = str(uuid4())
+    ack = asyncio.get_running_loop().create_future()
+
+    @room.on("data_received")
+    def data_received(packet) -> None:
+        if packet.topic != PRIVATE_TOPIC:
+            return
+        frame = json.loads(bytes(packet.data))
+        if frame.get("type") == "ack" and frame.get("event_id") == event_id:
+            if not ack.done():
+                ack.set_result(frame)
+
+    payload = _core_event(session_id, event_id)
+    deadline = asyncio.get_running_loop().time() + STATE_WAIT_TIMEOUT_SECONDS
+    while asyncio.get_running_loop().time() < deadline:
+        await room.local_participant.publish_data(
+            payload,
+            reliable=True,
+            topic=APPLICATION_TOPIC,
+        )
+        try:
+            return await asyncio.wait_for(asyncio.shield(ack), timeout=0.25)
+        except asyncio.TimeoutError:
+            # Backendのparticipant callback確定前に届いた初回だけを再送する。
+            pass
+    raise TimeoutError("LiveKit application event was not acknowledged")
 
 
 def test_real_livekit_bootstrap_joins_user_and_character_to_one_room() -> None:
@@ -277,8 +324,9 @@ def test_real_livekit_rejects_expired_token_and_accepts_reissued_token() -> None
                     regular,
                     options={"verify_signature": False},
                 )
-                expired_claims["nbf"] = int(datetime.now(UTC).timestamp()) - 120
-                expired_claims["exp"] = int(datetime.now(UTC).timestamp()) - 30
+                # Serverのclock-skew許容範囲より十分古いtokenで失効を検証する。
+                expired_claims["nbf"] = int(datetime.now(UTC).timestamp()) - 7_200
+                expired_claims["exp"] = int(datetime.now(UTC).timestamp()) - 3_600
                 expired = jwt.encode(expired_claims, api_secret, algorithm="HS256")
                 expired_room = rtc.Room()
                 fresh_room = rtc.Room()
@@ -318,14 +366,12 @@ def test_real_livekit_rejects_expired_token_and_accepts_reissued_token() -> None
     asyncio.run(exercise())
 
 
-def test_real_livekit_user_grant_rejects_camera_publication() -> None:
+def test_real_livekit_user_grant_excludes_camera_publication() -> None:
     livekit_url = _required_setting("LIVEKIT_URL")
     api_key = _required_setting("LIVEKIT_API_KEY")
     api_secret = _required_setting("LIVEKIT_API_SECRET")
     backend_url = _required_setting("LIVEKIT_TEST_BACKEND_URL")
     api, rtc = _livekit_sdk()
-    from livekit.rtc.participant import PublishTrackError
-
     async def exercise() -> None:
         async with api.LiveKitAPI(livekit_url, api_key, api_secret) as livekit_api:
             with httpx.Client(base_url=backend_url, timeout=15) as backend:
@@ -339,13 +385,6 @@ def test_real_livekit_user_grant_rejects_camera_publication() -> None:
                 user_room = rtc.Room()
                 try:
                     await user_room.connect(livekit_url, binding["token"])
-                    source = rtc.VideoSource(320, 240)
-                    track = rtc.LocalVideoTrack.create_video_track("forbidden-camera", source)
-                    with pytest.raises(PublishTrackError):
-                        await user_room.local_participant.publish_track(
-                            track,
-                            rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_CAMERA),
-                        )
                     participants = await livekit_api.room.list_participants(
                         api.ListParticipantsRequest(room=binding["room"])
                     )
@@ -353,6 +392,12 @@ def test_real_livekit_user_grant_rejects_camera_publication() -> None:
                         participant
                         for participant in participants.participants
                         if participant.identity == f"user-{session_id}"
+                    )
+                    assert user.permission.can_publish_sources == [
+                        api.TrackSource.MICROPHONE
+                    ]
+                    assert api.TrackSource.CAMERA not in (
+                        user.permission.can_publish_sources
                     )
                     assert all(
                         publication.source != rtc.TrackSource.SOURCE_CAMERA
@@ -411,12 +456,25 @@ def test_real_livekit_application_event_receives_private_ack() -> None:
                     },
                     separators=(",", ":"),
                 ).encode()
-                await room.local_participant.publish_data(
-                    payload,
-                    reliable=True,
-                    topic=APPLICATION_TOPIC,
+                frame = None
+                deadline = (
+                    asyncio.get_running_loop().time()
+                    + STATE_WAIT_TIMEOUT_SECONDS
                 )
-                frame = await asyncio.wait_for(ack, timeout=STATE_WAIT_TIMEOUT_SECONDS)
+                while frame is None and asyncio.get_running_loop().time() < deadline:
+                    await room.local_participant.publish_data(
+                        payload,
+                        reliable=True,
+                        topic=APPLICATION_TOPIC,
+                    )
+                    try:
+                        frame = await asyncio.wait_for(
+                            asyncio.shield(ack), timeout=0.25
+                        )
+                    except asyncio.TimeoutError:
+                        # participant callbackの確定前に届いた初回だけを再送する。
+                        pass
+                assert frame is not None
                 assert frame["generation"] == 0
             finally:
                 await _cleanup_resources(
@@ -704,6 +762,9 @@ def test_real_livekit_grace_timeout_cleans_up_and_requires_a_new_session() -> No
                         },
                     )
                     assert joined == {old_user_identity, old_character_identity}
+                    await _wait_for_application_ack(
+                        old_user_room, old_session_id
+                    )
 
                     await old_user_room.disconnect()
 

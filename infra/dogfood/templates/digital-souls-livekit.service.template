@@ -1,0 +1,20 @@
+[Unit]
+Description=Digital Souls LiveKit
+PartOf=digital-souls-dogfood.target
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+EnvironmentFile=@DOGFOOD_CONFIG_DIR@/dogfood.env
+Environment="DOGFOOD_ENV_FILE=@DOGFOOD_CONFIG_DIR@/dogfood.env" "WSL_DISTRO_NAME=@DOGFOOD_WSL_DISTRO@"
+ExecStart=@DOGFOOD_CLONE_DIR@/scripts/dogfood/run-livekit.sh compose up --detach
+ExecStop=@DOGFOOD_CLONE_DIR@/scripts/dogfood/run-livekit.sh compose down
+RemainAfterExit=yes
+TimeoutStartSec=120s
+TimeoutStopSec=60s
+
+[Install]
+WantedBy=digital-souls-dogfood.target

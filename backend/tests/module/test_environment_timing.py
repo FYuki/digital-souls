@@ -142,9 +142,11 @@ def test_should_apply_one_timing_object_to_verification_preprobe_and_readiness(
         backend=disabled,
         ollama=disabled,
         voicevox=disabled,
+        livekit=disabled,
         whisper=disabled,
         chroma=disabled,
     )
+    del profile["dependencies"]["livekit"]
     report = create_initial_report(
         run_id="timing-integration",
         started_at="2026-07-18T00:00:00+00:00",

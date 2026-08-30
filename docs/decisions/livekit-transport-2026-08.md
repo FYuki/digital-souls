@@ -19,13 +19,15 @@ Issue #113で追加した`/voice/livekit`は基盤検証用の一時入口であ
 streaming、barge-in、再接続等のWave 3機能を追加しない。完成後に別工程でdefault transportを
 切り替える計画は設けず、Frontend統合の時点からLiveKitを正式経路として扱う。
 
+通常UIはsession、input、response、playbackを独立表示する。`/voice/livekit`はdev serverとLiveKit integrationだけで利用し、production buildでは製品入口として公開しない。音声session中にtextを送信した場合は、active音声responseと再生を停止して音声sessionを終了した後、既存HTTP text chat経路で送る。同一LiveKit session内のtyped textは将来範囲とする。
+
 ## 運用制約
 
 devは7880/TCP、7881/TCP、7882/UDP、dogfoodは17880/TCP、17881/TCP、17882/UDPを使う。host networkと単一UDP muxを使い、TURN、Redis、TLS、固定`node_ip`は初期範囲に含めない。
 
 実LiveKit Backend/Browser suiteはUDP・WebRTCと実serverを必要とするためCI外とし、`npm run test:integration:livekit`で明示実行する。
 
-実行前に`LIVEKIT_TEST_FRONTEND_URL`、`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`を設定する。Backend pytestとPlaywright Chromiumの実サービス結合を同じrepository taskで順に実行する。テスト層とCI除外理由の正本は`docs/testing-policy.md`とする。
+実行前に`LIVEKIT_TEST_BACKEND_URL`、`LIVEKIT_TEST_FRONTEND_URL`、`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`を設定する。Backend pytestとPlaywright Chromiumの実サービス結合を同じrepository taskで順に実行する。テスト層とCI除外理由の正本は`docs/testing-policy.md`とする。
 
 Frontendの`livekit-client`はBackend側SDKおよびself-host serverとの接続互換性を固定して検証するため、完全版`2.22.1`へ固定する。更新時は実LiveKit Backend/Browser suiteを通してから版を変更する。
 

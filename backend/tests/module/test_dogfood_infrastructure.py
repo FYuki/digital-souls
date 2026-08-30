@@ -39,6 +39,11 @@ REQUIRED_ENV_KEYS = {
     "DOGFOOD_LOG_DIR",
     "DOGFOOD_VOICEVOX_IMAGE",
     "DOGFOOD_VOICEVOX_CONTAINER",
+    "DOGFOOD_LIVEKIT_IMAGE",
+    "DOGFOOD_LIVEKIT_CONTAINER",
+    "LIVEKIT_URL",
+    "LIVEKIT_API_KEY",
+    "LIVEKIT_API_SECRET",
 }
 SHELL_ENTRYPOINTS = (
     "bootstrap.sh",
@@ -49,6 +54,7 @@ SHELL_ENTRYPOINTS = (
     "restart-services.sh",
     "status.sh",
     "wait-inference.sh",
+    "run-livekit.sh",
 )
 
 
@@ -317,6 +323,7 @@ def test_should_define_one_inference_target_for_both_owned_services() -> None:
     service_names = {
         "digital-souls-ollama.service",
         "digital-souls-voicevox.service",
+        "digital-souls-whisper.service",
     }
 
     wants = set(target["Unit"]["Wants"].split())
@@ -362,6 +369,62 @@ def test_should_limit_compose_to_loopback_voicevox_only() -> None:
     assert "${VOICEVOX_PORT}" in content
     assert "0.0.0.0" not in content
     assert not re.search(r"(?m)^  (frontend|backend|ollama):", service_block["body"])
+
+
+def test_should_define_host_network_livekit_with_rendered_config_only() -> None:
+    compose_path = DOGFOOD_INFRA_DIR / "livekit" / "compose.yaml"
+    compose = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
+    service = compose["services"]["livekit"]
+
+    assert service["image"] == "${DOGFOOD_LIVEKIT_IMAGE}"
+    assert service["container_name"] == "${DOGFOOD_LIVEKIT_CONTAINER}"
+    assert service["network_mode"] == "host"
+    assert service["restart"] == "unless-stopped"
+    assert service["volumes"] == [
+        "${DOGFOOD_CONFIG_DIR}/livekit.yaml:/etc/livekit.yaml:ro"
+    ]
+    assert "ports" not in service
+    assert "environment" not in service
+
+
+def test_should_configure_livekit_systemd_compose_lifecycle(tmp_path: Path) -> None:
+    values, generated_dir = render_nondefault_dogfood_assets(tmp_path)
+    unit = _read_unit(generated_dir / "digital-souls-livekit.service")
+    service = unit["Service"]
+
+    assert service["User"] == "root"
+    assert service["Group"] == "root"
+    assert service["EnvironmentFile"] == f"{values['DOGFOOD_CONFIG_DIR']}/dogfood.env"
+    assert "compose" in service["ExecStart"] and " up " in service["ExecStart"]
+    assert "compose" in service["ExecStop"] and " down" in service["ExecStop"]
+    assert service["RemainAfterExit"] == "yes"
+    assert unit["Unit"]["PartOf"] == "digital-souls-dogfood.target"
+    _assert_finite_stop_timeout(service)
+
+
+def test_should_render_livekit_credentials_into_minimal_backend_environment(
+    tmp_path: Path,
+) -> None:
+    values, generated_dir = render_nondefault_dogfood_assets(tmp_path)
+    backend_environment = (
+        generated_dir / "livekit-backend.env"
+    ).read_text(encoding="utf-8").splitlines()
+    livekit_config = yaml.safe_load(
+        (generated_dir / "livekit.yaml").read_text(encoding="utf-8")
+    )
+
+    assert backend_environment == [
+        f"LIVEKIT_URL={values['LIVEKIT_URL']}",
+        f"LIVEKIT_API_KEY={values['LIVEKIT_API_KEY']}",
+        f"LIVEKIT_API_SECRET={values['LIVEKIT_API_SECRET']}",
+    ]
+    assert livekit_config["bind_addresses"] == ["127.0.0.1"]
+    assert livekit_config["keys"] == {
+        values["LIVEKIT_API_KEY"]: values["LIVEKIT_API_SECRET"]
+    }
+    assert "DOGFOOD_BACKUP_AUTHENTICATION_KEY" not in "\n".join(
+        backend_environment
+    )
 
 
 def test_should_mount_only_voicevox_local_share_as_tmpfs() -> None:
@@ -503,11 +566,16 @@ def test_should_preserve_all_placeholders_when_rendering_sed_metacharacters(
     values = {
         "DOGFOOD_SERVICE_USER": r"service&user|segment\leaf",
         "DOGFOOD_SERVICE_GROUP": r"service&group|segment\leaf",
+        "DOGFOOD_SERVICE_UID": "1234",
+        "DOGFOOD_SERVICE_GID": "5678",
         "DOGFOOD_CONFIG_DIR": r"/srv/config&dog|segment\leaf",
         "DOGFOOD_CLONE_DIR": r"/srv/clone&dog|segment\leaf",
         "DOGFOOD_WSL_DISTRO": r"Ubuntu&dogfood|segment\leaf",
         "DOGFOOD_SERVICE_HOME_DIR": r"/srv/home&food|segment\leaf",
         "DS_DATA_DIR": r"/srv/dog&food|segment\leaf",
+        "LIVEKIT_URL": r"ws://127.0.0.1:17880",
+        "LIVEKIT_API_KEY": r"livekit&key|segment\leaf",
+        "LIVEKIT_API_SECRET": r"livekit&secret|segment\leaf",
     }
     result = subprocess.run(
         [
@@ -545,6 +613,8 @@ def test_should_require_service_home_when_rendering_assets(tmp_path: Path) -> No
             **os.environ,
             "DOGFOOD_SERVICE_USER": "digital-souls",
             "DOGFOOD_SERVICE_GROUP": "digital-souls",
+            "DOGFOOD_SERVICE_UID": "1234",
+            "DOGFOOD_SERVICE_GID": "5678",
             "DOGFOOD_CONFIG_DIR": "/etc/digital-souls",
             "DOGFOOD_CLONE_DIR": "/opt/digital-souls/current",
             "DOGFOOD_WSL_DISTRO": "Ubuntu-dogfood",
@@ -576,7 +646,7 @@ def test_should_generate_a_windows_entrypoint_from_the_shared_environment(
     assert not re.search(r"\bsystemctl\s+(?:stop|restart|is-active|show)\b", source)
 
 
-def test_should_delegate_application_lifecycle_to_one_oneshot_systemd_unit(
+def test_should_delegate_application_lifecycle_to_one_foreground_systemd_unit(
     tmp_path: Path,
 ) -> None:
     values, generated_dir = render_nondefault_dogfood_assets(tmp_path)
@@ -585,16 +655,20 @@ def test_should_delegate_application_lifecycle_to_one_oneshot_systemd_unit(
     unit = _read_unit(unit_path)
     service = unit["Service"]
 
-    assert service["Type"] == "oneshot"
-    assert service["RemainAfterExit"] == "yes"
-    assert service["User"] == values["DOGFOOD_SERVICE_USER"]
-    assert service["Group"] == values["DOGFOOD_SERVICE_GROUP"]
+    assert service["Type"] == "simple"
+    assert "RemainAfterExit" not in service
+    assert service["User"] == "root"
+    assert service["Group"] == "root"
     assert service["ExecStart"] == f"{values['DOGFOOD_CLONE_DIR']}/environments/up.sh"
     assert service["ExecStartPre"] == (
         f"{values['DOGFOOD_CLONE_DIR']}/scripts/dogfood/wait-inference.sh"
     )
     assert service["ExecStop"] == f"{values['DOGFOOD_CLONE_DIR']}/environments/down.sh"
-    assert "EnvironmentFile" not in service
+    assert service["EnvironmentFile"].split() == [
+        f"{values['DOGFOOD_CONFIG_DIR']}/dogfood.env",
+        f"-{values['DOGFOOD_CONFIG_DIR']}/dogfood-images.env",
+        f"{values['DOGFOOD_CONFIG_DIR']}/livekit-backend.env",
+    ]
     assert "DS_ENVIRONMENT_ID=dogfood" in service["Environment"]
     assert f"DS_DATA_DIR={values['DS_DATA_DIR']}" in service["Environment"]
     assert f"HOME={values['DOGFOOD_SERVICE_HOME_DIR']}" in service["Environment"]
@@ -606,6 +680,7 @@ def test_should_delegate_application_lifecycle_to_one_oneshot_systemd_unit(
         encoding="utf-8"
     )
     assert "digital-souls-inference.target" in unit["Unit"]["After"].split()
+    assert "digital-souls-livekit.service" in unit["Unit"]["After"].split()
     assert "Restart" not in service
     assert service["TimeoutStartSec"] == "180s"
 
@@ -616,6 +691,8 @@ def test_should_bound_inference_cold_start_wait_before_application_start() -> No
     assert "wait-readiness" in source
     assert "--service ollama" in source
     assert "--service voicevox" in source
+    assert "--service whisper" in source
+    assert "--service livekit" in source
     assert "--max-attempts 30" in source
     assert "--interval-seconds 1" in source
     assert "--request-timeout-seconds 1" in source
@@ -804,6 +881,7 @@ def test_should_require_inference_and_application_from_dogfood_target() -> None:
     target = _read_unit(target_path)["Unit"]
     dependencies = {
         "digital-souls-inference.target",
+        "digital-souls-livekit.service",
         "digital-souls-application.service",
     }
 
@@ -818,6 +896,10 @@ def test_should_stop_application_and_inference_with_dogfood_target() -> None:
     inference = _read_unit(
         DOGFOOD_INFRA_DIR / "systemd" / "digital-souls-inference.target"
     )["Unit"]
+    livekit = _read_unit(
+        DOGFOOD_INFRA_DIR / "templates" / "digital-souls-livekit.service.template"
+    )["Unit"]
 
     assert application["PartOf"] == "digital-souls-dogfood.target"
     assert inference["PartOf"] == "digital-souls-dogfood.target"
+    assert livekit["PartOf"] == "digital-souls-dogfood.target"

@@ -1,7 +1,7 @@
 [Unit]
 Description=Digital Souls 共通推論サービス
 PartOf=digital-souls-dogfood.target
-Wants=digital-souls-ollama.service digital-souls-voicevox.service
+Wants=digital-souls-ollama.service digital-souls-voicevox.service digital-souls-whisper.service
 After=network.target docker.service
 
 [Install]

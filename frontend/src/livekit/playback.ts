@@ -57,6 +57,10 @@ export class PlaybackPrefixTracker {
     }
   }
 
+  discardResponse(responseId: string): void {
+    this.responses.delete(responseId)
+  }
+
   private evidence(responseId: string, sequence: number): SegmentEvidence {
     let response = this.responses.get(responseId)
     if (response === undefined) {
@@ -121,6 +125,19 @@ export class PlaybackEvidenceController {
     this.unassignedRenderedSamples = 0
   }
 
+  discardResponse(responseId: string): void {
+    for (let index = this.pending.length - 1; index >= 0; index -= 1) {
+      if (this.pending[index].metadata.responseId === responseId) {
+        this.pending.splice(index, 1)
+      }
+    }
+    this.tracker.discardResponse(responseId)
+  }
+
+  continuousPrefix(responseId: string): number {
+    return this.tracker.continuousPrefix(responseId)
+  }
+
   recordMetadata(metadata: SegmentMetadata, eligibleAfterFrame: number): void {
     if (metadata.generation !== this.generation) return
     if (!Number.isInteger(eligibleAfterFrame) || eligibleAfterFrame < 0) return
@@ -161,7 +178,17 @@ export class PlaybackEvidenceController {
       segment.renderedSamples += consumed
       segment.renderedEnergy += interval.energy * (consumed / intervalSamples)
       cursor += consumed
-      if (segment.renderedSamples !== segment.metadata.pcmSampleCount) return
+      if (segment.renderedSamples !== segment.metadata.pcmSampleCount) {
+        this.observe({
+          responseId: segment.metadata.responseId,
+          continuousPrefix: this.tracker.continuousPrefix(segment.metadata.responseId),
+          renderedSamples: this.renderedSamples + segment.renderedSamples,
+          renderedEnergy: this.renderedEnergy + segment.renderedEnergy,
+          confirmedSegments: this.confirmedSegments,
+          unassignedRenderedSamples: this.unassignedRenderedSamples,
+        })
+        return
+      }
       this.pending.shift()
       this.renderedSamples += segment.metadata.pcmSampleCount
       this.renderedEnergy += segment.renderedEnergy

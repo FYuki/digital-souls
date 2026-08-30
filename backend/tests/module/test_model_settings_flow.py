@@ -1,6 +1,5 @@
 import json
 import os
-import shlex
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -157,39 +156,12 @@ def test_should_route_profile_ollama_model_to_readiness_validation(
     assert result.message is None
 
 
-def test_should_route_profile_whisper_model_to_cache_check(tmp_path: Path) -> None:
+def test_should_not_route_external_whisper_model_to_backend_cache_check(
+    tmp_path: Path,
+) -> None:
     from adapters.base import OperationContext
     from service_registry import create_service_registry, require_service_operations
 
-    snapshot = (
-        tmp_path
-        / "runtime-data"
-        / "cache"
-        / "huggingface"
-        / "hub"
-        / "models--Systran--faster-whisper-large-v3"
-        / "snapshots"
-        / "revision"
-    )
-    snapshot.mkdir(parents=True)
-    refs = snapshot.parent.parent / "refs"
-    refs.mkdir()
-    (refs / "main").write_text("revision", encoding="utf-8")
-    for artifact in (
-        "config.json",
-        "model.bin",
-        "preprocessor_config.json",
-        "tokenizer.json",
-        "vocabulary.json",
-    ):
-        (snapshot / artifact).write_text("fixture", encoding="utf-8")
-    python = tmp_path / "backend" / ".venv" / "bin" / "python"
-    python.parent.mkdir(parents=True)
-    python.write_text(
-        f"#!/bin/sh\nprintf '%s\\n' {shlex.quote(str(snapshot))}\n",
-        encoding="utf-8",
-    )
-    python.chmod(0o755)
     runtime_paths = resolved_runtime_paths(tmp_path)
     report = _resolve_profile(
         {"DS_PROFILE": "integration-voice", **MODEL_ENVIRONMENT}, tmp_path
@@ -207,11 +179,7 @@ def test_should_route_profile_whisper_model_to_cache_check(tmp_path: Path) -> No
         OperationContext(whisper_enabled=True, chroma_enabled=False),
     )
 
-    whisper_check = next(
-        check for check in result.checks if check.name == "whisper-model-large-v3"
-    )
-    assert whisper_check.classification == "ready"
-    assert "large-v3" in whisper_check.message
+    assert all(not check.name.startswith("whisper-model-") for check in result.checks)
 
 
 @pytest.mark.parametrize("model_is_available", [True, False])
@@ -239,6 +207,7 @@ def test_should_validate_but_not_prepare_the_profile_model_for_external_ollama(
             if name == "ollama"
             else {"mode": "disabled", "source": None}
             for name, dependency in report["dependencies"].items()
+            if name != "livekit"
         },
     }
     derived = report["derivedEnvironment"]
@@ -310,7 +279,7 @@ def test_should_validate_but_not_prepare_the_profile_model_for_external_ollama(
     assert runner.calls == []
 
 
-def test_should_prepare_the_same_profile_whisper_model(tmp_path: Path) -> None:
+def test_should_not_prepare_external_whisper_model_in_backend(tmp_path: Path) -> None:
     from adapters.base import OperationContext
     from service_registry import create_service_registry, require_service_operations
 
@@ -333,16 +302,4 @@ def test_should_prepare_the_same_profile_whisper_model(tmp_path: Path) -> None:
         OperationContext(whisper_enabled=True, chroma_enabled=False),
     )
 
-    assert len(runner.calls) == 3
-    download_command = runner.calls[1]
-    assert download_command[:2] == (
-        str(tmp_path / "backend" / ".venv" / "bin" / "python"),
-        "-c",
-    )
-    assert download_command[3] == "large-v3"
-    assert download_command[4] == str(runtime_paths.whisper_cache_path)
-    inference_command = runner.calls[2]
-    assert inference_command[:2] == download_command[:2]
-    assert inference_command[3] == "large-v3"
-    assert inference_command[4] == str(runtime_paths.whisper_cache_path)
-    assert ".transcribe(" in inference_command[2]
+    assert runner.calls == []

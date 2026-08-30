@@ -270,140 +270,35 @@ def test_should_import_adapter_contract_without_loading_concrete_adapters():
     assert json.loads(result.stdout) == []
 
 
-def test_should_prepare_missing_frontend_dependencies_without_starting_service(tmp_path: Path):
+def test_should_delegate_frontend_preparation_to_the_container_image(
+    tmp_path: Path,
+) -> None:
     from adapters.frontend import FrontendAdapter
 
-    frontend = tmp_path / "frontend"
-    frontend.mkdir()
-    (frontend / "package.json").write_text("{}", encoding="utf-8")
     runner = RecordingRunner()
-    adapter = FrontendAdapter(root_dir=tmp_path, runner=runner)
+    adapter = FrontendAdapter(
+        tmp_path, resolved_runtime_paths(tmp_path), runner
+    )
 
     adapter.prepare(
         resolved_profile()["dependencies"]["frontend"], OPERATION_CONTEXT
     )
 
-    assert runner.calls == [("npm", "ci", "--prefix", str(frontend))]
+    assert runner.calls == []
 
 
-def test_should_start_frontend_in_foreground_without_install_command(tmp_path: Path):
+def test_should_verify_frontend_through_docker_compose(tmp_path: Path) -> None:
     from adapters.frontend import FrontendAdapter
 
-    frontend = tmp_path / "frontend"
-    (frontend / "node_modules").mkdir(parents=True)
     runner = RecordingRunner()
-    adapter = FrontendAdapter(root_dir=tmp_path, runner=runner)
+    result = FrontendAdapter(
+        tmp_path, resolved_runtime_paths(tmp_path), runner
+    ).verify(_frontend_dependency(5173), OPERATION_CONTEXT)
 
-    specification = adapter.start_specification(
-        resolved_profile()["dependencies"]["frontend"]
+    assert runner.calls == [("docker", "compose", "version")]
+    assert result.checks == (
+        Check("docker-compose", "ready", "Docker Engine and Compose plugin", False),
     )
-
-    assert specification.command == (
-        "npm",
-        "run",
-        "dev",
-        "--prefix",
-        str(frontend),
-        "--",
-        "--host",
-        "localhost",
-        "--port",
-        "5173",
-        "--strictPort",
-    )
-    assert runner.calls == []
-
-
-@pytest.mark.parametrize("effective_profile", ("dev", "test-mocked"))
-def test_should_keep_dev_frontend_command_for_non_dogfood_profiles(
-    tmp_path: Path, effective_profile: str
-) -> None:
-    from service_registry import create_service_registry, require_service_operations
-
-    frontend = tmp_path / "frontend"
-    (frontend / "node_modules").mkdir(parents=True)
-    registry = create_service_registry(
-        tmp_path,
-        resolved_runtime_paths(tmp_path),
-        effective_profile=effective_profile,
-    )
-
-    specification = require_service_operations(
-        registry, "frontend"
-    ).start_specification(_frontend_dependency(5173))
-
-    assert specification.command == (
-        "npm",
-        "run",
-        "dev",
-        "--prefix",
-        str(frontend),
-        "--",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        "5173",
-        "--strictPort",
-    )
-
-
-def test_should_start_dogfood_frontend_from_built_assets_without_npm(
-    tmp_path: Path,
-) -> None:
-    adapter = _dogfood_frontend_adapter(tmp_path)
-
-    specification = adapter.start_specification(_frontend_dependency(15173))
-
-    assert specification.command == (
-        "node",
-        str(tmp_path / "frontend" / "built-frontend-server.mjs"),
-        "--host",
-        "127.0.0.1",
-        "--port",
-        "15173",
-    )
-
-
-def test_should_not_install_or_build_frontend_during_dogfood_prepare(
-    tmp_path: Path,
-) -> None:
-    runner = RecordingRunner()
-    from service_registry import create_service_registry, require_service_operations
-
-    registry = create_service_registry(
-        tmp_path,
-        resolved_runtime_paths(tmp_path),
-        runner,
-        effective_profile="dogfood",
-    )
-    adapter = require_service_operations(registry, "frontend")
-
-    adapter.prepare(_frontend_dependency(15173), OPERATION_CONTEXT)
-
-    assert runner.calls == []
-
-
-def test_should_identify_unreadable_dogfood_frontend_asset_as_eacces(
-    tmp_path: Path,
-) -> None:
-    frontend = tmp_path / "frontend"
-    dist = frontend / "dist"
-    node_modules = frontend / "node_modules"
-    dist.mkdir(parents=True)
-    node_modules.mkdir()
-    launcher = frontend / "built-frontend-server.mjs"
-    launcher.write_text("", encoding="utf-8")
-    index = dist / "index.html"
-    index.write_text("fixture", encoding="utf-8")
-    index.chmod(0)
-    adapter = _dogfood_frontend_adapter(tmp_path)
-
-    result = adapter.verify(_frontend_dependency(15173), OPERATION_CONTEXT)
-
-    failed = tuple(
-        check for check in result.checks if check.classification == "preparation_required"
-    )
-    assert any("EACCES" in check.message and str(index) in check.message for check in failed)
 
 
 def test_should_serve_built_frontend_without_writing_to_read_only_clone(
@@ -453,12 +348,16 @@ def test_should_serve_built_frontend_without_writing_to_read_only_clone(
     for path in (cache, npm_cache, home):
         path.mkdir(parents=True, exist_ok=True)
     port = _available_local_port()
-    specification = _dogfood_frontend_adapter(clone).start_specification(
-        _frontend_dependency(port)
-    )
     process = subprocess.Popen(
-        specification.command,
-        cwd=specification.cwd,
+        (
+            "node",
+            str(frontend / "built-frontend-server.mjs"),
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ),
+        cwd=clone,
         env={
             **os.environ,
             "HOME": str(home),
@@ -579,92 +478,68 @@ def test_should_proxy_http_and_websocket_to_backend(tmp_path: Path) -> None:
             backend.close()
 
 
-def test_should_preserve_identity_mismatch_skip_without_waiting_or_signaling(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
+def test_should_preserve_container_identity_mismatch_without_removing_it(
+    tmp_path: Path,
+) -> None:
     from adapters.frontend import FrontendAdapter
-    from process_control import ManagedProcess, ProcessIdentity
-
-    class ReusedPidProcess:
-        pid = 4102
-
-        def __init__(self) -> None:
-            self.wait_calls: list[float] = []
-
-        def poll(self):
-            return None
-
-        def wait(self, timeout: float):
-            self.wait_calls.append(timeout)
-            raise subprocess.TimeoutExpired("unrelated-process", timeout)
-
-    process = ReusedPidProcess()
-    identity = ProcessIdentity(pid=4101, pgid=4101, session_id=4101, start_time=99101)
-    sent_signals: list[tuple[int, int]] = []
-    adapter = FrontendAdapter(root_dir=tmp_path, runner=RecordingRunner())
-    adapter._process = ManagedProcess(
-        label="frontend",
-        process=process,  # type: ignore[arg-type]
-        identity=identity,
+    runner = RecordingRunner(
+        [{
+            "returncode": 0,
+            "stdout": json.dumps([{
+                "Id": "b" * 64,
+                "State": {"StartedAt": "2026-08-30T01:00:00Z", "Running": True},
+            }]),
+            "stderr": "",
+        }]
     )
-    monkeypatch.setattr(
-        "process_control.os.killpg",
-        lambda pgid, sent_signal: sent_signals.append((pgid, sent_signal)),
+    adapter = FrontendAdapter(
+        tmp_path, resolved_runtime_paths(tmp_path), runner
     )
-    service = {"processIdentity": identity.to_report()}
+    service = {
+        "containerIdentity": {
+            "containerId": "a" * 64,
+            "startedAt": "2026-08-30T00:00:00Z",
+        }
+    }
 
     result = adapter.stop(service, grace_seconds=5.0)
 
     assert result.result == "skipped_identity_mismatch"
-    assert process.wait_calls == []
-    assert sent_signals == []
+    assert runner.calls == [
+        ("docker", "inspect", "digital-souls-test-frontend")
+    ]
 
 
-def test_should_refuse_managed_group_with_member_older_than_recorded_leader(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
+def test_should_require_the_recorded_container_start_time(tmp_path: Path) -> None:
     from adapters.frontend import FrontendAdapter
-    from process_control import ManagedProcess, ProcessIdentity
-
-    class MatchingLeaderProcess:
-        pid = 4101
-
-        def __init__(self) -> None:
-            self.wait_calls: list[float] = []
-
-        def poll(self):
-            return None
-
-        def wait(self, timeout: float):
-            self.wait_calls.append(timeout)
-            raise subprocess.TimeoutExpired("unrelated-process", timeout)
-
-    process = MatchingLeaderProcess()
-    identity = ProcessIdentity(pid=4101, pgid=4101, session_id=4101, start_time=99101)
-    sent_signals: list[tuple[int, int]] = []
-    adapter = FrontendAdapter(root_dir=tmp_path, runner=RecordingRunner())
-    adapter._process = ManagedProcess(
-        label="frontend",
-        process=process,  # type: ignore[arg-type]
-        identity=identity,
+    runner = RecordingRunner(
+        [{
+            "returncode": 0,
+            "stdout": json.dumps([{
+                "Id": "a" * 64,
+                "State": {"StartedAt": "2026-08-30T01:00:00Z", "Running": True},
+            }]),
+            "stderr": "",
+        }]
     )
-    monkeypatch.setattr("process_control._leader_identity_matches", lambda value: True)
-    monkeypatch.setattr("process_control._group_members", lambda value: ((4102, 99100),))
-    monkeypatch.setattr(
-        "process_control.os.killpg",
-        lambda pgid, sent_signal: sent_signals.append((pgid, sent_signal)),
+    adapter = FrontendAdapter(
+        tmp_path, resolved_runtime_paths(tmp_path), runner
     )
 
     result = adapter.stop(
-        {"processIdentity": identity.to_report()}, grace_seconds=5.0
+        {
+            "containerIdentity": {
+                "containerId": "a" * 64,
+                "startedAt": "2026-08-30T00:00:00Z",
+            }
+        },
+        grace_seconds=5.0,
     )
 
     assert result.result == "skipped_identity_mismatch"
-    assert process.wait_calls == []
-    assert sent_signals == []
 
 
-def test_should_keep_backend_setup_in_prepare_and_uvicorn_in_start(tmp_path: Path):
+def test_should_prepare_backend_data_without_host_toolchain(tmp_path: Path):
     from adapters.backend import BackendAdapter
 
     runner = RecordingRunner()
@@ -674,20 +549,12 @@ def test_should_keep_backend_setup_in_prepare_and_uvicorn_in_start(tmp_path: Pat
     dependency = resolved_profile()["dependencies"]["backend"]
 
     adapter.prepare(dependency, OPERATION_CONTEXT)
-    start = adapter.start_specification(dependency)
 
-    assert runner.calls == [(str(tmp_path / "scripts" / "setup-backend.sh"),)]
-    assert start.command == (
-        str(tmp_path / "scripts" / "start-backend.sh"),
-        "--host",
-        "localhost",
-        "--port",
-        "8000",
-        "--reload",
-    )
+    assert runner.calls == []
+    assert resolved_runtime_paths(tmp_path).identity_marker_path.is_file()
 
 
-def test_should_classify_missing_whisper_cache_as_preparation_required(tmp_path: Path):
+def test_should_not_assign_shared_whisper_preparation_to_backend(tmp_path: Path):
     from adapters.backend import BackendAdapter
 
     result = BackendAdapter(
@@ -699,14 +566,11 @@ def test_should_classify_missing_whisper_cache_as_preparation_required(tmp_path:
         OperationContext(whisper_enabled=True, chroma_enabled=False),
     )
 
-    whisper = next(check for check in result.checks if check.name == "whisper-model-medium")
-    assert whisper.classification == "preparation_required"
+    assert all(not check.name.startswith("whisper-model-") for check in result.checks)
 
 
-def test_should_prepare_whisper_model_in_cache_used_by_backend_runtime(tmp_path: Path):
+def test_should_leave_shared_whisper_cache_outside_backend_prepare(tmp_path: Path):
     from adapters.backend import BackendAdapter
-
-    from app.model_settings import WHISPER_MODEL_NAME
 
     runner = RecordingRunner()
     runtime_paths = resolved_runtime_paths(tmp_path)
@@ -719,20 +583,10 @@ def test_should_prepare_whisper_model_in_cache_used_by_backend_runtime(tmp_path:
         OperationContext(whisper_enabled=True, chroma_enabled=False),
     )
 
-    assert runner.calls[0] == (str(tmp_path / "scripts" / "setup-backend.sh"),)
-    assert runner.calls[1][0] == str(tmp_path / "backend" / ".venv" / "bin" / "python")
-    assert runner.calls[1][3] == WHISPER_MODEL_NAME
-    assert runner.calls[1][4] == str(runtime_paths.whisper_cache_path)
-    assert "device=" in runner.calls[1][2]
-    assert "compute_type=" in runner.calls[1][2]
-    assert runner.cwds == [
-        tmp_path,
-        tmp_path / "backend",
-        tmp_path / "backend",
-    ]
+    assert runner.calls == []
 
 
-def test_should_run_silent_whisper_inference_when_model_is_cached(tmp_path: Path):
+def test_should_not_run_whisper_inference_in_backend_prepare(tmp_path: Path):
     from adapters.backend import BackendAdapter
 
     snapshot = write_cached_whisper_model(
@@ -753,24 +607,10 @@ def test_should_run_silent_whisper_inference_when_model_is_cached(tmp_path: Path
         OperationContext(whisper_enabled=True, chroma_enabled=False),
     )
 
-    inference_command = runner.calls[2]
-    assert inference_command[:2] == (
-        str(tmp_path / "backend" / ".venv" / "bin" / "python"),
-        "-c",
-    )
-    assert "WhisperTranscriber" in inference_command[2]
-    assert ".transcribe(" in inference_command[2]
-    assert "PCM_SAMPLE_RATE_HZ" in inference_command[2]
-    assert "PCM_CHANNELS" in inference_command[2]
-    assert "PCM_SAMPLE_WIDTH_BYTES" in inference_command[2]
-    assert runner.cwds == [
-        tmp_path,
-        tmp_path,
-        tmp_path / "backend",
-    ]
+    assert runner.calls == []
 
 
-def test_should_hard_fail_with_diagnostics_when_whisper_inference_fails(
+def test_should_ignore_host_whisper_state_during_backend_prepare(
     tmp_path: Path,
 ) -> None:
     from adapters.backend import BackendAdapter
@@ -788,23 +628,15 @@ def test_should_hard_fail_with_diagnostics_when_whisper_inference_fails(
     )
     adapter = BackendAdapter(tmp_path, resolved_runtime_paths(tmp_path), runner)
 
-    with pytest.raises(RuntimeError) as error:
-        adapter.prepare(
-            resolved_profile()["dependencies"]["backend"],
-            OperationContext(whisper_enabled=True, chroma_enabled=False),
-        )
+    adapter.prepare(
+        resolved_profile()["dependencies"]["backend"],
+        OperationContext(whisper_enabled=True, chroma_enabled=False),
+    )
 
-    message = str(error.value)
-    assert "Whisper" in message
-    assert "inference" in message.lower()
-    assert "device=cpu" in message
-    assert "compute_type=int8" in message
-    assert missing_library in message
-    assert "scripts/setup-backend.sh" in message
-    assert "environments/up.sh" in message
+    assert runner.calls == []
 
 
-def test_should_mark_missing_whisper_cache_as_preparable(tmp_path: Path):
+def test_should_not_expose_host_whisper_cache_as_backend_check(tmp_path: Path):
     from adapters.backend import BackendAdapter
 
     result = BackendAdapter(
@@ -816,8 +648,7 @@ def test_should_mark_missing_whisper_cache_as_preparable(tmp_path: Path):
         OperationContext(whisper_enabled=True, chroma_enabled=False),
     )
 
-    whisper = next(check for check in result.checks if check.name == "whisper-model-medium")
-    assert whisper.can_prepare is True
+    assert all(not check.name.startswith("whisper-model-") for check in result.checks)
 
 
 @pytest.mark.parametrize(
@@ -840,19 +671,17 @@ def test_should_verify_cache_resolved_by_faster_whisper(
     result = BackendAdapter(
         root_dir=tmp_path,
         runtime_paths=resolved_runtime_paths(tmp_path),
+        runner=RecordingRunner(),
         whisper_model_name=model_name,
     ).verify(
         resolved_profile()["dependencies"]["backend"],
         OperationContext(whisper_enabled=True, chroma_enabled=False),
     )
 
-    whisper = next(
-        check for check in result.checks if check.name == f"whisper-model-{model_name}"
-    )
-    assert whisper.classification == "ready"
+    assert all(not check.name.startswith("whisper-model-") for check in result.checks)
 
 
-def test_should_treat_empty_whisper_cache_as_preparation_required(tmp_path: Path):
+def test_should_ignore_empty_host_whisper_cache(tmp_path: Path):
     from adapters.backend import BackendAdapter
 
     write_cached_whisper_model(
@@ -860,17 +689,20 @@ def test_should_treat_empty_whisper_cache_as_preparation_required(tmp_path: Path
     )
 
     result = BackendAdapter(
-        root_dir=tmp_path, runtime_paths=resolved_runtime_paths(tmp_path)
+        root_dir=tmp_path,
+        runtime_paths=resolved_runtime_paths(tmp_path),
+        runner=RecordingRunner(),
     ).verify(
         resolved_profile()["dependencies"]["backend"],
         OperationContext(whisper_enabled=True, chroma_enabled=False),
     )
 
-    whisper = next(check for check in result.checks if check.name == "whisper-model-medium")
-    assert whisper.classification == "preparation_required"
+    assert all(not check.name.startswith("whisper-model-") for check in result.checks)
 
 
-def test_should_require_executable_backend_launchers_during_verify(tmp_path: Path):
+def test_should_require_docker_compose_instead_of_host_backend_launchers(
+    tmp_path: Path,
+) -> None:
     from adapters.backend import BackendAdapter
 
     scripts = tmp_path / "scripts"
@@ -893,15 +725,9 @@ def test_should_require_executable_backend_launchers_during_verify(tmp_path: Pat
         OperationContext(whisper_enabled=False, chroma_enabled=False),
     )
 
-    setup = next(check for check in result.checks if check.name == "backend-setup-launcher")
-    start_check = next(check for check in result.checks if check.name == "backend-start-launcher")
-    python = next(check for check in result.checks if check.name == "backend-python")
-    uvicorn = next(check for check in result.checks if check.name == "backend-uvicorn")
-    assert setup.classification == "preparation_required"
-    assert setup.can_prepare is False
-    assert start_check.classification == "ready"
-    assert python.classification == "preparation_required"
-    assert uvicorn.classification == "preparation_required"
+    assert result.checks == (
+        Check("docker-compose", "ready", "Docker Engine and Compose plugin", False),
+    )
 
 
 def test_should_prepare_chroma_directory_only_in_prepare(tmp_path: Path):

@@ -125,7 +125,7 @@ def test_should_map_all_profile_dependencies_to_initial_runtime_states(
 
     report_validator.validate(report)
     assert report["services"]["frontend"]["state"] == "pending"
-    assert report["services"]["whisper"]["state"] == "in_process"
+    assert report["services"]["whisper"]["state"] == "external"
     assert report["services"]["chroma"]["state"] == "disabled"
     assert all(service["owned"] is False for service in report["services"].values())
 
@@ -143,21 +143,24 @@ def test_should_reject_owned_state_that_cannot_be_stopped(state: str):
         update_service(report, "frontend", state=state, owned=True)
 
 
-def test_should_record_process_identity_only_for_started_owned_service():
+def test_should_record_container_identity_only_for_started_owned_service():
     from run_report import update_service
 
     report = _initial_report()
-    identity = {"pid": 4101, "pgid": 4101, "sessionId": 4101, "startTime": 88201}
+    identity = {
+        "containerId": "backend-container",
+        "startedAt": "2026-07-17T00:00:00Z",
+    }
 
     updated = update_service(
         report,
         "backend",
         state="started",
         owned=True,
-        process_identity=identity,
+        container_identity=identity,
     )
 
-    assert updated["services"]["backend"]["processIdentity"] == identity
+    assert updated["services"]["backend"]["containerIdentity"] == identity
     assert updated["startSequence"] == ["backend"]
     assert report["services"]["backend"]["state"] == "pending"
 
@@ -500,13 +503,16 @@ def test_should_reject_external_started_owned_service_in_validator_and_schema(
 ):
     from run_report import RunReportError, update_service, validate_run_report
 
-    identity = {"pid": 41, "pgid": 41, "sessionId": 41, "startTime": 82}
+    identity = {
+        "containerId": "a" * 64,
+        "startedAt": "2026-08-30T00:00:00Z",
+    }
     report = update_service(
         _initial_report(),
         "backend",
         state="started",
         owned=True,
-        process_identity=identity,
+        container_identity=identity,
     )
     report["services"]["backend"]["source"] = "external"
 
@@ -555,8 +561,8 @@ def test_should_reject_service_that_disagrees_with_effective_profile(field: str)
     [
         (
             "frontend",
-            "container_identity",
-            {"containerId": "frontend-container", "startedAt": "2026-07-17T00:00:00Z"},
+            "process_identity",
+            {"pid": 40, "pgid": 40, "sessionId": 40, "startTime": 81},
         ),
         (
             "voicevox",
@@ -611,7 +617,10 @@ def test_should_not_serialize_process_environment_or_secret_values():
         lambda report: report["services"]["backend"].update(
             state="started",
             owned=True,
-            processIdentity={"pid": 41, "pgid": 41, "sessionId": 41, "startTime": 82},
+            containerIdentity={
+                "containerId": "a" * 64,
+                "startedAt": "2026-08-30T00:00:00Z",
+            },
         ),
         lambda report: report["startSequence"].append("backend"),
     ],

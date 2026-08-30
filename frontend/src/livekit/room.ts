@@ -7,6 +7,9 @@ import {
   type RemoteParticipant,
 } from 'livekit-client'
 
+import type { VoiceSessionEvent } from '../lib/voice-session/generated'
+import { parseVoiceSessionEvent } from '../lib/voice-session/validation'
+
 import {
   PlaybackEvidenceController,
   type SegmentMetadata,
@@ -37,7 +40,22 @@ export type RoomObservation = Readonly<{
   terminalResponseId?: string
   terminalConfirmedAudioSequence?: number
   activeResponseId?: string
+  speechStartedAtMs?: number
+  localPlaybackStoppedAtMs?: number
+  cancelConfirmedAtMs?: number
 }>
+
+export type MicrophoneCaptureOptions = Readonly<{
+  echoCancellation: boolean
+  noiseSuppression: boolean
+  channelCount: number
+}>
+
+const DEFAULT_MICROPHONE_CAPTURE_OPTIONS: MicrophoneCaptureOptions = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  channelCount: 1,
+}
 
 const PRIVATE_TOPIC = 'digital-souls.livekit-transport.v1'
 const APPLICATION_TOPIC = 'digital-souls.core.v1'
@@ -56,13 +74,11 @@ class RenderEvidenceProcessor extends AudioWorkletProcessor {
     if (samples > 0) {
       let energy = 0
       for (const sample of channel) energy += sample * sample
-      if (energy > 0) {
-        this.port.postMessage({
-          startFrame: currentFrame,
-          endFrame: currentFrame + samples,
-          energy,
-        })
-      }
+      this.port.postMessage({
+        startFrame: currentFrame,
+        endFrame: currentFrame + samples,
+        energy,
+      })
     }
     return true
   }
@@ -85,14 +101,22 @@ export class LiveKitRoomClient {
     worklet: AudioWorkletNode
   }>()
   private duplicateTrackFrames = 0
+  private readonly playbackStartedResponses = new Set<string>()
   private readonly playback: PlaybackEvidenceController
   private readonly coreEvents = new CoreEventReceiver()
   private playbackConfirmations: PlaybackConfirmationTracker | null = null
   private controlOutbox: BrowserControlOutbox | null = null
   private sessionId: string | null = null
   private explicitDisconnect = false
+  private reconnectRequested = false
+  private suppressedResponseId: string | null = null
+  private suppressedLastPlayedAudioSequence = 0
 
-  constructor(private readonly observe: (observation: RoomObservation) => void) {
+  constructor(
+    private readonly observe: (observation: RoomObservation) => void,
+    private readonly receiveCoreEvent: (event: VoiceSessionEvent) => void = () => undefined,
+    private readonly microphoneCaptureOptions: MicrophoneCaptureOptions = DEFAULT_MICROPHONE_CAPTURE_OPTIONS,
+  ) {
     this.playback = new PlaybackEvidenceController(0, (evidence) => {
       this.observe({
         transport: 'available',
@@ -111,25 +135,101 @@ export class LiveKitRoomClient {
         evidence.responseId,
         evidence.continuousPrefix,
       ).catch(() => this.failTransport())
+      if (
+        evidence.renderedEnergy > 0
+        && evidence.responseId !== ''
+        && !this.playbackStartedResponses.has(evidence.responseId)
+      ) {
+        this.playbackStartedResponses.add(evidence.responseId)
+        void this.publishPlaybackStarted(evidence.responseId).catch(() => {
+          this.failTransport()
+        })
+      }
     })
   }
 
   async connect(url: string, token: string, sessionId: string): Promise<void> {
     if (this.room === null) this.room = this.createRoom()
+    const shouldSynchronize = this.reconnectRequested && this.sessionId === sessionId
     this.explicitDisconnect = false
     this.sessionId = sessionId
     this.startBrowserDelivery(sessionId, this.room)
     await this.room.connect(url, token)
+    if (shouldSynchronize) await this.requestStateSync(this.room)
+    this.reconnectRequested = false
     this.observe({ transport: 'available', control: 'available', audio: 'unavailable' })
   }
 
   async publishMicrophone(): Promise<void> {
     if (this.room === null) throw new Error('LiveKit Room is not connected')
-    await this.room.localParticipant.setMicrophoneEnabled(true)
+    await this.room.localParticipant.setMicrophoneEnabled(
+      true,
+      { ...this.microphoneCaptureOptions },
+    )
+  }
+
+  async muteMicrophone(): Promise<void> {
+    if (this.room === null) throw new Error('LiveKit Room is not connected')
+    await this.room.localParticipant.setMicrophoneEnabled(false)
+  }
+
+  async publishControlEvent(value: VoiceSessionEvent): Promise<void> {
+    const sessionId = this.sessionId
+    const outbox = this.controlOutbox
+    if (sessionId === null || outbox === null) {
+      throw new Error('LiveKit Room control channel is not connected')
+    }
+    const event = parseVoiceSessionEvent(value)
+    if (event.session_id !== sessionId) {
+      throw new Error('control event session_id does not match the connected session')
+    }
+    const payload = new TextEncoder().encode(JSON.stringify(event))
+    await outbox.enqueue({ event }, payload)
+  }
+
+  stopPlayback(responseId: string, speechStartedAtMs: number): number {
+    if (this.suppressedResponseId === responseId) {
+      return this.suppressedLastPlayedAudioSequence
+    }
+    const lastPlayedAudioSequence = Math.max(
+      0,
+      this.playback.continuousPrefix(responseId) + 1,
+    )
+    this.suppressedResponseId = responseId
+    this.suppressedLastPlayedAudioSequence = lastPlayedAudioSequence
+    this.playback.discardResponse(responseId)
+    for (let index = this.pendingMetadata.length - 1; index >= 0; index -= 1) {
+      if (this.pendingMetadata[index].responseId === responseId) {
+        this.pendingMetadata.splice(index, 1)
+      }
+    }
+    this.audioGraphResetVersion += 1
+    for (const graph of this.audioGraphs.values()) {
+      graph.source.disconnect()
+      graph.worklet.disconnect()
+    }
+    this.audioGraphs.clear()
+    const context = this.audioContext
+    this.audioContext = null
+    this.workletReady = null
+    if (context !== null) void context.close().catch(() => undefined)
+    const controlAvailable = this.controlOutbox !== null
+    this.observe({
+      transport: this.room === null ? 'idle' : controlAvailable ? 'available' : 'unavailable',
+      control: controlAvailable ? 'available' : 'unavailable',
+      audio: 'unavailable',
+      activeAudioGraphs: 0,
+      activeResponseId: responseId,
+      playedPrefix: lastPlayedAudioSequence - 1,
+      speechStartedAtMs,
+      localPlaybackStoppedAtMs: Math.floor(performance.now()),
+    })
+    return lastPlayedAudioSequence
   }
 
   disconnect(): void {
     this.explicitDisconnect = true
+    this.reconnectRequested = false
     this.sessionId = null
     this.room?.disconnect()
     void this.closeAudioGraph()
@@ -137,6 +237,7 @@ export class LiveKitRoomClient {
   }
 
   temporaryDisconnect(): void {
+    this.reconnectRequested = true
     this.room?.disconnect()
     void this.closeAudioGraph()
     this.observe({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable' })
@@ -151,15 +252,7 @@ export class LiveKitRoomClient {
     room.on(RoomEvent.Reconnected, () => {
       const sessionId = this.sessionId
       if (sessionId !== null) this.startBrowserDelivery(sessionId, room)
-      const frame = new TextEncoder().encode(JSON.stringify({
-        protocol_version: '1.0',
-        type: 'state_sync_request',
-        generation: this.generation,
-      }))
-      void room.localParticipant.publishData(frame, {
-        reliable: true,
-        topic: PRIVATE_TOPIC,
-      })
+      void this.requestStateSync(room).catch(() => this.failTransport())
     })
     room.on(RoomEvent.DataReceived, (payload, _participant, _kind, topic) => {
       if (topic === APPLICATION_TOPIC) {
@@ -181,6 +274,7 @@ export class LiveKitRoomClient {
           if (generationChanged) {
             this.playback.setGeneration(frame.generation)
             this.pendingMetadata.length = 0
+            this.playbackStartedResponses.clear()
             const resetVersion = ++this.audioGraphResetVersion
             const resetTask = this.audioGraphResetTask.then(
               () => this.resetAudioGraphs(resetVersion),
@@ -215,7 +309,10 @@ export class LiveKitRoomClient {
         } else if (frame.type === 'ack') {
           if (frame.generation !== this.generation) return
           const confirmation = this.controlOutbox?.acknowledge(frame.eventId)
-          if (confirmation !== null && confirmation !== undefined) {
+          if (
+            confirmation?.responseId !== undefined
+            && confirmation.continuousPrefix !== undefined
+          ) {
             this.observe({
               transport: 'available', control: 'available', audio: 'available',
               acknowledgedPlaybackPrefix: confirmation.continuousPrefix,
@@ -270,6 +367,9 @@ export class LiveKitRoomClient {
       this.audioGraphs.delete(key)
     })
     room.on(RoomEvent.Disconnected, () => {
+      if (!this.explicitDisconnect && this.sessionId !== null) {
+        this.reconnectRequested = true
+      }
       this.clearBrowserDelivery()
       void this.closeAudioGraph()
       this.observe({
@@ -282,8 +382,20 @@ export class LiveKitRoomClient {
     return room
   }
 
+  private async requestStateSync(room: Room): Promise<void> {
+    const frame = new TextEncoder().encode(JSON.stringify({
+      protocol_version: '1.0',
+      type: 'state_sync_request',
+      generation: this.generation,
+    }))
+    await room.localParticipant.publishData(frame, {
+      reliable: true,
+      topic: PRIVATE_TOPIC,
+    })
+  }
+
   private async acknowledgeCoreEvent(room: Room, payload: Uint8Array): Promise<void> {
-    const { event } = this.coreEvents.receive(payload)
+    const { event, duplicate } = this.coreEvents.receive(payload)
     const ack = new TextEncoder().encode(JSON.stringify({
       protocol_version: '1.0',
       type: 'ack',
@@ -294,6 +406,39 @@ export class LiveKitRoomClient {
       reliable: true,
       topic: PRIVATE_TOPIC,
     })
+    if (!duplicate) {
+      if (
+        event.type === 'response_started'
+        && event.response_id !== undefined
+        && this.suppressedResponseId !== null
+        && event.response_id !== this.suppressedResponseId
+      ) {
+        this.suppressedResponseId = null
+        this.suppressedLastPlayedAudioSequence = 0
+        const resetVersion = ++this.audioGraphResetVersion
+        const resetTask = this.audioGraphResetTask.then(
+          () => this.resetAudioGraphs(resetVersion),
+        )
+        this.audioGraphResetTask = resetTask.catch(() => undefined)
+        void resetTask.catch(() => this.failTransport())
+      }
+      if (
+        (event.type === 'response_cancelled' || event.type === 'response_failed')
+        && event.response_id !== undefined
+      ) {
+        this.playback.discardResponse(event.response_id)
+      }
+      if (event.type === 'response_cancelled' && event.response_id !== undefined) {
+        this.observe({
+          transport: 'available',
+          control: 'available',
+          audio: 'unavailable',
+          activeResponseId: event.response_id,
+          cancelConfirmedAtMs: Math.floor(performance.now()),
+        })
+      }
+      this.receiveCoreEvent(event)
+    }
     if (event.type === 'session_ended') this.failTransport()
   }
 
@@ -310,6 +455,22 @@ export class LiveKitRoomClient {
     if (confirmation === null) return
     const payload = new TextEncoder().encode(JSON.stringify(confirmation.event))
     await outbox.enqueue(confirmation, payload)
+  }
+
+  private async publishPlaybackStarted(responseId: string): Promise<void> {
+    const sessionId = this.sessionId
+    if (sessionId === null) throw new Error('LiveKit Room is not connected')
+    await this.publishControlEvent(parseVoiceSessionEvent({
+      type: 'observation',
+      protocol_version: '1.0',
+      event_id: crypto.randomUUID(),
+      session_id: sessionId,
+      response_id: responseId,
+      measurement: 'playback_started',
+      timestamp: Math.floor(performance.now()),
+      clock_domain: 'client_monotonic',
+      unit: 'millisecond',
+    }))
   }
 
   private failTransport(): void {
@@ -381,6 +542,8 @@ export class LiveKitRoomClient {
     this.subscriptions.clear()
     this.subscribedTracks.clear()
     this.pendingMetadata.length = 0
+    this.suppressedResponseId = null
+    this.suppressedLastPlayedAudioSequence = 0
     this.coreEvents.clear()
     this.clearBrowserDelivery()
     await this.disposeAudioContext()

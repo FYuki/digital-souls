@@ -1,0 +1,39 @@
+services:
+  backend:
+    volumes:
+      - type: bind
+        source: ${DS_REPOSITORY_ROOT:?DS_REPOSITORY_ROOT is required}/backend/app
+        target: /app/backend/app
+      - type: bind
+        source: ${DS_REPOSITORY_ROOT:?DS_REPOSITORY_ROOT is required}/characters
+        target: /app/characters
+        read_only: true
+      - type: bind
+        source: ${DS_REPOSITORY_ROOT:?DS_REPOSITORY_ROOT is required}/contracts
+        target: /app/contracts
+        read_only: true
+  frontend:
+    volumes:
+      - type: bind
+        source: ${DS_REPOSITORY_ROOT:?DS_REPOSITORY_ROOT is required}/frontend/src
+        target: /app/frontend/src
+      - type: bind
+        source: ${DS_REPOSITORY_ROOT:?DS_REPOSITORY_ROOT is required}/frontend/index.html
+        target: /app/frontend/index.html
+        read_only: true
+      - type: bind
+        source: ${DS_REPOSITORY_ROOT:?DS_REPOSITORY_ROOT is required}/frontend/vite.config.ts
+        target: /app/frontend/vite.config.ts
+        read_only: true
+      - type: bind
+        source: ${DS_REPOSITORY_ROOT:?DS_REPOSITORY_ROOT is required}/frontend/vite.proxy.ts
+        target: /app/frontend/vite.proxy.ts
+        read_only: true
+      - type: bind
+        source: ${DS_REPOSITORY_ROOT:?DS_REPOSITORY_ROOT is required}/frontend/vite.vad-assets.ts
+        target: /app/frontend/vite.vad-assets.ts
+        read_only: true
+      - type: bind
+        source: ${DS_REPOSITORY_ROOT:?DS_REPOSITORY_ROOT is required}/frontend/resolved-profile.ts
+        target: /app/frontend/resolved-profile.ts
+        read_only: true

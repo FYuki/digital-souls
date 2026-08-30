@@ -26,6 +26,8 @@ DOGFOOD_INFRA_DIR = ROOT_DIR / "infra" / "dogfood"
 DOGFOOD_SCRIPTS_DIR = ROOT_DIR / "scripts" / "dogfood"
 OLLAMA_ENDPOINT = ("localhost", 11434)
 VOICEVOX_ENDPOINT = ("127.0.0.1", 50021)
+LIVEKIT_ENDPOINT = ("127.0.0.1", 17880)
+WHISPER_ENDPOINT = ("127.0.0.1", 50022)
 
 
 def _copy_runtime(tmp_path: Path) -> tuple[Path, Path, Path]:
@@ -68,7 +70,12 @@ def _copy_runtime(tmp_path: Path) -> tuple[Path, Path, Path]:
             str(generated_dir),
             ],
         ),
-        env={**os.environ, "DOGFOOD_ENV_FILE": str(env_path)},
+        env={
+            **os.environ,
+            "DOGFOOD_ENV_FILE": str(env_path),
+            "DOGFOOD_SERVICE_UID": str(os.getuid()),
+            "DOGFOOD_SERVICE_GID": str(os.getgid()),
+        },
         capture_output=True,
         text=True,
     )
@@ -162,6 +169,8 @@ def test_should_propagate_profile_endpoints_to_compose_and_status(
     calls = command_log.read_text(encoding="utf-8")
     assert str(OLLAMA_ENDPOINT[1]) in calls
     assert str(VOICEVOX_ENDPOINT[1]) in calls
+    assert str(WHISPER_ENDPOINT[1]) in calls
+    assert str(LIVEKIT_ENDPOINT[1]) in calls
     assert "docker\t" in calls
     assert f"\t{VOICEVOX_ENDPOINT[0]}\t{VOICEVOX_ENDPOINT[1]}" in calls
 
@@ -219,6 +228,9 @@ def test_should_pass_the_dedicated_model_directory_to_ollama(tmp_path: Path) -> 
         ("voicevox", "baseUrl", "http://127.0.0.8:50021"),
         ("voicevox", "baseUrl", "http://127.0.0.1:20021"),
         ("voicevox", "readinessPath", "/health"),
+        ("livekit", "baseUrl", "http://127.0.0.8:17880"),
+        ("livekit", "baseUrl", "http://127.0.0.1:27880"),
+        ("livekit", "readinessPath", "/health"),
     ],
 )
 def test_should_reject_dogfood_inference_endpoints_outside_the_registry(

@@ -266,6 +266,7 @@ def test_public_audio_entry_runs_stt_llm_tts_delivery_and_completion() -> None:
         assert persistence.starts == [(RESPONSE_1, "利用者の発話")]
         assert len(persistence.outcomes) == 1
         assert [event_field(event, "type") for event in delivery.events] == [
+            "utterance_finalized",
             "response_started",
             "response_delta",
             "response_delta",
@@ -282,16 +283,16 @@ def test_public_audio_entry_runs_stt_llm_tts_delivery_and_completion() -> None:
             "stt",
             "stt",
             "llm",
-            "llm",
             "tts",
+            "llm",
             "tts",
         ]
         assert [event_field(item, "outcome") for item in producer_observations] == [
             "started",
             "completed",
             "started",
-            "completed",
             "started",
+            "completed",
             "completed",
         ]
         assert event_field(observation.observations[0], "utterance_id") == UTTERANCE_1
@@ -1501,7 +1502,7 @@ def test_delivery_failure_is_not_recorded_as_an_llm_failure() -> None:
         observation = RecordingObservation()
         session = module.ConversationCoreSession(
             session_id=SESSION_ID,
-            response_id_factory=response_id_factory(RESPONSE_1),
+            response_id_factory=response_id_factory(RESPONSE_1, RESPONSE_2),
             delivery=delivery,
             persistence=persistence,
             observation=observation,
@@ -1516,8 +1517,15 @@ def test_delivery_failure_is_not_recorded_as_an_llm_failure() -> None:
             should_response=True,
         )
         await _wait_until(lambda: session.running_stage_count == 0)
+        next_response = await session.finalize_utterance(
+            utterance_id=UTTERANCE_2,
+            transcript="送信失敗後の発話",
+            should_response=True,
+        )
 
         assert session.response(response.response_id).state is module.ResponseState.FAILED
+        assert next_response.response_id == RESPONSE_2
+        assert next_response.state is module.ResponseState.IN_PROGRESS
         llm_outcomes = [
             event_field(item, "outcome")
             for item in observation.observations
@@ -1529,9 +1537,10 @@ def test_delivery_failure_is_not_recorded_as_an_llm_failure() -> None:
             for item in observation.observations
             if event_field(item, "stage") == "delivery"
         ]
-        assert delivery_outcomes == [
+        assert delivery_outcomes[:6] == [
             "started", "completed", "started", "failed", "started", "completed"
         ]
+        await session.end()
 
     _run(exercise)
 

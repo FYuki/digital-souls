@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock, patch
+import asyncio
 
 import httpx
 import pytest
@@ -168,3 +169,209 @@ class TestOllamaClientGenerate:
                 )
 
         response.json.assert_not_called()
+
+
+class _AsyncStreamResponse:
+    def __init__(self, lines: list[str]) -> None:
+        self.lines = lines
+        self.closed = False
+
+    def raise_for_status(self) -> None:
+        return None
+
+    async def aiter_lines(self):
+        try:
+            for line in self.lines:
+                yield line
+                await asyncio.sleep(0)
+        finally:
+            self.closed = True
+
+
+class _AsyncContext:
+    def __init__(self, value) -> None:
+        self.value = value
+
+    async def __aenter__(self):
+        return self.value
+
+    async def __aexit__(self, *_args):
+        self.value.closed = True
+
+
+class _AsyncClient:
+    def __init__(self, response: _AsyncStreamResponse, calls: list[dict]) -> None:
+        self.response = response
+        self.calls = calls
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_args):
+        return None
+
+    def stream(self, method: str, url: str, **kwargs):
+        self.calls.append({"method": method, "url": url, **kwargs})
+        return _AsyncContext(self.response)
+
+
+def test_ollama_stream_emits_provider_independent_text_deltas(monkeypatch) -> None:
+    from app.llm import ollama_client
+
+    response = _AsyncStreamResponse([
+        '{"message":{"content":"光"},"done":false}',
+        '{"message":{"content":"織"},"done":false}',
+        '{"message":{"content":""},"done":true,"done_reason":"stop"}',
+    ])
+    calls: list[dict] = []
+    monkeypatch.setattr(
+        ollama_client.httpx,
+        "AsyncClient",
+        lambda **_kwargs: _AsyncClient(response, calls),
+    )
+
+    async def exercise() -> None:
+        deltas = [
+            delta
+            async for delta in _ollama_client().stream_generate(
+                _built_prompt(), max_output_tokens=32
+            )
+        ]
+        assert deltas == ["光", "織"]
+
+    asyncio.run(exercise())
+    assert calls[0]["json"]["stream"] is True
+    assert response.closed is True
+
+
+def test_ollama_stream_uses_configured_timeout(monkeypatch) -> None:
+    from app.llm import ollama_client
+
+    response = _AsyncStreamResponse([
+        '{"message":{"content":"ok"},"done":false}',
+        '{"message":{"content":""},"done":true,"done_reason":"stop"}',
+    ])
+    constructor_calls: list[dict] = []
+
+    def async_client(**kwargs):
+        constructor_calls.append(kwargs)
+        return _AsyncClient(response, [])
+
+    monkeypatch.setattr(ollama_client.httpx, "AsyncClient", async_client)
+
+    async def exercise() -> None:
+        assert [
+            delta
+            async for delta in _ollama_client().stream_generate(
+                _built_prompt(), max_output_tokens=32
+            )
+        ] == ["ok"]
+
+    asyncio.run(exercise())
+    timeout = constructor_calls[0]["timeout"]
+    assert isinstance(timeout, httpx.Timeout)
+    assert timeout.read == 30.0
+
+
+@pytest.mark.parametrize(
+    ("lines", "message"),
+    [
+        (["{\"message\":{\"content\":\"途中\"},\"done\":false}"], "terminal"),
+        (["{\"message\":{\"content\":\"\"},\"done\":true}"], "empty"),
+    ],
+)
+def test_ollama_stream_rejects_incomplete_or_empty_response(
+    monkeypatch, lines: list[str], message: str
+) -> None:
+    from app.llm import ollama_client
+
+    response = _AsyncStreamResponse(lines)
+    monkeypatch.setattr(
+        ollama_client.httpx,
+        "AsyncClient",
+        lambda **_kwargs: _AsyncClient(response, []),
+    )
+
+    async def exercise() -> None:
+        with pytest.raises(ValueError, match=message):
+            _ = [
+                delta
+                async for delta in _ollama_client().stream_generate(
+                    _built_prompt(), max_output_tokens=32
+                )
+            ]
+
+    asyncio.run(exercise())
+    assert response.closed is True
+
+
+def test_ollama_stream_cancellation_closes_http_stream(monkeypatch) -> None:
+    from app.llm import ollama_client
+
+    class BlockingResponse(_AsyncStreamResponse):
+        def __init__(self) -> None:
+            super().__init__([])
+            self.blocked = asyncio.Event()
+
+        async def aiter_lines(self):
+            try:
+                yield '{"message":{"content":"最初"},"done":false}'
+                self.blocked.set()
+                await asyncio.Event().wait()
+            finally:
+                self.closed = True
+
+    response = BlockingResponse()
+    monkeypatch.setattr(
+        ollama_client.httpx,
+        "AsyncClient",
+        lambda **_kwargs: _AsyncClient(response, []),
+    )
+
+    async def exercise() -> None:
+        async def consume() -> None:
+            _ = [
+                delta
+                async for delta in _ollama_client().stream_generate(
+                    _built_prompt(), max_output_tokens=32
+                )
+            ]
+
+        task = asyncio.create_task(consume())
+        await asyncio.wait_for(response.blocked.wait(), timeout=0.5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(exercise())
+    assert response.closed is True
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "not-json",
+        '{"message":{"content":"text"}}',
+        '{"message":{"content":1},"done":false}',
+    ],
+)
+def test_ollama_stream_rejects_malformed_chunks(monkeypatch, line: str) -> None:
+    from app.llm import ollama_client
+
+    response = _AsyncStreamResponse([line])
+    monkeypatch.setattr(
+        ollama_client.httpx,
+        "AsyncClient",
+        lambda **_kwargs: _AsyncClient(response, []),
+    )
+
+    async def exercise() -> None:
+        with pytest.raises(ValueError):
+            _ = [
+                delta
+                async for delta in _ollama_client().stream_generate(
+                    _built_prompt(), max_output_tokens=32
+                )
+            ]
+
+    asyncio.run(exercise())

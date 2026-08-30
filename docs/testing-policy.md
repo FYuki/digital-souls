@@ -23,7 +23,7 @@ dogfoodのFrontend、Backend、SQLite、Chromaをテスト対象またはfixture
 - dogfoodのFrontend `:15173`、Backend `:18000`、ready gate `:14174`へ接続しない
 - `DS_ENVIRONMENT_ID=dogfood`またはdogfood identity markerを持つdata rootではテストを開始しない
 - テストsetup、DB再作成、cleanup、Playwright teardownからdogfood data rootを操作しない
-- Ollama／VOICEVOXを共通推論サービスとして実接続する場合も、テストrunはそのprocessを所有・停止しない
+- Ollama／VOICEVOX／Whisperを共通推論サービスとして実接続する場合も、テストrunはそのprocessを所有・停止しない
 - 実接続証跡へdogfoodの会話本文、prompt、SQLite row、Chroma documentを複製しない
 
 pytest fixtureは各テストの一時ディレクトリへ`DS_ENVIRONMENT_ID=test`と`DS_DATA_DIR`を設定し、
@@ -43,6 +43,8 @@ Issue #56で、dogfood稼働中のintegration testとcleanupを含む横断受�
 | `npm run test:integration:livekit` | `frontend/integration/livekit/` | `livekit/chromium` | マイク権限・実LiveKit接続 | `frontend/test-results/` |
 
 各設定は Profile、収集ディレクトリ、成果物の出力先を固定する。spec 内で環境変数や依存 mode によってモックと実接続を切り替えない。各 spec が受け入れる要求Capabilityは1つだけとする。実接続 spec では mock WebSocket、`page.route`、HARによる外部通信の置換を禁止する。
+
+`voice-chat-real`はOllama、Whisper、VOICEVOXに加えてLiveKitのreadinessを要求する。`npm run test:integration:voice`の実行時は、Profileへ秘密値を保存せず、`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`を実行環境からBackendへ渡す。
 
 ## 実行入口
 
@@ -66,7 +68,9 @@ npm run build
 音声品質の指標、clock、artifact schema、WebSocket baseline条件は
 [`voice-quality-measurement.md`](voice-quality-measurement.md) を参照する。
 
-CI は単体テスト、結合テスト、モックE2E、型チェック、ビルドを実行する。実接続スイートは外部サービスを必要とするため自動実行せず、Pull Request の検証欄へローカル実行結果または未実行状態を記録する。
+CI は単体テスト、結合テスト、モックE2E、型チェック、Frontend build、Compose契約検証、Backend／Frontend image buildを実行する。別workflowはmainと`epic/**`へのpushでBackend／Frontend／Whisper imageをGHCRへcommit SHA tagで公開しdigestを記録する。実GPU・実接続スイートは外部サービスを必要とするため自動実行せず、Pull Request の検証欄へローカル実行結果または未実行状態を記録する。
+
+Issue #135 Goal 1ではremote client、single-flight、capacity超過、timeout、worker再生成、Profile、Compose、deploy／rollbackをfakeまたはCPU不要の自動テストで検証する。RTX 4070 Ti SUPER上のCUDA／VRAM証跡、dev・dogfood同時会話、連続会話品質、WSL再起動復旧はGoal 2の手動受入とし、Goal 1の成功を実GPU受入済みとは扱わない。
 
 ## Pull Requestレビュー
 
@@ -92,7 +96,12 @@ CodeRabbitの指摘はコードレビューの補助であり、GitHub Actions�
 
 ## LiveKit実サーバーsuite
 
-LiveKitの状態遷移、outbox、mapping、再生済みprefixはfake clock/portを使うunit/module testでCI内検証する。実Room、WebRTC media、browser microphoneの結合は`LIVEKIT_TEST_FRONTEND_URL`、`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`を設定し、リポジトリルートの`npm run test:integration:livekit`でBackend pytestとPlaywright Chromiumをまとめて実行する。このスイートはself-host LiveKitとUDP到達性が必要なためCIでは自動実行しない。
+LiveKitの状態遷移、outbox、mapping、再生済みprefixはfake clock/portを使うunit/module testでCI内検証する。実Room、WebRTC media、browser microphoneの結合は`LIVEKIT_TEST_BACKEND_URL`、`LIVEKIT_TEST_FRONTEND_URL`、`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`を設定し、リポジトリルートの`npm run test:integration:livekit`でBackend pytestとPlaywright Chromiumをまとめて実行する。このスイートはself-host LiveKitとUDP到達性が必要なためCIでは自動実行しない。
+
+`test:integration:livekit`はtransport単体のRoom、権限、outbox、microphone、AudioTrack購読graph、再接続を検証し、テスト専用character音声はproduction runtimeへ注入しない。Whisper、Ollama、VOICEVOXを含む通常conversation UIの逐次text/audio応答は`test:integration:voice`で検証する。
+
+Wave 3のEpic受入シナリオ、自動testと利用者dogfoodの責務分離、再実行手順は
+[`wave3-acceptance-2026-08.md`](wave3-acceptance-2026-08.md)を正本とする。
 
 ## Capability不足と失敗
 
