@@ -139,6 +139,52 @@ def test_should_keep_deployment_responsibilities_in_same_sha_deploy() -> None:
         assert stop_reason in section
 
 
+def test_should_document_explicit_deployment_contract_migration() -> None:
+    section = _section(
+        README_PATH.read_text(encoding="utf-8"),
+        r"経路②.*bootstrap管理資材のin-place更新",
+    )
+
+    assert "migrate-deployment-contract.sh" in section
+    assert "dogfood.revision" in section
+    assert re.search(r"先に.*書き換えてはならない", section)
+    assert "legacy-v0-<from>-to-<target>" in section
+    assert re.search(r"manifest.*手動退避.*行わない", section)
+    assert "previousCommit: null" in section
+    assert re.search(r"境界.*自動rollback.*安全に構成できない", section)
+    assert "migration.json" in section
+
+
+def test_should_document_bootstrap_registry_and_gpu_preflight() -> None:
+    source = README_PATH.read_text(encoding="utf-8")
+    setup = _section(source, r"設定とbootstrap")
+
+    assert "read:packages" in setup
+    assert "--password-stdin" in setup
+    assert "docker buildx imagetools inspect" in setup
+    assert "repository@sha256:..." in setup
+    for component in ("Backend", "Frontend", "Whisper"):
+        assert component in setup
+    assert "Ollamaはhost process" in setup
+    assert "dummy digest" in setup
+    assert "nvidia" in setup and "GPU実動確認" in setup
+
+
+def test_should_document_nvidia_toolkit_install_and_cold_start_contract() -> None:
+    source = README_PATH.read_text(encoding="utf-8")
+
+    for command in (
+        "nvidia-container-toolkit.list",
+        "nvidia-container-toolkit=",
+        "nvidia-ctk runtime configure --runtime=docker",
+        "docker run --rm --runtime=nvidia --gpus all ubuntu nvidia-smi",
+        "--wait --wait-timeout 600",
+        "TimeoutStartSec=900s",
+    ):
+        assert command in source
+    assert "application側の30秒待機へWhisper cold startを押し付けない" in source
+
+
 def test_should_apply_preservation_contract_before_recovery_bootstrap() -> None:
     section = _section(
         README_PATH.read_text(encoding="utf-8"),

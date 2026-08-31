@@ -54,6 +54,7 @@ SHELL_ENTRYPOINTS = (
     "restart-services.sh",
     "status.sh",
     "wait-inference.sh",
+    "migrate-deployment-contract.sh",
     "run-livekit.sh",
 )
 
@@ -228,10 +229,10 @@ def test_should_preserve_wsl_identity_in_direct_sudo_runbook_commands() -> None:
     assert not re.search(r"(?m)^\s*sudo scripts/dogfood/", source)
     for script_name in SHELL_ENTRYPOINTS:
         if f"scripts/dogfood/{script_name}" in source:
-            assert (
-                f"sudo env WSL_DISTRO_NAME=Ubuntu-dogfood "
-                f"scripts/dogfood/{script_name}"
-            ) in source
+            assert re.search(
+                rf"sudo env [^\n]*WSL_DISTRO_NAME=Ubuntu-dogfood(?: \\\n+\s*)?\s*scripts/dogfood/{re.escape(script_name)}",
+                source,
+            )
 
 
 def test_should_document_service_gitconfig_failure_recovery() -> None:
@@ -739,6 +740,34 @@ def test_should_load_each_whisper_environment_file_separately(tmp_path: Path) ->
         f"{values['DOGFOOD_CONFIG_DIR']}/dogfood.env",
         f"-{values['DOGFOOD_CONFIG_DIR']}/dogfood-images.env",
     ]
+    service = _read_unit(unit_path)["Service"]
+    assert service["TimeoutStartSec"] == "900s"
+
+
+def test_should_wait_for_whisper_health_during_cold_start() -> None:
+    source = (DOGFOOD_SCRIPTS_DIR / "run-whisper.sh").read_text(encoding="utf-8")
+
+    assert "--wait --wait-timeout 600 whisper" in " ".join(
+        line.rstrip("\\").strip() for line in source.splitlines()
+    )
+
+
+def test_should_verify_registry_images_and_real_gpu_before_bootstrap_changes() -> None:
+    bootstrap = (DOGFOOD_SCRIPTS_DIR / "bootstrap.sh").read_text(encoding="utf-8")
+    library = (DOGFOOD_SCRIPTS_DIR / "deployment-lib.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert "dogfood_verify_bootstrap_container_prerequisites" in bootstrap
+    for contract in (
+        "command -v nvidia-ctk",
+        "docker info --format '{{json .Runtimes}}'",
+        "docker buildx imagetools inspect",
+        "docker login ghcr.io",
+        "--runtime=nvidia --gpus all",
+        '--entrypoint nvidia-smi "$DOGFOOD_WHISPER_IMAGE" -L',
+    ):
+        assert contract in library
 
 
 def test_should_bound_inference_cold_start_wait_before_application_start() -> None:

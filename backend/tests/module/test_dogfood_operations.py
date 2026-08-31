@@ -141,6 +141,7 @@ def _run_bootstrap(
     npm_dirty: bool = False,
     build_dirty: bool = False,
     persistent_sentinels: dict[str, str] | None = None,
+    container_failure: Literal["runtime", "ghcr", "gpu"] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], tuple[str, ...]]:
     env_path, data_dir = write_dogfood_env(tmp_path)
 
@@ -234,6 +235,8 @@ def _run_bootstrap(
         environment["BOOTSTRAP_SERVICE_GROUP_MISSING"] = "1"
     if compose_available:
         environment["BOOTSTRAP_COMPOSE_AVAILABLE"] = "1"
+    if container_failure is not None:
+        environment["BOOTSTRAP_CONTAINER_FAILURE"] = container_failure
     revision_path = tmp_path / "config" / "dogfood.revision"
     command = command_with_root_owned_revision(
         revision_path, [str(DOGFOOD_SCRIPTS_DIR / "bootstrap.sh")]
@@ -481,6 +484,34 @@ def test_should_reject_bootstrap_before_changes_when_compose_plugin_is_missing(
 
     assert result.returncode == 2
     assert "docker\tcompose version" in calls
+    assert _post_gate_side_effect_calls(calls, ()) == ()
+
+
+@pytest.mark.parametrize(
+    ("container_failure", "diagnostic"),
+    (
+        ("runtime", "nvidia runtime"),
+        ("ghcr", "docker login ghcr.io"),
+        ("gpu", "NVIDIA GPU"),
+    ),
+)
+def test_should_reject_bootstrap_before_changes_when_container_preflight_fails(
+    tmp_path: Path,
+    container_failure: Literal["runtime", "ghcr", "gpu"],
+    diagnostic: str,
+) -> None:
+    result, calls = _run_bootstrap(
+        tmp_path,
+        None,
+        False,
+        "existing",
+        environment_id="dogfood",
+        wsl_distribution="Ubuntu-dogfood",
+        container_failure=container_failure,
+    )
+
+    assert result.returncode == 2
+    assert diagnostic in result.stderr
     assert _post_gate_side_effect_calls(calls, ()) == ()
 
 

@@ -2,6 +2,7 @@
 
 DOGFOOD_DEPLOYMENT_RETENTION=20
 DOGFOOD_MANIFEST_GENERATION_ATTEMPTS=16
+DOGFOOD_DEPLOYMENT_CONTRACT_MIGRATION_SCHEMA=1
 
 dogfood_require_root() {
   if [ "$(id -u)" -eq 0 ]; then
@@ -23,6 +24,51 @@ dogfood_require_root() {
 dogfood_require_commit_sha() {
   if ! [[ "$1" =~ ^[0-9a-f]{40}$ ]]; then
     echo "ERROR: commitは完全な小文字SHAで指定してください" >&2
+    return 2
+  fi
+}
+
+dogfood_verify_bootstrap_container_prerequisites() {
+  local key image expected_digest observed_digest
+  local runtimes
+  if ! command -v nvidia-ctk >/dev/null 2>&1; then
+    echo "ERROR: bootstrap前にNVIDIA Container Toolkitをインストールしてください" >&2
+    return 2
+  fi
+  runtimes=$(docker info --format '{{json .Runtimes}}') || {
+    echo "ERROR: Docker runtime情報を取得できません" >&2
+    return 2
+  }
+  if ! python3 -c '
+import json
+import sys
+
+try:
+    runtimes = json.load(sys.stdin)
+except (json.JSONDecodeError, TypeError):
+    raise SystemExit(1)
+if not isinstance(runtimes, dict) or "nvidia" not in runtimes:
+    raise SystemExit(1)
+' <<< "$runtimes"; then
+    echo "ERROR: Dockerにnvidia runtimeが登録されていません。nvidia-ctk runtime configure後にDockerを再起動してください" >&2
+    return 2
+  fi
+  for key in "${DOGFOOD_IMAGE_KEYS[@]}"; do
+    image=${!key}
+    expected_digest=${image##*@}
+    observed_digest=$(docker buildx imagetools inspect "$image" \
+      --format '{{.Manifest.Digest}}') || {
+      echo "ERROR: $key をGHCRから解決できません。rootでdocker login ghcr.ioを確認してください" >&2
+      return 2
+    }
+    if [ "$observed_digest" != "$expected_digest" ]; then
+      echo "ERROR: $key の取得結果が設定済みimmutable digestと一致しません" >&2
+      return 2
+    fi
+  done
+  if ! docker run --rm --runtime=nvidia --gpus all \
+    --entrypoint nvidia-smi "$DOGFOOD_WHISPER_IMAGE" -L >/dev/null; then
+    echo "ERROR: immutable Whisper imageからNVIDIA GPUを利用できません" >&2
     return 2
   fi
 }
@@ -290,6 +336,288 @@ dogfood_write_active_images() (
   mv -T -- "$prepared" "$destination"
   prepared=
 )
+
+dogfood_archive_legacy_deployment_manifests() {
+  local from_commit=$1
+  local target_commit=$2
+  python3 - "$DOGFOOD_STATE_DIR/deployments" "$from_commit" "$target_commit" <<'PYTHON'
+import json
+import os
+import re
+import stat
+import sys
+from pathlib import Path
+
+deployments = Path(sys.argv[1])
+from_commit, target_commit = sys.argv[2:]
+commit_pattern = re.compile(r"^[0-9a-f]{40}$")
+if commit_pattern.fullmatch(from_commit) is None or commit_pattern.fullmatch(target_commit) is None:
+    raise SystemExit(2)
+archive_name = f"legacy-v0-{from_commit[:12]}-to-{target_commit[:12]}"
+archive = deployments / archive_name
+expected_owner = os.geteuid()
+
+if archive.exists():
+    archive_status = archive.stat(follow_symlinks=False)
+    if (
+        not stat.S_ISDIR(archive_status.st_mode)
+        or archive_status.st_uid != expected_owner
+        or stat.S_IMODE(archive_status.st_mode) != 0o750
+    ):
+        print("ERROR: legacy deployment archiveが安全なdirectoryではありません", file=sys.stderr)
+        raise SystemExit(2)
+else:
+    archive.mkdir(mode=0o750)
+
+legacy_keys = {
+    "previousCommit",
+    "targetCommit",
+    "profileSchemaVersion",
+    "dataSchemaVersion",
+    "backupId",
+    "deployedAt",
+}
+
+def read_legacy_manifest(path: Path) -> bytes:
+    descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    try:
+        status = os.fstat(descriptor)
+        path_status = path.stat(follow_symlinks=False)
+        if (
+            not stat.S_ISREG(status.st_mode)
+            or status.st_uid != expected_owner
+            or stat.S_IMODE(status.st_mode) != 0o640
+            or (status.st_dev, status.st_ino) != (path_status.st_dev, path_status.st_ino)
+        ):
+            raise OSError
+        with os.fdopen(descriptor, "rb") as source:
+            contents = source.read()
+        descriptor = -1
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    try:
+        payload = json.loads(contents)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise OSError from None
+    if not isinstance(payload, dict) or set(payload) != legacy_keys:
+        raise OSError
+    previous = payload["previousCommit"]
+    target = payload["targetCommit"]
+    if previous is not None and (
+        not isinstance(previous, str) or commit_pattern.fullmatch(previous) is None
+    ):
+        raise OSError
+    if not isinstance(target, str) or commit_pattern.fullmatch(target) is None:
+        raise OSError
+    if previous is not None and previous == target:
+        raise OSError
+    for field in ("profileSchemaVersion", "dataSchemaVersion"):
+        value = payload[field]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise OSError
+    for field in ("backupId", "deployedAt"):
+        if not isinstance(payload[field], str) or not payload[field]:
+            raise OSError
+    return contents
+
+sources = sorted(deployments.glob("*.json"))
+for source in sources:
+    try:
+        contents = read_legacy_manifest(source)
+    except OSError:
+        print(
+            f"ERROR: legacy deployment manifestを検証できません: {source.name}",
+            file=sys.stderr,
+        )
+        raise SystemExit(2) from None
+    destination = archive / source.name
+    if destination.exists():
+        try:
+            archived_contents = read_legacy_manifest(destination)
+        except OSError:
+            print(
+                f"ERROR: 既存legacy deployment archiveを検証できません: {source.name}",
+                file=sys.stderr,
+            )
+            raise SystemExit(2) from None
+        if archived_contents != contents:
+            print(
+                f"ERROR: legacy deployment archiveの同名manifestが一致しません: {source.name}",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+        source.unlink()
+    else:
+        os.replace(source, destination)
+
+for archived in archive.glob("*.json"):
+    if archived.name == "migration.json":
+        continue
+    try:
+        read_legacy_manifest(archived)
+    except OSError:
+        print(
+            f"ERROR: legacy deployment archiveを検証できません: {archived.name}",
+            file=sys.stderr,
+        )
+        raise SystemExit(2) from None
+
+print(archive_name)
+PYTHON
+}
+
+dogfood_write_deployment_contract_migration() (
+  set -e
+  local from_commit=$1
+  local target_commit=$2
+  local archive_name=$3
+  local marker="$DOGFOOD_STATE_DIR/deployment-contract-migration.json"
+  local temporary prepared
+  temporary=$(mktemp "$DOGFOOD_STATE_DIR/.deployment-contract-migration.XXXXXX")
+  prepared=$(mktemp "$DOGFOOD_STATE_DIR/.deployment-contract-migration.ready.XXXXXX")
+  trap 'rm -f -- "$temporary" "$prepared"' EXIT
+  python3 - "$from_commit" "$target_commit" "$archive_name" \
+    "$DOGFOOD_DEPLOYMENT_CONTRACT_MIGRATION_SCHEMA" > "$temporary" <<'PYTHON'
+import json
+import sys
+from datetime import datetime, timezone
+
+from_commit, target_commit, archive_name, schema = sys.argv[1:]
+print(json.dumps({
+    "schemaVersion": int(schema),
+    "fromCommit": from_commit,
+    "targetCommit": target_commit,
+    "archiveDirectory": archive_name,
+    "createdAt": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+}, separators=(",", ":")))
+PYTHON
+  install -m 0640 -o root -g "$DOGFOOD_SERVICE_GROUP" "$temporary" "$prepared"
+  mv -T -- "$prepared" "$marker"
+  prepared=
+)
+
+dogfood_read_deployment_contract_migration() {
+  local marker="$DOGFOOD_STATE_DIR/deployment-contract-migration.json"
+  local output
+  local -a migration_fields
+  output=$(python3 - "$marker" "$DOGFOOD_STATE_DIR/deployments" \
+    "$DOGFOOD_DEPLOYMENT_CONTRACT_MIGRATION_SCHEMA" <<'PYTHON'
+import json
+import os
+import re
+import stat
+import sys
+from pathlib import Path
+
+marker = Path(sys.argv[1])
+deployments = Path(sys.argv[2])
+expected_schema = int(sys.argv[3])
+pattern = re.compile(r"^[0-9a-f]{40}$")
+try:
+    descriptor = os.open(marker, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    status = os.fstat(descriptor)
+    marker_status = marker.stat(follow_symlinks=False)
+    if (
+        not stat.S_ISREG(status.st_mode)
+        or status.st_uid != os.geteuid()
+        or stat.S_IMODE(status.st_mode) != 0o640
+        or (status.st_dev, status.st_ino) != (marker_status.st_dev, marker_status.st_ino)
+    ):
+        raise OSError
+    with os.fdopen(descriptor, encoding="utf-8") as source:
+        payload = json.load(source)
+except (OSError, json.JSONDecodeError):
+    raise SystemExit(1)
+if set(payload) != {
+    "schemaVersion", "fromCommit", "targetCommit", "archiveDirectory", "createdAt"
+}:
+    raise SystemExit(1)
+if payload["schemaVersion"] != expected_schema:
+    raise SystemExit(1)
+for field in ("fromCommit", "targetCommit"):
+    if not isinstance(payload[field], str) or pattern.fullmatch(payload[field]) is None:
+        raise SystemExit(1)
+if payload["fromCommit"] == payload["targetCommit"]:
+    raise SystemExit(1)
+archive_name = payload["archiveDirectory"]
+if (
+    not isinstance(archive_name, str)
+    or not archive_name
+    or archive_name != Path(archive_name).name
+):
+    raise SystemExit(1)
+if archive_name != (
+    f"legacy-v0-{payload['fromCommit'][:12]}-to-{payload['targetCommit'][:12]}"
+):
+    raise SystemExit(1)
+if not isinstance(payload["createdAt"], str) or not payload["createdAt"]:
+    raise SystemExit(1)
+archive = deployments / archive_name
+try:
+    archive_status = archive.stat(follow_symlinks=False)
+except OSError:
+    raise SystemExit(1)
+if (
+    not stat.S_ISDIR(archive_status.st_mode)
+    or archive_status.st_uid != os.geteuid()
+    or stat.S_IMODE(archive_status.st_mode) != 0o750
+):
+    raise SystemExit(1)
+print(payload["fromCommit"])
+print(payload["targetCommit"])
+print(archive_name)
+PYTHON
+) || {
+    echo "ERROR: deployment contract migration markerを検証できません" >&2
+    return 2
+  }
+  mapfile -t migration_fields <<< "$output"
+  if [ "${#migration_fields[@]}" -ne 3 ]; then
+    echo "ERROR: deployment contract migration markerのfield数が不正です" >&2
+    return 2
+  fi
+  export DOGFOOD_MIGRATION_FROM_COMMIT=${migration_fields[0]}
+  export DOGFOOD_MIGRATION_TARGET_COMMIT=${migration_fields[1]}
+  export DOGFOOD_MIGRATION_ARCHIVE_DIRECTORY=${migration_fields[2]}
+}
+
+dogfood_prepare_deployment_contract_migration() {
+  local from_commit=$1
+  local target_commit=$2
+  local marker="$DOGFOOD_STATE_DIR/deployment-contract-migration.json"
+  local archive_name
+  if [ -e "$marker" ] || [ -L "$marker" ]; then
+    dogfood_read_deployment_contract_migration || return
+    if [ "$DOGFOOD_MIGRATION_FROM_COMMIT" != "$from_commit" ] \
+      || [ "$DOGFOOD_MIGRATION_TARGET_COMMIT" != "$target_commit" ]; then
+      echo "ERROR: 既存deployment contract migrationが指定commitと一致しません" >&2
+      return 2
+    fi
+    return
+  fi
+  archive_name=$(dogfood_archive_legacy_deployment_manifests \
+    "$from_commit" "$target_commit") || return
+  dogfood_write_deployment_contract_migration \
+    "$from_commit" "$target_commit" "$archive_name"
+}
+
+dogfood_complete_deployment_contract_migration() {
+  local target_commit=$1
+  local marker="$DOGFOOD_STATE_DIR/deployment-contract-migration.json"
+  local destination
+  dogfood_read_deployment_contract_migration || return
+  if [ "$DOGFOOD_MIGRATION_TARGET_COMMIT" != "$target_commit" ]; then
+    echo "ERROR: 完了対象とdeployment contract migrationのtargetが一致しません" >&2
+    return 2
+  fi
+  destination="$DOGFOOD_STATE_DIR/deployments/$DOGFOOD_MIGRATION_ARCHIVE_DIRECTORY/migration.json"
+  if [ -e "$destination" ] || [ -L "$destination" ]; then
+    echo "ERROR: legacy deployment archiveのmigration記録が既に存在します" >&2
+    return 2
+  fi
+  mv -T -- "$marker" "$destination"
+}
 
 dogfood_activate_revision() {
   local target=$1

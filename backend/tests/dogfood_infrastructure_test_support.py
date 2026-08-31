@@ -339,9 +339,26 @@ def install_bootstrap_command_fakes(tmp_path: Path) -> tuple[Path, Path]:
     write_executable(
         bin_dir / "docker",
         recorder
-        + 'case "$*" in "compose version"|"buildx version") ;; *) exit 1 ;; esac\n'
-        + '[ "${BOOTSTRAP_COMPOSE_AVAILABLE-}" = "1" ]\n',
+        + 'case "$*" in\n'
+        + '  "compose version"|"buildx version") '
+        + '[ "${BOOTSTRAP_COMPOSE_AVAILABLE-}" = "1" ] ;;\n'
+        + '  "info --format {{json .Runtimes}}")\n'
+        + '    if [ "${BOOTSTRAP_CONTAINER_FAILURE-}" = "runtime" ]; then '
+        + "printf '{}\\n'; else printf '{\"nvidia\":{}}\\n'; fi ;;\n"
+        + '  *"buildx imagetools inspect "*)\n'
+        + '    [ "${BOOTSTRAP_CONTAINER_FAILURE-}" != "ghcr" ] || exit 1\n'
+        + '    case "$*" in\n'
+        + f'      *"digital-souls-backend"*) printf "sha256:{"1" * 64}\\n" ;;\n'
+        + f'      *"digital-souls-frontend"*) printf "sha256:{"2" * 64}\\n" ;;\n'
+        + f'      *"digital-souls-whisper"*) printf "sha256:{"3" * 64}\\n" ;;\n'
+        + '      *) exit 1 ;;\n'
+        + '    esac ;;\n'
+        + '  "run --rm --runtime=nvidia --gpus all --entrypoint nvidia-smi "*)\n'
+        + '    [ "${BOOTSTRAP_CONTAINER_FAILURE-}" != "gpu" ] ;;\n'
+        + '  *) exit 1 ;;\n'
+        + 'esac\n',
     )
+    write_executable(bin_dir / "nvidia-ctk", recorder)
     write_executable(
         bin_dir / "node",
         recorder
