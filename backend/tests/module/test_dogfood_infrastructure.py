@@ -73,10 +73,25 @@ def _read_environment_example() -> dict[str, str]:
 
 
 def _read_unit(path: Path) -> configparser.ConfigParser:
-    parser = configparser.ConfigParser(interpolation=None, strict=True)
+    # systemdは同じdirectiveの複数指定を許可するため、重複keyを受理する。
+    parser = configparser.ConfigParser(interpolation=None, strict=False)
     parser.optionxform = str
     parser.read(path, encoding="utf-8")
     return parser
+
+
+def _read_unit_directives(path: Path, section: str, directive: str) -> list[str]:
+    current_section = ""
+    values: list[str] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            current_section = stripped[1:-1]
+            continue
+        key, separator, value = stripped.partition("=")
+        if current_section == section and separator and key == directive:
+            values.append(value)
+    return values
 
 
 def _assert_finite_stop_timeout(service: configparser.SectionProxy) -> None:
@@ -695,7 +710,7 @@ def test_should_delegate_application_lifecycle_to_one_foreground_systemd_unit(
         f"{values['DOGFOOD_CLONE_DIR']}/scripts/dogfood/wait-inference.sh"
     )
     assert service["ExecStop"] == f"{values['DOGFOOD_CLONE_DIR']}/environments/down.sh"
-    assert service["EnvironmentFile"].split() == [
+    assert _read_unit_directives(unit_path, "Service", "EnvironmentFile") == [
         f"{values['DOGFOOD_CONFIG_DIR']}/dogfood.env",
         f"-{values['DOGFOOD_CONFIG_DIR']}/dogfood-images.env",
         f"{values['DOGFOOD_CONFIG_DIR']}/livekit-backend.env",
@@ -714,6 +729,16 @@ def test_should_delegate_application_lifecycle_to_one_foreground_systemd_unit(
     assert "digital-souls-livekit.service" in unit["Unit"]["After"].split()
     assert "Restart" not in service
     assert service["TimeoutStartSec"] == "180s"
+
+
+def test_should_load_each_whisper_environment_file_separately(tmp_path: Path) -> None:
+    values, generated_dir = render_nondefault_dogfood_assets(tmp_path)
+    unit_path = generated_dir / "digital-souls-whisper.service"
+
+    assert _read_unit_directives(unit_path, "Service", "EnvironmentFile") == [
+        f"{values['DOGFOOD_CONFIG_DIR']}/dogfood.env",
+        f"-{values['DOGFOOD_CONFIG_DIR']}/dogfood-images.env",
+    ]
 
 
 def test_should_bound_inference_cold_start_wait_before_application_start() -> None:

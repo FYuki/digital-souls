@@ -109,8 +109,7 @@ dogfood_load_environment_settings() {
   if [ "$EUID" -eq 0 ] && [[ "${SUDO_UID-}" =~ ^[0-9]+$ ]]; then
     expected_owner=$SUDO_UID
   fi
-  if [ "$load_active_images" = true ] \
-    && [ "$normalized_env_file" = "$normalized_default_env_file" ]; then
+  if [ "$normalized_env_file" = "$normalized_default_env_file" ]; then
     expected_owner=0
   fi
   if ! environment_contents=$(
@@ -183,7 +182,8 @@ PYTHON
     export DOGFOOD_OLLAMA_MODELS_DIR="$DOGFOOD_DEFAULT_OLLAMA_MODELS_DIR"
   fi
   dogfood_validate_environment || return
-  if [ "$normalized_env_file" = "$normalized_default_env_file" ]; then
+  if [ "$load_active_images" = true ] \
+    && [ "$normalized_env_file" = "$normalized_default_env_file" ]; then
     dogfood_load_active_images || return
     dogfood_validate_images || return
   fi
