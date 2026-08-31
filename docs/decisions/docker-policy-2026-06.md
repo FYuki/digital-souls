@@ -63,6 +63,12 @@ Environment CLIをホスト側control planeとして残し、managed adapterの�
 Compose container操作へ差し替える。Backend／Frontendのrun reportはcontainer identityを記録し、
 記録したenvironment runが所有するcontainerだけを停止する。
 
+dogfoodのsystemd application unitは`Type=simple`とし、`scripts/start-dogfood.sh`が直接
+`environment_cli.py up`へ`exec`してforeground supervision processになる。ready後に子processを
+残して終了する汎用`environments/up.sh`は対話・テスト入口として維持するが、systemdの
+`ExecStart`には使用しない。systemd停止時はrun reportのprocess identityを使う`down.sh`から
+foreground orchestratorへSIGTERMを送り、所有するBackend／Frontendだけをcleanupする。
+
 WSL2上の既存loopback URLとportを維持するため、アプリケーションとWhisperのComposeはhost networkを
 使用する。containerはProfileで解決したloopback endpointをそのまま利用し、LANへ公開しない。
 

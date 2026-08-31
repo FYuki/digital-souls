@@ -706,7 +706,9 @@ def test_should_delegate_application_lifecycle_to_one_foreground_systemd_unit(
     assert "RemainAfterExit" not in service
     assert service["User"] == "root"
     assert service["Group"] == "root"
-    assert service["ExecStart"] == f"{values['DOGFOOD_CLONE_DIR']}/environments/up.sh"
+    assert service["ExecStart"] == (
+        f"{values['DOGFOOD_CLONE_DIR']}/scripts/start-dogfood.sh"
+    )
     assert service["ExecStartPre"] == (
         f"{values['DOGFOOD_CLONE_DIR']}/scripts/dogfood/wait-inference.sh"
     )
@@ -716,6 +718,11 @@ def test_should_delegate_application_lifecycle_to_one_foreground_systemd_unit(
         f"-{values['DOGFOOD_CONFIG_DIR']}/dogfood-images.env",
         f"{values['DOGFOOD_CONFIG_DIR']}/livekit-backend.env",
     ]
+    assert (
+        f"DOGFOOD_ENV_FILE={values['DOGFOOD_CONFIG_DIR']}/dogfood.env"
+        in service["Environment"]
+    )
+    assert f"WSL_DISTRO_NAME={values['DOGFOOD_WSL_DISTRO']}" in service["Environment"]
     assert "DS_ENVIRONMENT_ID=dogfood" in service["Environment"]
     assert f"DS_DATA_DIR={values['DS_DATA_DIR']}" in service["Environment"]
     assert f"HOME={values['DOGFOOD_SERVICE_HOME_DIR']}" in service["Environment"]
@@ -730,6 +737,12 @@ def test_should_delegate_application_lifecycle_to_one_foreground_systemd_unit(
     assert "digital-souls-livekit.service" in unit["Unit"]["After"].split()
     assert "Restart" not in service
     assert service["TimeoutStartSec"] == "180s"
+
+    foreground_entrypoint = (ROOT_DIR / "scripts" / "start-dogfood.sh").read_text(
+        encoding="utf-8"
+    )
+    assert 'environment_cli.py" up' in foreground_entrypoint
+    assert 'environment_cli.py" start' not in foreground_entrypoint
 
 
 def test_should_load_each_whisper_environment_file_separately(tmp_path: Path) -> None:
