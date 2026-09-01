@@ -33,6 +33,7 @@ def _event(
         schema_version="1.0",
         measurement_kind="automated_test",
         event_id=event_id,
+        character_id="miori",
         session_id="session-1",
         utterance_id="utterance-1",
         response_id="response-1",
@@ -93,6 +94,7 @@ def test_vm_id_01_serialized_event_keeps_the_complete_correlation_chain() -> Non
     serialized = metrics.serialize_trace_event(event, {})
 
     assert serialized["event_id"] == "event-1"
+    assert serialized["character_id"] == "miori"
     assert serialized["session_id"] == "session-1"
     assert serialized["utterance_id"] == "utterance-1"
     assert serialized["response_id"] == "response-1"
@@ -302,6 +304,27 @@ def test_vm_kind_01_rejects_mixed_measurement_kinds() -> None:
         )
         metrics.aggregate_events(
             [automated, controlled],
+            metadata=metadata,
+            diagnostics=diagnostics,
+        )
+
+
+def test_vm_character_01_rejects_mixed_character_ids() -> None:
+    metrics = _voice_metrics()
+    miori = _event(
+        metrics,
+        event_id="miori-event",
+        name="stt_started",
+        timestamp=1,
+    )
+    another = miori.model_copy(
+        update={"event_id": "another-event", "character_id": "another"}
+    )
+    metadata, diagnostics = _aggregation_context(metrics)
+
+    with pytest.raises(ValueError, match="character ids must not be mixed"):
+        metrics.aggregate_events(
+            [miori, another],
             metadata=metadata,
             diagnostics=diagnostics,
         )
@@ -796,6 +819,7 @@ def _write_valid_baseline_inputs(tmp_path: Path) -> tuple[Path, Path, dict[str, 
             "schema_version": "1.0",
             "measurement_kind": "controlled_baseline",
             "event_id": f"event-{index}",
+            "character_id": "miori",
             "session_id": session_id,
             "utterance_id": utterance_id,
             "response_id": response_id,
@@ -851,6 +875,7 @@ def test_vm_base_01_finalizer_excludes_warmups_and_writes_anonymous_artifact(
     assert next(metric for metric in artifact["metrics"] if metric["name"] == "ttfa")["p95"] == 750.0
     serialized = json.dumps(artifact)
     assert "session_id" not in serialized
+    assert "character_id" not in serialized
     assert "utterance_id" not in serialized
     assert "response_id" not in serialized
 

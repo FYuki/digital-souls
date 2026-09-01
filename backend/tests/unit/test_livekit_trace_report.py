@@ -14,6 +14,7 @@ def test_livekit_dogfood_report_aggregates_anonymous_trace(tmp_path: Path) -> No
             schema_version="1.0",
             measurement_kind="dogfood",
             event_id=f"event-{index}",
+            character_id="miori",
             session_id="session-1",
             utterance_id="utterance-1",
             response_id="response-1",
@@ -65,6 +66,12 @@ def test_livekit_dogfood_report_aggregates_anonymous_trace(tmp_path: Path) -> No
     )["p50"] == 750.0
     assert all(
         forbidden not in serialized
-        for forbidden in ("event-1", "session-1", "utterance-1", "response-1")
+        for forbidden in (
+            "event-1",
+            "miori",
+            "session-1",
+            "utterance-1",
+            "response-1",
+        )
     )
     assert output_path.with_suffix(".md").exists()

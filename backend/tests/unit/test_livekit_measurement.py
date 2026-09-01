@@ -12,6 +12,7 @@ def test_livekit_measurement_correlates_buffered_core_stages_with_response() -> 
     timestamps = iter(range(1_000, 2_000))
     measurement = LiveKitMeasurementSession(
         session_id="session-1",
+        character_id="miori",
         measurement_kind="dogfood",
         record=recorded.append,
         clock_ns=lambda: next(timestamps),
@@ -59,12 +60,64 @@ def test_livekit_measurement_correlates_buffered_core_stages_with_response() -> 
         (event.session_id, event.utterance_id, event.response_id)
         for event in recorded
     } == {("session-1", "utterance-1", "response-1")}
+    assert {event.character_id for event in recorded} == {"miori"}
+
+
+def test_livekit_measurement_retries_client_observations_after_correlation() -> None:
+    recorded: list[TraceEvent] = []
+    measurement = LiveKitMeasurementSession(
+        session_id="session-1",
+        character_id="miori",
+        measurement_kind="dogfood",
+        record=recorded.append,
+        clock_ns=lambda: 1_000,
+    )
+    speech_stopped = {
+        "event_id": "speech-event",
+        "session_id": "session-1",
+        "utterance_id": "utterance-1",
+        "measurement": "speech_stopped",
+        "timestamp": 900,
+        "clock_domain": "client_monotonic",
+        "unit": "millisecond",
+    }
+    playback_started = {
+        "event_id": "playback-event",
+        "session_id": "session-1",
+        "response_id": "response-1",
+        "measurement": "playback_started",
+        "timestamp": 1_250,
+        "clock_domain": "client_monotonic",
+        "unit": "millisecond",
+    }
+
+    assert measurement.record_client_observation(speech_stopped) is False
+    assert measurement.record_client_observation(speech_stopped) is False
+    assert measurement.record_client_observation(playback_started) is False
+    measurement.record_utterance_event(
+        utterance_id="utterance-1",
+        name="vad_speech_end",
+        stage="vad",
+    )
+    measurement.bind_response(
+        response_id="response-1",
+        source_utterance_ids=("utterance-1",),
+    )
+
+    assert [event.name for event in recorded] == [
+        "vad_speech_end",
+        "speech_stopped",
+        "first_playback",
+    ]
+    assert measurement.record_client_observation(speech_stopped) is False
+    assert measurement.record_client_observation(playback_started) is False
 
 
 def test_livekit_measurement_normalizes_and_deduplicates_client_observations() -> None:
     recorded: list[TraceEvent] = []
     measurement = LiveKitMeasurementSession(
         session_id="session-1",
+        character_id="miori",
         measurement_kind="controlled_baseline",
         record=recorded.append,
         clock_ns=lambda: 1_000,
@@ -104,6 +157,7 @@ def test_livekit_measurement_keeps_client_speech_end_for_ttfa() -> None:
     recorded: list[TraceEvent] = []
     measurement = LiveKitMeasurementSession(
         session_id="session-1",
+        character_id="miori",
         measurement_kind="dogfood",
         record=recorded.append,
         clock_ns=lambda: 1_000,
@@ -138,6 +192,7 @@ def test_livekit_measurement_records_only_first_event_per_trial_point() -> None:
     recorded: list[TraceEvent] = []
     measurement = LiveKitMeasurementSession(
         session_id="session-1",
+        character_id="miori",
         measurement_kind="dogfood",
         record=recorded.append,
         clock_ns=lambda: 1_000,
@@ -178,6 +233,7 @@ def test_livekit_measurement_keeps_stt_failure_without_protocol_response() -> No
     recorded: list[TraceEvent] = []
     measurement = LiveKitMeasurementSession(
         session_id="session-1",
+        character_id="miori",
         measurement_kind="dogfood",
         record=recorded.append,
         clock_ns=lambda: 1_000,

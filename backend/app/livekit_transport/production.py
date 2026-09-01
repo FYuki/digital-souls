@@ -300,6 +300,7 @@ class ProductionConversationCoreSessionFactory:
         )
         measurement = LiveKitMeasurementSession(
             session_id=session_id,
+            character_id=character_id,
             measurement_kind=self._measurement_kind,
             record=self._trace_record,
             clock_ns=self._measurement_clock_ns,

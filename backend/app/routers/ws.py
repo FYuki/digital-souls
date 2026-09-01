@@ -388,6 +388,7 @@ def _extract_client_measurement_event(
     payload: object,
     connection_session_id: UUID | None,
     measurement_kind: MeasurementKind,
+    character_id: str,
 ) -> TraceEvent:
     if not isinstance(payload, dict) or payload.get(MESSAGE_TYPE_FIELD) != MEASUREMENT_EVENT_MESSAGE_TYPE:
         raise WebSocketMessageError("WebSocket measurement event is invalid")
@@ -412,6 +413,7 @@ def _extract_client_measurement_event(
             schema_version="1.0",
             measurement_kind=measurement_kind,
             event_id=event_id,
+            character_id=character_id,
             session_id=session_id,
             utterance_id=utterance_id,
             response_id=response_id,
@@ -605,6 +607,7 @@ def _record_audio_request_events(
             schema_version="1.0",
             measurement_kind=measurement.measurement_kind,
             event_id=str(uuid4()),
+            character_id=measurement.character_id,
             session_id=measurement.session_id,
             utterance_id=measurement.utterance_id,
             response_id=measurement.response_id,
@@ -657,6 +660,7 @@ async def _handle_audio_payload(
     chat_session: ChatReplySession,
     audio_session: AudioPipelineSession,
     audio: bytes,
+    character_id: str,
     measurement_state: _ConnectionMeasurementState,
     correlation: AudioCorrelation | None = None,
     received_at_ns: int | None = None,
@@ -670,6 +674,7 @@ async def _handle_audio_payload(
             raise ValueError("correlated audio requires its server receive timestamp")
         measurement = MeasurementContext(
             measurement_kind=_connection_measurement_kind(websocket),
+            character_id=character_id,
             session_id=correlation.session_id,
             utterance_id=correlation.utterance_id,
             response_id=response_id,
@@ -845,6 +850,7 @@ async def _process_audio_queue(
                 chat_session,
                 audio_session,
                 audio,
+                character_name,
                 measurement_state,
                 correlation,
                 received_at_ns,
@@ -921,6 +927,7 @@ async def websocket_chat(
                             payload,
                             session_id,
                             _connection_measurement_kind(websocket),
+                            character_name,
                         )
                         measurement_state.consume(event)
                         _record_trace_event(websocket, event)

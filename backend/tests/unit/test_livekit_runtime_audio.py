@@ -319,6 +319,9 @@ def test_stream_boundary_whitespace_never_reaches_voicevox_or_livekit_audio(
             metadata["response_id"],
         )
     }
+    assert {
+        event.character_id for event in trace_events  # type: ignore[attr-defined]
+    } == {"miori"}
     trace_by_name = {
         event.name: event for event in trace_events  # type: ignore[attr-defined]
     }

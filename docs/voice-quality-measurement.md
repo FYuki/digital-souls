@@ -6,7 +6,7 @@
 
 ## trace と clock
 
-生traceは `event_id`、`session_id`、`utterance_id`、`response_id`、event名、stage、outcome、reason code、timestamp、clock domain、単位、数値観測値だけを allow-list で書き出す。prompt、transcript、音声本文、音声payload、exception詳細は書き出さない。server は `server_monotonic` / ns、client は `client_monotonic` / msを使い、異なる clock domain の値を直接減算しない。fixtureの発話開始・終了はfixture開始時とsample数からclient clock上の時刻へ変換する。
+生traceは `event_id`、`character_id`、`session_id`、`utterance_id`、`response_id`、event名、stage、outcome、reason code、timestamp、clock domain、単位、数値観測値だけを allow-list で書き出す。`character_id`は人格単位の分離・検証・削除に使い、異なる人格のtraceを同じaggregateへ混在させない。prompt、transcript、音声本文、音声payload、exception詳細は書き出さない。server は `server_monotonic` / ns、client は `client_monotonic` / msを使い、異なる clock domain の値を直接減算しない。fixtureの発話開始・終了はfixture開始時とsample数からclient clock上の時刻へ変換する。
 
 ## 指標カタログ
 
@@ -53,7 +53,7 @@ dogfood BackendはLiveKit sessionごとに、Conversation CoreのSTT／LLM／TTS
 
 `speech_stopped`と`first_playback`は同じ`client_monotonic` clockとしてTTFAを算出する。TTS開始はworkerのqueue待機開始ではなく、最初の合成可能segmentを受け取った時点とする。LiveKitで観測が未実装の指標はWebSocket用の`not_applicable`へ落とさず`missing`として残す。
 
-受入対象のBackend起動で作られたtraceだけを選び、次のように匿名aggregateとMarkdown表を生成する。複数ファイルの場合は`--trace`の後へ列挙する。生成物には逆引き可能なevent／session／utterance／response IDを含めない。
+受入対象のBackend起動で作られた同一`character_id`のtraceだけを選び、次のように匿名aggregateとMarkdown表を生成する。複数ファイルの場合は`--trace`の後へ列挙する。異なる`character_id`が混在した入力は拒否する。生成物には逆引き可能なcharacter／event／session／utterance／response IDを含めない。
 
 ```bash
 PYTHONPATH=backend backend/.venv/bin/python -m app.livekit_trace_report \
@@ -67,4 +67,4 @@ browser内だけで確定するclient track受信、barge-in local停止、recon
 
 ## 保存と削除
 
-dogfood生traceはリポジトリ外の `DS_DATA_DIR/voice-metrics/raw/` へ保存し、7日を超えたファイルを起動時に削除する。生traceはGit、会話履歴、テスト成果物、dogfood backupの対象にしない。長期保存aggregateからはevent・session・utterance・response IDを除く。リポジトリ内へ誤出力した `voice-metrics/raw/` は `.gitignore` で追跡対象外にする。
+dogfood生traceはリポジトリ外の `DS_DATA_DIR/voice-metrics/raw/` へ保存し、7日を超えたファイルを起動時に削除する。生traceはGit、会話履歴、テスト成果物、dogfood backupの対象にしない。長期保存aggregateからはcharacter・event・session・utterance・response IDを除く。リポジトリ内へ誤出力した `voice-metrics/raw/` は `.gitignore` で追跡対象外にする。

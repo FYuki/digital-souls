@@ -534,12 +534,13 @@ def test_real_livekit_sustained_microphone_keeps_core_delivery_available(client)
         session_id = binding["session_id"]
         source = rtc.AudioSource(48_000, 1, queue_size_ms=100)
         track = rtc.LocalAudioTrack.create_audio_track("sustained-microphone", source)
-        publication = await room.local_participant.publish_track(
-            track,
-            rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE),
-        )
+        publication = None
         frame = rtc.AudioFrame(bytes(480 * 2), 48_000, 1, 480)
         try:
+            publication = await room.local_participant.publish_track(
+                track,
+                rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE),
+            )
             # 実ブラウザと同じ10ms cadenceで継続入力し、観測用private messageが
             # response/control配送を枯渇させないことを確認する。
             for _ in range(800):
@@ -556,13 +557,16 @@ def test_real_livekit_sustained_microphone_keeps_core_delivery_available(client)
 
             assert delivered == payload
         finally:
-            await room.local_participant.unpublish_track(publication.sid)
-            await _cleanup_resources(
-                client,
-                rooms=(room,),
-                session_ids=(session_id,),
-                conversation_id=conversation_id,
-            )
+            try:
+                if publication is not None:
+                    await room.local_participant.unpublish_track(publication.sid)
+            finally:
+                await _cleanup_resources(
+                    client,
+                    rooms=(room,),
+                    session_ids=(session_id,),
+                    conversation_id=conversation_id,
+                )
 
     asyncio.run(exercise())
 

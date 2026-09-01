@@ -25,6 +25,7 @@ from app.voice_metrics import (
 
 _FORBIDDEN_KEYS = {
     "event_id",
+    "character_id",
     "session_id",
     "utterance_id",
     "response_id",

@@ -29,6 +29,7 @@ class TraceEvent(BaseModel):
     schema_version: Literal["1.0"]
     measurement_kind: MeasurementKind
     event_id: str = Field(min_length=1)
+    character_id: str = Field(min_length=1)
     session_id: str = Field(min_length=1)
     utterance_id: str = Field(min_length=1)
     response_id: str = Field(min_length=1)
@@ -54,6 +55,7 @@ class MeasurementContext(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
 
     measurement_kind: MeasurementKind
+    character_id: str = Field(min_length=1)
     session_id: str = Field(min_length=1)
     utterance_id: str = Field(min_length=1)
     response_id: str = Field(min_length=1)
@@ -606,6 +608,8 @@ def aggregate_events(
         raise ValueError("event aggregation requires at least one event")
     if any(event.measurement_kind != metadata.measurement_kind for event in events):
         raise ValueError("measurement kinds must not be mixed")
+    if len({event.character_id for event in events}) != 1:
+        raise ValueError("character ids must not be mixed")
     trials: dict[tuple[str, str, str], list[TraceEvent]] = {}
     for event in events:
         trials.setdefault(_trial_key(event), []).append(event)

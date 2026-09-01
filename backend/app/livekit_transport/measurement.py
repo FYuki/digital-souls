@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Callable, Literal
+from typing import Callable, Literal, cast
 from uuid import uuid4
 
 from app.conversation_core import StageObservation
@@ -10,6 +10,7 @@ from app.voice_metrics import EventOutcome, MeasurementKind, TraceEvent
 
 logger = logging.getLogger(__name__)
 TraceUnit = Literal["nanosecond", "millisecond"]
+_MAX_PENDING_CLIENT_OBSERVATIONS = 256
 
 
 @dataclass(frozen=True)
@@ -31,11 +32,13 @@ class LiveKitMeasurementSession:
         self,
         *,
         session_id: str,
+        character_id: str,
         measurement_kind: MeasurementKind,
         record: Callable[[TraceEvent], None] | None,
         clock_ns: Callable[[], int],
     ) -> None:
         self.session_id = session_id
+        self._character_id = character_id
         self._measurement_kind = measurement_kind
         self._record = record
         self._clock_ns = clock_ns
@@ -44,6 +47,7 @@ class LiveKitMeasurementSession:
         self._response_utterances: dict[str, tuple[str, ...]] = {}
         self._seen_keys: set[tuple[str, str, str]] = set()
         self._seen_client_event_ids: set[str] = set()
+        self._pending_client_observations: dict[str, dict[str, object]] = {}
         self._recorded_names: set[tuple[str, str, str]] = set()
 
     def bind_response(
@@ -61,6 +65,7 @@ class LiveKitMeasurementSession:
         for event in self._response_events.get(response_id, ()):
             for utterance_id in source_utterance_ids:
                 self._emit(event, utterance_id=utterance_id, response_id=response_id)
+        self._retry_pending_client_observations()
 
     def bind_utterance_outcome(
         self,
@@ -125,6 +130,7 @@ class LiveKitMeasurementSession:
         for response_id, source_utterance_ids in self._response_utterances.items():
             if utterance_id in source_utterance_ids:
                 self._emit(event, utterance_id=utterance_id, response_id=response_id)
+        self._retry_pending_client_observations()
 
     def record_response_event(
         self,
@@ -218,16 +224,56 @@ class LiveKitMeasurementSession:
             or event.get("unit") != "millisecond"
         ):
             return False
-        self._seen_client_event_ids.add(event_id)
         if measurement == "speech_stopped":
             utterance_id = event.get("utterance_id")
-            if (
-                not isinstance(utterance_id, str)
-                or utterance_id not in self._utterance_events
-            ):
+            if not isinstance(utterance_id, str):
                 return False
+            normalized = {
+                "event_id": event_id,
+                "measurement": measurement,
+                "utterance_id": utterance_id,
+                "timestamp": timestamp,
+            }
+        else:
+            response_id = event.get("response_id")
+            if not isinstance(response_id, str):
+                return False
+            normalized = {
+                "event_id": event_id,
+                "measurement": measurement,
+                "response_id": response_id,
+                "timestamp": timestamp,
+            }
+
+        pending = self._pending_client_observations.get(event_id)
+        if pending is not None and pending != normalized:
+            return False
+        if not self._client_observation_is_correlated(normalized):
+            if pending is None and (
+                len(self._pending_client_observations)
+                < _MAX_PENDING_CLIENT_OBSERVATIONS
+            ):
+                self._pending_client_observations[event_id] = normalized
+            return False
+
+        self._pending_client_observations.pop(event_id, None)
+        self._seen_client_event_ids.add(event_id)
+        self._record_correlated_client_observation(normalized)
+        return True
+
+    def _client_observation_is_correlated(self, event: dict[str, object]) -> bool:
+        if event["measurement"] == "speech_stopped":
+            return event["utterance_id"] in self._utterance_events
+        return event["response_id"] in self._response_utterances
+
+    def _record_correlated_client_observation(
+        self, event: dict[str, object]
+    ) -> None:
+        event_id = str(event["event_id"])
+        timestamp = cast(int, event["timestamp"])
+        if event["measurement"] == "speech_stopped":
             self.record_utterance_event(
-                utterance_id=utterance_id,
+                utterance_id=str(event["utterance_id"]),
                 name="speech_stopped",
                 stage="vad",
                 timestamp=timestamp,
@@ -235,12 +281,9 @@ class LiveKitMeasurementSession:
                 unit="millisecond",
                 event_id=event_id,
             )
-            return True
-        response_id = event.get("response_id")
-        if not isinstance(response_id, str) or response_id not in self._response_utterances:
-            return False
+            return
         self.record_response_event(
-            response_id=response_id,
+            response_id=str(event["response_id"]),
             name="first_playback",
             stage="playback",
             timestamp=timestamp,
@@ -248,7 +291,15 @@ class LiveKitMeasurementSession:
             unit="millisecond",
             event_id=event_id,
         )
-        return True
+
+    def _retry_pending_client_observations(self) -> None:
+        for event_id, event in tuple(self._pending_client_observations.items()):
+            if not self._client_observation_is_correlated(event):
+                continue
+            # 再入時に同じeventを処理しないよう、記録処理より先にpendingから外す。
+            self._pending_client_observations.pop(event_id)
+            self._seen_client_event_ids.add(event_id)
+            self._record_correlated_client_observation(event)
 
     def _pending_event(
         self,
@@ -286,6 +337,7 @@ class LiveKitMeasurementSession:
             schema_version="1.0",
             measurement_kind=self._measurement_kind,
             event_id=event.event_id,
+            character_id=self._character_id,
             session_id=self.session_id,
             utterance_id=utterance_id,
             response_id=response_id,
