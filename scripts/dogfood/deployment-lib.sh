@@ -638,8 +638,13 @@ dogfood_activate_revision() {
 
 dogfood_check_readiness() {
   "$DOGFOOD_CLONE_DIR/backend/.venv/bin/python" \
-    "$DOGFOOD_CLONE_DIR/environments/environment_cli.py" readiness \
-    --profile "$DS_ENVIRONMENT_ID"
+    "$DOGFOOD_CLONE_DIR/environments/environment_cli.py" wait-readiness \
+    --profile "$DS_ENVIRONMENT_ID" \
+    --service frontend \
+    --service backend \
+    --max-attempts 180 \
+    --interval-seconds 1 \
+    --request-timeout-seconds 2
 }
 
 dogfood_backup() {

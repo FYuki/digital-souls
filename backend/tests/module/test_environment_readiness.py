@@ -17,7 +17,7 @@ def test_should_dispatch_bounded_inference_readiness_wait(
     calls: list[tuple[str, list[str], object]] = []
     monkeypatch.setattr(
         environment_cli,
-        "wait_for_inference_services",
+        "wait_for_services",
         lambda profile, services, timing: calls.append(
             (profile, services, timing)
         )
@@ -50,6 +50,93 @@ def test_should_dispatch_bounded_inference_readiness_wait(
     assert timing.readiness_attempts == 30
     assert timing.readiness_interval_seconds == 1
     assert timing.request_timeout_seconds == 1
+
+
+def test_should_accept_managed_application_services_for_bounded_wait() -> None:
+    import environment_cli
+
+    arguments = environment_cli._parser().parse_args(
+        [
+            "wait-readiness",
+            "--profile",
+            "dogfood",
+            "--service",
+            "frontend",
+            "--service",
+            "backend",
+            "--max-attempts",
+            "180",
+            "--interval-seconds",
+            "1",
+            "--request-timeout-seconds",
+            "2",
+        ]
+    )
+
+    assert arguments.service == ["frontend", "backend"]
+
+
+def test_should_wait_for_managed_application_services(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import commands.readiness_wait_command as command
+    from environment_timing import EnvironmentTiming
+    from http_readiness import ReadinessResult
+
+    monkeypatch.setattr(
+        command,
+        "load_profile",
+        lambda name: {
+            "name": name,
+            "dependencies": {
+                "frontend": {
+                    "mode": "real",
+                    "source": "managed",
+                    "baseUrl": "http://localhost:15173",
+                    "readinessPath": "/",
+                },
+                "backend": {
+                    "mode": "real",
+                    "source": "managed",
+                    "baseUrl": "http://localhost:18000",
+                    "readinessPath": "/",
+                },
+            },
+        },
+    )
+    calls: list[tuple[str, int, float, float]] = []
+
+    def fake_wait(
+        url: str,
+        *,
+        max_attempts: int,
+        interval_seconds: float,
+        request_timeout_seconds: float,
+    ) -> ReadinessResult:
+        calls.append((url, max_attempts, interval_seconds, request_timeout_seconds))
+        return ReadinessResult(url, 4, 3.0, "ready")
+
+    monkeypatch.setattr(command, "wait_for_http", fake_wait)
+
+    result = command.wait_for_services(
+        "dogfood",
+        ("frontend", "backend"),
+        EnvironmentTiming(
+            readiness_attempts=180,
+            readiness_interval_seconds=1,
+            request_timeout_seconds=2,
+        ),
+    )
+
+    assert result == 0
+    assert calls == [
+        ("http://localhost:15173/", 180, 1, 2),
+        ("http://localhost:18000/", 180, 1, 2),
+    ]
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "ready"
+    assert report["services"]["frontend"]["attempts"] == 4
 
 
 def test_should_retry_each_external_inference_service_until_ready(
@@ -95,7 +182,7 @@ def test_should_retry_each_external_inference_service_until_ready(
 
     monkeypatch.setattr(command, "wait_for_http", fake_wait)
 
-    result = command.wait_for_inference_services(
+    result = command.wait_for_services(
         "dogfood",
         ("ollama", "voicevox"),
         EnvironmentTiming(
@@ -150,7 +237,7 @@ def test_should_fail_inference_gate_after_bounded_timeout(
         lambda url, **kwargs: ReadinessResult(url, 30, 30.0, "timeout"),
     )
 
-    result = command.wait_for_inference_services(
+    result = command.wait_for_services(
         "dogfood",
         ("ollama", "voicevox"),
         EnvironmentTiming(
@@ -199,7 +286,7 @@ def test_should_report_missing_inference_dependency_as_profile_error(
     monkeypatch.setattr(command, "wait_for_http", unexpected_wait)
 
     with pytest.raises(ProfileError, match="voicevox dependency is required"):
-        command.wait_for_inference_services(
+        command.wait_for_services(
             "dogfood",
             ("ollama", "voicevox"),
             EnvironmentTiming(),

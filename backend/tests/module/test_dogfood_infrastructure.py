@@ -796,6 +796,20 @@ def test_should_bound_inference_cold_start_wait_before_application_start() -> No
     assert "--request-timeout-seconds 1" in source
 
 
+def test_should_wait_for_application_readiness_after_deploy_restart() -> None:
+    source = (DOGFOOD_SCRIPTS_DIR / "deployment-lib.sh").read_text(
+        encoding="utf-8"
+    )
+    function = source[source.index("dogfood_check_readiness()") :]
+
+    assert "wait-readiness" in function
+    assert "--service frontend" in function
+    assert "--service backend" in function
+    assert "--max-attempts 180" in function
+    assert "--interval-seconds 1" in function
+    assert "--request-timeout-seconds 2" in function
+
+
 def test_should_document_executable_pull_command_for_backend_default_model() -> None:
     source = README_PATH.read_text(encoding="utf-8")
     command_blocks = re.findall(r"```bash\n(.*?)```", source, flags=re.DOTALL)

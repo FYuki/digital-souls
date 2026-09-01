@@ -69,6 +69,11 @@ dogfoodのsystemd application unitは`Type=simple`とし、`scripts/start-dogfoo
 `ExecStart`には使用しない。systemd停止時はrun reportのprocess identityを使う`down.sh`から
 foreground orchestratorへSIGTERMを送り、所有するBackend／Frontendだけをcleanupする。
 
+`Type=simple`のsystemd restart完了とapplication readinessは別の時点である。deploy／rollbackは
+restart直後の単発probeを成功条件にせず、Frontend／Backendの両方を有限回pollingしてから
+manifest確定またはrollbackへ進む。これにより正常な起動途中を障害と誤認しない一方、timeout後の
+自動rollback契約は維持する。
+
 WSL2上の既存loopback URLとportを維持するため、アプリケーションとWhisperのComposeはhost networkを
 使用する。containerはProfileで解決したloopback endpointをそのまま利用し、LANへ公開しない。
 

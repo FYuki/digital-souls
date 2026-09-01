@@ -27,8 +27,8 @@ from app.backup_restore import (
 from app.backup_restore.models import BackupError
 from commands.down_command import down_environment
 from commands.readiness_wait_command import (
-    INFERENCE_SERVICE_NAMES,
-    wait_for_inference_services,
+    READINESS_SERVICE_NAMES,
+    wait_for_services,
 )
 from commands.start_command import start_environment
 from commands.status_command import (
@@ -153,7 +153,7 @@ def _parser() -> argparse.ArgumentParser:
     wait_readiness.add_argument(
         "--service",
         action="append",
-        choices=INFERENCE_SERVICE_NAMES,
+        choices=READINESS_SERVICE_NAMES,
         required=True,
     )
     wait_readiness.add_argument("--max-attempts", type=int, required=True)
@@ -183,7 +183,7 @@ def _parser() -> argparse.ArgumentParser:
 
 def _dispatch(arguments: argparse.Namespace) -> int:
     if arguments.command == WAIT_READINESS_COMMAND:
-        return wait_for_inference_services(
+        return wait_for_services(
             arguments.profile,
             arguments.service,
             EnvironmentTiming(

@@ -100,7 +100,7 @@ def _rollback_environment(
     write_executable(
         readiness,
         f'printf "cli\\t%s\\n" "$*" >> "{call_log}"\n'
-        '[ "$1" = "readiness" ]\n'
+        '[ "$1" = "wait-readiness" ]\n'
         '[ "${ROLLBACK_FAILURE-}" != "readiness" ]\n',
     )
     python = clone_dir / "backend" / ".venv" / "bin" / "python"
@@ -193,7 +193,7 @@ def test_should_select_only_a_saved_manifest_for_rollback(
             "chown\t",
             "chmod\t",
             "restart",
-            "cli\treadiness ",
+            "cli\twait-readiness ",
         )
     )
     assert operation_positions == tuple(sorted(operation_positions))
@@ -315,7 +315,7 @@ def test_should_stop_rollback_at_the_first_activation_failure(
     assert result.returncode != 0
     calls = tuple(call_log.read_text(encoding="utf-8").splitlines())
     assert any(last_operation in call for call in calls)
-    assert not any(call.startswith("cli\treadiness ") for call in calls)
+    assert not any(call.startswith("cli\twait-readiness ") for call in calls)
     diagnostic = result.stdout + result.stderr
     assert f"現在のrevision: {OLDER_REVISION}" in diagnostic
     assert f"現在のHEAD: {OLDER_REVISION}" in diagnostic
@@ -340,7 +340,7 @@ def test_should_not_publish_a_manifest_when_rollback_readiness_fails(
 
     assert result.returncode != 0
     calls = tuple(call_log.read_text(encoding="utf-8").splitlines())
-    assert any(call.startswith("cli\treadiness ") for call in calls)
+    assert any(call.startswith("cli\twait-readiness ") for call in calls)
     assert set(deployments.glob("*.json")) == generations_before
     assert current.read_bytes() == current_before
     diagnostic = result.stdout + result.stderr
