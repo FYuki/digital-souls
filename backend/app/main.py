@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 
 from app import _chat_runtime
+from app.async_worker import run_sync
 from app.audio_pipeline import (
     create_audio_pipeline_service,
     resolve_audio_runtime_config,
@@ -37,7 +38,7 @@ from app.conversation_history.schema import (
     initialize_conversation_history_schema,
     inspect_conversation_history_schema,
 )
-from app.conversation_history.service import ConversationHistoryService
+from app.conversation_history.service import ConversationHistoryService, HistorySession
 from app.conversation_history.sqlite_lease import SQLiteLease, acquire_maintenance_lease
 from app.conversation_history.wal_cleanup import ConversationWalCleanup
 from app.environment import iana_timezone_environment_value
@@ -69,7 +70,7 @@ from app.memory.persistence.approved_repository import ApprovedMemoryRepository
 from app.memory.persistence.index_outbox_repository import IndexOutboxRepository
 from app.memory.persistence.temporary_repository import TemporaryProviderRecordRepository
 from app.memory.providers import AddonRecordProvider, PersonaMemoryProvider
-from app.model_settings import resolve_model_settings
+from app.model_settings import ModelSettings, resolve_model_settings
 from app.prompting import BuiltPrompt, CharacterPrompt, PromptMessage
 from app.privacy.history_sanitizer import create_history_sanitizer
 from app.privacy.scanner import create_privacy_scanner
@@ -197,6 +198,28 @@ def log_runtime_configuration(paths: RuntimePaths) -> None:
     logging.getLogger(__name__).info(
         "Runtime configuration: %s", runtime_paths_projection(paths)
     )
+
+
+async def _stream_core_reply(
+    chat_service: _chat_runtime.ChatService,
+    model_settings: ModelSettings,
+    character: str,
+    history_session: HistorySession,
+    transcript: str,
+) -> AsyncIterator[str]:
+    prompt, max_output_tokens = await run_sync(
+        chat_service.prepare_unrecorded_generation,
+        character,
+        history_session,
+        transcript,
+    )
+    async for text in llm_router.stream_response(
+        prompt,
+        max_output_tokens=max_output_tokens,
+        settings=model_settings,
+    ):
+        yield text
+    chat_service.record_successful_prompt_references(prompt)
 
 
 @asynccontextmanager
@@ -514,25 +537,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 core_synthesizer = create_voicevox_client(
                     audio_runtime_config.voicevox_base_url
                 )
+
                 async def generate_core_reply_stream(
                     character: str,
                     history_session: object,
                     transcript: str,
                 ) -> AsyncIterator[str]:
-                    prompt, max_output_tokens = (
-                        app_chat_service.prepare_unrecorded_generation(
-                            character,
-                            history_session,  # type: ignore[arg-type]
-                            transcript,
-                        )
-                    )
-                    async for text in llm_router.stream_response(
-                        prompt,
-                        max_output_tokens=max_output_tokens,
-                        settings=model_settings,
+                    async for text in _stream_core_reply(
+                        app_chat_service,
+                        model_settings,
+                        character,
+                        history_session,  # type: ignore[arg-type]
+                        transcript,
                     ):
                         yield text
-                    app_chat_service.record_successful_prompt_references(prompt)
 
                 def submit_completed_core_turn(persisted_turn: object) -> None:
                     if not isinstance(persisted_turn, ConversationTurn):

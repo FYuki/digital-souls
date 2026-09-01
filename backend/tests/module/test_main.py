@@ -1,4 +1,6 @@
 import importlib
+import threading
+from typing import cast
 from unittest.mock import patch
 
 import pytest
@@ -112,3 +114,60 @@ async def test_invalid_memory_policy_preserves_legacy_chroma_index(
 
     assert legacy_index.read_bytes() == b"legacy"
     assert not cutover_marker.exists()
+
+
+@pytest.mark.anyio
+async def test_core_reply_prepares_prompt_outside_event_loop_thread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app import _chat_runtime, main
+    from app.conversation_history.service import HistorySession
+    from app.model_settings import resolve_model_settings
+
+    prompt = object()
+    prepared_thread: int | None = None
+    recorded_prompts: list[object] = []
+    stream_arguments: list[tuple[object, int, object]] = []
+
+    class StubChatService:
+        def prepare_unrecorded_generation(
+            self, character: str, history_session: object, transcript: str
+        ) -> tuple[object, int]:
+            nonlocal prepared_thread
+            prepared_thread = threading.get_ident()
+            assert character == "miori"
+            assert history_session is session
+            assert transcript == "こんにちは"
+            return prompt, 123
+
+        def record_successful_prompt_references(self, built_prompt: object) -> None:
+            recorded_prompts.append(built_prompt)
+
+    async def fake_stream_response(
+        built_prompt: object, *, max_output_tokens: int, settings: object
+    ):
+        stream_arguments.append((built_prompt, max_output_tokens, settings))
+        yield "こんにちは"
+
+    session = cast(HistorySession, object())
+    settings = resolve_model_settings({})
+    chat_service = cast(_chat_runtime.ChatService, StubChatService())
+    event_loop_thread = threading.get_ident()
+    monkeypatch.setattr(main.llm_router, "stream_response", fake_stream_response)
+
+    chunks = [
+        chunk
+        async for chunk in main._stream_core_reply(
+            chat_service,
+            settings,
+            "miori",
+            session,
+            "こんにちは",
+        )
+    ]
+
+    assert prepared_thread is not None
+    assert prepared_thread != event_loop_thread
+    assert chunks == ["こんにちは"]
+    assert stream_arguments == [(prompt, 123, settings)]
+    assert recorded_prompts == [prompt]
