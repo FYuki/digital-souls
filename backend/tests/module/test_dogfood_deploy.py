@@ -1539,7 +1539,7 @@ async def test_should_create_database_on_application_start_before_deploy_prepara
 
     assert not (data_dir / "conversation-history.db").exists()
     assert (
-        f"ExecStart={tmp_path / 'clone' / 'environments' / 'up.sh'}"
+        f"ExecStart={tmp_path / 'clone' / 'scripts' / 'start-dogfood.sh'}"
         in application_unit
     )
     assert f"DS_DATA_DIR={data_dir}" in application_unit

@@ -11,9 +11,9 @@ Group=root
 EnvironmentFile=@DOGFOOD_CONFIG_DIR@/dogfood.env
 EnvironmentFile=-@DOGFOOD_CONFIG_DIR@/dogfood-images.env
 EnvironmentFile=@DOGFOOD_CONFIG_DIR@/livekit-backend.env
-Environment="DS_ENVIRONMENT_ID=dogfood" "DS_PROFILE=dogfood" "DS_DATA_DIR=@DS_DATA_DIR@" "DS_ENVIRONMENT_RUN_REPORT=@DS_DATA_DIR@/runtime/dogfood/environment-run.json" "DS_PROFILE_REPORT=@DS_DATA_DIR@/runtime/dogfood/resolved-profile.json" "DS_RUNTIME_UID=@DOGFOOD_SERVICE_UID@" "DS_RUNTIME_GID=@DOGFOOD_SERVICE_GID@" "HOME=@DOGFOOD_SERVICE_HOME_DIR@" "XDG_CACHE_HOME=@DS_DATA_DIR@/cache" "npm_config_cache=@DS_DATA_DIR@/cache/npm"
+Environment="DOGFOOD_ENV_FILE=@DOGFOOD_CONFIG_DIR@/dogfood.env" "WSL_DISTRO_NAME=@DOGFOOD_WSL_DISTRO@" "DS_ENVIRONMENT_ID=dogfood" "DS_PROFILE=dogfood" "DS_DATA_DIR=@DS_DATA_DIR@" "DS_ENVIRONMENT_RUN_REPORT=@DS_DATA_DIR@/runtime/dogfood/environment-run.json" "DS_PROFILE_REPORT=@DS_DATA_DIR@/runtime/dogfood/resolved-profile.json" "DS_RUNTIME_UID=@DOGFOOD_SERVICE_UID@" "DS_RUNTIME_GID=@DOGFOOD_SERVICE_GID@" "HOME=@DOGFOOD_SERVICE_HOME_DIR@" "XDG_CACHE_HOME=@DS_DATA_DIR@/cache" "npm_config_cache=@DS_DATA_DIR@/cache/npm"
 ExecStartPre=@DOGFOOD_CLONE_DIR@/scripts/dogfood/wait-inference.sh
-ExecStart=@DOGFOOD_CLONE_DIR@/environments/up.sh
+ExecStart=@DOGFOOD_CLONE_DIR@/scripts/start-dogfood.sh
 ExecStop=@DOGFOOD_CLONE_DIR@/environments/down.sh
 TimeoutStartSec=180s
 TimeoutStopSec=60s
