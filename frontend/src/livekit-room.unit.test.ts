@@ -401,7 +401,8 @@ describe('LiveKit Room generation synchronization', () => {
     expect(client.stopPlayback('50000000-0000-4000-8000-000000000001', 100)).toBe(0)
     expect(client.stopPlayback('50000000-0000-4000-8000-000000000001', 101)).toBe(0)
     expect(audioContexts[0].sources[0].disconnect).toHaveBeenCalledTimes(1)
-    expect(document.querySelectorAll('audio')).toHaveLength(0)
+    expect(document.querySelectorAll('audio')).toHaveLength(1)
+    expect(document.querySelector('audio')?.muted).toBe(true)
     expect(observations.at(-1)).toMatchObject({
       audio: 'unavailable', activeAudioGraphs: 0, speechStartedAtMs: 100,
     })
@@ -423,7 +424,7 @@ describe('LiveKit Room generation synchronization', () => {
 
     await vi.waitFor(() => expect(receiveCoreEvent).toHaveBeenCalledTimes(1))
     expect(audioContexts).toHaveLength(1)
-    expect(document.querySelectorAll('audio')).toHaveLength(0)
+    expect(document.querySelector('audio')?.muted).toBe(true)
 
     emitCoreEvent(room, {
       type: 'response_audio_segment',
@@ -437,7 +438,8 @@ describe('LiveKit Room generation synchronization', () => {
     })
 
     await vi.waitFor(() => {
-      expect(audioContexts).toHaveLength(2)
+      expect(audioContexts).toHaveLength(1)
+      expect(document.querySelector('audio')?.muted).toBe(false)
       expect(observations.at(-1)).toMatchObject({ activeAudioGraphs: 1 })
     })
     client.disconnect()

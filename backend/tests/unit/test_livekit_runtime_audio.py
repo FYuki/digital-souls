@@ -641,6 +641,52 @@ def test_production_core_bridge_keeps_preroll_before_speech_started() -> None:
     assert requests[0]["audio"] == b"pre-live"
 
 
+def test_production_core_bridge_keeps_full_vad_confirmation_window() -> None:
+    production = importlib.import_module("app.livekit_transport.production")
+    requests: list[dict[str, object]] = []
+    tasks: set[asyncio.Task[None]] = set()
+
+    class RecordingCoreSession:
+        accepting_input = True
+
+        def start_transcription(self, **request: object) -> asyncio.Task[None]:
+            async def record() -> None:
+                requests.append(request)
+
+            return asyncio.create_task(record())
+
+    def schedule(operation: Awaitable[None]) -> None:
+        task = asyncio.create_task(operation)
+        tasks.add(task)
+        task.add_done_callback(tasks.discard)
+
+    bridge = production._ConversationCoreBridge(
+        RecordingCoreSession(), schedule, media_tail_seconds=0
+    )
+    preroll = bytes(
+        index % 251
+        for index in range(production.STT_MICROPHONE_PREROLL_BYTES + 257)
+    )
+
+    async def exercise() -> None:
+        bridge.receive_microphone(preroll)
+        common = {
+            "speaker": {"role": "user"},
+            "utterance_id": "30000000-0000-4000-8000-000000000022",
+        }
+        bridge.notify(json.dumps({**common, "type": "speech_started"}).encode())
+        bridge.receive_microphone(b"live")
+        bridge.notify(json.dumps({**common, "type": "speech_stopped"}).encode())
+        await _drain_asyncio_tasks(tasks)
+
+    asyncio.run(exercise())
+
+    assert production.STT_MICROPHONE_PREROLL_BYTES == int(16_000 * 2 * 0.8)
+    assert requests[0]["audio"] == (
+        preroll[-production.STT_MICROPHONE_PREROLL_BYTES :] + b"live"
+    )
+
+
 def test_production_core_bridge_previews_first_audio_before_speech_end() -> None:
     production = importlib.import_module("app.livekit_transport.production")
     previews: list[dict[str, object]] = []
