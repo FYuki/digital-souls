@@ -73,7 +73,10 @@ async def _drain_asyncio_tasks(tasks: set[asyncio.Task[None]]) -> None:
 def test_microphone_observation_records_metadata_without_audio_bytes() -> None:
     module = _runtime_module("metadata-only microphone observation")
     port = RecordingObservationPort()
-    observer = module.MicrophoneTrackObserver(observation_port=port)
+    observer = module.MicrophoneTrackObserver(
+        observation_port=port,
+        observation_interval_ms=10,
+    )
 
     observer.receive_frame(
         pcm=b"private-audio-sentinel",
@@ -99,6 +102,28 @@ def test_microphone_observation_records_metadata_without_audio_bytes() -> None:
         for record in port.records
         for value in record.values()
     )
+
+
+def test_microphone_observation_is_throttled_to_one_per_second() -> None:
+    module = _runtime_module("throttled microphone observation")
+    port = RecordingObservationPort()
+    observer = module.MicrophoneTrackObserver(observation_port=port)
+
+    for frame_index in range(101):
+        observer.receive_frame(
+            pcm=b"audio-not-recorded",
+            sample_count=480,
+            received_at_ms=1_000 + frame_index * 10,
+        )
+
+    assert port.records == [
+        {
+            "frame_count": 101,
+            "sample_count": 48_480,
+            "elapsed_ms": 1_000,
+            "missing_frames": 0,
+        }
+    ]
 
 
 def test_stream_boundary_whitespace_never_reaches_voicevox_or_livekit_audio(

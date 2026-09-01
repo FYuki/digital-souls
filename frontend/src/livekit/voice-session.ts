@@ -37,7 +37,7 @@ export type VoiceSessionSnapshot = Readonly<{
 
 export type VoiceSessionRoom = {
   connect: (url: string, token: string, sessionId: string) => Promise<void>
-  publishMicrophone: () => Promise<void>
+  publishMicrophone: (stream: MediaStream) => Promise<void>
   muteMicrophone: () => Promise<void>
   publishControlEvent: (event: VoiceSessionEvent) => Promise<void>
   stopPlayback: (responseId: string, speechStartedAtMs: number) => number
@@ -195,9 +195,9 @@ export class LiveKitVoiceSessionController {
     }
   }
 
-  async resumeMicrophone(): Promise<void> {
+  async resumeMicrophone(stream: MediaStream): Promise<void> {
     const room = this.requiredRoom()
-    await room.publishMicrophone()
+    await room.publishMicrophone(stream)
     this.microphoneEnabled = true
     await this.publishControlEvent(room, this.event({ type: 'session_resumed' }))
     this.input = 'listening'

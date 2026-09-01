@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable, Coroutine
 from dataclasses import replace
 from typing import TypeVar
@@ -27,6 +28,7 @@ from app.conversation_core.segmentation import JapaneseTextSegmenter, TextSegmen
 
 
 TaskResult = TypeVar("TaskResult")
+logger = logging.getLogger(__name__)
 
 
 class TerminalProtocolError(RuntimeError):
@@ -277,7 +279,12 @@ class ConversationCoreSession:
                 else 0
             )
             if start != expected_start:
-                raise TerminalProtocolError("audio text_range is not contiguous")
+                skipped_text = response.generated_text[expected_start:start]
+                if start < expected_start or not skipped_text.isspace():
+                    raise TerminalProtocolError("audio text_range is not contiguous")
+                # VOICEVOXへ空白だけの区間は渡さない。一方、再生済みprefixは
+                # LLM本文上で連続させる必要があるため、直前の空白を次の音声へ含める。
+                text_range = (expected_start, end)
 
             segment = AudioSegment(audio_sequence, audio, text_range)
             self._audio_payloads[sequence_key] = payload
@@ -600,10 +607,19 @@ class ConversationCoreSession:
             tts_task.cancel()
             await asyncio.gather(llm_task, tts_task, return_exceptions=True)
             raise
-        except Exception:
+        except Exception as error:
             llm_task.cancel()
             tts_task.cancel()
-            await asyncio.gather(llm_task, tts_task, return_exceptions=True)
+            results = await asyncio.gather(llm_task, tts_task, return_exceptions=True)
+            logger.warning(
+                "Conversation response pipeline failed: session_id=%s response_id=%s generation=%d error_type=%s llm_outcome=%s tts_outcome=%s",
+                self.session_id,
+                response.response_id,
+                response.generation,
+                type(error).__name__,
+                self._pipeline_task_outcome(results[0]),
+                self._pipeline_task_outcome(results[1]),
+            )
             if self._gated_response(response.response_id, response.generation) is not None:
                 await self.fail_response(
                     response_id=response.response_id,
@@ -617,6 +633,12 @@ class ConversationCoreSession:
             response_id=response.response_id,
             generation=response.generation,
         )
+
+    @staticmethod
+    def _pipeline_task_outcome(result: object) -> str:
+        if isinstance(result, BaseException):
+            return type(result).__name__
+        return "completed"
 
     async def _produce_text_segments(
         self,

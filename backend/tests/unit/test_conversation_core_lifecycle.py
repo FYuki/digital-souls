@@ -1169,6 +1169,47 @@ def test_audio_text_ranges_must_form_a_contiguous_prefix_before_delivery() -> No
     _run(exercise)
 
 
+def test_audio_text_range_absorbs_skipped_whitespace_into_contiguous_prefix() -> None:
+    async def exercise() -> None:
+        _module, session, delivery, _persistence, _observation = _session()
+        response = await session.finalize_utterance(
+            utterance_id=UTTERANCE_1,
+            transcript="空白を含む音声範囲",
+            should_response=True,
+        )
+        await session.accept_text_delta(
+            response_id=response.response_id,
+            generation=response.generation,
+            text_sequence=1,
+            text="一文目。\n二文目。",
+            text_range=(0, 9),
+        )
+        await session.accept_audio_segment(
+            response_id=response.response_id,
+            generation=response.generation,
+            audio_sequence=1,
+            audio=b"first",
+            text_range=(0, 4),
+        )
+
+        accepted = await session.accept_audio_segment(
+            response_id=response.response_id,
+            generation=response.generation,
+            audio_sequence=2,
+            audio=b"second",
+            text_range=(5, 9),
+        )
+
+        assert accepted is True
+        assert session.response(response.response_id).audio_segments[-1].text_range == (
+            4,
+            9,
+        )
+        assert delivery.events[-1].text_range == (4, 9)
+
+    _run(exercise)
+
+
 @pytest.mark.parametrize(
     ("terminal_method", "expected_state"),
     [

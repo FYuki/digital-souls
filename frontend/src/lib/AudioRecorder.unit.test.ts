@@ -27,6 +27,8 @@ let vadOptions: {
   pauseStream: (stream: MediaStream) => Promise<void>
   startOnLoad: boolean
   onSpeechStart: () => void
+  onSpeechRealStart: () => void
+  onVADMisfire: () => void
   onSpeechEnd: () => void
 }
 
@@ -170,14 +172,42 @@ describe('AudioRecorder', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
     await waitFor(() => expect(vadStart).toHaveBeenCalledTimes(1))
     vadOptions.onSpeechStart()
+    vadOptions.onSpeechRealStart()
     vadOptions.onSpeechEnd()
 
     await waitFor(() => expect(onSpeechStopped).toHaveBeenCalledTimes(1))
     expect(onMicrophoneEnabled).toHaveBeenCalledTimes(1)
+    expect(onMicrophoneEnabled).toHaveBeenCalledWith(microphoneStream)
     expect(onSpeechStarted).toHaveBeenCalledWith({ clientMs: expect.any(Number) })
     expect(recorderInitialize).not.toHaveBeenCalled()
     expect(recorderStart).not.toHaveBeenCalled()
     expect(recorderStopAndTake).not.toHaveBeenCalled()
+  })
+
+  test('VAD候補だけでは発話開始を通知せずmisfireを待機状態へ戻す', async () => {
+    const onSpeechStarted = vi.fn()
+    render(AudioRecorder, {
+      props: {
+        disabled: false,
+        forceOff: false,
+        continuous: true,
+        onSpeechStarted,
+        onAudioCaptured: createCaptureMock(),
+        onError: vi.fn(),
+      },
+    })
+
+    const button = screen.getByRole('button', { name: 'マイクをオンにする' })
+    await fireEvent.click(button)
+    await waitFor(() => expect(vadStart).toHaveBeenCalledTimes(1))
+
+    vadOptions.onSpeechStart()
+    expect(onSpeechStarted).not.toHaveBeenCalled()
+    await waitFor(() => expect(button.classList.contains('mic-active')).toBe(true))
+
+    vadOptions.onVADMisfire()
+    await waitFor(() => expect(button.classList.contains('mic-standby')).toBe(true))
+    expect(onSpeechStarted).not.toHaveBeenCalled()
   })
 
   test('should publish ON status while speech is active', async () => {
@@ -215,6 +245,7 @@ describe('AudioRecorder', () => {
     await fireEvent.click(button)
     await waitFor(() => expect(vadStart).toHaveBeenCalledTimes(1))
     vadOptions.onSpeechStart()
+    vadOptions.onSpeechRealStart()
     vadOptions.onSpeechEnd()
 
     await waitFor(() => expect(onAudioCaptured).toHaveBeenCalledWith(
@@ -461,6 +492,7 @@ describe('AudioRecorder', () => {
     await fireEvent.click(button)
     await waitFor(() => expect(vadStart).toHaveBeenCalledTimes(1))
     vadOptions.onSpeechStart()
+    vadOptions.onSpeechRealStart()
     vadOptions.onSpeechEnd()
 
     await waitFor(() => expect(onError).toHaveBeenCalledWith(error))
