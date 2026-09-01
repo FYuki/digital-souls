@@ -10,14 +10,14 @@ import time
 from collections import deque
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI
 
 from app.characters.loader import load_character_card
 from app.characters.loader import load_tts_config
-from app.conversation_core import ConversationCoreSession, CoreEvent, StageObservation
+from app.conversation_core import ConversationCoreSession, CoreEvent
 from app.conversation_core.adapters import (
     ConversationHistoryPersistenceAdapter,
     PromptLlmAdapter,
@@ -40,8 +40,10 @@ from app.livekit_transport.coordinator import (
 )
 from app.livekit_transport.delivery import CoreNotificationPort
 from app.livekit_transport.errors import RoomCleanupPendingError
+from app.livekit_transport.measurement import LiveKitMeasurementSession
 from app.livekit_transport.runtime import MicrophoneTrackObserver
 from app.livekit_transport.token import IssuedToken, LiveKitTokenSigner
+from app.voice_metrics import MeasurementKind, TraceEvent
 
 if TYPE_CHECKING:
     import livekit.api as livekit_api
@@ -257,19 +259,6 @@ class _MissingCoreSessionFactory:
         raise RuntimeError("Conversation Core session factory is required")
 
 
-class _LoggingCoreObservation:
-    async def record(self, observation: StageObservation) -> None:
-        logger.info(
-            "Conversation Core stage: session_id=%s response_id=%s generation=%s stage=%s outcome=%s utterance_id=%s",
-            observation.session_id,
-            observation.response_id,
-            observation.generation,
-            observation.stage,
-            observation.outcome,
-            observation.utterance_id,
-        )
-
-
 class ProductionConversationCoreSessionFactory:
     def __init__(
         self,
@@ -282,6 +271,9 @@ class ProductionConversationCoreSessionFactory:
         generate_reply_stream: Callable[
             [str, object, str], AsyncIterator[str]
         ] | None = None,
+        measurement_kind: MeasurementKind = "automated_test",
+        trace_record: Callable[[TraceEvent], None] | None = None,
+        measurement_clock_ns: Callable[[], int] = time.perf_counter_ns,
     ) -> None:
         self._stt = WhisperSttAdapter(transcriber=transcriber)
         self._synthesizer = synthesizer
@@ -289,6 +281,9 @@ class ProductionConversationCoreSessionFactory:
         self._completed_turn_observer = completed_turn_observer
         self._generate_reply = generate_reply
         self._generate_reply_stream = generate_reply_stream
+        self._measurement_kind = measurement_kind
+        self._trace_record = trace_record
+        self._measurement_clock_ns = measurement_clock_ns
         if (generate_reply is None) == (generate_reply_stream is None):
             raise ValueError("exactly one production LLM generation source is required")
 
@@ -303,6 +298,14 @@ class ProductionConversationCoreSessionFactory:
         history_session = self._history_service.open_session(
             character_id, conversation_id
         )
+        measurement = LiveKitMeasurementSession(
+            session_id=session_id,
+            measurement_kind=self._measurement_kind,
+            record=self._trace_record,
+            clock_ns=self._measurement_clock_ns,
+        )
+        if isinstance(delivery, _ConversationCoreDelivery):
+            delivery.attach_measurement(measurement)
         speaker_id = load_tts_config(character_id).speaker_id
         return ConversationCoreSession(
             session_id=session_id,
@@ -312,7 +315,7 @@ class ProductionConversationCoreSessionFactory:
                 history_session=history_session,  # type: ignore[arg-type]
                 completed_turn_observer=self._completed_turn_observer,
             ),
-            observation=_LoggingCoreObservation(),
+            observation=measurement,
             stt=self._stt,
             llm=(
                 PromptLlmAdapter(
@@ -372,12 +375,88 @@ class _ConversationCoreDelivery:
             else None
         )
         self._first_audio_observed: set[str] = set()
+        self._first_text_observed: set[str] = set()
+        self._measurement: LiveKitMeasurementSession | None = None
+
+    @property
+    def measurement(self) -> LiveKitMeasurementSession | None:
+        return self._measurement
+
+    def attach_measurement(self, measurement: LiveKitMeasurementSession) -> None:
+        if self._measurement is not None and self._measurement is not measurement:
+            raise RuntimeError("delivery measurement is already attached")
+        self._measurement = measurement
 
     async def publish(self, event: CoreEvent) -> None:
+        if (
+            event.response_id is not None
+            and event.source_utterance_ids is not None
+            and self._measurement is not None
+        ):
+            self._measurement.bind_response(
+                response_id=event.response_id,
+                source_utterance_ids=event.source_utterance_ids,
+            )
         if event.type == "response_started":
-            if event.response_id is None:
-                raise ValueError("response_started requires response_id")
+            if event.response_id is None or event.source_utterance_ids is None:
+                raise ValueError(
+                    "response_started requires response id and source utterances"
+                )
+            if self._measurement is not None:
+                self._measurement.bind_response(
+                    response_id=event.response_id,
+                    source_utterance_ids=event.source_utterance_ids,
+                )
+                self._measurement.record_response_event(
+                    response_id=event.response_id,
+                    name="response_decision",
+                    stage="turn",
+                )
             self._coordinator.begin_response(response_id=event.response_id)
+        if (
+            event.type == "utterance_finalized"
+            and event.utterance_id is not None
+            and self._measurement is not None
+        ):
+            self._measurement.record_utterance_event(
+                utterance_id=event.utterance_id,
+                name="utterance_finalized",
+                stage="stt",
+            )
+            if event.should_response is False:
+                self._measurement.bind_utterance_outcome(
+                    utterance_id=event.utterance_id,
+                    outcome="excluded",
+                    reason_code="response_not_requested",
+                )
+        if (
+            event.type in {"utterance_discarded", "error"}
+            and event.utterance_id is not None
+            and self._measurement is not None
+        ):
+            outcome: Literal["failure", "excluded"] = (
+                "failure" if event.type == "error" else "excluded"
+            )
+            reason_code = (
+                event.error_code if event.type == "error" else event.reason
+            )
+            self._measurement.bind_utterance_outcome(
+                utterance_id=event.utterance_id,
+                outcome=outcome,
+                reason_code=reason_code or f"{event.type}_without_reason",
+            )
+        if (
+            event.type == "response_delta"
+            and event.response_id is not None
+            and event.response_id not in self._first_text_observed
+        ):
+            self._first_text_observed.add(event.response_id)
+            if self._measurement is not None:
+                self._measurement.record_response_event(
+                    response_id=event.response_id,
+                    name="first_text_delta",
+                    stage="llm",
+                )
         if event.type == "response_audio_segment":
             if (
                 event.audio is None
@@ -385,6 +464,19 @@ class _ConversationCoreDelivery:
                 or event.audio_sequence is None
             ):
                 raise ValueError("audio event requires response metadata and PCM bytes")
+            response_id = event.response_id
+            first_audio = response_id not in self._first_audio_observed
+            if first_audio and self._measurement is not None:
+                self._measurement.record_response_event(
+                    response_id=response_id,
+                    name="tts_completed",
+                    stage="tts",
+                )
+                self._measurement.record_response_event(
+                    response_id=response_id,
+                    name="first_audio_generated",
+                    stage="tts",
+                )
             await self._coordinator.send_logical_audio_segment(
                 response_id=event.response_id,
                 # private playback evidenceは0始まり、Core contractは1始まり。
@@ -394,9 +486,14 @@ class _ConversationCoreDelivery:
             )
             await self._coordinator.send_core(self._voice_payload(event))
             await self._audio_source.publish(event.audio)
-            response_id = event.response_id
-            if response_id is not None and response_id not in self._first_audio_observed:
+            if first_audio:
                 self._first_audio_observed.add(response_id)
+                if self._measurement is not None:
+                    self._measurement.record_response_event(
+                        response_id=response_id,
+                        name="first_audio_out",
+                        stage="transport",
+                    )
                 await self._coordinator.send_core(
                     json.dumps(
                         {
@@ -414,6 +511,30 @@ class _ConversationCoreDelivery:
                     ).encode()
                 )
             return
+        if (
+            event.type == "response_cancelled"
+            and event.response_id is not None
+            and self._measurement is not None
+        ):
+            self._measurement.record_response_event(
+                response_id=event.response_id,
+                name="response_excluded",
+                stage="response",
+                outcome="excluded",
+                reason_code=event.reason or "response_cancelled",
+            )
+        if (
+            event.type == "response_privacy_skipped"
+            and event.response_id is not None
+            and self._measurement is not None
+        ):
+            self._measurement.record_response_event(
+                response_id=event.response_id,
+                name="response_excluded",
+                stage="response",
+                outcome="excluded",
+                reason_code="privacy_skip",
+            )
         if event.type in {"response_cancelled", "response_failed"}:
             self._audio_source.clear()
         if event.type == "response_privacy_skipped":
@@ -559,11 +680,13 @@ class _ConversationCoreBridge:
         schedule: Callable[[Awaitable[None]], None],
         stop_audio: Callable[[], None] = lambda: None,
         media_tail_seconds: float = 0.15,
+        measurement: LiveKitMeasurementSession | None = None,
     ) -> None:
         self._session = session
         self._schedule = schedule
         self._media_tail_seconds = media_tail_seconds
         self._stop_audio = stop_audio
+        self._measurement = measurement
         self._user_audio_captures: deque[_UserAudioCapture] = deque()
         self._pending_transcriptions: deque[tuple[str, bytes]] = deque()
         self._pending_transcription_bytes = 0
@@ -592,11 +715,21 @@ class _ConversationCoreBridge:
             return
         if event["type"] == "speech_stopped" and self._is_user_event(event):
             utterance_id = str(event["utterance_id"])
+            if self._measurement is not None:
+                self._measurement.record_utterance_event(
+                    utterance_id=utterance_id,
+                    name="vad_speech_end",
+                    stage="vad",
+                )
             for capture in self._user_audio_captures:
                 if capture.utterance_id == utterance_id:
                     capture.finalized = True
                     self._schedule_finalization_if_ready(capture)
                     break
+            return
+        if event["type"] == "observation":
+            if self._measurement is not None:
+                self._measurement.record_client_observation(event)
             return
         self._schedule(self._receive_serialized(event))
 
@@ -621,6 +754,12 @@ class _ConversationCoreBridge:
             (item for item in self._user_audio_captures if not item.pcm),
             self._user_audio_captures[0],
         )
+        if self._measurement is not None:
+            self._measurement.record_utterance_event(
+                utterance_id=capture.utterance_id,
+                name="user_audio_received",
+                stage="transport",
+            )
         if len(capture.pcm) + len(pcm) > STT_MAX_UTTERANCE_PCM_BYTES:
             capture.capacity_exceeded = True
         elif not capture.capacity_exceeded:
@@ -999,6 +1138,7 @@ class ProductionRuntimeManager:
             core_session,
             schedule_core_operation,
             stop_audio=audio_source.clear,
+            measurement=delivery.measurement,
         )
         self._audio_sources[session_id] = audio_source
         self._core_sessions[session_id] = core_session

@@ -521,6 +521,52 @@ def test_real_livekit_first_ack_stops_backend_outbox_retry(client) -> None:
     asyncio.run(exercise())
 
 
+def test_real_livekit_sustained_microphone_keeps_core_delivery_available(client) -> None:
+    _required_setting("LIVEKIT_URL")
+    _required_setting("LIVEKIT_API_KEY")
+    _required_setting("LIVEKIT_API_SECRET")
+    _, rtc = _livekit_sdk()
+
+    async def exercise() -> None:
+        conversation_id, binding, room, payloads = await _connect_test_app_user(
+            client, rtc
+        )
+        session_id = binding["session_id"]
+        source = rtc.AudioSource(48_000, 1, queue_size_ms=100)
+        track = rtc.LocalAudioTrack.create_audio_track("sustained-microphone", source)
+        publication = await room.local_participant.publish_track(
+            track,
+            rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE),
+        )
+        frame = rtc.AudioFrame(bytes(480 * 2), 48_000, 1, 480)
+        try:
+            # 実ブラウザと同じ10ms cadenceで継続入力し、観測用private messageが
+            # response/control配送を枯渇させないことを確認する。
+            for _ in range(800):
+                await source.capture_frame(frame)
+                await asyncio.sleep(0.01)
+
+            event_id = str(uuid4())
+            payload = _core_event(session_id, event_id)
+            _send_core_from_test_app(client, session_id, payload)
+            delivered = await asyncio.wait_for(
+                payloads.get(), timeout=STATE_WAIT_TIMEOUT_SECONDS
+            )
+            await _acknowledge_application_event(room, event_id)
+
+            assert delivered == payload
+        finally:
+            await room.local_participant.unpublish_track(publication.sid)
+            await _cleanup_resources(
+                client,
+                rooms=(room,),
+                session_ids=(session_id,),
+                conversation_id=conversation_id,
+            )
+
+    asyncio.run(exercise())
+
+
 def test_real_livekit_ack_after_first_retry_stops_remaining_retries(client) -> None:
     _required_setting("LIVEKIT_URL")
     _required_setting("LIVEKIT_API_KEY")

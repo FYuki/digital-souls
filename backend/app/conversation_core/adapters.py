@@ -141,6 +141,8 @@ class VoicevoxTtsAdapter:
             sample_width=input_sample_width,
             channels=input_channels,
         )
+        if not samples:
+            raise ValueError("VOICEVOX WAV must contain audio frames")
         if input_sample_rate != self._output_sample_rate:
             samples = _resample_pcm16(
                 samples,
@@ -209,21 +211,31 @@ class PromptLlmAdapter:
         if self._generate_stream is None:
             if self._generate_reply is None:
                 raise RuntimeError("LLM generation source is missing")
-            text = await run_sync(self._generate_reply, transcript)
+            text = (await run_sync(self._generate_reply, transcript)).strip()
             if not text:
                 raise ValueError("LLM response must not be empty")
             yield TextDelta(text_sequence=1, text=text, text_range=(0, len(text)))
             return
         sequence = 0
         offset = 0
+        pending_whitespace = ""
         async for text in self._generate_stream(transcript):
             if not text:
                 continue
+            buffered = pending_whitespace + text
+            if sequence == 0:
+                # providerが本文前に返す改行は表示・TTSの対象にしない。
+                buffered = buffered.lstrip()
+            if not buffered or buffered.isspace():
+                pending_whitespace = buffered
+                continue
+            content = buffered.rstrip()
+            pending_whitespace = buffered[len(content) :]
             sequence += 1
-            next_offset = offset + len(text)
+            next_offset = offset + len(content)
             yield TextDelta(
                 text_sequence=sequence,
-                text=text,
+                text=content,
                 text_range=(offset, next_offset),
             )
             offset = next_offset

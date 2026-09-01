@@ -471,15 +471,15 @@ _METRIC_CATALOG = (
     _MetricDefinition("first_audio_generation", "first_text_delta", "tts_completed", "first_synthesizable_segment", "first_audio_generated", failure_stages=("llm", "tts"), exclude_on_response_outcome=True),
     _MetricDefinition("client_playback_latency", "client_audio_received", "first_playback", "client_audio_received", "first_playback", failure_stages=("transport", "playback"), exclude_on_response_outcome=True),
     _MetricDefinition("ttfa", "fixture_speech_end", "first_playback", "fixture_speech_end", "first_playback", failure_stages=("stt", "llm", "tts", "transport", "playback"), exclude_on_response_outcome=True),
-    _MetricDefinition("local_playback_stop", None, None, "speech_started", "local_playback_stopped", not_applicable_reason="websocket_barge_in_not_implemented"),
-    _MetricDefinition("turn_decision", None, None, "speech_started", "turn_decision", not_applicable_reason="websocket_turn_decision_not_implemented"),
-    _MetricDefinition("cancel_after_decision", None, None, "take_turn_decision", "server_cancelled", not_applicable_reason="websocket_cancel_not_implemented"),
-    _MetricDefinition("barge_in_cancel_total", None, None, "speech_started", "server_cancelled", not_applicable_reason="websocket_barge_in_not_implemented"),
+    _MetricDefinition("local_playback_stop", "speech_started", "local_playback_stopped", "speech_started", "local_playback_stopped", not_applicable_reason="websocket_barge_in_not_implemented"),
+    _MetricDefinition("turn_decision", "speech_started", "turn_decision", "speech_started", "turn_decision", not_applicable_reason="websocket_turn_decision_not_implemented"),
+    _MetricDefinition("cancel_after_decision", "take_turn_decision", "server_cancelled", "take_turn_decision", "server_cancelled", not_applicable_reason="websocket_cancel_not_implemented"),
+    _MetricDefinition("barge_in_cancel_total", "speech_started", "server_cancelled", "speech_started", "server_cancelled", not_applicable_reason="websocket_barge_in_not_implemented"),
     _MetricDefinition("vad_leading_boundary", "fixture_speech_start", "captured_audio_start", "fixture_speech_start", "captured_audio_start", signed_offset=True),
     _MetricDefinition("vad_trailing_boundary", "fixture_speech_end", "utterance_finalized", "fixture_speech_end", "utterance_finalized", signed_offset=True),
-    _MetricDefinition("stale_output", None, None, "server_cancelled", "stale_output", unit="count", not_applicable_reason="websocket_cancel_not_implemented"),
-    _MetricDefinition("reconnect", None, None, "network_recovered", "transport_available", not_applicable_reason="websocket_reconnect_not_instrumented"),
-    _MetricDefinition("playback_continuity", None, None, "scheduled_playout", "frame_playout", not_applicable_reason="websocket_playout_not_instrumented"),
+    _MetricDefinition("stale_output", None, None, "server_cancelled", "stale_output", unit="count", not_applicable_reason="websocket_cancel_not_implemented", value_event="stale_output"),
+    _MetricDefinition("reconnect", "network_recovered", "transport_available", "network_recovered", "transport_available", not_applicable_reason="websocket_reconnect_not_instrumented"),
+    _MetricDefinition("playback_continuity", "scheduled_playout", "frame_playout", "scheduled_playout", "frame_playout", not_applicable_reason="websocket_playout_not_instrumented"),
     _MetricDefinition("processing_failure", "stt_started", "first_playback", "response_utterance", "processing_outcome", unit="count", failure_stages=("stt", "llm", "tts", "transport", "playback"), exclude_on_response_outcome=True),
     _MetricDefinition("manual_operations", None, None, "session_started", "session_ended", unit="count", value_event="manual_operations"),
 )
@@ -499,10 +499,21 @@ def _primary_trial_event(events: Sequence[TraceEvent]) -> TraceEvent:
 def _metric_observation(
     definition: _MetricDefinition,
     trial_events: Sequence[TraceEvent],
+    *,
+    transport: Transport,
 ) -> MetricObservation:
-    if definition.not_applicable_reason is not None:
+    if definition.not_applicable_reason is not None and transport == "websocket":
         return MetricObservation.not_applicable(definition.not_applicable_reason)
     by_name = {event.name: event for event in trial_events}
+    # controlled WebSocket runnerはfixture境界を使う。LiveKit TTFAだけは
+    # VoiceSessionのspeech_stoppedを同じclient clockの開始点にする。
+    # VAD境界指標へ流用するとserver clockとの誤減算になるためaliasしない。
+    if (
+        definition.name == "ttfa"
+        and "fixture_speech_end" not in by_name
+        and "speech_stopped" in by_name
+    ):
+        by_name["fixture_speech_end"] = by_name["speech_stopped"]
     response_exclusion = next(
         (
             event for event in trial_events
@@ -610,7 +621,14 @@ def aggregate_events(
     metric_aggregates = [
         aggregate_metric(
             definition.name,
-            [_metric_observation(definition, trial) for trial in trials.values()],
+            [
+                _metric_observation(
+                    definition,
+                    trial,
+                    transport=metadata.transport,
+                )
+                for trial in trials.values()
+            ],
             unit=definition.unit,
             start_point=definition.start_point,
             end_point=definition.end_point,

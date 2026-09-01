@@ -436,6 +436,46 @@ def test_vm_art_01_uses_metric_and_stage_specific_outcomes() -> None:
     }
 
 
+def test_vm_art_01_livekit_speech_stopped_is_ttfa_start() -> None:
+    metrics = _voice_metrics()
+    events = [
+        _event(
+            metrics,
+            event_id="speech-stopped",
+            name="speech_stopped",
+            timestamp=1_000.0,
+            stage="vad",
+            clock_domain="client_monotonic",
+            unit="millisecond",
+        ),
+        _event(
+            metrics,
+            event_id="playback",
+            name="first_playback",
+            timestamp=1_750.0,
+            stage="playback",
+            clock_domain="client_monotonic",
+            unit="millisecond",
+        ),
+    ]
+    metadata, diagnostics = _aggregation_context(metrics)
+    metadata = metadata.model_copy(update={"transport": "livekit"})
+
+    artifact = metrics.aggregate_events(
+        events,
+        metadata=metadata,
+        diagnostics=diagnostics,
+    )
+
+    ttfa = next(metric for metric in artifact.metrics if metric.name == "ttfa")
+    assert ttfa.status == "measured"
+    assert ttfa.p50 == 750.0
+    catalog = {metric.name: metric for metric in artifact.metrics}
+    assert catalog["local_playback_stop"].status == "missing"
+    assert catalog["reconnect"].status == "missing"
+    assert catalog["playback_continuity"].status == "missing"
+
+
 def test_vm_art_01_does_not_project_a_tts_failure_into_stt_metrics() -> None:
     metrics = _voice_metrics()
     events = [

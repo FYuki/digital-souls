@@ -685,11 +685,7 @@ class ConversationCoreSession:
         response: Response,
         queue: asyncio.Queue[TextSegment | None],
     ) -> None:
-        await self.stage_started(
-            response_id=response.response_id,
-            generation=response.generation,
-            stage="tts",
-        )
+        stage_started = False
         audio_sequence = 0
         try:
             while True:
@@ -697,6 +693,15 @@ class ConversationCoreSession:
                 try:
                     if text_segment is None:
                         break
+                    if not stage_started:
+                        # queue待機はTTS処理時間ではない。最初の合成可能segmentを
+                        # 受け取った時点を#17のTTS開始点にする。
+                        await self.stage_started(
+                            response_id=response.response_id,
+                            generation=response.generation,
+                            stage="tts",
+                        )
+                        stage_started = True
                     async for synthesized in self._tts.synthesize(text_segment.text):
                         audio_sequence += 1
                         local_start, local_end = synthesized.text_range
@@ -714,26 +719,31 @@ class ConversationCoreSession:
                 finally:
                     queue.task_done()
         except asyncio.CancelledError:
-            await self.stage_cancelled(
-                response_id=response.response_id,
-                generation=response.generation,
-                stage="tts",
-            )
+            if stage_started:
+                await self.stage_cancelled(
+                    response_id=response.response_id,
+                    generation=response.generation,
+                    stage="tts",
+                )
             raise
         except DeliveryError:
-            await self.stage_cancelled(
-                response_id=response.response_id,
-                generation=response.generation,
-                stage="tts",
-            )
+            if stage_started:
+                await self.stage_cancelled(
+                    response_id=response.response_id,
+                    generation=response.generation,
+                    stage="tts",
+                )
             raise
         except Exception:
-            await self.stage_failed(
-                response_id=response.response_id,
-                generation=response.generation,
-                stage="tts",
-            )
+            if stage_started:
+                await self.stage_failed(
+                    response_id=response.response_id,
+                    generation=response.generation,
+                    stage="tts",
+                )
             raise
+        if not stage_started:
+            return
         if self._gated_response(response.response_id, response.generation) is None:
             await self.stage_cancelled(
                 response_id=response.response_id,

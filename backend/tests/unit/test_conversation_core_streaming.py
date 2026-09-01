@@ -31,6 +31,15 @@ def test_japanese_segmenter_confirms_sentence_clause_and_final_remainder() -> No
     assert segmenter.finish()[0].text == "終端なし"
 
 
+def test_japanese_segmenter_drops_whitespace_only_sentence_before_tts() -> None:
+    segmenter = JapaneseTextSegmenter()
+
+    assert segmenter.feed("\n") == ()
+    assert segmenter.feed("次です。") == (
+        TextSegment(text="次です。", text_range=(1, 5)),
+    )
+
+
 def test_japanese_segmenter_does_not_split_a_short_url_at_soft_limit() -> None:
     segmenter = JapaneseTextSegmenter(max_chars=12, min_clause_chars=4)
     segments = segmenter.feed("参照 https://example.com/path 続き")

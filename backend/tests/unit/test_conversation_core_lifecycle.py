@@ -283,16 +283,16 @@ def test_public_audio_entry_runs_stt_llm_tts_delivery_and_completion() -> None:
             "stt",
             "stt",
             "llm",
-            "tts",
             "llm",
+            "tts",
             "tts",
         ]
         assert [event_field(item, "outcome") for item in producer_observations] == [
             "started",
             "completed",
             "started",
-            "started",
             "completed",
+            "started",
             "completed",
         ]
         assert event_field(observation.observations[0], "utterance_id") == UTTERANCE_1
