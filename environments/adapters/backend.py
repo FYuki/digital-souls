@@ -8,6 +8,7 @@ from app.runtime_data_root import initialize_runtime_data_root
 from app.runtime_paths import RuntimePaths
 
 from adapters.base import (
+    AdapterOperationError,
     Check,
     CommandRunner,
     OperationContext,
@@ -15,6 +16,29 @@ from adapters.base import (
     require_resolved_managed_endpoint,
 )
 from adapters.compose_service import ComposeManagedServiceOperations
+
+
+RUNTIME_UID_ENV = "DS_RUNTIME_UID"
+RUNTIME_GID_ENV = "DS_RUNTIME_GID"
+
+
+def _require_dogfood_runtime_identity() -> tuple[int, int]:
+    values: list[int] = []
+    for key in (RUNTIME_UID_ENV, RUNTIME_GID_ENV):
+        raw_value = os.environ.get(key)
+        if (
+            raw_value is None
+            or not raw_value.isascii()
+            or not raw_value.isdecimal()
+            or int(raw_value) < 1
+            or str(int(raw_value)) != raw_value
+        ):
+            raise AdapterOperationError(
+                "preparation",
+                f"{key} must be a canonical positive integer in dogfood",
+            )
+        values.append(int(raw_value))
+    return values[0], values[1]
 
 
 def _chroma_storage_check(chroma_path: Path) -> Check:
@@ -86,6 +110,22 @@ class BackendAdapter(ComposeManagedServiceOperations):
         context: OperationContext,
     ) -> None:
         require_resolved_managed_endpoint(dependency, service="backend")
+        runtime_identity = (
+            _require_dogfood_runtime_identity()
+            if context.chroma_enabled and self.effective_profile == "dogfood"
+            else None
+        )
         initialize_runtime_data_root(self._runtime_paths, self.root_dir)
         if context.chroma_enabled:
             self._runtime_paths.chroma_path.mkdir(parents=True, exist_ok=True)
+            if runtime_identity is not None:
+                runtime_uid, runtime_gid = runtime_identity
+                try:
+                    os.chown(self._runtime_paths.chroma_path, runtime_uid, runtime_gid)
+                    self._runtime_paths.chroma_path.chmod(0o750)
+                except OSError as error:
+                    raise AdapterOperationError(
+                        "preparation",
+                        "failed to converge Chroma storage ownership for dogfood: "
+                        f"{error}",
+                    ) from error
