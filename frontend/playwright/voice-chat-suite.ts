@@ -4,6 +4,9 @@ import { expect, type Page } from '@playwright/test'
 
 declare global {
   interface Window {
+    __voiceSessionController?: {
+      speechStarted: (utteranceId: string, atMs: number) => Promise<void>
+    }
     __voiceChatE2E: {
       cycles: {
         fixtureStartedAt: number
@@ -111,10 +114,16 @@ const installPlaybackProbe = async (page: Page) => {
           source_utterance_ids?: string[]
           measurement?: string
         }) => void
+        bindController?: (controller: {
+          speechStarted: (utteranceId: string, atMs: number) => Promise<void>
+        }) => void
       }
     }
     testPortTarget.__digitalSoulsVoiceSessionTestPort = {
       ...testPortTarget.__digitalSoulsVoiceSessionTestPort,
+      bindController: (controller) => {
+        window.__voiceSessionController = controller
+      },
       observeRoom: (observation) => {
         if (
           observation.activeResponseId !== undefined

@@ -14,6 +14,12 @@ class ClockDomain(Enum):
     SERVER_MONOTONIC = "server_monotonic"
 
 
+class Decision(Enum):
+    BACKCHANNEL = "backchannel"
+    INDETERMINATE = "indeterminate"
+    TAKE_TURN = "take_turn"
+
+
 class Measurement(Enum):
     FIRST_AUDIO_OUT = "first_audio_out"
     PLAYBACK_STARTED = "playback_started"
@@ -81,6 +87,7 @@ class TypeEnum(Enum):
     SESSION_START_REQUESTED = "session_start_requested"
     SPEECH_STARTED = "speech_started"
     SPEECH_STOPPED = "speech_stopped"
+    TURN_DECISION = "turn_decision"
     UTTERANCE_DISCARDED = "utterance_discarded"
     UTTERANCE_FINALIZED = "utterance_finalized"
     UTTERANCE_PENDING = "utterance_pending"
@@ -110,11 +117,13 @@ class VoiceSessionEvent(BaseModel):
     requested_reconnect_grace_ms: Optional[int] = None
     reconnect_grace_ms: Optional[int] = None
     reason: Optional[Reason] = None
+    response_id: Optional[UUID] = None
     speaker: Optional[Speaker] = None
     utterance_id: Optional[UUID] = None
+    decision: Optional[Decision] = None
+    final: Optional[bool] = None
     should_response: Optional[bool] = None
     transcript: Optional[str] = None
-    response_id: Optional[UUID] = None
     source_utterance_ids: Optional[List[UUID]] = None
     text: Optional[str] = None
     text_range: Optional[TextRange] = None

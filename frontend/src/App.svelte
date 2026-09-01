@@ -90,6 +90,7 @@
   function receiveVoiceCoreEvent(event: VoiceSessionEvent) {
     if (event.type === 'utterance_finalized' && event.utterance_id !== undefined) {
       const transcript = event.transcript ?? ''
+      if (event.should_response === false) return
       finalizedUtterances.set(event.utterance_id, transcript)
       if (liveVoiceTurn === null) {
         liveVoiceTurn = {

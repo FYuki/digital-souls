@@ -84,6 +84,8 @@ class CoreEvent:
     transcript: str | None = None
     should_response: bool | None = None
     classification: str | None = None
+    decision: str | None = None
+    final: bool | None = None
     error_code: str | None = None
     recoverable: bool | None = None
     user_state: str | None = None

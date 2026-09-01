@@ -12,7 +12,7 @@ Issue #111の自動受入と、Issue #112の利用者によるdogfood受入を�
 |---|---|---|---|
 | 1 | 追加操作なしで3往復以上 | mocked E2E「通常UIの同一sessionで追加操作なしに3往復を履歴へ確定する」 | `test:integration:voice`と#112で3往復 |
 | 2 | 思考中・発話中にも入力 | controllerの生成中speech start、Conversation Coreのpending utterance test | #112で思考中と再生中を各1回 |
-| 3 | speech startでlocal停止 | Roomのaudio graph即時停止、controllerのevent順序test、連続barge-in mocked E2E | `local_playback_stop` p95と#112の聴感 |
+| 3 | 冒頭STTでtake turn判定後にlocal停止 | 相槌では継続、take turnでRoomのaudio graph停止、controllerのevent順序test、連続barge-in mocked E2E | `turn_decision` / `local_playback_stop` p95と#112の聴感 |
 | 4 | 割り込み発話を冒頭から処理 | Core bridgeの発話別PCM所有・STT直列queue test | 実Whisperを含む`test:integration:voice` |
 | 5 | cancel後の旧text/audioを混入しない | Appの遅延delta、Roomのresponse/generation gate、Core cancel race | #112で割り込み後の再開なしを確認 |
 | 6 | 短い間・言い淀みを分割しない | AudioRecorder VAD fixtureとmedia tail test | 実マイクで短い間を含む発話 |

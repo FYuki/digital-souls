@@ -164,7 +164,7 @@ describe('通常会話UI向けLiveKit音声session', () => {
     expect(room.publishMicrophone).toHaveBeenCalledTimes(2)
   })
 
-  test('生成・再生中のspeech startでlocal停止後にcancelを一度だけ送る', async () => {
+  test('生成・再生中もspeech startでは継続しtake turn判定後だけ停止する', async () => {
     const { controller, coreEventReceivers, events, observations, room } = setup()
     await controller.ensureSession({
       characterId: 'miori', conversationId: 'conversation-id',
@@ -187,19 +187,41 @@ describe('通常会話UI向けLiveKit音声session', () => {
       1_011,
     )
 
-    expect(room.stopPlayback).toHaveBeenCalledTimes(1)
+    expect(room.stopPlayback).not.toHaveBeenCalled()
     expect(events.slice(2).map((event) => event.type)).toEqual([
-      'playback_stopped',
-      'response_cancel_requested',
       'speech_started',
       'speech_started',
     ])
+    expect(events.at(-1)).toMatchObject({
+      type: 'speech_started',
+      response_id: '50000000-0000-4000-8000-000000000001',
+    })
+
+    coreEventReceivers[0]({
+      type: 'turn_decision',
+      utterance_id: UTTERANCE_ID,
+      response_id: '50000000-0000-4000-8000-000000000001',
+      decision: 'take_turn',
+      final: false,
+    } as VoiceSessionEvent)
+    coreEventReceivers[0]({
+      type: 'turn_decision',
+      utterance_id: UTTERANCE_ID,
+      response_id: '50000000-0000-4000-8000-000000000001',
+      decision: 'take_turn',
+      final: true,
+    } as VoiceSessionEvent)
+    await Promise.resolve()
+
+    expect(room.stopPlayback).toHaveBeenCalledTimes(1)
+    expect(events.map((event) => event.type)).toContain('playback_stopped')
+    expect(events.map((event) => event.type)).not.toContain('response_cancel_requested')
     expect(controller.snapshot()).toMatchObject({
       response: 'interrupting', playback: 'stopped',
     })
   })
 
-  test('生成完了後のspeech startは再生だけを止めて履歴完成状態を維持する', async () => {
+  test('生成完了後の相槌では再生と履歴完成状態を維持する', async () => {
     const { controller, coreEventReceivers, events, observations, room } = setup()
     await controller.ensureSession({
       characterId: 'miori', conversationId: 'conversation-id',
@@ -221,9 +243,17 @@ describe('通常会話UI向けLiveKit音声session', () => {
 
     await controller.speechStarted(UTTERANCE_ID, 1_010)
 
-    expect(room.stopPlayback).toHaveBeenCalledTimes(1)
+    coreEventReceivers[0]({
+      type: 'turn_decision',
+      utterance_id: UTTERANCE_ID,
+      response_id: '50000000-0000-4000-8000-000000000001',
+      decision: 'backchannel',
+      final: true,
+    } as VoiceSessionEvent)
+
+    expect(room.stopPlayback).not.toHaveBeenCalled()
     expect(events.map((event) => event.type)).toEqual([
-      'session_start_requested', 'playback_stopped', 'speech_started',
+      'session_start_requested', 'speech_started',
     ])
     expect(controller.snapshot().response).toBe('idle')
   })

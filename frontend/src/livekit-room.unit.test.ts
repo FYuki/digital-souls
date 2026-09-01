@@ -378,7 +378,11 @@ describe('LiveKit Room generation synchronization', () => {
 
   test('barge-inではaudio graphを即時停止し次responseだけで再開する', async () => {
     const observations: RoomObservation[] = []
-    const client = new LiveKitRoomClient((observation) => observations.push(observation))
+    const receiveCoreEvent = vi.fn()
+    const client = new LiveKitRoomClient(
+      (observation) => observations.push(observation),
+      receiveCoreEvent,
+    )
     await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
     const room = latestRoom()
     room.emit(
@@ -397,7 +401,8 @@ describe('LiveKit Room generation synchronization', () => {
     expect(client.stopPlayback('50000000-0000-4000-8000-000000000001', 100)).toBe(0)
     expect(client.stopPlayback('50000000-0000-4000-8000-000000000001', 101)).toBe(0)
     expect(audioContexts[0].sources[0].disconnect).toHaveBeenCalledTimes(1)
-    expect(document.querySelectorAll('audio')).toHaveLength(0)
+    expect(document.querySelectorAll('audio')).toHaveLength(1)
+    expect(document.querySelector('audio')?.muted).toBe(true)
     expect(observations.at(-1)).toMatchObject({
       audio: 'unavailable', activeAudioGraphs: 0, speechStartedAtMs: 100,
     })
@@ -417,8 +422,24 @@ describe('LiveKit Room generation synchronization', () => {
       monotonic_timestamp_ms: 1_000,
     })
 
+    await vi.waitFor(() => expect(receiveCoreEvent).toHaveBeenCalledTimes(1))
+    expect(audioContexts).toHaveLength(1)
+    expect(document.querySelector('audio')?.muted).toBe(true)
+
+    emitCoreEvent(room, {
+      type: 'response_audio_segment',
+      protocol_version: '1.0',
+      event_id: '10000000-0000-4000-8000-000000000002',
+      session_id: '20000000-0000-4000-8000-000000000001',
+      response_id: '50000000-0000-4000-8000-000000000002',
+      audio_sequence: 1,
+      text_range: { start: 0, end: 1 },
+      monotonic_timestamp_ms: 1_100,
+    })
+
     await vi.waitFor(() => {
-      expect(audioContexts).toHaveLength(2)
+      expect(audioContexts).toHaveLength(1)
+      expect(document.querySelector('audio')?.muted).toBe(false)
       expect(observations.at(-1)).toMatchObject({ activeAudioGraphs: 1 })
     })
     client.disconnect()

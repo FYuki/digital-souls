@@ -41,7 +41,7 @@
 
 p50とp95は Hyndman-Fan Type 7 で計算する。p50は診断値、latencyの合否はp95で判定する。rateはbasis point（`100 = 1%`）で、artifactに試行数、成功、失敗、missing、not applicable、除外、率の分母を残す。
 
-LiveKitの絶対p95上限は TTFA 2000ms、local stop 150ms、turn decision 300ms、decision後cancel 200ms、全cancel 500ms、utterance確定 800msである。比較可能な同一区間では `WebSocket p95 + max(10%, 50ms)` も同時に満たす。TTFA p50 1000msは改善目安であり合否を変えない。CPU、memory、bandwidth、packet loss、network条件も診断値であり合否に使わない。
+LiveKitの絶対p95上限は TTFA 2000ms、local stop 3000ms、turn decision 3000ms、decision後cancel 200ms、全cancel 3500ms、utterance確定 800msである。local stopと全cancelは、VAD直後に相槌でも停止する旧方式ではなく、冒頭STTによる相槌／発話判定を含む。比較可能な同一区間では `WebSocket p95 + max(10%, 50ms)` も同時に満たす。TTFA p50 1000msは改善目安であり合否を変えない。CPU、memory、bandwidth、packet loss、network条件も診断値であり合否に使わない。
 
 ## controlled WebSocket baseline
 

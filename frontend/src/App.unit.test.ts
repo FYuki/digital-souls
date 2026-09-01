@@ -372,12 +372,23 @@ describe('App conversation lifecycle', () => {
 
     audioMocks.vadOptions.onSpeechStart()
     audioMocks.vadOptions.onSpeechRealStart()
+    await waitFor(() => expect(
+      liveKitMocks.controlEvents.map((event) => event.type),
+    ).toContain('speech_started'))
+    expect(liveKitMocks.stopPlayback).not.toHaveBeenCalled()
+
+    await emitCoreEvent({
+      type: 'turn_decision',
+      utterance_id: TURN_ID,
+      response_id: RESPONSE_ID,
+      decision: 'take_turn',
+      final: false,
+    })
     await waitFor(() => expect(liveKitMocks.stopPlayback).toHaveBeenCalledWith(
       RESPONSE_ID, expect.any(Number),
     ))
-    await waitFor(() => expect(
-      liveKitMocks.controlEvents.map((event) => event.type),
-    ).toContain('response_cancel_requested'))
+    expect(liveKitMocks.controlEvents.map((event) => event.type))
+      .not.toContain('response_cancel_requested')
 
     expect(screen.getByText('応答: 割り込み処理中')).toBeTruthy()
     expect(screen.getByText('再生: 停止済み')).toBeTruthy()

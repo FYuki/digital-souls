@@ -101,6 +101,7 @@ export class LiveKitRoomClient {
     worklet: AudioWorkletNode
     silentGain: GainNode
     playbackElement: HTMLAudioElement
+    suspended: boolean
   }>()
   private duplicateTrackFrames = 0
   private readonly playbackStartedResponses = new Set<string>()
@@ -113,6 +114,7 @@ export class LiveKitRoomClient {
   private reconnectRequested = false
   private suppressedResponseId: string | null = null
   private suppressedLastPlayedAudioSequence = 0
+  private pendingPlaybackResponseId: string | null = null
 
   constructor(
     private readonly observe: (observation: RoomObservation) => void,
@@ -214,6 +216,7 @@ export class LiveKitRoomClient {
     )
     this.suppressedResponseId = responseId
     this.suppressedLastPlayedAudioSequence = lastPlayedAudioSequence
+    this.pendingPlaybackResponseId = null
     this.playback.discardResponse(responseId)
     for (let index = this.pendingMetadata.length - 1; index >= 0; index -= 1) {
       if (this.pendingMetadata[index].responseId === responseId) {
@@ -222,13 +225,8 @@ export class LiveKitRoomClient {
     }
     this.audioGraphResetVersion += 1
     for (const graph of this.audioGraphs.values()) {
-      this.disconnectAudioGraph(graph)
+      this.suspendAudioGraph(graph)
     }
-    this.audioGraphs.clear()
-    const context = this.audioContext
-    this.audioContext = null
-    this.workletReady = null
-    if (context !== null) void context.close().catch(() => undefined)
     const controlAvailable = this.controlOutbox !== null
     this.observe({
       transport: this.room === null ? 'idle' : controlAvailable ? 'available' : 'unavailable',
@@ -428,20 +426,28 @@ export class LiveKitRoomClient {
         && this.suppressedResponseId !== null
         && event.response_id !== this.suppressedResponseId
       ) {
+        // response_started直後は、remote trackに割り込み前の音声が残っている場合がある。
+        // 次回答の最初の音声セグメントが確定するまで再生graphを復旧しない。
+        this.pendingPlaybackResponseId = event.response_id
+      }
+      if (
+        event.type === 'response_audio_segment'
+        && event.response_id !== undefined
+        && event.response_id === this.pendingPlaybackResponseId
+      ) {
         this.suppressedResponseId = null
         this.suppressedLastPlayedAudioSequence = 0
-        const resetVersion = ++this.audioGraphResetVersion
-        const resetTask = this.audioGraphResetTask.then(
-          () => this.resetAudioGraphs(resetVersion),
-        )
-        this.audioGraphResetTask = resetTask.catch(() => undefined)
-        void resetTask.catch(() => this.failTransport())
+        this.pendingPlaybackResponseId = null
+        this.resumePlaybackGraphs()
       }
       if (
         (event.type === 'response_cancelled' || event.type === 'response_failed')
         && event.response_id !== undefined
       ) {
         this.playback.discardResponse(event.response_id)
+        if (event.response_id === this.pendingPlaybackResponseId) {
+          this.pendingPlaybackResponseId = null
+        }
       }
       if (event.type === 'response_cancelled' && event.response_id !== undefined) {
         this.observe({
@@ -530,15 +536,21 @@ export class LiveKitRoomClient {
         this.playback.recordRenderedInterval(event.data)
       }
     }
-    source.connect(worklet)
-    worklet.connect(silentGain)
-    silentGain.connect(context.destination)
     const playbackElement = document.createElement('audio')
     playbackElement.autoplay = true
     playbackElement.hidden = true
+    playbackElement.muted = this.suppressedResponseId !== null
     playbackElement.srcObject = new MediaStream([track.mediaStreamTrack])
     document.body.append(playbackElement)
-    this.audioGraphs.set(key, { source, worklet, silentGain, playbackElement })
+    const graph = {
+      source,
+      worklet,
+      silentGain,
+      playbackElement,
+      suspended: this.suppressedResponseId !== null,
+    }
+    if (!graph.suspended) this.connectAudioEvidence(graph, context)
+    this.audioGraphs.set(key, graph)
     for (const metadata of this.pendingMetadata.splice(0)) {
       this.recordMetadataOnContext(metadata, context)
     }
@@ -568,6 +580,7 @@ export class LiveKitRoomClient {
     this.pendingMetadata.length = 0
     this.suppressedResponseId = null
     this.suppressedLastPlayedAudioSequence = 0
+    this.pendingPlaybackResponseId = null
     this.coreEvents.clear()
     this.clearBrowserDelivery()
     await this.disposeAudioContext()
@@ -612,12 +625,69 @@ export class LiveKitRoomClient {
     worklet: AudioWorkletNode
     silentGain: GainNode
     playbackElement: HTMLAudioElement
+    suspended: boolean
   }): void {
+    if (!graph.suspended) {
+      graph.source.disconnect()
+      graph.worklet.disconnect()
+      graph.silentGain.disconnect()
+    }
+    graph.playbackElement.srcObject = null
+    graph.playbackElement.remove()
+  }
+
+  private suspendAudioGraph(graph: {
+    source: MediaStreamAudioSourceNode
+    worklet: AudioWorkletNode
+    silentGain: GainNode
+    playbackElement: HTMLAudioElement
+    suspended: boolean
+  }): void {
+    graph.playbackElement.muted = true
+    if (graph.suspended) return
     graph.source.disconnect()
     graph.worklet.disconnect()
     graph.silentGain.disconnect()
-    graph.playbackElement.srcObject = null
-    graph.playbackElement.remove()
+    graph.suspended = true
+  }
+
+  private resumePlaybackGraphs(): void {
+    const context = this.audioContext
+    if (context !== null && this.audioGraphs.size > 0) {
+      for (const graph of this.audioGraphs.values()) {
+        if (graph.suspended) this.connectAudioEvidence(graph, context)
+        graph.playbackElement.muted = false
+      }
+      this.observe({
+        transport: this.room === null ? 'idle' : 'available',
+        control: this.controlOutbox === null ? 'unavailable' : 'available',
+        audio: 'available',
+        activeAudioGraphs: this.audioGraphs.size,
+      })
+      return
+    }
+    const resetVersion = ++this.audioGraphResetVersion
+    const resetTask = this.audioGraphResetTask.then(
+      () => this.resetAudioGraphs(resetVersion),
+    )
+    this.audioGraphResetTask = resetTask.catch(() => undefined)
+    void resetTask.catch(() => this.failTransport())
+  }
+
+  private connectAudioEvidence(
+    graph: {
+      source: MediaStreamAudioSourceNode
+      worklet: AudioWorkletNode
+      silentGain: GainNode
+      playbackElement: HTMLAudioElement
+      suspended: boolean
+    },
+    context: AudioContext,
+  ): void {
+    graph.source.connect(graph.worklet)
+    graph.worklet.connect(graph.silentGain)
+    graph.silentGain.connect(context.destination)
+    graph.suspended = false
   }
 
   private recordMetadataOnContext(
