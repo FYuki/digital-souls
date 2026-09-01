@@ -250,6 +250,42 @@ export const installMockLiveKit = async (
                 sentBytes: 1,
                 receivedBytes: null,
               })
+              if (typeof event.response_id === 'string') {
+                const responseId = event.response_id
+                receiveCoreEvent({
+                  type: 'turn_decision', session_id: sessionId,
+                  utterance_id: String(event.utterance_id), response_id: responseId,
+                  decision: 'take_turn', final: false,
+                })
+                receiveCoreEvent({
+                  type: 'response_cancelled', session_id: sessionId,
+                  response_id: responseId, reason: 'barge_in',
+                })
+                const cancelledAt = performance.now()
+                observe({
+                  transport: 'available', control: 'available', audio: 'unavailable',
+                  activeResponseId: responseId,
+                  cancelConfirmedAtMs: cancelledAt,
+                })
+                const interruption = (window as unknown as { __voiceChatE2E?: {
+                  interruptions: {
+                    responseId: string
+                    cancelConfirmedAtMs: number | null
+                  }[]
+                } }).__voiceChatE2E?.interruptions.find(
+                  (candidate) => candidate.responseId === responseId,
+                )
+                if (interruption !== undefined) {
+                  interruption.cancelConfirmedAtMs = cancelledAt
+                }
+                receiveCoreEvent({
+                  type: 'response_delta', session_id: sessionId,
+                  response_id: responseId, text_sequence: 2,
+                  text: '破棄対象',
+                  text_range: { start: responseText.length, end: responseText.length + 4 },
+                })
+                if (activeResponseId === responseId) activeResponseId = null
+              }
               return
             }
             if (event.type !== 'speech_stopped') return

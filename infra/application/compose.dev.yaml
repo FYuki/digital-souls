@@ -15,6 +15,10 @@ services:
   frontend:
     volumes:
       - type: bind
+        source: ${DS_REPOSITORY_ROOT:?DS_REPOSITORY_ROOT is required}/contracts
+        target: /app/contracts
+        read_only: true
+      - type: bind
         source: ${DS_REPOSITORY_ROOT:?DS_REPOSITORY_ROOT is required}/frontend/src
         target: /app/frontend/src
       - type: bind

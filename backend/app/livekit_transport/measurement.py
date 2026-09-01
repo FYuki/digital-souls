@@ -355,6 +355,10 @@ class LiveKitMeasurementSession:
         observation: StageObservation,
     ) -> tuple[str, str, EventOutcome, str | None] | None:
         stage = "transport" if observation.stage == "delivery" else observation.stage
+        if stage in {"turn_decision", "take_turn_decision", "server_cancelled"}:
+            if observation.outcome != "completed":
+                return None
+            return stage, "turn", "success", None
         if stage not in {"stt", "llm", "tts", "transport"}:
             return None
         if stage == "transport" and observation.outcome != "failed":

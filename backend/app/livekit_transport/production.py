@@ -62,6 +62,10 @@ STT_MAX_PENDING_UTTERANCES = 3
 STT_MAX_OPEN_CAPTURES = STT_MAX_PENDING_UTTERANCES + 1
 STT_MAX_UTTERANCE_PCM_BYTES = STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 30
 STT_MAX_PENDING_PCM_BYTES = STT_MAX_PENDING_UTTERANCES * STT_MAX_UTTERANCE_PCM_BYTES
+# Whisperはstreaming APIではないため、冒頭800msのsnapshotを先行認識する。
+STT_TURN_PREVIEW_PCM_BYTES = int(STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 0.8)
+# data channelより先に届く発話冒頭をmedia側で保持する。
+STT_MICROPHONE_PREROLL_BYTES = int(STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 0.25)
 
 
 def _livekit_rtc_module() -> Any:
@@ -583,6 +587,21 @@ class _ConversationCoreDelivery:
                 transcript=event.transcript,
                 should_response=event.should_response,
             )
+        elif event.type == "turn_decision":
+            if (
+                event.utterance_id is None
+                or event.response_id is None
+                or event.decision not in {"backchannel", "take_turn", "indeterminate"}
+                or event.final is None
+            ):
+                raise ValueError("turn_decision requires decision metadata")
+            payload.update(
+                type=event.type,
+                utterance_id=event.utterance_id,
+                response_id=event.response_id,
+                decision=event.decision,
+                final=event.final,
+            )
         elif event.type == "error":
             if (
                 event.utterance_id is None
@@ -668,10 +687,12 @@ class _ConversationCoreDelivery:
 @dataclass
 class _UserAudioCapture:
     utterance_id: str
+    interrupted_response_id: str | None = None
     pcm: bytearray = field(default_factory=bytearray)
     finalized: bool = False
     finalization_scheduled: bool = False
     capacity_exceeded: bool = False
+    preview_started: bool = False
 
 
 class _ConversationCoreBridge:
@@ -689,14 +710,27 @@ class _ConversationCoreBridge:
         self._stop_audio = stop_audio
         self._measurement = measurement
         self._user_audio_captures: deque[_UserAudioCapture] = deque()
-        self._pending_transcriptions: deque[tuple[str, bytes]] = deque()
+        self._pending_transcriptions: deque[tuple[str, bytes, str | None]] = deque()
         self._pending_transcription_bytes = 0
         self._transcription_active = False
+        self._microphone_preroll = bytearray()
+        self._interrupt_utterances_by_response: dict[str, str] = {}
         self._control_lock = asyncio.Lock()
 
     def notify(self, payload: bytes) -> None:
         event = json.loads(payload)
         if event["type"] == "speech_started" and self._is_user_event(event):
+            utterance_id = str(event["utterance_id"])
+            if self._measurement is not None:
+                self._measurement.record_utterance_event(
+                    utterance_id=utterance_id,
+                    name="speech_started",
+                    stage="vad",
+                )
+            if isinstance(event.get("response_id"), str):
+                self._interrupt_utterances_by_response[str(event["response_id"])] = (
+                    utterance_id
+                )
             open_captures = sum(
                 not capture.finalized for capture in self._user_audio_captures
             )
@@ -710,9 +744,17 @@ class _ConversationCoreBridge:
                 self._schedule(
                     self._discard_capture_for_capacity(oldest_open.utterance_id)
                 )
-            self._user_audio_captures.append(
-                _UserAudioCapture(utterance_id=str(event["utterance_id"]))
+            capture = _UserAudioCapture(
+                utterance_id=utterance_id,
+                interrupted_response_id=(
+                    str(event["response_id"])
+                    if isinstance(event.get("response_id"), str)
+                    else None
+                ),
             )
+            capture.pcm.extend(self._microphone_preroll)
+            self._microphone_preroll.clear()
+            self._user_audio_captures.append(capture)
             return
         if event["type"] == "speech_stopped" and self._is_user_event(event):
             utterance_id = str(event["utterance_id"])
@@ -746,6 +788,10 @@ class _ConversationCoreBridge:
 
     def receive_microphone(self, pcm: bytes) -> None:
         if not self._user_audio_captures:
+            self._microphone_preroll.extend(pcm)
+            excess = len(self._microphone_preroll) - STT_MICROPHONE_PREROLL_BYTES
+            if excess > 0:
+                del self._microphone_preroll[:excess]
             return
         active = next(
             (item for item in reversed(self._user_audio_captures) if not item.finalized),
@@ -765,7 +811,42 @@ class _ConversationCoreBridge:
             capture.capacity_exceeded = True
         elif not capture.capacity_exceeded:
             capture.pcm.extend(pcm)
+        if (
+            capture.interrupted_response_id is not None
+            and not capture.preview_started
+            and not self._transcription_active
+            and len(capture.pcm) >= STT_TURN_PREVIEW_PCM_BYTES
+        ):
+            capture.preview_started = True
+            self._transcription_active = True
+            self._schedule(
+                self._preview_user_turn(
+                    utterance_id=capture.utterance_id,
+                    interrupted_response_id=capture.interrupted_response_id,
+                    microphone_pcm=bytes(capture.pcm),
+                )
+            )
         self._schedule_finalization_if_ready(capture)
+
+    async def _preview_user_turn(
+        self,
+        *,
+        utterance_id: str,
+        interrupted_response_id: str,
+        microphone_pcm: bytes,
+    ) -> None:
+        try:
+            await self._session.preview_turn(
+                utterance_id=utterance_id,
+                audio=microphone_pcm,
+                interrupted_response_id=interrupted_response_id,
+            )
+        except Exception:
+            # 冒頭認識はlatency最適化であり、失敗時も発話全体のSTTで確定できる。
+            logger.exception("Turn preview failed: utterance_id=%s", utterance_id)
+        finally:
+            self._transcription_active = False
+            self._start_next_transcription()
 
     def _schedule_finalization_if_ready(self, capture: _UserAudioCapture) -> None:
         if (
@@ -809,6 +890,7 @@ class _ConversationCoreBridge:
             await self._enqueue_user_audio(
                 utterance_id=utterance_id,
                 microphone_pcm=microphone_pcm,
+                interrupted_response_id=capture.interrupted_response_id,
             )
 
     async def _receive(self, event: dict[str, object]) -> None:
@@ -835,6 +917,13 @@ class _ConversationCoreBridge:
             if event_type == "playback_stopped":
                 # prefix検証や永続化が失敗しても、旧音声をlocal graph再接続後へ残さない。
                 self._stop_audio()
+                utterance_id = self._interrupt_utterances_by_response.get(response_id)
+                if utterance_id is not None and self._measurement is not None:
+                    self._measurement.record_utterance_event(
+                        utterance_id=utterance_id,
+                        name="local_playback_stopped",
+                        stage="playback",
+                    )
             await self._session.confirm_playback(
                 response_id=response_id,
                 last_played_audio_sequence=last_played_audio_sequence,
@@ -845,7 +934,11 @@ class _ConversationCoreBridge:
             await self._session.reconnect()
 
     async def _enqueue_user_audio(
-        self, *, utterance_id: str, microphone_pcm: bytes
+        self,
+        *,
+        utterance_id: str,
+        microphone_pcm: bytes,
+        interrupted_response_id: str | None = None,
     ) -> None:
         if not getattr(self._session, "accepting_input", True):
             return
@@ -860,21 +953,36 @@ class _ConversationCoreBridge:
                     reason="input_capacity_exceeded",
                 )
                 return
-            self._pending_transcriptions.append((utterance_id, microphone_pcm))
+            self._pending_transcriptions.append(
+                (utterance_id, microphone_pcm, interrupted_response_id)
+            )
             self._pending_transcription_bytes += len(microphone_pcm)
             return
-        self._start_user_transcription(utterance_id, microphone_pcm)
+        self._start_user_transcription(
+            utterance_id, microphone_pcm, interrupted_response_id
+        )
 
     def _start_user_transcription(
-        self, utterance_id: str, microphone_pcm: bytes
+        self,
+        utterance_id: str,
+        microphone_pcm: bytes,
+        interrupted_response_id: str | None = None,
     ) -> None:
         self._transcription_active = True
         try:
-            task = self._session.start_transcription(
-                utterance_id=utterance_id,
-                audio=microphone_pcm,
-                should_response=True,
-            )
+            if interrupted_response_id is None:
+                task = self._session.start_transcription(
+                    utterance_id=utterance_id,
+                    audio=microphone_pcm,
+                    should_response=True,
+                )
+            else:
+                task = self._session.start_transcription(
+                    utterance_id=utterance_id,
+                    audio=microphone_pcm,
+                    should_response=True,
+                    interrupted_response_id=interrupted_response_id,
+                )
         except RuntimeError:
             # disconnect/endとmedia tail確定の競合では、旧発話を次世代へ持ち越さない。
             if not getattr(self._session, "accepting_input", True):
@@ -886,15 +994,22 @@ class _ConversationCoreBridge:
     def _transcription_done(self, task: asyncio.Task[object]) -> None:
         self._consume_task(task)
         self._transcription_active = False
+        self._start_next_transcription()
+
+    def _start_next_transcription(self) -> None:
         if not getattr(self._session, "accepting_input", True):
             self._pending_transcriptions.clear()
             self._pending_transcription_bytes = 0
             return
         if not self._pending_transcriptions:
             return
-        utterance_id, microphone_pcm = self._pending_transcriptions.popleft()
+        utterance_id, microphone_pcm, interrupted_response_id = (
+            self._pending_transcriptions.popleft()
+        )
         self._pending_transcription_bytes -= len(microphone_pcm)
-        self._start_user_transcription(utterance_id, microphone_pcm)
+        self._start_user_transcription(
+            utterance_id, microphone_pcm, interrupted_response_id
+        )
 
     @staticmethod
     def _is_user_event(event: dict[str, object]) -> bool:

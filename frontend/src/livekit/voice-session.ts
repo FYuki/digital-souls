@@ -215,42 +215,14 @@ export class LiveKitVoiceSessionController {
 
   async speechStarted(utteranceId: string, atMs: number): Promise<void> {
     const room = this.requiredRoom()
-    const playbackResponseId = this.playbackResponseId
-    const generatingResponseId = this.generatingResponseId
-    if (
-      playbackResponseId !== null
-      && !this.interruptedResponseIds.has(playbackResponseId)
-    ) {
-      const lastPlayedAudioSequence = room.stopPlayback(playbackResponseId, atMs)
-      this.playback = 'stopped'
-      this.interruptedResponseIds.add(playbackResponseId)
-      void this.publishControlEvent(room, this.event({
-        type: 'playback_stopped',
-        response_id: playbackResponseId,
-        reason: 'barge_in',
-        last_played_audio_sequence: lastPlayedAudioSequence,
-        monotonic_timestamp_ms: Math.floor(atMs),
-      }))
-    }
-    if (
-      generatingResponseId !== null
-      && !this.interruptedResponseIds.has(`cancel:${generatingResponseId}`)
-    ) {
-      this.interruptedResponseIds.add(`cancel:${generatingResponseId}`)
-      this.response = 'interrupting'
-      void this.publishControlEvent(room, this.event({
-        type: 'response_cancel_requested',
-        response_id: generatingResponseId,
-        reason: 'barge_in',
-        monotonic_timestamp_ms: Math.floor(atMs),
-      }))
-    }
+    const interruptedResponseId = this.generatingResponseId ?? this.playbackResponseId
     this.input = 'listening'
     this.publishSnapshot()
     await this.publishControlEvent(room, this.event({
       type: 'speech_started',
       utterance_id: utteranceId,
       speaker: this.userSpeaker(),
+      ...(interruptedResponseId === null ? {} : { response_id: interruptedResponseId }),
       monotonic_timestamp_ms: Math.floor(atMs),
     }))
   }
@@ -382,7 +354,16 @@ export class LiveKitVoiceSessionController {
       this.receiveCoreEvent(event)
       return
     }
-    if (event.type === 'response_started' && event.response_id !== undefined) {
+    if (
+      event.type === 'turn_decision'
+      && event.decision === 'take_turn'
+      && event.response_id !== undefined
+    ) {
+      this.stopInterruptedPlayback(event.response_id)
+      if (event.response_id === this.generatingResponseId) {
+        this.response = 'interrupting'
+      }
+    } else if (event.type === 'response_started' && event.response_id !== undefined) {
       this.interruptedResponseIds.clear()
       this.generatingResponseId = event.response_id
       this.playbackResponseId = null
@@ -440,6 +421,22 @@ export class LiveKitVoiceSessionController {
     }
     this.publishSnapshot()
     this.receiveCoreEvent(event)
+  }
+
+  private stopInterruptedPlayback(responseId: string): void {
+    const room = this.room
+    if (room === null || this.interruptedResponseIds.has(responseId)) return
+    const atMs = this.dependencies.monotonicMs()
+    const lastPlayedAudioSequence = room.stopPlayback(responseId, atMs)
+    this.playback = 'stopped'
+    this.interruptedResponseIds.add(responseId)
+    void this.publishControlEvent(room, this.event({
+      type: 'playback_stopped',
+      response_id: responseId,
+      reason: 'barge_in',
+      last_played_audio_sequence: lastPlayedAudioSequence,
+      monotonic_timestamp_ms: Math.floor(atMs),
+    }))
   }
 
   private terminateTransport(phase: 'ended' | 'error'): void {

@@ -340,6 +340,27 @@ describe('voice session shared contract', () => {
     })).toThrow()
   })
 
+  it('turn decisionは判定値と暫定・確定状態を必須とする', async () => {
+    const { parseVoiceSessionEvent } = await loadValidationModule()
+    const event = {
+      type: 'turn_decision',
+      protocol_version: '1.0',
+      event_id: '10000000-0000-4000-8000-000000000090',
+      session_id: '20000000-0000-4000-8000-000000000001',
+      utterance_id: '30000000-0000-4000-8000-000000000090',
+      response_id: '50000000-0000-4000-8000-000000000090',
+      decision: 'backchannel',
+      final: false,
+      monotonic_timestamp_ms: 1090,
+    }
+
+    expect(parseVoiceSessionEvent(event)).toMatchObject({
+      decision: 'backchannel', final: false,
+    })
+    const { final: _final, ...withoutFinal } = event
+    expect(() => parseVoiceSessionEvent(withoutFinal)).toThrow()
+  })
+
   it('非互換protocolをtyped eventへ変換しない', async () => {
     const { parseVoiceSessionEvent } = await loadValidationModule()
     const loaded = fixture('protocol-version-mismatch.json')
