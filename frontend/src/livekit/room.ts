@@ -113,6 +113,7 @@ export class LiveKitRoomClient {
   private reconnectRequested = false
   private suppressedResponseId: string | null = null
   private suppressedLastPlayedAudioSequence = 0
+  private pendingPlaybackResponseId: string | null = null
 
   constructor(
     private readonly observe: (observation: RoomObservation) => void,
@@ -214,6 +215,7 @@ export class LiveKitRoomClient {
     )
     this.suppressedResponseId = responseId
     this.suppressedLastPlayedAudioSequence = lastPlayedAudioSequence
+    this.pendingPlaybackResponseId = null
     this.playback.discardResponse(responseId)
     for (let index = this.pendingMetadata.length - 1; index >= 0; index -= 1) {
       if (this.pendingMetadata[index].responseId === responseId) {
@@ -428,8 +430,18 @@ export class LiveKitRoomClient {
         && this.suppressedResponseId !== null
         && event.response_id !== this.suppressedResponseId
       ) {
+        // response_started直後は、remote trackに割り込み前の音声が残っている場合がある。
+        // 次回答の最初の音声セグメントが確定するまで再生graphを復旧しない。
+        this.pendingPlaybackResponseId = event.response_id
+      }
+      if (
+        event.type === 'response_audio_segment'
+        && event.response_id !== undefined
+        && event.response_id === this.pendingPlaybackResponseId
+      ) {
         this.suppressedResponseId = null
         this.suppressedLastPlayedAudioSequence = 0
+        this.pendingPlaybackResponseId = null
         const resetVersion = ++this.audioGraphResetVersion
         const resetTask = this.audioGraphResetTask.then(
           () => this.resetAudioGraphs(resetVersion),
@@ -442,6 +454,9 @@ export class LiveKitRoomClient {
         && event.response_id !== undefined
       ) {
         this.playback.discardResponse(event.response_id)
+        if (event.response_id === this.pendingPlaybackResponseId) {
+          this.pendingPlaybackResponseId = null
+        }
       }
       if (event.type === 'response_cancelled' && event.response_id !== undefined) {
         this.observe({
@@ -568,6 +583,7 @@ export class LiveKitRoomClient {
     this.pendingMetadata.length = 0
     this.suppressedResponseId = null
     this.suppressedLastPlayedAudioSequence = 0
+    this.pendingPlaybackResponseId = null
     this.coreEvents.clear()
     this.clearBrowserDelivery()
     await this.disposeAudioContext()

@@ -378,7 +378,11 @@ describe('LiveKit Room generation synchronization', () => {
 
   test('barge-inではaudio graphを即時停止し次responseだけで再開する', async () => {
     const observations: RoomObservation[] = []
-    const client = new LiveKitRoomClient((observation) => observations.push(observation))
+    const receiveCoreEvent = vi.fn()
+    const client = new LiveKitRoomClient(
+      (observation) => observations.push(observation),
+      receiveCoreEvent,
+    )
     await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
     const room = latestRoom()
     room.emit(
@@ -415,6 +419,21 @@ describe('LiveKit Room generation synchronization', () => {
       },
       source_utterance_ids: ['30000000-0000-4000-8000-000000000001'],
       monotonic_timestamp_ms: 1_000,
+    })
+
+    await vi.waitFor(() => expect(receiveCoreEvent).toHaveBeenCalledTimes(1))
+    expect(audioContexts).toHaveLength(1)
+    expect(document.querySelectorAll('audio')).toHaveLength(0)
+
+    emitCoreEvent(room, {
+      type: 'response_audio_segment',
+      protocol_version: '1.0',
+      event_id: '10000000-0000-4000-8000-000000000002',
+      session_id: '20000000-0000-4000-8000-000000000001',
+      response_id: '50000000-0000-4000-8000-000000000002',
+      audio_sequence: 1,
+      text_range: { start: 0, end: 1 },
+      monotonic_timestamp_ms: 1_100,
     })
 
     await vi.waitFor(() => {
