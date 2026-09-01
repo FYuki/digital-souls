@@ -12,6 +12,7 @@ import {
 const SESSION_ID = '20000000-0000-4000-8000-000000000001'
 const PARTICIPANT_ID = '40000000-0000-4000-8000-000000000001'
 const UTTERANCE_ID = '30000000-0000-4000-8000-000000000001'
+const MICROPHONE_STREAM = {} as MediaStream
 
 const setup = () => {
   const events: VoiceSessionEvent[] = []
@@ -68,11 +69,11 @@ describe('通常会話UI向けLiveKit音声session', () => {
     const context = { characterId: 'miori', conversationId: 'conversation-id' }
 
     await controller.ensureSession(context)
-    await controller.resumeMicrophone()
+    await controller.resumeMicrophone(MICROPHONE_STREAM)
     await controller.speechStarted(UTTERANCE_ID, 1_010)
     await controller.speechStopped(UTTERANCE_ID, 1_020)
     await controller.muteMicrophone()
-    await controller.resumeMicrophone()
+    await controller.resumeMicrophone(MICROPHONE_STREAM)
 
     expect(dependencies.requestToken).toHaveBeenCalledTimes(1)
     expect(room.publishMicrophone).toHaveBeenCalledTimes(2)
@@ -113,7 +114,7 @@ describe('通常会話UI向けLiveKit音声session', () => {
     await controller.ensureSession({
       characterId: 'miori', conversationId: 'conversation-id',
     })
-    await controller.resumeMicrophone()
+    await controller.resumeMicrophone(MICROPHONE_STREAM)
 
     observations[0]({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable' })
     observations[0]({ transport: 'available', control: 'available', audio: 'available' })
@@ -124,7 +125,7 @@ describe('通常会話UI向けLiveKit音声session', () => {
   test('前sessionのmicrophone状態を次sessionへ持ち越さない', async () => {
     const { controller, observations } = setup()
     await controller.ensureSession({ characterId: 'miori', conversationId: 'one' })
-    await controller.resumeMicrophone()
+    await controller.resumeMicrophone(MICROPHONE_STREAM)
     await controller.end()
     await controller.ensureSession({ characterId: 'miori', conversationId: 'two' })
 
@@ -153,12 +154,12 @@ describe('通常会話UI向けLiveKit音声session', () => {
       characterId: 'miori', conversationId: 'conversation-id',
     })
 
-    await expect(controller.resumeMicrophone()).rejects.toThrow(
+    await expect(controller.resumeMicrophone(MICROPHONE_STREAM)).rejects.toThrow(
       'permission or publish failure',
     )
     expect(controller.snapshot().phase).toBe('muted')
 
-    await controller.resumeMicrophone()
+    await controller.resumeMicrophone(MICROPHONE_STREAM)
     expect(controller.snapshot().phase).toBe('listening')
     expect(room.publishMicrophone).toHaveBeenCalledTimes(2)
   })
@@ -168,7 +169,7 @@ describe('通常会話UI向けLiveKit音声session', () => {
     await controller.ensureSession({
       characterId: 'miori', conversationId: 'conversation-id',
     })
-    await controller.resumeMicrophone()
+    await controller.resumeMicrophone(MICROPHONE_STREAM)
     coreEventReceivers[0]({
       type: 'response_started',
       response_id: '50000000-0000-4000-8000-000000000001',
@@ -264,7 +265,7 @@ describe('通常会話UI向けLiveKit音声session', () => {
     await controller.ensureSession({
       characterId: 'miori', conversationId: 'conversation-id',
     })
-    await controller.resumeMicrophone()
+    await controller.resumeMicrophone(MICROPHONE_STREAM)
     await controller.speechStopped(UTTERANCE_ID, 1_020)
     expect(controller.snapshot().input).toBe('transcribing')
 

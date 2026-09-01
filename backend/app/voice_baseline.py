@@ -24,6 +24,7 @@ from app.voice_metrics import (
 
 FORBIDDEN_AGGREGATE_KEYS = {
     "event_id",
+    "character_id",
     "session_id",
     "utterance_id",
     "response_id",
@@ -165,6 +166,10 @@ def finalize_baseline(
         for event in _load_trace(trace_path)
         if (event.session_id, event.utterance_id, event.response_id) in measured_keys
     ]
+    character_by_trial = {
+        (event.session_id, event.utterance_id, event.response_id): event.character_id
+        for event in events
+    }
     observed_keys = {
         (event.session_id, event.utterance_id, event.response_id) for event in events
     }
@@ -188,6 +193,9 @@ def finalize_baseline(
                 schema_version="1.0",
                 measurement_kind="controlled_baseline",
                 event_id=f"{boundary}-{index}",
+                character_id=character_by_trial[
+                    (session_ids[index], utterance_ids[index], response_ids[index])
+                ],
                 session_id=session_ids[index],
                 utterance_id=utterance_ids[index],
                 response_id=response_ids[index],

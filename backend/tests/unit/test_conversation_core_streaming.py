@@ -31,6 +31,15 @@ def test_japanese_segmenter_confirms_sentence_clause_and_final_remainder() -> No
     assert segmenter.finish()[0].text == "終端なし"
 
 
+def test_japanese_segmenter_drops_whitespace_only_sentence_before_tts() -> None:
+    segmenter = JapaneseTextSegmenter()
+
+    assert segmenter.feed("\n") == ()
+    assert segmenter.feed("次です。") == (
+        TextSegment(text="次です。", text_range=(1, 5)),
+    )
+
+
 def test_japanese_segmenter_does_not_split_a_short_url_at_soft_limit() -> None:
     segmenter = JapaneseTextSegmenter(max_chars=12, min_clause_chars=4)
     segments = segmenter.feed("参照 https://example.com/path 続き")
@@ -122,6 +131,46 @@ def test_first_audio_is_delivered_before_llm_stream_completes() -> None:
             await asyncio.sleep(0)
         assert tts.calls == ["最初の文です。", "続きです。"]
         assert session.active_response is None
+
+    asyncio.run(exercise())
+
+
+def test_streaming_pipeline_completes_when_whitespace_only_segment_is_not_spoken() -> None:
+    @dataclass
+    class ParagraphLlm:
+        async def generate(self, _transcript: str) -> AsyncIterator[TextDelta]:
+            text = "一文目。\n二文目。"
+            yield TextDelta(1, text, (0, len(text)))
+
+    async def exercise() -> None:
+        delivery = RecordingDelivery()
+        session = ConversationCoreSession(
+            session_id="20000000-0000-4000-8000-000000000011",
+            response_id_factory=response_id_factory(
+                "50000000-0000-4000-8000-000000000011"
+            ),
+            delivery=delivery,
+            persistence=RecordingPersistence(),
+            observation=RecordingObservation(),
+            stt=RecordingStt(),
+            llm=ParagraphLlm(),
+            tts=RecordingSegmentTts(),
+        )
+        response = await session.finalize_utterance(
+            utterance_id="30000000-0000-4000-8000-000000000011",
+            transcript="段落で答えて",
+            should_response=True,
+        )
+        while session.running_stage_count:
+            await asyncio.sleep(0)
+
+        assert session.response(response.response_id).state.value == "completed"
+        audio_ranges = [
+            event_field(event, "text_range")
+            for event in delivery.events
+            if event_field(event, "type") == "response_audio_segment"
+        ]
+        assert audio_ranges == [(0, 4), (4, 9)]
 
     asyncio.run(exercise())
 

@@ -43,11 +43,12 @@ class JapaneseTextSegmenter:
             if end is None:
                 break
             text = self._buffer[:end]
-            if text:
+            if text.strip():
                 result.append(
                     TextSegment(text=text, text_range=(self._offset, self._offset + end))
                 )
-                self._offset += end
+            # 空白だけの区間もLLM本文上のoffsetとしては消費済みにする。
+            self._offset += end
             self._buffer = self._buffer[end:]
         return tuple(result)
 

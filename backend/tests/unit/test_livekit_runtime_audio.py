@@ -73,7 +73,10 @@ async def _drain_asyncio_tasks(tasks: set[asyncio.Task[None]]) -> None:
 def test_microphone_observation_records_metadata_without_audio_bytes() -> None:
     module = _runtime_module("metadata-only microphone observation")
     port = RecordingObservationPort()
-    observer = module.MicrophoneTrackObserver(observation_port=port)
+    observer = module.MicrophoneTrackObserver(
+        observation_port=port,
+        observation_interval_ms=10,
+    )
 
     observer.receive_frame(
         pcm=b"private-audio-sentinel",
@@ -101,13 +104,36 @@ def test_microphone_observation_records_metadata_without_audio_bytes() -> None:
     )
 
 
-def test_voicevox_wav_reaches_livekit_as_matching_48khz_pcm_frame(
+def test_microphone_observation_is_throttled_to_one_per_second() -> None:
+    module = _runtime_module("throttled microphone observation")
+    port = RecordingObservationPort()
+    observer = module.MicrophoneTrackObserver(observation_port=port)
+
+    for frame_index in range(101):
+        observer.receive_frame(
+            pcm=b"audio-not-recorded",
+            sample_count=480,
+            received_at_ms=1_000 + frame_index * 10,
+        )
+
+    assert port.records == [
+        {
+            "frame_count": 101,
+            "sample_count": 48_480,
+            "elapsed_ms": 1_000,
+            "missing_frames": 0,
+        }
+    ]
+
+
+def test_stream_boundary_whitespace_never_reaches_voicevox_or_livekit_audio(
     monkeypatch,
 ) -> None:
     production = importlib.import_module("app.livekit_transport.production")
     session_id = "20000000-0000-4000-8000-000000000010"
     events: list[tuple[str, object]] = []
     response_ids: list[str] = []
+    trace_events: list[object] = []
 
     class AudioFrame:
         def __init__(
@@ -191,15 +217,18 @@ def test_voicevox_wav_reaches_livekit_as_matching_48khz_pcm_frame(
         assert character_id == "miori"
         return SimpleNamespace(speaker_id=7)
 
-    def generate_reply(
+    async def generate_reply_stream(
         character_id: str,
         history_session: object,
         transcript: str,
-    ) -> str:
+    ):
         assert character_id == "miori"
         assert isinstance(history_session, HistorySession)
         assert transcript == "利用者の発話"
-        return "光織の応答"
+        yield "\n"
+        yield "光織"
+        yield "の応答"
+        yield "\n"
 
     monkeypatch.setattr(production, "load_tts_config", load_tts_config)
     coordinator = RecordingCoordinator()
@@ -213,7 +242,10 @@ def test_voicevox_wav_reaches_livekit_as_matching_48khz_pcm_frame(
         transcriber=Transcriber(),
         synthesizer=Synthesizer(),
         history_service=HistoryService(),
-        generate_reply=generate_reply,
+        generate_reply_stream=generate_reply_stream,
+        measurement_kind="dogfood",
+        trace_record=trace_events.append,
+        measurement_clock_ns=iter(range(1_000, 2_000)).__next__,
     )
 
     async def exercise() -> None:
@@ -266,6 +298,38 @@ def test_voicevox_wav_reaches_livekit_as_matching_48khz_pcm_frame(
     assert frame.sample_rate == 48_000
     assert frame.channels == 1
     assert frame.samples_per_channel == len(frame.data) // 2
+    assert {
+        event.name for event in trace_events  # type: ignore[attr-defined]
+    } >= {
+        "response_decision",
+        "llm_started",
+        "first_text_delta",
+        "tts_started",
+        "tts_completed",
+        "first_audio_generated",
+        "first_audio_out",
+    }
+    assert {
+        (event.session_id, event.utterance_id, event.response_id)  # type: ignore[attr-defined]
+        for event in trace_events
+    } == {
+        (
+            session_id,
+            "30000000-0000-4000-8000-000000000010",
+            metadata["response_id"],
+        )
+    }
+    assert {
+        event.character_id for event in trace_events  # type: ignore[attr-defined]
+    } == {"miori"}
+    trace_by_name = {
+        event.name: event for event in trace_events  # type: ignore[attr-defined]
+    }
+    assert (
+        trace_by_name["first_text_delta"].timestamp
+        < trace_by_name["tts_started"].timestamp
+        <= trace_by_name["tts_completed"].timestamp
+    )
 
 
 def test_cancel_clears_character_audio_queue_and_next_response_can_publish(

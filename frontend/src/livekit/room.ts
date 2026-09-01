@@ -99,6 +99,8 @@ export class LiveKitRoomClient {
   private readonly audioGraphs = new Map<string, {
     source: MediaStreamAudioSourceNode
     worklet: AudioWorkletNode
+    silentGain: GainNode
+    playbackElement: HTMLAudioElement
   }>()
   private duplicateTrackFrames = 0
   private readonly playbackStartedResponses = new Set<string>()
@@ -160,8 +162,16 @@ export class LiveKitRoomClient {
     this.observe({ transport: 'available', control: 'available', audio: 'unavailable' })
   }
 
-  async publishMicrophone(): Promise<void> {
+  async publishMicrophone(stream?: MediaStream): Promise<void> {
     if (this.room === null) throw new Error('LiveKit Room is not connected')
+    if (stream !== undefined) {
+      const track = stream.getAudioTracks()[0]
+      if (track === undefined) throw new Error('Microphone stream has no audio track')
+      await this.room.localParticipant.publishTrack(track, {
+        source: Track.Source.Microphone,
+      })
+      return
+    }
     await this.room.localParticipant.setMicrophoneEnabled(
       true,
       { ...this.microphoneCaptureOptions },
@@ -170,6 +180,13 @@ export class LiveKitRoomClient {
 
   async muteMicrophone(): Promise<void> {
     if (this.room === null) throw new Error('LiveKit Room is not connected')
+    const publication = this.room.localParticipant.getTrackPublication(
+      Track.Source.Microphone,
+    )
+    if (publication?.track !== undefined) {
+      await this.room.localParticipant.unpublishTrack(publication.track, false)
+      return
+    }
     await this.room.localParticipant.setMicrophoneEnabled(false)
   }
 
@@ -205,8 +222,7 @@ export class LiveKitRoomClient {
     }
     this.audioGraphResetVersion += 1
     for (const graph of this.audioGraphs.values()) {
-      graph.source.disconnect()
-      graph.worklet.disconnect()
+      this.disconnectAudioGraph(graph)
     }
     this.audioGraphs.clear()
     const context = this.audioContext
@@ -362,8 +378,7 @@ export class LiveKitRoomClient {
       this.subscriptions.delete(key)
       this.subscribedTracks.delete(key)
       const graph = this.audioGraphs.get(key)
-      graph?.source.disconnect()
-      graph?.worklet.disconnect()
+      if (graph !== undefined) this.disconnectAudioGraph(graph)
       this.audioGraphs.delete(key)
     })
     room.on(RoomEvent.Disconnected, () => {
@@ -504,6 +519,8 @@ export class LiveKitRoomClient {
       new MediaStream([track.mediaStreamTrack]),
     )
     const worklet = new AudioWorkletNode(context, 'render-evidence-processor')
+    const silentGain = context.createGain()
+    silentGain.gain.value = 0
     worklet.port.onmessage = (event: MessageEvent<{
       startFrame: number
       endFrame: number
@@ -513,8 +530,15 @@ export class LiveKitRoomClient {
         this.playback.recordRenderedInterval(event.data)
       }
     }
-    source.connect(worklet).connect(context.destination)
-    this.audioGraphs.set(key, { source, worklet })
+    source.connect(worklet)
+    worklet.connect(silentGain)
+    silentGain.connect(context.destination)
+    const playbackElement = document.createElement('audio')
+    playbackElement.autoplay = true
+    playbackElement.hidden = true
+    playbackElement.srcObject = new MediaStream([track.mediaStreamTrack])
+    document.body.append(playbackElement)
+    this.audioGraphs.set(key, { source, worklet, silentGain, playbackElement })
     for (const metadata of this.pendingMetadata.splice(0)) {
       this.recordMetadataOnContext(metadata, context)
     }
@@ -574,14 +598,26 @@ export class LiveKitRoomClient {
 
   private async disposeAudioContext(): Promise<void> {
     for (const graph of this.audioGraphs.values()) {
-      graph.source.disconnect()
-      graph.worklet.disconnect()
+      this.disconnectAudioGraph(graph)
     }
     this.audioGraphs.clear()
     const context = this.audioContext
     this.audioContext = null
     this.workletReady = null
     if (context !== null) await context.close()
+  }
+
+  private disconnectAudioGraph(graph: {
+    source: MediaStreamAudioSourceNode
+    worklet: AudioWorkletNode
+    silentGain: GainNode
+    playbackElement: HTMLAudioElement
+  }): void {
+    graph.source.disconnect()
+    graph.worklet.disconnect()
+    graph.silentGain.disconnect()
+    graph.playbackElement.srcObject = null
+    graph.playbackElement.remove()
   }
 
   private recordMetadataOnContext(

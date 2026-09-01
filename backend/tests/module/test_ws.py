@@ -349,6 +349,7 @@ class TestWebSocketEndpoint:
                 schema_version="1.0",
                 measurement_kind="automated_test",
                 event_id=event_id,
+                character_id="miori",
                 session_id=correlation.session_id,
                 utterance_id=correlation.utterance_id,
                 response_id=response_id,
@@ -461,6 +462,7 @@ class TestWebSocketEndpoint:
                     chat_session,
                     StubAudioSession(),
                     b"audio",
+                    "miori",
                     state,
                     correlation,
                     1,
@@ -473,6 +475,7 @@ class TestWebSocketEndpoint:
             schema_version="1.0",
             measurement_kind="automated_test",
             event_id="01992f57-8c65-79d0-924f-e2cd79bc0501",
+            character_id="miori",
             session_id=correlation.session_id,
             utterance_id=correlation.utterance_id,
             response_id=websocket.response_id,
@@ -1111,6 +1114,7 @@ class TestWebSocketEndpoint:
                 MissingConversationSession(),
                 CallbackAudioSession(),
                 _PCM_AUDIO,
+                "miori",
                 _ConnectionMeasurementState(),
             )
             return keep_open, websocket
@@ -2102,6 +2106,7 @@ class TestWebSocketEndpoint:
                 StubChatSession(),
                 FailingAudioSession(),
                 b"audio",
+                "miori",
                 ws_module._ConnectionMeasurementState(),
             )
             return keep_open, websocket
@@ -2161,6 +2166,7 @@ class TestWebSocketEndpoint:
                     StubChatSession(),
                     StubAudioSession(),
                     b"audio",
+                    "miori",
                     _ConnectionMeasurementState(),
                 )
             )
@@ -2928,6 +2934,7 @@ def test_audio_measurement_metadata_records_pre_response_events() -> None:
     )
     measurement = MeasurementContext(
         measurement_kind="automated_test",
+        character_id="miori",
         session_id=correlation.session_id,
         utterance_id=correlation.utterance_id,
         response_id="01992f57-8c65-79d0-924f-e2cd79bc04fa",

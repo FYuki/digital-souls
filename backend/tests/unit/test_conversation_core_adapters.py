@@ -177,6 +177,28 @@ def test_voicevox_adapter_rejects_non_wav_audio_without_fallback() -> None:
     asyncio.run(exercise())
 
 
+def test_voicevox_adapter_rejects_wav_without_audio_frames() -> None:
+    async def exercise() -> None:
+        _public, adapters = _modules()
+        adapter = adapters.VoicevoxTtsAdapter(
+            client=FakeVoicevoxClient(
+                audio=make_pcm16_wav(
+                    pcm=b"",
+                    sample_rate=24_000,
+                    channels=1,
+                )
+            ),
+            output_sample_rate=48_000,
+            output_channels=1,
+            output_sample_width=2,
+        )
+
+        with pytest.raises(ValueError, match="must contain audio frames"):
+            _segments = [segment async for segment in adapter.synthesize("改行")]
+
+    asyncio.run(exercise())
+
+
 def test_prompt_llm_adapter_emits_one_text_delta_without_fixing_the_port_to_one() -> None:
     async def exercise() -> None:
         _public, adapters = _modules()
@@ -190,6 +212,39 @@ def test_prompt_llm_adapter_emits_one_text_delta_without_fixing_the_port_to_one(
         assert deltas[0].text_sequence == 1
         assert deltas[0].text == "光織からの応答🙂"
         assert deltas[0].text_range == (0, 8)
+
+    asyncio.run(exercise())
+
+
+def test_prompt_llm_adapter_drops_boundary_whitespace_and_preserves_internal_spacing() -> None:
+    async def generate_stream(_transcript: str):
+        for chunk in ("\n", "  ", "こんにちは。", "\n", "次の文", "です。", "\n\n"):
+            yield chunk
+
+    async def exercise() -> None:
+        _public, adapters = _modules()
+        adapter = adapters.PromptLlmAdapter(generate_stream=generate_stream)
+
+        deltas = [delta async for delta in adapter.generate("利用者の発話")]
+
+        assert [delta.text for delta in deltas] == ["こんにちは。", "\n次の文", "です。"]
+        assert [delta.text_sequence for delta in deltas] == [1, 2, 3]
+        assert [delta.text_range for delta in deltas] == [(0, 6), (6, 10), (10, 13)]
+
+    asyncio.run(exercise())
+
+
+def test_prompt_llm_adapter_rejects_whitespace_only_response() -> None:
+    async def generate_stream(_transcript: str):
+        yield "\n"
+        yield "  "
+
+    async def exercise() -> None:
+        _public, adapters = _modules()
+        adapter = adapters.PromptLlmAdapter(generate_stream=generate_stream)
+
+        with pytest.raises(ValueError, match="must not be empty"):
+            _deltas = [delta async for delta in adapter.generate("利用者の発話")]
 
     asyncio.run(exercise())
 

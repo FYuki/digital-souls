@@ -553,6 +553,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     history_service=conversation_history_service,
                     completed_turn_observer=submit_completed_core_turn,
                     generate_reply_stream=generate_core_reply_stream,
+                    measurement_kind=voice_measurement_kind,
+                    trace_record=(
+                        voice_trace_recorder.record
+                        if voice_trace_recorder is not None
+                        else None
+                    ),
                 )
             livekit_api = await configure_production_resources(
                 app,
