@@ -201,7 +201,7 @@ def _prepare_deploy_scenario(
         '  backup) [ "${DEPLOY_FAILURE-}" != "backup" ]; '
         "printf '%s\\n' \"$DEPLOY_BACKUP_OUTPUT\" ;;\n"
         '  backup-verify) [ "${DEPLOY_FAILURE-}" != "verify" ] ;;\n'
-        f'  readiness) count=$(cat "{tmp_path / "readiness-count"}" 2>/dev/null || printf 0); '
+        f'  wait-readiness) count=$(cat "{tmp_path / "readiness-count"}" 2>/dev/null || printf 0); '
         f'count=$((count + 1)); printf "%s" "$count" > "{tmp_path / "readiness-count"}"; '
         'case "${DEPLOY_FAILURE-}" in '
         f'readiness) if [ "$count" -gt 1 ]; then printf "readiness-result\\tsuccess\\n" >> "{call_log}"; '
@@ -897,11 +897,19 @@ def test_should_deploy_only_after_backup_verify_and_record_a_safe_manifest(
             next(index for index, call in enumerate(calls) if marker in call)
             for marker in (
                 "restart",
-                "cli\treadiness ",
+                "cli\twait-readiness ",
             )
         ),
     )
     assert operations == tuple(sorted(operations))
+    readiness_calls = tuple(
+        call for call in calls if call.startswith("cli\twait-readiness ")
+    )
+    assert readiness_calls == (
+        "cli\twait-readiness --profile dogfood --service frontend "
+        "--service backend --max-attempts 180 --interval-seconds 1 "
+        "--request-timeout-seconds 2",
+    )
     assert (tmp_path / "config" / "dogfood.revision").read_text(
         encoding="utf-8"
     ) == f"{NEXT_REVISION}\n"
@@ -949,7 +957,7 @@ def test_should_record_null_previous_commit_on_the_true_initial_deploy(
         "cli\tbackup-verify ",
         "manifest-write",
         "restart",
-        "cli\treadiness ",
+        "cli\twait-readiness ",
     )
     assert all(any(marker in call for call in calls) for marker in required_operations)
     generations = tuple((tmp_path / "state" / "deployments").glob("*.json"))
@@ -1624,7 +1632,7 @@ def test_should_stop_deploy_at_the_first_activation_failure(
 
     assert result.returncode != 0
     assert any(last_operation in call for call in calls)
-    assert not any(call.startswith("cli\treadiness ") for call in calls)
+    assert not any(call.startswith("cli\twait-readiness ") for call in calls)
     diagnostic = result.stdout + result.stderr
     assert f"現在のrevision: {TEST_REVISION}" in diagnostic
     assert f"現在のHEAD: {TEST_REVISION}" in diagnostic
@@ -1796,7 +1804,7 @@ def test_should_automatically_restore_the_previous_revision_after_readiness_fail
         ("chown\t", "chown"),
         ("chmod\t", "chmod"),
         ("restart", "restart"),
-        ("cli\treadiness ", "readiness"),
+        ("cli\twait-readiness ", "readiness"),
         ("readiness-result\tfailure", "readiness-failure"),
         ("readiness-result\tsuccess", "readiness-success"),
     )

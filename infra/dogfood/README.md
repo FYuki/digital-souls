@@ -271,7 +271,7 @@ sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/rollback.sh --to <保存
 
 `sudo`は既定で`WSL_DISTRO_NAME`を引き継がないため、rootで直接実行する手順では明示的に渡す。`wslinfo --name`は利用可能な環境でだけfallbackとして使用し、distributionを解決できない場合は推測せず拒否する。
 
-deployはdirty checkout、origin/main上で解決できないcommit、設定不足を拒否する。最初に3つのGHCR commit SHA tagをBuildxでimmutable digestへ解決する。`conversation-history.db`がなければBackend依存の準備より前に初回起動を案内して、backup、manifest、revision、checkoutを変更せず停止する。DBが存在する場合だけ、backup前に現在HEADのBackend依存を準備し、backupとbackup-verifyを完了してからmanifestとrevisionを更新する。その後、detached checkout、Backend依存準備、3 digestの原子的配置、権限再適用、service restart、Profile準拠readinessの順で実行する。readiness失敗時は既定で直前commitと3 digestへ自動rollbackし、`--no-auto-rollback`指定時だけ現在状態を維持して停止する。backupを省略するオプションはない。
+deployはdirty checkout、origin/main上で解決できないcommit、設定不足を拒否する。最初に3つのGHCR commit SHA tagをBuildxでimmutable digestへ解決する。`conversation-history.db`がなければBackend依存の準備より前に初回起動を案内して、backup、manifest、revision、checkoutを変更せず停止する。DBが存在する場合だけ、backup前に現在HEADのBackend依存を準備し、backupとbackup-verifyを完了してからmanifestとrevisionを更新する。その後、detached checkout、Backend依存準備、3 digestの原子的配置、権限再適用、service restart、Profile準拠readinessの順で実行する。`Type=simple`のrestart完了はapplication readinessを意味しないため、deployとrollbackはFrontend／Backendを1秒間隔、最大180回、request timeout 2秒で有限待機する。単発probeの`not_ready`ではrollbackせず、待機timeout後だけ既定で直前commitと3 digestへ自動rollbackする。`--no-auto-rollback`指定時だけ現在状態を維持して停止する。backupを省略するオプションはない。
 
 rollbackは引数なしで現在manifestの直前commitへ、`--to`で保存済みmanifestが存在する任意commitへ戻す。rollback先manifestのSQLite data schemaと現在DBのschemaが一致しない場合は、保存済みbackupを検証・restoreするまでcommitの切替を拒否する。保存済み3 digestが欠落・不正な旧manifestも拒否する。どちらもimage pull、restart、readiness確認を行うため数分かかる場合がある。
 

@@ -86,9 +86,14 @@ sudo apt install -y nodejs
 
 # Backend 仮想環境
 scripts/setup-backend.sh
+
+# devの通常起動に必要なDocker capability
+docker info
+docker compose version
+docker buildx version
 ```
 
-Ollama、Docker、VOICEVOXの導入と起動はUbuntu-dogfood側で行う。別distributionの作成、systemd有効化、専用service user、独立clone、data／state／log directoryの構築手順は`infra/dogfood/README.md`を参照する。
+Ollama、VOICEVOX、Whisperの導入と起動はUbuntu-dogfood側で行う。Ubuntu-devではBackend／Frontendとdev用LiveKitをComposeで起動するため、Ubuntu-devから利用できるDocker Engine、Compose plugin、Buildxが必要である。Docker DesktopのWSL integrationまたはUbuntu-dev内のDocker Engineを準備し、上記3コマンドが成功することを確認する。別distributionの作成、systemd有効化、専用service user、独立clone、data／state／log directoryの構築手順は`infra/dogfood/README.md`を参照する。
 
 疎通確認:
 
@@ -98,11 +103,27 @@ curl http://127.0.0.1:50021/version
 curl http://127.0.0.1:50022/health/ready
 ```
 
+dev用LiveKitのkey／secretを同じshell sessionへ設定し、repository同梱のComposeを起動する。secretは端末やIssueへ転記せず、`docker compose down`まで同じ値を保持する。
+
+```bash
+export LIVEKIT_URL=ws://127.0.0.1:7880
+export LIVEKIT_API_KEY=dev-local
+export LIVEKIT_API_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+export LIVEKIT_KEYS="${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+docker compose --project-name digital-souls-dev-livekit \
+  --file infra/livekit/compose.yaml up --detach --wait
+curl http://127.0.0.1:7880/
+```
+
 ## 通常起動
 
 環境全体の構成は `DS_PROFILE` で選択する。通常利用では次を実行する。
 
 ```bash
+export DS_ENVIRONMENT_ID=dev
+export DS_DATA_DIR="${HOME}/.local/state/digital-souls/dev"
+export DS_ENVIRONMENT_RUN_REPORT="${DS_DATA_DIR}/runtime/dev/environment-run.json"
+export DS_PROFILE_REPORT="${DS_DATA_DIR}/runtime/dev/resolved-profile.json"
 scripts/start-all.sh
 ```
 
@@ -111,6 +132,16 @@ scripts/start-all.sh
 ```bash
 DS_PROFILE=integration-text scripts/start-all.sh
 DS_PROFILE=test-mocked scripts/start-voice-chat-e2e.sh
+```
+
+`scripts/start-all.sh`はreadyを確認すると終了するが、run reportに記録されたorchestratorはforeground supervisionを継続する。上記の固定pathを同じshell sessionで使い、状態確認と停止を行う。停止対象はrun reportが所有するBackend／Frontendだけであり、Ubuntu-dogfood所有の共通推論serviceは停止しない。
+
+```bash
+environments/status.sh
+environments/down.sh
+docker compose --project-name digital-souls-dev-livekit \
+  --file infra/livekit/compose.yaml down
+unset LIVEKIT_KEYS LIVEKIT_API_SECRET LIVEKIT_API_KEY LIVEKIT_URL
 ```
 
 Profile は次の5種類である。各依存の完全な接続先と readiness path は `environments/profiles/*.json` を参照する。
