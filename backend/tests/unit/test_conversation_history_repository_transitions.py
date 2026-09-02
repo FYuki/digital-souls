@@ -385,6 +385,7 @@ class TestTurnTransitions:
             "list_archived_conversations",
             "skip_processing_turn_for_privacy",
             "recover_stale_processing",
+            "rename_conversation",
             "unarchive_conversation",
             "list_turns",
             "list_history_turns",

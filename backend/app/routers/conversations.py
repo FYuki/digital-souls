@@ -3,6 +3,7 @@ from fastapi import APIRouter, Request, Response, status
 from app.conversation_history.lifecycle_service import ConversationLifecycleService
 from app.routers.conversation_contracts import (
     ConversationResponse,
+    RenameConversationRequest,
     TurnResponse,
     conversation_response,
     history_turn_response,
@@ -57,6 +58,25 @@ def list_archived_conversations(
         conversation_response(item)
         for item in _service(request).list_archived_conversations(character_id)
     ]
+
+
+@router.patch(
+    f"{CONVERSATIONS_PATH}/{{conversation_id}}",
+    response_model=ConversationResponse,
+)
+def rename_conversation(
+    character_id: str,
+    conversation_id: CanonicalUuid4,
+    body: RenameConversationRequest,
+    request: Request,
+) -> ConversationResponse:
+    return conversation_response(
+        _service(request).rename_conversation(
+            character_id,
+            conversation_id,
+            body.title,
+        )
+    )
 
 
 @router.get(

@@ -17,6 +17,7 @@ const conversation = {
   created_at: '2026-08-01T12:00:00+00:00',
   updated_at: '2026-08-01T12:01:00+00:00',
   archived_at: null,
+  title: CONVERSATION_ID,
 }
 
 const audioMocks = vi.hoisted(() => ({

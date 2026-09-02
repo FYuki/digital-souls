@@ -51,6 +51,7 @@ const installMockBackend = async (page: Page) => {
       created_at: '2026-08-01T12:00:00.000000Z',
       updated_at: '2026-08-01T12:00:00.000000Z',
       archived_at: null,
+      title: MOCK_CONVERSATION_ID,
     }
     await route.fulfill({
       status: 200,

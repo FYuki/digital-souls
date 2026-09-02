@@ -70,7 +70,8 @@ def select_conversation(
 ) -> Conversation:
     row = connection.execute(
         "SELECT c.character_id, c.conversation_id, c.created_at, "
-        "COALESCE(MAX(t.updated_at), c.created_at), c.archived_at "
+        "COALESCE(MAX(t.updated_at), c.created_at), c.archived_at, "
+        "c.title, c.title_is_manual "
         "FROM conversations AS c LEFT JOIN conversation_turns AS t "
         "ON t.character_id = c.character_id "
         "AND t.conversation_id = c.conversation_id "
@@ -90,6 +91,8 @@ def select_conversation(
         created_at=parse_datetime(str(row[2])),
         updated_at=parse_datetime(str(row[3])),
         archived_at=None,
+        title=str(row[5]),
+        title_is_manual=bool(row[6]),
     )
 
 
@@ -122,6 +125,8 @@ def conversation_from_row(row: sqlite3.Row) -> Conversation:
         created_at=parse_datetime(str(row[2])),
         updated_at=parse_datetime(str(row[3])),
         archived_at=None if row[4] is None else parse_datetime(str(row[4])),
+        title=str(row[5]),
+        title_is_manual=bool(row[6]),
     )
 
 

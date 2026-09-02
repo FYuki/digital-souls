@@ -4,6 +4,7 @@ export type Conversation = {
   created_at: string
   updated_at: string
   archived_at: string | null
+  title: string
 }
 
 export type ContentTurn = {

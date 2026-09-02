@@ -80,7 +80,7 @@ class TestConversationHistorySchema:
         initialize_conversation_history_schema(database_path)
 
         with _connect(database_path) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 4
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 5
             assert connection.execute(
                 "SELECT COUNT(*) FROM conversations"
             ).fetchone()[0] == 0
@@ -104,7 +104,7 @@ class TestConversationHistorySchema:
             future.result()
 
         with _connect(database_path) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 4
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 5
             assert {
                 row[0]
                 for row in connection.execute(

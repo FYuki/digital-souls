@@ -32,6 +32,9 @@ const parseConversation = (value: unknown): Conversation => {
     || typeof value.created_at !== 'string'
     || typeof value.updated_at !== 'string'
     || !(typeof value.archived_at === 'string' || value.archived_at === null)
+    || typeof value.title !== 'string'
+    || value.title.length < 1
+    || value.title.length > 40
   ) throw new Error('Conversation response shape is invalid')
   return value as Conversation
 }
@@ -105,6 +108,26 @@ export const archiveConversation = async (character: string, conversationId: str
 export const unarchiveConversation = async (character: string, conversationId: string) => (
   transition(character, conversationId, 'unarchive')
 )
+
+export const renameConversation = async (
+  character: string,
+  conversationId: string,
+  title: string,
+): Promise<Conversation> => {
+  const conversation = parseConversation(await requestJson(
+    `${basePath(character)}/${conversationId}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    },
+  ))
+  if (
+    conversation.character_id !== character
+    || conversation.conversation_id !== conversationId
+  ) throw new Error('Renamed conversation response boundary is invalid')
+  return conversation
+}
 
 export const hardDeleteConversation = async (
   character: string,
