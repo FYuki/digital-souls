@@ -171,6 +171,10 @@ def _load_character_card_document(character: str) -> JsonObject:
         character,
         f"{character}{CARD_FILE_SUFFIX}",
     )
+    return _load_character_card_path(card_path)
+
+
+def _load_character_card_path(card_path: Path) -> JsonObject:
     if not card_path.is_file():
         raise FileNotFoundError(f"Character card not found: {card_path}")
     raw_document = json.loads(card_path.read_text(encoding="utf-8"))
@@ -183,6 +187,10 @@ def _load_character_card_document(character: str) -> JsonObject:
 
 def load_character_card(character: str) -> CharacterCard:
     document = _load_character_card_document(character)
+    return _parse_character_card(document)
+
+
+def _parse_character_card(document: JsonObject) -> CharacterCard:
     _validate_card_identity(document)
     data = _required_object(document, DATA_FIELD, "Character Card root")
     return CharacterCard(
