@@ -655,7 +655,7 @@
     background: rgba(141, 66, 96, 0.92);
   }
 
-  .floating-menu { position: fixed; z-index: 55; top: 14px; left: 14px; display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; color: #f8f3ff; background: rgba(27, 23, 38, 0.9); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.28); cursor: pointer; backdrop-filter: blur(12px); }
+  .floating-menu { position: fixed; z-index: 55; top: 14px; left: 14px; display: grid; width: 44px; height: 44px; place-items: center; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; color: #f8f3ff; background: rgba(27, 23, 38, 0.9); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.28); cursor: pointer; backdrop-filter: blur(12px); }
   .floating-menu:focus-visible { outline: 2px solid #f0a3c1; outline-offset: 2px; }
   .drawer-backdrop { position: fixed; z-index: 45; inset: 0; border: 0; background: rgba(3, 2, 6, 0.62); }
   .memory-panel { overflow: auto; padding: 18px; }
@@ -693,7 +693,7 @@
   }
 
   .voice-status button {
-    min-height: 36px;
+    min-height: 44px;
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 8px;
     color: #eee8f3;

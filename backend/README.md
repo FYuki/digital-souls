@@ -28,6 +28,7 @@ digital-souls の自作バックエンド（FastAPI）。
 
 キャラクターcatalogはリクエスト時に`characters/`を再走査し、有効なCharacter Cardだけを返す。
 立ち絵URLはBackendが生成し、character境界、variant、PNG、symlink脱出を検証する。
+立ち絵レスポンスは`ETag`と`Cache-Control: no-cache`を返し、`If-None-Match`による再検証に対応する。
 Frontendはrepository上のファイルパスを直接組み立てない。
 
 アーカイブは短期会話履歴を保持したまま通常利用から外す操作であり、物理削除では

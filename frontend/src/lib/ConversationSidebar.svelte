@@ -265,7 +265,7 @@
       <label for="add-character">キャラクター追加</label>
       <select id="add-character" bind:value={addCharacterId} disabled={state.pending}>
         <option value="">選択してください</option>
-        {#each addCandidates as character}<option value={character.character_id}>{character.display_name}</option>{/each}
+        {#each addCandidates as character}<option value={character.character_id}>{character.display_name} ({character.character_id})</option>{/each}
       </select>
       <div class="settings-actions">
         <button type="button" disabled={addCharacterId === '' || state.pending} on:click={() => { void addCharacter() }}>追加</button>
@@ -326,7 +326,7 @@
 
 <style>
   .sidebar { position: relative; z-index: 50; display: flex; width: 292px; min-height: 0; flex: 0 0 292px; flex-direction: column; border-right: 1px solid rgba(255, 255, 255, 0.09); color: #f8f3ff; background: rgba(17, 14, 24, 0.98); box-shadow: 14px 0 40px rgba(0, 0, 0, 0.18); }
-  .brand { display: grid; grid-template-columns: 36px minmax(0, 1fr) 36px; align-items: center; gap: 10px; padding: 17px 12px 13px 18px; }
+  .brand { display: grid; grid-template-columns: 36px minmax(0, 1fr) 44px; align-items: center; gap: 10px; padding: 17px 8px 13px 18px; }
   .brand-mark { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid rgba(240, 163, 193, 0.32); border-radius: 11px; color: #ffd5e5; background: linear-gradient(145deg, rgba(240, 163, 193, 0.2), rgba(156, 130, 255, 0.16)); }
   .brand p { margin: 0; }
   .brand-name { font-size: 0.92rem; font-weight: 750; }
@@ -335,7 +335,7 @@
   button { color: inherit; cursor: pointer; }
   button:disabled { cursor: not-allowed; opacity: 0.48; }
   button:focus-visible, select:focus-visible { outline: 2px solid #f0a3c1; outline-offset: 2px; }
-  .icon-button, .thread-menu, .pin-character { display: inline-grid; min-width: 34px; min-height: 34px; place-items: center; border: 0; border-radius: 9px; background: transparent; }
+  .icon-button, .thread-menu, .pin-character { display: inline-grid; min-width: 44px; min-height: 44px; place-items: center; border: 0; border-radius: 9px; background: transparent; }
   .icon-button:hover, .thread-menu:hover, .pin-character:hover { background: rgba(255, 255, 255, 0.075); }
   .close { font-size: 1.35rem; }
   .sidebar-heading { display: flex; align-items: center; justify-content: space-between; padding: 5px 14px 10px 18px; }
@@ -344,27 +344,27 @@
   .sidebar-error { margin: 0 12px 8px; padding: 8px; border-radius: 8px; color: #ffd1d1; background: rgba(177, 50, 50, 0.22); font-size: 0.72rem; }
   .thread-groups { min-height: 0; flex: 1; overflow-y: auto; padding: 0 10px 18px; scrollbar-width: thin; scrollbar-color: #443b50 transparent; }
   .character-block { margin: 0 0 13px; }
-  .character-head { display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px; align-items: center; min-height: 40px; gap: 4px; padding: 2px 3px 3px; }
+  .character-head { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; min-height: 44px; gap: 2px; padding: 2px 0 3px; }
   .character-label { min-width: 0; }
   .character-label strong { display: block; overflow: hidden; color: #cbc3d4; font-size: 0.79rem; text-overflow: ellipsis; white-space: nowrap; }
   .character-label span { color: #766f81; font-size: 0.65rem; }
   .pin-character { color: #6e6875; }
   .pin-character.active-pin, .thread-pin { color: #f5bc77; }
   .thread-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
-  .thread-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 34px; align-items: center; min-height: 39px; border-radius: 10px; }
+  .thread-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; min-height: 44px; border-radius: 10px; }
   .thread-row:hover { background: rgba(255, 255, 255, 0.045); }
   .thread-row.selected { background: linear-gradient(90deg, rgba(240, 163, 193, 0.14), rgba(156, 130, 255, 0.1)); box-shadow: inset 2px 0 #f0a3c1; }
-  .thread-select { display: flex; min-width: 0; min-height: 39px; align-items: center; gap: 7px; padding: 0 6px 0 10px; border: 0; color: #d7d0df; background: transparent; text-align: left; }
+  .thread-select { display: flex; min-width: 0; min-height: 44px; align-items: center; gap: 7px; padding: 0 6px 0 10px; border: 0; color: #d7d0df; background: transparent; text-align: left; }
   .thread-title { overflow: hidden; min-width: 0; flex: 1; font-size: 0.77rem; text-overflow: ellipsis; white-space: nowrap; }
   .archived-title { display: flex; align-items: center; gap: 7px; padding-left: 10px; color: #b9b1c2; }
   .thread-pin { font-size: 0.65rem; }
   .thread-menu { color: #85808d; }
   .menu-wrap { position: relative; }
   .menu { position: absolute; z-index: 70; top: 31px; right: 0; display: grid; width: 152px; padding: 5px; border: 1px solid rgba(255, 255, 255, 0.11); border-radius: 10px; background: #282230; box-shadow: 0 14px 35px rgba(0, 0, 0, 0.4); }
-  .menu button { min-height: 36px; padding: 7px 10px; border: 0; border-radius: 7px; background: transparent; text-align: left; }
+  .menu button { min-height: 44px; padding: 7px 10px; border: 0; border-radius: 7px; background: transparent; text-align: left; }
   .menu button:hover, .menu button:focus-visible { background: rgba(255, 255, 255, 0.08); }
   .menu .danger { color: #ffb8b8; }
-  .show-more, .hide-character { width: 100%; padding: 7px 9px; border: 0; border-radius: 8px; color: #928a9d; background: transparent; font-size: 0.68rem; text-align: left; }
+  .show-more, .hide-character { width: 100%; min-height: 44px; padding: 7px 9px; border: 0; border-radius: 8px; color: #928a9d; background: transparent; font-size: 0.68rem; text-align: left; }
   .show-more:hover, .hide-character:hover { color: #ddd4e6; background: rgba(255, 255, 255, 0.045); }
   .hide-character { margin-top: 2px; color: #756d7d; }
   .empty { margin: 12px 8px; color: #8b8394; font-size: 0.76rem; }
@@ -372,15 +372,15 @@
   .settings-panel { max-height: 58dvh; overflow-y: auto; padding: 13px; border-top: 1px solid rgba(255, 255, 255, 0.09); background: #18131f; }
   .settings-head { display: flex; align-items: center; justify-content: space-between; }
   .settings-head h2 { margin: 0; font-size: 0.85rem; }
-  .settings-head button { border: 0; color: #aaa2b3; background: transparent; }
+  .settings-head button { min-width: 44px; min-height: 44px; border: 0; color: #aaa2b3; background: transparent; }
   .settings-panel label { display: block; margin: 10px 0 5px; color: #aaa2b3; font-size: 0.7rem; }
-  .settings-panel select { width: 100%; min-height: 38px; padding: 6px 8px; border: 1px solid #4c4358; border-radius: 8px; color: #eee8f3; background: #100d17; }
+  .settings-panel select { width: 100%; min-height: 44px; padding: 6px 8px; border: 1px solid #4c4358; border-radius: 8px; color: #eee8f3; background: #100d17; }
   .settings-actions { display: flex; gap: 6px; margin-top: 8px; }
-  .settings-actions button { min-height: 36px; padding: 6px 9px; border: 1px solid #4c4358; border-radius: 8px; background: #292231; font-size: 0.7rem; }
+  .settings-actions button { min-height: 44px; padding: 6px 9px; border: 1px solid #4c4358; border-radius: 8px; background: #292231; font-size: 0.7rem; }
   .layout-settings { display: grid; gap: 5px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.09); }
   .layout-settings label { margin-top: 6px; }
   .sidebar-bottom { display: grid; gap: 3px; padding: 10px; border-top: 1px solid rgba(255, 255, 255, 0.09); background: rgba(15, 12, 22, 0.98); }
-  .side-action { display: flex; min-height: 42px; align-items: center; gap: 10px; padding: 0 11px; border: 0; border-radius: 10px; color: #bbb3c5; background: transparent; font-size: 0.78rem; }
+  .side-action { display: flex; min-height: 44px; align-items: center; gap: 10px; padding: 0 11px; border: 0; border-radius: 10px; color: #bbb3c5; background: transparent; font-size: 0.78rem; }
   .side-action:hover, .side-action.active { color: #fff; background: rgba(255, 255, 255, 0.06); }
   .side-action span { width: 18px; color: #a99dc3; text-align: center; }
 </style>

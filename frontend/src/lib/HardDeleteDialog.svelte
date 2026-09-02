@@ -71,7 +71,7 @@
   h2 { margin-top: 0; }
   .id { color: #968fa3; font-size: 0.72rem; overflow-wrap: anywhere; }
   .actions { display: flex; justify-content: flex-end; gap: 8px; }
-  button { min-height: 40px; padding: 8px 12px; border: 1px solid #574d63; border-radius: 9px; color: #eee8f3; background: #272130; }
+  button { min-height: 44px; padding: 8px 12px; border: 1px solid #574d63; border-radius: 9px; color: #eee8f3; background: #272130; }
   button:focus-visible { outline: 2px solid #f0a3c1; outline-offset: 2px; }
   .danger { color: white; background: #9d281f; }
 </style>
