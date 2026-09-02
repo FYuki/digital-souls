@@ -43,6 +43,13 @@ def _scan() -> list[CharacterCatalogResponse]:
     return [_response(entry) for entry in _catalog.scan()]
 
 
+def catalog_contains(character_id: str) -> bool:
+    return any(
+        entry.character_id == character_id
+        for entry in _catalog.scan()
+    )
+
+
 @router.get("/characters", response_model=list[CharacterCatalogResponse])
 def list_characters() -> list[CharacterCatalogResponse]:
     return _scan()
