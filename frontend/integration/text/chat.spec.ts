@@ -34,7 +34,7 @@ test('実サービスから受け取った光織の応答がチャット画面�
   await page.goto('/')
 
   const input = page.getByLabel('メッセージ')
-  await page.getByRole('button', { name: '新規スレッド' }).click()
+  await page.getByRole('button', { name: '新規スレッド（光織）' }).click()
   await expect(input).toBeEnabled()
   await input.fill('こんにちは')
   await page.getByRole('button', { name: '送信' }).click()

@@ -47,6 +47,7 @@ export type ConversationController = Readable<ConversationControllerState> & {
   requestHardDelete: (conversationId: string) => void
   cancelHardDelete: () => void
   confirmHardDelete: () => Promise<void>
+  clearSelection: (character: string, conversationId: string) => void
   selectedContext: () => SelectedConversationContext | null
   appendTurn: (context: SelectedConversationContext, turn: ConversationTurn) => void
   refreshTurns: (context: SelectedConversationContext) => Promise<void>
@@ -295,6 +296,19 @@ export const createConversationController = (
       } finally {
         updateIfCurrent(context.version, (current) => ({ ...current, pending: false }))
       }
+    },
+    clearSelection: (character, conversationId) => {
+      const state = get(store)
+      if (
+        state.character !== character
+        || state.selectedConversationId !== conversationId
+      ) {
+        sessions.clearConversation(character, conversationId)
+        return
+      }
+      contextVersion += 1
+      listVersion += 1
+      clearSelection(character, conversationId)
     },
     selectedContext,
     appendTurn: (context, turn) => {

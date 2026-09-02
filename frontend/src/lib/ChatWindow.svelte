@@ -2,6 +2,7 @@
   import type { ConversationTurn } from './conversations/types'
 
   export let turns: ConversationTurn[]
+  export let characterName = '光織'
   export let failedVoiceTurns: {
     responseId: string
     userContent: string
@@ -21,7 +22,7 @@
         <p>{turn.user_content}</p>
       </article>
       <article class="message" data-turn-id={turn.turn_id}>
-        <span class="speaker">光織</span>
+        <span class="speaker">{characterName}</span>
         <p>{turn.assistant_content}</p>
       </article>
     {:else}
@@ -37,7 +38,7 @@
       <p>{turn.userContent}</p>
     </article>
     <article class="message failed" data-failed-voice-turn={turn.responseId}>
-      <span class="speaker">光織（応答失敗）</span>
+      <span class="speaker">{characterName}（応答失敗）</span>
       <p>{turn.assistantContent || '応答を完了できませんでした。'}</p>
     </article>
   {/each}
@@ -47,7 +48,7 @@
       <p>{liveVoiceTurn.userContent}</p>
     </article>
     <article class="message" data-live-voice-turn="true">
-      <span class="speaker">光織（応答中）</span>
+      <span class="speaker">{characterName}（応答中）</span>
       <p>{liveVoiceTurn.assistantContent}</p>
     </article>
   {/if}
@@ -68,20 +69,22 @@
     max-width: min(72%, 560px);
     align-self: flex-start;
     padding: 12px 14px;
-    border: 1px solid rgba(144, 67, 47, 0.18);
-    border-radius: 8px;
-    background: #fff7f1;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    color: #eee8f3;
+    background: #211b2a;
   }
 
   .message.user {
     align-self: flex-end;
-    background: #b94f38;
-    color: #fffaf6;
+    border-color: rgba(240, 163, 193, 0.22);
+    background: #8d4260;
+    color: #fff8fb;
   }
 
   .message.failed {
-    border-color: rgba(153, 27, 27, 0.28);
-    background: #fff1f1;
+    border-color: rgba(255, 125, 125, 0.28);
+    background: #382027;
   }
 
   .speaker {

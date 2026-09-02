@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installMockWebSocketBackend } from './mock-web-socket'
+import { installMockUiBootstrap } from './mock-ui-bootstrap'
 import {
   attachProfileEvidence,
   getCapabilitySkipReason,
@@ -65,6 +66,7 @@ const installMemoryBackend = async (page: Page) => {
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
   })
+  await installMockUiBootstrap(page)
 }
 
 test('記憶管理入口から別groupを表示し明示削除後すぐ一覧から除外する', async ({ page }) => {
