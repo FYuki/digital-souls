@@ -3,6 +3,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from app.characters.models import (
+    CharacterBook,
+    CharacterBookEntry,
+    CharacterLorePosition,
+    JsonObject,
+)
 from app.prompting import CharacterPrompt
 
 CARD_FILE_SUFFIX = ".card.json"
@@ -11,6 +17,7 @@ CARD_SPEC = "chara_card_v3"
 CARD_SPEC_VERSION = "3.0"
 DATA_FIELD = "data"
 EXTENSIONS_FIELD = "extensions"
+CHARACTER_BOOK_FIELD = "character_book"
 DIGITAL_SOULS_EXTENSION = "digital_souls"
 TTS_CONFIG_FIELD = "tts_config"
 TTS_ENGINE_FIELD = "engine"
@@ -42,10 +49,39 @@ DATA_FIELDS = frozenset(
     REQUIRED_DATA_STRING_FIELDS
     + OPTIONAL_DATA_STRING_FIELDS
     + DATA_LIST_FIELDS
-    + (EXTENSIONS_FIELD,)
+    + (EXTENSIONS_FIELD, CHARACTER_BOOK_FIELD)
 )
 
-JsonObject = dict[str, object]
+CHARACTER_BOOK_FIELDS = frozenset(
+    (
+        "name",
+        "description",
+        "scan_depth",
+        "token_budget",
+        "recursive_scanning",
+        EXTENSIONS_FIELD,
+        "entries",
+    )
+)
+CHARACTER_BOOK_ENTRY_FIELDS = frozenset(
+    (
+        "keys",
+        "content",
+        EXTENSIONS_FIELD,
+        "enabled",
+        "insertion_order",
+        "use_regex",
+        "case_sensitive",
+        "constant",
+        "name",
+        "priority",
+        "id",
+        "comment",
+        "selective",
+        "secondary_keys",
+        "position",
+    )
+)
 
 
 class CharacterCardValidationError(ValueError):
@@ -88,6 +124,7 @@ class CharacterCardData:
     tags: tuple[str, ...]
     creator: str
     character_version: str
+    character_book: CharacterBook | None
     extensions: JsonObject
     extra_fields: JsonObject
 
@@ -218,9 +255,221 @@ def _parse_card_data(data: JsonObject) -> CharacterCardData:
         tags=_string_tuple(data, "tags"),
         creator=_optional_string(data, "creator"),
         character_version=_optional_string(data, "character_version"),
+        character_book=_parse_character_book(data),
         extensions=_optional_object(data, EXTENSIONS_FIELD),
         extra_fields=_extra_fields(data, DATA_FIELDS),
     )
+
+
+def _parse_character_book(data: JsonObject) -> CharacterBook | None:
+    if CHARACTER_BOOK_FIELD not in data:
+        return None
+    owner = f"data.{CHARACTER_BOOK_FIELD}"
+    raw_book = data[CHARACTER_BOOK_FIELD]
+    if not isinstance(raw_book, dict):
+        raise CharacterCardValidationError(f"{owner} must be an object")
+    book = cast(JsonObject, raw_book)
+    entries = _required_array(book, "entries", owner)
+    return CharacterBook(
+        name=_optional_string_or_none(book, "name", owner),
+        description=_optional_string_or_none(book, "description", owner),
+        scan_depth=_optional_non_negative_integer(book, "scan_depth", owner),
+        token_budget=_optional_non_negative_integer(book, "token_budget", owner),
+        recursive_scanning=_optional_boolean(
+            book,
+            "recursive_scanning",
+            owner,
+        ),
+        extensions=_required_object_field(book, EXTENSIONS_FIELD, owner),
+        entries=tuple(
+            _parse_character_book_entry(entry, index, owner)
+            for index, entry in enumerate(entries)
+        ),
+        extra_fields=_extra_fields(book, CHARACTER_BOOK_FIELDS),
+    )
+
+
+def _parse_character_book_entry(
+    value: object,
+    index: int,
+    book_owner: str,
+) -> CharacterBookEntry:
+    owner = f"{book_owner}.entries[{index}]"
+    if not isinstance(value, dict):
+        raise CharacterCardValidationError(f"{owner} must be an object")
+    entry = cast(JsonObject, value)
+    return CharacterBookEntry(
+        keys=_required_string_tuple(entry, "keys", owner),
+        content=_required_string_field(entry, "content", owner),
+        extensions=_required_object_field(entry, EXTENSIONS_FIELD, owner),
+        enabled=_required_boolean(entry, "enabled", owner),
+        insertion_order=_required_integer(entry, "insertion_order", owner),
+        use_regex=_required_boolean(entry, "use_regex", owner),
+        case_sensitive=_optional_boolean(entry, "case_sensitive", owner),
+        constant=_optional_boolean(entry, "constant", owner),
+        name=_optional_string_or_none(entry, "name", owner),
+        priority=_optional_integer(entry, "priority", owner),
+        id=_optional_entry_id(entry, "id", owner),
+        comment=_optional_string_or_none(entry, "comment", owner),
+        selective=_optional_boolean(entry, "selective", owner),
+        secondary_keys=_optional_string_tuple(entry, "secondary_keys", owner),
+        position=_optional_lore_position(entry, "position", owner),
+        extra_fields=_extra_fields(entry, CHARACTER_BOOK_ENTRY_FIELDS),
+    )
+
+
+def _required_string_field(source: JsonObject, field: str, owner: str) -> str:
+    if field not in source or not isinstance(source[field], str):
+        raise CharacterCardValidationError(
+            f"{owner}.{field} must be a string"
+        )
+    return cast(str, source[field])
+
+
+def _optional_string_or_none(
+    source: JsonObject,
+    field: str,
+    owner: str,
+) -> str | None:
+    if field not in source:
+        return None
+    value = source[field]
+    if not isinstance(value, str):
+        raise CharacterCardValidationError(
+            f"{owner}.{field} must be a string"
+        )
+    return value
+
+
+def _required_array(
+    source: JsonObject,
+    field: str,
+    owner: str,
+) -> list[object]:
+    if field not in source or not isinstance(source[field], list):
+        raise CharacterCardValidationError(f"{owner}.{field} must be an array")
+    return cast(list[object], source[field])
+
+
+def _required_object_field(
+    source: JsonObject,
+    field: str,
+    owner: str,
+) -> JsonObject:
+    if field not in source or not isinstance(source[field], dict):
+        raise CharacterCardValidationError(f"{owner}.{field} must be an object")
+    return cast(JsonObject, source[field])
+
+
+def _required_string_tuple(
+    source: JsonObject,
+    field: str,
+    owner: str,
+) -> tuple[str, ...]:
+    values = _required_array(source, field, owner)
+    if not all(isinstance(value, str) for value in values):
+        raise CharacterCardValidationError(
+            f"{owner}.{field} must be a string array"
+        )
+    return tuple(cast(list[str], values))
+
+
+def _optional_string_tuple(
+    source: JsonObject,
+    field: str,
+    owner: str,
+) -> tuple[str, ...] | None:
+    if field not in source:
+        return None
+    return _required_string_tuple(source, field, owner)
+
+
+def _required_boolean(source: JsonObject, field: str, owner: str) -> bool:
+    if field not in source or type(source[field]) is not bool:
+        raise CharacterCardValidationError(
+            f"{owner}.{field} must be a boolean"
+        )
+    return cast(bool, source[field])
+
+
+def _optional_boolean(
+    source: JsonObject,
+    field: str,
+    owner: str,
+) -> bool | None:
+    if field not in source:
+        return None
+    if type(source[field]) is not bool:
+        raise CharacterCardValidationError(
+            f"{owner}.{field} must be a boolean"
+        )
+    return cast(bool, source[field])
+
+
+def _required_integer(source: JsonObject, field: str, owner: str) -> int:
+    if field not in source or type(source[field]) is not int:
+        raise CharacterCardValidationError(
+            f"{owner}.{field} must be an integer"
+        )
+    return cast(int, source[field])
+
+
+def _optional_integer(
+    source: JsonObject,
+    field: str,
+    owner: str,
+) -> int | None:
+    if field not in source:
+        return None
+    return _required_integer(source, field, owner)
+
+
+def _optional_non_negative_integer(
+    source: JsonObject,
+    field: str,
+    owner: str,
+) -> int | None:
+    value = _optional_integer(source, field, owner)
+    if value is not None and value < 0:
+        raise CharacterCardValidationError(
+            f"{owner}.{field} must be a non-negative integer"
+        )
+    return value
+
+
+def _optional_entry_id(
+    source: JsonObject,
+    field: str,
+    owner: str,
+) -> int | str | None:
+    if field not in source:
+        return None
+    value = source[field]
+    if type(value) is int or isinstance(value, str):
+        return value
+    raise CharacterCardValidationError(
+        f"{owner}.{field} must be an integer or string"
+    )
+
+
+def _optional_lore_position(
+    source: JsonObject,
+    field: str,
+    owner: str,
+) -> CharacterLorePosition | None:
+    if field not in source:
+        return None
+    value = source[field]
+    if not isinstance(value, str):
+        raise CharacterCardValidationError(
+            f"{owner}.{field} must be 'before_char' or 'after_char'"
+        )
+    try:
+        return CharacterLorePosition(value)
+    except ValueError as exc:
+        raise CharacterCardValidationError(
+            f"{owner}.{field} must be 'before_char' or 'after_char'"
+        ) from exc
 
 
 def _required_string(source: JsonObject, field: str) -> str:

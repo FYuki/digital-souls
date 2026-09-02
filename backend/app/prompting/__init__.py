@@ -1,4 +1,5 @@
 from app.prompting.builder import PromptBuilder
+from app.prompting.character_lore import PromptCharacterLoreTokenCounter
 from app.prompting.measurement import TokenCounter
 from app.prompting.models import (
     BuiltPrompt,
@@ -27,6 +28,7 @@ __all__ = [
     "MaskedHistoryTurn",
     "PromptBuildInput",
     "PromptBuilder",
+    "PromptCharacterLoreTokenCounter",
     "PromptInputLimitError",
     "PromptMessage",
     "PromptMemoryReference",

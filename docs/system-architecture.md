@@ -64,8 +64,9 @@
 * `routers/livekit.py` / `livekit_transport/` — LiveKit join認証、Roomとsessionの対応付け、control event配送、character audio runtimeを担うWave 3の正式な音声transport境界
 * `voice_metrics.py` — transport非依存のmetadata-only trace、集計artifact、保持、LiveKit受入目標判定
 * `chat_service.py` / `_chat_runtime.py` — チャットセッションの生成・応答生成のエントリポイント
-* `characters/loader.py` — `characters/` 配下のCharacter Card V3の検証・ロードと、`extensions.digital_souls`の型付き設定読み取り
-* `prompting/` — Character Card、RAG、保存済み履歴、現在発言を順序とtoken budgetに従って合成する単一境界
+* `characters/loader.py` — `characters/` 配下のCharacter Card V3を検証し、Character Core、Character Book、`extensions.digital_souls`を型付きで読み取る
+* `characters/lore_selector.py` — current userとprivacy処理済み履歴を対象に、Character Book Entryを決定論的に照合・選択する
+* `prompting/` — Character Core、Character Lore、RAG、保存済み履歴、現在発言を順序とtoken budgetに従って合成する単一境界
 * `llm/` — 完成済みpromptを受け取るLLM振り分けルーターとクライアント実装。`ollama_client.py`（ローカルOllama、常用）、`base.py`（クライアント共通インターフェース）。クラウドLLM（Claude等）向けクライアントは未実装のスタブ
 * `memory/` — 会話履歴と長期記憶の基盤。SQLiteに同一conversation再開用の履歴と承認済み長期記憶を責務分離して保存し、Chromaは承認済み長期記憶だけの派生検索インデックスとして扱う。`memory_policy.py`は`backend/app/memory/memory_policy.json`の認識設定と、アプリケーションの非緩和policyを組み合わせて保存先別に判定する
 * `stt/remote_whisper_client.py` — 共有GPU Whisper HTTP serviceによる音声認識。旧`whisper_client.py`はGoal 2受入までrollback用に保持する
@@ -83,6 +84,38 @@
 * `lib/AudioRecorder.svelte` / `lib/AudioPlayer.svelte` — マイク入力UI・音声再生UI
 * `lib/ChatWindow.svelte` / `lib/InputBar.svelte` — テキストチャットUI
 * `App.svelte` — テキスト/音声チャットを統合したメインUI
+
+### Character CardとCharacter Lore
+
+runtime人格定義の正本は`characters/{id}/{id}.card.json`である。Character Card V3の
+`data.character_book`がない既存カードは、Character Loreなしとして従来どおり動作する。
+Bookがある場合、共通ChatServiceはCharacter CoreとBookを同じload結果から取得する。
+
+Lore照合はRAG検索と分離する。current userを先頭に、同じconversationから復元した
+privacy処理済みuser／assistant messageを新しい順に`scan_depth`件だけ走査する。literal照合は
+message境界を越えず、NFKC正規化後に既定でcase-insensitiveとする。MVPで未対応のregexと
+Decoratorを含むEntryは、カード上の値を保持したままruntime注入しない。
+`recursive_scanning=true`でもliteral／constantによる初期matchingは行うが、選択済みLore本文を
+新しいscan sourceとする再帰scanは行わない。
+
+最終promptの順序は次で固定する。
+
+```text
+before_char Character Lore
+Character Core
+after_char Character Lore
+RAG required instruction / RAG Memory
+Conversation History
+post_history_instructions
+Current User
+```
+
+Character LoreはEntry単位で扱い、本文を途中で切らない。Book固有の`token_budget`と
+PromptBuilderのLore領域上限では、priority、insertion order、カード内indexから作る同じ
+決定論的removal keyで低優先Entryから除外する。prompt全体上限では、RAG Memory、古い履歴、
+低優先Lore、`post_history_instructions`の順に任意領域を削減する。LoreをRAGへ登録せず、
+RAGの`memory_reference`も付けない。詳細な契約は
+`docs/decisions/character-book-runtime-2026-08.md`を正本とする。
 
 ## 表示・配信レイヤー
 

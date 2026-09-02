@@ -8,7 +8,6 @@ from app.characters.loader import load_character_card, load_tts_config
 from app.prompting import (
     CurrentUserMessage,
     HistoryCandidates,
-    MaskedHistory,
     PromptBuildInput,
     PromptBuilder,
     PromptMessage,
@@ -45,6 +44,7 @@ def test_should_build_runtime_prompt_from_shipped_character_card() -> None:
         budget=TokenBudget(
             total=20,
             character=10,
+            character_lore=10,
             rag=10,
             history=10,
             current_user=10,
@@ -90,6 +90,7 @@ def test_should_omit_final_instruction_when_card_field_is_missing(
         budget=TokenBudget(
             total=20,
             character=10,
+            character_lore=10,
             rag=10,
             history=10,
             current_user=10,

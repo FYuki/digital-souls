@@ -1,5 +1,9 @@
 # Character Card V3とprompt合成境界（2026-07）
 
+状態: **ACTIVE**。CCV3 `data.character_book`によるCharacter Loreの追加順序、独立した
+token accounting、全体budget超過時の削減順は、後続ADR
+`character-book-runtime-2026-08.md`を優先する。
+
 ## 決定
 
 runtimeの人格定義は`chara_card_v3`かつ`spec_version: 3.0`のCharacter Cardを

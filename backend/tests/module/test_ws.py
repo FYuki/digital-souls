@@ -69,6 +69,7 @@ class _StubDeliverySession:
 
 def _character_card(system_prompt: str = _PERSONALITY) -> MagicMock:
     card = MagicMock()
+    card.data.character_book = None
     card.to_character_prompt.return_value = CharacterPrompt(
         description="",
         personality="",

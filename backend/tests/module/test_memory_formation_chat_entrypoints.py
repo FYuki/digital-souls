@@ -193,6 +193,7 @@ def _route_ollama_post(extractor_request):
 
 def _character_card() -> MagicMock:
     card = MagicMock()
+    card.data.character_book = None
     card.to_character_prompt.return_value = CharacterPrompt(
         description="",
         personality="",

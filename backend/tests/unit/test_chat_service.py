@@ -75,6 +75,7 @@ def _formal_token_counter(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _character_card(system_prompt: str = "# prompt") -> MagicMock:
     card = MagicMock()
+    card.data.character_book = None
     card.to_character_prompt.return_value = CharacterPrompt(
         description="",
         personality="",
@@ -93,11 +94,15 @@ def _runtime_dependencies(
 
     settings = resolve_model_settings({})
 
-    def load_prompt(character: str) -> CharacterPrompt:
-        return character_loader.load_character_card(character).to_character_prompt()
+    def load_definition(character: str) -> _chat_runtime.CharacterRuntimeDefinition:
+        card = character_loader.load_character_card(character)
+        return _chat_runtime.CharacterRuntimeDefinition(
+            prompt=card.to_character_prompt(),
+            character_book=card.data.character_book,
+        )
 
     return ChatRuntimeDependencies(
-        character_prompt_loader=load_prompt,
+        character_definition_loader=load_definition,
         prompt_builder=build_chat_prompt,
         llm_response_generator=lambda prompt, *, max_output_tokens: (
             llm_router.generate_response(
@@ -320,7 +325,12 @@ def _chat_service_with_history(session: _RecordingHistorySession) -> ChatService
 class TestChatServiceErrorContract:
     def test_uses_all_injected_runtime_dependencies_for_reply_generation(self):
         character_prompt = CharacterPrompt("", "", "", "injected", "", "")
-        load_prompt = MagicMock(return_value=character_prompt)
+        load_definition = MagicMock(
+            return_value=_chat_runtime.CharacterRuntimeDefinition(
+                prompt=character_prompt,
+                character_book=None,
+            )
+        )
         prompt_builder = MagicMock(wraps=build_chat_prompt)
         generate = MagicMock(return_value="injected reply")
         count = MagicMock(side_effect=lambda messages: len(messages))
@@ -333,7 +343,7 @@ class TestChatServiceErrorContract:
             ),
             _IgnoringHistoryService(),
             ChatRuntimeDependencies(
-                character_prompt_loader=load_prompt,
+                character_definition_loader=load_definition,
                 prompt_builder=prompt_builder,
                 llm_response_generator=generate,
                 input_token_counter=count,
@@ -351,7 +361,7 @@ class TestChatServiceErrorContract:
         )
 
         assert _assistant_content(reply) == "injected reply"
-        load_prompt.assert_called_once_with("miori")
+        load_definition.assert_called_once_with("miori")
         prompt_builder.assert_called_once()
         assert prompt_builder.call_args.kwargs["character"] is character_prompt
         assert count.call_count > 0

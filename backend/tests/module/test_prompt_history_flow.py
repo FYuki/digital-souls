@@ -101,6 +101,7 @@ def test_should_build_system_rag_saved_history_then_current_user() -> None:
         budget=prompting.TokenBudget(
             total=20,
             character=10,
+            character_lore=10,
             rag=10,
             history=10,
             current_user=10,
@@ -142,7 +143,7 @@ def test_should_keep_history_when_rag_context_is_empty() -> None:
             omitted_turns=history.omitted_turns,
         ),
         current_user=CurrentUserMessage("current"),
-        budget=prompting.TokenBudget(20, 10, 10, 10, 10, 10),
+        budget=prompting.TokenBudget(20, 10, 10, 10, 10, 10, 10),
     )
 
     result = prompting.PromptBuilder(UnitMessageCounter()).build(prompt_input)
@@ -213,7 +214,7 @@ def test_sqlite_pages_restore_select_and_reach_existing_builder(
             omitted_turns=0,
         ),
         current_user=CurrentUserMessage("RAW_CURRENT_USER"),
-        budget=prompting.TokenBudget(20, 10, 10, 10, 10, 10),
+        budget=prompting.TokenBudget(20, 10, 10, 10, 10, 10, 10),
     )
 
     result = prompting.PromptBuilder(UnitMessageCounter()).build(prompt_input)
@@ -371,6 +372,10 @@ def test_runtime_should_inject_history_when_rag_is_disabled(
     card.to_character_prompt.return_value = CharacterPrompt(
         "", "", "", "system", "", ""
     )
+    definition = _chat_runtime.CharacterRuntimeDefinition(
+        prompt=card.to_character_prompt(),
+        character_book=None,
+    )
     retrieve = MagicMock()
     monkeypatch.setattr(
         _chat_runtime._rag_service,
@@ -393,7 +398,7 @@ def test_runtime_should_inject_history_when_rag_is_disabled(
         ),
         _RuntimeHistoryService(session),
         _chat_runtime.ChatRuntimeDependencies(
-            character_prompt_loader=lambda character: card.to_character_prompt(),
+            character_definition_loader=lambda character: definition,
             prompt_builder=build_chat_prompt,
             llm_response_generator=generate,
             input_token_counter=lambda messages: len(messages),
