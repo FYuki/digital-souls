@@ -48,6 +48,7 @@ const installConversationBackend = async (page: Page) => {
       created_at: '2026-08-01T12:00:00.000000Z',
       updated_at: '2026-08-01T12:00:00.000000Z',
       archived_at: null,
+      title: conversationId,
     }] : []
     await route.fulfill({
       status: 200,

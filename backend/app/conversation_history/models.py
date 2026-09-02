@@ -4,6 +4,7 @@ from enum import Enum
 from uuid import UUID
 
 from app.privacy.contracts import HistoryDecisionReasonCode
+from app.conversation_history.titles import DEFAULT_CONVERSATION_TITLE
 
 
 class TurnStatus(str, Enum):
@@ -21,6 +22,8 @@ class Conversation:
     created_at: datetime
     updated_at: datetime
     archived_at: datetime | None
+    title: str = DEFAULT_CONVERSATION_TITLE
+    title_is_manual: bool = False
 
 
 @dataclass(frozen=True)

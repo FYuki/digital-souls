@@ -36,6 +36,7 @@ const conversation = (conversationId: string, archivedAt: string | null) => ({
   created_at: '2026-08-01T12:00:00.000000Z',
   updated_at: '2026-08-01T12:01:00.000000Z',
   archived_at: archivedAt,
+  title: conversationId,
 })
 
 const installLifecycleBackend = async (page: Page, options: LifecycleOptions = {}) => {

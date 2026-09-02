@@ -17,6 +17,18 @@ class ConversationLifecycleService:
     def list_archived_conversations(self, character_id: str) -> list[Conversation]:
         return self._repository.list_archived_conversations(character_id)
 
+    def rename_conversation(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+        title: str,
+    ) -> Conversation:
+        return self._repository.rename_conversation(
+            character_id,
+            conversation_id,
+            title,
+        )
+
     def list_conversation_turns(
         self,
         character_id: str,

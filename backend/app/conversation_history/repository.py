@@ -29,6 +29,11 @@ from app.conversation_history.models import (
     TurnStatus,
 )
 from app.conversation_history.turn_state import require_turn_transition
+from app.conversation_history.titles import (
+    DEFAULT_CONVERSATION_TITLE,
+    generate_conversation_title,
+    normalize_manual_conversation_title,
+)
 from app.conversation_history.wal_cleanup import ConversationWalCleanup
 from app.privacy.contracts import HistoryDecisionReasonCode
 
@@ -39,7 +44,8 @@ MIN_PROMPT_PAGE_SIZE = 1
 MAX_PROMPT_PAGE_SIZE = 100
 CONVERSATION_SELECT_COLUMNS = (
     "c.character_id, c.conversation_id, c.created_at, "
-    "COALESCE(MAX(t.updated_at), c.created_at), c.archived_at"
+    "COALESCE(MAX(t.updated_at), c.created_at), c.archived_at, "
+    "c.title, c.title_is_manual"
 )
 
 
@@ -86,8 +92,14 @@ class ConversationHistoryRepository:
         with self._database.transaction() as connection:
             connection.execute(
                 "INSERT INTO conversations "
-                "(character_id, conversation_id, created_at) VALUES (?, ?, ?)",
-                (character_id, str(conversation_id), format_datetime(now)),
+                "(character_id, conversation_id, created_at, title, title_is_manual) "
+                "VALUES (?, ?, ?, ?, 0)",
+                (
+                    character_id,
+                    str(conversation_id),
+                    format_datetime(now),
+                    DEFAULT_CONVERSATION_TITLE,
+                ),
             )
             return select_conversation(
                 connection,
@@ -117,6 +129,31 @@ class ConversationHistoryRepository:
             character_id,
             archived_clause="IS NOT NULL",
         )
+
+    def rename_conversation(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+        title: str,
+    ) -> Conversation:
+        _require_uuid4(conversation_id)
+        normalized_title = normalize_manual_conversation_title(title)
+        with self._database.transaction() as connection:
+            self._select_conversation_for_lifecycle(
+                connection,
+                character_id,
+                conversation_id,
+            )
+            connection.execute(
+                "UPDATE conversations SET title = ?, title_is_manual = 1 "
+                "WHERE character_id = ? AND conversation_id = ?",
+                (normalized_title, character_id, str(conversation_id)),
+            )
+            return self._select_conversation_for_lifecycle(
+                connection,
+                character_id,
+                conversation_id,
+            )
 
     def archive_conversation(
         self,
@@ -436,6 +473,11 @@ class ConversationHistoryRepository:
                     str(turn_id),
                 ),
             )
+            self._rebuild_automatic_title(
+                connection,
+                character_id,
+                conversation_id,
+            )
             return select_turn(
                 connection,
                 character_id,
@@ -625,12 +667,69 @@ class ConversationHistoryRepository:
                     timestamp,
                 ),
             )
+            if status is TurnStatus.PROCESSING and user_content is not None:
+                self._set_initial_automatic_title(
+                    connection,
+                    character_id,
+                    conversation_id,
+                    user_content,
+                )
             return select_turn(
                 connection,
                 character_id,
                 conversation_id,
                 turn_id,
             )
+
+    @staticmethod
+    def _set_initial_automatic_title(
+        connection: sqlite3.Connection,
+        character_id: str,
+        conversation_id: UUID,
+        user_content: str,
+    ) -> None:
+        connection.execute(
+            "UPDATE conversations SET title = ? "
+            "WHERE character_id = ? AND conversation_id = ? "
+            "AND title_is_manual = 0 AND title = ?",
+            (
+                generate_conversation_title(user_content),
+                character_id,
+                str(conversation_id),
+                DEFAULT_CONVERSATION_TITLE,
+            ),
+        )
+
+    @staticmethod
+    def _rebuild_automatic_title(
+        connection: sqlite3.Connection,
+        character_id: str,
+        conversation_id: UUID,
+    ) -> None:
+        current = connection.execute(
+            "SELECT title_is_manual FROM conversations "
+            "WHERE character_id = ? AND conversation_id = ?",
+            (character_id, str(conversation_id)),
+        ).fetchone()
+        if current is None or bool(current[0]):
+            return
+        first_content = connection.execute(
+            "SELECT user_content FROM conversation_turns "
+            "WHERE character_id = ? AND conversation_id = ? "
+            "AND user_content IS NOT NULL "
+            "ORDER BY created_at, rowid LIMIT 1",
+            (character_id, str(conversation_id)),
+        ).fetchone()
+        title = (
+            DEFAULT_CONVERSATION_TITLE
+            if first_content is None
+            else generate_conversation_title(str(first_content[0]))
+        )
+        connection.execute(
+            "UPDATE conversations SET title = ? "
+            "WHERE character_id = ? AND conversation_id = ?",
+            (title, character_id, str(conversation_id)),
+        )
 
     def _select_conversations(
         self,

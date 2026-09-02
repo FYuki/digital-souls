@@ -5,11 +5,17 @@ from pathlib import Path
 
 from app.conversation_history.errors import LegacySchemaError
 from app.conversation_history.sqlite_lease import normal_sqlite_access
+from app.conversation_history.titles import (
+    CONVERSATION_TITLE_MAX_LENGTH,
+    DEFAULT_CONVERSATION_TITLE,
+    generate_conversation_title,
+)
 from app.privacy.contracts import HistoryDecisionReasonCode
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 _VERSION_TWO_SCHEMA_VERSION = 2
 _VERSION_THREE_SCHEMA_VERSION = 3
+_VERSION_FOUR_SCHEMA_VERSION = 4
 CURRENT_TABLES = frozenset(
     {
         "conversations",
@@ -49,6 +55,7 @@ def inspect_conversation_history_artifact_schema(
             migration_required=(
                 _is_version_two_schema(connection)
                 or _is_version_three_schema(connection)
+                or _is_version_four_schema(connection)
             ),
         )
 _VERSION_TWO_TABLES = frozenset({"conversations", "conversation_turns"})
@@ -57,7 +64,11 @@ CONVERSATIONS_COLUMNS = (
     "conversation_id",
     "created_at",
     "archived_at",
+    "title",
+    "title_is_manual",
 )
+VERSION_FOUR_CONVERSATIONS_COLUMNS = CONVERSATIONS_COLUMNS[:-2]
+VERSION_TWO_CONVERSATIONS_COLUMNS = CONVERSATIONS_COLUMNS[:3]
 CONVERSATION_TURNS_COLUMNS = (
     "turn_id",
     "character_id",
@@ -91,7 +102,7 @@ def _uuid4_check(column_name: str) -> str:
     """.strip()
 
 
-CONVERSATIONS_SQL = f"""
+VERSION_FOUR_CONVERSATIONS_SQL = f"""
 CREATE TABLE conversations (
     character_id TEXT NOT NULL,
     conversation_id TEXT NOT NULL CHECK (
@@ -102,6 +113,18 @@ CREATE TABLE conversations (
     PRIMARY KEY (character_id, conversation_id)
 )
 """
+
+CONVERSATIONS_SQL = VERSION_FOUR_CONVERSATIONS_SQL.replace(
+    "archived_at TEXT,",
+    f"""archived_at TEXT,
+    title TEXT NOT NULL DEFAULT '{DEFAULT_CONVERSATION_TITLE}' CHECK (
+        length(title) BETWEEN 1 AND {CONVERSATION_TITLE_MAX_LENGTH}
+        AND title = trim(title)
+    ),
+    title_is_manual INTEGER NOT NULL DEFAULT 0 CHECK (
+        title_is_manual IN (0, 1)
+    ),""",
+)
 
 VERSION_TWO_CONVERSATIONS_SQL = f"""
 CREATE TABLE conversations (
@@ -117,6 +140,18 @@ CREATE TABLE conversations (
 _MIGRATED_CONVERSATIONS_SQL = VERSION_TWO_CONVERSATIONS_SQL.replace(
     "created_at TEXT NOT NULL,",
     "created_at TEXT NOT NULL, archived_at TEXT,",
+)
+
+_MIGRATED_TITLED_CONVERSATIONS_SQL = _MIGRATED_CONVERSATIONS_SQL.replace(
+    "archived_at TEXT,",
+    f"""archived_at TEXT,
+    title TEXT NOT NULL DEFAULT '{DEFAULT_CONVERSATION_TITLE}' CHECK (
+        length(title) BETWEEN 1 AND {CONVERSATION_TITLE_MAX_LENGTH}
+        AND title = trim(title)
+    ),
+    title_is_manual INTEGER NOT NULL DEFAULT 0 CHECK (
+        title_is_manual IN (0, 1)
+    ),""",
 )
 
 WAL_CLEANUP_JOBS_SQL = f"""
@@ -283,7 +318,12 @@ def _column_names(
 
 
 def _normalized_sql(sql: str) -> str:
-    return " ".join(sql.rstrip(";").split()).lower()
+    normalized = " ".join(sql.rstrip(";").split()).lower()
+    return (
+        normalized.replace("( ", "(")
+        .replace(" )", ")")
+        .replace(" ,", ",")
+    )
 
 
 def _schema_object_sql(
@@ -314,7 +354,7 @@ def _has_current_definitions(connection: sqlite3.Connection) -> bool:
     )
     return conversations_definition in {
         _normalized_sql(CONVERSATIONS_SQL),
-        _normalized_sql(_MIGRATED_CONVERSATIONS_SQL),
+        _normalized_sql(_MIGRATED_TITLED_CONVERSATIONS_SQL),
     } and all(
         _schema_object_sql(connection, object_type, name) == _normalized_sql(sql)
         for object_type, name, sql in expected_definitions
@@ -331,7 +371,7 @@ def _is_version_two_schema(connection: sqlite3.Connection) -> bool:
     return (
         _user_tables(connection) == _VERSION_TWO_TABLES
         and _column_names(connection, "conversations")
-        == CONVERSATIONS_COLUMNS[:-1]
+        == VERSION_TWO_CONVERSATIONS_COLUMNS
         and _column_names(connection, "conversation_turns")
         == CONVERSATION_TURNS_COLUMNS
         and connection.execute("PRAGMA user_version").fetchone()[0]
@@ -362,14 +402,43 @@ def _is_version_three_schema(connection: sqlite3.Connection) -> bool:
         _user_tables(connection) == CURRENT_TABLES
         and _schema_object_sql(connection, "table", "conversations")
         in {
-            _normalized_sql(CONVERSATIONS_SQL),
+            _normalized_sql(VERSION_FOUR_CONVERSATIONS_SQL),
             _normalized_sql(_MIGRATED_CONVERSATIONS_SQL),
         }
-        and _column_names(connection, "conversations") == CONVERSATIONS_COLUMNS
+        and _column_names(connection, "conversations")
+        == VERSION_FOUR_CONVERSATIONS_COLUMNS
         and _column_names(connection, "conversation_turns")
         == CONVERSATION_TURNS_COLUMNS
         and connection.execute("PRAGMA user_version").fetchone()[0]
         == _VERSION_THREE_SCHEMA_VERSION
+        and all(
+            _schema_object_sql(connection, object_type, name)
+            == _normalized_sql(sql)
+            for object_type, name, sql in expected_definitions
+        )
+    )
+
+
+def _is_version_four_schema(connection: sqlite3.Connection) -> bool:
+    expected_definitions = (
+        ("table", "conversation_turns", CONVERSATION_TURNS_SQL),
+        ("table", "wal_cleanup_jobs", WAL_CLEANUP_JOBS_SQL),
+        ("index", "conversation_turns_history_idx", HISTORY_INDEX_SQL),
+        ("index", "conversation_turns_stale_processing_idx", STALE_INDEX_SQL),
+    )
+    return (
+        _user_tables(connection) == CURRENT_TABLES
+        and _schema_object_sql(connection, "table", "conversations")
+        in {
+            _normalized_sql(VERSION_FOUR_CONVERSATIONS_SQL),
+            _normalized_sql(_MIGRATED_CONVERSATIONS_SQL),
+        }
+        and _column_names(connection, "conversations")
+        == VERSION_FOUR_CONVERSATIONS_COLUMNS
+        and _column_names(connection, "conversation_turns")
+        == CONVERSATION_TURNS_COLUMNS
+        and connection.execute("PRAGMA user_version").fetchone()[0]
+        == _VERSION_FOUR_SCHEMA_VERSION
         and all(
             _schema_object_sql(connection, object_type, name)
             == _normalized_sql(sql)
@@ -393,6 +462,7 @@ def _migrate_version_two_schema(connection: sqlite3.Connection) -> None:
     connection.execute("ALTER TABLE conversations ADD COLUMN archived_at TEXT")
     connection.execute(WAL_CLEANUP_JOBS_SQL)
     _migrate_turn_contract_to_version_four(connection)
+    _migrate_conversation_titles_to_version_five(connection)
     if not _is_current_schema(connection):
         raise LegacySchemaError("version two migration did not create current schema")
 
@@ -439,13 +509,58 @@ def _migrate_turn_contract_to_version_four(connection: sqlite3.Connection) -> No
     connection.execute("DROP TABLE conversation_turns_version_three")
     connection.execute(HISTORY_INDEX_SQL)
     connection.execute(STALE_INDEX_SQL)
-    connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+    connection.execute(f"PRAGMA user_version = {_VERSION_FOUR_SCHEMA_VERSION}")
 
 
 def _migrate_version_three_schema(connection: sqlite3.Connection) -> None:
     _migrate_turn_contract_to_version_four(connection)
+    _migrate_conversation_titles_to_version_five(connection)
     if not _is_current_schema(connection):
         raise LegacySchemaError("version three migration did not create current schema")
+
+
+def _migrate_version_four_schema(connection: sqlite3.Connection) -> None:
+    _migrate_conversation_titles_to_version_five(connection)
+    if not _is_current_schema(connection):
+        raise LegacySchemaError("version four migration did not create current schema")
+
+
+def _migrate_conversation_titles_to_version_five(
+    connection: sqlite3.Connection,
+) -> None:
+    connection.execute(
+        "ALTER TABLE conversations ADD COLUMN title TEXT NOT NULL "
+        f"DEFAULT '{DEFAULT_CONVERSATION_TITLE}' CHECK ("
+        f"length(title) BETWEEN 1 AND {CONVERSATION_TITLE_MAX_LENGTH} "
+        "AND title = trim(title))"
+    )
+    connection.execute(
+        "ALTER TABLE conversations ADD COLUMN title_is_manual INTEGER NOT NULL "
+        "DEFAULT 0 CHECK (title_is_manual IN (0, 1))"
+    )
+    conversations = connection.execute(
+        "SELECT character_id, conversation_id FROM conversations"
+    ).fetchall()
+    for character_id, conversation_id in conversations:
+        first_content = connection.execute(
+            "SELECT user_content FROM conversation_turns "
+            "WHERE character_id = ? AND conversation_id = ? "
+            "AND user_content IS NOT NULL "
+            "ORDER BY created_at, rowid LIMIT 1",
+            (character_id, conversation_id),
+        ).fetchone()
+        if first_content is None:
+            continue
+        connection.execute(
+            "UPDATE conversations SET title = ? "
+            "WHERE character_id = ? AND conversation_id = ?",
+            (
+                generate_conversation_title(str(first_content[0])),
+                character_id,
+                conversation_id,
+            ),
+        )
+    connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
 def initialize_conversation_history_schema(database_path: Path) -> None:
@@ -467,6 +582,10 @@ def initialize_conversation_history_schema(database_path: Path) -> None:
                     return
                 if _is_version_three_schema(connection):
                     _migrate_version_three_schema(connection)
+                    connection.commit()
+                    return
+                if _is_version_four_schema(connection):
+                    _migrate_version_four_schema(connection)
                     connection.commit()
                     return
                 raise LegacySchemaError("existing database does not use current schema")
