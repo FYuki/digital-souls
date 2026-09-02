@@ -6,6 +6,7 @@ import {
   voiceTestTimeout,
 } from '../playwright/voice-chat-suite'
 import { installMockLiveKit } from './mock-livekit'
+import { installMockUiBootstrap } from './mock-ui-bootstrap'
 import {
   attachProfileEvidence,
   getCapabilitySkipReason,
@@ -59,6 +60,7 @@ const installMockBackend = async (page: Page) => {
       body: JSON.stringify(request.method() === 'POST' ? conversation : []),
     })
   })
+  await installMockUiBootstrap(page)
 }
 
 test.use(createVoiceTestUseOptions())

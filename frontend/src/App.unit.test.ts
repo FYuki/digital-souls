@@ -67,6 +67,29 @@ const start = vi.fn()
 const close = vi.fn()
 const fetchMock = vi.fn()
 
+const characterCatalog = [{
+  character_id: 'miori',
+  display_name: '光織',
+  standing_image: {
+    status: 'available',
+    url: '/api/characters/miori/assets/standing/default.png',
+  },
+}]
+
+const uiSettings = {
+  user_id: 'local',
+  desktop_portrait_layout: 'right',
+  desktop_history_height_percent: 75,
+  compact_history_height_percent: 75,
+  characters: [{
+    character_id: 'miori',
+    visible: true,
+    pinned: false,
+    pin_order: null,
+  }],
+  thread_pins: [],
+}
+
 type CoreEventReceiver = (event: Record<string, unknown>) => void
 type RoomObserver = (event: Record<string, unknown>) => void
 const liveKitMocks = {
@@ -101,6 +124,15 @@ const persistedTurn = (userContent: string, assistantContent: string) => ({
 
 const defaultFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = String(input)
+  if (url === '/api/characters') {
+    return new Response(JSON.stringify(characterCatalog), { status: 200 })
+  }
+  if (url === '/api/characters/rescan') {
+    return new Response(JSON.stringify(characterCatalog), { status: 200 })
+  }
+  if (url.startsWith('/api/ui-settings')) {
+    return new Response(JSON.stringify(uiSettings), { status: 200 })
+  }
   if (url === '/api/voice/livekit/token') {
     return new Response(JSON.stringify({
       session_id: VOICE_SESSION_ID,
@@ -136,6 +168,26 @@ const selectConversation = async (): Promise<void> => {
   await fireEvent.click(
     await screen.findByRole('button', { name: new RegExp(`^${CONVERSATION_ID}$`) }),
   )
+}
+
+const chooseThreadAction = async (
+  action: 'アーカイブ' | '復元' | '削除' | '名前を変更',
+  title = CONVERSATION_ID,
+): Promise<void> => {
+  await fireEvent.click(await screen.findByRole('button', { name: `${title}のメニュー` }))
+  await fireEvent.click(screen.getByRole('menuitem', { name: action }))
+}
+
+const showArchived = async (): Promise<void> => {
+  const button = await screen.findByRole<HTMLButtonElement>('button', {
+    name: 'アーカイブ済み',
+  })
+  await waitFor(() => expect(button.disabled).toBe(false))
+  await fireEvent.click(button)
+}
+
+const showActive = async (): Promise<void> => {
+  await fireEvent.click(await screen.findByRole('button', { name: '会話履歴に戻る' }))
 }
 
 const startLiveKitSession = async () => {
@@ -509,57 +561,29 @@ describe('App conversation lifecycle', () => {
     render(App)
     await waitFor(() => expect(resolveInitialList).toBeDefined())
 
-    await fireEvent.click(screen.getByRole('button', { name: '新規スレッド' }))
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'アーカイブ済み' }).disabled)
+      .toBe(true)
+    if (resolveInitialList === undefined) throw new Error('Initial list resolver is required')
+    const resolveList = resolveInitialList
+    await act(() => resolveList(new Response('[]', { status: 200 })))
+    await fireEvent.click(await screen.findByRole('button', { name: '新規スレッド（光織）' }))
     await screen.findByRole('button', { name: CONVERSATION_ID })
     await waitFor(() => expect(
       screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled,
     ).toBe(false))
-    if (resolveInitialList === undefined) throw new Error('Initial list resolver is required')
-    const resolveList = resolveInitialList
-    await act(() => resolveList(new Response('[]', { status: 200 })))
-
     expect(screen.getByRole('button', { name: CONVERSATION_ID })).toBeTruthy()
     expect(localStorage.getItem('digital-souls:conversation:miori')).toBe(CONVERSATION_ID)
     expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(false)
   })
 
-  test('復元後に初期active一覧の古い応答が到着しても復元したスレッドを維持する', async () => {
-    const archivedConversation = {
-      ...conversation,
-      archived_at: '2026-08-01T12:02:00+00:00',
-    }
-    let activeListRequestCount = 0
-    let archivedListRequestCount = 0
-    let resolveInitialList: ((response: Response) => void) | undefined
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = String(input)
-      if (url === '/api/characters/miori/conversations' && init === undefined) {
-        activeListRequestCount += 1
-        if (activeListRequestCount === 1) {
-          return new Promise<Response>((resolve) => { resolveInitialList = resolve })
-        }
-        return new Response(JSON.stringify([conversation]), { status: 200 })
-      }
-      if (url.endsWith('/archived')) {
-        archivedListRequestCount += 1
-        const archived = archivedListRequestCount === 1 ? [archivedConversation] : []
-        return new Response(JSON.stringify(archived), { status: 200 })
-      }
-      return defaultFetch(input, init)
-    })
+  test('初期表示では一覧を読み込んでもスレッドを自動選択しない', async () => {
     render(App)
-    await waitFor(() => expect(resolveInitialList).toBeDefined())
 
-    await fireEvent.click(screen.getByRole('button', { name: 'アーカイブ済み' }))
-    await fireEvent.click(await screen.findByRole('button', { name: `復元 ${CONVERSATION_ID}` }))
-    expect(activeListRequestCount).toBe(1)
-    await fireEvent.click(screen.getByRole('button', { name: 'アクティブ' }))
     await screen.findByRole('button', { name: CONVERSATION_ID })
-    if (resolveInitialList === undefined) throw new Error('Initial list resolver is required')
-    const resolveList = resolveInitialList
-    await act(() => resolveList(new Response('[]', { status: 200 })))
 
-    expect(screen.getByRole('button', { name: CONVERSATION_ID })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'スレッド未選択' })).toBeTruthy()
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled)
+      .toBe(true)
   })
 
   test('archive成功後は一覧を再取得せず応答から即時に状態を遷移する', async () => {
@@ -588,17 +612,19 @@ describe('App conversation lifecycle', () => {
     await selectConversation()
     await screen.findByText('保存済みの回答')
 
-    await fireEvent.click(screen.getByRole('button', { name: `アーカイブ ${CONVERSATION_ID}` }))
+    await chooseThreadAction('アーカイブ')
 
     await waitFor(() => expect(
       screen.queryByRole('button', { name: CONVERSATION_ID }),
     ).toBeNull())
-    expect(screen.queryByText('保存済みの回答')).toBeNull()
-    expect(localStorage.getItem('digital-souls:conversation:miori')).toBeNull()
+    expect(await screen.findByRole('heading', { name: 'スレッド未選択' })).toBeTruthy()
+    await waitFor(() => expect(
+      localStorage.getItem('digital-souls:conversation:miori'),
+    ).toBeNull())
     expect(activeListRequestCount).toBe(1)
     expect(archivedListRequestCount).toBe(0)
-    await fireEvent.click(screen.getByRole('button', { name: 'アーカイブ済み' }))
-    expect(await screen.findByRole('button', { name: CONVERSATION_ID })).toBeTruthy()
+    await showArchived()
+    expect(await screen.findByText(CONVERSATION_ID)).toBeTruthy()
     expect(archivedListRequestCount).toBe(1)
   })
 
@@ -610,11 +636,13 @@ describe('App conversation lifecycle', () => {
     const newerConversation = {
       ...conversation,
       conversation_id: SECOND_CONVERSATION_ID,
+      title: SECOND_CONVERSATION_ID,
       updated_at: '2026-08-01T12:02:00+00:00',
     }
     const sameTimeConversation = {
       ...conversation,
       conversation_id: THIRD_CONVERSATION_ID,
+      title: THIRD_CONVERSATION_ID,
     }
     let activeListRequestCount = 0
     let archivedListRequestCount = 0
@@ -634,10 +662,10 @@ describe('App conversation lifecycle', () => {
       return defaultFetch(input, init)
     })
     render(App)
-    await fireEvent.click(screen.getByRole('button', { name: 'アーカイブ済み' }))
-    await fireEvent.click(await screen.findByRole('button', { name: `復元 ${CONVERSATION_ID}` }))
+    await showArchived()
+    await chooseThreadAction('復元')
 
-    await fireEvent.click(screen.getByRole('button', { name: 'アクティブ' }))
+    await showActive()
 
     expect(await screen.findByRole('button', { name: CONVERSATION_ID })).toBeTruthy()
     const threadIds = screen.getAllByRole('button', { name: /^[0-9a-f-]{36}$/ })
@@ -675,72 +703,44 @@ describe('App conversation lifecycle', () => {
       return defaultFetch(input, init)
     })
     render(App)
-    await fireEvent.click(screen.getByRole('button', { name: 'アーカイブ済み' }))
-    await fireEvent.click(await screen.findByRole('button', { name: `削除 ${CONVERSATION_ID}` }))
+    await showArchived()
+    await chooseThreadAction('削除')
 
     await fireEvent.click(screen.getByRole('button', { name: '完全に削除' }))
 
     await waitFor(() => expect(
       screen.queryByRole('button', { name: CONVERSATION_ID }),
     ).toBeNull())
-    expect(localStorage.getItem('digital-souls:conversation:miori')).toBeNull()
+    await waitFor(() => expect(
+      localStorage.getItem('digital-souls:conversation:miori'),
+    ).toBeNull())
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(activeListRequestCount).toBe(1)
     expect(archivedListRequestCount).toBe(1)
   })
 
-  test('hard delete後に到着した古いarchived一覧を反映しない', async () => {
-    const archivedConversation = {
-      ...conversation,
-      archived_at: '2026-08-01T13:00:00+00:00',
-    }
-    let archivedListRequestCount = 0
-    let resolveStaleArchivedList: ((response: Response) => void) | undefined
-    let deleteCompleted = false
+  test('メニューから名前を変更して一覧と会話ヘッダーへ反映する', async () => {
     fetchMock.mockImplementation(async (input, init) => {
       const url = String(input)
-      if (init?.method === 'DELETE') {
-        deleteCompleted = true
-        return new Response(null, { status: 204 })
+      if (init?.method === 'PATCH' && url.endsWith(`/${CONVERSATION_ID}`)) {
+        return new Response(JSON.stringify({
+          ...conversation,
+          title: '光織との予定相談',
+        }), { status: 200 })
       }
-      if (url.endsWith('/archived')) {
-        archivedListRequestCount += 1
-        if (archivedListRequestCount === 1) {
-          return new Response(JSON.stringify([archivedConversation]), { status: 200 })
-        }
-        if (archivedListRequestCount === 2) {
-          return new Promise<Response>((resolve) => { resolveStaleArchivedList = resolve })
-        }
-        return new Response(JSON.stringify(deleteCompleted ? [] : [archivedConversation]), {
-          status: 200,
-        })
-      }
-      if (url.endsWith('/conversations')) return new Response('[]', { status: 200 })
       return defaultFetch(input, init)
     })
     render(App)
-    await fireEvent.click(screen.getByRole('button', { name: 'アーカイブ済み' }))
-    await screen.findByRole('button', { name: `削除 ${CONVERSATION_ID}` })
-    await fireEvent.click(screen.getByRole('button', { name: 'アクティブ' }))
-    await fireEvent.click(screen.getByRole('button', { name: 'アーカイブ済み' }))
-    await waitFor(() => expect(resolveStaleArchivedList).toBeDefined())
+    await selectConversation()
+    await chooseThreadAction('名前を変更')
+    await fireEvent.input(screen.getByRole('textbox', { name: 'スレッド名' }), {
+      target: { value: '光織との予定相談' },
+    })
 
-    await fireEvent.click(screen.getByRole('button', { name: `削除 ${CONVERSATION_ID}` }))
-    await fireEvent.click(screen.getByRole('button', { name: '完全に削除' }))
-    await waitFor(() => expect(
-      screen.queryByRole('button', { name: CONVERSATION_ID }),
-    ).toBeNull())
+    await fireEvent.click(screen.getByRole('button', { name: '保存' }))
 
-    if (resolveStaleArchivedList === undefined) {
-      throw new Error('Stale archived list resolver is required')
-    }
-    const resolveList = resolveStaleArchivedList
-    await act(() => resolveList(new Response(
-      JSON.stringify([archivedConversation]),
-      { status: 200 },
-    )))
-
-    expect(screen.queryByRole('button', { name: CONVERSATION_ID })).toBeNull()
+    expect(await screen.findByRole('button', { name: '光織との予定相談' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '光織との予定相談' })).toBeTruthy()
   })
 
   test('archive API失敗時は一覧・履歴・選択状態を維持する', async () => {
@@ -755,7 +755,7 @@ describe('App conversation lifecycle', () => {
     await selectConversation()
     await screen.findByText('保存済みの回答')
 
-    await fireEvent.click(screen.getByRole('button', { name: `アーカイブ ${CONVERSATION_ID}` }))
+    await chooseThreadAction('アーカイブ')
 
     expect(await screen.findByRole('alert')).toBeTruthy()
     expect(screen.getByRole('button', { name: CONVERSATION_ID })).toBeTruthy()
@@ -780,12 +780,12 @@ describe('App conversation lifecycle', () => {
       return defaultFetch(input, init)
     })
     render(App)
-    await fireEvent.click(screen.getByRole('button', { name: 'アーカイブ済み' }))
+    await showArchived()
 
-    await fireEvent.click(await screen.findByRole('button', { name: `復元 ${CONVERSATION_ID}` }))
+    await chooseThreadAction('復元')
 
     expect(await screen.findByRole('alert')).toBeTruthy()
-    expect(screen.getByRole('button', { name: CONVERSATION_ID })).toBeTruthy()
+    expect(screen.getByText(CONVERSATION_ID)).toBeTruthy()
   })
 
   test('hard delete API失敗時は対象一覧・選択保存・確認状態を維持する', async () => {
@@ -804,63 +804,64 @@ describe('App conversation lifecycle', () => {
       return defaultFetch(input, init)
     })
     render(App)
-    await fireEvent.click(screen.getByRole('button', { name: 'アーカイブ済み' }))
-    await fireEvent.click(await screen.findByRole('button', { name: `削除 ${CONVERSATION_ID}` }))
+    await showArchived()
+    await chooseThreadAction('削除')
 
     await fireEvent.click(screen.getByRole('button', { name: '完全に削除' }))
 
     expect(await screen.findByRole('alert')).toBeTruthy()
     expect(screen.getByRole('dialog')).toBeTruthy()
-    expect(screen.getByRole('button', { name: CONVERSATION_ID })).toBeTruthy()
+    expect(screen.getByRole('button', { name: `${CONVERSATION_ID}のメニュー` })).toBeTruthy()
     expect(localStorage.getItem('digital-souls:conversation:miori')).toBe(CONVERSATION_ID)
   })
 
-  test('character切替時に前characterの履歴を即時に消去する', async () => {
+  test('サイドバーは閉じた後にフロートボタンから再展開できる', async () => {
     render(App)
-    await fireEvent.click(await screen.findByRole('button', { name: new RegExp(`^${CONVERSATION_ID}$`) }))
-    await screen.findByText('保存済みの回答')
+    await screen.findByRole('button', { name: CONVERSATION_ID })
 
-    await fireEvent.input(screen.getByLabelText('キャラクターID'), { target: { value: 'akira' } })
-    await fireEvent.click(screen.getByRole('button', { name: '切り替え' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'サイドバーを閉じる' }))
+    expect(screen.queryByRole('complementary', { name: 'スレッド一覧' })).toBeNull()
+    await fireEvent.click(screen.getByRole('button', { name: 'サイドバーを開く' }))
 
-    await waitFor(() => expect(screen.queryByText('保存済みの回答')).toBeNull())
+    expect(screen.getByRole('complementary', { name: 'スレッド一覧' })).toBeTruthy()
   })
 
-  test('character切替後に到着した旧characterのarchived一覧を反映しない', async () => {
-    const archivedConversation = {
-      ...conversation,
-      conversation_id: '6ad9a610-02cc-4a41-b02e-503826f7292b',
-      archived_at: '2026-08-01T12:02:00+00:00',
+  test('設定のプルダウンからキャラクターを追加し0件ブロックを表示する', async () => {
+    const akira = {
+      character_id: 'akira',
+      display_name: '晶',
+      standing_image: { status: 'missing', url: null },
     }
-    let resolveMioriArchived: ((response: Response) => void) | undefined
-    const fetchMock = vi.mocked(fetch)
-    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+    fetchMock.mockImplementation(async (input, init) => {
       const url = String(input)
-      if (url.includes('/api/characters/miori/conversations/archived')) {
-        return new Promise<Response>((resolve) => { resolveMioriArchived = resolve })
+      if (url === '/api/characters') {
+        return new Response(JSON.stringify([...characterCatalog, akira]), { status: 200 })
       }
-      if (url.includes('/archived')) return new Response('[]', { status: 200 })
-      if (url.includes('/api/characters/akira/conversations')) return new Response('[]', { status: 200 })
-      return new Response(JSON.stringify([conversation]), { status: 200 })
+      if (url === '/api/ui-settings/characters/akira' && init?.method === 'PUT') {
+        return new Response(JSON.stringify({
+          ...uiSettings,
+          characters: [
+            ...uiSettings.characters,
+            { character_id: 'akira', visible: true, pinned: false, pin_order: null },
+          ],
+        }), { status: 200 })
+      }
+      if (url === '/api/characters/akira/conversations') {
+        return new Response('[]', { status: 200 })
+      }
+      return defaultFetch(input, init)
     })
     render(App)
-    await screen.findByRole('button', { name: new RegExp(`^${CONVERSATION_ID}$`) })
-
-    await fireEvent.click(screen.getByRole('button', { name: 'アーカイブ済み' }))
-    await fireEvent.input(screen.getByLabelText('キャラクターID'), { target: { value: 'akira' } })
-    await fireEvent.click(screen.getByRole('button', { name: '切り替え' }))
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      '/api/characters/akira/conversations',
-      undefined,
-    ))
-    await fireEvent.click(screen.getByRole('button', { name: 'アーカイブ済み' }))
-    resolveMioriArchived?.(
-      new Response(JSON.stringify([archivedConversation]), { status: 200 }),
-    )
-
-    await waitFor(() => {
-      expect(screen.queryByText(archivedConversation.conversation_id)).toBeNull()
+    await screen.findByRole('button', { name: CONVERSATION_ID })
+    await fireEvent.click(screen.getByRole('button', { name: '設定' }))
+    await fireEvent.change(screen.getByRole('combobox', { name: 'キャラクター追加' }), {
+      target: { value: 'akira' },
     })
+
+    await fireEvent.click(screen.getByRole('button', { name: '追加' }))
+
+    expect(await screen.findByRole('button', { name: '晶をピン留め' })).toBeTruthy()
+    expect(screen.getAllByText('スレッドはありません')).toHaveLength(1)
   })
 
 
@@ -868,6 +869,7 @@ describe('App conversation lifecycle', () => {
     const secondConversation = {
       ...conversation,
       conversation_id: SECOND_CONVERSATION_ID,
+      title: SECOND_CONVERSATION_ID,
     }
     let resolveChat: ((response: Response) => void) | undefined
     fetchMock.mockImplementation(async (input, init) => {
@@ -881,6 +883,9 @@ describe('App conversation lifecycle', () => {
         ]), { status: 200 })
       }
       if (url.endsWith('/turns') || url.endsWith('/archived')) {
+        return defaultFetch(input, init)
+      }
+      if (url === '/api/characters' || url.startsWith('/api/ui-settings')) {
         return defaultFetch(input, init)
       }
       return new Response(JSON.stringify([conversation, secondConversation]), { status: 200 })
@@ -914,6 +919,7 @@ describe('App conversation lifecycle', () => {
     const secondConversation = {
       ...conversation,
       conversation_id: SECOND_CONVERSATION_ID,
+      title: SECOND_CONVERSATION_ID,
     }
     let rejectPreviousHistory: ((reason: Error) => void) | undefined
     fetchMock.mockImplementation(async (input, init) => {
@@ -927,6 +933,9 @@ describe('App conversation lifecycle', () => {
         ]), { status: 200 })
       }
       if (url.endsWith('/turns') || url.endsWith('/archived')) return defaultFetch(input, init)
+      if (url === '/api/characters' || url.startsWith('/api/ui-settings')) {
+        return defaultFetch(input, init)
+      }
       return new Response(JSON.stringify([conversation, secondConversation]), { status: 200 })
     })
     render(App)
@@ -987,11 +996,9 @@ describe('App conversation lifecycle', () => {
 
     expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(true)
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'マイクをオンにする' }).disabled).toBe(false)
-    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'キャラクターID' }).disabled).toBe(true)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: '切り替え' }).disabled).toBe(true)
     expect(screen.getByRole<HTMLButtonElement>('button', { name: CONVERSATION_ID }).disabled).toBe(true)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: `アーカイブ ${CONVERSATION_ID}` }).disabled).toBe(true)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: '新規スレッド' }).disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: `${CONVERSATION_ID}のメニュー` }).disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: '新規スレッド（光織）' }).disabled).toBe(true)
   })
 
   test('物理削除の確認中は他操作を無効にし開始元characterを削除対象にする', async () => {
@@ -1008,20 +1015,58 @@ describe('App conversation lifecycle', () => {
     })
     render(App)
     await screen.findByRole('button', { name: CONVERSATION_ID })
-    await fireEvent.click(screen.getByRole('button', { name: 'アーカイブ済み' }))
-    await fireEvent.click(await screen.findByRole('button', { name: `削除 ${CONVERSATION_ID}` }))
+    await showArchived()
+    await chooseThreadAction('削除')
 
-    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'キャラクターID' }).disabled).toBe(true)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: '切り替え' }).disabled).toBe(true)
     expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'メッセージ' }).disabled).toBe(true)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'アクティブ' }).disabled).toBe(true)
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: `復元 ${CONVERSATION_ID}` }).disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: '会話履歴に戻る' }).disabled).toBe(true)
 
     await fireEvent.click(screen.getByRole('button', { name: '完全に削除' }))
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       `/api/characters/miori/conversations/${CONVERSATION_ID}`,
       { method: 'DELETE' },
     ))
+  })
+
+  test('archive一覧切替と会話中キャラクターの非表示では音声sessionを終了しない', async () => {
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (url === '/api/ui-settings/characters/miori' && init?.method === 'PUT') {
+        return new Response(JSON.stringify({
+          ...uiSettings,
+          characters: [{
+            character_id: 'miori', visible: false, pinned: false, pin_order: null,
+          }],
+        }), { status: 200 })
+      }
+      return defaultFetch(input, init)
+    })
+    render(App)
+    await startLiveKitSession()
+
+    await showArchived()
+    await showActive()
+    await fireEvent.click(screen.getByRole('button', { name: '光織を一覧から非表示' }))
+
+    expect(liveKitMocks.disconnect).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'マイクをオフにする' })).toBeTruthy()
+  })
+
+  test('スレッドメニューを矢印キーで移動しEscapeで開始ボタンへfocusを戻す', async () => {
+    render(App)
+    const menuButton = await screen.findByRole('button', {
+      name: `${CONVERSATION_ID}のメニュー`,
+    })
+
+    await fireEvent.click(menuButton)
+    const pin = screen.getByRole('menuitem', { name: 'ピン留め' })
+    await waitFor(() => expect(document.activeElement).toBe(pin))
+    await fireEvent.keyDown(window, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: '名前を変更' }))
+    await fireEvent.keyDown(window, { key: 'Escape' })
+
+    await waitFor(() => expect(document.activeElement).toBe(menuButton))
+    expect(screen.queryByRole('menu')).toBeNull()
   })
 
 

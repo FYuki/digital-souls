@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 import { installMockWebSocketBackend } from './mock-web-socket'
 import { installMockLiveKit } from './mock-livekit'
+import { installMockUiBootstrap } from './mock-ui-bootstrap'
 import {
   attachProfileEvidence,
   getCapabilitySkipReason,
@@ -56,6 +57,10 @@ const installConversationBackend = async (page: Page) => {
       body: JSON.stringify(request.method() === 'POST' ? conversations[0] : conversations),
     })
   })
+  await installMockUiBootstrap(page, [
+    { character_id: 'miori', display_name: '光織' },
+    { character_id: 'mock-character-b', display_name: 'キャラクターB' },
+  ])
 }
 
 const openNewChat = async (page: Page, assistantContent: string) => {
@@ -77,7 +82,7 @@ const openNewChat = async (page: Page, assistantContent: string) => {
     }) })
   })
   await page.goto('/')
-  await page.getByRole('button', { name: '新規スレッド' }).click()
+  await page.getByRole('button', { name: '新規スレッド（光織）' }).click()
 }
 
 test('ユーザーが送信したメッセージとモック応答がチャット画面に表示される', async ({ page }) => {
@@ -96,12 +101,9 @@ test('スレッド機能を表示したときも既存の背景とレイアウ�
   await installConversationBackend(page)
   await page.goto('/')
 
-  await expect(page.locator('.app-shell')).toHaveCSS('background-image', /^linear-gradient/)
+  await expect(page.locator('.app-shell')).toHaveCSS('background-image', /radial-gradient/)
   await expect(page.locator('.app-shell')).toHaveCSS('align-items', 'stretch')
-  await expect(page.locator('.chat-panel')).toHaveCSS(
-    'box-shadow',
-    /rgba\(69, 39, 33, 0\.12\) 0px 18px 42px 0px/,
-  )
+  await expect(page.getByRole('complementary', { name: 'スレッド一覧' })).toBeVisible()
 })
 
 test('モックBEがエラーを返した場合にエラーメッセージが表示される', async ({ page }) => {
@@ -111,7 +113,7 @@ test('モックBEがエラーを返した場合にエラーメッセージが表
     await route.fulfill({ status: 500, contentType: 'application/json', body: '{"detail":"backend error"}' })
   })
   await page.goto('/')
-  await page.getByRole('button', { name: '新規スレッド' }).click()
+  await page.getByRole('button', { name: '新規スレッド（光織）' }).click()
 
   await page.getByLabel('メッセージ').fill('テスト')
   await page.getByRole('button', { name: '送信' }).click()
@@ -142,7 +144,7 @@ test('利用者がAからBへ切り替えてAへ戻すとcharacter別UUIDv4をHT
     })
   })
   await page.goto('/')
-  await page.getByRole('button', { name: '新規スレッド' }).click()
+  await page.getByRole('button', { name: '新規スレッド（光織）' }).click()
 
   for (const [index, message] of ['一回目', '二回目'].entries()) {
     await page.getByLabel('メッセージ').fill(message)
@@ -153,9 +155,7 @@ test('利用者がAからBへ切り替えてAへ戻すとcharacter別UUIDv4をHT
   await expect.poll(() => liveKit.readBindings('miori').length).toBe(1)
   const [conversationIdA] = liveKit.readBindings('miori')
 
-  await page.getByLabel('キャラクターID').fill('mock-character-b')
-  await page.getByRole('button', { name: '切り替え' }).click()
-  await page.getByRole('button', { name: '新規スレッド' }).click()
+  await page.getByRole('button', { name: '新規スレッド（キャラクターB）' }).click()
   await page.getByRole('button', { name: 'マイクをオンにする' }).click()
   await expect.poll(() => liveKit.readBindings('mock-character-b').length).toBe(1)
   await page.getByLabel('メッセージ').fill('Bへの質問')
@@ -163,8 +163,7 @@ test('利用者がAからBへ切り替えてAへ戻すとcharacter別UUIDv4をHT
   await expect(page.getByText('応答3')).toBeVisible()
   const [conversationIdB] = liveKit.readBindings('mock-character-b')
 
-  await page.getByLabel('キャラクターID').fill('miori')
-  await page.getByRole('button', { name: '切り替え' }).click()
+  await page.getByRole('button', { name: CONVERSATION_IDS.miori, exact: true }).click()
   await page.getByRole('button', { name: 'マイクをオンにする' }).click()
   await expect.poll(() => liveKit.readBindings('miori').length).toBe(2)
   await page.getByLabel('メッセージ').fill('Aへの再質問')

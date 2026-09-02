@@ -405,7 +405,7 @@ export const createVoiceChatDriver = () => {
   const openVoiceChat = async (page: Page) => {
     await installPlaybackProbe(page)
     await page.goto('/')
-    await page.getByRole('button', { name: '新規スレッド' }).click()
+    await page.getByRole('button', { name: '新規スレッド（光織）' }).click()
     const button = page.getByRole('button', { name: /マイクを(オン|オフ)にする/ })
     await expect(button).toBeEnabled()
     return button
