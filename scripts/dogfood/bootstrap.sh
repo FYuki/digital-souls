@@ -36,6 +36,7 @@ if ! docker buildx version >/dev/null 2>&1; then
   echo "ERROR: bootstrap前にDocker Buildx pluginをインストールしてください" >&2
   exit 2
 fi
+dogfood_verify_bootstrap_container_prerequisites
 getent group "$DOGFOOD_SERVICE_GROUP" >/dev/null || groupadd --system "$DOGFOOD_SERVICE_GROUP"
 if current_passwd=$(getent passwd "$DOGFOOD_SERVICE_USER"); then
   IFS=: read -r _ _ _ _ _ current_home current_shell \

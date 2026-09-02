@@ -10,10 +10,18 @@ from profile_resolution import resolve_dependencies
 from profile_types import ProfileError
 from profile_validation import load_profile
 
-INFERENCE_SERVICE_NAMES = ("ollama", "voicevox", "whisper", "livekit")
+READINESS_SERVICE_CONTRACTS = {
+    "frontend": ("real", "managed"),
+    "backend": ("real", "managed"),
+    "ollama": ("real", "external"),
+    "voicevox": ("real", "external"),
+    "whisper": ("real", "external"),
+    "livekit": ("real", "external"),
+}
+READINESS_SERVICE_NAMES = tuple(READINESS_SERVICE_CONTRACTS)
 
 
-def wait_for_inference_services(
+def wait_for_services(
     profile_name: str,
     service_names: Sequence[str],
     timing: EnvironmentTiming,
@@ -24,14 +32,19 @@ def wait_for_inference_services(
     validated_services: list[tuple[str, str]] = []
 
     for name in service_names:
-        if name not in INFERENCE_SERVICE_NAMES:
-            raise ProfileError(f"unsupported inference readiness service: {name}")
+        if name not in READINESS_SERVICE_CONTRACTS:
+            raise ProfileError(f"unsupported readiness service: {name}")
         if name not in dependency_map:
             raise ProfileError(f"{name} dependency is required")
         dependency = dependency_map[name]
-        if dependency.get("mode") != "real" or dependency.get("source") != "external":
+        expected_mode, expected_source = READINESS_SERVICE_CONTRACTS[name]
+        if (
+            dependency.get("mode") != expected_mode
+            or dependency.get("source") != expected_source
+        ):
             raise ProfileError(
-                f"{name} must be configured as a real external dependency"
+                f"{name} must be configured as a {expected_mode} "
+                f"{expected_source} dependency"
             )
         readiness_url = dependency.get("readinessUrl")
         if not isinstance(readiness_url, str) or not readiness_url:

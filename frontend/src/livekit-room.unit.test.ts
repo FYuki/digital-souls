@@ -5,6 +5,11 @@ const livekitMocks = vi.hoisted(() => {
     readonly handlers = new Map<string, Array<(...args: unknown[]) => void>>()
     readonly localParticipant = {
       publishData: vi.fn(async (_payload: Uint8Array, _options: unknown) => undefined),
+      publishTrack: vi.fn(async () => undefined),
+      unpublishTrack: vi.fn(async () => undefined),
+      getTrackPublication: vi.fn(
+        (_source: unknown): { track?: unknown } | undefined => undefined,
+      ),
       setMicrophoneEnabled: vi.fn(async () => undefined),
     }
 
@@ -44,7 +49,10 @@ vi.mock('livekit-client', () => ({
     TrackUnsubscribed: 'trackUnsubscribed',
     Disconnected: 'disconnected',
   },
-  Track: { Kind: { Audio: 'audio' } },
+  Track: {
+    Kind: { Audio: 'audio' },
+    Source: { Microphone: 'microphone' },
+  },
 }))
 
 import { LiveKitRoomClient, type RoomObservation } from './livekit/room'
@@ -86,6 +94,15 @@ class FakeAudioWorkletNode {
   }
 }
 
+class FakeGainNode {
+  readonly gain = { value: 1 }
+  disconnect = vi.fn()
+
+  connect(destination: unknown): unknown {
+    return destination
+  }
+}
+
 class FakeAudioContext {
   readonly destination = {}
   readonly sampleRate = 48_000
@@ -95,6 +112,7 @@ class FakeAudioContext {
     if (failure !== undefined) throw failure
   }) }
   readonly sources: FakeAudioSourceNode[] = []
+  readonly gains: FakeGainNode[] = []
 
   constructor() {
     audioContexts.push(this)
@@ -110,6 +128,12 @@ class FakeAudioContext {
     const source = new FakeAudioSourceNode()
     this.sources.push(source)
     return source
+  }
+
+  createGain(): FakeGainNode {
+    const gain = new FakeGainNode()
+    this.gains.push(gain)
+    return gain
   }
 }
 
@@ -209,6 +233,25 @@ describe('LiveKit Room generation synchronization', () => {
       },
     )
     expect(room.localParticipant.setMicrophoneEnabled).toHaveBeenNthCalledWith(2, false)
+  })
+
+  test('VADと共有するmicrophone trackをLiveKitへpublishして明示的に解除する', async () => {
+    const client = new LiveKitRoomClient(() => undefined)
+    await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
+    const room = latestRoom()
+    const audioTrack = { kind: 'audio' } as MediaStreamTrack
+    const localTrack = { kind: 'audio' }
+    const stream = { getAudioTracks: () => [audioTrack] } as unknown as MediaStream
+    room.localParticipant.getTrackPublication.mockReturnValue({ track: localTrack })
+
+    await client.publishMicrophone(stream)
+    await client.muteMicrophone()
+
+    expect(room.localParticipant.publishTrack).toHaveBeenCalledWith(audioTrack, {
+      source: 'microphone',
+    })
+    expect(room.localParticipant.unpublishTrack).toHaveBeenCalledWith(localTrack, false)
+    expect(room.localParticipant.setMicrophoneEnabled).not.toHaveBeenCalled()
   })
 
   test('同一sessionへの明示的な再接続時に状態同期を要求する', async () => {
@@ -335,7 +378,11 @@ describe('LiveKit Room generation synchronization', () => {
 
   test('barge-inではaudio graphを即時停止し次responseだけで再開する', async () => {
     const observations: RoomObservation[] = []
-    const client = new LiveKitRoomClient((observation) => observations.push(observation))
+    const receiveCoreEvent = vi.fn()
+    const client = new LiveKitRoomClient(
+      (observation) => observations.push(observation),
+      receiveCoreEvent,
+    )
     await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
     const room = latestRoom()
     room.emit(
@@ -348,10 +395,14 @@ describe('LiveKit Room generation synchronization', () => {
       expect(audioContexts).toHaveLength(1)
       expect(audioContexts[0].sources).toHaveLength(1)
     })
+    expect(audioContexts[0].gains[0].gain.value).toBe(0)
+    expect(document.querySelectorAll('audio')).toHaveLength(1)
 
     expect(client.stopPlayback('50000000-0000-4000-8000-000000000001', 100)).toBe(0)
     expect(client.stopPlayback('50000000-0000-4000-8000-000000000001', 101)).toBe(0)
     expect(audioContexts[0].sources[0].disconnect).toHaveBeenCalledTimes(1)
+    expect(document.querySelectorAll('audio')).toHaveLength(1)
+    expect(document.querySelector('audio')?.muted).toBe(true)
     expect(observations.at(-1)).toMatchObject({
       audio: 'unavailable', activeAudioGraphs: 0, speechStartedAtMs: 100,
     })
@@ -371,8 +422,24 @@ describe('LiveKit Room generation synchronization', () => {
       monotonic_timestamp_ms: 1_000,
     })
 
+    await vi.waitFor(() => expect(receiveCoreEvent).toHaveBeenCalledTimes(1))
+    expect(audioContexts).toHaveLength(1)
+    expect(document.querySelector('audio')?.muted).toBe(true)
+
+    emitCoreEvent(room, {
+      type: 'response_audio_segment',
+      protocol_version: '1.0',
+      event_id: '10000000-0000-4000-8000-000000000002',
+      session_id: '20000000-0000-4000-8000-000000000001',
+      response_id: '50000000-0000-4000-8000-000000000002',
+      audio_sequence: 1,
+      text_range: { start: 0, end: 1 },
+      monotonic_timestamp_ms: 1_100,
+    })
+
     await vi.waitFor(() => {
-      expect(audioContexts).toHaveLength(2)
+      expect(audioContexts).toHaveLength(1)
+      expect(document.querySelector('audio')?.muted).toBe(false)
       expect(observations.at(-1)).toMatchObject({ activeAudioGraphs: 1 })
     })
     client.disconnect()

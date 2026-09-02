@@ -40,7 +40,7 @@ dogfood_report_unsafe_rollback_history() {
   echo "ERROR: 復旧手順は infra/dogfood/README.md の deployとrollback を参照してください" >&2
 }
 
-dogfood_load_environment_settings
+dogfood_load_environment_settings --with-images
 dogfood_require_identity
 dogfood_require_root "${deploy_arguments[@]}"
 dogfood_validate_deployment_storage || {
@@ -50,6 +50,20 @@ dogfood_validate_deployment_storage || {
 dogfood_verify_origin
 dogfood_require_clean_checkout
 current_head=$(git -C "$DOGFOOD_CLONE_DIR" rev-parse HEAD)
+migration_active=false
+migration_marker="$DOGFOOD_STATE_DIR/deployment-contract-migration.json"
+if [ -e "$migration_marker" ] || [ -L "$migration_marker" ]; then
+  dogfood_read_deployment_contract_migration || {
+    dogfood_report_unsafe_rollback_history
+    exit 2
+  }
+  if [ "$DOGFOOD_MIGRATION_TARGET_COMMIT" != "$target" ] \
+    || [ "$current_head" != "$target" ]; then
+    echo "ERROR: deployment contract migrationとcheckout／deploy targetが一致しません" >&2
+    exit 2
+  fi
+  migration_active=true
+fi
 if [ ! -f "$DS_DATA_DIR/conversation-history.db" ]; then
   echo "ERROR: conversation-history.dbがありません。先にdigital-souls-dogfood.targetを起動してBackendの初回DB作成を完了してください" >&2
   exit 2
@@ -63,7 +77,9 @@ previous_backend_image=$DOGFOOD_BACKEND_IMAGE
 previous_frontend_image=$DOGFOOD_FRONTEND_IMAGE
 previous_whisper_image=$DOGFOOD_WHISPER_IMAGE
 current_manifest="$DOGFOOD_STATE_DIR/deployments/current.json"
-if [ "$current_head" = "$target" ]; then
+if [ "$migration_active" = true ]; then
+  previous=
+elif [ "$current_head" = "$target" ]; then
   if [ -e "$current_manifest" ] || [ -L "$current_manifest" ]; then
     dogfood_require_rollback_schema "$current_manifest" || {
       dogfood_report_unsafe_rollback_history
@@ -143,6 +159,9 @@ if ! dogfood_activate_revision \
   activation_failed=true
   echo "ERROR: deploy処理がreadiness確認前に失敗しました: $target" >&2
 elif dogfood_check_readiness; then
+  if [ "$migration_active" = true ]; then
+    dogfood_complete_deployment_contract_migration "$target"
+  fi
   echo "deployが完了しました: $target"
   exit 0
 fi

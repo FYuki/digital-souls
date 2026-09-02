@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable, Coroutine
 from dataclasses import replace
 from typing import TypeVar
@@ -24,9 +25,11 @@ from app.conversation_core.ports import (
     TtsPort,
 )
 from app.conversation_core.segmentation import JapaneseTextSegmenter, TextSegment
+from app.conversation_core.turn_decision import TurnDecision, classify_turn
 
 
 TaskResult = TypeVar("TaskResult")
+logger = logging.getLogger(__name__)
 
 
 class TerminalProtocolError(RuntimeError):
@@ -50,6 +53,7 @@ class ConversationCoreSession:
         llm: LlmPort,
         tts: TtsPort,
         tts_queue_maxsize: int = 8,
+        turn_classifier: Callable[[str], TurnDecision] = classify_turn,
     ) -> None:
         if tts_queue_maxsize < 1:
             raise ValueError("tts_queue_maxsize must be positive")
@@ -62,6 +66,7 @@ class ConversationCoreSession:
         self._llm = llm
         self._tts = tts
         self._tts_queue_maxsize = tts_queue_maxsize
+        self._turn_classifier = turn_classifier
         self._responses: dict[str, Response] = {}
         self._utterances: dict[str, Utterance] = {}
         self._active_response_id: str | None = None
@@ -115,6 +120,7 @@ class ConversationCoreSession:
         utterance_id: str,
         transcript: str,
         should_response: bool,
+        retain_pending: bool = True,
     ) -> Response | None:
         start_task: asyncio.Task[Response] | None = None
         async with self._state_lock:
@@ -134,7 +140,11 @@ class ConversationCoreSession:
                 utterance_id=utterance_id,
                 transcript=transcript,
                 should_response=should_response,
-                state=UtteranceState.PENDING,
+                state=(
+                    UtteranceState.PENDING
+                    if retain_pending
+                    else UtteranceState.CONSUMED
+                ),
             )
             if self.active_response is None and should_response:
                 response, response_input = self._reserve_pending_response_locked()
@@ -174,6 +184,7 @@ class ConversationCoreSession:
         utterance_id: str,
         audio: bytes,
         should_response: bool,
+        interrupted_response_id: str | None = None,
     ) -> asyncio.Task[Response | None]:
         self._require_available()
         return self._register_stage_task(
@@ -181,8 +192,47 @@ class ConversationCoreSession:
                 utterance_id=utterance_id,
                 audio=audio,
                 should_response=should_response,
+                interrupted_response_id=interrupted_response_id,
             )
         )
+
+    async def preview_turn(
+        self,
+        *,
+        utterance_id: str,
+        audio: bytes,
+        interrupted_response_id: str,
+    ) -> TurnDecision:
+        """発話冒頭の認識結果から暫定判定し、明確な発話なら旧回答を早期終了する。"""
+        await self._record_utterance_stage(utterance_id, "stt_preview", "started")
+        transcript = await self._stt.transcribe(audio)
+        await self._record_utterance_stage(utterance_id, "stt_preview", "completed")
+        decision = self._turn_classifier(transcript)
+        await self._record_utterance_stage(
+            utterance_id, "turn_decision", "completed"
+        )
+        await self._publish_utterance_delivery(
+            CoreEvent(
+                type="turn_decision",
+                session_id=self.session_id,
+                utterance_id=utterance_id,
+                response_id=interrupted_response_id,
+                decision=decision,
+                final=False,
+            )
+        )
+        if decision == "take_turn":
+            await self._record_utterance_stage(
+                utterance_id, "take_turn_decision", "completed"
+            )
+            await self.cancel_response(
+                response_id=interrupted_response_id,
+                reason="barge_in",
+            )
+            await self._record_utterance_stage(
+                utterance_id, "server_cancelled", "completed"
+            )
+        return decision
 
     async def accept_text_delta(
         self,
@@ -277,7 +327,12 @@ class ConversationCoreSession:
                 else 0
             )
             if start != expected_start:
-                raise TerminalProtocolError("audio text_range is not contiguous")
+                skipped_text = response.generated_text[expected_start:start]
+                if start < expected_start or not skipped_text.isspace():
+                    raise TerminalProtocolError("audio text_range is not contiguous")
+                # VOICEVOXへ空白だけの区間は渡さない。一方、再生済みprefixは
+                # LLM本文上で連続させる必要があるため、直前の空白を次の音声へ含める。
+                text_range = (expected_start, end)
 
             segment = AudioSegment(audio_sequence, audio, text_range)
             self._audio_payloads[sequence_key] = payload
@@ -522,6 +577,7 @@ class ConversationCoreSession:
         utterance_id: str,
         audio: bytes,
         should_response: bool,
+        interrupted_response_id: str | None,
     ) -> Response | None:
         await self._record_utterance_stage(utterance_id, "stt", "started")
         try:
@@ -551,6 +607,35 @@ class ConversationCoreSession:
                 )
             raise
         await self._record_utterance_stage(utterance_id, "stt", "completed")
+        retain_pending = True
+        if interrupted_response_id is not None:
+            decision = self._turn_classifier(transcript)
+            should_response = decision == "take_turn"
+            retain_pending = should_response
+            await self._record_utterance_stage(
+                utterance_id, "turn_decision", "completed"
+            )
+            await self._publish_utterance_delivery(
+                CoreEvent(
+                    type="turn_decision",
+                    session_id=self.session_id,
+                    utterance_id=utterance_id,
+                    response_id=interrupted_response_id,
+                    decision=decision,
+                    final=True,
+                )
+            )
+            if should_response:
+                await self._record_utterance_stage(
+                    utterance_id, "take_turn_decision", "completed"
+                )
+                await self.cancel_response(
+                    response_id=interrupted_response_id,
+                    reason="barge_in",
+                )
+                await self._record_utterance_stage(
+                    utterance_id, "server_cancelled", "completed"
+                )
         await self._publish_utterance_delivery(
             CoreEvent(
                 type="utterance_finalized",
@@ -564,6 +649,7 @@ class ConversationCoreSession:
             utterance_id=utterance_id,
             transcript=transcript,
             should_response=should_response,
+            retain_pending=retain_pending,
         )
 
     async def _discard_failed_utterance(
@@ -600,10 +686,19 @@ class ConversationCoreSession:
             tts_task.cancel()
             await asyncio.gather(llm_task, tts_task, return_exceptions=True)
             raise
-        except Exception:
+        except Exception as error:
             llm_task.cancel()
             tts_task.cancel()
-            await asyncio.gather(llm_task, tts_task, return_exceptions=True)
+            results = await asyncio.gather(llm_task, tts_task, return_exceptions=True)
+            logger.warning(
+                "Conversation response pipeline failed: session_id=%s response_id=%s generation=%d error_type=%s llm_outcome=%s tts_outcome=%s",
+                self.session_id,
+                response.response_id,
+                response.generation,
+                type(error).__name__,
+                self._pipeline_task_outcome(results[0]),
+                self._pipeline_task_outcome(results[1]),
+            )
             if self._gated_response(response.response_id, response.generation) is not None:
                 await self.fail_response(
                     response_id=response.response_id,
@@ -617,6 +712,12 @@ class ConversationCoreSession:
             response_id=response.response_id,
             generation=response.generation,
         )
+
+    @staticmethod
+    def _pipeline_task_outcome(result: object) -> str:
+        if isinstance(result, BaseException):
+            return type(result).__name__
+        return "completed"
 
     async def _produce_text_segments(
         self,
@@ -685,11 +786,7 @@ class ConversationCoreSession:
         response: Response,
         queue: asyncio.Queue[TextSegment | None],
     ) -> None:
-        await self.stage_started(
-            response_id=response.response_id,
-            generation=response.generation,
-            stage="tts",
-        )
+        stage_started = False
         audio_sequence = 0
         try:
             while True:
@@ -697,6 +794,15 @@ class ConversationCoreSession:
                 try:
                     if text_segment is None:
                         break
+                    if not stage_started:
+                        # queue待機はTTS処理時間ではない。最初の合成可能segmentを
+                        # 受け取った時点を#17のTTS開始点にする。
+                        await self.stage_started(
+                            response_id=response.response_id,
+                            generation=response.generation,
+                            stage="tts",
+                        )
+                        stage_started = True
                     async for synthesized in self._tts.synthesize(text_segment.text):
                         audio_sequence += 1
                         local_start, local_end = synthesized.text_range
@@ -714,26 +820,31 @@ class ConversationCoreSession:
                 finally:
                     queue.task_done()
         except asyncio.CancelledError:
-            await self.stage_cancelled(
-                response_id=response.response_id,
-                generation=response.generation,
-                stage="tts",
-            )
+            if stage_started:
+                await self.stage_cancelled(
+                    response_id=response.response_id,
+                    generation=response.generation,
+                    stage="tts",
+                )
             raise
         except DeliveryError:
-            await self.stage_cancelled(
-                response_id=response.response_id,
-                generation=response.generation,
-                stage="tts",
-            )
+            if stage_started:
+                await self.stage_cancelled(
+                    response_id=response.response_id,
+                    generation=response.generation,
+                    stage="tts",
+                )
             raise
         except Exception:
-            await self.stage_failed(
-                response_id=response.response_id,
-                generation=response.generation,
-                stage="tts",
-            )
+            if stage_started:
+                await self.stage_failed(
+                    response_id=response.response_id,
+                    generation=response.generation,
+                    stage="tts",
+                )
             raise
+        if not stage_started:
+            return
         if self._gated_response(response.response_id, response.generation) is None:
             await self.stage_cancelled(
                 response_id=response.response_id,

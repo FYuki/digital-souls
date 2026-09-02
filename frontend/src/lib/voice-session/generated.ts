@@ -10,11 +10,13 @@ export interface VoiceSessionEvent {
     type:                          Type;
     reconnect_grace_ms?:           number;
     reason?:                       Reason;
+    response_id?:                  string;
     speaker?:                      Speaker;
     utterance_id?:                 string;
+    decision?:                     Decision;
+    final?:                        boolean;
     should_response?:              boolean;
     transcript?:                   string;
-    response_id?:                  string;
     source_utterance_ids?:         string[];
     text?:                         string;
     text_range?:                   TextRange;
@@ -37,6 +39,8 @@ export type Classification = "recoverable" | "terminal";
 
 export type ClockDomain = "client_monotonic" | "server_monotonic";
 
+export type Decision = "backchannel" | "take_turn" | "indeterminate";
+
 export type Measurement = "speech_stopped" | "utterance_finalized" | "response_started" | "first_audio_out" | "playback_started";
 
 export type Reason = "user_request" | "terminal_error" | "reconnect_timeout" | "privacy" | "disconnect" | "session_ended" | "invalid_audio" | "input_capacity_exceeded" | "barge_in" | "decode_failure";
@@ -57,7 +61,7 @@ export interface TextRange {
     start: number;
 }
 
-export type Type = "session_start_requested" | "session_started" | "session_muted" | "session_resumed" | "session_ended" | "session_disconnected" | "session_reconnect_requested" | "session_reconnected" | "speech_started" | "speech_stopped" | "utterance_finalized" | "utterance_pending" | "utterance_discarded" | "response_started" | "response_delta" | "response_audio_segment" | "response_completed" | "response_cancel_requested" | "response_cancelled" | "response_failed" | "playback_started" | "playback_stopped" | "playback_completed" | "playback_decode_failed" | "error" | "observation";
+export type Type = "session_start_requested" | "session_started" | "session_muted" | "session_resumed" | "session_ended" | "session_disconnected" | "session_reconnect_requested" | "session_reconnected" | "speech_started" | "speech_stopped" | "turn_decision" | "utterance_finalized" | "utterance_pending" | "utterance_discarded" | "response_started" | "response_delta" | "response_audio_segment" | "response_completed" | "response_cancel_requested" | "response_cancelled" | "response_failed" | "playback_started" | "playback_stopped" | "playback_completed" | "playback_decode_failed" | "error" | "observation";
 
 export type Unit = "millisecond" | "nanosecond";
 

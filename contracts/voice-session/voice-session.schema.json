@@ -14,6 +14,7 @@
     { "$ref": "#/$defs/SessionReconnected" },
     { "$ref": "#/$defs/SpeechStarted" },
     { "$ref": "#/$defs/SpeechStopped" },
+    { "$ref": "#/$defs/TurnDecision" },
     { "$ref": "#/$defs/UtteranceFinalized" },
     { "$ref": "#/$defs/UtterancePending" },
     { "$ref": "#/$defs/UtteranceDiscarded" },
@@ -157,6 +158,7 @@
       "properties": {
         "type": { "const": "speech_started" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
         "session_id": { "$ref": "#/$defs/Identifier" }, "utterance_id": { "$ref": "#/$defs/Identifier" }, "speaker": { "$ref": "#/$defs/Speaker" },
+        "response_id": { "$ref": "#/$defs/Identifier" },
         "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
@@ -166,6 +168,16 @@
       "properties": {
         "type": { "const": "speech_stopped" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
         "session_id": { "$ref": "#/$defs/Identifier" }, "utterance_id": { "$ref": "#/$defs/Identifier" }, "speaker": { "$ref": "#/$defs/Speaker" },
+        "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
+      }
+    },
+    "TurnDecision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "protocol_version", "event_id", "session_id", "utterance_id", "response_id", "decision", "final", "monotonic_timestamp_ms"],
+      "properties": {
+        "type": { "const": "turn_decision" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
+        "session_id": { "$ref": "#/$defs/Identifier" }, "utterance_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" },
+        "decision": { "type": "string", "enum": ["backchannel", "take_turn", "indeterminate"] }, "final": { "type": "boolean" },
         "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },

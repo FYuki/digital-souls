@@ -2,6 +2,11 @@
   import type { ConversationTurn } from './conversations/types'
 
   export let turns: ConversationTurn[]
+  export let failedVoiceTurns: {
+    responseId: string
+    userContent: string
+    assistantContent: string
+  }[] = []
   export let liveVoiceTurn: {
     userContent: string
     assistantContent: string
@@ -25,6 +30,16 @@
         <p>{turn.reason_code}</p>
       </article>
     {/if}
+  {/each}
+  {#each failedVoiceTurns as turn (turn.responseId)}
+    <article class="message user" data-failed-voice-turn={turn.responseId}>
+      <span class="speaker">あなた</span>
+      <p>{turn.userContent}</p>
+    </article>
+    <article class="message failed" data-failed-voice-turn={turn.responseId}>
+      <span class="speaker">光織（応答失敗）</span>
+      <p>{turn.assistantContent || '応答を完了できませんでした。'}</p>
+    </article>
   {/each}
   {#if liveVoiceTurn !== null}
     <article class="message user" data-live-voice-turn="true">
@@ -62,6 +77,11 @@
     align-self: flex-end;
     background: #b94f38;
     color: #fffaf6;
+  }
+
+  .message.failed {
+    border-color: rgba(153, 27, 27, 0.28);
+    background: #fff1f1;
   }
 
   .speaker {

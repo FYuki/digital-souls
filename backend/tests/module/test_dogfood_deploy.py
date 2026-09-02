@@ -34,6 +34,7 @@ CONVERSATION_SENTINEL = "会話本文をdeploymentへ出力してはならない
 PROMPT_SENTINEL = "promptをdeploymentへ出力してはならない"
 ROOT_OPERATION_CASES = (
     ("bootstrap.sh", ()),
+    ("migrate-deployment-contract.sh", ("--commit", NEXT_REVISION)),
     ("deploy.sh", ("--commit", NEXT_REVISION)),
     ("rollback.sh", ("--to", NEXT_REVISION)),
 )
@@ -68,6 +69,15 @@ def _manifest_payload(
         "images": TEST_DEPLOYMENT_IMAGES,
         "deployedAt": "2026-07-31T00:00:00Z",
     }
+
+
+def _legacy_manifest_payload(
+    previous_commit: object = TEST_REVISION,
+    target_commit: object = NEXT_REVISION,
+) -> dict[str, object]:
+    payload = _manifest_payload(previous_commit, target_commit)
+    del payload["images"]
+    return payload
 
 
 def test_should_check_current_profile_readiness_without_starting_processes(
@@ -191,7 +201,7 @@ def _prepare_deploy_scenario(
         '  backup) [ "${DEPLOY_FAILURE-}" != "backup" ]; '
         "printf '%s\\n' \"$DEPLOY_BACKUP_OUTPUT\" ;;\n"
         '  backup-verify) [ "${DEPLOY_FAILURE-}" != "verify" ] ;;\n'
-        f'  readiness) count=$(cat "{tmp_path / "readiness-count"}" 2>/dev/null || printf 0); '
+        f'  wait-readiness) count=$(cat "{tmp_path / "readiness-count"}" 2>/dev/null || printf 0); '
         f'count=$((count + 1)); printf "%s" "$count" > "{tmp_path / "readiness-count"}"; '
         'case "${DEPLOY_FAILURE-}" in '
         f'readiness) if [ "$count" -gt 1 ]; then printf "readiness-result\\tsuccess\\n" >> "{call_log}"; '
@@ -329,7 +339,8 @@ def _prepare_deploy_scenario(
         '/usr/bin/install "${arguments[@]}"\n'
         'case "$destination" in\n'
         f'  "{tmp_path / "config"}/.dogfood.revision.ready."*) '
-        f'/usr/bin/chown "0:{os.getgid()}" "$destination" ;;\n'
+        f'[ "${{DEPLOY_SKIP_FAKE_REVISION_CHOWN-}}" = "1" ] '
+        f'|| /usr/bin/chown "0:$DOGFOOD_SERVICE_GROUP" "$destination" ;;\n'
         'esac\n',
     )
     for command in ("chown", "chmod"):
@@ -356,6 +367,28 @@ def _prepare_deploy_scenario(
     if failure is not None:
         environment["DEPLOY_FAILURE"] = failure
     return environment, call_log
+
+
+def _invoke_deployment_contract_migration(
+    tmp_path: Path,
+    environment: dict[str, str],
+    *,
+    target_revision: str = NEXT_REVISION,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        command_with_root_owned_revision(
+            tmp_path / "config" / "dogfood.revision",
+            [
+                str(DOGFOOD_SCRIPTS_DIR / "migrate-deployment-contract.sh"),
+                "--commit",
+                target_revision,
+            ],
+        ),
+        env={**environment, "DEPLOY_SKIP_FAKE_REVISION_CHOWN": "1"},
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
 
 
 def _run_deploy(
@@ -864,11 +897,19 @@ def test_should_deploy_only_after_backup_verify_and_record_a_safe_manifest(
             next(index for index, call in enumerate(calls) if marker in call)
             for marker in (
                 "restart",
-                "cli\treadiness ",
+                "cli\twait-readiness ",
             )
         ),
     )
     assert operations == tuple(sorted(operations))
+    readiness_calls = tuple(
+        call for call in calls if call.startswith("cli\twait-readiness ")
+    )
+    assert readiness_calls == (
+        "cli\twait-readiness --profile dogfood --service frontend "
+        "--service backend --max-attempts 180 --interval-seconds 1 "
+        "--request-timeout-seconds 2",
+    )
     assert (tmp_path / "config" / "dogfood.revision").read_text(
         encoding="utf-8"
     ) == f"{NEXT_REVISION}\n"
@@ -916,7 +957,7 @@ def test_should_record_null_previous_commit_on_the_true_initial_deploy(
         "cli\tbackup-verify ",
         "manifest-write",
         "restart",
-        "cli\treadiness ",
+        "cli\twait-readiness ",
     )
     assert all(any(marker in call for call in calls) for marker in required_operations)
     generations = tuple((tmp_path / "state" / "deployments").glob("*.json"))
@@ -1082,6 +1123,172 @@ def test_should_reject_a_self_referencing_revision_before_deploy_side_effects(
     assert not any(call.startswith("cli\tbackup ") for call in calls)
     assert not any("checkout --detach" in call for call in calls)
     assert not tuple((tmp_path / "state" / "deployments").glob("*.json"))
+
+
+def test_should_migrate_legacy_manifests_and_establish_a_new_docker_baseline(
+    tmp_path: Path,
+) -> None:
+    environment, _ = _prepare_deploy_scenario(
+        tmp_path,
+        current_manifest_payload=_legacy_manifest_payload(),
+    )
+
+    migration = _invoke_deployment_contract_migration(tmp_path, environment)
+
+    assert migration.returncode == 0, (migration.stdout, migration.stderr)
+    deployments = tmp_path / "state" / "deployments"
+    assert not tuple(deployments.glob("*.json"))
+    archives = tuple(deployments.glob("legacy-v0-*-to-*"))
+    assert len(archives) == 1
+    legacy_current = json.loads(
+        (archives[0] / "current.json").read_text(encoding="utf-8")
+    )
+    assert legacy_current == _legacy_manifest_payload()
+    marker = tmp_path / "state" / "deployment-contract-migration.json"
+    marker_payload = json.loads(marker.read_text(encoding="utf-8"))
+    assert marker_payload["fromCommit"] == TEST_REVISION
+    assert marker_payload["targetCommit"] == NEXT_REVISION
+    assert marker_payload["archiveDirectory"] == archives[0].name
+    assert (tmp_path / "config" / "dogfood.revision").read_text(
+        encoding="utf-8"
+    ) == f"{NEXT_REVISION}\n"
+
+    # bootstrapが同じtargetへcheckoutした状態を再現する。
+    (tmp_path / "head").write_text(NEXT_REVISION, encoding="utf-8")
+    deploy = _invoke_deploy(
+        tmp_path,
+        environment,
+        ["--commit", NEXT_REVISION],
+        revision_exists=True,
+    )
+
+    assert deploy.returncode == 0, (deploy.stdout, deploy.stderr)
+    current = json.loads((deployments / "current.json").read_text(encoding="utf-8"))
+    assert current["previousCommit"] is None
+    assert current["targetCommit"] == NEXT_REVISION
+    assert not marker.exists()
+    completed_marker = json.loads(
+        (archives[0] / "migration.json").read_text(encoding="utf-8")
+    )
+    assert completed_marker["targetCommit"] == NEXT_REVISION
+
+
+def test_should_not_rollback_across_the_legacy_contract_boundary(
+    tmp_path: Path,
+) -> None:
+    environment, call_log = _prepare_deploy_scenario(
+        tmp_path,
+        failure="readiness",
+        current_manifest_payload=_legacy_manifest_payload(),
+    )
+    migration = _invoke_deployment_contract_migration(tmp_path, environment)
+    assert migration.returncode == 0, (migration.stdout, migration.stderr)
+    (tmp_path / "head").write_text(NEXT_REVISION, encoding="utf-8")
+
+    deploy = _invoke_deploy(
+        tmp_path,
+        environment,
+        ["--commit", NEXT_REVISION],
+        revision_exists=True,
+    )
+
+    calls = tuple(call_log.read_text(encoding="utf-8").splitlines())
+    diagnostic = deploy.stdout + deploy.stderr
+    assert deploy.returncode == 1
+    assert "初回 deploy" in diagnostic
+    assert "自動 rollback できない" in diagnostic
+    assert sum("checkout --detach" in call for call in calls) == 1
+    assert (tmp_path / "state" / "deployment-contract-migration.json").is_file()
+
+
+def test_should_reject_a_tampered_migration_marker_before_backup(
+    tmp_path: Path,
+) -> None:
+    environment, call_log = _prepare_deploy_scenario(
+        tmp_path,
+        current_manifest_payload=_legacy_manifest_payload(),
+    )
+    migration = _invoke_deployment_contract_migration(tmp_path, environment)
+    assert migration.returncode == 0, (migration.stdout, migration.stderr)
+    marker = tmp_path / "state" / "deployment-contract-migration.json"
+    payload = json.loads(marker.read_text(encoding="utf-8"))
+    payload["targetCommit"] = THIRD_REVISION
+    marker.write_text(json.dumps(payload), encoding="utf-8")
+    marker.chmod(0o640)
+    (tmp_path / "head").write_text(NEXT_REVISION, encoding="utf-8")
+
+    deploy = _invoke_deploy(
+        tmp_path,
+        environment,
+        ["--commit", NEXT_REVISION],
+        revision_exists=True,
+    )
+
+    calls = tuple(call_log.read_text(encoding="utf-8").splitlines())
+    assert deploy.returncode == 2
+    assert "migration markerを検証できません" in deploy.stderr
+    assert not any(call.startswith("cli\tbackup ") for call in calls)
+    assert not tuple((tmp_path / "state" / "deployments").glob("*.json"))
+
+
+def test_should_reject_corrupt_legacy_manifest_without_changing_revision(
+    tmp_path: Path,
+) -> None:
+    environment, _ = _prepare_deploy_scenario(
+        tmp_path,
+        current_manifest_payload="{not-json",
+    )
+
+    migration = _invoke_deployment_contract_migration(tmp_path, environment)
+
+    assert migration.returncode == 2
+    assert "legacy deployment manifestを検証できません" in migration.stderr
+    assert (tmp_path / "state" / "deployments" / "current.json").is_file()
+    assert not (tmp_path / "state" / "deployment-contract-migration.json").exists()
+    assert (tmp_path / "config" / "dogfood.revision").read_text(
+        encoding="utf-8"
+    ) == f"{TEST_REVISION}\n"
+
+
+def test_should_idempotently_prepare_migration_without_a_legacy_manifest(
+    tmp_path: Path,
+) -> None:
+    environment, _ = _prepare_deploy_scenario(tmp_path)
+
+    first = _invoke_deployment_contract_migration(tmp_path, environment)
+    second = _invoke_deployment_contract_migration(tmp_path, environment)
+
+    assert first.returncode == 0, (first.stdout, first.stderr)
+    assert second.returncode == 0, (second.stdout, second.stderr)
+    deployments = tmp_path / "state" / "deployments"
+    archives = tuple(deployments.glob("legacy-v0-*-to-*"))
+    assert len(archives) == 1
+    assert not tuple(archives[0].glob("*.json"))
+    marker = tmp_path / "state" / "deployment-contract-migration.json"
+    assert marker.is_file()
+    assert json.loads(marker.read_text(encoding="utf-8"))["targetCommit"] == (
+        NEXT_REVISION
+    )
+    assert (tmp_path / "config" / "dogfood.revision").read_text(
+        encoding="utf-8"
+    ) == f"{NEXT_REVISION}\n"
+
+
+def test_should_not_migrate_a_current_image_aware_manifest(tmp_path: Path) -> None:
+    environment, _ = _prepare_deploy_scenario(
+        tmp_path,
+        current_manifest_payload=_manifest_payload(TEST_REVISION, NEXT_REVISION),
+    )
+
+    migration = _invoke_deployment_contract_migration(tmp_path, environment)
+
+    assert migration.returncode == 2
+    assert "legacy deployment manifestを検証できません" in migration.stderr
+    assert (tmp_path / "state" / "deployments" / "current.json").is_file()
+    assert not (tmp_path / "state" / "deployment-contract-migration.json").exists()
+    assert (tmp_path / "config" / "dogfood.revision").read_text(
+        encoding="utf-8"
+    ) == f"{TEST_REVISION}\n"
 
 
 def test_should_repair_a_self_referencing_manifest_during_a_normal_deploy(
@@ -1340,7 +1547,7 @@ async def test_should_create_database_on_application_start_before_deploy_prepara
 
     assert not (data_dir / "conversation-history.db").exists()
     assert (
-        f"ExecStart={tmp_path / 'clone' / 'environments' / 'up.sh'}"
+        f"ExecStart={tmp_path / 'clone' / 'scripts' / 'start-dogfood.sh'}"
         in application_unit
     )
     assert f"DS_DATA_DIR={data_dir}" in application_unit
@@ -1425,7 +1632,7 @@ def test_should_stop_deploy_at_the_first_activation_failure(
 
     assert result.returncode != 0
     assert any(last_operation in call for call in calls)
-    assert not any(call.startswith("cli\treadiness ") for call in calls)
+    assert not any(call.startswith("cli\twait-readiness ") for call in calls)
     diagnostic = result.stdout + result.stderr
     assert f"現在のrevision: {TEST_REVISION}" in diagnostic
     assert f"現在のHEAD: {TEST_REVISION}" in diagnostic
@@ -1597,7 +1804,7 @@ def test_should_automatically_restore_the_previous_revision_after_readiness_fail
         ("chown\t", "chown"),
         ("chmod\t", "chmod"),
         ("restart", "restart"),
-        ("cli\treadiness ", "readiness"),
+        ("cli\twait-readiness ", "readiness"),
         ("readiness-result\tfailure", "readiness-failure"),
         ("readiness-result\tsuccess", "readiness-success"),
     )
@@ -1812,7 +2019,7 @@ def test_should_reject_invalid_deploy_invocations_before_external_side_effects(
 @pytest.mark.parametrize(
     ("script_name", "arguments"),
     ROOT_OPERATION_CASES,
-    ids=("bootstrap", "deploy", "rollback"),
+    ids=("bootstrap", "migration", "deploy", "rollback"),
 )
 def test_should_handoff_noninteractive_root_operation_with_exit_code_three(
     tmp_path: Path,
@@ -1868,7 +2075,7 @@ def test_should_handoff_noninteractive_root_operation_with_exit_code_three(
 @pytest.mark.parametrize(
     ("script_name", "arguments"),
     ROOT_OPERATION_CASES,
-    ids=("bootstrap", "deploy", "rollback"),
+    ids=("bootstrap", "migration", "deploy", "rollback"),
 )
 def test_should_reject_without_handoff_when_non_root_operation_is_interactive(
     tmp_path: Path,
@@ -1924,7 +2131,7 @@ def test_should_reject_without_handoff_when_non_root_operation_is_interactive(
 @pytest.mark.parametrize(
     ("script_name", "arguments"),
     ROOT_OPERATION_CASES,
-    ids=("bootstrap", "deploy", "rollback"),
+    ids=("bootstrap", "migration", "deploy", "rollback"),
 )
 def test_should_handoff_interactive_root_operation_when_sudo_probe_fails(
     tmp_path: Path,

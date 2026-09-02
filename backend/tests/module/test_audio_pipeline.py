@@ -131,6 +131,7 @@ class TestAudioPipelineSession:
         recorded = []
         measurement = SimpleNamespace(
             measurement_kind="automated_test",
+            character_id="miori",
             session_id="session-1",
             utterance_id="utterance-1",
             response_id="response-1",
@@ -172,6 +173,7 @@ class TestAudioPipelineSession:
         recorded = []
         measurement = SimpleNamespace(
             measurement_kind="automated_test",
+            character_id="miori",
             session_id="session-1",
             utterance_id="utterance-1",
             response_id="response-1",
@@ -217,6 +219,7 @@ class TestAudioPipelineSession:
         recorded = []
         measurement = SimpleNamespace(
             measurement_kind="automated_test",
+            character_id="miori",
             session_id="session-1",
             utterance_id="utterance-1",
             response_id="response-1",

@@ -386,6 +386,25 @@ def test_speaker_role_requires_only_character_speaker_to_have_character_id() -> 
         )
 
 
+def test_turn_decision_requires_explicit_decision_and_finality() -> None:
+    parser = importlib.import_module("app.voice_session.validation")
+    event = {
+        "type": "turn_decision",
+        "protocol_version": "1.0",
+        "event_id": "10000000-0000-4000-8000-000000000090",
+        "session_id": "20000000-0000-4000-8000-000000000001",
+        "utterance_id": "30000000-0000-4000-8000-000000000090",
+        "response_id": "50000000-0000-4000-8000-000000000090",
+        "decision": "backchannel",
+        "final": False,
+        "monotonic_timestamp_ms": 1090,
+    }
+
+    assert parser.parse_voice_session_event(event).decision.value == "backchannel"
+    with pytest.raises(ValueError):
+        parser.parse_voice_session_event({key: value for key, value in event.items() if key != "final"})
+
+
 def test_protocol_mismatch_is_rejected_at_parser_boundary() -> None:
     parser = importlib.import_module("app.voice_session.validation")
     fixture = _fixture("protocol-version-mismatch.json")

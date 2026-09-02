@@ -81,6 +81,118 @@ def test_should_continue_after_loading_valid_dogfood_environment(
     assert sentinel_path.is_file()
 
 
+def test_should_keep_generic_loader_on_root_active_image_contract() -> None:
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; '
+            'dogfood_load_environment_settings() { printf "settings:%s\\n" "$*"; }; '
+            'dogfood_read_revision() { printf "revision\\n"; }; '
+            "dogfood_load_environment",
+            "bash",
+            str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["settings:--with-images", "revision"]
+
+
+def test_should_reject_unknown_active_image_loading_option() -> None:
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; dogfood_load_environment_settings --without-images',
+            "bash",
+            str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 2
+    assert "--with-images" in result.stderr
+
+
+def test_should_require_root_owner_for_default_environment_without_images(
+    tmp_path: Path,
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    expected_owner_log = tmp_path / "expected-owner.log"
+    write_executable(
+        fake_bin / "python3",
+        'printf "%s\\n" "$4" > "$EXPECTED_OWNER_LOG"\ncat "$2"\n',
+    )
+    active_images_marker = tmp_path / "active-images-called.sentinel"
+    sentinel_path = tmp_path / "settings-loaded.sentinel"
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; DOGFOOD_DEFAULT_ENV_FILE=$2 DOGFOOD_ENV_FILE=$2; '
+            "active_images_marker=$3; "
+            'dogfood_load_active_images() { touch "$active_images_marker"; }; '
+            'dogfood_load_environment_settings; touch "$4"',
+            "bash",
+            str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+            str(env_path),
+            str(active_images_marker),
+            str(sentinel_path),
+        ],
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "EXPECTED_OWNER_LOG": str(expected_owner_log),
+        },
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert expected_owner_log.read_text(encoding="utf-8").strip() == "0"
+    assert not active_images_marker.exists()
+    assert sentinel_path.is_file()
+
+
+def test_should_load_active_images_only_when_option_is_present(tmp_path: Path) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    write_executable(fake_bin / "python3", 'cat "$2"\n')
+    active_images_marker = tmp_path / "active-images-called.sentinel"
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; DOGFOOD_DEFAULT_ENV_FILE=$2 DOGFOOD_ENV_FILE=$2; '
+            "active_images_marker=$3; "
+            'dogfood_load_active_images() { touch "$active_images_marker"; }; '
+            "dogfood_load_environment_settings --with-images",
+            "bash",
+            str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+            str(env_path),
+            str(active_images_marker),
+        ],
+        env={**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert active_images_marker.is_file()
+
+
 def test_should_accept_every_key_in_checked_in_environment_example() -> None:
     env_example = DOGFOOD_SCRIPTS_DIR.parent.parent / "infra" / "dogfood" / "env.example"
 

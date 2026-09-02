@@ -36,8 +36,9 @@ Frontend は mic/VAD と実再生の事実、Backend は session 判定、STT �
 | `session_disconnected` | Backend | adapter の transport unavailable 通知に基づく Core session 切断の確定 |
 | `session_reconnect_requested` | Frontend | 同じ session への再接続要求 |
 | `session_reconnected` | Backend | 猶予時間内の再接続確定 |
-| `speech_started` | Frontend | VAD による発話開始。再生は Backend を待たず停止できる |
+| `speech_started` | Frontend | VAD による発話開始。再生中の `response_id` があれば判定対象として付与するが、この時点では停止しない |
 | `speech_stopped` | Frontend | VAD による発話停止。応答開始を意味しない |
+| `turn_decision` | Backend | 発話冒頭または確定STTによる `backchannel` / `take_turn` / `indeterminate` 判定。`final` で暫定・確定を区別する |
 | `utterance_finalized` | Backend | privacy 判定後の STT 確定テキストと `should_response` |
 | `utterance_pending` | Backend | 応答見送り発話の保持 |
 | `utterance_discarded` | Backend | privacy、切断、session 終了、無効音声による終端 |
@@ -66,9 +67,11 @@ Frontend は mic/VAD と実再生の事実、Backend は session 判定、STT �
 - terminal event は response では `completed` / `cancelled` / `failed`、utterance では consumed 相当の `response_started` または `discarded`、session では `ended` である。終端後に同じ lifecycle ID で届いた delta、audio、完了、cancel は遅延 event として決定論的に破棄する。
 - cancel と完了が競合した場合、Backend が先に受理して終端記録した event が winner となる。後着 event は状態も永続化結果も変更しない。Frontend の再生停止はこの winner 決定を待たない。
 
-barge-inではFrontendがspeech startと同じclient clock上でCharacter audio graphを先に停止し、`playback_stopped`を送る。対象responseがまだgeneratingなら続けて`response_cancel_requested`を一度だけ送る。すでに`response_completed`が確定し、AudioTrackのbufferだけが再生中なら再生だけを止め、完成済み履歴と長期記憶候補をcancelへ戻さない。Backendは`playback_stopped`で対象AudioSourceの未再生queueをclearする。次の`response_started`までFrontendはCharacter audio graphを再接続しない。
+barge-inではFrontendはVAD開始時に再生を止めず、対象responseを`speech_started.response_id`でBackendへ渡す。Backendは発話冒頭800msの音声を先行STTし、`turn_decision(decision=take_turn)`を通知してから生成中responseをcancelする。Frontendはこの判定を受けた場合だけCharacter audio graphを停止し、`playback_stopped`を返す。`backchannel`なら旧responseの生成と再生を継続し、そのutteranceを後続promptへ持ち越さない。確定STTで暫定判定を更新し、冒頭認識が失敗した場合も発話全体で判定する。
 
-同じresponseへの連続speech startはlocal停止とcancelを冪等に扱う。確定発話はSTT実行中1件と待機3件までを到着順に保持し、PCM byteにも上限を設ける。超過した発話は`utterance_discarded(reason=input_capacity_exceeded)`で明示し、黙って上書きしない。
+`speech_started`のreliable dataとAudioTrack frameには到着順保証がないため、Backendは直前250msのmicrophone PCMをmemory上のprerollとして保持し、発話captureへ先頭から結合する。音声byteは永続化しない。
+
+同じresponseへの暫定・確定`take_turn`判定はlocal停止とcancelを冪等に扱う。確定発話はSTT実行中1件と待機3件までを到着順に保持し、PCM byteにも上限を設ける。超過した発話は`utterance_discarded(reason=input_capacity_exceeded)`で明示し、黙って上書きしない。
 
 Frontend VADは1,400ms未満の無音を短い間・言い淀みとして同一utteranceへ結合する。1,400msの連続無音で`speech_stopped`を一度だけ確定し、無音中にspeech判定へ戻った場合は猶予を最初から数え直す。この境界はframe fixtureで決定論的に検証する。
 

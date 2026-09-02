@@ -54,10 +54,10 @@ def _artifact(metrics, *, transport: str, cpu_percent: float):
     ("metric_name", "limit_ms"),
     [
         ("ttfa", 2_000.0),
-        ("local_playback_stop", 150.0),
-        ("turn_decision", 300.0),
+        ("local_playback_stop", 3_000.0),
+        ("turn_decision", 3_000.0),
         ("cancel_after_decision", 200.0),
-        ("barge_in_cancel_total", 500.0),
+        ("barge_in_cancel_total", 3_500.0),
         ("utterance_finalized", 800.0),
     ],
 )

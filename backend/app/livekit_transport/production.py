@@ -10,14 +10,14 @@ import time
 from collections import deque
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI
 
 from app.characters.loader import load_character_card
 from app.characters.loader import load_tts_config
-from app.conversation_core import ConversationCoreSession, CoreEvent, StageObservation
+from app.conversation_core import ConversationCoreSession, CoreEvent
 from app.conversation_core.adapters import (
     ConversationHistoryPersistenceAdapter,
     PromptLlmAdapter,
@@ -40,8 +40,10 @@ from app.livekit_transport.coordinator import (
 )
 from app.livekit_transport.delivery import CoreNotificationPort
 from app.livekit_transport.errors import RoomCleanupPendingError
+from app.livekit_transport.measurement import LiveKitMeasurementSession
 from app.livekit_transport.runtime import MicrophoneTrackObserver
 from app.livekit_transport.token import IssuedToken, LiveKitTokenSigner
+from app.voice_metrics import MeasurementKind, TraceEvent
 
 if TYPE_CHECKING:
     import livekit.api as livekit_api
@@ -60,6 +62,11 @@ STT_MAX_PENDING_UTTERANCES = 3
 STT_MAX_OPEN_CAPTURES = STT_MAX_PENDING_UTTERANCES + 1
 STT_MAX_UTTERANCE_PCM_BYTES = STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 30
 STT_MAX_PENDING_PCM_BYTES = STT_MAX_PENDING_UTTERANCES * STT_MAX_UTTERANCE_PCM_BYTES
+# Whisperはstreaming APIではないため、冒頭800msのsnapshotを先行認識する。
+STT_TURN_PREVIEW_PCM_BYTES = int(STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 0.8)
+# VADは誤検知を避けるため約400msの発話確認後にspeech_startedを送る。
+# data channelとmediaの到着差も含め、確認前の語頭をmedia側で800ms保持する。
+STT_MICROPHONE_PREROLL_BYTES = int(STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 0.8)
 
 
 def _livekit_rtc_module() -> Any:
@@ -257,19 +264,6 @@ class _MissingCoreSessionFactory:
         raise RuntimeError("Conversation Core session factory is required")
 
 
-class _LoggingCoreObservation:
-    async def record(self, observation: StageObservation) -> None:
-        logger.info(
-            "Conversation Core stage: session_id=%s response_id=%s generation=%s stage=%s outcome=%s utterance_id=%s",
-            observation.session_id,
-            observation.response_id,
-            observation.generation,
-            observation.stage,
-            observation.outcome,
-            observation.utterance_id,
-        )
-
-
 class ProductionConversationCoreSessionFactory:
     def __init__(
         self,
@@ -282,6 +276,9 @@ class ProductionConversationCoreSessionFactory:
         generate_reply_stream: Callable[
             [str, object, str], AsyncIterator[str]
         ] | None = None,
+        measurement_kind: MeasurementKind = "automated_test",
+        trace_record: Callable[[TraceEvent], None] | None = None,
+        measurement_clock_ns: Callable[[], int] = time.perf_counter_ns,
     ) -> None:
         self._stt = WhisperSttAdapter(transcriber=transcriber)
         self._synthesizer = synthesizer
@@ -289,6 +286,9 @@ class ProductionConversationCoreSessionFactory:
         self._completed_turn_observer = completed_turn_observer
         self._generate_reply = generate_reply
         self._generate_reply_stream = generate_reply_stream
+        self._measurement_kind = measurement_kind
+        self._trace_record = trace_record
+        self._measurement_clock_ns = measurement_clock_ns
         if (generate_reply is None) == (generate_reply_stream is None):
             raise ValueError("exactly one production LLM generation source is required")
 
@@ -303,6 +303,15 @@ class ProductionConversationCoreSessionFactory:
         history_session = self._history_service.open_session(
             character_id, conversation_id
         )
+        measurement = LiveKitMeasurementSession(
+            session_id=session_id,
+            character_id=character_id,
+            measurement_kind=self._measurement_kind,
+            record=self._trace_record,
+            clock_ns=self._measurement_clock_ns,
+        )
+        if isinstance(delivery, _ConversationCoreDelivery):
+            delivery.attach_measurement(measurement)
         speaker_id = load_tts_config(character_id).speaker_id
         return ConversationCoreSession(
             session_id=session_id,
@@ -312,7 +321,7 @@ class ProductionConversationCoreSessionFactory:
                 history_session=history_session,  # type: ignore[arg-type]
                 completed_turn_observer=self._completed_turn_observer,
             ),
-            observation=_LoggingCoreObservation(),
+            observation=measurement,
             stt=self._stt,
             llm=(
                 PromptLlmAdapter(
@@ -372,12 +381,88 @@ class _ConversationCoreDelivery:
             else None
         )
         self._first_audio_observed: set[str] = set()
+        self._first_text_observed: set[str] = set()
+        self._measurement: LiveKitMeasurementSession | None = None
+
+    @property
+    def measurement(self) -> LiveKitMeasurementSession | None:
+        return self._measurement
+
+    def attach_measurement(self, measurement: LiveKitMeasurementSession) -> None:
+        if self._measurement is not None and self._measurement is not measurement:
+            raise RuntimeError("delivery measurement is already attached")
+        self._measurement = measurement
 
     async def publish(self, event: CoreEvent) -> None:
+        if (
+            event.response_id is not None
+            and event.source_utterance_ids is not None
+            and self._measurement is not None
+        ):
+            self._measurement.bind_response(
+                response_id=event.response_id,
+                source_utterance_ids=event.source_utterance_ids,
+            )
         if event.type == "response_started":
-            if event.response_id is None:
-                raise ValueError("response_started requires response_id")
+            if event.response_id is None or event.source_utterance_ids is None:
+                raise ValueError(
+                    "response_started requires response id and source utterances"
+                )
+            if self._measurement is not None:
+                self._measurement.bind_response(
+                    response_id=event.response_id,
+                    source_utterance_ids=event.source_utterance_ids,
+                )
+                self._measurement.record_response_event(
+                    response_id=event.response_id,
+                    name="response_decision",
+                    stage="turn",
+                )
             self._coordinator.begin_response(response_id=event.response_id)
+        if (
+            event.type == "utterance_finalized"
+            and event.utterance_id is not None
+            and self._measurement is not None
+        ):
+            self._measurement.record_utterance_event(
+                utterance_id=event.utterance_id,
+                name="utterance_finalized",
+                stage="stt",
+            )
+            if event.should_response is False:
+                self._measurement.bind_utterance_outcome(
+                    utterance_id=event.utterance_id,
+                    outcome="excluded",
+                    reason_code="response_not_requested",
+                )
+        if (
+            event.type in {"utterance_discarded", "error"}
+            and event.utterance_id is not None
+            and self._measurement is not None
+        ):
+            outcome: Literal["failure", "excluded"] = (
+                "failure" if event.type == "error" else "excluded"
+            )
+            reason_code = (
+                event.error_code if event.type == "error" else event.reason
+            )
+            self._measurement.bind_utterance_outcome(
+                utterance_id=event.utterance_id,
+                outcome=outcome,
+                reason_code=reason_code or f"{event.type}_without_reason",
+            )
+        if (
+            event.type == "response_delta"
+            and event.response_id is not None
+            and event.response_id not in self._first_text_observed
+        ):
+            self._first_text_observed.add(event.response_id)
+            if self._measurement is not None:
+                self._measurement.record_response_event(
+                    response_id=event.response_id,
+                    name="first_text_delta",
+                    stage="llm",
+                )
         if event.type == "response_audio_segment":
             if (
                 event.audio is None
@@ -385,6 +470,19 @@ class _ConversationCoreDelivery:
                 or event.audio_sequence is None
             ):
                 raise ValueError("audio event requires response metadata and PCM bytes")
+            response_id = event.response_id
+            first_audio = response_id not in self._first_audio_observed
+            if first_audio and self._measurement is not None:
+                self._measurement.record_response_event(
+                    response_id=response_id,
+                    name="tts_completed",
+                    stage="tts",
+                )
+                self._measurement.record_response_event(
+                    response_id=response_id,
+                    name="first_audio_generated",
+                    stage="tts",
+                )
             await self._coordinator.send_logical_audio_segment(
                 response_id=event.response_id,
                 # private playback evidenceは0始まり、Core contractは1始まり。
@@ -394,9 +492,14 @@ class _ConversationCoreDelivery:
             )
             await self._coordinator.send_core(self._voice_payload(event))
             await self._audio_source.publish(event.audio)
-            response_id = event.response_id
-            if response_id is not None and response_id not in self._first_audio_observed:
+            if first_audio:
                 self._first_audio_observed.add(response_id)
+                if self._measurement is not None:
+                    self._measurement.record_response_event(
+                        response_id=response_id,
+                        name="first_audio_out",
+                        stage="transport",
+                    )
                 await self._coordinator.send_core(
                     json.dumps(
                         {
@@ -414,6 +517,30 @@ class _ConversationCoreDelivery:
                     ).encode()
                 )
             return
+        if (
+            event.type == "response_cancelled"
+            and event.response_id is not None
+            and self._measurement is not None
+        ):
+            self._measurement.record_response_event(
+                response_id=event.response_id,
+                name="response_excluded",
+                stage="response",
+                outcome="excluded",
+                reason_code=event.reason or "response_cancelled",
+            )
+        if (
+            event.type == "response_privacy_skipped"
+            and event.response_id is not None
+            and self._measurement is not None
+        ):
+            self._measurement.record_response_event(
+                response_id=event.response_id,
+                name="response_excluded",
+                stage="response",
+                outcome="excluded",
+                reason_code="privacy_skip",
+            )
         if event.type in {"response_cancelled", "response_failed"}:
             self._audio_source.clear()
         if event.type == "response_privacy_skipped":
@@ -460,6 +587,21 @@ class _ConversationCoreDelivery:
                 speaker=self._user_speaker,
                 transcript=event.transcript,
                 should_response=event.should_response,
+            )
+        elif event.type == "turn_decision":
+            if (
+                event.utterance_id is None
+                or event.response_id is None
+                or event.decision not in {"backchannel", "take_turn", "indeterminate"}
+                or event.final is None
+            ):
+                raise ValueError("turn_decision requires decision metadata")
+            payload.update(
+                type=event.type,
+                utterance_id=event.utterance_id,
+                response_id=event.response_id,
+                decision=event.decision,
+                final=event.final,
             )
         elif event.type == "error":
             if (
@@ -546,10 +688,12 @@ class _ConversationCoreDelivery:
 @dataclass
 class _UserAudioCapture:
     utterance_id: str
+    interrupted_response_id: str | None = None
     pcm: bytearray = field(default_factory=bytearray)
     finalized: bool = False
     finalization_scheduled: bool = False
     capacity_exceeded: bool = False
+    preview_started: bool = False
 
 
 class _ConversationCoreBridge:
@@ -559,20 +703,35 @@ class _ConversationCoreBridge:
         schedule: Callable[[Awaitable[None]], None],
         stop_audio: Callable[[], None] = lambda: None,
         media_tail_seconds: float = 0.15,
+        measurement: LiveKitMeasurementSession | None = None,
     ) -> None:
         self._session = session
         self._schedule = schedule
         self._media_tail_seconds = media_tail_seconds
         self._stop_audio = stop_audio
+        self._measurement = measurement
         self._user_audio_captures: deque[_UserAudioCapture] = deque()
-        self._pending_transcriptions: deque[tuple[str, bytes]] = deque()
+        self._pending_transcriptions: deque[tuple[str, bytes, str | None]] = deque()
         self._pending_transcription_bytes = 0
         self._transcription_active = False
+        self._microphone_preroll = bytearray()
+        self._interrupt_utterances_by_response: dict[str, str] = {}
         self._control_lock = asyncio.Lock()
 
     def notify(self, payload: bytes) -> None:
         event = json.loads(payload)
         if event["type"] == "speech_started" and self._is_user_event(event):
+            utterance_id = str(event["utterance_id"])
+            if self._measurement is not None:
+                self._measurement.record_utterance_event(
+                    utterance_id=utterance_id,
+                    name="speech_started",
+                    stage="vad",
+                )
+            if isinstance(event.get("response_id"), str):
+                self._interrupt_utterances_by_response[str(event["response_id"])] = (
+                    utterance_id
+                )
             open_captures = sum(
                 not capture.finalized for capture in self._user_audio_captures
             )
@@ -586,17 +745,35 @@ class _ConversationCoreBridge:
                 self._schedule(
                     self._discard_capture_for_capacity(oldest_open.utterance_id)
                 )
-            self._user_audio_captures.append(
-                _UserAudioCapture(utterance_id=str(event["utterance_id"]))
+            capture = _UserAudioCapture(
+                utterance_id=utterance_id,
+                interrupted_response_id=(
+                    str(event["response_id"])
+                    if isinstance(event.get("response_id"), str)
+                    else None
+                ),
             )
+            capture.pcm.extend(self._microphone_preroll)
+            self._microphone_preroll.clear()
+            self._user_audio_captures.append(capture)
             return
         if event["type"] == "speech_stopped" and self._is_user_event(event):
             utterance_id = str(event["utterance_id"])
+            if self._measurement is not None:
+                self._measurement.record_utterance_event(
+                    utterance_id=utterance_id,
+                    name="vad_speech_end",
+                    stage="vad",
+                )
             for capture in self._user_audio_captures:
                 if capture.utterance_id == utterance_id:
                     capture.finalized = True
                     self._schedule_finalization_if_ready(capture)
                     break
+            return
+        if event["type"] == "observation":
+            if self._measurement is not None:
+                self._measurement.record_client_observation(event)
             return
         self._schedule(self._receive_serialized(event))
 
@@ -612,6 +789,10 @@ class _ConversationCoreBridge:
 
     def receive_microphone(self, pcm: bytes) -> None:
         if not self._user_audio_captures:
+            self._microphone_preroll.extend(pcm)
+            excess = len(self._microphone_preroll) - STT_MICROPHONE_PREROLL_BYTES
+            if excess > 0:
+                del self._microphone_preroll[:excess]
             return
         active = next(
             (item for item in reversed(self._user_audio_captures) if not item.finalized),
@@ -621,11 +802,52 @@ class _ConversationCoreBridge:
             (item for item in self._user_audio_captures if not item.pcm),
             self._user_audio_captures[0],
         )
+        if self._measurement is not None:
+            self._measurement.record_utterance_event(
+                utterance_id=capture.utterance_id,
+                name="user_audio_received",
+                stage="transport",
+            )
         if len(capture.pcm) + len(pcm) > STT_MAX_UTTERANCE_PCM_BYTES:
             capture.capacity_exceeded = True
         elif not capture.capacity_exceeded:
             capture.pcm.extend(pcm)
+        if (
+            capture.interrupted_response_id is not None
+            and not capture.preview_started
+            and not self._transcription_active
+            and len(capture.pcm) >= STT_TURN_PREVIEW_PCM_BYTES
+        ):
+            capture.preview_started = True
+            self._transcription_active = True
+            self._schedule(
+                self._preview_user_turn(
+                    utterance_id=capture.utterance_id,
+                    interrupted_response_id=capture.interrupted_response_id,
+                    microphone_pcm=bytes(capture.pcm),
+                )
+            )
         self._schedule_finalization_if_ready(capture)
+
+    async def _preview_user_turn(
+        self,
+        *,
+        utterance_id: str,
+        interrupted_response_id: str,
+        microphone_pcm: bytes,
+    ) -> None:
+        try:
+            await self._session.preview_turn(
+                utterance_id=utterance_id,
+                audio=microphone_pcm,
+                interrupted_response_id=interrupted_response_id,
+            )
+        except Exception:
+            # 冒頭認識はlatency最適化であり、失敗時も発話全体のSTTで確定できる。
+            logger.exception("Turn preview failed: utterance_id=%s", utterance_id)
+        finally:
+            self._transcription_active = False
+            self._start_next_transcription()
 
     def _schedule_finalization_if_ready(self, capture: _UserAudioCapture) -> None:
         if (
@@ -669,6 +891,7 @@ class _ConversationCoreBridge:
             await self._enqueue_user_audio(
                 utterance_id=utterance_id,
                 microphone_pcm=microphone_pcm,
+                interrupted_response_id=capture.interrupted_response_id,
             )
 
     async def _receive(self, event: dict[str, object]) -> None:
@@ -695,6 +918,13 @@ class _ConversationCoreBridge:
             if event_type == "playback_stopped":
                 # prefix検証や永続化が失敗しても、旧音声をlocal graph再接続後へ残さない。
                 self._stop_audio()
+                utterance_id = self._interrupt_utterances_by_response.get(response_id)
+                if utterance_id is not None and self._measurement is not None:
+                    self._measurement.record_utterance_event(
+                        utterance_id=utterance_id,
+                        name="local_playback_stopped",
+                        stage="playback",
+                    )
             await self._session.confirm_playback(
                 response_id=response_id,
                 last_played_audio_sequence=last_played_audio_sequence,
@@ -705,7 +935,11 @@ class _ConversationCoreBridge:
             await self._session.reconnect()
 
     async def _enqueue_user_audio(
-        self, *, utterance_id: str, microphone_pcm: bytes
+        self,
+        *,
+        utterance_id: str,
+        microphone_pcm: bytes,
+        interrupted_response_id: str | None = None,
     ) -> None:
         if not getattr(self._session, "accepting_input", True):
             return
@@ -720,21 +954,36 @@ class _ConversationCoreBridge:
                     reason="input_capacity_exceeded",
                 )
                 return
-            self._pending_transcriptions.append((utterance_id, microphone_pcm))
+            self._pending_transcriptions.append(
+                (utterance_id, microphone_pcm, interrupted_response_id)
+            )
             self._pending_transcription_bytes += len(microphone_pcm)
             return
-        self._start_user_transcription(utterance_id, microphone_pcm)
+        self._start_user_transcription(
+            utterance_id, microphone_pcm, interrupted_response_id
+        )
 
     def _start_user_transcription(
-        self, utterance_id: str, microphone_pcm: bytes
+        self,
+        utterance_id: str,
+        microphone_pcm: bytes,
+        interrupted_response_id: str | None = None,
     ) -> None:
         self._transcription_active = True
         try:
-            task = self._session.start_transcription(
-                utterance_id=utterance_id,
-                audio=microphone_pcm,
-                should_response=True,
-            )
+            if interrupted_response_id is None:
+                task = self._session.start_transcription(
+                    utterance_id=utterance_id,
+                    audio=microphone_pcm,
+                    should_response=True,
+                )
+            else:
+                task = self._session.start_transcription(
+                    utterance_id=utterance_id,
+                    audio=microphone_pcm,
+                    should_response=True,
+                    interrupted_response_id=interrupted_response_id,
+                )
         except RuntimeError:
             # disconnect/endとmedia tail確定の競合では、旧発話を次世代へ持ち越さない。
             if not getattr(self._session, "accepting_input", True):
@@ -746,15 +995,22 @@ class _ConversationCoreBridge:
     def _transcription_done(self, task: asyncio.Task[object]) -> None:
         self._consume_task(task)
         self._transcription_active = False
+        self._start_next_transcription()
+
+    def _start_next_transcription(self) -> None:
         if not getattr(self._session, "accepting_input", True):
             self._pending_transcriptions.clear()
             self._pending_transcription_bytes = 0
             return
         if not self._pending_transcriptions:
             return
-        utterance_id, microphone_pcm = self._pending_transcriptions.popleft()
+        utterance_id, microphone_pcm, interrupted_response_id = (
+            self._pending_transcriptions.popleft()
+        )
         self._pending_transcription_bytes -= len(microphone_pcm)
-        self._start_user_transcription(utterance_id, microphone_pcm)
+        self._start_user_transcription(
+            utterance_id, microphone_pcm, interrupted_response_id
+        )
 
     @staticmethod
     def _is_user_event(event: dict[str, object]) -> bool:
@@ -999,6 +1255,7 @@ class ProductionRuntimeManager:
             core_session,
             schedule_core_operation,
             stop_audio=audio_source.clear,
+            measurement=delivery.measurement,
         )
         self._audio_sources[session_id] = audio_source
         self._core_sessions[session_id] = core_session

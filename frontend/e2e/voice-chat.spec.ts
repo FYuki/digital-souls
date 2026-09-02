@@ -218,9 +218,7 @@ test('barge-inでlocal停止とserver cancelを相関し遅延出力を破棄す
     return mock.beginInterruptibleResponse()
   })
   await page.evaluate(async () => {
-    const controller = (window as unknown as { __mockVoiceController?: {
-      speechStarted: (utteranceId: string, atMs: number) => Promise<void>
-    } }).__mockVoiceController
+    const controller = window.__voiceSessionController
     if (controller === undefined) throw new Error('mock voice controller is required')
     await controller.speechStarted(crypto.randomUUID(), performance.now())
   })
@@ -262,9 +260,7 @@ test('連続barge-in後も旧responseを混入させず同じsessionで次の発
     const mock = (window as unknown as { __mockLiveKit?: {
       beginInterruptibleResponse: () => string
     } }).__mockLiveKit
-    const controller = (window as unknown as { __mockVoiceController?: {
-      speechStarted: (utteranceId: string, atMs: number) => Promise<void>
-    } }).__mockVoiceController
+    const controller = window.__voiceSessionController
     if (mock === undefined || controller === undefined) {
       throw new Error('mock LiveKit and voice controller are required')
     }

@@ -16,7 +16,7 @@ from urllib.error import HTTPError
 from urllib.request import urlopen
 
 import pytest
-from adapters.base import Check, OperationContext
+from adapters.base import AdapterOperationError, Check, OperationContext
 
 from tests.environment_test_support import (
     RecordingRunner,
@@ -759,6 +759,59 @@ def test_should_prepare_chroma_directory_only_in_prepare(tmp_path: Path):
     assert missing.can_prepare is True
     assert chroma_path.is_dir()
     assert ready.classification == "ready"
+
+
+def test_should_converge_dogfood_chroma_directory_to_runtime_identity(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    import adapters.backend
+    from adapters.backend import BackendAdapter
+
+    runtime_paths = resolved_runtime_paths(tmp_path)
+    chown_calls: list[tuple[Path, int, int]] = []
+    monkeypatch.setenv("DS_RUNTIME_UID", "997")
+    monkeypatch.setenv("DS_RUNTIME_GID", "986")
+    monkeypatch.setattr(
+        adapters.backend.os,
+        "chown",
+        lambda path, uid, gid: chown_calls.append((path, uid, gid)),
+    )
+
+    BackendAdapter(
+        root_dir=tmp_path,
+        runtime_paths=runtime_paths,
+        runner=RecordingRunner(),
+        effective_profile="dogfood",
+    ).prepare(
+        resolved_profile()["dependencies"]["backend"],
+        OperationContext(whisper_enabled=False, chroma_enabled=True),
+    )
+
+    assert chown_calls == [(runtime_paths.chroma_path, 997, 986)]
+    assert runtime_paths.chroma_path.stat().st_mode & 0o777 == 0o750
+
+
+def test_should_reject_missing_dogfood_runtime_identity_before_chroma_creation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    from adapters.backend import BackendAdapter
+
+    runtime_paths = resolved_runtime_paths(tmp_path)
+    monkeypatch.delenv("DS_RUNTIME_UID", raising=False)
+    monkeypatch.setenv("DS_RUNTIME_GID", "986")
+
+    with pytest.raises(AdapterOperationError, match="DS_RUNTIME_UID"):
+        BackendAdapter(
+            root_dir=tmp_path,
+            runtime_paths=runtime_paths,
+            runner=RecordingRunner(),
+            effective_profile="dogfood",
+        ).prepare(
+            resolved_profile()["dependencies"]["backend"],
+            OperationContext(whisper_enabled=False, chroma_enabled=True),
+        )
+
+    assert not runtime_paths.chroma_path.exists()
 
 
 def test_should_classify_chroma_file_collision_as_not_preparable(tmp_path: Path):

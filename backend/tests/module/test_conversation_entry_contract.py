@@ -262,6 +262,7 @@ def test_should_fail_generated_audio_turn_when_tts_fails() -> None:
         session,
         FailingTtsSession(),
         b"\x01\x00",
+        "miori",
         _ConnectionMeasurementState(),
     )
 
@@ -297,6 +298,7 @@ def test_should_fail_generated_audio_turn_at_each_send_stage(
             session,
             _AudioResponseSession(),
             b"\x01\x00",
+            "miori",
             _ConnectionMeasurementState(),
         )
 
@@ -318,6 +320,7 @@ def test_should_acknowledge_audio_turn_only_after_all_send_stages_succeed() -> N
         session,
         _AudioResponseSession(),
         b"\x01\x00",
+        "miori",
         _ConnectionMeasurementState(),
     )
 

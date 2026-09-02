@@ -115,6 +115,7 @@ class AudioPipelineSession:
                 schema_version="1.0",
                 measurement_kind=measurement.measurement_kind,
                 event_id=str(uuid4()),
+                character_id=measurement.character_id,
                 session_id=measurement.session_id,
                 utterance_id=measurement.utterance_id,
                 response_id=measurement.response_id,

@@ -30,7 +30,11 @@ const audioMocks = vi.hoisted(() => ({
   getUserMedia: vi.fn(),
   microphoneStream: { getTracks: () => [] } as unknown as MediaStream,
   vadOptions: undefined as
-    | { onSpeechStart: () => void; onSpeechEnd: () => void }
+    | {
+        onSpeechStart: () => void
+        onSpeechRealStart: () => void
+        onSpeechEnd: () => void
+      }
     | undefined,
 }))
 
@@ -220,6 +224,7 @@ describe('App conversation lifecycle', () => {
     if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
 
     audioMocks.vadOptions.onSpeechStart()
+    audioMocks.vadOptions.onSpeechRealStart()
     audioMocks.vadOptions.onSpeechEnd()
     await waitFor(() => expect(
       liveKitMocks.controlEvents.map((event) => event.type),
@@ -320,6 +325,33 @@ describe('App conversation lifecycle', () => {
     ).toBeGreaterThanOrEqual(2))
   })
 
+  test('response失敗後もユーザー発話と途中回答を画面に保持する', async () => {
+    render(App)
+    await startLiveKitSession()
+
+    await emitCoreEvent({
+      type: 'utterance_finalized', utterance_id: TURN_ID,
+      transcript: '消してはいけない質問', should_response: true,
+    })
+    await emitCoreEvent({
+      type: 'response_started', response_id: RESPONSE_ID,
+      source_utterance_ids: [TURN_ID],
+    })
+    await emitCoreEvent({
+      type: 'response_delta', response_id: RESPONSE_ID,
+      text_sequence: 1, text: '途中までの回答',
+    })
+    await emitCoreEvent({
+      type: 'response_failed', response_id: RESPONSE_ID,
+      reason: 'streaming_pipeline_failed',
+    })
+
+    expect(screen.getByText('消してはいけない質問')).toBeTruthy()
+    expect(screen.getByText('途中までの回答')).toBeTruthy()
+    expect(screen.getByText('光織（応答失敗）')).toBeTruthy()
+    expect(screen.queryByText('光織（応答中）')).toBeNull()
+  })
+
   test('入力・応答・再生・sessionを独立表示しbarge-inを制御する', async () => {
     render(App)
     await startLiveKitSession()
@@ -339,12 +371,24 @@ describe('App conversation lifecycle', () => {
     if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
 
     audioMocks.vadOptions.onSpeechStart()
+    audioMocks.vadOptions.onSpeechRealStart()
+    await waitFor(() => expect(
+      liveKitMocks.controlEvents.map((event) => event.type),
+    ).toContain('speech_started'))
+    expect(liveKitMocks.stopPlayback).not.toHaveBeenCalled()
+
+    await emitCoreEvent({
+      type: 'turn_decision',
+      utterance_id: TURN_ID,
+      response_id: RESPONSE_ID,
+      decision: 'take_turn',
+      final: false,
+    })
     await waitFor(() => expect(liveKitMocks.stopPlayback).toHaveBeenCalledWith(
       RESPONSE_ID, expect.any(Number),
     ))
-    await waitFor(() => expect(
-      liveKitMocks.controlEvents.map((event) => event.type),
-    ).toContain('response_cancel_requested'))
+    expect(liveKitMocks.controlEvents.map((event) => event.type))
+      .not.toContain('response_cancel_requested')
 
     expect(screen.getByText('応答: 割り込み処理中')).toBeTruthy()
     expect(screen.getByText('再生: 停止済み')).toBeTruthy()

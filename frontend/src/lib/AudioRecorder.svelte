@@ -35,7 +35,7 @@
   export let onError: (error: Error) => void
   export let continuous = false
   export let onBeforeEnable: () => Promise<void> = async () => undefined
-  export let onMicrophoneEnabled: () => Promise<void> = async () => undefined
+  export let onMicrophoneEnabled: (stream: MediaStream) => Promise<void> = async () => undefined
   export let onMicrophoneDisabled: () => Promise<void> = async () => undefined
   export let onSpeechStarted: (activity: SpeechActivity) => void = () => undefined
   export let onSpeechStopped: (activity: SpeechActivity) => void = () => undefined
@@ -45,6 +45,7 @@
   let microphoneStream: MediaStream | null = null
   let status: MicStatus = 'off'
   let isLoading = false
+  let candidateSpeechStartClientMs: number | null = null
   let capturedAudioStartClientMs: number | null = null
 
   const requestMicrophoneStream = (): Promise<MediaStream> => {
@@ -67,13 +68,20 @@
     pauseStream: async () => undefined,
     onSpeechStart: () => {
       try {
-        capturedAudioStartClientMs = performance.now()
-        onSpeechStarted({ clientMs: capturedAudioStartClientMs })
+        candidateSpeechStartClientMs = performance.now()
         if (!continuous) getRecorder().start()
         setStatus('on')
       } catch (error) {
         reportError(error)
       }
+    },
+    onSpeechRealStart: () => {
+      capturedAudioStartClientMs = candidateSpeechStartClientMs ?? performance.now()
+      candidateSpeechStartClientMs = null
+      onSpeechStarted({ clientMs: capturedAudioStartClientMs })
+    },
+    onVADMisfire: () => {
+      void handleVadMisfire()
     },
     onSpeechEnd: () => {
       void handleSpeechEnd()
@@ -136,7 +144,7 @@
       if (!continuous) await getRecorder().initialize(stream)
       const activeVad = await getVad(stream)
       await activeVad.start()
-      await onMicrophoneEnabled()
+      await onMicrophoneEnabled(stream)
       setStatus('standby')
     } catch (error) {
       try {
@@ -181,11 +189,24 @@
         requiredManualOperations: 0,
       })
       capturedAudioStartClientMs = null
+      candidateSpeechStartClientMs = null
 
       setStatus('standby')
     } catch (error) {
       setStatus('standby')
       reportError(error)
+    }
+  }
+
+  const handleVadMisfire = async () => {
+    candidateSpeechStartClientMs = null
+    capturedAudioStartClientMs = null
+    try {
+      if (!continuous) await getRecorder().stopAndTake()
+    } catch (error) {
+      reportError(error)
+    } finally {
+      setStatus('standby')
     }
   }
 

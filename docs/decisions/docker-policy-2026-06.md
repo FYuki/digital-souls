@@ -63,6 +63,17 @@ Environment CLIをホスト側control planeとして残し、managed adapterの�
 Compose container操作へ差し替える。Backend／Frontendのrun reportはcontainer identityを記録し、
 記録したenvironment runが所有するcontainerだけを停止する。
 
+dogfoodのsystemd application unitは`Type=simple`とし、`scripts/start-dogfood.sh`が直接
+`environment_cli.py up`へ`exec`してforeground supervision processになる。ready後に子processを
+残して終了する汎用`environments/up.sh`は対話・テスト入口として維持するが、systemdの
+`ExecStart`には使用しない。systemd停止時はrun reportのprocess identityを使う`down.sh`から
+foreground orchestratorへSIGTERMを送り、所有するBackend／Frontendだけをcleanupする。
+
+`Type=simple`のsystemd restart完了とapplication readinessは別の時点である。deploy／rollbackは
+restart直後の単発probeを成功条件にせず、Frontend／Backendの両方を有限回pollingしてから
+manifest確定またはrollbackへ進む。これにより正常な起動途中を障害と誤認しない一方、timeout後の
+自動rollback契約は維持する。
+
 WSL2上の既存loopback URLとportを維持するため、アプリケーションとWhisperのComposeはhost networkを
 使用する。containerはProfileで解決したloopback endpointをそのまま利用し、LANへ公開しない。
 
@@ -123,6 +134,7 @@ commit、schema、backupとimage digestの組を検証して切り替える。ma
 registry更新だけではdogfoodの実行imageを変更しない。
 
 3 imageは`dogfood-images.env`へ原子的に反映し、systemd targetの再起動で同じcommitの組へ切り替える。
+このファイルは`0600 root:root`とし、active digestを必要とするroot control plane、deploy、Whisper runnerだけが読む。Ollama、VOICEVOX、LiveKit runnerはimage digestを使用しないため読み込まず、Ollamaの非root process所有を維持する。
 失敗時は直前manifestのcommitと3 digestを一組で復元する。Whisper image、CUDA runtime、modelまたは
 protocolを変更した場合は、Goal 2でdev／dogfood双方の互換性とGPU実機受入を行う。
 

@@ -54,6 +54,7 @@ SHELL_ENTRYPOINTS = (
     "restart-services.sh",
     "status.sh",
     "wait-inference.sh",
+    "migrate-deployment-contract.sh",
     "run-livekit.sh",
 )
 
@@ -73,10 +74,25 @@ def _read_environment_example() -> dict[str, str]:
 
 
 def _read_unit(path: Path) -> configparser.ConfigParser:
-    parser = configparser.ConfigParser(interpolation=None, strict=True)
+    # systemdは同じdirectiveの複数指定を許可するため、重複keyを受理する。
+    parser = configparser.ConfigParser(interpolation=None, strict=False)
     parser.optionxform = str
     parser.read(path, encoding="utf-8")
     return parser
+
+
+def _read_unit_directives(path: Path, section: str, directive: str) -> list[str]:
+    current_section = ""
+    values: list[str] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            current_section = stripped[1:-1]
+            continue
+        key, separator, value = stripped.partition("=")
+        if current_section == section and separator and key == directive:
+            values.append(value)
+    return values
 
 
 def _assert_finite_stop_timeout(service: configparser.SectionProxy) -> None:
@@ -176,16 +192,47 @@ def test_should_keep_dogfood_shell_entrypoints_executable_strict_and_syntax_vali
     assert result.returncode == 0, result.stderr
 
 
+def test_should_limit_root_only_active_image_loading_to_digest_consumers() -> None:
+    no_image_runners = ("run-ollama.sh", "run-voicevox.sh", "run-livekit.sh")
+    for script_name in no_image_runners:
+        source = (DOGFOOD_SCRIPTS_DIR / script_name).read_text(encoding="utf-8")
+        assert re.search(r"(?m)^dogfood_load_environment_settings$", source)
+        assert re.search(r"(?m)^dogfood_read_revision$", source)
+        assert not re.search(r"(?m)^dogfood_load_environment$", source)
+        assert "--with-images" not in source
+
+    whisper_source = (DOGFOOD_SCRIPTS_DIR / "run-whisper.sh").read_text(
+        encoding="utf-8"
+    )
+    deploy_source = (DOGFOOD_SCRIPTS_DIR / "deploy.sh").read_text(encoding="utf-8")
+    loader_source = (DOGFOOD_SCRIPTS_DIR / "load-environment.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert re.search(
+        r"(?m)^dogfood_load_environment_settings --with-images$", whisper_source
+    )
+    assert re.search(
+        r"(?m)^dogfood_load_environment_settings --with-images$", deploy_source
+    )
+    assert re.search(
+        r"(?ms)^dogfood_load_environment\(\) \{\n"
+        r"  dogfood_load_environment_settings --with-images \|\| return\n"
+        r"  dogfood_read_revision\n\}",
+        loader_source,
+    )
+
+
 def test_should_preserve_wsl_identity_in_direct_sudo_runbook_commands() -> None:
     source = README_PATH.read_text(encoding="utf-8")
 
     assert not re.search(r"(?m)^\s*sudo scripts/dogfood/", source)
     for script_name in SHELL_ENTRYPOINTS:
         if f"scripts/dogfood/{script_name}" in source:
-            assert (
-                f"sudo env WSL_DISTRO_NAME=Ubuntu-dogfood "
-                f"scripts/dogfood/{script_name}"
-            ) in source
+            assert re.search(
+                rf"sudo env [^\n]*WSL_DISTRO_NAME=Ubuntu-dogfood(?: \\\n+\s*)?\s*scripts/dogfood/{re.escape(script_name)}",
+                source,
+            )
 
 
 def test_should_document_service_gitconfig_failure_recovery() -> None:
@@ -659,16 +706,23 @@ def test_should_delegate_application_lifecycle_to_one_foreground_systemd_unit(
     assert "RemainAfterExit" not in service
     assert service["User"] == "root"
     assert service["Group"] == "root"
-    assert service["ExecStart"] == f"{values['DOGFOOD_CLONE_DIR']}/environments/up.sh"
+    assert service["ExecStart"] == (
+        f"{values['DOGFOOD_CLONE_DIR']}/scripts/start-dogfood.sh"
+    )
     assert service["ExecStartPre"] == (
         f"{values['DOGFOOD_CLONE_DIR']}/scripts/dogfood/wait-inference.sh"
     )
     assert service["ExecStop"] == f"{values['DOGFOOD_CLONE_DIR']}/environments/down.sh"
-    assert service["EnvironmentFile"].split() == [
+    assert _read_unit_directives(unit_path, "Service", "EnvironmentFile") == [
         f"{values['DOGFOOD_CONFIG_DIR']}/dogfood.env",
         f"-{values['DOGFOOD_CONFIG_DIR']}/dogfood-images.env",
         f"{values['DOGFOOD_CONFIG_DIR']}/livekit-backend.env",
     ]
+    assert (
+        f"DOGFOOD_ENV_FILE={values['DOGFOOD_CONFIG_DIR']}/dogfood.env"
+        in service["Environment"]
+    )
+    assert f"WSL_DISTRO_NAME={values['DOGFOOD_WSL_DISTRO']}" in service["Environment"]
     assert "DS_ENVIRONMENT_ID=dogfood" in service["Environment"]
     assert f"DS_DATA_DIR={values['DS_DATA_DIR']}" in service["Environment"]
     assert f"HOME={values['DOGFOOD_SERVICE_HOME_DIR']}" in service["Environment"]
@@ -684,6 +738,50 @@ def test_should_delegate_application_lifecycle_to_one_foreground_systemd_unit(
     assert "Restart" not in service
     assert service["TimeoutStartSec"] == "180s"
 
+    foreground_entrypoint = (ROOT_DIR / "scripts" / "start-dogfood.sh").read_text(
+        encoding="utf-8"
+    )
+    assert 'environment_cli.py" up' in foreground_entrypoint
+    assert 'environment_cli.py" start' not in foreground_entrypoint
+
+
+def test_should_load_each_whisper_environment_file_separately(tmp_path: Path) -> None:
+    values, generated_dir = render_nondefault_dogfood_assets(tmp_path)
+    unit_path = generated_dir / "digital-souls-whisper.service"
+
+    assert _read_unit_directives(unit_path, "Service", "EnvironmentFile") == [
+        f"{values['DOGFOOD_CONFIG_DIR']}/dogfood.env",
+        f"-{values['DOGFOOD_CONFIG_DIR']}/dogfood-images.env",
+    ]
+    service = _read_unit(unit_path)["Service"]
+    assert service["TimeoutStartSec"] == "900s"
+
+
+def test_should_wait_for_whisper_health_during_cold_start() -> None:
+    source = (DOGFOOD_SCRIPTS_DIR / "run-whisper.sh").read_text(encoding="utf-8")
+
+    assert "--wait --wait-timeout 600 whisper" in " ".join(
+        line.rstrip("\\").strip() for line in source.splitlines()
+    )
+
+
+def test_should_verify_registry_images_and_real_gpu_before_bootstrap_changes() -> None:
+    bootstrap = (DOGFOOD_SCRIPTS_DIR / "bootstrap.sh").read_text(encoding="utf-8")
+    library = (DOGFOOD_SCRIPTS_DIR / "deployment-lib.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert "dogfood_verify_bootstrap_container_prerequisites" in bootstrap
+    for contract in (
+        "command -v nvidia-ctk",
+        "docker info --format '{{json .Runtimes}}'",
+        "docker buildx imagetools inspect",
+        "docker login ghcr.io",
+        "--runtime=nvidia --gpus all",
+        '--entrypoint nvidia-smi "$DOGFOOD_WHISPER_IMAGE" -L',
+    ):
+        assert contract in library
+
 
 def test_should_bound_inference_cold_start_wait_before_application_start() -> None:
     source = (DOGFOOD_SCRIPTS_DIR / "wait-inference.sh").read_text(encoding="utf-8")
@@ -696,6 +794,20 @@ def test_should_bound_inference_cold_start_wait_before_application_start() -> No
     assert "--max-attempts 30" in source
     assert "--interval-seconds 1" in source
     assert "--request-timeout-seconds 1" in source
+
+
+def test_should_wait_for_application_readiness_after_deploy_restart() -> None:
+    source = (DOGFOOD_SCRIPTS_DIR / "deployment-lib.sh").read_text(
+        encoding="utf-8"
+    )
+    function = source[source.index("dogfood_check_readiness()") :]
+
+    assert "wait-readiness" in function
+    assert "--service frontend" in function
+    assert "--service backend" in function
+    assert "--max-attempts 180" in function
+    assert "--interval-seconds 1" in function
+    assert "--request-timeout-seconds 2" in function
 
 
 def test_should_document_executable_pull_command_for_backend_default_model() -> None:

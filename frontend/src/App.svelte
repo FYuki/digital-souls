@@ -60,6 +60,18 @@
     lastTextSequence: number
   }
   let liveVoiceTurn: LiveVoiceTurn | null = null
+  type FailedVoiceTurn = {
+    responseId: string
+    characterId: string
+    conversationId: string
+    userContent: string
+    assistantContent: string
+  }
+  let failedVoiceTurns: FailedVoiceTurn[] = []
+  $: visibleFailedVoiceTurns = failedVoiceTurns.filter((turn) => (
+    turn.characterId === $conversationController.character
+    && turn.conversationId === $conversationController.selectedConversationId
+  ))
   const finalizedUtterances = new Map<string, string>()
   let voiceSnapshot: VoiceSessionSnapshot = {
     phase: 'idle',
@@ -78,6 +90,7 @@
   function receiveVoiceCoreEvent(event: VoiceSessionEvent) {
     if (event.type === 'utterance_finalized' && event.utterance_id !== undefined) {
       const transcript = event.transcript ?? ''
+      if (event.should_response === false) return
       finalizedUtterances.set(event.utterance_id, transcript)
       if (liveVoiceTurn === null) {
         liveVoiceTurn = {
@@ -132,13 +145,23 @@
       && liveVoiceTurn !== null
       && event.response_id === liveVoiceTurn.responseId
     ) {
-      const persisted = event.type === 'response_completed'
-        || event.type === 'response_cancelled'
+      if (event.type === 'response_failed') {
+        const context = conversationController.selectedContext()
+        if (context !== null) {
+          failedVoiceTurns = [...failedVoiceTurns, {
+            responseId: event.response_id,
+            characterId: context.character,
+            conversationId: context.conversationId,
+            userContent: liveVoiceTurn.userContent,
+            assistantContent: liveVoiceTurn.assistantContent,
+          }]
+        }
+      }
       for (const utteranceId of liveVoiceTurn.sourceUtteranceIds) {
         finalizedUtterances.delete(utteranceId)
       }
       liveVoiceTurn = null
-      if (persisted) {
+      if (event.type !== 'response_failed') {
         const context = conversationController.selectedContext()
         if (context !== null) void conversationController.refreshTurns(context)
       }
@@ -264,9 +287,9 @@
     }
   }
 
-  const resumeVoiceMicrophone = async () => {
+  const resumeVoiceMicrophone = async (stream: MediaStream) => {
     try {
-      await voiceSession.resumeMicrophone()
+      await voiceSession.resumeMicrophone(stream)
     } catch (error) {
       appendApplicationError()
       throw error
@@ -342,7 +365,11 @@
       onUnarchive={conversationController.unarchiveConversation}
       onDelete={conversationController.requestHardDelete}
     />
-    <ChatWindow turns={$conversationController.turns} liveVoiceTurn={liveVoiceTurn} />
+    <ChatWindow
+      turns={$conversationController.turns}
+      failedVoiceTurns={visibleFailedVoiceTurns}
+      liveVoiceTurn={liveVoiceTurn}
+    />
     {#if applicationError !== null || $conversationController.error !== null}
       <p class="application-error" role="alert">{applicationError ?? $conversationController.error}</p>
     {/if}

@@ -33,6 +33,7 @@ def _event(
         schema_version="1.0",
         measurement_kind="automated_test",
         event_id=event_id,
+        character_id="miori",
         session_id="session-1",
         utterance_id="utterance-1",
         response_id="response-1",
@@ -93,6 +94,7 @@ def test_vm_id_01_serialized_event_keeps_the_complete_correlation_chain() -> Non
     serialized = metrics.serialize_trace_event(event, {})
 
     assert serialized["event_id"] == "event-1"
+    assert serialized["character_id"] == "miori"
     assert serialized["session_id"] == "session-1"
     assert serialized["utterance_id"] == "utterance-1"
     assert serialized["response_id"] == "response-1"
@@ -307,6 +309,27 @@ def test_vm_kind_01_rejects_mixed_measurement_kinds() -> None:
         )
 
 
+def test_vm_character_01_rejects_mixed_character_ids() -> None:
+    metrics = _voice_metrics()
+    miori = _event(
+        metrics,
+        event_id="miori-event",
+        name="stt_started",
+        timestamp=1,
+    )
+    another = miori.model_copy(
+        update={"event_id": "another-event", "character_id": "another"}
+    )
+    metadata, diagnostics = _aggregation_context(metrics)
+
+    with pytest.raises(ValueError, match="character ids must not be mixed"):
+        metrics.aggregate_events(
+            [miori, another],
+            metadata=metadata,
+            diagnostics=diagnostics,
+        )
+
+
 def test_vm_art_01_aggregate_drops_all_reverse_lookup_ids() -> None:
     metrics = _voice_metrics()
     events = [
@@ -434,6 +457,46 @@ def test_vm_art_01_uses_metric_and_stage_specific_outcomes() -> None:
     assert {outcome.stage for outcome in artifact.stage_outcomes} == {
         "stt", "llm", "tts", "transport", "playback"
     }
+
+
+def test_vm_art_01_livekit_speech_stopped_is_ttfa_start() -> None:
+    metrics = _voice_metrics()
+    events = [
+        _event(
+            metrics,
+            event_id="speech-stopped",
+            name="speech_stopped",
+            timestamp=1_000.0,
+            stage="vad",
+            clock_domain="client_monotonic",
+            unit="millisecond",
+        ),
+        _event(
+            metrics,
+            event_id="playback",
+            name="first_playback",
+            timestamp=1_750.0,
+            stage="playback",
+            clock_domain="client_monotonic",
+            unit="millisecond",
+        ),
+    ]
+    metadata, diagnostics = _aggregation_context(metrics)
+    metadata = metadata.model_copy(update={"transport": "livekit"})
+
+    artifact = metrics.aggregate_events(
+        events,
+        metadata=metadata,
+        diagnostics=diagnostics,
+    )
+
+    ttfa = next(metric for metric in artifact.metrics if metric.name == "ttfa")
+    assert ttfa.status == "measured"
+    assert ttfa.p50 == 750.0
+    catalog = {metric.name: metric for metric in artifact.metrics}
+    assert catalog["local_playback_stop"].status == "missing"
+    assert catalog["reconnect"].status == "missing"
+    assert catalog["playback_continuity"].status == "missing"
 
 
 def test_vm_art_01_does_not_project_a_tts_failure_into_stt_metrics() -> None:
@@ -756,6 +819,7 @@ def _write_valid_baseline_inputs(tmp_path: Path) -> tuple[Path, Path, dict[str, 
             "schema_version": "1.0",
             "measurement_kind": "controlled_baseline",
             "event_id": f"event-{index}",
+            "character_id": "miori",
             "session_id": session_id,
             "utterance_id": utterance_id,
             "response_id": response_id,
@@ -811,6 +875,7 @@ def test_vm_base_01_finalizer_excludes_warmups_and_writes_anonymous_artifact(
     assert next(metric for metric in artifact["metrics"] if metric["name"] == "ttfa")["p95"] == 750.0
     serialized = json.dumps(artifact)
     assert "session_id" not in serialized
+    assert "character_id" not in serialized
     assert "utterance_id" not in serialized
     assert "response_id" not in serialized
 
