@@ -82,6 +82,7 @@ const gateway = (overrides: Partial<SidebarGateway> = {}): SidebarGateway => ({
   listCatalog: vi.fn(async () => catalog),
   rescanCatalog: vi.fn(async () => catalog),
   getSettings: vi.fn(async () => settings()),
+  updatePreferences: vi.fn(async () => settings()),
   setCharacterVisibility: vi.fn(async () => settings()),
   setCharacterPinned: vi.fn(async () => settings()),
   setThreadPinned: vi.fn(async () => settings()),
@@ -241,6 +242,25 @@ describe('sidebar controller operations', () => {
 
     expect(setThreadPinned).toHaveBeenCalledWith('miori', ids[0], true)
     expect(get(controller).settings).toEqual(pinnedSettings)
+  })
+
+  test('layout設定を即時previewし保存失敗時は変更前へ戻す', async () => {
+    let rejectUpdate: ((reason: Error) => void) | undefined
+    const updatePreferences = vi.fn(() => new Promise<UiSettings>((_resolve, reject) => {
+      rejectUpdate = reject
+    }))
+    const controller = createSidebarController(gateway({ updatePreferences }), '取得失敗')
+    await controller.initialize()
+
+    const updating = controller.updatePreferences({ desktop_portrait_layout: 'background' })
+    expect(get(controller).settings?.desktop_portrait_layout).toBe('background')
+    expect(get(controller).pending).toBe(true)
+    if (rejectUpdate === undefined) throw new Error('設定更新のreject関数が必要です')
+    rejectUpdate(new Error('failed'))
+
+    expect(await updating).toBe(false)
+    expect(get(controller).settings?.desktop_portrait_layout).toBe('right')
+    expect(get(controller).error).toBe('取得失敗')
   })
 
   test('アーカイブと物理削除を再取得なしで一覧へ反映する', async () => {

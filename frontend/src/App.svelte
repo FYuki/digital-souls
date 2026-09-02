@@ -3,6 +3,7 @@
 
   import AudioRecorder from './lib/AudioRecorder.svelte'
   import type { SpeechActivity } from './lib/AudioRecorder.svelte'
+  import CharacterPortrait from './lib/CharacterPortrait.svelte'
   import ChatWindow from './lib/ChatWindow.svelte'
   import ConversationSidebar from './lib/ConversationSidebar.svelte'
   import InputBar from './lib/InputBar.svelte'
@@ -29,6 +30,7 @@
     setCharacterPinned,
     setCharacterVisibility,
     setThreadPinned,
+    updateUiPreferences,
   } from './lib/ui-settings/client'
   import type { VoiceSessionEvent } from './lib/voice-session/generated'
   import {
@@ -56,6 +58,7 @@
     listCatalog: listCharacters,
     rescanCatalog: rescanCharacters,
     getSettings: getUiSettings,
+    updatePreferences: updateUiPreferences,
     setCharacterVisibility,
     setCharacterPinned,
     setThreadPinned,
@@ -76,6 +79,8 @@
   let endingVoiceSession = false
   let sidebarOpen = true
   let compactLayout = false
+  let visualViewportHeight: number | null = null
+  let visualViewportOffsetTop = 0
   type LiveVoiceTurn = {
     responseId: string | null
     sourceUtteranceIds: string[]
@@ -262,6 +267,7 @@
 
   onMount(() => {
     const compactQuery = window.matchMedia?.('(max-width: 900px)')
+    const viewport = window.visualViewport
     const updateLayout = () => {
       const wasCompact = compactLayout
       compactLayout = compactQuery?.matches ?? false
@@ -270,10 +276,21 @@
     }
     compactLayout = compactQuery?.matches ?? false
     sidebarOpen = !compactLayout
+    const updateViewport = () => {
+      visualViewportHeight = viewport?.height ?? window.innerHeight
+      visualViewportOffsetTop = viewport?.offsetTop ?? 0
+    }
+    updateViewport()
     compactQuery?.addEventListener('change', updateLayout)
+    viewport?.addEventListener('resize', updateViewport)
+    viewport?.addEventListener('scroll', updateViewport)
+    window.addEventListener('resize', updateViewport)
     void sidebarController.initialize()
     return () => {
       compactQuery?.removeEventListener('change', updateLayout)
+      viewport?.removeEventListener('resize', updateViewport)
+      viewport?.removeEventListener('scroll', updateViewport)
+      window.removeEventListener('resize', updateViewport)
       void voiceSession.end().catch(() => undefined)
     }
   })
@@ -330,6 +347,12 @@
     ...($sidebarController.activeByCharacter[$conversationController.character] ?? []),
     ...($sidebarController.archivedByCharacter[$conversationController.character] ?? []),
   ].find((item) => item.conversation_id === $conversationController.selectedConversationId)
+  $: portraitLayout = compactLayout
+    ? 'background'
+    : ($sidebarController.settings?.desktop_portrait_layout ?? 'right')
+  $: historyHeightPercent = compactLayout
+    ? ($sidebarController.settings?.compact_history_height_percent ?? 75)
+    : ($sidebarController.settings?.desktop_history_height_percent ?? 75)
 
   const ensureVoiceSession = async () => {
     const context = conversationController.selectedContext()
@@ -400,7 +423,10 @@
   }
 </script>
 
-<main class="app-shell">
+<main
+  class="app-shell"
+  style={`--visual-viewport-height: ${visualViewportHeight === null ? '100dvh' : `${visualViewportHeight}px`}; --visual-viewport-top: ${visualViewportOffsetTop}px`}
+>
   {#if sidebarOpen}
     {#if compactLayout}
       <button class="drawer-backdrop" type="button" aria-label="サイドバーを閉じる" on:click={() => { sidebarOpen = false }}></button>
@@ -437,12 +463,26 @@
         <span class="hidden-badge">一覧から非表示中</span>
       {/if}
     </header>
-    <ChatWindow
-      turns={$conversationController.turns}
-      characterName={currentCharacterEntry?.display_name ?? $conversationController.character}
-      failedVoiceTurns={visibleFailedVoiceTurns}
-      liveVoiceTurn={liveVoiceTurn}
-    />
+    <div
+      class:portrait-background={portraitLayout === 'background'}
+      class:portrait-right={portraitLayout === 'right'}
+      class="conversation-stage"
+      data-portrait-layout={portraitLayout}
+      data-history-height={historyHeightPercent}
+      style={`--history-height: ${historyHeightPercent}%`}
+    >
+      <div class="portrait-layer">
+        <CharacterPortrait character={currentCharacterEntry ?? null} />
+      </div>
+      <div class="history-layer">
+        <ChatWindow
+          turns={$conversationController.turns}
+          characterName={currentCharacterEntry?.display_name ?? $conversationController.character}
+          failedVoiceTurns={visibleFailedVoiceTurns}
+          liveVoiceTurn={liveVoiceTurn}
+        />
+      </div>
+    </div>
     {#if applicationError !== null || $conversationController.error !== null}
       <p class="application-error" role="alert">{applicationError ?? $conversationController.error}</p>
     {/if}
@@ -494,7 +534,7 @@
 <style>
   .app-shell {
     position: relative;
-    height: 100dvh;
+    height: var(--visual-viewport-height, 100dvh);
     display: flex;
     align-items: stretch;
     overflow: hidden;
@@ -547,6 +587,73 @@
   }
   .current-thread p { margin: 3px 0 0; color: #8d8598; font-size: 0.68rem; }
   .hidden-badge { padding: 5px 8px; border: 1px solid rgba(240, 163, 193, 0.25); border-radius: 999px; color: #e5b5c9; font-size: 0.65rem; }
+
+  .conversation-stage {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 72% 38%, rgba(240, 163, 193, 0.08), transparent 35%),
+      #100d17;
+  }
+
+  .portrait-right {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(280px, 34vw, 520px);
+  }
+
+  .portrait-right .portrait-layer {
+    position: relative;
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .portrait-right .history-layer {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .portrait-background .portrait-layer {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+  }
+
+  .portrait-background .history-layer {
+    position: absolute;
+    z-index: 1;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: var(--history-height);
+    display: flex;
+    min-height: 0;
+    background: linear-gradient(180deg, transparent, rgba(12, 10, 18, 0.18) 28%);
+  }
+
+  :global(.history-layer .messages) {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    background: transparent;
+  }
+
+  :global(.portrait-background .message) {
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(33, 27, 42, 0.9);
+    backdrop-filter: blur(8px);
+  }
+
+  :global(.portrait-background .message.user) {
+    background: rgba(141, 66, 96, 0.92);
+  }
 
   .floating-menu { position: fixed; z-index: 55; top: 14px; left: 14px; display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; color: #f8f3ff; background: rgba(27, 23, 38, 0.9); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.28); cursor: pointer; backdrop-filter: blur(12px); }
   .floating-menu:focus-visible { outline: 2px solid #f0a3c1; outline-offset: 2px; }
@@ -613,12 +720,13 @@
   }
 
   @media (max-width: 900px) {
+    .app-shell { position: fixed; top: var(--visual-viewport-top, 0); right: 0; left: 0; }
     :global(.app-shell > .sidebar) { position: fixed; z-index: 50; inset: 0 auto 0 0; width: min(292px, calc(100vw - 36px)); }
     .chat-header { padding-left: 68px; }
   }
 
   @media (max-width: 640px) {
-    .chat-panel { min-height: 100dvh; }
+    .chat-panel { min-height: 0; }
 
     .input-area {
       padding: 12px;

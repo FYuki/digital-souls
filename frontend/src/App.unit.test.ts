@@ -1069,6 +1069,72 @@ describe('App conversation lifecycle', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
+  test('PCの立ち絵配置と履歴高を設定から即時反映して保存する', async () => {
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (url === '/api/ui-settings' && init?.method === 'PATCH') {
+        const patch = JSON.parse(String(init.body)) as Record<string, unknown>
+        return new Response(JSON.stringify({ ...uiSettings, ...patch }), { status: 200 })
+      }
+      return defaultFetch(input, init)
+    })
+    render(App)
+    await screen.findByRole('button', { name: CONVERSATION_ID })
+    const stage = document.querySelector<HTMLElement>('.conversation-stage')
+    if (stage === null) throw new Error('会話stageが必要です')
+    expect(stage.dataset.portraitLayout).toBe('right')
+    await fireEvent.click(screen.getByRole('button', { name: '設定' }))
+
+    await fireEvent.change(screen.getByRole('combobox', { name: 'PCの立ち絵配置' }), {
+      target: { value: 'background' },
+    })
+    await waitFor(() => expect(stage.dataset.portraitLayout).toBe('background'))
+    const historyHeight = screen.getByRole<HTMLSelectElement>('combobox', {
+      name: 'PC・履歴背面の表示範囲',
+    })
+    await waitFor(() => expect(historyHeight.disabled).toBe(false))
+    await fireEvent.change(historyHeight, {
+      target: { value: '50' },
+    })
+
+    await waitFor(() => expect(stage.dataset.historyHeight).toBe('50'))
+    expect(fetchMock).toHaveBeenCalledWith('/api/ui-settings', expect.objectContaining({
+      method: 'PATCH',
+    }))
+  })
+
+  test('compact画面は履歴背面に固定しVisual Viewportの高さへ追従する', async () => {
+    let viewportHeight = 640
+    const viewport = new EventTarget()
+    Object.defineProperties(viewport, {
+      height: { get: () => viewportHeight },
+      offsetTop: { get: () => 12 },
+    })
+    vi.stubGlobal('matchMedia', vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })))
+    vi.stubGlobal('visualViewport', viewport)
+    render(App)
+    const open = await screen.findByRole('button', { name: 'サイドバーを開く' })
+    expect(open).toBeTruthy()
+    const stage = document.querySelector<HTMLElement>('.conversation-stage')
+    const shell = document.querySelector<HTMLElement>('.app-shell')
+    if (stage === null || shell === null) throw new Error('layout要素が必要です')
+    expect(stage.dataset.portraitLayout).toBe('background')
+    expect(stage.dataset.historyHeight).toBe('75')
+    expect(shell.style.getPropertyValue('--visual-viewport-height')).toBe('640px')
+
+    viewportHeight = 420
+    viewport.dispatchEvent(new Event('resize'))
+
+    await waitFor(() => expect(
+      shell.style.getPropertyValue('--visual-viewport-height'),
+    ).toBe('420px'))
+    expect(stage.dataset.historyHeight).toBe('75')
+  })
+
 
 
 
