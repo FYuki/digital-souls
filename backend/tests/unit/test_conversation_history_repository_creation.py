@@ -144,8 +144,12 @@ class TestConversationLifecycle:
         )
 
         assert miori.conversation_id == akira.conversation_id
-        assert repository.resume_conversation("miori", CONVERSATION_ID) == miori
-        assert repository.resume_conversation("akira", CONVERSATION_ID) == akira
+        resumed_miori = repository.resume_conversation("miori", CONVERSATION_ID)
+        resumed_akira = repository.resume_conversation("akira", CONVERSATION_ID)
+        assert resumed_miori.title == "光織の履歴"
+        assert resumed_akira.title == "晶の履歴"
+        assert resumed_miori.character_id == miori.character_id
+        assert resumed_akira.character_id == akira.character_id
         assert repository.list_turns("miori", CONVERSATION_ID) == [miori_turn]
         assert repository.list_turns("akira", CONVERSATION_ID) == [akira_turn]
 
