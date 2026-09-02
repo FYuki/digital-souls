@@ -62,7 +62,8 @@ def test_should_build_runtime_prompt_from_shipped_character_card() -> None:
     assert character_prompt.system_prompt in character_region
     assert character_prompt.mes_example in character_region
     assert all(card.data.first_mes not in content for content in prompt_contents)
-    assert prompt_contents[1] == character_prompt.post_history_instructions
+    assert character_prompt.post_history_instructions == ""
+    assert len(prompt_contents) == 2
     assert prompt_contents[-1] == "現在ターンの入力"
     assert tts_config.speaker_id == 14
 
@@ -139,5 +140,6 @@ def test_should_send_builder_messages_from_http_entrypoint(
     assert card.data.description in contents[0]
     assert card.data.system_prompt in contents[0]
     assert all(card.data.first_mes not in content for content in contents)
-    assert contents[1] == card.data.post_history_instructions
+    assert card.data.post_history_instructions == ""
+    assert len(contents) == 2
     assert contents[-1] == "HTTP_CURRENT_USER"
