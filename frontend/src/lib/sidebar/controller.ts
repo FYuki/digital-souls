@@ -2,7 +2,7 @@ import { get, writable, type Readable } from 'svelte/store'
 
 import type { CharacterCatalogEntry } from '../characters/types'
 import type { Conversation } from '../conversations/types'
-import type { UiSettings } from '../ui-settings/types'
+import type { UiPreferencesPatch, UiSettings } from '../ui-settings/types'
 
 export type ThreadMode = 'active' | 'archived'
 
@@ -31,6 +31,7 @@ export type SidebarGateway = {
   listCatalog: () => Promise<CharacterCatalogEntry[]>
   rescanCatalog: () => Promise<CharacterCatalogEntry[]>
   getSettings: () => Promise<UiSettings>
+  updatePreferences: (patch: UiPreferencesPatch) => Promise<UiSettings>
   setCharacterVisibility: (characterId: string, visible: boolean) => Promise<UiSettings>
   setCharacterPinned: (characterId: string, pinned: boolean) => Promise<UiSettings>
   setThreadPinned: (
@@ -54,6 +55,7 @@ export type SidebarGateway = {
 export type SidebarController = Readable<SidebarState> & {
   initialize: () => Promise<void>
   rescan: () => Promise<void>
+  updatePreferences: (patch: UiPreferencesPatch) => Promise<boolean>
   addCharacter: (characterId: string) => Promise<boolean>
   hideCharacter: (characterId: string) => Promise<void>
   setCharacterPinned: (characterId: string, pinned: boolean) => Promise<void>
@@ -257,6 +259,27 @@ export const createSidebarController = (
           activeByCharacter: { ...state.activeByCharacter, ...added },
         }))
       })
+    },
+    updatePreferences: async (patch) => {
+      if (get(store).pending) return false
+      const previous = get(store).settings
+      if (previous === null) return false
+      store.update((state) => ({
+        ...state,
+        settings: { ...previous, ...patch },
+        pending: true,
+        error: null,
+      }))
+      try {
+        const settings = await gateway.updatePreferences(patch)
+        store.update((state) => ({ ...state, settings }))
+        return true
+      } catch {
+        store.update((state) => ({ ...state, settings: previous, error: errorMessage }))
+        return false
+      } finally {
+        store.update((state) => ({ ...state, pending: false }))
+      }
     },
     addCharacter: async (characterId) => (
       (await run(async () => {

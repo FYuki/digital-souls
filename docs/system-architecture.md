@@ -65,6 +65,9 @@
 * `voice_metrics.py` — transport非依存のmetadata-only trace、集計artifact、保持、LiveKit受入目標判定
 * `chat_service.py` / `_chat_runtime.py` — チャットセッションの生成・応答生成のエントリポイント
 * `characters/loader.py` — `characters/` 配下のCharacter Card V3を検証し、Character Core、Character Book、`extensions.digital_souls`を型付きで読み取る
+* `characters/catalog.py` / `routers/character_catalog.py` — Character Cardの表示名と標準立ち絵metadataを再走査し、character境界を検証してPNGを配信する
+* `conversation_history/` — `character_id`とUUIDv4の`conversation_id`を境界に、短期会話履歴、スレッド名、アーカイブ状態をSQLiteへ保存する
+* `ui_settings/` / `routers/ui_settings.py` — 立ち絵layout、PC／compact別履歴範囲、キャラクター表示状態、キャラクター／スレッドpinをローカルユーザー単位で保存する
 * `characters/lore_selector.py` — current userとprivacy処理済み履歴を対象に、Character Book Entryを決定論的に照合・選択する
 * `prompting/` — Character Core、Character Lore、RAG、保存済み履歴、現在発言を順序とtoken budgetに従って合成する単一境界
 * `llm/` — 完成済みpromptを受け取るLLM振り分けルーターとクライアント実装。`ollama_client.py`（ローカルOllama、常用）、`base.py`（クライアント共通インターフェース）。クラウドLLM（Claude等）向けクライアントは未実装のスタブ
@@ -83,7 +86,13 @@
 * `lib/audio/pcm-worklet-recorder.ts` / `lib/audio/vad-assets.ts` — AudioWorkletによるPCM録音とVAD（発話区間検出）
 * `lib/AudioRecorder.svelte` / `lib/AudioPlayer.svelte` — マイク入力UI・音声再生UI
 * `lib/ChatWindow.svelte` / `lib/InputBar.svelte` — テキストチャットUI
-* `App.svelte` — テキスト/音声チャットを統合したメインUI
+* `lib/ConversationSidebar.svelte` / `lib/sidebar/controller.ts` — キャラクター別スレッド一覧、設定、操作メニュー、desktop sidebar／compact drawerの状態を管理する
+* `lib/CharacterPortrait.svelte` — catalogが返した標準立ち絵URLだけを表示し、未設定・読込失敗時は会話を止めず共通プレースホルダーへ切り替える
+* `App.svelte` — テキスト／音声チャット、左サイドバー、立ち絵layoutを統合する。compact時はVisual Viewportへ追従して入力領域をソフトウェアキーボードの上へ保つ
+
+会話画面はPCで立ち絵の右配置と履歴背面配置を切り替える。タブレット・モバイルは履歴背面に
+固定する。背面時の履歴は入力・音声操作を除いた会話領域の下端を基準に50%、75%、100%を
+使用し、立ち絵の上へ透明な履歴領域と高不透明度のメッセージバブルを重ねる。
 
 ### Character CardとCharacter Lore
 

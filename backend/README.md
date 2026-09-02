@@ -13,10 +13,22 @@ digital-souls の自作バックエンド（FastAPI）。
 - キャラクター（`characters/`）のロード
 - `GET /` のヘルスチェック
 - `POST /chat` のチャット応答 API
+- `GET /characters`、`POST /characters/rescan` のキャラクターcatalog API
+- `GET /characters/{character_id}/assets/standing/default.png` の立ち絵配信 API
 - `POST /characters/{character_id}/conversations` のスレッド作成 API
 - `GET /characters/{character_id}/conversations` の利用中スレッド一覧 API
 - `GET /characters/{character_id}/conversations/archived` のアーカイブ済み一覧 API
-- スレッド単位の履歴取得・アーカイブ・復元・物理削除 API
+- スレッド単位の履歴取得・名称変更・アーカイブ・復元・物理削除 API
+- `GET /ui-settings`、`PATCH /ui-settings` と配下のキャラクター表示・ピン留め API
+
+スレッド名は最初の履歴保存可能なユーザー発言から一度だけ決定論的に生成する。
+手動名は自動生成で上書きしない。UI設定は現段階ではローカル単一ユーザー`local`へ紐付け、
+立ち絵配置、PC／compact別の履歴範囲、キャラクターの表示状態、キャラクター／スレッドの
+ピン留めをSQLiteへ保存する。SNSログイン実装後に実ユーザーIDとの関連付けへ移行する。
+
+キャラクターcatalogはリクエスト時に`characters/`を再走査し、有効なCharacter Cardだけを返す。
+立ち絵URLはBackendが生成し、character境界、variant、PNG、symlink脱出を検証する。
+Frontendはrepository上のファイルパスを直接組み立てない。
 
 アーカイブは短期会話履歴を保持したまま通常利用から外す操作であり、物理削除では
 対象 conversation とその全 turn だけを SQLite から削除する。削除後、この短期会話履歴は

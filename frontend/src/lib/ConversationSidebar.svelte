@@ -4,6 +4,7 @@
   import HardDeleteDialog from './HardDeleteDialog.svelte'
   import RenameThreadDialog from './RenameThreadDialog.svelte'
   import type { Conversation } from './conversations/types'
+  import type { HistoryHeightPercent, PortraitLayout } from './ui-settings/types'
   import {
     collapsedThreads,
     selectCharacterGroups,
@@ -164,6 +165,22 @@
     if (await controller.addCharacter(addCharacterId)) addCharacterId = ''
   }
 
+  const updatePortraitLayout = (event: Event) => {
+    const desktop_portrait_layout = (event.currentTarget as HTMLSelectElement)
+      .value as PortraitLayout
+    void controller.updatePreferences({ desktop_portrait_layout })
+  }
+
+  const updateHistoryHeight = (
+    key: 'desktop_history_height_percent' | 'compact_history_height_percent',
+    event: Event,
+  ) => {
+    const value = Number(
+      (event.currentTarget as HTMLSelectElement).value,
+    ) as HistoryHeightPercent
+    void controller.updatePreferences({ [key]: value })
+  }
+
   onMount(() => document.addEventListener('pointerdown', handleDocumentPointer))
   onDestroy(() => document.removeEventListener('pointerdown', handleDocumentPointer))
 </script>
@@ -254,6 +271,42 @@
         <button type="button" disabled={addCharacterId === '' || state.pending} on:click={() => { void addCharacter() }}>追加</button>
         <button type="button" disabled={state.pending} on:click={() => { void controller.rescan() }}>一覧を再読み込み</button>
       </div>
+      {#if state.settings !== null}
+        <div class="layout-settings">
+          <label for="desktop-portrait-layout">PCの立ち絵配置</label>
+          <select
+            id="desktop-portrait-layout"
+            value={state.settings.desktop_portrait_layout}
+            disabled={state.pending}
+            on:change={updatePortraitLayout}
+          >
+            <option value="right">会話履歴の右側</option>
+            <option value="background">会話履歴の背面</option>
+          </select>
+          <label for="desktop-history-height">PC・履歴背面の表示範囲</label>
+          <select
+            id="desktop-history-height"
+            value={state.settings.desktop_history_height_percent}
+            disabled={state.pending}
+            on:change={(event) => updateHistoryHeight('desktop_history_height_percent', event)}
+          >
+            <option value="50">下部50%</option>
+            <option value="75">下部75%</option>
+            <option value="100">下部100%</option>
+          </select>
+          <label for="compact-history-height">タブレット・モバイルの表示範囲</label>
+          <select
+            id="compact-history-height"
+            value={state.settings.compact_history_height_percent}
+            disabled={state.pending}
+            on:change={(event) => updateHistoryHeight('compact_history_height_percent', event)}
+          >
+            <option value="50">下部50%</option>
+            <option value="75">下部75%</option>
+            <option value="100">下部100%</option>
+          </select>
+        </div>
+      {/if}
     </section>
   {/if}
 
@@ -316,7 +369,7 @@
   .hide-character { margin-top: 2px; color: #756d7d; }
   .empty { margin: 12px 8px; color: #8b8394; font-size: 0.76rem; }
   .empty.small { margin: 5px 10px; font-size: 0.68rem; }
-  .settings-panel { padding: 13px; border-top: 1px solid rgba(255, 255, 255, 0.09); background: #18131f; }
+  .settings-panel { max-height: 58dvh; overflow-y: auto; padding: 13px; border-top: 1px solid rgba(255, 255, 255, 0.09); background: #18131f; }
   .settings-head { display: flex; align-items: center; justify-content: space-between; }
   .settings-head h2 { margin: 0; font-size: 0.85rem; }
   .settings-head button { border: 0; color: #aaa2b3; background: transparent; }
@@ -324,6 +377,8 @@
   .settings-panel select { width: 100%; min-height: 38px; padding: 6px 8px; border: 1px solid #4c4358; border-radius: 8px; color: #eee8f3; background: #100d17; }
   .settings-actions { display: flex; gap: 6px; margin-top: 8px; }
   .settings-actions button { min-height: 36px; padding: 6px 9px; border: 1px solid #4c4358; border-radius: 8px; background: #292231; font-size: 0.7rem; }
+  .layout-settings { display: grid; gap: 5px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.09); }
+  .layout-settings label { margin-top: 6px; }
   .sidebar-bottom { display: grid; gap: 3px; padding: 10px; border-top: 1px solid rgba(255, 255, 255, 0.09); background: rgba(15, 12, 22, 0.98); }
   .side-action { display: flex; min-height: 42px; align-items: center; gap: 10px; padding: 0 11px; border: 0; border-radius: 10px; color: #bbb3c5; background: transparent; font-size: 0.78rem; }
   .side-action:hover, .side-action.active { color: #fff; background: rgba(255, 255, 255, 0.06); }

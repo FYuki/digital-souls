@@ -3,21 +3,38 @@ import type { Page } from '@playwright/test'
 type MockCharacter = {
   character_id: string
   display_name: string
+  standing_image?: {
+    status: 'available' | 'missing'
+    url: string | null
+  }
+}
+
+type MockUiPreferences = {
+  desktopPortraitLayout?: 'right' | 'background'
+  desktopHistoryHeightPercent?: 50 | 75 | 100
+  compactHistoryHeightPercent?: 50 | 75 | 100
 }
 
 export const installMockUiBootstrap = async (
   page: Page,
   characters: MockCharacter[] = [{ character_id: 'miori', display_name: '光織' }],
+  preferences: MockUiPreferences = {},
 ): Promise<void> => {
   const visible = new Set(characters.map((character) => character.character_id))
   const pinnedCharacters: string[] = []
   const threadPins = new Set<string>()
+  let desktopPortraitLayout: 'right' | 'background'
+    = preferences.desktopPortraitLayout ?? 'right'
+  let desktopHistoryHeightPercent: 50 | 75 | 100
+    = preferences.desktopHistoryHeightPercent ?? 75
+  let compactHistoryHeightPercent: 50 | 75 | 100
+    = preferences.compactHistoryHeightPercent ?? 75
 
   const settings = () => ({
     user_id: 'local',
-    desktop_portrait_layout: 'right',
-    desktop_history_height_percent: 75,
-    compact_history_height_percent: 75,
+    desktop_portrait_layout: desktopPortraitLayout,
+    desktop_history_height_percent: desktopHistoryHeightPercent,
+    compact_history_height_percent: compactHistoryHeightPercent,
     characters: characters.map((character) => {
       const pinIndex = pinnedCharacters.indexOf(character.character_id)
       return {
@@ -39,7 +56,7 @@ export const installMockUiBootstrap = async (
       contentType: 'application/json',
       body: JSON.stringify(characters.map((character) => ({
         ...character,
-        standing_image: { status: 'missing', url: null },
+        standing_image: character.standing_image ?? { status: 'missing', url: null },
       }))),
     })
   })
@@ -49,7 +66,18 @@ export const installMockUiBootstrap = async (
     const segments = pathname.split('/')
     const characterId = segments[4]
     const conversationId = segments[6]
-    if (characterId !== undefined && pathname.endsWith('/pin')) {
+    if (pathname === '/api/ui-settings' && request.method() === 'PATCH') {
+      const body = request.postDataJSON() as {
+        desktop_portrait_layout?: 'right' | 'background'
+        desktop_history_height_percent?: 50 | 75 | 100
+        compact_history_height_percent?: 50 | 75 | 100
+      }
+      desktopPortraitLayout = body.desktop_portrait_layout ?? desktopPortraitLayout
+      desktopHistoryHeightPercent = body.desktop_history_height_percent
+        ?? desktopHistoryHeightPercent
+      compactHistoryHeightPercent = body.compact_history_height_percent
+        ?? compactHistoryHeightPercent
+    } else if (characterId !== undefined && pathname.endsWith('/pin')) {
       if (conversationId !== undefined) {
         const key = `${characterId}/${conversationId}`
         if (request.method() === 'PUT') threadPins.add(key)
