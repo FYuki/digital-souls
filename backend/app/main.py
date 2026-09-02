@@ -77,6 +77,7 @@ from app.privacy.scanner import create_privacy_scanner
 from app.privacy.semantic.classifier import OllamaSemanticPrivacyClassifier
 from app.privacy.semantic.ollama_classifier_client import OllamaClassifierClient
 from app.routers.chat import router as chat_router
+from app.routers.character_catalog import router as character_catalog_router
 from app.routers.conversations import router as conversations_router
 from app.routers.memory_management import router as memory_management_router
 from app.routers.livekit import router as livekit_router
@@ -687,6 +688,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(lifespan=lifespan)
 
 app.include_router(chat_router)
+app.include_router(character_catalog_router)
 app.include_router(conversations_router)
 app.include_router(memory_management_router)
 app.include_router(livekit_router)
