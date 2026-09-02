@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from app.audio_pipeline import AudioPipelineService
+from app.conversation_history.titles import DEFAULT_CONVERSATION_TITLE
 
 
 RAW_USER = "password: raw-user-secret-41"
@@ -46,6 +47,16 @@ def _chat_body(conversation_id, message: str) -> dict[str, str]:  # type: ignore
     }
 
 
+def _assert_conversation_title(  # type: ignore[no-untyped-def]
+    client,
+    conversation_id,
+    expected: str,
+) -> None:
+    repository = client.app.state.conversation_history_repository
+    restored = repository.resume_conversation("miori", conversation_id)
+    assert restored.title == expected
+
+
 def _assert_content_turn(turn: dict[str, object]) -> None:
     assert set(turn) == {
         "kind",
@@ -87,6 +98,7 @@ def test_should_return_the_persisted_masked_turn_from_http_chat(client) -> None:
     assert set(payload) == {"character", "turn"}
     assert payload["character"] == "miori"
     _assert_content_turn(payload["turn"])
+    _assert_conversation_title(client, conversation.conversation_id, MASKED_USER)
 
 
 def test_should_return_metadata_only_when_http_chat_storage_is_skipped(client) -> None:
@@ -103,6 +115,11 @@ def test_should_return_metadata_only_when_http_chat_storage_is_skipped(client) -
     assert set(payload) == {"character", "turn"}
     assert payload["character"] == "miori"
     _assert_privacy_skipped_turn(payload["turn"])
+    _assert_conversation_title(
+        client,
+        conversation.conversation_id,
+        DEFAULT_CONVERSATION_TITLE,
+    )
 
 
 def test_should_send_the_persisted_masked_turn_from_text_websocket(client) -> None:
@@ -118,6 +135,7 @@ def test_should_send_the_persisted_masked_turn_from_text_websocket(client) -> No
     assert set(payload) == {"type", "turn"}
     assert payload["type"] == "text"
     _assert_content_turn(payload["turn"])
+    _assert_conversation_title(client, conversation.conversation_id, MASKED_USER)
 
 
 def test_should_send_metadata_only_for_privacy_skipped_text_websocket(client) -> None:
@@ -133,6 +151,11 @@ def test_should_send_metadata_only_for_privacy_skipped_text_websocket(client) ->
     assert set(payload) == {"type", "turn"}
     assert payload["type"] == "text"
     _assert_privacy_skipped_turn(payload["turn"])
+    _assert_conversation_title(
+        client,
+        conversation.conversation_id,
+        DEFAULT_CONVERSATION_TITLE,
+    )
 
 
 def test_should_synthesize_only_the_persisted_masked_assistant_content(client) -> None:
@@ -151,6 +174,7 @@ def test_should_synthesize_only_the_persisted_masked_assistant_content(client) -
             websocket.receive_json()
 
     assert synthesizer.synthesize_calls == [(MASKED_ASSISTANT, 14)]
+    _assert_conversation_title(client, conversation.conversation_id, MASKED_USER)
 
 
 def test_should_not_synthesize_content_for_privacy_skipped_audio_turn(client) -> None:
@@ -169,3 +193,8 @@ def test_should_not_synthesize_content_for_privacy_skipped_audio_turn(client) ->
             websocket.receive_json()
 
     assert synthesizer.synthesize_calls == []
+    _assert_conversation_title(
+        client,
+        conversation.conversation_id,
+        DEFAULT_CONVERSATION_TITLE,
+    )

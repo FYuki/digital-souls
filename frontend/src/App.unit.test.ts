@@ -586,6 +586,70 @@ describe('App conversation lifecycle', () => {
       .toBe(true)
   })
 
+  test('最初のtext送信後に自動生成名を再読み込みなしで一覧とheaderへ反映する', async () => {
+    const initial = { ...conversation, title: '新しい会話' }
+    const named = { ...conversation, title: '今日の予定は？' }
+    let activeListRequests = 0
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (url === '/api/characters/miori/conversations' && init === undefined) {
+        activeListRequests += 1
+        return new Response(JSON.stringify([
+          activeListRequests === 1 ? initial : named,
+        ]), { status: 200 })
+      }
+      return defaultFetch(input, init)
+    })
+    render(App)
+    await fireEvent.click(await screen.findByRole('button', { name: '新しい会話' }))
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: '今日の予定は？ 続きです。' },
+    })
+
+    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
+
+    expect(await screen.findByRole('button', { name: '今日の予定は？' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '今日の予定は？' })).toBeTruthy()
+    expect(activeListRequests).toBe(2)
+  })
+
+  test('LiveKit応答完了後に自動生成名を再読み込みなしで一覧とheaderへ反映する', async () => {
+    const initial = { ...conversation, title: '新しい会話' }
+    const named = { ...conversation, title: '声で相談したい' }
+    let activeListRequests = 0
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (url === '/api/characters/miori/conversations' && init === undefined) {
+        activeListRequests += 1
+        return new Response(JSON.stringify([
+          activeListRequests === 1 ? initial : named,
+        ]), { status: 200 })
+      }
+      return defaultFetch(input, init)
+    })
+    render(App)
+    await fireEvent.click(await screen.findByRole('button', { name: '新しい会話' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
+    await waitFor(() => expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(1))
+    await emitCoreEvent({
+      type: 'utterance_finalized',
+      utterance_id: TURN_ID,
+      transcript: '声で相談したい',
+      should_response: true,
+    })
+    await emitCoreEvent({
+      type: 'response_started',
+      response_id: RESPONSE_ID,
+      source_utterance_ids: [TURN_ID],
+    })
+
+    await emitCoreEvent({ type: 'response_completed', response_id: RESPONSE_ID })
+
+    expect(await screen.findByRole('button', { name: '声で相談したい' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '声で相談したい' })).toBeTruthy()
+    expect(activeListRequests).toBe(2)
+  })
+
   test('archive成功後は一覧を再取得せず応答から即時に状態を遷移する', async () => {
     const archivedConversation = {
       ...conversation,
@@ -854,6 +918,8 @@ describe('App conversation lifecycle', () => {
     render(App)
     await screen.findByRole('button', { name: CONVERSATION_ID })
     await fireEvent.click(screen.getByRole('button', { name: '設定' }))
+    const candidate = screen.getByRole<HTMLOptionElement>('option', { name: '晶 (akira)' })
+    expect(candidate.value).toBe('akira')
     await fireEvent.change(screen.getByRole('combobox', { name: 'キャラクター追加' }), {
       target: { value: 'akira' },
     })

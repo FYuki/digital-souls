@@ -88,10 +88,10 @@
   h2 { margin: 0 0 18px; font-size: 1.1rem; }
   form, label { display: grid; gap: 8px; }
   label { color: #c8bfd1; font-size: 0.78rem; font-weight: 700; }
-  input { min-height: 42px; box-sizing: border-box; padding: 8px 11px; border: 1px solid #574d63; border-radius: 9px; color: #fff; background: #100d17; }
+  input { min-height: 44px; box-sizing: border-box; padding: 8px 11px; border: 1px solid #574d63; border-radius: 9px; color: #fff; background: #100d17; }
   input:focus-visible { outline: 2px solid #f0a3c1; outline-offset: 2px; }
   .count { margin: 0; color: #8f8699; font-size: 0.7rem; text-align: right; }
   .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-  button { min-height: 40px; padding: 8px 13px; border: 1px solid #574d63; border-radius: 9px; color: #eee8f3; background: #272130; }
+  button { min-height: 44px; padding: 8px 13px; border: 1px solid #574d63; border-radius: 9px; color: #eee8f3; background: #272130; }
   .primary { border-color: #b86d89; background: #9d496b; }
 </style>

@@ -10,7 +10,7 @@ _SENTENCE_END = re.compile(r"[。！？.!?]")
 def generate_conversation_title(user_content: str) -> str:
     """保存可能なユーザー本文から決定論的な初期タイトルを生成する。"""
 
-    normalized = " ".join(user_content.split())
+    normalized = " ".join(unicodedata.normalize("NFC", user_content).split())
     if not normalized:
         return DEFAULT_CONVERSATION_TITLE
 
@@ -26,7 +26,7 @@ def generate_conversation_title(user_content: str) -> str:
 
 
 def normalize_manual_conversation_title(title: str) -> str:
-    normalized = title.strip()
+    normalized = unicodedata.normalize("NFC", title).strip()
     if not normalized:
         raise ValueError("title must not be empty")
     if len(normalized) > CONVERSATION_TITLE_MAX_LENGTH:

@@ -20,6 +20,7 @@ from tests.conversation_history_test_support import create_repository
     [
         ("  最初の質問です。 続きです。 ", "最初の質問です。"),
         ("改行を\n含む\t質問", "改行を 含む 質問"),
+        ("Cafe\u0301について", "Caféについて"),
         ("a" * 40, "a" * 40),
         ("a" * 41, "a" * 39 + "…"),
     ],
@@ -123,3 +124,7 @@ def test_should_never_overwrite_manual_title(tmp_path: Path) -> None:
 def test_should_reject_invalid_manual_title(title: str) -> None:
     with pytest.raises(ValueError):
         normalize_manual_conversation_title(title)
+
+
+def test_should_normalize_manual_title_to_nfc() -> None:
+    assert normalize_manual_conversation_title("  Cafe\u0301  ") == "Café"

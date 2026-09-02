@@ -77,8 +77,40 @@ def test_default_standing_image_is_served_as_png(
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
+    assert response.headers["cache-control"] == "no-cache"
+    assert response.headers["etag"].startswith('"')
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.content == PNG
+
+
+def test_standing_image_supports_conditional_get(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "characters"
+    character = _write_character(root, "miori", "光織")
+    standing = character / "assets" / "standing"
+    standing.mkdir(parents=True)
+    image = standing / "default.png"
+    image.write_bytes(PNG)
+
+    with _client(monkeypatch, root) as client:
+        first = client.get("/characters/miori/assets/standing/default.png")
+        not_modified = client.get(
+            "/characters/miori/assets/standing/default.png",
+            headers={"If-None-Match": f'W/{first.headers["etag"]}'},
+        )
+        image.write_bytes(PNG + b"changed")
+        changed = client.get(
+            "/characters/miori/assets/standing/default.png",
+            headers={"If-None-Match": first.headers["etag"]},
+        )
+
+    assert not_modified.status_code == 304
+    assert not_modified.content == b""
+    assert not_modified.headers["etag"] == first.headers["etag"]
+    assert changed.status_code == 200
+    assert changed.headers["etag"] != first.headers["etag"]
 
 
 def test_asset_errors_have_distinct_machine_readable_codes(
