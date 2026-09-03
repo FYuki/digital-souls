@@ -80,6 +80,7 @@ def test_should_rename_active_and_archived_conversation(client) -> None:
     assert archived.json()["archived_at"] is not None
     assert renamed_archived.status_code == 200
     assert renamed_archived.json()["title"] == "アーカイブ後の名前"
+    assert renamed_archived.json()["archived_at"] is not None
 
 
 @pytest.mark.parametrize("title", ["", "   ", "改行\nタイトル", "a" * 41])
