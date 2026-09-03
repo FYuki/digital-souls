@@ -1,0 +1,65 @@
+<script lang="ts">
+  import { modalDialog } from './modal-dialog'
+
+  export let currentTitle: string
+  export let disabled: boolean
+  export let returnFocus: HTMLElement | null = null
+  export let onConfirm: (title: string) => void
+  export let onCancel: () => void
+
+  let title = currentTitle
+  $: normalizedTitle = title.normalize('NFC').trim()
+  $: titleLength = Array.from(normalizedTitle).length
+
+  const submit = () => {
+    if (disabled || titleLength === 0 || titleLength > 40) return
+    onConfirm(normalizedTitle)
+  }
+</script>
+
+<div class="backdrop" role="presentation">
+  <section
+    use:modalDialog={{
+      disabled,
+      focusableSelector: 'input:not(:disabled), button:not(:disabled)',
+      initialFocusSelector: '#thread-title',
+      onCancel,
+      returnFocus,
+      selectInitialText: true,
+    }}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="rename-title"
+  >
+    <h2 id="rename-title">スレッド名を変更</h2>
+    <form on:submit|preventDefault={submit}>
+      <label for="thread-title">スレッド名</label>
+      <input
+        id="thread-title"
+        bind:value={title}
+        disabled={disabled}
+      />
+      <p class="count">{titleLength} / 40</p>
+      <div class="actions">
+        <button type="button" on:click={onCancel} disabled={disabled}>キャンセル</button>
+        <button type="submit" class="primary" disabled={disabled || titleLength === 0 || titleLength > 40}>
+          保存
+        </button>
+      </div>
+    </form>
+  </section>
+</div>
+
+<style>
+  .backdrop { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: rgba(5, 4, 8, 0.68); }
+  section { width: min(420px, calc(100% - 32px)); box-sizing: border-box; padding: 24px; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; color: #f8f3ff; background: #1b1724; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42); }
+  h2 { margin: 0 0 18px; font-size: 1.1rem; }
+  form, label { display: grid; gap: 8px; }
+  label { color: #c8bfd1; font-size: 0.78rem; font-weight: 700; }
+  input { min-height: 44px; box-sizing: border-box; padding: 8px 11px; border: 1px solid #574d63; border-radius: 9px; color: #fff; background: #100d17; }
+  input:focus-visible { outline: 2px solid #f0a3c1; outline-offset: 2px; }
+  .count { margin: 0; color: #8f8699; font-size: 0.7rem; text-align: right; }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  button { min-height: 44px; padding: 8px 13px; border: 1px solid #574d63; border-radius: 9px; color: #eee8f3; background: #272130; }
+  .primary { border-color: #b86d89; background: #9d496b; }
+</style>

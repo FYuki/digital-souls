@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { installMockWebSocketBackend } from './mock-web-socket'
+import { installMockUiBootstrap } from './mock-ui-bootstrap'
 import {
   attachProfileEvidence,
   getCapabilitySkipReason,
@@ -36,6 +37,7 @@ const conversation = (conversationId: string, archivedAt: string | null) => ({
   created_at: '2026-08-01T12:00:00.000000Z',
   updated_at: '2026-08-01T12:01:00.000000Z',
   archived_at: archivedAt,
+  title: conversationId,
 })
 
 const installLifecycleBackend = async (page: Page, options: LifecycleOptions = {}) => {
@@ -86,6 +88,8 @@ const installLifecycleBackend = async (page: Page, options: LifecycleOptions = {
         user_content: MASKED_USER,
         assistant_content: MASKED_ASSISTANT,
       }]
+    } else if (url.pathname.includes('/characters/akira/')) {
+      response = []
     } else if (url.pathname.includes('archived')) {
       response = archived
     } else if (method === 'POST') {
@@ -93,7 +97,7 @@ const installLifecycleBackend = async (page: Page, options: LifecycleOptions = {
       active = [created, ...active]
       response = created
     } else {
-      response = url.pathname.includes('/characters/akira/') ? [] : active
+      response = active
     }
 
     await route.fulfill({
@@ -102,7 +106,20 @@ const installLifecycleBackend = async (page: Page, options: LifecycleOptions = {
       body: response === null ? '' : JSON.stringify(response),
     })
   })
+  await installMockUiBootstrap(page, [
+    { character_id: 'miori', display_name: '光織' },
+    { character_id: 'akira', display_name: '晶' },
+  ])
   return { chatRequests }
+}
+
+const chooseThreadAction = async (
+  page: Page,
+  title: string,
+  action: 'アーカイブ' | '復元' | '削除' | '名前を変更',
+) => {
+  await page.getByRole('button', { name: `${title}のメニュー` }).click()
+  await page.getByRole('menuitem', { name: action, exact: true }).click()
 }
 
 test('既存スレッドを選ぶと保存済み履歴を表示し同じIDで再開する', async ({ page }) => {
@@ -124,7 +141,7 @@ test('新規スレッドは既存選択と混同せずBackendが発行したID�
   const backend = await installLifecycleBackend(page)
   await page.goto('/')
 
-  await page.getByRole('button', { name: '新規スレッド' }).click()
+  await page.getByRole('button', { name: '新規スレッド（光織）' }).click()
   await page.getByLabel('メッセージ').fill('新しい会話')
   await page.getByRole('button', { name: '送信' }).click()
 
@@ -137,7 +154,7 @@ test('hard delete確認は削除範囲・復元不能・保証対象外を明示
   await page.goto('/')
 
   await page.getByRole('button', { name: 'アーカイブ済み' }).click()
-  await page.getByRole('button', { name: new RegExp(`削除.*${ARCHIVED_ID}`) }).click()
+  await chooseThreadAction(page, ARCHIVED_ID, '削除')
 
   const dialog = page.getByRole('dialog')
   await expect(dialog).toContainText(ARCHIVED_ID)
@@ -150,19 +167,15 @@ test('hard delete確認は削除範囲・復元不能・保証対象外を明示
   await expect(dialog).toContainText('消去を保証しません')
 })
 
-test('character切替時に前characterの一覧・履歴・選択を即時に表示しない', async ({ page }) => {
+test('サイドバーを閉じた後はフロートメニューから再展開できる', async ({ page }) => {
   await installLifecycleBackend(page)
   await page.goto('/')
-  await page.getByRole('button', { name: ACTIVE_ID, exact: true }).click()
-  await expect(page.getByText(MASKED_ASSISTANT, { exact: true })).toBeVisible()
 
-  await page.getByLabel('キャラクターID').fill('akira')
-  await page.getByRole('button', { name: '切り替え' }).click()
+  await page.getByRole('button', { name: 'サイドバーを閉じる' }).click()
+  await expect(page.getByRole('complementary', { name: 'スレッド一覧' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'サイドバーを開く' }).click()
 
-  await expect(page.getByText(MASKED_ASSISTANT, { exact: true })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: new RegExp(ACTIVE_ID) })).toHaveCount(0)
-  const selected = await page.evaluate(() => localStorage.getItem('digital-souls:conversation:akira'))
-  expect(selected).not.toBe(ACTIVE_ID)
+  await expect(page.getByRole('complementary', { name: 'スレッド一覧' })).toBeVisible()
 })
 
 test('archive成功後はactive一覧と選択状態から除去しarchived一覧へ移す', async ({ page }) => {
@@ -170,16 +183,15 @@ test('archive成功後はactive一覧と選択状態から除去しarchived一�
   await page.goto('/')
   await page.getByRole('button', { name: ACTIVE_ID, exact: true }).click()
 
-  await page.getByRole('button', { name: new RegExp(`アーカイブ.*${ACTIVE_ID}`) }).click()
+  await chooseThreadAction(page, ACTIVE_ID, 'アーカイブ')
 
   await expect(page.getByRole('button', { name: new RegExp(ACTIVE_ID) })).toHaveCount(0)
   await expect(page.getByText(MASKED_ASSISTANT, { exact: true })).toHaveCount(0)
   const selected = await page.evaluate(() => localStorage.getItem('digital-souls:conversation:miori'))
   expect(selected).not.toBe(ACTIVE_ID)
   await page.getByRole('button', { name: 'アーカイブ済み' }).click()
-  await expect(page.getByRole('button', { name: ARCHIVED_ID, exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: ACTIVE_ID, exact: true })).toBeVisible()
-  await expect(page.getByText('履歴は削除されずSQLiteに保持されます', { exact: false })).toBeVisible()
+  await expect(page.getByText(ARCHIVED_ID, { exact: true })).toBeVisible()
+  await expect(page.getByText(ACTIVE_ID, { exact: true })).toBeVisible()
 })
 
 test('unarchive成功後は同じIDをactive一覧へ戻して再開できる', async ({ page }) => {
@@ -187,9 +199,9 @@ test('unarchive成功後は同じIDをactive一覧へ戻して再開できる', 
   await page.goto('/')
   await page.getByRole('button', { name: 'アーカイブ済み' }).click()
 
-  await page.getByRole('button', { name: new RegExp(`復元.*${ARCHIVED_ID}`) }).click()
+  await chooseThreadAction(page, ARCHIVED_ID, '復元')
 
-  await page.getByRole('button', { name: 'アクティブ' }).click()
+  await page.getByRole('button', { name: '会話履歴に戻る' }).click()
   await page.getByRole('button', { name: ARCHIVED_ID, exact: true }).click()
   const selected = await page.evaluate(() => localStorage.getItem('digital-souls:conversation:miori'))
   expect(selected).toBe(ARCHIVED_ID)
@@ -202,7 +214,7 @@ test('hard delete成功後は一覧・履歴・選択ID・localStorageから除�
   await installLifecycleBackend(page)
   await page.goto('/')
   await page.getByRole('button', { name: 'アーカイブ済み' }).click()
-  await page.getByRole('button', { name: new RegExp(`削除.*${ARCHIVED_ID}`) }).click()
+  await chooseThreadAction(page, ARCHIVED_ID, '削除')
 
   await page.getByRole('dialog').getByRole('button', { name: '完全に削除' }).click()
 
@@ -232,35 +244,39 @@ test('privacy_skipped履歴は本文を作らずreason metadataを表示する',
 
 const SENSITIVE_RAW_TEXT = '復元してはいけない原文'
 
-test('character切替後に到着した旧characterの遅延応答を破棄する', async ({ page }) => {
-  let releaseMiori: (() => void) | undefined
-  let mioriRequests = 0
-  let akiraRequests = 0
-  const mioriReleased = new Promise<void>((resolve) => {
-    releaseMiori = resolve
-  })
-  await installMockWebSocketBackend(page, { textFrames: [], binaryFrames: [] })
-  await page.route('**/api/**', async (route) => {
-    const pathname = new URL(route.request().url()).pathname
-    if (pathname.includes('/characters/miori/') && !pathname.includes('/turns')) {
-      mioriRequests += 1
-      await mioriReleased
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([conversation(ACTIVE_ID, null)]) })
-      return
-    }
-    if (pathname.includes('/characters/akira/')) akiraRequests += 1
-    await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
-  })
+test('キャラクターをピン留めすると0件ブロックも一覧先頭へ移動する', async ({ page }) => {
+  await installLifecycleBackend(page)
   await page.goto('/')
-  await expect.poll(() => mioriRequests).toBeGreaterThan(0)
-  await page.getByLabel('キャラクターID').fill('akira')
-  await page.getByRole('button', { name: '切り替え' }).click()
-  await expect.poll(() => akiraRequests).toBeGreaterThan(0)
 
-  if (releaseMiori === undefined) throw new Error('miori response resolver was not initialized')
-  releaseMiori()
+  await page.getByRole('button', { name: '晶をピン留め' }).click()
 
-  await expect(page.getByRole('button', { name: new RegExp(ACTIVE_ID) })).toHaveCount(0)
-  const selected = await page.evaluate(() => localStorage.getItem('digital-souls:conversation:akira'))
-  expect(selected).not.toBe(ACTIVE_ID)
+  await expect(page.locator('.character-label strong').first()).toHaveText('晶')
+  await expect(page.getByText('スレッドはありません', { exact: true })).toBeVisible()
+})
+
+test('非表示にしたキャラクターを設定から再追加すると既存スレッドを復元する', async ({ page }) => {
+  await installLifecycleBackend(page)
+  await page.goto('/')
+
+  await page.getByRole('button', { name: '光織を一覧から非表示' }).click()
+  await expect(page.getByRole('region', { name: '光織', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: '設定' }).click()
+  await page.getByRole('combobox', { name: 'キャラクター追加' }).selectOption('miori')
+  await page.getByRole('button', { name: '追加' }).click()
+
+  await expect(page.getByRole('region', { name: '光織', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: ACTIVE_ID, exact: true })).toBeVisible()
+})
+
+test('320px幅では履歴をdrawerとして開きEscapeで閉じる', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 })
+  await installLifecycleBackend(page)
+  await page.goto('/')
+
+  await expect(page.getByRole('complementary', { name: 'スレッド一覧' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'サイドバーを開く' }).click()
+  await expect(page.getByRole('complementary', { name: 'スレッド一覧' })).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  await expect(page.getByRole('complementary', { name: 'スレッド一覧' })).toHaveCount(0)
 })

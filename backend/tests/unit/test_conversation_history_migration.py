@@ -54,7 +54,7 @@ def _create_version_two_database(database_path: Path) -> None:
 
 def _create_version_three_database(database_path: Path) -> None:
     with sqlite3.connect(database_path) as connection:
-        connection.execute(schema.CONVERSATIONS_SQL)
+        connection.execute(schema.VERSION_FOUR_CONVERSATIONS_SQL)
         connection.execute(VERSION_THREE_CONVERSATION_TURNS_SQL)
         connection.execute(schema.WAL_CLEANUP_JOBS_SQL)
         connection.execute(schema.HISTORY_INDEX_SQL)
@@ -83,6 +83,53 @@ def _create_version_three_database(database_path: Path) -> None:
         connection.execute("PRAGMA user_version = 3")
 
 
+def _create_version_four_database(database_path: Path) -> None:
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(schema.VERSION_FOUR_CONVERSATIONS_SQL)
+        connection.execute(schema.CONVERSATION_TURNS_SQL)
+        connection.execute(schema.WAL_CLEANUP_JOBS_SQL)
+        connection.execute(schema.HISTORY_INDEX_SQL)
+        connection.execute(schema.STALE_INDEX_SQL)
+        connection.execute(
+            "INSERT INTO conversations "
+            "(character_id, conversation_id, created_at) VALUES (?, ?, ?)",
+            (CHARACTER_ID, CONVERSATION_ID, CREATED_AT),
+        )
+        connection.execute(
+            "INSERT INTO conversation_turns "
+            "(turn_id, character_id, conversation_id, user_content, "
+            "assistant_content, status, privacy_reason_code, sanitizer_version, "
+            "policy_version, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, 'completed', NULL, NULL, NULL, ?, ?)",
+            (
+                TURN_ID,
+                CHARACTER_ID,
+                CONVERSATION_ID,
+                "  最初の文です。 後続の文です。",
+                "保存済みの回答",
+                CREATED_AT,
+                CREATED_AT,
+            ),
+        )
+        connection.execute("PRAGMA user_version = 4")
+
+
+def _create_version_five_database(database_path: Path) -> None:
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(schema.CONVERSATIONS_SQL)
+        connection.execute(schema.CONVERSATION_TURNS_SQL)
+        connection.execute(schema.WAL_CLEANUP_JOBS_SQL)
+        connection.execute(schema.HISTORY_INDEX_SQL)
+        connection.execute(schema.STALE_INDEX_SQL)
+        connection.execute(
+            "INSERT INTO conversations "
+            "(character_id, conversation_id, created_at, title, title_is_manual) "
+            "VALUES (?, ?, ?, ?, 1)",
+            (CHARACTER_ID, CONVERSATION_ID, CREATED_AT, "既存タイトル"),
+        )
+        connection.execute("PRAGMA user_version = 5")
+
+
 def _schema_state(database_path: Path) -> tuple[int, tuple[str, ...], set[str]]:
     with sqlite3.connect(database_path) as connection:
         version = int(connection.execute("PRAGMA user_version").fetchone()[0])
@@ -100,7 +147,7 @@ def _schema_state(database_path: Path) -> tuple[int, tuple[str, ...], set[str]]:
     return version, columns, tables
 
 
-def test_should_migrate_canonical_version_two_database_to_version_four(
+def test_should_migrate_canonical_version_two_database_to_current_version(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "history.db"
@@ -110,14 +157,16 @@ def test_should_migrate_canonical_version_two_database_to_version_four(
 
     version, conversation_columns, tables = _schema_state(database_path)
 
-    assert version == 4
+    assert version == schema.SCHEMA_VERSION
     assert conversation_columns == (
         "character_id",
         "conversation_id",
         "created_at",
         "archived_at",
+        "title",
+        "title_is_manual",
     )
-    assert tables == {"conversations", "conversation_turns", "wal_cleanup_jobs"}
+    assert tables == schema.CURRENT_TABLES
 
 
 def test_should_preserve_existing_rows_when_migrating_version_two_database(
@@ -130,7 +179,8 @@ def test_should_preserve_existing_rows_when_migrating_version_two_database(
 
     with sqlite3.connect(database_path) as connection:
         conversation = connection.execute(
-            "SELECT character_id, conversation_id, created_at, archived_at "
+            "SELECT character_id, conversation_id, created_at, archived_at, "
+            "title, title_is_manual "
             "FROM conversations"
         ).fetchone()
         turn = connection.execute(
@@ -138,7 +188,14 @@ def test_should_preserve_existing_rows_when_migrating_version_two_database(
             "assistant_content, status FROM conversation_turns"
         ).fetchone()
 
-    assert conversation == (CHARACTER_ID, CONVERSATION_ID, CREATED_AT, None)
+    assert conversation == (
+        CHARACTER_ID,
+        CONVERSATION_ID,
+        CREATED_AT,
+        None,
+        "マスク済みユーザー本文",
+        0,
+    )
     assert turn == (
         TURN_ID,
         CHARACTER_ID,
@@ -149,7 +206,7 @@ def test_should_preserve_existing_rows_when_migrating_version_two_database(
     )
 
 
-def test_should_migrate_version_three_to_four_without_losing_rows(
+def test_should_migrate_version_three_to_current_without_losing_rows(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "history.db"
@@ -159,18 +216,68 @@ def test_should_migrate_version_three_to_four_without_losing_rows(
 
     with sqlite3.connect(database_path) as connection:
         version = connection.execute("PRAGMA user_version").fetchone()[0]
+        title = connection.execute(
+            "SELECT title FROM conversations"
+        ).fetchone()[0]
         turn = connection.execute(
             "SELECT turn_id, user_content, assistant_content, status "
             "FROM conversation_turns"
         ).fetchone()
 
-    assert version == 4
+    assert version == schema.SCHEMA_VERSION
+    assert title == "マスク済みユーザー本文"
     assert turn == (
         TURN_ID,
         "マスク済みユーザー本文",
         "マスク済みアシスタント本文",
         "completed",
     )
+
+
+def test_should_migrate_version_four_and_backfill_deterministic_title(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "history.db"
+    _create_version_four_database(database_path)
+
+    initialize_conversation_history_schema(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+        title, title_is_manual = connection.execute(
+            "SELECT title, title_is_manual FROM conversations"
+        ).fetchone()
+
+    assert version == schema.SCHEMA_VERSION
+    assert title == "最初の文です。"
+    assert title_is_manual == 0
+
+
+def test_should_migrate_version_five_and_preserve_conversations(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "history.db"
+    _create_version_five_database(database_path)
+
+    initialize_conversation_history_schema(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+        title = connection.execute(
+            "SELECT title FROM conversations WHERE character_id = ?",
+            (CHARACTER_ID,),
+        ).fetchone()[0]
+        tables = {
+            str(row[0])
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            )
+        }
+
+    assert version == schema.SCHEMA_VERSION
+    assert title == "既存タイトル"
+    assert tables == schema.CURRENT_TABLES
 
 
 def test_should_reject_version_three_migration_with_dependent_view(

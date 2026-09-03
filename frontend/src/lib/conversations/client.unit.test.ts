@@ -5,6 +5,7 @@ import {
   createConversation,
   listActiveConversations,
   listArchivedConversations,
+  renameConversation,
   unarchiveConversation,
 } from './client'
 
@@ -22,6 +23,7 @@ const conversation = (
   created_at: '2026-08-01T12:00:00+00:00',
   updated_at: '2026-08-01T12:01:00+00:00',
   archived_at: archivedAt,
+  title: '新しい会話',
 })
 
 const respondWith = (body: unknown): void => {
@@ -43,6 +45,16 @@ describe('conversation lifecycle client response boundary', () => {
     const result = await listActiveConversations(CHARACTER)
 
     expect(result).toEqual([expected])
+  })
+
+  test('should accept a title containing 40 astral Unicode characters', async () => {
+    const expected = {
+      ...conversation(CHARACTER, CONVERSATION_ID, null),
+      title: '😀'.repeat(40),
+    }
+    respondWith([expected])
+
+    await expect(listActiveConversations(CHARACTER)).resolves.toEqual([expected])
   })
 
   test('should reject an active list item for another character', async () => {
@@ -128,5 +140,29 @@ describe('conversation lifecycle client response boundary', () => {
     const request = unarchiveConversation(CHARACTER, CONVERSATION_ID)
 
     await expect(request).rejects.toThrow()
+  })
+
+  test('should send a conversation title change through PATCH', async () => {
+    const renamed = {
+      ...conversation(CHARACTER, CONVERSATION_ID, null),
+      title: '手動タイトル',
+    }
+    respondWith(renamed)
+
+    const result = await renameConversation(
+      CHARACTER,
+      CONVERSATION_ID,
+      '手動タイトル',
+    )
+
+    expect(result).toEqual(renamed)
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/characters/${CHARACTER}/conversations/${CONVERSATION_ID}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: '手動タイトル' }),
+      },
+    )
   })
 })

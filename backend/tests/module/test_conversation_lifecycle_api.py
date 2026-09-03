@@ -46,6 +46,7 @@ def test_should_create_conversation_through_public_api(client) -> None:
 
     assert created.status_code == 201
     assert created.json()["character_id"] == "miori"
+    assert created.json()["title"] == "新しい会話"
 
 
 def test_should_list_active_conversations_through_public_api(client) -> None:
@@ -57,6 +58,52 @@ def test_should_list_active_conversations_through_public_api(client) -> None:
     assert [item["conversation_id"] for item in listed.json()] == [
         str(conversation.conversation_id)
     ]
+    assert listed.json()[0]["title"] == "連絡先は[REDACTED]です"
+
+
+def test_should_rename_active_and_archived_conversation(client) -> None:
+    conversation = _create_completed_conversation(client)
+
+    renamed = client.patch(
+        f"{BASE_PATH}/{conversation.conversation_id}",
+        json={"title": "  手動で変更した名前  "},
+    )
+    archived = client.post(f"{BASE_PATH}/{conversation.conversation_id}/archive")
+    renamed_archived = client.patch(
+        f"{BASE_PATH}/{conversation.conversation_id}",
+        json={"title": "アーカイブ後の名前"},
+    )
+
+    assert renamed.status_code == 200
+    assert renamed.json()["title"] == "手動で変更した名前"
+    assert archived.status_code == 200
+    assert archived.json()["archived_at"] is not None
+    assert renamed_archived.status_code == 200
+    assert renamed_archived.json()["title"] == "アーカイブ後の名前"
+    assert renamed_archived.json()["archived_at"] is not None
+
+
+@pytest.mark.parametrize("title", ["", "   ", "改行\nタイトル", "a" * 41])
+def test_should_reject_invalid_conversation_title(client, title: str) -> None:
+    conversation = _create_completed_conversation(client)
+
+    response = client.patch(
+        f"{BASE_PATH}/{conversation.conversation_id}",
+        json={"title": title},
+    )
+
+    assert response.status_code == 422
+
+
+def test_should_hide_rename_character_boundary_as_not_found(client) -> None:
+    conversation = _create_completed_conversation(client)
+
+    response = client.patch(
+        f"/characters/akira/conversations/{conversation.conversation_id}",
+        json={"title": "境界外の変更"},
+    )
+
+    assert response.status_code == 404
 
 
 def test_should_list_archived_conversations_through_separate_public_api(client) -> None:

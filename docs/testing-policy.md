@@ -44,6 +44,11 @@ Issue #56で、dogfood稼働中のintegration testとcleanupを含む横断受�
 
 各設定は Profile、収集ディレクトリ、成果物の出力先を固定する。spec 内で環境変数や依存 mode によってモックと実接続を切り替えない。各 spec が受け入れる要求Capabilityは1つだけとする。実接続 spec では mock WebSocket、`page.route`、HARによる外部通信の置換を禁止する。
 
+Epic #151のresponsive会話画面は`frontend/e2e/portrait-layout.spec.ts`でPC、tablet、mobile、
+Visual Viewport縮小、立ち絵未設定・取得失敗を検証する。PC右配置、PC背面配置、tablet、mobileの
+画面はPlaywright attachmentとして各テスト結果へ保存する。手動受け入れ手順と証跡名は
+[`epic-151-acceptance.md`](epic-151-acceptance.md)を正本とする。
+
 `voice-chat-real`はOllama、Whisper、VOICEVOXに加えてLiveKitのreadinessを要求する。`npm run test:integration:voice`の実行時は、Profileへ秘密値を保存せず、`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`を実行環境からBackendへ渡す。
 
 ## 実行入口

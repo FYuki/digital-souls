@@ -6,7 +6,11 @@ from threading import Barrier
 import pytest
 
 from app.conversation_history.errors import LegacySchemaError
-from app.conversation_history.schema import initialize_conversation_history_schema
+from app.conversation_history.schema import (
+    CURRENT_TABLES,
+    SCHEMA_VERSION,
+    initialize_conversation_history_schema,
+)
 
 
 def _connect(database_path: Path) -> sqlite3.Connection:
@@ -34,12 +38,8 @@ class TestConversationHistorySchema:
             }
             user_version = connection.execute("PRAGMA user_version").fetchone()[0]
 
-        assert tables == {
-            "conversations",
-            "conversation_turns",
-            "wal_cleanup_jobs",
-        }
-        assert user_version > 0
+        assert tables == CURRENT_TABLES
+        assert user_version == SCHEMA_VERSION
 
     def test_should_be_idempotent_for_current_schema(self, tmp_path: Path) -> None:
         database_path = tmp_path / "conversation-history.db"
@@ -80,7 +80,10 @@ class TestConversationHistorySchema:
         initialize_conversation_history_schema(database_path)
 
         with _connect(database_path) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 4
+            assert (
+                connection.execute("PRAGMA user_version").fetchone()[0]
+                == SCHEMA_VERSION
+            )
             assert connection.execute(
                 "SELECT COUNT(*) FROM conversations"
             ).fetchone()[0] == 0
@@ -104,18 +107,17 @@ class TestConversationHistorySchema:
             future.result()
 
         with _connect(database_path) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 4
+            assert (
+                connection.execute("PRAGMA user_version").fetchone()[0]
+                == SCHEMA_VERSION
+            )
             assert {
                 row[0]
                 for row in connection.execute(
                     "SELECT name FROM sqlite_master "
                     "WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
                 )
-            } == {
-                "conversations",
-                "conversation_turns",
-                "wal_cleanup_jobs",
-            }
+            } == CURRENT_TABLES
 
     def test_should_reject_schema_with_matching_columns_but_missing_constraints(
         self,

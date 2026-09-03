@@ -21,6 +21,9 @@
 characters/
 └─ miori/
    ├─ miori.card.json
+   ├─ assets/
+   │  └─ standing/
+   │     └─ default.png
    ├─ personality.md
    ├─ world.md
    └─ memory-policy.md
@@ -39,6 +42,7 @@ characters/
 | ファイル | 役割 |
 |---|---|
 | `{id}.card.json` | runtimeで使用する人格Core・条件付きCharacter Lore・表示名・会話例・応答指示の正本 |
+| `assets/standing/default.png` | 会話画面で使用する標準立ち絵 |
 | `personality.md` | Character Cardを編集するときの非runtime補助資料 |
 | `world.md` | 世界観、比喩体系、用語、演出方針、応答上の扱い |
 | `memory-policy.md` | 記憶方針本文の移動先と実装設定ファイルへの案内 |
@@ -80,6 +84,23 @@ characters/example-character/
 ```
 
 日本語名や表示名は、各人格の `{id}.card.json` の `data.name` に記載する。
+
+IDはASCII小文字で始め、ASCII小文字・数字を使用したkebab-caseとする。立ち絵の将来variant名も同じ規則とし、`default.png`、`winter-outfit.png`のように配置する。日本語名、アンダースコア、連続ハイフン、ディレクトリ区切りは使用しない。
+
+## 立ち絵アセット
+
+標準立ち絵を用意する場合は、次のパスへPNGとして配置する。
+
+```text
+characters/{id}/assets/standing/default.png
+```
+
+- 初期対応形式はPNGとし、透過PNGと背景込みPNGのどちらも許可する
+- 表示時のトリミングを避けるため、全身が収まった縦長画像を推奨する
+- 推奨解像度は1024×1536px程度とする。UI側で表示領域に合わせて縮小する
+- variantを追加する場合も同じ`standing/`配下へ配置し、ファイル名はASCII小文字のkebab-caseとする
+- Frontendはrepository上のパスを直接参照せず、Backendのcatalogが返すURLを使用する
+- 未配置または読み込み失敗時は、Frontend共通のプレースホルダーへフォールバックする
 
 ## 新しい人格を追加する場合
 

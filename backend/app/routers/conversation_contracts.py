@@ -1,7 +1,7 @@
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.chat_service import (
     PersistedContentTurn,
@@ -9,6 +9,7 @@ from app.chat_service import (
     PersistedTurn,
 )
 from app.conversation_history.models import Conversation, ConversationTurn, TurnStatus
+from app.conversation_history.titles import normalize_manual_conversation_title
 from app.privacy.contracts import HistoryDecisionReasonCode
 
 
@@ -18,6 +19,16 @@ class ConversationResponse(BaseModel):
     created_at: str
     updated_at: str
     archived_at: str | None
+    title: str
+
+
+class RenameConversationRequest(BaseModel):
+    title: str
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        return normalize_manual_conversation_title(value)
 
 
 class ContentTurnResponse(BaseModel):
@@ -49,6 +60,7 @@ def conversation_response(conversation: Conversation) -> ConversationResponse:
             if conversation.archived_at is None
             else conversation.archived_at.isoformat()
         ),
+        title=conversation.title,
     )
 
 

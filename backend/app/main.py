@@ -77,8 +77,10 @@ from app.privacy.scanner import create_privacy_scanner
 from app.privacy.semantic.classifier import OllamaSemanticPrivacyClassifier
 from app.privacy.semantic.ollama_classifier_client import OllamaClassifierClient
 from app.routers.chat import router as chat_router
+from app.routers.character_catalog import router as character_catalog_router
 from app.routers.conversations import router as conversations_router
 from app.routers.memory_management import router as memory_management_router
+from app.routers.ui_settings import router as ui_settings_router
 from app.routers.livekit import router as livekit_router
 from app.routers.ws import router as ws_router
 from app.runtime_data_root import (
@@ -90,6 +92,7 @@ from app.runtime_paths import (
     resolve_runtime_paths,
     runtime_paths_projection,
 )
+from app.ui_settings import UiSettingsRepository
 from app.voice_metrics import (
     JsonlTraceRecorder,
     MeasurementKind,
@@ -327,6 +330,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         conversation_lifecycle_service = ConversationLifecycleService(
             conversation_history_repository
         )
+        ui_settings_repository = UiSettingsRepository(
+            database_path=conversation_history_config.database_path,
+            clock=clock,
+        )
         approved_memory_repository = ApprovedMemoryRepository(
             database_path=runtime_paths.persona_memory_sqlite_path,
             clock=clock,
@@ -356,6 +363,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         chat_service_resolver = None
         repository_state_set = False
         lifecycle_service_state_set = False
+        ui_settings_repository_state_set = False
         resolver_registered = False
         chat_service_state_set = False
         audio_pipeline_state_set = False
@@ -384,6 +392,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             repository_state_set = True
             app.state.conversation_lifecycle_service = conversation_lifecycle_service
             lifecycle_service_state_set = True
+            app.state.ui_settings_repository = ui_settings_repository
+            ui_settings_repository_state_set = True
             semantic_classifier_client = OllamaClassifierClient(
                 model_id=model_settings.ollama_classifier_model
             )
@@ -656,6 +666,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         app.state,
                         "conversation_lifecycle_service",
                     )
+                if ui_settings_repository_state_set:
+                    cleanup.callback(
+                        delattr,
+                        app.state,
+                        "ui_settings_repository",
+                    )
                 if semantic_classifier_state_set:
                     cleanup.callback(
                         delattr,
@@ -687,8 +703,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(lifespan=lifespan)
 
 app.include_router(chat_router)
+app.include_router(character_catalog_router)
 app.include_router(conversations_router)
 app.include_router(memory_management_router)
+app.include_router(ui_settings_router)
 app.include_router(livekit_router)
 app.include_router(ws_router)
 

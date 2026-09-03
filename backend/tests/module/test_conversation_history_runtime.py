@@ -10,7 +10,10 @@ from app.conversation_history.config import resolve_conversation_history_config
 from app.conversation_history.models import ProcessingTurnInput, TurnStatus
 from app.conversation_history.repository import ConversationHistoryRepository
 from app.conversation_history.wal_cleanup import ConversationWalCleanup
-from app.conversation_history.schema import initialize_conversation_history_schema
+from app.conversation_history.schema import (
+    CURRENT_TABLES,
+    initialize_conversation_history_schema,
+)
 from tests.conversation_history_test_support import set_turn_times
 
 
@@ -87,11 +90,7 @@ class TestConversationHistoryRuntime:
                     "WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
                 )
             }
-        assert tables == {
-            "conversations",
-            "conversation_turns",
-            "wal_cleanup_jobs",
-        }
+        assert tables == CURRENT_TABLES
 
     def test_should_recover_stale_processing_during_startup(
         self,

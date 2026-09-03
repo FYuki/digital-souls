@@ -3,12 +3,12 @@
 
   import AudioRecorder from './lib/AudioRecorder.svelte'
   import type { SpeechActivity } from './lib/AudioRecorder.svelte'
-  import CharacterSwitcher from './lib/CharacterSwitcher.svelte'
+  import CharacterPortrait from './lib/CharacterPortrait.svelte'
   import ChatWindow from './lib/ChatWindow.svelte'
   import ConversationSidebar from './lib/ConversationSidebar.svelte'
-  import HardDeleteDialog from './lib/HardDeleteDialog.svelte'
   import InputBar from './lib/InputBar.svelte'
   import MemoryManagement from './lib/MemoryManagement.svelte'
+  import { listCharacters, rescanCharacters } from './lib/characters/client'
   import { sendChatMessage } from './lib/chat/client'
   import { createConversationSessionManager } from './lib/conversation-session'
   import {
@@ -18,11 +18,20 @@
     listActiveConversations,
     listArchivedConversations,
     listConversationTurns,
+    renameConversation,
     unarchiveConversation,
   } from './lib/conversations/client'
   import {
     createConversationController,
   } from './lib/conversations/controller'
+  import { createSidebarController } from './lib/sidebar/controller'
+  import {
+    getUiSettings,
+    setCharacterPinned,
+    setCharacterVisibility,
+    setThreadPinned,
+    updateUiPreferences,
+  } from './lib/ui-settings/client'
   import type { VoiceSessionEvent } from './lib/voice-session/generated'
   import {
     LiveKitVoiceSessionController,
@@ -45,6 +54,22 @@
     },
     createConversationSessionManager(),
   )
+  const sidebarController = createSidebarController({
+    listCatalog: listCharacters,
+    rescanCatalog: rescanCharacters,
+    getSettings: getUiSettings,
+    updatePreferences: updateUiPreferences,
+    setCharacterVisibility,
+    setCharacterPinned,
+    setThreadPinned,
+    listActive: listActiveConversations,
+    listArchived: listArchivedConversations,
+    create: createConversation,
+    rename: renameConversation,
+    archive: archiveConversation,
+    unarchive: unarchiveConversation,
+    hardDelete: hardDeleteConversation,
+  }, ERROR_MESSAGE)
   type PendingRequest = 'text' | null
 
   let pendingRequest: PendingRequest = null
@@ -52,6 +77,10 @@
   let showingMemoryManagement = false
   let activeUtteranceId: string | null = null
   let endingVoiceSession = false
+  let sidebarOpen = true
+  let compactLayout = false
+  let visualViewportHeight: number | null = null
+  let visualViewportOffsetTop = 0
   type LiveVoiceTurn = {
     responseId: string | null
     sourceUtteranceIds: string[]
@@ -163,7 +192,10 @@
       liveVoiceTurn = null
       if (event.type !== 'response_failed') {
         const context = conversationController.selectedContext()
-        if (context !== null) void conversationController.refreshTurns(context)
+        if (context !== null) {
+          void conversationController.refreshTurns(context)
+          void sidebarController.refreshCharacter(context.character)
+        }
       }
       return
     }
@@ -234,8 +266,33 @@
   }
 
   onMount(() => {
-    void conversationController.loadCharacter(INITIAL_CHARACTER_ID)
-    return () => { void voiceSession.end().catch(() => undefined) }
+    const compactQuery = window.matchMedia?.('(max-width: 900px)')
+    const viewport = window.visualViewport
+    const updateLayout = () => {
+      const wasCompact = compactLayout
+      compactLayout = compactQuery?.matches ?? false
+      if (compactLayout && !wasCompact) sidebarOpen = false
+      if (!compactLayout && wasCompact) sidebarOpen = true
+    }
+    compactLayout = compactQuery?.matches ?? false
+    sidebarOpen = !compactLayout
+    const updateViewport = () => {
+      visualViewportHeight = viewport?.height ?? window.innerHeight
+      visualViewportOffsetTop = viewport?.offsetTop ?? 0
+    }
+    updateViewport()
+    compactQuery?.addEventListener('change', updateLayout)
+    viewport?.addEventListener('resize', updateViewport)
+    viewport?.addEventListener('scroll', updateViewport)
+    window.addEventListener('resize', updateViewport)
+    void sidebarController.initialize()
+    return () => {
+      compactQuery?.removeEventListener('change', updateLayout)
+      viewport?.removeEventListener('resize', updateViewport)
+      viewport?.removeEventListener('scroll', updateViewport)
+      window.removeEventListener('resize', updateViewport)
+      void voiceSession.end().catch(() => undefined)
+    }
   })
 
   const handleSend = async (message: string) => {
@@ -255,6 +312,7 @@
         message: text,
       })
       conversationController.appendTurn(context, response.turn)
+      void sidebarController.refreshCharacter(context.character)
     } catch {
       conversationController.reportConversationError(context)
     } finally {
@@ -262,15 +320,40 @@
     }
   }
 
-  const handleCharacterSwitch = (character: string) => {
-    if (interactionsDisabled || character === $conversationController.character) return
-    void conversationController.loadCharacter(character)
+  const handleSelectConversation = async (character: string, conversationId: string) => {
+    if (interactionsDisabled) return
+    showingMemoryManagement = false
+    if (character !== $conversationController.character) {
+      await conversationController.loadCharacter(character)
+    }
+    await conversationController.selectConversation(conversationId)
+    if (compactLayout) sidebarOpen = false
   }
 
-  const handleSelectConversation = (conversationId: string) => {
-    if (interactionsDisabled) return
-    void conversationController.selectConversation(conversationId)
+  const handleCreatedConversation = async (character: string, conversation: { conversation_id: string }) => {
+    await handleSelectConversation(character, conversation.conversation_id)
   }
+
+  const handleRemovedConversation = (character: string, conversationId: string) => {
+    conversationController.clearSelection(character, conversationId)
+  }
+
+  $: currentCharacterEntry = $sidebarController.catalog.find(
+    (item) => item.character_id === $conversationController.character,
+  )
+  $: currentCharacterState = $sidebarController.settings?.characters.find(
+    (item) => item.character_id === $conversationController.character,
+  )
+  $: currentConversation = [
+    ...($sidebarController.activeByCharacter[$conversationController.character] ?? []),
+    ...($sidebarController.archivedByCharacter[$conversationController.character] ?? []),
+  ].find((item) => item.conversation_id === $conversationController.selectedConversationId)
+  $: portraitLayout = compactLayout
+    ? 'background'
+    : ($sidebarController.settings?.desktop_portrait_layout ?? 'right')
+  $: historyHeightPercent = compactLayout
+    ? ($sidebarController.settings?.compact_history_height_percent ?? 75)
+    : ($sidebarController.settings?.desktop_history_height_percent ?? 75)
 
   const ensureVoiceSession = async () => {
     const context = conversationController.selectedContext()
@@ -341,35 +424,66 @@
   }
 </script>
 
-<main class="app-shell">
-  {#if showingMemoryManagement}
-    <MemoryManagement character={$conversationController.character} onClose={() => { showingMemoryManagement = false }} />
+<main
+  class="app-shell"
+  style={`--visual-viewport-height: ${visualViewportHeight === null ? '100dvh' : `${visualViewportHeight}px`}; --visual-viewport-top: ${visualViewportOffsetTop}px`}
+>
+  {#if sidebarOpen}
+    {#if compactLayout}
+      <button class="drawer-backdrop" type="button" aria-label="サイドバーを閉じる" on:click={() => { sidebarOpen = false }}></button>
+    {/if}
+    <ConversationSidebar
+      state={$sidebarController}
+      controller={sidebarController}
+      selectedCharacter={$conversationController.character}
+      selectedConversationId={$conversationController.selectedConversationId}
+      disabled={interactionsDisabled}
+      onClose={() => { sidebarOpen = false }}
+      onSelect={(character, conversationId) => { void handleSelectConversation(character, conversationId) }}
+      onCreated={(character, conversation) => { void handleCreatedConversation(character, conversation) }}
+      onRemoved={handleRemovedConversation}
+      onRenamed={() => undefined}
+      onOpenMemory={() => { showingMemoryManagement = true; if (compactLayout) sidebarOpen = false }}
+    />
   {:else}
-  <section class="chat-panel" aria-label="光織とのチャット">
+    <button class="floating-menu" type="button" aria-label="サイドバーを開く" on:click={() => { sidebarOpen = true }}>☰</button>
+  {/if}
+  {#if showingMemoryManagement}
+    <section class="content-panel memory-panel">
+      <MemoryManagement character={$conversationController.character} onClose={() => { showingMemoryManagement = false }} />
+    </section>
+  {:else}
+  <section class="chat-panel" aria-label={`${currentCharacterEntry?.display_name ?? $conversationController.character}とのチャット`}>
     <header class="chat-header">
       <p class="eyebrow">digital-souls</p>
-      <h1>光織</h1>
-      <CharacterSwitcher currentCharacter={$conversationController.character} disabled={interactionsDisabled} onSwitch={handleCharacterSwitch} />
-      <button type="button" on:click={() => { showingMemoryManagement = true }}>記憶管理</button>
+      <div class="current-thread">
+        <h1>{currentConversation?.title ?? 'スレッド未選択'}</h1>
+        <p>{currentCharacterEntry?.display_name ?? $conversationController.character}</p>
+      </div>
+      {#if currentCharacterState?.visible === false}
+        <span class="hidden-badge">一覧から非表示中</span>
+      {/if}
     </header>
-    <ConversationSidebar
-      active={$conversationController.active}
-      archived={$conversationController.archived}
-      showingArchived={$conversationController.showingArchived}
-      disabled={interactionsDisabled}
-      onShowActive={conversationController.showActive}
-      onShowArchived={conversationController.showArchived}
-      onCreate={conversationController.createConversation}
-      onSelect={handleSelectConversation}
-      onArchive={conversationController.archiveConversation}
-      onUnarchive={conversationController.unarchiveConversation}
-      onDelete={conversationController.requestHardDelete}
-    />
-    <ChatWindow
-      turns={$conversationController.turns}
-      failedVoiceTurns={visibleFailedVoiceTurns}
-      liveVoiceTurn={liveVoiceTurn}
-    />
+    <div
+      class:portrait-background={portraitLayout === 'background'}
+      class:portrait-right={portraitLayout === 'right'}
+      class="conversation-stage"
+      data-portrait-layout={portraitLayout}
+      data-history-height={historyHeightPercent}
+      style={`--history-height: ${historyHeightPercent}%`}
+    >
+      <div class="portrait-layer">
+        <CharacterPortrait character={currentCharacterEntry ?? null} />
+      </div>
+      <div class="history-layer">
+        <ChatWindow
+          turns={$conversationController.turns}
+          characterName={currentCharacterEntry?.display_name ?? $conversationController.character}
+          failedVoiceTurns={visibleFailedVoiceTurns}
+          liveVoiceTurn={liveVoiceTurn}
+        />
+      </div>
+    </div>
     {#if applicationError !== null || $conversationController.error !== null}
       <p class="application-error" role="alert">{applicationError ?? $conversationController.error}</p>
     {/if}
@@ -388,7 +502,11 @@
       </section>
     {/if}
     <div class="input-area">
-      <InputBar onSend={handleSend} disabled={interactionsDisabled || $conversationController.selectedConversationId === null} />
+      <InputBar
+        onSend={handleSend}
+        characterName={currentCharacterEntry?.display_name ?? $conversationController.character}
+        disabled={interactionsDisabled || $conversationController.selectedConversationId === null}
+      />
       <AudioRecorder
         disabled={voiceRecorderDisabled}
         forceOff={voiceRecorderForceOff}
@@ -414,73 +532,148 @@
   {/if}
 </main>
 
-{#if $conversationController.deleteCandidate !== null}
-  <HardDeleteDialog
-    conversationId={$conversationController.deleteCandidate}
-    disabled={$conversationController.pending}
-    onConfirm={conversationController.confirmHardDelete}
-    onCancel={conversationController.cancelHardDelete}
-  />
-{/if}
-
 <style>
   .app-shell {
-    min-height: 100vh;
+    position: relative;
+    height: var(--visual-viewport-height, 100dvh);
     display: flex;
     align-items: stretch;
-    justify-content: center;
-    padding: 24px;
-    box-sizing: border-box;
+    overflow: hidden;
     background:
-      linear-gradient(180deg, rgba(178, 73, 48, 0.1), rgba(255, 248, 243, 0) 35%),
-      #fff8f3;
+      radial-gradient(circle at 78% 8%, rgba(156, 130, 255, 0.14), transparent 30%),
+      #0c0a12;
   }
 
-  .chat-panel {
-    width: min(880px, 100%);
-    min-height: calc(100vh - 48px);
+  .chat-panel, .content-panel {
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid rgba(144, 67, 47, 0.2);
-    border-radius: 8px;
-    background: rgba(255, 253, 250, 0.95);
-    box-shadow: 0 18px 42px rgba(69, 39, 33, 0.12);
+    color: #f8f3ff;
+    background: #100d17;
   }
 
   .chat-header {
-    padding: 20px 24px 16px;
-    border-bottom: 1px solid rgba(144, 67, 47, 0.16);
-    background: #fff4ec;
+    position: relative;
+    z-index: 20;
+    display: flex;
+    min-height: 64px;
+    box-sizing: border-box;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 22px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+    background: rgba(12, 10, 18, 0.84);
+    backdrop-filter: blur(18px);
   }
 
   .eyebrow {
-    margin: 0 0 4px;
-    color: #9f4933;
-    font-size: 0.78rem;
+    margin: 0;
+    color: #c4b6da;
+    font-size: 0.68rem;
     font-weight: 700;
     text-transform: uppercase;
   }
 
+  .current-thread { min-width: 0; flex: 1; }
   h1 {
     margin: 0;
-    font-size: 1.6rem;
-    color: #4a2822;
+    overflow: hidden;
+    color: #fbf7ff;
+    font-size: 0.94rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
+  .current-thread p { margin: 3px 0 0; color: #8d8598; font-size: 0.68rem; }
+  .hidden-badge { padding: 5px 8px; border: 1px solid rgba(240, 163, 193, 0.25); border-radius: 999px; color: #e5b5c9; font-size: 0.65rem; }
+
+  .conversation-stage {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 72% 38%, rgba(240, 163, 193, 0.08), transparent 35%),
+      #100d17;
+  }
+
+  .portrait-right {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(280px, 34vw, 520px);
+  }
+
+  .portrait-right .portrait-layer {
+    position: relative;
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .portrait-right .history-layer {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .portrait-background .portrait-layer {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+  }
+
+  .portrait-background .history-layer {
+    position: absolute;
+    z-index: 1;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: var(--history-height);
+    display: flex;
+    min-height: 0;
+    background: linear-gradient(180deg, transparent, rgba(12, 10, 18, 0.18) 28%);
+  }
+
+  :global(.history-layer .messages) {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    background: transparent;
+  }
+
+  :global(.portrait-background .message) {
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(33, 27, 42, 0.9);
+    backdrop-filter: blur(8px);
+  }
+
+  :global(.portrait-background .message.user) {
+    background: rgba(141, 66, 96, 0.92);
+  }
+
+  .floating-menu { position: fixed; z-index: 55; top: 14px; left: 14px; display: grid; width: 44px; height: 44px; place-items: center; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; color: #f8f3ff; background: rgba(27, 23, 38, 0.9); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.28); cursor: pointer; backdrop-filter: blur(12px); }
+  .floating-menu:focus-visible { outline: 2px solid #f0a3c1; outline-offset: 2px; }
+  .drawer-backdrop { position: fixed; z-index: 45; inset: 0; border: 0; background: rgba(3, 2, 6, 0.62); }
+  .memory-panel { overflow: auto; padding: 18px; }
 
   .input-area {
     display: flex;
     align-items: stretch;
     gap: 12px;
     padding: 16px 24px 20px;
-    border-top: 1px solid rgba(144, 67, 47, 0.16);
-    background: #fff4ec;
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+    background: #15111d;
   }
 
   .application-error {
     margin: 0;
     padding: 8px 24px;
-    color: #8a211b;
+    color: #ffb8b8;
   }
 
   .voice-status {
@@ -489,9 +682,9 @@
     align-items: center;
     gap: 8px 14px;
     padding: 10px 24px;
-    border-top: 1px solid rgba(144, 67, 47, 0.12);
-    color: #63382f;
-    background: #fffaf6;
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+    color: #d4ccd9;
+    background: #17131e;
     font-size: 0.88rem;
   }
 
@@ -501,11 +694,11 @@
   }
 
   .voice-status button {
-    min-height: 36px;
-    border: 1px solid rgba(144, 67, 47, 0.28);
+    min-height: 44px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 8px;
-    color: #6e3227;
-    background: #fffdfa;
+    color: #eee8f3;
+    background: #282230;
     font-weight: 700;
   }
 
@@ -520,23 +713,21 @@
   .end-voice-session {
     flex: 0 0 auto;
     min-height: 44px;
-    border: 1px solid rgba(144, 67, 47, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 8px;
-    color: #6e3227;
-    background: #fffdfa;
+    color: #eee8f3;
+    background: #282230;
     font-weight: 700;
   }
 
-  @media (max-width: 640px) {
-    .app-shell {
-      padding: 0;
-    }
+  @media (max-width: 900px) {
+    .app-shell { position: fixed; top: var(--visual-viewport-top, 0); right: 0; left: 0; }
+    :global(.app-shell > .sidebar) { position: fixed; z-index: 50; inset: 0 auto 0 0; width: min(292px, calc(100vw - 36px)); }
+    .chat-header { padding-left: 68px; }
+  }
 
-    .chat-panel {
-      min-height: 100vh;
-      border: 0;
-      border-radius: 0;
-    }
+  @media (max-width: 640px) {
+    .chat-panel { min-height: 0; }
 
     .input-area {
       padding: 12px;

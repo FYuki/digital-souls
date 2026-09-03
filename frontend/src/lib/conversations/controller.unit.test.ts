@@ -23,6 +23,7 @@ const conversation = (
   created_at: '2026-08-01T10:00:00+00:00',
   updated_at: updatedAt,
   archived_at: archivedAt,
+  title: conversationId,
 })
 
 const turn = (turnId: string): ConversationTurn => ({

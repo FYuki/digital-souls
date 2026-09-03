@@ -6,6 +6,7 @@ import {
   voiceTestTimeout,
 } from '../playwright/voice-chat-suite'
 import { installMockLiveKit } from './mock-livekit'
+import { installMockUiBootstrap } from './mock-ui-bootstrap'
 import {
   attachProfileEvidence,
   getCapabilitySkipReason,
@@ -51,6 +52,7 @@ const installMockBackend = async (page: Page) => {
       created_at: '2026-08-01T12:00:00.000000Z',
       updated_at: '2026-08-01T12:00:00.000000Z',
       archived_at: null,
+      title: MOCK_CONVERSATION_ID,
     }
     await route.fulfill({
       status: 200,
@@ -58,6 +60,7 @@ const installMockBackend = async (page: Page) => {
       body: JSON.stringify(request.method() === 'POST' ? conversation : []),
     })
   })
+  await installMockUiBootstrap(page)
 }
 
 test.use(createVoiceTestUseOptions())
