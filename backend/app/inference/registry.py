@@ -129,9 +129,7 @@ def default_provider_registry() -> ProviderRegistry:
                 capabilities=all_capabilities,
                 validate_options=lambda options: _validate_known_options(
                     options,
-                    allowed=frozenset(
-                        {"temperature", "top_p", "seed", "reasoning_effort"}
-                    ),
+                    allowed=frozenset({"temperature", "top_p", "reasoning_effort"}),
                 ),
             ),
             ProviderDescriptor(

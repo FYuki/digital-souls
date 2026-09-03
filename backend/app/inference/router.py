@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator, Mapping
 import json
+from threading import BoundedSemaphore
 
 from jsonschema import Draft202012Validator, SchemaError, ValidationError
 
-from app.inference.authorization import InferenceAuthorizer, InferencePrincipal
+from app.inference.authorization import InferenceCaller, authorize
 from app.inference.config import InferenceSettings
 from app.inference.contracts import (
     EmbeddingRequest,
@@ -34,36 +36,41 @@ class InferenceRouter:
         *,
         settings: InferenceSettings,
         registry: ProviderRegistry,
-        authorizer: InferenceAuthorizer,
     ) -> None:
         self._settings = settings
         self._registry = registry
-        self._authorizer = authorizer
+        self._capacity = {
+            target: BoundedSemaphore(resolved.max_concurrency)
+            for target, resolved in settings.targets.items()
+        }
 
     def generate_text(
         self,
         *,
-        principal: InferencePrincipal,
+        caller: InferenceCaller,
         target: InferenceTarget,
         messages: tuple[InferenceMessage, ...],
         timeout_seconds: float | None = None,
     ) -> TextGenerationResult:
         resolved, adapter = self._resolve(
-            principal, target, InferenceCapability.GENERATE_TEXT
+            caller, target, InferenceCapability.GENERATE_TEXT
         )
         max_output_tokens = resolved.max_output_tokens
         if max_output_tokens is None:
             raise AssertionError("text generation target requires an output limit")
-        provider_result = adapter.generate_text(
-            TextGenerationRequest(
-                messages=messages,
-                model_id=resolved.reference.model_id,
-                options=resolved.options,
-                max_input_tokens=resolved.max_input_tokens,
-                max_output_tokens=max_output_tokens,
-                timeout_seconds=self._timeout(resolved.timeout_seconds, timeout_seconds),
+        with self._capacity[target]:
+            provider_result = adapter.generate_text(
+                TextGenerationRequest(
+                    messages=messages,
+                    model_id=resolved.reference.model_id,
+                    options=resolved.options,
+                    max_input_tokens=resolved.max_input_tokens,
+                    max_output_tokens=max_output_tokens,
+                    timeout_seconds=self._timeout(
+                        resolved.timeout_seconds, timeout_seconds
+                    ),
+                )
             )
-        )
         self._validate_text(provider_result)
         return TextGenerationResult(
             text=provider_result.text,
@@ -73,13 +80,13 @@ class InferenceRouter:
     async def stream_text(
         self,
         *,
-        principal: InferencePrincipal,
+        caller: InferenceCaller,
         target: InferenceTarget,
         messages: tuple[InferenceMessage, ...],
         timeout_seconds: float | None = None,
     ) -> AsyncIterator[str]:
         resolved, adapter = self._resolve(
-            principal, target, InferenceCapability.STREAM_TEXT
+            caller, target, InferenceCapability.STREAM_TEXT
         )
         max_output_tokens = resolved.max_output_tokens
         if max_output_tokens is None:
@@ -92,18 +99,24 @@ class InferenceRouter:
             max_output_tokens=max_output_tokens,
             timeout_seconds=self._timeout(resolved.timeout_seconds, timeout_seconds),
         )
-        async for delta in adapter.stream_text(request):
-            if not isinstance(delta, str):
-                raise InferenceError(
-                    InferenceErrorCategory.INVALID_RESPONSE,
-                    retryable=False,
-                )
-            yield delta
+        capacity = self._capacity[target]
+        while not capacity.acquire(blocking=False):
+            await asyncio.sleep(0.01)
+        try:
+            async for delta in adapter.stream_text(request):
+                if not isinstance(delta, str):
+                    raise InferenceError(
+                        InferenceErrorCategory.INVALID_RESPONSE,
+                        retryable=False,
+                    )
+                yield delta
+        finally:
+            capacity.release()
 
     def generate_structured(
         self,
         *,
-        principal: InferencePrincipal,
+        caller: InferenceCaller,
         target: InferenceTarget,
         messages: tuple[InferenceMessage, ...],
         response_schema: Mapping[str, object],
@@ -117,22 +130,25 @@ class InferenceRouter:
                 retryable=False,
             ) from None
         resolved, adapter = self._resolve(
-            principal, target, InferenceCapability.GENERATE_STRUCTURED
+            caller, target, InferenceCapability.GENERATE_STRUCTURED
         )
         max_output_tokens = resolved.max_output_tokens
         if max_output_tokens is None:
             raise AssertionError("structured target requires an output limit")
-        provider_result = adapter.generate_structured(
-            StructuredGenerationRequest(
-                messages=messages,
-                model_id=resolved.reference.model_id,
-                options=resolved.options,
-                max_input_tokens=resolved.max_input_tokens,
-                max_output_tokens=max_output_tokens,
-                timeout_seconds=self._timeout(resolved.timeout_seconds, timeout_seconds),
-                response_schema=response_schema,
+        with self._capacity[target]:
+            provider_result = adapter.generate_structured(
+                StructuredGenerationRequest(
+                    messages=messages,
+                    model_id=resolved.reference.model_id,
+                    options=resolved.options,
+                    max_input_tokens=resolved.max_input_tokens,
+                    max_output_tokens=max_output_tokens,
+                    timeout_seconds=self._timeout(
+                        resolved.timeout_seconds, timeout_seconds
+                    ),
+                    response_schema=response_schema,
+                )
             )
-        )
         self._validate_text(provider_result)
         try:
             value: JsonValue = json.loads(provider_result.text)
@@ -147,48 +163,50 @@ class InferenceRouter:
     def embed(
         self,
         *,
-        principal: InferencePrincipal,
+        caller: InferenceCaller,
         target: InferenceTarget,
         inputs: tuple[str, ...],
         timeout_seconds: float | None = None,
     ) -> EmbeddingResult:
-        resolved, adapter = self._resolve(
-            principal, target, InferenceCapability.EMBED
-        )
-        return adapter.embed(
-            EmbeddingRequest(
-                inputs=inputs,
-                model_id=resolved.reference.model_id,
-                options=resolved.options,
-                max_input_tokens=resolved.max_input_tokens,
-                timeout_seconds=self._timeout(resolved.timeout_seconds, timeout_seconds),
+        resolved, adapter = self._resolve(caller, target, InferenceCapability.EMBED)
+        with self._capacity[target]:
+            return adapter.embed(
+                EmbeddingRequest(
+                    inputs=inputs,
+                    model_id=resolved.reference.model_id,
+                    options=resolved.options,
+                    max_input_tokens=resolved.max_input_tokens,
+                    timeout_seconds=self._timeout(
+                        resolved.timeout_seconds, timeout_seconds
+                    ),
+                )
             )
-        )
 
     def estimate_input_tokens(
         self,
         *,
-        principal: InferencePrincipal,
+        caller: InferenceCaller,
         target: InferenceTarget,
         messages: tuple[InferenceMessage, ...],
         response_schema: Mapping[str, object] | None = None,
         timeout_seconds: float | None = None,
     ) -> TokenEstimate:
         resolved, adapter = self._resolve(
-            principal, target, InferenceCapability.ESTIMATE_INPUT_TOKENS
+            caller, target, InferenceCapability.ESTIMATE_INPUT_TOKENS
         )
-        estimate = adapter.estimate_input_tokens(
-            TokenEstimateRequest(
-                messages=messages,
-                model_id=resolved.reference.model_id,
-                options=resolved.options,
-                max_input_tokens=resolved.max_input_tokens,
-                timeout_seconds=self._timeout(
-                    resolved.timeout_seconds, timeout_seconds
-                ),
-                response_schema=response_schema,
+        with self._capacity[target]:
+            estimate = adapter.estimate_input_tokens(
+                TokenEstimateRequest(
+                    messages=messages,
+                    model_id=resolved.reference.model_id,
+                    options=resolved.options,
+                    max_input_tokens=resolved.max_input_tokens,
+                    timeout_seconds=self._timeout(
+                        resolved.timeout_seconds, timeout_seconds
+                    ),
+                    response_schema=response_schema,
+                )
             )
-        )
         if estimate.count > resolved.max_input_tokens:
             raise InferenceError(
                 InferenceErrorCategory.INVALID_REQUEST,
@@ -199,11 +217,11 @@ class InferenceRouter:
 
     def _resolve(
         self,
-        principal: InferencePrincipal,
+        caller: InferenceCaller,
         target: InferenceTarget,
         capability: InferenceCapability,
     ) -> tuple[ResolvedTarget, InferenceAdapter]:
-        self._authorizer.authorize(principal, target)
+        authorize(caller, target)
         resolved = self._settings.target(target)
         adapter = self._registry.adapter(resolved.reference.provider_id)
         if capability not in adapter.capabilities:
