@@ -211,13 +211,13 @@ def test_settings_reject_capability_mismatch_and_privacy_cloud_assignment() -> N
         resolve_inference_settings(privacy_environment, registry)
 
 
-def _router(adapter: _FakeAdapter) -> InferenceRouter:
+def _router(adapter: _FakeAdapter, *, observer=None) -> InferenceRouter:
     registry = default_provider_registry()
     registry.bind(adapter)
-    return InferenceRouter(
-        settings=resolve_inference_settings(_environment(), registry),
-        registry=registry,
-    )
+    settings = resolve_inference_settings(_environment(), registry)
+    if observer is None:
+        return InferenceRouter(settings=settings, registry=registry)
+    return InferenceRouter(settings=settings, registry=registry, observer=observer)
 
 
 def _messages() -> tuple[InferenceMessage, ...]:
@@ -253,6 +253,48 @@ def test_structured_generation_is_revalidated_without_repair_or_retry() -> None:
 
     assert exc_info.value.category is InferenceErrorCategory.INVALID_RESPONSE
     assert adapter.structured_calls == 2
+
+
+def test_memory_capabilities_invoke_metadata_only_observer() -> None:
+    adapter = _FakeAdapter()
+    observations = []
+    router = _router(adapter, observer=observations.append)
+    schema: Mapping[str, object] = {
+        "type": "object",
+        "properties": {"answer": {"type": "string"}},
+        "required": ["answer"],
+        "additionalProperties": False,
+    }
+
+    router.generate_structured(
+        caller=InferenceCaller.MEMORY_EXTRACTION,
+        target=InferenceTarget.MEMORY_EXTRACTION,
+        messages=_messages(),
+        response_schema=schema,
+    )
+    router.embed(
+        caller=InferenceCaller.MEMORY_INDEX,
+        target=InferenceTarget.EMBEDDING,
+        inputs=("synthetic",),
+    )
+    adapter.structured_text = "invalid"
+    with pytest.raises(InferenceError):
+        router.generate_structured(
+            caller=InferenceCaller.MEMORY_CONSOLIDATION,
+            target=InferenceTarget.MEMORY_CONSOLIDATION,
+            messages=_messages(),
+            response_schema=schema,
+        )
+
+    assert [observation.success for observation in observations] == [True, True, False]
+    assert [observation.capability for observation in observations] == [
+        InferenceCapability.GENERATE_STRUCTURED,
+        InferenceCapability.EMBED,
+        InferenceCapability.GENERATE_STRUCTURED,
+    ]
+    assert observations[-1].error_category is InferenceErrorCategory.INVALID_RESPONSE
+    assert all(observation.provider_id == "ollama" for observation in observations)
+    assert all(not hasattr(observation, "messages") for observation in observations)
 
 
 def test_router_does_not_retry_or_fallback_and_keeps_errors_sanitized() -> None:

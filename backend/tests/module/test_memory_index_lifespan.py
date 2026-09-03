@@ -1,5 +1,4 @@
 from fastapi.testclient import TestClient
-import pytest
 
 
 def test_lifespan_starts_and_collects_the_single_memory_index_scheduler(
@@ -81,115 +80,54 @@ def test_lifespan_starts_consolidation_after_index_and_stops_it_first(
     assert events[-2:] == ["consolidation:stop", "index:stop"]
 
 
-def test_lifespan_wires_a_dedicated_local_client_for_consolidation(
+def test_lifespan_wires_fixed_inference_callers_for_memory_generation(
     monkeypatch,
 ) -> None:
     from app import main
+    from app.inference import InferenceCaller, InferenceTarget
 
-    extractor_clients: list[tuple[str, str | None]] = []
-    classifier_clients: list[tuple[str, str | None]] = []
-    closed_extractors: list[tuple[str, str | None]] = []
-    closed_classifiers: list[tuple[str, str | None]] = []
-    semantic_classifiers: list[object] = []
-    consolidation_review_classifiers: list[object] = []
+    clients: list[tuple[InferenceCaller, InferenceTarget]] = []
+    closed: list[tuple[InferenceCaller, InferenceTarget]] = []
 
-    class RecordingExtractorClient:
-        def __init__(self, *, model_id: str, base_url: str | None = None) -> None:
-            self.model_id = model_id
-            self.base_url = base_url
-            extractor_clients.append((model_id, base_url))
-
-        def close(self) -> None:
-            closed_extractors.append((self.model_id, self.base_url))
-
-    class RecordingClassifierClient:
-        def __init__(self, **kwargs: object) -> None:
-            from app.inference import InferenceTarget
-
-            settings = kwargs.get("settings")
-            if settings is None:
-                raise AssertionError("inference settings are required")
-            model_id = settings.target(InferenceTarget.PRIVACY).reference.model_id
-            self.model_id = model_id
-            self.base_url = None
-            classifier_clients.append((model_id, None))
-
-        def resolve_model_digest(self, *, timeout_seconds: float) -> str:
-            assert timeout_seconds > 0
-            return "sha256:synthetic"
+    class RecordingInferenceClient:
+        def __init__(
+            self,
+            *,
+            caller: InferenceCaller,
+            target: InferenceTarget,
+            **_kwargs: object,
+        ) -> None:
+            self.identity = (caller, target)
+            clients.append(self.identity)
 
         def close(self) -> None:
-            closed_classifiers.append((self.model_id, self.base_url))
+            closed.append(self.identity)
 
-    class RecordingSemanticClassifier:
-        def __init__(self, *, client: object, **_kwargs: object) -> None:
-            self.client = client
-            semantic_classifiers.append(self)
-
-    class RecordingPrivacyReviewer:
-        def __init__(self, *, classifier: object, **_kwargs: object) -> None:
-            consolidation_review_classifiers.append(classifier)
-
-    monkeypatch.setenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434/")
     monkeypatch.setattr(
         main,
-        "OllamaMemoryExtractorClient",
-        RecordingExtractorClient,
-    )
-    monkeypatch.setattr(main, "OllamaClassifierClient", RecordingClassifierClient)
-    monkeypatch.setattr(
-        main,
-        "OllamaSemanticPrivacyClassifier",
-        RecordingSemanticClassifier,
-    )
-    monkeypatch.setattr(
-        main,
-        "ConsolidationPrivacyReviewer",
-        RecordingPrivacyReviewer,
+        "StructuredMemoryInferenceClient",
+        RecordingInferenceClient,
     )
 
     with TestClient(main.app):
         pass
 
-    assert [base_url for _, base_url in extractor_clients] == [
-        None,
-        "http://127.0.0.1:11434",
+    assert clients == [
+        (InferenceCaller.MEMORY_EXTRACTION, InferenceTarget.MEMORY_EXTRACTION),
+        (
+            InferenceCaller.MEMORY_CONSOLIDATION,
+            InferenceTarget.MEMORY_CONSOLIDATION,
+        ),
     ]
-    assert [base_url for _, base_url in classifier_clients] == [
-        None,
-        None,
-    ]
-    assert len(semantic_classifiers) == 2
-    assert consolidation_review_classifiers == [semantic_classifiers[1]]
-    assert set(closed_extractors) == set(extractor_clients)
-    assert set(closed_classifiers) == set(classifier_clients)
+    assert closed == list(reversed(clients))
 
 
-def test_lifespan_rejects_external_consolidation_url_before_client_request(
+def test_lifespan_does_not_apply_ollama_endpoint_policy_in_memory_domain(
     monkeypatch,
 ) -> None:
     from app import main
 
-    requests: list[object] = []
-
-    class RecordingClient:
-        def __init__(self, **kwargs: object) -> None:
-            self.model_id = "synthetic"
-            self.base_url = None
-
-        def chat(self, *args: object, **kwargs: object) -> str:
-            requests.append((args, kwargs))
-            return ""
-
-        def close(self) -> None:
-            pass
-
     monkeypatch.setenv("OLLAMA_BASE_URL", "https://ollama.example.test")
-    monkeypatch.setattr(main, "OllamaMemoryExtractorClient", RecordingClient)
-    monkeypatch.setattr(main, "OllamaClassifierClient", RecordingClient)
 
-    with pytest.raises(ValueError, match="loopback host"):
-        with TestClient(main.app):
-            pass
-
-    assert requests == []
+    with TestClient(main.app):
+        assert main.app.state.inference_router is not None

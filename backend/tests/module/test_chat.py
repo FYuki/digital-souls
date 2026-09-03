@@ -324,6 +324,7 @@ class TestChatEndpoint:
             scanner=ANY,
             classifier=ANY,
             approved_repository=ANY,
+            embedder=ANY,
             chroma_path=runtime_paths.chroma_path,
             now=ANY,
             timezone="Asia/Tokyo",
@@ -335,10 +336,17 @@ class TestChatEndpoint:
         self,
         monkeypatch,
     ):
+        from app.memory.chroma_store import EmbeddingFingerprint
         from app.memory.memory_policy import resolved_memory_policy
 
         monkeypatch.setenv("RAG_ENABLED", "true")
         policy = resolved_memory_policy()
+        monkeypatch.setattr(
+            "app.memory.chroma_store.active_memory_index_fingerprint",
+            lambda *_args: EmbeddingFingerprint(
+                "ollama", "nomic-embed-text:latest", 1
+            ),
+        )
         chroma_collection = MagicMock()
         chroma_collection.query.return_value = {
             "ids": [[]],
@@ -372,7 +380,10 @@ class TestChatEndpoint:
                 "OllamaSemanticPrivacyClassifier.classify",
                 return_value=safe_assessment,
             ):
-                with patch("app.memory.rag_service.embed_text", return_value=[0.1]):
+                with patch(
+                    "app.memory.inference_client.MemoryInferenceEmbedder.__call__",
+                    return_value=[0.1],
+                ):
                     with patch(
                         "app.memory.chroma_store.upsert_memory_index_entry"
                     ) as upsert_memory_index_entry:
@@ -710,6 +721,7 @@ class TestChatFlow:
             scanner=ANY,
             classifier=ANY,
             approved_repository=ANY,
+            embedder=ANY,
             chroma_path=runtime_paths.chroma_path,
             now=ANY,
             timezone="Asia/Tokyo",
@@ -741,8 +753,7 @@ class TestChatFlow:
         _write_card(tmp_path, system_prompt)
         monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
         monkeypatch.setattr(
-            rag_service,
-            "embed_text",
+            "app.memory.inference_client.MemoryInferenceEmbedder.__call__",
             MagicMock(side_effect=ValueError("invalid embedding response")),
         )
         monkeypatch.setattr(rag_service, "query_memories", MagicMock())

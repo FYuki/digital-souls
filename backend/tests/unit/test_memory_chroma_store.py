@@ -193,9 +193,9 @@ def test_upsert_omits_occurred_at_when_the_event_date_is_unknown(
 
     _upsert(chroma_store, tmp_path, occurred_at=None)
 
-    metadata = _only_collection().records[
-        "00000000-0000-4000-8000-000000000042"
-    ]["metadata"]
+    metadata = _only_collection().records["00000000-0000-4000-8000-000000000042"][
+        "metadata"
+    ]
     assert isinstance(metadata, dict)
     assert "occurred_at" not in metadata
 
@@ -285,6 +285,91 @@ def test_persistent_client_is_reused_for_the_same_path(
     )
 
     assert len(FakePersistentClient.instances) == 1
+
+
+def test_embedding_fingerprint_uses_separate_collections_and_metadata(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+    chroma_path = tmp_path / "data" / "chroma"
+    old = chroma_store.EmbeddingFingerprint("ollama", "nomic-v1", 2)
+    new = chroma_store.EmbeddingFingerprint("ollama", "nomic-v2", 3)
+
+    _upsert(chroma_store, tmp_path, fingerprint=old)
+    _upsert(
+        chroma_store,
+        tmp_path,
+        embedding=[0.1, 0.2, 0.3],
+        normalized_text="新モデルの索引",
+        fingerprint=new,
+    )
+
+    collections = FakePersistentClient.collections_by_path[str(chroma_path)]
+    assert len(collections) == 2
+    assert all(_is_chroma_safe_name(name) for name in collections)
+    assert {
+        next(iter(collection.records.values()))["document"]
+        for collection in collections.values()
+    } == {
+        "畑の相談",
+        "新モデルの索引",
+    }
+    new_metadata = chroma_store.get_memory_index_metadata(
+        character_id="miori",
+        memory_id="00000000-0000-4000-8000-000000000042",
+        chroma_path=chroma_path,
+        fingerprint=new,
+    )
+    assert new_metadata is not None
+    assert new_metadata["embedding_provider_id"] == "ollama"
+    assert new_metadata["embedding_model_id"] == "nomic-v2"
+    assert new_metadata["embedding_dimension"] == "3"
+
+
+def test_query_requires_the_configured_fingerprint_to_be_active(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+    chroma_path = tmp_path / "data" / "chroma"
+    old = chroma_store.EmbeddingFingerprint("ollama", "nomic-v1", 2)
+    new = chroma_store.EmbeddingFingerprint("ollama", "nomic-v2", 2)
+    _upsert(chroma_store, tmp_path, fingerprint=old)
+    _upsert(chroma_store, tmp_path, fingerprint=new)
+    chroma_store.activate_memory_index("miori", old, chroma_path)
+
+    with pytest.raises(chroma_store.MemoryIndexReindexRequiredError):
+        chroma_store.query_memories(
+            "miori",
+            [0.1, 0.2],
+            5,
+            chroma_path=chroma_path,
+            fingerprint=new,
+        )
+
+    assert chroma_store.query_memories(
+        "miori", [0.1, 0.2], 5, chroma_path=chroma_path, fingerprint=old
+    )
+
+
+def test_active_fingerprint_is_persisted_atomically_and_validated(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chroma_store = _import_chroma_store(monkeypatch)
+    chroma_path = tmp_path / "data" / "chroma"
+    fingerprint = chroma_store.EmbeddingFingerprint("ollama", "nomic-v1", 768)
+
+    chroma_store.activate_memory_index("miori", fingerprint, chroma_path)
+
+    assert (
+        chroma_store.active_memory_index_fingerprint("miori", chroma_path)
+        == fingerprint
+    )
+    (chroma_path / chroma_store.INDEX_STATE_FILENAME).write_text(
+        '{"version":1,"characters":{"miori":{"provider_id":"ollama"}}}',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="fingerprint fields"):
+        chroma_store.active_memory_index_fingerprint("miori", chroma_path)
 
 
 def test_delete_collection_removes_the_character_index(

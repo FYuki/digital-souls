@@ -902,6 +902,7 @@ class TestWebSocketEndpoint:
             scanner=ANY,
             classifier=ANY,
             approved_repository=ANY,
+            embedder=ANY,
             chroma_path=runtime_paths.chroma_path,
             now=ANY,
             timezone="Asia/Tokyo",

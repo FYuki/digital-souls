@@ -69,7 +69,7 @@ def _assessment(
 
 
 def _candidate(
-    memory_id: UUID | str = _MEMORY_ID, raw_distance: float = 1.75
+    memory_id: UUID | str = _MEMORY_ID, raw_distance: float = 0.25
 ) -> MemorySearchCandidate:
     return MemorySearchCandidate(memory_id=str(memory_id), raw_distance=raw_distance)
 
@@ -111,6 +111,7 @@ def _retrieve(
         scanner=scanner,
         classifier=classifier,
         approved_repository=repository,
+        embedder=lambda _text: [0.1],
         chroma_path=_CHROMA_PATH,
         now=datetime(2026, 8, 20, 3, 30, tzinfo=UTC),
         timezone="Asia/Tokyo",
@@ -148,7 +149,6 @@ def test_query_absolute_deny_uses_resolved_policy_before_any_search(monkeypatch)
     )
     embed = MagicMock()
     query = MagicMock()
-    monkeypatch.setattr(rag_service, "embed_text", embed)
     monkeypatch.setattr(rag_service, "query_memories", query)
 
     outcome = rag_service.retrieve_prompt_memories(
@@ -158,6 +158,7 @@ def test_query_absolute_deny_uses_resolved_policy_before_any_search(monkeypatch)
         scanner=scanner,
         classifier=classifier,
         approved_repository=repository,
+        embedder=embed,
         chroma_path=_CHROMA_PATH,
         now=datetime(2026, 8, 20, 3, 30, tzinfo=UTC),
         timezone="Asia/Tokyo",
@@ -196,6 +197,39 @@ def test_query_scan_failure_skips_classifier_embedding_and_chroma(monkeypatch):
     embed.assert_not_called()
     query.assert_not_called()
     repository.search_by_occurred_range.assert_not_called()
+
+
+def test_retrieval_passes_embedding_fingerprint_to_chroma(monkeypatch) -> None:
+    from app.memory import rag_service
+
+    class Embedder:
+        provider_id = "ollama"
+        model_id = "nomic-embed-text:latest"
+
+        def __call__(self, _text: str) -> list[float]:
+            return [0.1, 0.2]
+
+    scanner, classifier, repository = _dependencies()
+    query = MagicMock(return_value=[])
+    monkeypatch.setattr(rag_service, "query_memories", query)
+
+    outcome = rag_service.retrieve_prompt_memories(
+        "miori",
+        "紅茶の好みは？",
+        resolved_memory_policy(),
+        scanner=scanner,
+        classifier=classifier,
+        approved_repository=repository,
+        embedder=Embedder(),
+        chroma_path=_CHROMA_PATH,
+        now=datetime(2026, 8, 20, 3, 30, tzinfo=UTC),
+        timezone="Asia/Tokyo",
+    )
+
+    assert outcome.memories == ()
+    assert query.call_args.kwargs["fingerprint"] == rag_service.EmbeddingFingerprint(
+        "ollama", "nomic-embed-text:latest", 2
+    )
 
 
 def test_query_scanner_exception_returns_empty_without_starting_rag(monkeypatch):
@@ -329,7 +363,6 @@ def test_safe_query_returns_only_scanned_sqlite_text_with_raw_distance(monkeypat
     from app.memory import rag_service
 
     scanner, classifier, repository = _dependencies()
-    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
     monkeypatch.setattr(
         rag_service, "query_memories", MagicMock(return_value=[_candidate()])
     )
@@ -344,7 +377,7 @@ def test_safe_query_returns_only_scanned_sqlite_text_with_raw_distance(monkeypat
     assert len(memories) == 1
     assert memories[0].memory_id == str(_MEMORY_ID)
     assert memories[0].normalized_text == "SQLiteに保存された紅茶の好み"
-    assert memories[0].raw_distance == 1.75
+    assert memories[0].raw_distance == 0.25
     classifier.classify.assert_called_once_with("紅茶の好みは？", QUERY_GATE)
     assert scanner.scan.call_args_list == [
         call("紅茶の好みは？"),
@@ -488,8 +521,8 @@ def test_unsupported_body_scan_result_excludes_only_current_candidate(monkeypatc
         MagicMock(
             return_value=[
                 _candidate(),
-                _candidate(second_id, 2.0),
-                _candidate(third_id, 2.25),
+                _candidate(second_id, 0.3),
+                _candidate(third_id, 0.35),
             ]
         ),
     )
@@ -595,7 +628,7 @@ def test_malformed_uuid_candidate_does_not_remove_valid_sibling(
     assert len(memories) == 1
     assert memories[0].memory_id == str(_MEMORY_ID)
     assert memories[0].normalized_text == "SQLiteに保存された紅茶の好み"
-    assert memories[0].raw_distance == 1.75
+    assert memories[0].raw_distance == 0.25
     repository.get.assert_called_once_with(
         character_id="miori",
         memory_id=_MEMORY_ID,
@@ -776,8 +809,7 @@ def test_retrieval_uses_candidate_pool_before_sqlite_verification(monkeypatch):
 
     valid_id = UUID("00000000-0000-4000-8000-000000000049")
     invalid_ids = tuple(
-        UUID(f"00000000-0000-4000-8000-{index:012d}")
-        for index in range(43, 48)
+        UUID(f"00000000-0000-4000-8000-{index:012d}") for index in range(43, 48)
     )
     memories = {memory_id: None for memory_id in invalid_ids}
     memories[valid_id] = _approved_memory(id=valid_id)
@@ -824,15 +856,15 @@ def test_retrieval_filters_below_threshold_and_orders_by_relevance(monkeypatch):
     monkeypatch.setattr(
         rag_service,
         "query_memories",
-            MagicMock(
-                return_value=[
-                    _candidate(below_id, _distance_for_relevance(0.0499)),
-                    _candidate(low_id, _distance_for_relevance(0.05)),
-                    _candidate(high_id, _distance_for_relevance(0.80)),
-                    _candidate(exact_id, _distance_for_relevance(1.0)),
-                ]
-            ),
-        )
+        MagicMock(
+            return_value=[
+                _candidate(below_id, _distance_for_relevance(0.5399)),
+                _candidate(low_id, _distance_for_relevance(0.54)),
+                _candidate(high_id, _distance_for_relevance(0.80)),
+                _candidate(exact_id, _distance_for_relevance(1.0)),
+            ]
+        ),
+    )
 
     results = _retrieve(
         rag_service,
@@ -1043,8 +1075,7 @@ def test_retrieval_limits_results_after_ranking(monkeypatch):
     from app.memory import rag_service
 
     ids = tuple(
-        UUID(f"00000000-0000-4000-8000-{index:012d}")
-        for index in range(43, 49)
+        UUID(f"00000000-0000-4000-8000-{index:012d}") for index in range(43, 49)
     )
     scanner, classifier, repository = _ranking_dependencies(
         {memory_id: _approved_memory(id=memory_id) for memory_id in ids}
@@ -1058,7 +1089,7 @@ def test_retrieval_limits_results_after_ranking(monkeypatch):
                 _candidate(memory_id, _distance_for_relevance(relevance))
                 for memory_id, relevance in zip(
                     reversed(ids),
-                    (0.5, 0.55, 0.6, 0.65, 0.7, 0.75),
+                    (0.6, 0.65, 0.7, 0.75, 0.8, 0.85),
                     strict=True,
                 )
             ]
@@ -1159,6 +1190,7 @@ def test_temporal_retrieval_unions_both_paths_and_ranks_by_one_match_kind(
         scanner=scanner,
         classifier=classifier,
         approved_repository=repository,
+        embedder=MagicMock(return_value=[0.1]),
         chroma_path=_CHROMA_PATH,
         now=datetime(2026, 3, 25, tzinfo=UTC),
         timezone="Asia/Tokyo",
@@ -1188,7 +1220,6 @@ def test_temporal_retrieval_reports_no_match_only_after_both_paths_succeed(
     scanner.scan.side_effect = None
     scanner.scan.return_value = ScanSuccess(())
     repository.search_by_occurred_range.return_value = []
-    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
     monkeypatch.setattr(rag_service, "query_memories", MagicMock(return_value=[]))
 
     outcome = rag_service.retrieve_prompt_memories(
@@ -1198,6 +1229,7 @@ def test_temporal_retrieval_reports_no_match_only_after_both_paths_succeed(
         scanner=scanner,
         classifier=classifier,
         approved_repository=repository,
+        embedder=MagicMock(return_value=[0.1]),
         chroma_path=_CHROMA_PATH,
         now=datetime(2026, 3, 25, tzinfo=UTC),
         timezone="Asia/Tokyo",
@@ -1214,7 +1246,6 @@ def test_temporal_retrieval_failure_is_not_reported_as_no_match(monkeypatch) -> 
     scanner.scan.side_effect = None
     scanner.scan.return_value = ScanSuccess(())
     repository.search_by_occurred_range.return_value = []
-    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.1]))
     monkeypatch.setattr(
         rag_service,
         "query_memories",
@@ -1228,6 +1259,7 @@ def test_temporal_retrieval_failure_is_not_reported_as_no_match(monkeypatch) -> 
         scanner=scanner,
         classifier=classifier,
         approved_repository=repository,
+        embedder=MagicMock(return_value=[0.1]),
         chroma_path=_CHROMA_PATH,
         now=datetime(2026, 3, 25, tzinfo=UTC),
         timezone="Asia/Tokyo",

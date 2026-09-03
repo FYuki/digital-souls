@@ -41,6 +41,23 @@ def _install_index_double(
 
     records: dict[tuple[str, str], dict[str, object]] = {}
 
+    class FakeRuntime:
+        router = object()
+        settings = object()
+
+        def close(self) -> None:
+            return None
+
+    class FakeEmbedder:
+        provider_id = "ollama"
+        model_id = "nomic-embed-text:latest"
+
+        def __init__(self, **_kwargs: object) -> None:
+            return None
+
+        def __call__(self, _text: str) -> list[float]:
+            return [0.1]
+
     def upsert(**entry: object) -> None:
         records[(str(entry["character_id"]), str(entry["memory_id"]))] = dict(entry)
 
@@ -55,16 +72,19 @@ def _install_index_double(
     monkeypatch.setattr(
         index_sync,
         "list_memory_index_ids",
-        lambda *, character_id, chroma_path: {
+        lambda *, character_id, chroma_path, fingerprint=None: {
             memory_id for owner, memory_id in records if owner == character_id
         },
     )
     monkeypatch.setattr(
         index_sync,
         "get_memory_index_metadata",
-        lambda *, character_id, memory_id, chroma_path: None,
+        lambda *, character_id, memory_id, chroma_path, fingerprint=None: None,
     )
-    monkeypatch.setattr(index_cli, "embed_text", lambda _text: [0.1])
+    monkeypatch.setattr(
+        index_cli, "create_inference_runtime", lambda _environment: FakeRuntime()
+    )
+    monkeypatch.setattr(index_cli, "MemoryInferenceEmbedder", FakeEmbedder)
     return records
 
 

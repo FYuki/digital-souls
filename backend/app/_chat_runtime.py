@@ -104,6 +104,7 @@ class ChatRuntimeDependencies:
     privacy_scanner: PrivacyScanner
     semantic_classifier: SemanticPrivacyClassifier
     approved_memory_repository: ApprovedMemoryRepository
+    memory_embedder: Callable[[str], list[float]]
     memory_formation_submitter: MemoryFormationSubmitter
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
 
@@ -415,6 +416,7 @@ def _rag_context_for_reply(
         scanner=dependencies.privacy_scanner,
         classifier=dependencies.semantic_classifier,
         approved_repository=dependencies.approved_memory_repository,
+        embedder=dependencies.memory_embedder,
         chroma_path=context.chroma_path,
         now=dependencies.clock(),
         timezone=context.occurred_timezone,

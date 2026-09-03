@@ -117,6 +117,7 @@ def _runtime_dependencies(
         privacy_scanner=MagicMock(),
         semantic_classifier=MagicMock(),
         approved_memory_repository=MagicMock(),
+        memory_embedder=lambda _text: [0.1],
         memory_formation_submitter=(
             memory_formation_submitter
             if memory_formation_submitter is not None
@@ -350,6 +351,7 @@ class TestChatServiceErrorContract:
                 privacy_scanner=MagicMock(),
                 semantic_classifier=MagicMock(),
                 approved_memory_repository=MagicMock(),
+                memory_embedder=lambda _text: [0.1],
                 memory_formation_submitter=MagicMock(),
             ),
         )
@@ -944,6 +946,7 @@ class TestChatServiceRagContract:
             scanner=service._dependencies.privacy_scanner,
             classifier=service._dependencies.semantic_classifier,
             approved_repository=service._dependencies.approved_memory_repository,
+            embedder=service._dependencies.memory_embedder,
             chroma_path=_CHROMA_PATH,
             now=ANY,
             timezone="Asia/Tokyo",
@@ -1130,6 +1133,7 @@ class TestChatServiceRagContract:
             "scanner": service._dependencies.privacy_scanner,
             "classifier": service._dependencies.semantic_classifier,
             "approved_repository": service._dependencies.approved_memory_repository,
+            "embedder": service._dependencies.memory_embedder,
             "chroma_path": _CHROMA_PATH,
             "now": ANY,
             "timezone": "Asia/Tokyo",

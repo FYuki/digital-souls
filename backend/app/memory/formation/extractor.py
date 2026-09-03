@@ -7,6 +7,7 @@ from datetime import date
 from typing import Protocol
 
 from app.conversation_history.models import ConversationTurn, TurnStatus
+from app.inference import InferenceError
 from app.memory.admission.contracts import (
     ConversationSource,
     EpisodicEventType,
@@ -102,6 +103,10 @@ class MemoryCandidateExtractor:
                 )
             except TimeoutError:
                 continue
+            except InferenceError as error:
+                if error.retryable:
+                    continue
+                return ()
             return _parse_candidates(raw)
         return ()
 

@@ -162,14 +162,17 @@ class TestRuntimeConfiguration:
         assert "generate_chat_reply(" in chat_router_source
         assert "create_chat_session(" in ws_router_source
 
-    def test_ollama_environment_is_resolved_in_llm_boundary_only(self):
-        import app.memory.embedder as embedder
+    def test_memory_domain_does_not_reference_ollama_specific_clients(self):
+        memory_root = _BACKEND_DIR / "app" / "memory"
+        sources = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in memory_root.rglob("*.py")
+            if path.name != "__init__.py"
+        )
 
-        source = inspect.getsource(embedder)
-
-        assert "os.environ" not in source
-        assert "OLLAMA_BASE_URL" not in source
-        assert "OLLAMA_EMBEDDING_MODEL" not in source
+        assert "OllamaMemoryExtractorClient" not in sources
+        assert "resolve_ollama_base_url" not in sources
+        assert '"/api/embeddings"' not in sources
 
     def test_memory_policy_config_declares_common_and_service_sections(self):
         import json
