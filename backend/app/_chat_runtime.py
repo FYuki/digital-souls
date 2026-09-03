@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from app import chat_service
+from app.inference import InferenceError, InferenceErrorCategory
 from app.async_worker import run_sync
 from app.characters.models import CharacterBook
 from app.conversation_history.models import ConversationTurn, TurnStatus
@@ -480,6 +481,10 @@ def _call_llm(
         raise chat_service.ChatTimeoutError() from exc
     except httpx.HTTPError as exc:
         raise chat_service.ChatBackendError() from exc
+    except InferenceError as exc:
+        if exc.category is InferenceErrorCategory.TIMEOUT:
+            raise chat_service.ChatTimeoutError() from None
+        raise chat_service.ChatBackendError() from None
     if not reply:
         raise chat_service.ChatBackendError()
     return reply
@@ -525,6 +530,10 @@ def _build_unrecorded_prompt(
         raise chat_service.ChatTimeoutError() from exc
     except httpx.HTTPError as exc:
         raise chat_service.ChatBackendError() from exc
+    except InferenceError as exc:
+        if exc.category is InferenceErrorCategory.TIMEOUT:
+            raise chat_service.ChatTimeoutError() from None
+        raise chat_service.ChatBackendError() from None
     return prompt
 
 

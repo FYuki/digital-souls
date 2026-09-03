@@ -125,6 +125,7 @@ class TextGenerationRequest:
     messages: tuple[InferenceMessage, ...]
     model_id: str
     options: Mapping[str, JsonValue]
+    max_input_tokens: int
     max_output_tokens: int
     timeout_seconds: float
 
@@ -139,6 +140,7 @@ class EmbeddingRequest:
     inputs: tuple[str, ...]
     model_id: str
     options: Mapping[str, JsonValue]
+    max_input_tokens: int
     timeout_seconds: float
 
 
@@ -146,6 +148,9 @@ class EmbeddingRequest:
 class TokenEstimateRequest:
     messages: tuple[InferenceMessage, ...]
     model_id: str
+    options: Mapping[str, JsonValue]
+    max_input_tokens: int
+    timeout_seconds: float
     response_schema: Mapping[str, object] | None = None
 
 

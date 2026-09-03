@@ -46,6 +46,7 @@ class InferenceRouter:
         principal: InferencePrincipal,
         target: InferenceTarget,
         messages: tuple[InferenceMessage, ...],
+        timeout_seconds: float | None = None,
     ) -> TextGenerationResult:
         resolved, adapter = self._resolve(
             principal, target, InferenceCapability.GENERATE_TEXT
@@ -58,8 +59,9 @@ class InferenceRouter:
                 messages=messages,
                 model_id=resolved.reference.model_id,
                 options=resolved.options,
+                max_input_tokens=resolved.max_input_tokens,
                 max_output_tokens=max_output_tokens,
-                timeout_seconds=resolved.timeout_seconds,
+                timeout_seconds=self._timeout(resolved.timeout_seconds, timeout_seconds),
             )
         )
         self._validate_text(provider_result)
@@ -74,6 +76,7 @@ class InferenceRouter:
         principal: InferencePrincipal,
         target: InferenceTarget,
         messages: tuple[InferenceMessage, ...],
+        timeout_seconds: float | None = None,
     ) -> AsyncIterator[str]:
         resolved, adapter = self._resolve(
             principal, target, InferenceCapability.STREAM_TEXT
@@ -85,8 +88,9 @@ class InferenceRouter:
             messages=messages,
             model_id=resolved.reference.model_id,
             options=resolved.options,
+            max_input_tokens=resolved.max_input_tokens,
             max_output_tokens=max_output_tokens,
-            timeout_seconds=resolved.timeout_seconds,
+            timeout_seconds=self._timeout(resolved.timeout_seconds, timeout_seconds),
         )
         async for delta in adapter.stream_text(request):
             if not isinstance(delta, str):
@@ -103,6 +107,7 @@ class InferenceRouter:
         target: InferenceTarget,
         messages: tuple[InferenceMessage, ...],
         response_schema: Mapping[str, object],
+        timeout_seconds: float | None = None,
     ) -> StructuredGenerationResult:
         try:
             Draft202012Validator.check_schema(response_schema)
@@ -122,8 +127,9 @@ class InferenceRouter:
                 messages=messages,
                 model_id=resolved.reference.model_id,
                 options=resolved.options,
+                max_input_tokens=resolved.max_input_tokens,
                 max_output_tokens=max_output_tokens,
-                timeout_seconds=resolved.timeout_seconds,
+                timeout_seconds=self._timeout(resolved.timeout_seconds, timeout_seconds),
                 response_schema=response_schema,
             )
         )
@@ -144,6 +150,7 @@ class InferenceRouter:
         principal: InferencePrincipal,
         target: InferenceTarget,
         inputs: tuple[str, ...],
+        timeout_seconds: float | None = None,
     ) -> EmbeddingResult:
         resolved, adapter = self._resolve(
             principal, target, InferenceCapability.EMBED
@@ -153,7 +160,8 @@ class InferenceRouter:
                 inputs=inputs,
                 model_id=resolved.reference.model_id,
                 options=resolved.options,
-                timeout_seconds=resolved.timeout_seconds,
+                max_input_tokens=resolved.max_input_tokens,
+                timeout_seconds=self._timeout(resolved.timeout_seconds, timeout_seconds),
             )
         )
 
@@ -164,6 +172,7 @@ class InferenceRouter:
         target: InferenceTarget,
         messages: tuple[InferenceMessage, ...],
         response_schema: Mapping[str, object] | None = None,
+        timeout_seconds: float | None = None,
     ) -> TokenEstimate:
         resolved, adapter = self._resolve(
             principal, target, InferenceCapability.ESTIMATE_INPUT_TOKENS
@@ -172,6 +181,11 @@ class InferenceRouter:
             TokenEstimateRequest(
                 messages=messages,
                 model_id=resolved.reference.model_id,
+                options=resolved.options,
+                max_input_tokens=resolved.max_input_tokens,
+                timeout_seconds=self._timeout(
+                    resolved.timeout_seconds, timeout_seconds
+                ),
                 response_schema=response_schema,
             )
         )
@@ -206,3 +220,14 @@ class InferenceRouter:
                 InferenceErrorCategory.INVALID_RESPONSE,
                 retryable=False,
             )
+
+    @staticmethod
+    def _timeout(configured: float, requested: float | None) -> float:
+        if requested is None:
+            return configured
+        if requested <= 0:
+            raise InferenceError(
+                InferenceErrorCategory.INVALID_REQUEST,
+                retryable=False,
+            )
+        return min(configured, requested)

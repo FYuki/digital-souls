@@ -4,83 +4,39 @@ import re
 
 import httpx
 
+from app.inference.errors import InferenceError, InferenceErrorCategory
 from app.llm.ollama_config import resolve_ollama_base_url
+from app.privacy.semantic.schema import SEMANTIC_RESPONSE_SCHEMA
 
 
 _DIGEST_PATTERN = re.compile(r"sha256[:-]([0-9a-fA-F]{64})")
 MODEL_LOOKUP_TIMEOUT_SECONDS = 15.0
-_REQUIRED_RESPONSE_FIELDS = (
-    "classification",
-    "subject_scope",
-    "category",
-    "reason_code",
-)
-_SENSITIVE_CATEGORIES = (
-    "HEALTH",
-    "MENTAL_STATE",
-    "SELF_HARM",
-    "ABUSE_OR_SEXUAL_VIOLENCE",
-    "FINANCIAL_SITUATION",
-    "THIRD_PARTY_PRIVATE",
-    "OTHER_SENSITIVE",
-)
-
-
-def _response_branch(
-    classification: str,
-    subject_scopes: tuple[str, ...],
-    categories: tuple[str, ...],
-    reason_code: str,
-) -> dict[str, object]:
-    """モデル出力をPrivacyAssessmentの整合条件へ制約する。"""
-    return {
-        "type": "object",
-        "properties": {
-            "classification": {"enum": [classification]},
-            "subject_scope": {"enum": list(subject_scopes)},
-            "category": {"enum": list(categories)},
-            "reason_code": {"enum": [reason_code]},
-        },
-        "required": list(_REQUIRED_RESPONSE_FIELDS),
-        "additionalProperties": False,
-    }
-
-
-_RESPONSE_FORMAT: dict[str, object] = {
-    "type": "object",
-    "oneOf": [
-        _response_branch(
-            "SENSITIVE",
-            ("SELF", "THIRD_PARTY"),
-            _SENSITIVE_CATEGORIES,
-            "SENSITIVE_CONTENT",
-        ),
-        _response_branch(
-            "NOT_SENSITIVE",
-            ("SELF", "THIRD_PARTY", "GENERAL"),
-            ("NONE",),
-            "NO_SENSITIVE_CONTENT",
-        ),
-        _response_branch(
-            "ABSTAIN",
-            ("UNKNOWN",),
-            ("UNKNOWN",),
-            "UNKNOWN_LANGUAGE",
-        ),
-    ],
-}
-
-
-class OllamaClassifierError(RuntimeError):
-    pass
+class OllamaClassifierError(InferenceError):
+    def __init__(self, message: str = "semantic classifier request failed") -> None:
+        super().__init__(
+            InferenceErrorCategory.UNAVAILABLE,
+            retryable=True,
+            message=message,
+        )
 
 
 class OllamaModelNotLoadedError(OllamaClassifierError):
-    pass
+    def __init__(self) -> None:
+        InferenceError.__init__(
+            self,
+            InferenceErrorCategory.MODEL_NOT_FOUND,
+            retryable=False,
+        )
 
 
 class OllamaInvalidResponseError(OllamaClassifierError):
-    pass
+    def __init__(self, message: str = "semantic classifier response is invalid") -> None:
+        InferenceError.__init__(
+            self,
+            InferenceErrorCategory.INVALID_RESPONSE,
+            retryable=False,
+            message=message,
+        )
 
 
 class OllamaClassifierClient:
@@ -117,7 +73,7 @@ class OllamaClassifierClient:
                     "model": self._model_id,
                     "stream": False,
                     "think": False,
-                    "format": _RESPONSE_FORMAT,
+                    "format": SEMANTIC_RESPONSE_SCHEMA,
                     "messages": list(messages),
                     "options": {"temperature": 0},
                 },

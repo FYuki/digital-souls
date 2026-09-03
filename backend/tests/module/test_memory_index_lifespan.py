@@ -103,10 +103,16 @@ def test_lifespan_wires_a_dedicated_local_client_for_consolidation(
             closed_extractors.append((self.model_id, self.base_url))
 
     class RecordingClassifierClient:
-        def __init__(self, *, model_id: str, base_url: str | None = None) -> None:
+        def __init__(self, **kwargs: object) -> None:
+            from app.inference import InferenceTarget
+
+            settings = kwargs.get("settings")
+            if settings is None:
+                raise AssertionError("inference settings are required")
+            model_id = settings.target(InferenceTarget.PRIVACY).reference.model_id
             self.model_id = model_id
-            self.base_url = base_url
-            classifier_clients.append((model_id, base_url))
+            self.base_url = None
+            classifier_clients.append((model_id, None))
 
         def resolve_model_digest(self, *, timeout_seconds: float) -> str:
             assert timeout_seconds > 0
@@ -151,7 +157,7 @@ def test_lifespan_wires_a_dedicated_local_client_for_consolidation(
     ]
     assert [base_url for _, base_url in classifier_clients] == [
         None,
-        "http://127.0.0.1:11434",
+        None,
     ]
     assert len(semantic_classifiers) == 2
     assert consolidation_review_classifiers == [semantic_classifiers[1]]
@@ -167,9 +173,9 @@ def test_lifespan_rejects_external_consolidation_url_before_client_request(
     requests: list[object] = []
 
     class RecordingClient:
-        def __init__(self, *, model_id: str, base_url: str | None = None) -> None:
-            self.model_id = model_id
-            self.base_url = base_url
+        def __init__(self, **kwargs: object) -> None:
+            self.model_id = "synthetic"
+            self.base_url = None
 
         def chat(self, *args: object, **kwargs: object) -> str:
             requests.append((args, kwargs))
