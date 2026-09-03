@@ -43,6 +43,8 @@ from app.conversation_history.sqlite_lease import SQLiteLease, acquire_maintenan
 from app.conversation_history.wal_cleanup import ConversationWalCleanup
 from app.environment import iana_timezone_environment_value
 from app.llm import router as llm_router
+from app.inference import InferenceTarget
+from app.inference.runtime import create_inference_runtime, target_model_id
 from app.memory.memory_policy import resolved_memory_policy
 from app.memory.admission.evaluator import create_rag_admission_evaluator
 from app.memory.admission_service import RagAdmissionService
@@ -74,8 +76,8 @@ from app.model_settings import ModelSettings, resolve_model_settings
 from app.prompting import BuiltPrompt, PromptMessage
 from app.privacy.history_sanitizer import create_history_sanitizer
 from app.privacy.scanner import create_privacy_scanner
-from app.privacy.semantic.classifier import OllamaSemanticPrivacyClassifier
-from app.privacy.semantic.ollama_classifier_client import OllamaClassifierClient
+from app.privacy.semantic.classifier import InferenceSemanticPrivacyClassifier
+from app.privacy.semantic.inference_client import InferenceSemanticClassifierClient
 from app.routers.chat import router as chat_router
 from app.routers.character_catalog import router as character_catalog_router
 from app.routers.conversations import router as conversations_router
@@ -110,6 +112,10 @@ DEFAULT_MEMORY_OCCURRED_TIMEZONE = "Asia/Tokyo"
 DOGFOOD_BACKUP_DIR_ENV = "DOGFOOD_BACKUP_DIR"
 DOGFOOD_BACKUP_RETENTION_COUNT_ENV = "DOGFOOD_BACKUP_RETENTION_COUNT"
 CONSOLIDATION_PROMPT_VERSION = "consolidation-v1"
+
+# 既存テスト・子PR間だけのimport互換。#181で撤去する。
+OllamaClassifierClient = InferenceSemanticClassifierClient
+OllamaSemanticPrivacyClassifier = InferenceSemanticPrivacyClassifier
 
 
 @dataclass(frozen=True)
@@ -241,6 +247,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     livekit_api = None
     model_settings = resolve_model_settings(os.environ)
+    inference_runtime = create_inference_runtime(os.environ)
     occurred_timezone = iana_timezone_environment_value(
         MEMORY_OCCURRED_TIMEZONE_ENV,
         DEFAULT_MEMORY_OCCURRED_TIMEZONE,
@@ -368,6 +375,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         chat_service_state_set = False
         audio_pipeline_state_set = False
         semantic_classifier_state_set = False
+        inference_router_state_set = False
+        inference_router_registered = False
         persona_memory_provider_state_set = False
         addon_record_provider_state_set = False
         rag_admission_service_state_set = False
@@ -383,6 +392,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         core_transcriber = None
         core_synthesizer = None
         try:
+            llm_router.register_inference_router(inference_runtime.router)
+            inference_router_registered = True
+            app.state.inference_router = inference_runtime.router
+            inference_router_state_set = True
             app.state.voice_measurement_kind = voice_measurement_kind
             voice_measurement_kind_state_set = True
             if voice_trace_recorder is not None:
@@ -395,12 +408,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             app.state.ui_settings_repository = ui_settings_repository
             ui_settings_repository_state_set = True
             semantic_classifier_client = OllamaClassifierClient(
-                model_id=model_settings.ollama_classifier_model
+                router=inference_runtime.router,
+                settings=inference_runtime.settings,
+                model_digest_resolver=lambda model_id, timeout_seconds: (
+                    inference_runtime.ollama_adapter.resolve_model_digest(
+                        model_id,
+                        timeout_seconds=timeout_seconds,
+                    )
+                ),
             )
             semantic_privacy_classifier = OllamaSemanticPrivacyClassifier(
                 client=semantic_classifier_client,
                 privacy_policy=policy.privacy,
-                model_id=model_settings.ollama_classifier_model,
+                model_id=target_model_id(
+                    inference_runtime.settings,
+                    InferenceTarget.PRIVACY,
+                ),
                 model_digest_resolver=lambda timeout_seconds: (
                     semantic_classifier_client.resolve_model_digest(
                         timeout_seconds=timeout_seconds
@@ -443,14 +466,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 base_url=consolidation_ollama_base_url,
             )
             memory_consolidation_classifier_client = OllamaClassifierClient(
-                model_id=model_settings.ollama_classifier_model,
-                base_url=consolidation_ollama_base_url,
+                router=inference_runtime.router,
+                settings=inference_runtime.settings,
+                model_digest_resolver=lambda model_id, timeout_seconds: (
+                    inference_runtime.ollama_adapter.resolve_model_digest(
+                        model_id,
+                        timeout_seconds=timeout_seconds,
+                    )
+                ),
             )
             memory_consolidation_privacy_classifier = (
                 OllamaSemanticPrivacyClassifier(
                     client=memory_consolidation_classifier_client,
                     privacy_policy=policy.privacy,
-                    model_id=model_settings.ollama_classifier_model,
+                    model_id=target_model_id(
+                        inference_runtime.settings,
+                        InferenceTarget.PRIVACY,
+                    ),
                     model_digest_resolver=lambda timeout_seconds: (
                         memory_consolidation_classifier_client.resolve_model_digest(
                             timeout_seconds=timeout_seconds
@@ -678,6 +710,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         app.state,
                         "semantic_privacy_classifier",
                     )
+                if inference_router_state_set:
+                    cleanup.callback(delattr, app.state, "inference_router")
+                if inference_router_registered:
+                    cleanup.callback(
+                        llm_router.clear_inference_router,
+                        inference_runtime.router,
+                    )
                 if persona_memory_provider_state_set:
                     cleanup.callback(delattr, app.state, "persona_memory_provider")
                 if addon_record_provider_state_set:
@@ -696,6 +735,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     cleanup.callback(memory_consolidation_client.close)
                 if memory_consolidation_classifier_client is not None:
                     cleanup.callback(memory_consolidation_classifier_client.close)
+                cleanup.callback(inference_runtime.close)
             if cleanup_errors:
                 raise cleanup_errors[0]
 

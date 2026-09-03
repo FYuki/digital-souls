@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
 
 
@@ -24,7 +25,7 @@ def test_startup_resolves_semantic_dependencies_once_and_cleans_up_state(
     closed_clients: list[object] = []
     original_close = main.OllamaClassifierClient.close
 
-    def post(_client: object, url: str, **kwargs: object) -> MagicMock:
+    def post(url: str, **kwargs: object) -> MagicMock:
         requests.append(url)
         payload = kwargs["json"]
         assert isinstance(payload, dict)
@@ -58,9 +59,11 @@ def test_startup_resolves_semantic_dependencies_once_and_cleans_up_state(
     monkeypatch.setenv("OLLAMA_CLASSIFIER_MODEL", "classifier-only:4b")
     monkeypatch.setattr(main, "resolved_memory_policy", resolve_policy)
     monkeypatch.setattr(main, "create_privacy_scanner", create_scanner)
+    http_client = MagicMock(spec=httpx.Client)
+    http_client.post.side_effect = post
     monkeypatch.setattr(
-        "app.privacy.semantic.ollama_classifier_client.OllamaClassifierClient._post",
-        post,
+        "app.inference.adapters.ollama.httpx.Client",
+        lambda **_kwargs: http_client,
     )
     monkeypatch.setattr(main.OllamaClassifierClient, "close", close)
 
