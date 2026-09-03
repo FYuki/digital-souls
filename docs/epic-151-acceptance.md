@@ -5,7 +5,8 @@
 
 ## 自動確認
 
-リポジトリルートで次を実行する。
+Linux／WSL2上の作業ディレクトリ（例: `~/dev/digital-souls`）にあるリポジトリルートで
+次を実行する。`/mnt/c/Users/...`配下はNode.jsの依存関係処理やファイル監視が不安定になるため使用しない。
 
 ```text
 npm run lint:python

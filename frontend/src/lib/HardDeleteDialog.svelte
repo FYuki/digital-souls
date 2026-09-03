@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte'
+  import { modalDialog } from './modal-dialog'
 
   export let conversationId: string
   export let conversationTitle: string | null = null
@@ -8,50 +8,21 @@
   export let onConfirm: () => void
   export let onCancel: () => void
 
-  let dialog: HTMLElement
-  let cancelButton: HTMLButtonElement
-
-  const cancelFromOutside = (event: PointerEvent) => {
-    if (!disabled && dialog !== undefined && !dialog.contains(event.target as Node)) {
-      onCancel()
-    }
-  }
-
-  const handleKeydown = (event: KeyboardEvent) => {
-    if (event.key === 'Escape' && !disabled) {
-      event.preventDefault()
-      onCancel()
-      return
-    }
-    if (event.key === 'Tab' && dialog !== undefined) {
-      const focusable = [...dialog.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
-      if (focusable.length === 0) return
-      const first = focusable[0]
-      const last = focusable[focusable.length - 1]
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-  }
-
-  onMount(() => {
-    document.addEventListener('pointerdown', cancelFromOutside)
-    cancelButton.focus()
-  })
-  onDestroy(() => {
-    document.removeEventListener('pointerdown', cancelFromOutside)
-    returnFocus?.focus()
-  })
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
-
 <div class="backdrop" role="presentation">
-  <section bind:this={dialog} role="dialog" aria-modal="true" aria-labelledby="delete-title">
+  <section
+    use:modalDialog={{
+      disabled,
+      focusableSelector: 'button:not(:disabled)',
+      initialFocusSelector: '[data-initial-focus]',
+      onCancel,
+      returnFocus,
+    }}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="delete-title"
+  >
     <h2 id="delete-title">スレッドを完全に削除しますか</h2>
     <p>対象スレッド: {conversationTitle ?? conversationId}</p>
     <p class="id">ID: {conversationId}</p>
@@ -59,7 +30,7 @@
     <p>RAG長期記憶は削除されません。</p>
     <p>既存のbackup、snapshot、ファイルシステム上の複製からの消去を保証しません。</p>
     <div class="actions">
-      <button bind:this={cancelButton} type="button" on:click={onCancel} disabled={disabled}>キャンセル</button>
+      <button data-initial-focus type="button" on:click={onCancel} disabled={disabled}>キャンセル</button>
       <button type="button" class="danger" on:click={onConfirm} disabled={disabled}>完全に削除</button>
     </div>
   </section>

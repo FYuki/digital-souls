@@ -22,9 +22,15 @@ export type UiSettings = {
   thread_pins: ThreadPin[]
 }
 
-export type UiPreferencesPatch = Partial<Pick<
+type UiPreferenceFields = Pick<
   UiSettings,
   | 'desktop_portrait_layout'
   | 'desktop_history_height_percent'
   | 'compact_history_height_percent'
->>
+>
+
+type AtLeastOne<T, Key extends keyof T = keyof T> = Key extends keyof T
+  ? Required<Pick<T, Key>> & Partial<Omit<T, Key>>
+  : never
+
+export type UiPreferencesPatch = AtLeastOne<UiPreferenceFields>

@@ -13,7 +13,7 @@ digital-souls の自作バックエンド（FastAPI）。
 - キャラクター（`characters/`）のロード
 - `GET /` のヘルスチェック
 - `POST /chat` のチャット応答 API
-- `GET /characters`、`POST /characters/rescan` のキャラクターcatalog API
+- `GET /characters`、`POST /characters/rescan` のキャラクターカタログ API
 - `GET /characters/{character_id}/assets/standing/default.png` の立ち絵配信 API
 - `POST /characters/{character_id}/conversations` のスレッド作成 API
 - `GET /characters/{character_id}/conversations` の利用中スレッド一覧 API
@@ -26,15 +26,15 @@ digital-souls の自作バックエンド（FastAPI）。
 立ち絵配置、PC／compact別の履歴範囲、キャラクターの表示状態、キャラクター／スレッドの
 ピン留めをSQLiteへ保存する。SNSログイン実装後に実ユーザーIDとの関連付けへ移行する。
 
-キャラクターcatalogはリクエスト時に`characters/`を再走査し、有効なCharacter Cardだけを返す。
-立ち絵URLはBackendが生成し、character境界、variant、PNG、symlink脱出を検証する。
+キャラクターカタログはリクエスト時に`characters/`を再走査し、有効なCharacter Cardだけを返す。
+立ち絵URLはバックエンドが生成し、character境界、variant、PNG、symlink脱出を検証する。
 立ち絵レスポンスは`ETag`と`Cache-Control: no-cache`を返し、`If-None-Match`による再検証に対応する。
-Frontendはrepository上のファイルパスを直接組み立てない。
+フロントエンドはrepository上のファイルパスを直接組み立てない。
 
 アーカイブは短期会話履歴を保持したまま通常利用から外す操作であり、物理削除では
 対象 conversation とその全 turn だけを SQLite から削除する。削除後、この短期会話履歴は
 復元できない。SQLite 接続では `secure_delete` を有効にし、物理削除後の WAL 後処理に
-失敗した場合は本文を含まない再試行情報を保存して Backend 起動時に再試行する。
+失敗した場合は本文を含まない再試行情報を保存してバックエンド起動時に再試行する。
 アーカイブと物理削除のどちらも RAG 長期記憶は変更せず、その閲覧・訂正・物理削除と
 Chroma 同期削除は Wave 2 で実装する。既存の backup、snapshot、ファイルシステム上の
 複製からの消去は保証しない。
@@ -51,7 +51,7 @@ Wave 2の実装順と受入条件は
 scripts/setup-backend.sh
 ```
 
-`setup-backend.sh` は `backend/.venv` の作成と実行時依存関係のインストールだけを行い、Backend は起動しない。
+`setup-backend.sh` は `backend/.venv` の作成と実行時依存関係のインストールだけを行い、バックエンドは起動しない。
 
 ## 起動
 
@@ -59,8 +59,8 @@ scripts/setup-backend.sh
 scripts/start-backend.sh --host localhost --port 8000 --reload
 ```
 
-`start-backend.sh` は解決済みの dev Profile（`localhost:8000`、reload有効）と一致するhost、port、reload設定を明示して実行する。構築済みの `backend/.venv` を使って Backend だけを foreground で起動し、環境がない場合にセットアップは自動実行されず、`setup-backend.sh` の実行を促すエラーで終了する。Backend プロセス自身が終了した場合は、その終了ステータスが呼び出し元へ伝播する。
+`start-backend.sh` は解決済みの dev Profile（`localhost:8000`、reload有効）と一致するhost、port、reload設定を明示して実行する。構築済みの `backend/.venv` を使ってバックエンドだけを foreground で起動し、環境がない場合にセットアップは自動実行されず、`setup-backend.sh` の実行を促すエラーで終了する。バックエンドプロセス自身が終了した場合は、その終了ステータスが呼び出し元へ伝播する。
 
 LLM・Whisper・prompt予算は `backend/.env.example` の環境変数で変更できる。`OLLAMA_CONTEXT_TOKENS` はOllamaの実行時context、`LLM_CONTEXT_TOKEN_LIMIT` はモデル自体の最大context、`OLLAMA_RESPONSE_RESERVE_TOKENS` はassistant応答の予約量である。応答予約量は実行時context未満、実行時contextはモデル最大context以下でなければならない。`ASSISTANT_MAX_GENERATION_TOKENS` は応答予約量の既存契約名で、同時指定時は同値が必要になる。不正値は起動時に設定名を含むエラーとなる。
 
-`WHISPER_MODEL` を変更すると、環境adapterのcache確認・prepareとBackendのfaster-whisper初期化が同じモデルへ切り替わる。Profile経由の起動では、これらの設定が解決済みreportへ記録され、Backendとadapterの双方へ渡される。
+`WHISPER_MODEL` を変更すると、環境adapterのcache確認・prepareとバックエンドのfaster-whisper初期化が同じモデルへ切り替わる。Profile経由の起動では、これらの設定が解決済みreportへ記録され、バックエンドとadapterの双方へ渡される。

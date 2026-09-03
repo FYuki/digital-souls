@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte'
+  import { modalDialog } from './modal-dialog'
 
   export let currentTitle: string
   export let disabled: boolean
@@ -7,74 +7,42 @@
   export let onConfirm: (title: string) => void
   export let onCancel: () => void
 
-  let dialog: HTMLElement
-  let titleInput: HTMLInputElement
   let title = currentTitle
-
-  const cancelFromOutside = (event: PointerEvent) => {
-    if (!disabled && dialog !== undefined && !dialog.contains(event.target as Node)) {
-      onCancel()
-    }
-  }
-
-  const handleKeydown = (event: KeyboardEvent) => {
-    if (event.key === 'Escape' && !disabled) {
-      event.preventDefault()
-      onCancel()
-      return
-    }
-    if (event.key === 'Tab' && dialog !== undefined) {
-      const focusable = [...dialog.querySelectorAll<HTMLElement>(
-        'input:not(:disabled), button:not(:disabled)',
-      )]
-      if (focusable.length === 0) return
-      const first = focusable[0]
-      const last = focusable[focusable.length - 1]
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-  }
+  $: normalizedTitle = title.normalize('NFC').trim()
+  $: titleLength = Array.from(normalizedTitle).length
 
   const submit = () => {
-    const normalized = title.trim()
-    if (disabled || normalized.length === 0 || normalized.length > 40) return
-    onConfirm(normalized)
+    if (disabled || titleLength === 0 || titleLength > 40) return
+    onConfirm(normalizedTitle)
   }
-
-  onMount(() => {
-    document.addEventListener('pointerdown', cancelFromOutside)
-    titleInput.focus()
-    titleInput.select()
-  })
-  onDestroy(() => {
-    document.removeEventListener('pointerdown', cancelFromOutside)
-    returnFocus?.focus()
-  })
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
-
 <div class="backdrop" role="presentation">
-  <section bind:this={dialog} role="dialog" aria-modal="true" aria-labelledby="rename-title">
+  <section
+    use:modalDialog={{
+      disabled,
+      focusableSelector: 'input:not(:disabled), button:not(:disabled)',
+      initialFocusSelector: '#thread-title',
+      onCancel,
+      returnFocus,
+      selectInitialText: true,
+    }}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="rename-title"
+  >
     <h2 id="rename-title">スレッド名を変更</h2>
     <form on:submit|preventDefault={submit}>
       <label for="thread-title">スレッド名</label>
       <input
-        bind:this={titleInput}
         id="thread-title"
         bind:value={title}
-        maxlength="40"
         disabled={disabled}
       />
-      <p class="count">{title.length} / 40</p>
+      <p class="count">{titleLength} / 40</p>
       <div class="actions">
         <button type="button" on:click={onCancel} disabled={disabled}>キャンセル</button>
-        <button type="submit" class="primary" disabled={disabled || title.trim().length === 0}>
+        <button type="submit" class="primary" disabled={disabled || titleLength === 0 || titleLength > 40}>
           保存
         </button>
       </div>

@@ -74,6 +74,8 @@ test('記憶管理入口から別groupを表示し明示削除後すぐ一覧か
   await page.goto('/')
 
   await page.getByRole('button', { name: '記憶管理' }).click()
+  await expect(page.getByRole('region', { name: '記憶管理' }))
+    .toHaveCSS('background-color', 'rgb(16, 13, 23)')
   await expect(page.getByRole('heading', { name: '人格記憶' })).toBeVisible()
   await expect(page.getByRole('heading', { name: '暫定記録' })).toBeVisible()
   await expect(page.getByText('ユーザーは紅茶を好む')).toBeVisible()

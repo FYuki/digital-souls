@@ -191,7 +191,7 @@ class UiSettingsRepository:
                     "(user_id, character_id, conversation_id, pinned_at) "
                     "VALUES (?, ?, ?, ?) "
                     "ON CONFLICT(user_id, character_id, conversation_id) "
-                    "DO UPDATE SET pinned_at = excluded.pinned_at",
+                    "DO NOTHING",
                     (user_id, character_id, str(conversation_id), now),
                 )
             else:

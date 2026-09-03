@@ -314,18 +314,28 @@
 {/if}
 
 <style>
-  .memory-management { width: min(880px, 100%); min-height: calc(100vh - 48px); box-sizing: border-box; padding: 24px; border: 1px solid rgba(144, 67, 47, .2); border-radius: 8px; background: #fffdfa; }
+  .memory-management { width: min(880px, 100%); min-height: calc(100vh - 48px); box-sizing: border-box; padding: 24px; border: 1px solid rgba(255, 255, 255, .09); border-radius: 14px; color: #f8f3ff; background: #100d17; }
   header, .record-heading, .actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  header { border-bottom: 1px solid rgba(144, 67, 47, .16); }
-  h1, h2 { color: #4a2822; }
-  .eyebrow { margin: 0; color: #9f4933; font-size: .78rem; font-weight: 700; text-transform: uppercase; }
-  article { margin: 12px 0; padding: 16px; border: 1px solid rgba(144, 67, 47, .16); border-radius: 8px; }
-  time { display: block; color: #69524d; }
-  .pending { color: #9f4933; font-weight: 700; }
-  .editor { position: fixed; right: 24px; bottom: 24px; z-index: 5; width: min(420px, calc(100% - 48px)); box-sizing: border-box; padding: 20px; border: 1px solid #bc806d; border-radius: 8px; background: white; box-shadow: 0 12px 32px rgba(69, 39, 33, .2); }
-  input, textarea { display: block; width: 100%; box-sizing: border-box; }
+  header { padding-bottom: 14px; border-bottom: 1px solid rgba(255, 255, 255, .09); }
+  h1, h2 { color: #fbf7ff; }
+  .eyebrow { margin: 0; color: #c4b6da; font-size: .78rem; font-weight: 700; text-transform: uppercase; }
+  article { margin: 12px 0; padding: 16px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 12px; background: #1b1724; }
+  time { display: block; color: #968fa3; }
+  .pending { color: #f0a3c1; font-weight: 700; }
+  button { min-height: 44px; padding: 8px 12px; border: 1px solid #574d63; border-radius: 9px; color: #eee8f3; background: #272130; cursor: pointer; }
+  button:hover { background: #342b3e; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid #f0a3c1; outline-offset: 2px; }
+  button:disabled { cursor: not-allowed; opacity: .48; }
+  .editor { position: fixed; right: 24px; bottom: 24px; z-index: 80; width: min(420px, calc(100% - 48px)); box-sizing: border-box; padding: 20px; border: 1px solid rgba(255, 255, 255, .12); border-radius: 14px; color: #f8f3ff; background: #1b1724; box-shadow: 0 24px 70px rgba(0, 0, 0, .42); }
+  input, textarea { display: block; width: 100%; min-height: 44px; box-sizing: border-box; padding: 8px 11px; border: 1px solid #574d63; border-radius: 9px; color: #fff; background: #100d17; }
   textarea { min-height: 80px; }
-  .backdrop { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: rgba(40, 20, 16, .45); }
-  .dialog { width: min(480px, calc(100% - 32px)); box-sizing: border-box; padding: 24px; border-radius: 8px; background: white; }
+  .backdrop { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: rgba(5, 4, 8, .68); }
+  .dialog { width: min(480px, calc(100% - 32px)); box-sizing: border-box; padding: 24px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 14px; color: #f8f3ff; background: #1b1724; box-shadow: 0 24px 70px rgba(0, 0, 0, .42); }
   .danger { color: white; background: #9d281f; }
+
+  @media (max-width: 640px) {
+    .memory-management { min-height: calc(100vh - 24px); padding: 16px; }
+    header { align-items: flex-start; }
+    .editor { right: 12px; bottom: 12px; width: calc(100% - 24px); }
+  }
 </style>

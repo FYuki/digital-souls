@@ -188,6 +188,8 @@ export const createSidebarController = (
 ): SidebarController => {
   const store = writable<SidebarState>(initialState())
   let operationVersion = 0
+  let mutationVersion = 0
+  const refreshVersions = new Map<string, number>()
 
   const fail = () => store.update((state) => ({
     ...state,
@@ -209,6 +211,7 @@ export const createSidebarController = (
 
   const run = async <T>(operation: () => Promise<T>): Promise<T | null> => {
     if (get(store).pending) return null
+    ++mutationVersion
     store.update((state) => ({ ...state, pending: true, error: null }))
     try {
       return await operation()
@@ -224,6 +227,7 @@ export const createSidebarController = (
     subscribe: store.subscribe,
     initialize: async () => {
       const version = ++operationVersion
+      ++mutationVersion
       store.set({ ...initialState(), pending: true })
       try {
         const [catalog, settings] = await Promise.all([
@@ -448,12 +452,19 @@ export const createSidebarController = (
     ),
     refreshCharacter: async (characterId) => {
       if (get(store).pending) return
+      const mutationAtStart = mutationVersion
+      const refreshVersion = (refreshVersions.get(characterId) ?? 0) + 1
+      refreshVersions.set(characterId, refreshVersion)
       try {
         const active = await gateway.listActive(characterId)
         const state = get(store)
         const archived = state.archivedLoaded.includes(characterId)
           ? await gateway.listArchived(characterId)
           : null
+        if (
+          mutationAtStart !== mutationVersion
+          || refreshVersions.get(characterId) !== refreshVersion
+        ) return
         store.update((current) => ({
           ...current,
           activeByCharacter: {
@@ -465,7 +476,10 @@ export const createSidebarController = (
             : { ...current.archivedByCharacter, [characterId]: ordered(archived) },
         }))
       } catch {
-        store.update((state) => ({ ...state, error: errorMessage }))
+        if (
+          mutationAtStart === mutationVersion
+          && refreshVersions.get(characterId) === refreshVersion
+        ) store.update((state) => ({ ...state, error: errorMessage }))
       }
     },
   }

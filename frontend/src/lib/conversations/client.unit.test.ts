@@ -47,6 +47,16 @@ describe('conversation lifecycle client response boundary', () => {
     expect(result).toEqual([expected])
   })
 
+  test('should accept a title containing 40 astral Unicode characters', async () => {
+    const expected = {
+      ...conversation(CHARACTER, CONVERSATION_ID, null),
+      title: '😀'.repeat(40),
+    }
+    respondWith([expected])
+
+    await expect(listActiveConversations(CHARACTER)).resolves.toEqual([expected])
+  })
+
   test('should reject an active list item for another character', async () => {
     respondWith([conversation('akira', CONVERSATION_ID, null)])
 

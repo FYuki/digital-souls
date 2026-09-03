@@ -68,4 +68,18 @@ describe('RenameThreadDialog', () => {
 
     expect(document.activeElement).toBe(trigger)
   })
+
+  test('40個のastral文字を有効な名前として送信する', async () => {
+    const onConfirm = vi.fn()
+    render(RenameThreadDialog, {
+      currentTitle: '名前', disabled: false, onConfirm, onCancel: vi.fn(),
+    })
+    const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'スレッド名' })
+    await fireEvent.input(input, { target: { value: '😀'.repeat(40) } })
+
+    await fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    expect(onConfirm).toHaveBeenCalledWith('😀'.repeat(40))
+    expect(screen.getByText('40 / 40')).toBeTruthy()
+  })
 })

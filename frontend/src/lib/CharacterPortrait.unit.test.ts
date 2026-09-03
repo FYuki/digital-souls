@@ -40,4 +40,11 @@ describe('CharacterPortrait', () => {
     expect(screen.queryByRole('img')).toBeNull()
     expect(screen.getByLabelText('立ち絵未設定')).toBeTruthy()
   })
+
+  test('character未選択時も日本語のplaceholderを表示する', () => {
+    render(CharacterPortrait, { character: null })
+
+    expect(screen.getByText('キャラクター')).toBeTruthy()
+    expect(screen.getByText('立ち絵を準備中')).toBeTruthy()
+  })
 })
