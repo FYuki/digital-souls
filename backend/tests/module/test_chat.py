@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.conversation_history.prompt_history import RestoredHistoryTurn
+from app.inference.contracts import ProviderTextResult
 from app.main import app
 from app.memory.chroma_store import MemorySearchResult
 from app.prompting import CharacterPrompt, PromptInputLimitError
@@ -643,9 +644,9 @@ class TestChatFlow:
 
         expected_reply = "光織です。よろしくお願いします。"
         with patch(
-            "app.inference.adapters.ollama.httpx.Client.post",
-            return_value=_ollama_response(expected_reply),
-        ) as mock_post:
+            "app.inference.adapters.ollama.OllamaAdapter.generate_text",
+            return_value=ProviderTextResult(text=expected_reply, usage=None),
+        ) as generate_text:
             response = client.post(
                 "/chat?character=ignored&message=ignored",
                 json=_VALID_BODY,
@@ -655,10 +656,10 @@ class TestChatFlow:
         assert response.json()["character"] == "miori"
         assert response.json()["turn"]["assistant_content"] == expected_reply
 
-        payload = mock_post.call_args.kwargs["json"]
-        assert payload["messages"] == [
-            {"role": "system", "content": f"## 応答方針\n{system_prompt}"},
-            {"role": "user", "content": "自己紹介してください"},
+        request = generate_text.call_args.args[-1]
+        assert [(message.role, message.content) for message in request.messages] == [
+            ("system", f"## 応答方針\n{system_prompt}"),
+            ("user", "自己紹介してください"),
         ]
 
     def test_rag_augmented_prompt_reaches_ollama_and_reply_is_recorded(
@@ -685,9 +686,9 @@ class TestChatFlow:
                 ),
             ) as mock_build:
                 with patch(
-                    "app.inference.adapters.ollama.httpx.Client.post",
-                    return_value=_ollama_response(expected_reply),
-                ) as mock_post:
+                    "app.inference.adapters.ollama.OllamaAdapter.generate_text",
+                    return_value=ProviderTextResult(text=expected_reply, usage=None),
+                ) as generate_text:
                     with TestClient(app) as client:
                         response = client.post(
                             "/chat",
@@ -713,20 +714,20 @@ class TestChatFlow:
             now=ANY,
             timezone="Asia/Tokyo",
         )
-        payload = mock_post.call_args.kwargs["json"]
-        assert payload["messages"] == [
-            {"role": "system", "content": f"## 応答方針\n{system_prompt}"},
-            {
-                "role": "system",
-                "content": "## 関連する記憶\n"
+        request = generate_text.call_args.args[-1]
+        assert [(message.role, message.content) for message in request.messages] == [
+            ("system", f"## 応答方針\n{system_prompt}"),
+            (
+                "system",
+                "## 関連する記憶\n"
                 "[2026-07-31T09:00:00+09:00] 順位1の記憶",
-            },
-            {
-                "role": "system",
-                "content": "## 関連する記憶\n"
+            ),
+            (
+                "system",
+                "## 関連する記憶\n"
                 "[2026-07-31T09:00:00+09:00] 順位2の記憶",
-            },
-            {"role": "user", "content": "前回なんの話をしたっけ？"},
+            ),
+            ("user", "前回なんの話をしたっけ？"),
         ]
 
     def test_rag_value_error_falls_back_without_writing_failed_memory(
@@ -749,9 +750,9 @@ class TestChatFlow:
         user_message = "農業日誌: 2026-06-23はピーマンに水やりした"
         expected_reply = "農業日誌として保存しました。"
         with patch(
-            "app.inference.adapters.ollama.httpx.Client.post",
-            return_value=_ollama_response(expected_reply),
-        ) as mock_post:
+            "app.inference.adapters.ollama.OllamaAdapter.generate_text",
+            return_value=ProviderTextResult(text=expected_reply, usage=None),
+        ) as generate_text:
             with TestClient(app) as client:
                 response = client.post(
                     "/chat",
@@ -765,10 +766,10 @@ class TestChatFlow:
         assert response.status_code == 200
         assert response.json()["character"] == "miori"
         assert response.json()["turn"]["assistant_content"] == expected_reply
-        payload = mock_post.call_args.kwargs["json"]
-        assert payload["messages"] == [
-            {"role": "system", "content": f"## 応答方針\n{system_prompt}"},
-            {"role": "user", "content": user_message},
+        request = generate_text.call_args.args[-1]
+        assert [(message.role, message.content) for message in request.messages] == [
+            ("system", f"## 応答方針\n{system_prompt}"),
+            ("user", user_message),
         ]
         rag_service.query_memories.assert_not_called()
 

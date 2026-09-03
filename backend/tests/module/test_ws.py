@@ -10,6 +10,7 @@ from starlette.websockets import WebSocketDisconnect
 from unittest.mock import ANY, MagicMock, patch
 
 from app.audio_pipeline import resolve_audio_runtime_config
+from app.inference.contracts import ProviderTextResult
 from app.main import app
 from app.memory.chroma_store import MemorySearchResult
 from app.memory.rag_service import RetrievalOutcome
@@ -2891,9 +2892,9 @@ class TestWebSocketFlow:
 
         expected_reply = "光織です。よろしくお願いします。"
         with patch(
-            "app.inference.adapters.ollama.httpx.Client.post",
-            return_value=_ollama_response(expected_reply),
-        ) as mock_post:
+            "app.inference.adapters.ollama.OllamaAdapter.generate_text",
+            return_value=ProviderTextResult(text=expected_reply, usage=None),
+        ) as generate_text:
             with client.websocket_connect(
                 f"/ws/miori?conversation_id={CONVERSATION_ID}&character=ignored&message=ignored",
             ) as websocket:
@@ -2904,10 +2905,10 @@ class TestWebSocketFlow:
 
         _assert_persisted_content_frame(response, expected_reply)
 
-        payload = mock_post.call_args.kwargs["json"]
-        assert payload["messages"] == [
-            {"role": "system", "content": f"## 応答方針\n{system_prompt}"},
-            {"role": "user", "content": "自己紹介してください"},
+        request = generate_text.call_args.args[-1]
+        assert [(message.role, message.content) for message in request.messages] == [
+            ("system", f"## 応答方針\n{system_prompt}"),
+            ("user", "自己紹介してください"),
         ]
 
 
