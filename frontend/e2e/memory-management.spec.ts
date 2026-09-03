@@ -23,6 +23,8 @@ test.beforeEach(async ({}, testInfo) => {
 
 const MEMORY_ID = '00000000-0000-4000-8000-000000000012'
 const RECORD_ID = '10000000-0000-4000-8000-000000000012'
+const CONVERSATION_ID = 'e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'
+const CONVERSATION_TITLE = '記憶について話したスレッド'
 
 const installMemoryBackend = async (page: Page) => {
   let memories = [{
@@ -64,6 +66,21 @@ const installMemoryBackend = async (page: Page) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(records) })
       return
     }
+    if (url.pathname === '/api/characters/miori/conversations') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{
+          character_id: 'miori',
+          conversation_id: CONVERSATION_ID,
+          created_at: '2026-08-01T12:00:00+00:00',
+          updated_at: '2026-08-01T12:01:00+00:00',
+          archived_at: null,
+          title: CONVERSATION_TITLE,
+        }]),
+      })
+      return
+    }
     await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
   })
   await installMockUiBootstrap(page)
@@ -90,4 +107,17 @@ test('記憶管理入口から別groupを表示し明示削除後すぐ一覧か
   await page.getByRole('button', { name: `削除 ${MEMORY_ID}` }).click()
   await page.getByRole('dialog').getByRole('button', { name: '完全に削除' }).click()
   await expect(page.getByText('ユーザーは紅茶を好む')).toHaveCount(0)
+})
+
+test('記憶管理画面でスレッドを選択すると会話画面へ切り替える', async ({ page }) => {
+  await installMemoryBackend(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: '記憶管理' }).click()
+  await expect(page.getByRole('region', { name: '記憶管理' })).toBeVisible()
+
+  await page.getByRole('button', { name: CONVERSATION_TITLE, exact: true }).click()
+
+  await expect(page.getByRole('region', { name: '記憶管理' })).toHaveCount(0)
+  await expect(page.getByRole('region', { name: '光織とのチャット' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: CONVERSATION_TITLE })).toBeVisible()
 })
