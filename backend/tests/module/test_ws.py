@@ -2891,7 +2891,7 @@ class TestWebSocketFlow:
 
         expected_reply = "光織です。よろしくお願いします。"
         with patch(
-            "app.llm.ollama_client.httpx.post",
+            "app.inference.adapters.ollama.httpx.Client.post",
             return_value=_ollama_response(expected_reply),
         ) as mock_post:
             with client.websocket_connect(

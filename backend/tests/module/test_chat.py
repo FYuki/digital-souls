@@ -643,7 +643,7 @@ class TestChatFlow:
 
         expected_reply = "光織です。よろしくお願いします。"
         with patch(
-            "app.llm.ollama_client.httpx.post",
+            "app.inference.adapters.ollama.httpx.Client.post",
             return_value=_ollama_response(expected_reply),
         ) as mock_post:
             response = client.post(
@@ -685,7 +685,7 @@ class TestChatFlow:
                 ),
             ) as mock_build:
                 with patch(
-                    "app.llm.ollama_client.httpx.post",
+                    "app.inference.adapters.ollama.httpx.Client.post",
                     return_value=_ollama_response(expected_reply),
                 ) as mock_post:
                     with TestClient(app) as client:
@@ -749,7 +749,7 @@ class TestChatFlow:
         user_message = "農業日誌: 2026-06-23はピーマンに水やりした"
         expected_reply = "農業日誌として保存しました。"
         with patch(
-            "app.llm.ollama_client.httpx.post",
+            "app.inference.adapters.ollama.httpx.Client.post",
             return_value=_ollama_response(expected_reply),
         ) as mock_post:
             with TestClient(app) as client:

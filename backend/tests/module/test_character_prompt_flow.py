@@ -121,7 +121,7 @@ def test_should_send_builder_messages_from_http_entrypoint(
     monkeypatch.setenv("RAG_ENABLED", "false")
 
     with patch(
-        "app.llm.ollama_client.httpx.post",
+        "app.inference.adapters.ollama.httpx.Client.post",
         return_value=response,
     ) as ollama_post:
         with TestClient(app) as client:
