@@ -2,6 +2,13 @@
 
 検証日: 2026-06-14
 
+## 状態
+
+**ACTIVE**。2026-06時点のOllama／gemma3検証結果とWhisperを含む既存設定の移行履歴として維持する。
+「現行のモデル設定契約」にあるOllama用途別Model／context envはIssue #105で置換中であり、
+設計と新規実装では`inference-provider-foundation-2026-09.md`を優先する。旧envはIssue #181で
+撤去するまでの暫定互換であり、release互換契約ではない。
+
 ## 目的
 
 Phase 2 の要件として、WSL2 上の Ollama で軽量 LLM を動かし、Phase 3 以降のコア基盤として採用可能か判断する。
@@ -104,6 +111,10 @@ total_duration 約 510ms、eval（生成）は約 96ms。
 ## 現行のモデル設定契約（2026-08-02）
 
 上記は 2026-06-14 時点の検証記録として維持する。その後、AIRI フォークから自作 Backend へ移行し、常用する Ollama モデルも変更したため、現在の実行契約は次のとおりとする。
+
+> **2026-09移行注記**: 次表のOllama用途別Model／context設定は#105完了後の現行契約ではない。
+> 新しいTarget／Provider設定、token上限、readinessは
+> `inference-provider-foundation-2026-09.md`を正本とする。表は#181までの移行元を明示するため残す。
 
 | 環境変数 | 既定値 | 用途・制約 |
 |---|---:|---|
