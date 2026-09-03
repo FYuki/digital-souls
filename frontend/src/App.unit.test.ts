@@ -586,6 +586,26 @@ describe('App conversation lifecycle', () => {
       .toBe(true)
   })
 
+  test('記憶管理画面でスレッドを選択すると会話画面へ切り替える', async () => {
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (url.includes('/persona-memories') || url.includes('/temporary-records/')) {
+        return new Response('[]', { status: 200 })
+      }
+      return defaultFetch(input, init)
+    })
+    render(App)
+    const thread = await screen.findByRole('button', { name: CONVERSATION_ID })
+    await fireEvent.click(screen.getByRole('button', { name: '記憶管理' }))
+    expect(await screen.findByRole('heading', { name: '記憶管理' })).toBeTruthy()
+
+    await fireEvent.click(thread)
+
+    expect(await screen.findByRole('heading', { name: CONVERSATION_ID })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: '記憶管理' })).toBeNull()
+    expect(await screen.findByText('保存済みの回答')).toBeTruthy()
+  })
+
   test('最初のtext送信後に自動生成名を再読み込みなしで一覧とheaderへ反映する', async () => {
     const initial = { ...conversation, title: '新しい会話' }
     const named = { ...conversation, title: '今日の予定は？' }

@@ -322,6 +322,7 @@
 
   const handleSelectConversation = async (character: string, conversationId: string) => {
     if (interactionsDisabled) return
+    showingMemoryManagement = false
     if (character !== $conversationController.character) {
       await conversationController.loadCharacter(character)
     }
