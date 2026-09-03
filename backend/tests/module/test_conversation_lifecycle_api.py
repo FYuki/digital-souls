@@ -68,7 +68,7 @@ def test_should_rename_active_and_archived_conversation(client) -> None:
         f"{BASE_PATH}/{conversation.conversation_id}",
         json={"title": "  手動で変更した名前  "},
     )
-    client.post(f"{BASE_PATH}/{conversation.conversation_id}/archive")
+    archived = client.post(f"{BASE_PATH}/{conversation.conversation_id}/archive")
     renamed_archived = client.patch(
         f"{BASE_PATH}/{conversation.conversation_id}",
         json={"title": "アーカイブ後の名前"},
@@ -76,6 +76,8 @@ def test_should_rename_active_and_archived_conversation(client) -> None:
 
     assert renamed.status_code == 200
     assert renamed.json()["title"] == "手動で変更した名前"
+    assert archived.status_code == 200
+    assert archived.json()["archived_at"] is not None
     assert renamed_archived.status_code == 200
     assert renamed_archived.json()["title"] == "アーカイブ後の名前"
 

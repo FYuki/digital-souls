@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte'
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 import HardDeleteDialog from './HardDeleteDialog.svelte'
@@ -6,12 +6,15 @@ import HardDeleteDialog from './HardDeleteDialog.svelte'
 const CONVERSATION_ID = 'e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'
 
 describe('HardDeleteDialog', () => {
+  let onCancel: ReturnType<typeof vi.fn>
+
   beforeEach(() => {
+    onCancel = vi.fn()
     render(HardDeleteDialog, {
       conversationId: CONVERSATION_ID,
       disabled: false,
       onConfirm: vi.fn(),
-      onCancel: vi.fn(),
+      onCancel,
     })
   })
 
@@ -36,5 +39,14 @@ describe('HardDeleteDialog', () => {
     expect(dialog.textContent).toContain('snapshot')
     expect(dialog.textContent).toContain('ファイルシステム上の複製')
     expect(dialog.textContent).toContain('消去を保証しません')
+  })
+
+  test('初期focusとEscapeによるcancelを共通modal挙動で提供する', async () => {
+    const cancel = screen.getByRole('button', { name: 'キャンセル' })
+    await waitFor(() => expect(document.activeElement).toBe(cancel))
+
+    await fireEvent.keyDown(window, { key: 'Escape' })
+
+    expect(onCancel).toHaveBeenCalledTimes(1)
   })
 })

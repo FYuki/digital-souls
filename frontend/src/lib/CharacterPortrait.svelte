@@ -28,7 +28,7 @@
       <span class="placeholder-head"></span>
       <span class="placeholder-body"></span>
     </div>
-    <p>{character?.display_name ?? 'Character'}</p>
+    <p>{character?.display_name ?? 'キャラクター'}</p>
     <span>立ち絵を準備中</span>
   {/if}
 </div>

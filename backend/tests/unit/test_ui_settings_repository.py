@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from app.ui_settings import PortraitLayout, UiSettingsRepository
@@ -163,6 +163,44 @@ def test_archive_preserves_thread_pin_and_hard_delete_removes_it(
     conversations.hard_delete_conversation("miori", conversation.conversation_id)
 
     assert settings.get(LOCAL_USER).thread_pins == ()
+
+
+def test_repeated_thread_pin_preserves_original_order(tmp_path: Path) -> None:
+    database_path = tmp_path / "history.db"
+    conversations = create_repository(database_path)
+    first = conversations.create_conversation("miori")
+    second = conversations.create_conversation("miori")
+    current = [NOW]
+    settings = UiSettingsRepository(
+        database_path=database_path,
+        clock=lambda: current[0],
+    )
+
+    settings.set_thread_pinned(
+        LOCAL_USER,
+        "miori",
+        first.conversation_id,
+        pinned=True,
+    )
+    current[0] += timedelta(seconds=1)
+    settings.set_thread_pinned(
+        LOCAL_USER,
+        "miori",
+        second.conversation_id,
+        pinned=True,
+    )
+    current[0] += timedelta(seconds=1)
+    snapshot = settings.set_thread_pinned(
+        LOCAL_USER,
+        "miori",
+        first.conversation_id,
+        pinned=True,
+    )
+
+    assert [pin.conversation_id for pin in snapshot.thread_pins] == [
+        first.conversation_id,
+        second.conversation_id,
+    ]
 
 
 def test_different_user_ids_do_not_share_settings_or_pins(tmp_path: Path) -> None:

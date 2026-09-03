@@ -33,8 +33,8 @@ const parseConversation = (value: unknown): Conversation => {
     || typeof value.updated_at !== 'string'
     || !(typeof value.archived_at === 'string' || value.archived_at === null)
     || typeof value.title !== 'string'
-    || value.title.length < 1
-    || value.title.length > 40
+    || Array.from(value.title).length < 1
+    || Array.from(value.title).length > 40
   ) throw new Error('Conversation response shape is invalid')
   return value as Conversation
 }

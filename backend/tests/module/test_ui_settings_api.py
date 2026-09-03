@@ -176,7 +176,9 @@ def test_pin_endpoints_report_missing_character_and_thread(
             "e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010/pin"
         )
 
+    assert missing_character.status_code == 404
     assert missing_character.json()["detail"]["code"] == (
         "ui_character_not_added"
     )
+    assert missing_thread.status_code == 404
     assert missing_thread.json()["detail"]["code"] == "ui_thread_not_found"

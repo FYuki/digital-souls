@@ -178,7 +178,9 @@
     const value = Number(
       (event.currentTarget as HTMLSelectElement).value,
     ) as HistoryHeightPercent
-    void controller.updatePreferences({ [key]: value })
+    void controller.updatePreferences(key === 'desktop_history_height_percent'
+      ? { desktop_history_height_percent: value }
+      : { compact_history_height_percent: value })
   }
 
   onMount(() => document.addEventListener('pointerdown', handleDocumentPointer))

@@ -179,13 +179,21 @@ describe('sidebar controller operations', () => {
     const listActive = vi.fn(async (characterId: string) => [
       conversation(ids[0], characterId),
     ])
-    const controller = createSidebarController(gateway({ listActive }), '取得失敗')
+    const controller = createSidebarController(gateway({
+      listActive,
+      getSettings: vi.fn(async () => settings({
+        characters: [
+          { character_id: 'miori', visible: true, pinned: false, pin_order: null },
+          { character_id: 'akira', visible: false, pinned: false, pin_order: null },
+        ],
+      })),
+    }), '取得失敗')
 
     await controller.initialize()
 
-    expect(listActive).toHaveBeenCalledTimes(2)
+    expect(listActive.mock.calls).toEqual([['miori']])
     expect(get(controller).initialized).toBe(true)
-    expect(Object.keys(get(controller).activeByCharacter)).toEqual(['miori', 'akira'])
+    expect(Object.keys(get(controller).activeByCharacter)).toEqual(['miori'])
   })
 
   test('非表示後の再追加で保存済みスレッドを再取得する', async () => {
@@ -281,5 +289,28 @@ describe('sidebar controller operations', () => {
     expect(await controller.hardDeleteConversation('miori', ids[0])).toBe(true)
     expect(get(controller).archivedByCharacter.miori).toEqual([])
     expect(get(controller).settings?.thread_pins).toEqual([])
+  })
+
+  test('mutation中に解決した古い再取得結果を一覧へ反映しない', async () => {
+    let resolveRefresh: ((items: Conversation[]) => void) | undefined
+    let refreshing = false
+    const listActive = vi.fn(async (characterId: string) => {
+      if (!refreshing) {
+        return characterId === 'miori' ? [conversation(ids[0])] : []
+      }
+      return new Promise<Conversation[]>((resolve) => { resolveRefresh = resolve })
+    })
+    const controller = createSidebarController(gateway({ listActive }), '取得失敗')
+    await controller.initialize()
+    refreshing = true
+
+    const refresh = controller.refreshCharacter('miori')
+    if (resolveRefresh === undefined) throw new Error('再取得のresolve関数が必要です')
+    expect(await controller.archiveConversation('miori', ids[0])).toBe(true)
+    resolveRefresh([conversation(ids[0])])
+    await refresh
+
+    expect(get(controller).activeByCharacter.miori).toEqual([])
+    expect(get(controller).archivedByCharacter.miori[0].conversation_id).toBe(ids[0])
   })
 })
