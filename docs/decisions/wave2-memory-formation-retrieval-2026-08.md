@@ -7,6 +7,11 @@
 本ADRは、Wave 2で実装する人格記憶のモデリング、保存判定、非同期記憶形成、検索順位、
 domain recordとの分離を定める。
 
+Inference Provider／Target、Ollama固定経路、consolidation Modelの選択、Embedding Index fingerprintと
+再構築時の切替については`inference-provider-foundation-2026-09.md`を優先する。本ADRのprivacy、
+保存allowlist、fail-closed、SQLite正本、Chroma派生Index、transactional outboxは引き続き有効であり、
+Provider変更によって緩和しない。
+
 RAG privacyの絶対禁止、SQLite正本、Chroma派生index、transactional outbox等の不変条件は
 `rag-memory-privacy-policy-2026-07.md`を引き続き適用する。ただし、同ADRにある次の決定は
 本ADRで改定する。
@@ -354,6 +359,9 @@ Wave 1 scannerの結果だけで終了しclassifierを呼ばなかった場合�
 小さくするためである。最初からinstanceを分けず、会話との競合をlatencyとtimeoutで観測してから
 分離する。versionを独立fieldにするのは、model更新、prompt変更、classifier実装変更、policy変更の
 どれが判定差を生んだかを後から切り分けるためである。
+
+Issue #105以降も`privacy` Targetはlocal Provider専用であり、この安全境界は維持する。ただし、
+Ollama Clientを直接呼ぶ実装と用途別Model envは共通Inference Target経路へ置き換える。
 
 ### 9. 会話応答と記憶形成を分離する
 
