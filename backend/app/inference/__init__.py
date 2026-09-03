@@ -1,8 +1,4 @@
-from app.inference.authorization import (
-    InferenceAuthorizer,
-    InferencePrincipal,
-    InferencePrincipalKind,
-)
+from app.inference.authorization import InferenceCaller, authorize
 from app.inference.config import (
     InferenceSettings,
     TARGET_DEFINITIONS,
@@ -27,13 +23,11 @@ from app.inference.router import InferenceRouter
 
 __all__ = [
     "EmbeddingResult",
-    "InferenceAuthorizer",
+    "InferenceCaller",
     "InferenceCapability",
     "InferenceError",
     "InferenceErrorCategory",
     "InferenceMessage",
-    "InferencePrincipal",
-    "InferencePrincipalKind",
     "InferenceRouter",
     "InferenceSettings",
     "InferenceTarget",
@@ -46,6 +40,7 @@ __all__ = [
     "TokenEstimate",
     "TokenEstimateAccuracy",
     "default_provider_registry",
+    "authorize",
     "parse_provider_reference",
     "resolve_inference_settings",
 ]

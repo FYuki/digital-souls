@@ -2,9 +2,8 @@ from collections.abc import AsyncIterator
 import threading
 
 from app.inference import (
+    InferenceCaller,
     InferenceMessage,
-    InferencePrincipal,
-    InferencePrincipalKind,
     InferenceRouter,
     InferenceTarget,
 )
@@ -15,7 +14,7 @@ from app.prompting import BuiltPrompt, PromptMessage
 DEFAULT_PROVIDER = "ollama"
 _router_lock = threading.Lock()
 _configured_routers: list[InferenceRouter] = []
-_CHAT_PRINCIPAL = InferencePrincipal(InferencePrincipalKind.CORE, "chat")
+_CHAT_CALLER = InferenceCaller.CHAT
 
 
 def register_inference_router(router: InferenceRouter) -> None:
@@ -77,7 +76,7 @@ def generate_response(
     inference_router = current_inference_router()
     if inference_router is not None:
         return inference_router.generate_text(
-            principal=_CHAT_PRINCIPAL,
+            caller=_CHAT_CALLER,
             target=InferenceTarget.CHAT,
             messages=_inference_messages(prompt.messages),
         ).text
@@ -91,7 +90,7 @@ def count_input_tokens(
     inference_router = current_inference_router()
     if inference_router is not None:
         return inference_router.estimate_input_tokens(
-            principal=_CHAT_PRINCIPAL,
+            caller=_CHAT_CALLER,
             target=InferenceTarget.CHAT,
             messages=_inference_messages(messages),
         ).count
@@ -108,7 +107,7 @@ async def stream_response(
     inference_router = current_inference_router()
     if inference_router is not None:
         async for delta in inference_router.stream_text(
-            principal=_CHAT_PRINCIPAL,
+            caller=_CHAT_CALLER,
             target=InferenceTarget.CHAT,
             messages=_inference_messages(prompt.messages),
         ):

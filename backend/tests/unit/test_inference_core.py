@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Mapping
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event, Lock
 import pytest
 
 from app.inference.authorization import (
-    InferenceAuthorizer,
-    InferencePrincipal,
-    InferencePrincipalKind,
+    InferenceCaller,
 )
 from app.inference.config import parse_provider_reference, resolve_inference_settings
 from app.inference.contracts import (
@@ -19,6 +19,7 @@ from app.inference.contracts import (
     ProviderTextResult,
     StructuredGenerationRequest,
     TextGenerationRequest,
+    TextGenerationResult,
     TokenEstimate,
     TokenEstimateAccuracy,
     TokenEstimateRequest,
@@ -85,6 +86,28 @@ class _FakeAdapter:
         return TokenEstimate(12, TokenEstimateAccuracy.EXACT, "fixture")
 
 
+class _BlockingAdapter(_FakeAdapter):
+    def __init__(self) -> None:
+        super().__init__()
+        self.entered = Event()
+        self.release = Event()
+        self._active = 0
+        self.max_active = 0
+        self._lock = Lock()
+
+    def generate_text(self, request: TextGenerationRequest) -> ProviderTextResult:
+        del request
+        with self._lock:
+            self.text_calls += 1
+            self._active += 1
+            self.max_active = max(self.max_active, self._active)
+        self.entered.set()
+        self.release.wait(timeout=2.0)
+        with self._lock:
+            self._active -= 1
+        return ProviderTextResult("ok")
+
+
 @pytest.mark.parametrize(
     ("value", "provider_id", "model_id"),
     [
@@ -106,7 +129,15 @@ def test_provider_reference_splits_only_the_first_slash(
 
 @pytest.mark.parametrize(
     "value",
-    ["", "ollama", "/model", "ollama/", " ollama/model", "ollama/model ", "ollama@a/model"],
+    [
+        "",
+        "ollama",
+        "/model",
+        "ollama/",
+        " ollama/model",
+        "ollama/model ",
+        "ollama@a/model",
+    ],
 )
 def test_provider_reference_rejects_noncanonical_or_reserved_values(value: str) -> None:
     with pytest.raises(ValueError):
@@ -186,12 +217,7 @@ def _router(adapter: _FakeAdapter) -> InferenceRouter:
     return InferenceRouter(
         settings=resolve_inference_settings(_environment(), registry),
         registry=registry,
-        authorizer=InferenceAuthorizer(),
     )
-
-
-def _principal(identifier: str) -> InferencePrincipal:
-    return InferencePrincipal(InferencePrincipalKind.CORE, identifier)
 
 
 def _messages() -> tuple[InferenceMessage, ...]:
@@ -209,7 +235,7 @@ def test_structured_generation_is_revalidated_without_repair_or_retry() -> None:
     }
 
     result = router.generate_structured(
-        principal=_principal("semantic-privacy"),
+        caller=InferenceCaller.SEMANTIC_PRIVACY,
         target=InferenceTarget.PRIVACY,
         messages=_messages(),
         response_schema=schema,
@@ -219,7 +245,7 @@ def test_structured_generation_is_revalidated_without_repair_or_retry() -> None:
     adapter.structured_text = '{"unexpected":true}'
     with pytest.raises(InferenceError) as exc_info:
         router.generate_structured(
-            principal=_principal("semantic-privacy"),
+            caller=InferenceCaller.SEMANTIC_PRIVACY,
             target=InferenceTarget.PRIVACY,
             messages=_messages(),
             response_schema=schema,
@@ -239,7 +265,7 @@ def test_router_does_not_retry_or_fallback_and_keeps_errors_sanitized() -> None:
 
     with pytest.raises(InferenceError) as exc_info:
         router.generate_text(
-            principal=_principal("chat"),
+            caller=InferenceCaller.CHAT,
             target=InferenceTarget.CHAT,
             messages=_messages(),
         )
@@ -249,13 +275,13 @@ def test_router_does_not_retry_or_fallback_and_keeps_errors_sanitized() -> None:
     assert "secret" not in str(exc_info.value).lower()
 
 
-def test_authorization_happens_before_provider_send_and_addons_default_deny() -> None:
+def test_authorization_happens_before_provider_send() -> None:
     adapter = _FakeAdapter()
     router = _router(adapter)
 
     with pytest.raises(InferenceError) as exc_info:
         router.generate_text(
-            principal=InferencePrincipal(InferencePrincipalKind.ADDON, "sample-addon"),
+            caller=InferenceCaller.MEMORY_EXTRACTION,
             target=InferenceTarget.CHAT,
             messages=_messages(),
         )
@@ -269,12 +295,12 @@ def test_token_estimate_and_usage_are_separate_contracts() -> None:
     router = _router(adapter)
 
     estimate = router.estimate_input_tokens(
-        principal=_principal("chat"),
+        caller=InferenceCaller.CHAT,
         target=InferenceTarget.CHAT,
         messages=_messages(),
     )
     result = router.generate_text(
-        principal=_principal("chat"),
+        caller=InferenceCaller.CHAT,
         target=InferenceTarget.CHAT,
         messages=_messages(),
     )
@@ -283,6 +309,36 @@ def test_token_estimate_and_usage_are_separate_contracts() -> None:
     assert result.usage == InferenceUsage(3, 2, 5, provider_reported=True)
     assert adapter.estimate_calls == 1
     assert adapter.text_calls == 1
+
+
+def test_router_enforces_target_max_concurrency_in_core() -> None:
+    adapter = _BlockingAdapter()
+    router = _router(adapter)
+    second_attempted = Event()
+
+    def call() -> TextGenerationResult:
+        return router.generate_text(
+            caller=InferenceCaller.CHAT,
+            target=InferenceTarget.CHAT,
+            messages=_messages(),
+        )
+
+    def call_second() -> TextGenerationResult:
+        second_attempted.set()
+        return call()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(call)
+        assert adapter.entered.wait(timeout=1.0)
+        second = executor.submit(call_second)
+        assert second_attempted.wait(timeout=1.0)
+        assert adapter.text_calls == 1
+        assert not second.done()
+        adapter.release.set()
+        assert first.result(timeout=1.0).text == "ok"
+        assert second.result(timeout=1.0).text == "ok"
+
+    assert adapter.max_active == 1
 
 
 def test_registry_declares_fixed_provider_kinds_and_capabilities() -> None:

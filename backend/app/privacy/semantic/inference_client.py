@@ -4,9 +4,8 @@ from collections.abc import Callable
 import json
 
 from app.inference import (
+    InferenceCaller,
     InferenceMessage,
-    InferencePrincipal,
-    InferencePrincipalKind,
     InferenceRouter,
     InferenceSettings,
     InferenceTarget,
@@ -25,14 +24,9 @@ class InferenceSemanticClassifierClient:
         model_digest_resolver: Callable[[str, float], str],
     ) -> None:
         self._router = router
-        self._model_id = settings.target(
-            InferenceTarget.PRIVACY
-        ).reference.model_id
+        self._model_id = settings.target(InferenceTarget.PRIVACY).reference.model_id
         self._model_digest_resolver = model_digest_resolver
-        self._principal = InferencePrincipal(
-            InferencePrincipalKind.CORE,
-            "semantic-privacy",
-        )
+        self._caller = InferenceCaller.SEMANTIC_PRIVACY
 
     @property
     def model_id(self) -> str:
@@ -48,7 +42,7 @@ class InferenceSemanticClassifierClient:
         timeout_seconds: float,
     ) -> str:
         result = self._router.generate_structured(
-            principal=self._principal,
+            caller=self._caller,
             target=InferenceTarget.PRIVACY,
             messages=tuple(
                 InferenceMessage(message["role"], message["content"])

@@ -212,19 +212,18 @@ retryまたは別Providerへのfallbackを行わない。SDK内部retryは無効
 
 Streaming途中失敗では送信済みtextを破棄、再送せず、部分応答を保持して中断を通知する。
 
-### 9. Principal単位でProvider送信前に認可する
+### 9. Core呼出元単位でProvider送信前に認可する
 
 ```text
-InferencePrincipal
-  kind: core | addon
-  id: <core-purpose> | <addon-id>
+InferenceCaller
+  value: <core-purpose>
 
-authorize(principal, target) -> allow | deny
+authorize(caller, target) -> allow | deny
 ```
 
-Core機能はコード内固定表でTargetを制限し、Addonは既定denyとする。#104がCore承認済みTarget allowlistを
-渡し、Addon Manifestの自己申告だけでは許可しない。Provider送信前に認可して拒否を`access_denied`とする。
-#105はCore内部Inference契約とauthorization境界、#104はAddon向けpublic／network contractを所有する。
+Core機能は固定列挙とコード内のCaller→Target対応表で制限する。AddonはInference callerにならず、#104は
+Target allowlistを生成、保持、受け渡ししない。#182のTool orchestrationはCore callerとしてInferenceを
+利用し、Addon自身にはTargetを選択させない。Provider送信前に認可して拒否を`access_denied`とする。
 
 ### 10. 起動時検証とruntime状態を分離する
 
