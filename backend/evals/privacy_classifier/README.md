@@ -11,11 +11,11 @@ npm run eval:privacy:prompt-lab
 npm run eval:privacy:conformance
 ```
 
-`prompt-lab.yaml` は Ollama を直接呼び、prompt 候補を比較する。`conformance.yaml` は `provider.py` を介して production の `OllamaSemanticPrivacyClassifier` を呼ぶ release gate である。標準の unit / module test には実 Ollama 評価を含めない。
+`prompt-lab.yaml` は Ollama を直接呼び、prompt 候補を比較する。`conformance.yaml` は `provider.py` を介してproductionの`InferenceSemanticPrivacyClassifier`とPrivacy Targetを呼ぶrelease gateである。標準のunit／module testには実Ollama評価を含めない。
 
 ## バージョン固定
 
-- model: `OLLAMA_CLASSIFIER_MODEL`。既定は `gemma4:e4b`。起動時に `/api/show` から digest を解決する。
+- model: `INFERENCE_TARGET_PRIVACY` のModel ID。既定例は `ollama/gemma4:e4b`。Ollama利用時は起動時に `/api/show` から digest を解決する。
 - classifier: `semantic-privacy-classifier-v2`
 - prompt: `semantic-privacy-prompt-v11`
 - policy: `backend/app/memory/memory_policy.json` の `policy_version`

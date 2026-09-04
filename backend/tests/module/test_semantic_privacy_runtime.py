@@ -23,7 +23,7 @@ def test_startup_resolves_semantic_dependencies_once_and_cleans_up_state(
     requests: list[str] = []
     requested_models: list[str] = []
     closed_clients: list[object] = []
-    original_close = main.OllamaClassifierClient.close
+    original_close = main.InferenceSemanticClassifierClient.close
 
     def post(url: str, **kwargs: object) -> MagicMock:
         requests.append(url)
@@ -55,8 +55,8 @@ def test_startup_resolves_semantic_dependencies_once_and_cleans_up_state(
         original_close(client)
 
     monkeypatch.setenv("RAG_ENABLED", "false")
-    monkeypatch.setenv("OLLAMA_CHAT_MODEL", "chat-only:9b")
-    monkeypatch.setenv("OLLAMA_CLASSIFIER_MODEL", "classifier-only:4b")
+    monkeypatch.setenv("INFERENCE_TARGET_CHAT", "ollama/chat-only:9b")
+    monkeypatch.setenv("INFERENCE_TARGET_PRIVACY", "ollama/classifier-only:4b")
     monkeypatch.setattr(main, "resolved_memory_policy", resolve_policy)
     monkeypatch.setattr(main, "create_privacy_scanner", create_scanner)
     http_client = MagicMock(spec=httpx.Client)
@@ -65,7 +65,7 @@ def test_startup_resolves_semantic_dependencies_once_and_cleans_up_state(
         "app.inference.adapters.ollama.httpx.Client",
         lambda **_kwargs: http_client,
     )
-    monkeypatch.setattr(main.OllamaClassifierClient, "close", close)
+    monkeypatch.setattr(main.InferenceSemanticClassifierClient, "close", close)
 
     async def exercise_lifespan() -> None:
         async with main.lifespan(main.app):
@@ -94,7 +94,7 @@ def test_startup_continues_when_semantic_model_digest_is_unavailable(
 
     monkeypatch.setenv("RAG_ENABLED", "false")
     monkeypatch.setattr(
-        main.OllamaClassifierClient,
+        main.InferenceSemanticClassifierClient,
         "resolve_model_digest",
         lambda _client, **_kwargs: (_ for _ in ()).throw(
             TimeoutError("lookup timeout")

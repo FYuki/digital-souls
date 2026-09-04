@@ -119,7 +119,6 @@ TARGET_DEFINITIONS: Mapping[InferenceTarget, TargetDefinition] = {
     ),
 }
 
-
 @dataclass(frozen=True)
 class InferenceSettings:
     targets: Mapping[InferenceTarget, ResolvedTarget]
@@ -139,6 +138,24 @@ def target_environment_key(
     return f"{INFERENCE_TARGET_PREFIX}{TARGET_DEFINITIONS[target].env_token}{suffix}"
 
 
+INFERENCE_TARGET_ENVIRONMENT_KEYS = frozenset(
+    target_environment_key(target, suffix)
+    for target in TARGET_DEFINITIONS
+    for suffix in _SUFFIXES
+)
+
+
+def inference_target_environment(
+    environment: Mapping[str, str],
+) -> dict[str, str]:
+    """Target設定だけをsecretを含まない環境projectionとして返す。"""
+    return {
+        key: value
+        for key, value in environment.items()
+        if key in INFERENCE_TARGET_ENVIRONMENT_KEYS
+    }
+
+
 def parse_provider_reference(value: str) -> ProviderReference:
     if not value or value.strip() != value or "/" not in value:
         raise ValueError("inference target must use canonical provider/model syntax")
@@ -154,11 +171,7 @@ def resolve_inference_settings(
     environment: Mapping[str, str],
     registry: ProviderRegistry,
 ) -> InferenceSettings:
-    allowed_keys = {
-        target_environment_key(target, suffix)
-        for target in TARGET_DEFINITIONS
-        for suffix in _SUFFIXES
-    }
+    allowed_keys = INFERENCE_TARGET_ENVIRONMENT_KEYS
     unknown_keys = sorted(
         key
         for key in environment

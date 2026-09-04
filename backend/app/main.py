@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 from app import _chat_runtime
 from app.async_worker import run_sync
@@ -43,8 +44,17 @@ from app.conversation_history.sqlite_lease import SQLiteLease, acquire_maintenan
 from app.conversation_history.wal_cleanup import ConversationWalCleanup
 from app.environment import iana_timezone_environment_value
 from app.llm import router as llm_router
-from app.inference import InferenceCaller, InferenceTarget
-from app.inference.runtime import create_inference_runtime, target_model_id
+from app.inference import (
+    InferenceCaller,
+    InferenceTarget,
+    default_provider_registry,
+    resolve_inference_settings,
+)
+from app.inference.runtime import (
+    create_inference_runtime,
+    reject_legacy_inference_environment,
+    target_model_id,
+)
 from app.memory.memory_policy import resolved_memory_policy
 from app.memory.admission.evaluator import create_rag_admission_evaluator
 from app.memory.admission_service import RagAdmissionService
@@ -112,11 +122,6 @@ DEFAULT_MEMORY_OCCURRED_TIMEZONE = "Asia/Tokyo"
 DOGFOOD_BACKUP_DIR_ENV = "DOGFOOD_BACKUP_DIR"
 DOGFOOD_BACKUP_RETENTION_COUNT_ENV = "DOGFOOD_BACKUP_RETENTION_COUNT"
 CONSOLIDATION_PROMPT_VERSION = "consolidation-v1"
-
-# 既存テスト・子PR間だけのimport互換。#181で撤去する。
-OllamaClassifierClient = InferenceSemanticClassifierClient
-OllamaSemanticPrivacyClassifier = InferenceSemanticPrivacyClassifier
-
 
 @dataclass(frozen=True)
 class _SchemaRollbackContext:
@@ -246,12 +251,30 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
 
     livekit_api = None
-    model_settings = resolve_model_settings(os.environ)
-    inference_runtime = create_inference_runtime(os.environ)
+    reject_legacy_inference_environment(os.environ)
+    inference_settings = resolve_inference_settings(
+        os.environ,
+        default_provider_registry(),
+    )
+    chat_target = inference_settings.target(InferenceTarget.CHAT)
+    chat_output_tokens = chat_target.max_output_tokens
+    if chat_output_tokens is None:
+        raise AssertionError("chat target requires an output limit")
+    model_settings = resolve_model_settings(
+        os.environ,
+        chat_context_tokens=chat_target.max_input_tokens + chat_output_tokens,
+        assistant_max_generation_tokens=chat_output_tokens,
+    )
     occurred_timezone = iana_timezone_environment_value(
         MEMORY_OCCURRED_TIMEZONE_ENV,
         DEFAULT_MEMORY_OCCURRED_TIMEZONE,
     )
+    inference_runtime = create_inference_runtime(os.environ)
+    try:
+        inference_runtime.probe_startup()
+    except Exception:
+        inference_runtime.close()
+        raise
     repository_root = Path(__file__).resolve().parents[2]
     runtime_paths = resolve_runtime_paths(os.environ, repository_root)
     initialize_runtime_data_root(runtime_paths, repository_root)
@@ -401,6 +424,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             llm_router.register_inference_router(inference_runtime.router)
             inference_router_registered = True
             app.state.inference_router = inference_runtime.router
+            app.state.inference_health = inference_runtime.health
             inference_router_state_set = True
             app.state.voice_measurement_kind = voice_measurement_kind
             voice_measurement_kind_state_set = True
@@ -413,7 +437,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             lifecycle_service_state_set = True
             app.state.ui_settings_repository = ui_settings_repository
             ui_settings_repository_state_set = True
-            semantic_classifier_client = OllamaClassifierClient(
+            semantic_classifier_client = InferenceSemanticClassifierClient(
                 router=inference_runtime.router,
                 settings=inference_runtime.settings,
                 model_digest_resolver=lambda model_id, timeout_seconds: (
@@ -423,7 +447,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     )
                 ),
             )
-            semantic_privacy_classifier = OllamaSemanticPrivacyClassifier(
+            semantic_privacy_classifier = InferenceSemanticPrivacyClassifier(
                 client=semantic_classifier_client,
                 privacy_policy=policy.privacy,
                 model_id=target_model_id(
@@ -473,7 +497,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 caller=InferenceCaller.MEMORY_CONSOLIDATION,
                 target=InferenceTarget.MEMORY_CONSOLIDATION,
             )
-            memory_consolidation_classifier_client = OllamaClassifierClient(
+            memory_consolidation_classifier_client = InferenceSemanticClassifierClient(
                 router=inference_runtime.router,
                 settings=inference_runtime.settings,
                 model_digest_resolver=lambda model_id, timeout_seconds: (
@@ -484,7 +508,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 ),
             )
             memory_consolidation_privacy_classifier = (
-                OllamaSemanticPrivacyClassifier(
+                InferenceSemanticPrivacyClassifier(
                     client=memory_consolidation_classifier_client,
                     privacy_policy=policy.privacy,
                     model_id=target_model_id(
@@ -751,6 +775,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 if memory_consolidation_classifier_client is not None:
                     cleanup.callback(memory_consolidation_classifier_client.close)
                 cleanup.callback(inference_runtime.close)
+                cleanup.callback(delattr, app.state, "inference_health")
             if cleanup_errors:
                 raise cleanup_errors[0]
 
@@ -769,3 +794,24 @@ app.include_router(ws_router)
 @app.get("/")
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/health/ready")
+def inference_readiness() -> JSONResponse:
+    health = getattr(app.state, "inference_health", None)
+    ready = health is not None and health.is_ready()
+    return JSONResponse(
+        {"status": "ready" if ready else "not_ready"},
+        status_code=200 if ready else 503,
+    )
+
+
+@app.get("/health/inference")
+def inference_health() -> JSONResponse:
+    health = getattr(app.state, "inference_health", None)
+    if health is None:
+        return JSONResponse({"targets": []}, status_code=503)
+    return JSONResponse(
+        {"targets": [item.public_dict() for item in health.snapshot()]},
+        status_code=200,
+    )

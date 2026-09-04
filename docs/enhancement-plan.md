@@ -114,8 +114,7 @@ conversationとturnをSQLiteからhard deleteする。
 
 ### 6. 設定のenv化（実装済み）
 
-- `OLLAMA_CHAT_MODEL`、`OLLAMA_CONTEXT_TOKENS`、`OLLAMA_RESPONSE_RESERVE_TOKENS`で
-  Ollamaのモデル、実行時context、応答予約量を設定する
+- 用途別の`INFERENCE_TARGET_*`でProvider／Modelとtoken上限を設定する
 - `WHISPER_MODEL`で実行時モデルとcache準備対象を揃える
 - 会話履歴件数、履歴token上限、user入力上限、assistant最大生成量、モデル最大contextを設定する
 - typed settingsで不正値と設定間の不整合を起動時に拒否し、Profile経由でBackendと環境adapterへ

@@ -261,9 +261,7 @@ Chroma Index metadataへProvider ID、Model ID、Embedding dimensionからなる
 | 新旧両方 | 値が同じでも起動時エラー |
 | 必須Targetが新旧どちらにもない | 起動時エラー |
 
-Issue #181でfallback code、test、文書と`OLLAMA_CHAT_MODEL`、`OLLAMA_CLASSIFIER_MODEL`、
-`OLLAMA_EXTRACTOR_MODEL`、`OLLAMA_EMBEDDING_MODEL`、`OLLAMA_CONTEXT_TOKENS`、
-`OLLAMA_RESPONSE_RESERVE_TOKENS`を削除する。`OLLAMA_BASE_URL`は維持する。撤去後は旧変数の指定を
+Issue #181でfallback code、test、文書と旧Ollama用途別変数を削除する。`OLLAMA_BASE_URL`は維持する。撤去後は旧変数の指定を
 起動時エラーにし、CIでcode、設定、現行文書への再導入を検知する。
 
 ### 14. real-service証跡はIssue #181を正本にする

@@ -44,18 +44,15 @@ def _require_runtime_evidence_dependencies() -> None:
 class TestRagRuntimeEvidenceIntegration:
     def test_real_chroma_and_resolved_ollama_run_the_shared_manifest(
         self,
-        monkeypatch: pytest.MonkeyPatch,
         runtime_paths,
     ) -> None:
-        monkeypatch.setenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:latest")
         _require_runtime_evidence_dependencies()
-        from app.llm.ollama_config import resolve_ollama_embedding_model
         from evals.rag_retrieval.real_evaluator import evaluate_real_manifest
 
         result = evaluate_real_manifest(
             RAG_EVAL_MANIFEST,
             runtime_paths=runtime_paths,
-            embedding_model=resolve_ollama_embedding_model(),
+            embedding_model=os.environ["INFERENCE_TARGET_EMBEDDING"].split("/", 1)[1],
         )
 
         assert result.privacy_boundary_violations == 0
@@ -69,11 +66,9 @@ class TestRagRuntimeEvidenceIntegration:
 
     def test_rebuildable_index_remains_available_to_the_retrieval_path(
         self,
-        monkeypatch: pytest.MonkeyPatch,
         runtime_paths,
         request: pytest.FixtureRequest,
     ) -> None:
-        monkeypatch.setenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:latest")
         _require_runtime_evidence_dependencies()
 
         from app.inference.runtime import create_inference_runtime

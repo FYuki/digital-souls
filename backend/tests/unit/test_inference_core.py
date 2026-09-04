@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event, Lock
@@ -56,6 +57,9 @@ class _FakeAdapter:
         self.structured_text = '{"answer":"ok"}'
         self.failure: InferenceError | None = None
 
+    def probe(self, model_id: str, *, timeout_seconds: float) -> None:
+        del model_id, timeout_seconds
+
     def generate_text(self, request: TextGenerationRequest) -> ProviderTextResult:
         del request
         self.text_calls += 1
@@ -106,6 +110,19 @@ class _BlockingAdapter(_FakeAdapter):
         with self._lock:
             self._active -= 1
         return ProviderTextResult("ok")
+
+
+class _CancellableAdapter(_FakeAdapter):
+    def __init__(self) -> None:
+        super().__init__()
+        self.entered = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def stream_text(self, request: TextGenerationRequest) -> AsyncIterator[str]:
+        del request
+        self.entered.set()
+        await self.release.wait()
+        yield "late"
 
 
 @pytest.mark.parametrize(
@@ -294,7 +311,35 @@ def test_memory_capabilities_invoke_metadata_only_observer() -> None:
     ]
     assert observations[-1].error_category is InferenceErrorCategory.INVALID_RESPONSE
     assert all(observation.provider_id == "ollama" for observation in observations)
+    assert all(observation.external_request_count == 1 for observation in observations)
     assert all(not hasattr(observation, "messages") for observation in observations)
+
+
+def test_stream_cancellation_is_observed_as_failure() -> None:
+    adapter = _CancellableAdapter()
+    observations = []
+    router = _router(adapter, observer=observations.append)
+
+    async def exercise() -> None:
+        async def consume() -> None:
+            async for _chunk in router.stream_text(
+                caller=InferenceCaller.CHAT,
+                target=InferenceTarget.CHAT,
+                messages=_messages(),
+            ):
+                pass
+
+        task = asyncio.create_task(consume())
+        await adapter.entered.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(exercise())
+
+    assert len(observations) == 1
+    assert observations[0].success is False
+    assert observations[0].error_category is InferenceErrorCategory.CANCELLED
 
 
 def test_router_does_not_retry_or_fallback_and_keeps_errors_sanitized() -> None:

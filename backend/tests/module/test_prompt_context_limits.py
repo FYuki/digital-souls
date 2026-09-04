@@ -78,8 +78,12 @@ def _service(
         prompt=card.to_character_prompt(),
         character_book=None,
     )
+    chat_input_tokens = int(os.environ["INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS"])
+    chat_output_tokens = int(os.environ["INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS"])
     config = importlib.import_module("app.model_settings").resolve_model_settings(
-        os.environ
+        os.environ,
+        chat_context_tokens=chat_input_tokens + chat_output_tokens,
+        assistant_max_generation_tokens=chat_output_tokens,
     )
     return _chat_runtime.ChatService(
         _chat_runtime.ChatRuntimeConfig(
@@ -107,8 +111,8 @@ def test_should_reject_user_input_using_formal_provider_count(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("USER_INPUT_TOKEN_LIMIT", "1")
-    monkeypatch.setenv("ASSISTANT_MAX_GENERATION_TOKENS", "1")
-    monkeypatch.setenv("OLLAMA_CONTEXT_TOKENS", "20")
+    monkeypatch.setenv("INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS", "19")
+    monkeypatch.setenv("INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS", "1")
     monkeypatch.setenv("LLM_CONTEXT_TOKEN_LIMIT", "20")
 
     def count(messages) -> int:
@@ -137,8 +141,8 @@ def test_should_return_persisted_reply_with_history_session_contract(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("USER_INPUT_TOKEN_LIMIT", "10")
-    monkeypatch.setenv("ASSISTANT_MAX_GENERATION_TOKENS", "10")
-    monkeypatch.setenv("OLLAMA_CONTEXT_TOKENS", "100")
+    monkeypatch.setenv("INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS", "90")
+    monkeypatch.setenv("INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS", "10")
     monkeypatch.setenv("LLM_CONTEXT_TOKEN_LIMIT", "100")
     generate = MagicMock(return_value="MASKED_ASSISTANT")
 
@@ -157,8 +161,8 @@ def test_should_reserve_assistant_tokens_and_keep_latest_completed_or_fail(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("USER_INPUT_TOKEN_LIMIT", "10")
-    monkeypatch.setenv("ASSISTANT_MAX_GENERATION_TOKENS", "18")
-    monkeypatch.setenv("OLLAMA_CONTEXT_TOKENS", "20")
+    monkeypatch.setenv("INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS", "2")
+    monkeypatch.setenv("INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS", "18")
     monkeypatch.setenv("LLM_CONTEXT_TOKEN_LIMIT", "20")
     restored_type = getattr(
         importlib.import_module("app.conversation_history.prompt_history"),

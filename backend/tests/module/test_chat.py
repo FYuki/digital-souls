@@ -377,7 +377,7 @@ class TestChatEndpoint:
         with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
             with patch(
                 "app.privacy.semantic.classifier."
-                "OllamaSemanticPrivacyClassifier.classify",
+                "InferenceSemanticPrivacyClassifier.classify",
                 return_value=safe_assessment,
             ):
                 with patch(

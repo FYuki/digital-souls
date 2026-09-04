@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import os
 import sys
 from pathlib import Path
@@ -13,6 +14,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app.model_settings import MODEL_ENVIRONMENT_KEYS
+from app.inference.config import INFERENCE_TARGET_ENVIRONMENT_KEYS
 from app.runtime_data_root import initialize_runtime_data_root
 from app.runtime_paths import resolve_runtime_paths
 from profile_report import (
@@ -41,6 +43,13 @@ def _parser() -> argparse.ArgumentParser:
     get.add_argument("--report", required=True)
     get.add_argument("--path", required=True)
     commands.add_parser("model-environment-keys")
+    commands.add_parser("inference-environment-keys")
+    configured_inference = commands.add_parser(
+        "configured-inference-environment-keys"
+    )
+    configured_inference.add_argument("--report", required=True)
+    backend_environment = commands.add_parser("backend-environment")
+    backend_environment.add_argument("--report", required=True)
     return parser
 
 
@@ -76,6 +85,32 @@ def _model_environment_keys_command() -> None:
     print("\n".join(MODEL_ENVIRONMENT_KEYS))
 
 
+def _inference_environment_keys_command() -> None:
+    print("\n".join(sorted(INFERENCE_TARGET_ENVIRONMENT_KEYS)))
+
+
+def _configured_inference_environment_keys_command(report_path: str) -> None:
+    report = load_resolved_report(Path(report_path))
+    configured = sorted(
+        key
+        for key in report["derivedEnvironment"]
+        if key in INFERENCE_TARGET_ENVIRONMENT_KEYS
+    )
+    print("\n".join(configured))
+
+
+def _backend_environment_command(report_path: str) -> None:
+    report = load_resolved_report(Path(report_path))
+    derived = report["derivedEnvironment"]
+    allowed = set(MODEL_ENVIRONMENT_KEYS) | set(INFERENCE_TARGET_ENVIRONMENT_KEYS)
+    for key in sorted(allowed & derived.keys()):
+        value = derived[key]
+        if not isinstance(value, str):
+            raise ProfileError(f"derivedEnvironment.{key} must be a string")
+        encoded = base64.b64encode(value.encode("utf-8")).decode("ascii")
+        print(f"{key}\t{encoded}")
+
+
 def main() -> int:
     arguments = _parser().parse_args()
     try:
@@ -87,8 +122,14 @@ def main() -> int:
             _resolve_command(arguments)
         elif arguments.command == "get":
             _get_command(arguments)
-        else:
+        elif arguments.command == "model-environment-keys":
             _model_environment_keys_command()
+        elif arguments.command == "inference-environment-keys":
+            _inference_environment_keys_command()
+        elif arguments.command == "configured-inference-environment-keys":
+            _configured_inference_environment_keys_command(arguments.report)
+        else:
+            _backend_environment_command(arguments.report)
     except ProfileError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1

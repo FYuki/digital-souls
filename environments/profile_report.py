@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import cast
 
 from app.model_settings import MODEL_ENVIRONMENT_KEYS, resolve_model_settings
+from app.inference.config import inference_target_environment
 from app.runtime_paths import (
     CACHE_DIRECTORY,
     CHROMA_DIRECTORY,
@@ -281,6 +282,13 @@ def validate_resolved_report(raw: object) -> ResolvedReport:
                 resolve_model_settings(model_environment)
                 if backend_uses_model_settings
                 else None
+            ),
+            inference_target_environment(
+                {
+                    key: value
+                    for key, value in derived_environment.items()
+                    if isinstance(value, str)
+                }
             ),
         )
     except ValueError as error:

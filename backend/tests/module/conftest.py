@@ -3,8 +3,9 @@ import sqlite3
 import pytest
 
 from app.conversation_history.schema import initialize_conversation_history_schema
+from app.inference.runtime import InferenceRuntime
 from app.llm import router
-from app.privacy.semantic.ollama_classifier_client import OllamaClassifierClient
+from app.privacy.semantic.inference_client import InferenceSemanticClassifierClient
 from tests.conversation_history_test_support import (
     CONVERSATION_ID,
     OTHER_CONVERSATION_ID,
@@ -12,6 +13,17 @@ from tests.conversation_history_test_support import (
 
 
 _MODEL_DIGEST = "sha256:" + "f" * 64
+
+
+@pytest.fixture(autouse=True)
+def successful_inference_startup_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Module testは外部Providerへ接続せず、起動後の統合だけを検証する。"""
+
+    def probe(runtime: InferenceRuntime) -> None:
+        for target in runtime.settings.targets:
+            runtime.health.record_success(target)
+
+    monkeypatch.setattr(InferenceRuntime, "probe_startup", probe)
 
 
 @pytest.fixture
@@ -27,7 +39,7 @@ def isolate_semantic_model_digest(
     if "semantic_model_digest_http" in request.fixturenames:
         return
     monkeypatch.setattr(
-        OllamaClassifierClient,
+        InferenceSemanticClassifierClient,
         "resolve_model_digest",
         lambda _client, **_kwargs: _MODEL_DIGEST,
     )

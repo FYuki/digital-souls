@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator, Callable, Mapping
 import json
 import math
 from typing import NoReturn, cast
+from urllib.parse import quote
 
 import httpx
 
@@ -59,6 +60,20 @@ class OpenAIAPIAdapter:
     def close(self) -> None:
         if self._owns_http_client:
             self._http_client.close()
+
+    def probe(self, model_id: str, *, timeout_seconds: float) -> None:
+        """課金を伴わないModel取得でcredential、endpoint、modelを確認する。"""
+        path = f"/models/{quote(model_id, safe='')}"
+        try:
+            response = self._http_client.get(
+                f"{OPENAI_API_BASE_URL}{path}",
+                headers=self._headers,
+                timeout=httpx.Timeout(timeout_seconds),
+            )
+        except Exception as error:
+            self._raise_transport(error)
+        if response.is_error:
+            self._raise_http_status(response.status_code, None)
 
     def generate_text(self, request: TextGenerationRequest) -> ProviderTextResult:
         body = self._post_json(

@@ -89,6 +89,42 @@ def test_should_list_backend_owned_model_environment_keys(tmp_path: Path):
     assert result.stdout.splitlines() == list(MODEL_ENVIRONMENT_KEYS)
 
 
+def test_should_list_inference_environment_keys(tmp_path: Path):
+    environments_dir = _copy_environments(tmp_path)
+
+    result = _run(environments_dir, "inference-environment-keys")
+
+    assert result.returncode == 0, result.stderr
+    assert "INFERENCE_TARGET_CHAT" in result.stdout.splitlines()
+    assert "INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS" in result.stdout.splitlines()
+
+
+def test_should_list_only_configured_inference_environment_keys(tmp_path: Path):
+    environments_dir = _copy_environments(tmp_path)
+    report_path = _report_path(tmp_path)
+    resolved = _run(
+        environments_dir,
+        "resolve",
+        "--report",
+        str(report_path),
+        "--default-profile",
+        "dev",
+    )
+    assert resolved.returncode == 0, resolved.stderr
+
+    result = _run(
+        environments_dir,
+        "configured-inference-environment-keys",
+        "--report",
+        str(report_path),
+    )
+
+    assert result.returncode == 0, result.stderr
+    keys = result.stdout.splitlines()
+    assert "INFERENCE_TARGET_CHAT" in keys
+    assert "INFERENCE_TARGET_CHAT_OPTIONS_JSON" not in keys
+
+
 @pytest.mark.parametrize("path", ["dependencies.missing.mode", "dependencies"])
 def test_should_reject_missing_or_non_scalar_get_path(path: str, tmp_path: Path):
     environments_dir = _copy_environments(tmp_path)

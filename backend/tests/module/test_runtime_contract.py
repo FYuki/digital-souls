@@ -77,7 +77,7 @@ class TestRuntimeConfiguration:
     def test_env_example_declares_ollama_embedding_model(self):
         lines = (_BACKEND_DIR / ".env.example").read_text().splitlines()
 
-        assert "OLLAMA_EMBEDDING_MODEL=nomic-embed-text:latest" in lines
+        assert "INFERENCE_TARGET_EMBEDDING=ollama/nomic-embed-text:latest" in lines
 
     def test_env_example_declares_rag_enabled_switch(self):
         lines = (_BACKEND_DIR / ".env.example").read_text().splitlines()

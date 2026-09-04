@@ -5,6 +5,8 @@ from collections.abc import AsyncIterator, Mapping
 import json
 import logging
 from threading import BoundedSemaphore
+from time import perf_counter
+from uuid import uuid4
 
 from jsonschema import Draft202012Validator, SchemaError, ValidationError
 
@@ -17,6 +19,7 @@ from app.inference.contracts import (
     InferenceCapability,
     InferenceMessage,
     InferenceTarget,
+    InferenceUsage,
     JsonValue,
     ProviderTextResult,
     ResolvedTarget,
@@ -69,20 +72,34 @@ class InferenceRouter:
         max_output_tokens = resolved.max_output_tokens
         if max_output_tokens is None:
             raise AssertionError("text generation target requires an output limit")
-        with self._capacity[target]:
-            provider_result = adapter.generate_text(
-                TextGenerationRequest(
-                    messages=messages,
-                    model_id=resolved.reference.model_id,
-                    options=resolved.options,
-                    max_input_tokens=resolved.max_input_tokens,
-                    max_output_tokens=max_output_tokens,
-                    timeout_seconds=self._timeout(
-                        resolved.timeout_seconds, timeout_seconds
-                    ),
+        request_id = str(uuid4())
+        started_at = perf_counter()
+        try:
+            with self._capacity[target]:
+                provider_result = adapter.generate_text(
+                    TextGenerationRequest(
+                        messages=messages,
+                        model_id=resolved.reference.model_id,
+                        options=resolved.options,
+                        max_input_tokens=resolved.max_input_tokens,
+                        max_output_tokens=max_output_tokens,
+                        timeout_seconds=self._timeout(
+                            resolved.timeout_seconds, timeout_seconds
+                        ),
+                    )
                 )
+            self._validate_text(provider_result)
+        except Exception as error:
+            self._observe_error(
+                request_id, started_at, caller, target,
+                InferenceCapability.GENERATE_TEXT, resolved, error,
             )
-        self._validate_text(provider_result)
+            raise
+        self._observe(
+            request_id, started_at, caller, target,
+            InferenceCapability.GENERATE_TEXT, resolved, None,
+            usage=provider_result.usage,
+        )
         return TextGenerationResult(
             text=provider_result.text,
             usage=provider_result.usage,
@@ -111,18 +128,35 @@ class InferenceRouter:
             timeout_seconds=self._timeout(resolved.timeout_seconds, timeout_seconds),
         )
         capacity = self._capacity[target]
+        request_id = str(uuid4())
+        started_at = perf_counter()
         while not capacity.acquire(blocking=False):
             await asyncio.sleep(0.01)
+        error_category: InferenceErrorCategory | None = None
         try:
             async for delta in adapter.stream_text(request):
                 if not isinstance(delta, str):
                     raise InferenceError(
                         InferenceErrorCategory.INVALID_RESPONSE,
                         retryable=False,
-                    )
+                )
                 yield delta
+        except asyncio.CancelledError:
+            error_category = InferenceErrorCategory.CANCELLED
+            raise
+        except Exception as error:
+            error_category = (
+                error.category
+                if isinstance(error, InferenceError)
+                else InferenceErrorCategory.PROVIDER_ERROR
+            )
+            raise
         finally:
             capacity.release()
+            self._observe(
+                request_id, started_at, caller, target,
+                InferenceCapability.STREAM_TEXT, resolved, error_category,
+            )
 
     def generate_structured(
         self,
@@ -146,6 +180,8 @@ class InferenceRouter:
         max_output_tokens = resolved.max_output_tokens
         if max_output_tokens is None:
             raise AssertionError("structured target requires an output limit")
+        request_id = str(uuid4())
+        started_at = perf_counter()
         try:
             with self._capacity[target]:
                 provider_result = adapter.generate_structured(
@@ -170,6 +206,8 @@ class InferenceRouter:
                 retryable=False,
             )
             self._observe(
+                request_id,
+                started_at,
                 caller,
                 target,
                 InferenceCapability.GENERATE_STRUCTURED,
@@ -179,6 +217,8 @@ class InferenceRouter:
             raise error from None
         except Exception as error:
             self._observe(
+                request_id,
+                started_at,
                 caller,
                 target,
                 InferenceCapability.GENERATE_STRUCTURED,
@@ -191,11 +231,14 @@ class InferenceRouter:
             )
             raise
         self._observe(
+            request_id,
+            started_at,
             caller,
             target,
             InferenceCapability.GENERATE_STRUCTURED,
             resolved,
             None,
+            usage=provider_result.usage,
         )
         return StructuredGenerationResult(value=value, usage=provider_result.usage)
 
@@ -208,6 +251,8 @@ class InferenceRouter:
         timeout_seconds: float | None = None,
     ) -> EmbeddingResult:
         resolved, adapter = self._resolve(caller, target, InferenceCapability.EMBED)
+        request_id = str(uuid4())
+        started_at = perf_counter()
         try:
             with self._capacity[target]:
                 result = adapter.embed(
@@ -223,6 +268,8 @@ class InferenceRouter:
                 )
         except Exception as error:
             self._observe(
+                request_id,
+                started_at,
                 caller,
                 target,
                 InferenceCapability.EMBED,
@@ -235,11 +282,14 @@ class InferenceRouter:
             )
             raise
         self._observe(
+            request_id,
+            started_at,
             caller,
             target,
             InferenceCapability.EMBED,
             resolved,
             None,
+            usage=result.usage,
         )
         return result
 
@@ -255,25 +305,39 @@ class InferenceRouter:
         resolved, adapter = self._resolve(
             caller, target, InferenceCapability.ESTIMATE_INPUT_TOKENS
         )
-        with self._capacity[target]:
-            estimate = adapter.estimate_input_tokens(
-                TokenEstimateRequest(
-                    messages=messages,
-                    model_id=resolved.reference.model_id,
-                    options=resolved.options,
-                    max_input_tokens=resolved.max_input_tokens,
-                    timeout_seconds=self._timeout(
-                        resolved.timeout_seconds, timeout_seconds
-                    ),
-                    response_schema=response_schema,
+        request_id = str(uuid4())
+        started_at = perf_counter()
+        try:
+            with self._capacity[target]:
+                estimate = adapter.estimate_input_tokens(
+                    TokenEstimateRequest(
+                        messages=messages,
+                        model_id=resolved.reference.model_id,
+                        options=resolved.options,
+                        max_input_tokens=resolved.max_input_tokens,
+                        timeout_seconds=self._timeout(
+                            resolved.timeout_seconds, timeout_seconds
+                        ),
+                        response_schema=response_schema,
+                    )
                 )
+            if estimate.count > resolved.max_input_tokens:
+                raise InferenceError(
+                    InferenceErrorCategory.INVALID_REQUEST,
+                    retryable=False,
+                    message="inference input exceeds the configured token limit",
+                )
+        except Exception as error:
+            self._observe_error(
+                request_id, started_at, caller, target,
+                InferenceCapability.ESTIMATE_INPUT_TOKENS, resolved, error,
             )
-        if estimate.count > resolved.max_input_tokens:
-            raise InferenceError(
-                InferenceErrorCategory.INVALID_REQUEST,
-                retryable=False,
-                message="inference input exceeds the configured token limit",
-            )
+            raise
+        self._observe(
+            request_id, started_at, caller, target,
+            InferenceCapability.ESTIMATE_INPUT_TOKENS, resolved, None,
+            token_estimate=estimate,
+        )
         return estimate
 
     def _resolve(
@@ -294,26 +358,82 @@ class InferenceRouter:
 
     def _observe(
         self,
+        request_id: str,
+        started_at: float,
         caller: InferenceCaller,
         target: InferenceTarget,
         capability: InferenceCapability,
         resolved: ResolvedTarget,
         error_category: InferenceErrorCategory | None,
+        *,
+        token_estimate: TokenEstimate | None = None,
+        usage: InferenceUsage | None = None,
     ) -> None:
         try:
             self._observer(
                 InferenceObservation(
+                    request_id=request_id,
                     caller=caller,
                     target=target,
                     capability=capability,
                     provider_id=resolved.reference.provider_id,
                     model_id=resolved.reference.model_id,
+                    auth_kind=self._auth_kind(resolved.reference.provider_id),
+                    latency_ms=max(0.0, (perf_counter() - started_at) * 1000),
+                    external_request_count=self._external_request_count(
+                        resolved.reference.provider_id,
+                        capability,
+                    ),
+                    token_estimate=token_estimate,
+                    usage=usage,
                     success=error_category is None,
                     error_category=error_category,
                 )
             )
         except Exception:
             logger.warning("Inference observer failed")
+
+    def _observe_error(
+        self,
+        request_id: str,
+        started_at: float,
+        caller: InferenceCaller,
+        target: InferenceTarget,
+        capability: InferenceCapability,
+        resolved: ResolvedTarget,
+        error: Exception,
+    ) -> None:
+        self._observe(
+            request_id,
+            started_at,
+            caller,
+            target,
+            capability,
+            resolved,
+            error.category
+            if isinstance(error, InferenceError)
+            else InferenceErrorCategory.PROVIDER_ERROR,
+        )
+
+    @staticmethod
+    def _auth_kind(provider_id: str) -> str:
+        return {
+            "ollama": "none",
+            "openai-api": "api_key",
+            "openai-codex": "subscription",
+        }.get(provider_id, "unknown")
+
+    @staticmethod
+    def _external_request_count(
+        provider_id: str,
+        capability: InferenceCapability,
+    ) -> int:
+        if (
+            capability is InferenceCapability.ESTIMATE_INPUT_TOKENS
+            and provider_id in {"openai-api", "openai-codex"}
+        ):
+            return 0
+        return 1
 
     @staticmethod
     def _validate_text(result: ProviderTextResult) -> None:

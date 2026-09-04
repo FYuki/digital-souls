@@ -114,9 +114,9 @@ def _build_chat_prompt(
                 "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": str(history_count),
                 "CONVERSATION_HISTORY_TOKEN_LIMIT": "1000",
                 "USER_INPUT_TOKEN_LIMIT": "1000",
-                "OLLAMA_RESPONSE_RESERVE_TOKENS": "1",
-                "OLLAMA_CONTEXT_TOKENS": "2000",
-            }
+            },
+            chat_context_tokens=2000,
+            assistant_max_generation_tokens=1,
         ),
         token_counter=counter,
     )
@@ -287,9 +287,9 @@ def test_should_stream_many_failed_turns_without_materializing_or_measuring_all(
                 "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "10",
                 "CONVERSATION_HISTORY_TOKEN_LIMIT": "1",
                 "USER_INPUT_TOKEN_LIMIT": "10",
-                "OLLAMA_RESPONSE_RESERVE_TOKENS": "1",
-                "OLLAMA_CONTEXT_TOKENS": "20",
-            }
+            },
+            chat_context_tokens=20,
+            assistant_max_generation_tokens=1,
         ),
         token_counter=YieldAwareCounter(),
     )

@@ -34,6 +34,8 @@ from app.model_settings import (
     model_settings_environment,
     resolve_model_settings,
 )
+from app.inference.config import inference_target_environment
+from app.inference.runtime import reject_legacy_inference_environment
 from app.runtime_paths import RuntimePaths, runtime_paths_projection
 
 
@@ -182,6 +184,7 @@ def derive_capabilities(dependencies: ResolvedDependencies) -> list[Capability]:
 def derive_environment(
     dependencies: ResolvedDependencies,
     model_settings: ModelSettings | None = None,
+    inference_environment: dict[str, str] | None = None,
 ) -> dict[str, str]:
     dependency_map = cast(dict[str, ResolvedDependency], dependencies)
     real_service_urls = {
@@ -204,6 +207,7 @@ def derive_environment(
     return {
         **environment,
         **model_settings_environment(model_settings),
+        **({} if inference_environment is None else inference_environment),
     }
 
 
@@ -230,6 +234,7 @@ def resolve_profile(
         profile["readyGate"]["baseUrl"], "readyGate.baseUrl"
     )
     try:
+        reject_legacy_inference_environment(env)
         model_settings = resolve_model_settings(env)
     except ValueError as error:
         raise ProfileError(str(error)) from error
@@ -248,7 +253,11 @@ def resolve_profile(
         "dependencies": resolved_dependencies,
         "capabilities": derive_capabilities(resolved_dependencies),
         "derivedEnvironment": {
-            **derive_environment(resolved_dependencies, model_settings),
+            **derive_environment(
+                resolved_dependencies,
+                model_settings,
+                inference_target_environment(env),
+            ),
             "DS_ENVIRONMENT_ID": runtime_paths.environment_id,
             "DS_DATA_DIR": str(runtime_paths.data_root),
         },

@@ -45,6 +45,19 @@ def _text_request() -> TextGenerationRequest:
     )
 
 
+def test_probe_uses_non_billable_model_lookup() -> None:
+    client = MagicMock(spec=httpx.Client)
+    client.get.return_value = _response({"id": "organization/model"})
+    adapter = OpenAIAPIAdapter(api_key="test-api-key", http_client=client)
+
+    adapter.probe("organization/model", timeout_seconds=3.0)
+
+    call = client.get.call_args
+    assert call.args[0] == f"{OPENAI_API_BASE_URL}/models/organization%2Fmodel"
+    assert call.kwargs["headers"]["Authorization"] == "Bearer test-api-key"
+    assert client.post.call_count == 0
+
+
 def test_generate_text_uses_official_endpoint_and_reports_usage() -> None:
     client = MagicMock(spec=httpx.Client)
     client.post.return_value = _response(
