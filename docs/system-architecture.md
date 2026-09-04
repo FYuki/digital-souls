@@ -70,10 +70,11 @@
 * `ui_settings/` / `routers/ui_settings.py` — 立ち絵layout、PC／compact別履歴範囲、キャラクター表示状態、キャラクター／スレッドpinをローカルユーザー単位で保存する
 * `characters/lore_selector.py` — current userとprivacy処理済み履歴を対象に、Character Book Entryを決定論的に照合・選択する
 * `prompting/` — Character Core、Character Lore、RAG、保存済み履歴、現在発言を順序とtoken budgetに従って合成する単一境界
-* `llm/` — 完成済みpromptを受け取るLLM振り分けルーターとクライアント実装。`ollama_client.py`（ローカルOllama、常用）、`base.py`（クライアント共通インターフェース）。クラウドLLM（Claude等）向けクライアントは未実装のスタブ
+* `inference/` — Coreの用途Targetを環境ローカルな`provider/model`へ解決し、Capability認可、上限、同時実行数、共通error、readiness、metadata観測を一元化する。Ollama、OpenAI API、Codex runtimeの差はAdapter内へ閉じ込める
+* `llm/` — 完成済みpromptをChat Targetへ接続する互換境界。ProviderやModelを直接選択せず、共通Inference Routerだけを呼び出す
 * `memory/` — 会話履歴と長期記憶の基盤。SQLiteに同一conversation再開用の履歴と承認済み長期記憶を責務分離して保存し、Chromaは承認済み長期記憶だけの派生検索インデックスとして扱う。`memory_policy.py`は`backend/app/memory/memory_policy.json`の認識設定と、アプリケーションの非緩和policyを組み合わせて保存先別に判定する
 * `stt/remote_whisper_client.py` — 共有GPU Whisper HTTP serviceによる音声認識。旧`whisper_client.py`はGoal 2受入までrollback用に保持する
-* `model_settings.py` — Ollamaモデル・実行時context・応答予約量、Whisperモデル、履歴・入力・モデルcontext上限を環境変数から型付きで一括解決する。Backendはlifespanの先頭で検証し、不正設定ではリクエスト受付前に起動失敗する
+* `model_settings.py` — Whisperモデル、履歴・入力・モデルcontext上限を型付きで解決する。InferenceのProvider、Model、入力／出力上限は`inference/config.py`がTarget単位で解決し、Backendはlifespanの先頭で検証する
 * `tts/voicevox_client.py` / `tts/speech_synthesizer.py` — VOICEVOXによる音声合成
 * `audio/transport.py` / `audio_pipeline.py` — 音声フレームの送受信・パイプライン制御
 
@@ -157,24 +158,11 @@ VRMは常用ではなく、配信・イベント用の身体として扱う。
 
 ## 推論ルーター
 
-推論処理は用途に応じて振り分ける。
+Coreは`chat`、`privacy`、`memory-extraction`、`memory-consolidation`、`embedding`、`heavy-reasoning`の固定Targetだけを指定する。環境は各Targetへ`provider/model`を直接割り当て、Provider RegistryがOllama、OpenAI API、Codex runtimeのAdapterを選ぶ。独立したInference Profileや暗黙fallbackは持たない。
 
-```text
-small:
-  provider: local
-  target: Mac mini / Ollama
-  purpose: 日常会話、記録、軽い相談
+`privacy`はローカルProvider固定で、設定から緩和できない。その他のTargetへcloud Providerを割り当てた場合は起動時にwarningを記録する。起動時には静的設定を検証した後、生成を伴わないProvider別probeを行う。`chat`の利用不能は起動失敗、他の設定済みTargetは`degraded`として起動を継続する。
 
-medium:
-  provider: windows
-  target: WindowsメインPC
-  purpose: 高精度回答、長文推論、重めの処理
-
-large:
-  provider: cloud
-  target: Cloud GPU/VM
-  purpose: Windows未起動時の代替、大規模推論
-```
+`/health/ready`は必須Targetのaggregateだけを返し、`/health/inference`はTarget別状態と共通error categoryだけを返す。Provider、Model、endpoint、認証状態は公開しない。Provider／Modelを含む運用metadataはprompt／response本文を除外した構造化logに記録する。設定、認証、実接続受入の手順は[`inference-operations.md`](inference-operations.md)を参照する。
 
 ## 音声処理設計
 

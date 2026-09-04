@@ -111,6 +111,41 @@ def test_should_pull_dogfood_frontend_by_immutable_digest(tmp_path: Path) -> Non
     assert "DOGFOOD_BACKUP_AUTHENTICATION_KEY" not in environment
 
 
+def test_should_pass_inference_targets_to_dogfood_backend(tmp_path: Path) -> None:
+    from adapters.backend import BackendAdapter
+
+    image = f"ghcr.io/example/digital-souls-backend@sha256:{'d' * 64}"
+    runner = RecordingRunner(_start_responses("e" * 64))
+    adapter = BackendAdapter(
+        tmp_path,
+        resolved_runtime_paths(tmp_path),
+        runner,
+        effective_profile="dogfood",
+    )
+    config_directory = tmp_path / "config"
+    config_directory.mkdir()
+
+    adapter.start(
+        _dependency(service="backend", host="127.0.0.1", port=18000, reload=False),
+        {
+            "DS_ENVIRONMENT_ID": "dogfood",
+            "DS_RUNTIME_UID": "10001",
+            "DS_RUNTIME_GID": "10001",
+            "DOGFOOD_CONFIG_DIR": str(config_directory),
+            "DOGFOOD_BACKEND_IMAGE": image,
+            "INFERENCE_TARGET_CHAT": "ollama/gemma4:e4b",
+            "INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS": "7168",
+            "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS": "1024",
+        },
+    )
+
+    environment_path = config_directory / "containers" / "backend.env"
+    environment = environment_path.read_text(encoding="utf-8")
+    assert 'INFERENCE_TARGET_CHAT="ollama/gemma4:e4b"' in environment
+    assert 'INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS="7168"' in environment
+    assert 'INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS="1024"' in environment
+
+
 def test_should_use_the_resolved_frontend_endpoint_not_base_url(tmp_path: Path) -> None:
     from adapters.frontend import FrontendAdapter
 

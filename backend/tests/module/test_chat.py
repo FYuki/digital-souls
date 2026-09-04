@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.conversation_history.prompt_history import RestoredHistoryTurn
+from app.inference.contracts import ProviderTextResult
 from app.main import app
 from app.memory.chroma_store import MemorySearchResult
 from app.prompting import CharacterPrompt, PromptInputLimitError
@@ -323,6 +324,7 @@ class TestChatEndpoint:
             scanner=ANY,
             classifier=ANY,
             approved_repository=ANY,
+            embedder=ANY,
             chroma_path=runtime_paths.chroma_path,
             now=ANY,
             timezone="Asia/Tokyo",
@@ -334,10 +336,17 @@ class TestChatEndpoint:
         self,
         monkeypatch,
     ):
+        from app.memory.chroma_store import EmbeddingFingerprint
         from app.memory.memory_policy import resolved_memory_policy
 
         monkeypatch.setenv("RAG_ENABLED", "true")
         policy = resolved_memory_policy()
+        monkeypatch.setattr(
+            "app.memory.chroma_store.active_memory_index_fingerprint",
+            lambda *_args: EmbeddingFingerprint(
+                "ollama", "nomic-embed-text:latest", 1
+            ),
+        )
         chroma_collection = MagicMock()
         chroma_collection.query.return_value = {
             "ids": [[]],
@@ -368,10 +377,13 @@ class TestChatEndpoint:
         with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
             with patch(
                 "app.privacy.semantic.classifier."
-                "OllamaSemanticPrivacyClassifier.classify",
+                "InferenceSemanticPrivacyClassifier.classify",
                 return_value=safe_assessment,
             ):
-                with patch("app.memory.rag_service.embed_text", return_value=[0.1]):
+                with patch(
+                    "app.memory.inference_client.MemoryInferenceEmbedder.__call__",
+                    return_value=[0.1],
+                ):
                     with patch(
                         "app.memory.chroma_store.upsert_memory_index_entry"
                     ) as upsert_memory_index_entry:
@@ -643,9 +655,9 @@ class TestChatFlow:
 
         expected_reply = "光織です。よろしくお願いします。"
         with patch(
-            "app.llm.ollama_client.httpx.post",
-            return_value=_ollama_response(expected_reply),
-        ) as mock_post:
+            "app.inference.adapters.ollama.OllamaAdapter.generate_text",
+            return_value=ProviderTextResult(text=expected_reply, usage=None),
+        ) as generate_text:
             response = client.post(
                 "/chat?character=ignored&message=ignored",
                 json=_VALID_BODY,
@@ -655,10 +667,10 @@ class TestChatFlow:
         assert response.json()["character"] == "miori"
         assert response.json()["turn"]["assistant_content"] == expected_reply
 
-        payload = mock_post.call_args.kwargs["json"]
-        assert payload["messages"] == [
-            {"role": "system", "content": f"## 応答方針\n{system_prompt}"},
-            {"role": "user", "content": "自己紹介してください"},
+        request = generate_text.call_args.args[-1]
+        assert [(message.role, message.content) for message in request.messages] == [
+            ("system", f"## 応答方針\n{system_prompt}"),
+            ("user", "自己紹介してください"),
         ]
 
     def test_rag_augmented_prompt_reaches_ollama_and_reply_is_recorded(
@@ -685,9 +697,9 @@ class TestChatFlow:
                 ),
             ) as mock_build:
                 with patch(
-                    "app.llm.ollama_client.httpx.post",
-                    return_value=_ollama_response(expected_reply),
-                ) as mock_post:
+                    "app.inference.adapters.ollama.OllamaAdapter.generate_text",
+                    return_value=ProviderTextResult(text=expected_reply, usage=None),
+                ) as generate_text:
                     with TestClient(app) as client:
                         response = client.post(
                             "/chat",
@@ -709,24 +721,25 @@ class TestChatFlow:
             scanner=ANY,
             classifier=ANY,
             approved_repository=ANY,
+            embedder=ANY,
             chroma_path=runtime_paths.chroma_path,
             now=ANY,
             timezone="Asia/Tokyo",
         )
-        payload = mock_post.call_args.kwargs["json"]
-        assert payload["messages"] == [
-            {"role": "system", "content": f"## 応答方針\n{system_prompt}"},
-            {
-                "role": "system",
-                "content": "## 関連する記憶\n"
+        request = generate_text.call_args.args[-1]
+        assert [(message.role, message.content) for message in request.messages] == [
+            ("system", f"## 応答方針\n{system_prompt}"),
+            (
+                "system",
+                "## 関連する記憶\n"
                 "[2026-07-31T09:00:00+09:00] 順位1の記憶",
-            },
-            {
-                "role": "system",
-                "content": "## 関連する記憶\n"
+            ),
+            (
+                "system",
+                "## 関連する記憶\n"
                 "[2026-07-31T09:00:00+09:00] 順位2の記憶",
-            },
-            {"role": "user", "content": "前回なんの話をしたっけ？"},
+            ),
+            ("user", "前回なんの話をしたっけ？"),
         ]
 
     def test_rag_value_error_falls_back_without_writing_failed_memory(
@@ -740,8 +753,7 @@ class TestChatFlow:
         _write_card(tmp_path, system_prompt)
         monkeypatch.setattr(loader_module, "_get_repo_root", lambda: tmp_path)
         monkeypatch.setattr(
-            rag_service,
-            "embed_text",
+            "app.memory.inference_client.MemoryInferenceEmbedder.__call__",
             MagicMock(side_effect=ValueError("invalid embedding response")),
         )
         monkeypatch.setattr(rag_service, "query_memories", MagicMock())
@@ -749,9 +761,9 @@ class TestChatFlow:
         user_message = "農業日誌: 2026-06-23はピーマンに水やりした"
         expected_reply = "農業日誌として保存しました。"
         with patch(
-            "app.llm.ollama_client.httpx.post",
-            return_value=_ollama_response(expected_reply),
-        ) as mock_post:
+            "app.inference.adapters.ollama.OllamaAdapter.generate_text",
+            return_value=ProviderTextResult(text=expected_reply, usage=None),
+        ) as generate_text:
             with TestClient(app) as client:
                 response = client.post(
                     "/chat",
@@ -765,10 +777,10 @@ class TestChatFlow:
         assert response.status_code == 200
         assert response.json()["character"] == "miori"
         assert response.json()["turn"]["assistant_content"] == expected_reply
-        payload = mock_post.call_args.kwargs["json"]
-        assert payload["messages"] == [
-            {"role": "system", "content": f"## 応答方針\n{system_prompt}"},
-            {"role": "user", "content": user_message},
+        request = generate_text.call_args.args[-1]
+        assert [(message.role, message.content) for message in request.messages] == [
+            ("system", f"## 応答方針\n{system_prompt}"),
+            ("user", user_message),
         ]
         rag_service.query_memories.assert_not_called()
 

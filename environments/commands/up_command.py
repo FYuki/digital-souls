@@ -32,6 +32,13 @@ from app.runtime_data_root import initialize_runtime_data_root
 from app.runtime_paths import resolve_runtime_paths, runtime_paths_projection
 
 
+def _target_model(derived: dict[str, object], target: str) -> str:
+    value = derived.get(f"INFERENCE_TARGET_{target}")
+    if not isinstance(value, str) or "/" not in value:
+        raise ValueError(f"INFERENCE_TARGET_{target} is required")
+    return value.split("/", 1)[1]
+
+
 def up_environment(
     root_dir: Path,
     arguments: argparse.Namespace,
@@ -97,8 +104,8 @@ def up_environment(
                 root_dir,
                 runtime_paths,
                 effective_profile=effective_profile,
-                ollama_model_name=derived["OLLAMA_CHAT_MODEL"],
-                ollama_classifier_model_name=derived["OLLAMA_CLASSIFIER_MODEL"],
+                ollama_model_name=_target_model(derived, "CHAT"),
+                ollama_classifier_model_name=_target_model(derived, "PRIVACY"),
                 whisper_model_name=derived["WHISPER_MODEL"],
             )
         else:

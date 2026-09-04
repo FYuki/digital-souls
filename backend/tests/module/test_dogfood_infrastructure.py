@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from app.model_settings import OLLAMA_MODEL_NAME
+from adapters.ollama import DEFAULT_OLLAMA_MODEL_NAME
 
 from tests.dogfood_infrastructure_test_support import render_nondefault_dogfood_assets
 
@@ -44,6 +44,20 @@ REQUIRED_ENV_KEYS = {
     "LIVEKIT_URL",
     "LIVEKIT_API_KEY",
     "LIVEKIT_API_SECRET",
+    "INFERENCE_TARGET_CHAT",
+    "INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS",
+    "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS",
+    "INFERENCE_TARGET_PRIVACY",
+    "INFERENCE_TARGET_PRIVACY_MAX_INPUT_TOKENS",
+    "INFERENCE_TARGET_PRIVACY_MAX_OUTPUT_TOKENS",
+    "INFERENCE_TARGET_MEMORY_EXTRACTION",
+    "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_INPUT_TOKENS",
+    "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS",
+    "INFERENCE_TARGET_MEMORY_CONSOLIDATION",
+    "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_INPUT_TOKENS",
+    "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_OUTPUT_TOKENS",
+    "INFERENCE_TARGET_EMBEDDING",
+    "INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS",
 }
 SHELL_ENTRYPOINTS = (
     "bootstrap.sh",
@@ -823,7 +837,7 @@ def test_should_document_executable_pull_command_for_backend_default_model() -> 
         "sudo -u digital-souls env",
         "HOME=/var/lib/digital-souls/home",
         "OLLAMA_MODELS=/var/lib/digital-souls/models/ollama",
-        f"ollama pull {OLLAMA_MODEL_NAME}",
+        f"ollama pull {DEFAULT_OLLAMA_MODEL_NAME}",
     )
     assert any(
         all(part in command for part in expected_parts) for command in pull_commands

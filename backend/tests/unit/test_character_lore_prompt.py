@@ -382,9 +382,9 @@ def test_chat_prompt_matches_before_history_budget_using_same_sanitized_source()
             "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "2",
             "CONVERSATION_HISTORY_TOKEN_LIMIT": "2",
             "USER_INPUT_TOKEN_LIMIT": "10",
-            "OLLAMA_RESPONSE_RESERVE_TOKENS": "1",
-            "OLLAMA_CONTEXT_TOKENS": "20",
-        }
+        },
+        chat_context_tokens=20,
+        assistant_max_generation_tokens=1,
     )
 
     result = chat_prompt.build_chat_prompt(

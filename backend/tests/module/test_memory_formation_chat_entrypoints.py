@@ -464,6 +464,12 @@ def test_http_turn_extracts_each_allowlisted_type_to_automatic_persistence(
         timeout: httpx.Timeout,
     ) -> httpx.Response:
         del timeout
+        if url.endswith("/api/show"):
+            return httpx.Response(
+                200,
+                json={"modelfile": "FROM /models/blobs/sha256-" + "0" * 64},
+                request=httpx.Request("POST", url),
+            )
         content = extractor_response if _is_extractor_request(json) else privacy_response
         return httpx.Response(
             200,
@@ -527,6 +533,12 @@ def test_noop_domain_dispatch_preserves_automatic_persona_admission(
         timeout: httpx.Timeout,
     ) -> httpx.Response:
         del timeout
+        if url.endswith("/api/show"):
+            return httpx.Response(
+                200,
+                json={"modelfile": "FROM /models/blobs/sha256-" + "0" * 64},
+                request=httpx.Request("POST", url),
+            )
         content = extractor_response if _is_extractor_request(json) else privacy_response
         return httpx.Response(
             200,
@@ -641,6 +653,12 @@ def test_invalid_extractor_batch_is_not_automatically_persisted(
         json: dict[str, object],
         timeout: httpx.Timeout,
     ) -> httpx.Response:
+        if url.endswith("/api/show"):
+            return httpx.Response(
+                200,
+                json={"modelfile": "FROM /models/blobs/sha256-" + "0" * 64},
+                request=httpx.Request("POST", url),
+            )
         if _is_extractor_request(json):
             return extractor_request(url, json=json, timeout=timeout)
         return httpx.Response(
@@ -703,7 +721,10 @@ def test_runtime_passes_schema_zero_temperature_and_configured_output_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     extractor_request = SequencedExtractorRequest([json.dumps({"candidates": []})])
-    monkeypatch.setenv("MEMORY_FORMATION_MAX_OUTPUT_TOKENS", "321")
+    monkeypatch.setenv("INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS", "321")
+    monkeypatch.setenv(
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_OPTIONS_JSON", '{"temperature":0}'
+    )
     monkeypatch.setattr(
         httpx.Client,
         "post",
@@ -720,6 +741,7 @@ def test_runtime_passes_schema_zero_temperature_and_configured_output_limit(
     )
     assert extractor_request.calls[0]["options"] == {
         "temperature": 0,
+        "num_ctx": 8001,
         "num_predict": 321,
     }
 

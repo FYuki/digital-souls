@@ -7,6 +7,11 @@
 本ADRは、TAKTによる開発と並行して安定版を継続利用するローカルdogfood環境の分離境界、
 データ保持、デプロイ、Wave 2との依存関係を定める。実装進捗は親Issue #50で管理する。
 
+Inference Target／Provider設定とOpenAI credential境界は
+`inference-provider-foundation-2026-09.md`を追加適用する。本ADRの独立clone、data root、backup、
+rollback、process ownershipは維持する。OpenAI API keyまたはCodex認証情報を複数service共用の
+`dogfood.env`へ追加せず、Issue #181でBackend専用secret／credential領域を構築する。
+
 ## 背景
 
 TAKTは開発用worktreeで実装、テスト、レビューを行う。開発中にもテキスト／音声チャットの

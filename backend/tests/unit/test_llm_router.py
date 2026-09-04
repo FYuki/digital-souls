@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -16,31 +16,53 @@ def _settings():
 
 
 class TestGenerateResponse:
-    def test_should_pass_built_prompt_to_selected_client(self):
-        from app.llm.router import generate_response
+    def test_should_pass_built_prompt_to_inference_chat_target(self):
+        from app.inference import (
+            InferenceCaller,
+            InferenceRouter,
+            InferenceTarget,
+            TextGenerationResult,
+        )
+        from app.llm.router import (
+            clear_inference_router,
+            generate_response,
+            register_inference_router,
+        )
 
         built_prompt = _built_prompt()
-        with patch(
-            "app.llm.ollama_client.OllamaClient.generate",
-            return_value="光織のLLM応答",
-        ) as generate:
+        inference_router = MagicMock(spec=InferenceRouter)
+        inference_router.generate_text.return_value = TextGenerationResult(
+            "光織のLLM応答",
+            None,
+        )
+        register_inference_router(inference_router)
+        try:
             result = generate_response(
                 built_prompt, max_output_tokens=512, settings=_settings()
             )
+        finally:
+            clear_inference_router(inference_router)
 
         assert result == "光織のLLM応答"
-        generate.assert_called_once_with(built_prompt, max_output_tokens=512)
+        call = inference_router.generate_text.call_args
+        assert call.kwargs["caller"] is InferenceCaller.CHAT
+        assert call.kwargs["target"] is InferenceTarget.CHAT
+        assert [message.content for message in call.kwargs["messages"]] == [
+            message.content for message in built_prompt.messages
+        ]
+
+    def test_should_fail_without_configured_inference_router(self):
+        from app.llm.router import generate_response
+
+        with pytest.raises(RuntimeError, match="inference router is not configured"):
+            generate_response(
+                _built_prompt(),
+                max_output_tokens=512,
+                settings=_settings(),
+            )
 
 
-class TestClaudeClientDummy:
-    def test_generate_raises_not_implemented_error(self):
-        from app.llm.router import _create_llm_client
-
-        client = _create_llm_client("claude", _settings())
-
-        with pytest.raises(NotImplementedError):
-            client.generate(_built_prompt(), max_output_tokens=512)
-
+class TestProviderBoundary:
     def test_router_does_not_expose_infrastructure_clients(self):
         from app.llm import router
 
@@ -48,9 +70,4 @@ class TestClaudeClientDummy:
         assert not hasattr(router, "create_llm_client")
         assert not hasattr(router, "OllamaClient")
         assert not hasattr(router, "ClaudeClient")
-
-    def test_should_reject_unsupported_provider(self):
-        from app.llm.router import _create_llm_client
-
-        with pytest.raises(ValueError, match="Unsupported LLM provider: invalid"):
-            _create_llm_client("invalid", _settings())
+        assert not hasattr(router, "_create_llm_client")

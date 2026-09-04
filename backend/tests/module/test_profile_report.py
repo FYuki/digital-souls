@@ -20,13 +20,21 @@ DEPENDENCY_NAMES = {
     "livekit",
 }
 MODEL_DEFAULT_ENVIRONMENT = {
-    "OLLAMA_CHAT_MODEL": "gemma4:e4b",
-    "OLLAMA_CLASSIFIER_MODEL": "gemma4:e4b",
-    "OLLAMA_EXTRACTOR_MODEL": "gemma4:e4b",
     "WHISPER_MODEL": "medium",
-    "OLLAMA_CONTEXT_TOKENS": "8192",
-    "OLLAMA_RESPONSE_RESERVE_TOKENS": "1024",
-    "ASSISTANT_MAX_GENERATION_TOKENS": "1024",
+    "INFERENCE_TARGET_CHAT": "ollama/gemma4:e4b",
+    "INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS": "7168",
+    "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS": "1024",
+    "INFERENCE_TARGET_PRIVACY": "ollama/gemma4:e4b",
+    "INFERENCE_TARGET_PRIVACY_MAX_INPUT_TOKENS": "7680",
+    "INFERENCE_TARGET_PRIVACY_MAX_OUTPUT_TOKENS": "512",
+    "INFERENCE_TARGET_MEMORY_EXTRACTION": "ollama/gemma4:e4b",
+    "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_INPUT_TOKENS": "7680",
+    "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS": "512",
+    "INFERENCE_TARGET_MEMORY_CONSOLIDATION": "ollama/gemma4:e4b",
+    "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_INPUT_TOKENS": "7680",
+    "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_OUTPUT_TOKENS": "512",
+    "INFERENCE_TARGET_EMBEDDING": "ollama/nomic-embed-text:latest",
+    "INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS": "8192",
     "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "10",
     "CONVERSATION_HISTORY_TOKEN_LIMIT": "4096",
     "USER_INPUT_TOKEN_LIMIT": "8192",
@@ -49,6 +57,13 @@ def _clean_env(**overrides: str) -> dict[str, str]:
         *MODEL_DEFAULT_ENVIRONMENT,
     }
     env = {key: value for key, value in os.environ.items() if key not in blocked}
+    env.update(
+        {
+            key: value
+            for key, value in MODEL_DEFAULT_ENVIRONMENT.items()
+            if key.startswith("INFERENCE_TARGET_")
+        }
+    )
     env.update(overrides)
     return env
 
@@ -177,7 +192,10 @@ def test_should_derive_readiness_urls_from_base_urls_and_paths(tmp_path: Path):
     assert result.returncode == 0, result.stderr
     dependencies = _read_json(report_path)["dependencies"]
     assert dependencies["frontend"]["readinessUrl"] == "http://localhost:5173/"
-    assert dependencies["backend"]["readinessUrl"] == "http://localhost:8000/"
+    assert (
+        dependencies["backend"]["readinessUrl"]
+        == "http://localhost:8000/health/ready"
+    )
     assert dependencies["ollama"]["readinessUrl"] == "http://localhost:11434/api/tags"
     assert dependencies["voicevox"]["readinessUrl"] == "http://127.0.0.1:50021/version"
     assert dependencies["whisper"]["readinessUrl"] == "http://127.0.0.1:50022/health/ready"
@@ -248,7 +266,10 @@ def test_should_apply_backend_origin_override_to_report_and_derived_environment(
     report = _read_json(report_path)
     assert report["dependencies"]["backend"]["source"] == "external"
     assert report["dependencies"]["backend"]["baseUrl"] == override
-    assert report["dependencies"]["backend"]["readinessUrl"] == f"{override}/"
+    assert (
+        report["dependencies"]["backend"]["readinessUrl"]
+        == f"{override}/health/ready"
+    )
     assert report["derivedEnvironment"]["DS_BACKEND_ORIGIN"] == override
 
 

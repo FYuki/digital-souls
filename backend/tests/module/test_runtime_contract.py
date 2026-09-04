@@ -77,7 +77,7 @@ class TestRuntimeConfiguration:
     def test_env_example_declares_ollama_embedding_model(self):
         lines = (_BACKEND_DIR / ".env.example").read_text().splitlines()
 
-        assert "OLLAMA_EMBEDDING_MODEL=nomic-embed-text:latest" in lines
+        assert "INFERENCE_TARGET_EMBEDDING=ollama/nomic-embed-text:latest" in lines
 
     def test_env_example_declares_rag_enabled_switch(self):
         lines = (_BACKEND_DIR / ".env.example").read_text().splitlines()
@@ -162,14 +162,17 @@ class TestRuntimeConfiguration:
         assert "generate_chat_reply(" in chat_router_source
         assert "create_chat_session(" in ws_router_source
 
-    def test_ollama_environment_is_resolved_in_llm_boundary_only(self):
-        import app.memory.embedder as embedder
+    def test_memory_domain_does_not_reference_ollama_specific_clients(self):
+        memory_root = _BACKEND_DIR / "app" / "memory"
+        sources = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in memory_root.rglob("*.py")
+            if path.name != "__init__.py"
+        )
 
-        source = inspect.getsource(embedder)
-
-        assert "os.environ" not in source
-        assert "OLLAMA_BASE_URL" not in source
-        assert "OLLAMA_EMBEDDING_MODEL" not in source
+        assert "OllamaMemoryExtractorClient" not in sources
+        assert "resolve_ollama_base_url" not in sources
+        assert '"/api/embeddings"' not in sources
 
     def test_memory_policy_config_declares_common_and_service_sections(self):
         import json
@@ -535,7 +538,7 @@ class TestRuntimeConfiguration:
             "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "4",
             "CONVERSATION_HISTORY_TOKEN_LIMIT": "1300",
             "USER_INPUT_TOKEN_LIMIT": "650",
-            "ASSISTANT_MAX_GENERATION_TOKENS": "750",
+            "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS": "750",
             "LLM_CONTEXT_TOKEN_LIMIT": "9000",
         }
         for key, value in environment.items():

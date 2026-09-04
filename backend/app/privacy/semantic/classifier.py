@@ -9,6 +9,7 @@ from typing import Callable, Protocol, TypedDict
 
 import httpx
 
+from app.inference import InferenceError, InferenceErrorCategory
 from app.memory.memory_policy import PrivacyPolicy
 from app.privacy.semantic.contracts import (
     PrivacyAssessment,
@@ -18,12 +19,6 @@ from app.privacy.semantic.contracts import (
     SemanticPrivacyCategory,
     SubjectScope,
 )
-from app.privacy.semantic.ollama_classifier_client import (
-    OllamaInvalidResponseError,
-    OllamaModelNotLoadedError,
-)
-
-
 SEMANTIC_CLASSIFIER_VERSION = "semantic-privacy-classifier-v2"
 SEMANTIC_PROMPT_VERSION = "semantic-privacy-prompt-v11"
 UNRESOLVED_MODEL_DIGEST = "unresolved"
@@ -68,8 +63,8 @@ class _ResponsePayload(TypedDict):
     reason_code: str
 
 
-class OllamaSemanticPrivacyClassifier:
-    """固定したpolicyとprovenanceでOllama出力を安全側へ正規化する。"""
+class InferenceSemanticPrivacyClassifier:
+    """固定したpolicyとprovenanceでInference出力を安全側へ正規化する。"""
 
     def __init__(
         self,
@@ -168,10 +163,8 @@ class OllamaSemanticPrivacyClassifier:
                     return SemanticAssessmentReasonCode.TIMEOUT
             except (TimeoutError, httpx.TimeoutException):
                 return SemanticAssessmentReasonCode.TIMEOUT
-            except OllamaModelNotLoadedError:
-                return SemanticAssessmentReasonCode.MODEL_NOT_LOADED
-            except OllamaInvalidResponseError:
-                return SemanticAssessmentReasonCode.INVALID_OUTPUT
+            except InferenceError as error:
+                return _inference_failure_reason(error)
             except Exception:
                 return SemanticAssessmentReasonCode.MODEL_UNAVAILABLE
         finally:
@@ -219,12 +212,8 @@ class OllamaSemanticPrivacyClassifier:
             return self._parse(raw_output)
         except (TimeoutError, httpx.TimeoutException):
             return self._fail_closed(SemanticAssessmentReasonCode.TIMEOUT)
-        except OllamaModelNotLoadedError:
-            return self._fail_closed(
-                SemanticAssessmentReasonCode.MODEL_NOT_LOADED
-            )
-        except OllamaInvalidResponseError:
-            return self._fail_closed(SemanticAssessmentReasonCode.INVALID_OUTPUT)
+        except InferenceError as error:
+            return self._fail_closed(_inference_failure_reason(error))
         except Exception:
             return self._fail_closed(SemanticAssessmentReasonCode.MODEL_UNAVAILABLE)
 
@@ -296,6 +285,22 @@ def _response_payload(value: object) -> _ResponsePayload | None:
         "category": category,
         "reason_code": reason_code,
     }
+
+
+def _inference_failure_reason(error: InferenceError) -> SemanticAssessmentReasonCode:
+    if error.category is InferenceErrorCategory.TIMEOUT:
+        return SemanticAssessmentReasonCode.TIMEOUT
+    if error.category is InferenceErrorCategory.MODEL_NOT_FOUND:
+        return SemanticAssessmentReasonCode.MODEL_NOT_LOADED
+    if error.category in {
+        InferenceErrorCategory.INVALID_RESPONSE,
+        InferenceErrorCategory.UNSUPPORTED_CAPABILITY,
+    }:
+        return SemanticAssessmentReasonCode.INVALID_OUTPUT
+    return SemanticAssessmentReasonCode.MODEL_UNAVAILABLE
+
+
+# 移行期間のimport互換。実装はProvider非依存であり、#181で旧名を撤去する。
 
 
 def _build_messages(text: str) -> tuple[dict[str, str], ...]:

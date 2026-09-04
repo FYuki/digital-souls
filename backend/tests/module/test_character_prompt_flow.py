@@ -1,10 +1,11 @@
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.characters.loader import load_character_card, load_tts_config
+from app.inference.contracts import ProviderTextResult
 from app.prompting import (
     CurrentUserMessage,
     HistoryCandidates,
@@ -112,18 +113,12 @@ def test_should_send_builder_messages_from_http_entrypoint(
     from app.main import app
 
     card = load_character_card("miori")
-    response = MagicMock()
-    response.raise_for_status.return_value = None
-    response.json.return_value = {
-        "message": {"role": "assistant", "content": "応答"},
-        "prompt_eval_count": 1,
-    }
     monkeypatch.setenv("RAG_ENABLED", "false")
 
     with patch(
-        "app.llm.ollama_client.httpx.post",
-        return_value=response,
-    ) as ollama_post:
+        "app.inference.adapters.ollama.OllamaAdapter.generate_text",
+        return_value=ProviderTextResult(text="応答", usage=None),
+    ) as generate_text:
         with TestClient(app) as client:
             result = client.post(
                 "/chat",
@@ -135,8 +130,8 @@ def test_should_send_builder_messages_from_http_entrypoint(
             )
 
     assert result.status_code == 200
-    messages = ollama_post.call_args.kwargs["json"]["messages"]
-    contents = [message["content"] for message in messages]
+    request = generate_text.call_args.args[-1]
+    contents = [message.content for message in request.messages]
     assert card.data.description in contents[0]
     assert card.data.system_prompt in contents[0]
     assert all(card.data.first_mes not in content for content in contents)

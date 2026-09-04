@@ -29,7 +29,17 @@ def _sync(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, embedder):
     def upsert_memory_index_entry(**entry: object) -> None:
         assert entry["chroma_path"] == tmp_path / "data" / "chroma"
         key = (str(entry["character_id"]), str(entry["memory_id"]))
-        records[key] = dict(entry)
+        record = dict(entry)
+        fingerprint = record.get("fingerprint")
+        if fingerprint is not None:
+            record.update(
+                {
+                    "embedding_provider_id": fingerprint.provider_id,
+                    "embedding_model_id": fingerprint.model_id,
+                    "embedding_dimension": str(fingerprint.dimension),
+                }
+            )
+        records[key] = record
 
     def delete_memory_index_entry(**entry: object) -> None:
         assert entry["chroma_path"] == tmp_path / "data" / "chroma"
@@ -37,12 +47,14 @@ def _sync(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, embedder):
         deleted.append(key)
         records.pop(key, None)
 
-    def list_memory_index_ids(*, character_id: str, chroma_path: Path) -> set[str]:
+    def list_memory_index_ids(
+        *, character_id: str, chroma_path: Path, fingerprint=None
+    ) -> set[str]:
         assert chroma_path == tmp_path / "data" / "chroma"
         return {memory_id for owner, memory_id in records if owner == character_id}
 
     def get_memory_index_metadata(
-        *, character_id: str, memory_id: str, chroma_path: Path
+        *, character_id: str, memory_id: str, chroma_path: Path, fingerprint=None
     ) -> dict[str, str] | None:
         assert chroma_path == tmp_path / "data" / "chroma"
         record = records.get((character_id, memory_id))
@@ -61,6 +73,9 @@ def _sync(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, embedder):
                 "occurred_at",
                 "effective_at",
                 "expires_at",
+                "embedding_provider_id",
+                "embedding_model_id",
+                "embedding_dimension",
             }
             and value is not None
         }
@@ -81,6 +96,8 @@ def _sync(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, embedder):
         chroma_path=tmp_path / "data" / "chroma",
         runtime_report_dir=tmp_path / "data" / "runtime-reports",
         embedder=embedder,
+        embedding_provider_id="ollama",
+        embedding_model_id="nomic-embed-text:latest",
         clock=lambda: NOW,
     )
     return service, approved, database_path, records, deleted
@@ -560,6 +577,8 @@ def test_reconciliation_repairs_only_approved_memory_entries(
 def test_reconciliation_keeps_partial_progress_and_converges_after_restart(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from app.memory.chroma_store import active_memory_index_fingerprint
+
     calls = 0
 
     def fail_first(text: str) -> list[float]:
@@ -590,13 +609,24 @@ def test_reconciliation_keeps_partial_progress_and_converges_after_restart(
         "failed_count": 0,
         "last_error_code": "EMBEDDING_UNAVAILABLE",
         "last_success_at": None,
+        "index_state": "reindex_required",
     }
+    assert (
+        active_memory_index_fingerprint("miori", tmp_path / "data" / "chroma")
+        is None
+    )
 
     service.reconcile_once()
     assert set(records) == {("miori", str(first.id)), ("miori", str(second.id))}
     recovered_report = json.loads(report_path.read_text(encoding="utf-8"))
     assert recovered_report["last_error_code"] is None
     assert recovered_report["last_success_at"] == "2026-08-20T12:00:00.000000Z"
+    assert recovered_report["index_state"] == "ready"
+    active_fingerprint = active_memory_index_fingerprint(
+        "miori", tmp_path / "data" / "chroma"
+    )
+    assert active_fingerprint is not None
+    assert active_fingerprint.model_id == "nomic-embed-text:latest"
 
 
 def test_reconciliation_stops_between_characters_without_recording_full_success(
@@ -652,12 +682,14 @@ def test_reconciliation_recovers_attempt_limit_and_writes_metadata_only_report(
         "failed_count",
         "last_error_code",
         "last_success_at",
+        "index_state",
     }
     assert report == {
         "pending_count": 0,
         "failed_count": 0,
         "last_error_code": None,
         "last_success_at": "2026-08-20T12:00:00.000000Z",
+        "index_state": "ready",
     }
     assert secret not in report_path.read_text(encoding="utf-8")
 
@@ -665,6 +697,8 @@ def test_reconciliation_recovers_attempt_limit_and_writes_metadata_only_report(
 def test_worker_removes_deactivated_memory_from_index(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from app.memory.chroma_store import EmbeddingFingerprint, activate_memory_index
+
     service, approved, database_path, records, _deleted = _sync(
         tmp_path, monkeypatch, lambda _text: [0.1]
     )
@@ -672,6 +706,11 @@ def test_worker_removes_deactivated_memory_from_index(
         character_id="miori", candidate=_candidate(), context=_context()
     )
     records[("miori", str(memory.id))] = {"character_id": "miori"}
+    activate_memory_index(
+        "miori",
+        EmbeddingFingerprint("ollama", "nomic-embed-text:latest", 1),
+        tmp_path / "data" / "chroma",
+    )
     approved.deactivate(character_id="miori", memory_id=memory.id)
 
     service.run_worker_once()
@@ -683,6 +722,8 @@ def test_worker_removes_deactivated_memory_from_index(
 def test_worker_removes_expired_memory_from_index(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from app.memory.chroma_store import EmbeddingFingerprint, activate_memory_index
+
     service, approved, database_path, records, _deleted = _sync(
         tmp_path, monkeypatch, lambda _text: [0.1]
     )
@@ -692,6 +733,11 @@ def test_worker_removes_expired_memory_from_index(
         context=_context(expires_at=NOW),
     )
     records[("miori", str(memory.id))] = {"character_id": "miori"}
+    activate_memory_index(
+        "miori",
+        EmbeddingFingerprint("ollama", "nomic-embed-text:latest", 1),
+        tmp_path / "data" / "chroma",
+    )
 
     service.run_worker_once()
 

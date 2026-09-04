@@ -1,36 +1,42 @@
 from collections.abc import AsyncIterator
+import threading
 
-from app.llm.base import LLMClient
+from app.inference import (
+    InferenceCaller,
+    InferenceMessage,
+    InferenceRouter,
+    InferenceTarget,
+)
 from app.model_settings import ModelSettings
 from app.prompting import BuiltPrompt, PromptMessage
 
-DEFAULT_PROVIDER = "ollama"
+_router_lock = threading.Lock()
+_configured_routers: list[InferenceRouter] = []
+_CHAT_CALLER = InferenceCaller.CHAT
 
 
-class _ClaudeClient(LLMClient):
-    def generate(
-        self,
-        prompt: BuiltPrompt,
-        *,
-        max_output_tokens: int,
-    ) -> str:
-        raise NotImplementedError("ClaudeClient is not yet implemented")
-
-    def count_input_tokens(self, messages: tuple[PromptMessage, ...]) -> int:
-        raise NotImplementedError("ClaudeClient is not yet implemented")
+def register_inference_router(router: InferenceRouter) -> None:
+    with _router_lock:
+        _configured_routers.append(router)
 
 
-def _create_llm_client(provider: str, settings: ModelSettings) -> LLMClient:
-    if provider == "ollama":
-        from app.llm.ollama_client import OllamaClient as _OllamaClient
+def clear_inference_router(router: InferenceRouter) -> None:
+    with _router_lock:
+        _configured_routers.remove(router)
 
-        return _OllamaClient(
-            model_name=settings.ollama_chat_model,
-            context_tokens=settings.ollama_context_tokens,
-        )
-    if provider == "claude":
-        return _ClaudeClient()
-    raise ValueError(f"Unsupported LLM provider: {provider}")
+
+def current_inference_router() -> InferenceRouter | None:
+    with _router_lock:
+        return _configured_routers[-1] if _configured_routers else None
+
+
+def _inference_messages(
+    messages: tuple[PromptMessage, ...],
+) -> tuple[InferenceMessage, ...]:
+    return tuple(
+        InferenceMessage(role=message.role.value, content=message.content)
+        for message in messages
+    )
 
 
 def generate_response(
@@ -39,15 +45,29 @@ def generate_response(
     max_output_tokens: int,
     settings: ModelSettings,
 ) -> str:
-    client = _create_llm_client(DEFAULT_PROVIDER, settings)
-    return client.generate(prompt, max_output_tokens=max_output_tokens)
+    del max_output_tokens, settings
+    inference_router = current_inference_router()
+    if inference_router is None:
+        raise RuntimeError("inference router is not configured")
+    return inference_router.generate_text(
+        caller=_CHAT_CALLER,
+        target=InferenceTarget.CHAT,
+        messages=_inference_messages(prompt.messages),
+    ).text
 
 
 def count_input_tokens(
     messages: tuple[PromptMessage, ...], *, settings: ModelSettings
 ) -> int:
-    client = _create_llm_client(DEFAULT_PROVIDER, settings)
-    return client.count_input_tokens(messages)
+    inference_router = current_inference_router()
+    del settings
+    if inference_router is None:
+        raise RuntimeError("inference router is not configured")
+    return inference_router.estimate_input_tokens(
+        caller=_CHAT_CALLER,
+        target=InferenceTarget.CHAT,
+        messages=_inference_messages(messages),
+    ).count
 
 
 async def stream_response(
@@ -56,8 +76,13 @@ async def stream_response(
     max_output_tokens: int,
     settings: ModelSettings,
 ) -> AsyncIterator[str]:
-    client = _create_llm_client(DEFAULT_PROVIDER, settings)
-    async for delta in client.stream_generate(
-        prompt, max_output_tokens=max_output_tokens
+    inference_router = current_inference_router()
+    del max_output_tokens, settings
+    if inference_router is None:
+        raise RuntimeError("inference router is not configured")
+    async for delta in inference_router.stream_text(
+        caller=_CHAT_CALLER,
+        target=InferenceTarget.CHAT,
+        messages=_inference_messages(prompt.messages),
     ):
         yield delta

@@ -36,6 +36,14 @@ REQUIRED_COVERAGE = {
 }
 
 
+class _FakeEmbedder:
+    provider_id = "ollama"
+    model_id = "model"
+
+    def __call__(self, _text: str) -> list[float]:
+        return [0.0]
+
+
 def _manifest() -> dict[str, object]:
     loaded: object = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     assert isinstance(loaded, dict)
@@ -161,8 +169,7 @@ def test_synthetic_manifest_declares_reproducible_fixed_embeddings() -> None:
     ]
     assert searchable
     assert all(
-        isinstance(case.get("query_embedding"), list)
-        and case["query_embedding"]
+        isinstance(case.get("query_embedding"), list) and case["query_embedding"]
         for case in searchable
     )
     candidates = [
@@ -315,8 +322,7 @@ def test_real_evaluator_passes_manifest_candidate_pool_to_chroma(
         candidate_pool_size=7,
         expected_ids=["core"],
         candidates=[
-            _candidate("core", 0.1)
-            | {"occurred_at": "2026-07-31T15:30:00+00:00"},
+            _candidate("core", 0.1) | {"occurred_at": "2026-07-31T15:30:00+00:00"},
             _candidate("unknown", 0.2) | {"occurred_at": None},
         ],
     )
@@ -330,19 +336,21 @@ def test_real_evaluator_passes_manifest_candidate_pool_to_chroma(
         n_results: int,
         *,
         chroma_path: Path,
+        fingerprint: object,
     ) -> list[MemorySearchCandidate]:
         assert chroma_path == tmp_path / "chroma"
         observed_n_results.append(n_results)
         return [MemorySearchCandidate(memory_id="core", raw_distance=0.01)]
 
-    monkeypatch.setattr(real_evaluator, "resolve_ollama_embedding_model", lambda: "model")
-    monkeypatch.setattr(real_evaluator, "embed_text", lambda _text: [0.0])
+    monkeypatch.setattr(real_evaluator, "activate_memory_index", lambda *_args: None)
     monkeypatch.setattr(
         real_evaluator,
         "upsert_memory_index_entry",
         lambda **kwargs: indexed_occurrences.append(kwargs["occurred_at"]),
     )
-    monkeypatch.setattr(real_evaluator, "delete_memory_index_entry", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        real_evaluator, "delete_memory_index_entry", lambda **_kwargs: None
+    )
     monkeypatch.setattr(
         real_evaluator,
         "delete_memory_index_collection",
@@ -352,7 +360,10 @@ def test_real_evaluator_passes_manifest_candidate_pool_to_chroma(
     runtime_paths = _runtime_paths(tmp_path)
 
     result = real_evaluator.evaluate_real_manifest(
-        path, runtime_paths=runtime_paths, embedding_model="model"
+        path,
+        runtime_paths=runtime_paths,
+        embedding_model="model",
+        embedder=_FakeEmbedder(),
     )
 
     assert observed_n_results == [7]
@@ -367,16 +378,14 @@ def test_real_evaluator_rejects_embedding_model_mismatch(
 ) -> None:
     from evals.rag_retrieval import real_evaluator
 
-    monkeypatch.setattr(
-        real_evaluator, "resolve_ollama_embedding_model", lambda: "resolved-model"
-    )
     runtime_paths = _runtime_paths(tmp_path)
 
-    with pytest.raises(ValueError, match="must match the resolved Ollama model"):
+    with pytest.raises(ValueError, match="must match the resolved Inference target"):
         real_evaluator.evaluate_real_manifest(
             MANIFEST_PATH,
             runtime_paths=runtime_paths,
             embedding_model="different-model",
+            embedder=_FakeEmbedder(),
         )
 
 
@@ -403,14 +412,13 @@ def test_real_evaluator_deletes_collection_after_chroma_failure(
     def query_memories(*_args: object, **_kwargs: object) -> list[object]:
         raise RuntimeError("query failure")
 
-    monkeypatch.setattr(
-        real_evaluator, "resolve_ollama_embedding_model", lambda: "model"
-    )
-    monkeypatch.setattr(real_evaluator, "embed_text", lambda _text: [0.0])
+    monkeypatch.setattr(real_evaluator, "activate_memory_index", lambda *_args: None)
     monkeypatch.setattr(
         real_evaluator, "upsert_memory_index_entry", upsert_memory_index_entry
     )
-    monkeypatch.setattr(real_evaluator, "delete_memory_index_entry", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        real_evaluator, "delete_memory_index_entry", lambda **_kwargs: None
+    )
     monkeypatch.setattr(real_evaluator, "query_memories", query_memories)
     monkeypatch.setattr(
         real_evaluator,
@@ -421,7 +429,10 @@ def test_real_evaluator_deletes_collection_after_chroma_failure(
 
     with pytest.raises(RuntimeError, match=f"{failure_stage} failure"):
         real_evaluator.evaluate_real_manifest(
-            path, runtime_paths=runtime_paths, embedding_model="model"
+            path,
+            runtime_paths=runtime_paths,
+            embedding_model="model",
+            embedder=_FakeEmbedder(),
         )
 
     assert len(deleted_collections) == 1

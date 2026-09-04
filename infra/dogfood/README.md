@@ -202,7 +202,9 @@ CIが公開した対象commit SHA tagからBackend、Frontend、Whisperのmanife
 )
 ```
 
-`env.example`をdogfood専用の一時pathへmode `0600`で作成し、repository URL、上で取得した3つの完全なimmutable image、VOICEVOX／LiveKit image、LiveKit API key／secretを実環境に合わせる。`LIVEKIT_URL`はdogfood Profileと同じ`ws://127.0.0.1:17880`から変更しない。key／secretは`livekit-server generate-keys`または安全な乱数生成器で新規作成し、端末出力、shell history、Issue、Gitへ残さない。通常bootstrapではrevisionを秘密設定と分離した`/etc/digital-souls/dogfood.revision`へ完全なcommit SHA 1行だけで書く。contract migration時は`migrate-deployment-contract.sh`がrevisionを更新するため、作業者は書き換えない。単純な`cp infra/dogfood/env.example /tmp/dogfood.env`のまま使用してはならない。service portはここへ追加せず、`environments/profiles/dogfood.json`を唯一の参照元にする。
+`env.example`をdogfood専用の一時pathへmode `0600`で作成し、repository URL、上で取得した3つの完全なimmutable image、VOICEVOX／LiveKit image、LiveKit API key／secretを実環境に合わせる。`INFERENCE_TARGET_*`はdogfood Backendへ渡す必須の非秘密設定であり、既定Ollama構成を変更しない場合も削除しない。`LIVEKIT_URL`はdogfood Profileと同じ`ws://127.0.0.1:17880`から変更しない。key／secretは`livekit-server generate-keys`または安全な乱数生成器で新規作成し、端末出力、shell history、Issue、Gitへ残さない。通常bootstrapではrevisionを秘密設定と分離した`/etc/digital-souls/dogfood.revision`へ完全なcommit SHA 1行だけで書く。contract migration時は`migrate-deployment-contract.sh`がrevisionを更新するため、作業者は書き換えない。単純な`cp infra/dogfood/env.example /tmp/dogfood.env`のまま使用してはならない。service portはここへ追加せず、`environments/profiles/dogfood.json`を唯一の参照元にする。
+
+既存dogfoodへ`INFERENCE_TARGET_*`を初めて追加する更新は、`infra/dogfood/env.example`のenvキー契約変更に当たるため経路②を使用する。現在の`dogfood.env`へ直接追記して通常deployだけを実行せず、対象main revisionのexampleから秘密値と実環境固有値を設定した一時envを作成し、backup、停止、bootstrap、同一SHAのdeploy、status確認の順序を守る。
 
 ```bash
 dogfood_env=$(mktemp)
@@ -491,10 +493,7 @@ sudo -u digital-souls env \
   ollama pull gemma4:e4b
 ```
 
-required model名の正本は`backend/app/model_settings.py`の`OLLAMA_MODEL_NAME`であり、未指定時の
-`OLLAMA_CHAT_MODEL`へ使われる。既定値を変更する場合は、このpullコマンドを同時に更新する。
-環境変数で`OLLAMA_CHAT_MODEL`を上書きする場合は、上記コマンド末尾をeffectiveなmodel名へ置き換える。
-readiness検証も解決済みの`OLLAMA_CHAT_MODEL`を使用するため、既定値と上書きのどちらでも不足model名を表示する。
+required model名の正本はdogfoodの`INFERENCE_TARGET_*`設定である。TargetのModel IDを変更する場合は、このpullコマンドも同時に更新する。readiness検証も解決済みChat／Privacy TargetのModel IDを使用するため、不足model名を表示する。
 
 旧homeだったdata root直下の`.ollama`、`.cache`等は自動削除しない。`sudo ls -la /var/lib/digital-souls/data`で内容と必要性を利用者が確認し、保全後に個別判断する。
 

@@ -9,10 +9,10 @@ from adapters.backend import BackendAdapter
 from adapters.base import CommandRunner, OperationContext, ReadinessOperations, ServiceOperations
 from adapters.livekit import LiveKitExternalOperations
 from adapters.frontend import FrontendAdapter
-from adapters.ollama import OllamaAdapter
+from adapters.ollama import DEFAULT_OLLAMA_MODEL_NAME, OllamaAdapter
 from adapters.voicevox import VoicevoxAdapter
 from environment_constants import DEPENDENCY_NAMES, OPTIONAL_DEPENDENCY_NAMES
-from app.model_settings import OLLAMA_MODEL_NAME, WHISPER_MODEL_NAME
+from app.model_settings import WHISPER_MODEL_NAME
 from app.runtime_paths import RuntimePaths
 
 
@@ -48,7 +48,7 @@ def create_service_registry(
     runner: CommandRunner | None = None,
     *,
     effective_profile: str = "dev",
-    ollama_model_name: str = OLLAMA_MODEL_NAME,
+    ollama_model_name: str = DEFAULT_OLLAMA_MODEL_NAME,
     ollama_classifier_model_name: str | None = None,
     whisper_model_name: str = WHISPER_MODEL_NAME,
 ) -> ServiceRegistry:

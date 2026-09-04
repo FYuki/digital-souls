@@ -43,7 +43,7 @@
     "rag_service": {
       "max_retrieved_memories": 5,
       "candidate_pool_size": 20,
-      "relevance_threshold": 0.05,
+      "relevance_threshold": 0.54,
       "equivalence_margin": 0.002
     }
   },

@@ -8,18 +8,24 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.conversation_history.models import ConversationTurn, TurnStatus
+from app.inference import InferenceCaller, InferenceTarget
+from app.inference.runtime import create_inference_runtime
 from app.memory.formation.config import resolve_memory_formation_settings
 from app.memory.formation.extractor import MemoryCandidateExtractor
-from app.memory.formation.ollama_client import OllamaMemoryExtractorClient
-from app.model_settings import resolve_model_settings
+from app.memory.inference_client import StructuredMemoryInferenceClient
 
-SETTINGS = resolve_model_settings(os.environ)
-CLIENT = OllamaMemoryExtractorClient(model_id=SETTINGS.ollama_extractor_model)
+RUNTIME = create_inference_runtime(os.environ)
+CLIENT = StructuredMemoryInferenceClient(
+    router=RUNTIME.router,
+    caller=InferenceCaller.MEMORY_EXTRACTION,
+    target=InferenceTarget.MEMORY_EXTRACTION,
+    settings=RUNTIME.settings,
+)
 EXTRACTOR = MemoryCandidateExtractor(
     client=CLIENT,
     settings=resolve_memory_formation_settings(os.environ),
 )
-atexit.register(CLIENT.close)
+atexit.register(RUNTIME.close)
 
 
 def _case_id(context: Mapping[str, object]) -> str:
@@ -55,8 +61,8 @@ def call_api(
         "case_id": _case_id(context),
         "candidates": [
             {
-                "memory_type": candidate.memory_type.value,
-                "structured_value": candidate.structured_value.__dict__,
+                "memory_type": candidate.candidate.memory_type.value,
+                "structured_value": candidate.candidate.structured_value.__dict__,
             }
             for candidate in candidates
         ],

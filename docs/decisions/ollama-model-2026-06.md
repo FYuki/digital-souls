@@ -2,6 +2,13 @@
 
 検証日: 2026-06-14
 
+## 状態
+
+**ACTIVE**。2026-06時点のOllama／gemma3検証結果とWhisperを含む既存設定の移行履歴として維持する。
+「現行のモデル設定契約」にあるOllama用途別Model／context envはIssue #105で置換中であり、
+設計と新規実装では`inference-provider-foundation-2026-09.md`を優先する。旧envはIssue #181で
+撤去するまでの暫定互換であり、release互換契約ではない。
+
 ## 目的
 
 Phase 2 の要件として、WSL2 上の Ollama で軽量 LLM を動かし、Phase 3 以降のコア基盤として採用可能か判断する。
@@ -105,13 +112,16 @@ total_duration 約 510ms、eval（生成）は約 96ms。
 
 上記は 2026-06-14 時点の検証記録として維持する。その後、AIRI フォークから自作 Backend へ移行し、常用する Ollama モデルも変更したため、現在の実行契約は次のとおりとする。
 
+> **2026-09移行注記**: 次表のOllama用途別Model／context設定は#105完了後の現行契約ではない。
+> 新しいTarget／Provider設定、token上限、readinessは
+> `inference-provider-foundation-2026-09.md`を正本とする。表は#181までの移行元を明示するため残す。
+
 | 環境変数 | 既定値 | 用途・制約 |
 |---|---:|---|
-| `OLLAMA_CHAT_MODEL` | `gemma4:e4b` | Backend の Ollama payload、prepare、readiness で共通利用するチャットモデル。空文字と前後の空白を拒否する |
+| `INFERENCE_TARGET_CHAT` | `ollama/gemma4:e4b` | Backend、prepare、readinessで共通利用するチャットTarget |
 | `WHISPER_MODEL` | `medium` | faster-whisper の実行モデルと prepare・cache 確認対象。空文字と前後の空白を拒否する |
-| `OLLAMA_CONTEXT_TOKENS` | `8192` | Ollama の `num_ctx` に渡す実行時 context。1 以上かつモデル最大 context 以下とする |
-| `OLLAMA_RESPONSE_RESERVE_TOKENS` | `1024` | 応答生成用に prompt から予約し、Ollama の `num_predict` に渡す token 数。1 以上かつ実行時 context 未満とする |
-| `ASSISTANT_MAX_GENERATION_TOKENS` | `1024` | 応答予約量の既存名。同時指定時は `OLLAMA_RESPONSE_RESERVE_TOKENS` と同値にする |
+| `INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS` | `7168` | Chatへ渡す入力token上限 |
+| `INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS` | `1024` | Chatの最大出力token数 |
 | `CONVERSATION_HISTORY_MAX_COMPLETED_TURNS` | `10` | prompt に含める completed ターン数。failed ターンは履歴へ含めるが件数には数えない |
 | `CONVERSATION_HISTORY_TOKEN_LIMIT` | `4096` | prompt に含める会話履歴の token 上限。1 以上とする |
 | `USER_INPUT_TOKEN_LIMIT` | `8192` | 1 回の user 入力の token 上限。1 以上とする |
@@ -119,4 +129,4 @@ total_duration 約 510ms、eval（生成）は約 96ms。
 
 Backend はこれらを起動時に型付き設定として一括検証する。不正な文字列、正でない整数、応答予約量が実行時 context 以上、実行時 context がモデル最大 context を超える指定はデフォルトへ置き換えず、リクエスト受付前に起動を失敗させる。prompt の入力予算は実行時 context から応答予約量を差し引いて算出し、payload と同じ解決済み設定を使用する。
 
-Profile resolver は実 Backend を使う Profile の `derivedEnvironment` に全設定を記録する。起動処理はその解決済み値を Backend プロセスへ渡し、同じ `OLLAMA_CHAT_MODEL` を Ollama の prepare・readiness に、同じ `WHISPER_MODEL` を faster-whisper の prepare・cache 確認に注入する。これにより、Profile 経由の override でも Backend の実行対象と環境 adapter の確認対象を一致させる。
+Profile resolver は実 Backend を使う Profile の `derivedEnvironment` に全設定を記録する。起動処理はその解決済み値を Backend プロセスへ渡し、同じChat TargetのModel IDをOllamaのprepare・readinessに、同じ `WHISPER_MODEL` を faster-whisper のprepare・cache確認に注入する。

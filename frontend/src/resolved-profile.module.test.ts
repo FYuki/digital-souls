@@ -80,8 +80,8 @@ const createResolvedEndpointReport = () => {
         host: 'localhost',
         port: 18000,
         reload: false,
-        readinessPath: '/',
-        readinessUrl: 'http://localhost:18000/',
+        readinessPath: '/health/ready',
+        readinessUrl: 'http://localhost:18000/health/ready',
       },
     },
   })
