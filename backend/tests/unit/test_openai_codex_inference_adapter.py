@@ -64,6 +64,7 @@ class RecordingRunner:
         self.exec_returncode = 0
         self.login_returncode = 0
         self.login_stdout = "Logged in using ChatGPT"
+        self.login_stderr = ""
         self.timeout_on_exec = False
 
     def run(
@@ -96,7 +97,7 @@ class RecordingRunner:
                 arguments,
                 self.login_returncode,
                 self.login_stdout if self.login_returncode == 0 else "",
-                "not logged in" if self.login_returncode else "",
+                "not logged in" if self.login_returncode else self.login_stderr,
             )
         if self.timeout_on_exec:
             raise subprocess.TimeoutExpired(arguments, timeout_seconds)
@@ -326,6 +327,14 @@ def test_login_status_uses_runtime_without_reading_auth_cache(tmp_path: Path) ->
         "login",
         "status",
     )
+
+
+def test_login_status_accepts_chatgpt_marker_on_stderr(tmp_path: Path) -> None:
+    runner = RecordingRunner()
+    runner.login_stdout = ""
+    runner.login_stderr = "Logged in using ChatGPT"
+
+    _adapter(tmp_path, runner).login_status(timeout_seconds=2.0)
 
 
 def test_codex_api_key_login_is_not_accepted_as_subscription(tmp_path: Path) -> None:

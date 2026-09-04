@@ -300,7 +300,8 @@ class OpenAICodexAdapter:
                 InferenceErrorCategory.UNAVAILABLE,
                 retryable=True,
             ) from None
-        if result.returncode != 0 or "chatgpt" not in result.stdout.lower():
+        status_output = f"{result.stdout}\n{result.stderr}".lower()
+        if result.returncode != 0 or "logged in using chatgpt" not in status_output:
             raise InferenceError(
                 InferenceErrorCategory.AUTHENTICATION_FAILED,
                 retryable=False,
