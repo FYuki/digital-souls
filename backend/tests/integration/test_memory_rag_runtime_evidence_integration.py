@@ -21,17 +21,14 @@ RAG_EVAL_MANIFEST = (
 def _require_runtime_evidence_dependencies() -> None:
     importlib.import_module("chromadb")
 
-    from app.llm.ollama_config import (
-        resolve_ollama_base_url,
-        resolve_ollama_embedding_model,
-    )
+    from app.llm.ollama_config import resolve_ollama_base_url
 
     response = httpx.get(f"{resolve_ollama_base_url()}/api/tags", timeout=5.0)
     response.raise_for_status()
     models = response.json().get("models")
     if not isinstance(models, list):
         pytest.fail("Ollama tags response does not include models")
-    model_name = resolve_ollama_embedding_model()
+    model_name = os.environ["INFERENCE_TARGET_EMBEDDING"].split("/", 1)[1]
     available = {
         model.get("name")
         for model in models

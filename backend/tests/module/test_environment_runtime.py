@@ -932,8 +932,8 @@ def test_should_detect_later_registered_process_exit_during_readiness(
         "mode": "real",
         "source": "managed",
         "baseUrl": "http://localhost:8000",
-        "readinessPath": "/",
-        "readinessUrl": "http://localhost:8000/",
+        "readinessPath": "/health/ready",
+        "readinessUrl": "http://localhost:8000/health/ready",
     }
     profile = {**profile, "dependencies": dependencies}
     report = create_initial_report(

@@ -100,7 +100,7 @@ def test_should_wait_for_managed_application_services(
                     "mode": "real",
                     "source": "managed",
                     "baseUrl": "http://localhost:18000",
-                    "readinessPath": "/",
+                    "readinessPath": "/health/ready",
                 },
             },
         },
@@ -132,7 +132,7 @@ def test_should_wait_for_managed_application_services(
     assert result == 0
     assert calls == [
         ("http://localhost:15173/", 180, 1, 2),
-        ("http://localhost:18000/", 180, 1, 2),
+        ("http://localhost:18000/health/ready", 180, 1, 2),
     ]
     report = json.loads(capsys.readouterr().out)
     assert report["status"] == "ready"

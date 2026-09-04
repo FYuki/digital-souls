@@ -538,7 +538,7 @@ class TestRuntimeConfiguration:
             "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "4",
             "CONVERSATION_HISTORY_TOKEN_LIMIT": "1300",
             "USER_INPUT_TOKEN_LIMIT": "650",
-            "ASSISTANT_MAX_GENERATION_TOKENS": "750",
+            "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS": "750",
             "LLM_CONTEXT_TOKEN_LIMIT": "9000",
         }
         for key, value in environment.items():

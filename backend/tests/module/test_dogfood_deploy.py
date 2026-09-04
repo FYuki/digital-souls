@@ -129,7 +129,7 @@ def test_should_check_current_profile_readiness_without_starting_processes(
     observations = json.loads(probe_log.read_text(encoding="utf-8"))
     assert observations == [
         {"url": "http://localhost:15173/", "timeoutSeconds": 2.0},
-        {"url": "http://localhost:18000/", "timeoutSeconds": 2.0},
+        {"url": "http://localhost:18000/health/ready", "timeoutSeconds": 2.0},
     ]
 
 
