@@ -102,6 +102,25 @@ def test_should_keep_generic_loader_on_root_active_image_contract() -> None:
     assert result.stdout.splitlines() == ["settings:--with-images", "revision"]
 
 
+def test_should_not_overwrite_caller_variables_when_sourcing_loader() -> None:
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'target="deploy-commit"; suffix="caller-suffix"; source "$1"; '
+            'printf "%s\\n%s\\n" "$target" "$suffix"',
+            "bash",
+            str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["deploy-commit", "caller-suffix"]
+
+
 def test_should_reject_unknown_active_image_loading_option() -> None:
     result = subprocess.run(
         [
@@ -211,6 +230,53 @@ def test_should_accept_every_key_in_checked_in_environment_example() -> None:
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_should_accept_optional_inference_target_settings(tmp_path: Path) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    with env_path.open("a", encoding="utf-8") as env_file:
+        env_file.write(
+            "\nINFERENCE_TARGET_HEAVY_REASONING=ollama/gemma4:e4b\n"
+            "INFERENCE_TARGET_HEAVY_REASONING_MAX_INPUT_TOKENS=7680\n"
+            "INFERENCE_TARGET_HEAVY_REASONING_MAX_OUTPUT_TOKENS=512\n"
+            "INFERENCE_TARGET_CHAT_TIMEOUT_SECONDS=45\n"
+            "INFERENCE_TARGET_CHAT_MAX_CONCURRENCY=2\n"
+        )
+    sentinel_path = tmp_path / "optional-inference.sentinel"
+
+    result = _run_loader(env_path, sentinel_path)
+
+    assert result.returncode == 0, result.stderr
+    assert sentinel_path.is_file()
+
+
+def test_should_export_inference_target_settings(tmp_path: Path) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    revision_path = tmp_path / "config" / "dogfood.revision"
+    result = subprocess.run(
+        command_with_root_owned_revision(
+            revision_path,
+            [
+                "bash",
+                "-c",
+                'source "$1"; dogfood_load_environment; '
+                'printf "%s\\n%s\\n" "$INFERENCE_TARGET_CHAT" '
+                '"$INFERENCE_TARGET_EMBEDDING"',
+                "bash",
+                str(DOGFOOD_SCRIPTS_DIR / "load-environment.sh"),
+            ],
+        ),
+        env={**os.environ, "DOGFOOD_ENV_FILE": str(env_path)},
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "ollama/gemma4:e4b",
+        "ollama/nomic-embed-text:latest",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -840,9 +906,10 @@ def test_should_reject_symlink_test_lock_without_changing_target(
     "invalid_line",
     (
         "UNKNOWN_DOGFOOD_KEY=value",
+        "INFERENCE_TARGET_CHATT=ollama/gemma4:e4b",
         "DS_ENVIRONMENT_ID=dogfood",
     ),
-    ids=("unknown-key", "duplicate-key"),
+    ids=("unknown-key", "unknown-inference-target", "duplicate-key"),
 )
 def test_should_reject_invalid_env_line_before_following_operation(
     tmp_path: Path,
@@ -888,6 +955,45 @@ def test_should_reject_missing_required_setting_before_following_operation(
     result = _run_loader(env_path, sentinel_path)
 
     assert result.returncode != 0
+    assert not sentinel_path.exists()
+
+
+@pytest.mark.parametrize(
+    "key",
+    (
+        "INFERENCE_TARGET_CHAT",
+        "INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS",
+        "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS",
+        "INFERENCE_TARGET_PRIVACY",
+        "INFERENCE_TARGET_PRIVACY_MAX_INPUT_TOKENS",
+        "INFERENCE_TARGET_PRIVACY_MAX_OUTPUT_TOKENS",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_INPUT_TOKENS",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_INPUT_TOKENS",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_OUTPUT_TOKENS",
+        "INFERENCE_TARGET_EMBEDDING",
+        "INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS",
+    ),
+)
+def test_should_reject_missing_required_inference_setting(
+    tmp_path: Path, key: str
+) -> None:
+    env_path, _ = write_dogfood_env(tmp_path)
+    source = env_path.read_text(encoding="utf-8")
+    env_path.write_text(
+        "\n".join(
+            line for line in source.splitlines() if not line.startswith(f"{key}=")
+        ),
+        encoding="utf-8",
+    )
+    sentinel_path = tmp_path / "missing-inference.sentinel"
+
+    result = _run_loader(env_path, sentinel_path)
+
+    assert result.returncode != 0
+    assert f"必須設定がありません: {key}" in result.stderr
     assert not sentinel_path.exists()
 
 

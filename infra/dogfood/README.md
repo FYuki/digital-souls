@@ -202,7 +202,9 @@ CIが公開した対象commit SHA tagからBackend、Frontend、Whisperのmanife
 )
 ```
 
-`env.example`をdogfood専用の一時pathへmode `0600`で作成し、repository URL、上で取得した3つの完全なimmutable image、VOICEVOX／LiveKit image、LiveKit API key／secretを実環境に合わせる。`LIVEKIT_URL`はdogfood Profileと同じ`ws://127.0.0.1:17880`から変更しない。key／secretは`livekit-server generate-keys`または安全な乱数生成器で新規作成し、端末出力、shell history、Issue、Gitへ残さない。通常bootstrapではrevisionを秘密設定と分離した`/etc/digital-souls/dogfood.revision`へ完全なcommit SHA 1行だけで書く。contract migration時は`migrate-deployment-contract.sh`がrevisionを更新するため、作業者は書き換えない。単純な`cp infra/dogfood/env.example /tmp/dogfood.env`のまま使用してはならない。service portはここへ追加せず、`environments/profiles/dogfood.json`を唯一の参照元にする。
+`env.example`をdogfood専用の一時pathへmode `0600`で作成し、repository URL、上で取得した3つの完全なimmutable image、VOICEVOX／LiveKit image、LiveKit API key／secretを実環境に合わせる。`INFERENCE_TARGET_*`はdogfood Backendへ渡す必須の非秘密設定であり、既定Ollama構成を変更しない場合も削除しない。`LIVEKIT_URL`はdogfood Profileと同じ`ws://127.0.0.1:17880`から変更しない。key／secretは`livekit-server generate-keys`または安全な乱数生成器で新規作成し、端末出力、shell history、Issue、Gitへ残さない。通常bootstrapではrevisionを秘密設定と分離した`/etc/digital-souls/dogfood.revision`へ完全なcommit SHA 1行だけで書く。contract migration時は`migrate-deployment-contract.sh`がrevisionを更新するため、作業者は書き換えない。単純な`cp infra/dogfood/env.example /tmp/dogfood.env`のまま使用してはならない。service portはここへ追加せず、`environments/profiles/dogfood.json`を唯一の参照元にする。
+
+既存dogfoodへ`INFERENCE_TARGET_*`を初めて追加する更新は、`infra/dogfood/env.example`のenvキー契約変更に当たるため経路②を使用する。現在の`dogfood.env`へ直接追記して通常deployだけを実行せず、対象main revisionのexampleから秘密値と実環境固有値を設定した一時envを作成し、backup、停止、bootstrap、同一SHAのdeploy、status確認の順序を守る。
 
 ```bash
 dogfood_env=$(mktemp)
