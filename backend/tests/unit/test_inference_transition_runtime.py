@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
+from app.inference.config import reject_legacy_inference_environment
 from app.inference.runtime import (
     create_inference_runtime,
-    reject_legacy_inference_environment,
 )
 
 

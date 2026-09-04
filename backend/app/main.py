@@ -50,9 +50,9 @@ from app.inference import (
     default_provider_registry,
     resolve_inference_settings,
 )
+from app.inference.config import reject_legacy_inference_environment
 from app.inference.runtime import (
     create_inference_runtime,
-    reject_legacy_inference_environment,
     target_model_id,
 )
 from app.memory.memory_policy import resolved_memory_policy

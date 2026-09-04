@@ -35,7 +35,7 @@ def test_legacy_inference_settings_do_not_return_to_runtime_or_current_docs() ->
         )
     )
     rejection_contract = (
-        _REPOSITORY_ROOT / "backend" / "app" / "inference" / "runtime.py"
+        _REPOSITORY_ROOT / "backend" / "app" / "inference" / "config.py"
     )
 
     offenders: list[str] = []

@@ -13,6 +13,7 @@ from app.inference.adapters.openai_api import OpenAIAPIAdapter
 from app.inference.adapters.openai_codex import OpenAICodexAdapter
 from app.inference.config import (
     InferenceSettings,
+    reject_legacy_inference_environment,
     resolve_inference_settings,
 )
 from app.inference.contracts import InferenceTarget, ProviderKind, TargetCriticality
@@ -33,16 +34,6 @@ OPENAI_CODEX_HOME_ENV = "OPENAI_CODEX_HOME"
 OPENAI_CODEX_EXECUTABLE_ENV = "OPENAI_CODEX_EXECUTABLE"
 FORBIDDEN_OPENAI_ENDPOINT_ENV_KEYS = frozenset(
     {"OPENAI_API_BASE", "OPENAI_API_ENDPOINT", "OPENAI_BASE_URL"}
-)
-LEGACY_INFERENCE_ENV_KEYS = frozenset(
-    {
-        "OLLAMA_CHAT_MODEL",
-        "OLLAMA_CLASSIFIER_MODEL",
-        "OLLAMA_EXTRACTOR_MODEL",
-        "OLLAMA_EMBEDDING_MODEL",
-        "OLLAMA_CONTEXT_TOKENS",
-        "OLLAMA_RESPONSE_RESERVE_TOKENS",
-    }
 )
 
 
@@ -246,12 +237,6 @@ def create_inference_runtime(environment: Mapping[str, str]) -> InferenceRuntime
         openai_api_adapter,
         openai_codex_adapter,
     )
-
-
-def reject_legacy_inference_environment(environment: Mapping[str, str]) -> None:
-    explicit_legacy = sorted(LEGACY_INFERENCE_ENV_KEYS & set(environment))
-    if explicit_legacy:
-        raise ValueError(f"legacy inference setting is forbidden: {explicit_legacy[0]}")
 
 
 def target_model_id(settings: InferenceSettings, target: InferenceTarget) -> str:

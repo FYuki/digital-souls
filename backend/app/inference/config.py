@@ -23,6 +23,16 @@ from app.inference.registry import ProviderRegistry
 
 
 INFERENCE_TARGET_PREFIX = "INFERENCE_TARGET_"
+LEGACY_INFERENCE_ENV_KEYS = frozenset(
+    {
+        "OLLAMA_CHAT_MODEL",
+        "OLLAMA_CLASSIFIER_MODEL",
+        "OLLAMA_EXTRACTOR_MODEL",
+        "OLLAMA_EMBEDDING_MODEL",
+        "OLLAMA_CONTEXT_TOKENS",
+        "OLLAMA_RESPONSE_RESERVE_TOKENS",
+    }
+)
 DEFAULT_TIMEOUT_SECONDS = 30.0
 DEFAULT_MAX_CONCURRENCY = 1
 _SUFFIXES = (
@@ -154,6 +164,12 @@ def inference_target_environment(
         for key, value in environment.items()
         if key in INFERENCE_TARGET_ENVIRONMENT_KEYS
     }
+
+
+def reject_legacy_inference_environment(environment: Mapping[str, str]) -> None:
+    explicit_legacy = sorted(LEGACY_INFERENCE_ENV_KEYS & set(environment))
+    if explicit_legacy:
+        raise ValueError(f"legacy inference setting is forbidden: {explicit_legacy[0]}")
 
 
 def parse_provider_reference(value: str) -> ProviderReference:

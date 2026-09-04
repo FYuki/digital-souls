@@ -34,8 +34,10 @@ from app.model_settings import (
     model_settings_environment,
     resolve_model_settings,
 )
-from app.inference.config import inference_target_environment
-from app.inference.runtime import reject_legacy_inference_environment
+from app.inference.config import (
+    inference_target_environment,
+    reject_legacy_inference_environment,
+)
 from app.runtime_paths import RuntimePaths, runtime_paths_projection
 
 
