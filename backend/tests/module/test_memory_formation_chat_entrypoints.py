@@ -738,7 +738,7 @@ def test_runtime_passes_schema_zero_temperature_and_configured_output_limit(
     )
     assert extractor_request.calls[0]["options"] == {
         "temperature": 0,
-        "num_ctx": 8192,
+        "num_ctx": 8001,
         "num_predict": 321,
     }
 
