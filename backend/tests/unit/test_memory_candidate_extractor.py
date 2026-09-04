@@ -9,6 +9,7 @@ from uuid import UUID
 import pytest
 
 from app.conversation_history.models import ConversationTurn, TurnStatus
+from app.inference import InferenceError, InferenceErrorCategory
 from app.memory.admission.contracts import (
     EpisodicEventValue,
     InteractionPreferenceValue,
@@ -452,6 +453,27 @@ def test_timeout_retries_only_to_the_configured_attempt_limit_then_discards() ->
     assert result == ()
     assert len(client.calls) == 2
     assert [call["timeout_seconds"] for call in client.calls] == [15.0, 15.0]
+
+
+def test_retryable_inference_error_retries_but_invalid_response_fails_safe() -> None:
+    client = FakeExtractorClient(
+        [
+            InferenceError(InferenceErrorCategory.UNAVAILABLE, retryable=True),
+            InferenceError(InferenceErrorCategory.INVALID_RESPONSE, retryable=False),
+        ]
+    )
+
+    result = _extractor(client, MEMORY_FORMATION_MAX_ATTEMPTS="3").extract(
+        current_turn=_turn(
+            TURN_ID,
+            user_content=CURRENT_USER,
+            assistant_content=CURRENT_ASSISTANT,
+        ),
+        previous_turn=None,
+    )
+
+    assert result == ()
+    assert len(client.calls) == 2
 
 
 def test_each_retry_is_bounded_by_the_remaining_total_timeout() -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator, Mapping
 import json
+import logging
 from threading import BoundedSemaphore
 
 from jsonschema import Draft202012Validator, SchemaError, ValidationError
@@ -27,7 +28,15 @@ from app.inference.contracts import (
     TokenEstimateRequest,
 )
 from app.inference.errors import InferenceError, InferenceErrorCategory
+from app.inference.observer import (
+    InferenceObservation,
+    InferenceObserver,
+    ignore_inference_observation,
+)
 from app.inference.registry import ProviderRegistry
+
+
+logger = logging.getLogger(__name__)
 
 
 class InferenceRouter:
@@ -36,9 +45,11 @@ class InferenceRouter:
         *,
         settings: InferenceSettings,
         registry: ProviderRegistry,
+        observer: InferenceObserver = ignore_inference_observation,
     ) -> None:
         self._settings = settings
         self._registry = registry
+        self._observer = observer
         self._capacity = {
             target: BoundedSemaphore(resolved.max_concurrency)
             for target, resolved in settings.targets.items()
@@ -135,29 +146,57 @@ class InferenceRouter:
         max_output_tokens = resolved.max_output_tokens
         if max_output_tokens is None:
             raise AssertionError("structured target requires an output limit")
-        with self._capacity[target]:
-            provider_result = adapter.generate_structured(
-                StructuredGenerationRequest(
-                    messages=messages,
-                    model_id=resolved.reference.model_id,
-                    options=resolved.options,
-                    max_input_tokens=resolved.max_input_tokens,
-                    max_output_tokens=max_output_tokens,
-                    timeout_seconds=self._timeout(
-                        resolved.timeout_seconds, timeout_seconds
-                    ),
-                    response_schema=response_schema,
-                )
-            )
-        self._validate_text(provider_result)
         try:
+            with self._capacity[target]:
+                provider_result = adapter.generate_structured(
+                    StructuredGenerationRequest(
+                        messages=messages,
+                        model_id=resolved.reference.model_id,
+                        options=resolved.options,
+                        max_input_tokens=resolved.max_input_tokens,
+                        max_output_tokens=max_output_tokens,
+                        timeout_seconds=self._timeout(
+                            resolved.timeout_seconds, timeout_seconds
+                        ),
+                        response_schema=response_schema,
+                    )
+                )
+            self._validate_text(provider_result)
             value: JsonValue = json.loads(provider_result.text)
             Draft202012Validator(response_schema).validate(value)
         except (json.JSONDecodeError, ValidationError):
-            raise InferenceError(
+            error = InferenceError(
                 InferenceErrorCategory.INVALID_RESPONSE,
                 retryable=False,
-            ) from None
+            )
+            self._observe(
+                caller,
+                target,
+                InferenceCapability.GENERATE_STRUCTURED,
+                resolved,
+                error.category,
+            )
+            raise error from None
+        except Exception as error:
+            self._observe(
+                caller,
+                target,
+                InferenceCapability.GENERATE_STRUCTURED,
+                resolved,
+                (
+                    error.category
+                    if isinstance(error, InferenceError)
+                    else InferenceErrorCategory.PROVIDER_ERROR
+                ),
+            )
+            raise
+        self._observe(
+            caller,
+            target,
+            InferenceCapability.GENERATE_STRUCTURED,
+            resolved,
+            None,
+        )
         return StructuredGenerationResult(value=value, usage=provider_result.usage)
 
     def embed(
@@ -169,18 +208,40 @@ class InferenceRouter:
         timeout_seconds: float | None = None,
     ) -> EmbeddingResult:
         resolved, adapter = self._resolve(caller, target, InferenceCapability.EMBED)
-        with self._capacity[target]:
-            return adapter.embed(
-                EmbeddingRequest(
-                    inputs=inputs,
-                    model_id=resolved.reference.model_id,
-                    options=resolved.options,
-                    max_input_tokens=resolved.max_input_tokens,
-                    timeout_seconds=self._timeout(
-                        resolved.timeout_seconds, timeout_seconds
-                    ),
+        try:
+            with self._capacity[target]:
+                result = adapter.embed(
+                    EmbeddingRequest(
+                        inputs=inputs,
+                        model_id=resolved.reference.model_id,
+                        options=resolved.options,
+                        max_input_tokens=resolved.max_input_tokens,
+                        timeout_seconds=self._timeout(
+                            resolved.timeout_seconds, timeout_seconds
+                        ),
+                    )
                 )
+        except Exception as error:
+            self._observe(
+                caller,
+                target,
+                InferenceCapability.EMBED,
+                resolved,
+                (
+                    error.category
+                    if isinstance(error, InferenceError)
+                    else InferenceErrorCategory.PROVIDER_ERROR
+                ),
             )
+            raise
+        self._observe(
+            caller,
+            target,
+            InferenceCapability.EMBED,
+            resolved,
+            None,
+        )
+        return result
 
     def estimate_input_tokens(
         self,
@@ -230,6 +291,29 @@ class InferenceRouter:
                 retryable=False,
             )
         return resolved, adapter
+
+    def _observe(
+        self,
+        caller: InferenceCaller,
+        target: InferenceTarget,
+        capability: InferenceCapability,
+        resolved: ResolvedTarget,
+        error_category: InferenceErrorCategory | None,
+    ) -> None:
+        try:
+            self._observer(
+                InferenceObservation(
+                    caller=caller,
+                    target=target,
+                    capability=capability,
+                    provider_id=resolved.reference.provider_id,
+                    model_id=resolved.reference.model_id,
+                    success=error_category is None,
+                    error_category=error_category,
+                )
+            )
+        except Exception:
+            logger.warning("Inference observer failed")
 
     @staticmethod
     def _validate_text(result: ProviderTextResult) -> None:

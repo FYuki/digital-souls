@@ -161,6 +161,7 @@ def test_loader_to_shared_http_and_websocket_runtime_uses_same_lore_prompt(
             privacy_scanner=MagicMock(),
             semantic_classifier=MagicMock(),
             approved_memory_repository=MagicMock(),
+            memory_embedder=lambda _text: [0.1],
             memory_formation_submitter=submitter,
         ),
     )

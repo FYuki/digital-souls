@@ -18,6 +18,7 @@ from app.inference.contracts import (
     TokenEstimateAccuracy,
 )
 from app.inference.errors import InferenceError, InferenceErrorCategory
+from app.inference.observer import InferenceObservation, InferenceObserver
 from app.inference.registry import ProviderRegistry, default_provider_registry
 from app.inference.router import InferenceRouter
 
@@ -28,6 +29,8 @@ __all__ = [
     "InferenceError",
     "InferenceErrorCategory",
     "InferenceMessage",
+    "InferenceObservation",
+    "InferenceObserver",
     "InferenceRouter",
     "InferenceSettings",
     "InferenceTarget",

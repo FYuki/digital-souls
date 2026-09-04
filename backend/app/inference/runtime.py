@@ -216,6 +216,7 @@ def transition_inference_environment(
         values[f"{INFERENCE_TARGET_PREFIX}{token}_MAX_OUTPUT_TOKENS"] = str(
             structured_output
         )
+        values[f"{INFERENCE_TARGET_PREFIX}{token}_OPTIONS_JSON"] = '{"temperature":0}'
     values[f"{INFERENCE_TARGET_PREFIX}EMBEDDING_MAX_INPUT_TOKENS"] = str(context)
     values[f"{INFERENCE_TARGET_PREFIX}PRIVACY_TIMEOUT_SECONDS"] = "15"
     values[f"{INFERENCE_TARGET_PREFIX}MEMORY_EXTRACTION_TIMEOUT_SECONDS"] = str(

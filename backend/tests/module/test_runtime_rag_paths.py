@@ -20,7 +20,7 @@ def test_rt_chroma_01_rag_lookup_uses_resolved_chroma_path(
     from app.memory.memory_policy import resolved_memory_policy
 
     chroma_path = tmp_path / "runtime-data" / "chroma"
-    monkeypatch.setattr(rag_service, "embed_text", MagicMock(return_value=[0.5]))
+    embedder = MagicMock(return_value=[0.5])
     monkeypatch.setattr(rag_service, "query_memories", MagicMock(return_value=[]))
     scanner = MagicMock()
     scanner.scan.return_value = ScanSuccess(())
@@ -44,6 +44,7 @@ def test_rt_chroma_01_rag_lookup_uses_resolved_chroma_path(
         scanner=scanner,
         classifier=classifier,
         approved_repository=MagicMock(),
+        embedder=embedder,
         chroma_path=chroma_path,
         now=datetime(2026, 8, 20, tzinfo=UTC),
         timezone="Asia/Tokyo",
@@ -54,4 +55,5 @@ def test_rt_chroma_01_rag_lookup_uses_resolved_chroma_path(
         [0.5],
         n_results=20,
         chroma_path=chroma_path,
+        fingerprint=None,
     )

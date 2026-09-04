@@ -1,4 +1,5 @@
 import importlib
+import os
 from dataclasses import replace
 from datetime import UTC, datetime
 from itertools import count
@@ -13,10 +14,7 @@ import pytest
 
 pytestmark = pytest.mark.rag_retrieval_real
 RAG_EVAL_MANIFEST = (
-    Path(__file__).resolve().parents[2]
-    / "evals"
-    / "rag_retrieval"
-    / "manifest.json"
+    Path(__file__).resolve().parents[2] / "evals" / "rag_retrieval" / "manifest.json"
 )
 
 
@@ -73,12 +71,15 @@ class TestRagRuntimeEvidenceIntegration:
         self,
         monkeypatch: pytest.MonkeyPatch,
         runtime_paths,
+        request: pytest.FixtureRequest,
     ) -> None:
         monkeypatch.setenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:latest")
         _require_runtime_evidence_dependencies()
 
+        from app.inference.runtime import create_inference_runtime
+        from app.memory.chroma_store import EmbeddingFingerprint
         from app.memory.index_sync import MemoryIndexSync
-        from app.memory.embedder import embed_text
+        from app.memory.inference_client import MemoryInferenceEmbedder
         from app.memory.chroma_store import query_memories, upsert_memory_index_entry
         from app.memory.memory_policy import resolved_memory_policy
         from app.memory.persistence.approved_repository import ApprovedMemoryRepository
@@ -95,6 +96,12 @@ class TestRagRuntimeEvidenceIntegration:
         )
         from tests.unit.test_approved_memory_repository import _candidate, _context
 
+        inference_runtime = create_inference_runtime(dict(os.environ))
+        request.addfinalizer(inference_runtime.close)
+        embedder = MemoryInferenceEmbedder(
+            router=inference_runtime.router,
+            settings=inference_runtime.settings,
+        )
         importlib.import_module("app.backup_restore.service")
         character_id = f"miori{uuid4().hex[:8]}"
         content = "ユーザーは紅茶を好む。"
@@ -104,9 +111,7 @@ class TestRagRuntimeEvidenceIntegration:
         approved = ApprovedMemoryRepository(
             database_path=runtime_paths.persona_memory_sqlite_path,
             clock=lambda: datetime(2026, 8, 20, tzinfo=UTC),
-            uuid_factory=lambda: UUID(
-                f"00000000-0000-4000-8000-{next(ids):012d}"
-            ),
+            uuid_factory=lambda: UUID(f"00000000-0000-4000-8000-{next(ids):012d}"),
             outbox_uuid_factory=lambda: UUID(
                 f"10000000-0000-4000-8000-{next(ids):012d}"
             ),
@@ -125,14 +130,19 @@ class TestRagRuntimeEvidenceIntegration:
             ),
             chroma_path=runtime_paths.chroma_path,
             runtime_report_dir=runtime_paths.runtime_report_dir,
-            embedder=embed_text,
+            embedder=embedder,
+            embedding_provider_id=embedder.provider_id,
+            embedding_model_id=embedder.model_id,
             clock=lambda: datetime(2026, 8, 20, tzinfo=UTC),
         )
         assert not runtime_paths.chroma_path.exists()
 
         sync.reconcile_once()
 
-        query_embedding = embed_text("紅茶の好みは？")
+        query_embedding = embedder("紅茶の好みは？")
+        fingerprint = EmbeddingFingerprint(
+            embedder.provider_id, embedder.model_id, len(query_embedding)
+        )
         upsert_memory_index_entry(
             character_id=character_id,
             memory_id=str(saved.id),
@@ -145,12 +155,14 @@ class TestRagRuntimeEvidenceIntegration:
             occurred_at=saved.occurred_at.isoformat(),
             expires_at=None,
             chroma_path=runtime_paths.chroma_path,
+            fingerprint=fingerprint,
         )
         indexed = query_memories(
             character_id,
             query_embedding,
             n_results=5,
             chroma_path=runtime_paths.chroma_path,
+            fingerprint=fingerprint,
         )
         assert len(indexed) == 1
         classifier = MagicMock()
@@ -173,14 +185,12 @@ class TestRagRuntimeEvidenceIntegration:
             scanner=create_privacy_scanner(policy.privacy),
             classifier=classifier,
             approved_repository=approved,
+            embedder=embedder,
             chroma_path=runtime_paths.chroma_path,
             now=datetime(2026, 8, 20, tzinfo=UTC),
             timezone="Asia/Tokyo",
         )
 
         assert [
-            (memory.normalized_text, memory.raw_distance)
-            for memory in outcome.memories
-        ] == [
-            (content, indexed[0].raw_distance)
-        ]
+            (memory.normalized_text, memory.raw_distance) for memory in outcome.memories
+        ] == [(content, indexed[0].raw_distance)]

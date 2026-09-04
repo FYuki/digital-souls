@@ -43,16 +43,18 @@ from app.conversation_history.sqlite_lease import SQLiteLease, acquire_maintenan
 from app.conversation_history.wal_cleanup import ConversationWalCleanup
 from app.environment import iana_timezone_environment_value
 from app.llm import router as llm_router
-from app.inference import InferenceTarget
+from app.inference import InferenceCaller, InferenceTarget
 from app.inference.runtime import create_inference_runtime, target_model_id
 from app.memory.memory_policy import resolved_memory_policy
 from app.memory.admission.evaluator import create_rag_admission_evaluator
 from app.memory.admission_service import RagAdmissionService
-from app.memory.embedder import embed_text
+from app.memory.inference_client import (
+    MemoryInferenceEmbedder,
+    StructuredMemoryInferenceClient,
+)
 from app.memory.index_scheduler import MemoryIndexScheduler
 from app.memory.index_sync import MemoryIndexSync
 from app.memory.consolidation.config import resolve_memory_consolidation_settings
-from app.memory.consolidation.local_llm import require_local_ollama_base_url
 from app.memory.consolidation.planner import ConsolidationPlanner
 from app.memory.consolidation.privacy import ConsolidationPrivacyReviewer
 from app.memory.consolidation.scheduler import (
@@ -64,8 +66,6 @@ from app.memory.consolidation.service import MemoryConsolidationService
 from app.memory.formation.config import resolve_memory_formation_settings
 from app.memory.formation.contracts import MemoryFormationJob
 from app.memory.formation.extractor import EXTRACTOR_VERSION, MemoryCandidateExtractor
-from app.memory.formation.ollama_client import OllamaMemoryExtractorClient
-from app.llm.ollama_config import resolve_ollama_base_url
 from app.memory.formation.scheduler import MemoryFormationScheduler
 from app.memory.formation.worker import MemoryFormationWorker
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
@@ -351,12 +351,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             database_path=runtime_paths.persona_memory_sqlite_path,
             clock=clock,
         )
+        memory_embedder = MemoryInferenceEmbedder(
+            router=inference_runtime.router,
+            settings=inference_runtime.settings,
+        )
         memory_index_sync = MemoryIndexSync(
             approved_repository=approved_memory_repository,
             outbox_repository=outbox_repository,
             chroma_path=runtime_paths.chroma_path,
             runtime_report_dir=runtime_paths.runtime_report_dir,
-            embedder=embed_text,
+            embedder=memory_embedder,
+            embedding_provider_id=memory_embedder.provider_id,
+            embedding_model_id=memory_embedder.model_id,
             clock=clock,
         )
         temporary_record_repository = TemporaryProviderRecordRepository(
@@ -455,15 +461,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 extractor_version=EXTRACTOR_VERSION,
             )
             rag_admission_service_state_set = True
-            memory_extractor_client = OllamaMemoryExtractorClient(
-                model_id=model_settings.ollama_extractor_model
+            memory_extractor_client = StructuredMemoryInferenceClient(
+                router=inference_runtime.router,
+                settings=inference_runtime.settings,
+                caller=InferenceCaller.MEMORY_EXTRACTION,
+                target=InferenceTarget.MEMORY_EXTRACTION,
             )
-            consolidation_ollama_base_url = require_local_ollama_base_url(
-                resolve_ollama_base_url()
-            )
-            memory_consolidation_client = OllamaMemoryExtractorClient(
-                model_id=model_settings.ollama_extractor_model,
-                base_url=consolidation_ollama_base_url,
+            memory_consolidation_client = StructuredMemoryInferenceClient(
+                router=inference_runtime.router,
+                settings=inference_runtime.settings,
+                caller=InferenceCaller.MEMORY_CONSOLIDATION,
+                target=InferenceTarget.MEMORY_CONSOLIDATION,
             )
             memory_consolidation_classifier_client = OllamaClassifierClient(
                 router=inference_runtime.router,
@@ -517,7 +525,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     planner=ConsolidationPlanner(
                         client=memory_consolidation_client,
                         max_output_tokens=consolidation_settings.max_output_tokens,
-                        model_id=model_settings.ollama_extractor_model,
+                        model_id=target_model_id(
+                            inference_runtime.settings,
+                            InferenceTarget.MEMORY_CONSOLIDATION,
+                        ),
                         prompt_version=CONSOLIDATION_PROMPT_VERSION,
                         policy_version=policy.policy_version,
                     ),
@@ -529,7 +540,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     batch_size=consolidation_settings.batch_size,
                     llm_timeout_seconds=consolidation_settings.llm_timeout_seconds,
                     clock=clock,
-                    model_id=model_settings.ollama_extractor_model,
+                    model_id=target_model_id(
+                        inference_runtime.settings,
+                        InferenceTarget.MEMORY_CONSOLIDATION,
+                    ),
                     prompt_version=CONSOLIDATION_PROMPT_VERSION,
                     policy_version=policy.policy_version,
                     reprocess_interval_seconds=consolidation_settings.interval_seconds,
@@ -561,6 +575,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     privacy_scanner=privacy_scanner,
                     semantic_classifier=semantic_privacy_classifier,
                     approved_memory_repository=approved_memory_repository,
+                    memory_embedder=memory_embedder,
                     memory_formation_submitter=memory_formation_scheduler,
                     clock=clock,
                 ),

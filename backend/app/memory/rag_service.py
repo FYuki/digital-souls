@@ -1,5 +1,6 @@
 import logging
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -9,12 +10,12 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import httpx
 
 from app.memory.chroma_store import (
+    EmbeddingFingerprint,
     MemorySearchCandidate,
     MemorySearchResult,
     RetrievalMatchKind,
     query_memories,
 )
-from app.memory.embedder import embed_text
 from app.memory.memory_policy import MemoryPolicy, rag_service_policy
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
 from app.memory.persistence.contracts import (
@@ -61,6 +62,12 @@ class RetrievalOutcome:
     no_match: bool
 
 
+def embed_text(_text: str) -> list[float]:
+    """テスト互換用の未設定境界。productionは必ず依存を注入する。"""
+
+    raise RuntimeError("memory embedder is not configured")
+
+
 def retrieve_prompt_memories(
     character: str,
     user_message: str,
@@ -69,6 +76,7 @@ def retrieve_prompt_memories(
     scanner: PrivacyScanner,
     classifier: SemanticPrivacyClassifier,
     approved_repository: ApprovedMemoryRepository,
+    embedder: Callable[[str], list[float]] | None = None,
     chroma_path: Path,
     now: datetime,
     timezone: str,
@@ -109,11 +117,14 @@ def retrieve_prompt_memories(
                 ),
             )
         )
+        resolved_embedder = embed_text if embedder is None else embedder
+        embedding = resolved_embedder(user_message)
         candidates = query_memories(
             character,
-            embed_text(user_message),
+            embedding,
             n_results=ranking_policy.candidate_pool_size,
             chroma_path=chroma_path,
+            fingerprint=_embedding_fingerprint(resolved_embedder, embedding),
         )
         verified = _verified_candidates(
             candidates,
@@ -155,6 +166,16 @@ def retrieve_prompt_memories(
     except RAG_OPERATION_ERRORS as exc:
         logger.warning("RAG memory lookup failed: %s", exc.__class__.__name__)
         return RetrievalOutcome((), False)
+
+
+def _embedding_fingerprint(
+    embedder: Callable[[str], list[float]], embedding: list[float]
+) -> EmbeddingFingerprint | None:
+    provider_id = getattr(embedder, "provider_id", None)
+    model_id = getattr(embedder, "model_id", None)
+    if not isinstance(provider_id, str) or not isinstance(model_id, str):
+        return None
+    return EmbeddingFingerprint(provider_id, model_id, len(embedding))
 
 
 def _scan_blocks_retrieval(scan: object, policy: MemoryPolicy) -> bool:
