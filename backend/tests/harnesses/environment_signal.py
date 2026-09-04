@@ -96,8 +96,8 @@ profile["dependencies"] = {
         "mode": "real",
         "source": "managed",
         "baseUrl": "http://localhost:8000",
-        "readinessPath": "/",
-        "readinessUrl": "http://localhost:8000/",
+        "readinessPath": "/health/ready",
+        "readinessUrl": "http://localhost:8000/health/ready",
     },
 }
 up_command.resolve_and_write_profile = (

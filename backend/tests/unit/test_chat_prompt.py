@@ -37,10 +37,10 @@ def test_should_budget_prompt_from_runtime_context_not_model_maximum() -> None:
             "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "2",
             "CONVERSATION_HISTORY_TOKEN_LIMIT": "10",
             "USER_INPUT_TOKEN_LIMIT": "10",
-            "OLLAMA_RESPONSE_RESERVE_TOKENS": "3",
-            "OLLAMA_CONTEXT_TOKENS": "20",
             "LLM_CONTEXT_TOKEN_LIMIT": "100",
-        }
+        },
+        chat_context_tokens=20,
+        assistant_max_generation_tokens=3,
     )
 
     prompt_input = chat_prompt._build_prompt_input(
@@ -64,9 +64,9 @@ def test_should_coordinate_history_budget_and_existing_prompt_builder() -> None:
             "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "2",
             "CONVERSATION_HISTORY_TOKEN_LIMIT": "10",
             "USER_INPUT_TOKEN_LIMIT": "10",
-            "OLLAMA_RESPONSE_RESERVE_TOKENS": "3",
-            "OLLAMA_CONTEXT_TOKENS": "20",
-        }
+        },
+        chat_context_tokens=20,
+        assistant_max_generation_tokens=3,
     )
     history_session = _HistorySession(
         (
@@ -104,9 +104,9 @@ def test_should_rebuild_same_prompt_input_with_fresh_history_iterator() -> None:
             "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "2",
             "CONVERSATION_HISTORY_TOKEN_LIMIT": "10",
             "USER_INPUT_TOKEN_LIMIT": "10",
-            "OLLAMA_RESPONSE_RESERVE_TOKENS": "3",
-            "OLLAMA_CONTEXT_TOKENS": "20",
-        }
+        },
+        chat_context_tokens=20,
+        assistant_max_generation_tokens=3,
     )
     history_session = _HistorySession(
         (

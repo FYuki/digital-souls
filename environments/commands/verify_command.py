@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,13 @@ from profile_resolution import resolve_profile
 from service_registry import ServiceRegistry, create_service_registry
 from app.runtime_data_root import validate_existing_runtime_data_root
 from app.runtime_paths import resolve_runtime_paths
+
+
+def _target_model(derived: Mapping[str, object], target: str) -> str:
+    value = derived.get(f"INFERENCE_TARGET_{target}")
+    if not isinstance(value, str) or "/" not in value:
+        raise ValueError(f"INFERENCE_TARGET_{target} is required")
+    return value.split("/", 1)[1]
 
 
 def verify_environment(
@@ -31,8 +39,8 @@ def verify_environment(
             root_dir,
             runtime_paths,
             effective_profile=profile["effectiveProfile"],
-            ollama_model_name=derived["OLLAMA_CHAT_MODEL"],
-            ollama_classifier_model_name=derived["OLLAMA_CLASSIFIER_MODEL"],
+            ollama_model_name=_target_model(derived, "CHAT"),
+            ollama_classifier_model_name=_target_model(derived, "PRIVACY"),
             whisper_model_name=derived["WHISPER_MODEL"],
         )
     else:

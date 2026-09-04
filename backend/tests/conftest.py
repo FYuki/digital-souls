@@ -8,6 +8,10 @@ from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator, FormatChecker
 
 
+# テスト収集やapp.main importで開発者個人のbackend/.envを読み込まない。
+os.environ["PYTHON_DOTENV_DISABLED"] = "1"
+
+
 ENVIRONMENTS_DIR = Path(__file__).resolve().parents[2] / "environments"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 if str(ENVIRONMENTS_DIR) not in sys.path:
@@ -35,12 +39,35 @@ def _refuse_protected_runtime_data(repository_root: Path) -> None:
 
 
 @pytest.fixture(autouse=True)
-def conversation_history_database_path(tmp_path, monkeypatch) -> Path:
+def conversation_history_database_path(
+    tmp_path,
+    monkeypatch,
+    request: pytest.FixtureRequest,
+) -> Path:
     repository_root = Path(__file__).resolve().parents[2]
     _refuse_protected_runtime_data(repository_root)
     data_root = tmp_path / "runtime-data"
     monkeypatch.setenv("DS_ENVIRONMENT_ID", "test")
     monkeypatch.setenv("DS_DATA_DIR", str(data_root))
+    inference_environment = {
+        "INFERENCE_TARGET_CHAT": "ollama/gemma4:e4b",
+        "INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS": "7168",
+        "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS": "1024",
+        "INFERENCE_TARGET_PRIVACY": "ollama/gemma4:e4b",
+        "INFERENCE_TARGET_PRIVACY_MAX_INPUT_TOKENS": "7680",
+        "INFERENCE_TARGET_PRIVACY_MAX_OUTPUT_TOKENS": "512",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION": "ollama/gemma4:e4b",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_INPUT_TOKENS": "7680",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS": "512",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION": "ollama/gemma4:e4b",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_INPUT_TOKENS": "7680",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_OUTPUT_TOKENS": "512",
+        "INFERENCE_TARGET_EMBEDDING": "ollama/nomic-embed-text:latest",
+        "INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS": "8192",
+    }
+    if request.node.get_closest_marker("inference_real") is None:
+        for key, value in inference_environment.items():
+            monkeypatch.setenv(key, value)
     from app.runtime_data_root import initialize_runtime_data_root
     from app.runtime_paths import resolve_runtime_paths
 

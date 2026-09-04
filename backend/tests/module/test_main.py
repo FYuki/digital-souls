@@ -65,7 +65,6 @@ async def test_should_validate_model_settings_before_startup_side_effects(
     from app import main
 
     monkeypatch.setenv("OLLAMA_CONTEXT_TOKENS", "1024")
-    monkeypatch.setenv("OLLAMA_RESPONSE_RESERVE_TOKENS", "1024")
     memory_policy = patch.object(main, "resolved_memory_policy")
 
     with memory_policy as resolve_policy:
@@ -75,7 +74,7 @@ async def test_should_validate_model_settings_before_startup_side_effects(
 
     message = str(exc_info.value)
     assert "OLLAMA_CONTEXT_TOKENS" in message
-    assert "OLLAMA_RESPONSE_RESERVE_TOKENS" in message
+    assert "legacy inference setting" in message
     resolve_policy.assert_not_called()
 
 

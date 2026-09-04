@@ -721,7 +721,10 @@ def test_runtime_passes_schema_zero_temperature_and_configured_output_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     extractor_request = SequencedExtractorRequest([json.dumps({"candidates": []})])
-    monkeypatch.setenv("MEMORY_FORMATION_MAX_OUTPUT_TOKENS", "321")
+    monkeypatch.setenv("INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS", "321")
+    monkeypatch.setenv(
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_OPTIONS_JSON", '{"temperature":0}'
+    )
     monkeypatch.setattr(
         httpx.Client,
         "post",
@@ -738,7 +741,7 @@ def test_runtime_passes_schema_zero_temperature_and_configured_output_limit(
     )
     assert extractor_request.calls[0]["options"] == {
         "temperature": 0,
-        "num_ctx": 8192,
+        "num_ctx": 8001,
         "num_predict": 321,
     }
 

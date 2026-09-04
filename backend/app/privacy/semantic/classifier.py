@@ -301,7 +301,6 @@ def _inference_failure_reason(error: InferenceError) -> SemanticAssessmentReason
 
 
 # 移行期間のimport互換。実装はProvider非依存であり、#181で旧名を撤去する。
-OllamaSemanticPrivacyClassifier = InferenceSemanticPrivacyClassifier
 
 
 def _build_messages(text: str) -> tuple[dict[str, str], ...]:

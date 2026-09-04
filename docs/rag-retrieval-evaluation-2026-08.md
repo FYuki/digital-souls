@@ -12,10 +12,10 @@ metadataの正本はSQLiteであり、`character_id`、`provider_id=core`、`sta
 policy version、決定論的privacy scanを再検証する。Chroma metadataだけでは採用しない。
 
 `budget.rag`は新設せず既存のprompt入力上限を使う。標準設定では
-`OLLAMA_CONTEXT_TOKENS(8192) - ASSISTANT_MAX_GENERATION_TOKENS(1024) = 7168 token`であり、
+`INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS=7168`であり、
 region上限またはtotal上限を超えた場合はranking済みprefixを保持して下位から除外する。
 
-実連携評価は`nomic-embed-text:latest`を`resolve_ollama_embedding_model()`で解決し、実Chromaと
+実連携評価は`INFERENCE_TARGET_EMBEDDING`からModel IDを解決し、実Chromaと
 実Ollamaを使う。通常CIから分離し、`npm run eval:rag:real`で明示実行する。
 
 ## 決定的評価結果

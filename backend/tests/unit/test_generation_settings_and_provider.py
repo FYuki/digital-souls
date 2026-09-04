@@ -12,7 +12,6 @@ PROMPT_ENV_KEYS = (
     "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS",
     "CONVERSATION_HISTORY_TOKEN_LIMIT",
     "USER_INPUT_TOKEN_LIMIT",
-    "ASSISTANT_MAX_GENERATION_TOKENS",
     "LLM_CONTEXT_TOKEN_LIMIT",
 )
 _BACKEND_DIR = Path(__file__).parent.parent.parent
@@ -34,15 +33,13 @@ class TestModelSettings:
         lines = (_BACKEND_DIR / ".env.example").read_text().splitlines()
 
         assert {
-            "OLLAMA_CHAT_MODEL=gemma4:e4b",
-            "OLLAMA_CLASSIFIER_MODEL=gemma4:e4b",
             "WHISPER_MODEL=medium",
-            "OLLAMA_CONTEXT_TOKENS=8192",
-            "OLLAMA_RESPONSE_RESERVE_TOKENS=1024",
+            "INFERENCE_TARGET_CHAT=ollama/gemma4:e4b",
+            "INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS=7168",
+            "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS=1024",
             "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS=10",
             "CONVERSATION_HISTORY_TOKEN_LIMIT=4096",
             "USER_INPUT_TOKEN_LIMIT=8192",
-            "ASSISTANT_MAX_GENERATION_TOKENS=1024",
             "LLM_CONTEXT_TOKEN_LIMIT=32768",
         }.issubset(lines)
 
@@ -60,17 +57,19 @@ class TestModelSettings:
 
     def test_should_propagate_environment_overrides(self, monkeypatch: pytest.MonkeyPatch) -> None:
         values = {
-            "OLLAMA_CONTEXT_TOKENS": "7000",
             "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "3",
             "CONVERSATION_HISTORY_TOKEN_LIMIT": "1200",
             "USER_INPUT_TOKEN_LIMIT": "600",
-            "ASSISTANT_MAX_GENERATION_TOKENS": "700",
             "LLM_CONTEXT_TOKEN_LIMIT": "8000",
         }
         for key, value in values.items():
             monkeypatch.setenv(key, value)
 
-        config = _model_settings_module().resolve_model_settings(values)
+        config = _model_settings_module().resolve_model_settings(
+            values,
+            chat_context_tokens=7000,
+            assistant_max_generation_tokens=700,
+        )
 
         assert (
             config.max_completed_turns,
@@ -99,17 +98,13 @@ class TestModelSettings:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setenv("ASSISTANT_MAX_GENERATION_TOKENS", "1024")
-        monkeypatch.setenv("OLLAMA_CONTEXT_TOKENS", "1024")
         monkeypatch.setenv("LLM_CONTEXT_TOKEN_LIMIT", "1024")
 
-        with pytest.raises(ValueError, match="ASSISTANT_MAX_GENERATION_TOKENS"):
+        with pytest.raises(ValueError, match="output token limit"):
             _model_settings_module().resolve_model_settings(
-                {
-                    "ASSISTANT_MAX_GENERATION_TOKENS": "1024",
-                    "OLLAMA_CONTEXT_TOKENS": "1024",
-                    "LLM_CONTEXT_TOKEN_LIMIT": "1024",
-                }
+                {"LLM_CONTEXT_TOKEN_LIMIT": "1024"},
+                chat_context_tokens=1024,
+                assistant_max_generation_tokens=1024,
             )
 
 
@@ -129,7 +124,6 @@ class TestOllamaInputTokens:
         [
             ("app.llm.base", "LLMClient", "generate"),
             ("app.llm.ollama_client", "OllamaClient", "generate"),
-            ("app.llm.router", "_ClaudeClient", "generate"),
             ("app.llm.router", None, "generate_response"),
         ],
     )
@@ -228,24 +222,17 @@ class TestOllamaInputTokens:
 
         assert counting_payload["messages"] == generation_payload["messages"]
 
-    def test_router_should_delegate_count_and_generation_to_same_provider(self) -> None:
+    def test_router_should_fail_without_common_inference_runtime(self) -> None:
         from app.llm import router
         from tests.prompt_test_support import prompt_build_input, prompt_builder
 
         prompt = prompt_builder().build(prompt_build_input())
-        client = MagicMock()
-        client.count_input_tokens.return_value = 9
-        client.generate.return_value = "reply"
         from app.model_settings import resolve_model_settings
 
         settings = resolve_model_settings({})
-        with patch.object(router, "_create_llm_client", return_value=client):
-            counted = router.count_input_tokens(prompt.messages, settings=settings)
-            generated = router.generate_response(
+        with pytest.raises(RuntimeError, match="inference router"):
+            router.count_input_tokens(prompt.messages, settings=settings)
+        with pytest.raises(RuntimeError, match="inference router"):
+            router.generate_response(
                 prompt, max_output_tokens=321, settings=settings
             )
-
-        assert counted == 9
-        assert generated == "reply"
-        client.count_input_tokens.assert_called_once_with(prompt.messages)
-        client.generate.assert_called_once_with(prompt, max_output_tokens=321)

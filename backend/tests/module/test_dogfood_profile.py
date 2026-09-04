@@ -108,7 +108,7 @@ def test_should_validate_each_resolved_managed_endpoint_from_its_base_url(
     endpoint["port"] = port
     if endpoint_path != "readyGate":
         endpoint["readinessUrl"] = (
-            f"{base_url}/" if not base_url.endswith("/") else base_url
+            base_url.rstrip("/") + endpoint["readinessPath"]
         )
     if endpoint_path == "backend":
         report["derivedEnvironment"]["DS_BACKEND_ORIGIN"] = base_url

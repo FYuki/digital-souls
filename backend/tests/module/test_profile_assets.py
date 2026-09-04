@@ -539,7 +539,7 @@ def test_should_define_profile_dependency_contracts(
     ("dependency_name", "base_url", "readiness_path"),
     [
         ("frontend", "http://localhost:5173", "/"),
-        ("backend", "http://localhost:8000", "/"),
+        ("backend", "http://localhost:8000", "/health/ready"),
         ("ollama", "http://localhost:11434", "/api/tags"),
         ("voicevox", "http://127.0.0.1:50021", "/version"),
     ],

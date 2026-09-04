@@ -38,6 +38,18 @@ def _text_request() -> TextGenerationRequest:
     )
 
 
+def test_probe_uses_model_metadata_without_generation() -> None:
+    client = MagicMock(spec=httpx.Client)
+    client.post.return_value = _response({"digest": "sha256:" + "a" * 64})
+    adapter = OllamaAdapter(base_url="http://127.0.0.1:11434", http_client=client)
+
+    adapter.probe("gemma4:e4b", timeout_seconds=3.0)
+
+    call = client.post.call_args
+    assert call.args[0] == "http://127.0.0.1:11434/api/show"
+    assert call.kwargs["json"] == {"model": "gemma4:e4b"}
+
+
 def test_generate_text_applies_target_limits_and_returns_provider_usage() -> None:
     client = MagicMock(spec=httpx.Client)
     client.post.return_value = _response(

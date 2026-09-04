@@ -80,7 +80,7 @@ def test_should_resolve_policy_once_and_inject_same_instance_at_startup(
     assert history_service is not None
     resolve_chat.assert_called_once()
     assert resolve_chat.call_args.args[0] is policy
-    assert resolve_chat.call_args.args[1].ollama_chat_model == "gemma4:e4b"
+    assert resolve_chat.call_args.args[1].assistant_max_generation_tokens == 1024
 
 
 def test_should_initialize_privacy_even_when_rag_is_disabled(

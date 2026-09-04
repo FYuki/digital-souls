@@ -10,6 +10,7 @@
     "test:unit": "backend/.venv/bin/python -m pytest backend/tests/unit && npm --prefix frontend run test:unit",
     "test:module": "backend/.venv/bin/python -m pytest backend/tests/module && npm --prefix frontend run test:module",
     "test:integration:backend": "backend/.venv/bin/python -m pytest backend/tests/integration",
+    "test:integration:inference": "backend/.venv/bin/python -m pytest -s backend/tests/integration/test_inference_real_service_acceptance_integration.py",
     "test:e2e:mocked": "npm --prefix frontend run test:e2e:mocked",
     "test:integration:text": "npm --prefix frontend run test:integration:text",
     "test:integration:voice": "npm --prefix frontend run test:integration:voice",

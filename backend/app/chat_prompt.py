@@ -75,7 +75,7 @@ def _build_prompt_input(
         token_counter,
     )
     input_limit = (
-        config.ollama_context_tokens - config.assistant_max_generation_tokens
+        config.chat_context_tokens - config.assistant_max_generation_tokens
     )
     return PromptBuildInput(
         character=character,
@@ -188,7 +188,7 @@ def _input_limit_error(
     limit = error.limit
     if error.region == "total":
         used += config.assistant_max_generation_tokens
-        limit = config.ollama_context_tokens
+        limit = config.chat_context_tokens
     return chat_service.ChatInputLimitError(
         region=error.region,
         used=used,

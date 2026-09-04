@@ -138,6 +138,11 @@ class OpenAICodexAdapter:
     def close(self) -> None:
         return None
 
+    def probe(self, model_id: str, *, timeout_seconds: float) -> None:
+        del model_id
+        self.validate_runtime(timeout_seconds=timeout_seconds)
+        self.login_status(timeout_seconds=timeout_seconds)
+
     def generate_text(self, request: TextGenerationRequest) -> ProviderTextResult:
         self.login_status(timeout_seconds=min(request.timeout_seconds, 10.0))
         prompt = self._prompt(request.messages)

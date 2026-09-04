@@ -7,8 +7,6 @@ from collections.abc import Mapping
 from pathlib import Path
 from urllib.request import urlopen
 
-from app.model_settings import OLLAMA_MODEL_NAME
-
 from adapters.base import (
     AdapterOperationError,
     Check,
@@ -35,8 +33,11 @@ def _fetch_json(url: str) -> dict[str, object]:
     return value
 
 
+DEFAULT_OLLAMA_MODEL_NAME = "gemma4:e4b"
+
+
 def verify_required_model(
-    payload: Mapping[str, object], model_name: str = OLLAMA_MODEL_NAME
+    payload: Mapping[str, object], model_name: str = DEFAULT_OLLAMA_MODEL_NAME
 ) -> None:
     models = payload.get("models")
     names = {
@@ -58,7 +59,7 @@ class OllamaAdapter(ProcessServiceOperations):
         root_dir: Path,
         runner: CommandRunner | None = None,
         *,
-        model_name: str = OLLAMA_MODEL_NAME,
+        model_name: str = DEFAULT_OLLAMA_MODEL_NAME,
         classifier_model_name: str | None = None,
     ) -> None:
         super().__init__(root_dir, "ollama", runner)

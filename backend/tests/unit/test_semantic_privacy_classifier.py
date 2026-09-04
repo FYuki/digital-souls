@@ -51,9 +51,9 @@ def _response(
 
 def _classifier(client: FakeClassifierClient):
     from app.memory.memory_policy import resolved_memory_policy
-    from app.privacy.semantic.classifier import OllamaSemanticPrivacyClassifier
+    from app.privacy.semantic.classifier import InferenceSemanticPrivacyClassifier
 
-    return OllamaSemanticPrivacyClassifier(
+    return InferenceSemanticPrivacyClassifier(
         client=client,
         privacy_policy=resolved_memory_policy().privacy,
         model_id="gemma4:e4b",
@@ -278,13 +278,18 @@ def test_classifier_rejects_internally_inconsistent_enum_combinations(
 
 
 def test_model_not_loaded_is_fail_closed() -> None:
+    from app.inference import InferenceError, InferenceErrorCategory
     from app.privacy.semantic.contracts import QUERY_GATE
-    from app.privacy.semantic.ollama_classifier_client import (
-        OllamaModelNotLoadedError,
-    )
 
     assessment = _classifier(
-        FakeClassifierClient([OllamaModelNotLoadedError()])
+        FakeClassifierClient(
+            [
+                InferenceError(
+                    InferenceErrorCategory.MODEL_NOT_FOUND,
+                    retryable=False,
+                )
+            ]
+        )
     ).classify(SENSITIVE_TEXT, QUERY_GATE)
 
     assert assessment.classification.value == "ABSTAIN"
@@ -352,7 +357,7 @@ def test_admission_retries_only_up_to_its_bound_and_uses_exponential_backoff(
 
 def test_digest_lookup_failure_is_fail_closed_and_recovers_lazily() -> None:
     from app.memory.memory_policy import resolved_memory_policy
-    from app.privacy.semantic.classifier import OllamaSemanticPrivacyClassifier
+    from app.privacy.semantic.classifier import InferenceSemanticPrivacyClassifier
     from app.privacy.semantic.contracts import QUERY_GATE
 
     digest_outcomes: list[str | BaseException] = [
@@ -367,7 +372,7 @@ def test_digest_lookup_failure_is_fail_closed_and_recovers_lazily() -> None:
         return outcome
 
     client = FakeClassifierClient([_response()])
-    classifier = OllamaSemanticPrivacyClassifier(
+    classifier = InferenceSemanticPrivacyClassifier(
         client=client,
         privacy_policy=resolved_memory_policy().privacy,
         model_id="gemma4:e4b",

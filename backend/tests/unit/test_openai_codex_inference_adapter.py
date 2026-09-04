@@ -138,6 +138,24 @@ def _request() -> TextGenerationRequest:
     )
 
 
+def test_probe_validates_runtime_and_subscription_without_inference(
+    tmp_path: Path,
+) -> None:
+    runner = RecordingRunner()
+    adapter = _adapter(tmp_path, runner)
+
+    adapter.probe("gpt-5.6-sol", timeout_seconds=2.0)
+
+    arguments = [call["arguments"] for call in runner.calls]
+    assert arguments == [
+        ("/usr/bin/codex", "--version"),
+        ("/usr/bin/codex", "exec", "--help"),
+        ("/usr/bin/codex", "features", "list"),
+        ("/usr/bin/codex", "login", "status"),
+    ]
+    assert all(call["input_text"] is None for call in runner.calls)
+
+
 def test_generate_text_enforces_stateless_tool_free_isolation(
     tmp_path: Path,
 ) -> None:

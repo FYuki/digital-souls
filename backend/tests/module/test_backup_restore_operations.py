@@ -291,7 +291,9 @@ async def test_schema_gate_01_backup_failure_prevents_schema_initialization(
     initialize_runtime_data_root(paths, repository_root)
     initialize_schema = Mock(side_effect=AssertionError("migration must not start"))
     backup_gate = Mock(side_effect=RuntimeError("pre-migration backup failed"))
-    monkeypatch.setattr(main, "resolve_model_settings", lambda *_args: object())
+    monkeypatch.setattr(
+        main, "resolve_model_settings", lambda *_args, **_kwargs: object()
+    )
     monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
     monkeypatch.setattr(main, "initialize_runtime_data_root", lambda *_args: None)
     monkeypatch.setattr(main, "ensure_schema_backup_gate", backup_gate)
@@ -320,7 +322,9 @@ async def test_sqlite_lease_01_stops_startup_before_sqlite_open_during_maintenan
     repository_root = Path(__file__).resolve().parents[3]
     paths = initialized_runtime(tmp_path, repository_root, name="runtime")
     inspect_schema = Mock(side_effect=AssertionError("SQLite must not be opened"))
-    monkeypatch.setattr(main, "resolve_model_settings", lambda *_args: object())
+    monkeypatch.setattr(
+        main, "resolve_model_settings", lambda *_args, **_kwargs: object()
+    )
     monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
     monkeypatch.setattr(main, "initialize_runtime_data_root", lambda *_args: None)
     monkeypatch.setattr(main, "inspect_conversation_history_schema", inspect_schema)
@@ -556,7 +560,9 @@ async def test_should_initialize_schema_only_after_real_gate_backup_and_verify(
     monkeypatch.setenv("DOGFOOD_BACKUP_DIR", str(tmp_path / "backups"))
     monkeypatch.setenv("DOGFOOD_BACKUP_RETENTION_COUNT", "2")
     monkeypatch.setenv("DOGFOOD_BACKUP_AUTHENTICATION_KEY", "ab" * 32)
-    monkeypatch.setattr(main, "resolve_model_settings", lambda *_args: object())
+    monkeypatch.setattr(
+        main, "resolve_model_settings", lambda *_args, **_kwargs: object()
+    )
     monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
     monkeypatch.setattr(main, "initialize_runtime_data_root", lambda *_args: None)
     monkeypatch.setattr(main, "create_backup", create)
@@ -622,7 +628,9 @@ async def test_should_restore_verified_generation_when_schema_initialization_fai
     monkeypatch.setenv("DOGFOOD_BACKUP_DIR", str(tmp_path / "backups"))
     monkeypatch.setenv("DOGFOOD_BACKUP_RETENTION_COUNT", "2")
     monkeypatch.setenv("DOGFOOD_BACKUP_AUTHENTICATION_KEY", "ab" * 32)
-    monkeypatch.setattr(main, "resolve_model_settings", lambda *_args: object())
+    monkeypatch.setattr(
+        main, "resolve_model_settings", lambda *_args, **_kwargs: object()
+    )
     monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
     monkeypatch.setattr(main, "initialize_runtime_data_root", lambda *_args: None)
     monkeypatch.setattr(main, "create_backup", create_spy)
@@ -700,7 +708,9 @@ async def test_should_stop_startup_when_schema_rollback_fails(
     monkeypatch.setenv("DOGFOOD_BACKUP_DIR", str(tmp_path / "backups"))
     monkeypatch.setenv("DOGFOOD_BACKUP_RETENTION_COUNT", "2")
     monkeypatch.setenv("DOGFOOD_BACKUP_AUTHENTICATION_KEY", "ab" * 32)
-    monkeypatch.setattr(main, "resolve_model_settings", lambda *_args: object())
+    monkeypatch.setattr(
+        main, "resolve_model_settings", lambda *_args, **_kwargs: object()
+    )
     monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
     monkeypatch.setattr(main, "initialize_runtime_data_root", lambda *_args: None)
     monkeypatch.setattr(
@@ -747,7 +757,9 @@ async def test_should_stop_before_schema_initializer_when_real_gate_operation_fa
     monkeypatch.setenv("DOGFOOD_BACKUP_DIR", str(tmp_path / "backups"))
     monkeypatch.setenv("DOGFOOD_BACKUP_RETENTION_COUNT", "2")
     monkeypatch.setenv("DOGFOOD_BACKUP_AUTHENTICATION_KEY", "ab" * 32)
-    monkeypatch.setattr(main, "resolve_model_settings", lambda *_args: object())
+    monkeypatch.setattr(
+        main, "resolve_model_settings", lambda *_args, **_kwargs: object()
+    )
     monkeypatch.setattr(main, "resolve_runtime_paths", lambda *_args: paths)
     monkeypatch.setattr(main, "initialize_runtime_data_root", lambda *_args: None)
     monkeypatch.setattr(main, "create_backup", create)

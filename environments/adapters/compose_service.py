@@ -30,6 +30,8 @@ IMMUTABLE_GHCR_IMAGE = re.compile(
 BACKEND_ENV_PREFIXES = (
     "DS_",
     "OLLAMA_",
+    "INFERENCE_",
+    "OPENAI_",
     "VOICEVOX_",
     "LIVEKIT_",
     "RAG_",

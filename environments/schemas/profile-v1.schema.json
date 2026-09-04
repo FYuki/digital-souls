@@ -203,7 +203,7 @@
         "mode": { "const": "real" },
         "source": { "const": "managed" },
         "baseUrl": { "$ref": "#/$defs/managedOrigin" },
-        "readinessPath": { "const": "/" },
+        "readinessPath": { "const": "/health/ready" },
         "reload": { "type": "boolean" }
       }
     },

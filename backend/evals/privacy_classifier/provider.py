@@ -7,9 +7,10 @@ import os
 import time
 
 from app.memory.memory_policy import resolved_memory_policy
-from app.model_settings import resolve_model_settings
+from app.inference import InferenceTarget
+from app.inference.runtime import create_inference_runtime
 from app.privacy.semantic.classifier import (
-    OllamaSemanticPrivacyClassifier,
+    InferenceSemanticPrivacyClassifier,
     SemanticClassifierClient,
 )
 from app.privacy.semantic.contracts import (
@@ -17,7 +18,7 @@ from app.privacy.semantic.contracts import (
     QUERY_GATE,
     SemanticClassifierCallProfile,
 )
-from app.privacy.semantic.ollama_classifier_client import OllamaClassifierClient
+from app.privacy.semantic.inference_client import InferenceSemanticClassifierClient
 
 
 PROFILES = {
@@ -43,7 +44,7 @@ class _StubClassifierClient:
             }
         )
 
-def _classifier() -> OllamaSemanticPrivacyClassifier:
+def _classifier() -> InferenceSemanticPrivacyClassifier:
     policy = resolved_memory_policy()
     client: SemanticClassifierClient
     if os.environ.get("PRIVACY_EVAL_STUB") == "1":
@@ -51,15 +52,26 @@ def _classifier() -> OllamaSemanticPrivacyClassifier:
         model_id = "semantic-privacy-eval-stub"
         model_digest = "sha256:semantic-privacy-eval-stub"
     else:
-        settings = resolve_model_settings(os.environ)
-        real_client = OllamaClassifierClient(
-            model_id=settings.ollama_classifier_model
+        runtime = create_inference_runtime(os.environ)
+        target = runtime.settings.target(InferenceTarget.PRIVACY)
+        if target.reference.provider_id != "ollama":
+            runtime.close()
+            raise ValueError("privacy evaluation requires the Ollama provider")
+        real_client = InferenceSemanticClassifierClient(
+            router=runtime.router,
+            settings=runtime.settings,
+            model_digest_resolver=lambda model_id, timeout_seconds: (
+                runtime.ollama_adapter.resolve_model_digest(
+                    model_id,
+                    timeout_seconds=timeout_seconds,
+                )
+            ),
         )
-        model_id = settings.ollama_classifier_model
-        model_digest = real_client.resolve_model_digest()
+        model_id = target.reference.model_id
+        model_digest = real_client.resolve_model_digest(timeout_seconds=10.0)
         client = real_client
-        atexit.register(real_client.close)
-    return OllamaSemanticPrivacyClassifier(
+        atexit.register(runtime.close)
+    return InferenceSemanticPrivacyClassifier(
         client=client,
         privacy_policy=policy.privacy,
         model_id=model_id,

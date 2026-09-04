@@ -50,6 +50,10 @@ class OllamaAdapter:
         if self._owns_http_client:
             self._http_client.close()
 
+    def probe(self, model_id: str, *, timeout_seconds: float) -> None:
+        """生成を行わずendpoint到達性とmodel存在を確認する。"""
+        self.resolve_model_digest(model_id, timeout_seconds=timeout_seconds)
+
     def generate_text(self, request: TextGenerationRequest) -> ProviderTextResult:
         response = self._post_chat(request)
         body = self._response_object(response)

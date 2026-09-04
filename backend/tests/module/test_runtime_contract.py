@@ -77,7 +77,7 @@ class TestRuntimeConfiguration:
     def test_env_example_declares_ollama_embedding_model(self):
         lines = (_BACKEND_DIR / ".env.example").read_text().splitlines()
 
-        assert "OLLAMA_EMBEDDING_MODEL=nomic-embed-text:latest" in lines
+        assert "INFERENCE_TARGET_EMBEDDING=ollama/nomic-embed-text:latest" in lines
 
     def test_env_example_declares_rag_enabled_switch(self):
         lines = (_BACKEND_DIR / ".env.example").read_text().splitlines()
@@ -538,7 +538,7 @@ class TestRuntimeConfiguration:
             "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "4",
             "CONVERSATION_HISTORY_TOKEN_LIMIT": "1300",
             "USER_INPUT_TOKEN_LIMIT": "650",
-            "ASSISTANT_MAX_GENERATION_TOKENS": "750",
+            "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS": "750",
             "LLM_CONTEXT_TOKEN_LIMIT": "9000",
         }
         for key, value in environment.items():

@@ -148,9 +148,11 @@ def _validate_mode_source(name: str, dependency: Dependency, path: str) -> None:
     elif mode == "real" and source == "managed":
         if name in {"frontend", "backend"}:
             resolve_managed_http_origin(dependency["baseUrl"], f"{path}.baseUrl")
-        if dependency["readinessPath"] != "/":
+        expected_readiness_path = "/health/ready" if name == "backend" else "/"
+        if dependency["readinessPath"] != expected_readiness_path:
             raise ProfileError(
-                f"{path}.readinessPath must be / when source is managed"
+                f"{path}.readinessPath must be {expected_readiness_path} "
+                "when source is managed"
             )
     if name == "backend" and source == "managed":
         if not isinstance(dependency.get("reload"), bool):

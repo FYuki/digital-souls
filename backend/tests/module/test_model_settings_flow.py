@@ -14,12 +14,21 @@ from tests.environment_test_support import (
 )
 
 MODEL_ENVIRONMENT = {
-    "OLLAMA_CHAT_MODEL": "profile-chat:12b",
-    "OLLAMA_CLASSIFIER_MODEL": "profile-classifier:4b",
-    "OLLAMA_EXTRACTOR_MODEL": "profile-extractor:4b",
     "WHISPER_MODEL": "large-v3",
-    "OLLAMA_CONTEXT_TOKENS": "12288",
-    "OLLAMA_RESPONSE_RESERVE_TOKENS": "1536",
+    "INFERENCE_TARGET_CHAT": "ollama/profile-chat:12b",
+    "INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS": "10752",
+    "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS": "1536",
+    "INFERENCE_TARGET_PRIVACY": "ollama/profile-classifier:4b",
+    "INFERENCE_TARGET_PRIVACY_MAX_INPUT_TOKENS": "11776",
+    "INFERENCE_TARGET_PRIVACY_MAX_OUTPUT_TOKENS": "512",
+    "INFERENCE_TARGET_MEMORY_EXTRACTION": "ollama/profile-extractor:4b",
+    "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_INPUT_TOKENS": "11776",
+    "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS": "512",
+    "INFERENCE_TARGET_MEMORY_CONSOLIDATION": "ollama/profile-extractor:4b",
+    "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_INPUT_TOKENS": "11776",
+    "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_OUTPUT_TOKENS": "512",
+    "INFERENCE_TARGET_EMBEDDING": "ollama/nomic-embed-text:latest",
+    "INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS": "12288",
     "CONVERSATION_HISTORY_MAX_COMPLETED_TURNS": "6",
     "CONVERSATION_HISTORY_TOKEN_LIMIT": "3000",
     "USER_INPUT_TOKEN_LIMIT": "1000",
@@ -40,19 +49,14 @@ def test_should_resolve_profile_overrides_into_canonical_child_environment() -> 
 
     derived = report["derivedEnvironment"]
     assert {key: derived[key] for key in MODEL_ENVIRONMENT} == MODEL_ENVIRONMENT
-    assert derived["ASSISTANT_MAX_GENERATION_TOKENS"] == "1536"
 
 
-def test_should_emit_model_defaults_for_profile_when_overrides_are_absent() -> None:
+def test_should_not_synthesize_infrastructure_dependent_targets() -> None:
     report = _resolve_profile({"DS_PROFILE": "integration-text"})
 
     derived = report["derivedEnvironment"]
-    assert derived["OLLAMA_CHAT_MODEL"] == "gemma4:e4b"
-    assert derived["OLLAMA_CLASSIFIER_MODEL"] == "gemma4:e4b"
-    assert derived["OLLAMA_EXTRACTOR_MODEL"] == "gemma4:e4b"
     assert derived["WHISPER_MODEL"] == "medium"
-    assert derived["OLLAMA_CONTEXT_TOKENS"] == "8192"
-    assert derived["OLLAMA_RESPONSE_RESERVE_TOKENS"] == "1024"
+    assert not any(key.startswith("INFERENCE_TARGET_") for key in derived)
 
 
 def test_should_export_all_model_keys_and_unset_them_when_switching_to_mock_backend(
@@ -114,14 +118,12 @@ def test_should_reject_invalid_model_settings_before_writing_resolved_values() -
         _resolve_profile(
             {
                 "DS_PROFILE": "integration-text",
-                "OLLAMA_CONTEXT_TOKENS": "1024",
-                "OLLAMA_RESPONSE_RESERVE_TOKENS": "1024",
+                "OLLAMA_CHAT_MODEL": "legacy:latest",
             },
         )
 
     message = str(exc_info.value)
-    assert "OLLAMA_CONTEXT_TOKENS" in message
-    assert "OLLAMA_RESPONSE_RESERVE_TOKENS" in message
+    assert "legacy inference setting" in message
 
 
 def test_should_route_profile_ollama_model_to_readiness_validation(
@@ -134,7 +136,7 @@ def test_should_route_profile_ollama_model_to_readiness_validation(
     monkeypatch.setattr(
         ollama,
         "_fetch_json",
-        lambda _url: {"models": [{"name": MODEL_ENVIRONMENT["OLLAMA_CHAT_MODEL"]}]},
+        lambda _url: {"models": [{"name": "profile-chat:12b"}]},
     )
     runtime_paths = resolved_runtime_paths(tmp_path)
     report = _resolve_profile(
@@ -144,7 +146,7 @@ def test_should_route_profile_ollama_model_to_readiness_validation(
     registry = create_service_registry(
         tmp_path,
         runtime_paths,
-        ollama_model_name=derived["OLLAMA_CHAT_MODEL"],
+        ollama_model_name=derived["INFERENCE_TARGET_CHAT"].split("/", 1)[1],
         whisper_model_name=derived["WHISPER_MODEL"],
     )
 
@@ -170,7 +172,7 @@ def test_should_not_route_external_whisper_model_to_backend_cache_check(
     registry = create_service_registry(
         tmp_path,
         runtime_paths,
-        ollama_model_name=derived["OLLAMA_CHAT_MODEL"],
+        ollama_model_name=derived["INFERENCE_TARGET_CHAT"].split("/", 1)[1],
         whisper_model_name=derived["WHISPER_MODEL"],
     )
 
@@ -216,7 +218,7 @@ def test_should_validate_but_not_prepare_the_profile_model_for_external_ollama(
         tmp_path,
         runtime_paths,
         runner,
-        ollama_model_name=derived["OLLAMA_CHAT_MODEL"],
+        ollama_model_name=derived["INFERENCE_TARGET_CHAT"].split("/", 1)[1],
         whisper_model_name=derived["WHISPER_MODEL"],
     )
     monkeypatch.setattr(
@@ -232,7 +234,7 @@ def test_should_validate_but_not_prepare_the_profile_model_for_external_ollama(
         lambda url, **_options: ReadinessResult(url, 1, 0.001, "ready"),
     )
     models = (
-        [{"name": MODEL_ENVIRONMENT["OLLAMA_CHAT_MODEL"]}]
+        [{"name": "profile-chat:12b"}]
         if model_is_available
         else [{"name": "other:latest"}]
     )
@@ -293,7 +295,7 @@ def test_should_not_prepare_external_whisper_model_in_backend(tmp_path: Path) ->
         tmp_path,
         runtime_paths,
         runner,
-        ollama_model_name=derived["OLLAMA_CHAT_MODEL"],
+        ollama_model_name=derived["INFERENCE_TARGET_CHAT"].split("/", 1)[1],
         whisper_model_name=derived["WHISPER_MODEL"],
     )
 

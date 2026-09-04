@@ -5,55 +5,45 @@ from pathlib import Path
 
 import pytest
 
+from app.inference.config import reject_legacy_inference_environment
 from app.inference.runtime import (
     create_inference_runtime,
-    transition_inference_environment,
 )
 
 
 def _target_environment() -> dict[str, str]:
-    return transition_inference_environment({})
+    return {
+        "INFERENCE_TARGET_CHAT": "ollama/gemma4:e4b",
+        "INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS": "7168",
+        "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS": "1024",
+        "INFERENCE_TARGET_PRIVACY": "ollama/gemma4:e4b",
+        "INFERENCE_TARGET_PRIVACY_MAX_INPUT_TOKENS": "7680",
+        "INFERENCE_TARGET_PRIVACY_MAX_OUTPUT_TOKENS": "512",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION": "ollama/gemma4:e4b",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_INPUT_TOKENS": "7680",
+        "INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS": "512",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION": "ollama/gemma4:e4b",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_INPUT_TOKENS": "7680",
+        "INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_OUTPUT_TOKENS": "512",
+        "INFERENCE_TARGET_EMBEDDING": "ollama/nomic-embed-text:latest",
+        "INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS": "8192",
+    }
 
 
-def test_legacy_settings_map_to_fixed_targets_with_deprecation_warning(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    caplog.set_level(logging.WARNING)
-
-    result = transition_inference_environment(
-        {
-            "OLLAMA_CHAT_MODEL": "chat:4b",
-            "OLLAMA_CLASSIFIER_MODEL": "privacy:4b",
-            "OLLAMA_EXTRACTOR_MODEL": "memory:12b",
-            "OLLAMA_EMBEDDING_MODEL": "embed:latest",
-            "OLLAMA_CONTEXT_TOKENS": "8192",
-            "OLLAMA_RESPONSE_RESERVE_TOKENS": "1024",
-        }
-    )
-
-    assert result["INFERENCE_TARGET_CHAT"] == "ollama/chat:4b"
-    assert result["INFERENCE_TARGET_PRIVACY"] == "ollama/privacy:4b"
-    assert result["INFERENCE_TARGET_MEMORY_EXTRACTION"] == "ollama/memory:12b"
-    assert result["INFERENCE_TARGET_MEMORY_CONSOLIDATION"] == "ollama/memory:12b"
-    assert result["INFERENCE_TARGET_EMBEDDING"] == "ollama/embed:latest"
-    assert result["INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS"] == "7168"
-    assert "deprecated" in caplog.text
-
-
-def test_new_target_settings_are_not_rewritten() -> None:
-    environment = {"INFERENCE_TARGET_CHAT": "ollama/custom/model"}
-
-    assert transition_inference_environment(environment) == environment
-
-
-def test_new_and_legacy_settings_are_rejected_even_when_equivalent() -> None:
-    with pytest.raises(ValueError, match="must not be configured together"):
-        transition_inference_environment(
-            {
-                "INFERENCE_TARGET_CHAT": "ollama/gemma4:e4b",
-                "OLLAMA_CHAT_MODEL": "gemma4:e4b",
-            }
-        )
+@pytest.mark.parametrize(
+    "legacy_key",
+    [
+        "OLLAMA_CHAT_MODEL",
+        "OLLAMA_CLASSIFIER_MODEL",
+        "OLLAMA_EXTRACTOR_MODEL",
+        "OLLAMA_EMBEDDING_MODEL",
+        "OLLAMA_CONTEXT_TOKENS",
+        "OLLAMA_RESPONSE_RESERVE_TOKENS",
+    ],
+)
+def test_legacy_inference_settings_are_always_rejected(legacy_key: str) -> None:
+    with pytest.raises(ValueError, match=f"forbidden: {legacy_key}"):
+        reject_legacy_inference_environment({legacy_key: "legacy-value"})
 
 
 def test_ollama_only_runtime_does_not_require_openai_credentials() -> None:

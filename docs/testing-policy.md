@@ -59,6 +59,7 @@ Visual Viewport縮小、立ち絵未設定・取得失敗を検証する。PC右
 npm run test:unit
 npm run test:module
 npm run test:integration:backend
+npm run test:integration:inference
 npm run test:e2e:mocked
 npm run test:integration:text
 npm run test:integration:voice
@@ -70,6 +71,7 @@ npm run build
 ```
 
 `npm run test:integration:backend` は ChromaDB パッケージ、Ollama、`nomic-embed-text:latest` モデルを必要とする。
+`npm run test:integration:inference`は`RUN_INFERENCE_REAL_SERVICE_TESTS=true`を明示した場合だけ実行し、`INFERENCE_ACCEPTANCE_PROVIDER`で1つのProviderを選ぶ。通常CIではskipし、#181完了時はOllama、OpenAI API、Codex runtimeを個別に実行する。証跡の正本は#181のIssueコメントとし、実行方法と記載項目は[`inference-operations.md`](inference-operations.md)に従う。
 音声品質の指標、clock、artifact schema、WebSocket baseline条件は
 [`voice-quality-measurement.md`](voice-quality-measurement.md) を参照する。
 
