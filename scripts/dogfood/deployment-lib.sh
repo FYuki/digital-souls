@@ -2,7 +2,7 @@
 
 DOGFOOD_DEPLOYMENT_RETENTION=20
 DOGFOOD_MANIFEST_GENERATION_ATTEMPTS=16
-DOGFOOD_DEPLOYMENT_CONTRACT_MIGRATION_SCHEMA=1
+DOGFOOD_DEPLOYMENT_CONTRACT_MIGRATION_SCHEMA=2
 
 dogfood_require_root() {
   if [ "$(id -u)" -eq 0 ]; then
@@ -337,7 +337,7 @@ dogfood_write_active_images() (
   prepared=
 )
 
-dogfood_archive_legacy_deployment_manifests() {
+dogfood_archive_pre_migration_manifests() {
   local from_commit=$1
   local target_commit=$2
   python3 - "$DOGFOOD_STATE_DIR/deployments" "$from_commit" "$target_commit" <<'PYTHON'
@@ -353,21 +353,9 @@ from_commit, target_commit = sys.argv[2:]
 commit_pattern = re.compile(r"^[0-9a-f]{40}$")
 if commit_pattern.fullmatch(from_commit) is None or commit_pattern.fullmatch(target_commit) is None:
     raise SystemExit(2)
-archive_name = f"legacy-v0-{from_commit[:12]}-to-{target_commit[:12]}"
+archive_name = f"pre-migration-{from_commit[:12]}-to-{target_commit[:12]}"
 archive = deployments / archive_name
 expected_owner = os.geteuid()
-
-if archive.exists():
-    archive_status = archive.stat(follow_symlinks=False)
-    if (
-        not stat.S_ISDIR(archive_status.st_mode)
-        or archive_status.st_uid != expected_owner
-        or stat.S_IMODE(archive_status.st_mode) != 0o750
-    ):
-        print("ERROR: legacy deployment archiveが安全なdirectoryではありません", file=sys.stderr)
-        raise SystemExit(2)
-else:
-    archive.mkdir(mode=0o750)
 
 legacy_keys = {
     "previousCommit",
@@ -377,8 +365,14 @@ legacy_keys = {
     "backupId",
     "deployedAt",
 }
+current_keys = legacy_keys | {"images"}
+image_keys = {"backend", "frontend", "whisper"}
+image_pattern = re.compile(
+    r"^ghcr\.io/[a-z0-9](?:[a-z0-9._-]*/)+"
+    r"[a-z0-9][a-z0-9._-]*@sha256:[0-9a-f]{64}$"
+)
 
-def read_legacy_manifest(path: Path) -> bytes:
+def read_manifest(path: Path) -> bytes:
     descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
     try:
         status = os.fstat(descriptor)
@@ -400,7 +394,7 @@ def read_legacy_manifest(path: Path) -> bytes:
         payload = json.loads(contents)
     except (UnicodeDecodeError, json.JSONDecodeError):
         raise OSError from None
-    if not isinstance(payload, dict) or set(payload) != legacy_keys:
+    if not isinstance(payload, dict) or set(payload) not in (legacy_keys, current_keys):
         raise OSError
     previous = payload["previousCommit"]
     target = payload["targetCommit"]
@@ -419,31 +413,55 @@ def read_legacy_manifest(path: Path) -> bytes:
     for field in ("backupId", "deployedAt"):
         if not isinstance(payload[field], str) or not payload[field]:
             raise OSError
+    if set(payload) == current_keys:
+        images = payload["images"]
+        if not isinstance(images, dict) or set(images) != image_keys:
+            raise OSError
+        if any(
+            not isinstance(image, str) or image_pattern.fullmatch(image) is None
+            for image in images.values()
+        ):
+            raise OSError
     return contents
 
 sources = sorted(deployments.glob("*.json"))
+validated_sources = []
 for source in sources:
     try:
-        contents = read_legacy_manifest(source)
+        validated_sources.append((source, read_manifest(source)))
     except OSError:
         print(
-            f"ERROR: legacy deployment manifestを検証できません: {source.name}",
+            f"ERROR: deployment manifestを検証できません: {source.name}",
             file=sys.stderr,
         )
         raise SystemExit(2) from None
+
+if archive.exists():
+    archive_status = archive.stat(follow_symlinks=False)
+    if (
+        not stat.S_ISDIR(archive_status.st_mode)
+        or archive_status.st_uid != expected_owner
+        or stat.S_IMODE(archive_status.st_mode) != 0o750
+    ):
+        print("ERROR: deployment archiveが安全なdirectoryではありません", file=sys.stderr)
+        raise SystemExit(2)
+else:
+    archive.mkdir(mode=0o750)
+
+for source, contents in validated_sources:
     destination = archive / source.name
     if destination.exists():
         try:
-            archived_contents = read_legacy_manifest(destination)
+            archived_contents = read_manifest(destination)
         except OSError:
             print(
-                f"ERROR: 既存legacy deployment archiveを検証できません: {source.name}",
+                f"ERROR: 既存deployment archiveを検証できません: {source.name}",
                 file=sys.stderr,
             )
             raise SystemExit(2) from None
         if archived_contents != contents:
             print(
-                f"ERROR: legacy deployment archiveの同名manifestが一致しません: {source.name}",
+                f"ERROR: deployment archiveの同名manifestが一致しません: {source.name}",
                 file=sys.stderr,
             )
             raise SystemExit(2)
@@ -455,10 +473,10 @@ for archived in archive.glob("*.json"):
     if archived.name == "migration.json":
         continue
     try:
-        read_legacy_manifest(archived)
+        read_manifest(archived)
     except OSError:
         print(
-            f"ERROR: legacy deployment archiveを検証できません: {archived.name}",
+            f"ERROR: deployment archiveを検証できません: {archived.name}",
             file=sys.stderr,
         )
         raise SystemExit(2) from None
@@ -533,7 +551,8 @@ if set(payload) != {
     "schemaVersion", "fromCommit", "targetCommit", "archiveDirectory", "createdAt"
 }:
     raise SystemExit(1)
-if payload["schemaVersion"] != expected_schema:
+schema = payload["schemaVersion"]
+if isinstance(schema, bool) or schema not in (1, expected_schema):
     raise SystemExit(1)
 for field in ("fromCommit", "targetCommit"):
     if not isinstance(payload[field], str) or pattern.fullmatch(payload[field]) is None:
@@ -547,9 +566,12 @@ if (
     or archive_name != Path(archive_name).name
 ):
     raise SystemExit(1)
-if archive_name != (
+expected_archive_name = (
     f"legacy-v0-{payload['fromCommit'][:12]}-to-{payload['targetCommit'][:12]}"
-):
+    if schema == 1
+    else f"pre-migration-{payload['fromCommit'][:12]}-to-{payload['targetCommit'][:12]}"
+)
+if archive_name != expected_archive_name:
     raise SystemExit(1)
 if not isinstance(payload["createdAt"], str) or not payload["createdAt"]:
     raise SystemExit(1)
@@ -596,7 +618,7 @@ dogfood_prepare_deployment_contract_migration() {
     fi
     return
   fi
-  archive_name=$(dogfood_archive_legacy_deployment_manifests \
+  archive_name=$(dogfood_archive_pre_migration_manifests \
     "$from_commit" "$target_commit") || return
   dogfood_write_deployment_contract_migration \
     "$from_commit" "$target_commit" "$archive_name"
@@ -613,7 +635,7 @@ dogfood_complete_deployment_contract_migration() {
   fi
   destination="$DOGFOOD_STATE_DIR/deployments/$DOGFOOD_MIGRATION_ARCHIVE_DIRECTORY/migration.json"
   if [ -e "$destination" ] || [ -L "$destination" ]; then
-    echo "ERROR: legacy deployment archiveのmigration記録が既に存在します" >&2
+    echo "ERROR: deployment archiveのmigration記録が既に存在します" >&2
     return 2
   fi
   mv -T -- "$marker" "$destination"

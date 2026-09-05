@@ -12,5 +12,6 @@ fi
 dogfood_require_identity
 
 export DS_PROFILE="dogfood"
+export DS_DEPLOYMENT_COMMIT="$DOGFOOD_REPOSITORY_REVISION"
 export DS_ENVIRONMENT_RUN_REPORT="$DS_DATA_DIR/runtime/dogfood/environment-run.json"
 export DS_PROFILE_REPORT="$DS_DATA_DIR/runtime/dogfood/resolved-profile.json"

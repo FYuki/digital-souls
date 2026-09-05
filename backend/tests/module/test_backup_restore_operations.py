@@ -415,6 +415,7 @@ def test_should_create_then_verify_backup_for_dogfood_version_two_schema(
     monkeypatch.setenv("DOGFOOD_BACKUP_DIR", str(backup_root))
     monkeypatch.setenv("DOGFOOD_BACKUP_RETENTION_COUNT", "2")
     monkeypatch.setenv("DOGFOOD_BACKUP_AUTHENTICATION_KEY", "ab" * 32)
+    monkeypatch.setenv("DS_DEPLOYMENT_COMMIT", "01" * 20)
     monkeypatch.setattr(main, "create_backup", create_spy)
     monkeypatch.setattr(main, "verify_backup", verify_spy)
 
@@ -426,6 +427,7 @@ def test_should_create_then_verify_backup_for_dogfood_version_two_schema(
     assert rollback is not None
     assert rollback.generation == generations[0]
     assert rollback.authentication_key == TEST_AUTHENTICATION_KEY
+    assert create_spy.call_args.kwargs["git_commit"] == "01" * 20
     verification = verify_backup(
         backup_directory=generations[0],
         authentication_key=TEST_AUTHENTICATION_KEY,
@@ -433,6 +435,30 @@ def test_should_create_then_verify_backup_for_dogfood_version_two_schema(
     assert (
         verification.artifact(CONVERSATION_ARTIFACT_FILENAME).schema_version == 2
     )
+
+
+def test_should_reject_invalid_deployment_commit_before_schema_backup(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from app import main
+
+    repository_root = Path(__file__).resolve().parents[3]
+    paths = initialized_runtime(
+        tmp_path, repository_root, environment_id="dogfood", name="runtime"
+    )
+    create_version_two_database(paths.sqlite_path)
+    monkeypatch.setenv("DOGFOOD_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("DOGFOOD_BACKUP_RETENTION_COUNT", "2")
+    monkeypatch.setenv("DOGFOOD_BACKUP_AUTHENTICATION_KEY", "ab" * 32)
+    monkeypatch.setenv("DS_DEPLOYMENT_COMMIT", "not-a-commit")
+    create = Mock()
+    monkeypatch.setattr(main, "create_backup", create)
+
+    with pytest.raises(RuntimeError, match="deployment commit is invalid"):
+        main.ensure_schema_backup_gate(paths, repository_root)
+
+    create.assert_not_called()
 
 
 @pytest.mark.parametrize(

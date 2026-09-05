@@ -36,6 +36,7 @@ json.dump({{
     'profile': os.environ.get('DS_PROFILE'),
     'identity': os.environ.get('DS_ENVIRONMENT_ID'),
     'dataRoot': os.environ.get('DS_DATA_DIR'),
+    'deploymentCommit': os.environ.get('DS_DEPLOYMENT_COMMIT'),
     'runReport': os.environ.get('DS_ENVIRONMENT_RUN_REPORT'),
     'profileReport': os.environ.get('DS_PROFILE_REPORT'),
 }}, open({str(capture_path)!r}, 'w'))
@@ -118,6 +119,9 @@ def test_should_fix_dogfood_profile_identity_and_report_for_start(tmp_path: Path
     assert capture["profile"] == "dogfood"
     assert capture["identity"] == "dogfood"
     assert capture["dataRoot"] == str(tmp_path / "dogfood-data")
+    assert capture["deploymentCommit"] == (
+        "0123456789abcdef0123456789abcdef01234567"
+    )
     assert cast(str, capture["runReport"]).endswith(
         "/runtime/dogfood/environment-run.json"
     )

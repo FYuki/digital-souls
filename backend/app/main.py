@@ -1,6 +1,7 @@
 from contextlib import ExitStack, asynccontextmanager
 import logging
 import os
+import re
 from collections.abc import AsyncIterator, Awaitable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -121,6 +122,7 @@ MEMORY_OCCURRED_TIMEZONE_ENV = "MEMORY_OCCURRED_TIMEZONE"
 DEFAULT_MEMORY_OCCURRED_TIMEZONE = "Asia/Tokyo"
 DOGFOOD_BACKUP_DIR_ENV = "DOGFOOD_BACKUP_DIR"
 DOGFOOD_BACKUP_RETENTION_COUNT_ENV = "DOGFOOD_BACKUP_RETENTION_COUNT"
+DS_DEPLOYMENT_COMMIT_ENV = "DS_DEPLOYMENT_COMMIT"
 CONSOLIDATION_PROMPT_VERSION = "consolidation-v1"
 
 @dataclass(frozen=True)
@@ -145,6 +147,11 @@ def ensure_schema_backup_gate(
         raise RuntimeError("dogfood backup retention count is invalid") from error
     if retention_count <= 0:
         raise RuntimeError("dogfood backup retention count is invalid")
+    deployment_commit = os.environ.get(DS_DEPLOYMENT_COMMIT_ENV)
+    if deployment_commit is not None and re.fullmatch(
+        r"[0-9a-f]{40}", deployment_commit
+    ) is None:
+        raise RuntimeError("deployment commit is invalid")
     authentication_key = resolve_backup_authentication_key(os.environ)
     generation = create_backup(
         runtime_paths=paths,
@@ -152,6 +159,7 @@ def ensure_schema_backup_gate(
         backup_root=Path(backup_root_value),
         retention_count=retention_count,
         authentication_key=authentication_key,
+        git_commit=deployment_commit,
     )
     verify_backup(
         backup_directory=generation,
