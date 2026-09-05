@@ -702,7 +702,8 @@ print(payload["backupDirectory"])
     -u "$DOGFOOD_SERVICE_USER" env \
     HOME="$DOGFOOD_SERVICE_HOME_DIR" \
     GIT_CONFIG_GLOBAL="$DOGFOOD_SERVICE_HOME_DIR/.gitconfig" \
-    "$python" "$cli" backup-verify --backup-directory "$backup_directory" || return
+    "$python" "$cli" backup-verify --backup-directory "$backup_directory" \
+    >/dev/null || return
   printf '%s\n' "$backup_directory"
 }
 
