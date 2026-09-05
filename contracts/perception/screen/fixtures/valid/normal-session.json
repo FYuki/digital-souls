@@ -1,0 +1,127 @@
+{
+  "events": [
+    {
+      "protocol_version": "1.0",
+      "type": "screen_routing_disclosed",
+      "event_id": "10000000-0000-4000-8000-000000000001",
+      "client_session_id": "20000000-0000-4000-8000-000000000001",
+      "routing_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "vision_destination": "local",
+      "chat_destination": "local",
+      "limits": {
+        "allowed_mime_types": ["image/png", "image/jpeg"],
+        "max_width": 2560,
+        "max_height": 2560,
+        "max_pixels": 4194304,
+        "max_bytes": 5242880,
+        "snapshot_max_age_ms": 5000,
+        "capture_timeout_ms": 5000,
+        "vision_timeout_ms": 30000,
+        "request_timeout_ms": 45000,
+        "max_concurrency": 1
+      }
+    },
+    {
+      "protocol_version": "1.0",
+      "type": "screen_session_start_requested",
+      "event_id": "10000000-0000-4000-8000-000000000002",
+      "client_session_id": "20000000-0000-4000-8000-000000000001",
+      "generation": 1,
+      "character_id": "miori",
+      "conversation_id": "30000000-0000-4000-8000-000000000001",
+      "requested_surface": "window",
+      "actual_surface": "window",
+      "routing_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "cloud_consent": {
+        "cloud_vision": false,
+        "cloud_derived_chat": false
+      }
+    },
+    {
+      "protocol_version": "1.0",
+      "type": "screen_session_started",
+      "event_id": "10000000-0000-4000-8000-000000000003",
+      "screen_session_id": "40000000-0000-4000-8000-000000000001",
+      "client_session_id": "20000000-0000-4000-8000-000000000001",
+      "generation": 1,
+      "character_id": "miori",
+      "conversation_id": "30000000-0000-4000-8000-000000000001",
+      "actual_surface": "window",
+      "routing_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "lease_expires_at": "2026-09-06T03:00:15Z",
+      "lease_duration_ms": 15000,
+      "heartbeat_interval_ms": 5000
+    },
+    {
+      "protocol_version": "1.0",
+      "type": "screen_session_heartbeat",
+      "event_id": "10000000-0000-4000-8000-000000000004",
+      "screen_session_id": "40000000-0000-4000-8000-000000000001",
+      "client_session_id": "20000000-0000-4000-8000-000000000001",
+      "generation": 1
+    },
+    {
+      "protocol_version": "1.0",
+      "type": "screen_session_heartbeat_accepted",
+      "event_id": "10000000-0000-4000-8000-000000000005",
+      "screen_session_id": "40000000-0000-4000-8000-000000000001",
+      "generation": 1,
+      "lease_expires_at": "2026-09-06T03:00:20Z"
+    },
+    {
+      "protocol_version": "1.0",
+      "type": "screen_snapshot_requested",
+      "event_id": "10000000-0000-4000-8000-000000000006",
+      "screen_session_id": "40000000-0000-4000-8000-000000000001",
+      "generation": 1,
+      "request_id": "50000000-0000-4000-8000-000000000001",
+      "turn_id": "60000000-0000-4000-8000-000000000001",
+      "source": "explicit_ui",
+      "requested_at": "2026-09-06T03:00:06Z",
+      "capture_deadline": "2026-09-06T03:00:11Z"
+    },
+    {
+      "protocol_version": "1.0",
+      "type": "screen_snapshot_upload_metadata",
+      "event_id": "10000000-0000-4000-8000-000000000007",
+      "screen_session_id": "40000000-0000-4000-8000-000000000001",
+      "client_session_id": "20000000-0000-4000-8000-000000000001",
+      "generation": 1,
+      "request_id": "50000000-0000-4000-8000-000000000001",
+      "turn_id": "60000000-0000-4000-8000-000000000001",
+      "image_id": "70000000-0000-4000-8000-000000000001",
+      "actual_surface": "window",
+      "captured_at": "2026-09-06T03:00:07Z",
+      "mime_type": "image/png",
+      "width": 1920,
+      "height": 1080,
+      "byte_length": 1234567
+    },
+    {
+      "protocol_version": "1.0",
+      "type": "screen_snapshot_upload_accepted",
+      "event_id": "10000000-0000-4000-8000-000000000008",
+      "screen_session_id": "40000000-0000-4000-8000-000000000001",
+      "generation": 1,
+      "request_id": "50000000-0000-4000-8000-000000000001",
+      "image_id": "70000000-0000-4000-8000-000000000001",
+      "received_at": "2026-09-06T03:00:08Z"
+    },
+    {
+      "protocol_version": "1.0",
+      "type": "screen_status",
+      "event_id": "10000000-0000-4000-8000-000000000009",
+      "screen_session_id": "40000000-0000-4000-8000-000000000001",
+      "generation": 1,
+      "capture_state": "active",
+      "recognition_state": "succeeded",
+      "reason_code": null,
+      "last_recognized_capture_at": "2026-09-06T03:00:07Z"
+    }
+  ],
+  "expected": {
+    "accepted_request_id": "50000000-0000-4000-8000-000000000001",
+    "accepted_generation": 1,
+    "raw_image_is_outside_json": true
+  }
+}

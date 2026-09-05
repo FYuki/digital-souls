@@ -1,0 +1,496 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digital-souls.local/contracts/perception/screen/1.0/screen-perception.schema.json",
+  "title": "ScreenPerceptionEvent",
+  "description": "画面共有の制御metadata契約。画像本文、質問本文、Vision観測本文、対象名は含めない。",
+  "oneOf": [
+    { "$ref": "#/$defs/RoutingDisclosure" },
+    { "$ref": "#/$defs/SessionStartRequested" },
+    { "$ref": "#/$defs/SessionStarted" },
+    { "$ref": "#/$defs/SessionHeartbeat" },
+    { "$ref": "#/$defs/SessionHeartbeatAccepted" },
+    { "$ref": "#/$defs/SessionRevokeRequested" },
+    { "$ref": "#/$defs/SessionRevoked" },
+    { "$ref": "#/$defs/SnapshotRequested" },
+    { "$ref": "#/$defs/SnapshotUploadMetadata" },
+    { "$ref": "#/$defs/SnapshotUploadAccepted" },
+    { "$ref": "#/$defs/ScreenStatus" },
+    { "$ref": "#/$defs/ScreenError" }
+  ],
+  "$defs": {
+    "ProtocolVersion": { "type": "string", "const": "1.0" },
+    "Uuid4": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "Generation": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "Timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?Z$"
+    },
+    "Surface": { "type": "string", "enum": ["monitor", "window"] },
+    "RoutingRevision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "DestinationKind": {
+      "type": "string",
+      "enum": ["local", "cloud", "unconfigured"]
+    },
+    "CloudConsent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cloud_vision", "cloud_derived_chat"],
+      "properties": {
+        "cloud_vision": { "type": "boolean" },
+        "cloud_derived_chat": { "type": "boolean" }
+      }
+    },
+    "Limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_mime_types",
+        "max_width",
+        "max_height",
+        "max_pixels",
+        "max_bytes",
+        "snapshot_max_age_ms",
+        "capture_timeout_ms",
+        "vision_timeout_ms",
+        "request_timeout_ms",
+        "max_concurrency"
+      ],
+      "properties": {
+        "allowed_mime_types": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "type": "string", "enum": ["image/png", "image/jpeg"] }
+        },
+        "max_width": { "type": "integer", "minimum": 2560, "maximum": 2560 },
+        "max_height": { "type": "integer", "minimum": 2560, "maximum": 2560 },
+        "max_pixels": { "type": "integer", "minimum": 4194304, "maximum": 4194304 },
+        "max_bytes": { "type": "integer", "minimum": 5242880, "maximum": 5242880 },
+        "snapshot_max_age_ms": { "type": "integer", "minimum": 5000, "maximum": 5000 },
+        "capture_timeout_ms": { "type": "integer", "minimum": 5000, "maximum": 5000 },
+        "vision_timeout_ms": { "type": "integer", "minimum": 30000, "maximum": 30000 },
+        "request_timeout_ms": { "type": "integer", "minimum": 45000, "maximum": 45000 },
+        "max_concurrency": { "type": "integer", "minimum": 1, "maximum": 1 }
+      }
+    },
+    "CaptureState": {
+      "type": "string",
+      "enum": ["off", "selecting", "active", "unavailable", "unsupported"]
+    },
+    "RecognitionState": {
+      "type": "string",
+      "enum": [
+        "idle",
+        "snapshot_requested",
+        "capturing",
+        "uploading",
+        "recognizing",
+        "composing",
+        "succeeded",
+        "failed"
+      ]
+    },
+    "ReasonCode": {
+      "type": "string",
+      "enum": [
+        "api_unavailable",
+        "insecure_context",
+        "transient_activation_required",
+        "capture_not_allowed",
+        "no_capture_source",
+        "capture_os_error",
+        "picker_cancelled",
+        "surface_mismatch",
+        "browser_surface_rejected",
+        "surface_unknown",
+        "video_track_invalid",
+        "frame_unavailable",
+        "image_type_invalid",
+        "image_too_large",
+        "image_decode_failed",
+        "session_not_found",
+        "session_revoked",
+        "session_expired",
+        "generation_mismatch",
+        "context_mismatch",
+        "request_not_found",
+        "request_expired",
+        "duplicate_request",
+        "cloud_consent_required",
+        "routing_changed",
+        "vision_unconfigured",
+        "vision_unsupported",
+        "vision_timeout",
+        "vision_unavailable",
+        "vision_invalid_response",
+        "request_cancelled",
+        "backend_unavailable"
+      ]
+    },
+    "RoutingDisclosure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "event_id",
+        "client_session_id",
+        "routing_revision",
+        "vision_destination",
+        "chat_destination",
+        "limits"
+      ],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "screen_routing_disclosed" },
+        "event_id": { "$ref": "#/$defs/Uuid4" },
+        "client_session_id": { "$ref": "#/$defs/Uuid4" },
+        "routing_revision": { "$ref": "#/$defs/RoutingRevision" },
+        "vision_destination": { "$ref": "#/$defs/DestinationKind" },
+        "chat_destination": {
+          "type": "string",
+          "enum": ["local", "cloud"]
+        },
+        "limits": { "$ref": "#/$defs/Limits" }
+      }
+    },
+    "SessionStartRequested": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "event_id",
+        "client_session_id",
+        "generation",
+        "character_id",
+        "conversation_id",
+        "requested_surface",
+        "actual_surface",
+        "routing_revision",
+        "cloud_consent"
+      ],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "screen_session_start_requested" },
+        "event_id": { "$ref": "#/$defs/Uuid4" },
+        "client_session_id": { "$ref": "#/$defs/Uuid4" },
+        "generation": { "$ref": "#/$defs/Generation" },
+        "character_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "conversation_id": { "$ref": "#/$defs/Uuid4" },
+        "requested_surface": { "$ref": "#/$defs/Surface" },
+        "actual_surface": { "$ref": "#/$defs/Surface" },
+        "routing_revision": { "$ref": "#/$defs/RoutingRevision" },
+        "cloud_consent": { "$ref": "#/$defs/CloudConsent" }
+      }
+    },
+    "SessionStarted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "event_id",
+        "screen_session_id",
+        "client_session_id",
+        "generation",
+        "character_id",
+        "conversation_id",
+        "actual_surface",
+        "routing_revision",
+        "lease_expires_at",
+        "lease_duration_ms",
+        "heartbeat_interval_ms"
+      ],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "screen_session_started" },
+        "event_id": { "$ref": "#/$defs/Uuid4" },
+        "screen_session_id": { "$ref": "#/$defs/Uuid4" },
+        "client_session_id": { "$ref": "#/$defs/Uuid4" },
+        "generation": { "$ref": "#/$defs/Generation" },
+        "character_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "conversation_id": { "$ref": "#/$defs/Uuid4" },
+        "actual_surface": { "$ref": "#/$defs/Surface" },
+        "routing_revision": { "$ref": "#/$defs/RoutingRevision" },
+        "lease_expires_at": { "$ref": "#/$defs/Timestamp" },
+        "lease_duration_ms": { "type": "integer", "minimum": 15000, "maximum": 15000 },
+        "heartbeat_interval_ms": { "type": "integer", "minimum": 5000, "maximum": 5000 }
+      }
+    },
+    "SessionHeartbeat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "event_id",
+        "screen_session_id",
+        "client_session_id",
+        "generation"
+      ],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "screen_session_heartbeat" },
+        "event_id": { "$ref": "#/$defs/Uuid4" },
+        "screen_session_id": { "$ref": "#/$defs/Uuid4" },
+        "client_session_id": { "$ref": "#/$defs/Uuid4" },
+        "generation": { "$ref": "#/$defs/Generation" }
+      }
+    },
+    "SessionHeartbeatAccepted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "event_id",
+        "screen_session_id",
+        "generation",
+        "lease_expires_at"
+      ],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "screen_session_heartbeat_accepted" },
+        "event_id": { "$ref": "#/$defs/Uuid4" },
+        "screen_session_id": { "$ref": "#/$defs/Uuid4" },
+        "generation": { "$ref": "#/$defs/Generation" },
+        "lease_expires_at": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+    "SessionRevokeRequested": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "event_id",
+        "screen_session_id",
+        "client_session_id",
+        "generation",
+        "reason"
+      ],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "screen_session_revoke_requested" },
+        "event_id": { "$ref": "#/$defs/Uuid4" },
+        "screen_session_id": { "$ref": "#/$defs/Uuid4" },
+        "client_session_id": { "$ref": "#/$defs/Uuid4" },
+        "generation": { "$ref": "#/$defs/Generation" },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "user_off",
+            "target_change",
+            "conversation_change",
+            "character_change",
+            "capture_ended",
+            "pagehide",
+            "backend_disconnect",
+            "consent_revoked"
+          ]
+        }
+      }
+    },
+    "SessionRevoked": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "event_id",
+        "screen_session_id",
+        "generation",
+        "reason"
+      ],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "screen_session_revoked" },
+        "event_id": { "$ref": "#/$defs/Uuid4" },
+        "screen_session_id": { "$ref": "#/$defs/Uuid4" },
+        "generation": { "$ref": "#/$defs/Generation" },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "user_off",
+            "target_change",
+            "conversation_change",
+            "character_change",
+            "capture_ended",
+            "pagehide",
+            "backend_disconnect",
+            "consent_revoked",
+            "lease_expired",
+            "routing_changed",
+            "backend_restart"
+          ]
+        }
+      }
+    },
+    "SnapshotRequested": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "event_id",
+        "screen_session_id",
+        "generation",
+        "request_id",
+        "turn_id",
+        "source",
+        "requested_at",
+        "capture_deadline"
+      ],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "screen_snapshot_requested" },
+        "event_id": { "$ref": "#/$defs/Uuid4" },
+        "screen_session_id": { "$ref": "#/$defs/Uuid4" },
+        "generation": { "$ref": "#/$defs/Generation" },
+        "request_id": { "$ref": "#/$defs/Uuid4" },
+        "turn_id": { "$ref": "#/$defs/Uuid4" },
+        "source": {
+          "type": "string",
+          "enum": ["explicit_ui", "natural_language_text", "natural_language_voice"]
+        },
+        "requested_at": { "$ref": "#/$defs/Timestamp" },
+        "capture_deadline": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+    "SnapshotUploadMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "event_id",
+        "screen_session_id",
+        "client_session_id",
+        "generation",
+        "request_id",
+        "turn_id",
+        "image_id",
+        "actual_surface",
+        "captured_at",
+        "mime_type",
+        "width",
+        "height",
+        "byte_length"
+      ],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "screen_snapshot_upload_metadata" },
+        "event_id": { "$ref": "#/$defs/Uuid4" },
+        "screen_session_id": { "$ref": "#/$defs/Uuid4" },
+        "client_session_id": { "$ref": "#/$defs/Uuid4" },
+        "generation": { "$ref": "#/$defs/Generation" },
+        "request_id": { "$ref": "#/$defs/Uuid4" },
+        "turn_id": { "$ref": "#/$defs/Uuid4" },
+        "image_id": { "$ref": "#/$defs/Uuid4" },
+        "actual_surface": { "$ref": "#/$defs/Surface" },
+        "captured_at": { "$ref": "#/$defs/Timestamp" },
+        "mime_type": { "type": "string", "enum": ["image/png", "image/jpeg"] },
+        "width": { "type": "integer", "minimum": 1, "maximum": 2560 },
+        "height": { "type": "integer", "minimum": 1, "maximum": 2560 },
+        "byte_length": { "type": "integer", "minimum": 1, "maximum": 5242880 }
+      }
+    },
+    "SnapshotUploadAccepted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "event_id",
+        "screen_session_id",
+        "generation",
+        "request_id",
+        "image_id",
+        "received_at"
+      ],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "screen_snapshot_upload_accepted" },
+        "event_id": { "$ref": "#/$defs/Uuid4" },
+        "screen_session_id": { "$ref": "#/$defs/Uuid4" },
+        "generation": { "$ref": "#/$defs/Generation" },
+        "request_id": { "$ref": "#/$defs/Uuid4" },
+        "image_id": { "$ref": "#/$defs/Uuid4" },
+        "received_at": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+    "ScreenStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "event_id",
+        "generation",
+        "capture_state",
+        "recognition_state",
+        "reason_code",
+        "last_recognized_capture_at"
+      ],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "screen_status" },
+        "event_id": { "$ref": "#/$defs/Uuid4" },
+        "screen_session_id": {
+          "oneOf": [{ "$ref": "#/$defs/Uuid4" }, { "type": "null" }]
+        },
+        "generation": { "$ref": "#/$defs/Generation" },
+        "capture_state": { "$ref": "#/$defs/CaptureState" },
+        "recognition_state": { "$ref": "#/$defs/RecognitionState" },
+        "reason_code": {
+          "oneOf": [{ "$ref": "#/$defs/ReasonCode" }, { "type": "null" }]
+        },
+        "last_recognized_capture_at": {
+          "oneOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }]
+        }
+      }
+    },
+    "ScreenError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "event_id",
+        "generation",
+        "stage",
+        "reason_code",
+        "recoverable"
+      ],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "screen_error" },
+        "event_id": { "$ref": "#/$defs/Uuid4" },
+        "screen_session_id": { "$ref": "#/$defs/Uuid4" },
+        "generation": { "$ref": "#/$defs/Generation" },
+        "request_id": { "$ref": "#/$defs/Uuid4" },
+        "turn_id": { "$ref": "#/$defs/Uuid4" },
+        "stage": {
+          "type": "string",
+          "enum": ["support", "picker", "capture", "session", "upload", "vision", "chat"]
+        },
+        "reason_code": { "$ref": "#/$defs/ReasonCode" },
+        "recoverable": { "type": "boolean" }
+      }
+    }
+  }
+}

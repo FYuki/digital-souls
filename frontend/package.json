@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "generate:voice-session": "quicktype --src ../contracts/voice-session/voice-session.schema.json --src-lang schema --lang typescript --just-types --prefer-unions --prefer-const-values --top-level VoiceSessionEvent --out src/lib/voice-session/generated.ts && quicktype --src ../contracts/voice-session/voice-session.schema.json --src-lang schema --lang python --just-types --pydantic-base-model --python-version 3.7 --top-level VoiceSessionEvent --out ../backend/app/voice_session/generated.py",
+    "generate:screen-perception": "quicktype --src ../contracts/perception/screen/screen-perception.schema.json --src-lang schema --lang typescript --just-types --prefer-unions --prefer-const-values --no-date-times --top-level ScreenPerceptionEvent --out src/lib/screen-perception/generated.ts && quicktype --src ../contracts/perception/screen/screen-perception.schema.json --src-lang schema --lang python --just-types --pydantic-base-model --python-version 3.7 --no-date-times --top-level ScreenPerceptionEvent --out ../backend/app/screen_perception/generated.py",
     "dev": "vite",
     "check": "svelte-check --tsconfig ./tsconfig.json && tsc --noEmit -p ./tsconfig.e2e.json",
     "build": "vite build",
