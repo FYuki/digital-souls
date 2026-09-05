@@ -19,6 +19,9 @@ from tests.dogfood_infrastructure_test_support import render_nondefault_dogfood_
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
 DOGFOOD_INFRA_DIR = ROOT_DIR / "infra" / "dogfood"
 DOGFOOD_SCRIPTS_DIR = ROOT_DIR / "scripts" / "dogfood"
+DOGFOOD_APPLICATION_COMPOSE_PATH = (
+    ROOT_DIR / "infra" / "application" / "compose.dogfood.yaml"
+)
 ENV_EXAMPLE_PATH = DOGFOOD_INFRA_DIR / "env.example"
 README_PATH = DOGFOOD_INFRA_DIR / "README.md"
 REQUIRED_ENV_KEYS = {
@@ -184,6 +187,26 @@ def test_should_define_separate_dogfood_identity_clone_and_runtime_paths() -> No
         for key, path in paths.items()
         if key != "DOGFOOD_CLONE_DIR"
     )
+
+
+def test_should_mount_dogfood_backup_directory_into_backend() -> None:
+    compose = yaml.safe_load(
+        DOGFOOD_APPLICATION_COMPOSE_PATH.read_text(encoding="utf-8")
+    )
+
+    assert compose == {
+        "services": {
+            "backend": {
+                "volumes": [
+                    {
+                        "type": "bind",
+                        "source": "${DOGFOOD_BACKUP_DIR:?DOGFOOD_BACKUP_DIR is required}",
+                        "target": "${DOGFOOD_BACKUP_DIR:?DOGFOOD_BACKUP_DIR is required}",
+                    }
+                ]
+            }
+        }
+    }
 
 
 def test_should_keep_dogfood_shell_entrypoints_executable_strict_and_syntax_valid() -> (
