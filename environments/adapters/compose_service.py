@@ -12,7 +12,6 @@ from adapters.base import (
     Check,
     CommandRunner,
     HttpServiceOperations,
-    OperationContext,
     ReadinessValidationResult,
     ServiceStartResult,
     StopResult,
@@ -330,7 +329,11 @@ class ComposeManagedServiceOperations(HttpServiceOperations):
     def stop(self, service: Mapping[str, object], grace_seconds: float) -> StopResult:
         del grace_seconds
         expected = _container_identity(service, self.label)
-        if not self.is_running(service):
+        try:
+            actual, _running = self._inspect()
+        except RuntimeError:
+            return StopResult("skipped_identity_mismatch")
+        if actual != expected:
             return StopResult("skipped_identity_mismatch")
         result = self.runner.run(
             ("docker", "rm", "--force", expected["containerId"]), self.root_dir

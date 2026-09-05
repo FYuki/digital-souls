@@ -148,7 +148,7 @@ def test_should_document_explicit_deployment_contract_migration() -> None:
     assert "migrate-deployment-contract.sh" in section
     assert "dogfood.revision" in section
     assert re.search(r"先に.*書き換えてはならない", section)
-    assert "legacy-v0-<from>-to-<target>" in section
+    assert "pre-migration-<from>-to-<target>" in section
     assert re.search(r"manifest.*手動退避.*行わない", section)
     assert "previousCommit: null" in section
     assert re.search(r"境界.*自動rollback.*安全に構成できない", section)

@@ -539,6 +539,44 @@ def test_should_require_the_recorded_container_start_time(tmp_path: Path) -> Non
     assert result.result == "skipped_identity_mismatch"
 
 
+def test_should_remove_owned_container_after_it_has_exited(tmp_path: Path) -> None:
+    from adapters.frontend import FrontendAdapter
+
+    identity = {
+        "containerId": "a" * 64,
+        "startedAt": "2026-08-30T00:00:00Z",
+    }
+    runner = RecordingRunner(
+        [
+            {
+                "returncode": 0,
+                "stdout": json.dumps(
+                    [
+                        {
+                            "Id": identity["containerId"],
+                            "State": {
+                                "StartedAt": identity["startedAt"],
+                                "Running": False,
+                            },
+                        }
+                    ]
+                ),
+                "stderr": "",
+            },
+            {"returncode": 0, "stdout": identity["containerId"], "stderr": ""},
+        ]
+    )
+    adapter = FrontendAdapter(tmp_path, resolved_runtime_paths(tmp_path), runner)
+
+    result = adapter.stop({"containerIdentity": identity}, grace_seconds=5.0)
+
+    assert result.result == "stopped"
+    assert runner.calls == [
+        ("docker", "inspect", "digital-souls-test-frontend"),
+        ("docker", "rm", "--force", identity["containerId"]),
+    ]
+
+
 def test_should_prepare_backend_data_without_host_toolchain(tmp_path: Path):
     from adapters.backend import BackendAdapter
 

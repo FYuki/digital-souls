@@ -139,9 +139,9 @@ sudo env DOGFOOD_ENV_FILE="$dogfood_env" WSL_DISTRO_NAME=Ubuntu-dogfood \
   --commit '<検証済みmain commit SHA>'
 ```
 
-migrationは現在のcleanなdetached HEADを移行元として固定し、旧schemaの全manifestを検証して`DOGFOOD_STATE_DIR/deployments/legacy-v0-<from>-to-<target>/`へ保全し、migration markerと`dogfood.revision`を原子的にtargetへ収束させる。manifestの削除、手編集、作業者による手動退避は行わない。その後、同じ一時envとSHAでbootstrap、deployを続ける。
+migrationは現在のcleanなdetached HEADを移行元として固定し、既存schemaの全manifestを検証して`DOGFOOD_STATE_DIR/deployments/pre-migration-<from>-to-<target>/`へ保全し、migration markerと`dogfood.revision`を原子的にtargetへ収束させる。image digestを持つmanifestもenvキーcontractの境界では同様に保全する。manifestの削除、手編集、作業者による手動退避は行わない。その後、同じ一時envとSHAでbootstrap、deployを続ける。
 
-旧contractにはDocker image digestが存在せず、新envを旧revisionが拒否するため、この境界を越える自動rollbackは安全に構成できない。最初の新contract deployは`previousCommit: null`の新baselineとし、失敗時は旧commitへ自動rollbackせず停止する。検証済み論理backup、filesystem保全、legacy archiveを維持したまま原因を修正して同じtargetへ再deployする。成功時はmarkerをlegacy archive内の`migration.json`へ移し、以後の同一contract内deployは通常どおり直前commitへ自動rollbackする。
+旧contractにDocker image digestが存在しない場合や新envを旧revisionが拒否する場合、この境界を越える自動rollbackは安全に構成できない。最初の新contract deployは`previousCommit: null`の新baselineとし、失敗時は旧commitへ自動rollbackせず停止する。検証済み論理backup、filesystem保全、移行前archiveを維持したまま原因を修正して同じtargetへ再deployする。成功時はmarkerを移行前archive内の`migration.json`へ移し、以後の同一contract内deployは通常どおり直前commitへ自動rollbackする。
 
 対象SHAは`origin/main`の祖先commitだけに限定する。実機検証で問題が判明した場合は、未mergeのrevisionへ切り替えず、修正commitをmainへ積んで同じ経路を再実行する前進復旧を行う。
 

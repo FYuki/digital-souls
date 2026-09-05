@@ -1138,7 +1138,7 @@ def test_should_migrate_legacy_manifests_and_establish_a_new_docker_baseline(
     assert migration.returncode == 0, (migration.stdout, migration.stderr)
     deployments = tmp_path / "state" / "deployments"
     assert not tuple(deployments.glob("*.json"))
-    archives = tuple(deployments.glob("legacy-v0-*-to-*"))
+    archives = tuple(deployments.glob("pre-migration-*-to-*"))
     assert len(archives) == 1
     legacy_current = json.loads(
         (archives[0] / "current.json").read_text(encoding="utf-8")
@@ -1242,9 +1242,12 @@ def test_should_reject_corrupt_legacy_manifest_without_changing_revision(
     migration = _invoke_deployment_contract_migration(tmp_path, environment)
 
     assert migration.returncode == 2
-    assert "legacy deployment manifestを検証できません" in migration.stderr
+    assert "deployment manifestを検証できません" in migration.stderr
     assert (tmp_path / "state" / "deployments" / "current.json").is_file()
     assert not (tmp_path / "state" / "deployment-contract-migration.json").exists()
+    assert not tuple(
+        (tmp_path / "state" / "deployments").glob("pre-migration-*-to-*")
+    )
     assert (tmp_path / "config" / "dogfood.revision").read_text(
         encoding="utf-8"
     ) == f"{TEST_REVISION}\n"
@@ -1261,7 +1264,7 @@ def test_should_idempotently_prepare_migration_without_a_legacy_manifest(
     assert first.returncode == 0, (first.stdout, first.stderr)
     assert second.returncode == 0, (second.stdout, second.stderr)
     deployments = tmp_path / "state" / "deployments"
-    archives = tuple(deployments.glob("legacy-v0-*-to-*"))
+    archives = tuple(deployments.glob("pre-migration-*-to-*"))
     assert len(archives) == 1
     assert not tuple(archives[0].glob("*.json"))
     marker = tmp_path / "state" / "deployment-contract-migration.json"
@@ -1274,7 +1277,7 @@ def test_should_idempotently_prepare_migration_without_a_legacy_manifest(
     ) == f"{NEXT_REVISION}\n"
 
 
-def test_should_not_migrate_a_current_image_aware_manifest(tmp_path: Path) -> None:
+def test_should_migrate_a_current_image_aware_manifest(tmp_path: Path) -> None:
     environment, _ = _prepare_deploy_scenario(
         tmp_path,
         current_manifest_payload=_manifest_payload(TEST_REVISION, NEXT_REVISION),
@@ -1282,13 +1285,20 @@ def test_should_not_migrate_a_current_image_aware_manifest(tmp_path: Path) -> No
 
     migration = _invoke_deployment_contract_migration(tmp_path, environment)
 
-    assert migration.returncode == 2
-    assert "legacy deployment manifestを検証できません" in migration.stderr
-    assert (tmp_path / "state" / "deployments" / "current.json").is_file()
-    assert not (tmp_path / "state" / "deployment-contract-migration.json").exists()
+    assert migration.returncode == 0, (migration.stdout, migration.stderr)
+    deployments = tmp_path / "state" / "deployments"
+    archives = tuple(deployments.glob("pre-migration-*-to-*"))
+    assert len(archives) == 1
+    archived = json.loads(
+        (archives[0] / "current.json").read_text(encoding="utf-8")
+    )
+    assert archived == _manifest_payload(TEST_REVISION, NEXT_REVISION)
+    assert not (deployments / "current.json").exists()
+    marker = tmp_path / "state" / "deployment-contract-migration.json"
+    assert json.loads(marker.read_text(encoding="utf-8"))["schemaVersion"] == 2
     assert (tmp_path / "config" / "dogfood.revision").read_text(
         encoding="utf-8"
-    ) == f"{TEST_REVISION}\n"
+    ) == f"{NEXT_REVISION}\n"
 
 
 def test_should_repair_a_self_referencing_manifest_during_a_normal_deploy(
