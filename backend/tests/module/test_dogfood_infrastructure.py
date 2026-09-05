@@ -719,15 +719,26 @@ def test_should_generate_a_windows_entrypoint_from_the_shared_environment(
     values, generated_dir = render_nondefault_dogfood_assets(tmp_path)
     source = (generated_dir / "start-dogfood-wsl.ps1").read_text(encoding="utf-8")
 
-    assert "wsl.exe" in source
     assert values["DOGFOOD_WSL_DISTRO"] in source
+    assert values["DOGFOOD_SERVICE_USER"] in source
+    assert values["DOGFOOD_SERVICE_HOME_DIR"] in source
+    assert "Start-Process -FilePath \"wsl.exe\"" in source
+    assert "-WindowStyle Hidden" in source
+    assert '"--user", $DogfoodServiceUser' in source
+    assert '"--exec", "/usr/bin/flock"' in source
+    assert '"--exclusive", "--nonblock"' in source
+    assert '"--conflict-exit-code", "$KeepAliveConflictExitCode"' in source
+    assert '"/bin/sleep", "infinity"' in source
+    assert "$ProbeExitCode -eq $KeepAliveConflictExitCode" in source
+    assert "$ProbeExitCode -ne 0" in source
     assert re.search(r"wsl\.exe\s+.*--user\s+root(?:\s|$)", source)
     assert "systemctl start digital-souls-dogfood.target" in source
     assert "$LASTEXITCODE -ne 0" in source
-    assert source.index("wsl.exe") < source.index("$LASTEXITCODE -ne 0")
+    assert source.index("Start-Process") < source.index("systemctl start")
     assert "throw" in source
     assert "start-services.sh" not in source
     assert not re.search(r"\bsystemctl\s+(?:stop|restart|is-active|show)\b", source)
+    assert values["LIVEKIT_API_SECRET"] not in source
 
 
 def test_should_delegate_application_lifecycle_to_one_foreground_systemd_unit(

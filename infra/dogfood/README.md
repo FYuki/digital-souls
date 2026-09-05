@@ -242,7 +242,7 @@ bootstrapはhost側Environment CLI用のBackend venvを準備し、初期3 diges
 
 更新時は、運用者の作業コピーにある新revisionの`bootstrap.sh`を実行する。bootstrapがdogfood cloneを指定revisionへ収束させた後に、そのrevisionのloaderで正規envを配置する。この順序により、旧revisionの`load-environment.sh`へ新しいenvキーを先に渡す過渡状態を避ける。
 
-bootstrapは検証済み設定からsystemd unit、LiveKit Server設定、Backend専用のLiveKit環境ファイル、Windows launcherを生成する。`livekit.yaml`と`livekit-backend.env`は`DOGFOOD_CONFIG_DIR`へ`0640 root:digital-souls`で配置する。Backend専用ファイルに含めるのは`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`だけであり、backup認証鍵を含む`dogfood.env`全体はapplication processへ渡さない。生成されたlauncherは`DOGFOOD_CONFIG_DIR/start-dogfood-wsl.ps1`に配置されるため、Windows側から`\\wsl$`経由でコピーして使用する。unitのservice user、group、設定file、clone内runner、WSL distributionは同じ設定値から生成される。
+bootstrapは検証済み設定からsystemd unit、LiveKit Server設定、Backend専用のLiveKit環境ファイル、Windows launcherを生成する。`livekit.yaml`と`livekit-backend.env`は`DOGFOOD_CONFIG_DIR`へ`0640 root:digital-souls`で配置する。Backend専用ファイルに含めるのは`LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`だけであり、backup認証鍵を含む`dogfood.env`全体はapplication processへ渡さない。生成されたlauncherは`DOGFOOD_CONFIG_DIR/start-dogfood-wsl.ps1`に配置されるため、Windows側から`\\wsl$`経由でコピーして使用する。launcher自体に秘密値は含めず、service user、service home、WSL distributionだけを埋め込む。unitのservice user、group、設定file、clone内runner、WSL distributionは同じ設定値から生成される。
 
 標準配置と所有権は次のとおり。
 
@@ -453,7 +453,7 @@ sudo env WSL_DISTRO_NAME=Ubuntu-dogfood scripts/dogfood/stop-services.sh
 
 application unitは推論targetとLiveKitの起動後、`wait-inference.sh`でOllama、VOICEVOX、Whisper、LiveKitのHTTP readinessを有限時間再確認してから、rootのhost control planeとして`scripts/start-dogfood.sh`を実行する`Type=simple` unitである。`start-dogfood.sh`は`environment_cli.py up`を`exec`し、ready後もsupervisionとcleanupを担う同一processをforegroundに維持する。readyを確認すると子orchestratorを残して正常終了する汎用`environments/up.sh`はsystemdの`ExecStart`に使用しない。これによりsystemdはapplication processの生存を追跡し、ready直後の正常終了と誤認して`ExecStop`を呼ぶことがない。明示停止時は`down.sh`がrun reportのprocess identityへSIGTERMを送り、foreground orchestratorが所有するBackend／Frontendをcleanupする。
 
-Backend／Frontend container自体はservice UID／GIDで非root実行する。target restart直後のOllama GPU検出中に`/api/tags`が一時的な500を返しても、applicationの一発検証を先に実行しない。待機がtimeoutした場合はapplicationを起動せず、systemdとjournalへ失敗を残す。Backendへ渡す秘密は専用ファイル内のLiveKit 3設定に限定し、Frontendへ`DOGFOOD_BACKUP_AUTHENTICATION_KEY`を渡さない。通常起動は上記`start-services.sh`またはWindows launcherを使う。どちらも`systemctl start digital-souls-dogfood.target`へ委譲するため、PC／WSL再起動後も事前停止なしで同じ入口を実行でき、起動済みならno-opとなる。Windows launcherは`wsl.exe`の非ゼロ終了を失敗として通知する。
+Backend／Frontend container自体はservice UID／GIDで非root実行する。target restart直後のOllama GPU検出中に`/api/tags`が一時的な500を返しても、applicationの一発検証を先に実行しない。待機がtimeoutした場合はapplicationを起動せず、systemdとjournalへ失敗を残す。Backendへ渡す秘密は専用ファイル内のLiveKit 3設定に限定し、Frontendへ`DOGFOOD_BACKUP_AUTHENTICATION_KEY`を渡さない。通常起動は上記`start-services.sh`またはWindows launcherを使う。どちらも`systemctl start digital-souls-dogfood.target`へ委譲するため、PC／WSL再起動後も事前停止なしで同じ入口を実行でき、起動済みならno-opとなる。Windows launcherはそれに加えて、非rootのservice userで`flock`を保持する非対話keepaliveをWindowsの非表示processとして起動する。systemd serviceだけではWSL instanceを維持できないため、このprocessの存続中はdistributionを明示的に維持する。launcherはkeepaliveとtarget起動の非ゼロ終了を失敗として通知する。
 
 `status.sh`はidentity、runtime root、unit、container identity、listen port、CPU、memory、GPU、各containerのmetadataだけを表示する。会話、DB、永続data、journal本文、LiveKit資格情報は読まない。application unitがactiveなのにrun reportのcontainer ID／起動時刻と実containerが一致しない場合は異常終了し、`restart-services.sh`を案内する。
 
@@ -540,13 +540,22 @@ in-place復旧が失敗した場合だけ、保全物を維持したまま別名
 
 ## WSL終了・Windows再起動後の復旧
 
-systemd unitのenableだけではWSL instanceの常時維持やWindows起動時のdistribution起動を保証しない。Windows再起動後は次の順序で復旧する。
+systemd unitのenableだけではWSL instanceの常時維持やWindows起動時のdistribution起動を保証しない。[MicrosoftのWSL systemd資料](https://learn.microsoft.com/windows/wsl/systemd)にも、systemd serviceはWSL instanceを維持しないと明記されている。Windows再起動後は次の順序で復旧する。
 
 1. Windowsからbootstrapが`DOGFOOD_CONFIG_DIR`へ生成した`start-dogfood-wsl.ps1`を実行し、設定したdogfood distributionを明示起動する。
-2. launcherは冪等な`systemctl start digital-souls-dogfood.target`だけを実行するため、事前停止せず同じlauncherを再実行する。
-3. `systemctl is-system-running`と`systemctl show digital-souls-dogfood.target --property=ActiveState,SubState`を確認する。
-4. `scripts/dogfood/status.sh`でapplication／推論unit、orchestrator、port、container metadataを確認する。
-5. dogfood ProfileのFrontend／Backend ready gateを確認する。
+2. launcherはservice userで`/usr/bin/flock`と`/bin/sleep infinity`を実行し、Windows側の`wsl.exe`を非表示で維持する。lock fileはservice home直下の`.dogfood-wsl-keepalive.lock`であり、秘密値を含まず、process終了後に残っても次回起動を妨げない。
+3. 同じlauncherを再実行しても、既存processが保持するlockを検出して成功とみなすため、keepaliveは多重化しない。続く`systemctl start digital-souls-dogfood.target`も起動済みならno-opとなる。
+4. `systemctl is-system-running`と`systemctl show digital-souls-dogfood.target --property=ActiveState,SubState`を確認する。
+5. `scripts/dogfood/status.sh`でapplication／推論unit、orchestrator、port、container metadataを確認する。
+6. dogfood ProfileのFrontend／Backend ready gateを確認する。
+
+`stop-services.sh`はapplicationと推論serviceを停止するが、保守作業を続けられるようWSL keepaliveは停止しない。keepaliveを含むdistribution全体を停止する場合は、Windowsから次を実行する。
+
+```powershell
+wsl.exe --terminate Ubuntu-dogfood
+```
+
+Windows終了時にはkeepaliveも終了する。次回のWindows起動後はlauncherを再実行する。
 
 ## 障害診断と個別復旧
 
