@@ -22,7 +22,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Validate application Compose
-        run: docker compose --env-file infra/application/env.example --file infra/application/compose.yaml --file infra/application/compose.dev.yaml config --quiet
+        run: |
+          docker compose --env-file infra/application/env.example --file infra/application/compose.yaml --file infra/application/compose.dev.yaml config --quiet
+          DOGFOOD_BACKUP_DIR=/tmp/digital-souls-dogfood-backups \
+            docker compose --env-file infra/application/env.example --file infra/application/compose.yaml --file infra/application/compose.dogfood.yaml config --quiet
       - name: Validate Whisper Compose
         run: docker compose --env-file infra/whisper/env.example --file infra/whisper/compose.yaml config --quiet
       - name: Build application images
