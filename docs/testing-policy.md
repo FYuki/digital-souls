@@ -96,6 +96,10 @@ Pull RequestではGitHub ActionsのCIに加え、GitHub Appとして導入した
 
 CodeRabbitの指摘はコードレビューの補助であり、GitHub Actionsやローカルで実行したテスト結果の代替にはしない。特に、CodeRabbitのレビュー完了を外部サービスとの実接続に成功した一次証跡として扱わない。
 
+main向けPRはCI成功に加え、最新差分へのCodeRabbitレビューと指摘の確認・必要な対応を受入条件とする。
+自動レビューがskipされた場合は`@coderabbitai full review`で依頼する。skip時の成功statusを
+実レビュー済みと扱わない。子PRのEpic統合はCI成功を条件とし、mainのマージはユーザーが行う。
+
 ## LLM classifier conformance
 
 意味分類器とpersona memory抽出器の品質評価は、通常のpytest unit testと分離したpromptfoo suiteで行う。抽出器はenum一致を決定論的に評価し、topic妥当性とhallucination非発生を独立したローカルOllama judgeで評価する。
@@ -118,6 +122,68 @@ LiveKitの状態遷移、outbox、mapping、再生済みprefixはfake clock/port
 
 Wave 3のEpic受入シナリオ、自動testと利用者dogfoodの責務分離、再実行手順は
 [`wave3-acceptance-2026-08.md`](wave3-acceptance-2026-08.md)を正本とする。
+
+## Addon / MCP conformance
+
+#104 MCP-first接続基盤は、contract検証、test-owned MCP、実Addon/外部MCPを同じ証跡として扱わない。
+正本contractは`contracts/addon/`、設計判断は`docs/decisions/addon-connection-foundation-2026-09.md`、SDK version適合は`docs/addon-mcp-sdk-compatibility-2026-09.md`とする。
+
+### contract / unit
+
+`backend/tests/unit/`でJSON Schema Draft 2020-12とsemantic validatorを検証する。
+
+- `manifest.schema.json` / `addon-meta.schema.json` / `capability-snapshot.schema.json` / `execution-envelope.schema.json`
+- `contracts/addon/fixtures/valid/`は受理する
+- `contracts/addon/fixtures/invalid/`は拒否する
+- raw secretをManifestで受理しない
+- Core restrictionは安全側だけ
+- annotation未信頼時に`readOnlyHint=true`をeffective read-onlyへ昇格しない
+- `effect_source=unknown`はunknown / serial / retryなし
+
+これは外部MCPへ接続した証跡ではない。
+
+### test-owned MCP / module
+
+#159では`backend/tests/module/`からtest-owned MCP serverを別processで起動し、通常CIで実行可能なconformanceとする。
+
+- SDKは#152で確認した`mcp==2.0.0`をpinする
+- external Streamable HTTP（none / preconfigured Bearer）
+- external stdio server
+- self-ownedのOrigin拒否・localhost bind・mandatory Bearerは#221へ分離
+- MCP 2026-07-28 Tools / Resources / Prompts discovery
+- MRTR `input_required` →回答→元request再実行
+- mapping不能Tool
+- trusted/untrusted annotations
+- Tool追加/削除/schema変更、snapshot activation境界
+- effective read-onlyのみ並列/1 retry
+- write/destructive/unknownは直列/automatic retryなし
+- budget 6 / same-tool 3 / identical 2 / normal 3 cycle
+- Tasks必須operationは`unsupported`へ落とし、同serverの通常Toolを壊さない
+- native result保持、secret/raw payload非logging
+
+実行入口は`backend/tests/module/test_external_mcp_conformance.py`。unitは`test_external_mcp_registry.py`、`test_external_mcp_client.py`、`test_external_mcp_gate.py`、contract検証は`test_addon_contracts.py`に配置する。
+
+Core package/DBをtest MCP serverからimportしない。test-owned MCPの成功をDevelopment Observerや第三者MCPへの実接続成功とは扱わない。
+
+### real Addon / integration
+
+#58 Development Observer等の実Addon processとの接続は`backend/tests/integration/test_*_integration.py`に置く。
+実AddonのStreamable HTTP endpoint、service auth、process/config/store分離を実接続で検証する。
+
+第三者/コラボMCPを本番credentialで通常CIへ接続しない。必要な実接続受入は対象Issueで明示し、credentialをfixture/evidenceへ保存しない。
+
+### 外部MCPの独立実装との実接続
+
+`npm run test:integration:mcp`は公開されたFilesystem / Everything Serverに実接続する。
+`RUN_MCP_REAL_SERVICE_TESTS=true`と`MCP_REAL_SERVER_ROOT`を設定して明示実行する。
+通常CIでは実行しない。開始後の依存不足・認証・接続失敗はskipに変換しない。
+再実行手順、固定version、検証範囲と証跡は
+[`external-mcp-integration-2026-09.md`](external-mcp-integration-2026-09.md)を参照する。
+
+### SDK/version更新
+
+`mcp` package version更新は通常の依存更新として無条件mergeしない。protocol negotiation、Streamable HTTP、stdio、Tools/Resources、MRTR、trust/snapshot境界を#159 conformanceで再確認する。
+MCP Tasks extension等、SDKで未対応の任意能力は`unsupported`として明示し、通常Tool/Resource利用を失敗させない。
 
 ## Capability不足と失敗
 

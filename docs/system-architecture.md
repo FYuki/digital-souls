@@ -307,3 +307,15 @@ Issue #113で追加した`/voice/livekit`と`LiveKitPage`は基盤検証用の�
 Frontend実装では通常の会話・conversation UIへLiveKitを直接組み込み、その時点から正式な
 音声経路として扱う。既存WebSocket音声pipelineをWave 3完成形へ拡張した後でtransportを
 切り替える二段階実装は行わない。
+
+## 外部MCP接続・実行基盤
+
+`backend/app/external_mcp/`はnative capabilityと検証済みstaged/active snapshot、登録済みconnectionの
+trust・sharing・binding検証、Execution Gateを所有する。公式SDKのstdio/Streamable HTTP Clientは
+通信とnative結果を扱い、Toolの安全性や会話routingを判断しない。
+
+Gateはloop開始時のsnapshotと接続世代を固定し、実行直前にgrant、入力schema、停止、予算を検証する。
+未信頼annotationはunknownとして直列・retryなしにし、実効read-onlyだけ並列・最大1 retryを許可する。
+Resourcesをnativeに読み取り、Promptsはdiscoveryまでに限定する。入力待ちは上位判断へ返し、
+回答後も同じloopと許可で再実行する。自動会話利用は#182、self-owned runtimeは#221が担当する。
+設定・公開Python API・制限は[外部MCP利用基盤](external-mcp-foundation.md)を参照する。

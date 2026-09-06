@@ -27,6 +27,7 @@
     "eval:memory:prompt-lab": "python3 scripts/eval_memory_extraction.py prompt-lab",
     "eval:memory:conformance": "python3 scripts/eval_memory_extraction.py conformance",
     "eval:rag:real": "backend/.venv/bin/python -m pytest backend/tests/integration -m rag_retrieval_real",
+    "test:integration:mcp": "backend/.venv/bin/python -m pytest -s backend/tests/integration/test_external_mcp_real_servers_integration.py",
     "eval:screen-reference:conformance": "PYTHONPATH=backend python3 backend/evals/screen_reference/gate.py"
   }
 }

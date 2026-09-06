@@ -1,0 +1,29 @@
+{
+  "connection_instance_id": "external-example#1",
+  "snapshot_revision": "snap-20260906-001",
+  "protocol_version": "2026-07-28",
+  "discovered_at": "2026-09-06T01:00:00Z",
+  "activation_state": "active",
+  "tools": [
+    {
+      "name": "search",
+      "schema_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input_schema": {
+        "type": "object",
+        "properties": {"q": {"type": "string"}}
+      },
+      "native_annotations": {"readOnlyHint": true},
+      "trust": {"annotations": false, "addon_metadata": false},
+      "effective_policy": {
+        "effect": "unknown",
+        "effect_source": "unknown",
+        "concurrency": "serial",
+        "retry": "none"
+      },
+      "requires_core_features": [],
+      "status": "active"
+    }
+  ],
+  "resources": [],
+  "prompts": []
+}
