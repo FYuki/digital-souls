@@ -148,6 +148,8 @@ Wave 3のEpic受入シナリオ、自動testと利用者dogfoodの責務分離�
 - Tasks必須operationは`unsupported`へ落とし、同serverの通常Toolを壊さない
 - native result保持、secret/raw payload非logging
 
+実行入口は`backend/tests/module/test_external_mcp_conformance.py`。unitは`test_external_mcp_registry.py`、`test_external_mcp_client.py`、`test_external_mcp_gate.py`、contract検証は`test_addon_contracts.py`に配置する。
+
 Core package/DBをtest MCP serverからimportしない。test-owned MCPの成功をDevelopment Observerや第三者MCPへの実接続成功とは扱わない。
 
 ### real Addon / integration
