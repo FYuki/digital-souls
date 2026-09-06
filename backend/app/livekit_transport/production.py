@@ -789,6 +789,13 @@ class _ConversationCoreBridge:
                     timestamp=event["monotonic_timestamp_ms"],
                     clock_domain="client_monotonic", unit="millisecond",
                 )
+                # 通常発話の正解境界診断はその発話への応答に結ぶ。
+                # 割り込み指標のspeech_started_clientは従来どおり旧応答だけへ結ぶ。
+                self._measurement.record_utterance_event(
+                    utterance_id=utterance_id, name="vad_speech_start_client", stage="vad",
+                    timestamp=event["monotonic_timestamp_ms"],
+                    clock_domain="client_monotonic", unit="millisecond",
+                )
             open_captures = sum(
                 not capture.finalized for capture in self._user_audio_captures
             )

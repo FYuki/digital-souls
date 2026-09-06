@@ -92,12 +92,12 @@ def probe_gpu() -> dict[str, object]:
 
 
 def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
-                      trials: int, disable_thinking: bool) -> dict[str, str]:
+                      trials: int, disable_thinking: bool, scheduled_fixture: bool = False) -> dict[str, str]:
     run_root(run_id)
     if not inference_env.is_file() or not livekit_env.is_file():
         raise ValueError("pilot environment files are unavailable")
-    if not 1 <= trials <= 100:
-        raise ValueError("pilot trials must be between 1 and 100")
+    if not 1 <= trials <= 99:
+        raise ValueError("pilot trials must be between 1 and 99")
     excluded = ("INFERENCE_TARGET_HEAVY_REASONING", "INFERENCE_TARGET_VISION")
     env = {k: v for k, v in os.environ.items() if not k.startswith(excluded)}
     for key, value in dotenv_values(inference_env).items():
@@ -116,12 +116,13 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
     if not key.strip() or not secret.strip():
         raise ValueError("LiveKit keys are empty")
     env.update(LIVEKIT_URL="ws://127.0.0.1:7880", LIVEKIT_API_KEY=key.strip(), LIVEKIT_API_SECRET=secret.strip(),
-               VOICE_QUALITY_PILOT_TRIALS=str(trials), VOICE_QUALITY_RUN_ID=run_id)
+               VOICE_QUALITY_PILOT_TRIALS=str(trials), VOICE_QUALITY_RUN_ID=run_id,
+               VOICE_QUALITY_SCHEDULED_FIXTURE="1" if scheduled_fixture else "0")
     return env
 
 
 def run(args: argparse.Namespace) -> int:
-    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking)
+    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture)
     reference = env.get("INFERENCE_TARGET_CHAT", "")
     if not reference.startswith("ollama/"):
         raise ValueError("this diagnostic requires an Ollama chat target")
@@ -138,7 +139,7 @@ def run(args: argparse.Namespace) -> int:
             sample = 0
             while process.poll() is None:
                 row = {"scope": "pilot_shared_inference_observation", "clock_domain": "observer_monotonic",
-                       "expected_context_tokens": expected_context, "thinking_disabled_for_pilot": args.disable_thinking,
+                       "expected_context_tokens": expected_context, "thinking_disabled_for_pilot": args.disable_thinking, "scheduled_fixture": args.scheduled_fixture,
                        "ollama": probe_residency(endpoint, model)}
                 if sample % 10 == 0:
                     row["gpu"] = probe_gpu()
@@ -164,4 +165,5 @@ if __name__ == "__main__":
     parser.add_argument("--livekit-env", type=Path, default=ROOT / "infra/livekit/.env")
     parser.add_argument("--trials", type=int, default=3)
     parser.add_argument("--disable-thinking", action="store_true")
+    parser.add_argument("--scheduled-fixture", action="store_true")
     raise SystemExit(run(parser.parse_args()))

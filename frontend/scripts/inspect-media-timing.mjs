@@ -17,13 +17,15 @@ try {
     const oscillator = context.createOscillator()
     const gain = context.createGain()
     const destination = context.createMediaStreamDestination()
-    const encoded = [], decoded = []
-    let worker, receiver, clone, reader, element, trackReceivedAt
+    const encoded = [], decoded = [], synchronization = []
+    let worker, receiver, clone, reader, element, trackReceivedAt, syncTimer
+    let lastRtpTimestamp
     const source = `self.onrtctransform = event => {
       const t = event.transformer; let count = 0;
       t.readable.pipeThrough(new TransformStream({ transform(frame, controller) {
         const row = {atMs: performance.timeOrigin + performance.now() - t.options.origin,
           timestamp: frame.timestamp, bytes: frame.data.byteLength, metadata: frame.getMetadata()};
+        if (typeof row.metadata.receiveTime === 'number') row.receiveAtMs = performance.timeOrigin + row.metadata.receiveTime - t.options.origin;
         controller.enqueue(frame);
         if (count++ < 500) self.postMessage(row);
       }})).pipeTo(t.writable).catch(() => {});
@@ -36,6 +38,14 @@ try {
     rx.ontrack = event => {
       trackReceivedAt = performance.now()
       receiver = event.receiver
+      syncTimer = setInterval(() => {
+        for (const value of receiver.getSynchronizationSources()) {
+          if (value.rtpTimestamp !== lastRtpTimestamp && synchronization.length < 1000) {
+            synchronization.push({ sampledAtMs: performance.now(), ...value })
+            lastRtpTimestamp = value.rtpTimestamp
+          }
+        }
+      }, 2)
       const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }))
       worker = new Worker(url)
       URL.revokeObjectURL(url)
@@ -55,6 +65,7 @@ try {
             frame.copyTo(samples, {planeIndex: 0, format: 'f32-planar'})
             if (decoded.length < 1000) decoded.push({atMs: performance.now(), timestamp: frame.timestamp,
               samples: frame.numberOfFrames, sampleRate: frame.sampleRate,
+              synchronization: receiver.getSynchronizationSources(),
               peak: samples.reduce((peak, sample) => Math.max(peak, Math.abs(sample)), 0)})
           } finally { frame.close() }
         }
@@ -81,8 +92,9 @@ try {
       const toneStopRequestedAt = performance.now()
       gain.gain.setValueAtTime(0, context.currentTime)
       await wait(500)
-      return { trackReceivedAt, toneStartRequestedAt, toneStopRequestedAt, encoded, decoded }
+      return { timeOrigin: performance.timeOrigin, trackReceivedAt, toneStartRequestedAt, toneStopRequestedAt, encoded, decoded, synchronization }
     } finally {
+      clearInterval(syncTimer)
       if (receiver) receiver.transform = null
       worker?.terminate(); await reader?.cancel(); clone?.stop()
       if (element) { element.srcObject = null; element.remove() }
@@ -91,10 +103,11 @@ try {
       await context.close()
     }
   })
-  const output = resolve(root, 'test-results/media-boundaries/rtp-timing.json')
+  const output = resolve(process.argv[2] ?? resolve(root, 'test-results/media-boundaries/rtp-timing.json'))
   await mkdir(dirname(output), { recursive: true })
-  await writeFile(output, JSON.stringify({ scope: 'synthetic_webrtc_clock_diagnostic', browser: browser.version(), trial }, null, 2) + '\n')
+  await writeFile(output, JSON.stringify({ scope: 'synthetic_webrtc_clock_diagnostic', browser: browser.version(), trial }, null, 2) + '\n', { flag: 'wx' })
   const firstSignal = trial.encoded.find(row => row.metadata.audioLevel > 0)
   console.log(JSON.stringify({ output, encoded: trial.encoded.length, decoded: trial.decoded.length,
+    synchronization: trial.synchronization.length, firstSynchronization: trial.synchronization[0],
     firstEncoded: trial.encoded[0], firstSignal, firstDecoded: trial.decoded[0], toneStartRequestedAt: trial.toneStartRequestedAt }))
 } finally { await browser.close() }

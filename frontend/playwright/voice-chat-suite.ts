@@ -214,7 +214,7 @@ const installPlaybackProbe = async (page: Page) => {
         ) {
           const now = performance.now()
           window.__voiceChatE2E.cycles.push({
-            fixtureStartedAt: fixtureStartedAt ?? now,
+            fixtureStartedAt: window.__voiceFixtureClock?.bounds.sourceStart?.lowerMs ?? fixtureStartedAt ?? now,
             sendAt: now,
             audioReceivedAt: null,
             audioDecodeAt: null,

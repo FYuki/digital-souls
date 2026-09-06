@@ -5,6 +5,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { PROFILE_REPORT_ENV } from '../../resolved-profile'
 
+import { installScheduledFixture, parseScheduledFixture, readFixtureBounds } from '../../playwright/controlled-audio-fixture'
 import { hardDeleteSelectedConversation } from '../../playwright/conversation-cleanup'
 import {
   attachProfileEvidence,
@@ -23,6 +24,7 @@ import {
 } from '../../playwright/voice-baseline-fixture'
 
 // pilotは診断用。正式な5 warm-up + 100試行の受入結果とは区別する。
+const scheduledFixture = process.env.VOICE_QUALITY_SCHEDULED_FIXTURE === '1'
 const pilot = process.env.VOICE_QUALITY_PILOT_TRIALS
 if (pilot !== undefined && !/^[1-9][0-9]?$/.test(pilot)) {
   throw new Error('VOICE_QUALITY_PILOT_TRIALS must be between 1 and 99')
@@ -68,6 +70,7 @@ test('LiveKit固定fixtureの独立試行を測定する', async ({ browser }) =
     JSON.parse(await readFile(fixtureMetadataUrl, 'utf8')),
     await readFile(fixtureAudioUrl),
   )
+  const sourceFixture = scheduledFixture ? parseScheduledFixture(await readFile(fixtureAudioUrl), fixture) : undefined
   const expectedTranscript = normalizeBaselineTranscript(fixture.expected_transcript)
   let initialStateHash: string | undefined
   const runFile = promisify(execFile)
@@ -95,6 +98,7 @@ test('LiveKit固定fixtureの独立試行を測定する', async ({ browser }) =
     })
     const driver = createVoiceChatDriver()
     try {
+      if (sourceFixture) await installScheduledFixture(page, sourceFixture)
       const microphone = await driver.openVoiceChat(page)
       const conversationId = await page.evaluate(() => (
         localStorage.getItem('digital-souls:conversation:miori')
@@ -112,6 +116,7 @@ test('LiveKit固定fixtureの独立試行を測定する', async ({ browser }) =
       if (state.initial_state_hash !== initialStateHash) throw new Error('controlled initial state changed between trials')
       await microphone.click()
       await expect(microphone).toHaveAttribute('aria-pressed', 'true')
+      if (sourceFixture) await page.evaluate(() => window.__voiceFixtureClock!.start())
       await driver.waitForSpeechCompletion(page)
       const cycle = await driver.waitForCompletedVoiceCycle(page)
       const mediaCorrelated = cycle.audioReceivedAt !== null && cycle.audioDecodeAt !== null
@@ -135,7 +140,10 @@ test('LiveKit固定fixtureの独立試行を測定する', async ({ browser }) =
       const endResponse = await sessionEnded
       expect(endResponse.ok()).toBe(true)
       expect((await endResponse.json()).phase).toBe('ended')
+      const sourceBounds = sourceFixture ? await readFixtureBounds(page) : undefined
       trials.push({
+        fixture_clock_method: sourceBounds ? 'audio_worklet_pcm_causal_bounds' : 'get_user_media_completion_unverified',
+        ...(sourceBounds ? { fixture_clock_bounds: sourceBounds, fixture_clock_maximum_uncertainty_ms: 20 } : {}),
         session_end_confirmed: true,
         phase: index < WARMUP_RUNS ? 'warmup' : 'measured',
         outcome: 'success',
@@ -147,8 +155,8 @@ test('LiveKit固定fixtureの独立試行を測定する', async ({ browser }) =
         transcript_matches: transcriptMatches,
         initial_state_hash: initialStateHash,
         initial_state_evidence: state.evidence,
-        fixture_speech_end_client_ms: cycle.fixtureStartedAt
-          + fixture.speech_end_sample * 1000 / fixture.sample_rate_hz,
+        fixture_speech_end_client_ms: sourceBounds?.speechEnd.lowerMs ?? (cycle.fixtureStartedAt
+          + fixture.speech_end_sample * 1000 / fixture.sample_rate_hz),
         ...cycle,
       })
       await hardDeleteSelectedConversation(page, 'miori')
@@ -158,6 +166,7 @@ test('LiveKit固定fixtureの独立試行を測定する', async ({ browser }) =
         coreEvents: window.__voiceChatE2E.coreEventDiagnostics,
         liveKitOrder: window.__voiceChatE2E.liveKitOrder,
         microphoneStates: window.__voiceChatE2E.micStates,
+        fixtureClockBounds: window.__voiceFixtureClock?.bounds,
       })).catch(() => ({ unavailable: true }))
       trials[index] = {
         ...trials[index],
@@ -167,6 +176,7 @@ test('LiveKit固定fixtureの独立試行を測定する', async ({ browser }) =
       throw error
     } finally {
       await persistManifest()
+      await page.evaluate(() => window.__voiceFixtureClock?.close()).catch(() => undefined)
       await page.close()
     }
   }

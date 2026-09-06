@@ -2425,3 +2425,33 @@ def test_production_core_bridge_waits_for_each_utterances_media_tail() -> None:
     assert [request["audio"] for request in requests] == [
         b"first-pcm", b"second-pcm-late-tail",
     ]
+
+
+@pytest.mark.parametrize("interruption", [False, True])
+def test_vad_source_boundary_is_correlated_without_rebinding_interruption(interruption) -> None:
+    from app.livekit_transport import production
+    from app.livekit_transport.measurement import LiveKitMeasurementSession
+
+    events = []
+    measurement = LiveKitMeasurementSession(
+        session_id="session", character_id="miori", measurement_kind="controlled_baseline",
+        record=events.append, clock_ns=lambda: 9_000_000_000,
+    )
+    if interruption:
+        measurement.bind_response(response_id="old-response", source_utterance_ids=("old-utterance",))
+    bridge = production._ConversationCoreBridge(NoopCoreSession(), lambda task: None, measurement=measurement)
+    bridge.notify(json.dumps({
+        "type": "speech_started", "utterance_id": "new-utterance", "speaker": {"role": "user"},
+        "monotonic_timestamp_ms": 1234,
+        **({"response_id": "old-response"} if interruption else {}),
+    }).encode())
+    measurement.bind_response(response_id="new-response", source_utterance_ids=("new-utterance",))
+    boundary = [event for event in events if event.name == "vad_speech_start_client"]
+    assert len(boundary) == 1
+    assert boundary[0].response_id == "new-response"
+    assert boundary[0].utterance_id == "new-utterance"
+    assert boundary[0].timestamp == 1234
+    assert boundary[0].clock_domain == "client_monotonic"
+    assert boundary[0].unit == "millisecond"
+    starts = [event for event in events if event.name == "speech_started_client"]
+    assert [event.response_id for event in starts] == (["old-response"] if interruption else [])

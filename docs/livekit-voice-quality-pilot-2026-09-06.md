@@ -192,3 +192,28 @@ fixtureの起点は現状`getUserMedia`完了時刻であり、実際の入力�
 GPUはhost全体の使用率・使用／総memoryを取得した。この会話に帰属するGPU時間、Backend RSS、transport帯域・packet lossとは区別する。生観測はignoredのdata rootへ保存し、model名・digest・endpoint・本文・秘密値を含めない。`residency-01`の初版観測にはclock名`server_monotonic`が付いているが、実体はrunner自身のclockであり、Backendコンテナとの同期を証明するものではない。以後のrunnerでは`observer_monotonic`へ名称を訂正した。既存生観測を上書きしていない。
 
 runnerの秘密値除外、欠測の維持、GPU単位・値域、run IDのディレクトリ逸脱防止、既存options維持を確認する19テストとPython lintが成功した。今回追加したのは診断情報と再現手段であり、TTFAの改善策や全必須指標の合格を証明したわけではない。応答sourceのreceive／decode／playback相関など、先に記載した未完了条件は維持する。
+
+
+## 音声源のsample境界によるVAD測定（2026-09-07）
+
+[固定PCMの音声源](../frontend/playwright/controlled-audio-fixture.ts)を追加した。マイク準備後に固定PCMをAudioWorkletからMediaStreamへ流し、source開始と正解発話開始・末尾のsampleを出すprocess呼び出しをmain→worklet→mainの因果関係で囲む。各時刻を20ms以下の幅の上下限で残し、VADや`getUserMedia`から正解時刻を推測しない。WAVのhashとPCM16 sample列は検証し、開始前の無音でfixtureを消費しない。
+
+`source-clock-01`は準備1回＋測定3回が成功し、測定3回の発話末尾の観測幅は約0.7〜1.7msだった。VAD終了までの遅延は約754〜766ms。通常発話の語頭時刻が既存traceに出ないことも確認した。既存の`speech_started_client`は割り込みの旧応答専用に相関されるため、通常発話用の`vad_speech_start_client`を追加した。新しい観測はその発話への応答に結び、割り込み指標の旧応答相関は維持する。
+
+追加後の`source-clock-02`も準備1回＋測定3回が成功し、transcript一致・応答完了・明示終了を確認した。以下の開始・終了誤差は正解境界の上下限を維持した範囲である。開始の負値はVADが保持するframe先頭が正解境界より前にあることを示す。VAD終了からサーバー発話確定までの800ms指標とは区間を分ける。
+
+| 測定試行 | VAD開始 − 正解開始 | VAD終了 − 正解末尾 | VAD終了→サーバー確定 |
+|---|---:|---:|---:|
+| 1 | -61.2〜-60.4ms | 762.3〜762.6ms | 393.4ms |
+| 2 | -65.4〜-61.6ms | 759.3〜762.4ms | 407.3ms |
+| 3 | -60.6〜-57.9ms | 763.9〜766.1ms | 422.1ms |
+
+この3試行では開始遅延100ms超は観測されなかったが、相槌・take-turn各100試行の成功率を示す結果ではない。通常のfake microphoneと入力供給方法が異なるため、凍結済みWebSocket baselineの計測方法と同一とは扱わない。入力側の正解clockを改善したもので、応答sourceへのreceive／decode／playback相関は未解決である。
+
+Frontend単体351件、関連Backend66件が成功した。Svelte／TypeScript、Python lint、225 source filesの型検査も成功した。観測幅超過・欠測・時刻逆転の拒否、元PCM保持、開始前消費の防止、通知の重複防止を含む。発話末尾後のping停止は実接続2 runの後に追加した資源解放であり、上記runの観測値を変更していない。
+
+### RTP受信とトラック配送の対応を調べる診断
+
+[WebRTCの仕様](https://www.w3.org/TR/webrtc/#dom-rtcrtpreceiver-getsynchronizationsources)にある`getSynchronizationSources()`を、実際の2つのRTCPeerConnectionを結ぶ固定tone診断へ追加した。RTP timestampをキーにencoded受信とトラック配送を照合し、103/103 packetを対応付けた。トラック配送時刻はepoch基準なので`performance.timeOrigin`を引いてwindowのclockへ合わせた。受信→配送は約3.1〜23.1msで、時刻の逆転はなかった。既存診断を上書きしないよう、出力先指定と排他的な新規作成に対応した。
+
+このAPIの時刻はMediaStreamTrackへの配送であり、スピーカー出力やアプリのAudioWorkletへの実sample提示の時刻ではない。最初の非無音packetに対応するdecoded frameでも、最初の10msは小さいcomfort noise、次の10msでtoneが観測された。同じRTP packetに相関できたことだけでfirst audible sampleを確定しない。アプリのresponseとの対応、stale提示、再接続後の世代境界は別途解決が必要である。

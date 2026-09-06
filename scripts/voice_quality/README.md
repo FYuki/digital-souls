@@ -20,6 +20,21 @@ backend/.venv/bin/python scripts/voice_quality/run_pilot.py \
 
 runnerは準備1回と指定回数の測定を行い、実際のBrowser→LiveKit→Whisper→LLM→VOICEVOX経路でtranscript一致・応答完了・session終了を確認する。応答sourceとreceive／decode／playbackの対応が未実装の場合、理由付き欠測を残す。このpilotをcontrolled受入へ変更して扱わない。
 
+## 音声源の正解境界を直接観測するpilot
+
+`--scheduled-fixture`を追加すると、マイクの準備・publish完了後に固定WAVのPCMをAudioWorkletからMediaStreamへ流す。開始前にfixtureを消費しない。各境界のPCMを出すprocess呼び出しより前にmainから送ったping時刻と、通知をmainが受け取った時刻で境界を囲む。clock名はclient側の`performance.now()`で統一する。正解境界をVAD判定や`getUserMedia`完了時刻から作らない。
+
+```bash
+backend/.venv/bin/python scripts/voice_quality/run_pilot.py \
+  --run-id source-clock-01 \
+  --inference-env /home/asa/dev/digital-souls/backend/.env \
+  --trials 3 --disable-thinking --scheduled-fixture
+```
+
+manifestの`fixture_clock_bounds`にはsource開始、正解発話開始、正解発話末尾の`lowerMs`／`upperMs`と元sample位置を保存する。上下限の幅が20msを超えた場合や欠測・逆転があれば試行は失敗する。遅延を単一値へ変換する必要がある場合は、末尾の下限を起点として遅延を過小評価しない。境界後に高頻度pingを停止する。
+
+これは合成PCMの生成時刻の観測であり、物理マイク・スピーカーの時刻ではない。通常のfake microphoneとは入力供給方法が異なるため、凍結済みWebSocket baselineと同じ方法で計測したとは扱わない。WAVのhashとsample列は維持し、診断方法をmanifestへ明示する。応答音声のsource相関や全cohortの受け入れを完了したという意味ではない。
+
 ## 共有推論環境の数値観測
 
 `inference-runtime.jsonl`へOllamaのロード済みモデル状態を約0.5秒おき、GPU使用量を約5秒おきに保存する。APIやコマンドの処理時間により間隔は延びる。観測失敗は欠測理由で残し、0使用量へ補完しない。
