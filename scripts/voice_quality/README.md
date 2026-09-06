@@ -72,13 +72,13 @@ trackの応答ID一致は、PCM先頭の受信・decode・first playbackを相�
 
 ```bash
 backend/.venv/bin/python scripts/voice_quality/probe_native_audio_source.py \
-  --output frontend/test-results/media-boundaries/native-source-render-07.json
+  --output frontend/test-results/media-boundaries/native-source-shared-decoder-01.json
 ```
 
 出力先は毎回新しい名前を指定する。専用の一時Roomを`127.0.0.1:7880`へ作り、Python SDKから48kHz monoの合成440Hz音を送信し、Chromiumで実WebRTC受信する。推論サービス・会話DB・dogfoodを使用しない。終了時は自分が作ったRoom、AudioSource、browser、localhostの静的診断ページ用serverを解放する。鍵とRoom用JWTはファイルやstdoutへ保存しない。
 
-標準buffer（1,000ms）と直接入力（0ms）を比較し、購読後1秒の入力前、20ms入力後、追加1秒入力後を観測する。直接入力は10msずつ実時間で供給する。[RFC 2198](https://www.rfc-editor.org/rfc/rfc2198.html)に従って受信REDからprimary payloadを取り出し、[WebCodecs Opus](https://www.w3.org/TR/webcodecs-opus-codec-registration/)として独立decodeする。packetごとに`decoder.flush()`を待ち、そのoutput callbackへ入力packet番号を付け、PCMをAudioWorkletへ渡す。PCM本体は診断JSONへ保存しない。decoderの`AudioData.timestamp`は再構成され得るため、入力packetの識別子に使わない。
+標準buffer（1,000ms）と直接入力（0ms）を比較し、購読後1秒の入力前、20ms入力後、追加1秒入力後を観測する。直接入力は10msずつ実時間で供給する。[RFC 2198](https://www.rfc-editor.org/rfc/rfc2198.html)に従って受信REDからprimary payloadを取り出し、[WebCodecs Opus](https://www.w3.org/TR/webcodecs-opus-codec-registration/)として独立decodeする。通常会話の受信観測と同じ`OpusPacketDecoder`を使い、途中でflushせずに各packetの960sample出力を待って入力番号を対応付け、PCMをAudioWorkletへ渡す。同じsnapshotまでの全packetを別decoderで一括復号し、PCM全サンプルの差分が0であることも検証する。比較用に途中flushするdecoderの波形差分も数値で記録する。PCM本体は診断JSONへ保存しない。decoderの`AudioData.timestamp`は再構成され得るため、入力packetの識別子に使わない。
 
 workerと画面は10回の往復messageで時計offsetの上下限を求める。このChromium診断では100usの時計丸めを前提としてoffsetの両端に0.2msの余裕を残し、幅が1msを超えた場合や矛盾した場合は失敗する。これは全browserの時計精度を保証する方法ではない。`timeOrigin`だけの換算値は比較診断用に残すが、遅延へ採用しない。出力frame位置は`getOutputTimestamp()`でbrowser出力時計へ写し、最後の観測で出力時計が全サンプルの末尾を通過したことを確認する。物理スピーカーの音響時刻は測らない。
 
-検証器は直接入力の0→1→51 packet、同数のdecode・render・完了、RTP timestamp／sequenceの連続性、packet相関、各960サンプルの出力、時計の順序を必須にする。別のsource PCM sample位置との一致、通常会話への組み込み、loss回復、音質、TTFA・underrunの受け入れ完了は示さない。最初の20ms後の200ms停止は診断で意図的に入れるため、playback continuityの合格試行として集計しない。
+検証器は直接入力の0→1→51 packet、同数のdecode・render・完了、RTP timestamp／sequenceの連続性、packet相関、各960サンプルの出力、時計の順序を必須にする。別のsource PCM sample位置との一致、通常会話の明示PCM再生、loss回復、実音声全般の音質、TTFA・underrunの受け入れ完了は示さない。最初の20ms後の200ms停止は診断で意図的に入れるため、playback continuityの合格試行として集計しない。

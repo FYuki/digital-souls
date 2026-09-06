@@ -120,7 +120,7 @@ test('既存のtransformを上書きせず、欠測理由を明示する', () =>
 
 
 type SyncSource = { source: number; rtpTimestamp: number; timestamp: number }
-type PacketMessage = { kind: string; workerAtMs?: number; sequence?: number; packet?: { source: number; rtpTimestamp: number; receivedAtWorkerMs: number } }
+type PacketMessage = { kind: string; workerAtMs?: number; sequence?: number; packet?: { source: number; rtpTimestamp: number; receivedAtWorkerMs: number }; packetIndex?: number; samples?: number; reason?: string }
 const packetObserver = (initial: SyncSource[] = [], autoClock = true) => {
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] })
   let now = 300
@@ -150,6 +150,10 @@ const packetObserver = (initial: SyncSource[] = [], autoClock = true) => {
     worker.onmessage?.({ data: { kind: 'encoded', workerAtMs: now, packet: { rtpTimestamp, source, receivedAtWorkerMs: receivedAtMs } } })
   }
   return { observer, send,
+    decoded: (overrides: Partial<PacketMessage> = {}) => worker.onmessage?.({data: {
+      kind: 'packet_decoded', packetIndex: 0, samples: 960, workerAtMs: 110,
+      packet: {source: 7, rtpTimestamp: 9, receivedAtWorkerMs: 100}, ...overrides,
+    }}),
     calibrate: () => {
       for (let index = 0; index < 10; index++) {
         worker.onmessage?.({data: {kind: 'clock', sequence: clockRequests[index].sequence, workerAtMs: now}})
@@ -253,4 +257,86 @@ describe('worker時計の較正と計測待ち', () => {
     expect(vi.getTimerCount()).toBe(0)
     p.observer.close()
   })
+})
+
+
+test('同一packetの独立decodeは受信時刻と別に較正し、較正前の通知も保持する', () => {
+  const p = packetObserver([], false)
+  p.decoded()
+  p.send(9, 7)
+  expect(p.observer.snapshot().firstPacketDecodedAtMs).toBeUndefined()
+  p.calibrate()
+  expect(p.observer.snapshot()).toMatchObject({
+    firstPacketReceivedAtMs: 99.8, firstPacketDecodedAtMs: 109.8,
+    firstPacketDecodedAtBoundsMs: {lowerMs: 109.8, upperMs: 110.2}, firstPacketDecodedSamples: 960,
+  })
+  p.observer.close()
+})
+
+test.each(['wrong_source', 'wrong_packet', 'wrong_count', 'wrong_index', 'early', 'future'])('誤ったpacketや時計を相関済みdecodeへしない（%s）', damage => {
+  const p = packetObserver()
+  p.send(9, 7)
+  p.decoded(damage === 'wrong_source' ? {packet: {source: 8, rtpTimestamp: 9, receivedAtWorkerMs: 100}}
+    : damage === 'wrong_packet' ? {packet: {source: 7, rtpTimestamp: 10, receivedAtWorkerMs: 100}}
+      : damage === 'wrong_count' ? {samples: 480} : damage === 'wrong_index' ? {packetIndex: 1}
+        : {workerAtMs: damage === 'early' ? 99 : 99999})
+  expect(p.observer.snapshot().firstPacketDecodedAtMs).toBeUndefined()
+  expect(p.observer.snapshot().packetDecodeMissingReason).toBeDefined()
+  p.observer.close()
+})
+
+test('close後のdecode通知を無視する', () => {
+  const p = packetObserver()
+  p.send(9, 7)
+  p.observer.close()
+  p.decoded()
+  expect(p.observer.snapshot().firstPacketDecodedAtMs).toBeUndefined()
+})
+
+
+test.each([false, true])('独立decodeの待機やqueue超過でもnative frame配送を止めない（overflow=%s）', async overflow => {
+  const reported: {kind: string; packetIndex?: number; reason?: string}[] = []
+  const delivered: unknown[] = []
+  let output!: (frame: unknown) => void
+  const requests: unknown[] = []
+  const close = vi.fn()
+  class Decoder {
+    static isConfigSupported = async () => ({supported: true})
+    state = 'configured'
+    constructor(options: {output: typeof output}) {output = options.output}
+    configure() {}
+    decode(chunk: unknown) {requests.push(chunk)}
+    close() {this.state = 'closed'; close()}
+    flush() {throw new Error('flush must not be called')}
+  }
+  const count = overflow ? 60 : 2
+  const frames = Array.from({length: count}, (_, index) => ({
+    data: new Uint8Array([0x98, 1]).buffer,
+    getMetadata: () => ({receiveTime: 1, rtpTimestamp: 9 + index * 960, synchronizationSource: 7, mimeType: 'audio/opus'}),
+  }))
+  const worker: {onrtctransform?: (event: unknown) => Promise<void>; postMessage: (row: typeof reported[number]) => void} = {
+    postMessage: row => reported.push(row),
+  }
+  new Function('self', 'TransformStream', 'AudioDecoder', 'EncodedAudioChunk', encodedObserverWorkerSource)(
+    worker, TransformStream, Decoder, class {},
+  )
+  await worker.onrtctransform?.({transformer: {
+    options: {decodePackets: true},
+    readable: new ReadableStream({start(controller) {for (const frame of frames) controller.enqueue(frame); controller.close()}}),
+    writable: new WritableStream({write(frame) {delivered.push(frame)}}),
+  }})
+  expect(delivered).toEqual(frames)
+  expect(requests).toHaveLength(1)
+  if (overflow) {
+    expect(reported).toContainEqual({kind: 'packet_decode_error', reason: 'opus_decode_queue_overflow'})
+  } else {
+    for (let index = 0; index < count; index++) {
+      output({numberOfFrames: 960, sampleRate: 48000, numberOfChannels: 1, timestamp: 999,
+        copyTo: (samples: Float32Array) => samples.fill(.1), close: vi.fn()})
+      await Promise.resolve()
+    }
+    expect(reported.filter(row => row.kind === 'packet_decoded')).toHaveLength(1)
+    expect(requests).toHaveLength(count)
+  }
+  await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
 })

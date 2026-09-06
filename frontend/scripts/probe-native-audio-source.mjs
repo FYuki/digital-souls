@@ -1,5 +1,6 @@
 // Python SDKの実AudioSourceを受信し、入力前packetと独立Opus decodeを観測する。
 import { chromium } from 'playwright'
+import ts from 'typescript'
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
@@ -7,6 +8,10 @@ import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const decoderModule = ts.transpileModule(await readFile(resolve(root, 'src/livekit/opus-packet-decoder.ts'), 'utf8'), {
+  compilerOptions: {module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022},
+})
+const {opusPacketDecoderSource} = await import('data:text/javascript;base64,' + Buffer.from(decoderModule.outputText).toString('base64'))
 const lines = createInterface({ input: process.stdin })
 const input = lines[Symbol.asyncIterator]()
 const initial = await input.next()
@@ -27,7 +32,7 @@ try {
   await page.evaluate(async config => {
     const { Room, RoomEvent, Track } = window.LivekitClient
     const room = new Room()
-    const rows = {}, workers = [], receivers = [], elements = [], nodes = {}
+    const rows = {}, workers = [], receivers = [], elements = [], nodes = {}, comparisons = new Map()
     const context = new AudioContext({sampleRate: 48000})
     const renderSource = `class PacketRenderer extends AudioWorkletProcessor {
       constructor() {
@@ -59,30 +64,66 @@ try {
     const renderUrl = URL.createObjectURL(new Blob([renderSource], {type: 'text/javascript'}))
     try { await context.audioWorklet.addModule(renderUrl) } finally { URL.revokeObjectURL(renderUrl) }
     await context.resume()
-    const source = `self.onmessage = event => {
+    const source = `${config.packetDecoderSource}
+self.onmessage = event => {
       if (event.data.kind === 'clock') self.postMessage({kind: 'clock', lower: event.data.lower,
         workerNow: performance.now(), workerOrigin: performance.timeOrigin});
     };
     self.onrtctransform = async event => {
-      const t = event.transformer; let index = 0; let decoder; let decodingIndex = null;
+      const t = event.transformer; let index = 0; let decoder;
+      const inputs = [], serialOutputs = [];
+      // 比較用のPCMはworker内だけに保持し、artifactには差分の数値だけを返す。
+      const copySamples = frame => {
+        const samples = new Float32Array(frame.numberOfFrames);
+        frame.copyTo(samples, {planeIndex: 0, format: 'f32-planar'});
+        return samples;
+      };
+      const decodeReference = async (inputPackets, flushEach) => {
+        const outputs = []; let failure = null;
+        const reference = new AudioDecoder({output: frame => {
+          try { outputs.push(copySamples(frame)); } finally { frame.close(); }
+        }, error: error => { failure = error; }});
+        try {
+          reference.configure(config);
+          for (let n = 0; n < inputPackets.length; n++) {
+            reference.decode(new EncodedAudioChunk({type: 'key', timestamp: n * 20000, data: inputPackets[n]}));
+            if (flushEach) await reference.flush();
+          }
+          await reference.flush();
+          if (failure) throw failure;
+          return outputs;
+        } finally { if (reference.state !== 'closed') reference.close(); }
+      };
+      const difference = (actual, reference) => {
+        if (actual.length !== reference.length || actual.some((chunk, i) => chunk.length !== reference[i].length)) {
+          throw new Error('reference output format mismatch');
+        }
+        let maximum = 0, squares = 0, samples = 0;
+        for (let n = 0; n < actual.length; n++) for (let i = 0; i < actual[n].length; i++) {
+          const error = actual[n][i] - reference[n][i];
+          if (!Number.isFinite(error)) throw new Error('nonfinite reference sample');
+          maximum = Math.max(maximum, Math.abs(error)); squares += error * error; samples++;
+        }
+        return {packets: actual.length, samples, maxAbsoluteError: maximum, rmsError: Math.sqrt(squares / samples)};
+      };
+      self.addEventListener('message', async ({data}) => {
+        if (data.kind !== 'compare') return;
+        try {
+          // snapshotまでの同じpacketだけを固定し、終了後の追加frameを混ぜない。
+          const count = data.count;
+          if (!Number.isInteger(count) || count < 1 || count > serialOutputs.length || count > inputs.length) {
+            throw new Error('comparison input count unavailable');
+          }
+          const inputPackets = inputs.slice(0, count), actual = serialOutputs.slice(0, count);
+          const batch = await decodeReference(inputPackets, false);
+          const flushed = await decodeReference(inputPackets, true);
+          self.postMessage({kind: 'comparison', serialVersusBatch: difference(actual, batch),
+            flushedVersusBatch: difference(flushed, batch), perPacketFlush: false});
+        } catch (error) { self.postMessage({kind: 'comparison_error', name: error.name}); }
+      });
       const config = {codec: 'opus', sampleRate: 48000, numberOfChannels: 1};
       try {
-        if (typeof AudioDecoder === 'undefined' || !(await AudioDecoder.isConfigSupported(config)).supported) {
-          self.postMessage({kind: 'decoder_unavailable'});
-        } else {
-          decoder = new AudioDecoder({output: frame => {
-            try {
-              const samples = new Float32Array(frame.numberOfFrames);
-              frame.copyTo(samples, {planeIndex: 0, format: 'f32-planar'});
-              self.postMessage({kind: 'decoded', packetIndex: decodingIndex, chunkTimestamp: frame.timestamp,
-                originBasedAtMs: performance.timeOrigin + performance.now() - t.options.origin, workerNow: performance.now(),
-                sampleRate: frame.sampleRate, frames: frame.numberOfFrames, channels: frame.numberOfChannels,
-                peak: samples.reduce((p, value) => Math.max(p, Math.abs(value)), 0),
-                firstNonzero: samples.findIndex(value => value !== 0), samples}, [samples.buffer]);
-            } finally { frame.close(); }
-          }, error: error => self.postMessage({kind: 'decoder_error', name: error.name})});
-          decoder.configure(config);
-        }
+        decoder = await OpusPacketDecoder.create(reason => self.postMessage({kind: 'decoder_error', name: reason}));
         await t.readable.pipeThrough(new TransformStream({async transform(frame, controller) {
           const metadata = frame.getMetadata(), n = index++;
           const row = {kind: 'packet', index: n, rtpTimestamp: metadata.rtpTimestamp,
@@ -92,35 +133,26 @@ try {
             bytes: frame.data.byteLength,
             originBasedReceivedAtMs: performance.timeOrigin + metadata.receiveTime - t.options.origin,
             observedAtMs: performance.timeOrigin + performance.now() - t.options.origin};
-          if (decoder?.state === 'configured' && n < 400) {
+          if (decoder && !decoder.failed && n < 400) {
             try {
-              let payload = new Uint8Array(frame.data);
-              if (metadata.mimeType === 'audio/red') {
-                // RFC 2198: 全headerを読み、冗長blockを飛ばしてprimaryだけをdecodeする。
-                let header = 0, redundant = 0;
-                while (header < payload.length && payload[header] & 128) {
-                  if (header + 4 > payload.length) throw new Error('truncated RED header');
-                  redundant += ((payload[header + 2] & 3) << 8) | payload[header + 3];
-                  header += 4;
-                }
-                if (header >= payload.length || header + 1 + redundant >= payload.length) throw new Error('truncated RED primary');
-                row.primaryPayloadType = payload[header] & 127;
-                payload = payload.subarray(header + 1 + redundant);
-              } else if (metadata.mimeType !== 'audio/opus') throw new Error('unsupported codec');
+              const payload = OpusPacketDecoder.primaryPayload(frame.data, metadata.mimeType);
               row.primaryBytes = payload.byteLength;
-              // 1packetずつflushし、output callbackを現在の入力packetへ対応させる。
-              // AudioData.timestampはdecoderが再構成するため識別子に使わない。
-              decodingIndex = n;
-              decoder.decode(new EncodedAudioChunk({type: 'key', timestamp: n * 20000, data: payload}));
-              await decoder.flush();
-              decodingIndex = null;
-            }
-            catch (error) { self.postMessage({kind: 'decode_call_error', name: error.name}); }
+              inputs.push(payload.slice());
+              const decoded = await decoder.decode(payload, n);
+              const samples = decoded.samples;
+              serialOutputs.push(samples.slice());
+              self.postMessage({kind: 'decoded', packetIndex: decoded.packetIndex, chunkTimestamp: decoded.timestamp,
+                originBasedAtMs: performance.timeOrigin + decoded.decodedAtWorkerMs - t.options.origin,
+                workerNow: decoded.decodedAtWorkerMs, sampleRate: 48000, frames: samples.length, channels: 1,
+                peak: samples.reduce((p, value) => Math.max(p, Math.abs(value)), 0),
+                firstNonzero: samples.findIndex(value => value !== 0), samples}, [samples.buffer]);
+            } catch (error) { self.postMessage({kind: 'decode_call_error', name: error.name}); }
           }
           controller.enqueue(frame);
           if (n < 400) self.postMessage(row);
         }})).pipeTo(t.writable);
       } catch { self.postMessage({kind: 'observer_error'}); }
+      finally { decoder?.close(); }
     }`
     room.on(RoomEvent.TrackSubscribed, (track, publication) => {
       if (track.kind !== Track.Kind.Audio || !['buffered', 'direct'].includes(publication.trackName)) return
@@ -142,7 +174,7 @@ try {
       const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }))
       const worker = new Worker(url)
       URL.revokeObjectURL(url)
-      workers.push(worker); receivers.push(track.receiver)
+      workers.push(worker); worker.probeMode = name; receivers.push(track.receiver)
       worker.onmessage = ({ data }) => {
         if (data.kind === 'clock') {
           rows[name].clocks.push({...data, upper: performance.now()})
@@ -153,6 +185,10 @@ try {
           const {samples, ...observation} = data
           rows[name].decoded.push(observation)
           node.port.postMessage({packetIndex: data.packetIndex, chunkTimestamp: data.chunkTimestamp, samples}, [samples.buffer])
+        }
+        else if (data.kind === 'comparison' || data.kind === 'comparison_error') {
+          const pending = comparisons.get(worker)
+          if (pending) { comparisons.delete(worker); clearTimeout(pending.timer); pending.resolve(data) }
         }
         else rows[name].errors.push({kind: data.kind, name: data.name})
       }
@@ -165,6 +201,15 @@ try {
       window.sourceProbeEvent({ kind: 'subscribed', mode: name })
     })
     window.sourceProbe = {
+      async compare(mode, count) {
+        const worker = workers.find(worker => worker.probeMode === mode)
+        if (!worker) throw new Error('comparison worker missing')
+        return await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => { comparisons.delete(worker); reject(new Error('comparison timeout')) }, 5000)
+          comparisons.set(worker, {resolve, timer})
+          worker.postMessage({kind: 'compare', count})
+        })
+      },
       snapshot() {
         const outputTimestamp = context.getOutputTimestamp()
         const observedAtMs = performance.now()
@@ -182,13 +227,14 @@ try {
       },
     }
     await room.connect(config.url, config.token)
-  }, configuration)
+  }, {...configuration, packetDecoderSource: opusPacketDecoderSource})
   emit({ kind: 'ready', browser: browser.version() })
   while (true) {
     const line = await input.next()
     if (line.done) break
     const command = JSON.parse(line.value)
     if (command.kind === 'snapshot') emit({ kind: 'snapshot', rows: await page.evaluate(() => window.sourceProbe.snapshot()) })
+    else if (command.kind === 'compare') emit({kind: 'comparison', mode: command.mode, result: await page.evaluate(({mode, count}) => window.sourceProbe.compare(mode, count), command)})
     else if (command.kind === 'close') break
     else throw new Error('unknown probe command')
   }

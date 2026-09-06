@@ -126,3 +126,65 @@ def test_rejects_false_media_evidence(damage):
         final["errors"].append({"kind": "decoder_error"})
     with pytest.raises(ValueError):
         probe.verify_direct_chain(rows)
+
+
+def compared_observation():
+    row = observations()[-1]
+    row["decoder_comparison"] = {
+        "kind": "comparison",
+        "perPacketFlush": False,
+        "serialVersusBatch": {
+            "packets": 51,
+            "samples": 48960,
+            "maxAbsoluteError": 0,
+            "rmsError": 0,
+        },
+        "flushedVersusBatch": {
+            "packets": 51,
+            "samples": 48960,
+            "maxAbsoluteError": 0.2,
+            "rmsError": 0.1,
+        },
+    }
+    return row
+
+
+def test_serial_decode_requires_identical_pcm_but_reports_flush_damage():
+    probe.verify_decoder_comparison(compared_observation())
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "difference",
+        "wrong_count",
+        "wrong_samples",
+        "missing",
+        "flushed",
+        "nan",
+        "bool",
+        "no_packets",
+    ],
+)
+def test_decoder_comparison_rejects_incomplete_or_changed_samples(damage):
+    row = compared_observation()
+    comparison = row["decoder_comparison"]
+    serial = comparison["serialVersusBatch"]
+    if damage == "difference":
+        serial["maxAbsoluteError"] = 0.000001
+    elif damage == "wrong_count":
+        serial["packets"] += 1
+    elif damage == "wrong_samples":
+        serial["samples"] -= 1
+    elif damage == "missing":
+        comparison["kind"] = "comparison_error"
+    elif damage == "flushed":
+        comparison["perPacketFlush"] = True
+    elif damage == "nan":
+        comparison["flushedVersusBatch"]["rmsError"] = float("nan")
+    elif damage == "bool":
+        serial["rmsError"] = False
+    elif damage == "no_packets":
+        row["packets"] = []
+    with pytest.raises(ValueError):
+        probe.verify_decoder_comparison(row)

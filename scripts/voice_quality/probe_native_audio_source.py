@@ -83,7 +83,7 @@ def verify_direct_chain(snapshots: list[dict[str, Any]]) -> dict[str, object]:
     for index, (packet, frame, output, end) in enumerate(
         zip(packets, decoded, rendered, completed, strict=True)
     ):
-        # decoder.flushで入力packetごとにoutput callbackの完了を待つ。
+        # 次の入力を渡す前にoutput callbackの完了を待ち、途中flushしない。
         # decoderの再構成timestampをpacket識別子として使用しない。
         if packet["index"] != index or any(
             item["packetIndex"] != index for item in (frame, output, end)
@@ -150,6 +150,38 @@ def verify_direct_chain(snapshots: list[dict[str, Any]]) -> dict[str, object]:
         "source_pcm_offset_verified": False,
         "production_playback_verified": False,
     }
+
+
+def verify_decoder_comparison(row: dict[str, Any]) -> None:
+    """同じsnapshotの全PCMと一括復号の一致を要求する。flush比較は差分を報告する。"""
+    comparison = row["decoder_comparison"]
+    if (
+        comparison.get("kind") != "comparison"
+        or comparison.get("perPacketFlush") is not False
+    ):
+        raise ValueError("decoder comparison unavailable")
+    expected_packets = len(row["packets"])
+    expected_samples = sum(frame["frames"] for frame in row["decoded"])
+    if not expected_packets or len(row["decoded"]) != expected_packets:
+        raise ValueError("decoder comparison frame count unavailable")
+    for method in ("serialVersusBatch", "flushedVersusBatch"):
+        result = comparison[method]
+        if (
+            result["packets"] != expected_packets
+            or result["samples"] != expected_samples
+        ):
+            raise ValueError("decoder comparison input count mismatch")
+        for key in ("maxAbsoluteError", "rmsError"):
+            value = result[key]
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value < 0
+            ):
+                raise ValueError("invalid decoder comparison error")
+            if method == "serialVersusBatch" and value != 0:
+                raise ValueError("serial decode differs from continuous reference")
 
 
 async def run(output: Path) -> None:
@@ -280,6 +312,17 @@ async def run(output: Path) -> None:
                 await sender.local_participant.unpublish_track(publication.sid)
                 await source.aclose()
                 sources.remove(source)
+                # publisher停止後に同じencoded packetを一括decodeしてPCMを比較する。
+                await asyncio.sleep(0.2)
+                await send(
+                    {
+                        "kind": "compare",
+                        "mode": mode,
+                        "count": len(snapshots[-1]["packets"]),
+                    }
+                )
+                comparison = (await receive("comparison"))["result"]
+                snapshots[-1]["decoder_comparison"] = comparison
             await send({"kind": "close"})
             await receive("closed")
             child.stdin.close()
@@ -287,6 +330,11 @@ async def run(output: Path) -> None:
             if child.returncode:
                 raise RuntimeError("browser probe failed during cleanup")
             result["verification"] = verify_direct_chain(snapshots)
+            for row in snapshots:
+                if row["phase"] == "after_paced_audio":
+                    verify_decoder_comparison(row)
+                    if row["mode"] == "direct":
+                        result["decoder_comparison"] = row["decoder_comparison"]
             result["outcome"] = "observed"
         except BaseException as error:
             result["outcome"] = "failed"

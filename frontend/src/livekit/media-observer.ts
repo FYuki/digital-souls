@@ -1,40 +1,68 @@
+import { opusPacketDecoderSource } from './opus-packet-decoder'
 import { WorkerClockCalibration, type ClockBounds } from './worker-clock'
 
 // encoded frameは変更せず通す。workerの生monotonic時刻だけを通知し、main側で較正する。
-export const encodedObserverWorkerSource = `
+export const encodedObserverWorkerSource = `${opusPacketDecoderSource}
 self.onmessage = (event) => {
   if (event.data.kind === 'clock' && Number.isInteger(event.data.sequence)) {
     self.postMessage({ kind: 'clock', sequence: event.data.sequence, workerAtMs: performance.now() })
   }
 }
-self.onrtctransform = (event) => {
+self.onrtctransform = async (event) => {
   const transformer = event.transformer
-  let reported = false
+  let reported = false, index = 0, decoder = null
+  const decodeFailure = reason => self.postMessage({kind: 'packet_decode_error', reason})
+  if (transformer.options?.decodePackets) {
+    try { decoder = await OpusPacketDecoder.create(decodeFailure) }
+    catch { decodeFailure('opus_decoder_unavailable') }
+  }
+  const pending = []
+  let draining = false, ended = false
+  const drain = async () => {
+    if (draining || decoder === null) return
+    draining = true
+    try {
+      while (pending.length && !decoder.failed) {
+        const input = pending.shift()
+        const output = await decoder.decode(input.payload, input.packetIndex)
+        if (input.packetIndex === 0) self.postMessage({kind: 'packet_decoded', packetIndex: input.packetIndex,
+          workerAtMs: output.decodedAtWorkerMs, samples: output.samples.length, packet: input.packet})
+      }
+    } catch { /* 復号器が理由を通知済み。native frameはそのまま通す。 */ }
+    finally { draining = false; if (decoder.failed) pending.length = 0; if (ended) decoder.close() }
+  }
   const observer = new TransformStream({
     transform(frame, controller) {
-      const workerAtMs = performance.now()
-      let packet
-      if (!reported) {
-        try {
-          const metadata = frame.getMetadata()
-          const receivedAtWorkerMs = metadata.receiveTime
-          const u32 = value => Number.isInteger(value) && value >= 0 && value <= 0xffffffff
-          if (u32(metadata.rtpTimestamp) && u32(metadata.synchronizationSource)
-            && Number.isFinite(receivedAtWorkerMs) && receivedAtWorkerMs >= 0) {
-            packet = { rtpTimestamp: metadata.rtpTimestamp, source: metadata.synchronizationSource, receivedAtWorkerMs }
-          }
-        } catch { /* 観測APIの失敗で音声frameを破棄しない。 */ }
+      const workerAtMs = performance.now(), packetIndex = index++
+      let packet, payload
+      try {
+        const metadata = frame.getMetadata()
+        const receivedAtWorkerMs = metadata.receiveTime
+        const u32 = value => Number.isInteger(value) && value >= 0 && value <= 0xffffffff
+        if (u32(metadata.rtpTimestamp) && u32(metadata.synchronizationSource)
+          && Number.isFinite(receivedAtWorkerMs) && receivedAtWorkerMs >= 0) {
+          packet = { rtpTimestamp: metadata.rtpTimestamp, source: metadata.synchronizationSource, receivedAtWorkerMs }
+        }
+        if (decoder !== null && !decoder.failed) payload = OpusPacketDecoder.primaryPayload(frame.data, metadata.mimeType)
+      } catch {
+        if (decoder !== null && !decoder.failed) decoder.fail('packet_metadata_or_codec_invalid')
       }
+      // native経路へ先に渡す。独立decodeの成功をnative再生の条件にしない。
       controller.enqueue(frame)
       if (!reported) {
         reported = true
         self.postMessage({ kind: 'encoded', workerAtMs, ...(packet ? { packet } : {}) })
       }
+      if (payload && decoder !== null && !decoder.failed) {
+        // 観測側の停滞でnativeを止めない。待機packetは最大1秒分、別に復号中1件。
+        if (pending.length >= 50) { pending.length = 0; decoder.fail('opus_decode_queue_overflow') }
+        else { pending.push({payload, packetIndex, packet}); void drain() }
+      }
     },
   })
-  transformer.readable.pipeThrough(observer).pipeTo(transformer.writable).catch(() => {
-    self.postMessage({ kind: 'error' })
-  })
+  try { await transformer.readable.pipeThrough(observer).pipeTo(transformer.writable) }
+  catch { self.postMessage({ kind: 'error' }) }
+  finally { ended = true; if (!draining) decoder?.close() }
 }
 `
 
@@ -50,6 +78,12 @@ export type MediaObservation = Readonly<{
   firstNonzeroDecodedFrameAtMs?: number
   firstPacketReceivedAtMs?: number
   firstPacketDeliveredAtMs?: number
+  // 同じRTP packetの独立WebCodecs復号。native decoderやsource PCM offsetの確定ではない。
+  firstPacketDecodedAtMs?: number
+  firstPacketDecodedAtBoundsMs?: ClockBounds
+  firstPacketDecodedSamples?: number
+  packetDecodeMissingReason?: 'api_unavailable' | 'decoder_failed' | 'packet_metadata_unavailable'
+    | 'packet_clock_invalid' | 'clock_calibration_failed' | 'observer_failed'
   packetDeliveryMissingReason?: 'synchronization_api_unavailable' | 'packet_metadata_unavailable'
     | 'matching_packet_not_observed' | 'packet_clock_invalid' | 'observer_failed' | 'clock_calibration_failed'
   encodedMissingReason?: 'api_unavailable' | 'transform_already_in_use' | 'observer_failed' | 'clock_calibration_failed'
@@ -57,7 +91,7 @@ export type MediaObservation = Readonly<{
 }>
 
 type RawEncodedPacket = { rtpTimestamp: number; source: number; receivedAtWorkerMs: number }
-type WorkerObservation = { kind: string; sequence?: number; workerAtMs?: number; packet?: RawEncodedPacket }
+type WorkerObservation = { kind: string; sequence?: number; workerAtMs?: number; packet?: RawEncodedPacket; packetIndex?: number; samples?: number; reason?: string }
 type EncodedPacket = { rtpTimestamp: number; source: number; receivedAtMs: number }
 const validU32 = (value: number) => Number.isInteger(value) && value >= 0 && value <= 0xffffffff
 const packetKey = (packet: Pick<EncodedPacket, 'source' | 'rtpTimestamp'>) => `${packet.source}:${packet.rtpTimestamp}`
@@ -79,6 +113,7 @@ export class RemoteMediaObserver {
   private clockRequest: { sequence: number; sentAtMs: number } | null = null
   private clockTimeout: ReturnType<typeof setTimeout> | null = null
   private encoded: WorkerObservation | null = null
+  private decodedPacket: WorkerObservation | null = null
   private readonly deliveredPackets = new Map<string, number>()
   private synchronizationTimer: ReturnType<typeof setInterval> | null = null
   private synchronizationTimeout: ReturnType<typeof setTimeout> | null = null
@@ -119,12 +154,14 @@ export class RemoteMediaObserver {
     if (this.receiver === undefined || typeof RTCRtpScriptTransform === 'undefined'
         || typeof Worker === 'undefined') {
       this.evidence.encodedMissingReason = 'api_unavailable'
+      this.evidence.packetDecodeMissingReason = 'api_unavailable'
       this.evidence.packetDeliveryMissingReason ??= 'packet_metadata_unavailable'
       this.stopPacketDelivery()
       return
     }
     if (this.receiver.transform != null) {
       this.evidence.encodedMissingReason = 'transform_already_in_use'
+      this.evidence.packetDecodeMissingReason = 'observer_failed'
       this.evidence.packetDeliveryMissingReason ??= 'packet_metadata_unavailable'
       this.stopPacketDelivery()
       return
@@ -154,11 +191,17 @@ export class RemoteMediaObserver {
         } else if (event.data.kind === 'encoded' && this.encoded === null) {
           this.encoded = event.data
           this.applyEncodedObservation()
+        } else if (event.data.kind === 'packet_decoded' && this.decodedPacket === null) {
+          this.decodedPacket = event.data
+          this.applyPacketDecodedObservation()
+        } else if (event.data.kind === 'packet_decode_error') {
+          this.evidence.packetDecodeMissingReason = event.data.reason === 'opus_decoder_unavailable' ? 'api_unavailable' : 'decoder_failed'
         } else if (event.data.kind === 'error') { this.failEncoded(); return }
+        this.applyPacketDecodedObservation()
         this.publish()
       }
       worker.onerror = () => this.failEncoded()
-      this.transform = new RTCRtpScriptTransform(worker)
+      this.transform = new RTCRtpScriptTransform(worker, {decodePackets: true})
       this.receiver.transform = this.transform
       this.clockTimeout = setTimeout(() => this.failEncoded('clock_calibration_failed'), 1000)
       this.requestClockSample()
@@ -211,12 +254,38 @@ export class RemoteMediaObserver {
       this.observePacketDelivery()
     }
     this.matchPacketDelivery()
+    this.applyPacketDecodedObservation()
+  }
+
+  private applyPacketDecodedObservation(): void {
+    const decoded = this.decodedPacket
+    if (decoded === null || this.clock.bounds() === undefined || this.encoded === null
+      || this.evidence.firstPacketDecodedAtMs !== undefined) return
+    const packet = decoded.packet, first = this.encoded.packet
+    if (!packet || !first || !validU32(first.source) || !validU32(first.rtpTimestamp)
+      || !Number.isFinite(first.receivedAtWorkerMs) || first.receivedAtWorkerMs < 0
+      || this.evidence.firstPacketReceivedAtMs === undefined || decoded.packetIndex !== 0 || decoded.samples !== 960
+      || packet.source !== first.source || packet.rtpTimestamp !== first.rtpTimestamp
+      || packet.receivedAtWorkerMs !== first.receivedAtWorkerMs) {
+      this.evidence.packetDecodeMissingReason = 'packet_metadata_unavailable'
+      return
+    }
+    const at = this.clock.toMain(decoded.workerAtMs ?? NaN)
+    if (at === undefined || typeof decoded.workerAtMs !== 'number'
+      || decoded.workerAtMs < first.receivedAtWorkerMs || at.lowerMs > performance.now()) {
+      this.evidence.packetDecodeMissingReason = 'packet_clock_invalid'
+      return
+    }
+    this.evidence.firstPacketDecodedAtMs = at.lowerMs
+    this.evidence.firstPacketDecodedAtBoundsMs = at
+    this.evidence.firstPacketDecodedSamples = decoded.samples
   }
 
   private failEncoded(reason: 'observer_failed' | 'clock_calibration_failed' = 'observer_failed'): void {
     if (this.closed) return
     this.stopClockCalibration()
     this.evidence.encodedMissingReason = reason
+    this.evidence.packetDecodeMissingReason ??= reason
     this.evidence.packetDeliveryMissingReason ??= reason
     this.stopPacketDelivery()
     // 観測器の失敗時はpassthroughへ戻し、観測のために再生を停止しない。

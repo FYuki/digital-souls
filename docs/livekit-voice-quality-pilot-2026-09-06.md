@@ -324,3 +324,21 @@ LLM／TTS生成と受信準備は並行する。PCMが生成された時点で�
 `response-ready-01`の準備1回＋測定3回は全件成功した。track発行完了→準備確認は約40.133／35.719／36.888／36.813msで、全4回で準備確認が最初のnative PCM供給より前だった。同じsessionの`response-ready-session-01`でも3往復が成功し、準備確認は約36.394／29.527／30.059ms、明示終了が成功した。両runの全7応答で入力sample＋末尾padding＝native供給sampleが一致した。
 
 単体検証では通知のresponse／SID不一致、publish完了前の通知、待機期限切れ・cancel・終了、participant／世代不一致、購読解除・切断後の非同期完了を扱う。Backend単体2,342件成功・1件skip、Frontend単体379件・結合97件、型検査と対象lintが成功した。実接続の準備確認はブラウザgraphの構築完了を表し、最初のRTP packetの無欠落、source PCM先頭との対応、実際のbrowser出力完了までは証明しない。通常pilotの`media_observation_method`は引き続き`unavailable`で、正式100試行とTTFAを含む品質受け入れは未完了である。
+
+
+## 2026-09-07: 復号状態を維持するpacket相関
+
+先行する専用診断はpacketごとに`AudioDecoder.flush()`していたが、その方法では同じOpus入力を連続して復号した場合とPCM波形が異なることを実測した。[Chromiumのdecoder実装](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/webcodecs/decoder_template.cc)にもflushでEOSを送り、その後にdecoderを初期化する経路がある。仕様上のoutput回収だけを根拠に、音声の連続性が保たれるとは判断しない。
+
+`OpusPacketDecoder`は次のpacketを投入する前に960sampleのoutput callbackを待ち、途中flushを行わない。input packet番号をPCMと対にし、decoderが再構成するtimestampを識別子へ使わない。REDのprimary取り出し、Opus TOCからの20ms長検証、48kHz mono／960sample、有限sample値、待機上限1秒、終了・失敗時の解放を共通化した。20ms以外のpacketを黙って960sampleへ置き換えない。
+
+専用診断もこの共通コードへ切り替えた。`native-source-shared-decoder-01`では、直接入力の51 packet／48,960sampleについて、packetごとにoutputを待つ方式と一括復号の最大絶対誤差・RMS誤差がともに0だった。一方、途中flushする比較decoderは最大絶対誤差約0.18754、RMS誤差約0.09863だった。値はFloat32 PCM振幅の差であり、主観音質スコアではない。明示worklet出力も全51 packetが完了し、最後の出力時計通過を確認した。
+
+`native-source-no-flush-01`の最初の比較はunpublish後の追加packetまで含んでいたため、snapshotの51件との同一範囲を示さない。比較対象をsnapshotまでに固定した`native-source-no-flush-02`と、その後に共通コードを使った上記runでは、同じ51件／48,960sampleに対して一致した。以前の途中flush診断はpacket数や時計の履歴として残すが、音声波形を維持した再生の証明には使わない。
+
+通常会話の`RemoteMediaObserver`にも同じ独立decoderを組み込み、最初のRTP packetのsource／timestamp／receiveTimeを照合して、`firstPacketDecodedAtBoundsMs`と960sampleを記録する。因果的なworker時計較正を適用し、時刻逆転・別packet・欠測を拒否する。独立復号の待機queueは50 packet＋復号中1件を上限とし、復号の停滞・失敗でnative音声配送を止めない。現在の出音は引き続きnativeのgraph経路で、今回の独立PCMを通常会話の再生へ接続する処理は残っている。
+
+
+実会話の`packet-decode-01`は準備1回＋測定3回が全件成功し、全4回で同一packetの受信・独立decode・native track配送を別時刻として観測した。測定3回の受信→独立decodeは約1.5／1.0／1.1msで、各960sample、worker時計較正幅約0.4msだった。raw evidenceに新しいdecode境界が残ることを確認したが、通常会話の出力PCMはまだ独立decoderから供給していないため、`media_observation_method`は`unavailable`を維持する。これらはfirst playbackやTTFAの受け入れ証拠ではない。
+
+Frontend単体407件・結合97件、型検査、診断validatorの単体17件とPython lintが成功した。Frontendでは誤ったpacket／時計／sample数、復号timeout・異常出力・終了、復号queue超過でもnative配送が継続することを検証した。明示PCM再生とsource位置、loss／RED回復、underrun／gap／stale提示、正式100試行とdogfoodの品質受け入れは引き続き未完了である。
