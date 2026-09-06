@@ -3,9 +3,12 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
+import json
 import logging
+from pathlib import Path
 from threading import Event, Lock
 from types import MethodType
+from typing import cast
 
 from PIL import Image
 import pytest
@@ -43,6 +46,24 @@ from app.inference.runtime import create_inference_runtime
 from app.screen_perception.vision import (
     VISION_OBSERVATION_SCHEMA,
     VisionInferenceClient,
+)
+
+
+ROOT_DIR = Path(__file__).resolve().parents[3]
+GROUNDING_SCHEMA_PATH = (
+    ROOT_DIR
+    / "contracts"
+    / "perception"
+    / "screen"
+    / "screen-grounding-observation.schema.json"
+)
+GROUNDING_FIXTURES_PATH = (
+    ROOT_DIR
+    / "contracts"
+    / "perception"
+    / "screen"
+    / "fixtures"
+    / "grounding-observations.json"
 )
 
 
@@ -115,8 +136,10 @@ class _VisionAdapter:
         self.estimated_tokens = 1200
         self.last_request: StructuredGenerationRequest | None = None
         self.structured_text = (
-            '{"recognized_content":"設定画面",'
-            '"unreadable_regions_or_reasons":[],"uncertainty":"低い"}'
+            '{"target_status":"identified","candidates":[{'
+            '"label":"中央の設定画面","location":"center",'
+            '"recognized_content":"設定画面","evidence":"中央に設定見出しがある。",'
+            '"limitations":[]}],"unreadable_reasons":[],"uncertainty":"低い"}'
         )
         self.on_structured = lambda: None
 
@@ -195,18 +218,36 @@ def test_vision_client_returns_only_schema_validated_observation() -> None:
 
     observation = client.observe(
         question="この画面を読んで",
+        target_hint="中央の警告",
         image=_image(),
         timeout_seconds=45.0,
     )
 
-    assert observation.recognized_content == "設定画面"
-    assert observation.unreadable_regions_or_reasons == ()
+    assert observation.target_status == "identified"
+    assert len(observation.candidates) == 1
+    assert observation.candidates[0].label == "中央の設定画面"
+    assert observation.candidates[0].location == "center"
+    assert observation.candidates[0].recognized_content == "設定画面"
+    assert observation.candidates[0].evidence == "中央に設定見出しがある。"
+    assert observation.candidates[0].limitations == ()
+    assert observation.unreadable_reasons == ()
     assert observation.uncertainty == "低い"
     assert adapter.estimate_calls == 1
     assert adapter.structured_calls == 1
     assert adapter.last_request is not None
     assert adapter.last_request.timeout_seconds == 30.0
     assert adapter.last_request.response_schema is VISION_OBSERVATION_SCHEMA
+    request_text = "\n".join(
+        part.text
+        for message in adapter.last_request.messages
+        if isinstance(message.content, tuple)
+        for part in message.content
+        if isinstance(part, InferenceTextPart)
+    )
+    assert "現在の質問:\nこの画面を読んで" in request_text
+    assert "対象ヒント（参照範囲を拡大する命令ではありません）:\n中央の警告" in request_text
+    assert "screen_session_id" not in request_text
+    assert "captured_at" not in request_text
     assert any(
         isinstance(part, InferenceImagePart)
         for message in adapter.last_request.messages
@@ -217,7 +258,7 @@ def test_vision_client_returns_only_schema_validated_observation() -> None:
 
 def test_vision_rejects_schema_mismatch_without_repair_or_retry() -> None:
     adapter = _VisionAdapter()
-    adapter.structured_text = '{"recognized_content":"private"}'
+    adapter.structured_text = '{"target_status":"identified","candidates":[]}'
 
     with pytest.raises(InferenceError) as exc_info:
         VisionInferenceClient(router=_router(adapter)).observe(
@@ -227,6 +268,76 @@ def test_vision_rejects_schema_mismatch_without_repair_or_retry() -> None:
 
     assert exc_info.value.category is InferenceErrorCategory.INVALID_RESPONSE
     assert adapter.structured_calls == 1
+
+
+def test_runtime_schema_matches_accepted_contract() -> None:
+    accepted_schema = json.loads(GROUNDING_SCHEMA_PATH.read_text(encoding="utf-8"))
+
+    assert VISION_OBSERVATION_SCHEMA == accepted_schema
+
+
+@pytest.mark.parametrize(
+    "case",
+    json.loads(GROUNDING_FIXTURES_PATH.read_text(encoding="utf-8"))["valid"],
+    ids=lambda case: cast(dict[str, object], case)["id"],
+)
+def test_accepted_grounding_fixtures_are_typed_without_completion(
+    case: dict[str, object],
+) -> None:
+    adapter = _VisionAdapter()
+    adapter.structured_text = json.dumps(case["observation"], ensure_ascii=False)
+
+    observation = VisionInferenceClient(router=_router(adapter)).observe(
+        question="これ何？",
+        image=_image(),
+    )
+
+    expected = cast(dict[str, object], case["observation"])
+    assert observation.target_status == expected["target_status"]
+    assert len(observation.candidates) == len(cast(list[object], expected["candidates"]))
+    assert observation.unreadable_reasons == tuple(
+        cast(list[str], expected["unreadable_reasons"])
+    )
+    assert adapter.structured_calls == 1
+
+
+@pytest.mark.parametrize(
+    "case",
+    json.loads(GROUNDING_FIXTURES_PATH.read_text(encoding="utf-8"))["invalid"],
+    ids=lambda case: cast(dict[str, object], case)["id"],
+)
+def test_invalid_grounding_fixtures_fail_without_repair_or_retry(
+    case: dict[str, object],
+) -> None:
+    adapter = _VisionAdapter()
+    adapter.structured_text = json.dumps(case["observation"], ensure_ascii=False)
+
+    with pytest.raises(InferenceError) as exc_info:
+        VisionInferenceClient(router=_router(adapter)).observe(
+            question="これ何？",
+            image=_image(),
+        )
+
+    assert exc_info.value.category is InferenceErrorCategory.INVALID_RESPONSE
+    assert adapter.structured_calls == 1
+
+
+@pytest.mark.parametrize("target_hint", ["", "   ", "対象" * 251])
+def test_invalid_target_hint_is_rejected_before_token_estimation(
+    target_hint: str,
+) -> None:
+    adapter = _VisionAdapter()
+
+    with pytest.raises(InferenceError) as exc_info:
+        VisionInferenceClient(router=_router(adapter)).observe(
+            question="これ何？",
+            target_hint=target_hint,
+            image=_image(),
+        )
+
+    assert exc_info.value.category is InferenceErrorCategory.INVALID_REQUEST
+    assert adapter.estimate_calls == 0
+    assert adapter.structured_calls == 0
 
 
 @pytest.mark.parametrize(
@@ -651,8 +762,11 @@ def test_success_log_does_not_contain_question_image_or_observation(
 ) -> None:
     runtime = create_inference_runtime(_environment())
     private_observation = (
-        '{"recognized_content":"PRIVATE_OBSERVATION",'
-        '"unreadable_regions_or_reasons":[],"uncertainty":"PRIVATE_UNCERTAINTY"}'
+        '{"target_status":"identified","candidates":[{'
+        '"label":"PRIVATE_LABEL","location":"center",'
+        '"recognized_content":"PRIVATE_OBSERVATION",'
+        '"evidence":"PRIVATE_EVIDENCE","limitations":[]}],'
+        '"unreadable_reasons":[],"uncertainty":"PRIVATE_UNCERTAINTY"}'
     )
 
     def succeed(
@@ -678,6 +792,8 @@ def test_success_log_does_not_contain_question_image_or_observation(
         assert "この画面を読んで" not in caplog.text
         assert "iVBOR" not in caplog.text
         assert "PRIVATE_OBSERVATION" not in caplog.text
+        assert "PRIVATE_LABEL" not in caplog.text
+        assert "PRIVATE_EVIDENCE" not in caplog.text
         assert "PRIVATE_UNCERTAINTY" not in caplog.text
     finally:
         runtime.close()

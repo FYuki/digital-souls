@@ -73,6 +73,8 @@ describe('ScreenCaptureControls', () => {
     expect(screen.getByRole('button', { name: '画面共有を開始' }).getAttribute('aria-pressed')).toBe('false')
     expect((screen.getByRole('button', { name: '現在の画面を参照' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText('共有: 停止中')).toBeTruthy()
+    expect(screen.getByText(/音声だけで画面共有が自動開始することはありません/)).toBeTruthy()
+    expect(screen.getByText(/通常の質問ごとに押す必要はありません/)).toBeTruthy()
     expect(setItem).not.toHaveBeenCalled()
   })
 
@@ -88,6 +90,10 @@ describe('ScreenCaptureControls', () => {
     expect(stop.getAttribute('aria-pressed')).toBe('true')
     expect(document.activeElement).toBe(stop)
     expect(screen.getByText('共有: 共有中')).toBeTruthy()
+    expect(screen.getByText('認識: 待機')).toBeTruthy()
+    expect(screen.getByText(/共有ONだけでは画像の送信や定期的な解析を行いません/)).toBeTruthy()
+    expect(screen.getByText(/特定のアプリについて尋ねる場合はウィンドウ共有が適しています/)).toBeTruthy()
+    expect(screen.getByText(/digital-soulsを前面にすると/)).toBeTruthy()
     expect(screen.getByText(/対象（この画面だけに表示）: 合成ウィンドウ/)).toBeTruthy()
     expect(screen.getByLabelText('共有画面のローカルプレビュー').classList.contains('visible')).toBe(true)
     expect((screen.getByRole('button', { name: '現在の画面を参照' }) as HTMLButtonElement).disabled).toBe(true)
@@ -240,5 +246,70 @@ describe('ScreenCaptureControls', () => {
     resolveAuthorization(null)
     expect((await screen.findByRole('alert')).textContent).toContain('サーバー連携は準備中です')
     expect(onSnapshotCaptured).not.toHaveBeenCalled()
+  })
+
+  test('会話runtimeの参照判断中を取得や常時解析と区別して表示する', async () => {
+    const track = new UiTrack('monitor')
+    getDisplayMedia.mockResolvedValue(createStream(track))
+    const view = render(ScreenCaptureControls, {
+      props: {
+        characterId: 'miori',
+        conversationId: CONVERSATION_ID,
+        contextualReferenceAvailable: true,
+        referenceDecisionActive: false,
+      },
+    })
+    await fireEvent.click(screen.getByRole('button', { name: '画面共有を開始' }))
+    expect(screen.getByText('認識: 参照可能')).toBeTruthy()
+
+    await view.rerender({
+      characterId: 'miori',
+      conversationId: CONVERSATION_ID,
+      contextualReferenceAvailable: true,
+      referenceDecisionActive: true,
+    })
+
+    expect(screen.getByText('認識: 参照が必要か確認中')).toBeTruthy()
+    expect(getDisplayMedia).toHaveBeenCalledTimes(1)
+    expect((screen.getByRole('button', { name: '現在の画面を参照' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  test('window共有では取得対象とdigital-soulsを区別して案内する', async () => {
+    const track = new UiTrack('window')
+    getDisplayMedia.mockResolvedValue(createStream(track))
+    render(ScreenCaptureControls, {
+      props: { characterId: 'miori', conversationId: CONVERSATION_ID },
+    })
+    await fireEvent.change(screen.getByLabelText('共有する画面の種類'), { target: { value: 'window' } })
+    await fireEvent.click(screen.getByRole('button', { name: '画面共有を開始' }))
+
+    await screen.findByText('共有: 共有中')
+    expect(screen.getByText(/選択したウィンドウが参照対象です/)).toBeTruthy()
+    expect(screen.getByText(/digital-soulsの画面とは別の対象/)).toBeTruthy()
+  })
+
+  test('クラウド画像と派生テキストの同意を分けてruntimeへ通知する', async () => {
+    const onCloudImageConsentChanged = vi.fn()
+    const onCloudDerivedChatConsentChanged = vi.fn()
+    render(ScreenCaptureControls, {
+      props: {
+        characterId: 'miori',
+        conversationId: CONVERSATION_ID,
+        cloudImageConsent: false,
+        cloudDerivedChatConsent: false,
+        onCloudImageConsentChanged,
+        onCloudDerivedChatConsentChanged,
+      },
+    })
+
+    const imageConsent = screen.getByRole('checkbox', { name: /今回の共有画像をクラウドの画面認識へ送信する/ })
+    const derivedConsent = screen.getByRole('checkbox', { name: /画面の観測文と、この共有に由来する会話内の回答/ })
+    expect(screen.getByText(/現在の共有対象・会話・送信先だけに有効/)).toBeTruthy()
+
+    await fireEvent.click(imageConsent)
+    await fireEvent.click(derivedConsent)
+
+    expect(onCloudImageConsentChanged).toHaveBeenCalledWith(true)
+    expect(onCloudDerivedChatConsentChanged).toHaveBeenCalledWith(true)
   })
 })
