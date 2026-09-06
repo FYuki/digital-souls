@@ -110,6 +110,58 @@ LiveKitの状態遷移、outbox、mapping、再生済みprefixはfake clock/port
 Wave 3のEpic受入シナリオ、自動testと利用者dogfoodの責務分離、再実行手順は
 [`wave3-acceptance-2026-08.md`](wave3-acceptance-2026-08.md)を正本とする。
 
+## Addon / MCP conformance
+
+#104 MCP-first接続基盤は、contract検証、test-owned MCP、実Addon/外部MCPを同じ証跡として扱わない。
+正本contractは`contracts/addon/`、設計判断は`docs/decisions/addon-connection-foundation-2026-09.md`、SDK version適合は`docs/addon-mcp-sdk-compatibility-2026-09.md`とする。
+
+### contract / unit
+
+`backend/tests/unit/`でJSON Schema Draft 2020-12とsemantic validatorを検証する。
+
+- `manifest.schema.json` / `addon-meta.schema.json` / `capability-snapshot.schema.json` / `execution-envelope.schema.json`
+- `contracts/addon/fixtures/valid/`は受理する
+- `contracts/addon/fixtures/invalid/`は拒否する
+- raw secretをManifestで受理しない
+- Core restrictionは安全側だけ
+- annotation未信頼時に`readOnlyHint=true`をeffective read-onlyへ昇格しない
+- `effect_source=unknown`はunknown / serial / retryなし
+
+これは外部MCPへ接続した証跡ではない。
+
+### test-owned MCP / module
+
+#159では`backend/tests/module/`からtest-owned MCP serverを別processで起動し、通常CIで実行可能なconformanceとする。
+
+- SDKは#152で確認した`mcp==2.0.0`をpinする
+- external Streamable HTTP（none / preconfigured Bearer）
+- external stdio server
+- self-ownedのOrigin拒否・localhost bind・mandatory Bearerは#221へ分離
+- MCP 2026-07-28 Tools / Resources / Prompts discovery
+- MRTR `input_required` →回答→元request再実行
+- mapping不能Tool
+- trusted/untrusted annotations
+- Tool追加/削除/schema変更、snapshot activation境界
+- effective read-onlyのみ並列/1 retry
+- write/destructive/unknownは直列/automatic retryなし
+- budget 6 / same-tool 3 / identical 2 / normal 3 cycle
+- Tasks必須operationは`unsupported`へ落とし、同serverの通常Toolを壊さない
+- native result保持、secret/raw payload非logging
+
+Core package/DBをtest MCP serverからimportしない。test-owned MCPの成功をDevelopment Observerや第三者MCPへの実接続成功とは扱わない。
+
+### real Addon / integration
+
+#58 Development Observer等の実Addon processとの接続は`backend/tests/integration/test_*_integration.py`に置く。
+実AddonのStreamable HTTP endpoint、service auth、process/config/store分離を実接続で検証する。
+
+第三者/コラボMCPを本番credentialで通常CIへ接続しない。必要な実接続受入は対象Issueで明示し、credentialをfixture/evidenceへ保存しない。
+
+### SDK/version更新
+
+`mcp` package version更新は通常の依存更新として無条件mergeしない。protocol negotiation、Streamable HTTP、stdio、Tools/Resources、MRTR、trust/snapshot境界を#159 conformanceで再確認する。
+MCP Tasks extension等、SDKで未対応の任意能力は`unsupported`として明示し、通常Tool/Resource利用を失敗させない。
+
 ## Capability不足と失敗
 
 スイートの要求Capabilityが resolved Profile にない場合、テストは不足Capabilityと解決済み依存を理由に `skip` する。スイートを明示的に開始した後の次の失敗は skip に変換しない。

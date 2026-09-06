@@ -1,0 +1,44 @@
+{
+  "manifest_version": "1.0",
+  "connection": {
+    "id": "development-observer",
+    "ownership": "external",
+    "protocol": "mcp",
+    "transport": "stdio",
+    "auth": {
+      "type": "none"
+    },
+    "trust": {
+      "annotations": false,
+      "addon_metadata": false
+    },
+    "grant": {
+      "scope": "validated_snapshot",
+      "activation": "next_execution_loop"
+    },
+    "stdio": {
+      "command": "example-mcp",
+      "args": []
+    }
+  },
+  "capabilities": {
+    "source": "mcp_discovery",
+    "tools": [],
+    "resources": [],
+    "prompts": []
+  },
+  "core_policy": {
+    "enabled": true,
+    "sharing": {
+      "mode": "shared"
+    },
+    "resource_binding_required": true,
+    "execution_budget": {
+      "max_calls_per_loop": 6,
+      "max_consecutive_same_tool": 3,
+      "max_identical_call": 2,
+      "normal_max_auto_cycles": 3
+    },
+    "restrictions": []
+  }
+}

@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digital-souls.local/contracts/addon/1.0/capability-snapshot.schema.json",
+  "title": "DigitalSoulsCapabilitySnapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "connection_instance_id",
+    "snapshot_revision",
+    "protocol_version",
+    "discovered_at",
+    "activation_state",
+    "tools",
+    "resources",
+    "prompts"
+  ],
+  "properties": {
+    "connection_instance_id": {"type": "string", "minLength": 1},
+    "snapshot_revision": {"type": "string", "minLength": 1},
+    "protocol_version": {"type": "string", "minLength": 1},
+    "discovered_at": {"type": "string", "format": "date-time"},
+    "activation_state": {"enum": ["staged", "active"]},
+    "tools": {"type": "array", "items": {"$ref": "#/$defs/Tool"}},
+    "resources": {"type": "array", "items": {"type": "object"}},
+    "prompts": {"type": "array", "items": {"type": "object"}}
+  },
+  "$defs": {
+    "Trust": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["annotations", "addon_metadata"],
+      "properties": {
+        "annotations": {"type": "boolean"},
+        "addon_metadata": {"type": "boolean"}
+      }
+    },
+    "EffectivePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["effect", "effect_source", "concurrency", "retry"],
+      "properties": {
+        "effect": {"enum": ["read", "write", "destructive", "external_send", "unknown"]},
+        "effect_source": {"enum": ["unknown", "trusted_annotation", "trusted_addon_metadata", "core_restriction"]},
+        "concurrency": {"enum": ["parallel", "serial"]},
+        "retry": {"enum": ["none", "read_once"]}
+      }
+    },
+    "Tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "schema_digest", "input_schema", "trust", "effective_policy", "status"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "stable_operation_id": {"type": "string", "minLength": 1},
+        "schema_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "input_schema": {"type": "object"},
+        "native_definition": {"type": "object"},
+        "native_annotations": {"type": "object"},
+        "native_meta": {"type": "object"},
+        "trust": {"$ref": "#/$defs/Trust"},
+        "effective_policy": {"$ref": "#/$defs/EffectivePolicy"},
+        "requires_core_features": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "status": {"enum": ["active", "unsupported"]},
+        "unsupported_reason": {"type": "string", "minLength": 1}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "effective_policy": {
+                "properties": {"effect_source": {"const": "unknown"}},
+                "required": ["effect_source"]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "effective_policy": {
+                "properties": {
+                  "effect": {"const": "unknown"},
+                  "concurrency": {"const": "serial"},
+                  "retry": {"const": "none"}
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "effective_policy": {
+                "properties": {"effect_source": {"const": "trusted_annotation"}},
+                "required": ["effect_source"]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "trust": {"properties": {"annotations": {"const": true}}}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "effective_policy": {
+                "properties": {"effect_source": {"const": "trusted_addon_metadata"}},
+                "required": ["effect_source"]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "trust": {"properties": {"addon_metadata": {"const": true}}}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"status": {"const": "unsupported"}}, "required": ["status"]},
+          "then": {"required": ["unsupported_reason"]}
+        }
+      ]
+    }
+  }
+}
