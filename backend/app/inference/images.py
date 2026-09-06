@@ -3,8 +3,6 @@ from __future__ import annotations
 from io import BytesIO
 import warnings
 
-from PIL import Image, UnidentifiedImageError
-
 from app.inference.contracts import (
     ImageInputLimits,
     InferenceImagePart,
@@ -58,6 +56,9 @@ def validate_multimodal_messages(
 
 
 def _validate_image(image: InferenceImagePart, limits: ImageInputLimits) -> None:
+    # 環境CLIも設定定数をimportするため、Backend実行時依存はdecode時だけ読む。
+    from PIL import Image
+
     if image.mime_type not in limits.allowed_mime_types:
         _invalid_image()
     if not image.data or len(image.data) > limits.max_bytes:
@@ -91,7 +92,6 @@ def _validate_image(image: InferenceImagePart, limits: ImageInputLimits) -> None
         Image.DecompressionBombWarning,
         OSError,
         SyntaxError,
-        UnidentifiedImageError,
         ValueError,
     ):
         _invalid_image()
