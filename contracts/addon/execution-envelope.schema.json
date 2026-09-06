@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digital-souls.local/contracts/addon/1.0/execution-envelope.schema.json",
+  "title": "DigitalSoulsExecutionEnvelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "execution_id",
+    "connection_instance_id",
+    "definition_revision",
+    "operation_ref",
+    "started_at",
+    "finished_at",
+    "outcome",
+    "retry_count",
+    "native_payload"
+  ],
+  "properties": {
+    "execution_id": {"type": "string", "format": "uuid"},
+    "connection_instance_id": {"type": "string", "minLength": 1},
+    "definition_revision": {"type": "string", "minLength": 1},
+    "operation_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool_name"],
+      "properties": {
+        "tool_name": {"type": "string", "minLength": 1},
+        "stable_operation_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": ["string", "null"], "format": "date-time"},
+    "outcome": {"enum": ["succeeded", "failed", "unsupported", "budget_exceeded", "result_unknown", "cancel_requested"]},
+    "error_category": {
+      "type": ["string", "null"],
+      "enum": [null, "transport", "protocol", "auth", "validation", "tool_error", "unavailable", "policy"]
+    },
+    "retry_count": {"type": "integer", "minimum": 0},
+    "native_payload": {},
+    "native_error": {},
+    "audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "character_id": {"type": "string", "minLength": 1},
+        "conversation_id": {"type": "string", "minLength": 1},
+        "resource_binding_id": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}
