@@ -257,14 +257,14 @@ async def _complete_text_chat(
     completed: CompletedScreenRequest,
     control_key: str = "upload",
 ) -> dict[str, object]:
-    from app.async_worker import run_sync
+    from app._chat_runtime import generate_reply_with_tools
 
     service = cast(_chat_runtime.ChatService, request.app.state.chat_service)
     history_access = await _service(request).history_access(
         completed.client_session_id
     )
     try:
-        reply = await run_sync(
+        reply = await generate_reply_with_tools(
             service.generate_screen_chat_reply,
             completed.character_id,
             completed.conversation_id,

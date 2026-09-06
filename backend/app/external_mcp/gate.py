@@ -60,6 +60,7 @@ class _Pending:
     request_state: str | None
     request_ids: frozenset[str]
     rounds: int
+    binding_id: str | None
 
 
 class _ConnectionLock:
@@ -205,6 +206,54 @@ class ExecutionGate:
     def stop(self, loop_id: str) -> None:
         self._loop(loop_id).stopped = True
 
+    def catalog_snapshots(self, loop_id: str) -> dict[str, Snapshot]:
+        """現在loopの利用可能な正本だけを返す。stagedをactivateしない。"""
+        loop = self._loop(loop_id)
+        result: dict[str, Snapshot] = {}
+        for connection_id, (snapshot, generation) in loop.snapshots.items():
+            try:
+                self._live(loop, connection_id, generation)
+                self._sharing(loop, connection_id)
+            except MCPFailure:
+                continue
+            result[connection_id] = snapshot
+        return result
+
+    def _sharing(self, loop: _Loop, connection_id: str) -> None:
+        sharing = self.registry.entry(connection_id).connection.manifest["core_policy"][
+            "sharing"
+        ]
+        if (
+            sharing["mode"] == "character_bound"
+            and sharing["character_id"] != loop.context.character_id
+        ) or (
+            sharing["mode"] == "user_bound"
+            and sharing["user_id"] != loop.context.user_id
+        ):
+            raise MCPFailure("policy", "sharing_denied")
+
+    async def refresh_for_loop(self, connection_id: str, loop_id: str) -> Snapshot:
+        """会話からのrefreshも同じgrant・停止・予算で制限する。"""
+        loop = self._loop(loop_id)
+        if connection_id not in loop.snapshots:
+            raise MCPFailure("policy", "snapshot_not_granted")
+        _, generation = loop.snapshots[connection_id]
+        self._sharing(loop, connection_id)
+        async with self._locks[connection_id].hold(False):
+            for attempt in range(2):
+                source = self._live(loop, connection_id, generation)
+                self._charge(loop, connection_id, "capability_refresh", {})
+                try:
+                    discovery = await source.discover()
+                    self._live(loop, connection_id, generation)
+                    return self.registry.stage(connection_id, discovery)
+                except MCPFailure as error:
+                    if attempt == 0 and error.retryable:
+                        continue
+                    self.registry.availability(connection_id, "degraded")
+                    raise
+        raise AssertionError("unreachable")
+
     def end_loop(self, loop_id: str) -> None:
         self.stop(loop_id)
         self._loops.pop(loop_id)
@@ -282,14 +331,29 @@ class ExecutionGate:
         return source
 
     async def invoke(
-        self, connection_id: str, tool_ref: str, arguments: Json, loop_id: str
+        self,
+        connection_id: str,
+        tool_ref: str,
+        arguments: Json,
+        loop_id: str,
+        *,
+        binding_id: str | None = None,
     ) -> Json:
-        return await self._execute(connection_id, tool_ref, arguments, loop_id, "tool")
+        return await self._execute(
+            connection_id, tool_ref, arguments, loop_id, "tool", binding_id=binding_id
+        )
 
     async def read_resource(
-        self, connection_id: str, resource_ref: str, loop_id: str
+        self,
+        connection_id: str,
+        resource_ref: str,
+        loop_id: str,
+        *,
+        binding_id: str | None = None,
     ) -> Json:
-        return await self._execute(connection_id, resource_ref, {}, loop_id, "resource")
+        return await self._execute(
+            connection_id, resource_ref, {}, loop_id, "resource", binding_id=binding_id
+        )
 
     async def resume(
         self, interaction_id: str, input_responses: Json, loop_id: str
@@ -308,6 +372,7 @@ class ExecutionGate:
             pending.kind,
             pending=pending,
             responses=input_responses,
+            binding_id=pending.binding_id,
         )
 
     async def _execute(
@@ -320,9 +385,12 @@ class ExecutionGate:
         *,
         pending: _Pending | None = None,
         responses: Json | None = None,
+        binding_id: str | None = None,
     ) -> Json:
         # 不明なloopには監査主体が無いため、envelopeを捏造せず呼出しを拒否する。
         loop = self._loop(loop_id)
+        # 明示的な呼出しbindingを優先する。MRTRには解決済み値を固定する。
+        binding_id = binding_id if binding_id is not None else loop.context.binding_id
         result: Json = {
             "execution_id": str(uuid4()),
             "connection_instance_id": connection_id,
@@ -351,24 +419,13 @@ class ExecutionGate:
             self._live(loop, connection_id, generation)
             connection = self.registry.entry(connection_id).connection
             policy = connection.manifest["core_policy"]
-            sharing = policy["sharing"]
-            if (
-                sharing["mode"] == "character_bound"
-                and sharing["character_id"] != loop.context.character_id
-            ) or (
-                sharing["mode"] == "user_bound"
-                and sharing["user_id"] != loop.context.user_id
-            ):
-                raise MCPFailure("policy", "sharing_denied")
-            if (
-                policy["resource_binding_required"]
-                or loop.context.binding_id is not None
-            ):
+            self._sharing(loop, connection_id)
+            if policy["resource_binding_required"] or binding_id is not None:
                 if self.bindings is None or not await self.bindings.validate(
                     connection_id,
                     operation,
                     loop.context.character_id,
-                    loop.context.binding_id,
+                    binding_id,
                 ):
                     raise MCPFailure("policy", "binding_denied")
             native = snapshot.document
@@ -413,6 +470,16 @@ class ExecutionGate:
                 payload: Json
                 for attempt in range(2 if retry else 1):
                     source = self._live(loop, connection_id, generation)
+                    if policy["resource_binding_required"] or binding_id is not None:
+                        if self.bindings is None or not await self.bindings.validate(
+                            connection_id,
+                            operation,
+                            loop.context.character_id,
+                            binding_id,
+                        ):
+                            raise MCPFailure("policy", "binding_denied")
+                    # 非同期validatorを待つ間のstop/relinkもdispatch前に確認する。
+                    self._live(loop, connection_id, generation)
                     self._charge(loop, connection_id, operation, arguments)
                     try:
                         if kind == "tool":
@@ -446,6 +513,7 @@ class ExecutionGate:
                 # 成功後の結果統合はretry区間の外で行う。
                 result["native_payload"] = payload
                 if payload.get("resultType") == "input_required":
+                    self._live(loop, connection_id, generation)
                     request_state = payload.get("requestState")
                     requests = payload.get("inputRequests") or {}
                     if (
@@ -468,6 +536,7 @@ class ExecutionGate:
                         request_state,
                         frozenset(requests),
                         (pending.rounds if pending else 0) + 1,
+                        binding_id,
                     )
                     result.update(
                         outcome="input_required", interaction_id=interaction_id

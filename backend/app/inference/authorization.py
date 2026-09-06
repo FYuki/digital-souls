@@ -18,6 +18,7 @@ class InferenceCaller(str, Enum):
     SCREEN_VISION = "screen-vision"
     SCREEN_REFERENCE = "screen-reference"
     HEAVY_REASONING = "heavy-reasoning"
+    TOOL_ROUTING = "tool-routing"
 
 
 CORE_TARGET_ALLOWLIST: Mapping[InferenceCaller, frozenset[InferenceTarget]] = {
@@ -31,6 +32,7 @@ CORE_TARGET_ALLOWLIST: Mapping[InferenceCaller, frozenset[InferenceTarget]] = {
     InferenceCaller.SCREEN_VISION: frozenset({InferenceTarget.VISION}),
     InferenceCaller.SCREEN_REFERENCE: frozenset({InferenceTarget.CHAT}),
     InferenceCaller.HEAVY_REASONING: frozenset({InferenceTarget.HEAVY_REASONING}),
+    InferenceCaller.TOOL_ROUTING: frozenset({InferenceTarget.TOOL_ROUTING}),
 }
 
 

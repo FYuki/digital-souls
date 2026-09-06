@@ -54,6 +54,7 @@ class ConversationCoreSession:
         tts: TtsPort,
         tts_queue_maxsize: int = 8,
         turn_classifier: Callable[[str], TurnDecision] = classify_turn,
+        on_interruption: Callable[[str], None] = lambda _reason: None,
     ) -> None:
         if tts_queue_maxsize < 1:
             raise ValueError("tts_queue_maxsize must be positive")
@@ -67,6 +68,7 @@ class ConversationCoreSession:
         self._tts = tts
         self._tts_queue_maxsize = tts_queue_maxsize
         self._turn_classifier = turn_classifier
+        self._on_interruption = on_interruption
         self._responses: dict[str, Response] = {}
         self._utterances: dict[str, Utterance] = {}
         self._active_response_id: str | None = None
@@ -396,6 +398,8 @@ class ConversationCoreSession:
         response = self._responses.get(response_id)
         if response is None:
             return None
+        if response.state not in {ResponseState.COMPLETED, ResponseState.CANCELLED, ResponseState.FAILED}:
+            self._on_interruption(reason)
         result = await self._terminate(
             response_id=response_id,
             generation=response.generation,
@@ -467,6 +471,7 @@ class ConversationCoreSession:
             return
         self._connected = False
         await self._terminate_active_for_shutdown("disconnect")
+        self._on_interruption("disconnect")
         self._discard_pending("disconnect")
         await self._cancel_all_stage_tasks()
         await self._finish_effect_tasks()
@@ -481,6 +486,7 @@ class ConversationCoreSession:
             return
         self._connected = False
         self._ended = True
+        self._on_interruption("session_ended")
         await self._terminate_active_for_shutdown("session_ended")
         self._discard_pending("session_ended")
         await self._cancel_all_stage_tasks()

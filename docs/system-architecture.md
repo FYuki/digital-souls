@@ -317,5 +317,16 @@ trust・sharing・binding検証、Execution Gateを所有する。公式SDKのst
 Gateはloop開始時のsnapshotと接続世代を固定し、実行直前にgrant、入力schema、停止、予算を検証する。
 未信頼annotationはunknownとして直列・retryなしにし、実効read-onlyだけ並列・最大1 retryを許可する。
 Resourcesをnativeに読み取り、Promptsはdiscoveryまでに限定する。入力待ちは上位判断へ返し、
-回答後も同じloopと許可で再実行する。自動会話利用は#182、self-owned runtimeは#221が担当する。
+回答後も同じloopと許可で再実行する。self-owned runtimeは#221が担当する。
 設定・公開Python API・制限は[外部MCP利用基盤](external-mcp-foundation.md)を参照する。
+
+`backend/app/tool_use/`はこのGateをテキスト会話とLiveKit音声で共有する。管理設定から接続し、
+loopに固定した候補を資格・関連性・schema容量で絞り、専用`tool-routing` Targetで選択する。
+元schemaで引数を検証し、会話内の対象選択を呼出しごとのbindingとしてGateへ渡す。
+結果は秘密情報・生エラーを除いた非信頼データとして現在turnの最終回答へ統合する。
+履歴・Memory Formationには既存privacy方針を通った通常の会話だけが渡り、native payloadは渡らない。
+
+MRTRの追加情報は既存contextで補える場合に再開し、不足時は通常の入力欄・音声で質問する。
+入力待ちは同じsnapshot・grant・budget・bindingを最大10分保持する。停止・会話切替・音声切断で破棄し、
+回答中のbarge-inでは古い音声を止めつつ入力待ちを保つ。Target未設定なら通常会話を維持する。
+設定、停止の意味、検証入口は[会話からの外部MCP利用](tool-use.md)を参照する。

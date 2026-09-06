@@ -1,0 +1,16 @@
+
+> check
+> backend/.venv/bin/python -m mypy --config-file backend/mypy.ini backend/app environments && npm --prefix frontend run check
+
+Success: no issues found in 236 source files
+
+> digital-souls-frontend@0.0.0 check
+> svelte-check --tsconfig ./tsconfig.json && tsc --noEmit -p ./tsconfig.e2e.json
+
+
+====================================
+Loading svelte-check in workspace: /home/asa/dev/digital-souls/frontend
+Getting Svelte diagnostics...
+
+====================================
+svelte-check found 0 errors and 0 warnings
