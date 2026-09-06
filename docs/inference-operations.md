@@ -37,6 +37,7 @@ INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS=8192
 INFERENCE_TARGET_VISION=ollama/gemma4:e4b
 INFERENCE_TARGET_VISION_MAX_INPUT_TOKENS=7168
 INFERENCE_TARGET_VISION_MAX_OUTPUT_TOKENS=1024
+INFERENCE_TARGET_VISION_OPTIONS_JSON={"temperature":0}
 INFERENCE_TARGET_VISION_TIMEOUT_SECONDS=30
 INFERENCE_TARGET_VISION_MAX_CONCURRENCY=1
 ```
@@ -139,6 +140,7 @@ npm run test:integration:screen-vision
 ```
 
 実行環境には通常Target一式と、選択Providerを指す`INFERENCE_TARGET_VISION`を設定する。
+Ollamaの構造化Vision受入では生成揺らぎを抑えるため`INFERENCE_TARGET_VISION_OPTIONS_JSON={"temperature":0}`も設定する。
 `openai-api`へ切り替える場合は実行前の利用者承認とBackend専用secretが必要である。
 
 参照ruleの固定fixtureは次で評価する。
