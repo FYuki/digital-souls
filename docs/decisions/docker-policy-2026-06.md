@@ -137,6 +137,10 @@ deploy前backup、backup検証、readiness、失敗時rollbackを維持する。
 commit、schema、backupとimage digestの組を検証して切り替える。mainへのmerge、image build、
 registry更新だけではdogfoodの実行imageを変更しない。
 
+対象digestをGHCRから取得できない場合の再ビルドは本移行の範囲外とし、
+ユーザーの明示指示で別途対応する。当時の依存が取得できない場合も同じ扱いとし、
+通常rollbackから自動再ビルドや別バージョンのimageへの代替は行わない。
+
 3 imageは`dogfood-images.env`へ原子的に反映し、systemd targetの再起動で同じcommitの組へ切り替える。
 このファイルは`0600 root:root`とし、active digestを必要とするroot control plane、deploy、Whisper runnerだけが読む。Ollama、VOICEVOX、LiveKit runnerはimage digestを使用しないため読み込まず、Ollamaの非root process所有を維持する。
 失敗時は直前manifestのcommitと3 digestを一組で復元する。Whisper image、CUDA runtime、modelまたは

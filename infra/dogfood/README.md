@@ -305,6 +305,12 @@ manifestは20世代、backupは既定7世代のため、古いbackupの実在・
 これはDBの自動restoreを追加するものではなく、schema不一致時は従来どおり切替を拒否する。
 必要なbackupが残っていない場合もschema検証を迂回しない。
 
+アプリケーションは保存済みmanifestに記録されたGHCRのimage digestを取得して戻す。
+対象imageを取得できない場合は通常rollbackを停止し、別バージョンのimageで代用しない。
+最終手段として対象commitから再ビルドする対応は、ユーザーの明示指示で別途行う。
+当時の依存が取得できない場合の調整を含め、再ビルドとその受入は#135／#146の範囲外とする。
+再ビルドで元と異なるdigestになったimageを、保存済みdigestのimageと同一のものとして扱わない。
+
 2026-09-06決定: #146のコード、回帰テスト、手順書をmainへ取り込む時点で#135をcloseする。
 dogfood実機のbackup／別data rootへのrestore／失敗時rollback受入は別タスクとする。
 そのタスクでは本書の実機検証時のデータ保全、restore drill、readiness確認に従い、
