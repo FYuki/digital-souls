@@ -1,0 +1,81 @@
+
+> test:e2e:mocked
+> npm --prefix frontend run test:e2e:mocked
+
+
+> digital-souls-frontend@0.0.0 test:e2e:mocked
+> playwright test --config playwright.mocked.config.ts
+
+
+Running 38 tests using 14 workers
+
+(node:1994916) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1994901) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1994908) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1994902) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1994921) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1994900) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1994944) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1994950) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1994937) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1994912) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1994990) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1994956) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1994991) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1994997) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   2 [e2e/chromium] › e2e/conversation-threads.spec.ts:170:1 › サイドバーを閉じた後はフロートメニューから再展開できる (1.3s)
+  ✓   3 [e2e/chromium] › e2e/conversation-threads.spec.ts:197:1 › unarchive成功後は同じIDをactive一覧へ戻して再開できる (1.4s)
+  ✓   7 [e2e/chromium] › e2e/memory-management.spec.ts:89:1 › 記憶管理入口から別groupを表示し明示削除後すぐ一覧から除外する (1.5s)
+  ✓  12 [e2e/chromium] › e2e/conversation-threads.spec.ts:152:1 › hard delete確認は削除範囲・復元不能・保証対象外を明示する (1.4s)
+  ✓  10 [e2e/chromium] › e2e/conversation-threads.spec.ts:210:1 › hard delete成功後は一覧・履歴・選択ID・localStorageから除去する (1.5s)
+  ✓   8 [e2e/chromium] › e2e/conversation-threads.spec.ts:271:1 › 320px幅では履歴をdrawerとして開きEscapeで閉じる (1.6s)
+  ✓   6 [e2e/chromium] › e2e/chat.spec.ts:88:1 › ユーザーが送信したメッセージとモック応答がチャット画面に表示される (1.6s)
+  ✓  11 [e2e/chromium] › e2e/memory-management.spec.ts:112:1 › 記憶管理画面でスレッドを選択すると会話画面へ切り替える (1.6s)
+  ✓   9 [e2e/chromium] › e2e/conversation-threads.spec.ts:257:1 › 非表示にしたキャラクターを設定から再追加すると既存スレッドを復元する (1.7s)
+  ✓   4 [e2e/chromium] › e2e/conversation-threads.spec.ts:181:1 › archive成功後はactive一覧と選択状態から除去しarchived一覧へ移す (1.7s)
+  ✓   1 [e2e/chromium] › e2e/conversation-threads.spec.ts:227:1 › privacy_skipped履歴は本文を作らずreason metadataを表示する (1.9s)
+  ✓   5 [e2e/chromium] › e2e/conversation-threads.spec.ts:247:1 › キャラクターをピン留めすると0件ブロックも一覧先頭へ移動する (1.8s)
+  ✓  14 [e2e/chromium] › e2e/conversation-threads.spec.ts:140:1 › 新規スレッドは既存選択と混同せずBackendが発行したIDへ切り替える (1.9s)
+  ✓  13 [e2e/chromium] › e2e/conversation-threads.spec.ts:125:1 › 既存スレッドを選ぶと保存済み履歴を表示し同じIDで再開する (1.9s)
+(node:1996321) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  21 [e2e/chromium] › e2e/chat.spec.ts:100:1 › スレッド機能を表示したときも既存の背景とレイアウトを維持する (581ms)
+  ✓  19 [e2e/chromium] › e2e/portrait-layout.spec.ts:191:3 › 立ち絵が未設定でもplaceholderで会話を継続できる (645ms)
+  ✓  18 [e2e/chromium] › e2e/portrait-layout.spec.ts:151:1 › Visual Viewport縮小時は一時的に100%へ変更せず入力欄を表示範囲内へ保つ (718ms)
+  ✓  20 [e2e/chromium] › e2e/portrait-layout.spec.ts:191:3 › 立ち絵が読み込み失敗でもplaceholderで会話を継続できる (692ms)
+  ✓  15 [e2e/chromium] › e2e/portrait-layout.spec.ts:81:1 › PCでは右配置を初期値とし背面配置と50%設定を再読み込み後も復元する (1.4s)
+  ✓  16 [e2e/chromium] › e2e/portrait-layout.spec.ts:114:3 › tabletは背面配置に固定し50・75・100%を下端基準で反映する (1.4s)
+  ✓  23 [e2e/chromium] › e2e/chat.spec.ts:109:1 › モックBEがエラーを返した場合にエラーメッセージが表示される (636ms)
+  ✓  17 [e2e/chromium] › e2e/portrait-layout.spec.ts:114:3 › mobileは背面配置に固定し50・75・100%を下端基準で反映する (1.4s)
+  ✓  22 [e2e/chromium] › e2e/screen-perception.spec.ts:317:1 › 共有ONだけでは送信せず文脈参照と明示参照で各1枚だけ送る (1.2s)
+  ✓  24 [e2e/chromium] › e2e/voice-chat.spec.ts:78:1 › マイクボタン操作でOFFから有効状態へ遷移する (1.1s)
+  ✓  26 [e2e/chromium] › e2e/screen-perception.spec.ts:352:1 › ウィンドウ共有はsurfaceを維持しOFFと再読込でsessionを復元しない (917ms)
+  ✓  25 [e2e/chromium] › e2e/chat.spec.ts:124:1 › 利用者がAからBへ切り替えてAへ戻すとcharacter別UUIDv4をHTTPとvoiceで利用する (1.0s)
+  ✓  28 [e2e/chromium] › e2e/screen-perception.spec.ts:376:1 › Edgeの静止ウィンドウ相当でも5秒の取得期限内に現在frameを送る (911ms)
+  ✓  27 [e2e/chromium] › e2e/voice-chat.spec.ts:86:1 › VADの発話イベント中も継続microphone sessionを維持する (1.3s)
+  ✓  29 [e2e/chromium] › e2e/screen-perception.spec.ts:395:1 › ブラウザタブ共有はbrowser surfaceを維持して送信する (645ms)
+  ✓  30 [e2e/chromium] › e2e/voice-chat.spec.ts:93:1 › 音声応答のuser発話とmiori応答がこの順でチャット欄に表示される (3.1s)
+  ✓  31 [e2e/chromium] › e2e/voice-chat.spec.ts:100:1 › 音声応答はtext delta、audio segmentの順で受信する (3.1s)
+  ✓  32 [e2e/chromium] › e2e/voice-chat.spec.ts:107:1 › 音声segmentを受信すると再生開始観測をresponseへ相関する (2.9s)
+  ✓  33 [e2e/chromium] › e2e/voice-chat.spec.ts:113:1 › 音声送信から音声再生開始までの遅延を計測してレポートへ添付する (2.9s)
+  ✓  34 [e2e/chromium] › e2e/voice-chat.spec.ts:123:1 › 通常UIの同一sessionで追加操作なしに3往復を履歴へ確定する (3.2s)
+  ✓  35 [e2e/chromium] › e2e/voice-chat.spec.ts:146:1 › 通常UIでmute・再開・終了しRoomとmicrophone resourceを一度ずつ解放する (998ms)
+  ✓  36 [e2e/chromium] › e2e/voice-chat.spec.ts:179:1 › 一時切断中の状態を表示し同じ通常UIへ重複なく復帰する (824ms)
+  ✓  37 [e2e/chromium] › e2e/voice-chat.spec.ts:214:1 › barge-inでlocal停止とserver cancelを相関し遅延出力を破棄する (877ms)
+  ✓  38 [e2e/chromium] › e2e/voice-chat.spec.ts:259:1 › 連続barge-in後も旧responseを混入させず同じsessionで次の発話を処理する (911ms)
+
+  38 passed (44.7s)

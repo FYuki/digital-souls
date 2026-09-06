@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ToolUseStatus from './lib/ToolUseStatus.svelte'
   import { onMount } from 'svelte'
 
   import AudioRecorder from './lib/AudioRecorder.svelte'
@@ -546,6 +547,15 @@
       </section>
     {/if}
     <div class="input-area">
+      {#if $conversationController.selectedConversationId !== null}
+        {#key `${$conversationController.character}:${$conversationController.selectedConversationId}`}
+          <ToolUseStatus
+            character={$conversationController.character}
+            conversationId={$conversationController.selectedConversationId}
+            onStop={endVoiceSession}
+          />
+        {/key}
+      {/if}
       <InputBar
         onSend={handleSend}
         characterName={currentCharacterEntry?.display_name ?? $conversationController.character}
@@ -708,6 +718,7 @@
 
   .input-area {
     display: flex;
+    flex-wrap: wrap;
     align-items: stretch;
     gap: 12px;
     padding: 16px 24px 20px;

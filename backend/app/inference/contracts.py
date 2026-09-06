@@ -19,6 +19,7 @@ class InferenceTarget(str, Enum):
     EMBEDDING = "embedding"
     VISION = "vision"
     HEAVY_REASONING = "heavy-reasoning"
+    TOOL_ROUTING = "tool-routing"
 
 
 class InferenceCapability(str, Enum):

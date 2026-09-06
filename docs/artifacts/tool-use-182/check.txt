@@ -1,0 +1,11 @@
+
+> digital-souls-frontend@0.0.0 check
+> svelte-check --tsconfig ./tsconfig.json && tsc --noEmit -p ./tsconfig.e2e.json
+
+
+====================================
+Loading svelte-check in workspace: ./frontend
+Getting Svelte diagnostics...
+
+====================================
+svelte-check found 0 errors and 0 warnings

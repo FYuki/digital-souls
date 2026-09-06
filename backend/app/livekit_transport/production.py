@@ -293,6 +293,7 @@ class ProductionConversationCoreSessionFactory:
         measurement_kind: MeasurementKind = "automated_test",
         trace_record: Callable[[TraceEvent], None] | None = None,
         measurement_clock_ns: Callable[[], int] = time.perf_counter_ns,
+        on_conversation_interruption: Callable[[str, str, str], None] = lambda _c, _s, _r: None,
     ) -> None:
         self._stt = WhisperSttAdapter(transcriber=transcriber)
         self._synthesizer = synthesizer
@@ -304,6 +305,7 @@ class ProductionConversationCoreSessionFactory:
         self._measurement_kind = measurement_kind
         self._trace_record = trace_record
         self._measurement_clock_ns = measurement_clock_ns
+        self._on_conversation_interruption = on_conversation_interruption
         if sum(
             source is not None
             for source in (
@@ -340,6 +342,7 @@ class ProductionConversationCoreSessionFactory:
         return ConversationCoreSession(
             session_id=session_id,
             response_id_factory=lambda: str(uuid4()),
+            on_interruption=lambda reason: self._on_conversation_interruption(character_id, str(conversation_id), reason),
             delivery=delivery,
             persistence=ConversationHistoryPersistenceAdapter(
                 history_session=history_session,  # type: ignore[arg-type]

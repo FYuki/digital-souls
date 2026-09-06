@@ -1,4 +1,6 @@
 from typing import cast
+import asyncio
+from contextlib import suppress
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -13,6 +15,8 @@ from app.chat_service import (
 from app.routers.validation import ConversationRoute
 from app.routers.conversation_contracts import TurnResponse, persisted_turn_response
 from app.async_worker import run_sync
+from app._chat_runtime import generate_reply_with_tools
+from app.tool_use.service import TOOL_STOP_MESSAGE
 from app.screen_perception.detector import needs_reference_history
 from app.screen_perception.service import (
     ScreenSource,
@@ -44,6 +48,53 @@ async def chat(
     payload: ChatRequest,
     request: Request,
 ) -> PersistedChatResponse | JSONResponse:
+    if getattr(request.app.state, "tool_service", None) is None:
+        return await _chat_response(payload, request)
+    owner = asyncio.current_task()
+    assert owner is not None
+    disconnected = False
+
+    async def watch_disconnect() -> None:
+        nonlocal disconnected
+        while True:
+            if await request.is_disconnected():
+                disconnected = True
+                request.app.state.tool_service.stop(
+                    payload.character, str(payload.conversation_id)
+                )
+                if not owner.cancelling():
+                    owner.cancel("client_disconnected")
+                return
+            await asyncio.sleep(0.25)
+
+    watcher = asyncio.create_task(watch_disconnect())
+    try:
+        return await _chat_response(payload, request)
+    except asyncio.CancelledError as error:
+        request.app.state.tool_service.stop(
+            payload.character, str(payload.conversation_id)
+        )
+        # 明示停止と切断だけをHTTP応答に変換し、shutdown等のcancelは伝搬する。
+        if getattr(request.app.state.tool_service, "closing", False) or not (
+            error.args == (TOOL_STOP_MESSAGE,)
+            or (disconnected and error.args == ("client_disconnected",))
+        ):
+            raise
+        return JSONResponse(
+            status_code=499,
+            content={
+                "detail": "会話応答を停止しました。開始済みの外部操作が取り消されたことは保証されません。"
+            },
+        )
+    finally:
+        watcher.cancel()
+        with suppress(asyncio.CancelledError):
+            await watcher
+
+
+async def _chat_response(
+    payload: ChatRequest, request: Request
+) -> PersistedChatResponse | JSONResponse:
     try:
         needs_contextual_reference = needs_reference_history(payload.message)
         if (
@@ -51,7 +102,7 @@ async def chat(
             and payload.screen_client_session_id is None
             and not needs_contextual_reference
         ):
-            reply = await run_sync(
+            reply = await generate_reply_with_tools(
                 request.app.state.chat_service.generate_chat_reply,
                 payload.character,
                 payload.conversation_id,
@@ -99,7 +150,7 @@ async def chat(
                     request_id=None,
                     validity=InferenceCancellationToken(),
                 )
-                reply = await run_sync(
+                reply = await generate_reply_with_tools(
                     request.app.state.chat_service.generate_screen_chat_reply,
                     payload.character,
                     payload.conversation_id,
@@ -127,7 +178,7 @@ async def chat(
                         request_id=None,
                         validity=InferenceCancellationToken(),
                     )
-                    reply = await run_sync(
+                    reply = await generate_reply_with_tools(
                         request.app.state.chat_service.generate_screen_chat_reply,
                         payload.character,
                         payload.conversation_id,
@@ -157,7 +208,7 @@ async def chat(
                 request_id=None,
                 validity=InferenceCancellationToken(),
             )
-            reply = await run_sync(
+            reply = await generate_reply_with_tools(
                 request.app.state.chat_service.generate_screen_chat_reply,
                 payload.character,
                 payload.conversation_id,
@@ -166,7 +217,7 @@ async def chat(
                 history_access,
             )
         else:
-            reply = await run_sync(
+            reply = await generate_reply_with_tools(
                 request.app.state.chat_service.generate_contextual_chat_reply,
                 payload.character,
                 payload.conversation_id,

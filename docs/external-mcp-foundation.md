@@ -1,8 +1,9 @@
 # 外部MCP利用基盤（#104）
 
 `backend/app/external_mcp/`は、登録済み外部MCPのdiscoveryと選択済みoperationの実行を提供する。
-会話からのTool選択・LLM向けprojection・binding解決・応答への統合は#182で実装する。
-現在の会話画面へMCPを自動接続する設定やHTTP管理APIは追加しない。
+会話からのTool選択・LLM向けprojection・binding解決・応答への統合は
+`backend/app/tool_use/`が担当する。会話用の管理設定と停止APIは
+[会話からの外部MCP利用](tool-use.md)を参照する。
 
 ## 構成と呼出順
 
