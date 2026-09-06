@@ -18,8 +18,8 @@ def rig(monkeypatch):
     flags = SimpleNamespace(publish_error=False, publish_entered=None, publish_release=None)
 
     class Source:
-        def __init__(self, rate, channels):
-            assert (rate, channels) == (48000, 1)
+        def __init__(self, rate, channels, *, queue_size_ms):
+            assert (rate, channels, queue_size_ms) == (48000, 1, 0)
             self.frames, self.closed, self.clears = [], False, 0
             self.capture_entered = self.capture_release = None
             sources.append(self)
@@ -81,13 +81,13 @@ def test_responses_use_distinct_sources_and_release_previous_track(rig):
         assert sources == []
         await output.begin_response(A)
         await output.begin_response(A)
-        await output.publish(b'\x01\x00' * 10, response_id=A)
+        await output.publish(b'\x01\x00' * 480, response_id=A)
         await output.begin_response(B)
-        await output.publish(b'\x02\x00' * 10, response_id=B)
+        await output.publish(b'\x02\x00' * 480, response_id=B)
         assert sources[0].closed and tracks[0].muted
         assert not sources[1].closed
-        assert sources[0].frames == [b'\x01\x00' * 10]
-        assert sources[1].frames == [b'\x02\x00' * 10]
+        assert sources[0].frames == [b'\x01\x00' * 480]
+        assert sources[1].frames == [b'\x02\x00' * 480]
         assert operations == [('publish', 'TR_1', 'ds-response-v1:' + A),
                               ('unpublish', 'TR_1'), ('publish', 'TR_2', 'ds-response-v1:' + B)]
         await output.aclose()
@@ -117,9 +117,9 @@ def test_stopped_and_old_response_pcm_cannot_enter_new_source(rig):
         assert not tracks[1].muted
         with pytest.raises(asyncio.CancelledError):
             await output.publish(b'\x01\x00', response_id=A)
-        await output.publish(b'\x02\x00', response_id=B)
+        await output.publish(b'\x02\x00' * 480, response_id=B)
         assert sources[0].frames == []
-        assert sources[1].frames == [b'\x02\x00']
+        assert sources[1].frames == [b'\x02\x00' * 480]
         await output.aclose()
     asyncio.run(exercise())
 
@@ -130,7 +130,7 @@ def test_clear_releases_native_queue_while_capture_waits(rig):
         await output.begin_response(A)
         source = sources[0]
         source.capture_entered, source.capture_release = asyncio.Event(), asyncio.Event()
-        capture = asyncio.create_task(output.publish(b'\x01\x00', response_id=A))
+        capture = asyncio.create_task(output.publish(b'\x01\x00' * 480, response_id=A))
         await source.capture_entered.wait()
         output.clear(A)
         with pytest.raises(asyncio.CancelledError):
@@ -193,4 +193,20 @@ def test_invalid_response_or_partial_pcm_is_rejected(rig):
         await output.aclose()
         with pytest.raises(RuntimeError):
             await output.begin_response(B)
+    asyncio.run(exercise())
+
+
+def test_finish_drains_partial_samples_and_reports_padding_separately(rig):
+    output, sources, _, _, _ = rig
+    async def exercise():
+        await output.begin_response(A)
+        assert await output.publish(b"\x03\x00" * 481, response_id=A) is not None
+        await output.finish_response(A)
+        stats = output.statistics(A)
+        assert stats["response_audio_input_samples"] == 481
+        assert stats["response_audio_captured_samples"] == 1920
+        assert stats["response_audio_padding_samples"] == 1439
+        assert stats["response_audio_max_queued_samples"] <= 48000
+        assert b"".join(sources[0].frames) == b"\x03\x00" * 481 + bytes(1439 * 2)
+        await output.aclose()
     asyncio.run(exercise())

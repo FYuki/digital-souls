@@ -8,6 +8,8 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from app.livekit_transport.paced_audio import PacedPcmSource
+
 if TYPE_CHECKING:
     import livekit.rtc as rtc
 
@@ -20,6 +22,7 @@ class _ResponseTrack:
     source: rtc.AudioSource
     track: rtc.LocalAudioTrack
     sid: str
+    pacer: PacedPcmSource
     source_closed: bool = False
 
 
@@ -55,6 +58,7 @@ class ResponseAudioTracks:
             previous = self._current
             if previous is not None:
                 if not previous.source_closed:
+                    previous.pacer.stop()
                     previous.source.clear_queue()
                 previous.track.mute()
                 await self._room.local_participant.unpublish_track(previous.sid)
@@ -64,7 +68,7 @@ class ResponseAudioTracks:
             if self._closed or self._stopped:
                 raise asyncio.CancelledError("response audio was stopped while retiring the previous track")
             rtc_module = importlib.import_module("livekit.rtc")
-            source: rtc.AudioSource = rtc_module.AudioSource(self._sample_rate, self._channels)
+            source: rtc.AudioSource = rtc_module.AudioSource(self._sample_rate, self._channels, queue_size_ms=0)
             try:
                 track: rtc.LocalAudioTrack = rtc_module.LocalAudioTrack.create_audio_track(
                     TRACK_NAME_PREFIX + response_id, source,
@@ -72,7 +76,8 @@ class ResponseAudioTracks:
                 publication = await self._room.local_participant.publish_track(
                     track, rtc_module.TrackPublishOptions(source=rtc_module.TrackSource.SOURCE_MICROPHONE),
                 )
-                self._current = _ResponseTrack(response_id, source, track, publication.sid)
+                self._current = _ResponseTrack(response_id, source, track, publication.sid,
+                    PacedPcmSource(source, sample_rate=self._sample_rate, channels=self._channels))
                 self._observe("response_audio_track_published", response_id)
                 if self._closed or self._stopped:
                     source.clear_queue()
@@ -85,27 +90,57 @@ class ResponseAudioTracks:
                     await source.aclose()
                 raise
 
-    async def publish(self, pcm: bytes, *, response_id: str) -> None:
+    async def publish(self, pcm: bytes, *, response_id: str) -> int | None:
         async with self._lock:
             current = self._current
             if self._closed or self._stopped or current is None or current.source_closed or current.response_id != response_id:
                 raise asyncio.CancelledError("audio does not belong to the active response")
             if not pcm or len(pcm) % (2 * self._channels):
                 raise ValueError("response audio requires complete PCM16 samples")
-            rtc_module = importlib.import_module("livekit.rtc")
-            await current.source.capture_frame(rtc_module.AudioFrame(
-                pcm, self._sample_rate, self._channels, len(pcm) // (2 * self._channels),
-            ))
+            try:
+                first_capture_ns = await current.pacer.publish(pcm)
+            except asyncio.CancelledError:
+                self.clear(response_id)
+                raise
             if self._closed or self._stopped:
                 raise asyncio.CancelledError("response audio was stopped while capturing")
+            return first_capture_ns
+
+    async def finish_response(self, response_id: str) -> int | None:
+        async with self._lock:
+            current = self._current
+            if self._closed or self._stopped or current is None or current.source_closed or current.response_id != response_id:
+                raise asyncio.CancelledError("audio does not belong to the active response")
+            try:
+                first_capture_ns = await current.pacer.finish()
+            except asyncio.CancelledError:
+                self.clear(response_id)
+                raise
+            self._observe("response_audio_source_drained", response_id)
+            return first_capture_ns
+
+    def statistics(self, response_id: str) -> dict[str, int]:
+        current = self._current
+        if current is None or current.response_id != response_id:
+            raise ValueError("audio statistics do not belong to the active response")
+        pacer = current.pacer
+        return {
+            "response_audio_input_samples": pacer.input_sample_count,
+            "response_audio_captured_samples": pacer.captured_sample_count,
+            "response_audio_padding_samples": pacer.padding_sample_count,
+            "response_audio_max_queued_samples": pacer.max_queued_samples,
+        }
 
     def clear(self, response_id: str | None = None) -> None:
-        # clearはcapture_frameのbackpressure待ち中にも即時実行できる。
+        # clearはPCM queueの空き待ち中にも即時実行できる。
         if response_id is not None and response_id != self._requested_response_id:
+            return
+        if self._stopped:
             return
         self._stopped = True
         if self._current is not None:
             if not self._current.source_closed:
+                self._current.pacer.stop()
                 self._current.source.clear_queue()
             self._current.track.mute()
 
@@ -121,6 +156,7 @@ class ResponseAudioTracks:
 
     async def _close_source(self, current: _ResponseTrack) -> None:
         if not current.source_closed:
+            await current.pacer.aclose()
             await current.source.aclose()
             current.source_closed = True
             self._observe("response_audio_source_closed", current.response_id)

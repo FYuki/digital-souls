@@ -232,7 +232,7 @@ class _LiveKitPcmAudioSource:
     async def begin_response(self, response_id: str) -> None:
         """単一sourceのadapter。productionではResponseAudioTracksがtrackを分離する。"""
 
-    async def publish(self, pcm: bytes, *, response_id: str) -> None:
+    async def publish(self, pcm: bytes, *, response_id: str) -> int:
         rtc_module = _livekit_rtc_module()
 
         samples_per_channel = len(pcm) // (
@@ -245,6 +245,10 @@ class _LiveKitPcmAudioSource:
             samples_per_channel,
         )
         await self._source.capture_frame(frame)
+        return time.monotonic_ns()
+
+    async def finish_response(self, response_id: str) -> None:
+        """既存adapterのnative bufferは従来どおりsourceが所有する。"""
 
     def clear(self, response_id: str | None = None) -> None:
         self._source.clear_queue()
@@ -553,31 +557,8 @@ class _ConversationCoreDelivery:
                 // (PCM_SAMPLE_WIDTH_BYTES * PCM_CHANNELS),
             )
             await self._coordinator.send_core(self._voice_payload(event))
-            await self._audio_source.publish(event.audio, response_id=response_id)
-            if first_audio:
-                self._first_audio_observed.add(response_id)
-                if self._measurement is not None:
-                    self._measurement.record_response_event(
-                        response_id=response_id,
-                        name="first_audio_out",
-                        stage="transport",
-                    )
-                await self._coordinator.send_core(
-                    json.dumps(
-                        {
-                            "type": "observation",
-                            "protocol_version": "1.0",
-                            "event_id": str(uuid4()),
-                            "session_id": event.session_id,
-                            "response_id": response_id,
-                            "measurement": "first_audio_out",
-                            "timestamp": str(time.monotonic_ns()),
-                            "clock_domain": "server_monotonic",
-                            "unit": "nanosecond",
-                        },
-                        separators=(",", ":"),
-                    ).encode()
-                )
+            first_capture_ns = await self._audio_source.publish(event.audio, response_id=response_id)
+            await self._observe_first_audio_out(event, first_capture_ns)
             return
         if (
             event.type == "response_cancelled"
@@ -603,6 +584,14 @@ class _ConversationCoreDelivery:
                 outcome="excluded",
                 reason_code="privacy_skip",
             )
+        if event.type == "response_completed" and event.response_id is not None:
+            first_capture_ns = await self._audio_source.finish_response(event.response_id)
+            if isinstance(self._audio_source, ResponseAudioTracks) and self._measurement is not None:
+                for name, value in self._audio_source.statistics(event.response_id).items():
+                    self._measurement.record_response_event(
+                        response_id=event.response_id, name=name, stage="transport", value=value,
+                    )
+            await self._observe_first_audio_out(event, first_capture_ns)
         if event.type in {"response_cancelled", "response_failed"}:
             self._audio_source.clear(event.response_id)
         if event.type == "response_privacy_skipped":
@@ -614,6 +603,22 @@ class _ConversationCoreDelivery:
                 )
             return
         await self._coordinator.send_core(self._voice_payload(event))
+
+    async def _observe_first_audio_out(self, event: CoreEvent, timestamp_ns: int | None) -> None:
+        response_id = event.response_id
+        if timestamp_ns is None or response_id is None or response_id in self._first_audio_observed:
+            return
+        self._first_audio_observed.add(response_id)
+        if self._measurement is not None:
+            self._measurement.record_response_event(
+                response_id=response_id, name="first_audio_out", stage="transport", timestamp=timestamp_ns,
+            )
+        await self._coordinator.send_core(json.dumps({
+            "type": "observation", "protocol_version": "1.0", "event_id": str(uuid4()),
+            "session_id": event.session_id, "response_id": response_id,
+            "measurement": "first_audio_out", "timestamp": str(timestamp_ns),
+            "clock_domain": "server_monotonic", "unit": "nanosecond",
+        }, separators=(",", ":")).encode())
 
     def _voice_payload(
         self, event: CoreEvent, *, utterance_id: str | None = None

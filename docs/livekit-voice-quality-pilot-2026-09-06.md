@@ -292,3 +292,24 @@ Frontend単体351件、関連Backend66件が成功した。Svelte／TypeScript�
 実会話pilot`causal-media-clock-01`の準備1回＋測定3回はtranscript一致、応答完了、明示終了が全件成功した。全4回でworker較正・packet受信・同一packet配送を観測し、較正幅は約0.4msだった。測定3回の受信下限→配送は約26.0ms、26.4ms、24.3ms。標準native bufferの最初のpacketには入力前の無音が含まれるため、全試行の`media_observation_method`は`unavailable`を維持し、これらを応答TTFAの合格根拠にしない。
 
 Frontend単体テスト375件と型検査が成功した。後処理を統一した最終変更後にも、対象の時計・media observerテスト23件が成功した。実測結果は`frontend/test-results/livekit-quality/runs/causal-media-clock-01/`に保持する。
+
+
+## 2026-09-07: 入力のあるframeだけを送るPCM pacing
+
+通常会話のnative AudioSourceを`queue_size_ms=0`へ変更し、`PacedPcmSource`が最大1秒のPCM queueから10ms frameを供給する構成にした。queueの外に送信中の1 frameがあり、合成済みPCM本体はCore側にも保持する。入力前の無音を生成せず、10ms未満の端数はsegment間で保存する。応答末尾では20ms境界へのpadding＋追加20msを明示的に送り、native供給完了後に`response_completed`を配送する。paddingは元のPCMやlogical segmentの長さへ加えない。
+
+cancel、送信taskのキャンセル、次応答、session終了は所有するpacerを止める。空き待ち中のproducerも解除し、旧PCMが新sourceへ入ることを防ぐ。native capture失敗はproducer／finishへ伝える。`first_audio_out`のtraceとcontrol観測には最初のnative capture完了時刻を保持し、長いsegmentのqueue待ちが終わった時刻を使わない。この時刻はSDKへの最初の10ms供給完了であり、最初のRTP packetの送信時刻やbrowser出力時刻とは異なる。
+
+`paced-source-01`は固定入力のsourceStart境界を20ms以内に確定できず失敗した。失敗runを保存し、同じコードで実行した`paced-source-02`の準備1回＋測定3回はtranscript一致、応答完了、明示終了が成功した。track作成から最初のpacketまでの測定3回は約666.8ms、695.4ms、720.3msで、標準bufferの入力前packetを観測する状態から変わった。全4回で最初のnative capture、source drain、source closeを記録した。準備回を含む生成完了→最初のnative供給は5.3〜9.2msだった。入力時計の失敗を成功へ置き換えたという意味ではなく、正式な100試行の失敗率評価は未実施である。
+
+続く`paced-source-session-01`では同じsession・conversationで3往復が成功し、追加マイク操作0回、異なる応答track、最後の明示終了を確認した。送信側のsample数は次のとおり。
+
+| 応答 | 入力PCM | 末尾padding | native供給 | queue最大 |
+|---|---:|---:|---:|---:|
+| 1 | 167,422 | 1,538 | 168,960 | 48,000 |
+| 2 | 120,830 | 1,090 | 121,920 | 48,000 |
+| 3 | 137,726 | 1,474 | 139,200 | 48,000 |
+
+全応答で入力＋padding＝native供給が一致した。これはnativeへ渡したsample数の検証であり、受信loss、decoderの遅延、ブラウザで再生したsource PCM位置、underrunの証明ではない。通常pilotの`media_observation_method`は引き続き`unavailable`とする。次に、購読・再生準備を送信開始前に確認する処理と、packet→decode→明示PCM出力の対応を通常経路へ組み込む必要がある。
+
+Backend全単体テストは2,334件成功・1件skip。最終の統計追加後にはpacer、応答track、LiveKit関連moduleの34件と型検査が成功した。先行したmodule全体との混載実行では単体1件が二重clearで失敗したため、clearを冪等化してから全単体を再実行している。source完了の統計4種類は本文を含まない数値としてtraceへ記録する。
