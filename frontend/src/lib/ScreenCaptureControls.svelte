@@ -135,7 +135,10 @@
         && state.captureState === 'active'
         ? '参照可能'
         : recognitionLabels[state.recognitionState]
-  $: if (mounted) publishAvailability()
+  $: referenceAvailableValue = backendSession !== null
+    && state.captureState === 'active'
+    && !busy
+  $: if (mounted) onReferenceAvailabilityChanged(referenceAvailableValue)
 
   onMount(() => {
     controller = new BrowserScreenCaptureController(preview, observeCaptureState)
@@ -237,7 +240,6 @@
   function observeCaptureState(next: ScreenCaptureState) {
     const ended = state.captureState === 'active' && next.captureState === 'unavailable'
     state = next
-    publishAvailability()
     if (ended) void revokeBackend('capture_ended')
   }
 
@@ -253,7 +255,6 @@
     const session = backendSession
     backendSession = null
     stopHeartbeat()
-    publishAvailability()
     if (session === null) return
     await revokeScreenSession(session, reason).catch(() => undefined)
   }
@@ -309,7 +310,6 @@
         return
       }
       backendSession = session
-      publishAvailability()
       stopHeartbeat()
       heartbeatTimer = window.setInterval(() => {
         const current = backendSession
@@ -336,13 +336,7 @@
   }
 
   export function referenceAvailable(): boolean {
-    return backendSession !== null && state.captureState === 'active' && !busy
-  }
-
-  function publishAvailability() {
-    onReferenceAvailabilityChanged(
-      backendSession !== null && state.captureState === 'active' && !busy,
-    )
+    return referenceAvailableValue
   }
 
   export async function captureAuthorizedRequest(

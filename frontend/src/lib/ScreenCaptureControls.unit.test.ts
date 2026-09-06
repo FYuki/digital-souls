@@ -295,11 +295,13 @@ describe('ScreenCaptureControls', () => {
     vi.stubGlobal('fetch', fetchMock)
     const track = new UiTrack('monitor')
     getDisplayMedia.mockResolvedValue(createStream(track))
+    const onReferenceAvailabilityChanged = vi.fn()
     const view = render(ScreenCaptureControls, {
       props: {
         characterId: 'miori',
         conversationId: CONVERSATION_ID,
         referenceDecisionActive: false,
+        onReferenceAvailabilityChanged,
       },
     })
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
@@ -315,6 +317,15 @@ describe('ScreenCaptureControls', () => {
     expect(screen.getByText('認識: 参照が必要か確認中')).toBeTruthy()
     expect(getDisplayMedia).toHaveBeenCalledTimes(1)
     expect((screen.getByRole('button', { name: '現在の画面を参照' }) as HTMLButtonElement).disabled).toBe(true)
+    await waitFor(() => expect(onReferenceAvailabilityChanged).toHaveBeenLastCalledWith(false))
+
+    await view.rerender({
+      characterId: 'miori',
+      conversationId: CONVERSATION_ID,
+      referenceDecisionActive: false,
+      onReferenceAvailabilityChanged,
+    })
+    await waitFor(() => expect(onReferenceAvailabilityChanged).toHaveBeenLastCalledWith(true))
   })
 
   test('window共有では取得対象とdigital-soulsを区別して案内する', async () => {
