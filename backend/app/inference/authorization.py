@@ -15,6 +15,7 @@ class InferenceCaller(str, Enum):
     MEMORY_EXTRACTION = "memory-extraction"
     MEMORY_CONSOLIDATION = "memory-consolidation"
     MEMORY_INDEX = "memory-index"
+    SCREEN_VISION = "screen-vision"
     HEAVY_REASONING = "heavy-reasoning"
 
 
@@ -26,6 +27,7 @@ CORE_TARGET_ALLOWLIST: Mapping[InferenceCaller, frozenset[InferenceTarget]] = {
         {InferenceTarget.MEMORY_CONSOLIDATION}
     ),
     InferenceCaller.MEMORY_INDEX: frozenset({InferenceTarget.EMBEDDING}),
+    InferenceCaller.SCREEN_VISION: frozenset({InferenceTarget.VISION}),
     InferenceCaller.HEAVY_REASONING: frozenset({InferenceTarget.HEAVY_REASONING}),
 }
 

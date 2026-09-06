@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from collections.abc import AsyncIterator, Mapping
 import json
 import math
@@ -13,9 +14,12 @@ from app.inference.contracts import (
     EmbeddingRequest,
     EmbeddingResult,
     InferenceCapability,
+    InferenceImagePart,
     InferenceMessage,
+    InferenceTextPart,
     InferenceUsage,
     JsonValue,
+    ModelProbeResult,
     ProviderTextResult,
     StructuredGenerationRequest,
     TextGenerationRequest,
@@ -24,6 +28,7 @@ from app.inference.contracts import (
     TokenEstimateRequest,
 )
 from app.inference.errors import InferenceError, InferenceErrorCategory
+from app.inference.images import CONSERVATIVE_IMAGE_TOKEN_ESTIMATE
 
 
 _DIGEST_PATTERN = re.compile(r"sha256[:-]([0-9a-fA-F]{64})")
@@ -31,7 +36,16 @@ _DIGEST_PATTERN = re.compile(r"sha256[:-]([0-9a-fA-F]{64})")
 
 class OllamaAdapter:
     provider_id = "ollama"
-    capabilities = frozenset(InferenceCapability)
+    capabilities = frozenset(
+        {
+            InferenceCapability.GENERATE_TEXT,
+            InferenceCapability.STREAM_TEXT,
+            InferenceCapability.GENERATE_STRUCTURED,
+            InferenceCapability.IMAGE_INPUT,
+            InferenceCapability.EMBED,
+            InferenceCapability.ESTIMATE_INPUT_TOKENS,
+        }
+    )
 
     def __init__(
         self,
@@ -45,14 +59,25 @@ class OllamaAdapter:
         self._http_client = http_client or httpx.Client(trust_env=False)
         self._owns_http_client = http_client is None
         self._model_digests: dict[str, str] = {}
+        self._model_details: dict[str, Mapping[str, object]] = {}
 
     def close(self) -> None:
         if self._owns_http_client:
             self._http_client.close()
 
-    def probe(self, model_id: str, *, timeout_seconds: float) -> None:
+    def probe(self, model_id: str, *, timeout_seconds: float) -> ModelProbeResult:
         """生成を行わずendpoint到達性とmodel存在を確認する。"""
-        self.resolve_model_digest(model_id, timeout_seconds=timeout_seconds)
+        body = self._resolve_model_details(model_id, timeout_seconds=timeout_seconds)
+        self._digest_from_details(model_id, body)
+        raw_capabilities = body.get("capabilities")
+        if not isinstance(raw_capabilities, list) or any(
+            not isinstance(item, str) for item in raw_capabilities
+        ):
+            return ModelProbeResult()
+        capabilities: set[InferenceCapability] = set()
+        if "vision" in raw_capabilities:
+            capabilities.add(InferenceCapability.IMAGE_INPUT)
+        return ModelProbeResult(frozenset(capabilities))
 
     def generate_text(self, request: TextGenerationRequest) -> ProviderTextResult:
         response = self._post_chat(request)
@@ -173,6 +198,32 @@ class OllamaAdapter:
         return EmbeddingResult(vectors=tuple(vectors), usage=usage)
 
     def estimate_input_tokens(self, request: TokenEstimateRequest) -> TokenEstimate:
+        image_count = sum(
+            isinstance(part, InferenceImagePart)
+            for message in request.messages
+            if isinstance(message.content, tuple)
+            for part in message.content
+        )
+        if image_count:
+            serialized = {
+                "model": request.model_id,
+                "messages": self._messages_without_images(request.messages),
+                "options": dict(request.options),
+                "response_schema": request.response_schema,
+            }
+            text_bytes = len(
+                json.dumps(
+                    serialized,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            )
+            return TokenEstimate(
+                math.ceil(text_bytes / 3 * 1.15)
+                + CONSERVATIVE_IMAGE_TOKEN_ESTIMATE * image_count,
+                TokenEstimateAccuracy.ESTIMATED,
+                "ollama_multimodal_text_utf8_div3_margin15pct+1120_per_image",
+            )
         estimate_request = TextGenerationRequest(
             messages=request.messages,
             model_id=request.model_id,
@@ -206,6 +257,15 @@ class OllamaAdapter:
         cached = self._model_digests.get(model_id)
         if cached is not None:
             return cached
+        body = self._resolve_model_details(model_id, timeout_seconds=timeout_seconds)
+        return self._digest_from_details(model_id, body)
+
+    def _resolve_model_details(
+        self, model_id: str, *, timeout_seconds: float
+    ) -> Mapping[str, object]:
+        cached = self._model_details.get(model_id)
+        if cached is not None:
+            return cached
         try:
             response = self._http_client.post(
                 self._endpoint("/api/show"),
@@ -216,6 +276,15 @@ class OllamaAdapter:
         except Exception as error:
             self._raise_normalized(error)
         body = self._response_object(response)
+        self._model_details[model_id] = body
+        return body
+
+    def _digest_from_details(
+        self, model_id: str, body: Mapping[str, object]
+    ) -> str:
+        cached = self._model_digests.get(model_id)
+        if cached is not None:
+            return cached
         digest = body.get("digest")
         if isinstance(digest, str) and digest.strip():
             resolved = digest
@@ -278,11 +347,48 @@ class OllamaAdapter:
         return payload
 
     @staticmethod
-    def _messages(messages: tuple[InferenceMessage, ...]) -> list[dict[str, str]]:
-        return [
-            {"role": message.role, "content": message.content}
-            for message in messages
-        ]
+    def _messages(messages: tuple[InferenceMessage, ...]) -> list[dict[str, object]]:
+        mapped: list[dict[str, object]] = []
+        for message in messages:
+            if isinstance(message.content, str):
+                mapped.append({"role": message.role, "content": message.content})
+                continue
+            texts = [
+                part.text
+                for part in message.content
+                if isinstance(part, InferenceTextPart)
+            ]
+            images = [
+                base64.b64encode(part.data).decode("ascii")
+                for part in message.content
+                if isinstance(part, InferenceImagePart)
+            ]
+            mapped_message: dict[str, object] = {
+                "role": message.role,
+                "content": "\n".join(texts),
+            }
+            if images:
+                mapped_message["images"] = images
+            mapped.append(mapped_message)
+        return mapped
+
+    @staticmethod
+    def _messages_without_images(
+        messages: tuple[InferenceMessage, ...],
+    ) -> list[dict[str, str]]:
+        mapped: list[dict[str, str]] = []
+        for message in messages:
+            content = (
+                message.content
+                if isinstance(message.content, str)
+                else "\n".join(
+                    part.text
+                    for part in message.content
+                    if isinstance(part, InferenceTextPart)
+                )
+            )
+            mapped.append({"role": message.role, "content": content})
+        return mapped
 
     @staticmethod
     def _message_content(body: Mapping[str, object]) -> str:

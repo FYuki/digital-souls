@@ -70,7 +70,7 @@
 * `ui_settings/` / `routers/ui_settings.py` — 立ち絵layout、PC／compact別履歴範囲、キャラクター表示状態、キャラクター／スレッドpinをローカルユーザー単位で保存する
 * `characters/lore_selector.py` — current userとprivacy処理済み履歴を対象に、Character Book Entryを決定論的に照合・選択する
 * `prompting/` — Character Core、Character Lore、RAG、保存済み履歴、現在発言を順序とtoken budgetに従って合成する単一境界
-* `inference/` — Coreの用途Targetを環境ローカルな`provider/model`へ解決し、Capability認可、上限、同時実行数、共通error、readiness、metadata観測を一元化する。Ollama、OpenAI API、Codex runtimeの差はAdapter内へ閉じ込める
+* `inference/` — Coreの用途Targetを環境ローカルな`provider/model`へ解決し、text／画像Capability認可、画像decodeと入力上限、同時実行数、共通error、readiness、metadata観測を一元化する。optionalなVision Targetは構造化観測だけを返し、Ollama、OpenAI API、Codex runtimeの差とBase64化はAdapter内へ閉じ込める
 * `llm/` — 完成済みpromptをChat Targetへ接続する互換境界。ProviderやModelを直接選択せず、共通Inference Routerだけを呼び出す
 * `memory/` — 会話履歴と長期記憶の基盤。SQLiteに同一conversation再開用の履歴と承認済み長期記憶を責務分離して保存し、Chromaは承認済み長期記憶だけの派生検索インデックスとして扱う。`memory_policy.py`は`backend/app/memory/memory_policy.json`の認識設定と、アプリケーションの非緩和policyを組み合わせて保存先別に判定する
 * `stt/remote_whisper_client.py` — 共有GPU Whisper HTTP serviceによる音声認識。旧`whisper_client.py`はGoal 2受入までrollback用に保持する

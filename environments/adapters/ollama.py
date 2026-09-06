@@ -61,11 +61,16 @@ class OllamaAdapter(ProcessServiceOperations):
         *,
         model_name: str = DEFAULT_OLLAMA_MODEL_NAME,
         classifier_model_name: str | None = None,
+        vision_model_name: str | None = None,
     ) -> None:
         super().__init__(root_dir, "ollama", runner)
         self._model_names = tuple(
             dict.fromkeys(
-                (model_name, classifier_model_name or model_name)
+                (
+                    model_name,
+                    classifier_model_name or model_name,
+                    *(() if vision_model_name is None else (vision_model_name,)),
+                )
             )
         )
 
