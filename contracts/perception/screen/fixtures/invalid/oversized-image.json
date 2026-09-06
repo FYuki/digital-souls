@@ -1,0 +1,17 @@
+{
+  "protocol_version": "1.0",
+  "type": "screen_snapshot_upload_metadata",
+  "event_id": "14000000-0000-4000-8000-000000000001",
+  "screen_session_id": "44000000-0000-4000-8000-000000000001",
+  "client_session_id": "24000000-0000-4000-8000-000000000001",
+  "generation": 1,
+  "request_id": "54000000-0000-4000-8000-000000000001",
+  "turn_id": "64000000-0000-4000-8000-000000000001",
+  "image_id": "74000000-0000-4000-8000-000000000001",
+  "actual_surface": "monitor",
+  "captured_at": "2026-09-06T03:30:01Z",
+  "mime_type": "image/png",
+  "width": 2560,
+  "height": 1440,
+  "byte_length": 5242881
+}

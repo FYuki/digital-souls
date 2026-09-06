@@ -1,0 +1,8 @@
+{
+  "protocol_version": "2.0",
+  "type": "screen_session_heartbeat",
+  "event_id": "15000000-0000-4000-8000-000000000001",
+  "screen_session_id": "45000000-0000-4000-8000-000000000001",
+  "client_session_id": "25000000-0000-4000-8000-000000000001",
+  "generation": 1
+}

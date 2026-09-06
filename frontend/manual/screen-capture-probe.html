@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>画面共有ローカル検証</title>
+    <style>
+      :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+      body { max-width: 960px; margin: 0 auto; padding: 24px; background: #111; color: #f6f3ff; }
+      button { margin: 4px; padding: 10px 14px; }
+      video, canvas { display: block; width: 100%; max-height: 360px; margin-top: 16px; background: #000; object-fit: contain; }
+      dl { display: grid; grid-template-columns: 14rem 1fr; gap: 6px 12px; }
+      dt { font-weight: 700; }
+      dd { margin: 0; overflow-wrap: anywhere; }
+      .warning { color: #ffd98a; }
+      #status[role="alert"] { color: #ffaaaa; }
+    </style>
+  </head>
+  <body>
+    <h1>画面共有ローカル検証</h1>
+    <p class="warning">公開・合成画面だけを選択してください。このページは画像や対象名を送信・保存しません。</p>
+    <div>
+      <button id="monitor" type="button">モニターを選択</button>
+      <button id="window" type="button">ウィンドウを選択</button>
+      <button id="snapshot" type="button" disabled>静止画をローカル確認</button>
+      <button id="stop" type="button" disabled>共有を停止</button>
+    </div>
+    <p id="status" aria-live="polite">未開始</p>
+    <dl>
+      <dt>secure context</dt><dd id="secure"></dd>
+      <dt>API</dt><dd id="api"></dd>
+      <dt>希望種別</dt><dd id="requested">-</dd>
+      <dt>実際の種別</dt><dd id="actual">-</dd>
+      <dt>video / audio track数</dt><dd id="tracks">-</dd>
+      <dt>frame寸法</dt><dd id="dimensions">-</dd>
+      <dt>track状態</dt><dd id="track-state">-</dd>
+      <dt>対象名（ローカル表示のみ）</dt><dd id="label">-</dd>
+      <dt>固定reason code</dt><dd id="reason">-</dd>
+    </dl>
+    <video id="preview" autoplay muted playsinline></video>
+    <canvas id="canvas" hidden></canvas>
+    <script type="module">
+      const elements = {
+        monitor: document.querySelector('#monitor'),
+        window: document.querySelector('#window'),
+        snapshot: document.querySelector('#snapshot'),
+        stop: document.querySelector('#stop'),
+        status: document.querySelector('#status'),
+        secure: document.querySelector('#secure'),
+        api: document.querySelector('#api'),
+        requested: document.querySelector('#requested'),
+        actual: document.querySelector('#actual'),
+        tracks: document.querySelector('#tracks'),
+        dimensions: document.querySelector('#dimensions'),
+        trackState: document.querySelector('#track-state'),
+        label: document.querySelector('#label'),
+        preview: document.querySelector('#preview'),
+        canvas: document.querySelector('#canvas'),
+        reason: document.querySelector('#reason'),
+      }
+      let stream = null
+      let generation = 0
+
+      elements.secure.textContent = String(window.isSecureContext)
+      elements.api.textContent = String(typeof navigator.mediaDevices?.getDisplayMedia === 'function')
+
+      const reasonCode = (error) => {
+        if (!(error instanceof DOMException)) return 'capture_os_error'
+        return ({
+          InvalidStateError: 'transient_activation_required',
+          NotAllowedError: 'capture_not_allowed',
+          NotFoundError: 'no_capture_source',
+          NotReadableError: 'capture_os_error',
+          AbortError: 'capture_os_error',
+          TypeError: 'api_unavailable',
+        })[error.name] ?? 'capture_os_error'
+      }
+
+      const stop = (message = '共有停止') => {
+        generation += 1
+        stream?.getTracks().forEach((track) => track.stop())
+        stream = null
+        elements.preview.srcObject = null
+        elements.canvas.width = 0
+        elements.canvas.height = 0
+        elements.canvas.hidden = true
+        elements.snapshot.disabled = true
+        elements.stop.disabled = true
+        elements.status.textContent = message
+        elements.trackState.textContent = '-'
+      }
+
+      const start = async (requestedSurface) => {
+        stop('picker選択中')
+        const operationGeneration = generation
+        elements.requested.textContent = requestedSurface
+        elements.actual.textContent = '-'
+        elements.reason.textContent = '-'
+        if (!window.isSecureContext) {
+          elements.reason.textContent = 'insecure_context'
+          elements.status.textContent = 'secure contextではありません'
+          return
+        }
+        if (typeof navigator.mediaDevices?.getDisplayMedia !== 'function') {
+          elements.reason.textContent = 'api_unavailable'
+          elements.status.textContent = 'Screen Capture APIを利用できません'
+          return
+        }
+        let selected
+        try {
+          selected = await navigator.mediaDevices.getDisplayMedia({
+            video: { displaySurface: requestedSurface },
+            audio: false,
+            selfBrowserSurface: 'exclude',
+            surfaceSwitching: 'exclude',
+            ...(requestedSurface === 'window' ? { monitorTypeSurfaces: 'exclude' } : { monitorTypeSurfaces: 'include' }),
+          })
+        } catch (error) {
+          elements.reason.textContent = reasonCode(error)
+          elements.status.textContent = 'pickerまたは画面取得に失敗しました'
+          return
+        }
+        if (operationGeneration !== generation) {
+          selected.getTracks().forEach((track) => track.stop())
+          return
+        }
+        const videoTracks = selected.getVideoTracks()
+        const audioTracks = selected.getAudioTracks()
+        const track = videoTracks[0]
+        const actualSurface = track?.getSettings().displaySurface
+        elements.actual.textContent = actualSurface ?? '不明'
+        elements.tracks.textContent = `${videoTracks.length} / ${audioTracks.length}`
+        elements.label.textContent = track?.label || '-'
+        if (videoTracks.length !== 1 || audioTracks.length !== 0 || actualSurface !== requestedSurface) {
+          elements.reason.textContent = actualSurface === 'browser'
+            ? 'browser_surface_rejected'
+            : actualSurface === undefined
+              ? 'surface_unknown'
+              : 'surface_mismatch'
+          selected.getTracks().forEach((candidate) => candidate.stop())
+          elements.status.textContent = '希望種別と異なるため停止しました'
+          return
+        }
+        stream = selected
+        elements.preview.srcObject = stream
+        track.addEventListener('ended', () => {
+          if (operationGeneration === generation && stream === selected) {
+            stop('ブラウザ側で共有が停止されました')
+          }
+        }, { once: true })
+        track.addEventListener('mute', () => {
+          if (operationGeneration === generation && stream === selected) {
+            elements.trackState.textContent = `${track.readyState} / muted`
+          }
+        })
+        track.addEventListener('unmute', () => {
+          if (operationGeneration === generation && stream === selected) {
+            elements.trackState.textContent = `${track.readyState} / available`
+          }
+        })
+        try {
+          await elements.preview.play()
+        } catch {
+          if (operationGeneration === generation && stream === selected) {
+            elements.reason.textContent = 'capture_os_error'
+            stop('プレビューを開始できません')
+          }
+          return
+        }
+        if (operationGeneration !== generation || stream !== selected) return
+        elements.dimensions.textContent = `${elements.preview.videoWidth} × ${elements.preview.videoHeight}`
+        elements.trackState.textContent = `${track.readyState} / ${track.muted ? 'muted' : 'available'}`
+        elements.snapshot.disabled = false
+        elements.stop.disabled = false
+        elements.status.textContent = '共有中（画像は送信していません）'
+      }
+
+      elements.monitor.addEventListener('click', () => void start('monitor'))
+      elements.window.addEventListener('click', () => void start('window'))
+      elements.stop.addEventListener('click', () => stop())
+      elements.snapshot.addEventListener('click', () => {
+        if (stream === null || elements.preview.videoWidth < 1 || elements.preview.videoHeight < 1) {
+          elements.reason.textContent = 'frame_unavailable'
+          elements.status.textContent = 'frameを利用できません'
+          return
+        }
+        elements.canvas.width = elements.preview.videoWidth
+        elements.canvas.height = elements.preview.videoHeight
+        const context = elements.canvas.getContext('2d')
+        if (context === null) return
+        context.drawImage(elements.preview, 0, 0)
+        elements.canvas.hidden = false
+        elements.status.textContent = `静止画をローカル取得: ${new Date().toISOString()}`
+      })
+      window.addEventListener('pagehide', () => stop('ページ終了'))
+    </script>
+  </body>
+</html>
