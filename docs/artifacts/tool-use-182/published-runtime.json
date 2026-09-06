@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "runId": "724b7eb7-464a-492e-9dff-479749f08955",
+  "startedAt": "2026-09-06T17:37:56.746956+00:00",
+  "environmentId": "test",
+  "mcpImplementation": "published-filesystem-and-everything",
+  "microphone": "chromium-voicevox-wav",
+  "routingModel": "ollama/gemma4:e4b",
+  "dataRoot": "/tmp/ds-tool-182-mtemqcsa/data",
+  "ownedProcesses": {
+    "backend": 2069755,
+    "frontend": 2069889
+  },
+  "ownedLiveKitContainer": "ds-tool-182-f5489c4d1f01",
+  "externalServices": {
+    "ollama": "http://localhost:11434",
+    "voicevox": "http://localhost:50021",
+    "whisper": "http://127.0.0.1:50022"
+  },
+  "testStatus": "passed",
+  "completedAt": "2026-09-06T17:40:50.535197+00:00"
+}

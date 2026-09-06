@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "runId": "8719f1ae-1d16-44ed-b018-2f0beb45c851",
+  "startedAt": "2026-09-06T17:30:10.529346+00:00",
+  "environmentId": "test",
+  "mcpImplementation": "controlled-fixture",
+  "microphone": "scheduled-voicevox-wav-mediastream",
+  "routingModel": "ollama/gemma4:e4b",
+  "dataRoot": "/tmp/ds-tool-182-jlp2gxka/data",
+  "ownedProcesses": {
+    "backend": 2064915,
+    "frontend": 2064950
+  },
+  "ownedLiveKitContainer": "ds-tool-182-855654c83338",
+  "externalServices": {
+    "ollama": "http://localhost:11434",
+    "voicevox": "http://localhost:50021",
+    "whisper": "http://127.0.0.1:50022"
+  },
+  "testStatus": "passed",
+  "completedAt": "2026-09-06T17:32:47.093999+00:00"
+}

@@ -167,7 +167,7 @@ class ExternalMCPClient:
 
     @property
     def connected(self) -> bool:
-        return self._client is not None
+        return self._client is not None and self._connection_failure is None
 
     @asynccontextmanager
     async def connect(self) -> AsyncIterator[ExternalMCPClient]:

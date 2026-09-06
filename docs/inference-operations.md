@@ -31,6 +31,11 @@ INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS=8192
 
 任意の`_OPTIONS_JSON`、`_TIMEOUT_SECONDS`、`_MAX_CONCURRENCY`はTargetごとに指定する。未知のTarget／suffix、未知のOption、非正数の上限、`privacy`へのcloud Provider割当ては起動時エラーになる。旧Ollama用途別設定は移行契約ではなく、1つでも指定すると起動を拒否する。
 
+会話で外部MCPを利用する場合はoptionalな`tool-routing` Targetを設定する。
+`INFERENCE_TARGET_TOOL_ROUTING`と入力・出力上限を指定し、structured generationとtoken estimateに対応する
+Provider／Modelを選ぶ。未設定時はTool利用を無効にして通常会話を維持する。
+管理設定、秘密情報の扱い、実接続受入は[会話からの外部MCP利用](tool-use.md)を参照する。
+
 画面知覚を有効にする場合だけ、optionalなVision Targetを設定する。設定しない環境では`unconfigured`となり、Backendと通常Chatは従来どおり起動する。画像の取得・共有session・cloud同意経路が接続される前に、この設定だけで画面送信が開始されることはない。
 
 ```env
