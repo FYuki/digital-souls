@@ -257,3 +257,27 @@ Frontend単体351件、関連Backend66件が成功した。Svelte／TypeScript�
 検証結果はFrontend単体366件、結合97件、Backend単体2,321件成功・1件skip、LiveKit関連module20件成功。Svelte／TypeScript、Python lint、Backend型検査226 source filesも成功した。Backend全体の初回実行ではcwdが`backend/`だったためschema／Git ignore参照5件が失敗したが、規定のリポジトリ直下から再実行して解消した。外部実接続の結果は上記3 runであり、unitのskipを実接続成功として数えない。
 
 同一session診断の再現手順は[`scripts/voice_quality/README.md`](../scripts/voice_quality/README.md)を参照する。生manifestとtraceはignoredの各runディレクトリへ保持する。PCM先頭のreceive／decode／first playback、相槌・take-turnの残る検出漏れ、reconnect／underrun／gap／stale提示、全条件の100試行・dogfood受け入れは引き続き未完了である。
+
+
+## 2026-09-07: native source・Opus decode・明示出力の境界診断
+
+`probe_native_audio_source.py`とChromium側の専用診断を追加した。実LiveKit、Python SDK 1.1.16、Chromium 149.0.7827.55で、buffer 1,000ms／0msの入力前packetと独立Opus decodeを比較した。通常conversation UIの経路は変更していない。
+
+`native-source-render-07`の結果は次のとおり。各欄は受信packet／decode出力数で、直接入力では同数のAudioWorklet出力・全サンプル完了を確認した。
+
+| 条件 | 入力前1秒 | 20ms入力後 | 追加1秒入力後 |
+|---|---:|---:|---:|
+| 標準buffer 1,000ms | 12 / 12 | 24 / 24 | 86 / 86 |
+| 直接入力 0ms | 0 / 0 | 1 / 1 | 51 / 51 |
+
+直接入力の51 packetは各960サンプル、計48,960サンプルで、供給した102個の10ms frameと一致した。RTP timestamp／sequenceの連続性、受信→decode→出力のpacket番号、最後の出力時計通過を検証器が確認した。最初のpacketの受信→独立decodeは0.8ms、decode→browser出力への時計換算は32.95〜33.35msだった。これは単発の合成tone診断であり、通常応答TTFAやp95ではない。
+
+診断中に次の問題を確認した。
+
+- 受信codecは`audio/red`だった。REDのprimary Opusを取り出さずにWebCodecsへ渡すとdecodeが失敗する。診断はprimaryだけをdecodeし、冗長blockによるpacket loss回復は行わない。
+- `AudioData.timestamp`は指定したchunk時刻をそのまま返す識別子ではない。連続した20ms刻みへ再構成され、1usの丸めも観測した。診断はpacketごとに`flush()`でoutputを回収し、現在の入力packet番号をPCMとともに明示的に伝える。
+- `native-source-render-03`では、workerの`timeOrigin`差だけの換算が画面の時計より約1,291ms早くなり、入力前snapshotより前にpacketを受信したように見えた。換算の正しさを前提にせず、往復messageからoffsetを囲む方式へ変更した。`native-source-render-07`のoffset幅は時計丸め余裕を含む0.4msだった。
+
+失敗した`native-source-buffer-*`、`native-source-render-01`〜`05`も同じローカル結果ディレクトリに保持した。`native-source-render-06`は丸め余裕追加前の成功診断で、最終確認は`07`。時計換算ミス、RTP欠落、誤packet相関、不完全出力、出力時計未通過などを拒否する単体テスト8件が成功した。
+
+通常会話の`RemoteMediaObserver`にはまだ`timeOrigin`のみの換算が残るため、既存のraw packet latencyを有効な応答遅延の証拠へ格上げしない。次の実装では因果的な時計較正に加え、最初の送信packetを欠落なく捕捉する購読準備、上限付きPCM queueの10ms pacing、segment末尾とcodec遅延の対応、RED／loss／再接続時の回復、明示PCM出力とcancelの相関を扱う必要がある。今回の独立decoderは通常再生へ未接続で、source PCM offsetの一致、音質維持、underrun 0件、全cohort受け入れは未検証である。
