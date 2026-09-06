@@ -8,6 +8,7 @@
   import ConversationSidebar from './lib/ConversationSidebar.svelte'
   import InputBar from './lib/InputBar.svelte'
   import MemoryManagement from './lib/MemoryManagement.svelte'
+  import ScreenCaptureControls from './lib/ScreenCaptureControls.svelte'
   import { listCharacters, rescanCharacters } from './lib/characters/client'
   import { sendChatMessage } from './lib/chat/client'
   import { createConversationSessionManager } from './lib/conversation-session'
@@ -501,6 +502,11 @@
         {/if}
       </section>
     {/if}
+    <ScreenCaptureControls
+      characterId={$conversationController.character}
+      conversationId={$conversationController.selectedConversationId}
+      disabled={interactionsDisabled}
+    />
     <div class="input-area">
       <InputBar
         onSend={handleSend}
