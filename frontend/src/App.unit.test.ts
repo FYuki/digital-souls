@@ -3,6 +3,21 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import App from './App.svelte'
 
+let vadFrameClock = 10_000
+const feedVadFrames = (
+  callback: (probabilities: { isSpeech: number; notSpeech: number }, frame: Float32Array) => void,
+  count: number, amplitude: number, probability: number,
+) => {
+  const clock = vi.spyOn(performance, 'now')
+  try {
+    for (let index = 0; index < count; index += 1) {
+      vadFrameClock += 96
+      clock.mockReturnValue(vadFrameClock)
+      callback({ isSpeech: probability, notSpeech: 1 - probability }, new Float32Array(1536).fill(amplitude))
+    }
+  } finally { clock.mockRestore() }
+}
+
 const CONVERSATION_ID = 'e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'
 const SECOND_CONVERSATION_ID = '6ad9a610-02cc-4a41-b02e-503826f7292b'
 const THIRD_CONVERSATION_ID = 'f98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'
@@ -32,6 +47,7 @@ const audioMocks = vi.hoisted(() => ({
   microphoneStream: { getTracks: () => [] } as unknown as MediaStream,
   vadOptions: undefined as
     | {
+        onFrameProcessed: (probabilities: { isSpeech: number; notSpeech: number }, frame: Float32Array) => void
         onSpeechStart: () => void
         onSpeechRealStart: () => void
         onSpeechEnd: () => void
@@ -276,9 +292,8 @@ describe('App conversation lifecycle', () => {
     await startLiveKitSession()
     if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
 
-    audioMocks.vadOptions.onSpeechStart()
-    audioMocks.vadOptions.onSpeechRealStart()
-    audioMocks.vadOptions.onSpeechEnd()
+    feedVadFrames(audioMocks.vadOptions.onFrameProcessed, 4, 0.01, 0.8)
+    feedVadFrames(audioMocks.vadOptions.onFrameProcessed, 7, 0, 0.8)
     await waitFor(() => expect(
       liveKitMocks.controlEvents.map((event) => event.type),
     ).toEqual([
@@ -423,8 +438,7 @@ describe('App conversation lifecycle', () => {
     expect(screen.getByText('再生: 再生中')).toBeTruthy()
     if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
 
-    audioMocks.vadOptions.onSpeechStart()
-    audioMocks.vadOptions.onSpeechRealStart()
+    feedVadFrames(audioMocks.vadOptions.onFrameProcessed, 4, 0.01, 0.8)
     await waitFor(() => expect(
       liveKitMocks.controlEvents.map((event) => event.type),
     ).toContain('speech_started'))

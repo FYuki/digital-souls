@@ -18,6 +18,7 @@
   import { AudioWorkletPcmRecorder } from './audio/pcm-worklet-recorder'
   import { VAD_ASSET_ROUTE } from './audio/vad-assets'
   import { VAD_UTTERANCE_REDEMPTION_MS } from './audio/vad-policy'
+  import { UtteranceDetector, type UtteranceDetection } from './audio/utterance-detector'
 
   type MicStatus = 'off' | 'standby' | 'on'
 
@@ -47,6 +48,7 @@
   let isLoading = false
   let candidateSpeechStartClientMs: number | null = null
   let capturedAudioStartClientMs: number | null = null
+  let utteranceDetector: UtteranceDetector | null = null
 
   const requestMicrophoneStream = (): Promise<MediaStream> => {
     return navigator.mediaDevices.getUserMedia({
@@ -58,7 +60,23 @@
     })
   }
 
+  const handleUtteranceDetection = (event: UtteranceDetection) => {
+    if (event.type === 'candidate') {
+      candidateSpeechStartClientMs = event.speechStartedAtMs
+    } else if (event.type === 'confirmed') {
+      capturedAudioStartClientMs = event.speechStartedAtMs
+      candidateSpeechStartClientMs = null
+      setStatus('on')
+      onSpeechStarted({ clientMs: event.speechStartedAtMs })
+    } else if (event.type === 'ended') {
+      void handleSpeechEnd(event.detectedAtMs)
+    } else {
+      void handleVadMisfire()
+    }
+  }
+
   const buildVadOptions = (stream: MediaStream): Partial<RealTimeVADOptions> => ({
+    model: 'legacy',
     baseAssetPath: VAD_ASSET_ROUTE,
     onnxWASMBasePath: VAD_ASSET_ROUTE,
     redemptionMs: VAD_UTTERANCE_REDEMPTION_MS,
@@ -66,7 +84,11 @@
     getStream: async () => stream,
     resumeStream: async () => stream,
     pauseStream: async () => undefined,
+    onFrameProcessed: (probabilities, frame) => {
+      if (continuous) utteranceDetector?.process(frame, probabilities.isSpeech, performance.now())
+    },
     onSpeechStart: () => {
+      if (continuous) return
       try {
         candidateSpeechStartClientMs = performance.now()
         if (!continuous) getRecorder().start()
@@ -76,14 +98,17 @@
       }
     },
     onSpeechRealStart: () => {
+      if (continuous) return
       capturedAudioStartClientMs = candidateSpeechStartClientMs ?? performance.now()
       candidateSpeechStartClientMs = null
       onSpeechStarted({ clientMs: capturedAudioStartClientMs })
     },
     onVADMisfire: () => {
+      if (continuous) return
       void handleVadMisfire()
     },
     onSpeechEnd: () => {
+      if (continuous) return
       void handleSpeechEnd()
     },
   })
@@ -105,6 +130,8 @@
   }
 
   const releaseMicrophoneResources = async () => {
+    utteranceDetector?.reset()
+    utteranceDetector = null
     if (vad !== null) {
       await vad.destroy()
       vad = null
@@ -127,6 +154,7 @@
       return vad
     }
 
+    if (continuous) utteranceDetector = new UtteranceDetector(handleUtteranceDetection)
     vad = await MicVAD.new(buildVadOptions(stream))
     return vad
   }
@@ -168,8 +196,7 @@
     }
   }
 
-  const handleSpeechEnd = async () => {
-    const vadSpeechEndClientMs = performance.now()
+  const handleSpeechEnd = async (vadSpeechEndClientMs = performance.now()) => {
     try {
       if (capturedAudioStartClientMs === null) {
         throw new Error('Speech start timestamp is not available')

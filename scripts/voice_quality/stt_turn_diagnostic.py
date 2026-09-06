@@ -9,7 +9,7 @@ from pathlib import Path
 import sys
 import time
 
-from fixtures import DEFAULT_ROOT, ROOT, materialize_trial, read_pcm, sha256, validate
+from fixtures import CASES_PATH, DEFAULT_ROOT, ROOT, materialize_trial, read_pcm, sha256, validate
 
 sys.path.insert(0, str(ROOT / 'backend'))
 from app.conversation_core.adapters import _resample_pcm16  # noqa: E402
@@ -17,8 +17,8 @@ from app.conversation_core.turn_decision import classify_turn  # noqa: E402
 from app.stt.remote_whisper_client import RemoteWhisperTranscriber  # noqa: E402
 
 
-def run(root: Path, vad_path: Path, output: Path, whisper_url: str) -> None:
-    validate(root, None)
+def run(root: Path, vad_path: Path, output: Path, whisper_url: str, cases_path: Path = CASES_PATH) -> None:
+    validate(root, None, cases_path)
     manifest_bytes = (root / 'manifest.json').read_bytes()
     manifest = json.loads(manifest_bytes)
     vad_bytes = vad_path.read_bytes()
@@ -88,8 +88,9 @@ def run(root: Path, vad_path: Path, output: Path, whisper_url: str) -> None:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=DEFAULT_ROOT)
+    parser.add_argument('--cases', type=Path, default=CASES_PATH)
     parser.add_argument('--vad', type=Path, default=ROOT / 'frontend/test-results/vad-quality/labeled-v1.json')
     parser.add_argument('--output', type=Path, default=ROOT / 'frontend/test-results/vad-quality/stt-turn-v1.json')
     parser.add_argument('--whisper-url', default='http://127.0.0.1:50022')
     args = parser.parse_args()
-    run(args.root, args.vad, args.output, args.whisper_url)
+    run(args.root, args.vad, args.output, args.whisper_url, args.cases)

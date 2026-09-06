@@ -66,9 +66,9 @@ STT_MAX_UTTERANCE_PCM_BYTES = STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 30
 STT_MAX_PENDING_PCM_BYTES = STT_MAX_PENDING_UTTERANCES * STT_MAX_UTTERANCE_PCM_BYTES
 # Whisperはstreaming APIではないため、冒頭800msのsnapshotを先行認識する。
 STT_TURN_PREVIEW_PCM_BYTES = int(STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 0.8)
-# VADは誤検知を避けるため約400msの発話確認後にspeech_startedを送る。
-# data channelとmediaの到着差も含め、確認前の語頭をmedia側で800ms保持する。
-STT_MICROPHONE_PREROLL_BYTES = int(STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 0.8)
+# 発話確認までの遅れを含め、通知前の語頭をmedia側で最大2秒保持する。
+# #150の固定fixtureで確認通知が語頭から1,440ms遅れる条件があり、800msでは語頭を失う。
+STT_MICROPHONE_PREROLL_BYTES = STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 2
 
 
 def _livekit_rtc_module() -> Any:

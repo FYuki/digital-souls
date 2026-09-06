@@ -113,10 +113,11 @@ test('LiveKit固定fixtureの独立試行を測定する', async ({ browser }) =
       await microphone.click()
       await expect(microphone).toHaveAttribute('aria-pressed', 'true')
       await driver.waitForSpeechCompletion(page)
-      await page.waitForFunction(() => window.__voiceChatE2E.cycles.some((cycle) => (
-        cycle.startedAt !== null && cycle.audioReceivedAt !== null && cycle.audioDecodeAt !== null
-      )), undefined, { timeout: voiceTestTimeout })
       const cycle = await driver.waitForCompletedVoiceCycle(page)
+      const mediaCorrelated = cycle.audioReceivedAt !== null && cycle.audioDecodeAt !== null
+      if (pilot === undefined && !mediaCorrelated) {
+        throw new Error('controlled run requires response-correlated receive and decode evidence')
+      }
       await expect(page.locator('article.message')).toHaveCount(2)
       const transcriptMatches = normalizeBaselineTranscript(
         await driver.readUserTranscript(page),
@@ -139,7 +140,8 @@ test('LiveKit固定fixtureの独立試行を測定する', async ({ browser }) =
         phase: index < WARMUP_RUNS ? 'warmup' : 'measured',
         outcome: 'success',
         first_playback_method: 'audio_worklet_output_timestamp',
-        media_observation_method: 'rtc_encoded_transform_and_decoded_track_first_response',
+        media_observation_method: mediaCorrelated ? 'rtc_encoded_transform_and_decoded_track_first_response' : 'unavailable',
+        ...(mediaCorrelated ? {} : { media_observation_missing_reason: 'response_frame_correlation_unavailable' }),
         fixture_version: fixture.fixture_version,
         audio_sha256: fixture.audio_sha256,
         transcript_matches: transcriptMatches,

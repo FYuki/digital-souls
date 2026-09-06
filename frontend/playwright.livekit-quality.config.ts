@@ -8,9 +8,14 @@ import { PROFILE_REPORT_ENV } from './resolved-profile'
 
 const frontendRoot = dirname(fileURLToPath(import.meta.url))
 const controlledRoot = join(frontendRoot, 'test-results', 'livekit-quality')
-const dataRoot = join(controlledRoot, 'runtime-data')
+const runId = process.env.VOICE_QUALITY_RUN_ID
+if (runId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(runId)) {
+  throw new Error('VOICE_QUALITY_RUN_ID must be a single safe run identifier')
+}
+const resultRoot = runId === undefined ? controlledRoot : join(controlledRoot, 'runs', runId)
+const dataRoot = join(resultRoot, 'runtime-data')
 const tracePath = join(dataRoot, 'voice-metrics', 'controlled-trace.jsonl')
-const manifestPath = join(controlledRoot, 'trial-manifest.json')
+const manifestPath = join(resultRoot, 'trial-manifest.json')
 const base = createSuiteConfig('integration-voice')
 const isCollectionOnly = process.argv.includes('--list')
 const webServer = base.webServer as NonNullable<PlaywrightTestConfig['webServer']> & {
@@ -30,7 +35,7 @@ Object.assign(process.env, {
 export default defineConfig({
   ...base,
   testDir: './integration/voice-quality',
-  outputDir: join(controlledRoot, 'playwright-artifacts'),
+  outputDir: join(resultRoot, 'playwright-artifacts'),
   fullyParallel: false,
   projects: base.projects?.map((project) => ({
     ...project,
@@ -40,7 +45,7 @@ export default defineConfig({
     ? [['list']]
     : [
         ['list'],
-        ['json', { outputFile: join(controlledRoot, 'playwright-results.json') }],
+        ['json', { outputFile: join(resultRoot, 'playwright-results.json') }],
       ],
   webServer: {
     ...webServer,

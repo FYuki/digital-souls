@@ -681,7 +681,9 @@ def test_production_core_bridge_keeps_full_vad_confirmation_window() -> None:
 
     asyncio.run(exercise())
 
-    assert production.STT_MICROPHONE_PREROLL_BYTES == int(16_000 * 2 * 0.8)
+    # 実fixtureの最大確認遅れ1,440msと到達差の余裕を保持し、2秒を上限とする。
+    retained_ms = production.STT_MICROPHONE_PREROLL_BYTES * 1000 / (16_000 * 2)
+    assert 1600 <= retained_ms <= 2000
     assert requests[0]["audio"] == (
         preroll[-production.STT_MICROPHONE_PREROLL_BYTES :] + b"live"
     )

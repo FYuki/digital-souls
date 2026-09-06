@@ -16,8 +16,8 @@ sys.modules[_SPEC.name] = fixtures
 _SPEC.loader.exec_module(fixtures)
 
 
-def fixture_manifest(root):
-    cases = json.loads(fixtures.CASES_PATH.read_text())
+def fixture_manifest(root, cases_path=fixtures.CASES_PATH):
+    cases = json.loads(cases_path.read_text())
     # 境界の数値を独立に求められる固定信号。実音声品質の成功を示すテストではない。
     pcm = array.array('h', [0] * 480 + [1000, -1000] * 240 + [0] * 480)
     data = fixtures.encode_pcm(pcm)
@@ -25,10 +25,13 @@ def fixture_manifest(root):
     for case in cases['cases']:
         name = f"{case['id']}.wav"
         (root / name).write_bytes(data)
-        sources.append({'id': case['id'], 'cohort': case['cohort'], 'source_file': name,
-                        'source_sha256': fixtures.sha256(data), 'speech_start_sample': 480,
-                        'speech_end_sample': 960, 'speaker_id': 3, 'engine_version': 'test'})
-    result = fixtures.build_manifest(root, cases, sources)
+        source = {'id': case['id'], 'cohort': case['cohort'], 'source_file': name,
+                  'source_sha256': fixtures.sha256(data), 'speech_start_sample': 480,
+                  'speech_end_sample': 960, 'speaker_id': 3, 'engine_version': 'test'}
+        if 'pair_id' in case:
+            source.update(pair_id=case['pair_id'], part=case['part'])
+        sources.append(source)
+    result = fixtures.build_manifest(root, cases, sources, cases_path)
     (root / 'manifest.json').write_text(json.dumps(result))
     return result
 
@@ -73,3 +76,19 @@ def test_validation_rejects_changed_labels_boundaries_recipes_or_sources(tmp_pat
 def test_silence_has_no_invented_speech_boundary():
     with pytest.raises(ValueError, match='no annotated speech'):
         fixtures.speech_bounds(array.array('h', [0] * 960))
+
+
+def test_v2_pause_preserves_declared_clause_pair_and_detects_swapped_labels(tmp_path):
+    cases_path = fixtures.CASES_PATH.with_name('fixture_cases_v2.json')
+    manifest = fixture_manifest(tmp_path, cases_path)
+    trial = next(t for t in manifest['trials'] if t['cohort'] == 'pause')
+    before, after = trial['segments']
+    assert before['source_file'] != after['source_file']
+    assert before['pair_id'] == after['pair_id']
+    assert [before['part'], after['part']] == ['before', 'after']
+    fixtures.validate(tmp_path, None, cases_path)
+    source = next(s for s in manifest['sources'] if s.get('part') == 'before')
+    source['part'] = 'after'
+    (tmp_path / 'manifest.json').write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match='clause labels'):
+        fixtures.validate(tmp_path, None, cases_path)

@@ -88,11 +88,22 @@ def materialize_trial(root: Path, trial: dict[str, object]) -> tuple[bytes, dict
                     "speech_intervals": intervals, "expected_utterances": 1}
 
 
-def build_manifest(root: Path, cases_document: dict[str, object], sources: list[dict[str, object]]) -> dict[str, object]:
+def build_manifest(root: Path, cases_document: dict[str, object], sources: list[dict[str, object]], cases_path: Path = CASES_PATH) -> dict[str, object]:
     trials: list[dict[str, object]] = []
     for cohort in ("backchannel", "take_turn", "pause"):
-        cohort_sources = [s for s in sources if s["cohort"] == ("take_turn" if cohort == "pause" else cohort)]
-        for source in cohort_sources:
+        if cohort == "pause" and any(s["cohort"] == "pause" for s in sources):
+            pause_sources = [s for s in sources if s["cohort"] == "pause"]
+            groups = []
+            for pair_id in dict.fromkeys(s["pair_id"] for s in pause_sources):
+                pair = [s for s in pause_sources if s["pair_id"] == pair_id]
+                if [s["part"] for s in pair] != ["before", "after"]:
+                    raise ValueError("pause fixture requires ordered before/after clauses")
+                groups.append(pair)
+        else:
+            cohort_sources = [s for s in sources if s["cohort"] == ("take_turn" if cohort == "pause" else cohort)]
+            groups = [[source] * (2 if cohort == "pause" else 1) for source in cohort_sources]
+        for group in groups:
+            source = group[0]
             for variation in range(10):
                 # 10語句×10位相・音量条件。100種類の独立した人間の発声とは扱わない。
                 trial = {"id": f"{cohort}-{source['id']}-{variation:02d}", "cohort": cohort,
@@ -100,20 +111,20 @@ def build_manifest(root: Path, cases_document: dict[str, object], sources: list[
                          "leading_samples": 4800 + variation * 432,
                          "trailing_samples": SAMPLE_RATE * 2,
                          "pause_samples": (200, 400, 600)[variation % 3] * 48 if cohort == "pause" else 0,
-                         "segments": [source] * (2 if cohort == "pause" else 1)}
+                         "segments": group}
                 _, annotation = materialize_trial(root, trial)
                 trial.update(annotation)
                 trials.append(trial)
-    return {"version": cases_document["version"], "cases_sha256": sha256(CASES_PATH.read_bytes()),
+    return {"version": cases_document["version"], "cases_sha256": sha256(cases_path.read_bytes()),
             "label_method": "predeclared_conversational_intent",
             "boundary_method": {"kind": "source_pcm_rms_window", "window_samples": BOUNDARY_WINDOW,
                                 "threshold_pcm16": BOUNDARY_RMS, "resolution_ms": 10},
             "sources": sources, "trials": trials}
 
 
-def generate(root: Path, url: str, speaker: int) -> None:
+def generate(root: Path, url: str, speaker: int, cases_path: Path = CASES_PATH) -> None:
     import httpx
-    cases = json.loads(CASES_PATH.read_text())
+    cases = json.loads(cases_path.read_text())
     root.mkdir(parents=True, exist_ok=True)
     # 既存versionを黙って別音声へ変更しない。
     if (root / "manifest.json").exists():
@@ -123,7 +134,7 @@ def generate(root: Path, url: str, speaker: int) -> None:
         version_response = client.get("/version")
         version_response.raise_for_status()
         engine_version = version_response.json()
-        provenance = {"cases_sha256": sha256(CASES_PATH.read_bytes()), "speaker_id": speaker,
+        provenance = {"cases_sha256": sha256(cases_path.read_bytes()), "speaker_id": speaker,
                       "engine_version": engine_version, "sample_rate_hz": SAMPLE_RATE}
         provenance_path = root / "generation.json"
         if provenance_path.exists():
@@ -149,25 +160,30 @@ def generate(root: Path, url: str, speaker: int) -> None:
             data = path.read_bytes()
             pcm = read_pcm(data)
             start, end = speech_bounds(pcm)
-            sources.append({"id": case["id"], "cohort": case["cohort"], "source_file": name,
-                            "source_sha256": sha256(data), "speech_start_sample": start,
-                            "speech_end_sample": end, "speaker_id": speaker, "engine_version": engine_version})
-    manifest = build_manifest(root, cases, sources)
+            source = {"id": case["id"], "cohort": case["cohort"], "source_file": name,
+                      "source_sha256": sha256(data), "speech_start_sample": start,
+                      "speech_end_sample": end, "speaker_id": speaker, "engine_version": engine_version}
+            if "pair_id" in case:
+                source.update(pair_id=case["pair_id"], part=case["part"])
+            sources.append(source)
+    manifest = build_manifest(root, cases, sources, cases_path)
     (root / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps({"sources": len(sources), "trials": len(manifest["trials"]), "manifest": str(root / "manifest.json")}))
 
 
-def validate(root: Path, output: Path | None) -> None:
+def validate(root: Path, output: Path | None, cases_path: Path = CASES_PATH) -> None:
     manifest = json.loads((root / "manifest.json").read_text())
-    if manifest["cases_sha256"] != sha256(CASES_PATH.read_bytes()):
+    if manifest["cases_sha256"] != sha256(cases_path.read_bytes()):
         raise ValueError("fixture labels changed after generation")
-    cases = json.loads(CASES_PATH.read_text())
+    cases = json.loads(cases_path.read_text())
     sources = manifest["sources"]
     if len(sources) != len(cases["cases"]):
         raise ValueError("fixture source set changed")
     for source, case in zip(sources, cases["cases"], strict=True):
         if source["id"] != case["id"] or source["cohort"] != case["cohort"]:
             raise ValueError("fixture labels differ from declared intent")
+        if (source.get("pair_id"), source.get("part")) != (case.get("pair_id"), case.get("part")):
+            raise ValueError("pause fixture clause labels changed")
         if source["source_file"] != f"{case['id']}.wav":
             raise ValueError("fixture source filename changed")
         data = (root / source["source_file"]).read_bytes()
@@ -175,7 +191,7 @@ def validate(root: Path, output: Path | None) -> None:
             raise ValueError("fixture source hash mismatch")
         if speech_bounds(read_pcm(data)) != (source["speech_start_sample"], source["speech_end_sample"]):
             raise ValueError("fixture boundary changed")
-    if manifest != build_manifest(root, cases, sources):
+    if manifest != build_manifest(root, cases, sources, cases_path):
         raise ValueError("fixture recipes differ from fixed cohort definitions")
     if output is not None:
         output.mkdir(parents=True, exist_ok=True)
@@ -202,14 +218,15 @@ def main() -> None:
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     parser.add_argument("--voicevox-url", default="http://127.0.0.1:50021")
     parser.add_argument("--speaker", type=int, default=3)
+    parser.add_argument("--cases", type=Path, default=CASES_PATH)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     if args.command == "generate":
-        generate(args.root, args.voicevox_url, args.speaker)
+        generate(args.root, args.voicevox_url, args.speaker, args.cases)
     else:
         if args.command == "materialize" and args.output is None:
             parser.error("materialize requires --output")
-        validate(args.root, args.output if args.command == "materialize" else None)
+        validate(args.root, args.output if args.command == "materialize" else None, args.cases)
 
 
 if __name__ == "__main__":

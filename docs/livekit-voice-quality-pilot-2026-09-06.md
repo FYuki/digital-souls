@@ -138,3 +138,38 @@ legacyのVAD区間を実WhisperとCore判定へ渡した200件の診断では、
 今回の追加修正後、Backend unitは2,272 passed / 1 skipped、Frontend unitは330 passed。Python lintとBackend／Frontendの型検査は成功した。保存済みLiveKit artifact 4件のschema検証と、比較結果を含む5件の匿名性検査も成功した。schema検証・匿名性検査は、計測内容の妥当性や品質合格を示すものではない。
 
 モジュール横断検証はBackend 1,421 passed、Frontend 97 passed。production buildも成功した。モックE2E全体とBackend／Frontendの実接続suite全体はまだ実行しておらず、各品質cohortの全stack受け入れも未完了。現時点の変更はDraft PRとしてレビュー対象にし、#150の完了やmerge可能状態として扱わない。
+
+
+## 文中の継続・言い淀みfixtureとPCM終了判定（2026-09-07）
+
+[fixture v2](../frontend/playwright/fixtures/voice-quality-v2/README.md)を追加した。相槌・take-turn各10語句に加え、別々の節を接続する10組（文の継続5組、言い淀み5組）を使用する。各cohort100件、計300件の開始位相・音量・既知の無音を固定する。自然な実声の評価とは区別する。
+
+legacyの音声確率で発話を確認し、PCMの無音が600msを超えた時点で終了する検出器をLiveKitのcontinuous入力へ組み込んだ。従来のモデル確率の余韻が無音終了を遅らせることを避ける。背景音がPCM閾値を超え続ける場合は、確定済み発話を低い音声確率の継続でも終了する。未確定候補にこの終了条件を適用した初版では語頭欠落が増えたため、適用対象を確定済み発話に限定した。また、音声確率の強いframeの合算を直近2秒に制限し、離れたノイズのピークを無期限に合算しない。
+
+サーバーのマイクprerollは800msから2秒へ拡張した。固定fixtureで発話確認まで最大約1,440msかかる例があり、元の語頭時刻を保持しても800msの音声bufferでは先頭が残らないためである。入力を停止したときは検出状態を破棄する。
+
+保存済み実Silero確率と元PCMを使った修正後の診断は、相槌83/100、take-turn98/100、文中無音100/100で発話を検出した。検出済みの発話では冒頭100ms超の欠落・早期終了・誤分割は0件。未検出を成功分母から取り除かず、相槌17件とtake-turn2件を未達として残す。fixture末尾から検出終了までのp95は各cohort約757〜760msだが、これはオフラインのframe clockによる値で、Browser実時間や発話確定の受け入れ値ではない。
+
+### 実接続での区間の分解
+
+`pcm-vad-01`と背景音対策後の`pcm-vad-guard-01`は、それぞれ新しいdata rootで準備1回＋測定3回を実行した。既存の失敗試行の履歴・traceは消していない。両runともtranscript一致、応答完了、明示的なsession終了を確認した。測定scopeはpilotであり、独立100試行の完了ではない。
+
+800msの受け入れ指標は[計測定義](voice-quality-measurement.md)の「VAD speech endからutterance確定まで」。fixtureの末尾からクライアントの確定event受信までの時間とは起点・終点が異なる。初回pilotの約1.1秒を800ms目標に比較した説明を訂正する。以下は測定3回のみで、server区間は同じmonotonic clockで差を計算した。
+
+| run・試行 | VAD終了→STT開始 | STT処理 | VAD終了→サーバー発話確定 | LLM開始→最初の本文 |
+|---|---:|---:|---:|---:|
+| pcm-vad-01 / 1 | 150.4ms | 247.7ms | 398.1ms | 332.0ms |
+| pcm-vad-01 / 2 | 150.0ms | 232.7ms | 382.7ms | 366.3ms |
+| pcm-vad-01 / 3 | 150.3ms | 223.1ms | 373.4ms | 340.7ms |
+| pcm-vad-guard-01 / 1 | 150.4ms | 204.1ms | 354.5ms | 4154.8ms |
+| pcm-vad-guard-01 / 2 | 150.9ms | 267.0ms | 418.0ms | 6024.8ms |
+| pcm-vad-guard-01 / 3 | 150.9ms | 218.8ms | 369.8ms | 16008.1ms |
+
+fixtureの起点は現状`getUserMedia`完了時刻であり、実際の入力サンプル開始との対応を厳密には検証していない。この起点から求めたVAD境界誤差を正式な受入値にしない。応答sourceへのreceive／decode／playback相関も未解決で、両pilotは欠測理由`response_frame_correlation_unavailable`を残す。controlledモードはこの相関がなければ失敗し、pilot成功を通常100試行の証拠へ流用しない。
+
+背景音対策後にもLLM最初の本文が約16秒かかった試行があり、TTFA目標の達成は示していない。記憶ありdogfood、各100件の全stack割り込み、実ネットワーク障害からの復旧・継続性、正確な応答サンプルの帰属、最終100試行の実測は引き続き未完了。
+
+
+背景音対策後の単体検証はFrontend339件、音声runtime／fixtureの関連Backend47件が成功した。Svelte／TypeScript検査はerror・warningとも0件。修正後に非発声120件を実Sileroへ通した診断では候補検出器の誤起動9件、従来FrameProcessorの誤起動14件だった。誤起動が解消したという結果ではなく、自然環境の発生率へも一般化しない。
+
+[連続背景音の診断](../frontend/scripts/measure-utterance-continuous-background.mjs)では、既存speech-v2へwhite noise／60Hz hum／pink noiseを各2音量で重ね、音声後もノイズを継続した。実Sileroによる6条件すべてで発話は1回終了し、終了遅延はfixture末尾から884〜1,172msだった。PCM閾値以上の環境音で終了不能になる回帰を防ぐ証拠であり、速い終了やBrowserの割り込み受け入れを示すものではない。

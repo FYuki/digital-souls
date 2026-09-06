@@ -26,6 +26,7 @@ let vadOptions: {
   resumeStream: (stream: MediaStream) => Promise<MediaStream>
   pauseStream: (stream: MediaStream) => Promise<void>
   startOnLoad: boolean
+  onFrameProcessed: (probabilities: { isSpeech: number; notSpeech: number }, frame: Float32Array) => void
   onSpeechStart: () => void
   onSpeechRealStart: () => void
   onVADMisfire: () => void
@@ -55,6 +56,21 @@ vi.mock('./audio/pcm-worklet-recorder', () => ({
 
 const createCaptureMock = () => {
   return vi.fn((_pcmData: ArrayBuffer, _metadata: object): void => undefined)
+}
+
+let vadFrameClock = 10_000
+const feedVadFrames = (
+  callback: (probabilities: { isSpeech: number; notSpeech: number }, frame: Float32Array) => void,
+  count: number, amplitude: number, probability: number,
+) => {
+  const clock = vi.spyOn(performance, 'now')
+  try {
+    for (let index = 0; index < count; index += 1) {
+      vadFrameClock += 96
+      clock.mockReturnValue(vadFrameClock)
+      callback({ isSpeech: probability, notSpeech: 1 - probability }, new Float32Array(1536).fill(amplitude))
+    }
+  } finally { clock.mockRestore() }
 }
 
 describe('AudioRecorder', () => {
@@ -171,6 +187,9 @@ describe('AudioRecorder', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
     await waitFor(() => expect(vadStart).toHaveBeenCalledTimes(1))
+    feedVadFrames(vadOptions.onFrameProcessed, 4, 0.01, 0.8)
+    feedVadFrames(vadOptions.onFrameProcessed, 7, 0, 0.8)
+    // legacyの別callbackで開始・終了を二重通知しない。
     vadOptions.onSpeechStart()
     vadOptions.onSpeechRealStart()
     vadOptions.onSpeechEnd()
@@ -201,11 +220,11 @@ describe('AudioRecorder', () => {
     await fireEvent.click(button)
     await waitFor(() => expect(vadStart).toHaveBeenCalledTimes(1))
 
-    vadOptions.onSpeechStart()
+    feedVadFrames(vadOptions.onFrameProcessed, 1, 0.01, 0.1)
     expect(onSpeechStarted).not.toHaveBeenCalled()
-    await waitFor(() => expect(button.classList.contains('mic-active')).toBe(true))
+    await waitFor(() => expect(button.classList.contains('mic-standby')).toBe(true))
 
-    vadOptions.onVADMisfire()
+    feedVadFrames(vadOptions.onFrameProcessed, 7, 0, 0.1)
     await waitFor(() => expect(button.classList.contains('mic-standby')).toBe(true))
     expect(onSpeechStarted).not.toHaveBeenCalled()
   })
