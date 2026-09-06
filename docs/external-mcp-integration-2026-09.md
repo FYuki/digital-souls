@@ -20,6 +20,9 @@ nginxのdigestは`sha256:30f1c0d78e0ad60901648be663a710bdadf19e4c10ac6782c235200
 
 実接続5件と関連unit/module 68件が成功した。
 一次証跡は[`test-evidence/mcp-104/real-and-regression.log`](test-evidence/mcp-104/real-and-regression.log)。
+追加のローカルBackend全UTも2116件成功した。
+証跡は[`test-evidence/mcp-104/all-unit.log`](test-evidence/mcp-104/all-unit.log)。
+sandbox内の初回実行は途中で進行停止したため中断し、制限外の同じテスト専用data root方針で再実行した結果を記録する。
 対象ファイルは以下。
 
 - `backend/tests/integration/test_external_mcp_real_servers_integration.py`

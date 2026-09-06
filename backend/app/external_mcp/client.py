@@ -139,7 +139,7 @@ def _failure(error: BaseException) -> MCPFailure:
 
 class _ReportingTransport(httpx2.AsyncHTTPTransport):
     def __init__(self, report: Callable[[Exception], None]) -> None:
-        super().__init__()
+        super().__init__(trust_env=False)
         self._report = report
 
     async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
