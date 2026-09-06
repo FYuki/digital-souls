@@ -2,7 +2,7 @@
 
 ## 状態
 
-**DRAFT**。Issue #213のcontract実装とWindows 11上のGoogle Chrome／Microsoft Edgeによる実機確認は完了している。レビュー受入後に`ACTIVE`へ変更する。
+**ACTIVE**。Issue #213のcontract実装、Windows 11上のGoogle Chrome／Microsoft Edgeによる実機確認、レビュー受入を完了した。
 
 本ADRはIssue #212の画面知覚にだけ適用する。Inference全般は`inference-provider-foundation-2026-09.md`、音声sessionとLiveKit固有transportの分離は`voice-session-contract-2026-08.md`および`livekit-transport-2026-08.md`、会話履歴と長期記憶は`wave2-memory-formation-retrieval-2026-08.md`を正本とする。本ADRと既存ADRが重なる場合、画面画像と画面由来情報の追加制約だけを本ADRが優先する。
 
