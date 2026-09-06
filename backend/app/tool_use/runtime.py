@@ -143,10 +143,13 @@ class ToolRuntime:
             await asyncio.gather(*ready)
 
     async def _connection(self, connection: Connection, ready: asyncio.Event) -> None:
+        delay = 5
+        failed = False
         while True:
             try:
                 client = ExternalMCPClient(connection)
                 async with client.connect(), self.gate.attach(connection.id, client):
+                    delay, failed = 5, False
                     ready.set()
                     while client.connected:
                         await asyncio.sleep(1)
@@ -154,10 +157,13 @@ class ToolRuntime:
                 raise
             except Exception:
                 # 共有serviceを止めず、接続失敗はmetadata-onlyで扱う。
-                logger.warning("External MCP connection unavailable")
+                if not failed:
+                    logger.warning("External MCP connection unavailable")
+                failed = True
             finally:
                 ready.set()
-            await asyncio.sleep(5)
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 300)
 
     async def close(self) -> None:
         self.service.close()

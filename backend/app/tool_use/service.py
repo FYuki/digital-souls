@@ -14,7 +14,14 @@ from contextlib import contextmanager
 from collections.abc import Iterator, Awaitable
 
 from app.external_mcp import ExecutionContext, ExecutionGate
-from app.external_mcp.models import Json, MCPFailure, digest, encode, validate_arguments
+from app.external_mcp.models import (
+    Json,
+    MCPFailure,
+    digest,
+    encode,
+    input_validator,
+    validate_arguments,
+)
 from app.inference import InferenceCancellationToken, InferenceError
 from app.privacy.contracts import ScanSuccess
 
@@ -165,7 +172,9 @@ class ToolService:
         self._status.pop(key, None)
 
     def close(self) -> None:
-        for character, conversation in tuple(self._runs.keys() | self._owners.keys()):
+        for character, conversation in tuple(
+            self._runs.keys() | self._owners.keys() | self._status.keys()
+        ):
             self.stop(character, conversation)
 
     async def run(
@@ -202,7 +211,16 @@ class ToolService:
         run.task = asyncio.current_task()
         run.waiting_until = None
         if key not in self._status and len(self._status) >= self.max_sessions:
-            self._status.pop(next(iter(self._status)))
+            expired = next(
+                (
+                    saved
+                    for saved in self._status
+                    if saved not in self._runs and saved not in self._owners
+                ),
+                None,
+            )
+            if expired is not None:
+                self.stop(*expired)
         self._status[key] = {"state": "running", "sources": []}
         keep = False
         try:
@@ -560,7 +578,7 @@ class ToolService:
         )
 
     def _protect_core(self, arguments: Json) -> None:
-        """Core側で識別できる保護pathへの副作用を安全側に拒否する。"""
+        """未知のserver cwdで相対pathを推測せず、明示pathを安全側に判定する。"""
 
         def check(value: object, key: str = "") -> None:
             if isinstance(value, dict):
@@ -572,8 +590,18 @@ class ToolService:
             elif isinstance(value, str):
                 if any(str(root) in value for root in self.protected_roots):
                     raise MCPFailure("policy", "core_write_denied")
-                if re.search(r"path|file|directory|root|repo|database", key, re.I):
-                    path = Path(value.removeprefix("file://")).expanduser().resolve()
+                path_value = value.removeprefix("file://")
+                # key名は任意なので、値のpath表現も検査する。URLはファイルpathではない。
+                if "://" in path_value:
+                    return
+                if (
+                    re.search(r"path|file|directory|root|repo|database", key, re.I)
+                    or re.search(r"[/\\]", path_value)
+                    or path_value.startswith(".")
+                ):
+                    if not Path(path_value).is_absolute():
+                        raise MCPFailure("policy", "relative_write_path_denied")
+                    path = Path(path_value).resolve()
                     if any(
                         path == root or root in path.parents or path in root.parents
                         for root in self.protected_roots
@@ -583,24 +611,29 @@ class ToolService:
         check(arguments)
 
     def _interaction(self, envelope: Json) -> tuple[Json, Json]:
-        requests = (envelope.get("native_payload") or {}).get("inputRequests")
+        native = envelope.get("native_payload")
+        requests = native.get("inputRequests") if isinstance(native, dict) else None
         if not isinstance(requests, dict) or not 1 <= len(requests) <= 4:
             raise MCPFailure("policy", "unsupported_input")
         properties: Json = {}
         questions: Json = {}
         for request_id, item in requests.items():
+            if not isinstance(item, dict) or not isinstance(item.get("params"), dict):
+                raise MCPFailure("policy", "unsupported_input")
             params = item.get("params") or {}
             schema = params.get("requestedSchema")
             if (
                 item.get("method") != "elicitation/create"
                 or params.get("mode", "form") != "form"
                 or not isinstance(schema, dict)
+                or not isinstance(params.get("message", ""), str)
                 or _PROTECTED_INPUT.search(encode(params))
                 or self.sanitizer.text(request_id) != request_id
                 or _PROTECTED_INPUT.search(request_id)
             ):
                 raise MCPFailure("policy", "protected_input")
             serialized = encode(schema)
+            self._validate_interaction_schema(schema)
             scan = self.sanitizer.scanner.scan(serialized)
             if (
                 not isinstance(scan, ScanSuccess)
@@ -624,3 +657,41 @@ class ToolService:
             "required": list(properties),
             "additionalProperties": False,
         }, questions
+
+    @staticmethod
+    def _validate_interaction_schema(schema: Json) -> None:
+        """追加質問schemaの再帰・参照・正規表現を、同期validatorへ渡す前に制限する。"""
+        if len(encode(schema).encode()) > 16_384:
+            raise MCPFailure("policy", "unsupported_input_schema")
+        patterns = 0
+        pending: list[tuple[object, int]] = [(schema, 0)]
+        while pending:
+            value, depth = pending.pop()
+            if depth > 16:
+                raise MCPFailure("policy", "unsupported_input_schema")
+            if isinstance(value, dict):
+                if "$ref" in value or "$dynamicRef" in value:
+                    raise MCPFailure("policy", "unsupported_input_schema")
+                for key, item in value.items():
+                    expressions = (
+                        [item]
+                        if key == "pattern"
+                        else list(item)
+                        if key == "patternProperties" and isinstance(item, dict)
+                        else []
+                    )
+                    for expression in expressions:
+                        patterns += 1
+                        # 初期の追加質問では固定長の文字・文字クラスのみ許可する。
+                        # 複雑な正規表現を縮約して元schemaと異なる入力を許可しない。
+                        if (
+                            patterns > 16
+                            or not isinstance(expression, str)
+                            or len(expression) > 128
+                            or re.search(r"[()*+?{}|\\\\]", expression)
+                        ):
+                            raise MCPFailure("policy", "unsupported_input_schema")
+                    pending.append((item, depth + 1))
+            elif isinstance(value, list):
+                pending.extend((item, depth + 1) for item in value)
+        input_validator(schema)

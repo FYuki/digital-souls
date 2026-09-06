@@ -1,0 +1,41 @@
+
+> digital-souls-frontend@0.0.0 test:module
+> vitest run .module.test.ts
+
+
+ RUN  v2.1.9 ./frontend
+
+ ✓ src/e2e-public-api.module.test.ts (1 test) 4ms
+ ✓ src/livekit-integration-wiring.module.test.ts (3 tests) 4ms
+ ✓ src/test-entrypoints.module.test.ts (5 tests) 8ms
+ ✓ src/conversation-cleanup.module.test.ts (5 tests) 7ms
+ ✓ src/lib/ToolUseStatus.module.test.ts (3 tests) 64ms
+ ✓ src/vite-config.module.test.ts (1 test) 2ms
+ ✓ src/conversation-flow.module.test.ts (1 test) 8ms
+ ✓ src/livekit-entrypoint.module.test.ts (1 test) 666ms
+   ✓ LiveKit experimental entrypoint > /voice/livekit mounts the isolated experimental page 665ms
+ ✓ src/suite-reporter-failure.module.test.ts (11 tests) 73ms
+ ✓ src/suite-reporter.module.test.ts (11 tests) 63ms
+ ✓ src/playwright-config.module.test.ts (17 tests) 140ms
+ ✓ src/livekit-page.module.test.ts (3 tests) 1137ms
+   ✓ LiveKit experimental page client flow > token取得は固定graceとclient UUIDを公開APIへ送る 658ms
+   ✓ LiveKit experimental page client flow > 再接続用tokenは同じsession IDでendpointを再呼び出す 329ms
+ ✓ src/resolved-profile.module.test.ts (18 tests) 1427ms
+   ✓ resolved profile reader > should retain profile evidence when Playwright skips after beforeEach 1173ms
+ ✓ src/test-suite-boundaries.module.test.ts (18 tests) 2948ms
+   ✓ Playwright suite boundaries > controlled baseline config collects only the dedicated real-service spec 619ms
+   ✓ Playwright suite boundaries > 'playwright.mocked.config.ts' collects only specs from 'e2e' 584ms
+   ✓ Playwright suite boundaries > 'playwright.integration-text.config.ts' collects only specs from 'integration/text' 342ms
+   ✓ Playwright suite boundaries > 'playwright.integration-voice.config.ts' collects only specs from 'integration/voice' 321ms
+   ✓ Playwright suite boundaries > 'playwright.mocked.config.ts' does not change 'mocked-e2e' results when collecting specs 378ms
+   ✓ Playwright suite boundaries > 'playwright.integration-text.config.ts' does not change 'integration-text' results when collecting specs 336ms
+   ✓ Playwright suite boundaries > 'playwright.integration-voice.config.ts' does not change 'integration-voice' results when collecting specs 344ms
+ ✓ src/suite-reporter-process.module.test.ts (2 tests) 6071ms
+   ✓ Playwright suite reporter process boundary > should exit non-zero and retain failed evidence when report association fails 4243ms
+   ✓ Playwright suite reporter process boundary > should exit zero and write linked evidence when reporter finalization succeeds 1827ms
+
+ Test Files  15 passed (15)
+      Tests  100 passed (100)
+   Start at  03:26:00
+   Duration  7.72s (transform 2.21s, setup 13.35s, collect 4.41s, tests 12.62s, environment 6.79s, prepare 1.07s)
+

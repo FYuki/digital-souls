@@ -81,10 +81,13 @@ class BindingResolver:
         operation: str,
         character_id: str,
         binding_id: str | None,
+        session_id: str,
     ) -> bool:
         item = self._resolved.get(binding_id or "")
-        return item is not None and item[1] in self.candidates(
-            character_id, connection_id, operation
+        return (
+            item is not None
+            and item[0] == session_id
+            and item[1] in self.candidates(character_id, connection_id, operation)
         )
 
     def forget(self, character: str, conversation: str) -> None:

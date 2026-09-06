@@ -65,6 +65,9 @@ bindingが必要な接続だけ、次の形式で対象を指定する。
 
 ## 開発検証
 
+LinuxまたはWSL2のリポジトリルート（推奨 `~/dev/digital-souls`）から実行する。
+Windows側の `/mnt/c/Users/...` に置いたcheckoutでは実行しない。
+
 ```bash
 backend/.venv/bin/python -m pytest backend/tests/unit/test_tool_use.py backend/tests/unit/test_external_mcp_gate.py
 npm ci --prefix infra/testing/mcp-real-servers --ignore-scripts
@@ -91,14 +94,26 @@ backend/.venv/bin/python scripts/acceptance_tool_use.py --contract-mcp
 どちらも既存のOllama・Whisper・VOICEVOXを共通推論サービスとして利用し、独立した一時data root、
 Backend、Frontend、テスト所有LiveKit containerを起動する。Dockerと
 `livekit/livekit-server:v1.9.7`、Playwright Chromiumが必要。既存processやdogfoodは停止しない。
+runnerは`DS_ENVIRONMENT_ID=test`と一時ディレクトリ配下の`DS_DATA_DIR`を設定する。
+BackendはSQLite lease初期化・Chroma作成より前に`initialize_runtime_data_root()`で
+data rootのパス契約と`.environment-identity.json`を検証する。identity不一致やdogfood markerを検出した場合は起動しない。
 マイク入力はVOICEVOXで作成した合成音声ファイルをChromiumへ渡す。実STTとWebRTC mediaは通るが、
 物理マイク・人の発話品質を確認した証跡ではない。
 制御MCPの音声試験ではWebAudioのMediaStreamへ合成発話を流し、追加質問の再生を観測して回答を投入する。
 質問へのbarge-inから同じMCP操作の再開・最終回答再生までを検証し、STT/LLM/TTSや通信は置換しない。
 結果は`frontend/test-results/tool-use-browser/`と`tool-use-contract/`、runtime logはそれぞれ
 `tool-use-runtime/`と`tool-use-contract-runtime/`へ分けて出力する。
+rawな解決済みProfileと実行manifestは一時data rootの`runtime/tool-use/`配下に置く。
+共有には専用runtime成果物の`browser-public.json`と`runtime-manifest.json`を使う。
+これらはpath・endpoint・process/container識別子を除き、使用model・成否・時刻を保持する。
 
 候補schema・結果は各4096 tokenを暫定上限とし、初期実装ではUTF-8 byte数で保守的に制限する。
 推論全体の見積もりが上限を超えれば古いrouting履歴・下位候補を削り、最終回答の残量に合わせ結果を省略する。
 最低限の省略通知も収まらない場合は、外部実行の前に入力上限エラーにする。
 Tool処理は1回の入力につき最大120秒。長い処理を使うreverse proxyではこの期限と最終回答生成時間を許容する。
+
+追加質問schemaは16 KiB・深さ16、正規表現は16個・各128文字までとする。
+参照schemaと可変長・分岐を含む複雑な正規表現は自動回答を停止する。元schemaを緩めて実行しない。
+副作用のある操作のpath引数は絶対pathを要求し、外部serverのcwdをCoreのcwdから推測しない。
+Coreのpath検査はOSの隔離境界ではない。接続の管理者はserver側の許可rootを設定し、
+Coreのコード・data rootへ書ける権限を外部serverへ与えない。

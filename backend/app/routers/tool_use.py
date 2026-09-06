@@ -1,6 +1,6 @@
 """会話の外部参照状態と利用者停止。接続設定・生payloadは公開しない。"""
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, UUID4
 
 from app.routers.validation import ConversationRoute
@@ -16,8 +16,9 @@ class StopRequest(BaseModel):
 
 @router.get("/tool-use/status/{character}/{conversation_id}")
 async def status(
-    character: str, conversation_id: UUID4, request: Request
+    character: str, conversation_id: UUID4, request: Request, response: Response
 ) -> dict[str, object]:
+    response.headers["Cache-Control"] = "no-store"
     service: ToolService | None = getattr(request.app.state, "tool_service", None)
     if service is None:
         return {"state": "disabled", "sources": []}

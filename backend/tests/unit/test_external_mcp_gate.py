@@ -254,7 +254,7 @@ def test_sharing_and_binding_rejection(policy):
 
 def test_validated_binding_and_confirmation_arguments_are_stable():
     class Binding:
-        async def validate(self, connection_id, operation, character_id, binding_id):
+        async def validate(self, connection_id, operation, character_id, binding_id, session_id):
             return binding_id == "resolved" and character_id == "miori"
 
     async def run():

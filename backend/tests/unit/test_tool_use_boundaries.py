@@ -45,7 +45,7 @@ def test_per_call_binding_overrides_legacy_context_and_is_pinned_across_mrtr():
     class Binding:
         seen = []
 
-        async def validate(self, connection, operation, character, binding):
+        async def validate(self, connection, operation, character, binding, session):
             self.seen.append(binding)
             return binding == "call-binding"
 

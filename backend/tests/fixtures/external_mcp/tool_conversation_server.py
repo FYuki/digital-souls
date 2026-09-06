@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import anyio
 from pathlib import Path
 
 from mcp import types
@@ -42,7 +43,10 @@ async def list_tools(ctx, params):
 async def call_tool(ctx, params):
     if params.name == "slow-exhibit":
         (signals / "slow-dispatched").touch()
-        await asyncio.sleep(30)
+        # cancellationを受けても外部処理が完了するケースを明示的に再現する。
+        with anyio.CancelScope(shield=True):
+            await asyncio.sleep(30)
+            (signals / "slow-result-attempted").touch()
         return types.CallToolResult(
             content=[types.TextContent(type="text", text="遅い照合の結果は金色です。")]
         )

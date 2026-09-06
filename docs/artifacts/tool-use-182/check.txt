@@ -9,7 +9,7 @@ Success: no issues found in 236 source files
 
 
 ====================================
-Loading svelte-check in workspace: /home/asa/dev/digital-souls/frontend
+Loading svelte-check in workspace: ./frontend
 Getting Svelte diagnostics...
 
 ====================================

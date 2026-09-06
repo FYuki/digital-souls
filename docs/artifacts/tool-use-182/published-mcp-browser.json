@@ -2,13 +2,13 @@
   "config": {
     "argv": [
       "/usr/bin/node",
-      "/home/asa/dev/digital-souls/frontend/node_modules/.bin/playwright",
+      "./frontend/node_modules/.bin/playwright",
       "test",
       "--config",
       "playwright.tool-use.config.ts"
     ],
-    "configFile": "/home/asa/dev/digital-souls/frontend/playwright.tool-use.config.ts",
-    "rootDir": "/home/asa/dev/digital-souls/frontend/integration/tool-use",
+    "configFile": "./frontend/playwright.tool-use.config.ts",
+    "rootDir": "./frontend/integration/tool-use",
     "failOnFlakyTests": false,
     "forbidOnly": false,
     "fullyParallel": false,
@@ -24,7 +24,7 @@
     "preserveOutput": "always",
     "projects": [
       {
-        "outputDir": "/home/asa/dev/digital-souls/frontend/test-results/tool-use-browser",
+        "outputDir": "./frontend/test-results/tool-use-browser",
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
@@ -32,7 +32,7 @@
         },
         "id": "text",
         "name": "text",
-        "testDir": "/home/asa/dev/digital-souls/frontend/integration/tool-use",
+        "testDir": "./frontend/integration/tool-use",
         "testIgnore": [],
         "testMatch": [
           "**/*.@(spec|test).?(c|m)[jt]s?(x)"
@@ -40,7 +40,7 @@
         "timeout": 240000
       },
       {
-        "outputDir": "/home/asa/dev/digital-souls/frontend/test-results/tool-use-browser",
+        "outputDir": "./frontend/test-results/tool-use-browser",
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
@@ -48,7 +48,7 @@
         },
         "id": "filesystem",
         "name": "filesystem",
-        "testDir": "/home/asa/dev/digital-souls/frontend/integration/tool-use",
+        "testDir": "./frontend/integration/tool-use",
         "testIgnore": [],
         "testMatch": [
           "**/*.@(spec|test).?(c|m)[jt]s?(x)"
@@ -56,7 +56,7 @@
         "timeout": 240000
       },
       {
-        "outputDir": "/home/asa/dev/digital-souls/frontend/test-results/tool-use-browser",
+        "outputDir": "./frontend/test-results/tool-use-browser",
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
@@ -64,7 +64,7 @@
         },
         "id": "resource",
         "name": "resource",
-        "testDir": "/home/asa/dev/digital-souls/frontend/integration/tool-use",
+        "testDir": "./frontend/integration/tool-use",
         "testIgnore": [],
         "testMatch": [
           "**/*.@(spec|test).?(c|m)[jt]s?(x)"
@@ -120,12 +120,12 @@
                   "workerIndex": 0,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 68317,
+                  "duration": 69417,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-09-06T17:37:59.118Z",
+                  "startTime": "2026-09-06T18:30:15.397Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -162,12 +162,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 64567,
+                      "duration": 197218,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-06T17:39:05.426Z",
+                      "startTime": "2026-09-06T18:31:21.660Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -204,12 +204,12 @@
                       "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 44687,
+                      "duration": 46725,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-09-06T17:40:08.022Z",
+                      "startTime": "2026-09-06T18:34:32.136Z",
                       "annotations": [],
                       "attachments": []
                     }
@@ -229,8 +229,8 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-09-06T17:37:58.842Z",
-    "duration": 178584.537,
+    "startTime": "2026-09-06T18:30:15.149Z",
+    "duration": 314361.80799999996,
     "expected": 3,
     "skipped": 0,
     "unexpected": 0,
