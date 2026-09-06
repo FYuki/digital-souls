@@ -1,0 +1,22 @@
+{
+  "execution_id": "123e4567-e89b-12d3-a456-426614174000",
+  "connection_instance_id": "development-observer#1",
+  "definition_revision": "snap-20260906-001",
+  "operation_ref": {
+    "tool_name": "state.current",
+    "stable_operation_id": "development_observer.state.current"
+  },
+  "started_at": "2026-09-06T01:00:00Z",
+  "finished_at": "2026-09-06T01:00:00.120Z",
+  "outcome": "succeeded",
+  "error_category": null,
+  "retry_count": 0,
+  "native_payload": {
+    "content": [{"type": "text", "text": "ok"}]
+  },
+  "audit": {
+    "character_id": "miori",
+    "conversation_id": "conversation-1",
+    "resource_binding_id": "repo-digital-souls"
+  }
+}

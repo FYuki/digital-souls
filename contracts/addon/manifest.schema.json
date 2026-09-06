@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digital-souls.local/contracts/addon/1.0/manifest.schema.json",
+  "title": "DigitalSoulsAddonManifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifest_version", "connection", "capabilities", "core_policy"],
+  "properties": {
+    "manifest_version": {"const": "1.0"},
+    "connection": {"$ref": "#/$defs/Connection"},
+    "capabilities": {"$ref": "#/$defs/Capabilities"},
+    "core_policy": {"$ref": "#/$defs/CorePolicy"}
+  },
+  "$defs": {
+    "Identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "SecretRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Z][A-Z0-9_]*$"
+    },
+    "Auth": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {"type": {"const": "none"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "secret_ref"],
+          "properties": {
+            "type": {"const": "bearer"},
+            "secret_ref": {"$ref": "#/$defs/SecretRef"}
+          }
+        }
+      ]
+    },
+    "Trust": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["annotations", "addon_metadata"],
+      "properties": {
+        "annotations": {"type": "boolean", "default": false},
+        "addon_metadata": {"type": "boolean", "default": false}
+      }
+    },
+    "Grant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "activation"],
+      "properties": {
+        "scope": {"const": "validated_snapshot"},
+        "activation": {"const": "next_execution_loop"}
+      }
+    },
+    "StreamableHttpConnection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "ownership", "protocol", "transport", "endpoint", "auth", "trust", "grant"],
+      "properties": {
+        "id": {"$ref": "#/$defs/Identifier"},
+        "ownership": {"enum": ["self_owned", "external"]},
+        "protocol": {"const": "mcp"},
+        "transport": {"const": "streamable_http"},
+        "endpoint": {"type": "string", "format": "uri", "pattern": "^https?://"},
+        "auth": {"$ref": "#/$defs/Auth"},
+        "trust": {"$ref": "#/$defs/Trust"},
+        "grant": {"$ref": "#/$defs/Grant"},
+        "expected_identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tls_issuer": {"type": "string", "minLength": 1},
+            "auth_principal": {"type": "string", "minLength": 1}
+          },
+          "minProperties": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"ownership": {"const": "self_owned"}}, "required": ["ownership"]},
+          "then": {
+            "properties": {
+              "auth": {
+                "type": "object",
+                "required": ["type", "secret_ref"],
+                "properties": {
+                  "type": {"const": "bearer"},
+                  "secret_ref": {"$ref": "#/$defs/SecretRef"}
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "StdioConnection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "ownership", "protocol", "transport", "stdio", "auth", "trust", "grant"],
+      "properties": {
+        "id": {"$ref": "#/$defs/Identifier"},
+        "ownership": {"const": "external"},
+        "protocol": {"const": "mcp"},
+        "transport": {"const": "stdio"},
+        "stdio": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["command"],
+          "properties": {
+            "command": {"type": "string", "minLength": 1},
+            "args": {"type": "array", "items": {"type": "string"}, "default": []}
+          }
+        },
+        "auth": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {"type": {"const": "none"}}
+        },
+        "trust": {"$ref": "#/$defs/Trust"},
+        "grant": {"$ref": "#/$defs/Grant"}
+      }
+    },
+    "Connection": {
+      "oneOf": [
+        {"$ref": "#/$defs/StreamableHttpConnection"},
+        {"$ref": "#/$defs/StdioConnection"}
+      ]
+    },
+    "StaticTool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "schema_digest", "native_definition"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "stable_operation_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "schema_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "native_definition": {"type": "object"}
+      }
+    },
+    "Capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "tools", "resources", "prompts"],
+      "properties": {
+        "source": {"enum": ["static", "mcp_discovery"]},
+        "tools": {"type": "array", "items": {"$ref": "#/$defs/StaticTool"}},
+        "resources": {"type": "array", "items": {"type": "object"}},
+        "prompts": {"type": "array", "items": {"type": "object"}}
+      }
+    },
+    "Sharing": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": {"mode": {"const": "shared"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "character_id"],
+          "properties": {
+            "mode": {"const": "character_bound"},
+            "character_id": {"type": "string", "minLength": 1}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "user_id"],
+          "properties": {
+            "mode": {"const": "user_bound"},
+            "user_id": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    },
+    "ExecutionBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_calls_per_loop", "max_consecutive_same_tool", "max_identical_call", "normal_max_auto_cycles"],
+      "properties": {
+        "max_calls_per_loop": {"type": "integer", "minimum": 1, "default": 6},
+        "max_consecutive_same_tool": {"type": "integer", "minimum": 1, "default": 3},
+        "max_identical_call": {"type": "integer", "minimum": 1, "default": 2},
+        "normal_max_auto_cycles": {"type": "integer", "minimum": 1, "default": 3}
+      }
+    },
+    "Restriction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "action"],
+      "properties": {
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "stable_operation_id": {"type": "string", "minLength": 1},
+            "tool_name": {"type": "string", "minLength": 1}
+          }
+        },
+        "action": {"enum": ["deny", "force_serial", "disable_retry", "require_confirmation"]}
+      }
+    },
+    "CorePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "sharing", "resource_binding_required", "execution_budget", "restrictions"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "sharing": {"$ref": "#/$defs/Sharing"},
+        "resource_binding_required": {"type": "boolean"},
+        "execution_budget": {"$ref": "#/$defs/ExecutionBudget"},
+        "restrictions": {"type": "array", "items": {"$ref": "#/$defs/Restriction"}}
+      }
+    }
+  }
+}
