@@ -173,3 +173,22 @@ fixtureの起点は現状`getUserMedia`完了時刻であり、実際の入力�
 背景音対策後の単体検証はFrontend339件、音声runtime／fixtureの関連Backend47件が成功した。Svelte／TypeScript検査はerror・warningとも0件。修正後に非発声120件を実Sileroへ通した診断では候補検出器の誤起動9件、従来FrameProcessorの誤起動14件だった。誤起動が解消したという結果ではなく、自然環境の発生率へも一般化しない。
 
 [連続背景音の診断](../frontend/scripts/measure-utterance-continuous-background.mjs)では、既存speech-v2へwhite noise／60Hz hum／pink noiseを各2音量で重ね、音声後もノイズを継続した。実Sileroによる6条件すべてで発話は1回終了し、終了遅延はfixture末尾から884〜1,172msだった。PCM閾値以上の環境音で終了不能になる回帰を防ぐ証拠であり、速い終了やBrowserの割り込み受け入れを示すものではない。
+
+
+## 共有Ollamaのロード状態とGPUの同時計測（2026-09-07）
+
+`pcm-vad-guard-01`でLLM最初の本文まで約4.2／6.0／16.0秒を要した区間を分解した。provider報告の`load_duration`は各3,744.7／5,623.0／15,801.9msで、promptのtoken計測は全件cache hit、計測合計は約3〜4msだった。観測後の共有Ollamaには13,312 tokenのcontextがあり、今回の要求の8,192 tokenとは異なっていた。ただし、この読み取りだけから、別タスクが遅延を引き起こしたとは断定しない。
+
+[実測runner](../scripts/voice_quality/README.md)を追加して、別の新規data root `residency-01`で準備1回＋測定3回を実行した。全件のtranscript一致、応答完了、明示終了が成功した。今回の実測では遅い状態が再現せず、測定3回のLLM開始→最初の本文は次の値だった。
+
+| 試行 | LLM開始→最初の本文 | provider load | prompt evaluation | token generation |
+|---|---:|---:|---:|---:|
+| 1 | 336.3ms | 273.6ms | 22.5ms | 122.6ms |
+| 2 | 353.1ms | 267.4ms | 41.6ms | 88.5ms |
+| 3 | 356.8ms | 269.0ms | 54.1ms | 193.3ms |
+
+モデル状態127回、GPU13回を読み取り、観測APIの失敗は0件だった。開始直後の未ロード状態から8,192 tokenのロード済み状態へ遷移し、それ以降の取得サンプルには別contextへの変更がなかった。約0.5秒間隔の離散観測であり、間の変更やOllama内部queue待ちを排除できる証拠ではない。`load_duration`はv0.32.5の[ChatHandler実装](https://github.com/ollama/ollama/blob/v0.32.5/server/routes.go)上、handler開始からschedulerのrunner返却までを含むため、純粋な重み再ロード時間とは扱わない。
+
+GPUはhost全体の使用率・使用／総memoryを取得した。この会話に帰属するGPU時間、Backend RSS、transport帯域・packet lossとは区別する。生観測はignoredのdata rootへ保存し、model名・digest・endpoint・本文・秘密値を含めない。`residency-01`の初版観測にはclock名`server_monotonic`が付いているが、実体はrunner自身のclockであり、Backendコンテナとの同期を証明するものではない。以後のrunnerでは`observer_monotonic`へ名称を訂正した。既存生観測を上書きしていない。
+
+runnerの秘密値除外、欠測の維持、GPU単位・値域、run IDのディレクトリ逸脱防止、既存options維持を確認する19テストとPython lintが成功した。今回追加したのは診断情報と再現手段であり、TTFAの改善策や全必須指標の合格を証明したわけではない。応答sourceのreceive／decode／playback相関など、先に記載した未完了条件は維持する。

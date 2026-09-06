@@ -1,0 +1,80 @@
+from __future__ import annotations
+
+import importlib.util
+import json
+from pathlib import Path
+import sys
+
+import pytest
+
+_PATH = Path(__file__).resolve().parents[3] / "scripts/voice_quality/run_pilot.py"
+_SPEC = importlib.util.spec_from_file_location("voice_quality_pilot", _PATH)
+assert _SPEC is not None and _SPEC.loader is not None
+pilot = importlib.util.module_from_spec(_SPEC)
+sys.modules[_SPEC.name] = pilot
+_SPEC.loader.exec_module(pilot)
+
+
+def test_residency_omits_model_names_and_arbitrary_provider_data():
+    body = {"models": [
+        {"name": "test-model", "context_length": 8192, "size": 100, "size_vram": 90,
+         "digest": "private-digest", "prompt": "private-prompt"},
+        {"name": "another-private-model", "context_length": 13312},
+    ], "secret": "private-value"}
+    result = pilot.residency_values(body, "test-model")
+    assert result["resident_model_count"] == 2
+    assert result["target_context_tokens"] == [8192]
+    assert result["target_vram_bytes"] == [90]
+    serialized = json.dumps(result)
+    assert "private" not in serialized and "test-model" not in serialized
+
+
+@pytest.mark.parametrize("value", [True, -1, float("inf"), float("nan"), "private-value"])
+def test_invalid_provider_numbers_remain_missing(value):
+    result = pilot.residency_values({"models": [{"name": "test", "context_length": value}]}, "test")
+    assert result["target_context_tokens"] == [None]
+    json.dumps(result, allow_nan=False)
+
+
+def test_unloaded_model_is_distinct_from_probe_failure():
+    assert pilot.residency_values({"models": []}, "test")["target_model_present"] is False
+    assert pilot.residency_values({"error": "private"}, "test")["outcome"] == "missing"
+
+
+@pytest.mark.parametrize("raw", ["N/A, 10, 20", "101, 10, 20", "10, 30, 20", "nan, 10, 20", ""])
+def test_gpu_unavailable_or_invalid_does_not_become_zero_usage(raw):
+    assert pilot.gpu_values(raw)["outcome"] == "missing"
+
+
+def test_gpu_memory_units_and_scope_are_explicit():
+    result = pilot.gpu_values("25, 10, 20\n50, 5, 15")
+    assert result["scope"] == "host_gpu"
+    assert result["devices"][0] == {"utilization_percent": 25, "used_bytes": 10 * 1024**2,
+                                    "total_bytes": 20 * 1024**2}
+    assert len(result["devices"]) == 2
+
+
+@pytest.mark.parametrize("run_id", ["../other", "/tmp/other", "a/b", "", "x" * 65])
+def test_run_id_cannot_escape_the_isolated_directory(run_id):
+    with pytest.raises(ValueError):
+        pilot.run_root(run_id)
+
+
+def test_pilot_environment_keeps_existing_generation_options_and_isolates_state(tmp_path, monkeypatch):
+    inference = tmp_path / "inference.env"
+    inference.write_text('INFERENCE_TARGET_CHAT=ollama/test\n'
+                         'INFERENCE_TARGET_CHAT_OPTIONS_JSON={"temperature":0.2}\n'
+                         'DS_DATA_DIR=/private/dogfood\n'
+                         'INFERENCE_TARGET_VISION=ollama/other\n')
+    livekit = tmp_path / "livekit.env"
+    livekit.write_text('LIVEKIT_KEYS="test-key: test-value"\n')
+    monkeypatch.delenv("DS_DATA_DIR", raising=False)
+    monkeypatch.setenv("VOICE_QUALITY_RUN_ID", "previous-run")
+    env = pilot.pilot_environment(inference, livekit, "fresh-run", 3, False)
+    assert "DS_DATA_DIR" not in env
+    assert "INFERENCE_TARGET_VISION" not in env
+    assert env["VOICE_QUALITY_RUN_ID"] == "fresh-run"
+    assert env["VOICE_QUALITY_PILOT_TRIALS"] == "3"
+    assert json.loads(env["INFERENCE_TARGET_CHAT_OPTIONS_JSON"]) == {"temperature": 0.2}
+    changed = pilot.pilot_environment(inference, livekit, "fresh-run", 3, True)
+    assert json.loads(changed["INFERENCE_TARGET_CHAT_OPTIONS_JSON"]) == {"temperature": 0.2, "think": False}
