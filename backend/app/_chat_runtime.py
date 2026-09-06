@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import threading
@@ -290,8 +291,26 @@ class ChatService:
                 )
             persisted = await run_sync(history_session.complete_turn, started, reply)
         except BaseException:
-            self.tools.stop(character, str(conversation_id))
-            await run_sync(history_session.fail_turn, started)
+            try:
+                self.tools.stop(character, str(conversation_id))
+            except Exception as cleanup_error:
+                logger.warning("Tool cleanup failed: %s", type(cleanup_error).__name__)
+            cleanup = asyncio.create_task(run_sync(history_session.fail_turn, started))
+            while True:
+                try:
+                    await asyncio.shield(cleanup)
+                    break
+                except asyncio.CancelledError:
+                    if cleanup.cancelled():
+                        logger.warning("Failed-turn cleanup cancelled")
+                        break
+                    # 切断等による追加cancelでも、履歴の後始末を置き去りにしない。
+                    continue
+                except Exception as cleanup_error:
+                    logger.warning(
+                        "Failed-turn cleanup failed: %s", type(cleanup_error).__name__
+                    )
+                    break
             raise
         if persisted.status is TurnStatus.COMPLETED and not prompt.screen_lineages:
             self._dependencies.memory_formation_submitter.submit(

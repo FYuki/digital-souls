@@ -552,7 +552,7 @@
           <ToolUseStatus
             character={$conversationController.character}
             conversationId={$conversationController.selectedConversationId}
-            onStop={async () => { await voiceSession.end() }}
+            onStop={endVoiceSession}
           />
         {/key}
       {/if}

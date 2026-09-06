@@ -25,6 +25,8 @@ sys.path.insert(0, str(ROOT / "backend"))
 import httpx
 from dotenv import dotenv_values
 from uvicorn.config import LOGGING_CONFIG
+from app.runtime_data_root import initialize_runtime_data_root
+from app.runtime_paths import resolve_runtime_paths
 from tests.external_mcp_test_support import manifest
 from tests.integration.test_external_mcp_real_servers_integration import (
     everything_http,
@@ -33,10 +35,10 @@ from tests.integration.test_external_mcp_real_servers_integration import (
 )
 
 
-def public_evidence(text: str) -> str:
+def public_evidence(text: str, temporary_root: Path) -> str:
     """公開用の写しだけからローカルpathと動的な接続先を除く。"""
+    text = text.replace(str(temporary_root), "<test-root>")
     text = text.replace(str(ROOT), ".")
-    text = re.sub(r"/tmp/ds-tool-182-[^/\s\"']+", "<test-root>", text)
     return re.sub(
         r"(?:https?|wss?)://(?:localhost|127\.0\.0\.1):\d+", "<test-service>", text
     )
@@ -168,13 +170,17 @@ def main():
     ):
         root = Path(temporary)
         data = root / "data"
+        environment["DS_DATA_DIR"] = str(data)
+        initialize_runtime_data_root(resolve_runtime_paths(environment, ROOT), ROOT)
+        runtime = data / "runtime" / "tool-use"
+        runtime.mkdir(parents=True, exist_ok=True)
         files = root / "files"
         files.mkdir()
         sample = files / "sample.txt"
         sample.write_text("展示テーマは青い折り紙です。", encoding="utf-8")
         endpoint = None
         if not contract:
-            endpoint, _http = stack.enter_context(everything_http(servers, root))
+            endpoint, _http = stack.enter_context(everything_http(servers, runtime))
         backend_port, frontend_port = free_port(), free_port()
         livekit_port, tcp_port, udp_port = free_port(), free_port(), free_port()
         key, secret = "test-182", secrets.token_hex(32)
@@ -213,7 +219,7 @@ def main():
                 ],
                 os.environ,
                 ROOT,
-                root / "livekit.log",
+                runtime / "livekit.log",
             )
         )
         stack.callback(
@@ -299,12 +305,10 @@ def main():
                 ],
                 environment,
                 ROOT,
-                artifacts / "backend.log",
+                runtime / "backend.log",
             )
         )
         ready(backend_url + "/health/ready", backend)
-        runtime = data / "runtime" / "tool-use"
-        runtime.mkdir(parents=True, exist_ok=True)
         profile = runtime / "resolved-profile.json"
         service_urls = {
             "backend": backend_url,
@@ -364,7 +368,7 @@ def main():
                 ],
                 frontend_env,
                 ROOT / "frontend",
-                artifacts / "frontend.log",
+                runtime / "frontend.log",
             )
         )
         ready(frontend_url, frontend)
@@ -412,6 +416,7 @@ def main():
             "TOOL_USE_TEST_SAMPLE": str(sample),
             "TOOL_USE_TEST_AUDIO_DIR": str(root),
             "TOOL_USE_TEST_SIGNALS": str(signals),
+            "TOOL_USE_TEST_RESULTS_DIR": str(runtime / "browser"),
         }
         if contract:
             speech(
@@ -421,18 +426,38 @@ def main():
                 silence=0,
             )
             speech(voicevox, "展示の色は赤色です。", root / "answer.wav", silence=0)
-        result = subprocess.run(
-            [
-                str(ROOT / "frontend/node_modules/.bin/playwright"),
-                "test",
-                "--config",
-                "playwright.tool-use-contract.config.ts"
-                if contract
-                else "playwright.tool-use.config.ts",
-                *arguments,
-            ],
-            cwd=ROOT / "frontend",
-            env=test_env,
+            speech(
+                voicevox,
+                "時間のかかる確認という名前の外部ツールを実行してください。このツールは引数なしで実行できます。",
+                root / "slow.wav",
+                silence=0,
+            )
+            speech(
+                voicevox,
+                "確認はやめて、普通に挨拶してください。こんにちは。",
+                root / "greeting.wav",
+                silence=0,
+            )
+        with (runtime / "playwright.log").open("w") as output:
+            result = subprocess.run(
+                [
+                    str(ROOT / "frontend/node_modules/.bin/playwright"),
+                    "test",
+                    "--config",
+                    "playwright.tool-use-contract.config.ts"
+                    if contract
+                    else "playwright.tool-use.config.ts",
+                    *arguments,
+                ],
+                cwd=ROOT / "frontend",
+                env=test_env,
+                stdout=output,
+                stderr=subprocess.STDOUT,
+            )
+        print(
+            public_evidence((runtime / "playwright.log").read_text(), root),
+            end="",
+            flush=True,
         )
         run_manifest["testStatus"] = "passed" if result.returncode == 0 else "failed"
         run_manifest["completedAt"] = datetime.now(timezone.utc).isoformat()
@@ -454,15 +479,10 @@ def main():
         (artifacts / "runtime-manifest.json").write_text(
             json.dumps(shared, ensure_ascii=False, indent=2)
         )
-        report = (
-            ROOT
-            / "frontend/test-results"
-            / ("tool-use-contract" if contract else "tool-use-browser")
-            / "results.json"
-        )
+        report = runtime / "browser" / "results.json"
         if report.is_file():
             (artifacts / "browser-public.json").write_text(
-                public_evidence(report.read_text())
+                public_evidence(report.read_text(), root)
             )
         return result.returncode
 

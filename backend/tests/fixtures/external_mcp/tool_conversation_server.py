@@ -29,7 +29,7 @@ async def list_tools(ctx, params):
             ),
             types.Tool(
                 name="slow-exhibit",
-                description="展示の遅い照合処理を実行します。",
+                description="「時間のかかる確認」という名前の定型処理を実行します。引数や追加情報は不要です。",
                 input_schema={
                     "type": "object",
                     "properties": {},
@@ -41,6 +41,8 @@ async def list_tools(ctx, params):
 
 
 async def call_tool(ctx, params):
+    with (signals / "calls.txt").open("a") as output:
+        output.write(params.name + "\n")
     if params.name == "slow-exhibit":
         (signals / "slow-dispatched").touch()
         # cancellationを受けても外部処理が完了するケースを明示的に再現する。

@@ -399,7 +399,7 @@ class ConversationCoreSession:
         if response is None:
             return None
         if not response.state.is_terminal:
-            self._on_interruption(reason)
+            self._notify_interruption(reason)
         result = await self._terminate(
             response_id=response_id,
             generation=response.generation,
@@ -471,7 +471,7 @@ class ConversationCoreSession:
             return
         self._connected = False
         await self._terminate_active_for_shutdown("disconnect")
-        self._on_interruption("disconnect")
+        self._notify_interruption("disconnect")
         self._discard_pending("disconnect")
         await self._cancel_all_stage_tasks()
         await self._finish_effect_tasks()
@@ -486,11 +486,23 @@ class ConversationCoreSession:
             return
         self._connected = False
         self._ended = True
-        self._on_interruption("session_ended")
+        self._notify_interruption("session_ended")
         await self._terminate_active_for_shutdown("session_ended")
         self._discard_pending("session_ended")
         await self._cancel_all_stage_tasks()
         await self._finish_effect_tasks()
+
+    def _notify_interruption(self, reason: str) -> None:
+        try:
+            self._on_interruption(reason)
+        except Exception:
+            logger.warning(
+                "Conversation interruption callback failed: session_id=%s reason=%s",
+                self.session_id,
+                reason
+                if reason in {"disconnect", "session_ended", "barge_in", "user_cancelled"}
+                else "other",
+            )
 
     def _reserve_pending_response_locked(self) -> tuple[Response, str]:
         pending = self.pending_utterances

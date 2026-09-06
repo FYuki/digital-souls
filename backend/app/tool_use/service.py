@@ -37,6 +37,7 @@ _PROTECTED_INPUT = re.compile(
 )
 _REFRESH = re.compile(r"refresh|更新|再取得", re.I)
 logger = logging.getLogger(__name__)
+TOOL_STOP_MESSAGE = "tool_operation_stopped"
 
 
 @dataclass(frozen=True)
@@ -100,6 +101,7 @@ class ToolService:
         self._runs: dict[tuple[str, str], _Run] = {}
         self._status: dict[tuple[str, str], Json] = {}
         self._owners: dict[tuple[str, str], asyncio.Task[object]] = {}
+        self.closing = False
 
     @contextmanager
     def response_scope(self, character: str, conversation: str) -> Iterator[None]:
@@ -156,9 +158,13 @@ class ToolService:
     def stop(self, character: str, conversation: str) -> None:
         key = (character, conversation)
         owner = self._owners.pop(key, None)
-        if owner is not None and owner is not asyncio.current_task():
-            owner.cancel()
         run = self._runs.pop(key, None)
+        targets = {
+            task for task in (owner, run.task if run else None) if task is not None
+        }
+        for task in targets:
+            if task is not asyncio.current_task():
+                task.cancel(TOOL_STOP_MESSAGE)
         if run is not None:
             run.cancellation.cancel()
             self.gate.end_loop(run.loop)
@@ -166,12 +172,11 @@ class ToolService:
                 run.expiration.cancel()
             if run.presence_expiration:
                 run.presence_expiration.cancel()
-            if run.task and run.task is not asyncio.current_task():
-                run.task.cancel()
         self.bindings.forget(character, conversation)
         self._status.pop(key, None)
 
     def close(self) -> None:
+        self.closing = True
         for character, conversation in tuple(
             self._runs.keys() | self._owners.keys() | self._status.keys()
         ):
@@ -186,6 +191,8 @@ class ToolService:
         history: tuple[Json, ...] = (),
         before_execute: Callable[[], Awaitable[None]] | None = None,
     ) -> ToolMaterial:
+        if self.closing:
+            raise asyncio.CancelledError()
         key = (character, conversation)
         run = self._runs.get(key)
         if run and run.task and not run.task.done():

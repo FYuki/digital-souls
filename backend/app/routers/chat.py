@@ -16,6 +16,7 @@ from app.routers.validation import ConversationRoute
 from app.routers.conversation_contracts import TurnResponse, persisted_turn_response
 from app.async_worker import run_sync
 from app._chat_runtime import generate_reply_with_tools
+from app.tool_use.service import TOOL_STOP_MESSAGE
 from app.screen_perception.detector import needs_reference_history
 from app.screen_perception.service import (
     ScreenSource,
@@ -51,24 +52,34 @@ async def chat(
         return await _chat_response(payload, request)
     owner = asyncio.current_task()
     assert owner is not None
+    disconnected = False
 
     async def watch_disconnect() -> None:
+        nonlocal disconnected
         while True:
             if await request.is_disconnected():
+                disconnected = True
                 request.app.state.tool_service.stop(
                     payload.character, str(payload.conversation_id)
                 )
-                owner.cancel()
+                if not owner.cancelling():
+                    owner.cancel("client_disconnected")
                 return
             await asyncio.sleep(0.25)
 
     watcher = asyncio.create_task(watch_disconnect())
     try:
         return await _chat_response(payload, request)
-    except asyncio.CancelledError:
+    except asyncio.CancelledError as error:
         request.app.state.tool_service.stop(
             payload.character, str(payload.conversation_id)
         )
+        # 明示停止と切断だけをHTTP応答に変換し、shutdown等のcancelは伝搬する。
+        if getattr(request.app.state.tool_service, "closing", False) or not (
+            error.args == (TOOL_STOP_MESSAGE,)
+            or (disconnected and error.args == ("client_disconnected",))
+        ):
+            raise
         return JSONResponse(
             status_code=499,
             content={
