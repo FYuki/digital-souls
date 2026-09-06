@@ -18,7 +18,24 @@ from app.tool_use.prompt import require_tool_room, with_tool_material
 from app.tool_use.routing import InferenceDecisionRouter, ToolDecision
 from app.tool_use.runtime import ToolSettings
 from app.tool_use.service import ToolMaterial
+from app.tool_use.binding import BindingResolver, BindingTarget
+from app.external_mcp.models import MCPFailure
 from tests.unit.test_tool_use import Decisions, InputSource, call, runtime
+
+
+def test_configured_optional_binding_uses_unique_target_and_asks_on_ambiguity():
+    one = BindingTarget(
+        "a", "connection", "miori", "対象A", ("operation",), '{"project":"a"}'
+    )
+    two = BindingTarget(
+        "b", "connection", "miori", "対象B", ("operation",), '{"project":"b"}'
+    )
+    resolver = BindingResolver((one,))
+    binding, arguments = resolver.resolve("miori", "session", "connection", "operation")
+    assert binding and arguments == {"project": "a"}
+    resolver = BindingResolver((one, two))
+    with pytest.raises(MCPFailure, match="binding_input_required"):
+        resolver.resolve("miori", "session", "connection", "operation")
 
 
 def test_per_call_binding_overrides_legacy_context_and_is_pinned_across_mrtr():
@@ -127,6 +144,7 @@ def test_stop_cancels_final_answer_after_tool_loop_ended():
             task = asyncio.create_task(reply())
             await generating.wait()
             assert not gate._loops
+            assert service.status("miori", "a")["state"] == "running"
             service.stop("miori", "a")
             with pytest.raises(asyncio.CancelledError):
                 await task
@@ -257,6 +275,35 @@ def test_routing_reduces_history_and_candidates_before_generation():
     asyncio.run(run())
 
 
+def test_sufficient_result_finishes_before_selecting_another_operation():
+    class Router:
+        calls = 0
+
+        def estimate_input_tokens(self, **kwargs):
+            assert set(kwargs["response_schema"]["properties"]) == {"done"}
+
+        def generate_structured(self, **kwargs):
+            self.calls += 1
+            return SimpleNamespace(value={"done": True})
+
+    async def run():
+        router = Router()
+        decision = await InferenceDecisionRouter(router).decide(
+            {
+                "original_request": "展示を準備",
+                "current_user": "赤",
+                "results": [{"outcome": "succeeded", "text": "赤い展示の準備完了"}],
+                "candidates": [{"id": "tool"}],
+                "history": [],
+                "pending": None,
+            },
+            InferenceCancellationToken(),
+        )
+        assert decision.action == "finish" and router.calls == 1
+
+    asyncio.run(run())
+
+
 def test_prompt_shrinks_results_preserving_original_and_current_user():
     prompt = BuiltPrompt(
         (
@@ -279,6 +326,13 @@ def test_prompt_shrinks_results_preserving_original_and_current_user():
     )
     assert encode(material.results[0]) == before
     assert with_tool_material(prompt, ToolMaterial(), counter, 1) is prompt
+    small = with_tool_material(
+        prompt,
+        ToolMaterial(results=({"outcome": "succeeded", "text": "短い結果"},)),
+        counter,
+        1600,
+    )
+    assert "短い結果" in small.messages[-2].content
 
 
 @pytest.mark.parametrize(

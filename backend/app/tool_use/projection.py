@@ -70,6 +70,26 @@ class Sanitizer:
             }
         return value if value is None or isinstance(value, (bool, int, float)) else None
 
+    def arguments_allowed(self, value: Json) -> bool:
+        """公開URLは引数に使えるが、秘密値・credential欄・MCP接続先は送らない。"""
+        serialized = encode(value)
+        if any(private and private in serialized for private in self.sensitive_values):
+            return False
+
+        def secret_key(item: Any) -> bool:
+            if isinstance(item, dict):
+                return any(
+                    _SECRET_KEY.search(str(k)) or secret_key(v) for k, v in item.items()
+                )
+            return isinstance(item, list) and any(secret_key(v) for v in item)
+
+        scan = self.scanner.scan(serialized)
+        return (
+            isinstance(scan, ScanSuccess)
+            and not scan.findings
+            and not secret_key(value)
+        )
+
     def result(self, envelope: Json, *, may_change_state: bool = True) -> Json:
         outcome = envelope["outcome"]
         projected: Json = {"outcome": outcome}
@@ -108,6 +128,8 @@ def bounded_json(value: Json, maximum_bytes: int) -> str:
         return full
     # 元のJSONを壊して返さず、previewとして明示する。
     wrapper: Json = {"omitted": True, "preview": ""}
+    if maximum_bytes >= 128 and "outcome" in value:
+        wrapper["outcome"] = value["outcome"]
     room = max(0, maximum_bytes - len(encode(wrapper).encode()) - 32)
     wrapper["preview"] = full.encode()[:room].decode("utf-8", errors="ignore")
     while len(encode(wrapper).encode()) > maximum_bytes and wrapper["preview"]:

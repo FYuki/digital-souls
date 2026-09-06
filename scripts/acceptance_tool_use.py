@@ -15,6 +15,9 @@ import time
 import wave
 from contextlib import ExitStack, contextmanager
 from copy import deepcopy
+from datetime import datetime, timezone
+from uuid import uuid4
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
@@ -290,6 +293,13 @@ def main():
         )
         ready(backend_url + "/health/ready", backend)
         profile = root / "profile.json"
+        service_urls = {
+            "backend": backend_url,
+            "frontend": frontend_url,
+            "ollama": environment.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
+            "voicevox": environment.get("VOICEVOX_BASE_URL", "http://127.0.0.1:50021"),
+            "whisper": environment.get("WHISPER_BASE_URL", "http://127.0.0.1:50022"),
+        }
         profile.write_text(
             json.dumps(
                 {
@@ -308,11 +318,7 @@ def main():
                             else {
                                 "mode": "real",
                                 "source": "external",
-                                "baseUrl": backend_url
-                                if name == "backend"
-                                else frontend_url
-                                if name == "frontend"
-                                else "http://127.0.0.1",
+                                "baseUrl": service_urls[name],
                             }
                         )
                         for name in (
@@ -349,6 +355,39 @@ def main():
             )
         )
         ready(frontend_url, frontend)
+
+        def public_origin(url):
+            parsed = urlsplit(url)
+            return f"{parsed.scheme}://{parsed.hostname}" + (
+                f":{parsed.port}" if parsed.port else ""
+            )
+
+        run_manifest = {
+            "schemaVersion": 1,
+            "runId": str(uuid4()),
+            "startedAt": datetime.now(timezone.utc).isoformat(),
+            "environmentId": "test",
+            "mcpImplementation": "controlled-fixture"
+            if contract
+            else "published-filesystem-and-everything",
+            "microphone": "scheduled-voicevox-wav-mediastream"
+            if contract
+            else "chromium-voicevox-wav",
+            "routingModel": environment["INFERENCE_TARGET_TOOL_ROUTING"],
+            "dataRoot": str(data),
+            "ownedProcesses": {"backend": backend.pid, "frontend": frontend.pid},
+            "ownedLiveKitContainer": container,
+            "externalServices": {
+                k: public_origin(v)
+                for k, v in service_urls.items()
+                if k not in {"backend", "frontend"}
+            },
+            "testStatus": "running",
+        }
+        (artifacts / "runtime-manifest.json").write_text(
+            json.dumps(run_manifest, ensure_ascii=False, indent=2)
+        )
+        shutil.copyfile(profile, artifacts / "resolved-profile.json")
         voicevox = environment.get("VOICEVOX_BASE_URL", "http://127.0.0.1:50021")
         speech(
             voicevox,
@@ -372,17 +411,9 @@ def main():
                 voicevox,
                 "外部ツールを使って、展示の案内を準備してください。",
                 root / "question.wav",
-                silence=100,
+                silence=0,
             )
-            speech(voicevox, "展示の色は赤色です。", root / "answer.wav", silence=120)
-            with (
-                wave.open(str(root / "question.wav")) as question,
-                wave.open(str(root / "answer.wav")) as answer,
-            ):
-                with wave.open(str(root / "mrtr.wav"), "wb") as output:
-                    output.setparams(question.getparams())
-                    output.writeframes(question.readframes(question.getnframes()))
-                    output.writeframes(answer.readframes(answer.getnframes()))
+            speech(voicevox, "展示の色は赤色です。", root / "answer.wav", silence=0)
         result = subprocess.run(
             [
                 str(ROOT / "frontend/node_modules/.bin/playwright"),
@@ -395,6 +426,11 @@ def main():
             ],
             cwd=ROOT / "frontend",
             env=test_env,
+        )
+        run_manifest["testStatus"] = "passed" if result.returncode == 0 else "failed"
+        run_manifest["completedAt"] = datetime.now(timezone.utc).isoformat()
+        (artifacts / "runtime-manifest.json").write_text(
+            json.dumps(run_manifest, ensure_ascii=False, indent=2)
         )
         return result.returncode
 

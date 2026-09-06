@@ -55,10 +55,10 @@ class BindingResolver:
         target = next((t for t in choices if t.id == selected), None)
         if explicit and target is None:
             raise MCPFailure("validation", "invalid_binding")
-        if target is None and len(choices) == 1 and required:
+        if target is None and len(choices) == 1:
             target = choices[0]
         if target is None:
-            if required:
+            if required or len(choices) > 1:
                 raise MCPFailure("policy", "binding_input_required")
             return None, {}
         self._selected[key] = target.id

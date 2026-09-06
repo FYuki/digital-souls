@@ -1,5 +1,4 @@
 import { defineConfig, devices } from '@playwright/test'
-import { join } from 'node:path'
 
 const baseURL = process.env.TOOL_USE_TEST_FRONTEND_URL
 if (!baseURL) throw new Error('scripts/acceptance_tool_use.py --contract-mcpから起動してください')
@@ -16,7 +15,6 @@ export default defineConfig({
     { name: 'text', grep: /テキスト/ },
     { name: 'voice', grep: /音声/, use: { launchOptions: { args: [
       '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream',
-      `--use-file-for-fake-audio-capture=${join(process.env.TOOL_USE_TEST_AUDIO_DIR!, 'mrtr.wav')}`,
     ] } } },
   ],
 })

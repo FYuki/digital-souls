@@ -93,6 +93,8 @@ Backend、Frontend、テスト所有LiveKit containerを起動する。Dockerと
 `livekit/livekit-server:v1.9.7`、Playwright Chromiumが必要。既存processやdogfoodは停止しない。
 マイク入力はVOICEVOXで作成した合成音声ファイルをChromiumへ渡す。実STTとWebRTC mediaは通るが、
 物理マイク・人の発話品質を確認した証跡ではない。
+制御MCPの音声試験ではWebAudioのMediaStreamへ合成発話を流し、追加質問の再生を観測して回答を投入する。
+質問へのbarge-inから同じMCP操作の再開・最終回答再生までを検証し、STT/LLM/TTSや通信は置換しない。
 結果は`frontend/test-results/tool-use-browser/`と`tool-use-contract/`、runtime logはそれぞれ
 `tool-use-runtime/`と`tool-use-contract-runtime/`へ分けて出力する。
 

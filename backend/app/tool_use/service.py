@@ -109,6 +109,8 @@ class ToolService:
         finally:
             if self._owners.get(key) is task:
                 self._owners.pop(key)
+                if key not in self._runs and key in self._status:
+                    self._status[key]["state"] = "idle"
 
     def status(self, character: str, conversation: str) -> Json:
         return cast(
@@ -246,7 +248,9 @@ class ToolService:
                 self.gate.end_loop(run.loop)
                 self._runs.pop(key)
                 self._status[key] = {
-                    "state": "idle",
+                    "state": "running"
+                    if key in self._owners and run.results
+                    else "idle",
                     "sources": [
                         {"label": s["label"], "source_id": s["source_id"]}
                         for s in run.sources
@@ -388,7 +392,7 @@ class ToolService:
                     raise MCPFailure("validation", "unexpected_resume")
                 answers = parse_object(decision.input_response_json)
                 validate_arguments(run.answer_schema, answers)
-                if self.sanitizer.value(answers) != answers:
+                if not self.sanitizer.arguments_allowed(answers):
                     return self._material(
                         run,
                         "安全に送信できない入力が含まれるため、操作を停止しました。",
@@ -399,6 +403,7 @@ class ToolService:
                 resumed_candidate = run.candidate
                 run.interaction = None
                 run.answer_schema = None
+                run.user_followup = False
                 assert resumed_candidate is not None
                 candidate = resumed_candidate
             else:
@@ -423,6 +428,8 @@ class ToolService:
                 arguments = (
                     run.binding_arguments
                     if run.binding_candidate
+                    else {}
+                    if candidate.kind == "resource"
                     else decision.arguments()
                 )
                 try:
@@ -452,7 +459,13 @@ class ToolService:
                         waiting=True,
                     )
                 run.binding_candidate = None
+                run.user_followup = False
                 arguments = apply_binding(arguments, constraints)
+                if not self.sanitizer.arguments_allowed(arguments):
+                    return self._material(
+                        run,
+                        "安全に送信できない入力が含まれるため、操作を停止しました。秘密情報は会話へ入力しないでください。",
+                    )
                 fingerprint = digest(
                     {
                         "candidate": candidate.id,
@@ -488,6 +501,11 @@ class ToolService:
                     )
             if run.cancellation.is_cancelled:
                 raise asyncio.CancelledError()
+            logger.info(
+                "Tool result: outcome=%s category=%s",
+                envelope["outcome"],
+                envelope.get("error_category", "none"),
+            )
             if envelope["outcome"] == "input_required":
                 run.interaction = envelope["interaction_id"]
                 run.candidate = candidate
@@ -525,6 +543,11 @@ class ToolService:
                 if run.call_fingerprint is not None:
                     run.completed_calls.add(run.call_fingerprint)
             if envelope["outcome"] == "budget_exceeded":
+                return self._material(run)
+            if envelope.get("error_category") == "validation" and any(
+                s["source_id"] == candidate.id for s in run.sources
+            ):
+                # 完了済み操作の再呼出しを、引数修復の連鎖で繰り返さない。
                 return self._material(run)
             if (
                 envelope["outcome"] != "succeeded"

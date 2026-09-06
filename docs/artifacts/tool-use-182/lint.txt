@@ -1,0 +1,5 @@
+
+> lint:python
+> backend/.venv/bin/python -m ruff check --config backend/ruff.toml backend/app
+
+All checks passed!

@@ -146,7 +146,8 @@ def test_resource_is_read_via_gate():
     async def run():
         def read(c):
             item = next(i for i in c["candidates"] if i["kind"] == "resource")
-            return ToolDecision("call", item["id"], "{}")
+            # Resourceには引数がない。モデルの補助欄を実行URIへ流用しない。
+            return ToolDecision("call", item["id"], '{"uri":"unrelated://injected"}')
 
         async with runtime(Decisions(read, ToolDecision("finish"))) as (
             service,
@@ -196,6 +197,19 @@ def test_result_secrets_errors_and_non_text_are_projected():
     assert failure == {"outcome": "failed", "error": "auth"}
     bounded = bounded_json({"text": '引用"\\日本語' * 10_000}, 512)
     assert len(bounded.encode()) <= 512 and json.loads(bounded)["omitted"]
+    large = json.loads(
+        bounded_json({"outcome": "succeeded", "text": "資料" * 1000}, 512)
+    )
+    assert large["outcome"] == "succeeded" and large["omitted"]
+
+
+def test_arguments_allow_public_urls_but_reject_secrets_before_dispatch(monkeypatch):
+    sanitizer = Sanitizer(Scanner(), ("known-private-value",), ("DS_TEST_MCP_TOKEN",))
+    assert sanitizer.arguments_allowed({"url": "https://example.invalid/article"})
+    assert not sanitizer.arguments_allowed({"text": "known-private-value"})
+    assert not sanitizer.arguments_allowed({"nested": {"authorization": "value"}})
+    monkeypatch.setenv("DS_TEST_MCP_TOKEN", "rotated-private-value")
+    assert not sanitizer.arguments_allowed({"value": "rotated-private-value"})
 
 
 def test_failed_unknown_operation_cannot_be_retried_by_routing():

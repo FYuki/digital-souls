@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { access, rm } from 'node:fs/promises'
+import { access, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createVoiceChatDriver } from '../../playwright/voice-chat-suite'
 
@@ -49,12 +49,40 @@ test('テキストの実行中に停止すると遅い結果が回答へ混ざ�
 
 test('音声で追加質問を再生し、音声の回答で再開して最終回答を再生する', async ({ page }) => {
   await rm(join(signals, 'resumed'), { force: true })
+  const fixtures = Object.fromEntries(await Promise.all(['question', 'answer'].map(async name => [name, (await readFile(join(process.env.TOOL_USE_TEST_AUDIO_DIR!, `${name}.wav`))).toString('base64')])))
+  await page.addInitScript((clips) => {
+    const native = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
+    let context: AudioContext
+    let destination: MediaStreamAudioDestinationNode
+    const play = async (name: string) => {
+      const bytes = Uint8Array.from(atob(clips[name]), c => c.charCodeAt(0))
+      const buffer = await context.decodeAudioData(bytes.buffer)
+      const source = context.createBufferSource()
+      source.buffer = buffer
+      source.connect(destination)
+      source.start()
+    }
+    navigator.mediaDevices.getUserMedia = async constraints => {
+      const granted = await native(constraints)
+      granted.getTracks().forEach(track => track.stop())
+      context = new AudioContext()
+      destination = context.createMediaStreamDestination()
+      destination.channelCount = 1
+      await context.resume()
+      // VAD・LiveKitの接続後に、普通のマイクMediaStreamへ合成発話を流す。
+      setTimeout(() => { void play('question') }, 2000)
+      return destination.stream
+    }
+    ;(window as unknown as { __toolAnswer: () => Promise<void> }).__toolAnswer = () => play('answer')
+  }, fixtures)
   const microphone = await driver.openVoiceChat(page)
   await microphone.click()
   await expect(page.getByRole('region', { name: '外部参照' })).toContainText('追加情報をお待ちしています')
   await expect.poll(() => page.evaluate(() => window.__voiceChatE2E.liveKitOrder.filter(item => item.endsWith(':rendered-audio')).length)).toBeGreaterThan(0)
+  await page.evaluate(() => (window as unknown as { __toolAnswer: () => Promise<void> }).__toolAnswer())
   await expect.poll(() => signal('resumed'), { timeout: 150_000 }).toBe(true)
   await expect(page.locator('article.message').last()).toContainText('赤')
   await expect.poll(() => page.evaluate(() => new Set(window.__voiceChatE2E.liveKitOrder.filter(item => item.endsWith(':rendered-audio')).map(item => item.split(':')[0])).size)).toBeGreaterThan(1)
+  expect(await page.evaluate(() => window.__voiceChatE2E.interruptions.length)).toBeGreaterThan(0)
   await driver.endVoiceSession(page)
 })
