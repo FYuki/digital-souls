@@ -164,6 +164,9 @@ def _prepare_deploy_scenario(
     current_manifest_payload: dict[str, object] | str | None = None,
 ) -> tuple[dict[str, str], Path]:
     env_path, data_dir = write_dogfood_env(tmp_path)
+    (tmp_path / "backups" / "backup-20260906T000000Z-0123456789ab-abcdef012345").mkdir(
+        parents=True
+    )
     env_path.write_text(
         env_path.read_text(encoding="utf-8")
         + f"\nDOGFOOD_SERVICE_HOME_DIR={tmp_path / 'service-home'}\n",
@@ -362,7 +365,9 @@ def _prepare_deploy_scenario(
         else json.dumps(
             {
                 "status": "ok",
-                "backupDirectory": str(tmp_path / "backups" / "backup-test-generation"),
+                "backupDirectory": str(
+                    tmp_path / "backups" / "backup-20260906T000000Z-0123456789ab-abcdef012345"
+                ),
             }
         ),
     }
@@ -931,7 +936,9 @@ def test_should_deploy_only_after_backup_verify_and_record_a_safe_manifest(
             "targetCommit": NEXT_REVISION,
             "profileSchemaVersion": 1,
             "dataSchemaVersion": 3,
-            "backupId": str(tmp_path / "backups" / "backup-test-generation"),
+            "backupId": str(
+                tmp_path / "backups" / "backup-20260906T000000Z-0123456789ab-abcdef012345"
+            ),
         },
     )
     assert any(
@@ -969,7 +976,9 @@ def test_should_record_null_previous_commit_on_the_true_initial_deploy(
         "targetCommit": TEST_REVISION,
         "profileSchemaVersion": 1,
         "dataSchemaVersion": 3,
-        "backupId": str(tmp_path / "backups" / "backup-test-generation"),
+        "backupId": str(
+            tmp_path / "backups" / "backup-20260906T000000Z-0123456789ab-abcdef012345"
+        ),
     }
     read_valid_deployment_manifest(generation, expected_manifest)
     read_valid_deployment_manifest(
@@ -1622,6 +1631,9 @@ def test_should_stop_before_checkout_when_a_deploy_gate_fails(
     expected_backend_setups = 0 if failure == "dirty" else 1
     assert calls.count("backend-setup") == expected_backend_setups
     assert "restart" not in calls
+    assert "manifest-write" not in calls
+    assert "revision-update" not in calls
+    assert not tuple((tmp_path / "state" / "deployments").glob("*.json"))
     assert (tmp_path / "config" / "dogfood.revision").read_text(
         encoding="utf-8"
     ) == f"{TEST_REVISION}\n"
@@ -2609,3 +2621,76 @@ def test_should_stop_manifest_generation_after_finite_link_attempts(
     assert link_log.read_text(encoding="utf-8").splitlines() == ["attempt"] * 16
     assert not tuple(deployments.glob("*.json"))
     assert not tuple(deployments.glob(".*"))
+
+
+@pytest.mark.parametrize(
+    "kind",
+    (
+        "outside-root",
+        "relative",
+        "traversal",
+        "newline",
+        "missing",
+        "symlink",
+        "file",
+        "invalid-generation",
+        "duplicate-separator",
+    ),
+)
+def test_should_reject_unsafe_backup_directory_before_deploy_mutation(
+    tmp_path: Path,
+    kind: str,
+) -> None:
+    environment, call_log = _prepare_deploy_scenario(tmp_path)
+    backup = Path(json.loads(environment["DEPLOY_BACKUP_OUTPUT"])["backupDirectory"])
+    value = str(backup)
+    if kind == "outside-root":
+        value = str(tmp_path / backup.name)
+    elif kind == "relative":
+        value = backup.name
+    elif kind == "traversal":
+        value = str(backup.parent) + "/../backups/" + backup.name
+    elif kind == "newline":
+        value += "\n"
+    elif kind == "duplicate-separator":
+        value = str(backup.parent) + "//" + backup.name
+    elif kind == "invalid-generation":
+        value = str(backup.parent / "manual-directory")
+        Path(value).mkdir()
+    else:
+        backup.rmdir()
+        if kind == "symlink":
+            target = tmp_path / "other-directory"
+            target.mkdir()
+            backup.symlink_to(target, target_is_directory=True)
+        elif kind == "file":
+            backup.write_text("not a directory")
+    environment["DEPLOY_BACKUP_OUTPUT"] = json.dumps(
+        {"status": "ok", "backupDirectory": value}
+    )
+    revision = tmp_path / "config" / "dogfood.revision"
+    original_revision = revision.read_bytes()
+
+    result = subprocess.run(
+        command_with_root_owned_revision(
+            revision,
+            [
+                str(DOGFOOD_SCRIPTS_DIR / "deploy.sh"),
+                "--commit",
+                NEXT_REVISION,
+            ],
+        ),
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode != 0
+    calls = call_log.read_text()
+    assert "backup-verify" not in calls
+    assert "checkout --detach" not in calls
+    assert "revision-update" not in calls
+    assert "restart" not in calls
+    assert revision.read_bytes() == original_revision
+    assert not tuple((tmp_path / "state" / "deployments").glob("*.json"))
