@@ -15,6 +15,13 @@
 
 モックを使用する単体・結合・E2Eテストの結果は、外部サービスとの実接続に成功した一次証跡として扱わない。
 
+画面知覚では、unit／moduleで参照3分岐、session・generation・同意、画像上限、Vision観測、
+provenance、Memory Formation除外を検証する。`frontend/e2e/screen-perception.spec.ts`は通常UIの
+共有ON、文脈参照、明示参照、OFF、再読込、monitor／window／browser surface、静止windowでframe callbackが来ない場合の現在frameフォールバックを合成MediaStreamとbrowser内Backendで検証するが、標準picker、
+OSが供給する実フレーム、Chrome／Edge差、実Vision品質の代用にはしない。実機と実モデルの完了条件は
+[`screen-perception-browser-acceptance.md`](screen-perception-browser-acceptance.md)に従う。
+`frontend/integration/text/screen-perception.spec.ts`は合成browser streamを起点に、実Backendのsession・画像受付、実Ollama Vision、実Chat、会話履歴までを通す。標準pickerとOS frameだけはこの統合試験でもmockのため、Windows実機確認を省略しない。
+
 ## dogfood環境との分離
 
 unit、module、E2E、integrationの全テストはdev／test専用Profileとdata rootを使用し、
@@ -60,11 +67,13 @@ npm run test:unit
 npm run test:module
 npm run test:integration:backend
 npm run test:integration:inference
+npm run test:integration:screen-vision
 npm run test:e2e:mocked
 npm run test:integration:text
 npm run test:integration:voice
 npm run test:integration:livekit
 npm run baseline:websocket
+npm run eval:screen-reference:conformance
 npm run lint:python
 npm run check
 npm run build

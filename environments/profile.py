@@ -25,6 +25,7 @@ from profile_report import (
 from profile_report_store import resolve_report_paths, write_reports
 from profile_resolution import resolve_profile
 from profile_types import ProfileError
+from profile_constants import SCREEN_ALLOWED_ORIGIN_ENV
 from profile_validation import load_profile
 
 
@@ -102,7 +103,11 @@ def _configured_inference_environment_keys_command(report_path: str) -> None:
 def _backend_environment_command(report_path: str) -> None:
     report = load_resolved_report(Path(report_path))
     derived = report["derivedEnvironment"]
-    allowed = set(MODEL_ENVIRONMENT_KEYS) | set(INFERENCE_TARGET_ENVIRONMENT_KEYS)
+    allowed = (
+        set(MODEL_ENVIRONMENT_KEYS)
+        | set(INFERENCE_TARGET_ENVIRONMENT_KEYS)
+        | {SCREEN_ALLOWED_ORIGIN_ENV}
+    )
     for key in sorted(allowed & derived.keys()):
         value = derived[key]
         if not isinstance(value, str):

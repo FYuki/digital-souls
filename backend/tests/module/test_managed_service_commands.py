@@ -98,6 +98,7 @@ def test_should_pull_dogfood_frontend_by_immutable_digest(tmp_path: Path) -> Non
             "DS_RUNTIME_GID": "10001",
             "DS_PROFILE_REPORT": str(profile_report),
             "DOGFOOD_CONFIG_DIR": str(config_directory),
+            "DOGFOOD_BACKUP_DIR": str(tmp_path / "backups"),
             "DOGFOOD_FRONTEND_IMAGE": image,
             "DOGFOOD_BACKUP_AUTHENTICATION_KEY": "must-not-reach-frontend",
         },
@@ -132,10 +133,16 @@ def test_should_pass_inference_targets_to_dogfood_backend(tmp_path: Path) -> Non
             "DS_RUNTIME_UID": "10001",
             "DS_RUNTIME_GID": "10001",
             "DOGFOOD_CONFIG_DIR": str(config_directory),
+            "DOGFOOD_BACKUP_DIR": str(tmp_path / "backups"),
             "DOGFOOD_BACKEND_IMAGE": image,
             "INFERENCE_TARGET_CHAT": "ollama/gemma4:e4b",
             "INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS": "7168",
             "INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS": "1024",
+            "INFERENCE_TARGET_VISION": "ollama/gemma4:e4b",
+            "INFERENCE_TARGET_VISION_MAX_INPUT_TOKENS": "7168",
+            "INFERENCE_TARGET_VISION_MAX_OUTPUT_TOKENS": "1024",
+            "INFERENCE_TARGET_VISION_TIMEOUT_SECONDS": "30",
+            "INFERENCE_TARGET_VISION_MAX_CONCURRENCY": "1",
         },
     )
 
@@ -144,6 +151,11 @@ def test_should_pass_inference_targets_to_dogfood_backend(tmp_path: Path) -> Non
     assert 'INFERENCE_TARGET_CHAT="ollama/gemma4:e4b"' in environment
     assert 'INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS="7168"' in environment
     assert 'INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS="1024"' in environment
+    assert 'INFERENCE_TARGET_VISION="ollama/gemma4:e4b"' in environment
+    assert 'INFERENCE_TARGET_VISION_MAX_INPUT_TOKENS="7168"' in environment
+    assert 'INFERENCE_TARGET_VISION_MAX_OUTPUT_TOKENS="1024"' in environment
+    assert 'INFERENCE_TARGET_VISION_TIMEOUT_SECONDS="30"' in environment
+    assert 'INFERENCE_TARGET_VISION_MAX_CONCURRENCY="1"' in environment
 
 
 def test_should_use_the_resolved_frontend_endpoint_not_base_url(tmp_path: Path) -> None:

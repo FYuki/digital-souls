@@ -130,6 +130,53 @@ def _create_version_five_database(database_path: Path) -> None:
         connection.execute("PRAGMA user_version = 5")
 
 
+def _create_version_seven_database(database_path: Path) -> None:
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(schema.CONVERSATIONS_SQL)
+        connection.execute(schema.CONVERSATION_TURNS_SQL)
+        connection.execute(schema.WAL_CLEANUP_JOBS_SQL)
+        connection.execute(schema.UI_SETTINGS_SQL)
+        connection.execute(schema.UI_CHARACTERS_SQL)
+        connection.execute(schema.UI_THREAD_PINS_SQL)
+        connection.execute(schema.VERSION_SEVEN_SCREEN_TURN_PROVENANCE_SQL)
+        connection.execute(schema.HISTORY_INDEX_SQL)
+        connection.execute(schema.STALE_INDEX_SQL)
+        connection.execute(
+            "INSERT INTO conversations "
+            "(character_id, conversation_id, created_at) VALUES (?, ?, ?)",
+            (CHARACTER_ID, CONVERSATION_ID, CREATED_AT),
+        )
+        connection.execute(
+            "INSERT INTO conversation_turns "
+            "(turn_id, character_id, conversation_id, user_content, "
+            "assistant_content, status, privacy_reason_code, sanitizer_version, "
+            "policy_version, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, 'completed', NULL, NULL, NULL, ?, ?)",
+            (
+                TURN_ID,
+                CHARACTER_ID,
+                CONVERSATION_ID,
+                "画面を見て",
+                "確認しました",
+                CREATED_AT,
+                CREATED_AT,
+            ),
+        )
+        connection.execute(
+            "INSERT INTO screen_turn_provenance "
+            "(turn_id, screen_lineage_id, origin_screen_session_id, "
+            "origin_generation, origin_routing_revision, source, surface, derivation) "
+            "VALUES (?, ?, ?, 1, ?, 'explicit_ui', 'window', 'direct_observation')",
+            (
+                TURN_ID,
+                "10000000-0000-4000-8000-000000000001",
+                "20000000-0000-4000-8000-000000000001",
+                "a" * 64,
+            ),
+        )
+        connection.execute("PRAGMA user_version = 7")
+
+
 def _schema_state(database_path: Path) -> tuple[int, tuple[str, ...], set[str]]:
     with sqlite3.connect(database_path) as connection:
         version = int(connection.execute("PRAGMA user_version").fetchone()[0])
@@ -278,6 +325,37 @@ def test_should_migrate_version_five_and_preserve_conversations(
     assert version == schema.SCHEMA_VERSION
     assert title == "既存タイトル"
     assert tables == schema.CURRENT_TABLES
+
+
+def test_should_migrate_version_seven_and_accept_browser_provenance(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "history.db"
+    _create_version_seven_database(database_path)
+
+    initialize_conversation_history_schema(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        existing_surface = connection.execute(
+            "SELECT surface FROM screen_turn_provenance WHERE turn_id = ?",
+            (TURN_ID,),
+        ).fetchone()[0]
+        connection.execute(
+            "INSERT INTO screen_turn_provenance "
+            "(turn_id, screen_lineage_id, origin_screen_session_id, "
+            "origin_generation, origin_routing_revision, source, surface, derivation) "
+            "VALUES (?, ?, ?, 1, ?, 'explicit_ui', 'browser', 'direct_observation')",
+            (
+                TURN_ID,
+                "30000000-0000-4000-8000-000000000001",
+                "40000000-0000-4000-8000-000000000001",
+                "b" * 64,
+            ),
+        )
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+
+    assert existing_surface == "window"
+    assert version == schema.SCHEMA_VERSION
 
 
 def test_should_reject_version_three_migration_with_dependent_view(

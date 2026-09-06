@@ -7,6 +7,7 @@ from app.characters.lore_selector import (
     CharacterLoreSelection,
     LoreSelectionDecision,
 )
+from app.screen_perception.provenance import ScreenLineage
 
 
 class PromptRole(str, Enum):
@@ -75,6 +76,7 @@ class MaskedHistoryTurn:
     user_content: str
     assistant_content: str | None
     is_completed: bool
+    screen_lineages: tuple[ScreenLineage, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.user_content, str):
@@ -176,6 +178,7 @@ class PromptMessage:
     role: PromptRole
     content: str
     memory_reference: PromptMemoryReference | None = None
+    screen_lineages: tuple[ScreenLineage, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -197,6 +200,7 @@ class BuiltPrompt:
     messages: tuple[PromptMessage, ...]
     usage: PromptUsage
     character_lore_decisions: tuple[LoreSelectionDecision, ...]
+    screen_lineages: tuple[ScreenLineage, ...] = ()
 
 
 class PromptInputLimitError(ValueError):

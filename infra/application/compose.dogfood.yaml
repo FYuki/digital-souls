@@ -1,0 +1,6 @@
+services:
+  backend:
+    volumes:
+      - type: bind
+        source: ${DOGFOOD_BACKUP_DIR:?DOGFOOD_BACKUP_DIR is required}
+        target: ${DOGFOOD_BACKUP_DIR:?DOGFOOD_BACKUP_DIR is required}

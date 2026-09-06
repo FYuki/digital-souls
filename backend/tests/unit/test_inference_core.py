@@ -8,6 +8,7 @@ import pytest
 
 from app.inference.authorization import (
     InferenceCaller,
+    authorize,
 )
 from app.inference.config import parse_provider_reference, resolve_inference_settings
 from app.inference.contracts import (
@@ -56,6 +57,8 @@ class _FakeAdapter:
         self.estimate_calls = 0
         self.structured_text = '{"answer":"ok"}'
         self.failure: InferenceError | None = None
+        self.last_structured_request: StructuredGenerationRequest | None = None
+        self.last_estimate_request: TokenEstimateRequest | None = None
 
     def probe(self, model_id: str, *, timeout_seconds: float) -> None:
         del model_id, timeout_seconds
@@ -77,7 +80,7 @@ class _FakeAdapter:
     def generate_structured(
         self, request: StructuredGenerationRequest
     ) -> ProviderTextResult:
-        del request
+        self.last_structured_request = request
         self.structured_calls += 1
         return ProviderTextResult(self.structured_text)
 
@@ -85,7 +88,7 @@ class _FakeAdapter:
         return EmbeddingResult(tuple((1.0, 2.0) for _ in request.inputs))
 
     def estimate_input_tokens(self, request: TokenEstimateRequest) -> TokenEstimate:
-        del request
+        self.last_estimate_request = request
         self.estimate_calls += 1
         return TokenEstimate(12, TokenEstimateAccuracy.EXACT, "fixture")
 
@@ -258,6 +261,48 @@ def test_structured_generation_is_revalidated_without_repair_or_retry() -> None:
         response_schema=schema,
     )
     assert result.value == {"answer": "ok"}
+
+
+def test_screen_reference_caller_is_limited_to_chat() -> None:
+    authorize(InferenceCaller.SCREEN_REFERENCE, InferenceTarget.CHAT)
+
+    with pytest.raises(InferenceError) as error:
+        authorize(InferenceCaller.SCREEN_REFERENCE, InferenceTarget.VISION)
+
+    assert error.value.category is InferenceErrorCategory.ACCESS_DENIED
+
+
+def test_per_call_structured_token_caps_cannot_expand_configured_limits() -> None:
+    adapter = _FakeAdapter()
+    router = _router(adapter)
+    schema: Mapping[str, object] = {
+        "type": "object",
+        "properties": {"answer": {"type": "string"}},
+        "required": ["answer"],
+        "additionalProperties": False,
+    }
+
+    router.estimate_input_tokens(
+        caller=InferenceCaller.SCREEN_REFERENCE,
+        target=InferenceTarget.CHAT,
+        messages=_messages(),
+        response_schema=schema,
+        max_input_tokens=1536,
+    )
+    router.generate_structured(
+        caller=InferenceCaller.SCREEN_REFERENCE,
+        target=InferenceTarget.CHAT,
+        messages=_messages(),
+        response_schema=schema,
+        max_input_tokens=1536,
+        max_output_tokens=64,
+    )
+
+    assert adapter.last_estimate_request is not None
+    assert adapter.last_estimate_request.max_input_tokens == 1536
+    assert adapter.last_structured_request is not None
+    assert adapter.last_structured_request.max_input_tokens == 1536
+    assert adapter.last_structured_request.max_output_tokens == 64
 
     adapter.structured_text = '{"unexpected":true}'
     with pytest.raises(InferenceError) as exc_info:

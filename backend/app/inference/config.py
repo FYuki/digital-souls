@@ -19,6 +19,7 @@ from app.inference.contracts import (
     TargetDefinition,
     TargetFailurePolicy,
 )
+from app.inference.images import SCREEN_IMAGE_INPUT_LIMITS
 from app.inference.registry import ProviderRegistry
 
 
@@ -113,6 +114,21 @@ TARGET_DEFINITIONS: Mapping[InferenceTarget, TargetDefinition] = {
         criticality=TargetCriticality.DEGRADABLE,
         failure_policy=TargetFailurePolicy.INDEX_RETRY,
         requires_output_limit=False,
+    ),
+    InferenceTarget.VISION: TargetDefinition(
+        target=InferenceTarget.VISION,
+        env_token="VISION",
+        required_capabilities=frozenset(
+            {
+                InferenceCapability.GENERATE_STRUCTURED,
+                InferenceCapability.IMAGE_INPUT,
+                InferenceCapability.ESTIMATE_INPUT_TOKENS,
+            }
+        ),
+        criticality=TargetCriticality.OPTIONAL,
+        failure_policy=TargetFailurePolicy.OPTIONAL_ERROR,
+        requires_output_limit=True,
+        image_limits=SCREEN_IMAGE_INPUT_LIMITS,
     ),
     InferenceTarget.HEAVY_REASONING: TargetDefinition(
         target=InferenceTarget.HEAVY_REASONING,

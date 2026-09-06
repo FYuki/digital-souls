@@ -8,8 +8,10 @@
   import ConversationSidebar from './lib/ConversationSidebar.svelte'
   import InputBar from './lib/InputBar.svelte'
   import MemoryManagement from './lib/MemoryManagement.svelte'
+  import ScreenCaptureControls from './lib/ScreenCaptureControls.svelte'
+  import type { ScreenUploadResult } from './lib/screen-perception/client'
   import { listCharacters, rescanCharacters } from './lib/characters/client'
-  import { sendChatMessage } from './lib/chat/client'
+  import { sendChatRequest } from './lib/chat/client'
   import { createConversationSessionManager } from './lib/conversation-session'
   import {
     archiveConversation,
@@ -73,6 +75,9 @@
   type PendingRequest = 'text' | null
 
   let pendingRequest: PendingRequest = null
+  let screenControls: ScreenCaptureControls | null = null
+  let screenReferenceAvailable = false
+  let screenReferenceDecisionActive = false
   let applicationError: string | null = null
   let showingMemoryManagement = false
   let activeUtteranceId: string | null = null
@@ -120,6 +125,7 @@
     if (event.type === 'utterance_finalized' && event.utterance_id !== undefined) {
       const transcript = event.transcript ?? ''
       if (event.should_response === false) return
+      if (screenReferenceAvailable) screenReferenceDecisionActive = true
       finalizedUtterances.set(event.utterance_id, transcript)
       if (liveVoiceTurn === null) {
         liveVoiceTurn = {
@@ -162,6 +168,7 @@
       && liveVoiceTurn?.responseId === event.response_id
       && event.text_sequence === liveVoiceTurn.lastTextSequence + 1
     ) {
+      screenReferenceDecisionActive = false
       liveVoiceTurn = {
         ...liveVoiceTurn,
         assistantContent: liveVoiceTurn.assistantContent + event.text,
@@ -174,6 +181,7 @@
       && liveVoiceTurn !== null
       && event.response_id === liveVoiceTurn.responseId
     ) {
+      screenReferenceDecisionActive = false
       if (event.type === 'response_failed') {
         const context = conversationController.selectedContext()
         if (context !== null) {
@@ -200,11 +208,13 @@
       return
     }
     if (event.type === 'error') {
+      screenReferenceDecisionActive = false
       if (event.utterance_id !== undefined) finalizedUtterances.delete(event.utterance_id)
       appendApplicationError()
       return
     }
     if (event.type === 'utterance_discarded' && event.utterance_id !== undefined) {
+      screenReferenceDecisionActive = false
       finalizedUtterances.delete(event.utterance_id)
       if (liveVoiceTurn?.responseId === null) liveVoiceTurn = null
     }
@@ -295,27 +305,42 @@
     }
   })
 
-  const handleSend = async (message: string) => {
+  const handleSend = async (message: string, screenReference = false) => {
     const text = message.trim()
     const context = conversationController.selectedContext()
     if (text.length === 0 || interactionsDisabled || context === null) return
     pendingRequest = 'text'
+    if (screenReferenceAvailable) screenReferenceDecisionActive = true
     applicationError = null
     try {
       if (voiceSnapshot.sessionId !== null || voiceSnapshot.phase === 'reconnecting') {
         activeUtteranceId = null
         await voiceSession.end().catch(() => undefined)
       }
-      const response = await sendChatMessage({
+      const response = await sendChatRequest({
         character: context.character,
         conversationId: context.conversationId,
         message: text,
+        screenReference,
+        screenClientSessionId: screenControls?.clientSessionId() ?? null,
       })
-      conversationController.appendTurn(context, response.turn)
+      let completed = response.kind === 'completed' ? response.chat : null
+      if (response.kind === 'snapshot_requested') {
+        screenReferenceDecisionActive = false
+        if (screenControls === null) throw new Error('screen capture is not active')
+        const upload: ScreenUploadResult = await screenControls.captureAuthorizedRequest(
+          response.request,
+        )
+        completed = upload.chat
+      }
+      if (completed === null) throw new Error('text screen request did not return a chat turn')
+      if (conversationController.selectedContext()?.version !== context.version) return
+      conversationController.appendTurn(context, completed.turn)
       void sidebarController.refreshCharacter(context.character)
     } catch {
       conversationController.reportConversationError(context)
     } finally {
+      screenReferenceDecisionActive = false
       if (conversationController.selectedContext()?.version === context.version) pendingRequest = null
     }
   }
@@ -360,6 +385,15 @@
     if (context === null) throw new Error('Conversation is not selected')
     applicationError = null
     try {
+      voiceSession.setScreenIntegration(
+        screenControls?.clientSessionId() ?? null,
+        (event) => {
+          const controls = screenControls
+          if (controls === null) return
+          screenReferenceDecisionActive = false
+          void controls.captureAuthorizedRequest(event).catch(appendApplicationError)
+        },
+      )
       await voiceSession.ensureSession({
         characterId: context.character,
         conversationId: context.conversationId,
@@ -428,24 +462,34 @@
   class="app-shell"
   style={`--visual-viewport-height: ${visualViewportHeight === null ? '100dvh' : `${visualViewportHeight}px`}; --visual-viewport-top: ${visualViewportOffsetTop}px`}
 >
-  {#if sidebarOpen}
-    {#if compactLayout}
+  {#if sidebarOpen && compactLayout}
       <button class="drawer-backdrop" type="button" aria-label="サイドバーを閉じる" on:click={() => { sidebarOpen = false }}></button>
-    {/if}
-    <ConversationSidebar
-      state={$sidebarController}
-      controller={sidebarController}
-      selectedCharacter={$conversationController.character}
-      selectedConversationId={$conversationController.selectedConversationId}
+  {/if}
+  <ConversationSidebar
+    open={sidebarOpen}
+    state={$sidebarController}
+    controller={sidebarController}
+    selectedCharacter={$conversationController.character}
+    selectedConversationId={$conversationController.selectedConversationId}
+    disabled={interactionsDisabled}
+    onClose={() => { sidebarOpen = false }}
+    onSelect={(character, conversationId) => { void handleSelectConversation(character, conversationId) }}
+    onCreated={(character, conversation) => { void handleCreatedConversation(character, conversation) }}
+    onRemoved={handleRemovedConversation}
+    onRenamed={() => undefined}
+    onOpenMemory={() => { showingMemoryManagement = true; if (compactLayout) sidebarOpen = false }}
+  >
+    <ScreenCaptureControls
+      slot="screen-controls"
+      bind:this={screenControls}
+      characterId={$conversationController.character}
+      conversationId={$conversationController.selectedConversationId}
       disabled={interactionsDisabled}
-      onClose={() => { sidebarOpen = false }}
-      onSelect={(character, conversationId) => { void handleSelectConversation(character, conversationId) }}
-      onCreated={(character, conversation) => { void handleCreatedConversation(character, conversation) }}
-      onRemoved={handleRemovedConversation}
-      onRenamed={() => undefined}
-      onOpenMemory={() => { showingMemoryManagement = true; if (compactLayout) sidebarOpen = false }}
+      referenceDecisionActive={screenReferenceDecisionActive}
+      onReferenceAvailabilityChanged={(available) => { screenReferenceAvailable = available }}
     />
-  {:else}
+  </ConversationSidebar>
+  {#if !sidebarOpen}
     <button class="floating-menu" type="button" aria-label="サイドバーを開く" on:click={() => { sidebarOpen = true }}>☰</button>
   {/if}
   {#if showingMemoryManagement}
@@ -506,6 +550,7 @@
         onSend={handleSend}
         characterName={currentCharacterEntry?.display_name ?? $conversationController.character}
         disabled={interactionsDisabled || $conversationController.selectedConversationId === null}
+        screenReferenceAvailable={screenReferenceAvailable}
       />
       <AudioRecorder
         disabled={voiceRecorderDisabled}

@@ -154,6 +154,7 @@ def _masked_turn(turn: RestoredHistoryTurn) -> MaskedHistoryTurn:
         turn.user_content,
         turn.assistant_content,
         turn.is_completed,
+        turn.screen_lineages,
     )
 
 

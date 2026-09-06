@@ -69,6 +69,13 @@ def test_should_route_effective_profile_to_up_service_registry(
     from tests.environment_test_support import resolved_profile
 
     profile = resolved_profile("dogfood")
+    profile["derivedEnvironment"].update(
+        {
+            "INFERENCE_TARGET_VISION": "ollama/vision-only:4b",
+            "INFERENCE_TARGET_VISION_MAX_INPUT_TOKENS": "7168",
+            "INFERENCE_TARGET_VISION_MAX_OUTPUT_TOKENS": "1024",
+        }
+    )
     captured_settings: dict[str, object] = {}
 
     class ExpectedStop(RuntimeError):
@@ -97,6 +104,7 @@ def test_should_route_effective_profile_to_up_service_registry(
 
     assert exit_code == 1
     assert captured_settings["effective_profile"] == "dogfood"
+    assert captured_settings["ollama_vision_model_name"] == "vision-only:4b"
 
 class _ExitedFrontendOperations(_NeverReadyOperations):
     def is_running(self, service):

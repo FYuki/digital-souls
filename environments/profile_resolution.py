@@ -11,6 +11,7 @@ from profile_constants import (
     OLLAMA_BASE_URL_ENV,
     PROFILE_ENV,
     RAG_ENABLED_ENV,
+    SCREEN_ALLOWED_ORIGIN_ENV,
     VOICE_BACKEND_ENV,
     VOICEVOX_BASE_URL_ENV,
     WHISPER_BASE_URL_ENV,
@@ -200,6 +201,13 @@ def derive_environment(
         if dependency_map[dependency_name]["mode"] == "real"
         and "baseUrl" in dependency_map[dependency_name]
     }
+    if (
+        dependencies["frontend"]["mode"] == "real"
+        and "baseUrl" in dependencies["frontend"]
+    ):
+        real_service_urls[SCREEN_ALLOWED_ORIGIN_ENV] = dependencies["frontend"][
+            "baseUrl"
+        ]
     environment = {
         RAG_ENABLED_ENV: str(dependencies["chroma"]["mode"] == "real").lower(),
         **real_service_urls,

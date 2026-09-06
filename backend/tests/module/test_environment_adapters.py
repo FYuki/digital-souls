@@ -577,6 +577,68 @@ def test_should_remove_owned_container_after_it_has_exited(tmp_path: Path) -> No
     ]
 
 
+def test_should_apply_dogfood_compose_overlay_to_managed_services(
+    tmp_path: Path,
+) -> None:
+    from adapters.backend import BackendAdapter
+
+    adapter = BackendAdapter(
+        tmp_path,
+        resolved_runtime_paths(tmp_path),
+        RecordingRunner(),
+        effective_profile="dogfood",
+    )
+
+    command = adapter._compose_command(  # noqa: SLF001
+        {"DS_CONTAINER_ENV_FILE": "/run/digital-souls/backend.env"}
+    )
+
+    assert command == (
+        "docker",
+        "compose",
+        "--env-file",
+        "/run/digital-souls/backend.env",
+        "--file",
+        str(tmp_path / "infra" / "application" / "compose.yaml"),
+        "--file",
+        str(tmp_path / "infra" / "application" / "compose.dogfood.yaml"),
+    )
+
+
+def test_should_stage_dogfood_backup_directory_for_frontend_compose(
+    tmp_path: Path,
+) -> None:
+    from adapters.frontend import FrontendAdapter
+
+    profile_report = tmp_path / "resolved-profile.json"
+    profile_report.write_text("{}", encoding="utf-8")
+    backup_directory = tmp_path / "backups"
+    adapter = FrontendAdapter(
+        tmp_path,
+        resolved_runtime_paths(tmp_path),
+        RecordingRunner(),
+        effective_profile="dogfood",
+    )
+
+    values = adapter._write_compose_environment(  # noqa: SLF001
+        _frontend_dependency(15173),
+        {
+            "DS_RUNTIME_UID": "10001",
+            "DS_RUNTIME_GID": "10001",
+            "DS_PROFILE_REPORT": str(profile_report),
+            "DOGFOOD_FRONTEND_IMAGE": (
+                "ghcr.io/example/frontend@sha256:" + "a" * 64
+            ),
+            "DOGFOOD_CONFIG_DIR": str(tmp_path / "config"),
+            "DOGFOOD_BACKUP_DIR": str(backup_directory),
+        },
+        host="127.0.0.1",
+        port=15173,
+    )
+
+    assert values["DOGFOOD_BACKUP_DIR"] == str(backup_directory)
+
+
 def test_should_prepare_backend_data_without_host_toolchain(tmp_path: Path):
     from adapters.backend import BackendAdapter
 
@@ -1014,11 +1076,14 @@ def test_should_fail_ollama_preparation_when_model_pull_fails(tmp_path: Path) ->
     assert runner.calls == [("ollama", "pull", "gemma4:e4b")]
 
 
-def test_should_prepare_distinct_chat_and_classifier_models(tmp_path: Path) -> None:
+def test_should_prepare_distinct_chat_classifier_and_vision_models(
+    tmp_path: Path,
+) -> None:
     from adapters.ollama import OllamaAdapter
 
     runner = RecordingRunner(
         [
+            {"returncode": 0, "stdout": "", "stderr": ""},
             {"returncode": 0, "stdout": "", "stderr": ""},
             {"returncode": 0, "stdout": "", "stderr": ""},
         ]
@@ -1029,11 +1094,13 @@ def test_should_prepare_distinct_chat_and_classifier_models(tmp_path: Path) -> N
         runner=runner,
         model_name="chat-only:9b",
         classifier_model_name="classifier-only:4b",
+        vision_model_name="vision-only:4b",
     ).prepare(resolved_profile()["dependencies"]["ollama"], OPERATION_CONTEXT)
 
     assert runner.calls == [
         ("ollama", "pull", "chat-only:9b"),
         ("ollama", "pull", "classifier-only:4b"),
+        ("ollama", "pull", "vision-only:4b"),
     ]
 
 
@@ -1058,6 +1125,29 @@ def test_should_require_distinct_classifier_model_at_readiness(
     assert result.classification == "preparation"
     assert result.message is not None
     assert "classifier-only:4b" in result.message
+
+
+def test_should_require_distinct_vision_model_at_readiness(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import adapters.ollama
+    from adapters.ollama import OllamaAdapter
+
+    monkeypatch.setattr(
+        adapters.ollama,
+        "_fetch_json",
+        lambda _url: {"models": [{"name": "chat-only:9b"}]},
+    )
+
+    result = OllamaAdapter(
+        tmp_path,
+        model_name="chat-only:9b",
+        vision_model_name="vision-only:4b",
+    ).validate_readiness(resolved_profile()["dependencies"]["ollama"])
+
+    assert result.classification == "preparation"
+    assert result.message is not None
+    assert "vision-only:4b" in result.message
 
 
 def test_should_reuse_running_voicevox_without_ownership(tmp_path: Path):

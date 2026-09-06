@@ -1,0 +1,204 @@
+{
+  "contract_version": "1.0",
+  "description": "参照判断の正例・負例・文脈競合・認可失敗を、画像取得前の入力だけで評価する合成fixture。",
+  "cases": [
+    {
+      "id": "deictic-with-active-share",
+      "sharing": "active",
+      "screen_use_authorized": true,
+      "explicit_ui": false,
+      "current_message": "これ何？",
+      "history": [],
+      "expected_decision": "inspect_screen",
+      "expected_path": "rule"
+    },
+    {
+      "id": "located-current-screen-target",
+      "sharing": "active",
+      "screen_use_authorized": true,
+      "explicit_ui": false,
+      "current_message": "右上の赤い表示、何？",
+      "history": [],
+      "expected_decision": "inspect_screen",
+      "expected_path": "rule"
+    },
+    {
+      "id": "pasted-error-is-current-message-referent",
+      "sharing": "active",
+      "screen_use_authorized": true,
+      "explicit_ui": false,
+      "current_message": "Error: synthetic timeout\nこれ何？",
+      "history": [],
+      "expected_decision": "answer_without_screen",
+      "expected_path": "rule"
+    },
+    {
+      "id": "assistant-explanation-is-referent",
+      "sharing": "active",
+      "screen_use_authorized": true,
+      "explicit_ui": false,
+      "current_message": "それ、もう少し詳しく",
+      "history": [
+        { "role": "assistant", "content": "合成例の設定について説明したよ。", "screen_provenance": "none" }
+      ],
+      "expected_decision": "answer_without_screen",
+      "expected_path": "rule"
+    },
+    {
+      "id": "quoted-deictic",
+      "sharing": "active",
+      "screen_use_authorized": true,
+      "explicit_ui": false,
+      "current_message": "『これ何？』って聞かれた",
+      "history": [],
+      "expected_decision": "answer_without_screen",
+      "expected_path": "rule"
+    },
+    {
+      "id": "explicit-prohibition",
+      "sharing": "active",
+      "screen_use_authorized": true,
+      "explicit_ui": false,
+      "current_message": "画面は見ないで。これ何？",
+      "history": [],
+      "expected_decision": "answer_without_screen",
+      "expected_path": "rule"
+    },
+    {
+      "id": "prohibition-overrides-explicit-ui",
+      "sharing": "active",
+      "screen_use_authorized": true,
+      "explicit_ui": true,
+      "current_message": "画面は見ないで答えて",
+      "history": [],
+      "expected_decision": "answer_without_screen",
+      "expected_path": "rule"
+    },
+    {
+      "id": "sharing-off",
+      "sharing": "off",
+      "screen_use_authorized": false,
+      "explicit_ui": false,
+      "current_message": "これ何？",
+      "history": [],
+      "expected_decision": "answer_without_screen",
+      "expected_path": "rule"
+    },
+    {
+      "id": "sharing-revoked",
+      "sharing": "revoked",
+      "screen_use_authorized": false,
+      "explicit_ui": true,
+      "current_message": "今の画面を見て",
+      "history": [],
+      "expected_decision": "answer_without_screen",
+      "expected_path": "rule"
+    },
+    {
+      "id": "cloud-consent-missing",
+      "sharing": "active",
+      "screen_use_authorized": false,
+      "explicit_ui": false,
+      "current_message": "右上の表示を読んで",
+      "history": [],
+      "expected_decision": "answer_without_screen",
+      "expected_path": "rule"
+    },
+    {
+      "id": "explicit-ui-fast-path",
+      "sharing": "active",
+      "screen_use_authorized": true,
+      "explicit_ui": true,
+      "current_message": "ここを説明して",
+      "history": [],
+      "expected_decision": "inspect_screen",
+      "expected_path": "rule"
+    },
+    {
+      "id": "freshness-follow-up",
+      "sharing": "active",
+      "screen_use_authorized": true,
+      "explicit_ui": false,
+      "current_message": "今は直った？",
+      "history": [
+        { "role": "assistant", "content": "中央に合成警告が出ているね。", "screen_provenance": "current_session" }
+      ],
+      "expected_decision": "inspect_screen",
+      "expected_path": "rule"
+    },
+    {
+      "id": "small-text-requires-fresh-image",
+      "sharing": "active",
+      "screen_use_authorized": true,
+      "explicit_ui": false,
+      "current_message": "その下の小さい文字は？",
+      "history": [
+        { "role": "assistant", "content": "中央の合成警告を確認したよ。", "screen_provenance": "current_session" }
+      ],
+      "expected_decision": "inspect_screen",
+      "expected_path": "rule"
+    },
+    {
+      "id": "advice-follow-up-uses-saved-answer",
+      "sharing": "active",
+      "screen_use_authorized": true,
+      "explicit_ui": false,
+      "current_message": "どう直すの？",
+      "history": [
+        { "role": "assistant", "content": "中央に合成設定エラーが出ているね。", "screen_provenance": "current_session" }
+      ],
+      "expected_decision": "answer_without_screen",
+      "expected_path": "rule",
+      "expected_provenance": "inherit_screen"
+    },
+    {
+      "id": "competing-pasted-and-screen-references",
+      "sharing": "active",
+      "screen_use_authorized": true,
+      "explicit_ui": false,
+      "current_message": "さっき貼ったエラーと今見えている警告、これはどっち？",
+      "history": [
+        { "role": "user", "content": "Error: synthetic timeout", "screen_provenance": "none" },
+        { "role": "assistant", "content": "貼られたエラーの説明だよ。", "screen_provenance": "none" }
+      ],
+      "expected_decision": "clarify_reference",
+      "expected_path": "llm"
+    },
+    {
+      "id": "competing-conversation-references",
+      "sharing": "active",
+      "screen_use_authorized": true,
+      "explicit_ui": false,
+      "current_message": "それはどっち？",
+      "history": [
+        { "role": "assistant", "content": "保存済みの合成設定と画面の候補があるよ。", "screen_provenance": "current_session" }
+      ],
+      "expected_decision": "clarify_reference",
+      "expected_path": "llm"
+    },
+    {
+      "id": "expired-screen-history-is-not-cloud-judge-input",
+      "sharing": "active",
+      "screen_use_authorized": true,
+      "explicit_ui": false,
+      "current_message": "それ、どういう意味？",
+      "history": [
+        { "role": "assistant", "content": "過去sessionの合成画面に由来する回答。", "screen_provenance": "expired_session" }
+      ],
+      "reference_judge_destination": "cloud",
+      "expected_decision": "clarify_reference",
+      "expected_path": "fallback",
+      "expected_cloud_history_items": 0
+    },
+    {
+      "id": "unrelated-conversation",
+      "sharing": "active",
+      "screen_use_authorized": true,
+      "explicit_ui": false,
+      "current_message": "明日の予定を整理して",
+      "history": [],
+      "expected_decision": "answer_without_screen",
+      "expected_path": "rule"
+    }
+  ]
+}
