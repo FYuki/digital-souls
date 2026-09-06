@@ -10,6 +10,12 @@ if TYPE_CHECKING:
     import livekit.rtc as rtc
 
 
+def next_capture_deadline(previous: float | None, now: float) -> float:
+    """通常の遅れを次周期で回収し、長い停止でも追い付きは1 Opus packet分に限る。"""
+    target = (now if previous is None else previous) + .01
+    return max(target, now - .02)
+
+
 class PacedPcmSource:
     def __init__(self, source: rtc.AudioSource, *, sample_rate: int = 48000,
                  channels: int = 1, buffer_ms: int = 1000) -> None:
@@ -31,6 +37,10 @@ class PacedPcmSource:
         self.captured_sample_count = 0
         self.padding_sample_count = 0
         self.max_queued_samples = 0
+        self.capture_wait_ns = 0
+        self.maximum_capture_wait_ns = 0
+        self.input_wait_ns = 0
+        self.schedule_reset_ns = 0
         self._task = asyncio.create_task(self._pump())
 
     @property
@@ -112,7 +122,10 @@ class PacedPcmSource:
                     if self._finished:
                         return
                     self._available.clear()
+                    waiting_ns = time.monotonic_ns()
                     await self._available.wait()
+                    if self.first_capture_ns is not None:
+                        self.input_wait_ns += time.monotonic_ns() - waiting_ns
                     deadline = None
                     continue
                 if deadline is not None:
@@ -122,15 +135,22 @@ class PacedPcmSource:
                 pcm = bytes(self._buffer[:self._frame_bytes])
                 del self._buffer[:self._frame_bytes]
                 self._space.set()
+                capture_started_ns = time.monotonic_ns()
                 await asyncio.wait_for(self._source.capture_frame(rtc_module.AudioFrame(
                     pcm, self._rate, self._channels, self._frame_samples,
                 )), 5)
+                waited_ns = time.monotonic_ns() - capture_started_ns
+                self.capture_wait_ns += waited_ns
+                self.maximum_capture_wait_ns = max(self.maximum_capture_wait_ns, waited_ns)
                 self.captured_sample_count += self._frame_samples
                 if self.first_capture_ns is None:
                     self.first_capture_ns = time.monotonic_ns()
                     self._first_capture.set()
-                # 通常は10ms周期を保ち、長い停止後に過去の全frameを一度に送らない。
-                deadline = max((deadline if deadline is not None else loop.time()) + .01, loop.time())
+                # 予定時刻を毎回nowへ繰り下げると、短いscheduler遅延まで累積する。
+                next_deadline = (deadline if deadline is not None else loop.time()) + .01
+                now = loop.time()
+                deadline = next_capture_deadline(deadline, now)
+                self.schedule_reset_ns += round(max(0, deadline - next_deadline) * 1e9)
         except asyncio.CancelledError:
             raise
         except Exception as error:

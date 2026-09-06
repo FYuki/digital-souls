@@ -288,6 +288,9 @@ describe('通常会話UI向けLiveKit音声session', () => {
       transport: 'available', control: 'available', audio: 'available',
       activeResponseId: responseId, renderedEnergy: 1, playedPrefix: 1,
     })
+    expect(controller.snapshot()).toMatchObject({playback: 'playing'})
+    observations[0]({transport: 'available', control: 'available', audio: 'available',
+      activeResponseId: responseId, playbackCompletedResponseId: responseId})
     expect(controller.snapshot()).toMatchObject({
       response: 'idle', playback: 'idle', activeResponseId: null,
     })

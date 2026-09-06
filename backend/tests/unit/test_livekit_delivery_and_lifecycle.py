@@ -1034,3 +1034,24 @@ def test_response_track_readiness_requires_current_participant_and_generation():
         assert received == [(response_id, "TR_one")]
         await coordinator.cleanup("test_complete")
     asyncio.run(exercise())
+
+
+def test_source_completion_reports_conserved_samples_on_private_topic() -> None:
+    module = _livekit_module("coordinator", "source completion metadata")
+    async def exercise() -> None:
+        published = []
+        coordinator = _coordinator(module, published, [])
+        coordinator.participant_connected(identity="user-20000000-0000-4000-8000-000000000010", participant_sid="PA_current", room_sid="RM_one")
+        await coordinator.send_response_audio_finished(response_id="30000000-0000-4000-8000-000000000010",
+            input_sample_count=1234, captured_sample_count=2880, padding_sample_count=1646)
+        payload, topic = published[0]
+        assert topic == module.PRIVATE_TOPIC
+        assert json.loads(payload) == {"protocol_version": "1.0", "type": "response_audio_finished",
+            "response_id": "30000000-0000-4000-8000-000000000010", "generation": 0,
+            "input_sample_count": 1234, "captured_sample_count": 2880, "padding_sample_count": 1646}
+        with pytest.raises(ValueError):
+            await coordinator.send_response_audio_finished(response_id="30000000-0000-4000-8000-000000000010",
+                input_sample_count=1234, captured_sample_count=1920, padding_sample_count=1646)
+        assert len(published) == 1
+        await coordinator.cleanup("test_complete")
+    asyncio.run(exercise())

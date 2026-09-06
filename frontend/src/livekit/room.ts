@@ -23,7 +23,7 @@ import {
   type RetryTimer,
 } from './control'
 import { decodePrivateFrame } from './private-contract'
-import { packetRendererSource, PacketOutputTracker, type PacketRenderInterval, type PacketPlaybackObservation } from './packet-renderer'
+import { packetRendererSource, PacketOutputTracker, PacketRenderError, type PacketRenderInterval, type PacketPlaybackObservation, type SourceAudioFinished, type PlaybackCompletion } from './packet-renderer'
 import { RemoteMediaObserver, type MediaObservation, type DecodedAudioPacket } from './media-observer'
 
 export type RoomObservation = Readonly<{
@@ -31,6 +31,9 @@ export type RoomObservation = Readonly<{
   control: 'available' | 'unavailable'
   audio: 'available' | 'unavailable'
   generation?: number
+  failureContext?: Readonly<Record<string, number>>
+  failureReason?: string
+  failureStage?: 'transport' | 'media_decoder' | 'audio_graph' | 'output_clock' | 'renderer' | 'rtp_timeline'
   renderedSamples?: number
   playedPrefix?: number
   microphoneFrames?: number
@@ -52,6 +55,8 @@ export type RoomObservation = Readonly<{
   mediaObservation?: MediaObservation
   mediaCorrelationMissingReason?: 'response_frame_correlation_unavailable'
   packetPlaybackObservation?: PacketPlaybackObservation
+  playbackCompletedResponseId?: string
+  playbackCompletion?: PlaybackCompletion
   cancelConfirmedAtMs?: number
 }>
 
@@ -91,6 +96,7 @@ export class LiveKitRoomClient {
   private readonly subscriptions = new Set<string>()
   private readonly subscribedTracks = new Map<string, RemoteTrack>()
   private readonly pendingMetadata: SegmentMetadata[] = []
+  private readonly pendingFinishes = new Map<string, SourceAudioFinished>()
   private readonly trackResponses = new Map<string, string>()
   private readonly stoppedResponses = new Set<string>()
   private latestResponseId: string | null = null
@@ -317,6 +323,7 @@ export class LiveKitRoomClient {
           if (generationChanged) {
             this.playback.setGeneration(frame.generation)
             this.pendingMetadata.length = 0
+            this.pendingFinishes.clear()
             this.playbackStartedResponses.clear()
             this.firstOutputTimes.clear()
             const resetVersion = ++this.audioGraphResetVersion
@@ -361,6 +368,14 @@ export class LiveKitRoomClient {
               transport: 'available', control: 'available', audio: 'available',
               acknowledgedPlaybackPrefix: confirmation.continuousPrefix,
             })
+          }
+        } else if (frame.type === 'response_audio_finished') {
+          if (frame.generation !== this.generation || this.stoppedResponses.has(frame.responseId)) return
+          const graph = [...this.audioGraphs.values()].find(graph => graph.responseId === frame.responseId)
+          if (graph) graph.outputTracker.finish(frame)
+          else {
+            if (this.pendingFinishes.size >= 128) throw new Error('pending source completion overflow')
+            this.pendingFinishes.set(frame.responseId, frame)
           }
         } else if (frame.type === 'logical_audio_segment') {
           if (frame.generation !== this.generation || this.stoppedResponses.has(frame.responseId)) return
@@ -409,10 +424,10 @@ export class LiveKitRoomClient {
               if (packet.packetIndex === 0) graph.firstPacket = {...packet, pcm: new Float32Array(0)}
               graph.worklet.port.postMessage({kind: 'pcm', packetIndex: packet.packetIndex,
                 rtpTimestamp: packet.rtpTimestamp, samples: packet.pcm}, [packet.pcm.buffer])
-            }, failed: () => this.failTransport(),
+            }, failed: () => this.failTransport('media_decoder'),
           })
         this.mediaObservers.set(key, observer)
-        void this.attachRenderEvidence(track, key).catch(() => this.failTransport())
+        void this.attachRenderEvidence(track, key).catch(() => this.failTransport('audio_graph'))
       },
     )
     room.on(RoomEvent.TrackUnsubscribed, (_track, publication) => {
@@ -572,10 +587,18 @@ export class LiveKitRoomClient {
     }))
   }
 
-  private failTransport(): void {
+  private failTransport(failureStage: NonNullable<RoomObservation['failureStage']> = 'transport', reason?: unknown): void {
+    // 任意の例外本文を外へ渡さず、内部の固定エラー名だけを診断に残す。
+    const knownReasons = ['invalid packet render interval', 'invalid RTP timestamp', 'RTP timeline discontinuity',
+      'render beyond completed source', 'output clock confirmation queue overflow', 'invalid packet output clock',
+      'first output packet mismatch', 'packet_or_sample_mismatch', 'pcm_queue_overflow']
+    const message = reason instanceof Error ? reason.message : reason
+    const failureReason = typeof message === 'string' && knownReasons.includes(message) ? message : 'unclassified'
+
     this.room?.disconnect()
     void this.closeAudioGraph()
-    this.observe({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable' })
+    this.observe({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable', failureStage, failureReason,
+      ...(reason instanceof PacketRenderError ? {failureContext: reason.context} : {}) })
   }
 
   private async attachRenderEvidence(track: RemoteTrack, key: string): Promise<void> {
@@ -624,18 +647,27 @@ export class LiveKitRoomClient {
       }
       this.playback.recordRenderedInterval({...interval, responseId,
         ...(interval.packetIndex === 0 && interval.packetSampleOffset === 0 ? {firstResponseFrame: interval.startFrame} : {})})
+    }, completion => {
+      const graph = this.audioGraphs.get(key)
+      if (!graph || graph.suspended || this.generation !== generation || this.audioContext !== context) return
+      clearInterval(graph.outputTimer)
+      graph.worklet.port.postMessage({kind: 'stop'})
+      this.observe({transport: 'available', control: 'available', audio: 'available',
+        activeResponseId: responseId, playbackCompletedResponseId: responseId, playbackCompletion: completion})
     })
     const outputTimer = setInterval(() => {
       try {outputTracker.poll(context.getOutputTimestamp(), context.sampleRate)}
-      catch {this.failTransport()}
+      catch (error) {this.failTransport('output_clock', error)}
     }, 5)
-    worklet.port.onmessage = (event: MessageEvent<PacketRenderInterval | {kind: 'empty' | 'error'}>) => {
+    worklet.port.onmessage = (event: MessageEvent<PacketRenderInterval | {kind: 'empty' | 'error'; reason?: string}>) => {
       if (!this.subscriptions.has(key) || this.generation !== generation || this.audioContext !== context
         || this.audioGraphs.get(key)?.suspended) return
       try {
         if (event.data.kind === 'rendered') outputTracker.record(event.data)
-        else if (event.data.kind === 'error') this.failTransport()
-      } catch {this.failTransport()}
+        else if (event.data.kind === 'error') this.failTransport('renderer', event.data.reason)
+      } catch (error) {
+        this.failTransport(error instanceof Error && error.message === 'RTP timeline discontinuity' ? 'rtp_timeline' : 'renderer', error)
+      }
     }
     const playbackElement = document.createElement('audio')
     playbackElement.autoplay = true
@@ -656,6 +688,8 @@ export class LiveKitRoomClient {
     }
     if (!graph.suspended) this.connectAudioEvidence(graph, context)
     this.audioGraphs.set(key, graph)
+    const finished = this.pendingFinishes.get(responseId)
+    if (finished) {this.pendingFinishes.delete(responseId); outputTracker.finish(finished)}
     for (const metadata of this.pendingMetadata.splice(0)) {
       this.recordMetadataOnContext(metadata, context)
     }
@@ -695,6 +729,7 @@ export class LiveKitRoomClient {
     this.subscribedTracks.clear()
     this.trackResponses.clear()
     this.pendingMetadata.length = 0
+    this.pendingFinishes.clear()
     this.firstOutputTimes.clear()
     this.suppressedResponseId = null
     this.suppressedLastPlayedAudioSequence = 0

@@ -94,3 +94,48 @@ test('停止時点で出力時計が未通過の区間を後から完了扱い�
   tracker.poll({contextTime: 2, performanceTime: 2000}, 48000)
   expect(confirmed).toEqual([])
 })
+
+
+test.each([false, true])('完了通知が前後どちらに届いても全sampleの出力時計通過を待つ（先行=%s）', early => {
+  const complete: unknown[] = []
+  const tracker = new PacketOutputTracker(() => undefined, row => complete.push(row))
+  const source = {inputSampleCount: 960, capturedSampleCount: 1920, paddingSampleCount: 960}
+  if (early) tracker.finish(source)
+  tracker.record({...interval, endFrame: 48960})
+  tracker.poll({contextTime: 1.03, performanceTime: 1030}, 48000)
+  expect(complete).toEqual([])
+  tracker.record({...interval, packetIndex: 1, rtpTimestamp: 1059, startFrame: 49200, endFrame: 50160})
+  tracker.poll({contextTime: 1.04, performanceTime: 1040}, 48000)
+  expect(complete).toEqual([])
+  tracker.poll({contextTime: 1.1, performanceTime: 1100}, 48000)
+  if (!early) tracker.finish(source)
+  expect(complete).toEqual([expect.objectContaining({expectedSamples: 1920, renderedSamples: 1920,
+    inputSamples: 960, paddingSamples: 960, packetCount: 2, gapSamples: 240, maximumGapSamples: 240, gapCount: 1})])
+  tracker.finish(source)
+  tracker.poll({contextTime: 100, performanceTime: 100000}, 48000)
+  expect(complete).toHaveLength(1)
+})
+
+test('末尾packetが欠けたまま時間が経っても再生完了やgapゼロへ補完しない', () => {
+  const complete: unknown[] = []
+  const tracker = new PacketOutputTracker(() => undefined, row => complete.push(row))
+  tracker.finish({inputSampleCount: 960, capturedSampleCount: 1920, paddingSampleCount: 960})
+  tracker.record({...interval, endFrame: 48960})
+  tracker.poll({contextTime: 100, performanceTime: 100000}, 48000)
+  expect(complete).toEqual([])
+})
+
+test('RTP欠落・重複を受信packet番号の連番だけで成功扱いしない', () => {
+  const tracker = new PacketOutputTracker(() => undefined)
+  tracker.record({...interval, endFrame: 48960})
+  expect(() => tracker.record({...interval, packetIndex: 1, rtpTimestamp: 2019, startFrame: 48960, endFrame: 49920})).toThrow('RTP timeline')
+})
+
+test('矛盾する総sample数や終了後の追加sampleを拒否する', () => {
+  const tracker = new PacketOutputTracker(() => undefined)
+  expect(() => tracker.finish({inputSampleCount: 1, capturedSampleCount: 960, paddingSampleCount: 1})).toThrow()
+  tracker.finish({inputSampleCount: 0, capturedSampleCount: 960, paddingSampleCount: 960})
+  expect(() => tracker.finish({inputSampleCount: 960, capturedSampleCount: 1920, paddingSampleCount: 960})).toThrow()
+  tracker.record({...interval, endFrame: 48960})
+  expect(() => tracker.record({...interval, packetIndex: 1, rtpTimestamp: 1059, startFrame: 48960, endFrame: 49920})).toThrow()
+})

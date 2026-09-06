@@ -367,3 +367,24 @@ workletはpacket番号、RTP timestamp、packet内sample offsetとともにPCM�
 Frontend全単体418件・結合97件と型検査が成功し、その後に追加したRoom境界の旧PCM破棄テストを含む16件も成功した。Backend report単体49件・型検査227 source files・対象lintが成功した。途中のFrontend結合3件は、helperがRoom型を参照して不要なJSON依存まで探索したため失敗し、再生証跡の型へ参照を限定して解消した。別の部分実行ではcwdをリポジトリrootにしたため境界検査が失敗したが、Frontendディレクトリからの全実行で成功を確認している。
 
 この変更で相関できたのは受信packetのPCMとbrowser出力である。codecのlookaheadや初回packet欠落を含めた元のsource PCM offset、logical segment末尾まで聞こえたかの厳密なprefixは未確定のため、`sourcePcmOffsetVerified: false`、`media_observation_method: unavailable`を維持する。末尾までの再生完了通知、途中の空きと正常な末尾の区別、loss／RED回復、再接続、実割り込みのstale提示、全100試行とdogfood受け入れは未完了である。今回の少数成功やunitの停止検証を、音切れ0件・stale提示0件・TTFA品質合格へ拡大して扱わない。
+
+## 2026-09-07: 応答末尾の再生確認と音切れの集計
+
+BackendはPCM供給を終えた時点で、入力・padding・native供給済みのsample総数をprivate `response_audio_finished`へ送る。OpusのDTXは明示的に無効にする。Frontendは、この通知だけで再生完了とせず、連続するRTP timestamp、全packetのsample数、全出力区間の出力時計通過を確認してから完了を通知する。UIも音声がある応答ではこの完了を待つ。正常な末尾の後のゼロ出力は音切れに含めず、先頭から末尾までの出力区間の間だけをgapとして数える。末尾packetの欠測を時間経過で補完しない。
+
+`complete-playback-01`の準備1回＋独立測定3回は全sampleの再生完了を確認した。測定3回のgap合計は0／9.333／2.667ms、gap件数は0／6／1件、最大連続gapはいずれも0または2.667msだった。したがって制御測定のunderrun 0件は未達である。送信traceのsample総数と出力時計を再検証した[匿名artifact](artifacts/livekit-pilot-2026-09-07-playback-completion.json)はschema検証・匿名性検査を通過した。
+
+`playback_continuity`は、同じAudioContext上で「先頭frameから全sampleを連続出力した場合の末尾」と「実際の末尾」を比較する。追加指標`playback_gap_total_ms`、`playback_gap_maximum_ms`、`playback_underrun_count`、`playback_duration_ms`は、検証済みの完了証跡から生成する。warm-upを除外し、音切れがある試行も観測値として残す。計測成功と品質合格は区別する。packet全体の出力完了は確認できたが、codec lookaheadを含む元PCM offsetとlogical segmentの厳密なplayed prefixは未確定のままである。
+
+同一session試験では固定の1.5秒待機を外し、実際の再生完了と入力fixtureの終了を待って次の発話へ進む。`complete-playback-session-01`は3往復目の応答開始待ちで失敗し、再試行`complete-playback-session-02`は3往復と明示終了が成功した。これだけでは断続的な失敗が解消したとは判断しない。
+
+失敗時に本文なしのCoreイベント（認識文字数を含む）、マイク状態、再生完了、固定のtransport失敗箇所を保存するようにした。`source-timing-session-01`は2往復目の応答途中で切断、`source-timing-session-02`は3往復目で認識文字数0の`utterance_finalized`に続いて`response_failed`となった。後者ではtransport失敗は記録されず、空のSTT結果による応答失敗まで原因を絞れた。STT入力のsample数・peak・RMS・振幅200超のsample数を追加し、波形を保存せず入力欠落を切り分ける。
+
+native capture待ち、入力待ち、送信予定時刻の繰り下げも数値で計測する。修正前の`source-timing-session-01`の最初の応答では入力待ち0ms、送信予定の繰り下げ約58msだった。従来の毎回の繰り下げをやめ、短い遅延は次周期で回収する。長い停止後の追い付きは20ms（1 Opus packet分）に制限する。`paced-recovery-session-01`の最初の4往復はgap 0msで末尾まで確認したが、5往復目でrenderer経路の失敗による切断が発生した。10往復試験全体は失敗であり、送信周期の修正だけで連続会話を合格とはしない。
+
+Backend単体2379件成功・1件skip、対象Python型検査とFrontend型検査が成功した。再接続経路への診断追加で発生したFrontendの型エラー2件・単体失敗3件は修正し、関連単体61件の成功を確認した。再生切断の具体原因、空のSTT入力／結果の原因、loss回復、全cohortの100試行とdogfood受け入れは残っている。
+
+
+`paced-recovery-session-02`は8往復の末尾まで確認後、9往復目で`invalid packet render interval`となった。既知の内部エラー名と、不一致時のpacket番号・sample offset・出力frameだけを追加保存する。切断や`response_failed`を確認した試行は、残りの長いタイムアウトを待たず診断を保存して終了する。
+
+最終の`render-interval-session-01`は、同一session・conversationの10往復、transcript一致、全応答の末尾出力、追加操作0回、明示終了が成功した。gap合計は順に2.667／0／40／0／0／0／0／0／0／0msで、品質のunderrun 0件は未達。断続的な再生区間不一致と空の認識結果が解消したとは判断しない。最終差分のFrontend全単体425件・結合97件と型検査は成功した。

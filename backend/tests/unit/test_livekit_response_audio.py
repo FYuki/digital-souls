@@ -49,6 +49,7 @@ def rig(monkeypatch):
             self.muted = True
 
     async def publish(track, options):
+        assert options["dtx"] is False
         if flags.publish_entered is not None:
             flags.publish_entered.set()
             await flags.publish_release.wait()

@@ -274,6 +274,23 @@ class ProductionSessionCoordinator:
             }
         )
 
+    async def send_response_audio_finished(
+        self, *, response_id: str, input_sample_count: int,
+        captured_sample_count: int, padding_sample_count: int,
+    ) -> None:
+        """native供給完了の総sample数を送る。ブラウザ再生完了とは区別する。"""
+        if self._lifecycle.phase != "available":
+            raise RuntimeError("session is not available")
+        if input_sample_count + padding_sample_count != captured_sample_count:
+            raise ValueError("response source sample conservation failed")
+        await self._publish_private({
+            "protocol_version": "1.0", "type": "response_audio_finished",
+            "response_id": response_id, "generation": self.generation,
+            "input_sample_count": input_sample_count,
+            "captured_sample_count": captured_sample_count,
+            "padding_sample_count": padding_sample_count,
+        })
+
     def acknowledge(self, event_id: str, direction: str) -> bool:
         acknowledged = self._outboxes.get(self.session_id, direction).ack(event_id)
         if acknowledged:

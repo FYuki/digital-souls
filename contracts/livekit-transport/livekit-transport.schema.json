@@ -8,6 +8,7 @@
     { "$ref": "#/$defs/AuthoritativeState" },
     { "$ref": "#/$defs/LogicalAudioSegment" },
     { "$ref": "#/$defs/ResponseTrackReady" },
+    { "$ref": "#/$defs/ResponseAudioFinished" },
     { "$ref": "#/$defs/MicrophoneObservation" }
   ],
   "$defs": {
@@ -81,6 +82,20 @@
         "response_id": { "$ref": "#/$defs/Identifier" },
         "track_sid": { "type": "string", "pattern": "^TR_[A-Za-z0-9_-]{1,100}$" },
         "generation": { "$ref": "#/$defs/Generation" }
+      }
+    },
+    "ResponseAudioFinished": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_version", "type", "response_id", "generation", "input_sample_count", "captured_sample_count", "padding_sample_count"],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "response_audio_finished" },
+        "response_id": { "$ref": "#/$defs/Identifier" },
+        "generation": { "$ref": "#/$defs/Generation" },
+        "input_sample_count": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "captured_sample_count": { "type": "integer", "minimum": 0, "maximum": 9007199254740991, "multipleOf": 960 },
+        "padding_sample_count": { "type": "integer", "minimum": 0, "maximum": 1919 }
       }
     },
     "MicrophoneObservation": {

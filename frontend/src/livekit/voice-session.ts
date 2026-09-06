@@ -116,6 +116,7 @@ export class LiveKitVoiceSessionController {
   private generatingResponseId: string | null = null
   private playbackResponseId: string | null = null
   private playbackLastPlayedSequence = 0
+  private readonly renderCompletedResponses = new Set<string>()
   private completedPlayback: { responseId: string; lastAudioSequence: number } | null = null
   private readonly interruptedResponseIds = new Set<string>()
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -352,6 +353,7 @@ export class LiveKitVoiceSessionController {
       this.clearReconnectTimer()
       this.setPhase(this.microphoneEnabled ? 'listening' : 'muted')
     }
+    if (observation.playbackCompletedResponseId) this.renderCompletedResponses.add(observation.playbackCompletedResponseId)
     if (
       observation.activeResponseId !== undefined
       && observation.activeResponseId !== ''
@@ -367,7 +369,7 @@ export class LiveKitVoiceSessionController {
       ) this.playback = 'playing'
       if (
         this.completedPlayback?.responseId === observation.activeResponseId
-        && this.playbackLastPlayedSequence >= this.completedPlayback.lastAudioSequence
+        && this.renderCompletedResponses.has(observation.activeResponseId)
       ) {
         this.playback = 'idle'
         this.playbackResponseId = null
@@ -378,6 +380,7 @@ export class LiveKitVoiceSessionController {
   }
 
   private receiveRoomCoreEvent(event: VoiceSessionEvent): void {
+    if (event.type === 'response_started') this.renderCompletedResponses.clear()
     if (event.type === 'turn_decision' && (event.final || event.decision === 'take_turn')) {
       this.publishInterruptionObservation('turn_decision_received', event.utterance_id, event.response_id)
     }
@@ -438,7 +441,7 @@ export class LiveKitVoiceSessionController {
         }
         if (
           event.response_id === this.playbackResponseId
-          && this.playbackLastPlayedSequence >= event.last_audio_sequence
+          && (event.last_audio_sequence === 0 || this.renderCompletedResponses.has(event.response_id))
         ) {
           this.playback = 'idle'
           this.playbackResponseId = null

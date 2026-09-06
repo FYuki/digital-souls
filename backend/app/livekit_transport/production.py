@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import time
+import struct
 from collections import deque
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
@@ -586,11 +587,19 @@ class _ConversationCoreDelivery:
             )
         if event.type == "response_completed" and event.response_id is not None:
             first_capture_ns = await self._audio_source.finish_response(event.response_id)
-            if isinstance(self._audio_source, ResponseAudioTracks) and self._measurement is not None:
-                for name, value in self._audio_source.statistics(event.response_id).items():
-                    self._measurement.record_response_event(
-                        response_id=event.response_id, name=name, stage="transport", value=value,
-                    )
+            if isinstance(self._audio_source, ResponseAudioTracks):
+                statistics = self._audio_source.statistics(event.response_id)
+                await self._coordinator.send_response_audio_finished(
+                    response_id=event.response_id,
+                    input_sample_count=statistics["response_audio_input_samples"],
+                    captured_sample_count=statistics["response_audio_captured_samples"],
+                    padding_sample_count=statistics["response_audio_padding_samples"],
+                )
+                if self._measurement is not None:
+                    for name, value in statistics.items():
+                        self._measurement.record_response_event(
+                            response_id=event.response_id, name=name, stage="transport", value=value,
+                        )
             await self._observe_first_audio_out(event, first_capture_ns)
         if event.type in {"response_cancelled", "response_failed"}:
             self._audio_source.clear(event.response_id)
@@ -1047,6 +1056,19 @@ class _ConversationCoreBridge:
         interrupted_response_id: str | None = None,
     ) -> None:
         self._transcription_active = True
+        if self._measurement is not None:
+            # 本文・波形は残さず、STTへ渡したPCMの長さと振幅だけを確認する。
+            samples = [value[0] for value in struct.iter_unpack("<h", microphone_pcm)]
+            statistics = {
+                "stt_input_sample_count": len(samples),
+                "stt_input_peak_pcm16": max((abs(value) for value in samples), default=0),
+                "stt_input_rms_pcm16": (sum(value * value for value in samples) / max(1, len(samples))) ** .5,
+                "stt_input_active_samples": sum(abs(value) > 200 for value in samples),
+            }
+            for name, value in statistics.items():
+                self._measurement.record_utterance_event(
+                    utterance_id=utterance_id, name=name, stage="stt", value=value,
+                )
         try:
             if interrupted_response_id is None:
                 task = self._session.start_transcription(

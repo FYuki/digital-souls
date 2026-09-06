@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url'
-import type {PacketPlaybackObservation} from '../src/livekit/packet-renderer'
+import type {PacketPlaybackObservation, PlaybackCompletion} from '../src/livekit/packet-renderer'
 import type { MediaObservation } from '../src/livekit/media-observer'
 
 import { expect, type Page } from '@playwright/test'
@@ -10,9 +10,11 @@ declare global {
       speechStarted: (utteranceId: string, atMs: number) => Promise<void>
     }
     __voiceChatE2E: {
+      transportFailures?: {stage: string; reason?: string; context?: Readonly<Record<string, number>>; atMs: number}[]
       lastTrackMediaResponseId?: string
       lastTrackMediaObservation?: MediaObservation
       lastPacketPlaybackObservation?: PacketPlaybackObservation
+      playbackCompletions?: Record<string, PlaybackCompletion>
       cycles: {
         fixtureStartedAt: number
         trackReceivedAt?: number
@@ -116,8 +118,13 @@ const installPlaybackProbe = async (page: Page) => {
       __digitalSoulsVoiceSessionTestPort?: {
         createRoom?: (...args: never[]) => unknown
         observeRoom?: (observation: {
+          failureContext?: Readonly<Record<string, number>>
+          failureReason?: string
+          failureStage?: string
           firstPlaybackAtMs?: number
           packetPlaybackObservation?: PacketPlaybackObservation
+          playbackCompletedResponseId?: string
+          playbackCompletion?: PlaybackCompletion
           mediaResponseId?: string
           mediaTrackResponseId?: string
           mediaObservation?: MediaObservation
@@ -152,6 +159,14 @@ const installPlaybackProbe = async (page: Page) => {
         window.__voiceSessionController = controller
       },
       observeRoom: (observation) => {
+        if (observation.failureStage) {
+          window.__voiceChatE2E.transportFailures ??= []
+          window.__voiceChatE2E.transportFailures.push({stage: observation.failureStage, reason: observation.failureReason, context: observation.failureContext, atMs: performance.now()})
+        }
+        if (observation.playbackCompletedResponseId && observation.playbackCompletion) {
+          window.__voiceChatE2E.playbackCompletions ??= {}
+          window.__voiceChatE2E.playbackCompletions[observation.playbackCompletedResponseId] = observation.playbackCompletion
+        }
         if (observation.packetPlaybackObservation !== undefined) {
           window.__voiceChatE2E.lastPacketPlaybackObservation = {...observation.packetPlaybackObservation}
         }
@@ -498,6 +513,8 @@ export const createVoiceChatDriver = () => {
       throw new Error('voice cycle count must be positive')
     }
     const handle = await page.waitForFunction((requiredCount) => {
+      if (window.__voiceChatE2E.transportFailures?.length) throw new Error('voice transport failed')
+      if (window.__voiceChatE2E.coreEventDiagnostics.some(event => event.type === 'response_failed')) throw new Error('voice response failed')
       const completed = window.__voiceChatE2E.cycles.filter((cycle) => (
         cycle.startedAt !== null
         && cycle.responseId !== null

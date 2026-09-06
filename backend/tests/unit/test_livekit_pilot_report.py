@@ -284,3 +284,81 @@ def test_packet_playback_rejects_false_evidence(damage):
     elif damage == "cycle": trial["startedAt"] += 1
     with pytest.raises(ValueError):
         validate_packet_playback_observation(trial)
+
+
+@pytest.fixture
+def completion_evidence():
+    from app.voice_metrics import TraceEvent
+    raw = dict(expectedSamples=2880, inputSamples=1900, paddingSamples=980,
+               renderedSamples=2880, packetCount=3, firstOutputFrame=48000,
+               lastOutputEndFrame=51008, gapSamples=128, maximumGapSamples=128,
+               gapCount=1, firstRtpTimestamp=4294967000,
+               lastRtpTimestamp=(4294967000 + 1920) % 2**32,
+               outputClockContextTime=1.1, outputClockPerformanceTime=1200,
+               confirmationObservedAtMs=1210, sampleRate=48000)
+    points = {name: TraceEvent(
+        schema_version='1.0', measurement_kind='controlled_baseline', event_id=name,
+        character_id='fixture', session_id='session', utterance_id='utterance', response_id='response',
+        name=name, stage='transport', outcome='success', timestamp=1,
+        clock_domain='server_monotonic', unit='nanosecond', value=value,
+    ) for name, value in [('response_audio_input_samples', 1900),
+                          ('response_audio_captured_samples', 2880),
+                          ('response_audio_padding_samples', 980)]}
+    return {'playback_completion': raw, 'packet_playback_observation': {'firstOutputFrame': 48000}}, points
+
+
+def test_completion_revalidates_source_counts_rtp_wrap_and_observed_gap(completion_evidence):
+    from app.livekit_pilot_report import validate_playback_completion
+    values = validate_playback_completion(*completion_evidence)
+    assert values == {'playback_gap_total_ms': 128 / 48, 'playback_gap_maximum_ms': 128 / 48,
+                      'playback_underrun_count': 1, 'playback_duration_ms': 3008 / 48}
+
+
+@pytest.mark.parametrize('field,value', [
+    ('expectedSamples', 3840), ('renderedSamples', 1920), ('inputSamples', 1901),
+    ('lastOutputEndFrame', 50900), ('gapSamples', 0), ('gapCount', 0),
+    ('maximumGapSamples', 64), ('lastRtpTimestamp', 1625),
+    ('outputClockContextTime', 1.0), ('confirmationObservedAtMs', 1000),
+    ('sampleRate', 24000), ('gapCount', True), ('outputClockPerformanceTime', float('nan')),
+])
+def test_completion_rejects_unproven_output_or_contradictions(completion_evidence, field, value):
+    from app.livekit_pilot_report import validate_playback_completion
+    trial, points = completion_evidence
+    trial['playback_completion'][field] = value
+    with pytest.raises(ValueError):
+        validate_playback_completion(trial, points)
+
+
+def test_completion_requires_matching_source_trace(completion_evidence):
+    from app.livekit_pilot_report import validate_playback_completion
+    trial, points = completion_evidence
+    del points['response_audio_captured_samples']
+    with pytest.raises(ValueError, match='source trace'):
+        validate_playback_completion(trial, points)
+
+
+def test_completion_aggregate_excludes_warmup_and_preserves_nonzero_gap(pilot_inputs, completion_evidence):
+    import copy
+    manifest, events, run = pilot_inputs
+    trial_evidence, source_points = completion_evidence
+    for index, trial in enumerate(manifest['trials']):
+        trial.update(packet_playback_trial())
+        raw = copy.deepcopy(trial_evidence['playback_completion'])
+        if index == 0:
+            raw.update(gapSamples=256, maximumGapSamples=256, lastOutputEndFrame=51136)
+        trial['playback_completion'] = raw
+        for point in source_points.values():
+            events.append({**point.model_dump(mode='json'), 'event_id': str(uuid4()), 'character_id': 'miori',
+                           'session_id': trial['sessionId'], 'utterance_id': trial['utteranceId'],
+                           'response_id': trial['responseId']})
+    for event in events:
+        if event['name'] == 'first_playback':
+            event['timestamp'] = 1100
+    artifact = run()
+    metrics = {item['name']: item for item in artifact['metrics']}
+    for name in ('playback_continuity', 'playback_gap_total_ms', 'playback_gap_maximum_ms'):
+        assert metrics[name]['trial_count'] == metrics[name]['success_count'] == 1
+        assert metrics[name]['p95'] == pytest.approx(128 / 48)
+    assert metrics['playback_underrun_count']['p95'] == 1
+    for trial in manifest['trials']:
+        assert trial['sessionId'] not in json.dumps(artifact)

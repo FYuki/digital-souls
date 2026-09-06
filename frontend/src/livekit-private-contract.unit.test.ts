@@ -103,3 +103,14 @@ test('応答track準備通知は応答IDとSIDを検証して正規化する', (
     expect(() => parsePrivateFrame(invalid)).toThrow()
   }
 })
+
+
+test('送信完了の総sample数を検証し、PCM本文や矛盾した総数を許可しない', () => {
+  const frame = {protocol_version: '1.0', type: 'response_audio_finished',
+    response_id: '50000000-0000-4000-8000-000000000001', generation: 0,
+    input_sample_count: 1234, captured_sample_count: 2880, padding_sample_count: 1646}
+  expect(parsePrivateFrame(frame)).toMatchObject({type: 'response_audio_finished', inputSampleCount: 1234, capturedSampleCount: 2880})
+  expect(() => parsePrivateFrame({...frame, captured_sample_count: 1920})).toThrow()
+  expect(() => parsePrivateFrame({...frame, pcm: 'body'})).toThrow()
+  expect(() => parsePrivateFrame({...frame, input_sample_count: -1})).toThrow()
+})

@@ -19,6 +19,7 @@ type PrivateFrame =
   }>
   | Readonly<{ type: 'ack'; eventId: string; generation: number }>
   | Readonly<{ type: 'state_sync_request'; generation: number }>
+  | Readonly<{ type: 'response_audio_finished'; responseId: string; generation: number; inputSampleCount: number; capturedSampleCount: number; paddingSampleCount: number }>
   | Readonly<{ type: 'response_track_ready'; responseId: string; trackSid: string; generation: number }>
   | Readonly<{
     type: 'logical_audio_segment'
@@ -52,6 +53,7 @@ type PrivateFrameWire =
   }>
   | Readonly<{ type: 'ack'; event_id: string; generation: number }>
   | Readonly<{ type: 'state_sync_request'; generation: number }>
+  | Readonly<{ type: 'response_audio_finished'; response_id: string; generation: number; input_sample_count: number; captured_sample_count: number; padding_sample_count: number }>
   | Readonly<{ type: 'response_track_ready'; response_id: string; track_sid: string; generation: number }>
   | Readonly<{
     type: 'logical_audio_segment'
@@ -99,6 +101,10 @@ export function parsePrivateFrame(value: unknown): PrivateFrame {
       }
     case 'state_sync_request':
       return { type: frame.type, generation: frame.generation }
+    case 'response_audio_finished':
+      if (frame.input_sample_count + frame.padding_sample_count !== frame.captured_sample_count) throw new Error('source sample conservation failed')
+      return {type: frame.type, responseId: frame.response_id, generation: frame.generation,
+        inputSampleCount: frame.input_sample_count, capturedSampleCount: frame.captured_sample_count, paddingSampleCount: frame.padding_sample_count}
     case 'response_track_ready':
       return { type: frame.type, responseId: frame.response_id, trackSid: frame.track_sid, generation: frame.generation }
     case 'logical_audio_segment':

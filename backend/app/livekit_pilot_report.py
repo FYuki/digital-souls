@@ -140,6 +140,30 @@ def _finalize_livekit_report(
                 raise ValueError("controlled media boundaries are out of order")
         if trial.get("packet_playback_observation") is not None:
             validate_packet_playback_observation(trial)
+        if trial.get("playback_completion") is not None:
+            completion = validate_playback_completion(trial, points)
+            raw_completion = trial["playback_completion"]
+            # 先頭出力frameから無欠損で連続再生した末尾と、実際の末尾を同じ時計で比較する。
+            for name, frame in (
+                ("scheduled_playout", raw_completion["firstOutputFrame"] + raw_completion["expectedSamples"]),
+                ("frame_playout", raw_completion["lastOutputEndFrame"]),
+            ):
+                events.append(TraceEvent(
+                    schema_version="1.0", measurement_kind="controlled_baseline",
+                    event_id=f"{name}-{index}", character_id=matched[0].character_id,
+                    session_id=pair[0], utterance_id=pair[1], response_id=pair[2],
+                    name=name, stage="playback", outcome="success", timestamp=frame / 48,
+                    clock_domain="browser_audio_context", unit="millisecond",
+                ))
+            for name, value in completion.items():
+                events.append(TraceEvent(
+                    schema_version="1.0", measurement_kind="controlled_baseline",
+                    event_id=f"{name}-{index}", character_id=matched[0].character_id,
+                    session_id=pair[0], utterance_id=pair[1], response_id=pair[2],
+                    name=name, stage="playback", outcome="success",
+                    timestamp=float(trial["playback_completion"]["confirmationObservedAtMs"]),
+                    clock_domain="client_monotonic", unit="millisecond", value=value,
+                ))
         fixture_start, fixture_end = _validate_fixture_clock(
             trial, sample_rate=sample_rate, start_sample=start_sample, end_sample=end_sample,
             controlled=controlled,
@@ -169,6 +193,8 @@ def _finalize_livekit_report(
             clocks=[
                 ClockMetadata(domain="server_monotonic", method="perf_counter_ns", unit="nanosecond"),
                 ClockMetadata(domain="client_monotonic", method="performance_now_and_audio_output_timestamp", unit="millisecond"),
+                *([ClockMetadata(domain="browser_audio_context", method="confirmed_output_frame_divided_by_sample_rate", unit="millisecond")]
+                  if any(trial.get("playback_completion") is not None for trial in measured) else []),
             ],
             hardware=HardwareMetadata(description=platform.platform()),
             resources=ResourceMetadata(cpu_percent=missing_resource, memory_bytes=missing_resource),
@@ -188,6 +214,62 @@ def _finalize_livekit_report(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(serialized, ensure_ascii=False, indent=2) + "\n")
 
+
+
+def validate_playback_completion(
+    trial: dict[str, object], points: dict[str, TraceEvent],
+) -> dict[str, float]:
+    """送信総数・連続RTP・出力時計を照合する。音切れがあっても計測値として残す。"""
+    raw = trial.get("playback_completion")
+    if not isinstance(raw, dict):
+        raise ValueError("playback completion is unavailable")
+    counts = {}
+    for name in (
+        "expectedSamples", "inputSamples", "paddingSamples", "renderedSamples", "packetCount",
+        "firstOutputFrame", "lastOutputEndFrame", "gapSamples", "maximumGapSamples", "gapCount",
+        "firstRtpTimestamp", "lastRtpTimestamp", "sampleRate",
+    ):
+        value = raw.get(name)
+        if type(value) is not int or not 0 <= value <= 2**53 - 1:
+            raise ValueError("invalid completion sample count")
+        counts[name] = value
+    expected, gap, packets = counts["expectedSamples"], counts["gapSamples"], counts["packetCount"]
+    if (counts["sampleRate"] != 48000 or not expected or expected != packets * 960
+        or counts["renderedSamples"] != expected
+        or counts["inputSamples"] + counts["paddingSamples"] != expected
+        or counts["paddingSamples"] > 1919
+        or counts["lastOutputEndFrame"] - counts["firstOutputFrame"] != expected + gap
+        or not 0 <= counts["maximumGapSamples"] <= gap
+        or (gap == 0) != (counts["gapCount"] == 0)
+        or (gap == 0) != (counts["maximumGapSamples"] == 0)
+        or counts["gapCount"] > gap
+        or gap > counts["gapCount"] * counts["maximumGapSamples"]):
+        raise ValueError("completion sample conservation mismatch")
+    if (counts["firstRtpTimestamp"] > 0xffffffff or counts["lastRtpTimestamp"] > 0xffffffff
+        or (counts["lastRtpTimestamp"] - counts["firstRtpTimestamp"]) % 2**32 != ((packets - 1) * 960) % 2**32):
+        raise ValueError("completion RTP timeline mismatch")
+    for field, name in (("inputSamples", "response_audio_input_samples"),
+                        ("expectedSamples", "response_audio_captured_samples"),
+                        ("paddingSamples", "response_audio_padding_samples")):
+        point = points.get(name)
+        if point is None or point.outcome != "success" or point.value != counts[field]:
+            raise ValueError("completion does not match source trace")
+    times: list[float] = []
+    for name in ("outputClockContextTime", "outputClockPerformanceTime", "confirmationObservedAtMs"):
+        value = raw.get(name)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+            raise ValueError("invalid completion output clock")
+        times.append(value)
+    context, performance, observed = times
+    end_at = performance + (counts["lastOutputEndFrame"] / 48000 - context) * 1000
+    first = trial.get("packet_playback_observation")
+    if (context * 48000 < counts["lastOutputEndFrame"] or not 0 <= end_at <= observed
+        or not isinstance(first, dict) or first.get("firstOutputFrame") != counts["firstOutputFrame"]):
+        raise ValueError("completion output clock has not confirmed the response")
+    return {"playback_gap_total_ms": gap / 48,
+            "playback_gap_maximum_ms": counts["maximumGapSamples"] / 48,
+            "playback_underrun_count": float(counts["gapCount"]),
+            "playback_duration_ms": (expected + gap) / 48}
 
 
 def validate_packet_playback_observation(trial: dict[str, object]) -> tuple[float, float]:

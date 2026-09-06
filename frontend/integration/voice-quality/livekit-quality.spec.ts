@@ -141,6 +141,7 @@ test(Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0) > 0
       await page.waitForFunction((responseId) => (
         window.__voiceChatE2E.liveKitOrder.includes(`${responseId}:completed`)
       ), cycle.responseId, { timeout: voiceTestTimeout })
+      await page.waitForFunction(responseId => !!window.__voiceChatE2E.playbackCompletions?.[responseId], cycle.responseId!, {timeout: 10_000})
       // page.closeだけでは再接続猶予中のroomが残る。明示終了の完了後に次試行へ進む。
       const sessionEnded = page.waitForResponse((response) => (
         response.request().method() === 'DELETE'
@@ -155,6 +156,7 @@ test(Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0) > 0
         track_response_matches: await page.evaluate(responseId => window.__voiceChatE2E.lastTrackMediaResponseId === responseId, cycle.responseId),
         track_media_observation: await page.evaluate(() => window.__voiceChatE2E.lastTrackMediaObservation),
         packet_playback_observation: await page.evaluate(() => window.__voiceChatE2E.lastPacketPlaybackObservation),
+        playback_completion: await page.evaluate(responseId => window.__voiceChatE2E.playbackCompletions?.[responseId], cycle.responseId!),
         fixture_clock_method: sourceBounds ? 'audio_worklet_pcm_causal_bounds' : 'get_user_media_completion_unverified',
         ...(sourceBounds ? { fixture_clock_bounds: sourceBounds, fixture_clock_maximum_uncertainty_ms: 20 } : {}),
         session_end_confirmed: true,

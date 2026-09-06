@@ -506,6 +506,15 @@ _LIVEKIT_DIAGNOSTIC_CATALOG = (
     _MetricDefinition("llm_http_headers_latency", "llm_http_started", "llm_http_headers_received", "llm_http_started", "llm_http_headers_received"),
     _MetricDefinition("llm_first_token_latency", "llm_http_started", "llm_first_token", "llm_http_started", "llm_first_token"),
     *(
+        _MetricDefinition(name, None, None, name, name, unit=unit, value_event=name)
+        for name, unit in (
+            ("playback_gap_total_ms", "millisecond"),
+            ("playback_gap_maximum_ms", "millisecond"),
+            ("playback_underrun_count", "count"),
+            ("playback_duration_ms", "millisecond"),
+        )
+    ),
+    *(
         _MetricDefinition(
             name, None, None, name, name,
             unit="millisecond" if name.endswith("_ms") else "count",

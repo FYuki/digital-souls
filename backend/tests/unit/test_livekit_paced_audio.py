@@ -110,3 +110,17 @@ def test_empty_response_does_not_generate_tail_audio(source):
         await output.aclose()
         await output.aclose()
     asyncio.run(exercise())
+
+
+def test_pacing_recovers_short_stalls_without_accumulating_schedule_drift():
+    from app.livekit_transport.paced_audio import next_capture_deadline
+    deadline = next_capture_deadline(None, 0)
+    # 15msかかったcaptureの遅れを、次の短いcaptureで回収する。
+    deadline = next_capture_deadline(deadline, .025)
+    assert deadline == pytest.approx(.02)
+    deadline = next_capture_deadline(deadline, .026)
+    assert deadline == pytest.approx(.03)
+    # 200msの停止で過去の20 frameを一斉送信しない。
+    assert next_capture_deadline(deadline, .23) == pytest.approx(.21)
+    # 入力が途切れた後は、その入力の到着から新しい周期を開始する。
+    assert next_capture_deadline(None, .5) == pytest.approx(.51)

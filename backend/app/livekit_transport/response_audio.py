@@ -82,7 +82,7 @@ class ResponseAudioTracks:
                     TRACK_NAME_PREFIX + response_id, source,
                 )
                 publication = await self._room.local_participant.publish_track(
-                    track, rtc_module.TrackPublishOptions(source=rtc_module.TrackSource.SOURCE_MICROPHONE),
+                    track, rtc_module.TrackPublishOptions(source=rtc_module.TrackSource.SOURCE_MICROPHONE, dtx=False),
                 )
                 self._current = _ResponseTrack(response_id, source, track, publication.sid,
                     PacedPcmSource(source, sample_rate=self._sample_rate, channels=self._channels))
@@ -158,6 +158,10 @@ class ResponseAudioTracks:
             "response_audio_captured_samples": pacer.captured_sample_count,
             "response_audio_padding_samples": pacer.padding_sample_count,
             "response_audio_max_queued_samples": pacer.max_queued_samples,
+            "response_audio_capture_wait_ns": pacer.capture_wait_ns,
+            "response_audio_maximum_capture_wait_ns": pacer.maximum_capture_wait_ns,
+            "response_audio_input_wait_ns": pacer.input_wait_ns,
+            "response_audio_schedule_reset_ns": pacer.schedule_reset_ns,
         }
 
     def clear(self, response_id: str | None = None) -> None:
