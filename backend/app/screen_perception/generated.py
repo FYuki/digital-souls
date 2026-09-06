@@ -1,30 +1,12 @@
 from enum import Enum
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Union
 from uuid import UUID
-
-
-class ActualSurface(Enum):
-    MONITOR = "monitor"
-    WINDOW = "window"
-
-
-class CaptureState(Enum):
-    ACTIVE = "active"
-    OFF = "off"
-    SELECTING = "selecting"
-    UNAVAILABLE = "unavailable"
-    UNSUPPORTED = "unsupported"
 
 
 class ChatDestination(Enum):
     CLOUD = "cloud"
     LOCAL = "local"
-
-
-class CloudConsent(BaseModel):
-    cloud_derived_chat: bool
-    cloud_vision: bool
 
 
 class MIMEType(Enum):
@@ -49,21 +31,28 @@ class ProtocolVersion(Enum):
     THE_10 = "1.0"
 
 
-class Reason(Enum):
-    BACKEND_DISCONNECT = "backend_disconnect"
-    BACKEND_RESTART = "backend_restart"
-    CAPTURE_ENDED = "capture_ended"
-    CHARACTER_CHANGE = "character_change"
-    CONSENT_REVOKED = "consent_revoked"
-    CONVERSATION_CHANGE = "conversation_change"
-    LEASE_EXPIRED = "lease_expired"
-    PAGEHIDE = "pagehide"
-    ROUTING_CHANGED = "routing_changed"
-    TARGET_CHANGE = "target_change"
-    USER_OFF = "user_off"
+class RoutingDisclosureType(Enum):
+    SCREEN_ROUTING_DISCLOSED = "screen_routing_disclosed"
 
 
-class ScreenPerceptionSchema(Enum):
+class VisionDestination(Enum):
+    CLOUD = "cloud"
+    LOCAL = "local"
+    UNCONFIGURED = "unconfigured"
+
+
+class RoutingDisclosure(BaseModel):
+    chat_destination: ChatDestination
+    client_session_id: UUID
+    event_id: UUID
+    limits: Limits
+    protocol_version: ProtocolVersion
+    routing_revision: str
+    type: RoutingDisclosureType
+    vision_destination: VisionDestination
+
+
+class ReasonCode(Enum):
     API_UNAVAILABLE = "api_unavailable"
     BACKEND_UNAVAILABLE = "backend_unavailable"
     BROWSER_SURFACE_REJECTED = "browser_surface_rejected"
@@ -98,6 +87,41 @@ class ScreenPerceptionSchema(Enum):
     VISION_UNSUPPORTED = "vision_unsupported"
 
 
+class Stage(Enum):
+    CAPTURE = "capture"
+    CHAT = "chat"
+    PICKER = "picker"
+    SESSION = "session"
+    SUPPORT = "support"
+    UPLOAD = "upload"
+    VISION = "vision"
+
+
+class ScreenErrorType(Enum):
+    SCREEN_ERROR = "screen_error"
+
+
+class ScreenError(BaseModel):
+    event_id: UUID
+    generation: int
+    protocol_version: ProtocolVersion
+    reason_code: ReasonCode
+    recoverable: bool
+    stage: Stage
+    type: ScreenErrorType
+    request_id: Optional[UUID] = None
+    screen_session_id: Optional[UUID] = None
+    turn_id: Optional[UUID] = None
+
+
+class CaptureState(Enum):
+    ACTIVE = "active"
+    OFF = "off"
+    SELECTING = "selecting"
+    UNAVAILABLE = "unavailable"
+    UNSUPPORTED = "unsupported"
+
+
 class RecognitionState(Enum):
     CAPTURING = "capturing"
     COMPOSING = "composing"
@@ -109,80 +133,219 @@ class RecognitionState(Enum):
     UPLOADING = "uploading"
 
 
+class ScreenStatusType(Enum):
+    SCREEN_STATUS = "screen_status"
+
+
+class ScreenStatus(BaseModel):
+    capture_state: CaptureState
+    event_id: UUID
+    generation: int
+    protocol_version: ProtocolVersion
+    recognition_state: RecognitionState
+    type: ScreenStatusType
+    last_recognized_capture_at: Optional[str] = None
+    reason_code: Optional[ReasonCode] = None
+    screen_session_id: Optional[UUID] = None
+
+
+class SessionHeartbeatType(Enum):
+    SCREEN_SESSION_HEARTBEAT = "screen_session_heartbeat"
+
+
+class SessionHeartbeat(BaseModel):
+    client_session_id: UUID
+    event_id: UUID
+    generation: int
+    protocol_version: ProtocolVersion
+    screen_session_id: UUID
+    type: SessionHeartbeatType
+
+
+class SessionHeartbeatAcceptedType(Enum):
+    SCREEN_SESSION_HEARTBEAT_ACCEPTED = "screen_session_heartbeat_accepted"
+
+
+class SessionHeartbeatAccepted(BaseModel):
+    event_id: UUID
+    generation: int
+    lease_expires_at: str
+    protocol_version: ProtocolVersion
+    screen_session_id: UUID
+    type: SessionHeartbeatAcceptedType
+
+
+class SessionRevokeRequestedReason(Enum):
+    BACKEND_DISCONNECT = "backend_disconnect"
+    CAPTURE_ENDED = "capture_ended"
+    CHARACTER_CHANGE = "character_change"
+    CONSENT_REVOKED = "consent_revoked"
+    CONVERSATION_CHANGE = "conversation_change"
+    PAGEHIDE = "pagehide"
+    TARGET_CHANGE = "target_change"
+    USER_OFF = "user_off"
+
+
+class SessionRevokeRequestedType(Enum):
+    SCREEN_SESSION_REVOKE_REQUESTED = "screen_session_revoke_requested"
+
+
+class SessionRevokeRequested(BaseModel):
+    client_session_id: UUID
+    event_id: UUID
+    generation: int
+    protocol_version: ProtocolVersion
+    reason: SessionRevokeRequestedReason
+    screen_session_id: UUID
+    type: SessionRevokeRequestedType
+
+
+class SessionRevokedReason(Enum):
+    BACKEND_DISCONNECT = "backend_disconnect"
+    BACKEND_RESTART = "backend_restart"
+    CAPTURE_ENDED = "capture_ended"
+    CHARACTER_CHANGE = "character_change"
+    CONSENT_REVOKED = "consent_revoked"
+    CONVERSATION_CHANGE = "conversation_change"
+    LEASE_EXPIRED = "lease_expired"
+    PAGEHIDE = "pagehide"
+    ROUTING_CHANGED = "routing_changed"
+    TARGET_CHANGE = "target_change"
+    USER_OFF = "user_off"
+
+
+class SessionRevokedType(Enum):
+    SCREEN_SESSION_REVOKED = "screen_session_revoked"
+
+
+class SessionRevoked(BaseModel):
+    event_id: UUID
+    generation: int
+    protocol_version: ProtocolVersion
+    reason: SessionRevokedReason
+    screen_session_id: UUID
+    type: SessionRevokedType
+
+
+class ActualSurface(Enum):
+    MONITOR = "monitor"
+    WINDOW = "window"
+
+
+class CloudConsent(BaseModel):
+    cloud_derived_chat: bool
+    cloud_vision: bool
+
+
+class SessionStartRequestedType(Enum):
+    SCREEN_SESSION_START_REQUESTED = "screen_session_start_requested"
+
+
+class SessionStartRequested(BaseModel):
+    actual_surface: ActualSurface
+    character_id: str
+    client_session_id: UUID
+    cloud_consent: CloudConsent
+    conversation_id: UUID
+    event_id: UUID
+    generation: int
+    protocol_version: ProtocolVersion
+    requested_surface: ActualSurface
+    routing_revision: str
+    type: SessionStartRequestedType
+
+
+class SessionStartedType(Enum):
+    SCREEN_SESSION_STARTED = "screen_session_started"
+
+
+class SessionStarted(BaseModel):
+    actual_surface: ActualSurface
+    character_id: str
+    client_session_id: UUID
+    conversation_id: UUID
+    event_id: UUID
+    generation: int
+    heartbeat_interval_ms: int
+    lease_duration_ms: int
+    lease_expires_at: str
+    protocol_version: ProtocolVersion
+    routing_revision: str
+    screen_session_id: UUID
+    type: SessionStartedType
+
+
 class Source(Enum):
     EXPLICIT_UI = "explicit_ui"
     NATURAL_LANGUAGE_TEXT = "natural_language_text"
     NATURAL_LANGUAGE_VOICE = "natural_language_voice"
 
 
-class Stage(Enum):
-    CAPTURE = "capture"
-    CHAT = "chat"
-    PICKER = "picker"
-    SESSION = "session"
-    SUPPORT = "support"
-    UPLOAD = "upload"
-    VISION = "vision"
-
-
-class TypeEnum(Enum):
-    SCREEN_ERROR = "screen_error"
-    SCREEN_ROUTING_DISCLOSED = "screen_routing_disclosed"
-    SCREEN_SESSION_HEARTBEAT = "screen_session_heartbeat"
-    SCREEN_SESSION_HEARTBEAT_ACCEPTED = "screen_session_heartbeat_accepted"
-    SCREEN_SESSION_REVOKED = "screen_session_revoked"
-    SCREEN_SESSION_REVOKE_REQUESTED = "screen_session_revoke_requested"
-    SCREEN_SESSION_STARTED = "screen_session_started"
-    SCREEN_SESSION_START_REQUESTED = "screen_session_start_requested"
+class SnapshotRequestedType(Enum):
     SCREEN_SNAPSHOT_REQUESTED = "screen_snapshot_requested"
-    SCREEN_SNAPSHOT_UPLOAD_ACCEPTED = "screen_snapshot_upload_accepted"
-    SCREEN_SNAPSHOT_UPLOAD_METADATA = "screen_snapshot_upload_metadata"
-    SCREEN_STATUS = "screen_status"
 
 
-class VisionDestination(Enum):
-    CLOUD = "cloud"
-    LOCAL = "local"
-    UNCONFIGURED = "unconfigured"
-
-
-class ScreenPerceptionEvent(BaseModel):
-    """画面共有の制御metadata契約。画像本文、質問本文、Vision観測本文、対象名は含めない。"""
-
+class SnapshotRequested(BaseModel):
+    capture_deadline: str
     event_id: UUID
+    generation: int
     protocol_version: ProtocolVersion
-    type: TypeEnum
-    chat_destination: Optional[ChatDestination] = None
-    client_session_id: Optional[UUID] = None
-    limits: Optional[Limits] = None
-    routing_revision: Optional[str] = None
-    vision_destination: Optional[VisionDestination] = None
-    actual_surface: Optional[ActualSurface] = None
-    character_id: Optional[str] = None
-    cloud_consent: Optional[CloudConsent] = None
-    conversation_id: Optional[UUID] = None
-    generation: Optional[int] = None
-    requested_surface: Optional[ActualSurface] = None
-    heartbeat_interval_ms: Optional[int] = None
-    lease_duration_ms: Optional[int] = None
-    lease_expires_at: Optional[str] = None
-    screen_session_id: Optional[UUID] = None
-    reason: Optional[Reason] = None
-    capture_deadline: Optional[str] = None
-    request_id: Optional[UUID] = None
-    requested_at: Optional[str] = None
-    source: Optional[Source] = None
-    turn_id: Optional[UUID] = None
-    byte_length: Optional[int] = None
-    captured_at: Optional[str] = None
-    height: Optional[int] = None
-    image_id: Optional[UUID] = None
-    mime_type: Optional[MIMEType] = None
-    width: Optional[int] = None
-    received_at: Optional[str] = None
-    capture_state: Optional[CaptureState] = None
-    last_recognized_capture_at: Optional[str] = None
-    reason_code: Optional[ScreenPerceptionSchema] = None
-    recognition_state: Optional[RecognitionState] = None
-    recoverable: Optional[bool] = None
-    stage: Optional[Stage] = None
+    request_id: UUID
+    requested_at: str
+    screen_session_id: UUID
+    source: Source
+    turn_id: UUID
+    type: SnapshotRequestedType
+
+
+class SnapshotUploadAcceptedType(Enum):
+    SCREEN_SNAPSHOT_UPLOAD_ACCEPTED = "screen_snapshot_upload_accepted"
+
+
+class SnapshotUploadAccepted(BaseModel):
+    event_id: UUID
+    generation: int
+    image_id: UUID
+    protocol_version: ProtocolVersion
+    received_at: str
+    request_id: UUID
+    screen_session_id: UUID
+    type: SnapshotUploadAcceptedType
+
+
+class SnapshotUploadMetadataType(Enum):
+    SCREEN_SNAPSHOT_UPLOAD_METADATA = "screen_snapshot_upload_metadata"
+
+
+class SnapshotUploadMetadata(BaseModel):
+    actual_surface: ActualSurface
+    byte_length: int
+    captured_at: str
+    client_session_id: UUID
+    event_id: UUID
+    generation: int
+    height: int
+    image_id: UUID
+    mime_type: MIMEType
+    protocol_version: ProtocolVersion
+    request_id: UUID
+    screen_session_id: UUID
+    turn_id: UUID
+    type: SnapshotUploadMetadataType
+    width: int
+
+
+ScreenPerceptionEvent = Union[
+    RoutingDisclosure,
+    SessionStartRequested,
+    SessionStarted,
+    SessionHeartbeat,
+    SessionHeartbeatAccepted,
+    SessionRevokeRequested,
+    SessionRevoked,
+    SnapshotRequested,
+    SnapshotUploadMetadata,
+    SnapshotUploadAccepted,
+    ScreenStatus,
+    ScreenError,
+]

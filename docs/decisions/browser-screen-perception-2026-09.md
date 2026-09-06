@@ -90,7 +90,7 @@ OFFの線形化点は次の2段階である。
 
 ### 5. 共通JSON contract
 
-SSOTは`contracts/perception/screen/screen-perception.schema.json`である。Draft 2020-12を使用し、`protocol_version`は`1.0`完全一致とする。Frontend／Backend型は同じschemaからquicktype 23.2.6で生成し、両境界が同じ正常／異常fixtureを検証する。
+SSOTは`contracts/perception/screen/screen-perception.schema.json`である。Draft 2020-12を使用し、`protocol_version`は`1.0`完全一致とする。Frontend／Backend型は同じschemaからquicktype-core 23.2.6で生成し、両境界が同じ正常／異常fixtureを検証する。rootの`oneOf`を単一の任意field modelへ平坦化しないよう、generatorは各`$defs` variantを独立モデルとして生成した後、`ScreenPerceptionEvent`判別unionへ結合する。生成型を直接編集しない。
 
 schemaは次の制御metadataだけを扱う。
 

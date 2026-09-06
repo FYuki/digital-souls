@@ -4,9 +4,12 @@ from functools import lru_cache
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
-from app.screen_perception.generated import ScreenPerceptionEvent, TypeEnum
+from app.screen_perception.generated import (
+    ScreenPerceptionEvent,
+    SnapshotUploadMetadata,
+)
 
 
 MAX_IMAGE_PIXELS = 4_194_304
@@ -18,6 +21,9 @@ TIMESTAMP_FIELDS = {
     "received_at",
     "requested_at",
 }
+_SCREEN_PERCEPTION_EVENT_ADAPTER: TypeAdapter[ScreenPerceptionEvent] = TypeAdapter(
+    ScreenPerceptionEvent
+)
 
 
 @lru_cache(maxsize=1)
@@ -57,14 +63,12 @@ def parse_screen_perception_event(value: object) -> ScreenPerceptionEvent:
                         "screen perception event contains an invalid UTC timestamp"
                     ) from error
     try:
-        event = ScreenPerceptionEvent.model_validate(value)
+        event = _SCREEN_PERCEPTION_EVENT_ADAPTER.validate_python(value)
     except ValidationError as error:
         raise ValueError(
             "screen perception event cannot be converted to generated type"
         ) from error
-    if event.type is TypeEnum.SCREEN_SNAPSHOT_UPLOAD_METADATA:
-        if event.width is None or event.height is None:
-            raise ValueError("screen snapshot metadata requires dimensions")
+    if isinstance(event, SnapshotUploadMetadata):
         if event.width * event.height > MAX_IMAGE_PIXELS:
             raise ValueError("screen snapshot exceeds the decoded pixel limit")
     return event

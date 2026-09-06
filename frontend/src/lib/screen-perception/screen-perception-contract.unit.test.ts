@@ -3,6 +3,27 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { parseScreenPerceptionEvent } from './validation'
+import type { ScreenPerceptionEvent } from './generated'
+
+const typedHeartbeat: ScreenPerceptionEvent = {
+  protocol_version: '1.0',
+  type: 'screen_session_heartbeat',
+  event_id: '10000000-0000-4000-8000-000000000004',
+  screen_session_id: '40000000-0000-4000-8000-000000000001',
+  client_session_id: '20000000-0000-4000-8000-000000000001',
+  generation: 1,
+}
+void typedHeartbeat
+
+// @ts-expect-error heartbeat variantではclient_session_idが必須
+const incompleteTypedHeartbeat: ScreenPerceptionEvent = {
+  protocol_version: '1.0',
+  type: 'screen_session_heartbeat',
+  event_id: '10000000-0000-4000-8000-000000000004',
+  screen_session_id: '40000000-0000-4000-8000-000000000001',
+  generation: 1,
+}
+void incompleteTypedHeartbeat
 
 const contractRoot = resolve(process.cwd(), '..', 'contracts', 'perception', 'screen')
 

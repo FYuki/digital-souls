@@ -71,7 +71,7 @@
           NotAllowedError: 'capture_not_allowed',
           NotFoundError: 'no_capture_source',
           NotReadableError: 'capture_os_error',
-          AbortError: 'picker_cancelled',
+          AbortError: 'capture_os_error',
           TypeError: 'api_unavailable',
         })[error.name] ?? 'capture_os_error'
       }
@@ -143,14 +143,31 @@
         }
         stream = selected
         elements.preview.srcObject = stream
-        track.addEventListener('ended', () => stop('ブラウザ側で共有が停止されました'), { once: true })
+        track.addEventListener('ended', () => {
+          if (operationGeneration === generation && stream === selected) {
+            stop('ブラウザ側で共有が停止されました')
+          }
+        }, { once: true })
         track.addEventListener('mute', () => {
-          elements.trackState.textContent = `${track.readyState} / muted`
+          if (operationGeneration === generation && stream === selected) {
+            elements.trackState.textContent = `${track.readyState} / muted`
+          }
         })
         track.addEventListener('unmute', () => {
-          elements.trackState.textContent = `${track.readyState} / available`
+          if (operationGeneration === generation && stream === selected) {
+            elements.trackState.textContent = `${track.readyState} / available`
+          }
         })
-        await elements.preview.play()
+        try {
+          await elements.preview.play()
+        } catch {
+          if (operationGeneration === generation && stream === selected) {
+            elements.reason.textContent = 'capture_os_error'
+            stop('プレビューを開始できません')
+          }
+          return
+        }
+        if (operationGeneration !== generation || stream !== selected) return
         elements.dimensions.textContent = `${elements.preview.videoWidth} × ${elements.preview.videoHeight}`
         elements.trackState.textContent = `${track.readyState} / ${track.muted ? 'muted' : 'available'}`
         elements.snapshot.disabled = false

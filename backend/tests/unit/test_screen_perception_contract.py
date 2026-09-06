@@ -6,12 +6,27 @@ import subprocess
 
 import pytest
 from jsonschema import Draft202012Validator
+from pydantic import ValidationError
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 CONTRACT_ROOT = REPOSITORY_ROOT / "contracts" / "perception" / "screen"
 VALID_FIXTURE_ROOT = CONTRACT_ROOT / "fixtures" / "valid"
 INVALID_FIXTURE_ROOT = CONTRACT_ROOT / "fixtures" / "invalid"
+EVENT_MODEL_NAMES = {
+    "screen_routing_disclosed": "RoutingDisclosure",
+    "screen_session_start_requested": "SessionStartRequested",
+    "screen_session_started": "SessionStarted",
+    "screen_session_heartbeat": "SessionHeartbeat",
+    "screen_session_heartbeat_accepted": "SessionHeartbeatAccepted",
+    "screen_session_revoke_requested": "SessionRevokeRequested",
+    "screen_session_revoked": "SessionRevoked",
+    "screen_snapshot_requested": "SnapshotRequested",
+    "screen_snapshot_upload_metadata": "SnapshotUploadMetadata",
+    "screen_snapshot_upload_accepted": "SnapshotUploadAccepted",
+    "screen_status": "ScreenStatus",
+    "screen_error": "ScreenError",
+}
 
 
 def _load_json(path: Path) -> object:
@@ -53,10 +68,23 @@ def test_shared_schema_rejects_all_invalid_events() -> None:
 def test_backend_boundary_parses_shared_valid_fixtures() -> None:
     parser = importlib.import_module("app.screen_perception.validation")
     for fixture_path in sorted(VALID_FIXTURE_ROOT.glob("*.json")):
-        assert [
-            parser.parse_screen_perception_event(event)
-            for event in _valid_events(fixture_path.name)
-        ]
+        for event in _valid_events(fixture_path.name):
+            parsed = parser.parse_screen_perception_event(event)
+            assert type(parsed).__name__ == EVENT_MODEL_NAMES[event["type"]]
+
+
+def test_generated_variant_model_requires_its_own_fields() -> None:
+    generated = importlib.import_module("app.screen_perception.generated")
+    with pytest.raises(ValidationError):
+        generated.SessionHeartbeat.model_validate(
+            {
+                "protocol_version": "1.0",
+                "type": "screen_session_heartbeat",
+                "event_id": "10000000-0000-4000-8000-000000000004",
+                "screen_session_id": "40000000-0000-4000-8000-000000000001",
+                "generation": 1,
+            }
+        )
 
 
 def test_decoded_pixel_limit_is_checked_beyond_per_dimension_limits() -> None:
@@ -145,6 +173,7 @@ def test_codegen_command_reproduces_committed_screen_types(tmp_path: Path) -> No
         shutil.copy2(source, destination)
     for relative_path in (
         "frontend/package-lock.json",
+        "frontend/scripts/generate-screen-perception.mjs",
         "contracts/perception/screen",
         "backend/app/screen_perception",
         "frontend/src/lib/screen-perception",
