@@ -274,11 +274,12 @@
   }
 
   async function ensureBackendSession() {
+    const activeController = controller
     if (
       backendSessionStarting
       || backendSession !== null
       || routing === null
-      || controller === null
+      || activeController === null
       || conversationId === null
       || state.captureState !== 'active'
       || state.actualSurface === null
@@ -297,8 +298,10 @@
         cloudDerivedChatConsent,
       })
       if (
-        controller.snapshot().generation !== session.generation
-        || controller.snapshot().captureState !== 'active'
+        !mounted
+        || controller !== activeController
+        || activeController.snapshot().generation !== session.generation
+        || activeController.snapshot().captureState !== 'active'
         || characterId !== session.character_id
         || conversationId !== session.conversation_id
       ) {
@@ -317,7 +320,7 @@
         })
       }, session.heartbeat_interval_ms)
     } catch {
-      controller.failRecognition('backend_unavailable')
+      controller?.failRecognition('backend_unavailable')
     } finally {
       backendSessionStarting = false
     }
