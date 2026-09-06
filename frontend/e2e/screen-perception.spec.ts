@@ -74,6 +74,7 @@ const installSyntheticScreenCapture = async (page: Page) => {
       requestVideoFrameCallback: {
         configurable: true,
         value: (callback: () => void) => {
+          if ((window as unknown as { __digitalSoulsStaticScreen?: boolean }).__digitalSoulsStaticScreen) return 1
           queueMicrotask(callback)
           return 1
         },
@@ -238,7 +239,7 @@ const installScreenBackend = async (page: Page): Promise<ScreenEvidence> => {
           turn_id: `60000000-0000-4000-8000-${String(requestIndex).padStart(12, '0')}`,
           source: body.screen_reference === true ? 'explicit_ui' : 'natural_language_text',
           requested_at: new Date().toISOString(),
-          capture_deadline: new Date(Date.now() + 30_000).toISOString(),
+          capture_deadline: new Date(Date.now() + 5_000).toISOString(),
         }),
       })
       return
@@ -316,6 +317,7 @@ const attachMetadataEvidence = async (testInfo: TestInfo, evidence: ScreenEviden
 test('共有ONだけでは送信せず文脈参照と明示参照で各1枚だけ送る', async ({ page }, testInfo) => {
   const evidence = await openScreenChat(page)
 
+  await page.getByText('画面共有の詳細').click()
   await page.getByRole('button', { name: '画面共有を開始' }).click()
   await expect(page.getByText('共有: 共有中')).toBeVisible()
   await expect(page.getByText('認識: 参照可能')).toBeVisible()
@@ -349,6 +351,7 @@ test('共有ONだけでは送信せず文脈参照と明示参照で各1枚だ�
 
 test('ウィンドウ共有はsurfaceを維持しOFFと再読込でsessionを復元しない', async ({ page }, testInfo) => {
   const evidence = await openScreenChat(page)
+  await page.getByText('画面共有の詳細').click()
   await page.getByLabel('共有する画面の種類').selectOption('window')
   await page.getByRole('button', { name: '画面共有を開始' }).click()
   await expect(page.getByText('認識: 参照可能')).toBeVisible()
@@ -364,8 +367,50 @@ test('ウィンドウ共有はsurfaceを維持しOFFと再読込でsessionを復
   await expect(page.getByRole('checkbox', { name: '現在の画面を参照' })).toBeDisabled()
 
   await page.reload()
-  await expect(page.getByText('共有: 停止中')).toBeVisible()
+  await expect(page.getByText('対象: 未選択')).toBeVisible()
   expect(evidence.sessionStarts).toHaveLength(1)
+  expect(evidence.failures).toEqual([])
+  await attachMetadataEvidence(testInfo, evidence)
+})
+
+test('Edgeの静止ウィンドウ相当でも5秒の取得期限内に現在frameを送る', async ({ page }, testInfo) => {
+  const evidence = await openScreenChat(page)
+  await page.getByText('画面共有の詳細').click()
+  await page.getByLabel('共有する画面の種類').selectOption('window')
+  await page.getByRole('button', { name: '画面共有を開始' }).click()
+  await expect(page.getByText('対象: ウィンドウ・合成画面')).toBeVisible()
+  await page.evaluate(() => {
+    (window as unknown as { __digitalSoulsStaticScreen?: boolean }).__digitalSoulsStaticScreen = true
+  })
+
+  await page.getByLabel('メッセージ').fill('これ何？')
+  await page.getByRole('button', { name: '送信' }).click()
+
+  await expect(page.getByText('画面を一度だけ確認して回答1')).toBeVisible()
+  expect(evidence.uploads).toEqual([{ surface: 'window', byteLength: expect.any(Number) }])
+  expect(evidence.failures).toEqual([])
+  await attachMetadataEvidence(testInfo, evidence)
+})
+
+test('ブラウザタブ共有はbrowser surfaceを維持して送信する', async ({ page }, testInfo) => {
+  const evidence = await openScreenChat(page)
+  await page.getByText('画面共有の詳細').click()
+  await page.getByLabel('共有する画面の種類').selectOption('browser')
+  await page.getByRole('button', { name: '画面共有を開始' }).click()
+  await expect(page.getByText('対象: ブラウザタブ・合成画面')).toBeVisible()
+
+  await page.getByRole('button', { name: 'サイドバーを閉じる' }).click()
+  await expect(page.getByRole('button', { name: 'サイドバーを開く' })).toBeVisible()
+  expect(evidence.revocations).toEqual([])
+  await page.getByRole('button', { name: 'サイドバーを開く' }).click()
+  await expect(page.getByText('対象: ブラウザタブ・合成画面')).toBeVisible()
+  expect(evidence.sessionStarts).toHaveLength(1)
+
+  await page.getByLabel('メッセージ').fill('これ何？')
+  await page.getByRole('button', { name: '送信' }).click()
+
+  await expect(page.getByText('画面を一度だけ確認して回答1')).toBeVisible()
+  expect(evidence.uploads[0]?.surface).toBe('browser')
   expect(evidence.failures).toEqual([])
   await attachMetadataEvidence(testInfo, evidence)
 })

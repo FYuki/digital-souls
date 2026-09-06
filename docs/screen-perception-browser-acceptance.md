@@ -4,7 +4,7 @@
 
 Issue #213および#217で、Windows 11上のデスクトップ版Google Chrome／Microsoft Edgeが実際に返す画面共有surfaceとframeを確認する。mockやAPIの存在確認だけを成功証跡にしない。
 
-個人デスクトップ、実会話、URL、window title、画像、Vision観測本文は記録しない。テスト専用の公開・合成画面を使用する。
+個人デスクトップ、実会話、URL、window title、画像、Vision観測本文は記録しない。機微情報を含まないテスト専用の合成画面を使用する。「公開」はインターネット公開を意味せず、localhostで手動試験中だけ配信する。検証ページは製品buildやサービスへ含めない。
 
 ## 準備
 
@@ -34,8 +34,9 @@ Issue #213および#217で、Windows 11上のデスクトップ版Google Chrome�
 7. 「ウィンドウを選択」から公開・合成windowを選び、同様に`window`、`1 / 0`、preview、静止画を確認する。
 8. windowを背面化、最小化、サイズ変更、別monitorへ移動、終了し、frameとtrack状態を記録する。
 9. pickerで拒否／取消しを行い、共有中にならないことを確認する。
-10. 選択可能ならbrowser tabまたは希望と異なる種別を選び、送信可能状態にならずtrackが停止することを確認する。
-11. picker表示中にページを再読込し、後から古い共有が有効にならないことを確認する。
+10. 「ブラウザタブを選択」から合成画面のtabを選び、`browser`、`1 / 0`、preview、静止画を確認する。digital-souls自身のtabが除外されることも確認する。
+11. 希望と異なる種別を選び、送信可能状態にならずtrackが停止することを確認する。
+12. picker表示中にページを再読込し、後から古い共有が有効にならないことを確認する。
 
 管理policyによる禁止を試せる環境では、設定前後の成否だけを記録する。registry値、企業名、管理情報、raw errorは記録しない。Webアプリから拒否とpolicy禁止を確実に区別できない場合、共通の`capture_not_allowed`で正しい。
 
@@ -49,7 +50,7 @@ commit: <40桁SHA>
 環境区分: dev
 OS: Windows 11 <version>
 Browser: Chrome または Edge <version>
-対象: monitor / window
+対象: monitor / window / browser
 secure context: true / false
 displaySurface: monitor / window / browser / unavailable
 video/audio tracks: <count>/<count>
@@ -84,7 +85,7 @@ reason code: <失敗時の固定codeだけ>
 
 ## #217 完成UIの実施順
 
-各ブラウザでmonitor、windowの順に共有し、各surfaceでtext、LiveKitの順に実施する。同じ共有session中は
+各ブラウザでmonitor、window、browserの順に共有し、各surfaceでtext、LiveKitの順に実施する。同じ共有session中は
 pickerを開き直さない。
 
 1. ON直後に画像要求が0件であることを確認する。
@@ -108,7 +109,7 @@ pickerを開き直さない。
 commit: <40桁SHA>
 環境区分: dev
 OS / Browser: <version>
-対象: monitor / window
+対象: monitor / window / browser
 経路: text / LiveKit / explicit UI
 Provider / Model: <provider> / <model>
 合成fixture ID: <ID>

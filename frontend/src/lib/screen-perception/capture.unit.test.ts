@@ -58,6 +58,7 @@ const createHarness = ({
   width = 1920,
   height = 1080,
   freshFrame = true,
+  readyState = HTMLMediaElement.HAVE_CURRENT_DATA,
 }: {
   stream?: MediaStream
   secure?: boolean
@@ -68,6 +69,7 @@ const createHarness = ({
   width?: number
   height?: number
   freshFrame?: boolean
+  readyState?: number
 } = {}) => {
   const states: ScreenCaptureState[] = []
   const getDisplayMedia = vi.fn(() => Promise.resolve(stream))
@@ -85,7 +87,7 @@ const createHarness = ({
   Object.defineProperties(preview, {
     videoWidth: { configurable: true, value: width },
     videoHeight: { configurable: true, value: height },
-    readyState: { configurable: true, value: HTMLMediaElement.HAVE_CURRENT_DATA },
+    readyState: { configurable: true, value: readyState },
     play: { configurable: true, value: vi.fn(async () => undefined) },
     pause: { configurable: true, value: vi.fn() },
     requestVideoFrameCallback: {
@@ -162,8 +164,27 @@ describe('BrowserScreenCaptureController', () => {
     })
   })
 
+  test('browser希望と実対象が一致した場合だけ共有する', async () => {
+    const track = new FakeTrack('browser')
+    const harness = createHarness({ stream: fakeStream(track) })
+
+    await harness.controller.selectSurface('browser')
+
+    expect(harness.getDisplayMedia).toHaveBeenCalledWith({
+      video: { displaySurface: 'browser' },
+      audio: false,
+      selfBrowserSurface: 'exclude',
+      surfaceSwitching: 'exclude',
+      monitorTypeSurfaces: 'exclude',
+    })
+    expect(harness.controller.snapshot()).toMatchObject({
+      captureState: 'active',
+      requestedSurface: 'browser',
+      actualSurface: 'browser',
+    })
+  })
+
   test.each([
-    ['browser', 'browser_surface_rejected'],
     ['window', 'surface_mismatch'],
     [null, 'surface_unknown'],
   ] as const)('不正なsurface %sを停止して画像を作らない', async (surface, reason) => {
@@ -351,9 +372,34 @@ describe('BrowserScreenCaptureController', () => {
     expect(harness.canvas.toBlob).not.toHaveBeenCalled()
   })
 
-  test('frame callbackが期限内に返らなければcanvasへ古いframeを描かない', async () => {
+  test('Edgeの静止window相当で次frame通知がなくても現在frameを取得する', async () => {
     vi.useFakeTimers()
     const harness = createHarness()
+    Object.defineProperty(harness.preview, 'requestVideoFrameCallback', {
+      configurable: true,
+      value: vi.fn(() => 1),
+    })
+    Object.defineProperty(harness.preview, 'cancelVideoFrameCallback', {
+      configurable: true,
+      value: vi.fn(),
+    })
+    await harness.controller.selectSurface('monitor')
+    const capturing = harness.controller.captureSnapshot({
+      request: snapshotRequest(1),
+      clientSessionId: CLIENT_SESSION_ID,
+    })
+
+    await vi.advanceTimersByTimeAsync(250)
+
+    await expect(capturing).resolves.toMatchObject({
+      metadata: { actual_surface: 'monitor' },
+    })
+    expect(harness.drawImage).toHaveBeenCalledTimes(1)
+  })
+
+  test('現在frameも次frame通知もなければ取得期限で失敗する', async () => {
+    vi.useFakeTimers()
+    const harness = createHarness({ readyState: HTMLMediaElement.HAVE_NOTHING })
     Object.defineProperty(harness.preview, 'requestVideoFrameCallback', {
       configurable: true,
       value: vi.fn(() => 1),

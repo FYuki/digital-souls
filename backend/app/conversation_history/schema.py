@@ -12,12 +12,13 @@ from app.conversation_history.titles import (
 )
 from app.privacy.contracts import HistoryDecisionReasonCode
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 _VERSION_TWO_SCHEMA_VERSION = 2
 _VERSION_THREE_SCHEMA_VERSION = 3
 _VERSION_FOUR_SCHEMA_VERSION = 4
 _VERSION_FIVE_SCHEMA_VERSION = 5
 _VERSION_SIX_SCHEMA_VERSION = 6
+_VERSION_SEVEN_SCHEMA_VERSION = 7
 _VERSION_FIVE_TABLES = frozenset(
     {
         "conversations",
@@ -67,6 +68,8 @@ def inspect_conversation_history_artifact_schema(
                 or _is_version_three_schema(connection)
                 or _is_version_four_schema(connection)
                 or _is_version_five_schema(connection)
+                or _is_version_six_schema(connection)
+                or _is_version_seven_schema(connection)
             ),
         )
 
@@ -237,7 +240,7 @@ CREATE TABLE ui_thread_pins (
 )
 """
 
-SCREEN_TURN_PROVENANCE_SQL = """
+VERSION_SEVEN_SCREEN_TURN_PROVENANCE_SQL = """
 CREATE TABLE screen_turn_provenance (
     turn_id TEXT NOT NULL,
     screen_lineage_id TEXT NOT NULL CHECK (
@@ -268,6 +271,11 @@ CREATE TABLE screen_turn_provenance (
         ON DELETE CASCADE
 )
 """
+
+SCREEN_TURN_PROVENANCE_SQL = VERSION_SEVEN_SCREEN_TURN_PROVENANCE_SQL.replace(
+    "surface IN ('monitor', 'window')",
+    "surface IN ('monitor', 'window', 'browser')",
+)
 
 VERSION_THREE_CONVERSATION_TURNS_SQL = f"""
 CREATE TABLE conversation_turns (
@@ -586,6 +594,26 @@ def _is_version_six_schema(connection: sqlite3.Connection) -> bool:
     )
 
 
+def _is_version_seven_schema(connection: sqlite3.Connection) -> bool:
+    return (
+        _user_tables(connection) == CURRENT_TABLES
+        and _column_names(connection, "conversations") == CONVERSATIONS_COLUMNS
+        and _column_names(connection, "conversation_turns")
+        == CONVERSATION_TURNS_COLUMNS
+        and connection.execute("PRAGMA user_version").fetchone()[0]
+        == _VERSION_SEVEN_SCHEMA_VERSION
+        and _has_conversation_definitions(connection)
+        and _schema_object_sql(connection, "table", "ui_settings")
+        == _normalized_sql(UI_SETTINGS_SQL)
+        and _schema_object_sql(connection, "table", "ui_characters")
+        == _normalized_sql(UI_CHARACTERS_SQL)
+        and _schema_object_sql(connection, "table", "ui_thread_pins")
+        == _normalized_sql(UI_THREAD_PINS_SQL)
+        and _schema_object_sql(connection, "table", "screen_turn_provenance")
+        == _normalized_sql(VERSION_SEVEN_SCREEN_TURN_PROVENANCE_SQL)
+    )
+
+
 def _is_version_five_schema(connection: sqlite3.Connection) -> bool:
     return (
         _user_tables(connection) == _VERSION_FIVE_TABLES
@@ -604,7 +632,7 @@ def _migrate_version_two_schema(connection: sqlite3.Connection) -> None:
     _migrate_turn_contract_to_version_four(connection)
     _migrate_conversation_titles_to_version_five(connection)
     _migrate_ui_settings_to_version_six(connection)
-    _migrate_screen_provenance_to_version_seven(connection)
+    _add_screen_provenance_to_current_schema(connection)
     if not _is_current_schema(connection):
         raise LegacySchemaError("version two migration did not create current schema")
 
@@ -658,7 +686,7 @@ def _migrate_version_three_schema(connection: sqlite3.Connection) -> None:
     _migrate_turn_contract_to_version_four(connection)
     _migrate_conversation_titles_to_version_five(connection)
     _migrate_ui_settings_to_version_six(connection)
-    _migrate_screen_provenance_to_version_seven(connection)
+    _add_screen_provenance_to_current_schema(connection)
     if not _is_current_schema(connection):
         raise LegacySchemaError("version three migration did not create current schema")
 
@@ -666,7 +694,7 @@ def _migrate_version_three_schema(connection: sqlite3.Connection) -> None:
 def _migrate_version_four_schema(connection: sqlite3.Connection) -> None:
     _migrate_conversation_titles_to_version_five(connection)
     _migrate_ui_settings_to_version_six(connection)
-    _migrate_screen_provenance_to_version_seven(connection)
+    _add_screen_provenance_to_current_schema(connection)
     if not _is_current_schema(connection):
         raise LegacySchemaError("version four migration did not create current schema")
 
@@ -716,10 +744,30 @@ def _migrate_ui_settings_to_version_six(connection: sqlite3.Connection) -> None:
     connection.execute(f"PRAGMA user_version = {_VERSION_SIX_SCHEMA_VERSION}")
 
 
-def _migrate_screen_provenance_to_version_seven(
+def _add_screen_provenance_to_current_schema(
     connection: sqlite3.Connection,
 ) -> None:
     connection.execute(SCREEN_TURN_PROVENANCE_SQL)
+    connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
+
+def _migrate_screen_provenance_to_version_eight(
+    connection: sqlite3.Connection,
+) -> None:
+    connection.execute(
+        "ALTER TABLE screen_turn_provenance "
+        "RENAME TO screen_turn_provenance_version_seven"
+    )
+    connection.execute(SCREEN_TURN_PROVENANCE_SQL)
+    columns = (
+        "turn_id, screen_lineage_id, origin_screen_session_id, "
+        "origin_generation, origin_routing_revision, source, surface, derivation"
+    )
+    connection.execute(
+        f"INSERT INTO screen_turn_provenance ({columns}) "
+        f"SELECT {columns} FROM screen_turn_provenance_version_seven"
+    )
+    connection.execute("DROP TABLE screen_turn_provenance_version_seven")
     connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
@@ -750,7 +798,7 @@ def initialize_conversation_history_schema(database_path: Path) -> None:
                     return
                 if _is_version_five_schema(connection):
                     _migrate_ui_settings_to_version_six(connection)
-                    _migrate_screen_provenance_to_version_seven(connection)
+                    _add_screen_provenance_to_current_schema(connection)
                     if not _is_current_schema(connection):
                         raise LegacySchemaError(
                             "version five migration did not create current schema"
@@ -758,10 +806,18 @@ def initialize_conversation_history_schema(database_path: Path) -> None:
                     connection.commit()
                     return
                 if _is_version_six_schema(connection):
-                    _migrate_screen_provenance_to_version_seven(connection)
+                    _add_screen_provenance_to_current_schema(connection)
                     if not _is_current_schema(connection):
                         raise LegacySchemaError(
                             "version six migration did not create current schema"
+                        )
+                    connection.commit()
+                    return
+                if _is_version_seven_schema(connection):
+                    _migrate_screen_provenance_to_version_eight(connection)
+                    if not _is_current_schema(connection):
+                        raise LegacySchemaError(
+                            "version seven migration did not create current schema"
                         )
                     connection.commit()
                     return

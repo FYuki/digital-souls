@@ -58,7 +58,7 @@ export interface ScreenError {
     type:               "screen_error";
 }
 
-export type ReasonCode = "api_unavailable" | "insecure_context" | "transient_activation_required" | "capture_not_allowed" | "no_capture_source" | "capture_os_error" | "picker_cancelled" | "surface_mismatch" | "browser_surface_rejected" | "surface_unknown" | "video_track_invalid" | "frame_unavailable" | "image_type_invalid" | "image_too_large" | "image_decode_failed" | "session_not_found" | "session_revoked" | "session_expired" | "generation_mismatch" | "context_mismatch" | "request_not_found" | "request_expired" | "duplicate_request" | "cloud_consent_required" | "routing_changed" | "vision_unconfigured" | "vision_unsupported" | "vision_timeout" | "vision_unavailable" | "vision_invalid_response" | "request_cancelled" | "backend_unavailable";
+export type ReasonCode = "api_unavailable" | "insecure_context" | "transient_activation_required" | "capture_not_allowed" | "no_capture_source" | "capture_os_error" | "picker_cancelled" | "surface_mismatch" | "surface_unknown" | "video_track_invalid" | "frame_unavailable" | "image_type_invalid" | "image_too_large" | "image_decode_failed" | "session_not_found" | "session_revoked" | "session_expired" | "generation_mismatch" | "context_mismatch" | "request_not_found" | "request_expired" | "duplicate_request" | "cloud_consent_required" | "routing_changed" | "vision_unconfigured" | "vision_unsupported" | "vision_timeout" | "vision_unavailable" | "vision_invalid_response" | "request_cancelled" | "backend_unavailable";
 
 export type Stage = "support" | "picker" | "capture" | "session" | "upload" | "vision" | "chat";
 
@@ -133,7 +133,7 @@ export interface SessionStartRequested {
     type:              "screen_session_start_requested";
 }
 
-export type ActualSurface = "monitor" | "window";
+export type ActualSurface = "monitor" | "window" | "browser";
 
 export interface CloudConsent {
     cloud_derived_chat: boolean;

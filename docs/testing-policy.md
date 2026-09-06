@@ -17,8 +17,8 @@
 
 画面知覚では、unit／moduleで参照3分岐、session・generation・同意、画像上限、Vision観測、
 provenance、Memory Formation除外を検証する。`frontend/e2e/screen-perception.spec.ts`は通常UIの
-共有ON、文脈参照、明示参照、OFF、再読込を合成MediaStreamとbrowser内Backendで検証するが、標準picker、
-実フレーム供給、Chrome／Edge差、実Vision品質の代用にはしない。実機と実モデルの完了条件は
+共有ON、文脈参照、明示参照、OFF、再読込、monitor／window／browser surface、静止windowでframe callbackが来ない場合の現在frameフォールバックを合成MediaStreamとbrowser内Backendで検証するが、標準picker、
+OSが供給する実フレーム、Chrome／Edge差、実Vision品質の代用にはしない。実機と実モデルの完了条件は
 [`screen-perception-browser-acceptance.md`](screen-perception-browser-acceptance.md)に従う。
 
 ## dogfood環境との分離

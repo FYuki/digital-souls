@@ -88,7 +88,7 @@
 * `lib/audio/pcm-worklet-recorder.ts` / `lib/audio/vad-assets.ts` — AudioWorkletによるPCM録音とVAD（発話区間検出）
 * `lib/AudioRecorder.svelte` / `lib/AudioPlayer.svelte` — マイク入力UI・音声再生UI
 * `lib/ChatWindow.svelte` / `lib/InputBar.svelte` — テキストチャットUI
-* `lib/ScreenCaptureControls.svelte` / `lib/screen-perception/` — 標準picker、単一monitor／windowの検証、ローカルpreview、取得時だけの静止画化、共有sessionの失効を担う。共有ONだけでは画像送信や定期解析を始めない
+* `lib/ScreenCaptureControls.svelte` / `lib/screen-perception/` — サイドバーメニュー上の共有操作、標準picker、単一monitor／window／browser tabの検証、ローカルpreview、取得時だけの静止画化、共有sessionの失効を担う。サイドバーを閉じても選択中の共有対象を破棄せず、共有ONだけでは画像送信や定期解析を始めない
 * `lib/ConversationSidebar.svelte` / `lib/sidebar/controller.ts` — キャラクター別スレッド一覧、設定、操作メニュー、desktop sidebar／compact drawerの状態を管理する
 * `lib/CharacterPortrait.svelte` — catalogが返した標準立ち絵URLだけを表示し、未設定・読込失敗時は会話を止めず共通プレースホルダーへ切り替える
 * `App.svelte` — テキスト／音声チャット、左サイドバー、立ち絵layoutを統合する。compact時はVisual Viewportへ追従して入力領域をソフトウェアキーボードの上へ保つ

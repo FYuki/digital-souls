@@ -8,14 +8,14 @@
 
 | 範囲 | 2026-09-06時点 |
 |---|---|
-| 標準picker、monitor／window検証、静止画生成、画像Inference基盤 | #213〜#215で実装済み |
+| 標準picker、monitor／window／browser検証、静止画生成、画像Inference基盤 | #213〜#215で実装し、#217でbrowserを追加 |
 | 文脈参照判断、lineage、text／LiveKit統合 | 本改訂で契約確定、#216で実装 |
 | 新しい共有説明、質問対象に沿う観測 | 本改訂で契約確定、#226で実装 |
 | 常時解析、自発発話 | #223／#224の後続Epic。本MVPでは未実装・非スコープ |
 
 ## 背景
 
-利用者が明示的に許可した1つのmonitorまたはwindowを、テキストとLiveKit音声で共有するCore知覚として利用する。最初の共有ONと標準pickerは利用者が操作する。共有後は「これ何？」「右上の赤い表示、何？」等の発言と許可された会話文脈から必要性を判断し、必要なturnだけ新しい静止画を取得する。共有ONはローカルの`MediaStreamTrack`を利用可能にするだけであり、画像の先行取得、定期送信、常時Vision、無発言時の解析を意味しない。
+利用者が明示的に許可した1つのmonitor、windowまたはbrowser tabを、テキストとLiveKit音声で共有するCore知覚として利用する。最初の共有ONと標準pickerは利用者が操作する。共有後は「これ何？」「右上の赤い表示、何？」等の発言と許可された会話文脈から必要性を判断し、必要なturnだけ新しい静止画を取得する。共有ONはローカルの`MediaStreamTrack`を利用可能にするだけであり、画像の先行取得、定期送信、常時Vision、無発言時の解析を意味しない。
 
 対象はWindows 11上のデスクトップ版Google Chrome／Microsoft Edgeである。Screen Capture APIの仕様、ブラウザ実装、OS、管理policy、GPU構成を区別し、文書上のAPI存在やmock成功だけで実機成功を主張しない。
 
@@ -26,10 +26,10 @@
 - `navigator.mediaDevices.getDisplayMedia()`だけを使用する。ネイティブ取得、Electron、ブラウザ拡張、OS policy回避は追加しない。
 - 利用者のclickによるtransient activation中に直接APIを呼ぶ。picker前にBackend通信等の長い非同期処理を待たない。
 - `audio: false`とし、返却streamにaudio trackがあれば異常として全trackを停止する。
-- 希望種別は`monitor`または`window`で、同時に保持するstreamは1つとする。
+- 希望種別は`monitor`、`window`または`browser`で、同時に保持するstreamは1つとする。
 - `video.displaySurface`はpicker表示への希望として渡す。特定対象の指定や実対象の保証には使わない。
-- `selfBrowserSurface: "exclude"`、`surfaceSwitching: "exclude"`をhintとして渡す。window希望時だけ`monitorTypeSurfaces: "exclude"`を使用し、実機で利用できないhintは外しても安全性が変わらない構造にする。
-- 取得後にvideo trackが1本、audio trackが0本、`track.getSettings().displaySurface`が希望種別と完全一致することを確認する。`browser`、属性欠落、不一致、複数video trackは送信前に停止する。
+- `selfBrowserSurface: "exclude"`、`surfaceSwitching: "exclude"`をhintとして渡す。monitor以外を希望するときは`monitorTypeSurfaces: "exclude"`を使用し、実機で利用できないhintは外しても安全性が変わらない構造にする。`selfBrowserSurface`はdigital-souls自身のtabを除外する指定であり、他のbrowser tab共有を禁止しない。
+- 取得後にvideo trackが1本、audio trackが0本、`track.getSettings().displaySurface`が希望種別と完全一致することを確認する。属性欠落、不一致、複数video trackは送信前に停止する。
 - pickerに表示する対象、最終選択、物理monitorと論理surfaceの対応はブラウザ／OSが所有する。アプリは対象一覧を列挙せず、別対象へ自動fallbackしない。
 
 Chromeのhintは特定windowやscreenを事前選択せず、pickerのpaneを優先表示するだけである。またScreen Capture仕様は利用者が毎回対象を選択し、通常の永続`granted`権限を持たないことを定めている。
@@ -47,13 +47,13 @@ Chromeのhintは特定windowやscreenを事前選択せず、pickerのpaneを優
 
 参照判断はsnapshot要求より前のCore内部処理である。Frontendは共有中の会話requestを待っている間だけローカルな`reference_deciding`表示を使用できるが、共有wire contractの`RecognitionState`へ追加せず、Backendから判断完了を装う状態eventも作らない。fast pathでも短時間表示され得るため、表示文言は「参照が必要か確認中」とし「画面を解析中」としない。textではHTTP応答、voiceでは既存Core eventまたは`snapshot_requested`の到着で終了する。
 
-共有中は「ONの間、会話に必要と判断したときに、選択した画面を参照します。ONだけでは画像を送信しません」と説明する。monitor共有ではdigital-soulsを前面へ出すと質問対象を隠し得るため、特定アプリについて継続して尋ねる場合はwindow共有を案内する。対象の前面化や共有先変更をアプリが自動実行してはならない。
+共有操作はサイドバーへ置き、現在の共有対象とON/OFFを常時表示する。共有種別、認識状態、説明、明示参照、同意、previewは既定で折り畳む。サイドバーの表示切替ではコンポーネントとstreamを破棄せず、利用者のOFF、対象・会話・キャラクター変更等の既存失効条件だけで停止する。共有中は「ONの間、会話に必要と判断したときに、選択した画面を参照します。ONだけでは画像を送信しません」と説明する。monitor共有ではdigital-soulsを前面へ出すと質問対象を隠し得るため、特定アプリについて継続して尋ねる場合はwindow共有を案内する。対象の前面化や共有先変更をアプリが自動実行してはならない。
 
 対象名となる`MediaStreamTrack.label`は現在ページのローカル表示だけに使用する。Backend、telemetry、通常log、storage、Issue証跡へ送らない。共有許可、ON状態、stream、同意は再読込後に復元しない。
 
 ### 3. 静止画と上限
 
-認識要求ごとに新しいframeを1枚だけ取得する。`track.readyState === "live"`、videoの寸法、frame callbackを確認し、5秒以内に利用可能な新しいframeを得られなければ`frame_unavailable`とする。
+認識要求ごとに現在のframeを1枚だけ取得する。`track.readyState === "live"`、videoの寸法を確認し、frame callbackが使える場合は更新を短時間待つ。Chromium系の静止windowでは次のcallbackが来ないことがあるため、`HAVE_CURRENT_DATA`以上なら250 ms後に現在frameへフォールバックする。現在frame自体がない場合だけ5秒を上限に待ち、得られなければ`frame_unavailable`または`request_expired`とする。要求前の画像bufferや定期captureは持たない。
 
 `captured_at`はFrontendがframeを読み出したUTC時刻であり、画面内容が最後に更新された時刻ではない。最小化やocclusion時に同じ内容が供給されても更新時刻を捏造しない。
 
@@ -245,7 +245,7 @@ privacy処理後の利用者発話とキャラクター回答は、既存どお�
 | `screen_lineage_id` | 直接観測turnでCoreが発行するUUID。派生turnへ同じIDを継承する |
 | `origin_screen_session_id`、`origin_generation` | 現行sessionとの一致確認。モデルは生成しない |
 | `origin_routing_revision` | 同じ送信先構成かの確認 |
-| `source`、`surface` | 明示UI／自然言語とmonitor／windowのmetadata。対象名は含めない |
+| `source`、`surface` | 明示UI／自然言語とmonitor／window／browserのmetadata。対象名は含めない |
 | `derivation` | `direct_observation`または`conversation_follow_up` |
 
 1 turnが複数の画面由来回答を入力に使った場合は全lineageを関連付け、1件へ要約して制約を失わせない。画面由来回答を参照して生成した「どう直すの？」等の派生回答も`conversation_follow_up`を継承する。provenanceが1件以上あるturnはMemory Formation scheduler、長期記憶抽出、Chroma投入から除外する。privacy skipped turnは本文を保存しない既存契約を優先しつつ、作成済みlineage metadataを本文復元の手掛かりにしてはならない。
@@ -285,21 +285,21 @@ Frontendはraw `DOMException.message`を表示・送信・記録せず、`name`�
 | `NotFoundError` | `no_capture_source` |
 | `NotReadableError` | `capture_os_error` |
 | pickerの明示的な取消しを区別できる場合 | `picker_cancelled` |
-| 実surface不一致／browser／不明 | `surface_mismatch`／`browser_surface_rejected`／`surface_unknown` |
+| 実surface不一致／不明 | `surface_mismatch`／`surface_unknown` |
 | frameなし | `frame_unavailable` |
 
 利用者拒否、Permissions Policy、OS／企業policy禁止は同じ`NotAllowedError`になり得るため、Webアプリから確実に区別できない場合は`capture_not_allowed`へ畳み込む。UI文言は「画面共有が許可されませんでした。ブラウザまたは管理設定と選択内容を確認してください。」とし、管理policyを確定原因として表示しない。
 
 ## 実機検証
 
-`frontend/manual/screen-capture-probe.html`をlocalhostで開き、公開・合成画面だけを使う。手順と記録様式は`docs/screen-perception-browser-acceptance.md`を正本とする。
+`frontend/manual/screen-capture-probe.html`をlocalhostで開き、機微情報を含まないテスト用合成画面だけを使う。このページはlocalhostで手動検証時にだけ配信し、製品buildやサービスの公開画面には含めない。手順と記録様式は`docs/screen-perception-browser-acceptance.md`を正本とする。
 
 2026-09-06に利用者が公開・合成画面で実施した。localhost probeへのアクセスだけを確認し、画像、対象名、User-Agentは収集していない。
 
-| 環境 | monitor | window | mismatch／browser拒否 | 背面化／サイズ変更 | 最小化 | 停止／取消し | 状態 |
+| 環境 | monitor | window | browser | 背面化／サイズ変更 | 最小化 | 停止／取消し | 状態 |
 |---|---|---|---|---|---|---|---|
-| Windows 11 25H2 / Chrome 152.0.7977.77 | 成功 | 成功 | 想定どおり拒否 | frame継続 | 取得停止 | 成功 | 合格 |
-| Windows 11 25H2 / Edge 152.0.4191.62 | 成功 | 成功 | 想定どおり拒否 | frame継続 | 取得停止 | 成功 | 合格 |
+| Windows 11 25H2 / Chrome 152.0.7977.77 | probe成功 | 完成UIで期限切れを確認、修正後再確認待ち | 再確認待ち | frame継続 | 取得停止 | 成功 | 保留 |
+| Windows 11 25H2 / Edge 152.0.4191.62 | probe成功 | 完成UIで期限切れを確認、修正後再確認待ち | 再確認待ち | frame継続 | 取得停止 | 成功 | 保留 |
 
 既存共有中に新しいpickerを開いて取消した場合、先に既存共有が解除され、そのままOFFとなった。これは対象変更操作の開始時に旧generationとtrackを失効させる本契約と一致する。最小化時は取得が停止したため、最小化windowの継続取得を保証せず`frame_unavailable`またはtrack終了として扱い、現在画面の画像を再利用しない。
 
