@@ -76,6 +76,7 @@ const deferred = (): Deferred => {
 const audioContexts: FakeAudioContext[] = []
 const closeBlockers: Deferred[] = []
 const workletFailures: Error[] = []
+const workletBlockers: Deferred[] = []
 
 class FakeAudioSourceNode {
   disconnect = vi.fn()
@@ -108,6 +109,7 @@ class FakeAudioContext {
   readonly audioWorklet = { addModule: vi.fn(async () => {
     const failure = workletFailures.shift()
     if (failure !== undefined) throw failure
+    await workletBlockers.shift()?.promise
   }) }
   readonly sources: FakeAudioSourceNode[] = []
   readonly gains: FakeGainNode[] = []
@@ -190,6 +192,7 @@ describe('LiveKit Room generation synchronization', () => {
     audioContexts.length = 0
     closeBlockers.length = 0
     workletFailures.length = 0
+    workletBlockers.length = 0
     vi.stubGlobal('AudioContext', FakeAudioContext)
     vi.stubGlobal('AudioWorkletNode', FakeAudioWorkletNode)
     vi.stubGlobal('MediaStream', class {
@@ -203,6 +206,57 @@ describe('LiveKit Room generation synchronization', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  test.each([false, true])('再生worklet準備前・購読解除後はreadyを送らない（解除=%s）', async unsubscribe => {
+    const client = new LiveKitRoomClient(() => undefined)
+    await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
+    const room = latestRoom()
+    const blocker = deferred()
+    workletBlockers.push(blocker)
+    const publication = {trackSid: 'TR_ready', trackName: 'ds-response-v1:50000000-0000-4000-8000-000000000001'}
+    const track = {kind: 'audio', mediaStreamTrack: {}}
+    const readyFrames = () => room.localParticipant.publishData.mock.calls
+      .map(([payload]) => JSON.parse(new TextDecoder().decode(payload)))
+      .filter(frame => frame.type === 'response_track_ready')
+    room.emit('trackSubscribed', track, publication, {})
+    await vi.waitFor(() => expect(audioContexts).toHaveLength(1))
+    expect(readyFrames()).toEqual([])
+    if (unsubscribe) room.emit('trackUnsubscribed', track, publication, {})
+    blocker.resolve()
+    if (unsubscribe) {
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(readyFrames()).toEqual([])
+    } else {
+      await vi.waitFor(() => expect(readyFrames()).toEqual([{
+        protocol_version: '1.0', type: 'response_track_ready', response_id: '50000000-0000-4000-8000-000000000001',
+        track_sid: 'TR_ready', generation: 0,
+      }]))
+    }
+    client.disconnect()
+  })
+
+  test('ready送信の完了が切断後に戻っても音声利用可能へ戻さない', async () => {
+    const observations: RoomObservation[] = []
+    const client = new LiveKitRoomClient(value => observations.push(value))
+    await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
+    const room = latestRoom()
+    const blocker = deferred()
+    let readySent = false
+    room.localParticipant.publishData.mockImplementation(async payload => {
+      if (JSON.parse(new TextDecoder().decode(payload)).type === 'response_track_ready') {
+        readySent = true
+        await blocker.promise
+      }
+    })
+    room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}}, {
+      trackSid: 'TR_ready', trackName: 'ds-response-v1:50000000-0000-4000-8000-000000000001',
+    }, {})
+    await vi.waitFor(() => expect(readySent).toBe(true))
+    client.disconnect()
+    blocker.resolve()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(observations.at(-1)).toMatchObject({transport: 'idle', audio: 'unavailable'})
   })
 
   test('世代変更時に前世代の終端応答とactive responseを消去する', async () => {

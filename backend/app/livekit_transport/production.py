@@ -1222,6 +1222,11 @@ class ProductionRuntimeManager:
         async def generation_ready() -> None:
             return None
 
+        def response_track_ready(response_id: str, track_sid: str) -> None:
+            source = self._audio_sources.get(session_id)
+            if source is not None:
+                source.confirm_ready(response_id, track_sid)
+
         coordinator = ProductionSessionCoordinator(
             session_id=session_id,
             user_identity=user_identity,
@@ -1233,6 +1238,7 @@ class ProductionRuntimeManager:
                 publish_data=publish_data,
                 cleanup=cleanup,
                 generation_ready=generation_ready,
+                response_track_ready=response_track_ready,
             ),
             core_port=self._core_port,
         )

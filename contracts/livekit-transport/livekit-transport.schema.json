@@ -7,6 +7,7 @@
     { "$ref": "#/$defs/StateSyncRequest" },
     { "$ref": "#/$defs/AuthoritativeState" },
     { "$ref": "#/$defs/LogicalAudioSegment" },
+    { "$ref": "#/$defs/ResponseTrackReady" },
     { "$ref": "#/$defs/MicrophoneObservation" }
   ],
   "$defs": {
@@ -68,6 +69,18 @@
         "audio_sequence": { "type": "integer", "minimum": 0 },
         "generation": { "$ref": "#/$defs/Generation" },
         "pcm_sample_count": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "ResponseTrackReady": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_version", "type", "response_id", "track_sid", "generation"],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/ProtocolVersion" },
+        "type": { "const": "response_track_ready" },
+        "response_id": { "$ref": "#/$defs/Identifier" },
+        "track_sid": { "type": "string", "pattern": "^TR_[A-Za-z0-9_-]{1,100}$" },
+        "generation": { "$ref": "#/$defs/Generation" }
       }
     },
     "MicrophoneObservation": {

@@ -15,7 +15,7 @@ B = "50000000-0000-4000-8000-000000000002"
 @pytest.fixture
 def rig(monkeypatch):
     sources, tracks, operations = [], [], []
-    flags = SimpleNamespace(publish_error=False, publish_entered=None, publish_release=None)
+    flags = SimpleNamespace(publish_error=False, publish_entered=None, publish_release=None, auto_ready=True)
 
     class Source:
         def __init__(self, rate, channels, *, queue_size_ms):
@@ -56,6 +56,8 @@ def rig(monkeypatch):
             raise RuntimeError('publish failed')
         sid = 'TR_' + str(len(tracks))
         operations.append(('publish', sid, track.name))
+        if flags.auto_ready:
+            asyncio.get_running_loop().call_soon(output.confirm_ready, track.name.split(':', 1)[1], sid)
         return SimpleNamespace(sid=sid)
 
     async def unpublish(sid):
@@ -70,7 +72,8 @@ def rig(monkeypatch):
     )
     monkeypatch.setitem(sys.modules, 'livekit.rtc', rtc)
     room = SimpleNamespace(local_participant=SimpleNamespace(publish_track=publish, unpublish_track=unpublish))
-    return ResponseAudioTracks(room), sources, tracks, operations, flags
+    output = ResponseAudioTracks(room, ready_timeout_seconds=.05)
+    return output, sources, tracks, operations, flags
 
 
 def test_responses_use_distinct_sources_and_release_previous_track(rig):
@@ -95,9 +98,11 @@ def test_responses_use_distinct_sources_and_release_previous_track(rig):
         assert sources[1].closed and tracks[1].muted
         assert observed == [
             ('response_audio_track_published', A),
+            ('response_audio_track_ready', A),
             ('response_audio_track_unpublished', A),
             ('response_audio_source_closed', A),
             ('response_audio_track_published', B),
+            ('response_audio_track_ready', B),
             ('response_audio_source_closed', B),
         ]
     asyncio.run(exercise())
@@ -208,5 +213,65 @@ def test_finish_drains_partial_samples_and_reports_padding_separately(rig):
         assert stats["response_audio_padding_samples"] == 1439
         assert stats["response_audio_max_queued_samples"] <= 48000
         assert b"".join(sources[0].frames) == b"\x03\x00" * 481 + bytes(1439 * 2)
+        await output.aclose()
+    asyncio.run(exercise())
+
+
+def test_readiness_requires_current_response_and_exact_track_before_capture(rig):
+    output, sources, _, _, flags = rig
+    flags.auto_ready = False
+    async def exercise():
+        await output.begin_response(A)
+        publish = asyncio.create_task(output.publish(bytes(960), response_id=A))
+        await asyncio.sleep(0)
+        assert not output.confirm_ready(B, "TR_1")
+        assert not output.confirm_ready(A, "TR_other")
+        assert sources[0].frames == []
+        assert not publish.done()
+        assert output.confirm_ready(A, "TR_1")
+        await publish
+        assert len(sources[0].frames) == 1
+        await output.aclose()
+    asyncio.run(exercise())
+
+
+def test_readiness_before_publish_completion_is_bound_to_actual_sid(rig):
+    output, sources, _, _, flags = rig
+    flags.auto_ready = False
+    async def exercise():
+        flags.publish_entered, flags.publish_release = asyncio.Event(), asyncio.Event()
+        begin = asyncio.create_task(output.begin_response(A))
+        await flags.publish_entered.wait()
+        assert not output.confirm_ready(A, "TR_1")
+        flags.publish_release.set()
+        await begin
+        await output.publish(bytes(960), response_id=A)
+        assert len(sources[0].frames) == 1
+        await output.aclose()
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("operation", ["timeout", "clear", "close", "cancel_task"])
+def test_no_audio_on_missing_readiness_or_stop_while_waiting(rig, operation):
+    output, sources, tracks, _, flags = rig
+    flags.auto_ready = False
+    async def exercise():
+        await output.begin_response(A)
+        publish = asyncio.create_task(output.publish(bytes(960), response_id=A))
+        await asyncio.sleep(0)
+        close = None
+        if operation == "clear":
+            output.clear(A)
+        elif operation == "close":
+            close = asyncio.create_task(output.aclose())
+        elif operation == "cancel_task":
+            publish.cancel()
+        with pytest.raises(TimeoutError if operation == "timeout" else asyncio.CancelledError):
+            await publish
+        if close is not None:
+            await close
+        assert sources[0].frames == []
+        assert tracks[0].muted
+        assert not output.confirm_ready(A, "TR_1")
         await output.aclose()
     asyncio.run(exercise())

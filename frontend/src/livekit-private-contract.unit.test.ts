@@ -91,3 +91,15 @@ describe('LiveKit private contract', () => {
     )
   })
 })
+
+
+test('応答track準備通知は応答IDとSIDを検証して正規化する', () => {
+  const frame = { protocol_version: '1.0', type: 'response_track_ready', generation: 2,
+    response_id: '50000000-0000-4000-8000-000000000001', track_sid: 'TR_one' }
+  expect(parsePrivateFrame(frame)).toEqual({type: 'response_track_ready', generation: 2,
+    responseId: frame.response_id, trackSid: 'TR_one'})
+  for (const invalid of [{...frame, response_id: 'invalid'}, {...frame, track_sid: 'other'},
+    {...frame, generation: -1}, {...frame, unexpected: true}]) {
+    expect(() => parsePrivateFrame(invalid)).toThrow()
+  }
+})

@@ -19,6 +19,7 @@ type PrivateFrame =
   }>
   | Readonly<{ type: 'ack'; eventId: string; generation: number }>
   | Readonly<{ type: 'state_sync_request'; generation: number }>
+  | Readonly<{ type: 'response_track_ready'; responseId: string; trackSid: string; generation: number }>
   | Readonly<{
     type: 'logical_audio_segment'
     responseId: string
@@ -51,6 +52,7 @@ type PrivateFrameWire =
   }>
   | Readonly<{ type: 'ack'; event_id: string; generation: number }>
   | Readonly<{ type: 'state_sync_request'; generation: number }>
+  | Readonly<{ type: 'response_track_ready'; response_id: string; track_sid: string; generation: number }>
   | Readonly<{
     type: 'logical_audio_segment'
     response_id: string
@@ -97,6 +99,8 @@ export function parsePrivateFrame(value: unknown): PrivateFrame {
       }
     case 'state_sync_request':
       return { type: frame.type, generation: frame.generation }
+    case 'response_track_ready':
+      return { type: frame.type, responseId: frame.response_id, trackSid: frame.track_sid, generation: frame.generation }
     case 'logical_audio_segment':
       return {
         type: frame.type,

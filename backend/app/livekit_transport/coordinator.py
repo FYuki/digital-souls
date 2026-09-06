@@ -45,6 +45,7 @@ class SessionCoordinatorDependencies:
     publish_data: Callable[[bytes, str], Awaitable[None]]
     cleanup: Callable[[str], Awaitable[None]]
     generation_ready: Callable[[], Awaitable[None]]
+    response_track_ready: Callable[[str, str], None] = lambda _response_id, _track_sid: None
 
 
 class ProductionSessionCoordinator:
@@ -213,7 +214,9 @@ class ProductionSessionCoordinator:
                     return
                 if frame_generation != self.generation:
                     return
-                if frame["type"] == "ack":
+                if frame["type"] == "response_track_ready":
+                    self._dependencies.response_track_ready(str(frame["response_id"]), str(frame["track_sid"]))
+                elif frame["type"] == "ack":
                     self.acknowledge(str(frame["event_id"]), "character_to_user")
         except TerminalProtocolError:
             await self.cleanup("protocol_error")

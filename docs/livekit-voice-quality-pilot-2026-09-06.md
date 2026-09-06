@@ -313,3 +313,14 @@ cancel、送信taskのキャンセル、次応答、session終了は所有する
 全応答で入力＋padding＝native供給が一致した。これはnativeへ渡したsample数の検証であり、受信loss、decoderの遅延、ブラウザで再生したsource PCM位置、underrunの証明ではない。通常pilotの`media_observation_method`は引き続き`unavailable`とする。次に、購読・再生準備を送信開始前に確認する処理と、packet→decode→明示PCM出力の対応を通常経路へ組み込む必要がある。
 
 Backend全単体テストは2,334件成功・1件skip。最終の統計追加後にはpacer、応答track、LiveKit関連moduleの34件と型検査が成功した。先行したmodule全体との混載実行では単体1件が二重clearで失敗したため、clearを冪等化してから全単体を再実行している。source完了の統計4種類は本文を含まない数値としてtraceへ記録する。
+
+
+## 2026-09-07: ブラウザの受信準備を確認してPCMを供給
+
+private契約に`response_track_ready`を追加した。ブラウザが応答trackのAudioContextをresumeし、workletと出力graphを用意してから、response ID・track SID・session世代を送る。Backendは現在のparticipant identity／SIDと世代を検証し、実際に発行したtrack SIDが一致した場合だけ送信準備済みとする。publish完了より先に届く通知は1件だけ保留し、完了後の実SIDで照合する。
+
+LLM／TTS生成と受信準備は並行する。PCMが生成された時点で未準備なら最大3秒待ち、期限切れ・cancel・終了時はqueueをclearしてtrackをmuteする。待機解除だけでPCMを送らないよう停止状態を再確認する。旧世代・旧応答・別participantからの通知では開始しない。ブラウザ側でもworklet準備中や通知配送中の切断・購読解除・世代変更後にgraphを利用可能へ戻さない。Backend／Frontendは新private契約を揃えて更新する必要があり、旧Frontendから通知が届かない場合は音声送信待ちが期限切れになる。
+
+`response-ready-01`の準備1回＋測定3回は全件成功した。track発行完了→準備確認は約40.133／35.719／36.888／36.813msで、全4回で準備確認が最初のnative PCM供給より前だった。同じsessionの`response-ready-session-01`でも3往復が成功し、準備確認は約36.394／29.527／30.059ms、明示終了が成功した。両runの全7応答で入力sample＋末尾padding＝native供給sampleが一致した。
+
+単体検証では通知のresponse／SID不一致、publish完了前の通知、待機期限切れ・cancel・終了、participant／世代不一致、購読解除・切断後の非同期完了を扱う。Backend単体2,342件成功・1件skip、Frontend単体379件・結合97件、型検査と対象lintが成功した。実接続の準備確認はブラウザgraphの構築完了を表し、最初のRTP packetの無欠落、source PCM先頭との対応、実際のbrowser出力完了までは証明しない。通常pilotの`media_observation_method`は引き続き`unavailable`で、正式100試行とTTFAを含む品質受け入れは未完了である。

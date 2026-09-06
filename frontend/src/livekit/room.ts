@@ -591,7 +591,7 @@ export class LiveKitRoomClient {
     const generation = this.generation
     await context.resume()
     await workletReady
-    if (!this.subscriptions.has(key) || this.audioContext !== context) return
+    if (!this.subscriptions.has(key) || this.audioContext !== context || this.generation !== generation) return
     const source = context.createMediaStreamSource(
       new MediaStream([track.mediaStreamTrack]),
     )
@@ -631,6 +631,15 @@ export class LiveKitRoomClient {
     for (const metadata of this.pendingMetadata.splice(0)) {
       this.recordMetadataOnContext(metadata, context)
     }
+    if (this.room !== null && this.subscriptions.has(key) && this.audioGraphs.get(key) === graph
+      && this.generation === generation && !this.stoppedResponses.has(responseId)) {
+      await this.room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({
+        protocol_version: '1.0', type: 'response_track_ready', response_id: responseId,
+        track_sid: key, generation,
+      })), {reliable: true, topic: PRIVATE_TOPIC})
+    }
+    if (!this.subscriptions.has(key) || this.audioContext !== context || this.generation !== generation
+      || this.audioGraphs.get(key) !== graph) return
     this.observe({
       transport: 'available', control: 'available', audio: 'available',
       activeAudioGraphs: [...this.audioGraphs.values()].filter(graph => !graph.suspended).length,

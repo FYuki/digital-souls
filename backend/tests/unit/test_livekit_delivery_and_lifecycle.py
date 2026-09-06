@@ -1004,3 +1004,33 @@ def test_production_never_joined_deadline_owns_cleanup(monkeypatch) -> None:
         assert cleaned == ["20000000-0000-4000-8000-000000000010"]
 
     asyncio.run(exercise())
+
+
+
+def test_response_track_readiness_requires_current_participant_and_generation():
+    module = _livekit_module("coordinator", "response audio receiver readiness")
+    async def exercise():
+        received = []
+        async def noop(*_args):
+            return None
+        coordinator = module.ProductionSessionCoordinator(
+            session_id="20000000-0000-4000-8000-000000000010", user_identity="user-one",
+            core_participant_id="30000000-0000-4000-8000-000000000010", reconnect_grace_ms=60000,
+            dependencies=module.SessionCoordinatorDependencies(
+                publish_data=noop, cleanup=noop, generation_ready=noop,
+                response_track_ready=lambda response, track: received.append((response, track)),
+            ), core_port=RecordingCorePort(),
+        )
+        coordinator.participant_connected(identity="user-one", participant_sid="PA_current", room_sid="RM_one")
+        response_id = "50000000-0000-4000-8000-000000000001"
+        frame = {"protocol_version": "1.0", "type": "response_track_ready", "response_id": response_id,
+                 "track_sid": "TR_one", "generation": 0}
+        for identity, participant, generation in [("other", "PA_current", 0), ("user-one", "PA_old", 0), ("user-one", "PA_current", 1)]:
+            await coordinator.receive_data(identity=identity, participant_sid=participant, topic=module.PRIVATE_TOPIC,
+                                           payload=json.dumps({**frame, "generation": generation}).encode())
+        assert received == []
+        await coordinator.receive_data(identity="user-one", participant_sid="PA_current", topic=module.PRIVATE_TOPIC,
+                                       payload=json.dumps(frame).encode())
+        assert received == [(response_id, "TR_one")]
+        await coordinator.cleanup("test_complete")
+    asyncio.run(exercise())
