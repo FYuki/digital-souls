@@ -1,7 +1,13 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte'
 
-  import type { ActualSurface, RecognitionState } from './screen-perception/generated'
+  import type {
+    ActualSurface,
+    RecognitionState,
+    RoutingDisclosure,
+    SessionStarted,
+    SnapshotRequested,
+  } from './screen-perception/generated'
   import {
     BrowserScreenCaptureController,
     screenCaptureFailureReason,
@@ -9,6 +15,15 @@
     type CapturedScreenSnapshot,
     type ScreenCaptureState,
   } from './screen-perception/capture'
+  import {
+    fetchScreenRouting,
+    heartbeatScreenSession,
+    reportScreenCaptureFailure,
+    revokeScreenSession,
+    startScreenSession,
+    uploadScreenSnapshot,
+    type ScreenUploadResult,
+  } from './screen-perception/client'
 
   export let characterId: string
   export let conversationId: string | null
@@ -18,13 +33,7 @@
   export let onSnapshotCaptured: ((snapshot: CapturedScreenSnapshot) => Promise<void>) | null = null
   /** #216の会話runtimeが参照要否を判定している間だけtrueにする。 */
   export let referenceDecisionActive = false
-  /** #216のsession・送信先・同意が揃い、会話から参照できる間だけtrueにする。 */
-  export let contextualReferenceAvailable = false
-  /** nullはローカル送信または送信先未確定、booleanはクラウド同意UIを表示する。 */
-  export let cloudImageConsent: boolean | null = null
-  export let cloudDerivedChatConsent: boolean | null = null
-  export let onCloudImageConsentChanged: ((consented: boolean) => void) | null = null
-  export let onCloudDerivedChatConsentChanged: ((consented: boolean) => void) | null = null
+  export let onReferenceAvailabilityChanged: (available: boolean) => void = () => undefined
 
   let preview: HTMLVideoElement
   let controller: BrowserScreenCaptureController | null = null
@@ -46,6 +55,12 @@
   let previousCoreConnected = coreConnected
   let operationButton: HTMLButtonElement | null = null
   let requestingAuthorization = false
+  let routing: RoutingDisclosure | null = null
+  let backendSession: SessionStarted | null = null
+  let heartbeatTimer: number | null = null
+  let backendSessionStarting = false
+  let cloudVisionConsent = false
+  let cloudDerivedChatConsent = false
 
   const captureLabels = {
     off: '停止中',
@@ -115,21 +130,29 @@
     ? '参照が必要か確認中'
     : requestingAuthorization
       ? recognitionLabels.snapshot_requested
-      : state.recognitionState === 'idle' && contextualReferenceAvailable
+      : state.recognitionState === 'idle'
+        && backendSession !== null
+        && state.captureState === 'active'
         ? '参照可能'
         : recognitionLabels[state.recognitionState]
+  $: if (mounted) publishAvailability()
 
   onMount(() => {
-    controller = new BrowserScreenCaptureController(preview, (next) => { state = next })
+    controller = new BrowserScreenCaptureController(preview, observeCaptureState)
     mounted = true
-    const handlePageHide = () => controller?.stop('pagehide')
+    void fetchScreenRouting().then((value) => {
+      if (!mounted) return
+      routing = value
+      void ensureBackendSession()
+    }).catch(() => undefined)
+    const handlePageHide = () => stopAndRevoke('pagehide')
     window.addEventListener('pagehide', handlePageHide)
     return () => window.removeEventListener('pagehide', handlePageHide)
   })
 
   onDestroy(() => {
     mounted = false
-    controller?.stop('pagehide')
+    stopAndRevoke('pagehide')
     controller = null
   })
 
@@ -141,16 +164,16 @@
     if (nextCharacterId !== previousCharacterId) {
       previousCharacterId = nextCharacterId
       previousConversationId = nextConversationId
-      controller?.stop('character_change')
+      stopAndRevoke('character_change')
     } else if (nextConversationId !== previousConversationId) {
       previousConversationId = nextConversationId
-      controller?.stop('conversation_change')
+      stopAndRevoke('conversation_change')
     }
   }
 
   function syncCoreConnection(nextConnected: boolean) {
     if (!mounted) return
-    if (previousCoreConnected && !nextConnected) controller?.stop('backend_disconnect')
+    if (previousCoreConnected && !nextConnected) stopAndRevoke('backend_disconnect')
     previousCoreConnected = nextConnected
   }
 
@@ -164,18 +187,20 @@
     const selectedConversationId = conversationId
     await controller.selectSurface(requestedSurface)
     if (selectedCharacterId !== characterId || selectedConversationId !== conversationId) {
-      controller.stop(selectedCharacterId !== characterId ? 'character_change' : 'conversation_change')
+      stopAndRevoke(selectedCharacterId !== characterId ? 'character_change' : 'conversation_change')
+    } else {
+      void ensureBackendSession()
     }
     restoreFocus()
   }
 
   const stopSharing = () => {
-    controller?.stop('user_off')
+    stopAndRevoke('user_off')
     restoreFocus()
   }
 
   const changeTarget = async () => {
-    controller?.stop('target_change')
+    stopAndRevoke('target_change')
     await selectTarget()
   }
 
@@ -209,12 +234,155 @@
     }
   }
 
-  const changeCloudImageConsent = (event: Event) => {
-    onCloudImageConsentChanged?.((event.currentTarget as HTMLInputElement).checked)
+  function observeCaptureState(next: ScreenCaptureState) {
+    const ended = state.captureState === 'active' && next.captureState === 'unavailable'
+    state = next
+    publishAvailability()
+    if (ended) void revokeBackend('capture_ended')
   }
 
-  const changeCloudDerivedChatConsent = (event: Event) => {
-    onCloudDerivedChatConsentChanged?.((event.currentTarget as HTMLInputElement).checked)
+  function stopHeartbeat() {
+    if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer)
+    heartbeatTimer = null
+  }
+
+  async function revokeBackend(
+    reason: 'user_off' | 'target_change' | 'conversation_change' | 'character_change'
+      | 'consent_revoked' | 'capture_ended' | 'pagehide' | 'backend_disconnect',
+  ) {
+    const session = backendSession
+    backendSession = null
+    stopHeartbeat()
+    publishAvailability()
+    if (session === null) return
+    await revokeScreenSession(session, reason).catch(() => undefined)
+  }
+
+  function stopAndRevoke(
+    reason: 'user_off' | 'target_change' | 'conversation_change' | 'character_change'
+      | 'consent_revoked' | 'capture_ended' | 'pagehide' | 'backend_disconnect',
+  ) {
+    controller?.stop(reason)
+    void revokeBackend(reason)
+  }
+
+  function consentSatisfied(): boolean {
+    if (routing === null) return false
+    if (routing.vision_destination === 'cloud' && !cloudVisionConsent) return false
+    if (routing.chat_destination === 'cloud' && !cloudDerivedChatConsent) return false
+    return true
+  }
+
+  async function ensureBackendSession() {
+    const activeController = controller
+    if (
+      backendSessionStarting
+      || backendSession !== null
+      || routing === null
+      || activeController === null
+      || conversationId === null
+      || state.captureState !== 'active'
+      || state.actualSurface === null
+      || !consentSatisfied()
+    ) return
+    backendSessionStarting = true
+    try {
+      const session = await startScreenSession({
+        routing,
+        generation: state.generation,
+        characterId,
+        conversationId,
+        requestedSurface: state.requestedSurface,
+        actualSurface: state.actualSurface,
+        cloudVisionConsent,
+        cloudDerivedChatConsent,
+      })
+      if (
+        !mounted
+        || controller !== activeController
+        || activeController.snapshot().generation !== session.generation
+        || activeController.snapshot().captureState !== 'active'
+        || characterId !== session.character_id
+        || conversationId !== session.conversation_id
+      ) {
+        await revokeScreenSession(session, 'conversation_change').catch(() => undefined)
+        return
+      }
+      backendSession = session
+      publishAvailability()
+      stopHeartbeat()
+      heartbeatTimer = window.setInterval(() => {
+        const current = backendSession
+        if (current === null) return
+        void heartbeatScreenSession(current).catch(() => {
+          controller?.failRecognition('backend_unavailable')
+          stopAndRevoke('backend_disconnect')
+        })
+      }, session.heartbeat_interval_ms)
+    } catch {
+      controller?.failRecognition('backend_unavailable')
+    } finally {
+      backendSessionStarting = false
+    }
+  }
+
+  function updateConsent() {
+    if (backendSession !== null) stopAndRevoke('consent_revoked')
+    else void ensureBackendSession()
+  }
+
+  export function clientSessionId(): string | null {
+    return routing?.client_session_id ?? null
+  }
+
+  export function referenceAvailable(): boolean {
+    return backendSession !== null && state.captureState === 'active' && !busy
+  }
+
+  function publishAvailability() {
+    onReferenceAvailabilityChanged(
+      backendSession !== null && state.captureState === 'active' && !busy,
+    )
+  }
+
+  export async function captureAuthorizedRequest(
+    request: SnapshotRequested,
+  ): Promise<ScreenUploadResult> {
+    const session = backendSession
+    if (
+      controller === null
+      || session === null
+      || request.screen_session_id !== session.screen_session_id
+      || request.generation !== session.generation
+    ) {
+      const chat = await reportScreenCaptureFailure(
+        request,
+        session === null ? 'session_revoked' : 'generation_mismatch',
+        characterId,
+      )
+      return { accepted: null, chat }
+    }
+    let snapshot: CapturedScreenSnapshot
+    try {
+      snapshot = await controller.captureSnapshot({
+        request,
+        clientSessionId: session.client_session_id,
+      })
+    } catch (error) {
+      const reason = screenCaptureFailureReason(error)
+      controller.failRecognition(reason)
+      const chat = await reportScreenCaptureFailure(request, reason, characterId)
+      return { accepted: null, chat }
+    }
+    controller.markRecognition('recognizing')
+    try {
+      const result = await uploadScreenSnapshot(snapshot, characterId)
+      controller.markRecognition('succeeded', snapshot.metadata.captured_at)
+      return result
+    } catch (error) {
+      controller.failRecognition('backend_unavailable')
+      throw error
+    }
   }
 </script>
 
@@ -273,27 +441,27 @@
       選択したウィンドウが参照対象です。digital-soulsの画面とは別の対象として扱います。
     </p>
   {/if}
-  {#if cloudImageConsent !== null || cloudDerivedChatConsent !== null}
+  {#if routing?.vision_destination === 'cloud' || routing?.chat_destination === 'cloud'}
     <fieldset class="cloud-consent">
       <legend>クラウド送信の確認</legend>
-      {#if cloudImageConsent !== null}
+      {#if routing?.vision_destination === 'cloud'}
         <label>
           <input
             type="checkbox"
-            checked={cloudImageConsent}
-            disabled={disabled || onCloudImageConsentChanged === null}
-            on:change={changeCloudImageConsent}
+            bind:checked={cloudVisionConsent}
+            disabled={disabled}
+            on:change={updateConsent}
           />
           今回の共有画像をクラウドの画面認識へ送信する
         </label>
       {/if}
-      {#if cloudDerivedChatConsent !== null}
+      {#if routing?.chat_destination === 'cloud'}
         <label>
           <input
             type="checkbox"
-            checked={cloudDerivedChatConsent}
-            disabled={disabled || onCloudDerivedChatConsentChanged === null}
-            on:change={changeCloudDerivedChatConsent}
+            bind:checked={cloudDerivedChatConsent}
+            disabled={disabled}
+            on:change={updateConsent}
           />
           画面の観測文と、この共有に由来する会話内の回答をクラウドの参照判断・会話へ送信する
         </label>
@@ -303,8 +471,8 @@
   {/if}
   {#if state.reasonCode !== null}
     <p class="screen-error" role="alert">{reasonLabels[state.reasonCode]}</p>
-  {:else if state.captureState === 'active' && requestSnapshot === null}
-    <p class="integration-note">画面参照のサーバー連携は準備中です。共有画像は送信されません。</p>
+  {:else if state.captureState === 'active' && routing === null}
+    <p class="integration-note">画面参照のサーバーへ接続できていません。共有画像は送信されません。</p>
   {/if}
   <video bind:this={preview} class:visible={state.captureState === 'active'} autoplay muted playsinline aria-label="共有画面のローカルプレビュー"></video>
 </section>
@@ -320,6 +488,7 @@
   .screen-actions, .screen-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
   .screen-description { margin: 0 0 9px; color: #eee8f3; }
   label { display: flex; align-items: center; gap: 7px; }
+  .cloud-consent { margin-top: 8px; }
   select, button {
     min-height: 40px;
     border: 1px solid rgba(255, 255, 255, 0.14);

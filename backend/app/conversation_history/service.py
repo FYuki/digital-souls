@@ -21,6 +21,7 @@ from app.privacy.contracts import (
 )
 from app.privacy.history_sanitizer import HistorySanitizer
 from app.voice_session.playback_range import played_text_prefix
+from app.screen_perception.provenance import ScreenLineage
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,13 @@ class HistorySession(Protocol):
         ...
 
     def fail_turn(self, started_turn: StartedHistoryTurn) -> None:
+        ...
+
+    def mark_screen_derived(
+        self,
+        started_turn: StartedHistoryTurn,
+        lineages: tuple[ScreenLineage, ...],
+    ) -> None:
         ...
 
     def prompt_turns(
@@ -142,6 +150,20 @@ class ConversationHistorySession:
             started_turn.turn_id,
         )
 
+    def mark_screen_derived(
+        self,
+        started_turn: StartedHistoryTurn,
+        lineages: tuple[ScreenLineage, ...],
+    ) -> None:
+        if started_turn.content_skipped:
+            return
+        self._repository.mark_screen_derived(
+            self._character_id,
+            self._conversation_id,
+            started_turn.turn_id,
+            lineages,
+        )
+
     def interrupt_turn(
         self,
         started_turn: StartedHistoryTurn,
@@ -205,7 +227,12 @@ class ConversationHistorySession:
                 page_size=page_size,
             )
             for turn in page.turns:
-                restored_turn = restore_prompt_turn(turn)
+                restored_turn = restore_prompt_turn(
+                    turn,
+                    self._repository.list_screen_lineages(
+                        self._character_id, self._conversation_id, turn.turn_id
+                    ),
+                )
                 yield restored_turn
                 if restored_turn.is_completed:
                     completed += 1

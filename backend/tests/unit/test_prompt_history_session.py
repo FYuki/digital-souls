@@ -43,6 +43,7 @@ def _page(turns, cursor):
 
 
 def _session(repository: MagicMock) -> ConversationHistorySession:
+    repository.list_screen_lineages.return_value = ()
     return ConversationHistorySession(
         character_id="miori",
         conversation_id=CONVERSATION_ID,

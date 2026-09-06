@@ -4,8 +4,11 @@ import asyncio
 from dataclasses import dataclass, field
 import importlib
 import threading
+from uuid import UUID
 
 import pytest
+
+from app.screen_perception.provenance import ScreenLineage
 
 from tests.conversation_core_test_support import (
     BlockingLlm,
@@ -262,6 +265,9 @@ class FakeHistorySession:
         default_factory=list
     )
     failed: list[object] = field(default_factory=list)
+    screen_derived: list[tuple[object, tuple[ScreenLineage, ...]]] = field(
+        default_factory=list
+    )
     content_skipped: bool = False
     completed_turn: object = field(default_factory=object)
 
@@ -296,6 +302,11 @@ class FakeHistorySession:
             return
         self.failed.append(started_turn)
 
+    def mark_screen_derived(
+        self, started_turn: object, lineages: tuple[ScreenLineage, ...]
+    ) -> None:
+        self.screen_derived.append((started_turn, lineages))
+
 
 @dataclass
 class TerminalRecordingDelivery(RecordingDelivery):
@@ -324,6 +335,45 @@ def test_history_adapter_propagates_privacy_skipped_start_result() -> None:
 
         assert result.content_skipped is True
         assert history.started == ["保存対象外"]
+
+    asyncio.run(exercise())
+
+
+def test_voice_screen_lineage_is_marked_only_for_adopted_terminal_response() -> None:
+    async def exercise() -> None:
+        public, adapters = _modules()
+        history = FakeHistorySession()
+        state = adapters.ScreenLineageResponseState()
+        adapter = adapters.ConversationHistoryPersistenceAdapter(
+            history_session=history,
+            screen_lineage_state=state,
+        )
+        response_id = "50000000-0000-4000-8000-000000000904"
+        await adapter.start_response(
+            response_id=response_id,
+            user_content="今の画面を見て",
+        )
+        lineage = ScreenLineage(
+            UUID("10000000-0000-4000-8000-000000000004"),
+            UUID("20000000-0000-4000-8000-000000000004"),
+            1,
+            "a" * 64,
+            "natural_language_voice",
+            "monitor",
+        )
+        state.record((lineage,))
+        await adapter.persist(public.TerminalOutcome(
+            response_id=response_id,
+            generation=1,
+            state=public.ResponseState.COMPLETED,
+            reason=None,
+            generated_text="回答",
+            audio_segments=(),
+            last_played_audio_sequence=0,
+        ))
+        assert history.screen_derived == [
+            (history.handle, (lineage,))
+        ]
 
     asyncio.run(exercise())
 

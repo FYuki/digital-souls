@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from app.conversation_history.models import ConversationTurn, TurnStatus
+from app.screen_perception.provenance import ScreenLineage
 
 
 @dataclass(frozen=True, repr=False)
@@ -8,9 +9,13 @@ class RestoredHistoryTurn:
     user_content: str
     assistant_content: str | None
     is_completed: bool
+    screen_lineages: tuple[ScreenLineage, ...] = ()
 
 
-def restore_prompt_turn(turn: ConversationTurn) -> RestoredHistoryTurn:
+def restore_prompt_turn(
+    turn: ConversationTurn,
+    screen_lineages: tuple[ScreenLineage, ...] = (),
+) -> RestoredHistoryTurn:
     if turn.status not in {
         TurnStatus.COMPLETED,
         TurnStatus.INTERRUPTED,
@@ -28,4 +33,5 @@ def restore_prompt_turn(turn: ConversationTurn) -> RestoredHistoryTurn:
         user_content=turn.user_content,
         assistant_content=assistant_content,
         is_completed=turn.status is TurnStatus.COMPLETED,
+        screen_lineages=screen_lineages,
     )

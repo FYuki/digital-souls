@@ -81,6 +81,13 @@ class PromptBuilder:
             messages=messages,
             usage=usage,
             character_lore_decisions=measured.selected.character_lore_decisions,
+            screen_lineages=tuple(
+                {
+                    lineage.screen_lineage_id: lineage
+                    for message in messages
+                    for lineage in message.screen_lineages
+                }.values()
+            ),
         )
 
     def _select_regions(

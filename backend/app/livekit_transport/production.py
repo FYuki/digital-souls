@@ -25,6 +25,7 @@ from app.conversation_core.adapters import (
     SyncTranscriber,
     VoicevoxTtsAdapter,
     WhisperSttAdapter,
+    ScreenLineageResponseState,
 )
 from app.conversation_core.ports import DeliveryPort
 from app.livekit_transport.bootstrap import (
@@ -44,6 +45,7 @@ from app.livekit_transport.measurement import LiveKitMeasurementSession
 from app.livekit_transport.runtime import MicrophoneTrackObserver
 from app.livekit_transport.token import IssuedToken, LiveKitTokenSigner
 from app.voice_metrics import MeasurementKind, TraceEvent
+from app.screen_perception.provenance import ScreenLineage
 
 if TYPE_CHECKING:
     import livekit.api as livekit_api
@@ -248,6 +250,10 @@ class _HistoryService(Protocol):
     def open_session(self, character_id: str, conversation_id: UUID) -> object: ...
 
 
+class _ScreenSessionRevoker(Protocol):
+    async def revoke_client(self, client_session_id: UUID, reason: str) -> None: ...
+
+
 class _CoreSessionFactory(Protocol):
     def create(
         self,
@@ -256,6 +262,7 @@ class _CoreSessionFactory(Protocol):
         character_id: str,
         conversation_id: UUID,
         delivery: DeliveryPort,
+        client_session_id: UUID | None = None,
     ) -> ConversationCoreSession: ...
 
 
@@ -276,6 +283,13 @@ class ProductionConversationCoreSessionFactory:
         generate_reply_stream: Callable[
             [str, object, str], AsyncIterator[str]
         ] | None = None,
+        generate_screen_reply_stream: Callable[
+            [
+                str, UUID | None, str, UUID, object, str,
+                Callable[[tuple[ScreenLineage, ...]], None],
+            ],
+            AsyncIterator[str],
+        ] | None = None,
         measurement_kind: MeasurementKind = "automated_test",
         trace_record: Callable[[TraceEvent], None] | None = None,
         measurement_clock_ns: Callable[[], int] = time.perf_counter_ns,
@@ -286,10 +300,18 @@ class ProductionConversationCoreSessionFactory:
         self._completed_turn_observer = completed_turn_observer
         self._generate_reply = generate_reply
         self._generate_reply_stream = generate_reply_stream
+        self._generate_screen_reply_stream = generate_screen_reply_stream
         self._measurement_kind = measurement_kind
         self._trace_record = trace_record
         self._measurement_clock_ns = measurement_clock_ns
-        if (generate_reply is None) == (generate_reply_stream is None):
+        if sum(
+            source is not None
+            for source in (
+                generate_reply,
+                generate_reply_stream,
+                generate_screen_reply_stream,
+            )
+        ) != 1:
             raise ValueError("exactly one production LLM generation source is required")
 
     def create(
@@ -299,6 +321,7 @@ class ProductionConversationCoreSessionFactory:
         character_id: str,
         conversation_id: UUID,
         delivery: DeliveryPort,
+        client_session_id: UUID | None = None,
     ) -> ConversationCoreSession:
         history_session = self._history_service.open_session(
             character_id, conversation_id
@@ -313,6 +336,7 @@ class ProductionConversationCoreSessionFactory:
         if isinstance(delivery, _ConversationCoreDelivery):
             delivery.attach_measurement(measurement)
         speaker_id = load_tts_config(character_id).speaker_id
+        screen_lineage_state = ScreenLineageResponseState()
         return ConversationCoreSession(
             session_id=session_id,
             response_id_factory=lambda: str(uuid4()),
@@ -320,10 +344,24 @@ class ProductionConversationCoreSessionFactory:
             persistence=ConversationHistoryPersistenceAdapter(
                 history_session=history_session,  # type: ignore[arg-type]
                 completed_turn_observer=self._completed_turn_observer,
+                screen_lineage_state=screen_lineage_state,
             ),
             observation=measurement,
             stt=self._stt,
             llm=(
+                PromptLlmAdapter(
+                    generate_stream=lambda transcript: self._required_generate_screen_reply_stream()(
+                        session_id,
+                        client_session_id,
+                        character_id,
+                        conversation_id,
+                        history_session,
+                        transcript,
+                        screen_lineage_state.record,
+                    )
+                )
+                if self._generate_screen_reply_stream is not None
+                else
                 PromptLlmAdapter(
                     generate_reply=lambda transcript: self._required_generate_reply()(
                         character_id, history_session, transcript
@@ -356,6 +394,19 @@ class ProductionConversationCoreSessionFactory:
         if self._generate_reply_stream is None:
             raise RuntimeError("streaming LLM generator is missing")
         return self._generate_reply_stream
+
+    def _required_generate_screen_reply_stream(
+        self,
+    ) -> Callable[
+        [
+            str, UUID | None, str, UUID, object, str,
+            Callable[[tuple[ScreenLineage, ...]], None],
+        ],
+        AsyncIterator[str],
+    ]:
+        if self._generate_screen_reply_stream is None:
+            raise RuntimeError("screen-aware streaming LLM generator is missing")
+        return self._generate_screen_reply_stream
 
 
 class _ConversationCoreDelivery:
@@ -1055,6 +1106,7 @@ class ProductionRuntimeManager:
         session_repository: InMemorySessionBindingRepository,
         core_port: CoreNotificationPort,
         core_session_factory: _CoreSessionFactory | None = None,
+        screen_session_revoker: _ScreenSessionRevoker | None = None,
     ) -> None:
         self._livekit_url = livekit_url
         self._signer = signer
@@ -1066,6 +1118,7 @@ class ProductionRuntimeManager:
             if core_session_factory is not None
             else _MissingCoreSessionFactory()
         )
+        self._screen_session_revoker = screen_session_revoker
         self._rooms: dict[str, rtc.Room] = {}
         self._coordinators: dict[str, ProductionSessionCoordinator] = {}
         self._session_tasks: dict[str, set[asyncio.Task[None]]] = {}
@@ -1075,6 +1128,7 @@ class ProductionRuntimeManager:
         self._core_sessions: dict[str, ConversationCoreSession] = {}
         self._core_bridges: dict[str, _ConversationCoreBridge] = {}
         self._cleanup_states: dict[str, _SessionCleanupState] = {}
+        self._screen_client_sessions: dict[str, UUID] = {}
 
     async def connect(self, session_id: str) -> None:
         reservation = self._sessions.get(session_id)
@@ -1094,6 +1148,15 @@ class ProductionRuntimeManager:
                     ),
                     60_000,
                 ),
+                **(
+                    {}
+                    if reservation.request.get("screen_client_session_id") is None
+                    else {
+                        "screen_client_session_id": reservation.request[
+                            "screen_client_session_id"
+                        ]
+                    }
+                ),
             }
         )
 
@@ -1104,6 +1167,10 @@ class ProductionRuntimeManager:
         rtc_module = _livekit_rtc_module()
 
         session_id = str(request["session_id"])
+        if request.get("screen_client_session_id") is not None:
+            self._screen_client_sessions[session_id] = UUID(
+                str(request["screen_client_session_id"])
+            )
         room_name = f"voice-{session_id}"
         user_identity = f"user-{session_id}"
         token = await self._signer.issue_token(
@@ -1246,6 +1313,11 @@ class ProductionRuntimeManager:
             character_id=str(request["character_id"]),
             conversation_id=UUID(str(request["conversation_id"])),
             delivery=delivery,
+            client_session_id=(
+                UUID(str(request["screen_client_session_id"]))
+                if request.get("screen_client_session_id") is not None
+                else None
+            ),
         )
 
         def schedule_core_operation(operation: Awaitable[None]) -> None:
@@ -1405,6 +1477,12 @@ class ProductionRuntimeManager:
             raise RuntimeError("LiveKit session is not active")
         await coordinator.send_core(payload)
 
+    async def send_screen(self, session_id: str, payload: bytes) -> None:
+        coordinator = self._coordinators.get(session_id)
+        if coordinator is None:
+            raise RuntimeError("LiveKit session is not active")
+        await coordinator.send_screen(payload)
+
     async def stop(self, session_id: str) -> None:
         coordinator = self._coordinators.get(session_id)
         if coordinator is not None:
@@ -1439,6 +1517,14 @@ class ProductionRuntimeManager:
     async def _cleanup_owned_session(self, session_id: str) -> None:
         state = self._cleanup_states.get(session_id)
         if state is None:
+            screen_client_session_id = getattr(
+                self, "_screen_client_sessions", {}
+            ).pop(session_id, None)
+            if screen_client_session_id is not None and self._screen_session_revoker is not None:
+                await self._screen_session_revoker.revoke_client(
+                    screen_client_session_id,
+                    "backend_disconnect",
+                )
             core_session = self._core_sessions.pop(session_id, None)
             if core_session is not None:
                 await core_session.end()
@@ -1554,6 +1640,7 @@ async def configure_production_resources(
         session_repository=sessions,
         core_port=core_events,
         core_session_factory=core_session_factory,
+        screen_session_revoker=app.state.screen_perception_service,
     )
     validator = CharacterConversationBindingValidator(
         character_loader=load_character_card,

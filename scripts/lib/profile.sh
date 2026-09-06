@@ -65,7 +65,7 @@ profile_export_derived_environment() {
     backend_origin="$(profile_get derivedEnvironment.DS_BACKEND_ORIGIN)" || return $?
   fi
 
-  unset OLLAMA_BASE_URL VOICEVOX_BASE_URL DS_BACKEND_ORIGIN
+  unset OLLAMA_BASE_URL VOICEVOX_BASE_URL DS_BACKEND_ORIGIN SCREEN_ALLOWED_ORIGIN
   for key in $model_environment_keys; do
     unset "$key"
   done

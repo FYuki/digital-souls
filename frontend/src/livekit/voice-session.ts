@@ -6,6 +6,7 @@ import {
   type TokenResponse,
 } from './client'
 import { LiveKitRoomClient, type RoomObservation } from './room'
+import type { SnapshotRequested } from '../lib/screen-perception/generated'
 
 export type VoiceSessionPhase =
   | 'idle'
@@ -49,11 +50,13 @@ export type VoiceSessionDependencies = Readonly<{
     characterId: string,
     conversationId: string,
     sessionId?: string,
+    screenClientSessionId?: string | null,
   ) => Promise<TokenResponse>
   endSession: (sessionId: string) => Promise<void>
   roomFactory: (
     observe: (observation: RoomObservation) => void,
     receiveCoreEvent: (event: VoiceSessionEvent) => void,
+    receiveScreenRequest: (event: SnapshotRequested) => void,
   ) => VoiceSessionRoom
   eventId: () => string
   monotonicMs: () => number
@@ -62,7 +65,7 @@ export type VoiceSessionDependencies = Readonly<{
 const defaultDependencies: VoiceSessionDependencies = {
   requestToken: requestLiveKitToken,
   endSession: endLiveKitSession,
-  roomFactory: (observe, receiveCoreEvent) => {
+  roomFactory: (observe, receiveCoreEvent, receiveScreenRequest) => {
     const testPort = (globalThis as typeof globalThis & {
       __digitalSoulsVoiceSessionTestPort?: {
         createRoom?: VoiceSessionDependencies['roomFactory']
@@ -74,7 +77,7 @@ const defaultDependencies: VoiceSessionDependencies = {
       }
     }).__digitalSoulsVoiceSessionTestPort
     if (testPort?.createRoom !== undefined) {
-      return testPort.createRoom(observe, receiveCoreEvent)
+      return testPort.createRoom(observe, receiveCoreEvent, receiveScreenRequest)
     }
     return new LiveKitRoomClient(
       (observation) => {
@@ -85,6 +88,8 @@ const defaultDependencies: VoiceSessionDependencies = {
         receiveCoreEvent(event)
         testPort?.receiveCoreEvent?.(event)
       },
+      undefined,
+      receiveScreenRequest,
     )
   },
   eventId: () => crypto.randomUUID(),
@@ -114,6 +119,8 @@ export class LiveKitVoiceSessionController {
   private completedPlayback: { responseId: string; lastAudioSequence: number } | null = null
   private readonly interruptedResponseIds = new Set<string>()
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private screenClientSessionId: string | null = null
+  private receiveScreenRequest: (event: SnapshotRequested) => void = () => undefined
 
   constructor(
     private readonly observe: (snapshot: VoiceSessionSnapshot) => void,
@@ -145,6 +152,14 @@ export class LiveKitVoiceSessionController {
     }
   }
 
+  setScreenIntegration(
+    clientSessionId: string | null,
+    receiveRequest: (event: SnapshotRequested) => void,
+  ): void {
+    this.screenClientSessionId = clientSessionId
+    this.receiveScreenRequest = receiveRequest
+  }
+
   async ensureSession(context: VoiceSessionContext): Promise<void> {
     if (sameContext(this.context, context) && this.room !== null && this.binding !== null) {
       return
@@ -159,12 +174,17 @@ export class LiveKitVoiceSessionController {
       const binding = await this.dependencies.requestToken(
         context.characterId,
         context.conversationId,
+        undefined,
+        this.screenClientSessionId,
       )
       if (version !== this.operationVersion) return
       const room = this.dependencies.roomFactory(
         (observation) => this.receiveRoomObservation(version, observation),
         (event) => {
           if (version === this.operationVersion) this.receiveRoomCoreEvent(event)
+        },
+        (event) => {
+          if (version === this.operationVersion) this.receiveScreenRequest(event)
         },
       )
       await room.connect(binding.livekit_url, binding.token, binding.session_id)

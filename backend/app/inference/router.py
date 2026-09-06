@@ -171,6 +171,8 @@ class InferenceRouter:
         response_schema: Mapping[str, object],
         timeout_seconds: float | None = None,
         cancellation_token: InferenceCancellationToken | None = None,
+        max_input_tokens: int | None = None,
+        max_output_tokens: int | None = None,
     ) -> StructuredGenerationResult:
         self._raise_if_cancelled(cancellation_token)
         try:
@@ -184,9 +186,15 @@ class InferenceRouter:
             caller, target, InferenceCapability.GENERATE_STRUCTURED
         )
         self._validate_messages(resolved, adapter, messages)
-        max_output_tokens = resolved.max_output_tokens
-        if max_output_tokens is None:
+        configured_output_tokens = resolved.max_output_tokens
+        if configured_output_tokens is None:
             raise AssertionError("structured target requires an output limit")
+        request_input_tokens = self._bounded_token_limit(
+            resolved.max_input_tokens, max_input_tokens
+        )
+        request_output_tokens = self._bounded_token_limit(
+            configured_output_tokens, max_output_tokens
+        )
         request_id = str(uuid4())
         started_at = perf_counter()
         external_request_count = 0
@@ -200,8 +208,8 @@ class InferenceRouter:
                         messages=messages,
                         model_id=resolved.reference.model_id,
                         options=resolved.options,
-                        max_input_tokens=resolved.max_input_tokens,
-                        max_output_tokens=max_output_tokens,
+                        max_input_tokens=request_input_tokens,
+                        max_output_tokens=request_output_tokens,
                         timeout_seconds=self._timeout(
                             resolved.timeout_seconds, timeout_seconds
                         ),
@@ -316,11 +324,15 @@ class InferenceRouter:
         messages: tuple[InferenceMessage, ...],
         response_schema: Mapping[str, object] | None = None,
         timeout_seconds: float | None = None,
+        max_input_tokens: int | None = None,
     ) -> TokenEstimate:
         resolved, adapter = self._resolve(
             caller, target, InferenceCapability.ESTIMATE_INPUT_TOKENS
         )
         self._validate_messages(resolved, adapter, messages)
+        request_input_tokens = self._bounded_token_limit(
+            resolved.max_input_tokens, max_input_tokens
+        )
         request_id = str(uuid4())
         started_at = perf_counter()
         try:
@@ -330,14 +342,14 @@ class InferenceRouter:
                         messages=messages,
                         model_id=resolved.reference.model_id,
                         options=resolved.options,
-                        max_input_tokens=resolved.max_input_tokens,
+                        max_input_tokens=request_input_tokens,
                         timeout_seconds=self._timeout(
                             resolved.timeout_seconds, timeout_seconds
                         ),
                         response_schema=response_schema,
                     )
                 )
-            if estimate.count > resolved.max_input_tokens:
+            if estimate.count > request_input_tokens:
                 raise InferenceError(
                     InferenceErrorCategory.INVALID_REQUEST,
                     retryable=False,
@@ -508,6 +520,17 @@ class InferenceRouter:
         if requested is None:
             return configured
         if requested <= 0:
+            raise InferenceError(
+                InferenceErrorCategory.INVALID_REQUEST,
+                retryable=False,
+            )
+        return min(configured, requested)
+
+    @staticmethod
+    def _bounded_token_limit(configured: int, requested: int | None) -> int:
+        if requested is None:
+            return configured
+        if type(requested) is not int or requested < 1:
             raise InferenceError(
                 InferenceErrorCategory.INVALID_REQUEST,
                 retryable=False,
