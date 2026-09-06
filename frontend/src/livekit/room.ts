@@ -9,6 +9,8 @@ import {
 
 import type { VoiceSessionEvent } from '../lib/voice-session/generated'
 import { parseVoiceSessionEvent } from '../lib/voice-session/validation'
+import type { SnapshotRequested } from '../lib/screen-perception/generated'
+import { parseScreenPerceptionEvent } from '../lib/screen-perception/validation'
 
 import {
   PlaybackEvidenceController,
@@ -59,6 +61,7 @@ const DEFAULT_MICROPHONE_CAPTURE_OPTIONS: MicrophoneCaptureOptions = {
 
 const PRIVATE_TOPIC = 'digital-souls.livekit-transport.v1'
 const APPLICATION_TOPIC = 'digital-souls.core.v1'
+const SCREEN_TOPIC = 'digital-souls.screen-perception.v1'
 const browserRetryTimer: RetryTimer = {
   now: () => performance.now(),
   schedule: (callback, delayMs) => setTimeout(callback, delayMs),
@@ -120,6 +123,7 @@ export class LiveKitRoomClient {
     private readonly observe: (observation: RoomObservation) => void,
     private readonly receiveCoreEvent: (event: VoiceSessionEvent) => void = () => undefined,
     private readonly microphoneCaptureOptions: MicrophoneCaptureOptions = DEFAULT_MICROPHONE_CAPTURE_OPTIONS,
+    private readonly receiveScreenRequest: (event: SnapshotRequested) => void = () => undefined,
   ) {
     this.playback = new PlaybackEvidenceController(0, (evidence) => {
       this.observe({
@@ -277,6 +281,18 @@ export class LiveKitRoomClient {
             transport: 'unavailable', control: 'unavailable', audio: 'unavailable',
           })
         })
+        return
+      }
+      if (topic === SCREEN_TOPIC) {
+        try {
+          const event = parseScreenPerceptionEvent(
+            JSON.parse(new TextDecoder().decode(payload)) as unknown,
+          )
+          if (event.type !== 'screen_snapshot_requested') throw new Error('invalid screen event')
+          this.receiveScreenRequest(event)
+        } catch {
+          this.failTransport()
+        }
         return
       }
       if (topic !== PRIVATE_TOPIC) return

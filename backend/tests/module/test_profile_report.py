@@ -342,6 +342,7 @@ def test_should_allowlist_derived_environment_and_exclude_process_secrets(tmp_pa
         "WHISPER_BASE_URL",
         "RAG_ENABLED",
         "DS_BACKEND_ORIGIN",
+        "SCREEN_ALLOWED_ORIGIN",
         "DS_ENVIRONMENT_ID",
         "DS_DATA_DIR",
         *MODEL_DEFAULT_ENVIRONMENT,
@@ -355,13 +356,20 @@ def test_should_allowlist_derived_environment_and_exclude_process_secrets(tmp_pa
 @pytest.mark.parametrize(
     ("profile", "expected_environment"),
     [
-        ("test-mocked", {"RAG_ENABLED": "false"}),
+        (
+            "test-mocked",
+            {
+                "RAG_ENABLED": "false",
+                "SCREEN_ALLOWED_ORIGIN": "http://localhost:5173",
+            },
+        ),
         (
             "integration-text",
             {
                 "OLLAMA_BASE_URL": "http://localhost:11434",
                 "RAG_ENABLED": "true",
                 "DS_BACKEND_ORIGIN": "http://localhost:8000",
+                "SCREEN_ALLOWED_ORIGIN": "http://localhost:5173",
                 **MODEL_DEFAULT_ENVIRONMENT,
             },
         ),

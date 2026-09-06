@@ -473,6 +473,27 @@ def test_coordinator_sends_valid_logical_audio_metadata_on_private_topic() -> No
     asyncio.run(exercise())
 
 
+def test_coordinator_sends_screen_request_on_dedicated_topic() -> None:
+    module = _livekit_module("coordinator", "screen perception request delivery")
+
+    async def exercise() -> None:
+        published: list[tuple[bytes, str]] = []
+        coordinator = _coordinator(module, published, [])
+        coordinator.participant_connected(
+            identity="user-20000000-0000-4000-8000-000000000010",
+            participant_sid="PA_current",
+            room_sid="RM_one",
+        )
+        payload = b'{"type":"screen_snapshot_requested"}'
+
+        await coordinator.send_screen(payload)
+
+        assert published == [(payload, module.SCREEN_TOPIC)]
+        await coordinator.cleanup("test_complete")
+
+    asyncio.run(exercise())
+
+
 def test_disconnect_resynchronizes_the_acknowledged_terminal_outcome() -> None:
     module = _livekit_module("coordinator", "terminal outcome reconnection sync")
 

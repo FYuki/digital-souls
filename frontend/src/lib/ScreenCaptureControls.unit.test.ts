@@ -6,6 +6,46 @@ import type { CapturedScreenSnapshot } from './screen-perception/capture'
 import type { SnapshotRequested } from './screen-perception/generated'
 
 const CONVERSATION_ID = '10000000-0000-4000-8000-000000000001'
+const CLIENT_SESSION_ID = '70000000-0000-4000-8000-000000000001'
+const SCREEN_SESSION_ID = '30000000-0000-4000-8000-000000000001'
+
+const routingResponse = (vision: 'local' | 'cloud', chat: 'local' | 'cloud') => new Response(JSON.stringify({
+  protocol_version: '1.0',
+  type: 'screen_routing_disclosed',
+  event_id: '80000000-0000-4000-8000-000000000001',
+  client_session_id: CLIENT_SESSION_ID,
+  routing_revision: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  vision_destination: vision,
+  chat_destination: chat,
+  limits: {
+    allowed_mime_types: ['image/png', 'image/jpeg'],
+    capture_timeout_ms: 5_000,
+    max_bytes: 5_242_880,
+    max_concurrency: 1,
+    max_height: 2560,
+    max_pixels: 4_194_304,
+    max_width: 2560,
+    request_timeout_ms: 45_000,
+    snapshot_max_age_ms: 5_000,
+    vision_timeout_ms: 30_000,
+  },
+}), { status: 200 })
+
+const sessionResponse = () => new Response(JSON.stringify({
+  protocol_version: '1.0',
+  type: 'screen_session_started',
+  event_id: '90000000-0000-4000-8000-000000000001',
+  screen_session_id: SCREEN_SESSION_ID,
+  client_session_id: CLIENT_SESSION_ID,
+  generation: 1,
+  character_id: 'miori',
+  conversation_id: CONVERSATION_ID,
+  actual_surface: 'monitor',
+  routing_revision: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  heartbeat_interval_ms: 5_000,
+  lease_duration_ms: 15_000,
+  lease_expires_at: '2099-01-01T00:00:15.000Z',
+}), { status: 201 })
 
 class UiTrack extends EventTarget {
   label = '合成ウィンドウ'
@@ -249,23 +289,26 @@ describe('ScreenCaptureControls', () => {
   })
 
   test('会話runtimeの参照判断中を取得や常時解析と区別して表示する', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => (
+      init?.method === 'POST' ? sessionResponse() : routingResponse('local', 'local')
+    ))
+    vi.stubGlobal('fetch', fetchMock)
     const track = new UiTrack('monitor')
     getDisplayMedia.mockResolvedValue(createStream(track))
     const view = render(ScreenCaptureControls, {
       props: {
         characterId: 'miori',
         conversationId: CONVERSATION_ID,
-        contextualReferenceAvailable: true,
         referenceDecisionActive: false,
       },
     })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     await fireEvent.click(screen.getByRole('button', { name: '画面共有を開始' }))
-    expect(screen.getByText('認識: 参照可能')).toBeTruthy()
+    expect(await screen.findByText('認識: 参照可能')).toBeTruthy()
 
     await view.rerender({
       characterId: 'miori',
       conversationId: CONVERSATION_ID,
-      contextualReferenceAvailable: true,
       referenceDecisionActive: true,
     })
 
@@ -289,27 +332,22 @@ describe('ScreenCaptureControls', () => {
   })
 
   test('クラウド画像と派生テキストの同意を分けてruntimeへ通知する', async () => {
-    const onCloudImageConsentChanged = vi.fn()
-    const onCloudDerivedChatConsentChanged = vi.fn()
+    vi.stubGlobal('fetch', vi.fn(async () => routingResponse('cloud', 'cloud')))
     render(ScreenCaptureControls, {
       props: {
         characterId: 'miori',
         conversationId: CONVERSATION_ID,
-        cloudImageConsent: false,
-        cloudDerivedChatConsent: false,
-        onCloudImageConsentChanged,
-        onCloudDerivedChatConsentChanged,
       },
     })
 
-    const imageConsent = screen.getByRole('checkbox', { name: /今回の共有画像をクラウドの画面認識へ送信する/ })
-    const derivedConsent = screen.getByRole('checkbox', { name: /画面の観測文と、この共有に由来する会話内の回答/ })
+    const imageConsent = await screen.findByRole('checkbox', { name: /今回の共有画像をクラウドの画面認識へ送信する/ })
+    const derivedConsent = await screen.findByRole('checkbox', { name: /画面の観測文と、この共有に由来する会話内の回答/ })
     expect(screen.getByText(/現在の共有対象・会話・送信先だけに有効/)).toBeTruthy()
 
     await fireEvent.click(imageConsent)
     await fireEvent.click(derivedConsent)
 
-    expect(onCloudImageConsentChanged).toHaveBeenCalledWith(true)
-    expect(onCloudDerivedChatConsentChanged).toHaveBeenCalledWith(true)
+    expect((imageConsent as HTMLInputElement).checked).toBe(true)
+    expect((derivedConsent as HTMLInputElement).checked).toBe(true)
   })
 })

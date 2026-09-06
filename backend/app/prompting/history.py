@@ -27,6 +27,10 @@ class SavedHistoryTurn(Protocol):
     def is_completed(self) -> bool:
         ...
 
+    @property
+    def screen_lineages(self) -> tuple[object, ...]:
+        ...
+
 
 @dataclass(frozen=True)
 class HistorySelection:
@@ -38,9 +42,22 @@ def turn_messages(turn: MaskedHistoryTurn) -> tuple[PromptMessage, ...]:
     assistant = (
         ()
         if turn.assistant_content is None
-        else (PromptMessage(PromptRole.ASSISTANT, turn.assistant_content),)
+        else (
+            PromptMessage(
+                PromptRole.ASSISTANT,
+                turn.assistant_content,
+                screen_lineages=turn.screen_lineages,
+            ),
+        )
     )
-    return (PromptMessage(PromptRole.USER, turn.user_content), *assistant)
+    return (
+        PromptMessage(
+            PromptRole.USER,
+            turn.user_content,
+            screen_lineages=turn.screen_lineages,
+        ),
+        *assistant,
+    )
 
 
 def select_history(
@@ -267,6 +284,7 @@ def _masked_turn(source_turn: SavedHistoryTurn) -> MaskedHistoryTurn:
         source_turn.user_content,
         source_turn.assistant_content,
         source_turn.is_completed,
+        getattr(source_turn, "screen_lineages", ()),
     )
 
 

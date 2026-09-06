@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
-import { sendChatMessage } from './client'
+import { sendChatMessage, sendChatRequest } from './client'
 
 const CONVERSATION_ID = 'e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'
 
@@ -90,5 +90,41 @@ describe('sendChatMessage', () => {
     await expect(
       sendChatMessage({ character: 'miori', conversationId: CONVERSATION_ID, message: '応答して' }),
     ).rejects.toThrow(/character/i)
+  })
+
+  test('画面参照を現在turnへ明示し202の取得要求を返す', async () => {
+    const fetchMock = vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >(async () => response({
+      protocol_version: '1.0',
+      type: 'screen_snapshot_requested',
+      event_id: '10000000-0000-4000-8000-000000000006',
+      screen_session_id: '40000000-0000-4000-8000-000000000001',
+      generation: 1,
+      request_id: '50000000-0000-4000-8000-000000000001',
+      turn_id: '60000000-0000-4000-8000-000000000001',
+      source: 'explicit_ui',
+      requested_at: '2026-09-06T03:00:06Z',
+      capture_deadline: '2026-09-06T03:00:11Z',
+    }, { status: 202 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await sendChatRequest({
+      character: 'miori',
+      conversationId: CONVERSATION_ID,
+      message: 'ここを説明して',
+      screenReference: true,
+      screenClientSessionId: '20000000-0000-4000-8000-000000000001',
+    })
+
+    const init = fetchMock.mock.calls[0]?.[1]
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      screen_reference: true,
+      screen_client_session_id: '20000000-0000-4000-8000-000000000001',
+    })
+    expect(result).toMatchObject({
+      kind: 'snapshot_requested',
+      request: { source: 'explicit_ui' },
+    })
   })
 })

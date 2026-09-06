@@ -221,7 +221,7 @@ export class BrowserScreenCaptureController {
     })
   }
 
-  stop(reason: 'user_off' | 'target_change' | 'conversation_change' | 'character_change' | 'capture_ended' | 'pagehide' | 'backend_disconnect' = 'user_off'): void {
+  stop(reason: 'user_off' | 'target_change' | 'conversation_change' | 'character_change' | 'consent_revoked' | 'capture_ended' | 'pagehide' | 'backend_disconnect' = 'user_off'): void {
     this.snapshotOperation += 1
     this.state = {
       ...this.state,

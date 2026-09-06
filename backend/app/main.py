@@ -2,13 +2,13 @@ from contextlib import ExitStack, asynccontextmanager
 import logging
 import os
 import re
-from collections.abc import AsyncIterator, Awaitable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import sqlite3
 from pathlib import Path
 from typing import cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
@@ -95,7 +95,22 @@ from app.routers.conversations import router as conversations_router
 from app.routers.memory_management import router as memory_management_router
 from app.routers.ui_settings import router as ui_settings_router
 from app.routers.livekit import router as livekit_router
+from app.routers.screen_perception import router as screen_perception_router
 from app.routers.ws import router as ws_router
+from app.screen_perception.http_security import (
+    SCREEN_ALLOWED_ORIGIN_ENV,
+    resolve_screen_http_security,
+)
+from app.screen_perception.service import (
+    ScreenHistoryAccess,
+    ScreenPerceptionService,
+    ScreenPerceptionError,
+    ScreenTurnMaterial,
+    resolve_routing_policy,
+)
+from app.screen_perception.provenance import ScreenLineage
+from app.screen_perception.detector import needs_reference_history
+from app.screen_perception.vision import VisionInferenceClient
 from app.runtime_data_root import (
     initialize_runtime_data_root,
     remove_legacy_chroma_index_once,
@@ -234,19 +249,39 @@ async def _stream_core_reply(
     character: str,
     history_session: HistorySession,
     transcript: str,
+    screen: ScreenTurnMaterial | None = None,
+    history_access: ScreenHistoryAccess | None = None,
+    screen_lineage_observer: Callable[[tuple[ScreenLineage, ...]], None] | None = None,
 ) -> AsyncIterator[str]:
+    prepare_arguments: tuple[object, ...] = (
+        character, history_session, transcript
+    )
+    if screen is not None or history_access is not None:
+        prepare_arguments = (*prepare_arguments, screen, history_access)
     prompt, max_output_tokens = await run_sync(
         chat_service.prepare_unrecorded_generation,
-        character,
-        history_session,
-        transcript,
+        *prepare_arguments,
     )
+    if screen_lineage_observer is not None:
+        screen_lineage_observer(prompt.screen_lineages)
+    if history_access is not None and not all(
+        history_access.allows(lineage) for lineage in prompt.screen_lineages
+    ):
+        raise ScreenPerceptionError("request_cancelled", stage="chat")
     async for text in llm_router.stream_response(
         prompt,
         max_output_tokens=max_output_tokens,
         settings=model_settings,
     ):
+        if screen is not None and not screen.is_current:
+            raise ScreenPerceptionError("request_cancelled", stage="chat")
+        if history_access is not None and not all(
+            history_access.allows(lineage) for lineage in prompt.screen_lineages
+        ):
+            raise ScreenPerceptionError("request_cancelled", stage="chat")
         yield text
+    if screen is not None and not screen.is_current:
+        raise ScreenPerceptionError("request_cancelled", stage="chat")
     chat_service.record_successful_prompt_references(prompt)
 
 
@@ -278,6 +313,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         DEFAULT_MEMORY_OCCURRED_TIMEZONE,
     )
     inference_runtime = create_inference_runtime(os.environ)
+    screen_http_security = resolve_screen_http_security(
+        os.environ.get(SCREEN_ALLOWED_ORIGIN_ENV, "http://localhost:5173")
+    )
     try:
         inference_runtime.probe_startup()
     except Exception:
@@ -417,6 +455,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         persona_memory_provider_state_set = False
         addon_record_provider_state_set = False
         rag_admission_service_state_set = False
+        screen_perception_state_set = False
         voice_trace_recorder_state_set = False
         voice_measurement_kind_state_set = False
         semantic_classifier_client = None
@@ -441,6 +480,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 voice_trace_recorder_state_set = True
             app.state.conversation_history_repository = conversation_history_repository
             repository_state_set = True
+            def validate_screen_context(
+                character_id: str, conversation_id: UUID
+            ) -> None:
+                load_character_card(character_id)
+                conversation_history_repository.resume_conversation(
+                    character_id, conversation_id
+                )
+
+            screen_routing_policy = resolve_routing_policy(
+                inference_runtime.settings, inference_runtime.registry
+            )
+            app.state.screen_http_security = screen_http_security
+            app.state.screen_perception_service = ScreenPerceptionService(
+                vision=VisionInferenceClient(router=inference_runtime.router),
+                routing_policy=lambda: screen_routing_policy,
+                validate_context=validate_screen_context,
+                reference_router=inference_runtime.router,
+            )
+            screen_perception_state_set = True
             app.state.conversation_lifecycle_service = conversation_lifecycle_service
             lifecycle_service_state_set = True
             app.state.ui_settings_repository = ui_settings_repository
@@ -633,17 +691,49 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     audio_runtime_config.voicevox_base_url
                 )
 
-                async def generate_core_reply_stream(
+                async def generate_screen_core_reply_stream(
+                    session_id: str,
+                    client_session_id: UUID | None,
                     character: str,
+                    conversation_id: UUID,
                     history_session: object,
                     transcript: str,
+                    screen_lineage_observer: Callable[
+                        [tuple[ScreenLineage, ...]], None
+                    ],
                 ) -> AsyncIterator[str]:
+                    history_access = await app.state.screen_perception_service.history_access(
+                        client_session_id
+                    )
+                    reference_history = (
+                        await run_sync(
+                            app_chat_service.recent_screen_reference_history,
+                            character,
+                            conversation_id,
+                            history_access,
+                        )
+                        if needs_reference_history(transcript)
+                        else ()
+                    )
+                    screen_material = await app.state.screen_perception_service.await_voice_material(
+                        client_session_id=client_session_id,
+                        character_id=character,
+                        conversation_id=conversation_id,
+                        question=transcript,
+                        publish_request=lambda payload: app.state.livekit_runtime_manager.send_screen(
+                            session_id, payload
+                        ),
+                        history=reference_history,
+                    )
                     async for text in _stream_core_reply(
                         app_chat_service,
                         model_settings,
                         character,
                         history_session,  # type: ignore[arg-type]
                         transcript,
+                        screen_material,
+                        history_access,
+                        screen_lineage_observer,
                     ):
                         yield text
 
@@ -651,6 +741,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     if not isinstance(persisted_turn, ConversationTurn):
                         raise TypeError("completed Core turn must be a ConversationTurn")
                     if persisted_turn.status is not TurnStatus.COMPLETED:
+                        return
+                    if conversation_history_repository.is_screen_derived(
+                        persisted_turn.character_id,
+                        persisted_turn.conversation_id,
+                        persisted_turn.turn_id,
+                    ):
                         return
                     memory_formation_scheduler.submit(
                         MemoryFormationJob(
@@ -665,7 +761,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     synthesizer=core_synthesizer,
                     history_service=conversation_history_service,
                     completed_turn_observer=submit_completed_core_turn,
-                    generate_reply_stream=generate_core_reply_stream,
+                    generate_screen_reply_stream=generate_screen_core_reply_stream,
                     measurement_kind=voice_measurement_kind,
                     trace_record=(
                         voice_trace_recorder.record
@@ -774,6 +870,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         app.state,
                         "rag_admission_service",
                     )
+                if screen_perception_state_set:
+                    cleanup.callback(delattr, app.state, "screen_perception_service")
+                    cleanup.callback(delattr, app.state, "screen_http_security")
                 if semantic_classifier_client is not None:
                     cleanup.callback(semantic_classifier_client.close)
                 if memory_extractor_client is not None:
@@ -796,6 +895,7 @@ app.include_router(conversations_router)
 app.include_router(memory_management_router)
 app.include_router(ui_settings_router)
 app.include_router(livekit_router)
+app.include_router(screen_perception_router)
 app.include_router(ws_router)
 
 

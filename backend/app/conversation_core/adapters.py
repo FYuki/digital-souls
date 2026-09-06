@@ -16,6 +16,7 @@ from app.conversation_core.models import (
     TerminalOutcome,
     TextDelta,
 )
+from app.screen_perception.provenance import ScreenLineage
 
 
 class SyncTranscriber(Protocol):
@@ -50,6 +51,11 @@ class HistorySession(Protocol):
         ...
 
     def fail_turn(self, started_turn: object) -> None:
+        ...
+
+    def mark_screen_derived(
+        self, started_turn: object, lineages: tuple[ScreenLineage, ...]
+    ) -> None:
         ...
 
 
@@ -243,15 +249,40 @@ class PromptLlmAdapter:
             raise ValueError("LLM response must not be empty")
 
 
+class ScreenLineageResponseState:
+    """単一Core session内のresponseと生成時lineageを対応付ける。"""
+
+    def __init__(self) -> None:
+        self._active_response_id: str | None = None
+        self._lineages: dict[str, tuple[ScreenLineage, ...]] = {}
+
+    def begin(self, response_id: str) -> None:
+        self._active_response_id = response_id
+        self._lineages[response_id] = ()
+
+    def record(self, lineages: tuple[ScreenLineage, ...]) -> None:
+        if self._active_response_id is None:
+            raise RuntimeError("screen lineage response has not started")
+        self._lineages[self._active_response_id] = lineages
+
+    def finish(self, response_id: str) -> tuple[ScreenLineage, ...]:
+        lineages = self._lineages.pop(response_id, ())
+        if self._active_response_id == response_id:
+            self._active_response_id = None
+        return lineages
+
+
 class ConversationHistoryPersistenceAdapter:
     def __init__(
         self,
         *,
         history_session: HistorySession,
         completed_turn_observer: Callable[[object], None] | None = None,
+        screen_lineage_state: ScreenLineageResponseState | None = None,
     ) -> None:
         self._history_session = history_session
         self._completed_turn_observer = completed_turn_observer
+        self._screen_lineage_state = screen_lineage_state
         self._history_turns: dict[str, object] = {}
         self._persisted_response_ids: set[str] = set()
 
@@ -269,6 +300,8 @@ class ConversationHistoryPersistenceAdapter:
             self._history_turns[response_id] = _HISTORY_START_FAILED
             raise
         self._history_turns[response_id] = started_turn
+        if self._screen_lineage_state is not None:
+            self._screen_lineage_state.begin(response_id)
         content_skipped = getattr(started_turn, "content_skipped", None)
         if not isinstance(content_skipped, bool):
             raise TypeError("started history turn must expose content_skipped")
@@ -286,6 +319,20 @@ class ConversationHistoryPersistenceAdapter:
             self._persisted_response_ids.add(outcome.response_id)
             return
         self._persisted_response_ids.add(outcome.response_id)
+        lineages = (
+            ()
+            if self._screen_lineage_state is None
+            else self._screen_lineage_state.finish(outcome.response_id)
+        )
+        if lineages and outcome.state in {
+            ResponseState.COMPLETED,
+            ResponseState.CANCELLED,
+        }:
+            await run_sync(
+                self._history_session.mark_screen_derived,
+                started_turn,
+                lineages,
+            )
         if outcome.state is ResponseState.COMPLETED:
             persisted_turn = await run_sync(
                 self._history_session.complete_turn,
