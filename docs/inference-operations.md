@@ -43,6 +43,8 @@ INFERENCE_TARGET_VISION_MAX_CONCURRENCY=1
 
 Vision入力はPNGまたはJPEGの1枚に限定し、各辺2,560 px、decode後4,194,304 pixel、encoded 5 MiBを上限とする。CoreがMIME、magic bytes、実decode、寸法を検証し、AdapterだけがProvider payload用Base64を作る。任意URL／pathはInference契約に公開しない。画像tokenは1枚1,120 tokenを含むProvider別の保守的推定とし、実usageやexact計数とは区別する。
 
+構造化出力ではCoreのJSON Schemaを検証の正本とする。AdapterはProviderのgrammar実装が受け付けない制約だけを送信schemaから除外し、生成結果はRouterで除外前の完全schemaに再検証する。現在はOllama向けに文字列長・配列長制約、OpenAI API向けに`allOf`、`if`、`then`などの未対応合成制約を除外する。互換化によってCoreの受入条件を緩めない。
+
 画面参照の競合判定は独立Targetを増やさず、`screen-reference` callerからChat Targetを利用する。
 ruleで確定できるturnではLLMを呼ばず、構造化出力不正、timeout、未設定時は画像を送らない分岐へ
 縮退する。判定へ渡せる履歴も画面lineageとcloud派生履歴の同意で制限し、新しい共有同意を過去sessionの

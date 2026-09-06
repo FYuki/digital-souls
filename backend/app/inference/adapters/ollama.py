@@ -32,6 +32,9 @@ from app.inference.images import CONSERVATIVE_IMAGE_TOKEN_ESTIMATE
 
 
 _DIGEST_PATTERN = re.compile(r"sha256[:-]([0-9a-fA-F]{64})")
+_UNSUPPORTED_GRAMMAR_SCHEMA_KEYWORDS = frozenset(
+    {"minLength", "maxLength", "minItems", "maxItems"}
+)
 
 
 class OllamaAdapter:
@@ -342,9 +345,22 @@ class OllamaAdapter:
             "options": options,
         }
         if response_schema is not None:
-            payload["format"] = dict(response_schema)
+            payload["format"] = OllamaAdapter._grammar_schema(response_schema)
             payload["think"] = False
         return payload
+
+    @staticmethod
+    def _grammar_schema(value: object) -> object:
+        """Ollama grammar未対応制約だけを除き、Coreの完全schema検証は維持する。"""
+        if isinstance(value, Mapping):
+            return {
+                key: OllamaAdapter._grammar_schema(item)
+                for key, item in value.items()
+                if key not in _UNSUPPORTED_GRAMMAR_SCHEMA_KEYWORDS
+            }
+        if isinstance(value, list):
+            return [OllamaAdapter._grammar_schema(item) for item in value]
+        return value
 
     @staticmethod
     def _messages(messages: tuple[InferenceMessage, ...]) -> list[dict[str, object]]:

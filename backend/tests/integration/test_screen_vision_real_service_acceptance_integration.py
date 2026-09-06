@@ -9,7 +9,7 @@ from statistics import median, quantiles
 import subprocess
 from time import perf_counter
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 import pytest
 
 from app.inference import InferenceImagePart, InferenceTarget
@@ -43,6 +43,7 @@ def _commit_sha() -> str:
 def _image(
     *,
     boxes: tuple[tuple[tuple[int, int, int, int], str, str], ...] = (),
+    unreadable_region: bool = False,
 ) -> InferenceImagePart:
     canvas = Image.new("RGB", (640, 360), "white")
     draw = ImageDraw.Draw(canvas)
@@ -50,6 +51,21 @@ def _image(
     for coordinates, color, label in boxes:
         draw.rectangle(coordinates, fill=color, outline="black", width=3)
         draw.text((coordinates[0] + 8, coordinates[1] + 8), label, fill="white")
+    if unreadable_region:
+        draw.rectangle((150, 100, 490, 260), fill="lightgray", outline="black", width=3)
+        heading_font = ImageFont.truetype("DejaVuSans-Bold.ttf", 26)
+        draw.text((170, 118), "DETAILS", fill="black", font=heading_font)
+        tiny_font = ImageFont.truetype("DejaVuSans.ttf", 11)
+        detail = Image.new("RGB", (260, 65), "lightgray")
+        detail_draw = ImageDraw.Draw(detail)
+        for row in range(5):
+            detail_draw.text(
+                (0, row * 12),
+                f"SYNTHETIC DETAIL LINE {row + 1}: 0123456789",
+                fill="dimgray",
+                font=tiny_font,
+            )
+        canvas.paste(detail.filter(ImageFilter.GaussianBlur(radius=4)), (175, 175))
     encoded = BytesIO()
     canvas.save(encoded, format="PNG")
     return InferenceImagePart(encoded.getvalue(), "image/png", 640, 360)
@@ -82,15 +98,15 @@ def _cases() -> tuple[VisionCase, ...]:
         ),
         VisionCase(
             "target-disappeared",
-            "赤い警告は今もありますか。見つからなければ推測しないでください。",
+            "中央の赤い警告は今もありますか。見つからなければ推測しないでください。",
             "not_found",
-            _image(boxes=(((220, 120, 420, 250), "blue", "ALL CLEAR"),)),
+            _image(),
         ),
         VisionCase(
             "small-text-unreadable",
-            "中央の灰色領域にある極小文字を正確に読んでください。判読できなければその旨を答えてください。",
+            "中央のDETAILSパネルで、見出しではなく下段の極小文字を正確に読んでください。判読できなければその旨を答えてください。",
             "unreadable",
-            _image(boxes=(((150, 100, 490, 260), "gray", ". . ."),)),
+            _image(unreadable_region=True),
         ),
     )
 

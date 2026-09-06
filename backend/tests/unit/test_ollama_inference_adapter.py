@@ -185,6 +185,62 @@ def test_structured_generation_forwards_schema_without_domain_types() -> None:
     assert payload["think"] is False
 
 
+def test_structured_generation_removes_only_unsupported_grammar_constraints() -> None:
+    client = MagicMock(spec=httpx.Client)
+    client.post.return_value = _response({"message": {"content": '{"items":[]}'}})
+    adapter = OllamaAdapter(base_url="http://127.0.0.1:11434", http_client=client)
+    schema: Mapping[str, object] = {
+        "type": "object",
+        "properties": {
+            "items": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 5,
+                "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "enum": ["kept"],
+                },
+            }
+        },
+        "required": ["items"],
+        "additionalProperties": False,
+    }
+    request = StructuredGenerationRequest(
+        **_text_request().__dict__,
+        response_schema=schema,
+    )
+
+    adapter.generate_structured(request)
+
+    payload_schema = client.post.call_args.kwargs["json"]["format"]
+    assert payload_schema == {
+        "type": "object",
+        "properties": {
+            "items": {
+                "type": "array",
+                "items": {"type": "string", "enum": ["kept"]},
+            }
+        },
+        "required": ["items"],
+        "additionalProperties": False,
+    }
+    assert schema["properties"] == {
+        "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "enum": ["kept"],
+            },
+        }
+    }
+
+
 @pytest.mark.parametrize(
     ("status", "category", "retryable"),
     [
