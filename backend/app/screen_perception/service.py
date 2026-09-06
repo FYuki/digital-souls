@@ -51,7 +51,7 @@ MAX_TERMINAL_REQUESTS = 256
 ScreenSource = Literal[
     "explicit_ui", "natural_language_text", "natural_language_voice"
 ]
-ScreenSurface = Literal["monitor", "window"]
+ScreenSurface = Literal["monitor", "window", "browser"]
 Destination = Literal["local", "cloud", "unconfigured"]
 
 

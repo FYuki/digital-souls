@@ -237,6 +237,10 @@ def test_vision_client_returns_only_schema_validated_observation() -> None:
     assert adapter.last_request is not None
     assert adapter.last_request.timeout_seconds == 30.0
     assert adapter.last_request.response_schema is VISION_OBSERVATION_SCHEMA
+    system_instruction = adapter.last_request.messages[0].content
+    assert isinstance(system_instruction, str)
+    assert "not_foundとunreadableではcandidatesを空" in system_instruction
+    assert "どちらの場合も理由をunreadable_reasonsへ1件以上" in system_instruction
     request_text = "\n".join(
         part.text
         for message in adapter.last_request.messages

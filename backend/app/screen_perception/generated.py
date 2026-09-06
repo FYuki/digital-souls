@@ -55,7 +55,6 @@ class RoutingDisclosure(BaseModel):
 class ReasonCode(Enum):
     API_UNAVAILABLE = "api_unavailable"
     BACKEND_UNAVAILABLE = "backend_unavailable"
-    BROWSER_SURFACE_REJECTED = "browser_surface_rejected"
     CAPTURE_NOT_ALLOWED = "capture_not_allowed"
     CAPTURE_OS_ERROR = "capture_os_error"
     CLOUD_CONSENT_REQUIRED = "cloud_consent_required"
@@ -228,6 +227,7 @@ class SessionRevoked(BaseModel):
 
 
 class ActualSurface(Enum):
+    BROWSER = "browser"
     MONITOR = "monitor"
     WINDOW = "window"
 

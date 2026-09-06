@@ -13,6 +13,7 @@ from app.screen_perception.service import (
     RoutingPolicy,
     ScreenPerceptionError,
     ScreenPerceptionService,
+    ScreenSurface,
 )
 from app.screen_perception.vision import VisionObservation, VisionTargetCandidate
 
@@ -69,18 +70,56 @@ def _service(
     )
 
 
-async def _start(service: ScreenPerceptionService) -> dict[str, object]:
+async def _start(
+    service: ScreenPerceptionService,
+    surface: ScreenSurface = "monitor",
+) -> dict[str, object]:
     return await service.start_session(
         client_session_id=CLIENT_ID,
         generation=1,
         character_id="miori",
         conversation_id=CONVERSATION_ID,
-        requested_surface="monitor",
-        actual_surface="monitor",
+        requested_surface=surface,
+        actual_surface=surface,
         routing_revision="a" * 64,
         cloud_vision_consent=False,
         cloud_derived_chat_consent=False,
     )
+
+
+def test_browser_surface_is_preserved_through_session_and_image() -> None:
+    async def exercise() -> None:
+        vision = FakeVision()
+        service = _service(vision)
+        session = await _start(service, "browser")
+        request, _future = await service.begin_request(
+            client_session_id=CLIENT_ID,
+            character_id="miori",
+            conversation_id=CONVERSATION_ID,
+            question="このタブを見て",
+            source="explicit_ui",
+        )
+
+        _accepted, completed = await service.accept_image(
+            request_id=UUID(str(request["request_id"])),
+            screen_session_id=UUID(str(session["screen_session_id"])),
+            client_session_id=CLIENT_ID,
+            generation=1,
+            turn_id=UUID(str(request["turn_id"])),
+            image_id=UUID("30000000-0000-4000-8000-000000000002"),
+            actual_surface="browser",
+            captured_at=Clock.utc,
+            mime_type="image/png",
+            width=1,
+            height=1,
+            image_data=_png(),
+        )
+
+        assert session["actual_surface"] == "browser"
+        assert completed.material.lineages[0].surface == "browser"
+        assert len(vision.calls) == 1
+
+    asyncio.run(exercise())
 
 
 def test_request_binds_image_to_owner_generation_turn_and_invalidates_on_revoke() -> None:

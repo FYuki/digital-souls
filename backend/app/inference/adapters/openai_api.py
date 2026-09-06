@@ -33,6 +33,9 @@ from app.inference.images import CONSERVATIVE_IMAGE_TOKEN_ESTIMATE
 
 OPENAI_API_BASE_URL = "https://api.openai.com/v1"
 AsyncClientFactory = Callable[[float], httpx.AsyncClient]
+_UNSUPPORTED_STRUCTURED_SCHEMA_KEYWORDS = frozenset(
+    {"allOf", "not", "dependentRequired", "dependentSchemas", "if", "then", "else"}
+)
 
 
 class OpenAIAPIAdapter:
@@ -106,7 +109,7 @@ class OpenAIAPIAdapter:
             "format": {
                 "type": "json_schema",
                 "name": "inference_response",
-                "schema": dict(request.response_schema),
+                "schema": self._structured_output_schema(request.response_schema),
                 "strict": True,
             }
         }
@@ -116,6 +119,19 @@ class OpenAIAPIAdapter:
             timeout_seconds=request.timeout_seconds,
         )
         return self._text_result(body)
+
+    @staticmethod
+    def _structured_output_schema(value: object) -> object:
+        """OpenAI未対応の合成制約だけを除き、Coreの完全schema検証は維持する。"""
+        if isinstance(value, Mapping):
+            return {
+                key: OpenAIAPIAdapter._structured_output_schema(item)
+                for key, item in value.items()
+                if key not in _UNSUPPORTED_STRUCTURED_SCHEMA_KEYWORDS
+            }
+        if isinstance(value, list):
+            return [OpenAIAPIAdapter._structured_output_schema(item) for item in value]
+        return value
 
     async def stream_text(self, request: TextGenerationRequest) -> AsyncIterator[str]:
         payload = self._response_payload(request)

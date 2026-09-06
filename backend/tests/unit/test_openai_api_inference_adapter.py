@@ -127,6 +127,54 @@ def test_structured_generation_forwards_json_schema() -> None:
     }
 
 
+def test_structured_generation_removes_only_unsupported_composition() -> None:
+    client = MagicMock(spec=httpx.Client)
+    client.post.return_value = _response(
+        {"status": "completed", "output_text": '{"items":[]}'}
+    )
+    adapter = OpenAIAPIAdapter(api_key="test-api-key", http_client=client)
+    schema: Mapping[str, object] = {
+        "type": "object",
+        "properties": {
+            "items": {
+                "type": "array",
+                "maxItems": 5,
+                "items": {"type": "string", "enum": ["kept"]},
+            }
+        },
+        "required": ["items"],
+        "additionalProperties": False,
+        "allOf": [
+            {
+                "if": {"properties": {"items": {"minItems": 1}}},
+                "then": {"properties": {"items": {"maxItems": 1}}},
+            }
+        ],
+    }
+
+    adapter.generate_structured(
+        StructuredGenerationRequest(
+            **_text_request().__dict__,
+            response_schema=schema,
+        )
+    )
+
+    payload_schema = client.post.call_args.kwargs["json"]["text"]["format"]["schema"]
+    assert payload_schema == {
+        "type": "object",
+        "properties": {
+            "items": {
+                "type": "array",
+                "maxItems": 5,
+                "items": {"type": "string", "enum": ["kept"]},
+            }
+        },
+        "required": ["items"],
+        "additionalProperties": False,
+    }
+    assert "allOf" in schema
+
+
 def test_multimodal_mapping_uses_responses_input_parts_and_data_url() -> None:
     client = MagicMock(spec=httpx.Client)
     client.post.return_value = _response(

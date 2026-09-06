@@ -79,6 +79,11 @@
     succeeded: '完了',
     failed: '失敗',
   }
+  const surfaceLabels: Record<ActualSurface, string> = {
+    monitor: 'モニター',
+    window: 'ウィンドウ',
+    browser: 'ブラウザタブ',
+  }
   const reasonLabels = {
     api_unavailable: 'このブラウザでは画面共有APIを利用できません。',
     insecure_context: '安全な接続ではないため画面共有を利用できません。',
@@ -88,7 +93,6 @@
     capture_os_error: '画面共有を開始できませんでした。',
     picker_cancelled: '画面の選択を取り消しました。',
     surface_mismatch: '希望と異なる種類が選ばれたため共有しませんでした。',
-    browser_surface_rejected: 'ブラウザタブは共有対象にできません。',
     surface_unknown: '共有対象の種類を確認できなかったため共有しませんでした。',
     video_track_invalid: '共有映像を利用できません。',
     frame_unavailable: '現在の画面フレームを取得できません。',
@@ -126,6 +130,9 @@
     && !disabled
     && !busy
   $: captureStatus = captureLabels[state.captureState]
+  $: currentTarget = state.targetLabel === null
+    ? state.captureState === 'selecting' ? '選択中' : '未選択'
+    : `${state.actualSurface === null ? '' : `${surfaceLabels[state.actualSurface]}・`}${state.targetLabel}`
   $: recognitionStatus = referenceDecisionActive
     ? '参照が必要か確認中'
     : requestingAuthorization
@@ -135,7 +142,10 @@
         && state.captureState === 'active'
         ? '参照可能'
         : recognitionLabels[state.recognitionState]
-  $: if (mounted) publishAvailability()
+  $: referenceAvailableValue = backendSession !== null
+    && state.captureState === 'active'
+    && !busy
+  $: if (mounted) onReferenceAvailabilityChanged(referenceAvailableValue)
 
   onMount(() => {
     controller = new BrowserScreenCaptureController(preview, observeCaptureState)
@@ -237,7 +247,6 @@
   function observeCaptureState(next: ScreenCaptureState) {
     const ended = state.captureState === 'active' && next.captureState === 'unavailable'
     state = next
-    publishAvailability()
     if (ended) void revokeBackend('capture_ended')
   }
 
@@ -253,7 +262,6 @@
     const session = backendSession
     backendSession = null
     stopHeartbeat()
-    publishAvailability()
     if (session === null) return
     await revokeScreenSession(session, reason).catch(() => undefined)
   }
@@ -309,7 +317,6 @@
         return
       }
       backendSession = session
-      publishAvailability()
       stopHeartbeat()
       heartbeatTimer = window.setInterval(() => {
         const current = backendSession
@@ -336,13 +343,7 @@
   }
 
   export function referenceAvailable(): boolean {
-    return backendSession !== null && state.captureState === 'active' && !busy
-  }
-
-  function publishAvailability() {
-    onReferenceAvailabilityChanged(
-      backendSession !== null && state.captureState === 'active' && !busy,
-    )
+    return referenceAvailableValue
   }
 
   export async function captureAuthorizedRequest(
@@ -387,21 +388,11 @@
 </script>
 
 <section class="screen-capture" aria-label="画面参照">
-  <p id="screen-capture-description" class="screen-description">
-    {#if state.captureState === 'active'}
-      共有中は、会話に必要と判断したときだけ選択した画面を参照します。共有ONだけでは画像の送信や定期的な解析を行いません。
-    {:else}
-      画面について会話するには、最初に共有を開始して対象を選んでください。音声だけで画面共有が自動開始することはありません。
-    {/if}
-  </p>
-  <div class="screen-actions">
-    <label>
-      共有する種類
-      <select bind:value={requestedSurface} disabled={disabled || busy} aria-label="共有する画面の種類">
-        <option value="monitor">モニター</option>
-        <option value="window">ウィンドウ</option>
-      </select>
-    </label>
+  <div class="screen-summary">
+    <div class="screen-summary-copy">
+      <strong>画面共有</strong>
+      <span title={currentTarget}>対象: {currentTarget}</span>
+    </div>
     <button
       bind:this={operationButton}
       type="button"
@@ -410,6 +401,25 @@
       aria-describedby="screen-capture-description"
       on:click={() => { if (sharing) stopSharing(); else void selectTarget() }}
     >{sharing ? '画面共有を停止' : '画面共有を開始'}</button>
+  </div>
+  <details class="screen-details">
+    <summary>画面共有の詳細</summary>
+    <p id="screen-capture-description" class="screen-description">
+    {#if state.captureState === 'active'}
+      共有中は、会話に必要と判断したときだけ選択した画面を参照します。共有ONだけでは画像の送信や定期的な解析を行いません。
+    {:else}
+      画面について会話するには、最初に共有を開始して対象を選んでください。音声だけで画面共有が自動開始することはありません。
+    {/if}
+    </p>
+    <div class="screen-actions">
+    <label>
+      共有する種類
+      <select bind:value={requestedSurface} disabled={disabled || busy} aria-label="共有する画面の種類">
+        <option value="monitor">モニター</option>
+        <option value="window">ウィンドウ</option>
+        <option value="browser">ブラウザタブ</option>
+      </select>
+    </label>
     {#if sharing}
       <button type="button" disabled={disabled || busy} on:click={() => { void changeTarget() }}>共有対象を変更</button>
     {/if}
@@ -439,6 +449,10 @@
   {:else if state.captureState === 'active' && state.actualSurface === 'window'}
     <p class="surface-guidance">
       選択したウィンドウが参照対象です。digital-soulsの画面とは別の対象として扱います。
+    </p>
+  {:else if state.captureState === 'active' && state.actualSurface === 'browser'}
+    <p class="surface-guidance">
+      選択したブラウザタブだけが参照対象です。共有中のタブを閉じると画面共有も終了します。
     </p>
   {/if}
   {#if routing?.vision_destination === 'cloud' || routing?.chat_destination === 'cloud'}
@@ -475,17 +489,26 @@
     <p class="integration-note">画面参照のサーバーへ接続できていません。共有画像は送信されません。</p>
   {/if}
   <video bind:this={preview} class:visible={state.captureState === 'active'} autoplay muted playsinline aria-label="共有画面のローカルプレビュー"></video>
+  </details>
 </section>
 
 <style>
   .screen-capture {
-    padding: 10px 24px;
+    padding: 10px;
     border-top: 1px solid rgba(255, 255, 255, 0.09);
     color: #d9d1df;
     background: #17131e;
     font-size: 0.82rem;
   }
-  .screen-actions, .screen-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .screen-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .screen-summary-copy { min-width: 0; display: grid; gap: 2px; }
+  .screen-summary-copy strong { color: #eee8f3; font-size: 0.78rem; }
+  .screen-summary-copy span { overflow: hidden; color: #a9a1b5; font-size: 0.68rem; text-overflow: ellipsis; white-space: nowrap; }
+  .screen-summary button { flex: 0 0 auto; min-height: 36px; padding-inline: 9px; font-size: 0.7rem; }
+  .screen-details { margin-top: 8px; }
+  .screen-details summary { min-height: 36px; display: flex; align-items: center; color: #bdb3c7; cursor: pointer; font-weight: 700; }
+  .screen-details[open] summary { margin-bottom: 7px; }
+  .screen-actions, .screen-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .screen-description { margin: 0 0 9px; color: #eee8f3; }
   label { display: flex; align-items: center; gap: 7px; }
   .cloud-consent { margin-top: 8px; }
@@ -511,7 +534,7 @@
   .cloud-consent label { align-items: flex-start; }
   .cloud-consent input { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 1px; accent-color: #d4729a; }
   .cloud-consent p { margin: 0; color: #bdb3c7; }
-  video { display: none; width: min(100%, 560px); max-height: 180px; margin-top: 10px; border-radius: 8px; background: #050407; object-fit: contain; }
+  video { display: none; width: 100%; max-height: 150px; margin-top: 10px; border-radius: 8px; background: #050407; object-fit: contain; }
   video.visible { display: block; }
   @media (max-width: 640px) { .screen-capture { padding: 10px 12px; } }
 </style>

@@ -15,6 +15,10 @@ export const SCREEN_CAPTURE_LIMITS = {
   captureTimeoutMs: 5_000,
 } as const
 
+// Chromium系では静止したwindow共有で次frame通知が来ないことがある。
+// 現在frameが利用可能なら短時間だけ更新を待ち、その時点の表示内容を取得する。
+const FRESH_FRAME_GRACE_MS = 250
+
 type DisplayVideoTrackSettings = MediaTrackSettings & {
   displaySurface?: string
 }
@@ -93,7 +97,6 @@ const mapCaptureError = (error: unknown): ReasonCode => {
 }
 
 const surfaceReason = (actual: string | undefined, requested: ActualSurface): ReasonCode => {
-  if (actual === 'browser') return 'browser_surface_rejected'
   if (actual === undefined) return 'surface_unknown'
   if (actual !== requested) return 'surface_mismatch'
   return 'video_track_invalid'
@@ -357,7 +360,7 @@ export class BrowserScreenCaptureController {
       audio: false,
       selfBrowserSurface: 'exclude',
       surfaceSwitching: 'exclude',
-      monitorTypeSurfaces: surface === 'window' ? 'exclude' : 'include',
+      monitorTypeSurfaces: surface === 'monitor' ? 'include' : 'exclude',
     } as DisplayMediaStreamOptions
   }
 
@@ -408,12 +411,17 @@ export class BrowserScreenCaptureController {
         operation()
       }
       const remainingMs = Math.max(0, deadlineMs - this.dependencies.now().getTime())
+      const currentFrameAvailable = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+      const waitMs = currentFrameAvailable
+        ? Math.min(FRESH_FRAME_GRACE_MS, remainingMs)
+        : Math.min(SCREEN_CAPTURE_LIMITS.captureTimeoutMs, remainingMs)
       const timeoutHandle = this.dependencies.setTimer(() => {
         if (frameHandle !== null) video.cancelVideoFrameCallback?.(frameHandle)
-        finish(() => reject(new ScreenCaptureFailure(
+        if (currentFrameAvailable) finish(resolve)
+        else finish(() => reject(new ScreenCaptureFailure(
           remainingMs < SCREEN_CAPTURE_LIMITS.captureTimeoutMs ? 'request_expired' : 'frame_unavailable',
         )))
-      }, Math.min(SCREEN_CAPTURE_LIMITS.captureTimeoutMs, remainingMs))
+      }, waitMs)
       this.cancelPendingFrame = () => {
         if (frameHandle !== null) video.cancelVideoFrameCallback?.(frameHandle)
         const reason = generation === this.state.generation && operation !== this.snapshotOperation

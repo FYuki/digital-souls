@@ -52,7 +52,7 @@ class UiTrack extends EventTarget {
   readyState: MediaStreamTrackState = 'live'
   muted = false
   stop = vi.fn(() => { this.readyState = 'ended' })
-  constructor(private readonly surface: 'monitor' | 'window' = 'monitor') { super() }
+  constructor(private readonly surface: 'monitor' | 'window' | 'browser' = 'monitor') { super() }
   getSettings = () => ({ displaySurface: this.surface })
 }
 
@@ -295,11 +295,13 @@ describe('ScreenCaptureControls', () => {
     vi.stubGlobal('fetch', fetchMock)
     const track = new UiTrack('monitor')
     getDisplayMedia.mockResolvedValue(createStream(track))
+    const onReferenceAvailabilityChanged = vi.fn()
     const view = render(ScreenCaptureControls, {
       props: {
         characterId: 'miori',
         conversationId: CONVERSATION_ID,
         referenceDecisionActive: false,
+        onReferenceAvailabilityChanged,
       },
     })
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
@@ -315,6 +317,15 @@ describe('ScreenCaptureControls', () => {
     expect(screen.getByText('認識: 参照が必要か確認中')).toBeTruthy()
     expect(getDisplayMedia).toHaveBeenCalledTimes(1)
     expect((screen.getByRole('button', { name: '現在の画面を参照' }) as HTMLButtonElement).disabled).toBe(true)
+    await waitFor(() => expect(onReferenceAvailabilityChanged).toHaveBeenLastCalledWith(false))
+
+    await view.rerender({
+      characterId: 'miori',
+      conversationId: CONVERSATION_ID,
+      referenceDecisionActive: false,
+      onReferenceAvailabilityChanged,
+    })
+    await waitFor(() => expect(onReferenceAvailabilityChanged).toHaveBeenLastCalledWith(true))
   })
 
   test('window共有では取得対象とdigital-soulsを区別して案内する', async () => {
@@ -329,6 +340,19 @@ describe('ScreenCaptureControls', () => {
     await screen.findByText('共有: 共有中')
     expect(screen.getByText(/選択したウィンドウが参照対象です/)).toBeTruthy()
     expect(screen.getByText(/digital-soulsの画面とは別の対象/)).toBeTruthy()
+  })
+
+  test('browser共有を選択して対象を維持する', async () => {
+    const track = new UiTrack('browser')
+    getDisplayMedia.mockResolvedValue(createStream(track))
+    render(ScreenCaptureControls, {
+      props: { characterId: 'miori', conversationId: CONVERSATION_ID },
+    })
+    await fireEvent.change(screen.getByLabelText('共有する画面の種類'), { target: { value: 'browser' } })
+    await fireEvent.click(screen.getByRole('button', { name: '画面共有を開始' }))
+
+    expect(await screen.findByText('対象: ブラウザタブ・合成ウィンドウ')).toBeTruthy()
+    expect(screen.getByText(/選択したブラウザタブだけが参照対象です/)).toBeTruthy()
   })
 
   test('クラウド画像と派生テキストの同意を分けてruntimeへ通知する', async () => {

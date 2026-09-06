@@ -7,7 +7,7 @@
   "character_id": "miori",
   "conversation_id": "32000000-0000-4000-8000-000000000001",
   "requested_surface": "window",
-  "actual_surface": "browser",
+  "actual_surface": "application",
   "routing_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "cloud_consent": {
     "cloud_vision": false,

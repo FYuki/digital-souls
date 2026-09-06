@@ -34,7 +34,7 @@
       "format": "date-time",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{1,6})?Z$"
     },
-    "Surface": { "type": "string", "enum": ["monitor", "window"] },
+    "Surface": { "type": "string", "enum": ["monitor", "window", "browser"] },
     "RoutingRevision": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
@@ -114,7 +114,6 @@
         "capture_os_error",
         "picker_cancelled",
         "surface_mismatch",
-        "browser_surface_rejected",
         "surface_unknown",
         "video_track_invalid",
         "frame_unavailable",

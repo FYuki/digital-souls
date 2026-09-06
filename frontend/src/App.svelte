@@ -462,24 +462,34 @@
   class="app-shell"
   style={`--visual-viewport-height: ${visualViewportHeight === null ? '100dvh' : `${visualViewportHeight}px`}; --visual-viewport-top: ${visualViewportOffsetTop}px`}
 >
-  {#if sidebarOpen}
-    {#if compactLayout}
+  {#if sidebarOpen && compactLayout}
       <button class="drawer-backdrop" type="button" aria-label="サイドバーを閉じる" on:click={() => { sidebarOpen = false }}></button>
-    {/if}
-    <ConversationSidebar
-      state={$sidebarController}
-      controller={sidebarController}
-      selectedCharacter={$conversationController.character}
-      selectedConversationId={$conversationController.selectedConversationId}
+  {/if}
+  <ConversationSidebar
+    open={sidebarOpen}
+    state={$sidebarController}
+    controller={sidebarController}
+    selectedCharacter={$conversationController.character}
+    selectedConversationId={$conversationController.selectedConversationId}
+    disabled={interactionsDisabled}
+    onClose={() => { sidebarOpen = false }}
+    onSelect={(character, conversationId) => { void handleSelectConversation(character, conversationId) }}
+    onCreated={(character, conversation) => { void handleCreatedConversation(character, conversation) }}
+    onRemoved={handleRemovedConversation}
+    onRenamed={() => undefined}
+    onOpenMemory={() => { showingMemoryManagement = true; if (compactLayout) sidebarOpen = false }}
+  >
+    <ScreenCaptureControls
+      slot="screen-controls"
+      bind:this={screenControls}
+      characterId={$conversationController.character}
+      conversationId={$conversationController.selectedConversationId}
       disabled={interactionsDisabled}
-      onClose={() => { sidebarOpen = false }}
-      onSelect={(character, conversationId) => { void handleSelectConversation(character, conversationId) }}
-      onCreated={(character, conversation) => { void handleCreatedConversation(character, conversation) }}
-      onRemoved={handleRemovedConversation}
-      onRenamed={() => undefined}
-      onOpenMemory={() => { showingMemoryManagement = true; if (compactLayout) sidebarOpen = false }}
+      referenceDecisionActive={screenReferenceDecisionActive}
+      onReferenceAvailabilityChanged={(available) => { screenReferenceAvailable = available }}
     />
-  {:else}
+  </ConversationSidebar>
+  {#if !sidebarOpen}
     <button class="floating-menu" type="button" aria-label="サイドバーを開く" on:click={() => { sidebarOpen = true }}>☰</button>
   {/if}
   {#if showingMemoryManagement}
@@ -535,14 +545,6 @@
         {/if}
       </section>
     {/if}
-    <ScreenCaptureControls
-      bind:this={screenControls}
-      characterId={$conversationController.character}
-      conversationId={$conversationController.selectedConversationId}
-      disabled={interactionsDisabled}
-      referenceDecisionActive={screenReferenceDecisionActive}
-      onReferenceAvailabilityChanged={(available) => { screenReferenceAvailable = available }}
-    />
     <div class="input-area">
       <InputBar
         onSend={handleSend}

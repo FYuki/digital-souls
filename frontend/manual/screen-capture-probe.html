@@ -22,6 +22,7 @@
     <div>
       <button id="monitor" type="button">モニターを選択</button>
       <button id="window" type="button">ウィンドウを選択</button>
+      <button id="browser" type="button">ブラウザタブを選択</button>
       <button id="snapshot" type="button" disabled>静止画をローカル確認</button>
       <button id="stop" type="button" disabled>共有を停止</button>
     </div>
@@ -43,6 +44,7 @@
       const elements = {
         monitor: document.querySelector('#monitor'),
         window: document.querySelector('#window'),
+        browser: document.querySelector('#browser'),
         snapshot: document.querySelector('#snapshot'),
         stop: document.querySelector('#stop'),
         status: document.querySelector('#status'),
@@ -113,7 +115,7 @@
             audio: false,
             selfBrowserSurface: 'exclude',
             surfaceSwitching: 'exclude',
-            ...(requestedSurface === 'window' ? { monitorTypeSurfaces: 'exclude' } : { monitorTypeSurfaces: 'include' }),
+            ...(requestedSurface === 'monitor' ? { monitorTypeSurfaces: 'include' } : { monitorTypeSurfaces: 'exclude' }),
           })
         } catch (error) {
           elements.reason.textContent = reasonCode(error)
@@ -132,9 +134,7 @@
         elements.tracks.textContent = `${videoTracks.length} / ${audioTracks.length}`
         elements.label.textContent = track?.label || '-'
         if (videoTracks.length !== 1 || audioTracks.length !== 0 || actualSurface !== requestedSurface) {
-          elements.reason.textContent = actualSurface === 'browser'
-            ? 'browser_surface_rejected'
-            : actualSurface === undefined
+          elements.reason.textContent = actualSurface === undefined
               ? 'surface_unknown'
               : 'surface_mismatch'
           selected.getTracks().forEach((candidate) => candidate.stop())
@@ -177,6 +177,7 @@
 
       elements.monitor.addEventListener('click', () => void start('monitor'))
       elements.window.addEventListener('click', () => void start('window'))
+      elements.browser.addEventListener('click', () => void start('browser'))
       elements.stop.addEventListener('click', () => stop())
       elements.snapshot.addEventListener('click', () => {
         if (stream === null || elements.preview.videoWidth < 1 || elements.preview.videoHeight < 1) {

@@ -495,6 +495,18 @@ sudo -u digital-souls env \
 
 required model名の正本はdogfoodの`INFERENCE_TARGET_*`設定である。TargetのModel IDを変更する場合は、このpullコマンドも同時に更新する。readiness検証も解決済みChat／Privacy TargetのModel IDを使用するため、不足model名を表示する。
 
+画面知覚をdogfoodで有効にする場合は、同じローカルenvで`INFERENCE_TARGET_VISION=ollama/gemma4:e4b`
+と上限を設定し、`SCREEN_ALLOWED_ORIGIN`をdogfood Frontendのcanonical originへ一致させる。共有ONや
+Backend再起動で過去sessionを復元せず、標準pickerはWindows側Chrome／Edgeで利用者が操作する。
+受入では合成画面だけを使い、`status.sh`、journal、SQLite、Chroma、backupへ画像・対象名・Vision観測が
+ないことを確認する。実会話履歴をdevへコピーせず、実モデル評価もdev専用data rootから共通Ollamaを
+参照する。
+
+既知のWindows 11 25H2実測ではChrome 152.0.7977.77とEdge 152.0.4191.62が同じ挙動で、取得対象windowの
+背面化・サイズ変更ではframeが継続し、最小化では停止した。対象変更pickerを取消した場合は安全側に
+旧共有も解除される。これは対応保証ではなく当該構成の制約であり、browser更新後は
+[`docs/screen-perception-browser-acceptance.md`](../../docs/screen-perception-browser-acceptance.md)を再実施する。
+
 旧homeだったdata root直下の`.ollama`、`.cache`等は自動削除しない。`sudo ls -la /var/lib/digital-souls/data`で内容と必要性を利用者が確認し、保全後に個別判断する。
 
 ## 経路③: partial構築／破損状態からの障害復旧

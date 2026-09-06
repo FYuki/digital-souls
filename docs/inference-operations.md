@@ -37,11 +37,19 @@ INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS=8192
 INFERENCE_TARGET_VISION=ollama/gemma4:e4b
 INFERENCE_TARGET_VISION_MAX_INPUT_TOKENS=7168
 INFERENCE_TARGET_VISION_MAX_OUTPUT_TOKENS=1024
+INFERENCE_TARGET_VISION_OPTIONS_JSON={"temperature":0}
 INFERENCE_TARGET_VISION_TIMEOUT_SECONDS=30
 INFERENCE_TARGET_VISION_MAX_CONCURRENCY=1
 ```
 
 Vision入力はPNGまたはJPEGの1枚に限定し、各辺2,560 px、decode後4,194,304 pixel、encoded 5 MiBを上限とする。CoreがMIME、magic bytes、実decode、寸法を検証し、AdapterだけがProvider payload用Base64を作る。任意URL／pathはInference契約に公開しない。画像tokenは1枚1,120 tokenを含むProvider別の保守的推定とし、実usageやexact計数とは区別する。
+
+構造化出力ではCoreのJSON Schemaを検証の正本とする。AdapterはProviderのgrammar実装が受け付けない制約だけを送信schemaから除外し、生成結果はRouterで除外前の完全schemaに再検証する。現在はOllama向けに文字列長・配列長制約、OpenAI API向けに`allOf`、`if`、`then`などの未対応合成制約を除外する。互換化によってCoreの受入条件を緩めない。
+
+画面参照の競合判定は独立Targetを増やさず、`screen-reference` callerからChat Targetを利用する。
+ruleで確定できるturnではLLMを呼ばず、構造化出力不正、timeout、未設定時は画像を送らない分岐へ
+縮退する。判定へ渡せる履歴も画面lineageとcloud派生履歴の同意で制限し、新しい共有同意を過去sessionの
+履歴へ遡って適用しない。
 
 ## OpenAI認証
 
@@ -115,3 +123,32 @@ npm run test:integration:inference
 ```
 
 prompt／response、token／credential、endpoint／hostname、個人情報をIssue、artifact、実行logへ追加しない。必要な全Providerのsuccess記録が#181へ揃うまでIssueをcloseしない。
+
+## 画面知覚の実接続受入
+
+#217では公開・合成画像だけを使い、Ollamaの`gemma4:e4b`と、利用者が明示承認した場合だけ
+`openai-api`の画像入力を個別に確認する。起動probeだけをVision成功とは扱わず、質問対象を1つ特定する
+case、複数候補、対象なし、判読不能を実推論する。OpenAI APIは課金と外部送信を伴うため、credentialが
+存在しても実行前に毎回利用者確認を得る。API key、画像、質問、観測本文、endpoint、raw errorは証跡へ
+残さない。
+
+```bash
+RUN_SCREEN_VISION_REAL_TESTS=true \
+SCREEN_VISION_ACCEPTANCE_PROVIDER=ollama \
+INFERENCE_ACCEPTANCE_ENVIRONMENT=dev \
+npm run test:integration:screen-vision
+```
+
+実行環境には通常Target一式と、選択Providerを指す`INFERENCE_TARGET_VISION`を設定する。
+Ollamaの構造化Vision受入では生成揺らぎを抑えるため`INFERENCE_TARGET_VISION_OPTIONS_JSON={"temperature":0}`も設定する。
+`openai-api`へ切り替える場合は実行前の利用者承認とBackend専用secretが必要である。
+
+参照ruleの固定fixtureは次で評価する。
+
+```bash
+npm run eval:screen-reference:conformance
+```
+
+この結果は本文非保持のsynthetic route conformanceであり、実モデル品質の代用ではない。実接続証跡は
+UTC日時、commit、環境区分、Provider／Model、合成fixture ID、成功可否、分岐、区間遅延だけを#217へ
+記録する。対象特定率と実質回答開始P50／P95はモデルごとの反復結果から別途集計する。
