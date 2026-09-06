@@ -54,6 +54,7 @@
         "stable_operation_id": {"type": "string", "minLength": 1},
         "schema_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
         "input_schema": {"type": "object"},
+        "native_definition": {"type": "object"},
         "native_annotations": {"type": "object"},
         "native_meta": {"type": "object"},
         "trust": {"$ref": "#/$defs/Trust"},

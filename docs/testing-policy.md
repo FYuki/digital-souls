@@ -134,9 +134,9 @@ Wave 3のEpic受入シナリオ、自動testと利用者dogfoodの責務分離�
 #159では`backend/tests/module/`からtest-owned MCP serverを別processで起動し、通常CIで実行可能なconformanceとする。
 
 - SDKは#152で確認した`mcp==2.0.0`をpinする
-- self-owned想定Streamable HTTP + Bearer service auth
-- `Origin`拒否とlocalhost bind設定
-- external想定stdio server
+- external Streamable HTTP（none / preconfigured Bearer）
+- external stdio server
+- self-ownedのOrigin拒否・localhost bind・mandatory Bearerは#221へ分離
 - MCP 2026-07-28 Tools / Resources / Prompts discovery
 - MRTR `input_required` →回答→元request再実行
 - mapping不能Tool

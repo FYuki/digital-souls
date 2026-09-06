@@ -22,21 +22,23 @@
     "operation_ref": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["tool_name"],
+      "oneOf": [{"required": ["tool_name"]}, {"required": ["resource_uri"]}],
       "properties": {
         "tool_name": {"type": "string", "minLength": 1},
+        "resource_uri": {"type": "string", "minLength": 1},
         "stable_operation_id": {"type": "string", "minLength": 1}
       }
     },
     "started_at": {"type": "string", "format": "date-time"},
     "finished_at": {"type": ["string", "null"], "format": "date-time"},
-    "outcome": {"enum": ["succeeded", "failed", "unsupported", "budget_exceeded", "result_unknown", "cancel_requested"]},
+    "outcome": {"enum": ["succeeded", "failed", "unsupported", "budget_exceeded", "result_unknown", "cancel_requested", "input_required"]},
     "error_category": {
       "type": ["string", "null"],
       "enum": [null, "transport", "protocol", "auth", "validation", "tool_error", "unavailable", "policy"]
     },
     "retry_count": {"type": "integer", "minimum": 0},
     "native_payload": {},
+    "interaction_id": {"type": "string", "format": "uuid"},
     "native_error": {},
     "audit": {
       "type": "object",

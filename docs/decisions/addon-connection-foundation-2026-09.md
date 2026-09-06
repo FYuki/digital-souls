@@ -1,14 +1,21 @@
-# 外部能力としてのAddonとMCP-first接続基盤（ドラフトADR）
+# 外部能力としてのAddonとMCP-first接続基盤
 
 - 作成日: 2026-09-05
 - 最終整理日: 2026-09-06
-- 文書段階: 作業ブランチ上の未受入ドラフト
-- 状態タグ: 未付与。#152のcontract/fixtureレビュー後に`ACTIVE`へ移行する。
+- 文書段階: 設計・契約確定
+- 状態: `ACTIVE`。#104ではexternal MCP subsetを適用し、self-owned固有runtimeは#221へ延期する。
 - 対象: #104 Addon接続基盤、#152 設計確定
 
 > 本ADRは2026-09-05〜06のgrillMeと、その後のレビューで確定した設計判断を記録する。
 > MCPを第一の公開・接続方式とし、HTTP/WS等の独自経路はMCPで満たせない具体的要件が確認された場合だけ追加する。
 > Task/Event/副作用回復/長時間自律行動の詳細実装は後続Issueへ残し、#104では抽象境界までに留める。
+
+## 適用範囲
+
+#104は外部stdio / Streamable HTTP、connection grantとannotation trust、validated snapshot、
+Execution Gate、external conformanceを対象とする。self-ownedのmetadata・stable operation ID・
+localhost bind・Origin検証・mandatory Bearer server conformanceは#221の後続設計とする。
+以下にself-owned向け記述があっても、#104の実装・受入条件には含めない。
 
 ## 1. 決定概要
 
@@ -419,8 +426,8 @@ JSON Schemaだけで表現できないidentity照合、Core restrictionの単調
 
 #159ではtest-owned別process MCPを使う。
 
-- self-owned Streamable HTTP + Bearer auth。
-- Origin拒否 / localhost bind設定。
+- external Streamable HTTP（none / preconfigured Bearer）。
+- self-ownedのOrigin拒否 / localhost bind / mandatory Bearerは#221で検証。
 - external stdio fixture。
 - Tools / Resources / Prompts discovery。
 - mapping不能Tool。
@@ -464,9 +471,9 @@ JSON Schemaだけで表現できないidentity照合、Core restrictionの単調
 - Testing policy: `docs/testing-policy.md`
 - NIKE ROYALE AI参加ガイド: 2026-09-05にユーザーが共有した本文を設計事例として参照。実サービス接続は未検証。
 
-## 18. 状態
+## 18. 契約の適用
 
-設計判断、JSON Schema、fixture、SDK/versionの文書適合確認は完了した。
-
-ADRを`ACTIVE`へ移行し#152をcloseする前に、`docs/testing-policy.md`へAddon conformance分類を反映し、レビューでcontract/fixtureの整合を確認する。
-実MCPとのruntime conformanceは#154/#159で行い、#152の設計文書だけを実接続成功の証跡とは扱わない。
+Snapshotはnative Tool定義全体を`native_definition`へ保持できる。Execution envelopeは
+Tool名またはResource URIのいずれかを参照し、MRTR入力待ちを`input_required`と
+`interaction_id`で上位へ渡す。契約のunit検証と実通信conformanceは別の証跡として扱う。
+設計文書とschemaの検証だけを実接続成功の証跡とは扱わない。

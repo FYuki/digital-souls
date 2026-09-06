@@ -121,7 +121,7 @@ MCP Tool annotationsはhintであり、trusted server由来でない限り実行
 4. stdio test server接続を確認。
 5. MRTR `input_required` fixtureを確認。
 6. Tasks必須operationが`unsupported`となり通常Toolを壊さないことを確認。
-7. Origin拒否、localhost bind、Bearer auth failureのsecurity testを実施。
+7. 外部HTTPのnone/Bearer/auth failureを検証。self-owned Origin拒否・localhost bindは#221へ分離。
 8. external legacy fixtureで`mode="auto"` fallbackを確認。
 
 ## 参照

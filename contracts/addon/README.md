@@ -70,3 +70,8 @@ normal_max_auto_cycles = 3
 - schema digest/revision差分とsnapshot activation境界。
 - cached snapshotだけでoffline実行しないこと。
 - secret/raw auth error/native payloadを通常log・LLM・Frontendへ露出しないこと。
+
+## External MCP subset
+
+#104のruntime対象はexternal stdio / Streamable HTTPとする。self-owned向けschemaは将来互換用であり、runtime・server conformanceは#221で実装する。
+Snapshot Toolは`native_definition`へ定義全体を保持できる。Executionの`operation_ref`は`tool_name`または`resource_uri`のいずれか一方とする。MRTRは`outcome=input_required`と`interaction_id`で明示的な上位判断へ渡す。
