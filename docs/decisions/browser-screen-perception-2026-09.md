@@ -2,13 +2,20 @@
 
 ## 状態
 
-**ACTIVE**。Issue #213のcontract実装、Windows 11上のGoogle Chrome／Microsoft Edgeによる実機確認、レビュー受入を完了した。
+**ACTIVE**。Issue #213の初期contract実装、Windows 11上のGoogle Chrome／Microsoft Edgeによる実機確認、レビュー受入を完了した。その後のIssue #225で、最初の共有許可後は会話文脈に応じてon-demand参照する方針へ改訂した。旧取得・失効契約は維持し、改訂点は本ADRの参照判断、対象特定、派生履歴、評価契約に明示する。
 
 本ADRはIssue #212の画面知覚にだけ適用する。Inference全般は`inference-provider-foundation-2026-09.md`、音声sessionとLiveKit固有transportの分離は`voice-session-contract-2026-08.md`および`livekit-transport-2026-08.md`、会話履歴と長期記憶は`wave2-memory-formation-retrieval-2026-08.md`を正本とする。本ADRと既存ADRが重なる場合、画面画像と画面由来情報の追加制約だけを本ADRが優先する。
 
+| 範囲 | 2026-09-06時点 |
+|---|---|
+| 標準picker、monitor／window検証、静止画生成、画像Inference基盤 | #213〜#215で実装済み |
+| 文脈参照判断、lineage、text／LiveKit統合 | 本改訂で契約確定、#216で実装 |
+| 新しい共有説明、質問対象に沿う観測 | 本改訂で契約確定、#226で実装 |
+| 常時解析、自発発話 | #223／#224の後続Epic。本MVPでは未実装・非スコープ |
+
 ## 背景
 
-利用者が明示的に許可した1つのmonitorまたはwindowを、テキストとLiveKit音声で共有するCore知覚として利用する。共有ONはローカルの`MediaStreamTrack`を利用可能にするだけであり、画像の定期送信や常時Visionを意味しない。
+利用者が明示的に許可した1つのmonitorまたはwindowを、テキストとLiveKit音声で共有するCore知覚として利用する。最初の共有ONと標準pickerは利用者が操作する。共有後は「これ何？」「右上の赤い表示、何？」等の発言と許可された会話文脈から必要性を判断し、必要なturnだけ新しい静止画を取得する。共有ONはローカルの`MediaStreamTrack`を利用可能にするだけであり、画像の先行取得、定期送信、常時Vision、無発言時の解析を意味しない。
 
 対象はWindows 11上のデスクトップ版Google Chrome／Microsoft Edgeである。Screen Capture APIの仕様、ブラウザ実装、OS、管理policy、GPU構成を区別し、文書上のAPI存在やmock成功だけで実機成功を主張しない。
 
@@ -37,6 +44,10 @@ Chromeのhintは特定windowやscreenを事前選択せず、pickerのpaneを優
 | recognition | `idle`、`snapshot_requested`、`capturing`、`uploading`、`recognizing`、`composing`、`succeeded`、`failed` |
 
 `active`は「共有中」、`recognizing`／`composing`は「認識・回答処理中」であり、同じ表示へ畳み込まない。最後に認識へ採用した画像の`captured_at`だけを表示し、前回画像を新しい時刻で再利用しない。
+
+参照判断はsnapshot要求より前のCore内部処理である。Frontendは共有中の会話requestを待っている間だけローカルな`reference_deciding`表示を使用できるが、共有wire contractの`RecognitionState`へ追加せず、Backendから判断完了を装う状態eventも作らない。fast pathでも短時間表示され得るため、表示文言は「参照が必要か確認中」とし「画面を解析中」としない。textではHTTP応答、voiceでは既存Core eventまたは`snapshot_requested`の到着で終了する。
+
+共有中は「ONの間、会話に必要と判断したときに、選択した画面を参照します。ONだけでは画像を送信しません」と説明する。monitor共有ではdigital-soulsを前面へ出すと質問対象を隠し得るため、特定アプリについて継続して尋ねる場合はwindow共有を案内する。対象の前面化や共有先変更をアプリが自動実行してはならない。
 
 対象名となる`MediaStreamTrack.label`は現在ページのローカル表示だけに使用する。Backend、telemetry、通常log、storage、Issue証跡へ送らない。共有許可、ON状態、stream、同意は再読込後に復元しない。
 
@@ -102,6 +113,15 @@ schemaは次の制御metadataだけを扱う。
 
 画像本文、Base64、質問本文、Vision観測本文、window title、URL、Provider endpoint、credentialはschemaへ入れない。binaryがschemaに適合したとは扱わず、画像decoder境界で別に検証する。
 
+Issue #225の改訂では共有sessionのwire eventを変更しないため、`screen-perception.schema.json`とprotocol `1.0`を維持する。次の2つはwire eventでも生成型でもなく、Core内部でInferenceの構造化出力を検証する画面domain contractである。
+
+| schema | 所有者・用途 |
+|---|---|
+| `screen-reference-decision.schema.json` | Coreの参照判断。3分岐と固定basisだけを許可し、自由な理由文、Provider、Tool、対象、認可情報を出力させない |
+| `screen-grounding-observation.schema.json` | CoreのVision観測。質問対象候補、位置、読取内容、根拠、制約、読取不能、不確実性を表す。session等の正本metadataを含めない |
+
+参照判断の入力と期待経路は`fixtures/contextual-reference-cases.json`、対象特定の正常・異常例は`fixtures/grounding-observations.json`を正本とする。これらは共通event生成型の入力ではなく、Backendのdomain型、rule、prompt、parserおよび#217の評価に使う。生成済みFrontend／Backend event型を手編集しない。
+
 ### 6. HTTPとLiveKitへのmapping
 
 通常Frontendは同一originの`/api`を使用し、Backend上では次の境界へmappingする。
@@ -137,28 +157,65 @@ schemaは次の制御metadataだけを扱う。
 
 質問本文は`POST /chat`または確定済み音声transcriptからCoreがpending requestへmemory-onlyで保持する。画像uploadへ重複させない。textでは画像処理完了後のPUT responseを既存Chat responseへmappingし、voiceではPUTを受付応答に留め、既存LiveKit response eventを継続する。両経路とも同じCore画面認識serviceを呼ぶ。production Frontend proxyのtimeoutは画面依存request全体45秒より5秒以上長くし、現行30秒から50秒以上へ変更する。
 
-### 7. 明示要求
+### 7. 会話文脈による参照判断
 
-画面共有ONだけではsnapshotを作らない。次のどちらかだけを要求とする。
+画面共有ONだけではsnapshotを作らない。Coreは現在発言、明示UI、共有・認可状態、必要最小限の保存済み会話から、画像取得前に次のいずれかへ決定する。
 
-1. 入力欄の「現在の画面を参照」をそのturnに付ける明示UI。
-2. Coreの決定論的判定器が現在画面の知覚要求と認めたtext／STT transcript。
+| decision | 後続処理 |
+|---|---|
+| `answer_without_screen` | 画像を取得せず既存Chatへ進む。取得不能を伝える必要がある場合だけ信頼済み制御指示を添える |
+| `inspect_screen` | Coreが認可を再検証し、新しい静止画1枚を要求する |
+| `clarify_reference` | 画像を取得せず、キャラクターとして対象を短く確認する |
 
-判定前にNFKC正規化と空白／句読点整理を行う。画面対象語と、見る・確認・読む・説明・現在表示の質問等の知覚表現を共に要求する。否定、引用、過去の叙述、機能自体の説明、曖昧な「これどう思う？」だけでは発火しない。判定不能は画面を送らず、利用者は明示UIで補える。
+このdecisionは認可ではない。`inspect_screen`でもsession、generation、client、character、conversation、surface、`routing_revision`、cloud同意のいずれかが不成立ならcapture・送信しない。Frontendの予測、LLM出力、`enabled=true`だけでこの検証を通過させない。
 
-fixtureの正本は`contracts/perception/screen/fixtures/explicit-reference-cases.json`とする。Frontendで推測して送信するだけにせず、Coreが最終判定を所有する。
+#### ruleの優先順位
 
-### 8. Vision観測と失敗時のChat
+判定前にNFKC正規化と空白／句読点整理を行い、次の順で評価する。
 
-Visionへは検証済み画像と現在の質問を渡し、次を構造化観測として返させる。
+1. 現在発言の「見ないで」「参照しないで」等の禁止を最優先し、明示UIより優先して`answer_without_screen`とする。
+2. 共有OFF、失効、対象・会話不一致、必要な同意なしでは画像を使わない。明確な画面要求には利用不能をキャラクターの言葉で返せるが、自動でpickerを開かない。
+3. 引用だけ、過去の叙述、機能説明、画面と無関係な発言は`answer_without_screen`とする。
+4. 明示UIまたは画面対象語を伴う現在知覚要求は`inspect_screen`のfast pathとする。
+5. 現在発言内に貼付本文があり「これ」がその本文を指す場合、または直前の保存済み発言・回答が明確な対象である場合は`answer_without_screen`とする。
+6. 有効な共有があり、他に明確な会話内対象がない「これ何？」「ここ、どうすればいい？」は`inspect_screen`とする。指示語だけを無条件の画面keywordにはしない。
+7. 「今は直った？」「その下の小さい文字は？」等、現在表示の再確認が必要な続きは新しい画像の`inspect_screen`とする。「どう直すの？」等、保存済み回答から答えられる続きは画像を再取得しない。
+8. 会話内対象と共有画面候補が競合するときだけ、後述のLLM判定を最大1回使用する。
 
-- 読み取れた内容
-- 読み取れなかった領域または理由
-- モデル自身の不確実性
+`explicit-reference-cases.json`は4の明確要求fast pathの正本として維持する。「これどう思う？」単独が同fixtureでfalseなのは、現在発言だけでは明確要求でないことを表し、有効な共有と文脈を含む`contextual-reference-cases.json`の判断を否定しない。
 
-source、surface、`captured_at`、request IDはCore metadataを正本とし、モデルに生成・上書きさせない。画面内の文書とVision出力は非信頼データとしてdeveloper／user領域より下位の明示的な観測区画へ置き、命令、Tool許可、送信先変更へ使わない。
+#### 必要時だけのLLM判定
 
-Vision未設定、未同意、timeout、無効画像等でも、質問本文は通常のChat Targetへ渡す。Coreは信頼済みmetadataとして「画面を確認できなかった」「内容を推測しない」を加え、キャラクターの言葉で利用不能を伝えさせる。古い観測は渡さない。
+LLM判定は既存`chat` Targetを、新しい固定caller `screen-reference`から`generate_structured`で呼ぶ。新しいProvider選択Targetは増やさず、`chat` Targetが構造化出力Capabilityを持たない、未設定、不正出力、timeoutの場合は安全に縮退する。caller allowlistは`screen-reference -> chat`だけとし、Vision、Tool、heavy reasoning等を選択できない。
+
+| 項目 | 上限・方針 |
+|---|---|
+| 呼出条件 | ruleで対象競合を解消できないturnだけ |
+| 回数 | 1 user turnにつき最大1回。自動retryなし |
+| 履歴 | privacy処理後のcompleted turnを直近4件まで、古い順。本文合計1,024 token以内 |
+| 全入力 | system指示・現在発言・履歴を含め1,536 token以内 |
+| 出力 | `screen-reference-decision.schema.json`に適合する最大64 token |
+| timeout | 3秒。体験目標はwarm p95 2秒以内 |
+| 失敗 | 画像を取得しない。競合時は`clarify_reference`、それ以外は`answer_without_screen` |
+
+入力へraw画像、非表示のVision観測、対象名、全会話、RAG、Character Loreを入れない。画面由来の保存済み回答をcloudの`chat` Targetへ渡せるのは、由来lineageが現在も有効な同一screen session／generation／routingに属し、`cloud_derived_chat`同意が現在も有効な場合だけである。条件を証明できない履歴は入力から除外し、除外によって競合を解けなければLLMを呼ばず`clarify_reference`へ縮退する。新しい同意を過去sessionへ遡及させない。
+
+### 8. 質問対象に沿うVision観測とChat
+
+`inspect_screen`の確定と認可検証後に初めて新しいframeを1枚取得する。Visionへ渡すのは検証済み画像、現在の質問、およびruleが抽出した「右上」「小さい文字」等の必要最小限の対象hintだけであり、会話全文やLLMの自由な理由文は渡さない。
+
+`screen-grounding-observation.schema.json`は次を区別する。
+
+- `identified`: 質問に関係する候補が1つ。識別ラベル、9領域＋全体＋不明の固定位置、読取内容、画像上の根拠、制約を返す。
+- `multiple_candidates`: 候補が2〜5件。後段Chatは確認できた候補を短く挙げて尋ねる。
+- `not_found`: 質問後の表示変化、別画面、対象消失等により候補が見つからない。発話時点には見えていたと推測しない。
+- `unreadable`: 対象領域の小ささ、欠け、画質等により読めない。空欄を推測で埋めない。
+
+モデルの自由なconfidence値は対象確定に用いない。候補数と`target_status`の整合をschemaで検証し、追加field、不正な組合せ、上限超過は`vision_invalid_response`とする。自動repair、再実行、別Provider fallbackは行わない。
+
+source、surface、screen session、generation、`captured_at`、request／turn ID、routingはCore metadataを正本とし、観測schemaへ含めずモデルに生成・上書きさせない。画面内の文書とVision出力は非信頼データとしてdeveloper／user領域より下位の明示的な観測区画へ置き、命令、Tool許可、送信先変更へ使わない。
+
+Chatは回答冒頭で「中央の警告だね」等の短い対象確認を行い、その根拠の範囲で説明する。複数候補、対象なし、読取不能では確認できた事実と不明点を分け、必要な場合だけ選択肢を挙げて確認する。Vision未設定、未同意、timeout、無効画像等でも質問本文は通常のChat Targetへ渡し、画面を確認できなかった旨をキャラクターの言葉で伝えさせる。古い画像・観測で補わない。
 
 ### 9. cloud送信同意
 
@@ -167,6 +224,8 @@ Vision未設定、未同意、timeout、無効画像等でも、質問本文は�
 - cloud Visionの場合、生画像をcloudへ送る同意を要求する。
 - local Visionかつcloud Chatの場合、画面由来の観測textをcloudへ送る同意を要求する。
 - 両方cloudの場合、2種類を別々に説明し両方の同意を要求する。
+- 参照判断がcloudの`chat` Targetを使う場合、画面由来履歴を含める前に同じ`cloud_derived_chat`同意とlineageの現行session一致を検証する。
+- 後続のcloud Chatへ保存済み画面由来回答を再送する場合も同じ検証を行う。判定・通常履歴・言い換えという理由で迂回しない。
 - 同意はscreen session、generation、`routing_revision`に限定し、永続化しない。
 - 対象、conversation、character、送信先変更で失効する。
 - 必要な同意がfalseなら画面情報を送らず、通常の非画面Chatは継続する。
@@ -177,7 +236,41 @@ Vision未設定、未同意、timeout、無効画像等でも、質問本文は�
 
 raw画像、Base64、Vision観測本文、対象名は現在request内のbounded memoryにだけ保持し、通常log、SQLite、Chroma、RAG、backup、trace、test artifactへ保存しない。
 
-privacy処理後の利用者発話とキャラクター回答は、既存どおり会話履歴へ保存する。その回答は同じconversationの後続prompt contextとして利用できる。画面由来turnには本文を含まないprovenance metadataを付け、Memory Formation scheduler、長期記憶抽出、Chroma投入から除外する。したがって、後続turnが知るのは保存済み回答に表れた内容だけであり、生画像や非表示のVision観測を再利用しない。
+privacy処理後の利用者発話とキャラクター回答は、既存どおり会話履歴へ保存できる。画面由来の保存済み回答を後続のローカル会話で使うことと、raw画像・非表示観測を保持することは区別する。後続turnが知るのは保存済み回答に表れた内容だけであり、新しい現在表示が必要なら新規画像を取得する。
+
+画面由来provenanceは本文を含まない次のlineage metadataとして保持する。
+
+| metadata | 用途 |
+|---|---|
+| `screen_lineage_id` | 直接観測turnでCoreが発行するUUID。派生turnへ同じIDを継承する |
+| `origin_screen_session_id`、`origin_generation` | 現行sessionとの一致確認。モデルは生成しない |
+| `origin_routing_revision` | 同じ送信先構成かの確認 |
+| `source`、`surface` | 明示UI／自然言語とmonitor／windowのmetadata。対象名は含めない |
+| `derivation` | `direct_observation`または`conversation_follow_up` |
+
+1 turnが複数の画面由来回答を入力に使った場合は全lineageを関連付け、1件へ要約して制約を失わせない。画面由来回答を参照して生成した「どう直すの？」等の派生回答も`conversation_follow_up`を継承する。provenanceが1件以上あるturnはMemory Formation scheduler、長期記憶抽出、Chroma投入から除外する。privacy skipped turnは本文を保存しない既存契約を優先しつつ、作成済みlineage metadataを本文復元の手掛かりにしてはならない。
+
+同意そのものは永続化しない。cloudへ再送する時点で、全lineageのoriginが現在有効なscreen session／generation／routingと一致し、必要な同意がmemory上で有効な場合だけ本文を含められる。OFF、lease切れ、同意取消し、Backend再起動後や、由来を証明できない旧データはローカル履歴としては残せるが、cloudの参照判断・Chatへ再送しない。
+
+### 11. 評価と遅延
+
+Backendは`input accepted`、`reference decision started/completed`、`capture requested/received`、`Vision started/completed`、`Chat first delta`、`TTS first frame`をmonotonic clockで区別する。通常telemetryは本文、観測、対象名を記録せず、decision、rule／LLM／fallback、所要時間、共通error、lineage件数だけを扱う。45秒の画面依存request timeoutは障害収束上限であり、会話品質目標ではない。
+
+#217では公開・合成caseだけを用い、次を受け入れる。
+
+| 指標 | 基準 |
+|---|---:|
+| rule fixture | 正しい3分岐100%、禁止・未認可からの画像送信0件 |
+| 誤参照率 | 画面不要caseの5%以下。禁止・引用・未同意caseは0% |
+| 参照漏れ率 | 画面必須caseの10%以下 |
+| 不要な確認質問率 | 単一対象または明確な会話対象caseの10%以下 |
+| 対象特定率 | 単一対象caseの85%以上。複数候補は候補列挙を正解とする |
+| 判定LLM呼出率 | 代表fixtureの20%以下 |
+| rule判定時間 | p95 20 ms以内 |
+| 判定LLM時間 | warm p95 2秒以内、hard timeout 3秒 |
+| 画面参照の実質回答開始 | 取得要求から最初の内容あるtext deltaまでp50 10秒以内、p95 20秒以内 |
+
+同一fixtureをtextとLiveKitで対応付け、LiveKitでは最初の内容あるtext deltaと最初のTTS frameを別々に測る。Windows 11 Chrome／Edgeでdigital-souls側タブの背面・非表示と、共有対象windowの背面化・最小化を分ける。最小化でframe停止する既知結果は失敗時契約を確認し、有限leaseや鮮度検証を無効化して成功扱いにしない。Ollama／Vision／Chatが同じGPUを競合する場合は逐次条件と遅延を記録し、mock結果を実モデル品質の証拠にしない。
 
 ## reason codeとブラウザerror
 
@@ -219,7 +312,10 @@ Frontendはraw `DOMException.message`を表示・送信・記録せず、`name`�
 - 汎用multipart upload: frameworkの自動spoolを完全に避ける追加実装が必要になる。
 - 任意URL／path入力: SSRF、ローカルファイル読取、権限境界を広げる。
 - Frontendだけの`enabled`判定: Backend失効後の遅延送信を防げない。
-- LLMによる明示要求分類: 通常turnへ追加推論を発生させ、判定の再現性を失う。
+- 全turnのLLM参照分類: 通常会話の遅延・費用を増やすため採用しない。ruleで競合を解けないturnだけの構造化判定は採用する。
+- 指示語を単純な画面keywordへ追加: 貼付本文や直前回答への「これ」「それ」を誤参照するため採用しない。
+- 発話時の先行capture／画像ring buffer: 参照判断前の取得と画像保持を生むため採用しない。
+- 非表示Vision観測のturn間保持: 鮮度とprivacy境界を曖昧にするため採用しない。保存済み回答とmetadata-only lineageだけを継続利用する。
 - Vision失敗時の固定キャラクター文: 人格表現を迂回するため、Chatへ失敗metadataを渡す。
 
 ## 参照
