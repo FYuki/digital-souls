@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+import logging
+import tempfile
 import os
 import shutil
 import socket
@@ -43,6 +45,7 @@ def servers():
 
 
 def test_published_filesystem_stdio(servers, tmp_path, caplog):
+    caplog.set_level(logging.DEBUG)
     data = tmp_path / "allowed"
     data.mkdir()
     sample = data / "sample.txt"
@@ -89,42 +92,89 @@ def test_published_filesystem_stdio(servers, tmp_path, caplog):
     assert "mcp-integration-read-evidence" not in caplog.text
 
 
-@contextmanager
-def everything_http(servers, tmp_path):
+def free_port():
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
-        port = sock.getsockname()[1]
-    # 個人のsecretや設定をserverへ継承しない。
-    env = {"PATH": os.defpath, "HOME": str(tmp_path), "PORT": str(port)}
-    process = subprocess.Popen(
-        [servers["node"], servers["everything"], "streamableHttp"],
-        cwd=tmp_path,
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+        return sock.getsockname()[1]
+
+
+def mcp_ready(endpoint, token=None):
+    from app.external_mcp import MCPFailure
+
+    class ProbeSecret:
+        async def resolve(self, secret_ref):
+            return token
+
+    async def probe():
+        c = Connection.from_manifest(
+            manifest(
+                connection_id="readiness",
+                transport="streamable_http",
+                endpoint=endpoint,
+                auth={"type": "bearer", "secret_ref": "MCP_READINESS_TOKEN"}
+                if token
+                else None,
+            )
+        )
+        async with ExternalMCPClient(
+            c, secrets=ProbeSecret(), timeout=1
+        ).connect() as client:
+            discovered = await client.discover()
+            return any(t["name"] == "echo" for t in discovered.tools)
+
     try:
-        for _ in range(200):
-            assert process.poll() is None, "公開MCP serverが起動中に終了"
+        return asyncio.run(probe())
+    except MCPFailure as error:
+        if error.category not in {"transport", "protocol", "auth", "unavailable"}:
+            raise
+        return False
+
+
+def stop_process(process):
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+
+
+@contextmanager
+def everything_http(servers, tmp_path):
+    for _ in range(3):
+        port = free_port()
+        endpoint = f"http://127.0.0.1:{port}/mcp"
+        # 自分のprocessのlisten成功とMCP応答の両方を確認する。
+        with tempfile.TemporaryFile(mode="w+") as startup:
+            process = subprocess.Popen(
+                [servers["node"], servers["everything"], "streamableHttp"],
+                cwd=tmp_path,
+                env={"PATH": os.defpath, "HOME": str(tmp_path), "PORT": str(port)},
+                stdout=subprocess.DEVNULL,
+                stderr=startup,
+            )
+            ready = False
             try:
-                with socket.create_connection(("127.0.0.1", port), timeout=0.1):
-                    break
-            except OSError:
-                time.sleep(0.05)
-        else:
-            pytest.fail("公開MCP serverのreadiness timeout")
-        yield f"http://127.0.0.1:{port}/mcp", process
-    finally:
-        if process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=5)
+                for _ in range(200):
+                    if process.poll() is not None:
+                        break
+                    startup.seek(0)
+                    if f"listening on port {port}" in startup.read():
+                        ready = mcp_ready(endpoint) and process.poll() is None
+                        break
+                    time.sleep(0.05)
+                if ready:
+                    yield endpoint, process
+                    return
+            finally:
+                stop_process(process)
+    pytest.fail("公開MCP serverの起動/readiness失敗（3回）")
 
 
 def test_published_everything_streamable_http(servers, tmp_path, caplog):
+    caplog.set_level(logging.DEBUG)
+
     async def run(endpoint, process):
         c = Connection.from_manifest(
             manifest(
@@ -180,11 +230,9 @@ NGINX_IMAGE = (
 
 
 @contextmanager
-def bearer_proxy(upstream, tmp_path, token):
+def bearer_proxy_attempt(upstream, tmp_path, token):
     # 実nginxを認証境界にする。MCP応答をmock/合成しない。
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        port = sock.getsockname()[1]
+    port = free_port()
     config = tmp_path / "nginx.conf"
     config.write_text(f"""events {{}}
 http {{
@@ -221,21 +269,27 @@ http {{
         ],
         text=True,
     ).strip()
+    ready = False
     try:
-        for _ in range(100):
-            try:
-                with socket.create_connection(("127.0.0.1", port), timeout=0.1):
-                    break
-            except OSError:
-                time.sleep(0.05)
+        for _ in range(20):
+            running = (
+                subprocess.check_output(
+                    ["docker", "inspect", "--format", "{{.State.Running}}", container],
+                    text=True,
+                ).strip()
+                == "true"
+            )
+            if not running:
+                break
+            endpoint = f"http://127.0.0.1:{port}/mcp"
+            if mcp_ready(endpoint, token) and not mcp_ready(endpoint):
+                ready = True
+                break
+            time.sleep(0.05)
+        if ready:
+            yield endpoint
         else:
-            detail = subprocess.check_output(
-                ["docker", "logs", container], stderr=subprocess.STDOUT, text=True
-            )
-            pytest.fail(
-                "nginx readiness timeout: " + detail.replace(token, "[redacted]")
-            )
-        yield f"http://127.0.0.1:{port}/mcp"
+            yield None
     finally:
         subprocess.run(
             ["docker", "rm", "-f", container], check=True, stdout=subprocess.DEVNULL
@@ -243,8 +297,19 @@ http {{
         config.unlink()
 
 
+@contextmanager
+def bearer_proxy(upstream, tmp_path, token):
+    for _ in range(3):
+        with bearer_proxy_attempt(upstream, tmp_path, token) as endpoint:
+            if endpoint is not None:
+                yield endpoint
+                return
+    pytest.fail("nginxの起動/readiness失敗（3回）")
+
+
 @pytest.mark.parametrize("credential", ["valid", "invalid", "missing"])
 def test_real_http_bearer_proxy(servers, tmp_path, monkeypatch, caplog, credential):
+    caplog.set_level(logging.DEBUG)
     import secrets
     from app.external_mcp import MCPFailure
 

@@ -462,11 +462,10 @@ JSON Schemaだけで表現できないidentity照合、Core restrictionの単調
 ## 17. 参考
 
 - MCP 2026-07-28: https://blog.modelcontextprotocol.io/posts/2026-07-28/
-- MCP Tools trust guidance: https://modelcontextprotocol.io/specification/draft/server/tools
-- MCP Streamable HTTP security: https://modelcontextprotocol.io/specification/2025-11-25/basic/transports
-- MCP Python SDK: https://pypi.org/project/mcp/
-- Python SDK roadmap: https://github.com/modelcontextprotocol/python-sdk/blob/main/ROADMAP.md
-- Python SDK protocol versions: https://github.com/modelcontextprotocol/python-sdk/blob/main/docs/protocol-versions.md
+- MCP Tools trust guidance: https://modelcontextprotocol.io/specification/2026-07-28/server/tools
+- MCP Streamable HTTP security: https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http
+- MCP Python SDK: https://pypi.org/project/mcp/2.0.0/
+- Python SDK protocol versions: https://github.com/modelcontextprotocol/python-sdk/blob/v2.0.0/docs/protocol-versions.md
 - SDK適合記録: `docs/addon-mcp-sdk-compatibility-2026-09.md`
 - Testing policy: `docs/testing-policy.md`
 - NIKE ROYALE AI参加ガイド: 2026-09-05にユーザーが共有した本文を設計事例として参照。実サービス接続は未検証。

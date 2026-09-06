@@ -65,7 +65,7 @@ skipへ変更しない。npm installやimage取得はテスト本体から実行
 ## 環境分離と検証の限界
 
 - 一時directory内の合成ファイルだけを読む。実ユーザーデータ、dogfood、共有推論serviceを使わない。
-- HTTPは動的空きportを使用する。nginxはlocalhostにbindする。Everythingの公開版listenerは全interfaceにbindするため、隔離されたdev/test hostで実施する。
+- HTTPは動的空きportを使用し、起動/readiness失敗時は再取得して最大3回試行する。自分のprocessのlisten成功またはcontainer生存と、MCP discovery応答を確認する。認証proxyは正しいtokenの成功と未認証の拒否もreadinessで検証する。nginxはlocalhostにbindする。Everythingの公開版listenerは全interfaceにbindするため、隔離されたdev/test hostで実施する。
 - HTTP serverへ渡す環境はPATH、テストHOME、PORTのみ。stdioはSDKの最小環境継承を使用する。
 - nginxのBearer値はrunごとに生成し、一時configはcleanupで削除する。通常logと証跡にtokenを保存しない。
 - 自分が作成したprocessとnginx containerだけを終了する。既存dev/dogfoodをstart/stopしない。
@@ -73,3 +73,12 @@ skipへ変更しない。npm installやimage取得はテスト本体から実行
 - HTTPS/TLS、OAuth、インターネット上のSaaS MCP、本番credentialは検証していない。
 - 新protocolのMRTR等は既存conformanceの証跡であり、この旧protocol実接続の結果に含めない。
 - 会話へのLLM routingは#182、自作Addon固有受入は#221の範囲。
+
+## CodeRabbit指摘対応後の再検証（2026-09-07）
+
+PR #235の実レビューを受け、監査主体・rate bucket回収・format検証、fixtureの分割body、DEBUGログの秘密情報非漏えい、実接続readinessを補強した。最新mainを取り込んだ状態で、実接続5件を含む関連unit/moduleは84件、Backend全UTは2,233件成功した。
+
+- [実接続と関連回帰の実行ログ](test-evidence/mcp-104/review-real-and-regression.log)
+- [Backend全UTの実行ログ](test-evidence/mcp-104/review-all-unit.log)
+
+Ruffとmypyも成功。format依存追加に伴い、画面認識の不正日付が早い検証段階で拒否されるため、既存UTの期待メッセージを境界の拒否という契約に合わせた。

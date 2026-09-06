@@ -1,0 +1,7 @@
+filesystem: protocol=2025-11-25; tools=14; read/access-denial=passed
+.everything: protocol=2025-11-25; tools=13; resources=7; prompts=4; echo/resource-read=passed
+.nginx/everything: bearer-valid=passed
+.nginx/everything: bearer-invalid=passed
+.nginx/everything: bearer-missing=passed
+................................................................................
+84 passed in 11.75s

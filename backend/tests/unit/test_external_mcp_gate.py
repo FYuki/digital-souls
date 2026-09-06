@@ -1,8 +1,17 @@
 """#156の単体検証。"""
+
 import asyncio
 import pytest
-from app.external_mcp import Connection, ExecutionContext, ExecutionGate, MCPFailure, RateLimits, Registry
+from app.external_mcp import (
+    Connection,
+    ExecutionContext,
+    ExecutionGate,
+    MCPFailure,
+    RateLimits,
+    Registry,
+)
 from tests.external_mcp_test_support import FakeSource, discovery, manifest
+
 CTX = ExecutionContext("miori", "test-session")
 
 
@@ -42,6 +51,7 @@ def test_snapshot_activation_and_offline():
 
     asyncio.run(run())
 
+
 @pytest.mark.parametrize("trusted,expected", [(False, 1), (True, 2)])
 def test_only_effective_read_retries(trusted, expected):
     async def run():
@@ -60,6 +70,7 @@ def test_only_effective_read_retries(trusted, expected):
             assert result["outcome"] == ("succeeded" if trusted else "failed")
 
     asyncio.run(run())
+
 
 @pytest.mark.parametrize("mode", ["identical", "same", "total", "cycle", "rate"])
 def test_budgets(mode):
@@ -86,6 +97,7 @@ def test_budgets(mode):
             assert len(source.calls) == count - 1
 
     asyncio.run(run())
+
 
 def test_stop_validation_native_resource_and_tasks():
     async def run():
@@ -118,6 +130,7 @@ def test_stop_validation_native_resource_and_tasks():
 
     asyncio.run(run())
 
+
 @pytest.mark.parametrize("restricted", ["deny", "require_confirmation"])
 def test_restrictions_fail_closed(restricted):
     async def run():
@@ -141,6 +154,7 @@ def test_restrictions_fail_closed(restricted):
             assert not source.calls
 
     asyncio.run(run())
+
 
 def test_mrtr_keeps_original_request_and_one_use_token():
     async def run():
@@ -177,6 +191,7 @@ def test_mrtr_keeps_original_request_and_one_use_token():
 
     asyncio.run(run())
 
+
 @pytest.mark.parametrize("trusted,maximum", [(False, 1), (True, 2)])
 def test_connection_concurrency(trusted, maximum):
     async def run():
@@ -209,6 +224,7 @@ def test_connection_concurrency(trusted, maximum):
 
     asyncio.run(run())
 
+
 @pytest.mark.parametrize("policy", ["character", "user", "binding"])
 def test_sharing_and_binding_rejection(policy):
     async def run():
@@ -234,6 +250,7 @@ def test_sharing_and_binding_rejection(policy):
             assert not source.calls
 
     asyncio.run(run())
+
 
 def test_validated_binding_and_confirmation_arguments_are_stable():
     class Binding:
@@ -276,6 +293,7 @@ def test_validated_binding_and_confirmation_arguments_are_stable():
 
     asyncio.run(run())
 
+
 def test_mrtr_round_limit_independent_of_normal_budget():
     async def run():
         c = Connection.from_manifest(
@@ -306,6 +324,7 @@ def test_mrtr_round_limit_independent_of_normal_budget():
             assert len(source.calls) == 2
 
     asyncio.run(run())
+
 
 def test_unknown_writer_excludes_readers_and_stop_rechecks_waiting_call():
     async def run():
@@ -343,6 +362,7 @@ def test_unknown_writer_excludes_readers_and_stop_rechecks_waiting_call():
 
     asyncio.run(run())
 
+
 @pytest.mark.parametrize("layer", ["connection", "session"])
 def test_rate_limit_layers_and_window_expiry(layer):
     async def run():
@@ -372,6 +392,7 @@ def test_rate_limit_layers_and_window_expiry(layer):
 
     asyncio.run(run())
 
+
 def test_sampling_input_required_is_unsupported():
     async def run():
         c = Connection.from_manifest(manifest())
@@ -392,6 +413,7 @@ def test_sampling_input_required_is_unsupported():
 
     asyncio.run(run())
 
+
 def test_non_json_arguments_fail_without_invoking():
     async def run():
         c = Connection.from_manifest(manifest())
@@ -405,5 +427,57 @@ def test_non_json_arguments_fail_without_invoking():
             )
             assert result["error_category"] == "validation"
             assert not source.calls
+
+    asyncio.run(run())
+
+
+def test_expired_session_rate_buckets_are_reclaimed_without_resetting_live_limits():
+    async def run():
+        clock = [0.0]
+        c = Connection.from_manifest(manifest())
+        registry = Registry()
+        registry.register(c)
+        gate = ExecutionGate(
+            registry, rate_limits=RateLimits(session_calls=1), clock=lambda: clock[0]
+        )
+        async with gate.attach(c.id, FakeSource(c)):
+            for index in range(5):
+                loop = gate.begin_loop(ExecutionContext("miori", f"session-{index}"))
+                assert (await gate.invoke(c.id, "native-tool", {"value": index}, loop))[
+                    "outcome"
+                ] == "succeeded"
+                gate.end_loop(loop)
+            loop = gate.begin_loop(ExecutionContext("miori", "session-0"))
+            assert (await gate.invoke(c.id, "native-tool", {"value": 8}, loop))[
+                "outcome"
+            ] == "budget_exceeded"
+            gate.end_loop(loop)
+            clock[0] = 61.0
+            loop = gate.begin_loop(ExecutionContext("miori", "new-session"))
+            assert (await gate.invoke(c.id, "native-tool", {"value": 9}, loop))[
+                "outcome"
+            ] == "succeeded"
+            assert set(gate._rates) == {
+                ("global",),
+                ("connection", c.id),
+                ("session", "miori", "new-session"),
+            }
+
+    asyncio.run(run())
+
+
+def test_execution_audit_keeps_character_on_success_and_denial():
+    async def run():
+        c = Connection.from_manifest(manifest())
+        registry = Registry()
+        registry.register(c)
+        gate = ExecutionGate(registry)
+        async with gate.attach(c.id, FakeSource(c)):
+            loop = gate.begin_loop(CTX)
+            for operation in ["native-tool", "not-granted"]:
+                result = await gate.invoke(c.id, operation, {"value": 1}, loop)
+                assert result["audit"]["character_id"] == CTX.character_id
+            with pytest.raises(MCPFailure, match="unknown_execution_loop"):
+                await gate.invoke(c.id, "native-tool", {"value": 1}, "invalid-loop")
 
     asyncio.run(run())

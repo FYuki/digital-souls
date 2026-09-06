@@ -55,7 +55,7 @@ MRTR自動round数には上限を設け、通常Execution budgetと別に無限�
 ## Tasks
 
 MCP `2026-07-28`ではTasksは`io.modelcontextprotocol/tasks` extensionであり、core protocol必須機能ではない。
-公式Python SDK v2 roadmapではTasks extensionは未実装とされている。
+採用する`mcp==2.0.0`には、本基盤で利用するTasks extensionの実行APIがない。
 
 したがって#104では:
 
@@ -126,10 +126,9 @@ MCP Tool annotationsはhintであり、trusted server由来でない限り実行
 
 ## 参照
 
-- PyPI `mcp`: https://pypi.org/project/mcp/
-- Python SDK v2 What's New: https://github.com/modelcontextprotocol/python-sdk/blob/main/docs/whats-new.md
-- Python SDK protocol versions: https://github.com/modelcontextprotocol/python-sdk/blob/main/docs/protocol-versions.md
-- Python SDK roadmap: https://github.com/modelcontextprotocol/python-sdk/blob/main/ROADMAP.md
+- PyPI `mcp`: https://pypi.org/project/mcp/2.0.0/
+- Python SDK v2 What's New: https://github.com/modelcontextprotocol/python-sdk/blob/v2.0.0/docs/whats-new.md
+- Python SDK protocol versions: https://github.com/modelcontextprotocol/python-sdk/blob/v2.0.0/docs/protocol-versions.md
 - MCP 2026-07-28 release: https://blog.modelcontextprotocol.io/posts/2026-07-28/
-- MCP Tools trust guidance: https://modelcontextprotocol.io/specification/draft/server/tools
-- MCP Streamable HTTP security: https://modelcontextprotocol.io/specification/2025-11-25/basic/transports
+- MCP Tools trust guidance: https://modelcontextprotocol.io/specification/2026-07-28/server/tools
+- MCP Streamable HTTP security: https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http

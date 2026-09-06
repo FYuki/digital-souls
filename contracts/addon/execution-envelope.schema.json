@@ -13,7 +13,8 @@
     "finished_at",
     "outcome",
     "retry_count",
-    "native_payload"
+    "native_payload",
+    "audit"
   ],
   "properties": {
     "execution_id": {"type": "string", "format": "uuid"},
@@ -42,6 +43,7 @@
     "native_error": {},
     "audit": {
       "type": "object",
+      "required": ["character_id"],
       "additionalProperties": false,
       "properties": {
         "character_id": {"type": "string", "minLength": 1},
