@@ -13,8 +13,11 @@ from app.inference.contracts import (
     EmbeddingRequest,
     EmbeddingResult,
     InferenceCapability,
+    InferenceImagePart,
     InferenceMessage,
+    InferenceTextPart,
     JsonValue,
+    ModelProbeResult,
     ProviderTextResult,
     StructuredGenerationRequest,
     TextGenerationRequest,
@@ -138,10 +141,11 @@ class OpenAICodexAdapter:
     def close(self) -> None:
         return None
 
-    def probe(self, model_id: str, *, timeout_seconds: float) -> None:
+    def probe(self, model_id: str, *, timeout_seconds: float) -> ModelProbeResult:
         del model_id
         self.validate_runtime(timeout_seconds=timeout_seconds)
         self.login_status(timeout_seconds=timeout_seconds)
+        return ModelProbeResult()
 
     def generate_text(self, request: TextGenerationRequest) -> ProviderTextResult:
         self.login_status(timeout_seconds=min(request.timeout_seconds, 10.0))
@@ -199,7 +203,7 @@ class OpenAICodexAdapter:
     def estimate_input_tokens(self, request: TokenEstimateRequest) -> TokenEstimate:
         serialized: dict[str, object] = {
             "messages": [
-                {"role": message.role, "content": message.content}
+                {"role": message.role, "content": self._text_content(message)}
                 for message in request.messages
             ],
             "model": request.model_id,
@@ -363,12 +367,30 @@ class OpenAICodexAdapter:
             {
                 "task": "Return only the final text response to the following messages.",
                 "messages": [
-                    {"role": message.role, "content": message.content}
+                    {
+                        "role": message.role,
+                        "content": OpenAICodexAdapter._text_content(message),
+                    }
                     for message in messages
                 ],
             },
             ensure_ascii=False,
             separators=(",", ":"),
+        )
+
+    @staticmethod
+    def _text_content(message: InferenceMessage) -> str:
+        if isinstance(message.content, str):
+            return message.content
+        if any(isinstance(part, InferenceImagePart) for part in message.content):
+            raise InferenceError(
+                InferenceErrorCategory.UNSUPPORTED_CAPABILITY,
+                retryable=False,
+            )
+        return "\n".join(
+            part.text
+            for part in message.content
+            if isinstance(part, InferenceTextPart)
         )
 
     @staticmethod

@@ -112,6 +112,8 @@ def test_should_validate_each_resolved_managed_endpoint_from_its_base_url(
         )
     if endpoint_path == "backend":
         report["derivedEnvironment"]["DS_BACKEND_ORIGIN"] = base_url
+    if endpoint_path == "frontend":
+        report["derivedEnvironment"]["SCREEN_ALLOWED_ORIGIN"] = base_url
 
     validated = validate_resolved_report(report)
 

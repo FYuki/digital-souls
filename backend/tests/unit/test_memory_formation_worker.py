@@ -62,8 +62,10 @@ def _candidate(value: str) -> MemoryCandidate:
 class FakeRepository:
     current: ConversationTurn | None
     previous: ConversationTurn | None = None
+    screen_derived: bool = False
     get_calls: list[tuple[str, UUID, UUID]] = field(default_factory=list)
     previous_calls: list[tuple[str, UUID, UUID]] = field(default_factory=list)
+    provenance_calls: list[tuple[str, UUID, UUID]] = field(default_factory=list)
 
     def get_turn(
         self,
@@ -82,6 +84,23 @@ class FakeRepository:
     ) -> ConversationTurn | None:
         self.previous_calls.append((character_id, conversation_id, turn_id))
         return self.previous
+
+    def is_screen_derived(
+        self, character_id: str, conversation_id: UUID, turn_id: UUID
+    ) -> bool:
+        self.provenance_calls.append((character_id, conversation_id, turn_id))
+        return self.screen_derived
+
+
+def test_screen_derived_turn_is_excluded_before_extraction() -> None:
+    repository = FakeRepository(current=_turn(), screen_derived=True)
+    extractor = MagicMock()
+    admission = MagicMock()
+
+    _worker(repository, extractor, admission, None).process(_job())
+
+    extractor.extract.assert_not_called()
+    admission.admit.assert_not_called()
 
 
 def _job():

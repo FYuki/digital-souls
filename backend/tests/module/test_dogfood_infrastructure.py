@@ -19,6 +19,9 @@ from tests.dogfood_infrastructure_test_support import render_nondefault_dogfood_
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
 DOGFOOD_INFRA_DIR = ROOT_DIR / "infra" / "dogfood"
 DOGFOOD_SCRIPTS_DIR = ROOT_DIR / "scripts" / "dogfood"
+DOGFOOD_APPLICATION_COMPOSE_PATH = (
+    ROOT_DIR / "infra" / "application" / "compose.dogfood.yaml"
+)
 ENV_EXAMPLE_PATH = DOGFOOD_INFRA_DIR / "env.example"
 README_PATH = DOGFOOD_INFRA_DIR / "README.md"
 REQUIRED_ENV_KEYS = {
@@ -184,6 +187,26 @@ def test_should_define_separate_dogfood_identity_clone_and_runtime_paths() -> No
         for key, path in paths.items()
         if key != "DOGFOOD_CLONE_DIR"
     )
+
+
+def test_should_mount_dogfood_backup_directory_into_backend() -> None:
+    compose = yaml.safe_load(
+        DOGFOOD_APPLICATION_COMPOSE_PATH.read_text(encoding="utf-8")
+    )
+
+    assert compose == {
+        "services": {
+            "backend": {
+                "volumes": [
+                    {
+                        "type": "bind",
+                        "source": "${DOGFOOD_BACKUP_DIR:?DOGFOOD_BACKUP_DIR is required}",
+                        "target": "${DOGFOOD_BACKUP_DIR:?DOGFOOD_BACKUP_DIR is required}",
+                    }
+                ]
+            }
+        }
+    }
 
 
 def test_should_keep_dogfood_shell_entrypoints_executable_strict_and_syntax_valid() -> (
@@ -696,15 +719,26 @@ def test_should_generate_a_windows_entrypoint_from_the_shared_environment(
     values, generated_dir = render_nondefault_dogfood_assets(tmp_path)
     source = (generated_dir / "start-dogfood-wsl.ps1").read_text(encoding="utf-8")
 
-    assert "wsl.exe" in source
     assert values["DOGFOOD_WSL_DISTRO"] in source
+    assert values["DOGFOOD_SERVICE_USER"] in source
+    assert values["DOGFOOD_SERVICE_HOME_DIR"] in source
+    assert "Start-Process -FilePath \"wsl.exe\"" in source
+    assert "-WindowStyle Hidden" in source
+    assert '"--user", $DogfoodServiceUser' in source
+    assert '"--exec", "/usr/bin/flock"' in source
+    assert '"--exclusive", "--nonblock"' in source
+    assert '"--conflict-exit-code", "$KeepAliveConflictExitCode"' in source
+    assert '"/bin/sleep", "infinity"' in source
+    assert "$ProbeExitCode -eq $KeepAliveConflictExitCode" in source
+    assert "$ProbeExitCode -ne 0" in source
     assert re.search(r"wsl\.exe\s+.*--user\s+root(?:\s|$)", source)
     assert "systemctl start digital-souls-dogfood.target" in source
     assert "$LASTEXITCODE -ne 0" in source
-    assert source.index("wsl.exe") < source.index("$LASTEXITCODE -ne 0")
+    assert source.index("Start-Process") < source.index("systemctl start")
     assert "throw" in source
     assert "start-services.sh" not in source
     assert not re.search(r"\bsystemctl\s+(?:stop|restart|is-active|show)\b", source)
+    assert values["LIVEKIT_API_SECRET"] not in source
 
 
 def test_should_delegate_application_lifecycle_to_one_foreground_systemd_unit(

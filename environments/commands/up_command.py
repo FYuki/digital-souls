@@ -39,6 +39,18 @@ def _target_model(derived: dict[str, object], target: str) -> str:
     return value.split("/", 1)[1]
 
 
+def _optional_ollama_target_model(
+    derived: dict[str, object], target: str
+) -> str | None:
+    value = derived.get(f"INFERENCE_TARGET_{target}")
+    if value is None:
+        return None
+    if not isinstance(value, str) or "/" not in value:
+        raise ValueError(f"INFERENCE_TARGET_{target} is invalid")
+    provider_id, model_id = value.split("/", 1)
+    return model_id if provider_id == "ollama" else None
+
+
 def up_environment(
     root_dir: Path,
     arguments: argparse.Namespace,
@@ -106,6 +118,9 @@ def up_environment(
                 effective_profile=effective_profile,
                 ollama_model_name=_target_model(derived, "CHAT"),
                 ollama_classifier_model_name=_target_model(derived, "PRIVACY"),
+                ollama_vision_model_name=_optional_ollama_target_model(
+                    derived, "VISION"
+                ),
                 whisper_model_name=derived["WHISPER_MODEL"],
             )
         else:

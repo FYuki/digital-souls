@@ -391,4 +391,7 @@ class TestTurnTransitions:
             "list_history_turns",
             "list_prompt_turns_page",
             "consolidation_activity",
+            "mark_screen_derived",
+            "list_screen_lineages",
+            "is_screen_derived",
         }

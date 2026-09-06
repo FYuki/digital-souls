@@ -1,5 +1,37 @@
 $ErrorActionPreference = "Stop"
 $DogfoodDistribution = "@DOGFOOD_WSL_DISTRO@"
+$DogfoodServiceUser = "@DOGFOOD_SERVICE_USER@"
+$KeepAliveLock = "@DOGFOOD_SERVICE_HOME_DIR@/.dogfood-wsl-keepalive.lock"
+$KeepAliveConflictExitCode = 75
+$KeepAliveArguments = @(
+    "--distribution", $DogfoodDistribution,
+    "--user", $DogfoodServiceUser,
+    "--exec", "/usr/bin/flock",
+    "--exclusive", "--nonblock",
+    "--conflict-exit-code", "$KeepAliveConflictExitCode",
+    $KeepAliveLock,
+    "/bin/sleep", "infinity"
+)
+
+Start-Process -FilePath "wsl.exe" -ArgumentList $KeepAliveArguments -WindowStyle Hidden
+
+$KeepAliveReady = $false
+for ($Attempt = 1; $Attempt -le 40; $Attempt++) {
+    wsl.exe --distribution $DogfoodDistribution --user $DogfoodServiceUser --exec /usr/bin/flock --exclusive --nonblock --conflict-exit-code $KeepAliveConflictExitCode $KeepAliveLock /bin/true
+    $ProbeExitCode = $LASTEXITCODE
+    if ($ProbeExitCode -eq $KeepAliveConflictExitCode) {
+        $KeepAliveReady = $true
+        break
+    }
+    if ($ProbeExitCode -ne 0) {
+        throw "WSL keepalive の確認に失敗しました (終了コード: $ProbeExitCode)"
+    }
+    Start-Sleep -Milliseconds 250
+}
+if (-not $KeepAliveReady) {
+    throw "WSL keepalive を10秒以内に開始できませんでした"
+}
+
 wsl.exe --distribution $DogfoodDistribution --user root --exec systemctl start digital-souls-dogfood.target
 if ($LASTEXITCODE -ne 0) {
     throw "digital-souls-dogfood.target の起動に失敗しました (終了コード: $LASTEXITCODE)"

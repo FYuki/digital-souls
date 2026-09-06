@@ -1,0 +1,43 @@
+{
+  "events": [
+    {
+      "protocol_version": "1.0",
+      "type": "screen_session_revoke_requested",
+      "event_id": "11000000-0000-4000-8000-000000000001",
+      "screen_session_id": "41000000-0000-4000-8000-000000000001",
+      "client_session_id": "21000000-0000-4000-8000-000000000001",
+      "generation": 3,
+      "reason": "target_change"
+    },
+    {
+      "protocol_version": "1.0",
+      "type": "screen_session_revoked",
+      "event_id": "11000000-0000-4000-8000-000000000002",
+      "screen_session_id": "41000000-0000-4000-8000-000000000001",
+      "generation": 3,
+      "reason": "target_change"
+    },
+    {
+      "protocol_version": "1.0",
+      "type": "screen_snapshot_upload_metadata",
+      "event_id": "11000000-0000-4000-8000-000000000003",
+      "screen_session_id": "41000000-0000-4000-8000-000000000001",
+      "client_session_id": "21000000-0000-4000-8000-000000000001",
+      "generation": 3,
+      "request_id": "51000000-0000-4000-8000-000000000001",
+      "turn_id": "61000000-0000-4000-8000-000000000001",
+      "image_id": "71000000-0000-4000-8000-000000000001",
+      "actual_surface": "monitor",
+      "captured_at": "2026-09-06T03:10:01Z",
+      "mime_type": "image/jpeg",
+      "width": 2560,
+      "height": 1440,
+      "byte_length": 2000000
+    }
+  ],
+  "expected": {
+    "late_event_index": 2,
+    "late_event_reason_code": "session_revoked",
+    "provider_request_count": 0
+  }
+}

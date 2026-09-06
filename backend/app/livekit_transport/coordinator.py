@@ -28,6 +28,7 @@ from app.livekit_transport.outbox import (
 
 
 APPLICATION_TOPIC = "digital-souls.core.v1"
+SCREEN_TOPIC = "digital-souls.screen-perception.v1"
 PRIVATE_TOPIC = "digital-souls.livekit-transport.v1"
 OUTBOX_MAX_EVENTS = 256
 OUTBOX_MAX_BYTES = 1024 * 1024
@@ -242,6 +243,12 @@ class ProductionSessionCoordinator:
         task = asyncio.create_task(self._retry(event_id, payload))
         self._retry_tasks[("character_to_user", event_id)] = task
         await self._dependencies.publish_data(payload, APPLICATION_TOPIC)
+
+    async def send_screen(self, payload: bytes) -> None:
+        """画面制御metadataを音声Core eventとは別topicで配送する。"""
+        if self._lifecycle.phase != "available":
+            raise RuntimeError("session is not available")
+        await self._dependencies.publish_data(payload, SCREEN_TOPIC)
 
     async def send_logical_audio_segment(
         self,

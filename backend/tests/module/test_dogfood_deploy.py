@@ -200,7 +200,9 @@ def _prepare_deploy_scenario(
         'case "$1" in\n'
         '  backup) [ "${DEPLOY_FAILURE-}" != "backup" ]; '
         "printf '%s\\n' \"$DEPLOY_BACKUP_OUTPUT\" ;;\n"
-        '  backup-verify) [ "${DEPLOY_FAILURE-}" != "verify" ] ;;\n'
+        '  backup-verify) [ "${DEPLOY_FAILURE-}" != "verify" ] || exit 1; '
+        "printf '%s\\n' "
+        "'{\"status\":\"ok\",\"artifacts\":[]}' ;;\n"
         f'  wait-readiness) count=$(cat "{tmp_path / "readiness-count"}" 2>/dev/null || printf 0); '
         f'count=$((count + 1)); printf "%s" "$count" > "{tmp_path / "readiness-count"}"; '
         'case "${DEPLOY_FAILURE-}" in '

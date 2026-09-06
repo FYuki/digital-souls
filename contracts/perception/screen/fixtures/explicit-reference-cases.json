@@ -1,0 +1,21 @@
+{
+  "normalization": "NFKC",
+  "cases": [
+    { "text": "今の画面を見て", "explicit_ui": false, "expected": true, "reason": "current_perception_request" },
+    { "text": "この画面に何が表示されてる？", "explicit_ui": false, "expected": true, "reason": "current_perception_request" },
+    { "text": "画面のエラーを読んで", "explicit_ui": false, "expected": true, "reason": "current_perception_request" },
+    { "text": "共有しているウィンドウを確認して", "explicit_ui": false, "expected": true, "reason": "current_perception_request" },
+    { "text": "モニター右上の数字を教えて", "explicit_ui": false, "expected": true, "reason": "current_perception_request" },
+    { "text": "現在表示されているコードを説明して", "explicit_ui": false, "expected": true, "reason": "current_perception_request" },
+    { "text": "これどう思う？", "explicit_ui": true, "expected": true, "reason": "explicit_ui" },
+    { "text": "画面は見ないで", "explicit_ui": false, "expected": false, "reason": "negated" },
+    { "text": "画面を確認しなくていい", "explicit_ui": false, "expected": false, "reason": "negated" },
+    { "text": "『今の画面を見て』と言って", "explicit_ui": false, "expected": false, "reason": "quoted" },
+    { "text": "画面を見る機能について教えて", "explicit_ui": false, "expected": false, "reason": "feature_discussion" },
+    { "text": "昨日は画面を見てもらった", "explicit_ui": false, "expected": false, "reason": "past_reference" },
+    { "text": "ディスプレイを買い替えたい", "explicit_ui": false, "expected": false, "reason": "unrelated" },
+    { "text": "これどう思う？", "explicit_ui": false, "expected": false, "reason": "ambiguous" },
+    { "text": "画面", "explicit_ui": false, "expected": false, "reason": "ambiguous" },
+    { "text": "画面を見てくれる？", "explicit_ui": false, "expected": true, "reason": "current_perception_request" }
+  ]
+}

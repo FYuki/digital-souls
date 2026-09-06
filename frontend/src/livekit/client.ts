@@ -15,6 +15,7 @@ type TokenRequest = {
   conversation_id: string
   requested_reconnect_grace_ms: 60000
   session_id?: string
+  screen_client_session_id?: string
 }
 
 const CHARACTER_ID = 'miori'
@@ -66,6 +67,7 @@ export const requestLiveKitToken = async (
   characterId: string,
   conversationId: string,
   sessionId?: string,
+  screenClientSessionId?: string | null,
 ): Promise<TokenResponse> => {
   const body: TokenRequest = {
     protocol_version: '1.0',
@@ -75,6 +77,9 @@ export const requestLiveKitToken = async (
     requested_reconnect_grace_ms: 60000,
   }
   if (sessionId !== undefined) body.session_id = sessionId
+  if (screenClientSessionId !== undefined && screenClientSessionId !== null) {
+    body.screen_client_session_id = screenClientSessionId
+  }
   const response = await fetch(`${API_PREFIX}/voice/livekit/token`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

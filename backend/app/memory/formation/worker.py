@@ -20,6 +20,10 @@ class FormationConversationRepository(Protocol):
         self, character_id: str, conversation_id: UUID, turn_id: UUID
     ) -> ConversationTurn | None: ...
 
+    def is_screen_derived(
+        self, character_id: str, conversation_id: UUID, turn_id: UUID
+    ) -> bool: ...
+
 
 class CandidateExtractor(Protocol):
     def extract(
@@ -60,7 +64,13 @@ class MemoryFormationWorker:
         current = self._repository.get_turn(
             job.character_id, job.conversation_id, job.turn_id
         )
-        if current is None or not _is_eligible(current):
+        if (
+            current is None
+            or not _is_eligible(current)
+            or self._repository.is_screen_derived(
+                job.character_id, job.conversation_id, job.turn_id
+            )
+        ):
             return
         previous = self._repository.get_previous_completed_turn(
             job.character_id, job.conversation_id, job.turn_id

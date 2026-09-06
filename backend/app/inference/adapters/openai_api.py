@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from collections.abc import AsyncIterator, Callable, Mapping
 import json
 import math
@@ -13,9 +14,12 @@ from app.inference.contracts import (
     EmbeddingRequest,
     EmbeddingResult,
     InferenceCapability,
+    InferenceImagePart,
     InferenceMessage,
+    InferenceTextPart,
     InferenceUsage,
     JsonValue,
+    ModelProbeResult,
     ProviderTextResult,
     StructuredGenerationRequest,
     TextGenerationRequest,
@@ -24,17 +28,30 @@ from app.inference.contracts import (
     TokenEstimateRequest,
 )
 from app.inference.errors import InferenceError, InferenceErrorCategory
+from app.inference.images import CONSERVATIVE_IMAGE_TOKEN_ESTIMATE
 
 
 OPENAI_API_BASE_URL = "https://api.openai.com/v1"
 AsyncClientFactory = Callable[[float], httpx.AsyncClient]
+_UNSUPPORTED_STRUCTURED_SCHEMA_KEYWORDS = frozenset(
+    {"allOf", "not", "dependentRequired", "dependentSchemas", "if", "then", "else"}
+)
 
 
 class OpenAIAPIAdapter:
     """公式OpenAI API専用Adapter。ChatGPTサブスクリプション認証は扱わない。"""
 
     provider_id = "openai-api"
-    capabilities = frozenset(InferenceCapability)
+    capabilities = frozenset(
+        {
+            InferenceCapability.GENERATE_TEXT,
+            InferenceCapability.STREAM_TEXT,
+            InferenceCapability.GENERATE_STRUCTURED,
+            InferenceCapability.IMAGE_INPUT,
+            InferenceCapability.EMBED,
+            InferenceCapability.ESTIMATE_INPUT_TOKENS,
+        }
+    )
 
     def __init__(
         self,
@@ -61,7 +78,7 @@ class OpenAIAPIAdapter:
         if self._owns_http_client:
             self._http_client.close()
 
-    def probe(self, model_id: str, *, timeout_seconds: float) -> None:
+    def probe(self, model_id: str, *, timeout_seconds: float) -> ModelProbeResult:
         """課金を伴わないModel取得でcredential、endpoint、modelを確認する。"""
         path = f"/models/{quote(model_id, safe='')}"
         try:
@@ -74,6 +91,7 @@ class OpenAIAPIAdapter:
             self._raise_transport(error)
         if response.is_error:
             self._raise_http_status(response.status_code, None)
+        return ModelProbeResult()
 
     def generate_text(self, request: TextGenerationRequest) -> ProviderTextResult:
         body = self._post_json(
@@ -91,7 +109,7 @@ class OpenAIAPIAdapter:
             "format": {
                 "type": "json_schema",
                 "name": "inference_response",
-                "schema": dict(request.response_schema),
+                "schema": self._structured_output_schema(request.response_schema),
                 "strict": True,
             }
         }
@@ -101,6 +119,19 @@ class OpenAIAPIAdapter:
             timeout_seconds=request.timeout_seconds,
         )
         return self._text_result(body)
+
+    @staticmethod
+    def _structured_output_schema(value: object) -> object:
+        """OpenAI未対応の合成制約だけを除き、Coreの完全schema検証は維持する。"""
+        if isinstance(value, Mapping):
+            return {
+                key: OpenAIAPIAdapter._structured_output_schema(item)
+                for key, item in value.items()
+                if key not in _UNSUPPORTED_STRUCTURED_SCHEMA_KEYWORDS
+            }
+        if isinstance(value, list):
+            return [OpenAIAPIAdapter._structured_output_schema(item) for item in value]
+        return value
 
     async def stream_text(self, request: TextGenerationRequest) -> AsyncIterator[str]:
         payload = self._response_payload(request)
@@ -223,9 +254,15 @@ class OpenAIAPIAdapter:
         )
 
     def estimate_input_tokens(self, request: TokenEstimateRequest) -> TokenEstimate:
+        image_count = sum(
+            isinstance(part, InferenceImagePart)
+            for message in request.messages
+            if isinstance(message.content, tuple)
+            for part in message.content
+        )
         serialized: dict[str, object] = {
             "model": request.model_id,
-            "input": self._messages(request.messages),
+            "input": self._messages_without_images(request.messages),
             "options": dict(request.options),
         }
         if request.response_schema is not None:
@@ -238,9 +275,14 @@ class OpenAIAPIAdapter:
             ).encode("utf-8")
         )
         return TokenEstimate(
-            count=max(1, math.ceil(byte_count / 3 * 1.15)),
+            count=max(1, math.ceil(byte_count / 3 * 1.15))
+            + CONSERVATIVE_IMAGE_TOKEN_ESTIMATE * image_count,
             accuracy=TokenEstimateAccuracy.ESTIMATED,
-            method="openai_payload_utf8_div3_margin15pct",
+            method=(
+                "openai_payload_utf8_div3_margin15pct"
+                if image_count == 0
+                else "openai_text_utf8_div3_margin15pct+1120_per_image"
+            ),
         )
 
     def _response_payload(self, request: TextGenerationRequest) -> dict[str, object]:
@@ -260,10 +302,43 @@ class OpenAIAPIAdapter:
         return payload
 
     @staticmethod
-    def _messages(messages: tuple[InferenceMessage, ...]) -> list[dict[str, str]]:
-        return [
-            {"role": message.role, "content": message.content} for message in messages
-        ]
+    def _messages(messages: tuple[InferenceMessage, ...]) -> list[dict[str, object]]:
+        mapped: list[dict[str, object]] = []
+        for message in messages:
+            if isinstance(message.content, str):
+                mapped.append({"role": message.role, "content": message.content})
+                continue
+            content: list[dict[str, str]] = []
+            for part in message.content:
+                if isinstance(part, InferenceTextPart):
+                    content.append({"type": "input_text", "text": part.text})
+                elif isinstance(part, InferenceImagePart):
+                    encoded = base64.b64encode(part.data).decode("ascii")
+                    content.append(
+                        {
+                            "type": "input_image",
+                            "image_url": f"data:{part.mime_type};base64,{encoded}",
+                        }
+                    )
+            mapped.append({"role": message.role, "content": content})
+        return mapped
+
+    @staticmethod
+    def _messages_without_images(
+        messages: tuple[InferenceMessage, ...],
+    ) -> list[dict[str, object]]:
+        mapped: list[dict[str, object]] = []
+        for message in messages:
+            if isinstance(message.content, str):
+                content: object = message.content
+            else:
+                content = [
+                    {"type": "input_text", "text": part.text}
+                    for part in message.content
+                    if isinstance(part, InferenceTextPart)
+                ]
+            mapped.append({"role": message.role, "content": content})
+        return mapped
 
     def _post_json(
         self,

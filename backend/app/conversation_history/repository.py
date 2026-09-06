@@ -36,6 +36,7 @@ from app.conversation_history.titles import (
 )
 from app.conversation_history.wal_cleanup import ConversationWalCleanup
 from app.privacy.contracts import HistoryDecisionReasonCode
+from app.screen_perception.provenance import ScreenLineage
 
 ConnectionFactory = Callable[[Path], sqlite3.Connection]
 Clock = Callable[[], datetime]
@@ -274,6 +275,94 @@ class ConversationHistoryRepository:
                 (character_id, str(conversation_id), str(turn_id)),
             ).fetchone()
         return None if row is None else turn_from_row(row)
+
+    def mark_screen_derived(
+        self,
+        character_id: str,
+        conversation_id: UUID,
+        turn_id: UUID,
+        lineages: tuple[ScreenLineage, ...],
+    ) -> None:
+        """画面本文を含めず、長期記憶除外用の由来だけを保存する。"""
+        _require_non_empty(character_id, "character_id")
+        _require_uuid4(conversation_id)
+        _require_uuid4(turn_id)
+        if not lineages:
+            return
+        with self._database.transaction() as connection:
+            turn = connection.execute(
+                "SELECT 1 FROM conversation_turns "
+                "WHERE character_id = ? AND conversation_id = ? AND turn_id = ?",
+                (character_id, str(conversation_id), str(turn_id)),
+            ).fetchone()
+            if turn is None:
+                raise KeyError("conversation turn does not exist")
+            connection.executemany(
+                "INSERT INTO screen_turn_provenance ("
+                "turn_id, screen_lineage_id, origin_screen_session_id, "
+                "origin_generation, origin_routing_revision, source, surface, derivation"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(turn_id, screen_lineage_id) DO UPDATE SET "
+                "derivation = excluded.derivation",
+                tuple(
+                    (
+                        str(turn_id),
+                        str(lineage.screen_lineage_id),
+                        str(lineage.origin_screen_session_id),
+                        lineage.origin_generation,
+                        lineage.origin_routing_revision,
+                        lineage.source,
+                        lineage.surface,
+                        lineage.derivation,
+                    )
+                    for lineage in lineages
+                ),
+            )
+
+    def list_screen_lineages(
+        self, character_id: str, conversation_id: UUID, turn_id: UUID
+    ) -> tuple[ScreenLineage, ...]:
+        _require_non_empty(character_id, "character_id")
+        _require_uuid4(conversation_id)
+        _require_uuid4(turn_id)
+        with self._database.connection() as connection:
+            rows = connection.execute(
+                "SELECT p.screen_lineage_id, p.origin_screen_session_id, "
+                "p.origin_generation, p.origin_routing_revision, p.source, "
+                "p.surface, p.derivation FROM screen_turn_provenance AS p "
+                "JOIN conversation_turns AS t ON t.turn_id = p.turn_id "
+                "WHERE t.character_id = ? AND t.conversation_id = ? "
+                "AND t.turn_id = ? ORDER BY p.screen_lineage_id",
+                (character_id, str(conversation_id), str(turn_id)),
+            ).fetchall()
+        return tuple(
+            ScreenLineage(
+                screen_lineage_id=UUID(str(row[0])),
+                origin_screen_session_id=UUID(str(row[1])),
+                origin_generation=int(row[2]),
+                origin_routing_revision=str(row[3]),
+                source=row[4],
+                surface=row[5],
+                derivation=row[6],
+            )
+            for row in rows
+        )
+
+    def is_screen_derived(
+        self, character_id: str, conversation_id: UUID, turn_id: UUID
+    ) -> bool:
+        _require_non_empty(character_id, "character_id")
+        _require_uuid4(conversation_id)
+        _require_uuid4(turn_id)
+        with self._database.connection() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM screen_turn_provenance AS p "
+                "JOIN conversation_turns AS t ON t.turn_id = p.turn_id "
+                "WHERE t.character_id = ? AND t.conversation_id = ? "
+                "AND t.turn_id = ?",
+                (character_id, str(conversation_id), str(turn_id)),
+            ).fetchone()
+        return row is not None
 
     def get_previous_completed_turn(
         self,

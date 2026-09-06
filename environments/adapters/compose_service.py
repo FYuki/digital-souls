@@ -207,6 +207,13 @@ class ComposeManagedServiceOperations(HttpServiceOperations):
                 raise AdapterOperationError(
                     "profile", "DOGFOOD_CONFIG_DIR is required for dogfood containers"
                 )
+            backup_directory = environment.get("DOGFOOD_BACKUP_DIR")
+            if backup_directory is None or not Path(backup_directory).is_absolute():
+                raise AdapterOperationError(
+                    "profile", "DOGFOOD_BACKUP_DIR is required for dogfood containers"
+                )
+            # Composeはfrontendだけを操作する場合もbackendのmountを補間する。
+            values["DOGFOOD_BACKUP_DIR"] = backup_directory
             directory = Path(config_directory) / "containers"
         else:
             directory = self.runtime_paths.runtime_report_dir / "containers"
@@ -248,13 +255,17 @@ class ComposeManagedServiceOperations(HttpServiceOperations):
             "--file",
             str(self.root_dir / "infra" / "application" / "compose.yaml"),
         ]
-        if self.effective_profile != "dogfood":
-            command.extend(
-                (
-                    "--file",
-                    str(self.root_dir / "infra" / "application" / "compose.dev.yaml"),
-                )
+        overlay = (
+            "compose.dogfood.yaml"
+            if self.effective_profile == "dogfood"
+            else "compose.dev.yaml"
+        )
+        command.extend(
+            (
+                "--file",
+                str(self.root_dir / "infra" / "application" / overlay),
             )
+        )
         return tuple(command)
 
     def _container_name(self) -> str:

@@ -171,6 +171,19 @@ const emitCoreEvent = (
   )
 }
 
+const emitScreenEvent = (
+  room: InstanceType<typeof livekitMocks.FakeRoom>,
+  event: Record<string, unknown>,
+) => {
+  room.emit(
+    'dataReceived',
+    new TextEncoder().encode(JSON.stringify(event)),
+    undefined,
+    undefined,
+    'digital-souls.screen-perception.v1',
+  )
+}
+
 describe('LiveKit Room generation synchronization', () => {
   beforeEach(() => {
     livekitMocks.rooms.length = 0
@@ -458,6 +471,38 @@ describe('LiveKit Room generation synchronization', () => {
       transport: 'unavailable', control: 'unavailable', audio: 'unavailable',
       speechStartedAtMs: 100,
     })
+    client.disconnect()
+  })
+
+  test('画面要求topicだけを画面取得callbackへ分離して渡す', async () => {
+    const receiveCoreEvent = vi.fn()
+    const receiveScreenRequest = vi.fn()
+    const client = new LiveKitRoomClient(
+      () => undefined,
+      receiveCoreEvent,
+      undefined,
+      receiveScreenRequest,
+    )
+    await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
+    const room = latestRoom()
+    const event = {
+      protocol_version: '1.0',
+      type: 'screen_snapshot_requested',
+      event_id: '10000000-0000-4000-8000-000000000006',
+      screen_session_id: '40000000-0000-4000-8000-000000000001',
+      generation: 1,
+      request_id: '50000000-0000-4000-8000-000000000001',
+      turn_id: '60000000-0000-4000-8000-000000000001',
+      source: 'natural_language_voice',
+      requested_at: '2026-09-06T03:00:06Z',
+      capture_deadline: '2026-09-06T03:00:11Z',
+    }
+
+    emitScreenEvent(room, event)
+
+    await vi.waitFor(() => expect(receiveScreenRequest).toHaveBeenCalledTimes(1))
+    expect(receiveScreenRequest).toHaveBeenCalledWith(event)
+    expect(receiveCoreEvent).not.toHaveBeenCalled()
     client.disconnect()
   })
 })
