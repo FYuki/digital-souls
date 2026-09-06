@@ -1,4 +1,5 @@
 """#153の単体検証。"""
+
 import pytest
 from app.external_mcp import Connection, MCPFailure, Registry
 from app.external_mcp.models import build_snapshot
@@ -108,3 +109,22 @@ def test_invalid_output_schema_is_rejected_before_activation():
     data.tools[0]["outputSchema"] = {"type": "invalid-type"}
     with pytest.raises(MCPFailure):
         build_snapshot(c, data)
+
+
+@pytest.mark.parametrize(
+    "host", ["127.0.0.1", "localhost", "[::1]", "example.com", "192.168.1.10"]
+)
+def test_preconfigured_bearer_http_is_limited_to_local_loopback(host):
+    value = manifest(
+        transport="streamable_http",
+        endpoint=f"http://{host}:9100/mcp",
+        auth={"type": "bearer", "secret_ref": "MCP_TOKEN"},
+    )
+    if host in {"127.0.0.1", "localhost", "[::1]"}:
+        assert (
+            Connection.from_manifest(value).manifest["connection"]["auth"]["type"]
+            == "bearer"
+        )
+    else:
+        with pytest.raises(MCPFailure, match="tls_required"):
+            Connection.from_manifest(value)

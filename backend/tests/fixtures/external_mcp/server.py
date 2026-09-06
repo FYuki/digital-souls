@@ -45,7 +45,7 @@ def definitions():
             },
             annotations=types.ToolAnnotations(read_only_hint=True),
             meta={"vendor/optional": {"ignored": True}},
-            **({"execution": {"taskSupport": "required"}} if name == "task" else {}),
+            # SDK 2では旧executionはwireに残らない。taskのcallで-32003を返す。
         )
         for name in [
             "native",
@@ -178,8 +178,15 @@ class AuthFixture:
             and scope["type"] == "http"
             and scope["method"] == "POST"
         ):
-            message = await receive()
-            body = json.loads(message.get("body", b"{}"))
+            messages = []
+            while True:
+                message = await receive()
+                if message["type"] == "http.disconnect":
+                    return
+                messages.append(message)
+                if not message.get("more_body", False):
+                    break
+            body = json.loads(b"".join(m.get("body", b"") for m in messages) or b"{}")
             if body.get("method") == "tools/call":
                 path = Path(options.fault_state)
                 calls = int(path.read_text()) if path.exists() else 0
@@ -189,12 +196,11 @@ class AuthFixture:
                         "private-transient-error", status_code=503
                     )(scope, receive, send)
             original_receive = receive
-            first = True
+            buffered = iter(messages)
 
             async def replay():
-                nonlocal first
-                if first:
-                    first = False
+                message = next(buffered, None)
+                if message is not None:
                     return message
                 return await original_receive()
 
@@ -247,12 +253,13 @@ def legacy():
         )
 
 
-if options.legacy:
-    legacy()
-elif options.port:
-    app = server.streamable_http_app(json_response=True, stateless_http=True)
-    uvicorn.run(
-        AuthFixture(app), host="127.0.0.1", port=options.port, log_level="error"
-    )
-else:
-    asyncio.run(stdio())
+if __name__ == "__main__":
+    if options.legacy:
+        legacy()
+    elif options.port:
+        app = server.streamable_http_app(json_response=True, stateless_http=True)
+        uvicorn.run(
+            AuthFixture(app), host="127.0.0.1", port=options.port, log_level="error"
+        )
+    else:
+        asyncio.run(stdio())

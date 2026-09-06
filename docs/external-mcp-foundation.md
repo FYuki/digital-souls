@@ -43,6 +43,7 @@ sessionごとに別インスタンスへ分散させない。Manifestやloop ID�
 - 外部stdioとStreamable HTTPを対応範囲とし、HTTP認証は`none`またはBearerの`secret_ref`だけ。
 - Bearerは各HTTP送信直前に`SecretResolverPort`から解決する。既定実装は環境変数を参照する。
 - URLのuserinfo・query・fragmentは拒否する。localhost以外のHTTPはTLS必須。redirectへ追従しない。
+- HTTPの例外は`127.0.0.1` / `localhost` / `::1`に登録したローカル接続だけ。事前設定Bearerもこの例外に含む。信頼できる同一host内のservice認証用であり、LANや外部networkへ平文tokenを送る設定は拒否する。OAuth access tokenの運用適合を保証するものではない。
 - `expected_identity`のTLS issuer/auth principalの独自照合は未対応として拒否する。HTTPSはHTTP clientの標準証明書検証を利用する。
 - endpoint、command/args、認証設定の変更は`relink_required`となり旧connectionを停止する。新しいIDで管理側が再登録する。
 - trust・sharing・restrictionの変更も既存登録の上書きではなく再登録する。
@@ -52,7 +53,7 @@ sessionごとに別インスタンスへ分散させない。Manifestやloop ID�
 
 ## Snapshot
 
-native Tool定義全体、input schema、annotations、`_meta`、Resources、Promptsを保存する。
+SDKが返すTool定義全体、input schema、annotations、`_meta`、Resources、Promptsを保存する。
 Toolのdefinition revisionはconnection ID・Tool名・input/output schema digestで構成する。
 snapshot revisionはprotocol、native定義、trustとeffective policyを含む内容digestとする。
 JSON文字列による不変な保存形式を使い、取得したdocumentの編集はRegistryへ反映されない。
@@ -75,13 +76,16 @@ Promptsはdiscovery情報だけを上位へ渡し、取得・注入は行わな�
 - binding必須時にvalidatorがない場合と、confirmation必須時に確認Portがない場合は拒否する。
 - loopの既定上限は6 calls、同一Tool連続3回、同一引数2回、自動cycle 3回。自動cycle番号はCoreが`auto_cycle`へ渡す。
 - retry・入力回答後の再実行も回数へ加算し、予算を暗黙に延長しない。
-- rate limit既定は60秒あたりglobal 120、connection 60、character＋session 30。`RateLimits`で変更可能。
+- rate limit既定は60秒あたりglobal 120、connection 60、character＋session 30。`RateLimits`で変更可能。窓ごとの掃除で期限切れsessionバケットも回収し、loop終了だけでは有効な制限をリセットしない。
 - parallel上限はconnectionごとに4。待機中の停止要求をdispatch直前にも検証する。
 - `stop(loop)`は新規dispatchを停止する。既に開始した副作用の取消しや巻戻しを保証しない。
 
 ## 結果・MRTR・未対応能力
 
-返却値は`execution-envelope.schema.json`の形式で、text、structuredContent、image、resource link、
+返却値は`execution-envelope.schema.json`の形式で、`audit.character_id`を必須とする。
+成功・拒否のどちらも実行loopのキャラクターを記録する。不明なloop IDは主体を特定できないため
+`MCPFailure(unknown_execution_loop)`としてenvelope生成前に拒否する。
+結果のtext、structuredContent、image、resource link、
 embedded resource等をnative payloadとして保持する。native payloadは非信頼データであり、通常log、
 Frontend、LLMへそのまま公開しない。表示・会話統合のsanitizeは#182の責務となる。
 SDKの外部I/O診断は固定文にし、stdio stderrを通常logへ転送しない。SDK外の例外本文も公開しない。
@@ -95,8 +99,11 @@ Coreの呼出taskを取り消さず、transport失敗として返す。利用者
 再検証して元requestを再送する。入力round上限は3で、通常budgetがさらに厳しい場合は先にbudgetで止まる。
 Sampling callback、roots callback、elicitation callbackによる自動回答は登録しない。
 
-旧版の`execution.taskSupport=required`はsnapshotでunsupportedにする。2026-07-28では必須能力不足
-（`-32003`）をunsupportedとして返す。Tasks必須operationだけを止め、同じserverの通常Toolを壊さない。
+CapabilitySourceが旧版の`execution.taskSupport=required`を返した場合はsnapshotでunsupportedにする。
+ただしSDK 2.0.0はこの旧フィールドを破棄するため、本Clientでdiscovery時に検出できるとは保証しない。
+任意の`_meta.execution`を標準Tasks宣言へ読み替えない。合成2026-07-28 serverの`task`は
+discovery時にはactiveであり、call時の必須能力不足（`-32003`）でunsupportedになることを検証する。
+Tasks必須operationだけを止め、同じserverの通常Toolを壊さない。
 `TaskTrackerPort`の既定はunsupported。EventSource、ActionRecovery、ConfirmationPolicy、BindingValidatorは
 抽象Portであり、後続Issueの機能を実装済みとは扱わない。
 

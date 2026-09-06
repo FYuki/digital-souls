@@ -152,6 +152,7 @@ class ExecutionGate:
         self._loops: dict[str, _Loop] = {}
         self._pending: dict[str, _Pending] = {}
         self._rates: dict[tuple[str, ...], deque[float]] = {}
+        self._last_rate_cleanup = float("-inf")
 
     @asynccontextmanager
     async def attach(
@@ -241,6 +242,14 @@ class ExecutionGate:
             ),
         ]
         current = self.clock()
+        if current - self._last_rate_cleanup >= rate.window_seconds:
+            # 再利用されないsessionも窓外で回収する。loop終了直後には消さない。
+            for stale_key, bucket in list(self._rates.items()):
+                while bucket and bucket[0] <= current - rate.window_seconds:
+                    bucket.popleft()
+                if not bucket:
+                    del self._rates[stale_key]
+            self._last_rate_cleanup = current
         for key_rate, maximum in checks:
             bucket = self._rates.setdefault(key_rate, deque())
             while bucket and bucket[0] <= current - rate.window_seconds:
@@ -312,6 +321,8 @@ class ExecutionGate:
         pending: _Pending | None = None,
         responses: Json | None = None,
     ) -> Json:
+        # 不明なloopには監査主体が無いため、envelopeを捏造せず呼出しを拒否する。
+        loop = self._loop(loop_id)
         result: Json = {
             "execution_id": str(uuid4()),
             "connection_instance_id": connection_id,
@@ -324,6 +335,7 @@ class ExecutionGate:
             "outcome": "failed",
             "retry_count": 0,
             "native_payload": None,
+            "audit": {"character_id": loop.context.character_id},
         }
         try:
             try:
@@ -333,7 +345,6 @@ class ExecutionGate:
                 )
             except (ValueError, TypeError):
                 raise MCPFailure("validation", "invalid_arguments") from None
-            loop = self._loop(loop_id)
             if connection_id not in loop.snapshots:
                 raise MCPFailure("policy", "snapshot_not_granted")
             snapshot, generation = loop.snapshots[connection_id]

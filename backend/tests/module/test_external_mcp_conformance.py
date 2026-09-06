@@ -117,6 +117,9 @@ async def exercise(connection, *, expect_mrtr=True):
                 loop,
             )
             assert final["outcome"] == "succeeded", final
+            # SDKが捨てる旧executionを_metaの独自契約へ置換しない。
+            task_definition = next(t for t in active["tools"] if t["name"] == "task")
+            assert task_definition["status"] == "active"
             task = await gate.invoke(connection.id, "task", {"value": 1}, loop)
             assert task["outcome"] == "unsupported", task
             error = await gate.invoke(connection.id, "error", {"value": 1}, loop)
@@ -164,6 +167,8 @@ def test_http_native_mrtr(auth, monkeypatch, caplog):
     "auth,code", [("bearer", "auth_failed"), ("oauth", "unsupported_auth")]
 )
 def test_auth_failure_is_sanitized(auth, code, caplog):
+    caplog.set_level(logging.DEBUG)
+
     async def run(connection):
         with pytest.raises(MCPFailure) as caught:
             async with ExternalMCPClient(connection, timeout=2).connect():
@@ -232,6 +237,8 @@ def test_timeout_closes_stdio_process(tmp_path):
 
 @pytest.mark.parametrize("trusted,attempts", [(False, 1), (True, 2)])
 def test_http_retry_requires_annotation_trust(tmp_path, trusted, attempts, caplog):
+    caplog.set_level(logging.DEBUG)
+
     async def run(endpoint):
         c = Connection.from_manifest(
             manifest(transport="streamable_http", endpoint=endpoint, trusted=trusted)

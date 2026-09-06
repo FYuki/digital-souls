@@ -96,6 +96,10 @@ Pull RequestではGitHub ActionsのCIに加え、GitHub Appとして導入した
 
 CodeRabbitの指摘はコードレビューの補助であり、GitHub Actionsやローカルで実行したテスト結果の代替にはしない。特に、CodeRabbitのレビュー完了を外部サービスとの実接続に成功した一次証跡として扱わない。
 
+main向けPRはCI成功に加え、最新差分へのCodeRabbitレビューと指摘の確認・必要な対応を受入条件とする。
+自動レビューがskipされた場合は`@coderabbitai full review`で依頼する。skip時の成功statusを
+実レビュー済みと扱わない。子PRのEpic統合はCI成功を条件とし、mainのマージはユーザーが行う。
+
 ## LLM classifier conformance
 
 意味分類器とpersona memory抽出器の品質評価は、通常のpytest unit testと分離したpromptfoo suiteで行う。抽出器はenum一致を決定論的に評価し、topic妥当性とhallucination非発生を独立したローカルOllama judgeで評価する。
