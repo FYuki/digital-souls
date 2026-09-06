@@ -101,6 +101,16 @@ def main():
     arguments = [a for a in sys.argv[1:] if a != "--contract-mcp"]
     if os.environ.get("DS_ENVIRONMENT_ID") == "dogfood":
         raise RuntimeError("dogfoodから受入テストを起動できません")
+    artifacts = (
+        ROOT
+        / "frontend/test-results"
+        / ("tool-use-contract-runtime" if contract else "tool-use-runtime")
+    )
+    artifacts.mkdir(parents=True, exist_ok=True)
+    # 起動・readiness失敗でも前回の成功証跡を今回の結果として残さない。
+    (artifacts / "resolved-profile.json").unlink(missing_ok=True)
+    (artifacts / "runtime-manifest.json").unlink(missing_ok=True)
+    (artifacts / "browser-public.json").unlink(missing_ok=True)
     node = shutil.which("node")
     docker = shutil.which("docker")
     assert node and docker
@@ -156,14 +166,6 @@ def main():
             "RAG_ENABLED": "false",
         }
     )
-    artifacts = (
-        ROOT
-        / "frontend/test-results"
-        / ("tool-use-contract-runtime" if contract else "tool-use-runtime")
-    )
-    artifacts.mkdir(parents=True, exist_ok=True)
-    # 旧runnerが出力したProfileも共有用ディレクトリへ残さない。
-    (artifacts / "resolved-profile.json").unlink(missing_ok=True)
     with (
         tempfile.TemporaryDirectory(prefix="ds-tool-182-") as temporary,
         ExitStack() as stack,
