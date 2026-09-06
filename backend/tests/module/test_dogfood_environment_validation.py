@@ -236,7 +236,12 @@ def test_should_accept_optional_inference_target_settings(tmp_path: Path) -> Non
     env_path, _ = write_dogfood_env(tmp_path)
     with env_path.open("a", encoding="utf-8") as env_file:
         env_file.write(
-            "\nINFERENCE_TARGET_HEAVY_REASONING=ollama/gemma4:e4b\n"
+            "\nINFERENCE_TARGET_VISION=ollama/gemma4:e4b\n"
+            "INFERENCE_TARGET_VISION_MAX_INPUT_TOKENS=7168\n"
+            "INFERENCE_TARGET_VISION_MAX_OUTPUT_TOKENS=1024\n"
+            "INFERENCE_TARGET_VISION_TIMEOUT_SECONDS=30\n"
+            "INFERENCE_TARGET_VISION_MAX_CONCURRENCY=1\n"
+            "INFERENCE_TARGET_HEAVY_REASONING=ollama/gemma4:e4b\n"
             "INFERENCE_TARGET_HEAVY_REASONING_MAX_INPUT_TOKENS=7680\n"
             "INFERENCE_TARGET_HEAVY_REASONING_MAX_OUTPUT_TOKENS=512\n"
             "INFERENCE_TARGET_CHAT_TIMEOUT_SECONDS=45\n"

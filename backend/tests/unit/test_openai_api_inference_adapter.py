@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from collections.abc import AsyncIterator, Mapping
 from typing import cast
 from unittest.mock import MagicMock
@@ -14,7 +15,9 @@ from app.inference.adapters.openai_api import (
 )
 from app.inference.contracts import (
     EmbeddingRequest,
+    InferenceImagePart,
     InferenceMessage,
+    InferenceTextPart,
     StructuredGenerationRequest,
     TextGenerationRequest,
     TokenEstimateAccuracy,
@@ -50,12 +53,13 @@ def test_probe_uses_non_billable_model_lookup() -> None:
     client.get.return_value = _response({"id": "organization/model"})
     adapter = OpenAIAPIAdapter(api_key="test-api-key", http_client=client)
 
-    adapter.probe("organization/model", timeout_seconds=3.0)
+    result = adapter.probe("organization/model", timeout_seconds=3.0)
 
     call = client.get.call_args
     assert call.args[0] == f"{OPENAI_API_BASE_URL}/models/organization%2Fmodel"
     assert call.kwargs["headers"]["Authorization"] == "Bearer test-api-key"
     assert client.post.call_count == 0
+    assert result.capabilities is None
 
 
 def test_generate_text_uses_official_endpoint_and_reports_usage() -> None:
@@ -121,6 +125,78 @@ def test_structured_generation_forwards_json_schema() -> None:
             "strict": True,
         }
     }
+
+
+def test_multimodal_mapping_uses_responses_input_parts_and_data_url() -> None:
+    client = MagicMock(spec=httpx.Client)
+    client.post.return_value = _response(
+        {"status": "completed", "output_text": '{"ok":true}'}
+    )
+    adapter = OpenAIAPIAdapter(api_key="test-api-key", http_client=client)
+    image = b"synthetic-image"
+    request = StructuredGenerationRequest(
+        messages=(
+            InferenceMessage(
+                "user",
+                (
+                    InferenceTextPart("画面を読んで"),
+                    InferenceImagePart(image, "image/png", 1, 1),
+                ),
+            ),
+        ),
+        model_id="gpt-5.6-sol",
+        options={},
+        max_input_tokens=7168,
+        max_output_tokens=1024,
+        timeout_seconds=3.0,
+        response_schema={"type": "object"},
+    )
+
+    adapter.generate_structured(request)
+
+    payload = client.post.call_args.kwargs["json"]
+    assert payload["store"] is False
+    assert payload["input"] == [
+        {
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": "画面を読んで"},
+                {
+                    "type": "input_image",
+                    "image_url": "data:image/png;base64,"
+                    + base64.b64encode(image).decode("ascii"),
+                },
+            ],
+        }
+    ]
+
+
+def test_multimodal_estimate_does_not_encode_or_send_image() -> None:
+    client = MagicMock(spec=httpx.Client)
+    adapter = OpenAIAPIAdapter(api_key="test-api-key", http_client=client)
+
+    result = adapter.estimate_input_tokens(
+        TokenEstimateRequest(
+            messages=(
+                InferenceMessage(
+                    "user",
+                    (
+                        InferenceTextPart("画面を読んで"),
+                        InferenceImagePart(b"private", "image/png", 1, 1),
+                    ),
+                ),
+            ),
+            model_id="gpt-5.6-sol",
+            options={},
+            max_input_tokens=7168,
+            timeout_seconds=3.0,
+        )
+    )
+
+    assert result.count > 1_120
+    assert result.accuracy is TokenEstimateAccuracy.ESTIMATED
+    assert "1120_per_image" in result.method
+    client.post.assert_not_called()
 
 
 @pytest.mark.parametrize(

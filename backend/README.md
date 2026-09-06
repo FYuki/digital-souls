@@ -53,6 +53,8 @@ scripts/setup-backend.sh
 
 `setup-backend.sh` は `backend/.venv` の作成と実行時依存関係のインストールだけを行い、バックエンドは起動しない。
 
+画面知覚の画像decode検証にはPillowを使用する。Vision Targetを未設定にした環境でも依存関係は同じで、画面送信やVision推論は開始されない。
+
 ## 起動
 
 ```bash
@@ -62,5 +64,7 @@ scripts/start-backend.sh --host localhost --port 8000 --reload
 `start-backend.sh` は解決済みの dev Profile（`localhost:8000`、reload有効）と一致するhost、port、reload設定を明示して実行する。構築済みの `backend/.venv` を使ってバックエンドだけを foreground で起動し、環境がない場合にセットアップは自動実行されず、`setup-backend.sh` の実行を促すエラーで終了する。バックエンドプロセス自身が終了した場合は、その終了ステータスが呼び出し元へ伝播する。
 
 LLM・Whisper・prompt予算は `backend/.env.example` の環境変数で変更できる。Inferenceは用途別の `INFERENCE_TARGET_*` でProvider／Model、入力・出力token上限、timeout、同時実行数を指定する。Chatの入力＋出力上限は`LLM_CONTEXT_TOKEN_LIMIT`以下でなければならない。不正値や旧Ollama用途別変数は起動時エラーになる。
+
+画面知覚を使う環境だけoptionalな`INFERENCE_TARGET_VISION`を設定する。画像上限とProviderごとのpayload変換、起動時Capability確認は[`docs/inference-operations.md`](../docs/inference-operations.md)を参照する。
 
 `WHISPER_MODEL` を変更すると、環境adapterのcache確認・prepareとバックエンドのfaster-whisper初期化が同じモデルへ切り替わる。Profile経由の起動では、これらの設定が解決済みreportへ記録され、バックエンドとadapterの双方へ渡される。

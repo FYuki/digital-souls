@@ -31,6 +31,18 @@ INFERENCE_TARGET_EMBEDDING_MAX_INPUT_TOKENS=8192
 
 任意の`_OPTIONS_JSON`、`_TIMEOUT_SECONDS`、`_MAX_CONCURRENCY`はTargetごとに指定する。未知のTarget／suffix、未知のOption、非正数の上限、`privacy`へのcloud Provider割当ては起動時エラーになる。旧Ollama用途別設定は移行契約ではなく、1つでも指定すると起動を拒否する。
 
+画面知覚を有効にする場合だけ、optionalなVision Targetを設定する。設定しない環境では`unconfigured`となり、Backendと通常Chatは従来どおり起動する。画像の取得・共有session・cloud同意経路が接続される前に、この設定だけで画面送信が開始されることはない。
+
+```env
+INFERENCE_TARGET_VISION=ollama/gemma4:e4b
+INFERENCE_TARGET_VISION_MAX_INPUT_TOKENS=7168
+INFERENCE_TARGET_VISION_MAX_OUTPUT_TOKENS=1024
+INFERENCE_TARGET_VISION_TIMEOUT_SECONDS=30
+INFERENCE_TARGET_VISION_MAX_CONCURRENCY=1
+```
+
+Vision入力はPNGまたはJPEGの1枚に限定し、各辺2,560 px、decode後4,194,304 pixel、encoded 5 MiBを上限とする。CoreがMIME、magic bytes、実decode、寸法を検証し、AdapterだけがProvider payload用Base64を作る。任意URL／pathはInference契約に公開しない。画像tokenは1枚1,120 tokenを含むProvider別の保守的推定とし、実usageやexact計数とは区別する。
+
 ## OpenAI認証
 
 OpenAI APIとChatGPTサブスクリプションは別Providerとして設定する。
@@ -68,7 +80,7 @@ Backend起動時はInferenceを送らず、次だけを確認する。
 - OpenAI API: 課金されないModel取得によるcredential、endpoint、Model確認
 - Codex runtime: version／必須隔離機能と`codex login status`
 
-`chat`のprobe失敗は起動を中止する。その他のTarget失敗はwarningと`degraded`または`invalid`を記録し、各Callerのfail-safeへ委ねる。定期probeは行わず、起動時と実Inference結果で状態を更新する。
+OllamaのVisionではModel metadataの`vision` Capabilityも確認する。OpenAIのModel取得は入力modalitiesを返さないため、接続確認後もVisionを`unverified`とし、最初の実リクエスト成功後に`verified`へ更新する。`chat`のprobe失敗は起動を中止する。その他のTarget失敗はwarningと`degraded`または`invalid`を記録し、各Callerのfail-safeへ委ねる。Visionのmodel非対応、model不在、接続不能も通常Chatを停止しない。定期probeや自動retry／Provider fallbackは行わず、起動時と実Inference結果で状態を更新する。
 
 ```json
 {"status":"ready"}

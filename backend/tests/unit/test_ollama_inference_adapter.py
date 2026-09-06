@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from collections.abc import AsyncIterator, Mapping
 from unittest.mock import MagicMock
 
@@ -10,7 +11,10 @@ import pytest
 from app.inference.adapters.ollama import OllamaAdapter
 from app.inference.contracts import (
     EmbeddingRequest,
+    InferenceCapability,
+    InferenceImagePart,
     InferenceMessage,
+    InferenceTextPart,
     StructuredGenerationRequest,
     TextGenerationRequest,
     TokenEstimateAccuracy,
@@ -40,14 +44,98 @@ def _text_request() -> TextGenerationRequest:
 
 def test_probe_uses_model_metadata_without_generation() -> None:
     client = MagicMock(spec=httpx.Client)
-    client.post.return_value = _response({"digest": "sha256:" + "a" * 64})
+    client.post.return_value = _response(
+        {
+            "digest": "sha256:" + "a" * 64,
+            "capabilities": ["completion", "vision"],
+        }
+    )
     adapter = OllamaAdapter(base_url="http://127.0.0.1:11434", http_client=client)
 
-    adapter.probe("gemma4:e4b", timeout_seconds=3.0)
+    result = adapter.probe("gemma4:e4b", timeout_seconds=3.0)
 
     call = client.post.call_args
     assert call.args[0] == "http://127.0.0.1:11434/api/show"
     assert call.kwargs["json"] == {"model": "gemma4:e4b"}
+    assert result.capabilities == frozenset({InferenceCapability.IMAGE_INPUT})
+
+
+def test_probe_distinguishes_known_non_vision_model() -> None:
+    client = MagicMock(spec=httpx.Client)
+    client.post.return_value = _response(
+        {
+            "digest": "sha256:" + "b" * 64,
+            "capabilities": ["completion"],
+        }
+    )
+
+    result = OllamaAdapter(
+        base_url="http://127.0.0.1:11434", http_client=client
+    ).probe("text-only:latest", timeout_seconds=3.0)
+
+    assert result.capabilities == frozenset()
+
+
+def test_multimodal_mapping_base64_encodes_only_inside_adapter() -> None:
+    client = MagicMock(spec=httpx.Client)
+    client.post.return_value = _response({"message": {"content": '{"ok":true}'}})
+    adapter = OllamaAdapter(base_url="http://127.0.0.1:11434", http_client=client)
+    image = b"synthetic-image"
+    request = StructuredGenerationRequest(
+        messages=(
+            InferenceMessage(
+                "user",
+                (
+                    InferenceTextPart("画面を読んで"),
+                    InferenceImagePart(image, "image/png", 1, 1),
+                ),
+            ),
+        ),
+        model_id="gemma4:e4b",
+        options={},
+        max_input_tokens=7168,
+        max_output_tokens=1024,
+        timeout_seconds=3.0,
+        response_schema={"type": "object"},
+    )
+
+    adapter.generate_structured(request)
+
+    message = client.post.call_args.kwargs["json"]["messages"][0]
+    assert message == {
+        "role": "user",
+        "content": "画面を読んで",
+        "images": [base64.b64encode(image).decode("ascii")],
+    }
+
+
+def test_multimodal_estimate_is_local_conservative_and_not_exact() -> None:
+    client = MagicMock(spec=httpx.Client)
+    adapter = OllamaAdapter(base_url="http://127.0.0.1:11434", http_client=client)
+
+    result = adapter.estimate_input_tokens(
+        TokenEstimateRequest(
+            messages=(
+                InferenceMessage(
+                    "user",
+                    (
+                        InferenceTextPart("画面を読んで"),
+                        InferenceImagePart(b"private", "image/png", 1, 1),
+                    ),
+                ),
+            ),
+            model_id="gemma4:e4b",
+            options={},
+            max_input_tokens=7168,
+            timeout_seconds=3.0,
+            response_schema={"type": "object"},
+        )
+    )
+
+    assert result.count > 1_120
+    assert result.accuracy is TokenEstimateAccuracy.ESTIMATED
+    assert "1120_per_image" in result.method
+    client.post.assert_not_called()
 
 
 def test_generate_text_applies_target_limits_and_returns_provider_usage() -> None:

@@ -111,13 +111,22 @@ def _validate_known_options(
 
 
 def default_provider_registry() -> ProviderRegistry:
-    all_capabilities = frozenset(InferenceCapability)
+    multimodal_capabilities = frozenset(
+        {
+            InferenceCapability.GENERATE_TEXT,
+            InferenceCapability.STREAM_TEXT,
+            InferenceCapability.GENERATE_STRUCTURED,
+            InferenceCapability.IMAGE_INPUT,
+            InferenceCapability.EMBED,
+            InferenceCapability.ESTIMATE_INPUT_TOKENS,
+        }
+    )
     return ProviderRegistry(
         (
             ProviderDescriptor(
                 provider_id="ollama",
                 kind=ProviderKind.LOCAL,
-                capabilities=all_capabilities,
+                capabilities=multimodal_capabilities,
                 validate_options=lambda options: _validate_known_options(
                     options,
                     allowed=frozenset({"temperature", "top_p", "seed"}),
@@ -126,7 +135,7 @@ def default_provider_registry() -> ProviderRegistry:
             ProviderDescriptor(
                 provider_id="openai-api",
                 kind=ProviderKind.CLOUD,
-                capabilities=all_capabilities,
+                capabilities=multimodal_capabilities,
                 validate_options=lambda options: _validate_known_options(
                     options,
                     allowed=frozenset({"temperature", "top_p", "reasoning_effort"}),

@@ -16,7 +16,13 @@ from app.inference.config import (
     reject_legacy_inference_environment,
     resolve_inference_settings,
 )
-from app.inference.contracts import InferenceTarget, ProviderKind, TargetCriticality
+from app.inference.contracts import (
+    InferenceCapability,
+    InferenceTarget,
+    ModelProbeResult,
+    ProviderKind,
+    TargetCriticality,
+)
 from app.inference.errors import InferenceError, InferenceErrorCategory
 from app.inference.health import InferenceHealth
 from app.inference.observer import InferenceObservation
@@ -52,9 +58,18 @@ class InferenceRuntime:
         for target, resolved in self.settings.targets.items():
             adapter = self.registry.adapter(resolved.reference.provider_id)
             try:
-                adapter.probe(
+                raw_probe_result = adapter.probe(
                     resolved.reference.model_id,
                     timeout_seconds=min(resolved.timeout_seconds, 10.0),
+                )
+                probe_result = (
+                    raw_probe_result
+                    if isinstance(raw_probe_result, ModelProbeResult)
+                    else ModelProbeResult()
+                )
+                verifies_image = self._verify_model_capabilities(
+                    resolved.definition.required_capabilities,
+                    probe_result,
                 )
             except Exception as error:
                 category = (
@@ -73,7 +88,7 @@ class InferenceRuntime:
                 if resolved.definition.criticality is TargetCriticality.REQUIRED:
                     required_failure = required_failure or category
             else:
-                self.health.record_success(target)
+                self.health.record_success(target, verified=verifies_image)
                 logger.info(
                     "Inference startup probe succeeded target=%s provider=%s model=%s",
                     target.value,
@@ -82,6 +97,23 @@ class InferenceRuntime:
                 )
         if required_failure is not None:
             raise InferenceError(required_failure, retryable=False)
+
+    @staticmethod
+    def _verify_model_capabilities(
+        required_capabilities: frozenset[InferenceCapability],
+        probe_result: ModelProbeResult,
+    ) -> bool:
+        if InferenceCapability.IMAGE_INPUT not in required_capabilities:
+            return True
+        model_capabilities = probe_result.capabilities
+        if model_capabilities is None:
+            return False
+        if InferenceCapability.IMAGE_INPUT not in model_capabilities:
+            raise InferenceError(
+                InferenceErrorCategory.UNSUPPORTED_CAPABILITY,
+                retryable=False,
+            )
+        return True
 
     def close(self) -> None:
         if self.openai_codex_adapter is not None:
@@ -181,7 +213,10 @@ def create_inference_runtime(environment: Mapping[str, str]) -> InferenceRuntime
     def observe(observation: InferenceObservation) -> None:
         if observation.success and observation.external_request_count > 0:
             health.record_success(observation.target)
-        elif observation.error_category is not None:
+        elif (
+            observation.error_category is not None
+            and observation.external_request_count > 0
+        ):
             health.record_failure(observation.target, observation.error_category)
         estimate = observation.token_estimate
         usage = observation.usage

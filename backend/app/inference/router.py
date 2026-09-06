@@ -16,6 +16,7 @@ from app.inference.contracts import (
     EmbeddingRequest,
     EmbeddingResult,
     InferenceAdapter,
+    InferenceCancellationToken,
     InferenceCapability,
     InferenceMessage,
     InferenceTarget,
@@ -31,6 +32,7 @@ from app.inference.contracts import (
     TokenEstimateRequest,
 )
 from app.inference.errors import InferenceError, InferenceErrorCategory
+from app.inference.images import image_parts, validate_multimodal_messages
 from app.inference.observer import (
     InferenceObservation,
     InferenceObserver,
@@ -69,6 +71,7 @@ class InferenceRouter:
         resolved, adapter = self._resolve(
             caller, target, InferenceCapability.GENERATE_TEXT
         )
+        self._validate_messages(resolved, adapter, messages)
         max_output_tokens = resolved.max_output_tokens
         if max_output_tokens is None:
             raise AssertionError("text generation target requires an output limit")
@@ -116,6 +119,7 @@ class InferenceRouter:
         resolved, adapter = self._resolve(
             caller, target, InferenceCapability.STREAM_TEXT
         )
+        self._validate_messages(resolved, adapter, messages)
         max_output_tokens = resolved.max_output_tokens
         if max_output_tokens is None:
             raise AssertionError("streaming target requires an output limit")
@@ -166,7 +170,9 @@ class InferenceRouter:
         messages: tuple[InferenceMessage, ...],
         response_schema: Mapping[str, object],
         timeout_seconds: float | None = None,
+        cancellation_token: InferenceCancellationToken | None = None,
     ) -> StructuredGenerationResult:
+        self._raise_if_cancelled(cancellation_token)
         try:
             Draft202012Validator.check_schema(response_schema)
         except SchemaError:
@@ -177,13 +183,18 @@ class InferenceRouter:
         resolved, adapter = self._resolve(
             caller, target, InferenceCapability.GENERATE_STRUCTURED
         )
+        self._validate_messages(resolved, adapter, messages)
         max_output_tokens = resolved.max_output_tokens
         if max_output_tokens is None:
             raise AssertionError("structured target requires an output limit")
         request_id = str(uuid4())
         started_at = perf_counter()
+        external_request_count = 0
         try:
+            self._raise_if_cancelled(cancellation_token)
             with self._capacity[target]:
+                self._raise_if_cancelled(cancellation_token)
+                external_request_count = 1
                 provider_result = adapter.generate_structured(
                     StructuredGenerationRequest(
                         messages=messages,
@@ -197,6 +208,7 @@ class InferenceRouter:
                         response_schema=response_schema,
                     )
                 )
+            self._raise_if_cancelled(cancellation_token)
             self._validate_text(provider_result)
             value: JsonValue = json.loads(provider_result.text)
             Draft202012Validator(response_schema).validate(value)
@@ -213,6 +225,7 @@ class InferenceRouter:
                 InferenceCapability.GENERATE_STRUCTURED,
                 resolved,
                 error.category,
+                external_request_count=external_request_count,
             )
             raise error from None
         except Exception as error:
@@ -228,6 +241,7 @@ class InferenceRouter:
                     if isinstance(error, InferenceError)
                     else InferenceErrorCategory.PROVIDER_ERROR
                 ),
+                external_request_count=external_request_count,
             )
             raise
         self._observe(
@@ -239,6 +253,7 @@ class InferenceRouter:
             resolved,
             None,
             usage=provider_result.usage,
+            external_request_count=external_request_count,
         )
         return StructuredGenerationResult(value=value, usage=provider_result.usage)
 
@@ -305,6 +320,7 @@ class InferenceRouter:
         resolved, adapter = self._resolve(
             caller, target, InferenceCapability.ESTIMATE_INPUT_TOKENS
         )
+        self._validate_messages(resolved, adapter, messages)
         request_id = str(uuid4())
         started_at = perf_counter()
         try:
@@ -356,6 +372,45 @@ class InferenceRouter:
             )
         return resolved, adapter
 
+    @staticmethod
+    def _validate_messages(
+        resolved: ResolvedTarget,
+        adapter: InferenceAdapter,
+        messages: tuple[InferenceMessage, ...],
+    ) -> None:
+        images = image_parts(messages)
+        requires_image = (
+            InferenceCapability.IMAGE_INPUT
+            in resolved.definition.required_capabilities
+        )
+        if not images:
+            if requires_image:
+                raise InferenceError(
+                    InferenceErrorCategory.INVALID_REQUEST,
+                    retryable=False,
+                )
+            return
+        if (
+            not requires_image
+            or InferenceCapability.IMAGE_INPUT not in adapter.capabilities
+            or resolved.definition.image_limits is None
+        ):
+            raise InferenceError(
+                InferenceErrorCategory.UNSUPPORTED_CAPABILITY,
+                retryable=False,
+            )
+        validate_multimodal_messages(messages, resolved.definition.image_limits)
+
+    @staticmethod
+    def _raise_if_cancelled(
+        cancellation_token: InferenceCancellationToken | None,
+    ) -> None:
+        if cancellation_token is not None and cancellation_token.is_cancelled:
+            raise InferenceError(
+                InferenceErrorCategory.CANCELLED,
+                retryable=False,
+            )
+
     def _observe(
         self,
         request_id: str,
@@ -368,6 +423,7 @@ class InferenceRouter:
         *,
         token_estimate: TokenEstimate | None = None,
         usage: InferenceUsage | None = None,
+        external_request_count: int | None = None,
     ) -> None:
         try:
             self._observer(
@@ -380,9 +436,13 @@ class InferenceRouter:
                     model_id=resolved.reference.model_id,
                     auth_kind=self._auth_kind(resolved.reference.provider_id),
                     latency_ms=max(0.0, (perf_counter() - started_at) * 1000),
-                    external_request_count=self._external_request_count(
-                        resolved.reference.provider_id,
-                        capability,
+                    external_request_count=(
+                        self._external_request_count(
+                            resolved.reference.provider_id,
+                            capability,
+                        )
+                        if external_request_count is None
+                        else external_request_count
                     ),
                     token_estimate=token_estimate,
                     usage=usage,
