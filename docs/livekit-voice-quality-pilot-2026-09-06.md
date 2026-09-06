@@ -342,3 +342,28 @@ LLM／TTS生成と受信準備は並行する。PCMが生成された時点で�
 実会話の`packet-decode-01`は準備1回＋測定3回が全件成功し、全4回で同一packetの受信・独立decode・native track配送を別時刻として観測した。測定3回の受信→独立decodeは約1.5／1.0／1.1msで、各960sample、worker時計較正幅約0.4msだった。raw evidenceに新しいdecode境界が残ることを確認したが、通常会話の出力PCMはまだ独立decoderから供給していないため、`media_observation_method`は`unavailable`を維持する。これらはfirst playbackやTTFAの受け入れ証拠ではない。
 
 Frontend単体407件・結合97件、型検査、診断validatorの単体17件とPython lintが成功した。Frontendでは誤ったpacket／時計／sample数、復号timeout・異常出力・終了、復号queue超過でもnative配送が継続することを検証した。明示PCM再生とsource位置、loss／RED回復、underrun／gap／stale提示、正式100試行とdogfoodの品質受け入れは引き続き未完了である。
+
+
+## 2026-09-07: 応答packetのPCMを通常会話のworkletへ出力
+
+通常会話の出音を、独立Opus復号のFloat32 PCMを受け取る`PacketRenderer`へ接続した。native MediaStreamAudioSourceNodeから音声をコピーする経路は使わず、mutedのaudio要素はWebRTC処理を維持するために残す。Backendへの`response_track_ready`は、復号器・worker時計・AudioContext・workletが準備できてから送る。必要なブラウザAPIや復号処理が失敗した場合に、未検証の別再生経路へ切り替えて計測成功とはしない。
+
+workletはpacket番号、RTP timestamp、packet内sample offsetとともにPCMを受け取り、実際に出力バッファへ書いた区間だけを数値で通知する。入力前のゼロ出力を応答sampleとして数えない。初回に60msのbufferを確保し、待機PCMは最大48,000sample。停止ではqueueを破棄し、旧応答の遅着PCMとresume通知でも再開しない。元の発話開始時刻と停止応答の相関は維持する。
+
+`PacketOutputTracker`は、render callbackが来ただけでは再生済みとせず、`getOutputTimestamp()`のcontext clockが当該区間の末尾を通過するまで保留する。その時計から先頭frameのclient monotonic時刻を求める。最初のpacketの受信・復号・出力frame・出力時刻・観測時刻・出力時計の生値を`packet_playback_observation`へ保存し、Backendのvalidatorが時計通過と対応を再計算する。first playbackの通知とpilot cycleにも同じ確定値を使い、callback到着時刻や後から取得した時計へ置き換えない。
+
+`packet-playback-01`の準備1回＋測定3回は成功した。このrunは出力時計の生値追加前の診断である。最終形式の`packet-playback-02`も全4回成功し、保存結果だけを使う再検証が通った。測定3回の値は次のとおり。
+
+| 測定 | 同一packet受信→独立復号 | 独立復号→最初のbrowser出力 |
+|---|---:|---:|
+| 1 | 1.5ms | 95.468ms |
+| 2 | 1.7ms | 102.691ms |
+| 3 | 1.4ms | 93.697ms |
+
+各初回出力区間は64sampleで、出力clockはその末尾を通過していた。全体のpacketは960sampleだが、worklet quantum境界の途中から開始するため初回通知が64sampleになる。first playbackはdecoded応答packetの先頭sampleをbrowserへ出力した時刻で、音量閾値を超えた時刻や物理スピーカーの音響到達時刻ではない。
+
+`packet-playback-session-01`では同じsession・conversationの3往復が成功し、全応答でtranscriptとtrackの応答IDが一致、追加マイク操作0回、最後の明示終了を確認した。`packet-playback-02/pilot-aggregate-01.json`へのpilot集計は出力時計の再検証、schema検証、匿名性検査を通過した。保存先はignoredの各runディレクトリである。
+
+Frontend全単体418件・結合97件と型検査が成功し、その後に追加したRoom境界の旧PCM破棄テストを含む16件も成功した。Backend report単体49件・型検査227 source files・対象lintが成功した。途中のFrontend結合3件は、helperがRoom型を参照して不要なJSON依存まで探索したため失敗し、再生証跡の型へ参照を限定して解消した。別の部分実行ではcwdをリポジトリrootにしたため境界検査が失敗したが、Frontendディレクトリからの全実行で成功を確認している。
+
+この変更で相関できたのは受信packetのPCMとbrowser出力である。codecのlookaheadや初回packet欠落を含めた元のsource PCM offset、logical segment末尾まで聞こえたかの厳密なprefixは未確定のため、`sourcePcmOffsetVerified: false`、`media_observation_method: unavailable`を維持する。末尾までの再生完了通知、途中の空きと正常な末尾の区別、loss／RED回復、再接続、実割り込みのstale提示、全100試行とdogfood受け入れは未完了である。今回の少数成功やunitの停止検証を、音切れ0件・stale提示0件・TTFA品質合格へ拡大して扱わない。

@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url'
+import type {PacketPlaybackObservation} from '../src/livekit/packet-renderer'
 import type { MediaObservation } from '../src/livekit/media-observer'
 
 import { expect, type Page } from '@playwright/test'
@@ -11,6 +12,7 @@ declare global {
     __voiceChatE2E: {
       lastTrackMediaResponseId?: string
       lastTrackMediaObservation?: MediaObservation
+      lastPacketPlaybackObservation?: PacketPlaybackObservation
       cycles: {
         fixtureStartedAt: number
         trackReceivedAt?: number
@@ -115,6 +117,7 @@ const installPlaybackProbe = async (page: Page) => {
         createRoom?: (...args: never[]) => unknown
         observeRoom?: (observation: {
           firstPlaybackAtMs?: number
+          packetPlaybackObservation?: PacketPlaybackObservation
           mediaResponseId?: string
           mediaTrackResponseId?: string
           mediaObservation?: MediaObservation
@@ -149,6 +152,9 @@ const installPlaybackProbe = async (page: Page) => {
         window.__voiceSessionController = controller
       },
       observeRoom: (observation) => {
+        if (observation.packetPlaybackObservation !== undefined) {
+          window.__voiceChatE2E.lastPacketPlaybackObservation = {...observation.packetPlaybackObservation}
+        }
         if (observation.mediaObservation !== undefined) {
           window.__voiceChatE2E.lastTrackMediaObservation = { ...observation.mediaObservation }
           window.__voiceChatE2E.lastTrackMediaResponseId = observation.mediaTrackResponseId

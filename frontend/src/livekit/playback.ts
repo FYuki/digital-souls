@@ -99,6 +99,8 @@ export type RenderInterval = Readonly<{
   endFrame: number
   energy: number
   firstAudibleFrame?: number
+  // response所有packetの実出力先頭。無音sampleも応答PCMの出力として数える。
+  firstResponseFrame?: number
 }>
 
 export class PlaybackEvidenceController {
@@ -182,9 +184,9 @@ export class PlaybackEvidenceController {
       }
       const required = segment.metadata.pcmSampleCount - segment.renderedSamples
       const consumed = Math.min(required, interval.endFrame - cursor)
-      const firstFrame = interval.firstAudibleFrame
+      const firstFrame = interval.firstResponseFrame ?? interval.firstAudibleFrame
       if (
-        interval.energy > 0 && firstFrame !== undefined && Number.isInteger(firstFrame)
+        (interval.firstResponseFrame !== undefined || interval.energy > 0) && firstFrame !== undefined && Number.isInteger(firstFrame)
         && firstFrame >= cursor && firstFrame < cursor + consumed
         && !this.firstPlaybackFrames.has(segment.metadata.responseId)
       ) this.firstPlaybackFrames.set(segment.metadata.responseId, firstFrame)

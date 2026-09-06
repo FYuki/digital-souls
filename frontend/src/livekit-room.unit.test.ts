@@ -55,6 +55,18 @@ vi.mock('livekit-client', () => ({
   },
 }))
 
+const mediaMocks = vi.hoisted(() => ({observers: [] as Array<{
+  playback?: {packet: (packet: unknown) => void; failed: () => void}
+}>}))
+vi.mock('./livekit/media-observer', () => ({
+  RemoteMediaObserver: class {
+    constructor(_receiver: unknown, _track: unknown, report: (value: unknown) => void,
+      public playback?: {packet: (packet: unknown) => void; failed: () => void}) {mediaMocks.observers.push(this); report({trackReceivedAtMs: performance.now()})}
+    ready = async () => undefined
+    close = vi.fn()
+  },
+}))
+
 import { LiveKitRoomClient, type RoomObservation } from './livekit/room'
 
 type Deferred = Readonly<{
@@ -78,19 +90,11 @@ const closeBlockers: Deferred[] = []
 const workletFailures: Error[] = []
 const workletBlockers: Deferred[] = []
 
-class FakeAudioSourceNode {
-  disconnect = vi.fn()
-
-  connect = vi.fn((node: FakeAudioWorkletNode): FakeAudioWorkletNode => node)
-}
-
 class FakeAudioWorkletNode {
-  readonly port = { onmessage: null as ((event: MessageEvent) => void) | null }
+  readonly port = {onmessage: null as ((event: MessageEvent) => void) | null, postMessage: vi.fn(), close: vi.fn()}
   disconnect = vi.fn()
-
-  connect(destination: unknown): unknown {
-    return destination
-  }
+  connect = vi.fn((destination: unknown) => destination)
+  constructor(context: FakeAudioContext) {context.worklets.push(this)}
 }
 
 class FakeGainNode {
@@ -111,7 +115,7 @@ class FakeAudioContext {
     if (failure !== undefined) throw failure
     await workletBlockers.shift()?.promise
   }) }
-  readonly sources: FakeAudioSourceNode[] = []
+  readonly worklets: FakeAudioWorkletNode[] = []
   readonly gains: FakeGainNode[] = []
 
   constructor() {
@@ -126,11 +130,7 @@ class FakeAudioContext {
     return closeBlockers.shift()?.promise ?? Promise.resolve()
   })
 
-  createMediaStreamSource(): FakeAudioSourceNode {
-    const source = new FakeAudioSourceNode()
-    this.sources.push(source)
-    return source
-  }
+  createMediaStreamSource(): never {throw new Error('native PCM source must not be connected')}
 
   createGain(): FakeGainNode {
     const gain = new FakeGainNode()
@@ -191,6 +191,7 @@ describe('LiveKit Room generation synchronization', () => {
     livekitMocks.rooms.length = 0
     audioContexts.length = 0
     closeBlockers.length = 0
+    mediaMocks.observers.length = 0
     workletFailures.length = 0
     workletBlockers.length = 0
     vi.stubGlobal('AudioContext', FakeAudioContext)
@@ -367,7 +368,7 @@ describe('LiveKit Room generation synchronization', () => {
     firstClose.resolve()
     await vi.waitFor(() => {
       expect(audioContexts).toHaveLength(2)
-      expect(audioContexts.reduce((total, context) => total + context.sources.length, 0)).toBe(2)
+      expect(audioContexts.reduce((total, context) => total + context.worklets.length, 0)).toBe(2)
       expect(observations.at(-1)).toMatchObject({ activeAudioGraphs: 1 })
     })
     client.disconnect()
@@ -385,21 +386,21 @@ describe('LiveKit Room generation synchronization', () => {
     room.emit('trackSubscribed', firstTrack, publication, {})
     await vi.waitFor(() => {
       expect(audioContexts).toHaveLength(1)
-      expect(audioContexts[0].sources).toHaveLength(1)
+      expect(audioContexts[0].worklets).toHaveLength(1)
     })
 
     room.emit('trackSubscribed', replacementTrack, publication, {})
-    expect(audioContexts[0].sources).toHaveLength(1)
+    expect(audioContexts[0].worklets).toHaveLength(1)
     expect(observations.at(-1)).toMatchObject({
       duplicateTrackFrames: 1,
     })
 
     room.emit('trackUnsubscribed', firstTrack, publication, {})
-    expect(audioContexts[0].sources[0].disconnect).toHaveBeenCalledTimes(1)
+    expect(audioContexts[0].worklets[0].disconnect).toHaveBeenCalledTimes(1)
     room.emit('trackSubscribed', replacementTrack, publication, {})
 
     await vi.waitFor(() => {
-      expect(audioContexts[0].sources).toHaveLength(2)
+      expect(audioContexts[0].worklets).toHaveLength(2)
       expect(observations.at(-1)).toMatchObject({ activeAudioGraphs: 1 })
     })
     client.disconnect()
@@ -435,7 +436,7 @@ describe('LiveKit Room generation synchronization', () => {
 
     await vi.waitFor(() => {
       expect(audioContexts).toHaveLength(2)
-      expect(audioContexts[1].sources).toHaveLength(1)
+      expect(audioContexts[1].worklets).toHaveLength(1)
       expect(observations.at(-1)).toMatchObject({
         transport: 'available', audio: 'available', activeAudioGraphs: 1,
       })
@@ -460,14 +461,14 @@ describe('LiveKit Room generation synchronization', () => {
     )
     await vi.waitFor(() => {
       expect(audioContexts).toHaveLength(1)
-      expect(audioContexts[0].sources).toHaveLength(1)
+      expect(audioContexts[0].worklets).toHaveLength(1)
     })
     expect(audioContexts[0].gains[0].gain.value).toBe(1)
     expect(document.querySelectorAll('audio')).toHaveLength(1)
 
     expect(client.stopPlayback('50000000-0000-4000-8000-000000000001', 100)).toBe(0)
     expect(client.stopPlayback('50000000-0000-4000-8000-000000000001', 101)).toBe(0)
-    expect(audioContexts[0].sources[0].disconnect).toHaveBeenCalledTimes(1)
+    expect(audioContexts[0].worklets[0].disconnect).toHaveBeenCalledTimes(1)
     expect(document.querySelectorAll('audio')).toHaveLength(1)
     expect(document.querySelector('audio')?.muted).toBe(true)
     expect(observations.at(-1)).toMatchObject({
@@ -518,12 +519,12 @@ describe('LiveKit Room generation synchronization', () => {
       trackSid: 'TR_next', trackName: 'ds-response-v1:50000000-0000-4000-8000-000000000002',
     }, {})
     await vi.waitFor(() => {
-      expect(audioContexts[0].sources).toHaveLength(2)
+      expect(audioContexts[0].worklets).toHaveLength(2)
       expect(observations.at(-1)).toMatchObject({ activeAudioGraphs: 1 })
     })
     // 旧trackは残っていても再開しない。新しい応答のtrackだけを接続する。
-    expect(audioContexts[0].sources[0].connect).toHaveBeenCalledTimes(1)
-    expect(audioContexts[0].sources[1].connect).toHaveBeenCalledTimes(1)
+    expect(audioContexts[0].worklets[0].connect).toHaveBeenCalledTimes(1)
+    expect(audioContexts[0].worklets[1].connect).toHaveBeenCalledTimes(1)
     client.disconnect()
   })
 
@@ -592,9 +593,31 @@ describe('LiveKit Room generation synchronization', () => {
     client.temporaryDisconnect()
     await client.connect('ws://127.0.0.1:7880', 'new-token', sessionId)
     latestRoom().emit('trackSubscribed', { kind: 'audio', mediaStreamTrack: {} }, { trackSid: 'TR_old', trackName: 'ds-response-v1:' + responseId }, {})
-    await vi.waitFor(() => expect(audioContexts[0].sources).toHaveLength(1))
-    expect(audioContexts[0].sources[0].connect).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(audioContexts[0].worklets).toHaveLength(1))
+    expect(audioContexts[0].worklets[0].connect).not.toHaveBeenCalled()
     client.disconnect()
   })
+
+
+test('復号PCMは一つのworkletへ渡し、停止後の旧PCMを再投入しない', async () => {
+  const client = new LiveKitRoomClient(() => undefined)
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  const responseId = '22222222-2222-2222-2222-222222222222'
+  room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
+    {trackSid: 'TR_packet', trackName: `ds-response-v1:${responseId}`})
+  await vi.waitFor(() => expect(audioContexts.at(-1)?.worklets).toHaveLength(1))
+  const worklet = audioContexts.at(-1)!.worklets[0]
+  const observer = mediaMocks.observers.at(-1)!
+  const pcm = new Float32Array(960).fill(.25)
+  observer.playback!.packet({packetIndex: 0, rtpTimestamp: 99, receivedAtMs: 100, decodedAtMs: 101, pcm})
+  expect(worklet.port.postMessage).toHaveBeenCalledWith(
+    {kind: 'pcm', packetIndex: 0, rtpTimestamp: 99, samples: pcm}, [pcm.buffer])
+  client.stopPlayback(responseId)
+  expect(worklet.port.postMessage).toHaveBeenCalledWith({kind: 'stop'})
+  observer.playback!.packet({packetIndex: 1, rtpTimestamp: 1059, receivedAtMs: 120, decodedAtMs: 121, pcm})
+  expect(worklet.port.postMessage.mock.calls.filter(([row]) => row.kind === 'pcm')).toHaveLength(1)
+  client.disconnect()
+})
 
 })

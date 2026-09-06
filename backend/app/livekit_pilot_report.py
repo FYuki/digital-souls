@@ -138,6 +138,8 @@ def _finalize_livekit_report(
                 media_times.append(value)
             if not media_times[0] <= media_times[1] <= media_times[2] <= playback:
                 raise ValueError("controlled media boundaries are out of order")
+        if trial.get("packet_playback_observation") is not None:
+            validate_packet_playback_observation(trial)
         fixture_start, fixture_end = _validate_fixture_clock(
             trial, sample_rate=sample_rate, start_sample=start_sample, end_sample=end_sample,
             controlled=controlled,
@@ -186,6 +188,45 @@ def _finalize_livekit_report(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(serialized, ensure_ascii=False, indent=2) + "\n")
 
+
+
+def validate_packet_playback_observation(trial: dict[str, object]) -> tuple[float, float]:
+    """同一packetの出力時計通過を再検証する。source PCM offsetや品質合格は示さない。"""
+    evidence = trial.get("packet_playback_observation")
+    media = trial.get("track_media_observation")
+    if not isinstance(evidence, dict) or not isinstance(media, dict):
+        raise ValueError("packet playback evidence is unavailable")
+
+    def number(value: object) -> float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+            raise ValueError("invalid packet playback number")
+        return float(value)
+
+    if evidence.get("packetIndex") != 0 or type(evidence.get("packetIndex")) is not int:
+        raise ValueError("first playback packet is not zero")
+    if evidence.get("outputClockPassed") is not True or evidence.get("sourcePcmOffsetVerified") is not False:
+        raise ValueError("unsupported packet playback claim")
+    if evidence.get("sampleRate") != 48000 or media.get("firstPacketDecodedSamples") != 960:
+        raise ValueError("packet playback format mismatch")
+    if not trial.get("track_response_matches") or media.get("packetDecodeMissingReason") is not None:
+        raise ValueError("packet response correlation unavailable")
+    received, decoded, played, observed = (number(evidence.get(name)) for name in (
+        "receivedAtMs", "decodedAtMs", "firstOutputAtMs", "confirmationObservedAtMs",
+    ))
+    if not received <= decoded <= played <= observed:
+        raise ValueError("packet playback clock order mismatch")
+    for name, value in (("firstPacketReceivedAtMs", received), ("firstPacketDecodedAtMs", decoded)):
+        if abs(number(media.get(name)) - value) > 0.001:
+            raise ValueError("packet playback does not match the observed packet")
+    first, end = number(evidence.get("firstOutputFrame")), number(evidence.get("firstOutputEndFrame"))
+    context_time = number(evidence.get("outputClockContextTime"))
+    performance_time = number(evidence.get("outputClockPerformanceTime"))
+    if not first.is_integer() or not end.is_integer() or not 0 < end - first <= 960 or context_time * 48000 < end:
+        raise ValueError("output clock has not passed the first packet samples")
+    mapped = performance_time + (first / 48000 - context_time) * 1000
+    if abs(mapped - played) > 0.001 or abs(number(trial.get("startedAt")) - played) > 0.001:
+        raise ValueError("first playback does not match the output clock")
+    return decoded - received, played - decoded
 
 
 def _validate_fixture_clock(

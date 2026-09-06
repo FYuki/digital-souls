@@ -246,3 +246,41 @@ def test_controlled_rejects_unverified_or_invalid_pcm_clock(controlled_inputs, i
         trial['fixture_speech_end_client_ms'] = 1041
     with pytest.raises(ValueError):
         run(controlled=True)
+
+
+def packet_playback_trial():
+    return {
+        "track_response_matches": True, "startedAt": 1100,
+        "track_media_observation": {"firstPacketReceivedAtMs": 998, "firstPacketDecodedAtMs": 1000,
+                                    "firstPacketDecodedSamples": 960},
+        "packet_playback_observation": {
+            "packetIndex": 0, "receivedAtMs": 998, "decodedAtMs": 1000,
+            "firstOutputFrame": 48000, "firstOutputEndFrame": 48128,
+            "firstOutputAtMs": 1100, "outputClockContextTime": 1.01,
+            "outputClockPerformanceTime": 1110, "confirmationObservedAtMs": 1120,
+            "sampleRate": 48000, "outputClockPassed": True, "sourcePcmOffsetVerified": False,
+        },
+    }
+
+
+def test_packet_output_clock_can_be_revalidated_without_pcm():
+    from app.livekit_pilot_report import validate_packet_playback_observation
+    assert validate_packet_playback_observation(packet_playback_trial()) == (2, 100)
+
+
+@pytest.mark.parametrize("damage", ["future", "unpassed", "mapping", "different_packet", "response", "source_claim", "nonfinite", "bool", "cycle"])
+def test_packet_playback_rejects_false_evidence(damage):
+    from app.livekit_pilot_report import validate_packet_playback_observation
+    trial = packet_playback_trial()
+    evidence = trial["packet_playback_observation"]
+    if damage == "future": evidence["confirmationObservedAtMs"] = 1099
+    elif damage == "unpassed": evidence["outputClockContextTime"] = 1
+    elif damage == "mapping": evidence["outputClockPerformanceTime"] += 1
+    elif damage == "different_packet": trial["track_media_observation"]["firstPacketDecodedAtMs"] += 1
+    elif damage == "response": trial["track_response_matches"] = False
+    elif damage == "source_claim": evidence["sourcePcmOffsetVerified"] = True
+    elif damage == "nonfinite": evidence["firstOutputFrame"] = float("nan")
+    elif damage == "bool": evidence["packetIndex"] = False
+    elif damage == "cycle": trial["startedAt"] += 1
+    with pytest.raises(ValueError):
+        validate_packet_playback_observation(trial)

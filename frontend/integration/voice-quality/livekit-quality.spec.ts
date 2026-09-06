@@ -154,6 +154,7 @@ test(Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0) > 0
       trials.push({
         track_response_matches: await page.evaluate(responseId => window.__voiceChatE2E.lastTrackMediaResponseId === responseId, cycle.responseId),
         track_media_observation: await page.evaluate(() => window.__voiceChatE2E.lastTrackMediaObservation),
+        packet_playback_observation: await page.evaluate(() => window.__voiceChatE2E.lastPacketPlaybackObservation),
         fixture_clock_method: sourceBounds ? 'audio_worklet_pcm_causal_bounds' : 'get_user_media_completion_unverified',
         ...(sourceBounds ? { fixture_clock_bounds: sourceBounds, fixture_clock_maximum_uncertainty_ms: 20 } : {}),
         session_end_confirmed: true,

@@ -23,8 +23,8 @@ import {
   type RetryTimer,
 } from './control'
 import { decodePrivateFrame } from './private-contract'
-import { renderWorkletSource, outputFrameTimeMs } from './render-worklet'
-import { RemoteMediaObserver, type MediaObservation } from './media-observer'
+import { packetRendererSource, PacketOutputTracker, type PacketRenderInterval, type PacketPlaybackObservation } from './packet-renderer'
+import { RemoteMediaObserver, type MediaObservation, type DecodedAudioPacket } from './media-observer'
 
 export type RoomObservation = Readonly<{
   transport: 'available' | 'unavailable' | 'idle'
@@ -51,6 +51,7 @@ export type RoomObservation = Readonly<{
   mediaTrackResponseId?: string
   mediaObservation?: MediaObservation
   mediaCorrelationMissingReason?: 'response_frame_correlation_unavailable'
+  packetPlaybackObservation?: PacketPlaybackObservation
   cancelConfirmedAtMs?: number
 }>
 
@@ -95,7 +96,9 @@ export class LiveKitRoomClient {
   private latestResponseId: string | null = null
   private readonly audioGraphs = new Map<string, {
     responseId: string
-    source: MediaStreamAudioSourceNode
+    outputTracker: PacketOutputTracker
+    outputTimer: ReturnType<typeof setInterval>
+    firstPacket?: DecodedAudioPacket
     worklet: AudioWorkletNode
     outputGain: GainNode
     playbackElement: HTMLAudioElement
@@ -104,6 +107,7 @@ export class LiveKitRoomClient {
   private readonly mediaObservers = new Map<string, RemoteMediaObserver>()
   private duplicateTrackFrames = 0
   private readonly playbackStartedResponses = new Set<string>()
+  private readonly firstOutputTimes = new Map<string, number>()
   private readonly playback: PlaybackEvidenceController
   private readonly coreEvents = new CoreEventReceiver()
   private playbackConfirmations: PlaybackConfirmationTracker | null = null
@@ -122,12 +126,7 @@ export class LiveKitRoomClient {
     private readonly receiveScreenRequest: (event: SnapshotRequested) => void = () => undefined,
   ) {
     this.playback = new PlaybackEvidenceController(0, (evidence) => {
-      const context = this.audioContext
-      const firstPlaybackAtMs = context === null || evidence.firstPlaybackFrame === undefined
-        ? undefined
-        : outputFrameTimeMs(
-            evidence.firstPlaybackFrame, context.sampleRate, context.getOutputTimestamp(),
-          )
+      const firstPlaybackAtMs = this.firstOutputTimes.get(evidence.responseId)
       this.observe({
         transport: 'available',
         control: 'available',
@@ -319,6 +318,7 @@ export class LiveKitRoomClient {
             this.playback.setGeneration(frame.generation)
             this.pendingMetadata.length = 0
             this.playbackStartedResponses.clear()
+            this.firstOutputTimes.clear()
             const resetVersion = ++this.audioGraphResetVersion
             const resetTask = this.audioGraphResetTask.then(
               () => this.resetAudioGraphs(resetVersion),
@@ -402,7 +402,15 @@ export class LiveKitRoomClient {
         this.trackResponses.set(key, responseId)
         this.subscribedTracks.set(key, track)
         const observer = new RemoteMediaObserver(track.receiver, track.mediaStreamTrack,
-          (evidence) => this.observeTrackMedia(evidence, responseId))
+          (evidence) => this.observeTrackMedia(evidence, responseId), {
+            packet: packet => {
+              const graph = this.audioGraphs.get(key)
+              if (!this.subscriptions.has(key) || !graph || this.stoppedResponses.has(responseId)) return
+              if (packet.packetIndex === 0) graph.firstPacket = {...packet, pcm: new Float32Array(0)}
+              graph.worklet.port.postMessage({kind: 'pcm', packetIndex: packet.packetIndex,
+                rtpTimestamp: packet.rtpTimestamp, samples: packet.pcm}, [packet.pcm.buffer])
+            }, failed: () => this.failTransport(),
+          })
         this.mediaObservers.set(key, observer)
         void this.attachRenderEvidence(track, key).catch(() => this.failTransport())
       },
@@ -464,6 +472,7 @@ export class LiveKitRoomClient {
         if (this.latestResponseId !== null && this.latestResponseId !== event.response_id) {
           this.stoppedResponses.add(this.latestResponseId)
           this.playback.discardResponse(this.latestResponseId)
+          this.firstOutputTimes.delete(this.latestResponseId)
           for (const graph of this.audioGraphs.values()) {
             if (graph.responseId === this.latestResponseId) this.suspendAudioGraph(graph)
           }
@@ -576,7 +585,7 @@ export class LiveKitRoomClient {
     if (this.audioContext === null) {
       const created = new AudioContext({ sampleRate: 48_000 })
       this.audioContext = created
-      const url = URL.createObjectURL(new Blob([renderWorkletSource], { type: 'text/javascript' }))
+      const url = URL.createObjectURL(new Blob([packetRendererSource], { type: 'text/javascript' }))
       this.workletReady = created.audioWorklet.addModule(url)
         .finally(() => {
           URL.revokeObjectURL(url)
@@ -591,25 +600,42 @@ export class LiveKitRoomClient {
     const generation = this.generation
     await context.resume()
     await workletReady
+    await this.mediaObservers.get(key)?.ready()
     if (!this.subscriptions.has(key) || this.audioContext !== context || this.generation !== generation) return
-    const source = context.createMediaStreamSource(
-      new MediaStream([track.mediaStreamTrack]),
-    )
-    const worklet = new AudioWorkletNode(context, 'render-evidence-processor')
+    const worklet = new AudioWorkletNode(context, 'packet-renderer', {
+      numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1],
+      processorOptions: {paused: this.stoppedResponses.has(responseId) || this.suppressedResponseId !== null},
+    })
     const outputGain = context.createGain()
     outputGain.gain.value = 1
-    worklet.port.onmessage = (event: MessageEvent<{
-      startFrame: number
-      endFrame: number
-      energy: number
-      firstAudibleFrame?: number
-    }>) => {
-      if (
-        this.subscriptions.has(key) && this.generation === generation
-        && this.audioContext === context && !this.audioGraphs.get(key)?.suspended
-      ) {
-        this.playback.recordRenderedInterval({ ...event.data, responseId })
+    const outputTracker = new PacketOutputTracker((interval, atMs, clock) => {
+      const graph = this.audioGraphs.get(key)
+      if (!graph || graph.suspended || this.generation !== generation || this.audioContext !== context) return
+      if (interval.packetIndex === 0 && interval.packetSampleOffset === 0) {
+        if (!graph.firstPacket || graph.firstPacket.rtpTimestamp !== interval.rtpTimestamp) throw new Error('first output packet mismatch')
+        this.firstOutputTimes.set(responseId, atMs)
+        this.observe({transport: 'available', control: 'available', audio: 'available', activeResponseId: responseId,
+          packetPlaybackObservation: {packetIndex: 0, receivedAtMs: graph.firstPacket.receivedAtMs,
+            decodedAtMs: graph.firstPacket.decodedAtMs, firstOutputFrame: interval.startFrame,
+            firstOutputEndFrame: interval.endFrame, firstOutputAtMs: atMs,
+            outputClockContextTime: clock.contextTime, outputClockPerformanceTime: clock.performanceTime,
+            confirmationObservedAtMs: clock.observedAtMs, sampleRate: 48000,
+            outputClockPassed: true, sourcePcmOffsetVerified: false}})
       }
+      this.playback.recordRenderedInterval({...interval, responseId,
+        ...(interval.packetIndex === 0 && interval.packetSampleOffset === 0 ? {firstResponseFrame: interval.startFrame} : {})})
+    })
+    const outputTimer = setInterval(() => {
+      try {outputTracker.poll(context.getOutputTimestamp(), context.sampleRate)}
+      catch {this.failTransport()}
+    }, 5)
+    worklet.port.onmessage = (event: MessageEvent<PacketRenderInterval | {kind: 'empty' | 'error'}>) => {
+      if (!this.subscriptions.has(key) || this.generation !== generation || this.audioContext !== context
+        || this.audioGraphs.get(key)?.suspended) return
+      try {
+        if (event.data.kind === 'rendered') outputTracker.record(event.data)
+        else if (event.data.kind === 'error') this.failTransport()
+      } catch {this.failTransport()}
     }
     const playbackElement = document.createElement('audio')
     playbackElement.autoplay = true
@@ -620,7 +646,9 @@ export class LiveKitRoomClient {
     document.body.append(playbackElement)
     const graph = {
       responseId,
-      source,
+      outputTracker,
+      outputTimer,
+      firstPacket: undefined as DecodedAudioPacket | undefined,
       worklet,
       outputGain,
       playbackElement,
@@ -667,6 +695,7 @@ export class LiveKitRoomClient {
     this.subscribedTracks.clear()
     this.trackResponses.clear()
     this.pendingMetadata.length = 0
+    this.firstOutputTimes.clear()
     this.suppressedResponseId = null
     this.suppressedLastPlayedAudioSequence = 0
     this.pendingPlaybackResponseId = null
@@ -710,14 +739,18 @@ export class LiveKitRoomClient {
   }
 
   private disconnectAudioGraph(graph: {
-    source: MediaStreamAudioSourceNode
+    outputTracker: PacketOutputTracker
+    outputTimer: ReturnType<typeof setInterval>
     worklet: AudioWorkletNode
     outputGain: GainNode
     playbackElement: HTMLAudioElement
     suspended: boolean
   }): void {
+    clearInterval(graph.outputTimer)
+    graph.outputTracker.stop()
+    graph.worklet.port.postMessage({kind: 'stop'})
+    graph.worklet.port.close()
     if (!graph.suspended) {
-      graph.source.disconnect()
       graph.worklet.disconnect()
       graph.outputGain.disconnect()
     }
@@ -726,15 +759,18 @@ export class LiveKitRoomClient {
   }
 
   private suspendAudioGraph(graph: {
-    source: MediaStreamAudioSourceNode
+    outputTracker: PacketOutputTracker
+    outputTimer: ReturnType<typeof setInterval>
     worklet: AudioWorkletNode
     outputGain: GainNode
     playbackElement: HTMLAudioElement
     suspended: boolean
   }): void {
     graph.playbackElement.muted = true
+    clearInterval(graph.outputTimer)
+    graph.outputTracker.stop()
+    graph.worklet.port.postMessage({kind: 'stop'})
     if (graph.suspended) return
-    graph.source.disconnect()
     graph.worklet.disconnect()
     graph.outputGain.disconnect()
     graph.suspended = true
@@ -765,7 +801,6 @@ export class LiveKitRoomClient {
 
   private connectAudioEvidence(
     graph: {
-      source: MediaStreamAudioSourceNode
       worklet: AudioWorkletNode
       outputGain: GainNode
       playbackElement: HTMLAudioElement
@@ -773,7 +808,7 @@ export class LiveKitRoomClient {
     },
     context: AudioContext,
   ): void {
-    graph.source.connect(graph.worklet)
+    graph.worklet.port.postMessage({kind: 'resume'})
     graph.worklet.connect(graph.outputGain)
     graph.outputGain.connect(context.destination)
     graph.suspended = false
