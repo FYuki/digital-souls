@@ -111,7 +111,9 @@ def test_backend_boundary_rejects_calendar_invalid_timestamp() -> None:
         for event in _valid_events("normal-session.json")
         if event["type"] == "screen_snapshot_requested"
     )
-    with pytest.raises(ValueError, match="invalid UTC timestamp"):
+    parser.parse_screen_perception_event(request)
+    # format検証の依存が利用できる環境では、schema側が先に不正な日付を拒否する。
+    with pytest.raises(ValueError, match="invalid UTC timestamp|does not match protocol"):
         parser.parse_screen_perception_event(
             {**request, "requested_at": "2026-02-30T03:00:06Z"}
         )

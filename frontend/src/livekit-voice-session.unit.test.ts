@@ -214,7 +214,10 @@ describe('通常会話UI向けLiveKit音声session', () => {
     await Promise.resolve()
 
     expect(room.stopPlayback).toHaveBeenCalledTimes(1)
-    expect(events.map((event) => event.type)).toContain('playback_stopped')
+    expect(room.stopPlayback).toHaveBeenCalledWith(
+      '50000000-0000-4000-8000-000000000001', 1_010,
+    )
+    await vi.waitFor(() => expect(events.map((event) => event.type)).toContain('playback_stopped'))
     expect(events.map((event) => event.type)).not.toContain('response_cancel_requested')
     expect(controller.snapshot()).toMatchObject({
       response: 'interrupting', playback: 'stopped',

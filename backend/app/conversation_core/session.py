@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable, Coroutine
+from pathlib import Path
+import traceback
+from collections.abc import AsyncIterator, Callable, Coroutine
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from typing import TypeVar
 
@@ -26,10 +29,29 @@ from app.conversation_core.ports import (
 )
 from app.conversation_core.segmentation import JapaneseTextSegmenter, TextSegment
 from app.conversation_core.turn_decision import TurnDecision, classify_turn
+from app.inference.diagnostics import collect_diagnostics
 
 
 TaskResult = TypeVar("TaskResult")
 logger = logging.getLogger(__name__)
+
+
+def _log_unhandled_task_error(task: asyncio.Task[object]) -> None:
+    if task.cancelled():
+        return
+    error = task.exception()
+    if error is None:
+        return
+    # 例外本文・ローカル変数・ユーザー入力を出さず、失敗箇所だけを残す。
+    frames = [
+        f"{Path(frame.f_code.co_filename).name}:{line}:{frame.f_code.co_name}"
+        for frame, line in traceback.walk_tb(error.__traceback__)
+    ][-8:]
+    logger.error(
+        "Core task failed: type=%s errno=%s frames=%s",
+        type(error).__name__, error.errno if isinstance(error, OSError) else None,
+        ";".join(frames),
+    )
 
 
 class TerminalProtocolError(RuntimeError):
@@ -211,6 +233,10 @@ class ConversationCoreSession:
         await self._record_utterance_stage(
             utterance_id, "turn_decision", "completed"
         )
+        if decision == "take_turn":
+            await self._record_utterance_stage(
+                utterance_id, "take_turn_decision", "completed"
+            )
         await self._publish_utterance_delivery(
             CoreEvent(
                 type="turn_decision",
@@ -222,9 +248,6 @@ class ConversationCoreSession:
             )
         )
         if decision == "take_turn":
-            await self._record_utterance_stage(
-                utterance_id, "take_turn_decision", "completed"
-            )
             await self.cancel_response(
                 response_id=interrupted_response_id,
                 reason="barge_in",
@@ -615,6 +638,10 @@ class ConversationCoreSession:
             await self._record_utterance_stage(
                 utterance_id, "turn_decision", "completed"
             )
+            if should_response:
+                await self._record_utterance_stage(
+                    utterance_id, "take_turn_decision", "completed"
+                )
             await self._publish_utterance_delivery(
                 CoreEvent(
                     type="turn_decision",
@@ -626,9 +653,6 @@ class ConversationCoreSession:
                 )
             )
             if should_response:
-                await self._record_utterance_stage(
-                    utterance_id, "take_turn_decision", "completed"
-                )
                 await self.cancel_response(
                     response_id=interrupted_response_id,
                     reason="barge_in",
@@ -732,18 +756,19 @@ class ConversationCoreSession:
         )
         segmenter = JapaneseTextSegmenter()
         try:
-            async for delta in self._llm.generate(response_input):
-                accepted = await self.accept_text_delta(
-                    response_id=response.response_id,
-                    generation=response.generation,
-                    text_sequence=delta.text_sequence,
-                    text=delta.text,
-                    text_range=delta.text_range,
-                )
-                if not accepted:
-                    continue
-                for segment in segmenter.feed(delta.text):
-                    await queue.put(segment)
+            async with self._measure_llm_stage(response):
+                async for delta in self._llm.generate(response_input):
+                    accepted = await self.accept_text_delta(
+                        response_id=response.response_id,
+                        generation=response.generation,
+                        text_sequence=delta.text_sequence,
+                        text=delta.text,
+                        text_range=delta.text_range,
+                    )
+                    if not accepted:
+                        continue
+                    for segment in segmenter.feed(delta.text):
+                        await queue.put(segment)
             for segment in segmenter.finish():
                 await queue.put(segment)
             await queue.put(None)
@@ -780,6 +805,23 @@ class ConversationCoreSession:
             generation=response.generation,
             stage="llm",
         )
+
+    @asynccontextmanager
+    async def _measure_llm_stage(self, response: Response) -> AsyncIterator[None]:
+        with collect_diagnostics() as diagnostics:
+            try:
+                yield
+            finally:
+                for event in diagnostics.finish():
+                    await self._observation.record(StageObservation(
+                        session_id=self.session_id,
+                        response_id=response.response_id,
+                        generation=response.generation,
+                        stage=event.name,
+                        outcome="completed",
+                        timestamp_ns=event.timestamp_ns,
+                        value=event.value,
+                    ))
 
     async def _consume_text_segments(
         self,
@@ -865,14 +907,15 @@ class ConversationCoreSession:
             stage="llm",
         )
         try:
-            async for delta in self._llm.generate(response_input):
-                await self.accept_text_delta(
-                    response_id=response.response_id,
-                    generation=response.generation,
-                    text_sequence=delta.text_sequence,
-                    text=delta.text,
-                    text_range=delta.text_range,
-                )
+            async with self._measure_llm_stage(response):
+                async for delta in self._llm.generate(response_input):
+                    await self.accept_text_delta(
+                        response_id=response.response_id,
+                        generation=response.generation,
+                        text_sequence=delta.text_sequence,
+                        text=delta.text,
+                        text_range=delta.text_range,
+                    )
         except asyncio.CancelledError:
             await self.stage_cancelled(
                 response_id=response.response_id,
@@ -1266,13 +1309,11 @@ class ConversationCoreSession:
     def _forget_stage_task(self, task: asyncio.Task[object]) -> None:
         self._stage_tasks.discard(task)
         self._stage_task_keys.pop(task, None)
-        if not task.cancelled():
-            task.exception()
+        _log_unhandled_task_error(task)
 
     def _forget_effect_task(self, task: asyncio.Task[object]) -> None:
         self._effect_tasks.discard(task)
-        if not task.cancelled():
-            task.exception()
+        _log_unhandled_task_error(task)
 
     def _gated_response(self, response_id: str, generation: int) -> Response | None:
         response = self._responses.get(response_id)

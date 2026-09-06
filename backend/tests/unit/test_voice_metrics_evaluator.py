@@ -238,3 +238,57 @@ def test_vm_target_01_continuity_processing_and_presentation_contracts() -> None
     assert result.continuity_passed is True
     assert result.processing_passed is True
     assert result.presentation_passed is True
+
+
+def _complete_latency_artifacts(metrics):
+    candidate = _artifact(metrics, transport="livekit", cpu_percent=10)
+    baseline = _artifact(metrics, transport="websocket", cpu_percent=10)
+    names = [*metrics.ABSOLUTE_LATENCY_LIMITS_MS, "first_text_delta"]
+    candidates = [metrics.aggregate_metric(
+        name, [metrics.MetricObservation.measured(100)] * 100,
+        start_point=f"{name}_start", end_point=f"{name}_end",
+    ) for name in names]
+    references = [metric for metric in candidates if metric.name in {"ttfa", "first_text_delta"}]
+    return candidate.model_copy(update={"metrics": candidates}), baseline.model_copy(update={"metrics": references})
+
+
+def test_artifact_latency_requires_all_measurements_and_full_trial_count() -> None:
+    metrics = _evaluator()
+    candidate, baseline = _complete_latency_artifacts(metrics)
+    assert metrics.evaluate_artifact(candidate, baseline).passed
+    partial = candidate.model_copy(update={"metrics": candidate.metrics[:1]})
+    result = metrics.evaluate_artifact(partial, baseline)
+    assert not result.passed
+    assert "local_playback_stop:incomplete_measurement" in result.coverage_errors
+    pilot = candidate.model_copy(update={"run_counts": candidate.run_counts.model_copy(update={"measured": 3})})
+    assert not metrics.evaluate_artifact(pilot, baseline).passed
+
+
+def test_partial_p95_does_not_hide_missing_trials_and_reasons() -> None:
+    metrics = _evaluator()
+    candidate, baseline = _complete_latency_artifacts(metrics)
+    metric = metrics.aggregate_metric(
+        "ttfa", [metrics.MetricObservation.measured(100)] * 99
+        + [metrics.MetricObservation.missing("client_playback_not_observed")],
+        start_point="ttfa_start", end_point="ttfa_end",
+    )
+    assert metric.p95 == 100
+    assert metric.rate_denominator == 100
+    assert metric.missing_outcomes == {"client_playback_not_observed": 1}
+    candidate = candidate.model_copy(update={"metrics": [metric, *candidate.metrics[1:]]})
+    assert not metrics.evaluate_artifact(candidate, baseline).passed
+
+
+def test_relative_only_latency_is_checked_and_changed_boundaries_fail_closed() -> None:
+    metrics = _evaluator()
+    candidate, baseline = _complete_latency_artifacts(metrics)
+    candidate = candidate.model_copy(update={"metrics": [
+        *candidate.metrics[:-1], candidate.metrics[-1].model_copy(update={"p95": 151}),
+    ]})
+    result = metrics.evaluate_artifact(candidate, baseline)
+    assert not result.passed
+    assert result.metric_results["first_text_delta"].relative_passed is False
+    candidate = candidate.model_copy(update={"metrics": [
+        *candidate.metrics[:-1], candidate.metrics[-1].model_copy(update={"p95": 100, "start_point": "wrong_clock_boundary"}),
+    ]})
+    assert "first_text_delta:measurement_boundary_mismatch" in metrics.evaluate_artifact(candidate, baseline).coverage_errors

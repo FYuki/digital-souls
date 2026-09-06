@@ -401,3 +401,139 @@ def test_streaming_emits_each_delta_once_and_closes_transport(
 
     assert asyncio.run(consume()) == ["a", "b"]
     assert response.closed is True
+
+
+def test_token_count_uses_generation_context_without_generating_full_reply() -> None:
+    client = MagicMock(spec=httpx.Client)
+    client.post.return_value = _response({
+        "message": {"content": "ok"}, "prompt_eval_count": 99,
+    })
+    adapter = OllamaAdapter(base_url="http://127.0.0.1:11434", http_client=client)
+    request = _text_request()
+    estimate = adapter.estimate_input_tokens(TokenEstimateRequest(
+        messages=request.messages, model_id=request.model_id,
+        options=request.options, max_input_tokens=request.max_input_tokens,
+        timeout_seconds=request.timeout_seconds,
+        context_window_tokens=request.max_input_tokens + request.max_output_tokens,
+    ))
+    estimate_payload = client.post.call_args.kwargs["json"]
+    adapter.generate_text(request)
+    generation_payload = client.post.call_args.kwargs["json"]
+
+    assert estimate.count == 99
+    assert estimate.accuracy is TokenEstimateAccuracy.EXACT
+    assert estimate_payload["messages"] == generation_payload["messages"]
+    assert estimate_payload["model"] == generation_payload["model"]
+    assert estimate_payload["options"] == {"temperature": 0.2, "num_ctx": 8192, "num_predict": 1}
+    assert generation_payload["options"] == {"temperature": 0.2, "num_ctx": 8192, "num_predict": 1024}
+
+
+@pytest.mark.parametrize("context_window", [7168, 0, -1, True])
+def test_token_count_rejects_context_smaller_than_input_budget(context_window: int) -> None:
+    client = MagicMock(spec=httpx.Client)
+    adapter = OllamaAdapter(base_url="http://127.0.0.1:11434", http_client=client)
+    request = _text_request()
+    with pytest.raises(InferenceError) as error:
+        adapter.estimate_input_tokens(TokenEstimateRequest(
+            messages=request.messages, model_id=request.model_id,
+            options=request.options, max_input_tokens=request.max_input_tokens,
+            timeout_seconds=request.timeout_seconds,
+            context_window_tokens=context_window,
+        ))
+    assert error.value.category is InferenceErrorCategory.INVALID_REQUEST
+    client.post.assert_not_called()
+
+
+@pytest.mark.parametrize("thinking", [False, True])
+def test_thinking_option_is_a_top_level_chat_field(thinking: bool) -> None:
+    from dataclasses import replace
+
+    request = replace(_text_request(), options={"temperature": 0.2, "think": thinking})
+    payload = OllamaAdapter._chat_payload(request, stream=True)
+    assert payload["think"] is thinking
+    assert payload["options"] == {"temperature": 0.2, "num_ctx": 8192, "num_predict": 1024}
+    assert "think" not in OllamaAdapter._chat_payload(_text_request(), stream=True)
+    # 構造化出力の既存の思考無効化は維持する。
+    assert OllamaAdapter._chat_payload(request, stream=False, response_schema={"type": "object"})["think"] is False
+
+
+def test_exact_count_cache_checks_model_digest_and_keeps_request_variants_separate() -> None:
+    from dataclasses import replace
+
+    digest = "a" * 64
+    chat_calls = 0
+    def handle(request: httpx.Request) -> httpx.Response:
+        nonlocal chat_calls
+        if request.url.path == "/api/tags":
+            return httpx.Response(200, json={"models": [{"name": "gemma4:e4b", "digest": digest}]})
+        chat_calls += 1
+        return httpx.Response(200, json={"prompt_eval_count": 10 + chat_calls})
+    with httpx.Client(transport=httpx.MockTransport(handle)) as client:
+        adapter = OllamaAdapter(base_url="http://127.0.0.1:11434", http_client=client)
+        request = TokenEstimateRequest(
+            messages=(InferenceMessage("user", "private input"),), model_id="gemma4:e4b",
+            options={}, max_input_tokens=7168, timeout_seconds=3,
+            context_window_tokens=8192, allow_cached_exact_result=True,
+        )
+        first = adapter.estimate_input_tokens(request)
+        repeated = adapter.estimate_input_tokens(request)
+        assert first.count == repeated.count == 11
+        assert first.external_request_count == 3
+        assert repeated.external_request_count == 1
+        assert chat_calls == 1
+        assert "private input" not in repr(adapter._token_counts.__dict__)
+
+        digest = "b" * 64
+        assert adapter.estimate_input_tokens(request).count == 12
+        assert adapter.estimate_input_tokens(replace(request, options={"think": False})).count == 13
+        assert adapter.estimate_input_tokens(replace(request, context_window_tokens=16384)).count == 14
+        assert adapter.estimate_input_tokens(replace(request, messages=(InferenceMessage("user", "changed"),))).count == 15
+        adapter.close()
+        assert adapter.estimate_input_tokens(request).count == 16
+
+
+def test_model_change_during_count_is_not_cached_and_metadata_failure_bypasses_cache() -> None:
+    digest = "a" * 64
+    broken_metadata = False
+    chat_calls = 0
+    def handle(request: httpx.Request) -> httpx.Response:
+        nonlocal digest, chat_calls
+        if request.url.path == "/api/tags":
+            if broken_metadata:
+                return httpx.Response(503)
+            return httpx.Response(200, json={"models": [{"name": "gemma4:e4b", "digest": digest}]})
+        chat_calls += 1
+        digest = "b" * 64
+        return httpx.Response(200, json={"prompt_eval_count": 10 + chat_calls})
+    with httpx.Client(transport=httpx.MockTransport(handle)) as client:
+        adapter = OllamaAdapter(base_url="http://127.0.0.1:11434", http_client=client)
+        request = TokenEstimateRequest(
+            messages=(InferenceMessage("user", "private"),), model_id="gemma4:e4b",
+            options={}, max_input_tokens=7168, timeout_seconds=3,
+            context_window_tokens=8192, allow_cached_exact_result=True,
+        )
+        adapter.estimate_input_tokens(request)
+        digest = "a" * 64
+        adapter.estimate_input_tokens(request)
+        assert chat_calls == 2
+        adapter.estimate_input_tokens(request)
+        assert chat_calls == 3
+        adapter.estimate_input_tokens(request)
+        assert chat_calls == 3
+        broken_metadata = True
+        assert adapter.estimate_input_tokens(request).count == 14
+        assert chat_calls == 4
+
+
+def test_exact_count_cache_is_bounded_and_does_not_share_keys_between_instances() -> None:
+    from app.inference.token_estimate_cache import ExactTokenEstimateCache
+
+    cache = ExactTokenEstimateCache(capacity=2)
+    keys = [cache.key(text) for text in (b"first", b"second", b"third")]
+    assert ExactTokenEstimateCache().key(b"first") != keys[0]
+    cache.put(keys[0], 1)
+    cache.put(keys[1], 2)
+    assert cache.get(keys[0]) == 1
+    cache.put(keys[2], 3)
+    assert cache.get(keys[1]) is None
+    assert cache.get(keys[0]) == 1

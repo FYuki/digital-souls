@@ -194,12 +194,17 @@ class TokenEstimate:
     count: int
     accuracy: TokenEstimateAccuracy
     method: str
+    external_request_count: int | None = None
 
     def __post_init__(self) -> None:
         if type(self.count) is not int or self.count < 0:
             raise ValueError("token estimate count must be a non-negative integer")
         if not self.method.strip():
             raise ValueError("token estimate method must not be blank")
+        if self.external_request_count is not None and (
+            type(self.external_request_count) is not int or self.external_request_count < 0
+        ):
+            raise ValueError("provider request count must be a non-negative integer")
 
 
 @dataclass(frozen=True)
@@ -249,6 +254,9 @@ class TokenEstimateRequest:
     max_input_tokens: int
     timeout_seconds: float
     response_schema: Mapping[str, object] | None = None
+    # token計測の1-token生成でも、本生成と同じrunner容量を選ぶ。
+    context_window_tokens: int | None = None
+    allow_cached_exact_result: bool = False
 
 
 @dataclass(frozen=True)

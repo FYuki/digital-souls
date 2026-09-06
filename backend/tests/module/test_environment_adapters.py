@@ -1474,3 +1474,24 @@ def test_should_stop_voicevox_by_immutable_container_id_when_identity_matches(tm
         ("docker", "inspect", "voicevox_engine"),
         ("docker", "stop", "container-a"),
     ]
+
+
+def test_backend_container_receives_only_named_voice_measurement_settings(tmp_path: Path):
+    from adapters.backend import BackendAdapter
+
+    adapter = BackendAdapter(
+        root_dir=tmp_path, runtime_paths=resolved_runtime_paths(tmp_path),
+        runner=RecordingRunner(),
+    )
+    dependency = dict(resolved_profile()["dependencies"]["backend"], reload=False)
+    trace_path = str(tmp_path / "voice-metrics" / "trace.jsonl")
+    values = adapter._write_compose_environment(  # noqa: SLF001
+        dependency,
+        {"VOICE_MEASUREMENT_KIND": "controlled_baseline",
+         "VOICE_CONTROLLED_TRACE_PATH": trace_path,
+         "VOICE_UNRELATED_SECRET": "must-not-forward"},
+        host="127.0.0.1", port=8000,
+    )
+    assert values["VOICE_MEASUREMENT_KIND"] == "controlled_baseline"
+    assert values["VOICE_CONTROLLED_TRACE_PATH"] == trace_path
+    assert "VOICE_UNRELATED_SECRET" not in values

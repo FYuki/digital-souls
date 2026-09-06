@@ -743,6 +743,7 @@ class _UserAudioCapture:
     pcm: bytearray = field(default_factory=bytearray)
     finalized: bool = False
     finalization_scheduled: bool = False
+    media_tail_elapsed: bool = False
     capacity_exceeded: bool = False
     preview_started: bool = False
 
@@ -766,7 +767,6 @@ class _ConversationCoreBridge:
         self._pending_transcription_bytes = 0
         self._transcription_active = False
         self._microphone_preroll = bytearray()
-        self._interrupt_utterances_by_response: dict[str, str] = {}
         self._control_lock = asyncio.Lock()
 
     def notify(self, payload: bytes) -> None:
@@ -774,14 +774,20 @@ class _ConversationCoreBridge:
         if event["type"] == "speech_started" and self._is_user_event(event):
             utterance_id = str(event["utterance_id"])
             if self._measurement is not None:
+                interrupted_response_id = event.get("response_id")
+                if isinstance(interrupted_response_id, str):
+                    self._measurement.bind_interruption(
+                        utterance_id=utterance_id, response_id=interrupted_response_id,
+                    )
                 self._measurement.record_utterance_event(
                     utterance_id=utterance_id,
                     name="speech_started",
                     stage="vad",
                 )
-            if isinstance(event.get("response_id"), str):
-                self._interrupt_utterances_by_response[str(event["response_id"])] = (
-                    utterance_id
+                self._measurement.record_utterance_event(
+                    utterance_id=utterance_id, name="speech_started_client", stage="vad",
+                    timestamp=event["monotonic_timestamp_ms"],
+                    clock_domain="client_monotonic", unit="millisecond",
                 )
             open_captures = sum(
                 not capture.finalized for capture in self._user_audio_captures
@@ -914,11 +920,11 @@ class _ConversationCoreBridge:
         # audio frameを取りこぼさない短い猶予を置いてからSTT入力を確定する。
         if self._media_tail_seconds > 0:
             await asyncio.sleep(self._media_tail_seconds)
-        if any(
-            capture.utterance_id == utterance_id
-            for capture in self._user_audio_captures
-        ):
-            await self._finalize_user_audio_if_ready()
+        for capture in self._user_audio_captures:
+            if capture.utterance_id == utterance_id:
+                capture.media_tail_elapsed = True
+                await self._finalize_user_audio_if_ready()
+                break
 
     async def _finalize_user_audio_if_ready(self) -> None:
         while self._user_audio_captures:
@@ -930,6 +936,10 @@ class _ConversationCoreBridge:
                     return
                 self._user_audio_captures.popleft()
                 continue
+            # 各発話のtimerが完了するまで、その発話の末尾を確定しない。
+            # 音声のない旧captureは従来どおり後続を妨げず取り除く。
+            if not capture.media_tail_elapsed:
+                return
             utterance_id = capture.utterance_id
             microphone_pcm = bytes(capture.pcm)
             self._user_audio_captures.popleft()
@@ -969,13 +979,6 @@ class _ConversationCoreBridge:
             if event_type == "playback_stopped":
                 # prefix検証や永続化が失敗しても、旧音声をlocal graph再接続後へ残さない。
                 self._stop_audio()
-                utterance_id = self._interrupt_utterances_by_response.get(response_id)
-                if utterance_id is not None and self._measurement is not None:
-                    self._measurement.record_utterance_event(
-                        utterance_id=utterance_id,
-                        name="local_playback_stopped",
-                        stage="playback",
-                    )
             await self._session.confirm_playback(
                 response_id=response_id,
                 last_played_audio_sequence=last_played_audio_sequence,

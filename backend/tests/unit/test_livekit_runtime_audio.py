@@ -2378,3 +2378,48 @@ def test_production_connect_failure_is_compensated_by_bootstrap_owner(
     assert runtime._coordinators == {}
     assert runtime._session_tasks == {}
     assert disconnected == [session_id]
+
+
+def test_production_core_bridge_waits_for_each_utterances_media_tail() -> None:
+    """前の発話の待機完了で、後続発話の遅着音声を打ち切らない。"""
+    production = importlib.import_module("app.livekit_transport.production")
+    scheduled: list[Awaitable[None]] = []
+    requests: list[dict[str, object]] = []
+
+    class RecordingCoreSession:
+        accepting_input = True
+
+        def start_transcription(self, **request: object) -> asyncio.Task[None]:
+            async def record() -> None:
+                requests.append(request)
+            return asyncio.create_task(record())
+
+    bridge = production._ConversationCoreBridge(
+        RecordingCoreSession(), scheduled.append, media_tail_seconds=0,
+    )
+
+    async def exercise() -> None:
+        try:
+            for utterance_id, pcm in (("first", b"first-pcm"), ("second", b"second-pcm")):
+                common = {"speaker": {"role": "user"}, "utterance_id": utterance_id}
+                bridge.notify(json.dumps({**common, "type": "speech_started"}).encode())
+                bridge.receive_microphone(pcm)
+                bridge.notify(json.dumps({**common, "type": "speech_stopped"}).encode())
+            first_tail, second_tail = scheduled[:2]
+            await first_tail
+            await asyncio.sleep(0)
+            # 2つ目のtimerはまだ完了していない。末尾frameを受け付け続ける。
+            assert len(bridge._user_audio_captures) == 1
+            bridge.receive_microphone(b"-late-tail")
+            await second_tail
+            while len(scheduled) > 2:
+                await scheduled.pop(2)
+            await asyncio.sleep(0)
+        finally:
+            for operation in scheduled:
+                operation.close()
+
+    asyncio.run(exercise())
+    assert [request["audio"] for request in requests] == [
+        b"first-pcm", b"second-pcm-late-tail",
+    ]

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from app.conversation_core.models import ResponseState, UtteranceState
 from app.conversation_core.session import ConversationCoreSession
 from app.conversation_core.turn_decision import classify_turn
@@ -27,12 +29,17 @@ def test_classify_turn_limits_backchannel_to_complete_short_reactions() -> None:
     assert classify_turn("うん。") == "backchannel"
     assert classify_turn("うん、うん") == "backchannel"
     assert classify_turn("なるほど") == "backchannel"
+    assert classify_turn("そうなんですね。") == "backchannel"
+    assert classify_turn("そうですね！") == "backchannel"
+    assert classify_turn("そうですね、でも質問があります") == "take_turn"
+    assert classify_turn("そうなんですね、具体例を教えて") == "take_turn"
     assert classify_turn("うん、でも別の質問があります") == "take_turn"
     assert classify_turn("はい、続きを止めて") == "take_turn"
     assert classify_turn("  ") == "indeterminate"
 
 
-def test_backchannel_keeps_active_response_and_is_not_carried_to_next_prompt() -> None:
+@pytest.mark.parametrize("transcript", ["うん", "そうなんですね", "そうですね"])
+def test_backchannel_keeps_active_response_and_is_not_carried_to_next_prompt(transcript: str) -> None:
     async def exercise() -> None:
         delivery = RecordingDelivery()
         session = ConversationCoreSession(
@@ -41,7 +48,7 @@ def test_backchannel_keeps_active_response_and_is_not_carried_to_next_prompt() -
             delivery=delivery,
             persistence=RecordingPersistence(),
             observation=RecordingObservation(),
-            stt=RecordingStt("うん"),
+            stt=RecordingStt(transcript),
             llm=BlockingLlm(),
             tts=RecordingTts(),
         )

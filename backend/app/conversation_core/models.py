@@ -110,3 +110,5 @@ class StageObservation:
     stage: str
     outcome: str
     utterance_id: str | None = None
+    timestamp_ns: int | None = None
+    value: float | None = None

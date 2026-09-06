@@ -21,10 +21,16 @@ class Decision(Enum):
 
 
 class Measurement(Enum):
+    CANCEL_CONFIRMED = "cancel_confirmed"
+    CLIENT_AUDIO_DECODED = "client_audio_decoded"
+    CLIENT_ENCODED_RECEIVED = "client_encoded_received"
+    CLIENT_TRACK_RECEIVED = "client_track_received"
     FIRST_AUDIO_OUT = "first_audio_out"
+    LOCAL_PLAYBACK_STOPPED = "local_playback_stopped"
     PLAYBACK_STARTED = "playback_started"
     RESPONSE_STARTED = "response_started"
     SPEECH_STOPPED = "speech_stopped"
+    TURN_DECISION_RECEIVED = "turn_decision_received"
     UTTERANCE_FINALIZED = "utterance_finalized"
 
 

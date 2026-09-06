@@ -905,3 +905,26 @@ def test_vm_base_01_finalizer_rejects_fixture_or_transcript_mismatch(
             output_path=tmp_path / "artifact.json",
             schema_path=Path("docs/schemas/voice-quality-artifact-v1.schema.json"),
         )
+
+
+@pytest.mark.parametrize("metric,start,end", [
+    ("vad_trailing_boundary", "fixture_speech_end", "utterance_finalized"),
+    ("client_playback_latency", "client_audio_received", "first_playback"),
+])
+def test_mixed_clock_metric_is_missing_without_losing_valid_ttfa(metric, start, end):
+    metrics = _voice_metrics()
+    events = [
+        _event(metrics, event_id="fixture", name="fixture_speech_end", timestamp=1000,
+               clock_domain="client_monotonic", unit="millisecond"),
+        _event(metrics, event_id="playback", name="first_playback", timestamp=1750,
+               clock_domain="client_monotonic", unit="millisecond"),
+        _event(metrics, event_id="server", name=end if start == "fixture_speech_end" else start,
+               timestamp=2000000000),
+    ]
+    metadata, diagnostics = _aggregation_context(metrics)
+    metadata = metadata.model_copy(update={"transport": "livekit"})
+    artifact = metrics.aggregate_events(events, metadata=metadata, diagnostics=diagnostics)
+    catalog = {item.name: item for item in artifact.metrics}
+    assert catalog["ttfa"].p95 == 750
+    assert catalog[metric].status == "missing"
+    assert catalog[metric].missing_outcomes == {"metric_boundary_clock_mismatch": 1}

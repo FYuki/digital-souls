@@ -82,6 +82,10 @@
         "p50": { "type": ["number", "null"] },
         "p95": { "type": ["number", "null"] },
         "not_applicable_reason": { "type": ["string", "null"] },
+        "missing_outcomes": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
         "excluded_outcomes": {
           "type": "object",
           "additionalProperties": { "type": "integer", "minimum": 0 }

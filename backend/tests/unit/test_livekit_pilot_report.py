@@ -1,0 +1,172 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from uuid import uuid4
+
+import pytest
+
+from app.livekit_pilot_report import finalize_livekit_controlled, finalize_livekit_pilot
+
+
+@pytest.fixture
+def pilot_inputs(tmp_path):
+    root = Path(__file__).resolve().parents[3]
+    fixture = json.loads((root / 'frontend/playwright/fixtures/speech.metadata.json').read_text())
+    trials = []
+    events = []
+    for phase in ('warmup', 'measured'):
+        trial = {
+            **{name: str(uuid4()) for name in ('sessionId', 'utteranceId', 'responseId', 'conversationId')},
+            'phase': phase, 'outcome': 'success', 'transcript_matches': True,
+            'fixture_version': fixture['fixture_version'], 'audio_sha256': fixture['audio_sha256'],
+            'initial_state_hash': 'requested-state', 'fixtureStartedAt': 100,
+            'startedAt': 1500, 'fixture_speech_end_client_ms': 1040,
+        }
+        trials.append(trial)
+        for index, name in enumerate(('stt_completed', 'llm_completed', 'tts_pipeline_completed',
+                                      'utterance_finalized', 'first_playback')):
+            client = name == 'first_playback'
+            events.append({
+                'schema_version': '1.0', 'measurement_kind': 'controlled_baseline',
+                'event_id': str(uuid4()), 'character_id': 'miori',
+                'session_id': trial['sessionId'], 'utterance_id': trial['utteranceId'],
+                'response_id': trial['responseId'], 'name': name, 'stage': 'playback' if client else 'stt',
+                'outcome': 'success', 'timestamp': 1500 if client else 1000000000 + index,
+                'clock_domain': 'client_monotonic' if client else 'server_monotonic',
+                'unit': 'millisecond' if client else 'nanosecond',
+            })
+    manifest = {'measurement_scope': 'pilot', 'expected_warmup': 1, 'expected_measured': 1,
+                'fixture': fixture, 'initial_state_hash': 'requested-state', 'trials': trials}
+    profile = {'effectiveProfile': 'integration-voice', 'derivedEnvironment': {'WHISPER_MODEL': 'medium', 'RAG_ENABLED': 'false'}}
+    paths = {name: tmp_path / (name + '.json') for name in ('manifest', 'trace', 'output', 'profile')}
+    paths['profile'].write_text(json.dumps(profile))
+    def run(*, controlled=False):
+        paths['manifest'].write_text(json.dumps(manifest))
+        paths['trace'].write_text('\n'.join(json.dumps(event) for event in events))
+        finalize = finalize_livekit_controlled if controlled else finalize_livekit_pilot
+        finalize(manifest_path=paths['manifest'], trace_path=paths['trace'],
+                              output_path=paths['output'], profile_report_path=paths['profile'],
+                              schema_path=root / 'docs/schemas/voice-quality-artifact-v1.schema.json',
+                              run_id='unit-pilot')
+        return json.loads(paths['output'].read_text())
+    return manifest, events, run
+
+
+def test_pilot_filters_warmup_and_exports_anonymous_valid_artifact(pilot_inputs):
+    manifest, _, run = pilot_inputs
+    artifact = run()
+    assert artifact['run_counts']['measured'] == 1
+    metrics = {item['name']: item for item in artifact['metrics']}
+    assert metrics['ttfa']['p95'] == 460
+    assert metrics['vad_trailing_boundary']['missing_outcomes'] == {'metric_boundary_clock_mismatch': 1}
+    for trial in manifest['trials']:
+        assert trial['sessionId'] not in json.dumps(artifact)
+
+
+@pytest.mark.parametrize('invalid', ['cohort', 'identity', 'failure', 'fixture', 'clock', 'playback'])
+def test_pilot_rejects_invalid_evidence(pilot_inputs, invalid):
+    manifest, events, run = pilot_inputs
+    if invalid == 'cohort':
+        manifest['expected_measured'] = 100
+    elif invalid == 'identity':
+        manifest['trials'][1]['sessionId'] = manifest['trials'][0]['sessionId']
+    elif invalid == 'failure':
+        manifest['trials'][1]['outcome'] = 'failure'
+    elif invalid == 'fixture':
+        manifest['fixture']['audio_sha256'] = 'different'
+    elif invalid == 'clock':
+        events[-1]['clock_domain'] = 'server_monotonic'
+    else:
+        events[-1]['timestamp'] += 5
+    with pytest.raises(ValueError):
+        run()
+
+
+@pytest.fixture
+def controlled_inputs(pilot_inputs):
+    import copy
+    import hashlib
+    from app.memory.persistence.schema import PERSONA_MEMORY_TABLES
+
+    manifest, events, run = pilot_inputs
+    evidence = {
+        'method': 'sqlite_empty_state_and_configuration_v1', 'rag_enabled': False,
+        'row_counts': {name: 0 for name in (*PERSONA_MEMORY_TABLES, 'conversation_turns', 'screen_turn_provenance')},
+        'schema_versions': {'history': 1, 'memory': 2},
+        'configuration_sha256': {'characters/miori/miori.card.json': 'a' * 64,
+                                 'backend/app/memory/memory_policy.json': 'b' * 64},
+    }
+    digest = hashlib.sha256(json.dumps(evidence, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    trial_template = copy.deepcopy(manifest['trials'][1])
+    event_template = copy.deepcopy(events[5:])
+    manifest.update(measurement_scope='controlled', expected_warmup=5, expected_measured=100,
+                    initial_state_hash=digest, trials=[])
+    events.clear()
+    for index in range(105):
+        trial = copy.deepcopy(trial_template)
+        trial.update({name: str(uuid4()) for name in ('sessionId', 'utteranceId', 'responseId', 'conversationId')})
+        trial.update(phase='warmup' if index < 5 else 'measured', initial_state_hash=digest,
+                     initial_state_evidence=copy.deepcopy(evidence), first_playback_method='audio_worklet_output_timestamp',
+                     session_end_confirmed=True,
+                     media_observation_method='rtc_encoded_transform_and_decoded_track_first_response',
+                     trackReceivedAt=50, audioReceivedAt=1400, audioDecodeAt=1410)
+        manifest['trials'].append(trial)
+        for original in event_template:
+            event = {**original, 'event_id': str(uuid4()), 'session_id': trial['sessionId'],
+                     'utterance_id': trial['utteranceId'], 'response_id': trial['responseId']}
+            events.append(event)
+        for name, timestamp in (('client_track_received', 50), ('client_audio_received', 1400), ('client_audio_decoded', 1410)):
+            events.append({**event, 'event_id': str(uuid4()), 'name': name, 'stage': 'transport',
+                           'timestamp': timestamp, 'clock_domain': 'client_monotonic', 'unit': 'millisecond'})
+    return manifest, events, run
+
+
+def test_controlled_report_verifies_all_trials_and_excludes_five_warmups(controlled_inputs):
+    _, _, run = controlled_inputs
+    result = run(controlled=True)
+    assert result['run_counts'] == {'warmup': 5, 'measured': 100, 'success': 100, 'failure': 0, 'excluded': 0}
+    ttfa = next(item for item in result['metrics'] if item['name'] == 'ttfa')
+    assert ttfa['success_count'] == ttfa['trial_count'] == 100
+    assert ttfa['p95'] == 460
+
+
+@pytest.mark.parametrize('invalid', ['missing_state', 'changed_state', 'nonempty_state', 'unknown_success', 'playback_method', 'cleanup', 'wrong_warmup'])
+def test_controlled_report_rejects_incomplete_or_inconsistent_evidence(controlled_inputs, invalid):
+    manifest, _, run = controlled_inputs
+    trial = manifest['trials'][5]
+    if invalid == 'missing_state':
+        del trial['initial_state_evidence']
+    elif invalid == 'changed_state':
+        trial['initial_state_evidence']['configuration_sha256']['characters/miori/miori.card.json'] = 'c' * 64
+    elif invalid == 'nonempty_state':
+        trial['initial_state_evidence']['row_counts']['conversation_turns'] = 1
+    elif invalid == 'unknown_success':
+        del trial['outcome']
+    elif invalid == 'playback_method':
+        trial['first_playback_method'] = 'callback_arrival'
+    elif invalid == 'cleanup':
+        trial['session_end_confirmed'] = False
+    else:
+        manifest['expected_warmup'] = 1
+    with pytest.raises(ValueError):
+        run(controlled=True)
+
+
+@pytest.mark.parametrize('invalid', ['missing_point', 'timestamp_mismatch', 'mixed_clock', 'reversed_order', 'wrong_method'])
+def test_controlled_media_evidence_requires_real_matching_boundaries(controlled_inputs, invalid):
+    manifest, events, run = controlled_inputs
+    trial = manifest['trials'][5]
+    event = next(e for e in events if e['session_id'] == trial['sessionId'] and e['name'] == 'client_audio_decoded')
+    if invalid == 'missing_point':
+        events.remove(event)
+    elif invalid == 'timestamp_mismatch':
+        trial['audioDecodeAt'] = 1440
+    elif invalid == 'mixed_clock':
+        event['clock_domain'] = 'server_monotonic'
+    elif invalid == 'reversed_order':
+        trial['audioDecodeAt'] = event['timestamp'] = 1600
+    else:
+        trial['media_observation_method'] = 'playback_callback_reused'
+    with pytest.raises(ValueError):
+        run(controlled=True)

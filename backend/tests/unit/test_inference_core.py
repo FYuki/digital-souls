@@ -300,6 +300,7 @@ def test_per_call_structured_token_caps_cannot_expand_configured_limits() -> Non
 
     assert adapter.last_estimate_request is not None
     assert adapter.last_estimate_request.max_input_tokens == 1536
+    assert adapter.last_estimate_request.context_window_tokens == 1536 + 1024
     assert adapter.last_structured_request is not None
     assert adapter.last_structured_request.max_input_tokens == 1536
     assert adapter.last_structured_request.max_output_tokens == 64
@@ -482,3 +483,23 @@ def test_registry_declares_fixed_provider_kinds_and_capabilities() -> None:
         not in registry.descriptor("openai-codex").capabilities
     )
     assert registry.descriptor("ollama").kind.value == "local"
+
+
+@pytest.mark.parametrize("thinking", [False, True])
+def test_ollama_target_accepts_explicit_thinking_preference(thinking: bool) -> None:
+    import json
+
+    environment = _environment()
+    environment["INFERENCE_TARGET_CHAT_OPTIONS_JSON"] = json.dumps({"think": thinking})
+    settings = resolve_inference_settings(environment, default_provider_registry())
+    assert settings.target(InferenceTarget.CHAT).options["think"] is thinking
+
+
+@pytest.mark.parametrize("invalid", ["false", 0, 1, None])
+def test_ollama_thinking_preference_rejects_non_boolean_values(invalid: object) -> None:
+    import json
+
+    environment = _environment()
+    environment["INFERENCE_TARGET_CHAT_OPTIONS_JSON"] = json.dumps({"think": invalid})
+    with pytest.raises(ValueError, match="think must be a boolean"):
+        resolve_inference_settings(environment, default_provider_registry())

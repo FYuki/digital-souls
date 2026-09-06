@@ -118,6 +118,8 @@ class FakeAudioContext {
     audioContexts.push(this)
   }
 
+  getOutputTimestamp(): AudioTimestamp { return { contextTime: 1, performanceTime: 1000 } }
+
   async resume(): Promise<void> {}
 
   readonly close = vi.fn((): Promise<void> => {
@@ -208,7 +210,7 @@ describe('LiveKit Room generation synchronization', () => {
   test('世代変更時に前世代の終端応答とactive responseを消去する', async () => {
     const observations: RoomObservation[] = []
     const client = new LiveKitRoomClient((observation) => observations.push(observation))
-    await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
+    await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
     const room = latestRoom()
     emitPrivateFrame(room, authoritativeState(0, [{
       type: 'response_interrupted',
@@ -230,7 +232,7 @@ describe('LiveKit Room generation synchronization', () => {
 
   test('microphone publishとmuteでbrowser音声処理設定を維持する', async () => {
     const client = new LiveKitRoomClient(() => undefined)
-    await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
+    await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
     const room = latestRoom()
 
     await client.publishMicrophone()
@@ -250,7 +252,7 @@ describe('LiveKit Room generation synchronization', () => {
 
   test('VADと共有するmicrophone trackをLiveKitへpublishして明示的に解除する', async () => {
     const client = new LiveKitRoomClient(() => undefined)
-    await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
+    await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
     const room = latestRoom()
     const audioTrack = { kind: 'audio' } as MediaStreamTrack
     const localTrack = { kind: 'audio' }
@@ -269,11 +271,11 @@ describe('LiveKit Room generation synchronization', () => {
 
   test('同一sessionへの明示的な再接続時に状態同期を要求する', async () => {
     const client = new LiveKitRoomClient(() => undefined)
-    await client.connect('ws://127.0.0.1:7880', 'token-1', 'session-id')
+    await client.connect('ws://127.0.0.1:7880', 'token-1', '20000000-0000-4000-8000-000000000001')
     const room = latestRoom()
 
     client.temporaryDisconnect()
-    await client.connect('ws://127.0.0.1:7880', 'token-2', 'session-id')
+    await client.connect('ws://127.0.0.1:7880', 'token-2', '20000000-0000-4000-8000-000000000001')
 
     expect(room.localParticipant.publishData).toHaveBeenCalledTimes(1)
     const [payload, options] = room.localParticipant.publishData.mock.calls[0]
@@ -291,7 +293,7 @@ describe('LiveKit Room generation synchronization', () => {
   test('連続する世代変更では古い音声graph再構築を再開しない', async () => {
     const observations: RoomObservation[] = []
     const client = new LiveKitRoomClient((observation) => observations.push(observation))
-    await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
+    await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
     const room = latestRoom()
     room.emit(
       'trackSubscribed',
@@ -322,7 +324,7 @@ describe('LiveKit Room generation synchronization', () => {
   test('重複trackを二重再生せずunsubscribe後の同一track再購読だけを再接続する', async () => {
     const observations: RoomObservation[] = []
     const client = new LiveKitRoomClient((observation) => observations.push(observation))
-    await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
+    await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
     const room = latestRoom()
     const firstTrack = { kind: 'audio', mediaStreamTrack: { id: 'first' } }
     const replacementTrack = { kind: 'audio', mediaStreamTrack: { id: 'replacement' } }
@@ -354,7 +356,7 @@ describe('LiveKit Room generation synchronization', () => {
   test('audio graph初期化失敗後も再接続したtrackを新しいgraphで再生できる', async () => {
     const observations: RoomObservation[] = []
     const client = new LiveKitRoomClient((observation) => observations.push(observation))
-    await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
+    await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
     const room = latestRoom()
     workletFailures.push(new Error('audio worklet initialization failed'))
 
@@ -396,7 +398,7 @@ describe('LiveKit Room generation synchronization', () => {
       (observation) => observations.push(observation),
       receiveCoreEvent,
     )
-    await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
+    await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
     const room = latestRoom()
     room.emit(
       'trackSubscribed',
@@ -408,7 +410,7 @@ describe('LiveKit Room generation synchronization', () => {
       expect(audioContexts).toHaveLength(1)
       expect(audioContexts[0].sources).toHaveLength(1)
     })
-    expect(audioContexts[0].gains[0].gain.value).toBe(0)
+    expect(audioContexts[0].gains[0].gain.value).toBe(1)
     expect(document.querySelectorAll('audio')).toHaveLength(1)
 
     expect(client.stopPlayback('50000000-0000-4000-8000-000000000001', 100)).toBe(0)
@@ -436,6 +438,16 @@ describe('LiveKit Room generation synchronization', () => {
     })
 
     await vi.waitFor(() => expect(receiveCoreEvent).toHaveBeenCalledTimes(1))
+    const trackEvidence = observations.find((observation) => observation.mediaObservation !== undefined)
+    expect(trackEvidence).toMatchObject({
+      mediaCorrelationMissingReason: 'response_frame_correlation_unavailable',
+    })
+    expect(trackEvidence?.mediaResponseId).toBeUndefined()
+    const sentMeasurements = room.localParticipant.publishData.mock.calls
+      .map(([payload]) => JSON.parse(new TextDecoder().decode(payload)).measurement)
+    expect(sentMeasurements).not.toContain('client_track_received')
+    expect(sentMeasurements).not.toContain('client_encoded_received')
+    expect(sentMeasurements).not.toContain('client_audio_decoded')
     expect(audioContexts).toHaveLength(1)
     expect(document.querySelector('audio')?.muted).toBe(true)
 
@@ -452,7 +464,8 @@ describe('LiveKit Room generation synchronization', () => {
 
     await vi.waitFor(() => {
       expect(audioContexts).toHaveLength(1)
-      expect(document.querySelector('audio')?.muted).toBe(false)
+      expect(document.querySelector('audio')?.muted).toBe(true)
+      expect(audioContexts[0].gains[0].gain.value).toBe(1)
       expect(observations.at(-1)).toMatchObject({ activeAudioGraphs: 1 })
     })
     client.disconnect()
@@ -461,7 +474,7 @@ describe('LiveKit Room generation synchronization', () => {
   test('再接続中のbarge-in観測はtransport unavailableを維持する', async () => {
     const observations: RoomObservation[] = []
     const client = new LiveKitRoomClient((observation) => observations.push(observation))
-    await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
+    await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
     const room = latestRoom()
 
     room.emit('reconnecting')
@@ -483,7 +496,7 @@ describe('LiveKit Room generation synchronization', () => {
       undefined,
       receiveScreenRequest,
     )
-    await client.connect('ws://127.0.0.1:7880', 'token', 'session-id')
+    await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
     const room = latestRoom()
     const event = {
       protocol_version: '1.0',

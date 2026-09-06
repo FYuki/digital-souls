@@ -106,6 +106,8 @@ def _validate_known_options(
             raise ValueError("temperature must be between 0 and 2")
         if key == "top_p" and not 0 <= value <= 1:
             raise ValueError("top_p must be between 0 and 1")
+    if "think" in options and type(options["think"]) is not bool:
+        raise ValueError("think must be a boolean")
     if "seed" in options and type(options["seed"]) is not int:
         raise ValueError("seed must be an integer")
 
@@ -129,7 +131,7 @@ def default_provider_registry() -> ProviderRegistry:
                 capabilities=multimodal_capabilities,
                 validate_options=lambda options: _validate_known_options(
                     options,
-                    allowed=frozenset({"temperature", "top_p", "seed"}),
+                    allowed=frozenset({"temperature", "top_p", "seed", "think"}),
                 ),
             ),
             ProviderDescriptor(

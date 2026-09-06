@@ -123,7 +123,17 @@ async def test_core_reply_prepares_prompt_outside_event_loop_thread(
     from app.conversation_history.service import HistorySession
     from app.model_settings import resolve_model_settings
 
-    prompt = object()
+    from app.prompting import BuiltPrompt, PromptMessage, PromptRole, PromptUsage
+
+    prompt = BuiltPrompt(
+        messages=(PromptMessage(PromptRole.USER, "こんにちは"),),
+        usage=PromptUsage(
+            total=3, character=0, character_lore=0, rag=0, history=0,
+            current_user=3, post_history=0, omitted_character_lore_entries=0,
+            omitted_rag_items=0, omitted_history_exchanges=0,
+        ),
+        character_lore_decisions=(),
+    )
     prepared_thread: int | None = None
     recorded_prompts: list[object] = []
     stream_arguments: list[tuple[object, int, object]] = []

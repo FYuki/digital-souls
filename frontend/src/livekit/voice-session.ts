@@ -41,7 +41,7 @@ export type VoiceSessionRoom = {
   publishMicrophone: (stream: MediaStream) => Promise<void>
   muteMicrophone: () => Promise<void>
   publishControlEvent: (event: VoiceSessionEvent) => Promise<void>
-  stopPlayback: (responseId: string, speechStartedAtMs: number) => number
+  stopPlayback: (responseId: string, speechStartedAtMs?: number) => number
   disconnect: () => void
 }
 
@@ -236,6 +236,13 @@ export class LiveKitVoiceSessionController {
   async speechStarted(utteranceId: string, atMs: number): Promise<void> {
     const room = this.requiredRoom()
     const interruptedResponseId = this.generatingResponseId ?? this.playbackResponseId
+    if (!this.speechStarts.has(utteranceId)) {
+      if (this.speechStarts.size >= 256) {
+        const oldest = this.speechStarts.keys().next().value
+        if (oldest !== undefined) this.speechStarts.delete(oldest)
+      }
+      this.speechStarts.set(utteranceId, { atMs: Math.floor(atMs), responseId: interruptedResponseId })
+    }
     this.input = 'listening'
     this.publishSnapshot()
     await this.publishControlEvent(room, this.event({
@@ -281,6 +288,8 @@ export class LiveKitVoiceSessionController {
     this.playbackLastPlayedSequence = 0
     this.completedPlayback = null
     this.interruptedResponseIds.clear()
+    this.speechStarts.clear()
+    this.interruptingUtterances.clear()
     this.microphoneEnabled = false
     this.input = 'inactive'
     this.response = 'idle'
@@ -369,6 +378,15 @@ export class LiveKitVoiceSessionController {
   }
 
   private receiveRoomCoreEvent(event: VoiceSessionEvent): void {
+    if (event.type === 'turn_decision' && (event.final || event.decision === 'take_turn')) {
+      this.publishInterruptionObservation('turn_decision_received', event.utterance_id, event.response_id)
+    }
+    if (event.type === 'response_cancelled' && event.response_id !== undefined) {
+      this.publishInterruptionObservation(
+        'cancel_confirmed', this.interruptingUtterances.get(event.response_id), event.response_id,
+      )
+      this.interruptingUtterances.delete(event.response_id)
+    }
     if (event.type === 'session_ended') {
       this.terminateTransport('ended')
       this.receiveCoreEvent(event)
@@ -379,7 +397,7 @@ export class LiveKitVoiceSessionController {
       && event.decision === 'take_turn'
       && event.response_id !== undefined
     ) {
-      this.stopInterruptedPlayback(event.response_id)
+      this.stopInterruptedPlayback(event.response_id, event.utterance_id)
       if (event.response_id === this.generatingResponseId) {
         this.response = 'interrupting'
       }
@@ -443,11 +461,31 @@ export class LiveKitVoiceSessionController {
     this.receiveCoreEvent(event)
   }
 
-  private stopInterruptedPlayback(responseId: string): void {
+  private publishInterruptionObservation(
+    measurement: 'turn_decision_received' | 'cancel_confirmed' | 'local_playback_stopped',
+    utteranceId?: string,
+    responseId?: string,
+    atMs = this.dependencies.monotonicMs(),
+  ): void {
+    if (this.room === null || utteranceId === undefined || responseId === undefined) return
+    void this.publishControlEvent(this.room, this.event({
+      type: 'observation', measurement, utterance_id: utteranceId, response_id: responseId,
+      timestamp: Math.floor(atMs),
+      clock_domain: 'client_monotonic', unit: 'millisecond',
+    }))
+  }
+
+  private readonly speechStarts = new Map<string, { atMs: number; responseId: string | null }>()
+  private readonly interruptingUtterances = new Map<string, string>()
+
+  private stopInterruptedPlayback(responseId: string, utteranceId?: string): void {
     const room = this.room
     if (room === null || this.interruptedResponseIds.has(responseId)) return
+    const speech = utteranceId === undefined ? undefined : this.speechStarts.get(utteranceId)
+    const startedAt = speech?.responseId === responseId ? speech.atMs : undefined
+    const lastPlayedAudioSequence = room.stopPlayback(responseId, startedAt)
     const atMs = this.dependencies.monotonicMs()
-    const lastPlayedAudioSequence = room.stopPlayback(responseId, atMs)
+    if (utteranceId !== undefined) this.interruptingUtterances.set(responseId, utteranceId)
     this.playback = 'stopped'
     this.interruptedResponseIds.add(responseId)
     void this.publishControlEvent(room, this.event({
@@ -457,6 +495,7 @@ export class LiveKitVoiceSessionController {
       last_played_audio_sequence: lastPlayedAudioSequence,
       monotonic_timestamp_ms: Math.floor(atMs),
     }))
+    this.publishInterruptionObservation('local_playback_stopped', utteranceId, responseId, atMs)
   }
 
   private terminateTransport(phase: 'ended' | 'error'): void {
@@ -471,6 +510,8 @@ export class LiveKitVoiceSessionController {
     this.playbackLastPlayedSequence = 0
     this.completedPlayback = null
     this.interruptedResponseIds.clear()
+    this.speechStarts.clear()
+    this.interruptingUtterances.clear()
     this.microphoneEnabled = false
     this.input = 'inactive'
     this.response = 'idle'

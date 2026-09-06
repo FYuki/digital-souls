@@ -33,6 +33,7 @@ from app.inference.contracts import (
 )
 from app.inference.errors import InferenceError, InferenceErrorCategory
 from app.inference.images import image_parts, validate_multimodal_messages
+from app.inference.diagnostics import diagnostic, estimate_diagnostics
 from app.inference.observer import (
     InferenceObservation,
     InferenceObserver,
@@ -134,17 +135,24 @@ class InferenceRouter:
         capacity = self._capacity[target]
         request_id = str(uuid4())
         started_at = perf_counter()
-        while not capacity.acquire(blocking=False):
-            await asyncio.sleep(0.01)
+        diagnostic("llm_request_started")
+        acquired = False
         error_category: InferenceErrorCategory | None = None
         try:
+            while not capacity.acquire(blocking=False):
+                await asyncio.sleep(0.01)
+            acquired = True
+            diagnostic("llm_capacity_acquired")
             async for delta in adapter.stream_text(request):
                 if not isinstance(delta, str):
                     raise InferenceError(
                         InferenceErrorCategory.INVALID_RESPONSE,
                         retryable=False,
                 )
+                if delta:
+                    diagnostic("llm_first_token")
                 yield delta
+            diagnostic("llm_stream_completed")
         except asyncio.CancelledError:
             error_category = InferenceErrorCategory.CANCELLED
             raise
@@ -156,10 +164,12 @@ class InferenceRouter:
             )
             raise
         finally:
-            capacity.release()
+            if acquired:
+                capacity.release()
             self._observe(
                 request_id, started_at, caller, target,
                 InferenceCapability.STREAM_TEXT, resolved, error_category,
+                external_request_count=1 if acquired else 0,
             )
 
     def generate_structured(
@@ -335,8 +345,10 @@ class InferenceRouter:
         )
         request_id = str(uuid4())
         started_at = perf_counter()
+        diagnostic("token_estimate_requests", 1)
         try:
-            with self._capacity[target]:
+            with estimate_diagnostics(), self._capacity[target]:
+                diagnostic("token_estimate_queue_ms", (perf_counter() - started_at) * 1000)
                 estimate = adapter.estimate_input_tokens(
                     TokenEstimateRequest(
                         messages=messages,
@@ -347,6 +359,13 @@ class InferenceRouter:
                             resolved.timeout_seconds, timeout_seconds
                         ),
                         response_schema=response_schema,
+                        allow_cached_exact_result=(
+                            caller is InferenceCaller.CHAT and target is InferenceTarget.CHAT
+                            and response_schema is None
+                        ),
+                        context_window_tokens=(
+                            request_input_tokens + (resolved.max_output_tokens or 1)
+                        ),
                     )
                 )
             if estimate.count > request_input_tokens:
@@ -361,10 +380,13 @@ class InferenceRouter:
                 InferenceCapability.ESTIMATE_INPUT_TOKENS, resolved, error,
             )
             raise
+        finally:
+            diagnostic("token_estimate_total_ms", (perf_counter() - started_at) * 1000)
         self._observe(
             request_id, started_at, caller, target,
             InferenceCapability.ESTIMATE_INPUT_TOKENS, resolved, None,
             token_estimate=estimate,
+            external_request_count=estimate.external_request_count,
         )
         return estimate
 

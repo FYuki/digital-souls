@@ -327,7 +327,7 @@
       "properties": {
         "type": { "const": "observation" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
         "session_id": { "$ref": "#/$defs/Identifier" }, "utterance_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" },
-        "measurement": { "type": "string", "enum": ["speech_stopped", "utterance_finalized", "response_started", "first_audio_out", "playback_started"] },
+        "measurement": { "type": "string", "enum": ["speech_stopped", "utterance_finalized", "response_started", "first_audio_out", "playback_started", "client_track_received", "client_encoded_received", "client_audio_decoded", "turn_decision_received", "cancel_confirmed", "local_playback_stopped"] },
         "timestamp": {
           "oneOf": [
             { "$ref": "#/$defs/NonNegativeSafeInteger" },
@@ -339,7 +339,15 @@
       },
       "allOf": [
         {
-          "if": { "properties": { "measurement": { "enum": ["speech_stopped", "playback_started"] } }, "required": ["measurement"] },
+          "if": { "properties": { "measurement": { "enum": ["client_track_received", "client_encoded_received", "client_audio_decoded"] } }, "required": ["measurement"] },
+          "then": { "properties": { "response_id": { "$ref": "#/$defs/Identifier" } }, "required": ["response_id"] }
+        },
+        {
+          "if": { "properties": { "measurement": { "enum": ["turn_decision_received", "cancel_confirmed", "local_playback_stopped"] } }, "required": ["measurement"] },
+          "then": { "properties": { "utterance_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" } }, "required": ["utterance_id", "response_id"] }
+        },
+        {
+          "if": { "properties": { "measurement": { "enum": ["speech_stopped", "playback_started", "client_track_received", "client_encoded_received", "client_audio_decoded", "turn_decision_received", "cancel_confirmed", "local_playback_stopped"] } }, "required": ["measurement"] },
           "then": {
             "properties": {
               "timestamp": { "$ref": "#/$defs/NonNegativeSafeInteger" },

@@ -23,6 +23,8 @@ import {
   type RetryTimer,
 } from './control'
 import { decodePrivateFrame } from './private-contract'
+import { renderWorkletSource, outputFrameTimeMs } from './render-worklet'
+import { RemoteMediaObserver, type MediaObservation } from './media-observer'
 
 export type RoomObservation = Readonly<{
   transport: 'available' | 'unavailable' | 'idle'
@@ -44,6 +46,10 @@ export type RoomObservation = Readonly<{
   activeResponseId?: string
   speechStartedAtMs?: number
   localPlaybackStoppedAtMs?: number
+  firstPlaybackAtMs?: number
+  mediaResponseId?: string
+  mediaObservation?: MediaObservation
+  mediaCorrelationMissingReason?: 'response_frame_correlation_unavailable'
   cancelConfirmedAtMs?: number
 }>
 
@@ -68,27 +74,6 @@ const browserRetryTimer: RetryTimer = {
   cancel: (handle) => clearTimeout(handle),
 }
 
-const workletSource = `
-class RenderEvidenceProcessor extends AudioWorkletProcessor {
-  process(inputs) {
-    const input = inputs[0]
-    const channel = input && input[0]
-    const samples = channel ? channel.length : 0
-    if (samples > 0) {
-      let energy = 0
-      for (const sample of channel) energy += sample * sample
-      this.port.postMessage({
-        startFrame: currentFrame,
-        endFrame: currentFrame + samples,
-        energy,
-      })
-    }
-    return true
-  }
-}
-registerProcessor('render-evidence-processor', RenderEvidenceProcessor)
-`
-
 export class LiveKitRoomClient {
   private room: Room | null = null
   private audioContext: AudioContext | null = null
@@ -102,10 +87,11 @@ export class LiveKitRoomClient {
   private readonly audioGraphs = new Map<string, {
     source: MediaStreamAudioSourceNode
     worklet: AudioWorkletNode
-    silentGain: GainNode
+    outputGain: GainNode
     playbackElement: HTMLAudioElement
     suspended: boolean
   }>()
+  private readonly mediaObservers = new Map<string, RemoteMediaObserver>()
   private duplicateTrackFrames = 0
   private readonly playbackStartedResponses = new Set<string>()
   private readonly playback: PlaybackEvidenceController
@@ -126,6 +112,12 @@ export class LiveKitRoomClient {
     private readonly receiveScreenRequest: (event: SnapshotRequested) => void = () => undefined,
   ) {
     this.playback = new PlaybackEvidenceController(0, (evidence) => {
+      const context = this.audioContext
+      const firstPlaybackAtMs = context === null || evidence.firstPlaybackFrame === undefined
+        ? undefined
+        : outputFrameTimeMs(
+            evidence.firstPlaybackFrame, context.sampleRate, context.getOutputTimestamp(),
+          )
       this.observe({
         transport: 'available',
         control: 'available',
@@ -138,18 +130,19 @@ export class LiveKitRoomClient {
         confirmedSegments: evidence.confirmedSegments,
         unassignedRenderedSamples: evidence.unassignedRenderedSamples,
         activeResponseId: evidence.responseId,
+        ...(firstPlaybackAtMs === undefined ? {} : { firstPlaybackAtMs }),
       })
       void this.publishPlaybackConfirmation(
         evidence.responseId,
         evidence.continuousPrefix,
       ).catch(() => this.failTransport())
       if (
-        evidence.renderedEnergy > 0
+        firstPlaybackAtMs !== undefined
         && evidence.responseId !== ''
         && !this.playbackStartedResponses.has(evidence.responseId)
       ) {
         this.playbackStartedResponses.add(evidence.responseId)
-        void this.publishPlaybackStarted(evidence.responseId).catch(() => {
+        void this.publishPlaybackStarted(evidence.responseId, firstPlaybackAtMs).catch(() => {
           this.failTransport()
         })
       }
@@ -210,7 +203,7 @@ export class LiveKitRoomClient {
     await outbox.enqueue({ event }, payload)
   }
 
-  stopPlayback(responseId: string, speechStartedAtMs: number): number {
+  stopPlayback(responseId: string, speechStartedAtMs?: number): number {
     if (this.suppressedResponseId === responseId) {
       return this.suppressedLastPlayedAudioSequence
     }
@@ -239,7 +232,7 @@ export class LiveKitRoomClient {
       activeAudioGraphs: 0,
       activeResponseId: responseId,
       playedPrefix: lastPlayedAudioSequence - 1,
-      speechStartedAtMs,
+      ...(speechStartedAtMs === undefined ? {} : { speechStartedAtMs }),
       localPlaybackStoppedAtMs: Math.floor(performance.now()),
     })
     return lastPlayedAudioSequence
@@ -384,6 +377,9 @@ export class LiveKitRoomClient {
         }
         this.subscriptions.add(key)
         this.subscribedTracks.set(key, track)
+        const observer = new RemoteMediaObserver(track.receiver, track.mediaStreamTrack,
+          (evidence) => this.observeTrackMedia(evidence))
+        this.mediaObservers.set(key, observer)
         void this.attachRenderEvidence(track, key).catch(() => this.failTransport())
       },
     )
@@ -391,6 +387,8 @@ export class LiveKitRoomClient {
       const key = publication.trackSid
       this.subscriptions.delete(key)
       this.subscribedTracks.delete(key)
+      this.mediaObservers.get(key)?.close()
+      this.mediaObservers.delete(key)
       const graph = this.audioGraphs.get(key)
       if (graph !== undefined) this.disconnectAudioGraph(graph)
       this.audioGraphs.delete(key)
@@ -494,7 +492,21 @@ export class LiveKitRoomClient {
     await outbox.enqueue(confirmation, payload)
   }
 
-  private async publishPlaybackStarted(responseId: string): Promise<void> {
+  private observeTrackMedia(evidence: MediaObservation): void {
+    // 無音中のencoded frameやdecoderのcomfort noiseも含むtrack単位の観測。
+    // 初回応答でもsource PCMとの対応は未確定なので、response_idを付けて送らない。
+    const controlAvailable = this.controlOutbox !== null
+    const audioAvailable = controlAvailable && [...this.audioGraphs.values()].some((graph) => !graph.suspended)
+    this.observe({
+      transport: controlAvailable ? 'available' : 'unavailable',
+      control: controlAvailable ? 'available' : 'unavailable',
+      audio: audioAvailable ? 'available' : 'unavailable',
+      mediaObservation: evidence,
+      mediaCorrelationMissingReason: 'response_frame_correlation_unavailable',
+    })
+  }
+
+  private async publishPlaybackStarted(responseId: string, atMs: number): Promise<void> {
     const sessionId = this.sessionId
     if (sessionId === null) throw new Error('LiveKit Room is not connected')
     await this.publishControlEvent(parseVoiceSessionEvent({
@@ -504,7 +516,7 @@ export class LiveKitRoomClient {
       session_id: sessionId,
       response_id: responseId,
       measurement: 'playback_started',
-      timestamp: Math.floor(performance.now()),
+      timestamp: Math.floor(atMs),
       clock_domain: 'client_monotonic',
       unit: 'millisecond',
     }))
@@ -519,9 +531,9 @@ export class LiveKitRoomClient {
   private async attachRenderEvidence(track: RemoteTrack, key: string): Promise<void> {
     if (!this.subscriptions.has(key)) return
     if (this.audioContext === null) {
-      const created = new AudioContext()
+      const created = new AudioContext({ sampleRate: 48_000 })
       this.audioContext = created
-      const url = URL.createObjectURL(new Blob([workletSource], { type: 'text/javascript' }))
+      const url = URL.createObjectURL(new Blob([renderWorkletSource], { type: 'text/javascript' }))
       this.workletReady = created.audioWorklet.addModule(url)
         .finally(() => {
           URL.revokeObjectURL(url)
@@ -541,27 +553,32 @@ export class LiveKitRoomClient {
       new MediaStream([track.mediaStreamTrack]),
     )
     const worklet = new AudioWorkletNode(context, 'render-evidence-processor')
-    const silentGain = context.createGain()
-    silentGain.gain.value = 0
+    const outputGain = context.createGain()
+    outputGain.gain.value = 1
     worklet.port.onmessage = (event: MessageEvent<{
       startFrame: number
       endFrame: number
       energy: number
+      firstAudibleFrame?: number
     }>) => {
-      if (this.subscriptions.has(key) && this.generation === generation) {
+      if (
+        this.subscriptions.has(key) && this.generation === generation
+        && this.audioContext === context && !this.audioGraphs.get(key)?.suspended
+      ) {
         this.playback.recordRenderedInterval(event.data)
       }
     }
     const playbackElement = document.createElement('audio')
     playbackElement.autoplay = true
     playbackElement.hidden = true
-    playbackElement.muted = this.suppressedResponseId !== null
+    // 要素はWebRTCのmedia処理を維持する。出音はworklet経路だけにする。
+    playbackElement.muted = true
     playbackElement.srcObject = new MediaStream([track.mediaStreamTrack])
     document.body.append(playbackElement)
     const graph = {
       source,
       worklet,
-      silentGain,
+      outputGain,
       playbackElement,
       suspended: this.suppressedResponseId !== null,
     }
@@ -591,6 +608,8 @@ export class LiveKitRoomClient {
 
   private async closeAudioGraph(): Promise<void> {
     this.audioGraphResetVersion += 1
+    for (const observer of this.mediaObservers.values()) observer.close()
+    this.mediaObservers.clear()
     this.subscriptions.clear()
     this.subscribedTracks.clear()
     this.pendingMetadata.length = 0
@@ -639,14 +658,14 @@ export class LiveKitRoomClient {
   private disconnectAudioGraph(graph: {
     source: MediaStreamAudioSourceNode
     worklet: AudioWorkletNode
-    silentGain: GainNode
+    outputGain: GainNode
     playbackElement: HTMLAudioElement
     suspended: boolean
   }): void {
     if (!graph.suspended) {
       graph.source.disconnect()
       graph.worklet.disconnect()
-      graph.silentGain.disconnect()
+      graph.outputGain.disconnect()
     }
     graph.playbackElement.srcObject = null
     graph.playbackElement.remove()
@@ -655,7 +674,7 @@ export class LiveKitRoomClient {
   private suspendAudioGraph(graph: {
     source: MediaStreamAudioSourceNode
     worklet: AudioWorkletNode
-    silentGain: GainNode
+    outputGain: GainNode
     playbackElement: HTMLAudioElement
     suspended: boolean
   }): void {
@@ -663,7 +682,7 @@ export class LiveKitRoomClient {
     if (graph.suspended) return
     graph.source.disconnect()
     graph.worklet.disconnect()
-    graph.silentGain.disconnect()
+    graph.outputGain.disconnect()
     graph.suspended = true
   }
 
@@ -672,7 +691,6 @@ export class LiveKitRoomClient {
     if (context !== null && this.audioGraphs.size > 0) {
       for (const graph of this.audioGraphs.values()) {
         if (graph.suspended) this.connectAudioEvidence(graph, context)
-        graph.playbackElement.muted = false
       }
       this.observe({
         transport: this.room === null ? 'idle' : 'available',
@@ -694,15 +712,15 @@ export class LiveKitRoomClient {
     graph: {
       source: MediaStreamAudioSourceNode
       worklet: AudioWorkletNode
-      silentGain: GainNode
+      outputGain: GainNode
       playbackElement: HTMLAudioElement
       suspended: boolean
     },
     context: AudioContext,
   ): void {
     graph.source.connect(graph.worklet)
-    graph.worklet.connect(graph.silentGain)
-    graph.silentGain.connect(context.destination)
+    graph.worklet.connect(graph.outputGain)
+    graph.outputGain.connect(context.destination)
     graph.suspended = false
   }
 
