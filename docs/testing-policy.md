@@ -88,6 +88,11 @@ CI は単体テスト、結合テスト、モックE2E、型チェック、Front
 
 Issue #135 Goal 1ではremote client、single-flight、capacity超過、timeout、worker再生成、Profile、Compose、deploy／rollbackをfakeまたはCPU不要の自動テストで検証する。RTX 4070 Ti SUPER上のCUDA／VRAM証跡、dev・dogfood同時会話、連続会話品質、WSL再起動復旧はGoal 2の手動受入とし、Goal 1の成功を実GPU受入済みとは扱わない。
 
+Issue `#146`の回帰テストは新規backup pathの検証、検証失敗時の更新停止、既知の汚染manifestの読込、
+保持期限でbackupが削除された世代へのrollback、旧履歴の不変性を一時環境で確認する。
+2026-09-06決定により、#135は残実装のmain取り込み時にcloseし、dogfoodのbackup／restore・
+失敗時rollbackの実機受入は別タスクとして扱う。手順は`infra/dogfood/README.md`に従う。
+
 ## Pull Requestレビュー
 
 Pull RequestではGitHub ActionsのCIに加え、GitHub Appとして導入したCodeRabbitによる自動レビューを実行する。レビュー設定の正本はリポジトリルートの`.coderabbit.yaml`とし、`AGENTS.md`および同設定の`knowledge_base.code_guidelines.filePatterns`に登録した規約・設計文書をレビュー基準として使用する。

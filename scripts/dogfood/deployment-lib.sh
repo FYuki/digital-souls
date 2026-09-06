@@ -669,6 +669,120 @@ dogfood_check_readiness() {
     --request-timeout-seconds 2
 }
 
+# stdoutは正規化済みpathの1行だけ。過去世代は保持期限による削除を許容する。
+dogfood_normalize_backup_path() {
+  python3 - "$DOGFOOD_BACKUP_DIR" "$1" "$2" <<'PYTHON'
+import json
+import re
+import sys
+from pathlib import Path
+
+
+def reject():
+    print("ERROR: backup pathまたはlegacy backupIdの形式が不正です", file=sys.stderr)
+    raise SystemExit(2)
+
+
+def unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            reject()
+        result[key] = value
+    return result
+
+
+def nonnegative_integer(value):
+    return type(value) is int and value >= 0
+
+
+def verification_report(report):
+    if not isinstance(report, dict) or report.get("status") != "ok":
+        return False
+    if set(report) == {"status", "schemaVersion", "conversationCount"}:
+        return all(
+            nonnegative_integer(report[key])
+            for key in ("schemaVersion", "conversationCount")
+        )
+    if set(report) != {"status", "artifacts"}:
+        return False
+    artifacts = report["artifacts"]
+    if not isinstance(artifacts, list) or len(artifacts) != 2:
+        return False
+    names = set()
+    for artifact in artifacts:
+        if not isinstance(artifact, dict) or set(artifact) != {
+            "filename",
+            "schemaVersion",
+            "recordCount",
+        }:
+            return False
+        name = artifact["filename"]
+        if (
+            not isinstance(name, str)
+            or name not in {"conversation-history.db", "persona-memory.db"}
+            or name in names
+        ):
+            return False
+        names.add(name)
+        if not all(
+            nonnegative_integer(artifact[key])
+            for key in ("schemaVersion", "recordCount")
+        ):
+            return False
+    return True
+
+
+root_value, encoded, mode = sys.argv[1:]
+try:
+    value = json.loads(encoded, object_pairs_hook=unique_object)
+    if mode == "new":
+        if (
+            not isinstance(value, dict)
+            or set(value) != {"status", "backupDirectory"}
+            or value["status"] != "ok"
+        ):
+            reject()
+        value = value["backupDirectory"]
+    elif mode != "stored":
+        reject()
+    if not isinstance(value, str) or not value:
+        reject()
+    if mode == "stored" and "\n" in value:
+        lines = value.split("\n")
+        if len(lines) != 2 or not verification_report(
+            json.loads(lines[0], object_pairs_hook=unique_object)
+        ):
+            reject()
+        value = lines[1]
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        reject()
+    root = Path(root_value)
+    path = Path(value)
+    # traversalや別rootを受け入れず、保存値は絶対pathの正規表記に限定する。
+    if (
+        not root.is_absolute()
+        or not path.is_absolute()
+        or str(path) != value
+        or ".." in path.parts
+    ):
+        reject()
+    if (
+        path.parent != root
+        or re.fullmatch(
+            r"backup-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}-[0-9a-f]{12}", path.name
+        )
+        is None
+    ):
+        reject()
+    if mode == "new" and (not path.is_dir() or path.resolve(strict=True) != path):
+        reject()
+    print(value)
+except (ValueError, OSError, RuntimeError):
+    reject()
+PYTHON
+}
+
 dogfood_backup() {
   local python="$DOGFOOD_CLONE_DIR/backend/.venv/bin/python"
   local cli="$DOGFOOD_CLONE_DIR/environments/environment_cli.py"
@@ -684,20 +798,7 @@ dogfood_backup() {
     --repository-root "$DOGFOOD_CLONE_DIR" \
     --backup-root "$DOGFOOD_BACKUP_DIR" \
     --retention-count "$DOGFOOD_BACKUP_RETENTION_COUNT") || return
-  backup_directory=$(printf '%s\n' "$backup_result" | python3 -c '
-import json
-import sys
-
-payload = json.load(sys.stdin)
-if (
-    set(payload) != {"status", "backupDirectory"}
-    or payload["status"] != "ok"
-    or not isinstance(payload["backupDirectory"], str)
-    or not payload["backupDirectory"]
-):
-    raise SystemExit(1)
-print(payload["backupDirectory"])
-') || return
+  backup_directory=$(dogfood_normalize_backup_path "$backup_result" new) || return
   sudo --preserve-env=DOGFOOD_BACKUP_AUTHENTICATION_KEY \
     -u "$DOGFOOD_SERVICE_USER" env \
     HOME="$DOGFOOD_SERVICE_HOME_DIR" \
@@ -934,12 +1035,18 @@ if value is None and null_policy == "allow":
     raise SystemExit(0)
 if not isinstance(value, str) or not value:
     raise SystemExit(1)
-print(value)
+print(json.dumps(value) if field == "backupId" else value)
 PYTHON
 }
 
 dogfood_manifest_field() {
-  _dogfood_manifest_string_field "$1" "$2" reject
+  local value
+  value=$(_dogfood_manifest_string_field "$1" "$2" reject) || return
+  if [ "$2" = backupId ]; then
+    dogfood_normalize_backup_path "$value" stored
+  else
+    printf '%s\n' "$value"
+  fi
 }
 
 dogfood_manifest_nullable_commit_field() {
