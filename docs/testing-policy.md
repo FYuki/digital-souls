@@ -20,6 +20,7 @@ provenance、Memory Formation除外を検証する。`frontend/e2e/screen-percep
 共有ON、文脈参照、明示参照、OFF、再読込、monitor／window／browser surface、静止windowでframe callbackが来ない場合の現在frameフォールバックを合成MediaStreamとbrowser内Backendで検証するが、標準picker、
 OSが供給する実フレーム、Chrome／Edge差、実Vision品質の代用にはしない。実機と実モデルの完了条件は
 [`screen-perception-browser-acceptance.md`](screen-perception-browser-acceptance.md)に従う。
+`frontend/integration/text/screen-perception.spec.ts`は合成browser streamを起点に、実Backendのsession・画像受付、実Ollama Vision、実Chat、会話履歴までを通す。標準pickerとOS frameだけはこの統合試験でもmockのため、Windows実機確認を省略しない。
 
 ## dogfood環境との分離
 
