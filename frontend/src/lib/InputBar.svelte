@@ -1,9 +1,13 @@
 <script lang="ts">
-  export let onSend: (message: string) => void
+  export let onSend: (message: string, screenReference?: boolean) => void
   export let disabled = false
   export let characterName = '光織'
+  export let screenReferenceAvailable = false
 
   let text = ''
+  let screenReference = false
+
+  $: if (!screenReferenceAvailable) screenReference = false
 
   const submit = () => {
     const message = text.trim()
@@ -12,8 +16,10 @@
       return
     }
 
-    onSend(message)
+    if (screenReference) onSend(message, true)
+    else onSend(message)
     text = ''
+    screenReference = false
   }
 
   const submitOnEnter = (event: KeyboardEvent) => {
@@ -27,6 +33,14 @@
 </script>
 
 <form class="input-bar" on:submit|preventDefault={submit}>
+  <label class="screen-reference">
+    <input
+      type="checkbox"
+      bind:checked={screenReference}
+      disabled={disabled || !screenReferenceAvailable}
+    />
+    現在の画面を参照
+  </label>
   <input
     bind:value={text}
     disabled={disabled}
@@ -46,7 +60,18 @@
     background: #15111d;
   }
 
-  input {
+  .screen-reference {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    color: #d9d1df;
+    font-size: 0.82rem;
+  }
+
+  .screen-reference input { flex: 0 0 auto; }
+
+  input:not([type='checkbox']) {
     flex: 1;
     min-width: 0;
     padding: 12px 14px;
@@ -56,7 +81,7 @@
     background: #100d17;
   }
 
-  input:focus {
+  input:not([type='checkbox']):focus {
     outline: 3px solid rgba(240, 163, 193, 0.2);
     border-color: #d98bac;
   }

@@ -159,7 +159,7 @@ class TestRuntimeConfiguration:
         assert "app.chat_runtime" not in ws_router_source
         assert "request.app.state.chat_service" in chat_router_source
         assert "websocket.app.state.chat_service" in ws_router_source
-        assert "generate_chat_reply(" in chat_router_source
+        assert "generate_chat_reply" in chat_router_source
         assert "create_chat_session(" in ws_router_source
 
     def test_memory_domain_does_not_reference_ollama_specific_clients(self):

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digital-souls.local/contracts/perception/screen/screen-grounding-observation.schema.json",
+  "title": "ScreenGroundingObservation",
+  "description": "現在の質問に関係する画面内対象と根拠だけを返すCore画面domainの一時観測。Core管理metadataは含めない。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["target_status", "candidates", "unreadable_reasons", "uncertainty"],
+  "properties": {
+    "target_status": {
+      "type": "string",
+      "enum": ["identified", "multiple_candidates", "not_found", "unreadable"]
+    },
+    "candidates": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "location", "recognized_content", "evidence", "limitations"],
+        "properties": {
+          "label": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "location": {
+            "type": "string",
+            "enum": [
+              "top_left", "top", "top_right",
+              "left", "center", "right",
+              "bottom_left", "bottom", "bottom_right",
+              "full_screen", "unknown"
+            ]
+          },
+          "recognized_content": { "type": "string", "maxLength": 4000 },
+          "evidence": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "limitations": {
+            "type": "array",
+            "maxItems": 8,
+            "items": { "type": "string", "minLength": 1, "maxLength": 300 }
+          }
+        }
+      }
+    },
+    "unreadable_reasons": {
+      "type": "array",
+      "maxItems": 8,
+      "items": { "type": "string", "minLength": 1, "maxLength": 300 }
+    },
+    "uncertainty": { "type": "string", "minLength": 1, "maxLength": 1000 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "target_status": { "const": "identified" } } },
+      "then": { "properties": { "candidates": { "minItems": 1, "maxItems": 1 } } }
+    },
+    {
+      "if": { "properties": { "target_status": { "const": "multiple_candidates" } } },
+      "then": { "properties": { "candidates": { "minItems": 2 } } }
+    },
+    {
+      "if": {
+        "properties": {
+          "target_status": { "enum": ["not_found", "unreadable"] }
+        }
+      },
+      "then": {
+        "properties": {
+          "candidates": { "maxItems": 0 },
+          "unreadable_reasons": { "minItems": 1 }
+        }
+      }
+    }
+  ]
+}

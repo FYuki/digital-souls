@@ -80,8 +80,10 @@ class InferenceHealth:
             for target, definition in TARGET_DEFINITIONS.items()
         }
 
-    def record_success(self, target: InferenceTarget) -> None:
-        self._record(target, InferenceTargetState.READY, None, verified=True)
+    def record_success(
+        self, target: InferenceTarget, *, verified: bool = True
+    ) -> None:
+        self._record(target, InferenceTargetState.READY, None, verified=verified)
 
     def record_failure(
         self,

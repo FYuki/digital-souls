@@ -81,6 +81,7 @@ accountを同時利用しない。将来用に`provider@instance/model`を予約
 | `memory-extraction` | `MEMORY_EXTRACTION` | structured generation、token estimate | degradable |
 | `memory-consolidation` | `MEMORY_CONSOLIDATION` | structured generation、token estimate | degradable |
 | `embedding` | `EMBEDDING` | embedding、token estimate | degradable |
+| `vision` | `VISION` | structured generation、image input、token estimate | optional |
 | `heavy-reasoning` | `HEAVY_REASONING` | text generation、token estimate | optional |
 
 Target Registryが要求Capability、criticality、Callerの失敗時方針を所有する。envから追加、自己申告、
@@ -98,6 +99,7 @@ INFERENCE_TARGET_PRIVACY=ollama/gemma4:e4b
 INFERENCE_TARGET_MEMORY_EXTRACTION=ollama/gemma4:e4b
 INFERENCE_TARGET_MEMORY_CONSOLIDATION=ollama/gemma4:e4b
 INFERENCE_TARGET_EMBEDDING=ollama/nomic-embed-text:latest
+INFERENCE_TARGET_VISION=ollama/gemma4:e4b
 INFERENCE_TARGET_HEAVY_REASONING=openai-codex/<configured-model>
 
 INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS=24576

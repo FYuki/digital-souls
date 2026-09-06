@@ -5,7 +5,7 @@ from typing import Annotated, cast
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import UUID4, BaseModel, Field
 
 from app.livekit_transport.bootstrap import (
     BindingValidationError,
@@ -14,6 +14,7 @@ from app.livekit_transport.bootstrap import (
     BootstrapTimeoutError,
     UnknownSessionError,
 )
+from app.routers.screen_perception import _require_owner
 
 
 SUPPORTED_PROTOCOL_VERSION = "1.0"
@@ -29,6 +30,7 @@ class TokenRequest(BaseModel):
     conversation_id: UUID
     requested_reconnect_grace_ms: Annotated[int, Field(ge=0, le=MAX_RECONNECT_GRACE_MS)]
     session_id: UUID | None = None
+    screen_client_session_id: UUID4 | None = None
 
 
 class TokenResponse(BaseModel):
@@ -69,6 +71,8 @@ async def issue_token(body: TokenRequest, request: Request) -> TokenResponse:
             },
         )
     service, livekit_url = _configured(request)
+    if body.screen_client_session_id is not None:
+        _require_owner(request, body.screen_client_session_id)
     raw = body.model_dump(mode="json", exclude_none=True)
     try:
         result = await service.bootstrap(raw)

@@ -1,0 +1,12 @@
+{
+  "protocol_version": "1.0",
+  "type": "screen_snapshot_requested",
+  "event_id": "12000000-0000-4000-8000-000000000001",
+  "screen_session_id": "42000000-0000-4000-8000-000000000001",
+  "generation": 1,
+  "request_id": "52000000-0000-4000-8000-000000000001",
+  "turn_id": "62000000-0000-4000-8000-000000000001",
+  "source": "explicit_ui",
+  "requested_at": "2026-09-06T03:00:06+09:00",
+  "capture_deadline": "2026-09-06T03:00:11Z"
+}

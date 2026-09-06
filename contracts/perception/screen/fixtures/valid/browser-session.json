@@ -1,0 +1,23 @@
+{
+  "events": [
+    {
+      "protocol_version": "1.0",
+      "type": "screen_session_start_requested",
+      "event_id": "13000000-0000-4000-8000-000000000001",
+      "client_session_id": "23000000-0000-4000-8000-000000000001",
+      "generation": 1,
+      "character_id": "miori",
+      "conversation_id": "33000000-0000-4000-8000-000000000001",
+      "requested_surface": "browser",
+      "actual_surface": "browser",
+      "routing_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "cloud_consent": {
+        "cloud_vision": false,
+        "cloud_derived_chat": false
+      }
+    }
+  ],
+  "expected": {
+    "browser_surface_is_accepted": true
+  }
+}

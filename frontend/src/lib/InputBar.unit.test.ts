@@ -50,4 +50,25 @@ describe('InputBar', () => {
 
     expect(handleSend).not.toHaveBeenCalled()
   })
+
+  test('有効な共有sessionで選んだ現在turnだけに画面参照を付ける', async () => {
+    const handleSend = vi.fn()
+    const view = render(InputBar, {
+      props: { onSend: handleSend, screenReferenceAvailable: true },
+    })
+    const reference = screen.getByRole('checkbox', { name: '現在の画面を参照' })
+    const input = screen.getByRole('textbox')
+    await fireEvent.click(reference)
+    await fireEvent.input(input, { target: { value: 'ここを説明して' } })
+    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
+
+    expect(handleSend).toHaveBeenLastCalledWith('ここを説明して', true)
+    expect((reference as HTMLInputElement).checked).toBe(false)
+
+    await view.rerender({ onSend: handleSend, screenReferenceAvailable: false })
+    expect((reference as HTMLInputElement).disabled).toBe(true)
+    await fireEvent.input(input, { target: { value: '通常の発言' } })
+    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
+    expect(handleSend).toHaveBeenLastCalledWith('通常の発言')
+  })
 })

@@ -23,6 +23,7 @@
   export let onRemoved: (characterId: string, conversationId: string) => void
   export let onRenamed: (characterId: string, conversation: Conversation) => void
   export let onOpenMemory: () => void
+  export let open = true
 
   type DialogCandidate = {
     characterId: string
@@ -189,7 +190,7 @@
 
 <svelte:window on:keydown={handleKeydown} />
 
-<aside class="sidebar" aria-label="スレッド一覧">
+<aside class:closed={!open} class="sidebar" aria-label="スレッド一覧" aria-hidden={!open}>
   <div class="brand">
     <span class="brand-mark" aria-hidden="true">✦</span>
     <div><p class="brand-name">digital-souls</p><p class="brand-note">character conversations</p></div>
@@ -312,6 +313,8 @@
     </section>
   {/if}
 
+  <div class="screen-control-slot"><slot name="screen-controls" /></div>
+
   <nav class="sidebar-bottom" aria-label="サイドバーメニュー">
     <button class:active={state.showingArchived} class="side-action" type="button" disabled={sidebarDisabled} on:click={() => state.showingArchived ? controller.showActive() : void controller.showArchived()}><span aria-hidden="true">▣</span>{state.showingArchived ? '会話履歴に戻る' : 'アーカイブ済み'}</button>
     <button class="side-action" type="button" on:click={() => { showingSettings = !showingSettings }}><span aria-hidden="true">⚙</span>設定</button>
@@ -328,6 +331,7 @@
 
 <style>
   .sidebar { position: relative; z-index: 50; display: flex; width: 292px; min-height: 0; flex: 0 0 292px; flex-direction: column; border-right: 1px solid rgba(255, 255, 255, 0.09); color: #f8f3ff; background: rgba(17, 14, 24, 0.98); box-shadow: 14px 0 40px rgba(0, 0, 0, 0.18); }
+  .sidebar.closed { display: none; }
   .brand { display: grid; grid-template-columns: 36px minmax(0, 1fr) 44px; align-items: center; gap: 10px; padding: 17px 8px 13px 18px; }
   .brand-mark { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid rgba(240, 163, 193, 0.32); border-radius: 11px; color: #ffd5e5; background: linear-gradient(145deg, rgba(240, 163, 193, 0.2), rgba(156, 130, 255, 0.16)); }
   .brand p { margin: 0; }
@@ -382,6 +386,7 @@
   .layout-settings { display: grid; gap: 5px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.09); }
   .layout-settings label { margin-top: 6px; }
   .sidebar-bottom { display: grid; gap: 3px; padding: 10px; border-top: 1px solid rgba(255, 255, 255, 0.09); background: rgba(15, 12, 22, 0.98); }
+  .screen-control-slot { flex: 0 0 auto; max-height: 48dvh; overflow-y: auto; border-top: 1px solid rgba(255, 255, 255, 0.09); }
   .side-action { display: flex; min-height: 44px; align-items: center; gap: 10px; padding: 0 11px; border: 0; border-radius: 10px; color: #bbb3c5; background: transparent; font-size: 0.78rem; }
   .side-action:hover, .side-action.active { color: #fff; background: rgba(255, 255, 255, 0.06); }
   .side-action span { width: 18px; color: #a99dc3; text-align: center; }

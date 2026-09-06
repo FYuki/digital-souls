@@ -24,6 +24,8 @@ const createRealBackendProxy = (origin: string): Record<string, ProxyOptions> =>
   [API_PROXY_PREFIX]: {
     target: origin,
     changeOrigin: true,
+    timeout: 50_000,
+    proxyTimeout: 50_000,
     rewrite: (path: string) => path.replace(/^\/api(?=\/|$)/, ''),
   },
   [WS_PROXY_PREFIX]: {
