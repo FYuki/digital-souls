@@ -87,4 +87,23 @@ describe('PCMで終了境界を測る発話検出', () => {
     expect(events.filter(event => event.type === 'ended')).toHaveLength(1)
   })
 
+  test('長時間の背景音の後に確定する発話はpre-rollで保持できる窓から始める', () => {
+    const { events, frame } = harness()
+    for (let i = 0; i < 2000; i++) frame(0.01, 0.27)
+    for (let i = 0; i < 4; i++) frame(0.1, 0.8)
+    const confirmed = events.filter(event => event.type === 'confirmed')
+    expect(confirmed).toHaveLength(1)
+    expect(confirmed[0].speechStartedAtMs).toBe(confirmed[0].detectedAtMs - 2000)
+    expect(events.filter(event => event.type === 'candidate')).toHaveLength(1)
+  })
+
+  test('確定した長い発話の開始時刻は観測窓が進んでも書き換えない', () => {
+    const { events, frame } = harness()
+    frame(0, 0)
+    for (let i = 0; i < 200; i++) frame(0.1, 0.8)
+    for (let i = 0; i < 7; i++) frame(0, 0)
+    expect(events.filter(event => event.type === 'confirmed')).toHaveLength(1)
+    expect(events.at(-1)).toMatchObject({ type: 'ended', speechStartedAtMs: 96 })
+  })
+
 })

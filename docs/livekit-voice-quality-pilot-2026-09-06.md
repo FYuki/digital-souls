@@ -227,3 +227,19 @@ Frontend単体351件、関連Backend66件が成功した。Svelte／TypeScript�
 レポート集計には、PCM因果境界を保存しても開始時刻＋sample数から末尾時刻を再構成してしまう不整合があった。観測済みの上下限、source sample位置、20ms以下の観測幅、時刻順序、manifestとの一致を検証し、観測した末尾の下限を集計に使うよう修正した。controlledでは未検証の`getUserMedia`完了時刻を正解時計として許可しない。旧入力時計はpilotの履歴解析に限定して残し、凍結済みWebSocket artifactを変更しない。`packet-delivery-01`の既存raw trace／manifestを変更せず、新しいvalidatorでpilot集計が完了することも確認した。応答sampleへの対応がないため、この集計から品質合格とは判定しない。
 
 変更後の検証はFrontend単体360件、レポート検証39件、Svelte／TypeScript、Python lint、Backend型検査225 source filesが成功した。レポート検証には欠測・誤sample・非数・時刻逆転・観測幅超過・旧未相関media方式の拒否を含む。正式100試行、相槌／take-turn、障害復旧、stale提示、dogfoodの受け入れ条件は未完了である。
+
+### 長い背景音の後のVAD開始時刻（2026-09-07）
+
+未確定の音声候補について、PCM活動量と開始時刻が無期限に保持される不具合を修正した。確率側だけを2秒の窓に制限しても、背景音がPCM閾値を超え続けると、その数十秒後の発話が背景音の開始時刻に結び付いていた。未確定候補のPCM活動も同じ2秒の窓へ限定し、確定時点で保持範囲外の開始時刻を使わないようにした。確定済み発話の開始時刻は、その後の窓移動でも変更しない。発話の元時刻をturn判定時刻で上書きする変更ではない。
+
+`measure-utterance-continuous-background.mjs`へ、出力先・背景音の先行秒数・比較対象detectorのsourceファイル指定を追加した。同じ実Silero確率を修正前後へ与え、WAV／モデル／両detectorのhash、背景音seed、先行時間を結果へ残す。既存出力は上書きせず、新規作成に限定した。
+
+20秒の背景音の後に固定発話を重ねる6条件（white noise／hum／pink noise、各2音量）では、修正前の候補開始→確定は20,736〜20,832msだった。修正後は全条件2,000msとなり、背景音だけの区間での確定は0件、発話終了は各1回だった。正解末尾→VAD終了は788〜1,076ms。サーバーでのutterance確定800ms指標とは区間が異なる。結果は`frontend/test-results/vad-quality/utterance-long-background-window-01.json`へ保存した。
+
+固定音声300件と保存済み実Silero確率の再評価は、修正前の`utterance-detector-v2-guarded.json`に対し、検出漏れ・開始遅延・早期終了・分割・終了遅延の全300件が一致した。相槌17/100、take-turn 2/100の検出漏れは残っており、合格扱いにしない。非発声音120件の実Silero診断も、誤確定9件で修正前と同じだった。これらはブラウザの全経路を通す割り込み100試行の代用ではない。
+
+実サービスの`candidate-window-01`は準備1回＋測定3回が成功し、全試行でtranscript一致・応答完了・明示終了を確認した。Frontend単体362件とSvelte／TypeScript検査も成功した。今回の実接続は通常固定発話の回帰確認であり、長い背景音6条件はオフラインの実Silero診断である。応答sourceとfirst playbackの対応が未確定のため、TTFA合格は引き続き未証明である。
+
+### 応答source相関で確認したSDK制約
+
+現在のCharacter AudioTrackは複数応答で共有され、RTP frameへCoreのresponse IDは付いていない。公開SDKの[frame metadata仕様](https://docs.livekit.io/transport/media/frame-metadata/)も映像限定で、音声には未対応と明記している。Pythonの`AudioFrame.userdata`はRTPへ送られるresponse metadataとして使用できない。応答ごとのtrack分離は旧応答と新応答の混入を防ぐ候補だが、track発行後の無音やdecoderのcomfort noiseと、実際の応答PCMの先頭を区別する課題は残る。source相関が確認できるまでは、trackの初回packetや最初の非ゼロsampleを応答開始として採用しない。

@@ -33,7 +33,7 @@ export const utteranceDetectorOptions: UtteranceDetectorOptions = {
 export class UtteranceDetector {
   private candidateStart: number | null = null
   private lastActiveEnd = 0
-  private activeMs = 0
+  private activeFrames: { start: number; end: number }[] = []
   private strongFrames: { end: number; duration: number }[] = []
   private neuralSilenceMs = 0
   private confirmed = false
@@ -46,7 +46,7 @@ export class UtteranceDetector {
   reset(): void {
     this.candidateStart = null
     this.lastActiveEnd = 0
-    this.activeMs = 0
+    this.activeFrames = []
     this.strongFrames = []
     this.neuralSilenceMs = 0
     this.confirmed = false
@@ -62,17 +62,27 @@ export class UtteranceDetector {
       energy += sample * sample
     }
     const active = Math.sqrt(energy / frame.length) >= this.options.minimumRms
+    const evidenceStart = frameEndMs - this.options.evidenceWindowMs
+    // 確定前のPCM活動も確率と同じ窓に限定する。古い背景音の開始時刻を
+    // 後の発話へ引き継ぐと、サーバーのpre-rollに存在しない音声を指してしまう。
+    if (!this.confirmed) {
+      this.activeFrames = this.activeFrames.filter(item => item.end > evidenceStart)
+    }
     if (active) {
       if (this.candidateStart === null) {
         this.candidateStart = Math.max(0, frameEndMs - durationMs)
         this.emit({ type: 'candidate', speechStartedAtMs: this.candidateStart, detectedAtMs: frameEndMs })
       }
       this.lastActiveEnd = frameEndMs
-      this.activeMs += durationMs
+      if (!this.confirmed) {
+        this.activeFrames.push({ start: Math.max(0, frameEndMs - durationMs), end: frameEndMs })
+      }
     }
     if (this.candidateStart === null) return
     // 背景音がPCM閾値を超え続けても、離れた確率ピークを無期限に合算しない。
-    const evidenceStart = frameEndMs - this.options.evidenceWindowMs
+    if (!this.confirmed && this.activeFrames.length > 0) {
+      this.candidateStart = Math.max(this.activeFrames[0].start, evidenceStart)
+    }
     this.strongFrames = this.strongFrames.filter(item => item.end > evidenceStart)
     if (speechProbability >= this.options.strongSpeechProbability) {
       this.strongFrames.push({ end: frameEndMs, duration: durationMs })
@@ -88,9 +98,13 @@ export class UtteranceDetector {
     const ended = frameEndMs - this.lastActiveEnd > this.options.silenceMs
       || (this.confirmed && this.neuralSilenceMs > this.options.neuralSilenceMs)
     // 短い単発の確率上昇を発話へ昇格させない。現行legacyの4 frame確認を保つ。
-    if (!this.confirmed && this.activeMs >= this.options.minimumActiveMs
+    const activeMs = this.activeFrames.reduce((total, item) => (
+      total + item.end - Math.max(item.start, evidenceStart)
+    ), 0)
+    if (!this.confirmed && activeMs >= this.options.minimumActiveMs
       && strongMs >= this.options.minimumStrongMs) {
       this.confirmed = true
+      this.activeFrames = []
       this.emit({ type: 'confirmed', speechStartedAtMs: this.candidateStart, detectedAtMs: frameEndMs })
     }
     if (ended) {
