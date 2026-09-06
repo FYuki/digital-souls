@@ -2689,6 +2689,7 @@ def test_should_reject_unsafe_backup_directory_before_deploy_mutation(
     assert result.returncode != 0
     calls = call_log.read_text()
     assert "backup-verify" not in calls
+    assert "manifest-write" not in calls
     assert "checkout --detach" not in calls
     assert "revision-update" not in calls
     assert "restart" not in calls
