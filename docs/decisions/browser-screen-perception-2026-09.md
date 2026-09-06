@@ -2,7 +2,7 @@
 
 ## 状態
 
-**DRAFT**。Issue #213のcontract実装は完了しているが、Windows 11上のGoogle Chrome／Microsoft Edgeによる実機確認とレビュー受入前である。実機結果を本書へ反映してから`ACTIVE`へ変更する。
+**DRAFT**。Issue #213のcontract実装とWindows 11上のGoogle Chrome／Microsoft Edgeによる実機確認は完了している。レビュー受入後に`ACTIVE`へ変更する。
 
 本ADRはIssue #212の画面知覚にだけ適用する。Inference全般は`inference-provider-foundation-2026-09.md`、音声sessionとLiveKit固有transportの分離は`voice-session-contract-2026-08.md`および`livekit-transport-2026-08.md`、会話履歴と長期記憶は`wave2-memory-formation-retrieval-2026-08.md`を正本とする。本ADRと既存ADRが重なる場合、画面画像と画面由来情報の追加制約だけを本ADRが優先する。
 
@@ -201,10 +201,14 @@ Frontendはraw `DOMException.message`を表示・送信・記録せず、`name`�
 
 `frontend/manual/screen-capture-probe.html`をlocalhostで開き、公開・合成画面だけを使う。手順と記録様式は`docs/screen-perception-browser-acceptance.md`を正本とする。
 
-| 環境 | monitor | window | mismatch拒否 | 最小化／背面 | 共有停止 | 状態 |
-|---|---|---|---|---|---|---|
-| Windows 11 / Chrome | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | ユーザー確認待ち |
-| Windows 11 / Edge | 未実施 | 未実施 | 未実施 | 未実施 | 未実施 | ユーザー確認待ち |
+2026-09-06に利用者が公開・合成画面で実施した。localhost probeへのアクセスだけを確認し、画像、対象名、User-Agentは収集していない。
+
+| 環境 | monitor | window | mismatch／browser拒否 | 背面化／サイズ変更 | 最小化 | 停止／取消し | 状態 |
+|---|---|---|---|---|---|---|---|
+| Windows 11 25H2 / Chrome 152.0.7977.77 | 成功 | 成功 | 想定どおり拒否 | frame継続 | 取得停止 | 成功 | 合格 |
+| Windows 11 25H2 / Edge 152.0.4191.62 | 成功 | 成功 | 想定どおり拒否 | frame継続 | 取得停止 | 成功 | 合格 |
+
+既存共有中に新しいpickerを開いて取消した場合、先に既存共有が解除され、そのままOFFとなった。これは対象変更操作の開始時に旧generationとtrackを失効させる本契約と一致する。最小化時は取得が停止したため、最小化windowの継続取得を保証せず`frame_unavailable`またはtrack終了として扱い、現在画面の画像を再利用しない。
 
 物理monitorの分離、非表示windowの継続frame、混在DPI時の寸法は実測結果だけを記録する。未検証構成は保証しない。
 
