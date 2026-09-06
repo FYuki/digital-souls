@@ -112,6 +112,8 @@ def _failure(error: BaseException) -> MCPFailure:
         failure = _failure(child)
         if failure.category in {"auth", "policy"}:
             return failure
+    if nested:
+        return _failure(nested[0])
     if isinstance(error, MCPError):
         if error.code == -32003:
             return MCPFailure("policy", "required_capability_unsupported")
@@ -135,6 +137,20 @@ def _failure(error: BaseException) -> MCPFailure:
     return MCPFailure("protocol", "invalid_protocol_result")
 
 
+class _ReportingTransport(httpx2.AsyncHTTPTransport):
+    def __init__(self, report: Callable[[Exception], None]) -> None:
+        super().__init__()
+        self._report = report
+
+    async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
+        try:
+            return await super().handle_async_request(request)
+        except httpx2.TransportError as error:
+            # SDKがdispatcherを閉じる前に原因を記録する。HTTP応答は合成しない。
+            self._report(error)
+            raise
+
+
 class ExternalMCPClient:
     def __init__(
         self,
@@ -146,6 +162,8 @@ class ExternalMCPClient:
         self.secrets = secrets or EnvironmentSecrets()
         self.timeout = timeout
         self._client: Client | None = None
+        self._owner: asyncio.Task[None] | None = None
+        self._connection_failure: MCPFailure | None = None
 
     @property
     def connected(self) -> bool:
@@ -153,11 +171,44 @@ class ExternalMCPClient:
 
     @asynccontextmanager
     async def connect(self) -> AsyncIterator[ExternalMCPClient]:
-        if self.connected:
+        if self._owner is not None:
             raise MCPFailure("policy", "already_connected")
+        ready = asyncio.Event()
+        stop = asyncio.Event()
+        self._connection_failure = None
+
+        async def own_session() -> None:
+            # SDKのcancel scopeを専用taskに閉じ込め、Coreへ内部cancelを漏らさない。
+            try:
+                async with self._session():
+                    ready.set()
+                    await stop.wait()
+            except Exception as error:
+                self._connection_failure = _failure(error)
+            finally:
+                ready.set()
+
+        owner = asyncio.create_task(own_session())
+        self._owner = owner
+        try:
+            await ready.wait()
+            if self._connection_failure is not None:
+                raise self._connection_failure
+            yield self
+        finally:
+            stop.set()
+            try:
+                await owner
+            finally:
+                self._owner = None
+
+    def _record_transport_failure(self, error: Exception) -> None:
+        self._connection_failure = _failure(error)
+
+    @asynccontextmanager
+    async def _session(self) -> AsyncIterator[None]:
         _protect_sdk_logs()
         token = _private_io.set(True)
-        body_error: BaseException | None = None
         try:
             async with AsyncExitStack() as stack:
                 c = self.connection.manifest["connection"]
@@ -173,6 +224,9 @@ class ExternalMCPClient:
                     http = await stack.enter_async_context(
                         httpx2.AsyncClient(
                             auth=auth,
+                            transport=_ReportingTransport(
+                                self._record_transport_failure
+                            ),
                             follow_redirects=False,
                             trust_env=False,
                             timeout=self.timeout,
@@ -190,24 +244,21 @@ class ExternalMCPClient:
                 await stack.enter_async_context(client)
                 self._client = client
                 try:
-                    yield self
-                except BaseException as error:
-                    body_error = error
-                    raise
+                    yield
                 finally:
                     self._client = None
         except asyncio.CancelledError:
             raise
         except Exception as error:
-            if body_error is not None:
-                raise body_error
             raise _failure(error) from None
         finally:
             self._client = None
             _private_io.reset(token)
 
     async def _request(self, request: Callable[[Client], Awaitable[Any]]) -> Any:
-        if self._client is None:
+        if self._connection_failure is not None:
+            raise self._connection_failure
+        if self._client is None or self._owner is None:
             raise MCPFailure("unavailable", "not_connected")
         token = _private_io.set(True)
         failures: list[MCPFailure] = []
@@ -219,18 +270,39 @@ class ExternalMCPClient:
                     # SDKのbackground taskを開始する前にも欠落・失効を検出する。
                     try:
                         token_value = await self.secrets.resolve(auth["secret_ref"])
-                        if not token_value or "\r" in token_value or "\n" in token_value:
+                        if (
+                            not token_value
+                            or "\r" in token_value
+                            or "\n" in token_value
+                        ):
                             raise ValueError
                     except Exception:
                         raise MCPFailure("auth", "secret_unavailable") from None
-                result = await request(self._client)
+                pending = asyncio.ensure_future(request(self._client))
+                try:
+                    done, _ = await asyncio.wait(
+                        {pending, self._owner}, return_when=asyncio.FIRST_COMPLETED
+                    )
+                    if self._owner in done:
+                        raise self._connection_failure or MCPFailure(
+                            "transport", "connection_closed"
+                        )
+                    result = await pending
+                finally:
+                    if not pending.done():
+                        pending.cancel()
+                    await asyncio.gather(pending, return_exceptions=True)
                 if failures:
                     raise failures[-1]
                 return result
         except asyncio.CancelledError:
             raise
         except Exception as error:
-            raise (failures[-1] if failures else _failure(error)) from None
+            raise (
+                failures[-1]
+                if failures
+                else self._connection_failure or _failure(error)
+            ) from None
         finally:
             _private_io.reset(token)
             _http_failures.reset(failure_token)

@@ -86,6 +86,8 @@ embedded resource等をnative payloadとして保持する。native payloadは�
 Frontend、LLMへそのまま公開しない。表示・会話統合のsanitizeは#182の責務となる。
 SDKの外部I/O診断は固定文にし、stdio stderrを通常logへ転送しない。SDK外の例外本文も公開しない。
 protocol/auth/tool errorや結果整形の失敗をtransport retryへ変換しない。
+SDKの接続lifecycleは専用taskが所有する。HTTP接続断でSDK内部のcancel scopeが終了しても
+Coreの呼出taskを取り消さず、transport失敗として返す。利用者からのcancelは維持する。
 
 `InputRequiredResult`は`outcome=input_required`と一回限りの`interaction_id`で返す。
 上位は許可・user inputを判断し、`resume(interaction_id, input_responses, loop_id)`へ回答する。

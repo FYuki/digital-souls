@@ -46,7 +46,7 @@ def stdio_connection(tmp_path, *, legacy=False):
 
 
 @contextmanager
-def http_server(auth="none", fault_state=None):
+def http_server(auth="none", fault_state=None, *, with_process=False):
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
@@ -67,7 +67,8 @@ def http_server(auth="none", fault_state=None):
                 time.sleep(0.05)
         else:
             raise AssertionError("test MCP startup timeout")
-        yield f"http://127.0.0.1:{port}/mcp"
+        endpoint = f"http://127.0.0.1:{port}/mcp"
+        yield (endpoint, process) if with_process else endpoint
     finally:
         process.terminate()
         try:
@@ -287,3 +288,51 @@ def test_bearer_is_resolved_per_request_and_invalid_rotation_is_contained(
         asyncio.run(run(endpoint))
     assert "private-invalid-token" not in caplog.text
     assert "private-auth-error" not in caplog.text
+
+
+def test_http_disconnect_does_not_cancel_caller():
+    async def run(endpoint, process):
+        c = Connection.from_manifest(
+            manifest(transport="streamable_http", endpoint=endpoint)
+        )
+        registry = Registry()
+        registry.register(c)
+        gate = ExecutionGate(registry)
+        client = ExternalMCPClient(c, timeout=2)
+        async with client.connect(), gate.attach(c.id, client):
+            loop = gate.begin_loop(CTX)
+            process.terminate()
+            process.wait(timeout=5)
+            result = await gate.invoke(c.id, "native", {"value": 1}, loop)
+            assert result["outcome"] == "failed"
+            assert result["error_category"] == "transport"
+            assert result["retry_count"] == 0
+            # SDK内部のcancel scopeがCoreのtaskを取り消していない。
+            await asyncio.sleep(0)
+            assert asyncio.current_task().cancelling() == 0
+        assert not client.connected
+
+    with http_server(with_process=True) as (endpoint, process):
+        asyncio.run(run(endpoint, process))
+
+
+def test_caller_cancellation_still_propagates(tmp_path):
+    async def run():
+        entered = asyncio.Event()
+        client = ExternalMCPClient(stdio_connection(tmp_path), timeout=2)
+
+        async def use_connection():
+            async with client.connect():
+                entered.set()
+                await asyncio.Event().wait()
+
+        task = asyncio.create_task(use_connection())
+        await asyncio.wait_for(entered.wait(), timeout=5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert not client.connected
+
+    asyncio.run(run())
+    with pytest.raises(ProcessLookupError):
+        os.kill(int((tmp_path / "pid").read_text()), 0)

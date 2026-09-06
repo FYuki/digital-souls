@@ -159,6 +159,14 @@ Core package/DBをtest MCP serverからimportしない。test-owned MCPの成功
 
 第三者/コラボMCPを本番credentialで通常CIへ接続しない。必要な実接続受入は対象Issueで明示し、credentialをfixture/evidenceへ保存しない。
 
+### 外部MCPの独立実装との実接続
+
+`npm run test:integration:mcp`は公開されたFilesystem / Everything Serverに実接続する。
+`RUN_MCP_REAL_SERVICE_TESTS=true`と`MCP_REAL_SERVER_ROOT`を設定して明示実行する。
+通常CIでは実行しない。開始後の依存不足・認証・接続失敗はskipに変換しない。
+再実行手順、固定version、検証範囲と証跡は
+[`external-mcp-integration-2026-09.md`](external-mcp-integration-2026-09.md)を参照する。
+
 ### SDK/version更新
 
 `mcp` package version更新は通常の依存更新として無条件mergeしない。protocol negotiation、Streamable HTTP、stdio、Tools/Resources、MRTR、trust/snapshot境界を#159 conformanceで再確認する。
