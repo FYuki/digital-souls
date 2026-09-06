@@ -280,4 +280,15 @@ Frontend単体351件、関連Backend66件が成功した。Svelte／TypeScript�
 
 失敗した`native-source-buffer-*`、`native-source-render-01`〜`05`も同じローカル結果ディレクトリに保持した。`native-source-render-06`は丸め余裕追加前の成功診断で、最終確認は`07`。時計換算ミス、RTP欠落、誤packet相関、不完全出力、出力時計未通過などを拒否する単体テスト8件が成功した。
 
-通常会話の`RemoteMediaObserver`にはまだ`timeOrigin`のみの換算が残るため、既存のraw packet latencyを有効な応答遅延の証拠へ格上げしない。次の実装では因果的な時計較正に加え、最初の送信packetを欠落なく捕捉する購読準備、上限付きPCM queueの10ms pacing、segment末尾とcodec遅延の対応、RED／loss／再接続時の回復、明示PCM出力とcancelの相関を扱う必要がある。今回の独立decoderは通常再生へ未接続で、source PCM offsetの一致、音質維持、underrun 0件、全cohort受け入れは未検証である。
+`4ea1b4c`時点の通常会話の`RemoteMediaObserver`には`timeOrigin`のみの換算が残っていたため、既存のraw packet latencyを有効な応答遅延の証拠へ格上げしない。次の実装では因果的な時計較正に加え、最初の送信packetを欠落なく捕捉する購読準備、上限付きPCM queueの10ms pacing、segment末尾とcodec遅延の対応、RED／loss／再接続時の回復、明示PCM出力とcancelの相関を扱う必要がある。今回の独立decoderは通常再生へ未接続で、source PCM offsetの一致、音質維持、underrun 0件、全cohort受け入れは未検証である。
+
+
+## 2026-09-07: 通常会話のworker時計較正
+
+通常会話の`RemoteMediaObserver`も、workerの生monotonic時刻と10回の往復messageからoffsetの上下限を求める方式へ変更した。workerの`timeOrigin`は受信・encoded時刻の換算に使用しない。100us時計を前提とした両端各0.2msの丸め余裕を含め、幅1ms以下を記録条件とする。較正前の最初のpacket通知は保留し、1秒以内に較正できない場合や時計が矛盾する場合は`clock_calibration_failed`を残して観測transformを外す。音声frameは較正を待たずに通過する。
+
+`firstPacketReceivedAtBoundsMs`、`firstEncodedFrameAtBoundsMs`、`workerClockOffsetBoundsMs`と`workerClockMethod: causal_message_bounds`をraw evidenceへ記録する。既存のscalar受信時刻には下限を使い、受信→配送の差分を小さく見積もらない。source受信時刻と同じpacketの配送時刻の照合は引き続きSSRC＋RTP timestampで行い、配送APIのepoch時刻が受信前・現在より未来なら欠測とする。配送時刻はdecodeしたPCM先頭との相関を証明する値ではない。
+
+実会話pilot`causal-media-clock-01`の準備1回＋測定3回はtranscript一致、応答完了、明示終了が全件成功した。全4回でworker較正・packet受信・同一packet配送を観測し、較正幅は約0.4msだった。測定3回の受信下限→配送は約26.0ms、26.4ms、24.3ms。標準native bufferの最初のpacketには入力前の無音が含まれるため、全試行の`media_observation_method`は`unavailable`を維持し、これらを応答TTFAの合格根拠にしない。
+
+Frontend単体テスト375件と型検査が成功した。後処理を統一した最終変更後にも、対象の時計・media observerテスト23件が成功した。実測結果は`frontend/test-results/livekit-quality/runs/causal-media-clock-01/`に保持する。

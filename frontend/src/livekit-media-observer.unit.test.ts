@@ -5,7 +5,7 @@ import { encodedObserverWorkerSource, RemoteMediaObserver, type MediaObservation
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 
 describe('受信とdecodeの独立観測', () => {
-  test.each([true, false])('encoded frameを変更せず通し、worker clockをwindow clockへ写す（metadata=%s）', async metadataAvailable => {
+  test.each([true, false])('encoded frameを変更せず通し、epoch換算なしでworkerの生時刻を通知する（metadata=%s）', async metadataAvailable => {
     const frames = [{ data: new Uint8Array([1, 2, 3]).buffer, getMetadata: () => {
       if (!metadataAvailable) throw new Error('metadata unavailable')
       return { receiveTime: 11, rtpTimestamp: 9, synchronizationSource: 7 }
@@ -16,7 +16,7 @@ describe('受信とdecodeの独立観測', () => {
       postMessage: (value) => reported.push(value),
     }
     new Function('self', 'performance', 'TransformStream', encodedObserverWorkerSource)(
-      worker, { timeOrigin: 2000, now: () => 17 }, TransformStream,
+      worker, { get timeOrigin() { throw new Error('epoch clock must not be read') }, now: () => 17 }, TransformStream,
     )
     let completed!: () => void
     const done = new Promise<void>((resolve) => { completed = resolve })
@@ -31,8 +31,8 @@ describe('受信とdecodeの独立観測', () => {
     await done
     expect(delivered[0]).toBe(frames[0])
     expect(delivered[1]).toBe(frames[1])
-    expect(reported).toEqual([{ kind: 'encoded', atMs: 1017, ...(metadataAvailable
-      ? { packet: { receivedAtMs: 1011, rtpTimestamp: 9, source: 7 } } : {}) }])
+    expect(reported).toEqual([{ kind: 'encoded', workerAtMs: 17, ...(metadataAvailable
+      ? { packet: { receivedAtWorkerMs: 11, rtpTimestamp: 9, source: 7 } } : {}) }])
   })
 
   test('未対応APIは欠測理由を返し、時刻を捏造しない', () => {
@@ -91,6 +91,7 @@ test('encoded観測の失敗時にtransformを外し、元の受信経路へ戻�
   vi.stubGlobal('Worker', class {
     onmessage?: (event: { data: { kind: string } }) => void
     terminate = terminate
+    postMessage = vi.fn()
     constructor() { worker = this }
   })
   vi.stubGlobal('RTCRtpScriptTransform', class {})
@@ -119,11 +120,12 @@ test('既存のtransformを上書きせず、欠測理由を明示する', () =>
 
 
 type SyncSource = { source: number; rtpTimestamp: number; timestamp: number }
-type PacketMessage = { kind: string; atMs: number; packet?: { source: number; rtpTimestamp: number; receivedAtMs: number } }
-const packetObserver = (initial: SyncSource[] = []) => {
+type PacketMessage = { kind: string; workerAtMs?: number; sequence?: number; packet?: { source: number; rtpTimestamp: number; receivedAtWorkerMs: number } }
+const packetObserver = (initial: SyncSource[] = [], autoClock = true) => {
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] })
   let now = 300
   let sources = initial
+  const clockRequests: {kind: string; sequence: number}[] = []
   let worker!: { onmessage?: (event: { data: PacketMessage }) => void }
   const originalUrl = URL
   vi.stubGlobal('performance', { timeOrigin: 1000, now: () => now })
@@ -134,6 +136,10 @@ const packetObserver = (initial: SyncSource[] = []) => {
   vi.stubGlobal('Worker', class {
     onmessage?: (event: { data: PacketMessage }) => void
     terminate = vi.fn()
+    postMessage(message: {kind: string; sequence: number}) {
+      clockRequests.push(message)
+      if (autoClock) this.onmessage?.({data: {kind: 'clock', sequence: message.sequence, workerAtMs: now}})
+    }
     constructor() { worker = this }
   })
   vi.stubGlobal('RTCRtpScriptTransform', class {})
@@ -141,9 +147,14 @@ const packetObserver = (initial: SyncSource[] = []) => {
   const receiver = { transform: null, getSynchronizationSources: () => sources } as unknown as RTCRtpReceiver
   const observer = new RemoteMediaObserver(receiver, {} as MediaStreamTrack, () => undefined)
   const send = (rtpTimestamp: number, source: number, receivedAtMs = 100) => {
-    worker.onmessage?.({ data: { kind: 'encoded', atMs: now, packet: { rtpTimestamp, source, receivedAtMs } } })
+    worker.onmessage?.({ data: { kind: 'encoded', workerAtMs: now, packet: { rtpTimestamp, source, receivedAtWorkerMs: receivedAtMs } } })
   }
-  return { observer, send, setSources: (next: SyncSource[]) => { sources = next },
+  return { observer, send,
+    calibrate: () => {
+      for (let index = 0; index < 10; index++) {
+        worker.onmessage?.({data: {kind: 'clock', sequence: clockRequests[index].sequence, workerAtMs: now}})
+      }
+    }, setSources: (next: SyncSource[]) => { sources = next },
     advance: (ms: number) => { now += ms; vi.advanceTimersByTime(ms) } }
 }
 
@@ -152,7 +163,7 @@ describe('同一RTP frameの受信とトラック配送', () => {
     const p = packetObserver([{ source: 7, rtpTimestamp: 9, timestamp: 1200 }])
     p.setSources([{ source: 7, rtpTimestamp: 10, timestamp: 1210 }]); p.advance(2)
     p.send(9, 7)
-    expect(p.observer.snapshot()).toMatchObject({ firstPacketReceivedAtMs: 100, firstPacketDeliveredAtMs: 200 })
+    expect(p.observer.snapshot()).toMatchObject({ firstPacketReceivedAtMs: 99.8, firstPacketDeliveredAtMs: 200 })
     expect(p.observer.snapshot().packetDeliveryMissingReason).toBeUndefined()
     expect(vi.getTimerCount()).toBe(0)
     p.observer.close()
@@ -164,7 +175,7 @@ describe('同一RTP frameの受信とトラック配送', () => {
     expect(p.observer.snapshot().firstPacketDeliveredAtMs).toBeUndefined()
     p.advance(2000)
     expect(p.observer.snapshot().packetDeliveryMissingReason).toBe('matching_packet_not_observed')
-    expect(p.observer.snapshot().firstPacketReceivedAtMs).toBe(100)
+    expect(p.observer.snapshot().firstPacketReceivedAtMs).toBe(99.8)
     p.observer.close()
   })
 
@@ -189,7 +200,7 @@ describe('同一RTP frameの受信とトラック配送', () => {
     p.advance(2500)
     p.setSources([{ source: 7, rtpTimestamp: 9, timestamp: 3780 }])
     p.send(9, 7, 2770)
-    expect(p.observer.snapshot()).toMatchObject({ firstPacketReceivedAtMs: 2770, firstPacketDeliveredAtMs: 2780 })
+    expect(p.observer.snapshot()).toMatchObject({ firstPacketReceivedAtMs: 2769.8, firstPacketDeliveredAtMs: 2780 })
     expect(p.observer.snapshot().packetDeliveryMissingReason).toBeUndefined()
     p.observer.close()
   })
@@ -213,5 +224,33 @@ describe('同一RTP frameの受信とトラック配送', () => {
     p.setSources([{ source: 7, rtpTimestamp: 9, timestamp: 1200 }]); p.send(9, 7); p.advance(2000)
     expect(p.observer.snapshot()).toEqual(closed)
     expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
+
+describe('worker時計の較正と計測待ち', () => {
+  test('較正前のpacketを保留し、較正後に受信時刻の上下限を記録する', () => {
+    const p = packetObserver([{source: 7, rtpTimestamp: 9, timestamp: 1200}], false)
+    p.send(9, 7)
+    expect(p.observer.snapshot().firstPacketReceivedAtMs).toBeUndefined()
+    p.calibrate()
+    expect(p.observer.snapshot()).toMatchObject({
+      workerClockMethod: 'causal_message_bounds',
+      workerClockOffsetBoundsMs: {lowerMs: -0.2, upperMs: 0.2},
+      firstPacketReceivedAtBoundsMs: {lowerMs: 99.8, upperMs: 100.2},
+      firstPacketReceivedAtMs: 99.8, firstPacketDeliveredAtMs: 200,
+    })
+    expect(vi.getTimerCount()).toBe(0)
+    p.observer.close()
+  })
+
+  test('較正timeoutで受信時刻を捏造せず、終了後の通知を無視する', () => {
+    const p = packetObserver([], false)
+    p.send(9, 7)
+    p.advance(1000)
+    expect(p.observer.snapshot().encodedMissingReason).toBe('clock_calibration_failed')
+    expect(p.observer.snapshot().firstPacketReceivedAtMs).toBeUndefined()
+    expect(vi.getTimerCount()).toBe(0)
+    p.observer.close()
   })
 })

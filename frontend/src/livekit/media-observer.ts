@@ -1,28 +1,34 @@
-// encoded frameはdepacketizerの後・decoderの前で、そのまま通過させる。
-// workerとwindowのtimeOrigin差を補正し、通知配送の待ち時間を受信時刻へ加えない。
+import { WorkerClockCalibration, type ClockBounds } from './worker-clock'
+
+// encoded frameは変更せず通す。workerの生monotonic時刻だけを通知し、main側で較正する。
 export const encodedObserverWorkerSource = `
+self.onmessage = (event) => {
+  if (event.data.kind === 'clock' && Number.isInteger(event.data.sequence)) {
+    self.postMessage({ kind: 'clock', sequence: event.data.sequence, workerAtMs: performance.now() })
+  }
+}
 self.onrtctransform = (event) => {
   const transformer = event.transformer
   let reported = false
   const observer = new TransformStream({
     transform(frame, controller) {
-      const atMs = performance.timeOrigin + performance.now() - transformer.options.windowTimeOrigin
+      const workerAtMs = performance.now()
       let packet
       if (!reported) {
         try {
           const metadata = frame.getMetadata()
-          const receivedAtMs = performance.timeOrigin + metadata.receiveTime - transformer.options.windowTimeOrigin
+          const receivedAtWorkerMs = metadata.receiveTime
           const u32 = value => Number.isInteger(value) && value >= 0 && value <= 0xffffffff
           if (u32(metadata.rtpTimestamp) && u32(metadata.synchronizationSource)
-            && Number.isFinite(receivedAtMs) && receivedAtMs >= 0) {
-            packet = { rtpTimestamp: metadata.rtpTimestamp, source: metadata.synchronizationSource, receivedAtMs }
+            && Number.isFinite(receivedAtWorkerMs) && receivedAtWorkerMs >= 0) {
+            packet = { rtpTimestamp: metadata.rtpTimestamp, source: metadata.synchronizationSource, receivedAtWorkerMs }
           }
         } catch { /* 観測APIの失敗で音声frameを破棄しない。 */ }
       }
       controller.enqueue(frame)
       if (!reported) {
         reported = true
-        self.postMessage({ kind: 'encoded', atMs, ...(packet ? { packet } : {}) })
+        self.postMessage({ kind: 'encoded', workerAtMs, ...(packet ? { packet } : {}) })
       }
     },
   })
@@ -34,17 +40,24 @@ self.onrtctransform = (event) => {
 
 export type MediaObservation = Readonly<{
   trackReceivedAtMs: number
+  // scalarは上下限の下限。packet受信→配送の差分を過小評価しない。
   firstEncodedFrameAtMs?: number
+  firstEncodedFrameAtBoundsMs?: ClockBounds
+  firstPacketReceivedAtBoundsMs?: ClockBounds
+  workerClockOffsetBoundsMs?: ClockBounds
+  workerClockMethod?: 'causal_message_bounds'
   // comfort noiseも含む。RTP packetやresponseに相関済みのdecode時刻ではない。
   firstNonzeroDecodedFrameAtMs?: number
   firstPacketReceivedAtMs?: number
   firstPacketDeliveredAtMs?: number
   packetDeliveryMissingReason?: 'synchronization_api_unavailable' | 'packet_metadata_unavailable'
-    | 'matching_packet_not_observed' | 'packet_clock_invalid' | 'observer_failed'
-  encodedMissingReason?: 'api_unavailable' | 'transform_already_in_use' | 'observer_failed'
+    | 'matching_packet_not_observed' | 'packet_clock_invalid' | 'observer_failed' | 'clock_calibration_failed'
+  encodedMissingReason?: 'api_unavailable' | 'transform_already_in_use' | 'observer_failed' | 'clock_calibration_failed'
   decodedMissingReason?: 'api_unavailable' | 'observer_failed'
 }>
 
+type RawEncodedPacket = { rtpTimestamp: number; source: number; receivedAtWorkerMs: number }
+type WorkerObservation = { kind: string; sequence?: number; workerAtMs?: number; packet?: RawEncodedPacket }
 type EncodedPacket = { rtpTimestamp: number; source: number; receivedAtMs: number }
 const validU32 = (value: number) => Number.isInteger(value) && value >= 0 && value <= 0xffffffff
 const packetKey = (packet: Pick<EncodedPacket, 'source' | 'rtpTimestamp'>) => `${packet.source}:${packet.rtpTimestamp}`
@@ -61,6 +74,11 @@ export class RemoteMediaObserver {
   private clone: MediaStreamTrack | null = null
   private closed = false
   private packet: EncodedPacket | null = null
+  private readonly clock = new WorkerClockCalibration()
+  private clockSamples = 0
+  private clockRequest: { sequence: number; sentAtMs: number } | null = null
+  private clockTimeout: ReturnType<typeof setTimeout> | null = null
+  private encoded: WorkerObservation | null = null
   private readonly deliveredPackets = new Map<string, number>()
   private synchronizationTimer: ReturnType<typeof setInterval> | null = null
   private synchronizationTimeout: ReturnType<typeof setTimeout> | null = null
@@ -87,6 +105,7 @@ export class RemoteMediaObserver {
   close(): void {
     if (this.closed) return
     this.closed = true
+    this.stopClockCalibration()
     this.stopPacketDelivery()
     if (this.receiver !== undefined && this.transform !== null
         && this.receiver.transform === this.transform) this.receiver.transform = null
@@ -114,48 +133,91 @@ export class RemoteMediaObserver {
     try {
       const worker = new Worker(url)
       this.worker = worker
-      worker.onmessage = (event: MessageEvent<{ kind: string; atMs?: number; packet?: EncodedPacket }>) => {
-        if (this.closed) return
-        if (event.data.kind === 'encoded' && this.evidence.firstEncodedFrameAtMs === undefined
-            && typeof event.data.atMs === 'number' && Number.isFinite(event.data.atMs)
-            && event.data.atMs >= 0) {
-          this.evidence.firstEncodedFrameAtMs = event.data.atMs
-          const packet = event.data.packet
-          if (packet && validU32(packet.source) && validU32(packet.rtpTimestamp)
-            && Number.isFinite(packet.receivedAtMs) && packet.receivedAtMs >= 0) {
-            this.packet = packet
-            this.evidence.firstPacketReceivedAtMs = packet.receivedAtMs
-            // publish後に長く無音だった場合、最初のpacketが来てから観測窓を開き直す。
-            if (this.evidence.packetDeliveryMissingReason === 'matching_packet_not_observed') {
-              delete this.evidence.packetDeliveryMissingReason
-              this.observePacketDelivery()
-            }
-            this.matchPacketDelivery()
-          } else {
-            this.evidence.packetDeliveryMissingReason ??= 'packet_metadata_unavailable'
-            this.stopPacketDelivery()
+      worker.onmessage = (event: MessageEvent<WorkerObservation>) => {
+        if (this.closed || this.worker !== worker) return
+        if (event.data.kind === 'clock') {
+          const request = this.clockRequest
+          if (request === null || event.data.sequence !== request.sequence) return
+          this.clockRequest = null
+          if (typeof event.data.workerAtMs !== 'number') { this.failEncoded('clock_calibration_failed'); return }
+          this.clock.add(request.sentAtMs, event.data.workerAtMs, performance.now())
+          this.clockSamples += 1
+          if (this.clockSamples < 10) this.requestClockSample()
+          else {
+            this.stopClockCalibration()
+            const bounds = this.clock.bounds()
+            if (bounds === undefined) { this.failEncoded('clock_calibration_failed'); return }
+            this.evidence.workerClockMethod = 'causal_message_bounds'
+            this.evidence.workerClockOffsetBoundsMs = bounds
+            this.applyEncodedObservation()
           }
+        } else if (event.data.kind === 'encoded' && this.encoded === null) {
+          this.encoded = event.data
+          this.applyEncodedObservation()
         } else if (event.data.kind === 'error') { this.failEncoded(); return }
         this.publish()
       }
       worker.onerror = () => this.failEncoded()
-      this.transform = new RTCRtpScriptTransform(worker, { windowTimeOrigin: performance.timeOrigin })
+      this.transform = new RTCRtpScriptTransform(worker)
       this.receiver.transform = this.transform
+      this.clockTimeout = setTimeout(() => this.failEncoded('clock_calibration_failed'), 1000)
+      this.requestClockSample()
     } catch {
-      this.worker?.terminate()
-      this.worker = null
-      this.evidence.encodedMissingReason = 'observer_failed'
-      this.evidence.packetDeliveryMissingReason ??= 'observer_failed'
-      this.stopPacketDelivery()
+      this.failEncoded()
     } finally {
       URL.revokeObjectURL(url)
     }
   }
 
-  private failEncoded(): void {
+  private requestClockSample(): void {
+    this.clockRequest = { sequence: this.clockSamples, sentAtMs: performance.now() }
+    this.worker?.postMessage({ kind: 'clock', sequence: this.clockSamples })
+  }
+
+  private stopClockCalibration(): void {
+    if (this.clockTimeout !== null) clearTimeout(this.clockTimeout)
+    this.clockTimeout = null
+    this.clockRequest = null
+  }
+
+  private applyEncodedObservation(): void {
+    if (this.encoded === null || this.clock.bounds() === undefined
+      || this.evidence.firstEncodedFrameAtMs !== undefined) return
+    const encodedAt = this.clock.toMain(this.encoded.workerAtMs ?? NaN)
+    if (encodedAt === undefined || encodedAt.lowerMs > performance.now()) {
+      this.failEncoded('clock_calibration_failed')
+      return
+    }
+    this.evidence.firstEncodedFrameAtBoundsMs = encodedAt
+    this.evidence.firstEncodedFrameAtMs = encodedAt.lowerMs
+    const packet = this.encoded.packet
+    if (!packet || !validU32(packet.source) || !validU32(packet.rtpTimestamp)) {
+      this.evidence.packetDeliveryMissingReason ??= 'packet_metadata_unavailable'
+      this.stopPacketDelivery()
+      return
+    }
+    const receivedAt = this.clock.toMain(packet.receivedAtWorkerMs)
+    if (receivedAt === undefined || receivedAt.lowerMs > encodedAt.upperMs) {
+      this.evidence.packetDeliveryMissingReason = 'packet_clock_invalid'
+      this.stopPacketDelivery()
+      return
+    }
+    this.packet = { source: packet.source, rtpTimestamp: packet.rtpTimestamp, receivedAtMs: receivedAt.lowerMs }
+    this.evidence.firstPacketReceivedAtBoundsMs = receivedAt
+    this.evidence.firstPacketReceivedAtMs = receivedAt.lowerMs
+    // publish後に長く無音だった場合、最初のpacketが来てから観測窓を開き直す。
+    if (this.evidence.packetDeliveryMissingReason === 'matching_packet_not_observed') {
+      delete this.evidence.packetDeliveryMissingReason
+      this.observePacketDelivery()
+    }
+    this.matchPacketDelivery()
+  }
+
+  private failEncoded(reason: 'observer_failed' | 'clock_calibration_failed' = 'observer_failed'): void {
     if (this.closed) return
-    this.evidence.encodedMissingReason = 'observer_failed'
-    this.evidence.packetDeliveryMissingReason ??= 'observer_failed'
+    this.stopClockCalibration()
+    this.evidence.encodedMissingReason = reason
+    this.evidence.packetDeliveryMissingReason ??= reason
     this.stopPacketDelivery()
     // 観測器の失敗時はpassthroughへ戻し、観測のために再生を停止しない。
     if (this.receiver !== undefined && this.transform !== null
