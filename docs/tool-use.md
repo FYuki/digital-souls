@@ -69,7 +69,7 @@ LinuxまたはWSL2のリポジトリルート（推奨 `~/dev/digital-souls`）�
 Windows側の `/mnt/c/Users/...` に置いたcheckoutでは実行しない。
 
 ```bash
-backend/.venv/bin/python -m pytest backend/tests/unit/test_tool_use.py backend/tests/unit/test_external_mcp_gate.py
+backend/.venv/bin/python -m pytest backend/tests/unit/test_tool_use*.py backend/tests/unit/test_external_mcp_gate.py
 npm ci --prefix infra/testing/mcp-real-servers --ignore-scripts
 RUN_TOOL_USE_REAL_SERVICE_TESTS=true \
 MCP_REAL_SERVER_ROOT="$PWD/infra/testing/mcp-real-servers" \
@@ -101,10 +101,12 @@ data rootのパス契約と`.environment-identity.json`を検証する。identit
 物理マイク・人の発話品質を確認した証跡ではない。
 制御MCPの音声試験ではWebAudioのMediaStreamへ合成発話を流し、追加質問の再生を観測して回答を投入する。
 質問へのbarge-inから同じMCP操作の再開・最終回答再生までを検証し、STT/LLM/TTSや通信は置換しない。
-結果は`frontend/test-results/tool-use-browser/`と`tool-use-contract/`、runtime logはそれぞれ
-`tool-use-runtime/`と`tool-use-contract-runtime/`へ分けて出力する。
-rawな解決済みProfileと実行manifestは一時data rootの`runtime/tool-use/`配下に置く。
-共有には専用runtime成果物の`browser-public.json`と`runtime-manifest.json`を使う。
+さらに対象Toolを会話で確定してから音声で開始し、実行中の明示停止・別発話による割り込み、
+外部処理が遅れて結果を返した後の旧応答の非再生・再実行なしを確認する。
+rawなPlaywright結果・添付・process log・解決済みProfileと実行manifestは、identity検証済みの
+一時data rootの`runtime/tool-use/`配下に置き、runner終了時に削除する。
+共有用の写しだけを`frontend/test-results/tool-use-runtime/`または
+`tool-use-contract-runtime/`へ出力する。`browser-public.json`と`runtime-manifest.json`を共有に使う。
 これらはpath・endpoint・process/container識別子を除き、使用model・成否・時刻を保持する。
 
 候補schema・結果は各4096 tokenを暫定上限とし、初期実装ではUTF-8 byte数で保守的に制限する。

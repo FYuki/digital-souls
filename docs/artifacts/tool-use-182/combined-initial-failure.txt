@@ -1,0 +1,311 @@
+........................................................................ [  1%]
+........................................................................ [  3%]
+........................................................................ [  5%]
+........................................................................ [  7%]
+........................................................................ [  9%]
+........................................................................ [ 11%]
+........................................................................ [ 13%]
+........................................................................ [ 15%]
+........................................................................ [ 17%]
+........................................................................ [ 19%]
+........................................................................ [ 21%]
+........................................................................ [ 23%]
+........................................................................ [ 25%]
+........................................................................ [ 27%]
+........................................................................ [ 29%]
+........................................................................ [ 31%]
+........................................................................ [ 33%]
+........................................................................ [ 35%]
+........................................................................ [ 37%]
+........................................................................ [ 39%]
+........................................................................ [ 41%]
+........................................................................ [ 43%]
+........................................................................ [ 44%]
+........................................................................ [ 46%]
+........................................................................ [ 48%]
+........................................................................ [ 50%]
+........................................................................ [ 52%]
+........................................................................ [ 54%]
+........................................................................ [ 56%]
+........................................................................ [ 58%]
+........................................................................ [ 60%]
+........................................................................ [ 62%]
+..................................F..................................... [ 64%]
+........................................................................ [ 66%]
+........................................................................ [ 68%]
+........................................................................ [ 70%]
+........................................................................ [ 72%]
+........................................................................ [ 74%]
+........................................................................ [ 76%]
+........................................................................ [ 78%]
+........................................................................ [ 80%]
+..........................................................F............. [ 82%]
+................F....................................................... [ 84%]
+........................................F............................... [ 86%]
+........................................................................ [ 88%]
+........................................................................ [ 89%]
+........................................................................ [ 91%]
+........................................................................ [ 93%]
+........................................................................ [ 95%]
+........................................................................ [ 97%]
+........................................................................ [ 99%]
+.........                                                                [100%]
+=================================== FAILURES ===================================
+_ TestChatEndpoint.test_completed_http_turn_does_not_write_raw_conversation_to_chroma _
+
+self = <test_chat.TestChatEndpoint object at <object-address>>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at <object-address>>
+
+    def test_completed_http_turn_does_not_write_raw_conversation_to_chroma(
+        self,
+        monkeypatch,
+    ):
+        from app.memory.chroma_store import EmbeddingFingerprint
+        from app.memory.memory_policy import resolved_memory_policy
+    
+        monkeypatch.setenv("RAG_ENABLED", "true")
+        policy = resolved_memory_policy()
+        monkeypatch.setattr(
+            "app.memory.chroma_store.active_memory_index_fingerprint",
+            lambda *_args: EmbeddingFingerprint(
+                "ollama", "nomic-embed-text:latest", 1
+            ),
+        )
+        chroma_collection = MagicMock()
+        chroma_collection.query.return_value = {
+            "ids": [[]],
+            "distances": [[]],
+        }
+        chroma_collection.count.return_value = 0
+        chroma_client = MagicMock()
+        chroma_client.get_or_create_collection.return_value = chroma_collection
+        fake_chromadb = ModuleType("chromadb")
+        setattr(
+            fake_chromadb,
+            "PersistentClient",
+            MagicMock(return_value=chroma_client),
+        )
+        monkeypatch.setitem(sys.modules, "chromadb", fake_chromadb)
+        safe_assessment = PrivacyAssessment(
+            classification=SemanticClassification.NOT_SENSITIVE,
+            subject_scope=SubjectScope.GENERAL,
+            category=SemanticPrivacyCategory.NONE,
+            reason_code=SemanticAssessmentReasonCode.NO_SENSITIVE_CONTENT,
+            classifier_version="test-classifier-v1",
+            model_id="test-model",
+            model_digest="sha256:test",
+            prompt_version="test-prompt-v1",
+            policy_version=policy.policy_version,
+        )
+    
+        with patch(_RESOLVED_MEMORY_POLICY, return_value=policy):
+            with patch(
+                "app.privacy.semantic.classifier."
+                "InferenceSemanticPrivacyClassifier.classify",
+                return_value=safe_assessment,
+            ):
+                with patch(
+                    "app.memory.inference_client.MemoryInferenceEmbedder.__call__",
+                    return_value=[0.1],
+                ):
+                    with patch(
+                        "app.memory.chroma_store.upsert_memory_index_entry"
+                    ) as upsert_memory_index_entry:
+                        with TestClient(app) as client:
+                            with patch(
+                                _LOAD_PERSONALITY, return_value=_character_card()
+                            ):
+                                with patch(
+                                    _GENERATE_RESPONSE, return_value=_LLM_REPLY
+                                ):
+                                    response = client.post(
+                                        "/chat",
+                                        json={
+                                            **_VALID_BODY,
+                                            "message": "農業日誌: トマト畑に水やりした",
+                                        },
+                                    )
+    
+        assert response.status_code == 200
+        assert response.json()["turn"]["assistant_content"] == _LLM_REPLY
+>       chroma_collection.query.assert_called_once()
+
+backend/tests/module/test_chat.py:407: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <MagicMock name='mock.get_or_create_collection().query' id='124893298231104'>
+
+    def assert_called_once(self):
+        """assert that the mock was called only once.
+        """
+        if not self.call_count == 1:
+            msg = ("Expected '%s' to have been called once. Called %s times.%s"
+                   % (self._mock_name or 'mock',
+                      self.call_count,
+                      self._calls_repr()))
+>           raise AssertionError(msg)
+E           AssertionError: Expected 'query' to have been called once. Called 0 times.
+
+/usr/lib/python3.12/unittest/mock.py:923: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  app.memory.rag_service:rag_service.py:167 RAG memory lookup failed: MemoryIndexReindexRequiredError
+__ test_should_delegate_live_down_cleanup_to_up_even_after_additional_sigterm __
+
+tmp_path = PosixPath('<test-root>/test_should_delegate_live_down0')
+environment_report_validator = Draft202012Validator(schema={'$defs': {'backendSequenceInvariant': {'$ref': '#/$defs/sequ...plate/backend'}, 'chromaSe...reference', 'json-pointer', 'regex', 'relative-json-pointer', 'time', 'uri', 'uri-reference', 'uri-template', 'uuid']>)
+runtime_paths = RuntimePaths(environment_id='test', data_root=PosixPath('<test-root>/test_should_delegate_live_down0...th=PosixPath('<test-root>/test_should_delegate_live_down0/runtime-data/.sqlite-restore-intent.json'))
+
+    def test_should_delegate_live_down_cleanup_to_up_even_after_additional_sigterm(
+        tmp_path: Path, environment_report_validator, runtime_paths
+    ):
+        stop_log = tmp_path / "stop-order.log"
+        report_path = runtime_paths.runtime_report_dir / "delegated" / "environment-run.json"
+        harness = ROOT_DIR / "backend" / "tests" / "harnesses" / "environment_signal.py"
+        environment = {
+            **os.environ,
+            "DS_PROFILE": "test-mocked",
+            "TEST_STOP_LOG": str(stop_log),
+        }
+        process = subprocess.Popen(
+            [sys.executable, str(harness), str(ROOT_DIR), str(report_path), str(stop_log)],
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+>           _wait_for_report_phase(report_path, "supervise")
+
+backend/tests/module/test_environment_signal_entrypoints.py:145: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+path = PosixPath('<test-root>/test_should_delegate_live_down0/runtime-data/runtime/delegated/environment-run.json')
+phase = 'supervise', timeout = 10.0
+
+    def wait_for_report_phase(path: Path, phase: str, timeout: float = 10.0) -> None:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                report = json.loads(path.read_text(encoding="utf-8"))
+            except (FileNotFoundError, json.JSONDecodeError):
+                time.sleep(0.01)
+                continue
+            if report["phase"] == phase:
+                return
+            time.sleep(0.01)
+>       pytest.fail(f"run report did not reach phase {phase}")
+E       Failed: run report did not reach phase supervise
+
+backend/tests/environment_entrypoint_test_support.py:78: Failed
+_ test_should_return_after_child_orchestrator_is_ready_and_leave_down_cleanup_to_it _
+
+tmp_path = PosixPath('<test-root>/test_should_return_after_child0')
+runtime_paths = RuntimePaths(environment_id='test', data_root=PosixPath('<test-root>/test_should_return_after_child0...th=PosixPath('<test-root>/test_should_return_after_child0/runtime-data/.sqlite-restore-intent.json'))
+
+    def test_should_return_after_child_orchestrator_is_ready_and_leave_down_cleanup_to_it(
+        tmp_path: Path,
+        runtime_paths,
+    ) -> None:
+        from process_control import (
+            ProcessIdentity,
+            process_identity_matches,
+            request_process_stop,
+        )
+    
+        environments = ROOT_DIR / "environments"
+        report_path = runtime_paths.runtime_report_dir / "detached" / "environment-run.json"
+        env = {
+            **os.environ,
+            "DS_PROFILE": "test-mocked",
+            "DS_ENVIRONMENT_RUN_REPORT": str(report_path),
+        }
+    
+        stdout_path = tmp_path / "start.stdout"
+        stderr_path = tmp_path / "start.stderr"
+        identity: ProcessIdentity | None = None
+        start_process: subprocess.Popen[bytes] | None = None
+        try:
+            with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
+                start_process = subprocess.Popen(
+                    [str(environments / "up.sh")],
+                    env=env,
+                    stdout=stdout,
+                    stderr=stderr,
+                )
+                # clean環境では子オーケストレーターがFrontend依存を導入してから起動する。
+                start_process.wait(timeout=60)
+            ready_report = json.loads(report_path.read_text(encoding="utf-8"))
+            identity = ProcessIdentity.from_report(ready_report["orchestratorIdentity"])
+    
+>           assert start_process.returncode == 0, (
+                stdout_path.read_text(encoding="utf-8"),
+                stderr_path.read_text(encoding="utf-8"),
+            )
+E           AssertionError: ('', '')
+E           assert 1 == 0
+E            +  where 1 = <Popen: returncode: 1 args: ['./environments/up.sh']>.returncode
+
+backend/tests/module/test_environment_up_command.py:127: AssertionError
+_____ test_extractor_receives_only_current_user_and_latest_completed_turn ______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at <object-address>>
+
+    def test_extractor_receives_only_current_user_and_latest_completed_turn(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        empty_response = json.dumps({"candidates": []})
+        extractor_request = SequencedExtractorRequest([empty_response] * 3)
+        monkeypatch.setattr(
+            httpx.Client,
+            "post",
+            _route_ollama_post(extractor_request),
+        )
+    
+        with patch("app.main.load_character_card", return_value=_character_card()):
+            with patch(
+                "app.llm.router.generate_response",
+                side_effect=["reply-one", "reply-two", "reply-three"],
+            ):
+                with TestClient(main.app) as client:
+                    for index, message in enumerate(
+                        ["oldest-user", "latest-user", "current-user"]
+                    ):
+                        _send_http_message(client, message)
+    
+        transferred = (
+            json.dumps(extractor_request.calls[2]["messages"], ensure_ascii=False)
+            if len(extractor_request.calls) == 3
+            else ""
+        )
+>       assert (
+            "current-user" in transferred
+            and "latest-user" in transferred
+            and "reply-two" in transferred
+            and "oldest-user" not in transferred
+            and "reply-one" not in transferred
+            and "reply-three" not in transferred
+        )
+E       AssertionError: assert ('current-user' in '')
+
+backend/tests/module/test_memory_formation_chat_entrypoints.py:710: AssertionError
+=============================== warnings summary ===============================
+tests/unit/test_livekit_token_signer.py::test_sdk_user_token_has_fixed_ttl_and_least_privilege_grants
+tests/unit/test_livekit_token_signer.py::test_sdk_character_token_has_fixed_ttl_and_microphone_publish_grant
+  ./backend/.venv/lib/python3.12/site-packages/jwt/api_jwt.py:147: InsecureKeyLengthWarning: The HMAC key is 23 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+    return self._jws.encode(
+
+tests/unit/test_whisper_client.py::TestIsolatedWhisperTranscriber::test_lock_wait_timeout_discards_owner_and_next_request_succeeds
+  /usr/lib/python3.12/multiprocessing/popen_fork.py:66: DeprecationWarning: This process (pid=<process>) is multi-threaded, use of fork() may lead to deadlocks in the child.
+    self.pid = os.fork()
+
+tests/module/test_memory_management_api.py::test_persona_patch_returns_privacy_reason_without_rejected_body
+  ./backend/.venv/lib/python3.12/site-packages/fastapi/routing.py:136: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await f(request)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/module/test_chat.py::TestChatEndpoint::test_completed_http_turn_does_not_write_raw_conversation_to_chroma
+FAILED backend/tests/module/test_environment_signal_entrypoints.py::test_should_delegate_live_down_cleanup_to_up_even_after_additional_sigterm
+FAILED backend/tests/module/test_environment_up_command.py::test_should_return_after_child_orchestrator_is_ready_and_leave_down_cleanup_to_it
+FAILED backend/tests/module/test_memory_formation_chat_entrypoints.py::test_extractor_receives_only_current_user_and_latest_completed_turn
+4 failed, 3677 passed, 4 warnings in 507.40s (0:08:27)

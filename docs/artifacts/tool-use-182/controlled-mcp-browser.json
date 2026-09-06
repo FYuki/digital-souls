@@ -10,7 +10,7 @@
     "configFile": "./frontend/playwright.tool-use-contract.config.ts",
     "rootDir": "./frontend/integration/tool-use-contract",
     "failOnFlakyTests": false,
-    "forbidOnly": false,
+    "forbidOnly": true,
     "fullyParallel": false,
     "globalSetup": null,
     "globalTeardown": null,
@@ -24,7 +24,7 @@
     "preserveOutput": "always",
     "projects": [
       {
-        "outputDir": "./frontend/test-results/tool-use-contract",
+        "outputDir": "<test-root>/data/runtime/tool-use/browser",
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
@@ -40,7 +40,7 @@
         "timeout": 240000
       },
       {
-        "outputDir": "./frontend/test-results/tool-use-contract",
+        "outputDir": "<test-root>/data/runtime/tool-use/browser",
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
@@ -65,7 +65,7 @@
       [
         "json",
         {
-          "outputFile": "test-results/tool-use-contract/results.json"
+          "outputFile": "<test-root>/data/runtime/tool-use/browser/results.json"
         }
       ]
     ],
@@ -104,12 +104,12 @@
                   "workerIndex": 0,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 74635,
+                  "duration": 63021,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-09-06T18:26:12.277Z",
+                  "startTime": "2026-09-06T19:39:05.847Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -138,12 +138,12 @@
                   "workerIndex": 0,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 56717,
+                  "duration": 57452,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-09-06T18:27:24.815Z",
+                  "startTime": "2026-09-06T19:40:06.541Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -172,12 +172,12 @@
                   "workerIndex": 1,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 64387,
+                  "duration": 65306,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-09-06T18:28:19.482Z",
+                  "startTime": "2026-09-06T19:41:01.871Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -191,13 +191,89 @@
           "column": 1
         }
       ]
+    },
+    {
+      "title": "interruption.spec.ts",
+      "file": "interruption.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "音声の外部処理実行中に停止すると旧結果を読み上げず再実行しない",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 240000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "voice",
+              "projectName": "voice",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 74775,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-06T19:42:04.847Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea7612a22b8d6ec4294c-a8a27b6933ef5d0880ec",
+          "file": "interruption.spec.ts",
+          "line": 19,
+          "column": 3
+        },
+        {
+          "title": "音声の外部処理実行中に割り込みすると旧結果を読み上げず再実行しない",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 240000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "voice",
+              "projectName": "voice",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 69838,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-06T19:43:17.214Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ea7612a22b8d6ec4294c-6998849fa0e5824ae5bf",
+          "file": "interruption.spec.ts",
+          "line": 19,
+          "column": 3
+        }
+      ]
     }
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-09-06T18:26:11.938Z",
-    "duration": 196710.50699999998,
-    "expected": 3,
+    "startTime": "2026-09-06T19:39:05.593Z",
+    "duration": 331095.368,
+    "expected": 5,
     "skipped": 0,
     "unexpected": 0,
     "flaky": 0

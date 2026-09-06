@@ -101,7 +101,7 @@ def parse_object(value: str) -> Json:
             raise ValueError()
         encode(result)
         return result
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, RecursionError):
         raise MCPFailure("validation", "invalid_decision") from None
 
 
