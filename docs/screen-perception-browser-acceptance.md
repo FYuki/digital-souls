@@ -81,3 +81,47 @@ reason code: <失敗時の固定codeだけ>
 合否集計ではADRの誤参照率、参照漏れ率、不要確認質問率、対象特定率、判定LLM呼出率、p50／p95基準を使う。45秒の障害timeout到達を会話品質の目標達成として扱わない。会話本文、画面内容、対象名は集計artifactへ残さず、合成case ID、decision、成功可否、区間時間、固定reason codeだけを記録する。
 
 #213のprobe成功を#217の完成UI受入の代わりにしない。
+
+## #217 完成UIの実施順
+
+各ブラウザでmonitor、windowの順に共有し、各surfaceでtext、LiveKitの順に実施する。同じ共有session中は
+pickerを開き直さない。
+
+1. ON直後に画像要求が0件であることを確認する。
+2. 合成画面の単一対象へ「これ何？」、位置付き要求、明示チェック付き送信を行い、各turnで新しい画像が
+   1枚だけ要求され、対象を短く示した実質回答になることを確認する。
+3. 貼付本文、直前回答への「それ、詳しく」、否定、引用を各1回送り、画像要求がないことを確認する。
+4. 複数候補、対象消失、小さい文字、無関係な画面を各1回確認し、推測せず候補または見えない旨を
+   キャラクターの言葉で返すことを確認する。
+5. 取得対象windowの背面化・サイズ変更・最小化と、digital-souls側tabの背面・非表示を別々に試す。
+6. OFF、対象変更picker取消し、会話変更、再読込、通信断を行い、旧画像要求・遅延回答・TTSが採用されず、
+   自動再開しないことを確認する。
+
+現在の既知実測はWindows 11 25H2、Chrome 152.0.7977.77、Edge 152.0.4191.62で、両browserとも背面化・
+サイズ変更は継続、最小化は停止、対象変更pickerの取消しでは元の共有も解除された。これはMVPの
+安全側挙動として受け入れ、最小化時の継続を保証しない。
+
+## #217 証跡テンプレート
+
+```text
+実行日時: YYYY-MM-DD HH:MM JST
+commit: <40桁SHA>
+環境区分: dev
+OS / Browser: <version>
+対象: monitor / window
+経路: text / LiveKit / explicit UI
+Provider / Model: <provider> / <model>
+合成fixture ID: <ID>
+分岐: rule / LLM / fallback / Vision
+結果: success / failed / unsupported
+reason code: <失敗時の固定codeだけ>
+参照判断 ms: <数値>
+実質回答開始 ms: <数値>
+TTS開始 ms: <数値またはnot-applicable>
+画像要求数: <数値>
+背面 / 最小化 / サイズ変更: <結果>
+```
+
+集計時はcase総数、誤参照率、参照漏れ率、不要確認率、対象特定率、判定LLM呼出率、rule P95、LLM warm
+P95、実質回答開始P50／P95を記録する。本文、画像、対象名、window title、URL、secret、raw errorは
+記録しない。

@@ -71,6 +71,7 @@
 * `characters/lore_selector.py` — current userとprivacy処理済み履歴を対象に、Character Book Entryを決定論的に照合・選択する
 * `prompting/` — Character Core、Character Lore、RAG、保存済み履歴、現在発言を順序とtoken budgetに従って合成する単一境界
 * `inference/` — Coreの用途Targetを環境ローカルな`provider/model`へ解決し、text／画像Capability認可、画像decodeと入力上限、同時実行数、共通error、readiness、metadata観測を一元化する。optionalなVision Targetは構造化観測だけを返し、Ollama、OpenAI API、Codex runtimeの差とBase64化はAdapter内へ閉じ込める
+* `screen_perception/` / `routers/screen_perception.py` — 有限leaseの共有session、generation、所有会話、routing同意を検証し、参照が確定したturnだけへ新しい静止画1枚を要求する。参照判断はruleを優先し、競合時だけ`screen-reference` callerでChat Targetを使う。Vision観測は現在request内の非信頼データであり、生画像とともに履歴へ保存しない
 * `llm/` — 完成済みpromptをChat Targetへ接続する互換境界。ProviderやModelを直接選択せず、共通Inference Routerだけを呼び出す
 * `memory/` — 会話履歴と長期記憶の基盤。SQLiteに同一conversation再開用の履歴と承認済み長期記憶を責務分離して保存し、Chromaは承認済み長期記憶だけの派生検索インデックスとして扱う。`memory_policy.py`は`backend/app/memory/memory_policy.json`の認識設定と、アプリケーションの非緩和policyを組み合わせて保存先別に判定する
 * `stt/remote_whisper_client.py` — 共有GPU Whisper HTTP serviceによる音声認識。旧`whisper_client.py`はGoal 2受入までrollback用に保持する
@@ -87,9 +88,16 @@
 * `lib/audio/pcm-worklet-recorder.ts` / `lib/audio/vad-assets.ts` — AudioWorkletによるPCM録音とVAD（発話区間検出）
 * `lib/AudioRecorder.svelte` / `lib/AudioPlayer.svelte` — マイク入力UI・音声再生UI
 * `lib/ChatWindow.svelte` / `lib/InputBar.svelte` — テキストチャットUI
+* `lib/ScreenCaptureControls.svelte` / `lib/screen-perception/` — 標準picker、単一monitor／windowの検証、ローカルpreview、取得時だけの静止画化、共有sessionの失効を担う。共有ONだけでは画像送信や定期解析を始めない
 * `lib/ConversationSidebar.svelte` / `lib/sidebar/controller.ts` — キャラクター別スレッド一覧、設定、操作メニュー、desktop sidebar／compact drawerの状態を管理する
 * `lib/CharacterPortrait.svelte` — catalogが返した標準立ち絵URLだけを表示し、未設定・読込失敗時は会話を止めず共通プレースホルダーへ切り替える
 * `App.svelte` — テキスト／音声チャット、左サイドバー、立ち絵layoutを統合する。compact時はVisual Viewportへ追従して入力領域をソフトウェアキーボードの上へ保つ
+
+テキストHTTPとLiveKit音声は同じConversation Coreの画面参照判断を使う。結果は
+`answer_without_screen`、`inspect_screen`、`clarify_reference`の3分岐で、モデル出力を認可には使わない。
+`inspect_screen`でもCoreが共有session、generation、client、character、conversation、routing revision、
+画像／派生会話の同意を再検証する。privacy処理後の会話回答はSQLiteへ保存できるが、画面由来lineageを
+turnに付けてMemory FormationとChroma投入から除外する。非表示のVision観測は次turnへ継承しない。
 
 会話画面はPCで立ち絵の右配置と履歴背面配置を切り替える。タブレット・モバイルは履歴背面に
 固定する。背面時の履歴は入力・音声操作を除いた会話領域の下端を基準に50%、75%、100%を
