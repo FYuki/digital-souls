@@ -123,7 +123,7 @@ def _finalize_livekit_report(
         if point.clock_domain != "client_monotonic" or point.unit != "millisecond" or abs(point.timestamp - playback) >= 1.1:
             raise ValueError("pilot playback timestamp does not match its trace")
         if controlled:
-            if trial.get("media_observation_method") != "rtc_encoded_transform_and_decoded_track_first_response":
+            if trial.get("media_observation_method") != "rtc_encoded_transform_and_rtp_track_delivery":
                 raise ValueError("controlled trial requires independent media observations")
             media_times = []
             for key, name in (("trackReceivedAt", "client_track_received"),
@@ -138,16 +138,17 @@ def _finalize_livekit_report(
                 media_times.append(value)
             if not media_times[0] <= media_times[1] <= media_times[2] <= playback:
                 raise ValueError("controlled media boundaries are out of order")
-        expected_end = origin + end_sample * 1000 / sample_rate
-        if abs(trial["fixture_speech_end_client_ms"] - expected_end) > 0.001:
-            raise ValueError("fixture end does not match sample boundaries")
-        for name, sample in (("fixture_speech_start", start_sample), ("fixture_speech_end", end_sample)):
+        fixture_start, fixture_end = _validate_fixture_clock(
+            trial, sample_rate=sample_rate, start_sample=start_sample, end_sample=end_sample,
+            controlled=controlled,
+        )
+        for name, timestamp in (("fixture_speech_start", fixture_start), ("fixture_speech_end", fixture_end)):
             events.append(TraceEvent(
                 schema_version="1.0", measurement_kind="controlled_baseline",
                 event_id=f"{name}-{index}", character_id=matched[0].character_id,
                 session_id=pair[0], utterance_id=pair[1], response_id=pair[2],
                 name=name, stage="fixture", outcome="success",
-                timestamp=origin + sample * 1000 / sample_rate,
+                timestamp=timestamp,
                 clock_domain="client_monotonic", unit="millisecond",
             ))
     measured_keys = {(trial["sessionId"], trial["utteranceId"], trial["responseId"]) for trial in measured}
@@ -184,6 +185,59 @@ def _finalize_livekit_report(
     Draft202012Validator(schema).validate(serialized)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(serialized, ensure_ascii=False, indent=2) + "\n")
+
+
+
+def _validate_fixture_clock(
+    trial: dict[str, object], *, sample_rate: int, start_sample: int, end_sample: int,
+    controlled: bool,
+) -> tuple[float, float]:
+    """PCM出力の因果境界を検証する。旧入力時計はpilotの履歴解析だけに許可する。"""
+    def timestamp(value: object) -> float:
+        if type(value) not in (int, float) or not isinstance(value, (int, float)):
+            raise ValueError("fixture clock requires numeric timestamps")
+        if not math.isfinite(value) or value < 0:
+            raise ValueError("fixture clock requires finite non-negative timestamps")
+        return float(value)
+
+    origin = timestamp(trial.get("fixtureStartedAt"))
+    recorded_end = timestamp(trial.get("fixture_speech_end_client_ms"))
+    method = trial.get("fixture_clock_method")
+    if method != "audio_worklet_pcm_causal_bounds":
+        if controlled:
+            raise ValueError("controlled fixture requires observed PCM causal bounds")
+        if method not in (None, "get_user_media_completion_unverified") or "fixture_clock_bounds" in trial:
+            raise ValueError("unknown or inconsistent fixture clock method")
+        expected_end = origin + end_sample * 1000 / sample_rate
+        if abs(recorded_end - expected_end) > 0.001:
+            raise ValueError("fixture end does not match sample boundaries")
+        return origin + start_sample * 1000 / sample_rate, expected_end
+
+    maximum = timestamp(trial.get("fixture_clock_maximum_uncertainty_ms"))
+    if not 0 < maximum <= 20:
+        raise ValueError("fixture clock uncertainty limit must be at most 20 ms")
+    bounds = trial.get("fixture_clock_bounds")
+    if not isinstance(bounds, dict) or set(bounds) != {"sourceStart", "speechStart", "speechEnd"}:
+        raise ValueError("fixture clock requires all three PCM boundaries")
+    lower_values: list[float] = []
+    upper_values: list[float] = []
+    for name, sample in (("sourceStart", 0), ("speechStart", start_sample), ("speechEnd", end_sample)):
+        boundary = bounds[name]
+        if not isinstance(boundary, dict) or set(boundary) != {"lowerMs", "upperMs", "sourceSample"}:
+            raise ValueError("fixture clock boundary is incomplete")
+        if type(boundary["sourceSample"]) is not int or boundary["sourceSample"] != sample:
+            raise ValueError("fixture clock boundary does not match its source sample")
+        lower, upper = timestamp(boundary["lowerMs"]), timestamp(boundary["upperMs"])
+        if upper < lower or upper - lower > maximum:
+            raise ValueError("fixture clock boundary is reversed or too uncertain")
+        lower_values.append(lower)
+        upper_values.append(upper)
+    if lower_values != sorted(lower_values) or upper_values != sorted(upper_values):
+        raise ValueError("fixture clock boundaries are out of order")
+    if abs(origin - lower_values[0]) > 0.001 or abs(recorded_end - lower_values[2]) > 0.001:
+        raise ValueError("fixture timestamps do not match observed causal lower bounds")
+    # 発話末尾の下限を使い、時計の不確かさで遅延を過小評価しない。
+    return lower_values[1], lower_values[2]
 
 
 def _validate_initial_state_evidence(trial: dict[str, object]) -> None:

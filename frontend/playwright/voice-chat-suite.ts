@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url'
+import type { MediaObservation } from '../src/livekit/media-observer'
 
 import { expect, type Page } from '@playwright/test'
 
@@ -8,6 +9,7 @@ declare global {
       speechStarted: (utteranceId: string, atMs: number) => Promise<void>
     }
     __voiceChatE2E: {
+      lastTrackMediaObservation?: MediaObservation
       cycles: {
         fixtureStartedAt: number
         trackReceivedAt?: number
@@ -98,16 +100,14 @@ const installPlaybackProbe = async (page: Page) => {
       observeMicrophoneState()
     }, { once: true })
     let fixtureStartedAt: number | null = null
-    const mediaByResponse = new Map<string, {
-      trackReceivedAtMs: number; firstEncodedFrameAtMs?: number; firstDecodedSampleAtMs?: number
-    }>()
+    const mediaByResponse = new Map<string, MediaObservation>()
     const applyMediaEvidence = (responseId: string) => {
       const evidence = mediaByResponse.get(responseId)
       const cycle = window.__voiceChatE2E.cycles.find((candidate) => candidate.responseId === responseId)
       if (evidence === undefined || cycle === undefined) return
       cycle.trackReceivedAt = evidence.trackReceivedAtMs
-      cycle.audioReceivedAt = evidence.firstEncodedFrameAtMs ?? null
-      cycle.audioDecodeAt = evidence.firstDecodedSampleAtMs ?? null
+      cycle.audioReceivedAt = evidence.firstPacketReceivedAtMs ?? null
+      cycle.audioDecodeAt = evidence.firstPacketDeliveredAtMs ?? null
     }
     const testPortTarget = window as typeof window & {
       __digitalSoulsVoiceSessionTestPort?: {
@@ -115,9 +115,7 @@ const installPlaybackProbe = async (page: Page) => {
         observeRoom?: (observation: {
           firstPlaybackAtMs?: number
           mediaResponseId?: string
-          mediaObservation?: {
-            trackReceivedAtMs: number; firstEncodedFrameAtMs?: number; firstDecodedSampleAtMs?: number
-          }
+          mediaObservation?: MediaObservation
           renderedEnergy?: number
           activeResponseId?: string
           activeAudioGraphs?: number
@@ -149,6 +147,9 @@ const installPlaybackProbe = async (page: Page) => {
         window.__voiceSessionController = controller
       },
       observeRoom: (observation) => {
+        if (observation.mediaObservation !== undefined) {
+          window.__voiceChatE2E.lastTrackMediaObservation = { ...observation.mediaObservation }
+        }
         if (observation.mediaResponseId !== undefined && observation.mediaObservation !== undefined) {
           mediaByResponse.set(observation.mediaResponseId, observation.mediaObservation)
           applyMediaEvidence(observation.mediaResponseId)

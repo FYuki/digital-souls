@@ -217,3 +217,13 @@ Frontend単体351件、関連Backend66件が成功した。Svelte／TypeScript�
 [WebRTCの仕様](https://www.w3.org/TR/webrtc/#dom-rtcrtpreceiver-getsynchronizationsources)にある`getSynchronizationSources()`を、実際の2つのRTCPeerConnectionを結ぶ固定tone診断へ追加した。RTP timestampをキーにencoded受信とトラック配送を照合し、103/103 packetを対応付けた。トラック配送時刻はepoch基準なので`performance.timeOrigin`を引いてwindowのclockへ合わせた。受信→配送は約3.1〜23.1msで、時刻の逆転はなかった。既存診断を上書きしないよう、出力先指定と排他的な新規作成に対応した。
 
 このAPIの時刻はMediaStreamTrackへの配送であり、スピーカー出力やアプリのAudioWorkletへの実sample提示の時刻ではない。最初の非無音packetに対応するdecoded frameでも、最初の10msは小さいcomfort noise、次の10msでtoneが観測された。同じRTP packetに相関できたことだけでfirst audible sampleを確定しない。アプリのresponseとの対応、stale提示、再接続後の世代境界は別途解決が必要である。
+
+### 実LiveKitでの同一packet配送観測とレポート検証（2026-09-07）
+
+`RemoteMediaObserver`へ、encoded frameの受信時刻と`getSynchronizationSources()`のトラック配送時刻を、SSRCとRTP timestampの両方で照合する処理を追加した。window／workerのclock原点を正規化し、時刻逆転・未来時刻・欠測を成功値へ置換しない。照合bufferは128件、観測窓は2秒とし、最初のpacketが遅れて届いた場合はその到着から窓を開き直す。終了・失敗時にはtimerを解放する。既存の非ゼロdecoded frame観測はcomfort noiseも含むため、`firstNonzeroDecodedFrameAtMs`へ名称を変え、同一packetの配送観測とは区別した。
+
+`packet-delivery-01`の準備1回＋測定3回はtranscript一致・応答完了・明示終了が成功した。測定3回の同一packet受信→配送は4.4ms、10.0ms、2.4msだった。生観測は`frontend/test-results/livekit-quality/runs/packet-delivery-01/`に保存した。track初期のpacketであり、アプリの応答音声との対応は未確定のため、manifestの`media_observation_method`は`unavailable`を維持する。今回の値を応答開始・first playback・TTFAの受け入れ証拠に使わない。
+
+レポート集計には、PCM因果境界を保存しても開始時刻＋sample数から末尾時刻を再構成してしまう不整合があった。観測済みの上下限、source sample位置、20ms以下の観測幅、時刻順序、manifestとの一致を検証し、観測した末尾の下限を集計に使うよう修正した。controlledでは未検証の`getUserMedia`完了時刻を正解時計として許可しない。旧入力時計はpilotの履歴解析に限定して残し、凍結済みWebSocket artifactを変更しない。`packet-delivery-01`の既存raw trace／manifestを変更せず、新しいvalidatorでpilot集計が完了することも確認した。応答sampleへの対応がないため、この集計から品質合格とは判定しない。
+
+変更後の検証はFrontend単体360件、レポート検証39件、Svelte／TypeScript、Python lint、Backend型検査225 source filesが成功した。レポート検証には欠測・誤sample・非数・時刻逆転・観測幅超過・旧未相関media方式の拒否を含む。正式100試行、相槌／take-turn、障害復旧、stale提示、dogfoodの受け入れ条件は未完了である。

@@ -109,7 +109,14 @@ def controlled_inputs(pilot_inputs):
         trial.update(phase='warmup' if index < 5 else 'measured', initial_state_hash=digest,
                      initial_state_evidence=copy.deepcopy(evidence), first_playback_method='audio_worklet_output_timestamp',
                      session_end_confirmed=True,
-                     media_observation_method='rtc_encoded_transform_and_decoded_track_first_response',
+                     fixture_clock_method='audio_worklet_pcm_causal_bounds',
+                     fixture_clock_maximum_uncertainty_ms=20,
+                     fixture_clock_bounds={
+                         'sourceStart': {'lowerMs': 100, 'upperMs': 102, 'sourceSample': 0},
+                         'speechStart': {'lowerMs': 120, 'upperMs': 122, 'sourceSample': manifest['fixture']['speech_start_sample']},
+                         'speechEnd': {'lowerMs': 1040, 'upperMs': 1042, 'sourceSample': manifest['fixture']['speech_end_sample']},
+                     },
+                     media_observation_method='rtc_encoded_transform_and_rtp_track_delivery',
                      trackReceivedAt=50, audioReceivedAt=1400, audioDecodeAt=1410)
         manifest['trials'].append(trial)
         for original in event_template:
@@ -168,5 +175,74 @@ def test_controlled_media_evidence_requires_real_matching_boundaries(controlled_
         trial['audioDecodeAt'] = event['timestamp'] = 1600
     else:
         trial['media_observation_method'] = 'playback_callback_reused'
+    with pytest.raises(ValueError):
+        run(controlled=True)
+
+
+def test_pilot_exports_observed_pcm_boundaries_without_reconstructing_wall_clock(pilot_inputs):
+    manifest, events, run = pilot_inputs
+    fixture = manifest['fixture']
+    for trial in manifest['trials']:
+        trial.update(
+            fixture_clock_method='audio_worklet_pcm_causal_bounds',
+            fixture_clock_maximum_uncertainty_ms=20,
+            fixture_speech_end_client_ms=1100,
+            fixture_clock_bounds={
+                'sourceStart': {'lowerMs': 100, 'upperMs': 102, 'sourceSample': 0},
+                'speechStart': {'lowerMs': 130, 'upperMs': 132, 'sourceSample': fixture['speech_start_sample']},
+                'speechEnd': {'lowerMs': 1100, 'upperMs': 1102, 'sourceSample': fixture['speech_end_sample']},
+            },
+        )
+    result = run()
+    ttfa = next(item for item in result['metrics'] if item['name'] == 'ttfa')
+    assert ttfa['p95'] == 400
+
+
+@pytest.mark.parametrize('invalid', [
+    'missing_method', 'legacy_method', 'old_media_method', 'missing_bounds', 'missing_end',
+    'wrong_sample', 'bool_sample', 'negative', 'nonfinite', 'bool_time', 'reversed',
+    'too_wide', 'relaxed_limit', 'negative_limit', 'missing_limit', 'out_of_order',
+    'origin_mismatch', 'end_mismatch',
+])
+def test_controlled_rejects_unverified_or_invalid_pcm_clock(controlled_inputs, invalid):
+    manifest, _, run = controlled_inputs
+    trial = manifest['trials'][5]
+    bounds = trial['fixture_clock_bounds']
+    if invalid == 'missing_method':
+        del trial['fixture_clock_method']
+    elif invalid == 'legacy_method':
+        trial['fixture_clock_method'] = 'get_user_media_completion_unverified'
+    elif invalid == 'old_media_method':
+        trial['media_observation_method'] = 'rtc_encoded_transform_and_decoded_track_first_response'
+    elif invalid == 'missing_bounds':
+        del trial['fixture_clock_bounds']
+    elif invalid == 'missing_end':
+        del bounds['speechEnd']
+    elif invalid == 'wrong_sample':
+        bounds['speechEnd']['sourceSample'] += 1
+    elif invalid == 'bool_sample':
+        bounds['sourceStart']['sourceSample'] = False
+    elif invalid == 'negative':
+        bounds['sourceStart']['lowerMs'] = -1
+    elif invalid == 'nonfinite':
+        bounds['speechEnd']['upperMs'] = float('nan')
+    elif invalid == 'bool_time':
+        bounds['sourceStart']['lowerMs'] = True
+    elif invalid == 'reversed':
+        bounds['speechEnd']['upperMs'] = 1039
+    elif invalid == 'too_wide':
+        bounds['speechEnd']['upperMs'] = 1061
+    elif invalid == 'relaxed_limit':
+        trial['fixture_clock_maximum_uncertainty_ms'] = 21
+    elif invalid == 'negative_limit':
+        trial['fixture_clock_maximum_uncertainty_ms'] = -1
+    elif invalid == 'missing_limit':
+        del trial['fixture_clock_maximum_uncertainty_ms']
+    elif invalid == 'out_of_order':
+        bounds['speechStart'].update(lowerMs=80, upperMs=82)
+    elif invalid == 'origin_mismatch':
+        trial['fixtureStartedAt'] = 101
+    else:
+        trial['fixture_speech_end_client_ms'] = 1041
     with pytest.raises(ValueError):
         run(controlled=True)

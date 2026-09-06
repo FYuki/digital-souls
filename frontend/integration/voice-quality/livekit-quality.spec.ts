@@ -142,13 +142,14 @@ test('LiveKit固定fixtureの独立試行を測定する', async ({ browser }) =
       expect((await endResponse.json()).phase).toBe('ended')
       const sourceBounds = sourceFixture ? await readFixtureBounds(page) : undefined
       trials.push({
+        track_media_observation: await page.evaluate(() => window.__voiceChatE2E.lastTrackMediaObservation),
         fixture_clock_method: sourceBounds ? 'audio_worklet_pcm_causal_bounds' : 'get_user_media_completion_unverified',
         ...(sourceBounds ? { fixture_clock_bounds: sourceBounds, fixture_clock_maximum_uncertainty_ms: 20 } : {}),
         session_end_confirmed: true,
         phase: index < WARMUP_RUNS ? 'warmup' : 'measured',
         outcome: 'success',
         first_playback_method: 'audio_worklet_output_timestamp',
-        media_observation_method: mediaCorrelated ? 'rtc_encoded_transform_and_decoded_track_first_response' : 'unavailable',
+        media_observation_method: mediaCorrelated ? 'rtc_encoded_transform_and_rtp_track_delivery' : 'unavailable',
         ...(mediaCorrelated ? {} : { media_observation_missing_reason: 'response_frame_correlation_unavailable' }),
         fixture_version: fixture.fixture_version,
         audio_sha256: fixture.audio_sha256,
