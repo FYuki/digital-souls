@@ -11,6 +11,10 @@ from pydantic import ValidationError
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 CONTRACT_ROOT = REPOSITORY_ROOT / "contracts" / "perception" / "screen"
+REFERENCE_DECISION_SCHEMA = CONTRACT_ROOT / "screen-reference-decision.schema.json"
+GROUNDING_OBSERVATION_SCHEMA = (
+    CONTRACT_ROOT / "screen-grounding-observation.schema.json"
+)
 VALID_FIXTURE_ROOT = CONTRACT_ROOT / "fixtures" / "valid"
 INVALID_FIXTURE_ROOT = CONTRACT_ROOT / "fixtures" / "invalid"
 EVENT_MODEL_NAMES = {
@@ -157,6 +161,82 @@ def test_explicit_reference_fixture_has_both_positive_and_negative_cases() -> No
     assert any(case["reason"] == "quoted" for case in cases)
     assert any(case["reason"] == "negated" for case in cases)
     assert any(case["explicit_ui"] is True for case in cases)
+
+
+def test_contextual_reference_fixture_covers_rules_limited_llm_and_safe_fallback() -> None:
+    fixture = _load_json(CONTRACT_ROOT / "fixtures/contextual-reference-cases.json")
+    assert isinstance(fixture, dict)
+    cases = fixture["cases"]
+    assert isinstance(cases, list)
+    assert len({case["id"] for case in cases}) == len(cases)
+    assert {case["expected_decision"] for case in cases} == {
+        "answer_without_screen",
+        "inspect_screen",
+        "clarify_reference",
+    }
+    assert {case["expected_path"] for case in cases} == {
+        "rule",
+        "llm",
+        "fallback",
+    }
+    llm_cases = [case for case in cases if case["expected_path"] == "llm"]
+    assert len(llm_cases) / len(cases) <= 0.2
+    assert all(
+        case["expected_decision"] != "inspect_screen"
+        for case in cases
+        if not case["screen_use_authorized"]
+    )
+    by_id = {case["id"]: case for case in cases}
+    assert by_id["prohibition-overrides-explicit-ui"]["expected_decision"] == (
+        "answer_without_screen"
+    )
+    assert by_id["expired-screen-history-is-not-cloud-judge-input"][
+        "expected_cloud_history_items"
+    ] == 0
+
+
+def test_reference_decision_schema_rejects_free_reason_provider_and_target_selection() -> None:
+    validator = Draft202012Validator(_load_json(REFERENCE_DECISION_SCHEMA))
+    valid = {
+        "decision": "clarify_reference",
+        "basis": "competing_references",
+    }
+    validator.validate(valid)
+    for extra in ("reason", "provider", "screen_session_id", "target"):
+        assert list(validator.iter_errors({**valid, extra: "model-selected"}))
+    assert list(
+        validator.iter_errors(
+            {"decision": "use_tool", "basis": "shared_screen_candidate"}
+        )
+    )
+    assert list(
+        validator.iter_errors(
+            {"decision": "inspect_screen", "basis": "recent_conversation"}
+        )
+    )
+
+
+def test_grounding_observation_fixtures_enforce_candidates_evidence_and_core_ownership() -> None:
+    schema = _load_json(GROUNDING_OBSERVATION_SCHEMA)
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema)
+    fixture = _load_json(CONTRACT_ROOT / "fixtures/grounding-observations.json")
+    assert isinstance(fixture, dict)
+    valid = fixture["valid"]
+    invalid = fixture["invalid"]
+    assert isinstance(valid, list)
+    assert isinstance(invalid, list)
+    for case in valid:
+        validator.validate(case["observation"])
+    for case in invalid:
+        assert list(validator.iter_errors(case["observation"])), case["id"]
+    assert {case["id"] for case in valid} == {
+        "single-warning",
+        "multiple-red-candidates",
+        "target-disappeared",
+        "small-text-unreadable",
+        "unrelated-screen",
+    }
 
 
 def test_codegen_command_reproduces_committed_screen_types(tmp_path: Path) -> None:

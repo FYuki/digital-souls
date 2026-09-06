@@ -1,0 +1,110 @@
+{
+  "valid": [
+    {
+      "id": "single-warning",
+      "observation": {
+        "target_status": "identified",
+        "candidates": [
+          {
+            "label": "中央の警告ダイアログ",
+            "location": "center",
+            "recognized_content": "Synthetic warning",
+            "evidence": "中央に赤い警告アイコンと見出しが表示されている。",
+            "limitations": []
+          }
+        ],
+        "unreadable_reasons": [],
+        "uncertainty": "質問中の『これ』は中央の警告を指す可能性が高い。"
+      }
+    },
+    {
+      "id": "multiple-red-candidates",
+      "observation": {
+        "target_status": "multiple_candidates",
+        "candidates": [
+          {
+            "label": "右上の赤いバッジ",
+            "location": "top_right",
+            "recognized_content": "3",
+            "evidence": "右上に赤い円形バッジがある。",
+            "limitations": ["質問だけでは通知かエラーかを区別できない。"]
+          },
+          {
+            "label": "中央の赤い警告",
+            "location": "center",
+            "recognized_content": "Warning",
+            "evidence": "中央にも赤い警告アイコンがある。",
+            "limitations": []
+          }
+        ],
+        "unreadable_reasons": [],
+        "uncertainty": "赤い対象が2つあり、追加確認が必要。"
+      }
+    },
+    {
+      "id": "target-disappeared",
+      "observation": {
+        "target_status": "not_found",
+        "candidates": [],
+        "unreadable_reasons": ["質問にある警告は現在の画像内に見つからない。"],
+        "uncertainty": "質問後に表示が変化した可能性はあるが確定できない。"
+      }
+    },
+    {
+      "id": "small-text-unreadable",
+      "observation": {
+        "target_status": "unreadable",
+        "candidates": [],
+        "unreadable_reasons": ["対象領域の文字が小さく判読できない。"],
+        "uncertainty": "文字内容は推測できない。"
+      }
+    },
+    {
+      "id": "unrelated-screen",
+      "observation": {
+        "target_status": "not_found",
+        "candidates": [],
+        "unreadable_reasons": ["質問に関係する設定項目は画像内に見つからない。"],
+        "uncertainty": "別の画面が共有されている可能性がある。"
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "id": "model-overwrites-core-metadata",
+      "observation": {
+        "target_status": "not_found",
+        "candidates": [],
+        "unreadable_reasons": ["対象なし"],
+        "uncertainty": "不明",
+        "captured_at": "2026-09-06T03:00:00Z"
+      }
+    },
+    {
+      "id": "identified-without-candidate",
+      "observation": {
+        "target_status": "identified",
+        "candidates": [],
+        "unreadable_reasons": [],
+        "uncertainty": "不正"
+      }
+    },
+    {
+      "id": "multiple-with-one-candidate",
+      "observation": {
+        "target_status": "multiple_candidates",
+        "candidates": [
+          {
+            "label": "候補",
+            "location": "center",
+            "recognized_content": "",
+            "evidence": "候補がある。",
+            "limitations": []
+          }
+        ],
+        "unreadable_reasons": [],
+        "uncertainty": "不正"
+      }
+    }
+  ]
+}

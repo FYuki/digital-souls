@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digital-souls.local/contracts/perception/screen/screen-reference-decision.schema.json",
+  "title": "ScreenReferenceDecision",
+  "description": "会話文脈から画面参照の要否だけを判定するCore内部出力。認可、対象、Provider、自由な理由文は含めない。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision", "basis"],
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": ["answer_without_screen", "inspect_screen", "clarify_reference"]
+    },
+    "basis": {
+      "type": "string",
+      "enum": [
+        "current_message",
+        "recent_conversation",
+        "shared_screen_candidate",
+        "competing_references",
+        "insufficient_context"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "decision": { "const": "answer_without_screen" } } },
+      "then": {
+        "properties": {
+          "basis": { "enum": ["current_message", "recent_conversation"] }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "decision": { "const": "inspect_screen" } } },
+      "then": {
+        "properties": {
+          "basis": { "enum": ["current_message", "shared_screen_candidate"] }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "decision": { "const": "clarify_reference" } } },
+      "then": {
+        "properties": {
+          "basis": { "enum": ["competing_references", "insufficient_context"] }
+        }
+      }
+    }
+  ]
+}

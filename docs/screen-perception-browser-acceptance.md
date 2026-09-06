@@ -68,9 +68,16 @@ reason code: <失敗時の固定codeだけ>
 #217では完成した通常UIを使用し、上記に次を追加する。
 
 - text／LiveKit音声の明示要求
+- 共有中で会話内に別対象がない「これ何？」と位置付きの「右上の赤い表示、何？」
+- 貼付本文への「これ何？」、直前回答への「それ、詳しく」、否定、引用、対象競合
+- 単一対象、複数候補、対象消失、小さい文字、質問と無関係な共有画面
 - Ollama／openai-apiのProvider種別とmodel
-- snapshot、upload、Vision、Chat初回出力、音声開始のmetadata-only遅延
+- rule／LLM／fallbackの分岐と、判定LLM呼出率
+- input、参照判断、snapshot、upload、Vision、Chat初回内容あり出力、音声開始のmetadata-only遅延
 - OFF、対象変更、会話変更、通信断後の遅延結果破棄
-- cloud未同意、memory除外、保存禁止
+- cloud未同意、同意取消し後の画面由来履歴非送信、provenance継承、memory除外、保存禁止
+- digital-souls側タブの背面／非表示と、取得対象windowの背面／最小化を分けた結果
+
+合否集計ではADRの誤参照率、参照漏れ率、不要確認質問率、対象特定率、判定LLM呼出率、p50／p95基準を使う。45秒の障害timeout到達を会話品質の目標達成として扱わない。会話本文、画面内容、対象名は集計artifactへ残さず、合成case ID、decision、成功可否、区間時間、固定reason codeだけを記録する。
 
 #213のprobe成功を#217の完成UI受入の代わりにしない。
