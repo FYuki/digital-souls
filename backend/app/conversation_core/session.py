@@ -398,7 +398,7 @@ class ConversationCoreSession:
         response = self._responses.get(response_id)
         if response is None:
             return None
-        if response.state not in {ResponseState.COMPLETED, ResponseState.CANCELLED, ResponseState.FAILED}:
+        if not response.state.is_terminal:
             self._on_interruption(reason)
         result = await self._terminate(
             response_id=response_id,

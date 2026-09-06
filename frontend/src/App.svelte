@@ -718,6 +718,7 @@
 
   .input-area {
     display: flex;
+    flex-wrap: wrap;
     align-items: stretch;
     gap: 12px;
     padding: 16px 24px 20px;

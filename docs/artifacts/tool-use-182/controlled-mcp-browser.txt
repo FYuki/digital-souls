@@ -1,12 +1,12 @@
 
 Running 3 tests using 1 worker
 
-(node:2065049) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(node:2093097) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
-  ✓  1 [text] › integration/tool-use-contract/conversation.spec.ts:29:1 › テキストで追加情報を質問し、回答で同じ操作を再開する (1.1m)
-  ✓  2 [text] › integration/tool-use-contract/conversation.spec.ts:40:1 › テキストの実行中に停止すると遅い結果が回答へ混ざらない (28.5s)
-(node:2065600) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+  ✓  1 [text] › integration/tool-use-contract/conversation.spec.ts:29:1 › テキストで追加情報を質問し、回答で同じ操作を再開する (1.2m)
+  ✓  2 [text] › integration/tool-use-contract/conversation.spec.ts:40:1 › テキストの実行中に停止すると遅い結果が回答へ混ざらない (56.7s)
+(node:2094719) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
-  ✓  3 [voice] › integration/tool-use-contract/conversation.spec.ts:50:1 › 音声で追加質問を再生し、音声の回答で再開して最終回答を再生する (1.1m)
+  ✓  3 [voice] › integration/tool-use-contract/conversation.spec.ts:53:1 › 音声で追加質問を再生し、音声の回答で再開して最終回答を再生する (1.1m)
 
-  3 passed (2.7m)
+  3 passed (3.3m)

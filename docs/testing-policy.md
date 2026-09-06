@@ -187,8 +187,10 @@ Core package/DBをtest MCP serverからimportしない。test-owned MCPの成功
 ブラウザのテキスト・LiveKit音声、追加質問と停止の実行方法・公開MCPと制御fixtureの区別は
 [会話からの外部MCP利用](tool-use.md)を参照する。実接続スイートをCIのmock結果で代替しない。
 この受入runnerはテスト所有LiveKitと動的portを使う独立入口であり、既存Profileの環境オーケストレーターを起動しない。
-共通reporterの`environment-run.json`／`evidence.json`の代わりに、専用runtimeディレクトリの
-`runtime-manifest.json`へrun ID、実行時刻、実依存、所有process、テスト結果を記録する。
+共通reporterの`environment-run.json`／`evidence.json`の代わりに、テストdata rootの`runtime/tool-use/`
+へ解決済みProfileと`runtime-manifest.json`（run ID、実行時刻、実依存、所有process、結果）を記録する。
+共有用の専用成果物ディレクトリにはpath・endpoint・process/container識別子を除いた写しだけを置く。
+使用modelは実接続受入の再現条件として共有用にも記録する。
 起動途中の例外・中断はrunnerの非zero終了として扱い、readinessだけを成功証跡にしない。
 
 ### SDK/version更新

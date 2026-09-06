@@ -2,13 +2,13 @@
   "config": {
     "argv": [
       "/usr/bin/node",
-      "/home/asa/dev/digital-souls/frontend/node_modules/.bin/playwright",
+      "./frontend/node_modules/.bin/playwright",
       "test",
       "--config",
       "playwright.tool-use-contract.config.ts"
     ],
-    "configFile": "/home/asa/dev/digital-souls/frontend/playwright.tool-use-contract.config.ts",
-    "rootDir": "/home/asa/dev/digital-souls/frontend/integration/tool-use-contract",
+    "configFile": "./frontend/playwright.tool-use-contract.config.ts",
+    "rootDir": "./frontend/integration/tool-use-contract",
     "failOnFlakyTests": false,
     "forbidOnly": false,
     "fullyParallel": false,
@@ -24,7 +24,7 @@
     "preserveOutput": "always",
     "projects": [
       {
-        "outputDir": "/home/asa/dev/digital-souls/frontend/test-results/tool-use-contract",
+        "outputDir": "./frontend/test-results/tool-use-contract",
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
@@ -32,7 +32,7 @@
         },
         "id": "text",
         "name": "text",
-        "testDir": "/home/asa/dev/digital-souls/frontend/integration/tool-use-contract",
+        "testDir": "./frontend/integration/tool-use-contract",
         "testIgnore": [],
         "testMatch": [
           "**/*.@(spec|test).?(c|m)[jt]s?(x)"
@@ -40,7 +40,7 @@
         "timeout": 240000
       },
       {
-        "outputDir": "/home/asa/dev/digital-souls/frontend/test-results/tool-use-contract",
+        "outputDir": "./frontend/test-results/tool-use-contract",
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
@@ -48,7 +48,7 @@
         },
         "id": "voice",
         "name": "voice",
-        "testDir": "/home/asa/dev/digital-souls/frontend/integration/tool-use-contract",
+        "testDir": "./frontend/integration/tool-use-contract",
         "testIgnore": [],
         "testMatch": [
           "**/*.@(spec|test).?(c|m)[jt]s?(x)"
@@ -104,12 +104,12 @@
                   "workerIndex": 0,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 66800,
+                  "duration": 74635,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-09-06T17:30:13.753Z",
+                  "startTime": "2026-09-06T18:26:12.277Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -138,12 +138,12 @@
                   "workerIndex": 0,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 28460,
+                  "duration": 56717,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-09-06T17:31:18.322Z",
+                  "startTime": "2026-09-06T18:27:24.815Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -172,12 +172,12 @@
                   "workerIndex": 1,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 63364,
+                  "duration": 64387,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-09-06T17:31:45.912Z",
+                  "startTime": "2026-09-06T18:28:19.482Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -187,7 +187,7 @@
           ],
           "id": "e7085d83df82ab600126-b05ae5553a28b918e7f7",
           "file": "conversation.spec.ts",
-          "line": 50,
+          "line": 53,
           "column": 1
         }
       ]
@@ -195,8 +195,8 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-09-06T17:30:13.484Z",
-    "duration": 159316.328,
+    "startTime": "2026-09-06T18:26:11.938Z",
+    "duration": 196710.50699999998,
     "expected": 3,
     "skipped": 0,
     "unexpected": 0,

@@ -148,28 +148,34 @@ class InferenceDecisionRouter:
                 "required": ["done"],
                 "additionalProperties": False,
             }
-            await run_sync(
-                self.router.estimate_input_tokens,
-                caller=InferenceCaller.TOOL_ROUTING,
-                target=InferenceTarget.TOOL_ROUTING,
-                messages=completion_messages,
-                response_schema=completion_schema,
-            )
-            completion = await run_sync(
-                self.router.generate_structured,
-                caller=InferenceCaller.TOOL_ROUTING,
-                target=InferenceTarget.TOOL_ROUTING,
-                messages=completion_messages,
-                response_schema=completion_schema,
-                cancellation_token=cancellation,
-            )
-            if (
-                not isinstance(completion.value, dict)
-                or type(completion.value.get("done")) is not bool
-            ):
-                raise MCPFailure("validation", "invalid_decision")
-            if completion.value["done"]:
-                return ToolDecision("finish")
+            try:
+                await run_sync(
+                    self.router.estimate_input_tokens,
+                    caller=InferenceCaller.TOOL_ROUTING,
+                    target=InferenceTarget.TOOL_ROUTING,
+                    messages=completion_messages,
+                    response_schema=completion_schema,
+                )
+            except InferenceError as error:
+                if error.category != InferenceErrorCategory.INVALID_REQUEST:
+                    raise
+                # 完了判定が収まらない場合は、下の通常判断で入力を減らす。
+            else:
+                completion = await run_sync(
+                    self.router.generate_structured,
+                    caller=InferenceCaller.TOOL_ROUTING,
+                    target=InferenceTarget.TOOL_ROUTING,
+                    messages=completion_messages,
+                    response_schema=completion_schema,
+                    cancellation_token=cancellation,
+                )
+                if (
+                    not isinstance(completion.value, dict)
+                    or type(completion.value.get("done")) is not bool
+                ):
+                    raise MCPFailure("validation", "invalid_decision")
+                if completion.value["done"]:
+                    return ToolDecision("finish")
         if is_pending:
             context["candidates"] = []
         # candidateには元schemaとbindingを一緒に積み、全体推定にも収める。
@@ -199,6 +205,9 @@ class InferenceDecisionRouter:
                     context["history"].pop(0)
                 elif context["candidates"]:
                     context["candidates"].pop()
+                elif context.get("results"):
+                    context["results"].pop(0)
+                    context["results_omitted"] = True
                 else:
                     raise
         result = await run_sync(

@@ -52,19 +52,26 @@ class Sanitizer:
             value = value[:start] + "[非公開]" + value[end:]
         return "".join(c for c in value if c in "\n\t" or ord(c) >= 32)
 
-    def value(self, value: Any, *, depth: int = 0) -> Any:
+    def value(
+        self, value: Any, *, depth: int = 0, omitted: list[bool] | None = None
+    ) -> Any:
+        omitted = omitted if omitted is not None else [False]
         if depth > 12:
+            omitted[0] = True
             return "[省略]"
         if isinstance(value, str):
+            omitted[0] |= len(value) > 16_384
             return self.text(value)
         if isinstance(value, list):
-            return [self.value(v, depth=depth + 1) for v in value[:64]]
+            omitted[0] |= len(value) > 64
+            return [self.value(v, depth=depth + 1, omitted=omitted) for v in value[:64]]
         if isinstance(value, dict):
+            omitted[0] |= len(value) > 128 or any(len(str(k)) > 200 for k in value)
             return {
                 self.text(str(k), maximum=200): (
                     "[非公開]"
                     if _SECRET_KEY.search(str(k))
-                    else self.value(v, depth=depth + 1)
+                    else self.value(v, depth=depth + 1, omitted=omitted)
                 )
                 for k, v in list(value.items())[:128]
             }
@@ -103,21 +110,33 @@ class Sanitizer:
                 projected["outcome"] = "result_unknown"
             return projected
         native = envelope.get("native_payload") or {}
+        if not isinstance(native, dict):
+            return {**projected, "text": [], "omitted": True}
         texts: list[str] = []
-        omitted = False
-        for part in (native.get("content") or native.get("contents") or [])[:64]:
+        parts = native["content"] if "content" in native else native.get("contents", [])
+        omitted = not isinstance(parts, list) or len(parts) > 64
+        for part in parts[:64] if isinstance(parts, list) else []:
+            if not isinstance(part, dict):
+                omitted = True
+                continue
             if part.get("type", "text") == "text" and isinstance(part.get("text"), str):
                 texts.append(self.text(part["text"]))
                 omitted |= len(part["text"]) > 16_384
-            elif part.get("type") == "resource" and isinstance(
-                part.get("resource", {}).get("text"), str
+            elif (
+                part.get("type") == "resource"
+                and isinstance(part.get("resource"), dict)
+                and isinstance(part.get("resource", {}).get("text"), str)
             ):
                 texts.append(self.text(part["resource"]["text"]))
+                omitted |= len(part["resource"]["text"]) > 16_384
             else:
                 omitted = True
-        projected.update(text=texts, omitted=omitted)
+        truncation = [omitted]
         if "structuredContent" in native:
-            projected["structured"] = self.value(native["structuredContent"])
+            projected["structured"] = self.value(
+                native["structuredContent"], omitted=truncation
+            )
+        projected.update(text=texts, omitted=truncation[0])
         return projected
 
 

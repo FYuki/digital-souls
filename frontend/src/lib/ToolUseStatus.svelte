@@ -17,6 +17,7 @@
     try {
       const response = await fetch(`/api/tool-use/status/${encodeURIComponent(character)}/${encodeURIComponent(conversationId)}`, {
         signal: controller.signal,
+        cache: 'no-store',
       })
       if (!response.ok) return
       const value: unknown = await response.json()
@@ -58,7 +59,7 @@
   }
 
   function leave() {
-    if (state !== 'disabled') void stopRequest().catch(() => undefined)
+    void stopRequest().catch(() => undefined)
   }
 
   onMount(() => {
@@ -75,7 +76,7 @@
     controller.abort()
     clearTimeout(timer)
     // 会話切替と画面終了で、以前の会話の入力待ちを持ち越さない。
-    if (state !== 'disabled') void stopRequest().catch(() => undefined)
+    void stopRequest().catch(() => undefined)
   })
 </script>
 
@@ -100,7 +101,7 @@
 {/if}
 
 <style>
-  .tool-use-status { padding: 0.5rem 1rem; font-size: 0.875rem; }
+  .tool-use-status { flex: 0 0 100%; box-sizing: border-box; padding: 0.5rem 1rem; font-size: 0.875rem; }
   button { margin: 0.25rem 0.5rem; }
   ul { margin: 0.25rem 0; }
 </style>

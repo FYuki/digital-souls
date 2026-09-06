@@ -20,7 +20,7 @@
 .................................................................        [100%]
 =============================== warnings summary ===============================
 tests/module/test_memory_management_api.py::test_persona_patch_returns_privacy_reason_without_rejected_body
-  /home/asa/dev/digital-souls/backend/.venv/lib/python3.12/site-packages/fastapi/routing.py:136: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+  ./backend/.venv/lib/python3.12/site-packages/fastapi/routing.py:136: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
     response = await f(request)
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html

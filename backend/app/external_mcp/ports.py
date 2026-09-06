@@ -37,6 +37,7 @@ class BindingValidatorPort(Protocol):
         operation: str,
         character_id: str,
         binding_id: str | None,
+        session_id: str,
     ) -> bool: ...
 
 

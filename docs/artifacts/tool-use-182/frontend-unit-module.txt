@@ -3,7 +3,7 @@
 > vitest run
 
 
- RUN  v2.1.9 /home/asa/dev/digital-souls/frontend
+ RUN  v2.1.9 ./frontend
 
  ✓ src/test-entrypoints.module.test.ts (5 tests) 7ms
  ✓ src/lib/conversation-session.unit.test.ts (11 tests) 8ms

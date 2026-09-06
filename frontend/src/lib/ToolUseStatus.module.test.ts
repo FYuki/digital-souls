@@ -30,3 +30,16 @@ test('出典は文字として表示し、ページ終了で入力待ちを破�
   window.dispatchEvent(new Event('pagehide'))
   expect(fetcher).toHaveBeenCalledWith('/api/tool-use/stop', expect.objectContaining({ keepalive: true }))
 })
+
+test('初回status待ちの離脱でも停止し、状態取得をキャッシュしない', () => {
+  const fetcher = vi.fn((_url: string, options?: RequestInit) => options?.method === 'POST'
+    ? Promise.resolve(new Response('{}')) : new Promise<Response>(() => undefined))
+  vi.stubGlobal('fetch', fetcher)
+  const component = render(ToolUseStatus, { character: 'miori', conversationId: 'pending' })
+  expect(fetcher).toHaveBeenCalledWith(expect.stringContaining('/status/'), expect.objectContaining({ cache: 'no-store' }))
+  window.dispatchEvent(new Event('pagehide'))
+  expect(fetcher).toHaveBeenCalledWith('/api/tool-use/stop', expect.objectContaining({ method: 'POST' }))
+  fetcher.mockClear()
+  component.unmount()
+  expect(fetcher).toHaveBeenCalledWith('/api/tool-use/stop', expect.objectContaining({ method: 'POST' }))
+})

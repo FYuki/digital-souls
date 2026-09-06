@@ -426,6 +426,7 @@ class ExecutionGate:
                     operation,
                     loop.context.character_id,
                     binding_id,
+                    loop.context.session_id,
                 ):
                     raise MCPFailure("policy", "binding_denied")
             native = snapshot.document
@@ -476,6 +477,7 @@ class ExecutionGate:
                             operation,
                             loop.context.character_id,
                             binding_id,
+                            loop.context.session_id,
                         ):
                             raise MCPFailure("policy", "binding_denied")
                     # 非同期validatorを待つ間のstop/relinkもdispatch前に確認する。

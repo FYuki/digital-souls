@@ -38,13 +38,16 @@ test('テキストで追加情報を質問し、回答で同じ操作を再開�
 })
 
 test('テキストの実行中に停止すると遅い結果が回答へ混ざらない', async ({ page }) => {
+  await rm(join(signals, 'slow-dispatched'), { force: true })
+  await rm(join(signals, 'slow-result-attempted'), { force: true })
   await driver.openVoiceChat(page)
   const reply = send(page, 'slow-exhibitで展示の遅い照合を実行してください。')
   await expect.poll(() => signal('slow-dispatched')).toBe(true)
   await page.getByRole('button', { name: '外部操作を停止', exact: true }).click()
   expect((await reply).status()).toBe(499)
   await expect(page.getByRole('textbox', { name: 'メッセージ', exact: true })).toBeEnabled()
-  await expect(page.locator('article.message')).not.toContainText(['遅い照合の結果は金色'])
+  await expect.poll(() => signal('slow-result-attempted'), { timeout: 45_000 }).toBe(true)
+  await expect(page.locator('article.message').filter({ hasText: '遅い照合の結果は金色' })).toHaveCount(0)
 })
 
 test('音声で追加質問を再生し、音声の回答で再開して最終回答を再生する', async ({ page }) => {

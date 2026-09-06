@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import shutil
@@ -17,7 +18,6 @@ from contextlib import ExitStack, contextmanager
 from copy import deepcopy
 from datetime import datetime, timezone
 from uuid import uuid4
-from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
@@ -31,6 +31,15 @@ from tests.integration.test_external_mcp_real_servers_integration import (
     free_port,
     stop_process,
 )
+
+
+def public_evidence(text: str) -> str:
+    """公開用の写しだけからローカルpathと動的な接続先を除く。"""
+    text = text.replace(str(ROOT), ".")
+    text = re.sub(r"/tmp/ds-tool-182-[^/\s\"']+", "<test-root>", text)
+    return re.sub(
+        r"(?:https?|wss?)://(?:localhost|127\.0\.0\.1):\d+", "<test-service>", text
+    )
 
 
 @contextmanager
@@ -151,6 +160,8 @@ def main():
         / ("tool-use-contract-runtime" if contract else "tool-use-runtime")
     )
     artifacts.mkdir(parents=True, exist_ok=True)
+    # 旧runnerが出力したProfileも共有用ディレクトリへ残さない。
+    (artifacts / "resolved-profile.json").unlink(missing_ok=True)
     with (
         tempfile.TemporaryDirectory(prefix="ds-tool-182-") as temporary,
         ExitStack() as stack,
@@ -292,7 +303,9 @@ def main():
             )
         )
         ready(backend_url + "/health/ready", backend)
-        profile = root / "profile.json"
+        runtime = data / "runtime" / "tool-use"
+        runtime.mkdir(parents=True, exist_ok=True)
+        profile = runtime / "resolved-profile.json"
         service_urls = {
             "backend": backend_url,
             "frontend": frontend_url,
@@ -356,12 +369,6 @@ def main():
         )
         ready(frontend_url, frontend)
 
-        def public_origin(url):
-            parsed = urlsplit(url)
-            return f"{parsed.scheme}://{parsed.hostname}" + (
-                f":{parsed.port}" if parsed.port else ""
-            )
-
         run_manifest = {
             "schemaVersion": 1,
             "runId": str(uuid4()),
@@ -378,16 +385,16 @@ def main():
             "ownedProcesses": {"backend": backend.pid, "frontend": frontend.pid},
             "ownedLiveKitContainer": container,
             "externalServices": {
-                k: public_origin(v)
+                k: v
                 for k, v in service_urls.items()
                 if k not in {"backend", "frontend"}
             },
             "testStatus": "running",
         }
-        (artifacts / "runtime-manifest.json").write_text(
+        (runtime / "runtime-manifest.json").write_text(
             json.dumps(run_manifest, ensure_ascii=False, indent=2)
         )
-        shutil.copyfile(profile, artifacts / "resolved-profile.json")
+        # resolved profileを公開証跡へ複製しない。接続先はテスト用data rootだけに置く。
         voicevox = environment.get("VOICEVOX_BASE_URL", "http://127.0.0.1:50021")
         speech(
             voicevox,
@@ -429,9 +436,34 @@ def main():
         )
         run_manifest["testStatus"] = "passed" if result.returncode == 0 else "failed"
         run_manifest["completedAt"] = datetime.now(timezone.utc).isoformat()
-        (artifacts / "runtime-manifest.json").write_text(
+        (runtime / "runtime-manifest.json").write_text(
             json.dumps(run_manifest, ensure_ascii=False, indent=2)
         )
+        shared = {
+            k: v
+            for k, v in run_manifest.items()
+            if k
+            not in {
+                "dataRoot",
+                "ownedProcesses",
+                "ownedLiveKitContainer",
+                "externalServices",
+            }
+        }
+        # 使用modelはIssueの実接続受入条件として記録する。credentialは含まない。
+        (artifacts / "runtime-manifest.json").write_text(
+            json.dumps(shared, ensure_ascii=False, indent=2)
+        )
+        report = (
+            ROOT
+            / "frontend/test-results"
+            / ("tool-use-contract" if contract else "tool-use-browser")
+            / "results.json"
+        )
+        if report.is_file():
+            (artifacts / "browser-public.json").write_text(
+                public_evidence(report.read_text())
+            )
         return result.returncode
 
 
