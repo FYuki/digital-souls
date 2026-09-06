@@ -11,6 +11,10 @@ Issue #135 Goal 1では、コード、設定、CI、dogfood配備資材を実機
 実Ubuntu-dogfoodへの適用、実GPUでのVRAM／latency計測、連続会話と再起動受入はGoal 2で行う。
 Issue #112は本決定と実装の対象外である。
 
+2026-09-06決定: 過去backupの実在をrollbackの必須条件とする要件は取り下げる。
+manifestとbackupの保持数が異なるため、古い世代へ戻せることを優先する。新規backupの検証は維持し、
+過去manifestは既知の汚染形式だけを読込時に正規化する。schema不一致時の切替拒否は維持する。
+
 ## 背景
 
 当初は個人開発・単一マシンであり、FastAPI、Vite、Ollama、WhisperをWSL2上で直接実行する方が
