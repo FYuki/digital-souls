@@ -13,7 +13,7 @@ const processor = (samples: number[], start: number, end: number) => {
   const events: { kind: string; lowerMs: number; sourceSample: number }[] = []
   const registry: { factory?: new (options: { processorOptions: Partial<ScheduledFixture> }) => Processor } = {}
   class AudioWorkletProcessor {
-    port: Port = { onmessage: null, postMessage: data => events.push(data as typeof events[number]) }
+    port: Port = { onmessage: null, postMessage: data => { if ((data as { kind: string }).kind !== 'finished') events.push(data as typeof events[number]) } }
   }
   runInNewContext(fixtureWorkletSource, {
     AudioWorkletProcessor,
@@ -73,6 +73,18 @@ describe('観測可能なfixture音声源', () => {
     expect(p.next(2)).toEqual([0, 0])
     expect(p.events.filter(e => e.kind === 'sourceStart')).toHaveLength(1)
   })
+  test('全sample消費後の明示replayだけが同じ音声を新しい境界で再送する', () => {
+    const p = processor([0.25, 0.5, -0.5, -0.25], 0, 4)
+    p.send('start', 100)
+    expect(p.next(2)).toEqual([0.25, 0.5])
+    p.send('replay', 105)
+    expect(p.next(2)).toEqual([-0.5, -0.25])
+    expect(p.next(2)).toEqual([0, 0])
+    p.send('replay', 200)
+    expect(p.next(4)).toEqual([0.25, 0.5, -0.5, -0.25])
+    expect(p.events.filter(e => e.kind === 'sourceStart').map(e => e.lowerMs)).toEqual([100, 200])
+  })
+
 })
 
 const wav = () => {

@@ -43,6 +43,7 @@ from app.livekit_transport.delivery import CoreNotificationPort
 from app.livekit_transport.errors import RoomCleanupPendingError
 from app.livekit_transport.measurement import LiveKitMeasurementSession
 from app.livekit_transport.runtime import MicrophoneTrackObserver
+from app.livekit_transport.response_audio import ResponseAudioTracks
 from app.livekit_transport.token import IssuedToken, LiveKitTokenSigner
 from app.voice_metrics import MeasurementKind, TraceEvent
 from app.screen_perception.provenance import ScreenLineage
@@ -228,7 +229,10 @@ class _LiveKitPcmAudioSource:
     def __init__(self, source: _RtcAudioSource) -> None:
         self._source = source
 
-    async def publish(self, pcm: bytes) -> None:
+    async def begin_response(self, response_id: str) -> None:
+        """単一sourceのadapter。productionではResponseAudioTracksがtrackを分離する。"""
+
+    async def publish(self, pcm: bytes, *, response_id: str) -> None:
         rtc_module = _livekit_rtc_module()
 
         samples_per_channel = len(pcm) // (
@@ -242,7 +246,7 @@ class _LiveKitPcmAudioSource:
         )
         await self._source.capture_frame(frame)
 
-    def clear(self) -> None:
+    def clear(self, response_id: str | None = None) -> None:
         self._source.clear_queue()
 
 
@@ -414,7 +418,7 @@ class _ConversationCoreDelivery:
         self,
         *,
         coordinator: ProductionSessionCoordinator,
-        audio_source: _LiveKitPcmAudioSource,
+        audio_source: _LiveKitPcmAudioSource | ResponseAudioTracks,
         character_participant_id: str,
         character_id: str,
         user_participant_id: str | None = None,
@@ -440,9 +444,15 @@ class _ConversationCoreDelivery:
         return self._measurement
 
     def attach_measurement(self, measurement: LiveKitMeasurementSession) -> None:
+        if self._measurement is measurement:
+            return
         if self._measurement is not None and self._measurement is not measurement:
             raise RuntimeError("delivery measurement is already attached")
         self._measurement = measurement
+        if isinstance(self._audio_source, ResponseAudioTracks):
+            self._audio_source.set_observer(lambda name, response_id: measurement.record_response_event(
+                response_id=response_id, name=name, stage="transport",
+            ))
 
     async def publish(self, event: CoreEvent) -> None:
         if (
@@ -470,6 +480,7 @@ class _ConversationCoreDelivery:
                     stage="turn",
                 )
             self._coordinator.begin_response(response_id=event.response_id)
+            await self._audio_source.begin_response(event.response_id)
         if (
             event.type == "utterance_finalized"
             and event.utterance_id is not None
@@ -542,7 +553,7 @@ class _ConversationCoreDelivery:
                 // (PCM_SAMPLE_WIDTH_BYTES * PCM_CHANNELS),
             )
             await self._coordinator.send_core(self._voice_payload(event))
-            await self._audio_source.publish(event.audio)
+            await self._audio_source.publish(event.audio, response_id=response_id)
             if first_audio:
                 self._first_audio_observed.add(response_id)
                 if self._measurement is not None:
@@ -593,7 +604,7 @@ class _ConversationCoreDelivery:
                 reason_code="privacy_skip",
             )
         if event.type in {"response_cancelled", "response_failed"}:
-            self._audio_source.clear()
+            self._audio_source.clear(event.response_id)
         if event.type == "response_privacy_skipped":
             if event.source_utterance_ids is None:
                 raise ValueError("privacy event requires source utterance ids")
@@ -1098,6 +1109,7 @@ class _ConversationCoreBridge:
 class _SessionCleanupState:
     room: rtc.Room | None
     pending_runtime_tasks: list[asyncio.Task[None]]
+    audio_source: ResponseAudioTracks | None = None
     session_binding_deleted: bool = False
     room_deleted: bool = False
     room_cleanup_task: asyncio.Task[None] | None = None
@@ -1134,7 +1146,7 @@ class ProductionRuntimeManager:
         self._session_tasks: dict[str, set[asyncio.Task[None]]] = {}
         self._participant_event_tails: dict[str, asyncio.Task[None]] = {}
         self._ready: dict[str, asyncio.Event] = {}
-        self._audio_sources: dict[str, _LiveKitPcmAudioSource] = {}
+        self._audio_sources: dict[str, ResponseAudioTracks] = {}
         self._core_sessions: dict[str, ConversationCoreSession] = {}
         self._core_bridges: dict[str, _ConversationCoreBridge] = {}
         self._cleanup_states: dict[str, _SessionCleanupState] = {}
@@ -1468,18 +1480,9 @@ class ProductionRuntimeManager:
                 exc_info=(type(error), error, error.__traceback__),
             )
 
-    async def _prepare_output_track(
-        self, room: rtc.Room
-    ) -> _LiveKitPcmAudioSource:
-        rtc_module = _livekit_rtc_module()
-
-        source: rtc.AudioSource = rtc_module.AudioSource(PCM_SAMPLE_RATE, PCM_CHANNELS)
-        track = rtc_module.LocalAudioTrack.create_audio_track("character-response", source)
-        options = rtc_module.TrackPublishOptions(
-            source=rtc_module.TrackSource.SOURCE_MICROPHONE
-        )
-        await room.local_participant.publish_track(track, options)
-        return _LiveKitPcmAudioSource(source)
+    async def _prepare_output_track(self, room: rtc.Room) -> ResponseAudioTracks:
+        # 応答決定まで無所属の出力trackを発行しない。
+        return ResponseAudioTracks(room, sample_rate=PCM_SAMPLE_RATE, channels=PCM_CHANNELS)
 
     async def send_core(self, session_id: str, payload: bytes) -> None:
         coordinator = self._coordinators.get(session_id)
@@ -1538,16 +1541,20 @@ class ProductionRuntimeManager:
             core_session = self._core_sessions.pop(session_id, None)
             if core_session is not None:
                 await core_session.end()
+            audio_source = self._audio_sources.get(session_id)
             room, pending_tasks = self._release_runtime_ownership(session_id)
             state = _SessionCleanupState(
                 room=room,
                 pending_runtime_tasks=pending_tasks,
+                audio_source=audio_source,
             )
             self._cleanup_states[session_id] = state
 
         async with state.lock:
             room_cleanup_task = self._start_room_cleanup(session_id, state)
             local_operations: list[Awaitable[object]] = []
+            if state.audio_source is not None:
+                local_operations.append(asyncio.create_task(self._close_audio_source(state)))
             if not state.session_binding_deleted:
                 local_operations.append(
                     asyncio.create_task(self._delete_session_binding(session_id, state))
@@ -1579,6 +1586,12 @@ class ProductionRuntimeManager:
                 ) from room_cleanup_result
             if self._cleanup_states.get(session_id) is state:
                 self._cleanup_states.pop(session_id)
+
+    @staticmethod
+    async def _close_audio_source(state: _SessionCleanupState) -> None:
+        if state.audio_source is not None:
+            await state.audio_source.aclose()
+            state.audio_source = None
 
     async def _delete_session_binding(
         self, session_id: str, state: _SessionCleanupState

@@ -243,3 +243,17 @@ Frontend単体351件、関連Backend66件が成功した。Svelte／TypeScript�
 ### 応答source相関で確認したSDK制約
 
 現在のCharacter AudioTrackは複数応答で共有され、RTP frameへCoreのresponse IDは付いていない。公開SDKの[frame metadata仕様](https://docs.livekit.io/transport/media/frame-metadata/)も映像限定で、音声には未対応と明記している。Pythonの`AudioFrame.userdata`はRTPへ送られるresponse metadataとして使用できない。応答ごとのtrack分離は旧応答と新応答の混入を防ぐ候補だが、track発行後の無音やdecoderのcomfort noiseと、実際の応答PCMの先頭を区別する課題は残る。source相関が確認できるまでは、trackの初回packetや最初の非ゼロsampleを応答開始として採用しない。
+
+### 応答ごとのAudioTrack分離（2026-09-07）
+
+全応答が同じCharacter AudioTrackを使う構成を変更し、`ResponseAudioTracks`が応答ごとに独立したAudioSource／AudioTrackを所有する。track名の`ds-response-v1:<response_id>`をブラウザで検証し、対応する応答のrender観測だけへ割り当てる。次応答の発行前には旧trackをunpublishしてsourceをcloseする。cancelでは対応するqueueをclearしてtrackをmuteし、旧responseのPCMが新sourceへ送られないようにした。待機中のcapture、publish中断、終了との競合、破棄済みsourceへの再操作も検証した。
+
+ブラウザは停止済み応答を同一sessionの再接続でも保持し、次応答のsegmentで古いtrackを再開しない。response IDを持たないtrackは再生経路へ接続しない。Backend／Frontendはtrack名方式を揃えて更新する。これはtrackの所有先の分離であり、decoder内のcomfort noiseやlogical segment内のPCM先頭sampleの対応を確定するものではない。既存のfirst playback値を今回の変更だけで受け入れ証拠へ昇格させない。
+
+`response-tracks-01`の準備1回＋測定3回ではtranscript一致・応答完了・明示終了が成功し、全4回で受信trackのresponse IDが応答と一致した。続いて`response-tracks-session-01`／`response-tracks-session-02`では、同じsession・conversation・マイクstreamを維持した3往復を各1回実行した。両runとも3応答のIDが一意で、trackのresponse IDと一致し、途中の追加マイク操作0回、最後の明示終了が成功した。各入力は同じhashの合成fixtureであり、物理マイクによる手動会話や独立100試行ではない。
+
+`response-tracks-session-02`には実際のtrack発行・解除・native source解放完了をserver monotonic traceへ記録した。発行は3件、次応答前のunpublishは2件、source closeは3件だった。1→2応答目、2→3応答目とも、旧sourceのclose完了が次trackのpublish完了より前にあった。最後のsourceはsession終了時にcloseしたため、独立したtrack unpublishイベントは記録しない。response decision→track publish完了は1.7ms、54.4ms、55.0msで、後続2回は旧trackの解放を含む。これは少数試行のtransport処理時間であり、TTFAの合否やreconnect／stale提示の100試行受け入れを示す値ではない。
+
+検証結果はFrontend単体366件、結合97件、Backend単体2,321件成功・1件skip、LiveKit関連module20件成功。Svelte／TypeScript、Python lint、Backend型検査226 source filesも成功した。Backend全体の初回実行ではcwdが`backend/`だったためschema／Git ignore参照5件が失敗したが、規定のリポジトリ直下から再実行して解消した。外部実接続の結果は上記3 runであり、unitのskipを実接続成功として数えない。
+
+同一session診断の再現手順は[`scripts/voice_quality/README.md`](../scripts/voice_quality/README.md)を参照する。生manifestとtraceはignoredの各runディレクトリへ保持する。PCM先頭のreceive／decode／first playback、相槌・take-turnの残る検出漏れ、reconnect／underrun／gap／stale提示、全条件の100試行・dogfood受け入れは引き続き未完了である。

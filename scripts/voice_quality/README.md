@@ -50,3 +50,19 @@ Ollamaの`load_duration`はprovider報告値として扱う。v0.32.5の[ChatHan
 ## 正解ラベル付きfixture
 
 [v1](../../frontend/playwright/fixtures/voice-quality-v1/README.md)と[v2](../../frontend/playwright/fixtures/voice-quality-v2/README.md)に、独立したラベル、音声生成クレジット、WAV hash、正解境界、展開・診断手順を記載する。`fixtures.py`と`stt_turn_diagnostic.py`は`--cases`で対応する固定ラベル定義を選択できる。
+
+
+## 同一sessionの応答track切替診断
+
+`--continuous-turns 3 --scheduled-fixture`を指定すると、同じsession／conversationとマイクstreamを維持して固定音声を3回供給する。最初のマイクON後はマイクを操作せず、各応答のtrack名のresponse ID、一意な応答ID、transcript一致、応答完了、最後の明示終了を確認する。
+
+```bash
+backend/.venv/bin/python scripts/voice_quality/run_pilot.py \
+  --run-id response-tracks-session-02 \
+  --inference-env /home/asa/dev/digital-souls/backend/.env \
+  --disable-thinking --scheduled-fixture --continuous-turns 3
+```
+
+このモードのmanifest scopeは`continuous_response_track_diagnostic`で、warm-up除外や独立100試行を実施するものではない。`--trials`の独立試行数はこのモードでは使用しない。固定音声全体の供給と各応答の完了後に1.5秒待って次へ進み、この待機をplayout完了の測定値とは扱わない。fixtureの途中でreplayを要求しても巻き戻さず、完了後の明示要求だけを受理する。通常pilotの起動では環境から残ったcontinuous指定を引き継がない。
+
+trackの応答ID一致は、PCM先頭の受信・decode・first playbackを相関できたという意味ではない。decoderのcomfort noiseやlogical segment内のsample位置については別の検証が必要である。診断中の会話履歴は専用runのdata rootに残し、dogfoodは使用しない。

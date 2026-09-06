@@ -70,7 +70,13 @@ def test_pilot_environment_keeps_existing_generation_options_and_isolates_state(
     livekit.write_text('LIVEKIT_KEYS="test-key: test-value"\n')
     monkeypatch.delenv("DS_DATA_DIR", raising=False)
     monkeypatch.setenv("VOICE_QUALITY_RUN_ID", "previous-run")
+    monkeypatch.setenv("VOICE_QUALITY_CONTINUOUS_TURNS", "9")
     env = pilot.pilot_environment(inference, livekit, "fresh-run", 3, False)
+    assert env["VOICE_QUALITY_CONTINUOUS_TURNS"] == "0"
+    continuous = pilot.pilot_environment(inference, livekit, "fresh-run", 3, False, True, 3)
+    assert continuous["VOICE_QUALITY_CONTINUOUS_TURNS"] == "3"
+    with pytest.raises(ValueError):
+        pilot.pilot_environment(inference, livekit, "fresh-run", 3, False, False, 3)
     assert "DS_DATA_DIR" not in env
     assert "INFERENCE_TARGET_VISION" not in env
     assert env["VOICE_QUALITY_RUN_ID"] == "fresh-run"

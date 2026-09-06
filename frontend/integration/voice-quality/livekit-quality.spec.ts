@@ -5,6 +5,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { PROFILE_REPORT_ENV } from '../../resolved-profile'
 
+import { measureResponseTrackSession } from '../../playwright/response-track-diagnostic'
 import { installScheduledFixture, parseScheduledFixture, readFixtureBounds } from '../../playwright/controlled-audio-fixture'
 import { hardDeleteSelectedConversation } from '../../playwright/conversation-cleanup'
 import {
@@ -62,7 +63,9 @@ test.use({
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(voiceTestTimeout * (WARMUP_RUNS + MEASURED_RUNS))
 
-test('LiveKit固定fixtureの独立試行を測定する', async ({ browser }) => {
+test(Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0) > 0
+  ? '同一LiveKit sessionで応答trackの切替を診断する'
+  : 'LiveKit固定fixtureの独立試行を測定する', async ({ browser }) => {
   const runStartedAt = performance.now()
   const manifestPath = process.env.VOICE_QUALITY_MANIFEST_PATH
   if (manifestPath === undefined) throw new Error('VOICE_QUALITY_MANIFEST_PATH is required')
@@ -72,6 +75,13 @@ test('LiveKit固定fixtureの独立試行を測定する', async ({ browser }) =
   )
   const sourceFixture = scheduledFixture ? parseScheduledFixture(await readFile(fixtureAudioUrl), fixture) : undefined
   const expectedTranscript = normalizeBaselineTranscript(fixture.expected_transcript)
+  const continuousTurns = Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0)
+  if (!Number.isInteger(continuousTurns) || continuousTurns < 0 || continuousTurns > 10) throw new Error('invalid continuous diagnostic count')
+  if (continuousTurns > 0) {
+    if (!sourceFixture || pilot === undefined) throw new Error('continuous diagnostic requires scheduled pilot')
+    await measureResponseTrackSession(browser, sourceFixture, expectedTranscript, continuousTurns, manifestPath)
+    return
+  }
   let initialStateHash: string | undefined
   const runFile = promisify(execFile)
   const trials: Record<string, unknown>[] = []
@@ -142,6 +152,7 @@ test('LiveKit固定fixtureの独立試行を測定する', async ({ browser }) =
       expect((await endResponse.json()).phase).toBe('ended')
       const sourceBounds = sourceFixture ? await readFixtureBounds(page) : undefined
       trials.push({
+        track_response_matches: await page.evaluate(responseId => window.__voiceChatE2E.lastTrackMediaResponseId === responseId, cycle.responseId),
         track_media_observation: await page.evaluate(() => window.__voiceChatE2E.lastTrackMediaObservation),
         fixture_clock_method: sourceBounds ? 'audio_worklet_pcm_causal_bounds' : 'get_user_media_completion_unverified',
         ...(sourceBounds ? { fixture_clock_bounds: sourceBounds, fixture_clock_maximum_uncertainty_ms: 20 } : {}),

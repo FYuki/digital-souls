@@ -94,6 +94,7 @@ type PendingSegment = {
 }
 
 export type RenderInterval = Readonly<{
+  responseId?: string
   startFrame: number
   endFrame: number
   energy: number
@@ -168,7 +169,8 @@ export class PlaybackEvidenceController {
     const intervalSamples = interval.endFrame - interval.startFrame
     while (cursor < interval.endFrame) {
       const segment = this.pending[0]
-      if (segment === undefined) {
+      if (segment === undefined || (interval.responseId !== undefined
+        && interval.responseId !== segment.metadata.responseId)) {
         this.unassignedRenderedSamples += interval.endFrame - cursor
         return
       }

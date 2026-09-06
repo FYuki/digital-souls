@@ -48,6 +48,7 @@ export type RoomObservation = Readonly<{
   localPlaybackStoppedAtMs?: number
   firstPlaybackAtMs?: number
   mediaResponseId?: string
+  mediaTrackResponseId?: string
   mediaObservation?: MediaObservation
   mediaCorrelationMissingReason?: 'response_frame_correlation_unavailable'
   cancelConfirmedAtMs?: number
@@ -63,6 +64,11 @@ const DEFAULT_MICROPHONE_CAPTURE_OPTIONS: MicrophoneCaptureOptions = {
   echoCancellation: true,
   noiseSuppression: true,
   channelCount: 1,
+}
+
+const responseIdFromTrackName = (name: string): string | null => {
+  const match = /^ds-response-v1:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(name)
+  return match?.[1] ?? null
 }
 
 const PRIVATE_TOPIC = 'digital-souls.livekit-transport.v1'
@@ -84,7 +90,11 @@ export class LiveKitRoomClient {
   private readonly subscriptions = new Set<string>()
   private readonly subscribedTracks = new Map<string, RemoteTrack>()
   private readonly pendingMetadata: SegmentMetadata[] = []
+  private readonly trackResponses = new Map<string, string>()
+  private readonly stoppedResponses = new Set<string>()
+  private latestResponseId: string | null = null
   private readonly audioGraphs = new Map<string, {
+    responseId: string
     source: MediaStreamAudioSourceNode
     worklet: AudioWorkletNode
     outputGain: GainNode
@@ -125,7 +135,7 @@ export class LiveKitRoomClient {
         renderedSamples: evidence.renderedSamples,
         playedPrefix: evidence.continuousPrefix,
         duplicateTrackFrames: this.duplicateTrackFrames,
-        activeAudioGraphs: this.audioGraphs.size,
+        activeAudioGraphs: [...this.audioGraphs.values()].filter(graph => !graph.suspended).length,
         renderedEnergy: evidence.renderedEnergy,
         confirmedSegments: evidence.confirmedSegments,
         unassignedRenderedSamples: evidence.unassignedRenderedSamples,
@@ -150,6 +160,10 @@ export class LiveKitRoomClient {
   }
 
   async connect(url: string, token: string, sessionId: string): Promise<void> {
+    if (this.sessionId !== sessionId) {
+      this.stoppedResponses.clear()
+      this.latestResponseId = null
+    }
     if (this.room === null) this.room = this.createRoom()
     const shouldSynchronize = this.reconnectRequested && this.sessionId === sessionId
     this.explicitDisconnect = false
@@ -211,6 +225,7 @@ export class LiveKitRoomClient {
       0,
       this.playback.continuousPrefix(responseId) + 1,
     )
+    this.stoppedResponses.add(responseId)
     this.suppressedResponseId = responseId
     this.suppressedLastPlayedAudioSequence = lastPlayedAudioSequence
     this.pendingPlaybackResponseId = null
@@ -222,7 +237,7 @@ export class LiveKitRoomClient {
     }
     this.audioGraphResetVersion += 1
     for (const graph of this.audioGraphs.values()) {
-      this.suspendAudioGraph(graph)
+      if (graph.responseId === responseId) this.suspendAudioGraph(graph)
     }
     const controlAvailable = this.controlOutbox !== null
     this.observe({
@@ -292,6 +307,12 @@ export class LiveKitRoomClient {
       try {
         const frame = decodePrivateFrame(payload)
         if (frame.type === 'authoritative_state') {
+          for (const terminal of frame.terminalOutcomes) {
+            this.stoppedResponses.add(terminal.responseId)
+            for (const graph of this.audioGraphs.values()) {
+              if (graph.responseId === terminal.responseId) this.suspendAudioGraph(graph)
+            }
+          }
           const generationChanged = frame.generation !== this.generation
           this.generation = frame.generation
           if (generationChanged) {
@@ -342,7 +363,7 @@ export class LiveKitRoomClient {
             })
           }
         } else if (frame.type === 'logical_audio_segment') {
-          if (frame.generation !== this.generation) return
+          if (frame.generation !== this.generation || this.stoppedResponses.has(frame.responseId)) return
           const context = this.audioContext
           if (context === null) this.pendingMetadata.push(frame)
           else this.recordMetadataOnContext(frame, context)
@@ -367,6 +388,8 @@ export class LiveKitRoomClient {
       (track: RemoteTrack, publication: RemoteTrackPublication, _participant: RemoteParticipant) => {
         if (track.kind !== Track.Kind.Audio) return
         const key = publication.trackSid
+        const responseId = responseIdFromTrackName(publication.trackName)
+        if (responseId === null) return
         if (this.subscriptions.has(key)) {
           this.duplicateTrackFrames += 1
           this.observe({
@@ -376,9 +399,10 @@ export class LiveKitRoomClient {
           return
         }
         this.subscriptions.add(key)
+        this.trackResponses.set(key, responseId)
         this.subscribedTracks.set(key, track)
         const observer = new RemoteMediaObserver(track.receiver, track.mediaStreamTrack,
-          (evidence) => this.observeTrackMedia(evidence))
+          (evidence) => this.observeTrackMedia(evidence, responseId))
         this.mediaObservers.set(key, observer)
         void this.attachRenderEvidence(track, key).catch(() => this.failTransport())
       },
@@ -387,6 +411,7 @@ export class LiveKitRoomClient {
       const key = publication.trackSid
       this.subscriptions.delete(key)
       this.subscribedTracks.delete(key)
+      this.trackResponses.delete(key)
       this.mediaObservers.get(key)?.close()
       this.mediaObservers.delete(key)
       const graph = this.audioGraphs.get(key)
@@ -434,6 +459,17 @@ export class LiveKitRoomClient {
       topic: PRIVATE_TOPIC,
     })
     if (!duplicate) {
+      if (event.type === 'response_started' && event.response_id !== undefined
+        && !this.stoppedResponses.has(event.response_id)) {
+        if (this.latestResponseId !== null && this.latestResponseId !== event.response_id) {
+          this.stoppedResponses.add(this.latestResponseId)
+          this.playback.discardResponse(this.latestResponseId)
+          for (const graph of this.audioGraphs.values()) {
+            if (graph.responseId === this.latestResponseId) this.suspendAudioGraph(graph)
+          }
+        }
+        this.latestResponseId = event.response_id
+      }
       if (
         event.type === 'response_started'
         && event.response_id !== undefined
@@ -452,13 +488,17 @@ export class LiveKitRoomClient {
         this.suppressedResponseId = null
         this.suppressedLastPlayedAudioSequence = 0
         this.pendingPlaybackResponseId = null
-        this.resumePlaybackGraphs()
+        this.resumePlaybackGraphs(event.response_id)
       }
       if (
         (event.type === 'response_cancelled' || event.type === 'response_failed')
         && event.response_id !== undefined
       ) {
+        this.stoppedResponses.add(event.response_id)
         this.playback.discardResponse(event.response_id)
+        for (const graph of this.audioGraphs.values()) {
+          if (graph.responseId === event.response_id) this.suspendAudioGraph(graph)
+        }
         if (event.response_id === this.pendingPlaybackResponseId) {
           this.pendingPlaybackResponseId = null
         }
@@ -492,7 +532,7 @@ export class LiveKitRoomClient {
     await outbox.enqueue(confirmation, payload)
   }
 
-  private observeTrackMedia(evidence: MediaObservation): void {
+  private observeTrackMedia(evidence: MediaObservation, responseId: string): void {
     // 無音中のencoded frameやdecoderのcomfort noiseも含むtrack単位の観測。
     // 初回応答でもsource PCMとの対応は未確定なので、response_idを付けて送らない。
     const controlAvailable = this.controlOutbox !== null
@@ -502,6 +542,7 @@ export class LiveKitRoomClient {
       control: controlAvailable ? 'available' : 'unavailable',
       audio: audioAvailable ? 'available' : 'unavailable',
       mediaObservation: evidence,
+      mediaTrackResponseId: responseId,
       mediaCorrelationMissingReason: 'response_frame_correlation_unavailable',
     })
   }
@@ -530,6 +571,8 @@ export class LiveKitRoomClient {
 
   private async attachRenderEvidence(track: RemoteTrack, key: string): Promise<void> {
     if (!this.subscriptions.has(key)) return
+    const responseId = this.trackResponses.get(key)
+    if (responseId === undefined) return
     if (this.audioContext === null) {
       const created = new AudioContext({ sampleRate: 48_000 })
       this.audioContext = created
@@ -565,7 +608,7 @@ export class LiveKitRoomClient {
         this.subscriptions.has(key) && this.generation === generation
         && this.audioContext === context && !this.audioGraphs.get(key)?.suspended
       ) {
-        this.playback.recordRenderedInterval(event.data)
+        this.playback.recordRenderedInterval({ ...event.data, responseId })
       }
     }
     const playbackElement = document.createElement('audio')
@@ -576,11 +619,12 @@ export class LiveKitRoomClient {
     playbackElement.srcObject = new MediaStream([track.mediaStreamTrack])
     document.body.append(playbackElement)
     const graph = {
+      responseId,
       source,
       worklet,
       outputGain,
       playbackElement,
-      suspended: this.suppressedResponseId !== null,
+      suspended: this.stoppedResponses.has(responseId) || this.suppressedResponseId !== null,
     }
     if (!graph.suspended) this.connectAudioEvidence(graph, context)
     this.audioGraphs.set(key, graph)
@@ -589,7 +633,7 @@ export class LiveKitRoomClient {
     }
     this.observe({
       transport: 'available', control: 'available', audio: 'available',
-      activeAudioGraphs: this.audioGraphs.size,
+      activeAudioGraphs: [...this.audioGraphs.values()].filter(graph => !graph.suspended).length,
     })
   }
 
@@ -612,6 +656,7 @@ export class LiveKitRoomClient {
     this.mediaObservers.clear()
     this.subscriptions.clear()
     this.subscribedTracks.clear()
+    this.trackResponses.clear()
     this.pendingMetadata.length = 0
     this.suppressedResponseId = null
     this.suppressedLastPlayedAudioSequence = 0
@@ -686,17 +731,18 @@ export class LiveKitRoomClient {
     graph.suspended = true
   }
 
-  private resumePlaybackGraphs(): void {
+  private resumePlaybackGraphs(responseId: string): void {
     const context = this.audioContext
     if (context !== null && this.audioGraphs.size > 0) {
       for (const graph of this.audioGraphs.values()) {
-        if (graph.suspended) this.connectAudioEvidence(graph, context)
+        if (graph.responseId === responseId && !this.stoppedResponses.has(responseId)
+          && graph.suspended) this.connectAudioEvidence(graph, context)
       }
       this.observe({
         transport: this.room === null ? 'idle' : 'available',
         control: this.controlOutbox === null ? 'unavailable' : 'available',
         audio: 'available',
-        activeAudioGraphs: this.audioGraphs.size,
+        activeAudioGraphs: [...this.audioGraphs.values()].filter(graph => !graph.suspended).length,
       })
       return
     }

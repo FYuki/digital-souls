@@ -9,6 +9,7 @@ declare global {
       speechStarted: (utteranceId: string, atMs: number) => Promise<void>
     }
     __voiceChatE2E: {
+      lastTrackMediaResponseId?: string
       lastTrackMediaObservation?: MediaObservation
       cycles: {
         fixtureStartedAt: number
@@ -115,6 +116,7 @@ const installPlaybackProbe = async (page: Page) => {
         observeRoom?: (observation: {
           firstPlaybackAtMs?: number
           mediaResponseId?: string
+          mediaTrackResponseId?: string
           mediaObservation?: MediaObservation
           renderedEnergy?: number
           activeResponseId?: string
@@ -149,6 +151,7 @@ const installPlaybackProbe = async (page: Page) => {
       observeRoom: (observation) => {
         if (observation.mediaObservation !== undefined) {
           window.__voiceChatE2E.lastTrackMediaObservation = { ...observation.mediaObservation }
+          window.__voiceChatE2E.lastTrackMediaResponseId = observation.mediaTrackResponseId
         }
         if (observation.mediaResponseId !== undefined && observation.mediaObservation !== undefined) {
           mediaByResponse.set(observation.mediaResponseId, observation.mediaObservation)

@@ -1,0 +1,196 @@
+from __future__ import annotations
+
+import asyncio
+import sys
+from types import SimpleNamespace
+
+import pytest
+
+from app.livekit_transport.response_audio import ResponseAudioTracks
+
+A = "50000000-0000-4000-8000-000000000001"
+B = "50000000-0000-4000-8000-000000000002"
+
+
+@pytest.fixture
+def rig(monkeypatch):
+    sources, tracks, operations = [], [], []
+    flags = SimpleNamespace(publish_error=False, publish_entered=None, publish_release=None)
+
+    class Source:
+        def __init__(self, rate, channels):
+            assert (rate, channels) == (48000, 1)
+            self.frames, self.closed, self.clears = [], False, 0
+            self.capture_entered = self.capture_release = None
+            sources.append(self)
+
+        async def capture_frame(self, frame):
+            assert not self.closed
+            self.frames.append(frame.data)
+            if self.capture_entered is not None:
+                self.capture_entered.set()
+                await self.capture_release.wait()
+
+        def clear_queue(self):
+            assert not self.closed
+            self.clears += 1
+            if self.capture_release is not None:
+                self.capture_release.set()
+
+        async def aclose(self):
+            self.closed = True
+
+    class Track:
+        def __init__(self, name, source):
+            self.name, self.source, self.muted = name, source, False
+            tracks.append(self)
+
+        def mute(self):
+            self.muted = True
+
+    async def publish(track, options):
+        if flags.publish_entered is not None:
+            flags.publish_entered.set()
+            await flags.publish_release.wait()
+        if flags.publish_error:
+            raise RuntimeError('publish failed')
+        sid = 'TR_' + str(len(tracks))
+        operations.append(('publish', sid, track.name))
+        return SimpleNamespace(sid=sid)
+
+    async def unpublish(sid):
+        operations.append(('unpublish', sid))
+
+    rtc = SimpleNamespace(
+        AudioSource=Source,
+        LocalAudioTrack=SimpleNamespace(create_audio_track=Track),
+        TrackSource=SimpleNamespace(SOURCE_MICROPHONE='microphone'),
+        TrackPublishOptions=lambda **kwargs: kwargs,
+        AudioFrame=lambda data, rate, channels, count: SimpleNamespace(data=data),
+    )
+    monkeypatch.setitem(sys.modules, 'livekit.rtc', rtc)
+    room = SimpleNamespace(local_participant=SimpleNamespace(publish_track=publish, unpublish_track=unpublish))
+    return ResponseAudioTracks(room), sources, tracks, operations, flags
+
+
+def test_responses_use_distinct_sources_and_release_previous_track(rig):
+    output, sources, tracks, operations, _ = rig
+    async def exercise():
+        observed = []
+        output.set_observer(lambda name, response_id: observed.append((name, response_id)))
+        assert sources == []
+        await output.begin_response(A)
+        await output.begin_response(A)
+        await output.publish(b'\x01\x00' * 10, response_id=A)
+        await output.begin_response(B)
+        await output.publish(b'\x02\x00' * 10, response_id=B)
+        assert sources[0].closed and tracks[0].muted
+        assert not sources[1].closed
+        assert sources[0].frames == [b'\x01\x00' * 10]
+        assert sources[1].frames == [b'\x02\x00' * 10]
+        assert operations == [('publish', 'TR_1', 'ds-response-v1:' + A),
+                              ('unpublish', 'TR_1'), ('publish', 'TR_2', 'ds-response-v1:' + B)]
+        await output.aclose()
+        await output.aclose()
+        assert sources[1].closed and tracks[1].muted
+        assert observed == [
+            ('response_audio_track_published', A),
+            ('response_audio_track_unpublished', A),
+            ('response_audio_source_closed', A),
+            ('response_audio_track_published', B),
+            ('response_audio_source_closed', B),
+        ]
+    asyncio.run(exercise())
+
+
+def test_stopped_and_old_response_pcm_cannot_enter_new_source(rig):
+    output, sources, tracks, _, _ = rig
+    async def exercise():
+        await output.begin_response(A)
+        output.clear(A)
+        with pytest.raises(asyncio.CancelledError):
+            await output.publish(b'\x01\x00', response_id=A)
+        with pytest.raises(asyncio.CancelledError):
+            await output.begin_response(A)
+        await output.begin_response(B)
+        output.clear(A)
+        assert not tracks[1].muted
+        with pytest.raises(asyncio.CancelledError):
+            await output.publish(b'\x01\x00', response_id=A)
+        await output.publish(b'\x02\x00', response_id=B)
+        assert sources[0].frames == []
+        assert sources[1].frames == [b'\x02\x00']
+        await output.aclose()
+    asyncio.run(exercise())
+
+
+def test_clear_releases_native_queue_while_capture_waits(rig):
+    output, sources, tracks, _, _ = rig
+    async def exercise():
+        await output.begin_response(A)
+        source = sources[0]
+        source.capture_entered, source.capture_release = asyncio.Event(), asyncio.Event()
+        capture = asyncio.create_task(output.publish(b'\x01\x00', response_id=A))
+        await source.capture_entered.wait()
+        output.clear(A)
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(capture, .5)
+        assert tracks[0].muted and source.clears == 1
+        await output.aclose()
+    asyncio.run(exercise())
+
+
+def test_failed_track_publication_releases_native_source(rig):
+    output, sources, _, _, flags = rig
+    flags.publish_error = True
+    async def exercise():
+        with pytest.raises(RuntimeError, match='publish failed'):
+            await output.begin_response(A)
+        assert sources[0].closed
+        await output.aclose()
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize('operation', ['clear', 'close', 'cancel_task'])
+def test_stop_during_track_publication_never_leaves_a_writable_source(rig, operation):
+    output, sources, tracks, _, flags = rig
+    async def exercise():
+        flags.publish_entered, flags.publish_release = asyncio.Event(), asyncio.Event()
+        begin = asyncio.create_task(output.begin_response(A))
+        await flags.publish_entered.wait()
+        close = None
+        if operation == 'clear':
+            output.clear(A)
+        elif operation == 'close':
+            close = asyncio.create_task(output.aclose())
+            await asyncio.sleep(0)
+        else:
+            begin.cancel()
+        flags.publish_release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await begin
+        if close is not None:
+            await asyncio.wait_for(close, .5)
+        else:
+            await output.aclose()
+        assert sources[0].closed
+        with pytest.raises((RuntimeError, asyncio.CancelledError)):
+            await output.publish(b'\x01\x00', response_id=A)
+    asyncio.run(exercise())
+
+
+def test_invalid_response_or_partial_pcm_is_rejected(rig):
+    output, sources, _, _, _ = rig
+    async def exercise():
+        with pytest.raises(ValueError):
+            await output.begin_response('not-a-response-id')
+        assert sources == []
+        await output.begin_response(A)
+        for pcm in [b'', b'x']:
+            with pytest.raises(ValueError):
+                await output.publish(pcm, response_id=A)
+        assert sources[0].frames == []
+        await output.aclose()
+        with pytest.raises(RuntimeError):
+            await output.begin_response(B)
+    asyncio.run(exercise())

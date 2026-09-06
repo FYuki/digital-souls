@@ -8,6 +8,7 @@ from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from uuid import UUID
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -422,7 +423,10 @@ def test_response_started_character_speaker_passes_schema_validation() -> None:
             del payload
 
     class AudioSource:
-        async def publish(self, pcm: bytes) -> None:
+        async def begin_response(self, response_id: str) -> None:
+            pass
+
+        async def publish(self, pcm: bytes, *, response_id: str) -> None:
             raise AssertionError(f"response_started must not publish audio: {pcm!r}")
 
     async def exercise() -> None:
@@ -1701,8 +1705,8 @@ def test_character_runtime_uses_microphone_grant_and_matching_publish_source(
             "can_publish_sources": ["microphone"],
         }
     ]
-    assert len(published_tracks) == 1
-    assert published_tracks[0][1].source == microphone_source
+    # 応答のないsessionには無所属のcharacter trackを作らない。
+    assert published_tracks == []
 
 
 def test_microphone_observer_returns_when_bridge_was_released(monkeypatch) -> None:
@@ -1948,7 +1952,7 @@ def test_production_stop_releases_local_ownership_before_external_cleanup_finish
         runtime._coordinators = {}
         runtime._session_tasks = {session_id: set()}
         runtime._ready = {session_id: asyncio.Event()}
-        runtime._audio_sources = {session_id: object()}
+        runtime._audio_sources = {session_id: SimpleNamespace(aclose=AsyncMock())}
         runtime._cleanup_states = {}
 
         stop_task = asyncio.create_task(runtime.stop(session_id))
@@ -2000,7 +2004,7 @@ def test_production_room_cleanup_survives_cancelled_stop() -> None:
         runtime._coordinators = {}
         runtime._session_tasks = {session_id: set()}
         runtime._ready = {session_id: asyncio.Event()}
-        runtime._audio_sources = {session_id: object()}
+        runtime._audio_sources = {session_id: SimpleNamespace(aclose=AsyncMock())}
         runtime._cleanup_states = {}
 
         stop_task = asyncio.create_task(runtime.stop(session_id))

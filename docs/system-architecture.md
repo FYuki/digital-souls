@@ -84,7 +84,7 @@
 ### フロントエンド（Vite + Svelte, `frontend/src/`）
 
 * `lib/audio/transport.ts` — 移行前baseline用の `WebSocketAudioTransport`。Wave 3の正式経路には使用しない
-* `livekit/` — LiveKit Room接続、microphone publish、Character AudioTrack再生、control event、再接続を担うWave 3音声transport
+* `livekit/` — LiveKit Room接続、microphone publish、応答IDを持つCharacter AudioTrack再生、旧応答trackの再開防止、control event、再接続を担うWave 3音声transport
 * `lib/audio/pcm-worklet-recorder.ts` / `lib/audio/vad-assets.ts` — AudioWorkletによるPCM録音とVAD（発話区間検出）
 * `lib/AudioRecorder.svelte` / `lib/AudioPlayer.svelte` — マイク入力UI・音声再生UI
 * `lib/ChatWindow.svelte` / `lib/InputBar.svelte` — テキストチャットUI

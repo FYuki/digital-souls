@@ -15,6 +15,8 @@ declare global {
   interface Window {
     __voiceFixtureClock?: {
       start: () => Promise<void>
+      replay: () => Promise<void>
+      finished: boolean
       close: () => Promise<void>
       bounds: Partial<Record<FixtureBoundary, ClockBounds>>
     }
@@ -36,6 +38,11 @@ class FixtureSource extends AudioWorkletProcessor {
     this.lastPing = null
     this.port.onmessage = ({data}) => {
       if (!Number.isFinite(data.sentAtMs) || data.sentAtMs < 0) return
+      if (data.type === 'replay' && this.started && this.offset === this.samples.length) {
+        this.offset = 0
+        this.reported.clear()
+        this.lastPing = data.sentAtMs
+      }
       if (data.type === 'start' && !this.started) this.started = true
       if (data.type === 'start' || data.type === 'ping') this.lastPing = data.sentAtMs
     }
@@ -55,6 +62,7 @@ class FixtureSource extends AudioWorkletProcessor {
         this.port.postMessage({kind, sourceSample: sample, lowerMs: this.lastPing})
       }
     }
+    if (end === this.samples.length && this.offset < end) this.port.postMessage({kind: 'finished'})
     this.offset = end
     return true
   }
@@ -116,6 +124,10 @@ export const installScheduledFixture = async (page: Page, fixture: ScheduledFixt
           numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: fixture,
         })
         worklet.port.onmessage = ({ data }) => {
+          if (data.kind === 'finished') {
+            if (window.__voiceFixtureClock) window.__voiceFixtureClock.finished = true
+            return
+          }
           const upperMs = performance.now()
           if (!['sourceStart', 'speechStart', 'speechEnd'].includes(data.kind)
             || !Number.isFinite(data.lowerMs) || data.lowerMs < 0 || data.lowerMs > upperMs) return
@@ -131,6 +143,15 @@ export const installScheduledFixture = async (page: Page, fixture: ScheduledFixt
     }
     window.__voiceFixtureClock = {
       bounds,
+      finished: false,
+      replay: async () => {
+        if (!context || !worklet || !window.__voiceFixtureClock?.finished) throw new Error('fixture must finish before replay')
+        await context.resume()
+        for (const name of Object.keys(bounds) as FixtureBoundary[]) delete bounds[name]
+        window.__voiceFixtureClock.finished = false
+        worklet.port.postMessage({ type: 'replay', sentAtMs: performance.now() })
+        timer = setInterval(() => worklet?.port.postMessage({ type: 'ping', sentAtMs: performance.now() }), 2)
+      },
       start: async () => {
         if (!context || !worklet || started) throw new Error('fixture is not ready or already started')
         await context.resume()

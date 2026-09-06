@@ -80,9 +80,7 @@ const workletFailures: Error[] = []
 class FakeAudioSourceNode {
   disconnect = vi.fn()
 
-  connect(node: FakeAudioWorkletNode): FakeAudioWorkletNode {
-    return node
-  }
+  connect = vi.fn((node: FakeAudioWorkletNode): FakeAudioWorkletNode => node)
 }
 
 class FakeAudioWorkletNode {
@@ -298,7 +296,7 @@ describe('LiveKit Room generation synchronization', () => {
     room.emit(
       'trackSubscribed',
       { kind: 'audio', mediaStreamTrack: {} },
-      { trackSid: 'TR_audio' },
+      { trackSid: 'TR_audio', trackName: 'ds-response-v1:50000000-0000-4000-8000-000000000001' },
       {},
     )
     await vi.waitFor(() => {
@@ -328,7 +326,7 @@ describe('LiveKit Room generation synchronization', () => {
     const room = latestRoom()
     const firstTrack = { kind: 'audio', mediaStreamTrack: { id: 'first' } }
     const replacementTrack = { kind: 'audio', mediaStreamTrack: { id: 'replacement' } }
-    const publication = { trackSid: 'TR_audio' }
+    const publication = { trackSid: 'TR_audio', trackName: 'ds-response-v1:50000000-0000-4000-8000-000000000001' }
 
     room.emit('trackSubscribed', firstTrack, publication, {})
     await vi.waitFor(() => {
@@ -363,7 +361,7 @@ describe('LiveKit Room generation synchronization', () => {
     room.emit(
       'trackSubscribed',
       { kind: 'audio', mediaStreamTrack: { id: 'failed' } },
-      { trackSid: 'TR_failed' },
+      { trackSid: 'TR_failed', trackName: 'ds-response-v1:50000000-0000-4000-8000-000000000001' },
       {},
     )
     await vi.waitFor(() => {
@@ -377,7 +375,7 @@ describe('LiveKit Room generation synchronization', () => {
     room.emit(
       'trackSubscribed',
       { kind: 'audio', mediaStreamTrack: { id: 'recovered' } },
-      { trackSid: 'TR_recovered' },
+      { trackSid: 'TR_recovered', trackName: 'ds-response-v1:50000000-0000-4000-8000-000000000001' },
       {},
     )
 
@@ -403,7 +401,7 @@ describe('LiveKit Room generation synchronization', () => {
     room.emit(
       'trackSubscribed',
       { kind: 'audio', mediaStreamTrack: {} },
-      { trackSid: 'TR_audio' },
+      { trackSid: 'TR_audio', trackName: 'ds-response-v1:50000000-0000-4000-8000-000000000001' },
       {},
     )
     await vi.waitFor(() => {
@@ -462,12 +460,16 @@ describe('LiveKit Room generation synchronization', () => {
       monotonic_timestamp_ms: 1_100,
     })
 
+    room.emit('trackSubscribed', { kind: 'audio', mediaStreamTrack: {} }, {
+      trackSid: 'TR_next', trackName: 'ds-response-v1:50000000-0000-4000-8000-000000000002',
+    }, {})
     await vi.waitFor(() => {
-      expect(audioContexts).toHaveLength(1)
-      expect(document.querySelector('audio')?.muted).toBe(true)
-      expect(audioContexts[0].gains[0].gain.value).toBe(1)
+      expect(audioContexts[0].sources).toHaveLength(2)
       expect(observations.at(-1)).toMatchObject({ activeAudioGraphs: 1 })
     })
+    // 旧trackは残っていても再開しない。新しい応答のtrackだけを接続する。
+    expect(audioContexts[0].sources[0].connect).toHaveBeenCalledTimes(1)
+    expect(audioContexts[0].sources[1].connect).toHaveBeenCalledTimes(1)
     client.disconnect()
   })
 
@@ -518,4 +520,27 @@ describe('LiveKit Room generation synchronization', () => {
     expect(receiveCoreEvent).not.toHaveBeenCalled()
     client.disconnect()
   })
+  test('応答IDを持たないtrackを再生経路へ接続しない', async () => {
+    const client = new LiveKitRoomClient(() => undefined)
+    await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
+    latestRoom().emit('trackSubscribed', { kind: 'audio', mediaStreamTrack: {} }, { trackSid: 'TR_unknown', trackName: 'character-response' }, {})
+    await Promise.resolve()
+    expect(audioContexts).toHaveLength(0)
+    client.disconnect()
+  })
+
+  test('停止した応答のtrackは同一sessionへ再接続しても復活しない', async () => {
+    const client = new LiveKitRoomClient(() => undefined)
+    const sessionId = '20000000-0000-4000-8000-000000000001'
+    const responseId = '50000000-0000-4000-8000-000000000001'
+    await client.connect('ws://127.0.0.1:7880', 'token', sessionId)
+    client.stopPlayback(responseId, 10)
+    client.temporaryDisconnect()
+    await client.connect('ws://127.0.0.1:7880', 'new-token', sessionId)
+    latestRoom().emit('trackSubscribed', { kind: 'audio', mediaStreamTrack: {} }, { trackSid: 'TR_old', trackName: 'ds-response-v1:' + responseId }, {})
+    await vi.waitFor(() => expect(audioContexts[0].sources).toHaveLength(1))
+    expect(audioContexts[0].sources[0].connect).not.toHaveBeenCalled()
+    client.disconnect()
+  })
+
 })
