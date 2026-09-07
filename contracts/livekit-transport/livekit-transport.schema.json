@@ -11,7 +11,11 @@
     { "$ref": "#/$defs/LogicalAudioSegment" },
     { "$ref": "#/$defs/ResponseTrackReady" },
     { "$ref": "#/$defs/ResponseAudioFinished" },
-    { "$ref": "#/$defs/MicrophoneObservation" }
+    { "$ref": "#/$defs/MicrophoneObservation" },
+    { "$ref": "#/$defs/AudioProbeRequest" },
+    { "$ref": "#/$defs/AudioProbeReady" },
+    { "$ref": "#/$defs/AudioProbeComplete" },
+    { "$ref": "#/$defs/AudioProbeFinished" }
   ],
   "$defs": {
     "ProtocolVersion": { "type": "string", "const": "1.0" },
@@ -160,6 +164,130 @@
         "sample_count": { "type": "integer", "minimum": 1 },
         "elapsed_ms": { "type": "integer", "minimum": 0 },
         "missing_frames": { "type": "integer", "minimum": 0 }
+      }
+    }
+,
+    "AudioProbeRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "probe_id",
+        "generation"
+      ],
+      "properties": {
+        "protocol_version": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "type": {
+          "const": "audio_probe_request"
+        },
+        "probe_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "generation": {
+          "$ref": "#/$defs/Generation"
+        }
+      }
+    },
+    "AudioProbeReady": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "probe_id",
+        "generation",
+        "track_sid"
+      ],
+      "properties": {
+        "protocol_version": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "type": {
+          "const": "audio_probe_ready"
+        },
+        "probe_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "generation": {
+          "$ref": "#/$defs/Generation"
+        },
+        "track_sid": {
+          "type": "string",
+          "pattern": "^TR_[A-Za-z0-9_-]{1,100}$"
+        }
+      }
+    },
+    "AudioProbeComplete": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "probe_id",
+        "generation",
+        "track_sid"
+      ],
+      "properties": {
+        "protocol_version": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "type": {
+          "const": "audio_probe_complete"
+        },
+        "probe_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "generation": {
+          "$ref": "#/$defs/Generation"
+        },
+        "track_sid": {
+          "type": "string",
+          "pattern": "^TR_[A-Za-z0-9_-]{1,100}$"
+        }
+      }
+    },
+    "AudioProbeFinished": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "probe_id",
+        "generation",
+        "track_sid",
+        "input_sample_count",
+        "captured_sample_count",
+        "padding_sample_count"
+      ],
+      "properties": {
+        "protocol_version": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "type": {
+          "const": "audio_probe_finished"
+        },
+        "probe_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "generation": {
+          "$ref": "#/$defs/Generation"
+        },
+        "track_sid": {
+          "type": "string",
+          "pattern": "^TR_[A-Za-z0-9_-]{1,100}$"
+        },
+        "input_sample_count": {
+          "const": 9600
+        },
+        "captured_sample_count": {
+          "const": 10560
+        },
+        "padding_sample_count": {
+          "const": 960
+        }
       }
     }
   }

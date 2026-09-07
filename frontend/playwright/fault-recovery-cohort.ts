@@ -1,4 +1,4 @@
-import {analyzeFaultRecovery, type TimedProbe} from './fault-recovery-diagnostic'
+import {analyzeFaultRecovery, analyzeProbeFaultRecovery, type TimedProbe} from './fault-recovery-diagnostic'
 import {faultToBrowserOffset, faultTimeInBrowser, type FaultClockCalibration} from './fault-clock'
 import type {PacketOutputEvidence} from '../src/livekit/packet-output-diagnostic'
 
@@ -23,6 +23,7 @@ export function summarizeFaultRecoveryCohort(records: readonly Record<string, un
     throw new Error('all expected reconnect trials must be recorded')
   }
   const sessions = new Set<string>(), conversations = new Set<string>(), fixtures = new Set<string>(), revisions = new Set<string>()
+  const audioMethods = new Set<string>()
   const control: number[] = [], audio: number[] = [], recovered: number[] = []
   let verifiedFaults = 0, completeOutput = 0, duplicates = 0, ended = 0, childrenClosed = 0, followups = 0
   const missing: Record<string, number> = {}
@@ -35,6 +36,9 @@ export function summarizeFaultRecoveryCohort(records: readonly Record<string, un
       throw new Error('reconnect fixture identity unavailable')
     }
     fixtures.add(record.fixture_sha256)
+    const audioMethod = record.audio_availability_method ?? 'response_packets'
+    if (!['response_packets', 'fresh_rtc_probe_and_followup'].includes(String(audioMethod))) throw new Error('unknown audio availability method')
+    audioMethods.add(String(audioMethod))
     if (typeof record.measurement_revision === 'string' && /^[0-9a-f]{40}$/.test(record.measurement_revision)) revisions.add(record.measurement_revision)
     else omit('measurement_revision_unavailable')
     if (uuid(record.session_id)) {
@@ -91,8 +95,11 @@ export function summarizeFaultRecoveryCohort(records: readonly Record<string, un
         || !Array.isArray(evidence.transport_failures)) throw new Error('output observations unavailable')
       const outputFailures = evidence.transport_failures.filter(value =>
         ['rtp_timeline', 'renderer', 'output_clock', 'media_decoder', 'audio_graph'].includes(String(object(value).stage))).length
-      const result = analyzeFaultRecovery(restored, probes, evidence.packet_outputs as PacketOutputEvidence[],
-        evidence.packet_output_overflow, outputFailures)
+      const result = audioMethod === 'fresh_rtc_probe_and_followup'
+        ? analyzeProbeFaultRecovery(restored, probes, evidence.packet_outputs as PacketOutputEvidence[],
+          evidence.packet_output_overflow, outputFailures, record.audio_probe)
+        : analyzeFaultRecovery(restored, probes, evidence.packet_outputs as PacketOutputEvidence[],
+          evidence.packet_output_overflow, outputFailures)
       duplicates += result.duplicate_packet_output_intervals
       if (result.control_recovery_upper_ms !== null) control.push(result.control_recovery_upper_ms)
       if (result.audio_recovery_upper_ms !== null) audio.push(result.audio_recovery_upper_ms)
@@ -102,6 +109,7 @@ export function summarizeFaultRecoveryCohort(records: readonly Record<string, un
       } else omit('output_evidence_incomplete')
     } catch {omit('recovery_evidence_invalid')}
   }
+  if (audioMethods.size !== 1) throw new Error('reconnect cohort mixes audio availability methods')
   if (revisions.size > 1) throw new Error('reconnect cohort mixes revisions')
   if (fixtures.size !== 1) throw new Error('reconnect cohort mixes fixtures')
   const coverage = sessions.size === expected && conversations.size === expected && verifiedFaults === expected
@@ -109,6 +117,7 @@ export function summarizeFaultRecoveryCohort(records: readonly Record<string, un
   const ratePassed = recovered.length * 100 >= expected * 99
   const p95 = quantile(recovered, .95)
   return {schema_version: '1.0', measurement_scope: 'livekit_fault_recovery_cohort_report',
+    audio_availability_method: [...audioMethods][0],
     fixture_sha256: [...fixtures][0], measurement_revision: [...revisions][0] ?? null,
     counts: {expected, recorded: records.length, independent_sessions: sessions.size, independent_conversations: conversations.size,
       verified_faults: verifiedFaults, complete_output_trials: completeOutput, recovered_within_ten_seconds: recovered.length,

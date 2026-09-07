@@ -127,3 +127,58 @@ test('匿名reportのschemaはIDや任意の欠測理由を拒否する', async 
   expect(validate({...report, session_id: id(1, 1)})).toBe(false)
   expect(validate({...report, missing_reasons: {'private-exception': 1}})).toBe(false)
 })
+
+function probeTrial() {
+  const row = trial()
+  const rows: PacketOutputEvidence[] = []
+  const diagnostic = new PacketOutputDiagnostic(id(1, 7), 'TR_probe', 0, row => rows.push(row))
+  for (let i = 0; i < 11; i++) {
+    diagnostic.receive({packetIndex: i, rtpTimestamp: 99 + i * 960, source: 8,
+      receivedAtMs: 3220 + i * 20, decodedAtMs: 3222 + i * 20,
+      receivedAtBoundsMs: {lowerMs: 3220 + i * 20, upperMs: 3220.2 + i * 20},
+      decodedAtBoundsMs: {lowerMs: 3222 + i * 20, upperMs: 3222.2 + i * 20}, pcm: new Float32Array(960)})
+    diagnostic.confirm({kind: 'rendered', packetIndex: i, rtpTimestamp: 99 + i * 960, packetSampleOffset: 0,
+      startFrame: 48000 + i * 960, endFrame: 48960 + i * 960, energy: 1, firstAudibleFrame: 48000 + i * 960},
+    3300 + i * 20, 3325 + i * 20)
+  }
+  return {...row, audio_availability_method: 'fresh_rtc_probe_and_followup', audio_probe: {
+    scope: 'rtc_audio_probe', status: 'captured', cleanupCompleted: true, probeId: id(1, 7), generation: 0,
+    requestedAtMs: 3211, completedAtMs: 3600, trackSid: 'TR_probe', packetOutputs: rows,
+    completion: {expectedSamples: 10560, inputSamples: 9600, paddingSamples: 960, renderedSamples: 10560,
+      packetCount: 11, gapSamples: 0, maximumGapSamples: 0, gapCount: 0, sampleRate: 48000,
+      firstOutputFrame: 48000, lastOutputEndFrame: 58560, firstRtpTimestamp: 99, lastRtpTimestamp: 9699}}}
+}
+
+test('新規RTC probeの全出力を再集計し、旧応答の時刻を復旧時間に使わない', () => {
+  const report = summarizeFaultRecoveryCohort([probeTrial()], 1)
+  expect(report.audio_availability_method).toBe('fresh_rtc_probe_and_followup')
+  expect(report.evaluation.coverage_complete).toBe(true)
+  expect(report.latency_ms.audio.p95).toBeCloseTo(300.4)
+  expect(report.counts.recovered_within_ten_seconds).toBe(1)
+  expect(() => summarizeFaultRecoveryCohort([probeTrial(), trial(2)], 2)).toThrow('audio availability methods')
+})
+
+test.each(['nonce', 'generation', 'track', 'pre_restore', 'before_control', 'packet_missing', 'packet_duplicate',
+  'sample_count', 'source_changed', 'cleanup', 'status', 'silent', 'timestamp_invalid'])('probeの不一致・欠測を成功で補完しない: %s', mode => {
+  const record = probeTrial(), probe = record.audio_probe
+  if (mode === 'nonce') probe.probeId = id(2, 7)
+  if (mode === 'generation') probe.generation++
+  if (mode === 'track') probe.trackSid = 'TR_other'
+  if (mode === 'pre_restore') probe.requestedAtMs = 3000
+  if (mode === 'before_control') probe.requestedAtMs = 3209
+  if (mode === 'packet_missing') probe.packetOutputs.pop()
+  if (mode === 'packet_duplicate') probe.packetOutputs.push(probe.packetOutputs.at(-1)!)
+  if (mode === 'sample_count') probe.completion.renderedSamples = 9600
+  if (mode === 'source_changed') probe.packetOutputs = probe.packetOutputs.map((row, index) =>
+    index === 1 && row.status === 'captured' ? {...row, packet: {...row.packet, source: 9}} : row)
+  if (mode === 'cleanup') probe.cleanupCompleted = false
+  if (mode === 'status') probe.status = 'failed'
+  if (mode === 'silent') probe.packetOutputs = probe.packetOutputs.map(row => row.status === 'captured'
+    ? {...row, firstAudibleAtMs: undefined, interval: {...row.interval, energy: 0}} : row)
+  if (mode === 'timestamp_invalid') probe.packetOutputs = probe.packetOutputs.map(row => row.status === 'captured'
+    ? {...row, outputAtMs: -1} : row)
+  const report = summarizeFaultRecoveryCohort([record], 1)
+  expect(report.counts.recovered_within_ten_seconds).toBe(0)
+  expect(report.counts.not_recovered).toBe(1)
+  expect(report.evaluation.passed).toBe(false)
+})

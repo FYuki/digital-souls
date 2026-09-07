@@ -263,3 +263,17 @@ node frontend/scripts/report-fault-recovery.mjs \
 入力path・任意の例外文字列を含めない。既存出力は上書きしない。
 終了コードは合格0、不合格report作成済み1、引数・証跡・schema等のエラー2である。
 この集計器のテスト成功は、実再接続100件の受け入れ成功を意味しない。
+
+再接続の新しい診断では`audio_availability_method=fresh_rtc_probe_and_followup`を記録する。
+専用bridgeの復旧後に送った制御probeの応答を待ち、同世代の新しいnonceで200msの固定音を
+Backendから要求する。通常の会話と共通のPCM送信器、RTC、packet復号器、renderer、出力時計を
+通し、入力9,600＋codec末尾960＝10,560 sampleの出力通過と後始末を照合する。
+診断音はCoreの応答や会話履歴へ登録しない。通常の次発話の成功も別途必須とする。
+これは音声transportの利用可能時刻を測る暫定の境界であり、次発話のSTT／LLM／TTS時間を含まない。
+旧応答の再開・buffer・無音を新しい音声復旧へ数えない。
+
+送信機能は`DS_ENVIRONMENT_ID=test`、`DS_PROFILE=integration-voice-fault`、
+`VOICE_MEASUREMENT_KIND=controlled_baseline`、専用localhost:19880の全条件を満たす場合だけ有効。
+同時実行1件、1 session当たり8 nonce、送信4秒、待機・後始末にも期限を設ける。
+rawには本文を含めず、nonce・SID・世代と数値packet証跡を保存する。匿名reportには識別子を出さず、
+計測方式だけを残す。旧方式との混在は拒否する。statusが成功でも全packet・相関が欠ければ失敗分母に残す。

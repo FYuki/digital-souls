@@ -126,3 +126,22 @@ test.each([
 ])('不正なprobeや本文の混入を拒否する', frame => {
   expect(() => parsePrivateFrame(frame)).toThrow()
 })
+
+test('音声probeは固定長の診断音とnonce・世代・trackだけを通知する', () => {
+  const base = {protocol_version: '1.0', generation: 1, probe_id: controlProbe.probe_id}
+  expect(parsePrivateFrame({...base, type: 'audio_probe_request'})).toEqual({
+    type: 'audio_probe_request', generation: 1, probeId: base.probe_id})
+  for (const type of ['audio_probe_ready', 'audio_probe_complete']) {
+    expect(parsePrivateFrame({...base, type, track_sid: 'TR_probe'})).toEqual({
+      type, generation: 1, probeId: base.probe_id, trackSid: 'TR_probe'})
+  }
+  const finished = {...base, type: 'audio_probe_finished', track_sid: 'TR_probe',
+    input_sample_count: 9600, captured_sample_count: 10560, padding_sample_count: 960}
+  expect(parsePrivateFrame(finished)).toEqual({type: 'audio_probe_finished', generation: 1,
+    probeId: base.probe_id, trackSid: 'TR_probe', inputSampleCount: 9600, capturedSampleCount: 10560, paddingSampleCount: 960})
+  for (const invalid of [{...finished, input_sample_count: 48000}, {...finished, captured_sample_count: 9600},
+    {...finished, padding_sample_count: 0}, {...finished, track_sid: ''}, {...finished, track_sid: 'other'},
+    {...finished, pcm: 'private'}, {...finished, generation: -1}, {...finished, probe_id: 'invalid'}]) {
+    expect(() => parsePrivateFrame(invalid)).toThrow()
+  }
+})

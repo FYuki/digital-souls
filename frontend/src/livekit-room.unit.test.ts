@@ -723,6 +723,103 @@ test.each(['gap', 'overlap'])('RTP不連続では未出力のPCMを止め、Core
   } finally {client.disconnect()}
 })
 
+
+const probeSession = '20000000-0000-4000-8000-000000000001'
+const probePublisher = {identity: 'character-miori-' + probeSession, sid: 'PA_backend'}
+const probeMessages = (room: InstanceType<typeof livekitMocks.FakeRoom>) => room.localParticipant.publishData.mock.calls
+  .map(([payload]) => JSON.parse(new TextDecoder().decode(payload)))
+const finishAudioProbe = (room: InstanceType<typeof livekitMocks.FakeRoom>, nonce: string, extra = {}, publisher = probePublisher) => {
+  room.emit('dataReceived', new TextEncoder().encode(JSON.stringify({protocol_version: '1.0', type: 'audio_probe_finished',
+    generation: 0, probe_id: nonce, track_sid: 'TR_probe', input_sample_count: 9600,
+    captured_sample_count: 10560, padding_sample_count: 960, ...extra})), publisher, undefined, 'digital-souls.livekit-transport.v1')
+}
+
+test('診断音は全packetの実出力時計を待ち、会話の再生・Core測定を変更しない', async () => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance']})
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(value => observations.push(value))
+  try {
+    await client.connect('ws://test', 'token', probeSession)
+    const room = latestRoom(), pending = client.probeAudio()
+    const request = probeMessages(room).find(row => row.type === 'audio_probe_request')
+    const publication = {trackSid: 'TR_probe', trackName: 'ds-audio-probe-v1:' + request.probe_id}
+    const track = {kind: 'audio', mediaStreamTrack: {}}
+    room.emit('trackSubscribed', track, {...publication, trackName: 'ds-audio-probe-v1:other'}, probePublisher)
+    room.emit('trackSubscribed', track, publication, {...probePublisher, identity: 'user-' + probeSession})
+    expect(audioContexts).toHaveLength(0)
+    room.emit('trackSubscribed', track, publication, probePublisher)
+    await vi.advanceTimersByTimeAsync(1)
+    const context = audioContexts[0], worklet = context.worklets[0], observer = mediaMocks.observers[0]
+    expect(probeMessages(room).filter(row => row.type === 'audio_probe_ready')).toHaveLength(1)
+    let passed = false, resolved = false
+    void pending.then(() => {resolved = true})
+    vi.spyOn(context, 'getOutputTimestamp').mockImplementation(() => ({contextTime: passed ? 1 : .05, performanceTime: passed ? 1000 : 50}))
+    for (let index = 0; index < 11; index++) {
+      observer.playback!.packet({packetIndex: index, rtpTimestamp: 99 + index * 960, source: 7,
+        receivedAtMs: 10 + index * 20, decodedAtMs: 11 + index * 20,
+        receivedAtBoundsMs: {lowerMs: 10 + index * 20, upperMs: 10.2 + index * 20},
+        decodedAtBoundsMs: {lowerMs: 11 + index * 20, upperMs: 11.2 + index * 20}, pcm: new Float32Array(960).fill(.25)})
+      worklet.port.onmessage?.({data: {kind: 'rendered', packetIndex: index, rtpTimestamp: 99 + index * 960,
+        packetSampleOffset: 0, startFrame: 4800 + index * 960, endFrame: 5760 + index * 960,
+        energy: .25, firstAudibleFrame: 4800 + index * 960}} as MessageEvent)
+    }
+    finishAudioProbe(room, request.probe_id, {generation: 1})
+    finishAudioProbe(room, request.probe_id, {track_sid: 'TR_other'})
+    finishAudioProbe(room, request.probe_id, {}, {...probePublisher, sid: 'PA_old'})
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(resolved).toBe(false)
+    passed = true
+    await vi.advanceTimersByTimeAsync(5)
+    expect(resolved).toBe(false) // 不一致の完了通知では出力済みでも完了しない。
+    finishAudioProbe(room, request.probe_id)
+    const result = await pending
+    expect(result).toMatchObject({scope: 'rtc_audio_probe', status: 'captured', cleanupCompleted: true,
+      completion: {renderedSamples: 10560, packetCount: 11, gapSamples: 0}})
+    expect(result.packetOutputs).toHaveLength(11)
+    expect(JSON.stringify(result.packetOutputs)).not.toContain('"pcm"')
+    expect(context.close).toHaveBeenCalledOnce()
+    expect(worklet.disconnect).toHaveBeenCalledOnce()
+    expect(document.querySelector('audio')).toBeNull()
+    expect(probeMessages(room).map(row => row.type)).toEqual(['audio_probe_request', 'audio_probe_ready', 'audio_probe_complete'])
+    expect(observations.some(row => row.playbackCompletedResponseId || row.mediaResponseId)).toBe(false)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+test.each(['reconnecting', 'disconnected', 'generation', 'unsubscribed', 'timeout', 'decoder'])('音声診断の失敗を保持してgraphを閉じる: %s', async mode => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']})
+  const client = new LiveKitRoomClient(() => undefined)
+  try {
+    await client.connect('ws://test', 'token', probeSession)
+    const room = latestRoom(), pending = client.probeAudio()
+    const request = probeMessages(room).find(row => row.type === 'audio_probe_request')
+    const publication = {trackSid: 'TR_probe', trackName: 'ds-audio-probe-v1:' + request.probe_id}
+    room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}}, publication, probePublisher)
+    await vi.advanceTimersByTimeAsync(1)
+    if (mode === 'generation') emitPrivateFrame(room, authoritativeState(1))
+    else if (mode === 'unsubscribed') room.emit('trackUnsubscribed', {}, publication)
+    else if (mode === 'decoder') mediaMocks.observers.at(-1)!.playback!.failed()
+    else if (mode === 'timeout') await vi.advanceTimersByTimeAsync(4000)
+    else room.emit(mode)
+    expect(await pending).toMatchObject({status: 'failed', cleanupCompleted: true,
+      reason: mode === 'unsubscribed' ? 'track_unsubscribed' : mode === 'decoder' ? 'media_decoder'
+        : mode === 'timeout' ? 'timeout' : 'connection_changed'})
+    expect(audioContexts[0].close).toHaveBeenCalledOnce()
+    expect(document.querySelector('audio')).toBeNull()
+    expect(probeMessages(room).some(row => row.type === 'audio_probe_complete')).toBe(false)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+test('音声診断は未接続・同時要求を失敗として返し、余分なtrackを要求しない', async () => {
+  const client = new LiveKitRoomClient(() => undefined)
+  expect(await client.probeAudio()).toMatchObject({status: 'failed', reason: 'unavailable'})
+  await client.connect('ws://test', 'token', probeSession)
+  const pending = client.probeAudio()
+  expect(await client.probeAudio()).toMatchObject({status: 'failed', reason: 'busy'})
+  expect(probeMessages(latestRoom()).filter(row => row.type === 'audio_probe_request')).toHaveLength(1)
+  client.disconnect()
+  expect(await pending).toMatchObject({status: 'failed', reason: 'connection_changed'})
+})
+
 })
 
 test('実roomのprobe応答をnonce・世代へ相関し、通常の状態同期を追加送信しない', async () => {

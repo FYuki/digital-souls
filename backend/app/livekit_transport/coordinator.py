@@ -46,6 +46,7 @@ class SessionCoordinatorDependencies:
     cleanup: Callable[[str], Awaitable[None]]
     generation_ready: Callable[[], Awaitable[None]]
     response_track_ready: Callable[[str, str], None] = lambda _response_id, _track_sid: None
+    audio_probe: Callable[[str, str, int, str | None], None] | None = None
 
 
 class ProductionSessionCoordinator:
@@ -213,6 +214,11 @@ class ProductionSessionCoordinator:
                     await self._dependencies.generation_ready()
                     return
                 if frame_generation != self.generation:
+                    return
+                if frame["type"] in {"audio_probe_request", "audio_probe_ready", "audio_probe_complete"}:
+                    if self._lifecycle.phase == "available" and self._dependencies.audio_probe is not None:
+                        self._dependencies.audio_probe(str(frame["type"]), str(frame["probe_id"]), frame_generation,
+                            str(frame["track_sid"]) if "track_sid" in frame else None)
                     return
                 if frame["type"] == "control_probe":
                     # 疎通確認は世代・再生・Core状態を変えず、現在利用可能な接続だけで応答する。

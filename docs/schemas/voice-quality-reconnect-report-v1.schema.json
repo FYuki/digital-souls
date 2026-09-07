@@ -11,7 +11,8 @@
     "duplicate_measurement_scope",
     "latency_ms",
     "evaluation",
-    "measurement_revision"
+    "measurement_revision",
+    "audio_availability_method"
   ],
   "properties": {
     "schema_version": {
@@ -249,8 +250,14 @@
         "null"
       ],
       "pattern": "^[0-9a-f]{40}$"
+    },
+    "audio_availability_method": {
+      "enum": [
+        "response_packets",
+        "fresh_rtc_probe_and_followup"
+      ]
     }
   },
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "LiveKit再接続の匿名集計"
+  "title": "LiveKit\u518d\u63a5\u7d9a\u306e\u533f\u540d\u96c6\u8a08"
 }

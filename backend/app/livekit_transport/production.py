@@ -1289,7 +1289,9 @@ class ProductionRuntimeManager:
         core_port: CoreNotificationPort,
         core_session_factory: _CoreSessionFactory | None = None,
         screen_session_revoker: _ScreenSessionRevoker | None = None,
+        audio_probe_enabled: bool = False,
     ) -> None:
+        self._audio_probe_enabled = audio_probe_enabled
         self._livekit_url = livekit_url
         self._signer = signer
         self._room_manager = room_manager
@@ -1405,6 +1407,8 @@ class ProductionRuntimeManager:
                 microphone_readers[key] = (track, identity, participant_sid, generation, task)
 
         async def generation_ready() -> None:
+            if audio_probe is not None:
+                await audio_probe.cancel()
             async with microphone_lock:
                 for track, identity, participant_sid, _generation, _task in tuple(microphone_readers.values()):
                     await replace_microphone_reader(track, identity, participant_sid)
@@ -1413,6 +1417,21 @@ class ProductionRuntimeManager:
             source = self._audio_sources.get(session_id)
             if source is not None:
                 source.confirm_ready(response_id, track_sid)
+
+        from app.livekit_transport.audio_probe import AudioProbePublisher
+        audio_probe = AudioProbePublisher(room,
+            current=lambda generation: coordinator.phase == "available" and coordinator.generation == generation,
+            publish=lambda frame: publish_data(json.dumps(frame).encode(), PRIVATE_TOPIC),
+            schedule=lambda operation: self._schedule_task(session_id, operation),
+        ) if self._audio_probe_enabled else None
+
+        def handle_audio_probe(kind: str, probe_id: str, generation: int, sid: str | None) -> None:
+            if audio_probe is None:
+                return
+            if kind == "audio_probe_request":
+                audio_probe.request(probe_id, generation)
+            elif sid is not None:
+                audio_probe.receive(kind, probe_id, generation, sid)
 
         coordinator = ProductionSessionCoordinator(
             session_id=session_id,
@@ -1426,6 +1445,7 @@ class ProductionRuntimeManager:
                 cleanup=cleanup,
                 generation_ready=generation_ready,
                 response_track_ready=response_track_ready,
+                audio_probe=handle_audio_probe if audio_probe is not None else None,
             ),
             core_port=self._core_port,
         )
@@ -1848,6 +1868,8 @@ async def configure_production_resources(
     *,
     core_session_factory: _CoreSessionFactory | None,
 ) -> livekit_api.LiveKitAPI | None:
+    from app.livekit_transport.audio_probe import audio_probe_enabled
+
     settings = resolve_livekit_settings()
     if settings is None:
         return None
@@ -1869,6 +1891,7 @@ async def configure_production_resources(
         core_port=core_events,
         core_session_factory=core_session_factory,
         screen_session_revoker=app.state.screen_perception_service,
+        audio_probe_enabled=audio_probe_enabled(os.environ, livekit_url),
     )
     validator = CharacterConversationBindingValidator(
         character_loader=load_character_card,

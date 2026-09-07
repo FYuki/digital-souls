@@ -1,3 +1,4 @@
+import {AudioAvailabilityProbe, AUDIO_PROBE_TRACK_PREFIX, type AudioProbeObservation} from './audio-probe'
 import { ControlProbeTracker, type ControlProbeObservation } from './control-probe'
 import {
   Room,
@@ -95,6 +96,7 @@ const browserRetryTimer: RetryTimer = {
 }
 
 export class LiveKitRoomClient {
+  private audioProbe: AudioAvailabilityProbe | null = null
   private readonly controlProbes = new ControlProbeTracker(browserRetryTimer)
   private room: Room | null = null
   private audioContext: AudioContext | null = null
@@ -179,6 +181,7 @@ export class LiveKitRoomClient {
 
   async connect(url: string, token: string, sessionId: string): Promise<void> {
     this.controlProbes.reset()
+    this.audioProbe?.cancel()
     if (this.sessionId !== sessionId) {
       this.stoppedResponses.clear()
       this.latestResponseId = null
@@ -211,6 +214,32 @@ export class LiveKitRoomClient {
         protocol_version: '1.0', type: 'control_probe', probe_id: probeId, generation,
       })), {reliable: true, topic: PRIVATE_TOPIC})
     })
+  }
+
+  probeAudio(): Promise<AudioProbeObservation> {
+    const room = this.room, sessionId = this.sessionId, generation = this.generation
+    const probe = new AudioAvailabilityProbe(crypto.randomUUID(), generation,
+      () => this.room === room && this.sessionId === sessionId && this.generation === generation
+        && this.controlOutbox !== null,
+      async frame => {
+        if (room === null) throw new Error('room unavailable')
+        await room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(frame)),
+          {reliable: true, topic: PRIVATE_TOPIC})
+      })
+    if (room === null || sessionId === null || this.controlOutbox === null) probe.cancel('unavailable')
+    else if (this.audioProbe !== null) probe.cancel('busy')
+    else {
+      this.audioProbe = probe
+      probe.start()
+      void probe.result.then(() => {if (this.audioProbe === probe) this.audioProbe = null})
+    }
+    return probe.result
+  }
+
+  private isProbePublisher(participant: RemoteParticipant | undefined): participant is RemoteParticipant {
+    return this.sessionId !== null && participant !== undefined && !!participant.sid
+      && participant.identity.startsWith('character-')
+      && participant.identity.endsWith('-' + this.sessionId)
   }
 
   async publishMicrophone(stream?: MediaStream): Promise<void> {
@@ -293,6 +322,7 @@ export class LiveKitRoomClient {
 
   disconnect(): void {
     this.controlProbes.reset()
+    this.audioProbe?.cancel()
     this.explicitDisconnect = true
     this.reconnectRequested = false
     this.sessionId = null
@@ -303,6 +333,7 @@ export class LiveKitRoomClient {
 
   temporaryDisconnect(): void {
     this.controlProbes.reset()
+    this.audioProbe?.cancel()
     this.reconnectRequested = true
     this.room?.disconnect()
     void this.closeAudioGraph()
@@ -313,6 +344,7 @@ export class LiveKitRoomClient {
     const room = new Room({ adaptiveStream: true, dynacast: true })
     room.on(RoomEvent.Reconnecting, () => {
       this.controlProbes.reset()
+      this.audioProbe?.cancel()
       this.clearBrowserDelivery()
       this.observe({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable' })
     })
@@ -347,6 +379,11 @@ export class LiveKitRoomClient {
       if (topic !== PRIVATE_TOPIC) return
       try {
         const frame = decodePrivateFrame(payload)
+        if (frame.type === 'audio_probe_finished') {
+          if (this.isProbePublisher(_participant)) this.audioProbe?.finish(frame.probeId, frame.generation,
+            frame.trackSid, _participant.sid, frame)
+          return
+        }
         if (frame.type === 'control_probe_ack') {
           this.controlProbes.acknowledge(frame.probeId, frame.generation)
           return
@@ -362,6 +399,7 @@ export class LiveKitRoomClient {
           this.generation = frame.generation
           if (generationChanged) {
             this.controlProbes.reset()
+            this.audioProbe?.cancel()
             this.playback.setGeneration(frame.generation)
             this.pendingMetadata.length = 0
             this.pendingFinishes.clear()
@@ -374,6 +412,7 @@ export class LiveKitRoomClient {
             this.audioGraphResetTask = resetTask.catch(() => undefined)
             void resetTask.catch(() => this.failTransport())
           }
+          if (frame.sessionPhase !== 'available') this.audioProbe?.cancel()
           if (frame.sessionPhase === 'ended') {
             this.failTransport()
             return
@@ -444,6 +483,12 @@ export class LiveKitRoomClient {
       (track: RemoteTrack, publication: RemoteTrackPublication, _participant: RemoteParticipant) => {
         if (track.kind !== Track.Kind.Audio) return
         const key = publication.trackSid
+        if (publication.trackName.startsWith(AUDIO_PROBE_TRACK_PREFIX)) {
+          if (this.isProbePublisher(_participant) && this.audioProbe?.matchesTrack(publication.trackName)) {
+            this.audioProbe.attach(track, key, _participant.sid)
+          }
+          return
+        }
         const responseId = responseIdFromTrackName(publication.trackName)
         if (responseId === null) return
         if (this.subscriptions.has(key)) {
@@ -483,6 +528,7 @@ export class LiveKitRoomClient {
     )
     room.on(RoomEvent.TrackUnsubscribed, (_track, publication) => {
       const key = publication.trackSid
+      this.audioProbe?.unsubscribe(key)
       this.subscriptions.delete(key)
       this.subscribedTracks.delete(key)
       this.trackResponses.delete(key)
@@ -495,6 +541,7 @@ export class LiveKitRoomClient {
     })
     room.on(RoomEvent.Disconnected, () => {
       this.controlProbes.reset()
+      this.audioProbe?.cancel()
       if (!this.explicitDisconnect && this.sessionId !== null) {
         this.reconnectRequested = true
       }

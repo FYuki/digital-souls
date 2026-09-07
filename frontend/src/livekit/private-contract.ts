@@ -20,6 +20,9 @@ type PrivateFrame =
   | Readonly<{ type: 'ack'; eventId: string; generation: number }>
   | Readonly<{ type: 'state_sync_request'; generation: number }>
   | Readonly<{ type: 'control_probe' | 'control_probe_ack'; generation: number; probeId: string }>
+  | Readonly<{ type: 'audio_probe_request'; generation: number; probeId: string }>
+  | Readonly<{ type: 'audio_probe_ready' | 'audio_probe_complete'; generation: number; probeId: string; trackSid: string }>
+  | Readonly<{ type: 'audio_probe_finished'; generation: number; probeId: string; trackSid: string; inputSampleCount: number; capturedSampleCount: number; paddingSampleCount: number }>
   | Readonly<{ type: 'response_audio_finished'; responseId: string; generation: number; inputSampleCount: number; capturedSampleCount: number; paddingSampleCount: number }>
   | Readonly<{ type: 'response_track_ready'; responseId: string; trackSid: string; generation: number }>
   | Readonly<{
@@ -55,6 +58,9 @@ type PrivateFrameWire =
   | Readonly<{ type: 'ack'; event_id: string; generation: number }>
   | Readonly<{ type: 'state_sync_request'; generation: number }>
   | Readonly<{ type: 'control_probe' | 'control_probe_ack'; generation: number; probe_id: string }>
+  | Readonly<{ type: 'audio_probe_request'; generation: number; probe_id: string }>
+  | Readonly<{ type: 'audio_probe_ready' | 'audio_probe_complete'; generation: number; probe_id: string; track_sid: string }>
+  | Readonly<{ type: 'audio_probe_finished'; generation: number; probe_id: string; track_sid: string; input_sample_count: number; captured_sample_count: number; padding_sample_count: number }>
   | Readonly<{ type: 'response_audio_finished'; response_id: string; generation: number; input_sample_count: number; captured_sample_count: number; padding_sample_count: number }>
   | Readonly<{ type: 'response_track_ready'; response_id: string; track_sid: string; generation: number }>
   | Readonly<{
@@ -104,6 +110,15 @@ export function parsePrivateFrame(value: unknown): PrivateFrame {
     case 'control_probe':
     case 'control_probe_ack':
       return { type: frame.type, generation: frame.generation, probeId: frame.probe_id }
+    case 'audio_probe_request':
+      return {type: frame.type, generation: frame.generation, probeId: frame.probe_id}
+    case 'audio_probe_ready':
+    case 'audio_probe_complete':
+      return {type: frame.type, generation: frame.generation, probeId: frame.probe_id, trackSid: frame.track_sid}
+    case 'audio_probe_finished':
+      return {type: frame.type, generation: frame.generation, probeId: frame.probe_id, trackSid: frame.track_sid,
+        inputSampleCount: frame.input_sample_count, capturedSampleCount: frame.captured_sample_count,
+        paddingSampleCount: frame.padding_sample_count}
     case 'state_sync_request':
       return { type: frame.type, generation: frame.generation }
     case 'response_audio_finished':

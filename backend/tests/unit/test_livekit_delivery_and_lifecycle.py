@@ -364,7 +364,7 @@ def test_disconnect_discards_response_and_interrupts_at_confirmed_prefix_once() 
     ]
 
 
-def _coordinator(module, published, cleaned, core_port=None):
+def _coordinator(module, published, cleaned, core_port=None, audio_probe=None):
     async def publish(payload: bytes, topic: str) -> None:
         published.append((payload, topic))
 
@@ -383,6 +383,7 @@ def _coordinator(module, published, cleaned, core_port=None):
             publish_data=publish,
             cleanup=cleanup,
             generation_ready=generation_ready,
+            audio_probe=audio_probe,
         ),
         core_port=core_port or RecordingCorePort(),
     )
@@ -1118,4 +1119,43 @@ def test_control_probe_does_not_acknowledge_invalid_or_unavailable_connection(ca
         assert published == []
         await coordinator.cleanup("test_complete")
 
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize('case', ['valid', 'disabled', 'wrong_identity', 'old_connection', 'old_generation',
+                                  'future_generation', 'unavailable', 'ended', 'wrong_direction'])
+def test_audio_probe_uses_only_current_authenticated_available_connection(case):
+    module = _livekit_module('coordinator', 'audio probe connection ownership')
+    async def exercise():
+        calls, published = [], []
+        core = RecordingCorePort()
+        coordinator = _coordinator(module, published, [], core,
+            None if case == 'disabled' else lambda *args: calls.append(args))
+        identity = 'user-20000000-0000-4000-8000-000000000010'
+        coordinator.participant_connected(identity=identity, participant_sid='PA_current', room_sid='RM_one')
+        generation = coordinator.generation
+        if case == 'old_generation':
+            coordinator._lifecycle.advance_generation()
+        if case == 'future_generation':
+            generation += 1
+        if case == 'unavailable':
+            await coordinator.mark_unavailable()
+        if case == 'ended':
+            await coordinator.cleanup('test_complete')
+        notifications = list(core.notifications)
+        probe_id = '10000000-0000-4000-8000-000000000001'
+        for kind in ['audio_probe_request', 'audio_probe_ready', 'audio_probe_complete']:
+            frame = dict(protocol_version='1.0', type=kind, probe_id=probe_id, generation=generation)
+            if kind != 'audio_probe_request':
+                frame['track_sid'] = 'TR_probe'
+            if case == 'wrong_direction':
+                frame.update(type='audio_probe_finished', track_sid='TR_probe', input_sample_count=9600,
+                             captured_sample_count=10560, padding_sample_count=960)
+            await coordinator.receive_data(identity='unrelated' if case == 'wrong_identity' else identity,
+                participant_sid='PA_old' if case == 'old_connection' else 'PA_current',
+                topic=module.PRIVATE_TOPIC, payload=json.dumps(frame).encode())
+        assert calls == ([('audio_probe_request', probe_id, 0, None), ('audio_probe_ready', probe_id, 0, 'TR_probe'),
+                          ('audio_probe_complete', probe_id, 0, 'TR_probe')] if case == 'valid' else [])
+        assert core.notifications == notifications
+        await coordinator.cleanup('test_complete')
     asyncio.run(exercise())

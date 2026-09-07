@@ -1,3 +1,4 @@
+import type {AudioProbeObservation} from '../src/livekit/audio-probe'
 import type {Page} from '@playwright/test'
 import type {} from './voice-chat-suite'
 import type {ControlProbeObservation} from '../src/livekit/control-probe'
@@ -9,6 +10,7 @@ import {calibrateFaultClock, type FaultClockRunner, type FaultEvent} from './fau
 declare global {
   interface Window {
     __voiceControlProbeRoom?: {probeControl: () => Promise<ControlProbeObservation>;
+      probeAudio: () => Promise<AudioProbeObservation>;
       setPacketOutputObserver: (observer: (row: PacketOutputEvidence) => void) => void}
     __voicePacketOutputs?: PacketOutputEvidence[]
     __voicePacketOutputOverflow?: boolean
@@ -67,23 +69,77 @@ export function analyzeFaultRecovery(restored: TimeBounds, probes: readonly Time
     audio_missing_reason: audioMs === null ? 'no_post_restore_received_audible_output' : null}
 }
 
+// 新規診断は復旧後のnonce・世代・全出力を検証する。保存済みstatusだけでは成功にしない。
+export function analyzeProbeFaultRecovery(restored: TimeBounds, probes: readonly TimedProbe[],
+  packets: readonly PacketOutputEvidence[], overflow: boolean, outputPathFailures: number, value: unknown) {
+  const base = analyzeFaultRecovery(restored, probes, packets, overflow, outputPathFailures)
+  const failed = () => ({...base, audio_recovery_upper_ms: null, recovery_upper_ms: null,
+    output_evidence_complete: false, packet_evidence_missing: base.packet_evidence_missing + 1,
+    audio_missing_reason: 'fresh_audio_probe_incomplete'})
+  if (!value || typeof value !== 'object') return failed()
+  const probe = value as AudioProbeObservation, completion = probe.completion
+  if (probe.scope !== 'rtc_audio_probe' || probe.status !== 'captured' || probe.reason !== undefined
+    || probe.cleanupCompleted !== true || !completion || !Array.isArray(probe.packetOutputs)
+    || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(probe.probeId)
+    || !Number.isFinite(probe.requestedAtMs) || probe.requestedAtMs <= restored.upperMs
+    || !Number.isFinite(probe.completedAtMs) || probe.completedAtMs < probe.requestedAtMs
+    || !probes.some(p => p.status === 'received' && p.generation === probe.generation
+      && p.sentAtMs !== null && p.receivedAtMs !== null && p.sentAtMs > restored.upperMs
+      && p.receivedAtMs >= p.sentAtMs && p.receivedAtMs <= probe.requestedAtMs)
+    || completion.expectedSamples !== 10560 || completion.inputSamples !== 9600 || completion.paddingSamples !== 960
+    || completion.renderedSamples !== 10560 || completion.packetCount !== 11 || completion.gapSamples !== 0
+    || completion.maximumGapSamples !== 0 || completion.gapCount !== 0 || completion.sampleRate !== 48000) return failed()
+  let samples = 0, endFrame: number | undefined, source: number | undefined, firstRtp: number | undefined
+  for (const row of probe.packetOutputs) {
+    if (row.status !== 'captured' || row.responseId !== probe.probeId || row.trackSid !== probe.trackSid
+      || row.generation !== probe.generation || row.packet.packetIndex !== Math.floor(samples / 960)
+      || row.interval.packetIndex !== row.packet.packetIndex || row.interval.packetSampleOffset !== samples % 960
+      || row.packet.receivedAtBoundsMs.lowerMs <= probe.requestedAtMs || row.confirmedAtMs > probe.completedAtMs
+      || (endFrame !== undefined && row.interval.startFrame !== endFrame)
+      || (source !== undefined && row.packet.source !== source)) return failed()
+    if (!Number.isInteger(row.packet.rtpTimestamp) || row.packet.rtpTimestamp < 0 || row.packet.rtpTimestamp > 0xffffffff
+      || !Number.isInteger(row.packet.source) || row.packet.source < 0 || row.packet.source > 0xffffffff) return failed()
+    firstRtp ??= Number(row.packet.rtpTimestamp)
+    if (((row.packet.rtpTimestamp - firstRtp) >>> 0) !== Math.floor(samples / 960) * 960) return failed()
+    if (samples === 0 && row.interval.startFrame !== completion.firstOutputFrame) return failed()
+    samples += row.interval.endFrame - row.interval.startFrame
+    endFrame = row.interval.endFrame; source = row.packet.source
+  }
+  if (samples !== 10560 || endFrame !== completion.lastOutputEndFrame
+    || completion.firstRtpTimestamp !== firstRtp || completion.lastRtpTimestamp !== ((firstRtp! + 9600) >>> 0)) return failed()
+  const audio = analyzeFaultRecovery(restored, probes, probe.packetOutputs, false, 0)
+  const combined = analyzeFaultRecovery(restored, probes, [...packets, ...probe.packetOutputs], overflow, outputPathFailures)
+  return {...combined, audio_recovery_upper_ms: audio.audio_recovery_upper_ms,
+    recovery_upper_ms: base.control_recovery_upper_ms === null || audio.audio_recovery_upper_ms === null
+      ? null : Math.max(base.control_recovery_upper_ms, audio.audio_recovery_upper_ms),
+    audio_missing_reason: audio.audio_missing_reason}
+}
+
 export async function measureFaultRecovery(page: Page, runner: FaultClockRunner,
   before: FaultClockCalibration, record: Record<string, unknown>): Promise<boolean> {
   const events: FaultEvent[] = [], probes: TimedProbe[] = []
   record.fault_events = events; record.fault_probes = probes
   record.fault_duration_ms = 2000
+  record.audio_availability_method = 'fresh_rtc_probe_and_followup'
+  let audioProbe: Promise<void> | undefined
   let endedAt: number | undefined, pulseFailed = false
   // 例外時にも復旧finallyが終了するまで待つ。pageが閉じてもpulseを中断しない。
   const pulse = runner.pulse(event => events.push(event)).then(() => {endedAt = performance.now()},
     () => {pulseFailed = true})
   try {
     while (!pulseFailed && (endedAt === undefined || performance.now() - endedAt < 10000)) {
-      probes.push(await page.evaluate(async () => ({
+      const sentAfterPulse = endedAt !== undefined
+      const control = await page.evaluate(async () => ({
         ...await window.__voiceControlProbeRoom!.probeControl(), observedAtMs: performance.now(),
-      })))
+      }))
+      probes.push(control)
+      if (sentAfterPulse && control.status === 'received' && audioProbe === undefined) {
+        audioProbe = page.evaluate(() => window.__voiceControlProbeRoom!.probeAudio())
+          .then(observation => {record.audio_probe = observation}, () => {record.audio_probe = null})
+      }
       await page.waitForTimeout(100)
     }
-  } finally {await pulse}
+  } finally {await pulse; await audioProbe}
   record.fault_operation_succeeded = !pulseFailed
   const after = await calibrateFaultClock(page, runner)
   record.fault_clock_after = after
@@ -104,7 +160,7 @@ export async function measureFaultRecovery(page: Page, runner: FaultClockRunner,
     overflow: window.__voicePacketOutputOverflow ?? false,
     outputPathFailures: (window.__voiceChatE2E.transportFailures ?? []).filter(failure =>
       ['rtp_timeline', 'renderer', 'output_clock', 'media_decoder', 'audio_graph'].includes(failure.stage)).length}))
-  const recovery = analyzeFaultRecovery(restored, probes, evidence.packets, evidence.overflow, evidence.outputPathFailures)
+  const recovery = analyzeProbeFaultRecovery(restored, probes, evidence.packets, evidence.overflow, evidence.outputPathFailures, record.audio_probe)
   record.recovery = recovery
   const passed = affected && recovery.recovery_upper_ms !== null && !recovery.packet_evidence_missing
     && recovery.output_evidence_complete && !recovery.duplicate_packet_output_intervals
