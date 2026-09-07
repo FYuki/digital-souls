@@ -1,6 +1,8 @@
 import { expect, type Browser } from '@playwright/test'
 import { mkdir, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { dirname, resolve } from 'node:path'
+import {faultToBrowserOffset, type FaultClockCalibration} from './fault-clock'
+import {FaultClockRunner, calibrateFaultClock} from './fault-clock-runner'
 import type { ControlProbeObservation } from '../src/livekit/control-probe'
 import { installScheduledFixture, type ScheduledFixture } from './controlled-audio-fixture'
 import { createVoiceChatDriver } from './voice-chat-suite'
@@ -19,6 +21,8 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
   const probes: Array<ControlProbeObservation & {playbackActive: boolean}> = []
   const record: Record<string, unknown> = {measurement_scope: 'livekit_control_probe_session_diagnostic',
     expected_probes: count, fixture_sha256: fixture.audioSha256, probes, outcome: 'failure'}
+  let clockRunner: FaultClockRunner | undefined
+  let clockBefore: FaultClockCalibration | undefined
   let stage = 'fixture_setup'
   try {
     await installScheduledFixture(page, fixture)
@@ -31,6 +35,13 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
       if (!target.__digitalSoulsVoiceSessionTestPort) throw new Error('voice diagnostic port unavailable')
       target.__digitalSoulsVoiceSessionTestPort.bindRoom = room => {window.__voiceControlProbeRoom = room}
     })
+    if (process.env.VOICE_QUALITY_FAULT_BRIDGE === '1') {
+      stage = 'fault_clock_before'
+      clockRunner = new FaultClockRunner(resolve(process.cwd(), '..'))
+      await clockRunner.ready()
+      clockBefore = await calibrateFaultClock(page, clockRunner)
+      record.fault_clock_before = clockBefore
+    }
     stage = 'session_create'
     const issuedResponse = page.waitForResponse(response => response.request().method() === 'POST'
       && new URL(response.url()).pathname.endsWith('/voice/livekit/token'), {timeout: 10000}).catch(() => null)
@@ -74,6 +85,12 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
         && state.coreEventDiagnostics.filter(event => event.type === 'response_started').length === 1
     }, cycle.responseId)
     expect(unchanged, 'probe must preserve the original response and transport').toBe(true)
+    if (clockRunner && clockBefore) {
+      stage = 'fault_clock_after'
+      const after = await calibrateFaultClock(page, clockRunner)
+      record.fault_clock_after = after
+      record.fault_to_browser_offset_ms = faultToBrowserOffset(clockBefore, after)
+    }
     record.outcome = 'success'
   } catch {
     record.failure_stage = stage
@@ -98,6 +115,10 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
         ended = response !== null && response.ok() && (await response.json()).phase === 'ended'
       } catch { await endedResponse }
     } else { await driver.endVoiceSession(page).catch(() => undefined) }
+    if (clockRunner) {
+      record.fault_clock_process_closed = await clockRunner.close()
+      if (!record.fault_clock_process_closed) {record.outcome = 'failure'; record.cleanup_failed = true}
+    }
     record.session_end_confirmed = ended
     if (!ended) {record.outcome = 'failure'; record.cleanup_failed = true}
     await mkdir(dirname(output), {recursive: true})

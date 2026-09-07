@@ -132,3 +132,42 @@ def test_fault_resolver_requires_the_same_dedicated_probe_endpoint(monkeypatch, 
     else:
         with pytest.raises(ValueError, match='loopback ports'):
             fault.resolve_target('test-only')
+
+
+def test_stdio_clock_echoes_nonce_without_docker(monkeypatch, capsys):
+    import io
+    import json
+    nonce = 'edcf38d0-e807-4c39-b02d-91a462bd7e5d'
+    monkeypatch.setattr(fault.sys, 'stdin', io.StringIO(json.dumps({'command': 'clock', 'nonce': nonce}) + '\n'))
+    monkeypatch.setattr(fault.time, 'monotonic_ns', lambda: 9007199254740993)
+    monkeypatch.setattr(fault, 'docker', lambda *args: pytest.fail('clock must not operate Docker'))
+    fault.serve_stdio(None)
+    ready, reply = map(json.loads, capsys.readouterr().out.splitlines())
+    assert ready == {'event': 'fault_runner_ready'}
+    assert reply == {'event': 'clock_sample', 'nonce': nonce, 'timestamp_ns': '9007199254740993',
+                     'clock_domain': 'fault_runner_monotonic'}
+
+
+@pytest.mark.parametrize('command', [
+    {'command': 'pulse', 'duration_ms': 100}, {'command': 'clock', 'nonce': 'invalid'},
+    {'command': 'clock', 'nonce': 5}, {'command': 'clock'}, [],
+    {'command': 'clock', 'nonce': 'edcf38d0-e807-4c39-b02d-91a462bd7e5d', 'extra': True},
+])
+def test_stdio_invalid_command_never_operates_docker(monkeypatch, command):
+    import io
+    import json
+    monkeypatch.setattr(fault.sys, 'stdin', io.StringIO(json.dumps(command) + '\n'))
+    monkeypatch.setattr(fault, 'docker', lambda *args: pytest.fail('invalid command touched Docker'))
+    with pytest.raises((ValueError, TypeError)):
+        fault.serve_stdio(None)
+
+
+def test_stdio_pulse_resolves_target_again_before_disconnect(monkeypatch):
+    import io
+    monkeypatch.setattr(fault.sys, 'stdin', io.StringIO('{"command":"pulse","duration_ms":2000}\n'))
+    calls = []
+    target = fault.Target('c', 'n', '172.20.0.2')
+    monkeypatch.setattr(fault, 'resolve_target', lambda name: calls.append(('resolve', name)) or target)
+    monkeypatch.setattr(fault, 'pulse', lambda selected, seconds: calls.append(('pulse', selected, seconds)))
+    fault.serve_stdio('dedicated')
+    assert calls == [('resolve', 'dedicated'), ('pulse', target, 2.0)]

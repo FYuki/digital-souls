@@ -7,7 +7,9 @@ import json
 import math
 import socket
 import subprocess
+import sys
 import time
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -106,12 +108,45 @@ def pulse(target: Target, duration_seconds: float) -> None:
             time.sleep(0.05)
 
 
+def serve_stdio(container_name: str | None) -> None:
+    """同じprocessの時計を往復較正し、明示されたpulseだけを実行する。"""
+    print(json.dumps({"event": "fault_runner_ready"}), flush=True)
+    for line in sys.stdin:
+        command = json.loads(line)
+        if not isinstance(command, dict):
+            raise TypeError("invalid fault runner command")
+        if command.get("command") == "clock" and set(command) == {"command", "nonce"}:
+            nonce = command["nonce"]
+            if not isinstance(nonce, str) or str(uuid.UUID(nonce)) != nonce:
+                raise ValueError("invalid clock nonce")
+            # JSON numberの53bit丸めを避け、ns値は十進文字列で返す。
+            print(json.dumps({"event": "clock_sample", "nonce": nonce,
+                              "timestamp_ns": str(time.monotonic_ns()),
+                              "clock_domain": "fault_runner_monotonic"}), flush=True)
+        elif command.get("command") == "pulse" and set(command) == {"command", "duration_ms"}:
+            duration = command["duration_ms"]
+            if (container_name is None or isinstance(duration, bool)
+                    or not isinstance(duration, (int, float)) or not math.isfinite(duration)
+                    or not 50 <= duration <= 30_000):
+                raise ValueError("invalid fault runner pulse")
+            # clock較正の後にも所有権・排他bridge・公開portを再照合する。
+            pulse(resolve_target(container_name), duration / 1000)
+        else:
+            raise ValueError("invalid fault runner command")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--container", required=True)
+    parser.add_argument("--container")
+    parser.add_argument("--stdio", action="store_true")
     parser.add_argument("--duration-ms", type=float, default=2_000)
     arguments = parser.parse_args()
-    pulse(resolve_target(arguments.container), arguments.duration_ms / 1000)
+    if arguments.stdio:
+        serve_stdio(arguments.container)
+    elif arguments.container:
+        pulse(resolve_target(arguments.container), arguments.duration_ms / 1000)
+    else:
+        parser.error("--container or --stdio is required")
 
 
 if __name__ == "__main__":

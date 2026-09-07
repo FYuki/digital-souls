@@ -68,3 +68,17 @@ browser内だけで確定するclient track受信、barge-in local停止、recon
 ## 保存と削除
 
 dogfood生traceはリポジトリ外の `DS_DATA_DIR/voice-metrics/raw/` へ保存し、7日を超えたファイルを起動時に削除する。生traceはGit、会話履歴、テスト成果物、dogfood backupの対象にしない。長期保存aggregateからはcharacter・event・session・utterance・response IDを除く。リポジトリ内へ誤出力した `voice-metrics/raw/` は `.gitignore` で追跡対象外にする。
+
+### 障害runnerとBrowserの時計対応
+
+専用bridgeの制御probe診断では、Python障害runnerとBrowserへそれぞれnonce付き標準入出力要求／
+`page.evaluate`を送り、Node側の要求送信・応答受信時刻でremote時刻を囲む。
+起動時間は較正の往復時間へ含めない。Pythonのns値は十進文字列で渡す。
+診断前後に各5sampleを保存し、両方を説明できるoffsetの共通区間から
+`fault_runner_monotonic`→`client_monotonic`の上下限を求める。
+Browser時計の量子化を考慮して各sampleの両端へ0.2msの余裕を付ける。
+区間が交差しない場合や合成した幅が20msを超える場合は測定失敗とする。
+
+復旧時刻の上限を過ぎて送信した要求のみを復旧確認の候補にし、遅延は復旧時刻の下限から
+算出する。復旧前の要求に対する遅着ackや、誤差区間内の送信で成功率を補完しない。
+この時計較正だけでは音声復旧・重複再生・再接続100試行の受け入れを証明しない。
