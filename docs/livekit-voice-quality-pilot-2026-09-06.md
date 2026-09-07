@@ -1608,3 +1608,14 @@ SDKが返したtimestampの逆行と、連続sampleを別のtimestampから換�
 
 初回組み込みではFrontend 764件・型検査・ビルドが成功した。
 追加の時計診断では関連70件と型検査が成功した。単体検証の成功で実出力の欠測を解消済みとはしない。
+
+
+### post-gain時計欠測の切り分け
+
+追加診断版 `9fac660` の実ブラウザ1件も会話・割り込み・session終了は成功し、所有Frontend／Backendの削除を確認した。
+出力監視は`mapped_interval_regression`で欠測となった。SDK timestamp自体の逆行条件には該当せず、
+連続するframe 2,816の境界を前後別のtimestampから換算した時刻が0.231833ms逆転していた。
+これはcancel前の通常再生中に起きた換算の不整合である。逆転許容値を広げて合格にするのではなく、
+cancel前後の実timestampから出力frameの上下限を求め、境界不確かさをstaleの上下限へ残す方式を検討する。
+この短いrunでは実行中imageの独立照合が終了に間に合わず、設定revisionと実行中実体の照合済みとは記載しない。
+stale presented 0と全件受け入れは引き続き未確認である。
