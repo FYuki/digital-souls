@@ -897,3 +897,27 @@ VAD、相槌・take-turn、dogfood gap・処理失敗率は、表示用basis poi
 アプリ側のrunは終了コード0で、session明示終了、teardown、所有Frontend／Backendコンテナ削除が確認できた。最後に専用LiveKitとbridgeも削除した。通常dev・dogfood・共有推論サービスへの設定変更や障害注入は行っていない。
 
 これで専用bridge上の実Browser／Core制御・音声経路を確認できたが、今回のBrowser診断には切断を入れていない。再接続100件、network回復とBrowser時計の対応、controlと実音声の回復時刻、重複再生0の受け入れは未完了である。
+
+
+## 2026-09-07: 障害runnerとBrowserの時計較正
+
+`f1b49e2`で、Python障害runnerの標準入出力によるnonce付き時計応答と、Browserへの
+`page.evaluate`をNodeの単調時計で囲む処理を追加した。診断前後にそれぞれ5sampleを取得し、
+全sampleで共通のoffset区間が成立することと、合成した誤差幅20ms以下を要求する。
+異なるepochを直接引かず、ns値は文字列として受け取る。復旧後の制御応答に対しても、
+要求の送信が復旧時刻の上限を過ぎていなければ回復確認に使わず、遅延は復旧時刻の下限から算出する。
+時計不一致・過大誤差・値の逆転・欠測・遅着ackを含むFrontend関連16件、
+専用networkと標準入出力protocolのBackend28件、型検査・Ruff・差分検査が成功した。
+
+実Browser／Core診断`fault-clock-session-01`は終了コード0。
+前後の時計対応区間は共通に成立し、合成誤差幅は1.929114msだった。
+音声再生中の3probeは全件成功し、往復時間は17.0／3.6／4.7ms。
+既存のpacket出力検証器で受信・復号・出力時計を再照合し、Backendのsession・utterance・responseに
+一致する元sample数／captured数／padding数と、全168,960 samplesの出力完了を検証した。
+出力時間3,520ms、gap合計・最大gap・underrunはいずれも0。
+
+session明示終了、時計probe子processの終了、teardown、所有Frontend／Backendの削除を確認した。
+最後に専用LiveKitとnetworkも削除した。raw証跡は当該run rootへ保持している。
+このrunは時計較正を追加した障害なし診断で、切断・復旧100試行には含めない。
+実際の切断をBrowser診断へ組み込む処理、復旧後の新しい受信音声と実出力の相関、
+重複再生の判定は引き続き未完了である。
