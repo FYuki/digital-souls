@@ -937,7 +937,7 @@ class ReconnectEvaluation(BaseModel):
 
     passed: bool
     within_ten_seconds_rate_basis_points: int
-    recovery_p95_ms: float
+    recovery_p95_ms: float | None
 
 
 def evaluate_reconnect(
@@ -947,12 +947,29 @@ def evaluate_reconnect(
     successful_recovery_ms: Sequence[float],
     duplicate_playbacks: int,
 ) -> ReconnectEvaluation:
+    # 10秒以内に回復した全試行の遅延を要求し、一部の有効値だけで合格にしない。
+    if any(type(value) is not int for value in (
+        trials, recovered_within_ten_seconds, duplicate_playbacks,
+    )) or duplicate_playbacks < 0:
+        raise ValueError("reconnect counts must be nonnegative integers")
     rate = _basis_points(recovered_within_ten_seconds, trials)
-    recovery_p95 = type7_quantile(successful_recovery_ms, 0.95)
+    if len(successful_recovery_ms) != recovered_within_ten_seconds:
+        raise ValueError("recovery sample count must match successful trials")
+    if any(
+        isinstance(value, bool) or not isinstance(value, (int, float))
+        or not math.isfinite(value) or not 0 <= value <= 10_000
+        for value in successful_recovery_ms
+    ):
+        raise ValueError("recovery latency must be finite and within ten seconds")
+    recovery_p95 = (
+        type7_quantile(successful_recovery_ms, 0.95)
+        if successful_recovery_ms else None
+    )
     return ReconnectEvaluation(
         passed=(
             trials == 100
             and rate >= 9_900
+            and recovery_p95 is not None
             and recovery_p95 <= 3_000
             and duplicate_playbacks == 0
         ),
@@ -984,11 +1001,11 @@ def evaluate_vad(
     split_rate = _basis_points(splits_at_intentional_pause, trials)
     return VadEvaluation(
         passed=(
-            leading_rate <= 100
-            and early_rate <= 100
+            leading_losses_over_100_ms * 100 <= trials
+            and early_ends_over_100_ms * 100 <= trials
             and utterance_finalize_p95_ms <= 800
             and intentional_pause_ms <= 600
-            and split_rate <= 100
+            and splits_at_intentional_pause * 100 <= trials
         ),
         leading_loss_rate_basis_points=leading_rate,
         early_end_rate_basis_points=early_rate,
@@ -1021,8 +1038,8 @@ def evaluate_turn_classification(
         passed=(
             backchannel_trials >= 100
             and interruption_trials >= 100
-            and false_rate <= 200
-            and missed_rate <= 100
+            and false_cancels * 100 <= backchannel_trials * 2
+            and missed_interruptions * 100 <= interruption_trials
         ),
         false_cancel_rate_basis_points=false_rate,
         missed_interruption_rate_basis_points=missed_rate,
@@ -1054,20 +1071,20 @@ def evaluate_quality_targets(
     duplicate_playbacks: int,
     required_manual_operations: int,
 ) -> QualityTargetEvaluation:
-    gap_rate = _basis_points(dogfood_gap_ms, dogfood_playback_ms)
-    failure_rate = _basis_points(
+    _basis_points(dogfood_gap_ms, dogfood_playback_ms)
+    _basis_points(
         dogfood_processing_failures,
         dogfood_response_utterances,
     )
     return QualityTargetEvaluation(
         continuity_passed=(
             controlled_underruns == 0
-            and gap_rate <= 10
+            and dogfood_gap_ms * 1_000 <= dogfood_playback_ms
             and maximum_continuous_gap_ms <= 200
         ),
         processing_passed=(
             controlled_processing_failures == 0
-            and failure_rate <= 100
+            and dogfood_processing_failures * 100 <= dogfood_response_utterances
             and unexpected_session_ends == 0
         ),
         presentation_passed=(

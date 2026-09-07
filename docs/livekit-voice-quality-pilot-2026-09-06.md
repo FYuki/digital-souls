@@ -846,3 +846,24 @@ VADの音量依存も[全300素材と非発声音120件](artifacts/vad-model-gai
 匿名性、metric schema、cohort全体schema、件数・分母・欠測理由・合否の整合性検査を通過した。時計の20ms上限超過とtransportエラーは0件。teardown完了と所有Frontend／Backendコンテナの削除も確認し、raw runは`one-second-backchannel-100-01`へ保持する。実行中の音声runtimeと測定harnessは変更していない。
 
 この結果はthink:false・RAGなし条件の相槌誤キャンセル率についての証拠である。分類保留を相槌成功へ補完せず、人格・記憶品質や他の未測定cohortの達成には流用しない。次に同じ音声実装で通常応答の準備5回＋独立100試行を行う。
+
+
+## 2026-09-07: 1秒補助後の通常応答100件
+
+`e506b2f`固定（音声runtimeは`cb42471`と同一）の[通常応答測定](artifacts/livekit-controlled-2026-09-07-one-second.json)は、準備5回と独立100試行が全成功した。全105件で明示終了を確認し、本測定100件の固定transcript一致・同一初期状態・独立ID・受信／decode／実出力時計・全PCM出力を集計時に検証した。raw runは`one-second-controlled-100-01`に保持する。
+
+TTFAのp50は1,824.15ms、p95は1,900.385msで2,000ms以下を達成した。p50の改善目安1,000ms以下には達していない。utterance確定p95は307.518msで800ms以下、first text p95は382.218ms、LLM完了p95は549.682msだった。本測定100件の処理失敗・追加操作・underrun・gap回数・gap合計・最大gapは0。これをdogfoodや同一session3往復の証拠へ代用しない。
+
+[凍結WebSocketとの自動比較](artifacts/livekit-controlled-2026-09-07-one-second-evaluation.json)は`latency_only`全体不合格を維持する。今回の通常cohortには割り込み4指標とVAD境界2指標がない。割り込み4指標は別のtake-turn100件で取得済みだが、この通常artifactへ値を補完していない。`response_decision`・`stt_start_latency`・`utterance_finalized`の相対判定も不合格であり、同名eventの実観測境界が異なる点の監査が残る。
+
+匿名性とschema検証は成功した。Backend CPUは観測区間平均32.406%（1 coreを100%）、sample上のcontainer charged memory最大299,040,768 bytes。共有host GPUは利用率最大98%、使用量合計のsample最大7,748,976,640 bytesで、専有GPU測定ではない。Backend未起動の6sampleは欠測理由付きで保持した。本測定100件のbrowser音声RTP payloadは送信1,339,711 bytes・受信4,084,538 bytes、下り受信17,467 packets・loss 0・通信統計欠測0件。上りlossや全wire量の証拠ではない。
+
+teardown完了と所有Frontend／Backendコンテナの削除を確認した。測定は引き続きthink:false・RAGなし条件であり、通常設定の人格・記憶応答品質の証明は未完了である。
+
+## 2026-09-07: 再接続の欠測と率の丸めによる誤合格を防ぐ
+
+再接続評価が「100試行中99件回復」に対し遅延値1件だけでも合格する問題を再現した。10秒以内に回復した全件と遅延値の件数を照合し、不正な件数・非有限値・負値・10秒超の成功値を拒否するよう修正した。全件タイムアウトはp95を0へ補わず`null`として不合格にする。再接続の最低試行数・99%・p95 3秒・重複0の条件は変更しない。
+
+VAD、相槌・take-turn、dogfood gap・処理失敗率は、表示用basis pointsを丸めてから比較すると閾値をわずかに超えた率も合格になる。そのため合否は元の件数比で判定し、表示用の丸めは維持する。目標値は変更していない。
+
+回帰テストは修正前22失敗・23成功、修正後は既存の音声指標・cohort検証を含む関連153件が成功した。Ruffと差分検査も成功。今回保存した通常100件の自動比較結果は、修正前後で完全に一致することを確認した。実際のネットワーク障害後のcontrol／audio回復100件は、この評価関数の検証だけでは達成扱いにしない。
