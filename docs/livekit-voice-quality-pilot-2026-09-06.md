@@ -1326,3 +1326,23 @@ Playwright側の時計はBrowser側と区別する。
 修正後はFrontend単体627件、Backend関連単体146件、Backend全232 sourceの型検査、
 Frontendの型検査、対象PythonのRuff、ビルドが成功した。ビルドには既存のchunkサイズ警告がある。
 これらは実障害100件の合格を示すものではなく、修正版の実接続と再測定が必要である。
+
+
+### 実障害21: 修正後もBackend SDKの復旧待ちが残る（2026-09-08）
+
+`a5feaa6a7c363507c5ec59470d3c3287878d6c7c`の[単独診断](artifacts/livekit-reconnect-pilot-2026-09-08-21.json)では、
+診断音10,560 sampleの全出力、次の同session会話、重複・欠測・出力経路エラー0を確認した。
+しかし制御4,396.382ms、音声・双方4,679.080msで、3秒目標は未達である。
+
+Backend単調時計で自身のRTC reconnectingからreconnectedまでは6,738msだった。
+世代準備は0ms、状態送信は43msであり、今回の長い待機はこの準備処理だけでは説明できない。
+音声要求の受付後はpublish 20ms、購読待ち163ms、ready確認後のcapture 216msだった。
+Browser側もSDK Reconnectedからauthoritative state受信まで約1,876ms待っていた。
+これらの異なる時計を直接減算せず、各時計内の区間として記録する。
+
+SDK自身の復旧時間には障害が継続している時間も含まれるため、これを受け入れ指標の
+「疎通回復後の時間」と置き換えない。HTTP診断には初回のv1接続試行時の404と、断中の接続失敗が
+記録され、今回の断中に401/403は観測されなかった。過去のSDK最終切断の原因を確定する証拠ではない。
+
+session・障害操作子・診断reader終了、所有Frontend・Backendの実削除、専用SFUとnetworkの削除を確認した。
+次はBackend SDKの再接続開始から完了までの待機を調査し、実接続で改善を検証する。
