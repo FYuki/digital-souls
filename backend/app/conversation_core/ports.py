@@ -6,6 +6,7 @@ from typing import Protocol
 from app.conversation_core.models import (
     AudioSegment,
     CoreEvent,
+    Response,
     StageObservation,
     ResponseStartResult,
     TerminalOutcome,
@@ -45,4 +46,10 @@ class PersistencePort(Protocol):
 
 class ObservationPort(Protocol):
     async def record(self, observation: StageObservation) -> None:
+        ...
+
+
+class ResponseCompletionPort(Protocol):
+    async def finish_response(self, response: Response) -> None:
+        """出力完了まで待つ。待機中の応答はCoreがcancelできる。"""
         ...

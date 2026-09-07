@@ -140,6 +140,7 @@ class VoiceSessionEvent(BaseModel):
     error_code: Optional[str] = None
     recoverable: Optional[bool] = None
     last_played_audio_sequence: Optional[int] = None
+    response_finished: Optional[bool] = None
     classification: Optional[Classification] = None
     user_state: Optional[UserState] = None
     clock_domain: Optional[ClockDomain] = None

@@ -550,13 +550,14 @@ export class LiveKitRoomClient {
   private async publishPlaybackConfirmation(
     responseId: string,
     continuousPrefix: number,
+    responseFinished = false,
   ): Promise<void> {
     const tracker = this.playbackConfirmations
     const outbox = this.controlOutbox
     if (tracker === null || outbox === null) {
       throw new Error('LiveKit Room is not connected')
     }
-    const confirmation = tracker.create(responseId, continuousPrefix)
+    const confirmation = tracker.create(responseId, continuousPrefix, responseFinished)
     if (confirmation === null) return
     const payload = new TextEncoder().encode(JSON.stringify(confirmation.event))
     await outbox.enqueue(confirmation, payload)
@@ -693,6 +694,9 @@ export class LiveKitRoomClient {
       if (!graph || graph.suspended || this.generation !== generation || this.audioContext !== context) return
       clearInterval(graph.outputTimer)
       graph.worklet.port.postMessage({kind: 'stop'})
+      const prefix = this.playback.metadataPrefixForTotal(responseId, completion.inputSamples)
+      if (prefix < 0) throw new Error('full playback metadata does not match source samples')
+      void this.publishPlaybackConfirmation(responseId, prefix, true).catch(() => this.failTransport())
       this.observe({transport: 'available', control: 'available', audio: 'available',
         activeResponseId: responseId, playbackCompletedResponseId: responseId, playbackCompletion: completion})
       void this.observeNetwork(responseId, key, generation, completion.packetCount)

@@ -749,7 +749,7 @@ def test_production_core_bridge_stops_server_audio_for_playback_stop() -> None:
     bridge = production._ConversationCoreBridge(
         RecordingCoreSession(),
         scheduled.append,
-        stop_audio=lambda: stopped.append("stopped"),
+        stop_audio=stopped.append,
         media_tail_seconds=0,
     )
     bridge.notify(
@@ -769,7 +769,7 @@ def test_production_core_bridge_stops_server_audio_for_playback_stop() -> None:
 
     asyncio.run(exercise())
 
-    assert stopped == ["stopped"]
+    assert stopped == ["50000000-0000-4000-8000-000000000010"]
 
 
 def test_production_core_bridge_stops_audio_before_prefix_validation_failure() -> None:
@@ -785,7 +785,7 @@ def test_production_core_bridge_stops_audio_before_prefix_validation_failure() -
     bridge = production._ConversationCoreBridge(
         RejectingCoreSession(),
         scheduled.append,
-        stop_audio=lambda: operations.append("stop"),
+        stop_audio=lambda _response_id: operations.append("stop"),
         media_tail_seconds=0,
     )
     bridge.notify(
@@ -2613,3 +2613,23 @@ def test_scheduled_preparation_does_not_start_after_session_ends() -> None:
         assert session.preparations == 0
 
     asyncio.run(exercise())
+
+
+def test_only_explicit_full_playback_confirmation_releases_output_wait():
+    production = importlib.import_module("app.livekit_transport.production")
+    scheduled, confirmations = [], []
+    class Session:
+        async def confirm_playback(self, **_request):
+            # 最後のprefix自体は既に進捗通知で確認済みでも、全出力確認は受ける。
+            return False
+    bridge = production._ConversationCoreBridge(
+        Session(), scheduled.append,
+        confirm_response_playback=lambda response, sequence: confirmations.append((response, sequence)) or True,
+    )
+    for full in [False, True]:
+        bridge.notify(json.dumps({"type":"playback_completed", "response_id":"old-response", "last_played_audio_sequence":2, "response_finished":full}).encode())
+    async def exercise():
+        for operation in scheduled:
+            await operation
+    asyncio.run(exercise())
+    assert confirmations == [("old-response", 2)]

@@ -244,3 +244,18 @@ describe('LiveKit browser control outbox', () => {
     expect(outbox.byteCount).toBe(0)
   })
 })
+
+
+test('途中prefixの通知後にも全出力確認を一度だけ送る', () => {
+  let sequence = 20
+  const tracker = new PlaybackConfirmationTracker(
+    '20000000-0000-4000-8000-000000000010', () => 1000,
+    () => `10000000-0000-4000-8000-${String(sequence++).padStart(12, '0')}`,
+  )
+  const responseId = '30000000-0000-4000-8000-000000000010'
+  expect(tracker.create(responseId, 1)?.event.response_finished).toBeUndefined()
+  const complete = tracker.create(responseId, 1, true)
+  expect(complete?.event).toMatchObject({type: 'playback_completed', last_played_audio_sequence: 2, response_finished: true})
+  expect(tracker.create(responseId, 1, true)).toBeNull()
+  expect(tracker.create(responseId, 1)).toBeNull()
+})

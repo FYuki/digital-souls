@@ -21,6 +21,7 @@ from app.conversation_core.models import (
 )
 from app.conversation_core.ports import (
     DeliveryPort,
+    ResponseCompletionPort,
     LlmPort,
     ObservationPort,
     PersistencePort,
@@ -74,6 +75,7 @@ class ConversationCoreSession:
         stt: SttPort,
         llm: LlmPort,
         tts: TtsPort,
+        completion: ResponseCompletionPort | None = None,
         tts_queue_maxsize: int = 8,
         turn_classifier: Callable[[str], TurnDecision] = classify_turn,
     ) -> None:
@@ -87,6 +89,7 @@ class ConversationCoreSession:
         self._stt = stt
         self._llm = llm
         self._tts = tts
+        self._completion = completion
         self._tts_queue_maxsize = tts_queue_maxsize
         self._turn_classifier = turn_classifier
         self._responses: dict[str, Response] = {}
@@ -714,6 +717,9 @@ class ConversationCoreSession:
         tts_task = asyncio.create_task(self._consume_text_segments(response, queue))
         try:
             await asyncio.gather(llm_task, tts_task)
+            current = self._gated_response(response.response_id, response.generation)
+            if current is not None and self._completion is not None:
+                await self._completion.finish_response(current)
         except asyncio.CancelledError:
             llm_task.cancel()
             tts_task.cancel()

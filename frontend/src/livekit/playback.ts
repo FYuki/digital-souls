@@ -57,6 +57,19 @@ export class PlaybackPrefixTracker {
     }
   }
 
+  metadataPrefixForTotal(responseId: string, sampleCount: number): number {
+    if (!Number.isSafeInteger(sampleCount) || sampleCount <= 0) return -1
+    const segments = this.responses.get(responseId)
+    if (!segments?.size) return -1
+    let total = 0
+    for (let sequence = 0; sequence < segments.size; sequence++) {
+      const samples = segments.get(sequence)?.metadataSamples
+      if (samples === undefined || !Number.isSafeInteger(samples) || samples <= 0) return -1
+      total += samples
+    }
+    return total === sampleCount ? segments.size - 1 : -1
+  }
+
   discardResponse(responseId: string): void {
     this.responses.delete(responseId)
   }
@@ -144,6 +157,10 @@ export class PlaybackEvidenceController {
 
   continuousPrefix(responseId: string): number {
     return this.tracker.continuousPrefix(responseId)
+  }
+
+  metadataPrefixForTotal(responseId: string, sampleCount: number): number {
+    return this.tracker.metadataPrefixForTotal(responseId, sampleCount)
   }
 
   recordMetadata(metadata: SegmentMetadata, eligibleAfterFrame: number): void {

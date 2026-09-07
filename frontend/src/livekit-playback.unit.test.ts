@@ -250,3 +250,19 @@ describe('LiveKit rendered playback prefix', () => {
   })
 
 })
+
+
+test('全出力確認のprefixには同じ応答の連続metadataと総sample数の一致が必要', async () => {
+  const {PlaybackPrefixTracker} = await import('./livekit/playback')
+  const tracker = new PlaybackPrefixTracker({generation: 2})
+  const row = {responseId: 'response', generation: 2, pcmSampleCount: 480}
+  tracker.recordMetadata({...row, audioSequence: 0})
+  tracker.recordMetadata({...row, audioSequence: 2})
+  expect(tracker.metadataPrefixForTotal('response', 960)).toBe(-1)
+  tracker.recordMetadata({...row, audioSequence: 1})
+  expect(tracker.metadataPrefixForTotal('response', 1440)).toBe(2)
+  expect(tracker.metadataPrefixForTotal('response', 1439)).toBe(-1)
+  expect(tracker.metadataPrefixForTotal('other', 1440)).toBe(-1)
+  tracker.setGeneration(3)
+  expect(tracker.metadataPrefixForTotal('response', 1440)).toBe(-1)
+})

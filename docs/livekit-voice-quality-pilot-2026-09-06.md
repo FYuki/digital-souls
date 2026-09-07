@@ -639,3 +639,25 @@ Frontend単体461件・結合97件、型検査、buildが成功した。最初�
 16件の確認不足では、Coreの`server_cancelled`記録はある一方、Browserへ`response_cancelled`が届いていなかった。Coreは生成終了時にterminal状態へ移り、その後のLiveKit配送で残りPCMの送出完了を待つ。既にCOMPLETEDの応答へcancel要求が来てもterminal不変条件により状態を変更しないが、preview／final判定の両経路は戻り値を確認せずキャンセル成功を記録していた。配送待機中のCOMPLETED応答で、成功観測1件・キャンセル通知0件となる単体再現も確認した。
 
 まず計測を修正し、cancel結果が実際にCANCELLEDの場合だけ`server_cancelled`を記録する。修正前は完了済み応答のpreview／final回帰2件が失敗し、修正後は実cancelの正のケースも含めCore・adapter・contract・集計器113件が成功した。Coreの型検査とRuffも成功した。完了済み応答の再生停止・確認自体を直したわけではなく、生成終了と配送／再生終了の境界の修正、および修正後の実接続再測定が必要である。
+
+
+## 2026-09-07: 全音声の出力確認まで応答をキャンセル可能にする
+
+生成完了と再生完了の境界を修正した。CoreはLLM/TTS生成後、`ResponseCompletionPort`で出力完了を待ってからCOMPLETEDへ移る。LiveKitではPCM送出と総sample数通知を先に行い、Browserの全sample実出力確認を待つ。待機中は既存のcancel処理で中断でき、terminal状態を後から書き換えない。総sample数通知までの送出処理後、確認が10秒以内に届かなければ既存のFAILED経路へ進む。
+
+`playback_completed.response_finished`を追加し、応答ID・連続した音声metadataの総sample数・最終sequenceが一致する全出力確認だけを受け付ける。途中prefixと同じsequenceでも最後の確認は1回送信できる。過去の`playback_stopped`は対象responseだけを停止する。元PCMと途中prefixのcodec offset検証は別途残る。
+
+変更後の[通常応答pilot](artifacts/livekit-pilot-2026-09-07-output-completion.json)は準備1回＋独立3回成功。transcript・全PCM出力・明示終了を照合し、gap・underrun・追加操作は0件、TTFA p95は約1,846.06msだった。think:false・RAGなしの少数診断であり、人格・記憶や正式100回の合格へ広げない。
+
+[実再生中のtake-turn先頭20件](artifacts/livekit-take-turn-20-2026-09-07-output-completion.json)は18成功・2失敗で、Playwright全件成功条件は不合格だった。音声投入・独立session・明示終了は20/20確認できた。失敗index 0・3はcandidateからmisfireとなり、割り込みのturn decisionは出なかった。対象音声付近のSilero最大確率は約0.420・0.443で、発話確定条件を満たしていない。判定が成立した18件はすべてBrowserのキャンセル通知と停止observer、旧responseと割り込みutteranceのtraceを照合できた。前の100件でキャンセル確認が欠けたindex 15・16・19は今回成功したが、残る80素材と位相差の再検証は必要である。
+
+| 指標 | 分母 | 取得 | 欠測 | p95（取得分） |
+|---|---:|---:|---:|---:|
+| local playback stop | 20 | 18 | 2 | 1,974.2ms |
+| turn decision | 20 | 18 | 2 | 1,974.2ms |
+| decision後cancel | 20 | 18 | 2 | 約5.97ms |
+| 発話開始からcancel確認 | 20 | 18 | 2 | 2,006.2ms |
+
+見逃しは2/20で10%。欠測2件を各遅延の分母に残し、100件未満でもあるため受け入れは未達とする。匿名性・metric schema・全fixtureのhashと順序は集計器で検証した。両runの所有Frontend・Backendコンテナ削除を確認し、共有推論サービスは停止していない。
+
+Backend単体・結合は3,920件成功・1件skip、Frontend単体463件・結合97件、Backend／環境の型検査231ファイル、Frontend型検査とbuildが成功した。出力待機中の正常完了・cancel・timeout、別responseやsequenceの確認拒否、重複確認、古い停止の対象を検証した。buildの既存bundleサイズ警告とBackendの既存非推奨警告は残る。VAD未確定、遅いpreview、全stackの相槌／take-turn各100件、再接続・stale提示・通常100件再測定・元設定の品質と相対境界の受け入れは引き続き未完了である。

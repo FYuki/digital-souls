@@ -27,6 +27,7 @@ export interface VoiceSessionEvent {
     error_code?:                   string;
     recoverable?:                  boolean;
     last_played_audio_sequence?:   number;
+    response_finished?:            boolean;
     classification?:               Classification;
     user_state?:                   UserState;
     clock_domain?:                 ClockDomain;

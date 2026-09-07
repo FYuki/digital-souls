@@ -29,6 +29,8 @@ from app.conversation_core.adapters import (
     ScreenLineageResponseState,
 )
 from app.conversation_core.ports import DeliveryPort
+from app.conversation_core.models import Response
+from app.livekit_transport.playback_completion import PlaybackCompletionGate
 from app.livekit_transport.bootstrap import (
     BOOTSTRAP_TIMEOUT_SECONDS,
     BootstrapService,
@@ -354,6 +356,7 @@ class ProductionConversationCoreSessionFactory:
             session_id=session_id,
             response_id_factory=lambda: str(uuid4()),
             delivery=delivery,
+            completion=delivery if isinstance(delivery, _ConversationCoreDelivery) else None,
             persistence=ConversationHistoryPersistenceAdapter(
                 history_session=history_session,  # type: ignore[arg-type]
                 completed_turn_observer=self._completed_turn_observer,
@@ -444,6 +447,9 @@ class _ConversationCoreDelivery:
             if user_participant_id is not None
             else None
         )
+        self._session_id: str | None = None
+        self._completion_gate = PlaybackCompletionGate()
+        self._completed_output_responses: set[str] = set()
         self._first_audio_observed: set[str] = set()
         self._first_text_observed: set[str] = set()
         self._measurement: LiveKitMeasurementSession | None = None
@@ -464,6 +470,10 @@ class _ConversationCoreDelivery:
             ))
 
     async def publish(self, event: CoreEvent) -> None:
+        if self._session_id is None:
+            self._session_id = event.session_id
+        elif self._session_id != event.session_id:
+            raise ValueError("delivery event belongs to another session")
         if (
             event.response_id is not None
             and event.source_utterance_ids is not None
@@ -563,7 +573,7 @@ class _ConversationCoreDelivery:
             )
             await self._coordinator.send_core(self._voice_payload(event))
             first_capture_ns = await self._audio_source.publish(event.audio, response_id=response_id)
-            await self._observe_first_audio_out(event, first_capture_ns)
+            await self._observe_first_audio_out(response_id, first_capture_ns)
             return
         if (
             event.type == "response_cancelled"
@@ -590,21 +600,8 @@ class _ConversationCoreDelivery:
                 reason_code="privacy_skip",
             )
         if event.type == "response_completed" and event.response_id is not None:
-            first_capture_ns = await self._audio_source.finish_response(event.response_id)
-            if isinstance(self._audio_source, ResponseAudioTracks):
-                statistics = self._audio_source.statistics(event.response_id)
-                await self._coordinator.send_response_audio_finished(
-                    response_id=event.response_id,
-                    input_sample_count=statistics["response_audio_input_samples"],
-                    captured_sample_count=statistics["response_audio_captured_samples"],
-                    padding_sample_count=statistics["response_audio_padding_samples"],
-                )
-                if self._measurement is not None:
-                    for name, value in statistics.items():
-                        self._measurement.record_response_event(
-                            response_id=event.response_id, name=name, stage="transport", value=value,
-                        )
-            await self._observe_first_audio_out(event, first_capture_ns)
+            if event.response_id not in self._completed_output_responses:
+                await self._finish_audio(event.response_id)
         if event.type in {"response_cancelled", "response_failed"}:
             self._audio_source.clear(event.response_id)
         if event.type == "response_privacy_skipped":
@@ -617,8 +614,40 @@ class _ConversationCoreDelivery:
             return
         await self._coordinator.send_core(self._voice_payload(event))
 
-    async def _observe_first_audio_out(self, event: CoreEvent, timestamp_ns: int | None) -> None:
-        response_id = event.response_id
+    async def finish_response(self, response: Response) -> None:
+        if not response.audio_segments:
+            self._completed_output_responses.add(response.response_id)
+            return
+        if isinstance(self._audio_source, ResponseAudioTracks):
+            await self._completion_gate.wait(
+                response.response_id, len(response.audio_segments),
+                lambda: self._finish_audio(response.response_id),
+            )
+        else:
+            await self._finish_audio(response.response_id)
+        self._completed_output_responses.add(response.response_id)
+
+    def confirm_response_playback(self, response_id: str, last_audio_sequence: int) -> bool:
+        return self._completion_gate.confirm(response_id, last_audio_sequence)
+
+    async def _finish_audio(self, response_id: str) -> None:
+        first_capture_ns = await self._audio_source.finish_response(response_id)
+        if isinstance(self._audio_source, ResponseAudioTracks):
+            statistics = self._audio_source.statistics(response_id)
+            await self._coordinator.send_response_audio_finished(
+                response_id=response_id,
+                input_sample_count=statistics["response_audio_input_samples"],
+                captured_sample_count=statistics["response_audio_captured_samples"],
+                padding_sample_count=statistics["response_audio_padding_samples"],
+            )
+            if self._measurement is not None:
+                for name, value in statistics.items():
+                    self._measurement.record_response_event(
+                        response_id=response_id, name=name, stage="transport", value=value,
+                    )
+        await self._observe_first_audio_out(response_id, first_capture_ns)
+
+    async def _observe_first_audio_out(self, response_id: str | None, timestamp_ns: int | None) -> None:
         if timestamp_ns is None or response_id is None or response_id in self._first_audio_observed:
             return
         self._first_audio_observed.add(response_id)
@@ -628,7 +657,7 @@ class _ConversationCoreDelivery:
             )
         await self._coordinator.send_core(json.dumps({
             "type": "observation", "protocol_version": "1.0", "event_id": str(uuid4()),
-            "session_id": event.session_id, "response_id": response_id,
+            "session_id": self._session_id, "response_id": response_id,
             "measurement": "first_audio_out", "timestamp": str(timestamp_ns),
             "clock_domain": "server_monotonic", "unit": "nanosecond",
         }, separators=(",", ":")).encode())
@@ -784,7 +813,8 @@ class _ConversationCoreBridge:
         self,
         session: ConversationCoreSession,
         schedule: Callable[[Awaitable[None]], None],
-        stop_audio: Callable[[], None] = lambda: None,
+        stop_audio: Callable[[str], None] = lambda _response_id: None,
+        confirm_response_playback: Callable[[str, int], bool] = lambda _response_id, _sequence: False,
         media_tail_seconds: float = 0.15,
         measurement: LiveKitMeasurementSession | None = None,
     ) -> None:
@@ -792,6 +822,7 @@ class _ConversationCoreBridge:
         self._schedule = schedule
         self._media_tail_seconds = media_tail_seconds
         self._stop_audio = stop_audio
+        self._confirm_response_playback = confirm_response_playback
         self._measurement = measurement
         self._user_audio_captures: deque[_UserAudioCapture] = deque()
         self._pending_transcriptions: deque[tuple[str, bytes, str | None]] = deque()
@@ -1064,11 +1095,13 @@ class _ConversationCoreBridge:
                 return
             if event_type == "playback_stopped":
                 # prefix検証や永続化が失敗しても、旧音声をlocal graph再接続後へ残さない。
-                self._stop_audio()
+                self._stop_audio(response_id)
             await self._session.confirm_playback(
                 response_id=response_id,
                 last_played_audio_sequence=last_played_audio_sequence,
             )
+            if event_type == "playback_completed" and event.get("response_finished") is True:
+                self._confirm_response_playback(response_id, last_played_audio_sequence)
         elif event_type == "session_disconnected":
             await self._session.disconnect()
         elif event_type == "session_reconnected":
@@ -1442,6 +1475,7 @@ class ProductionRuntimeManager:
             core_session,
             schedule_core_operation,
             stop_audio=audio_source.clear,
+            confirm_response_playback=delivery.confirm_response_playback,
             measurement=delivery.measurement,
         )
         self._audio_sources[session_id] = audio_source

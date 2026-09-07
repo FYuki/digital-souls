@@ -77,6 +77,7 @@ export type PlaybackConfirmation = BrowserControlMessage & Readonly<{
 
 export class PlaybackConfirmationTracker {
   private readonly reportedPrefixes = new Map<string, number>()
+  private readonly finishedResponses = new Set<string>()
 
   constructor(
     private readonly sessionId: string,
@@ -84,10 +85,11 @@ export class PlaybackConfirmationTracker {
     private readonly eventId: () => string,
   ) {}
 
-  create(responseId: string, continuousPrefix: number): PlaybackConfirmation | null {
+  create(responseId: string, continuousPrefix: number, responseFinished = false): PlaybackConfirmation | null {
     if (continuousPrefix < 0) return null
     const previous = this.reportedPrefixes.get(responseId)
-    if (previous !== undefined && continuousPrefix <= previous) return null
+    if (this.finishedResponses.has(responseId)) return null
+    if (previous !== undefined && (continuousPrefix < previous || (!responseFinished && continuousPrefix === previous))) return null
     const event = parseVoiceSessionEvent({
       protocol_version: '1.0',
       event_id: this.eventId(),
@@ -95,10 +97,12 @@ export class PlaybackConfirmationTracker {
       session_id: this.sessionId,
       response_id: responseId,
       last_played_audio_sequence: continuousPrefix + 1,
+      ...(responseFinished ? {response_finished: true} : {}),
       monotonic_timestamp_ms: this.monotonicMs(),
     })
     const confirmation = { event, responseId, continuousPrefix }
     this.reportedPrefixes.set(responseId, continuousPrefix)
+    if (responseFinished) this.finishedResponses.add(responseId)
     return confirmation
   }
 }

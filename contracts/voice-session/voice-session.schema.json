@@ -298,6 +298,7 @@
       "properties": {
         "type": { "const": "playback_completed" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
         "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" },
+        "response_finished": { "type": "boolean" },
         "last_played_audio_sequence": { "$ref": "#/$defs/Sequence" }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
