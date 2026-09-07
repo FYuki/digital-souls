@@ -1,4 +1,5 @@
 import { installUserControlProbe } from './user-control-probe'
+import type {} from './controlled-audio-fixture'
 import { fileURLToPath } from 'node:url'
 import type {PacketPlaybackObservation, PlaybackCompletion} from '../src/livekit/packet-renderer'
 import type { NetworkObservation } from '../src/livekit/network-observer'

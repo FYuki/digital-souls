@@ -1,4 +1,5 @@
 import type {Page} from '@playwright/test'
+import type {} from './voice-chat-suite'
 import type {ControlProbeObservation} from '../src/livekit/control-probe'
 import type {PacketOutputEvidence} from '../src/livekit/packet-output-diagnostic'
 import {faultTimeInBrowser, faultToBrowserOffset, recoveryLatencyUpperMs,
@@ -17,11 +18,12 @@ declare global {
 export type TimedProbe = ControlProbeObservation & {observedAtMs: number}
 
 export function analyzeFaultRecovery(restored: TimeBounds, probes: readonly TimedProbe[],
-  packets: readonly PacketOutputEvidence[], overflow: boolean) {
+  packets: readonly PacketOutputEvidence[], overflow: boolean, outputPathFailures: number) {
   const validTime = (value: number) => Number.isFinite(value) && value >= 0
   if (![restored.lowerMs, restored.upperMs].every(validTime) || restored.lowerMs > restored.upperMs) {
     throw new Error('invalid restoration interval')
   }
+  if (!Number.isInteger(outputPathFailures) || outputPathFailures < 0) throw new Error('invalid output path coverage')
   const control = probes.filter(p => p.status === 'received' && p.probeId !== null
     && p.sentAtMs !== null && p.receivedAtMs !== null && validTime(p.sentAtMs) && validTime(p.receivedAtMs)
     && p.sentAtMs > restored.upperMs && p.receivedAtMs >= p.sentAtMs)
@@ -59,6 +61,8 @@ export function analyzeFaultRecovery(restored: TimeBounds, probes: readonly Time
   return {control_recovery_upper_ms: controlMs, audio_recovery_upper_ms: audioMs,
     recovery_upper_ms: controlMs === null || audioMs === null ? null : Math.max(controlMs, audioMs),
     duplicate_packet_output_intervals: duplicates, packet_evidence_missing: missing,
+    output_path_failures: outputPathFailures,
+    output_evidence_complete: packets.length > 0 && !missing && outputPathFailures === 0,
     duplicate_measurement_scope: 'overlapping_response_ssrc_rtp_sample_intervals',
     audio_missing_reason: audioMs === null ? 'no_post_restore_received_audible_output' : null}
 }
@@ -97,11 +101,13 @@ export async function measureFaultRecovery(page: Page, runner: FaultClockRunner,
     && p.observedAtMs < times.network_link_restore_started.lowerMs)
   record.network_fault_affected_control = affected
   const evidence = await page.evaluate(() => ({packets: window.__voicePacketOutputs ?? [],
-    overflow: window.__voicePacketOutputOverflow ?? false}))
-  const recovery = analyzeFaultRecovery(restored, probes, evidence.packets, evidence.overflow)
+    overflow: window.__voicePacketOutputOverflow ?? false,
+    outputPathFailures: (window.__voiceChatE2E.transportFailures ?? []).filter(failure =>
+      ['rtp_timeline', 'renderer', 'output_clock', 'media_decoder', 'audio_graph'].includes(failure.stage)).length}))
+  const recovery = analyzeFaultRecovery(restored, probes, evidence.packets, evidence.overflow, evidence.outputPathFailures)
   record.recovery = recovery
   if (!affected || recovery.recovery_upper_ms === null || recovery.packet_evidence_missing
-    || recovery.duplicate_packet_output_intervals || recovery.recovery_upper_ms > 3000) {
+    || !recovery.output_evidence_complete || recovery.duplicate_packet_output_intervals || recovery.recovery_upper_ms > 3000) {
     throw new Error('fault recovery diagnostic requirements not met')
   }
 }

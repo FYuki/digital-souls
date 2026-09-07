@@ -921,3 +921,35 @@ session明示終了、時計probe子processの終了、teardown、所有Frontend
 このrunは時計較正を追加した障害なし診断で、切断・復旧100試行には含めない。
 実際の切断をBrowser診断へ組み込む処理、復旧後の新しい受信音声と実出力の相関、
 重複再生の判定は引き続き未完了である。
+
+
+## 2026-09-07: 初回の実Browser／Core切断診断
+
+`b51bf12`で専用bridgeを2秒切断する`--network-fault`を追加した。
+診断時だけ全packetの数値metadataと出力時計通過済み区間を保存し、
+復旧後に受信した非無音packetの出力を追跡する。音声本文は記録しない。
+復旧処理開始～TCP疎通成功を復旧時刻の範囲とし、時計較正の誤差とは分けて残す。
+切断前の3control probeが成功した場合だけ障害を注入し、切断中の実timeoutも確認する。
+Frontend関連74件、Backend関連65件、Frontend全単体534件、型検査・Ruffが成功した。
+これらのFrontendのテスト範囲は重複している。
+
+実測`network-fault-session-01`は終了コード1で、制御・音声の復旧条件を満たさなかった。
+専用networkの切断／復旧／TCP疎通は全て成功し、切断中のcontrol timeoutを3件確認した。
+前後の時計較正は成立し、合成誤差幅は1.816111ms。
+復旧処理開始からlink復旧までは約111.46ms、TCP疎通までは約112.31msだった。
+しかし復旧後10秒以内のcontrol ackも、新規受信packetの非無音出力も確認できなかった。
+
+Browserは`RTP timeline discontinuity`を検出し、`rtp_timeline`段階で接続全体を切断していた。
+その観測はTCP疎通成功時刻の上限から約3,854.58ms後。
+`PacketOutputTracker`がRTP timestampと連続packet番号の不一致を拒否し、
+roomの例外処理が`failTransport`を呼ぶ経路と一致する。
+出力確認できたのは切断前の184区間・22,080 samplesまでである。
+この範囲の重複区間は0だったが、再生経路が途中で失敗したため全体の重複再生0とは結論しない。
+後続の判定では再生経路のエラー数と出力観測が揃っているかを明示し、
+観測済み部分の重複0だけで合格しないようにした。
+
+session明示終了、時計・障害runner子processの正常終了、teardown、
+所有Frontend／Backendコンテナの削除を確認した。専用LiveKitとnetworkも最後に削除した。
+失敗したmanifestとtraceは当該run rootへ保持し、成功runへの置換は行っていない。
+次はRTP欠落時の再生中断と接続全体の終了を切り分け、Coreの応答中断・世代同期と
+整合する復旧処理を検討する。再接続100件と3,000ms目標は未達のままである。
