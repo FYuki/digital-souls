@@ -624,7 +624,9 @@ test('復号PCMは一つのworkletへ渡し、停止後の旧PCMを再投入し�
 
 test.each(['valid', 'mismatched_decode', 'stopped', 'unsubscribed'])('実出力した応答packetだけをmedia traceへ相関する（%s）', async mode => {
   const observations: RoomObservation[] = []
+  const packetOutputs: Array<{status: string}> = []
   const client = new LiveKitRoomClient(row => observations.push(row))
+  client.setPacketOutputObserver(row => packetOutputs.push(row))
   const responseId = '22222222-2222-2222-2222-222222222222'
   await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
   const room = latestRoom()
@@ -642,7 +644,8 @@ test.each(['valid', 'mismatched_decode', 'stopped', 'unsubscribed'])('実出力�
       firstPacketDecodedAtMs: mode === 'mismatched_decode' ? 102 : 101,
       firstPacketDecodedSamples: 960, firstPacketDeliveredAtMs: 150})
     observer.playback!.packet({packetIndex: 0, rtpTimestamp: 99, receivedAtMs: 100,
-      decodedAtMs: 101, pcm: new Float32Array(960).fill(.25)})
+      decodedAtMs: 101, receivedAtBoundsMs: {lowerMs: 100, upperMs: 100.2},
+      decodedAtBoundsMs: {lowerMs: 101, upperMs: 101.2}, source: 7, pcm: new Float32Array(960).fill(.25)})
     expect(measurements()).toHaveLength(0)
     expect(observations.some(row => row.mediaResponseId)).toBe(false)
     if (mode === 'stopped') client.stopPlayback(responseId)
@@ -659,6 +662,8 @@ test.each(['valid', 'mismatched_decode', 'stopped', 'unsubscribed'])('実出力�
       const correlated = observations.find(row => row.mediaResponseId === responseId)
       expect(correlated?.packetPlaybackObservation?.firstOutputAtMs).toBe(500)
       expect(correlated?.packetPlaybackObservation?.decodedAtMs).toBe(101)
+      expect(packetOutputs).toHaveLength(1)
+      expect(packetOutputs[0].status).toBe('captured')
     } else {
       if (mode === 'mismatched_decode') await vi.waitFor(() => expect(observations.some(row => row.failureStage)).toBe(true))
       else await new Promise(resolve => setTimeout(resolve, 20))

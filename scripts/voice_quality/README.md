@@ -207,3 +207,23 @@ raw manifestには同一Browserの`performance.now()`で記録した送信・ack
 
 
 control probeを専用19880 bridgeへ接続する場合は`--fault-bridge`と専用キーの`--livekit-env`を指定する。runnerとPlaywrightは`integration-voice-fault`を明示選択し、通常モードでは継承されたfault選択を除去する。専用環境の起動・所有検証・readinessの境界は`infra/voice-quality/README.md`を参照する。通常100試行や割り込みモードへfault選択を混在させない。
+
+
+### 専用bridgeの実切断診断
+
+`run_pilot.py --fault-bridge --control-probe --network-fault --trials 3 --scheduled-fixture`
+は、実応答の再生中に専用bridgeだけを2秒切断する1 sessionの診断である。
+`--run-id`、`--inference-env`、専用キーを指す`--livekit-env`も通常どおり指定する。
+専用Profile・container label・排他的bridge・loopback公開portの検査を通過する必要がある。
+通常環境への継承フラグはrunnerが除去する。
+
+PythonとBrowserの前後の時計sample、切断・復旧操作開始・link復旧・TCP疎通event、
+切断中と復旧後のcontrol probe、受信packetの数値情報と出力時計通過済み区間をraw manifestへ保存する。
+復旧操作開始からTCP疎通成功までを復旧時刻の範囲とし、その下限から保守的な回復時間を計算する。
+復旧後に送ったcontrol要求と、復旧後に受信した非無音packetの実出力を要求し、
+以前に受信済みのbufferはaudio回復として扱わない。観測overflowや欠測も残す。
+診断clientは、途中のBrowserエラーでもPython側のnetwork復旧処理の終了を待つ。
+
+重複観測は同じresponse・SSRC・RTP timestampのsample区間の重なりを検出する。
+SSRC変更後の同じsource音声の再送などを含む全面的な重複再生判定は別途必要であり、
+この単発診断の成功を再接続100試行の受け入れとして扱わない。

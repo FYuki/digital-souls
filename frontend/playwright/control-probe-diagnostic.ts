@@ -3,23 +3,19 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import {faultToBrowserOffset, type FaultClockCalibration} from './fault-clock'
 import {FaultClockRunner, calibrateFaultClock} from './fault-clock-runner'
+import {measureFaultRecovery} from './fault-recovery-diagnostic'
 import type { ControlProbeObservation } from '../src/livekit/control-probe'
 import { installScheduledFixture, type ScheduledFixture } from './controlled-audio-fixture'
 import { createVoiceChatDriver } from './voice-chat-suite'
 
-declare global {
-  interface Window {
-    __voiceControlProbeRoom?: {probeControl: () => Promise<ControlProbeObservation>}
-  }
-}
-
-// 障害なしで実制御往復と旧音声の継続を照合する。再接続100件の合否には使用しない。
+// 1 sessionの実制御・音声を診断する。明示時だけ専用bridgeを切断し、再接続100件とは分離する。
 export async function measureControlProbeSession(browser: Browser, fixture: ScheduledFixture,
   count: number, output: string): Promise<void> {
   const page = await browser.newPage({baseURL: 'http://localhost:5173', permissions: ['microphone']})
   const driver = createVoiceChatDriver()
+  const networkFault = process.env.VOICE_QUALITY_NETWORK_FAULT === '1'
   const probes: Array<ControlProbeObservation & {playbackActive: boolean}> = []
-  const record: Record<string, unknown> = {measurement_scope: 'livekit_control_probe_session_diagnostic',
+  const record: Record<string, unknown> = {measurement_scope: networkFault ? 'livekit_fault_recovery_session_diagnostic' : 'livekit_control_probe_session_diagnostic',
     expected_probes: count, fixture_sha256: fixture.audioSha256, probes, outcome: 'failure'}
   let clockRunner: FaultClockRunner | undefined
   let clockBefore: FaultClockCalibration | undefined
@@ -33,11 +29,18 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
       const target = window as typeof window & {__digitalSoulsVoiceSessionTestPort?: {
         bindRoom?: (room: NonNullable<Window['__voiceControlProbeRoom']>) => void}}
       if (!target.__digitalSoulsVoiceSessionTestPort) throw new Error('voice diagnostic port unavailable')
-      target.__digitalSoulsVoiceSessionTestPort.bindRoom = room => {window.__voiceControlProbeRoom = room}
+      window.__voicePacketOutputs = []; window.__voicePacketOutputOverflow = false
+      target.__digitalSoulsVoiceSessionTestPort.bindRoom = room => {
+        window.__voiceControlProbeRoom = room
+        room.setPacketOutputObserver(row => {
+          if (window.__voicePacketOutputs!.length < 15000) window.__voicePacketOutputs!.push(row)
+          else window.__voicePacketOutputOverflow = true
+        })
+      }
     })
     if (process.env.VOICE_QUALITY_FAULT_BRIDGE === '1') {
       stage = 'fault_clock_before'
-      clockRunner = new FaultClockRunner(resolve(process.cwd(), '..'))
+      clockRunner = new FaultClockRunner(resolve(process.cwd(), '..'), networkFault)
       await clockRunner.ready()
       clockBefore = await calibrateFaultClock(page, clockRunner)
       record.fault_clock_before = clockBefore
@@ -71,21 +74,27 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
       }, cycle.responseId))
       if (index + 1 < count) await page.waitForTimeout(100)
     }
-    stage = 'playback_continuity'
-    await page.waitForFunction(responseId => !!window.__voiceChatE2E.playbackCompletions?.[responseId], cycle.responseId,
-      {timeout: 15000})
     expect(probes.every(probe => probe.status === 'received' && probe.playbackActive)).toBe(true)
     expect(new Set(probes.map(probe => probe.probeId)).size).toBe(count)
     expect(new Set(probes.map(probe => probe.generation)).size).toBe(1)
-    const unchanged = await page.evaluate(responseId => {
-      const state = window.__voiceChatE2E
-      return state.cycles.length === 1 && (state.transportFailures?.length ?? 0) === 0
-        && !state.coreEventDiagnostics.some(event => event.type === 'response_cancelled'
-          && event.responseId === responseId)
-        && state.coreEventDiagnostics.filter(event => event.type === 'response_started').length === 1
-    }, cycle.responseId)
-    expect(unchanged, 'probe must preserve the original response and transport').toBe(true)
-    if (clockRunner && clockBefore) {
+    if (networkFault) {
+      stage = 'network_fault'
+      if (!clockRunner || !clockBefore) throw new Error('dedicated fault clock unavailable')
+      await measureFaultRecovery(page, clockRunner, clockBefore, record)
+    } else {
+      stage = 'playback_continuity'
+      await page.waitForFunction(responseId => !!window.__voiceChatE2E.playbackCompletions?.[responseId], cycle.responseId,
+        {timeout: 15000})
+      const unchanged = await page.evaluate(responseId => {
+        const state = window.__voiceChatE2E
+        return state.cycles.length === 1 && (state.transportFailures?.length ?? 0) === 0
+          && !state.coreEventDiagnostics.some(event => event.type === 'response_cancelled'
+            && event.responseId === responseId)
+          && state.coreEventDiagnostics.filter(event => event.type === 'response_started').length === 1
+      }, cycle.responseId)
+      expect(unchanged, 'probe must preserve the original response and transport').toBe(true)
+    }
+    if (clockRunner && clockBefore && !networkFault) {
       stage = 'fault_clock_after'
       const after = await calibrateFaultClock(page, clockRunner)
       record.fault_clock_after = after
@@ -96,6 +105,8 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
     record.failure_stage = stage
   } finally {
     record.evidence = await page.evaluate(() => ({
+      packet_outputs: window.__voicePacketOutputs ?? [],
+      packet_output_overflow: window.__voicePacketOutputOverflow ?? false,
       core_events: window.__voiceChatE2E.coreEventDiagnostics,
       transport_failures: window.__voiceChatE2E.transportFailures ?? [],
       playback_completions: window.__voiceChatE2E.playbackCompletions ?? {},
@@ -126,5 +137,5 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
     await page.evaluate(() => window.__voiceFixtureClock?.close()).catch(() => undefined)
     await page.close()
   }
-  expect(record.outcome, 'real control round trips without playback interruption').toBe('success')
+  expect(record.outcome, networkFault ? 'real network fault recovery' : 'real control round trips without playback interruption').toBe('success')
 }

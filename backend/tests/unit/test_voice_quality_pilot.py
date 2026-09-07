@@ -167,3 +167,19 @@ def test_fault_profile_and_token_endpoint_are_selected_together(tmp_path, monkey
     assert 'VOICE_QUALITY_FAULT_BRIDGE' not in ordinary
     with pytest.raises(ValueError, match='fault bridge'):
         pilot.pilot_environment(*arguments, fault_bridge=True)
+
+
+def test_network_fault_requires_explicit_bridge_and_clears_inherited_flag(tmp_path, monkeypatch):
+    inference = tmp_path / 'inference.env'
+    inference.write_text('INFERENCE_TARGET_CHAT=ollama/test\n')
+    livekit = tmp_path / 'livekit.env'
+    livekit.write_text('LIVEKIT_KEYS="test-key: test-value"\n')
+    args = (inference, livekit, 'fault-test', 3, False)
+    monkeypatch.setenv('VOICE_QUALITY_NETWORK_FAULT', '1')
+    assert 'VOICE_QUALITY_NETWORK_FAULT' not in pilot.pilot_environment(*args)
+    with pytest.raises(ValueError, match='dedicated bridge'):
+        pilot.pilot_environment(*args, network_fault=True)
+    env = pilot.pilot_environment(*args, scheduled_fixture=True, control_probe=True,
+                                  fault_bridge=True, network_fault=True)
+    assert env['VOICE_QUALITY_NETWORK_FAULT'] == '1'
+    assert env['DS_PROFILE'] == 'integration-voice-fault'

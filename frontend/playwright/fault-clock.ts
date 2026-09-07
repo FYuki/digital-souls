@@ -51,7 +51,7 @@ export function faultTimeInBrowser(timestampNs: string, offset: TimeBounds): Tim
 
 // 復旧前に送った要求の遅着ackは除外し、遅延は復旧時刻の下限から保守的に算出する。
 export function recoveryLatencyUpperMs(restored: TimeBounds, sentAtMs: number, receivedAtMs: number): number {
-  if (!validBounds(restored) || restored.lowerMs < 0 || restored.upperMs - restored.lowerMs > 20
+  if (!validBounds(restored) || restored.lowerMs < 0
     || ![sentAtMs, receivedAtMs].every(validTime) || sentAtMs <= restored.upperMs || receivedAtMs < sentAtMs) {
     throw new Error('recovery observation is not causally after restoration')
   }

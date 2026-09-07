@@ -24,6 +24,10 @@ if (process.env.VOICE_QUALITY_FAULT_BRIDGE !== undefined && !faultBridge) {
 if (faultBridge && process.env.VOICE_QUALITY_CONTROL_PROBE !== '1') {
   throw new Error('fault bridge requires an explicit control probe diagnostic')
 }
+if (process.env.VOICE_QUALITY_NETWORK_FAULT !== undefined
+  && (process.env.VOICE_QUALITY_NETWORK_FAULT !== '1' || !faultBridge)) {
+  throw new Error('network fault requires explicit dedicated bridge')
+}
 const selectedProfile = faultBridge ? 'integration-voice-fault' : 'integration-voice'
 const base = createSuiteConfig('integration-voice', faultBridge ? {
   loadProfile: () => JSON.parse(readFileSync(join(frontendRoot, '..', 'environments', 'profiles', 'integration-voice-fault.json'), 'utf8')),

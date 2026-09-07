@@ -85,7 +85,7 @@ def test_fault_restores_original_ip_when_wait_is_interrupted(monkeypatch):
     assert operations[-1] == (
         'network', 'connect', '--ip', '172.20.0.2', 'test-network', 'test-container',
     )
-    assert events == ['network_link_disconnected', 'network_link_restored']
+    assert events == ['network_link_disconnected', 'network_link_restore_started', 'network_link_restored']
 
 
 def test_fault_labels_tcp_probe_separately_from_media_recovery(monkeypatch):
@@ -100,7 +100,7 @@ def test_fault_labels_tcp_probe_separately_from_media_recovery(monkeypatch):
     monkeypatch.setattr(fault.socket, 'create_connection', lambda *args, **kwargs: nullcontext())
     fault.pulse(target, 0.1)
     assert events == [
-        'network_link_disconnected', 'network_link_restored', 'signaling_tcp_reachable',
+        'network_link_disconnected', 'network_link_restore_started', 'network_link_restored', 'signaling_tcp_reachable',
     ]
     assert 'transport_available' not in events
 

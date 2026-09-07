@@ -96,8 +96,10 @@ def probe_gpu() -> dict[str, object]:
 def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
                       trials: int, disable_thinking: bool, scheduled_fixture: bool = False, continuous_turns: int = 0,
                       controlled: bool = False, interruption_cohort: str | None = None,
-                      control_probe: bool = False, fault_bridge: bool = False) -> dict[str, str]:
+                      control_probe: bool = False, fault_bridge: bool = False, network_fault: bool = False) -> dict[str, str]:
     run_root(run_id)
+    if type(network_fault) is not bool or (network_fault and not fault_bridge):
+        raise ValueError("network fault requires the dedicated bridge diagnostic")
     if type(fault_bridge) is not bool or (fault_bridge and not control_probe):
         raise ValueError("fault bridge requires an explicit control probe diagnostic")
     if type(control_probe) is not bool or (control_probe and (
@@ -139,6 +141,9 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
                VOICE_QUALITY_PILOT_TRIALS=str(trials), VOICE_QUALITY_RUN_ID=run_id,
                VOICE_QUALITY_SCHEDULED_FIXTURE="1" if scheduled_fixture else "0",
                VOICE_QUALITY_CONTINUOUS_TURNS=str(continuous_turns))
+    env.pop("VOICE_QUALITY_NETWORK_FAULT", None)
+    if network_fault:
+        env["VOICE_QUALITY_NETWORK_FAULT"] = "1"
     env.pop("VOICE_QUALITY_FAULT_BRIDGE", None)
     env["DS_PROFILE"] = "integration-voice-fault" if fault_bridge else "integration-voice"
     if fault_bridge:
@@ -159,7 +164,7 @@ def run(args: argparse.Namespace) -> int:
     sys.path.insert(0, str(ROOT / "backend"))
     from app.voice_resource_metrics import ContainerResourceSampler
 
-    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe, args.fault_bridge)
+    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe, args.fault_bridge, args.network_fault)
     if args.fault_bridge:
         from network_fault import resolve_target
         resolve_target("ds-voice-quality-fault-livekit-1")
@@ -211,6 +216,8 @@ if __name__ == "__main__":
                         help="応答再生中へ固定ラベル音声を入れる実接続診断。通常の独立試行集計とは分離する。")
     parser.add_argument("--fault-bridge", action="store_true",
                         help="専用19880 bridgeと同じreadiness Profileを選ぶ。control-probe専用。")
+    parser.add_argument("--network-fault", action="store_true",
+                        help="専用bridgeを2秒切断する1 session診断。fault-bridgeとcontrol-probe必須。")
     parser.add_argument("--control-probe", action="store_true",
                         help="障害なしの1 sessionで実制御往復を確認する。trialsはprobe回数。")
     parser.add_argument("--disable-thinking", action="store_true")

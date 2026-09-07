@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
-const keys = ['VOICE_QUALITY_FAULT_BRIDGE', 'VOICE_QUALITY_CONTROL_PROBE', 'VOICE_QUALITY_RUN_ID',
+const keys = ['VOICE_QUALITY_NETWORK_FAULT', 'VOICE_QUALITY_FAULT_BRIDGE', 'VOICE_QUALITY_CONTROL_PROBE', 'VOICE_QUALITY_RUN_ID',
   'DS_PROFILE', 'DS_DATA_DIR', 'DS_ENVIRONMENT_ID', 'DS_ENVIRONMENT_RUN_REPORT', 'DS_PROFILE_REPORT',
   'VOICE_MEASUREMENT_KIND', 'VOICE_CONTROLLED_TRACE_PATH', 'VOICE_QUALITY_MANIFEST_PATH']
 let previous: Record<string, string | undefined>
@@ -40,4 +40,10 @@ test('故障環境だけの選択を通常100試行へ混在させない', async
 test('不正な選択値を通常環境へ暗黙fallbackしない', async () => {
   process.env.VOICE_QUALITY_FAULT_BRIDGE = 'invalid'
   await expect(import('../playwright.livekit-quality.config')).rejects.toThrow('invalid fault bridge')
+})
+
+
+test.each(['1', 'invalid'])('専用bridgeなしでnetwork faultを選択できない: %s', async value => {
+  process.env.VOICE_QUALITY_NETWORK_FAULT = value
+  await expect(import('../playwright.livekit-quality.config')).rejects.toThrow('dedicated bridge')
 })

@@ -97,6 +97,9 @@ export type DecodedAudioPacket = Readonly<{
   rtpTimestamp: number
   receivedAtMs: number
   decodedAtMs: number
+  receivedAtBoundsMs: ClockBounds
+  decodedAtBoundsMs: ClockBounds
+  source: number
   pcm: Float32Array
 }>
 
@@ -234,7 +237,8 @@ export class RemoteMediaObserver {
             && data.pcm instanceof Float32Array && data.pcm.length === 960
             && Number.isInteger(data.packetIndex) && data.packetIndex! >= 0) {
             this.playback.packet({packetIndex: data.packetIndex!, rtpTimestamp: packet.rtpTimestamp,
-              receivedAtMs: received.lowerMs, decodedAtMs: decoded.lowerMs, pcm: data.pcm})
+              receivedAtMs: received.lowerMs, decodedAtMs: decoded.lowerMs,
+              receivedAtBoundsMs: received, decodedAtBoundsMs: decoded, source: packet.source, pcm: data.pcm})
           } else if (this.playback) { this.failEncoded(); return }
         } else if (event.data.kind === 'packet_decoded' && this.decodedPacket === null) {
           this.decodedPacket = event.data

@@ -70,7 +70,7 @@ const defaultDependencies: VoiceSessionDependencies = {
       __digitalSoulsVoiceSessionTestPort?: {
         createRoom?: VoiceSessionDependencies['roomFactory']
         observeRoom?: (observation: RoomObservation) => void
-        bindRoom?: (room: Pick<LiveKitRoomClient, 'probeControl'>) => void
+        bindRoom?: (room: Pick<LiveKitRoomClient, 'probeControl' | 'setPacketOutputObserver'>) => void
         receiveCoreEvent?: (event: VoiceSessionEvent) => void
         bindController?: (controller: {
           speechStarted: (utteranceId: string, atMs: number) => Promise<void>

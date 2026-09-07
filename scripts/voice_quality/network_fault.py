@@ -76,7 +76,7 @@ def resolve_target(container_name: str) -> Target:
 
 def emit(name: str) -> None:
     print(json.dumps({
-        "event": name, "timestamp_ns": time.monotonic_ns(),
+        "event": name, "timestamp_ns": str(time.monotonic_ns()),
         "clock_domain": "fault_runner_monotonic",
     }), flush=True)
 
@@ -90,6 +90,7 @@ def pulse(target: Target, duration_seconds: float) -> None:
         emit("network_link_disconnected")
         time.sleep(duration_seconds)
     finally:
+        emit("network_link_restore_started")
         current = docker("inspect", target.container_id)[0]
         attached = current.get("NetworkSettings", {}).get("Networks") or {}
         if not any(item.get("NetworkID") == target.network_id for item in attached.values()):

@@ -26,6 +26,7 @@ import {
 import { decodePrivateFrame } from './private-contract'
 import { packetRendererSource, PacketOutputTracker, PacketRenderError, type PacketRenderInterval, type PacketPlaybackObservation, type SourceAudioFinished, type PlaybackCompletion } from './packet-renderer'
 import { RemoteMediaObserver, type MediaObservation, type DecodedAudioPacket } from './media-observer'
+import {PacketOutputDiagnostic, type PacketOutputEvidence} from './packet-output-diagnostic'
 import { RtpNetworkObserver, type NetworkObservation } from './network-observer'
 
 export type RoomObservation = Readonly<{
@@ -111,6 +112,7 @@ export class LiveKitRoomClient {
     outputTracker: PacketOutputTracker
     outputTimer: ReturnType<typeof setInterval>
     firstPacket?: DecodedAudioPacket
+    packetDiagnostic?: PacketOutputDiagnostic
     worklet: AudioWorkletNode
     outputGain: GainNode
     playbackElement: HTMLAudioElement
@@ -186,6 +188,12 @@ export class LiveKitRoomClient {
     if (shouldSynchronize) await this.requestStateSync(this.room)
     this.reconnectRequested = false
     this.observe({ transport: 'available', control: 'available', audio: 'unavailable' })
+  }
+
+  private packetOutputObserver: ((row: PacketOutputEvidence) => void) | undefined
+
+  setPacketOutputObserver(observer: (row: PacketOutputEvidence) => void): void {
+    this.packetOutputObserver = observer
   }
 
   probeControl(): Promise<ControlProbeObservation> {
@@ -450,6 +458,7 @@ export class LiveKitRoomClient {
             packet: packet => {
               const graph = this.audioGraphs.get(key)
               if (!this.subscriptions.has(key) || !graph || this.stoppedResponses.has(responseId)) return
+              graph.packetDiagnostic?.receive(packet)
               if (packet.packetIndex === 0) graph.firstPacket = {...packet, pcm: new Float32Array(0)}
               graph.worklet.port.postMessage({kind: 'pcm', packetIndex: packet.packetIndex,
                 rtpTimestamp: packet.rtpTimestamp, samples: packet.pcm}, [packet.pcm.buffer])
@@ -712,6 +721,7 @@ export class LiveKitRoomClient {
             renderQuantumStartFrame: interval.renderQuantumStartFrame,
             renderClockConfirmationFrame: interval.renderClockConfirmationFrame}})
       }
+      graph.packetDiagnostic?.confirm(interval, atMs, clock.observedAtMs)
       this.playback.recordRenderedInterval({...interval, responseId,
         ...(interval.packetIndex === 0 && interval.packetSampleOffset === 0 ? {firstResponseFrame: interval.startFrame} : {})})
     }, completion => {
@@ -752,6 +762,8 @@ export class LiveKitRoomClient {
       outputTracker,
       outputTimer,
       firstPacket: undefined as DecodedAudioPacket | undefined,
+      packetDiagnostic: this.packetOutputObserver === undefined ? undefined
+        : new PacketOutputDiagnostic(responseId, key, generation, row => this.packetOutputObserver?.(row)),
       worklet,
       outputGain,
       playbackElement,
