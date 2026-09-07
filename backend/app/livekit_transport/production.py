@@ -1433,6 +1433,18 @@ class ProductionRuntimeManager:
             elif sid is not None:
                 audio_probe.receive(kind, probe_id, generation, sid)
 
+        sync_observation_count = 0
+
+        def observe_sync(stage: str, generation: int, at_ms: int) -> None:
+            nonlocal sync_observation_count
+            if sync_observation_count > 512:
+                return
+            if sync_observation_count == 512:
+                stage = "overflow"
+            sync_observation_count += 1
+            # 専用test Profileのみ。本文、ID、接続先、例外文字列を含めない。
+            logger.warning("State sync: stage=%s generation=%d at_ms=%d", stage, generation, at_ms)
+
         coordinator = ProductionSessionCoordinator(
             session_id=session_id,
             user_identity=user_identity,
@@ -1446,6 +1458,7 @@ class ProductionRuntimeManager:
                 generation_ready=generation_ready,
                 response_track_ready=response_track_ready,
                 audio_probe=handle_audio_probe if audio_probe is not None else None,
+                sync_observer=observe_sync if self._audio_probe_enabled else None,
             ),
             core_port=self._core_port,
         )

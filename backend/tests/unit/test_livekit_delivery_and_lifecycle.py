@@ -364,7 +364,7 @@ def test_disconnect_discards_response_and_interrupts_at_confirmed_prefix_once() 
     ]
 
 
-def _coordinator(module, published, cleaned, core_port=None, audio_probe=None, ready=None):
+def _coordinator(module, published, cleaned, core_port=None, audio_probe=None, ready=None, sync_observer=None):
     async def publish(payload: bytes, topic: str) -> None:
         published.append((payload, topic))
 
@@ -385,6 +385,7 @@ def _coordinator(module, published, cleaned, core_port=None, audio_probe=None, r
             cleanup=cleanup,
             generation_ready=generation_ready,
             audio_probe=audio_probe,
+            sync_observer=sync_observer,
         ),
         core_port=core_port or RecordingCorePort(),
     )
@@ -1231,6 +1232,28 @@ def test_sync_retries_failed_readiness_before_publishing_available() -> None:
         await sync()
         assert calls == [1, 1]
         assert [json.loads(payload)["generation"] for payload, _ in published] == [1, 1]
+        await coordinator.cleanup("test_complete")
+
+    asyncio.run(exercise())
+
+
+def test_state_sync_observations_separate_receive_readiness_and_send() -> None:
+    module = _livekit_module("coordinator", "state sync numeric observations")
+
+    async def exercise() -> None:
+        rows: list[tuple[str, int, int]] = []
+        coordinator = _coordinator(module, [], [], sync_observer=lambda *values: rows.append(values))
+        identity = "user-20000000-0000-4000-8000-000000000010"
+        coordinator.participant_connected(identity=identity, participant_sid="PA_current", room_sid="RM_one")
+        for _ in range(2):
+            await coordinator.receive_data(identity=identity, participant_sid="PA_current", topic=module.PRIVATE_TOPIC,
+                payload=json.dumps({"protocol_version": "1.0", "type": "state_sync_request", "generation": 0}).encode())
+        assert [row[0] for row in rows] == ["request_received", "lock_acquired", "ready_started",
+            "ready_completed", "send_started", "send_completed", "request_received", "lock_acquired",
+            "send_started", "send_completed"]
+        assert [row[1] for row in rows] == [0, 0, 1, 1, 1, 1, 1, 1, 1, 1]
+        assert all(type(row[2]) is int and row[2] >= 0 for row in rows)
+        assert [row[2] for row in rows] == sorted(row[2] for row in rows)
         await coordinator.cleanup("test_complete")
 
     asyncio.run(exercise())

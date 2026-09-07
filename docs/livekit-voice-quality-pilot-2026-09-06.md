@@ -1286,3 +1286,11 @@ SDK再接続完了10,562.7msの後も同じ要求世代0の再送が続き、12,
 
 実18・19のsession・障害操作子・診断reader終了と所有Frontend・Backendの実削除を確認済み。
 専用LiveKitとnetworkも削除し、通常LiveKitの継続稼働を確認した。100件再接続の受け入れは未完了。
+
+
+### 状態同期のBackend段階別診断
+
+専用音声probeが有効なtest Profileだけ、状態要求の受信・lock取得、世代準備の開始・完了、
+状態送信の開始・完了をBackend単調時計のms値で記録する。世代と固定stage以外の識別情報を
+含めず、1 session最大512行とoverflow通知1行に制限する。Browser時計とは直接減算しない。
+準備や送信で例外が発生した場合、完了stageを補完しない。Backend関連136件とRuffが成功した。

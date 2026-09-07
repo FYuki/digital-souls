@@ -47,6 +47,7 @@ class SessionCoordinatorDependencies:
     generation_ready: Callable[[], Awaitable[None]]
     response_track_ready: Callable[[str, str], None] = lambda _response_id, _track_sid: None
     audio_probe: Callable[[str, str, int, str | None], None] | None = None
+    sync_observer: Callable[[str, int, int], None] | None = None
 
 
 class ProductionSessionCoordinator:
@@ -205,8 +206,10 @@ class ProductionSessionCoordinator:
                 frame = decode_private_frame(payload)
                 frame_generation = _required_int(frame["generation"], "generation")
                 if frame["type"] == "state_sync_request":
+                    self._observe_sync("request_received")
                     # 再送は同じ要求世代のまま直列化し、準備完了前のavailable通知を防ぐ。
                     async with self._state_sync_lock:
+                        self._observe_sync("lock_acquired")
                         if frame_generation > self.generation or self._ended:
                             return
                         if self._lifecycle.phase == "unavailable":
@@ -378,12 +381,20 @@ class ProductionSessionCoordinator:
         if self._ended:
             return
         if self._ready_generation != generation:
+            self._observe_sync("ready_started")
             await self._dependencies.generation_ready()
+            self._observe_sync("ready_completed")
             self._ready_generation = generation
         # 準備中のparticipant再接続・終了は、新世代が準備済みだと補完しない。
         if self._ended or self.generation != generation:
             return
+        self._observe_sync("send_started")
         await self._send_authoritative_state()
+        self._observe_sync("send_completed")
+
+    def _observe_sync(self, stage: str) -> None:
+        if self._dependencies.sync_observer is not None:
+            self._dependencies.sync_observer(stage, self.generation, self._clock())
 
     async def _send_authoritative_state(self) -> None:
         frames = reconnect_sync_frames(
