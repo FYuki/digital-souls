@@ -13,8 +13,10 @@ from jsonschema import Draft202012Validator
 
 from app.stt.remote_whisper_client import WHISPER_COMPUTE_TYPE, WHISPER_DEVICE
 from app.voice_baseline import _assert_anonymous, _load_manifest, _load_trace
+from app.voice_resource_metrics import aggregate_resources
+from app.voice_network_metrics import aggregate_network
 from app.voice_metrics import (
-    ClockMetadata, DiagnosticValue, HardwareMetadata, NetworkMetadata,
+    ClockMetadata, DiagnosticValue, HardwareMetadata,
     ResourceMetadata, RunDiagnostics, TraceEvent, aggregate_events, create_run_metadata,
 )
 
@@ -22,6 +24,7 @@ from app.voice_metrics import (
 def _finalize_livekit_report(
     *, manifest_path: Path, trace_path: Path, output_path: Path,
     schema_path: Path, profile_report_path: Path, run_id: str, controlled: bool,
+    resource_observations_path: Path | None = None,
 ) -> None:
     """試行数と証拠を検証する。品質合否は個別のevaluatorで判定する。"""
     manifest = _load_manifest(manifest_path)
@@ -185,7 +188,12 @@ def _finalize_livekit_report(
     measured_keys = {(trial["sessionId"], trial["utteranceId"], trial["responseId"]) for trial in measured}
     events = [event for event in events if (event.session_id, event.utterance_id, event.response_id) in measured_keys]
     missing_resource = DiagnosticValue(status="missing", reason="process_tree_not_observed")
-    missing_network = DiagnosticValue(status="missing", reason="webrtc_counters_not_observed")
+    resources = ResourceMetadata(cpu_percent=missing_resource, memory_bytes=missing_resource)
+    if resource_observations_path is not None:
+        rows = [json.loads(line) for line in resource_observations_path.read_text().splitlines() if line.strip()]
+        if not rows or any(not isinstance(row, dict) for row in rows):
+            raise ValueError("resource observations must contain sampled rows")
+        resources = aggregate_resources(rows)
     artifact = aggregate_events(
         events,
         metadata=create_run_metadata(
@@ -202,11 +210,8 @@ def _finalize_livekit_report(
                   if any(trial.get("playback_completion") is not None for trial in measured) else []),
             ],
             hardware=HardwareMetadata(description=platform.platform()),
-            resources=ResourceMetadata(cpu_percent=missing_resource, memory_bytes=missing_resource),
-            network=NetworkMetadata(
-                sent_bytes=missing_network, received_bytes=missing_network,
-                packet_loss_basis_points=missing_network, condition=f"localhost LiveKit {scope}; shared inference services; RAG disabled",
-            ),
+            resources=resources,
+            network=aggregate_network(measured, condition=f"localhost LiveKit {scope}; shared inference services; RAG disabled; browser audio RTP payload; loss at browser downlink"),
         ),
     )
     if artifact.run_counts.measured != expected:
@@ -405,21 +410,25 @@ def _validate_initial_state_evidence(trial: dict[str, object]) -> None:
 def finalize_livekit_pilot(
     *, manifest_path: Path, trace_path: Path, output_path: Path,
     schema_path: Path, profile_report_path: Path, run_id: str,
+    resource_observations_path: Path | None = None,
 ) -> None:
     """少数試行用。正式100試行の代用としては使わない。"""
     _finalize_livekit_report(manifest_path=manifest_path, trace_path=trace_path,
                             output_path=output_path, schema_path=schema_path,
-                            profile_report_path=profile_report_path, run_id=run_id, controlled=False)
+                            profile_report_path=profile_report_path, run_id=run_id, controlled=False,
+                            resource_observations_path=resource_observations_path)
 
 
 def finalize_livekit_controlled(
     *, manifest_path: Path, trace_path: Path, output_path: Path,
     schema_path: Path, profile_report_path: Path, run_id: str,
+    resource_observations_path: Path | None = None,
 ) -> None:
     """5 warm-up + 独立100試行のartifactを出力する。品質の合格判定は含まない。"""
     _finalize_livekit_report(manifest_path=manifest_path, trace_path=trace_path,
                             output_path=output_path, schema_path=schema_path,
-                            profile_report_path=profile_report_path, run_id=run_id, controlled=True)
+                            profile_report_path=profile_report_path, run_id=run_id, controlled=True,
+                            resource_observations_path=resource_observations_path)
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -431,12 +440,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--schema", type=Path, required=True)
     parser.add_argument("--profile-report", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--resource-observations", type=Path)
     arguments = vars(parser.parse_args(argv))
     finalize = finalize_livekit_controlled if arguments["scope"] == "controlled" else finalize_livekit_pilot
     finalize(
         manifest_path=arguments["manifest"], trace_path=arguments["trace"],
         output_path=arguments["output"], schema_path=arguments["schema"],
         profile_report_path=arguments["profile_report"], run_id=arguments["run_id"],
+        resource_observations_path=arguments["resource_observations"],
     )
 
 

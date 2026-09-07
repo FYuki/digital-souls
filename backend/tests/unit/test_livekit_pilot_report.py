@@ -41,14 +41,17 @@ def pilot_inputs(tmp_path):
     profile = {'effectiveProfile': 'integration-voice', 'derivedEnvironment': {'WHISPER_MODEL': 'medium', 'RAG_ENABLED': 'false'}}
     paths = {name: tmp_path / (name + '.json') for name in ('manifest', 'trace', 'output', 'profile')}
     paths['profile'].write_text(json.dumps(profile))
-    def run(*, controlled=False):
+    def run(*, controlled=False, resource_rows=None):
         paths['manifest'].write_text(json.dumps(manifest))
         paths['trace'].write_text('\n'.join(json.dumps(event) for event in events))
+        resource_path = tmp_path / "resources.jsonl"
+        if resource_rows is not None:
+            resource_path.write_text('\n'.join(json.dumps(row) for row in resource_rows))
         finalize = finalize_livekit_controlled if controlled else finalize_livekit_pilot
         finalize(manifest_path=paths['manifest'], trace_path=paths['trace'],
                               output_path=paths['output'], profile_report_path=paths['profile'],
                               schema_path=root / 'docs/schemas/voice-quality-artifact-v1.schema.json',
-                              run_id='unit-pilot')
+                              run_id='unit-pilot', resource_observations_path=resource_path if resource_rows is not None else None)
         return json.loads(paths['output'].read_text())
     return manifest, events, run
 
@@ -415,3 +418,23 @@ def test_controlled_media_requires_the_packet_that_was_actually_played(controlle
         trial['media_observation_method'] = 'rtc_encoded_transform_and_rtp_track_delivery'
     with pytest.raises(ValueError):
         run(controlled=True)
+
+
+def test_pilot_includes_scoped_resources_and_excludes_warmup_network(pilot_inputs):
+    manifest, _, run = pilot_inputs
+    for index, trial in enumerate(manifest["trials"]):
+        trial["network_observation"] = {"method": "browser_audio_rtp_counters_v1",
+            "uplink": {"status": "measured", "bytes": 900 if index == 0 else 100, "packets": 10},
+            "downlink": {"status": "measured", "bytes": 900 if index == 0 else 200, "packets": 20, "lostPackets": 0}}
+    rows = [{"backend": {"status": "measured", "scope": "owned_backend_container", "started_ns": at-1,
+                         "completed_ns": at, "cpu_total_ns": cpu, "memory_bytes": 100},
+             "gpu": {"outcome": "observed", "scope": "host_gpu", "devices": [{"utilization_percent": 50, "used_bytes": 200, "total_bytes": 500}]}}
+            for at, cpu in [(1_000_000_000, 100_000_000), (2_000_000_000, 300_000_000)]]
+    result = run(resource_rows=rows)
+    assert result["resources"]["cpu_percent"]["value"] == 20
+    assert result["resources"]["memory_bytes"]["value"] == 100
+    assert result["resources"]["gpu_memory_bytes"]["value"] == 200
+    assert result["network"]["sent_bytes"]["value"] == 100
+    assert result["network"]["received_bytes"]["value"] == 200
+    assert result["network"]["packet_loss_basis_points"]["value"] == 0
+    assert result["network"]["collection"]["trial_count"] == 1

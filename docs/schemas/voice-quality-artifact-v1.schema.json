@@ -147,7 +147,10 @@
       "required": ["cpu_percent", "memory_bytes"],
       "properties": {
         "cpu_percent": { "$ref": "#/$defs/diagnostic" },
-        "memory_bytes": { "$ref": "#/$defs/diagnostic" }
+        "memory_bytes": { "$ref": "#/$defs/diagnostic" },
+        "gpu_utilization_percent": { "$ref": "#/$defs/diagnostic" },
+        "gpu_memory_bytes": { "$ref": "#/$defs/diagnostic" },
+        "collection": { "anyOf": [{ "$ref": "#/$defs/resource_collection" }, { "type": "null" }] }
       }
     },
     "network": {
@@ -160,7 +163,128 @@
         "sent_bytes": { "$ref": "#/$defs/diagnostic" },
         "received_bytes": { "$ref": "#/$defs/diagnostic" },
         "packet_loss_basis_points": { "$ref": "#/$defs/diagnostic" },
-        "condition": { "type": "string" }
+        "condition": { "type": "string" },
+        "collection": { "anyOf": [{ "$ref": "#/$defs/network_collection" }, { "type": "null" }] }
+      }
+    },
+    "resource_collection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cpu_scope",
+        "cpu_method",
+        "memory_method",
+        "gpu_scope",
+        "gpu_method",
+        "backend_samples",
+        "cpu_intervals",
+        "cpu_observed_ms",
+        "maximum_interval_ms",
+        "gpu_samples",
+        "missing_samples"
+      ],
+      "properties": {
+        "cpu_scope": {
+          "const": "owned_backend_container"
+        },
+        "cpu_method": {
+          "const": "cpu_time_delta_over_observer_wall_time_one_core_100_percent"
+        },
+        "memory_method": {
+          "const": "maximum_sampled_container_charged_bytes"
+        },
+        "gpu_scope": {
+          "const": "shared_host_gpu"
+        },
+        "gpu_method": {
+          "const": "maximum_device_utilization_and_maximum_total_used_bytes"
+        },
+        "backend_samples": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cpu_intervals": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "gpu_samples": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cpu_observed_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "maximum_interval_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "missing_samples": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "network_collection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "byte_scope",
+        "loss_scope",
+        "trial_count",
+        "sent_trials",
+        "received_trials",
+        "loss_trials",
+        "received_packets",
+        "lost_packets",
+        "negative_loss_trials",
+        "missing_trials"
+      ],
+      "properties": {
+        "byte_scope": {
+          "const": "browser_audio_rtp_payload"
+        },
+        "loss_scope": {
+          "const": "browser_downlink_response_tracks"
+        },
+        "trial_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sent_trials": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "received_trials": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "loss_trials": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "received_packets": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lost_packets": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "negative_loss_trials": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing_trials": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
       }
     }
   }

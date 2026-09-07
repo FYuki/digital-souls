@@ -42,6 +42,7 @@ export const measureResponseTrackSession = async (
       },
         cycle.responseId, { timeout: voiceTestTimeout })
       await page.waitForFunction(responseId => !!window.__voiceChatE2E.playbackCompletions?.[responseId], cycle.responseId!, {timeout: 10_000})
+      await page.waitForFunction(responseId => !!window.__voiceChatE2E.networkObservations?.[responseId], cycle.responseId!, {timeout: 3000})
       const transcript = await page.locator('article.message').nth(index * 2).locator('p').textContent()
       expect(normalizeBaselineTranscript(transcript ?? '')).toBe(expectedTranscript)
       expect(cycle.sessionId).toBe(cycles[0].sessionId)
@@ -52,6 +53,10 @@ export const measureResponseTrackSession = async (
       await expect(microphone).toHaveAttribute('aria-pressed', 'true')
       observations.push({ ...cycle, outcome: 'success', transcript_matches: true,
         track_response_matches: trackMatches, additional_user_control_actions: 0,
+        packet_playback_observation: await page.evaluate(() => window.__voiceChatE2E.lastPacketPlaybackObservation),
+        track_media_observation: await page.evaluate(() => window.__voiceChatE2E.lastTrackMediaObservation),
+        media_observation_method: 'response_track_stateful_opus_worklet_output',
+        network_observation: await page.evaluate(responseId => window.__voiceChatE2E.networkObservations?.[responseId], cycle.responseId!),
         playback_completion: await page.evaluate(responseId => window.__voiceChatE2E.playbackCompletions?.[responseId], cycle.responseId!),
         fixture_clock_bounds: await readFixtureBounds(page) })
       await persist()
@@ -75,6 +80,7 @@ export const measureResponseTrackSession = async (
       cycles: window.__voiceChatE2E.cycles,
       microphone_states: window.__voiceChatE2E.micStates,
       playback_completions: window.__voiceChatE2E.playbackCompletions ?? {},
+      network_observations: window.__voiceChatE2E.networkObservations ?? {},
       fixture_finished: window.__voiceFixtureClock?.finished ?? false,
     })).catch(() => ({ browser_state_unavailable: true }))
     throw error

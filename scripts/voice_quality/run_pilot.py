@@ -7,6 +7,7 @@ import math
 import os
 import re
 import subprocess
+import sys
 import time
 from http.client import HTTPException
 from pathlib import Path
@@ -135,6 +136,9 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
 
 
 def run(args: argparse.Namespace) -> int:
+    sys.path.insert(0, str(ROOT / "backend"))
+    from app.voice_resource_metrics import ContainerResourceSampler
+
     env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled)
     reference = env.get("INFERENCE_TARGET_CHAT", "")
     if not reference.startswith("ollama/"):
@@ -144,6 +148,7 @@ def run(args: argparse.Namespace) -> int:
     expected_context = int(env["INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS"]) + int(env["INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS"])
     base = run_root(args.run_id)
     base.mkdir(parents=True, exist_ok=False)  # 失敗した試行のdata rootも上書きしない。
+    resources = ContainerResourceSampler(base / "runtime-data/runtime/standalone/environment-run.json")
     process = subprocess.Popen([
         "node", "node_modules/@playwright/test/cli.js", "test", "--config", "playwright.livekit-quality.config.ts",
     ], cwd=ROOT / "frontend", env=env)
@@ -153,7 +158,7 @@ def run(args: argparse.Namespace) -> int:
             while process.poll() is None:
                 row = {"scope": "controlled_shared_inference_observation" if args.controlled else "pilot_shared_inference_observation", "clock_domain": "observer_monotonic",
                        "expected_context_tokens": expected_context, "thinking_disabled_for_pilot": args.disable_thinking, "scheduled_fixture": args.scheduled_fixture, "continuous_turns": args.continuous_turns,
-                       "ollama": probe_residency(endpoint, model)}
+                       "ollama": probe_residency(endpoint, model), "backend": resources.sample()}
                 if sample % 10 == 0:
                     row["gpu"] = probe_gpu()
                 output.write(json.dumps(row, allow_nan=False) + "\n")

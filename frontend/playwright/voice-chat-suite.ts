@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import type {PacketPlaybackObservation, PlaybackCompletion} from '../src/livekit/packet-renderer'
+import type { NetworkObservation } from '../src/livekit/network-observer'
 import type { MediaObservation } from '../src/livekit/media-observer'
 
 import { expect, type Page } from '@playwright/test'
@@ -15,6 +16,7 @@ declare global {
       lastTrackMediaObservation?: MediaObservation
       lastPacketPlaybackObservation?: PacketPlaybackObservation
       playbackCompletions?: Record<string, PlaybackCompletion>
+      networkObservations?: Record<string, NetworkObservation>
       cycles: {
         fixtureStartedAt: number
         trackReceivedAt?: number
@@ -134,6 +136,8 @@ const installPlaybackProbe = async (page: Page) => {
           renderedSamples?: number
           speechStartedAtMs?: number
           localPlaybackStoppedAtMs?: number
+          networkResponseId?: string
+          networkObservation?: NetworkObservation
           cancelConfirmedAtMs?: number
         }) => void
         receiveCoreEvent?: (event: {
@@ -166,6 +170,10 @@ const installPlaybackProbe = async (page: Page) => {
         if (observation.playbackCompletedResponseId && observation.playbackCompletion) {
           window.__voiceChatE2E.playbackCompletions ??= {}
           window.__voiceChatE2E.playbackCompletions[observation.playbackCompletedResponseId] = observation.playbackCompletion
+        }
+        if (observation.networkResponseId && observation.networkObservation) {
+          window.__voiceChatE2E.networkObservations ??= {}
+          window.__voiceChatE2E.networkObservations[observation.networkResponseId] = observation.networkObservation
         }
         if (observation.packetPlaybackObservation !== undefined) {
           window.__voiceChatE2E.lastPacketPlaybackObservation = {...observation.packetPlaybackObservation}

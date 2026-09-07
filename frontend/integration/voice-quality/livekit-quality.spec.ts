@@ -142,6 +142,7 @@ test(Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0) > 0
         window.__voiceChatE2E.liveKitOrder.includes(`${responseId}:completed`)
       ), cycle.responseId, { timeout: voiceTestTimeout })
       await page.waitForFunction(responseId => !!window.__voiceChatE2E.playbackCompletions?.[responseId], cycle.responseId!, {timeout: 10_000})
+      await page.waitForFunction(responseId => !!window.__voiceChatE2E.networkObservations?.[responseId], cycle.responseId!, {timeout: 3000})
       // page.closeだけでは再接続猶予中のroomが残る。明示終了の完了後に次試行へ進む。
       const sessionEnded = page.waitForResponse((response) => (
         response.request().method() === 'DELETE'
@@ -153,6 +154,7 @@ test(Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0) > 0
       expect((await endResponse.json()).phase).toBe('ended')
       const sourceBounds = sourceFixture ? await readFixtureBounds(page) : undefined
       trials.push({
+        network_observation: await page.evaluate(responseId => window.__voiceChatE2E.networkObservations?.[responseId], cycle.responseId!),
         track_response_matches: await page.evaluate(responseId => window.__voiceChatE2E.lastTrackMediaResponseId === responseId, cycle.responseId),
         track_media_observation: await page.evaluate(() => window.__voiceChatE2E.lastTrackMediaObservation),
         packet_playback_observation: await page.evaluate(() => window.__voiceChatE2E.lastPacketPlaybackObservation),

@@ -25,6 +25,7 @@ import {
 import { decodePrivateFrame } from './private-contract'
 import { packetRendererSource, PacketOutputTracker, PacketRenderError, type PacketRenderInterval, type PacketPlaybackObservation, type SourceAudioFinished, type PlaybackCompletion } from './packet-renderer'
 import { RemoteMediaObserver, type MediaObservation, type DecodedAudioPacket } from './media-observer'
+import { RtpNetworkObserver, type NetworkObservation } from './network-observer'
 
 export type RoomObservation = Readonly<{
   transport: 'available' | 'unavailable' | 'idle'
@@ -58,6 +59,8 @@ export type RoomObservation = Readonly<{
   playbackCompletedResponseId?: string
   playbackCompletion?: PlaybackCompletion
   cancelConfirmedAtMs?: number
+  networkResponseId?: string
+  networkObservation?: NetworkObservation
 }>
 
 export type MicrophoneCaptureOptions = Readonly<{
@@ -111,6 +114,7 @@ export class LiveKitRoomClient {
     playbackElement: HTMLAudioElement
     suspended: boolean
   }>()
+  private readonly networkObserver = new RtpNetworkObserver()
   private readonly mediaObservers = new Map<string, RemoteMediaObserver>()
   private duplicateTrackFrames = 0
   private readonly playbackStartedResponses = new Set<string>()
@@ -596,6 +600,16 @@ export class LiveKitRoomClient {
     }))
   }
 
+  private async observeNetwork(responseId: string, key: string, generation: number, expectedPackets: number): Promise<void> {
+    const room = this.room
+    if (!room) return
+    const sender = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.sender
+    const receiver = this.subscribedTracks.get(key)?.receiver
+    const networkObservation = await this.networkObserver.capture(sender, receiver, expectedPackets)
+    if (this.room !== room || this.generation !== generation || this.trackResponses.get(key) !== responseId) return
+    this.observe({transport: 'available', control: 'available', audio: 'available', networkResponseId: responseId, networkObservation})
+  }
+
   private failTransport(failureStage: NonNullable<RoomObservation['failureStage']> = 'transport', reason?: unknown): void {
     // 任意の例外本文を外へ渡さず、内部の固定エラー名だけを診断に残す。
     const knownReasons = ['invalid packet render interval', 'invalid RTP timestamp', 'RTP timeline discontinuity',
@@ -681,6 +695,7 @@ export class LiveKitRoomClient {
       graph.worklet.port.postMessage({kind: 'stop'})
       this.observe({transport: 'available', control: 'available', audio: 'available',
         activeResponseId: responseId, playbackCompletedResponseId: responseId, playbackCompletion: completion})
+      void this.observeNetwork(responseId, key, generation, completion.packetCount)
     })
     const outputTimer = setInterval(() => {
       try {outputTracker.poll(context.getOutputTimestamp(), context.sampleRate)}

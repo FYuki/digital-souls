@@ -519,3 +519,33 @@ Backendの単体・結合を同一processで通した検査は3,847件成功、1
 Chromaテストの復元修正後、Backend単体・結合の全体再検証は3,848件成功、1件skipで完了した。元の作業ディレクトリは`epic/182-tool-foundation`のまま変更なしだった。
 
 resource計測の追加確認では、run reportが所有を記録するBackendコンテナのDocker statsからCPU累積時間とメモリ使用量を読み取れた。1回のメモリ使用量は255,021,056bytesだったが、これはcontainerに課金されるメモリ量のsnapshotであり、全試行のRSSやpeakではない。現在のaggregateへ補完していない。GPUは既存observerがhost値を保存しているがschemaへの取り込みは未完了。WebRTCの送受信・lossは、使用中のLiveKit SDKで公開されているsender／receiver statsから集める必要がある。既存manifestのCPUはPlaywright worker単体の値であり、Backendやbrowserを含むprocess tree値へ読み替えない。
+
+
+## 2026-09-07: 資源と音声RTP統計を匿名artifactへ取り込む
+
+正常応答の全PCM出力後に、ブラウザの`RTCRtpSender.getStats()`と`RTCRtpReceiver.getStats()`から音声RTPの数値を取得する。送信は同じsenderの前回応答snapshotとの差分、受信は応答専用trackの累積値とする。SDKの受信stats wrapperはpacket数・lossを返していなかったため、公開されているreceiverの標準APIを直接使った。stats ID・SSRC・IPは出力しない。未取得、不正値、巻戻り、曖昧な複数stream、2秒timeoutを理由付き欠測として残す。
+
+CPU・メモリはrun reportが所有するBackendコンテナから約0.5秒間隔で読み、`integration-voice`・`test`・当該data rootの一致を確認する。CPUは連続sample間のCPU累積時間差分／観測時間で、1 coreを100%とする。メモリはsampled container charged bytesの最大値であり、RSSではない。GPUは共有hostの最大device使用率と全device使用メモリ合計の最大値を低頻度sampleから集計する。BackendとGPUの観測範囲を混同せず、sample数・区間長・欠測理由も保存する。schemaへの追加は任意項目とし、凍結済みWebSocket artifactを変更しない。
+
+`resource-network-pilot-01`、環境照合追加後の`resource-network-pilot-02`はそれぞれ準備1回＋独立3試行が成功した。[最初のartifact](artifacts/livekit-pilot-2026-09-07-resource-network.json)と[最終版のartifact](artifacts/livekit-pilot-2026-09-07-resource-network-verified.json)はschema・匿名性・出力時計の検証を通過した。最終版では以下を記録した。
+
+| 診断 | 値・範囲 |
+|---|---|
+| Backend CPU | 平均40.44%、67区間・約34.80秒 |
+| Backendメモリ | sample最大150,200,320bytes、68sample |
+| GPU | 最大device使用率27%、全device合計使用量のsample最大7,889,485,824bytes、8sample |
+| 測定3回の送信RTP payload | 39,996bytes |
+| 測定3回の受信RTP payload | 115,684bytes、497packet |
+| 下り応答trackのloss | 0件、3/3で取得、欠測0 |
+| TTFA | p95 1,878.24ms。3試行の診断値 |
+
+資源観測はwarm-up・起動も含むrun中の値で、通信量はwarm-upを除外する。Backend生成前の4sampleは`owned_backend_not_running`として保存した。処理失敗・gap・underrunは0件だった。この少数runの資源・通信量を、既存の正式100試行へ補完しない。
+
+通信量はRTP payloadで、header・padding・UDP/IP・signaling・DataChannel全体のwire量ではない。lossの範囲はbrowser下り応答trackであり、上りの損失を0と主張しない。正常再生完了時のsnapshotだけでは、障害中や再接続のloss観測を証明できない。[W3C WebRTC stats](https://www.w3.org/TR/webrtc-stats/#dom-rtcreceivedrtpstreamstats-packetslost)に従い負の累積lossも認め、別trackの正のlossと相殺せず発生件数を残す。
+
+検証はBackend単体・結合3,867件成功・1件skip、Frontend単体450件・結合97件成功、Backend・環境の型検査230ファイル、Frontend型検査、Ruff、production buildが成功した。buildには既存の大きいbundle警告がある。
+
+
+`resource-network-session-02`では同一session・conversationで3往復し、3つの異なる応答trackについて最初のpacketと全sampleの出力時計、Backend送信総数を照合した。[連続試験の匿名結果](artifacts/livekit-session-2026-09-07-resource-network.json)に、gap・underrun 0、送信RTP payload 35,855bytes、受信101,713bytes、下りloss 0/440packetを保存した。Backend CPU平均20.96%、sampled memory最大140,902,400bytes、共有GPU使用率最大81%も範囲・観測数付きで記録した。Playwrightは1件成功・unexpected 0、明示的session終了を確認した。
+
+先行する`resource-network-session-01`では試験自体は成功したが、manifestに最初のpacketの出力時計を保存しておらず、厳密な再生照合が失敗した。完了時の値から合成せず、診断exportを修正して別runで再測定した。追加操作0回はこの時点では診断コードの固定値であり、操作observerによる計測の証明には使わない。通常aggregateへの取り込みと実操作数の観測は引き続き必要である。

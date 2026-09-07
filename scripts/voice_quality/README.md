@@ -106,3 +106,16 @@ backend/.venv/bin/python scripts/voice_quality/probe_stt_idle.py \
 ```
 
 固定fixtureの同じPCMに対して待機間隔を変え、100msの無音を先に認識する準備も比較する。音声・本文は保存せず、一致判定と時間だけを残す。既存出力は上書きしない。無音処理の結果は会話へ送らず、モデル・サービス設定は変更しない。先頭の追加待機0秒は、診断開始前のidle時間を表さない。前景の実会話・品質測定と並行して実行しない。
+
+
+## CPU・メモリ・GPU・音声RTPの診断
+
+`run_pilot.py`は`inference-runtime.jsonl`へ、run reportが所有するBackendコンテナのCPU累積時間・メモリ使用量を定期記録する。取得先は`integration-voice`、`test`環境、当該runのdata rootと一致する場合に限る。コンテナIDや例外本文は数値ファイルへ出さない。GPUは共有host全体の値を低頻度で記録する。
+
+集計時に、同じrunの`--resource-observations <run-root>/inference-runtime.jsonl`を`python -m app.livekit_pilot_report`へ追加する。CPUは連続して取得できたsample間のCPU時間増分／観測時間の平均で、1 core占有を100%とする。メモリはsampleのcontainer charged bytesの最大値であり、RSSやsample間の瞬間peakとは異なる。GPUは各sampleの最大device使用率と全device使用量合計の最大値を保存する。観測件数、CPU区間長、最大interval、取得失敗理由も`resources.collection`へ残す。
+
+正常応答の全PCM再生後、マイクの送信RTPと応答trackの受信RTPを`getStats()`から取得する。送信は同じsenderの前回応答snapshotとの差分、受信は応答専用trackの累積値とする。stats ID、SSRC、IP、音声本文は出力しない。同じsenderの巻戻り、複数音声stream、未取得値、2秒のtimeoutは理由付き欠測にする。欠測を0byte／loss 0件で補わない。
+
+通信量はRTP payloadであり、RTP header・padding・UDP/IP・DataChannel・signaling全体のwire量ではない。損失率の範囲はbrowserが観測した下り応答trackで、分母は受信packet数＋各trackの正のloss数。負のloss値を別trackの損失から相殺せず、その発生件数を残す。[W3C WebRTC stats](https://www.w3.org/TR/webrtc-stats/#dom-rtcreceivedrtpstreamstats-packetslost)では累積推定lossが負になる場合も定義されている。上りlossや疎通障害中の継続サンプリングは、この正常再生完了時のsnapshotだけでは証明しない。
+
+`network.collection`には送受信・loss各方向の取得試行数と欠測理由を残す。通常artifactではwarm-upを除外する。同一session診断にも各応答のsnapshotを保存し、送信累積値の二重加算を確認できる。

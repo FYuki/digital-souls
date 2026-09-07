@@ -359,11 +359,45 @@ class DiagnosticValue(BaseModel):
         return self
 
 
+class ResourceCollection(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    cpu_scope: Literal["owned_backend_container"] = "owned_backend_container"
+    cpu_method: Literal["cpu_time_delta_over_observer_wall_time_one_core_100_percent"] = "cpu_time_delta_over_observer_wall_time_one_core_100_percent"
+    memory_method: Literal["maximum_sampled_container_charged_bytes"] = "maximum_sampled_container_charged_bytes"
+    gpu_scope: Literal["shared_host_gpu"] = "shared_host_gpu"
+    gpu_method: Literal["maximum_device_utilization_and_maximum_total_used_bytes"] = "maximum_device_utilization_and_maximum_total_used_bytes"
+    backend_samples: int = Field(ge=0)
+    cpu_intervals: int = Field(ge=0)
+    cpu_observed_ms: float = Field(ge=0, allow_inf_nan=False)
+    maximum_interval_ms: float = Field(ge=0, allow_inf_nan=False)
+    gpu_samples: int = Field(ge=0)
+    missing_samples: dict[str, int]
+
+
 class ResourceMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     cpu_percent: DiagnosticValue
     memory_bytes: DiagnosticValue
+    gpu_utilization_percent: DiagnosticValue = Field(default_factory=lambda: DiagnosticValue(status="missing", reason="gpu_not_observed"))
+    gpu_memory_bytes: DiagnosticValue = Field(default_factory=lambda: DiagnosticValue(status="missing", reason="gpu_not_observed"))
+    collection: ResourceCollection | None = None
+
+
+class NetworkCollection(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    byte_scope: Literal["browser_audio_rtp_payload"] = "browser_audio_rtp_payload"
+    loss_scope: Literal["browser_downlink_response_tracks"] = "browser_downlink_response_tracks"
+    trial_count: int = Field(ge=0)
+    sent_trials: int = Field(ge=0)
+    received_trials: int = Field(ge=0)
+    loss_trials: int = Field(ge=0)
+    received_packets: int = Field(ge=0)
+    lost_packets: int = Field(ge=0)
+    negative_loss_trials: int = Field(ge=0)
+    missing_trials: dict[str, int]
 
 
 class NetworkMetadata(BaseModel):
@@ -373,6 +407,7 @@ class NetworkMetadata(BaseModel):
     received_bytes: DiagnosticValue
     packet_loss_basis_points: DiagnosticValue
     condition: str
+    collection: NetworkCollection | None = None
 
 
 class HardwareMetadata(BaseModel):
