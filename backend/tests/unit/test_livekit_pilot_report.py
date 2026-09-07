@@ -438,3 +438,67 @@ def test_pilot_includes_scoped_resources_and_excludes_warmup_network(pilot_input
     assert result["network"]["received_bytes"]["value"] == 200
     assert result["network"]["packet_loss_basis_points"]["value"] == 0
     assert result["network"]["collection"]["trial_count"] == 1
+
+
+@pytest.mark.parametrize('actions', [[], [500, 600]])
+def test_user_control_observation_counts_activations(actions):
+    from app.livekit_pilot_report import validate_user_control_observation
+    trial = dict(startedAt=1100, playback_completion={'confirmationObservedAtMs': 1200},
+                 fixture_clock_bounds={'speechStart': {'lowerMs': 300}},
+                 user_control_observation=dict(method='document_activation_clicks_v1',
+                     startedAtMs=100, observedAtMs=1300, activationTimesMs=actions))
+    assert validate_user_control_observation(trial) == (len(actions), 1300)
+
+
+@pytest.mark.parametrize('field,value', [
+    ('startedAtMs', 301), ('observedAtMs', 1199), ('activationTimesMs', None),
+    ('activationTimesMs', [99]), ('activationTimesMs', [1301]),
+    ('activationTimesMs', [600, 500]), ('activationTimesMs', [True]),
+    ('startedAtMs', float('nan')), ('method', 'assumed_zero'),
+])
+def test_user_control_rejects_incomplete_or_invalid_window(field, value):
+    from app.livekit_pilot_report import validate_user_control_observation
+    trial = dict(startedAt=1100, playback_completion={'confirmationObservedAtMs': 1200},
+                 fixture_clock_bounds={'speechStart': {'lowerMs': 300}},
+                 user_control_observation=dict(method='document_activation_clicks_v1',
+                     startedAtMs=100, observedAtMs=1300, activationTimesMs=[]))
+    trial['user_control_observation'][field] = value
+    with pytest.raises(ValueError):
+        validate_user_control_observation(trial)
+
+
+@pytest.mark.parametrize('actions', [[], [500, 600], None])
+def test_manual_operations_aggregate_excludes_warmup_and_preserves_missing(pilot_inputs, completion_evidence, actions):
+    import copy
+    manifest, events, run = pilot_inputs
+    evidence, source_points = completion_evidence
+    for index, trial in enumerate(manifest['trials']):
+        trial.update(packet_playback_trial())
+        trial['playback_completion'] = copy.deepcopy(evidence['playback_completion'])
+        fixture = manifest['fixture']
+        trial.update(fixture_clock_method='audio_worklet_pcm_causal_bounds',
+                     fixture_clock_maximum_uncertainty_ms=20,
+                     fixture_clock_bounds={
+                         'sourceStart': {'lowerMs': 100, 'upperMs': 102, 'sourceSample': 0},
+                         'speechStart': {'lowerMs': 130, 'upperMs': 132, 'sourceSample': fixture['speech_start_sample']},
+                         'speechEnd': {'lowerMs': 1040, 'upperMs': 1042, 'sourceSample': fixture['speech_end_sample']},
+                     })
+        if index == 0 or actions is not None:
+            trial['user_control_observation'] = dict(method='document_activation_clicks_v1',
+                startedAtMs=100, observedAtMs=1300, activationTimesMs=[200, 300, 400] if index == 0 else actions)
+        for point in source_points.values():
+            events.append({**point.model_dump(mode='json'), 'event_id': str(uuid4()), 'character_id': 'miori',
+                           'session_id': trial['sessionId'], 'utterance_id': trial['utteranceId'],
+                           'response_id': trial['responseId']})
+    for event in events:
+        if event['name'] == 'first_playback':
+            event['timestamp'] = 1100
+    artifact = run()
+    metric = next(item for item in artifact['metrics'] if item['name'] == 'manual_operations')
+    assert metric['trial_count'] == 1
+    if actions is None:
+        assert metric['success_count'] == 0 and metric['missing_count'] == 1
+        assert metric['p95'] is None
+    else:
+        assert metric['success_count'] == 1 and metric['missing_count'] == 0
+        assert metric['p95'] == len(actions)

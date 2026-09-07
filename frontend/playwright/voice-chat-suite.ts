@@ -1,3 +1,4 @@
+import { installUserControlProbe } from './user-control-probe'
 import { fileURLToPath } from 'node:url'
 import type {PacketPlaybackObservation, PlaybackCompletion} from '../src/livekit/packet-renderer'
 import type { NetworkObservation } from '../src/livekit/network-observer'
@@ -69,6 +70,7 @@ type CompletedVoiceCycle = {
 }
 
 const installPlaybackProbe = async (page: Page) => {
+  await page.addInitScript(installUserControlProbe)
   await page.addInitScript(() => {
     window.__voiceChatE2E = {
       cycles: [],

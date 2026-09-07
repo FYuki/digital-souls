@@ -172,6 +172,17 @@ def _finalize_livekit_report(
                     timestamp=float(trial["playback_completion"]["confirmationObservedAtMs"]),
                     clock_domain="client_monotonic", unit="millisecond", value=value,
                 ))
+        if trial.get("user_control_observation") is not None:
+            operations, observed_at = validate_user_control_observation(trial)
+            if "manual_operations" in points:
+                raise ValueError("duplicate manual operation evidence")
+            events.append(TraceEvent(
+                schema_version="1.0", measurement_kind="controlled_baseline",
+                event_id=f"manual-operations-{index}", character_id=matched[0].character_id,
+                session_id=pair[0], utterance_id=pair[1], response_id=pair[2],
+                name="manual_operations", stage="session", outcome="success", value=operations,
+                timestamp=observed_at, clock_domain="client_monotonic", unit="millisecond",
+            ))
         fixture_start, fixture_end = _validate_fixture_clock(
             trial, sample_rate=sample_rate, start_sample=start_sample, end_sample=end_sample,
             controlled=controlled,
@@ -224,6 +235,37 @@ def _finalize_livekit_report(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(serialized, ensure_ascii=False, indent=2) + "\n")
 
+
+
+def validate_user_control_observation(trial: dict[str, object]) -> tuple[int, float]:
+    """開始後から再生完了までのUI activation数を検証する。未観測を0にしない。"""
+    raw, completion = trial.get("user_control_observation"), trial.get("playback_completion")
+    if not isinstance(raw, dict) or raw.get("method") != "document_activation_clicks_v1":
+        raise ValueError("user control observation is unavailable")
+    def number(value: object) -> float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+            raise ValueError("invalid user control timestamp")
+        return float(value)
+    start, end = number(raw.get("startedAtMs")), number(raw.get("observedAtMs"))
+    if not isinstance(completion, dict):
+        raise ValueError("user control observation requires playback completion")
+    if not start <= number(trial.get("startedAt")) <= number(completion.get("confirmationObservedAtMs")) <= end:
+        raise ValueError("user control observation does not cover playback")
+    bounds = trial.get("fixture_clock_bounds")
+    if not isinstance(bounds, dict) or not isinstance(bounds.get("speechStart"), dict):
+        raise ValueError("user control observation requires speech start evidence")
+    if not start <= number(bounds["speechStart"].get("lowerMs")) <= number(trial.get("startedAt")):
+        raise ValueError("user control observation starts after speech")
+    actions = raw.get("activationTimesMs")
+    if not isinstance(actions, list):
+        raise ValueError("user control activations are unavailable")
+    previous = start
+    for action in actions:
+        current = number(action)
+        if not previous <= current <= end:
+            raise ValueError("user control activations outside observation window")
+        previous = current
+    return len(actions), end
 
 
 def validate_playback_completion(

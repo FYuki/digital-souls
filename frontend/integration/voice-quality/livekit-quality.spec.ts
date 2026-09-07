@@ -126,6 +126,7 @@ test(Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0) > 0
       if (state.initial_state_hash !== initialStateHash) throw new Error('controlled initial state changed between trials')
       await microphone.click()
       await expect(microphone).toHaveAttribute('aria-pressed', 'true')
+      await page.evaluate(() => window.__voiceUserControlProbe!.begin())
       if (sourceFixture) await page.evaluate(() => window.__voiceFixtureClock!.start())
       await driver.waitForSpeechCompletion(page)
       const cycle = await driver.waitForCompletedVoiceCycle(page)
@@ -143,6 +144,7 @@ test(Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0) > 0
       ), cycle.responseId, { timeout: voiceTestTimeout })
       await page.waitForFunction(responseId => !!window.__voiceChatE2E.playbackCompletions?.[responseId], cycle.responseId!, {timeout: 10_000})
       await page.waitForFunction(responseId => !!window.__voiceChatE2E.networkObservations?.[responseId], cycle.responseId!, {timeout: 3000})
+      const userControlObservation = await page.evaluate(() => window.__voiceUserControlProbe!.snapshot())
       // page.closeだけでは再接続猶予中のroomが残る。明示終了の完了後に次試行へ進む。
       const sessionEnded = page.waitForResponse((response) => (
         response.request().method() === 'DELETE'
@@ -154,6 +156,7 @@ test(Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0) > 0
       expect((await endResponse.json()).phase).toBe('ended')
       const sourceBounds = sourceFixture ? await readFixtureBounds(page) : undefined
       trials.push({
+        ...(sourceBounds ? { user_control_observation: userControlObservation } : {}),
         network_observation: await page.evaluate(responseId => window.__voiceChatE2E.networkObservations?.[responseId], cycle.responseId!),
         track_response_matches: await page.evaluate(responseId => window.__voiceChatE2E.lastTrackMediaResponseId === responseId, cycle.responseId),
         track_media_observation: await page.evaluate(() => window.__voiceChatE2E.lastTrackMediaObservation),

@@ -549,3 +549,17 @@ CPU・メモリはrun reportが所有するBackendコンテナから約0.5秒間
 `resource-network-session-02`では同一session・conversationで3往復し、3つの異なる応答trackについて最初のpacketと全sampleの出力時計、Backend送信総数を照合した。[連続試験の匿名結果](artifacts/livekit-session-2026-09-07-resource-network.json)に、gap・underrun 0、送信RTP payload 35,855bytes、受信101,713bytes、下りloss 0/440packetを保存した。Backend CPU平均20.96%、sampled memory最大140,902,400bytes、共有GPU使用率最大81%も範囲・観測数付きで記録した。Playwrightは1件成功・unexpected 0、明示的session終了を確認した。
 
 先行する`resource-network-session-01`では試験自体は成功したが、manifestに最初のpacketの出力時計を保存しておらず、厳密な再生照合が失敗した。完了時の値から合成せず、診断exportを修正して別runで再測定した。追加操作0回はこの時点では診断コードの固定値であり、操作observerによる計測の証明には使わない。通常aggregateへの取り込みと実操作数の観測は引き続き必要である。
+
+
+## 2026-09-07: 追加操作回数を実UIから観測する
+
+診断の固定値`additional_user_control_actions: 0`を除去し、documentのcapture listenerでclick activationを計測する。開始ボタンの処理完了後に一度だけ観測を開始し、応答音声の全sample出力後・明示終了操作前にsnapshotを保存する。キーボードによるbutton activationもclickとして数える。ページのクリック全体を保守的に数え、要素の文言・入力本文は保存しない。会話中に必要なアプリUI操作を対象とし、OS側の操作の観測とは主張しない。
+
+集計器は観測開始がfixtureの実発話開始より前であり、観測末尾が再生完了の時計通過より後であること、activation列の時刻順・範囲を検証する。独立試行では準備分を除外して`manual_operations`へ取り込み、記録がない試行を0回へ補完しない。PCM境界を観測しない旧pilotではこの指標は欠測のままにする。
+
+- [独立3試行](artifacts/livekit-pilot-2026-09-07-user-controls.json): 準備1回＋測定3回成功。`manual_operations`取得3/3、欠測0、p50／p95とも0回。TTFA p95 1,836.04msは少数試行の診断値。
+- [同一sessionの3往復](artifacts/livekit-session-2026-09-07-user-controls.json): 同一conversation・3応答trackの全sample出力、明示終了を確認。約21.95秒の同じ観測開始点と累積activation列を照合し、追加操作0回。gap・underrunも全応答0。各snapshotの累積値を合計して二重計上せず、最後の値をsession値とする。
+
+実Chromiumの空ページで開始clickを除外し、続くマウスclickとEnter activationが2回になること、観測途中のresetを拒否することも確認した。関連Backendテスト90件（準備除外、非ゼロ、欠測、範囲不正を含む）、Backend・環境の型検査230ファイル、Frontend型検査、Ruffは成功した。両runのPlaywrightはunexpected 0、所有Frontend・Backendコンテナの削除を確認した。共有推論サービスは停止していない。
+
+この3往復は追加操作条件の実接続証拠であり、相槌・割り込み・再接続・dogfood品質や正式100試行全体の合格を示すものではない。

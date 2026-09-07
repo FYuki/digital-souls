@@ -119,3 +119,10 @@ backend/.venv/bin/python scripts/voice_quality/probe_stt_idle.py \
 通信量はRTP payloadであり、RTP header・padding・UDP/IP・DataChannel・signaling全体のwire量ではない。損失率の範囲はbrowserが観測した下り応答trackで、分母は受信packet数＋各trackの正のloss数。負のloss値を別trackの損失から相殺せず、その発生件数を残す。[W3C WebRTC stats](https://www.w3.org/TR/webrtc-stats/#dom-rtcreceivedrtpstreamstats-packetslost)では累積推定lossが負になる場合も定義されている。上りlossや疎通障害中の継続サンプリングは、この正常再生完了時のsnapshotだけでは証明しない。
 
 `network.collection`には送受信・loss各方向の取得試行数と欠測理由を残す。通常artifactではwarm-upを除外する。同一session診断にも各応答のsnapshotを保存し、送信累積値の二重加算を確認できる。
+
+
+## 追加操作回数
+
+scheduled fixtureのpilot・controlledと同一session診断は、開始ボタン完了後にdocumentのclick activation observerを開始する。Enter等のbutton activationもclickとして数える。対象の文言・本文は保存せず、開始・snapshot・activationの単調時計だけをraw manifestへ保存する。明示終了とcleanupはsnapshot後に行う。
+
+`livekit_pilot_report`は発話開始前から全sample再生完了までを覆う観測を検証し、準備試行を除外して`manual_operations`へ集計する。旧manifestや実PCM境界がないpilotの欠測を0に補わない。同一sessionのsnapshotは累積値なので、sessionの操作総数には最後のsnapshotを用いる。通常の音声fixture送出はUI activationではなく、マイク入力を再現する操作である。

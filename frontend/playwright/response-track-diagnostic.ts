@@ -27,6 +27,7 @@ export const measureResponseTrackSession = async (
     const microphone = await driver.openVoiceChat(page)
     await microphone.click()
     await expect(microphone).toHaveAttribute('aria-pressed', 'true')
+    await page.evaluate(() => window.__voiceUserControlProbe!.begin())
     for (let index = 0; index < turns; index++) {
       await page.evaluate(async replay => {
         if (replay) await window.__voiceFixtureClock!.replay()
@@ -52,7 +53,8 @@ export const measureResponseTrackSession = async (
       expect(trackMatches).toBe(true)
       await expect(microphone).toHaveAttribute('aria-pressed', 'true')
       observations.push({ ...cycle, outcome: 'success', transcript_matches: true,
-        track_response_matches: trackMatches, additional_user_control_actions: 0,
+        track_response_matches: trackMatches,
+        user_control_observation: await page.evaluate(() => window.__voiceUserControlProbe!.snapshot()),
         packet_playback_observation: await page.evaluate(() => window.__voiceChatE2E.lastPacketPlaybackObservation),
         track_media_observation: await page.evaluate(() => window.__voiceChatE2E.lastTrackMediaObservation),
         media_observation_method: 'response_track_stateful_opus_worklet_output',
