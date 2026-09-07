@@ -822,3 +822,5 @@ VADの音量依存も[全300素材と非発声音120件](artifacts/vad-model-gai
 [候補と製品のオフライン比較](artifacts/vad-one-second-fallback-2026-09-07.json)では、固定音声300件の未検出・先頭欠落・早期終了・分割0、背景音の誤確定9/120件、既存短雑音の誤確定70/216件を維持した。追加の800/950/1100msの電子音・二音・雑音162条件も、比較元41件・候補41件で新規誤確定0だった。全300素材×6開始位置では、take-turn未検出が2/600件から0/600件、先頭欠落が6/600件から4/600件へ減った。相槌・文中休止は各600件の未検出・先頭欠落・早期終了・分割0。各cohortの確定遅延p95は約758〜760msだった。
 
 製品の再現scriptへ`phase-sweep`オプションを追加し、全1,800行が候補と一致することを確認した。再実行はFrontendから`node scripts/measure-vad-runtime-cohorts.mjs NEW_OUTPUT.json legacy src/lib/audio/utterance-detector.ts phase-sweep`で行う。追加の768/960/1000ms境界テストは修正前3失敗・既存13成功、修正後はFrontend全単体494件成功、型検査・build成功。実接続での改善は別runで確認し、この診断だけで100件受け入れの達成とはしない。
+
+`cb42471`の[1秒補助採用後の実接続8件](artifacts/livekit-take-turn-pilot-2026-09-07-one-second.json)は8/8件成功した。前回失敗したindex 1・7も含め、全8件で投入時計・take-turn判定・旧応答cancel・独立session・明示終了を確認した。local stop／turn decision／decision後cancel／全cancelのp95は1,738.30／1,737.65／12.427／1,768.15msで各8件取得・欠測0。transport・再生エラーは0件、teardown完了と所有Frontend／Backendコンテナ削除も確認した。少数試験のため最低100件の条件はまだ未達とし、同じ実装を全100件で再測定する。raw runは`one-second-take-turn-pilot-01`へ保持する。
