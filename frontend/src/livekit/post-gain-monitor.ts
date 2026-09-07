@@ -4,8 +4,14 @@ export type StaleAudioObservation = Readonly<{
   responseId: string; sessionId: string; generation: number; observedAtMs: number
   receivedAfterCancelPackets: number; receivedAfterCancelSamples: number
   receiveBoundary: 'decoded_packet_delivered'; cancelBoundary: 'client_cancel_confirmed'
+  outputContext: Readonly<{sampleRate: number | null; baseLatencySeconds: number | null; outputLatencySeconds: number | null}>
   graphClosed: boolean; audit: GainAuditSnapshot
 }>
+
+// 未対応・不正な測定値を0秒として扱わない。
+function measuredNonnegative(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+}
 
 // 明示診断時だけ追加する。音声はgain後段をそのまま通し、停止処理から独立してdrainを観測する。
 export class PostGainAudioMonitor {
@@ -95,6 +101,9 @@ export class PostGainAudioMonitor {
     this.report({responseId: this.responseId, sessionId: this.sessionId, generation: this.generation,
       observedAtMs: performance.now(), receivedAfterCancelPackets: this.packets, receivedAfterCancelSamples: this.samples,
       receiveBoundary: 'decoded_packet_delivered', cancelBoundary: 'client_cancel_confirmed',
+      outputContext: {sampleRate: measuredNonnegative(this.context.sampleRate),
+        baseLatencySeconds: measuredNonnegative(this.context.baseLatency),
+        outputLatencySeconds: measuredNonnegative(this.context.outputLatency)},
       graphClosed: this.closed, audit: this.tracker.snapshot()})
   }
 }

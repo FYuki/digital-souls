@@ -13,11 +13,11 @@ beforeEach(() => {
   vi.stubGlobal('AudioWorkletNode', FakeNode)
 })
 afterEach(() => {vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals()})
-function fixture() {
+function fixture(latencies: {baseLatency?: number; outputLatency?: number} = {}) {
   let now = 1000
   let clock: AudioTimestamp = {contextTime: 0, performanceTime: 0}
   vi.spyOn(performance, 'now').mockImplementation(() => now)
-  const context = {sampleRate: 48000, destination: {}, getOutputTimestamp: () => clock} as AudioContext
+  const context = {sampleRate: 48000, ...latencies, destination: {}, getOutputTimestamp: () => clock} as AudioContext
   const rows: StaleAudioObservation[] = []
   const monitor = new PostGainAudioMonitor(context, 'response', 'session', 3, row => rows.push(row))
   const node = monitor.node as unknown as FakeNode
@@ -82,4 +82,18 @@ test('cancel前の受信をstaleへ加算せず、通常graphのdrainも待つ',
   await f.finish()
   await disposed
   expect(f.rows).toEqual([]); expect(f.node.disconnect).toHaveBeenCalledOnce(); expect(vi.getTimerCount()).toBe(0)
+})
+
+
+test.each([
+  [{baseLatency: 128 / 48000, outputLatency: 0.008}, {baseLatencySeconds: 128 / 48000, outputLatencySeconds: 0.008}],
+  [{baseLatency: 0, outputLatency: 0}, {baseLatencySeconds: 0, outputLatencySeconds: 0}],
+  [{}, {baseLatencySeconds: null, outputLatencySeconds: null}],
+  [{baseLatency: Number.NaN, outputLatency: Infinity}, {baseLatencySeconds: null, outputLatencySeconds: null}],
+  [{baseLatency: -1, outputLatency: -1}, {baseLatencySeconds: null, outputLatencySeconds: null}],
+])('ブラウザの実遅延を記録し、未対応・不正値を欠測とする (%j)', async (latencies, expected) => {
+  const f = fixture(latencies); f.output(); f.now(1010); f.monitor.cancel(1010)
+  expect(f.rows.at(-1)?.outputContext).toEqual({sampleRate: 48000, ...expected})
+  await f.finish(); await f.monitor.dispose()
+  expect(vi.getTimerCount()).toBe(0)
 })

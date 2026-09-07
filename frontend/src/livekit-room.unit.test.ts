@@ -120,7 +120,7 @@ class FakeAudioContext {
   readonly worklets: FakeAudioWorkletNode[] = []
   readonly gains: FakeGainNode[] = []
 
-  constructor() {
+  constructor(readonly options?: AudioContextOptions) {
     audioContexts.push(this)
   }
 
@@ -226,6 +226,7 @@ describe('LiveKit Room generation synchronization', () => {
         {trackSid: 'TR_audited', trackName: `ds-response-v1:${responseId}`})
       await vi.waitFor(() => expect(audioContexts[0]?.worklets).toHaveLength(2))
       const context = audioContexts[0], [renderer, audit] = context.worklets
+      expect(context.options).toEqual({sampleRate: 48000, latencyHint: 0})
       expect(context.gains[0].connect).toHaveBeenCalledWith(audit)
       expect(audit.connect).toHaveBeenCalledWith(context.destination)
       const timestamp = vi.spyOn(context, 'getOutputTimestamp').mockReturnValue({contextTime: 1.009, performanceTime: 1009})

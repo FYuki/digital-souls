@@ -183,6 +183,9 @@ export class PostGainOutputAudit {
     }
     // 初期化前の全ゼロ時計には観測の証明力がない。
     if (contextTime === 0 || performanceTime === 0) return
+    // 未観測の未来timestampは比較の基準にも保存しない。後続の実観測を、
+    // 採用していない未来値との逆行として誤って欠測にしない。
+    if (performanceTime + this.roundingMarginMs > observedAtMs) return
     if (this.lastClock !== null && (contextTime < this.lastClock.contextTime
       || performanceTime < this.lastClock.performanceTime || observedAtMs < this.lastClock.observedAtMs)) {
       this.clockFailure = {stage: 'timestamp_regression', values: {contextTime, performanceTime, observedAtMs,
@@ -191,8 +194,6 @@ export class PostGainOutputAudit {
       this.fail('audit_output_clock_invalid'); return;
     }
     this.lastClock = {contextTime, performanceTime, observedAtMs}
-    // 未来へ外挿されたtimestampを、出力済みの観測点へ採用しない。
-    if (performanceTime + this.roundingMarginMs > observedAtMs) return
     const point = {frame: contextTime * sampleRate, atMs: performanceTime}
     this.lastOutputPoint = point
     if (this.cancel !== null && this.cancelUpperFrame === null

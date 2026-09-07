@@ -393,3 +393,8 @@ cancelは直前pollの観測時刻以後でなければ受理しない。poll済
 後からcancelへ含める区間を欠落させない。上限anchorを待つ間に出力時計を通過した区間は上限付きで保留する。
 前後anchor不足、監視窓の不足、timestampそのものの逆行は欠測のまま残す。
 `firstOutputAtMs/lastOutputEndAtMs`は表示用の外挿値で、staleの成否には使用しない。
+
+
+再生用AudioContextは`latencyHint: 0`で最小遅延を要求する。これは保証値ではない。
+診断行の`outputContext`にはブラウザが返すsample rate、base latency、output latencyを保存し、
+未対応や非有限・負の値はnullとする。要求値から実遅延を補完せず、staleと再生欠落は従来どおり実出力で判定する。

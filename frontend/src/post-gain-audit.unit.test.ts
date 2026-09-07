@@ -143,3 +143,14 @@ function auditProcessor() {
       setFrame(frame); const output = new Float32Array(128); instance.process([[pcm]], [[output]]); return output
     }}
 }
+
+
+test('採用しない未来timestampで後続の実観測を汚染しない', () => {
+  const a = fixture([row(48512, 1, 48520, 48520)])
+  a.poll({contextTime: 1.018, performanceTime: 1018}, 48000, 1013)
+  expect(a.snapshot().cancelOutputFrameBounds).toBeNull()
+  a.poll({contextTime: 1.014, performanceTime: 1014}, 48000, 1015)
+  drain(a)
+  expect(a.snapshot()).toMatchObject({complete: true, missingReason: null, clockFailure: null,
+    nonzeroSamplesAfterCancelLower: 0, nonzeroSamplesAfterCancelUpper: 1})
+})

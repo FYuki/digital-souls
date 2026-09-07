@@ -1619,3 +1619,26 @@ SDKが返したtimestampの逆行と、連続sampleを別のtimestampから換�
 cancel前後の実timestampから出力frameの上下限を求め、境界不確かさをstaleの上下限へ残す方式を検討する。
 この短いrunでは実行中imageの独立照合が終了に間に合わず、設定revisionと実行中実体の照合済みとは記載しない。
 stale presented 0と全件受け入れは引き続き未確認である。
+
+
+### cancel前後の出力anchorで残留音声を確認する
+
+設定revision `0a1811437442481b141d445ddf5fb718048fde6a` の独立3件では、
+会話・割り込み・session終了が成功し、所有Frontend／Backendの削除を確認した。
+実行中imageの独立照合は未取得のため、設定revisionとの実体一致までは証明していない。
+
+2件は出力時計の前後anchorとdrainを確認できたが、client cancel受信後の非ゼロsample数は
+下限34／33、上限531／528だった。48kHzで少なくとも約0.71／0.69msの残留出力を示す。
+後着の復号済みpacketは0件でも、先にrenderされた出力待ち音声は残っている。
+残る1件は時計欠測であり、3件ともstale presented 0の合格証拠には使わない。
+
+時計欠測1件は、観測時刻より約4.7ms未来のtimestampを採用対象から外したにもかかわらず、
+比較用の直前値へ保存していたことが原因だった。未来値を比較・更新より前に除外するよう修正し、
+後続の実timestampを誤って逆行扱いしない回帰検証を追加した。実timestampの逆行は引き続き欠測とする。
+
+同じChromium 149.0.7827.55の独立したAudioContextで、既定のinteractiveと数値0／0.001秒を
+interactive→0→0.001→0→interactiveの順に比較した。48kHzでinteractiveのbase latencyは
+約10.02ms、output latencyは32ms、数値指定時はそれぞれ約2.67ms、8msだった。
+全5 contextとブラウザを閉じた。この診断は無音sourceであり、実会話のstaleやunderrunの改善証拠ではない。
+[Web Audio仕様](https://www.w3.org/TR/2021/REC-webaudio-20210617/)に従い、数値のlatency hintは要求値として使い、
+実測値を別途記録する。最小遅延要求を通常の再生経路へ適用し、実接続で残留音声と再生継続性を再検証する。

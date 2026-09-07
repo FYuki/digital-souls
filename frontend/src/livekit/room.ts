@@ -852,7 +852,8 @@ export class LiveKitRoomClient {
     const responseId = this.trackResponses.get(key)
     if (responseId === undefined || this.stoppedResponses.has(responseId)) return
     if (this.audioContext === null) {
-      const created = new AudioContext({ sampleRate: 48_000 })
+      // 出力待ちの音声を減らす。実際の遅延はブラウザに依存するため診断側で実測する。
+      const created = new AudioContext({ sampleRate: 48_000, latencyHint: 0 })
       this.audioContext = created
       const url = URL.createObjectURL(new Blob([packetRendererSource, postGainAuditSource], { type: 'text/javascript' }))
       this.workletReady = created.audioWorklet.addModule(url)
