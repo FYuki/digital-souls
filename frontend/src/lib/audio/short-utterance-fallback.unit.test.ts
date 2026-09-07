@@ -37,8 +37,8 @@ test.each([96, 159])('補助根拠%s msでは短い衝撃音を確定しない',
   expect(h.events.map(e => e.type)).toEqual(['candidate', 'misfire'])
 })
 
-test('700msを超えて継続する弱い背景音を補助だけで確定しない', () => {
-  const h = setup(); for (let i = 0; i < 8; i++) h.frame(0.01)
+test('1秒を超えて継続する弱い背景音を補助だけで確定しない', () => {
+  const h = setup(); h.frame(0.01, 1001)
   h.frame(0, 700)
   expect(h.events.map(e => e.type)).toEqual(['candidate', 'misfire'])
 })
@@ -61,4 +61,19 @@ test('通常のSilero確定を維持し、補助判定で通知を重複させ�
   const h = setup(); for (let i = 0; i < 4; i++) h.frame(0.01, 96, supported, 0.9)
   h.frame(0, 700)
   expect(h.events.map(e => e.type)).toEqual(['candidate', 'confirmed', 'ended'])
+})
+
+
+test.each([768, 960, 1000])('1秒以内の弱い発話%s msも補助根拠があれば終了時に確定する', ms => {
+  const h = setup()
+  h.frame(0.01, ms)
+  h.frame(0, 600)
+  expect(h.events.map(event => event.type)).toEqual(['candidate'])
+  h.frame(0, 96)
+  expect(h.events.slice(-2)).toEqual([
+    {type: 'confirmed', speechStartedAtMs: 0, detectedAtMs: ms + 696},
+    {type: 'ended', speechStartedAtMs: 0, detectedAtMs: ms + 696},
+  ])
+  // Coreの2秒pre-rollに発話先頭と終了までの無音を収める。
+  expect(h.events.at(-1)!.detectedAtMs - h.events.at(-1)!.speechStartedAtMs).toBeLessThan(2000)
 })

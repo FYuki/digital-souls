@@ -43,7 +43,7 @@ export const utteranceDetectorOptions: UtteranceDetectorOptions = {
 }
 
 export const shortSpeechFallbackOptions = {
-  maximumActiveSpanMs: 700,
+  maximumActiveSpanMs: 1000,
   minimumVoicedEvidenceMs: 160,
   minimumVoicedFraction: 0.6,
   maximumTonalConcentration: 0.9,
