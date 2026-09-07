@@ -514,3 +514,20 @@ traceが存在するのに壊れている場合や読めない場合は入力失
 この連番はBackendが受信したPCM上の位置であり、ブラウザfixtureのsource sample位置や
 送信RTP packet番号ではない。連続範囲とsuffix保持だけでOpus前後の発話境界や全STT処理を証明しない。
 固定fixtureの正解境界との対応、サービスへ届いた入力、正式100試行の集約は別途照合が必要である。
+
+
+## 取消後にCoreへ届いたprovider結果
+
+`provider_result_*`は、Coreの実streaming処理がLLM／TTSのiteratorから結果を受け取った地点を観測する。
+その時点で同じ応答がCANCELLEDなら、テキストの受領件数／UTF-16 code unit数と、
+音声の受領件数／payload byte数へ加算する。後続の受付制限で破棄される結果も数える。
+同じpayloadが複数回yieldされた場合も受領件数から除外しない。本文・波形は保持しない。
+
+LLMとTTSのconsumerが両方終了してから、`provider_result_observation_closed=1`と最終数値を記録する。
+consumerの取消要求だけでゼロ件の観測終了を出さない。payload型の異常はvalid=0にする。
+これらは数値診断であり、正常cancelを処理失敗へ加算しない。
+
+これはprovider内部の生成時刻ではない。音声byte数はWAV headerなどを含むprovider payloadで、
+ブラウザの復号sample数・非ゼロ出力sample数とは別単位である。
+ブラウザ側へ届かない結果も観測するためのサーバー受領境界として扱い、
+未実装のprovider内部時計を推測で補完しない。

@@ -29,6 +29,7 @@ from app.conversation_core.ports import (
     SttPort,
     TtsPort,
 )
+from app.conversation_core.provider_result_audit import ProviderResultAudit
 from app.conversation_core.segmentation import JapaneseTextSegmenter, TextSegment
 from app.conversation_core.turn_decision import TurnDecision, classify_turn
 from app.inference.diagnostics import collect_diagnostics
@@ -720,13 +721,28 @@ class ConversationCoreSession:
         response: Response,
         response_input: str,
     ) -> None:
+        audit = ProviderResultAudit()
+        try:
+            await self._run_observed_response_pipeline(response, response_input, audit)
+        finally:
+            # innerは取消時も両consumerの終了を待つ。受付が続く間にゼロでcloseしない。
+            if self._responses[response.response_id].state is ResponseState.CANCELLED:
+                for name, value in audit.closed_statistics().items():
+                    await self._observation.record(StageObservation(
+                        session_id=self.session_id, response_id=response.response_id,
+                        generation=response.generation, stage=name, outcome='completed', value=value,
+                    ))
+
+    async def _run_observed_response_pipeline(
+        self, response: Response, response_input: str, audit: ProviderResultAudit,
+    ) -> None:
         queue: asyncio.Queue[TextSegment | None] = asyncio.Queue(
             maxsize=self._tts_queue_maxsize
         )
         llm_task = asyncio.create_task(
-            self._produce_text_segments(response, response_input, queue)
+            self._produce_text_segments(response, response_input, queue, audit)
         )
-        tts_task = asyncio.create_task(self._consume_text_segments(response, queue))
+        tts_task = asyncio.create_task(self._consume_text_segments(response, queue, audit))
         try:
             await asyncio.gather(llm_task, tts_task)
             current = self._gated_response(response.response_id, response.generation)
@@ -775,6 +791,7 @@ class ConversationCoreSession:
         response: Response,
         response_input: str,
         queue: asyncio.Queue[TextSegment | None],
+        audit: ProviderResultAudit,
     ) -> None:
         await self.stage_started(
             response_id=response.response_id,
@@ -785,6 +802,7 @@ class ConversationCoreSession:
         try:
             async with self._measure_llm_stage(response):
                 async for delta in self._llm.generate(response_input):
+                    audit.text(delta.text, cancelled=self._responses[response.response_id].state is ResponseState.CANCELLED)
                     accepted = await self.accept_text_delta(
                         response_id=response.response_id,
                         generation=response.generation,
@@ -854,6 +872,7 @@ class ConversationCoreSession:
         self,
         response: Response,
         queue: asyncio.Queue[TextSegment | None],
+        audit: ProviderResultAudit,
     ) -> None:
         stage_started = False
         audio_sequence = 0
@@ -873,6 +892,7 @@ class ConversationCoreSession:
                         )
                         stage_started = True
                     async for synthesized in self._tts.synthesize(text_segment.text):
+                        audit.audio(synthesized.audio, cancelled=self._responses[response.response_id].state is ResponseState.CANCELLED)
                         audio_sequence += 1
                         local_start, local_end = synthesized.text_range
                         global_range = (
