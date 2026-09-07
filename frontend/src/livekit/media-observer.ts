@@ -14,7 +14,9 @@ self.onrtctransform = async (event) => {
   const transformer = event.transformer
   let reported = false, index = 0, decoder = null, duplicatePackets = 0
   const duplicateFilter = new RtpDuplicateFilter()
-  const decodeFailure = reason => self.postMessage({kind: 'packet_decode_error', reason})
+  // 障害直前の数値metadataだけ保持する。payload本文・hashはworker外へ送らない。
+  const recentPackets = []
+  const decodeFailure = reason => self.postMessage({kind: 'packet_decode_error', reason, recentPackets})
   if (transformer.options?.decodePackets) {
     try { decoder = await OpusPacketDecoder.create(decodeFailure); self.postMessage({kind: 'decoder_ready'}) }
     catch { decodeFailure('opus_decoder_unavailable') }
@@ -46,7 +48,11 @@ self.onrtctransform = async (event) => {
         const u32 = value => Number.isInteger(value) && value >= 0 && value <= 0xffffffff
         if (u32(metadata.rtpTimestamp) && u32(metadata.synchronizationSource)
           && Number.isFinite(receivedAtWorkerMs) && receivedAtWorkerMs >= 0) {
-          packet = { rtpTimestamp: metadata.rtpTimestamp, source: metadata.synchronizationSource, receivedAtWorkerMs }
+          const sequence = metadata.sequenceNumber
+          const sequenceNumber = Number.isInteger(sequence) && sequence >= -32768 && sequence <= 65535
+            ? sequence & 0xffff : undefined
+          packet = { rtpTimestamp: metadata.rtpTimestamp, source: metadata.synchronizationSource, receivedAtWorkerMs,
+            ...(sequenceNumber === undefined ? {} : {sequenceNumber}) }
         }
         if (decoder !== null && !decoder.failed) payload = OpusPacketDecoder.primaryPayload(frame.data, metadata.mimeType)
       } catch {
@@ -60,6 +66,9 @@ self.onrtctransform = async (event) => {
       }
       if (payload && decoder !== null && !decoder.failed) {
         if (!packet) {decoder.fail('packet_metadata_or_codec_invalid'); return}
+        recentPackets.push({source: packet.source, rtpTimestamp: packet.rtpTimestamp,
+          ...(packet.sequenceNumber === undefined ? {} : {sequenceNumber: packet.sequenceNumber}), payloadBytes: payload.length})
+        if (recentPackets.length > 8) recentPackets.shift()
         const classification = duplicateFilter.accept(packet, payload)
         if (classification === 'duplicate') {
           self.postMessage({kind: 'packet_duplicate', count: ++duplicatePackets}); return
@@ -86,6 +95,7 @@ export type MediaObservation = Readonly<{
   trackReceivedAtMs: number
   duplicateEncodedPackets?: number
   packetDecoderFailureReason?: typeof decoderFailureReasons[number] | 'unclassified'
+  packetDecoderFailurePackets?: ReadonlyArray<PacketDiagnostic>
   // scalarは上下限の下限。packet受信→配送の差分を過小評価しない。
   firstEncodedFrameAtMs?: number
   firstEncodedFrameAtBoundsMs?: ClockBounds
@@ -119,8 +129,9 @@ export type DecodedAudioPacket = Readonly<{
   pcm: Float32Array
 }>
 
-type RawEncodedPacket = { rtpTimestamp: number; source: number; receivedAtWorkerMs: number }
-type WorkerObservation = { kind: string; count?: number; sequence?: number; workerAtMs?: number; packet?: RawEncodedPacket; packetIndex?: number; samples?: number; reason?: string; pcm?: Float32Array }
+type PacketDiagnostic = Readonly<{source: number; rtpTimestamp: number; sequenceNumber?: number; payloadBytes: number}>
+type RawEncodedPacket = { rtpTimestamp: number; source: number; receivedAtWorkerMs: number; sequenceNumber?: number }
+type WorkerObservation = { kind: string; recentPackets?: unknown; count?: number; sequence?: number; workerAtMs?: number; packet?: RawEncodedPacket; packetIndex?: number; samples?: number; reason?: string; pcm?: Float32Array }
 type EncodedPacket = { rtpTimestamp: number; source: number; receivedAtMs: number }
 const validU32 = (value: number) => Number.isInteger(value) && value >= 0 && value <= 0xffffffff
 const packetKey = (packet: Pick<EncodedPacket, 'source' | 'rtpTimestamp'>) => `${packet.source}:${packet.rtpTimestamp}`
@@ -264,6 +275,21 @@ export class RemoteMediaObserver {
           this.decodedPacket = event.data
           this.applyPacketDecodedObservation()
         } else if (event.data.kind === 'packet_decode_error') {
+          if (Array.isArray(event.data.recentPackets) && event.data.recentPackets.length <= 8) {
+            this.evidence.packetDecoderFailurePackets = event.data.recentPackets.flatMap((packet: unknown) => {
+              if (!packet || typeof packet !== 'object') return []
+              const row = packet as Record<string, unknown>
+              if (typeof row.source !== 'number' || !validU32(row.source)
+                || typeof row.rtpTimestamp !== 'number' || !validU32(row.rtpTimestamp)
+                || typeof row.payloadBytes !== 'number' || !Number.isSafeInteger(row.payloadBytes)
+                || row.payloadBytes < 1 || row.payloadBytes > 65535) return []
+              const sequence = row.sequenceNumber
+              const sequenceNumber = typeof sequence === 'number' && Number.isInteger(sequence)
+                && sequence >= 0 && sequence <= 65535 ? sequence : undefined
+              return [{source: row.source, rtpTimestamp: row.rtpTimestamp, payloadBytes: row.payloadBytes,
+                ...(sequenceNumber === undefined ? {} : {sequenceNumber})}]
+            })
+          }
           this.evidence.packetDecoderFailureReason = decoderFailureReasons.find(reason => reason === event.data.reason) ?? 'unclassified'
           this.evidence.packetDecodeMissingReason = event.data.reason === 'opus_decoder_unavailable' ? 'api_unavailable' : 'decoder_failed'
           this.rejectReady(new Error('packet decoder failed'))

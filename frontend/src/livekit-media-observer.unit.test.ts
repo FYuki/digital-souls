@@ -120,7 +120,7 @@ test('既存のtransformを上書きせず、欠測理由を明示する', () =>
 
 
 type SyncSource = { source: number; rtpTimestamp: number; timestamp: number }
-type PacketMessage = { kind: string; workerAtMs?: number; sequence?: number; packet?: { source: number; rtpTimestamp: number; receivedAtWorkerMs: number }; packetIndex?: number; samples?: number; reason?: string }
+type PacketMessage = { kind: string; recentPackets?: unknown; workerAtMs?: number; sequence?: number; packet?: { source: number; rtpTimestamp: number; receivedAtWorkerMs: number }; packetIndex?: number; samples?: number; reason?: string }
 const packetObserver = (initial: SyncSource[] = [], autoClock = true) => {
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] })
   let now = 300
@@ -330,7 +330,7 @@ test.each(['normal', 'overflow', 'duplicate'])('独立decodeの待機・重複�
   expect(delivered).toEqual(frames)
   expect(requests).toHaveLength(1)
   if (overflow) {
-    expect(reported).toContainEqual({kind: 'packet_decode_error', reason: 'opus_decode_queue_overflow'})
+    expect(reported).toContainEqual(expect.objectContaining({kind: 'packet_decode_error', reason: 'opus_decode_queue_overflow'}))
   } else {
     for (let index = 0; index < count; index++) {
       output({numberOfFrames: 960, sampleRate: 48000, numberOfChannels: 1, timestamp: 999,
@@ -354,5 +354,21 @@ test.each(['rtp_packet_payload_conflict', 'private-exception-sentinel'])('decode
   const snapshot = p.observer.snapshot()
   expect(snapshot.packetDecoderFailureReason).toBe(reason === 'rtp_packet_payload_conflict' ? reason : 'unclassified')
   expect(JSON.stringify(snapshot)).not.toContain('private-exception-sentinel')
+  p.observer.close()
+})
+
+
+test('失敗直前のpacket診断は上限付き数値項目だけを保持する', () => {
+  const p = packetObserver()
+  p.decoded({kind: 'packet_decode_error', reason: 'rtp_packet_payload_conflict', recentPackets: [
+    {source: 7, rtpTimestamp: 99, sequenceNumber: 65535, payloadBytes: 120, payload: 'private-payload'},
+    {source: 7, rtpTimestamp: 99, sequenceNumber: 0, payloadBytes: 3},
+    {source: 'private-source', rtpTimestamp: 99, payloadBytes: 120},
+  ]})
+  expect(p.observer.snapshot().packetDecoderFailurePackets).toEqual([
+    {source: 7, rtpTimestamp: 99, sequenceNumber: 65535, payloadBytes: 120},
+    {source: 7, rtpTimestamp: 99, sequenceNumber: 0, payloadBytes: 3},
+  ])
+  expect(JSON.stringify(p.observer.snapshot())).not.toContain('private-')
   p.observer.close()
 })
