@@ -1,0 +1,132 @@
+{
+  "scope": "labeled_livekit_take_turn_cohort_report",
+  "cohort": "take_turn",
+  "observer_timestamp_tolerance_ms": 2,
+  "quantile_method": "hyndman_fan_type_7",
+  "counts": {
+    "expected": 8,
+    "recorded": 8,
+    "success": 6,
+    "failure": 2,
+    "verified_injection": 8,
+    "take_turn_decision": 6,
+    "verified_cancel": 6,
+    "session_end_confirmed": 8,
+    "independent_sessions": 8
+  },
+  "failure_stages": {
+    "fixture_and_decision": 2
+  },
+  "missed_interruptions": {
+    "count": 2,
+    "denominator": 8,
+    "unverified_injection_count": 0,
+    "rate_basis_points": 2500
+  },
+  "metrics": [
+    {
+      "name": "local_playback_stop",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "speech_started_client",
+      "end_point": "local_playback_stopped",
+      "trial_count": 8,
+      "success_count": 6,
+      "failure_count": 0,
+      "missing_count": 2,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 8,
+      "failure_rate_basis_points": 0,
+      "p50": 1017.0,
+      "p95": 1076.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "final_decision_unavailable": 2
+      }
+    },
+    {
+      "name": "turn_decision",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "speech_started_client",
+      "end_point": "turn_decision_client",
+      "trial_count": 8,
+      "success_count": 6,
+      "failure_count": 0,
+      "missing_count": 2,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 8,
+      "failure_rate_basis_points": 0,
+      "p50": 1016.5,
+      "p95": 1076.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "final_decision_unavailable": 2
+      }
+    },
+    {
+      "name": "cancel_after_decision",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "take_turn_decision",
+      "end_point": "server_cancelled",
+      "trial_count": 8,
+      "success_count": 6,
+      "failure_count": 0,
+      "missing_count": 2,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 8,
+      "failure_rate_basis_points": 0,
+      "p50": 4.54301,
+      "p95": 5.00788525,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "final_decision_unavailable": 2
+      }
+    },
+    {
+      "name": "barge_in_cancel_total",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "speech_started_client",
+      "end_point": "server_cancelled_client",
+      "trial_count": 8,
+      "success_count": 6,
+      "failure_count": 0,
+      "missing_count": 2,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 8,
+      "failure_rate_basis_points": 0,
+      "p50": 1038.0,
+      "p95": 1099.25,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "final_decision_unavailable": 2
+      }
+    }
+  ],
+  "evaluation": {
+    "minimum_trials": 100,
+    "coverage_complete": true,
+    "missed_rate_passed": false,
+    "latency_passed": {
+      "local_playback_stop": false,
+      "turn_decision": false,
+      "cancel_after_decision": false,
+      "barge_in_cancel_total": false
+    }
+  },
+  "metric_schema_sha256": "2d331448f38a27474f23d7d5631d2c1ab15b097e54dcf70ad153cce63fbe34b9",
+  "labeled_manifest_sha256": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3",
+  "raw_manifest_sha256": "093c95c39676b393a0d79b919e7cd0316ba9681b192f6afdb718b1b9751c59a0",
+  "raw_trace_sha256": "48778bd44ec082aa72c9864e57e4bc66b5439e325ac5a42f52d4a2a569a8c085",
+  "reporter_sha256": "3315e86505809d231a059a34597199a65912593ae07a699323a79a6cc7132f2a"
+}
