@@ -1370,6 +1370,24 @@ class ProductionRuntimeManager:
         )
         room: rtc.Room = rtc_module.Room()
 
+        if self._audio_probe_enabled:
+            room_observation_count = 0
+
+            def observe_room_stage(stage: str) -> None:
+                nonlocal room_observation_count
+                if room_observation_count > 128:
+                    return
+                if room_observation_count == 128:
+                    stage = "overflow"
+                room_observation_count += 1
+                # SDKの接続先・identity・例外本文は診断へ渡さない。
+                logger.warning("RTC lifecycle: stage=%s at_ms=%d", stage, time.monotonic_ns() // 1_000_000)
+
+            room.on("connected")(lambda: observe_room_stage("connected"))
+            room.on("reconnecting")(lambda: observe_room_stage("reconnecting"))
+            room.on("reconnected")(lambda: observe_room_stage("reconnected"))
+            room.on("disconnected")(lambda _reason: observe_room_stage("disconnected"))
+
         async def publish_data(payload: bytes, topic: str) -> None:
             await room.local_participant.publish_data(payload, reliable=True, topic=topic)
 

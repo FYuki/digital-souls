@@ -98,9 +98,11 @@ const browserRetryTimer: RetryTimer = {
   cancel: (handle) => clearTimeout(handle),
 }
 
+export type DisconnectObservation = Readonly<{reason: number | null; origin: 'sdk' | 'explicit' | 'temporary' | 'transport_failure'}>
+
 export type ConnectionLifecycleObservation = Readonly<{event: 'retry_scheduled' | 'signal_reconnecting' | 'signal_connected'
   | 'reconnecting' | 'reconnected' | 'disconnected' | 'state_sync_requested' | 'state_sync_deferred' | 'authoritative_state' | 'ack_deferred';
-  atMs: number; generation: number; retry?: RetryObservation}>
+  atMs: number; generation: number; retry?: RetryObservation; disconnect?: DisconnectObservation}>
 
 export class LiveKitRoomClient {
   private recovering = false
@@ -148,6 +150,7 @@ export class LiveKitRoomClient {
   private controlOutbox: BrowserControlOutbox | null = null
   private sessionId: string | null = null
   private explicitDisconnect = false
+  private pendingDisconnectOrigin: DisconnectObservation['origin'] | null = null
   private reconnectRequested = false
   private suppressedResponseId: string | null = null
   private suppressedLastPlayedAudioSequence = 0
@@ -207,6 +210,7 @@ export class LiveKitRoomClient {
     if (this.room === null) this.room = this.createRoom()
     const shouldSynchronize = this.reconnectRequested && this.sessionId === sessionId
     this.explicitDisconnect = false
+    this.pendingDisconnectOrigin = null
     this.sessionId = sessionId
     this.startBrowserDelivery(sessionId, this.room)
     await this.room.connect(url, token)
@@ -220,8 +224,9 @@ export class LiveKitRoomClient {
 
   setConnectionObserver(observer: (row: ConnectionLifecycleObservation) => void): void {this.connectionObserver = observer}
 
-  private observeConnection(event: ConnectionLifecycleObservation['event'], retry?: RetryObservation): void {
-    this.connectionObserver?.({event, atMs: performance.now(), generation: this.generation, ...(retry ? {retry} : {})})
+  private observeConnection(event: ConnectionLifecycleObservation['event'], retry?: RetryObservation, disconnect?: DisconnectObservation): void {
+    this.connectionObserver?.({event, atMs: performance.now(), generation: this.generation,
+      ...(retry ? {retry} : {}), ...(disconnect ? {disconnect} : {})})
   }
 
   setPacketOutputObserver(observer: (row: PacketOutputEvidence) => void): void {
@@ -243,7 +248,8 @@ export class LiveKitRoomClient {
 
   isAudioProbeReady(): boolean {
     return this.room !== null && this.sessionId !== null && this.controlOutbox !== null
-      && (!this.recovering || this.recoverySynchronized) && this.syncRequestedGeneration === null
+      // 制御の疎通だけではmediaの再接続完了を証明できない。
+      && !this.recovering && this.syncRequestedGeneration === null
   }
 
   probeAudio(): Promise<AudioProbeObservation> {
@@ -354,6 +360,7 @@ export class LiveKitRoomClient {
     this.controlProbes.reset()
     this.audioProbe?.cancel()
     this.explicitDisconnect = true
+    this.pendingDisconnectOrigin = 'explicit'
     this.reconnectRequested = false
     this.sessionId = null
     this.room?.disconnect()
@@ -365,6 +372,7 @@ export class LiveKitRoomClient {
     this.controlProbes.reset()
     this.audioProbe?.cancel()
     this.reconnectRequested = true
+    this.pendingDisconnectOrigin = 'temporary'
     this.room?.disconnect()
     void this.closeAudioGraph()
     this.observe({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable' })
@@ -597,11 +605,16 @@ export class LiveKitRoomClient {
       if (graph !== undefined) this.disconnectAudioGraph(graph)
       this.audioGraphs.delete(key)
     })
-    room.on(RoomEvent.Disconnected, () => {
+    room.on(RoomEvent.Disconnected, reason => {
       this.recovering = true
       this.recoverySynchronized = false
       this.clearStateSync()
-      this.observeConnection('disconnected')
+      // SDK例外本文やtokenを含めず、数値の理由とアプリ側の切断起点だけを残す。
+      const origin = this.pendingDisconnectOrigin ?? 'sdk'
+      this.pendingDisconnectOrigin = null
+      this.observeConnection('disconnected', undefined, {
+        reason: typeof reason === 'number' && Number.isSafeInteger(reason) ? reason : null, origin,
+      })
       this.controlProbes.reset()
       this.audioProbe?.cancel()
       if (!this.explicitDisconnect && this.sessionId !== null) {
@@ -815,6 +828,7 @@ export class LiveKitRoomClient {
     const message = reason instanceof Error ? reason.message : reason
     const failureReason = typeof message === 'string' && knownReasons.includes(message) ? message : 'unclassified'
 
+    this.pendingDisconnectOrigin ??= 'transport_failure'
     this.room?.disconnect()
     void this.closeAudioGraph()
     this.observe({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable', failureStage, failureReason,

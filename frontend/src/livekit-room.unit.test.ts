@@ -964,7 +964,7 @@ test.each(['send_failed', 'reply_missing'])('状態同期は同じ要求世代�
 })
 
 
-test('signal再接続中の同期確認で診断音を開始し、SDK完了で同期を繰り返さない', async () => {
+test('制御の同期確認後もSDKのmedia再接続完了まで診断音を送らず、同期を繰り返さない', async () => {
   vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance']})
   const client = new LiveKitRoomClient(() => undefined)
   await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
@@ -976,10 +976,12 @@ test('signal再接続中の同期確認で診断音を開始し、SDK完了で�
     expect(messages().filter(p => p.type === 'state_sync_request').map(p => p.generation)).toEqual([0])
     expect(client.isAudioProbeReady()).toBe(false)
     emitPrivateFrame(room, authoritativeState(1))
+    expect(client.isAudioProbeReady()).toBe(false)
+    expect(await client.probeAudio()).toMatchObject({reason: 'unavailable'})
+    expect(messages().filter(p => p.type === 'audio_probe_request')).toHaveLength(0)
+    room.emit('reconnected')
     expect(client.isAudioProbeReady()).toBe(true)
     const probe = client.probeAudio()
-    await vi.advanceTimersByTimeAsync(0)
-    room.emit('reconnected')
     await vi.advanceTimersByTimeAsync(250)
     expect(messages().filter(p => p.type === 'state_sync_request')).toHaveLength(1)
     expect(messages().filter(p => p.type === 'audio_probe_request')).toHaveLength(1)
@@ -994,7 +996,7 @@ test('signal再接続中の同期確認で診断音を開始し、SDK完了で�
     emitPrivateFrame(room, authoritativeState(1))
     expect(client.isAudioProbeReady()).toBe(false)
     emitPrivateFrame(room, authoritativeState(2))
-    expect(client.isAudioProbeReady()).toBe(true)
+    expect(client.isAudioProbeReady()).toBe(false)
     room.emit('reconnecting')
     room.emit('reconnected')
     expect(client.isAudioProbeReady()).toBe(false)
@@ -1002,4 +1004,31 @@ test('signal再接続中の同期確認で診断音を開始し、SDK完了で�
     emitPrivateFrame(room, authoritativeState(3))
     expect(client.isAudioProbeReady()).toBe(true)
   } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+
+test.each([[3, 3], [undefined, null], ['token-must-not-appear', null], [{token: 'token-must-not-appear'}, null], [NaN, null], [Infinity, null]])(
+  'SDK切断診断は理由の数値だけを記録する: %s', async (reason, expectedReason) => {
+    const client = new LiveKitRoomClient(() => undefined), observed: unknown[] = []
+    client.setConnectionObserver(row => observed.push(row))
+    await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+    latestRoom().emit('disconnected', reason)
+    expect(observed).toEqual([expect.objectContaining({event: 'disconnected', disconnect: {
+      reason: expectedReason,
+      origin: 'sdk',
+    }})])
+    expect(JSON.stringify(observed)).not.toContain('token-must-not-appear')
+    client.disconnect()
+  },
+)
+
+test.each(['explicit', 'temporary', 'transport_failure'] as const)('アプリ起点の切断をSDKの切断と区別する: %s', async origin => {
+  const client = new LiveKitRoomClient(() => undefined), observed: unknown[] = []
+  client.setConnectionObserver(row => observed.push(row))
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  if (origin === 'explicit') client.disconnect()
+  else if (origin === 'temporary') client.temporaryDisconnect()
+  else emitPrivateFrame(latestRoom(), new TextEncoder().encode('invalid private frame'))
+  expect(observed).toEqual([expect.objectContaining({event: 'disconnected', disconnect: {reason: null, origin}})])
+  client.disconnect()
 })

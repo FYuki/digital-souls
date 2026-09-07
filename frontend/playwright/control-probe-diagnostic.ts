@@ -18,6 +18,34 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
   const record: Record<string, unknown> = {measurement_scope: networkFault ? 'livekit_fault_recovery_session_diagnostic' : 'livekit_control_probe_session_diagnostic',
     measurement_revision: process.env.VOICE_QUALITY_MEASUREMENT_REVISION,
     expected_probes: count, fixture_sha256: fixture.audioSha256, probes, outcome: 'failure'}
+  // URLのquery、認証情報、応答本文、socket frameは保存しない。
+  // Playwright側の時計であり、Browser側のatMsとは直接減算しない。
+  type SignalKind = 'http_response' | 'http_request_failed' | 'socket_created' | 'socket_closed' | 'socket_error'
+  const signaling = {clock_domain: 'playwright_monotonic', overflow: false,
+    events: [] as Array<{kind: SignalKind; at_ms: number; status: number | null}>}
+  const recordSignaling = (kind: SignalKind, status: number | null = null): void => {
+    if (signaling.events.length >= 200) {signaling.overflow = true; return}
+    signaling.events.push({kind, at_ms: performance.now(), status})
+  }
+  const isSignaling = (url: string): boolean => {
+    try {return /\/rtc(?:\/v1)?(?:\/validate)?$/.test(new URL(url).pathname)}
+    catch {return false}
+  }
+  if (networkFault) {
+    record.signaling_network = signaling
+    page.on('response', response => {
+      if (isSignaling(response.url())) recordSignaling('http_response', response.status())
+    })
+    page.on('requestfailed', request => {
+      if (isSignaling(request.url())) recordSignaling('http_request_failed')
+    })
+    page.on('websocket', socket => {
+      if (!isSignaling(socket.url())) return
+      recordSignaling('socket_created')
+      socket.on('close', () => recordSignaling('socket_closed'))
+      socket.on('socketerror', () => recordSignaling('socket_error'))
+    })
+  }
   let clockRunner: FaultClockRunner | undefined
   let clockBefore: FaultClockCalibration | undefined
   let stage = 'fixture_setup'

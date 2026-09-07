@@ -6,6 +6,7 @@ import importlib
 import logging
 import math
 import struct
+import time
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 from uuid import UUID
@@ -46,6 +47,16 @@ class AudioProbePublisher:
         self._ready, self._complete = asyncio.Event(), asyncio.Event()
         self._accept_complete = False
         self._seen: set[str] = set()
+        self._diagnostic_count = 0
+
+    def _observe_stage(self, stage: str, generation: int) -> None:
+        if self._diagnostic_count > 128:
+            return
+        if self._diagnostic_count == 128:
+            stage = "overflow"
+        self._diagnostic_count += 1
+        logger.warning("Audio probe stage: stage=%s generation=%d at_ms=%d",
+            stage, generation, time.monotonic_ns() // 1_000_000)
 
     def request(self, probe_id: str, generation: int) -> None:
         try:
@@ -57,6 +68,7 @@ class AudioProbePublisher:
         if probe_id in self._seen or len(self._seen) >= 8 or (self._task is not None and not self._task.done()):
             return
         self._seen.add(probe_id)
+        self._observe_stage("request_received", generation)
         self._probe_id, self._generation, self._sid, self._pending_ready_sid = probe_id, generation, None, None
         self._ready, self._complete = asyncio.Event(), asyncio.Event()
         self._accept_complete = False
@@ -67,6 +79,7 @@ class AudioProbePublisher:
                 or self._task is None or self._task.done()):
             return
         if kind == "audio_probe_ready":
+            self._observe_stage("ready_received", generation)
             if self._sid is None:
                 self._pending_ready_sid = sid
             elif sid == self._sid:
@@ -93,22 +106,28 @@ class AudioProbePublisher:
                 track = rtc.LocalAudioTrack.create_audio_track(AUDIO_PROBE_TRACK_PREFIX + probe_id, source)
                 previous_sids = set(self._room.local_participant.track_publications)
                 stage = "publish_track"
+                self._observe_stage("publish_started", generation)
                 publication = await self._room.local_participant.publish_track(track,
                     rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE, dtx=False))
                 logger.warning("Audio probe publication: tracks=%d sid_reused=%s",
                     len(self._room.local_participant.track_publications), publication.sid in previous_sids)
+                self._observe_stage("publish_completed", generation)
                 self._sid = publication.sid
                 if self._pending_ready_sid == self._sid:
                     self._ready.set()
                 stage = "subscription"
                 await asyncio.wait_for(publication.wait_for_subscription(), READY_TIMEOUT_SECONDS)
+                self._observe_stage("subscription_completed", generation)
                 stage = "ready"
                 await asyncio.wait_for(self._ready.wait(), READY_TIMEOUT_SECONDS)
+                self._observe_stage("ready_completed", generation)
                 if not self._current(generation):
                     return
                 stage = "capture"
+                self._observe_stage("capture_started", generation)
                 await pacer.publish(probe_pcm())
                 await pacer.finish()
+                self._observe_stage("capture_completed", generation)
                 if not self._current(generation):
                     return
                 stage = "finish_notification"
