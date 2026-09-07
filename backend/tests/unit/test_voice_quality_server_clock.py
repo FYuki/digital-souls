@@ -36,8 +36,15 @@ def test_missing_timeout_and_old_generation_are_counted_not_filled():
 @pytest.mark.parametrize("bad", [float("nan"), -1, True, 1.5, 9007199254740992])
 def test_invalid_server_clock_rejects_whole_calculation(bad):
     with pytest.raises(ValueError, match="invalid clock probe"):
-        clock.bound_transition([probe(100, 101, bad, 9999999999999999)], 1, 2, 1)
+        clock.bound_transition([probe(100, 101, bad, 9007199254740991)], 1, 2, 1)
 
 def test_contradictory_clock_order_cannot_be_a_zero_width_success():
     with pytest.raises(ValueError, match="contradictory"):
         clock.bound_transition([probe(200, 210, 1, 2), probe(100, 110, 4, 5)], 3000, 3001, 1)
+
+
+def test_boolean_generation_is_not_the_integer_generation_one():
+    row = probe(100, 101, 5000, 5001)
+    row["generation"] = True
+    with pytest.raises(ValueError, match="invalid clock probe"):
+        clock.bound_transition([row], 1, 2, 1)

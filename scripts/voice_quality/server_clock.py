@@ -28,6 +28,8 @@ def bound_transition(probes: list[dict[str, object]], lower_ns: int, upper_ns: i
     missing = 0
     observed = 0
     for probe in probes:
+        if not _integer(probe.get('generation')):
+            raise ValueError('invalid clock probe generation')
         if probe.get('status') != 'received' or probe.get('generation') != generation:
             missing += 1
             continue
