@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import wave
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from io import BytesIO
@@ -76,20 +77,71 @@ class WhisperSttAdapter:
             raise ValueError("max_inflight must be positive")
         self._transcriber = transcriber
         self._capacity = threading.BoundedSemaphore(max_inflight)
+        self._condition = threading.Condition()
+        self._preparing = False
+        self._active_transcriptions = 0
+        self._pending_transcriptions = 0
 
     async def transcribe(self, audio: bytes) -> str:
+        cancelled = threading.Event()
+        with self._condition:
+            self._pending_transcriptions += 1
         try:
-            return await run_sync(self._transcribe_reserved, audio)
+            return await run_sync(self._transcribe_reserved, audio, cancelled)
+        except asyncio.CancelledError:
+            # 同期workerが準備完了を待っている間に破棄された音声は送信しない。
+            cancelled.set()
+            with self._condition:
+                self._condition.notify_all()
+            raise
         except SyncWorkerCapacityError as error:
             raise SttCapacityError("STT worker capacity exceeded") from error
+        finally:
+            with self._condition:
+                self._pending_transcriptions -= 1
 
-    def _transcribe_reserved(self, audio: bytes) -> str:
-        if not self._capacity.acquire(blocking=False):
-            raise SttCapacityError("STT capacity exceeded")
+    def _transcribe_reserved(self, audio: bytes, cancelled: threading.Event) -> str:
+        with self._condition:
+            self._condition.wait_for(lambda: not self._preparing or cancelled.is_set())
+            if cancelled.is_set():
+                raise asyncio.CancelledError()
+            if not self._capacity.acquire(blocking=False):
+                raise SttCapacityError("STT capacity exceeded")
+            self._active_transcriptions += 1
         try:
             return self._transcriber.transcribe(audio)
         finally:
-            self._capacity.release()
+            with self._condition:
+                self._active_transcriptions -= 1
+                self._capacity.release()
+
+    async def prepare(self) -> bool:
+        """認識要求がないときだけ準備し、失敗しても本来のSTTへ伝播させない。"""
+        cancelled = threading.Event()
+        try:
+            return await run_sync(self._prepare_reserved, cancelled)
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        except Exception:
+            return False
+
+    def _prepare_reserved(self, cancelled: threading.Event) -> bool:
+        prepare = getattr(self._transcriber, "prepare", None)
+        if not callable(prepare):
+            return False
+        with self._condition:
+            if (cancelled.is_set() or self._preparing or self._active_transcriptions
+                    or self._pending_transcriptions):
+                return False
+            self._preparing = True
+        try:
+            return bool(prepare())
+        finally:
+            # await側がキャンセルされても、実HTTP要求が終わるまでは枠を保持する。
+            with self._condition:
+                self._preparing = False
+                self._condition.notify_all()
 
 
 class VoicevoxTtsAdapter:

@@ -2490,3 +2490,126 @@ def test_core_bridge_prepares_the_same_preroll_for_preview_and_final_stt() -> No
 
     asyncio.run(exercise())
     assert calls == [("final", expected), ("preview", expected)]
+
+
+class PreparationCoreSession:
+    def __init__(self, *, fail: bool = False) -> None:
+        self.accepting_input = True
+        self.fail = fail
+        self.preparations = 0
+        self.audio: list[bytes] = []
+
+    async def prepare_transcription(self) -> bool:
+        self.preparations += 1
+        if self.fail:
+            raise RuntimeError("optional preparation unavailable")
+        return True
+
+    def start_transcription(self, **request):
+        self.audio.append(request["audio"])
+        return asyncio.create_task(asyncio.sleep(0))
+
+
+def _preparation_event(kind: str, *, interrupted: bool = False) -> bytes:
+    event = {"type": kind, "utterance_id": "preparation-utterance",
+             "speaker": {"role": "user"}, "monotonic_timestamp_ms": 1000}
+    if interrupted:
+        event["response_id"] = "old-response"
+    return json.dumps(event).encode()
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_bridge_prepares_once_after_contiguous_quiet_without_ending_or_trimming_audio(fail) -> None:
+    async def exercise() -> None:
+        production = importlib.import_module("app.livekit_transport.production")
+        session = PreparationCoreSession(fail=fail)
+        tasks: set[asyncio.Task[None]] = set()
+
+        def schedule(operation):
+            task = asyncio.create_task(operation)
+            tasks.add(task)
+            task.add_done_callback(tasks.discard)
+
+        bridge = production._ConversationCoreBridge(session, schedule, media_tail_seconds=0)
+        bridge.notify(_preparation_event("speech_started"))
+        # 290msの静音は準備しない。途中の有音で静音の連続時間をリセットする。
+        pieces = [b"\x10\x01" * 160, bytes(16_000 * 2 * 290 // 1000),
+                  b"\x10\x01" * 160, bytes(16_000 * 2 * 290 // 1000)]
+        for pcm in pieces:
+            bridge.receive_microphone(pcm)
+        await _drain_asyncio_tasks(tasks)
+        assert session.preparations == 0
+        final_quiet = bytes(16_000 * 2 * 10 // 1000)
+        bridge.receive_microphone(final_quiet)
+        await _drain_asyncio_tasks(tasks)
+        assert session.preparations == 1
+        assert session.audio == []
+        assert not bridge._user_audio_captures[0].finalized
+        resumed = b"\x10\x01" * 160 + bytes(16_000)
+        bridge.receive_microphone(resumed)
+        await _drain_asyncio_tasks(tasks)
+        assert session.preparations == 1
+        bridge.notify(_preparation_event("speech_stopped"))
+        await _drain_asyncio_tasks(tasks)
+        assert session.audio == [b"".join(pieces) + final_quiet + resumed]
+
+    asyncio.run(exercise())
+
+
+def test_bridge_uses_retained_pcm_quiet_only_after_confirmed_speech_start() -> None:
+    async def exercise() -> None:
+        production = importlib.import_module("app.livekit_transport.production")
+        session = PreparationCoreSession()
+        tasks = []
+        bridge = production._ConversationCoreBridge(session, lambda op: tasks.append(asyncio.create_task(op)))
+        original = b"\x10\x01" * 160 + bytes(9600)
+        bridge.receive_microphone(original)
+        assert tasks == []
+        assert session.preparations == 0
+        bridge.notify(_preparation_event("speech_started"))
+        await asyncio.gather(*tasks)
+        assert session.preparations == 1
+        assert bytes(bridge._user_audio_captures[0].pcm) == original
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("gate", ["interruption", "active", "capacity", "ended", "finalized"])
+def test_bridge_skips_preparation_when_not_safe(gate: str) -> None:
+    async def exercise() -> None:
+        production = importlib.import_module("app.livekit_transport.production")
+        session = PreparationCoreSession()
+        tasks = []
+        bridge = production._ConversationCoreBridge(session, lambda op: tasks.append(asyncio.create_task(op)))
+        bridge.notify(_preparation_event("speech_started", interrupted=gate == "interruption"))
+        capture = bridge._user_audio_captures[0]
+        if gate == "active":
+            bridge._transcription_active = True
+        if gate == "capacity":
+            capture.capacity_exceeded = True
+        if gate == "ended":
+            session.accepting_input = False
+        if gate == "finalized":
+            capture.finalized = True
+        # finalizedのmedia-tailスケジュールはこの準備gate検査には含めない。
+        bridge._consider_stt_preparation(capture, bytes(9600))
+        await asyncio.gather(*tasks)
+        assert session.preparations == 0
+
+    asyncio.run(exercise())
+
+
+def test_scheduled_preparation_does_not_start_after_session_ends() -> None:
+    async def exercise() -> None:
+        production = importlib.import_module("app.livekit_transport.production")
+        session = PreparationCoreSession()
+        tasks = []
+        bridge = production._ConversationCoreBridge(session, lambda op: tasks.append(asyncio.create_task(op)))
+        bridge.notify(_preparation_event("speech_started"))
+        bridge.receive_microphone(bytes(9600))
+        assert len(tasks) == 1
+        session.accepting_input = False
+        await asyncio.gather(*tasks)
+        assert session.preparations == 0
+
+    asyncio.run(exercise())

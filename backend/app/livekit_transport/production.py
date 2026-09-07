@@ -72,6 +72,9 @@ STT_TURN_PREVIEW_PCM_BYTES = int(STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 0.8)
 # 発話確認までの遅れを含め、通知前の語頭をmedia側で最大2秒保持する。
 # #150の固定fixtureで確認通知が語頭から1,440ms遅れる条件があり、800msでは語頭を失う。
 STT_MICROPHONE_PREROLL_BYTES = STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 2
+# 確認済み発話で300msの静音を受けたら、VAD終了待ちとSTT準備を重ねる。
+# 入力の切断・削除・発話確定には使わない。
+STT_PREPARATION_QUIET_SAMPLES = STT_SAMPLE_RATE * 300 // 1000
 
 
 def _livekit_rtc_module() -> Any:
@@ -772,6 +775,8 @@ class _UserAudioCapture:
     media_tail_elapsed: bool = False
     capacity_exceeded: bool = False
     preview_started: bool = False
+    preparation_started: bool = False
+    quiet_samples: int = 0
 
 
 class _ConversationCoreBridge:
@@ -846,6 +851,7 @@ class _ConversationCoreBridge:
             capture.pcm.extend(self._microphone_preroll)
             self._microphone_preroll.clear()
             self._user_audio_captures.append(capture)
+            self._consider_stt_preparation(capture, bytes(capture.pcm))
             return
         if event["type"] == "speech_stopped" and self._is_user_event(event):
             utterance_id = str(event["utterance_id"])
@@ -902,6 +908,7 @@ class _ConversationCoreBridge:
             capture.capacity_exceeded = True
         elif not capture.capacity_exceeded:
             capture.pcm.extend(pcm)
+        self._consider_stt_preparation(capture, pcm)
         if (
             capture.interrupted_response_id is not None
             and not capture.preview_started
@@ -918,6 +925,52 @@ class _ConversationCoreBridge:
                 )
             )
         self._schedule_finalization_if_ready(capture)
+
+    def _consider_stt_preparation(self, capture: _UserAudioCapture, pcm: bytes) -> None:
+        if (capture.preparation_started or capture.finalized or capture.capacity_exceeded
+                or capture.interrupted_response_id is not None or self._transcription_active
+                or not getattr(self._session, "accepting_input", True)
+                or not callable(getattr(self._session, "prepare_transcription", None))):
+            return
+        if len(pcm) % PCM_SAMPLE_WIDTH_BYTES:
+            capture.quiet_samples = 0
+            return
+        # 先頭trimと同じ静音閾値。静音が続かない環境では通常STTへ任せる。
+        for (sample,) in struct.iter_unpack("<h", pcm):
+            capture.quiet_samples = capture.quiet_samples + 1 if abs(sample) <= 16 else 0
+        if capture.quiet_samples >= STT_PREPARATION_QUIET_SAMPLES:
+            capture.preparation_started = True
+            self._schedule(self._prepare_transcription(capture))
+
+    async def _prepare_transcription(self, capture: _UserAudioCapture) -> None:
+        # scheduleと実行の間に発話確定・切断された場合も、新規要求を増やさない。
+        if (capture.finalized or capture.capacity_exceeded or self._transcription_active
+                or not getattr(self._session, "accepting_input", True)
+                or not any(item is capture for item in self._user_audio_captures)):
+            return
+        if self._measurement is not None:
+            self._measurement.record_utterance_event(
+                utterance_id=capture.utterance_id, name="stt_preparation_started",
+                stage="stt_preparation",
+            )
+        completed = False
+        try:
+            completed = await self._session.prepare_transcription()
+        except asyncio.CancelledError:
+            if self._measurement is not None:
+                self._measurement.record_utterance_event(
+                    utterance_id=capture.utterance_id, name="stt_preparation_await_cancelled",
+                    stage="stt_preparation",
+                )
+            raise
+        except Exception:
+            # 任意の最適化の失敗を通常認識の失敗件数へ混ぜない。
+            pass
+        if self._measurement is not None:
+            self._measurement.record_utterance_event(
+                utterance_id=capture.utterance_id, name="stt_preparation_finished",
+                stage="stt_preparation", value=int(completed),
+            )
 
     async def _preview_user_turn(
         self,

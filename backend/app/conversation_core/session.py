@@ -130,6 +130,13 @@ class ConversationCoreSession:
         """新しい発話を受理できる接続状態かを返す。"""
         return self._connected and not self._ended
 
+    async def prepare_transcription(self) -> bool:
+        """任意の事前準備。接続終了後には新しい準備を投入しない。"""
+        prepare = getattr(self._stt, "prepare", None)
+        if not self.accepting_input or not callable(prepare):
+            return False
+        return bool(await prepare())
+
     def response(self, response_id: str) -> Response:
         return self._responses[response_id]
 
