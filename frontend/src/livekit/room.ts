@@ -27,6 +27,7 @@ import { decodePrivateFrame } from './private-contract'
 import { packetRendererSource, PacketOutputTracker, PacketRenderError, type PacketRenderInterval, type PacketPlaybackObservation, type SourceAudioFinished, type PlaybackCompletion } from './packet-renderer'
 import { RemoteMediaObserver, type MediaObservation, type DecodedAudioPacket } from './media-observer'
 import {PacketOutputDiagnostic, type PacketOutputEvidence} from './packet-output-diagnostic'
+import {RtpPacketSequence, type RtpPacketGap} from './rtp-packet-sequence'
 import { RtpNetworkObserver, type NetworkObservation } from './network-observer'
 
 export type RoomObservation = Readonly<{
@@ -37,6 +38,7 @@ export type RoomObservation = Readonly<{
   failureContext?: Readonly<Record<string, number>>
   failureReason?: string
   failureStage?: 'transport' | 'media_decoder' | 'audio_graph' | 'output_clock' | 'renderer' | 'rtp_timeline'
+  mediaPacketLoss?: RtpPacketGap & {responseId: string; atMs: number}
   renderedSamples?: number
   playedPrefix?: number
   microphoneFrames?: number
@@ -113,6 +115,7 @@ export class LiveKitRoomClient {
     outputTimer: ReturnType<typeof setInterval>
     firstPacket?: DecodedAudioPacket
     packetDiagnostic?: PacketOutputDiagnostic
+    packetSequence: RtpPacketSequence
     worklet: AudioWorkletNode
     outputGain: GainNode
     playbackElement: HTMLAudioElement
@@ -458,6 +461,10 @@ export class LiveKitRoomClient {
             packet: packet => {
               const graph = this.audioGraphs.get(key)
               if (!this.subscriptions.has(key) || !graph || this.stoppedResponses.has(responseId)) return
+              try {
+                const gap = graph.packetSequence.receive(packet)
+                if (gap) {this.interruptResponseAfterPacketLoss(responseId, gap); return}
+              } catch (error) {this.failTransport('rtp_timeline', error); return}
               graph.packetDiagnostic?.receive(packet)
               if (packet.packetIndex === 0) graph.firstPacket = {...packet, pcm: new Float32Array(0)}
               graph.worklet.port.postMessage({kind: 'pcm', packetIndex: packet.packetIndex,
@@ -645,9 +652,35 @@ export class LiveKitRoomClient {
     this.observe({transport: 'available', control: 'available', audio: 'available', networkResponseId: responseId, networkObservation})
   }
 
+  private interruptResponseAfterPacketLoss(responseId: string, gap: RtpPacketGap): void {
+    const sessionId = this.sessionId, room = this.room, generation = this.generation
+    if (sessionId === null || room === null || this.stoppedResponses.has(responseId)) return
+    // 欠けたPCMを全出力済みに補完しない。確認済みprefixだけ通知し、現在の応答を止める。
+    const lastPlayedAudioSequence = this.stopPlayback(responseId)
+    this.observe({transport: 'available', control: 'available', audio: 'unavailable',
+      mediaPacketLoss: {...gap, responseId, atMs: performance.now()}})
+    const event = (fields: Record<string, unknown>) => parseVoiceSessionEvent({
+      protocol_version: '1.0', event_id: crypto.randomUUID(), session_id: sessionId,
+      response_id: responseId, reason: 'disconnect', monotonic_timestamp_ms: Math.floor(performance.now()),
+      ...fields,
+    })
+    // reliable制御経路は維持する。Coreは停止位置を確定してから生成をcancelする。
+    void (async () => {
+      await this.publishControlEvent(event({type: 'playback_stopped', last_played_audio_sequence: lastPlayedAudioSequence}))
+      if (this.room !== room || this.sessionId !== sessionId) return
+      await this.publishControlEvent(event({type: 'response_cancel_requested'}))
+      // Backendが再送期限切れでunavailableになった場合も、同じsessionの制御を戻す。
+      if (this.room === room && this.sessionId === sessionId && this.generation === generation) {
+        await this.requestStateSync(room)
+      }
+    })().catch(() => {
+      if (this.room === room && this.sessionId === sessionId) this.failTransport()
+    })
+  }
+
   private failTransport(failureStage: NonNullable<RoomObservation['failureStage']> = 'transport', reason?: unknown): void {
     // 任意の例外本文を外へ渡さず、内部の固定エラー名だけを診断に残す。
-    const knownReasons = ['invalid packet render interval', 'invalid RTP timestamp', 'RTP timeline discontinuity',
+    const knownReasons = ['RTP packet sequence invalid', 'invalid packet render interval', 'invalid RTP timestamp', 'RTP timeline discontinuity',
       'render beyond completed source', 'output clock confirmation queue overflow', 'invalid packet output clock',
       'first output packet mismatch', 'packet_or_sample_mismatch', 'pcm_queue_overflow', 'render_clock_unreconciled']
     const message = reason instanceof Error ? reason.message : reason
@@ -662,7 +695,7 @@ export class LiveKitRoomClient {
   private async attachRenderEvidence(track: RemoteTrack, key: string): Promise<void> {
     if (!this.subscriptions.has(key)) return
     const responseId = this.trackResponses.get(key)
-    if (responseId === undefined) return
+    if (responseId === undefined || this.stoppedResponses.has(responseId)) return
     if (this.audioContext === null) {
       const created = new AudioContext({ sampleRate: 48_000 })
       this.audioContext = created
@@ -762,6 +795,7 @@ export class LiveKitRoomClient {
       outputTracker,
       outputTimer,
       firstPacket: undefined as DecodedAudioPacket | undefined,
+      packetSequence: new RtpPacketSequence(),
       packetDiagnostic: this.packetOutputObserver === undefined ? undefined
         : new PacketOutputDiagnostic(responseId, key, generation, row => this.packetOutputObserver?.(row)),
       worklet,

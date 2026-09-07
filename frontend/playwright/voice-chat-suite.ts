@@ -1,5 +1,6 @@
 import { installUserControlProbe } from './user-control-probe'
 import type {} from './controlled-audio-fixture'
+import type {RtpPacketGap} from '../src/livekit/rtp-packet-sequence'
 import { fileURLToPath } from 'node:url'
 import type {PacketPlaybackObservation, PlaybackCompletion} from '../src/livekit/packet-renderer'
 import type { NetworkObservation } from '../src/livekit/network-observer'
@@ -13,6 +14,7 @@ declare global {
       speechStarted: (utteranceId: string, atMs: number) => Promise<void>
     }
     __voiceChatE2E: {
+      mediaPacketLosses?: Array<RtpPacketGap & {responseId: string; atMs: number}>
       transportFailures?: {stage: string; reason?: string; context?: Readonly<Record<string, number>>; atMs: number}[]
       activeAudioGraphs?: number
       activeResponseId?: string
@@ -125,6 +127,7 @@ const installPlaybackProbe = async (page: Page) => {
       __digitalSoulsVoiceSessionTestPort?: {
         createRoom?: (...args: never[]) => unknown
         observeRoom?: (observation: {
+          mediaPacketLoss?: RtpPacketGap & {responseId: string; atMs: number}
           failureContext?: Readonly<Record<string, number>>
           failureReason?: string
           failureStage?: string
@@ -170,6 +173,10 @@ const installPlaybackProbe = async (page: Page) => {
         window.__voiceSessionController = controller
       },
       observeRoom: (observation) => {
+        if (observation.mediaPacketLoss) {
+          window.__voiceChatE2E.mediaPacketLosses ??= []
+          window.__voiceChatE2E.mediaPacketLosses.push(observation.mediaPacketLoss)
+        }
         if (observation.activeAudioGraphs !== undefined) window.__voiceChatE2E.activeAudioGraphs = observation.activeAudioGraphs
         if (observation.activeResponseId !== undefined) window.__voiceChatE2E.activeResponseId = observation.activeResponseId
         if (observation.failureStage) {

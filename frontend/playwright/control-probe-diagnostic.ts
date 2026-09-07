@@ -80,7 +80,26 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
     if (networkFault) {
       stage = 'network_fault'
       if (!clockRunner || !clockBefore) throw new Error('dedicated fault clock unavailable')
-      await measureFaultRecovery(page, clockRunner, clockBefore, record)
+      const recovered = await measureFaultRecovery(page, clockRunner, clockBefore, record)
+      // 回復計測の10秒窓を閉じた後に、同sessionで次の利用者発話を試す。復旧時間へ混ぜない。
+      stage = 'post_fault_followup'
+      record.post_fault_followup = {outcome: 'failure'}
+      await expect(microphone).toHaveAttribute('aria-pressed', 'true')
+      await page.evaluate(() => window.__voiceFixtureClock!.replay())
+      const following = (await driver.waitForCompletedVoiceCycles(page, 2))?.[1]
+      if (!following?.responseId || following.sessionId !== cycle.sessionId
+        || following.responseId === cycle.responseId) throw new Error('followup response identity unavailable')
+      await page.waitForFunction(responseId => !!window.__voiceChatE2E.playbackCompletions?.[responseId],
+        following.responseId, {timeout: 15000})
+      record.post_fault_followup = {outcome: 'success', cycle: following,
+        ...await page.evaluate(responseId => ({
+          playback_completion: window.__voiceChatE2E.playbackCompletions?.[responseId],
+          packet_playback_observation: window.__voiceChatE2E.lastPacketPlaybackObservation,
+          track_media_observation: window.__voiceChatE2E.lastTrackMediaObservation,
+          track_response_matches: window.__voiceChatE2E.lastTrackMediaResponseId === responseId,
+        }), following.responseId)}
+      stage = 'network_fault'
+      expect(recovered, 'followup success does not replace the fault recovery latency gate').toBe(true)
     } else {
       stage = 'playback_continuity'
       await page.waitForFunction(responseId => !!window.__voiceChatE2E.playbackCompletions?.[responseId], cycle.responseId,
@@ -105,6 +124,7 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
     record.failure_stage = stage
   } finally {
     record.evidence = await page.evaluate(() => ({
+      media_packet_losses: window.__voiceChatE2E.mediaPacketLosses ?? [],
       packet_outputs: window.__voicePacketOutputs ?? [],
       packet_output_overflow: window.__voicePacketOutputOverflow ?? false,
       core_events: window.__voiceChatE2E.coreEventDiagnostics,

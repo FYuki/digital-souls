@@ -68,7 +68,7 @@ export function analyzeFaultRecovery(restored: TimeBounds, probes: readonly Time
 }
 
 export async function measureFaultRecovery(page: Page, runner: FaultClockRunner,
-  before: FaultClockCalibration, record: Record<string, unknown>): Promise<void> {
+  before: FaultClockCalibration, record: Record<string, unknown>): Promise<boolean> {
   const events: FaultEvent[] = [], probes: TimedProbe[] = []
   record.fault_events = events; record.fault_probes = probes
   record.fault_duration_ms = 2000
@@ -106,8 +106,9 @@ export async function measureFaultRecovery(page: Page, runner: FaultClockRunner,
       ['rtp_timeline', 'renderer', 'output_clock', 'media_decoder', 'audio_graph'].includes(failure.stage)).length}))
   const recovery = analyzeFaultRecovery(restored, probes, evidence.packets, evidence.overflow, evidence.outputPathFailures)
   record.recovery = recovery
-  if (!affected || recovery.recovery_upper_ms === null || recovery.packet_evidence_missing
-    || !recovery.output_evidence_complete || recovery.duplicate_packet_output_intervals || recovery.recovery_upper_ms > 3000) {
-    throw new Error('fault recovery diagnostic requirements not met')
-  }
+  const passed = affected && recovery.recovery_upper_ms !== null && !recovery.packet_evidence_missing
+    && recovery.output_evidence_complete && !recovery.duplicate_packet_output_intervals
+    && recovery.recovery_upper_ms <= 3000
+  record.fault_recovery_passed = passed
+  return passed
 }

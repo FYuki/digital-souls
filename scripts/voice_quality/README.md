@@ -227,3 +227,9 @@ PythonとBrowserの前後の時計sample、切断・復旧操作開始・link復
 重複観測は同じresponse・SSRC・RTP timestampのsample区間の重なりを検出する。
 SSRC変更後の同じsource音声の再送などを含む全面的な重複再生判定は別途必要であり、
 この単発診断の成功を再接続100試行の受け入れとして扱わない。
+
+
+実切断診断は回復計測の10秒窓を閉じた後、同じsessionの次の発話を自動投入する。
+その応答の全出力を`post_fault_followup`へ別記録する。後続発話の成功を
+回復時間3,000msの判定へ置き換えず、元の回復判定が未達ならrunは失敗のままにする。
+RTP欠落による応答中断の時刻・欠落packet数も`media_packet_losses`へ残す。

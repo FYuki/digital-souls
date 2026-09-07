@@ -1374,8 +1374,40 @@ class ProductionRuntimeManager:
         async def cleanup(_owned_session_id: str) -> None:
             await self._cleanup_owned_session(session_id)
 
+        # 同じmicrophone trackでも、世代が変わると旧readerは入力を拒否して終了する。
+        # readerの終了を待ってから置き換え、二重取込と購読解除後の復活を防ぐ。
+        microphone_readers: dict[
+            int, tuple[rtc.Track, str, str, int, asyncio.Task[None] | None]
+        ] = {}
+        microphone_lock = asyncio.Lock()
+
+        async def replace_microphone_reader(
+            track: rtc.Track, identity: str, participant_sid: str,
+        ) -> None:
+            key = id(track)
+            old = microphone_readers.get(key)
+            if (old is not None and old[1] == identity and old[2] == participant_sid
+                    and old[3] == coordinator.generation
+                    and old[4] is not None and not old[4].done()
+                    and coordinator.is_current_participant(identity=identity, participant_sid=participant_sid)):
+                return
+            microphone_readers.pop(key, None)
+            if old is not None and old[4] is not None:
+                old[4].cancel()
+                await asyncio.gather(old[4], return_exceptions=True)
+            if not coordinator.is_current_participant(identity=identity, participant_sid=participant_sid):
+                return
+            generation = coordinator.generation
+            task = self._schedule_task(session_id, self._observe_microphone(
+                session_id, track, coordinator, identity, participant_sid, generation, publish_data,
+            ))
+            if task is not None:
+                microphone_readers[key] = (track, identity, participant_sid, generation, task)
+
         async def generation_ready() -> None:
-            return None
+            async with microphone_lock:
+                for track, identity, participant_sid, _generation, _task in tuple(microphone_readers.values()):
+                    await replace_microphone_reader(track, identity, participant_sid)
 
         def response_track_ready(response_id: str, track_sid: str) -> None:
             source = self._audio_sources.get(session_id)
@@ -1467,24 +1499,30 @@ class ProductionRuntimeManager:
                     )
                 ):
                     return
-                self._schedule_task(
-                    session_id,
-                    self._observe_microphone(
-                        session_id,
-                        track,
-                        coordinator,
-                        str(participant.identity),
-                        str(participant.sid),
-                        coordinator.generation,
-                        publish_data,
-                    ),
-                )
+                async with microphone_lock:
+                    await replace_microphone_reader(track, str(participant.identity), str(participant.sid))
 
             self._schedule_serialized_participant_operation(
                 session_id, handle_track_subscribed
             )
 
         room.on("track_subscribed")(track_subscribed)
+
+        def track_unsubscribed(
+            track: rtc.Track,
+            _publication: rtc.RemoteTrackPublication,
+            _participant: rtc.RemoteParticipant,
+        ) -> None:
+            async def handle_track_unsubscribed() -> None:
+                async with microphone_lock:
+                    old = microphone_readers.pop(id(track), None)
+                    if old is not None and old[4] is not None:
+                        old[4].cancel()
+                        await asyncio.gather(old[4], return_exceptions=True)
+
+            self._schedule_serialized_participant_operation(session_id, handle_track_unsubscribed)
+
+        room.on("track_unsubscribed")(track_unsubscribed)
 
         await room.connect(self._livekit_url, token)
         coordinator.start_join_deadline()

@@ -1826,8 +1826,9 @@ def test_microphone_observer_returns_when_bridge_was_released(monkeypatch) -> No
     assert stream_closed is True
 
 
-def test_serialized_participant_events_handle_track_before_immediate_disconnect(
-    monkeypatch,
+@pytest.mark.parametrize("mode", ["disconnect", "generation_sync"])
+def test_serialized_participant_events_and_generation_microphone_ownership(
+    monkeypatch, mode,
 ) -> None:
     production = importlib.import_module("app.livekit_transport.production")
     session_id = "20000000-0000-4000-8000-000000000010"
@@ -1876,7 +1877,8 @@ def test_serialized_participant_events_handle_track_before_immediate_disconnect(
             assert callable(disconnected)
             connected(participant)
             subscribed(remote_track, publication, participant)
-            disconnected(participant)
+            if mode == "disconnect":
+                disconnected(participant)
 
         async def disconnect(self) -> None:
             return None
@@ -1937,6 +1939,7 @@ def test_serialized_participant_events_handle_track_before_immediate_disconnect(
     async def exercise() -> None:
         observation_started = asyncio.Event()
         observations: list[tuple[str, str, object]] = []
+        reader_events: list[tuple[str, int]] = []
 
         async def observe_microphone(
             owned_session_id: str,
@@ -1947,10 +1950,16 @@ def test_serialized_participant_events_handle_track_before_immediate_disconnect(
             generation: int,
             publish_data: object,
         ) -> None:
-            del coordinator, generation, publish_data
+            del coordinator, publish_data
             observations.append((participant_identity, participant_sid, track))
             assert owned_session_id == session_id
             observation_started.set()
+            reader_events.append(("started", generation))
+            if mode == "generation_sync":
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    reader_events.append(("closed", generation))
 
         runtime._observe_microphone = observe_microphone
         await runtime.start_runtime(
@@ -1966,16 +1975,40 @@ def test_serialized_participant_events_handle_track_before_immediate_disconnect(
         await asyncio.wait_for(observation_started.wait(), timeout=0.5)
         coordinator = runtime._coordinators[session_id]
 
-        async def wait_until_disconnected() -> None:
-            while coordinator.phase != "unavailable":
-                await asyncio.sleep(0)
+        if mode == "generation_sync":
+            async def sync(generation: int) -> None:
+                await coordinator.receive_data(identity=user_identity, participant_sid="PA_user",
+                    topic="digital-souls.livekit-transport.v1", payload=json.dumps({
+                        "protocol_version": "1.0", "type": "state_sync_request", "generation": generation,
+                    }).encode())
 
-        await asyncio.wait_for(wait_until_disconnected(), timeout=0.5)
+            async def wait_for_event(event: tuple[str, int]) -> None:
+                while event not in reader_events:
+                    await asyncio.sleep(0)
 
-        assert observations == [(user_identity, "PA_user", remote_track)]
-        assert not coordinator.is_current_participant(
-            identity=user_identity, participant_sid="PA_user"
-        )
+            await sync(0)
+            await asyncio.wait_for(wait_for_event(("started", 1)), timeout=0.5)
+            assert reader_events == [("started", 0), ("closed", 0), ("started", 1)]
+            # 古い世代の再送では現世代readerを重複作成しない。
+            await sync(0)
+            await asyncio.sleep(0)
+            assert reader_events.count(("started", 1)) == 1
+            callbacks["track_unsubscribed"](remote_track, publication, participant)
+            await asyncio.wait_for(wait_for_event(("closed", 1)), timeout=0.5)
+            await sync(1)
+            await asyncio.sleep(0)
+            assert len(observations) == 2
+        else:
+            async def wait_until_disconnected() -> None:
+                while coordinator.phase != "unavailable":
+                    await asyncio.sleep(0)
+
+            await asyncio.wait_for(wait_until_disconnected(), timeout=0.5)
+
+            assert observations == [(user_identity, "PA_user", remote_track)]
+            assert not coordinator.is_current_participant(
+                identity=user_identity, participant_sid="PA_user"
+            )
         await runtime.stop(session_id)
 
     asyncio.run(exercise())

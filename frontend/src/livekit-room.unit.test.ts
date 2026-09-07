@@ -594,8 +594,8 @@ describe('LiveKit Room generation synchronization', () => {
     client.temporaryDisconnect()
     await client.connect('ws://127.0.0.1:7880', 'new-token', sessionId)
     latestRoom().emit('trackSubscribed', { kind: 'audio', mediaStreamTrack: {} }, { trackSid: 'TR_old', trackName: 'ds-response-v1:' + responseId }, {})
-    await vi.waitFor(() => expect(audioContexts[0].worklets).toHaveLength(1))
-    expect(audioContexts[0].worklets[0].connect).not.toHaveBeenCalled()
+    await Promise.resolve()
+    expect(audioContexts).toHaveLength(0)
     client.disconnect()
   })
 
@@ -670,6 +670,49 @@ test.each(['valid', 'mismatched_decode', 'stopped', 'unsubscribed'])('実出力�
       expect(measurements()).toHaveLength(0)
       expect(observations.some(row => row.mediaResponseId)).toBe(false)
     }
+  } finally {client.disconnect()}
+})
+
+
+test('RTP欠落では未出力のPCMを止め、Coreの応答だけを中断して制御接続を維持する', async () => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(row => observations.push(row))
+  const sessionId = '20000000-0000-4000-8000-000000000001'
+  const responseId = '22222222-2222-2222-2222-222222222222'
+  await client.connect('ws://test', 'token', sessionId)
+  const room = latestRoom(), disconnected = vi.spyOn(room, 'disconnect')
+  room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
+    {trackSid: 'TR_loss', trackName: `ds-response-v1:${responseId}`})
+  await vi.waitFor(() => expect(audioContexts.at(-1)?.worklets).toHaveLength(1))
+  const observer = mediaMocks.observers.at(-1)!, worklet = audioContexts.at(-1)!.worklets[0]
+  const frame = {receivedAtMs: 100, decodedAtMs: 101, pcm: new Float32Array(960).fill(.25)}
+  try {
+    observer.playback!.packet({...frame, packetIndex: 0, rtpTimestamp: 99})
+    observer.playback!.packet({...frame, packetIndex: 1, rtpTimestamp: 2019})
+    observer.playback!.packet({...frame, packetIndex: 2, rtpTimestamp: 2979})
+    const messages = () => room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
+    await vi.waitFor(() => expect(messages().some(p => p.type === 'state_sync_request')).toBe(true))
+    expect(messages().filter(p => ['playback_stopped', 'response_cancel_requested'].includes(p.type)))
+      .toMatchObject([{type: 'playback_stopped', session_id: sessionId, response_id: responseId,
+        reason: 'disconnect', last_played_audio_sequence: 0},
+      {type: 'response_cancel_requested', session_id: sessionId, response_id: responseId, reason: 'disconnect'}])
+    expect(worklet.port.postMessage.mock.calls.filter(([row]) => row.kind === 'pcm')).toHaveLength(1)
+    expect(worklet.port.postMessage).toHaveBeenCalledWith({kind: 'stop'})
+    expect(observations.find(row => row.mediaPacketLoss)?.mediaPacketLoss)
+      .toMatchObject({responseId, expectedTimestamp: 1059, receivedTimestamp: 2019, missingPacketCount: 1})
+    expect(observations.filter(row => row.mediaPacketLoss)).toHaveLength(1)
+    expect(observations.some(row => row.failureStage)).toBe(false)
+    expect(disconnected).not.toHaveBeenCalled()
+    expect(messages().filter(p => ['playback_stopped', 'response_cancel_requested', 'state_sync_request'].includes(p.type))
+      .map(p => p.type)).toEqual(['playback_stopped', 'response_cancel_requested', 'state_sync_request'])
+    emitPrivateFrame(room, authoritativeState(1, [{type: 'response_interrupted', session_id: sessionId,
+      response_id: responseId, confirmed_audio_sequence: 0}]))
+    await vi.waitFor(() => expect(audioContexts[0].close).toHaveBeenCalled())
+    expect(audioContexts.flatMap(context => context.worklets)).toHaveLength(1)
+    const probe = client.probeControl()
+    const sent = messages().find(row => row.type === 'control_probe')
+    emitPrivateFrame(room, new TextEncoder().encode(JSON.stringify({...sent, type: 'control_probe_ack'})))
+    expect(await probe).toMatchObject({status: 'received', generation: 1})
   } finally {client.disconnect()}
 })
 
