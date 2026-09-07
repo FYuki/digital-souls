@@ -9,6 +9,7 @@ from app.conversation_core.models import (
     Response,
     StageObservation,
     ResponseStartResult,
+    ResponseStopResult,
     TerminalOutcome,
     TextDelta,
 )
@@ -52,4 +53,14 @@ class ObservationPort(Protocol):
 class ResponseCompletionPort(Protocol):
     async def finish_response(self, response: Response) -> None:
         """出力完了まで待つ。待機中の応答はCoreがcancelできる。"""
+        ...
+
+
+class ResponseCancellationPort(Protocol):
+    async def stop_response(self, response: Response) -> ResponseStopResult:
+        """送出停止と、その応答の最終出力停止を確認する。欠測は例外にする。
+
+        呼出元の取消を受けたら待機資源を解放する。確認前のtimeoutや切断を
+        成功として返してはいけない。応答・世代・要求ごとの相関は実装側で検証する。
+        """
         ...

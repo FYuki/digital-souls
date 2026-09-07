@@ -86,3 +86,25 @@ def test_closed_zero_counts_are_trace_diagnostics_not_failed_cancel_stages():
     assert len(events)==6 and {e.name for e in events}==PROVIDER_RESULT_METRICS
     assert all(e.stage=='provider_result_received' and e.outcome=='success' and e.reason_code is None for e in events)
     assert all(e.response_id=='r' and e.utterance_id=='u' for e in events)
+
+
+def test_stopping_receipts_have_separate_trace_stage_and_do_not_change_after_cancel_counts():
+    from app.conversation_core.provider_result_audit import PROVIDER_STOPPING_METRICS
+    audit = ProviderResultAudit()
+    audit.text("後😀", cancelled=False, stopping=True)
+    audit.audio(b"pcm", cancelled=False, stopping=True)
+    events = []
+    measurement = LiveKitMeasurementSession(session_id="s", character_id="c",
+        measurement_kind="controlled_baseline", record=events.append, clock_ns=lambda: 1000)
+    measurement.bind_response(response_id="r", source_utterance_ids=("u",))
+    async def exercise():
+        for name, value in audit.stopping_statistics().items():
+            await measurement.record(StageObservation(session_id="s", response_id="r",
+                generation=1, stage=name, outcome="completed", value=value))
+    asyncio.run(exercise())
+    assert {event.name for event in events} == PROVIDER_STOPPING_METRICS
+    assert all(event.stage == "provider_result_stopping" for event in events)
+    assert audit.closed_statistics()["provider_result_text_after_cancel_utf16_units"] == 0
+    assert audit.stopping_statistics()["provider_result_text_during_stop_utf16_units"] == 3
+    assert audit.stopping_statistics()["provider_result_audio_during_stop_bytes"] == 3
+    assert all(type(value) in (int, bool) for value in vars(audit).values())

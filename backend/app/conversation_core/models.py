@@ -6,6 +6,7 @@ from enum import Enum
 
 class ResponseState(Enum):
     IN_PROGRESS = "in_progress"
+    CANCELLING = "cancelling"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
     FAILED = "failed"
@@ -13,7 +14,7 @@ class ResponseState(Enum):
 
     @property
     def is_terminal(self) -> bool:
-        return self is not ResponseState.IN_PROGRESS
+        return self not in {ResponseState.IN_PROGRESS, ResponseState.CANCELLING}
 
 
 class UtteranceState(Enum):
@@ -56,6 +57,13 @@ class Response:
     audio_segments: tuple[AudioSegment, ...] = ()
     last_played_audio_sequence: int = 0
     terminal_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class ResponseStopResult:
+    """送出と最終出力の停止確認後に得た再生済みprefix。"""
+
+    last_played_audio_sequence: int
 
 
 @dataclass(frozen=True)

@@ -6,7 +6,7 @@ from typing import Callable, Literal, cast
 from uuid import uuid4
 
 from app.conversation_core import StageObservation
-from app.conversation_core.provider_result_audit import PROVIDER_RESULT_METRICS
+from app.conversation_core.provider_result_audit import PROVIDER_RESULT_METRICS, PROVIDER_STOPPING_METRICS
 from app.inference.diagnostics import DIAGNOSTIC_NAMES
 from app.voice_metrics import EventOutcome, MeasurementKind, TraceEvent
 
@@ -422,6 +422,10 @@ class LiveKitMeasurementSession:
     def _map_stage_observation(
         observation: StageObservation,
     ) -> tuple[str, str, EventOutcome, str | None] | None:
+        if observation.stage in PROVIDER_STOPPING_METRICS:
+            if observation.outcome != 'completed':
+                return None
+            return observation.stage, 'provider_result_stopping', 'success', None
         if observation.stage in PROVIDER_RESULT_METRICS:
             if observation.outcome != 'completed':
                 return None
