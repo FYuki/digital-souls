@@ -1557,3 +1557,19 @@ Frontendの回帰テスト744件、型検査、ビルドも成功した。
 
 29のsession・障害操作子・診断reader終了、所有Frontend／Backend削除、専用SFU・network停止を確認した。
 1件の成功で再接続p95の未達を解消済みとはしない。文中休止と相槌は修正後100件へ進める。
+
+
+### 文中休止の実ブラウザ100試行
+
+測定版 `d5e704589c7e9c0947617bd1eee5bbebc49bb3b2` の固定Frontend／Backend imageで、
+200／400／600msの文中休止を含む全100音声を独立session／conversationで実行した。
+[文中休止100件の匿名集計](artifacts/livekit-vad-pause-100-2026-09-08.json)は、
+全件で発話の確認・終了が各1回、冒頭遅延・早期終了・誤分割・境界の不確かさが各0件だった。
+検出器の終了遅延上限はp95 787.315ms、最大795.100msだった。
+これはVAD終了イベントの時計差であり、STT完了までを含む別の発話確定指標へ転用しない。
+
+schemaと全件分母、100 session／conversationの独立性、全session終了、
+所有Frontend／Backend計2 containerの実削除、実行中imageの版、同梱SDKの実ロード証跡を照合した。
+frame／event／model resetの観測overflowはなかった。
+STTへ実際に取り込まれたPCMの境界とVAD全体の受け入れは未検証のfalseを維持する。
+相槌の修正後100件、stale出力、再接続p95などの残条件も引き続き検証する。
