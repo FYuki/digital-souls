@@ -14,8 +14,8 @@ from app.livekit_transport.paced_audio import PacedPcmSource
 
 logger = logging.getLogger(__name__)
 AUDIO_PROBE_TRACK_PREFIX = "ds-audio-probe-v1:"
-PROBE_TIMEOUT_SECONDS = 4
-READY_TIMEOUT_SECONDS = 1.5
+PROBE_TIMEOUT_SECONDS = 10
+READY_TIMEOUT_SECONDS = 8
 COMPLETE_TIMEOUT_SECONDS = 1
 CLEANUP_TIMEOUT_SECONDS = 1
 
@@ -91,9 +91,12 @@ class AudioProbePublisher:
                 source = rtc.AudioSource(48000, 1, queue_size_ms=0)
                 pacer = PacedPcmSource(source)
                 track = rtc.LocalAudioTrack.create_audio_track(AUDIO_PROBE_TRACK_PREFIX + probe_id, source)
+                previous_sids = set(self._room.local_participant.track_publications)
                 stage = "publish_track"
                 publication = await self._room.local_participant.publish_track(track,
                     rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE, dtx=False))
+                logger.warning("Audio probe publication: tracks=%d sid_reused=%s",
+                    len(self._room.local_participant.track_publications), publication.sid in previous_sids)
                 self._sid = publication.sid
                 if self._pending_ready_sid == self._sid:
                     self._ready.set()

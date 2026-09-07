@@ -45,7 +45,7 @@ export class AudioAvailabilityProbe {
   constructor(readonly probeId: string, readonly generation: number,
     private readonly current: () => boolean, private readonly send: (frame: ProbeFrame) => Promise<void>) {
     this.result = new Promise(resolve => {this.resolve = resolve})
-    this.deadline = setTimeout(() => this.cancel('timeout'), 4000)
+    this.deadline = setTimeout(() => this.cancel('timeout'), 10000)
   }
 
   start(): void {

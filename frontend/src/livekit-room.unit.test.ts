@@ -800,7 +800,7 @@ test.each(['reconnecting', 'disconnected', 'generation', 'unsubscribed', 'timeou
     if (mode === 'generation') emitPrivateFrame(room, authoritativeState(1))
     else if (mode === 'unsubscribed') room.emit('trackUnsubscribed', {}, publication)
     else if (mode === 'decoder') mediaMocks.observers.at(-1)!.playback!.failed()
-    else if (mode === 'timeout') await vi.advanceTimersByTimeAsync(4000)
+    else if (mode === 'timeout') await vi.advanceTimersByTimeAsync(10000)
     else room.emit(mode)
     expect(await pending).toMatchObject({status: 'failed', cleanupCompleted: true,
       reason: mode === 'unsubscribed' ? 'track_unsubscribed' : mode === 'decoder' ? 'media_decoder'

@@ -274,6 +274,7 @@ Backendから要求する。通常の会話と共通のPCM送信器、RTC、pack
 
 送信機能は`DS_ENVIRONMENT_ID=test`、`DS_PROFILE=integration-voice-fault`、
 `VOICE_MEASUREMENT_KIND=controlled_baseline`、専用localhost:19880の全条件を満たす場合だけ有効。
-同時実行1件、1 session当たり8 nonce、送信4秒、待機・後始末にも期限を設ける。
+同時実行1件、1 session当たり8 nonce、診断全体10秒、準備待機8秒、後始末にも期限を設ける。
+合否の起点は要求時刻ではなく障害回復時刻で、10秒・成功時p95 3,000msの基準は変更しない。
 rawには本文を含めず、nonce・SID・世代と数値packet証跡を保存する。匿名reportには識別子を出さず、
 計測方式だけを残す。旧方式との混在は拒否する。statusが成功でも全packet・相関が欠ければ失敗分母に残す。
