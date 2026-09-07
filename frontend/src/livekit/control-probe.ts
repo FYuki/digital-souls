@@ -10,12 +10,14 @@ export type ControlProbeObservation = Readonly<{
   probeId: string | null
   sentAtMs: number | null
   receivedAtMs: number | null
+  sendCompletedAtMs?: number | null
 }>
 
 type PendingProbe<Handle> = {
   generation: number
   probeId: string
   sentAtMs: number
+  sendCompletedAtMs: number | null
   timer: Handle | null
   resolve: (result: ControlProbeObservation) => void
 }
@@ -35,11 +37,16 @@ export class ControlProbeTracker<Handle> {
       return Promise.resolve(this.empty('clock_invalid', generation))
     }
     return new Promise(resolve => {
-      const pending: PendingProbe<Handle> = {generation, probeId: this.createId(), sentAtMs, timer: null, resolve}
+      const pending: PendingProbe<Handle> = {generation, probeId: this.createId(), sentAtMs, sendCompletedAtMs: null, timer: null, resolve}
       this.pending = pending
       pending.timer = this.timer.schedule(() => this.finish(pending, 'timeout'), 500)
       try {
-        void send(pending.probeId, generation).catch(() => this.finish(pending, 'send_failed'))
+        void send(pending.probeId, generation).then(() => {
+          // SDKへの送信完了であり、相手側受付や制御復旧の成功ではない。
+          // timeout後の完了で既に返した結果を書き換えない。
+          const completed = this.timer.now()
+          if (Number.isFinite(completed) && completed >= pending.sentAtMs) pending.sendCompletedAtMs = completed
+        }, () => this.finish(pending, 'send_failed'))
       } catch {
         this.finish(pending, 'send_failed')
       }
@@ -71,7 +78,7 @@ export class ControlProbeTracker<Handle> {
     this.pending = null
     if (pending.timer !== null) this.timer.cancel(pending.timer)
     pending.resolve({status, generation: pending.generation, probeId: pending.probeId,
-      sentAtMs: pending.sentAtMs, receivedAtMs})
+      sentAtMs: pending.sentAtMs, receivedAtMs, sendCompletedAtMs: pending.sendCompletedAtMs})
   }
 
   private empty(status: ControlProbeObservation['status'], generation: number): ControlProbeObservation {

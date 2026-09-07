@@ -1257,3 +1257,30 @@ def test_state_sync_observations_separate_receive_readiness_and_send() -> None:
         await coordinator.cleanup("test_complete")
 
     asyncio.run(exercise())
+
+
+def test_control_probe_diagnostic_has_numeric_stages_without_probe_identity() -> None:
+    module = _livekit_module('coordinator', 'control probe stage observation')
+
+    async def exercise() -> None:
+        rows, published = [], []
+        coordinator = _coordinator(module, published, [], sync_observer=lambda *row: rows.append(row))
+        identity = 'user-20000000-0000-4000-8000-000000000010'
+        coordinator.participant_connected(identity=identity, participant_sid='PA_current', room_sid='RM_one')
+        probe_id = '10000000-0000-4000-8000-000000000001'
+        await coordinator.receive_data(identity=identity, participant_sid='PA_current', topic=module.PRIVATE_TOPIC,
+            payload=json.dumps({'protocol_version': '1.0', 'type': 'control_probe',
+                                'probe_id': probe_id, 'generation': 0}).encode())
+        assert [row[0] for row in rows] == ['probe_received', 'probe_ack_started', 'probe_ack_completed']
+        assert all(row[1] == 0 and type(row[2]) is int for row in rows)
+        assert rows[0][2] <= rows[1][2] <= rows[2][2]
+        assert probe_id not in json.dumps(rows) and identity not in json.dumps(rows)
+        rows.clear()
+        await coordinator.receive_data(identity=identity, participant_sid='PA_current', topic=module.PRIVATE_TOPIC,
+            payload=json.dumps({'protocol_version': '1.0', 'type': 'control_probe',
+                                'probe_id': probe_id, 'generation': 1}).encode())
+        assert [row[0] for row in rows] == ['probe_received', 'probe_generation_rejected']
+        assert len(published) == 1
+        await coordinator.cleanup('test_complete')
+
+    asyncio.run(exercise())

@@ -20,8 +20,8 @@ declare global {
   }
 }
 
-type Cohort = 'backchannel' | 'take_turn'
-type LabeledTrial = {id: string; cohort: string; audio_sha256: string; sample_rate_hz: number;
+type Cohort = 'backchannel' | 'take_turn' | 'pause'
+type LabeledTrial = {id: string; cohort: string; audio_sha256: string; sample_rate_hz: number; expected_utterances: number; pause_samples: number;
   speech_intervals: {start_sample: number; end_sample: number}[]}
 const snapshot = (page: Page) => page.evaluate(() => ({
   vad: window.__voiceVadDiagnostics,
@@ -53,12 +53,20 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
   const trials: Record<string, unknown>[] = []
   const persist = async () => {
     await mkdir(dirname(output), {recursive: true})
-    await writeFile(output, JSON.stringify({measurement_scope: 'labeled_livekit_interruption_diagnostic',
+    await writeFile(output, JSON.stringify({measurement_scope: cohort === 'pause' ? 'labeled_livekit_vad_diagnostic' : 'labeled_livekit_interruption_diagnostic',
+      measurement_revision: process.env.VOICE_QUALITY_MEASUREMENT_REVISION,
       cohort, expected_measured: count, initial_fixture_sha256: initial.audioSha256,
       ...(selection === undefined ? {} : {fixture_indices: indices}),
       labeled_manifest_sha256: createHash('sha256').update(manifestBytes).digest('hex'), trials}, null, 2) + '\n')
   }
   for (const selectedTrial of selected) {
+    if (cohort === 'pause' && (selectedTrial.sample_rate_hz !== 48000
+      || selectedTrial.expected_utterances !== 1 || selectedTrial.speech_intervals.length !== 2
+      || !Number.isInteger(selectedTrial.pause_samples) || selectedTrial.pause_samples < 1
+      || selectedTrial.pause_samples > 28800
+      || selectedTrial.speech_intervals[1].start_sample - selectedTrial.speech_intervals[0].end_sample !== selectedTrial.pause_samples)) {
+      throw new Error('pause fixture must contain one utterance with a labeled pause of at most 600ms')
+    }
     const bytes = await readFile(new URL(`../test-results/vad-quality/fixtures-v2/${selectedTrial.id}.wav`, import.meta.url))
     const interruption = parseScheduledFixture(bytes, {audio_sha256: selectedTrial.audio_sha256,
       sample_rate_hz: selectedTrial.sample_rate_hz,
@@ -132,6 +140,26 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
       await page.evaluate(next => window.__voiceFixtureClock!.replay(next), interruption)
       await page.waitForFunction(() => window.__voiceFixtureClock?.finished, undefined, {timeout: 10000})
       trial.fixture_clock_bounds = await readFixtureBounds(page)
+      if (cohort === 'pause') {
+        stage = 'vad_completion'
+        // fixture全体を出した後に主VADのframe処理まで待つ。先行応答のVADや
+        // 文中の最初の終了だけを、対象音声全体の成功と取り違えない。
+        await page.waitForFunction(() => {
+          const bounds = window.__voiceFixtureClock?.bounds
+          const vad = window.__voiceVadDiagnostics
+          return bounds?.speechEnd !== undefined && vad !== undefined
+            && (vad.frames.at(-1)?.atMs ?? 0) >= bounds.speechEnd.upperMs + 800
+        }, undefined, {timeout: 5000})
+        const counts = await page.evaluate(() => {
+          const start = window.__voiceFixtureClock!.bounds.sourceStart!.lowerMs
+          const events = window.__voiceVadDiagnostics!.events.filter(event => event.detectedAtMs >= start)
+          return {confirmed: events.filter(event => event.type === 'confirmed').length,
+            ended: events.filter(event => event.type === 'ended').length}
+        })
+        expect(counts).toEqual({confirmed: 1, ended: 1})
+        trial.outcome = 'success'
+        continue
+      }
       await page.waitForFunction(responseId => window.__voiceChatE2E.coreEventDiagnostics.some(event =>
         event.type === 'turn_decision' && event.responseId === responseId && event.final === true), cycle.responseId, {timeout: 10000})
       const decision = await page.evaluate(responseId => window.__voiceChatE2E.coreEventDiagnostics.find(event =>

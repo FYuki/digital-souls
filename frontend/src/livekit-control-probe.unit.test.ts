@@ -93,3 +93,25 @@ describe('会話状態を変更しない制御probeの往復観測', () => {
     expect(await pending).toMatchObject({status: 'timeout', receivedAtMs: null})
   })
 })
+
+
+test('送信完了と応答到着を別に記録し、送信完了だけでは往復成功としない', async () => {
+  const h = setup()
+  let sent!: () => void
+  const pending = h.tracker.start(2, async () => new Promise<void>(resolve => {sent = resolve}))
+  h.time(130); sent(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+  h.time(160)
+  h.tracker.acknowledge('10000000-0000-4000-8000-000000000001', 2)
+  expect(await pending).toMatchObject({status: 'received', sentAtMs: 100, sendCompletedAtMs: 130, receivedAtMs: 160})
+})
+
+test('timeout後の遅い送信完了で保存済みの観測値を変更しない', async () => {
+  const h = setup()
+  let sent!: () => void
+  const pending = h.tracker.start(2, async () => new Promise<void>(resolve => {sent = resolve}))
+  h.time(600); h.jobs.values().next().value!()
+  const result = await pending
+  expect(result).toMatchObject({status: 'timeout', sendCompletedAtMs: null})
+  h.time(900); sent(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+  expect(result).toMatchObject({status: 'timeout', sendCompletedAtMs: null})
+})

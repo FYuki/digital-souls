@@ -249,3 +249,30 @@ def test_formal_cohort_does_not_inherit_diagnostic_fixture_selection(tmp_path, m
                                     scheduled_fixture=True, interruption_cohort='take_turn')
     assert 'VOICE_QUALITY_FIXTURE_INDICES' not in result
     assert result['VOICE_QUALITY_PILOT_TRIALS'] == '100'
+
+
+@pytest.mark.parametrize('changed', [
+    {'vad_cohort': 'take_turn'}, {'interruption_cohort': 'take_turn'}, {'controlled': True},
+    {'continuous_turns': 1}, {'control_probe': True}, {'fault_bridge': True},
+    {'network_fault': True}, {'scheduled_fixture': False},
+])
+def test_pause_cohort_cannot_mix_other_measurement_scope(tmp_path, changed):
+    inference, livekit = tmp_path / 'inference.env', tmp_path / 'livekit.env'
+    inference.write_text('INFERENCE_TARGET_CHAT=ollama/test\n')
+    livekit.write_text('LIVEKIT_KEYS=test:test-only\n')
+    options = dict(scheduled_fixture=True, vad_cohort='pause')
+    with pytest.raises(ValueError, match='VAD pause'):
+        pilot.pilot_environment(inference, livekit, 'pause-test', 100, False, **(options | changed))
+
+
+def test_pause_cohort_records_explicit_scope_and_does_not_leak_to_next_run(tmp_path, monkeypatch):
+    inference, livekit = tmp_path / 'inference.env', tmp_path / 'livekit.env'
+    inference.write_text('INFERENCE_TARGET_CHAT=ollama/test\n')
+    livekit.write_text('LIVEKIT_KEYS=test:test-only\n')
+    monkeypatch.setenv('VOICE_QUALITY_VAD_COHORT', 'pause')
+    result = pilot.pilot_environment(inference, livekit, 'pause-test', 100, False,
+                                    scheduled_fixture=True, vad_cohort='pause')
+    assert result['VOICE_QUALITY_VAD_COHORT'] == 'pause'
+    assert result['VOICE_QUALITY_PILOT_TRIALS'] == '100'
+    assert 'VOICE_QUALITY_INTERRUPTION_COHORT' not in result
+    assert 'VOICE_QUALITY_VAD_COHORT' not in pilot.pilot_environment(inference, livekit, 'ordinary', 3, False)

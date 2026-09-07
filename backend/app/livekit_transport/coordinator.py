@@ -220,7 +220,11 @@ class ProductionSessionCoordinator:
                             self._lifecycle.advance_generation()
                         await self._send_ready_authoritative_state()
                     return
+                if frame["type"] == "control_probe":
+                    self._observe_sync("probe_received")
                 if frame_generation != self.generation:
+                    if frame["type"] == "control_probe":
+                        self._observe_sync("probe_generation_rejected")
                     return
                 if frame["type"] in {"audio_probe_request", "audio_probe_ready", "audio_probe_complete"}:
                     if self._lifecycle.phase == "available" and self._dependencies.audio_probe is not None:
@@ -230,12 +234,16 @@ class ProductionSessionCoordinator:
                 if frame["type"] == "control_probe":
                     # 疎通確認は世代・再生・Core状態を変えず、現在利用可能な接続だけで応答する。
                     if self._lifecycle.phase == "available":
+                        self._observe_sync("probe_ack_started")
                         await self._publish_private({
                             "protocol_version": "1.0",
                             "type": "control_probe_ack",
                             "probe_id": frame["probe_id"],
                             "generation": self.generation,
                         })
+                        self._observe_sync("probe_ack_completed")
+                    else:
+                        self._observe_sync("probe_unavailable")
                     return
                 if frame["type"] == "response_track_ready":
                     self._dependencies.response_track_ready(str(frame["response_id"]), str(frame["track_sid"]))

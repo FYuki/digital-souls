@@ -30,9 +30,15 @@ import {
 const scheduledFixture = process.env.VOICE_QUALITY_SCHEDULED_FIXTURE === '1'
 const controlProbe = process.env.VOICE_QUALITY_CONTROL_PROBE === '1'
 const interruptionCohort = process.env.VOICE_QUALITY_INTERRUPTION_COHORT
+const vadCohort = process.env.VOICE_QUALITY_VAD_COHORT
+if (vadCohort !== undefined && (vadCohort !== 'pause' || interruptionCohort !== undefined
+  || controlProbe || process.env.VOICE_QUALITY_FAULT_BRIDGE === '1'
+  || !scheduledFixture || Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0))) {
+  throw new Error('VAD pause measurement requires a separate scheduled cohort')
+}
 if (interruptionCohort !== undefined && !['take_turn', 'backchannel'].includes(interruptionCohort)) throw new Error('invalid interruption cohort')
 const pilot = process.env.VOICE_QUALITY_PILOT_TRIALS
-if (pilot !== undefined && !(/^[1-9][0-9]?$/.test(pilot) || (pilot === '100' && interruptionCohort !== undefined))) {
+if (pilot !== undefined && !(/^[1-9][0-9]?$/.test(pilot) || (pilot === '100' && (interruptionCohort !== undefined || vadCohort !== undefined)))) {
   throw new Error('VOICE_QUALITY_PILOT_TRIALS must be between 1 and 99')
 }
 const WARMUP_RUNS = pilot === undefined ? 5 : 1
@@ -68,7 +74,7 @@ test.use({
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(voiceTestTimeout * (WARMUP_RUNS + MEASURED_RUNS))
 
-test(controlProbe ? '実音声再生中の制御往復を診断する' : interruptionCohort ? '実応答の再生中に固定ラベル音声で割り込みを測定する'
+test(vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割を測定する' : controlProbe ? '実音声再生中の制御往復を診断する' : interruptionCohort ? '実応答の再生中に固定ラベル音声で割り込みを測定する'
   : Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0) > 0
   ? '同一LiveKit sessionで応答trackの切替を診断する'
   : 'LiveKit固定fixtureの独立試行を測定する', async ({ browser }) => {
@@ -86,6 +92,11 @@ test(controlProbe ? '実音声再生中の制御往復を診断する' : interru
       || Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0)
       || Number(pilot) > 10) throw new Error('control probe requires a separate scheduled diagnostic')
     await measureControlProbeSession(browser, sourceFixture, Number(pilot), manifestPath)
+    return
+  }
+  if (vadCohort !== undefined) {
+    if (!sourceFixture || pilot === undefined) throw new Error('VAD pause requires explicit scheduled trial count')
+    await measureLabeledInterruptions(browser, sourceFixture, 'pause', Number(pilot), manifestPath)
     return
   }
   if (interruptionCohort !== undefined) {
