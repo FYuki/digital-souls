@@ -228,12 +228,13 @@ describe('LiveKit Room generation synchronization', () => {
       const context = audioContexts[0], [renderer, audit] = context.worklets
       expect(context.gains[0].connect).toHaveBeenCalledWith(audit)
       expect(audit.connect).toHaveBeenCalledWith(context.destination)
-      const timestamp = vi.spyOn(context, 'getOutputTimestamp').mockReturnValue({contextTime: 0, performanceTime: 0})
-      audit.port.onmessage?.({data: {kind: 'output', confirmedFrame: 48128, intervals: [
-        {startFrame: 48000, endFrame: 48128, nonzeroSamples: 128, firstNonzeroFrame: 48000, lastNonzeroFrame: 48127},
-        {startFrame: 48128, endFrame: 48256, nonzeroSamples: 0, firstNonzeroFrame: null, lastNonzeroFrame: null},
-      ]}} as MessageEvent)
-      now = 1003.1
+      const timestamp = vi.spyOn(context, 'getOutputTimestamp').mockReturnValue({contextTime: 1.009, performanceTime: 1009})
+      now = 1009.5
+      audit.port.onmessage?.({data: {kind: 'output', confirmedFrame: 49920, intervals: Array.from({length: 16}, (_, i) => ({
+        startFrame: 48000 + i * 128, endFrame: 48128 + i * 128, nonzeroSamples: i === 0 ? 128 : 0,
+        firstNonzeroFrame: i === 0 ? 48000 : null, lastNonzeroFrame: i === 0 ? 48127 : null,
+      }))}} as MessageEvent)
+      now = 1010
       emitCoreEvent(room, {protocol_version: '1.0', type: 'response_cancelled',
         event_id: '60000000-0000-4000-8000-000000000003', session_id: sessionId, response_id: responseId,
         reason: 'barge_in', monotonic_timestamp_ms: 2002})
@@ -245,8 +246,10 @@ describe('LiveKit Room generation synchronization', () => {
       client.disconnect()
       expect(context.close).not.toHaveBeenCalled()
       expect(audit.port.close).not.toHaveBeenCalled()
-      now = 1100; timestamp.mockReturnValue({contextTime: 1.01, performanceTime: 1010})
-      audit.port.onmessage?.({data: {kind: 'finished', endFrame: 48256}} as MessageEvent)
+      now = 1012.5; timestamp.mockReturnValue({contextTime: 1.012, performanceTime: 1012})
+      await new Promise(resolve => setTimeout(resolve, 10))
+      now = 1051; timestamp.mockReturnValue({contextTime: 1.05, performanceTime: 1050})
+      audit.port.onmessage?.({data: {kind: 'finished', endFrame: 50048}} as MessageEvent)
       await vi.waitFor(() => expect(context.close).toHaveBeenCalledOnce())
       expect(audit.disconnect).toHaveBeenCalledOnce()
       expect(rows.at(-1)).toMatchObject({responseId, sessionId, graphClosed: true,

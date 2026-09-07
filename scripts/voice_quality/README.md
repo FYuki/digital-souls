@@ -381,3 +381,15 @@ cancel境界はBrowserの`response_cancelled`受信時刻で、観測には
 再生抑止のreturnより前で数える。受信境界は`decoded_packet_delivered`で、Backend生成数や
 encoded packetの最初の到着数ではない。textの受信／DOM提示、匿名aggregateと受け入れ評価への
 統合は別途必要。この診断の導入だけでは#150のstale presented 0を満たさない。
+
+
+出力のcancel相関は、各区間を別timestampから外挿する方式から
+`bracketing_output_timestamps`へ変更した。cancel直前の利用可能なoutput timestampのframeを下限、
+cancel直後の最初の利用可能なtimestampのframeを上限にする。未来を指すtimestampは採用せず、
+このChromium診断のperformance時計丸めとして両端0.2ms、frameには外側1 sampleの余裕を残す。
+この余裕はstale件数の合否閾値ではなく、推定範囲を保守的に広げるための値である。
+
+cancelは直前pollの観測時刻以後でなければ受理しない。poll済み区間は採用した下限frame以前なので、
+後からcancelへ含める区間を欠落させない。上限anchorを待つ間に出力時計を通過した区間は上限付きで保留する。
+前後anchor不足、監視窓の不足、timestampそのものの逆行は欠測のまま残す。
+`firstOutputAtMs/lastOutputEndAtMs`は表示用の外挿値で、staleの成否には使用しない。

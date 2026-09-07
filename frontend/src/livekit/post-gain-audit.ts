@@ -74,6 +74,7 @@ export type GainAuditMissingReason = 'audit_output_unavailable' | 'audit_channel
   | 'audit_observation_overflow' | 'audit_interval_invalid' | 'audit_output_clock_invalid'
   | 'audit_output_gap' | 'audit_finish_invalid' | 'audit_cancel_clock_invalid'
   | 'audit_closed_before_drain' | 'audit_output_after_finish'
+  | 'audit_cancel_anchor_missing' | 'audit_cancel_window_unobserved'
 
 type Bounds = Readonly<{lowerMs: number; upperMs: number}>
 const time = (n: number): boolean => Number.isFinite(n) && n >= 0
@@ -82,6 +83,9 @@ const frame = (n: number): boolean => Number.isSafeInteger(n) && n >= 0
 export type GainAuditSnapshot = Readonly<{
   complete: boolean; drained: boolean; missingReason: GainAuditMissingReason | null
   cancelBoundsMs: Bounds | null; outputClockPassedFrame: number | null
+  cancelOutputFrameBounds: Readonly<{lowerFrame: number; upperFrame: number}> | null
+  clockCorrelationMethod: 'bracketing_output_timestamps'
+  timestampRoundingMarginMs: number
   firstOutputAtMs: number | null; lastOutputEndAtMs: number | null
   clockFailure: Readonly<{stage: 'invalid_timestamp' | 'timestamp_regression' | 'negative_output_time' | 'mapped_interval_regression'; values: Readonly<Record<string, number>>}> | null
   nonzeroSamplesAfterCancelLower: number; nonzeroSamplesAfterCancelUpper: number
@@ -94,6 +98,12 @@ export type GainAuditSnapshot = Readonly<{
 export class PostGainOutputAudit {
   private pending: GainAuditInterval[] = []
   private cancel: Bounds | null = null
+  private lastOutputPoint: {frame: number; atMs: number} | null = null
+  private cancelPending: GainAuditInterval[] = []
+  private cancelLowerFrame: number | null = null
+  private cancelUpperFrame: number | null = null
+  // このChromium診断のperformance時計丸めを上下限へ含める。外挿の誤差許容値ではない。
+  private readonly roundingMarginMs = 0.2
   private lastRecorded: number | null = null
   private firstRecorded: number | null = null
   private passed: number | null = null
@@ -118,6 +128,15 @@ export class PostGainOutputAudit {
       this.fail('audit_cancel_clock_invalid'); return;
     }
     this.cancel ??= {...bounds}
+    const before = this.lastOutputPoint
+    if (!before || before.atMs + this.roundingMarginMs > bounds.lowerMs) {
+      this.fail('audit_cancel_anchor_missing'); return
+    }
+    this.cancelLowerFrame = Math.max(0, Math.floor(before.frame) - 1)
+    // 採用済みtimestampは観測時刻以前、cancelは直前poll以後を要求する。
+    // 既に確認した区間がlowerを越えていたら、後付けの境界として拒否する。
+    if (this.passed !== null && this.passed > this.cancelLowerFrame) this.fail('audit_cancel_clock_invalid')
+
   }
 
   record(message: GainAuditMessage): void {
@@ -172,38 +191,50 @@ export class PostGainOutputAudit {
       this.fail('audit_output_clock_invalid'); return;
     }
     this.lastClock = {contextTime, performanceTime, observedAtMs}
-    const passedFrame = Math.floor(contextTime * sampleRate)
+    // 未来へ外挿されたtimestampを、出力済みの観測点へ採用しない。
+    if (performanceTime + this.roundingMarginMs > observedAtMs) return
+    const point = {frame: contextTime * sampleRate, atMs: performanceTime}
+    this.lastOutputPoint = point
+    if (this.cancel !== null && this.cancelUpperFrame === null
+      && point.atMs - this.roundingMarginMs >= this.cancel.upperMs) {
+      this.cancelUpperFrame = Math.ceil(point.frame) + 1
+      if (this.cancelLowerFrame === null || this.cancelUpperFrame < this.cancelLowerFrame) {
+        this.fail('audit_cancel_anchor_missing'); return
+      }
+      for (const row of this.cancelPending) this.classify(row)
+      this.cancelPending = []
+    }
+    const passedFrame = Math.max(0, Math.floor(point.frame) - 1)
     while (this.pending.length && this.pending[0].endFrame <= passedFrame) {
-      const row = this.pending[0]
-      const at = (f: number) => performanceTime + (f / sampleRate - contextTime) * 1000
-      if (at(row.endFrame) > observedAtMs) break
-      if (at(row.startFrame) < 0) {
-        this.clockFailure = {stage: 'negative_output_time', values: {contextTime, performanceTime, observedAtMs, startFrame: row.startFrame}}
-        this.fail('audit_output_clock_invalid'); return
-      }
-      if (this.lastOutputEndAt !== null && at(row.startFrame) < this.lastOutputEndAt - 0.001) {
-        this.clockFailure = {stage: 'mapped_interval_regression', values: {contextTime, performanceTime, observedAtMs,
-          previousOutputEndAtMs: this.lastOutputEndAt, mappedStartAtMs: at(row.startFrame), startFrame: row.startFrame,
-          deltaMs: at(row.startFrame) - this.lastOutputEndAt}}
-        this.fail('audit_output_clock_invalid'); return;
-      }
-      this.pending.shift(); this.passed = row.endFrame; this.count++
-      this.firstOutputAt ??= at(row.startFrame)
-      this.lastOutputEndAt = at(row.endFrame)
-      if (this.cancel !== null && row.nonzeroSamples > 0) {
-        const first = row.firstNonzeroFrame!, last = row.lastNonzeroFrame!
-        // sample区間が境界をまたぐ場合も提示の可能性を残す。浮動小数点の
-        // 丸めで境界sampleをゼロへ落とさず、上下限が一致しない場合は未確定にする。
-        const beforeUpper = Math.max(0, Math.min(last - first + 1,
-          Math.ceil((this.cancel.upperMs - at(first)) * 48 + 1e-6)))
-        const afterLower = Math.max(0, Math.min(last - first + 1,
-          last - first + 1 - Math.floor((this.cancel.lowerMs - at(first)) * 48 - 1e-6)))
-        const lower = Math.max(0, row.nonzeroSamples - beforeUpper)
-        const upper = Math.min(row.nonzeroSamples, afterLower)
-        this.lower += lower; this.upper += upper
-        if (lower !== upper) this.uncertain++
+      const row = this.pending.shift()!
+      this.passed = row.endFrame; this.count++
+      // 表示用の推定時刻。境界の成否やstale件数の判定には使用しない。
+      this.firstOutputAt ??= performanceTime + (row.startFrame / sampleRate - contextTime) * 1000
+      this.lastOutputEndAt = performanceTime + (row.endFrame / sampleRate - contextTime) * 1000
+      if (this.cancel === null) continue
+      if (this.cancelUpperFrame !== null) this.classify(row)
+      else {
+        if (this.cancelPending.length >= 1000) {this.fail('audit_observation_overflow'); return}
+        this.cancelPending.push(row)
       }
     }
+    if (this.cancel !== null && this.finished !== null && this.passed === this.finished
+      && (this.cancelLowerFrame === null || this.cancelUpperFrame === null || this.firstRecorded === null
+        || this.firstRecorded > this.cancelLowerFrame || this.finished <= this.cancelUpperFrame)) {
+      this.fail('audit_cancel_window_unobserved')
+    }
+  }
+
+  private classify(row: GainAuditInterval): void {
+    if (row.nonzeroSamples === 0 || this.cancelLowerFrame === null || this.cancelUpperFrame === null) return
+    const first = row.firstNonzeroFrame!, last = row.lastNonzeroFrame!, span = last - first + 1
+    // lower以後とupper以後を別々に数える。境界をはさむsampleは0へ確定しない。
+    const beforeUpper = Math.max(0, Math.min(span, this.cancelUpperFrame - first))
+    const afterLower = Math.max(0, Math.min(span, last + 1 - this.cancelLowerFrame))
+    const lower = Math.max(0, row.nonzeroSamples - beforeUpper)
+    const upper = Math.min(row.nonzeroSamples, afterLower)
+    this.lower += lower; this.upper += upper
+    if (lower !== upper) this.uncertain++
   }
 
   close(): void {
@@ -214,8 +245,12 @@ export class PostGainOutputAudit {
     const drained = this.missing === null && this.finished !== null
       && this.firstRecorded !== null && this.passed === this.finished && this.pending.length === 0
     return {drained, complete: drained && this.cancel !== null
-      && this.firstOutputAt !== null && this.lastOutputEndAt !== null
-      && this.firstOutputAt <= this.cancel.lowerMs && this.lastOutputEndAt > this.cancel.upperMs,
+      && this.cancelLowerFrame !== null && this.cancelUpperFrame !== null
+      && this.firstRecorded !== null && this.firstRecorded <= this.cancelLowerFrame
+      && this.finished !== null && this.finished > this.cancelUpperFrame,
+    cancelOutputFrameBounds: this.cancelLowerFrame === null || this.cancelUpperFrame === null ? null
+      : {lowerFrame: this.cancelLowerFrame, upperFrame: this.cancelUpperFrame},
+    clockCorrelationMethod: 'bracketing_output_timestamps', timestampRoundingMarginMs: this.roundingMarginMs,
     missingReason: this.missing, cancelBoundsMs: this.cancel === null ? null : {...this.cancel},
     outputClockPassedFrame: this.passed, nonzeroSamplesAfterCancelLower: this.lower,
     firstOutputAtMs: this.firstOutputAt, lastOutputEndAtMs: this.lastOutputEndAt,
@@ -224,5 +259,7 @@ export class PostGainOutputAudit {
     observedIntervals: this.count, observationBoundary: 'post_gain_browser_output_clock'}
   }
 
-  private fail(reason: GainAuditMissingReason): void {this.missing ??= reason; this.pending = []}
+  private fail(reason: GainAuditMissingReason): void {
+    this.missing ??= reason; this.pending = []; this.cancelPending = []
+  }
 }

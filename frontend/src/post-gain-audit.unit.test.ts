@@ -3,73 +3,93 @@ import {expect, test} from 'vitest'
 import {packetRendererSource} from './livekit/packet-renderer'
 import {PostGainOutputAudit, postGainAuditSource, type GainAuditInterval} from './livekit/post-gain-audit'
 
-const row = (start = 48000, n = 0, first: number | null = null, last: number | null = null): GainAuditInterval => ({startFrame: start, endFrame: start + 128,
-  nonzeroSamples: n, firstNonzeroFrame: first, lastNonzeroFrame: last})
-const full = (start = 48000) => row(start, 128, start, start + 127)
+const row = (start = 48000, n = 0, first: number | null = null, last: number | null = null): GainAuditInterval => ({
+  startFrame: start, endFrame: start + 128, nonzeroSamples: n, firstNonzeroFrame: first, lastNonzeroFrame: last})
+const full = (start: number) => row(start, 128, start, start + 127)
 const push = (a: PostGainOutputAudit, rows: GainAuditInterval[]) => a.record({kind: 'output', intervals: rows, confirmedFrame: rows.at(-1)!.startFrame})
-const finish = (a: PostGainOutputAudit) => a.record({kind: 'finished', endFrame: 48256})
-const poll = (a: PostGainOutputAudit, observed = 2100) => a.poll({contextTime: 2, performanceTime: 2000}, 48000, observed)
-test('停止前の音声と停止後の観測済み無音を分ける', () => {
-  const a = new PostGainOutputAudit(); push(a, [full(), row(48128)]);
-  a.markCancelled({lowerMs: 1003.1, upperMs: 1003.1}, 1003.1); finish(a); poll(a)
-  assert.equal(a.snapshot().complete, true); assert.equal(a.snapshot().nonzeroSamplesAfterCancelUpper, 0)
-  a.markCancelled({lowerMs: 1003.1, upperMs: 1003.1}, 2200); assert.equal(a.snapshot().missingReason, null)
+const finish = (a: PostGainOutputAudit) => a.record({kind: 'finished', endFrame: 50048})
+const before = (a: PostGainOutputAudit) => a.poll({contextTime: 1.009, performanceTime: 1009}, 48000, 1009.5)
+const after = (a: PostGainOutputAudit) => a.poll({contextTime: 1.012, performanceTime: 1012}, 48000, 1012.5)
+const drain = (a: PostGainOutputAudit) => {finish(a); a.poll({contextTime: 1.05, performanceTime: 1050}, 48000, 1051)}
+function fixture(replacements: GainAuditInterval[] = []) {
+  const a = new PostGainOutputAudit()
+  const rows = Array.from({length: 16}, (_, i) => replacements.find(r => r.startFrame === 48000 + i * 128) ?? row(48000 + i * 128))
+  push(a, rows); before(a); a.markCancelled({lowerMs: 1010, upperMs: 1010}, 1010)
+  return a
+}
+
+// 1.009秒のbinary浮動小数点と外側1 sampleの余裕を含め、lowerは48430へ丸める。
+test('cancel前後の観測点からframe上下限を求め、前の音声をstaleへ数えない', () => {
+  const a = fixture([full(48000)]); after(a); drain(a)
+  expect(a.snapshot()).toMatchObject({complete: true, missingReason: null, nonzeroSamplesAfterCancelUpper: 0,
+    cancelOutputFrameBounds: {lowerFrame: 48430, upperFrame: 48577}, clockCorrelationMethod: 'bracketing_output_timestamps'})
+  a.markCancelled({lowerMs: 1010, upperMs: 1010}, 1100)
+  expect(a.snapshot().complete).toBe(true)
 })
-test('停止前にrenderされた未出力の旧音声を後から数える', () => {
-  const a = new PostGainOutputAudit(); push(a, [row(), full(48128)])
-  a.markCancelled({lowerMs: 1001.3, upperMs: 1001.3}, 1001.3); finish(a); poll(a)
-  assert.equal(a.snapshot().complete, true)
-  assert.equal(a.snapshot().nonzeroSamplesAfterCancelLower, 128)
-  assert.equal(a.snapshot().nonzeroSamplesAfterCancelUpper, 128)
+test('cancel時にrender済みで出力待ちの旧音声を落とさない', () => {
+  const a = fixture([full(48768)]); after(a); drain(a)
+  expect(a.snapshot()).toMatchObject({complete: true, nonzeroSamplesAfterCancelLower: 128, nonzeroSamplesAfterCancelUpper: 128})
 })
-test('cancel境界をまたぐ1 sampleをゼロと断定しない', () => {
-  const a = new PostGainOutputAudit(); push(a, [row(48000, 1, 48010, 48010), row(48128)])
-  a.markCancelled({lowerMs: 1000.218, upperMs: 1000.218}, 1000.218); finish(a); poll(a)
-  assert.equal(a.snapshot().nonzeroSamplesAfterCancelLower, 0)
-  assert.equal(a.snapshot().nonzeroSamplesAfterCancelUpper, 1)
-  assert.equal(a.snapshot().boundaryUncertainIntervals, 1)
+test('境界の範囲内にある1 sampleをゼロと断定しない', () => {
+  const a = fixture([row(48512, 1, 48520, 48520)]); after(a); drain(a)
+  expect(a.snapshot()).toMatchObject({complete: true, nonzeroSamplesAfterCancelLower: 0,
+    nonzeroSamplesAfterCancelUpper: 1, boundaryUncertainIntervals: 1})
 })
-test('音声出力時計とperformance時計の双方が末尾を通るまで待つ', () => {
-  const a = new PostGainOutputAudit(); push(a, [row(), row(48128)])
-  a.markCancelled({lowerMs: 1001, upperMs: 1001}, 1001); finish(a); poll(a, 1001)
-  assert.equal(a.snapshot().complete, false); assert.equal(a.snapshot().observedIntervals, 0)
-  poll(a); assert.equal(a.snapshot().complete, true)
+test('cancel後の観測点がまだない間に通過した区間も分類まで保持する', () => {
+  const a = fixture([full(48384)])
+  a.poll({contextTime: 1.012, performanceTime: 1009.9}, 48000, 1010.5)
+  expect(a.snapshot().cancelOutputFrameBounds).toBeNull()
+  a.poll({contextTime: 1.013, performanceTime: 1013}, 48000, 1013.5); drain(a)
+  expect(a.snapshot()).toMatchObject({complete: true, nonzeroSamplesAfterCancelUpper: 82, nonzeroSamplesAfterCancelLower: 0})
 })
-test('観測がcancel時点を含まない場合は完了にしない', () => {
-  for (const time of [999, 1010]) {
-    const a = new PostGainOutputAudit(); push(a, [row(), row(48128)])
-    a.markCancelled({lowerMs: time, upperMs: time}, time); finish(a); poll(a)
-    assert.equal(a.snapshot().complete, false)
-  }
+test('未来のtimestampを観測済みのanchorや出力済みへ採用しない', () => {
+  const a = fixture([full(48768)])
+  a.poll({contextTime: 1.012, performanceTime: 1012}, 48000, 1011)
+  expect(a.snapshot().cancelOutputFrameBounds).toBeNull()
+  expect(a.snapshot().observedIntervals).toBe(3)
+  after(a); drain(a); expect(a.snapshot().complete).toBe(true)
 })
-test('出力区間の欠落・重複を明示欠測にする', () => {
+test('cancel前anchorの欠測や観測窓不足はdrain成功と区別する', () => {
+  const a = new PostGainOutputAudit(); push(a, [row()]); a.markCancelled({lowerMs: 1010, upperMs: 1010}, 1010)
+  expect(a.snapshot()).toMatchObject({complete: false, missingReason: 'audit_cancel_anchor_missing'})
+  const b = fixture(); b.poll({contextTime: 1.06, performanceTime: 1060}, 48000, 1061); finish(b)
+  b.poll({contextTime: 1.07, performanceTime: 1070}, 48000, 1071)
+  expect(b.snapshot()).toMatchObject({complete: false, missingReason: 'audit_cancel_window_unobserved'})
+})
+test('sample区間の欠落・重複を明示欠測にする', () => {
   for (const next of [48000, 48256]) {
     const a = new PostGainOutputAudit(); push(a, [row(), row(next)])
-    assert.equal(a.snapshot().missingReason, 'audit_output_gap')
+    expect(a.snapshot().missingReason).toBe('audit_output_gap')
   }
 })
-test('stop相当の早期closeで未出力を消してゼロにしない', () => {
-  const a = new PostGainOutputAudit(); push(a, [row(), full(48128)])
-  a.markCancelled({lowerMs: 1001, upperMs: 1001}, 1001); finish(a); a.close()
-  assert.equal(a.snapshot().complete, false); assert.equal(a.snapshot().missingReason, 'audit_closed_before_drain')
+test('早期closeで未出力を消してゼロにしない', () => {
+  const a = fixture([full(48768)]); after(a); finish(a); a.close()
+  expect(a.snapshot()).toMatchObject({complete: false, missingReason: 'audit_closed_before_drain'})
 })
-test('過去のcancel後付けと時計逆行を欠測にする', () => {
-  const a = new PostGainOutputAudit(); push(a, [row()]); poll(a)
-  a.markCancelled({lowerMs: 1001, upperMs: 1001}, 2200)
-  assert.equal(a.snapshot().missingReason, 'audit_cancel_clock_invalid')
-  const b = new PostGainOutputAudit(); poll(b); b.poll({contextTime: 1, performanceTime: 1000}, 48000, 2200)
-  assert.equal(b.snapshot().missingReason, 'audit_output_clock_invalid')
+test('過去のcancel後付けと実timestamp逆行を拒否する', () => {
+  const a = new PostGainOutputAudit(); before(a); a.markCancelled({lowerMs: 1008, upperMs: 1008}, 1100)
+  expect(a.snapshot().missingReason).toBe('audit_cancel_clock_invalid')
+  const b = new PostGainOutputAudit(); before(b)
+  b.poll({contextTime: 1.008, performanceTime: 1010}, 48000, 1011)
+  expect(b.snapshot()).toMatchObject({missingReason: 'audit_output_clock_invalid', clockFailure: {stage: 'timestamp_regression'}})
 })
-test('整合しない非ゼロsample情報やfinishを拒否する', () => {
+test('整合しないsample情報とfinishを拒否する', () => {
   const a = new PostGainOutputAudit(); push(a, [row(48000, 1, 48010, 48020)])
-  assert.equal(a.snapshot().missingReason, 'audit_interval_invalid')
+  expect(a.snapshot().missingReason).toBe('audit_interval_invalid')
   const b = new PostGainOutputAudit(); push(b, [row()]); finish(b)
-  assert.equal(b.snapshot().missingReason, 'audit_finish_invalid')
+  expect(b.snapshot().missingReason).toBe('audit_finish_invalid')
 })
-test('滞留上限で欠測を残す', () => {
+test('未出力区間が滞留上限を越えた場合は欠測にする', () => {
   const a = new PostGainOutputAudit()
   for (let i = 0; i < 1001; i++) push(a, [row(48000 + i * 128)])
-  assert.equal(a.snapshot().missingReason, 'audit_observation_overflow')
+  expect(a.snapshot().missingReason).toBe('audit_observation_overflow')
+})
+test('別timestampでの外挿が0.232ms逆転しても、直接の前後anchorで範囲を保持する', () => {
+  const a = fixture([row(48512, 1, 48520, 48520)])
+  a.poll({contextTime: 1.012, performanceTime: 1011.768}, 48000, 1012.5); drain(a)
+  expect(a.snapshot()).toMatchObject({complete: true, clockFailure: null, missingReason: null,
+    cancelOutputFrameBounds: {lowerFrame: 48430, upperFrame: 48577},
+    nonzeroSamplesAfterCancelLower: 0, nonzeroSamplesAfterCancelUpper: 1})
 })
 
 test('再生と監視workletを同じmoduleで登録し、波形を変えず観測する', () => {
@@ -123,19 +143,3 @@ function auditProcessor() {
       setFrame(frame); const output = new Float32Array(128); instance.process([[pcm]], [[output]]); return output
     }}
 }
-
-
-test('出力時計の逆行箇所と数値だけを欠測診断に残す', () => {
-  const a = new PostGainOutputAudit(); push(a, [row()])
-  a.poll({contextTime: 1.003, performanceTime: 1003}, 48000, 1004)
-  push(a, [row(48128)])
-  a.poll({contextTime: 1.006, performanceTime: 1005.8}, 48000, 1007)
-  expect(a.snapshot()).toMatchObject({missingReason: 'audit_output_clock_invalid',
-    clockFailure: {stage: 'mapped_interval_regression'}})
-  expect(a.snapshot().clockFailure?.values.deltaMs).toBeCloseTo(-.2)
-  const b = new PostGainOutputAudit()
-  b.poll({contextTime: 1, performanceTime: 1000}, 48000, 1000)
-  b.poll({contextTime: .999, performanceTime: 1001}, 48000, 1001)
-  expect(b.snapshot().clockFailure).toMatchObject({stage: 'timestamp_regression',
-    values: {previousContextTime: 1, contextTime: .999}})
-})
