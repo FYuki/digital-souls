@@ -20,6 +20,7 @@ declare global {
       activeResponseId?: string
       lastTrackMediaResponseId?: string
       lastTrackMediaObservation?: MediaObservation
+      trackMediaObservations?: Record<string, MediaObservation>
       lastPacketPlaybackObservation?: PacketPlaybackObservation
       playbackCompletions?: Record<string, PlaybackCompletion>
       networkObservations?: Record<string, NetworkObservation>
@@ -197,6 +198,10 @@ const installPlaybackProbe = async (page: Page) => {
         if (observation.mediaObservation !== undefined) {
           window.__voiceChatE2E.lastTrackMediaObservation = { ...observation.mediaObservation }
           window.__voiceChatE2E.lastTrackMediaResponseId = observation.mediaTrackResponseId
+          if (observation.mediaTrackResponseId) {
+            window.__voiceChatE2E.trackMediaObservations ??= {}
+            window.__voiceChatE2E.trackMediaObservations[observation.mediaTrackResponseId] = {...observation.mediaObservation}
+          }
         }
         if (observation.mediaResponseId !== undefined && observation.mediaObservation !== undefined) {
           mediaByResponse.set(observation.mediaResponseId, observation.mediaObservation)

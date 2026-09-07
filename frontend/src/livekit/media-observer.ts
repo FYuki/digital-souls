@@ -1,8 +1,10 @@
 import { opusPacketDecoderSource } from './opus-packet-decoder'
+import {rtpDuplicateFilterSource} from './rtp-duplicate-filter'
 import { WorkerClockCalibration, type ClockBounds } from './worker-clock'
 
 // encoded frameは変更せず通す。workerの生monotonic時刻だけを通知し、main側で較正する。
 export const encodedObserverWorkerSource = `${opusPacketDecoderSource}
+${rtpDuplicateFilterSource}
 self.onmessage = (event) => {
   if (event.data.kind === 'clock' && Number.isInteger(event.data.sequence)) {
     self.postMessage({ kind: 'clock', sequence: event.data.sequence, workerAtMs: performance.now() })
@@ -10,7 +12,8 @@ self.onmessage = (event) => {
 }
 self.onrtctransform = async (event) => {
   const transformer = event.transformer
-  let reported = false, index = 0, decoder = null
+  let reported = false, index = 0, decoder = null, duplicatePackets = 0
+  const duplicateFilter = new RtpDuplicateFilter()
   const decodeFailure = reason => self.postMessage({kind: 'packet_decode_error', reason})
   if (transformer.options?.decodePackets) {
     try { decoder = await OpusPacketDecoder.create(decodeFailure); self.postMessage({kind: 'decoder_ready'}) }
@@ -35,7 +38,7 @@ self.onrtctransform = async (event) => {
   }
   const observer = new TransformStream({
     transform(frame, controller) {
-      const workerAtMs = performance.now(), packetIndex = index++
+      const workerAtMs = performance.now()
       let packet, payload
       try {
         const metadata = frame.getMetadata()
@@ -56,6 +59,13 @@ self.onrtctransform = async (event) => {
         self.postMessage({ kind: 'encoded', workerAtMs, ...(packet ? { packet } : {}) })
       }
       if (payload && decoder !== null && !decoder.failed) {
+        if (!packet) {decoder.fail('packet_metadata_or_codec_invalid'); return}
+        const classification = duplicateFilter.accept(packet, payload)
+        if (classification === 'duplicate') {
+          self.postMessage({kind: 'packet_duplicate', count: ++duplicatePackets}); return
+        }
+        if (classification === 'conflict') {decoder.fail('rtp_packet_payload_conflict'); return}
+        const packetIndex = index++
         // 観測側の停滞でnativeを止めない。待機packetは最大1秒分、別に復号中1件。
         if (pending.length >= 50) { pending.length = 0; decoder.fail('opus_decode_queue_overflow') }
         else { pending.push({payload, packetIndex, packet}); void drain() }
@@ -70,6 +80,7 @@ self.onrtctransform = async (event) => {
 
 export type MediaObservation = Readonly<{
   trackReceivedAtMs: number
+  duplicateEncodedPackets?: number
   // scalarは上下限の下限。packet受信→配送の差分を過小評価しない。
   firstEncodedFrameAtMs?: number
   firstEncodedFrameAtBoundsMs?: ClockBounds
@@ -104,7 +115,7 @@ export type DecodedAudioPacket = Readonly<{
 }>
 
 type RawEncodedPacket = { rtpTimestamp: number; source: number; receivedAtWorkerMs: number }
-type WorkerObservation = { kind: string; sequence?: number; workerAtMs?: number; packet?: RawEncodedPacket; packetIndex?: number; samples?: number; reason?: string; pcm?: Float32Array }
+type WorkerObservation = { kind: string; count?: number; sequence?: number; workerAtMs?: number; packet?: RawEncodedPacket; packetIndex?: number; samples?: number; reason?: string; pcm?: Float32Array }
 type EncodedPacket = { rtpTimestamp: number; source: number; receivedAtMs: number }
 const validU32 = (value: number) => Number.isInteger(value) && value >= 0 && value <= 0xffffffff
 const packetKey = (packet: Pick<EncodedPacket, 'source' | 'rtpTimestamp'>) => `${packet.source}:${packet.rtpTimestamp}`
@@ -229,6 +240,10 @@ export class RemoteMediaObserver {
           this.applyEncodedObservation()
         } else if (event.data.kind === 'decoder_ready') {
           this.decoderReady = true
+        } else if (event.data.kind === 'packet_duplicate') {
+          if (!Number.isSafeInteger(event.data.count) || event.data.count! < 1) {this.failEncoded(); return}
+          this.evidence.duplicateEncodedPackets = event.data.count
+          this.publish()
         } else if (event.data.kind === 'pcm') {
           const data = event.data, packet = data.packet
           const received = packet && this.clock.toMain(packet.receivedAtWorkerMs)

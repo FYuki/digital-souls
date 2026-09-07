@@ -294,7 +294,8 @@ test('close後のdecode通知を無視する', () => {
 })
 
 
-test.each([false, true])('独立decodeの待機やqueue超過でもnative frame配送を止めない（overflow=%s）', async overflow => {
+test.each(['normal', 'overflow', 'duplicate'])('独立decodeの待機・重複・queue超過をnative frame配送と分離する（%s）', async mode => {
+  const overflow = mode === 'overflow'
   const reported: {kind: string; packetIndex?: number; reason?: string}[] = []
   const delivered: unknown[] = []
   let output!: (frame: unknown) => void
@@ -314,6 +315,7 @@ test.each([false, true])('独立decodeの待機やqueue超過でもnative frame�
     data: new Uint8Array([0x98, 1]).buffer,
     getMetadata: () => ({receiveTime: 1, rtpTimestamp: 9 + index * 960, synchronizationSource: 7, mimeType: 'audio/opus'}),
   }))
+  if (mode === 'duplicate') frames.splice(1, 0, frames[0])
   const worker: {onrtctransform?: (event: unknown) => Promise<void>; postMessage: (row: typeof reported[number]) => void} = {
     postMessage: row => reported.push(row),
   }
@@ -321,7 +323,7 @@ test.each([false, true])('独立decodeの待機やqueue超過でもnative frame�
     worker, TransformStream, Decoder, class {},
   )
   await worker.onrtctransform?.({transformer: {
-    options: {decodePackets: true},
+    options: {decodePackets: true, emitPcm: mode === 'duplicate'},
     readable: new ReadableStream({start(controller) {for (const frame of frames) controller.enqueue(frame); controller.close()}}),
     writable: new WritableStream({write(frame) {delivered.push(frame)}}),
   }})
@@ -337,6 +339,10 @@ test.each([false, true])('独立decodeの待機やqueue超過でもnative frame�
     }
     expect(reported.filter(row => row.kind === 'packet_decoded')).toHaveLength(1)
     expect(requests).toHaveLength(count)
+    if (mode === 'duplicate') {
+      expect(reported).toContainEqual({kind: 'packet_duplicate', count: 1})
+      expect(reported.filter(row => row.kind === 'pcm').map(row => row.packetIndex)).toEqual([0, 1])
+    }
   }
   await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
 })

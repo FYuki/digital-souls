@@ -125,6 +125,7 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
   } finally {
     record.evidence = await page.evaluate(() => ({
       media_packet_losses: window.__voiceChatE2E.mediaPacketLosses ?? [],
+      track_media_observations: window.__voiceChatE2E.trackMediaObservations ?? {},
       packet_outputs: window.__voicePacketOutputs ?? [],
       packet_output_overflow: window.__voicePacketOutputOverflow ?? false,
       core_events: window.__voiceChatE2E.coreEventDiagnostics,
