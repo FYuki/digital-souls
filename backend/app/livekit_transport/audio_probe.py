@@ -83,6 +83,7 @@ class AudioProbePublisher:
     async def _run(self, probe_id: str, generation: int) -> None:
         rtc = importlib.import_module("livekit.rtc")
         source = pacer = track = publication = None
+        stage = "source"
         try:
             async with asyncio.timeout(PROBE_TIMEOUT_SECONDS):
                 if not self._current(generation):
@@ -90,27 +91,32 @@ class AudioProbePublisher:
                 source = rtc.AudioSource(48000, 1, queue_size_ms=0)
                 pacer = PacedPcmSource(source)
                 track = rtc.LocalAudioTrack.create_audio_track(AUDIO_PROBE_TRACK_PREFIX + probe_id, source)
+                stage = "publish_track"
                 publication = await self._room.local_participant.publish_track(track,
                     rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE, dtx=False))
                 self._sid = publication.sid
                 if self._pending_ready_sid == self._sid:
                     self._ready.set()
+                stage = "ready"
                 await asyncio.wait_for(self._ready.wait(), READY_TIMEOUT_SECONDS)
                 if not self._current(generation):
                     return
+                stage = "capture"
                 await pacer.publish(probe_pcm())
                 await pacer.finish()
                 if not self._current(generation):
                     return
+                stage = "finish_notification"
                 self._accept_complete = True
                 await self._publish({"protocol_version": "1.0", "type": "audio_probe_finished",
                     "probe_id": probe_id, "generation": generation, "track_sid": publication.sid,
                     "input_sample_count": pacer.input_sample_count, "captured_sample_count": pacer.captured_sample_count,
                     "padding_sample_count": pacer.padding_sample_count})
+                stage = "complete"
                 await asyncio.wait_for(self._complete.wait(), COMPLETE_TIMEOUT_SECONDS)
         except Exception as error:
             # 診断の送信失敗で会話を終了させない。本文・例外文字列を残さずBrowserの失敗判定を待つ。
-            logger.warning("Audio probe failed: type=%s", type(error).__name__)
+            logger.warning("Audio probe failed: stage=%s type=%s", stage, type(error).__name__)
         finally:
             self._accept_complete = False
             try:

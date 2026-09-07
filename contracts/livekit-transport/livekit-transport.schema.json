@@ -165,8 +165,7 @@
         "elapsed_ms": { "type": "integer", "minimum": 0 },
         "missing_frames": { "type": "integer", "minimum": 0 }
       }
-    }
-,
+    },
     "AudioProbeRequest": {
       "type": "object",
       "additionalProperties": false,

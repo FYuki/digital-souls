@@ -180,7 +180,7 @@ def test_failure_never_leaves_sending_track_or_leaks_sdk_details(rig, monkeypatc
         assert all(s.closed for s in rig.sources) and not rig.publications
         assert all(t.muted for t in rig.tracks)
         assert len(rig.frames) == (1 if failure == 'complete_timeout' else 0)
-        assert 'Audio probe failed: type=' in caplog.text
+        assert 'Audio probe failed: stage=' in caplog.text
         assert 'private SDK details' not in caplog.text
     asyncio.run(exercise())
 
