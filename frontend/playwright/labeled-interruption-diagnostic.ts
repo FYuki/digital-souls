@@ -83,10 +83,18 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
       const playing = await page.evaluate(responseId => {
         const state = window.__voiceChatE2E
         return {observedAtMs: performance.now(), active: state.activeResponseId === responseId
-          && (state.activeAudioGraphs ?? 0) > 0 && !state.playbackCompletions?.[responseId]}
+          && (state.activeAudioGraphs ?? 0) > 0 && !state.playbackCompletions?.[responseId],
+          initialPlayback: {response_id: responseId,
+            track_response_matches: state.lastTrackMediaResponseId === responseId,
+            track_media_observation: state.lastTrackMediaObservation,
+            packet_playback_observation: state.lastPacketPlaybackObservation}}
       }, cycle.responseId)
-      trial.injection_playback = playing
+      trial.injection_playback = {observedAtMs: playing.observedAtMs, active: playing.active}
+      // 割り込み後の別応答に上書きされる前に、旧応答の初回packet証拠を保存する。
+      trial.initial_playback = playing.initialPlayback
       expect(playing.active).toBe(true)
+      expect(playing.initialPlayback.track_response_matches).toBe(true)
+      expect(playing.initialPlayback.packet_playback_observation?.firstOutputAtMs).toBeCloseTo(cycle.startedAt!, 3)
       stage = 'fixture_and_decision'
       await page.evaluate(next => window.__voiceFixtureClock!.replay(next), interruption)
       await page.waitForFunction(() => window.__voiceFixtureClock?.finished, undefined, {timeout: 10000})

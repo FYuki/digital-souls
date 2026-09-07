@@ -749,7 +749,7 @@ def test_turn_preview_waits_for_audio_after_signal_onset(prefix_samples: int) ->
 
         async def preview_turn(self, **request: object) -> str:
             previews.append(request["audio"])
-            return "indeterminate"
+            return "take_turn"
 
     def schedule(operation: Awaitable[None]) -> None:
         task = asyncio.create_task(operation)

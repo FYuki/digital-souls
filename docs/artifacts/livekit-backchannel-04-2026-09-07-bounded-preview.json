@@ -1,0 +1,54 @@
+{
+  "scope": "labeled_livekit_backchannel_cohort_report",
+  "quantile_method": "hyndman_fan_type_7",
+  "cohort": "backchannel",
+  "counts": {
+    "expected": 4,
+    "recorded": 4,
+    "independent_sessions": 4,
+    "success": 2,
+    "failure": 2,
+    "verified_injection": 4,
+    "session_end_confirmed": 4,
+    "backchannel_decision": 2,
+    "observed_server_cancel": 0,
+    "observed_local_stop": 0
+  },
+  "failure_stages": {
+    "fixture_and_decision": 2
+  },
+  "metrics": [
+    {
+      "name": "backchannel_false_cancel",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "labeled_backchannel_injected",
+      "end_point": "old_response_full_output_or_cancel",
+      "trial_count": 4,
+      "success_count": 4,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 4,
+      "failure_rate_basis_points": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    }
+  ],
+  "evaluation": {
+    "minimum_trials": 100,
+    "coverage_complete": true,
+    "false_cancel_rate_passed": false
+  },
+  "metric_schema_sha256": "2d331448f38a27474f23d7d5631d2c1ab15b097e54dcf70ad153cce63fbe34b9",
+  "labeled_manifest_sha256": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3",
+  "raw_manifest_sha256": "f807604f28d50313a3df6430acf5064c715d50846ef2c878898dd187eed57dbc",
+  "raw_trace_sha256": "f91709aa3c7b571f63a9ef853091e75c102b526aedb0a2daa65a07ffd7509950",
+  "reporter_sha256": "7f4e4941a9f15e051640a8e6ec834c4976fc3f7cbade2d33c08d6849586dbfcf",
+  "playback_validator_sha256": "63e26986ca6f117b947cc51a7b8037f56edeedc5f3863835fc22b7c605b18faa",
+  "shared_reporter_sha256": "3315e86505809d231a059a34597199a65912593ae07a699323a79a6cc7132f2a"
+}

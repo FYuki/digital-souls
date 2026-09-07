@@ -72,6 +72,7 @@ STT_MAX_PENDING_PCM_BYTES = STT_MAX_PENDING_UTTERANCES * STT_MAX_UTTERANCE_PCM_B
 # Whisperはstreaming APIではないため、最初の静音閾値超過から800msのsnapshotを先行認識する。
 # 発話前のpre-rollの長さをこの800msへ含めない。
 STT_TURN_PREVIEW_PCM_BYTES = int(STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 0.8)
+STT_TURN_PREVIEW_MAX_ATTEMPTS = 3
 # 発話確認までの遅れを含め、通知前の語頭をmedia側で最大2秒保持する。
 # #150の固定fixtureで確認通知が語頭から1,440ms遅れる条件があり、800msでは語頭を失う。
 STT_MICROPHONE_PREROLL_BYTES = STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 2
@@ -804,7 +805,9 @@ class _UserAudioCapture:
     finalization_scheduled: bool = False
     media_tail_elapsed: bool = False
     capacity_exceeded: bool = False
-    preview_started: bool = False
+    preview_attempts: int = 0
+    preview_complete: bool = False
+    preview_last_signal_samples: int = 0
     preview_signal: SttSignalSpan = field(default_factory=SttSignalSpan)
     preparation_started: bool = False
     quiet_samples: int = 0
@@ -942,33 +945,37 @@ class _ConversationCoreBridge:
         elif not capture.capacity_exceeded:
             capture.pcm.extend(pcm)
         self._consider_stt_preparation(capture, pcm)
-        if (
-            capture.interrupted_response_id is not None
-            and not capture.preview_started
-            and not capture.finalized
-            and not capture.capacity_exceeded
-            and not self._transcription_active
-            and getattr(self._session, "accepting_input", True)
-            and capture.preview_signal.sample_count(capture.pcm) * PCM_SAMPLE_WIDTH_BYTES >= STT_TURN_PREVIEW_PCM_BYTES
-        ):
-            capture.preview_started = True
-            self._transcription_active = True
-            if self._measurement is not None:
-                for name, value in {
-                    "stt_preview_raw_samples": len(capture.pcm) // PCM_SAMPLE_WIDTH_BYTES,
-                    "stt_preview_signal_span_samples": capture.preview_signal.sample_count(capture.pcm),
-                }.items():
-                    self._measurement.record_utterance_event(
-                        utterance_id=capture.utterance_id, name=name, stage="stt_preview", value=value,
-                    )
-            self._schedule(
-                self._preview_user_turn(
-                    utterance_id=capture.utterance_id,
-                    interrupted_response_id=capture.interrupted_response_id,
-                    microphone_pcm=bytes(capture.pcm),
-                )
-            )
+        self._consider_turn_preview(capture)
         self._schedule_finalization_if_ready(capture)
+
+    def _consider_turn_preview(self, capture: _UserAudioCapture) -> None:
+        if (capture.interrupted_response_id is None or capture.preview_complete
+                or capture.preview_attempts >= STT_TURN_PREVIEW_MAX_ATTEMPTS
+                or capture.finalized or capture.capacity_exceeded or self._transcription_active
+                or not getattr(self._session, "accepting_input", True)
+                or not any(item is capture for item in self._user_audio_captures)):
+            return
+        signal_samples = capture.preview_signal.sample_count(capture.pcm)
+        if (signal_samples - capture.preview_last_signal_samples) * PCM_SAMPLE_WIDTH_BYTES < STT_TURN_PREVIEW_PCM_BYTES:
+            return
+        # 相槌で始まる長い発話は追加800msで再評価する。全体STTを優先し、最大3回に限定する。
+        capture.preview_attempts += 1
+        capture.preview_last_signal_samples = signal_samples
+        self._transcription_active = True
+        if self._measurement is not None:
+            suffix = "" if capture.preview_attempts == 1 else f"_attempt_{capture.preview_attempts}"
+            for name, value in {
+                "stt_preview_raw_samples": len(capture.pcm) // PCM_SAMPLE_WIDTH_BYTES,
+                "stt_preview_signal_span_samples": signal_samples,
+            }.items():
+                self._measurement.record_utterance_event(
+                    utterance_id=capture.utterance_id, name=name + suffix, stage="stt_preview", value=value,
+                )
+        self._schedule(self._preview_user_turn(
+            utterance_id=capture.utterance_id,
+            interrupted_response_id=capture.interrupted_response_id,
+            microphone_pcm=bytes(capture.pcm), capture=capture,
+        ))
 
     def _consider_stt_preparation(self, capture: _UserAudioCapture, pcm: bytes) -> None:
         if (capture.preparation_started or capture.finalized or capture.capacity_exceeded
@@ -1022,19 +1029,39 @@ class _ConversationCoreBridge:
         utterance_id: str,
         interrupted_response_id: str,
         microphone_pcm: bytes,
+        capture: _UserAudioCapture | None = None,
     ) -> None:
+        attempt = capture.preview_attempts if capture is not None else 1
         try:
-            await self._session.preview_turn(
+            if not getattr(self._session, "accepting_input", True):
+                return
+            if self._measurement is not None:
+                self._measurement.record_utterance_event(
+                    utterance_id=utterance_id, name=f"stt_preview_attempt_{attempt}_started", stage="stt_preview",
+                )
+            decision = await self._session.preview_turn(
                 utterance_id=utterance_id,
                 audio=prepare_stt_audio(microphone_pcm)[0],
                 interrupted_response_id=interrupted_response_id,
             )
+            if capture is not None:
+                capture.preview_complete = decision == "take_turn"
+            if self._measurement is not None:
+                self._measurement.record_utterance_event(
+                    utterance_id=utterance_id, name=f"stt_preview_attempt_{attempt}_completed", stage="stt_preview",
+                )
+        except asyncio.CancelledError:
+            if capture is not None:
+                capture.preview_complete = True
+            raise
         except Exception:
-            # 冒頭認識はlatency最適化であり、失敗時も発話全体のSTTで確定できる。
+            # 先行認識の失敗時も発話全体のSTTで確定できる。
             logger.exception("Turn preview failed: utterance_id=%s", utterance_id)
         finally:
             self._transcription_active = False
             self._start_next_transcription()
+            if capture is not None:
+                self._consider_turn_preview(capture)
 
     def _schedule_finalization_if_ready(self, capture: _UserAudioCapture) -> None:
         if (

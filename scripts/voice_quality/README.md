@@ -163,3 +163,21 @@ PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/report_take_tu
 音声投入時計が20msより不確かな試行は投入未検証として残す。見逃し率の有効投入分母とは別に期待数・記録数・投入未検証数を保持し、投入・終了・独立性のいずれかが未確認なら100件条件の合格を認めない。取得分のp95が閾値以内でも欠測があればlatencyの評価は不合格にする。正常cancelを通常応答の処理失敗へ加算しない。
 
 local stopは元の発話開始時刻と旧responseでBrowser／traceを照合し、cancel ACKが欠測でも独立して計測する。serverのcancel時刻だけが残り、キャンセル通知が観測されないケースは成功cancelへ補完しない。欠測理由は固定の理由コードとし、本文やIDを出力しない。別callbackで取得するBrowser停止・確認時刻は、同じIDとclockで2ms以内の差だけを許す。
+
+
+## 相槌の誤cancelと旧応答の全出力
+
+`--interruption-cohort backchannel --scheduled-fixture --trials 100`で独立sessionの相槌cohortを実行する。割り込み前の旧応答について、初回packetの受信・復号・実出力観測を保存し、後の新応答の観測で上書きしない。
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/report_backchannel.py \
+  --manifest frontend/test-results/livekit-quality/runs/RUN/trial-manifest.json \
+  --trace frontend/test-results/livekit-quality/runs/RUN/runtime-data/voice-metrics/controlled-trace.jsonl \
+  --fixtures frontend/playwright/fixtures/voice-quality-v2/manifest.json \
+  --schema docs/schemas/voice-quality-artifact-v1.schema.json \
+  --output docs/artifacts/backchannel-UNIQUE.json
+```
+
+集計は全件・ラベルhashと順序・独立session・投入時計を照合する。local stopとserver cancelは個別に数え、片方だけでも誤cancelとして扱う。通知がない試行でも、同じ旧応答の初回packet、source sample総数、連続RTP、全出力時計、対象音声終了までの再生継続を確認できなければ欠測にする。欠測は全試行の分母へ残し、観測・終了の全coverageと最低100件が揃うまで誤cancel率を合格にしない。
+
+相槌と認識できなかった試行でも、旧音声の全出力継続を直接証明できれば「誤cancelなし」には数えられる。分類済み件数は別に報告し、この指標の合格をVADの未検出や冒頭／終了境界の合格へ広げない。誤cancelはこの品質指標のfailureであり、正常な割り込みcancelを通常応答の処理失敗へ混ぜない。出力のmetric schema・匿名性・raw入力と集計器／検証器のhashを確認し、既存artifactを上書きしない。

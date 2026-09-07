@@ -683,3 +683,30 @@ Backend単体・結合は3,920件成功・1件skip、Frontend単体463件・結�
 前の20件ではpreviewがtake-turn 15件・indeterminate 3件・VAD未確定2件だった。今回は20件すべてpreviewがtake-turnとなった。実際のpreview入力時点でcapture全体は34,720〜42,240 samples、最初の静音閾値超過以降は12,806〜12,955 samples（約800.4〜809.7ms）であり、新しい数値traceで区別できる。本文・波形は匿名artifactへ含めない。
 
 この20件はthink:false・RAGなしの診断で、最低100件の見逃し率評価は不合格のまま保存した。VADの確定条件は変えておらず、今回の未検出0件を位相依存の取りこぼし解消とはみなさない。全100素材・相槌への影響・その他の受け入れ条件は別途検証が必要である。
+
+
+## 2026-09-07: 全100素材で相槌から始まる発話の判断遅れを確認する
+
+`932a885`を固定した[実接続take-turn全100件](artifacts/livekit-take-turn-100-2026-09-07-preview-onset.json)は72成功・28失敗で不合格だった。VAD未確定1件、sourceStartの時計幅が約24.1msで20ms上限を超えた1件、先行判定backchannelの後に最終take-turnへ変わるが旧応答の実出力が既に完了していた26件である。26件すべてでBrowserの旧応答完了時刻が最終take-turn受信より早いことを照合した。
+
+| 指標 | 分母 | 取得 | 欠測 | p95（取得分） |
+|---|---:|---:|---:|---:|
+| local playback stop | 100 | 98 | 2 | 3,684.95ms |
+| turn decision | 100 | 98 | 2 | 3,684.1ms |
+| decision後cancel | 100 | 72 | 28 | 約6.26ms |
+| 発話開始からcancel確認 | 100 | 72 | 28 | 1,196.55ms |
+
+投入を検証できた99件のうち27件はキャンセルまで成立しなかった。投入未検証1件を除いて分母を縮めることはせず、全100件条件は未達とした。明示終了100/100、所有Frontend・Backend削除を確認し、raw runを保存した。短い発話中心の先頭20件で全成功していても、長い素材を含む品質は証明できなかった。
+
+先行認識を一度だけ行う制限を見直し、backchannel／indeterminateの後は追加800msを受信するごとに最大3回まで再判定する修正を追加する。take-turnを選んだ後、capture終了、入力受付終了、容量超過、preview taskのcancel後には再開しない。処理中のSTTと並行させず、待機中の発話全体STTを優先する。繰り返しの入力長と開始／終了はattempt別の数値traceへ記録する。音声を削ったり、相槌の分類語彙を変更したりはしない。
+
+修正前は追加音声による再判定等の4テストが失敗、修正候補では5件成功した。さらに処理cancel時に再実行を作ってしまう問題を1件で再現して修正し、6件成功を確認した。本体へ適用後の関連Backend131件、Backend／環境の型検査231ファイル、Frontend型検査、Ruffが成功した。実接続による再判定の効果と相槌への影響は別途測定する。
+
+
+## 2026-09-07: 相槌の誤cancelを全出力証拠と照合する
+
+割り込み前に旧応答の初回packetとtrackの観測を固定し、終了時の全出力観測と同じresponseで結べるようにした。`report_backchannel.py`は既存のpacket／全出力検証器を使い、初回出力時計・source sample総数・RTP連続性・対象音声終了までの全出力を検証する。local stopとserver cancelの片方だけでも誤cancelとして数え、出力を確認できない試行は欠測とする。全cohort、独立session、投入境界、終了、匿名性、metric schemaと検証器hashも確認する。
+
+[再判定修正後の実相槌4件](artifacts/livekit-backchannel-04-2026-09-07-bounded-preview.json)は、Playwrightの分類完了条件では2成功・2失敗だった。失敗2件はcandidateからmisfireとなり、分類へ進まなかった。4件すべてで旧応答が全sampleを出力したことをsource／packet／出力時計から照合でき、local stop・server cancelは0件だった。したがって誤cancel指標は取得4・欠測0・誤cancel0だが、最低100件を満たさず不合格のままとする。相槌のVAD未検出2件をこの指標の成功で隠さず、分類済み2/4と別に報告する。全4件の明示終了と所有Frontend・Backendコンテナ削除を確認した。
+
+集計器の単体22件では、誤停止単独・誤cancel単独、2%境界、入力不足、時計・source・response不一致、未完了音声、欠測の分母維持、匿名性を検証した。全体STTの優先と入力終了後の再判定防止を加え、関連Backend133件が成功した。take-turn全100件と相槌100件での再判定の効果はまだ未検証である。
