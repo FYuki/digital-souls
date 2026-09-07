@@ -1346,3 +1346,31 @@ SDK自身の復旧時間には障害が継続している時間も含まれる�
 
 session・障害操作子・診断reader終了、所有Frontend・Backendの実削除、専用SFUとnetworkの削除を確認した。
 次はBackend SDKの再接続開始から完了までの待機を調査し、実接続で改善を検証する。
+
+
+### 実障害22: SDK再試行待ちを実測で確認（2026-09-08）
+
+`0dc00405458ca2b042468bb41aac049ec2ce5f82`の[単独診断](artifacts/livekit-reconnect-pilot-2026-09-08-22.json)は、
+制御5,292.288ms、音声・双方5,610.882msで、3秒目標を満たさなかった。
+診断音10,560 sample・11 packetの全出力、次の同session会話の成功、
+重複・欠測・出力経路エラー0を確認した。今回のBrowser SDKの最終切断は観測されなかった。
+
+BackendのSDKログで、6回目の再接続失敗から7回目の試行まで5,128msの間隔を確認した。
+各接続失敗はconnection refusedで数msから数十msで返っており、
+1回の接続timeoutを短縮しても、この試行間の待機を解消できない。
+この間隔は診断reader内の単調時計で測ったログ受信間隔であり、
+Backend時計やBrowser時計との直接減算、および受け入れ指標への代用はしない。
+Backend自身の状態準備は0ms、状態送信は40msだった。
+
+[Python SDK 1.1.16のビルド設定](https://github.com/livekit/python-sdks/blob/rtc-v1.1.16/livekit-rtc/pyproject.toml)は、
+固定したRust submoduleのdownload_ffi.pyからFFI 0.12.73を取得する。
+[FFIリリース](https://github.com/livekit/rust-sdks/releases/tag/livekit-ffi/v0.12.73)も同じ
+`63128d01d955d9d8967544f46cff64a361232bf6`を指す。
+この版の[再試行間隔](https://github.com/livekit/rust-sdks/blob/63128d01d955d9d8967544f46cff64a361232bf6/livekit/src/rtc_engine/reconnect_strategy.rs)は、
+300msを起点とする指数増加とfull jitterを使用し、上限は7秒、最大試行回数は10回である。
+[再接続処理](https://github.com/livekit/rust-sdks/blob/63128d01d955d9d8967544f46cff64a361232bf6/livekit/src/rtc_engine/mod.rs)の
+失敗後の待機と実測は整合する。短い通信断に対する初期の再試行間隔を短縮する変更を、
+配布版に対応したソースの隔離ビルドで検証する。変更の効果はまだ未検証である。
+
+session・障害操作子・診断readerの終了、所有Frontend・Backendの実削除、
+専用SFUとnetworkの削除を確認した。再接続100件および#150全体の受け入れは未完了である。
