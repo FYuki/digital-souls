@@ -1,14 +1,15 @@
-"""独立data rootの実音声pilotと、共有推論環境の数値観測を実行する。"""
+"""独立data rootの実音声pilot／正式100試行と、共有推論環境の数値観測を実行する。"""
 from __future__ import annotations
 
 import argparse
 import json
 import math
 import os
-from pathlib import Path
 import re
 import subprocess
 import time
+from http.client import HTTPException
+from pathlib import Path
 from urllib.request import ProxyHandler, Request, build_opener
 
 from dotenv import dotenv_values
@@ -56,7 +57,7 @@ def probe_residency(endpoint: str, model: str) -> dict[str, object]:
             result: dict[str, object] = {"outcome": "missing", "reason": "residency_response_too_large"}
         else:
             result = residency_values(json.loads(body), model)
-    except Exception:
+    except (OSError, ValueError, HTTPException):
         # URL、認証情報、providerの応答本文を例外から保存しない。
         result = {"outcome": "missing", "reason": "residency_probe_failed"}
     return {"started_ns": started, "completed_ns": time.monotonic_ns(), **result}
@@ -92,13 +93,19 @@ def probe_gpu() -> dict[str, object]:
 
 
 def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
-                      trials: int, disable_thinking: bool, scheduled_fixture: bool = False, continuous_turns: int = 0) -> dict[str, str]:
+                      trials: int, disable_thinking: bool, scheduled_fixture: bool = False, continuous_turns: int = 0,
+                      controlled: bool = False) -> dict[str, str]:
     run_root(run_id)
     if not inference_env.is_file() or not livekit_env.is_file():
         raise ValueError("pilot environment files are unavailable")
     if type(continuous_turns) is not int or not 0 <= continuous_turns <= 10 or (continuous_turns and not scheduled_fixture):
         raise ValueError("continuous track diagnostic requires scheduled fixture and 1 to 10 turns")
-    if not 1 <= trials <= 99:
+    if type(trials) is not int or type(controlled) is not bool:
+        raise ValueError("measurement scope and trial count must be explicit")
+    if controlled:
+        if trials != 100 or not scheduled_fixture or continuous_turns:
+            raise ValueError("controlled measurement requires 100 independent trials and scheduled PCM fixture")
+    elif not 1 <= trials <= 99:
         raise ValueError("pilot trials must be between 1 and 99")
     excluded = ("INFERENCE_TARGET_HEAVY_REASONING", "INFERENCE_TARGET_VISION")
     env = {k: v for k, v in os.environ.items() if not k.startswith(excluded)}
@@ -121,11 +128,14 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
                VOICE_QUALITY_PILOT_TRIALS=str(trials), VOICE_QUALITY_RUN_ID=run_id,
                VOICE_QUALITY_SCHEDULED_FIXTURE="1" if scheduled_fixture else "0",
                VOICE_QUALITY_CONTINUOUS_TURNS=str(continuous_turns))
+    if controlled:
+        # specはpilot設定がない場合だけ5 warm-up＋100独立sessionを実行する。
+        env.pop("VOICE_QUALITY_PILOT_TRIALS", None)
     return env
 
 
 def run(args: argparse.Namespace) -> int:
-    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns)
+    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled)
     reference = env.get("INFERENCE_TARGET_CHAT", "")
     if not reference.startswith("ollama/"):
         raise ValueError("this diagnostic requires an Ollama chat target")
@@ -141,7 +151,7 @@ def run(args: argparse.Namespace) -> int:
         with (base / "inference-runtime.jsonl").open("x") as output:
             sample = 0
             while process.poll() is None:
-                row = {"scope": "pilot_shared_inference_observation", "clock_domain": "observer_monotonic",
+                row = {"scope": "controlled_shared_inference_observation" if args.controlled else "pilot_shared_inference_observation", "clock_domain": "observer_monotonic",
                        "expected_context_tokens": expected_context, "thinking_disabled_for_pilot": args.disable_thinking, "scheduled_fixture": args.scheduled_fixture, "continuous_turns": args.continuous_turns,
                        "ollama": probe_residency(endpoint, model)}
                 if sample % 10 == 0:
@@ -166,9 +176,13 @@ if __name__ == "__main__":
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--inference-env", type=Path, required=True)
     parser.add_argument("--livekit-env", type=Path, default=ROOT / "infra/livekit/.env")
-    parser.add_argument("--trials", type=int, default=3)
+    count_options = parser.add_mutually_exclusive_group()
+    count_options.add_argument("--trials", type=int)
+    count_options.add_argument("--controlled", action="store_true", help="準備5回＋独立100試行。scheduled fixture必須。")
     parser.add_argument("--disable-thinking", action="store_true")
     parser.add_argument("--scheduled-fixture", action="store_true")
     parser.add_argument("--continuous-turns", type=int, default=0,
                         help="同一sessionのtrack切替診断。独立試行artifactとは分離する。")
-    raise SystemExit(run(parser.parse_args()))
+    args = parser.parse_args()
+    args.trials = 100 if args.controlled else (args.trials if args.trials is not None else 3)
+    raise SystemExit(run(args))

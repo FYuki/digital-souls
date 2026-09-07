@@ -431,3 +431,8 @@ PCM16 monoは一括unpackし、2倍sample rateでは元sampleと隣接sampleの�
 `fast-pcm-session-01`は同一session・conversationの10往復、全応答の再生末尾、transcript一致、追加操作0回、明示終了が成功した。10回ともgap 0sample、失敗診断なしだった。正式100試行の安定性や、他cohortの品質まで拡大して合格とは扱わない。
 
 Frontendのproduction buildも成功した。大きいbundleに対するViteの警告は残るが、buildエラーはなかった。
+
+
+## 正式100試行の実行入口
+
+`run_pilot.py --controlled --scheduled-fixture`は、少数pilotの設定を除去し、5 warm-up＋独立100 sessionのspecを選ぶ。`--trials`との同時指定、固定PCM時計なし、連続session診断との混在を拒否する。出力は引き続き新しいrun専用data rootへ保存し、既存runを上書きしない。集計には`python -m app.livekit_pilot_report --scope controlled`を使う。100試行の収集成功と、TTFAや音切れの品質合格は分けて判定する。入口のscope・分母・環境選択を含む関連単体23件が成功した。

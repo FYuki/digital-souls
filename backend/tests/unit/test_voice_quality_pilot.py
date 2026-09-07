@@ -84,3 +84,24 @@ def test_pilot_environment_keeps_existing_generation_options_and_isolates_state(
     assert json.loads(env["INFERENCE_TARGET_CHAT_OPTIONS_JSON"]) == {"temperature": 0.2}
     changed = pilot.pilot_environment(inference, livekit, "fresh-run", 3, True)
     assert json.loads(changed["INFERENCE_TARGET_CHAT_OPTIONS_JSON"]) == {"temperature": 0.2, "think": False}
+
+
+@pytest.mark.parametrize('count,scheduled,continuous,valid', [
+    (100, True, 0, True), (99, True, 0, False), (100, False, 0, False), (100, True, 3, False),
+])
+def test_controlled_run_selects_exact_independent_scope(tmp_path, monkeypatch, count, scheduled, continuous, valid):
+    inference = tmp_path / 'inference.env'
+    inference.write_text('INFERENCE_TARGET_CHAT=ollama/test\n')
+    livekit = tmp_path / 'livekit.env'
+    livekit.write_text('LIVEKIT_KEYS="test-key: test-value"\n')
+    monkeypatch.setenv('VOICE_QUALITY_PILOT_TRIALS', '3')
+    if not valid:
+        with pytest.raises(ValueError):
+            pilot.pilot_environment(inference, livekit, 'controlled-test', count, False, scheduled, continuous, True)
+        return
+    env = pilot.pilot_environment(inference, livekit, 'controlled-test', count, False, scheduled, continuous, True)
+    assert 'VOICE_QUALITY_PILOT_TRIALS' not in env
+    assert env['VOICE_QUALITY_CONTINUOUS_TURNS'] == '0'
+    assert env['VOICE_QUALITY_SCHEDULED_FIXTURE'] == '1'
+    with pytest.raises(ValueError):
+        pilot.pilot_environment(inference, livekit, 'not-a-pilot', 100, False, True)
