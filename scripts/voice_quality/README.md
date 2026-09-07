@@ -320,3 +320,16 @@ backend/.venv/bin/python scripts/voice_quality/run_reconnect_cohort.py \
 VAD診断は各frameの確率・RMS・補助VADの有声割合・スペクトル集中度／平坦度と、モデルのリセット時刻を記録する。
 PCMや本文を診断portへ渡さない。frame・イベント・リセット記録には個別の上限とoverflowフラグを設け、
 古い値を黙って破棄しない。これらの追加観測だけではVADの精度改善や受け入れを証明しない。
+
+
+### 実ブラウザのVAD境界集計
+
+`report_vad.py --manifest <trial-manifest.json> --fixtures frontend/playwright/fixtures/voice-quality-v2/manifest.json --output <匿名集計.json>`
+で、固定ラベルと実ブラウザの検出器イベントを照合する。fixtureのSHA、試行の独立性、元sampleと時刻の因果境界を検査する。
+冒頭／終了誤差は20ms以下の時計区間から上下限を求め、100msの閾値をまたぐ場合は保守的に違反へ数える。
+最初の終了を使用し、後半の終了によって早い分割を隠さない。欠測を分母から外さず、試行数不足・終了未確認も合格にしない。
+
+出力は`docs/schemas/voice-quality-vad-report-v1.schema.json`で許可した集計値のみとし、schema検証後に新規保存する。
+終了コードは境界条件達成0、未達1、入力／schema／保存エラー2。既存の出力を上書きしない。
+これは検出器の境界であり、STTに取り込まれたPCMの冒頭・末尾を証明したものではない。
+`limits`のPCM取込確認・VAD全体受け入れはfalseのまま保持し、文中無音cohortの測定や実取込の証拠を別途要求する。
