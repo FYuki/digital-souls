@@ -45,6 +45,7 @@ vi.mock('livekit-client', () => ({
     Reconnecting: 'reconnecting',
     Reconnected: 'reconnected',
     DataReceived: 'dataReceived',
+    TrackPublished: 'trackPublished',
     TrackSubscribed: 'trackSubscribed',
     TrackUnsubscribed: 'trackUnsubscribed',
     Disconnected: 'disconnected',
@@ -776,6 +777,7 @@ test('診断音は全packetの実出力時計を待ち、会話の再生・Core�
     expect(result).toMatchObject({scope: 'rtc_audio_probe', status: 'captured', cleanupCompleted: true,
       completion: {renderedSamples: 10560, packetCount: 11, gapSamples: 0}})
     expect(result.packetOutputs).toHaveLength(11)
+    expect(result.trackEvents.map(row => [row.nameMatches, row.publisherMatches])).toEqual([[false, true], [true, false], [true, true]])
     expect(JSON.stringify(result.packetOutputs)).not.toContain('"pcm"')
     expect(context.close).toHaveBeenCalledOnce()
     expect(worklet.disconnect).toHaveBeenCalledOnce()

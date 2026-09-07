@@ -1117,3 +1117,11 @@ Frontend全577件、追加のcohort／出力証跡35件、型検査・Ruff・ビ
 Backendの専用test Profile・計測種別・LiveKit URLは実際の起動環境でも有効条件と一致していた。
 原因を切り分けるため、送信失敗ログに固定の処理段階を追加し、例外本文を記録しない。
 session終了、障害操作子の終了、Frontend・Backendコンテナの実削除を確認済み。
+
+### 実障害11: トラック公開後の準備待機でtimeout
+
+`be3c056`でも音声probeは未受信となった。送信側の段階別ログは`ready / TimeoutError`で、
+トラック公開後のBrowser準備通知を受け取れていない。制御復旧444.367ms、次発話成功、session終了・
+障害操作子終了、Frontend・Backendの実削除を確認した。音声はnullのまま失敗分母に残した。
+Browserの診断rawに、公開・購読イベントの時刻とnonce名・送信者の一致判定だけを追加した。
+型検査とRoom関連34件が成功した。任意のtrack名・参加者名はこの追加記録へ含めない。

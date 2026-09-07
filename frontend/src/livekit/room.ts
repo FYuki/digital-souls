@@ -478,9 +478,13 @@ export class LiveKitRoomClient {
         this.failTransport()
       }
     })
+    room.on(RoomEvent.TrackPublished, (publication, participant) => {
+      this.audioProbe?.observeTrack('published', publication.trackName, this.isProbePublisher(participant), publication.kind === Track.Kind.Audio)
+    })
     room.on(
       RoomEvent.TrackSubscribed,
       (track: RemoteTrack, publication: RemoteTrackPublication, _participant: RemoteParticipant) => {
+        this.audioProbe?.observeTrack('subscribed', publication.trackName, this.isProbePublisher(_participant), track.kind === Track.Kind.Audio)
         if (track.kind !== Track.Kind.Audio) return
         const key = publication.trackSid
         if (publication.trackName.startsWith(AUDIO_PROBE_TRACK_PREFIX)) {

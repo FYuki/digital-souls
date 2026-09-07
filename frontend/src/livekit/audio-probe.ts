@@ -5,6 +5,8 @@ import {PacketOutputTracker, packetRendererSource, type PacketRenderInterval,
 import {RtpPacketSequence} from './rtp-packet-sequence'
 
 export const AUDIO_PROBE_TRACK_PREFIX = 'ds-audio-probe-v1:'
+type ProbeTrackEvent = Readonly<{event: 'published' | 'subscribed'; atMs: number; nameMatches: boolean;
+  probePrefix: boolean; publisherMatches: boolean; audio: boolean}>
 type ProbeFailure = 'unavailable' | 'busy' | 'timeout' | 'connection_changed' | 'track_unsubscribed'
   | 'send_failed' | 'audio_graph' | 'media_decoder' | 'rtp_timeline' | 'renderer' | 'output_clock'
   | 'packet_evidence' | 'cleanup_failed'
@@ -13,6 +15,7 @@ export type AudioProbeObservation = Readonly<{
   trackSid: string | null; status: 'captured' | 'failed'; reason?: ProbeFailure
   completedAtMs: number; completion: PlaybackCompletion | null
   packetOutputs: ReadonlyArray<PacketOutputEvidence>; cleanupCompleted: boolean
+  trackEvents: ReadonlyArray<ProbeTrackEvent>
 }>
 type ProbeTrack = Readonly<{receiver?: RTCRtpReceiver; mediaStreamTrack: MediaStreamTrack}>
 type ProbeFrame = Record<string, string | number>
@@ -35,6 +38,7 @@ export class AudioAvailabilityProbe {
   private diagnostic: PacketOutputDiagnostic | null = null
   private readonly sequence = new RtpPacketSequence()
   private readonly rows: PacketOutputEvidence[] = []
+  private readonly trackEvents: ProbeTrackEvent[] = []
   private outputTimer: ReturnType<typeof setInterval> | null = null
   private readonly deadline: ReturnType<typeof setTimeout>
 
@@ -50,6 +54,12 @@ export class AudioAvailabilityProbe {
   }
 
   matchesTrack(name: string): boolean {return name === AUDIO_PROBE_TRACK_PREFIX + this.probeId}
+
+  observeTrack(event: ProbeTrackEvent['event'], name: string, publisherMatches: boolean, audio: boolean): void {
+    if (this.settling || this.trackEvents.length >= 16) return
+    this.trackEvents.push({event, atMs: performance.now(), nameMatches: this.matchesTrack(name),
+      probePrefix: name.startsWith(AUDIO_PROBE_TRACK_PREFIX), publisherMatches, audio})
+  }
 
   attach(track: ProbeTrack, trackSid: string, publisherSid: string): void {
     if (!this.active() || this.trackSid !== null || !/^TR_[A-Za-z0-9_-]{1,100}$/.test(trackSid) || !publisherSid) return
@@ -195,6 +205,6 @@ export class AudioAvailabilityProbe {
     this.resolve({scope: 'rtc_audio_probe', probeId: this.probeId, generation: this.generation,
       requestedAtMs: this.requestedAtMs, trackSid: this.trackSid, completedAtMs: performance.now(),
       status: this.failure ? 'failed' : 'captured', ...(this.failure ? {reason: this.failure} : {}),
-      completion, packetOutputs: [...this.rows], cleanupCompleted})
+      completion, packetOutputs: [...this.rows], cleanupCompleted, trackEvents: [...this.trackEvents]})
   }
 }
