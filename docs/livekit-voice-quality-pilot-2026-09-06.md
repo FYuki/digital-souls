@@ -1573,3 +1573,22 @@ schemaと全件分母、100 session／conversationの独立性、全session終�
 frame／event／model resetの観測overflowはなかった。
 STTへ実際に取り込まれたPCMの境界とVAD全体の受け入れは未検証のfalseを維持する。
 相槌の修正後100件、stale出力、再接続p95などの残条件も引き続き検証する。
+
+
+### 候補保留修正後の相槌100試行
+
+測定版 `43e3a2b0b8d1719d29c7237b9adae48a47036a4f` で、相槌全100音声を独立session／conversationで測定した。
+[相槌集計](artifacts/livekit-backchannel-100-2026-09-08-held.json)は、誤local stop・server cancel各0件、
+投入確認100件、全出力継続の観測欠測0件で、誤cancel率2%以下の条件を満たした。
+[VAD境界](artifacts/livekit-vad-backchannel-100-2026-09-08-held.json)も冒頭遅延・早期終了・分割・境界不確かさ各0件だった。
+検出器の終了遅延上限p95は790.610msだった。
+
+発話権分類は相槌80件、判定保留20件、take-turn 0件だった。
+ラベルとの完全一致を要求するPlaywrightは80成功・20失敗で終了コード1となり、この結果は変更しない。
+判定保留20件も旧応答の全出力を直接照合しているため、誤cancelの分母100件へ含める。
+誤cancel指標の合格を、全分類の成功や全試験の成功と読み替えない。
+
+100件の独立性・全session終了、所有Frontend／Backend計2 containerの実削除、
+実行中imageの版、同梱SDKの実ロード、全schemaと匿名集計の分母を検証した。
+VAD frame／event／model resetの観測overflowはなかった。
+STT実取込のPCM境界、cancel後のstale presented、再接続p95、標準人格・履歴・記憶条件でのTTFAなどは残っている。
