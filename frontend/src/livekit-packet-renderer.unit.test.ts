@@ -11,8 +11,11 @@ const renderer = () => {
     'let currentFrame = 0;' + packetRendererSource + '; return value => {currentFrame = value}')(
     Base, (_name: string, Kind: new (options: unknown) => typeof instance) => {instance = new Kind({processorOptions: {}})},
   )
+  setFrame(0); instance.process([], [[new Float32Array(128)]]);
+  setFrame(128); instance.process([], [[new Float32Array(128)]]);
+  setFrame(256);
   return {messages, send: (data: unknown) => instance.port.onmessage?.({data}),
-    step: (frame: number) => {setFrame(frame); const output = new Float32Array(128); instance.process([], [[output]]); return output}}
+    step: (frame: number) => {setFrame(frame + 256); const output = new Float32Array(128); instance.process([], [[output]]); return output}}
 }
 const packet = (index: number, value = .25) => ({kind: 'pcm', packetIndex: index,
   rtpTimestamp: 99 + index * 960, samples: new Float32Array(960).fill(value)})
@@ -21,11 +24,11 @@ test('入力前と初回buffer中のゼロを応答sampleとして記録しな�
   const p = renderer()
   expect(p.step(0)).toEqual(new Float32Array(128))
   p.send(packet(0))
-  for (let frame = 0; frame < 2880; frame += 128) {
+  for (let frame = 128; frame < 2880; frame += 128) {
     const result = p.step(frame)
     if (frame + 128 <= 2880) expect(result).toEqual(new Float32Array(128))
   }
-  expect(p.messages[0]).toMatchObject({kind: 'rendered', packetIndex: 0, packetSampleOffset: 0, startFrame: 2880})
+  expect(p.messages[0]).toMatchObject({kind: 'rendered', packetIndex: 0, packetSampleOffset: 0, startFrame: 3136})
 })
 
 test('全PCMをpacket内offsetと出力frameへ対応づけ、本文は観測へ含めない', () => {
@@ -37,8 +40,8 @@ test('全PCMをpacket内offsetと出力frameへ対応づけ、本文は観測へ
   expect(output).toEqual([...new Float32Array(960), ...new Float32Array(960).fill(.25)])
   const rendered = p.messages.filter(row => row.kind === 'rendered')
   expect(rendered.reduce((total, row) => total + Number(row.endFrame) - Number(row.startFrame), 0)).toBe(1920)
-  expect(rendered[0]).toMatchObject({packetIndex: 0, packetSampleOffset: 0, startFrame: 2880, energy: 0})
-  expect(rendered.at(-1)).toMatchObject({packetIndex: 1, endFrame: 4800})
+  expect(rendered[0]).toMatchObject({packetIndex: 0, packetSampleOffset: 0, startFrame: 3136, energy: 0})
+  expect(rendered.at(-1)).toMatchObject({packetIndex: 1, endFrame: 5056})
   expect(rendered.every(row => !('samples' in row))).toBe(true)
 })
 
@@ -138,4 +141,30 @@ test('矛盾する総sample数や終了後の追加sampleを拒否する', () =>
   expect(() => tracker.finish({inputSampleCount: 960, capturedSampleCount: 1920, paddingSampleCount: 960})).toThrow()
   tracker.record({...interval, endFrame: 48960})
   expect(() => tracker.record({...interval, packetIndex: 1, rtpTimestamp: 1059, startFrame: 48960, endFrame: 49920})).toThrow()
+})
+
+
+test('公開frameの更新欠落でもPCMを重複・欠落させず、次の時計で確認する', () => {
+  const p = renderer()
+  p.send({...packet(0), samples: Float32Array.from({length: 960}, (_, i) => i / 1000)})
+  const first = p.step(2880)
+  const second = p.step(2880)
+  expect(p.messages).toHaveLength(1)
+  expect(second).not.toEqual(first)
+  const third = p.step(3136)
+  expect([...first, ...second, ...third]).toEqual([...Float32Array.from({length: 384}, (_, i) => i / 1000)])
+  expect(p.messages.map(row => [row.startFrame, row.endFrame, row.renderClockConfirmationFrame]))
+    .toEqual([[3136, 3264, 3136], [3264, 3392, 3392], [3392, 3520, 3392]])
+})
+test('次の公開時計が計数と違う場合は保留した出力を確認済みへ昇格しない', () => {
+  const p = renderer()
+  p.send(packet(0)); p.step(2880); p.step(2880); p.step(3008)
+  expect(p.messages.filter(row => row.kind === 'rendered')).toHaveLength(1)
+  expect(p.messages.at(-1)).toMatchObject({kind: 'error', reason: 'render_clock_unreconciled'})
+})
+test('停止した応答の未照合区間は後から届いた時計で提示済みにしない', () => {
+  const p = renderer()
+  p.send(packet(0)); p.step(2880); p.step(2880); p.send({kind: 'stop'})
+  expect(p.step(3136)).toEqual(new Float32Array(128))
+  expect(p.messages).toHaveLength(1)
 })

@@ -591,7 +591,7 @@ export class LiveKitRoomClient {
     // 任意の例外本文を外へ渡さず、内部の固定エラー名だけを診断に残す。
     const knownReasons = ['invalid packet render interval', 'invalid RTP timestamp', 'RTP timeline discontinuity',
       'render beyond completed source', 'output clock confirmation queue overflow', 'invalid packet output clock',
-      'first output packet mismatch', 'packet_or_sample_mismatch', 'pcm_queue_overflow']
+      'first output packet mismatch', 'packet_or_sample_mismatch', 'pcm_queue_overflow', 'render_clock_unreconciled']
     const message = reason instanceof Error ? reason.message : reason
     const failureReason = typeof message === 'string' && knownReasons.includes(message) ? message : 'unclassified'
 
@@ -643,7 +643,10 @@ export class LiveKitRoomClient {
             firstOutputEndFrame: interval.endFrame, firstOutputAtMs: atMs,
             outputClockContextTime: clock.contextTime, outputClockPerformanceTime: clock.performanceTime,
             confirmationObservedAtMs: clock.observedAtMs, sampleRate: 48000,
-            outputClockPassed: true, sourcePcmOffsetVerified: false}})
+            outputClockPassed: true, sourcePcmOffsetVerified: false,
+            renderClockMethod: 'quantum_count_reconciled_with_global_frame',
+            renderQuantumStartFrame: interval.renderQuantumStartFrame,
+            renderClockConfirmationFrame: interval.renderClockConfirmationFrame}})
       }
       this.playback.recordRenderedInterval({...interval, responseId,
         ...(interval.packetIndex === 0 && interval.packetSampleOffset === 0 ? {firstResponseFrame: interval.startFrame} : {})})

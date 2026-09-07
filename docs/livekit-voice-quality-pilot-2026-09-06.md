@@ -388,3 +388,18 @@ Backend単体2379件成功・1件skip、対象Python型検査とFrontend型検�
 `paced-recovery-session-02`は8往復の末尾まで確認後、9往復目で`invalid packet render interval`となった。既知の内部エラー名と、不一致時のpacket番号・sample offset・出力frameだけを追加保存する。切断や`response_failed`を確認した試行は、残りの長いタイムアウトを待たず診断を保存して終了する。
 
 最終の`render-interval-session-01`は、同一session・conversationの10往復、transcript一致、全応答の末尾出力、追加操作0回、明示終了が成功した。gap合計は順に2.667／0／40／0／0／0／0／0／0／0msで、品質のunderrun 0件は未達。断続的な再生区間不一致と空の認識結果が解消したとは判断しない。最終差分のFrontend全単体425件・結合97件と型検査は成功した。
+
+
+## 2026-09-07: ブラウザ音声時計の照合とSTTの先頭静音
+
+`render-interval-session-02`は3往復後に失敗した。packet番号とpacket内offsetは正しく進んでいたが、workletのglobal `currentFrame`が同じ128sample区間を繰り返した。利用中のChromium 149.0.7827.55の[BaseAudioContext実装](https://chromium.googlesource.com/chromium/src/+/refs/tags/149.0.7827.55/third_party/blink/renderer/modules/webaudio/base_audio_context.cc)では、graph lockの取得に失敗するとworklet global frameの更新を見送る。[音声destination](https://chromium.googlesource.com/chromium/src/+/refs/tags/149.0.7827.55/third_party/blink/renderer/modules/webaudio/realtime_audio_destination_handler.cc)のsample counterはその場合も進む。
+
+`RenderQuantumClock`は実際の出力quantum数からframeを追跡し、global値が止まっている間の証跡を保留する。次に更新されたglobal値と一致した場合だけ確定する。PCMの重複再生やsample破棄で帳尻を合わせず、不一致・長時間の未照合では失敗する。独立したAudioParam automationの時間軸と比較する`probe_render_clock.mjs`を追加した。実ブラウザのgraph変更負荷試験`render-clock-01.json`では、7,424 quantumまでのsnapshotでglobal更新停滞210回、counterとautomationの不一致0回、最大誤差0.045655sample未満を確認した。終了時のAudioContext closeも確認した。
+
+`reconciled-clock-session-01`は再生区間エラーがなく、2往復目でSTT結果が空になった。入力には49,600sample、peak 10,763、RMS約1,776があり、入力全体の欠落ではなかった。先頭には約1.6秒の非常に小さい信号があった。同じ固定音声に0〜2,000msの先頭無音を加える実Whisper診断では、2,000msの2回がともに空の認識結果になり、それ以外の8回は一致した。
+
+STT境界に`prepare_stt_audio`を追加し、PCM16の振幅16を初めて超える位置より前の320msと、その後の全sampleを保持する。長いほぼ無音の先頭だけを短縮し、文中の休止と末尾は切らない。全体が小音量の場合は入力を維持する。通常STTと割り込みの先行STTに適用し、モデルは変更しない。同じ先頭無音5条件×2回の準備後診断は10回ともtranscript一致となった。`probe_stt_preroll.py`はfixtureのhashを確認し、本文・音声を保存せず件数と数値結果を残す。
+
+`prepared-stt-clock-session-01`は10往復と明示終了が成功した。`prepared-stt-clock-pilot-01`も準備1回＋独立測定3回が成功し、送信sample数・全packet出力・出力時計を再検証した[匿名artifact](artifacts/livekit-pilot-2026-09-07-reconciled-clock.json)がschema・匿名性検査を通過した。測定3回のgap合計は10.667／1.333／2.667msで、制御測定のunderrun 0件は未達である。
+
+Backend全単体は2,394件成功・1件skip。時計とrendererの関連単体26件、STTと音声bridgeの関連単体48件、report単体71件、対象型検査が成功した。今回の少数試行は、全cohortの100試行、dogfood品質、loss回復、実割り込みのstale提示を証明するものではない。

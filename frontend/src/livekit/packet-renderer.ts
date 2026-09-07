@@ -1,15 +1,18 @@
+import {renderQuantumClockSource} from './render-quantum-clock'
+
 // 音声本文はworker→workletだけへ渡し、mainの観測には数値とpacket番号を残す。
-export const packetRendererSource = `
+export const packetRendererSource = `${renderQuantumClockSource}
 class PacketRenderer extends AudioWorkletProcessor {
   constructor(options) {
     super(); this.queue = []; this.offset = 0; this.stopped = false;
     this.paused = !!options.processorOptions?.paused;
     this.queuedSamples = 0; this.renderedSamples = 0; this.droppedSamples = 0;
+    this.clock = new RenderQuantumClock(); this.pendingEvidence = [];
     this.nextPacket = 0; this.started = false; this.startFrame = null;
     this.port.onmessage = ({data}) => {
       if (data.kind === 'stop') {
         this.stopped = true; this.droppedSamples += this.queuedSamples;
-        this.queue = []; this.offset = 0; this.queuedSamples = 0; return;
+        this.queue = []; this.offset = 0; this.queuedSamples = 0; this.pendingEvidence = []; return;
       }
       if (data.kind === 'resume' && !this.stopped) { this.paused = false; return; }
       if (data.kind !== 'pcm') return;
@@ -32,8 +35,17 @@ class PacketRenderer extends AudioWorkletProcessor {
     const out = outputs[0]?.[0];
     if (!out) return true;
     out.fill(0);
-    if (this.stopped || this.paused || this.startFrame === null) return true;
-    let target = Math.max(0, Math.min(out.length, this.startFrame - currentFrame));
+    if (this.stopped) return true;
+    let quantum;
+    try {quantum = this.clock.read(currentFrame, out.length);}
+    catch {
+      this.stopped = true; this.pendingEvidence = [];
+      this.port.postMessage({kind: 'error', reason: 'render_clock_unreconciled'}); return true;
+    }
+    if (this.stopped || this.paused || !quantum) return true;
+    if (quantum.confirmed) this.flushEvidence(quantum.frame);
+    if (this.startFrame === null) return true;
+    let target = Math.max(0, Math.min(out.length, this.startFrame - quantum.frame));
     while (target < out.length && this.queue.length) {
       const chunk = this.queue[0], offset = this.offset;
       const count = Math.min(out.length - target, chunk.samples.length - offset);
@@ -42,18 +54,26 @@ class PacketRenderer extends AudioWorkletProcessor {
       let energy = 0, audible;
       for (let i = 0; i < samples.length; i++) {
         energy += samples[i] * samples[i];
-        if (audible === undefined && samples[i] !== 0) audible = currentFrame + target + i;
+        if (audible === undefined && samples[i] !== 0) audible = quantum.frame + target + i;
       }
-      const startFrame = currentFrame + target, endFrame = startFrame + count;
-      this.port.postMessage({kind: 'rendered', packetIndex: chunk.packetIndex,
+      const startFrame = quantum.frame + target, endFrame = startFrame + count;
+      this.pendingEvidence.push({kind: 'rendered', packetIndex: chunk.packetIndex,
         rtpTimestamp: chunk.rtpTimestamp, packetSampleOffset: offset,
-        startFrame, endFrame, energy, ...(audible === undefined ? {} : {firstAudibleFrame: audible})});
+        startFrame, endFrame, energy, renderQuantumStartFrame: quantum.frame, ...(audible === undefined ? {} : {firstAudibleFrame: audible})});
       this.offset += count; this.queuedSamples -= count; this.renderedSamples += count; target += count;
       this.started = true;
       if (this.offset === chunk.samples.length) {this.queue.shift(); this.offset = 0;}
     }
-    // 音切れは送信総数と前後の出力frameから確定する。末尾のゼロを数え続けない。
+    // 更新欠落中の区間は、次のglobal値とquantum計数が一致するまで通知しない。
+    if (this.pendingEvidence.length > 500) {
+      this.stopped = true; this.pendingEvidence = [];
+      this.port.postMessage({kind: 'error', reason: 'render_clock_unreconciled'});
+    } else if (quantum.confirmed) this.flushEvidence(quantum.frame);
     return true;
+  }
+  flushEvidence(confirmedFrame) {
+    for (const interval of this.pendingEvidence) this.port.postMessage({...interval, renderClockConfirmationFrame: confirmedFrame});
+    this.pendingEvidence = [];
   }
 }
 registerProcessor('packet-renderer', PacketRenderer);
@@ -68,6 +88,8 @@ export type PacketRenderInterval = Readonly<{
   endFrame: number
   energy: number
   firstAudibleFrame?: number
+  renderQuantumStartFrame?: number
+  renderClockConfirmationFrame?: number
 }>
 
 export type PacketPlaybackObservation = Readonly<{
@@ -83,6 +105,9 @@ export type PacketPlaybackObservation = Readonly<{
   sampleRate: 48000
   outputClockPassed: true
   sourcePcmOffsetVerified: false
+  renderClockMethod?: 'quantum_count_reconciled_with_global_frame'
+  renderQuantumStartFrame?: number
+  renderClockConfirmationFrame?: number
 }>
 
 export type SourceAudioFinished = Readonly<{inputSampleCount: number; capturedSampleCount: number; paddingSampleCount: number}>

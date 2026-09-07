@@ -845,7 +845,7 @@ def test_production_core_bridge_bounds_waiting_stt_and_discards_overflow() -> No
         for index in range(5):
             await bridge._enqueue_user_audio(
                 utterance_id=f"utterance-{index}",
-                microphone_pcm=b"pcm",
+                microphone_pcm=b"pcm0",
             )
         bridge._transcription_active = False
         utterance_id, microphone_pcm, interrupted_response_id = (
@@ -901,7 +901,7 @@ def test_production_core_bridge_discards_media_tail_after_disconnect() -> None:
             "utterance_id": "30000000-0000-4000-8000-000000000020",
         }
         bridge.notify(json.dumps({**common, "type": "speech_started"}).encode())
-        bridge.receive_microphone(b"stale-pcm")
+        bridge.receive_microphone(b"stale-pcm!")
         bridge.notify(
             json.dumps(
                 {
@@ -985,7 +985,7 @@ def test_production_core_bridge_keeps_pcm_owned_by_each_consecutive_utterance() 
     }
 
     async def exercise() -> None:
-        for suffix, pcm in (("10", b"pcm-one"), ("11", b"pcm-two")):
+        for suffix, pcm in (("10", b"pcm-one!"), ("11", b"pcm-two!")):
             utterance_id = f"30000000-0000-4000-8000-0000000000{suffix}"
             bridge.notify(
                 json.dumps(
@@ -1021,12 +1021,12 @@ def test_production_core_bridge_keeps_pcm_owned_by_each_consecutive_utterance() 
     assert calls == [
         {
             "utterance_id": "30000000-0000-4000-8000-000000000010",
-            "audio": b"pcm-one",
+            "audio": b"pcm-one!",
             "should_response": True,
         },
         {
             "utterance_id": "30000000-0000-4000-8000-000000000011",
-            "audio": b"pcm-two",
+            "audio": b"pcm-two!",
             "should_response": True,
         },
     ]
@@ -1101,7 +1101,7 @@ def test_production_core_bridge_does_not_assign_current_pcm_to_old_empty_capture
             "speech_started",
             third_utterance_id,
         )
-        bridge.receive_microphone(b"pcm-three")
+        bridge.receive_microphone(b"pcm-three!")
         notify(
             "11000000-0000-4000-8000-000000000012",
             "speech_stopped",
@@ -1118,7 +1118,7 @@ def test_production_core_bridge_does_not_assign_current_pcm_to_old_empty_capture
     assert calls == [
         {
             "utterance_id": third_utterance_id,
-            "audio": b"pcm-three",
+            "audio": b"pcm-three!",
             "should_response": True,
         },
     ]
@@ -1162,8 +1162,8 @@ def test_production_core_bridge_keeps_delayed_pcm_for_finalized_captures() -> No
         notify("speech_stopped", first_id)
         notify("speech_started", second_id)
         notify("speech_stopped", second_id)
-        bridge.receive_microphone(b"pcm-one")
-        bridge.receive_microphone(b"pcm-two")
+        bridge.receive_microphone(b"pcm-one!")
+        bridge.receive_microphone(b"pcm-two!")
         for operation in scheduled:
             await operation
         await _drain_asyncio_tasks(transcription_tasks)
@@ -1171,10 +1171,10 @@ def test_production_core_bridge_keeps_delayed_pcm_for_finalized_captures() -> No
     asyncio.run(exercise())
 
     assert calls == [
-        {"utterance_id": first_id, "audio": b"pcm-one", "should_response": True},
+        {"utterance_id": first_id, "audio": b"pcm-one!", "should_response": True},
         {
             "utterance_id": second_id,
-            "audio": b"pcm-two",
+            "audio": b"pcm-two!",
             "should_response": True,
         },
     ]
@@ -1216,9 +1216,9 @@ def test_production_core_bridge_separates_overlapping_utterance_pcm() -> None:
 
     async def exercise() -> None:
         notify("speech_started", first_id)
-        bridge.receive_microphone(b"pcm-one")
+        bridge.receive_microphone(b"pcm-one!")
         notify("speech_started", second_id)
-        bridge.receive_microphone(b"pcm-two")
+        bridge.receive_microphone(b"pcm-two!")
         notify("speech_stopped", first_id)
         notify("speech_stopped", second_id)
         for operation in scheduled:
@@ -1228,8 +1228,8 @@ def test_production_core_bridge_separates_overlapping_utterance_pcm() -> None:
     asyncio.run(exercise())
 
     assert calls == [
-        {"utterance_id": first_id, "audio": b"pcm-one", "should_response": True},
-        {"utterance_id": second_id, "audio": b"pcm-two", "should_response": True},
+        {"utterance_id": first_id, "audio": b"pcm-one!", "should_response": True},
+        {"utterance_id": second_id, "audio": b"pcm-two!", "should_response": True},
     ]
 
 
@@ -1313,7 +1313,7 @@ def test_production_core_bridge_empty_capture_does_not_block_later_audio() -> No
     async def exercise() -> None:
         notify("speech_started", first_id)
         notify("speech_started", second_id)
-        bridge.receive_microphone(b"pcm-two")
+        bridge.receive_microphone(b"pcm-two!")
         notify("speech_stopped", first_id)
         notify("speech_stopped", second_id)
         for operation in scheduled:
@@ -1323,7 +1323,7 @@ def test_production_core_bridge_empty_capture_does_not_block_later_audio() -> No
     asyncio.run(exercise())
 
     assert calls == [
-        {"utterance_id": second_id, "audio": b"pcm-two", "should_response": True}
+        {"utterance_id": second_id, "audio": b"pcm-two!", "should_response": True}
     ]
 
 
@@ -2406,7 +2406,7 @@ def test_production_core_bridge_waits_for_each_utterances_media_tail() -> None:
 
     async def exercise() -> None:
         try:
-            for utterance_id, pcm in (("first", b"first-pcm"), ("second", b"second-pcm")):
+            for utterance_id, pcm in (("first", b"first-pcm!"), ("second", b"second-pcm")):
                 common = {"speaker": {"role": "user"}, "utterance_id": utterance_id}
                 bridge.notify(json.dumps({**common, "type": "speech_started"}).encode())
                 bridge.receive_microphone(pcm)
@@ -2427,7 +2427,7 @@ def test_production_core_bridge_waits_for_each_utterances_media_tail() -> None:
 
     asyncio.run(exercise())
     assert [request["audio"] for request in requests] == [
-        b"first-pcm", b"second-pcm-late-tail",
+        b"first-pcm!", b"second-pcm-late-tail",
     ]
 
 
@@ -2459,3 +2459,34 @@ def test_vad_source_boundary_is_correlated_without_rebinding_interruption(interr
     assert boundary[0].unit == "millisecond"
     starts = [event for event in events if event.name == "speech_started_client"]
     assert [event.response_id for event in starts] == (["old-response"] if interruption else [])
+
+
+def test_core_bridge_prepares_the_same_preroll_for_preview_and_final_stt() -> None:
+    production = importlib.import_module("app.livekit_transport.production")
+    calls: list[tuple[str, bytes]] = []
+    tasks: list[asyncio.Task[None]] = []
+
+    class Core:
+        accepting_input = True
+
+        def start_transcription(self, **request: object) -> asyncio.Task[None]:
+            async def record() -> None:
+                calls.append(("final", request["audio"]))
+            task = asyncio.create_task(record())
+            tasks.append(task)
+            return task
+
+        async def preview_turn(self, **request: object) -> None:
+            calls.append(("preview", request["audio"]))
+
+    bridge = production._ConversationCoreBridge(Core(), lambda operation: tasks.append(asyncio.create_task(operation)))
+    original = bytes(32000 * 2) + b"\x00\x10" * 8000
+    expected = bytes(5120 * 2) + b"\x00\x10" * 8000
+
+    async def exercise() -> None:
+        bridge._start_user_transcription("final", original)
+        await asyncio.gather(*tasks)
+        await bridge._preview_user_turn(utterance_id="preview", interrupted_response_id="old", microphone_pcm=original)
+
+    asyncio.run(exercise())
+    assert calls == [("final", expected), ("preview", expected)]

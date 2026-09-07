@@ -301,6 +301,13 @@ def validate_packet_playback_observation(trial: dict[str, object]) -> tuple[floa
         if abs(number(media.get(name)) - value) > 0.001:
             raise ValueError("packet playback does not match the observed packet")
     first, end = number(evidence.get("firstOutputFrame")), number(evidence.get("firstOutputEndFrame"))
+    if evidence.get("renderClockMethod") is not None:
+        if evidence["renderClockMethod"] != "quantum_count_reconciled_with_global_frame":
+            raise ValueError("unsupported render clock method")
+        quantum = number(evidence.get("renderQuantumStartFrame"))
+        anchor = number(evidence.get("renderClockConfirmationFrame"))
+        if not quantum.is_integer() or not anchor.is_integer() or not quantum <= first < end <= quantum + 128 or anchor < quantum:
+            raise ValueError("render quantum clock is not reconciled")
     context_time = number(evidence.get("outputClockContextTime"))
     performance_time = number(evidence.get("outputClockPerformanceTime"))
     if not first.is_integer() or not end.is_integer() or not 0 < end - first <= 960 or context_time * 48000 < end:

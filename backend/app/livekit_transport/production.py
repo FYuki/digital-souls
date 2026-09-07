@@ -44,6 +44,7 @@ from app.livekit_transport.delivery import CoreNotificationPort
 from app.livekit_transport.errors import RoomCleanupPendingError
 from app.livekit_transport.measurement import LiveKitMeasurementSession
 from app.livekit_transport.runtime import MicrophoneTrackObserver
+from app.livekit_transport.stt_audio import prepare_stt_audio
 from app.livekit_transport.response_audio import ResponseAudioTracks
 from app.livekit_transport.token import IssuedToken, LiveKitTokenSigner
 from app.voice_metrics import MeasurementKind, TraceEvent
@@ -928,7 +929,7 @@ class _ConversationCoreBridge:
         try:
             await self._session.preview_turn(
                 utterance_id=utterance_id,
-                audio=microphone_pcm,
+                audio=prepare_stt_audio(microphone_pcm)[0],
                 interrupted_response_id=interrupted_response_id,
             )
         except Exception:
@@ -1055,15 +1056,21 @@ class _ConversationCoreBridge:
         microphone_pcm: bytes,
         interrupted_response_id: str | None = None,
     ) -> None:
+        microphone_pcm, trimmed_samples = prepare_stt_audio(microphone_pcm)
         self._transcription_active = True
         if self._measurement is not None:
             # 本文・波形は残さず、STTへ渡したPCMの長さと振幅だけを確認する。
             samples = [value[0] for value in struct.iter_unpack("<h", microphone_pcm)]
             statistics = {
                 "stt_input_sample_count": len(samples),
+                "stt_preroll_trimmed_samples": trimmed_samples,
                 "stt_input_peak_pcm16": max((abs(value) for value in samples), default=0),
                 "stt_input_rms_pcm16": (sum(value * value for value in samples) / max(1, len(samples))) ** .5,
                 "stt_input_active_samples": sum(abs(value) > 200 for value in samples),
+                "stt_input_first_nonzero_sample": next((i for i, value in enumerate(samples) if value != 0), len(samples)),
+                "stt_input_first_above_16_sample": next((i for i, value in enumerate(samples) if abs(value) > 16), len(samples)),
+                "stt_input_first_active_sample": next((i for i, value in enumerate(samples) if abs(value) > 200), len(samples)),
+                "stt_input_last_active_sample": next((len(samples) - 1 - i for i, value in enumerate(reversed(samples)) if abs(value) > 200), len(samples)),
             }
             for name, value in statistics.items():
                 self._measurement.record_utterance_event(

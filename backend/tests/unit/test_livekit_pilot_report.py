@@ -362,3 +362,30 @@ def test_completion_aggregate_excludes_warmup_and_preserves_nonzero_gap(pilot_in
     assert metrics['playback_underrun_count']['p95'] == 1
     for trial in manifest['trials']:
         assert trial['sessionId'] not in json.dumps(artifact)
+
+
+def test_reconciled_render_clock_records_the_observed_anchor():
+    from app.livekit_pilot_report import validate_packet_playback_observation
+    trial = packet_playback_trial()
+    trial['packet_playback_observation'].update(
+        renderClockMethod='quantum_count_reconciled_with_global_frame',
+        renderQuantumStartFrame=48000, renderClockConfirmationFrame=48256,
+    )
+    assert validate_packet_playback_observation(trial) == (2, 100)
+
+
+@pytest.mark.parametrize('field,value', [
+    ('renderClockMethod', 'guessed'), ('renderQuantumStartFrame', 48001),
+    ('renderClockConfirmationFrame', 47999), ('renderClockConfirmationFrame', None),
+    ('renderQuantumStartFrame', 47999.5),
+])
+def test_report_rejects_unreconciled_render_clock(field, value):
+    from app.livekit_pilot_report import validate_packet_playback_observation
+    trial = packet_playback_trial()
+    trial['packet_playback_observation'].update(
+        renderClockMethod='quantum_count_reconciled_with_global_frame',
+        renderQuantumStartFrame=48000, renderClockConfirmationFrame=48256,
+    )
+    trial['packet_playback_observation'][field] = value
+    with pytest.raises(ValueError):
+        validate_packet_playback_observation(trial)
