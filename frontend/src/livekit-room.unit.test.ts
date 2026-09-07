@@ -876,6 +876,7 @@ test('接続診断はsignal再接続とCore世代の時系列だけを通知す�
   room.emit('signalConnected')
   room.emit('reconnecting')
   room.emit('reconnected')
+  await Promise.resolve()
   emitPrivateFrame(room, authoritativeState(1))
   client.disconnect()
   expect(observed).toEqual([
@@ -900,6 +901,7 @@ test('SDK再接続と新世代の状態同期が終わるまで診断音を要�
     expect(client.isAudioProbeReady()).toBe(false)
     expect(await client.probeAudio()).toMatchObject({reason: 'unavailable'})
     room.emit('reconnected')
+    await Promise.resolve()
     expect(client.isAudioProbeReady()).toBe(false)
     emitPrivateFrame(room, authoritativeState(0))
     expect(client.isAudioProbeReady()).toBe(false)
@@ -921,6 +923,7 @@ test('CoreイベントはACK送信失敗中にも一度だけ適用し、ACK再�
     response_id: '30000000-0000-4000-8000-000000000010', text_sequence: 1, text: 'a',
     text_range: {start: 0, end: 1}, monotonic_timestamp_ms: 1}
   try {
+    room.emit('signalReconnecting')
     room.localParticipant.publishData.mockRejectedValueOnce(new Error('disconnected'))
     emitCoreEvent(room, event)
     await vi.advanceTimersByTimeAsync(0)
@@ -931,5 +934,28 @@ test('CoreイベントはACK送信失敗中にも一度だけ適用し、ACK再�
     expect(receive).toHaveBeenCalledTimes(1)
     expect(room.localParticipant.publishData).toHaveBeenCalledTimes(2)
     expect(disconnected).not.toHaveBeenCalled()
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+
+test.each(['send_failed', 'reply_missing'])('状態同期は同じ要求世代で再送し、確認後は世代を再更新しない: %s', async mode => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance']})
+  const observations: RoomObservation[] = [], client = new LiveKitRoomClient(row => observations.push(row))
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom(), disconnected = vi.spyOn(room, 'disconnect')
+  const requests = () => room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
+    .filter(p => p.type === 'state_sync_request')
+  try {
+    if (mode === 'send_failed') room.localParticipant.publishData.mockRejectedValueOnce(new Error('disconnected'))
+    room.emit('signalReconnecting'); room.emit('reconnected')
+    await vi.advanceTimersByTimeAsync(500)
+    expect(requests().map(p => p.generation)).toEqual([0, 0, 0])
+    expect(client.isAudioProbeReady()).toBe(false)
+    expect(disconnected).not.toHaveBeenCalled()
+    emitPrivateFrame(room, authoritativeState(1))
+    expect(client.isAudioProbeReady()).toBe(true)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(requests()).toHaveLength(3)
+    expect(observations.some(row => row.failureStage)).toBe(false)
   } finally {client.disconnect(); vi.useRealTimers()}
 })

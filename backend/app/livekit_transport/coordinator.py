@@ -92,6 +92,8 @@ class ProductionSessionCoordinator:
         self._retry_tasks: dict[tuple[str, str], asyncio.Task[None]] = {}
         self._deadline_task: asyncio.Task[None] | None = None
         self._ended = False
+        self._state_sync_lock = asyncio.Lock()
+        self._ready_generation: int | None = None
 
     @property
     def generation(self) -> int:
@@ -142,7 +144,8 @@ class ProductionSessionCoordinator:
         return False
 
     async def synchronize_reconnection(self) -> None:
-        await self._send_authoritative_state()
+        async with self._state_sync_lock:
+            await self._send_ready_authoritative_state()
 
     def is_current_participant(self, *, identity: str, participant_sid: str) -> bool:
         return (
@@ -202,16 +205,17 @@ class ProductionSessionCoordinator:
                 frame = decode_private_frame(payload)
                 frame_generation = _required_int(frame["generation"], "generation")
                 if frame["type"] == "state_sync_request":
-                    if frame_generation > self.generation:
-                        return
-                    if self._lifecycle.phase == "unavailable":
-                        self._lifecycle.reconnect(now_ms=self._clock())
-                        self._cancel_deadline()
-                        self._notify_core("session_reconnected")
-                    elif frame_generation == self.generation:
-                        self._lifecycle.advance_generation()
-                    await self._send_authoritative_state()
-                    await self._dependencies.generation_ready()
+                    # 再送は同じ要求世代のまま直列化し、準備完了前のavailable通知を防ぐ。
+                    async with self._state_sync_lock:
+                        if frame_generation > self.generation or self._ended:
+                            return
+                        if self._lifecycle.phase == "unavailable":
+                            self._lifecycle.reconnect(now_ms=self._clock())
+                            self._cancel_deadline()
+                            self._notify_core("session_reconnected")
+                        elif frame_generation == self.generation:
+                            self._lifecycle.advance_generation()
+                        await self._send_ready_authoritative_state()
                     return
                 if frame_generation != self.generation:
                     return
@@ -368,6 +372,18 @@ class ProductionSessionCoordinator:
                     await self.mark_unavailable()
         finally:
             self._retry_tasks.pop(("character_to_user", event_id), None)
+
+    async def _send_ready_authoritative_state(self) -> None:
+        generation = self.generation
+        if self._ended:
+            return
+        if self._ready_generation != generation:
+            await self._dependencies.generation_ready()
+            self._ready_generation = generation
+        # 準備中のparticipant再接続・終了は、新世代が準備済みだと補完しない。
+        if self._ended or self.generation != generation:
+            return
+        await self._send_authoritative_state()
 
     async def _send_authoritative_state(self) -> None:
         frames = reconnect_sync_frames(

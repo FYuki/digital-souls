@@ -364,7 +364,7 @@ def test_disconnect_discards_response_and_interrupts_at_confirmed_prefix_once() 
     ]
 
 
-def _coordinator(module, published, cleaned, core_port=None, audio_probe=None):
+def _coordinator(module, published, cleaned, core_port=None, audio_probe=None, ready=None):
     async def publish(payload: bytes, topic: str) -> None:
         published.append((payload, topic))
 
@@ -372,7 +372,8 @@ def _coordinator(module, published, cleaned, core_port=None, audio_probe=None):
         cleaned.append(session_id)
 
     async def generation_ready() -> None:
-        return None
+        if ready is not None:
+            await ready()
 
     return module.ProductionSessionCoordinator(
         session_id="20000000-0000-4000-8000-000000000010",
@@ -1158,4 +1159,78 @@ def test_audio_probe_uses_only_current_authenticated_available_connection(case):
                           ('audio_probe_complete', probe_id, 0, 'TR_probe')] if case == 'valid' else [])
         assert core.notifications == notifications
         await coordinator.cleanup('test_complete')
+    asyncio.run(exercise())
+
+
+def test_repeated_sync_waits_for_generation_readiness_without_restarting_it() -> None:
+    module = _livekit_module("coordinator", "idempotent generation readiness")
+
+    async def exercise() -> None:
+        published: list[tuple[bytes, str]] = []
+        entered, release = asyncio.Event(), asyncio.Event()
+        calls: list[int] = []
+
+        async def ready() -> None:
+            calls.append(1)
+            entered.set()
+            await release.wait()
+
+        coordinator = _coordinator(module, published, [], ready=ready)
+        identity = "user-20000000-0000-4000-8000-000000000010"
+        coordinator.participant_connected(identity=identity, participant_sid="PA_current", room_sid="RM_one")
+
+        async def sync() -> None:
+            await coordinator.receive_data(identity=identity, participant_sid="PA_current", topic=module.PRIVATE_TOPIC,
+                payload=json.dumps({"protocol_version": "1.0", "type": "state_sync_request", "generation": 0}).encode())
+
+        first = asyncio.create_task(sync())
+        await asyncio.wait_for(entered.wait(), timeout=0.5)
+        second = asyncio.create_task(sync())
+        try:
+            await asyncio.sleep(0)
+            assert published == []
+            assert calls == [1]
+        finally:
+            release.set()
+            await asyncio.gather(first, second)
+            await coordinator.cleanup("test_complete")
+        assert calls == [1]
+        assert [json.loads(payload)["generation"] for payload, _ in published] == [1, 1]
+
+    asyncio.run(exercise())
+
+
+def test_sync_retries_failed_readiness_before_publishing_available() -> None:
+    module = _livekit_module("coordinator", "readiness failure retry")
+
+    async def exercise() -> None:
+        published: list[tuple[bytes, str]] = []
+        calls: list[int] = []
+
+        async def ready() -> None:
+            calls.append(1)
+            if len(calls) == 1:
+                raise RuntimeError("readiness failed")
+
+        coordinator = _coordinator(module, published, [], ready=ready)
+        identity = "user-20000000-0000-4000-8000-000000000010"
+        coordinator.participant_connected(identity=identity, participant_sid="PA_current", room_sid="RM_one")
+
+        async def sync() -> None:
+            await coordinator.receive_data(identity=identity, participant_sid="PA_current", topic=module.PRIVATE_TOPIC,
+                payload=json.dumps({"protocol_version": "1.0", "type": "state_sync_request", "generation": 0}).encode())
+
+        try:
+            await sync()
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("readiness failure must propagate")
+        assert published == []
+        await sync()
+        await sync()
+        assert calls == [1, 1]
+        assert [json.loads(payload)["generation"] for payload, _ in published] == [1, 1]
+        await coordinator.cleanup("test_complete")
+
     asyncio.run(exercise())

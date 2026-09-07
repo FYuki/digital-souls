@@ -1,3 +1,4 @@
+import {StateSyncRequest} from './state-sync-request'
 import {CoreAckOutbox} from './core-ack-outbox'
 import {VoiceReconnectPolicy, type RetryObservation} from './reconnect-policy'
 import {AudioAvailabilityProbe, AUDIO_PROBE_TRACK_PREFIX, type AudioProbeObservation} from './audio-probe'
@@ -103,6 +104,7 @@ export type ConnectionLifecycleObservation = Readonly<{event: 'retry_scheduled' 
 
 export class LiveKitRoomClient {
   private recovering = false
+  private stateSyncRequest: StateSyncRequest | null = null
   private syncRequestedGeneration: number | null = null
   private coreAckOutbox: CoreAckOutbox | null = null
   private connectionObserver: ((row: ConnectionLifecycleObservation) => void) | undefined
@@ -191,7 +193,7 @@ export class LiveKitRoomClient {
 
   async connect(url: string, token: string, sessionId: string): Promise<void> {
     this.recovering = true
-    this.syncRequestedGeneration = null
+    this.clearStateSync()
     this.controlProbes.reset()
     this.audioProbe?.cancel()
     if (this.sessionId !== sessionId) {
@@ -429,7 +431,7 @@ export class LiveKitRoomClient {
           this.generation = frame.generation
           this.observeConnection('authoritative_state')
           if (this.syncRequestedGeneration !== null && frame.generation > this.syncRequestedGeneration
-            && frame.sessionPhase === 'available') this.syncRequestedGeneration = null
+            && frame.sessionPhase === 'available') this.clearStateSync()
           if (generationChanged) {
             this.controlProbes.reset()
             this.audioProbe?.cancel()
@@ -588,7 +590,7 @@ export class LiveKitRoomClient {
     })
     room.on(RoomEvent.Disconnected, () => {
       this.recovering = true
-      this.syncRequestedGeneration = null
+      this.clearStateSync()
       this.observeConnection('disconnected')
       this.controlProbes.reset()
       this.audioProbe?.cancel()
@@ -607,19 +609,26 @@ export class LiveKitRoomClient {
     return room
   }
 
+  private clearStateSync(): void {
+    this.stateSyncRequest?.close()
+    this.stateSyncRequest = null
+    this.syncRequestedGeneration = null
+  }
+
   private async requestStateSync(room: Room): Promise<void> {
     if (this.recovering) {this.observeConnection('state_sync_deferred'); return}
-    this.syncRequestedGeneration = this.generation
-    this.observeConnection('state_sync_requested')
+    if (this.stateSyncRequest !== null) return
+    const generation = this.generation, sessionId = this.sessionId
+    this.syncRequestedGeneration = generation
     const frame = new TextEncoder().encode(JSON.stringify({
-      protocol_version: '1.0',
-      type: 'state_sync_request',
-      generation: this.generation,
+      protocol_version: '1.0', type: 'state_sync_request', generation,
     }))
-    await room.localParticipant.publishData(frame, {
-      reliable: true,
-      topic: PRIVATE_TOPIC,
-    })
+    this.stateSyncRequest = new StateSyncRequest(async () => {
+      if (this.room !== room || this.sessionId !== sessionId) return
+      this.observeConnection('state_sync_requested')
+      await room.localParticipant.publishData(frame, {reliable: true, topic: PRIVATE_TOPIC})
+    }, browserRetryTimer, () => this.failTransport('transport', 'state_sync_timeout'))
+    this.stateSyncRequest.start()
   }
 
   private async acknowledgeCoreEvent(room: Room, payload: Uint8Array): Promise<void> {
@@ -782,7 +791,7 @@ export class LiveKitRoomClient {
 
   private failTransport(failureStage: NonNullable<RoomObservation['failureStage']> = 'transport', reason?: unknown): void {
     // 任意の例外本文を外へ渡さず、内部の固定エラー名だけを診断に残す。
-    const knownReasons = ['RTP packet sequence invalid', 'invalid packet render interval', 'invalid RTP timestamp', 'RTP timeline discontinuity',
+    const knownReasons = ['state_sync_timeout', 'RTP packet sequence invalid', 'invalid packet render interval', 'invalid RTP timestamp', 'RTP timeline discontinuity',
       'render beyond completed source', 'output clock confirmation queue overflow', 'invalid packet output clock',
       'first output packet mismatch', 'packet_or_sample_mismatch', 'pcm_queue_overflow', 'render_clock_unreconciled']
     const message = reason instanceof Error ? reason.message : reason
@@ -955,6 +964,7 @@ export class LiveKitRoomClient {
     this.suppressedLastPlayedAudioSequence = 0
     this.pendingPlaybackResponseId = null
     this.coreEvents.clear()
+    this.clearStateSync()
     this.coreAckOutbox?.clear()
     this.coreAckOutbox = null
     this.clearBrowserDelivery()
@@ -964,7 +974,7 @@ export class LiveKitRoomClient {
   private startBrowserDelivery(sessionId: string, room: Room): void {
     this.clearBrowserDelivery()
     this.coreAckOutbox ??= new CoreAckOutbox(async eventId => {
-      if (this.room !== room || this.sessionId !== sessionId || this.recovering || this.syncRequestedGeneration !== null) {
+      if (this.room !== room || this.sessionId !== sessionId) {
         throw new Error('Core ACK transport unavailable')
       }
       await room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({
