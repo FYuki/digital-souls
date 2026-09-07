@@ -14,7 +14,7 @@ declare global {
       speechStarted: (utteranceId: string, atMs: number) => Promise<void>
     }
     __voiceChatE2E: {
-      mediaTimelineInterruptions?: Array<{responseId: string; atMs: number; reason: 'timestamp_overlap'}>
+      mediaTimelineInterruptions?: Array<{responseId: string; atMs: number; reason: 'timestamp_overlap' | 'timestamp_discontinuity'}>
       mediaPacketLosses?: Array<RtpPacketGap & {responseId: string; atMs: number}>
       transportFailures?: {stage: string; reason?: string; context?: Readonly<Record<string, number>>; atMs: number}[]
       activeAudioGraphs?: number
@@ -129,7 +129,7 @@ const installPlaybackProbe = async (page: Page) => {
       __digitalSoulsVoiceSessionTestPort?: {
         createRoom?: (...args: never[]) => unknown
         observeRoom?: (observation: {
-          mediaTimelineInterruption?: {responseId: string; atMs: number; reason: 'timestamp_overlap'}
+          mediaTimelineInterruption?: {responseId: string; atMs: number; reason: 'timestamp_overlap' | 'timestamp_discontinuity'}
           mediaPacketLoss?: RtpPacketGap & {responseId: string; atMs: number}
           failureContext?: Readonly<Record<string, number>>
           failureReason?: string

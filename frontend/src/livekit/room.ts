@@ -1,3 +1,4 @@
+import {CoreAckOutbox} from './core-ack-outbox'
 import {VoiceReconnectPolicy, type RetryObservation} from './reconnect-policy'
 import {AudioAvailabilityProbe, AUDIO_PROBE_TRACK_PREFIX, type AudioProbeObservation} from './audio-probe'
 import { ControlProbeTracker, type ControlProbeObservation } from './control-probe'
@@ -41,7 +42,7 @@ export type RoomObservation = Readonly<{
   failureReason?: string
   failureStage?: 'transport' | 'media_decoder' | 'audio_graph' | 'output_clock' | 'renderer' | 'rtp_timeline'
   mediaPacketLoss?: RtpPacketGap & {responseId: string; atMs: number}
-  mediaTimelineInterruption?: {responseId: string; atMs: number; reason: 'timestamp_overlap'}
+  mediaTimelineInterruption?: {responseId: string; atMs: number; reason: 'timestamp_overlap' | 'timestamp_discontinuity'}
   renderedSamples?: number
   playedPrefix?: number
   microphoneFrames?: number
@@ -97,10 +98,13 @@ const browserRetryTimer: RetryTimer = {
 }
 
 export type ConnectionLifecycleObservation = Readonly<{event: 'retry_scheduled' | 'signal_reconnecting' | 'signal_connected'
-  | 'reconnecting' | 'reconnected' | 'disconnected' | 'state_sync_requested' | 'authoritative_state';
+  | 'reconnecting' | 'reconnected' | 'disconnected' | 'state_sync_requested' | 'state_sync_deferred' | 'authoritative_state' | 'ack_deferred';
   atMs: number; generation: number; retry?: RetryObservation}>
 
 export class LiveKitRoomClient {
+  private recovering = false
+  private syncRequestedGeneration: number | null = null
+  private coreAckOutbox: CoreAckOutbox | null = null
   private connectionObserver: ((row: ConnectionLifecycleObservation) => void) | undefined
   private audioProbe: AudioAvailabilityProbe | null = null
   private readonly controlProbes = new ControlProbeTracker(browserRetryTimer)
@@ -186,9 +190,13 @@ export class LiveKitRoomClient {
   }
 
   async connect(url: string, token: string, sessionId: string): Promise<void> {
+    this.recovering = true
+    this.syncRequestedGeneration = null
     this.controlProbes.reset()
     this.audioProbe?.cancel()
     if (this.sessionId !== sessionId) {
+      this.coreAckOutbox?.clear()
+      this.coreAckOutbox = null
       this.stoppedResponses.clear()
       this.latestResponseId = null
     }
@@ -198,6 +206,7 @@ export class LiveKitRoomClient {
     this.sessionId = sessionId
     this.startBrowserDelivery(sessionId, this.room)
     await this.room.connect(url, token)
+    this.recovering = false
     if (shouldSynchronize) await this.requestStateSync(this.room)
     this.reconnectRequested = false
     this.observe({ transport: 'available', control: 'available', audio: 'unavailable' })
@@ -228,6 +237,11 @@ export class LiveKitRoomClient {
     })
   }
 
+  isAudioProbeReady(): boolean {
+    return this.room !== null && this.sessionId !== null && this.controlOutbox !== null
+      && !this.recovering && this.syncRequestedGeneration === null
+  }
+
   probeAudio(): Promise<AudioProbeObservation> {
     const room = this.room, sessionId = this.sessionId, generation = this.generation
     const probe = new AudioAvailabilityProbe(crypto.randomUUID(), generation,
@@ -238,7 +252,7 @@ export class LiveKitRoomClient {
         await room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(frame)),
           {reliable: true, topic: PRIVATE_TOPIC})
       })
-    if (room === null || sessionId === null || this.controlOutbox === null) probe.cancel('unavailable')
+    if (!this.isAudioProbeReady()) probe.cancel('unavailable')
     else if (this.audioProbe !== null) probe.cancel('busy')
     else {
       this.audioProbe = probe
@@ -355,9 +369,13 @@ export class LiveKitRoomClient {
   private createRoom(): Room {
     const room = new Room({ adaptiveStream: true, dynacast: true,
       reconnectPolicy: new VoiceReconnectPolicy(Math.random, retry => this.observeConnection('retry_scheduled', retry)) })
-    room.on(RoomEvent.SignalReconnecting, () => this.observeConnection('signal_reconnecting'))
+    room.on(RoomEvent.SignalReconnecting, () => {
+      this.recovering = true
+      this.observeConnection('signal_reconnecting')
+    })
     room.on(RoomEvent.SignalConnected, () => this.observeConnection('signal_connected'))
     room.on(RoomEvent.Reconnecting, () => {
+      this.recovering = true
       this.observeConnection('reconnecting')
       this.controlProbes.reset()
       this.audioProbe?.cancel()
@@ -365,6 +383,7 @@ export class LiveKitRoomClient {
       this.observe({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable' })
     })
     room.on(RoomEvent.Reconnected, () => {
+      this.recovering = false
       this.observeConnection('reconnected')
       const sessionId = this.sessionId
       if (sessionId !== null) this.startBrowserDelivery(sessionId, room)
@@ -372,13 +391,7 @@ export class LiveKitRoomClient {
     })
     room.on(RoomEvent.DataReceived, (payload, _participant, _kind, topic) => {
       if (topic === APPLICATION_TOPIC) {
-        void this.acknowledgeCoreEvent(room, payload).catch(() => {
-          room.disconnect()
-          void this.closeAudioGraph()
-          this.observe({
-            transport: 'unavailable', control: 'unavailable', audio: 'unavailable',
-          })
-        })
+        void this.acknowledgeCoreEvent(room, payload).catch(error => this.failTransport('transport', error))
         return
       }
       if (topic === SCREEN_TOPIC) {
@@ -415,6 +428,8 @@ export class LiveKitRoomClient {
           const generationChanged = frame.generation !== this.generation
           this.generation = frame.generation
           this.observeConnection('authoritative_state')
+          if (this.syncRequestedGeneration !== null && frame.generation > this.syncRequestedGeneration
+            && frame.sessionPhase === 'available') this.syncRequestedGeneration = null
           if (generationChanged) {
             this.controlProbes.reset()
             this.audioProbe?.cancel()
@@ -532,7 +547,17 @@ export class LiveKitRoomClient {
               try {
                 const gap = graph.packetSequence.receive(packet)
                 if (gap) {this.interruptResponseAfterPacketLoss(responseId, gap); return}
-              } catch (error) {this.failTransport('rtp_timeline', error); return}
+              } catch (error) {
+                const context = error instanceof RtpPacketSequenceError ? error.context : undefined
+                if (context && context.packetIndex === context.expectedPacketIndex
+                  && Number.isInteger(context.rtpTimestamp) && context.rtpTimestamp >= 0 && context.rtpTimestamp <= 0xffffffff
+                  && Number.isInteger(context.previousRtpTimestamp) && context.previousRtpTimestamp >= 0 && context.previousRtpTimestamp <= 0xffffffff
+                  && Number.isInteger(context.timestampDelta)) {
+                  this.interruptResponseAfterMediaDiscontinuity(responseId, {mediaTimelineInterruption: {
+                    responseId, atMs: performance.now(), reason: 'timestamp_discontinuity'}})
+                } else this.failTransport('rtp_timeline', error)
+                return
+              }
               graph.packetDiagnostic?.receive(packet)
               if (packet.packetIndex === 0) graph.firstPacket = {...packet, pcm: new Float32Array(0)}
               graph.worklet.port.postMessage({kind: 'pcm', packetIndex: packet.packetIndex,
@@ -562,6 +587,8 @@ export class LiveKitRoomClient {
       this.audioGraphs.delete(key)
     })
     room.on(RoomEvent.Disconnected, () => {
+      this.recovering = true
+      this.syncRequestedGeneration = null
       this.observeConnection('disconnected')
       this.controlProbes.reset()
       this.audioProbe?.cancel()
@@ -581,6 +608,8 @@ export class LiveKitRoomClient {
   }
 
   private async requestStateSync(room: Room): Promise<void> {
+    if (this.recovering) {this.observeConnection('state_sync_deferred'); return}
+    this.syncRequestedGeneration = this.generation
     this.observeConnection('state_sync_requested')
     const frame = new TextEncoder().encode(JSON.stringify({
       protocol_version: '1.0',
@@ -595,16 +624,6 @@ export class LiveKitRoomClient {
 
   private async acknowledgeCoreEvent(room: Room, payload: Uint8Array): Promise<void> {
     const { event, duplicate } = this.coreEvents.receive(payload)
-    const ack = new TextEncoder().encode(JSON.stringify({
-      protocol_version: '1.0',
-      type: 'ack',
-      event_id: event.event_id,
-      generation: this.generation,
-    }))
-    await room.localParticipant.publishData(ack, {
-      reliable: true,
-      topic: PRIVATE_TOPIC,
-    })
     if (!duplicate) {
       if (event.type === 'response_started' && event.response_id !== undefined
         && !this.stoppedResponses.has(event.response_id)) {
@@ -662,6 +681,7 @@ export class LiveKitRoomClient {
       }
       this.receiveCoreEvent(event)
     }
+    if (this.room === room) this.coreAckOutbox?.enqueue(event.event_id)
     if (event.type === 'session_ended') this.failTransport()
   }
 
@@ -935,12 +955,22 @@ export class LiveKitRoomClient {
     this.suppressedLastPlayedAudioSequence = 0
     this.pendingPlaybackResponseId = null
     this.coreEvents.clear()
+    this.coreAckOutbox?.clear()
+    this.coreAckOutbox = null
     this.clearBrowserDelivery()
     await this.disposeAudioContext()
   }
 
   private startBrowserDelivery(sessionId: string, room: Room): void {
     this.clearBrowserDelivery()
+    this.coreAckOutbox ??= new CoreAckOutbox(async eventId => {
+      if (this.room !== room || this.sessionId !== sessionId || this.recovering || this.syncRequestedGeneration !== null) {
+        throw new Error('Core ACK transport unavailable')
+      }
+      await room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({
+        protocol_version: '1.0', type: 'ack', event_id: eventId, generation: this.generation,
+      })), {reliable: true, topic: PRIVATE_TOPIC})
+    }, browserRetryTimer, () => this.failTransport(), () => this.observeConnection('ack_deferred'))
     this.playbackConfirmations = new PlaybackConfirmationTracker(
       sessionId,
       () => Math.floor(performance.now()),

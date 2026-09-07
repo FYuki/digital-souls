@@ -677,7 +677,7 @@ test.each(['valid', 'mismatched_decode', 'stopped', 'unsubscribed'])('実出力�
 })
 
 
-test.each(['gap', 'overlap'])('RTP不連続では未出力のPCMを止め、Coreの応答だけを中断して制御接続を維持する: %s', async mode => {
+test.each(['gap', 'overlap', 'ragged_gap', 'gap_during_resume'])('RTP不連続では未出力のPCMを止め、Coreの応答だけを中断して制御接続を維持する: %s', async mode => {
   const observations: RoomObservation[] = []
   const client = new LiveKitRoomClient(row => observations.push(row))
   const sessionId = '20000000-0000-4000-8000-000000000001'
@@ -691,10 +691,18 @@ test.each(['gap', 'overlap'])('RTP不連続では未出力のPCMを止め、Core
   const frame = {receivedAtMs: 100, decodedAtMs: 101, pcm: new Float32Array(960).fill(.25)}
   try {
     observer.playback!.packet({...frame, packetIndex: 0, rtpTimestamp: 99})
+    if (mode === 'gap_during_resume') room.emit('signalReconnecting')
     if (mode === 'overlap') {observer.playback!.interrupted!(); observer.playback!.interrupted!()}
-    else observer.playback!.packet({...frame, packetIndex: 1, rtpTimestamp: 2019})
+    else observer.playback!.packet({...frame, packetIndex: 1, rtpTimestamp: mode === 'ragged_gap' ? 2021 : 2019})
     observer.playback!.packet({...frame, packetIndex: 2, rtpTimestamp: 2979})
     const messages = () => room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
+    if (mode === 'gap_during_resume') {
+      await vi.waitFor(() => expect(messages().filter(p => p.type === 'response_cancel_requested')).toHaveLength(1))
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(messages().filter(p => p.type === 'state_sync_request')).toHaveLength(0)
+      expect(client.isAudioProbeReady()).toBe(false)
+      room.emit('reconnected')
+    }
     await vi.waitFor(() => expect(messages().some(p => p.type === 'state_sync_request')).toBe(true))
     expect(messages().filter(p => ['playback_stopped', 'response_cancel_requested'].includes(p.type)))
       .toMatchObject([{type: 'playback_stopped', session_id: sessionId, response_id: responseId,
@@ -702,14 +710,14 @@ test.each(['gap', 'overlap'])('RTP不連続では未出力のPCMを止め、Core
       {type: 'response_cancel_requested', session_id: sessionId, response_id: responseId, reason: 'disconnect'}])
     expect(worklet.port.postMessage.mock.calls.filter(([row]) => row.kind === 'pcm')).toHaveLength(1)
     expect(worklet.port.postMessage).toHaveBeenCalledWith({kind: 'stop'})
-    if (mode === 'gap') {
+    if (mode === 'gap' || mode === 'gap_during_resume') {
       expect(observations.find(row => row.mediaPacketLoss)?.mediaPacketLoss)
         .toMatchObject({responseId, expectedTimestamp: 1059, receivedTimestamp: 2019, missingPacketCount: 1})
       expect(observations.filter(row => row.mediaPacketLoss)).toHaveLength(1)
     } else {
       expect(observations.filter(row => row.mediaTimelineInterruption)).toHaveLength(1)
       expect(observations.find(row => row.mediaTimelineInterruption)?.mediaTimelineInterruption)
-        .toMatchObject({responseId, reason: 'timestamp_overlap'})
+        .toMatchObject({responseId, reason: mode === 'ragged_gap' ? 'timestamp_discontinuity' : 'timestamp_overlap'})
     }
     expect(observations.some(row => row.failureStage)).toBe(false)
     expect(disconnected).not.toHaveBeenCalled()
@@ -879,4 +887,49 @@ test('接続診断はsignal再接続とCore世代の時系列だけを通知す�
     expect.objectContaining({event: 'authoritative_state', generation: 1}),
     expect.objectContaining({event: 'disconnected', generation: 1}),
   ])
+})
+
+
+test('SDK再接続と新世代の状態同期が終わるまで診断音を要求しない', async () => {
+  const client = new LiveKitRoomClient(() => undefined)
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  try {
+    expect(client.isAudioProbeReady()).toBe(true)
+    room.emit('signalReconnecting')
+    expect(client.isAudioProbeReady()).toBe(false)
+    expect(await client.probeAudio()).toMatchObject({reason: 'unavailable'})
+    room.emit('reconnected')
+    expect(client.isAudioProbeReady()).toBe(false)
+    emitPrivateFrame(room, authoritativeState(0))
+    expect(client.isAudioProbeReady()).toBe(false)
+    emitPrivateFrame(room, authoritativeState(1))
+    expect(client.isAudioProbeReady()).toBe(true)
+    const messages = room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
+    expect(messages.filter(p => p.type === 'state_sync_request')).toHaveLength(1)
+    expect(messages.filter(p => p.type === 'audio_probe_request')).toHaveLength(0)
+  } finally {client.disconnect()}
+})
+
+test('CoreイベントはACK送信失敗中にも一度だけ適用し、ACK再送で接続を維持する', async () => {
+  vi.useFakeTimers()
+  const receive = vi.fn(), client = new LiveKitRoomClient(() => undefined, receive)
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000010')
+  const room = latestRoom(), disconnected = vi.spyOn(room, 'disconnect')
+  const event = {protocol_version: '1.0', event_id: '10000000-0000-4000-8000-000000000010',
+    type: 'response_delta', session_id: '20000000-0000-4000-8000-000000000010',
+    response_id: '30000000-0000-4000-8000-000000000010', text_sequence: 1, text: 'a',
+    text_range: {start: 0, end: 1}, monotonic_timestamp_ms: 1}
+  try {
+    room.localParticipant.publishData.mockRejectedValueOnce(new Error('disconnected'))
+    emitCoreEvent(room, event)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(receive).toHaveBeenCalledTimes(1)
+    expect(disconnected).not.toHaveBeenCalled()
+    emitCoreEvent(room, event)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(receive).toHaveBeenCalledTimes(1)
+    expect(room.localParticipant.publishData).toHaveBeenCalledTimes(2)
+    expect(disconnected).not.toHaveBeenCalled()
+  } finally {client.disconnect(); vi.useRealTimers()}
 })

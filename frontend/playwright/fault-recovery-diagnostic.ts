@@ -12,6 +12,7 @@ declare global {
   interface Window {
     __voiceControlProbeRoom?: {probeControl: () => Promise<ControlProbeObservation>;
       probeAudio: () => Promise<AudioProbeObservation>;
+      isAudioProbeReady: () => boolean;
       setConnectionObserver: (observer: (row: ConnectionLifecycleObservation) => void) => void;
       setPacketOutputObserver: (observer: (row: PacketOutputEvidence) => void) => void}
     __voiceConnectionEvents?: ConnectionLifecycleObservation[]
@@ -143,8 +144,12 @@ export async function measureFaultRecovery(page: Page, runner: FaultClockRunner,
       }))
       probes.push(control)
       if (sentAfterPulse && control.status === 'received' && audioProbe === undefined) {
-        audioProbe = page.evaluate(() => window.__voiceControlProbeRoom!.probeAudio())
-          .then(observation => {record.audio_probe = observation}, () => {record.audio_probe = null})
+        audioProbe = page.evaluate(() => window.__voiceControlProbeRoom!.isAudioProbeReady()
+          ? window.__voiceControlProbeRoom!.probeAudio() : null)
+          .then(observation => {
+            if (observation === null) audioProbe = undefined
+            else record.audio_probe = observation
+          }, () => {record.audio_probe = null})
       }
       await page.waitForTimeout(100)
     }
