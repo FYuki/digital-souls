@@ -96,3 +96,13 @@ backend/.venv/bin/python scripts/voice_quality/run_pilot.py \
 `--controlled`は`--trials`と排他的で、少数pilotの環境変数を除去して5 warm-up＋独立100 sessionを選ぶ。固定PCM時計なし、連続session診断との混在は拒否する。上の例は`think:false`の実験条件を含み、元の生成optionsと同じ品質の証明ではない。RAGなしのintegration-voiceで、personaと会話の初期状態を毎試行照合する。
 
 完了したrunは`python -m app.livekit_pilot_report --scope controlled`へmanifest・trace・profile reportを指定して集計する。出力sample数、出力時計、receive／decode trace、固定音声の境界、独立ID、空の会話・記憶状態を検証する。品質の合否はさらに`voice_metrics.evaluate_artifact`で凍結済みWebSocket baselineと比較し、未測定のcohortを合格へ補完しない。
+
+
+## STTの待機後遅延
+
+```bash
+backend/.venv/bin/python scripts/voice_quality/probe_stt_idle.py \
+  --output frontend/test-results/media-boundaries/stt-idle-new.json
+```
+
+固定fixtureの同じPCMに対して待機間隔を変え、100msの無音を先に認識する準備も比較する。音声・本文は保存せず、一致判定と時間だけを残す。既存出力は上書きしない。無音処理の結果は会話へ送らず、モデル・サービス設定は変更しない。先頭の追加待機0秒は、診断開始前のidle時間を表さない。前景の実会話・品質測定と並行して実行しない。

@@ -459,3 +459,20 @@ Frontendのproduction buildも成功した。大きいbundleに対するViteの�
 割り込みのlocal stop／turn decision／cancel、VAD冒頭・終了境界、stale、reconnect、manual operationsはこの通常応答artifactで欠測が残る。resourceとnetworkも専用観測の取り込みが未完了である。割り込み・再接続のcohort、VAD境界計測、dogfood品質の受け入れは完了していない。
 
 途中の数値診断では、STT処理中央値約401ms、STT完了→LLM開始約15ms、LLM開始→first token約355ms、最初のTTS生成約308ms、VAD通知→STT開始約156msだった。Ollamaの生成prompt評価中央値は約38msに対して`load_duration`中央値は約274ms。v0.32.5の[ChatHandler](https://github.com/ollama/ollama/blob/v0.32.5/server/routes.go)・[scheduler](https://github.com/ollama/ollama/blob/v0.32.5/server/sched.go)では、モデル確認とrunner取得までがload値に含まれる。重みの再ロードや純粋なqueue待ちへ断定できない。共有Ollamaを変更せず、残る時間の切り分け対象とする。
+
+
+## 2026-09-07: 再生の先行bufferを32msへ短縮する候補
+
+60ms設定の正式100試行ではgap 0件だったが、client受信→実再生p95 104msが相対上限約81.20msを超えた。先行bufferを32ms（48kHzで1,536sample）へ短縮し、入力前のゼロを応答sampleへ含めないこと、全PCMの出力、停止後の破棄、global時計の照合を含む関連39テストが成功した。
+
+`buffer32-pilot-01`の準備1回＋独立10試行は全件成功、gap 0sampleだった。[匿名artifact](artifacts/livekit-pilot-2026-09-07-buffer32.json)のschema・匿名性・出力時計照合が成功した。測定10回のclient受信→実再生p95は75.55ms、復号→実再生p95は74msで、少数試行では相対上限以内となった。TTFA p95は2,138.025msで未達。32ms設定の正式100試行の安定性はまだ確認していない。
+
+## 2026-09-07: STTの待機後遅延と無音による準備
+
+同じ固定fixtureを元PCM／32kbps Opus経由／末尾静音320msにした12回の診断ではtranscriptが全件一致した。先頭の1回は約445ms、その後は約109〜123msだった。新しいHTTP clientを繰り返し作った追加診断でも、最初の1回の後は概ね約116〜160msとなり、HTTP接続を新しくするだけでは毎回の遅延を再現しなかった。診断用の`/health`取得は404だったため、readiness成功の証拠には使わない。
+
+[待機時間の診断](artifacts/stt-idle-2026-09-07.json)では、同じPCMで0.5秒待機後が約137ms、1秒後が約174ms、2秒後が約300ms、4秒後が約447msとなった。4秒待機後に100msの無音PCMを先に処理し、400ms後に本来の音声を渡す2回は約123／156msだった。無音の準備自体には約436〜450msかかり、総計算時間を減らした測定ではない。全8回でtranscript一致。先頭の`idle_seconds: 0`は診断内で追加待機していないという意味で、測定前のidle時間は制御していない。
+
+GPU clockの変化など、待機後に遅くなるハードウェア側の具体原因は未確定である。モデルやユーザー音声を変更せず、発話末尾の待機と準備処理を重ねる余地を示す診断として扱う。通常会話への準備処理は未実装で、共有STTの同時実行上限、前景の認識との競合、キャンセルと終了の扱いを設計する必要がある。`probe_stt_idle.py`を追加し、固定fixtureのhash確認、上書き拒否、本文・音声を含まない数値保存で再実行できるようにした。
+
+追加したコマンドの再実行`stt-idle-02`も8/8でtranscript一致した。4秒待機後約409ms、無音で準備後約125／126msとなり、待機後遅延の軽減が再現した。2秒待機後は約408msであり、idle時間から遅延を一意に予測できる測定ではない。

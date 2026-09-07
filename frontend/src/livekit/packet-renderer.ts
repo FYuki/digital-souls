@@ -27,8 +27,8 @@ class PacketRenderer extends AudioWorkletProcessor {
         this.port.postMessage({kind: 'error', reason: 'pcm_queue_overflow'}); return;
       }
       this.queue.push(data); this.queuedSamples += data.samples.length;
-      // 初回は60msを確保する。callbackの遅着で各packetの予定を後ろへずらさない。
-      if (this.startFrame === null) this.startFrame = currentFrame + 2880;
+      // 初回は32msを確保する。callbackの遅着で各packetの予定を後ろへずらさない。
+      if (this.startFrame === null) this.startFrame = currentFrame + 1536;
     };
   }
   process(_inputs, outputs) {

@@ -24,11 +24,11 @@ test('入力前と初回buffer中のゼロを応答sampleとして記録しな�
   const p = renderer()
   expect(p.step(0)).toEqual(new Float32Array(128))
   p.send(packet(0))
-  for (let frame = 128; frame < 2880; frame += 128) {
+  for (let frame = 128; frame <= 1536; frame += 128) {
     const result = p.step(frame)
-    if (frame + 128 <= 2880) expect(result).toEqual(new Float32Array(128))
+    if (frame + 128 <= 1536) expect(result).toEqual(new Float32Array(128))
   }
-  expect(p.messages[0]).toMatchObject({kind: 'rendered', packetIndex: 0, packetSampleOffset: 0, startFrame: 3136})
+  expect(p.messages[0]).toMatchObject({kind: 'rendered', packetIndex: 0, packetSampleOffset: 0, startFrame: 1792})
 })
 
 test('全PCMをpacket内offsetと出力frameへ対応づけ、本文は観測へ含めない', () => {
@@ -36,22 +36,22 @@ test('全PCMをpacket内offsetと出力frameへ対応づけ、本文は観測へ
   p.send(packet(0, 0))
   p.send(packet(1, .25))
   const output: number[] = []
-  for (let frame = 2880; frame < 4800; frame += 128) output.push(...p.step(frame))
+  for (let frame = 1536; frame < 3456; frame += 128) output.push(...p.step(frame))
   expect(output).toEqual([...new Float32Array(960), ...new Float32Array(960).fill(.25)])
   const rendered = p.messages.filter(row => row.kind === 'rendered')
   expect(rendered.reduce((total, row) => total + Number(row.endFrame) - Number(row.startFrame), 0)).toBe(1920)
-  expect(rendered[0]).toMatchObject({packetIndex: 0, packetSampleOffset: 0, startFrame: 3136, energy: 0})
-  expect(rendered.at(-1)).toMatchObject({packetIndex: 1, endFrame: 5056})
+  expect(rendered[0]).toMatchObject({packetIndex: 0, packetSampleOffset: 0, startFrame: 1792, energy: 0})
+  expect(rendered.at(-1)).toMatchObject({packetIndex: 1, endFrame: 3712})
   expect(rendered.every(row => !('samples' in row))).toBe(true)
 })
 
 test('stopは未出力PCMを破棄し、遅着した旧packetやresumeでも再開しない', () => {
   const p = renderer()
   p.send(packet(0)); p.send(packet(1))
-  p.step(2880)
+  p.step(1536)
   const count = p.messages.length
   p.send({kind: 'stop'}); p.send(packet(2)); p.send({kind: 'resume'})
-  expect(p.step(3008)).toEqual(new Float32Array(128))
+  expect(p.step(1664)).toEqual(new Float32Array(128))
   expect(p.messages).toHaveLength(count)
 })
 
@@ -147,24 +147,24 @@ test('矛盾する総sample数や終了後の追加sampleを拒否する', () =>
 test('公開frameの更新欠落でもPCMを重複・欠落させず、次の時計で確認する', () => {
   const p = renderer()
   p.send({...packet(0), samples: Float32Array.from({length: 960}, (_, i) => i / 1000)})
-  const first = p.step(2880)
-  const second = p.step(2880)
+  const first = p.step(1536)
+  const second = p.step(1536)
   expect(p.messages).toHaveLength(1)
   expect(second).not.toEqual(first)
-  const third = p.step(3136)
+  const third = p.step(1792)
   expect([...first, ...second, ...third]).toEqual([...Float32Array.from({length: 384}, (_, i) => i / 1000)])
   expect(p.messages.map(row => [row.startFrame, row.endFrame, row.renderClockConfirmationFrame]))
-    .toEqual([[3136, 3264, 3136], [3264, 3392, 3392], [3392, 3520, 3392]])
+    .toEqual([[1792, 1920, 1792], [1920, 2048, 2048], [2048, 2176, 2048]])
 })
 test('次の公開時計が計数と違う場合は保留した出力を確認済みへ昇格しない', () => {
   const p = renderer()
-  p.send(packet(0)); p.step(2880); p.step(2880); p.step(3008)
+  p.send(packet(0)); p.step(1536); p.step(1536); p.step(1664)
   expect(p.messages.filter(row => row.kind === 'rendered')).toHaveLength(1)
   expect(p.messages.at(-1)).toMatchObject({kind: 'error', reason: 'render_clock_unreconciled'})
 })
 test('停止した応答の未照合区間は後から届いた時計で提示済みにしない', () => {
   const p = renderer()
-  p.send(packet(0)); p.step(2880); p.step(2880); p.send({kind: 'stop'})
-  expect(p.step(3136)).toEqual(new Float32Array(128))
+  p.send(packet(0)); p.step(1536); p.step(1536); p.send({kind: 'stop'})
+  expect(p.step(1792)).toEqual(new Float32Array(128))
   expect(p.messages).toHaveLength(1)
 })
