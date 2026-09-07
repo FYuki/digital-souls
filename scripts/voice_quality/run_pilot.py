@@ -114,8 +114,15 @@ def probe_gpu() -> dict[str, object]:
 def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
                       trials: int, disable_thinking: bool, scheduled_fixture: bool = False, continuous_turns: int = 0,
                       controlled: bool = False, interruption_cohort: str | None = None,
-                      control_probe: bool = False, fault_bridge: bool = False, network_fault: bool = False) -> dict[str, str]:
+                      control_probe: bool = False, fault_bridge: bool = False, network_fault: bool = False, fixture_indices: str | None = None) -> dict[str, str]:
     run_root(run_id)
+    if fixture_indices is not None:
+        if (not isinstance(fixture_indices, str) or not re.fullmatch(r"(?:[1-9][0-9]?|100)(?:,(?:[1-9][0-9]?|100))*", fixture_indices)
+                or not interruption_cohort or controlled or not 1 <= trials <= 10):
+            raise ValueError("fixture selection requires a small labeled diagnostic")
+        indices = fixture_indices.split(",")
+        if len(indices) != trials or len(set(indices)) != trials:
+            raise ValueError("fixture selection must have one unique index per trial")
     if type(network_fault) is not bool or (network_fault and not fault_bridge):
         raise ValueError("network fault requires the dedicated bridge diagnostic")
     if type(fault_bridge) is not bool or (fault_bridge and not control_probe):
@@ -169,6 +176,9 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
     env.pop("VOICE_QUALITY_CONTROL_PROBE", None)
     if control_probe:
         env["VOICE_QUALITY_CONTROL_PROBE"] = "1"
+    env.pop("VOICE_QUALITY_FIXTURE_INDICES", None)
+    if fixture_indices is not None:
+        env["VOICE_QUALITY_FIXTURE_INDICES"] = fixture_indices
     env.pop("VOICE_QUALITY_INTERRUPTION_COHORT", None)
     if interruption_cohort:
         env["VOICE_QUALITY_INTERRUPTION_COHORT"] = interruption_cohort
@@ -186,7 +196,7 @@ def run(args: argparse.Namespace) -> int:
     from native_sdk import NativeSdkSampler
     from native_sdk_experiment.prepare import REVISION
 
-    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe, args.fault_bridge, args.network_fault)
+    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe, args.fault_bridge, args.network_fault, args.fixture_indices)
     if args.fault_bridge:
         from network_fault import resolve_target
         resolve_target("ds-voice-quality-fault-livekit-1")
@@ -253,6 +263,7 @@ if __name__ == "__main__":
     count_options.add_argument("--controlled", action="store_true", help="準備5回＋独立100試行。scheduled fixture必須。")
     parser.add_argument("--interruption-cohort", choices=("backchannel", "take_turn"),
                         help="応答再生中へ固定ラベル音声を入れる実接続診断。通常の独立試行集計とは分離する。")
+    parser.add_argument("--fixture-indices", help="小規模なラベル付き診断だけで使う1始まりの番号列（例51,56,72）。100試行には使わない。")
     parser.add_argument("--fault-bridge", action="store_true",
                         help="専用19880 bridgeと同じreadiness Profileを選ぶ。control-probe専用。")
     parser.add_argument("--network-fault", action="store_true",

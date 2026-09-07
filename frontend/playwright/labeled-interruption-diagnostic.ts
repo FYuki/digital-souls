@@ -5,13 +5,16 @@ import { createHash } from 'node:crypto'
 import { dirname } from 'node:path'
 import { installScheduledFixture, parseScheduledFixture, readFixtureBounds, type ScheduledFixture } from './controlled-audio-fixture'
 import { createVoiceChatDriver } from './voice-chat-suite'
+import type {ShortSpeechEvidence} from '../src/lib/audio/short-speech-evidence'
 
 declare global {
   interface Window {
-    __voiceVadDiagnostics?: {frames: {atMs: number; probability: number; rms: number; samples: number}[];
+    __voiceVadDiagnostics?: {frames: {atMs: number; probability: number; rms: number; samples: number; secondary?: ShortSpeechEvidence}[];
+      frameOverflow: boolean; eventOverflow: boolean; modelResetOverflow: boolean; modelResets: number[];
       events: {type: string; speechStartedAtMs: number; detectedAtMs: number}[]}
     __digitalSoulsVoiceVadTestPort?: {
-      frame: (observation: {atMs: number; probability: number; rms: number; samples: number}) => void
+      frame: (observation: {atMs: number; probability: number; rms: number; samples: number; secondary?: ShortSpeechEvidence}) => void
+      modelReset?: (atMs: number) => void
       event: (event: {type: string; speechStartedAtMs: number; detectedAtMs: number}) => void
     }
   }
@@ -39,13 +42,20 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
   if (!Number.isInteger(count) || count < 1 || count > 100) throw new Error('invalid interruption trial count')
   const manifestBytes = await readFile(new URL('./fixtures/voice-quality-v2/manifest.json', import.meta.url))
   const manifest = JSON.parse(manifestBytes.toString()) as {trials: LabeledTrial[]}
-  const selected = manifest.trials.filter(t => t.cohort === cohort).slice(0, count)
+  const available = manifest.trials.filter(t => t.cohort === cohort)
+  const selection = process.env.VOICE_QUALITY_FIXTURE_INDICES
+  const indices = selection === undefined ? Array.from({length: count}, (_, i) => i + 1) : selection.split(',').map(Number)
+  if (selection !== undefined && (count > 10 || !/^(?:[1-9][0-9]?|100)(?:,(?:[1-9][0-9]?|100))*$/.test(selection)
+    || indices.length !== count || new Set(indices).size !== count)) throw new Error('invalid diagnostic fixture selection')
+  const selected = indices.map(index => available[index - 1])
+  if (selected.some(t => t === undefined)) throw new Error('diagnostic fixture selection unavailable')
   if (selected.length !== count) throw new Error('labeled cohort coverage unavailable')
   const trials: Record<string, unknown>[] = []
   const persist = async () => {
     await mkdir(dirname(output), {recursive: true})
     await writeFile(output, JSON.stringify({measurement_scope: 'labeled_livekit_interruption_diagnostic',
       cohort, expected_measured: count, initial_fixture_sha256: initial.audioSha256,
+      ...(selection === undefined ? {} : {fixture_indices: indices}),
       labeled_manifest_sha256: createHash('sha256').update(manifestBytes).digest('hex'), trials}, null, 2) + '\n')
   }
   for (const selectedTrial of selected) {
@@ -62,10 +72,22 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
       await page.addInitScript(() => {
         const frames: NonNullable<Window['__voiceVadDiagnostics']>['frames'] = []
         const events: NonNullable<Window['__voiceVadDiagnostics']>['events'] = []
-        window.__voiceVadDiagnostics = {frames, events}
+        const state = {frames, events, frameOverflow: false, eventOverflow: false,
+          modelResetOverflow: false, modelResets: [] as number[]}
+        window.__voiceVadDiagnostics = state
         window.__digitalSoulsVoiceVadTestPort = {
-          frame: value => {frames.push(value); if (frames.length > 1024) frames.shift()},
-          event: value => {events.push(value); if (events.length > 128) events.shift()},
+          frame: value => {
+            if (frames.length >= 1024) {state.frameOverflow = true; return}
+            frames.push(value)
+          },
+          event: value => {
+            if (events.length >= 128) {state.eventOverflow = true; return}
+            events.push(value)
+          },
+          modelReset: atMs => {
+            if (state.modelResets.length >= 256) {state.modelResetOverflow = true; return}
+            state.modelResets.push(atMs)
+          },
         }
       })
       await installScheduledFixture(page, initial)

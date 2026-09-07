@@ -17,7 +17,7 @@
 
   import { AudioWorkletPcmRecorder } from './audio/pcm-worklet-recorder'
   import { attachIdleVadReset } from './audio/idle-vad-reset'
-  import { createShortSpeechAnalyzer, type ShortSpeechAnalyzer } from './audio/short-speech-evidence'
+  import { createShortSpeechAnalyzer, type ShortSpeechAnalyzer, type ShortSpeechEvidence } from './audio/short-speech-evidence'
   import { VAD_ASSET_ROUTE } from './audio/vad-assets'
   import { VAD_UTTERANCE_REDEMPTION_MS } from './audio/vad-policy'
   import { UtteranceDetector, type UtteranceDetection } from './audio/utterance-detector'
@@ -67,7 +67,8 @@
   // 実接続診断が設定した場合だけ数値を観測する。PCMや本文をtest portへ渡さない。
   const vadTestPort = () => (globalThis as typeof globalThis & {
     __digitalSoulsVoiceVadTestPort?: {
-      frame: (observation: {atMs: number; probability: number; rms: number; samples: number}) => void
+      frame: (observation: {atMs: number; probability: number; rms: number; samples: number; secondary?: ShortSpeechEvidence}) => void
+      modelReset?: (atMs: number) => void
       event: (event: UtteranceDetection) => void
     }
   }).__digitalSoulsVoiceVadTestPort
@@ -100,13 +101,16 @@
     onFrameProcessed: (probabilities, frame) => {
       if (continuous) {
         const atMs = performance.now()
+        const secondary = shortSpeechAnalyzer?.process(frame)
         const port = vadTestPort()
         if (port) {
           let energy = 0
           for (const sample of frame) energy += sample * sample
-          port.frame({atMs, probability: probabilities.isSpeech, rms: Math.sqrt(energy / frame.length), samples: frame.length})
+          port.frame({atMs, probability: probabilities.isSpeech, rms: Math.sqrt(energy / frame.length), samples: frame.length,
+            // 診断側の変更が検出器の補助根拠を書き換えないよう、数値だけを複製する。
+            ...(secondary === undefined ? {} : {secondary: {...secondary}})})
         }
-        utteranceDetector?.process(frame, probabilities.isSpeech, atMs, shortSpeechAnalyzer?.process(frame))
+        utteranceDetector?.process(frame, probabilities.isSpeech, atMs, secondary)
       }
     },
     onSpeechStart: () => {
@@ -188,7 +192,10 @@
       utteranceDetector = new UtteranceDetector(handleUtteranceDetection)
     }
     const instance = await MicVAD.new(buildVadOptions(stream))
-    if (continuous) vadFrameControl = attachIdleVadReset(instance, reportError, () => shortSpeechAnalyzer?.reset())
+    if (continuous) vadFrameControl = attachIdleVadReset(instance, reportError, () => {
+      shortSpeechAnalyzer?.reset()
+      vadTestPort()?.modelReset?.(performance.now())
+    })
     vad = instance
     return vad
   }

@@ -210,3 +210,42 @@ def test_measurement_revision_requires_committed_sources(tmp_path, monkeypatch, 
         with pytest.raises(ValueError, match='committed worktree'):
             pilot.measurement_revision(tmp_path)
         assert len(calls) == 1
+
+
+@pytest.mark.parametrize('selection,count,cohort,controlled,valid', [
+    ('51,56,72', 3, 'take_turn', False, True),
+    ('100', 1, 'backchannel', False, True),
+    ('51,51,72', 3, 'take_turn', False, False),
+    ('51,56', 3, 'take_turn', False, False),
+    ('0', 1, 'take_turn', False, False),
+    ('101', 1, 'take_turn', False, False),
+    ('01', 1, 'take_turn', False, False),
+    ('1, 2', 2, 'take_turn', False, False),
+    ('1', 1, None, False, False),
+    (','.join(str(i) for i in range(1, 101)), 100, 'take_turn', False, False),
+    ('1', 100, 'take_turn', True, False),
+])
+def test_fixture_selection_cannot_replace_the_formal_denominator(tmp_path, selection, count, cohort, controlled, valid):
+    inference, livekit = tmp_path / 'inference.env', tmp_path / 'livekit.env'
+    inference.write_text('INFERENCE_TARGET_CHAT=ollama/test\n')
+    livekit.write_text('LIVEKIT_KEYS=test:test-only\n')
+    arguments = (inference, livekit, 'selected-diagnostic', count, False)
+    options = dict(scheduled_fixture=True, interruption_cohort=cohort,
+                   controlled=controlled, fixture_indices=selection)
+    if valid:
+        result = pilot.pilot_environment(*arguments, **options)
+        assert result['VOICE_QUALITY_FIXTURE_INDICES'] == selection
+    else:
+        with pytest.raises(ValueError, match='fixture selection'):
+            pilot.pilot_environment(*arguments, **options)
+
+
+def test_formal_cohort_does_not_inherit_diagnostic_fixture_selection(tmp_path, monkeypatch):
+    inference, livekit = tmp_path / 'inference.env', tmp_path / 'livekit.env'
+    inference.write_text('INFERENCE_TARGET_CHAT=ollama/test\n')
+    livekit.write_text('LIVEKIT_KEYS=test:test-only\n')
+    monkeypatch.setenv('VOICE_QUALITY_FIXTURE_INDICES', '51,56,72')
+    result = pilot.pilot_environment(inference, livekit, 'complete-cohort', 100, False,
+                                    scheduled_fixture=True, interruption_cohort='take_turn')
+    assert 'VOICE_QUALITY_FIXTURE_INDICES' not in result
+    assert result['VOICE_QUALITY_PILOT_TRIALS'] == '100'
