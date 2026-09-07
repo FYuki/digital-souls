@@ -355,3 +355,29 @@ fixtureを全て出した後、VAD frame処理まで待って確認／終了イ�
 送信が完了しないままtimeoutした場合はnullのまま保存し、後から値を書き換えない。
 専用test Profileのサーバー診断はprobe受信・世代拒否・ack送信開始／完了を固定stageと単調時計で記録する。
 各時計の値を直接減算して片道遅延とせず、同じ時計内の段階差から滞留箇所を切り分ける。受け入れの往復成功条件は変更しない。
+
+
+## cancel後の音声出力をgain後段で診断する
+
+通常の音声試験driverは`observeStaleAudio`を設定し、応答ごとのgainとdestinationの間へ
+passthrough AudioWorkletを追加する。音声本文を記録せず、非ゼロsample数・先頭と末尾frame・
+出力時計・応答とsession／generationの対応だけを保持する。明示診断がない通常経路へ追加しない。
+割り込みのraw manifestは`stale_audio`と`stale_audio_overflow`へこの観測を保存する。
+
+renderer／gainを停止・切断しても監視nodeをdestinationへ残す。停止前にrender済みで出力待ちの
+sampleを捨てず、finish通知と`getOutputTimestamp()`の末尾通過、同じ末尾に対応する
+`performance.now()`の通過を待つ。音声graphを閉じるときも最大2秒までdrainを待ち、
+未観測なら`audit_closed_before_drain`として残す。終了通知だけで提示済みやstale 0とはしない。
+finish後に非ゼロ出力が届けば、先にdrain完了を通知していても欠測へ更新する。
+
+cancel境界はBrowserの`response_cancelled`受信時刻で、観測には
+`client_cancel_confirmed`を明記する。サーバーのcancel時刻からの全区間とは別であり、
+時計対応を確認するまで同一指標へ転用しない。sampleがcancel境界をまたぐ場合は
+`nonzeroSamplesAfterCancelLower/Upper`に上下限を残す。観測範囲が境界の前後を覆い、
+欠測がなく、上限が0の場合だけ、この出力窓の非ゼロsampleを0と確認できる。
+後から欠測が届く可能性があるため、最初のcomplete行だけを採用しない。
+
+`receivedAfterCancelPackets/Samples`はcancel後にmainへ届いた復号済み旧packetを、
+再生抑止のreturnより前で数える。受信境界は`decoded_packet_delivered`で、Backend生成数や
+encoded packetの最初の到着数ではない。textの受信／DOM提示、匿名aggregateと受け入れ評価への
+統合は別途必要。この診断の導入だけでは#150のstale presented 0を満たさない。

@@ -1,3 +1,5 @@
+import {postGainAuditSource} from './post-gain-audit'
+import {PostGainAudioMonitor, type StaleAudioObservation} from './post-gain-monitor'
 import {StateSyncRequest} from './state-sync-request'
 import {CoreAckOutbox} from './core-ack-outbox'
 import {VoiceReconnectPolicy, type RetryObservation} from './reconnect-policy'
@@ -132,6 +134,7 @@ export class LiveKitRoomClient {
     outputTracker: PacketOutputTracker
     outputTimer: ReturnType<typeof setInterval>
     firstPacket?: DecodedAudioPacket
+    audit?: PostGainAudioMonitor
     packetDiagnostic?: PacketOutputDiagnostic
     packetSequence: RtpPacketSequence
     worklet: AudioWorkletNode
@@ -139,6 +142,8 @@ export class LiveKitRoomClient {
     playbackElement: HTMLAudioElement
     suspended: boolean
   }>()
+  private readonly audioAuditDisposals = new Set<Promise<void>>()
+  private staleAudioObserver: ((row: StaleAudioObservation) => void) | undefined
   private readonly networkObserver = new RtpNetworkObserver()
   private readonly mediaObservers = new Map<string, RemoteMediaObserver>()
   private duplicateTrackFrames = 0
@@ -228,6 +233,8 @@ export class LiveKitRoomClient {
     this.connectionObserver?.({event, atMs: performance.now(), generation: this.generation,
       ...(retry ? {retry} : {}), ...(disconnect ? {disconnect} : {})})
   }
+
+  setStaleAudioObserver(observer: (row: StaleAudioObservation) => void): void {this.staleAudioObserver = observer}
 
   setPacketOutputObserver(observer: (row: PacketOutputEvidence) => void): void {
     this.packetOutputObserver = observer
@@ -562,6 +569,7 @@ export class LiveKitRoomClient {
           (evidence) => this.observeTrackMedia(evidence, responseId, key), {
             packet: packet => {
               const graph = this.audioGraphs.get(key)
+              graph?.audit?.received(packet.pcm.length)
               if (!this.subscriptions.has(key) || !graph || this.stoppedResponses.has(responseId)) return
               try {
                 const gap = graph.packetSequence.receive(packet)
@@ -711,12 +719,16 @@ export class LiveKitRoomClient {
         }
       }
       if (event.type === 'response_cancelled' && event.response_id !== undefined) {
+        const confirmedAt = performance.now()
+        for (const graph of this.audioGraphs.values()) {
+          if (graph.responseId === event.response_id) graph.audit?.cancel(confirmedAt)
+        }
         this.observe({
           transport: 'available',
           control: 'available',
           audio: 'unavailable',
           activeResponseId: event.response_id,
-          cancelConfirmedAtMs: Math.floor(performance.now()),
+          cancelConfirmedAtMs: Math.floor(confirmedAt),
         })
       }
       this.receiveCoreEvent(event)
@@ -842,7 +854,7 @@ export class LiveKitRoomClient {
     if (this.audioContext === null) {
       const created = new AudioContext({ sampleRate: 48_000 })
       this.audioContext = created
-      const url = URL.createObjectURL(new Blob([packetRendererSource], { type: 'text/javascript' }))
+      const url = URL.createObjectURL(new Blob([packetRendererSource, postGainAuditSource], { type: 'text/javascript' }))
       this.workletReady = created.audioWorklet.addModule(url)
         .finally(() => {
           URL.revokeObjectURL(url)
@@ -933,8 +945,10 @@ export class LiveKitRoomClient {
     playbackElement.muted = true
     playbackElement.srcObject = new MediaStream([track.mediaStreamTrack])
     document.body.append(playbackElement)
+    const audit = this.staleAudioObserver === undefined || this.sessionId === null ? undefined
+      : new PostGainAudioMonitor(context, responseId, this.sessionId, generation, this.staleAudioObserver)
     const graph = {
-      responseId,
+      responseId, audit,
       outputTracker,
       outputTimer,
       firstPacket: undefined as DecodedAudioPacket | undefined,
@@ -1043,10 +1057,12 @@ export class LiveKitRoomClient {
     const context = this.audioContext
     this.audioContext = null
     this.workletReady = null
+    await Promise.all([...this.audioAuditDisposals])
     if (context !== null) await context.close()
   }
 
   private disconnectAudioGraph(graph: {
+    audit?: PostGainAudioMonitor
     outputTracker: PacketOutputTracker
     outputTimer: ReturnType<typeof setInterval>
     worklet: AudioWorkletNode
@@ -1064,6 +1080,11 @@ export class LiveKitRoomClient {
     }
     graph.playbackElement.srcObject = null
     graph.playbackElement.remove()
+    if (graph.audit) {
+      const task = graph.audit.dispose()
+      this.audioAuditDisposals.add(task)
+      void task.then(() => this.audioAuditDisposals.delete(task), () => this.audioAuditDisposals.delete(task))
+    }
   }
 
   private suspendAudioGraph(graph: {
@@ -1109,6 +1130,7 @@ export class LiveKitRoomClient {
 
   private connectAudioEvidence(
     graph: {
+      audit?: PostGainAudioMonitor
       worklet: AudioWorkletNode
       outputGain: GainNode
       playbackElement: HTMLAudioElement
@@ -1118,7 +1140,7 @@ export class LiveKitRoomClient {
   ): void {
     graph.worklet.port.postMessage({kind: 'resume'})
     graph.worklet.connect(graph.outputGain)
-    graph.outputGain.connect(context.destination)
+    graph.outputGain.connect(graph.audit?.node ?? context.destination)
     graph.suspended = false
   }
 

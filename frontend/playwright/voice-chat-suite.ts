@@ -1,3 +1,4 @@
+import type {StaleAudioObservation} from '../src/livekit/post-gain-monitor'
 import { installUserControlProbe } from './user-control-probe'
 import type {} from './controlled-audio-fixture'
 import type {RtpPacketGap} from '../src/livekit/rtp-packet-sequence'
@@ -14,6 +15,8 @@ declare global {
       speechStarted: (utteranceId: string, atMs: number) => Promise<void>
     }
     __voiceChatE2E: {
+      staleAudio?: StaleAudioObservation[]
+      staleAudioOverflow?: boolean
       mediaTimelineInterruptions?: Array<{responseId: string; atMs: number; reason: 'timestamp_overlap' | 'timestamp_discontinuity'}>
       mediaPacketLosses?: Array<RtpPacketGap & {responseId: string; atMs: number}>
       transportFailures?: {stage: string; reason?: string; context?: Readonly<Record<string, number>>; atMs: number}[]
@@ -128,6 +131,7 @@ const installPlaybackProbe = async (page: Page) => {
     const testPortTarget = window as typeof window & {
       __digitalSoulsVoiceSessionTestPort?: {
         createRoom?: (...args: never[]) => unknown
+        observeStaleAudio?: (observation: StaleAudioObservation) => void
         observeRoom?: (observation: {
           mediaTimelineInterruption?: {responseId: string; atMs: number; reason: 'timestamp_overlap' | 'timestamp_discontinuity'}
           mediaPacketLoss?: RtpPacketGap & {responseId: string; atMs: number}
@@ -172,6 +176,11 @@ const installPlaybackProbe = async (page: Page) => {
     }
     testPortTarget.__digitalSoulsVoiceSessionTestPort = {
       ...testPortTarget.__digitalSoulsVoiceSessionTestPort,
+      observeStaleAudio: (observation) => {
+        const rows = window.__voiceChatE2E.staleAudio ??= []
+        if (rows.length >= 1024) {window.__voiceChatE2E.staleAudioOverflow = true; return}
+        rows.push(observation)
+      },
       bindController: (controller) => {
         window.__voiceSessionController = controller
       },

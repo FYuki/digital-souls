@@ -25,6 +25,8 @@ type LabeledTrial = {id: string; cohort: string; audio_sha256: string; sample_ra
   speech_intervals: {start_sample: number; end_sample: number}[]}
 const snapshot = (page: Page) => page.evaluate(() => ({
   vad: window.__voiceVadDiagnostics,
+  stale_audio: window.__voiceChatE2E.staleAudio ?? [],
+  stale_audio_overflow: window.__voiceChatE2E.staleAudioOverflow ?? false,
   core_events: window.__voiceChatE2E.coreEventDiagnostics,
   interruptions: window.__voiceChatE2E.interruptions,
   transport_failures: window.__voiceChatE2E.transportFailures ?? [],
@@ -170,6 +172,9 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
         await page.waitForFunction(responseId => window.__voiceChatE2E.coreEventDiagnostics.some(event =>
           event.type === 'response_cancelled' && event.responseId === responseId)
           && window.__voiceChatE2E.interruptions.some(item => item.responseId === responseId), cycle.responseId, {timeout: 5000})
+        await page.waitForFunction(responseId => window.__voiceChatE2E.staleAudio?.some(row =>
+          row.responseId === responseId && (row.audit.complete || row.audit.missingReason !== null)),
+        cycle.responseId, {timeout: 5000})
       } else {
         // ラベルとの一致を検査する前に、保留・誤判定時も旧応答の終端まで観測する。
         await page.waitForFunction(responseId => !!window.__voiceChatE2E.playbackCompletions?.[responseId]

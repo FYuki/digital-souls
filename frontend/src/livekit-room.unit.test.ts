@@ -105,9 +105,7 @@ class FakeGainNode {
   readonly gain = { value: 1 }
   disconnect = vi.fn()
 
-  connect(destination: unknown): unknown {
-    return destination
-  }
+  connect = vi.fn((destination: unknown): unknown => destination)
 }
 
 class FakeAudioContext {
@@ -211,6 +209,49 @@ describe('LiveKit Room generation synchronization', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  test('明示診断はgain後段を通り、cancel時に監視を切断せずcontext closeもdrainを待つ', async () => {
+    const rows: import('./livekit/post-gain-monitor').StaleAudioObservation[] = []
+    const client = new LiveKitRoomClient(() => undefined)
+    client.setStaleAudioObserver(row => rows.push(row))
+    const responseId = '50000000-0000-4000-8000-000000000001'
+    const sessionId = '20000000-0000-4000-8000-000000000001'
+    let now = 1000
+    const time = vi.spyOn(performance, 'now').mockImplementation(() => now)
+    try {
+      await client.connect('ws://test', 'token', sessionId)
+      const room = latestRoom()
+      room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
+        {trackSid: 'TR_audited', trackName: `ds-response-v1:${responseId}`})
+      await vi.waitFor(() => expect(audioContexts[0]?.worklets).toHaveLength(2))
+      const context = audioContexts[0], [renderer, audit] = context.worklets
+      expect(context.gains[0].connect).toHaveBeenCalledWith(audit)
+      expect(audit.connect).toHaveBeenCalledWith(context.destination)
+      const timestamp = vi.spyOn(context, 'getOutputTimestamp').mockReturnValue({contextTime: 0, performanceTime: 0})
+      audit.port.onmessage?.({data: {kind: 'output', confirmedFrame: 48128, intervals: [
+        {startFrame: 48000, endFrame: 48128, nonzeroSamples: 128, firstNonzeroFrame: 48000, lastNonzeroFrame: 48127},
+        {startFrame: 48128, endFrame: 48256, nonzeroSamples: 0, firstNonzeroFrame: null, lastNonzeroFrame: null},
+      ]}} as MessageEvent)
+      now = 1003.1
+      emitCoreEvent(room, {protocol_version: '1.0', type: 'response_cancelled',
+        event_id: '60000000-0000-4000-8000-000000000003', session_id: sessionId, response_id: responseId,
+        reason: 'barge_in', monotonic_timestamp_ms: 2002})
+      expect(renderer.disconnect).toHaveBeenCalledOnce()
+      expect(audit.disconnect).not.toHaveBeenCalled()
+      expect(rows.at(-1)?.audit.complete).toBe(false)
+      mediaMocks.observers[0].playback!.packet({pcm: new Float32Array(960)})
+      expect(rows.at(-1)?.receivedAfterCancelPackets).toBe(1)
+      client.disconnect()
+      expect(context.close).not.toHaveBeenCalled()
+      expect(audit.port.close).not.toHaveBeenCalled()
+      now = 1100; timestamp.mockReturnValue({contextTime: 1.01, performanceTime: 1010})
+      audit.port.onmessage?.({data: {kind: 'finished', endFrame: 48256}} as MessageEvent)
+      await vi.waitFor(() => expect(context.close).toHaveBeenCalledOnce())
+      expect(audit.disconnect).toHaveBeenCalledOnce()
+      expect(rows.at(-1)).toMatchObject({responseId, sessionId, graphClosed: true,
+        audit: {complete: true, nonzeroSamplesAfterCancelUpper: 0}})
+    } finally {client.disconnect(); time.mockRestore()}
   })
 
   test.each([false, true])('再生worklet準備前・購読解除後はreadyを送らない（解除=%s）', async unsubscribe => {
