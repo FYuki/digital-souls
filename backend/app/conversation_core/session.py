@@ -43,6 +43,10 @@ def _log_unhandled_task_error(task: asyncio.Task[object]) -> None:
     error = task.exception()
     if error is None:
         return
+    _log_core_error(error)
+
+
+def _log_core_error(error: BaseException) -> None:
     # 例外本文・ローカル変数・ユーザー入力を出さず、失敗箇所だけを残す。
     frames = [
         f"{Path(frame.f_code.co_filename).name}:{line}:{frame.f_code.co_name}"
@@ -563,7 +567,8 @@ class ConversationCoreSession:
                 stage="llm",
             )
             raise
-        except Exception:
+        except Exception as error:
+            _log_core_error(error)
             # terminal effectを起動する前にstart待ちを解除し、開始失敗時の
             # 相互待機を作らない。
             self._response_start_events[response.response_id].set()
@@ -1241,6 +1246,7 @@ class ConversationCoreSession:
             )
             raise
         except Exception as error:
+            _log_core_error(error)
             await self._record_stage(
                 response_id,
                 generation,

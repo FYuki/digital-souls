@@ -428,7 +428,7 @@ def test_automatic_llm_failure_terminates_once_and_starts_pending_response() -> 
     _run(exercise)
 
 
-def test_response_start_failure_terminates_once_and_allows_the_next_response() -> None:
+def test_response_start_failure_terminates_once_and_allows_the_next_response(caplog) -> None:
     async def exercise() -> None:
         module = _core_module()
         delivery = RecordingDelivery()
@@ -479,6 +479,10 @@ def test_response_start_failure_terminates_once_and_allows_the_next_response() -
         await session.end()
 
     _run(exercise)
+    assert "Core task failed: type=RuntimeError" in caplog.text
+    assert "start_response" in caplog.text
+    assert "response start failure sentinel" not in caplog.text
+    assert "開始に失敗する入力" not in caplog.text
 
 
 def test_terminal_persistence_failure_still_delivers_and_starts_pending_response() -> None:
