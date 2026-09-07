@@ -661,3 +661,25 @@ Frontend単体461件・結合97件、型検査、buildが成功した。最初�
 見逃しは2/20で10%。欠測2件を各遅延の分母に残し、100件未満でもあるため受け入れは未達とする。匿名性・metric schema・全fixtureのhashと順序は集計器で検証した。両runの所有Frontend・Backendコンテナ削除を確認し、共有推論サービスは停止していない。
 
 Backend単体・結合は3,920件成功・1件skip、Frontend単体463件・結合97件、Backend／環境の型検査231ファイル、Frontend型検査とbuildが成功した。出力待機中の正常完了・cancel・timeout、別responseやsequenceの確認拒否、重複確認、古い停止の対象を検証した。buildの既存bundleサイズ警告とBackendの既存非推奨警告は残る。VAD未確定、遅いpreview、全stackの相槌／take-turn各100件、再接続・stale提示・通常100件再測定・元設定の品質と相対境界の受け入れは引き続き未完了である。
+
+
+## 2026-09-07: 先行認識の800msから発話前の静音を除く
+
+先行認識の開始条件がcapture全体の800msだったため、最大2秒のpre-rollに無音が含まれていると、実音声200msでも一度きりのpreviewを消費していた。静音2秒＋実音声200msでpreviewが実行されるテストと、全無音でも実行されるテストは修正前に失敗した。pre-rollなしの対照は成功していた。
+
+`SttSignalSpan`は先頭trimと同じ絶対値16超の最初のPCM16 sampleを起点に、以後の長さを追記ごとに数える。最初の閾値超過から800msを受信した場合にだけpreviewを実行する。文中休止もこの長さに含み、音声の削除・分割には使わない。低い静音閾値は発話と雑音の分類器ではなく、環境雑音が続く条件では発話開始の保証にならない。全無音はpreviewを行わず、発話終了時の通常認識へ渡す。終了済みcapture、容量超過、入力受付終了ではpreviewを追加しない。
+
+関連Backend93件、型検査231ファイル、Ruffが成功した。語頭、負の閾値超過、静音境界、発話中休止、別captureへの持越し、1回だけのpreview、終了入力を検証した。FrontendとVAD確定条件は変更していない。
+
+[実接続take-turn先頭20件](artifacts/livekit-take-turn-20-2026-09-07-preview-onset.json)は20/20成功。全件で音声投入、独立session、停止とキャンセルの相関、明示終了を検証し、所有Frontend・Backendコンテナ削除を確認した。各割り込み指標は取得20・欠測0だった。
+
+| 指標 | 分母 | p95 |
+|---|---:|---:|
+| local playback stop | 20 | 1,110.4ms |
+| turn decision | 20 | 1,110.4ms |
+| decision後cancel | 20 | 約5.65ms |
+| 発話開始からcancel確認 | 20 | 1,131.75ms |
+
+前の20件ではpreviewがtake-turn 15件・indeterminate 3件・VAD未確定2件だった。今回は20件すべてpreviewがtake-turnとなった。実際のpreview入力時点でcapture全体は34,720〜42,240 samples、最初の静音閾値超過以降は12,806〜12,955 samples（約800.4〜809.7ms）であり、新しい数値traceで区別できる。本文・波形は匿名artifactへ含めない。
+
+この20件はthink:false・RAGなしの診断で、最低100件の見逃し率評価は不合格のまま保存した。VADの確定条件は変えておらず、今回の未検出0件を位相依存の取りこぼし解消とはみなさない。全100素材・相槌への影響・その他の受け入れ条件は別途検証が必要である。

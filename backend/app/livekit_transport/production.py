@@ -46,7 +46,7 @@ from app.livekit_transport.delivery import CoreNotificationPort
 from app.livekit_transport.errors import RoomCleanupPendingError
 from app.livekit_transport.measurement import LiveKitMeasurementSession
 from app.livekit_transport.runtime import MicrophoneTrackObserver
-from app.livekit_transport.stt_audio import prepare_stt_audio
+from app.livekit_transport.stt_audio import SttSignalSpan, prepare_stt_audio
 from app.livekit_transport.response_audio import ResponseAudioTracks
 from app.livekit_transport.token import IssuedToken, LiveKitTokenSigner
 from app.voice_metrics import MeasurementKind, TraceEvent
@@ -69,7 +69,8 @@ STT_MAX_PENDING_UTTERANCES = 3
 STT_MAX_OPEN_CAPTURES = STT_MAX_PENDING_UTTERANCES + 1
 STT_MAX_UTTERANCE_PCM_BYTES = STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 30
 STT_MAX_PENDING_PCM_BYTES = STT_MAX_PENDING_UTTERANCES * STT_MAX_UTTERANCE_PCM_BYTES
-# Whisperはstreaming APIではないため、冒頭800msのsnapshotを先行認識する。
+# Whisperはstreaming APIではないため、最初の静音閾値超過から800msのsnapshotを先行認識する。
+# 発話前のpre-rollの長さをこの800msへ含めない。
 STT_TURN_PREVIEW_PCM_BYTES = int(STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 0.8)
 # 発話確認までの遅れを含め、通知前の語頭をmedia側で最大2秒保持する。
 # #150の固定fixtureで確認通知が語頭から1,440ms遅れる条件があり、800msでは語頭を失う。
@@ -804,6 +805,7 @@ class _UserAudioCapture:
     media_tail_elapsed: bool = False
     capacity_exceeded: bool = False
     preview_started: bool = False
+    preview_signal: SttSignalSpan = field(default_factory=SttSignalSpan)
     preparation_started: bool = False
     quiet_samples: int = 0
 
@@ -943,11 +945,22 @@ class _ConversationCoreBridge:
         if (
             capture.interrupted_response_id is not None
             and not capture.preview_started
+            and not capture.finalized
+            and not capture.capacity_exceeded
             and not self._transcription_active
-            and len(capture.pcm) >= STT_TURN_PREVIEW_PCM_BYTES
+            and getattr(self._session, "accepting_input", True)
+            and capture.preview_signal.sample_count(capture.pcm) * PCM_SAMPLE_WIDTH_BYTES >= STT_TURN_PREVIEW_PCM_BYTES
         ):
             capture.preview_started = True
             self._transcription_active = True
+            if self._measurement is not None:
+                for name, value in {
+                    "stt_preview_raw_samples": len(capture.pcm) // PCM_SAMPLE_WIDTH_BYTES,
+                    "stt_preview_signal_span_samples": capture.preview_signal.sample_count(capture.pcm),
+                }.items():
+                    self._measurement.record_utterance_event(
+                        utterance_id=capture.utterance_id, name=name, stage="stt_preview", value=value,
+                    )
             self._schedule(
                 self._preview_user_turn(
                     utterance_id=capture.utterance_id,

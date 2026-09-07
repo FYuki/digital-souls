@@ -737,6 +737,67 @@ def test_production_core_bridge_previews_first_audio_before_speech_end() -> None
     ]
 
 
+@pytest.mark.parametrize("prefix_samples", [0, 32_000])
+def test_turn_preview_waits_for_audio_after_signal_onset(prefix_samples: int) -> None:
+    """長い静音のpre-rollを800msの発話冒頭として数えない。"""
+    production = importlib.import_module("app.livekit_transport.production")
+    previews: list[bytes] = []
+    tasks: set[asyncio.Task[None]] = set()
+
+    class Core:
+        accepting_input = True
+
+        async def preview_turn(self, **request: object) -> str:
+            previews.append(request["audio"])
+            return "indeterminate"
+
+    def schedule(operation: Awaitable[None]) -> None:
+        task = asyncio.create_task(operation)
+        tasks.add(task)
+        task.add_done_callback(tasks.discard)
+
+    bridge = production._ConversationCoreBridge(Core(), schedule)
+    voice = b"\x00\x10" * (production.STT_TURN_PREVIEW_PCM_BYTES // 2)
+
+    async def exercise() -> None:
+        bridge.receive_microphone(bytes(prefix_samples * 2))
+        bridge.notify(json.dumps({"type": "speech_started", "speaker": {"role": "user"},
+                                  "utterance_id": "preview-onset", "response_id": "old"}).encode())
+        bridge.receive_microphone(voice[:6400])  # 実音声200ms。
+        await _drain_asyncio_tasks(tasks)
+        assert previews == []
+        bridge.receive_microphone(voice[6400:])
+        await _drain_asyncio_tasks(tasks)
+        assert previews == [bytes(min(prefix_samples, 5120) * 2) + voice]
+        bridge.receive_microphone(voice)
+        await _drain_asyncio_tasks(tasks)
+        assert len(previews) == 1
+
+    asyncio.run(exercise())
+
+
+def test_turn_preview_does_not_transcribe_silence_or_closed_input() -> None:
+    production = importlib.import_module("app.livekit_transport.production")
+    scheduled: list[Awaitable[None]] = []
+
+    class Core:
+        accepting_input = True
+
+    core = Core()
+    bridge = production._ConversationCoreBridge(core, scheduled.append)
+    bridge.notify(json.dumps({"type": "speech_started", "speaker": {"role": "user"},
+                              "utterance_id": "preview-silence", "response_id": "old"}).encode())
+    bridge.receive_microphone(bytes(production.STT_TURN_PREVIEW_PCM_BYTES * 2))
+    try:
+        assert scheduled == []
+        core.accepting_input = False
+        bridge.receive_microphone(b"\x00\x10" * production.STT_TURN_PREVIEW_PCM_BYTES)
+        assert scheduled == []
+    finally:
+        for operation in scheduled:
+            operation.close()
+
+
 def test_production_core_bridge_stops_server_audio_for_playback_stop() -> None:
     production = importlib.import_module("app.livekit_transport.production")
     scheduled: list[Awaitable[None]] = []

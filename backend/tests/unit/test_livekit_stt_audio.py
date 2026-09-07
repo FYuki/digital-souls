@@ -4,7 +4,7 @@ import struct
 
 import pytest
 
-from app.livekit_transport.stt_audio import prepare_stt_audio
+from app.livekit_transport.stt_audio import SttSignalSpan, prepare_stt_audio
 
 
 def pcm(values: list[int]) -> bytes:
@@ -32,3 +32,25 @@ def test_short_preroll_and_entirely_quiet_input_are_unchanged(values):
 def test_truncated_pcm_is_rejected():
     with pytest.raises(ValueError, match='complete PCM16'):
         prepare_stt_audio(b'\x00')
+
+
+def test_preview_span_ignores_quiet_prefix_but_retains_internal_pause():
+    span = SttSignalSpan()
+    audio = bytearray(pcm([0, 16, -16] * 16000))
+    assert span.sample_count(audio) == 0
+    audio.extend(pcm([-17, 0, 0, 17]))
+    assert span.sample_count(audio) == 4
+    assert span.sample_count(audio) == 4
+    audio.extend(pcm([0] * 1600))
+    assert span.sample_count(audio) == 1604
+    # 別発話の静音へ開始位置を持ち越さない。
+    assert SttSignalSpan().sample_count(pcm([0] * 1600)) == 0
+
+
+def test_preview_span_rejects_truncated_or_replaced_input():
+    span = SttSignalSpan()
+    assert span.sample_count(pcm([0, 17])) == 1
+    with pytest.raises(ValueError, match="append-only complete PCM16"):
+        span.sample_count(b"\x00")
+    with pytest.raises(ValueError, match="append-only complete PCM16"):
+        span.sample_count(pcm([17]))
