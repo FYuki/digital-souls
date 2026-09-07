@@ -83,6 +83,7 @@ export type GainAuditSnapshot = Readonly<{
   complete: boolean; drained: boolean; missingReason: GainAuditMissingReason | null
   cancelBoundsMs: Bounds | null; outputClockPassedFrame: number | null
   firstOutputAtMs: number | null; lastOutputEndAtMs: number | null
+  clockFailure: Readonly<{stage: 'invalid_timestamp' | 'timestamp_regression' | 'negative_output_time' | 'mapped_interval_regression'; values: Readonly<Record<string, number>>}> | null
   nonzeroSamplesAfterCancelLower: number; nonzeroSamplesAfterCancelUpper: number
   boundaryUncertainIntervals: number; observedIntervals: number
   // 音響スピーカーではなく、独立したpost-gain graphのbrowser出力時計が境界。
@@ -104,6 +105,7 @@ export class PostGainOutputAudit {
   private count = 0
   private firstOutputAt: number | null = null
   private lastOutputEndAt: number | null = null
+  private clockFailure: GainAuditSnapshot['clockFailure'] = null
   private lastClock: {contextTime: number; performanceTime: number; observedAtMs: number} | null = null
 
   markCancelled(bounds: Bounds, observedAtMs: number): void {
@@ -157,12 +159,16 @@ export class PostGainOutputAudit {
     const {contextTime, performanceTime} = timestamp
     if (sampleRate !== 48000 || contextTime === undefined || performanceTime === undefined
       || !time(contextTime) || !time(performanceTime) || !time(observedAtMs)) {
+      this.clockFailure = {stage: 'invalid_timestamp', values: {}}
       this.fail('audit_output_clock_invalid'); return;
     }
     // 初期化前の全ゼロ時計には観測の証明力がない。
     if (contextTime === 0 || performanceTime === 0) return
     if (this.lastClock !== null && (contextTime < this.lastClock.contextTime
       || performanceTime < this.lastClock.performanceTime || observedAtMs < this.lastClock.observedAtMs)) {
+      this.clockFailure = {stage: 'timestamp_regression', values: {contextTime, performanceTime, observedAtMs,
+        previousContextTime: this.lastClock.contextTime, previousPerformanceTime: this.lastClock.performanceTime,
+        previousObservedAtMs: this.lastClock.observedAtMs}}
       this.fail('audit_output_clock_invalid'); return;
     }
     this.lastClock = {contextTime, performanceTime, observedAtMs}
@@ -171,8 +177,14 @@ export class PostGainOutputAudit {
       const row = this.pending[0]
       const at = (f: number) => performanceTime + (f / sampleRate - contextTime) * 1000
       if (at(row.endFrame) > observedAtMs) break
-      if (at(row.startFrame) < 0) {this.fail('audit_output_clock_invalid'); return}
+      if (at(row.startFrame) < 0) {
+        this.clockFailure = {stage: 'negative_output_time', values: {contextTime, performanceTime, observedAtMs, startFrame: row.startFrame}}
+        this.fail('audit_output_clock_invalid'); return
+      }
       if (this.lastOutputEndAt !== null && at(row.startFrame) < this.lastOutputEndAt - 0.001) {
+        this.clockFailure = {stage: 'mapped_interval_regression', values: {contextTime, performanceTime, observedAtMs,
+          previousOutputEndAtMs: this.lastOutputEndAt, mappedStartAtMs: at(row.startFrame), startFrame: row.startFrame,
+          deltaMs: at(row.startFrame) - this.lastOutputEndAt}}
         this.fail('audit_output_clock_invalid'); return;
       }
       this.pending.shift(); this.passed = row.endFrame; this.count++
@@ -207,6 +219,7 @@ export class PostGainOutputAudit {
     missingReason: this.missing, cancelBoundsMs: this.cancel === null ? null : {...this.cancel},
     outputClockPassedFrame: this.passed, nonzeroSamplesAfterCancelLower: this.lower,
     firstOutputAtMs: this.firstOutputAt, lastOutputEndAtMs: this.lastOutputEndAt,
+    clockFailure: this.clockFailure === null ? null : {stage: this.clockFailure.stage, values: {...this.clockFailure.values}},
     nonzeroSamplesAfterCancelUpper: this.upper, boundaryUncertainIntervals: this.uncertain,
     observedIntervals: this.count, observationBoundary: 'post_gain_browser_output_clock'}
   }

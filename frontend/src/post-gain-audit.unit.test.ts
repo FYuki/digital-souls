@@ -123,3 +123,19 @@ function auditProcessor() {
       setFrame(frame); const output = new Float32Array(128); instance.process([[pcm]], [[output]]); return output
     }}
 }
+
+
+test('出力時計の逆行箇所と数値だけを欠測診断に残す', () => {
+  const a = new PostGainOutputAudit(); push(a, [row()])
+  a.poll({contextTime: 1.003, performanceTime: 1003}, 48000, 1004)
+  push(a, [row(48128)])
+  a.poll({contextTime: 1.006, performanceTime: 1005.8}, 48000, 1007)
+  expect(a.snapshot()).toMatchObject({missingReason: 'audit_output_clock_invalid',
+    clockFailure: {stage: 'mapped_interval_regression'}})
+  expect(a.snapshot().clockFailure?.values.deltaMs).toBeCloseTo(-.2)
+  const b = new PostGainOutputAudit()
+  b.poll({contextTime: 1, performanceTime: 1000}, 48000, 1000)
+  b.poll({contextTime: .999, performanceTime: 1001}, 48000, 1001)
+  expect(b.snapshot().clockFailure).toMatchObject({stage: 'timestamp_regression',
+    values: {previousContextTime: 1, contextTime: .999}})
+})

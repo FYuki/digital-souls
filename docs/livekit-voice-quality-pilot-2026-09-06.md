@@ -1592,3 +1592,19 @@ STTへ実際に取り込まれたPCMの境界とVAD全体の受け入れは未�
 実行中imageの版、同梱SDKの実ロード、全schemaと匿名集計の分母を検証した。
 VAD frame／event／model resetの観測overflowはなかった。
 STT実取込のPCM境界、cancel後のstale presented、再接続p95、標準人格・履歴・記憶条件でのTTFAなどは残っている。
+
+
+### gain後段のstale音声監視を実経路で確認する
+
+測定版 `dab91fd7be19c1eb3e652762fd68fc30874075ea` で、rendererの停止から独立した
+post-gain監視を実ブラウザのtake-turn 3件へ接続した。会話・割り込み・全session終了は成功し、
+実行中Frontend／Backend imageの版と終了後の所有container削除を確認した。
+
+監視は3件すべて`audit_output_clock_invalid`で欠測となり、stale presented 0は未確認である。
+観測済み区間は各5／13／5 quantumで、いずれもcancel前の通常出力中に不整合が発生していた。
+このため、キャンセル処理そのものに原因を限定しない。欠測を0件に読み替えず、
+SDKが返したtimestampの逆行と、連続sampleを別のtimestampから換算した際の時刻逆行を
+固定の段階名・数値で切り分ける診断を追加した。
+
+初回組み込みではFrontend 764件・型検査・ビルドが成功した。
+追加の時計診断では関連70件と型検査が成功した。単体検証の成功で実出力の欠測を解消済みとはしない。
