@@ -1003,3 +1003,64 @@ control／audio成功は得られず、後続発話も失敗した。マイクre
 全runでsession明示終了、子process終了、teardown、所有Frontend／Backend削除を確認した。
 最後に専用LiveKitとnetworkも削除し、失敗rawは各run rootへ保持した。
 再接続100試行、成功率99%、p95 3,000msの受け入れは未達のままである。
+
+## 2026-09-07: RTP連番照合と再接続後の次発話
+
+`38a8e64`で、復号失敗直前の最大8packetについて送信元・RTP timestamp・RTP連番・
+primary payloadサイズだけを保持した。連番は符号付き表現も16bitへ正規化する。
+音声本文、payload、hash、任意例外本文は保存しない。
+`network-fault-session-06`では同じRTP timestampに連番1093・120bytesと
+連番1094・80bytesが届いた。したがって、先行runの競合を同一packetの再送とは扱えない。
+
+使用中の[LiveKit v1.9.7の公開実装](https://github.com/livekit/livekit/blob/v1.9.7/pkg/sfu/downtrack.go)
+ではmute／close時にOpusの無音frameを追加し、
+[RTP munger](https://github.com/livekit/livekit/blob/v1.9.7/pkg/sfu/rtpmunger.go)には
+直前のtimestampを使って新しい連番を発行する経路がある。
+実測の80bytesはその固定無音frameのサイズと一致するが、本文一致を測定していないため、
+実packetの発生元をこの一致だけで断定しない。
+
+`acd5829`ではpacketの同一性を送信元・連番で検査し、timestamp・payloadも一致する場合だけ
+重複再送として除外する。同じ連番の異なる内容は従来どおり拒否し、連番欠測も理由付き失敗とする。
+別連番で同じ20ms区間が重なる場合は、独立decodeへの追加投入を止めて
+`timestamp_overlap`として当該応答を中断する。確認済みplayed prefixだけを通知し、
+停止／cancel／世代同期を送る。native frame配送は維持し、同じ音声区間を二度出力しない。
+これは重複再送の件数やpacket欠落数に混ぜず、別の観測として保存する。
+
+この変更後、実切断07・08では制御往復が復旧し、再生経路の致命的失敗も0件になったが、
+次発話はSTT後に`response_failed`となった。`64b5aa0`で応答開始・配送失敗時の
+例外型とコード上の失敗箇所だけを保存し、08では旧音声trackの公開解除における
+`UnpublishTrackError`を確認した。例外本文と利用者入力の非露出はテストで検証した。
+
+`ae578ec`では、SDKの公開一覧で既に消失した所有trackへ再度unpublishを送らない。
+unpublish応答との競合でも、同じ所有SIDが一覧から消えた場合だけ旧sourceの解放へ進む。
+SIDが残る場合や別種のエラーは失敗を保持し、新trackを追加しない。
+修正前は消失・競合の再現テスト2件が失敗し、修正後はresponse audio／runtime audio／
+Core lifecycle関連118件が成功した。
+
+| run | 測定版 | 時計対応幅 | 制御回復上限 | 次発話 | session明示終了 |
+|---|---|---:|---:|---|---|
+| network-fault-session-06 | 38a8e64 | 1.676189ms | 未回復 | 失敗 | 確認済み |
+| network-fault-session-07 | acd5829 | 1.724136ms | 2,432.170ms | 応答開始失敗 | 未確認 |
+| network-fault-session-08 | 64b5aa0 | 1.700404ms | 4,583.698ms | 旧track解除失敗 | 未確認 |
+| network-fault-session-09 | ae578ec | 1.774982ms | 986.382ms | 成功 | 確認済み |
+
+全4runで専用bridgeの実切断・network復旧・切断中のcontrol不通を確認した。
+07～09の観測済み出力は重複区間0、packet観測欠測0、再生経路エラー0だった。
+ただし全4runとも回復測定10秒窓内の新規受信かつ可聴出力は得られず、
+`audio_recovery_upper_ms`と両経路の`recovery_upper_ms`はnullで、総合結果は失敗である。
+
+09では10秒窓を閉じた後、同じsessionの新しい発話・応答を確認した。
+新応答は入力167,422 samples・padding1,538 samplesに対する168,960 samples全出力、
+176packets、gap合計・最大gapとも0だった。旧trackの解除エラーは再発せず、
+マイク再開も実STTから新応答の全再生まで検証できた。これは回復時間の代替値ではない。
+
+全runの障害・時計子process終了、teardown、所有Frontend／Backend削除を確認した。
+07・08のsession終了未確認はそのまま残し、コンテナ削除をsession正常終了の代わりにしない。
+最後に専用LiveKitと専用networkの削除も検証した。失敗rawは各run rootへ保持する。
+現Frontend全単体554件、型検査、build、Backend関連118件とRuffが成功した。
+buildには既存の500KB超bundle警告が残る。
+
+次は、切断時に旧応答を中断する既存方針と、再接続時に音声の利用可能性を実出力で確認する
+測定条件を照合する。旧buffer・無音・接続フラグを音声回復へ置き換えない。
+再接続100試行・99%・p95 3,000msは未達であり、VAD境界、stale、dogfood相当条件、
+資源・RTP全分母、元設定の人格／記憶品質、最終実接続suite等も引き続き未完了である。
