@@ -258,6 +258,7 @@ class FakeHistorySession:
     class StartedTurn:
         handle: object
         content_skipped: bool
+        turn_id: UUID = UUID("60000000-0000-4000-8000-000000000902")
 
     started: list[str] = field(default_factory=list)
     completed: list[tuple[object, str]] = field(default_factory=list)
@@ -334,6 +335,7 @@ def test_history_adapter_propagates_privacy_skipped_start_result() -> None:
         )
 
         assert result.content_skipped is True
+        assert result.history_turn_id == str(history.handle.turn_id)
         assert history.started == ["保存対象外"]
 
     asyncio.run(exercise())
@@ -447,10 +449,11 @@ def test_core_starts_and_terminates_the_same_history_turn_once(
             completed_turn_observer=formation_candidates.append,
         )
         response_id = "50000000-0000-4000-8000-000000000902"
+        delivery = RecordingDelivery()
         session = public.ConversationCoreSession(
             session_id="20000000-0000-4000-8000-000000000902",
             response_id_factory=response_id_factory(response_id),
-            delivery=RecordingDelivery(),
+            delivery=delivery,
             persistence=persistence,
             observation=RecordingObservation(),
             stt=RecordingStt(),
@@ -473,6 +476,9 @@ def test_core_starts_and_terminates_the_same_history_turn_once(
         second = await getattr(session, terminal_method)(**kwargs)
         await asyncio.wait_for(session.end(), timeout=0.5)
 
+        started = next(event for event in delivery.events if event.type == "response_started")
+        assert started.history_turn_id == str(history.handle.turn_id)
+        assert started.history_turn_id != response_id
         assert first == second
         assert history.started == ["履歴へ保存する利用者発話"]
         assert len(history.completed) == (1 if history_operation == "completed" else 0)

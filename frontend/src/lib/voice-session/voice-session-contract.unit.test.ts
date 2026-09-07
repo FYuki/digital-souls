@@ -375,3 +375,15 @@ describe('voice session shared contract', () => {
     expect(() => parseVoiceSessionEvent(loaded.event)).toThrow()
   })
 })
+
+// 履歴の関連付けがない旧通知は受理し、不正な関連付けは境界で拒否する。
+it('response_startedの履歴turn IDを検証する', async () => {
+  const {parseVoiceSessionEvent} = await loadValidationModule()
+  const event = normalResponseEvent('response_started')
+  const historyTurnId = '60000000-0000-4000-8000-000000000010'
+  expect(parseVoiceSessionEvent({...event, history_turn_id: historyTurnId}).history_turn_id).toBe(historyTurnId)
+  expect(parseVoiceSessionEvent(event).history_turn_id).toBeUndefined()
+  for (const invalid of [null, '', 'invalid', 42]) {
+    expect(() => parseVoiceSessionEvent({...event, history_turn_id: invalid})).toThrow()
+  }
+})

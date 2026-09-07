@@ -285,6 +285,11 @@
               "minimum": 1,
               "maximum": 100
             },
+            "history_window_unobserved": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
             "history_observer_unimplemented": {
               "type": "integer",
               "minimum": 1,

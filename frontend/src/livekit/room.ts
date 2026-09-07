@@ -711,7 +711,8 @@ export class LiveKitRoomClient {
       || event.type === 'response_delta' || event.type === 'response_cancelled')) {
       this.coreDeliveryObserver?.({type: event.type, sessionId: event.session_id,
         responseId: event.response_id, generation: this.generation, atMs: performance.now(), duplicate,
-        textCharacters: event.text?.length ?? 0, textSequence: event.text_sequence ?? null})
+        textCharacters: event.text?.length ?? 0, textSequence: event.text_sequence ?? null,
+        ...(event.history_turn_id === undefined ? {} : {historyTurnId: event.history_turn_id})})
     }
     if (!duplicate) {
       if (event.type === 'response_started' && event.response_id !== undefined

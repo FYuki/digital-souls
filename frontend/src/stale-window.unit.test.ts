@@ -65,3 +65,42 @@ test('archiveの閉鎖時刻やcutoffのNaNを境界通過の証拠にしない'
     expect(replayStaleWindow(a).audio).toMatchObject({complete: false, missingReason: 'output_archive_invalid'})
   }
 })
+
+
+function historyFixture(): StaleWindowInput {
+  const value = fixture()
+  value.text.history = {turnId: 'saved-turn', domObserved: true, domChanges: 2, domAddedCharacters: 5,
+    domAfterCancelChanges: 0, domAfterCancelAddedCharacters: 0, observedFromMs: 1000, observedThroughMs: 1040,
+    missingReason: null, changes: [
+      {kind: 'dom_added', lowerMs: 1011, upperMs: 1020, characters: 2},
+      {kind: 'dom_added', lowerMs: 1030, upperMs: 1032, characters: 3},
+    ]}
+  return value
+}
+test('保存履歴の再提示をservercancel上下限で集計し、ライブ本文の欠測と分離する', () => {
+  const value = historyFixture(); value.text.domObserved = false
+  expect(replayStaleWindow(value)).toMatchObject({text: {complete: false}, historyText: {
+    complete: true, presented: {itemsLower: 1, itemsUpper: 2, unitsLower: 3, unitsUpper: 5}}})
+  expect(replayStaleWindow(fixture()).historyText).toMatchObject({complete: false, missingReason: 'history_window_unobserved'})
+})
+test('履歴の対応不明・未表示・観測窓不足・終了前を0件に補完しない', () => {
+  for (const patch of [{missingReason: 'history_mapping_conflict' as const}, {domObserved: false},
+    {observedFromMs: 1020}, {observedThroughMs: 1020}, {observedFromMs: Number.NaN}]) {
+    const value = historyFixture(); Object.assign(value.text.history!, patch)
+    expect(replayStaleWindow(value).historyText.complete).toBe(false)
+  }
+  const value = historyFixture(); value.textClosed = false
+  expect(replayStaleWindow(value).historyText.complete).toBe(false)
+})
+test('履歴の件数相殺・逆順・観測外区間を拒否する', () => {
+  for (const patch of [{domChanges: -1}, {domAddedCharacters: Number.NaN}]) {
+    const value = historyFixture(); Object.assign(value.text.history!, patch)
+    expect(() => replayStaleWindow(value)).toThrow('invalid_history_count')
+  }
+  const short = historyFixture(); short.text.history!.changes.pop()
+  expect(() => replayStaleWindow(short)).toThrow('history_count_mismatch')
+  const reverse = historyFixture(); reverse.text.history!.changes.reverse()
+  expect(() => replayStaleWindow(reverse)).toThrow('invalid_history_change')
+  const outside = historyFixture(); outside.text.history!.changes[0] = {kind: 'dom_added', lowerMs: 990, upperMs: 999, characters: 2}
+  expect(() => replayStaleWindow(outside)).toThrow('invalid_history_change')
+})

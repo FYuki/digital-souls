@@ -74,7 +74,34 @@ export function replayStaleWindow(input: StaleWindowInput) {
     : {complete: true, missingReason: null,
       received: count(text.changes.filter(row => row.kind === 'received').map(row => ({...row, units: row.characters})), bounds),
       presented: count(text.changes.filter(row => row.kind === 'dom_added').map(row => ({...row, units: row.characters})), bounds)}
-  return {bounds, audio, received, text: textResult,
-    // 保存履歴・サーバー生成・全cohortの正式受け入れはこの個別窓だけでは証明しない。
+  const history = text.history
+  const historyMissing = !input.textClosed || input.textOverflow || history === undefined
+    || typeof history.turnId !== 'string' || history.turnId.length === 0
+    || history.missingReason !== null || !history.domObserved
+    || text.startedAtMs === null || text.cancelledAtMs === null
+    || !time(text.startedAtMs) || !time(text.cancelledAtMs)
+    || !time(history.observedFromMs) || !time(history.observedThroughMs)
+    || history.observedFromMs > bounds.lowerMs || history.observedThroughMs < bounds.upperMs
+  if (!historyMissing) {
+    if (![history.domChanges, history.domAddedCharacters].every(safeCount)) throw new Error('invalid_history_count')
+    let previousUpper = -1
+    for (const row of history.changes) {
+      if (row.kind !== 'dom_added' || !boundsValid(row) || !safeCount(row.characters)
+        || row.lowerMs < Math.max(0, history.observedFromMs - 0.2)
+        || row.upperMs > history.observedThroughMs + 0.2 || row.upperMs < previousUpper) {
+        throw new Error('invalid_history_change')
+      }
+      previousUpper = row.upperMs
+    }
+    if (history.changes.length !== history.domChanges
+      || history.changes.reduce((sum, row) => sum + row.characters, 0) !== history.domAddedCharacters) {
+      throw new Error('history_count_mismatch')
+    }
+  }
+  const historyText = historyMissing ? {complete: false, missingReason: 'history_window_unobserved', presented: null}
+    : {complete: true, missingReason: null,
+      presented: count(history.changes.map(row => ({...row, units: row.characters})), bounds)}
+  return {bounds, audio, received, text: textResult, historyText,
+    // provider受領・全cohortの正式受け入れはこの個別窓だけでは証明しない。
     fullStaleAcceptanceVerified: false as const}
 }

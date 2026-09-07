@@ -7,6 +7,7 @@ from io import BytesIO
 import struct
 import threading
 from typing import Protocol, cast
+from uuid import UUID
 
 from app.async_worker import SyncWorkerCapacityError, run_sync
 
@@ -369,7 +370,13 @@ class ConversationHistoryPersistenceAdapter:
         content_skipped = getattr(started_turn, "content_skipped", None)
         if not isinstance(content_skipped, bool):
             raise TypeError("started history turn must expose content_skipped")
-        return ResponseStartResult(content_skipped=content_skipped)
+        turn_id = getattr(started_turn, "turn_id", None)
+        if turn_id is not None and not isinstance(turn_id, UUID):
+            raise TypeError("started history turn id must be a UUID")
+        return ResponseStartResult(
+            content_skipped=content_skipped,
+            history_turn_id=str(turn_id) if turn_id is not None else None,
+        )
 
     async def persist(self, outcome: TerminalOutcome) -> None:
         if outcome.response_id in self._persisted_response_ids:

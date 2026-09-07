@@ -236,3 +236,26 @@ def test_legacy_artifacts_keep_their_original_schema_and_missing_meaning():
         result=json.loads((ROOT/'docs/artifacts'/name).read_text())
         assert result['schema_version']=='1.0'
         reporter.validate_report(result,SCHEMA)
+
+
+def test_history_presentation_has_its_own_counts_and_missing_denominator():
+    m, fb, traces = cohort()
+    index = 0
+
+    def with_history(prepared):
+        nonlocal index
+        result = replay(prepared)
+        if index < 2:
+            result['historyText'] = dict(complete=True, missingReason=None,
+                presented=dict(itemsLower=index, itemsUpper=1, unitsLower=index * 3, unitsUpper=5))
+        index += 1
+        return result
+
+    result = reporter.summarize(m, fb, traces, with_history)
+    assert result['channels']['history_text_presented_characters'] == dict(
+        unit='utf16_code_unit', observed=2, missing=1,
+        missing_reasons=dict(history_window_unobserved=1),
+        definitely_stale=1, possibly_stale=2, verified_zero=0, lower_total=3, upper_total=10)
+    assert result['channels']['live_text_presented_characters']['verified_zero'] == 3
+    assert result['evaluation']['stale_presented_passed'] is False
+    reporter.validate_report(provenance(result), SCHEMA)

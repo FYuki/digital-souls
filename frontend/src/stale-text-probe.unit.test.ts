@@ -50,7 +50,7 @@ test('次応答・履歴のDOM変化を旧応答へ混ぜず、観測範囲を�
   document.body.append(next)
   const history = document.createElement('p'); history.textContent = '履歴'; document.body.append(history)
   await Promise.resolve()
-  expect(probe.snapshot()).toMatchObject({scope: 'live_response_dom', rows: [
+  expect(probe.snapshot()).toMatchObject({scope: 'live_and_history_response_dom', rows: [
     {responseId: 'response', domAfterCancelAddedCharacters: 0}, {responseId: 'next', domAddedCharacters: 3},
   ]})
 })
@@ -95,4 +95,47 @@ test('DOM変更は前回観測からcallbackまでの区間を保持し、過去
     expect(probe.snapshot().rows[0].changes[0].characters).toBe(2)
     probe.close()
   } finally {clock.mockRestore()}
+})
+
+
+test('保存turn IDで履歴を相関し、cancel後の同じ文章の再提示も独立に数える', async () => {
+  const {probe, node} = start()
+  probe.receive(event('response_started', {historyTurnId: 'saved-turn', duplicate: true}))
+  node.textContent = '同文🙂'; probe.receive(event('response_cancelled')); node.remove()
+  const unrelated = document.createElement('p')
+  unrelated.dataset.historyTurnText = 'another-turn'; unrelated.textContent = '無関係'; document.body.append(unrelated)
+  await Promise.resolve()
+  expect(probe.snapshot().rows[0].history).toMatchObject({domObserved: false, domAddedCharacters: 0})
+  const history = document.createElement('p')
+  history.dataset.historyTurnText = 'saved-turn'; history.textContent = '同文🙂'; document.body.append(history)
+  await Promise.resolve()
+  const snapshot = probe.snapshot()
+  expect(snapshot.rows[0]).toMatchObject({domAfterCancelAddedCharacters: 0,
+    history: {turnId: 'saved-turn', domObserved: true, domAddedCharacters: 4,
+      domAfterCancelAddedCharacters: 4, missingReason: null}})
+  snapshot.rows[0].history!.changes[0] = {...snapshot.rows[0].history!.changes[0], characters: 999}
+  expect(probe.snapshot().rows[0].history!.changes[0].characters).toBe(4)
+  history.remove(); await Promise.resolve(); document.body.append(history); await Promise.resolve()
+  expect(probe.close().rows[0].history!.domAfterCancelAddedCharacters).toBe(8)
+  expect(JSON.stringify(probe.snapshot())).not.toMatch(/同文|無関係|previousHistoryText/)
+})
+
+test('履歴mappingの欠測・変更・複数応答への再利用を0件の証明へしない', () => {
+  const {probe} = start()
+  expect(probe.snapshot().rows[0].history).toBeUndefined()
+  probe.receive(event('response_started', {historyTurnId: 'saved-turn', duplicate: true}))
+  probe.receive(event('response_started', {historyTurnId: 'other-turn', duplicate: true}))
+  expect(probe.snapshot().rows[0].history!.missingReason).toBe('history_mapping_conflict')
+  probe.receive(event('response_started', {responseId: 'next', historyTurnId: 'saved-turn'}))
+  expect(probe.snapshot().rows[1].history!.missingReason).toBe('history_mapping_conflict')
+})
+
+test('履歴の重複DOMを欠測にし、ライブ表示の観測と分離する', () => {
+  const {probe, node} = start(); node.textContent = 'ライブ'
+  probe.receive(event('response_started', {historyTurnId: 'saved-turn', duplicate: true}))
+  for (let i = 0; i < 2; i++) {
+    const history = document.createElement('p'); history.dataset.historyTurnText = 'saved-turn'; document.body.append(history)
+  }
+  expect(probe.close().rows[0]).toMatchObject({missingReason: null, domAddedCharacters: 3,
+    history: {missingReason: 'dom_response_duplicated'}})
 })

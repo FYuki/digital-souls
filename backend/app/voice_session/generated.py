@@ -130,6 +130,7 @@ class VoiceSessionEvent(BaseModel):
     final: Optional[bool] = None
     should_response: Optional[bool] = None
     transcript: Optional[str] = None
+    history_turn_id: Optional[UUID] = None
     source_utterance_ids: Optional[List[UUID]] = None
     text: Optional[str] = None
     text_range: Optional[TextRange] = None

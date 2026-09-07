@@ -467,6 +467,7 @@ def test_response_started_character_speaker_passes_schema_validation() -> None:
             type="response_started",
             session_id=session_id,
             response_id="50000000-0000-4000-8000-000000000010",
+            history_turn_id="60000000-0000-4000-8000-000000000010",
             source_utterance_ids=(
                 "30000000-0000-4000-8000-000000000010",
             ),
@@ -480,6 +481,7 @@ def test_response_started_character_speaker_passes_schema_validation() -> None:
     asyncio.run(exercise())
 
     payload = json.loads(published[0])
+    assert payload["history_turn_id"] == "60000000-0000-4000-8000-000000000010"
     assert payload["speaker"] == {
         "participant_id": participant_id,
         "role": "character",

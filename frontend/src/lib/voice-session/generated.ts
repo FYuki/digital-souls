@@ -17,6 +17,7 @@ export interface VoiceSessionEvent {
     final?:                        boolean;
     should_response?:              boolean;
     transcript?:                   string;
+    history_turn_id?:              string;
     source_utterance_ids?:         string[];
     text?:                         string;
     text_range?:                   TextRange;

@@ -24,7 +24,7 @@
       </article>
       <article class="message" data-turn-id={turn.turn_id}>
         <span class="speaker">{characterName}</span>
-        <p>{turn.assistant_content}</p>
+        <p data-history-turn-text={turn.turn_id}>{turn.assistant_content}</p>
       </article>
     {:else}
       <article class="message privacy" data-turn-id={turn.turn_id}>

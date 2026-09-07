@@ -690,6 +690,8 @@ class _ConversationCoreDelivery:
                 speaker=self._character_speaker,
                 source_utterance_ids=list(event.source_utterance_ids),
             )
+            if event.history_turn_id is not None:
+                payload["history_turn_id"] = event.history_turn_id
         elif event.type == "utterance_finalized":
             if (
                 event.utterance_id is None

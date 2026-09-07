@@ -75,6 +75,7 @@ class TerminalOutcome:
 @dataclass(frozen=True)
 class ResponseStartResult:
     content_skipped: bool
+    history_turn_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -102,6 +103,7 @@ class CoreEvent:
     last_text_sequence: int | None = None
     last_audio_sequence: int | None = None
     terminal_state_bounds_ns: tuple[int, int] | None = None
+    history_turn_id: str | None = None
 
 
 @dataclass(frozen=True)

@@ -598,6 +598,7 @@ class ConversationCoreSession:
                     response_id=response.response_id,
                     generation=response.generation,
                     source_utterance_ids=response.source_utterance_ids,
+                    history_turn_id=start_result.history_turn_id,
                 ),
                 response.response_id,
                 response.generation,

@@ -33,7 +33,8 @@ REASONS = ('identity_missing', 'fixture_injection_unverified', 'session_end_unco
            'cancel_state_unobserved', 'clock_window_unobserved', 'cleanup_unobserved',
            'observation_identity_unverified', 'output_window_unobserved',
            'receipt_window_unobserved', 'text_window_unobserved', 'replay_invalid',
-           'history_observer_unimplemented', 'server_generation_observer_unimplemented', 'server_result_window_unobserved')
+           'history_observer_unimplemented', 'history_window_unobserved',
+           'server_generation_observer_unimplemented', 'server_result_window_unobserved')
 
 
 def count(value):
@@ -252,15 +253,18 @@ def summarize(manifest, fixtures_bytes, traces, replay):
             if text.get('complete') is True and text.get('missingReason') is None:
                 for name, key in (('text_received_characters', 'received'), ('live_text_presented_characters', 'presented')):
                     values[name] = (text[key]['unitsLower'], text[key]['unitsUpper'])
+            history = result.get('historyText', {})
+            if history.get('complete') is True and history.get('missingReason') is None:
+                values['history_text_presented_characters'] = (history['presented']['unitsLower'], history['presented']['unitsUpper'])
         for name, missing in (
             ('audio_presented_samples', 'output_window_unobserved'),
             ('audio_received_packets', 'receipt_window_unobserved'), ('audio_received_samples', 'receipt_window_unobserved'),
-            ('text_received_characters', 'text_window_unobserved'), ('live_text_presented_characters', 'text_window_unobserved')):
+            ('text_received_characters', 'text_window_unobserved'), ('live_text_presented_characters', 'text_window_unobserved'),
+            ('history_text_presented_characters', 'history_window_unobserved')):
             if name in values:
                 add_channel(channels[name], *values[name])
             else:
                 add_channel(channels[name], reason=reason or missing)
-        add_channel(channels['history_text_presented_characters'], reason='history_observer_unimplemented')
         server = provider_receipts(trial, traces) if injected else None
         for name in ('server_received_text_characters', 'server_received_audio_bytes'):
             if server is None:

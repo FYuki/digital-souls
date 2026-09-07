@@ -410,8 +410,13 @@ cancel受信時には保留中のDOM観測を先に確定する。同じ長さ�
 共通prefix以後を新たな提示として保守的に扱う。本文は同一ページ内の比較だけに使い、
 snapshotには件数と文字数だけを出す。重複DOM・本文上限・応答数上限は欠測またはoverflowへ残す。
 
-現在のscopeは`live_response_dom`であり、保存履歴の再取得後の本文、OSの画面描画完了、
-サーバーcancel時点からの全区間を証明するものではない。受信前後の境界は`client_cancel_received`と明記する。
+現在のscopeは`live_and_history_response_dom`である。保存時に発行されたturn IDを
+`response_started.history_turn_id`で伝え、履歴のassistant本文DOMを対応付ける。
+履歴は`rows[].history`へ独立に記録し、ライブ表示と同じ文章の再表示も数える。
+IDの欠測・変更・再利用、重複DOM、履歴未表示、監視区間不足は0件の証明にしない。
+本文とIDを匿名aggregateへ転記せず、履歴の文字数・上下限・欠測理由だけを集計する。
+これはDOMへの反映でありOSの画面描画完了は証明しない。生観測のcancel前後は
+`client_cancel_received`と明記し、正式集計では保持した各変更区間をサーバーcancelの因果上下限へ再評価する。
 単に追加文字数が0でも、開始・cancel・DOMの観測、監視終了がそろわなければ完全な観測とはしない。
 
 割り込み試行は終了前の`evidence`を保持し、終了後の`cleanup_observation`へ最終audio行と
@@ -488,7 +493,8 @@ Frontend依存のインストール、Node、Backendのjsonschemaが必要。
 「残留の可能性」は「確実な残留」を含む。文字単位はUTF-16 code unit。
 サーバーcancelをclient cancel受信時刻へ置き換えず、時計の不確かさも上限へ残す。
 
-保存履歴再表示は現時点で未実装の理由付き欠測であり、他の項目がゼロでも全体を合格にしない。
+保存履歴再表示は開始通知のturn IDで相関し、独立チャネルへ集計する。
+旧観測などに対応付けやDOM観測がない場合は`history_window_unobserved`として分母に残す。
 v1.1はサーバー側のprovider結果受領を、文字数と音声payload byte数へ集計する。
 provider内部の生成時刻や音声sample数への読み替えは行わない。
 旧v1.0のサーバー生成の未実装項目と過去artifactはそのまま保持し、schemaは両versionを区別して検証する。

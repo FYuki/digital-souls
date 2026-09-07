@@ -214,6 +214,7 @@
       "properties": {
         "type": { "const": "response_started" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
         "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" }, "speaker": { "$ref": "#/$defs/Speaker" },
+        "history_turn_id": { "$ref": "#/$defs/Identifier" },
         "source_utterance_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/Identifier" } },
         "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
