@@ -1,6 +1,6 @@
 # 音声品質の診断コマンド
 
-これらは#150の診断用。各cohortの全stack受け入れ、通常100試行、実声dogfoodの完了は別途検証する。
+これらは#150の診断と制御測定の実行入口。通常100試行の収集成功だけで、各cohortの全stack受け入れや実声dogfoodの完了とは判断しない。
 
 ## 独立data rootでの実音声pilot
 
@@ -63,9 +63,9 @@ backend/.venv/bin/python scripts/voice_quality/run_pilot.py \
   --disable-thinking --scheduled-fixture --continuous-turns 3
 ```
 
-このモードのmanifest scopeは`continuous_response_track_diagnostic`で、warm-up除外や独立100試行を実施するものではない。`--trials`の独立試行数はこのモードでは使用しない。固定音声全体の供給と各応答の完了後に1.5秒待って次へ進み、この待機をplayout完了の測定値とは扱わない。fixtureの途中でreplayを要求しても巻き戻さず、完了後の明示要求だけを受理する。通常pilotの起動では環境から残ったcontinuous指定を引き継がない。
+このモードのmanifest scopeは`continuous_response_track_diagnostic`で、warm-up除外や独立100試行を実施するものではない。`--trials`の独立試行数はこのモードでは使用しない。固定音声全体の供給と、各応答の全sampleがbrowser出力時計を通過したことを確認して次へ進む。固定時間の待機をplayout完了の代用にしない。fixtureの途中でreplayを要求しても巻き戻さず、完了後の明示要求だけを受理する。通常pilotの起動では環境から残ったcontinuous指定を引き継がない。
 
-trackの応答ID一致は、PCM先頭の受信・decode・first playbackを相関できたという意味ではない。decoderのcomfort noiseやlogical segment内のsample位置については別の検証が必要である。診断中の会話履歴は専用runのdata rootに残し、dogfoodは使用しない。
+trackの応答IDだけでは相関を確定しない。同じ受信packetを状態付き復号してworkletへ供給し、出力時計通過を確認してからreceive／decode／first playbackを対応付ける。元source PCMのcodec lookaheadやlogical segment内の厳密なsample位置については別の検証が必要である。診断中の会話履歴は専用runのdata rootに残し、dogfoodは使用しない。
 
 
 ## native AudioSourceと独立decode・出力の診断
@@ -82,3 +82,17 @@ backend/.venv/bin/python scripts/voice_quality/probe_native_audio_source.py \
 workerと画面は10回の往復messageで時計offsetの上下限を求める。このChromium診断では100usの時計丸めを前提としてoffsetの両端に0.2msの余裕を残し、幅が1msを超えた場合や矛盾した場合は失敗する。これは全browserの時計精度を保証する方法ではない。`timeOrigin`だけの換算値は比較診断用に残すが、遅延へ採用しない。出力frame位置は`getOutputTimestamp()`でbrowser出力時計へ写し、最後の観測で出力時計が全サンプルの末尾を通過したことを確認する。物理スピーカーの音響時刻は測らない。
 
 検証器は直接入力の0→1→51 packet、同数のdecode・render・完了、RTP timestamp／sequenceの連続性、packet相関、各960サンプルの出力、時計の順序を必須にする。別のsource PCM sample位置との一致、通常会話の明示PCM再生、loss回復、実音声全般の音質、TTFA・underrunの受け入れ完了は示さない。最初の20ms後の200ms停止は診断で意図的に入れるため、playback continuityの合格試行として集計しない。
+
+
+## 準備5回＋独立100試行
+
+```bash
+backend/.venv/bin/python scripts/voice_quality/run_pilot.py \
+  --run-id controlled-01 \
+  --inference-env /home/asa/dev/digital-souls/backend/.env \
+  --controlled --scheduled-fixture --disable-thinking
+```
+
+`--controlled`は`--trials`と排他的で、少数pilotの環境変数を除去して5 warm-up＋独立100 sessionを選ぶ。固定PCM時計なし、連続session診断との混在は拒否する。上の例は`think:false`の実験条件を含み、元の生成optionsと同じ品質の証明ではない。RAGなしのintegration-voiceで、personaと会話の初期状態を毎試行照合する。
+
+完了したrunは`python -m app.livekit_pilot_report --scope controlled`へmanifest・trace・profile reportを指定して集計する。出力sample数、出力時計、receive／decode trace、固定音声の境界、独立ID、空の会話・記憶状態を検証する。品質の合否はさらに`voice_metrics.evaluate_artifact`で凍結済みWebSocket baselineと比較し、未測定のcohortを合格へ補完しない。

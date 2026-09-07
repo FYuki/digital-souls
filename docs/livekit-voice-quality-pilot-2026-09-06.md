@@ -436,3 +436,26 @@ Frontendのproduction buildも成功した。大きいbundleに対するViteの�
 ## 正式100試行の実行入口
 
 `run_pilot.py --controlled --scheduled-fixture`は、少数pilotの設定を除去し、5 warm-up＋独立100 sessionのspecを選ぶ。`--trials`との同時指定、固定PCM時計なし、連続session診断との混在を拒否する。出力は引き続き新しいrun専用data rootへ保存し、既存runを上書きしない。集計には`python -m app.livekit_pilot_report --scope controlled`を使う。100試行の収集成功と、TTFAや音切れの品質合格は分けて判定する。入口のscope・分母・環境選択を含む関連単体23件が成功した。
+
+
+## 2026-09-07: 高速PCM・実packet相関での正式通常100試行
+
+`fast-pcm-controlled-01`をコミット`0506eda`の実装で実行した。14.3分で準備5回＋独立100試行が終了し、transcript一致、応答完了、全sampleの出力時計通過、明示終了が105/105成功した。session／conversationは各105個で重複なし、各試行の空の会話・記憶状態と設定hashは一致した。共有サービスの設定とdogfoodデータは変更していない。`think:false`、RAGなしという実験条件であり、元の生成設定と同じ人格・記憶応答品質の証明ではない。
+
+[正式匿名artifact](artifacts/livekit-controlled-2026-09-07-fast-pcm.json)はcontrolled validator、schema、匿名性検査を通過した。測定100回の出力sample総数は16,996,800、gap合計・最大gap・underrunはすべて0、処理失敗0/100だった。従来の計測方式の100試行を流用した結果ではない。
+
+| 指標 | p50 | p95 | 確認結果 |
+|---|---:|---:|---|
+| TTFA | 2,120.60ms | 2,186.72ms | 絶対目標2,000msは未達、相対条件は達成 |
+| utterance確定 | 536.49ms | 602.23ms | 絶対目標800ms以内 |
+| first text | 367.64ms | 381.20ms | 相対条件は達成 |
+| LLM完了 | 470.26ms | 482.21ms | 相対条件は達成 |
+| client受信→実再生 | 100ms | 104ms | baseline＋許容幅の約81.20msを超過 |
+| client受信→復号 | 1ms | 2ms | 100/100実測、欠測0 |
+| client復号→実再生 | 98ms | 102ms | 100/100実測、欠測0 |
+
+[自動比較結果](artifacts/livekit-controlled-2026-09-07-fast-pcm-evaluation.json)は`latency_only`として不合格を記録した。TTFAの超過に加え、client再生待ち、STT開始待ち、response decision、utterance確定の相対比較が不合格になった。後者の区間にはWebSocket／LiveKitの確定段階や観測位置の相違があり、名前の一致だけで同じ境界と判断しないよう追加監査が必要である。保存した不合格結果を合格へ書き換えない。
+
+割り込みのlocal stop／turn decision／cancel、VAD冒頭・終了境界、stale、reconnect、manual operationsはこの通常応答artifactで欠測が残る。resourceとnetworkも専用観測の取り込みが未完了である。割り込み・再接続のcohort、VAD境界計測、dogfood品質の受け入れは完了していない。
+
+途中の数値診断では、STT処理中央値約401ms、STT完了→LLM開始約15ms、LLM開始→first token約355ms、最初のTTS生成約308ms、VAD通知→STT開始約156msだった。Ollamaの生成prompt評価中央値は約38msに対して`load_duration`中央値は約274ms。v0.32.5の[ChatHandler](https://github.com/ollama/ollama/blob/v0.32.5/server/routes.go)・[scheduler](https://github.com/ollama/ollama/blob/v0.32.5/server/sched.go)では、モデル確認とrunner取得までがload値に含まれる。重みの再ロードや純粋なqueue待ちへ断定できない。共有Ollamaを変更せず、残る時間の切り分け対象とする。
