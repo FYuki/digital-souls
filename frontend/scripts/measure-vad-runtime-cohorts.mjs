@@ -6,6 +6,7 @@ import {createHash} from 'node:crypto'
 import {resolve, dirname} from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {transform} from 'esbuild'
+import {createProductionShortSpeechAnalyzer, shortSpeechProvenance} from './load-short-speech-analyzer.mjs'
 const root=resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const require=createRequire(root+'/package.json')
 const {SileroLegacy,SileroV5}=require('@ricky0123/vad-web/dist/models')
@@ -38,6 +39,7 @@ const manifestBytes=await readFile(root+'/playwright/fixtures/voice-quality-v2/m
 const fixtures=JSON.parse(manifestBytes).trials
 const modelBytes=await readFile(root+`/node_modules/@ricky0123/vad-web/dist/silero_vad_${modelName}.onnx`)
 const model=await (modelName==='legacy'?SileroLegacy:SileroV5).new(ort,async()=>modelBytes.buffer.slice(modelBytes.byteOffset,modelBytes.byteOffset+modelBytes.byteLength))
+const secondary = modelName === 'legacy' ? await createProductionShortSpeechAnalyzer() : null
 const trials=[]
 try {
  for(const [index,fixture] of fixtures.entries()) {
@@ -50,10 +52,11 @@ try {
   const events=[],detector=new UtteranceDetector(e=>events.push(e)),resetTimes=[]
   let atMs=0,processingError=null
   model.reset_state()
+  secondary?.reset()
   const vad={pause:async()=>{model.reset_state();resetTimes.push(atMs)},start:async()=>{},processFrame:async frame=>{
-   const p=await model.process(frame);detector.process(frame,p.isSpeech,atMs)
+   const p=await model.process(frame);detector.process(frame,p.isSpeech,atMs,secondary?.process(frame))
   }}
-  const control=attachIdleVadReset(vad,error=>{processingError=error})
+  const control=attachIdleVadReset(vad,error=>{processingError=error},()=>secondary?.reset())
   const resampler=new Resampler({nativeSampleRate:48000,targetSampleRate:16000,targetFrameSize:frameMs*16})
   for await(const frame of resampler.stream(input)) {
    atMs+=frameMs;await vad.processFrame(frame)
@@ -71,7 +74,7 @@ try {
    finalize_delay_ms:ends.length===1?ends[0].detectedAtMs-end:null,
    reset_count:resetTimes.length,target_events:targetEvents})
  }
-}finally{await model.release()}
+}finally{secondary?.close();await model.release()}
 const p95=values=>{if(!values.length)return null;values.sort((a,b)=>a-b);const i=(values.length-1)*.95;return values[Math.floor(i)]+(values[Math.ceil(i)]-values[Math.floor(i)])*(i%1)}
 const summary=Object.fromEntries(['backchannel','take_turn','pause'].map(cohort=>{
  const rows=trials.filter(t=>t.cohort===cohort)
@@ -79,7 +82,7 @@ const summary=Object.fromEntries(['backchannel','take_turn','pause'].map(cohort=
   finalize_delay_valid:rows.filter(t=>t.finalize_delay_ms!==null).length,
   finalize_delay_p95_ms:p95(rows.flatMap(t=>t.finalize_delay_ms===null?[]:[t.finalize_delay_ms]))}]
 }))
-await writeFile(output,JSON.stringify({scope:'sequential_fixed_pcm_with_production_idle_reset_diagnostic',model:modelName,frame_ms:frameMs,
+await writeFile(output,JSON.stringify({scope:'sequential_fixed_pcm_with_production_idle_reset_diagnostic',short_speech:secondary ? shortSpeechProvenance : null,model:modelName,frame_ms:frameMs,
  script_sha256:hash(await readFile(fileURLToPath(import.meta.url))),idle_reset_options:idleVadResetOptions,idle_reset_sha256:hash(idleSource),
  model_sha256:hash(modelBytes),detector_sha256:hash(source),initial_fixture_sha256:hash(initialBytes),manifest_sha256:hash(manifestBytes),summary,trials},null,2)+'\n',{flag:'wx'})
 console.log(JSON.stringify({summary,output}))

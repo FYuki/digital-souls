@@ -1,3 +1,5 @@
+import type {ShortSpeechEvidence} from './short-speech-evidence'
+
 // Sileroの音声確率で発話を確認し、PCMの活動区間から無音長を測る。
 // 確率の余韻を発話末尾と見なさず、無音600ms以内の文の続きを保持する。
 export type UtteranceDetection = Readonly<{
@@ -40,7 +42,16 @@ export const utteranceDetectorOptions: UtteranceDetectorOptions = {
   evidenceWindowMs: 2000,
 }
 
+export const shortSpeechFallbackOptions = {
+  maximumActiveSpanMs: 700,
+  minimumVoicedEvidenceMs: 160,
+  minimumVoicedFraction: 0.6,
+  maximumTonalConcentration: 0.9,
+  maximumSpectralFlatness: 0.3,
+} as const
+
 export class UtteranceDetector {
+  private shortSpeechFrames: {end: number; duration: number}[] = []
   private candidateStart: number | null = null
   private lastActiveEnd = 0
   private activeFrames: { start: number; end: number }[] = []
@@ -56,6 +67,7 @@ export class UtteranceDetector {
   ) {}
 
   reset(): void {
+    this.shortSpeechFrames = []
     this.candidateStart = null
     this.lastActiveEnd = 0
     this.activeFrames = []
@@ -66,7 +78,7 @@ export class UtteranceDetector {
     this.consecutiveHighMs = 0
   }
 
-  process(frame: Float32Array, speechProbability: number, frameEndMs: number): void {
+  process(frame: Float32Array, speechProbability: number, frameEndMs: number, secondary?: ShortSpeechEvidence): void {
     if (frame.length === 0 || !Number.isFinite(frameEndMs) || frameEndMs < 0
       || !Number.isFinite(speechProbability) || speechProbability < 0 || speechProbability > 1) return
     const durationMs = frame.length * 1000 / this.options.sampleRate
@@ -93,6 +105,17 @@ export class UtteranceDetector {
       }
     }
     if (this.candidateStart === null) return
+    this.shortSpeechFrames = this.shortSpeechFrames.filter(item => item.end > evidenceStart)
+    // 不正な補助値は無視し、主VADの通常判定は続ける。
+    const validSecondary = secondary !== undefined
+      && [secondary.voicedFraction, secondary.tonalConcentration, secondary.spectralFlatness]
+        .every(value => Number.isFinite(value) && value >= 0 && value <= 1)
+    if (active && validSecondary && secondary
+      && secondary.voicedFraction >= shortSpeechFallbackOptions.minimumVoicedFraction
+      && secondary.tonalConcentration < shortSpeechFallbackOptions.maximumTonalConcentration
+      && secondary.spectralFlatness < shortSpeechFallbackOptions.maximumSpectralFlatness) {
+      this.shortSpeechFrames.push({end: frameEndMs, duration: durationMs * secondary.voicedFraction})
+    }
     // 背景音がPCM閾値を超え続けても、離れた確率ピークを無期限に合算しない。
     if (!this.confirmed && this.activeFrames.length > 0) {
       this.candidateStart = Math.max(this.activeFrames[0].start, evidenceStart)
@@ -124,8 +147,14 @@ export class UtteranceDetector {
     const activeMs = this.activeFrames.reduce((total, item) => (
       total + item.end - Math.max(item.start, evidenceStart)
     ), 0)
+    const shortSpeechMs = this.shortSpeechFrames.reduce((total, item) =>
+      total + Math.min(item.duration, item.end - evidenceStart), 0)
+    // 発話前に誤って止めないよう、未確定の短い候補だけをPCM静音での終了時に補う。
+    const shortFallback = frameEndMs - this.lastActiveEnd > this.options.silenceMs
+      && this.lastActiveEnd - this.candidateStart <= shortSpeechFallbackOptions.maximumActiveSpanMs
+      && shortSpeechMs >= shortSpeechFallbackOptions.minimumVoicedEvidenceMs
     if (!this.confirmed && activeMs >= this.options.minimumActiveMs
-      && (strongMs >= this.options.minimumStrongMs
+      && (shortFallback || strongMs >= this.options.minimumStrongMs
         || ((strongMs >= this.options.shortStrongMs || speechEvidenceMs >= this.options.minimumEvidenceMs) && this.consecutiveHighMs >= this.options.minimumHighMs))) {
       this.confirmed = true
       this.activeFrames = []

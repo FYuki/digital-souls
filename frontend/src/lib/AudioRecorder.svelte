@@ -17,6 +17,7 @@
 
   import { AudioWorkletPcmRecorder } from './audio/pcm-worklet-recorder'
   import { attachIdleVadReset } from './audio/idle-vad-reset'
+  import { createShortSpeechAnalyzer, type ShortSpeechAnalyzer } from './audio/short-speech-evidence'
   import { VAD_ASSET_ROUTE } from './audio/vad-assets'
   import { VAD_UTTERANCE_REDEMPTION_MS } from './audio/vad-policy'
   import { UtteranceDetector, type UtteranceDetection } from './audio/utterance-detector'
@@ -44,6 +45,7 @@
 
   let vad: MicVadInstance | null = null
   let vadFrameControl: ReturnType<typeof attachIdleVadReset> | null = null
+  let shortSpeechAnalyzer: ShortSpeechAnalyzer | null = null
   let recorder: AudioWorkletPcmRecorder | null = null
   let microphoneStream: MediaStream | null = null
   let status: MicStatus = 'off'
@@ -104,7 +106,7 @@
           for (const sample of frame) energy += sample * sample
           port.frame({atMs, probability: probabilities.isSpeech, rms: Math.sqrt(energy / frame.length), samples: frame.length})
         }
-        utteranceDetector?.process(frame, probabilities.isSpeech, atMs)
+        utteranceDetector?.process(frame, probabilities.isSpeech, atMs, shortSpeechAnalyzer?.process(frame))
       }
     },
     onSpeechStart: () => {
@@ -155,6 +157,10 @@
     const frameControl = vadFrameControl
     vadFrameControl = null
     if (frameControl !== null) await frameControl.close()
+    shortSpeechAnalyzer?.close()
+    shortSpeechAnalyzer = null
+    candidateSpeechStartClientMs = null
+    capturedAudioStartClientMs = null
     if (vad !== null) {
       await vad.destroy()
       vad = null
@@ -177,9 +183,12 @@
       return vad
     }
 
-    if (continuous) utteranceDetector = new UtteranceDetector(handleUtteranceDetection)
+    if (continuous) {
+      shortSpeechAnalyzer = await createShortSpeechAnalyzer()
+      utteranceDetector = new UtteranceDetector(handleUtteranceDetection)
+    }
     const instance = await MicVAD.new(buildVadOptions(stream))
-    if (continuous) vadFrameControl = attachIdleVadReset(instance, reportError)
+    if (continuous) vadFrameControl = attachIdleVadReset(instance, reportError, () => shortSpeechAnalyzer?.reset())
     vad = instance
     return vad
   }

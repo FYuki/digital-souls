@@ -7,7 +7,7 @@ export type ResettableVad = {
 }
 export const idleVadResetOptions = {sampleRate: 16000, maximumRms: 0.001, minimumQuietMs: 700, intervalMs: 256} as const
 
-export function attachIdleVadReset(vad: ResettableVad, onError: (error: unknown) => void): {close: () => Promise<void>} {
+export function attachIdleVadReset(vad: ResettableVad, onError: (error: unknown) => void, onReset: () => void = () => undefined): {close: () => Promise<void>} {
   const process = vad.processFrame.bind(vad)
   let closed = false
   let quietMs = 0
@@ -35,6 +35,7 @@ export function attachIdleVadReset(vad: ResettableVad, onError: (error: unknown)
       if (quietMs >= idleVadResetOptions.minimumQuietMs && elapsedSinceReset >= idleVadResetOptions.intervalMs) {
         await vad.pause()
         if (closed) return
+        onReset()
         await vad.start()
         elapsedSinceReset = 0
       }

@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { transform } from 'esbuild'
+import {createProductionShortSpeechAnalyzer, shortSpeechProvenance} from './load-short-speech-analyzer.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const require = createRequire(resolve(root, 'package.json'))
@@ -27,6 +28,7 @@ if(process.argv[4]!==undefined&&!idleReset)throw Error('invalid reset mode')
 const idleSource=idleReset?await readFile(resolve(root,'src/lib/audio/idle-vad-reset.ts'),'utf8'):null
 const idleModule=idleSource===null?null:await transform(idleSource,{loader:'ts',format:'esm'})
 const attachIdleReset=idleModule===null?null:(await import(`data:text/javascript;base64,${Buffer.from(idleModule.code).toString('base64')}`)).attachIdleVadReset
+const secondary = modelName === 'legacy' ? await createProductionShortSpeechAnalyzer() : null
 const trials=[]
 try {
  for(const kind of ['silence','white_noise','pink_noise','hum','tone','two_tones','click','keyboard','rustle','wind','short_tone','short_noise']) {
@@ -58,7 +60,7 @@ try {
    const baselineEvents=[]
    const baseline=new FrameProcessor(async()=>({isSpeech:currentProbability,notSpeech:1-currentProbability}),()=>{},
     {...getDefaultRealTimeVADOptions(modelName),redemptionMs:700},frameMs)
-   baseline.resume(); model.reset_state()
+   baseline.resume(); model.reset_state(); secondary?.reset()
    let maxProbability=0
    const frameProbabilities=[]
    let atMs=0
@@ -67,10 +69,10 @@ try {
     currentProbability=probability.isSpeech
     frameProbabilities.push(currentProbability)
     maxProbability=Math.max(maxProbability,currentProbability)
-    detector.process(frame,currentProbability,atMs)
+    detector.process(frame,currentProbability,atMs,secondary?.process(frame))
     await baseline.process(frame,event=>{if(event.msg===Message.SpeechRealStart)baselineEvents.push(atMs)})
    }}
-   const control=attachIdleReset?.(vad,error=>{throw error})
+   const control=attachIdleReset?.(vad,error=>{throw error},()=>secondary?.reset())
    for(let offset=0;offset+frameSamples<=samples.length;offset+=frameSamples) {
     atMs=(offset+frameSamples)/16
     await vad.processFrame(samples.slice(offset,offset+frameSamples))
@@ -81,11 +83,11 @@ try {
     frame_probabilities:frameProbabilities,events})
   }
  }
-} finally {await model.release()}
+} finally {secondary?.close();await model.release()}
 const summary={denominator:trials.length,candidate_false_starts:trials.filter(t=>t.candidate_false_start).length,
  baseline_false_starts:trials.filter(t=>t.baseline_false_start).length}
 const output=resolve(process.argv[2] ?? resolve(root,'test-results/vad-quality/utterance-background-v1.json'))
 await mkdir(dirname(output),{recursive:true})
-await writeFile(output,JSON.stringify({scope:'synthetic_non_speech_real_silero_diagnostic',detector_sha256:hash(source),
+await writeFile(output,JSON.stringify({scope:'synthetic_non_speech_real_silero_diagnostic',short_speech:secondary ? shortSpeechProvenance : null,detector_sha256:hash(source),
  idle_reset:idleReset,idle_reset_source_sha256:idleSource===null?null:hash(idleSource),model_sha256:hash(modelBytes),model:modelName,frame_ms:frameMs,options:utteranceDetectorOptions,summary,trials},null,2)+'\n',{flag:'wx'})
 console.log(JSON.stringify({summary,output}))

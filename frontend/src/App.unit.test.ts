@@ -69,6 +69,14 @@ vi.mock('@ricky0123/vad-web', () => ({
   },
 }))
 
+vi.mock('./lib/audio/short-speech-evidence', () => ({
+  createShortSpeechAnalyzer: vi.fn(async () => ({
+    process: () => ({voicedFraction: 0, tonalConcentration: 1, spectralFlatness: 1}),
+    reset: () => undefined,
+    close: () => undefined,
+  })),
+}))
+
 vi.mock('./lib/audio/pcm-worklet-recorder', () => ({
   AudioWorkletPcmRecorder: vi.fn(() => ({
     initialize: audioMocks.recorderInitialize,

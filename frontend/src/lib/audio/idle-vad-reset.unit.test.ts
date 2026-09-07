@@ -68,3 +68,21 @@ test('処理が詰まってもframeを無制限に保持せず、欠落を黙っ
   expect(h.onError.mock.calls[0][0].message).toContain('backlog')
   expect(h.process).not.toHaveBeenCalled()
 })
+
+
+test('補助VADもpauseとstartの間でresetし、失敗時はframeを処理しない', async () => {
+  const order: string[] = []
+  const vad = {processFrame: vi.fn(async (_frame: Float32Array) => {order.push('process')}),
+    pause: vi.fn(async () => {order.push('pause')}), start: vi.fn(async () => {order.push('start')})}
+  const error = vi.fn()
+  const reset = vi.fn(() => {order.push('secondary-reset')})
+  const control = attachIdleVadReset(vad, error, reset)
+  await vad.processFrame(frame(700))
+  expect(order).toEqual(['pause', 'secondary-reset', 'start', 'process'])
+  reset.mockImplementationOnce(() => {throw new Error('secondary reset failed')})
+  order.length = 0
+  await vad.processFrame(frame(300))
+  expect(order).toEqual(['pause'])
+  expect(error).toHaveBeenCalledOnce()
+  await control.close()
+})
