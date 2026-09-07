@@ -17,9 +17,10 @@ SID = "TR_probe"
 def rig(monkeypatch):
     sources, tracks, frames, tasks = [], [], [], []
     state = SimpleNamespace(generation=1, available=True, early_ready=True, auto_complete=True,
-                            publish_error=False, unpublish_error=False, removed=False, block_cleanup=False)
+                            publish_error=False, unpublish_error=False, removed=False, block_cleanup=False, block_subscription=False)
     published, captured, finished = asyncio.Event(), asyncio.Event(), asyncio.Event()
     publications = {}
+    subscription = asyncio.Event()
 
     class Source:
         def __init__(self, rate, channels, *, queue_size_ms):
@@ -55,7 +56,10 @@ def rig(monkeypatch):
             raise PublishTrackError('private SDK details must not be logged')
         if state.early_ready:
             output.receive('audio_probe_ready', track.name.split(':')[1], 1, SID)
-        publications[SID] = SimpleNamespace(sid=SID)
+        async def wait_for_subscription():
+            if state.block_subscription:
+                await subscription.wait()
+        publications[SID] = SimpleNamespace(sid=SID, wait_for_subscription=wait_for_subscription)
         published.set()
         return publications[SID]
 
@@ -90,7 +94,7 @@ def rig(monkeypatch):
     output = audio_probe.AudioProbePublisher(room, current=lambda gen: state.available and gen == state.generation,
         publish=notify, schedule=schedule)
     return SimpleNamespace(output=output, sources=sources, tracks=tracks, frames=frames, tasks=tasks,
-        state=state, published=published, captured=captured, finished=finished, publications=publications)
+        state=state, published=published, captured=captured, finished=finished, publications=publications, subscription=subscription)
 
 
 def test_probe_uses_real_pacer_and_waits_for_complete_before_retiring_track(rig):
@@ -219,3 +223,28 @@ def test_probe_gate_requires_every_isolation_setting():
             assert not audio_probe.audio_probe_enabled({**env, key: 'dogfood'}, url)
     for url in ['ws://localhost:7880', 'ws://127.0.0.1:17880', 'wss://example.com:19880']:
         assert not audio_probe.audio_probe_enabled(env, url)
+
+
+def test_browser_ready_does_not_send_pcm_before_server_subscription(rig):
+    async def exercise():
+        rig.state.block_subscription = True
+        rig.output.request(A, 1)
+        await rig.published.wait()
+        await asyncio.sleep(.02)
+        assert not rig.captured.is_set()
+        rig.subscription.set()
+        await asyncio.wait_for(rig.tasks[0], 1)
+        assert rig.captured.is_set()
+        assert rig.sources[0].closed and not rig.publications
+    asyncio.run(exercise())
+
+
+def test_subscription_wait_is_owned_and_cancelled_with_probe(rig):
+    async def exercise():
+        rig.state.block_subscription = True
+        rig.output.request(A, 1)
+        await rig.published.wait()
+        await rig.output.cancel()
+        assert not rig.captured.is_set()
+        assert rig.sources[0].closed and not rig.publications
+    asyncio.run(exercise())

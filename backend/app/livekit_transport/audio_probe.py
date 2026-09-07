@@ -100,6 +100,8 @@ class AudioProbePublisher:
                 self._sid = publication.sid
                 if self._pending_ready_sid == self._sid:
                     self._ready.set()
+                stage = "subscription"
+                await asyncio.wait_for(publication.wait_for_subscription(), READY_TIMEOUT_SECONDS)
                 stage = "ready"
                 await asyncio.wait_for(self._ready.wait(), READY_TIMEOUT_SECONDS)
                 if not self._current(generation):

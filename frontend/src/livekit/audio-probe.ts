@@ -1,4 +1,4 @@
-import {RemoteMediaObserver, type DecodedAudioPacket} from './media-observer'
+import {RemoteMediaObserver, type DecodedAudioPacket, type MediaObservation} from './media-observer'
 import {PacketOutputDiagnostic, type PacketOutputEvidence} from './packet-output-diagnostic'
 import {PacketOutputTracker, packetRendererSource, type PacketRenderInterval,
   type PlaybackCompletion, type SourceAudioFinished} from './packet-renderer'
@@ -16,6 +16,7 @@ export type AudioProbeObservation = Readonly<{
   completedAtMs: number; completion: PlaybackCompletion | null
   packetOutputs: ReadonlyArray<PacketOutputEvidence>; cleanupCompleted: boolean
   trackEvents: ReadonlyArray<ProbeTrackEvent>
+  mediaObservation: MediaObservation | null
 }>
 type ProbeTrack = Readonly<{receiver?: RTCRtpReceiver; mediaStreamTrack: MediaStreamTrack}>
 type ProbeFrame = Record<string, string | number>
@@ -31,6 +32,7 @@ export class AudioAvailabilityProbe {
   private publisherSid: string | null = null
   private context: AudioContext | null = null
   private observer: RemoteMediaObserver | null = null
+  private mediaObservation: MediaObservation | null = null
   private worklet: AudioWorkletNode | null = null
   private gain: GainNode | null = null
   private element: HTMLAudioElement | null = null
@@ -100,7 +102,7 @@ export class AudioAvailabilityProbe {
   private async setup(track: ProbeTrack): Promise<void> {
     const context = new AudioContext({sampleRate: 48000})
     this.context = context
-    const observer = new RemoteMediaObserver(track.receiver, track.mediaStreamTrack, () => undefined, {
+    const observer = new RemoteMediaObserver(track.receiver, track.mediaStreamTrack, row => {this.mediaObservation = row}, {
       packet: packet => this.receive(packet), failed: () => this.cancel('media_decoder'),
       interrupted: () => this.cancel('rtp_timeline'),
     })
@@ -205,6 +207,6 @@ export class AudioAvailabilityProbe {
     this.resolve({scope: 'rtc_audio_probe', probeId: this.probeId, generation: this.generation,
       requestedAtMs: this.requestedAtMs, trackSid: this.trackSid, completedAtMs: performance.now(),
       status: this.failure ? 'failed' : 'captured', ...(this.failure ? {reason: this.failure} : {}),
-      completion, packetOutputs: [...this.rows], cleanupCompleted, trackEvents: [...this.trackEvents]})
+      completion, packetOutputs: [...this.rows], cleanupCompleted, trackEvents: [...this.trackEvents], mediaObservation: this.mediaObservation})
   }
 }
