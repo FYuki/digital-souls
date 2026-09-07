@@ -582,6 +582,12 @@ class _ConversationCoreDelivery:
             and event.response_id is not None
             and self._measurement is not None
         ):
+            if event.terminal_state_bounds_ns is not None:
+                for name, timestamp in zip(("cancel_state_lower", "cancel_state_upper"),
+                                           event.terminal_state_bounds_ns, strict=True):
+                    self._measurement.record_response_event(
+                        response_id=event.response_id, name=name, stage="response", timestamp=timestamp,
+                    )
             self._measurement.record_response_event(
                 response_id=event.response_id,
                 name="response_excluded",

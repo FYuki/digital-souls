@@ -64,6 +64,9 @@
         },
         "generation": {
           "$ref": "#/$defs/Generation"
+        },
+        "observe_clock": {
+          "const": true
         }
       }
     },
@@ -88,7 +91,25 @@
         },
         "generation": {
           "$ref": "#/$defs/Generation"
+        },
+        "server_received_us": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "server_sent_us": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
+      },
+      "dependentRequired": {
+        "server_received_us": [
+          "server_sent_us"
+        ],
+        "server_sent_us": [
+          "server_received_us"
+        ]
       }
     },
     "StateSyncRequest": {

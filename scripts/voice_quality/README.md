@@ -417,3 +417,22 @@ snapshotには件数と文字数だけを出す。重複DOM・本文上限・応
 割り込み試行は終了前の`evidence`を保持し、終了後の`cleanup_observation`へ最終audio行と
 停止済みtext観測を追加する。take-turnでは旧応答のaudio graph closedも確認し、
 閉鎖を確認できない場合は`audit_cleanup_failed`として試行を失敗にする。
+
+
+### サーバーcancel成立の時計境界
+
+Coreはcancel状態の書き換え直前・直後の単調時計を`terminal_state_bounds_ns`として内部で保持し、
+永続化を待った後も同じ値をLiveKit計測へ渡す。traceの`cancel_state_lower/upper`はこの2点であり、
+既存のcancel通知送信時刻や、cancel処理から戻った時刻を成立時刻へ置き換えない。
+この内部metadataを公開Coreイベントの本文へ追加しない。
+
+ラベル付き実ブラウザ診断は`observe_clock: true`付きprivate control probeを直列に送る。
+通常の復旧判定用probeとはpendingを分け、現在の主体・接続・世代だけに応答する。
+ackはサーバーの受信・送信直前の単調時計をmicrosecondで返す。片方のみ、不正な整数、逆行は拒否する。
+ブラウザの送受信時刻と別フィールドで保存し、最大2048回、overflowと終了状態を明示する。
+
+`server_clock.py`の`bound_transition`は、サーバーで遷移前に処理したprobeのclient送信を下限、
+遷移後に処理したprobeのclient受信を上限へ使う。両時計の原点・速度の一致、一定offset、
+片道遅延=RTT/2を仮定しない。serverのmicrosecond切捨ては外側1us、clientの丸めは外側0.2msへ含める。
+前後probe不足は`server_transition_not_bracketed`、矛盾する順序はエラーとする。
+この境界だけではstale 0は証明できない。音声出力とDOMの履歴を同じ境界で再集計する必要がある。

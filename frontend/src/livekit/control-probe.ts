@@ -11,6 +11,7 @@ export type ControlProbeObservation = Readonly<{
   sentAtMs: number | null
   receivedAtMs: number | null
   sendCompletedAtMs?: number | null
+  serverReceivedAtUs?: number; serverSentAtUs?: number
 }>
 
 type PendingProbe<Handle> = {
@@ -53,7 +54,7 @@ export class ControlProbeTracker<Handle> {
     })
   }
 
-  acknowledge(probeId: string, generation: number): void {
+  acknowledge(probeId: string, generation: number, clock?: {serverReceivedAtUs: number; serverSentAtUs: number}): void {
     const pending = this.pending
     if (pending === null || pending.probeId !== probeId || pending.generation !== generation) return
     const receivedAtMs = this.timer.now()
@@ -65,7 +66,12 @@ export class ControlProbeTracker<Handle> {
       this.finish(pending, 'timeout')
       return
     }
-    this.finish(pending, 'received', receivedAtMs)
+    if (clock !== undefined && (!Number.isSafeInteger(clock.serverReceivedAtUs)
+      || !Number.isSafeInteger(clock.serverSentAtUs) || clock.serverReceivedAtUs < 0
+      || clock.serverSentAtUs < clock.serverReceivedAtUs)) {
+      this.finish(pending, 'clock_invalid'); return
+    }
+    this.finish(pending, 'received', receivedAtMs, clock)
   }
 
   reset(): void {
@@ -73,12 +79,12 @@ export class ControlProbeTracker<Handle> {
   }
 
   private finish(pending: PendingProbe<Handle>, status: ControlProbeObservation['status'],
-    receivedAtMs: number | null = null): void {
+    receivedAtMs: number | null = null, clock?: {serverReceivedAtUs: number; serverSentAtUs: number}): void {
     if (this.pending !== pending) return
     this.pending = null
     if (pending.timer !== null) this.timer.cancel(pending.timer)
     pending.resolve({status, generation: pending.generation, probeId: pending.probeId,
-      sentAtMs: pending.sentAtMs, receivedAtMs, sendCompletedAtMs: pending.sendCompletedAtMs})
+      sentAtMs: pending.sentAtMs, receivedAtMs, sendCompletedAtMs: pending.sendCompletedAtMs, ...clock})
   }
 
   private empty(status: ControlProbeObservation['status'], generation: number): ControlProbeObservation {

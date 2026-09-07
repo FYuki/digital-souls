@@ -61,12 +61,14 @@ class ProductionSessionCoordinator:
         dependencies: SessionCoordinatorDependencies,
         core_port: CoreNotificationPort,
         monotonic_ms: Callable[[], int] = lambda: int(time.monotonic() * 1000),
+        monotonic_us: Callable[[], int] = lambda: time.monotonic_ns() // 1000,
     ) -> None:
         self.session_id = session_id
         self.user_identity = user_identity
         self._dependencies = dependencies
         self._core_port = core_port
         self._clock = monotonic_ms
+        self._clock_us = monotonic_us
         self._mapping = ParticipantMapping()
         self._mapping.bind(
             core_participant_id=core_participant_id,
@@ -221,6 +223,7 @@ class ProductionSessionCoordinator:
                         await self._send_ready_authoritative_state()
                     return
                 if frame["type"] == "control_probe":
+                    received_us = self._clock_us() if frame.get("observe_clock") is True else None
                     self._observe_sync("probe_received")
                 if frame_generation != self.generation:
                     if frame["type"] == "control_probe":
@@ -240,6 +243,8 @@ class ProductionSessionCoordinator:
                             "type": "control_probe_ack",
                             "probe_id": frame["probe_id"],
                             "generation": self.generation,
+                            **({"server_received_us": received_us, "server_sent_us": self._clock_us()}
+                               if received_us is not None else {}),
                         })
                         self._observe_sync("probe_ack_completed")
                     else:

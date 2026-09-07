@@ -19,7 +19,8 @@ type PrivateFrame =
   }>
   | Readonly<{ type: 'ack'; eventId: string; generation: number }>
   | Readonly<{ type: 'state_sync_request'; generation: number }>
-  | Readonly<{ type: 'control_probe' | 'control_probe_ack'; generation: number; probeId: string }>
+  | Readonly<{ type: 'control_probe'; generation: number; probeId: string; observeClock?: true }>
+  | Readonly<{ type: 'control_probe_ack'; generation: number; probeId: string; serverReceivedAtUs?: number; serverSentAtUs?: number }>
   | Readonly<{ type: 'audio_probe_request'; generation: number; probeId: string }>
   | Readonly<{ type: 'audio_probe_ready' | 'audio_probe_complete'; generation: number; probeId: string; trackSid: string }>
   | Readonly<{ type: 'audio_probe_finished'; generation: number; probeId: string; trackSid: string; inputSampleCount: number; capturedSampleCount: number; paddingSampleCount: number }>
@@ -57,7 +58,8 @@ type PrivateFrameWire =
   }>
   | Readonly<{ type: 'ack'; event_id: string; generation: number }>
   | Readonly<{ type: 'state_sync_request'; generation: number }>
-  | Readonly<{ type: 'control_probe' | 'control_probe_ack'; generation: number; probe_id: string }>
+  | Readonly<{ type: 'control_probe'; generation: number; probe_id: string; observe_clock?: true }>
+  | Readonly<{ type: 'control_probe_ack'; generation: number; probe_id: string; server_received_us?: number; server_sent_us?: number }>
   | Readonly<{ type: 'audio_probe_request'; generation: number; probe_id: string }>
   | Readonly<{ type: 'audio_probe_ready' | 'audio_probe_complete'; generation: number; probe_id: string; track_sid: string }>
   | Readonly<{ type: 'audio_probe_finished'; generation: number; probe_id: string; track_sid: string; input_sample_count: number; captured_sample_count: number; padding_sample_count: number }>
@@ -108,8 +110,15 @@ export function parsePrivateFrame(value: unknown): PrivateFrame {
         generation: frame.generation,
       }
     case 'control_probe':
+      return {type: frame.type, generation: frame.generation, probeId: frame.probe_id,
+        ...(frame.observe_clock === true ? {observeClock: true} : {})}
     case 'control_probe_ack':
-      return { type: frame.type, generation: frame.generation, probeId: frame.probe_id }
+      if (frame.server_received_us !== undefined && frame.server_sent_us! < frame.server_received_us) {
+        throw new Error('invalid server clock order')
+      }
+      return {type: frame.type, generation: frame.generation, probeId: frame.probe_id,
+        ...(frame.server_received_us !== undefined ? {serverReceivedAtUs: frame.server_received_us,
+          serverSentAtUs: frame.server_sent_us!} : {})}
     case 'audio_probe_request':
       return {type: frame.type, generation: frame.generation, probeId: frame.probe_id}
     case 'audio_probe_ready':

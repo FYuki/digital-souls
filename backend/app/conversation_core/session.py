@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from pathlib import Path
 import traceback
 from collections.abc import AsyncIterator, Callable, Coroutine
@@ -82,6 +83,7 @@ class ConversationCoreSession:
         completion: ResponseCompletionPort | None = None,
         tts_queue_maxsize: int = 8,
         turn_classifier: Callable[[str], TurnDecision] = classify_turn,
+        monotonic_ns: Callable[[], int] = time.monotonic_ns,
     ) -> None:
         if tts_queue_maxsize < 1:
             raise ValueError("tts_queue_maxsize must be positive")
@@ -96,6 +98,7 @@ class ConversationCoreSession:
         self._completion = completion
         self._tts_queue_maxsize = tts_queue_maxsize
         self._turn_classifier = turn_classifier
+        self._monotonic_ns = monotonic_ns
         self._responses: dict[str, Response] = {}
         self._utterances: dict[str, Utterance] = {}
         self._active_response_id: str | None = None
@@ -1037,7 +1040,11 @@ class ConversationCoreSession:
             if response.generation != generation:
                 return response
             response = replace(response, state=state, terminal_reason=reason)
+            # awaitを挟まず、公開状態の書き換えを同じ単調時計の2点で囲む。
+            # 通知の送信・永続化完了をcancel成立時刻へ読み替えない。
+            transition_before = self._monotonic_ns() if state is ResponseState.CANCELLED else None
             self._responses[response_id] = response
+            transition_after = self._monotonic_ns() if state is ResponseState.CANCELLED else None
             if self._active_response_id == response_id:
                 self._active_response_id = None
             outcome = TerminalOutcome(
@@ -1050,6 +1057,8 @@ class ConversationCoreSession:
                 last_played_audio_sequence=response.last_played_audio_sequence,
                 last_text_sequence=response.last_text_sequence,
                 source_utterance_ids=response.source_utterance_ids,
+                terminal_state_bounds_ns=(transition_before, transition_after)
+                if transition_before is not None and transition_after is not None else None,
             )
             if response_id not in self._persisted_response_ids:
                 self._persisted_response_ids.add(response_id)
@@ -1078,6 +1087,7 @@ class ConversationCoreSession:
                         source_utterance_ids=outcome.source_utterance_ids,
                         last_text_sequence=outcome.last_text_sequence,
                         last_audio_sequence=len(outcome.audio_segments),
+                        terminal_state_bounds_ns=outcome.terminal_state_bounds_ns,
                     )
                 )
         finally:

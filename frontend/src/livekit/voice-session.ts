@@ -1,3 +1,4 @@
+import type {ControlProbeObservation} from './control-probe'
 import type {CoreDeliveryObservation} from './core-delivery-observation'
 import type {StaleAudioObservation} from './post-gain-monitor'
 import type { VoiceSessionEvent } from '../lib/voice-session/generated'
@@ -74,6 +75,7 @@ const defaultDependencies: VoiceSessionDependencies = {
         observeRoom?: (observation: RoomObservation) => void
         observeCoreDelivery?: (observation: CoreDeliveryObservation) => void
         observeStaleAudio?: (observation: StaleAudioObservation) => void
+        bindClockProbe?: (probe: () => Promise<ControlProbeObservation>) => void
         bindRoom?: (room: Pick<LiveKitRoomClient, 'probeControl' | 'setPacketOutputObserver'>) => void
         receiveCoreEvent?: (event: VoiceSessionEvent) => void
         bindController?: (controller: {
@@ -98,6 +100,7 @@ const defaultDependencies: VoiceSessionDependencies = {
     )
     if (testPort?.observeCoreDelivery) room.setCoreDeliveryObserver(testPort.observeCoreDelivery)
     if (testPort?.observeStaleAudio) room.setStaleAudioObserver(testPort.observeStaleAudio)
+    testPort?.bindClockProbe?.(() => room.probeClock())
     testPort?.bindRoom?.(room)
     return room
   },

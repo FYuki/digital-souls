@@ -145,3 +145,15 @@ test('音声probeは固定長の診断音とnonce・世代・trackだけを通�
     expect(() => parsePrivateFrame(invalid)).toThrow()
   }
 })
+
+
+test('時計要求と対になったserver時計を検証し、片方のみ・逆行・unsafe integerを拒否する', () => {
+  const common = {protocol_version: '1.0', probe_id: '10000000-0000-4000-8000-000000000010', generation: 0}
+  expect(parsePrivateFrame({...common, type: 'control_probe', observe_clock: true})).toMatchObject({observeClock: true})
+  const frame = {...common, type: 'control_probe_ack', server_received_us: 1000, server_sent_us: 1005}
+  expect(parsePrivateFrame(frame)).toMatchObject({serverReceivedAtUs: 1000, serverSentAtUs: 1005})
+  for (const changed of [{server_sent_us: undefined}, {server_received_us: undefined},
+    {server_sent_us: 999}, {server_sent_us: Number.MAX_SAFE_INTEGER + 1}, {server_received_us: true}]) {
+    expect(() => parsePrivateFrame({...frame, ...changed})).toThrow()
+  }
+})

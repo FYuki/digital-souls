@@ -1083,3 +1083,23 @@ test.each(['explicit', 'temporary', 'transport_failure'] as const)('アプリ起
   expect(observed).toEqual([expect.objectContaining({event: 'disconnected', disconnect: {reason: null, origin}})])
   client.disconnect()
 })
+
+
+test('時計probeと復旧用control probeは別pendingを持ち、切断時に両方を終了する', async () => {
+  const client = new LiveKitRoomClient(() => undefined)
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000010')
+  try {
+    const control = client.probeControl(), clock = client.probeClock(), room = latestRoom()
+    const frames = room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
+    const request = frames.find(frame => frame.type === 'control_probe' && frame.observe_clock === true)
+    expect(frames.filter(frame => frame.type === 'control_probe')).toHaveLength(2)
+    emitPrivateFrame(room, new TextEncoder().encode(JSON.stringify({protocol_version: '1.0',
+      type: 'control_probe_ack', probe_id: request.probe_id, generation: request.generation,
+      server_received_us: 1000, server_sent_us: 1001})))
+    expect(await clock).toMatchObject({status: 'received', serverReceivedAtUs: 1000, serverSentAtUs: 1001})
+    const interrupted = client.probeClock()
+    client.disconnect()
+    expect((await control).status).toBe('interrupted')
+    expect((await interrupted).status).toBe('interrupted')
+  } finally {client.disconnect()}
+})

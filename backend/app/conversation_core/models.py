@@ -69,6 +69,7 @@ class TerminalOutcome:
     last_played_audio_sequence: int
     last_text_sequence: int = 0
     source_utterance_ids: tuple[str, ...] = ()
+    terminal_state_bounds_ns: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -100,6 +101,7 @@ class CoreEvent:
     reason: str | None = None
     last_text_sequence: int | None = None
     last_audio_sequence: int | None = None
+    terminal_state_bounds_ns: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True)

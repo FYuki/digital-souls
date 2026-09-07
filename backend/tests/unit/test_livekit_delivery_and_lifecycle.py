@@ -1092,7 +1092,8 @@ def test_control_probe_round_trip_does_not_change_generation_or_interrupt_respon
 
 
 @pytest.mark.parametrize("case", ["wrong_identity", "old_connection", "old_generation", "future_generation", "unavailable", "ended"])
-def test_control_probe_does_not_acknowledge_invalid_or_unavailable_connection(case) -> None:
+@pytest.mark.parametrize("observe_clock", [False, True])
+def test_control_probe_does_not_acknowledge_invalid_or_unavailable_connection(case, observe_clock) -> None:
     module = _livekit_module("coordinator", "control probe connection ownership")
 
     async def exercise() -> None:
@@ -1116,7 +1117,7 @@ def test_control_probe_does_not_acknowledge_invalid_or_unavailable_connection(ca
             topic=module.PRIVATE_TOPIC,
             payload=json.dumps({"protocol_version": "1.0", "type": "control_probe",
                                 "probe_id": "10000000-0000-4000-8000-000000000001",
-                                "generation": generation}).encode(),
+                                "generation": generation, **({"observe_clock": True} if observe_clock else {})}).encode(),
         )
         assert published == []
         await coordinator.cleanup("test_complete")
@@ -1283,4 +1284,23 @@ def test_control_probe_diagnostic_has_numeric_stages_without_probe_identity() ->
         assert len(published) == 1
         await coordinator.cleanup('test_complete')
 
+    asyncio.run(exercise())
+
+
+def test_clock_probe_reports_server_receive_and_send_without_changing_state() -> None:
+    module = _livekit_module("coordinator", "clock probe causal order")
+    async def exercise() -> None:
+        published = []
+        coordinator = _coordinator(module, published, [])
+        coordinator._clock_us = iter((5_000_001, 5_000_004)).__next__
+        identity = "user-20000000-0000-4000-8000-000000000010"
+        coordinator.participant_connected(identity=identity, participant_sid="PA_current", room_sid="RM_one")
+        await coordinator.receive_data(identity=identity, participant_sid="PA_current", topic=module.PRIVATE_TOPIC,
+            payload=json.dumps({"protocol_version": "1.0", "type": "control_probe", "observe_clock": True,
+                "probe_id": "10000000-0000-4000-8000-000000000010", "generation": 0}).encode())
+        frame = json.loads(published[-1][0])
+        assert frame["server_received_us"] == 5_000_001
+        assert frame["server_sent_us"] == 5_000_004
+        assert coordinator.generation == 0 and coordinator.phase == "available"
+        await coordinator.cleanup("test_complete")
     asyncio.run(exercise())

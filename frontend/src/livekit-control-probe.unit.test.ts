@@ -115,3 +115,18 @@ test('timeout後の遅い送信完了で保存済みの観測値を変更しな�
   h.time(900); sent(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
   expect(result).toMatchObject({status: 'timeout', sendCompletedAtMs: null})
 })
+
+
+test('時計観測ackのserver受信・送信をclient往復時刻と別に保持する', async () => {
+  const h = setup(), pending = h.tracker.start(1, h.send); h.time(120)
+  h.tracker.acknowledge(h.send.mock.calls[0][0], 1, {serverReceivedAtUs: 500001, serverSentAtUs: 500009})
+  expect(await pending).toMatchObject({status: 'received', sentAtMs: 100, receivedAtMs: 120,
+    serverReceivedAtUs: 500001, serverSentAtUs: 500009})
+})
+
+test.each([[10, 9], [-1, 9], [1.1, 9], [1, Infinity], [1, Number.MAX_SAFE_INTEGER + 1]])(
+  '無効なserver時計を成功へ補完しない (%s,%s)', async (serverReceivedAtUs, serverSentAtUs) => {
+    const h = setup(), pending = h.tracker.start(1, h.send)
+    h.tracker.acknowledge(h.send.mock.calls[0][0], 1, {serverReceivedAtUs, serverSentAtUs})
+    expect(await pending).toMatchObject({status: 'clock_invalid', receivedAtMs: null})
+  })

@@ -1,3 +1,4 @@
+import {installServerClockProbe} from './server-clock-probe'
 // 固定ラベル音声を実応答の再生中へ入れる。通常応答の100試行とは別の分母を持つ。
 import { expect, type Browser, type Page } from '@playwright/test'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
@@ -25,6 +26,7 @@ type LabeledTrial = {id: string; cohort: string; audio_sha256: string; sample_ra
   speech_intervals: {start_sample: number; end_sample: number}[]}
 const snapshot = (page: Page) => page.evaluate(() => ({
   vad: window.__voiceVadDiagnostics,
+  server_clock: window.__voiceServerClockProbe?.snapshot() ?? null,
   stale_text: window.__voiceStaleTextProbe?.snapshot() ?? null,
   stale_audio: window.__voiceChatE2E.staleAudio ?? [],
   stale_audio_overflow: window.__voiceChatE2E.staleAudioOverflow ?? false,
@@ -80,6 +82,7 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
     const trial: Record<string, unknown> = {fixture_sha256: selectedTrial.audio_sha256, cohort, outcome: 'failure'}
     let stage = 'initial_response'
     try {
+      await page.addInitScript(installServerClockProbe)
       await page.addInitScript(() => {
         const frames: NonNullable<Window['__voiceVadDiagnostics']>['frames'] = []
         const events: NonNullable<Window['__voiceVadDiagnostics']>['events'] = []
@@ -213,6 +216,7 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
         stale_audio: window.__voiceChatE2E.staleAudio ?? [],
         stale_audio_overflow: window.__voiceChatE2E.staleAudioOverflow ?? false,
         stale_text: window.__voiceStaleTextProbe?.close() ?? null,
+        server_clock: window.__voiceServerClockProbe?.close() ?? null,
       })).catch(() => ({browser_state_unavailable: true}))
       trial.audio_audit_closed = audioClosed
       trial.session_end_confirmed = ended

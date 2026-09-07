@@ -1686,3 +1686,30 @@ def test_turn_cancel_observation_requires_a_cancelled_response(phase, already_co
         finally:
             await session.end()
     _run(exercise)
+
+
+def test_cancel_clock_brackets_state_transition_and_survives_delayed_delivery() -> None:
+    async def exercise() -> None:
+        module, session, delivery, _, _ = _session()
+        persistence = BlockingTerminalPersistence()
+        session._persistence = persistence
+        response = await session.finalize_utterance(
+            utterance_id=UTTERANCE_1, transcript="中断対象", should_response=True,
+        )
+        states = []
+        ticks = iter((123_456_001, 123_456_999))
+        def clock() -> int:
+            states.append(session.response(response.response_id).state)
+            return next(ticks)
+        session._monotonic_ns = clock
+        await session.cancel_response(response_id=response.response_id, reason="barge_in")
+        await session.cancel_response(response_id=response.response_id, reason="barge_in")
+        await persistence.persist_started.wait()
+        assert states == [module.ResponseState.IN_PROGRESS, module.ResponseState.CANCELLED]
+        assert _terminal_events(delivery) == []
+        persistence.release_persist.set()
+        await _wait_until(lambda: len(_terminal_events(delivery)) == 1)
+        assert event_field(_terminal_events(delivery)[0], "terminal_state_bounds_ns") == (123_456_001, 123_456_999)
+        assert event_field(persistence.outcomes[0], "terminal_state_bounds_ns") == (123_456_001, 123_456_999)
+        await session.end()
+    _run(exercise)

@@ -116,6 +116,7 @@ export class LiveKitRoomClient {
   private connectionObserver: ((row: ConnectionLifecycleObservation) => void) | undefined
   private audioProbe: AudioAvailabilityProbe | null = null
   private readonly controlProbes = new ControlProbeTracker(browserRetryTimer)
+  private readonly clockProbes = new ControlProbeTracker(browserRetryTimer)
   private room: Room | null = null
   private audioContext: AudioContext | null = null
   private workletReady: Promise<void> | null = null
@@ -206,7 +207,7 @@ export class LiveKitRoomClient {
     this.recovering = true
     this.recoverySynchronized = false
     this.clearStateSync()
-    this.controlProbes.reset()
+    this.controlProbes.reset(); this.clockProbes.reset()
     this.audioProbe?.cancel()
     if (this.sessionId !== sessionId) {
       this.coreAckOutbox?.clear()
@@ -253,6 +254,19 @@ export class LiveKitRoomClient {
     return this.controlProbes.start(this.generation, async (probeId, generation) => {
       await room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({
         protocol_version: '1.0', type: 'control_probe', probe_id: probeId, generation,
+      })), {reliable: true, topic: PRIVATE_TOPIC})
+    })
+  }
+
+  probeClock(): Promise<ControlProbeObservation> {
+    const room = this.room
+    if (room === null || this.controlOutbox === null) return Promise.resolve({
+      status: 'unavailable', generation: this.generation, probeId: null, sentAtMs: null, receivedAtMs: null,
+    })
+    // 復旧判定用probeとはpending状態を分け、通常の疎通指標へ時計診断を混ぜない。
+    return this.clockProbes.start(this.generation, async (probeId, generation) => {
+      await room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({
+        protocol_version: '1.0', type: 'control_probe', probe_id: probeId, generation, observe_clock: true,
       })), {reliable: true, topic: PRIVATE_TOPIC})
     })
   }
@@ -368,7 +382,7 @@ export class LiveKitRoomClient {
   }
 
   disconnect(): void {
-    this.controlProbes.reset()
+    this.controlProbes.reset(); this.clockProbes.reset()
     this.audioProbe?.cancel()
     this.explicitDisconnect = true
     this.pendingDisconnectOrigin = 'explicit'
@@ -380,7 +394,7 @@ export class LiveKitRoomClient {
   }
 
   temporaryDisconnect(): void {
-    this.controlProbes.reset()
+    this.controlProbes.reset(); this.clockProbes.reset()
     this.audioProbe?.cancel()
     this.reconnectRequested = true
     this.pendingDisconnectOrigin = 'temporary'
@@ -400,7 +414,7 @@ export class LiveKitRoomClient {
     room.on(RoomEvent.Reconnecting, () => {
       this.observeConnection('reconnecting')
       this.beginStateRecovery(room)
-      this.controlProbes.reset()
+      this.controlProbes.reset(); this.clockProbes.reset()
       this.audioProbe?.cancel()
       this.clearBrowserDelivery()
       this.observe({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable' })
@@ -438,7 +452,11 @@ export class LiveKitRoomClient {
           return
         }
         if (frame.type === 'control_probe_ack') {
-          this.controlProbes.acknowledge(frame.probeId, frame.generation)
+          const clock = frame.serverReceivedAtUs === undefined ? undefined : {
+            serverReceivedAtUs: frame.serverReceivedAtUs, serverSentAtUs: frame.serverSentAtUs!,
+          }
+          this.controlProbes.acknowledge(frame.probeId, frame.generation, clock)
+          this.clockProbes.acknowledge(frame.probeId, frame.generation, clock)
           return
         }
         if (frame.type === 'authoritative_state') {
@@ -458,7 +476,7 @@ export class LiveKitRoomClient {
             this.clearStateSync()
           }
           if (generationChanged) {
-            this.controlProbes.reset()
+            this.controlProbes.reset(); this.clockProbes.reset()
             this.audioProbe?.cancel()
             this.playback.setGeneration(frame.generation)
             this.pendingMetadata.length = 0
@@ -627,7 +645,7 @@ export class LiveKitRoomClient {
       this.observeConnection('disconnected', undefined, {
         reason: typeof reason === 'number' && Number.isSafeInteger(reason) ? reason : null, origin,
       })
-      this.controlProbes.reset()
+      this.controlProbes.reset(); this.clockProbes.reset()
       this.audioProbe?.cancel()
       if (!this.explicitDisconnect && this.sessionId !== null) {
         this.reconnectRequested = true
@@ -648,7 +666,7 @@ export class LiveKitRoomClient {
     this.recovering = true
     this.recoverySynchronized = false
     this.clearStateSync()
-    this.controlProbes.reset()
+    this.controlProbes.reset(); this.clockProbes.reset()
     this.audioProbe?.cancel()
     void this.requestStateSync(room).catch(() => this.failTransport())
   }

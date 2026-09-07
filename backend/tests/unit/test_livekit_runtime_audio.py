@@ -2727,3 +2727,22 @@ def test_only_explicit_full_playback_confirmation_releases_output_wait():
             await operation
     asyncio.run(exercise())
     assert confirmations == [("old-response", 2)]
+
+
+def test_cancel_transition_clock_uses_core_capture_in_trace_not_delivery_time() -> None:
+    production = importlib.import_module("app.livekit_transport.production")
+    records = []
+    wire = []
+    async def send(payload):
+        wire.append(json.loads(payload))
+    delivery = production._ConversationCoreDelivery(
+        coordinator=SimpleNamespace(send_core=send), audio_source=SimpleNamespace(clear=lambda _: None),
+        character_participant_id="40000000-0000-4000-8000-000000000010", character_id="miori",
+    )
+    delivery.attach_measurement(SimpleNamespace(record_response_event=lambda **row: records.append(row)))
+    asyncio.run(delivery.publish(production.CoreEvent(type="response_cancelled",
+        session_id="20000000-0000-4000-8000-000000000010", response_id="50000000-0000-4000-8000-000000000010",
+        reason="barge_in", terminal_state_bounds_ns=(1_234_000, 1_234_900))))
+    assert [(r["name"], r.get("timestamp")) for r in records] == [
+        ("cancel_state_lower", 1_234_000), ("cancel_state_upper", 1_234_900), ("response_excluded", None)]
+    assert all("terminal_state_bounds_ns" not in event for event in wire)
