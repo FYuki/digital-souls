@@ -282,3 +282,29 @@ rawには本文を含めず、nonce・SID・世代と数値packet証跡を保存
 状態同期の直前・直後には制御probeと音声probeの世代が異なることがある。再集計は音声と
 同世代の制御往復を選び、制御と音声出力の遅い方を復旧時間とする。同世代の制御確認が音声要求の
 後でも、音声診断完了までに成立した実往復なら照合できる。別世代の早いACKでは補完しない。
+
+## 再接続の独立100 sessionを逐次測定する
+
+専用LiveKitを`infra/voice-quality/compose.yaml`の`ds-voice-quality-fault` projectで起動し、
+共有Ollama／Whisper／VOICEVOXが利用可能な状態で実行する。runnerは専用bridgeのラベル・
+排他性・port・container IDを各試行前に再照合する。LiveKitの起動・終了は呼び出し側が管理する。
+
+```bash
+backend/.venv/bin/python scripts/voice_quality/run_reconnect_cohort.py \
+  --cohort-id reconnect-controlled-a --sessions 100 \
+  --inference-env /path/to/inference.env --livekit-env /path/to/fault-livekit.env \
+  --disable-thinking
+```
+
+`--sessions`は独立session数であり、単独pilotの`--trials`（1 session中の制御probe数）とは異なる。
+各試行に異なるrun ID・data rootを割り当て、固定scheduled fixtureを用いる。
+`--disable-thinking`は明示指定した場合だけ適用する。この条件の結果は通常設定の人格・記憶品質を
+証明しない。100未満も実行できるが、診断扱いで受け入れ合格にはならない。
+
+計画と進捗は`frontend/test-results/livekit-quality/cohorts/<cohort-id>/plan.json`と
+`execution.jsonl`へ保存する。Git変更や版の不一致、既存runの上書き、同時cohort実行を拒否する。
+試行失敗も分母に残し、子processの終了・専用test data root・Profile・所有コンテナの実削除を
+確認できた場合だけ次へ進む。削除を確認できない場合はcohortを停止し、途中の結果を保持する。
+中止したい場合はcohortディレクトリに`stop-requested`ファイルを作ると、現在の試行終了後に停止する。
+全件終了後にrawから再計算し、schema検証済み匿名`report.json`を作る。
+終了コードは合格0、不合格report作成済み1、途中停止／未検証2。
