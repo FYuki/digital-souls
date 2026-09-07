@@ -168,10 +168,11 @@ def summarize(
             and decision.get("sessionId") == trial.get("session_id")
             and decision.get("responseId") == response
             and decision.get("final") is True
+            and decision.get("decision") in {"backchannel", "take_turn", "indeterminate"}
         )
-        counts["backchannel_decision"] += bool(
-            matched and decision.get("decision") == "backchannel"
-        )
+        for label in ("backchannel", "take_turn", "indeterminate"):
+            counts[label + "_decision"] += bool(matched and decision.get("decision") == label)
+        counts["unverified_final_decision"] += not matched
         counts["observed_server_cancel"] += bool(server_cancelled)
         counts["observed_local_stop"] += local_stop
         if not injected:
@@ -215,6 +216,9 @@ def summarize(
                     "verified_injection",
                     "session_end_confirmed",
                     "backchannel_decision",
+                    "take_turn_decision",
+                    "indeterminate_decision",
+                    "unverified_final_decision",
                     "observed_server_cancel",
                     "observed_local_stop",
                 )

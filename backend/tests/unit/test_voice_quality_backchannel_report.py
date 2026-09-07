@@ -266,3 +266,31 @@ def test_mixed_or_partial_manifests_are_rejected(invalid):
         args[1][0] = args[1][0].model_copy(update={"character_id": "different"})
     with pytest.raises(ValueError):
         report.summarize(*args)
+
+
+@pytest.mark.parametrize("decision", ["indeterminate", "take_turn"])
+def test_non_backchannel_final_decision_is_counted_without_hiding_label_failure(decision):
+    args = case()
+    trial = args[0]["trials"][0]
+    trial["outcome"] = "failure"
+    trial["failure_stage"] = "cancel_or_continuity"
+    trial["decision"]["decision"] = decision
+    result = report.summarize(*args)
+    assert result["counts"]["failure"] == 1
+    assert result["counts"]["backchannel_decision"] == 99
+    assert result["counts"][decision + "_decision"] == 1
+    assert result["counts"]["unverified_final_decision"] == 0
+    assert result["metrics"][0]["success_count"] == 100
+    trial["evidence"]["playback_completions"] = {}
+    result = report.summarize(*args)
+    assert result["metrics"][0]["missing_count"] == 1
+    assert not result["evaluation"]["false_cancel_rate_passed"]
+
+
+def test_final_decision_for_other_response_is_unverified():
+    args = case()
+    args[0]["trials"][0]["decision"].update(decision="indeterminate", responseId="other")
+    result = report.summarize(*args)
+    assert result["counts"]["backchannel_decision"] == 99
+    assert result["counts"]["indeterminate_decision"] == 0
+    assert result["counts"]["unverified_final_decision"] == 1

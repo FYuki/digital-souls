@@ -38,8 +38,13 @@ def test_classify_turn_limits_backchannel_to_complete_short_reactions() -> None:
     assert classify_turn("  ") == "indeterminate"
 
 
-@pytest.mark.parametrize("transcript", ["うん", "そうなんですね", "そうですね"])
-def test_backchannel_keeps_active_response_and_is_not_carried_to_next_prompt(transcript: str) -> None:
+@pytest.mark.parametrize("transcript, expected_decision", [
+    ("うん", "backchannel"), ("そうなんですね", "backchannel"), ("そうですね", "backchannel"),
+    ("ヘッ", "indeterminate"), ("ん", "indeterminate"),
+])
+def test_non_taking_reaction_keeps_active_response_and_is_not_carried_to_next_prompt(
+    transcript: str, expected_decision: str,
+) -> None:
     async def exercise() -> None:
         delivery = RecordingDelivery()
         session = ConversationCoreSession(
@@ -72,7 +77,7 @@ def test_backchannel_keeps_active_response_and_is_not_carried_to_next_prompt(tra
         assert session.utterance(INTERRUPTION_ID).state is UtteranceState.CONSUMED
         decisions = [event for event in delivery.events if event.type == "turn_decision"]
         assert [(event.decision, event.final) for event in decisions] == [
-            ("backchannel", True)
+            (expected_decision, True)
         ]
         await session.end()
 
@@ -116,5 +121,56 @@ def test_take_turn_cancels_active_response_before_starting_new_response() -> Non
             "response_started", 1
         )
         await session.end()
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("transcript", ["ウン。", "ｳﾝｳﾝ", "ハイ", "ヘー", "ナルホド", "ソウナンデスネ"])
+def test_backchannel_accepts_kana_and_width_variants(transcript: str) -> None:
+    assert classify_turn(transcript) == "backchannel"
+
+
+@pytest.mark.parametrize("transcript", ["ん", "ヘッ", "へっ", "エッ", "あっ", "おー", "ふっ", "ほっ"])
+def test_short_nonlexical_reaction_remains_indeterminate(transcript: str) -> None:
+    assert classify_turn(transcript) == "indeterminate"
+
+
+@pytest.mark.parametrize("transcript", [
+    "ん？", "ヘッ?", "エッ？", "あっ、止めて", "ん、それは違う", "ヘッ、もう一度教えて",
+    "ハイ、続きを止めて", "ウン、でも質問です", "へ", "ほ", "ふ", "んー、待って",
+    "ストップ", "やめて", "違う", "はい？何ですか", "あっという間", "おーい",
+])
+def test_short_reaction_does_not_hide_question_or_following_instruction(transcript: str) -> None:
+    assert classify_turn(transcript) == "take_turn"
+
+
+@pytest.mark.parametrize("transcript", ["ん", "ヘッ", "エッ"])
+def test_indeterminate_reaction_preserves_output_until_following_take_turn(transcript: str) -> None:
+    async def exercise() -> None:
+        delivery = RecordingDelivery()
+        stt = RecordingStt(transcript)
+        session = ConversationCoreSession(
+            session_id=SESSION_ID,
+            response_id_factory=response_id_factory(OLD_RESPONSE_ID, NEW_RESPONSE_ID),
+            delivery=delivery,
+            persistence=RecordingPersistence(),
+            observation=RecordingObservation(),
+            stt=stt,
+            llm=BlockingLlm(),
+            tts=RecordingTts(),
+        )
+        try:
+            await session.finalize_utterance(utterance_id=OLD_UTTERANCE_ID, transcript="説明して", should_response=True)
+            decision = await session.preview_turn(utterance_id=INTERRUPTION_ID, audio=b"preview", interrupted_response_id=OLD_RESPONSE_ID)
+            assert decision == "indeterminate"
+            assert session.response(OLD_RESPONSE_ID).state is not ResponseState.CANCELLED
+            assert not any(event.type == "response_cancelled" for event in delivery.events)
+            stt.transcript = transcript + "、止めて。質問があります"
+            result = await session.start_transcription(utterance_id=INTERRUPTION_ID, audio=b"final", should_response=True, interrupted_response_id=OLD_RESPONSE_ID)
+            assert result is not None
+            assert session.response(OLD_RESPONSE_ID).state is ResponseState.CANCELLED
+            assert [(event.decision, event.final) for event in delivery.events if event.type == "turn_decision"] == [("indeterminate", False), ("take_turn", True)]
+        finally:
+            await session.end()
 
     asyncio.run(exercise())

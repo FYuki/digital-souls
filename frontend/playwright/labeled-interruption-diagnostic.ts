@@ -105,17 +105,20 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
         event.type === 'turn_decision' && event.responseId === responseId && event.final === true), cycle.responseId)
       trial.decision = decision
       stage = 'cancel_or_continuity'
-      expect(decision?.decision).toBe(cohort)
       if (cohort === 'take_turn') {
         await page.waitForFunction(responseId => window.__voiceChatE2E.coreEventDiagnostics.some(event =>
           event.type === 'response_cancelled' && event.responseId === responseId)
           && window.__voiceChatE2E.interruptions.some(item => item.responseId === responseId), cycle.responseId, {timeout: 5000})
       } else {
-        await page.waitForFunction(responseId => !!window.__voiceChatE2E.playbackCompletions?.[responseId], cycle.responseId, {timeout: 10000})
+        // ラベルとの一致を検査する前に、保留・誤判定時も旧応答の終端まで観測する。
+        await page.waitForFunction(responseId => !!window.__voiceChatE2E.playbackCompletions?.[responseId]
+          || window.__voiceChatE2E.coreEventDiagnostics.some(event =>
+            event.type === 'response_cancelled' && event.responseId === responseId), cycle.responseId, {timeout: 10000})
         const cancelled = await page.evaluate(responseId => window.__voiceChatE2E.coreEventDiagnostics.some(event =>
           event.type === 'response_cancelled' && event.responseId === responseId), cycle.responseId)
         expect(cancelled).toBe(false)
       }
+      expect(decision?.decision).toBe(cohort)
       trial.outcome = 'success'
     } catch {
       trial.failure_stage = stage
