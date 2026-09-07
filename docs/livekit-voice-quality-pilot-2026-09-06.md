@@ -1519,3 +1519,24 @@ PCM静音600ms、背景音に対する主モデルの700ms、確定閾値、2秒
 電子音・雑音216条件の誤検出は修正前後とも70件で増加0件だったが、既存の誤検出が解消したという結果ではない。
 Frontendの回帰テスト744件、型検査、ビルドも成功した。
 これらはオフライン診断であり、実ブラウザ100試行、実STT取込、#150全体の受け入れは引き続き未完了である。
+
+
+### 候補保留修正後の実ブラウザ100試行
+
+測定版 `b85985b155b38c6f07883d30c653c86753cf1cba` の固定Frontend／Backend imageを実行中に照合した。
+[先行3件](artifacts/livekit-vad-secondary-pilot-2026-09-08-held.json)の会話・VAD境界・終了確認後、
+同版でラベル付きtake-turn全100音声を独立session／conversationで測定した。
+[実VAD境界](artifacts/livekit-vad-take-turn-100-2026-09-08-held.json)は冒頭遅延・早期終了・分割が各0件、
+[割り込み集計](artifacts/livekit-take-turn-100-2026-09-08-held.json)も成立100/100、見逃し0、欠測0だった。
+
+| 指標 | p50 | p95 | 条件 |
+|---|---:|---:|---:|
+| 発話開始からlocal stop | 1,128.000ms | 1,986.850ms | 3,000ms以下 |
+| 発話開始からturn decision | 1,127.000ms | 1,986.850ms | 3,000ms以下 |
+| decision後server cancel | 4.557ms | 6.407ms | 200ms以下 |
+| 発話開始から全cancel | 1,151.000ms | 2,012.800ms | 3,500ms以下 |
+
+匿名schema・集計分母を検証し、100件の独立性、全session終了、所有Frontend／Backend計2 containerの実削除、
+同梱SDKの実ロード証跡を確認した。VADのframe／event／reset観測にoverflowはなかった。
+修正前の失敗を残したまま、別runの結果として保存する。
+修正後の相槌100件と文中休止100件、STT実取込のPCM境界、stale出力、再接続p95などは引き続き未完了である。
