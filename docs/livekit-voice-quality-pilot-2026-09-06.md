@@ -617,3 +617,25 @@ Frontend単体454件・結合97件、型検査、診断入口のBackend29件、R
 変更後の[通常応答pilot](artifacts/livekit-pilot-2026-09-07-idle-weighted.json)は準備1回＋独立3回成功。transcript・全PCM出力・明示終了を照合し、gap・underrun・追加操作は0、TTFA p95約1,833.57msだった。これはthink:false・RAGなしの少数診断値で、通常応答の正式100回や人格・記憶の品質証明には代用しない。所有Frontend／Backendコンテナの削除も確認した。
 
 Frontend単体461件・結合97件、型検査、buildが成功した。最初の全体テストで9件失敗した原因はAppのVADモックに今回使用する公開APIがなかったことで、モックを更新して全件を再実行した。buildには既存のbundleサイズ警告が残る。実割り込みの取りこぼし、相槌の検出・分類、全stack各100件の集計とその他の受け入れ条件は未完了である。
+
+
+## 2026-09-07: take-turn 100件で生成完了後のキャンセル欠測を確認する
+
+`1df4bba`の実装を固定し、ラベル付きtake-turn全100件を独立sessionで実行した。Playwrightは**80件成功・20件失敗**で不合格。明示終了100/100、所有Frontend・Backendコンテナ削除を確認した。共有推論サービスは停止していない。失敗runを保持し、[全分母と相関を再検証した匿名結果](artifacts/livekit-take-turn-100-2026-09-07.json)を保存した。
+
+失敗20件は、VAD未確定3件、take-turn確定とlocal stop後にキャンセル確認がない16件、fixture投入時計の不確かさが20ms上限を超えた1件だった。最後の1件はsourceStartの幅が約21.3msで、VAD自体は確定・終了していた。失敗段階だけでVAD未検出4件と数えるのは誤りである。
+
+集計器は全100件の存在、ラベルmanifestのhash・順序、独立session、旧応答と割り込み発話の相関、client/serverのclock・単位、Browser停止observerとtraceを照合する。別々の観測callbackで記録する停止・確認時刻には既存local stop照合と同じ2ms以内の差を許すが、ID不一致や異なるclockを補完しない。1件で確認時刻が1ms違っていた。量子化された別観測点の差として扱い、遅延の値にはtraceの元時刻を使う。
+
+| 指標 | 分母 | 取得 | 欠測 | p95（取得分） |
+|---|---:|---:|---:|---:|
+| local playback stop | 100 | 96 | 4 | 3,254.25ms |
+| turn decision | 100 | 96 | 4 | 3,253.25ms |
+| decision後cancel | 100 | 80 | 20 | 約6.95ms |
+| 発話開始からcancel確認 | 100 | 80 | 20 | 1,366.1ms |
+
+有効な音声投入を検証できた99件のうち、キャンセル確認まで成立したのは80件、見逃し・未確認は19件だった。投入未検証1件を別途残し、99件に分母を縮めて100件条件を満たしたことにはしない。local stopとturn decisionは取得分のp95も3,000msを超える。cancelのp95が小さくても欠測20件があるため合格にしない。各latencyは既存artifactのmetric schemaで検証し、匿名性検査、raw manifest・trace・集計コードのhashを保存した。通常応答の100試行artifactとの統合、相槌・再接続等の評価は未完了である。
+
+16件の確認不足では、Coreの`server_cancelled`記録はある一方、Browserへ`response_cancelled`が届いていなかった。Coreは生成終了時にterminal状態へ移り、その後のLiveKit配送で残りPCMの送出完了を待つ。既にCOMPLETEDの応答へcancel要求が来てもterminal不変条件により状態を変更しないが、preview／final判定の両経路は戻り値を確認せずキャンセル成功を記録していた。配送待機中のCOMPLETED応答で、成功観測1件・キャンセル通知0件となる単体再現も確認した。
+
+まず計測を修正し、cancel結果が実際にCANCELLEDの場合だけ`server_cancelled`を記録する。修正前は完了済み応答のpreview／final回帰2件が失敗し、修正後は実cancelの正のケースも含めCore・adapter・contract・集計器113件が成功した。Coreの型検査とRuffも成功した。完了済み応答の再生停止・確認自体を直したわけではなく、生成終了と配送／再生終了の境界の修正、および修正後の実接続再測定が必要である。

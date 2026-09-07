@@ -146,3 +146,20 @@ backend/.venv/bin/python scripts/voice_quality/run_pilot.py \
 raw manifestは`labeled_livekit_interruption_diagnostic`として別scopeで保存する。判定が来なかった試行も削除せず、初期応答・再生重複・fixture／判定・キャンセル／継続の失敗段階を記録する。全件成功しなければPlaywrightは失敗する。cleanupの終了操作は観測後に行い、明示終了の失敗も残す。
 
 診断時だけVADのframe確率・RMS・sample数・単調時計と候補／確定／終了イベントを観測する。上限は1024 frame・128イベントで、PCMや本文をこのportへ渡さない。これは待機後やframe開始位相による単独検出器診断との差を調べるための証拠である。正常応答用`livekit_pilot_report`へこのmanifestを渡して通常100試行として集計しない。全cohortの匿名aggregateと受け入れ評価の統合は別途必要。
+
+
+## take-turn全試行の相関集計
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/report_take_turn.py \
+  --manifest <run-root>/trial-manifest.json \
+  --trace <run-root>/runtime-data/voice-metrics/controlled-trace.jsonl \
+  --fixtures frontend/playwright/fixtures/voice-quality-v2/manifest.json \
+  --output <新しい出力ファイル>.json
+```
+
+全件の記録が終わってから実行する。期待件数より少ない途中run、fixtureの順序・hash不一致、sessionの再利用は拒否する。出力は既存ファイルを上書きしない。各latencyは既存`voice-quality-artifact-v1.schema.json`内のmetric schemaで検証する。このcohort結果を通常応答100件のartifactとして扱わない。
+
+音声投入時計が20msより不確かな試行は投入未検証として残す。見逃し率の有効投入分母とは別に期待数・記録数・投入未検証数を保持し、投入・終了・独立性のいずれかが未確認なら100件条件の合格を認めない。取得分のp95が閾値以内でも欠測があればlatencyの評価は不合格にする。正常cancelを通常応答の処理失敗へ加算しない。
+
+local stopは元の発話開始時刻と旧responseでBrowser／traceを照合し、cancel ACKが欠測でも独立して計測する。serverのcancel時刻だけが残り、キャンセル通知が観測されないケースは成功cancelへ補完しない。欠測理由は固定の理由コードとし、本文やIDを出力しない。別callbackで取得するBrowser停止・確認時刻は、同じIDとclockで2ms以内の差だけを許す。

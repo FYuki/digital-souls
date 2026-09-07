@@ -1658,3 +1658,27 @@ def test_cancel_finishes_while_terminal_persistence_is_blocked() -> None:
         assert len(persistence.outcomes) == 1
 
     _run(exercise)
+
+
+@pytest.mark.parametrize("phase", ["preview", "final"])
+@pytest.mark.parametrize("already_completed", [False, True])
+def test_turn_cancel_observation_requires_a_cancelled_response(phase, already_completed) -> None:
+    async def exercise() -> None:
+        module, session, delivery, _persistence, observation = _session()
+        first = await session.finalize_utterance(
+            utterance_id=UTTERANCE_1, transcript="応答", should_response=True,
+        )
+        try:
+            if already_completed:
+                await session.complete_response(response_id=first.response_id, generation=first.generation)
+            if phase == "preview":
+                await session.preview_turn(utterance_id=UTTERANCE_2, audio=b"\0\0", interrupted_response_id=first.response_id)
+            else:
+                await session.start_transcription(utterance_id=UTTERANCE_2, audio=b"\0\0", should_response=True, interrupted_response_id=first.response_id)
+            expected = 0 if already_completed else 1
+            assert sum(item.stage == "server_cancelled" and item.utterance_id == UTTERANCE_2 for item in observation.observations) == expected
+            assert sum(event.type == "response_cancelled" and event.response_id == first.response_id for event in delivery.events) == expected
+            assert session.response(first.response_id).state is (module.ResponseState.COMPLETED if already_completed else module.ResponseState.CANCELLED)
+        finally:
+            await session.end()
+    _run(exercise)

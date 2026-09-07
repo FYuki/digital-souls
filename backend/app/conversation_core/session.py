@@ -255,13 +255,14 @@ class ConversationCoreSession:
             )
         )
         if decision == "take_turn":
-            await self.cancel_response(
+            cancelled = await self.cancel_response(
                 response_id=interrupted_response_id,
                 reason="barge_in",
             )
-            await self._record_utterance_stage(
-                utterance_id, "server_cancelled", "completed"
-            )
+            if cancelled is not None and cancelled.state is ResponseState.CANCELLED:
+                await self._record_utterance_stage(
+                    utterance_id, "server_cancelled", "completed"
+                )
         return decision
 
     async def accept_text_delta(
@@ -660,13 +661,14 @@ class ConversationCoreSession:
                 )
             )
             if should_response:
-                await self.cancel_response(
+                cancelled = await self.cancel_response(
                     response_id=interrupted_response_id,
                     reason="barge_in",
                 )
-                await self._record_utterance_stage(
-                    utterance_id, "server_cancelled", "completed"
-                )
+                if cancelled is not None and cancelled.state is ResponseState.CANCELLED:
+                    await self._record_utterance_stage(
+                        utterance_id, "server_cancelled", "completed"
+                    )
         await self._publish_utterance_delivery(
             CoreEvent(
                 type="utterance_finalized",
