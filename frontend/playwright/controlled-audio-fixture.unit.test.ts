@@ -5,7 +5,7 @@ import type { Page } from '@playwright/test'
 import { fixtureWorkletSource, parseScheduledFixture, readFixtureBounds, type ScheduledFixture } from './controlled-audio-fixture'
 
 type Port = {
-  onmessage: ((event: { data: { type: string; sentAtMs: number } }) => void) | null
+  onmessage: ((event: { data: { type: string; sentAtMs: number; fixture?: Partial<ScheduledFixture> } }) => void) | null
   postMessage: (data: unknown) => void
 }
 type Processor = { port: Port; process: (inputs: unknown[], outputs: Float32Array[][]) => boolean }
@@ -27,7 +27,7 @@ const processor = (samples: number[], start: number, end: number) => {
     instance.process([], [[out]])
     return [...out]
   }
-  const send = (type: string, sentAtMs: number) => instance.port.onmessage!({ data: { type, sentAtMs } })
+  const send = (type: string, sentAtMs: number, fixture?: Partial<ScheduledFixture>) => instance.port.onmessage!({ data: { type, sentAtMs, fixture } })
   return { events, next, send }
 }
 
@@ -83,6 +83,22 @@ describe('観測可能なfixture音声源', () => {
     p.send('replay', 200)
     expect(p.next(4)).toEqual([0.25, 0.5, -0.5, -0.25])
     expect(p.events.filter(e => e.kind === 'sourceStart').map(e => e.lowerMs)).toEqual([100, 200])
+  })
+
+  test('前の音声を消費してから別fixtureへ切り替え、境界とPCMを混ぜない', () => {
+    const p = processor([0.25, 0.5, -0.5, -0.25], 0, 4)
+    const next = {samples: [0, -0.75, 0.75, 0, 0, 0], speechStartSample: 1, speechEndSample: 3}
+    p.send('start', 100)
+    expect(p.next(2)).toEqual([0.25, 0.5])
+    p.send('replay', 105, next)
+    expect(p.next(2)).toEqual([-0.5, -0.25])
+    p.send('replay', 200, next)
+    expect(p.next(4)).toEqual([0, -0.75, 0.75, 0])
+    expect(p.next(4)).toEqual([0, 0, 0, 0])
+    expect(p.events.filter(e => e.kind === 'speechEnd')).toEqual([
+      {kind: 'speechEnd', lowerMs: 100, sourceSample: 4},
+      {kind: 'speechEnd', lowerMs: 200, sourceSample: 3},
+    ])
   })
 
 })

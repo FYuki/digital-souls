@@ -13,6 +13,8 @@ declare global {
     }
     __voiceChatE2E: {
       transportFailures?: {stage: string; reason?: string; context?: Readonly<Record<string, number>>; atMs: number}[]
+      activeAudioGraphs?: number
+      activeResponseId?: string
       lastTrackMediaResponseId?: string
       lastTrackMediaObservation?: MediaObservation
       lastPacketPlaybackObservation?: PacketPlaybackObservation
@@ -153,6 +155,8 @@ const installPlaybackProbe = async (page: Page) => {
           reason?: string
           error_code?: string
           transcript?: string
+          decision?: string
+          final?: boolean
         }) => void
         bindController?: (controller: {
           speechStarted: (utteranceId: string, atMs: number) => Promise<void>
@@ -165,6 +169,8 @@ const installPlaybackProbe = async (page: Page) => {
         window.__voiceSessionController = controller
       },
       observeRoom: (observation) => {
+        if (observation.activeAudioGraphs !== undefined) window.__voiceChatE2E.activeAudioGraphs = observation.activeAudioGraphs
+        if (observation.activeResponseId !== undefined) window.__voiceChatE2E.activeResponseId = observation.activeResponseId
         if (observation.failureStage) {
           window.__voiceChatE2E.transportFailures ??= []
           window.__voiceChatE2E.transportFailures.push({stage: observation.failureStage, reason: observation.failureReason, context: observation.failureContext, atMs: performance.now()})
@@ -238,6 +244,7 @@ const installPlaybackProbe = async (page: Page) => {
           responseId: event.response_id ?? null, shouldResponse: event.should_response ?? null,
           reasonCode: event.error_code ?? event.reason ?? null,
           transcriptLength: event.transcript?.length ?? null,
+          decision: event.decision ?? null, final: event.final ?? null,
         })
         if (diagnostics.length > 256) diagnostics.shift()
         if (

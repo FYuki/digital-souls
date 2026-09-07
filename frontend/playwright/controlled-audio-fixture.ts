@@ -15,7 +15,7 @@ declare global {
   interface Window {
     __voiceFixtureClock?: {
       start: () => Promise<void>
-      replay: () => Promise<void>
+      replay: (nextFixture?: ScheduledFixture) => Promise<void>
       finished: boolean
       close: () => Promise<void>
       bounds: Partial<Record<FixtureBoundary, ClockBounds>>
@@ -39,6 +39,10 @@ class FixtureSource extends AudioWorkletProcessor {
     this.port.onmessage = ({data}) => {
       if (!Number.isFinite(data.sentAtMs) || data.sentAtMs < 0) return
       if (data.type === 'replay' && this.started && this.offset === this.samples.length) {
+        if (data.fixture) {
+          this.samples = new Float32Array(data.fixture.samples)
+          this.boundaries = {sourceStart: 0, speechStart: data.fixture.speechStartSample, speechEnd: data.fixture.speechEndSample}
+        }
         this.offset = 0
         this.reported.clear()
         this.lastPing = data.sentAtMs
@@ -144,12 +148,13 @@ export const installScheduledFixture = async (page: Page, fixture: ScheduledFixt
     window.__voiceFixtureClock = {
       bounds,
       finished: false,
-      replay: async () => {
+      replay: async (nextFixture) => {
         if (!context || !worklet || !window.__voiceFixtureClock?.finished) throw new Error('fixture must finish before replay')
+        if (nextFixture && nextFixture.sampleRate !== context.sampleRate) throw new Error('replacement fixture sample rate changed')
         await context.resume()
         for (const name of Object.keys(bounds) as FixtureBoundary[]) delete bounds[name]
         window.__voiceFixtureClock.finished = false
-        worklet.port.postMessage({ type: 'replay', sentAtMs: performance.now() })
+        worklet.port.postMessage({ type: 'replay', sentAtMs: performance.now(), fixture: nextFixture })
         timer = setInterval(() => worklet?.port.postMessage({ type: 'ping', sentAtMs: performance.now() }), 2)
       },
       start: async () => {

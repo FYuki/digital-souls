@@ -1,3 +1,4 @@
+import { measureLabeledInterruptions } from '../../playwright/labeled-interruption-diagnostic'
 import { expect, test } from '@playwright/test'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
@@ -26,8 +27,10 @@ import {
 
 // pilotは診断用。正式な5 warm-up + 100試行の受入結果とは区別する。
 const scheduledFixture = process.env.VOICE_QUALITY_SCHEDULED_FIXTURE === '1'
+const interruptionCohort = process.env.VOICE_QUALITY_INTERRUPTION_COHORT
+if (interruptionCohort !== undefined && !['take_turn', 'backchannel'].includes(interruptionCohort)) throw new Error('invalid interruption cohort')
 const pilot = process.env.VOICE_QUALITY_PILOT_TRIALS
-if (pilot !== undefined && !/^[1-9][0-9]?$/.test(pilot)) {
+if (pilot !== undefined && !(/^[1-9][0-9]?$/.test(pilot) || (pilot === '100' && interruptionCohort !== undefined))) {
   throw new Error('VOICE_QUALITY_PILOT_TRIALS must be between 1 and 99')
 }
 const WARMUP_RUNS = pilot === undefined ? 5 : 1
@@ -63,7 +66,8 @@ test.use({
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(voiceTestTimeout * (WARMUP_RUNS + MEASURED_RUNS))
 
-test(Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0) > 0
+test(interruptionCohort ? '実応答の再生中に固定ラベル音声で割り込みを測定する'
+  : Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0) > 0
   ? '同一LiveKit sessionで応答trackの切替を診断する'
   : 'LiveKit固定fixtureの独立試行を測定する', async ({ browser }) => {
   const runStartedAt = performance.now()
@@ -75,6 +79,11 @@ test(Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0) > 0
   )
   const sourceFixture = scheduledFixture ? parseScheduledFixture(await readFile(fixtureAudioUrl), fixture) : undefined
   const expectedTranscript = normalizeBaselineTranscript(fixture.expected_transcript)
+  if (interruptionCohort !== undefined) {
+    if (!sourceFixture || pilot === undefined || Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0)) throw new Error('interruption requires independent scheduled pilot')
+    await measureLabeledInterruptions(browser, sourceFixture, interruptionCohort as 'take_turn' | 'backchannel', Number(pilot), manifestPath)
+    return
+  }
   const continuousTurns = Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0)
   if (!Number.isInteger(continuousTurns) || continuousTurns < 0 || continuousTurns > 10) throw new Error('invalid continuous diagnostic count')
   if (continuousTurns > 0) {

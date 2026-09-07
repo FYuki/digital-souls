@@ -95,7 +95,7 @@ def probe_gpu() -> dict[str, object]:
 
 def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
                       trials: int, disable_thinking: bool, scheduled_fixture: bool = False, continuous_turns: int = 0,
-                      controlled: bool = False) -> dict[str, str]:
+                      controlled: bool = False, interruption_cohort: str | None = None) -> dict[str, str]:
     run_root(run_id)
     if not inference_env.is_file() or not livekit_env.is_file():
         raise ValueError("pilot environment files are unavailable")
@@ -103,10 +103,12 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
         raise ValueError("continuous track diagnostic requires scheduled fixture and 1 to 10 turns")
     if type(trials) is not int or type(controlled) is not bool:
         raise ValueError("measurement scope and trial count must be explicit")
+    if interruption_cohort is not None and (interruption_cohort not in ("backchannel", "take_turn") or not scheduled_fixture or continuous_turns or controlled):
+        raise ValueError("interruption diagnostic requires a labeled cohort and scheduled independent sessions")
     if controlled:
         if trials != 100 or not scheduled_fixture or continuous_turns:
             raise ValueError("controlled measurement requires 100 independent trials and scheduled PCM fixture")
-    elif not 1 <= trials <= 99:
+    elif not 1 <= trials <= (100 if interruption_cohort else 99):
         raise ValueError("pilot trials must be between 1 and 99")
     excluded = ("INFERENCE_TARGET_HEAVY_REASONING", "INFERENCE_TARGET_VISION")
     env = {k: v for k, v in os.environ.items() if not k.startswith(excluded)}
@@ -129,6 +131,9 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
                VOICE_QUALITY_PILOT_TRIALS=str(trials), VOICE_QUALITY_RUN_ID=run_id,
                VOICE_QUALITY_SCHEDULED_FIXTURE="1" if scheduled_fixture else "0",
                VOICE_QUALITY_CONTINUOUS_TURNS=str(continuous_turns))
+    env.pop("VOICE_QUALITY_INTERRUPTION_COHORT", None)
+    if interruption_cohort:
+        env["VOICE_QUALITY_INTERRUPTION_COHORT"] = interruption_cohort
     if controlled:
         # specはpilot設定がない場合だけ5 warm-up＋100独立sessionを実行する。
         env.pop("VOICE_QUALITY_PILOT_TRIALS", None)
@@ -139,7 +144,7 @@ def run(args: argparse.Namespace) -> int:
     sys.path.insert(0, str(ROOT / "backend"))
     from app.voice_resource_metrics import ContainerResourceSampler
 
-    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled)
+    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort)
     reference = env.get("INFERENCE_TARGET_CHAT", "")
     if not reference.startswith("ollama/"):
         raise ValueError("this diagnostic requires an Ollama chat target")
@@ -184,6 +189,8 @@ if __name__ == "__main__":
     count_options = parser.add_mutually_exclusive_group()
     count_options.add_argument("--trials", type=int)
     count_options.add_argument("--controlled", action="store_true", help="準備5回＋独立100試行。scheduled fixture必須。")
+    parser.add_argument("--interruption-cohort", choices=("backchannel", "take_turn"),
+                        help="応答再生中へ固定ラベル音声を入れる実接続診断。通常の独立試行集計とは分離する。")
     parser.add_argument("--disable-thinking", action="store_true")
     parser.add_argument("--scheduled-fixture", action="store_true")
     parser.add_argument("--continuous-turns", type=int, default=0,

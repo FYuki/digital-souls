@@ -578,3 +578,16 @@ CPU・メモリはrun reportが所有するBackendコンテナから約0.5秒間
 変更後の[実音声pilot](artifacts/livekit-pilot-2026-09-07-stable-vad.json)は準備1回＋独立3試行成功。transcript一致、全sample出力、明示終了、所有Frontend・Backendコンテナ削除を確認した。gap・underrun・追加操作は0件。TTFA p95 1,822.11msは`think:false`・RAGなしの少数診断値である。正式100試行はこのVAD変更後には再測定していない。
 
 Frontend単体453件・結合97件、型検査が成功した。非連続の確率ピーク、短い高確率1 frame、resetでの持越しを回帰検証した。相槌の検出と分類、全stackの相槌／take-turn各100試行、VAD境界の通常aggregateへの取り込みは引き続き未完了である。
+
+
+## 2026-09-07: 実再生中のtake-turnとVAD未確定を観測する
+
+別の固定fixtureを同じマイクstreamへ送る実接続診断を追加した。初期応答の実出力開始、対応するaudio graph、再生完了前であることを確認してからv2のラベル付き音声を投入する。全件で独立sessionを使い、旧応答・割り込み発話・判定・ローカル停止・キャンセルを相関する。失敗段階とcleanupを含めて全試行を保存し、全件成功しなければ試験を失敗にする。
+
+`labeled-take-turn-01`と数値VAD observer追加後の`labeled-take-turn-02`は、take-turn先頭4件を各1回実行し、**どちらも2/4成功・2/4未判定で不合格**だった。全8件で再生中の音声投入と明示session終了を確認し、両runの所有Frontend・Backendコンテナ削除も確認した。失敗したraw runは保持した。[匿名比較結果](artifacts/livekit-interruption-diagnostic-2026-09-07.json)の各latencyは分母4・取得2・欠測2とし、未判定を分母から取り除いていない。
+
+2回目の取得2件では、元の発話開始→local stop p95 709ms、元の発話開始→turn decision受信 p95 709ms、serverのdecision→cancel p95 5.06ms、元の発話開始→cancel確認 p95 733.75msだった。同じsession／割り込みutterance／旧responseのtrace、Browserの停止時刻、cancel通知を照合した値で、各100件の受け入れ値ではない。全4件の見逃し率は50%で未達である。
+
+未判定2件ではPCM活動をRMSで観測したが、ブラウザ内Sileroの最大音声確率は約0.117と0.242で、VADはcandidateの後にmisfireとなった。元の単独診断では同じfixtureの最大確率は約0.820と0.580だった。連続マイクの前状態・開始位相・ブラウザ入力経路のどれが差を作るかはまだ分離できておらず、確率閾値を下げただけで解決したとはしない。前段のVAD未確定へ原因を絞れたが、修正と再検証が必要である。
+
+Frontend単体454件・結合97件、型検査、診断入口のBackend29件、Ruffは成功した。固定fixture切替の14件では、消費途中の切替拒否、PCM完全一致、旧音声と新音声の境界分離を確認した。実割り込み試験は上記のとおり不合格であり、相槌・take-turn各100件、stale提示、reconnect、dogfoodの受け入れは未完了である。

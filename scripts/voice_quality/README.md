@@ -129,3 +129,20 @@ scheduled fixtureのpilot・controlledと同一session診断は、開始ボタ�
 
 
 VAD候補をアプリへ反映する前に比較する場合、`measure-utterance-detector.mjs`では確率JSON・出力JSONの後に、`measure-utterance-background.mjs`では出力JSONの後に、候補のTypeScript sourceを指定できる。省略時は現在のアプリsourceを使う。両診断は既存出力を上書きせず、source・modelのhashを結果へ保存する。非発声音の診断は各frameの実Silero確率もraw結果へ残す。比較では無音など同じPCMの反復をhashで潰さず、元の試行順・種類・hashを対応付ける。
+
+
+## 実応答の再生中にラベル付き音声を入れる
+
+```bash
+backend/.venv/bin/python scripts/voice_quality/run_pilot.py \
+  --run-id labeled-take-turn-new \
+  --inference-env /home/asa/dev/digital-souls/backend/.env \
+  --trials 4 --scheduled-fixture --disable-thinking \
+  --interruption-cohort take_turn
+```
+
+`--interruption-cohort`は`take_turn`または`backchannel`で、固定v2 manifestの対象cohortから先頭の`--trials`件（1〜100件）を選ぶ。展開済み音声が必要。通常のcontrolled測定・同一session診断とは混在できない。初期音声への応答が実再生を始め、再生完了前であることを確認した後、同じマイクstreamのfixture sourceをラベル付き音声へ切り替える。外部サービス、VAD、STT、発話権判定、キャンセルは置換しない。
+
+raw manifestは`labeled_livekit_interruption_diagnostic`として別scopeで保存する。判定が来なかった試行も削除せず、初期応答・再生重複・fixture／判定・キャンセル／継続の失敗段階を記録する。全件成功しなければPlaywrightは失敗する。cleanupの終了操作は観測後に行い、明示終了の失敗も残す。
+
+診断時だけVADのframe確率・RMS・sample数・単調時計と候補／確定／終了イベントを観測する。上限は1024 frame・128イベントで、PCMや本文をこのportへ渡さない。これは待機後やframe開始位相による単独検出器診断との差を調べるための証拠である。正常応答用`livekit_pilot_report`へこのmanifestを渡して通常100試行として集計しない。全cohortの匿名aggregateと受け入れ評価の統合は別途必要。

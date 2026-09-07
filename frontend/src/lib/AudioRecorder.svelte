@@ -60,7 +60,16 @@
     })
   }
 
+  // 実接続診断が設定した場合だけ数値を観測する。PCMや本文をtest portへ渡さない。
+  const vadTestPort = () => (globalThis as typeof globalThis & {
+    __digitalSoulsVoiceVadTestPort?: {
+      frame: (observation: {atMs: number; probability: number; rms: number; samples: number}) => void
+      event: (event: UtteranceDetection) => void
+    }
+  }).__digitalSoulsVoiceVadTestPort
+
   const handleUtteranceDetection = (event: UtteranceDetection) => {
+    vadTestPort()?.event(event)
     if (event.type === 'candidate') {
       candidateSpeechStartClientMs = event.speechStartedAtMs
     } else if (event.type === 'confirmed') {
@@ -85,7 +94,16 @@
     resumeStream: async () => stream,
     pauseStream: async () => undefined,
     onFrameProcessed: (probabilities, frame) => {
-      if (continuous) utteranceDetector?.process(frame, probabilities.isSpeech, performance.now())
+      if (continuous) {
+        const atMs = performance.now()
+        const port = vadTestPort()
+        if (port) {
+          let energy = 0
+          for (const sample of frame) energy += sample * sample
+          port.frame({atMs, probability: probabilities.isSpeech, rms: Math.sqrt(energy / frame.length), samples: frame.length})
+        }
+        utteranceDetector?.process(frame, probabilities.isSpeech, atMs)
+      }
     },
     onSpeechStart: () => {
       if (continuous) return

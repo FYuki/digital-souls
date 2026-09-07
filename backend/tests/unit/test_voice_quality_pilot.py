@@ -105,3 +105,24 @@ def test_controlled_run_selects_exact_independent_scope(tmp_path, monkeypatch, c
     assert env['VOICE_QUALITY_SCHEDULED_FIXTURE'] == '1'
     with pytest.raises(ValueError):
         pilot.pilot_environment(inference, livekit, 'not-a-pilot', 100, False, True)
+
+
+@pytest.mark.parametrize('cohort,scheduled,continuous,controlled,count,valid', [
+    ('take_turn', True, 0, False, 100, True),
+    ('backchannel', True, 0, False, 4, True),
+    ('take_turn', False, 0, False, 4, False),
+    ('take_turn', True, 3, False, 4, False),
+    ('take_turn', True, 0, True, 100, False),
+    ('unknown', True, 0, False, 4, False),
+])
+def test_interruption_scope_cannot_mix_with_other_measurements(tmp_path, cohort, scheduled, continuous, controlled, count, valid):
+    inference, livekit = tmp_path / 'inference.env', tmp_path / 'livekit.env'
+    inference.write_text('INFERENCE_TARGET_CHAT=ollama/test\n')
+    livekit.write_text('LIVEKIT_KEYS=test:test-only\n')
+    if not valid:
+        with pytest.raises(ValueError, match='interruption'):
+            pilot.pilot_environment(inference, livekit, 'interrupt-test', count, False, scheduled, continuous, controlled, cohort)
+    else:
+        result = pilot.pilot_environment(inference, livekit, 'interrupt-test', count, False, scheduled, continuous, controlled, cohort)
+        assert result['VOICE_QUALITY_INTERRUPTION_COHORT'] == cohort
+        assert result['VOICE_QUALITY_PILOT_TRIALS'] == str(count)

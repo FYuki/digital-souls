@@ -1,0 +1,135 @@
+// 固定ラベル音声を実応答の再生中へ入れる。通常応答の100試行とは別の分母を持つ。
+import { expect, type Browser, type Page } from '@playwright/test'
+import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { dirname } from 'node:path'
+import { installScheduledFixture, parseScheduledFixture, readFixtureBounds, type ScheduledFixture } from './controlled-audio-fixture'
+import { createVoiceChatDriver } from './voice-chat-suite'
+
+declare global {
+  interface Window {
+    __voiceVadDiagnostics?: {frames: {atMs: number; probability: number; rms: number; samples: number}[];
+      events: {type: string; speechStartedAtMs: number; detectedAtMs: number}[]}
+    __digitalSoulsVoiceVadTestPort?: {
+      frame: (observation: {atMs: number; probability: number; rms: number; samples: number}) => void
+      event: (event: {type: string; speechStartedAtMs: number; detectedAtMs: number}) => void
+    }
+  }
+}
+
+type Cohort = 'backchannel' | 'take_turn'
+type LabeledTrial = {id: string; cohort: string; audio_sha256: string; sample_rate_hz: number;
+  speech_intervals: {start_sample: number; end_sample: number}[]}
+const snapshot = (page: Page) => page.evaluate(() => ({
+  vad: window.__voiceVadDiagnostics,
+  core_events: window.__voiceChatE2E.coreEventDiagnostics,
+  interruptions: window.__voiceChatE2E.interruptions,
+  transport_failures: window.__voiceChatE2E.transportFailures ?? [],
+  playback_completions: window.__voiceChatE2E.playbackCompletions ?? {},
+  network_observations: window.__voiceChatE2E.networkObservations ?? {},
+  cycles: window.__voiceChatE2E.cycles,
+  fixture_clock_bounds: window.__voiceFixtureClock?.bounds ?? {},
+  active_audio_graphs: window.__voiceChatE2E.activeAudioGraphs ?? null,
+  active_response_id: window.__voiceChatE2E.activeResponseId ?? null,
+  user_control_observation: window.__voiceUserControlProbe?.snapshot(),
+}))
+
+export async function measureLabeledInterruptions(browser: Browser, initial: ScheduledFixture,
+  cohort: Cohort, count: number, output: string): Promise<void> {
+  if (!Number.isInteger(count) || count < 1 || count > 100) throw new Error('invalid interruption trial count')
+  const manifestBytes = await readFile(new URL('./fixtures/voice-quality-v2/manifest.json', import.meta.url))
+  const manifest = JSON.parse(manifestBytes.toString()) as {trials: LabeledTrial[]}
+  const selected = manifest.trials.filter(t => t.cohort === cohort).slice(0, count)
+  if (selected.length !== count) throw new Error('labeled cohort coverage unavailable')
+  const trials: Record<string, unknown>[] = []
+  const persist = async () => {
+    await mkdir(dirname(output), {recursive: true})
+    await writeFile(output, JSON.stringify({measurement_scope: 'labeled_livekit_interruption_diagnostic',
+      cohort, expected_measured: count, initial_fixture_sha256: initial.audioSha256,
+      labeled_manifest_sha256: createHash('sha256').update(manifestBytes).digest('hex'), trials}, null, 2) + '\n')
+  }
+  for (const selectedTrial of selected) {
+    const bytes = await readFile(new URL(`../test-results/vad-quality/fixtures-v2/${selectedTrial.id}.wav`, import.meta.url))
+    const interruption = parseScheduledFixture(bytes, {audio_sha256: selectedTrial.audio_sha256,
+      sample_rate_hz: selectedTrial.sample_rate_hz,
+      speech_start_sample: selectedTrial.speech_intervals[0].start_sample,
+      speech_end_sample: selectedTrial.speech_intervals.at(-1)!.end_sample})
+    const page = await browser.newPage({baseURL: 'http://localhost:5173', permissions: ['microphone']})
+    const driver = createVoiceChatDriver()
+    const trial: Record<string, unknown> = {fixture_sha256: selectedTrial.audio_sha256, cohort, outcome: 'failure'}
+    let stage = 'initial_response'
+    try {
+      await page.addInitScript(() => {
+        const frames: NonNullable<Window['__voiceVadDiagnostics']>['frames'] = []
+        const events: NonNullable<Window['__voiceVadDiagnostics']>['events'] = []
+        window.__voiceVadDiagnostics = {frames, events}
+        window.__digitalSoulsVoiceVadTestPort = {
+          frame: value => {frames.push(value); if (frames.length > 1024) frames.shift()},
+          event: value => {events.push(value); if (events.length > 128) events.shift()},
+        }
+      })
+      await installScheduledFixture(page, initial)
+      const microphone = await driver.openVoiceChat(page)
+      await microphone.click()
+      await expect(microphone).toHaveAttribute('aria-pressed', 'true')
+      await page.evaluate(() => window.__voiceUserControlProbe!.begin())
+      await page.evaluate(() => window.__voiceFixtureClock!.start())
+      const cycle = await driver.waitForCompletedVoiceCycle(page)
+      trial.session_id = cycle.sessionId
+      trial.old_response_id = cycle.responseId
+      trial.initial_utterance_id = cycle.utteranceId
+      stage = 'playback_overlap'
+      await page.waitForFunction(() => window.__voiceFixtureClock?.finished, undefined, {timeout: 5000})
+      const playing = await page.evaluate(responseId => {
+        const state = window.__voiceChatE2E
+        return {observedAtMs: performance.now(), active: state.activeResponseId === responseId
+          && (state.activeAudioGraphs ?? 0) > 0 && !state.playbackCompletions?.[responseId]}
+      }, cycle.responseId)
+      trial.injection_playback = playing
+      expect(playing.active).toBe(true)
+      stage = 'fixture_and_decision'
+      await page.evaluate(next => window.__voiceFixtureClock!.replay(next), interruption)
+      await page.waitForFunction(() => window.__voiceFixtureClock?.finished, undefined, {timeout: 10000})
+      trial.fixture_clock_bounds = await readFixtureBounds(page)
+      await page.waitForFunction(responseId => window.__voiceChatE2E.coreEventDiagnostics.some(event =>
+        event.type === 'turn_decision' && event.responseId === responseId && event.final === true), cycle.responseId, {timeout: 10000})
+      const decision = await page.evaluate(responseId => window.__voiceChatE2E.coreEventDiagnostics.find(event =>
+        event.type === 'turn_decision' && event.responseId === responseId && event.final === true), cycle.responseId)
+      trial.decision = decision
+      stage = 'cancel_or_continuity'
+      expect(decision?.decision).toBe(cohort)
+      if (cohort === 'take_turn') {
+        await page.waitForFunction(responseId => window.__voiceChatE2E.coreEventDiagnostics.some(event =>
+          event.type === 'response_cancelled' && event.responseId === responseId)
+          && window.__voiceChatE2E.interruptions.some(item => item.responseId === responseId), cycle.responseId, {timeout: 5000})
+      } else {
+        await page.waitForFunction(responseId => !!window.__voiceChatE2E.playbackCompletions?.[responseId], cycle.responseId, {timeout: 10000})
+        const cancelled = await page.evaluate(responseId => window.__voiceChatE2E.coreEventDiagnostics.some(event =>
+          event.type === 'response_cancelled' && event.responseId === responseId), cycle.responseId)
+        expect(cancelled).toBe(false)
+      }
+      trial.outcome = 'success'
+    } catch {
+      trial.failure_stage = stage
+    } finally {
+      trial.evidence = await snapshot(page).catch(() => ({browser_state_unavailable: true}))
+      let ended = false
+      if (typeof trial.session_id === 'string') {
+        const responsePromise = page.waitForResponse(response => response.request().method() === 'DELETE'
+          && new URL(response.url()).pathname.endsWith(`/voice/livekit/sessions/${trial.session_id}`), {timeout: 10000})
+        try {
+          await driver.endVoiceSession(page)
+          const response = await responsePromise
+          ended = response.ok() && (await response.json()).phase === 'ended'
+        } catch { await responsePromise.catch(() => undefined) }
+      } else { await driver.endVoiceSession(page).catch(() => undefined) }
+      trial.session_end_confirmed = ended
+      if (!ended) {trial.outcome = 'failure'; trial.cleanup_failed = true}
+      trials.push(trial)
+      await persist()
+      await page.evaluate(() => window.__voiceFixtureClock?.close()).catch(() => undefined)
+      await page.close()
+    }
+  }
+  expect(trials.filter(trial => trial.outcome === 'success').length, 'successful labeled interruption trial count').toBe(count)
+}
