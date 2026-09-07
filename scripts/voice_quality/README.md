@@ -158,7 +158,7 @@ PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/report_take_tu
   --output <新しい出力ファイル>.json
 ```
 
-全件の記録が終わってから実行する。期待件数より少ない途中run、fixtureの順序・hash不一致、sessionの再利用は拒否する。出力は既存ファイルを上書きしない。各latencyは既存`voice-quality-artifact-v1.schema.json`内のmetric schemaで検証する。このcohort結果を通常応答100件のartifactとして扱わない。
+全件の記録が終わってから実行する。期待件数より少ない途中run、fixtureの順序・hash不一致、sessionの再利用は拒否する。出力は既存ファイルを上書きしない。各latencyは既存`voice-quality-artifact-v1.schema.json`内のmetric schemaで検証し、集計全体は`voice-quality-cohort-report-v1.schema.json`でも検証する。このcohort結果を通常応答100件のartifactとして扱わない。
 
 音声投入時計が20msより不確かな試行は投入未検証として残す。見逃し率の有効投入分母とは別に期待数・記録数・投入未検証数を保持し、投入・終了・独立性のいずれかが未確認なら100件条件の合格を認めない。取得分のp95が閾値以内でも欠測があればlatencyの評価は不合格にする。正常cancelを通常応答の処理失敗へ加算しない。
 
@@ -181,3 +181,10 @@ PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/report_backcha
 集計は全件・ラベルhashと順序・独立session・投入時計を照合する。local stopとserver cancelは個別に数え、片方だけでも誤cancelとして扱う。通知がない試行でも、同じ旧応答の初回packet、source sample総数、連続RTP、全出力時計、対象音声終了までの再生継続を確認できなければ欠測にする。欠測は全試行の分母へ残し、観測・終了の全coverageと最低100件が揃うまで誤cancel率を合格にしない。
 
 相槌と認識できなかった試行でも、旧音声の全出力継続を直接証明できれば「誤cancelなし」には数えられる。分類済み件数は別に報告し、この指標の合格をVADの未検出や冒頭／終了境界の合格へ広げない。誤cancelはこの品質指標のfailureであり、正常な割り込みcancelを通常応答の処理失敗へ混ぜない。出力のmetric schema・匿名性・raw入力と集計器／検証器のhashを確認し、既存artifactを上書きしない。
+
+
+## cohort集計全体の検証
+
+相槌とtake-turnのCLIは、個々の指標に加えて集計全体のscope・型・必須項目・固定の計測境界・指標名を検証する。schema参照はローカルのmetric schemaへ登録して解決し、外部のschema取得を行わない。出力にはcohort schemaのversionとhash、整合性検証器のhashを残す。
+
+`cohort_report_validation.py`は、期待件数・記録件数・成功失敗の和、全metricの分母、欠測・除外理由の件数、分類済み／保留／未判定の和、ステータスと観測数、見逃し率とlatencyの合否を照合する。少数pilotを100件合格にする判定や、欠測を除いた分母での合格を拒否する。合否閾値と集計値の算出方法は既存の定義を維持する。

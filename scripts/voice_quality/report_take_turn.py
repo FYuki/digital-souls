@@ -7,10 +7,9 @@ import hashlib
 import json
 import math
 from collections import Counter
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
-
-from jsonschema import Draft202012Validator
+from typing import Any
 
 from app.voice_baseline import _assert_anonymous, _load_trace
 from app.voice_metrics import (
@@ -19,6 +18,7 @@ from app.voice_metrics import (
     aggregate_metric,
     duration_ms,
 )
+from jsonschema import Draft202012Validator
 
 POINTS = {
     "local_playback_stop": (
@@ -220,8 +220,10 @@ def summarize(
                 )
             }
 
-            def client_point(name: str) -> TraceEvent | None:
-                rows = points[name]
+            def client_point(
+                name: str, observation_points: dict[str, list[TraceEvent]] = points,
+            ) -> TraceEvent | None:
+                rows = observation_points[name]
                 if len(rows) != 1:
                     return None
                 event = rows[0]
@@ -387,6 +389,9 @@ def main() -> None:
     ).hexdigest()
     report["raw_trace_sha256"] = hashlib.sha256(args.trace.read_bytes()).hexdigest()
     report["reporter_sha256"] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    from cohort_report_validation import stamp_and_validate_report
+
+    stamp_and_validate_report(report, args.schema)
     with args.output.open("x") as output:
         output.write(
             json.dumps(report, ensure_ascii=False, allow_nan=False, indent=2) + "\n"

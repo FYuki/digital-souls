@@ -824,3 +824,14 @@ VADの音量依存も[全300素材と非発声音120件](artifacts/vad-model-gai
 製品の再現scriptへ`phase-sweep`オプションを追加し、全1,800行が候補と一致することを確認した。再実行はFrontendから`node scripts/measure-vad-runtime-cohorts.mjs NEW_OUTPUT.json legacy src/lib/audio/utterance-detector.ts phase-sweep`で行う。追加の768/960/1000ms境界テストは修正前3失敗・既存13成功、修正後はFrontend全単体494件成功、型検査・build成功。実接続での改善は別runで確認し、この診断だけで100件受け入れの達成とはしない。
 
 `cb42471`の[1秒補助採用後の実接続8件](artifacts/livekit-take-turn-pilot-2026-09-07-one-second.json)は8/8件成功した。前回失敗したindex 1・7も含め、全8件で投入時計・take-turn判定・旧応答cancel・独立session・明示終了を確認した。local stop／turn decision／decision後cancel／全cancelのp95は1,738.30／1,737.65／12.427／1,768.15msで各8件取得・欠測0。transport・再生エラーは0件、teardown完了と所有Frontend／Backendコンテナ削除も確認した。少数試験のため最低100件の条件はまだ未達とし、同じ実装を全100件で再測定する。raw runは`one-second-take-turn-pilot-01`へ保持する。
+
+
+## 2026-09-07: 1秒補助後のtake-turn 100件が全成功
+
+`81b36ce`固定（runtimeは`cb42471`と同一）の[実接続take-turn 100件](artifacts/livekit-take-turn-100-2026-09-07-one-second.json)は100/100件成功した。全100件の投入時計・独立session・take-turn判定・旧応答cancel・明示終了を検証し、見逃し0件・投入未検証0件だった。local stop／turn decision／decision後cancel／全cancelは各100件取得・欠測0、p95は1,931.45／1,930.50／6.951／1,953.35msで、各絶対目標を満たした。
+
+再生・transportエラー0件、投入時計の20ms上限超過0件。全runのteardown完了と所有Frontend／Backendコンテナの削除を確認した。raw runは`one-second-take-turn-100-01`として保持し、測定は約14分だった。凍結WebSocket baselineの4つの割り込み指標は`not_applicable`であり、この4指標の相対比較対象はない。他の比較可能な指標の相対評価は通常応答で行う。
+
+集計は従来のmetric schemaと匿名性検査に加え、cohort出力全体のschemaと整合性検査を通した。件数・欠測理由・指標名・計測境界・ステータス・合否の不整合を検出する関連68件のテストとRuffが成功した。欠測がある過去の結果や分類保留のある相槌結果も正しく検証し、合否や数値を書き換えないことを確認した。最終schema適用前の暫定集計は作業用ファイルへ保持し、最終検証後も今回の全件数・指標・合否が変わっていないことを照合した。
+
+この結果はthink:false・RAGなし条件でのtake-turn見逃し率と4つの割り込み遅延の達成であり、最新相槌100件、通常応答100件、VAD取込境界、人格・記憶品質、再接続、stale／gap等の残る受け入れを含まない。次に同じ音声実装で相槌100件を再測定する。

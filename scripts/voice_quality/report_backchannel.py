@@ -267,6 +267,9 @@ def main() -> None:
         "shared_reporter": Path(__file__).with_name("report_take_turn.py"),
     }.items():
         report[name + "_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    from cohort_report_validation import stamp_and_validate_report
+
+    stamp_and_validate_report(report, args.schema)
     with args.output.open("x") as output:
         output.write(
             json.dumps(report, ensure_ascii=False, allow_nan=False, indent=2) + "\n"
