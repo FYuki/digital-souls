@@ -607,6 +607,10 @@ class ConversationCoreSession:
                 generation=response.generation,
             )
             return self._responses[response.response_id]
+        # 開始通知の配送待ち中にもcancel・切断・終了は成立する。
+        # その待機から戻った後で、終了済み応答のprovider処理を新規起動しない。
+        if self._gated_response(response.response_id, response.generation) is None:
+            return self._responses[response.response_id]
         self._register_stage_task(
             self._run_response_pipeline(response, response_input),
             response_key=(response.response_id, response.generation),
