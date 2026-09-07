@@ -264,8 +264,12 @@
           "pattern": "^[0-9a-f]{64}$"
         },
         "raw_trace_sha256": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "trace未生成の場合だけnull。空のtraceファイルは実際の空ファイルのhashを保持する。"
         },
         "fixtures_sha256": {
           "type": "string",

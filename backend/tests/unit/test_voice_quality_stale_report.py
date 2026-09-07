@@ -168,3 +168,22 @@ def test_cli_saves_missing_report_without_leaking_arbitrary_process_errors_or_ov
     captured=capsys.readouterr()
     assert 'private-sentinel' not in captured.out+captured.err
     assert str(tmp_path) not in captured.out+captured.err
+
+
+def test_startup_failure_without_trace_remains_missing_and_has_no_fabricated_trace_hash(tmp_path):
+    m,fb,_=cohort(1)
+    t=m['trials'][0]
+    t['outcome']='failure'
+    t['injection_playback']['active']=False
+    t['session_end_confirmed']=False
+    (tmp_path/'manifest.json').write_text(json.dumps(m))
+    (tmp_path/'fixtures.json').write_bytes(fb)
+    argv=[item for key,name in (('manifest','manifest.json'),('trace','not-created.jsonl'),('fixtures','fixtures.json'),('output','report.json'))
+          for item in ('--'+key,str(tmp_path/name))]
+    assert reporter.main(argv)==1
+    result=json.loads((tmp_path/'report.json').read_bytes())
+    assert result['counts']['failure']==1
+    assert result['provenance']['raw_trace_sha256'] is None
+    assert result['channels']['audio_presented_samples']['observed']==0
+    assert result['channels']['audio_presented_samples']['missing_reasons']=={'fixture_injection_unverified':1}
+    assert result['evaluation']['stale_presented_passed'] is False

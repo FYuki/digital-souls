@@ -261,9 +261,13 @@ def main(argv=None):
     try:
         if args.output.exists():
             raise ValueError('output_exists')
-        raw, trace, fixtures = args.manifest.read_bytes(), args.trace.read_bytes(), args.fixtures.read_bytes()
+        raw, fixtures = args.manifest.read_bytes(), args.fixtures.read_bytes()
+        try:
+            trace = args.trace.read_bytes()
+        except FileNotFoundError:
+            trace = None
         manifest = json.loads(raw)
-        traces = [json.loads(line) for line in trace.splitlines() if line.strip()]
+        traces = [json.loads(line) for line in (trace or b'').splitlines() if line.strip()]
         schema_path = ROOT / 'docs/schemas/voice-quality-stale-report-v1.schema.json'
         schema_bytes = schema_path.read_bytes()
         sources = ('frontend/scripts/replay-stale-observations.ts', 'frontend/playwright/replay-stale-window.ts',
@@ -295,7 +299,7 @@ def main(argv=None):
             report = summarize(manifest, fixtures, traces, replay)
         digest = lambda value: hashlib.sha256(value).hexdigest()
         report['provenance'] = {'measurement_revision': manifest['measurement_revision'],
-            'raw_manifest_sha256': digest(raw), 'raw_trace_sha256': digest(trace), 'fixtures_sha256': digest(fixtures),
+            'raw_manifest_sha256': digest(raw), 'raw_trace_sha256': digest(trace) if trace is not None else None, 'fixtures_sha256': digest(fixtures),
             'reporter_sha256': digest(Path(__file__).read_bytes()), 'schema_sha256': digest(schema_bytes),
             'clock_validator_sha256': digest((ROOT / 'scripts/voice_quality/server_clock.py').read_bytes()),
             'fixture_validator_sha256': digest((ROOT / 'scripts/voice_quality/report_take_turn.py').read_bytes()),
