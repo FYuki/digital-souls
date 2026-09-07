@@ -492,3 +492,30 @@ Whisper adapterは準備と通常認識の同時投入を防ぎ、通常認識�
 
 
 Backendの単体・結合を同一processで通した検査は3,847件成功、1件skip、RAGテスト1件失敗だった。失敗はSTT処理を通らないHTTP会話で、単独では成功し、Chroma storeの単体テストを先に1件実行すると再現した。テスト用のmodule再importが親packageの属性を復元せず、後続のmonkeypatch先と実行moduleが食い違っていた。親属性もteardownで復元する変更後、Chroma・runtime path・HTTP chatの関連67件が成功した。RAG本体や検索条件は変更していない。
+
+
+## 2026-09-07: STT準備・32ms bufferでの正式通常100試行
+
+コミット`dc0c9fa`の実装で`stt-preparation-controlled-01`を実行し、13.8分で準備5回＋独立100試行が成功した。105/105でtranscript一致、応答全sampleの出力時計通過、明示終了を確認した。測定100回の出力sample総数は17,154,240、処理失敗・gap合計・最大gap・underrunは0件だった。environment reportは`completed / complete`、所有Frontend・Backendのteardownも完了した。
+
+[正式匿名artifact](artifacts/livekit-controlled-2026-09-07-stt-preparation.json)はcontrolled validator、schema、匿名性検査を通過した。
+
+| 指標 | p50 | p95 | 確認結果 |
+|---|---:|---:|---|
+| TTFA | 1,825.55ms | 1,888.305ms | 絶対目標2,000ms以内、相対条件も達成。p50改善目安1,000msには未達 |
+| utterance確定 | 276.15ms | 287.92ms | 絶対目標800ms以内、現行自動比較の相対条件は不合格 |
+| STT処理 | 120.46ms | 131.08ms | 準備待ちがある場合も含む |
+| first text | 367.54ms | 380.79ms | 相対条件は達成 |
+| LLM完了 | 466.08ms | 484.41ms | 相対条件は達成 |
+| client受信→実再生 | 70ms | 75ms | 相対上限約81.20ms以内 |
+
+[準備の診断](artifacts/stt-preparation-controlled-2026-09-07.json)では測定100回すべてで準備が成功し、98回は通常STT開始前に完了した。残る2回の待機もSTT処理時間に含めた。準備自体のp50は412.36ms、p95は476.23msで、追加計算を発話終了待ちと重ねた結果である。
+
+[自動比較結果](artifacts/livekit-controlled-2026-09-07-stt-preparation-evaluation.json)は`latency_only`として全体不合格を維持している。割り込み4指標とVAD境界2指標の欠測、`response_decision`・`stt_start_latency`・`utterance_finalized`の相対条件が残る。コード確認ではWebSocketのutterance確定はブラウザで録音PCMを取り出した時点、LiveKitの同名eventはCoreのSTT・turn分類後であり、観測境界が一致していない。STT開始待ちもWebSocketは完成したPCMの受信後、LiveKitは連続microphone PCMの最初の受信後となっている。比較の境界監査と、揃えた区間の追加計測が必要である。保存済みの不合格結果を合格へ書き換えない。
+
+この100試行も`think:false`・RAGなしのintegration-voice条件である。生成設定を変更した際の人格・記憶応答品質、相槌・take-turn・reconnect・dogfood品質、resource／networkの受け入れは完了していない。Backend・環境の型検査は228ファイルで成功した。
+
+
+Chromaテストの復元修正後、Backend単体・結合の全体再検証は3,848件成功、1件skipで完了した。元の作業ディレクトリは`epic/182-tool-foundation`のまま変更なしだった。
+
+resource計測の追加確認では、run reportが所有を記録するBackendコンテナのDocker statsからCPU累積時間とメモリ使用量を読み取れた。1回のメモリ使用量は255,021,056bytesだったが、これはcontainerに課金されるメモリ量のsnapshotであり、全試行のRSSやpeakではない。現在のaggregateへ補完していない。GPUは既存observerがhost値を保存しているがschemaへの取り込みは未完了。WebRTCの送受信・lossは、使用中のLiveKit SDKで公開されているsender／receiver statsから集める必要がある。既存manifestのCPUはPlaywright worker単体の値であり、Backendやbrowserを含むprocess tree値へ読み替えない。
