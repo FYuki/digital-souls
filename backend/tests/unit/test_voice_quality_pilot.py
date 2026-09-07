@@ -126,3 +126,25 @@ def test_interruption_scope_cannot_mix_with_other_measurements(tmp_path, cohort,
         result = pilot.pilot_environment(inference, livekit, 'interrupt-test', count, False, scheduled, continuous, controlled, cohort)
         assert result['VOICE_QUALITY_INTERRUPTION_COHORT'] == cohort
         assert result['VOICE_QUALITY_PILOT_TRIALS'] == str(count)
+
+
+@pytest.mark.parametrize('controlled,cohort,continuous,scheduled,count,valid', [
+    (False, None, 0, True, 3, True), (True, None, 0, True, 100, False),
+    (False, 'take_turn', 0, True, 3, False), (False, None, 3, True, 3, False),
+    (False, None, 0, False, 3, False), (False, None, 0, True, 11, False),
+])
+def test_control_probe_scope_is_explicit_and_separate(tmp_path, monkeypatch, controlled, cohort, continuous, scheduled, count, valid):
+    inference, livekit = tmp_path / 'inference.env', tmp_path / 'livekit.env'
+    inference.write_text('INFERENCE_TARGET_CHAT=ollama/test\n')
+    livekit.write_text('LIVEKIT_KEYS=test:test-only\n')
+    monkeypatch.setenv('VOICE_QUALITY_CONTROL_PROBE', '1')
+    if valid:
+        env = pilot.pilot_environment(inference, livekit, 'probe-test', count, False,
+                                      scheduled, continuous, controlled, cohort, True)
+        assert env['VOICE_QUALITY_CONTROL_PROBE'] == '1'
+        ordinary = pilot.pilot_environment(inference, livekit, 'ordinary-test', 3, False, True)
+        assert 'VOICE_QUALITY_CONTROL_PROBE' not in ordinary
+    else:
+        with pytest.raises(ValueError, match='control probe'):
+            pilot.pilot_environment(inference, livekit, 'probe-test', count, False,
+                                    scheduled, continuous, controlled, cohort, True)

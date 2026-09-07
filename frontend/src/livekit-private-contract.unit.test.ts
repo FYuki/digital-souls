@@ -114,3 +114,15 @@ test('送信完了の総sample数を検証し、PCM本文や矛盾した総数�
   expect(() => parsePrivateFrame({...frame, pcm: 'body'})).toThrow()
   expect(() => parsePrivateFrame({...frame, input_sample_count: -1})).toThrow()
 })
+
+const controlProbe = {protocol_version: '1.0', type: 'control_probe',
+  generation: 2, probe_id: '10000000-0000-4000-8000-000000000001'}
+test.each(['control_probe', 'control_probe_ack'])('制御probeはnonceと世代を保持する: %s', type => {
+  expect(parsePrivateFrame({...controlProbe, type})).toEqual({type, generation: 2, probeId: controlProbe.probe_id})
+})
+test.each([
+  {...controlProbe, probe_id: 'invalid'}, {...controlProbe, generation: -1},
+  {...controlProbe, body: 'private'}, {...controlProbe, probe_id: undefined},
+])('不正なprobeや本文の混入を拒否する', frame => {
+  expect(() => parsePrivateFrame(frame)).toThrow()
+})

@@ -95,8 +95,14 @@ def probe_gpu() -> dict[str, object]:
 
 def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
                       trials: int, disable_thinking: bool, scheduled_fixture: bool = False, continuous_turns: int = 0,
-                      controlled: bool = False, interruption_cohort: str | None = None) -> dict[str, str]:
+                      controlled: bool = False, interruption_cohort: str | None = None,
+                      control_probe: bool = False) -> dict[str, str]:
     run_root(run_id)
+    if type(control_probe) is not bool or (control_probe and (
+        controlled or interruption_cohort or continuous_turns or not scheduled_fixture
+        or not 1 <= trials <= 10
+    )):
+        raise ValueError("control probe diagnostic requires scheduled fixture and one to ten probes")
     if not inference_env.is_file() or not livekit_env.is_file():
         raise ValueError("pilot environment files are unavailable")
     if type(continuous_turns) is not int or not 0 <= continuous_turns <= 10 or (continuous_turns and not scheduled_fixture):
@@ -131,6 +137,9 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
                VOICE_QUALITY_PILOT_TRIALS=str(trials), VOICE_QUALITY_RUN_ID=run_id,
                VOICE_QUALITY_SCHEDULED_FIXTURE="1" if scheduled_fixture else "0",
                VOICE_QUALITY_CONTINUOUS_TURNS=str(continuous_turns))
+    env.pop("VOICE_QUALITY_CONTROL_PROBE", None)
+    if control_probe:
+        env["VOICE_QUALITY_CONTROL_PROBE"] = "1"
     env.pop("VOICE_QUALITY_INTERRUPTION_COHORT", None)
     if interruption_cohort:
         env["VOICE_QUALITY_INTERRUPTION_COHORT"] = interruption_cohort
@@ -144,7 +153,7 @@ def run(args: argparse.Namespace) -> int:
     sys.path.insert(0, str(ROOT / "backend"))
     from app.voice_resource_metrics import ContainerResourceSampler
 
-    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort)
+    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe)
     reference = env.get("INFERENCE_TARGET_CHAT", "")
     if not reference.startswith("ollama/"):
         raise ValueError("this diagnostic requires an Ollama chat target")
@@ -191,6 +200,8 @@ if __name__ == "__main__":
     count_options.add_argument("--controlled", action="store_true", help="準備5回＋独立100試行。scheduled fixture必須。")
     parser.add_argument("--interruption-cohort", choices=("backchannel", "take_turn"),
                         help="応答再生中へ固定ラベル音声を入れる実接続診断。通常の独立試行集計とは分離する。")
+    parser.add_argument("--control-probe", action="store_true",
+                        help="障害なしの1 sessionで実制御往復を確認する。trialsはprobe回数。")
     parser.add_argument("--disable-thinking", action="store_true")
     parser.add_argument("--scheduled-fixture", action="store_true")
     parser.add_argument("--continuous-turns", type=int, default=0,

@@ -19,6 +19,7 @@ type PrivateFrame =
   }>
   | Readonly<{ type: 'ack'; eventId: string; generation: number }>
   | Readonly<{ type: 'state_sync_request'; generation: number }>
+  | Readonly<{ type: 'control_probe' | 'control_probe_ack'; generation: number; probeId: string }>
   | Readonly<{ type: 'response_audio_finished'; responseId: string; generation: number; inputSampleCount: number; capturedSampleCount: number; paddingSampleCount: number }>
   | Readonly<{ type: 'response_track_ready'; responseId: string; trackSid: string; generation: number }>
   | Readonly<{
@@ -53,6 +54,7 @@ type PrivateFrameWire =
   }>
   | Readonly<{ type: 'ack'; event_id: string; generation: number }>
   | Readonly<{ type: 'state_sync_request'; generation: number }>
+  | Readonly<{ type: 'control_probe' | 'control_probe_ack'; generation: number; probe_id: string }>
   | Readonly<{ type: 'response_audio_finished'; response_id: string; generation: number; input_sample_count: number; captured_sample_count: number; padding_sample_count: number }>
   | Readonly<{ type: 'response_track_ready'; response_id: string; track_sid: string; generation: number }>
   | Readonly<{
@@ -99,6 +101,9 @@ export function parsePrivateFrame(value: unknown): PrivateFrame {
         eventId: frame.event_id,
         generation: frame.generation,
       }
+    case 'control_probe':
+    case 'control_probe_ack':
+      return { type: frame.type, generation: frame.generation, probeId: frame.probe_id }
     case 'state_sync_request':
       return { type: frame.type, generation: frame.generation }
     case 'response_audio_finished':

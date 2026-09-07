@@ -5,6 +5,8 @@
   "oneOf": [
     { "$ref": "#/$defs/Ack" },
     { "$ref": "#/$defs/StateSyncRequest" },
+    { "$ref": "#/$defs/ControlProbe" },
+    { "$ref": "#/$defs/ControlProbeAck" },
     { "$ref": "#/$defs/AuthoritativeState" },
     { "$ref": "#/$defs/LogicalAudioSegment" },
     { "$ref": "#/$defs/ResponseTrackReady" },
@@ -35,6 +37,54 @@
         "type": { "const": "ack" },
         "event_id": { "$ref": "#/$defs/Identifier" },
         "generation": { "$ref": "#/$defs/Generation" }
+      }
+    },
+    "ControlProbe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "probe_id",
+        "generation"
+      ],
+      "properties": {
+        "protocol_version": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "type": {
+          "const": "control_probe"
+        },
+        "probe_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "generation": {
+          "$ref": "#/$defs/Generation"
+        }
+      }
+    },
+    "ControlProbeAck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "probe_id",
+        "generation"
+      ],
+      "properties": {
+        "protocol_version": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "type": {
+          "const": "control_probe_ack"
+        },
+        "probe_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "generation": {
+          "$ref": "#/$defs/Generation"
+        }
       }
     },
     "StateSyncRequest": {

@@ -214,6 +214,16 @@ class ProductionSessionCoordinator:
                     return
                 if frame_generation != self.generation:
                     return
+                if frame["type"] == "control_probe":
+                    # 疎通確認は世代・再生・Core状態を変えず、現在利用可能な接続だけで応答する。
+                    if self._lifecycle.phase == "available":
+                        await self._publish_private({
+                            "protocol_version": "1.0",
+                            "type": "control_probe_ack",
+                            "probe_id": frame["probe_id"],
+                            "generation": self.generation,
+                        })
+                    return
                 if frame["type"] == "response_track_ready":
                     self._dependencies.response_track_ready(str(frame["response_id"]), str(frame["track_sid"]))
                 elif frame["type"] == "ack":

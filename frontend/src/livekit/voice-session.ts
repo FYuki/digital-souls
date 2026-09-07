@@ -70,6 +70,7 @@ const defaultDependencies: VoiceSessionDependencies = {
       __digitalSoulsVoiceSessionTestPort?: {
         createRoom?: VoiceSessionDependencies['roomFactory']
         observeRoom?: (observation: RoomObservation) => void
+        bindRoom?: (room: Pick<LiveKitRoomClient, 'probeControl'>) => void
         receiveCoreEvent?: (event: VoiceSessionEvent) => void
         bindController?: (controller: {
           speechStarted: (utteranceId: string, atMs: number) => Promise<void>
@@ -79,7 +80,7 @@ const defaultDependencies: VoiceSessionDependencies = {
     if (testPort?.createRoom !== undefined) {
       return testPort.createRoom(observe, receiveCoreEvent, receiveScreenRequest)
     }
-    return new LiveKitRoomClient(
+    const room = new LiveKitRoomClient(
       (observation) => {
         observe(observation)
         testPort?.observeRoom?.(observation)
@@ -91,6 +92,8 @@ const defaultDependencies: VoiceSessionDependencies = {
       undefined,
       receiveScreenRequest,
     )
+    testPort?.bindRoom?.(room)
+    return room
   },
   eventId: () => crypto.randomUUID(),
   monotonicMs: () => Math.floor(performance.now()),

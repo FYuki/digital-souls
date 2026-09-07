@@ -1055,3 +1055,67 @@ def test_source_completion_reports_conserved_samples_on_private_topic() -> None:
         assert len(published) == 1
         await coordinator.cleanup("test_complete")
     asyncio.run(exercise())
+
+
+def test_control_probe_round_trip_does_not_change_generation_or_interrupt_response() -> None:
+    module = _livekit_module("coordinator", "non-mutating control probe")
+
+    async def exercise() -> None:
+        published: list[tuple[bytes, str]] = []
+        core = RecordingCorePort()
+        coordinator = _coordinator(module, published, [], core)
+        identity = "user-20000000-0000-4000-8000-000000000010"
+        coordinator.participant_connected(identity=identity, participant_sid="PA_current", room_sid="RM_one")
+        coordinator.begin_response(response_id="30000000-0000-4000-8000-000000000010")
+        previous_notifications = list(core.notifications)
+        for index in range(3):
+            probe_id = f"10000000-0000-4000-8000-{index:012d}"
+            await coordinator.receive_data(
+                identity=identity, participant_sid="PA_current", topic=module.PRIVATE_TOPIC,
+                payload=json.dumps({"protocol_version": "1.0", "type": "control_probe",
+                                    "probe_id": probe_id, "generation": 0}).encode(),
+            )
+            assert json.loads(published[-1][0]) == {
+                "protocol_version": "1.0", "type": "control_probe_ack",
+                "probe_id": probe_id, "generation": 0,
+            }
+            assert published[-1][1] == module.PRIVATE_TOPIC
+            assert coordinator.generation == 0
+            assert coordinator.phase == "available"
+            assert core.notifications == previous_notifications
+        await coordinator.cleanup("test_complete")
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("case", ["wrong_identity", "old_connection", "old_generation", "future_generation", "unavailable", "ended"])
+def test_control_probe_does_not_acknowledge_invalid_or_unavailable_connection(case) -> None:
+    module = _livekit_module("coordinator", "control probe connection ownership")
+
+    async def exercise() -> None:
+        published: list[tuple[bytes, str]] = []
+        coordinator = _coordinator(module, published, [])
+        identity = "user-20000000-0000-4000-8000-000000000010"
+        coordinator.participant_connected(identity=identity, participant_sid="PA_current", room_sid="RM_one")
+        generation = coordinator.generation
+        if case == "old_generation":
+            coordinator._lifecycle.advance_generation()
+        if case == "future_generation":
+            generation += 1
+        if case == "unavailable":
+            await coordinator.mark_unavailable()
+        if case == "ended":
+            await coordinator.cleanup("test_complete")
+        published.clear()
+        await coordinator.receive_data(
+            identity="unrelated" if case == "wrong_identity" else identity,
+            participant_sid="PA_old" if case == "old_connection" else "PA_current",
+            topic=module.PRIVATE_TOPIC,
+            payload=json.dumps({"protocol_version": "1.0", "type": "control_probe",
+                                "probe_id": "10000000-0000-4000-8000-000000000001",
+                                "generation": generation}).encode(),
+        )
+        assert published == []
+        await coordinator.cleanup("test_complete")
+
+    asyncio.run(exercise())

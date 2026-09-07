@@ -669,3 +669,35 @@ test.each(['valid', 'mismatched_decode', 'stopped', 'unsubscribed'])('実出力�
 })
 
 })
+
+test('実roomのprobe応答をnonce・世代へ相関し、通常の状態同期を追加送信しない', async () => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(value => observations.push(value))
+  expect((await client.probeControl()).status).toBe('unavailable')
+  await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  room.localParticipant.publishData.mockClear()
+  const count = observations.length
+  const pending = client.probeControl()
+  const sent = room.localParticipant.publishData.mock.calls[0]
+  const frame = JSON.parse(new TextDecoder().decode(sent[0]))
+  expect(frame).toMatchObject({type: 'control_probe', generation: 0})
+  expect(sent[1]).toEqual({reliable: true, topic: 'digital-souls.livekit-transport.v1'})
+  emitPrivateFrame(room, new TextEncoder().encode(JSON.stringify({...frame, type: 'control_probe_ack'})))
+  expect(await pending).toMatchObject({status: 'received', probeId: frame.probe_id, generation: 0})
+  expect(observations.length).toBe(count)
+  expect(room.localParticipant.publishData).toHaveBeenCalledTimes(1)
+  client.disconnect()
+  expect((await client.probeControl()).status).toBe('unavailable')
+})
+
+test.each(['reconnecting', 'disconnected', 'generation'])('接続変化でprobe待機を終了する: %s', async change => {
+  const client = new LiveKitRoomClient(() => undefined)
+  await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  const pending = client.probeControl()
+  if (change === 'generation') emitPrivateFrame(room, authoritativeState(1))
+  else room.emit(change)
+  expect((await pending).status).toBe('interrupted')
+  client.disconnect()
+})

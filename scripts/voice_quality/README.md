@@ -188,3 +188,19 @@ PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/report_backcha
 相槌とtake-turnのCLIは、個々の指標に加えて集計全体のscope・型・必須項目・固定の計測境界・指標名を検証する。schema参照はローカルのmetric schemaへ登録して解決し、外部のschema取得を行わない。出力にはcohort schemaのversionとhash、整合性検証器のhashを残す。
 
 `cohort_report_validation.py`は、期待件数・記録件数・成功失敗の和、全metricの分母、欠測・除外理由の件数、分類済み／保留／未判定の和、ステータスと観測数、見逃し率とlatencyの合否を照合する。少数pilotを100件合格にする判定や、欠測を除いた分母での合格を拒否する。合否閾値と集計値の算出方法は既存の定義を維持する。
+
+
+## 会話状態を変えない制御probeの実接続診断
+
+```bash
+backend/.venv/bin/python scripts/voice_quality/run_pilot.py \
+  --run-id control-probe-new \
+  --inference-env /home/asa/dev/digital-souls/backend/.env \
+  --control-probe --trials 3 --scheduled-fixture --disable-thinking
+```
+
+`--control-probe`の`--trials`は、1 session内のprobe回数（1〜10）を表す。通常の独立試行数ではない。制御測定100件・割り込み・連続会話の各モードとの混在は拒否する。実応答の再生中へ100ms間隔でprobeを送り、応答継続・全出力完了・明示終了を記録する。上の例は実験用think:false条件であり、通常設定の品質試験ではない。
+
+private transportの`control_probe`と`control_probe_ack`はUUIDと世代を相関する。Backendは現在のparticipant・世代・利用可能phaseを確認し、世代・Core・再生状態を変更せず応答する。通常会話からは自動送信しない。Browserは最大1件を500msだけ保持し、publish完了を往復成功にしない。切断・再接続・世代変更で待機を終了し、古い応答・時計の逆転・期限後の応答は成功へ補完しない。
+
+raw manifestには同一Browserの`performance.now()`で記録した送信・ack受信時刻、probe成否、元応答の出力証拠を残す。これは障害なしのcontrol経路診断であり、音声のnetwork回復や再接続100件の成功率・遅延を証明しない。障害runnerとの時計対応と、実音声frameの回復・重複出力の観測は別に必要である。
