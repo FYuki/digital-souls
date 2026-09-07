@@ -1103,3 +1103,20 @@ test('時計probeと復旧用control probeは別pendingを持ち、切断時に�
     expect((await interrupted).status).toBe('interrupted')
   } finally {client.disconnect()}
 })
+
+
+test('時計probeはSDK connect完了までpublishせず、接続待ちへ割り込まない', async () => {
+  const blocked = deferred()
+  const connect = vi.spyOn(livekitMocks.FakeRoom.prototype, 'connect').mockImplementation(() => blocked.promise)
+  const client = new LiveKitRoomClient(() => undefined)
+  try {
+    const connecting = client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000010')
+    const room = latestRoom()
+    expect((await client.probeClock()).status).toBe('unavailable')
+    expect(room.localParticipant.publishData).not.toHaveBeenCalled()
+    blocked.resolve(); await connecting
+    const clock = client.probeClock()
+    expect(room.localParticipant.publishData).toHaveBeenCalledOnce()
+    client.disconnect(); expect((await clock).status).toBe('interrupted')
+  } finally {blocked.resolve(); client.disconnect(); connect.mockRestore()}
+})

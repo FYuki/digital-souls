@@ -118,8 +118,10 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
         throw new Error('session creation identity unavailable')
       }
       trial.session_id = issuedSessionId
+      stage = 'microphone_activation'
       await expect(microphone).toHaveAttribute('aria-pressed', 'true')
       await page.evaluate(() => window.__voiceUserControlProbe!.begin())
+      stage = 'initial_response'
       await page.evaluate(() => window.__voiceFixtureClock!.start())
       const cycle = await driver.waitForCompletedVoiceCycle(page)
       expect(cycle.sessionId, 'created session and initial response correlation').toBe(trial.session_id)
@@ -192,6 +194,12 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
       trial.outcome = 'success'
     } catch {
       trial.failure_stage = stage
+      trial.failure_observation = await page.evaluate(() => ({
+        micPressed: document.querySelector('button[aria-label^="マイクを"]')?.getAttribute('aria-pressed') === 'true',
+        coreEventCount: window.__voiceChatE2E?.coreEventDiagnostics?.length ?? null,
+        transportFailures: window.__voiceChatE2E?.transportFailures ?? [],
+        clockProbeStatuses: window.__voiceServerClockProbe?.snapshot().observations.map(row => row.status) ?? [],
+      })).catch(() => ({browser_state_unavailable: true}))
     } finally {
       trial.evidence = await snapshot(page).catch(() => ({browser_state_unavailable: true}))
       let ended = false

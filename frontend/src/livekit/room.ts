@@ -260,9 +260,10 @@ export class LiveKitRoomClient {
 
   probeClock(): Promise<ControlProbeObservation> {
     const room = this.room
-    if (room === null || this.controlOutbox === null) return Promise.resolve({
+    if (room === null || this.controlOutbox === null || this.recovering || this.syncRequestedGeneration !== null) return Promise.resolve({
       status: 'unavailable', generation: this.generation, probeId: null, sentAtMs: null, receivedAtMs: null,
     })
+    // 初回connect・状態同期の途中へ診断publishを差し込まない。
     // 復旧判定用probeとはpending状態を分け、通常の疎通指標へ時計診断を混ぜない。
     return this.clockProbes.start(this.generation, async (probeId, generation) => {
       await room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({
