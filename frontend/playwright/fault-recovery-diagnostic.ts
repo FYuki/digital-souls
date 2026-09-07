@@ -85,7 +85,7 @@ export function analyzeProbeFaultRecovery(restored: TimeBounds, probes: readonly
     || !Number.isFinite(probe.completedAtMs) || probe.completedAtMs < probe.requestedAtMs
     || !probes.some(p => p.status === 'received' && p.generation === probe.generation
       && p.sentAtMs !== null && p.receivedAtMs !== null && p.sentAtMs > restored.upperMs
-      && p.receivedAtMs >= p.sentAtMs && p.receivedAtMs <= probe.requestedAtMs)
+      && p.receivedAtMs >= p.sentAtMs && p.receivedAtMs <= probe.completedAtMs)
     || completion.expectedSamples !== 10560 || completion.inputSamples !== 9600 || completion.paddingSamples !== 960
     || completion.renderedSamples !== 10560 || completion.packetCount !== 11 || completion.gapSamples !== 0
     || completion.maximumGapSamples !== 0 || completion.gapCount !== 0 || completion.sampleRate !== 48000) return failed()
@@ -107,11 +107,16 @@ export function analyzeProbeFaultRecovery(restored: TimeBounds, probes: readonly
   }
   if (samples !== 10560 || endFrame !== completion.lastOutputEndFrame
     || completion.firstRtpTimestamp !== firstRtp || completion.lastRtpTimestamp !== ((firstRtp! + 9600) >>> 0)) return failed()
-  const audio = analyzeFaultRecovery(restored, probes, probe.packetOutputs, false, 0)
+  // 状態同期で世代が進んだ場合、音声と同世代の制御往復を採る。
+  // controlとaudioの実証順は問わず、両方の成立時刻の遅い側を復旧時間とする。
+  const matchingControls = probes.filter(p => p.generation === probe.generation
+    && p.receivedAtMs !== null && p.receivedAtMs <= probe.completedAtMs)
+  const audio = analyzeFaultRecovery(restored, matchingControls, probe.packetOutputs, false, 0)
   const combined = analyzeFaultRecovery(restored, probes, [...packets, ...probe.packetOutputs], overflow, outputPathFailures)
-  return {...combined, audio_recovery_upper_ms: audio.audio_recovery_upper_ms,
-    recovery_upper_ms: base.control_recovery_upper_ms === null || audio.audio_recovery_upper_ms === null
-      ? null : Math.max(base.control_recovery_upper_ms, audio.audio_recovery_upper_ms),
+  return {...combined, control_recovery_upper_ms: audio.control_recovery_upper_ms,
+    audio_recovery_upper_ms: audio.audio_recovery_upper_ms,
+    recovery_upper_ms: audio.control_recovery_upper_ms === null || audio.audio_recovery_upper_ms === null
+      ? null : Math.max(audio.control_recovery_upper_ms, audio.audio_recovery_upper_ms),
     audio_missing_reason: audio.audio_missing_reason}
 }
 

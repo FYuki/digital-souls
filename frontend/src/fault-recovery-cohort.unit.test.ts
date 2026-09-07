@@ -158,14 +158,14 @@ test('新規RTC probeの全出力を再集計し、旧応答の時刻を復旧�
   expect(() => summarizeFaultRecoveryCohort([probeTrial(), trial(2)], 2)).toThrow('audio availability methods')
 })
 
-test.each(['nonce', 'generation', 'track', 'pre_restore', 'before_control', 'packet_missing', 'packet_duplicate',
+test.each(['nonce', 'generation', 'track', 'pre_restore', 'control_after_completion', 'packet_missing', 'packet_duplicate',
   'sample_count', 'source_changed', 'cleanup', 'status', 'silent', 'timestamp_invalid'])('probeの不一致・欠測を成功で補完しない: %s', mode => {
   const record = probeTrial(), probe = record.audio_probe
   if (mode === 'nonce') probe.probeId = id(2, 7)
   if (mode === 'generation') probe.generation++
   if (mode === 'track') probe.trackSid = 'TR_other'
   if (mode === 'pre_restore') probe.requestedAtMs = 3000
-  if (mode === 'before_control') probe.requestedAtMs = 3209
+  if (mode === 'control_after_completion') record.fault_probes[1].receivedAtMs = 3700
   if (mode === 'packet_missing') probe.packetOutputs.pop()
   if (mode === 'packet_duplicate') probe.packetOutputs.push(probe.packetOutputs.at(-1)!)
   if (mode === 'sample_count') probe.completion.renderedSamples = 9600
@@ -181,4 +181,17 @@ test.each(['nonce', 'generation', 'track', 'pre_restore', 'before_control', 'pac
   expect(report.counts.recovered_within_ten_seconds).toBe(0)
   expect(report.counts.not_recovered).toBe(1)
   expect(report.evaluation.passed).toBe(false)
+})
+
+
+test('音声開始の後に確認した同世代controlと組み合わせ、旧世代ACKの早い値を採らない', () => {
+  const record = probeTrial()
+  record.fault_probes[1].generation = 1
+  record.fault_probes.push({status: 'received', generation: 0, probeId: id(1, 8),
+    sentAtMs: 3301, receivedAtMs: 3305, observedAtMs: 3305})
+  const report = summarizeFaultRecoveryCohort([record], 1)
+  expect(report.evaluation.coverage_complete).toBe(true)
+  expect(report.latency_ms.audio.p95).toBeCloseTo(300.4)
+  expect(report.latency_ms.control.p95).toBeCloseTo(305.4)
+  expect(report.latency_ms.both.p95).toBeCloseTo(305.4)
 })
