@@ -403,3 +403,31 @@ STT境界に`prepare_stt_audio`を追加し、PCM16の振幅16を初めて超え
 `prepared-stt-clock-session-01`は10往復と明示終了が成功した。`prepared-stt-clock-pilot-01`も準備1回＋独立測定3回が成功し、送信sample数・全packet出力・出力時計を再検証した[匿名artifact](artifacts/livekit-pilot-2026-09-07-reconciled-clock.json)がschema・匿名性検査を通過した。測定3回のgap合計は10.667／1.333／2.667msで、制御測定のunderrun 0件は未達である。
 
 Backend全単体は2,394件成功・1件skip。時計とrendererの関連単体26件、STTと音声bridgeの関連単体48件、report単体71件、対象型検査が成功した。今回の少数試行は、全cohortの100試行、dogfood品質、loss回復、実割り込みのstale提示を証明するものではない。
+
+
+## 2026-09-07: 実出力packetの受信・復号時刻をtraceへ相関
+
+従来の`media_observation_method: unavailable`は、元source PCM offsetと応答packetの対応を同じ未確認事項として扱っていた。現在は応答専用track、受信準備確認、同じOpus packetの状態付き復号、workletへのPCM供給、出力時計通過を通常会話で確認できる。元PCMのcodec lookahead／logical segmentの厳密なplayed prefixを確定せずとも、ユーザーが採用した「decoded応答packetの先頭sampleをbrowserへ出力した時刻」とそのpacketの受信・復号は相関できる。
+
+Roomはtrack名だけで相関せず、最初のpacketのRTP timestampと受信・復号時刻が保存済みmedia観測に一致し、そのPCMの出力時計が通過した場合に限り、`client_track_received`・`client_encoded_received`・`client_audio_decoded`を元の観測時刻で送る。停止・購読解除後や不一致では送らない。Playwrightもnative配送時刻の代わりに、実際にworkletへ供給した独立decoderのoutput時刻を使う。
+
+集計methodを`response_track_stateful_opus_worklet_output`とし、trace、試行内時刻、生のpacket出力証跡を照合する。正式controlled測定では古いnative配送methodやpacket証跡の欠落を拒否する。Room境界20件とreport75件の単体テストで、出力前、不一致、停止・購読解除後、旧method、配送時刻の代用を含めて検証した。
+
+`correlated-packet-pilot-01`の準備1回＋独立測定3回は全件成功し、[匿名artifact](artifacts/livekit-pilot-2026-09-07-correlated-packet.json)のschema・匿名性・生値照合が成功した。測定3回の`client_decode_latency` p95は1ms、`decoded_to_playback_latency` p95は99.7msで、両指標は3/3実測・欠測0件となった。TTFA p95は2,212.53ms、utterance確定p95は539.14msで、TTFAの絶対目標は未達である。
+
+## 2026-09-07: 同じPCM波形を保つTTS変換の高速化
+
+標準のPCM16 monoをPythonでsampleごとにbytesから変換し、24kHz→48kHzを毎sample一般式で補間する処理を調べた。合成PCM 72,000sampleの7回診断では、元処理の中央値83.985msに対し、候補処理は7.421msだった。出力143,999sampleの差分は0件。この診断はCPU処理時間であり、TTSサービスの合成時間や音切れ改善の直接証明ではない。
+
+PCM16 monoは一括unpackし、2倍sample rateでは元sampleと隣接sampleの中点を交互に配置する。既存の偶数丸め、末尾sample数を維持し、他の入力形式・sample rateは従来経路を使う。最終実装にはPCM16範囲検査も含む。全PCM16値と中点の丸め、異なるsample rate、不完全なsampleの拒否を含むadapter単体22件が成功した。
+
+`fast-pcm-pilot-01`の準備1回＋独立測定3回は全件成功し、4回ともgap 0sampleだった。[匿名artifact](artifacts/livekit-pilot-2026-09-07-fast-pcm.json)のschema・匿名性・生値照合も成功した。測定3回のTTFAは約1,969／2,098／2,150ms、保守的なfixture境界を使う集計p95は2,144.08msで、目標2,000msには届かない。少数試行であるため、制御測定100試行のunderrun 0件を達成したとは判断しない。
+
+最終差分のBackend全単体2,403件成功・1件skip、Frontend全単体439件・結合97件、Frontend型検査と対象Python型検査・lintが成功した。実サービスは既存の共有推論を変更せず、独立したintegration-voice data rootを使用した。正式100試行、全割り込み・再接続cohortとdogfood品質の受け入れは残っている。
+
+
+最終実装を旧コミット`bdf6235`と同じ合成PCMで再比較した`pcm-normalization-cpu-02.json`では、7回の中央値が83.095ms→8.116msとなり、出力143,999sampleの差分は0件だった。全ての負・正の0.5境界を使うよう補間テストを強化し、関連22件の成功を再確認した。
+
+`fast-pcm-session-01`は同一session・conversationの10往復、全応答の再生末尾、transcript一致、追加操作0回、明示終了が成功した。10回ともgap 0sample、失敗診断なしだった。正式100試行の安定性や、他cohortの品質まで拡大して合格とは扱わない。
+
+Frontendのproduction buildも成功した。大きいbundleに対するViteの警告は残るが、buildエラーはなかった。

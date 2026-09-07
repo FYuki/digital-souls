@@ -571,3 +571,39 @@ def test_history_start_failure_delivers_failed_and_starts_pending_response() -> 
         await asyncio.wait_for(session.end(), timeout=0.5)
 
     asyncio.run(exercise())
+
+
+def test_pcm16_mono_decode_preserves_all_signed_values_and_rejects_half_sample():
+    import struct
+    _public, adapters = _modules()
+    values = list(range(-32768, 32768))
+    pcm = struct.pack(f'<{len(values)}h', *values)
+    assert adapters._decode_mono_pcm16(pcm, sample_width=2, channels=1) == values
+    with pytest.raises(ValueError, match='incomplete frame'):
+        adapters._decode_mono_pcm16(pcm + b'x', sample_width=2, channels=1)
+
+
+def test_double_rate_pcm_keeps_samples_midpoint_rounding_and_final_length():
+    _public, adapters = _modules()
+    # 全PCM16値に隣接する負／正・奇数／偶数の和を含め、0.5の偶数丸めも確認する。
+    values = [value for pair in zip(range(-32768, 32767), range(-32767, 32768)) for value in pair]
+    result = adapters._resample_pcm16(values, input_sample_rate=24000, output_sample_rate=48000)
+    assert len(result) == len(values) * 2 - 1
+    assert result[::2] == values
+    for index, (left, right) in enumerate(zip(values, values[1:])):
+        numerator = left + right
+        quotient, remainder = divmod(numerator, 2)
+        assert result[index * 2 + 1] == quotient + (remainder and quotient % 2)
+
+
+@pytest.mark.parametrize('input_rate,output_rate', [(16000,48000), (48000,16000), (44100,48000)])
+def test_other_pcm_resampling_rates_keep_linear_interpolation(input_rate, output_rate):
+    _public, adapters = _modules()
+    values = [-32768, -123, 0, 125, 32767]
+    output = adapters._resample_pcm16(values, input_sample_rate=input_rate, output_sample_rate=output_rate)
+    expected = []
+    for index in range(((len(values) - 1) * output_rate) // input_rate + 1):
+        left, remainder = divmod(index * input_rate, output_rate)
+        expected.append(values[-1] if left >= len(values) - 1 else
+                        round(values[left] * (1 - remainder / output_rate) + values[left + 1] * remainder / output_rate))
+    assert output == expected

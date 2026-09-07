@@ -163,7 +163,7 @@ test(Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0) > 0
         phase: index < WARMUP_RUNS ? 'warmup' : 'measured',
         outcome: 'success',
         first_playback_method: 'audio_worklet_output_timestamp',
-        media_observation_method: mediaCorrelated ? 'rtc_encoded_transform_and_rtp_track_delivery' : 'unavailable',
+        media_observation_method: mediaCorrelated ? 'response_track_stateful_opus_worklet_output' : 'unavailable',
         ...(mediaCorrelated ? {} : { media_observation_missing_reason: 'response_frame_correlation_unavailable' }),
         fixture_version: fixture.fixture_version,
         audio_sha256: fixture.audio_sha256,

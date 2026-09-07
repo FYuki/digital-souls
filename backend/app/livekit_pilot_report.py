@@ -122,8 +122,8 @@ def _finalize_livekit_report(
         point = points["first_playback"]
         if point.clock_domain != "client_monotonic" or point.unit != "millisecond" or abs(point.timestamp - playback) >= 1.1:
             raise ValueError("pilot playback timestamp does not match its trace")
-        if controlled:
-            if trial.get("media_observation_method") != "rtc_encoded_transform_and_rtp_track_delivery":
+        if controlled or trial.get("media_observation_method") == "response_track_stateful_opus_worklet_output":
+            if trial.get("media_observation_method") != "response_track_stateful_opus_worklet_output":
                 raise ValueError("controlled trial requires independent media observations")
             media_times = []
             for key, name in (("trackReceivedAt", "client_track_received"),
@@ -138,6 +138,11 @@ def _finalize_livekit_report(
                 media_times.append(value)
             if not media_times[0] <= media_times[1] <= media_times[2] <= playback:
                 raise ValueError("controlled media boundaries are out of order")
+            validate_packet_playback_observation(trial)
+            media = trial["track_media_observation"]
+            for value, field in zip(media_times, ("trackReceivedAtMs", "firstPacketReceivedAtMs", "firstPacketDecodedAtMs")):
+                if not isinstance(media, dict) or media.get(field) != value:
+                    raise ValueError("media boundaries do not match the played packet")
         if trial.get("packet_playback_observation") is not None:
             validate_packet_playback_observation(trial)
         if trial.get("playback_completion") is not None:

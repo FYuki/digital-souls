@@ -57,10 +57,11 @@ vi.mock('livekit-client', () => ({
 
 const mediaMocks = vi.hoisted(() => ({observers: [] as Array<{
   playback?: {packet: (packet: unknown) => void; failed: () => void}
+  report: (value: unknown) => void
 }>}))
 vi.mock('./livekit/media-observer', () => ({
   RemoteMediaObserver: class {
-    constructor(_receiver: unknown, _track: unknown, report: (value: unknown) => void,
+    constructor(_receiver: unknown, _track: unknown, public report: (value: unknown) => void,
       public playback?: {packet: (packet: unknown) => void; failed: () => void}) {mediaMocks.observers.push(this); report({trackReceivedAtMs: performance.now()})}
     ready = async () => undefined
     close = vi.fn()
@@ -618,6 +619,53 @@ test('復号PCMは一つのworkletへ渡し、停止後の旧PCMを再投入し�
   observer.playback!.packet({packetIndex: 1, rtpTimestamp: 1059, receivedAtMs: 120, decodedAtMs: 121, pcm})
   expect(worklet.port.postMessage.mock.calls.filter(([row]) => row.kind === 'pcm')).toHaveLength(1)
   client.disconnect()
+})
+
+
+test.each(['valid', 'mismatched_decode', 'stopped', 'unsubscribed'])('実出力した応答packetだけをmedia traceへ相関する（%s）', async mode => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(row => observations.push(row))
+  const responseId = '22222222-2222-2222-2222-222222222222'
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  const track = {kind: 'audio', mediaStreamTrack: {}}
+  const publication = {trackSid: 'TR_correlated', trackName: `ds-response-v1:${responseId}`}
+  room.emit('trackSubscribed', track, publication)
+  await vi.waitFor(() => expect(audioContexts.at(-1)?.worklets).toHaveLength(1))
+  const observer = mediaMocks.observers.at(-1)!
+  const worklet = audioContexts.at(-1)!.worklets[0]
+  const measurements = () => room.localParticipant.publishData.mock.calls
+    .map(([payload]) => JSON.parse(new TextDecoder().decode(payload)))
+    .filter(row => ['client_track_received', 'client_encoded_received', 'client_audio_decoded'].includes(row.measurement))
+  try {
+    observer.report({trackReceivedAtMs: 50, firstPacketReceivedAtMs: 100,
+      firstPacketDecodedAtMs: mode === 'mismatched_decode' ? 102 : 101,
+      firstPacketDecodedSamples: 960, firstPacketDeliveredAtMs: 150})
+    observer.playback!.packet({packetIndex: 0, rtpTimestamp: 99, receivedAtMs: 100,
+      decodedAtMs: 101, pcm: new Float32Array(960).fill(.25)})
+    expect(measurements()).toHaveLength(0)
+    expect(observations.some(row => row.mediaResponseId)).toBe(false)
+    if (mode === 'stopped') client.stopPlayback(responseId)
+    if (mode === 'unsubscribed') room.emit('trackUnsubscribed', track, publication)
+    worklet.port.onmessage?.({data: {kind: 'rendered', packetIndex: 0, rtpTimestamp: 99,
+      packetSampleOffset: 0, startFrame: 24000, endFrame: 24128, energy: .25,
+      renderQuantumStartFrame: 24000, renderClockConfirmationFrame: 24000}} as MessageEvent)
+    if (mode === 'valid') {
+      await vi.waitFor(() => expect(measurements()).toHaveLength(3))
+      expect(measurements().map(row => [row.measurement, row.timestamp, row.response_id])).toEqual([
+        ['client_track_received', 50, responseId], ['client_encoded_received', 100, responseId],
+        ['client_audio_decoded', 101, responseId],
+      ])
+      const correlated = observations.find(row => row.mediaResponseId === responseId)
+      expect(correlated?.packetPlaybackObservation?.firstOutputAtMs).toBe(500)
+      expect(correlated?.packetPlaybackObservation?.decodedAtMs).toBe(101)
+    } else {
+      if (mode === 'mismatched_decode') await vi.waitFor(() => expect(observations.some(row => row.failureStage)).toBe(true))
+      else await new Promise(resolve => setTimeout(resolve, 20))
+      expect(measurements()).toHaveLength(0)
+      expect(observations.some(row => row.mediaResponseId)).toBe(false)
+    }
+  } finally {client.disconnect()}
 })
 
 })

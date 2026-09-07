@@ -162,6 +162,11 @@ def _decode_mono_pcm16(
     pcm: bytes, *, sample_width: int, channels: int
 ) -> list[int]:
     frame_width = sample_width * channels
+    if sample_width == 2 and channels == 1:
+        # VOICEVOXの標準PCM16 monoは、sampleごとのbytes生成・int変換を避ける。
+        if len(pcm) % 2:
+            raise ValueError("VOICEVOX PCM contains an incomplete frame")
+        return list(struct.unpack(f"<{len(pcm) // 2}h", pcm))
     samples: list[int] = []
     for frame_offset in range(0, len(pcm), frame_width):
         channels_in_frame: list[int] = []
@@ -186,6 +191,13 @@ def _resample_pcm16(
 ) -> list[int]:
     if len(samples) < 2:
         return list(samples)
+    if output_sample_rate == input_sample_rate * 2 and all(-32768 <= sample <= 32767 for sample in samples):
+        # 24kHz→48kHzの線形補間は、元sampleと隣接sampleの中点を交互に置く。
+        # 既存と同じ偶数丸め・末尾sample数を維持し、整数除算とclampの反復を省く。
+        doubled = [0] * (len(samples) * 2 - 1)
+        doubled[::2] = samples
+        doubled[1::2] = [round((left + right) / 2) for left, right in zip(samples, samples[1:])]
+        return doubled
     output_count = ((len(samples) - 1) * output_sample_rate) // input_sample_rate + 1
     output: list[int] = []
     for output_index in range(output_count):

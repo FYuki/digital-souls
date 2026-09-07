@@ -112,7 +112,7 @@ const installPlaybackProbe = async (page: Page) => {
       if (evidence === undefined || cycle === undefined) return
       cycle.trackReceivedAt = evidence.trackReceivedAtMs
       cycle.audioReceivedAt = evidence.firstPacketReceivedAtMs ?? null
-      cycle.audioDecodeAt = evidence.firstPacketDeliveredAtMs ?? null
+      cycle.audioDecodeAt = evidence.firstPacketDecodedAtMs ?? null
     }
     const testPortTarget = window as typeof window & {
       __digitalSoulsVoiceSessionTestPort?: {

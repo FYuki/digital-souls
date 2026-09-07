@@ -116,8 +116,15 @@ def controlled_inputs(pilot_inputs):
                          'speechStart': {'lowerMs': 120, 'upperMs': 122, 'sourceSample': manifest['fixture']['speech_start_sample']},
                          'speechEnd': {'lowerMs': 1040, 'upperMs': 1042, 'sourceSample': manifest['fixture']['speech_end_sample']},
                      },
-                     media_observation_method='rtc_encoded_transform_and_rtp_track_delivery',
+                     media_observation_method='response_track_stateful_opus_worklet_output',
                      trackReceivedAt=50, audioReceivedAt=1400, audioDecodeAt=1410)
+        packet_evidence = packet_playback_trial()
+        packet_evidence['startedAt'] = 1500
+        packet_evidence['track_media_observation'].update(trackReceivedAtMs=50,
+            firstPacketReceivedAtMs=1400, firstPacketDecodedAtMs=1410)
+        packet_evidence['packet_playback_observation'].update(receivedAtMs=1400, decodedAtMs=1410,
+            firstOutputAtMs=1500, outputClockPerformanceTime=1510, confirmationObservedAtMs=1520)
+        trial.update(packet_evidence)
         manifest['trials'].append(trial)
         for original in event_template:
             event = {**original, 'event_id': str(uuid4()), 'session_id': trial['sessionId'],
@@ -389,3 +396,22 @@ def test_report_rejects_unreconciled_render_clock(field, value):
     trial['packet_playback_observation'][field] = value
     with pytest.raises(ValueError):
         validate_packet_playback_observation(trial)
+
+
+@pytest.mark.parametrize('damage', ['missing_packet', 'wrong_track', 'native_delivery_as_decode', 'old_method'])
+def test_controlled_media_requires_the_packet_that_was_actually_played(controlled_inputs, damage):
+    manifest, events, run = controlled_inputs
+    trial = manifest['trials'][5]
+    if damage == 'missing_packet':
+        del trial['packet_playback_observation']
+    elif damage == 'wrong_track':
+        trial['track_media_observation']['trackReceivedAtMs'] += 10
+    elif damage == 'native_delivery_as_decode':
+        trial['audioDecodeAt'] += 20
+        for event in events:
+            if event['response_id'] == trial['responseId'] and event['name'] == 'client_audio_decoded':
+                event['timestamp'] = trial['audioDecodeAt']
+    else:
+        trial['media_observation_method'] = 'rtc_encoded_transform_and_rtp_track_delivery'
+    with pytest.raises(ValueError):
+        run(controlled=True)

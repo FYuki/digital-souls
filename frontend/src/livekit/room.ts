@@ -98,6 +98,7 @@ export class LiveKitRoomClient {
   private readonly pendingMetadata: SegmentMetadata[] = []
   private readonly pendingFinishes = new Map<string, SourceAudioFinished>()
   private readonly trackResponses = new Map<string, string>()
+  private readonly trackMediaEvidence = new Map<string, MediaObservation>()
   private readonly stoppedResponses = new Set<string>()
   private latestResponseId: string | null = null
   private readonly audioGraphs = new Map<string, {
@@ -417,7 +418,7 @@ export class LiveKitRoomClient {
         this.trackResponses.set(key, responseId)
         this.subscribedTracks.set(key, track)
         const observer = new RemoteMediaObserver(track.receiver, track.mediaStreamTrack,
-          (evidence) => this.observeTrackMedia(evidence, responseId), {
+          (evidence) => this.observeTrackMedia(evidence, responseId, key), {
             packet: packet => {
               const graph = this.audioGraphs.get(key)
               if (!this.subscriptions.has(key) || !graph || this.stoppedResponses.has(responseId)) return
@@ -435,6 +436,7 @@ export class LiveKitRoomClient {
       this.subscriptions.delete(key)
       this.subscribedTracks.delete(key)
       this.trackResponses.delete(key)
+      this.trackMediaEvidence.delete(key)
       this.mediaObservers.get(key)?.close()
       this.mediaObservers.delete(key)
       const graph = this.audioGraphs.get(key)
@@ -556,9 +558,10 @@ export class LiveKitRoomClient {
     await outbox.enqueue(confirmation, payload)
   }
 
-  private observeTrackMedia(evidence: MediaObservation, responseId: string): void {
-    // 無音中のencoded frameやdecoderのcomfort noiseも含むtrack単位の観測。
-    // 初回応答でもsource PCMとの対応は未確定なので、response_idを付けて送らない。
+  private observeTrackMedia(evidence: MediaObservation, responseId: string, key: string): void {
+    if (!this.subscriptions.has(key) || this.trackResponses.get(key) !== responseId) return
+    this.trackMediaEvidence.set(key, evidence)
+    // track名だけでは相関を確定せず、同じpacketのPCMが出力時計を通過するまで待つ。
     const controlAvailable = this.controlOutbox !== null
     const audioAvailable = controlAvailable && [...this.audioGraphs.values()].some((graph) => !graph.suspended)
     this.observe({
@@ -572,6 +575,12 @@ export class LiveKitRoomClient {
   }
 
   private async publishPlaybackStarted(responseId: string, atMs: number): Promise<void> {
+    await this.publishMediaMeasurement(responseId, 'playback_started', atMs)
+  }
+
+  private async publishMediaMeasurement(responseId: string,
+    measurement: 'client_track_received' | 'client_encoded_received' | 'client_audio_decoded' | 'playback_started',
+    atMs: number): Promise<void> {
     const sessionId = this.sessionId
     if (sessionId === null) throw new Error('LiveKit Room is not connected')
     await this.publishControlEvent(parseVoiceSessionEvent({
@@ -580,7 +589,7 @@ export class LiveKitRoomClient {
       event_id: crypto.randomUUID(),
       session_id: sessionId,
       response_id: responseId,
-      measurement: 'playback_started',
+      measurement,
       timestamp: Math.floor(atMs),
       clock_domain: 'client_monotonic',
       unit: 'millisecond',
@@ -636,8 +645,23 @@ export class LiveKitRoomClient {
       if (!graph || graph.suspended || this.generation !== generation || this.audioContext !== context) return
       if (interval.packetIndex === 0 && interval.packetSampleOffset === 0) {
         if (!graph.firstPacket || graph.firstPacket.rtpTimestamp !== interval.rtpTimestamp) throw new Error('first output packet mismatch')
+        const media = this.trackMediaEvidence.get(key)
+        const packet = graph.firstPacket
+        if (!media || media.packetDecodeMissingReason !== undefined || media.firstPacketDecodedSamples !== 960
+          || media.firstPacketReceivedAtMs !== packet.receivedAtMs || media.firstPacketDecodedAtMs !== packet.decodedAtMs
+          || !Number.isFinite(media.trackReceivedAtMs) || media.trackReceivedAtMs < 0
+          || media.trackReceivedAtMs > packet.receivedAtMs || packet.receivedAtMs > packet.decodedAtMs
+          || packet.decodedAtMs > atMs) throw new Error('first output media correlation mismatch')
         this.firstOutputTimes.set(responseId, atMs)
+        // 応答専用trackの最初の受信packetを復号し、そのPCMの出力通過を確認した時点で相関する。
+        // 元PCMのcodec lookaheadやlogical segmentのplayed prefixとは別の観測境界。
+        void Promise.all([
+          this.publishMediaMeasurement(responseId, 'client_track_received', media.trackReceivedAtMs),
+          this.publishMediaMeasurement(responseId, 'client_encoded_received', packet.receivedAtMs),
+          this.publishMediaMeasurement(responseId, 'client_audio_decoded', packet.decodedAtMs),
+        ]).catch(() => this.failTransport('media_decoder'))
         this.observe({transport: 'available', control: 'available', audio: 'available', activeResponseId: responseId,
+          mediaResponseId: responseId, mediaTrackResponseId: responseId, mediaObservation: media,
           packetPlaybackObservation: {packetIndex: 0, receivedAtMs: graph.firstPacket.receivedAtMs,
             decodedAtMs: graph.firstPacket.decodedAtMs, firstOutputFrame: interval.startFrame,
             firstOutputEndFrame: interval.endFrame, firstOutputAtMs: atMs,
@@ -731,6 +755,7 @@ export class LiveKitRoomClient {
     this.subscriptions.clear()
     this.subscribedTracks.clear()
     this.trackResponses.clear()
+    this.trackMediaEvidence.clear()
     this.pendingMetadata.length = 0
     this.pendingFinishes.clear()
     this.firstOutputTimes.clear()
