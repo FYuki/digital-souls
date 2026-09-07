@@ -154,3 +154,23 @@ test('採用しない未来timestampで後続の実観測を汚染しない', ()
   expect(a.snapshot()).toMatchObject({complete: true, missingReason: null, clockFailure: null,
     nonzeroSamplesAfterCancelLower: 0, nonzeroSamplesAfterCancelUpper: 1})
 })
+
+
+test('停止指示は最終出力を無音化し、時計照合済みの停止位置だけを通知する', () => {
+  const p = auditProcessor(), signal = new Float32Array(128).fill(.25)
+  p.step(0); expect(p.step(128, signal)).toEqual(signal)
+  p.send({kind: 'stop'})
+  expect(p.step(128, signal)).toEqual(new Float32Array(128))
+  expect(p.messages.some(m => m.kind === 'stopped')).toBe(false)
+  expect(p.step(384, signal)).toEqual(new Float32Array(128))
+  expect(p.messages.at(-1)).toEqual({kind: 'stopped', endFrame: 512})
+  expect(p.messages.at(-2)).toMatchObject({kind: 'output', confirmedFrame: 384,
+    intervals: [{nonzeroSamples: 128}, {nonzeroSamples: 0}, {nonzeroSamples: 0}]})
+  p.send({kind: 'resume'}); p.send({kind: 'stop'})
+  expect(p.step(512, signal)).toEqual(new Float32Array(128))
+  expect(p.messages.filter(m => m.kind === 'stopped')).toHaveLength(1)
+  // 停止後も独立の観測を続け、cancel境界以後の無音を記録できる。
+  p.send({kind: 'finish'}); p.step(640, signal)
+  expect(p.messages.at(-1)).toEqual({kind: 'finished', endFrame: 768})
+  expect(p.messages.some(m => m.kind === 'missing')).toBe(false)
+})

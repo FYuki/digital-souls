@@ -1,7 +1,13 @@
 import {PostGainOutputArchive, type OutputArchiveSnapshot} from './post-gain-archive'
 import {PostGainOutputAudit, type GainAuditMessage, type GainAuditSnapshot} from './post-gain-audit'
 
+export type OutputStopConfirmation = Readonly<{
+  endFrame: number; outputClockPassedFrame: number; observedAtMs: number
+}>
+export type PostGainWorkletMessage = GainAuditMessage | Readonly<{kind: 'stopped'; endFrame: number}>
+
 export type StaleAudioObservation = Readonly<{
+  outputStopConfirmation?: OutputStopConfirmation
   responseId: string; sessionId: string; generation: number; observedAtMs: number
   receivedAfterCancelPackets: number; receivedAfterCancelSamples: number
   receiveBoundary: 'decoded_packet_delivered'; cancelBoundary: 'client_cancel_confirmed'
@@ -27,24 +33,69 @@ export class PostGainAudioMonitor {
   private cancelled = false
   private packets = 0
   private samples = 0
+  private stopPromise: Promise<OutputStopConfirmation> | null = null
+  private resolveStop: ((value: OutputStopConfirmation) => void) | null = null
+  private rejectStop: ((error: Error) => void) | null = null
+  private stopTimeout: ReturnType<typeof setTimeout> | null = null
+  private stopFrame: number | null = null
+  private stopMarkerInvalid = false
+  private stopIssuedAfterFrame: number | null = null
+  private lastWorkletOutput: {endFrame: number; nonzeroSamples: number} | null = null
+  private stopConfirmation: OutputStopConfirmation | null = null
   private readonly drained: Promise<void>
   private settle: () => void = () => undefined
 
   constructor(private readonly context: AudioContext, private readonly responseId: string,
     private readonly sessionId: string, private readonly generation: number,
-    private readonly report: (row: StaleAudioObservation) => void) {
+    private readonly report?: (row: StaleAudioObservation) => void) {
     this.drained = new Promise(resolve => {this.settle = resolve})
     this.node = new AudioWorkletNode(context, 'post-gain-audit', {
       numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 1, channelCountMode: 'explicit',
     })
     this.node.connect(context.destination)
-    this.node.port.onmessage = (event: MessageEvent<GainAuditMessage>) => {
+    this.node.port.onmessage = (event: MessageEvent<PostGainWorkletMessage>) => {
       if (this.closed) return
-      this.archive.record({kind: 'message', message: event.data, atMs: performance.now()})
+      if (event.data.kind === 'stopped') {
+        const endFrame = event.data.endFrame
+        if (this.stopPromise === null || this.stopFrame !== null || !Number.isSafeInteger(endFrame) || endFrame < 0
+          || this.lastWorkletOutput?.endFrame !== endFrame || this.lastWorkletOutput.nonzeroSamples !== 0
+          || (this.stopIssuedAfterFrame !== null && endFrame <= this.stopIssuedAfterFrame)) {
+          this.stopMarkerInvalid = true
+          this.failStop('output_stop_marker_invalid')
+          return
+        }
+        this.stopFrame = endFrame
+        this.poll()
+        return
+      }
+      if (this.report !== undefined) this.archive.record({kind: 'message', message: event.data, atMs: performance.now()})
       this.tracker.record(event.data)
+      if (event.data.kind === 'output') {
+        const last = event.data.intervals.at(-1)
+        if (last !== undefined) this.lastWorkletOutput = {endFrame: last.endFrame, nonzeroSamples: last.nonzeroSamples}
+      }
       this.poll()
     }
     this.timer = setInterval(() => this.poll(), 5)
+  }
+
+  // 最終出力段を不可逆に無音化し、既に出力待ちだったquantumが実出力時計を通過するまで待つ。
+  // timeout・時計欠測・閉鎖を停止成功にはしない。監視はcancel境界の後も継続する。
+  stopAndConfirm(): Promise<OutputStopConfirmation> {
+    if (this.stopPromise !== null) return this.stopPromise
+    if (this.closed || this.finishRequested) return Promise.reject(new Error('output_stop_monitor_unavailable'))
+    if (this.stopMarkerInvalid) return Promise.reject(new Error('output_stop_marker_invalid'))
+    this.stopIssuedAfterFrame = this.lastWorkletOutput?.endFrame ?? null
+    this.stopPromise = new Promise((resolve, reject) => {this.resolveStop = resolve; this.rejectStop = reject})
+    this.stopTimeout = setTimeout(() => this.failStop('output_stop_confirmation_timeout'), 1000)
+    this.node.port.postMessage({kind: 'stop'})
+    return this.stopPromise
+  }
+
+  private failStop(reason: string): void {
+    if (this.stopTimeout !== null) {clearTimeout(this.stopTimeout); this.stopTimeout = null}
+    this.rejectStop?.(new Error(reason))
+    this.resolveStop = null; this.rejectStop = null
   }
 
   cancel(atMs: number): void {
@@ -65,6 +116,7 @@ export class PostGainAudioMonitor {
   }
 
   async dispose(): Promise<void> {
+    this.failStop('output_stop_monitor_closed')
     this.finish()
     await this.drained
     if (this.closed) return
@@ -93,9 +145,17 @@ export class PostGainAudioMonitor {
   private poll(): void {
     if (this.closed) return
     const timestamp = this.context.getOutputTimestamp(), atMs = performance.now()
-    this.archive.record({kind: 'clock', timestamp, sampleRate: this.context.sampleRate, atMs})
+    if (this.report !== undefined) this.archive.record({kind: 'clock', timestamp, sampleRate: this.context.sampleRate, atMs})
     this.tracker.poll(timestamp, this.context.sampleRate, atMs)
     const row = this.tracker.snapshot()
+    if (row.missingReason !== null) this.failStop('output_stop_observation_invalid')
+    else if (this.stopFrame !== null && row.outputClockPassedFrame !== null
+      && row.outputClockPassedFrame >= this.stopFrame && this.resolveStop !== null) {
+      this.stopConfirmation = {endFrame: this.stopFrame, outputClockPassedFrame: row.outputClockPassedFrame, observedAtMs: atMs}
+      this.resolveStop(this.stopConfirmation)
+      this.resolveStop = null; this.rejectStop = null
+      if (this.stopTimeout !== null) {clearTimeout(this.stopTimeout); this.stopTimeout = null}
+    }
     if (row.drained || row.missingReason !== null) {
       clearInterval(this.timer)
       if (this.timeout !== null) {clearTimeout(this.timeout); this.timeout = null}
@@ -105,10 +165,10 @@ export class PostGainAudioMonitor {
   }
 
   private emit(): void {
-    if (!this.cancelled) return
+    if (!this.cancelled || this.report === undefined) return
     const missing = this.tracker.snapshot().missingReason
     if (missing !== null) this.archive.fail(missing)
-    this.report({responseId: this.responseId, sessionId: this.sessionId, generation: this.generation,
+    this.report({...(this.stopConfirmation === null ? {} : {outputStopConfirmation: {...this.stopConfirmation}}), responseId: this.responseId, sessionId: this.sessionId, generation: this.generation,
       observedAtMs: performance.now(), receivedAfterCancelPackets: this.packets, receivedAfterCancelSamples: this.samples,
       receiveBoundary: 'decoded_packet_delivered', cancelBoundary: 'client_cancel_confirmed',
       outputContext: {sampleRate: measuredNonnegative(this.context.sampleRate),

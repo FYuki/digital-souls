@@ -544,3 +544,18 @@ consumerの取消要求だけでゼロ件の観測終了を出さない。payloa
 ブラウザの復号sample数・非ゼロ出力sample数とは別単位である。
 ブラウザ側へ届かない結果も観測するためのサーバー受領境界として扱い、
 未実装のprovider内部時計を推測で補完しない。
+
+
+### ブラウザ最終出力段の停止確認
+
+`PostGainAudioMonitor.stopAndConfirm()`は最終出力workletへstopを送り、それ以後の出力を
+不可逆に無音化する。workletは照合済みrender frameで無音区間の終端を通知し、
+monitorはその区間をブラウザの実出力時計が通過してからだけ確認を返す。
+指示前の古いmarker、非ゼロ区間、不正なframe、時計欠測、閉鎖、timeoutを成功へ変換しない。
+stopは監視のfinishとは別であり、取消境界以後の無音も独立に観測できる。
+1000msのtimeoutは待機を打ち切る上限であり、#150のdecision後cancel 200ms目標を緩和しない。
+
+`frontend/e2e/output-stop.spec.ts`は合成ページで実AudioContext・worklet・出力時計を使い、
+入力sourceを動かしたまま最終出力を停止する。ページだけを置換し、音声処理・時計はモック化しない。
+これはブラウザ最終出力段の検証であり、LiveKit経由の取消要求・停止確認・Core状態遷移を通す
+受け入れ試験ではない。現在、この確認をCoreの取消成立条件へ接続する作業は未完了である。

@@ -8,7 +8,11 @@ class PostGainAudit extends AudioWorkletProcessor {
   constructor() {
     super(); this.clock = new RenderQuantumClock(); this.pending = [];
     this.finishing = false; this.finished = false; this.failed = false;
-    this.port.onmessage = ({data}) => {if (data.kind === 'finish') this.finishing = true;};
+    this.stopping = false; this.stopAcknowledged = false;
+    this.port.onmessage = ({data}) => {
+      if (data.kind === 'finish') this.finishing = true;
+      if (data.kind === 'stop') this.stopping = true;
+    };
   }
   fail(reason) {
     if (!this.failed) this.port.postMessage({kind: 'missing', reason});
@@ -18,7 +22,7 @@ class PostGainAudit extends AudioWorkletProcessor {
     const out = outputs[0]?.[0], input = inputs[0]?.[0];
     if (!out) {this.fail('audit_output_unavailable'); return true;}
     out.fill(0);
-    if (input) out.set(input.subarray(0, out.length));
+    if (input && !this.stopping) out.set(input.subarray(0, out.length));
     if (outputs.length !== 1 || outputs[0].length !== 1 || inputs.length > 1
       || (inputs[0]?.length ?? 0) > 1 || (input && input.length !== out.length)) {
       this.fail('audit_channel_mismatch'); return true;
@@ -44,9 +48,14 @@ class PostGainAudit extends AudioWorkletProcessor {
       nonzeroSamples, firstNonzeroFrame: firstNonzeroFrame === null ? null : quantum.frame + firstNonzeroFrame,
       lastNonzeroFrame: lastNonzeroFrame === null ? null : quantum.frame + lastNonzeroFrame});
     if (this.pending.length > 500) {this.fail('audit_observation_overflow'); return true;}
-    if (quantum.confirmed && (this.pending.length >= 16 || this.finishing)) {
+    const acknowledgeStop = this.stopping && !this.stopAcknowledged;
+    if (quantum.confirmed && (this.pending.length >= 16 || this.finishing || acknowledgeStop)) {
       this.port.postMessage({kind: 'output', intervals: this.pending,
         confirmedFrame: quantum.frame}); this.pending = [];
+      if (acknowledgeStop) {
+        this.port.postMessage({kind: 'stopped', endFrame: quantum.frame + out.length});
+        this.stopAcknowledged = true;
+      }
       if (this.finishing) {
         this.port.postMessage({kind: 'finished', endFrame: quantum.frame + out.length});
         this.finished = true;
