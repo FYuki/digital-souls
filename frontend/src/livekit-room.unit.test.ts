@@ -42,6 +42,8 @@ vi.mock('livekit-client', () => ({
     }
   },
   RoomEvent: {
+    SignalReconnecting: 'signalReconnecting',
+    SignalConnected: 'signalConnected',
     Reconnecting: 'reconnecting',
     Reconnected: 'reconnected',
     DataReceived: 'dataReceived',
@@ -854,4 +856,27 @@ test.each(['reconnecting', 'disconnected', 'generation'])('接続変化でprobe�
   else room.emit(change)
   expect((await pending).status).toBe('interrupted')
   client.disconnect()
+})
+
+
+test('接続診断はsignal再接続とCore世代の時系列だけを通知する', async () => {
+  const client = new LiveKitRoomClient(() => undefined), observed: unknown[] = []
+  client.setConnectionObserver(row => observed.push(row))
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  room.emit('signalReconnecting')
+  room.emit('signalConnected')
+  room.emit('reconnecting')
+  room.emit('reconnected')
+  emitPrivateFrame(room, authoritativeState(1))
+  client.disconnect()
+  expect(observed).toEqual([
+    expect.objectContaining({event: 'signal_reconnecting', generation: 0}),
+    expect.objectContaining({event: 'signal_connected', generation: 0}),
+    expect.objectContaining({event: 'reconnecting', generation: 0}),
+    expect.objectContaining({event: 'reconnected', generation: 0}),
+    expect.objectContaining({event: 'state_sync_requested', generation: 0}),
+    expect.objectContaining({event: 'authoritative_state', generation: 1}),
+    expect.objectContaining({event: 'disconnected', generation: 1}),
+  ])
 })

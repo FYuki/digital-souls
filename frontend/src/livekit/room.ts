@@ -1,3 +1,4 @@
+import {VoiceReconnectPolicy, type RetryObservation} from './reconnect-policy'
 import {AudioAvailabilityProbe, AUDIO_PROBE_TRACK_PREFIX, type AudioProbeObservation} from './audio-probe'
 import { ControlProbeTracker, type ControlProbeObservation } from './control-probe'
 import {
@@ -95,7 +96,12 @@ const browserRetryTimer: RetryTimer = {
   cancel: (handle) => clearTimeout(handle),
 }
 
+export type ConnectionLifecycleObservation = Readonly<{event: 'retry_scheduled' | 'signal_reconnecting' | 'signal_connected'
+  | 'reconnecting' | 'reconnected' | 'disconnected' | 'state_sync_requested' | 'authoritative_state';
+  atMs: number; generation: number; retry?: RetryObservation}>
+
 export class LiveKitRoomClient {
+  private connectionObserver: ((row: ConnectionLifecycleObservation) => void) | undefined
   private audioProbe: AudioAvailabilityProbe | null = null
   private readonly controlProbes = new ControlProbeTracker(browserRetryTimer)
   private room: Room | null = null
@@ -198,6 +204,12 @@ export class LiveKitRoomClient {
   }
 
   private packetOutputObserver: ((row: PacketOutputEvidence) => void) | undefined
+
+  setConnectionObserver(observer: (row: ConnectionLifecycleObservation) => void): void {this.connectionObserver = observer}
+
+  private observeConnection(event: ConnectionLifecycleObservation['event'], retry?: RetryObservation): void {
+    this.connectionObserver?.({event, atMs: performance.now(), generation: this.generation, ...(retry ? {retry} : {})})
+  }
 
   setPacketOutputObserver(observer: (row: PacketOutputEvidence) => void): void {
     this.packetOutputObserver = observer
@@ -341,14 +353,19 @@ export class LiveKitRoomClient {
   }
 
   private createRoom(): Room {
-    const room = new Room({ adaptiveStream: true, dynacast: true })
+    const room = new Room({ adaptiveStream: true, dynacast: true,
+      reconnectPolicy: new VoiceReconnectPolicy(Math.random, retry => this.observeConnection('retry_scheduled', retry)) })
+    room.on(RoomEvent.SignalReconnecting, () => this.observeConnection('signal_reconnecting'))
+    room.on(RoomEvent.SignalConnected, () => this.observeConnection('signal_connected'))
     room.on(RoomEvent.Reconnecting, () => {
+      this.observeConnection('reconnecting')
       this.controlProbes.reset()
       this.audioProbe?.cancel()
       this.clearBrowserDelivery()
       this.observe({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable' })
     })
     room.on(RoomEvent.Reconnected, () => {
+      this.observeConnection('reconnected')
       const sessionId = this.sessionId
       if (sessionId !== null) this.startBrowserDelivery(sessionId, room)
       void this.requestStateSync(room).catch(() => this.failTransport())
@@ -397,6 +414,7 @@ export class LiveKitRoomClient {
           }
           const generationChanged = frame.generation !== this.generation
           this.generation = frame.generation
+          this.observeConnection('authoritative_state')
           if (generationChanged) {
             this.controlProbes.reset()
             this.audioProbe?.cancel()
@@ -544,6 +562,7 @@ export class LiveKitRoomClient {
       this.audioGraphs.delete(key)
     })
     room.on(RoomEvent.Disconnected, () => {
+      this.observeConnection('disconnected')
       this.controlProbes.reset()
       this.audioProbe?.cancel()
       if (!this.explicitDisconnect && this.sessionId !== null) {
@@ -562,6 +581,7 @@ export class LiveKitRoomClient {
   }
 
   private async requestStateSync(room: Room): Promise<void> {
+    this.observeConnection('state_sync_requested')
     const frame = new TextEncoder().encode(JSON.stringify({
       protocol_version: '1.0',
       type: 'state_sync_request',

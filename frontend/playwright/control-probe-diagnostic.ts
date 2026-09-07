@@ -31,8 +31,13 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
         bindRoom?: (room: NonNullable<Window['__voiceControlProbeRoom']>) => void}}
       if (!target.__digitalSoulsVoiceSessionTestPort) throw new Error('voice diagnostic port unavailable')
       window.__voicePacketOutputs = []; window.__voicePacketOutputOverflow = false
+      window.__voiceConnectionEvents = []; window.__voiceConnectionEventOverflow = false
       target.__digitalSoulsVoiceSessionTestPort.bindRoom = room => {
         window.__voiceControlProbeRoom = room
+        room.setConnectionObserver(row => {
+          if (window.__voiceConnectionEvents!.length < 200) window.__voiceConnectionEvents!.push(row)
+          else window.__voiceConnectionEventOverflow = true
+        })
         room.setPacketOutputObserver(row => {
           if (window.__voicePacketOutputs!.length < 15000) window.__voicePacketOutputs!.push(row)
           else window.__voicePacketOutputOverflow = true
@@ -129,6 +134,8 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
       media_packet_losses: window.__voiceChatE2E.mediaPacketLosses ?? [],
       track_media_observations: window.__voiceChatE2E.trackMediaObservations ?? {},
       packet_outputs: window.__voicePacketOutputs ?? [],
+      connection_events: window.__voiceConnectionEvents ?? [],
+      connection_event_overflow: window.__voiceConnectionEventOverflow ?? false,
       packet_output_overflow: window.__voicePacketOutputOverflow ?? false,
       core_events: window.__voiceChatE2E.coreEventDiagnostics,
       transport_failures: window.__voiceChatE2E.transportFailures ?? [],

@@ -1,3 +1,4 @@
+import type {ConnectionLifecycleObservation} from '../src/livekit/room'
 import type {AudioProbeObservation} from '../src/livekit/audio-probe'
 import type {Page} from '@playwright/test'
 import type {} from './voice-chat-suite'
@@ -11,7 +12,10 @@ declare global {
   interface Window {
     __voiceControlProbeRoom?: {probeControl: () => Promise<ControlProbeObservation>;
       probeAudio: () => Promise<AudioProbeObservation>;
+      setConnectionObserver: (observer: (row: ConnectionLifecycleObservation) => void) => void;
       setPacketOutputObserver: (observer: (row: PacketOutputEvidence) => void) => void}
+    __voiceConnectionEvents?: ConnectionLifecycleObservation[]
+    __voiceConnectionEventOverflow?: boolean
     __voicePacketOutputs?: PacketOutputEvidence[]
     __voicePacketOutputOverflow?: boolean
   }
