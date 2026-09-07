@@ -5,12 +5,12 @@ import type { Page } from '@playwright/test'
 import { fixtureWorkletSource, parseScheduledFixture, readFixtureBounds, type ScheduledFixture } from './controlled-audio-fixture'
 
 type Port = {
-  onmessage: ((event: { data: { type: string; sentAtMs: number; fixture?: Partial<ScheduledFixture> } }) => void) | null
+  onmessage: ((event: { data: { type: string; sentAtMs: number; fixture?: Partial<ScheduledFixture>; requestId?: number } }) => void) | null
   postMessage: (data: unknown) => void
 }
 type Processor = { port: Port; process: (inputs: unknown[], outputs: Float32Array[][]) => boolean }
 const processor = (samples: number[], start: number, end: number) => {
-  const events: { kind: string; lowerMs: number; sourceSample: number }[] = []
+  const events: { kind: string; lowerMs?: number; sourceSample?: number; requestId?: number }[] = []
   const registry: { factory?: new (options: { processorOptions: Partial<ScheduledFixture> }) => Processor } = {}
   class AudioWorkletProcessor {
     port: Port = { onmessage: null, postMessage: data => { if ((data as { kind: string }).kind !== 'finished') events.push(data as typeof events[number]) } }
@@ -27,7 +27,7 @@ const processor = (samples: number[], start: number, end: number) => {
     instance.process([], [[out]])
     return [...out]
   }
-  const send = (type: string, sentAtMs: number, fixture?: Partial<ScheduledFixture>) => instance.port.onmessage!({ data: { type, sentAtMs, fixture } })
+  const send = (type: string, sentAtMs: number, fixture?: Partial<ScheduledFixture>, requestId = 1) => instance.port.onmessage!({ data: { type, sentAtMs, fixture, requestId } })
   return { events, next, send }
 }
 
@@ -62,6 +62,35 @@ describe('観測可能なfixture音声源', () => {
     p.next(4)
     expect(p.events.find(e => e.kind === 'speechStart')?.lowerMs).toBe(100)
     expect(p.events.find(e => e.kind === 'speechEnd')?.lowerMs).toBe(105)
+  })
+
+  test('PCMを準備しても開始せず、別の軽いreplay要求から開始時計を測る', () => {
+    const p = processor([0.25, -0.25, 0, 0], 0, 2)
+    p.send('start', 10)
+    p.next(4)
+    p.send('prepare_replay', 100, {samples: [0, -0.75, 0.75, 0], speechStartSample: 1, speechEndSample: 3}, 7)
+    expect(p.events.at(-1)).toEqual({kind: 'replay_prepared', requestId: 7})
+    expect(p.next(4)).toEqual([0, 0, 0, 0])
+    expect(p.events.filter(e => e.kind === 'sourceStart')).toHaveLength(1)
+    p.send('replay', 200)
+    expect(p.next(4)).toEqual([0, -0.75, 0.75, 0])
+    expect(p.events.filter(e => e.kind === 'sourceStart').at(-1)?.lowerMs).toBe(200)
+    expect(p.events.filter(e => e.kind === 'speechEnd').at(-1)).toEqual({kind: 'speechEnd', lowerMs: 200, sourceSample: 3})
+  })
+
+  test('再生途中と準備重複を拒否して、受理済みPCMを置き換えない', () => {
+    const p = processor([0.25, 0.5, -0.5, -0.25], 0, 4)
+    const next = {samples: [0.75, -0.75, 0, 0], speechStartSample: 0, speechEndSample: 2}
+    p.send('start', 10)
+    expect(p.next(2)).toEqual([0.25, 0.5])
+    p.send('prepare_replay', 20, next, 1)
+    expect(p.events.at(-1)).toEqual({kind: 'replay_rejected', requestId: 1})
+    expect(p.next(2)).toEqual([-0.5, -0.25])
+    p.send('prepare_replay', 30, next, 2)
+    p.send('prepare_replay', 40, {...next, samples: [-1, 1, 0, 0]}, 3)
+    expect(p.events.at(-1)).toEqual({kind: 'replay_rejected', requestId: 3})
+    p.send('replay', 50)
+    expect(p.next(4)).toEqual(next.samples)
   })
 
   test('開始を重複要求しても音声を巻き戻さない', () => {

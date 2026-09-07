@@ -35,10 +35,26 @@ class FixtureSource extends AudioWorkletProcessor {
     this.reported = new Set()
     this.offset = 0
     this.started = false
+    this.prepared = null
     this.lastPing = null
     this.port.onmessage = ({data}) => {
       if (!Number.isFinite(data.sentAtMs) || data.sentAtMs < 0) return
+      if (data.type === 'prepare_replay') {
+        if (!this.started || this.offset !== this.samples.length || this.prepared || !data.fixture) {
+          this.port.postMessage({kind: 'replay_rejected', requestId: data.requestId})
+          return
+        }
+        this.prepared = {samples: new Float32Array(data.fixture.samples),
+          boundaries: {sourceStart: 0, speechStart: data.fixture.speechStartSample, speechEnd: data.fixture.speechEndSample}}
+        this.port.postMessage({kind: 'replay_prepared', requestId: data.requestId})
+        return
+      }
       if (data.type === 'replay' && this.started && this.offset === this.samples.length) {
+        if (this.prepared) {
+          this.samples = this.prepared.samples
+          this.boundaries = this.prepared.boundaries
+          this.prepared = null
+        }
         if (data.fixture) {
           this.samples = new Float32Array(data.fixture.samples)
           this.boundaries = {sourceStart: 0, speechStart: data.fixture.speechStartSample, speechEnd: data.fixture.speechEndSample}
@@ -114,6 +130,10 @@ export const installScheduledFixture = async (page: Page, fixture: ScheduledFixt
     let worklet: AudioWorkletNode | undefined
     let timer: ReturnType<typeof setInterval> | undefined
     let started = false
+    let closed = false
+    let replayInProgress = false
+    let preparationId = 0
+    let preparation: {id: number; resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout>} | undefined
     const bounds: Partial<Record<FixtureBoundary, ClockBounds>> = {}
     const nativeGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
     navigator.mediaDevices.getUserMedia = async constraints => {
@@ -128,6 +148,16 @@ export const installScheduledFixture = async (page: Page, fixture: ScheduledFixt
           numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: fixture,
         })
         worklet.port.onmessage = ({ data }) => {
+          if (data.kind === 'replay_prepared' || data.kind === 'replay_rejected') {
+            if (preparation && preparation.id === data.requestId) {
+              const pending = preparation
+              preparation = undefined
+              clearTimeout(pending.timer)
+              if (data.kind === 'replay_prepared') pending.resolve()
+              else pending.reject(new Error('fixture replay preparation rejected'))
+            }
+            return
+          }
           if (data.kind === 'finished') {
             if (window.__voiceFixtureClock) window.__voiceFixtureClock.finished = true
             return
@@ -149,13 +179,33 @@ export const installScheduledFixture = async (page: Page, fixture: ScheduledFixt
       bounds,
       finished: false,
       replay: async (nextFixture) => {
-        if (!context || !worklet || !window.__voiceFixtureClock?.finished) throw new Error('fixture must finish before replay')
+        if (!context || !worklet || closed || replayInProgress || !window.__voiceFixtureClock?.finished) throw new Error('fixture must finish before replay')
         if (nextFixture && nextFixture.sampleRate !== context.sampleRate) throw new Error('replacement fixture sample rate changed')
-        await context.resume()
-        for (const name of Object.keys(bounds) as FixtureBoundary[]) delete bounds[name]
-        window.__voiceFixtureClock.finished = false
-        worklet.port.postMessage({ type: 'replay', sentAtMs: performance.now(), fixture: nextFixture })
-        timer = setInterval(() => worklet?.port.postMessage({ type: 'ping', sentAtMs: performance.now() }), 2)
+        replayInProgress = true
+        try {
+          await context.resume()
+          if (closed) throw new Error('fixture was closed before replay preparation')
+          if (nextFixture) {
+            // 大きなPCM転送を済ませてから、軽い開始メッセージで因果境界を囲む。
+            const id = ++preparationId
+            await new Promise<void>((resolve, reject) => {
+              const timeout = setTimeout(() => {
+                if (preparation?.id === id) preparation = undefined
+                closed = true
+                reject(new Error('fixture replay preparation timed out'))
+              }, 5000)
+              preparation = {id, resolve, reject, timer: timeout}
+              worklet!.port.postMessage({type: 'prepare_replay', requestId: id, sentAtMs: performance.now(), fixture: nextFixture})
+            })
+          }
+          if (closed) throw new Error('fixture was closed during replay preparation')
+          for (const name of Object.keys(bounds) as FixtureBoundary[]) delete bounds[name]
+          window.__voiceFixtureClock.finished = false
+          worklet.port.postMessage({ type: 'replay', sentAtMs: performance.now() })
+          timer = setInterval(() => worklet?.port.postMessage({ type: 'ping', sentAtMs: performance.now() }), 2)
+        } finally {
+          replayInProgress = false
+        }
       },
       start: async () => {
         if (!context || !worklet || started) throw new Error('fixture is not ready or already started')
@@ -165,6 +215,12 @@ export const installScheduledFixture = async (page: Page, fixture: ScheduledFixt
         timer = setInterval(() => worklet?.port.postMessage({ type: 'ping', sentAtMs: performance.now() }), 2)
       },
       close: async () => {
+        closed = true
+        if (preparation) {
+          clearTimeout(preparation.timer)
+          preparation.reject(new Error('fixture closed during replay preparation'))
+          preparation = undefined
+        }
         if (timer !== undefined) clearInterval(timer)
         worklet?.disconnect()
         for (const track of destination?.stream.getTracks() ?? []) track.stop()

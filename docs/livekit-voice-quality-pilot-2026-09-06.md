@@ -710,3 +710,21 @@ Backend単体・結合は3,920件成功・1件skip、Frontend単体463件・結�
 [再判定修正後の実相槌4件](artifacts/livekit-backchannel-04-2026-09-07-bounded-preview.json)は、Playwrightの分類完了条件では2成功・2失敗だった。失敗2件はcandidateからmisfireとなり、分類へ進まなかった。4件すべてで旧応答が全sampleを出力したことをsource／packet／出力時計から照合でき、local stop・server cancelは0件だった。したがって誤cancel指標は取得4・欠測0・誤cancel0だが、最低100件を満たさず不合格のままとする。相槌のVAD未検出2件をこの指標の成功で隠さず、分類済み2/4と別に報告する。全4件の明示終了と所有Frontend・Backendコンテナ削除を確認した。
 
 集計器の単体22件では、誤停止単独・誤cancel単独、2%境界、入力不足、時計・source・response不一致、未完了音声、欠測の分母維持、匿名性を検証した。全体STTの優先と入力終了後の再判定防止を加え、関連Backend133件が成功した。take-turn全100件と相槌100件での再判定の効果はまだ未検証である。
+
+
+## 2026-09-07: 再判定後の全100件と、fixture開始時計の改善
+
+`10927b6`を固定した[実接続take-turn全100件](artifacts/livekit-take-turn-100-2026-09-07-bounded-preview.json)は98成功・2失敗だった。失敗はindex 1のVAD未確定と、index 75のsourceStart幅約24msによる投入時刻の未検証である。後者はBrowserのlocal stop・cancel通知・最終take-turnまで到達していたが、時計上限20msを満たさず品質集計では欠測とした。全100件の明示終了、所有Frontend・Backendコンテナ削除を確認した。
+
+| 指標 | 分母 | 取得 | 欠測 | p95（取得分） |
+|---|---:|---:|---:|---:|
+| local playback stop | 100 | 98 | 2 | 1,927.3ms |
+| turn decision | 100 | 98 | 2 | 1,927.15ms |
+| decision後cancel | 100 | 98 | 2 | 約6.49ms |
+| 発話開始からcancel確認 | 100 | 98 | 2 | 1,951.15ms |
+
+長い発話で先行backchannelの後に追加音声からtake-turnを選び、旧応答を停止・キャンセルできるケースを確認した。投入を検証できた99件に対して未成立1件、投入未検証1件を別途保持する。全100件のcoverageが揃わず、見逃し率・遅延の最終受け入れは引き続き不合格である。
+
+相槌等へのfixture切替では、大きなPCM配列と開始要求を同じメッセージで送っていた。開始時計に転送・準備の待機が入る可能性を切り分けるため、workletへPCMを先に準備し、準備確認後にデータを含まないreplay要求を送るようにした。準備中は音声を消費せず、新しい開始要求の時刻を因果下限とする。再生途中・準備重複を拒否し、準備待ちは5秒timeout、終了後には再開しない。20msの検証上限、元PCM、正解sample位置は変更していない。新しい2テストは修正前に失敗し、修正後は全16件とFrontend型検査が成功した。実接続100件で時計幅が改善したかは次の測定で確認する。
+
+VADについては、4msのPCM活動窓で開始を探し、その32ms前からモデルの96ms frameを揃える[オフライン候補](artifacts/vad-onset-alignment-2026-09-07.json)を全300素材・非発声音120条件で比較した。baselineは相槌未検出14/100・take-turn 0/100・文中分割0/100・非発声音誤確定9/120で、既存診断と一致した。候補は相槌未検出30/100・take-turn 10/100・文中分割0/100・非発声音誤確定2/120となり、発話検出が悪化したため採用しなかった。先行発話は両条件とも300/300で1回確定した。これはモデルframe区切りの候補診断であり、Browserの実入力や製品の変更ではない。再現scriptは`frontend/scripts/measure-vad-onset-alignment.mjs`、入力引数はfrontendディレクトリと新規出力パスである。
