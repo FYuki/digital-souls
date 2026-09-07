@@ -183,3 +183,30 @@ def test_network_fault_requires_explicit_bridge_and_clears_inherited_flag(tmp_pa
                                   fault_bridge=True, network_fault=True)
     assert env['VOICE_QUALITY_NETWORK_FAULT'] == '1'
     assert env['DS_PROFILE'] == 'integration-voice-fault'
+
+
+@pytest.mark.parametrize('state', ['clean', 'modified', 'untracked', 'symlink', 'directory'])
+def test_measurement_revision_requires_committed_sources(tmp_path, monkeypatch, state):
+    from types import SimpleNamespace
+    calls = []
+    if state in ('symlink', 'directory'):
+        (tmp_path / 'backend').mkdir()
+        if state == 'symlink':
+            (tmp_path / 'backend/.venv').symlink_to('/tmp/nonexistent-test-runtime')
+        else:
+            (tmp_path / 'backend/.venv').mkdir()
+    status = {'clean': '', 'modified': ' M frontend/src/App.svelte\n',
+              'untracked': '?? backend/app/new_runtime.py\n',
+              'symlink': '?? backend/.venv\n', 'directory': '?? backend/.venv\n'}[state]
+    def run(cmd, **kwargs):
+        calls.append(cmd)
+        assert kwargs['cwd'] == tmp_path
+        return SimpleNamespace(stdout=status if cmd[1] == 'status' else 'a' * 40 + '\n')
+    monkeypatch.setattr(pilot.subprocess, 'run', run)
+    if state in ('clean', 'symlink'):
+        assert pilot.measurement_revision(tmp_path) == 'a' * 40
+        assert len(calls) == 2
+    else:
+        with pytest.raises(ValueError, match='committed worktree'):
+            pilot.measurement_revision(tmp_path)
+        assert len(calls) == 1

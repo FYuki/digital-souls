@@ -1,0 +1,256 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "measurement_scope",
+    "fixture_sha256",
+    "counts",
+    "missing_reasons",
+    "duplicate_packet_output_intervals",
+    "duplicate_measurement_scope",
+    "latency_ms",
+    "evaluation",
+    "measurement_revision"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "measurement_scope": {
+      "const": "livekit_fault_recovery_cohort_report"
+    },
+    "fixture_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected",
+        "recorded",
+        "independent_sessions",
+        "independent_conversations",
+        "verified_faults",
+        "complete_output_trials",
+        "recovered_within_ten_seconds",
+        "not_recovered",
+        "session_end_confirmed",
+        "fault_children_closed",
+        "successful_followup_conversations"
+      ],
+      "properties": {
+        "expected": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "recorded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "independent_sessions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "independent_conversations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "verified_faults": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "complete_output_trials": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "recovered_within_ten_seconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "not_recovered": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "session_end_confirmed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fault_children_closed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "successful_followup_conversations": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "missing_reasons": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fault_operation_unverified": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "network_effect_unverified": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "output_evidence_incomplete": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "recovery_evidence_invalid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "measurement_revision_unavailable": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "duplicate_packet_output_intervals": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "duplicate_measurement_scope": {
+      "const": "overlapping_response_ssrc_rtp_sample_intervals"
+    },
+    "latency_ms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "control",
+        "audio",
+        "both"
+      ],
+      "properties": {
+        "control": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "count",
+            "p50",
+            "p95"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "p50": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "p95": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            }
+          }
+        },
+        "audio": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "count",
+            "p50",
+            "p95"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "p50": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "p95": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            }
+          }
+        },
+        "both": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "count",
+            "p50",
+            "p95"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "p50": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "p95": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "coverage_complete",
+        "rate_passed",
+        "latency_passed",
+        "passed"
+      ],
+      "properties": {
+        "coverage_complete": {
+          "type": "boolean"
+        },
+        "rate_passed": {
+          "type": "boolean"
+        },
+        "latency_passed": {
+          "type": "boolean"
+        },
+        "passed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "measurement_revision": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{40}$"
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LiveKit再接続の匿名集計"
+}

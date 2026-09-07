@@ -233,3 +233,33 @@ SSRC変更後の同じsource音声の再送などを含む全面的な重複再�
 その応答の全出力を`post_fault_followup`へ別記録する。後続発話の成功を
 回復時間3,000msの判定へ置き換えず、元の回復判定が未達ならrunは失敗のままにする。
 RTP欠落による応答中断の時刻・欠落packet数も`media_packet_losses`へ残す。
+
+## 再接続の匿名集計
+
+専用bridge診断の`trial-manifest.json`を指定する。保存された合否や`recovery`値は流用せず、
+切断前後の時計較正、実切断の時刻・長さ、切断中の不通、制御往復、受信・復号・実出力の
+記録から再計算する。受信済みbuffer、無音、復旧前に送った要求への遅着ACKは回復へ数えない。
+
+```bash
+node frontend/scripts/report-fault-recovery.mjs \
+  --expected 1 --output /tmp/reconnect-diagnostic-report.json \
+  frontend/test-results/livekit-quality/runs/network-fault-session-09/trial-manifest.json
+```
+
+これは1件の診断例で、合格にはならない。正式評価は`--expected 100`と独立100件のmanifestを
+指定する。同じfixture・同じ実装commit、独立session／conversation、全試行の記録と終了、
+時計・障害・出力証跡、次発話の成功を照合する。試行抜け、重複session、異なるfixture／commitの
+混在は拒否する。失敗は分母に残し、10秒内に両経路が復旧した全試行のp95を計算する。
+全失敗のp95はnullとし、99%・3,000ms・重複再生0を別々に判定する。
+重複の観測範囲は同一response／SSRC／RTP timestampの出力sample区間であり、
+送信元変更を跨いだsource PCM同一性の検証を代替しない。
+
+`run_pilot.py`は起動前にGitの未コミット変更を拒否し、実装commitを診断manifestへ記録する。
+既存のローカル依存環境を指す`backend/.venv`の未追跡symlinkだけは許可する。
+この変更より前のrawは実装版を後から推測して補完せず、版情報の欠測として集計する。
+共有推論サービスや依存runtimeの版・条件は別の環境証跡で照合する。
+
+出力は`docs/schemas/voice-quality-reconnect-report-v1.schema.json`で検証し、ID・本文・
+入力path・任意の例外文字列を含めない。既存出力は上書きしない。
+終了コードは合格0、不合格report作成済み1、引数・証跡・schema等のエラー2である。
+この集計器のテスト成功は、実再接続100件の受け入れ成功を意味しない。

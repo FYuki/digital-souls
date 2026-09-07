@@ -16,6 +16,7 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
   const networkFault = process.env.VOICE_QUALITY_NETWORK_FAULT === '1'
   const probes: Array<ControlProbeObservation & {playbackActive: boolean}> = []
   const record: Record<string, unknown> = {measurement_scope: networkFault ? 'livekit_fault_recovery_session_diagnostic' : 'livekit_control_probe_session_diagnostic',
+    measurement_revision: process.env.VOICE_QUALITY_MEASUREMENT_REVISION,
     expected_probes: count, fixture_sha256: fixture.audioSha256, probes, outcome: 'failure'}
   let clockRunner: FaultClockRunner | undefined
   let clockBefore: FaultClockCalibration | undefined

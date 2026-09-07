@@ -24,6 +24,24 @@ def run_root(run_id: str) -> Path:
     return ROOT / "frontend/test-results/livekit-quality/runs" / run_id
 
 
+def measurement_revision(root: Path) -> str:
+    """測定前に実装版と未コミット変更を照合する。pathや差分本文をログへ出さない。"""
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"], cwd=root,
+        capture_output=True, text=True, timeout=5, check=True,
+    ).stdout.splitlines()
+    allowed_venv = (root / "backend/.venv").is_symlink()
+    if any(line != "?? backend/.venv" or not allowed_venv for line in status):
+        raise ValueError("measurement requires a committed worktree")
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True,
+        timeout=5, check=True,
+    ).stdout.strip()
+    if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+        raise ValueError("measurement revision unavailable")
+    return revision
+
+
 def _number(value: object) -> int | float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
@@ -168,6 +186,7 @@ def run(args: argparse.Namespace) -> int:
     if args.fault_bridge:
         from network_fault import resolve_target
         resolve_target("ds-voice-quality-fault-livekit-1")
+    env["VOICE_QUALITY_MEASUREMENT_REVISION"] = measurement_revision(ROOT)
     reference = env.get("INFERENCE_TARGET_CHAT", "")
     if not reference.startswith("ollama/"):
         raise ValueError("this diagnostic requires an Ollama chat target")
