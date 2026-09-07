@@ -1655,3 +1655,23 @@ drain完了、前後anchorと監視範囲の成立、欠測なしを確認し、
 
 この3件は100試行の受け入れを代替しない。全packetの再生継続性、サーバーcancel時刻からの出力窓、
 text受信とDOM表示の観測は別途検証する。修正版のFrontendは772件・型検査・ビルドが成功した。
+
+### テキスト受信・DOMと終了後監視の実接続pilot
+
+測定版 `a3cfb1e094b6e1ba2e34d55649af837732df5ef4` の独立take-turn 3件は、
+全件で会話・割り込み・session終了・audio監視の閉鎖を確認した。
+各旧応答ではdelta 11件、24 UTF-16 code unitを受信し、応答中DOMへの追加も11回・24 unitだった。
+開始・cancel境界・DOM実在・監視終了を確認でき、cancel受信後のdelta受信とDOM追加は全件0だった。
+重複・text欠測・観測overflowはなかった。本文は診断snapshotへ出していない。
+
+終了後の最新audio行も全件でgraph closed、drain完了、欠測なし、残留非ゼロsampleの上下限0、
+後着packet／sample 0を確認した。実出力遅延は全件8ms、transport failureは0件だった。
+稼働中Frontend／Backend imageの測定版一致、全session終了、所有containerの削除を照合した。
+
+Frontend 777件・型検査・ビルドが成功した。最初の全体検証では、診断型のRoom経由importが
+テスト層の依存検査を不要なruntime依存へ到達させ、3件失敗した。
+依存のない型専用ファイルへ分離した後、全777件を再検証して通過した。
+
+この結果はclient cancel受信後と応答中DOMの小規模診断である。
+サーバーcancel時点からの全窓、保存履歴再取得後の本文、正式100試行、匿名schemaへの集約は未完了であり、
+#150のstale presented受け入れ全体の達成とはしない。
