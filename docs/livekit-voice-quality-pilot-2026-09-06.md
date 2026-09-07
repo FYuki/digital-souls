@@ -1771,3 +1771,33 @@ client cancel受信時刻へ置き換えたりしない。サーバー成立時�
 Frontend関連27件・型検査（エラー0、警告0）、Ruffも通過した。
 この作業では追加の実サービス試行を行わず、既存の生証拠を再集計した。
 キャンセル動作の変更、正式100試行、他の受け入れ指標とPRは引き続き未完了である。
+
+
+### 受信PCMの切り出し範囲と実STT入力suffix
+
+測定版 `4c247099da05e14b38cb048f08ea7b778f0e81be` で独立3試行のtake-turn診断を実施し、
+全件で会話・割り込み・明示session終了に成功した。実行中Frontend／Backend imageの測定版一致と、
+終了後の所有container削除を確認した。
+
+初回発話3件と割り込み発話3件の計6件で、受信PCMの連続範囲、capture長、
+STT直前の元入力長、除いたprefix、実際のSTT入力長を照合した。
+全6件で`received_end - received_start = capture_samples = original_input_samples`と
+`original_input_samples = removed_prefix_samples + prepared_input_samples`が成立した。
+実際の入力byte列も、元captureから宣言したprefixだけを除いた全suffixと一致した。
+
+| 発話の区分 | 件数 | capture sample数の範囲 | STT入力sample数の範囲 | 除いたprefix sample数の範囲 |
+|---|---:|---:|---:|---:|
+| 初回 | 3 | 30,240〜30,400 | 28,105〜28,494 | 1,906〜2,135 |
+| 割り込み | 3 | 34,560〜52,160 | 31,418〜32,794 | 1,766〜20,742 |
+
+冒頭STTの入力統計は2件で観測され、両方でsample数の保存則とsuffixの一致を確認した。
+冒頭STTが記録されていない試行へ、その成功を補完しない。
+波形、音声hash、本文は追加の診断へ保存していない。
+
+関連Backend77件が通過し、Ruffと変更2ファイルの型検査も通過した。
+型検査で最初に見つかったOptional位置の扱い2件は、位置が存在する分岐を明示して修正した。
+
+これはBackend受信後の切り出しとSTT入力直前の保存を検証したもの。
+送信前fixtureの正解境界との対応、Opus経由の先頭／末尾保持、Whisperサービス側の受領byte列、
+正式100試行の集約は未検証である。VAD報告の`captured_pcm_boundary_verified`をこの結果だけで
+`true`へ変更せず、#150全体の受け入れ未完了を維持する。
