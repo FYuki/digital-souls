@@ -39,6 +39,7 @@ export type RoomObservation = Readonly<{
   failureReason?: string
   failureStage?: 'transport' | 'media_decoder' | 'audio_graph' | 'output_clock' | 'renderer' | 'rtp_timeline'
   mediaPacketLoss?: RtpPacketGap & {responseId: string; atMs: number}
+  mediaTimelineInterruption?: {responseId: string; atMs: number; reason: 'timestamp_overlap'}
   renderedSamples?: number
   playedPrefix?: number
   microphoneFrames?: number
@@ -470,6 +471,11 @@ export class LiveKitRoomClient {
               graph.worklet.port.postMessage({kind: 'pcm', packetIndex: packet.packetIndex,
                 rtpTimestamp: packet.rtpTimestamp, samples: packet.pcm}, [packet.pcm.buffer])
             }, failed: () => this.failTransport('media_decoder'),
+            interrupted: () => {
+              if (!this.subscriptions.has(key) || this.trackResponses.get(key) !== responseId) return
+              this.interruptResponseAfterMediaDiscontinuity(responseId, {mediaTimelineInterruption: {
+                responseId, atMs: performance.now(), reason: 'timestamp_overlap'}})
+            },
           })
         this.mediaObservers.set(key, observer)
         void this.attachRenderEvidence(track, key).catch(() => this.failTransport('audio_graph'))
@@ -653,12 +659,17 @@ export class LiveKitRoomClient {
   }
 
   private interruptResponseAfterPacketLoss(responseId: string, gap: RtpPacketGap): void {
+    this.interruptResponseAfterMediaDiscontinuity(responseId, {mediaPacketLoss: {...gap, responseId, atMs: performance.now()}})
+  }
+
+  private interruptResponseAfterMediaDiscontinuity(responseId: string,
+    evidence: Pick<RoomObservation, 'mediaPacketLoss' | 'mediaTimelineInterruption'>): void {
     const sessionId = this.sessionId, room = this.room, generation = this.generation
     if (sessionId === null || room === null || this.stoppedResponses.has(responseId)) return
     // 欠けたPCMを全出力済みに補完しない。確認済みprefixだけ通知し、現在の応答を止める。
     const lastPlayedAudioSequence = this.stopPlayback(responseId)
     this.observe({transport: 'available', control: 'available', audio: 'unavailable',
-      mediaPacketLoss: {...gap, responseId, atMs: performance.now()}})
+      ...evidence})
     const event = (fields: Record<string, unknown>) => parseVoiceSessionEvent({
       protocol_version: '1.0', event_id: crypto.randomUUID(), session_id: sessionId,
       response_id: responseId, reason: 'disconnect', monotonic_timestamp_ms: Math.floor(performance.now()),

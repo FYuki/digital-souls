@@ -56,13 +56,13 @@ vi.mock('livekit-client', () => ({
 }))
 
 const mediaMocks = vi.hoisted(() => ({observers: [] as Array<{
-  playback?: {packet: (packet: unknown) => void; failed: () => void}
+  playback?: {packet: (packet: unknown) => void; failed: () => void; interrupted?: () => void}
   report: (value: unknown) => void
 }>}))
 vi.mock('./livekit/media-observer', () => ({
   RemoteMediaObserver: class {
     constructor(_receiver: unknown, _track: unknown, public report: (value: unknown) => void,
-      public playback?: {packet: (packet: unknown) => void; failed: () => void}) {mediaMocks.observers.push(this); report({trackReceivedAtMs: performance.now()})}
+      public playback?: {packet: (packet: unknown) => void; failed: () => void; interrupted?: () => void}) {mediaMocks.observers.push(this); report({trackReceivedAtMs: performance.now()})}
     ready = async () => undefined
     close = vi.fn()
   },
@@ -674,7 +674,7 @@ test.each(['valid', 'mismatched_decode', 'stopped', 'unsubscribed'])('実出力�
 })
 
 
-test('RTP欠落では未出力のPCMを止め、Coreの応答だけを中断して制御接続を維持する', async () => {
+test.each(['gap', 'overlap'])('RTP不連続では未出力のPCMを止め、Coreの応答だけを中断して制御接続を維持する: %s', async mode => {
   const observations: RoomObservation[] = []
   const client = new LiveKitRoomClient(row => observations.push(row))
   const sessionId = '20000000-0000-4000-8000-000000000001'
@@ -688,7 +688,8 @@ test('RTP欠落では未出力のPCMを止め、Coreの応答だけを中断し�
   const frame = {receivedAtMs: 100, decodedAtMs: 101, pcm: new Float32Array(960).fill(.25)}
   try {
     observer.playback!.packet({...frame, packetIndex: 0, rtpTimestamp: 99})
-    observer.playback!.packet({...frame, packetIndex: 1, rtpTimestamp: 2019})
+    if (mode === 'overlap') {observer.playback!.interrupted!(); observer.playback!.interrupted!()}
+    else observer.playback!.packet({...frame, packetIndex: 1, rtpTimestamp: 2019})
     observer.playback!.packet({...frame, packetIndex: 2, rtpTimestamp: 2979})
     const messages = () => room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
     await vi.waitFor(() => expect(messages().some(p => p.type === 'state_sync_request')).toBe(true))
@@ -698,9 +699,15 @@ test('RTP欠落では未出力のPCMを止め、Coreの応答だけを中断し�
       {type: 'response_cancel_requested', session_id: sessionId, response_id: responseId, reason: 'disconnect'}])
     expect(worklet.port.postMessage.mock.calls.filter(([row]) => row.kind === 'pcm')).toHaveLength(1)
     expect(worklet.port.postMessage).toHaveBeenCalledWith({kind: 'stop'})
-    expect(observations.find(row => row.mediaPacketLoss)?.mediaPacketLoss)
-      .toMatchObject({responseId, expectedTimestamp: 1059, receivedTimestamp: 2019, missingPacketCount: 1})
-    expect(observations.filter(row => row.mediaPacketLoss)).toHaveLength(1)
+    if (mode === 'gap') {
+      expect(observations.find(row => row.mediaPacketLoss)?.mediaPacketLoss)
+        .toMatchObject({responseId, expectedTimestamp: 1059, receivedTimestamp: 2019, missingPacketCount: 1})
+      expect(observations.filter(row => row.mediaPacketLoss)).toHaveLength(1)
+    } else {
+      expect(observations.filter(row => row.mediaTimelineInterruption)).toHaveLength(1)
+      expect(observations.find(row => row.mediaTimelineInterruption)?.mediaTimelineInterruption)
+        .toMatchObject({responseId, reason: 'timestamp_overlap'})
+    }
     expect(observations.some(row => row.failureStage)).toBe(false)
     expect(disconnected).not.toHaveBeenCalled()
     expect(messages().filter(p => ['playback_stopped', 'response_cancel_requested', 'state_sync_request'].includes(p.type))

@@ -73,7 +73,12 @@ self.onrtctransform = async (event) => {
         if (classification === 'duplicate') {
           self.postMessage({kind: 'packet_duplicate', count: ++duplicatePackets}); return
         }
+        if (classification === 'sequence_unavailable') {decoder.fail('rtp_packet_sequence_unavailable'); return}
         if (classification === 'conflict') {decoder.fail('rtp_packet_payload_conflict'); return}
+        if (classification === 'overlap') {
+          self.postMessage({kind: 'packet_timeline_interrupted', reason: 'timestamp_overlap', recentPackets})
+          pending.length = 0; decoder.close(); return
+        }
         const packetIndex = index++
         // 観測側の停滞でnativeを止めない。待機packetは最大1秒分、別に復号中1件。
         if (pending.length >= 50) { pending.length = 0; decoder.fail('opus_decode_queue_overflow') }
@@ -87,7 +92,7 @@ self.onrtctransform = async (event) => {
 }
 `
 
-const decoderFailureReasons = ['rtp_packet_payload_conflict', 'packet_metadata_or_codec_invalid',
+const decoderFailureReasons = ['rtp_packet_payload_conflict', 'rtp_packet_sequence_unavailable', 'packet_metadata_or_codec_invalid',
   'opus_decode_queue_overflow', 'opus_decoder_unavailable', 'opus_decode_timeout',
   'opus_output_format_mismatch', 'opus_output_nonfinite', 'opus_output_failed', 'opus_decode_failed'] as const
 
@@ -96,6 +101,7 @@ export type MediaObservation = Readonly<{
   duplicateEncodedPackets?: number
   packetDecoderFailureReason?: typeof decoderFailureReasons[number] | 'unclassified'
   packetDecoderFailurePackets?: ReadonlyArray<PacketDiagnostic>
+  packetTimelineInterruption?: 'timestamp_overlap'
   // scalarは上下限の下限。packet受信→配送の差分を過小評価しない。
   firstEncodedFrameAtMs?: number
   firstEncodedFrameAtBoundsMs?: ClockBounds
@@ -170,7 +176,7 @@ export class RemoteMediaObserver {
     private readonly receiver: RTCRtpReceiver | undefined,
     track: MediaStreamTrack,
     private readonly report: (observation: MediaObservation) => void,
-    private readonly playback?: {packet: (packet: DecodedAudioPacket) => void; failed: () => void},
+    private readonly playback?: {packet: (packet: DecodedAudioPacket) => void; failed: () => void; interrupted?: () => void},
   ) {
     void this.readyPromise.catch(() => undefined)
     if (playback) this.readyTimeout = setTimeout(() => this.failEncoded(), 1000)
@@ -274,7 +280,7 @@ export class RemoteMediaObserver {
         } else if (event.data.kind === 'packet_decoded' && this.decodedPacket === null) {
           this.decodedPacket = event.data
           this.applyPacketDecodedObservation()
-        } else if (event.data.kind === 'packet_decode_error') {
+        } else if (event.data.kind === 'packet_decode_error' || event.data.kind === 'packet_timeline_interrupted') {
           if (Array.isArray(event.data.recentPackets) && event.data.recentPackets.length <= 8) {
             this.evidence.packetDecoderFailurePackets = event.data.recentPackets.flatMap((packet: unknown) => {
               if (!packet || typeof packet !== 'object') return []
@@ -289,6 +295,13 @@ export class RemoteMediaObserver {
               return [{source: row.source, rtpTimestamp: row.rtpTimestamp, payloadBytes: row.payloadBytes,
                 ...(sequenceNumber === undefined ? {} : {sequenceNumber})}]
             })
+          }
+          if (event.data.kind === 'packet_timeline_interrupted') {
+            if (event.data.reason !== 'timestamp_overlap' || !this.playback?.interrupted) {this.failEncoded(); return}
+            this.evidence.packetTimelineInterruption = 'timestamp_overlap'
+            this.publish()
+            this.playback.interrupted()
+            return
           }
           this.evidence.packetDecoderFailureReason = decoderFailureReasons.find(reason => reason === event.data.reason) ?? 'unclassified'
           this.evidence.packetDecodeMissingReason = event.data.reason === 'opus_decoder_unavailable' ? 'api_unavailable' : 'decoder_failed'

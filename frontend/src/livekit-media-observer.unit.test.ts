@@ -294,7 +294,7 @@ test('close後のdecode通知を無視する', () => {
 })
 
 
-test.each(['normal', 'overflow', 'duplicate'])('独立decodeの待機・重複・queue超過をnative frame配送と分離する（%s）', async mode => {
+test.each(['normal', 'overflow', 'duplicate', 'overlap'])('独立decodeの待機・重複・queue超過をnative frame配送と分離する（%s）', async mode => {
   const overflow = mode === 'overflow'
   const reported: {kind: string; packetIndex?: number; reason?: string}[] = []
   const delivered: unknown[] = []
@@ -313,7 +313,7 @@ test.each(['normal', 'overflow', 'duplicate'])('独立decodeの待機・重複�
   const count = overflow ? 60 : 2
   const frames = Array.from({length: count}, (_, index) => ({
     data: new Uint8Array([0x98, 1]).buffer,
-    getMetadata: () => ({receiveTime: 1, rtpTimestamp: 9 + index * 960, synchronizationSource: 7, mimeType: 'audio/opus'}),
+    getMetadata: () => ({receiveTime: 1, rtpTimestamp: mode === 'overlap' ? 9 : 9 + index * 960, sequenceNumber: index - 1, synchronizationSource: 7, mimeType: 'audio/opus'}),
   }))
   if (mode === 'duplicate') frames.splice(1, 0, frames[0])
   const worker: {onrtctransform?: (event: unknown) => Promise<void>; postMessage: (row: typeof reported[number]) => void} = {
@@ -329,7 +329,10 @@ test.each(['normal', 'overflow', 'duplicate'])('独立decodeの待機・重複�
   }})
   expect(delivered).toEqual(frames)
   expect(requests).toHaveLength(1)
-  if (overflow) {
+  if (mode === 'overlap') {
+    expect(reported).toContainEqual(expect.objectContaining({kind: 'packet_timeline_interrupted', reason: 'timestamp_overlap'}))
+    expect(reported.some(row => row.kind === 'packet_decode_error')).toBe(false)
+  } else if (overflow) {
     expect(reported).toContainEqual(expect.objectContaining({kind: 'packet_decode_error', reason: 'opus_decode_queue_overflow'}))
   } else {
     for (let index = 0; index < count; index++) {
