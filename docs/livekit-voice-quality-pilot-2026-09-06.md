@@ -880,3 +880,20 @@ VAD、相槌・take-turn、dogfood gap・処理失敗率は、表示用basis poi
 さらにBackend traceの元sample数とBrowser packet・出力時計・全出力完了を照合し、168,960/168,960 samplesの出力、gap合計・最大gapとも0を検証した。session明示終了、teardown完了、所有Frontend／Backendコンテナ削除も確認した。raw manifestとtraceは当該run rootへ保持し、再実行コマンドは`scripts/voice_quality/README.md`に記載した。
 
 これは障害なし・1 session・3probeの診断である。再接続の100独立試行、network回復時刻とBrowser時計の対応、実音声の復旧時刻、重複再生0の受け入れは未完了。次は専用bridgeの接続先とreadinessが一致する測定Profileを用意し、実際の障害注入へ結ぶ。
+
+
+## 2026-09-07: 専用bridgeのProfileと実Browser／Core経路
+
+`integration-voice-fault`を追加し、LiveKitのtoken接続先とreadinessを19880へ揃えた。Playwrightとorchestratorは同じ明示Profileを使用する。通常Profileへ19880を混在させず、専用Profileでは7880／17880を拒否する。共有推論サービスとtest用Frontend／Backendは維持し、run data rootとキーを分離する。起動前にはpurpose・test label、専用bridge、接続の排他性、19880/tcp・19881/tcp・19882/udpのloopback公開を検査する。
+
+関連258テスト、通常・dogfood・共有推論を含むProfile回帰306テスト、Frontend結合101テストが成功した。これらのBackendテスト範囲には重複がある。型検査、変更PythonのRuff、差分検査も成功した。資源samplerは専用Profileでも当該test data rootの所有Backendだけを対象にする。
+
+`dfe3e2c`の最初のBrowser診断`fault-control-probe-session-01`は音声開始前に失敗し、probe0件・明示終了未確認だった。Profile／readinessとBackendの専用キーは一致していたが、RTC接続が完了しなかった。teardownと所有Frontend／Backendコンテナ削除は別に確認した。失敗runは保持する。
+
+同じ専用サービスへのSDK単独接続も20秒でtimeoutした。hostからbridge IPへ到達できることとUDP待受を確認したうえで、`node_ip: 127.0.0.1`とloopback候補の追加を外したところ、SDK接続は約548msで成立した。このSDK診断はroom削除後にプロセスが終了コード134で異常終了したため、終了処理まで成功した試験とは扱わない。診断の失敗段階とsession作成HTTP statusもharnessへ追加した。
+
+`7579d8a`の`fault-control-probe-session-02`では、実Browser／Core／音声サービスによるsession作成がHTTP 200、再生中の3/3制御往復が17.6／4.3／4.4msで成功した。全probeは別UUID・同世代で、追加応答・cancel・transportエラーは0。Backend traceのsample数とBrowserの受信・decode・実出力時計を照合し、168,960/168,960 samplesの全出力、gap合計・最大gapとも0を検証した。専用Profileと19880のreadiness、Backend資源84sampleの取得も確認し、起動前の4sampleは未起動の理由付き欠測として残した。
+
+アプリ側のrunは終了コード0で、session明示終了、teardown、所有Frontend／Backendコンテナ削除が確認できた。最後に専用LiveKitとbridgeも削除した。通常dev・dogfood・共有推論サービスへの設定変更や障害注入は行っていない。
+
+これで専用bridge上の実Browser／Core制御・音声経路を確認できたが、今回のBrowser診断には切断を入れていない。再接続100件、network回復とBrowser時計の対応、controlと実音声の回復時刻、重複再生0の受け入れは未完了である。
