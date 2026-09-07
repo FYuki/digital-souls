@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path'
 import {faultToBrowserOffset, type FaultClockCalibration} from './fault-clock'
 import {FaultClockRunner, calibrateFaultClock} from './fault-clock-runner'
 import {measureFaultRecovery} from './fault-recovery-diagnostic'
+import {installSdkReconnectDiagnostic, finishSdkClockDiagnostic} from './sdk-reconnect-diagnostic'
 import type { ControlProbeObservation } from '../src/livekit/control-probe'
 import { installScheduledFixture, type ScheduledFixture } from './controlled-audio-fixture'
 import { createVoiceChatDriver } from './voice-chat-suite'
@@ -32,6 +33,7 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
     catch {return false}
   }
   if (networkFault) {
+    record.sdk_reconnect = await installSdkReconnectDiagnostic(page)
     record.signaling_network = signaling
     page.on('response', response => {
       if (isSignaling(response.url())) recordSignaling('http_response', response.status())
@@ -157,6 +159,7 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
   } catch {
     record.failure_stage = stage
   } finally {
+    if (networkFault) record.sdk_clock = await finishSdkClockDiagnostic(page)
     record.evidence = await page.evaluate(() => ({
       media_timeline_interruptions: window.__voiceChatE2E.mediaTimelineInterruptions ?? [],
       media_packet_losses: window.__voiceChatE2E.mediaPacketLosses ?? [],

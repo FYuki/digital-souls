@@ -184,9 +184,13 @@ export class PacketOutputTracker {
     this.clock = {contextTime: timestamp.contextTime, performanceTime: timestamp.performanceTime, observedAtMs: performance.now()}
     const passedFrame = Math.floor(timestamp.contextTime * sampleRate)
     while (this.pending.length && this.pending[0].endFrame <= passedFrame) {
-      const interval = this.pending.shift()!
+      const interval = this.pending[0]
       const atMs = timestamp.performanceTime + (interval.startFrame / sampleRate - timestamp.contextTime) * 1000
       if (!Number.isFinite(atMs) || atMs < 0) throw new Error('invalid packet output clock')
+      // 出力時計から換算した末尾時刻を、実観測時刻も通過するまで保留する。
+      const endAtMs = atMs + (interval.endFrame - interval.startFrame) / (sampleRate / 1000)
+      if (endAtMs > this.clock.observedAtMs) break
+      this.pending.shift()
       if (this.firstFrame !== null && interval.startFrame > this.confirmedEndFrame) {
         const gap = interval.startFrame - this.confirmedEndFrame
         this.gapSamples += gap; this.maximumGapSamples = Math.max(this.maximumGapSamples, gap); this.gapCount++

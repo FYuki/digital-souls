@@ -1,5 +1,9 @@
-import {expect, test} from 'vitest'
+import {afterEach, beforeEach, expect, test, vi} from 'vitest'
 import {packetRendererSource, PacketOutputTracker, type PacketRenderInterval} from './livekit/packet-renderer'
+
+// 合成した出力時計を実観測済みの時刻へ固定する。
+beforeEach(() => {vi.spyOn(performance, 'now').mockReturnValue(1000000)})
+afterEach(() => {vi.restoreAllMocks()})
 
 const renderer = () => {
   const messages: Array<Record<string, unknown>> = []
@@ -187,4 +191,27 @@ test('PCM到着前の時計不一致で接続を終了せず、受信後は元�
   expect(rendered.reduce((sum, row) => sum + Number(row.endFrame) - Number(row.startFrame), 0)).toBe(960)
   expect(rendered[0]).toMatchObject({packetIndex: 0, packetSampleOffset: 0, startFrame: 1920})
   expect(p.messages.some(row => row.kind === 'error')).toBe(false)
+})
+
+
+test('出力時計の末尾が観測時刻より僅かに未来なら次のpollまで確認を保留する', () => {
+  const confirm = vi.fn()
+  const tracker = new PacketOutputTracker(confirm)
+  const row = {...interval, startFrame: 115328, endFrame: 115456}
+  tracker.record(row)
+  const contextTime = (row.endFrame + 1) / 48000
+  const expectedStart = 6111.794166666667
+  const performanceTime = expectedStart + (contextTime - row.startFrame / 48000) * 1000
+  const now = vi.spyOn(performance, 'now').mockReturnValue(6114.4000000059605)
+  tracker.poll({contextTime, performanceTime}, 48000)
+  expect(confirm).not.toHaveBeenCalled()
+  now.mockReturnValue(6114.5)
+  tracker.poll({contextTime, performanceTime}, 48000)
+  expect(confirm).toHaveBeenCalledTimes(1)
+  const [captured, atMs, clock] = confirm.mock.calls[0]
+  expect(captured).toEqual(row)
+  expect(atMs).toBeCloseTo(expectedStart, 8)
+  expect(atMs + (row.endFrame - row.startFrame) / 48).toBeLessThanOrEqual(clock.observedAtMs)
+  tracker.poll({contextTime, performanceTime}, 48000)
+  expect(confirm).toHaveBeenCalledTimes(1)
 })
