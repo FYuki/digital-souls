@@ -346,3 +346,13 @@ test.each(['normal', 'overflow', 'duplicate'])('独立decodeの待機・重複�
   }
   await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
 })
+
+
+test.each(['rtp_packet_payload_conflict', 'private-exception-sentinel'])('decoderエラーは固定コードだけ観測へ残す: %s', reason => {
+  const p = packetObserver()
+  p.decoded({kind: 'packet_decode_error', reason})
+  const snapshot = p.observer.snapshot()
+  expect(snapshot.packetDecoderFailureReason).toBe(reason === 'rtp_packet_payload_conflict' ? reason : 'unclassified')
+  expect(JSON.stringify(snapshot)).not.toContain('private-exception-sentinel')
+  p.observer.close()
+})

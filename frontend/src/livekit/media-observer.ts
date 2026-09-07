@@ -78,9 +78,14 @@ self.onrtctransform = async (event) => {
 }
 `
 
+const decoderFailureReasons = ['rtp_packet_payload_conflict', 'packet_metadata_or_codec_invalid',
+  'opus_decode_queue_overflow', 'opus_decoder_unavailable', 'opus_decode_timeout',
+  'opus_output_format_mismatch', 'opus_output_nonfinite', 'opus_output_failed', 'opus_decode_failed'] as const
+
 export type MediaObservation = Readonly<{
   trackReceivedAtMs: number
   duplicateEncodedPackets?: number
+  packetDecoderFailureReason?: typeof decoderFailureReasons[number] | 'unclassified'
   // scalarは上下限の下限。packet受信→配送の差分を過小評価しない。
   firstEncodedFrameAtMs?: number
   firstEncodedFrameAtBoundsMs?: ClockBounds
@@ -259,6 +264,7 @@ export class RemoteMediaObserver {
           this.decodedPacket = event.data
           this.applyPacketDecodedObservation()
         } else if (event.data.kind === 'packet_decode_error') {
+          this.evidence.packetDecoderFailureReason = decoderFailureReasons.find(reason => reason === event.data.reason) ?? 'unclassified'
           this.evidence.packetDecodeMissingReason = event.data.reason === 'opus_decoder_unavailable' ? 'api_unavailable' : 'decoder_failed'
           this.rejectReady(new Error('packet decoder failed'))
           if (this.playback) { this.failEncoded(); return }
