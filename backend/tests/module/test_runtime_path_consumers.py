@@ -43,6 +43,8 @@ def test_rt_chroma_01_upsert_and_query_use_the_explicit_same_chroma_path(
     fake_chromadb = ModuleType("chromadb")
     setattr(fake_chromadb, "PersistentClient", FakePersistentClient)
     monkeypatch.setitem(sys.modules, "chromadb", fake_chromadb)
+    # import時の親package属性も復元し、後続テストのpatch先を別moduleへ残さない。
+    monkeypatch.delattr(importlib.import_module("app.memory"), "chroma_store", raising=False)
     monkeypatch.delitem(sys.modules, "app.memory.chroma_store", raising=False)
     chroma_store = importlib.import_module("app.memory.chroma_store")
     FakePersistentClient.instances.clear()
@@ -90,6 +92,8 @@ def test_rt_chroma_01_resolved_environment_paths_keep_indexes_isolated(
     fake_chromadb = ModuleType("chromadb")
     setattr(fake_chromadb, "PersistentClient", FakePersistentClient)
     monkeypatch.setitem(sys.modules, "chromadb", fake_chromadb)
+    # import時の親package属性も復元し、後続テストのpatch先を別moduleへ残さない。
+    monkeypatch.delattr(importlib.import_module("app.memory"), "chroma_store", raising=False)
     monkeypatch.delitem(sys.modules, "app.memory.chroma_store", raising=False)
     chroma_store = importlib.import_module("app.memory.chroma_store")
     FakePersistentClient.collections_by_path.clear()
