@@ -1,58 +1,36 @@
 <script lang="ts">
   import type { ConversationTurn } from './conversations/types'
+  import {voiceDisplayTurns, type VoiceTurnDisplay, type SettledVoiceTurnDisplay,
+    type FailedVoiceTurnDisplay} from './voice-turn-display'
 
   export let turns: ConversationTurn[]
   export let characterName = '光織'
-  export let failedVoiceTurns: {
-    responseId: string
-    userContent: string
-    assistantContent: string
-  }[] = []
-  export let liveVoiceTurn: {
-    responseId: string | null
-    userContent: string
-    assistantContent: string
-  } | null = null
+  export let failedVoiceTurns: FailedVoiceTurnDisplay[] = []
+  export let liveVoiceTurn: VoiceTurnDisplay | null = null
+  export let settledVoiceTurns: SettledVoiceTurnDisplay[] = []
+  $: displayedTurns = voiceDisplayTurns(turns, failedVoiceTurns, settledVoiceTurns, liveVoiceTurn)
 </script>
 
 <div class="messages" aria-live="polite">
-  {#each turns as turn (turn.turn_id)}
+  {#each displayedTurns as turn (turn.key)}
     {#if turn.kind === 'content'}
-      <article class="message user" data-turn-id={turn.turn_id}>
+      <article class="message user" data-turn-id={turn.turnId}
+        data-live-voice-turn={turn.voicePending ? 'true' : undefined} data-failed-voice-turn={turn.failedResponseId}>
         <span class="speaker">あなた</span>
-        <p>{turn.user_content}</p>
+        <p>{turn.userContent}</p>
       </article>
-      <article class="message" data-turn-id={turn.turn_id}>
-        <span class="speaker">{characterName}</span>
-        <p data-history-turn-text={turn.turn_id}>{turn.assistant_content}</p>
+      <article class="message" class:failed={turn.failedResponseId !== undefined} data-turn-id={turn.turnId}
+        data-live-voice-turn={turn.voicePending ? 'true' : undefined} data-failed-voice-turn={turn.failedResponseId}>
+        <span class="speaker">{characterName}{turn.label ? `（${turn.label}）` : ''}</span>
+        <p data-live-response-text={turn.liveResponseId} data-history-turn-text={turn.historyTurnId}>{turn.assistantContent}</p>
       </article>
     {:else}
-      <article class="message privacy" data-turn-id={turn.turn_id}>
+      <article class="message privacy" data-turn-id={turn.turnId}>
         <span class="speaker">保存されなかったターン</span>
-        <p>{turn.reason_code}</p>
+        <p>{turn.reason}</p>
       </article>
     {/if}
   {/each}
-  {#each failedVoiceTurns as turn (turn.responseId)}
-    <article class="message user" data-failed-voice-turn={turn.responseId}>
-      <span class="speaker">あなた</span>
-      <p>{turn.userContent}</p>
-    </article>
-    <article class="message failed" data-failed-voice-turn={turn.responseId}>
-      <span class="speaker">{characterName}（応答失敗）</span>
-      <p>{turn.assistantContent || '応答を完了できませんでした。'}</p>
-    </article>
-  {/each}
-  {#if liveVoiceTurn !== null}
-    <article class="message user" data-live-voice-turn="true">
-      <span class="speaker">あなた</span>
-      <p>{liveVoiceTurn.userContent}</p>
-    </article>
-    <article class="message" data-live-voice-turn="true">
-      <span class="speaker">{characterName}（応答中）</span>
-      <p data-live-response-text={liveVoiceTurn.responseId ?? undefined}>{liveVoiceTurn.assistantContent}</p>
-    </article>
-  {/if}
 </div>
 
 <style>

@@ -414,6 +414,10 @@ snapshotには件数と文字数だけを出す。重複DOM・本文上限・応
 `response_started.history_turn_id`で伝え、履歴のassistant本文DOMを対応付ける。
 履歴は`rows[].history`へ独立に記録し、ライブ表示と同じ文章の再表示も数える。
 IDの欠測・変更・再利用、重複DOM、履歴未表示、監視区間不足は0件の証明にしない。
+ライブ表示から履歴へ同じ接続済み本文nodeを維持した場合だけ、そのnodeで観測済みの共通prefixを
+継続表示として引き継ぐ。`retainedLiveDomTransitions`と`retainedLiveDomCharacters`で遷移件数と文字数を記録する。
+同じnodeでも一度除去した場合、別nodeへ作り直した場合、別応答の場合は引き継がない。
+履歴への更新でprefix以後に追加・置換された文字は引き続き新規提示として数える。
 本文とIDを匿名aggregateへ転記せず、履歴の文字数・上下限・欠測理由だけを集計する。
 これはDOMへの反映でありOSの画面描画完了は証明しない。生観測のcancel前後は
 `client_cancel_received`と明記し、正式集計では保持した各変更区間をサーバーcancelの因果上下限へ再評価する。
