@@ -496,3 +496,21 @@ Frontend依存のインストール、Node、Backendのjsonschemaが必要。
 起動前の失敗などでtrace自体が作られなかった場合も、指定したtraceパスが未存在であることを確認し、
 そのhashを`null`として失敗・欠測を集計する。空ファイルのhashを代入しない。
 traceが存在するのに壊れている場合や読めない場合は入力失敗とする。
+
+
+## 受信PCMからSTT入力までの連続範囲
+
+音声測定を有効にしたrunでは、Bridgeが受信したPCM16 byte列の連番に対して、
+各captureの開始／終了sampleと連続性を`stt_capture_received_*`へ記録する。
+2秒のprerollを短縮した場合は、実際に保持した末尾範囲を起点にする。
+追加PCMの位置が飛ぶ、重なる、逆行する、sample途中で分かれる、またはcapture長と一致しない場合は
+`stt_capture_received_span_valid=0`とし、検証済みの開始／終了位置を出さない。
+
+最終STTの直前には、入力前sample数、除いたprefix、入力後sample数と、
+実際の入力byte列が元captureの全suffixと一致するかを`stt_input_*`へ記録する。
+冒頭STTも試行番号付きの`stt_preview_attempt_N_input_*`へ同じ比較を記録する。
+波形・本文・音声hashを診断へ追加しない。STTへ渡すbyte列、切り出し、待機時間は変更しない。
+
+この連番はBackendが受信したPCM上の位置であり、ブラウザfixtureのsource sample位置や
+送信RTP packet番号ではない。連続範囲とsuffix保持だけでOpus前後の発話境界や全STT処理を証明しない。
+固定fixtureの正解境界との対応、サービスへ届いた入力、正式100試行の集約は別途照合が必要である。

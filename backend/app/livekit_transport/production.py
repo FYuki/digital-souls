@@ -46,7 +46,9 @@ from app.livekit_transport.delivery import CoreNotificationPort
 from app.livekit_transport.errors import RoomCleanupPendingError
 from app.livekit_transport.measurement import LiveKitMeasurementSession
 from app.livekit_transport.runtime import MicrophoneTrackObserver
-from app.livekit_transport.stt_audio import SttSignalSpan, prepare_stt_audio
+from app.livekit_transport.stt_audio import (
+    PcmCaptureSpan, SttSignalSpan, prepare_stt_audio, stt_preparation_statistics,
+)
 from app.livekit_transport.response_audio import ResponseAudioTracks
 from app.livekit_transport.token import IssuedToken, LiveKitTokenSigner
 from app.voice_metrics import MeasurementKind, TraceEvent
@@ -815,6 +817,7 @@ class _UserAudioCapture:
     preview_complete: bool = False
     preview_last_signal_samples: int = 0
     preview_signal: SttSignalSpan = field(default_factory=SttSignalSpan)
+    received_span: PcmCaptureSpan = field(default_factory=PcmCaptureSpan)
     preparation_started: bool = False
     quiet_samples: int = 0
 
@@ -840,6 +843,7 @@ class _ConversationCoreBridge:
         self._pending_transcription_bytes = 0
         self._transcription_active = False
         self._microphone_preroll = bytearray()
+        self._microphone_received_bytes = 0
         self._control_lock = asyncio.Lock()
 
     def notify(self, payload: bytes) -> None:
@@ -890,6 +894,10 @@ class _ConversationCoreBridge:
                     else None
                 ),
             )
+            capture.received_span.append(
+                self._microphone_received_bytes - len(self._microphone_preroll),
+                len(self._microphone_preroll),
+            )
             capture.pcm.extend(self._microphone_preroll)
             self._microphone_preroll.clear()
             self._user_audio_captures.append(capture)
@@ -926,6 +934,8 @@ class _ConversationCoreBridge:
             await self._receive(event)
 
     def receive_microphone(self, pcm: bytes) -> None:
+        received_start_byte = self._microphone_received_bytes
+        self._microphone_received_bytes += len(pcm)
         if not self._user_audio_captures:
             self._microphone_preroll.extend(pcm)
             excess = len(self._microphone_preroll) - STT_MICROPHONE_PREROLL_BYTES
@@ -949,6 +959,7 @@ class _ConversationCoreBridge:
         if len(capture.pcm) + len(pcm) > STT_MAX_UTTERANCE_PCM_BYTES:
             capture.capacity_exceeded = True
         elif not capture.capacity_exceeded:
+            capture.received_span.append(received_start_byte, len(pcm))
             capture.pcm.extend(pcm)
         self._consider_stt_preparation(capture, pcm)
         self._consider_turn_preview(capture)
@@ -1045,9 +1056,16 @@ class _ConversationCoreBridge:
                 self._measurement.record_utterance_event(
                     utterance_id=utterance_id, name=f"stt_preview_attempt_{attempt}_started", stage="stt_preview",
                 )
+            prepared_audio, removed_samples = prepare_stt_audio(microphone_pcm)
+            if self._measurement is not None:
+                for name, value in stt_preparation_statistics(microphone_pcm, prepared_audio, removed_samples).items():
+                    self._measurement.record_utterance_event(
+                        utterance_id=utterance_id, name=f'stt_preview_attempt_{attempt}_' + name.removeprefix('stt_'),
+                        stage='stt_preview', value=value,
+                    )
             decision = await self._session.preview_turn(
                 utterance_id=utterance_id,
-                audio=prepare_stt_audio(microphone_pcm)[0],
+                audio=prepared_audio,
                 interrupted_response_id=interrupted_response_id,
             )
             if capture is not None:
@@ -1112,6 +1130,11 @@ class _ConversationCoreBridge:
                     reason="input_capacity_exceeded",
                 )
                 continue
+            if self._measurement is not None:
+                for name, value in capture.received_span.statistics(microphone_pcm).items():
+                    self._measurement.record_utterance_event(
+                        utterance_id=utterance_id, name=name, stage='stt_capture', value=value,
+                    )
             await self._enqueue_user_audio(
                 utterance_id=utterance_id,
                 microphone_pcm=microphone_pcm,
@@ -1188,12 +1211,14 @@ class _ConversationCoreBridge:
         microphone_pcm: bytes,
         interrupted_response_id: str | None = None,
     ) -> None:
-        microphone_pcm, trimmed_samples = prepare_stt_audio(microphone_pcm)
+        original_pcm = microphone_pcm
+        microphone_pcm, trimmed_samples = prepare_stt_audio(original_pcm)
         self._transcription_active = True
         if self._measurement is not None:
             # 本文・波形は残さず、STTへ渡したPCMの長さと振幅だけを確認する。
             samples = [value[0] for value in struct.iter_unpack("<h", microphone_pcm)]
             statistics = {
+                **stt_preparation_statistics(original_pcm, microphone_pcm, trimmed_samples),
                 "stt_input_sample_count": len(samples),
                 "stt_preroll_trimmed_samples": trimmed_samples,
                 "stt_input_peak_pcm16": max((abs(value) for value in samples), default=0),
