@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://digital-souls.local/schemas/voice-quality-stale-report-v1.schema.json",
-  "title": "サーバーcancel後のstale出力・受信の匿名集計v1",
+  "title": "サーバーcancel後のstale出力・受信の匿名集計v1 / v1.1",
   "description": "本文、ID、絶対時刻を禁止する。件数の和、上下限、合否式はreport_stale_output.pyでも検証する。",
   "type": "object",
   "additionalProperties": false,
@@ -18,7 +18,10 @@
   ],
   "properties": {
     "schema_version": {
-      "const": "1.0"
+      "enum": [
+        "1.0",
+        "1.1"
+      ]
     },
     "scope": {
       "const": "labeled_livekit_stale_output_report"
@@ -88,134 +91,7 @@
         }
       }
     },
-    "channels": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "audio_presented_samples",
-        "audio_received_packets",
-        "audio_received_samples",
-        "text_received_characters",
-        "live_text_presented_characters",
-        "history_text_presented_characters",
-        "server_generated_text_characters",
-        "server_generated_audio_samples"
-      ],
-      "properties": {
-        "audio_presented_samples": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/channel"
-            },
-            {
-              "properties": {
-                "unit": {
-                  "const": "sample"
-                }
-              }
-            }
-          ]
-        },
-        "audio_received_packets": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/channel"
-            },
-            {
-              "properties": {
-                "unit": {
-                  "const": "packet"
-                }
-              }
-            }
-          ]
-        },
-        "audio_received_samples": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/channel"
-            },
-            {
-              "properties": {
-                "unit": {
-                  "const": "sample"
-                }
-              }
-            }
-          ]
-        },
-        "text_received_characters": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/channel"
-            },
-            {
-              "properties": {
-                "unit": {
-                  "const": "utf16_code_unit"
-                }
-              }
-            }
-          ]
-        },
-        "live_text_presented_characters": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/channel"
-            },
-            {
-              "properties": {
-                "unit": {
-                  "const": "utf16_code_unit"
-                }
-              }
-            }
-          ]
-        },
-        "history_text_presented_characters": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/channel"
-            },
-            {
-              "properties": {
-                "unit": {
-                  "const": "utf16_code_unit"
-                }
-              }
-            }
-          ]
-        },
-        "server_generated_text_characters": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/channel"
-            },
-            {
-              "properties": {
-                "unit": {
-                  "const": "utf16_code_unit"
-                }
-              }
-            }
-          ]
-        },
-        "server_generated_audio_samples": {
-          "allOf": [
-            {
-              "$ref": "#/$defs/channel"
-            },
-            {
-              "properties": {
-                "unit": {
-                  "const": "sample"
-                }
-              }
-            }
-          ]
-        }
-      }
-    },
+    "channels": {},
     "evaluation": {
       "type": "object",
       "additionalProperties": false,
@@ -296,6 +172,9 @@
           "pattern": "^[0-9a-f]{64}$"
         }
       }
+    },
+    "provider_result_boundary": {
+      "const": "core_provider_iterator_yield"
     }
   },
   "$defs": {
@@ -318,7 +197,8 @@
           "enum": [
             "sample",
             "packet",
-            "utf16_code_unit"
+            "utf16_code_unit",
+            "byte"
           ]
         },
         "observed": {
@@ -414,6 +294,11 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 100
+            },
+            "server_result_window_unobserved": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
             }
           }
         },
@@ -429,5 +314,288 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "1.0"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "channels": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "audio_presented_samples",
+              "audio_received_packets",
+              "audio_received_samples",
+              "text_received_characters",
+              "live_text_presented_characters",
+              "history_text_presented_characters",
+              "server_generated_text_characters",
+              "server_generated_audio_samples"
+            ],
+            "properties": {
+              "audio_presented_samples": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "sample"
+                      }
+                    }
+                  }
+                ]
+              },
+              "audio_received_packets": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "packet"
+                      }
+                    }
+                  }
+                ]
+              },
+              "audio_received_samples": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "sample"
+                      }
+                    }
+                  }
+                ]
+              },
+              "text_received_characters": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "utf16_code_unit"
+                      }
+                    }
+                  }
+                ]
+              },
+              "live_text_presented_characters": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "utf16_code_unit"
+                      }
+                    }
+                  }
+                ]
+              },
+              "history_text_presented_characters": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "utf16_code_unit"
+                      }
+                    }
+                  }
+                ]
+              },
+              "server_generated_text_characters": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "utf16_code_unit"
+                      }
+                    }
+                  }
+                ]
+              },
+              "server_generated_audio_samples": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "sample"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "not": {
+          "required": [
+            "provider_result_boundary"
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "provider_result_boundary"
+        ],
+        "properties": {
+          "channels": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "audio_presented_samples",
+              "audio_received_packets",
+              "audio_received_samples",
+              "text_received_characters",
+              "live_text_presented_characters",
+              "history_text_presented_characters",
+              "server_received_text_characters",
+              "server_received_audio_bytes"
+            ],
+            "properties": {
+              "audio_presented_samples": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "sample"
+                      }
+                    }
+                  }
+                ]
+              },
+              "audio_received_packets": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "packet"
+                      }
+                    }
+                  }
+                ]
+              },
+              "audio_received_samples": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "sample"
+                      }
+                    }
+                  }
+                ]
+              },
+              "text_received_characters": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "utf16_code_unit"
+                      }
+                    }
+                  }
+                ]
+              },
+              "live_text_presented_characters": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "utf16_code_unit"
+                      }
+                    }
+                  }
+                ]
+              },
+              "history_text_presented_characters": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "utf16_code_unit"
+                      }
+                    }
+                  }
+                ]
+              },
+              "server_received_text_characters": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "utf16_code_unit"
+                      }
+                    }
+                  }
+                ]
+              },
+              "server_received_audio_bytes": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "byte"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

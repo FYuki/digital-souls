@@ -27,13 +27,13 @@ CHANNELS = {
     'audio_received_samples': 'sample', 'text_received_characters': 'utf16_code_unit',
     'live_text_presented_characters': 'utf16_code_unit',
     'history_text_presented_characters': 'utf16_code_unit',
-    'server_generated_text_characters': 'utf16_code_unit', 'server_generated_audio_samples': 'sample',
+    'server_received_text_characters': 'utf16_code_unit', 'server_received_audio_bytes': 'byte',
 }
 REASONS = ('identity_missing', 'fixture_injection_unverified', 'session_end_unconfirmed',
            'cancel_state_unobserved', 'clock_window_unobserved', 'cleanup_unobserved',
            'observation_identity_unverified', 'output_window_unobserved',
            'receipt_window_unobserved', 'text_window_unobserved', 'replay_invalid',
-           'history_observer_unimplemented', 'server_generation_observer_unimplemented')
+           'history_observer_unimplemented', 'server_generation_observer_unimplemented', 'server_result_window_unobserved')
 
 
 def count(value):
@@ -139,6 +139,46 @@ def validate_manifest(manifest, fixtures_bytes, traces):
     return trials, fixtures
 
 
+
+def provider_receipts(trial, traces):
+    """同じCoreの取消状態と、consumer終了後の受領件数を同じ時計で照合する。"""
+    sid, rid = trial.get('session_id'), trial.get('old_response_id')
+    if not sid or not rid:
+        return None
+    rows = [r for r in traces if r.get('session_id') == sid and r.get('response_id') == rid]
+    cancels = [r for r in rows if r.get('name') == 'cancel_state_upper']
+    if not cancels:
+        return None
+    if (any(r.get('clock_domain') != 'server_monotonic' or r.get('unit') != 'nanosecond' for r in cancels)
+            or len({r['timestamp'] for r in cancels}) != 1):
+        raise ValueError('invalid_provider_cancel_boundary')
+    upper = timestamp(cancels[0]['timestamp'])
+    names = ('provider_result_text_after_cancel_events', 'provider_result_text_after_cancel_utf16_units',
+             'provider_result_audio_after_cancel_events', 'provider_result_audio_after_cancel_bytes',
+             'provider_result_observation_closed', 'provider_result_observation_valid')
+    values = {}
+    for name in names:
+        matches = [r for r in rows if r.get('name') == name]
+        if not matches:
+            return None
+        if (len({(r.get('value'), r.get('timestamp')) for r in matches}) != 1
+                or any(r.get('stage') != 'provider_result_received' or r.get('outcome') != 'success'
+                    or r.get('clock_domain') != 'server_monotonic' or r.get('unit') != 'nanosecond'
+                    or timestamp(r.get('timestamp')) < upper for r in matches)):
+            raise ValueError('invalid_provider_result_observation')
+        value = timestamp(matches[0].get('value'))
+        if int(value) != value:
+            raise ValueError('fractional_provider_count')
+        values[name] = count(int(value))
+    if values['provider_result_observation_closed'] != 1 or values['provider_result_observation_valid'] != 1:
+        return None
+    for kind, units in (('text', 'utf16_units'), ('audio', 'bytes')):
+        if values[f'provider_result_{kind}_after_cancel_events'] == 0 and values[f'provider_result_{kind}_after_cancel_{units}'] != 0:
+            raise ValueError('provider_result_count_mismatch')
+    return {'server_received_text_characters': values['provider_result_text_after_cancel_utf16_units'],
+            'server_received_audio_bytes': values['provider_result_audio_after_cancel_bytes']}
+
+
 def empty_channel(unit):
     return dict(unit=unit, observed=0, missing=0, missing_reasons={}, definitely_stale=0,
                 possibly_stale=0, verified_zero=0, lower_total=0, upper_total=0)
@@ -221,9 +261,14 @@ def summarize(manifest, fixtures_bytes, traces, replay):
             else:
                 add_channel(channels[name], reason=reason or missing)
         add_channel(channels['history_text_presented_characters'], reason='history_observer_unimplemented')
-        for name in ('server_generated_text_characters', 'server_generated_audio_samples'):
-            add_channel(channels[name], reason='server_generation_observer_unimplemented')
-    report = {'schema_version': '1.0', 'scope': 'labeled_livekit_stale_output_report',
+        server = provider_receipts(trial, traces) if injected else None
+        for name in ('server_received_text_characters', 'server_received_audio_bytes'):
+            if server is None:
+                add_channel(channels[name], reason='server_result_window_unobserved')
+            else:
+                add_channel(channels[name], server[name], server[name])
+    report = {'schema_version': '1.1', 'scope': 'labeled_livekit_stale_output_report',
+              'provider_result_boundary': 'core_provider_iterator_yield',
               'cohort': 'take_turn', 'cancel_boundary': 'server_cancel_state_transition',
               'audio_presentation_boundary': 'post_gain_browser_output_clock',
               'counts': {k: counts[k] for k in ('expected', 'recorded', 'success', 'failure',

@@ -187,3 +187,52 @@ def test_startup_failure_without_trace_remains_missing_and_has_no_fabricated_tra
     assert result['channels']['audio_presented_samples']['observed']==0
     assert result['channels']['audio_presented_samples']['missing_reasons']=={'fixture_injection_unverified':1}
     assert result['evaluation']['stale_presented_passed'] is False
+
+
+def add_provider_results(traces,trial,units=0,audio_bytes=0):
+    for name,value in {'provider_result_text_after_cancel_events':int(units>0),
+        'provider_result_text_after_cancel_utf16_units':units,'provider_result_audio_after_cancel_events':int(audio_bytes>0),
+        'provider_result_audio_after_cancel_bytes':audio_bytes,'provider_result_observation_closed':1,
+        'provider_result_observation_valid':1}.items():
+        traces.append(dict(session_id=trial['session_id'],response_id=trial['old_response_id'],name=name,value=float(value),
+            timestamp=5003000,clock_domain='server_monotonic',unit='nanosecond',stage='provider_result_received',
+            outcome='success',character_id='private-character',measurement_kind='controlled_baseline'))
+
+
+def test_provider_results_are_exact_server_receipts_not_provider_generation_or_pcm_samples():
+    m,fb,traces=cohort(1)
+    add_provider_results(traces,m['trials'][0],3,90)
+    result=provenance(reporter.summarize(m,fb,traces,replay))
+    assert result['schema_version']=='1.1'
+    assert result['provider_result_boundary']=='core_provider_iterator_yield'
+    assert 'server_generated_audio_samples' not in result['channels']
+    assert result['channels']['server_received_text_characters']['lower_total']==3
+    audio=result['channels']['server_received_audio_bytes']
+    assert audio['unit']=='byte' and audio['lower_total']==audio['upper_total']==90
+    assert audio['missing']==0
+    assert result['evaluation']['stale_presented_passed'] is False
+    reporter.validate_report(result,SCHEMA)
+
+
+@pytest.mark.parametrize('invalid', ['missing','unclosed','invalid','before_cancel','conflicting','fractional','wrong_response'])
+def test_provider_window_needs_all_consistent_closed_metrics(invalid):
+    m,fb,traces=cohort(1);add_provider_results(traces,m['trials'][0])
+    if invalid=='missing':traces.pop()
+    elif invalid=='unclosed':next(r for r in traces if r['name']=='provider_result_observation_closed')['value']=0
+    elif invalid=='invalid':traces[-1]['value']=0
+    elif invalid=='before_cancel':traces[-1]['timestamp']=5002000
+    elif invalid=='conflicting':traces.append({**traces[-1],'value':0})
+    elif invalid=='fractional':traces[-1]['value']=.5
+    else:traces[-1]['response_id']=str(UUID(int=9000))
+    if invalid in ('before_cancel','conflicting','fractional'):
+        with pytest.raises(ValueError):reporter.summarize(m,fb,traces,replay)
+    else:
+        result=reporter.summarize(m,fb,traces,replay)
+        assert result['channels']['server_received_audio_bytes']['missing_reasons']=={'server_result_window_unobserved':1}
+
+
+def test_legacy_artifacts_keep_their_original_schema_and_missing_meaning():
+    for name in ('livekit-stale-server-cancel-pilot-3.json','livekit-stale-clock-startup-failure-3.json'):
+        result=json.loads((ROOT/'docs/artifacts'/name).read_text())
+        assert result['schema_version']=='1.0'
+        reporter.validate_report(result,SCHEMA)
