@@ -1,0 +1,2 @@
+# unified diffでは空のcontext行にも先頭の空白が必要なため、このpatchだけ行末空白検査を除外する。
+short-outage-retry.patch whitespace=-blank-at-eol

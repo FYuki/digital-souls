@@ -1374,3 +1374,34 @@ Backend自身の状態準備は0ms、状態送信は40msだった。
 
 session・障害操作子・診断readerの終了、所有Frontend・Backendの実削除、
 専用SFUとnetworkの削除を確認した。再接続100件および#150全体の受け入れは未完了である。
+
+
+### 検証用SDKでの実障害23〜25（2026-09-08）
+
+利用中のFFIと公式配布版がSHA-256でも一致することを確認した後、
+同じ上流コミットの再試行処理だけを変更し、専用コンテナでビルドした。
+最初の10秒は250〜500msのjitter付き間隔、その後は従来の指数増加と最大7秒待機を使う。
+新規試行は最大64回・開始から60秒までに制限する。進行中の接続のtimeoutはSDKの既存設定に従い、
+認証拒否・serverによる終了・明示的closeの処理は変更していない。
+
+同じ2秒のネットワーク断、scheduled fixture、thinking無効条件で独立3 sessionを測定した。
+[匿名集計](artifacts/livekit-reconnect-sdk-pilot-2026-09-08.json)と
+[検証用SDKの版・ハッシュ・試行別結果](artifacts/livekit-native-sdk-experiment-2026-09-08.json)を保存した。
+
+| 試行 | 制御の復旧上限 | 制御・音声双方の復旧上限 | 次の同session会話 |
+|---|---:|---:|---|
+| 23 | 2,578.829ms | 2,710.360ms | 成功 |
+| 24 | 2,228.597ms | 2,351.044ms | 成功 |
+| 25 | 2,262.800ms | 2,396.924ms | 成功 |
+
+3件とも3秒以内、出力証跡は完全で、観測したRTP sample区間の重複・欠測・出力経路エラーは0だった。
+各Backend processのmemory mapとファイルハッシュで、変更版FFIを実際に使ったことも確認した。
+再試行の単体検証4件、releaseビルド、Backend用Python 1.1.16でのFFI初期化が成功した。
+所有Frontend・Backend計6 container、診断reader3件、専用LiveKit・network、
+ビルド・初期化確認用containerの削除を確認し、通常LiveKitは維持した。
+
+これは3件の隔離実験であり、100件の正式受け入れではない。集計の合否もfalseのまま保持する。
+変更版はLinux x86_64専用で、今回のビルドはCUDAの動画codecを含まない。
+既存venvのライブラリや製品のDockerfileは変更していない。
+[再現用のsource patchと手順](../scripts/voice_quality/native_sdk_experiment/README.md)を残し、
+正式な配布・更新方法と他機能への影響を確認したうえで、100件再測定へ進む。

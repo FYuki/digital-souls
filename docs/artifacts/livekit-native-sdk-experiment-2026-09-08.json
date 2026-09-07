@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "measurement_scope": "isolated_native_sdk_experiment",
+  "formal_acceptance": false,
+  "provenance": {
+    "scope": "isolated_native_sdk_experiment",
+    "upstream_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+    "upstream_python_sdk": "1.1.16",
+    "upstream_ffi": "0.12.73",
+    "native_sha256": "c65e1a9dec19568c432be30394e99c645023518304a94b6b8da8bc4e758ba301",
+    "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+    "runner_sha256": "96ea0d9af7690dbe5f8015b46826929c8f212f5e49187b6d05a97837d22d5b50",
+    "measurement_revision": "f24ecba37387f37e0a3bd14f63d067f086f338b7"
+  },
+  "build": {
+    "rust_version": "1.97.1",
+    "architecture": "linux_x86_64",
+    "builder_base": "rust:1.97.1-bookworm@sha256:408fe88047cef61a2087653b0c5255fa51c0f2d6d94ddedd7a2562a9b91a46f6",
+    "source_archive_sha256": "bfc6b4539137a84420c8c8305f2c43d125f83f9de2912283bbba682106969266",
+    "upstream_ffi_sha256": "aa8efade985a74badac60749534ffadd72da53fafc8dd5d63124ec1169587014",
+    "cargo_locked": true,
+    "profile": "release",
+    "cpu_limit": 4,
+    "memory_limit_gib": 6,
+    "cuda_video_codecs_enabled": false,
+    "policy_tests_passed": 4
+  },
+  "policy": {
+    "fast_window_ms": 10000,
+    "fast_delay_min_ms": 250,
+    "fast_delay_max_ms": 500,
+    "later_delay_max_ms": 7000,
+    "max_attempts": 64,
+    "new_attempt_window_ms": 60000,
+    "inflight_attempt_timeout": "upstream_sdk"
+  },
+  "trials": [
+    {
+      "trial": 23,
+      "control_recovery_upper_ms": 2578.829368978739,
+      "both_recovery_upper_ms": 2710.359868990661,
+      "output_evidence_complete": true,
+      "duplicate_intervals": 0,
+      "packet_evidence_missing": 0,
+      "output_path_failures": 0,
+      "followup_success": true,
+      "session_end_confirmed": true,
+      "fault_clock_process_closed": true,
+      "native_mapping_verified": true
+    },
+    {
+      "trial": 24,
+      "control_recovery_upper_ms": 2228.59663400054,
+      "both_recovery_upper_ms": 2351.044300661246,
+      "output_evidence_complete": true,
+      "duplicate_intervals": 0,
+      "packet_evidence_missing": 0,
+      "output_path_failures": 0,
+      "followup_success": true,
+      "session_end_confirmed": true,
+      "fault_clock_process_closed": true,
+      "native_mapping_verified": true
+    },
+    {
+      "trial": 25,
+      "control_recovery_upper_ms": 2262.800080001354,
+      "both_recovery_upper_ms": 2396.923580001354,
+      "output_evidence_complete": true,
+      "duplicate_intervals": 0,
+      "packet_evidence_missing": 0,
+      "output_path_failures": 0,
+      "followup_success": true,
+      "session_end_confirmed": true,
+      "fault_clock_process_closed": true,
+      "native_mapping_verified": true
+    }
+  ],
+  "cleanup": {
+    "owned_backend_frontend_deleted": 6,
+    "diagnostic_readers_closed": 3,
+    "dedicated_livekit_deleted": true,
+    "dedicated_network_deleted": true,
+    "builder_container_deleted": true,
+    "load_check_container_deleted": true,
+    "normal_livekit_preserved": true
+  }
+}
