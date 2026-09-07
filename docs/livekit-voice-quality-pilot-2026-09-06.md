@@ -953,3 +953,53 @@ session明示終了、時計・障害runner子processの正常終了、teardown�
 失敗したmanifestとtraceは当該run rootへ保持し、成功runへの置換は行っていない。
 次はRTP欠落時の再生中断と接続全体の終了を切り分け、Coreの応答中断・世代同期と
 整合する復旧処理を検討する。再接続100件と3,000ms目標は未達のままである。
+
+
+## 2026-09-07: RTP不連続と世代同期後のマイク再開
+
+`011174e`で、RTP timestampの正の20ms単位の欠落をPCM出力前に検出し、
+当該応答の停止位置通知・Coreへのcancel要求・状態同期を送る処理を追加した。
+確認できていないsampleを全出力済みへ補完しない。停止済みの旧trackは再構築しない。
+またBackendでは世代変更時に旧microphone readerが終了したままになる経路を修正した。
+旧readerの終了を待って現世代のreaderを開始し、同世代の同期再送で重複させず、
+購読解除後には再開しない。participantとsession所有権も照合する。
+
+マイク再開のテストは修正前に1失敗・1成功、修正後は音声runtime／lifecycle／private契約の
+関連108件が成功した。Frontend全単体544件、型検査・build・Ruffも成功した。
+停止済みtrackを「未接続のgraphとして作る」とした旧テストは、graph自体を作らない期待へ更新した。
+実切断診断には、回復測定の10秒窓の後に同じsessionの次発話を入れる検証を追加した。
+これは回復時間の代替値として扱わない。
+
+`network-fault-session-02`は`RTP packet sequence invalid`で失敗した。
+`0f18c81`で数値contextを追加した`network-fault-session-03`では、受信packet番号は期待どおり
+だったが、同じ送信元の前後のRTP timestampが完全に同じであることを確認した。
+この観測だけで同一payloadの再送とは断定しない。
+
+`10826bf`ではworker内の限定された保持領域で同じ送信元・RTP timestampのprimary payloadを
+比較し、完全一致の場合だけ独立Opus復号前に除外する処理を追加した。
+内容が異なる場合は`rtp_packet_payload_conflict`として失敗させる。
+Frontend全単体547件、続く実worker経路・filter関連29件、型検査・buildが成功した。
+workerテストではnative配送を保ちながら、重複を二度復号せず受入packet番号も連続することを確認した。
+しかし`network-fault-session-04`はdecoder段階で失敗した。
+
+`438a285`で任意例外本文を含まない固定decoder理由を保存し、関連29件と型検査を確認した。
+続く`network-fault-session-05`では`rtp_packet_payload_conflict`を実際に取得した。
+同じ送信元・RTP timestampに異なるprimary payloadが届いている。
+同一payloadの重複として除外した件数は0で、RTP timestampだけによるpacket同一性の仮定は
+さらに検証が必要である。[Encoded Transformの仕様](https://www.w3.org/TR/webrtc-encoded-transform/#rtcencodedaudioframemetadata)
+には受信音声のRTP sequenceNumberも定義されているため、次は実Browserでその取得と
+packet識別・並びの照合を確認する。現在の取得コードはsequenceNumberを保存していない。
+
+| run | 測定版 | 時計対応の幅 | 結果 |
+|---|---|---:|---|
+| network-fault-session-02 | 011174e | 1.665336ms | RTP並び不整合、復旧・次発話未達 |
+| network-fault-session-03 | 0f18c81 | 1.697722ms | 同じ送信元・同じRTP timestampの再到着を確認、復旧未達 |
+| network-fault-session-04 | 10826bf | 2.129354ms | decoderエラー、復旧・次発話未達 |
+| network-fault-session-05 | 438a285 | 1.746585ms | 異なるprimary payloadの競合、復旧・次発話未達 |
+
+4runとも実切断・network復旧・切断中のcontrol不通は確認できたが、復旧後10秒内の
+control／audio成功は得られず、後続発話も失敗した。マイクreader再開は単体・結合経路での
+検証までで、これらのrunから実会話継続に成功したとは結論しない。
+全runでsession明示終了、子process終了、teardown、所有Frontend／Backend削除を確認した。
+最後に専用LiveKitとnetworkも削除し、失敗rawは各run rootへ保持した。
+再接続100試行、成功率99%、p95 3,000msの受け入れは未達のままである。
