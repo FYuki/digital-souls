@@ -9,6 +9,7 @@
     assistantContent: string
   }[] = []
   export let liveVoiceTurn: {
+    responseId: string | null
     userContent: string
     assistantContent: string
   } | null = null
@@ -49,7 +50,7 @@
     </article>
     <article class="message" data-live-voice-turn="true">
       <span class="speaker">{characterName}（応答中）</span>
-      <p>{liveVoiceTurn.assistantContent}</p>
+      <p data-live-response-text={liveVoiceTurn.responseId ?? undefined}>{liveVoiceTurn.assistantContent}</p>
     </article>
   {/if}
 </div>

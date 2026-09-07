@@ -962,7 +962,8 @@ test('新世代の状態同期が終わるまで診断音を要求しない', as
 
 test('CoreイベントはACK送信失敗中にも一度だけ適用し、ACK再送で接続を維持する', async () => {
   vi.useFakeTimers()
-  const receive = vi.fn(), client = new LiveKitRoomClient(() => undefined, receive)
+  const receive = vi.fn(), delivery = vi.fn(), client = new LiveKitRoomClient(() => undefined, receive)
+  client.setCoreDeliveryObserver(delivery)
   await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000010')
   const room = latestRoom(), disconnected = vi.spyOn(room, 'disconnect')
   const event = {protocol_version: '1.0', event_id: '10000000-0000-4000-8000-000000000010',
@@ -979,6 +980,11 @@ test('CoreイベントはACK送信失敗中にも一度だけ適用し、ACK再�
     emitCoreEvent(room, event)
     await vi.advanceTimersByTimeAsync(250)
     expect(receive).toHaveBeenCalledTimes(1)
+    expect(delivery).toHaveBeenCalledTimes(2)
+    expect(delivery.mock.calls.map(([row]) => row.duplicate)).toEqual([false, true])
+    expect(delivery.mock.calls[1][0]).toMatchObject({type: 'response_delta',
+      responseId: event.response_id, textCharacters: 1, textSequence: 1})
+    expect(delivery.mock.calls[1][0]).not.toHaveProperty('text')
     expect(room.localParticipant.publishData.mock.calls.filter(([p]) =>
       JSON.parse(new TextDecoder().decode(p)).type === 'ack')).toHaveLength(2)
     expect(disconnected).not.toHaveBeenCalled()

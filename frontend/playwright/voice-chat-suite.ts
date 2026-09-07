@@ -1,3 +1,5 @@
+import {installStaleTextProbe} from './stale-text-probe'
+import type {CoreDeliveryObservation} from '../src/livekit/core-delivery-observation'
 import type {StaleAudioObservation} from '../src/livekit/post-gain-monitor'
 import { installUserControlProbe } from './user-control-probe'
 import type {} from './controlled-audio-fixture'
@@ -80,6 +82,7 @@ type CompletedVoiceCycle = {
 }
 
 const installPlaybackProbe = async (page: Page) => {
+  await page.addInitScript(installStaleTextProbe)
   await page.addInitScript(installUserControlProbe)
   await page.addInitScript(() => {
     window.__voiceChatE2E = {
@@ -131,6 +134,7 @@ const installPlaybackProbe = async (page: Page) => {
     const testPortTarget = window as typeof window & {
       __digitalSoulsVoiceSessionTestPort?: {
         createRoom?: (...args: never[]) => unknown
+        observeCoreDelivery?: (observation: CoreDeliveryObservation) => void
         observeStaleAudio?: (observation: StaleAudioObservation) => void
         observeRoom?: (observation: {
           mediaTimelineInterruption?: {responseId: string; atMs: number; reason: 'timestamp_overlap' | 'timestamp_discontinuity'}
@@ -176,6 +180,7 @@ const installPlaybackProbe = async (page: Page) => {
     }
     testPortTarget.__digitalSoulsVoiceSessionTestPort = {
       ...testPortTarget.__digitalSoulsVoiceSessionTestPort,
+      observeCoreDelivery: row => window.__voiceStaleTextProbe?.receive(row),
       observeStaleAudio: (observation) => {
         const rows = window.__voiceChatE2E.staleAudio ??= []
         if (rows.length >= 1024) {window.__voiceChatE2E.staleAudioOverflow = true; return}

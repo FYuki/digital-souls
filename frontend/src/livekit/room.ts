@@ -1,3 +1,4 @@
+import type {CoreDeliveryObservation} from './core-delivery-observation'
 import {postGainAuditSource} from './post-gain-audit'
 import {PostGainAudioMonitor, type StaleAudioObservation} from './post-gain-monitor'
 import {StateSyncRequest} from './state-sync-request'
@@ -143,6 +144,7 @@ export class LiveKitRoomClient {
     suspended: boolean
   }>()
   private readonly audioAuditDisposals = new Set<Promise<void>>()
+  private coreDeliveryObserver: ((row: CoreDeliveryObservation) => void) | undefined
   private staleAudioObserver: ((row: StaleAudioObservation) => void) | undefined
   private readonly networkObserver = new RtpNetworkObserver()
   private readonly mediaObservers = new Map<string, RemoteMediaObserver>()
@@ -233,6 +235,8 @@ export class LiveKitRoomClient {
     this.connectionObserver?.({event, atMs: performance.now(), generation: this.generation,
       ...(retry ? {retry} : {}), ...(disconnect ? {disconnect} : {})})
   }
+
+  setCoreDeliveryObserver(observer: (row: CoreDeliveryObservation) => void): void {this.coreDeliveryObserver = observer}
 
   setStaleAudioObserver(observer: (row: StaleAudioObservation) => void): void {this.staleAudioObserver = observer}
 
@@ -672,6 +676,13 @@ export class LiveKitRoomClient {
 
   private async acknowledgeCoreEvent(room: Room, payload: Uint8Array): Promise<void> {
     const { event, duplicate } = this.coreEvents.receive(payload)
+    // 重複除外・Controllerの旧応答抑止より前の受信を、本文を含めず診断する。
+    if (event.response_id !== undefined && (event.type === 'response_started'
+      || event.type === 'response_delta' || event.type === 'response_cancelled')) {
+      this.coreDeliveryObserver?.({type: event.type, sessionId: event.session_id,
+        responseId: event.response_id, generation: this.generation, atMs: performance.now(), duplicate,
+        textCharacters: event.text?.length ?? 0, textSequence: event.text_sequence ?? null})
+    }
     if (!duplicate) {
       if (event.type === 'response_started' && event.response_id !== undefined
         && !this.stoppedResponses.has(event.response_id)) {

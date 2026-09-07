@@ -1642,3 +1642,16 @@ interactive→0→0.001→0→interactiveの順に比較した。48kHzでinterac
 全5 contextとブラウザを閉じた。この診断は無音sourceであり、実会話のstaleやunderrunの改善証拠ではない。
 [Web Audio仕様](https://www.w3.org/TR/2021/REC-webaudio-20210617/)に従い、数値のlatency hintは要求値として使い、
 実測値を別途記録する。最小遅延要求を通常の再生経路へ適用し、実接続で残留音声と再生継続性を再検証する。
+
+
+### 最小遅延要求の実接続pilot
+
+測定版 `201f89dc53ffc7778fa52db69cfdf6b62de82190` の独立take-turn 3件は、
+全件で会話・割り込み・session終了が成功した。実際のAudioContextは48kHz、
+base latency約2.67ms、output latency 8msだった。最新の監視行は全件でgraph closed、
+drain完了、前後anchorと監視範囲の成立、欠測なしを確認し、client cancel受信後の非ゼロsampleは上下限とも0だった。
+後着の復号済みpacket、観測overflow、transport failureも0件だった。
+実行中のFrontend／Backend imageが測定版と一致し、所有containerの終了後削除を確認した。
+
+この3件は100試行の受け入れを代替しない。全packetの再生継続性、サーバーcancel時刻からの出力窓、
+text受信とDOM表示の観測は別途検証する。修正版のFrontendは772件・型検査・ビルドが成功した。

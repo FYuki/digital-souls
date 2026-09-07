@@ -373,7 +373,9 @@ describe('App conversation lifecycle', () => {
       type: 'response_delta', response_id: RESPONSE_ID,
       text_sequence: 1, text: '古い途中応答',
     })
+    expect(screen.getByText('古い途中応答').getAttribute('data-live-response-text')).toBe(RESPONSE_ID)
     await emitCoreEvent({ type: 'response_cancelled', response_id: RESPONSE_ID })
+    expect(document.querySelector(`[data-live-response-text="${RESPONSE_ID}"]`)).toBeNull()
     await emitCoreEvent({
       type: 'response_delta', response_id: RESPONSE_ID,
       text_sequence: 2, text: '混入してはいけない',

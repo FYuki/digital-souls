@@ -398,3 +398,22 @@ cancelは直前pollの観測時刻以後でなければ受理しない。poll済
 再生用AudioContextは`latencyHint: 0`で最小遅延を要求する。これは保証値ではない。
 診断行の`outputContext`にはブラウザが返すsample rate、base latency、output latencyを保存し、
 未対応や非有限・負の値はnullとする。要求値から実遅延を補完せず、staleと再生欠落は従来どおり実出力で判定する。
+
+### 旧応答テキストの受信とDOM追加
+
+実ブラウザdriverの`stale_text`は、検証済みCoreイベントを重複除外前に観測し、
+旧responseのdelta受信件数／文字数と重複件数を保存する。cancel後も受信を数え、
+Controllerが破棄した受信を未受信と扱わない。文字数の単位はUTF-16 code unitである。
+
+応答中の本文DOMへresponse IDを付け、MutationObserverで追加・置換を別に観測する。
+cancel受信時には保留中のDOM観測を先に確定する。同じ長さの置換、除去後の再提示も数え、
+共通prefix以後を新たな提示として保守的に扱う。本文は同一ページ内の比較だけに使い、
+snapshotには件数と文字数だけを出す。重複DOM・本文上限・応答数上限は欠測またはoverflowへ残す。
+
+現在のscopeは`live_response_dom`であり、保存履歴の再取得後の本文、OSの画面描画完了、
+サーバーcancel時点からの全区間を証明するものではない。受信前後の境界は`client_cancel_received`と明記する。
+単に追加文字数が0でも、開始・cancel・DOMの観測、監視終了がそろわなければ完全な観測とはしない。
+
+割り込み試行は終了前の`evidence`を保持し、終了後の`cleanup_observation`へ最終audio行と
+停止済みtext観測を追加する。take-turnでは旧応答のaudio graph closedも確認し、
+閉鎖を確認できない場合は`audit_cleanup_failed`として試行を失敗にする。

@@ -25,6 +25,7 @@ type LabeledTrial = {id: string; cohort: string; audio_sha256: string; sample_ra
   speech_intervals: {start_sample: number; end_sample: number}[]}
 const snapshot = (page: Page) => page.evaluate(() => ({
   vad: window.__voiceVadDiagnostics,
+  stale_text: window.__voiceStaleTextProbe?.snapshot() ?? null,
   stale_audio: window.__voiceChatE2E.staleAudio ?? [],
   stale_audio_overflow: window.__voiceChatE2E.staleAudioOverflow ?? false,
   core_events: window.__voiceChatE2E.coreEventDiagnostics,
@@ -200,7 +201,22 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
           ended = response.ok() && (await response.json()).phase === 'ended'
         } catch { await responsePromise.catch(() => undefined) }
       } else { await driver.endVoiceSession(page).catch(() => undefined) }
+      // 終了操作後に届いた出力監視の更新も残す。最初のcomplete行や終了前snapshotだけで判定しない。
+      let audioClosed = cohort !== 'take_turn'
+      if (cohort === 'take_turn' && typeof trial.old_response_id === 'string') {
+        audioClosed = await page.waitForFunction(responseId => {
+          const rows = window.__voiceChatE2E.staleAudio?.filter(row => row.responseId === responseId)
+          return rows !== undefined && rows.length > 0 && rows.at(-1)!.graphClosed
+        }, trial.old_response_id, {timeout: 5000}).then(() => true, () => false)
+      }
+      trial.cleanup_observation = await page.evaluate(() => ({observedAtMs: performance.now(),
+        stale_audio: window.__voiceChatE2E.staleAudio ?? [],
+        stale_audio_overflow: window.__voiceChatE2E.staleAudioOverflow ?? false,
+        stale_text: window.__voiceStaleTextProbe?.close() ?? null,
+      })).catch(() => ({browser_state_unavailable: true}))
+      trial.audio_audit_closed = audioClosed
       trial.session_end_confirmed = ended
+      if (!audioClosed) {trial.outcome = 'failure'; trial.audit_cleanup_failed = true}
       if (!ended) {trial.outcome = 'failure'; trial.cleanup_failed = true}
       trials.push(trial)
       await persist()

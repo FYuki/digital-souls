@@ -1,3 +1,4 @@
+import type {CoreDeliveryObservation} from './core-delivery-observation'
 import type {StaleAudioObservation} from './post-gain-monitor'
 import type { VoiceSessionEvent } from '../lib/voice-session/generated'
 import { parseVoiceSessionEvent } from '../lib/voice-session/validation'
@@ -71,6 +72,7 @@ const defaultDependencies: VoiceSessionDependencies = {
       __digitalSoulsVoiceSessionTestPort?: {
         createRoom?: VoiceSessionDependencies['roomFactory']
         observeRoom?: (observation: RoomObservation) => void
+        observeCoreDelivery?: (observation: CoreDeliveryObservation) => void
         observeStaleAudio?: (observation: StaleAudioObservation) => void
         bindRoom?: (room: Pick<LiveKitRoomClient, 'probeControl' | 'setPacketOutputObserver'>) => void
         receiveCoreEvent?: (event: VoiceSessionEvent) => void
@@ -94,6 +96,7 @@ const defaultDependencies: VoiceSessionDependencies = {
       undefined,
       receiveScreenRequest,
     )
+    if (testPort?.observeCoreDelivery) room.setCoreDeliveryObserver(testPort.observeCoreDelivery)
     if (testPort?.observeStaleAudio) room.setStaleAudioObserver(testPort.observeStaleAudio)
     testPort?.bindRoom?.(room)
     return room
