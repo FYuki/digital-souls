@@ -103,1012 +103,116 @@
       ],
       "properties": {
         "audio_presented_samples": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "unit",
-            "observed",
-            "missing",
-            "definitely_stale",
-            "possibly_stale",
-            "verified_zero",
-            "missing_reasons",
-            "lower_total",
-            "upper_total"
-          ],
-          "properties": {
-            "unit": {
-              "const": "sample"
+          "allOf": [
+            {
+              "$ref": "#/$defs/channel"
             },
-            "observed": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "missing": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "definitely_stale": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "possibly_stale": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "verified_zero": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "missing_reasons": {
-              "type": "object",
-              "additionalProperties": false,
+            {
               "properties": {
-                "identity_missing": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "fixture_injection_unverified": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "session_end_unconfirmed": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "cancel_state_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "clock_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "cleanup_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "observation_identity_unverified": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "output_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "receipt_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "text_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "replay_invalid": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "history_observer_unimplemented": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "server_generation_observer_unimplemented": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
+                "unit": {
+                  "const": "sample"
                 }
               }
-            },
-            "lower_total": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            },
-            "upper_total": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
             }
-          }
+          ]
         },
         "audio_received_packets": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "unit",
-            "observed",
-            "missing",
-            "definitely_stale",
-            "possibly_stale",
-            "verified_zero",
-            "missing_reasons",
-            "lower_total",
-            "upper_total"
-          ],
-          "properties": {
-            "unit": {
-              "const": "packet"
+          "allOf": [
+            {
+              "$ref": "#/$defs/channel"
             },
-            "observed": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "missing": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "definitely_stale": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "possibly_stale": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "verified_zero": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "missing_reasons": {
-              "type": "object",
-              "additionalProperties": false,
+            {
               "properties": {
-                "identity_missing": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "fixture_injection_unverified": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "session_end_unconfirmed": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "cancel_state_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "clock_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "cleanup_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "observation_identity_unverified": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "output_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "receipt_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "text_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "replay_invalid": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "history_observer_unimplemented": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "server_generation_observer_unimplemented": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
+                "unit": {
+                  "const": "packet"
                 }
               }
-            },
-            "lower_total": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            },
-            "upper_total": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
             }
-          }
+          ]
         },
         "audio_received_samples": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "unit",
-            "observed",
-            "missing",
-            "definitely_stale",
-            "possibly_stale",
-            "verified_zero",
-            "missing_reasons",
-            "lower_total",
-            "upper_total"
-          ],
-          "properties": {
-            "unit": {
-              "const": "sample"
+          "allOf": [
+            {
+              "$ref": "#/$defs/channel"
             },
-            "observed": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "missing": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "definitely_stale": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "possibly_stale": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "verified_zero": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "missing_reasons": {
-              "type": "object",
-              "additionalProperties": false,
+            {
               "properties": {
-                "identity_missing": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "fixture_injection_unverified": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "session_end_unconfirmed": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "cancel_state_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "clock_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "cleanup_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "observation_identity_unverified": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "output_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "receipt_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "text_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "replay_invalid": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "history_observer_unimplemented": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "server_generation_observer_unimplemented": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
+                "unit": {
+                  "const": "sample"
                 }
               }
-            },
-            "lower_total": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            },
-            "upper_total": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
             }
-          }
+          ]
         },
         "text_received_characters": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "unit",
-            "observed",
-            "missing",
-            "definitely_stale",
-            "possibly_stale",
-            "verified_zero",
-            "missing_reasons",
-            "lower_total",
-            "upper_total"
-          ],
-          "properties": {
-            "unit": {
-              "const": "utf16_code_unit"
+          "allOf": [
+            {
+              "$ref": "#/$defs/channel"
             },
-            "observed": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "missing": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "definitely_stale": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "possibly_stale": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "verified_zero": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "missing_reasons": {
-              "type": "object",
-              "additionalProperties": false,
+            {
               "properties": {
-                "identity_missing": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "fixture_injection_unverified": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "session_end_unconfirmed": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "cancel_state_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "clock_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "cleanup_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "observation_identity_unverified": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "output_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "receipt_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "text_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "replay_invalid": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "history_observer_unimplemented": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "server_generation_observer_unimplemented": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
+                "unit": {
+                  "const": "utf16_code_unit"
                 }
               }
-            },
-            "lower_total": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            },
-            "upper_total": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
             }
-          }
+          ]
         },
         "live_text_presented_characters": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "unit",
-            "observed",
-            "missing",
-            "definitely_stale",
-            "possibly_stale",
-            "verified_zero",
-            "missing_reasons",
-            "lower_total",
-            "upper_total"
-          ],
-          "properties": {
-            "unit": {
-              "const": "utf16_code_unit"
+          "allOf": [
+            {
+              "$ref": "#/$defs/channel"
             },
-            "observed": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "missing": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "definitely_stale": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "possibly_stale": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "verified_zero": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "missing_reasons": {
-              "type": "object",
-              "additionalProperties": false,
+            {
               "properties": {
-                "identity_missing": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "fixture_injection_unverified": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "session_end_unconfirmed": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "cancel_state_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "clock_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "cleanup_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "observation_identity_unverified": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "output_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "receipt_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "text_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "replay_invalid": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "history_observer_unimplemented": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "server_generation_observer_unimplemented": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
+                "unit": {
+                  "const": "utf16_code_unit"
                 }
               }
-            },
-            "lower_total": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            },
-            "upper_total": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
             }
-          }
+          ]
         },
         "history_text_presented_characters": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "unit",
-            "observed",
-            "missing",
-            "definitely_stale",
-            "possibly_stale",
-            "verified_zero",
-            "missing_reasons",
-            "lower_total",
-            "upper_total"
-          ],
-          "properties": {
-            "unit": {
-              "const": "utf16_code_unit"
+          "allOf": [
+            {
+              "$ref": "#/$defs/channel"
             },
-            "observed": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "missing": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "definitely_stale": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "possibly_stale": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "verified_zero": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "missing_reasons": {
-              "type": "object",
-              "additionalProperties": false,
+            {
               "properties": {
-                "identity_missing": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "fixture_injection_unverified": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "session_end_unconfirmed": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "cancel_state_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "clock_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "cleanup_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "observation_identity_unverified": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "output_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "receipt_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "text_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "replay_invalid": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "history_observer_unimplemented": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "server_generation_observer_unimplemented": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
+                "unit": {
+                  "const": "utf16_code_unit"
                 }
               }
-            },
-            "lower_total": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            },
-            "upper_total": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
             }
-          }
+          ]
         },
         "server_generated_text_characters": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "unit",
-            "observed",
-            "missing",
-            "definitely_stale",
-            "possibly_stale",
-            "verified_zero",
-            "missing_reasons",
-            "lower_total",
-            "upper_total"
-          ],
-          "properties": {
-            "unit": {
-              "const": "utf16_code_unit"
+          "allOf": [
+            {
+              "$ref": "#/$defs/channel"
             },
-            "observed": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "missing": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "definitely_stale": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "possibly_stale": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "verified_zero": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "missing_reasons": {
-              "type": "object",
-              "additionalProperties": false,
+            {
               "properties": {
-                "identity_missing": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "fixture_injection_unverified": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "session_end_unconfirmed": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "cancel_state_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "clock_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "cleanup_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "observation_identity_unverified": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "output_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "receipt_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "text_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "replay_invalid": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "history_observer_unimplemented": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "server_generation_observer_unimplemented": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
+                "unit": {
+                  "const": "utf16_code_unit"
                 }
               }
-            },
-            "lower_total": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            },
-            "upper_total": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
             }
-          }
+          ]
         },
         "server_generated_audio_samples": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "unit",
-            "observed",
-            "missing",
-            "definitely_stale",
-            "possibly_stale",
-            "verified_zero",
-            "missing_reasons",
-            "lower_total",
-            "upper_total"
-          ],
-          "properties": {
-            "unit": {
-              "const": "sample"
+          "allOf": [
+            {
+              "$ref": "#/$defs/channel"
             },
-            "observed": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "missing": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "definitely_stale": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "possibly_stale": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "verified_zero": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 100
-            },
-            "missing_reasons": {
-              "type": "object",
-              "additionalProperties": false,
+            {
               "properties": {
-                "identity_missing": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "fixture_injection_unverified": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "session_end_unconfirmed": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "cancel_state_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "clock_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "cleanup_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "observation_identity_unverified": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "output_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "receipt_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "text_window_unobserved": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "replay_invalid": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "history_observer_unimplemented": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
-                },
-                "server_generation_observer_unimplemented": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
+                "unit": {
+                  "const": "sample"
                 }
               }
-            },
-            "lower_total": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            },
-            "upper_total": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
             }
-          }
+          ]
         }
       }
     },
@@ -1186,6 +290,138 @@
         "replay_sources_sha256": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "channel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unit",
+        "observed",
+        "missing",
+        "definitely_stale",
+        "possibly_stale",
+        "verified_zero",
+        "missing_reasons",
+        "lower_total",
+        "upper_total"
+      ],
+      "properties": {
+        "unit": {
+          "enum": [
+            "sample",
+            "packet",
+            "utf16_code_unit"
+          ]
+        },
+        "observed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "missing": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "definitely_stale": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "possibly_stale": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "verified_zero": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "missing_reasons": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "identity_missing": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "fixture_injection_unverified": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "session_end_unconfirmed": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "cancel_state_unobserved": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "clock_window_unobserved": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "cleanup_unobserved": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "observation_identity_unverified": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "output_window_unobserved": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "receipt_window_unobserved": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "text_window_unobserved": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "replay_invalid": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "history_observer_unimplemented": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "server_generation_observer_unimplemented": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        },
+        "lower_total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "upper_total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
         }
       }
     }
