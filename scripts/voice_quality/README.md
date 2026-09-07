@@ -204,3 +204,6 @@ backend/.venv/bin/python scripts/voice_quality/run_pilot.py \
 private transportの`control_probe`と`control_probe_ack`はUUIDと世代を相関する。Backendは現在のparticipant・世代・利用可能phaseを確認し、世代・Core・再生状態を変更せず応答する。通常会話からは自動送信しない。Browserは最大1件を500msだけ保持し、publish完了を往復成功にしない。切断・再接続・世代変更で待機を終了し、古い応答・時計の逆転・期限後の応答は成功へ補完しない。
 
 raw manifestには同一Browserの`performance.now()`で記録した送信・ack受信時刻、probe成否、元応答の出力証拠を残す。これは障害なしのcontrol経路診断であり、音声のnetwork回復や再接続100件の成功率・遅延を証明しない。障害runnerとの時計対応と、実音声frameの回復・重複出力の観測は別に必要である。
+
+
+control probeを専用19880 bridgeへ接続する場合は`--fault-bridge`と専用キーの`--livekit-env`を指定する。runnerとPlaywrightは`integration-voice-fault`を明示選択し、通常モードでは継承されたfault選択を除去する。専用環境の起動・所有検証・readinessの境界は`infra/voice-quality/README.md`を参照する。通常100試行や割り込みモードへfault選択を混在させない。

@@ -148,3 +148,22 @@ def test_control_probe_scope_is_explicit_and_separate(tmp_path, monkeypatch, con
         with pytest.raises(ValueError, match='control probe'):
             pilot.pilot_environment(inference, livekit, 'probe-test', count, False,
                                     scheduled, continuous, controlled, cohort, True)
+
+
+def test_fault_profile_and_token_endpoint_are_selected_together(tmp_path, monkeypatch):
+    inference, livekit = tmp_path / 'inference.env', tmp_path / 'livekit.env'
+    inference.write_text('INFERENCE_TARGET_CHAT=ollama/test\n')
+    livekit.write_text('LIVEKIT_KEYS=test:test-only\n')
+    monkeypatch.setenv('VOICE_QUALITY_FAULT_BRIDGE', '1')
+    monkeypatch.setenv('LIVEKIT_URL', 'ws://127.0.0.1:17880')
+    arguments = (inference, livekit, 'fault-probe', 3, False, True)
+    env = pilot.pilot_environment(*arguments, control_probe=True, fault_bridge=True)
+    assert env['DS_PROFILE'] == 'integration-voice-fault'
+    assert env['LIVEKIT_URL'] == 'ws://127.0.0.1:19880'
+    assert env['VOICE_QUALITY_FAULT_BRIDGE'] == '1'
+    ordinary = pilot.pilot_environment(*arguments)
+    assert ordinary['DS_PROFILE'] == 'integration-voice'
+    assert ordinary['LIVEKIT_URL'] == 'ws://127.0.0.1:7880'
+    assert 'VOICE_QUALITY_FAULT_BRIDGE' not in ordinary
+    with pytest.raises(ValueError, match='fault bridge'):
+        pilot.pilot_environment(*arguments, fault_bridge=True)

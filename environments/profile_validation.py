@@ -16,7 +16,6 @@ from profile_types import (
     ProfileError,
 )
 
-
 PROFILE_SCHEMA_VERSION = 1
 REQUIRED_DEPENDENCY_NAMES = ("frontend", "backend", "ollama", "voicevox", "whisper", "chroma")
 OPTIONAL_DEPENDENCY_NAMES = ("livekit",)
@@ -111,7 +110,7 @@ def validate_http_origin(value: object, path: str) -> str:
     return origin
 
 
-def _validate_mode_source(name: str, dependency: Dependency, path: str) -> None:
+def _validate_mode_source(name: str, dependency: Dependency, path: str, profile_name: str) -> None:
     mode = dependency["mode"]
     source = dependency["source"]
     if mode == "disabled" and source is not None:
@@ -137,6 +136,9 @@ def _validate_mode_source(name: str, dependency: Dependency, path: str) -> None:
             raise ProfileError(f"{path}.readinessPath is required for real/{source}")
     if mode == "real" and name in FIXED_LOCAL_HTTP_DEPENDENCY_CONTRACTS:
         fixed_base_urls, fixed_readiness_path = FIXED_LOCAL_HTTP_DEPENDENCY_CONTRACTS[name]
+        if name == "livekit" and profile_name == "integration-voice-fault":
+            # 通常dev/dogfoodの許可先は拡張せず、専用Profileだけを障害注入先へ固定する。
+            fixed_base_urls = {"http://127.0.0.1:19880", "http://127.0.0.1:19880/"}
         if dependency["baseUrl"] not in fixed_base_urls:
             raise ProfileError(
                 f"{path}.baseUrl must identify the fixed local service"
@@ -187,7 +189,7 @@ def _validate_dependency(profile_name: str, name: str, raw: object) -> Dependenc
         **_validated_readiness_path(record, path),
         **({"reload": record["reload"]} if "reload" in record else {}),
     })
-    _validate_mode_source(name, dependency, path)
+    _validate_mode_source(name, dependency, path, profile_name)
     return dependency
 
 

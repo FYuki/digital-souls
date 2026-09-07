@@ -57,10 +57,11 @@ def test_resource_sampler_refuses_unowned_container_without_connecting(tmp_path,
     assert ContainerResourceSampler(report).sample() == {"status": "missing", "reason": "owned_backend_not_running"}
 
 
-def test_resource_sampler_emits_only_counters_and_checks_container_identity(tmp_path, monkeypatch):
+@pytest.mark.parametrize("profile_name", ["integration-voice", "integration-voice-fault"])
+def test_resource_sampler_emits_only_counters_and_checks_container_identity(tmp_path, monkeypatch, profile_name):
     import app.voice_resource_metrics as module
     report = tmp_path / "report.json"
-    report.write_text(json.dumps({"effectiveProfile": {"effectiveProfile": "integration-voice"},
+    report.write_text(json.dumps({"effectiveProfile": {"effectiveProfile": profile_name},
                                   "runtime": {"environmentId": "test", "dataRoot": str(report.resolve().parents[2])},
                                   "services": {"backend": {"owned": True, "containerIdentity": {"containerId": "a" * 64}}}}))
     class Connection:

@@ -554,3 +554,29 @@ def test_should_use_existing_service_connection_contracts(
 
     assert dependency["baseUrl"] == base_url
     assert dependency["readinessPath"] == readiness_path
+
+
+def test_voice_fault_profile_keeps_inference_services_and_uses_dedicated_livekit(profile_validator, profile_module):
+    standard = profile_module.load_profile('integration-voice')
+    fault = profile_module.load_profile('integration-voice-fault')
+    profile_validator.validate(fault)
+    assert fault['name'] == 'integration-voice-fault'
+    assert fault['readyGate'] == standard['readyGate']
+    assert fault['dependencies']['livekit'] == {
+        'mode': 'real', 'source': 'external', 'baseUrl': 'http://127.0.0.1:19880', 'readinessPath': '/',
+    }
+    assert {name: value for name, value in fault['dependencies'].items() if name != 'livekit'} == {
+        name: value for name, value in standard['dependencies'].items() if name != 'livekit'
+    }
+
+
+@pytest.mark.parametrize('profile_name,endpoint', [
+    ('integration-voice', 'http://127.0.0.1:19880'),
+    ('integration-voice-fault', 'http://127.0.0.1:7880'),
+    ('integration-voice-fault', 'http://127.0.0.1:17880'),
+])
+def test_voice_fault_endpoint_cannot_cross_into_another_profile(profile_module, profile_name, endpoint):
+    raw = _read_json(ENVIRONMENTS_DIR / 'profiles' / f'{profile_name}.json')
+    raw['dependencies']['livekit']['baseUrl'] = endpoint
+    with pytest.raises(profile_module.ProfileError, match='fixed local service'):
+        profile_module.validate_profile(raw, profile_name)

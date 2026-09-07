@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 import ipaddress
 import json
 import math
 import socket
 import subprocess
 import time
+from dataclasses import dataclass
 from typing import Any
 
 PURPOSE = "voice-quality-fault-injection"
@@ -17,7 +17,7 @@ PURPOSE_LABEL = "io.digital-souls.purpose"
 
 def docker(*arguments: str) -> Any:
     result = subprocess.run(
-        ["docker", *arguments], capture_output=True, text=True, timeout=30,
+        ["docker", *arguments], capture_output=True, text=True, timeout=30, check=False,
     )
     if result.returncode:
         # inspectには環境変数も含まれる。stdout/stderrを例外へ転記しない。
@@ -55,6 +55,21 @@ def validate_target(container: dict[str, Any], network: dict[str, Any]) -> Targe
         raise ValueError("selected bridge does not match the container")
     address = str(ipaddress.IPv4Address(binding["IPAddress"]))
     return Target(container_id, network_id, address)
+
+
+def resolve_target(container_name: str) -> Target:
+    """probe接続先と切断対象が同じ専用loopback serviceであることを確認する。"""
+    container = docker("inspect", container_name)[0]
+    networks = container.get("NetworkSettings", {}).get("Networks") or {}
+    if len(networks) != 1:
+        raise ValueError("test container must have exactly one network")
+    network = docker("network", "inspect", next(iter(networks.values()))["NetworkID"])[0]
+    target = validate_target(container, network)
+    ports = container.get("HostConfig", {}).get("PortBindings") or {}
+    for port, protocol in ((19880, "tcp"), (19881, "tcp"), (19882, "udp")):
+        if ports.get(f"{port}/{protocol}") != [{"HostIp": "127.0.0.1", "HostPort": str(port)}]:
+            raise ValueError("fault service must publish its dedicated loopback ports")
+    return target
 
 
 def emit(name: str) -> None:
@@ -96,12 +111,7 @@ def main() -> None:
     parser.add_argument("--container", required=True)
     parser.add_argument("--duration-ms", type=float, default=2_000)
     arguments = parser.parse_args()
-    container = docker("inspect", arguments.container)[0]
-    networks = container.get("NetworkSettings", {}).get("Networks") or {}
-    if len(networks) != 1:
-        raise ValueError("test container must have exactly one network")
-    network = docker("network", "inspect", next(iter(networks.values()))["NetworkID"])[0]
-    pulse(validate_target(container, network), arguments.duration_ms / 1000)
+    pulse(resolve_target(arguments.container), arguments.duration_ms / 1000)
 
 
 if __name__ == "__main__":

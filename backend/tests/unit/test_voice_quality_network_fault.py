@@ -112,3 +112,23 @@ def test_invalid_duration_never_touches_docker(monkeypatch, duration):
     monkeypatch.setattr(fault, 'docker', forbidden)
     with pytest.raises(ValueError):
         fault.pulse(fault.Target('c', 'n', '172.20.0.2'), duration)
+
+
+@pytest.mark.parametrize('change', [None, 'host_ip', 'host_port', 'extra_binding', 'missing_media'])
+def test_fault_resolver_requires_the_same_dedicated_probe_endpoint(monkeypatch, change):
+    container, network = records()
+    container['HostConfig']['PortBindings'] = {
+        f'{port}/{protocol}': [{'HostIp': '127.0.0.1', 'HostPort': str(port)}]
+        for port, protocol in ((19880, 'tcp'), (19881, 'tcp'), (19882, 'udp'))
+    }
+    ports = container['HostConfig']['PortBindings']
+    if change == 'host_ip': ports['19880/tcp'][0]['HostIp'] = '0.0.0.0'
+    if change == 'host_port': ports['19880/tcp'][0]['HostPort'] = '17880'
+    if change == 'extra_binding': ports['19880/tcp'].append({'HostIp': '::1', 'HostPort': '19880'})
+    if change == 'missing_media': del ports['19882/udp']
+    monkeypatch.setattr(fault, 'docker', lambda *args: [container if args[0] == 'inspect' else network])
+    if change is None:
+        assert fault.resolve_target('test-only') == fault.Target('test-container', 'test-network', '172.20.0.2')
+    else:
+        with pytest.raises(ValueError, match='loopback ports'):
+            fault.resolve_target('test-only')

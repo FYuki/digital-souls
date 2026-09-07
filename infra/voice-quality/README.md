@@ -35,3 +35,22 @@ Python LiveKit SDKの2 participantで合成toneと制御probeを送受信し、�
 調整中に、最初の試行はtimeout、次の試行は通信復旧後のAudioStream cleanupでSDKが異常終了し、その次は復旧後の単発制御probe待ちでtimeoutした。これらを成功へ読み替えない。再接続で作り直された全streamを閉じ、疎通確認のprobeを繰り返す検証コードへ修正した。
 
 最後の診断試行は終了処理まで正常終了した。切断前の有音受信は75frame、切断中央区間の有音受信は0frame。link復旧から最初の有音受信は3,265.5ms、制御probe受信は3,298.3msだった。これは1回の診断値であり、reconnect成功率99%やp95 3,000ms以下の証明ではない。制御・音声の利用可能時刻とnetwork復旧を分け、障害注入用runnerと測定対象のclockを明示する必要も残る。
+
+
+## 実Browser／Coreを専用bridgeへ接続する
+
+`integration-voice-fault` ProfileはLiveKitのreadinessを19880へ固定する。通常の`integration-voice`では19880を許可せず、専用Profileでは7880・17880を拒否する。Frontend／Backendのtest用portと共有推論サービスは通常の実接続試験と同じで、同時に起動せず、runごとのdata rootへ分離する。
+
+専用サービスの`LIVEKIT_KEYS`と同じ値を持つ、権限を限定した環境ファイルを指定する。通常devやdogfoodのキーは使い回さない。`/path/to/fault-livekit.env`はそのファイルへ置き換える。
+
+```bash
+backend/.venv/bin/python scripts/voice_quality/run_pilot.py \
+  --run-id fault-control-probe-new \
+  --inference-env /home/asa/dev/digital-souls/backend/.env \
+  --livekit-env /path/to/fault-livekit.env \
+  --fault-bridge --control-probe --trials 3 --scheduled-fixture --disable-thinking
+```
+
+runnerは専用コンテナのpurpose・test label・専用bridge・排他的な接続に加え、19880/tcp・19881/tcp・19882/udpの公開先がそれぞれ同じportの127.0.0.1であることを起動前に検査する。token接続先、Profileとreadiness、Browser／orchestratorのProfileを揃える。資源samplerも当該Profileの所有Backendだけを観測し、別環境や別data rootは拒否する。
+
+このコマンドは障害なしのcontrol probe診断であり、自動的には切断しない。再接続100件の測定には、これに障害注入と有界時計対応、control・実音声の回復観測を組み合わせる必要がある。

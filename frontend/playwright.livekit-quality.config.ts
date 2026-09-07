@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { defineConfig, type PlaywrightTestConfig } from '@playwright/test'
 import { join } from 'node:path'
 import { dirname } from 'node:path'
@@ -16,13 +17,24 @@ const resultRoot = runId === undefined ? controlledRoot : join(controlledRoot, '
 const dataRoot = join(resultRoot, 'runtime-data')
 const tracePath = join(dataRoot, 'voice-metrics', 'controlled-trace.jsonl')
 const manifestPath = join(resultRoot, 'trial-manifest.json')
-const base = createSuiteConfig('integration-voice')
+const faultBridge = process.env.VOICE_QUALITY_FAULT_BRIDGE === '1'
+if (process.env.VOICE_QUALITY_FAULT_BRIDGE !== undefined && !faultBridge) {
+  throw new Error('invalid fault bridge selection')
+}
+if (faultBridge && process.env.VOICE_QUALITY_CONTROL_PROBE !== '1') {
+  throw new Error('fault bridge requires an explicit control probe diagnostic')
+}
+const selectedProfile = faultBridge ? 'integration-voice-fault' : 'integration-voice'
+const base = createSuiteConfig('integration-voice', faultBridge ? {
+  loadProfile: () => JSON.parse(readFileSync(join(frontendRoot, '..', 'environments', 'profiles', 'integration-voice-fault.json'), 'utf8')),
+} : undefined)
 const isCollectionOnly = process.argv.includes('--list')
 const webServer = base.webServer as NonNullable<PlaywrightTestConfig['webServer']> & {
   env: Record<string, string>
 }
 
 Object.assign(process.env, {
+  DS_PROFILE: selectedProfile,
   DS_DATA_DIR: dataRoot,
   DS_ENVIRONMENT_ID: 'test',
   DS_ENVIRONMENT_RUN_REPORT: join(dataRoot, 'runtime', 'standalone', 'environment-run.json'),
@@ -51,6 +63,7 @@ export default defineConfig({
     ...webServer,
     env: {
       ...webServer.env,
+      DS_PROFILE: selectedProfile,
       DS_DATA_DIR: dataRoot,
       DS_ENVIRONMENT_ID: 'test',
       DS_ENVIRONMENT_RUN_REPORT: join(dataRoot, 'runtime', 'standalone', 'environment-run.json'),
