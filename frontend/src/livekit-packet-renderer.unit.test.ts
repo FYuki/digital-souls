@@ -168,3 +168,23 @@ test('停止した応答の未照合区間は後から届いた時計で提示�
   expect(p.step(1792)).toEqual(new Float32Array(128))
   expect(p.messages).toHaveLength(1)
 })
+
+// PCM到着前の時計履歴には提示済み区間がなく、次の公開時計から安全に取り直せる。
+test('PCM到着前の時計不一致で接続を終了せず、受信後は元のPCM全量を出力する', () => {
+  const p = renderer()
+  p.step(0)
+  p.step(0)
+  p.step(128)
+  expect(p.messages).toEqual([])
+  p.send(packet(0))
+  const output: number[] = []
+  for (let frame = 256; frame <= 2688; frame += 128) {
+    const samples = p.step(frame)
+    if (frame >= 1664) output.push(...samples)
+  }
+  expect(output.slice(0, 960)).toEqual([...new Float32Array(960).fill(.25)])
+  const rendered = p.messages.filter(row => row.kind === 'rendered')
+  expect(rendered.reduce((sum, row) => sum + Number(row.endFrame) - Number(row.startFrame), 0)).toBe(960)
+  expect(rendered[0]).toMatchObject({packetIndex: 0, packetSampleOffset: 0, startFrame: 1920})
+  expect(p.messages.some(row => row.kind === 'error')).toBe(false)
+})

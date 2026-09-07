@@ -39,6 +39,14 @@ class PacketRenderer extends AudioWorkletProcessor {
     let quantum;
     try {quantum = this.clock.read(currentFrame, out.length);}
     catch {
+      // PCM未到着なら提示済み・未照合の音声区間はない。不要な時計履歴だけを破棄する。
+      // 受信後の時計不一致ではこの経路を使わず、曖昧な出力を確認済みにしない。
+      if (this.startFrame === null && this.renderedSamples === 0 && this.pendingEvidence.length === 0
+        && Number.isSafeInteger(currentFrame) && currentFrame >= 0) {
+        this.clock = new RenderQuantumClock();
+        this.clock.read(currentFrame, out.length);
+        return true;
+      }
       this.stopped = true; this.pendingEvidence = [];
       this.port.postMessage({kind: 'error', reason: 'render_clock_unreconciled'}); return true;
     }

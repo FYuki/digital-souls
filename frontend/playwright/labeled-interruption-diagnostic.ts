@@ -70,12 +70,23 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
       })
       await installScheduledFixture(page, initial)
       const microphone = await driver.openVoiceChat(page)
+      // 初回の再生が失敗しても、作成済みsessionの終了応答を照合できるよう先に記録する。
+      // token本文やsecretは証跡へ保存せず、session_idだけを取り出す。
+      const issuedResponse = page.waitForResponse(response => response.request().method() === 'POST'
+        && new URL(response.url()).pathname.endsWith('/voice/livekit/token'), {timeout: 10000}).catch(() => null)
       await microphone.click()
+      const issued = await issuedResponse
+      if (issued === null || !issued.ok()) throw new Error('session creation response unavailable')
+      const {session_id: issuedSessionId} = await issued.json() as {session_id?: unknown}
+      if (typeof issuedSessionId !== 'string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(issuedSessionId)) {
+        throw new Error('session creation identity unavailable')
+      }
+      trial.session_id = issuedSessionId
       await expect(microphone).toHaveAttribute('aria-pressed', 'true')
       await page.evaluate(() => window.__voiceUserControlProbe!.begin())
       await page.evaluate(() => window.__voiceFixtureClock!.start())
       const cycle = await driver.waitForCompletedVoiceCycle(page)
-      trial.session_id = cycle.sessionId
+      expect(cycle.sessionId, 'created session and initial response correlation').toBe(trial.session_id)
       trial.old_response_id = cycle.responseId
       trial.initial_utterance_id = cycle.utteranceId
       stage = 'playback_overlap'

@@ -794,3 +794,18 @@ VADの音量依存も[全300素材と非発声音120件](artifacts/vad-model-gai
 [製品実装によるオフライン再検証](artifacts/vad-short-speech-production-2026-09-07.json)では、音声300件・既存背景音120件・追加の短い電子音と雑音216条件が候補版と全行一致した。音声300件の未検出・先頭欠落・早期終了・分割は0件、確定遅延p95は各cohort約757.7ms。既存背景音の誤確定9/120件、追加条件の誤確定70/216件は比較元から増えていない。背景音集計の`baseline_false_starts`16件はライブラリ既定FrameProcessorであり、製品の比較元9件とは区別する。
 
 関連テスト64件は開始・終了順序、状態resetの同期、初期化失敗時の解放、同梱WASMの実行、PCM不変、異常入力を検証した。Frontend全単体490件・モジュール97件、型検査・ビルドが成功した。全単体の初回ではAppの補助VAD依存mock未追加により9件が失敗し、mockを追加した再実行で成功した。ビルドには既存の大きなchunkに関する警告が残る。実接続での開始・終了通知とpre-roll、分類・cancelの検証はこのオフライン結果に含めない。
+
+
+`c907f06`固定の[実接続少数試験](artifacts/livekit-short-speech-pilot-2026-09-07.json)では、相槌4/4件、take-turn4/4件が成功した。相槌のうち3件は短音声補助により開始・終了を同じcallbackで確定し、開始時刻を約1,246ms前の候補先頭に保ったままCoreへ通知した。全4件で最終相槌判定と旧応答の全出力継続、停止・cancel0件を検証した。take-turn4件も投入時計・旧応答相関・cancelを全件検証し、local stop／turn decision p95は1,106.1ms、decision後cancelは6.934ms、全cancelは1,130.35msだった。
+
+両試験は追加のthinking無効・RAGなし条件であり、通常設定での人格・記憶品質の証拠にはしない。全8sessionの明示終了、両runのteardown完了、所有Frontend／Backendコンテナの削除を確認した。最低100件を満たさないため、相槌・take-turnの最終合否はまだ未達として記録する。raw runは`product-short-backchannel-pilot-01`と`product-short-take-turn-pilot-01`に保持する。
+
+## 2026-09-07: 補助VAD組み込み後のtake-turn 100件と再生前の時計管理
+
+`c907f06`固定の[実接続take-turn 100件](artifacts/livekit-take-turn-100-2026-09-07-short-speech.json)は98成功・2失敗だった。投入時計を検証できた99件のうちcancel確認98件、見逃し1/99件で1%を超え、未投入1件も残るため受け入れは未達とする。local stop／turn decision／decision後cancel／全cancelの有効98件のp95は各1,920.90／1,920.75／5.955／1,948.15ms。各指標の欠測2件を残し、有効値だけで最終合格にしない。
+
+0始まりindex 6は約844msの発話がVAD候補のままmisfireとなり、主VADの最大確率は約0.273だった。700ms以下を対象とする短い候補の補助条件からも外れた。この素材は事前の6位相比較では全て検出できており、実入力との差を引き続き調べる。index 23は割り込み投入前の初回応答で`renderer/render_clock_unreconciled`が発生した。音声受信・decode・出力開始は未観測で、Coreの発話確定と応答開始だけが記録された。
+
+後者では測定harnessが再生成功後にsession IDを保存していたため、初期応答失敗時の終了確認も欠測となった。今回の99件の終了確認を100件へ補完しない。全run終了後のteardown完了と所有Frontend／Backendコンテナの削除は別に確認した。raw runは`product-short-take-turn-100-01`へ保持する。測定所要時間は約15.6分。
+
+再生前の時計不一致を固定clock列で再現する単体テストは修正前1失敗・26成功だった。PCMが未到着で提示済み・未照合の音声区間がない場合だけ、不要な時計履歴を破棄して再取得する修正後は27件成功、型検査・ビルドも成功した。PCM受信後は従来どおり不一致をエラーにし、出力済みの未照合区間を時刻補正で確認済みへ昇格しない。測定harnessはsession作成応答からIDのみを先に記録し、初回応答との一致を検証するようにした。これらの修正後の実接続再検証は別のrunとして実施する。
