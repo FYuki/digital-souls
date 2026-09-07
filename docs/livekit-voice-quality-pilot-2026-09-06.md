@@ -867,3 +867,16 @@ teardown完了と所有Frontend／Backendコンテナの削除を確認した。
 VAD、相槌・take-turn、dogfood gap・処理失敗率は、表示用basis pointsを丸めてから比較すると閾値をわずかに超えた率も合格になる。そのため合否は元の件数比で判定し、表示用の丸めは維持する。目標値は変更していない。
 
 回帰テストは修正前22失敗・23成功、修正後は既存の音声指標・cohort検証を含む関連153件が成功した。Ruffと差分検査も成功。今回保存した通常100件の自動比較結果は、修正前後で完全に一致することを確認した。実際のネットワーク障害後のcontrol／audio回復100件は、この評価関数の検証だけでは達成扱いにしない。
+
+
+## 2026-09-07: 会話を変えないcontrol往復の実測
+
+再接続測定のcontrol確認に備え、private transportへ`control_probe`／`control_probe_ack`を追加した。状態同期要求は世代やCore状態を変えるため、周期的な疎通確認には流用しない。probeは現在のparticipant・世代・利用可能phaseでのみ応答し、Core通知・応答の中断・世代変更を行わない。BrowserはUUIDと世代で送受信を相関し、最大1件を500msだけ保持する。通常会話からの自動送信は追加していない。
+
+送信完了だけの誤成功、異なるnonce／世代、遅着ack、切断後の古い送信失敗、時計逆転、500ms後のtimer遅延をテストした。期限の境界ケースは初回1失敗・既存を含む515成功から修正し、最終Frontend全単体516件・結合97件が成功した。Backendの認可・世代・lifecycle・private契約54件とrunner分離35件も成功。型検査、build、変更PythonのRuff、差分検査を完了した。
+
+`d642475`固定の`control-probe-session-01`で、実Ollama／Whisper／VOICEVOX／LiveKitによる1応答の再生中に3probeを送信し、3/3往復に成功した。同一Browserの単調時計による往復時間は17.6／4.7／4.7msで、全probeを異なるUUID・同じ世代0へ相関した。旧応答の再生中であること、追加応答やcancelがないこと、transportエラー0を確認した。
+
+さらにBackend traceの元sample数とBrowser packet・出力時計・全出力完了を照合し、168,960/168,960 samplesの出力、gap合計・最大gapとも0を検証した。session明示終了、teardown完了、所有Frontend／Backendコンテナ削除も確認した。raw manifestとtraceは当該run rootへ保持し、再実行コマンドは`scripts/voice_quality/README.md`に記載した。
+
+これは障害なし・1 session・3probeの診断である。再接続の100独立試行、network回復時刻とBrowser時計の対応、実音声の復旧時刻、重複再生0の受け入れは未完了。次は専用bridgeの接続先とreadinessが一致する測定Profileを用意し、実際の障害注入へ結ぶ。
