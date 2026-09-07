@@ -1,4 +1,4 @@
-import {afterEach, expect, test} from 'vitest'
+import {afterEach, expect, test, vi} from 'vitest'
 import {installStaleTextProbe} from '../playwright/stale-text-probe'
 import type {CoreDeliveryObservation} from './livekit/core-delivery-observation'
 
@@ -73,4 +73,26 @@ test('終了後は観測を更新せず、後着cancelでも最初の境界を�
   const final = probe.close(); node.textContent = '観測終了後'; probe.receive(event('response_delta'))
   await Promise.resolve()
   expect(probe.snapshot().rows).toEqual(final.rows)
+})
+
+
+test('DOM変更は前回観測からcallbackまでの区間を保持し、過去の境界を判定できる', async () => {
+  const clock = vi.spyOn(performance, 'now').mockReturnValue(1000)
+  try {
+    const {probe, node} = start()
+    clock.mockReturnValue(1010); probe.receive(event('response_delta'))
+    clock.mockReturnValue(1011); node.textContent = '本文'
+    clock.mockReturnValue(1015); await Promise.resolve()
+    clock.mockReturnValue(1030); probe.receive(event('response_cancelled'))
+    const row = probe.snapshot().rows[0]
+    expect(row.changes).toEqual([
+      {kind: 'received', lowerMs: 1009.8, upperMs: 1010.2, characters: 2, duplicate: false, textSequence: 1},
+      {kind: 'dom_added', lowerMs: 1009.8, upperMs: 1015.2, characters: 2},
+    ])
+    expect(row.domAfterCancelAddedCharacters).toBe(0)
+    expect(row.observedFromMs).toBe(1000); expect(row.observedThroughMs).toBe(1030)
+    row.changes[0] = {...row.changes[0], characters: 999}
+    expect(probe.snapshot().rows[0].changes[0].characters).toBe(2)
+    probe.close()
+  } finally {clock.mockRestore()}
 })

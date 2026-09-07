@@ -1,3 +1,4 @@
+import type {DecodedReceiptSnapshot} from '../src/livekit/decoded-receipt-audit'
 import {installStaleTextProbe} from './stale-text-probe'
 import type {CoreDeliveryObservation} from '../src/livekit/core-delivery-observation'
 import type {StaleAudioObservation} from '../src/livekit/post-gain-monitor'
@@ -17,6 +18,8 @@ declare global {
       speechStarted: (utteranceId: string, atMs: number) => Promise<void>
     }
     __voiceChatE2E: {
+      decodedReceipts?: DecodedReceiptSnapshot[]
+      decodedReceiptsOverflow?: boolean
       staleAudio?: StaleAudioObservation[]
       staleAudioOverflow?: boolean
       mediaTimelineInterruptions?: Array<{responseId: string; atMs: number; reason: 'timestamp_overlap' | 'timestamp_discontinuity'}>
@@ -135,6 +138,7 @@ const installPlaybackProbe = async (page: Page) => {
       __digitalSoulsVoiceSessionTestPort?: {
         createRoom?: (...args: never[]) => unknown
         observeCoreDelivery?: (observation: CoreDeliveryObservation) => void
+        observeDecodedReceipts?: (row: DecodedReceiptSnapshot) => void
         observeStaleAudio?: (observation: StaleAudioObservation) => void
         observeRoom?: (observation: {
           mediaTimelineInterruption?: {responseId: string; atMs: number; reason: 'timestamp_overlap' | 'timestamp_discontinuity'}
@@ -181,6 +185,11 @@ const installPlaybackProbe = async (page: Page) => {
     testPortTarget.__digitalSoulsVoiceSessionTestPort = {
       ...testPortTarget.__digitalSoulsVoiceSessionTestPort,
       observeCoreDelivery: row => window.__voiceStaleTextProbe?.receive(row),
+      observeDecodedReceipts: observation => {
+        const rows = window.__voiceChatE2E.decodedReceipts ??= []
+        if (rows.length >= 1024) {window.__voiceChatE2E.decodedReceiptsOverflow = true; return}
+        rows.push(observation)
+      },
       observeStaleAudio: (observation) => {
         const rows = window.__voiceChatE2E.staleAudio ??= []
         if (rows.length >= 1024) {window.__voiceChatE2E.staleAudioOverflow = true; return}

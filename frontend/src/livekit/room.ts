@@ -1,3 +1,4 @@
+import {DecodedReceiptAudit, type DecodedReceiptSnapshot} from './decoded-receipt-audit'
 import type {CoreDeliveryObservation} from './core-delivery-observation'
 import {postGainAuditSource} from './post-gain-audit'
 import {PostGainAudioMonitor, type StaleAudioObservation} from './post-gain-monitor'
@@ -148,6 +149,8 @@ export class LiveKitRoomClient {
   private coreDeliveryObserver: ((row: CoreDeliveryObservation) => void) | undefined
   private staleAudioObserver: ((row: StaleAudioObservation) => void) | undefined
   private readonly networkObserver = new RtpNetworkObserver()
+  private readonly receiptAudits = new Map<string, DecodedReceiptAudit>()
+  private receiptObserver: ((row: DecodedReceiptSnapshot) => void) | undefined
   private readonly mediaObservers = new Map<string, RemoteMediaObserver>()
   private duplicateTrackFrames = 0
   private readonly playbackStartedResponses = new Set<string>()
@@ -238,6 +241,8 @@ export class LiveKitRoomClient {
   }
 
   setCoreDeliveryObserver(observer: (row: CoreDeliveryObservation) => void): void {this.coreDeliveryObserver = observer}
+
+  setDecodedReceiptObserver(observer: (row: DecodedReceiptSnapshot) => void): void {this.receiptObserver = observer}
 
   setStaleAudioObserver(observer: (row: StaleAudioObservation) => void): void {this.staleAudioObserver = observer}
 
@@ -588,9 +593,13 @@ export class LiveKitRoomClient {
         this.subscriptions.add(key)
         this.trackResponses.set(key, responseId)
         this.subscribedTracks.set(key, track)
+        const receiptAudit = this.receiptObserver && this.sessionId !== null
+          ? new DecodedReceiptAudit(responseId, this.sessionId, this.generation, performance.now(), this.receiptObserver) : undefined
+        if (receiptAudit) this.receiptAudits.set(key, receiptAudit)
         const observer = new RemoteMediaObserver(track.receiver, track.mediaStreamTrack,
           (evidence) => this.observeTrackMedia(evidence, responseId, key), {
             packet: packet => {
+              receiptAudit?.received(packet.pcm.length, performance.now())
               const graph = this.audioGraphs.get(key)
               graph?.audit?.received(packet.pcm.length)
               if (!this.subscriptions.has(key) || !graph || this.stoppedResponses.has(responseId)) return
@@ -632,6 +641,8 @@ export class LiveKitRoomClient {
       this.trackMediaEvidence.delete(key)
       this.mediaObservers.get(key)?.close()
       this.mediaObservers.delete(key)
+      this.receiptAudits.get(key)?.close(performance.now())
+      this.receiptAudits.delete(key)
       const graph = this.audioGraphs.get(key)
       if (graph !== undefined) this.disconnectAudioGraph(graph)
       this.audioGraphs.delete(key)
@@ -750,6 +761,9 @@ export class LiveKitRoomClient {
       }
       if (event.type === 'response_cancelled' && event.response_id !== undefined) {
         const confirmedAt = performance.now()
+        for (const receipt of this.receiptAudits.values()) {
+          if (receipt.responseId === event.response_id) receipt.cancel(confirmedAt)
+        }
         for (const graph of this.audioGraphs.values()) {
           if (graph.responseId === event.response_id) graph.audit?.cancel(confirmedAt)
         }
@@ -1030,6 +1044,8 @@ export class LiveKitRoomClient {
     this.audioGraphResetVersion += 1
     for (const observer of this.mediaObservers.values()) observer.close()
     this.mediaObservers.clear()
+    for (const receipt of this.receiptAudits.values()) receipt.close(performance.now())
+    this.receiptAudits.clear()
     this.subscriptions.clear()
     this.subscribedTracks.clear()
     this.trackResponses.clear()

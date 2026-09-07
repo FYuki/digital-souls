@@ -1,3 +1,4 @@
+import type {DecodedReceiptSnapshot} from './decoded-receipt-audit'
 import type {ControlProbeObservation} from './control-probe'
 import type {CoreDeliveryObservation} from './core-delivery-observation'
 import type {StaleAudioObservation} from './post-gain-monitor'
@@ -74,6 +75,7 @@ const defaultDependencies: VoiceSessionDependencies = {
         createRoom?: VoiceSessionDependencies['roomFactory']
         observeRoom?: (observation: RoomObservation) => void
         observeCoreDelivery?: (observation: CoreDeliveryObservation) => void
+        observeDecodedReceipts?: (row: DecodedReceiptSnapshot) => void
         observeStaleAudio?: (observation: StaleAudioObservation) => void
         bindClockProbe?: (probe: () => Promise<ControlProbeObservation>) => void
         bindRoom?: (room: Pick<LiveKitRoomClient, 'probeControl' | 'setPacketOutputObserver'>) => void
@@ -99,6 +101,7 @@ const defaultDependencies: VoiceSessionDependencies = {
       receiveScreenRequest,
     )
     if (testPort?.observeCoreDelivery) room.setCoreDeliveryObserver(testPort.observeCoreDelivery)
+    if (testPort?.observeDecodedReceipts) room.setDecodedReceiptObserver(testPort.observeDecodedReceipts)
     if (testPort?.observeStaleAudio) room.setStaleAudioObserver(testPort.observeStaleAudio)
     testPort?.bindClockProbe?.(() => room.probeClock())
     testPort?.bindRoom?.(room)

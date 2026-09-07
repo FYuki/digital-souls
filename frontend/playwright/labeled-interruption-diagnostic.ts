@@ -28,6 +28,8 @@ const snapshot = (page: Page) => page.evaluate(() => ({
   vad: window.__voiceVadDiagnostics,
   server_clock: window.__voiceServerClockProbe?.snapshot() ?? null,
   stale_text: window.__voiceStaleTextProbe?.snapshot() ?? null,
+  decoded_receipts: window.__voiceChatE2E.decodedReceipts ?? [],
+  decoded_receipts_overflow: window.__voiceChatE2E.decodedReceiptsOverflow ?? false,
   stale_audio: window.__voiceChatE2E.staleAudio ?? [],
   stale_audio_overflow: window.__voiceChatE2E.staleAudioOverflow ?? false,
   core_events: window.__voiceChatE2E.coreEventDiagnostics,
@@ -221,6 +223,8 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
         }, trial.old_response_id, {timeout: 5000}).then(() => true, () => false)
       }
       trial.cleanup_observation = await page.evaluate(() => ({observedAtMs: performance.now(),
+        decoded_receipts: window.__voiceChatE2E.decodedReceipts ?? [],
+        decoded_receipts_overflow: window.__voiceChatE2E.decodedReceiptsOverflow ?? false,
         stale_audio: window.__voiceChatE2E.staleAudio ?? [],
         stale_audio_overflow: window.__voiceChatE2E.staleAudioOverflow ?? false,
         stale_text: window.__voiceStaleTextProbe?.close() ?? null,

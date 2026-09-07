@@ -213,8 +213,10 @@ describe('LiveKit Room generation synchronization', () => {
 
   test('明示診断はgain後段を通り、cancel時に監視を切断せずcontext closeもdrainを待つ', async () => {
     const rows: import('./livekit/post-gain-monitor').StaleAudioObservation[] = []
+    const receipts: import('./livekit/decoded-receipt-audit').DecodedReceiptSnapshot[] = []
     const client = new LiveKitRoomClient(() => undefined)
     client.setStaleAudioObserver(row => rows.push(row))
+    client.setDecodedReceiptObserver(row => receipts.push(row))
     const responseId = '50000000-0000-4000-8000-000000000001'
     const sessionId = '20000000-0000-4000-8000-000000000001'
     let now = 1000
@@ -224,6 +226,8 @@ describe('LiveKit Room generation synchronization', () => {
       const room = latestRoom()
       room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
         {trackSid: 'TR_audited', trackName: `ds-response-v1:${responseId}`})
+      // graph準備が完了する前の復号callbackも受信履歴へ残す。
+      mediaMocks.observers[0].playback!.packet({pcm: new Float32Array(128)})
       await vi.waitFor(() => expect(audioContexts[0]?.worklets).toHaveLength(2))
       const context = audioContexts[0], [renderer, audit] = context.worklets
       expect(context.options).toEqual({sampleRate: 48000, latencyHint: 0})
@@ -253,6 +257,9 @@ describe('LiveKit Room generation synchronization', () => {
       audit.port.onmessage?.({data: {kind: 'finished', endFrame: 50048}} as MessageEvent)
       await vi.waitFor(() => expect(context.close).toHaveBeenCalledOnce())
       expect(audit.disconnect).toHaveBeenCalledOnce()
+      expect(receipts.at(-1)).toMatchObject({responseId, closedAtMs: 1010, missingReason: null,
+        totalPackets: 2, totalSamples: 1088, entries: [{atMs: 1000, samples: 128}, {atMs: 1010, samples: 960}]})
+      expect(rows.at(-1)?.outputArchive.closedAtMs).not.toBeNull()
       expect(rows.at(-1)).toMatchObject({responseId, sessionId, graphClosed: true,
         audit: {complete: true, nonzeroSamplesAfterCancelUpper: 0}})
     } finally {client.disconnect(); time.mockRestore()}

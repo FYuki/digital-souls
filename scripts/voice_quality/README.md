@@ -436,3 +436,27 @@ ackはサーバーの受信・送信直前の単調時計をmicrosecondで返す
 片道遅延=RTT/2を仮定しない。serverのmicrosecond切捨ては外側1us、clientの丸めは外側0.2msへ含める。
 前後probe不足は`server_transition_not_bracketed`、矛盾する順序はエラーとする。
 この境界だけではstale 0は証明できない。音声出力とDOMの履歴を同じ境界で再集計する必要がある。
+
+### サーバー成立区間への出力履歴の再適用
+
+`StaleAudioObservation.outputArchive`は、gain後段workletの非ゼロsample区間と
+`getOutputTimestamp()`の各実観測を順序付きで残す。通常は直近4秒、cancel受信後は切り詰め位置を固定し、
+最大4096記録とする。PCMは保持しない。元の欠測、時計逆行、overflow、閉鎖時刻を保存し、
+切り詰められた過去や閉鎖より先の境界を補完しない。
+
+`replayPostGainOutput`は別の計測器へ観測を再適用し、指定したcancel下限の直前に境界を挿入する。
+確定済み区間を捨てた計測器の時刻制約を緩めない。前後anchor・区間連続性・finish・drainの検証は従来と同じである。
+
+`decoded_receipts`はaudio graphの有無と独立し、復号済みpacket callbackの入口でsample数と時刻を残す。
+graph準備前や切断後の受信も対象とし、media observerの閉鎖で最終記録を出す。閉鎖後のcallbackは欠測扱いとする。
+直近4秒の履歴、切捨てた件数・sample数、全受信の件数・sample数を照合し、cancel後は履歴を切り詰めない。
+
+textの`changes`にはdelta受信の時刻と、DOM追加の前回観測〜今回観測の区間を残す。
+MutationObserverのcallbackが遅れた場合に、DOM変更をcallback時刻一点へ確定しない。
+各応答最大4096件とし、本文は保存しない。追加・置換の件数と文字数は履歴の合計と一致することを要求する。
+
+Frontendの`scripts/replay-stale-observations.ts`は、traceとの応答・session対応とserver時計の前後probeを
+照合したtask内入力から、音声・復号受信・応答中DOMを同じ境界で再計算する診断CLIである。
+各出来事の時刻区間全体がcancel上限以後なら下限に数え、cancel下限以後に起きた可能性があれば上限に数える。
+曖昧な区間をstale0へ確定しない。入力・出力はtask内に0600で保存し、既存出力を上書きしない。
+この個別窓の結果は、保存履歴の再表示・サーバー生成側・正式100試行と匿名schema検証を代替しない。
