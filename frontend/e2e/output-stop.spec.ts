@@ -21,7 +21,7 @@ for (let trial = 1; trial <= 3; trial++) {
     const reason = getCapabilitySkipReason(profile, 'mocked-e2e')
     test.skip(reason !== null, reason ?? '')
     // 合成ページだけを置換する。WebAudio・worklet・出力時計はブラウザの実装をそのまま使う。
-    await page.route('**/output-stop-check', route => route.fulfill({contentType: 'text/html', body: '<button>音声の停止を検証</button>'}))
+    await page.route('**/output-stop-check', route => route.fulfill({contentType: 'text/html; charset=utf-8', body: '<meta charset="utf-8"><button>音声の停止を検証</button>'}))
     await page.goto('/output-stop-check')
     await page.addScriptTag({content: script})
     await page.getByRole('button', {name: '音声の停止を検証'}).click()

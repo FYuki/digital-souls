@@ -1902,3 +1902,33 @@ Frontend全813件、型検査、buildが通過した。
 共通ChatWindowの変更に対し、test-mocked専用環境のブラウザE2E全38件も通過した。
 FrontendのHTTP readinessと所有containerの削除を確認し、外部推論サービスは所有・操作していない。
 モックE2Eを実接続の証拠とは扱わず、実接続の証拠は上記3試行と区別する。
+
+
+### 最終出力段の停止確認を実ブラウザで検証
+
+実装版 `5312d73c088310478430d3f1e384579ae35ff56c` に
+`PostGainAudioMonitor.stopAndConfirm()`を追加した。
+最終出力workletがstopを受けると、入力sourceが動き続けても出力を不可逆に無音化する。
+時計の照合ができた無音quantumの終端を通知し、その区間を実出力時計が通過してからだけ
+停止確認を返す。stopは監視のfinishと分け、確認後のcancel境界も独立に観測できる。
+
+停止通知だけでは出力済みと判断しない。要求前のmarker、古いframe、非ゼロ区間、
+時計欠測・逆行、閉鎖、timeoutはいずれも成功に変換しない。
+1000msのtimeoutは失敗として打ち切る上限であり、decision後cancelの200ms目標を変更しない。
+関連49テスト、Frontendの型検査とbuildが通過した。
+
+`frontend/e2e/output-stop.spec.ts`は、合成ページだけを置換し、実ChromiumのAudioContext、
+AudioWorklet、出力時計を使う。入力oscillatorを動かしたままstopし、実出力時計の通過と、
+確認後の非ゼロ出力sample上限0、監視のdrainと閉鎖を検証する。
+3ケースすべてが通過し、stop要求から確認まで16.3〜16.8msだった。
+試行ごとにAudioContextを閉じ、テスト所有Frontendの削除とHTTP readinessも照合した。
+
+初回の全ブラウザE2Eでは既存38件が通過し、追加3件はテストHTMLのUTF-8指定漏れによる
+ボタン名の文字化けで音声処理前に失敗した。失敗結果を保管し、charset修正後に追加3件だけを
+再実行して通過した。失敗を成功件数へ読み替えない。
+
+これはブラウザの最終出力段だけの検証であり、LiveKitの経路、Coreの取消状態遷移、
+providerと送出queueの停止を組み合わせた受け入れではない。
+現時点の通常会話ではまだこの確認をCoreへ返しておらず、残留音声を解消済みとは扱わない。
+次に停止確認をCoreへ接続し、生成・送出・ブラウザ出力が止まる前にCANCELLEDを確定しない処理を
+実装する。相槌の再生継続と200ms／3500ms等の条件は維持する。
