@@ -699,7 +699,7 @@ test.each(['gap', 'overlap', 'ragged_gap', 'gap_during_resume'])('RTP不連続�
     if (mode === 'gap_during_resume') {
       await vi.waitFor(() => expect(messages().filter(p => p.type === 'response_cancel_requested')).toHaveLength(1))
       await new Promise(resolve => setTimeout(resolve, 0))
-      expect(messages().filter(p => p.type === 'state_sync_request')).toHaveLength(0)
+      expect(messages().filter(p => p.type === 'state_sync_request')).toHaveLength(1)
       expect(client.isAudioProbeReady()).toBe(false)
       room.emit('reconnected')
     }
@@ -722,7 +722,9 @@ test.each(['gap', 'overlap', 'ragged_gap', 'gap_during_resume'])('RTP不連続�
     expect(observations.some(row => row.failureStage)).toBe(false)
     expect(disconnected).not.toHaveBeenCalled()
     expect(messages().filter(p => ['playback_stopped', 'response_cancel_requested', 'state_sync_request'].includes(p.type))
-      .map(p => p.type)).toEqual(['playback_stopped', 'response_cancel_requested', 'state_sync_request'])
+      .map(p => p.type)).toEqual(mode === 'gap_during_resume'
+        ? ['playback_stopped', 'state_sync_request', 'response_cancel_requested']
+        : ['playback_stopped', 'response_cancel_requested', 'state_sync_request'])
     emitPrivateFrame(room, authoritativeState(1, [{type: 'response_interrupted', session_id: sessionId,
       response_id: responseId, confirmed_audio_sequence: 0}]))
     await vi.waitFor(() => expect(audioContexts[0].close).toHaveBeenCalled())
@@ -891,7 +893,7 @@ test('接続診断はsignal再接続とCore世代の時系列だけを通知す�
 })
 
 
-test('SDK再接続と新世代の状態同期が終わるまで診断音を要求しない', async () => {
+test('新世代の状態同期が終わるまで診断音を要求しない', async () => {
   const client = new LiveKitRoomClient(() => undefined)
   await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
   const room = latestRoom()
@@ -932,7 +934,8 @@ test('CoreイベントはACK送信失敗中にも一度だけ適用し、ACK再�
     emitCoreEvent(room, event)
     await vi.advanceTimersByTimeAsync(250)
     expect(receive).toHaveBeenCalledTimes(1)
-    expect(room.localParticipant.publishData).toHaveBeenCalledTimes(2)
+    expect(room.localParticipant.publishData.mock.calls.filter(([p]) =>
+      JSON.parse(new TextDecoder().decode(p)).type === 'ack')).toHaveLength(2)
     expect(disconnected).not.toHaveBeenCalled()
   } finally {client.disconnect(); vi.useRealTimers()}
 })
@@ -957,5 +960,46 @@ test.each(['send_failed', 'reply_missing'])('状態同期は同じ要求世代�
     await vi.advanceTimersByTimeAsync(1000)
     expect(requests()).toHaveLength(3)
     expect(observations.some(row => row.failureStage)).toBe(false)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+
+test('signal再接続中の同期確認で診断音を開始し、SDK完了で同期を繰り返さない', async () => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance']})
+  const client = new LiveKitRoomClient(() => undefined)
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  const messages = () => room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
+  try {
+    room.emit('signalReconnecting')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(messages().filter(p => p.type === 'state_sync_request').map(p => p.generation)).toEqual([0])
+    expect(client.isAudioProbeReady()).toBe(false)
+    emitPrivateFrame(room, authoritativeState(1))
+    expect(client.isAudioProbeReady()).toBe(true)
+    const probe = client.probeAudio()
+    await vi.advanceTimersByTimeAsync(0)
+    room.emit('reconnected')
+    await vi.advanceTimersByTimeAsync(250)
+    expect(messages().filter(p => p.type === 'state_sync_request')).toHaveLength(1)
+    expect(messages().filter(p => p.type === 'audio_probe_request')).toHaveLength(1)
+    // 遅着した旧世代の状態で同期確認を巻き戻さない。
+    emitPrivateFrame(room, authoritativeState(0))
+    expect(client.isAudioProbeReady()).toBe(true)
+    room.emit('signalReconnecting')
+    expect(await probe).toMatchObject({reason: 'connection_changed'})
+    expect(client.isAudioProbeReady()).toBe(false)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(messages().filter(p => p.type === 'state_sync_request').map(p => p.generation)).toEqual([0, 1])
+    emitPrivateFrame(room, authoritativeState(1))
+    expect(client.isAudioProbeReady()).toBe(false)
+    emitPrivateFrame(room, authoritativeState(2))
+    expect(client.isAudioProbeReady()).toBe(true)
+    room.emit('reconnecting')
+    room.emit('reconnected')
+    expect(client.isAudioProbeReady()).toBe(false)
+    await vi.advanceTimersByTimeAsync(0)
+    emitPrivateFrame(room, authoritativeState(3))
+    expect(client.isAudioProbeReady()).toBe(true)
   } finally {client.disconnect(); vi.useRealTimers()}
 })

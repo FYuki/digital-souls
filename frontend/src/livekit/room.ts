@@ -104,6 +104,7 @@ export type ConnectionLifecycleObservation = Readonly<{event: 'retry_scheduled' 
 
 export class LiveKitRoomClient {
   private recovering = false
+  private recoverySynchronized = false
   private stateSyncRequest: StateSyncRequest | null = null
   private syncRequestedGeneration: number | null = null
   private coreAckOutbox: CoreAckOutbox | null = null
@@ -193,6 +194,7 @@ export class LiveKitRoomClient {
 
   async connect(url: string, token: string, sessionId: string): Promise<void> {
     this.recovering = true
+    this.recoverySynchronized = false
     this.clearStateSync()
     this.controlProbes.reset()
     this.audioProbe?.cancel()
@@ -241,7 +243,7 @@ export class LiveKitRoomClient {
 
   isAudioProbeReady(): boolean {
     return this.room !== null && this.sessionId !== null && this.controlOutbox !== null
-      && !this.recovering && this.syncRequestedGeneration === null
+      && (!this.recovering || this.recoverySynchronized) && this.syncRequestedGeneration === null
   }
 
   probeAudio(): Promise<AudioProbeObservation> {
@@ -372,13 +374,13 @@ export class LiveKitRoomClient {
     const room = new Room({ adaptiveStream: true, dynacast: true,
       reconnectPolicy: new VoiceReconnectPolicy(Math.random, retry => this.observeConnection('retry_scheduled', retry)) })
     room.on(RoomEvent.SignalReconnecting, () => {
-      this.recovering = true
       this.observeConnection('signal_reconnecting')
+      this.beginStateRecovery(room)
     })
     room.on(RoomEvent.SignalConnected, () => this.observeConnection('signal_connected'))
     room.on(RoomEvent.Reconnecting, () => {
-      this.recovering = true
       this.observeConnection('reconnecting')
+      this.beginStateRecovery(room)
       this.controlProbes.reset()
       this.audioProbe?.cancel()
       this.clearBrowserDelivery()
@@ -389,7 +391,7 @@ export class LiveKitRoomClient {
       this.observeConnection('reconnected')
       const sessionId = this.sessionId
       if (sessionId !== null) this.startBrowserDelivery(sessionId, room)
-      void this.requestStateSync(room).catch(() => this.failTransport())
+      if (!this.recoverySynchronized) void this.requestStateSync(room).catch(() => this.failTransport())
     })
     room.on(RoomEvent.DataReceived, (payload, _participant, _kind, topic) => {
       if (topic === APPLICATION_TOPIC) {
@@ -421,6 +423,7 @@ export class LiveKitRoomClient {
           return
         }
         if (frame.type === 'authoritative_state') {
+          if (frame.generation < this.generation) return
           for (const terminal of frame.terminalOutcomes) {
             this.stoppedResponses.add(terminal.responseId)
             for (const graph of this.audioGraphs.values()) {
@@ -431,7 +434,10 @@ export class LiveKitRoomClient {
           this.generation = frame.generation
           this.observeConnection('authoritative_state')
           if (this.syncRequestedGeneration !== null && frame.generation > this.syncRequestedGeneration
-            && frame.sessionPhase === 'available') this.clearStateSync()
+            && frame.sessionPhase === 'available') {
+            this.recoverySynchronized = true
+            this.clearStateSync()
+          }
           if (generationChanged) {
             this.controlProbes.reset()
             this.audioProbe?.cancel()
@@ -447,7 +453,10 @@ export class LiveKitRoomClient {
             this.audioGraphResetTask = resetTask.catch(() => undefined)
             void resetTask.catch(() => this.failTransport())
           }
-          if (frame.sessionPhase !== 'available') this.audioProbe?.cancel()
+          if (frame.sessionPhase !== 'available') {
+            this.recoverySynchronized = false
+            this.audioProbe?.cancel()
+          }
           if (frame.sessionPhase === 'ended') {
             this.failTransport()
             return
@@ -590,6 +599,7 @@ export class LiveKitRoomClient {
     })
     room.on(RoomEvent.Disconnected, () => {
       this.recovering = true
+      this.recoverySynchronized = false
       this.clearStateSync()
       this.observeConnection('disconnected')
       this.controlProbes.reset()
@@ -609,6 +619,15 @@ export class LiveKitRoomClient {
     return room
   }
 
+  private beginStateRecovery(room: Room): void {
+    this.recovering = true
+    this.recoverySynchronized = false
+    this.clearStateSync()
+    this.controlProbes.reset()
+    this.audioProbe?.cancel()
+    void this.requestStateSync(room).catch(() => this.failTransport())
+  }
+
   private clearStateSync(): void {
     this.stateSyncRequest?.close()
     this.stateSyncRequest = null
@@ -616,7 +635,6 @@ export class LiveKitRoomClient {
   }
 
   private async requestStateSync(room: Room): Promise<void> {
-    if (this.recovering) {this.observeConnection('state_sync_deferred'); return}
     if (this.stateSyncRequest !== null) return
     const generation = this.generation, sessionId = this.sessionId
     this.syncRequestedGeneration = generation
@@ -964,6 +982,7 @@ export class LiveKitRoomClient {
     this.suppressedLastPlayedAudioSequence = 0
     this.pendingPlaybackResponseId = null
     this.coreEvents.clear()
+    this.recoverySynchronized = false
     this.clearStateSync()
     this.coreAckOutbox?.clear()
     this.coreAckOutbox = null
