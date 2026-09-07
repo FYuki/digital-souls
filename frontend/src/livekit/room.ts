@@ -27,7 +27,7 @@ import { decodePrivateFrame } from './private-contract'
 import { packetRendererSource, PacketOutputTracker, PacketRenderError, type PacketRenderInterval, type PacketPlaybackObservation, type SourceAudioFinished, type PlaybackCompletion } from './packet-renderer'
 import { RemoteMediaObserver, type MediaObservation, type DecodedAudioPacket } from './media-observer'
 import {PacketOutputDiagnostic, type PacketOutputEvidence} from './packet-output-diagnostic'
-import {RtpPacketSequence, type RtpPacketGap} from './rtp-packet-sequence'
+import {RtpPacketSequence, RtpPacketSequenceError, type RtpPacketGap} from './rtp-packet-sequence'
 import { RtpNetworkObserver, type NetworkObservation } from './network-observer'
 
 export type RoomObservation = Readonly<{
@@ -689,7 +689,7 @@ export class LiveKitRoomClient {
     this.room?.disconnect()
     void this.closeAudioGraph()
     this.observe({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable', failureStage, failureReason,
-      ...(reason instanceof PacketRenderError ? {failureContext: reason.context} : {}) })
+      ...(reason instanceof PacketRenderError || reason instanceof RtpPacketSequenceError ? {failureContext: reason.context} : {}) })
   }
 
   private async attachRenderEvidence(track: RemoteTrack, key: string): Promise<void> {
