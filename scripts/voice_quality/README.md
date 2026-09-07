@@ -460,3 +460,35 @@ Frontendの`scripts/replay-stale-observations.ts`は、traceとの応答・sessi
 各出来事の時刻区間全体がcancel上限以後なら下限に数え、cancel下限以後に起きた可能性があれば上限に数える。
 曖昧な区間をstale0へ確定しない。入力・出力はtask内に0600で保存し、既存出力を上書きしない。
 この個別窓の結果は、保存履歴の再表示・サーバー生成側・正式100試行と匿名schema検証を代替しない。
+
+
+## サーバーcancel後のstale受信・提示を匿名集計する
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python scripts/voice_quality/report_stale_output.py \
+  --manifest <run-root>/trial-manifest.json \
+  --trace <run-root>/runtime-data/voice-metrics/controlled-trace.jsonl \
+  --fixtures frontend/playwright/fixtures/voice-quality-v2/manifest.json \
+  --output <新しい出力ファイル>.json
+```
+
+対象は終了済みのtake-turn全試行（1〜100件）。固定fixtureのhash・順序、独立session、
+実投入の境界、明示終了、同じ旧responseのサーバーcancel状態遷移を照合する。
+成功試行だけの抽出、途中run、任意のfixture選抜を受け付けない。
+失敗・時計欠測・履歴欠落も期待件数の分母に残し、固定理由で区別する。
+
+このコマンドは現在のTypeScript履歴replayを一時ディレクトリでbuildし、同じ入力へ実行する。
+Frontend依存のインストール、Node、Backendのjsonschemaが必要。
+一時入力は0600で作成して終了時に削除し、出力は0600の新規作成に限定する。
+公開結果は専用schemaで固定キー・数値・固定enum・検証用hashだけを許し、
+本文、session／response ID、時刻の個別列を含めない。測定commitと集計器・schema・replay実装のhashを別々に保持する。
+
+音声の非ゼロ出力sample、復号済みpacket／sample、受信delta文字、応答中DOMの追加文字を別々に集計する。
+各項目は観測／欠測、確実な残留、残留の可能性、確認済みゼロ、総量の上下限を持つ。
+「残留の可能性」は「確実な残留」を含む。文字単位はUTF-16 code unit。
+サーバーcancelをclient cancel受信時刻へ置き換えず、時計の不確かさも上限へ残す。
+
+保存履歴再表示とサーバー生成は現時点で未実装の理由付き欠測であり、
+他の項目がゼロでも全体を合格にしない。100件条件と全観測範囲の充足を別途検証する。
+終了コードは合格0、集計保存済みだが受け入れ未達1、入力・schema・実行失敗2。
+このstale集計だけで通常応答、VAD、再接続や#150全体の達成とは判断しない。

@@ -68,6 +68,9 @@ export function replayPostGainOutput(archive: OutputArchiveSnapshot, bounds: {lo
   if (archive.method !== 'post_gain_observation_replay_v1' || archive.overflow || archive.clockInvalid
     || archive.sourceMissing !== null) return missing('output_archive_invalid')
   if (archive.closedAtMs === null) return missing('output_archive_not_closed')
+  if (!validTime(archive.closedAtMs) || !validTime(archive.retainedAfterMs) || archive.windowMs !== 4000
+    || (archive.lockedAtMs !== null && (!validTime(archive.lockedAtMs) || archive.lockedAtMs > archive.closedAtMs))
+    || !Array.isArray(archive.entries) || archive.entries.length > 4096) return missing('output_archive_invalid')
   if (!validTime(bounds.lowerMs) || !validTime(bounds.upperMs) || bounds.lowerMs > bounds.upperMs
     || bounds.lowerMs < archive.retainedAfterMs || bounds.upperMs > archive.closedAtMs) return missing('output_archive_window_unobserved')
   const audit = new PostGainOutputAudit()
@@ -78,7 +81,8 @@ export function replayPostGainOutput(archive: OutputArchiveSnapshot, bounds: {lo
     // 当時の順序を再現してからcancelを挿入する。既存のtrackerへ過去の境界を後付けしない。
     if (!marked && entry.atMs > bounds.lowerMs) {audit.markCancelled(bounds, bounds.upperMs); marked = true}
     if (entry.kind === 'message') audit.record(entry.message)
-    else audit.poll(entry.timestamp, entry.sampleRate, entry.atMs)
+    else if (entry.kind === 'clock') audit.poll(entry.timestamp, entry.sampleRate, entry.atMs)
+    else return missing('output_archive_invalid')
   }
   if (!marked) return missing('output_archive_window_unobserved')
   audit.close()

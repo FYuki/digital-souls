@@ -5,7 +5,7 @@ import {PostGainOutputArchive} from './livekit/post-gain-archive'
 function fixture(): StaleWindowInput {
   const archive = new PostGainOutputArchive(); archive.close(1040)
   return {bounds: {lowerMs: 1015, upperMs: 1025}, textClosed: true, textOverflow: false,
-    output: {sessionId: 's', responseId: 'r', graphClosed: true, outputArchive: archive.snapshot()} as StaleWindowInput['output'],
+    output: {sessionId: 's', responseId: 'r', generation: 0, graphClosed: true, outputArchive: archive.snapshot()} as StaleWindowInput['output'],
     receipts: {sessionId: 's', responseId: 'r', generation: 0, boundary: 'decoded_packet_callback', beganAtMs: 1000,
       retainedAfterMs: 0, cancelledAtMs: 1035, closedAtMs: 1040, overflow: false, missingReason: null,
       totalPackets: 3, totalSamples: 1568, discardedPackets: 0, discardedSamples: 0,
@@ -44,4 +44,24 @@ test('overflow・閉鎖前・履歴不足を成功にしない', () => {
   expect(replayStaleWindow(b)).toMatchObject({text: {complete: false}, received: {complete: false}})
   const c = fixture(); c.textClosed = false; c.receipts = {...c.receipts, closedAtMs: null}
   expect(replayStaleWindow(c)).toMatchObject({text: {complete: false}, received: {complete: false}})
+})
+
+test('負数・NaN・件数相殺・逆順callback・別世代を受け入れない', () => {
+  for (const value of [-1, Number.NaN, 0.5, Number.MAX_SAFE_INTEGER + 1]) {
+    const a = fixture(); a.receipts = {...a.receipts, totalPackets: value, discardedPackets: value - 3}
+    expect(() => replayStaleWindow(a)).toThrow('invalid_receipt_count')
+    const b = fixture(); b.text.receivedCharacters = value
+    expect(() => replayStaleWindow(b)).toThrow('invalid_text_count')
+  }
+  const c = fixture(); c.receipts = {...c.receipts, entries: [...c.receipts.entries].reverse()}
+  expect(() => replayStaleWindow(c)).toThrow('invalid_receipt_time')
+  const d = fixture(); d.receipts = {...d.receipts, generation: 1}
+  expect(() => replayStaleWindow(d)).toThrow('stale_identity_or_bounds_invalid')
+})
+test('archiveの閉鎖時刻やcutoffのNaNを境界通過の証拠にしない', () => {
+  for (const field of ['closedAtMs', 'retainedAfterMs', 'lockedAtMs']) {
+    const a = fixture()
+    a.output = {...a.output, outputArchive: {...a.output.outputArchive, [field]: Number.NaN}}
+    expect(replayStaleWindow(a).audio).toMatchObject({complete: false, missingReason: 'output_archive_invalid'})
+  }
 })
