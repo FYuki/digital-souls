@@ -180,13 +180,21 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
 
 def run(args: argparse.Namespace) -> int:
     sys.path.insert(0, str(ROOT / "backend"))
+    import hashlib
+
     from app.voice_resource_metrics import ContainerResourceSampler
+    from native_sdk import NativeSdkSampler
+    from native_sdk_experiment.prepare import REVISION
 
     env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe, args.fault_bridge, args.network_fault)
     if args.fault_bridge:
         from network_fault import resolve_target
         resolve_target("ds-voice-quality-fault-livekit-1")
     env["VOICE_QUALITY_MEASUREMENT_REVISION"] = measurement_revision(ROOT)
+    # 他worktreeのdevタグと競合させず、同一測定版のイメージを繰り返し利用する。
+    image_revision = env["VOICE_QUALITY_MEASUREMENT_REVISION"]
+    env["DS_BACKEND_IMAGE"] = f"digital-souls-voice-quality/backend:{image_revision}"
+    env["DS_FRONTEND_IMAGE"] = f"digital-souls-voice-quality/frontend:{image_revision}"
     reference = env.get("INFERENCE_TARGET_CHAT", "")
     if not reference.startswith("ollama/"):
         raise ValueError("this diagnostic requires an Ollama chat target")
@@ -196,6 +204,9 @@ def run(args: argparse.Namespace) -> int:
     base = run_root(args.run_id)
     base.mkdir(parents=True, exist_ok=False)  # 失敗した試行のdata rootも上書きしない。
     resources = ContainerResourceSampler(base / "runtime-data/runtime/standalone/environment-run.json")
+    native_sdk = NativeSdkSampler(base / "runtime-data/runtime/standalone/environment-run.json")
+    native_record = None
+    expected_patch_hash = hashlib.sha256((ROOT / "scripts/voice_quality/native_sdk_experiment/short-outage-retry.patch").read_bytes()).hexdigest()
     process = subprocess.Popen([
         "node", "node_modules/@playwright/test/cli.js", "test", "--config", "playwright.livekit-quality.config.ts",
     ], cwd=ROOT / "frontend", env=env)
@@ -208,6 +219,13 @@ def run(args: argparse.Namespace) -> int:
                        "ollama": probe_residency(endpoint, model), "backend": resources.sample()}
                 if sample % 10 == 0:
                     row["gpu"] = probe_gpu()
+                if native_record is None and sample % 4 == 0:
+                    native_record = native_sdk.sample()
+                    if native_record is not None:
+                        if (native_record['source_revision'] != REVISION
+                                or native_record['patch_sha256'] != expected_patch_hash):
+                            raise ValueError('measurement native SDK does not match committed source')
+                        (base / 'native-sdk.json').write_text(json.dumps({'status': 'verified', 'build': native_record}, indent=2) + '\n')
                 output.write(json.dumps(row, allow_nan=False) + "\n")
                 output.flush()
                 sample += 1
@@ -220,6 +238,8 @@ def run(args: argparse.Namespace) -> int:
             process.kill()
             process.wait(timeout=5)
         raise
+    if native_record is None:
+        raise ValueError("measurement native SDK could not be verified")
     return process.returncode
 
 

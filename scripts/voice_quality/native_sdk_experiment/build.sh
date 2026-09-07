@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 rustc --version
-rustc --test retry_policy_test.rs -o target-retry-policy-test
+rustc --edition=2021 --test retry_policy_test.rs -o target-retry-policy-test
 ./target-retry-policy-test
 cargo build --locked --release --package livekit-ffi
 sha256sum target/release/liblivekit_ffi.so

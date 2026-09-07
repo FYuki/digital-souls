@@ -256,6 +256,54 @@
         "response_packets",
         "fresh_rtc_probe_and_followup"
       ]
+    },
+    "native_sdk_build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "python_sdk_version",
+        "ffi_version",
+        "source_revision",
+        "patch_sha256",
+        "library_sha256",
+        "reconnect_policy",
+        "target",
+        "cuda_video_codecs_enabled"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "python_sdk_version": {
+          "const": "1.1.16"
+        },
+        "ffi_version": {
+          "const": "0.12.73"
+        },
+        "source_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "patch_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "library_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "reconnect_policy": {
+          "const": "short-outage-v1"
+        },
+        "target": {
+          "const": "x86_64-unknown-linux-gnu"
+        },
+        "cuda_video_codecs_enabled": {
+          "const": false
+        }
+      }
     }
   },
   "$schema": "http://json-schema.org/draft-07/schema#",

@@ -93,13 +93,14 @@ def test_plan_rejects_path_escape_or_invalid_denominator(identifier, count):
         cohort.planned_runs(identifier, count)
 
 
-@pytest.mark.parametrize('problem', ['none','live_container','permission_error','wrong_root','wrong_profile','wrong_owner','open_child'])
+@pytest.mark.parametrize('problem', ['none','live_container','permission_error','wrong_root','wrong_profile','wrong_owner','open_child','unverified_sdk'])
 def test_verifier_requires_actual_deletion_and_exclusive_test_ownership(tmp_path, monkeypatch, problem):
     base=tmp_path/'test-001'; runtime=base/'runtime-data/runtime/standalone'; runtime.mkdir(parents=True)
     monkeypatch.setattr(cohort,'run_root',lambda run_id:base)
     manifest=dict(measurement_scope='livekit_fault_recovery_session_diagnostic', measurement_revision='a'*40,
                   fault_clock_process_closed=problem!='open_child', session_end_confirmed=False, outcome='failure')
     (base/'trial-manifest.json').write_text(json.dumps(manifest))
+    (base/'native-sdk.json').write_text(json.dumps({'status': 'missing' if problem=='unverified_sdk' else 'verified', 'build': {}}))
     env=dict(runtime=dict(environmentId='test', dataRoot=str(base/'runtime-data') if problem!='wrong_root' else '/other'),
              effectiveProfile=dict(effectiveProfile='integration-voice-fault' if problem!='wrong_profile' else 'dogfood'),
              teardown=dict(status='completed'), services={name:dict(owned=problem!='wrong_owner',

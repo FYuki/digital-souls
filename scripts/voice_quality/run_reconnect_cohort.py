@@ -35,6 +35,9 @@ def verify_trial(run_id: str, revision: str) -> dict[str, bool]:
             or environment.get("effectiveProfile", {}).get("effectiveProfile") != "integration-voice-fault"
             or environment.get("teardown", {}).get("status") != "completed"):
         raise ValueError("trial ownership, revision, or teardown unavailable")
+    native = json.loads((base / 'native-sdk.json').read_text())
+    if native.get('status') != 'verified' or not isinstance(native.get('build'), dict):
+        raise ValueError('trial native SDK not verified')
     for name in ("frontend", "backend"):
         service = environment.get("services", {}).get(name, {})
         container_id = service.get("containerIdentity", {}).get("containerId", "")
@@ -78,7 +81,7 @@ def run_trial(run_id: str, args: argparse.Namespace, log_path: Path) -> int:
 
 def aggregate(run_ids: list[str], output: Path) -> int:
     result = subprocess.run(["node", str(ROOT / "frontend/scripts/report-fault-recovery.mjs"),
-        "--expected", str(len(run_ids)), "--output", str(output),
+        "--expected", str(len(run_ids)), "--output", str(output), "--require-native-sdk",
         *[str(run_root(run_id) / "trial-manifest.json") for run_id in run_ids]],
         cwd=ROOT, capture_output=True, text=True, timeout=60, check=False)
     if result.returncode not in (0, 1) or not output.is_file():
