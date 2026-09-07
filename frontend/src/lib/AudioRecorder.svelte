@@ -16,6 +16,7 @@
   import { MicVAD, type RealTimeVADOptions } from '@ricky0123/vad-web'
 
   import { AudioWorkletPcmRecorder } from './audio/pcm-worklet-recorder'
+  import { attachIdleVadReset } from './audio/idle-vad-reset'
   import { VAD_ASSET_ROUTE } from './audio/vad-assets'
   import { VAD_UTTERANCE_REDEMPTION_MS } from './audio/vad-policy'
   import { UtteranceDetector, type UtteranceDetection } from './audio/utterance-detector'
@@ -42,6 +43,7 @@
   export let onSpeechStopped: (activity: SpeechActivity) => void = () => undefined
 
   let vad: MicVadInstance | null = null
+  let vadFrameControl: ReturnType<typeof attachIdleVadReset> | null = null
   let recorder: AudioWorkletPcmRecorder | null = null
   let microphoneStream: MediaStream | null = null
   let status: MicStatus = 'off'
@@ -150,6 +152,9 @@
   const releaseMicrophoneResources = async () => {
     utteranceDetector?.reset()
     utteranceDetector = null
+    const frameControl = vadFrameControl
+    vadFrameControl = null
+    if (frameControl !== null) await frameControl.close()
     if (vad !== null) {
       await vad.destroy()
       vad = null
@@ -173,7 +178,9 @@
     }
 
     if (continuous) utteranceDetector = new UtteranceDetector(handleUtteranceDetection)
-    vad = await MicVAD.new(buildVadOptions(stream))
+    const instance = await MicVAD.new(buildVadOptions(stream))
+    if (continuous) vadFrameControl = attachIdleVadReset(instance, reportError)
+    vad = instance
     return vad
   }
 

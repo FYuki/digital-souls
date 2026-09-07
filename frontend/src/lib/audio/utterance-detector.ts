@@ -16,6 +16,8 @@ export type UtteranceDetectorOptions = Readonly<{
   shortStrongMs: number
   highSpeechProbability: number
   minimumHighMs: number
+  evidenceProbability: number
+  minimumEvidenceMs: number
   negativeSpeechProbability: number
   neuralSilenceMs: number
   evidenceWindowMs: number
@@ -29,8 +31,10 @@ export const utteranceDetectorOptions: UtteranceDetectorOptions = {
   strongSpeechProbability: 0.3,
   minimumStrongMs: 300,
   shortStrongMs: 250,
-  highSpeechProbability: 0.5,
+  highSpeechProbability: 0.4,
   minimumHighMs: 192,
+  evidenceProbability: 0.2,
+  minimumEvidenceMs: 140,
   negativeSpeechProbability: 0.25,
   neuralSilenceMs: 700,
   evidenceWindowMs: 2000,
@@ -40,6 +44,7 @@ export class UtteranceDetector {
   private candidateStart: number | null = null
   private lastActiveEnd = 0
   private activeFrames: { start: number; end: number }[] = []
+  private evidenceFrames: {end: number; duration: number; probability: number}[] = []
   private strongFrames: { end: number; duration: number }[] = []
   private neuralSilenceMs = 0
   private confirmed = false
@@ -55,6 +60,7 @@ export class UtteranceDetector {
     this.lastActiveEnd = 0
     this.activeFrames = []
     this.strongFrames = []
+    this.evidenceFrames = []
     this.neuralSilenceMs = 0
     this.confirmed = false
     this.consecutiveHighMs = 0
@@ -98,8 +104,14 @@ export class UtteranceDetector {
     } else if (speechProbability < this.options.negativeSpeechProbability) {
       this.neuralSilenceMs += durationMs
     }
-    this.consecutiveHighMs = speechProbability >= this.options.highSpeechProbability
+    this.consecutiveHighMs = active && speechProbability >= this.options.highSpeechProbability
       ? Math.min(this.consecutiveHighMs + durationMs, this.options.minimumHighMs) : 0
+    this.evidenceFrames = this.evidenceFrames.filter(item => item.end > evidenceStart)
+    if (!this.confirmed && active && speechProbability >= this.options.evidenceProbability) {
+      this.evidenceFrames.push({end: frameEndMs, duration: durationMs, probability: speechProbability})
+    }
+    const speechEvidenceMs = this.evidenceFrames.reduce((total, item) =>
+      total + item.probability * Math.min(item.duration, item.end - evidenceStart), 0)
     const strongMs = this.strongFrames.reduce((total, item) => (
       total + Math.min(item.duration, item.end - evidenceStart)
     ), 0)
@@ -107,14 +119,14 @@ export class UtteranceDetector {
     // 中間確率ではカウンターを進めず、正の確率で解除するhysteresisを維持する。
     const ended = frameEndMs - this.lastActiveEnd > this.options.silenceMs
       || (this.confirmed && this.neuralSilenceMs > this.options.neuralSilenceMs)
-    // 通常はlegacyの4 frame相当を確認する。短い発話は3 frame相当の根拠と
-    // 直近2 frameの連続した高確率が揃った場合だけ確定し、散在する弱い山を合算しない。
+    // 通常はlegacyの4 frame相当を確認する。短い発話はPCM活動を伴う
+    // 確率の積分値も根拠にするが、直近2 frameの連続した高確率を必須にする。
     const activeMs = this.activeFrames.reduce((total, item) => (
       total + item.end - Math.max(item.start, evidenceStart)
     ), 0)
     if (!this.confirmed && activeMs >= this.options.minimumActiveMs
       && (strongMs >= this.options.minimumStrongMs
-        || (strongMs >= this.options.shortStrongMs && this.consecutiveHighMs >= this.options.minimumHighMs))) {
+        || ((strongMs >= this.options.shortStrongMs || speechEvidenceMs >= this.options.minimumEvidenceMs) && this.consecutiveHighMs >= this.options.minimumHighMs))) {
       this.confirmed = true
       this.activeFrames = []
       this.emit({ type: 'confirmed', speechStartedAtMs: this.candidateStart, detectedAtMs: frameEndMs })

@@ -141,3 +141,21 @@ describe('短い発話の安定した音声確率', () => {
     expect(events.some(event => event.type === 'confirmed')).toBe(false)
   })
 })
+
+
+test('PCM活動を伴う弱い根拠と連続した高確率で短い発話を確定する', () => {
+  const {events, frame} = harness()
+  for (const probability of [0.21, 0.27, 0.21, 0.44]) frame(0.02, probability)
+  expect(events.some(event => event.type === 'confirmed')).toBe(false)
+  frame(0.02, 0.51)
+  expect(events.find(event => event.type === 'confirmed')).toMatchObject({speechStartedAtMs: 0, detectedAtMs: 480})
+})
+
+test('PCMがない確率の余韻や、低確率の環境音を弱い根拠へ加算しない', () => {
+  for (const amplitude of [0, 0.02]) {
+    const {events, frame} = harness()
+    for (let i = 0; i < 15; i++) frame(amplitude, amplitude === 0 ? 0.27 : 0.1)
+    frame(0.02, 0.44); frame(0.02, 0.51)
+    expect(events.some(event => event.type === 'confirmed')).toBe(false)
+  }
+})

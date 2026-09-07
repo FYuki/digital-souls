@@ -60,6 +60,8 @@ vi.mock('@ricky0123/vad-web', () => ({
     new: vi.fn(async (options) => {
       audioMocks.vadOptions = options
       return {
+        processFrame: vi.fn(async () => undefined),
+        pause: vi.fn(async () => undefined),
         start: () => audioMocks.vadStart(),
         destroy: () => audioMocks.vadDestroy(),
       }
