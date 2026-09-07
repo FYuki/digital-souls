@@ -333,3 +333,11 @@ PCMや本文を診断portへ渡さない。frame・イベント・リセット�
 終了コードは境界条件達成0、未達1、入力／schema／保存エラー2。既存の出力を上書きしない。
 これは検出器の境界であり、STTに取り込まれたPCMの冒頭・末尾を証明したものではない。
 `limits`のPCM取込確認・VAD全体受け入れはfalseのまま保持し、文中無音cohortの測定や実取込の証拠を別途要求する。
+
+
+### 語頭候補の保留に対する回帰診断
+
+Frontendで`node scripts/measure-vad-runtime-cohorts.mjs <新規出力.json> legacy <utterance-detector.ts> onset-regression`
+を実行すると、実ブラウザで失敗したtake-turnの51・56・72番を4ms刻みの24位相、待機500／2,000／6,000msで測る。
+通常の`phase-sweep`は全300音声×6位相を維持する。両方とも固定PCMと仮想時計によるオフライン診断であり、
+LiveKitの実ブラウザ100試行には代用しない。

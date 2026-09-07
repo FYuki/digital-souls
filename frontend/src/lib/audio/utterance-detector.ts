@@ -51,6 +51,7 @@ export const shortSpeechFallbackOptions = {
 } as const
 
 export class UtteranceDetector {
+  private pendingVoiceFrames: {end: number; duration: number}[] = []
   private shortSpeechFrames: {end: number; duration: number}[] = []
   private candidateStart: number | null = null
   private lastActiveEnd = 0
@@ -67,6 +68,7 @@ export class UtteranceDetector {
   ) {}
 
   reset(): void {
+    this.pendingVoiceFrames = []
     this.shortSpeechFrames = []
     this.candidateStart = null
     this.lastActiveEnd = 0
@@ -106,14 +108,23 @@ export class UtteranceDetector {
     }
     if (this.candidateStart === null) return
     this.shortSpeechFrames = this.shortSpeechFrames.filter(item => item.end > evidenceStart)
+    this.pendingVoiceFrames = this.pendingVoiceFrames.filter(item => item.end > evidenceStart)
     // 不正な補助値は無視し、主VADの通常判定は続ける。
     const validSecondary = secondary !== undefined
       && [secondary.voicedFraction, secondary.tonalConcentration, secondary.spectralFlatness]
         .every(value => Number.isFinite(value) && value >= 0 && value <= 1)
-    if (active && validSecondary && secondary
+    // 有声の短い母音は周波数が集中する場合がある。確定には従来の雑音除外を
+    // 要求し、ここでは後続語を待つ根拠だけを記録する。
+    if (!this.confirmed && active && validSecondary && secondary
+      && secondary.voicedFraction >= shortSpeechFallbackOptions.minimumVoicedFraction
+      && secondary.spectralFlatness < shortSpeechFallbackOptions.maximumSpectralFlatness) {
+      this.pendingVoiceFrames.push({end: frameEndMs, duration: durationMs * secondary.voicedFraction})
+    }
+    const secondarySpeech = active && validSecondary && secondary !== undefined
       && secondary.voicedFraction >= shortSpeechFallbackOptions.minimumVoicedFraction
       && secondary.tonalConcentration < shortSpeechFallbackOptions.maximumTonalConcentration
-      && secondary.spectralFlatness < shortSpeechFallbackOptions.maximumSpectralFlatness) {
+      && secondary.spectralFlatness < shortSpeechFallbackOptions.maximumSpectralFlatness
+    if (secondarySpeech && secondary) {
       this.shortSpeechFrames.push({end: frameEndMs, duration: durationMs * secondary.voicedFraction})
     }
     // 背景音がPCM閾値を超え続けても、離れた確率ピークを無期限に合算しない。
@@ -123,6 +134,10 @@ export class UtteranceDetector {
     this.strongFrames = this.strongFrames.filter(item => item.end > evidenceStart)
     if (speechProbability >= this.options.strongSpeechProbability) {
       this.strongFrames.push({ end: frameEndMs, duration: durationMs })
+      this.neuralSilenceMs = 0
+    } else if (this.confirmed && secondarySpeech) {
+      // 確定後に主モデルの確率が落ちても、PCM活動と独立した有声・雑音判定が
+      // 発話の継続を示すframeを無音へ加算しない。未確定の候補には適用しない。
       this.neuralSilenceMs = 0
     } else if (speechProbability < this.options.negativeSpeechProbability) {
       this.neuralSilenceMs += durationMs
@@ -138,10 +153,6 @@ export class UtteranceDetector {
     const strongMs = this.strongFrames.reduce((total, item) => (
       total + Math.min(item.duration, item.end - evidenceStart)
     ), 0)
-    // PCMに環境音が残る場合は従来の確率による無音判定でも終了できる。
-    // 中間確率ではカウンターを進めず、正の確率で解除するhysteresisを維持する。
-    const ended = frameEndMs - this.lastActiveEnd > this.options.silenceMs
-      || (this.confirmed && this.neuralSilenceMs > this.options.neuralSilenceMs)
     // 通常はlegacyの4 frame相当を確認する。短い発話はPCM活動を伴う
     // 確率の積分値も根拠にするが、直近2 frameの連続した高確率を必須にする。
     const activeMs = this.activeFrames.reduce((total, item) => (
@@ -160,6 +171,17 @@ export class UtteranceDetector {
       this.activeFrames = []
       this.emit({ type: 'confirmed', speechStartedAtMs: this.candidateStart, detectedAtMs: frameEndMs })
     }
+    // まだ確定できない候補でも、PCM活動と独立した有声根拠が残る間は
+    // 続く語の判定を2秒の証拠窓まで待つ。確定条件やpre-rollの上限は変えない。
+    // 根拠のない雑音は従来どおり終了し、短い発話の終了時確定も維持する。
+    const pendingVoiceMs = this.pendingVoiceFrames.reduce((total, item) =>
+      total + Math.min(item.duration, item.end - evidenceStart), 0)
+    const pendingSpeech = !this.confirmed && activeMs >= this.options.minimumActiveMs
+      && this.lastActiveEnd - this.candidateStart <= shortSpeechFallbackOptions.maximumActiveSpanMs
+      && pendingVoiceMs >= shortSpeechFallbackOptions.minimumVoicedEvidenceMs
+      && frameEndMs - this.candidateStart < this.options.evidenceWindowMs
+    const ended = (frameEndMs - this.lastActiveEnd > this.options.silenceMs && !pendingSpeech)
+      || (this.confirmed && this.neuralSilenceMs > this.options.neuralSilenceMs)
     if (ended) {
       const event: UtteranceDetection = {
         type: this.confirmed ? 'ended' : 'misfire',

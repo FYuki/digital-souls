@@ -36,10 +36,18 @@ function pcm(bytes) {
 }
 const initialBytes=await readFile(root+'/playwright/fixtures/speech.wav'),initial=pcm(initialBytes)
 const manifestBytes=await readFile(root+'/playwright/fixtures/voice-quality-v2/manifest.json')
-const phaseSweep=process.argv[5]==='phase-sweep'
+const onsetRegression=process.argv[5]==='onset-regression'
+const phaseSweep=process.argv[5]==='phase-sweep'||onsetRegression
 if(process.argv[5]!==undefined&&!phaseSweep)throw Error('invalid phase sweep option')
-const fixtures=JSON.parse(manifestBytes).trials.flatMap((fixture,index)=>
- (phaseSweep?[0,16,32,48,64,80]:[(index%6)*16]).map(phaseMs=>({...fixture,phaseMs})))
+// 実ブラウザで失敗した3音声を、4ms刻みの位相と3種類の待機で再現する。
+// 正式100試行ではなく、冒頭候補の破棄に対する固定PCM回帰診断である。
+const definitions=JSON.parse(manifestBytes).trials
+const selected=onsetRegression ? definitions.filter(f=>f.cohort==='take_turn')
+ .filter((f,index)=>[51,56,72].includes(index+1)) : definitions
+if(onsetRegression&&selected.length!==3)throw Error('onset regression fixtures unavailable')
+const fixtures=selected.flatMap((fixture,index)=>
+ (onsetRegression?Array.from({length:24},(_,i)=>i*4):phaseSweep?[0,16,32,48,64,80]:[(index%6)*16])
+ .flatMap(phaseMs=>(onsetRegression?[500,2000,6000]:[2000]).map(gapMs=>({...fixture,phaseMs,gapMs}))))
 const modelBytes=await readFile(root+`/node_modules/@ricky0123/vad-web/dist/silero_vad_${modelName}.onnx`)
 const model=await (modelName==='legacy'?SileroLegacy:SileroV5).new(ort,async()=>modelBytes.buffer.slice(modelBytes.byteOffset,modelBytes.byteOffset+modelBytes.byteLength))
 const secondary = modelName === 'legacy' ? await createProductionShortSpeechAnalyzer() : null
@@ -48,7 +56,7 @@ try {
  for(const [index,fixture] of fixtures.entries()) {
   const fixtureBytes=await readFile(root+`/test-results/vad-quality/fixtures-v2/${fixture.id}.wav`)
   if(hash(fixtureBytes)!==fixture.audio_sha256)throw Error('fixture mismatch')
-  const audio=pcm(fixtureBytes),phaseMs=fixture.phaseMs,gapMs=2000
+  const audio=pcm(fixtureBytes),phaseMs=fixture.phaseMs,gapMs=fixture.gapMs
   const targetStart=initial.length+gapMs*48+phaseMs*48
   const input=new Float32Array(targetStart+audio.length)
   input.set(initial);input.set(audio,targetStart)
@@ -85,7 +93,7 @@ const summary=Object.fromEntries(['backchannel','take_turn','pause'].map(cohort=
   finalize_delay_valid:rows.filter(t=>t.finalize_delay_ms!==null).length,
   finalize_delay_p95_ms:p95(rows.flatMap(t=>t.finalize_delay_ms===null?[]:[t.finalize_delay_ms]))}]
 }))
-await writeFile(output,JSON.stringify({scope:'sequential_fixed_pcm_with_production_idle_reset_diagnostic',short_speech:secondary ? shortSpeechProvenance : null,phase_sweep:phaseSweep,model:modelName,frame_ms:frameMs,
+await writeFile(output,JSON.stringify({scope:'sequential_fixed_pcm_with_production_idle_reset_diagnostic',short_speech:secondary ? shortSpeechProvenance : null,phase_sweep:phaseSweep,onset_regression:onsetRegression,model:modelName,frame_ms:frameMs,
  script_sha256:hash(await readFile(fileURLToPath(import.meta.url))),idle_reset_options:idleVadResetOptions,idle_reset_sha256:hash(idleSource),
  model_sha256:hash(modelBytes),detector_sha256:hash(source),initial_fixture_sha256:hash(initialBytes),manifest_sha256:hash(manifestBytes),summary,trials},null,2)+'\n',{flag:'wx'})
 console.log(JSON.stringify({summary,output}))
