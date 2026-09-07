@@ -728,3 +728,24 @@ Backend単体・結合は3,920件成功・1件skip、Frontend単体463件・結�
 相槌等へのfixture切替では、大きなPCM配列と開始要求を同じメッセージで送っていた。開始時計に転送・準備の待機が入る可能性を切り分けるため、workletへPCMを先に準備し、準備確認後にデータを含まないreplay要求を送るようにした。準備中は音声を消費せず、新しい開始要求の時刻を因果下限とする。再生途中・準備重複を拒否し、準備待ちは5秒timeout、終了後には再開しない。20msの検証上限、元PCM、正解sample位置は変更していない。新しい2テストは修正前に失敗し、修正後は全16件とFrontend型検査が成功した。実接続100件で時計幅が改善したかは次の測定で確認する。
 
 VADについては、4msのPCM活動窓で開始を探し、その32ms前からモデルの96ms frameを揃える[オフライン候補](artifacts/vad-onset-alignment-2026-09-07.json)を全300素材・非発声音120条件で比較した。baselineは相槌未検出14/100・take-turn 0/100・文中分割0/100・非発声音誤確定9/120で、既存診断と一致した。候補は相槌未検出30/100・take-turn 10/100・文中分割0/100・非発声音誤確定2/120となり、発話検出が悪化したため採用しなかった。先行発話は両条件とも300/300で1回確定した。これはモデルframe区切りの候補診断であり、Browserの実入力や製品の変更ではない。再現scriptは`frontend/scripts/measure-vad-onset-alignment.mjs`、入力引数はfrontendディレクトリと新規出力パスである。
+
+
+## 2026-09-07: 相槌100件の誤cancelと公式VAD候補
+
+`b19cf06`固定の[実接続相槌100件](artifacts/livekit-backchannel-100-2026-09-07-prepared-fixture.json)はPlaywrightで77成功・23失敗だった。12件はVAD candidateからmisfireとなり分類されず、11件はtake-turnと判定され、local stopと旧応答のcancelを両方観測した。誤cancel指標は全100件を検証でき、89件継続・11件誤cancel・欠測0、誤cancel率11%で目標2%以下に未達である。未検出12件では旧応答の全出力を直接確認できたため、誤cancelなしに数えるがVAD品質の成功とはみなさない。
+
+音声投入時計は全100件で20ms上限を満たした。最大幅はsourceStart 3.9ms、speechStart 4.3ms、speechEnd 6.4msだった。前回の大きな配列転送と開始指示を分けた変更により、今回の開始時計の未検証は0件になった。明示session終了100/100と、環境reportのteardown完了、所有Frontend／BackendのDocker削除を確認した。raw runは`prepared-fixture-backchannel-100-01`として保持する。測定条件は引き続きthink:false・RAGなしで、通常応答・人格・記憶品質の達成を示すものではない。
+
+VADの声質依存を切り分けるため、[公式Silero v6.2.1の固定commit](https://github.com/snakers4/silero-vad/tree/7e30209a3e901f9842f81b225f3e93d8199902b1)からONNX、MITライセンス、参照wrapperを取得した。16kHz入力の契約は新規512サンプルと直前64サンプルで、reset時はRNN stateと文脈の両方を消去する。診断wrapperはこの契約を実装し、62フレームについてPython ONNXの参照計算とWASMの確率差最大約0.00000104（許容0.00001）を確認した。文脈継続・全reset・不正frame拒否の単体確認も成功した。
+
+[全素材の候補比較](artifacts/vad-official-context-2026-09-07.json)は以下のとおり。相槌・take-turn・文中休止は各100件、非発声音は120件で、モデル前に同じ先行発話と待機を入れるオフライン診断である。
+
+| 候補 | 相槌未検出 | take-turn未検出 | 文中分割 | 非発声音誤確定 |
+|---|---:|---:|---:|---:|
+| 現行legacy・比較元 | 14/100 | 0/100 | 0/100 | 9/120 |
+| v6.2.1・現行detector | 27/100 | 0/100 | 0/100 | 0/120 |
+| v6.2.1・高確率の確認時間を短縮 | 26/100 | 0/100 | 0/100 | 0/120 |
+| v6.2.1・静音resetなし | 38/100 | 0/100 | 0/100 | 未測定 |
+| bundled v5・直前64サンプル追加 | 27/100 | 0/100 | 2/100 | 未測定 |
+
+短縮候補は強い確率を0.5・128ms、補助の高確率を0.7・96msとし、弱い確率を単純に許す変更では改善を主張しない。v6.2.1とlegacyのどちらかで検出できればよいという合算でも、legacy未検出14件のうち回復は1件だけだった。新モデル単独への置換、確認時間変更、静音reset撤去はいずれも採用しない。製品のVAD・分類器は変更していない。候補の入力・モデル・wrapper・script・rawのhashはartifactに保存し、作業用scriptとrawは`/tmp/issue150-silero-v621/`へ保持する。
