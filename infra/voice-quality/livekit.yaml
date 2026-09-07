@@ -5,5 +5,4 @@ rtc:
   tcp_port: 19881
   udp_port: 19882
   use_external_ip: false
-  node_ip: 127.0.0.1
-  enable_loopback_candidate: true
+  # 同じhostから到達できる専用bridgeのinterfaceをICE候補にする。

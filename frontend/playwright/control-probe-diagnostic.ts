@@ -19,26 +19,31 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
   const probes: Array<ControlProbeObservation & {playbackActive: boolean}> = []
   const record: Record<string, unknown> = {measurement_scope: 'livekit_control_probe_session_diagnostic',
     expected_probes: count, fixture_sha256: fixture.audioSha256, probes, outcome: 'failure'}
-  let stage = 'initial_response'
+  let stage = 'fixture_setup'
   try {
     await installScheduledFixture(page, fixture)
+    stage = 'open_voice_chat'
     const microphone = await driver.openVoiceChat(page)
+    stage = 'bind_control_probe'
     await page.evaluate(() => {
       const target = window as typeof window & {__digitalSoulsVoiceSessionTestPort?: {
         bindRoom?: (room: NonNullable<Window['__voiceControlProbeRoom']>) => void}}
       if (!target.__digitalSoulsVoiceSessionTestPort) throw new Error('voice diagnostic port unavailable')
       target.__digitalSoulsVoiceSessionTestPort.bindRoom = room => {window.__voiceControlProbeRoom = room}
     })
+    stage = 'session_create'
     const issuedResponse = page.waitForResponse(response => response.request().method() === 'POST'
       && new URL(response.url()).pathname.endsWith('/voice/livekit/token'), {timeout: 10000}).catch(() => null)
     await microphone.click()
     const issued = await issuedResponse
+    record.session_create_http_status = issued?.status() ?? null
     if (issued === null || !issued.ok()) throw new Error('session creation unavailable')
     const {session_id: sessionId} = await issued.json() as {session_id?: unknown}
     if (typeof sessionId !== 'string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(sessionId)) {
       throw new Error('session identity unavailable')
     }
     record.session_id = sessionId
+    stage = 'first_playback'
     await expect(microphone).toHaveAttribute('aria-pressed', 'true')
     await page.evaluate(() => window.__voiceFixtureClock!.start())
     const cycle = await driver.waitForCompletedVoiceCycle(page)

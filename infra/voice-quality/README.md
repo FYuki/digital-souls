@@ -2,7 +2,7 @@
 
 #150の再接続検証専用。通常devの7880番台、dogfoodの17880番台とは別の19880番台を使う。containerは専用Docker bridgeへ接続し、hostへ公開するportをloopbackに限定する。通常dev・dogfoodへこの設定を反映しない。
 
-LiveKit v1.9.7の[公式設定例](https://github.com/livekit/livekit/blob/v1.9.7/config-sample.yaml)に従い、`use_external_ip: false`と`node_ip: 127.0.0.1`を指定する。BrowserとBackendが同じ開発hostから接続する検証用の構成であり、別端末からの接続を想定しない。
+LiveKit v1.9.7の[公式設定例](https://github.com/livekit/livekit/blob/v1.9.7/config-sample.yaml)の`use_external_ip: false`を使い、`node_ip`とloopback候補の追加を指定せず、専用bridgeのinterfaceをICE候補にする。BrowserとBackendが同じ開発hostからbridgeのIPへ到達できる検証用の構成であり、別端末からの接続を想定しない。
 
 ## 起動と障害注入
 
