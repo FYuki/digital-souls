@@ -69,7 +69,7 @@ class ResponseAudioTracks:
                     previous.pacer.stop()
                     previous.source.clear_queue()
                 previous.track.mute()
-                await self._room.local_participant.unpublish_track(previous.sid)
+                await self._unpublish_previous(previous.sid)
                 self._observe("response_audio_track_unpublished", previous.response_id)
                 await self._close_source(previous)
                 self._current = None
@@ -187,6 +187,20 @@ class ResponseAudioTracks:
                 # session cleanupがroomを切断・削除する。ここではnative sourceを解放する。
                 await self._close_source(current)
                 self._current = None
+
+    async def _unpublish_previous(self, sid: str) -> None:
+        participant = self._room.local_participant
+        # 再接続で既に消えた所有trackへ、再度unpublishを送らない。
+        if sid not in participant.track_publications:
+            return
+        rtc_module = importlib.import_module("livekit.rtc")
+        try:
+            await participant.unpublish_track(sid)
+        except rtc_module.UnpublishTrackError:
+            # SDKのlocal_track_unpublished通知とFFI応答は競合する。
+            # 所有SIDの消失を確認できた場合だけ、sourceの解放へ進む。
+            if sid in participant.track_publications:
+                raise
 
     async def _close_source(self, current: _ResponseTrack) -> None:
         if not current.source_closed:

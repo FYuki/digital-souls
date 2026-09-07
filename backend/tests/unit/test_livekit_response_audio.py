@@ -15,7 +15,8 @@ B = "50000000-0000-4000-8000-000000000002"
 @pytest.fixture
 def rig(monkeypatch):
     sources, tracks, operations = [], [], []
-    flags = SimpleNamespace(publish_error=False, publish_entered=None, publish_release=None, auto_ready=True)
+    flags = SimpleNamespace(publish_error=False, publish_entered=None, publish_release=None, auto_ready=True,
+                            publications={}, unpublish_error=None, remove_before_error=False)
 
     class Source:
         def __init__(self, rate, channels, *, queue_size_ms):
@@ -59,20 +60,34 @@ def rig(monkeypatch):
         operations.append(('publish', sid, track.name))
         if flags.auto_ready:
             asyncio.get_running_loop().call_soon(output.confirm_ready, track.name.split(':', 1)[1], sid)
-        return SimpleNamespace(sid=sid)
+        publication = SimpleNamespace(sid=sid)
+        flags.publications[sid] = publication
+        return publication
+
+    class UnpublishTrackError(Exception):
+        pass
+
+    flags.error_type = UnpublishTrackError
 
     async def unpublish(sid):
         operations.append(('unpublish', sid))
+        if flags.remove_before_error:
+            flags.publications.pop(sid, None)
+        if flags.unpublish_error is not None:
+            raise flags.unpublish_error
+        if sid not in flags.publications:
+            raise UnpublishTrackError('track not found')
+        flags.publications.pop(sid)
 
     rtc = SimpleNamespace(
-        AudioSource=Source,
+        AudioSource=Source, UnpublishTrackError=UnpublishTrackError,
         LocalAudioTrack=SimpleNamespace(create_audio_track=Track),
         TrackSource=SimpleNamespace(SOURCE_MICROPHONE='microphone'),
         TrackPublishOptions=lambda **kwargs: kwargs,
         AudioFrame=lambda data, rate, channels, count: SimpleNamespace(data=data),
     )
     monkeypatch.setitem(sys.modules, 'livekit.rtc', rtc)
-    room = SimpleNamespace(local_participant=SimpleNamespace(publish_track=publish, unpublish_track=unpublish))
+    room = SimpleNamespace(local_participant=SimpleNamespace(publish_track=publish, unpublish_track=unpublish, track_publications=flags.publications))
     output = ResponseAudioTracks(room, ready_timeout_seconds=.05)
     return output, sources, tracks, operations, flags
 
@@ -274,5 +289,31 @@ def test_no_audio_on_missing_readiness_or_stop_while_waiting(rig, operation):
         assert sources[0].frames == []
         assert tracks[0].muted
         assert not output.confirm_ready(A, "TR_1")
+        await output.aclose()
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize('case', ['already_removed', 'removed_during_call', 'still_present', 'other_error'])
+def test_retire_only_verified_absent_publication_after_reconnect(rig, case):
+    output, sources, tracks, operations, flags = rig
+    async def exercise():
+        await output.begin_response(A)
+        if case == 'already_removed':
+            flags.publications.pop('TR_1')
+        else:
+            flags.unpublish_error = flags.error_type('private-sentinel') if case != 'other_error' else RuntimeError('private-sentinel')
+            flags.remove_before_error = case != 'still_present'
+        if case in ('still_present', 'other_error'):
+            with pytest.raises(type(flags.unpublish_error)):
+                await output.begin_response(B)
+            assert len(tracks) == 1
+        else:
+            await output.begin_response(B)
+            await output.publish(bytes(960), response_id=B)
+            assert sources[0].closed and tracks[0].muted
+            assert len(sources[1].frames) == 1
+            assert 'TR_2' in flags.publications
+            if case == 'already_removed':
+                assert ('unpublish', 'TR_1') not in operations
         await output.aclose()
     asyncio.run(exercise())
