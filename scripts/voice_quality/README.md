@@ -126,3 +126,6 @@ backend/.venv/bin/python scripts/voice_quality/probe_stt_idle.py \
 scheduled fixtureのpilot・controlledと同一session診断は、開始ボタン完了後にdocumentのclick activation observerを開始する。Enter等のbutton activationもclickとして数える。対象の文言・本文は保存せず、開始・snapshot・activationの単調時計だけをraw manifestへ保存する。明示終了とcleanupはsnapshot後に行う。
 
 `livekit_pilot_report`は発話開始前から全sample再生完了までを覆う観測を検証し、準備試行を除外して`manual_operations`へ集計する。旧manifestや実PCM境界がないpilotの欠測を0に補わない。同一sessionのsnapshotは累積値なので、sessionの操作総数には最後のsnapshotを用いる。通常の音声fixture送出はUI activationではなく、マイク入力を再現する操作である。
+
+
+VAD候補をアプリへ反映する前に比較する場合、`measure-utterance-detector.mjs`では確率JSON・出力JSONの後に、`measure-utterance-background.mjs`では出力JSONの後に、候補のTypeScript sourceを指定できる。省略時は現在のアプリsourceを使う。両診断は既存出力を上書きせず、source・modelのhashを結果へ保存する。非発声音の診断は各frameの実Silero確率もraw結果へ残す。比較では無音など同じPCMの反復をhashで潰さず、元の試行順・種類・hashを対応付ける。

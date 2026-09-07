@@ -13,6 +13,9 @@ export type UtteranceDetectorOptions = Readonly<{
   silenceMs: number
   strongSpeechProbability: number
   minimumStrongMs: number
+  shortStrongMs: number
+  highSpeechProbability: number
+  minimumHighMs: number
   negativeSpeechProbability: number
   neuralSilenceMs: number
   evidenceWindowMs: number
@@ -25,6 +28,9 @@ export const utteranceDetectorOptions: UtteranceDetectorOptions = {
   silenceMs: 600,
   strongSpeechProbability: 0.3,
   minimumStrongMs: 300,
+  shortStrongMs: 250,
+  highSpeechProbability: 0.5,
+  minimumHighMs: 192,
   negativeSpeechProbability: 0.25,
   neuralSilenceMs: 700,
   evidenceWindowMs: 2000,
@@ -37,6 +43,7 @@ export class UtteranceDetector {
   private strongFrames: { end: number; duration: number }[] = []
   private neuralSilenceMs = 0
   private confirmed = false
+  private consecutiveHighMs = 0
 
   constructor(
     private readonly emit: (event: UtteranceDetection) => void,
@@ -50,6 +57,7 @@ export class UtteranceDetector {
     this.strongFrames = []
     this.neuralSilenceMs = 0
     this.confirmed = false
+    this.consecutiveHighMs = 0
   }
 
   process(frame: Float32Array, speechProbability: number, frameEndMs: number): void {
@@ -90,6 +98,8 @@ export class UtteranceDetector {
     } else if (speechProbability < this.options.negativeSpeechProbability) {
       this.neuralSilenceMs += durationMs
     }
+    this.consecutiveHighMs = speechProbability >= this.options.highSpeechProbability
+      ? Math.min(this.consecutiveHighMs + durationMs, this.options.minimumHighMs) : 0
     const strongMs = this.strongFrames.reduce((total, item) => (
       total + Math.min(item.duration, item.end - evidenceStart)
     ), 0)
@@ -97,12 +107,14 @@ export class UtteranceDetector {
     // 中間確率ではカウンターを進めず、正の確率で解除するhysteresisを維持する。
     const ended = frameEndMs - this.lastActiveEnd > this.options.silenceMs
       || (this.confirmed && this.neuralSilenceMs > this.options.neuralSilenceMs)
-    // 短い単発の確率上昇を発話へ昇格させない。現行legacyの4 frame確認を保つ。
+    // 通常はlegacyの4 frame相当を確認する。短い発話は3 frame相当の根拠と
+    // 直近2 frameの連続した高確率が揃った場合だけ確定し、散在する弱い山を合算しない。
     const activeMs = this.activeFrames.reduce((total, item) => (
       total + item.end - Math.max(item.start, evidenceStart)
     ), 0)
     if (!this.confirmed && activeMs >= this.options.minimumActiveMs
-      && strongMs >= this.options.minimumStrongMs) {
+      && (strongMs >= this.options.minimumStrongMs
+        || (strongMs >= this.options.shortStrongMs && this.consecutiveHighMs >= this.options.minimumHighMs))) {
       this.confirmed = true
       this.activeFrames = []
       this.emit({ type: 'confirmed', speechStartedAtMs: this.candidateStart, detectedAtMs: frameEndMs })

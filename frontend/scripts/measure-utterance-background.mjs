@@ -12,7 +12,7 @@ const {FrameProcessor, Message, getDefaultRealTimeVADOptions} = require('@ricky0
 const {SileroLegacy} = require('@ricky0123/vad-web/dist/models')
 const ort=require('onnxruntime-web/wasm')
 ort.env.wasm.numThreads=1
-const source=await readFile(resolve(root,'src/lib/audio/utterance-detector.ts'),'utf8')
+const source=await readFile(process.argv[3] ? resolve(process.argv[3]) : resolve(root,'src/lib/audio/utterance-detector.ts'),'utf8')
 const {code}=await transform(source,{loader:'ts',format:'esm'})
 const {UtteranceDetector,utteranceDetectorOptions}=await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)
 const modelBytes=await readFile(resolve(root,'node_modules/@ricky0123/vad-web/dist/silero_vad_legacy.onnx'))
@@ -51,10 +51,12 @@ try {
     {...getDefaultRealTimeVADOptions('legacy'),redemptionMs:700},96)
    baseline.resume(); model.reset_state()
    let maxProbability=0
+   const frameProbabilities=[]
    for(let offset=0;offset+1536<=samples.length;offset+=1536) {
     const frame=samples.slice(offset,offset+1536)
     const probability=await model.process(frame)
     currentProbability=probability.isSpeech
+    frameProbabilities.push(currentProbability)
     maxProbability=Math.max(maxProbability,currentProbability)
     const atMs=(offset+1536)/16
     detector.process(frame,currentProbability,atMs)
@@ -62,7 +64,7 @@ try {
    }
    trials.push({kind,fixture_sha256:hash(new Uint8Array(samples.buffer)),max_probability:maxProbability,
     candidate_false_start:events.some(event=>event.type==='confirmed'),baseline_false_start:baselineEvents.length>0,
-    events})
+    frame_probabilities:frameProbabilities,events})
   }
  }
 } finally {await model.release()}
@@ -71,5 +73,5 @@ const summary={denominator:trials.length,candidate_false_starts:trials.filter(t=
 const output=resolve(process.argv[2] ?? resolve(root,'test-results/vad-quality/utterance-background-v1.json'))
 await mkdir(dirname(output),{recursive:true})
 await writeFile(output,JSON.stringify({scope:'synthetic_non_speech_real_silero_diagnostic',detector_sha256:hash(source),
- model_sha256:hash(modelBytes),options:utteranceDetectorOptions,summary,trials},null,2)+'\n')
+ model_sha256:hash(modelBytes),frame_ms:96,options:utteranceDetectorOptions,summary,trials},null,2)+'\n',{flag:'wx'})
 console.log(JSON.stringify({summary,output}))

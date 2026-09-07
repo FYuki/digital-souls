@@ -107,3 +107,37 @@ describe('PCMで終了境界を測る発話検出', () => {
   })
 
 })
+
+
+describe('短い発話の安定した音声確率', () => {
+  test('3 frameの根拠と直近2 frameの高確率で短い発話を確定する', () => {
+    const {events, frame} = harness()
+    frame(0.01, 0.35)
+    frame(0.01, 0.6)
+    expect(events.some(event => event.type === 'confirmed')).toBe(false)
+    frame(0.01, 0.6)
+    expect(events.filter(event => event.type === 'confirmed')).toEqual([
+      {type: 'confirmed', speechStartedAtMs: 0, detectedAtMs: 288},
+    ])
+    for (let i = 0; i < 7; i++) frame(0, 0)
+    expect(events.filter(event => event.type === 'ended')).toHaveLength(1)
+  })
+
+  test('弱い3 frameや高確率が1 frameだけの雑音を確定しない', () => {
+    for (const probabilities of [[0.31, 0.37, 0.36], [0.43, 0.62, 0.1, 0.1, 0.31]]) {
+      const {events, frame} = harness()
+      for (const probability of probabilities) frame(0.01, probability)
+      for (let i = 0; i < 7; i++) frame(0, 0)
+      expect(events.some(event => event.type === 'confirmed')).toBe(false)
+    }
+  })
+
+  test('離れた高確率やreset前の高確率を連続扱いしない', () => {
+    const {detector, events, frame} = harness()
+    frame(0.01, 0.35); frame(0.01, 0.6); frame(0.01, 0.1); frame(0.01, 0.6)
+    expect(events.some(event => event.type === 'confirmed')).toBe(false)
+    detector.reset()
+    frame(0.01, 0.35); frame(0.01, 0.35); frame(0.01, 0.6)
+    expect(events.some(event => event.type === 'confirmed')).toBe(false)
+  })
+})
