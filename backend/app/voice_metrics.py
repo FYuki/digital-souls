@@ -375,6 +375,36 @@ class ResourceCollection(BaseModel):
     missing_samples: dict[str, int]
 
 
+class ManualResourceCollection(BaseModel):
+    """手動取得のsnapshot。所有テストcontainerの連続観測とは別の方法として記録する。"""
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    method: Literal["manual_docker_stats_and_host_gpu_v1"] = "manual_docker_stats_and_host_gpu_v1"
+    cpu_scope: Literal["backend_container"] = "backend_container"
+    cpu_method: Literal["mean_sampled_docker_stats_percent_one_core_100_percent"] = "mean_sampled_docker_stats_percent_one_core_100_percent"
+    memory_method: Literal["maximum_sampled_docker_stats_cli_usage_bytes_excluding_cache"] = "maximum_sampled_docker_stats_cli_usage_bytes_excluding_cache"
+    gpu_scope: Literal["shared_host_gpu"] = "shared_host_gpu"
+    gpu_method: Literal["maximum_sampled_device_utilization_and_total_used_bytes"] = "maximum_sampled_device_utilization_and_total_used_bytes"
+    sample_count: int = Field(ge=1)
+    sample_window_ms: float = Field(ge=0, allow_inf_nan=False)
+    maximum_interval_ms: float = Field(ge=0, allow_inf_nan=False)
+    measured_samples: dict[str, int]
+    missing_samples: dict[str, int]
+
+    @model_validator(mode="after")
+    def validate_counts(self) -> ManualResourceCollection:
+        names = {"cpu_percent", "memory_bytes", "gpu_utilization_percent", "gpu_memory_bytes"}
+        if set(self.measured_samples) != names or set(self.missing_samples) != names:
+            raise ValueError("manual resource coverage requires every metric")
+        for name in names:
+            measured, missing = self.measured_samples[name], self.missing_samples[name]
+            if measured < 0 or missing < 0 or measured + missing != self.sample_count:
+                raise ValueError("manual resource sample denominator mismatch")
+        if self.maximum_interval_ms > self.sample_window_ms:
+            raise ValueError("manual resource interval exceeds observation window")
+        return self
+
+
 class ResourceMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -382,7 +412,7 @@ class ResourceMetadata(BaseModel):
     memory_bytes: DiagnosticValue
     gpu_utilization_percent: DiagnosticValue = Field(default_factory=lambda: DiagnosticValue(status="missing", reason="gpu_not_observed"))
     gpu_memory_bytes: DiagnosticValue = Field(default_factory=lambda: DiagnosticValue(status="missing", reason="gpu_not_observed"))
-    collection: ResourceCollection | None = None
+    collection: ResourceCollection | ManualResourceCollection | None = None
 
 
 class NetworkCollection(BaseModel):

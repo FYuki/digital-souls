@@ -65,6 +65,26 @@ PYTHONPATH=backend backend/.venv/bin/python -m app.livekit_trace_report \
 
 browser内だけで確定するclient track受信、barge-in local停止、reconnect、playback continuityは、`test:integration:voice`のPlaywright添付証跡と#112の手動受入記録を併用する。Backend生traceに対応eventがない場合、aggregate上も`missing`のまま残し、測定済みに見せかけない。
 
+### 手動で取得したdogfood resourceの取り込み
+
+同じ受け入れrunで取得した数値を、`voice-dogfood-resource-observations-v1.schema.json`に従うJSONへ記録し、上記コマンドに`--resource-observations <観測JSON>`を追加する。この入力は手動測定の申告であり、実サービスの自動テストや測定済み証拠を生成する機能ではない。
+
+入力は`schema_version: "1.0"`、`measurement_kind: "dogfood"`、`method: "manual_docker_stats_and_host_gpu_v1"`、選択した全traceファイルのSHA-256配列`trace_sha256`、`samples`配列を持つ。受け入れ終了後のtraceに対して`sha256sum`でhashを取得する。選択traceとの不一致、重複、別の測定種別、未知の項目は拒否する。観測JSONも生traceと同様にリポジトリ外で保管し、公開artifactへはhashやIDを転記しない。
+
+各sampleの必須項目は次のとおり。取得できなかった数値は`null`とし、0で埋めない。
+
+| 項目 | 観測方法・単位 |
+|---|---|
+| `elapsed_ms` | 最初のresource観測を起点とする経過ミリ秒。sampleごとに単調増加 |
+| `cpu_percent` | 同じBackend containerの`docker stats --no-stream`のCPU%。1 core占有が100%なので100を超える値も許容 |
+| `memory_bytes` | 同じ出力のメモリ使用量をbyteへ換算。Docker CLIがcacheを差し引いた値であり、container charged bytesやRSSとは区別 |
+| `gpu_utilization_percent` | 同じhostのGPU device使用率の最大値。0〜100% |
+| `gpu_memory_bytes` | 同じhostの全GPU device使用メモリ合計をbyteへ換算 |
+
+CPUは取得sampleの単純平均、メモリとGPUは取得sampleの最大値を集計する。全期間の時間加重平均やsample間の瞬間peakとは扱わない。`resources.collection`へ観測方法、scope、全sample数、観測時間幅、最大間隔、指標ごとの観測・欠測件数を保存する。全sampleが未取得の指標は`manual_dogfood_sample_not_recorded`として欠測を残す。共有GPUには他processの負荷も含まれ、Backend専有値として解釈しない。
+
+この取り込みはresourceだけを補う。通信量・packet loss、session中の追加操作、予期しない終了、再生品質は各々の観測が必要であり、resource値から推定しない。
+
 ## 保存と削除
 
 dogfood生traceはリポジトリ外の `DS_DATA_DIR/voice-metrics/raw/` へ保存し、7日を超えたファイルを起動時に削除する。生traceはGit、会話履歴、テスト成果物、dogfood backupの対象にしない。長期保存aggregateからはcharacter・event・session・utterance・response IDを除く。リポジトリ内へ誤出力した `voice-metrics/raw/` は `.gitignore` で追跡対象外にする。

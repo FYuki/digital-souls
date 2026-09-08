@@ -150,7 +150,7 @@
         "memory_bytes": { "$ref": "#/$defs/diagnostic" },
         "gpu_utilization_percent": { "$ref": "#/$defs/diagnostic" },
         "gpu_memory_bytes": { "$ref": "#/$defs/diagnostic" },
-        "collection": { "anyOf": [{ "$ref": "#/$defs/resource_collection" }, { "type": "null" }] }
+        "collection": { "anyOf": [{ "$ref": "#/$defs/resource_collection" }, { "$ref": "#/$defs/manual_resource_collection" }, { "type": "null" }] }
       }
     },
     "network": {
@@ -227,6 +227,86 @@
           }
         }
       }
+    },
+    "manual_resource_collection": {
+      "additionalProperties": false,
+      "description": "手動取得のsnapshot。所有テストcontainerの連続観測とは別の方法として記録する。",
+      "properties": {
+        "method": {
+          "const": "manual_docker_stats_and_host_gpu_v1",
+          "default": "manual_docker_stats_and_host_gpu_v1",
+          "title": "Method",
+          "type": "string"
+        },
+        "cpu_scope": {
+          "const": "backend_container",
+          "default": "backend_container",
+          "title": "Cpu Scope",
+          "type": "string"
+        },
+        "cpu_method": {
+          "const": "mean_sampled_docker_stats_percent_one_core_100_percent",
+          "default": "mean_sampled_docker_stats_percent_one_core_100_percent",
+          "title": "Cpu Method",
+          "type": "string"
+        },
+        "memory_method": {
+          "const": "maximum_sampled_docker_stats_cli_usage_bytes_excluding_cache",
+          "default": "maximum_sampled_docker_stats_cli_usage_bytes_excluding_cache",
+          "title": "Memory Method",
+          "type": "string"
+        },
+        "gpu_scope": {
+          "const": "shared_host_gpu",
+          "default": "shared_host_gpu",
+          "title": "Gpu Scope",
+          "type": "string"
+        },
+        "gpu_method": {
+          "const": "maximum_sampled_device_utilization_and_total_used_bytes",
+          "default": "maximum_sampled_device_utilization_and_total_used_bytes",
+          "title": "Gpu Method",
+          "type": "string"
+        },
+        "sample_count": {
+          "minimum": 1,
+          "title": "Sample Count",
+          "type": "integer"
+        },
+        "sample_window_ms": {
+          "minimum": 0,
+          "title": "Sample Window Ms",
+          "type": "number"
+        },
+        "maximum_interval_ms": {
+          "minimum": 0,
+          "title": "Maximum Interval Ms",
+          "type": "number"
+        },
+        "measured_samples": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Measured Samples",
+          "type": "object"
+        },
+        "missing_samples": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Missing Samples",
+          "type": "object"
+        }
+      },
+      "required": [
+        "sample_count",
+        "sample_window_ms",
+        "maximum_interval_ms",
+        "measured_samples",
+        "missing_samples"
+      ],
+      "title": "ManualResourceCollection",
+      "type": "object"
     },
     "network_collection": {
       "type": "object",

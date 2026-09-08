@@ -9,6 +9,7 @@ from typing import Sequence
 
 from jsonschema import Draft202012Validator
 
+from app.voice_dogfood_resources import load_dogfood_resources
 from app.model_settings import resolve_model_settings
 from app.stt.remote_whisper_client import WHISPER_COMPUTE_TYPE, WHISPER_DEVICE
 from app.voice_metrics import (
@@ -108,6 +109,7 @@ def finalize_livekit_dogfood_report(
     output_path: Path,
     schema_path: Path,
     run_id: str,
+    resource_observations_path: Path | None = None,
 ) -> None:
     events = _load_traces(trace_paths)
     trial_count = len({
@@ -146,10 +148,11 @@ def finalize_livekit_dogfood_report(
         ] + ([ClockMetadata(domain="browser_audio_context", method="output_timestamp_confirmed_frame", unit="millisecond")]
              if any(event.clock_domain == "browser_audio_context" for event in events) else []),
         hardware=HardwareMetadata(description=platform.platform()),
-        resources=ResourceMetadata(
-            cpu_percent=unavailable,
-            memory_bytes=unavailable,
-        ),
+        resources=(load_dogfood_resources(resource_observations_path, trace_paths=trace_paths)
+                   if resource_observations_path is not None else ResourceMetadata(
+                       cpu_percent=unavailable,
+                       memory_bytes=unavailable,
+                   )),
         network=NetworkMetadata(
             sent_bytes=unavailable,
             received_bytes=unavailable,
@@ -177,12 +180,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--schema", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--resource-observations", type=Path)
     args = parser.parse_args(argv)
     finalize_livekit_dogfood_report(
         trace_paths=args.trace,
         output_path=args.output,
         schema_path=args.schema,
         run_id=args.run_id,
+        resource_observations_path=args.resource_observations,
     )
 
 
