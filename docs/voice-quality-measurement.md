@@ -141,3 +141,5 @@ Conversation Coreから音声の本文をstreamする要求には`latency_sensit
 ## PCM端部照合の100件再検証（2026-09-08）
 
 `pcm-witness-v3-pause-100-20260908-01`では会話動作100件と実際の最終STT入力100件を確認したが、端部照合は98件成功、2件未確認だった。先頭の位置を求めるseedの相関が閾値未満であり、未確認2件を正常へ補完しない。[PCM結果](artifacts/livekit-pcm-witness-v3-pause-100-2026-09-08.json)、[VAD結果](artifacts/livekit-vad-pcm-witness-v3-pause-100-2026-09-08.json)、[終了確認](artifacts/livekit-pcm-witness-v3-pause-100-cleanup-2026-09-08.json)を保存した。共有サービスを残し、測定が所有したFrontend・Backendと観測proxyの終了を確認した。この測定は端部品質の受け入れを満たしていない。
+
+通常設定の最初の実接続pilot（`voice-default-latency-pilot-20260908-01`、revision `1c060e9`）は準備1件・測定3件すべてで低遅延要求と`think: false`の送信を確認し、会話・再生・所有環境の終了を確認した。一方TTFA p95は11334.77msで未達だった。Ollama load p95は9605.52msで、計測中の常駐contextに要求した8192と異なる13024が観測され、モデル不在の観測もあった。同時要求の発生元は未確認であるため、原因を断定しない。[匿名集計](artifacts/livekit-voice-default-latency-pilot-2026-09-08-01.json)と[設定・終了照合](artifacts/livekit-voice-default-latency-pilot-2026-09-08-01-verification.json)を保存した。traceの`unit`はtimestampの単位であり、これらの要求数はaggregateでは`count`として扱う。
