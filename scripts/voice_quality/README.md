@@ -622,3 +622,23 @@ sourceが変更された場合、同名eventの観測区間を再確認するま
 これはcodecと照合部品の検証であり、実Browser→LiveKit→Whisperの入力観測や、
 ラベル付き100試行のPCM境界受入はまだ証明しない。実入力の取得・試行との対応・集計を別途接続する必要がある。
 診断用依存は`backend/requirements-dev.txt`に定義する。
+
+## 実Whisper入力のPCM観測
+
+```bash
+backend/.venv/bin/python scripts/voice_quality/run_pilot.py \
+  --run-id pcm-input-new --trials 3 --scheduled-fixture --disable-thinking \
+  --inference-env /home/asa/dev/digital-souls/backend/.env --observe-stt-pcm
+```
+
+明示指定時だけ`integration-voice-pcm`を選び、runnerがlocalhost:50023の中継を所有する。
+Whisperの実POSTを既存localhost:50022へバイト列を変えずに転送し、HTTP statusと応答本文を返す。
+入力はメモリ内でfixtureへ照合し、数値だけを`whisper-input-pcm.jsonl`へ保存する。
+fixtureはrepositoryの固定hashから選び、trial ordinalとinitial／labeledの別をNode側で登録する。
+prepareの100ms無音は別記し、境界の成功試行へ数えない。
+
+通常fixtureとラベル付きcohortに対応する。中継による追加処理を含むため、このProfileの
+latencyを通常の無観測Profileの値と同じ条件として扱わない。既存の通常artifact集計器は
+このProfileを受け付けない。PCM照合の成立や最終STTとの相関は別途検証する。
+前半だけを使うturn判定用STTと最終STTを、request順だけで同じ意味とみなさない。
+終了時は所有HTTP serverとrequest threadを閉じる。共有Whisper等は終了しない。

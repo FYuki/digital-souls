@@ -276,3 +276,21 @@ def test_pause_cohort_records_explicit_scope_and_does_not_leak_to_next_run(tmp_p
     assert result['VOICE_QUALITY_PILOT_TRIALS'] == '100'
     assert 'VOICE_QUALITY_INTERRUPTION_COHORT' not in result
     assert 'VOICE_QUALITY_VAD_COHORT' not in pilot.pilot_environment(inference, livekit, 'ordinary', 3, False)
+
+
+def test_pcm_observer_is_explicit_and_not_inherited(tmp_path, monkeypatch):
+    inference, livekit = tmp_path / 'inference.env', tmp_path / 'livekit.env'
+    inference.write_text('INFERENCE_TARGET_CHAT=ollama/test\n')
+    livekit.write_text('LIVEKIT_KEYS=test:test-only\n')
+    monkeypatch.setenv('VOICE_QUALITY_OBSERVE_STT_PCM', '1')
+    arguments = (inference, livekit, 'pcm-test', 3, False, True)
+    ordinary = pilot.pilot_environment(*arguments)
+    assert ordinary['DS_PROFILE'] == 'integration-voice'
+    assert 'VOICE_QUALITY_OBSERVE_STT_PCM' not in ordinary
+    observed = pilot.pilot_environment(*arguments, observe_stt_pcm=True)
+    assert observed['DS_PROFILE'] == 'integration-voice-pcm'
+    assert observed['VOICE_QUALITY_OBSERVE_STT_PCM'] == '1'
+    assert observed['LIVEKIT_URL'] == 'ws://127.0.0.1:7880'
+    for incompatible in ({'continuous_turns': 3}, {'control_probe': True}, {'fault_bridge': True}):
+        with pytest.raises(ValueError, match='PCM observation requires'):
+            pilot.pilot_environment(*arguments, observe_stt_pcm=True, **incompatible)

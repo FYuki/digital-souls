@@ -1,3 +1,4 @@
+import { selectPcmFixture, snapshotPcmInputs } from '../../playwright/whisper-pcm-observer'
 import { measureControlProbeSession } from '../../playwright/control-probe-diagnostic'
 import { measureLabeledInterruptions } from '../../playwright/labeled-interruption-diagnostic'
 import { expect, test } from '@playwright/test'
@@ -137,6 +138,7 @@ test(vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割�
     })
     const driver = createVoiceChatDriver()
     try {
+      await selectPcmFixture(fixture.audio_sha256, index + 1, 'initial')
       if (sourceFixture) await installScheduledFixture(page, sourceFixture)
       const microphone = await driver.openVoiceChat(page)
       const conversationId = await page.evaluate(() => (
@@ -185,6 +187,7 @@ test(vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割�
       expect((await endResponse.json()).phase).toBe('ended')
       const sourceBounds = sourceFixture ? await readFixtureBounds(page) : undefined
       trials.push({
+        pcm_input_observation: await snapshotPcmInputs(index + 1),
         ...(sourceBounds ? { user_control_observation: userControlObservation } : {}),
         network_observation: await page.evaluate(responseId => window.__voiceChatE2E.networkObservations?.[responseId], cycle.responseId!),
         track_response_matches: await page.evaluate(responseId => window.__voiceChatE2E.lastTrackMediaResponseId === responseId, cycle.responseId),
@@ -221,6 +224,7 @@ test(vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割�
         ...trials[index],
         phase: index < WARMUP_RUNS ? 'warmup' : 'measured',
         outcome: 'failure', failure_reason: 'voice_cycle_incomplete', diagnostics,
+        pcm_input_observation: await snapshotPcmInputs(index + 1).catch(() => ({unavailable: true})),
       }
       throw error
     } finally {

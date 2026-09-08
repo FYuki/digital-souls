@@ -1,3 +1,4 @@
+import { selectPcmFixture, snapshotPcmInputs } from './whisper-pcm-observer'
 import {installServerClockProbe} from './server-clock-probe'
 // 固定ラベル音声を実応答の再生中へ入れる。通常応答の100試行とは別の分母を持つ。
 import { expect, type Browser, type Page } from '@playwright/test'
@@ -66,7 +67,7 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
       ...(selection === undefined ? {} : {fixture_indices: indices}),
       labeled_manifest_sha256: createHash('sha256').update(manifestBytes).digest('hex'), trials}, null, 2) + '\n')
   }
-  for (const selectedTrial of selected) {
+  for (const [trialIndex, selectedTrial] of selected.entries()) {
     if (cohort === 'pause' && (selectedTrial.sample_rate_hz !== 48000
       || selectedTrial.expected_utterances !== 1 || selectedTrial.speech_intervals.length !== 2
       || !Number.isInteger(selectedTrial.pause_samples) || selectedTrial.pause_samples < 1
@@ -106,6 +107,7 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
           },
         }
       })
+      await selectPcmFixture(initial.audioSha256, trialIndex + 1, 'initial')
       await installScheduledFixture(page, initial)
       const microphone = await driver.openVoiceChat(page)
       // 初回の再生が失敗しても、作成済みsessionの終了応答を照合できるよう先に記録する。
@@ -146,6 +148,7 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
       expect(playing.active).toBe(true)
       expect(playing.initialPlayback.track_response_matches).toBe(true)
       expect(playing.initialPlayback.packet_playback_observation?.firstOutputAtMs).toBeCloseTo(cycle.startedAt!, 3)
+      await selectPcmFixture(selectedTrial.audio_sha256, trialIndex + 1, 'labeled')
       stage = 'fixture_and_decision'
       await page.evaluate(next => window.__voiceFixtureClock!.replay(next), interruption)
       await page.waitForFunction(() => window.__voiceFixtureClock?.finished, undefined, {timeout: 10000})
@@ -167,6 +170,11 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
             ended: events.filter(event => event.type === 'ended').length}
         })
         expect(counts).toEqual({confirmed: 1, ended: 1})
+        if (process.env.VOICE_QUALITY_OBSERVE_STT_PCM === '1') {
+          // VAD終了だけでsessionを閉じず、対象音声の最終STTがCoreへ届くまで待つ。
+          await page.waitForFunction(initialId => window.__voiceChatE2E.coreEventDiagnostics.some(event =>
+            event.type === 'utterance_finalized' && event.utteranceId !== initialId), cycle.utteranceId, {timeout: 10_000})
+        }
         trial.outcome = 'success'
         continue
       }
@@ -214,6 +222,7 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
           ended = response.ok() && (await response.json()).phase === 'ended'
         } catch { await responsePromise.catch(() => undefined) }
       } else { await driver.endVoiceSession(page).catch(() => undefined) }
+      trial.pcm_input_observation = await snapshotPcmInputs(trialIndex + 1).catch(() => ({unavailable: true}))
       // 終了操作後に届いた出力監視の更新も残す。最初のcomplete行や終了前snapshotだけで判定しない。
       let audioClosed = cohort !== 'take_turn'
       if (cohort === 'take_turn' && typeof trial.old_response_id === 'string') {

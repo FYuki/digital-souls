@@ -20,7 +20,7 @@ def inspect_controlled_initial_state(
     profile = json.loads(profile_path.read_text())
     environment = profile.get('derivedEnvironment', {})
     if identity.get('environmentId') != 'test' or (
-        profile.get('effectiveProfile') != 'integration-voice'
+        profile.get('effectiveProfile') not in ('integration-voice', 'integration-voice-pcm')
         or environment.get('DS_ENVIRONMENT_ID') != 'test'
         or Path(environment.get('DS_DATA_DIR', '')).resolve() != data_root.resolve()
         or environment.get('RAG_ENABLED') != 'false'

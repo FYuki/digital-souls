@@ -580,3 +580,23 @@ def test_voice_fault_endpoint_cannot_cross_into_another_profile(profile_module, 
     raw['dependencies']['livekit']['baseUrl'] = endpoint
     with pytest.raises(profile_module.ProfileError, match='fixed local service'):
         profile_module.validate_profile(raw, profile_name)
+
+
+def test_pcm_profile_changes_only_observed_whisper_endpoint(profile_validator, profile_module):
+    standard = profile_module.load_profile('integration-voice')
+    observed = profile_module.load_profile('integration-voice-pcm')
+    profile_validator.validate(observed)
+    assert observed['dependencies']['whisper']['baseUrl'] == 'http://127.0.0.1:50023'
+    assert {k: v for k, v in observed['dependencies'].items() if k != 'whisper'} == {
+        k: v for k, v in standard['dependencies'].items() if k != 'whisper'}
+
+
+@pytest.mark.parametrize('name,port', [('dev', 50023), ('dogfood', 50023),
+                                     ('integration-voice', 50023), ('integration-voice-pcm', 50022)])
+def test_pcm_proxy_endpoint_is_scoped_in_both_validators(profile_validator, profile_module, name, port):
+    raw = _read_json(ENVIRONMENTS_DIR / 'profiles' / f'{name}.json')
+    raw['dependencies']['whisper'] = {'mode': 'real', 'source': 'external',
+        'baseUrl': f'http://127.0.0.1:{port}', 'readinessPath': '/health/ready'}
+    assert list(profile_validator.iter_errors(raw))
+    with pytest.raises(profile_module.ProfileError, match='fixed local service'):
+        profile_module.validate_profile(raw, name)

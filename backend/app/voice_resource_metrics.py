@@ -38,7 +38,7 @@ class ContainerResourceSampler:
             if backend.get("owned") is not True or not isinstance(identity, dict):
                 return {"status": "missing", "reason": "owned_backend_not_running"}
             profile, runtime = report.get("effectiveProfile"), report.get("runtime")
-            if (not isinstance(profile, dict) or profile.get("effectiveProfile") not in {"integration-voice", "integration-voice-fault"}
+            if (not isinstance(profile, dict) or profile.get("effectiveProfile") not in {"integration-voice", "integration-voice-fault", "integration-voice-pcm"}
                     or not isinstance(runtime, dict) or runtime.get("environmentId") != "test"
                     or runtime.get("dataRoot") != str(self._report_path.resolve().parents[2])):
                 return {"status": "missing", "reason": "resource_profile_mismatch"}

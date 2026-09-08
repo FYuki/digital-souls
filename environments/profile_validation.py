@@ -139,6 +139,9 @@ def _validate_mode_source(name: str, dependency: Dependency, path: str, profile_
         if name == "livekit" and profile_name == "integration-voice-fault":
             # 通常dev/dogfoodの許可先は拡張せず、専用Profileだけを障害注入先へ固定する。
             fixed_base_urls = {"http://127.0.0.1:19880", "http://127.0.0.1:19880/"}
+        if name == "whisper" and profile_name == "integration-voice-pcm":
+            # 実入力の観測用中継。通常ProfileのWhisper接続先は拡張しない。
+            fixed_base_urls = {"http://127.0.0.1:50023", "http://127.0.0.1:50023/"}
         if dependency["baseUrl"] not in fixed_base_urls:
             raise ProfileError(
                 f"{path}.baseUrl must identify the fixed local service"

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
 import json
 import math
 import os
@@ -114,8 +115,10 @@ def probe_gpu() -> dict[str, object]:
 def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
                       trials: int, disable_thinking: bool, scheduled_fixture: bool = False, continuous_turns: int = 0,
                       controlled: bool = False, interruption_cohort: str | None = None,
-                      control_probe: bool = False, fault_bridge: bool = False, network_fault: bool = False, fixture_indices: str | None = None, vad_cohort: str | None = None) -> dict[str, str]:
+                      control_probe: bool = False, fault_bridge: bool = False, network_fault: bool = False, fixture_indices: str | None = None, vad_cohort: str | None = None, observe_stt_pcm: bool = False) -> dict[str, str]:
     run_root(run_id)
+    if type(observe_stt_pcm) is not bool or (observe_stt_pcm and (not scheduled_fixture or continuous_turns or control_probe or fault_bridge or network_fault)):
+        raise ValueError("PCM observation requires scheduled independent test sessions")
     if vad_cohort is not None and (vad_cohort != "pause" or interruption_cohort is not None
             or controlled or continuous_turns or control_probe or fault_bridge or network_fault
             or not scheduled_fixture):
@@ -174,7 +177,10 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
     if network_fault:
         env["VOICE_QUALITY_NETWORK_FAULT"] = "1"
     env.pop("VOICE_QUALITY_FAULT_BRIDGE", None)
-    env["DS_PROFILE"] = "integration-voice-fault" if fault_bridge else "integration-voice"
+    env.pop("VOICE_QUALITY_OBSERVE_STT_PCM", None)
+    if observe_stt_pcm:
+        env["VOICE_QUALITY_OBSERVE_STT_PCM"] = "1"
+    env["DS_PROFILE"] = "integration-voice-pcm" if observe_stt_pcm else ("integration-voice-fault" if fault_bridge else "integration-voice")
     if fault_bridge:
         env["VOICE_QUALITY_FAULT_BRIDGE"] = "1"
     env.pop("VOICE_QUALITY_CONTROL_PROBE", None)
@@ -203,7 +209,7 @@ def run(args: argparse.Namespace) -> int:
     from native_sdk import NativeSdkSampler
     from native_sdk_experiment.prepare import REVISION
 
-    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe, args.fault_bridge, args.network_fault, args.fixture_indices, args.vad_cohort)
+    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe, args.fault_bridge, args.network_fault, args.fixture_indices, args.vad_cohort, getattr(args, "observe_stt_pcm", False))
     if args.fault_bridge:
         from network_fault import resolve_target
         resolve_target("ds-voice-quality-fault-livekit-1")
@@ -220,44 +226,48 @@ def run(args: argparse.Namespace) -> int:
     expected_context = int(env["INFERENCE_TARGET_CHAT_MAX_INPUT_TOKENS"]) + int(env["INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS"])
     base = run_root(args.run_id)
     base.mkdir(parents=True, exist_ok=False)  # 失敗した試行のdata rootも上書きしない。
-    resources = ContainerResourceSampler(base / "runtime-data/runtime/standalone/environment-run.json")
-    native_sdk = NativeSdkSampler(base / "runtime-data/runtime/standalone/environment-run.json")
-    native_record = None
-    expected_patch_hash = hashlib.sha256((ROOT / "scripts/voice_quality/native_sdk_experiment/short-outage-retry.patch").read_bytes()).hexdigest()
-    process = subprocess.Popen([
-        "node", "node_modules/@playwright/test/cli.js", "test", "--config", "playwright.livekit-quality.config.ts",
-    ], cwd=ROOT / "frontend", env=env)
-    try:
-        with (base / "inference-runtime.jsonl").open("x") as output:
-            sample = 0
-            while process.poll() is None:
-                row = {"scope": "controlled_shared_inference_observation" if args.controlled else "pilot_shared_inference_observation", "clock_domain": "observer_monotonic",
-                       "expected_context_tokens": expected_context, "thinking_disabled_for_pilot": args.disable_thinking, "scheduled_fixture": args.scheduled_fixture, "continuous_turns": args.continuous_turns,
-                       "ollama": probe_residency(endpoint, model), "backend": resources.sample()}
-                if sample % 10 == 0:
-                    row["gpu"] = probe_gpu()
-                if native_record is None and sample % 4 == 0:
-                    native_record = native_sdk.sample()
-                    if native_record is not None:
-                        if (native_record['source_revision'] != REVISION
-                                or native_record['patch_sha256'] != expected_patch_hash):
-                            raise ValueError('measurement native SDK does not match committed source')
-                        (base / 'native-sdk.json').write_text(json.dumps({'status': 'verified', 'build': native_record}, indent=2) + '\n')
-                output.write(json.dumps(row, allow_nan=False) + "\n")
-                output.flush()
-                sample += 1
-                time.sleep(0.5)
-    except BaseException:
-        process.terminate()
+    with ExitStack() as owned:
+        if getattr(args, 'observe_stt_pcm', False):
+            from whisper_pcm_observer import WhisperPcmObserver
+            owned.enter_context(WhisperPcmObserver(base / 'whisper-input-pcm.jsonl'))
+        resources = ContainerResourceSampler(base / "runtime-data/runtime/standalone/environment-run.json")
+        native_sdk = NativeSdkSampler(base / "runtime-data/runtime/standalone/environment-run.json")
+        native_record = None
+        expected_patch_hash = hashlib.sha256((ROOT / "scripts/voice_quality/native_sdk_experiment/short-outage-retry.patch").read_bytes()).hexdigest()
+        process = subprocess.Popen([
+            "node", "node_modules/@playwright/test/cli.js", "test", "--config", "playwright.livekit-quality.config.ts",
+        ], cwd=ROOT / "frontend", env=env)
         try:
-            process.wait(timeout=30)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=5)
-        raise
-    if native_record is None:
-        raise ValueError("measurement native SDK could not be verified")
-    return process.returncode
+            with (base / "inference-runtime.jsonl").open("x") as output:
+                sample = 0
+                while process.poll() is None:
+                    row = {"scope": "controlled_shared_inference_observation" if args.controlled else "pilot_shared_inference_observation", "clock_domain": "observer_monotonic",
+                           "expected_context_tokens": expected_context, "thinking_disabled_for_pilot": args.disable_thinking, "scheduled_fixture": args.scheduled_fixture, "continuous_turns": args.continuous_turns,
+                           "ollama": probe_residency(endpoint, model), "backend": resources.sample()}
+                    if sample % 10 == 0:
+                        row["gpu"] = probe_gpu()
+                    if native_record is None and sample % 4 == 0:
+                        native_record = native_sdk.sample()
+                        if native_record is not None:
+                            if (native_record['source_revision'] != REVISION
+                                    or native_record['patch_sha256'] != expected_patch_hash):
+                                raise ValueError('measurement native SDK does not match committed source')
+                            (base / 'native-sdk.json').write_text(json.dumps({'status': 'verified', 'build': native_record}, indent=2) + '\n')
+                    output.write(json.dumps(row, allow_nan=False) + "\n")
+                    output.flush()
+                    sample += 1
+                    time.sleep(0.5)
+        except BaseException:
+            process.terminate()
+            try:
+                process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+            raise
+        if native_record is None:
+            raise ValueError("measurement native SDK could not be verified")
+        return process.returncode
 
 
 if __name__ == "__main__":
@@ -279,6 +289,8 @@ if __name__ == "__main__":
                         help="専用bridgeを2秒切断する1 session診断。fault-bridgeとcontrol-probe必須。")
     parser.add_argument("--control-probe", action="store_true",
                         help="障害なしの1 sessionで実制御往復を確認する。trialsはprobe回数。")
+    parser.add_argument("--observe-stt-pcm", action="store_true",
+                        help="専用Whisper中継で実入力を照合する。通常latency受入とは別条件。")
     parser.add_argument("--disable-thinking", action="store_true")
     parser.add_argument("--scheduled-fixture", action="store_true")
     parser.add_argument("--continuous-turns", type=int, default=0,

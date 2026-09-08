@@ -23,7 +23,7 @@ class NativeSdkSampler:
             container = (backend.get('containerIdentity') or {}).get('containerId')
             if (runtime.get('environmentId') != 'test'
                     or runtime.get('dataRoot') != str(self.report.resolve().parents[2])
-                    or profile.get('effectiveProfile') not in ('integration-voice', 'integration-voice-fault')
+                    or profile.get('effectiveProfile') not in ('integration-voice', 'integration-voice-fault', 'integration-voice-pcm')
                     or backend.get('owned') is not True
                     or not isinstance(container, str) or not re.fullmatch('[a-f0-9]{64}', container)):
                 return None

@@ -28,9 +28,13 @@ if (process.env.VOICE_QUALITY_NETWORK_FAULT !== undefined
   && (process.env.VOICE_QUALITY_NETWORK_FAULT !== '1' || !faultBridge)) {
   throw new Error('network fault requires explicit dedicated bridge')
 }
-const selectedProfile = faultBridge ? 'integration-voice-fault' : 'integration-voice'
-const base = createSuiteConfig('integration-voice', faultBridge ? {
-  loadProfile: () => JSON.parse(readFileSync(join(frontendRoot, '..', 'environments', 'profiles', 'integration-voice-fault.json'), 'utf8')),
+const pcmObserver = process.env.VOICE_QUALITY_OBSERVE_STT_PCM === '1'
+if (process.env.VOICE_QUALITY_OBSERVE_STT_PCM !== undefined && (!pcmObserver || faultBridge)) {
+  throw new Error('invalid PCM observer selection')
+}
+const selectedProfile = pcmObserver ? 'integration-voice-pcm' : (faultBridge ? 'integration-voice-fault' : 'integration-voice')
+const base = createSuiteConfig('integration-voice', selectedProfile !== 'integration-voice' ? {
+  loadProfile: () => JSON.parse(readFileSync(join(frontendRoot, '..', 'environments', 'profiles', `${selectedProfile}.json`), 'utf8')),
 } : undefined)
 const isCollectionOnly = process.argv.includes('--list')
 const webServer = base.webServer as NonNullable<PlaywrightTestConfig['webServer']> & {
