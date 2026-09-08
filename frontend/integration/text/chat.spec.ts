@@ -40,7 +40,9 @@ test('実サービスから受け取った光織の応答がチャット画面�
   await page.getByRole('button', { name: '送信' }).click()
 
   const userMessage = page.locator('article.message').nth(0)
-  await expect(userMessage.locator('.speaker')).toHaveText('あなた')
+  await expect(userMessage.locator('.speaker')).toHaveText('あなた', {
+    timeout: REAL_RESPONSE_TIMEOUT_MS,
+  })
   await expect(userMessage.locator('p')).toHaveText('こんにちは', {
     timeout: REAL_RESPONSE_TIMEOUT_MS,
   })
