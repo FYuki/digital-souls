@@ -3,12 +3,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
 import socket
 import subprocess
-import sys
 import tempfile
 import time
 from contextlib import ExitStack, contextmanager
@@ -16,6 +16,33 @@ from pathlib import Path
 from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+BROWSER_CHECKS = {
+    "initial": ("registered-list", "initial-available", "toggle-off"),
+    "restored": ("restart-restores-off", "on-rechecks-health"),
+    "disconnected": ("idle-disconnect-badge", "offline-toggle"),
+}
+
+
+def sanitized_browser_log(stdout, phase):
+    """実browserがassert通過後に出す固定eventだけを公開する。"""
+    events = []
+    for line in stdout.splitlines():
+        if not line.startswith("ADDON_ACCEPTANCE "):
+            continue
+        try:
+            event = json.loads(line.removeprefix("ADDON_ACCEPTANCE "))
+        except ValueError:
+            raise RuntimeError("invalid browser evidence") from None
+        if event not in [
+            {"check": check, "status": "passed"} for check in BROWSER_CHECKS[phase]
+        ]:
+            raise RuntimeError("invalid browser evidence")
+        events.append(event)
+    if [event["check"] for event in events] != list(BROWSER_CHECKS[phase]):
+        raise RuntimeError("incomplete browser evidence")
+    return "".join(json.dumps(event, sort_keys=True) + "\n" for event in events)
 
 
 def port():
@@ -68,6 +95,9 @@ def main():
     output = ROOT / "docs/artifacts/addon-admin-184/browser-public.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.unlink(missing_ok=True)
+    log_output = output.with_name("browser-execution.jsonl")
+    log_output.unlink(missing_ok=True)
+    execution_log = []
     node = shutil.which("node")
     if node is None:
         raise RuntimeError("Node.js is required")
@@ -245,6 +275,7 @@ def main():
                 ],
                 cwd=ROOT / "frontend",
                 env=environment,
+                check=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -253,6 +284,7 @@ def main():
             if result.returncode:
                 (work / "browser-failure.log").write_text(result.stdout)
                 raise RuntimeError(f"addon acceptance failed: {phase}")
+            execution_log.append(sanitized_browser_log(result.stdout, phase))
 
         browser("initial")
         backend.terminate()
@@ -287,6 +319,12 @@ def main():
         }
     # context終了後にだけ成功証跡を書く。teardown失敗や途中失敗は成功扱いにしない。
     report["teardown"] = "passed"
+    log_text = "".join(execution_log)
+    log_output.write_text(log_text)
+    report["executionLog"] = {
+        "path": log_output.name,
+        "sha256": hashlib.sha256(log_text.encode()).hexdigest(),
+    }
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps(report, ensure_ascii=False))
 

@@ -15,6 +15,10 @@
     "idle-disconnect-badge",
     "offline-toggle"
   ],
-  "testedAt": "2026-09-08T03:16:02Z",
-  "teardown": "passed"
+  "testedAt": "2026-09-08T04:26:01Z",
+  "teardown": "passed",
+  "executionLog": {
+    "path": "browser-execution.jsonl",
+    "sha256": "b2b466a4dd87339497db8e5fc8fc2335f08f7f58ef024c56ffeec068364b3e97"
+  }
 }

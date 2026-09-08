@@ -37,6 +37,12 @@ OFF中はpingを休止する。OFF操作によってprocessの再起動や停止
 
 ## APIと表示名
 
+このAPIは既存の会話・設定APIと同じ、ローカル単一利用者の信頼境界で提供する。
+管理者認証・ユーザー別認可の仕組みは現MVPには含まれない。
+Frontend／Backendはloopbackで利用し、未認証でLANへ公開しない
+（`docs/infrastructure-policy.md`）。`DS_BACKEND_HOST`等のbind指定を公開許可として扱わない。
+SNSログイン・ユーザー別管理を導入する際は、既存の設定APIを含めた認証境界を定義する。
+
 - `GET /addon-admin/connections`: snapshotの有無に関係なく登録済み全件を取得。
 - `PATCH /addon-admin/connections/{connection_id}`: `{"desired_enabled": true}`または`false`だけを受理。
 - responseはID、表示名、source種別、希望値、availability、effective state、固定error code、最終確認時刻だけ。
@@ -78,4 +84,6 @@ Tool Routingを設定せず、独立したtest data rootと動的portで起動�
 Backend再起動後のOFF復元、ON後の再確認、MCP停止時の無操作での障害badgeとOFF操作を確認する。
 既存サービス・dogfoodへ接続せず、起動したprocessをteardownする。成功後の公開証跡は
 `docs/artifacts/addon-admin-184/browser-public.json`。起動時に旧成功証跡を無効化し、途中失敗やteardown失敗で成功を残さない。
+ブラウザの各assert通過時に出力した固定eventだけを`browser-execution.jsonl`へ保存し、
+公開証跡からファイル名とSHA-256で参照する。余分なfieldや欠落・順序違反は受入失敗とする。
 生のprocess logとブラウザ画像は一時領域へ限定し、終了時に削除する。

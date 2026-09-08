@@ -178,10 +178,13 @@ class ToolService:
     def connection_disabled(self, connection_id: str) -> None:
         # 回答・binding待ちだけを終了する。既に送信した外部処理はGateの世代で再送を防ぐ。
         for key, run in tuple(self._runs.items()):
-            candidates = (run.candidate, run.binding_candidate)
-            if run.waiting_until is not None and any(
-                candidate is not None and candidate.connection_id == connection_id
-                for candidate in candidates
+            candidate = run.binding_candidate or (
+                run.candidate if run.interaction else None
+            )
+            if (
+                run.waiting_until is not None
+                and candidate is not None
+                and candidate.connection_id == connection_id
             ):
                 self.stop(*key)
 
