@@ -181,3 +181,28 @@ test('許容範囲内でも片側の時刻へ丸めず上下限を維持する',
   const bounds = await readFixtureBounds(clockPage({ lowerMs: 100, upperMs: 103, sourceSample: 960 }))
   expect(bounds.speechEnd).toEqual({ lowerMs: 100, upperMs: 103, sourceSample: 960 })
 })
+
+
+test('開始準備は実quantumの処理で確認し、fixtureのsampleを消費しない', () => {
+  const p = processor([0.25, -0.5, 0, 0], 0, 2)
+  p.send('prepare_start', 10, undefined, 7)
+  expect(p.events).toEqual([])
+  expect(p.next(4)).toEqual([0, 0, 0, 0])
+  expect(p.events).toEqual([{kind: 'start_prepared', requestId: 7}])
+  expect(p.next(4)).toEqual([0, 0, 0, 0])
+  p.send('start', 100)
+  expect(p.next(4)).toEqual([0.25, -0.5, 0, 0])
+  expect(p.events.find(e => e.kind === 'sourceStart')).toEqual({kind: 'sourceStart', lowerMs: 100, sourceSample: 0})
+})
+
+test('開始準備の重複と開始後の準備を拒否する', () => {
+  const p = processor([0.25, -0.5, 0, 0], 0, 2)
+  p.send('prepare_start', 10, undefined, 7)
+  p.send('prepare_start', 11, undefined, 8)
+  expect(p.events.at(-1)).toEqual({kind: 'start_rejected', requestId: 8})
+  p.next(4)
+  expect(p.events.at(-1)).toEqual({kind: 'start_prepared', requestId: 7})
+  p.send('start', 100)
+  p.send('prepare_start', 101, undefined, 9)
+  expect(p.events.at(-1)).toEqual({kind: 'start_rejected', requestId: 9})
+})

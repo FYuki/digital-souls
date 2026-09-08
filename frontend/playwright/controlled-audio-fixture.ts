@@ -36,9 +36,16 @@ class FixtureSource extends AudioWorkletProcessor {
     this.offset = 0
     this.started = false
     this.prepared = null
+    this.startPreparation = null
     this.lastPing = null
     this.port.onmessage = ({data}) => {
       if (!Number.isFinite(data.sentAtMs) || data.sentAtMs < 0) return
+      if (data.type === 'prepare_start') {
+        if (this.started || this.startPreparation !== null) {
+          this.port.postMessage({kind: 'start_rejected', requestId: data.requestId})
+        } else this.startPreparation = data.requestId
+        return
+      }
       if (data.type === 'prepare_replay') {
         if (!this.started || this.offset !== this.samples.length || this.prepared || !data.fixture) {
           this.port.postMessage({kind: 'replay_rejected', requestId: data.requestId})
@@ -70,6 +77,10 @@ class FixtureSource extends AudioWorkletProcessor {
   process(inputs, outputs) {
     const channel = outputs[0][0]
     channel.fill(0)
+    if (this.startPreparation !== null) {
+      this.port.postMessage({kind: 'start_prepared', requestId: this.startPreparation})
+      this.startPreparation = null
+    }
     if (!this.started || this.lastPing === null) return true
     const end = Math.min(this.offset + channel.length, this.samples.length)
     channel.set(this.samples.subarray(this.offset, end))
@@ -148,12 +159,12 @@ export const installScheduledFixture = async (page: Page, fixture: ScheduledFixt
           numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: fixture,
         })
         worklet.port.onmessage = ({ data }) => {
-          if (data.kind === 'replay_prepared' || data.kind === 'replay_rejected') {
+          if (['replay_prepared', 'replay_rejected', 'start_prepared', 'start_rejected'].includes(data.kind)) {
             if (preparation && preparation.id === data.requestId) {
               const pending = preparation
               preparation = undefined
               clearTimeout(pending.timer)
-              if (data.kind === 'replay_prepared') pending.resolve()
+              if (data.kind === 'replay_prepared' || data.kind === 'start_prepared') pending.resolve()
               else pending.reject(new Error('fixture replay preparation rejected'))
             }
             return
@@ -208,9 +219,21 @@ export const installScheduledFixture = async (page: Page, fixture: ScheduledFixt
         }
       },
       start: async () => {
-        if (!context || !worklet || started) throw new Error('fixture is not ready or already started')
-        await context.resume()
+        if (!context || !worklet || started || closed) throw new Error('fixture is not ready or already started')
         started = true
+        await context.resume()
+        // 実際に無音quantumを処理できたことを確認してから、fixtureの開始境界を測る。
+        const id = ++preparationId
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            if (preparation?.id === id) preparation = undefined
+            closed = true
+            reject(new Error('fixture start preparation timed out'))
+          }, 5000)
+          preparation = {id, resolve, reject, timer: timeout}
+          worklet!.port.postMessage({type: 'prepare_start', requestId: id, sentAtMs: performance.now()})
+        })
+        if (closed) throw new Error('fixture closed during start preparation')
         worklet.port.postMessage({ type: 'start', sentAtMs: performance.now() })
         timer = setInterval(() => worklet?.port.postMessage({ type: 'ping', sentAtMs: performance.now() }), 2)
       },

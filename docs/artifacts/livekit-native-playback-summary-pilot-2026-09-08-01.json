@@ -1,0 +1,83 @@
+{
+  "run_id": "native-playback-summary-pilot-20260908-01",
+  "measurement_revision": "1879a4a",
+  "passed": false,
+  "failure_reason": "fixture_source_start_clock_uncertainty_exceeds_20ms",
+  "fixture_clock_bounds": {
+    "sourceStart": {
+      "lowerMs": 1776.5999999642372,
+      "upperMs": 1822,
+      "sourceSample": 0
+    },
+    "speechStart": {
+      "lowerMs": 2102.699999988079,
+      "upperMs": 2105.399999976158,
+      "sourceSample": 15840
+    },
+    "speechEnd": {
+      "lowerMs": 2714.7999999523163,
+      "upperMs": 2716.699999988079,
+      "sourceSample": 45120
+    }
+  },
+  "native_playback_events": [
+    {
+      "name": "scheduled_playout",
+      "timestamp": 8120.0,
+      "value": null,
+      "outcome": "success",
+      "clock_domain": "browser_audio_context",
+      "unit": "millisecond"
+    },
+    {
+      "name": "frame_playout",
+      "timestamp": 8120.0,
+      "value": null,
+      "outcome": "success",
+      "clock_domain": "browser_audio_context",
+      "unit": "millisecond"
+    },
+    {
+      "name": "playback_gap_total_ms",
+      "timestamp": 11955.5,
+      "value": 0.0,
+      "outcome": "success",
+      "clock_domain": "client_monotonic",
+      "unit": "millisecond"
+    },
+    {
+      "name": "playback_gap_maximum_ms",
+      "timestamp": 11955.5,
+      "value": 0.0,
+      "outcome": "success",
+      "clock_domain": "client_monotonic",
+      "unit": "millisecond"
+    },
+    {
+      "name": "playback_underrun_count",
+      "timestamp": 11955.5,
+      "value": 0.0,
+      "outcome": "success",
+      "clock_domain": "client_monotonic",
+      "unit": "millisecond"
+    },
+    {
+      "name": "playback_duration_ms",
+      "timestamp": 11955.5,
+      "value": 3520.0,
+      "outcome": "success",
+      "clock_domain": "client_monotonic",
+      "unit": "millisecond"
+    }
+  ],
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "teardown_completed": true,
+  "evidence_sha256": {
+    "trial-manifest.json": "477152447d0db1c2e22ca6e5f3fc293f604dc9b63dfa3b844006efd18ccf4da6",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "a23d7d4a25495eb5a8b72a5806e728be017d8b0c932101ed6169de13286cb2af",
+    "runtime-data/runtime/standalone/environment-run.json": "458f2c2b21796fd44bb0ab3d7050f8fa92345d5e8c7dbc72a1cb266742abf6cd"
+  }
+}
