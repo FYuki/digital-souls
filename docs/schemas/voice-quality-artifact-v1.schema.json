@@ -330,6 +330,14 @@
         "loss_scope": {
           "const": "browser_downlink_response_tracks"
         },
+        "observation_boundaries": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "playback_completed": {"type": "integer", "minimum": 0},
+            "response_cancelled": {"type": "integer", "minimum": 0}
+          }
+        },
         "trial_count": {
           "type": "integer",
           "minimum": 0

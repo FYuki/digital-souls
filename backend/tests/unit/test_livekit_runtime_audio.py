@@ -2746,5 +2746,8 @@ def test_cancel_transition_clock_uses_core_capture_in_trace_not_delivery_time() 
         session_id="20000000-0000-4000-8000-000000000010", response_id="50000000-0000-4000-8000-000000000010",
         reason="barge_in", terminal_state_bounds_ns=(1_234_000, 1_234_900))))
     assert [(r["name"], r.get("timestamp")) for r in records] == [
-        ("cancel_state_lower", 1_234_000), ("cancel_state_upper", 1_234_900), ("response_excluded", None)]
+        ("cancel_state_lower", 1_234_000), ("cancel_state_upper", 1_234_900),
+        ("response_excluded", None), ("response_cancelled", None)]
+    assert records[-1]["outcome"] == "excluded"
+    assert records[-1]["reason_code"] == "barge_in"
     assert all("terminal_state_bounds_ns" not in event for event in wire)

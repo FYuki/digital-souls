@@ -36,6 +36,10 @@ class Measurement(Enum):
     UTTERANCE_FINALIZED = "utterance_finalized"
 
 
+class Boundary(Enum):
+    RESPONSE_CANCELLED = "response_cancelled"
+
+
 class DownlinkReason(Enum):
     AMBIGUOUS_AUDIO_STREAM = "ambiguous_audio_stream"
     COUNTER_REGRESSED = "counter_regressed"
@@ -75,6 +79,7 @@ class NetworkSummary(BaseModel):
     downlink: Downlink
     method: Method
     uplink: Uplink
+    boundary: Optional[Boundary] = None
 
 
 class PlaybackSummary(BaseModel):

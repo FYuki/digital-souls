@@ -12,6 +12,7 @@ export type RtpCounterObservation = Readonly<{
 
 export type NetworkObservation = Readonly<{
   method: 'browser_audio_rtp_counters_v1'
+  boundary?: 'response_cancelled'
   uplink: RtpCounterObservation
   downlink: RtpCounterObservation
 }>

@@ -160,6 +160,7 @@ export class LiveKitRoomClient {
   private coreDeliveryObserver: ((row: CoreDeliveryObservation) => void) | undefined
   private staleAudioObserver: ((row: StaleAudioObservation) => void) | undefined
   private readonly networkObserver = new RtpNetworkObserver()
+  private readonly networkMeasurements = new Set<string>()
   private readonly receiptAudits = new Map<string, DecodedReceiptAudit>()
   private receiptObserver: ((row: DecodedReceiptSnapshot) => void) | undefined
   private readonly mediaObservers = new Map<string, RemoteMediaObserver>()
@@ -234,6 +235,7 @@ export class LiveKitRoomClient {
       this.coreAckOutbox = null
       this.stoppedResponses.clear()
       this.completedPlaybackResponses.clear()
+      this.networkMeasurements.clear()
       this.latestResponseId = null
     }
     if (this.room === null) this.room = this.createRoom()
@@ -889,6 +891,9 @@ export class LiveKitRoomClient {
         }
       }
       if (event.type === 'response_cancelled' && event.response_id !== undefined) {
+        // 取消確認後のRTP snapshotは停止処理を待たせず、完全再生と別の境界で記録する。
+        const trackKey = [...this.trackResponses].find(([, id]) => id === event.response_id)?.[0]
+        void this.observeNetwork(event.response_id, trackKey, this.generation, 0, 'response_cancelled')
         const confirmedAt = performance.now()
         for (const receipt of this.receiptAudits.values()) {
           if (receipt.responseId === event.response_id) receipt.cancel(confirmedAt)
@@ -967,13 +972,17 @@ export class LiveKitRoomClient {
     }))
   }
 
-  private async observeNetwork(responseId: string, key: string, generation: number, expectedPackets: number): Promise<void> {
+  private async observeNetwork(responseId: string, key: string | undefined, generation: number, expectedPackets: number, boundary?: 'response_cancelled'): Promise<void> {
     const room = this.room, sessionId = this.sessionId
-    if (!room || sessionId === null) return
+    if (!room || sessionId === null || this.generation !== generation || this.networkMeasurements.has(responseId)) return
+    if (boundary === undefined && (key === undefined || this.trackResponses.get(key) !== responseId)) return
+    this.networkMeasurements.add(responseId)
     const sender = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.sender
-    const receiver = this.subscribedTracks.get(key)?.receiver
-    const networkObservation = await this.networkObserver.capture(sender, receiver, expectedPackets)
-    if (this.room !== room || this.generation !== generation || this.trackResponses.get(key) !== responseId) return
+    const receiver = key === undefined ? undefined : this.subscribedTracks.get(key)?.receiver
+    const captured = await this.networkObserver.capture(sender, receiver, expectedPackets)
+    const networkObservation: NetworkObservation = {...captured, ...(boundary === undefined ? {} : {boundary})}
+    if (this.room !== room || this.sessionId !== sessionId || this.generation !== generation) return
+    if (boundary === undefined && (key === undefined || this.trackResponses.get(key) !== responseId)) return
     let networkMeasurementDelivered = false
     try {
       await this.publishControlEvent(parseVoiceSessionEvent({
@@ -987,6 +996,8 @@ export class LiveKitRoomClient {
       // 計測の配送失敗で再生済み応答をcancelしない。Backend側の欠測は集計に残す。
     }
     if (this.room !== room || this.generation !== generation || this.sessionId !== sessionId) return
+    // 非同期の取消統計で、次応答や再接続のaudio状態を上書きしない。
+    if (boundary !== undefined) return
     this.observe({transport: 'available', control: 'available', audio: 'available',
       networkResponseId: responseId, networkObservation, networkMeasurementDelivered})
   }

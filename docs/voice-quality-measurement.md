@@ -388,3 +388,17 @@ Backendログの固定診断markerを観測し、Core／pipeline例外0、reader
 測定版`6787abb`で、専用SFUを用いる[再接続回帰](artifacts/livekit-reconnect-session-regression-2026-09-08-03-verification.json)を1 session実行した。control回復上限2,366.770ms、audio回復上限2,502.490ms、重複再生0で、復帰後の次応答を完全再生した。次応答のIDをnative session journalと照合し、追加操作0、正常終了1、予期しない終了0、終了・操作記録の欠測0を確認した。所有Frontend／Backendと専用障害SFUを撤去し、共有SFUは操作していない。
 
 [独立再集計](artifacts/livekit-reconnect-session-regression-2026-09-08-03-cohort.json)ではcoverage・成功率・latencyの各評価が通過したが、試行数1のため100試行を要求する総合`passed`はfalse、reporterの終了コードは1のまま保持する。既存の再接続100件をこの1件で置き換えない。これによりnative session記録は、通常100件、連続3往復、無応答の正常／切断終了、一時切断からの復帰を実接続で照合した。人による実声dogfoodの終了率・操作回数の受け入れは別途必要である。
+
+
+### 取消応答のRTP観測境界（2026-09-09）
+
+完全再生時だけ統計を送信していたため、取消応答を含むrunの通信量は未取得になっていた。
+取消通知を受けたブラウザは、停止・取消の完了を待たせずに同じ応答trackのRTP統計を取得し、
+`boundary: response_cancelled`を付けて送る。完全再生の観測が先に開始済みなら二重計上しない。
+非同期の計測完了で次応答や再接続の再生状態を変更しない。
+
+BackendはCoreからの実際の取消記録を確認してから受理し、完全再生に必要なpacket下限を取消応答へ適用しない。
+通常の完全再生では従来のpacket下限を保持する。匿名集計の`network.collection.observation_boundaries`に
+完全再生と取消の観測数を分けて残す。旧artifactは更新せず、当時の観測範囲と欠測を保持する。
+取消確認時点までのsnapshotであり、取消後の遅着packetやsession全通信量の証明には使わない。
+stats API未提供・timeout・track未取得は引き続き理由付き欠測とし、0 bytesへ変換しない。

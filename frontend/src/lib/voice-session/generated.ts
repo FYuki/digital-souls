@@ -49,9 +49,10 @@ export type Decision = "backchannel" | "take_turn" | "indeterminate";
 export type Measurement = "speech_stopped" | "utterance_finalized" | "response_started" | "first_audio_out" | "playback_started" | "client_track_received" | "client_encoded_received" | "client_audio_decoded" | "turn_decision_received" | "cancel_confirmed" | "local_playback_stopped" | "network_summary" | "session_summary";
 
 export interface NetworkSummary {
-    downlink: Downlink;
-    method:   "browser_audio_rtp_counters_v1";
-    uplink:   Uplink;
+    boundary?: "response_cancelled";
+    downlink:  Downlink;
+    method:    "browser_audio_rtp_counters_v1";
+    uplink:    Uplink;
 }
 
 export interface Downlink {

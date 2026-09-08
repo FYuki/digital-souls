@@ -310,10 +310,20 @@ class LiveKitMeasurementSession:
                 return False
             samples = next((item.value for item in self._response_events.get(response_id, ())
                             if item.name == "response_audio_captured_samples" and item.outcome == "success"), None)
-            if samples is None or samples < 0 or samples % 960:
-                return False
+            raw = event.get("network_summary")
+            cancelled = isinstance(raw, dict) and raw.get("boundary") == "response_cancelled"
+            if cancelled:
+                # clientの申告だけで完了応答のpacket下限を緩めない。Coreの取消記録が必要。
+                if not any(item.name == "response_cancelled" and item.outcome == "excluded"
+                           for item in self._response_events.get(response_id, ())):
+                    return False
+                expected_packets = 0
+            else:
+                if samples is None or samples < 0 or samples % 960:
+                    return False
+                expected_packets = int(samples) // 960
             try:
-                values = network_summary_values(event.get("network_summary"), expected_packets=int(samples) // 960)
+                values = network_summary_values(raw, expected_packets=expected_packets)
             except ValueError:
                 return False
             self._seen_client_event_ids.add(event_id)

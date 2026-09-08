@@ -1,7 +1,7 @@
 """応答に相関したブラウザ音声RTP統計を、本文や接続先なしで集計する。"""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from app.voice_metrics import DiagnosticValue, NetworkCollection, NetworkMetadata, TraceEvent
 
@@ -17,6 +17,7 @@ def aggregate_network(trials: list[dict[str, Any]], *, condition: str) -> Networ
     byte_counts: dict[str, list[int]] = {"uplink": [], "downlink": []}
     received_packets = lost_packets = negative_loss_trials = loss_trials = 0
     missing: dict[str, int] = {}
+    boundaries: dict[Literal["playback_completed", "response_cancelled"], int] = {}
     for trial in trials:
         observation = trial.get("network_observation")
         if observation is None:
@@ -24,6 +25,11 @@ def aggregate_network(trials: list[dict[str, Any]], *, condition: str) -> Networ
                            for side in byte_counts}
         elif not isinstance(observation, dict) or observation.get("method") != "browser_audio_rtp_counters_v1":
             raise ValueError("invalid network observation method")
+        boundary = observation.get("boundary", "playback_completed")
+        if boundary not in {"playback_completed", "response_cancelled"}:
+            raise ValueError("invalid network observation boundary")
+        if trial.get("network_observation") is not None:
+            boundaries[boundary] = boundaries.get(boundary, 0) + 1
         for side in byte_counts:
             raw = observation.get(side)
             if not isinstance(raw, dict):
@@ -66,7 +72,7 @@ def aggregate_network(trials: list[dict[str, Any]], *, condition: str) -> Networ
         collection=NetworkCollection(trial_count=len(trials), sent_trials=len(byte_counts["uplink"]),
                                      received_trials=len(byte_counts["downlink"]), loss_trials=loss_trials,
                                      received_packets=received_packets, lost_packets=lost_packets,
-                                     negative_loss_trials=negative_loss_trials, missing_trials=missing),
+                                     negative_loss_trials=negative_loss_trials, missing_trials=missing, observation_boundaries=boundaries),
     )
 
 
@@ -77,7 +83,8 @@ _NETWORK_MARKER = "network_rtp_summary_recorded"
 def network_summary_values(raw: object, *, expected_packets: int) -> dict[str, float]:
     """1応答のRTP snapshotを検証し、本文を含まないtrace値へ変換する。"""
     if (type(expected_packets) is not int or expected_packets < 0 or not isinstance(raw, dict)
-            or set(raw) != {"method", "uplink", "downlink"}):
+            or set(raw) not in ({"method", "uplink", "downlink"}, {"method", "uplink", "downlink", "boundary"})
+            or ("boundary" in raw and raw["boundary"] != "response_cancelled")):
         raise ValueError("invalid network summary")
     aggregate_network([{"network_observation": raw,
                         "playback_completion": {"packetCount": expected_packets}}], condition="native-summary-validation")
@@ -101,6 +108,8 @@ def network_summary_values(raw: object, *, expected_packets: int) -> dict[str, f
                 if type(value) is not int:
                     raise ValueError("network counters require integers")
                 values[f"{_NETWORK_PREFIX}{side}_{name}"] = float(value)
+    if raw.get("boundary") == "response_cancelled":
+        values["network_rtp_cancelled_snapshot"] = 1
     values[_NETWORK_MARKER] = 1
     return values
 
@@ -128,6 +137,8 @@ def network_observation_from_trace(events: list["TraceEvent"]) -> dict[str, Any]
     if len(timestamps) != 1 or values.get(_NETWORK_MARKER) != 1:
         raise ValueError("incomplete native network snapshot")
     observation: dict[str, Any] = {"method": "browser_audio_rtp_counters_v1"}
+    if values.get("network_rtp_cancelled_snapshot") == 1:
+        observation["boundary"] = "response_cancelled"
     for side in ("uplink", "downlink"):
         prefix = f"{_NETWORK_PREFIX}{side}_"
         missing = [name.removeprefix(prefix + "missing_") for name in values if name.startswith(prefix + "missing_")]

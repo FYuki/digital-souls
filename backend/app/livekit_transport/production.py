@@ -602,6 +602,10 @@ class _ConversationCoreDelivery:
                 outcome="excluded",
                 reason_code=event.reason or "response_cancelled",
             )
+            self._measurement.record_response_event(
+                response_id=event.response_id, name="response_cancelled", stage="response",
+                outcome="excluded", reason_code=event.reason or "response_cancelled",
+            )
         if (
             event.type == "response_privacy_skipped"
             and event.response_id is not None

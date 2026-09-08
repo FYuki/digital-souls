@@ -127,3 +127,37 @@ def test_network_summary_protocol_is_numeric_and_client_response_bound(change):
         assert parsed.network_summary.downlink.bytes == 200
     else:
         with pytest.raises(ValueError): parse_voice_session_event(event)
+
+
+def test_cancelled_network_snapshot_requires_native_cancel_and_preserves_partial_counters():
+    events: list[TraceEvent] = []
+    measurement = LiveKitMeasurementSession(session_id="session-1", character_id="miori", measurement_kind="dogfood",
+        record=events.append, clock_ns=lambda: 1_000_000)
+    measurement.bind_response(response_id="response-1", source_utterance_ids=("utterance-1",))
+    event = {"type": "observation", "session_id": "session-1", "response_id": "response-1", "event_id": "network-event",
+             "measurement": "network_summary", "timestamp": 1000, "clock_domain": "client_monotonic", "unit": "millisecond",
+             "network_summary": {**summary(), "boundary": "response_cancelled"}}
+    assert not measurement.record_client_observation(event)
+    measurement.record_response_event(response_id="response-1", name="response_cancelled", stage="response", outcome="excluded", reason_code="barge_in")
+    assert measurement.record_client_observation(event)
+    assert not measurement.record_client_observation({**event, "event_id": "duplicate"})
+    assert network_observation_from_trace(events) == event["network_summary"]
+    result = aggregate_network_trace(events, condition="unit")
+    assert result.received_bytes.value == 200
+    assert result.collection.observation_boundaries == {"response_cancelled": 1}
+    assert result.collection.loss_trials == 1
+    assert not any(e.name in {"frame_playout", "playback_duration_ms"} for e in events)
+
+
+def test_cancelled_network_boundary_roundtrips_protocol_without_loosening_normal_completion():
+    event = {'type':'observation', 'protocol_version':'1.0', 'event_id':str(uuid4()), 'session_id':str(uuid4()),
+             'response_id':str(uuid4()), 'measurement':'network_summary', 'timestamp':1000,
+             'clock_domain':'client_monotonic', 'unit':'millisecond',
+             'network_summary':{**summary(), 'boundary':'response_cancelled'}}
+    assert parse_voice_session_event(event).network_summary.boundary is not None
+    measurement, events, normal = setup()
+    measurement.record_response_event(response_id="response-1", name="response_cancelled", stage="response", outcome="excluded", reason_code="barge_in")
+    normal["network_summary"]["downlink"]["packets"] = 3
+    assert not measurement.record_client_observation(normal)
+    event['network_summary']['boundary'] = 'invented'
+    with pytest.raises(ValueError): parse_voice_session_event(event)

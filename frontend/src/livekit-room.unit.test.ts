@@ -1067,6 +1067,36 @@ test.each([false, true])('全PCMの出力時計通過後の旧RTP異常だけが
   } finally {client.disconnect(); now.mockRestore()}
 })
 
+test('取消後のRTP観測は旧応答へ一度だけ送信し、非同期完了で再生状態を戻さない', async () => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(row => observations.push(row))
+  const sessionId = '20000000-0000-4000-8000-000000000001'
+  const responseId = '22222222-2222-2222-2222-222222222222'
+  await client.connect('ws://test', 'token', sessionId)
+  const room = latestRoom()
+  let resolveStats!: (value: Map<string, unknown>) => void
+  const receiver = {getStats: () => new Promise<Map<string, unknown>>(resolve => {resolveStats = resolve})}
+  room.emit('trackSubscribed', {kind:'audio', mediaStreamTrack:{}, receiver},
+    {trackSid:'TR_cancel_network', trackName:`ds-response-v1:${responseId}`})
+  await vi.waitFor(() => expect(audioContexts.at(-1)?.renderWorklets).toHaveLength(1))
+  const publish = vi.spyOn(client, 'publishControlEvent')
+  const cancelled = {protocol_version:'1.0', type:'response_cancelled', session_id:sessionId,
+    event_id:'60000000-0000-4000-8000-000000000003', response_id:responseId, reason:'barge_in', monotonic_timestamp_ms:1000}
+  try {
+    emitCoreEvent(room, cancelled)
+    expect(observations.at(-1)?.cancelConfirmedAtMs).toBeTypeOf('number')
+    expect(publish).not.toHaveBeenCalled()
+    const count = observations.length
+    emitCoreEvent(room, cancelled)
+    resolveStats(new Map([['private', {id:'private', type:'inbound-rtp', kind:'audio',
+      bytesReceived:200, packetsReceived:4, packetsLost:1}]]))
+    await vi.waitFor(() => expect(publish).toHaveBeenCalledOnce())
+    expect(publish.mock.calls[0][0]).toMatchObject({response_id:responseId, measurement:'network_summary',
+      network_summary:{boundary:'response_cancelled', downlink:{bytes:200, packets:4, lostPackets:1}}})
+    expect(observations).toHaveLength(count)
+  } finally {client.disconnect()}
+})
+
 test.each(['measured', 'missing', 'stale', 'send_failed'])('RTP統計を同一応答の製品観測へ送り、計測失敗で再生をcancelしない: %s', async mode => {
   const observations: RoomObservation[] = []
   const client = new LiveKitRoomClient(row => observations.push(row))

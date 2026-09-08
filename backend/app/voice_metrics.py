@@ -431,6 +431,7 @@ class NetworkCollection(BaseModel):
 
     byte_scope: Literal["browser_audio_rtp_payload"] = "browser_audio_rtp_payload"
     loss_scope: Literal["browser_downlink_response_tracks"] = "browser_downlink_response_tracks"
+    observation_boundaries: dict[Literal["playback_completed", "response_cancelled"], int] = Field(default_factory=dict)
     trial_count: int = Field(ge=0)
     sent_trials: int = Field(ge=0)
     received_trials: int = Field(ge=0)

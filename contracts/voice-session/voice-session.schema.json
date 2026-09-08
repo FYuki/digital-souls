@@ -437,6 +437,9 @@
         "method": {
           "const": "browser_audio_rtp_counters_v1"
         },
+        "boundary": {
+          "const": "response_cancelled"
+        },
         "uplink": {
           "oneOf": [
             {
