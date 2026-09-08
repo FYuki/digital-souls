@@ -4,7 +4,7 @@
 
 **ACTIVE**。
 
-#249のCharacter Life Runtimeについて、LangGraph / DBOS / Lettaを同一の共通契約で比較し、MVPのtop-level runtimeとしてDBOSを採用する。
+#249のCharacter Life Runtimeについて、LangGraph / DBOS / Lettaの責務と統合方式を比較し、MVPのtop-level runtimeとしてDBOSを採用する。本ADRは採用方針を定めるものであり、実装・実接続受入の完了証跡ではない。
 
 人格・Memory・Reflection・Life State・Autonomyの意味契約は
 `character-life-memory-personality-autonomy-2026-09.md`を正本とする。本ADRはそれらの意味を変更せず、会話外処理をいつ・どのように継続実行するかだけを決める。
@@ -30,23 +30,19 @@ Character Life Runtimeへ任せたい責務は次である。
 - #185 High Impact / ActionRecovery
 - 外部操作のresult_unknown判定
 
-## vertical slice
+## 実装時の検証シナリオ
 
-比較用コードは `backend/spikes/character_life_runtime/` に置く。
+採用後の実装では、Episode → Reflection → Life State → 活動というdomain境界を維持する。
+認知品質の評価と、DBOSによる実行制御の受入は分ける。
 
-同じ最小処理を両runtimeで表現する。
+- 通常実行、同じworkflow IDの再投入、途中停止・再起動後の復旧
+- 完了済みstepの再利用と、domain正本更新の冪等性
+- queueの同時実行制限、schedule停止・再開、missed runの非backfill
+- 実際のdomain contractの受け渡しと永続化
+- dispatch直前のprivacy・許可・Capability Snapshot検証
 
-```text
-Episode IDs
-  ↓
-Reflection候補形成（stub）
-  ↓
-Goal Intention形成（stub）
-  ↓
-APPLIED
-```
-
-認知品質やLLM精度を比較するspikeではない。既存domain contractを維持したまま、durable executionをどこまでruntimeへ任せられるかを比較する。
+比較用コードは本実装の土台として引き継がない。共通contract、runtime、テスト、依存packageは、
+既存serviceと正本DBへ接続する実装で改めて定義する。
 
 ## 比較
 
@@ -139,34 +135,24 @@ Lettaのmemory-centric Agent設計は目的自体には近いが、digital-souls
 
 したがってMVPでは採用せず、将来Memory正本そのものを再設計する場合のみ再評価する。
 
-## 共通contractの最小実装
+## 共通contractと関連Epicの境界
 
-runtime比較前に `backend/app/character_life/contracts.py` へframework非依存contractを置く。
+framework非依存の共通契約を維持し、DBOSの保存方式をpersona memory schemaへ持ち込まない。
 
-対象:
+- #249: runtime result、Life State、Autonomy Target、実行制御と関連serviceへの接続境界
+- #100: Episode schema / SELF / experienced_at / source、Semantic / Reflectionの形成・永続化
+- #101: Personality / Relationshipの更新
+- #102: Procedural / Interpersonal Skill
+- #185: High Impact / ActionRecovery / 通常writeの安全な実行
 
-- Reflection lifecycle
-- Life State kind / lifecycle
-- runtime result contract
-- Big Five Aspects trait ID
-- Relationship 2軸ID
-- `SELF` Episode入力に必要な`experienced_at` / sourceのcontract
-- vertical slice input
+関連Epicが未実装の間は、接続先の不足をDEFERRED等の明示的な結果として扱う。
+仮のReflection・SELF Episode・Personality更新を本実装の成功として返さない。
+最初の自律活動シナリオは、許可されたELYTH MCPを通じた話題探索とする。
 
-Reflection / Life Stateの永続tableと、既存`approved_memories`のschema migrationは本spikeでは実装しない。
-#100本実装でSQLite schema / repository / Chroma連携を追加する。
+## production統合の境界
 
-この順序により、runtimeの保存方式をpersona memory schemaへ持ち込まない。
-
-## 依存package
-
-vertical sliceではproduction dependencyへ即時追加せず、`backend/requirements-dev.txt`へ固定versionで隔離する。
-
-- `dbos==2.31.0`
-- `langgraph==1.2.11`
-- `langgraph-checkpoint-sqlite==3.1.1`
-
-DBOSをproductionへ統合するIssueで`requirements.txt`へ移す。その際、起動・shutdown、system DB path、backup対象、health checkを確定する。
+採用runtimeの依存は実装PRで固定versionとして追加する。起動・shutdown、system DB path、
+backup対象、health checkを併せて定義する。LangGraph / Lettaは本実装の依存へ追加しない。
 
 ## 次の実装順
 
