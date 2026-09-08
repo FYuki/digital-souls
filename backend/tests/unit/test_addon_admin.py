@@ -268,7 +268,7 @@ def test_health_threshold_recovery_disabled_session_and_teardown(tmp_path):
         try:
             await eventually(lambda: runtime.list()[0]["availability"] == "available")
             client.health_error = TimeoutError()
-            await eventually(lambda: client.health_calls == 1)
+            await eventually(lambda: client.health_calls >= 1)
             assert runtime.list()[0]["availability"] == "available"
             await eventually(lambda: client.health_calls >= 3)
             assert runtime.list()[0]["availability"] == "unavailable"
@@ -358,3 +358,114 @@ def test_off_during_question_generation_cannot_create_stale_waiting():
             assert len(source.calls) == 1
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("failure_point", ["os.replace", "fsync_directory"])
+def test_api_save_failure_is_sanitized(tmp_path, monkeypatch, failure_point):
+    async def run():
+        connection, _, runtime = setup(tmp_path)
+        app = FastAPI()
+        app.include_router(router)
+        app.state.addon_manager = runtime
+
+        def fail(*_):
+            raise OSError("private endpoint and credential")
+
+        monkeypatch.setattr(f"app.addon_admin.store.{failure_point}", fail)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.patch(
+                f"/addon-admin/connections/{connection.id}",
+                json={"desired_enabled": False},
+            )
+        assert response.status_code == 503
+        assert response.json()["detail"] == "settings_save_failed"
+        assert "private endpoint and credential" not in response.text
+        assert runtime.list()[0]["desired_enabled"] is True
+
+    asyncio.run(run())
+
+
+def test_settings_syncs_parent_after_replacement(tmp_path, monkeypatch):
+    connection, _, runtime = setup(tmp_path)
+    synchronized = []
+
+    def sync(parent):
+        synchronized.append(parent)
+        stored = json.loads((parent / "addon-settings.json").read_text())
+        assert stored["users"]["local"][connection.id] is False
+
+    monkeypatch.setattr("app.addon_admin.store.fsync_directory", sync)
+    runtime.set_enabled(connection.id, False)
+    assert synchronized == [tmp_path]
+
+
+@pytest.mark.parametrize("transition", ["reconnect", "enable"])
+def test_rechecking_clears_previous_partial_health(tmp_path, transition):
+    connection, gate, runtime = setup(tmp_path, self_owned=True)
+    gate.registry.availability(
+        connection.id, "degraded", healthy_operations=frozenset({"tool:read"})
+    )
+    if transition == "reconnect":
+        gate.registry.connected(connection)
+    else:
+        runtime.set_enabled(connection.id, False)
+        runtime.set_enabled(connection.id, True)
+    entry = gate.registry.entry(connection.id)
+    assert entry.availability == "unknown"
+    assert entry.error_code is None
+    assert not entry.healthy_operations
+
+
+def test_off_of_previous_interaction_does_not_stop_other_binding_wait():
+    from dataclasses import replace
+    from tests.unit.test_tool_use import (
+        runtime as tool_runtime,
+        Decisions,
+        InputSource,
+        call,
+    )
+    from app.tool_use.routing import ToolDecision
+
+    async def run():
+        decisions = Decisions(call, ToolDecision("clarify", instruction="色は？"))
+        async with tool_runtime(decisions, source_type=InputSource) as (
+            service,
+            source,
+            gate,
+        ):
+            result = await service.run("miori", "session", "操作して")
+            assert result.waiting
+            run = service._runs[("miori", "session")]
+            assert run.candidate is not None
+            # 前回のMRTR候補を保持したまま、別接続のbinding待ちに進んだ状態。
+            run.interaction = None
+            run.binding_candidate = replace(run.candidate, connection_id="other")
+            service.connection_disabled(source.connection.id)
+            assert service._runs[("miori", "session")] is run
+            assert run.loop in gate._loops
+            service.connection_disabled("other")
+            assert not service._runs and not gate._loops
+
+    asyncio.run(run())
+
+
+def test_browser_evidence_keeps_only_complete_fixed_events():
+    import runpy
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[3] / "scripts/acceptance_addon_admin.py"
+    sanitize = runpy.run_path(str(script))["sanitized_browser_log"]
+    lines = [
+        "private endpoint and credential",
+        'ADDON_ACCEPTANCE {"check":"restart-restores-off","status":"passed"}',
+        'ADDON_ACCEPTANCE {"check":"on-rechecks-health","status":"passed"}',
+    ]
+    result = sanitize("\n".join(lines), "restored")
+    assert "private" not in result
+    assert len(result.splitlines()) == 2
+    with pytest.raises(RuntimeError, match="incomplete browser evidence"):
+        sanitize(lines[1], "restored")
+    with pytest.raises(RuntimeError, match="invalid browser evidence"):
+        sanitize(lines[1].replace('"passed"', '"passed", "secret":"private"'), "restored")

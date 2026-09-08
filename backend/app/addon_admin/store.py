@@ -7,6 +7,8 @@ import os
 import tempfile
 from pathlib import Path
 
+from app.restore_intent import fsync_directory
+
 
 class SettingsStore:
     def __init__(self, path: Path | None = None) -> None:
@@ -48,6 +50,7 @@ class SettingsStore:
                     handle.flush()
                     os.fsync(handle.fileno())
                 os.replace(name, self.path)
+                fsync_directory(self.path.parent)
             finally:
                 if name is not None:
                     Path(name).unlink(missing_ok=True)

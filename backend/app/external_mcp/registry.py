@@ -66,7 +66,7 @@ class Registry:
         if not entry.linked or entry.connection != connection:
             raise MCPFailure("policy", "relink_required")
         entry.generation += 1
-        entry.availability = "unknown"
+        self.availability(connection.id, "unknown")
         # 再接続で旧loopを無効化。cached snapshotは診断にだけ残す。
         entry.staged = None
 
@@ -106,8 +106,7 @@ class Registry:
         # OFF→ONでも古いloop、dispatch待ち、MRTRを復活させない。
         entry.generation += 1
         if enabled:
-            entry.availability = "unknown"
-            entry.error_code = None
+            self.availability(connection_id, "unknown")
         return True
 
     def availability(
