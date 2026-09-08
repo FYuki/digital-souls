@@ -21,23 +21,23 @@
 | dogfood gap合計 ≤ 0.1%、最大連続gap ≤ 200ms | 製品側の完全再生観測とgap集計を実装。実声dogfoodの証拠なし | 所定の配備後の実声測定 |
 | stale presented 0件 | [旧応答提示100件](artifacts/livekit-stale-output-stop-proof-100.json): 音声・画面text・履歴textの提示0。受信は4件で最大4 packetsの可能性を保持 | 受信0と読み替えず、最終変更との照合 |
 | 通常100件の処理失敗0 | 最新通常100件で0/100、105件のnative再生・RTP・session終了を照合、所有FE/BE撤去済み | 実声dogfoodとは別条件 |
-| dogfood処理失敗率 ≤ 1%、予期しないsession終了0 | 無応答を含むnative session journalと匿名集計を実装。最新通常100件の終了記録は欠測0・予期しない終了0・追加操作0。実声dogfoodの証拠なし | [無応答の正常終了・切断後終了2件](artifacts/livekit-zero-response-session-2026-09-08-02.json)を確認。復帰するsessionと実声受け入れは別確認 |
+| dogfood処理失敗率 ≤ 1%、予期しないsession終了0 | 無応答を含むnative session journalと匿名集計を実装。最新通常100件の終了記録は欠測0・予期しない終了0・追加操作0。実声dogfoodの証拠なし | [無応答の正常終了・切断後終了2件](artifacts/livekit-zero-response-session-2026-09-08-02.json)を確認。[復帰後の記録1件](artifacts/livekit-reconnect-session-regression-2026-09-08-03-verification.json)も欠測0。実声受け入れが残る |
 | session開始後3往復以上の追加操作0 | [製品session計測の実接続3往復](artifacts/livekit-native-session-three-turn-2026-09-08-01-verification.json): 1 session・完全再生3応答・追加操作0・正常終了1・欠測0。ブラウザ操作観測とnative journalを照合 | 配備後の実声dogfood確認 |
-| #17必須指標に未実装由来のmissingを残さない | 製品RTP経路、再生、割り込み、手動resource入力を実装。欠測理由と分母は保持 | 取消途中の通信範囲、復帰するsessionの記録、実声dogfoodを確認。無応答の終了記録2件は実接続照合済み。全指標完了は未証明 |
+| #17必須指標に未実装由来のmissingを残さない | 製品RTP経路、再生、割り込み、手動resource入力を実装。欠測理由と分母は保持 | 取消途中の通信範囲と実声dogfoodを確認。無応答の終了記録2件・復帰後の記録1件は実接続照合済み。全指標完了は未証明 |
 
 ## Workstreamごとの実装・測定範囲
 
 - A: 音声latency policyとprovider診断を実装。Ollamaの内部queue・生成開始時点はAPIが公開せず、理由を記録する。model loadや残差をqueue待ちと推定しない。[文脈量比較](artifacts/livekit-context-comparison-2026-09-08.json)は48要求、[内容確認](artifacts/livekit-context-answer-content-2026-09-08.json)は36件中28件成功（thinking無効18/18）。実RAG取得や自然な人格品質の証明とは分ける。
 - B: 受信・復号・実出力時計、割り込みのsession/utterance/旧response相関、正常cancelと処理失敗の分離を実装。製品traceとmanifestの一致を各reporterで検証する。
 - C: 相槌・take-turn・文中休止の独立100件と、生成／受信・提示の区別を実装。実PCMのv4端部照合は前後最大600msの候補を使い、内部全体や全帯域の品質は主張しない。正常301音声と8種類の破損を用いた校正を別保存している。
-- D: 専用network障害・復旧、再生継続性、resource、RTPの観測経路を実装。[製品RTP pilot](artifacts/livekit-native-network-pilot-2026-09-08-01-verification.json)で準備を含む4応答のnative trace一致を確認。完了応答の音声RTP payloadが範囲であり、session全通信量ではない。session追加操作・終了の製品集計を実装し、実接続3往復で追加0・正常終了・欠測なしを確認。無応答の正常終了と切断後の猶予満了終了を実接続2件で照合した。復帰するsessionの記録照合と実声dogfoodが残る。
+- D: 専用network障害・復旧、再生継続性、resource、RTPの観測経路を実装。[製品RTP pilot](artifacts/livekit-native-network-pilot-2026-09-08-01-verification.json)で準備を含む4応答のnative trace一致を確認。完了応答の音声RTP payloadが範囲であり、session全通信量ではない。session追加操作・終了の製品集計を実装し、実接続3往復で追加0・正常終了・欠測なしを確認。無応答の正常終了と切断後の猶予満了終了を実接続2件で照合した。[一時切断から復帰したsession](artifacts/livekit-reconnect-session-regression-2026-09-08-03-verification.json)も追加0・正常終了・欠測0を照合した。実声dogfoodが残る。
 - E: 固定fixture・初期状態・warm-up除外・独立session/conversationと匿名schema検証を実装。失敗runを残す。[現在版の自動回帰](artifacts/livekit-automated-regression-2026-09-08-06.json)は全ユニット・モジュール・mocked E2E・型検査・lint・buildを通過。[実サービス音声回帰5ケース](artifacts/livekit-voice-regression-suite-2026-09-08-04.json)も成功。GitHub CI、残る実接続回帰、全条件の最終照合とPR作成は未完了。
 
 ## 次の作業
 
 1. 最新通常100件はTTFA p95 1,787.520ms、音切れ0件、VAD境界欠測0を確認した。前回の低速runではcontext切り替え107回、今回は0回だった。サーバーのchat要求213件に対して音声応答traceのHTTP要求は108件であり、残りの要求元と完全な専有は未証明として保持する。
 2. 診断結果から音切れの供給遅れを評価し、必要な修正と受け入れ測定を行う。
-3. 実装したsession journalを、実障害・無応答の実接続条件でも照合する。無応答・cleanup失敗・記録欠落・逆行する累積操作は関連ユニットテストで確認済み。正常な実接続3往復はnative完全再生3件・追加0・正常終了1・欠測0。
+3. session journalは通常100件・3往復・無応答の正常／切断終了・一時切断からの復帰を実接続で照合済み。人による実声dogfoodの計測条件と必要な配備手順を確認する。
 4. VAD境界2指標は、保存済み通常100件のnative時刻から欠測なしで再集計した。残る取消途中の通信範囲と実声の計測条件を確認する。
 5. 最終変更に必要な自動・実接続回帰を実行し、配備後の実声受け入れとPRを所定の順序で進める。
 

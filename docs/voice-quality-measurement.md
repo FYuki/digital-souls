@@ -381,3 +381,10 @@ LiveKitの`vad_leading_boundary`はfixture正解開始の因果下限から、�
 [実サービス音声回帰5ケース](artifacts/livekit-voice-regression-suite-2026-09-08-04.json)を`7034233`で再実行した。マイク開始、VAD後のsession維持、通常応答、同一sessionの3往復、ラベル付き実音声による割り込みがすべて成功し、skipは0だった。3往復の完全再生3件を添付観測で確認した。割り込みの固定音声開始からの上限はlocal停止989.700ms、cancel確定1,024.700msで各絶対上限以内だった。この1例を独立100件のp95としては扱わない。
 
 Backendログの固定診断markerを観測し、Core／pipeline例外0、reader終了を確認した。Frontend・Backend・Ollama・VOICEVOX・Whisperのready確認と、所有Frontend／Backendの撤去、teardown完了を検証した。前回の回帰raw証拠は専用worktree内に退避して保持した。新しいsession診断に加えたこの回帰も、人による実声dogfood受け入れを代替しない。
+
+
+## 一時切断から復帰したsessionの記録（2026-09-08）
+
+測定版`6787abb`で、専用SFUを用いる[再接続回帰](artifacts/livekit-reconnect-session-regression-2026-09-08-03-verification.json)を1 session実行した。control回復上限2,366.770ms、audio回復上限2,502.490ms、重複再生0で、復帰後の次応答を完全再生した。次応答のIDをnative session journalと照合し、追加操作0、正常終了1、予期しない終了0、終了・操作記録の欠測0を確認した。所有Frontend／Backendと専用障害SFUを撤去し、共有SFUは操作していない。
+
+[独立再集計](artifacts/livekit-reconnect-session-regression-2026-09-08-03-cohort.json)ではcoverage・成功率・latencyの各評価が通過したが、試行数1のため100試行を要求する総合`passed`はfalse、reporterの終了コードは1のまま保持する。既存の再接続100件をこの1件で置き換えない。これによりnative session記録は、通常100件、連続3往復、無応答の正常／切断終了、一時切断からの復帰を実接続で照合した。人による実声dogfoodの終了率・操作回数の受け入れは別途必要である。
