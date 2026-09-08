@@ -150,6 +150,7 @@ def test_real_adapter_stream_reports_headers_and_terminal_provider_numbers(
             assert [part async for part in adapter.stream_text(request)] == ["hello"]
             events = {event.name: event for event in collector.finish()}
         assert events["llm_http_headers_received"].timestamp_ns >= events["llm_http_started"].timestamp_ns
+        assert events["ollama_internal_timing_unavailable"].value is None
         assert events["ollama_generation_total_ms"].value == 12
         assert events["llm_thinking_chunks"].value == 1
         assert events["llm_thinking_characters"].value == len("private reasoning")
@@ -179,6 +180,7 @@ def test_core_diagnostics_reach_correlated_trace_and_anonymous_report(
 
     class Llm:
         async def generate(self, _transcript: str) -> AsyncIterator[TextDelta]:
+            diagnostic("ollama_internal_timing_unavailable")
             diagnostic("llm_http_started")
             diagnostic("llm_first_token")
             diagnostic("token_estimate_requests", 3)
@@ -228,6 +230,11 @@ def test_core_diagnostics_reach_correlated_trace_and_anonymous_report(
     assert metrics["token_estimate_total_ms"]["p95"] == 450
     assert metrics["token_estimate_requests"]["p95"] == 3
     assert metrics["ollama_generation_load_ms"]["status"] == "missing"
+    for name in ("llm_provider_acceptance_latency", "llm_provider_generation_start_latency",
+                 "llm_generation_start_to_first_token_received", "ollama_provider_queue_wait"):
+        assert metrics[name]["missing_outcomes"] == {"ollama_api_internal_timing_not_exposed": 1}
+        assert metrics[name]["missing_count"] == metrics[name]["rate_denominator"] == 1
+
     assert all(secret not in output.read_text() for secret in (
         "character-test", "session-test", "utterance-test", "response-test", "合成の返答",
     ))

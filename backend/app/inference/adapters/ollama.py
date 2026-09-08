@@ -108,6 +108,9 @@ class OllamaAdapter:
         self, request: TextGenerationRequest
     ) -> AsyncIterator[str]:
         payload = self._chat_payload(request, stream=True)
+        # /api/chatのdurationには内部受付・生成開始・独立したqueue待ちがない。
+        # HTTP headerやtotalの残差を内部時刻・queue値として代用しない。
+        diagnostic("ollama_internal_timing_unavailable")
         completed = False
         emitted = False
         try:

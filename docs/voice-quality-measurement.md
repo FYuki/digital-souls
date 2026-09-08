@@ -104,3 +104,17 @@ stale report v1.2の`output_stop_evidence`には検証済み、未検証、利�
 その合計を予定試行数と一致させる。生ID、本文、音声は公開aggregateへ出さない。
 v1.0/v1.1の保存済みartifactと当時の欠測・不確かさは変更しない。
 出力停止の確認だけで正式100試行や他の音声品質受入条件を満たしたとは判定しない。
+
+
+## Provider内部時刻の取得可否
+
+LiveKitの匿名集計にはHTTP要求からprovider受付、provider受付から生成開始、生成開始から本文の
+最初のtoken受信まで、およびOllamaの独立したqueue待ちを別指標として残す。
+現在利用するOllama `/api/chat` の応答には内部受付・生成開始のclockと独立したqueue待ちがないため、
+adapterは`ollama_internal_timing_unavailable`を記録する。このmarker自身の記録時計を内部時刻には使わない。
+
+markerがある試行は4指標を`missing`・`ollama_api_internal_timing_not_exposed`として分母に残す。
+未計測の旧traceへ取得不能markerを後から追加せず、旧traceは必要eventの欠測として扱う。
+HTTP header受信時刻とtotal/load/prompt evaluation/generationの残差を、受付・生成開始・queueの値へ変換しない。
+異なるclockの境界や、取得不能markerと内部時刻の矛盾も欠測として残す。
+これは内部queueを実測できるようになったという意味ではなく、取得不能の理由を明示する変更である。

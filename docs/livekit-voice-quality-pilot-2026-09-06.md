@@ -2323,3 +2323,16 @@ provider報告のload_duration約8.19〜8.80秒が含まれる。ほかの代表
 共有Ollamaのresident状態をこのprototypeで連続観測していないため、thinkingだけに差を帰属させない。
 think:falseの各条件のfirst token p50は約271〜280msだが、これは音声TTFAでも標準設定への改善反映済みという意味でもない。
 通常のCHAT optionsは変更しておらず、#150の残る品質・VAD・baseline比較・dogfood受入は継続する。
+
+
+## Provider内部時刻の欠測理由
+
+稼働中Ollama 0.32.5の`/api/chat`と対応するMetrics構造には、受付・生成開始の内部clockと独立したqueue待ちがない。
+adapterから取得不能markerをCore経由で相関traceへ送り、4指標を理由`ollama_api_internal_timing_not_exposed`付きの
+欠測として集計する。HTTP header、first token受信、load／prompt evaluation／generationは独立した既存観測として残す。
+markerなしの旧traceへ新たな理由を遡及せず、異時計の減算や矛盾する観測を拒否する。
+
+関連57件と型検査3ファイルが通過した。Backend全体の初回は4,323成功・1失敗・1skipで、
+失敗は記憶抽出テストが非同期jobの開始前にアプリを終了していたことによるものだった。
+検査対象の3件目が抽出器へ渡るのを待つようテストだけを修正し、当該モジュール20件と
+全体の再実行4,324成功・1skipを確認した。これはprovider内部queueを実測したという意味ではない。

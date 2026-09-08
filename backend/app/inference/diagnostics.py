@@ -15,6 +15,8 @@ POINT_NAMES = frozenset({
     "llm_request_started", "llm_capacity_acquired", "llm_http_started",
     "llm_http_headers_received", "llm_first_token", "llm_stream_completed",
     "llm_first_provider_chunk", "llm_first_thinking_chunk",
+    # このmarkerの時計はprovider内部イベントの時刻ではない。
+    "ollama_internal_timing_unavailable",
 })
 _PROVIDER_FIELDS = {
     "total_duration": "total_ms",

@@ -928,3 +928,59 @@ def test_mixed_clock_metric_is_missing_without_losing_valid_ttfa(metric, start, 
     assert catalog["ttfa"].p95 == 750
     assert catalog[metric].status == "missing"
     assert catalog[metric].missing_outcomes == {"metric_boundary_clock_mismatch": 1}
+
+
+@pytest.mark.parametrize('reported', [False, True])
+def test_provider_internal_timing_is_never_inferred_from_http_or_residual(reported):
+    metrics = _voice_metrics()
+    metadata, diagnostics = _aggregation_context(metrics)
+    metadata = metadata.model_copy(update={'transport': 'livekit'})
+    events = [_event(metrics, event_id=str(i), name=name, timestamp=(i+1)*1_000_000,
+                     stage='inference_diagnostic', value=value)
+              for i,(name,value) in enumerate([
+                  ('llm_http_started',None),('llm_http_headers_received',None),('llm_first_token',None),
+                  ('ollama_generation_total_ms',12),('ollama_generation_load_ms',2),
+                  ('ollama_generation_prompt_eval_ms',4),('ollama_generation_generation_ms',6)])]
+    if reported:
+        events.append(_event(metrics,event_id='unsupported',name='ollama_internal_timing_unavailable',
+                             timestamp=1,stage='inference_diagnostic'))
+    artifact=metrics.aggregate_events(events,metadata=metadata,diagnostics=diagnostics)
+    by_name={m.name:m for m in artifact.metrics}
+    names=('llm_provider_acceptance_latency','llm_provider_generation_start_latency',
+           'llm_generation_start_to_first_token_received','ollama_provider_queue_wait')
+    for name in names:
+        metric=by_name[name]
+        assert metric.status=='missing' and metric.missing_count==metric.rate_denominator==1
+        assert metric.p50 is metric.p95 is None
+        if reported:
+            assert metric.missing_outcomes=={'ollama_api_internal_timing_not_exposed':1}
+        else:
+            assert 'ollama_api_internal_timing_not_exposed' not in metric.missing_outcomes
+    assert by_name['llm_http_headers_latency'].p95 == 1
+    assert by_name['ollama_generation_load_ms'].p95 == 2
+
+
+def test_provider_timing_does_not_subtract_distinct_clocks():
+    metrics = _voice_metrics()
+    metadata, diagnostics = _aggregation_context(metrics)
+    metadata = metadata.model_copy(update={'transport': 'livekit'})
+    events=[_event(metrics,event_id='sent',name='llm_http_started',timestamp=1,stage='inference_diagnostic'),
+            _event(metrics,event_id='accepted',name='llm_provider_accepted',timestamp=2,
+                   clock_domain='provider_monotonic',stage='inference_diagnostic')]
+    artifact=metrics.aggregate_events(events,metadata=metadata,diagnostics=diagnostics)
+    metric=next(m for m in artifact.metrics if m.name=='llm_provider_acceptance_latency')
+    assert metric.missing_outcomes=={'metric_boundary_clock_mismatch':1}
+
+
+
+def test_conflicting_provider_timing_marker_is_not_used_as_zero_latency():
+    metrics = _voice_metrics()
+    metadata, diagnostics = _aggregation_context(metrics)
+    metadata = metadata.model_copy(update={'transport': 'livekit'})
+    events=[_event(metrics,event_id='sent',name='llm_http_started',timestamp=1,stage='inference_diagnostic'),
+            _event(metrics,event_id='accepted',name='llm_provider_accepted',timestamp=2,stage='inference_diagnostic'),
+            _event(metrics,event_id='unavailable',name='ollama_internal_timing_unavailable',timestamp=3,stage='inference_diagnostic')]
+    artifact=metrics.aggregate_events(events,metadata=metadata,diagnostics=diagnostics)
+    metric=next(m for m in artifact.metrics if m.name=='llm_provider_acceptance_latency')
+    assert metric.missing_outcomes=={'provider_timing_evidence_conflict':1}
+    assert metric.p95 is None

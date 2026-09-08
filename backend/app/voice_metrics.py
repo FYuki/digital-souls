@@ -502,6 +502,8 @@ class _MetricDefinition:
     exclude_on_response_outcome: bool = False
     value_event: str | None = None
     signed_offset: bool = False
+    unavailable_event: str | None = None
+    unavailable_reason: str | None = None
 
 
 _METRIC_CATALOG = (
@@ -531,6 +533,21 @@ _METRIC_CATALOG = (
 
 
 _LIVEKIT_DIAGNOSTIC_CATALOG = (
+    *(
+        _MetricDefinition(
+            name, start, end, start or "ollama_provider_queue_wait", end or "ollama_provider_queue_wait",
+            value_event="ollama_provider_queue_ms" if start is None else None,
+            failure_stages=("llm",),
+            unavailable_event="ollama_internal_timing_unavailable",
+            unavailable_reason="ollama_api_internal_timing_not_exposed",
+        )
+        for name, start, end in (
+            ("llm_provider_acceptance_latency", "llm_http_started", "llm_provider_accepted"),
+            ("llm_provider_generation_start_latency", "llm_provider_accepted", "llm_provider_generation_started"),
+            ("llm_generation_start_to_first_token_received", "llm_provider_generation_started", "llm_first_token"),
+            ("ollama_provider_queue_wait", None, None),
+        )
+    ),
     _MetricDefinition("client_decode_latency", "client_audio_received", "client_audio_decoded", "client_audio_received", "client_audio_decoded", failure_stages=("transport",)),
     _MetricDefinition("decoded_to_playback_latency", "client_audio_decoded", "first_playback", "client_audio_decoded", "first_playback", failure_stages=("transport", "playback")),
     _MetricDefinition("llm_first_provider_chunk_latency", "llm_http_started", "llm_first_provider_chunk", "llm_http_started", "llm_first_provider_chunk", failure_stages=("llm",)),
@@ -621,6 +638,13 @@ def _metric_observation(
     if relevant_failure is not None:
         assert relevant_failure.reason_code is not None
         return MetricObservation.failed(relevant_failure.reason_code)
+    if definition.unavailable_event is not None and definition.unavailable_event in by_name:
+        if any(name in by_name for name in (
+            "llm_provider_accepted", "llm_provider_generation_started", "ollama_provider_queue_ms",
+        )):
+            return MetricObservation.missing("provider_timing_evidence_conflict")
+        assert definition.unavailable_reason is not None
+        return MetricObservation.missing(definition.unavailable_reason)
     if definition.name == "ttfa" and "fixture_speech_end" not in by_name:
         return MetricObservation.not_applicable(
             "fixture_boundary_requires_controlled_runner"
