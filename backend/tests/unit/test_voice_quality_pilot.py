@@ -294,3 +294,24 @@ def test_pcm_observer_is_explicit_and_not_inherited(tmp_path, monkeypatch):
     for incompatible in ({'continuous_turns': 3}, {'control_probe': True}, {'fault_bridge': True}):
         with pytest.raises(ValueError, match='PCM observation requires'):
             pilot.pilot_environment(*arguments, observe_stt_pcm=True, **incompatible)
+
+
+def test_supply_observer_keeps_normal_profile_and_clears_inherited_option(tmp_path, monkeypatch):
+    inference, livekit = tmp_path / 'inference.env', tmp_path / 'livekit.env'
+    inference.write_text('INFERENCE_TARGET_CHAT=ollama/test\n')
+    livekit.write_text('LIVEKIT_KEYS=test:test-only\n')
+    monkeypatch.setenv('VOICE_QUALITY_OBSERVE_PLAYBACK_SUPPLY', '1')
+    monkeypatch.setenv('VOICE_QUALITY_OBSERVE_STT_PCM', '1')
+    arguments = (inference, livekit, 'supply-test', 100, False, True)
+    ordinary = pilot.pilot_environment(*arguments, controlled=True)
+    assert 'VOICE_QUALITY_OBSERVE_PLAYBACK_SUPPLY' not in ordinary
+    observed = pilot.pilot_environment(*arguments, controlled=True, observe_playback_supply=True)
+    assert observed['DS_PROFILE'] == 'integration-voice'
+    assert observed['VOICE_QUALITY_OBSERVE_PLAYBACK_SUPPLY'] == '1'
+    assert 'VOICE_QUALITY_OBSERVE_STT_PCM' not in observed
+    assert 'VOICE_QUALITY_PILOT_TRIALS' not in observed
+    assert observed['LIVEKIT_URL'] == ordinary['LIVEKIT_URL']
+    for incompatible in ({'continuous_turns': 3}, {'control_probe': True}, {'fault_bridge': True},
+                         {'network_fault': True}, {'interruption_cohort': 'take_turn'}, {'vad_cohort': 'pause'}):
+        with pytest.raises(ValueError, match='playback supply observation requires'):
+            pilot.pilot_environment(*arguments, controlled=True, observe_playback_supply=True, **incompatible)

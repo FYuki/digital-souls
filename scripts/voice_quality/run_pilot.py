@@ -115,8 +115,13 @@ def probe_gpu() -> dict[str, object]:
 def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
                       trials: int, disable_thinking: bool, scheduled_fixture: bool = False, continuous_turns: int = 0,
                       controlled: bool = False, interruption_cohort: str | None = None,
-                      control_probe: bool = False, fault_bridge: bool = False, network_fault: bool = False, fixture_indices: str | None = None, vad_cohort: str | None = None, observe_stt_pcm: bool = False) -> dict[str, str]:
+                      control_probe: bool = False, fault_bridge: bool = False, network_fault: bool = False, fixture_indices: str | None = None, vad_cohort: str | None = None, observe_stt_pcm: bool = False, observe_playback_supply: bool = False) -> dict[str, str]:
     run_root(run_id)
+    if type(observe_playback_supply) is not bool or (observe_playback_supply and (
+        not scheduled_fixture or continuous_turns or control_probe or fault_bridge
+        or network_fault or interruption_cohort or vad_cohort
+    )):
+        raise ValueError("playback supply observation requires scheduled normal independent sessions")
     if type(observe_stt_pcm) is not bool or (observe_stt_pcm and (not scheduled_fixture or continuous_turns or control_probe or fault_bridge or network_fault)):
         raise ValueError("PCM observation requires scheduled independent test sessions")
     if vad_cohort is not None and (vad_cohort != "pause" or interruption_cohort is not None
@@ -178,6 +183,9 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
         env["VOICE_QUALITY_NETWORK_FAULT"] = "1"
     env.pop("VOICE_QUALITY_FAULT_BRIDGE", None)
     env.pop("VOICE_QUALITY_OBSERVE_STT_PCM", None)
+    env.pop("VOICE_QUALITY_OBSERVE_PLAYBACK_SUPPLY", None)
+    if observe_playback_supply:
+        env["VOICE_QUALITY_OBSERVE_PLAYBACK_SUPPLY"] = "1"
     if observe_stt_pcm:
         env["VOICE_QUALITY_OBSERVE_STT_PCM"] = "1"
     env["DS_PROFILE"] = "integration-voice-pcm" if observe_stt_pcm else ("integration-voice-fault" if fault_bridge else "integration-voice")
@@ -209,7 +217,7 @@ def run(args: argparse.Namespace) -> int:
     from native_sdk import NativeSdkSampler
     from native_sdk_experiment.prepare import REVISION
 
-    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe, args.fault_bridge, args.network_fault, args.fixture_indices, args.vad_cohort, getattr(args, "observe_stt_pcm", False))
+    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe, args.fault_bridge, args.network_fault, args.fixture_indices, args.vad_cohort, getattr(args, "observe_stt_pcm", False), getattr(args, "observe_playback_supply", False))
     if args.fault_bridge:
         from network_fault import resolve_target
         resolve_target("ds-voice-quality-fault-livekit-1")
@@ -291,6 +299,8 @@ if __name__ == "__main__":
                         help="障害なしの1 sessionで実制御往復を確認する。trialsはprobe回数。")
     parser.add_argument("--observe-stt-pcm", action="store_true",
                         help="専用Whisper中継で実入力を照合する。通常latency受入とは別条件。")
+    parser.add_argument("--observe-playback-supply", action="store_true",
+                        help="通常経路の受信・復号・配送・再生の数値診断。Whisper中継は起動しない。")
     parser.add_argument("--disable-thinking", action="store_true")
     parser.add_argument("--scheduled-fixture", action="store_true")
     parser.add_argument("--continuous-turns", type=int, default=0,

@@ -117,11 +117,15 @@ test(vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割�
   const runFile = promisify(execFile)
   const trials: Record<string, unknown>[] = []
 
+  const observePlaybackSupply = process.env.VOICE_QUALITY_OBSERVE_PLAYBACK_SUPPLY === '1'
+    || process.env.VOICE_QUALITY_OBSERVE_STT_PCM === '1'
   const persistManifest = async (diagnostics?: Record<string, number>) => {
     await mkdir(dirname(manifestPath), { recursive: true })
     await writeFile(manifestPath, JSON.stringify({
       measurement_scope: pilot === undefined ? "controlled" : "pilot",
       measurement_revision: process.env.VOICE_QUALITY_MEASUREMENT_REVISION,
+      playback_supply_observation_enabled: observePlaybackSupply,
+      stt_pcm_observation_enabled: process.env.VOICE_QUALITY_OBSERVE_STT_PCM === '1',
       expected_warmup: WARMUP_RUNS, expected_measured: MEASURED_RUNS,
       fixture: {
         fixture_version: fixture.fixture_version,
@@ -144,7 +148,7 @@ test(vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割�
       await selectPcmFixture(fixture.audio_sha256, index + 1, 'initial')
       if (sourceFixture) await installScheduledFixture(page, sourceFixture)
       const microphone = await driver.openVoiceChat(page)
-      if (process.env.VOICE_QUALITY_OBSERVE_STT_PCM === '1') await page.evaluate(installPlaybackSupplyDiagnostic)
+      if (observePlaybackSupply) await page.evaluate(installPlaybackSupplyDiagnostic)
       const conversationId = await page.evaluate(() => (
         localStorage.getItem('digital-souls:conversation:miori')
       ))
@@ -192,7 +196,7 @@ test(vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割�
       const sourceBounds = sourceFixture ? await readFixtureBounds(page) : undefined
       trials.push({
         pcm_input_observation: await snapshotPcmInputs(index + 1),
-        ...(process.env.VOICE_QUALITY_OBSERVE_STT_PCM === '1' ? {
+        ...(observePlaybackSupply ? {
           playback_supply_observation: await page.evaluate(readPlaybackSupplyDiagnostic, cycle.responseId!),
         } : {}),
         ...(sourceBounds ? { user_control_observation: userControlObservation } : {}),

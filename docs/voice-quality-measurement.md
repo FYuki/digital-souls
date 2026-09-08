@@ -249,3 +249,10 @@ revision `2f2a3857ea34cd10f77a849e5b15a981baf48d18`で準備5件・通常音声�
 revision `0d0aeb279b80131f729db9cdf17cbef44770aa9e`の通常音声pilotで、準備1件・測定3件のブラウザRTP値が製品traceに届き、manifestと一致することを確認した。[匿名集計](artifacts/livekit-native-network-pilot-2026-09-08-01.json)と[独立照合・終了確認](artifacts/livekit-native-network-pilot-2026-09-08-01-verification.json)を保存した。測定3件の送信40,096 bytes、受信129,524 bytes、受信552 packets、損失0をtraceから再集計して一致した。欠測0、完全再生3/3、gap 0、所有app削除とteardown完了を確認した。
 
 これは完了応答のブラウザ音声RTP payloadを対象とする小規模な経路検証である。session全体の通信量、取消された途中応答の通信量、実声dogfoodの受け入れを証明するものではない。
+
+
+### 通常経路の再生供給診断
+
+`run_pilot.py --observe-playback-supply --scheduled-fixture`で、通常の`integration-voice` Profileのままpacket受信・復号・main配送・再生までの時間上限とgap前後の数値を記録する。`--observe-stt-pcm`とは独立し、Whisper中継は起動しない。独立100件では`--controlled`を併用する。manifestに両observerの有効状態を保存する。先行するPCM観測runは既存どおり供給診断も含む。
+
+この診断はブラウザの追加観測処理を含む条件として扱い、未観測runやPCM中継runと混同しない。入力fixture、推論設定、再生buffer、目標値は変更しない。既知の音切れを起こしたrunも保持し、新しいrunだけで原因が解消したとは判定しない。
