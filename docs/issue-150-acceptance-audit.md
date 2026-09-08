@@ -31,7 +31,7 @@
 - B: 受信・復号・実出力時計、割り込みのsession/utterance/旧response相関、正常cancelと処理失敗の分離を実装。製品traceとmanifestの一致を各reporterで検証する。
 - C: 相槌・take-turn・文中休止の独立100件と、生成／受信・提示の区別を実装。実PCMのv4端部照合は前後最大600msの候補を使い、内部全体や全帯域の品質は主張しない。正常301音声と8種類の破損を用いた校正を別保存している。
 - D: 専用network障害・復旧、再生継続性、resource、RTPの観測経路を実装。[製品RTP pilot](artifacts/livekit-native-network-pilot-2026-09-08-01-verification.json)で準備を含む4応答のnative trace一致を確認。完了応答の音声RTP payloadが範囲であり、session全通信量ではない。session追加操作・終了の製品集計を実装し、実接続3往復で追加0・正常終了・欠測なしを確認。無応答の正常終了と切断後の猶予満了終了を実接続2件で照合した。復帰するsessionの記録照合と実声dogfoodが残る。
-- E: 固定fixture・初期状態・warm-up除外・独立session/conversationと匿名schema検証を実装。失敗runを残す。[現在版の自動回帰](artifacts/livekit-automated-regression-2026-09-08-06.json)は全ユニット・モジュール・mocked E2E・型検査・lint・buildを通過。GitHub CI、必要な実接続回帰、全条件の最終照合とPR作成は未完了。
+- E: 固定fixture・初期状態・warm-up除外・独立session/conversationと匿名schema検証を実装。失敗runを残す。[現在版の自動回帰](artifacts/livekit-automated-regression-2026-09-08-06.json)は全ユニット・モジュール・mocked E2E・型検査・lint・buildを通過。[実サービス音声回帰5ケース](artifacts/livekit-voice-regression-suite-2026-09-08-04.json)も成功。GitHub CI、残る実接続回帰、全条件の最終照合とPR作成は未完了。
 
 ## 次の作業
 

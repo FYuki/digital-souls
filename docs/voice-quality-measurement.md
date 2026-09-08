@@ -374,3 +374,10 @@ LiveKitの`vad_leading_boundary`はfixture正解開始の因果下限から、�
 [初回失敗](artifacts/livekit-zero-response-session-2026-09-08-01-failed.json)も保存した。page切断後の待機を「再接続猶予＋20秒」としていたが、SFUの切断検知が遅れ、server側の猶予満了前にテスト環境を終了していた。診断側の待機起点の違いを考慮して再確認した結果、2ケースが成功した。page終了操作からnative終了を観測するまで約82.18秒だったが、これはSFUの切断検知と60秒の猶予、cleanup、観測遅延を含む。短時間障害の再接続p95やserver内部の猶予時間としては使用しない。
 
 診断の選択条件とsession集計の関連104件、Svelte／E2E TypeScript型検査が成功した。製品の`backend/app`・`frontend/src`は自動回帰版`43afa4f`から変更がないことをGit tree hashで確認した。この2件の障害注入を実声dogfoodの予期しない終了率へ混ぜず、通常100件や復帰を伴う再接続cohortとも分離する。
+
+
+## 実サービス音声回帰の再確認（2026-09-08）
+
+[実サービス音声回帰5ケース](artifacts/livekit-voice-regression-suite-2026-09-08-04.json)を`7034233`で再実行した。マイク開始、VAD後のsession維持、通常応答、同一sessionの3往復、ラベル付き実音声による割り込みがすべて成功し、skipは0だった。3往復の完全再生3件を添付観測で確認した。割り込みの固定音声開始からの上限はlocal停止989.700ms、cancel確定1,024.700msで各絶対上限以内だった。この1例を独立100件のp95としては扱わない。
+
+Backendログの固定診断markerを観測し、Core／pipeline例外0、reader終了を確認した。Frontend・Backend・Ollama・VOICEVOX・Whisperのready確認と、所有Frontend／Backendの撤去、teardown完了を検証した。前回の回帰raw証拠は専用worktree内に退避して保持した。新しいsession診断に加えたこの回帰も、人による実声dogfood受け入れを代替しない。
