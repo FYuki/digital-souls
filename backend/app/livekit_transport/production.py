@@ -38,7 +38,9 @@ from app.livekit_transport.bootstrap import (
     InMemorySessionBindingRepository,
 )
 from app.livekit_transport.coordinator import (
+    APPLICATION_TOPIC,
     PRIVATE_TOPIC,
+    SCREEN_TOPIC,
     ConfirmedOutputStop,
     ProductionSessionCoordinator,
     SessionCoordinatorDependencies,
@@ -1541,6 +1543,18 @@ class ProductionRuntimeManager:
         self._coordinators[session_id] = coordinator
         self._session_tasks[session_id] = set()
         self._ready[session_id] = asyncio.Event()
+        rtc_diagnostic = None
+        if self._audio_probe_enabled:
+            from app.livekit_transport.rtc_diagnostic import RtcIngressDiagnostic
+            rtc_diagnostic = RtcIngressDiagnostic(lambda: coordinator.generation)
+            stats_task: asyncio.Task[None] | None = None
+
+            def start_rtc_diagnostic() -> None:
+                nonlocal stats_task
+                if stats_task is None:
+                    stats_task = self._schedule_task(session_id, rtc_diagnostic.sample(room))
+
+            room.on("reconnecting")(start_rtc_diagnostic)
 
         def participant_connected(participant: rtc.RemoteParticipant) -> None:
             async def handle_connected() -> None:
@@ -1578,6 +1592,11 @@ class ProductionRuntimeManager:
 
         def data_received(packet: rtc.DataPacket) -> None:
             participant = getattr(packet, "participant", None)
+            if rtc_diagnostic is not None:
+                participant_kind = "missing" if participant is None else "current" if coordinator.is_current_participant(
+                    identity=str(participant.identity), participant_sid=str(participant.sid)) else "other"
+                rtc_diagnostic.ingress({PRIVATE_TOPIC: "private", APPLICATION_TOPIC: "application", SCREEN_TOPIC: "screen"}.get(
+                    str(packet.topic), "other"), participant_kind)
             if participant is None:
                 return
             self._schedule_task(
