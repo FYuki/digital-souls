@@ -154,3 +154,5 @@ Conversation Coreから音声の本文をstreamする要求には`latency_sensit
 通常latency比較器は、再生完了の製品trace追加後の`production.py`を再監査した。変更はsource統計の通知順と最終playback summaryの受信であり、比較不能とした3区間の起点・終点は維持されている。旧版と新版の監査済みファイルhashを別々に保持し、artifactには測定revisionから実際に読んだhashを記録する。未知の変更は再監査を要求する。これは比較器の準備であり、新設定100件の性能合格を示さない。
 
 v4の校正では301音声×9条件について、[未圧縮](artifacts/livekit-pcm-multi-seed-v4-raw-2026-09-08.json)、[Opus 32kbps](artifacts/livekit-pcm-multi-seed-v4-opus32-2026-09-08.json)、[Opus 64kbps](artifacts/livekit-pcm-multi-seed-v4-opus64-2026-09-08.json)のすべてで正常301件を照合し、欠け・無音化・雑音・重複・順序逆転の2408件を拒否した。実際のWebRTC入力による100件の受け入れは別途必要である。関連テスト48件と、旧schema互換性を追加した集計テスト22件（前者と重複を含む）が成功した。
+
+v4実ブラウザpilot（`pcm-multi-seed-v4-pause-pilot-20260908-01`、revision `f942001`）では前回未確認だった5・66番と100番の音声を使い、3件とも実際の最終STT入力と端部を確認した。通常音声設定を用い、実験用thinking上書きは指定していない。[端部照合結果](artifacts/livekit-pcm-multi-seed-v4-pause-pilot-2026-09-08.json)と[所有環境・proxyの終了確認](artifacts/livekit-pcm-multi-seed-v4-pause-pilot-cleanup-2026-09-08.json)を保存した。最小端部相関は0.95749で、発話全体の均一offsetが成立しない1件もそのまま記録した。独立100件には達しておらず、全受け入れは未完了である。
