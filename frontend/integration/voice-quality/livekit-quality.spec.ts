@@ -1,3 +1,4 @@
+import { installPlaybackSupplyDiagnostic, readPlaybackSupplyDiagnostic } from '../../playwright/playback-supply-diagnostic'
 import { selectPcmFixture, snapshotPcmInputs } from '../../playwright/whisper-pcm-observer'
 import { measureControlProbeSession } from '../../playwright/control-probe-diagnostic'
 import { measureLabeledInterruptions } from '../../playwright/labeled-interruption-diagnostic'
@@ -143,6 +144,7 @@ test(vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割�
       await selectPcmFixture(fixture.audio_sha256, index + 1, 'initial')
       if (sourceFixture) await installScheduledFixture(page, sourceFixture)
       const microphone = await driver.openVoiceChat(page)
+      if (process.env.VOICE_QUALITY_OBSERVE_STT_PCM === '1') await page.evaluate(installPlaybackSupplyDiagnostic)
       const conversationId = await page.evaluate(() => (
         localStorage.getItem('digital-souls:conversation:miori')
       ))
@@ -190,6 +192,9 @@ test(vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割�
       const sourceBounds = sourceFixture ? await readFixtureBounds(page) : undefined
       trials.push({
         pcm_input_observation: await snapshotPcmInputs(index + 1),
+        ...(process.env.VOICE_QUALITY_OBSERVE_STT_PCM === '1' ? {
+          playback_supply_observation: await page.evaluate(readPlaybackSupplyDiagnostic, cycle.responseId!),
+        } : {}),
         ...(sourceBounds ? { user_control_observation: userControlObservation } : {}),
         network_observation: await page.evaluate(responseId => window.__voiceChatE2E.networkObservations?.[responseId], cycle.responseId!),
         track_response_matches: await page.evaluate(responseId => window.__voiceChatE2E.lastTrackMediaResponseId === responseId, cycle.responseId),

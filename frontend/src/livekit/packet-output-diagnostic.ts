@@ -1,7 +1,7 @@
 import type {DecodedAudioPacket} from './media-observer'
 import type {PacketRenderInterval} from './packet-renderer'
 
-type PacketTimes = Omit<DecodedAudioPacket, 'pcm'>
+type PacketTimes = Omit<DecodedAudioPacket, 'pcm'> & {mainReceivedAtMs?: number}
 export type PacketOutputEvidence = Readonly<{
   status: 'captured'; responseId: string; trackSid: string; generation: number
   packet: PacketTimes; interval: PacketRenderInterval; outputAtMs: number
@@ -20,7 +20,7 @@ export class PacketOutputDiagnostic {
       return
     }
     const {pcm: _pcm, ...metadata} = packet
-    this.packets.set(packet.packetIndex, metadata)
+    this.packets.set(packet.packetIndex, {...metadata, mainReceivedAtMs: performance.now()})
   }
 
   confirm(interval: PacketRenderInterval, outputAtMs: number, confirmedAtMs: number): void {
