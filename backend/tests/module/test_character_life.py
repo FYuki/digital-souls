@@ -164,7 +164,7 @@ def test_formation_yields_when_higher_priority_work_arrives(
                     return {reflection.id: reflection.revision}
 
             class Proposal:
-                async def form(self, reflections):
+                async def form(self, reflections, cancellation):
                     await checkpoint("formation")
                     return {"states": [{
                         "kind": "INTEREST", "content": "色彩への関心",
@@ -625,8 +625,9 @@ def test_duplicate_model_reads_are_suppressed_before_final_synthesis(tmp_path):
 
 
 @pytest.mark.parametrize("failed_dependency", ["memory", "personality"])
+@pytest.mark.parametrize("unfinished", [Result.FAILED, Result.RESULT_UNKNOWN, Result.DEFERRED])
 def test_dependency_failure_resumes_with_same_owned_handoff(
-    tmp_path, failed_dependency
+    tmp_path, failed_dependency, unfinished
 ):
     from app.character_life.ports import DeferredMemory
 
@@ -639,7 +640,9 @@ def test_dependency_failure_resumes_with_same_owned_handoff(
                     observations.append(kwargs)
                     if len(observations) == 1:
                         if failed_dependency == "memory":
-                            raise RuntimeError("temporary failure")
+                            if unfinished is Result.FAILED:
+                                raise RuntimeError("temporary failure")
+                            return unfinished
                         return Result.APPLIED
                     return Result.NO_CHANGE
 
@@ -647,13 +650,15 @@ def test_dependency_failure_resumes_with_same_owned_handoff(
                 async def evaluate(self, character, request_id):
                     evaluations.append((character, request_id))
                     if failed_dependency == "personality" and len(evaluations) == 1:
-                        return Result.FAILED
+                        return unfinished
                     return Result.NO_CHANGE
 
             service.memory, service.personality = Memory(), Personality()
             assert await service.execute(str(run.id)) == Result.DEFERRED
             failed = service.store.run(str(run.id))
-            assert Result.FAILED in failed.dependency_results.values()
+            assert failed.dependency_results[
+                "episode" if failed_dependency == "memory" else "personality"
+            ] == unfinished
             assert failed.handoff.character_id == run.character_id
             assert not any(
                 s.kind is Kind.SHARE_CANDIDATE for s in service.store.states("miori")
@@ -794,4 +799,70 @@ def test_gpu_sampler_timeout_is_missing_data_and_restores_callbacks(monkeypatch)
         assert service.cognition.decide is decide
         assert service.foreground_busy is busy
 
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("interruption", ["foreground", "requested", "shutdown", "timeout"])
+def test_formation_cancels_inference_before_worker_returns(tmp_path, interruption):
+    import threading
+    from types import SimpleNamespace
+    from uuid import uuid4
+    from app.character_life.cognition import Formation
+    from app.character_life.formation import LifeFormation
+    from app.character_life.models import ReflectionView
+
+    async def scenario():
+        async with environment(tmp_path) as (service, _, run):
+            service.store.finish(run, Result.NO_CHANGE, "setup")
+            loop = asyncio.get_running_loop()
+            entered = asyncio.Event()
+            release, exited = threading.Event(), threading.Event()
+            tokens = []
+            reflection = ReflectionView(
+                id=uuid4(), character_id="miori", revision="1", content="色彩への内省",
+                active=True,
+            )
+            class Source:
+                async def active(self, character):
+                    return (reflection,)
+                def current_revisions(self, character):
+                    return {reflection.id: reflection.revision}
+            class Router:
+                def generate_structured(self, **kwargs):
+                    tokens.append(kwargs["cancellation_token"])
+                    loop.call_soon_threadsafe(entered.set)
+                    try:
+                        assert release.wait(2)
+                        return SimpleNamespace(value={"states": [{
+                            "kind": "INTEREST", "content": "遅れて返る内省",
+                            "source_ids": [str(reflection.id)],
+                        }]})
+                    finally:
+                        exited.set()
+            service.formation = LifeFormation(service.store, Source(), Formation(Router()), Privacy())
+            if interruption == "timeout":
+                service.timeout = 0.15
+            task = asyncio.create_task(service.form_life_states("miori"))
+            try:
+                await asyncio.wait_for(entered.wait(), 1)
+                if interruption == "foreground":
+                    service.foreground_busy = lambda: True
+                elif interruption == "requested":
+                    state = service.store.state("miori", run.state_id)
+                    grant = service.store.grant("miori", "elyth")
+                    service.store.create_run(state, grant, "priority-request", True)
+                elif interruption == "shutdown":
+                    await service.stop()
+                assert await asyncio.wait_for(task, 1) == Result.DEFERRED
+                assert tokens[0].is_cancelled
+                assert not exited.is_set()
+                assert not any(s.source == "reflection" for s in service.store.states("miori"))
+            finally:
+                release.set()
+                assert await asyncio.to_thread(exited.wait, 2)
+                if not task.done():
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+            # 同期workerが遅れて返した結果も正本へ反映しない。
+            assert not any(s.source == "reflection" for s in service.store.states("miori"))
     asyncio.run(scenario())

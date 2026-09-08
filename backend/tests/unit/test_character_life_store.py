@@ -110,7 +110,7 @@ def test_formation_deduplication_and_source_change(tmp_path):
                 return {reflection.id: reflection.revision}
 
         class Proposal:
-            async def form(self, reflections):
+            async def form(self, reflections, cancellation):
                 return {
                     "states": [
                         {
@@ -304,7 +304,7 @@ def test_invalid_formation_output_is_rejected_without_consuming_ledger(
                 return {reflection.id: reflection.revision}
 
         class Proposal:
-            async def form(self, reflections):
+            async def form(self, reflections, cancellation):
                 source_ids = [str(reflection.id)]
                 if invalid == "uuid":
                     source_ids = ["not-a-uuid"]
@@ -330,3 +330,53 @@ def test_invalid_formation_output_is_rejected_without_consuming_ledger(
         assert not any(s.source == "reflection" for s in store.states("miori"))
 
     asyncio.run(scenario())
+
+
+def test_writer_commits_while_reader_keeps_previous_snapshot(tmp_path):
+    store, state, _, _ = seeded(tmp_path)
+    with store.transaction(write=False) as reader:
+        assert reader.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+        assert reader.execute(
+            "SELECT revision FROM life_states WHERE id=?", (str(state.id),)
+        ).fetchone()[0] == 1
+        updated = store.save_state(
+            state.model_copy(update={"content": "新しい話題"}), expected_revision=1
+        )
+        assert updated.revision == 2
+        assert reader.execute(
+            "SELECT revision FROM life_states WHERE id=?", (str(state.id),)
+        ).fetchone()[0] == 1
+    assert store.state("miori", state.id).revision == 2
+
+
+@pytest.mark.parametrize("method", ["invalidate", "reconcile"])
+def test_reflection_invalidation_rolls_back_all_states_and_history(tmp_path, method):
+    import sqlite3
+
+    store, _, _, _ = seeded(tmp_path)
+    source = uuid4()
+    states = [store.save_state(LifeState(
+        character_id="miori", kind=Kind.INTEREST, content=f"関心 {index}",
+        source="reflection", source_ids=(source,), reflection_revisions={source: "1"},
+    )) for index in range(2)]
+    with store.transaction() as db:
+        # 2件目の更新をDB側で拒否し、先行更新とhistoryもrollbackすることを確認する。
+        db.execute("""CREATE TRIGGER refuse_partial_invalidation BEFORE UPDATE ON life_states
+            WHEN (SELECT count(*) FROM life_states
+                  WHERE json_extract(document,'$.status')='DORMANT') > 0
+            BEGIN SELECT RAISE(ABORT, 'injected invalidation failure'); END""")
+    def invalidate():
+        if method == "invalidate":
+            return store.invalidate_reflections("miori", frozenset({source}))
+        return store.reconcile_reflections("miori", {})
+    with pytest.raises(sqlite3.IntegrityError, match="injected invalidation failure"):
+        invalidate()
+    for state in states:
+        assert store.state("miori", state.id) == state
+        assert len(store.state_history("miori", state.id)) == 1
+    with store.transaction() as db:
+        db.execute("DROP TRIGGER refuse_partial_invalidation")
+    assert invalidate() == 2
+    for state in states:
+        assert store.state("miori", state.id).status is StateStatus.DORMANT
+        assert len(store.state_history("miori", state.id)) == 2

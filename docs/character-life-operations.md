@@ -69,7 +69,8 @@ Life Stateの共有候補と活動完了は同じSQLite transactionで確定す�
 #100呼出し前に承認済み観測のhandoffを作業記録として固定し、復旧時は同じrun_id・時刻・本文・sourceを再送する。
 handoffにも所有characterを持ち、保存・再開時にRunと照合する。schema v2への起動時移行では既存Runの所有者を補完する。
 #100/#101の接続先はこのkeyで冪等に受け付ける。これはSELF EpisodeやPersonalityの正本を代替しない。
-接続先のFAILED / RESULT_UNKNOWNは依存結果へ残し、活動をDEFERREDにして同じhandoffをresumeから再送できるようにする。
+接続済みportのFAILED / RESULT_UNKNOWN / DEFERREDは依存結果へ残し、活動をDEFERREDにして同じhandoffをresumeから再送できるようにする。
+port未指定（None）は後続Epicが未接続であることを表し、依存結果をDEFERREDのまま表示して話題共有だけを完了できる。接続済みportの一時的な保留とは区別する。
 DBOSによる再投入抑止を外部副作用のexactly-once保証とは扱わない。
 
 cronはUTC。missed runのbackfillは無効で、古いscheduleの回復時にも過去の活動を捏造しない。
@@ -77,11 +78,11 @@ cronはUTC。missed runのbackfillは無効で、古いscheduleの回復時に�
 queueの同時実行数は1で、利用者要求、自律活動、内省形成の順に優先する。
 同じGoalへの未完了の自律要求と同じcharacterへの未完了の内省形成を重ねない。活動の未完了queue上限はcharacterごとに100件。
 foreground会話がある場合は、認知の前後と外部dispatch直前に活動を保留する。
-内省からの状態形成も処理境界で会話・利用者要求を再確認し、優先作業が発生した場合は後続の推論・保存を保留する。
+内省からの状態形成も処理境界で会話・利用者要求を再確認し、優先作業が発生した場合は後続の推論・保存を保留する。形成推論へキャンセルtokenを伝播し、優先度変更・timeout・終了時には結果を採用しない。
 実行中の推論を会話開始と同時に強制preemptする設定はない。
 
 通常終了では新規活動を止め、進行中の読取・推論結果を破棄して保留状態を確定してからDBOSとMCPを閉じる。
-Backend停止後、両DBを同じ時点の組としてbackupする。稼働中の単純なファイルコピーは使わない。
+Backend停止後、両DBを同じ時点の組としてbackupする。Character Lifeの正本はWALを使うため、未checkpointのWALが残る場合はSQLite backup APIで取得する。稼働中の単純なファイルコピーは使わない。
 無効化時は`DS_CHARACTER_LIFE_ENABLED=false`でBackendを再起動する。DB・provenanceは保持する。
 DBOSのSQLiteは今回のdev/test受入に使用し、運用導入時のDB・長時間運転条件は別途検証する。
 

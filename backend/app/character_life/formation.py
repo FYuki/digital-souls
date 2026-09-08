@@ -4,6 +4,7 @@ from collections.abc import Callable
 from uuid import UUID
 
 from app.external_mcp.models import digest, validate_arguments
+from app.inference import InferenceCancellationToken
 
 from .cognition import FORMATION_SCHEMA, FormationPort, PrivacyPort
 from .models import Kind, LifeError, LifeState, Result
@@ -27,11 +28,19 @@ class LifeFormation:
         )
 
     async def run(
-        self, character: str, *, check_current: Callable[[], None] = lambda: None
+        self, character: str, *, check_current: Callable[[], None] = lambda: None,
+        cancellation: InferenceCancellationToken | None = None,
     ) -> Result:
-        check_current()
+        cancellation = cancellation or InferenceCancellationToken()
+
+        def check() -> None:
+            check_current()
+            if cancellation.is_cancelled:
+                raise LifeError(Result.DEFERRED, "formation_cancelled")
+
+        check()
         reflections = await self.source.active(character)
-        check_current()
+        check()
         if reflections is None:
             return Result.DEFERRED
         if len(reflections) > 16 or any(
@@ -53,9 +62,9 @@ class LifeFormation:
         if self.store.formation_exists(character, fingerprint):
             return Result.NO_CHANGE
         proposal = await self.cognition.form(
-            [r.model_dump(mode="json") for r in reflections]
+            [r.model_dump(mode="json") for r in reflections], cancellation
         )
-        check_current()
+        check()
         validate_arguments(FORMATION_SCHEMA, proposal)
         states = []
         for candidate in proposal["states"]:
@@ -67,7 +76,7 @@ class LifeFormation:
                 raise LifeError(Result.REJECTED, "reflection_evidence_invalid")
             if not await self.privacy.allowed(candidate["content"]):
                 raise LifeError(Result.REJECTED, "state_privacy_blocked")
-            check_current()
+            check()
             try:
                 state = LifeState(
                     character_id=character,
@@ -81,7 +90,7 @@ class LifeFormation:
                 raise LifeError(Result.REJECTED, "formation_state_invalid") from None
             states.append(state)
         current = await self.source.active(character)
-        check_current()
+        check()
         if current is None or any(
             r.character_id != character or not r.active for r in current
         ):
