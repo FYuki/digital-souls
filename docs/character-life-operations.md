@@ -134,15 +134,17 @@ python -m pytest backend/tests/integration/test_character_life_elyth_integration
 
 実接続テストではローカルOllama、ELYTH、DBOS、実socketのHTTP受付、同一要求の重複排除、
 次の会話へのLife State projectionと実モデル応答、終了処理を確認する。
-レポートへ本文・キー・argumentsを保存せず、結果・操作名・schema検証種別・時間を記録する。
+会話の出力上限は通常の.env.exampleと同じ1,024トークンとする。512では思考出力だけで上限へ達し、本文が空になるケースを確認した。
+レポートへ本文・キー・argumentsを保存せず、結果・操作名・schema検証種別・時間・会話出力上限を記録する。
 
 ## 前景と背景の実測と制限
 
 `RUN_CHARACTER_LIFE_PRIORITY_BENCHMARK=true`を実接続受入に追加すると、同じ実Ollamaへ背景認知と会話を重ね、TTFT・GPU使用量・foreground中のdispatch件数を記録する。
-2026-09-08のgemma4:e4bによる単一試行では、通常TTFT 10.444秒、重複時16.216秒、GPU使用メモリ最大9,658 MiB、使用率最大86%だった。
+2026-09-08のgemma4:e4b（会話出力上限1,024）による直近の単一試行では、通常TTFT 12.390秒、重複時8.166秒、GPU使用メモリ最大9,827 MiB、使用率最大84%だった。
+先行試行では重複時の遅延増加も観測しており、推論内容・cache等による変動を含む。この1試行で背景負荷の性能改善を主張しない。
 背景活動はDEFERREDとなり、foreground開始後の外部dispatchは0件。通常の強制pause/resumeとshutdownは別の自動テストで検証する。
 
 この測定はテキスト会話・一つのローカル環境の観測であり、音声streamや配信、異なるGPUの性能保証ではない。
 現行Inference Routerのcancelは結果の不採用を保証し、送信済み同期推論のGPU処理を強制停止しない。
-今回のdev/testでは処理境界での保留を維持し、強制preemptionは導入しない。共有推論serverでは会話の遅延が増える制限がある。
+今回のdev/testでは処理境界での保留を維持し、強制preemptionは導入しない。共有推論serverでは会話の遅延が増える場合がある。
 運用導入は今回の範囲外で、推論配置と音声・複数キャラクター・長時間負荷を含めて別途受入する。
