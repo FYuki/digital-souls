@@ -307,3 +307,11 @@ PYTHONPATH=backend backend/.venv/bin/python -m app.voice_session_metrics \
 ```
 
 `--expected-sessions`はjournalの件数から推定せず、独立した開始記録や試験manifestから与える。journalが全くないsessionも欠測として残す。これはsession指標の集計であり、実声dogfood、通常100件の速度、#150全条件の達成は別途確認する。
+
+#### 2026-09-08: 製品session記録の実接続確認
+
+`6ec4aa3a85ad745281c7ab63ec878d031f5ccb33`で`native-session-three-turn-20260908-01`を実行。通常のintegration-voice Profileで実Whisper・Ollama・VOICEVOX・LiveKitを使い、同じsessionで3応答の完全再生を確認した。native journalの作成・参加・3回の完全再生・最終操作summary・正常終了がmanifestと一致した。初回マイク開始1回、追加操作0、予期しない終了0、欠測0、gap0。実験的thinking上書きは使用していない。専用Frontend／Backendの実コンテナ削除とteardown完了も確認した。
+
+[session集計](artifacts/livekit-native-session-three-turn-2026-09-08-01.json)と[独立照合結果](artifacts/livekit-native-session-three-turn-2026-09-08-01-verification.json)を保存した。関連Backend 232件、Frontend全ユニット794件、baseline比較16件、変更Backend 4ファイルのmypy・ruff、Frontend/Svelte/E2E TypeScript型検査を通過した。初回のFrontend検証ではschemaのstrictRequired違反、全ユニットでは新しいobservationを含まない既存期待値を検出し、修正後に全件を再実行した。
+
+この1 sessionは計測経路の実接続検証であり、通常100件の速度安定化、実障害時のsession照合、実声dogfoodの受入れ完了を示さない。最新通常100件のTTFA p95 11,995.305msという未達判定は維持する。
