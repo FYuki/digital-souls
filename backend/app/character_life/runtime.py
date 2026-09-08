@@ -55,6 +55,12 @@ def formation_step(character: str, workflow_id: str) -> str:
             character, workflow_id, Result(result)
         )
         return result
+    except TimeoutError:
+        future.cancel()
+        runtime.service.store.finish_formation_job(
+            character, workflow_id, Result.DEFERRED
+        )
+        raise
     finally:
         with runtime.future_lock:
             runtime.futures.discard(future)

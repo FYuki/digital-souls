@@ -240,7 +240,10 @@ def owned_run(rt: Runtime, character: str, run_id: UUID) -> str:
 async def pause(character: str, run_id: UUID, request: Request) -> object:
     rt = runtime(request)
     key = owned_run(rt, character, run_id)
-    rt.service.pause(key)
+    try:
+        rt.service.pause(key)
+    except LifeError as exc:
+        raise error(exc) from None
     return rt.service.store.run(key)
 
 

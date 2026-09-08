@@ -766,12 +766,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     StateFormation(inference_runtime.router),
                     life_service.privacy,
                 )
+                character_catalog = CharacterCatalog(repository_root / "characters")
                 life_runtime = LifeRuntime(
                     life_service, runtime_paths.data_root, life_settings,
                     characters=lambda: tuple(
-                        entry.character_id for entry in CharacterCatalog(
-                            Path(__file__).resolve().parents[2] / "characters"
-                        ).scan()
+                        entry.character_id for entry in character_catalog.scan()
                     ),
                 )
                 await life_runtime.start()

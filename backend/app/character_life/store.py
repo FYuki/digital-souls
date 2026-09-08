@@ -23,6 +23,8 @@ class Store:
             version = db.execute("PRAGMA user_version").fetchone()[0]
             if version not in {0, 1, 2}:
                 raise ValueError("unsupported Character Life database version")
+            # executescriptは保留transactionをcommitするため、schemaと移行は
+            # script内のBEGIN IMMEDIATEから、このwithの終了までで確定する。
             db.executescript("""
                 BEGIN IMMEDIATE;
                 CREATE TABLE IF NOT EXISTS life_states (

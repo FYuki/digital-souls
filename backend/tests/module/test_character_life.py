@@ -1151,3 +1151,67 @@ def test_pause_at_finish_never_returns_none_to_workflow(tmp_path, monkeypatch, o
                            for s in service.store.states("miori"))
 
     asyncio.run(scenario())
+
+
+def test_formation_bridge_timeout_releases_job_for_next_schedule(tmp_path, monkeypatch):
+    import threading
+    from dbos import DBOS
+
+    async def scenario():
+        async with environment(tmp_path) as (service, _, initial):
+            service.store.finish(initial, Result.NO_CHANGE, "setup")
+            entered, exited = threading.Event(), asyncio.Event()
+
+            class Formation:
+                calls = 0
+
+                async def run(self, *args, **kwargs):
+                    self.calls += 1
+                    if self.calls > 1:
+                        return Result.NO_CHANGE
+                    entered.set()
+                    try:
+                        await asyncio.Event().wait()
+                    finally:
+                        exited.set()
+
+            service.formation = Formation()
+            runtime = Runtime(service, tmp_path, Settings(True, "0 0 1 1 *"))
+            await runtime.start()
+            original = runtime.on_owner_loop
+            shorten = True
+
+            def bridge(coroutine):
+                nonlocal shorten
+                future = original(coroutine)
+                if shorten:
+                    shorten = False
+                    result = future.result
+
+                    def short_result(timeout=None):
+                        assert entered.wait(5), "formation did not start"
+                        return result(timeout=0.05)
+
+                    # 実FutureとDBOSを使い、bridgeの待機期限だけを短縮する。
+                    future.result = short_result
+                return future
+
+            monkeypatch.setattr(runtime, "on_owner_loop", bridge)
+            try:
+                job = await runtime.submit_formation("miori", "bridge-timeout")
+                handle = await asyncio.to_thread(DBOS.retrieve_workflow, job)
+                with pytest.raises(TimeoutError):
+                    await asyncio.wait_for(asyncio.to_thread(handle.get_result), 10)
+                assert service.store.formation_job_result("miori", job) == Result.DEFERRED
+                await asyncio.wait_for(exited.wait(), 2)
+                assert not service.tasks and not runtime.futures
+                next_job = await runtime.submit_formation("miori", "next-schedule")
+                handle = await asyncio.to_thread(DBOS.retrieve_workflow, next_job)
+                assert await asyncio.wait_for(
+                    asyncio.to_thread(handle.get_result), 10
+                ) == Result.NO_CHANGE
+                assert service.store.formation_job_result("miori", next_job) == Result.NO_CHANGE
+            finally:
+                await runtime.close()
+
+    asyncio.run(scenario())
