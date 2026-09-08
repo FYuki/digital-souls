@@ -379,6 +379,19 @@ class ToolService:
             )
             if run.cancellation.is_cancelled:
                 raise asyncio.CancelledError()
+            waiting_candidate = run.binding_candidate or (
+                run.candidate if run.interaction else None
+            )
+            if (
+                waiting_candidate is not None
+                and waiting_candidate.connection_id
+                not in self.gate.catalog_snapshots(run.loop)
+            ):
+                # 追加質問の生成中にOFF→ONされても、古い回答待ちを新規作成しない。
+                return self._material(
+                    run,
+                    "連携の利用設定が変わったため、回答待ちを終了しました。必要なら改めて依頼してください。",
+                )
             logger.info(
                 "Tool decision: action=%s pending=%s followup=%s",
                 decision.action,

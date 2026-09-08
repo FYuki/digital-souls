@@ -317,3 +317,44 @@ def test_definite_health_error_immediate(tmp_path, category, code):
             await runtime.close()
 
     asyncio.run(run())
+
+
+def test_off_during_question_generation_cannot_create_stale_waiting():
+    from tests.unit.test_tool_use import (
+        runtime as tool_runtime,
+        Decisions,
+        InputSource,
+        call,
+    )
+    from app.tool_use.routing import ToolDecision
+
+    async def run():
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        class SlowDecision(Decisions):
+            async def decide(self, context, cancellation):
+                if context.get("pending"):
+                    entered.set()
+                    await release.wait()
+                return await super().decide(context, cancellation)
+
+        decisions = SlowDecision(call, ToolDecision("clarify", instruction="色は？"))
+        async with tool_runtime(decisions, source_type=InputSource) as (
+            service,
+            source,
+            gate,
+        ):
+            admin = AddonRuntime(gate)
+            admin.on_disabled = service.connection_disabled
+            task = asyncio.create_task(service.run("miori", "session", "操作して"))
+            await asyncio.wait_for(entered.wait(), 2)
+            admin.set_enabled(source.connection.id, False)
+            admin.set_enabled(source.connection.id, True)
+            await gate.refresh(source.connection.id)
+            release.set()
+            result = await task
+            assert not result.waiting
+            assert not gate._pending and not gate._loops
+            assert len(source.calls) == 1
+
+    asyncio.run(run())
