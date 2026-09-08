@@ -1,0 +1,7 @@
+{"check": "registered-list", "status": "passed"}
+{"check": "initial-available", "status": "passed"}
+{"check": "toggle-off", "status": "passed"}
+{"check": "restart-restores-off", "status": "passed"}
+{"check": "on-rechecks-health", "status": "passed"}
+{"check": "idle-disconnect-badge", "status": "passed"}
+{"check": "offline-toggle", "status": "passed"}

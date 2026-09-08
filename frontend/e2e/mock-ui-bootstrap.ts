@@ -50,6 +50,9 @@ export const installMockUiBootstrap = async (
     }),
   })
 
+  await page.route('**/api/addon-admin/connections', async (route) => {
+    await route.fulfill({ json: [] })
+  })
   await page.route('**/api/characters', async (route) => {
     await route.fulfill({
       status: 200,

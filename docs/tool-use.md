@@ -16,7 +16,8 @@ INFERENCE_TARGET_TOOL_ROUTING_TIMEOUT_SECONDS=90
 DS_MCP_CONFIG=/管理側で用意した絶対パス/mcp.json
 ```
 
-Target未設定時はMCPへ自動接続せず、通常のテキスト・音声会話を維持する。
+Target未設定時は会話からのTool選択を行わず、通常のテキスト・音声会話を維持する。
+登録済み接続の管理・healthはTarget設定から独立する。[MCP/Addon管理](addon-admin.md)を参照する。
 設定ファイルはBackendから読める場所へ置く。Composeでは既存のdata root等のmount内を使うか、
 管理側の明示的なread-only mountを追加する。ホスト専用パスがコンテナ内でも読めると仮定しない。
 stdioのcommandと依存packageもBackend実行環境で利用可能にする。

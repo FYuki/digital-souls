@@ -307,6 +307,14 @@ class ExternalMCPClient:
             _private_io.reset(token)
             _http_failures.reset(failure_token)
 
+    @property
+    def connection_failure(self) -> MCPFailure | None:
+        return self._connection_failure
+
+    async def health(self) -> None:
+        # capabilityの有無に依存せず、副作用のないprotocol pingを使う。
+        await self._request(lambda client: client.session.send_ping())
+
     async def discover(self) -> Discovery:
         async def fetch(client: Client) -> Discovery:
             lists: dict[str, tuple[Json, ...]] = {}
