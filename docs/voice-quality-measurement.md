@@ -335,3 +335,11 @@ LiveKitの`vad_leading_boundary`はfixture正解開始の因果下限から、�
 [baseline比較](artifacts/livekit-normal-vad-reanalysis-2026-09-08-01-latency.json)は比較可能8指標が基準内、観測点が異なる5指標が監査付き比較対象外。通常latencyのcoverage errorsは0だが、TTFA絶対上限により全体判定falseである。生成元のブラウザ・native観測・fixture時計のファイルhashを測定revisionに照合し、元のmanifest・trace・過去検証のhash、測定が所有したFrontend／Backendの削除も再確認した。旧artifactは上書きしていない。
 
 関連Backend 173件、変更2ファイルのmypy、Backend集計と比較器のruffを通過した。新たな会話試験や共有推論の設定変更は行っていない。実PCM端部、誤分割率、実声dogfood、応答速度の改善はそれぞれ別の証拠を必要とする。
+
+#### 2026-09-08: 遅延時間帯の共有Ollamaログ
+
+最新の遅い通常100件と同じ18.5分の時間窓について、共有Ollamaサービスのjournalから数値と固定の状態名だけを抽出した。[数値診断](artifacts/livekit-shared-ollama-context-diagnostic-2026-09-08-01.json)では`model loaded`の記録108回、内部context値の切り替わり107回を確認した。内部確保値は8,192／12,544／13,312だった。本文・prompt・音声・認証情報は抽出結果へ保存していない。
+
+同時期に別タスクで実行されたツール利用の実LLMテストは、同じgemma4:e4bとloopbackの11434番ポートを既定とし、入力12,288＋推定出力1＝12,289、入力12,288＋生成出力1,024＝13,312のcontextを要求する実装だった。音声の常駐観測で見えた要求contextと一致する。過去プロセスの実効接続先や個々のHTTP要求の所有者まで相関したわけではないため、この実装だけを全遅延の確定原因とはしない。
+
+現在の別タスクの実LLMテストは終了を確認済みで、共有Ollamaの常駐モデルは空だった。サービスの停止・設定変更は行わず、この状態から通常の準備5件＋独立100件を再測定する。再測定中も実要求のcontextと常駐状態を観測し、完了後に同時間窓のサーバー側要求数とモデル読み込み記録を照合する。並行負荷のないことを推測だけで合格条件に置き換えない。
