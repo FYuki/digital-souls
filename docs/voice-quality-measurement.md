@@ -182,3 +182,5 @@ npm run test:integration:voice:reconnect -- \
 実音声barge-inの回帰検証では、最初は非同期の最終意図判定を待たずに確認して失敗したため、判定到着を待つよう修正した。次の実行で停止988.5ms・取消1023.5ms（正解発話開始の下限から計算）を確認したが、終了時のSDK例外を4件記録したため全体成功にはしていない。[初回結果](artifacts/livekit-real-barge-in-regression-2026-09-08-01.json)と[終了時例外を含む結果](artifacts/livekit-real-barge-in-regression-2026-09-08-02.json)を保存した。実SDKでは`UnpublishTrackError`が`livekit.rtc`直下に再exportされていないことを確認し、実装と代替SDKを定義元の`livekit.rtc.participant`へ合わせた。取消を別の例外へ置き換えず音源を解放する回帰検証を含め、関連23テストと型検査が成功した。
 
 SDK例外の修正後、通常音声E2E全5件は通ったが、終了・切断後の最終通知を送信しようとしてdelivery失敗2件を記録した。[この結果](artifacts/livekit-voice-regression-suite-2026-09-08-02.json)も未達として保持した。coordinatorが`unavailable`または`ended`の場合は、送信を取消としてCoreへ伝えるようにした。成功として記録したり、送信queueへ積んだりしない。初期化前の送信は引き続きエラーとし、再接続後は新しい送信を受け付ける。切断・終了・再接続、Coreのstreamingと停止確認を含む95テストと型検査が成功した。
+
+`41bb2a2`で通常音声E2E全5件を再実行し、3往復の完全再生、実音声barge-in、観測対象のCore/pipeline例外0件、所有環境とログreaderの終了を確認した。[回帰結果](artifacts/livekit-voice-regression-suite-2026-09-08-03.json)は通常音声設定の実接続検証であり、正式100件の性能測定や実声dogfood受け入れとは分けて扱う。
