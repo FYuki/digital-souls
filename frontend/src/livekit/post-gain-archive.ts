@@ -2,7 +2,10 @@ import {PostGainOutputAudit, type GainAuditMessage, type GainAuditMissingReason,
 
 export type OutputArchiveEntry = Readonly<{atMs: number} & (
   {kind: 'message'; message: GainAuditMessage} |
-  {kind: 'clock'; timestamp: AudioTimestamp; sampleRate: number})>
+  {kind: 'clock'; timestamp: AudioTimestamp; sampleRate: number} |
+  {kind: 'stop_requested'; requestId: string; sessionId: string; responseId: string; generation: number; graphId: string} |
+  {kind: 'stop_marker'; endFrame: number} |
+  {kind: 'stop_confirmed'; requestId: string; endFrame: number; outputClockPassedFrame: number})>
 export type OutputArchiveSnapshot = Readonly<{
   method: 'post_gain_observation_replay_v1'; windowMs: number; retainedAfterMs: number
   lockedAtMs: number | null; closedAtMs: number | null; overflow: boolean; clockInvalid: boolean
@@ -10,7 +13,13 @@ export type OutputArchiveSnapshot = Readonly<{
 }>
 const validTime = (value: number) => Number.isFinite(value) && value >= 0
 const copyEntry = (entry: OutputArchiveEntry): OutputArchiveEntry => entry.kind === 'clock'
-  ? {...entry, timestamp: {contextTime: entry.timestamp.contextTime, performanceTime: entry.timestamp.performanceTime}}
+  ? {kind: 'clock', atMs: entry.atMs, sampleRate: entry.sampleRate,
+    timestamp: {contextTime: entry.timestamp.contextTime, performanceTime: entry.timestamp.performanceTime}}
+  : entry.kind === 'stop_requested' ? {kind: entry.kind, atMs: entry.atMs, requestId: entry.requestId,
+    sessionId: entry.sessionId, responseId: entry.responseId, generation: entry.generation, graphId: entry.graphId}
+  : entry.kind === 'stop_marker' ? {kind: entry.kind, atMs: entry.atMs, endFrame: entry.endFrame}
+  : entry.kind === 'stop_confirmed' ? {kind: entry.kind, atMs: entry.atMs, requestId: entry.requestId,
+    endFrame: entry.endFrame, outputClockPassedFrame: entry.outputClockPassedFrame}
   : {atMs: entry.atMs, kind: 'message', message: entry.message.kind === 'output'
     ? {kind: 'output', confirmedFrame: entry.message.confirmedFrame, intervals: entry.message.intervals.map(row => ({
       startFrame: row.startFrame, endFrame: row.endFrame, nonzeroSamples: row.nonzeroSamples,
@@ -61,7 +70,8 @@ export class PostGainOutputArchive {
   }
 }
 
-export function replayPostGainOutput(archive: OutputArchiveSnapshot, bounds: {lowerMs: number; upperMs: number}): {
+export function replayPostGainOutput(archive: OutputArchiveSnapshot, bounds: {lowerMs: number; upperMs: number},
+  confirmedOutputFrameFloor?: number): {
   complete: boolean; missingReason: string | null; audit: GainAuditSnapshot | null
 } {
   const missing = (reason: string) => ({complete: false, missingReason: reason, audit: null})
@@ -79,10 +89,10 @@ export function replayPostGainOutput(archive: OutputArchiveSnapshot, bounds: {lo
     if (!validTime(entry.atMs) || entry.atMs < previousAtMs || entry.atMs > archive.closedAtMs) return missing('output_archive_order_invalid')
     previousAtMs = entry.atMs
     // 当時の順序を再現してからcancelを挿入する。既存のtrackerへ過去の境界を後付けしない。
-    if (!marked && entry.atMs > bounds.lowerMs) {audit.markCancelled(bounds, bounds.upperMs); marked = true}
+    if (!marked && entry.atMs > bounds.lowerMs) {audit.markCancelled(bounds, bounds.upperMs, confirmedOutputFrameFloor); marked = true}
     if (entry.kind === 'message') audit.record(entry.message)
     else if (entry.kind === 'clock') audit.poll(entry.timestamp, entry.sampleRate, entry.atMs)
-    else return missing('output_archive_invalid')
+    else if (!['stop_requested', 'stop_marker', 'stop_confirmed'].includes(entry.kind)) return missing('output_archive_invalid')
   }
   if (!marked) return missing('output_archive_window_unobserved')
   audit.close()

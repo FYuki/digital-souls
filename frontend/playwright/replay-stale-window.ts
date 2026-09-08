@@ -1,4 +1,5 @@
 import {replayPostGainOutput} from '../src/livekit/post-gain-archive'
+import {replayConfirmedOutputStop, type OutputStopProof} from '../src/livekit/output-stop-proof'
 import type {StaleAudioObservation} from '../src/livekit/post-gain-monitor'
 import type {DecodedReceiptSnapshot} from '../src/livekit/decoded-receipt-audit'
 import type {StaleTextRow} from './stale-text-probe'
@@ -20,6 +21,7 @@ function count(rows: readonly Interval[], bounds: Bounds): Counts {
   return result
 }
 export type StaleWindowInput = {
+  outputStopProof?: OutputStopProof | null
   output: StaleAudioObservation; receipts: DecodedReceiptSnapshot; text: StaleTextRow
   textClosed: boolean; textOverflow: boolean; bounds: Bounds
 }
@@ -27,8 +29,9 @@ export function replayStaleWindow(input: StaleWindowInput) {
   const {output, receipts, text, bounds} = input
   if (!boundsValid(bounds) || !safeCount(output.generation) || output.generation !== receipts.generation || receipts.responseId !== output.responseId || text.responseId !== output.responseId
     || receipts.sessionId !== output.sessionId || text.sessionId !== output.sessionId) throw new Error('stale_identity_or_bounds_invalid')
-  const audio = output.graphClosed ? replayPostGainOutput(output.outputArchive, bounds)
-    : {complete: false, missingReason: 'output_graph_not_closed', audit: null}
+  const audio = !output.graphClosed ? {complete: false, missingReason: 'output_graph_not_closed', audit: null}
+    : input.outputStopProof === undefined ? replayPostGainOutput(output.outputArchive, bounds)
+      : replayConfirmedOutputStop(output, bounds, input.outputStopProof)
   const receiptsMissing = receipts.boundary !== 'decoded_packet_callback' || receipts.overflow || receipts.missingReason !== null
     || receipts.closedAtMs === null || !time(receipts.closedAtMs) || !time(receipts.beganAtMs) || !time(receipts.retainedAfterMs)
     || receipts.closedAtMs < bounds.upperMs
@@ -102,6 +105,7 @@ export function replayStaleWindow(input: StaleWindowInput) {
     : {complete: true, missingReason: null,
       presented: count(history.changes.map(row => ({...row, units: row.characters})), bounds)}
   return {bounds, audio, received, text: textResult, historyText,
+    outputStopProofVerified: 'stopProofVerified' in audio && audio.stopProofVerified === true,
     // provider受領・全cohortの正式受け入れはこの個別窓だけでは証明しない。
     fullStaleAcceptanceVerified: false as const}
 }

@@ -41,6 +41,13 @@ def _required_int(value: object, field: str) -> int:
 
 
 @dataclass(frozen=True)
+class ConfirmedOutputStop:
+    request_id: str
+    generation: int
+    last_played_audio_sequence: int
+
+
+@dataclass(frozen=True)
 class SessionCoordinatorDependencies:
     publish_data: Callable[[bytes, str], Awaitable[None]]
     cleanup: Callable[[str], Awaitable[None]]
@@ -287,7 +294,7 @@ class ProductionSessionCoordinator:
         self._retry_tasks[("character_to_user", event_id)] = task
         await self._dependencies.publish_data(payload, APPLICATION_TOPIC)
 
-    async def request_output_stop(self, response_id: str) -> int:
+    async def request_output_stop(self, response_id: str) -> ConfirmedOutputStop:
         if self._lifecycle.phase != "available":
             raise RuntimeError("output stop requires an available session")
         request_id, generation = str(uuid4()), self.generation
@@ -299,7 +306,10 @@ class ProductionSessionCoordinator:
                 "session_id": self.session_id, "response_id": response_id,
                 "request_id": request_id, "generation": generation,
             })
-            return await confirmed
+            prefix = await confirmed
+            if generation != self.generation or self._lifecycle.phase != "available":
+                raise RuntimeError("output stop connection changed")
+            return ConfirmedOutputStop(request_id, generation, prefix)
         finally:
             self._output_stop_requests.pop(request_id, None)
             if not confirmed.done():

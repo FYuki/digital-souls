@@ -55,6 +55,38 @@ def identity(value):
     return value
 
 
+def prepare_output_stop_proof(audio, matches, sid, rid, generation):
+    """新しい一次記録がある場合だけ要求nonceを相関する。時刻は文字列でJSへ渡す。"""
+    last = audio[-1]
+    entries = last.get('outputArchive', {}).get('entries', [])
+    if not any(isinstance(e, dict) and e.get('kind') in {'stop_requested', 'stop_marker', 'stop_confirmed'} for e in entries):
+        return {}
+    unavailable = {'outputStopProof': None}
+    try:
+        graph_id = identity(last.get('outputGraphId'))
+        if any(r.get('outputGraphId') != graph_id for r in audio):
+            return unavailable
+        events = []
+        for name in ('output_stop_requested', 'response_audio_source_stopped', 'output_stop_confirmed',
+                     'cancel_state_lower', 'cancel_state_upper'):
+            rows = [e for e in matches if e.get('name') == name]
+            if not rows or any(e.get('clock_domain') != 'server_monotonic' or e.get('unit') != 'nanosecond'
+                or type(e.get('timestamp')) is not int or e['timestamp'] < 0 or e.get('outcome') != 'success'
+                or e.get('reason_code') is not None or e.get('stage') != ('response' if name.startswith('cancel_state') else 'transport') for e in rows):
+                return unavailable
+            signatures = {(identity(e.get('event_id')), e['timestamp']) for e in rows}
+            if len(signatures) != 1:
+                return unavailable
+            events.append(signatures.pop())
+        times = [time for _, time in events]
+        if any(a > b for a, b in zip(times, times[1:])):
+            return unavailable
+        return {'outputStopProof': {'sessionId': sid, 'responseId': rid, 'generation': generation,
+            'graphId': graph_id, 'requestId': events[2][0], 'serverOrderNs': [str(time) for time in times]}}
+    except (ValueError, TypeError, KeyError):
+        return unavailable
+
+
 def prepare_trial(trial, traces):
     """欠測は固定理由で残す。生IDと本文はreplay入力だけにとどめる。"""
     if not trial.get('session_id') or not trial.get('old_response_id'):
@@ -107,7 +139,8 @@ def prepare_trial(trial, traces):
     upper = min(bounds['upper_ms'], timestamp(text_row['cancelledAtMs']) + 0.2)
     if upper < bounds['lower_ms']:
         raise ValueError('contradictory_cancel_bounds')
-    return {'output': audio[-1], 'receipts': receipts[-1], 'text': text_row,
+    return {**prepare_output_stop_proof(audio, matches, sid, rid, generation),
+            'output': audio[-1], 'receipts': receipts[-1], 'text': text_row,
             'textClosed': text.get('closed') is True, 'textOverflow': text.get('overflow') is not False,
             'bounds': {'lowerMs': bounds['lower_ms'], 'upperMs': upper}}, None
 
@@ -230,6 +263,7 @@ def summarize(manifest, fixtures_bytes, traces, replay):
         counts['verified_injection'] += injected
         prepared, reason = prepare_trial(trial, traces) if injected else (None, 'fixture_injection_unverified')
         result = None
+        counts['stop_proof_attempted'] += prepared is not None and 'outputStopProof' in prepared
         if prepared is not None:
             try:
                 result = replay(prepared)
@@ -241,6 +275,12 @@ def summarize(manifest, fixtures_bytes, traces, replay):
                 raise ValueError('replay_boundary_changed')
             counts['replayed_cancel_windows'] += 1
             audio, received, text = result['audio'], result['received'], result['text']
+            if result.get('outputStopProofVerified') is True:
+                if prepared.get('outputStopProof') is None or audio.get('complete') is not True:
+                    raise ValueError('unproven_output_stop_replay')
+                if audio['audit'].get('clockCorrelationMethod') != 'bracketing_output_timestamps_with_confirmed_stop':
+                    raise ValueError('unproven_output_stop_replay')
+                counts['stop_proof_verified'] += 1
             if audio.get('complete') is True and audio.get('missingReason') is None:
                 a = audio['audit']
                 if a.get('complete') is not True or a.get('drained') is not True or a.get('missingReason') is not None:
@@ -271,13 +311,17 @@ def summarize(manifest, fixtures_bytes, traces, replay):
                 add_channel(channels[name], reason='server_result_window_unobserved')
             else:
                 add_channel(channels[name], server[name], server[name])
-    report = {'schema_version': '1.1', 'scope': 'labeled_livekit_stale_output_report',
+    report = {'schema_version': '1.2', 'scope': 'labeled_livekit_stale_output_report',
               'provider_result_boundary': 'core_provider_iterator_yield',
               'cohort': 'take_turn', 'cancel_boundary': 'server_cancel_state_transition',
               'audio_presentation_boundary': 'post_gain_browser_output_clock',
               'counts': {k: counts[k] for k in ('expected', 'recorded', 'success', 'failure',
                   'independent_sessions', 'session_end_confirmed', 'verified_injection', 'replayed_cancel_windows')},
-              'channels': channels}
+              'channels': channels,
+              'output_stop_evidence': {'method': 'response_request_and_post_gain_replay',
+                  'verified': counts['stop_proof_verified'],
+                  'unverified': counts['stop_proof_attempted'] - counts['stop_proof_verified'],
+                  'unavailable': counts['expected'] - counts['stop_proof_attempted']}}
     report['evaluation'] = evaluate(report)
     return report
 
@@ -298,6 +342,11 @@ def validate_report(report, schema):
                 or (row['upper_total'] == 0) != (row['possibly_stale'] == 0)
                 or (row['lower_total'] == 0) != (row['definitely_stale'] == 0)):
             raise ValueError('report_channel_mismatch')
+    if report['schema_version'] == '1.2':
+        evidence = report['output_stop_evidence']
+        if (sum(evidence[k] for k in ('verified', 'unverified', 'unavailable')) != c['expected']
+                or evidence['verified'] > report['channels']['audio_presented_samples']['verified_zero']):
+            raise ValueError('report_stop_evidence_mismatch')
     if report['evaluation'] != evaluate(report):
         raise ValueError('report_evaluation_mismatch')
 
@@ -321,7 +370,7 @@ def main(argv=None):
         schema_bytes = schema_path.read_bytes()
         sources = ('frontend/scripts/replay-stale-observations.ts', 'frontend/playwright/replay-stale-window.ts',
                    'frontend/src/livekit/post-gain-archive.ts', 'frontend/src/livekit/post-gain-audit.ts',
-                   'frontend/src/livekit/render-quantum-clock.ts')
+                   'frontend/src/livekit/render-quantum-clock.ts', 'frontend/src/livekit/output-stop-proof.ts')
         # 1つのCLIから現在の実装をbuildし、そのまま実行する。別revisionのreplay結果は受け取らない。
         with tempfile.TemporaryDirectory(prefix='voice-stale-') as directory:
             base = Path(directory)

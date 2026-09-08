@@ -39,6 +39,7 @@ from app.livekit_transport.bootstrap import (
 )
 from app.livekit_transport.coordinator import (
     PRIVATE_TOPIC,
+    ConfirmedOutputStop,
     ProductionSessionCoordinator,
     SessionCoordinatorDependencies,
 )
@@ -637,13 +638,15 @@ class _ConversationCoreDelivery:
             self._coordinator.request_output_stop(response.response_id),
             return_exceptions=True,
         )
-        if isinstance(stopped, BaseException) or type(prefix) is not int:
+        if isinstance(stopped, BaseException) or not isinstance(prefix, ConfirmedOutputStop):
             raise RuntimeError("response output stop was not confirmed")
         if self._measurement is not None:
             self._measurement.record_response_event(
                 response_id=response.response_id, name="output_stop_confirmed", stage="transport",
+                # この確認eventのIDを要求nonceと揃え、privateな一次記録同士だけで照合する。
+                event_id=prefix.request_id,
             )
-        return ResponseStopResult(prefix)
+        return ResponseStopResult(prefix.last_played_audio_sequence)
 
     async def finish_response(self, response: Response) -> None:
         if not response.audio_segments:

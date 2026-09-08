@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://digital-souls.local/schemas/voice-quality-stale-report-v1.schema.json",
-  "title": "サーバーcancel後のstale出力・受信の匿名集計v1 / v1.1",
+  "title": "サーバーcancel後のstale出力・受信の匿名集計v1 / v1.1 / v1.2",
   "description": "本文、ID、絶対時刻を禁止する。件数の和、上下限、合否式はreport_stale_output.pyでも検証する。",
   "type": "object",
   "additionalProperties": false,
@@ -20,7 +20,8 @@
     "schema_version": {
       "enum": [
         "1.0",
-        "1.1"
+        "1.1",
+        "1.2"
       ]
     },
     "scope": {
@@ -175,6 +176,36 @@
     },
     "provider_result_boundary": {
       "const": "core_provider_iterator_yield"
+    },
+    "output_stop_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "verified",
+        "unverified",
+        "unavailable"
+      ],
+      "properties": {
+        "method": {
+          "const": "response_request_and_post_gain_replay"
+        },
+        "verified": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "unverified": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "unavailable": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
     }
   },
   "$defs": {
@@ -599,6 +630,27 @@
               }
             }
           }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "1.2"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "output_stop_evidence"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "output_stop_evidence"
+          ]
         }
       }
     }

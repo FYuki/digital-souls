@@ -407,6 +407,7 @@ def test_livekit_ack_completes_core_cancellation_while_control_queue_is_waiting(
                 "last_played_audio_sequence": 0, "output_confirmation": "never_connected"}).encode())
         await asyncio.wait_for(asyncio.gather(*scheduled), 0.5)
         assert session.response(A).state is ResponseState.CANCELLED
+        assert [event.event_id for event in trace if event.name == "output_stop_confirmed"] == [request["request_id"]]
         times = {event.name: event.timestamp for event in trace}
         assert times["output_stop_requested"] <= times["response_audio_source_stopped"]
         assert times["response_audio_source_stopped"] <= times["output_stop_confirmed"] <= times["cancel_state_lower"]

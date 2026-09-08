@@ -65,6 +65,8 @@ const findReachableTypescriptSources = async (entries: string[]): Promise<Map<st
 
     const relativeImports = [...source.matchAll(/from\s+['"](\.[^'"]+)['"]/g)]
       .map((match) => match[1])
+      // JSON schemaはTypeScriptの依存元コードとして再帰探索しない。
+      .filter((specifier) => !specifier.endsWith('.json'))
     pending.push(...relativeImports.map((specifier) => (
       resolve(dirname(sourcePath), specifier.endsWith('.ts') ? specifier : `${specifier}.ts`)
     )))

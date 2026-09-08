@@ -44,7 +44,9 @@ def test_ack_requires_current_participant_session_response_generation_and_nonce(
         await asyncio.sleep(0)
         assert not pending.done()
         await acknowledge(coordinator, request)
-        assert await asyncio.wait_for(pending, 0.5) == 0
+        result = await asyncio.wait_for(pending, 0.5)
+        assert result.last_played_audio_sequence == 0
+        assert result.request_id == request["request_id"] and result.generation == request["generation"]
         await coordinator.cleanup("test_complete")
     asyncio.run(exercise())
 
@@ -65,7 +67,7 @@ def test_cancelled_request_cannot_confirm_its_replacement():
         await acknowledge(coordinator, old_request)
         assert not second.done()
         await acknowledge(coordinator, request, output_confirmation="output_clock_passed", last_played_audio_sequence=2)
-        assert await second == 2
+        assert (await second).last_played_audio_sequence == 2
         await coordinator.cleanup("test_complete")
     asyncio.run(exercise())
 

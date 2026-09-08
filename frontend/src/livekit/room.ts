@@ -111,9 +111,11 @@ export type ConnectionLifecycleObservation = Readonly<{event: 'retry_scheduled' 
 
 export class LiveKitRoomClient {
   private readonly outputConnectedResponses = new Set<string>()
-  private readonly outputStopConfirmations = new Map<string, Promise<{
-    lastPlayedAudioSequence: number; outputConfirmation: 'output_clock_passed' | 'never_connected'
-  }>>()
+  private readonly outputStopConfirmations = new Map<string, {
+    requestId: string; generation: number; promise: Promise<{
+      lastPlayedAudioSequence: number; outputConfirmation: 'output_clock_passed' | 'never_connected'
+    }>
+  }>()
   private recovering = false
   private recoverySynchronized = false
   private stateSyncRequest: StateSyncRequest | null = null
@@ -394,7 +396,11 @@ export class LiveKitRoomClient {
 
   private async confirmOutputStop(room: Room, request: OutputStopRequest): Promise<void> {
     if (request.sessionId !== this.sessionId || request.generation !== this.generation || this.room !== room) return
-    let confirmation = this.outputStopConfirmations.get(request.responseId)
+    const existing = this.outputStopConfirmations.get(request.responseId)
+    if (existing !== undefined && (existing.requestId !== request.requestId || existing.generation !== request.generation)) {
+      throw new Error('output_stop_request_changed')
+    }
+    let confirmation = existing?.promise
     if (confirmation === undefined) {
       const lastPlayedAudioSequence = this.stopPlayback(request.responseId)
       const graphs = [...this.audioGraphs.values()].filter(graph => graph.responseId === request.responseId)
@@ -408,11 +414,13 @@ export class LiveKitRoomClient {
         }
         await Promise.all(graphs.map(graph => {
           if (graph.audit === undefined) throw new Error('output_stop_monitor_missing')
-          return graph.audit.stopAndConfirm()
+          return graph.audit.stopAndConfirm(request)
         }))
         return {lastPlayedAudioSequence, outputConfirmation: 'output_clock_passed' as const}
       })()
-      this.outputStopConfirmations.set(request.responseId, confirmation)
+      this.outputStopConfirmations.set(request.responseId, {
+        requestId: request.requestId, generation: request.generation, promise: confirmation,
+      })
     }
     const result = await confirmation
     if (this.room !== room || request.sessionId !== this.sessionId || request.generation !== this.generation) return

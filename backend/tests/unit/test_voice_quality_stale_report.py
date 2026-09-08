@@ -203,7 +203,7 @@ def test_provider_results_are_exact_server_receipts_not_provider_generation_or_p
     m,fb,traces=cohort(1)
     add_provider_results(traces,m['trials'][0],3,90)
     result=provenance(reporter.summarize(m,fb,traces,replay))
-    assert result['schema_version']=='1.1'
+    assert result['schema_version']=='1.2'
     assert result['provider_result_boundary']=='core_provider_iterator_yield'
     assert 'server_generated_audio_samples' not in result['channels']
     assert result['channels']['server_received_text_characters']['lower_total']==3
@@ -259,3 +259,64 @@ def test_history_presentation_has_its_own_counts_and_missing_denominator():
     assert result['channels']['live_text_presented_characters']['verified_zero'] == 3
     assert result['evaluation']['stale_presented_passed'] is False
     reporter.validate_report(provenance(result), SCHEMA)
+
+
+def with_stop_proof():
+    m, fb, traces = cohort(1)
+    trial = m['trials'][0]
+    sid, rid, graph, nonce = trial['session_id'], trial['old_response_id'], str(UUID(int=500)), str(UUID(int=600))
+    trial['cleanup_observation']['stale_audio'][0].update(outputGraphId=graph,
+        outputArchive={'entries': [{'kind': 'stop_requested', 'requestId': nonce}]})
+    for index, row in enumerate(traces):
+        row.update(outcome='success', stage='response', event_id=str(UUID(int=700+index)))
+    for index, (name, time) in enumerate([('output_stop_requested', 5001100), ('response_audio_source_stopped', 5001200), ('output_stop_confirmed', 5002000)]):
+        traces.append(dict(session_id=sid, response_id=rid, name=name, timestamp=time, clock_domain='server_monotonic',
+            unit='nanosecond', stage='transport', outcome='success', event_id=nonce if index == 2 else str(UUID(int=800+index))))
+    return m, fb, traces, nonce
+
+
+def test_server_output_stop_proof_uses_confirmation_nonce_and_lossless_clock_strings():
+    m, _, traces, nonce = with_stop_proof()
+    prepared, reason = reporter.prepare_trial(m['trials'][0], traces)
+    assert reason is None
+    assert prepared['outputStopProof']['requestId'] == nonce
+    assert prepared['outputStopProof']['serverOrderNs'] == ['5001100', '5001200', '5002000', '5002100', '5002200']
+
+
+@pytest.mark.parametrize('changed', ['missing', 'duplicate', 'after_cancel', 'wrong_clock', 'failure', 'wrong_response', 'wrong_graph'])
+def test_unverified_server_stop_cannot_supply_a_frame_floor(changed):
+    m, _, traces, _ = with_stop_proof()
+    confirmation = traces[-1]
+    if changed == 'missing': traces.pop()
+    if changed == 'duplicate': traces.append({**confirmation, 'event_id': str(UUID(int=999))})
+    if changed == 'after_cancel': confirmation['timestamp'] = 5002201
+    if changed == 'wrong_clock': confirmation['clock_domain'] = 'client_monotonic'
+    if changed == 'failure': confirmation['outcome'] = 'failure'
+    if changed == 'wrong_response': confirmation['response_id'] = str(UUID(int=999))
+    if changed == 'wrong_graph':
+        audio = m['trials'][0]['cleanup_observation']['stale_audio']
+        audio.insert(0, {**audio[0], 'outputGraphId': str(UUID(int=999))})
+    prepared, reason = reporter.prepare_trial(m['trials'][0], traces)
+    assert reason is None and prepared['outputStopProof'] is None
+
+
+def test_legacy_audio_has_no_stop_proof_and_evidence_counts_keep_the_denominator():
+    m, fb, traces = cohort()
+    result = provenance(reporter.summarize(m, fb, traces, replay))
+    assert result['output_stop_evidence'] == dict(method='response_request_and_post_gain_replay', verified=0, unverified=0, unavailable=3)
+    reporter.validate_report(result, SCHEMA)
+    result['output_stop_evidence']['verified'] = 1
+    with pytest.raises(ValueError, match='stop_evidence_mismatch'):
+        reporter.validate_report(result, SCHEMA)
+
+
+def test_old_v11_artifacts_still_validate_without_new_proof_claims():
+    artifacts = list((ROOT / 'docs/artifacts').glob('livekit-stale-*.json'))
+    checked = 0
+    for p in artifacts:
+        report = json.loads(p.read_text())
+        if report['schema_version'] == '1.1':
+            reporter.validate_report(report, SCHEMA)
+            assert 'output_stop_evidence' not in report
+            checked += 1
+    assert checked >= 4

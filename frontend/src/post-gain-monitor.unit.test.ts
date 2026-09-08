@@ -153,3 +153,30 @@ test('要求前の停止markerを後から有効な確認として採用しな�
   await expect(f.monitor.stopAndConfirm()).rejects.toThrow('output_stop_marker_invalid')
   const disposed = f.monitor.dispose(); await f.finish(); await disposed
 })
+
+
+test('同じ要求の停止・時計通過を一次記録へ残し、別の要求への確認使い回しを拒否する', async () => {
+  const f = fixture(); f.output(); f.now(1010)
+  const request = {type: 'output_stop_request' as const, sessionId: 'session', responseId: 'response',
+    generation: 3, requestId: crypto.randomUUID()}
+  const pending = f.monitor.stopAndConfirm(request)
+  expect(f.monitor.stopAndConfirm(request)).toBe(pending)
+  for (const changed of [{requestId: crypto.randomUUID()}, {generation: 4}, {responseId: 'other'}, {sessionId: 'other'}]) {
+    await expect(f.monitor.stopAndConfirm({...request, ...changed})).rejects.toThrow('output_stop_request_mismatch')
+  }
+  stopOutput(f); f.send({kind: 'stopped', endFrame: 50176})
+  f.now(1051); f.clock({contextTime: 1.05, performanceTime: 1050})
+  await vi.advanceTimersByTimeAsync(5); await pending
+  f.now(1052); f.monitor.cancel(1052); await closeStopped(f)
+  const row = f.rows.at(-1)!
+  expect(row.outputGraphId).toMatch(/^[a-f0-9-]{36}$/)
+  expect(row.outputArchive.entries.filter(e => e.kind.startsWith('stop_'))).toEqual([
+    {kind: 'stop_requested', atMs: 1010, requestId: request.requestId, sessionId: 'session', responseId: 'response',
+      generation: 3, graphId: row.outputGraphId},
+    {kind: 'stop_marker', atMs: 1010, endFrame: 50176},
+    {kind: 'stop_confirmed', atMs: 1051, requestId: request.requestId, endFrame: 50176, outputClockPassedFrame: 50176},
+  ])
+  expect(row).toMatchObject({graphClosed: true, outputStopConfirmation: {observedAtMs: 1051},
+    outputArchive: {clockInvalid: false, overflow: false, lockedAtMs: 1052, closedAtMs: 1061}})
+  expect(f.node.port.postMessage.mock.calls.filter(([m]) => m.kind === 'stop')).toHaveLength(1)
+})

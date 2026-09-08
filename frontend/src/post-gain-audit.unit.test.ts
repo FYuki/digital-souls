@@ -174,3 +174,11 @@ test('停止指示は最終出力を無音化し、時計照合済みの停止�
   expect(p.messages.at(-1)).toEqual({kind: 'finished', endFrame: 768})
   expect(p.messages.some(m => m.kind === 'missing')).toBe(false)
 })
+
+
+test('同じ取消時刻でも証明済みframe下限の後付け変更を拒否する', () => {
+  const a = fixture([full(48768)])
+  a.markCancelled({lowerMs: 1010, upperMs: 1010}, 1010, 49024)
+  after(a); drain(a)
+  expect(a.snapshot()).toMatchObject({complete: false, missingReason: 'audit_cancel_clock_invalid'})
+})

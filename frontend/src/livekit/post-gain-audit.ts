@@ -93,7 +93,7 @@ export type GainAuditSnapshot = Readonly<{
   complete: boolean; drained: boolean; missingReason: GainAuditMissingReason | null
   cancelBoundsMs: Bounds | null; outputClockPassedFrame: number | null
   cancelOutputFrameBounds: Readonly<{lowerFrame: number; upperFrame: number}> | null
-  clockCorrelationMethod: 'bracketing_output_timestamps'
+  clockCorrelationMethod: 'bracketing_output_timestamps' | 'bracketing_output_timestamps_with_confirmed_stop'
   timestampRoundingMarginMs: number
   firstOutputAtMs: number | null; lastOutputEndAtMs: number | null
   clockFailure: Readonly<{stage: 'invalid_timestamp' | 'timestamp_regression' | 'negative_output_time' | 'mapped_interval_regression'; values: Readonly<Record<string, number>>}> | null
@@ -110,6 +110,7 @@ export class PostGainOutputAudit {
   private lastOutputPoint: {frame: number; atMs: number} | null = null
   private cancelPending: GainAuditInterval[] = []
   private cancelLowerFrame: number | null = null
+  private confirmedOutputFrameFloor: number | null = null
   private cancelUpperFrame: number | null = null
   // このChromium診断のperformance時計丸めを上下限へ含める。外挿の誤差許容値ではない。
   private readonly roundingMarginMs = 0.2
@@ -127,21 +128,28 @@ export class PostGainOutputAudit {
   private clockFailure: GainAuditSnapshot['clockFailure'] = null
   private lastClock: {contextTime: number; performanceTime: number; observedAtMs: number} | null = null
 
-  markCancelled(bounds: Bounds, observedAtMs: number): void {
-    if (this.cancel !== null && bounds.lowerMs === this.cancel.lowerMs && bounds.upperMs === this.cancel.upperMs) return
+  markCancelled(bounds: Bounds, observedAtMs: number, confirmedOutputFrameFloor?: number): void {
+    const floor = confirmedOutputFrameFloor ?? null
+    if (this.cancel !== null && bounds.lowerMs === this.cancel.lowerMs && bounds.upperMs === this.cancel.upperMs
+      && floor === this.confirmedOutputFrameFloor) return
     if (!time(bounds.lowerMs) || !time(bounds.upperMs) || bounds.lowerMs > bounds.upperMs
       || !time(observedAtMs) || bounds.upperMs > observedAtMs
+      || (floor !== null && !frame(floor))
       // 過去に集計済みの出力より古いcancelを後付けしてゼロへ補完しない。
       || (this.lastClock !== null && bounds.lowerMs < this.lastClock.observedAtMs)
-      || (this.cancel !== null && (bounds.lowerMs !== this.cancel.lowerMs || bounds.upperMs !== this.cancel.upperMs))) {
+      || (this.cancel !== null && (bounds.lowerMs !== this.cancel.lowerMs || bounds.upperMs !== this.cancel.upperMs
+        || floor !== this.confirmedOutputFrameFloor))) {
       this.fail('audit_cancel_clock_invalid'); return;
     }
     this.cancel ??= {...bounds}
+    this.confirmedOutputFrameFloor = floor
     const before = this.lastOutputPoint
     if (!before || before.atMs + this.roundingMarginMs > bounds.lowerMs) {
       this.fail('audit_cancel_anchor_missing'); return
     }
-    this.cancelLowerFrame = Math.max(0, Math.floor(before.frame) - 1)
+    // floorは独立replayで要求・marker・時計通過・server確認順序を検証した場合だけ渡す。
+    // 取消以前に出力済みと証明したframeを、時計probeの粗い下限へ戻さない。
+    this.cancelLowerFrame = Math.max(0, Math.floor(before.frame) - 1, floor ?? 0)
     // 採用済みtimestampは観測時刻以前、cancelは直前poll以後を要求する。
     // 既に確認した区間がlowerを越えていたら、後付けの境界として拒否する。
     if (this.passed !== null && this.passed > this.cancelLowerFrame) this.fail('audit_cancel_clock_invalid')
@@ -260,7 +268,8 @@ export class PostGainOutputAudit {
       && this.finished !== null && this.finished > this.cancelUpperFrame,
     cancelOutputFrameBounds: this.cancelLowerFrame === null || this.cancelUpperFrame === null ? null
       : {lowerFrame: this.cancelLowerFrame, upperFrame: this.cancelUpperFrame},
-    clockCorrelationMethod: 'bracketing_output_timestamps', timestampRoundingMarginMs: this.roundingMarginMs,
+    clockCorrelationMethod: this.confirmedOutputFrameFloor === null ? 'bracketing_output_timestamps'
+      : 'bracketing_output_timestamps_with_confirmed_stop', timestampRoundingMarginMs: this.roundingMarginMs,
     missingReason: this.missing, cancelBoundsMs: this.cancel === null ? null : {...this.cancel},
     outputClockPassedFrame: this.passed, nonzeroSamplesAfterCancelLower: this.lower,
     firstOutputAtMs: this.firstOutputAt, lastOutputEndAtMs: this.lastOutputEndAt,
