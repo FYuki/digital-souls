@@ -100,6 +100,7 @@ from app.routers.livekit import router as livekit_router
 from app.routers.screen_perception import router as screen_perception_router
 from app.routers.ws import router as ws_router
 from app.routers.tool_use import router as tool_use_router
+from app.routers.addon_admin import router as addon_admin_router
 from app.screen_perception.http_security import (
     SCREEN_ALLOWED_ORIGIN_ENV,
     resolve_screen_http_security,
@@ -706,13 +707,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 conversation_history_repository,
                 history_sanitizer,
             )
-            if InferenceTarget.TOOL_ROUTING in inference_runtime.settings.targets:
-                tool_runtime = ToolRuntime(
-                    tool_settings, inference_runtime.router, privacy_scanner
-                )
-                await tool_runtime.start()
+            tool_runtime = ToolRuntime(
+                tool_settings,
+                inference_runtime.router,
+                privacy_scanner,
+                settings_path=runtime_paths.data_root / "addon-settings.json",
+            )
+            app.state.addon_manager = tool_runtime.management
+            await tool_runtime.start()
             app.state.tool_service = (
-                tool_runtime.service if tool_runtime is not None else None
+                tool_runtime.service
+                if InferenceTarget.TOOL_ROUTING in inference_runtime.settings.targets
+                else None
             )
             app_chat_service = _chat_runtime.create_chat_service(
                 _chat_runtime.resolve_chat_runtime_config(
@@ -971,6 +977,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(tool_use_router)
+app.include_router(addon_admin_router)
 
 app.include_router(chat_router)
 app.include_router(character_catalog_router)

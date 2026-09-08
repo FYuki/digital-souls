@@ -31,6 +31,7 @@
     "test:integration:tool-use": "backend/.venv/bin/python -m pytest -s backend/tests/integration/test_tool_use_real_service_integration.py",
     "test:acceptance:tool-use": "backend/.venv/bin/python scripts/acceptance_tool_use.py",
     "test:acceptance:tool-use-contract": "backend/.venv/bin/python scripts/acceptance_tool_use.py --contract-mcp",
-    "eval:screen-reference:conformance": "PYTHONPATH=backend python3 backend/evals/screen_reference/gate.py"
+    "eval:screen-reference:conformance": "PYTHONPATH=backend python3 backend/evals/screen_reference/gate.py",
+    "test:acceptance:addon-admin": "backend/.venv/bin/python scripts/acceptance_addon_admin.py"
   }
 }

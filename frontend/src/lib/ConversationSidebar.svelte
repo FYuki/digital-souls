@@ -23,6 +23,8 @@
   export let onRemoved: (characterId: string, conversationId: string) => void
   export let onRenamed: (characterId: string, conversation: Conversation) => void
   export let onOpenMemory: () => void
+  export let onOpenAddons: (trigger: HTMLButtonElement) => void = () => undefined
+  export let addonBadge: 'error' | 'warning' | null = null
   export let open = true
 
   type DialogCandidate = {
@@ -318,6 +320,13 @@
   <nav class="sidebar-bottom" aria-label="サイドバーメニュー">
     <button class:active={state.showingArchived} class="side-action" type="button" disabled={sidebarDisabled} on:click={() => state.showingArchived ? controller.showActive() : void controller.showArchived()}><span aria-hidden="true">▣</span>{state.showingArchived ? '会話履歴に戻る' : 'アーカイブ済み'}</button>
     <button class="side-action" type="button" on:click={() => { showingSettings = !showingSettings }}><span aria-hidden="true">⚙</span>設定</button>
+    <button class="side-action" type="button" data-addon-trigger on:click={(event) => onOpenAddons(event.currentTarget)}>
+      <span aria-hidden="true">＋</span>Addon / 連携
+      {#if addonBadge}
+        <span class="addon-badge" class:warning={addonBadge === 'warning'} role="status"
+          aria-label={addonBadge === 'error' ? '連携に接続エラーがあります' : '連携の一部機能に問題があります'}>{addonBadge === 'error' ? '!' : '△'}</span>
+      {/if}
+    </button>
     <button class="side-action" type="button" on:click={onOpenMemory}><span aria-hidden="true">◇</span>記憶管理</button>
   </nav>
 </aside>
@@ -330,6 +339,8 @@
 {/if}
 
 <style>
+  .addon-badge { margin-left: auto; color: #ffb5b5; font-weight: bold; }
+  .addon-badge.warning { color: #f9d484; }
   .sidebar { position: relative; z-index: 50; display: flex; width: 292px; min-height: 0; flex: 0 0 292px; flex-direction: column; border-right: 1px solid rgba(255, 255, 255, 0.09); color: #f8f3ff; background: rgba(17, 14, 24, 0.98); box-shadow: 14px 0 40px rgba(0, 0, 0, 0.18); }
   .sidebar.closed { display: none; }
   .brand { display: grid; grid-template-columns: 36px minmax(0, 1fr) 44px; align-items: center; gap: 10px; padding: 17px 8px 13px 18px; }

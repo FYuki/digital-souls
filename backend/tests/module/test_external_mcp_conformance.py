@@ -284,9 +284,15 @@ def test_bearer_is_resolved_per_request_and_invalid_rotation_is_contained(
             assert missing["error_category"] == "auth", missing
             monkeypatch.setenv("MCP_TEST_TOKEN", "private-invalid-token")
             result = await gate.invoke(c.id, "native", {"value": 1}, loop)
-            assert result["error_category"] == "auth", result
+            assert result["error_category"] == "unavailable", result
             assert result["retry_count"] == 0
+            assert r.entry(c.id).availability == "unavailable"
+            # auth失敗後は新規実行を止め、管理側の再確認で失効を検証する。
+            with pytest.raises(MCPFailure) as invalid:
+                await gate.refresh(c.id)
+            assert invalid.value.category == "auth"
             monkeypatch.setenv("MCP_TEST_TOKEN", "synthetic-test-token")
+            await gate.refresh(c.id)
             result = await gate.invoke(c.id, "native", {"value": 2}, loop)
             assert result["outcome"] == "succeeded", result
 
