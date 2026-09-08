@@ -1,6 +1,6 @@
 <script lang="ts">
   import ToolUseStatus from './lib/ToolUseStatus.svelte'
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
 
   import AudioRecorder from './lib/AudioRecorder.svelte'
   import type { SpeechActivity } from './lib/AudioRecorder.svelte'
@@ -9,6 +9,8 @@
   import ConversationSidebar from './lib/ConversationSidebar.svelte'
   import InputBar from './lib/InputBar.svelte'
   import MemoryManagement from './lib/MemoryManagement.svelte'
+  import AddonManagement from './lib/AddonManagement.svelte'
+  import { createAddonController, aggregateBadge } from './lib/addon-admin/controller'
   import ScreenCaptureControls from './lib/ScreenCaptureControls.svelte'
   import type { ScreenUploadResult } from './lib/screen-perception/client'
   import { listCharacters, rescanCharacters } from './lib/characters/client'
@@ -80,6 +82,15 @@
   let screenReferenceAvailable = false
   let screenReferenceDecisionActive = false
   let applicationError: string | null = null
+  const addonController = createAddonController()
+  let showingAddonManagement = false
+  let addonReturnFocus: HTMLButtonElement | null = null
+  async function closeAddonManagement() {
+    showingAddonManagement = false
+    sidebarOpen = true
+    await tick()
+    addonReturnFocus?.focus()
+  }
   let showingMemoryManagement = false
   let activeUtteranceId: string | null = null
   let endingVoiceSession = false
@@ -277,6 +288,9 @@
   }
 
   onMount(() => {
+    addonController.start()
+    const refreshAddons = () => { void addonController.refresh() }
+    window.addEventListener('focus', refreshAddons)
     const compactQuery = window.matchMedia?.('(max-width: 900px)')
     const viewport = window.visualViewport
     const updateLayout = () => {
@@ -298,6 +312,8 @@
     window.addEventListener('resize', updateViewport)
     void sidebarController.initialize()
     return () => {
+      addonController.destroy()
+      window.removeEventListener('focus', refreshAddons)
       compactQuery?.removeEventListener('change', updateLayout)
       viewport?.removeEventListener('resize', updateViewport)
       viewport?.removeEventListener('scroll', updateViewport)
@@ -349,6 +365,7 @@
   const handleSelectConversation = async (character: string, conversationId: string) => {
     if (interactionsDisabled) return
     showingMemoryManagement = false
+    showingAddonManagement = false
     if (character !== $conversationController.character) {
       await conversationController.loadCharacter(character)
     }
@@ -478,7 +495,9 @@
     onCreated={(character, conversation) => { void handleCreatedConversation(character, conversation) }}
     onRemoved={handleRemovedConversation}
     onRenamed={() => undefined}
-    onOpenMemory={() => { showingMemoryManagement = true; if (compactLayout) sidebarOpen = false }}
+    addonBadge={aggregateBadge($addonController.items)}
+    onOpenAddons={(trigger) => { addonReturnFocus = trigger; showingMemoryManagement = false; showingAddonManagement = true; if (compactLayout) sidebarOpen = false }}
+    onOpenMemory={() => { showingAddonManagement = false; showingMemoryManagement = true; if (compactLayout) sidebarOpen = false }}
   >
     <ScreenCaptureControls
       slot="screen-controls"
@@ -493,7 +512,11 @@
   {#if !sidebarOpen}
     <button class="floating-menu" type="button" aria-label="サイドバーを開く" on:click={() => { sidebarOpen = true }}>☰</button>
   {/if}
-  {#if showingMemoryManagement}
+  {#if showingAddonManagement}
+    <section class="content-panel memory-panel">
+      <AddonManagement controller={addonController} onClose={() => { void closeAddonManagement() }} />
+    </section>
+  {:else if showingMemoryManagement}
     <section class="content-panel memory-panel">
       <MemoryManagement character={$conversationController.character} onClose={() => { showingMemoryManagement = false }} />
     </section>

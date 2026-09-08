@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "mcp": {
+    "package": "@modelcontextprotocol/server-everything",
+    "version": "2026.8.31"
+  },
+  "checks": [
+    "real-core-vite-browser",
+    "tool-routing-unconfigured",
+    "registered-list",
+    "toggle",
+    "restart-restores-off",
+    "on-rechecks-health",
+    "idle-disconnect-badge",
+    "offline-toggle"
+  ],
+  "testedAt": "2026-09-08T03:16:02Z",
+  "teardown": "passed"
+}
