@@ -116,7 +116,7 @@ test(vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割�
   const runFile = promisify(execFile)
   const trials: Record<string, unknown>[] = []
 
-  const persistManifest = async () => {
+  const persistManifest = async (diagnostics?: Record<string, number>) => {
     await mkdir(dirname(manifestPath), { recursive: true })
     await writeFile(manifestPath, JSON.stringify({
       measurement_scope: pilot === undefined ? "controlled" : "pilot",
@@ -130,6 +130,7 @@ test(vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割�
         speech_end_sample: fixture.speech_end_sample,
       },
       initial_state_hash: initialStateHash, trials,
+      ...(diagnostics === undefined ? {} : {diagnostics}),
     }, null, 2))
   }
 
@@ -237,23 +238,8 @@ test(vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割�
 
   const resourceUsage = process.resourceUsage()
   const elapsedMicroseconds = (performance.now() - runStartedAt) * 1000
-  await mkdir(dirname(manifestPath), { recursive: true })
-  await writeFile(manifestPath, JSON.stringify({
-    measurement_scope: pilot === undefined ? 'controlled' : 'pilot',
-    expected_warmup: WARMUP_RUNS,
-    expected_measured: MEASURED_RUNS,
-    fixture: {
-      fixture_version: fixture.fixture_version,
-      audio_sha256: fixture.audio_sha256,
-      sample_rate_hz: fixture.sample_rate_hz,
-      speech_start_sample: fixture.speech_start_sample,
-      speech_end_sample: fixture.speech_end_sample,
-    },
-    initial_state_hash: initialStateHash,
-    trials,
-    diagnostics: {
-      cpu_percent: resourceUsage.userCPUTime * 100 / elapsedMicroseconds,
-      maximum_resident_set_bytes: resourceUsage.maxRSS * 1024,
-    },
-  }, null, 2))
+  await persistManifest({
+    cpu_percent: resourceUsage.userCPUTime * 100 / elapsedMicroseconds,
+    maximum_resident_set_bytes: resourceUsage.maxRSS * 1024,
+  })
 })
