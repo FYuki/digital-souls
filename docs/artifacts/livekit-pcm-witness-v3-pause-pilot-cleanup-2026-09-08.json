@@ -1,0 +1,14 @@
+{
+  "scope": "actual_whisper_pcm_witness_pilot_only",
+  "measurement_revision": "97714e07fd5cbfb6c65703109c54d23159fa71a4",
+  "verified_trials": 3,
+  "full_issue_acceptance_verified": false,
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "observer_port_closed": true,
+  "teardown_completed": true,
+  "report_sha256": "0d41b4c812746eb8698ddcb6d2d38e6637029c4dff320b196787d978581e80f3",
+  "environment_run_sha256": "e02fc3946b9c83eeb406d0d7cd1c95d039edb4a3b28e9825766b6d420e7c7df4"
+}
