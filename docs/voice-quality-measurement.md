@@ -186,3 +186,5 @@ SDK例外の修正後、通常音声E2E全5件は通ったが、終了・切断�
 `41bb2a2`で通常音声E2E全5件を再実行し、3往復の完全再生、実音声barge-in、観測対象のCore/pipeline例外0件、所有環境とログreaderの終了を確認した。[回帰結果](artifacts/livekit-voice-regression-suite-2026-09-08-03.json)は通常音声設定の実接続検証であり、正式100件の性能測定や実声dogfood受け入れとは分けて扱う。
 
 再接続の回帰初回はcontrolと実音声が2343.09ms以内に回復し、重複出力0件だった。一方、テストは切断前に中断された初回応答も含めて2応答の完了を待ち、復旧後の新しい応答が完全再生されていても失敗した。[初回結果](artifacts/livekit-reconnect-regression-2026-09-08-01.json)を保存し、同一session・異なるresponse・新しいfixture開始以降の発話／再生に限定して、その応答の完了と完全再生を直接待つように修正した。復旧時間の10秒窓、3秒の目標、重複出力の条件は変更していない。
+
+修正後の実障害回帰（`voice-regression-reconnect-20260908-02`、revision `3c0b21f`）では、controlと音声が2296.37ms以内に復旧し、重複0・欠測0、同一sessionでの次応答の完全再生を確認した。[独立再集計](artifacts/livekit-reconnect-regression-2026-09-08-02.json)はnative SDK・時計・packet出力・次応答を再検証している。単一sessionなので正式100試行の合否はfalseのままにした。[終了照合](artifacts/livekit-reconnect-regression-2026-09-08-02-verification.json)で所有app・専用SFU・bridge・時計runnerの終了を確認した。通常音声E2E5件と合わせた回帰検証の成功であり、#150全体の受け入れとは区別する。
