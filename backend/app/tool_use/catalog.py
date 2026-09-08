@@ -124,12 +124,13 @@ def select_candidates(
     *,
     maximum: int = 8,
     schema_budget: int = 4_096,
+    preferred_request: str = "",
 ) -> tuple[Candidate, ...]:
-    terms = _terms(request)
+    terms, preferred_terms = _terms(request), _terms(preferred_request)
 
-    def relevance(candidate: Candidate) -> int:
+    def relevance(candidate: Candidate, text: str, terms: set[str]) -> int:
         # 利用者が挙げた資料名を一般的な「read」「file」より優先する。
-        exact = bool(candidate.name and candidate.name.lower() in request.lower())
+        exact = bool(candidate.name and candidate.name.lower() in text.lower())
         return (
             (100 if exact else 0)
             + 3 * len(terms & _terms(candidate.name))
@@ -138,7 +139,12 @@ def select_candidates(
 
     ranked = sorted(
         candidates,
-        key=lambda c: (-relevance(c), c.id),
+        # 最新回答に一致する候補を先に通し、訂正前の条件で枠を使い切らない。
+        # 「はい」など候補との一致がない回答では、元の文脈の順位を維持する。
+        key=lambda c: (
+            -relevance(c, preferred_request, preferred_terms),
+            -relevance(c, request, terms), c.id,
+        ),
     )
     selected: list[Candidate] = []
     size = 2

@@ -119,6 +119,7 @@ def test_reconciliation_conflict_does_not_break_chat_or_use_derived_state(
     for error in (
         LifeError(Result.CONFLICT, "state_revision_conflict"),
         sqlite3.OperationalError("database is locked"),
+        ValueError("invalid reflection document"),
     ):
 
         def fail(*args, **kwargs):
@@ -175,3 +176,25 @@ def test_untrusted_life_state_is_not_tool_routing_intent(tmp_path):
             assert not source.calls
             assert injected not in str(decisions.contexts)
     asyncio.run(scenario())
+
+
+def test_invalid_reflection_document_does_not_fail_optional_context(tmp_path):
+    import json
+    from uuid import uuid4
+
+    store = Store(tmp_path / "life.db")
+    with store.transaction() as db:
+        db.execute("INSERT INTO life_states VALUES (?,?,?,?)", (
+            str(uuid4()), "miori", 1,
+            json.dumps({"source": "reflection", "status": "ACTIVE"}),
+        ))
+
+    class Source:
+        def current_revisions(self, character):
+            return {}
+
+    prompt = BuiltPrompt(
+        (PromptMessage(PromptRole.USER, "こんにちは"),),
+        PromptUsage(*([0] * 10)), (),
+    )
+    assert Context(store, lambda _: 100, 1000, reflections=Source())("miori", prompt) is prompt

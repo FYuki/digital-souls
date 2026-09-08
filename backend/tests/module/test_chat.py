@@ -785,3 +785,33 @@ class TestChatFlow:
         rag_service.query_memories.assert_not_called()
 
         assert not tmp_path.joinpath("data", "failed-memories.jsonl").exists()
+
+
+def test_optional_life_context_failure_preserves_chat_and_hides_error_body(
+    monkeypatch, caplog, conversation_history_database_path
+):
+    from dataclasses import replace
+
+    monkeypatch.setenv("RAG_ENABLED", "false")
+    secret = "PRIVATE_LIFE_CONTEXT_FAILURE"
+
+    def fail(character, prompt):
+        raise ValueError(secret)
+
+    with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+        with patch(_GENERATE_RESPONSE, return_value=_LLM_REPLY):
+            with TestClient(app) as client:
+                service = app.state.chat_service
+                monkeypatch.setattr(
+                    service, "_dependencies",
+                    replace(service._dependencies, life_context=fail),
+                )
+                response = client.post("/chat", json=_VALID_BODY)
+    assert response.status_code == 200
+    assert _LLM_REPLY in response.text and secret not in response.text
+    assert "Character Life context skipped: exception_type=ValueError" in caplog.text
+    assert secret not in caplog.text
+    with sqlite3.connect(conversation_history_database_path) as connection:
+        assert connection.execute("SELECT status FROM conversation_turns").fetchall() == [
+            ("completed",)
+        ]

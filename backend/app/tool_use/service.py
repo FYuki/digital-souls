@@ -342,6 +342,7 @@ class ToolService:
                     *[q["answer"] for q in run.clarification if q["answer"] is not None],
                     request,
                 ]),
+                preferred_request=request if run.user_followup else "",
             )
             if run.binding_candidate is not None:
                 candidates = (run.binding_candidate,)

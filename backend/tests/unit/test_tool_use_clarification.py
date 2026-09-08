@@ -3,6 +3,8 @@
 import asyncio
 import json
 
+import pytest
+
 from app.tool_use.routing import ToolDecision
 from tests.unit.test_tool_use import Decisions, call, runtime
 
@@ -142,5 +144,70 @@ def test_switching_request_discards_previous_clarification():
             await service.run("miori", "a", "投稿を探して")
             result = await service.run("miori", "a", "検索はやめて。こんにちは")
             assert not result.waiting and not source.calls and not gate._loops
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("answer", ["origami", "はい"])
+def test_latest_condition_reaches_router_without_losing_neutral_followup(answer):
+    from types import SimpleNamespace
+    from app.tool_use.routing import InferenceDecisionRouter
+    from app.tool_use.catalog import catalog, select_candidates
+    from tests.external_mcp_test_support import FakeSource, discovery
+
+    class Source(FakeSource):
+        def __init__(self, connection):
+            super().__init__(connection, discovery(
+                *[f"ancient_{i}" for i in range(9)], "origami"
+            ))
+
+    class Model:
+        def estimate_input_tokens(self, **kwargs):
+            pass
+
+        def generate_structured(self, **kwargs):
+            context = json.loads(kwargs["messages"][-1].content)
+            selected = context["candidates"]
+            assert len(selected) <= 8
+            if answer == "origami":
+                assert selected[0]["name"] == "origami"
+                chosen = selected[0]
+            else:
+                assert "origami" not in [c["name"] for c in selected]
+                chosen = next(c for c in selected if c["name"].startswith("ancient_"))
+            assert context["clarification"][-1]["answer"] == answer
+            return SimpleNamespace(value={
+                "action": "call", "candidate_id": chosen["id"],
+                "arguments_json": '{"value":1}',
+            })
+
+    class Router:
+        calls = 0
+
+        async def decide(self, context, cancellation):
+            self.calls += 1
+            if self.calls <= 2:
+                assert "origami" not in [c["name"] for c in context["candidates"]]
+                return ToolDecision("clarify", instruction="条件を教えてください。")
+            if self.calls == 3:
+                return await InferenceDecisionRouter(Model()).decide(context, cancellation)
+            return ToolDecision("finish")
+
+    async def scenario():
+        async with runtime(Router(), source_type=Source) as (service, source, gate):
+            original = "ancient の資料を探して"
+            previous = " ".join(f"ancient_{i}" for i in range(9))
+            assert (await service.run("miori", "a", original)).waiting
+            assert (await service.run("miori", "a", previous)).waiting
+            if answer == "origami":
+                # 旧来の全回答の単純結合では、古い9候補が新しい条件を押し出す。
+                old_ranking = select_candidates(
+                    catalog(gate, next(iter(gate._loops)), service.sanitizer),
+                    " ".join((original, previous, answer)),
+                )
+                assert "origami" not in [c.name for c in old_ranking]
+            result = await service.run("miori", "a", answer)
+            assert not result.waiting and result.sources
+            assert len(source.calls) == 1
 
     asyncio.run(scenario())
