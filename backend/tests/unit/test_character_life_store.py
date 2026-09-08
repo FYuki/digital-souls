@@ -1,4 +1,4 @@
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -211,3 +211,122 @@ def test_scheduler_does_not_accumulate_same_active_goal_and_job(tmp_path):
     store.finish_formation_job("miori", "first", Result.DEFERRED)
     store.register_formation_job("miori", "second")
     assert len(store.formation_jobs("miori")) == 2
+
+
+def test_handoff_owner_is_validated_and_legacy_records_migrate(tmp_path):
+    import json
+    from app.character_life.models import ObservationHandoff, Run
+
+    store, _, _, run = seeded(tmp_path)
+    handoff = ObservationHandoff(
+        character_id="other", topic="公開の観測", source_revisions=("source",)
+    )
+    invalid = run.model_copy(update={"handoff": handoff})
+    with pytest.raises(ValueError, match="handoff owner mismatch"):
+        Run.model_validate(invalid.model_dump())
+    with pytest.raises(ValueError, match="handoff owner mismatch"):
+        store.save_run(invalid)
+    assert store.run(str(run.id)).handoff is None
+    with pytest.raises(LifeError, match="run_owner_mismatch"):
+        store.finish(run.model_copy(update={"character_id": "other"}), Result.NO_CHANGE, "invalid_owner")
+    legacy = run.model_dump(mode="json")
+    legacy["handoff"] = handoff.model_dump(mode="json", exclude={"character_id"})
+    with store.transaction() as db:
+        db.execute(
+            "UPDATE life_runs SET document=? WHERE id=?",
+            (json.dumps(legacy), str(run.id)),
+        )
+        db.execute("PRAGMA user_version=1")
+    migrated = Store(store.path).run(str(run.id))
+    assert migrated.handoff.character_id == "miori"
+    assert migrated.handoff.topic == handoff.topic
+    assert Store(store.path).run(str(run.id)) == migrated
+
+
+def test_reads_do_not_take_a_reserved_write_lock(tmp_path):
+    store, state, _, run = seeded(tmp_path)
+    # 別connectionの書込transactionが開いていても、確定済みsnapshotを読める。
+    with store.transaction():
+        assert store.state("miori", state.id) == state
+        assert store.open_runs() == [run]
+        assert store.eligible_states() == [state]
+
+
+def test_scheduler_queries_use_indexes_and_exclude_ineligible_records(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+
+    store, state, grant, run = seeded(tmp_path)
+    store.finish(run, Result.NO_CHANGE, "complete")
+    pending = store.create_run(state, grant, "next", False)
+    store.save_state(LifeState(character_id="other", kind=Kind.INTEREST, content="関心", source="user"))
+    queries = []
+    transaction = store.transaction
+
+    @contextmanager
+    def traced_transaction(*args, **kwargs):
+        with transaction(*args, **kwargs) as db:
+            db.set_trace_callback(queries.append)
+            yield db
+
+    monkeypatch.setattr(store, "transaction", traced_transaction)
+    assert store.open_runs() == [pending]
+    assert store.eligible_states() == [state]
+    with transaction(write=False) as db:
+        for table, index in [("life_runs", "life_runs_phase"), ("life_states", "life_states_eligible")]:
+            query = next(q for q in queries if q.startswith("SELECT document FROM " + table))
+            plan = db.execute("EXPLAIN QUERY PLAN " + query).fetchall()
+            assert any(index in row[3] for row in plan)
+
+
+@pytest.mark.parametrize("invalid", ["uuid", "duplicate_uuid", "blank_content"])
+def test_invalid_formation_output_is_rejected_without_consuming_ledger(
+    tmp_path, invalid
+):
+    import asyncio
+    from app.character_life.models import ReflectionView
+    from app.character_life.formation import LifeFormation
+
+    async def scenario():
+        store, _, _, _ = seeded(tmp_path)
+        reflection = ReflectionView(
+            id=UUID("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"),
+            character_id="miori",
+            revision="1",
+            content="色彩への内省",
+            active=True,
+        )
+
+        class Source:
+            async def active(self, character):
+                return (reflection,)
+
+            def current_revisions(self, character):
+                return {reflection.id: reflection.revision}
+
+        class Proposal:
+            async def form(self, reflections):
+                source_ids = [str(reflection.id)]
+                if invalid == "uuid":
+                    source_ids = ["not-a-uuid"]
+                if invalid == "duplicate_uuid":
+                    source_ids.append(str(reflection.id).upper())
+                return {
+                    "states": [
+                        {
+                            "kind": "INTEREST",
+                            "content": "   " if invalid == "blank_content" else "色彩",
+                            "source_ids": source_ids,
+                        }
+                    ]
+                }
+
+        class Privacy:
+            async def allowed(self, text):
+                return True
+
+        with pytest.raises(LifeError) as caught:
+            await LifeFormation(store, Source(), Proposal(), Privacy()).run("miori")
+        assert caught.value.result is Result.REJECTED
+        assert not any(s.source == "reflection" for s in store.states("miori"))
+
+    asyncio.run(scenario())

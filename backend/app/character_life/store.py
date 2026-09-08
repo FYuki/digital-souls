@@ -18,9 +18,10 @@ class Store:
         path.parent.mkdir(parents=True, exist_ok=True)
         with self.transaction() as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in {0, 1}:
+            if version not in {0, 1, 2}:
                 raise ValueError("unsupported Character Life database version")
             db.executescript("""
+                BEGIN IMMEDIATE;
                 CREATE TABLE IF NOT EXISTS life_states (
                     id TEXT PRIMARY KEY, character_id TEXT NOT NULL,
                     revision INTEGER NOT NULL, document TEXT NOT NULL);
@@ -86,15 +87,26 @@ class Store:
                 END;
                 INSERT OR IGNORE INTO life_state_history
                     SELECT id,revision,character_id,document FROM life_states;
-                PRAGMA user_version=1;
+                CREATE INDEX IF NOT EXISTS life_runs_phase
+                    ON life_runs(json_extract(document,'$.phase'));
+                CREATE INDEX IF NOT EXISTS life_states_eligible
+                    ON life_states(json_extract(document,'$.status'),
+                                   json_extract(document,'$.kind'),
+                                   json_extract(document,'$.target_id'));
+                UPDATE life_runs
+                    SET document=json_set(document,'$.handoff.character_id',character_id)
+                    WHERE json_type(document,'$.handoff')='object'
+                      AND json_type(document,'$.handoff.character_id') IS NULL
+                      AND (SELECT user_version FROM pragma_user_version) < 2;
+                PRAGMA user_version=2;
             """)
 
     @contextmanager
-    def transaction(self) -> Iterator[sqlite3.Connection]:
+    def transaction(self, *, write: bool = True) -> Iterator[sqlite3.Connection]:
         db = sqlite3.connect(self.path, timeout=5)
         try:
             db.execute("PRAGMA busy_timeout=5000")
-            db.execute("BEGIN IMMEDIATE")
+            db.execute("BEGIN IMMEDIATE" if write else "BEGIN DEFERRED")
             yield db
             db.commit()
         except BaseException:
@@ -110,7 +122,7 @@ class Store:
         active_only: bool = False,
         limit: int = 200,
     ) -> list[LifeState]:
-        with self.transaction() as db:
+        with self.transaction(write=False) as db:
             return [
                 LifeState.model_validate_json(row[0])
                 for row in db.execute(
@@ -122,7 +134,7 @@ class Store:
             ]
 
     def state(self, character: str, state_id: UUID) -> LifeState:
-        with self.transaction() as db:
+        with self.transaction(write=False) as db:
             row = db.execute(
                 "SELECT document FROM life_states WHERE character_id=? AND id=?",
                 (character, str(state_id)),
@@ -132,7 +144,7 @@ class Store:
         return LifeState.model_validate_json(row[0])
 
     def state_history(self, character: str, state_id: UUID) -> list[LifeState]:
-        with self.transaction() as db:
+        with self.transaction(write=False) as db:
             return [
                 LifeState.model_validate_json(row[0])
                 for row in db.execute(
@@ -142,7 +154,7 @@ class Store:
             ]
 
     def audit(self, character: str, *, after: int = 0) -> list[dict[str, object]]:
-        with self.transaction() as db:
+        with self.transaction(write=False) as db:
             db.row_factory = sqlite3.Row
             return [
                 dict(row)
@@ -217,7 +229,7 @@ class Store:
         return state
 
     def grants(self, character: str) -> list[Grant]:
-        with self.transaction() as db:
+        with self.transaction(write=False) as db:
             return [
                 Grant.model_validate_json(row[0])
                 for row in db.execute(
@@ -227,7 +239,7 @@ class Store:
             ]
 
     def grant(self, character: str, connection: str) -> Grant:
-        with self.transaction() as db:
+        with self.transaction(write=False) as db:
             row = db.execute(
                 "SELECT document FROM autonomy_grants WHERE character_id=? AND connection_id=?",
                 (character, connection),
@@ -307,7 +319,7 @@ class Store:
             return run
 
     def run(self, run_id: str) -> Run:
-        with self.transaction() as db:
+        with self.transaction(write=False) as db:
             row = db.execute(
                 "SELECT document FROM life_runs WHERE id=?", (run_id,)
             ).fetchone()
@@ -316,7 +328,7 @@ class Store:
         return Run.model_validate_json(row[0])
 
     def runs(self, character: str) -> list[Run]:
-        with self.transaction() as db:
+        with self.transaction(write=False) as db:
             return [
                 Run.model_validate_json(row[0])
                 for row in db.execute(
@@ -326,6 +338,8 @@ class Store:
             ]
 
     def save_run(self, run: Run, *, expected_attempt: int | None = None) -> None:
+        # model_copyは検証を省略するため、永続化境界でhandoffの所有者も含めて再検証する。
+        run = Run.model_validate(run.model_dump())
         with self.transaction() as db:
             row = db.execute(
                 "SELECT document FROM life_runs WHERE id=? AND character_id=?",
@@ -340,12 +354,14 @@ class Store:
             )
 
     def open_runs(self) -> list[Run]:
-        with self.transaction() as db:
-            runs = [
+        with self.transaction(write=False) as db:
+            return [
                 Run.model_validate_json(r[0])
-                for r in db.execute("SELECT document FROM life_runs")
+                for r in db.execute(
+                    "SELECT document FROM life_runs "
+                    "WHERE json_extract(document,'$.phase') IN ('queued','running')"
+                )
             ]
-        return [r for r in runs if r.phase in {"queued", "running"}]
 
     def finish(
         self,
@@ -364,6 +380,8 @@ class Store:
                     "SELECT document FROM life_runs WHERE id=?", (str(run.id),)
                 ).fetchone()[0]
             )
+            if current.character_id != run.character_id:
+                raise LifeError(Result.REJECTED, "run_owner_mismatch")
             if current.attempt != run.attempt or current.phase == "finished":
                 return current
             # 停止中に返ったLLM/外部結果は採用しない。
@@ -432,18 +450,16 @@ class Store:
             return final
 
     def eligible_states(self) -> list[LifeState]:
-        with self.transaction() as db:
-            states = [
+        with self.transaction(write=False) as db:
+            return [
                 LifeState.model_validate_json(r[0])
-                for r in db.execute("SELECT document FROM life_states")
+                for r in db.execute(
+                    "SELECT document FROM life_states WHERE "
+                    "json_extract(document,'$.status')='ACTIVE' AND "
+                    "json_extract(document,'$.kind')='GOAL_INTENTION' AND "
+                    "json_extract(document,'$.target_id') IS NOT NULL"
+                )
             ]
-        return [
-            s
-            for s in states
-            if s.kind is Kind.GOAL_INTENTION
-            and s.status is StateStatus.ACTIVE
-            and s.target_id
-        ]
 
     def invalidate_reflections(
         self, character: str, source_ids: frozenset[UUID]
@@ -476,7 +492,7 @@ class Store:
         return affected
 
     def formation_exists(self, character: str, fingerprint: str) -> bool:
-        with self.transaction() as db:
+        with self.transaction(write=False) as db:
             return (
                 db.execute(
                     "SELECT 1 FROM life_formations WHERE character_id=? AND fingerprint=?",
@@ -502,7 +518,7 @@ class Store:
             )
 
     def formation_job_result(self, character: str, workflow_id: str) -> Result | None:
-        with self.transaction() as db:
+        with self.transaction(write=False) as db:
             row = db.execute(
                 "SELECT result FROM life_formation_jobs WHERE id=? AND character_id=?",
                 (workflow_id, character),
@@ -521,7 +537,7 @@ class Store:
             )
 
     def formation_jobs(self, character: str | None) -> list[dict[str, object]]:
-        with self.transaction() as db:
+        with self.transaction(write=False) as db:
             db.row_factory = sqlite3.Row
             if character is None:
                 rows = db.execute(

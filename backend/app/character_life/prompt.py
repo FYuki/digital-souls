@@ -2,11 +2,13 @@
 
 from collections.abc import Callable
 from dataclasses import replace
+import sqlite3
 
 from app.external_mcp.models import encode
 from app.prompting import BuiltPrompt, PromptMessage, PromptRole
 
 from .store import Store
+from .models import LifeError
 from .ports import DeferredReflections, ReflectionSource
 
 
@@ -29,10 +31,18 @@ class Context:
             # 接続先の一時障害で正本照合できない場合、派生状態を利用しない。
             revisions = None
         if revisions is not None:
-            self.store.reconcile_reflections(character, revisions)
+            try:
+                self.store.reconcile_reflections(character, revisions)
+            except (LifeError, sqlite3.Error):
+                # 訂正の反映に競合した場合も、派生状態を使わず会話を継続する。
+                revisions = None
+        try:
+            current_states = self.store.states(character, active_only=True)
+        except (LifeError, ValueError, sqlite3.Error):
+            return prompt
         states = [
             s
-            for s in self.store.states(character, active_only=True)
+            for s in current_states
             if s.source != "reflection" or revisions is not None
         ][:8]
         while states:
