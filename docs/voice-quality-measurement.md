@@ -256,3 +256,14 @@ revision `0d0aeb279b80131f729db9cdf17cbef44770aa9e`の通常音声pilotで、準
 `run_pilot.py --observe-playback-supply --scheduled-fixture`で、通常の`integration-voice` Profileのままpacket受信・復号・main配送・再生までの時間上限とgap前後の数値を記録する。`--observe-stt-pcm`とは独立し、Whisper中継は起動しない。独立100件では`--controlled`を併用する。manifestに両observerの有効状態を保存する。先行するPCM観測runは既存どおり供給診断も含む。
 
 この診断はブラウザの追加観測処理を含む条件として扱い、未観測runやPCM中継runと混同しない。入力fixture、推論設定、再生buffer、目標値は変更しない。既知の音切れを起こしたrunも保持し、新しいrunだけで原因が解消したとは判定しない。
+
+
+### 通常経路の供給診断100件と速度再悪化（2026-09-08）
+
+revision `2d10020ca818fce228b8446d51c329bebccb92e5`で、Whisper中継なし・実験用thinking overrideなしの通常経路を準備5件・独立100件測定した。[匿名集計](artifacts/livekit-normal-supply-100-2026-09-08-01.json)と[設定・native観測・終了照合](artifacts/livekit-normal-supply-100-2026-09-08-01-verification.json)を保存した。全100件の会話・完全再生・session終了が成功し、全105件で供給診断とnative再生記録が一致した。RTPもnative traceからの独立集計と一致し、所有app削除・teardown完了を確認した。
+
+本測定のgap/underrunは0だった。一方、TTFA p50は1,768.650ms、p95は11,995.305msとなり、p95の絶対上限2,000msを9,995.305ms超えた。発話確定p95は293.649ms、client playback p95は45msだった。[baseline比較](artifacts/livekit-normal-supply-latency-2026-09-08-01.json)では比較可能8指標は相対許容範囲内だが、TTFA絶対上限とVAD境界2指標の欠測により全体判定はfalseである。
+
+[provider loadの数値照合](artifacts/livekit-normal-supply-load-diagnostic-2026-09-08-01.json)では、TTFAが2秒を超えた29件のうち28件で、Ollamaが返すgeneration load時間も1秒を超えた。load p95は10,300.998msだった。常駐観測には想定8,192に加えて12,289・13,312のcontext設定と、対象モデルが観測されないsampleが含まれる。ただし常駐sampleは準備・起動・終了も含み、応答件数とは別の分母である。他の要求元やcontext変化の因果関係は未特定で、load時間をqueue待ちの実測へ読み替えない。
+
+先行runのp95 1,845msという速度達成は保持するが、通常運用で安定して再現できたとは扱わない。今回のgap 0も先行runの41.333ms gapの原因修正を証明しない。まず共有推論の設定変化とload増大を切り分け、速度と再生継続性を同じ条件で満たす必要がある。全条件の証拠と未完了項目は[Issue #150受け入れ確認表](issue-150-acceptance-audit.md)にまとめる。

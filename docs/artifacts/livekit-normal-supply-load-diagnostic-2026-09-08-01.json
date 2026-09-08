@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "scope": "normal_supply_run_provider_load_observation",
+  "measurement_revision": "2d10020ca818fce228b8446d51c329bebccb92e5",
+  "measured_trials": 100,
+  "ttfa_above_2000ms_trials": 29,
+  "model_load_above_1000ms_trials": 28,
+  "both_above_threshold_trials": 28,
+  "ttfa_p95_ms": 11995.305000022054,
+  "model_load_p95_ms": 10300.9976184,
+  "residency_observer_scope": "whole_run_including_warmup_startup_and_teardown",
+  "residency_samples": 2132,
+  "residency_context_samples": [
+    {
+      "context_tokens": [],
+      "samples": 815
+    },
+    {
+      "context_tokens": [
+        8192
+      ],
+      "samples": 1274
+    },
+    {
+      "context_tokens": [
+        12289
+      ],
+      "samples": 10
+    },
+    {
+      "context_tokens": [
+        13312
+      ],
+      "samples": 33
+    }
+  ],
+  "limits": {
+    "other_request_source_identified": false,
+    "context_change_causal_effect_proven": false,
+    "queue_wait_measured": false,
+    "prior_gap_cause_resolved": false
+  },
+  "source_sha256": {
+    "trial-manifest.json": "47c30b6417b3208d6cf9edea588d2684b075687c1d32b088b13cf2bfae27039d",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "7bbba46a72aa0ccbda552097aa96d6816eb6fe444e6e85026f4fe891eeaf941d",
+    "inference-runtime.jsonl": "694a346ba6021df826be8e38188b79926bb9034101ff7f79da32c2c013849258"
+  }
+}
