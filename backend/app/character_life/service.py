@@ -237,6 +237,7 @@ class Service:
                     run = run.model_copy(
                         update={
                             "handoff": ObservationHandoff(
+                                character_id=run.character_id,
                                 topic=summary, source_revisions=tuple(sources)
                             )
                         }
@@ -379,6 +380,8 @@ class Service:
             cancellation.cancel()
 
     async def _finish_handoff(self, run: Run) -> str:
+        # model_copyを含む内部更新でも、別characterの作業記録を接続先へ渡さない。
+        run = Run.model_validate(run.model_dump())
         self.validate_current(run)
         handoff = run.handoff
         assert handoff is not None
@@ -403,6 +406,15 @@ class Service:
             except Exception:
                 personality_result = Result.FAILED
         self.validate_current(run)
+        if memory_result in {Result.FAILED, Result.RESULT_UNKNOWN} or personality_result in {
+            Result.FAILED, Result.RESULT_UNKNOWN
+        }:
+            # 確定済みhandoffを残し、同じidempotency keyで通常のresumeから再試行する。
+            return str(self.store.finish(
+                run, Result.DEFERRED, "dependency_handoff_failed",
+                sources=handoff.source_revisions,
+                dependencies={"episode": memory_result, "personality": personality_result},
+            ).result)
         return str(
             self.store.finish(
                 run,

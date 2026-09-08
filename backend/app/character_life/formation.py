@@ -59,14 +59,17 @@ class LifeFormation:
         validate_arguments(FORMATION_SCHEMA, proposal)
         states = []
         for candidate in proposal["states"]:
-            sources = tuple(UUID(value) for value in candidate["source_ids"])
+            try:
+                sources = tuple(UUID(value) for value in candidate["source_ids"])
+            except ValueError:
+                raise LifeError(Result.REJECTED, "reflection_evidence_invalid") from None
             if not set(sources).issubset(ids):
                 raise LifeError(Result.REJECTED, "reflection_evidence_invalid")
             if not await self.privacy.allowed(candidate["content"]):
                 raise LifeError(Result.REJECTED, "state_privacy_blocked")
             check_current()
-            states.append(
-                LifeState(
+            try:
+                state = LifeState(
                     character_id=character,
                     kind=Kind(candidate["kind"]),
                     content=candidate["content"],
@@ -74,7 +77,9 @@ class LifeFormation:
                     source_ids=sources,
                     reflection_revisions={i: revisions[i] for i in sources},
                 )
-            )
+            except ValueError:
+                raise LifeError(Result.REJECTED, "formation_state_invalid") from None
+            states.append(state)
         current = await self.source.active(character)
         check_current()
         if current is None or any(

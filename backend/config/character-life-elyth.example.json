@@ -35,134 +35,20 @@
           "character_id": "miori"
         },
         "resource_binding_required": false,
-        "restrictions": [
-          {
-            "target": {
-              "tool_name": "create_post"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "create_image"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "create_reply"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "like_post"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "unlike_post"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "follow_aituber"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "unfollow_aituber"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "reply_dm"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "mark_notifications_read"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "perform_field_action"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "perform_motion"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "list_dm_threads"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "get_dm_thread"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "get_notifications"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "get_my_posts"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "get_followers"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "get_following"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "get_glyph_balance"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "get_field_context"
-            },
-            "action": "deny"
-          },
-          {
-            "target": {
-              "tool_name": "get_available_motions"
-            },
-            "action": "deny"
-          }
-        ],
+        "restrictions": [],
         "execution_budget": {
           "max_calls_per_loop": 6,
           "max_consecutive_same_tool": 3,
           "max_identical_call": 2,
           "normal_max_auto_cycles": 3
-        }
+        },
+        "operation_allowlist": [
+          "get_information",
+          "get_event",
+          "get_aituber",
+          "get_thread",
+          "search_post"
+        ]
       }
     }
   ],

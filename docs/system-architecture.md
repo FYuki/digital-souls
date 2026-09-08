@@ -353,5 +353,5 @@ Resource読取とTool呼出しはいずれもGateへ渡し、Binding制約を適
 停止時は進行中の結果を破棄し保留を確定してからDBOS・MCPを終了する。
 `_chat_runtime`は応答開始時の有効なLife Stateを非信頼データとして固定し、入力budgetに収まる分だけ参照する。
 
-#100/#101/#102/#185の正本実装は含まない。未接続の結果はDEFERREDとして表示する。
+関連Epic #100/#101/#102/#185の正本実装は含まない。未接続の結果はDEFERREDとして表示する。
 設定・API・保存・復旧・実接続検証は[Character Life運用手順](character-life-operations.md)を参照する。

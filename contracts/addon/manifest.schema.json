@@ -222,6 +222,11 @@
         "enabled": {"type": "boolean"},
         "sharing": {"$ref": "#/$defs/Sharing"},
         "resource_binding_required": {"type": "boolean"},
+        "operation_allowlist": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 2048}
+        },
         "execution_budget": {"$ref": "#/$defs/ExecutionBudget"},
         "restrictions": {"type": "array", "items": {"$ref": "#/$defs/Restriction"}}
       }

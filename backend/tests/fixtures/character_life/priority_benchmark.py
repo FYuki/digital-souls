@@ -30,25 +30,28 @@ async def measure_priority(runtime, state, router, prompt, count_calls):
     async def monitor():
         while not stop_monitor.is_set():
             if gpu:
-                sample = await asyncio.to_thread(
-                    subprocess.run,
-                    [
-                        gpu,
-                        "--query-gpu=memory.used,utilization.gpu",
-                        "--format=csv,noheader,nounits",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=3,
-                )
-                if sample.returncode == 0:
-                    try:
-                        samples.extend(
-                            tuple(int(v.strip()) for v in row.split(","))
-                            for row in sample.stdout.splitlines()
-                        )
-                    except ValueError:
-                        pass
+                try:
+                    sample = await asyncio.to_thread(
+                        subprocess.run,
+                        [
+                            gpu,
+                            "--query-gpu=memory.used,utilization.gpu",
+                            "--format=csv,noheader,nounits",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=3,
+                    )
+                    if sample.returncode == 0:
+                        try:
+                            samples.extend(
+                                tuple(int(v.strip()) for v in row.split(","))
+                                for row in sample.stdout.splitlines()
+                            )
+                        except ValueError:
+                            pass
+                except subprocess.TimeoutExpired:
+                    pass
             try:
                 await asyncio.wait_for(stop_monitor.wait(), 0.5)
             except TimeoutError:
@@ -94,6 +97,8 @@ async def measure_priority(runtime, state, router, prompt, count_calls):
         }
     finally:
         stop_monitor.set()
-        await monitor_task
-        service.cognition.decide = original_decide
-        service.foreground_busy = original_busy
+        try:
+            await monitor_task
+        finally:
+            service.cognition.decide = original_decide
+            service.foreground_busy = original_busy

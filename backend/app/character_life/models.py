@@ -101,6 +101,7 @@ class Grant(Record):
 class ObservationHandoff(Record):
     """#100へ同じ入力を再送するための承認済み作業記録。SELF Episode正本ではない。"""
 
+    character_id: Identifier
     topic: Content
     experienced_at: AwareDatetime = Field(default_factory=now)
     source_revisions: tuple[str, ...]
@@ -124,6 +125,12 @@ class Run(Record):
     source_revisions: tuple[str, ...] = ()
     dependency_results: dict[str, str] = Field(default_factory=dict)
     handoff: ObservationHandoff | None = Field(default=None, repr=False)
+
+    @model_validator(mode="after")
+    def consistent_owner(self) -> Run:
+        if self.handoff is not None and self.handoff.character_id != self.character_id:
+            raise ValueError("handoff owner mismatch")
+        return self
 
 
 class LifeError(Exception):

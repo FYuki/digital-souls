@@ -211,7 +211,16 @@ def test_elyth_topic_exploration_real_services(tmp_path, monkeypatch):
                     lambda messages: sum(len(m.content.encode()) for m in messages),
                     12000,
                 )("miori", prompt)
-                assert shares[0].content in projected.messages[-2].content
+                life_context = json.loads(
+                    projected.messages[-2].content.split("\n", 1)[1].rsplit("\n", 1)[0]
+                )
+                share_is_in_context = any(
+                    item.get("kind") == Kind.SHARE_CANDIDATE
+                    and item.get("content") == shares[0].content
+                    for item in life_context
+                )
+                # JSONの改行escapeを復元して完全一致を確認し、失敗時も実本文を表示しない。
+                assert share_is_in_context, "approved_share_missing_from_context"
                 started = time.monotonic()
                 first_delta = None
                 response_parts = []
@@ -227,7 +236,8 @@ def test_elyth_topic_exploration_real_services(tmp_path, monkeypatch):
                         first_delta = time.monotonic() - started
                     response_parts.append(delta)
                 assert first_delta is not None
-                assert "elyth" in "".join(response_parts).lower()
+                mentions_source = "elyth" in "".join(response_parts).lower()
+                assert mentions_source, "source_service_missing_from_response"
                 report["next_conversation"] = (
                     "life_state_context_and_real_response_passed"
                 )

@@ -264,7 +264,7 @@ def test_pause_during_remote_read_discards_late_result(tmp_path):
 
             source.call_tool = delayed
             task = asyncio.create_task(service.execute(str(run.id)))
-            await entered.wait()
+            await asyncio.wait_for(entered.wait(), 2)
             service.pause(str(run.id))
             release.set()
             assert await task == "DEFERRED"
@@ -620,5 +620,178 @@ def test_duplicate_model_reads_are_suppressed_before_final_synthesis(tmp_path):
             service.cognition.decide = decide
             assert await service.execute(str(run.id)) == "APPLIED"
             assert len(source.calls) == 1
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("failed_dependency", ["memory", "personality"])
+def test_dependency_failure_resumes_with_same_owned_handoff(
+    tmp_path, failed_dependency
+):
+    from app.character_life.ports import DeferredMemory
+
+    async def scenario():
+        async with environment(tmp_path) as (service, source, run):
+            observations, evaluations = [], []
+
+            class Memory(DeferredMemory):
+                async def record_observation(self, **kwargs):
+                    observations.append(kwargs)
+                    if len(observations) == 1:
+                        if failed_dependency == "memory":
+                            raise RuntimeError("temporary failure")
+                        return Result.APPLIED
+                    return Result.NO_CHANGE
+
+            class Personality:
+                async def evaluate(self, character, request_id):
+                    evaluations.append((character, request_id))
+                    if failed_dependency == "personality" and len(evaluations) == 1:
+                        return Result.FAILED
+                    return Result.NO_CHANGE
+
+            service.memory, service.personality = Memory(), Personality()
+            assert await service.execute(str(run.id)) == Result.DEFERRED
+            failed = service.store.run(str(run.id))
+            assert Result.FAILED in failed.dependency_results.values()
+            assert failed.handoff.character_id == run.character_id
+            assert not any(
+                s.kind is Kind.SHARE_CANDIDATE for s in service.store.states("miori")
+            )
+            runtime = Runtime(service, tmp_path, Settings(True, "0 0 1 1 *"))
+            await runtime.start()
+            try:
+                resumed = await runtime.resume(str(run.id))
+                assert resumed.attempt == 2
+                async with asyncio.timeout(10):
+                    while service.store.run(str(run.id)).phase != "finished":
+                        await asyncio.sleep(0.05)
+                assert service.store.run(str(run.id)).result is Result.APPLIED
+                assert observations[0] == observations[1]
+                assert len(source.calls) == 1
+                assert (
+                    len(
+                        [
+                            s
+                            for s in service.store.states("miori")
+                            if s.kind is Kind.SHARE_CANDIDATE
+                        ]
+                    )
+                    == 1
+                )
+            finally:
+                await runtime.close()
+
+    asyncio.run(scenario())
+
+
+def test_example_allowlist_applies_to_catalog_and_direct_gate(tmp_path):
+    import json
+    from pathlib import Path
+    from app.external_mcp import ExecutionContext
+    from app.tool_use.catalog import catalog
+    from app.character_life.service import ELYTH_TOPIC_TOOLS
+
+    async def scenario():
+        root = Path(__file__).resolve().parents[3]
+        config = json.loads(
+            (root / "backend/config/character-life-elyth.example.json").read_text()
+        )
+        connection = Connection.from_manifest(config["connections"][0])
+        assert (
+            set(connection.manifest["core_policy"]["operation_allowlist"])
+            == ELYTH_TOPIC_TOOLS
+        )
+        registry = Registry()
+        registry.register(connection)
+        gate = ExecutionGate(registry)
+        source = FakeSource(
+            connection, discovery("get_information", "new_private_tool")
+        )
+        async with gate.attach("elyth", source):
+            loop = gate.begin_loop(ExecutionContext("miori", "conversation"))
+            try:
+                assert [c.name for c in catalog(gate, loop, Sanitizer(Scanner()))] == [
+                    "get_information"
+                ]
+                denied = await gate.invoke(
+                    "elyth", "new_private_tool", {"value": 1}, loop
+                )
+                assert denied["outcome"] == "failed"
+                assert not source.calls
+                allowed = await gate.invoke(
+                    "elyth", "get_information", {"value": 1}, loop
+                )
+                assert allowed["outcome"] == "succeeded"
+                assert len(source.calls) == 1
+            finally:
+                gate.end_loop(loop)
+
+    asyncio.run(scenario())
+
+
+def test_gpu_sampler_timeout_is_missing_data_and_restores_callbacks(monkeypatch):
+    import subprocess
+    import threading
+    from types import SimpleNamespace
+    from uuid import uuid4
+    from tests.fixtures.character_life.priority_benchmark import measure_priority
+
+    async def scenario():
+        sampled = threading.Event()
+
+        async def decide(context, cancellation):
+            return None
+
+        busy = lambda: False
+        service = SimpleNamespace(
+            cognition=SimpleNamespace(decide=decide),
+            foreground_busy=busy,
+            store=SimpleNamespace(
+                run=lambda _: SimpleNamespace(
+                    phase="finished",
+                    result=Result.DEFERRED,
+                    reason="foreground_priority",
+                )
+            ),
+        )
+
+        class RuntimeStub:
+            async def submit(self, *args, **kwargs):
+                await service.cognition.decide({}, None)
+                return SimpleNamespace(id=uuid4())
+
+        runtime = RuntimeStub()
+        runtime.service = service
+
+        class Router:
+            async def stream_text(self, **kwargs):
+                async with asyncio.timeout(2):
+                    while not sampled.is_set():
+                        await asyncio.sleep(0.01)
+                yield "応答"
+
+        def timeout(*args, **kwargs):
+            sampled.set()
+            raise subprocess.TimeoutExpired("synthetic-gpu", 3)
+
+        monkeypatch.setattr(
+            "tests.fixtures.character_life.priority_benchmark.shutil.which",
+            lambda _: "synthetic-gpu",
+        )
+        monkeypatch.setattr(
+            "tests.fixtures.character_life.priority_benchmark.subprocess.run", timeout
+        )
+        result = await measure_priority(
+            runtime,
+            SimpleNamespace(id=uuid4()),
+            Router(),
+            SimpleNamespace(messages=()),
+            lambda: 0,
+        )
+        assert result["gpu_memory_peak_mib"] is None
+        assert result["gpu_utilization_peak_percent"] is None
+        assert service.cognition.decide is decide
+        assert service.foreground_busy is busy
 
     asyncio.run(scenario())

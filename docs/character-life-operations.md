@@ -67,7 +67,9 @@ DBOSへ渡すactivity引数は実行IDとattemptで、外部本文・MCP argumen
 監査は外部execution ID・候補ID・引数fingerprint・結果を記録し、native payloadを複製しない。
 Life Stateの共有候補と活動完了は同じSQLite transactionで確定する。
 #100呼出し前に承認済み観測のhandoffを作業記録として固定し、復旧時は同じrun_id・時刻・本文・sourceを再送する。
+handoffにも所有characterを持ち、保存・再開時にRunと照合する。schema v2への起動時移行では既存Runの所有者を補完する。
 #100/#101の接続先はこのkeyで冪等に受け付ける。これはSELF EpisodeやPersonalityの正本を代替しない。
+接続先のFAILED / RESULT_UNKNOWNは依存結果へ残し、活動をDEFERREDにして同じhandoffをresumeから再送できるようにする。
 DBOSによる再投入抑止を外部副作用のexactly-once保証とは扱わない。
 
 cronはUTC。missed runのbackfillは無効で、古いscheduleの回復時にも過去の活動を捏造しない。
@@ -96,6 +98,8 @@ DBOSのSQLiteは今回のdev/test受入に使用し、運用導入時のDB・長
 
 connectionへのGrantは会話での利用許可と別であり、schema変更でもconnection identityが同じなら保持する。
 今回の話題探索は公開情報の5操作に限定し、DM・投稿・通知の既読変更・Field操作を選ばせない。
+サンプル接続の`core_policy.operation_allowlist`は、CatalogとExecution Gateの共通制限として会話側にも適用する。
+未列挙の新しいTool・Resourceは拒否する。これは管理設定による制限で、connection単位の自律Grantや他の接続の既定動作は変更しない。
 非信頼annotationをreadや自動retryへ昇格させない。通常writeを恒久禁止する方針変更ではなく、
 #185接続前の制限として扱う。Webサービスは登録済みMCPを介して利用する。直接Web adapter・self-owned Addonは未接続で、#221等の基盤完成後に既存Execution Gate境界へ接続する。直接HTTPで迂回実行しない。
 MCPのResource読取と登録済みBindingを再利用する。複数Bindingから選ぶ場合は状態の`binding_target_id`へ管理側のIDを指定する。不足は`binding_input_required`で保留する。
@@ -118,10 +122,14 @@ pytestは開発者の`.env`を自動読込しない。秘密を表示せず環�
 テストは一時data rootを使用し、dogfood指定時は既存fixtureが拒否する。
 
 ```bash
+export DS_ENVIRONMENT_ID=test
+export DS_DATA_DIR="$(mktemp -d /tmp/character-life-test.XXXXXX)"
 RUN_CHARACTER_LIFE_REAL_TESTS=true \
-CHARACTER_LIFE_ACCEPTANCE_REPORT=/tmp/character-life-elyth-result.json \
+CHARACTER_LIFE_ACCEPTANCE_REPORT="$DS_DATA_DIR/runtime/character-life-elyth-result.json" \
 python -m pytest backend/tests/integration/test_character_life_elyth_integration.py -q
 ```
+
+起動ごとに新しいtest data rootを用意し、レポートの上書きを避ける。pytest fixtureは各ケースのDBをさらに独立した一時rootへ分離する。
 
 実接続テストではローカルOllama、ELYTH、DBOS、実socketのHTTP受付、同一要求の重複排除、
 次の会話へのLife State projectionと実モデル応答、終了処理を確認する。
