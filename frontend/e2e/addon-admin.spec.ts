@@ -36,7 +36,15 @@ for (const width of [1280, 320]) {
     await expect(page.getByLabel('連携に接続エラーがあります')).toBeVisible()
     const opener = page.getByRole('button', { name: /Addon \/ 連携/ })
     await opener.click()
-    await expect(page.getByRole('heading', { name: 'Addon / 連携' })).toBeFocused()
+    const heading = page.getByRole('heading', { name: 'Addon / 連携' })
+    await expect(heading).toBeFocused()
+    if (width === 320) {
+      const menuBounds = await page.getByRole('button', { name: 'サイドバーを開く' }).boundingBox()
+      const titleBounds = await heading.boundingBox()
+      expect(menuBounds).not.toBeNull()
+      expect(titleBounds).not.toBeNull()
+      expect(titleBounds!.x).toBeGreaterThanOrEqual(menuBounds!.x + menuBounds!.width)
+    }
     await expect(page.getByRole('list', { name: '登録済みの連携' }).getByRole('heading')).toHaveText(['自作の記録', '認証切れの連携', '資料検索', '無効な連携'])
     const toggle = page.getByRole('switch', { name: '認証切れの連携を利用する' })
     await toggle.focus()

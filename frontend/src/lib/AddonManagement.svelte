@@ -71,4 +71,5 @@
   .toggle[aria-checked="true"] { background: #514483; }
   .problem, [role="alert"] { color: #ffb5b5; }
   .warning { color: #f9d484; }
+  @media (max-width: 900px) { h1 { margin-inline-start: 54px; } }
 </style>
