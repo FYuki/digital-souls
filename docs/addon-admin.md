@@ -59,3 +59,23 @@ RUN_MCP_REAL_SERVICE_TESTS=true \
 MCP_REAL_SERVER_ROOT="$PWD/infra/testing/mcp-real-servers" \
 backend/.venv/bin/python -m pytest -s backend/tests/integration/test_addon_admin_real_service_integration.py
 ```
+
+管理画面は5秒間隔とwindow focus復帰時に状態を再取得する。対象行の更新中は多重送信を止め、
+更新前に始まったpollの遅延responseで更新結果を上書きしない。取得・更新のtimeoutは10秒。
+一覧の並びは障害→有効→無効、同一グループ内は日本語の表示名順とし、同名はIDで安定化する。
+無効な接続はbadge対象外。errorをwarningより優先し、warningは自作Addonの部分障害だけに使う。
+
+Frontendのunit/moduleは管理client・controller・component、モックE2Eは
+`frontend/e2e/addon-admin.spec.ts`で1280px/320px、keyboard、switchのアクセシブルな名前・状態、focus復帰を検証する。
+
+実Core・Vite・公開MCPをブラウザから通す受入:
+
+```bash
+backend/.venv/bin/python scripts/acceptance_addon_admin.py
+```
+
+Tool Routingを設定せず、独立したtest data rootと動的portで起動する。通信をmockせず一覧・toggleを操作し、
+Backend再起動後のOFF復元、ON後の再確認、MCP停止時の無操作での障害badgeとOFF操作を確認する。
+既存サービス・dogfoodへ接続せず、起動したprocessをteardownする。成功後の公開証跡は
+`docs/artifacts/addon-admin-184/browser-public.json`。起動時に旧成功証跡を無効化し、途中失敗やteardown失敗で成功を残さない。
+生のprocess logとブラウザ画像は一時領域へ限定し、終了時に削除する。
