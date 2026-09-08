@@ -2397,3 +2397,22 @@ Frontendの型検査は0 errors／0 warnings。テスト設定・失敗観測以
 `backend/app/conversation_core/session.py:677`である。凍結baseline本文や過去の失敗評価は変更していない。
 残る同一区間8指標のp95は既定の相対上限内だが、VAD境界2指標はLiveKit側に欠測が残る。
 この確認だけで比較評価全体を合格にせず、絶対上限・割り込みの独立分母・実PCM境界の検証を継続する。
+
+## 完全再生後の遅着RTPによる次応答停止の修正（2026-09-08）
+
+失敗再現では、1応答目の全PCM再生完了後、旧trackのtimestamp overlapが
+再同期を起こしていた。Backendが開始した2応答目もterminal outcomeに含まれ、Frontendは
+そのtrackを購読・decoder準備してもready通知を送らず、Backendが3秒でtimeoutした。
+Frontendの非破壊観測では、世代0→1、停止対象2件、音声context不在を確認した。
+
+`0d8d369`はsourceのsample数・logical metadata・実出力時計で完全再生を検証した応答を保持し、
+その応答の遅着RTP異常は診断として残しながら再同期を発行しない。遅着PCMはrendererへ渡さない。
+Core完了通知だけ・source完了通知だけ・出力時計未通過ではこの扱いにしない。
+再生途中のRTP欠落・重複で応答を止める既存動作も維持する。
+
+回帰テストは未修正で「全出力後に不要な停止・再同期を発行する」分岐が失敗し、修正後は
+Room 68件、Frontend全体881件、型検査0 errors／0 warningsが成功した。
+同版の実Whisper・Ollama・VOICEVOX・LiveKitによる通常4件もすべて成功した（約1分）。
+3往復では3応答の実再生完了、ready送信3件、世代0維持、transport failure 0件と診断終了を
+確認した。CHATは合成context照合済みのthink:falseで、他のoptionsは保持した。
+これは3往復の実統合であり、100試行・dogfoodの分母へ加算しない。
