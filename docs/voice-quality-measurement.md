@@ -365,3 +365,12 @@ LiveKitの`vad_leading_boundary`はfixture正解開始の因果下限から、�
 最初の全体mypyは`voice_vad_boundaries.summarize`の引数`dict`に型引数がないため1件失敗した。測定版の処理を変えず`dict[str, object]`へ修正し、修正版`43afa4f`でVAD関連14件と全体mypy（239ファイル）、Svelte／E2E TypeScript、Python lint、Frontend buildが成功した。全ユニットの版は直前の`d0f8c20`であり、この1行の型注釈以外にコード差分がないことを照合した。初回失敗ログのhashも保存する。buildには既存のchunkサイズ警告がある。
 
 これらのモックを使った検証を、実サービス回帰や人による実声dogfood受け入れの代わりにはしない。
+
+
+## 無応答sessionの実接続確認（2026-09-08）
+
+[無応答sessionの検証](artifacts/livekit-zero-response-session-2026-09-08-02.json)を測定版`ff12158`で実施した。実Browser／LiveKitにマイクを接続し、発話は供給せず、正常終了とpage切断の独立2 sessionを測定した。native journalのcreated／activated／endedを各1件、応答IDと完全再生応答0件、明示終了APIは正常側1回・切断側0回と照合した。正常側は`explicit`で終了し追加操作0、切断側は`reconnect_timeout`で終了した。切断側は最後の操作summaryがないため、`complete_operation_window_not_recorded`を1件保持し、操作0とは集計しない。所有FE/BEの撤去とteardown完了を確認した。
+
+[初回失敗](artifacts/livekit-zero-response-session-2026-09-08-01-failed.json)も保存した。page切断後の待機を「再接続猶予＋20秒」としていたが、SFUの切断検知が遅れ、server側の猶予満了前にテスト環境を終了していた。診断側の待機起点の違いを考慮して再確認した結果、2ケースが成功した。page終了操作からnative終了を観測するまで約82.18秒だったが、これはSFUの切断検知と60秒の猶予、cleanup、観測遅延を含む。短時間障害の再接続p95やserver内部の猶予時間としては使用しない。
+
+診断の選択条件とsession集計の関連104件、Svelte／E2E TypeScript型検査が成功した。製品の`backend/app`・`frontend/src`は自動回帰版`43afa4f`から変更がないことをGit tree hashで確認した。この2件の障害注入を実声dogfoodの予期しない終了率へ混ぜず、通常100件や復帰を伴う再接続cohortとも分離する。
