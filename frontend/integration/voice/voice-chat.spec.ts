@@ -1,3 +1,4 @@
+import { installResponseTrackDiagnostic } from '../../playwright/response-track-readiness-diagnostic'
 import { readFileSync } from 'node:fs'
 import { installScheduledFixture, parseScheduledFixture } from '../../playwright/controlled-audio-fixture'
 import { expect, test, type Page } from '@playwright/test'
@@ -21,7 +22,8 @@ test.beforeAll(async () => {
   resolvedProfile = await readResolvedProfile()
 })
 
-test.beforeEach(async ({}, testInfo) => {
+test.beforeEach(async ({ page }, testInfo) => {
+  await page.addInitScript(installResponseTrackDiagnostic)
   await attachProfileEvidence(testInfo, resolvedProfile)
   const reason = getCapabilitySkipReason(resolvedProfile, 'voice-chat-real')
   if (reason !== null) test.skip(true, reason)
@@ -33,6 +35,8 @@ test.afterEach(async ({ page, context }, testInfo) => {
     const state = window.__voiceChatE2E
     if (!state) return null
     return {
+      response_tracks: window.__responseTrackDiagnostic?.close(),
+      track_media: Object.values(state.trackMediaObservations ?? {}),
       core_events: state.coreEventDiagnostics.map(event => ({
         type: event.type, at_ms: event.atMs, reason_code: event.reasonCode,
       })),
