@@ -702,3 +702,18 @@ v3の最初の校正条件は端部25–75msの50ms窓だった。探索20msとf
 `--observe-stt-pcm`を付けた通常応答runでは、`playback_supply_observation`も保存する。既存のpacket出力観測を使い、受信・復号の時計上下限、main threadへPCMが届いた時刻、出力時計で確認した区間を照合する。音切れ前後の数値は16件、応答は4件まで保持し、上限超過・未観測を記録する。本文・PCMはこの診断へ転記しない。通常latency測定には有効化しない。
 
 受信間隔、復号待ち、mainへの配送待ち、配送後の出力待ちを別々に記録する。受信間隔の増加だけではserver生成、SFU、回線のどこに原因があるかは断定できない。診断のsample数・gap件数を同じ応答の`playback_completion`と照合し、欠測や不一致があれば原因特定の根拠にしない。`packet_sample_offset`が0以外のgapは、次packetの未供給だけでは説明できないため区別する。
+
+## 無応答sessionの正常終了と切断後の終了
+
+```bash
+backend/.venv/bin/python scripts/voice_quality/run_pilot.py \
+  --run-id zero-response-session-01 \
+  --inference-env /home/asa/dev/digital-souls/backend/.env \
+  --trials 2 --scheduled-fixture --session-lifecycle
+```
+
+この診断は通常の独立100件とは分離する。実Browser／LiveKitにマイクを接続するが、固定fixtureのstart／replayを呼ばず、発話を供給しない。1件目は通常UIから明示終了し、2件目は診断が所有するpageだけを閉じる。2件目の終了APIは呼ばず、実際の参加者切断から再接続猶予の満了まで待ち、native session journalの終了理由を確認する。共有SFUや推論サービスは停止しない。
+
+manifestにはsessionの識別子、発話・応答件数、明示終了要求数、再接続猶予、終了理由を残す。認証token、接続先、会話本文は保存しない。終了前の操作summaryとnativeのcreated／activated／endedを照合し、架空のutterance／response IDを作らない。切断側では最後の操作summaryがないため、操作回数の全区間は欠測として残す。障害注入による予期しない終了1件を、通常運用で予期しない終了0件という受け入れ条件へ混ぜない。
+
+`--controlled`、連続発話、相槌／割り込み／VAD／PCM／供給診断、専用network障害、thinking上書きとは同時指定できない。通常runへ戻ると、この診断用の環境変数を引き継がない。

@@ -315,3 +315,32 @@ def test_supply_observer_keeps_normal_profile_and_clears_inherited_option(tmp_pa
                          {'network_fault': True}, {'interruption_cohort': 'take_turn'}, {'vad_cohort': 'pause'}):
         with pytest.raises(ValueError, match='playback supply observation requires'):
             pilot.pilot_environment(*arguments, controlled=True, observe_playback_supply=True, **incompatible)
+
+
+@pytest.mark.parametrize('overrides', [
+    {'trials': 1}, {'trials': 100}, {'scheduled_fixture': False}, {'controlled': True},
+    {'continuous_turns': 3}, {'interruption_cohort': 'take_turn'}, {'control_probe': True},
+    {'fault_bridge': True}, {'network_fault': True}, {'fixture_indices': '1,2'},
+    {'vad_cohort': 'pause'}, {'observe_stt_pcm': True}, {'observe_playback_supply': True},
+    {'disable_thinking': True}, {'session_lifecycle': 1},
+])
+def test_zero_response_lifecycle_rejects_mixed_measurements(tmp_path, overrides):
+    arguments = dict(inference_env=tmp_path/'inference.env', livekit_env=tmp_path/'livekit.env',
+                     run_id='zero-response-test', trials=2, disable_thinking=False,
+                     scheduled_fixture=True, session_lifecycle=True)
+    arguments.update(overrides)
+    with pytest.raises(ValueError, match='zero-response lifecycle'):
+        pilot.pilot_environment(**arguments)
+
+
+def test_zero_response_lifecycle_cannot_leak_into_normal_measurement(tmp_path, monkeypatch):
+    inference, livekit = tmp_path/'inference.env', tmp_path/'livekit.env'
+    inference.write_text('INFERENCE_TARGET_CHAT=ollama/test\n')
+    livekit.write_text('LIVEKIT_KEYS=test: secret\n')
+    monkeypatch.setenv('VOICE_QUALITY_SESSION_LIFECYCLE', '1')
+    lifecycle = pilot.pilot_environment(inference, livekit, 'zero-response-test', 2, False,
+                                        scheduled_fixture=True, session_lifecycle=True)
+    assert lifecycle['VOICE_QUALITY_SESSION_LIFECYCLE'] == '1'
+    normal = pilot.pilot_environment(inference, livekit, 'normal-test', 100, False,
+                                     scheduled_fixture=True, controlled=True)
+    assert 'VOICE_QUALITY_SESSION_LIFECYCLE' not in normal

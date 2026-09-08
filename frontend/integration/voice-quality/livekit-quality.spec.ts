@@ -1,3 +1,4 @@
+import { measureZeroResponseSessions } from '../../playwright/zero-response-session-diagnostic'
 import { installPlaybackSupplyDiagnostic, readPlaybackSupplyDiagnostic } from '../../playwright/playback-supply-diagnostic'
 import { selectPcmFixture, snapshotPcmInputs } from '../../playwright/whisper-pcm-observer'
 import { measureControlProbeSession } from '../../playwright/control-probe-diagnostic'
@@ -30,6 +31,7 @@ import {
 
 // pilotは診断用。正式な5 warm-up + 100試行の受入結果とは区別する。
 const scheduledFixture = process.env.VOICE_QUALITY_SCHEDULED_FIXTURE === '1'
+const sessionLifecycle = process.env.VOICE_QUALITY_SESSION_LIFECYCLE === '1'
 const controlProbe = process.env.VOICE_QUALITY_CONTROL_PROBE === '1'
 const interruptionCohort = process.env.VOICE_QUALITY_INTERRUPTION_COHORT
 const vadCohort = process.env.VOICE_QUALITY_VAD_COHORT
@@ -76,7 +78,7 @@ test.use({
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(voiceTestTimeout * (WARMUP_RUNS + MEASURED_RUNS))
 
-test(vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割を測定する' : controlProbe ? '実音声再生中の制御往復を診断する' : interruptionCohort ? '実応答の再生中に固定ラベル音声で割り込みを測定する'
+test(sessionLifecycle ? '無応答sessionの正常終了とbrowser切断をnative記録で確認する' : vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割を測定する' : controlProbe ? '実音声再生中の制御往復を診断する' : interruptionCohort ? '実応答の再生中に固定ラベル音声で割り込みを測定する'
   : Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0) > 0
   ? '同一LiveKit sessionで応答trackの切替を診断する'
   : 'LiveKit固定fixtureの独立試行を測定する', async ({ browser }) => {
@@ -89,6 +91,16 @@ test(vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割�
   )
   const sourceFixture = scheduledFixture ? parseScheduledFixture(await readFile(fixtureAudioUrl), fixture) : undefined
   const expectedTranscript = normalizeBaselineTranscript(fixture.expected_transcript)
+  if (sessionLifecycle) {
+    if (!sourceFixture || pilot !== '2' || controlProbe || interruptionCohort !== undefined
+      || vadCohort !== undefined || Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0)
+      || process.env.VOICE_QUALITY_FAULT_BRIDGE === '1' || process.env.VOICE_QUALITY_NETWORK_FAULT === '1'
+      || process.env.VOICE_QUALITY_OBSERVE_STT_PCM === '1' || process.env.VOICE_QUALITY_OBSERVE_PLAYBACK_SUPPLY === '1') {
+      throw new Error('zero-response sessions require the separate two-case diagnostic')
+    }
+    await measureZeroResponseSessions(browser, sourceFixture, manifestPath)
+    return
+  }
   if (controlProbe) {
     if (!sourceFixture || pilot === undefined || interruptionCohort !== undefined
       || Number(process.env.VOICE_QUALITY_CONTINUOUS_TURNS ?? 0)
