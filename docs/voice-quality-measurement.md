@@ -220,3 +220,8 @@ revision `95afacecf8e3cc55da85f0c53550479486bb8166`で、実験用thinking overr
 ただし、1件で再生gapが1回、1,984 samples（41.333ms）発生した。全sampleは再生されたが、制御測定のunderrun 0件は未達である。gap/underrunのp95は0でも、1件の発生を合格へ変換しない。[baseline比較](artifacts/livekit-voice-default-normal-latency-2026-09-08.json)では比較可能な8指標が許容範囲内、観測区間が異なる3指標は比較対象外、VAD冒頭・末尾の2指標はこのrunでは欠測として全体判定をfalseにした。実声dogfoodと#150全体の完了は示さない。
 
 run中のmanifestにはmeasurement revisionがあったが、最終保存時にその項目が失われた。このrunのrevision根拠はrunner事前検査と、測定中に変更していないcheckoutの観測であり、検証JSONに根拠と最終manifestの不足を明記した。
+
+
+### 通常PCM・供給診断pilot（2026-09-08）
+
+revision `465abd6`の準備1件・測定3件で、通常音声の実Whisper入力端部と再生供給の数値診断を確認した。[PCM集計](artifacts/livekit-normal-pcm-supply-pilot-2026-09-08-01.json)は3件すべての最終STT入力・端部を相関したが、100件未満なので全体判定はfalseである。[照合・終了確認](artifacts/livekit-normal-pcm-supply-pilot-2026-09-08-01-verification.json)で全4件のpacket数・sample数・gap件数と完全再生記録の一致、診断欠測0、所有appとproxyの終了を確認した。測定3件のgapは0、受信間隔の最大上限32.600ms、復号待ち上限2.100ms、main配送待ち上限2.300msだった。この小規模runだけでは先行100件の音切れ原因や解消を証明しない。
