@@ -5,6 +5,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -38,6 +39,9 @@ QUESTION = (
 
 
 def check_answer(text, *, history_count, memory_count):
+    # 単一のJSONコードブロックだけを展開する。前後の説明や複数候補は採用しない。
+    fence = re.fullmatch(r"\s*```(?:json)?[ \t]*\n([\s\S]*?)\n```\s*", text)
+    candidate = fence.group(1) if fence else text
     try:
         def unique_object(pairs):
             result = {}
@@ -46,21 +50,26 @@ def check_answer(text, *, history_count, memory_count):
                     raise ValueError('duplicate key')
                 result[key] = value
             return result
-        value = json.loads(text, object_pairs_hook=unique_object)
+        value = json.loads(candidate, object_pairs_hook=unique_object)
     except (ValueError, TypeError):
         value = None
     valid = isinstance(value, dict) and set(value) == {'name', 'drink', 'key_location'}
     valid = valid and all(v is None or type(v) is str for v in value.values())
     if not valid:
-        return {'format_valid': False, 'name_correct': False, 'history_correct': False, 'memory_correct': False}
-    return {'format_valid': True, 'name_correct': value['name'] == '光織',
+        return {'strict_format_valid': False, 'format_valid': False, 'name_correct': False, 'history_correct': False, 'memory_correct': False}
+    return {'strict_format_valid': fence is None, 'format_valid': True, 'name_correct': value['name'] == '光織',
             'history_correct': value['drink'] == ('麦茶' if history_count else None),
             'memory_correct': value['key_location'] == ('玄関の棚' if memory_count else None)}
 
 
 
 def validate_evidence(evidence):
-    schema = json.loads((ROOT/'docs/schemas/voice-quality-context-answer-v1.schema.json').read_text())
+    version = evidence.get('schema_version')
+    schema_file = {'1.0': 'voice-quality-context-answer-v1.schema.json',
+                   '1.1': 'voice-quality-context-answer-v1.1.schema.json'}.get(version)
+    if schema_file is None:
+        raise ValueError('unsupported context answer schema')
+    schema = json.loads((ROOT/'docs/schemas'/schema_file).read_text())
     if not Draft202012Validator(schema).is_valid(evidence):
         raise ValueError('context answer schema mismatch')
     _assert_anonymous(evidence)
@@ -69,6 +78,8 @@ def validate_evidence(evidence):
     if len(identities) != 36 or evidence['recorded'] != len(trials):
         raise ValueError('context answer trial denominator mismatch')
     for row in trials:
+        if version == '1.1' and row['strict_format_valid'] and not row['format_valid']:
+            raise ValueError('context answer format evidence conflict')
         if row['passed'] != all(row[k] for k in ('request_completed', 'format_valid', 'name_correct', 'history_correct', 'memory_correct')):
             raise ValueError('context answer outcome mismatch')
     passed = sum(r['passed'] for r in trials)
@@ -141,7 +152,7 @@ def test_real_chat_keeps_persona_and_synthetic_context_facts():
                 runtime.close()
 
     asyncio.run(exercise())
-    evidence = {'schema_version': '1.0', 'configured_think': base_options.get('think'), 'measurement_scope': 'synthetic_context_answer_conformance', 'measurement_revision': revision,
+    evidence = {'schema_version': '1.1', 'configured_think': base_options.get('think'), 'measurement_scope': 'synthetic_context_answer_conformance', 'measurement_revision': revision,
                 'character_card_sha256': hashlib.sha256((ROOT/'characters/miori/miori.card.json').read_bytes()).hexdigest(),
                 'expected': 36, 'recorded': len(records), 'passed': sum(r['passed'] for r in records),
                 'failed': sum(not r['passed'] for r in records), 'memory_retrieval_exercised': False,
