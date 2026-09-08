@@ -72,3 +72,28 @@ def test_state_management_origin_conflict_and_audit(tmp_path, monkeypatch):
                 assert source.calls == []
 
     asyncio.run(scenario())
+
+
+def test_unregistered_character_cannot_create_state(tmp_path, monkeypatch):
+    def missing_character(character):
+        raise FileNotFoundError("synthetic private path")
+    monkeypatch.setattr(character_life, "load_character_card", missing_character)
+
+    async def scenario():
+        async with environment(tmp_path) as (service, _, _):
+            app = FastAPI()
+            app.include_router(character_life.router)
+            app.state.screen_http_security = SimpleNamespace(allowed_origin="http://localhost:5173")
+            app.state.character_life_runtime = SimpleNamespace(started=True, service=service)
+            async with AsyncClient(
+                transport=ASGITransport(app), base_url="http://localhost",
+                headers={"Origin": "http://localhost:5173"},
+            ) as client:
+                response = await client.post(
+                    "/character-life/missing/states",
+                    json={"kind": "INTEREST", "content": "保存されない関心"},
+                )
+            assert response.status_code == 404
+            assert response.json() == {"detail": {"code": "character_not_found"}}
+            assert service.store.states("missing") == []
+    asyncio.run(scenario())

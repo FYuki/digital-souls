@@ -27,14 +27,14 @@ MCP connectionの連携許可と、server自己申告metadataのtrustは別概�
 
 `core_policy.restrictions`は安全側の制約だけを表す。
 
-任意の`core_policy.operation_allowlist`で管理側が操作名・Resource URIを列挙した場合、
-未列挙の操作はCatalogとExecution Gateの両方で拒否する。空配列は全拒否、未指定は既存のsnapshot許可を維持する。
-これは接続ごとの追加制限で、Tool単位の利用者再承認やannotationの信頼昇格ではない。
-
 - `deny`
 - `force_serial`
 - `disable_retry`
 - `require_confirmation`
+
+任意の`core_policy.operation_allowlist`で管理側が操作名・Resource URIを列挙した場合、
+未列挙の操作はCatalogとExecution Gateの両方で拒否する。空配列は全拒否、未指定は既存のsnapshot許可を維持する。
+これは接続ごとの追加制限で、Tool単位の利用者再承認やannotationの信頼昇格ではない。
 
 Addonの`write/destructive`をCore側で`read`へ書き換えるような、domain意味を安全側に見せかけるoverrideは契約に存在させない。
 
