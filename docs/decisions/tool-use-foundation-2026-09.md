@@ -9,6 +9,11 @@
 自作Addon、管理画面、Prompt取得・明示適用、MCP画像／音声結果の内容理解、
 キャラクター全体へのbinding永続化、長時間自律runtimeは後続とする。
 
+会話外の自律活動については`character-life-memory-personality-autonomy-2026-09.md`を正本とする。
+同ADRは本ADRのCapability Snapshot / Tool Catalog / Execution Gateを再利用し、Autonomy Target、
+Minimum Disclosure / Egress Privacy、High Impact境界を追加する。本ADRの会話内Tool利用契約を
+自律runtimeへコピーして別実装にしない。
+
 ## 責務
 
 #104のnative definition、validated active snapshot、trust/effective policy、Execution Gateを正本とする。
@@ -18,6 +23,20 @@ annotationsをTool利用層で再解釈せず、元schemaで実行引数を再�
 Tool判断・入力待ち・現在turnの結果はtransport非依存のCoreサービスが所有する。
 HTTPとLiveKitは同じサービスを呼び、履歴保存は既存のsanitizerとMemory Formationへ委譲する。
 旧WebSocket baselineへTool機能を追加しない。
+
+### 会話外runtimeからの再利用
+
+長時間・会話外runtimeも外部MCPを直接呼ばず、#104/#182の実行境界を利用する。
+ユーザーがAutonomy Targetとして許可したMCP connectionでは、read/writeを問わずactive snapshotにある
+Toolを利用可能とする。Tool単位permission UIは作らない。
+
+MCP Server側のTool追加・削除・schema変更は既存Capability Snapshot更新として扱う。
+connection単位のAutonomy GrantをTool変更だけで失効させず、実行中loopの固定snapshotへ途中追加しない。
+新active snapshotは次loopから利用する。Tool変更の通知・表示は既存のCapability変更のバッチ表示・
+MCP管理UI要件へ揃え、Toolごとの再承認UIを追加しない。
+
+外部へ送るargumentsのprivacyはconnection permissionとは分離し、
+`character-life-memory-personality-autonomy-2026-09.md`のMinimum Disclosure / Egress Privacyをdispatch前に適用する。
 
 ## 推論と候補
 
