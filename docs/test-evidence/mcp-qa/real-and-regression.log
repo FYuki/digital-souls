@@ -1,0 +1,16 @@
+2026-09-08 / Ubuntu-dev / devは停止、専用testデータを使用
+
+real-elyth/real-llm: clarification -> answer -> clarification -> answer -> search passed
+.real-http/chat-history: two clarification answers -> ELYTH search -> final reply passed
+.
+2 passed in 260.54s (0:04:20)
+
+Tool unit
+.....................................................................    [100%]
+69 passed in 1.41s
+
+Chat module（独立process）
+.................................                                        [100%]
+33 passed in 79.25s (0:01:19)
+
+Success: no issues found in 254 source files
