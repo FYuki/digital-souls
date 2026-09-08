@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "measurement_revision": "2f2a3857ea34cd10f77a849e5b15a981baf48d18",
+  "verification_scope": "normal_pcm_edges_and_packet_supply_only",
+  "full_issue_acceptance_verified": false,
+  "measured_trials": 100,
+  "warmup_trials": 5,
+  "pcm_counts": {
+    "expected": 100,
+    "recorded": 100,
+    "final_inputs_correlated": 100,
+    "edges_matched": 100,
+    "missing": 0,
+    "session_cleanup_confirmed": 100,
+    "voice_success": 100,
+    "other_stt_requests": 0,
+    "nonuniform_global_alignment": 11
+  },
+  "pcm_report_passed": true,
+  "supply_diagnostics_match_native_completion": true,
+  "experimental_thinking_override": false,
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "pcm_proxy_closed": true,
+  "teardown_completed": true,
+  "supply": {
+    "gap_count": 0,
+    "gap_total_ms": 0.0,
+    "maximum_gap_ms": 0.0,
+    "maximum_receive_interval_upper_ms": 46.899999999999636,
+    "maximum_decode_latency_upper_ms": 3.0999999880787072,
+    "maximum_main_delivery_upper_ms": 3.500000011920747,
+    "maximum_render_after_main_ms": 48.465666678587695,
+    "gap_evidence": []
+  },
+  "report_sha256": "291cd0a83528b6a5b161aefd1467e719dc4385308f8b55939fdab72d828bed49",
+  "source_sha256": {
+    "trial-manifest.json": "fc5478fd625f1b211b28d448f3c03294ebd4516612eaafb6eee670fd3337817d",
+    "runtime-data/runtime/standalone/environment-run.json": "1068b3aa11cce29797fb6c2be25f7f98b898b067683f56ff8366ae088242554e",
+    "inference-runtime.jsonl": "48cedd907402ee5a1843875ff19471a72845bd21629856ef268b6b022c80db07"
+  }
+}

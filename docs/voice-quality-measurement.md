@@ -225,3 +225,12 @@ run中のmanifestにはmeasurement revisionがあったが、最終保存時に�
 ### 通常PCM・供給診断pilot（2026-09-08）
 
 revision `465abd6`の準備1件・測定3件で、通常音声の実Whisper入力端部と再生供給の数値診断を確認した。[PCM集計](artifacts/livekit-normal-pcm-supply-pilot-2026-09-08-01.json)は3件すべての最終STT入力・端部を相関したが、100件未満なので全体判定はfalseである。[照合・終了確認](artifacts/livekit-normal-pcm-supply-pilot-2026-09-08-01-verification.json)で全4件のpacket数・sample数・gap件数と完全再生記録の一致、診断欠測0、所有appとproxyの終了を確認した。測定3件のgapは0、受信間隔の最大上限32.600ms、復号待ち上限2.100ms、main配送待ち上限2.300msだった。この小規模runだけでは先行100件の音切れ原因や解消を証明しない。
+
+
+### 通常PCM品質100件（2026-09-08）
+
+revision `2f2a3857ea34cd10f77a849e5b15a981baf48d18`で準備5件・通常音声の独立100件を実行した。[PCM端部集計](artifacts/livekit-normal-pcm-supply-100-2026-09-08-01.json)では、最終Whisper入力の相関100/100、v4端部照合100/100、欠測0、session終了100/100だった。全体の時間伸縮が均一でない11件も診断値として保持し、内部PCM全体の品質を証明したとは扱わない。
+
+[packet供給の照合と終了確認](artifacts/livekit-normal-pcm-supply-100-2026-09-08-01-verification.json)で、全105件のpacket数・再生sample数・gap件数が製品側の完全再生記録と一致し、診断欠測・上限超過は0だった。本測定100件のgap/underrunは0。最大の受信間隔上限46.900ms、復号待ち上限3.100ms、main配送待ち上限3.500msを記録した。所有appの削除・proxy停止・teardown完了、実験用thinking overrideなしも確認した。
+
+これはPCM observerを介した入力品質・供給診断条件であり、通常latencyの測定と分離する。先行する通常設定100件の41.333msの音切れは再現しておらず、その原因特定や修正済みを示す結果ではない。
