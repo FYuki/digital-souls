@@ -54,7 +54,7 @@ ELYTH側の機能未有効化や接続障害は成功扱いしない。実MCP・
 - Tool関連unit 69件、Chat module 33件、テスト分類5件が成功。
 - 実Ollama `gemma4:e4b`と実ELYTHによる上記2ケースが260.54秒で成功。
 - HTTPケースでは画面と同じstatus pollingを行い、推論待ちを利用者離脱と誤判定しない。
-- mypy（254ファイル）・Ruffが成功。devのFrontend／Backend／ready gateは停止状態を維持。
+- mypy・Ruffが成功。devのFrontend／Backend／ready gateは停止状態を維持。
 - 途中で人物の興味を任せる入力は検索器が即座に検索を選ぶ場合もあったため、
   実接続の再確認ケースは「まだ条件未決定」と明示する。人格からテーマを生成する品質とは分ける。
 

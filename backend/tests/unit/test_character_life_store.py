@@ -54,7 +54,12 @@ def test_commit_rechecks_authority_and_intention(tmp_path, change):
     else:
         store.save_run(run.model_copy(update={"phase": "paused"}))
     final = store.finish(run, Result.APPLIED, "topic_ready", summary="保存されない話題")
-    assert final.result is not Result.APPLIED
+    expected = {
+        "revoke": (Result.REJECTED, "finished"),
+        "edit": (Result.SUPERSEDED, "finished"),
+        "pause": (None, "paused"),
+    }[change]
+    assert (final.result, final.phase) == expected
     assert all(s.kind is not Kind.SHARE_CANDIDATE for s in store.states("miori"))
 
 

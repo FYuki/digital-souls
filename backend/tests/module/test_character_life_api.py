@@ -57,6 +57,22 @@ def test_state_management_origin_conflict_and_audit(tmp_path, monkeypatch):
                 ).json() == []
                 paused = await client.post(base + f"/activities/{run.id}/pause")
                 assert paused.json()["phase"] == "paused"
+                save = service.store.save_run
+
+                def resume_before_save(stale, **kwargs):
+                    current = service.store.run(str(stale.id))
+                    save(current.model_copy(update={
+                        "attempt": current.attempt + 1, "phase": "queued"
+                    }), expected_attempt=current.attempt)
+                    return save(stale, **kwargs)
+
+                with monkeypatch.context() as patch:
+                    patch.setattr(service.store, "save_run", resume_before_save)
+                    conflict = await client.post(base + f"/activities/{run.id}/pause")
+                assert conflict.status_code == 409
+                assert conflict.json() == {"detail": {
+                    "result": "CONFLICT", "code": "attempt_superseded"
+                }}
                 assert (
                     await client.post(
                         f"/character-life/other/activities/{run.id}/pause"
