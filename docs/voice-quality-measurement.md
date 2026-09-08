@@ -356,3 +356,12 @@ LiveKitの`vad_leading_boundary`はfixture正解開始の因果下限から、�
 [共有Ollamaログの数値照合](artifacts/livekit-normal-isolated-100-2026-09-08-01-ollama-journal.json)では、測定環境の開始から終了までcontext 8,192のみ、context値の切り替え0回、`model loaded` 1回だった。前回低速runの切り替え107回・読み込み完了108回と異なる。一方、サーバーのPOST `/api/chat`ログは213件、音声応答traceで観測したHTTP要求は見積もり3＋生成105＝108件であり、要求元の完全な帰属は未証明である。run名の`isolated`を共有Ollamaの専有証明と解釈しない。prompt見積もりは各応答3回、最初の準備試行で3回HTTP通信し、残る104応答では計312回cache hitだった。想定値1回に合わない記録を削除せず、実counterを用いて検証した。
 
 このrunは通常100件の数値条件を満たしたが、先行runの41.333msの音切れ原因を修正済みとは扱わない。過去の未達runを残し、実障害時のsession記録、最終回帰、配備後の人による実声dogfood受け入れと、Issue全体の完了は別途確認する。
+
+
+## 自動回帰の再確認（2026-09-08、通常100件測定後）
+
+[自動回帰証拠](artifacts/livekit-automated-regression-2026-09-08-06.json)を保存した。全ユニットはBackend 3,104件・Frontend 794件、モジュールはBackend 1,430件・Frontend 107件、test-mocked E2Eは41件成功。モジュールとE2Eは順に実行し、所有Frontendの撤去とteardown完了を確認した。生成した音声／画面認識契約は既存ファイルと一致した。
+
+最初の全体mypyは`voice_vad_boundaries.summarize`の引数`dict`に型引数がないため1件失敗した。測定版の処理を変えず`dict[str, object]`へ修正し、修正版`43afa4f`でVAD関連14件と全体mypy（239ファイル）、Svelte／E2E TypeScript、Python lint、Frontend buildが成功した。全ユニットの版は直前の`d0f8c20`であり、この1行の型注釈以外にコード差分がないことを照合した。初回失敗ログのhashも保存する。buildには既存のchunkサイズ警告がある。
+
+これらのモックを使った検証を、実サービス回帰や人による実声dogfood受け入れの代わりにはしない。
