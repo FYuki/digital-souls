@@ -2460,3 +2460,24 @@ PCM・応答本文は保存していない。専用Frontend／Backendの削除�
 直接照合が成立しても、途中の無欠落や一定の時間倍率を証明したとは扱わず、
 `interior_continuity_verified:false`を残す。相関・競合候補の条件も緩和していない。
 固定音声の実Opus復号、100ms超の切断、重複、前後逆転を含む関連18件が成功した。
+
+## 実STT端部の少数cohort観測（2026-09-08）
+
+`5cf2d5f`で[通常音声](artifacts/livekit-stt-pcm-normal-pilot-2026-09-08.json)、
+[文中休止](artifacts/livekit-stt-pcm-pause-pilot-2026-09-08.json)、
+[相槌](artifacts/livekit-stt-pcm-backchannel-pilot-2026-09-08.json)、
+[take-turn](artifacts/livekit-stt-pcm-take-turn-pilot-2026-09-08.json)を各3件測定した。
+通常音声だけは別の準備1件を除外した。ラベル付き音声は各cohortの1・51・100番を用いた。
+すべて会話動作が成功し、各3件の最終STT入力sample数・suffix保持・受信範囲・実HTTP入力を
+一意に相関できた。全12件で正解の冒頭・末尾を直接照合し、境界観測の欠測は0だった。
+途中のSTT要求は文中休止3件、相槌3件、take-turn4件を別記し、最終STTの代用にしなかった。
+
+文中休止の測定1件は従来の全体offset診断が不一致だったが、端部の照合は成立した。
+この差を保持し、発話途中の無欠落を証明したという扱いにはしていない。
+[終了記録](artifacts/livekit-stt-pcm-pilots-cleanup-2026-09-08.json)で所有8コンテナの削除と
+中継50023の終了を確認した。100件未満のため、4レポートの受入判定はすべてfalseである。
+
+集計器は最終STTとpreview STTの取り違え、同数inputの曖昧性、欠測、誤った正解端部、
+重複session、観測終了前snapshot、準備試行の混入を検査する。関連14件が成功した。
+古い通常manifestに測定revisionがない場合はnullを残し、現在HEADを遡って埋めない。
+今後の通常manifestは起動時に確定した測定revisionを記録する。

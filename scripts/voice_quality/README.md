@@ -647,3 +647,21 @@ latencyを通常の無観測Profileの値と同じ条件として扱わない。
 正解発話の冒頭・末尾を必ず含む窓の直接照合を記録する。前後のoffset差を
 許容値内へ丸めたり、従来の未確認結果を再解釈したりしない。
 直接照合の成功は端部が入力中で識別できるという診断であり、途中の時間変化・無欠落を証明しない。
+
+### 実PCMの匿名集計
+
+```bash
+backend/.venv/bin/python scripts/voice_quality/report_stt_pcm.py \
+  --run-root frontend/test-results/livekit-quality/runs/pcm-input-new \
+  --output /tmp/pcm-edge-report-new.json
+```
+
+manifest、実POST観測、Backend trace、解決済みProfileを照合する。試行番号とfixtureに加え、
+Coreで確定した発話の最終STT sample数が一致する一意なHTTP入力を選ぶ。
+previewのsample数や単なる最後のHTTP要求を代用にせず、曖昧なら欠測理由を残す。
+正解の冒頭・末尾の位置、相関値、競合候補、範囲内のsample数と順序を再検証する。
+
+100件の分母、全件の最終入力相関、端部照合、終了、測定revisionが揃う場合だけ
+このPCM端部の検証範囲を合格とする。本文中の休止分割率、VAD判定時刻、
+発話途中の無欠落、他の音声品質条件の合格は別途必要になる。
+少数試行・欠測でもJSONを保存し、未達時はexit 1を返す。

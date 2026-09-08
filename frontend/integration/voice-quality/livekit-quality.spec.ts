@@ -120,6 +120,7 @@ test(vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割�
     await mkdir(dirname(manifestPath), { recursive: true })
     await writeFile(manifestPath, JSON.stringify({
       measurement_scope: pilot === undefined ? "controlled" : "pilot",
+      measurement_revision: process.env.VOICE_QUALITY_MEASUREMENT_REVISION,
       expected_warmup: WARMUP_RUNS, expected_measured: MEASURED_RUNS,
       fixture: {
         fixture_version: fixture.fixture_version,
