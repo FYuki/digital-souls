@@ -325,3 +325,13 @@ LiveKitの`vad_leading_boundary`はfixture正解開始の因果下限から、�
 `python -m app.voice_vad_boundaries --manifest <trial-manifest.json> --trace <controlled-trace.jsonl> --output <新規出力.json>`は、通常fixtureの正解時計幅とnative時刻の1ms丸めを含む、開始・終了offsetの下限／上限を匿名集計する。開始offset上限が100ms超、終了offset下限が-100ms未満の場合をそれぞれ誤差件数へ加算する。閾値をまたぐ不確かな例も除外せず記録する。分母には欠測試行を残し、warm-upを除外し、独立session等のIDとfixtureを確認する。文中無音の誤分割と実PCM端部は専用cohort・PCM照合の証拠を併用する。
 
 古い測定を再集計する場合は元のartifactを上書きせず、測定revision、集計revision、元manifest／traceのhashを併記する。改善のための新しい100件測定と解釈しない。
+
+#### 2026-09-08: 通常100件のVAD再集計
+
+測定`2d10020ca818fce228b8446d51c329bebccb92e5`の保存済み通常100件を、集計`3fdcdb5d25714a589eb2d75635465caa3a96c239`で再解析した。[境界レポート](artifacts/livekit-normal-vad-reanalysis-2026-09-08-01-boundaries.json)は開始・終了のnative時刻を100/100で相関し、欠測0、100ms超の開始遅延0、100ms超の早期終了0、閾値をまたぐ不確かな例0だった。開始offset上限p95は17.020ms、終了offset上限p95は751.840ms。fixture時計幅は最大3.600msで、native wire時刻の1ms切り捨ても区間に含めた。
+
+[再集計artifact](artifacts/livekit-normal-vad-reanalysis-2026-09-08-01.json)と[独立照合](artifacts/livekit-normal-vad-reanalysis-2026-09-08-01-verification.json)を保存した。既存のVAD以外の指標は全て元のartifactと一致し、TTFA p95 11,995.305msの未達を保持している。後から追加されたHTTP要求context診断10項目は、この測定版では記録されていないためmissingのままとした。全指標の欠測が解消したという意味ではない。
+
+[baseline比較](artifacts/livekit-normal-vad-reanalysis-2026-09-08-01-latency.json)は比較可能8指標が基準内、観測点が異なる5指標が監査付き比較対象外。通常latencyのcoverage errorsは0だが、TTFA絶対上限により全体判定falseである。生成元のブラウザ・native観測・fixture時計のファイルhashを測定revisionに照合し、元のmanifest・trace・過去検証のhash、測定が所有したFrontend／Backendの削除も再確認した。旧artifactは上書きしていない。
+
+関連Backend 173件、変更2ファイルのmypy、Backend集計と比較器のruffを通過した。新たな会話試験や共有推論の設定変更は行っていない。実PCM端部、誤分割率、実声dogfood、応答速度の改善はそれぞれ別の証拠を必要とする。
