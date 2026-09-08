@@ -573,6 +573,15 @@ _METRIC_CATALOG = (
 )
 
 
+# LiveKitの検出境界は、旧WebSocketの録音開始・録音確定とは異なる。
+# fixtureの下限を引いた値は、符号付き検出offsetの上限を表す。
+LIVEKIT_VAD_POINTS = {
+    "vad_leading_boundary": ("fixture_speech_start_lower_bound", "vad_speech_start_client_upper_bound"),
+    "vad_trailing_boundary": ("fixture_speech_end_lower_bound", "speech_stopped_client_upper_bound"),
+}
+
+_LIVEKIT_VAD_EVENTS = {"vad_leading_boundary": "vad_speech_start_client", "vad_trailing_boundary": "speech_stopped"}
+
 _LIVEKIT_DIAGNOSTIC_CATALOG = (
     *(
         _MetricDefinition(
@@ -705,6 +714,11 @@ def _metric_observation(
             return MetricObservation.missing(f"{definition.value_event}_value_missing")
         return MetricObservation.measured(latest.value)
     assert definition.start_event is not None and definition.end_event is not None
+    if transport == "livekit" and definition.name in LIVEKIT_VAD_POINTS:
+        for name in (definition.start_event, definition.end_event):
+            observed = [event for event in trial_events if event.name == name]
+            if len(observed) > 1:
+                return MetricObservation.missing("duplicate_vad_boundary")
     started = by_name.get(definition.start_event)
     completed = by_name.get(definition.end_event)
     if started is None or completed is None:
@@ -716,6 +730,11 @@ def _metric_observation(
         return MetricObservation.missing("metric_boundary_clock_mismatch")
     if definition.signed_offset:
         offset = completed.timestamp - started.timestamp
+        if transport == "livekit" and definition.name in LIVEKIT_VAD_POINTS:
+            if completed.timestamp % 1 or completed.unit != "millisecond":
+                return MetricObservation.missing("native_vad_timestamp_not_integer_milliseconds")
+            # wire時刻はMath.floor(ms)。真の検出時刻の上限を1ms加えて保持する。
+            offset += 1
         if started.unit == "nanosecond":
             offset /= 1_000_000
         return MetricObservation.measured(float(offset))
@@ -777,6 +796,14 @@ def aggregate_events(
         _METRIC_CATALOG + _LIVEKIT_DIAGNOSTIC_CATALOG
         if metadata.transport == "livekit" else _METRIC_CATALOG
     )
+    if metadata.transport == "livekit":
+        definitions = tuple(
+            replace(definition, start_point=LIVEKIT_VAD_POINTS[definition.name][0],
+                    end_event=_LIVEKIT_VAD_EVENTS[definition.name],
+                    end_point=LIVEKIT_VAD_POINTS[definition.name][1])
+            if definition.name in LIVEKIT_VAD_POINTS else definition
+            for definition in definitions
+        )
     if has_interruptions:
         definitions = tuple(
             replace(

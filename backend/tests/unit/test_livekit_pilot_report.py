@@ -62,7 +62,7 @@ def test_pilot_filters_warmup_and_exports_anonymous_valid_artifact(pilot_inputs)
     assert artifact['run_counts']['measured'] == 1
     metrics = {item['name']: item for item in artifact['metrics']}
     assert metrics['ttfa']['p95'] == 460
-    assert metrics['vad_trailing_boundary']['missing_outcomes'] == {'metric_boundary_clock_mismatch': 1}
+    assert metrics['vad_trailing_boundary']['missing_outcomes'] == {'speech_stopped_event_missing': 1}
     for trial in manifest['trials']:
         assert trial['sessionId'] not in json.dumps(artifact)
 

@@ -133,3 +133,27 @@ def test_historical_and_native_playback_revisions_keep_distinct_audited_hashes()
     assert historical['candidate'] == report.AUDITED_CANDIDATE_VARIANTS[0]
     assert current['candidate'] == report.AUDITED_CANDIDATE_VARIANTS[1]
     assert historical['candidate'] != current['candidate']
+
+
+def test_native_vad_boundary_audit_requires_complete_samples_and_exact_points(artifacts):
+    candidate, baseline = artifacts
+    reference = {metric.name: metric for metric in baseline.metrics}
+    for name, (start, end) in report.LIVEKIT_VAD_POINTS.items():
+        candidate = candidate.model_copy(update={'metrics': [
+            reference[name].model_copy(update={'start_point':start, 'end_point':end}) if metric.name == name else metric
+            for metric in candidate.metrics]})
+    result = report.compare(candidate, baseline)
+    assert result['passed']
+    assert all(result['relative_results'][name].status == 'not_comparable' for name in report.LIVEKIT_VAD_POINTS)
+    incomplete = replace_metric(candidate, 'vad_leading_boundary', success_count=99, missing_count=1)
+    assert report.compare(incomplete, baseline)['relative_results']['vad_leading_boundary'].status == 'missing'
+    wrong = replace_metric(candidate, 'vad_trailing_boundary', end_point='invented_capture_end')
+    assert report.compare(wrong, baseline)['relative_results']['vad_trailing_boundary'].status == 'failed'
+
+
+def test_native_vad_source_audit_cannot_be_skipped_for_modified_browser(monkeypatch):
+    actual = report.verify_vad_sources('2d10020ca818fce228b8446d51c329bebccb92e5')
+    assert actual == report.VAD_AUDITED_CANDIDATE_VARIANTS[0]
+    monkeypatch.setattr(report, '_source_bytes', lambda *_: b'changed browser boundary')
+    with pytest.raises(ValueError, match='boundary audit required'):
+        report.verify_vad_sources('2d10020ca818fce228b8446d51c329bebccb92e5')

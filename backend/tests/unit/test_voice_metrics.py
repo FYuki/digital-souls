@@ -908,7 +908,7 @@ def test_vm_base_01_finalizer_rejects_fixture_or_transcript_mismatch(
 
 
 @pytest.mark.parametrize("metric,start,end", [
-    ("vad_trailing_boundary", "fixture_speech_end", "utterance_finalized"),
+    ("vad_trailing_boundary", "fixture_speech_end", "speech_stopped"),
     ("client_playback_latency", "client_audio_received", "first_playback"),
 ])
 def test_mixed_clock_metric_is_missing_without_losing_valid_ttfa(metric, start, end):
@@ -984,3 +984,21 @@ def test_conflicting_provider_timing_marker_is_not_used_as_zero_latency():
     metric=next(m for m in artifact.metrics if m.name=='llm_provider_acceptance_latency')
     assert metric.missing_outcomes=={'provider_timing_evidence_conflict':1}
     assert metric.p95 is None
+
+
+def test_livekit_vad_uses_detector_clock_and_preserves_rounding_upper_bound():
+    metrics = _voice_metrics()
+    events = [_event(metrics, event_id=name, name=name, timestamp=stamp,
+                     clock_domain="client_monotonic", unit="millisecond")
+              for name, stamp in [("fixture_speech_start",1000), ("vad_speech_start_client",990),
+                                  ("fixture_speech_end",1600), ("speech_stopped",1700), ("first_playback",1800)]]
+    events.append(_event(metrics, event_id="core-final", name="utterance_finalized", timestamp=90000000000))
+    metadata, diagnostics = _aggregation_context(metrics)
+    metadata = metadata.model_copy(update={"transport":"livekit"})
+    result = metrics.aggregate_events(events, metadata=metadata, diagnostics=diagnostics)
+    catalog = {row.name:row for row in result.metrics}
+    assert catalog["vad_leading_boundary"].p95 == -9
+    assert catalog["vad_trailing_boundary"].p95 == 101
+    assert catalog["vad_trailing_boundary"].end_point == "speech_stopped_client_upper_bound"
+    duplicate = metrics.aggregate_events(events + [events[3]], metadata=metadata, diagnostics=diagnostics)
+    assert next(row for row in duplicate.metrics if row.name == "vad_trailing_boundary").missing_outcomes == {"duplicate_vad_boundary":1}

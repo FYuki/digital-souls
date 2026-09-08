@@ -315,3 +315,13 @@ PYTHONPATH=backend backend/.venv/bin/python -m app.voice_session_metrics \
 [session集計](artifacts/livekit-native-session-three-turn-2026-09-08-01.json)と[独立照合結果](artifacts/livekit-native-session-three-turn-2026-09-08-01-verification.json)を保存した。関連Backend 232件、Frontend全ユニット794件、baseline比較16件、変更Backend 4ファイルのmypy・ruff、Frontend/Svelte/E2E TypeScript型検査を通過した。初回のFrontend検証ではschemaのstrictRequired違反、全ユニットでは新しいobservationを含まない既存期待値を検出し、修正後に全件を再実行した。
 
 この1 sessionは計測経路の実接続検証であり、通常100件の速度安定化、実障害時のsession照合、実声dogfoodの受入れ完了を示さない。最新通常100件のTTFA p95 11,995.305msという未達判定は維持する。
+
+### 通常fixtureのnative VAD境界と旧録音境界の区別
+
+LiveKitの`vad_leading_boundary`はfixture正解開始の因果下限から、確認されたVAD候補開始frameのclient時刻の上限までを表す。`vad_trailing_boundary`はfixture正解終了の因果下限から、VADのended通知に使ったclient時刻の上限までを表す。wire時刻は整数msへ切り捨てられるため、上限には1msを加える。これらは検出器の時刻であり、実STT入力の先頭・末尾sampleの証明には使用しない。
+
+旧WebSocketの値は、`onSpeechStart`で`recorder.start()`を呼ぶ直前、および`stopAndTake()`完了後のclient時刻である。LiveKitの検出器時刻と同一区間ではないため、明示した新しい観測点・100件の完全な記録・監査済みの生成元を確認した場合だけ、baseline相対比較を「比較対象外」とする。欠測のまま比較対象外へ変換せず、TTFA等の絶対目標と、VAD誤差率の判定は別に残す。
+
+`python -m app.voice_vad_boundaries --manifest <trial-manifest.json> --trace <controlled-trace.jsonl> --output <新規出力.json>`は、通常fixtureの正解時計幅とnative時刻の1ms丸めを含む、開始・終了offsetの下限／上限を匿名集計する。開始offset上限が100ms超、終了offset下限が-100ms未満の場合をそれぞれ誤差件数へ加算する。閾値をまたぐ不確かな例も除外せず記録する。分母には欠測試行を残し、warm-upを除外し、独立session等のIDとfixtureを確認する。文中無音の誤分割と実PCM端部は専用cohort・PCM照合の証拠を併用する。
+
+古い測定を再集計する場合は元のartifactを上書きせず、測定revision、集計revision、元manifest／traceのhashを併記する。改善のための新しい100件測定と解釈しない。

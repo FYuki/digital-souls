@@ -4,21 +4,26 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from pathlib import Path
 import re
 import subprocess
 import sys
+from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
 from jsonschema import Draft202012Validator
+from pydantic import BaseModel, ConfigDict
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'backend'))
 from app.voice_baseline import _assert_anonymous
 from app.voice_metrics import (
-    AggregateArtifact, MetricAggregate, TargetEvaluation,
-    evaluate_artifact, evaluate_latency_target, evaluate_relative_latency,
+    LIVEKIT_VAD_POINTS,
+    AggregateArtifact,
+    MetricAggregate,
+    TargetEvaluation,
+    evaluate_artifact,
+    evaluate_latency_target,
+    evaluate_relative_latency,
 )
 
 BASELINE_REVISION = '4d71fbbf111ac87f22e7801106169ee6e4f1f532'
@@ -74,6 +79,42 @@ BOUNDARY_AUDIT = {
                                'backend/app/conversation_core/session.py:698-700'],
     },
 }
+# LiveKitは検出器の候補開始frameとended通知を記録する。
+# WS baselineのrecorder.start呼出し／stopAndTake完了とは一致しない。
+VAD_BOUNDARY_AUDIT = {
+    'vad_leading_boundary': {
+        'baseline': 'fixture正解開始 → onSpeechStart callbackでrecorder.startを呼ぶ直前',
+        'candidate': 'fixture正解開始の因果下限 → 確認された候補開始frameのclient時刻の丸め上限（offset上限）',
+        'baseline_evidence': ['frontend/src/lib/AudioRecorder.svelte:54-55'],
+        'candidate_evidence': ['frontend/src/lib/AudioRecorder.svelte:76-87',
+                               'frontend/src/lib/audio/utterance-detector.ts:101-102',
+                               'frontend/src/lib/audio/utterance-detector.ts:172',
+                               'backend/app/livekit_transport/production.py:897-906'],
+    },
+    'vad_trailing_boundary': {
+        'baseline': 'fixture正解終了 → stopAndTake完了後の録音確定client時刻',
+        'candidate': 'fixture正解終了の因果下限 → 検出器ended通知のclient時刻の丸め上限（offset上限）',
+        'baseline_evidence': ['frontend/src/lib/AudioRecorder.svelte:140-151'],
+        'candidate_evidence': ['frontend/src/lib/AudioRecorder.svelte:86-87',
+                               'frontend/src/lib/AudioRecorder.svelte:242-247',
+                               'backend/app/livekit_transport/measurement.py:401-409'],
+    },
+}
+VAD_AUDITED_CANDIDATE_VARIANTS = ({'frontend/src/lib/AudioRecorder.svelte': 'e288286ca4355a42733f7ff21d060e955b5af46838561265a3e8774acbc1f0df',
+  'frontend/src/lib/audio/utterance-detector.ts': 'dc1fda4e55aa283c43c3846f243280f4ea2fc7610179e4be3eff2cfb199db040',
+  'frontend/src/App.svelte': '1eae6fd3cd401685e7ed792a325bdec08d8f140f6f7ba9bf6a8ed50224c3c700',
+  'frontend/src/livekit/voice-session.ts': '15339da7b4195dbc09fe526e64c602bd0641894f11655238010538bc9fbe57b9',
+  'backend/app/livekit_transport/measurement.py': 'a87ec92503224cc5c5cfb0c7b8397e9dd5231df5b1e40f31ef125a83ac34e626',
+  'frontend/playwright/controlled-audio-fixture.ts': 'c78eaec064d1ac7fdcf193e96029aea8377a855a9448cfd8f6702a6e17a770c6',
+  'frontend/integration/voice-quality/livekit-quality.spec.ts': 'cefd1a9973688ae356ced54f72e5a3d28a8a582289ff97436c6c72aca99e9fe9'},
+ {'frontend/src/lib/AudioRecorder.svelte': 'e288286ca4355a42733f7ff21d060e955b5af46838561265a3e8774acbc1f0df',
+  'frontend/src/lib/audio/utterance-detector.ts': 'dc1fda4e55aa283c43c3846f243280f4ea2fc7610179e4be3eff2cfb199db040',
+  'frontend/src/App.svelte': '8315267bde4594f0f271ebb515ec9d2b05cc2aedb1e43ef0e335779cba026223',
+  'frontend/src/livekit/voice-session.ts': 'd713d373c46b2af3ba742f1d97062b71563f949a45cc76ebcb211f314bde33f2',
+  'backend/app/livekit_transport/measurement.py': 'a87ec92503224cc5c5cfb0c7b8397e9dd5231df5b1e40f31ef125a83ac34e626',
+  'frontend/playwright/controlled-audio-fixture.ts': 'c78eaec064d1ac7fdcf193e96029aea8377a855a9448cfd8f6702a6e17a770c6',
+  'frontend/integration/voice-quality/livekit-quality.spec.ts': 'cefd1a9973688ae356ced54f72e5a3d28a8a582289ff97436c6c72aca99e9fe9'})
+
 NORMAL_ABSOLUTE = ('ttfa', 'utterance_finalized')
 
 
@@ -131,6 +172,14 @@ def verify_sources(candidate_revision: str) -> dict[str, dict[str, str]]:
     return actual
 
 
+def verify_vad_sources(candidate_revision: str) -> dict[str, str]:
+    actual = {path: hashlib.sha256(_source_bytes(candidate_revision, path)).hexdigest()
+              for path in VAD_AUDITED_CANDIDATE_VARIANTS[0]}
+    if actual not in VAD_AUDITED_CANDIDATE_VARIANTS:
+        raise ValueError('native VAD source changed; boundary audit required')
+    return actual
+
+
 def complete(metric: MetricAggregate | None) -> bool:
     return metric is not None and (
         metric.status == 'measured' and metric.unit == 'millisecond'
@@ -170,14 +219,18 @@ def compare(candidate: AggregateArtifact, baseline: AggregateArtifact) -> dict:
         if b.unit != 'millisecond' or b.status != 'measured' or b.p95 is None:
             continue
         m = current.get(b.name)
-        row = dict(candidate_p95_ms=None if m is None else m.p95, baseline_p95_ms=b.p95,
-                   relative_limit_ms=b.p95 + max(b.p95 * .1, 50), reason=None)
+        row = {'candidate_p95_ms': None if m is None else m.p95, 'baseline_p95_ms': b.p95,
+                   'relative_limit_ms': b.p95 + max(b.p95 * .1, 50), 'reason': None}
         if b.name in BOUNDARY_AUDIT:
             # 除外は相対比較だけ。絶対上限・観測不足は独立して残す。
             row.update(status='not_comparable', relative_limit_ms=None,
                        reason='audited_observation_intervals_differ', boundary_evidence=BOUNDARY_AUDIT[b.name])
             if not complete(m):
                 coverage.append(f'{b.name}:incomplete_measurement')
+        elif b.name in VAD_BOUNDARY_AUDIT and m is not None and (
+                m.start_point, m.end_point) == LIVEKIT_VAD_POINTS[b.name] and complete(m) and complete(b):
+            row.update(status='not_comparable', relative_limit_ms=None,
+                       reason='audited_observation_intervals_differ', boundary_evidence=VAD_BOUNDARY_AUDIT[b.name])
         elif not complete(m) or not complete(b):
             coverage.append(f'{b.name}:incomplete_measurement')
             row.update(status='missing', reason='incomplete_measurement')
@@ -187,10 +240,10 @@ def compare(candidate: AggregateArtifact, baseline: AggregateArtifact) -> dict:
         else:
             row.update(status='passed' if evaluate_relative_latency(m.p95, b.p95).passed else 'failed')
         relative[b.name] = ComparisonRow(**row)
-    return dict(passed=not coverage and all(r.passed for r in absolute.values())
+    return {'passed': not coverage and all(r.passed for r in absolute.values())
                 and all(r.status in ('passed', 'not_comparable') for r in relative.values()),
-                absolute_results=absolute, relative_results=relative, coverage_errors=sorted(set(coverage)),
-                strict_evaluation_passed=strict.passed, strict_coverage_errors=strict.coverage_errors)
+                'absolute_results': absolute, 'relative_results': relative, 'coverage_errors': sorted(set(coverage)),
+                'strict_evaluation_passed': strict.passed, 'strict_coverage_errors': strict.coverage_errors}
 
 
 def build_report(candidate_path: Path, baseline_path: Path, verification_path: Path) -> NormalLatencyReport:
@@ -203,13 +256,17 @@ def build_report(candidate_path: Path, baseline_path: Path, verification_path: P
         raise ValueError('candidate verification hash mismatch')
     revision = evidence.get('measurement_revision')
     if not isinstance(revision, str):
-        raise ValueError('candidate measurement revision required')
+        raise ValueError('candidate measurement revision required')  # noqa: TRY004 - CLIの入力不整合をValueErrorに統一
     audited_sources = verify_sources(revision)
     schema = json.loads((ROOT / 'docs/schemas/voice-quality-artifact-v1.schema.json').read_text())
     for raw in (cbytes, bbytes):
         value = json.loads(raw)
         Draft202012Validator(schema).validate(value)
         _assert_anonymous(value)
+    candidate = AggregateArtifact.model_validate_json(cbytes)
+    if any(metric.name in LIVEKIT_VAD_POINTS and (metric.start_point, metric.end_point) == LIVEKIT_VAD_POINTS[metric.name]
+           for metric in candidate.metrics):
+        audited_sources['vad_candidate'] = verify_vad_sources(revision)
     result = NormalLatencyReport(candidate_revision=revision, candidate_sha256=candidate_hash,
         audited_source_sha256=audited_sources,
         **compare(AggregateArtifact.model_validate_json(cbytes), AggregateArtifact.model_validate_json(bbytes)))
