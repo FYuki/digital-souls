@@ -717,3 +717,5 @@ backend/.venv/bin/python scripts/voice_quality/run_pilot.py \
 manifestにはsessionの識別子、発話・応答件数、明示終了要求数、再接続猶予、終了理由を残す。認証token、接続先、会話本文は保存しない。終了前の操作summaryとnativeのcreated／activated／endedを照合し、架空のutterance／response IDを作らない。切断側では最後の操作summaryがないため、操作回数の全区間は欠測として残す。障害注入による予期しない終了1件を、通常運用で予期しない終了0件という受け入れ条件へ混ぜない。
 
 `--controlled`、連続発話、相槌／割り込み／VAD／PCM／供給診断、専用network障害、thinking上書きとは同時指定できない。通常runへ戻ると、この診断用の環境変数を引き継がない。
+
+無応答診断の初回では、SFUによる切断検知がbrowserのpage終了より遅れ、page終了から再接続猶予＋20秒という待機では猶予満了前にテスト環境を停止してしまった。失敗runは`livekit-zero-response-session-2026-09-08-01-failed.json`に保持する。診断の待機上限は、明示終了10秒、page切断では再接続猶予＋60秒とする。これは検知・cleanupを観測するためのテスト上限であり、再接続成功率や復旧latencyの受け入れ基準を変更しない。page側の操作からnative終了を観測するまでの時間は同じNode monotonic時計で別記録し、server内部の猶予時間と読み替えない。

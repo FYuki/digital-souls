@@ -89,6 +89,7 @@ export async function measureZeroResponseSessions(
       expect(before.fixture_finished).toBe(false)
       record.before_end = before
       stage = kind
+      const endObservedFromMs = performance.now()
       if (kind === 'explicit_end') {
         const response = page.waitForResponse(value => value.request().method() === 'DELETE'
           && new URL(value.url()).pathname.endsWith(`/voice/livekit/sessions/${issuedId}`))
@@ -105,7 +106,8 @@ export async function measureZeroResponseSessions(
       stage = 'native_end'
       const expectedReason = kind === 'explicit_end' ? 'explicit' : 'reconnect_timeout'
       await expect.poll(async () => (await readSession(issuedId)).find(row => row.name === 'ended')?.reason,
-        { timeout: graceMs + 20_000, intervals: [100, 250, 500] }).toBe(expectedReason)
+        // SFUの切断検知はpage.closeより遅れる。再接続猶予はserver側の通知から起算する。
+        { timeout: kind === 'explicit_end' ? 10_000 : graceMs + 60_000, intervals: [100, 250, 500] }).toBe(expectedReason)
       const rows = await readSession(issuedId)
       expect(rows.filter(row => row.name === 'created')).toHaveLength(1)
       expect(rows.filter(row => row.name === 'activated')).toHaveLength(1)
@@ -116,7 +118,8 @@ export async function measureZeroResponseSessions(
       ended = true
       Object.assign(record, { outcome: 'success', native_end_reason: expectedReason,
         explicit_delete_requests: deleteRequests, native_completed_responses: 0,
-        native_end_confirmed: true, final_operation_window_observed: kind === 'explicit_end' })
+        native_end_confirmed: true, end_observation_elapsed_ms: performance.now() - endObservedFromMs,
+        final_operation_window_observed: kind === 'explicit_end' })
     } catch (error) {
       record.failure_stage = stage
       throw error

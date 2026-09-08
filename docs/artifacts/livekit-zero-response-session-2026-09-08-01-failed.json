@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "measurement_revision": "73cc44fe0616bb8f81fc0dd850d978b48bb380e6",
+  "verification_scope": "failed_zero_response_session_diagnostic_retained",
+  "full_issue_acceptance_verified": false,
+  "test_exit_code": 1,
+  "explicit_end_verified": true,
+  "browser_disconnect_end_observed": false,
+  "reconnect_grace_ms": 60000,
+  "harness_end_wait_ms": 80000,
+  "native_created_sessions": 2,
+  "native_activated_sessions": 2,
+  "native_ended_sessions": 1,
+  "sfu_test_user_close_time_utc": "2026-09-08T14:19:52.822Z",
+  "sfu_test_user_close_reason": "PEER_CONNECTION_DISCONNECTED",
+  "environment_end_time_utc": "2026-09-08T14:20:52.618589+00:00",
+  "server_grace_origin": "participant_disconnected_notification",
+  "observer_wait_origin": "browser_page_closed",
+  "timeout_origin_mismatch_identified": true,
+  "runtime_cleanup_after_grace_verified": false,
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "teardown_completed": true,
+  "source_sha256": {
+    "trial-manifest.json": "a199dce5d91dac1a28e4188dec41580814ed2789b7255ba08390b91a99ea2caa",
+    "runtime-data/voice-metrics/sessions/controlled-trace.jsonl": "ca0bde62267edcf9ef7537cc5bb30b3e4f82134b4e34913951c845e770971bf7",
+    "runtime-data/runtime/standalone/environment-run.json": "559b57c5a0ed7f7c81df2fd135b4e975127839c4bfe88e19929f607a47ac6828",
+    "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+  },
+  "test_log_sha256": "5e2311377f5bf976193b3f5a9d6d6e51c579656185dae523d25792e0e54a01ab"
+}
