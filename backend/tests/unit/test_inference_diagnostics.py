@@ -16,7 +16,7 @@ from app.inference.adapters.ollama import OllamaAdapter
 from app.inference.contracts import InferenceMessage, TextGenerationRequest
 from app.inference.diagnostics import (
     InferenceDiagnostics, collect_diagnostics, diagnostic,
-    estimate_diagnostics, ollama_diagnostics,
+    estimate_diagnostics, ollama_diagnostics, ollama_request_diagnostics,
 )
 from app.livekit_trace_report import finalize_livekit_dogfood_report
 from app.livekit_transport.measurement import LiveKitMeasurementSession
@@ -156,6 +156,10 @@ def test_real_adapter_stream_reports_headers_and_terminal_provider_numbers(
         assert events["llm_thinking_characters"].value == len("private reasoning")
         assert events["llm_first_provider_chunk"].timestamp_ns <= events["llm_first_thinking_chunk"].timestamp_ns
         assert events["ollama_generation_load_ms"].value == 2
+        assert events["ollama_generation_http_requests"].value == 1
+        for boundary in ("minimum", "maximum"):
+            assert events[f"ollama_generation_requested_context_tokens_{boundary}"].value == 110
+            assert events[f"ollama_generation_requested_output_tokens_{boundary}"].value == 10
         assert "private" not in json.dumps([asdict(event) for event in events.values()])
     try:
         asyncio.run(exercise())
@@ -238,3 +242,28 @@ def test_core_diagnostics_reach_correlated_trace_and_anonymous_report(
     assert all(secret not in output.read_text() for secret in (
         "character-test", "session-test", "utterance-test", "response-test", "合成の返答",
     ))
+
+
+def test_request_ranges_preserve_mixed_contexts_and_separate_estimation():
+    with collect_diagnostics() as collector:
+        ollama_request_diagnostics({"num_ctx": 8192, "num_predict": 1024, "arbitrary": "private"})
+        ollama_request_diagnostics({"num_ctx": 13312, "num_predict": 512})
+        with estimate_diagnostics():
+            ollama_request_diagnostics({"num_ctx": 8192, "num_predict": 1})
+        events = {e.name: e.value for e in collector.finish()}
+    assert events["ollama_generation_http_requests"] == 2
+    assert events["ollama_generation_requested_context_tokens_minimum"] == 8192
+    assert events["ollama_generation_requested_context_tokens_maximum"] == 13312
+    assert events["ollama_generation_requested_output_tokens_minimum"] == 512
+    assert events["ollama_generation_requested_output_tokens_maximum"] == 1024
+    assert events["ollama_estimate_http_requests"] == 1
+    assert events["ollama_estimate_requested_context_tokens_maximum"] == 8192
+    assert events["ollama_estimate_requested_output_tokens_maximum"] == 1
+    assert "private" not in json.dumps(events)
+
+
+@pytest.mark.parametrize("invalid", [True, 0, -1, 1.5, "private", 2**53])
+def test_invalid_request_numbers_remain_missing(invalid):
+    with collect_diagnostics() as collector:
+        ollama_request_diagnostics({"num_ctx": invalid, "num_predict": invalid})
+        assert {e.name: e.value for e in collector.finish()} == {"ollama_generation_http_requests": 1}

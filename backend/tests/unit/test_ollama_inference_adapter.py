@@ -475,8 +475,17 @@ def test_exact_count_cache_checks_model_digest_and_keeps_request_variants_separa
             options={}, max_input_tokens=7168, timeout_seconds=3,
             context_window_tokens=8192, allow_cached_exact_result=True,
         )
-        first = adapter.estimate_input_tokens(request)
-        repeated = adapter.estimate_input_tokens(request)
+        from app.inference.diagnostics import collect_diagnostics, estimate_diagnostics
+        with collect_diagnostics() as collector, estimate_diagnostics():
+            first = adapter.estimate_input_tokens(request)
+            repeated = adapter.estimate_input_tokens(request)
+            diagnostics = {e.name: e.value for e in collector.finish()}
+        # cache照合用payloadやtags取得をchat送信として数えない。
+        assert diagnostics["ollama_estimate_http_requests"] == 1
+        assert diagnostics["ollama_estimate_requested_context_tokens_minimum"] == 8192
+        assert diagnostics["ollama_estimate_requested_context_tokens_maximum"] == 8192
+        assert diagnostics["ollama_estimate_requested_output_tokens_maximum"] == 1
+        assert "ollama_generation_http_requests" not in diagnostics
         assert first.count == repeated.count == 11
         assert first.external_request_count == 3
         assert repeated.external_request_count == 1

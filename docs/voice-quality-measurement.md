@@ -267,3 +267,10 @@ revision `2d10020ca818fce228b8446d51c329bebccb92e5`で、Whisper中継なし・�
 [provider loadの数値照合](artifacts/livekit-normal-supply-load-diagnostic-2026-09-08-01.json)では、TTFAが2秒を超えた29件のうち28件で、Ollamaが返すgeneration load時間も1秒を超えた。load p95は10,300.998msだった。常駐観測には想定8,192に加えて12,289・13,312のcontext設定と、対象モデルが観測されないsampleが含まれる。ただし常駐sampleは準備・起動・終了も含み、応答件数とは別の分母である。他の要求元やcontext変化の因果関係は未特定で、load時間をqueue待ちの実測へ読み替えない。
 
 先行runのp95 1,845msという速度達成は保持するが、通常運用で安定して再現できたとは扱わない。今回のgap 0も先行runの41.333ms gapの原因修正を証明しない。まず共有推論の設定変化とload増大を切り分け、速度と再生継続性を同じ条件で満たす必要がある。全条件の証拠と未完了項目は[Issue #150受け入れ確認表](issue-150-acceptance-audit.md)にまとめる。
+
+
+### 送信時の推論設定と常駐設定の分離
+
+Ollamaへの実chat送信直前に、`ollama_<estimate|generation>_http_requests`と、実際の`options.num_ctx`・`options.num_predict`の最小・最大を数値traceへ記録する。名前は`ollama_<operation>_requested_<context_tokens|output_tokens>_<minimum|maximum>`で固定する。複数要求を合算して架空のcontext値にせず、同一応答中の設定範囲を保存する。cache照合のためのpayload作成やtags取得はchat送信として数えない。
+
+この値はアプリがHTTP clientへ渡した設定であり、provider受付・実際のmodel常駐設定や他アプリの要求を証明しない。常駐pollのcontext値、providerが返したload時間とは別の観測として照合する。本文・任意のoptionsキー・認証情報は保存しない。旧traceにない設定値を後から推定して補完しない。

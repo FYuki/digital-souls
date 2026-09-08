@@ -29,7 +29,7 @@ from app.inference.contracts import (
 )
 from app.inference.errors import InferenceError, InferenceErrorCategory
 from app.inference.images import CONSERVATIVE_IMAGE_TOKEN_ESTIMATE
-from app.inference.diagnostics import diagnostic, ollama_diagnostics
+from app.inference.diagnostics import diagnostic, ollama_diagnostics, ollama_request_diagnostics
 from app.inference.token_estimate_cache import ExactTokenEstimateCache
 
 
@@ -121,6 +121,7 @@ class OllamaAdapter:
                 trust_env=False,
             ) as client:
                 diagnostic("llm_http_started")
+                ollama_request_diagnostics(cast(Mapping[str, object], payload["options"]))
                 async with client.stream(
                     "POST", self._endpoint("/api/chat"), json=payload
                 ) as response:
@@ -390,14 +391,14 @@ class OllamaAdapter:
         context_window_tokens: int | None = None,
     ) -> httpx.Response:
         try:
+            payload = self._chat_payload(
+                request, stream=False, response_schema=response_schema,
+                context_window_tokens=context_window_tokens,
+            )
+            ollama_request_diagnostics(cast(Mapping[str, object], payload["options"]))
             response = self._http_client.post(
                 self._endpoint("/api/chat"),
-                json=self._chat_payload(
-                    request,
-                    stream=False,
-                    response_schema=response_schema,
-                    context_window_tokens=context_window_tokens,
-                ),
+                json=payload,
                 timeout=httpx.Timeout(request.timeout_seconds),
             )
             response.raise_for_status()

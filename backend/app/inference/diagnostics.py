@@ -27,7 +27,15 @@ _PROVIDER_FIELDS = {
     "prompt_eval_cached_count": "cached_input_tokens",
     "eval_count": "output_tokens",
 }
+_REQUEST_RANGE_NAMES = frozenset(
+    f"ollama_{operation}_requested_{field}_{boundary}"
+    for operation in ("estimate", "generation")
+    for field in ("context_tokens", "output_tokens")
+    for boundary in ("minimum", "maximum")
+)
 VALUE_NAMES = frozenset({
+    *_REQUEST_RANGE_NAMES,
+    "ollama_estimate_http_requests", "ollama_generation_http_requests",
     "token_estimate_requests", "token_estimate_total_ms", "token_estimate_queue_ms",
     "prompt_message_count", "prompt_input_tokens",
     "llm_thinking_chunks", "llm_thinking_characters",
@@ -76,7 +84,10 @@ class InferenceDiagnostics:
             if existing is not None:
                 if value is None:
                     return
-                value += existing.value or 0
+                if name in _REQUEST_RANGE_NAMES:
+                    value = (min if name.endswith("_minimum") else max)(value, existing.value or 0)
+                else:
+                    value += existing.value or 0
                 if not math.isfinite(value):
                     return
             self._events[name] = DiagnosticEvent(name, perf_counter_ns(), value)
@@ -133,3 +144,17 @@ def ollama_diagnostics(body: Mapping[str, object]) -> None:
             continue
         if math.isfinite(numeric):
             diagnostic(f"ollama_{_OPERATION.get()}_{suffix}", numeric)
+
+
+def ollama_request_diagnostics(options: Mapping[str, object]) -> None:
+    """実送信直前の数値設定だけを記録する。cache用payload作成では呼ばない。"""
+    if _CURRENT.get() is None:
+        return
+    operation = _OPERATION.get()
+    diagnostic(f"ollama_{operation}_http_requests", 1)
+    for key, field in (("num_ctx", "context_tokens"), ("num_predict", "output_tokens")):
+        value = options.get(key)
+        if type(value) is not int or not 0 < value <= 2**53 - 1:
+            continue
+        for boundary in ("minimum", "maximum"):
+            diagnostic(f"ollama_{operation}_requested_{field}_{boundary}", value)
