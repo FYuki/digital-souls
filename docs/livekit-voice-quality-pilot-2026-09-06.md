@@ -2063,3 +2063,40 @@ JSONを再帰的なTypeScript探索から除いた後に全件通過した。失
 この予備試行は正式100件の代用ではない。集計器は件数不足により終了コード1でartifactを保存し、
 受入判定を不合格のまま残した。旧版の上限771 sampleなどのartifactは変更していない。
 再接続p95、実STTへのfixture境界対応、標準contextの品質・性能、最終実統合を含む#150全体は未完了である。
+
+
+## 停止証拠を照合した独立take_turn 100試行
+
+測定版 `9a8ce42409e8118fdfec89505968ce698651ae9a` を固定し、ラベル付きtake_turn音声100件を
+実LiveKit・Ollama・Whisper・VOICEVOXで測定した。これは割り込み用の100件であり、通常応答の
+warm-up 5件＋100件とは別の分母である。think:falseと既存のテスト用初期条件を維持した。
+
+[サーバー取消境界での独立集計](artifacts/livekit-stale-output-stop-proof-100.json)は、
+100件すべてで要求・graph・停止位置・実出力時計・サーバー確認順序を照合できた。
+音声提示、ライブ本文提示、履歴本文提示は各100件で取消後の追加0、欠測0であり、
+`stale_presented_passed`はtrueとなった。元の取消時計範囲を保持した結果、音声受領には
+4件の不確かな境界が残り、総量は下限0／上限4 packet・3,840 sampleだった。
+受領候補を実出力と混同せず、その不確かさもartifactへ保存した。
+テキスト受領とCoreのprovider結果受領は各100件で0だった。
+
+[割り込み集計](artifacts/livekit-take-turn-output-stop-proof-100.json)は、
+100件の注入・take_turn判定・cancelを確認し、見逃し0、欠測0、全遅延目標達成だった。
+
+| 指標 | p50 | p95 | p95目標 |
+|---|---:|---:|---:|
+| 発話開始からlocal playback stop | 1,131.500ms | 1,936.250ms | 3,000ms |
+| 発話開始からturn decision | 1,131.000ms | 1,935.300ms | 3,000ms |
+| decision後cancel | 26.579ms | 30.266ms | 200ms |
+| 発話開始から全cancel | 1,162.000ms | 1,968.250ms | 3,500ms |
+
+[ブラウザVADの境界集計](artifacts/livekit-vad-output-stop-proof-100.json)では、冒頭遅延、
+早期終了、誤分割、境界の不確かさは各0件だった。これはブラウザでの検出境界の証拠であり、
+fixtureから実STT入力PCMまでの対応を新たに証明するものではない。
+
+100件の独立session・conversation、保存済みinterrupted履歴との対応、同じDOMでの本文保持、
+出力監視の閉鎖、session終了を確認した。test環境の終了処理、所有するFrontend・Backendの
+実削除、起動imageと測定版の一致、ロードしたnative SDKの検証も完了した。
+3種類のartifactをschema検証し、同一raw manifest・traceのhashを照合して保存した。
+
+今回の結果で#150全体を完了とは扱わない。再接続の成功時p95、source PCMの対応、
+標準persona/history/memoryでの性能と品質、比較可能なbaseline、最終の実接続受入が残る。
