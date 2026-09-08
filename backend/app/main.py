@@ -277,7 +277,9 @@ async def _stream_core_reply(
     conversation_id: str | None = None,
 ) -> AsyncIterator[str]:
     prepare_arguments: tuple[object, ...] = (character, history_session, transcript)
-    if screen is not None or history_access is not None:
+    if tools is not None and conversation_id is not None:
+        prepare_arguments = (*prepare_arguments, screen, history_access, False)
+    elif screen is not None or history_access is not None:
         prepare_arguments = (*prepare_arguments, screen, history_access)
     prompt, max_output_tokens = await run_sync(
         chat_service.prepare_unrecorded_generation,
@@ -330,6 +332,7 @@ async def _stream_core_reply(
             ),
             model_settings.chat_context_tokens - max_output_tokens,
         )
+        prompt = await run_sync(chat_service.with_life_context, character, prompt)
     if history_access is not None and not all(
         history_access.allows(lineage) for lineage in prompt.screen_lineages
     ):

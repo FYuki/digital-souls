@@ -109,6 +109,9 @@ connectionへのGrantは会話での利用許可と別であり、schema変更�
 MCPのResource読取と登録済みBindingを再利用する。複数Bindingから選ぶ場合は状態の`binding_target_id`へ管理側のIDを指定する。不足は`binding_input_required`で保留する。
 
 共有候補の`APPLIED`はLife State保存の成功を表す。SELF Episode・Reflection・人格・Skill全体の統合完了を表さない。
+
+会話では現在の画面情報とMCP取得結果の入力枠を先に確保し、Life Stateは残り枠に収まる場合だけ追加する。
+HTTP会話・音声Coreのstreamで同じ優先順を使う。Life Stateが入らない場合も、ツール実行や取得結果の回答を妨げない。
 Reflection由来の状態は元sourceのrevisionを保存し、会話・実行直前に正本metadataを照合する。
 訂正・非公開化は件数制限なしで依存状態を休眠化し、正本取得不能時は派生状態を利用しない。
 関連Epic未実装の状態で、共通ADRの全体シナリオが完了したとは報告しない。
