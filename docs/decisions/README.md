@@ -15,6 +15,8 @@ archive内の文書を現行仕様や実装のSource of Truthとして使用し�
 
 ## 現行の優先関係
 
+- [`character-life-runtime-2026-09.md`](character-life-runtime-2026-09.md) は、#249のtop-level runtimeへDBOSを採用し、domain正本・関連Epicとの責務境界を定める。
+
 - [`character-life-memory-personality-autonomy-2026-09.md`](character-life-memory-personality-autonomy-2026-09.md) は、本人視点のEpisode、Semantic/Reflection分離、Life State、Big Five Aspects人格、Relationship、Autonomy Target、外部送信privacy、高影響操作の共通契約を定める。
 - 上記範囲で `wave2-memory-formation-retrieval-2026-08.md`、`rag-memory-privacy-policy-2026-07.md`、`tool-use-foundation-2026-09.md` と競合する場合は、2026-09のCharacter Life ADRを優先する。
 - 長期記憶保存時の絶対禁止・SQLite正本／Chroma派生index・transactional outbox、#104/#182のCapability Snapshot / Execution Gate等、Character Life ADRで明示的に変更していない既存契約は継続する。

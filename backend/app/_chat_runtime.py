@@ -117,6 +117,7 @@ class ChatRuntimeDependencies:
     memory_formation_submitter: MemoryFormationSubmitter
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
     tools: ToolService | None = None
+    life_context: Callable[[str, BuiltPrompt], BuiltPrompt] | None = None
 
 
 @dataclass(frozen=True)
@@ -795,6 +796,8 @@ def _build_unrecorded_prompt(
         if exc.category is InferenceErrorCategory.TIMEOUT:
             raise chat_service.ChatTimeoutError() from None
         raise chat_service.ChatBackendError() from None
+    if dependencies.life_context is not None:
+        prompt = dependencies.life_context(character, prompt)
     if screen is None:
         return replace(
             prompt,

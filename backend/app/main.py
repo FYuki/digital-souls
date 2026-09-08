@@ -23,6 +23,7 @@ from app.audio_pipeline import (
 )
 from app.chat_prompt import build_chat_prompt
 from app.characters.loader import load_character_card
+from app.characters.catalog import CharacterCatalog
 from app.backup_restore import (
     BackupAuthenticationKey,
     create_backup,
@@ -133,6 +134,18 @@ from app.voice_metrics import (
 from app.tool_use.runtime import ToolRuntime, ToolSettings
 from app.tool_use.prompt import routing_history, with_tool_material, require_tool_room
 from app.tool_use.service import ToolService
+from app.character_life.runtime import Runtime as LifeRuntime, Settings as LifeSettings
+from app.character_life.service import Service as LifeService
+from app.character_life.store import Store as LifeStore
+from app.character_life.cognition import (
+    Cognition as LifeCognition,
+    Privacy as LifePrivacy,
+)
+from app.character_life.prompt import Context as LifeContext
+from app.character_life.formation import LifeFormation
+from app.character_life.cognition import Formation as StateFormation
+from app.character_life.ports import DeferredReflections
+from app.routers.character_life import router as character_life_router
 
 VOICE_MEASUREMENT_KIND_ENV = "VOICE_MEASUREMENT_KIND"
 VOICE_CONTROLLED_TRACE_PATH_ENV = "VOICE_CONTROLLED_TRACE_PATH"
@@ -520,6 +533,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         core_transcriber = None
         core_synthesizer = None
         tool_runtime = None
+        life_runtime = None
+        life_context = None
         try:
             llm_router.register_inference_router(inference_runtime.router)
             inference_router_registered = True
@@ -706,14 +721,67 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 conversation_history_repository,
                 history_sanitizer,
             )
-            if InferenceTarget.TOOL_ROUTING in inference_runtime.settings.targets:
+            life_settings = LifeSettings.load(dict(os.environ))
+            if (
+                life_settings.enabled
+                and InferenceTarget.CHARACTER_LIFE
+                not in inference_runtime.settings.targets
+            ):
+                raise ValueError(
+                    "Character Life requires INFERENCE_TARGET_CHARACTER_LIFE"
+                )
+            if (
+                InferenceTarget.TOOL_ROUTING in inference_runtime.settings.targets
+                or life_settings.enabled
+            ):
                 tool_runtime = ToolRuntime(
                     tool_settings, inference_runtime.router, privacy_scanner
                 )
                 await tool_runtime.start()
             app.state.tool_service = (
-                tool_runtime.service if tool_runtime is not None else None
+                tool_runtime.service
+                if tool_runtime is not None
+                and InferenceTarget.TOOL_ROUTING in inference_runtime.settings.targets
+                else None
             )
+            if life_settings.enabled:
+                assert tool_runtime is not None
+                life_store = LifeStore(runtime_paths.data_root / "character-life.db")
+                life_service = LifeService(
+                    life_store,
+                    tool_runtime.gate,
+                    LifeCognition(inference_runtime.router),
+                    LifePrivacy(
+                        tool_runtime.service.sanitizer,
+                        memory_consolidation_privacy_classifier,
+                    ),
+                    tool_runtime.service.sanitizer,
+                    foreground_busy=lambda: (
+                        conversation_history_repository.consolidation_activity()[0] > 0
+                    ),
+                )
+                life_service.formation = LifeFormation(
+                    life_store,
+                    DeferredReflections(),
+                    StateFormation(inference_runtime.router),
+                    life_service.privacy,
+                )
+                life_runtime = LifeRuntime(
+                    life_service, runtime_paths.data_root, life_settings,
+                    characters=lambda: tuple(
+                        entry.character_id for entry in CharacterCatalog(
+                            Path(__file__).resolve().parents[2] / "characters"
+                        ).scan()
+                    ),
+                )
+                await life_runtime.start()
+                app.state.character_life_runtime = life_runtime
+                life_context = LifeContext(
+                    life_store,
+                    count_llm_input_tokens,
+                    model_settings.chat_context_tokens
+                    - model_settings.assistant_max_generation_tokens,
+                )
             app_chat_service = _chat_runtime.create_chat_service(
                 _chat_runtime.resolve_chat_runtime_config(
                     policy, model_settings, runtime_paths, occurred_timezone
@@ -731,6 +799,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     memory_formation_submitter=memory_formation_scheduler,
                     clock=clock,
                     tools=app.state.tool_service,
+                    life_context=life_context,
                 ),
             )
             app.state.chat_service = app_chat_service
@@ -871,6 +940,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             if livekit_api is not None:
                 await run_cleanup(app.state.livekit_runtime_manager.stop_all())
                 await run_cleanup(livekit_api.aclose())
+            if life_runtime is not None:
+                await run_cleanup(life_runtime.close())
+            if hasattr(app.state, "character_life_runtime"):
+                del app.state.character_life_runtime
             if tool_runtime is not None:
                 await run_cleanup(tool_runtime.close())
             if hasattr(app.state, "tool_service"):
@@ -971,6 +1044,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(tool_use_router)
+app.include_router(character_life_router)
 
 app.include_router(chat_router)
 app.include_router(character_catalog_router)

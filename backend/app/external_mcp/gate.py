@@ -338,9 +338,16 @@ class ExecutionGate:
         loop_id: str,
         *,
         binding_id: str | None = None,
+        dispatch_guard: Callable[[], None] | None = None,
     ) -> Json:
         return await self._execute(
-            connection_id, tool_ref, arguments, loop_id, "tool", binding_id=binding_id
+            connection_id,
+            tool_ref,
+            arguments,
+            loop_id,
+            "tool",
+            binding_id=binding_id,
+            dispatch_guard=dispatch_guard,
         )
 
     async def read_resource(
@@ -386,6 +393,7 @@ class ExecutionGate:
         pending: _Pending | None = None,
         responses: Json | None = None,
         binding_id: str | None = None,
+        dispatch_guard: Callable[[], None] | None = None,
     ) -> Json:
         # 不明なloopには監査主体が無いため、envelopeを捏造せず呼出しを拒否する。
         loop = self._loop(loop_id)
@@ -482,6 +490,9 @@ class ExecutionGate:
                             raise MCPFailure("policy", "binding_denied")
                     # 非同期validatorを待つ間のstop/relinkもdispatch前に確認する。
                     self._live(loop, connection_id, generation)
+                    # queue/connection lock待機中の自律許可取消しも送信直前に反映する。
+                    if dispatch_guard is not None:
+                        dispatch_guard()
                     self._charge(loop, connection_id, operation, arguments)
                     try:
                         if kind == "tool":
