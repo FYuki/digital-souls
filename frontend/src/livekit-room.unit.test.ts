@@ -996,6 +996,52 @@ test('音声診断は未接続・同時要求を失敗として返し、余分�
   expect(await pending).toMatchObject({status: 'failed', reason: 'connection_changed'})
 })
 
+test.each([false, true])('全PCMの出力時計通過後の旧RTP異常だけが次応答を中断しない: %s', async outputComplete => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(row => observations.push(row))
+  const sessionId = '20000000-0000-4000-8000-000000000001'
+  const responseId = '22222222-2222-2222-2222-222222222222'
+  const nextResponse = '33333333-3333-3333-3333-333333333333'
+  const now = vi.spyOn(performance, 'now').mockReturnValue(1000)
+  await client.connect('ws://test', 'token', sessionId)
+  const room = latestRoom()
+  const frames = () => room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
+  room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
+    {trackSid: 'TR_complete', trackName: `ds-response-v1:${responseId}`})
+  await vi.waitFor(() => expect(audioContexts.at(-1)?.renderWorklets).toHaveLength(1))
+  const context = audioContexts.at(-1)!, worklet = context.renderWorklets[0]
+  const observer = mediaMocks.observers.at(-1)!
+  vi.spyOn(context, 'getOutputTimestamp').mockReturnValue({contextTime: outputComplete ? 1 : .51, performanceTime: outputComplete ? 1000 : 510})
+  const privateEvent = (value: Record<string, unknown>) => emitPrivateFrame(room,
+    new TextEncoder().encode(JSON.stringify({protocol_version: '1.0', generation: 0, response_id: responseId, ...value})))
+  try {
+    privateEvent({type: 'logical_audio_segment', audio_sequence: 0, pcm_sample_count: 960})
+    observer.report({trackReceivedAtMs: 50, firstPacketReceivedAtMs: 100, firstPacketDecodedAtMs: 101, firstPacketDecodedSamples: 960})
+    observer.playback!.packet({packetIndex: 0, rtpTimestamp: 99, receivedAtMs: 100, decodedAtMs: 101,
+      receivedAtBoundsMs: {lowerMs: 100, upperMs: 100.2}, decodedAtBoundsMs: {lowerMs: 101, upperMs: 101.2},
+      source: 7, pcm: new Float32Array(960).fill(.25)})
+    worklet.port.onmessage?.({data: {kind: 'rendered', packetIndex: 0, rtpTimestamp: 99,
+      packetSampleOffset: 0, startFrame: 24000, endFrame: 24960, energy: .25,
+      renderQuantumStartFrame: 24000, renderClockConfirmationFrame: 24000}} as MessageEvent)
+    privateEvent({type: 'response_audio_finished', input_sample_count: 960, captured_sample_count: 960, padding_sample_count: 0})
+    if (outputComplete) await vi.waitFor(() => expect(observations.some(row => row.playbackCompletedResponseId === responseId)).toBe(true))
+    else await new Promise(resolve => setTimeout(resolve, 10))
+    observer.playback!.interrupted!()
+    await new Promise(resolve => setTimeout(resolve, 10))
+    const recovery = frames().filter(frame => ['playback_stopped', 'response_cancel_requested', 'state_sync_request'].includes(frame.type))
+    if (outputComplete) {
+      expect(recovery).toEqual([])
+      expect(observations.some(row => row.mediaTimelineInterruption?.responseId === responseId)).toBe(true)
+      room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
+        {trackSid: 'TR_next', trackName: `ds-response-v1:${nextResponse}`})
+      await vi.waitFor(() => expect(frames().some(frame => frame.type === 'response_track_ready' && frame.response_id === nextResponse && frame.generation === 0)).toBe(true))
+    } else {
+      await vi.waitFor(() => expect(frames().some(frame => frame.type === 'state_sync_request')).toBe(true))
+      expect(observations.some(row => row.playbackCompletedResponseId === responseId)).toBe(false)
+    }
+  } finally {client.disconnect(); now.mockRestore()}
+})
+
 })
 
 test('実roomのprobe応答をnonce・世代へ相関し、通常の状態同期を追加送信しない', async () => {

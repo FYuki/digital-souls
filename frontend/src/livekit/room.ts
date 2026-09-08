@@ -111,6 +111,7 @@ export type ConnectionLifecycleObservation = Readonly<{event: 'retry_scheduled' 
 
 export class LiveKitRoomClient {
   private readonly outputConnectedResponses = new Set<string>()
+  private readonly completedPlaybackResponses = new Set<string>()
   private readonly outputStopConfirmations = new Map<string, {
     requestId: string; generation: number; promise: Promise<{
       lastPlayedAudioSequence: number; outputConfirmation: 'output_clock_passed' | 'never_connected'
@@ -231,6 +232,7 @@ export class LiveKitRoomClient {
       this.coreAckOutbox?.clear()
       this.coreAckOutbox = null
       this.stoppedResponses.clear()
+      this.completedPlaybackResponses.clear()
       this.latestResponseId = null
     }
     if (this.room === null) this.room = this.createRoom()
@@ -687,6 +689,7 @@ export class LiveKitRoomClient {
               }
               graph.packetDiagnostic?.receive(packet)
               if (packet.packetIndex === 0) graph.firstPacket = {...packet, pcm: new Float32Array(0)}
+              if (this.completedPlaybackResponses.has(responseId)) return
               graph.worklet.port.postMessage({kind: 'pcm', packetIndex: packet.packetIndex,
                 rtpTimestamp: packet.rtpTimestamp, samples: packet.pcm}, [packet.pcm.buffer])
             }, failed: () => this.failTransport('media_decoder'),
@@ -959,6 +962,16 @@ export class LiveKitRoomClient {
     evidence: Pick<RoomObservation, 'mediaPacketLoss' | 'mediaTimelineInterruption'>): void {
     const sessionId = this.sessionId, room = this.room, generation = this.generation
     if (sessionId === null || room === null || this.stoppedResponses.has(responseId)) return
+    if (this.completedPlaybackResponses.has(responseId)) {
+      // 全source PCMの実出力が確認済みなら、旧trackの遅着異常で次の応答を再同期しない。
+      // 異常の観測は残す。受信しただけ・Coreが完了しただけの応答には適用しない。
+      const controlAvailable = this.controlOutbox !== null
+      this.observe({transport: controlAvailable ? 'available' : 'unavailable',
+        control: controlAvailable ? 'available' : 'unavailable',
+        audio: controlAvailable && [...this.audioGraphs.values()].some(graph => !graph.suspended) ? 'available' : 'unavailable',
+        ...evidence})
+      return
+    }
     // 欠けたPCMを全出力済みに補完しない。確認済みprefixだけ通知し、現在の応答を止める。
     const lastPlayedAudioSequence = this.stopPlayback(responseId)
     this.observe({transport: 'available', control: 'available', audio: 'unavailable',
@@ -1071,6 +1084,7 @@ export class LiveKitRoomClient {
       graph.worklet.port.postMessage({kind: 'stop'})
       const prefix = this.playback.metadataPrefixForTotal(responseId, completion.inputSamples)
       if (prefix < 0) throw new Error('full playback metadata does not match source samples')
+      this.completedPlaybackResponses.add(responseId)
       void this.publishPlaybackConfirmation(responseId, prefix, true).catch(() => this.failTransport())
       this.observe({transport: 'available', control: 'available', audio: 'available',
         activeResponseId: responseId, playbackCompletedResponseId: responseId, playbackCompletion: completion})
