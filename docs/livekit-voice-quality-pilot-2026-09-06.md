@@ -2184,3 +2184,33 @@ RTCの送信件数増加だけでは相手への到達を証明しない。SFU�
 断定する証拠はまだない。正式100件のp95未達と、#150の他の未完了条件は維持する。
 
 追加診断の最終7件（ページへの直列化、PC欠測、件数上限を含む）と最終型チェックも通過した。
+
+
+## SCTP受信・送信を追加観測した診断42–59
+
+測定版 `02d95e09ab1eca896c7b0c8a421110d3bf594ab1` の[18試行](artifacts/livekit-reconnect-sctp-42-59.json)で、
+59にて制御5,216.631ms、双方5,336.420msの遅延を再現した。先行17件は3秒以内だった。
+18件すべて実障害、完全な出力観測、後続会話、session終了が成立し、RTP区間重複・欠測は0だった。
+ブラウザ統計8,100件、Backend統計2,700件、SCTP collectorの閉鎖を確認した。
+各所有Frontend・Backendの実削除、専用SFUとnetworkの実削除も確認した。
+
+専用SFUは従来と同じLiveKit v1.9.7で、`logging.component_levels`の`pion.sctp`と
+`transport.pion.sctp`だけをdebugにした。通信設定・再送期限・復旧判定は変更していない。
+使用したPion SCTP v1.8.41とLiveKit protocol `21f690495229`の実装を照合し、DATA受信、
+DATA送信、再送、T3 timeout、SACK、RTT更新の固定書式だけを抽出した。
+participantはbrowser/backend、transportはpublisher/subscriberへ分類し、associationは試行内の連番、
+TSNは最初の観測からの差へ変換した。本文・SDP・アドレス・認証値・元の識別子は抽出記録へ保存しない。
+診断設定のSHA-256は`0f92035ebe683c4965f8ea0925484ee7de5f54e9dcaac8f071650c5ebcbc97fd`だった。
+
+59では、ブラウザSDKの再接続通知がnetwork回復から約2,372.1ms、実DataChannel送信が
+約2,373.2msだった。ところがSFUのSCTP DATA受信の観測は約5,202.2msまで進まず、
+次のBackend向けDATA送信は約5,203.2msだった。ブラウザからSFUへ届いたsequenceの
+順序入替は回復直後の1msだけで解消し、約2.8秒の間、新たなDATAの受信処理自体が観測されなかった。
+SFUからブラウザ向けの再送は約1,283.2msにあったが、これは遅れている上りと逆向きである。
+
+SCTPの時刻は同一hostのログreader単調時計で、NICへの実到着や転送処理時間を直接測るものではない。
+この証拠からは、ブラウザsendからSFUのSCTP受信処理までの区間に遅延を絞れる。
+TCP/UDP経路、ICE復旧、ブラウザ側の再送、SFU受信処理のどれが根本原因かはまだ断定しない。
+次の診断で、選択されたICE経路の固定protocol/typeと疎通counterを追加し、IP・stats IDは保持しない。
+追加したFrontend診断8件とSvelte／Playwright型チェックは通過した。
+正式100件のp95と#150全体の未完了条件は引き続き未達として扱う。

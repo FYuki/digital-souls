@@ -55,6 +55,9 @@ test('本物へ渡すthis・payload・例外を保持し、診断には本文を
   expect(result.samples[0].rows).toEqual([
     {kind: 'data_channel', channel: 'other', state: 'open', messagesSent: 7, messagesReceived: 3, bytesSent: 10, bytesReceived: 20},
     {kind: 'transport', dtlsState: 'connected', iceState: 'connected', packetsSent: null, packetsReceived: null, bytesSent: 40, bytesReceived: 50},
+    {kind: 'selected_candidate_pair', status: 'unavailable', state: null, localProtocol: null, remoteProtocol: null,
+      localType: null, remoteType: null, bytesSent: null, bytesReceived: null, requestsSent: null, requestsReceived: null,
+      responsesSent: null, responsesReceived: null, consentRequestsSent: null},
   ])
   expect(JSON.stringify(result)).not.toContain('private')
   expect(FakeChannel.prototype.send).toBe(original)
@@ -121,4 +124,23 @@ test('PCの観測上限を超えてもnativeの生成を妨げず超過を記録
   for (let index = 0; index < 10; index++) expect(new window.RTCPeerConnection()).toBeInstanceOf(FakePC)
   port().start(); await vi.advanceTimersByTimeAsync(1)
   expect(await port().finish()).toMatchObject({overflow: true, samples: Array.from({length: 8}, () => ({status: 'captured'}))})
+})
+
+
+test('選択したICE経路のprotocolと疎通counterを抽出し、IDやアドレスを残さない', async () => {
+  const map = new Map([
+    ['transport', {type: 'transport', selectedCandidatePairId: 'private-pair'}],
+    ['private-pair', {type: 'candidate-pair', state: 'succeeded', localCandidateId: 'private-local', remoteCandidateId: 'private-remote',
+      bytesSent: 100, bytesReceived: 200, requestsSent: 4, requestsReceived: 2, responsesSent: 2, responsesReceived: 3, consentRequestsSent: 1}],
+    ['private-local', {type: 'local-candidate', protocol: 'udp', candidateType: 'host', address: 'private-address'}],
+    ['private-remote', {type: 'remote-candidate', protocol: 'udp', candidateType: 'prflx', usernameFragment: 'private-credential'}],
+  ])
+  getStats.mockResolvedValue(map)
+  installRtcReconnectDiagnostic(); new window.RTCPeerConnection(); port().start()
+  await vi.advanceTimersByTimeAsync(1)
+  const result = await port().finish()
+  expect(result.samples[0].rows[1]).toEqual({kind: 'selected_candidate_pair', status: 'captured', state: 'succeeded',
+    localProtocol: 'udp', remoteProtocol: 'udp', localType: 'host', remoteType: 'prflx', bytesSent: 100, bytesReceived: 200,
+    requestsSent: 4, requestsReceived: 2, responsesSent: 2, responsesReceived: 3, consentRequestsSent: 1})
+  expect(JSON.stringify(result)).not.toContain('private')
 })

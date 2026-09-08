@@ -54,11 +54,26 @@ export function installRtcReconnectDiagnostic(): void {
           state: state(row.state, ['connecting', 'open', 'closing', 'closed']),
           messagesSent: counter(row.messagesSent), messagesReceived: counter(row.messagesReceived),
           bytesSent: counter(row.bytesSent), bytesReceived: counter(row.bytesReceived)})
-        else if (row.type === 'transport') rows.push({kind: 'transport',
-          dtlsState: state(row.dtlsState, ['new', 'connecting', 'connected', 'closed', 'failed']),
-          iceState: state(row.iceState, ['new', 'checking', 'connected', 'completed', 'disconnected', 'failed', 'closed']),
-          packetsSent: counter(row.packetsSent), packetsReceived: counter(row.packetsReceived),
-          bytesSent: counter(row.bytesSent), bytesReceived: counter(row.bytesReceived)})
+        else if (row.type === 'transport') {
+          rows.push({kind: 'transport',
+            dtlsState: state(row.dtlsState, ['new', 'connecting', 'connected', 'closed', 'failed']),
+            iceState: state(row.iceState, ['new', 'checking', 'connected', 'completed', 'disconnected', 'failed', 'closed']),
+            packetsSent: counter(row.packetsSent), packetsReceived: counter(row.packetsReceived),
+            bytesSent: counter(row.bytesSent), bytesReceived: counter(row.bytesReceived)})
+          // stats IDはページ内の対応づけだけに使い、選択経路の固定enumとcounterだけを残す。
+          const pair = typeof row.selectedCandidatePairId === 'string' ? report.get(row.selectedCandidatePairId) : undefined
+          const local = pair && typeof pair.localCandidateId === 'string' ? report.get(pair.localCandidateId) : undefined
+          const remote = pair && typeof pair.remoteCandidateId === 'string' ? report.get(pair.remoteCandidateId) : undefined
+          rows.push({kind: 'selected_candidate_pair', status: pair?.type === 'candidate-pair' ? 'captured' : 'unavailable',
+            state: state(pair?.state, ['frozen', 'waiting', 'in-progress', 'failed', 'succeeded']),
+            localProtocol: state(local?.protocol, ['udp', 'tcp']), remoteProtocol: state(remote?.protocol, ['udp', 'tcp']),
+            localType: state(local?.candidateType, ['host', 'srflx', 'prflx', 'relay']),
+            remoteType: state(remote?.candidateType, ['host', 'srflx', 'prflx', 'relay']),
+            bytesSent: counter(pair?.bytesSent), bytesReceived: counter(pair?.bytesReceived),
+            requestsSent: counter(pair?.requestsSent), requestsReceived: counter(pair?.requestsReceived),
+            responsesSent: counter(pair?.responsesSent), responsesReceived: counter(pair?.responsesReceived),
+            consentRequestsSent: counter(pair?.consentRequestsSent)})
+        }
       })
       if (rows.length > 16) {status = 'invalid'; rows = []}
     } catch {status = 'failed'; rows = []}
