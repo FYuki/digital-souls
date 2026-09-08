@@ -607,3 +607,18 @@ sourceが変更された場合、同名eventの観測区間を再確認するま
 割り込み・reconnect・stale・dogfoodなどの独立cohortは別の受入証拠が必要になる。
 既定`voice_metrics.evaluate_artifact`は変更せず、その結果とcoverage errorsも併記する。
 欠測や未達でもレポートを保存してexit 1を返す。既存出力は上書きしない。
+
+## STT入力PCMを照合する診断部品
+
+`pcm_boundary_alignment.py`は16kHz PCM16の参照音声と実入力について、
+正解発話の前半・後半から独立に選んだ高energy区間を正規化相関で照合する。
+返すものはsample数、一致位置、相関値、推定損失上限だけで、PCMや本文は出力しない。
+相関0.8未満、20ms以上離れた競合候補との相関差0.1未満、前後のoffset差2ms超、
+短すぎる参照音声は未確認として残し、損失0msへ補完しない。
+
+位置の許容幅2msは診断器の設定値であり、全音声の誤差保証ではない。
+固定speech fixtureの実Opus encode/decodeでは前後が同じ104sampleのlookaheadを持つことを確認し、
+欠落・重複・無音・前後で異なるoffsetを含む9件のテストが成功した。
+これはcodecと照合部品の検証であり、実Browser→LiveKit→Whisperの入力観測や、
+ラベル付き100試行のPCM境界受入はまだ証明しない。実入力の取得・試行との対応・集計を別途接続する必要がある。
+診断用依存は`backend/requirements-dev.txt`に定義する。
