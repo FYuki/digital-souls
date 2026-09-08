@@ -448,6 +448,7 @@ class Service:
         task = asyncio.current_task()
         interruption = Result.DEFERRED
         monitor_cancellation = object()
+        initial_cancellations = task.cancelling() if task is not None else 0
         body_completed = False
 
         async def monitor_priority() -> None:
@@ -488,8 +489,9 @@ class Service:
             return Result.DEFERRED
         except asyncio.CancelledError as error:
             if error.args == (monitor_cancellation,):
-                if task is not None:
-                    task.uncancel()
+                if task is not None and task.uncancel() > initial_cancellations:
+                    # 同時に届いた外部cancelまで、監視の取消しとして消費しない。
+                    raise
                 return interruption
             if self.closing:
                 return Result.DEFERRED

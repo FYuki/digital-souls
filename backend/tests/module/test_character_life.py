@@ -1044,7 +1044,8 @@ def test_real_formation_step_checkpoints_deferral_when_interrupted(tmp_path, int
     asyncio.run(scenario())
 
 
-def test_formation_does_not_consume_unrelated_cancellation(tmp_path):
+@pytest.mark.parametrize("coincident", [False, True])
+def test_formation_does_not_consume_unrelated_cancellation(tmp_path, coincident):
     async def scenario():
         async with environment(tmp_path) as (service, _, initial):
             service.store.finish(initial, Result.NO_CHANGE, "setup")
@@ -1056,10 +1057,19 @@ def test_formation_does_not_consume_unrelated_cancellation(tmp_path):
             service.formation = Formation()
             task = asyncio.create_task(service.form_life_states("miori"))
             await asyncio.wait_for(entered.wait(), 2)
-            task.cancel("external")
+            if coincident:
+                def simultaneous_priority():
+                    # monitorのcancel後、親taskが再開する前に外部cancelを届ける。
+                    asyncio.get_running_loop().call_soon(task.cancel, "external")
+                    return True
+                service.foreground_busy = simultaneous_priority
+            else:
+                task.cancel("external")
             with pytest.raises(asyncio.CancelledError) as error:
-                await task
-            assert error.value.args == ("external",)
+                await asyncio.wait_for(task, 2)
+            if not coincident:
+                assert error.value.args == ("external",)
+            assert task.cancelling() == 1
             assert not service.tasks
     asyncio.run(scenario())
 
