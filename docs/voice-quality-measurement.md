@@ -184,3 +184,5 @@ npm run test:integration:voice:reconnect -- \
 SDK例外の修正後、通常音声E2E全5件は通ったが、終了・切断後の最終通知を送信しようとしてdelivery失敗2件を記録した。[この結果](artifacts/livekit-voice-regression-suite-2026-09-08-02.json)も未達として保持した。coordinatorが`unavailable`または`ended`の場合は、送信を取消としてCoreへ伝えるようにした。成功として記録したり、送信queueへ積んだりしない。初期化前の送信は引き続きエラーとし、再接続後は新しい送信を受け付ける。切断・終了・再接続、Coreのstreamingと停止確認を含む95テストと型検査が成功した。
 
 `41bb2a2`で通常音声E2E全5件を再実行し、3往復の完全再生、実音声barge-in、観測対象のCore/pipeline例外0件、所有環境とログreaderの終了を確認した。[回帰結果](artifacts/livekit-voice-regression-suite-2026-09-08-03.json)は通常音声設定の実接続検証であり、正式100件の性能測定や実声dogfood受け入れとは分けて扱う。
+
+再接続の回帰初回はcontrolと実音声が2343.09ms以内に回復し、重複出力0件だった。一方、テストは切断前に中断された初回応答も含めて2応答の完了を待ち、復旧後の新しい応答が完全再生されていても失敗した。[初回結果](artifacts/livekit-reconnect-regression-2026-09-08-01.json)を保存し、同一session・異なるresponse・新しいfixture開始以降の発話／再生に限定して、その応答の完了と完全再生を直接待つように修正した。復旧時間の10秒窓、3秒の目標、重複出力の条件は変更していない。

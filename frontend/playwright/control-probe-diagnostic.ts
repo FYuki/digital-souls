@@ -125,7 +125,20 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
       record.post_fault_followup = {outcome: 'failure'}
       await expect(microphone).toHaveAttribute('aria-pressed', 'true')
       await page.evaluate(() => window.__voiceFixtureClock!.replay())
-      const following = (await driver.waitForCompletedVoiceCycles(page, 2))?.[1]
+      // 障害で初回応答が中断しても、新しい発話の完了を独立に確認する。
+      const followingHandle = await page.waitForFunction(initial => {
+        const state = window.__voiceChatE2E
+        const sourceStart = window.__voiceFixtureClock?.bounds.sourceStart?.lowerMs
+        if (sourceStart === undefined) return null
+        return state.cycles.find(candidate => candidate.sessionId === initial.sessionId
+          && candidate.responseId !== initial.responseId && candidate.responseId !== null
+          && candidate.fixtureStartedAt !== null && candidate.fixtureStartedAt >= sourceStart
+          && candidate.sendAt !== null && candidate.sendAt >= sourceStart
+          && candidate.startedAt !== null && candidate.startedAt >= sourceStart
+          && state.liveKitOrder.includes(`${candidate.responseId}:completed`)
+          && state.playbackCompletions?.[candidate.responseId] !== undefined) ?? null
+      }, {sessionId: cycle.sessionId, responseId: cycle.responseId}, {timeout: 60_000})
+      const following = await followingHandle.jsonValue()
       if (!following?.responseId || following.sessionId !== cycle.sessionId
         || following.responseId === cycle.responseId) throw new Error('followup response identity unavailable')
       await page.waitForFunction(responseId => !!window.__voiceChatE2E.playbackCompletions?.[responseId],
