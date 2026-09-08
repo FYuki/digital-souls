@@ -2346,3 +2346,15 @@ markerなしの旧traceへ新たな理由を遡及せず、異時計の減算や
 thinking無効の2件は元のJSONで一致した。この4要求だけから初回36件の内容は再判定しない。
 音声品質の要求と評価用JSONの包み方を区別するため、schema 1.1では単一コードブロックの
 展開と元の形式適合を別記する。人格名・履歴・記憶の値や未知時のnullという照合は変更しない。
+
+[形式を別記した36試行](artifacts/livekit-context-answer-content-2026-09-08.json)は
+`afd703b`で実施し、要求完了36/36、内部時刻取得不能marker36/36を確認した。
+configuredは内容一致10/18、表記名不一致8/18、履歴と記憶は各18/18一致した。
+thinking無効は内容一致18/18だった。厳密JSON形式への適合はconfigured 0/18、
+thinking無効14/18であり、この形式の項目は回答値の一致から分離している。
+既存設定の表記名不一致を合格に変換せず、36件全体のテスト結果は失敗のまま保持する。
+この合成質問ではthinking無効による内容悪化は観測していないが、自然な話し方や全回答品質の証明ではない。
+
+同じ版で実Chroma・実Ollama埋め込みによるRAG runtime evidenceとtoken countの
+インテグレーション3件が成功した。共有manifestのprivacy境界・character境界・取得閾値、
+再構築可能indexの検索経路とtoken estimateを、一時test data rootで検証した。
