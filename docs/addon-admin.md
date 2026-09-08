@@ -9,7 +9,11 @@
 以後はdata root直下の`addon-settings.json`を正本とする。再起動で旧Manifestの値へ戻さない。
 ファイルはversion付きの`users.local`にconnection IDとbooleanだけを保存し、一時ファイルから原子的に置換する。
 接続先、認証値、snapshot、healthはこのファイルへ保存しない。データ移行・手動backupではこのファイルも保持する。
-保存失敗時はAPIを失敗とし、runtimeの希望値を変更しない。MVPの競合はあと勝ち。
+置換前の保存失敗はAPIを失敗とし、runtimeの希望値を変更しない。MVPの競合はあと勝ち。
+置換後のdirectory同期失敗は、ファイル・runtime・Gateを反映済みの値へ揃え、
+503 `settings_durability_uncertain`で保存の耐久性が未確認であることを返す。
+UIは状態を再取得し、同じ設定の再保存を案内する。通常の再起動では置換済みの値を読み込むが、
+同期に失敗したままホストが異常終了した場合の保持は保証しない。
 既存のsharing、binding、trustによる実行制限は希望ONでも適用する。
 
 External MCPの確認結果は`available`（使用可能）/`unavailable`（使用不可）の2択。
@@ -82,6 +86,8 @@ backend/.venv/bin/python scripts/acceptance_addon_admin.py
 
 Tool Routingを設定せず、独立したtest data rootと動的portで起動する。通信をmockせず一覧・toggleを操作し、
 Backend再起動後のOFF復元、ON後の再確認、MCP停止時の無操作での障害badgeとOFF操作を確認する。
+ONの2接続と初期OFFの1接続を登録し、未確認・snapshot未取得のOFF接続も一覧に残ること、
+別接続の状態で誤って通過しないよう対象行内で状態を確認することを受入条件に含める。
 既存サービス・dogfoodへ接続せず、起動したprocessをteardownする。成功後の公開証跡は
 `docs/artifacts/addon-admin-184/browser-public.json`。起動時に旧成功証跡を無効化し、途中失敗やteardown失敗で成功を残さない。
 ブラウザの各assert通過時に出力した固定eventだけを`browser-execution.jsonl`へ保存し、

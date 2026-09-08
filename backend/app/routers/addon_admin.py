@@ -9,6 +9,7 @@ from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict
 
 from app.addon_admin.runtime import AddonRuntime
+from app.addon_admin.store import SettingsDurabilityError
 from app.external_mcp.models import MCPFailure
 
 
@@ -80,5 +81,7 @@ async def enabled(
         return manager(request).set_enabled(connection_id, payload.desired_enabled)
     except MCPFailure:
         raise HTTPException(404, "connection_not_found") from None
+    except SettingsDurabilityError:
+        raise HTTPException(503, "settings_durability_uncertain") from None
     except OSError:
         raise HTTPException(503, "settings_save_failed") from None

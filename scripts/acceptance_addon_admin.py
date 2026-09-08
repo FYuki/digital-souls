@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import time
 from contextlib import ExitStack, contextmanager
+from copy import deepcopy
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -150,13 +151,22 @@ def main():
                 },
             },
         }
+        always_on = deepcopy(manifest)
+        always_on["connection"]["id"] = "acceptance-always-on"
+        disabled = deepcopy(manifest)
+        disabled["connection"]["id"] = "acceptance-disabled"
+        disabled["core_policy"]["enabled"] = False
         config = work / "mcp.json"
         config.write_text(
             json.dumps(
                 {
                     "version": 1,
-                    "connections": [manifest],
-                    "display_names": {"acceptance-mcp": "受入用の公開MCP"},
+                    "connections": [manifest, always_on, disabled],
+                    "display_names": {
+                        "acceptance-mcp": "受入用の公開MCP",
+                        "acceptance-always-on": "受入用の常時ON接続",
+                        "acceptance-disabled": "受入用の未接続OFF",
+                    },
                 }
             )
         )
@@ -305,15 +315,16 @@ def main():
                 "package": "@modelcontextprotocol/server-everything",
                 "version": version,
             },
+            "environment": {
+                "runtime": "real-core-vite-browser",
+                "toolRoutingConfigured": any(
+                    key.startswith("INFERENCE_TARGET_TOOL_ROUTING") for key in environment
+                ),
+            },
             "checks": [
-                "real-core-vite-browser",
-                "tool-routing-unconfigured",
-                "registered-list",
-                "toggle",
-                "restart-restores-off",
-                "on-rechecks-health",
-                "idle-disconnect-badge",
-                "offline-toggle",
+                json.loads(line)["check"]
+                for phase_log in execution_log
+                for line in phase_log.splitlines()
             ],
             "testedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }

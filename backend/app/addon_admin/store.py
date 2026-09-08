@@ -10,6 +10,10 @@ from pathlib import Path
 from app.restore_intent import fsync_directory
 
 
+class SettingsDurabilityError(OSError):
+    """置換済みだが、ホスト障害に対する耐久性を確認できない。"""
+
+
 class SettingsStore:
     def __init__(self, path: Path | None = None) -> None:
         self.path = path
@@ -50,7 +54,12 @@ class SettingsStore:
                     handle.flush()
                     os.fsync(handle.fileno())
                 os.replace(name, self.path)
-                fsync_directory(self.path.parent)
+                # 置換後は再起動時にも読まれる値へ揃える。同期失敗は未反映と区別する。
+                self._values = values
+                try:
+                    fsync_directory(self.path.parent)
+                except OSError:
+                    raise SettingsDurabilityError("settings durability uncertain") from None
             finally:
                 if name is not None:
                     Path(name).unlink(missing_ok=True)

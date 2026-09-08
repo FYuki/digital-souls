@@ -11,7 +11,7 @@ from app.external_mcp import Connection, ExecutionGate, ExternalMCPClient
 from app.external_mcp.models import MCPFailure, now
 from app.external_mcp.registry import Entry
 
-from .store import SettingsStore
+from .store import SettingsDurabilityError, SettingsStore
 
 
 @dataclass(frozen=True)
@@ -83,13 +83,19 @@ class AddonRuntime:
 
     def set_enabled(self, connection_id: str, enabled: bool) -> dict[str, object]:
         entry = self.registry.entry(connection_id)
-        # 保存に失敗した場合、実行中の希望値は変更しない。同期区間内であと勝ちを確定。
-        self.store.save(connection_id, enabled)
+        # 置換前の失敗は旧値を保持する。置換後の同期失敗は反映済みとしてGateも揃える。
+        durability_error = None
+        try:
+            self.store.save(connection_id, enabled)
+        except SettingsDurabilityError as error:
+            durability_error = error
         if self.registry.set_enabled(connection_id, enabled):
             if not enabled:
                 self.gate.invalidate_connection(connection_id)
                 self.on_disabled(connection_id)
             self._wake[connection_id].set()
+        if durability_error is not None:
+            raise durability_error
         return self.projection(entry)
 
     async def start(self) -> None:

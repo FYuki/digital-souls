@@ -37,6 +37,8 @@
             {/if}
             {#if $controller.rowErrors[item.connection_instance_id]}
               <p role="alert">{$controller.rowErrors[item.connection_instance_id]}</p>
+              <button type="button" on:click={() => controller.retry(item.connection_instance_id)}
+                aria-label={`${item.display_name}の設定保存を再試行`}>設定保存を再試行</button>
             {/if}
           </div>
           <button type="button" class="toggle" role="switch"
