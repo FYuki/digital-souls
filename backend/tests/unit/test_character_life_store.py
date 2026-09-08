@@ -415,3 +415,78 @@ def test_state_copy_cannot_save_blank_content(tmp_path):
     with pytest.raises(ValidationError):
         store.save_state(state.model_copy(update={"content": "  "}), expected_revision=1)
     assert store.state("miori", state.id) == state
+
+
+@pytest.mark.parametrize("stage", ["reconcile_reflections", "apply_formation"])
+@pytest.mark.parametrize("cancelled", [False, True])
+def test_formation_sqlite_wait_keeps_loop_responsive_and_checks_cancellation(
+    tmp_path, monkeypatch, stage, cancelled
+):
+    import asyncio
+    import sqlite3
+    import threading
+    from app.character_life.formation import LifeFormation
+    from app.character_life.models import ReflectionView
+    from app.inference import InferenceCancellationToken
+
+    async def scenario():
+        store, _, _, _ = seeded(tmp_path)
+        reflection = ReflectionView(
+            id=uuid4(), character_id="miori", revision="1", content="色彩", active=True
+        )
+
+        class Source:
+            async def active(self, character):
+                return (reflection,)
+
+            def current_revisions(self, character):
+                return {reflection.id: "1"}
+
+        class Proposal:
+            async def form(self, reflections, cancellation):
+                return {"states": [{"kind": "INTEREST", "content": "色彩への関心",
+                                    "source_ids": [str(reflection.id)]}]}
+
+        class Privacy:
+            async def allowed(self, text):
+                return True
+
+        entered = threading.Event()
+        original = getattr(store, stage)
+        blocker = sqlite3.connect(store.path, check_same_thread=False)
+
+        def competing_write(*args, **kwargs):
+            blocker.execute("BEGIN IMMEDIATE")
+            entered.set()
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(store, stage, competing_write)
+        token = InferenceCancellationToken()
+        task = asyncio.create_task(
+            LifeFormation(store, Source(), Proposal(), Privacy()).run(
+                "miori", cancellation=token
+            )
+        )
+        try:
+            async with asyncio.timeout(2):
+                while not entered.is_set():
+                    await asyncio.sleep(0.01)
+                # 書込ロックを保持したままイベントループで取消し・解放へ進める。
+                await asyncio.sleep(0.02)
+                assert not task.done()
+                if cancelled:
+                    token.cancel()
+                blocker.rollback()
+                if cancelled:
+                    with pytest.raises(LifeError, match="formation_cancelled"):
+                        await task
+                else:
+                    assert await task is Result.APPLIED
+            formed = [s for s in store.states("miori") if s.source == "reflection"]
+            assert len(formed) == (0 if cancelled else 1)
+        finally:
+            blocker.rollback()
+            await asyncio.gather(task, return_exceptions=True)
+            blocker.close()
+
+    asyncio.run(scenario())

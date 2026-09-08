@@ -126,12 +126,16 @@ class Service:
             and candidate.ref in ELYTH_TOPIC_TOOLS
         )
 
+    @staticmethod
+    def _finished_result(run: Run) -> str:
+        return str(run.result or Result.DEFERRED)
+
     async def execute(self, run_id: str, *, attempt: int | None = None) -> str:
         run = self.store.run(run_id)
         if attempt is not None and attempt != run.attempt:
             return Result.SUPERSEDED
         if run.phase == "finished":
-            return str(run.result)
+            return self._finished_result(run)
         if run_id in self.cancellations:
             return Result.DEFERRED
         cancellation = InferenceCancellationToken()
@@ -143,21 +147,19 @@ class Service:
             async with asyncio.timeout(self.timeout):
                 return await self._execute(run, cancellation)
         except LifeError as error:
-            return str(
-                self.store.finish(run, error.result, error.reason).result
-                or Result.DEFERRED
+            return self._finished_result(
+                self.store.finish(run, error.result, error.reason)
             )
         except TimeoutError:
             cancellation.cancel()
-            return str(
-                self.store.finish(run, Result.DEFERRED, "activity_timeout").result
+            return self._finished_result(
+                self.store.finish(run, Result.DEFERRED, "activity_timeout")
             )
         except asyncio.CancelledError:
             cancellation.cancel()
             if self.closing:
-                return str(
-                    self.store.finish(run, Result.DEFERRED, "runtime_stopping").result
-                    or Result.DEFERRED
+                return self._finished_result(
+                    self.store.finish(run, Result.DEFERRED, "runtime_stopping")
                 )
             raise
         except Exception as error:
@@ -166,7 +168,9 @@ class Service:
                 "Character Life activity failed: exception_type=%s",
                 type(error).__name__,
             )
-            return str(self.store.finish(run, Result.FAILED, "activity_failed").result)
+            return self._finished_result(
+                self.store.finish(run, Result.FAILED, "activity_failed")
+            )
         finally:
             self.cancellations.pop(run_id, None)
             if task is not None:
@@ -223,8 +227,8 @@ class Service:
                 if decision["action"] == "finish":
                     summary = decision["summary"].strip()
                     if not sources or not summary:
-                        return str(
-                            self.store.finish(run, Result.NO_CHANGE, "no_topic").result
+                        return self._finished_result(
+                            self.store.finish(run, Result.NO_CHANGE, "no_topic")
                         )
                     if not await self.privacy.allowed(summary):
                         if step == 7:
@@ -411,12 +415,12 @@ class Service:
             self.personality is not None and personality_result in incomplete
         ):
             # 確定済みhandoffを残し、同じidempotency keyで通常のresumeから再試行する。
-            return str(self.store.finish(
+            return self._finished_result(self.store.finish(
                 run, Result.DEFERRED, "dependency_handoff_failed",
                 sources=handoff.source_revisions,
                 dependencies={"episode": memory_result, "personality": personality_result},
-            ).result)
-        return str(
+            ))
+        return self._finished_result(
             self.store.finish(
                 run,
                 Result.APPLIED,
@@ -427,7 +431,7 @@ class Service:
                     "episode": memory_result,
                     "personality": personality_result,
                 },
-            ).result
+            )
         )
 
     async def form_life_states(self, character: str) -> str:
