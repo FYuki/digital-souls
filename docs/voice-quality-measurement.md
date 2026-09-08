@@ -126,3 +126,5 @@ HTTP header受信時刻とtotal/load/prompt evaluation/generationの残差を、
 記録するのは`scheduled_playout`、`frame_playout`と、gap合計・最大gap・underrun回数・再生時間の4値である。前者2点は`browser_audio_context`の同一時計で比較する。controlledの集計では製品traceと測定manifestの値が一致することを検証し、重複、部分的な記録、矛盾を拒否する。旧runで製品側の6観測がすべて存在しない場合のみ、従来どおりmanifestの検証済み値を使用する。
 
 これは応答全体を再生した場合の計測経路であり、途中キャンセルした音声全体の品質や、実声dogfoodの受け入れ完了を示すものではない。dogfoodの実測は所定の配備・手動受け入れ手順で別途実施する。
+
+2026-09-08の実サービスpilot（`native-playback-summary-pilot-20260908-02`、revision `74b026e`）で、準備1件・測定3件すべてに6観測が製品traceへ届き、manifestとの一致、匿名aggregate、所有コンテナの終了を確認した。測定3件のgap・underrunは0だった。これは通常計測経路の動作確認であり、実声dogfoodの受け入れや100件の品質判定ではない。直前のpilotはfixtureの開始時計の幅が45.4msとなって失敗した結果を保持し、実quantumで無音処理が可能なことを確認してからfixtureを開始する修正後に再検証した。20msの上限とfixtureのPCMは維持した。

@@ -1,0 +1,29 @@
+{
+  "run_id": "native-playback-summary-pilot-20260908-02",
+  "measurement_revision": "74b026ec948eaf2b93feceb764c6e1446e76adb6",
+  "verification_scope": "native_full_playback_telemetry_pilot_only",
+  "verified": true,
+  "full_issue_acceptance_verified": false,
+  "warmup_trials": 1,
+  "measured_trials": 3,
+  "native_event_counts": {
+    "scheduled_playout": 4,
+    "frame_playout": 4,
+    "playback_gap_total_ms": 4,
+    "playback_gap_maximum_ms": 4,
+    "playback_underrun_count": 4,
+    "playback_duration_ms": 4
+  },
+  "all_native_values_match_validated_manifest": true,
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "teardown_completed": true,
+  "aggregate_sha256": "dbcbfacfd523efe3f1869d4c1754ae485526530856b09ec8c3aa2ff9f6239d87",
+  "source_sha256": {
+    "trial-manifest.json": "d0103ef773f4a5e6ddaba79a42c65fdfd3e75819905adc58fc9f4ed401329c3b",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "f7c4bc46ef5c9b5a5ef33e6befb3efea9d1bd6d7990b25beee5fe80cfa6d05a6",
+    "runtime-data/runtime/standalone/environment-run.json": "6e585d69a9262dec3eb553784e64e90fb7f84e94bef49fb6f22236f389bc71bd"
+  }
+}
