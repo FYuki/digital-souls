@@ -43,12 +43,13 @@ def test_http_forwards_actual_bytes_and_response_without_storing_either(tmp_path
             assert response.status_code == 200 and response.content == private_reply
             result = client.get('/observations').json()
             assert result['rows'][0]['alignment']['status'] == 'aligned'
+            assert result['rows'][0]['edge_alignment']['status'] == 'matched'
             assert result['rows'][0]['input_sample_count'] == len(original) // 2
             assert result['active_requests'] == 0
     assert sent == [original]
     saved = output.read_text()
     assert 'private response' not in saved and 'reference"' not in saved
-    assert len(saved) < 2500
+    assert len(saved) < 4000
     assert not observer.thread.is_alive()
 
 

@@ -12,7 +12,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'scripts/voice_quality'))
 try:
-    from pcm_boundary_alignment import align_pcm
+    from pcm_boundary_alignment import align_pcm, match_pcm_edges
 finally:
     sys.path.remove(str(ROOT / 'scripts/voice_quality'))
 
@@ -95,6 +95,8 @@ def test_real_opus_roundtrip_of_fixed_fixture_keeps_known_alignment():
         decoded.extend(f.to_ndarray()[0] for f in decoder.decode(packet))
     captured = np.concatenate(decoded) * 32768
     reference = pcm(original[::3])
+    edge = match_pcm_edges(reference, pcm(captured[::3]), speech_start_sample=5280, speech_end_sample=15040)
+    assert edge['status'] == 'matched'
     result = align_pcm(reference, pcm(captured[::3]), speech_start_sample=5280, speech_end_sample=15040)
     assert result['status'] == 'aligned'
     assert result['lag_difference_samples'] == 0
@@ -102,5 +104,24 @@ def test_real_opus_roundtrip_of_fixed_fixture_keeps_known_alignment():
     assert all(a['captured_start_sample'] - a['reference_start_sample'] == 104 for a in result['anchors'])
     assert result['leading_loss_upper_ms'] == result['early_end_loss_upper_ms'] == 0
     for cut in (captured[::3][7200:], captured[::3][:13120]):
+        assert match_pcm_edges(reference, pcm(cut), speech_start_sample=5280, speech_end_sample=15040)['status'] == 'unverified'
         result = align_pcm(reference, pcm(cut), speech_start_sample=5280, speech_end_sample=15040)
         assert result['status'] == 'unverified' or max(result['leading_loss_upper_ms'], result['early_end_loss_upper_ms']) > 100
+
+
+def test_direct_edges_do_not_reinterpret_interior_displacement_as_continuity(signal):
+    captured = np.r_[signal[:9600], np.zeros(640), signal[9600:]]
+    uniform = align_pcm(pcm(signal), pcm(captured), speech_start_sample=3200, speech_end_sample=16000)
+    edges = match_pcm_edges(pcm(signal), pcm(captured), speech_start_sample=3200, speech_end_sample=16000)
+    assert uniform['status'] == 'unverified'
+    assert uniform['reason'] == 'inconsistent_anchor_offsets'
+    assert edges['status'] == 'matched'
+    assert edges['interior_continuity_verified'] is False
+    assert edges['anchors'][0]['reference_start_sample'] == 3200
+    assert edges['anchors'][1]['reference_start_sample'] + edges['anchors'][1]['sample_count'] == 16000
+
+
+def test_direct_edges_reject_repeated_audio_and_reordered_edges(signal):
+    for captured in (np.r_[signal, signal], np.r_[signal[9600:], signal[:9600]]):
+        result = match_pcm_edges(pcm(signal), pcm(captured), speech_start_sample=3200, speech_end_sample=16000)
+        assert result['status'] == 'unverified'
