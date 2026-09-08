@@ -19,8 +19,9 @@ const recorderClose = vi.fn()
 const capturedPcmData = new ArrayBuffer(4)
 const getUserMedia = vi.fn()
 const microphoneTrackStop = vi.fn()
+const microphoneTrack = {enabled: true, stop: microphoneTrackStop}
 const microphoneStream = {
-  getTracks: () => [{ stop: microphoneTrackStop }],
+  getTracks: () => [microphoneTrack],
 } as unknown as MediaStream
 let vadOptions: {
   baseAssetPath: string
@@ -108,12 +109,61 @@ describe('AudioRecorder', () => {
     getUserMedia.mockReset()
     getUserMedia.mockResolvedValue(microphoneStream)
     microphoneTrackStop.mockReset()
+    microphoneTrack.enabled = true
     vi.stubGlobal('navigator', {
       mediaDevices: {
         getUserMedia,
       },
     })
     vi.clearAllMocks()
+  })
+
+  test('再接続中はtrackを無音化して発話を破棄し、追加操作やマイク再取得なしで再開する', async () => {
+    const started = vi.fn(), stopped = vi.fn()
+    const {component} = render(AudioRecorder, {props: {disabled: false, forceOff: false, continuous: true,
+      onSpeechStarted: started, onSpeechStopped: stopped, onAudioCaptured: createCaptureMock(), onError: vi.fn()}})
+    const button = screen.getByRole('button', {name: 'マイクをオンにする'})
+    await fireEvent.click(button)
+    await waitFor(() => expect(button.getAttribute('aria-pressed')).toBe('true'))
+    feedVadFrames(vadOptions.onFrameProcessed, 4, .01, .8)
+    expect(started).toHaveBeenCalledTimes(1)
+    await component.$set({suspended: true})
+    expect(microphoneTrack.enabled).toBe(false)
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    expect(vadDestroy).not.toHaveBeenCalled()
+    expect(microphoneTrackStop).not.toHaveBeenCalled()
+    feedVadFrames(vadOptions.onFrameProcessed, 7, 0, .1)
+    feedVadFrames(vadOptions.onFrameProcessed, 4, .01, .8)
+    expect(started).toHaveBeenCalledTimes(1)
+    expect(stopped).not.toHaveBeenCalled()
+    await component.$set({suspended: false})
+    expect(microphoneTrack.enabled).toBe(true)
+    feedVadFrames(vadOptions.onFrameProcessed, 4, .01, .8)
+    feedVadFrames(vadOptions.onFrameProcessed, 7, 0, .1)
+    expect(started).toHaveBeenCalledTimes(2)
+    expect(stopped).toHaveBeenCalledTimes(1)
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+    expect(vadStart).toHaveBeenCalledTimes(1)
+  })
+
+  test('再接続中に利用者がマイクをオフにした場合は復旧後も再取得しない', async () => {
+    const disabled = vi.fn()
+    const {component} = render(AudioRecorder, {props: {disabled: false, forceOff: false, continuous: true,
+      onMicrophoneDisabled: disabled, onAudioCaptured: createCaptureMock(), onError: vi.fn()}})
+    const button = screen.getByRole('button', {name: 'マイクをオンにする'})
+    await fireEvent.click(button)
+    await waitFor(() => expect(button.getAttribute('aria-pressed')).toBe('true'))
+    await component.$set({suspended: true})
+    expect((button as HTMLButtonElement).disabled).toBe(false)
+    await fireEvent.click(button)
+    await waitFor(() => expect(button.getAttribute('aria-pressed')).toBe('false'))
+    expect(disabled).toHaveBeenCalledTimes(1)
+    expect(microphoneTrackStop).toHaveBeenCalledTimes(1)
+    expect((button as HTMLButtonElement).disabled).toBe(true)
+    await component.$set({suspended: false})
+    expect((button as HTMLButtonElement).disabled).toBe(false)
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
   })
 
   test('should expose an accessible inactive microphone button', () => {

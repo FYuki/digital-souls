@@ -37,6 +37,7 @@
   ) => void
   export let onError: (error: Error) => void
   export let continuous = false
+  export let suspended = false
   export let onBeforeEnable: () => Promise<void> = async () => undefined
   export let onMicrophoneEnabled: (stream: MediaStream) => Promise<void> = async () => undefined
   export let onMicrophoneDisabled: () => Promise<void> = async () => undefined
@@ -100,6 +101,7 @@
     pauseStream: async () => undefined,
     onFrameProcessed: (probabilities, frame) => {
       if (continuous) {
+        if (suspended) return
         const atMs = performance.now()
         const secondary = shortSpeechAnalyzer?.process(frame)
         const port = vadTestPort()
@@ -291,13 +293,27 @@
     }
   }
 
+  const suspendCapture = (paused: boolean, stream: MediaStream | null) => {
+    // 再接続中は同じtrackを無音化し、利用者が選んだマイクのON/OFFを保持する。
+    // 途中の発話は次の接続へ継ぎ足さず、復旧後に新しい発話境界を検出する。
+    for (const track of stream?.getTracks() ?? []) track.enabled = !paused
+    if (paused) {
+      utteranceDetector?.reset()
+      shortSpeechAnalyzer?.reset()
+      candidateSpeechStartClientMs = null
+      capturedAudioStartClientMs = null
+      if (status === 'on') setStatus('standby')
+    }
+  }
+
+  $: suspendCapture(continuous && suspended, microphoneStream)
   $: if (forceOff && status !== 'off' && !isLoading) {
     setStatus('off')
     void releaseMicrophoneResources().catch(reportError)
   }
   $: buttonLabel = status === 'off' ? 'マイクをオンにする' : 'マイクをオフにする'
   $: isPressed = status !== 'off'
-  $: isDisabled = isLoading || disabled
+  $: isDisabled = isLoading || disabled || (suspended && status === 'off')
 
   onDestroy(() => {
     void releaseMicrophoneResources().catch(reportError)

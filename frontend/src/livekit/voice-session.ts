@@ -246,7 +246,8 @@ export class LiveKitVoiceSessionController {
     this.microphoneEnabled = false
     await this.publishControlEvent(room, this.event({ type: 'session_muted' }))
     this.input = 'muted'
-    this.setPhase('muted')
+    if (this.phase === 'reconnecting') this.publishSnapshot()
+    else this.setPhase('muted')
   }
 
   async speechStarted(utteranceId: string, atMs: number): Promise<void> {

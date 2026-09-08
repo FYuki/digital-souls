@@ -297,6 +297,28 @@ describe('App conversation lifecycle', () => {
     expect(localStorage.getItem('digital-souls:conversation:miori')).toBe(CONVERSATION_ID)
   })
 
+  test('再接続中はマイクを保持して発話を送らず、復旧後の次の発話を追加操作なしで送る', async () => {
+    render(App)
+    await startLiveKitSession()
+    const button = screen.getByRole('button', {name: 'マイクをオフにする'})
+    const frame = audioMocks.vadOptions!.onFrameProcessed
+    await act(() => liveKitMocks.observeRoom?.({transport: 'unavailable', control: 'unavailable', audio: 'unavailable'}))
+    expect(screen.getByText('セッション: 再接続中')).toBeTruthy()
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    expect(audioMocks.vadDestroy).not.toHaveBeenCalled()
+    feedVadFrames(frame, 4, .01, .8)
+    feedVadFrames(frame, 7, 0, .1)
+    expect(liveKitMocks.controlEvents.filter(event => event.type === 'speech_started')).toHaveLength(0)
+    await act(() => liveKitMocks.observeRoom?.({transport: 'available', control: 'available', audio: 'unavailable'}))
+    expect(screen.getByText('セッション: 接続済み')).toBeTruthy()
+    feedVadFrames(frame, 4, .01, .8)
+    feedVadFrames(frame, 7, 0, .1)
+    await waitFor(() => expect(liveKitMocks.controlEvents.filter(event => event.type === 'speech_stopped')).toHaveLength(1))
+    expect(liveKitMocks.controlEvents.filter(event => event.type === 'speech_started')).toHaveLength(1)
+    expect(audioMocks.getUserMedia).toHaveBeenCalledTimes(1)
+    expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(1)
+  })
+
   test('通常UIからLiveKit sessionを開始し継続VADと順序付きdeltaを表示する', async () => {
     render(App)
     await startLiveKitSession()

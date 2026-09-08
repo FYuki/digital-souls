@@ -122,7 +122,10 @@
     activeResponseId: null,
   }
   const voiceSession = new LiveKitVoiceSessionController(
-    (snapshot) => { voiceSnapshot = snapshot },
+    (snapshot) => {
+      if (snapshot.phase === 'reconnecting') activeUtteranceId = null
+      voiceSnapshot = snapshot
+    },
     receiveVoiceCoreEvent,
   )
 
@@ -259,7 +262,6 @@
     || endingVoiceSession
     || voiceSnapshot.phase === 'error'
     || voiceSnapshot.phase === 'ended'
-    || voiceSnapshot.phase === 'reconnecting'
   $: sessionStatus = ({
     idle: '停止',
     connecting: '接続中',
@@ -453,6 +455,7 @@
   }
 
   const handleSpeechStarted = ({ clientMs }: SpeechActivity) => {
+    if (voiceSnapshot.phase === 'reconnecting') return
     const utteranceId = crypto.randomUUID()
     activeUtteranceId = utteranceId
     void voiceSession.speechStarted(utteranceId, clientMs).catch(appendApplicationError)
@@ -583,6 +586,7 @@
         screenReferenceAvailable={screenReferenceAvailable}
       />
       <AudioRecorder
+        suspended={voiceSnapshot.phase === 'reconnecting'}
         disabled={voiceRecorderDisabled}
         forceOff={voiceRecorderForceOff}
         continuous={true}

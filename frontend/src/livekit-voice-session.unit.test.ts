@@ -122,6 +122,17 @@ describe('通常会話UI向けLiveKit音声session', () => {
     expect(controller.snapshot().phase).toBe('listening')
   })
 
+  test('再接続中の明示muteは操作可能へ戻さず、復旧後もmutedを維持する', async () => {
+    const {controller, observations} = setup()
+    await controller.ensureSession({characterId: 'miori', conversationId: 'conversation-id'})
+    await controller.resumeMicrophone(MICROPHONE_STREAM)
+    observations[0]({transport: 'unavailable', control: 'unavailable', audio: 'unavailable'})
+    await controller.muteMicrophone()
+    expect(controller.snapshot().phase).toBe('reconnecting')
+    observations[0]({transport: 'available', control: 'available', audio: 'unavailable'})
+    expect(controller.snapshot().phase).toBe('muted')
+  })
+
   test('前sessionのmicrophone状態を次sessionへ持ち越さない', async () => {
     const { controller, observations } = setup()
     await controller.ensureSession({ characterId: 'miori', conversationId: 'one' })
