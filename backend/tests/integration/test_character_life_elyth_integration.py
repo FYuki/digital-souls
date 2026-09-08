@@ -28,6 +28,7 @@ from app.privacy.semantic.inference_client import InferenceSemanticClassifierCli
 from app.tool_use.projection import Sanitizer
 from app.tool_use.runtime import ToolSettings
 from tests.fixtures.character_life.http_server import life_http
+from tests.fixtures.character_life.priority_benchmark import measure_priority
 
 
 @pytest.mark.inference_real
@@ -232,6 +233,14 @@ def test_elyth_topic_exploration_real_services(tmp_path, monkeypatch):
                 )
                 report["chat_ttft_seconds"] = round(first_delta, 3)
                 report["chat_duration_seconds"] = round(time.monotonic() - started, 3)
+                if os.environ.get("RUN_CHARACTER_LIFE_PRIORITY_BENCHMARK") == "true":
+                    report["priority_benchmark"] = await measure_priority(
+                        runtime,
+                        state,
+                        inference.router,
+                        projected,
+                        lambda: len(report["external_calls"]),
+                    )
                 report["status"] = "passed"
             finally:
                 await runtime.close()

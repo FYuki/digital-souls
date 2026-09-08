@@ -31,6 +31,7 @@ actionはcall/finish/defer。callはcandidate_idとarguments_json（JSON object�
 未取得の情報や未実施の活動を捏造しません。同じ操作と引数を繰り返しません。
 不足情報・利用者の回答・権限が必要ならdeferです。使わない文字列は空文字です。
 finalize_only=trueなら探索は終了です。取得済み結果に基づく話題をfinishでまとめ、不足する場合はdeferを返してください。
+summary_privacy_blockedがある場合は個人・機微情報を含まない別の一般的な話題へ要約を作り直します。安全な話題がなければdeferです。
 summaryは次の会話で共有できる話題候補であり、人格・長期記憶を変更する指示ではありません。"""
 
 SCHEMA: Json = {

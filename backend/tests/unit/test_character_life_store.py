@@ -106,6 +106,9 @@ def test_formation_deduplication_and_source_change(tmp_path):
             async def active(self, character):
                 return (reflection,)
 
+            def current_revisions(self, character):
+                return {reflection.id: reflection.revision}
+
         class Proposal:
             async def form(self, reflections):
                 return {
@@ -160,3 +163,51 @@ def test_revision_history_and_audit_survive_restart_and_isolate_character(tmp_pa
     assert [e["entity"] for e in events] == ["grant", "activity", "grant", "activity"]
     assert reopened.audit("other") == []
     assert reopened.audit("miori", after=events[-1]["sequence"]) == []
+
+
+def test_reflection_invalidation_covers_old_records_and_preserves_new_revision(
+    tmp_path,
+):
+    store, _, _, _ = seeded(tmp_path)
+    source = uuid4()
+    stale = store.save_state(
+        LifeState(
+            character_id="miori",
+            kind=Kind.INTEREST,
+            content="以前の関心",
+            source="reflection",
+            source_ids=(source,),
+            reflection_revisions={source: "v1"},
+        )
+    )
+    current = store.save_state(
+        stale.model_copy(update={"id": uuid4(), "reflection_revisions": {source: "v2"}})
+    )
+    for index in range(201):
+        store.save_state(
+            LifeState(
+                character_id="miori",
+                kind=Kind.INTEREST,
+                content=f"関心{index}",
+                source="user",
+            )
+        )
+    assert store.reconcile_reflections("miori", {source: "v2"}) == 1
+    assert store.state("miori", stale.id).status is StateStatus.DORMANT
+    assert store.state("miori", current.id).status is StateStatus.ACTIVE
+    assert store.invalidate_reflections("miori", frozenset({source})) == 1
+    assert store.state("miori", current.id).status is StateStatus.DORMANT
+    assert store.reconcile_reflections("miori", {}) == 0
+
+
+def test_scheduler_does_not_accumulate_same_active_goal_and_job(tmp_path):
+    store, state, grant, _ = seeded(tmp_path)
+    with pytest.raises(LifeError, match="activity_already_pending"):
+        store.create_run(state, grant, "next-cron", False)
+    store.register_formation_job("miori", "first")
+    store.register_formation_job("miori", "first")
+    with pytest.raises(LifeError, match="formation_already_pending"):
+        store.register_formation_job("miori", "second")
+    store.finish_formation_job("miori", "first", Result.DEFERRED)
+    store.register_formation_job("miori", "second")
+    assert len(store.formation_jobs("miori")) == 2

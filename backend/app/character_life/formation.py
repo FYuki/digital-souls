@@ -29,8 +29,6 @@ class LifeFormation:
         reflections = await self.source.active(character)
         if reflections is None:
             return Result.DEFERRED
-        if not reflections:
-            return Result.NO_CHANGE
         if len(reflections) > 16 or any(
             r.character_id != character or not r.active for r in reflections
         ):
@@ -38,6 +36,14 @@ class LifeFormation:
         ids = {r.id for r in reflections}
         if len(ids) != len(reflections):
             raise LifeError(Result.REJECTED, "reflection_duplicate")
+        revisions = self.source.current_revisions(character)
+        if revisions is None:
+            return Result.DEFERRED
+        if any(revisions.get(r.id) != r.revision for r in reflections):
+            return Result.SUPERSEDED
+        invalidated = self.store.reconcile_reflections(character, revisions)
+        if not reflections:
+            return Result.APPLIED if invalidated else Result.NO_CHANGE
         fingerprint = digest(sorted((str(r.id), r.revision) for r in reflections))
         if self.store.formation_exists(character, fingerprint):
             return Result.NO_CHANGE
@@ -59,6 +65,7 @@ class LifeFormation:
                     content=candidate["content"],
                     source="reflection",
                     source_ids=sources,
+                    reflection_revisions={i: revisions[i] for i in sources},
                 )
             )
         current = await self.source.active(character)
@@ -67,5 +74,8 @@ class LifeFormation:
         ):
             return Result.SUPERSEDED
         if digest(sorted((str(r.id), r.revision) for r in current)) != fingerprint:
+            return Result.SUPERSEDED
+        latest = self.source.current_revisions(character)
+        if latest is None or any(latest.get(r.id) != r.revision for r in reflections):
             return Result.SUPERSEDED
         return self.store.apply_formation(character, fingerprint, tuple(states))

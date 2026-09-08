@@ -56,10 +56,12 @@ class StateInput(Record):
     kind: Kind
     content: Content
     target_id: Identifier | None = None
+    binding_target_id: Identifier | None = None
 
 
 class StateUpdate(Record):
     target_id: Identifier | None = None
+    binding_target_id: Identifier | None = None
     revision: int = Field(ge=1)
     content: Content
     status: StateStatus
@@ -113,10 +115,12 @@ def status(character: str, request: Request) -> dict[str, object]:
             for g in rt.service.store.grants(character)
         ],
         "runs": rt.service.store.runs(character),
+        "formation_jobs": rt.service.store.formation_jobs(character),
         "dependencies": {
             "episode_reflection": "deferred_issue_100",
             "personality": "deferred_issue_101",
             "write_recovery": "deferred_issue_185",
+            "skill": "deferred_issue_102",
         },
     }
 
@@ -136,6 +140,7 @@ async def create_state(character: str, body: StateInput, request: Request) -> Li
         kind=body.kind,
         content=body.content,
         target_id=body.target_id,
+        binding_target_id=body.binding_target_id,
         source="user",
     )
     return rt.service.store.save_state(state)
@@ -160,6 +165,14 @@ async def update_state(
                     "target_id": body.target_id
                     if "target_id" in body.model_fields_set
                     else state.target_id,
+                    "binding_target_id": body.binding_target_id
+                    if "binding_target_id" in body.model_fields_set
+                    else state.binding_target_id,
+                    **(
+                        {"source": "user", "source_ids": (), "reflection_revisions": {}}
+                        if body.content != state.content
+                        else {}
+                    ),
                 }
             ),
             expected_revision=body.revision,
@@ -174,6 +187,20 @@ async def grant(
 ) -> dict[str, object]:
     rt = runtime(request)
     try:
+        if not body.enabled:
+            try:
+                previous = rt.service.store.grant(character, connection_id)
+            except LifeError:
+                previous = None
+            if previous is not None:
+                value = rt.service.store.set_grant(
+                    character, connection_id, previous.connection_identity, False
+                )
+                return {
+                    "connection_id": value.connection_id,
+                    "enabled": value.enabled,
+                    "revision": value.revision,
+                }
         shared_target(rt, character, connection_id)
         connection = rt.service.gate.registry.entry(connection_id).connection
         value = rt.service.store.set_grant(
@@ -235,9 +262,12 @@ class FormationInput(Record):
 async def form(
     character: str, body: FormationInput, request: Request
 ) -> dict[str, str]:
-    workflow_id = await runtime(request).submit_formation(
-        character, str(body.request_id)
-    )
+    try:
+        workflow_id = await runtime(request).submit_formation(
+            character, str(body.request_id)
+        )
+    except LifeError as exc:
+        raise error(exc) from None
     return {"workflow_id": workflow_id, "dependency": "issue_100"}
 
 

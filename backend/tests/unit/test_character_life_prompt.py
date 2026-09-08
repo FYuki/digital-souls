@@ -37,3 +37,39 @@ def test_next_response_uses_fixed_character_state_without_displacing_user(tmp_pa
     )
     assert context("miori", prompt) is prompt
     assert "色彩への関心" in fixed.messages[-2].content
+
+
+def test_reflection_context_requires_available_current_authority(tmp_path):
+    from uuid import uuid4
+
+    store = Store(tmp_path / "life.db")
+    source = uuid4()
+    store.save_state(
+        LifeState(
+            character_id="miori",
+            kind=Kind.INTEREST,
+            content="正本からの関心",
+            source="reflection",
+            source_ids=(source,),
+            reflection_revisions={source: "v1"},
+        )
+    )
+    prompt = BuiltPrompt(
+        (PromptMessage(PromptRole.USER, "最近どう？"),),
+        PromptUsage(10, 0, 0, 0, 0, 10, 0, 0, 0, 0),
+        (),
+    )
+
+    class Source:
+        revisions = {source: "v1"}
+
+        def current_revisions(self, character):
+            return self.revisions
+
+    authority = Source()
+    context = Context(store, lambda _: 100, 1000, reflections=authority)
+    assert context("miori", prompt) is not prompt
+    authority.revisions = None
+    assert context("miori", prompt) is prompt
+    authority.revisions = {source: "v2"}
+    assert context("miori", prompt) is prompt

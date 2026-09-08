@@ -36,8 +36,8 @@ APIキーを操作APIへ送らない。キャラクターは既存のCharacter C
 | 操作 | HTTP endpoint | 入力 |
 |---|---|---|
 | 状態・許可・実行履歴 | `GET /character-life/miori` | なし |
-| 状態作成 | `POST /character-life/miori/states` | `kind`, `content`, 任意の`target_id` |
-| 状態変更・完了・休眠 | `PUT /character-life/miori/states/{id}` | `revision`, `content`, `status`, 任意の`target_id` |
+| 状態作成 | `POST /character-life/miori/states` | `kind`, `content`, 任意の`target_id` / `binding_target_id` |
+| 状態変更・完了・休眠 | `PUT /character-life/miori/states/{id}` | `revision`, `content`, `status`, 任意の`target_id` / `binding_target_id` |
 | 状態のrevision履歴 | `GET /character-life/miori/states/{id}/history` | なし |
 | ELYTH自律許可・取消し | `PUT /character-life/miori/targets/elyth` | `enabled: true/false` |
 | 利用者からの実行要求 | `POST /character-life/miori/activities` | `state_id`, `request_id`（UUIDv4） |
@@ -52,7 +52,7 @@ Interestだけでは外部実行しない。状態の編集時は取得したrev
 同じrequest_idの再送は同じ実行を返す。別の目的への流用は409となる。
 未接続・利用者回答待ち・privacy判定不能・foreground優先は保留結果となり、成功扱いしない。
 
-状態・実行の一覧はそれぞれ直近200件・100件。監査はsequence順に100件ずつ取得する。
+状態・実行の一覧はそれぞれ直近200件・100件。内省形成jobもcharacter単位で直近100件の結果を表示する。監査はsequence順に100件ずつ取得する。
 停止済み実行の再開では新しいattemptを発行し、旧attemptからの遅延結果を採用しない。
 意図・許可のrevisionが変わった実行はそのまま再承認せず、新しいrequest_idで要求する。
 
@@ -66,11 +66,14 @@ Interestだけでは外部実行しない。状態の編集時は取得したrev
 DBOSへ渡すactivity引数は実行IDとattemptで、外部本文・MCP arguments・APIキーをcheckpointへ保存しない。
 監査は外部execution ID・候補ID・引数fingerprint・結果を記録し、native payloadを複製しない。
 Life Stateの共有候補と活動完了は同じSQLite transactionで確定する。
+#100呼出し前に承認済み観測のhandoffを作業記録として固定し、復旧時は同じrun_id・時刻・本文・sourceを再送する。
+#100/#101の接続先はこのkeyで冪等に受け付ける。これはSELF EpisodeやPersonalityの正本を代替しない。
 DBOSによる再投入抑止を外部副作用のexactly-once保証とは扱わない。
 
 cronはUTC。missed runのbackfillは無効で、古いscheduleの回復時にも過去の活動を捏造しない。
 登録済みキャラクターの内省形成要求と、許可済みの有効なGoal Intentionを定期scanする。
 queueの同時実行数は1で、利用者要求、自律活動、内省形成の順に優先する。
+同じGoalへの未完了の自律要求と同じcharacterへの未完了の内省形成を重ねない。活動の未完了queue上限はcharacterごとに100件。
 foreground会話がある場合は、認知の前後と外部dispatch直前に活動を保留する。
 実行中の推論を会話開始と同時に強制preemptする設定はない。
 
@@ -84,7 +87,7 @@ DBOSのSQLiteは今回のdev/test受入に使用し、運用導入時のDB・長
 | 境界 | 今回の挙動 | 後続の実装責務 |
 |---|---|---|
 | `MemoryPort` | 本人観測の保存・catch-upは`DEFERRED` | #100のSELF / experienced_at / Memory admission / Episode形成 |
-| `ReflectionSource` | 正本未接続は`None`として形成を保留 | #100のACTIVE Reflection projectionと訂正・非公開化通知 |
+| `ReflectionSource` | 正本未接続は`None`として形成を保留 | #100のACTIVE Reflection形成対象batch（最大16件）・完全な同期revision集合・訂正/非公開化通知 |
 | `LifeFormation` | 提供された正本projectionのcharacter・source・revision・privacyを検証してLife Stateを確定 | #249。#100の永続modelを複製しない |
 | `PersonalityPort` | `DEFERRED` | #101の証拠・閾値・bounded更新・重複排除 |
 | Skill | 自動学習・正本更新なし | #102 |
@@ -93,9 +96,12 @@ DBOSのSQLiteは今回のdev/test受入に使用し、運用導入時のDB・長
 connectionへのGrantは会話での利用許可と別であり、schema変更でもconnection identityが同じなら保持する。
 今回の話題探索は公開情報の5操作に限定し、DM・投稿・通知の既読変更・Field操作を選ばせない。
 非信頼annotationをreadや自動retryへ昇格させない。通常writeを恒久禁止する方針変更ではなく、
-#185接続前の制限として扱う。Web・Addonも既存Execution Gateへ登録された接続境界を使用し、直接HTTPを迂回実行しない。
+#185接続前の制限として扱う。Webサービスは登録済みMCPを介して利用する。直接Web adapter・self-owned Addonは未接続で、#221等の基盤完成後に既存Execution Gate境界へ接続する。直接HTTPで迂回実行しない。
+MCPのResource読取と登録済みBindingを再利用する。複数Bindingから選ぶ場合は状態の`binding_target_id`へ管理側のIDを指定する。不足は`binding_input_required`で保留する。
 
 共有候補の`APPLIED`はLife State保存の成功を表す。SELF Episode・Reflection・人格・Skill全体の統合完了を表さない。
+Reflection由来の状態は元sourceのrevisionを保存し、会話・実行直前に正本metadataを照合する。
+訂正・非公開化は件数制限なしで依存状態を休眠化し、正本取得不能時は派生状態を利用しない。
 関連Epic未実装の状態で、共通ADRの全体シナリオが完了したとは報告しない。
 
 ## テスト
@@ -119,3 +125,14 @@ python -m pytest backend/tests/integration/test_character_life_elyth_integration
 実接続テストではローカルOllama、ELYTH、DBOS、実socketのHTTP受付、同一要求の重複排除、
 次の会話へのLife State projectionと実モデル応答、終了処理を確認する。
 レポートへ本文・キー・argumentsを保存せず、結果・操作名・schema検証種別・時間を記録する。
+
+## 前景と背景の実測と制限
+
+`RUN_CHARACTER_LIFE_PRIORITY_BENCHMARK=true`を実接続受入に追加すると、同じ実Ollamaへ背景認知と会話を重ね、TTFT・GPU使用量・foreground中のdispatch件数を記録する。
+2026-09-08のgemma4:e4bによる単一試行では、通常TTFT 10.444秒、重複時16.216秒、GPU使用メモリ最大9,658 MiB、使用率最大86%だった。
+背景活動はDEFERREDとなり、foreground開始後の外部dispatchは0件。通常の強制pause/resumeとshutdownは別の自動テストで検証する。
+
+この測定はテキスト会話・一つのローカル環境の観測であり、音声streamや配信、異なるGPUの性能保証ではない。
+現行Inference Routerのcancelは結果の不採用を保証し、送信済み同期推論のGPU処理を強制停止しない。
+今回のdev/testでは処理境界での保留を維持し、強制preemptionは導入しない。共有推論serverでは会話の遅延が増える制限がある。
+運用導入は今回の範囲外で、推論配置と音声・複数キャラクター・長時間負荷を含めて別途受入する。

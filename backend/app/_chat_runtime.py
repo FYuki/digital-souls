@@ -788,6 +788,8 @@ def _build_unrecorded_prompt(
             config=context.prompt_config,
             token_counter=_ChatTokenCounter(dependencies.input_token_counter),
         )
+        if dependencies.life_context is not None:
+            prompt = dependencies.life_context(character, prompt)
     except httpx.TimeoutException as exc:
         raise chat_service.ChatTimeoutError() from exc
     except httpx.HTTPError as exc:
@@ -796,8 +798,6 @@ def _build_unrecorded_prompt(
         if exc.category is InferenceErrorCategory.TIMEOUT:
             raise chat_service.ChatTimeoutError() from None
         raise chat_service.ChatBackendError() from None
-    if dependencies.life_context is not None:
-        prompt = dependencies.life_context(character, prompt)
     if screen is None:
         return replace(
             prompt,

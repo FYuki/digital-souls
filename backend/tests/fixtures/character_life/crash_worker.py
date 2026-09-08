@@ -18,6 +18,7 @@ from tests.module.test_character_life import Cognition, Privacy, Scanner
 
 
 async def main(root: Path):
+    crash_at = sys.argv[2] if len(sys.argv) > 2 else "domain_commit"
     store = Store(root / "life.db")
     connection = Connection.from_manifest(
         manifest(
@@ -54,12 +55,35 @@ async def main(root: Path):
 
     def crash_after_commit(*args, **kwargs):
         final = original_finish(*args, **kwargs)
-        if final.result is Result.APPLIED and not (root / "crashed").exists():
+        if (
+            crash_at == "domain_commit"
+            and final.result is Result.APPLIED
+            and not (root / "crashed").exists()
+        ):
             (root / "crashed").write_text("yes")
             os._exit(23)
         return final
 
     store.finish = crash_after_commit
+
+    class Memory:
+        async def record_observation(
+            self, *, character, run_id, experienced_at, topic, source_revisions
+        ):
+            fixed = json.dumps(
+                [character, run_id, experienced_at.isoformat(), topic, source_revisions]
+            )
+            record = root / "memory-input"
+            if record.exists():
+                assert record.read_text() == fixed
+                return Result.NO_CHANGE
+            record.write_text(fixed)
+            (root / "crashed").write_text("yes")
+            os._exit(24)
+
+        async def catch_up(self, character):
+            return Result.NO_CHANGE
+
     async with gate.attach("elyth", source):
         service = Service(
             store,
@@ -68,6 +92,7 @@ async def main(root: Path):
             Privacy(),
             Sanitizer(Scanner()),
             foreground_busy=lambda: False,
+            memory=Memory() if crash_at == "memory_commit" else None,
         )
         runtime = Runtime(service, root, Settings(True, "0 0 1 1 *"))
         await runtime.start()
@@ -80,6 +105,8 @@ async def main(root: Path):
                     break
                 await asyncio.sleep(0.05)
             assert status is not None and status.status == "SUCCESS"
+            if crash_at == "memory_commit":
+                assert store.run(str(run.id)).dependency_results["episode"] == "NO_CHANGE"
             print(
                 json.dumps(
                     {

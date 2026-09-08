@@ -357,9 +357,11 @@ class ExecutionGate:
         loop_id: str,
         *,
         binding_id: str | None = None,
+        dispatch_guard: Callable[[], None] | None = None,
     ) -> Json:
         return await self._execute(
-            connection_id, resource_ref, {}, loop_id, "resource", binding_id=binding_id
+            connection_id, resource_ref, {}, loop_id, "resource", binding_id=binding_id,
+            dispatch_guard=dispatch_guard,
         )
 
     async def resume(

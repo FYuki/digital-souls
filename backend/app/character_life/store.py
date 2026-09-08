@@ -35,6 +35,9 @@ class Store:
                 CREATE TABLE IF NOT EXISTS life_formations (
                     character_id TEXT NOT NULL, fingerprint TEXT NOT NULL,
                     PRIMARY KEY(character_id, fingerprint));
+                CREATE TABLE IF NOT EXISTS life_formation_jobs (
+                    id TEXT PRIMARY KEY, character_id TEXT NOT NULL,
+                    result TEXT, created_at TEXT NOT NULL, finished_at TEXT);
                 CREATE TABLE IF NOT EXISTS life_state_history (
                     id TEXT NOT NULL, revision INTEGER NOT NULL,
                     character_id TEXT NOT NULL, document TEXT NOT NULL,
@@ -100,13 +103,21 @@ class Store:
         finally:
             db.close()
 
-    def states(self, character: str) -> list[LifeState]:
+    def states(
+        self,
+        character: str,
+        *,
+        active_only: bool = False,
+        limit: int = 200,
+    ) -> list[LifeState]:
         with self.transaction() as db:
             return [
                 LifeState.model_validate_json(row[0])
                 for row in db.execute(
-                    "SELECT document FROM life_states WHERE character_id=? ORDER BY rowid DESC LIMIT 200",
-                    (character,),
+                    "SELECT document FROM life_states WHERE character_id=? "
+                    "AND (?=0 OR json_extract(document,'$.status')='ACTIVE') "
+                    "ORDER BY rowid DESC LIMIT ?",
+                    (character, active_only, limit),
                 )
             ]
 
@@ -147,6 +158,8 @@ class Store:
         *,
         execution_id: str,
         candidate_id: str,
+        operation_label: str,
+        snapshot_revision: str,
         argument_fingerprint: str,
         outcome: str,
     ) -> None:
@@ -156,6 +169,8 @@ class Store:
                 "attempt": run.attempt,
                 "execution_id": execution_id,
                 "candidate_id": candidate_id,
+                "operation_label": operation_label,
+                "snapshot_revision": snapshot_revision,
                 "argument_fingerprint": argument_fingerprint,
                 "outcome": outcome,
             }
@@ -230,6 +245,12 @@ class Store:
                 (character, connection),
             ).fetchone()
             previous = Grant.model_validate_json(row[0]) if row else None
+            if (
+                previous is not None
+                and previous.enabled == enabled
+                and previous.connection_identity == identity
+            ):
+                return previous
             grant = Grant(
                 character_id=character,
                 connection_id=connection,
@@ -256,6 +277,18 @@ class Store:
                 if previous.state_id != state.id or previous.requested != requested:
                     raise LifeError(Result.CONFLICT, "request_id_conflict")
                 return previous
+            pending = [
+                Run.model_validate_json(row[0])
+                for row in db.execute(
+                    "SELECT document FROM life_runs WHERE character_id=? "
+                    "AND json_extract(document,'$.phase') IN ('queued','running')",
+                    (state.character_id,),
+                )
+            ]
+            if len(pending) >= 100:
+                raise LifeError(Result.DEFERRED, "activity_queue_full")
+            if not requested and any(r.state_id == state.id for r in pending):
+                raise LifeError(Result.DEFERRED, "activity_already_pending")
             run_id = uuid4()
             run = Run(
                 id=run_id,
@@ -416,9 +449,24 @@ class Store:
         self, character: str, source_ids: frozenset[UUID]
     ) -> int:
         affected = 0
-        for state in self.states(character):
+        for state in self.states(character, active_only=True, limit=-1):
             if state.source == "reflection" and source_ids.intersection(
                 state.source_ids
+            ):
+                self.save_state(
+                    state.model_copy(update={"status": StateStatus.DORMANT}),
+                    expected_revision=state.revision,
+                )
+                affected += 1
+        return affected
+
+    def reconcile_reflections(self, character: str, revisions: dict[UUID, str]) -> int:
+        affected = 0
+        for state in self.states(character, active_only=True, limit=-1):
+            if state.source == "reflection" and any(
+                source_id not in revisions
+                or state.reflection_revisions.get(source_id) != revisions[source_id]
+                for source_id in state.source_ids
             ):
                 self.save_state(
                     state.model_copy(update={"status": StateStatus.DORMANT}),
@@ -436,6 +484,55 @@ class Store:
                 ).fetchone()
                 is not None
             )
+
+    def register_formation_job(self, character: str, workflow_id: str) -> None:
+        with self.transaction() as db:
+            if db.execute(
+                "SELECT 1 FROM life_formation_jobs WHERE id=?", (workflow_id,)
+            ).fetchone():
+                return
+            if db.execute(
+                "SELECT 1 FROM life_formation_jobs WHERE character_id=? AND result IS NULL",
+                (character,),
+            ).fetchone():
+                raise LifeError(Result.DEFERRED, "formation_already_pending")
+            db.execute(
+                "INSERT OR IGNORE INTO life_formation_jobs VALUES (?,?,NULL,?,NULL)",
+                (workflow_id, character, now().isoformat()),
+            )
+
+    def formation_job_result(self, character: str, workflow_id: str) -> Result | None:
+        with self.transaction() as db:
+            row = db.execute(
+                "SELECT result FROM life_formation_jobs WHERE id=? AND character_id=?",
+                (workflow_id, character),
+            ).fetchone()
+        if row is None:
+            raise LifeError(Result.REJECTED, "formation_job_not_found")
+        return Result(row[0]) if row[0] else None
+
+    def finish_formation_job(
+        self, character: str, workflow_id: str, result: Result
+    ) -> None:
+        with self.transaction() as db:
+            db.execute(
+                "UPDATE life_formation_jobs SET result=?,finished_at=? WHERE id=? AND character_id=? AND result IS NULL",
+                (result, now().isoformat(), workflow_id, character),
+            )
+
+    def formation_jobs(self, character: str | None) -> list[dict[str, object]]:
+        with self.transaction() as db:
+            db.row_factory = sqlite3.Row
+            if character is None:
+                rows = db.execute(
+                    "SELECT * FROM life_formation_jobs WHERE result IS NULL"
+                )
+            else:
+                rows = db.execute(
+                    "SELECT * FROM life_formation_jobs WHERE character_id=? ORDER BY rowid DESC LIMIT 100",
+                    (character,),
+                )
+            return [dict(row) for row in rows]
 
     def apply_formation(
         self, character: str, fingerprint: str, states: tuple[LifeState, ...]

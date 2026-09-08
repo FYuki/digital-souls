@@ -6,8 +6,8 @@ from dataclasses import replace
 from app.external_mcp.models import encode
 from app.prompting import BuiltPrompt, PromptMessage, PromptRole
 
-from .models import StateStatus
 from .store import Store
+from .ports import DeferredReflections, ReflectionSource
 
 
 class Context:
@@ -16,12 +16,24 @@ class Context:
         store: Store,
         counter: Callable[[tuple[PromptMessage, ...]], int],
         limit: int,
+        *,
+        reflections: ReflectionSource | None = None,
     ) -> None:
         self.store, self.counter, self.limit = store, counter, limit
+        self.reflections = reflections or DeferredReflections()
 
     def __call__(self, character: str, prompt: BuiltPrompt) -> BuiltPrompt:
+        try:
+            revisions = self.reflections.current_revisions(character)
+        except Exception:
+            # 接続先の一時障害で正本照合できない場合、派生状態を利用しない。
+            revisions = None
+        if revisions is not None:
+            self.store.reconcile_reflections(character, revisions)
         states = [
-            s for s in self.store.states(character) if s.status is StateStatus.ACTIVE
+            s
+            for s in self.store.states(character, active_only=True)
+            if s.source != "reflection" or revisions is not None
         ][:8]
         while states:
             data = [

@@ -144,7 +144,6 @@ from app.character_life.cognition import (
 from app.character_life.prompt import Context as LifeContext
 from app.character_life.formation import LifeFormation
 from app.character_life.cognition import Formation as StateFormation
-from app.character_life.ports import DeferredReflections
 from app.routers.character_life import router as character_life_router
 
 VOICE_MEASUREMENT_KIND_ENV = "VOICE_MEASUREMENT_KIND"
@@ -759,10 +758,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     foreground_busy=lambda: (
                         conversation_history_repository.consolidation_activity()[0] > 0
                     ),
+                    bindings=tool_runtime.service.bindings,
                 )
                 life_service.formation = LifeFormation(
                     life_store,
-                    DeferredReflections(),
+                    life_service.reflections,
                     StateFormation(inference_runtime.router),
                     life_service.privacy,
                 )
@@ -781,6 +781,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     count_llm_input_tokens,
                     model_settings.chat_context_tokens
                     - model_settings.assistant_max_generation_tokens,
+                    reflections=life_service.reflections,
                 )
             app_chat_service = _chat_runtime.create_chat_service(
                 _chat_runtime.resolve_chat_runtime_config(

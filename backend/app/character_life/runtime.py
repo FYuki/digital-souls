@@ -40,23 +40,30 @@ def activity_workflow(run_id: str, attempt: int) -> str:
 
 
 @DBOS.step(retries_allowed=False)
-def formation_step(character: str) -> str:
+def formation_step(character: str, workflow_id: str) -> str:
     runtime = owner()
+    previous = runtime.service.store.formation_job_result(character, workflow_id)
+    if previous is not None:
+        return previous
     future = asyncio.run_coroutine_threadsafe(
         runtime.service.form_life_states(character), runtime.loop
     )
     with runtime.future_lock:
         runtime.futures.add(future)
     try:
-        return future.result(timeout=runtime.service.timeout + 10)
+        result = future.result(timeout=runtime.service.timeout + 10)
+        runtime.service.store.finish_formation_job(
+            character, workflow_id, Result(result)
+        )
+        return result
     finally:
         with runtime.future_lock:
             runtime.futures.discard(future)
 
 
 @DBOS.workflow(name="character_life_formation_v1")
-def formation_workflow(character: str) -> str:
-    return formation_step(character)
+def formation_workflow(character: str, workflow_id: str) -> str:
+    return formation_step(character, workflow_id)
 
 
 @DBOS.step(retries_allowed=False)
@@ -89,8 +96,12 @@ class Settings:
 
 class Runtime:
     def __init__(
-        self, service: Service, data_root: Path, settings: Settings,
-        *, characters: Callable[[], tuple[str, ...]] = lambda: (),
+        self,
+        service: Service,
+        data_root: Path,
+        settings: Settings,
+        *,
+        characters: Callable[[], tuple[str, ...]] = lambda: (),
     ) -> None:
         self.service, self.settings = service, settings
         self.characters = characters
@@ -134,6 +145,8 @@ class Runtime:
             # 正本への登録後・enqueue前に停止しても、安定IDで同じ実行だけを再投入する。
             for run in self.service.store.open_runs():
                 await self.enqueue(run)
+            for job in self.service.store.formation_jobs(None):
+                await self.enqueue_formation(str(job["character_id"]), str(job["id"]))
         except BaseException:
             await self.close()
             raise
@@ -198,20 +211,26 @@ class Runtime:
             except LifeError:
                 continue
         for character in characters:
-            await self.submit_formation(character, scheduled_at)
+            try:
+                await self.submit_formation(character, scheduled_at)
+            except LifeError:
+                continue
         return submitted
 
     async def submit_formation(self, character: str, request_id: str) -> str:
         workflow_id = "life-formation-" + digest([character, request_id])[7:]
+        self.service.store.register_formation_job(character, workflow_id)
+        await self.enqueue_formation(character, workflow_id)
+        return workflow_id
 
+    async def enqueue_formation(self, character: str, workflow_id: str) -> None:
         def submit() -> None:
             if self.service.closing:
                 raise LifeError(Result.DEFERRED, "runtime_stopping")
             with SetWorkflowID(workflow_id), SetEnqueueOptions(priority=20):
-                DBOS.enqueue_workflow(QUEUE, formation_workflow, character)
+                DBOS.enqueue_workflow(QUEUE, formation_workflow, character, workflow_id)
 
         await asyncio.to_thread(submit)
-        return workflow_id
 
     async def resume(self, run_id: str) -> Run:
         run = self.service.store.run(run_id)

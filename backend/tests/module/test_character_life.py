@@ -53,14 +53,19 @@ class Cognition:
 
 @asynccontextmanager
 async def environment(
-    tmp_path, *, trusted=False, names=("get_information",), busy=False
+    tmp_path,
+    *,
+    trusted=False,
+    names=("get_information",),
+    busy=False,
+    endpoint=ELYTH_ENDPOINT,
 ):
     connection = Connection.from_manifest(
         manifest(
             trusted=trusted,
             connection_id="elyth",
             transport="streamable_http",
-            endpoint=ELYTH_ENDPOINT,
+            endpoint=endpoint,
         )
     )
     registry = Registry()
@@ -233,7 +238,12 @@ def test_dbos_execution_relaunch_dedup_and_no_missed_cron(tmp_path):
     asyncio.run(scenario())
 
 
-def test_process_crash_after_domain_commit_does_not_repeat_read_or_state(tmp_path):
+@pytest.mark.parametrize(
+    "crash_at,exit_code", [("domain_commit", 23), ("memory_commit", 24)]
+)
+def test_process_crash_after_domain_commit_does_not_repeat_read_or_state(
+    tmp_path, crash_at, exit_code
+):
     import json
     import os
     import subprocess
@@ -244,15 +254,15 @@ def test_process_crash_after_domain_commit_does_not_repeat_read_or_state(tmp_pat
     worker = backend / "tests/fixtures/character_life/crash_worker.py"
     env = {**os.environ, "PYTHONPATH": str(backend)}
     first = subprocess.run(
-        [sys.executable, str(worker), str(tmp_path)],
+        [sys.executable, str(worker), str(tmp_path), crash_at],
         env=env,
         capture_output=True,
         text=True,
         timeout=20,
     )
-    assert first.returncode == 23, first.stderr
+    assert first.returncode == exit_code, first.stderr
     second = subprocess.run(
-        [sys.executable, str(worker), str(tmp_path)],
+        [sys.executable, str(worker), str(tmp_path), crash_at],
         env=env,
         capture_output=True,
         text=True,
@@ -324,5 +334,211 @@ def test_shutdown_completes_domain_deferral_before_destroying_dbos(tmp_path):
             assert not service.cancellations
             assert not service.gate._loops
             assert not runtime.futures
+
+    asyncio.run(scenario())
+
+
+def test_scheduler_scans_registered_characters_and_publishes_deferred_formation(
+    tmp_path,
+):
+    async def scenario():
+        async with environment(tmp_path) as (service, source, run):
+            service.pause(str(run.id))
+            runtime = Runtime(
+                service,
+                tmp_path,
+                Settings(True, "0 0 1 1 *"),
+                characters=lambda: ("miori", "other"),
+            )
+            await runtime.start()
+            try:
+                scheduled = now().isoformat()
+                await runtime.scan(scheduled)
+                for _ in range(100):
+                    jobs = service.store.formation_jobs("other")
+                    if jobs and jobs[0]["result"] is not None:
+                        break
+                    await asyncio.sleep(0.05)
+                assert jobs[0]["result"] == "DEFERRED"
+                count = len(jobs)
+                await runtime.submit_formation("other", scheduled)
+                assert len(service.store.formation_jobs("other")) == count
+                assert all(
+                    j["character_id"] == "miori"
+                    for j in service.store.formation_jobs("miori")
+                )
+            finally:
+                await runtime.close()
+
+    asyncio.run(scenario())
+
+
+def test_dbos_checkpoint_contains_references_and_results_without_domain_text(tmp_path):
+    import sqlite3
+
+    async def scenario():
+        async with environment(tmp_path) as (service, source, run):
+            runtime = Runtime(service, tmp_path, Settings(True, "0 0 1 1 *"))
+            state_text = service.store.state("miori", run.state_id).content
+            await runtime.start()
+            try:
+                for _ in range(100):
+                    if service.store.run(str(run.id)).phase == "finished":
+                        break
+                    await asyncio.sleep(0.05)
+                assert service.store.run(str(run.id)).result is Result.APPLIED
+            finally:
+                await runtime.close()
+            with sqlite3.connect(runtime.system_path) as db:
+                dump = "\n".join(db.iterdump())
+            assert str(run.id) in dump
+            assert state_text not in dump
+            assert "色彩についての公開話題を見つけた" not in dump
+            assert "arguments_json" not in dump
+            assert "native_payload" not in dump
+
+    asyncio.run(scenario())
+
+
+def test_unclassified_effect_explicitly_defers_until_action_recovery_is_connected(
+    tmp_path,
+):
+    async def scenario():
+        async with environment(tmp_path, endpoint="https://example.test/mcp") as (
+            service,
+            source,
+            run,
+        ):
+
+            async def decide(context, cancellation):
+                c = next(c for c in context["candidates"] if c["kind"] == "tool")
+                return {
+                    "action": "call",
+                    "candidate_id": c["id"],
+                    "arguments_json": '{"value":1}',
+                    "summary": "",
+                }
+
+            service.cognition.decide = decide
+            assert await service.execute(str(run.id)) == "DEFERRED"
+            assert (
+                service.store.run(str(run.id)).reason == "action_recovery_unavailable"
+            )
+            assert not source.calls
+
+    asyncio.run(scenario())
+
+
+def test_native_resource_read_uses_execution_gate(tmp_path):
+    async def scenario():
+        async with environment(tmp_path, endpoint="https://example.test/mcp") as (
+            service,
+            source,
+            run,
+        ):
+
+            async def decide(context, cancellation):
+                if context["results"]:
+                    return {
+                        "action": "finish",
+                        "candidate_id": "",
+                        "arguments_json": "",
+                        "summary": "資料から得た話題",
+                    }
+                c = next(c for c in context["candidates"] if c["kind"] == "resource")
+                return {
+                    "action": "call",
+                    "candidate_id": c["id"],
+                    "arguments_json": "{}",
+                    "summary": "",
+                }
+
+            service.cognition.decide = decide
+            assert await service.execute(str(run.id)) == "APPLIED"
+            assert len(source.calls) == 1
+            assert source.calls[0][0] == "test://resource"
+
+    asyncio.run(scenario())
+
+
+def test_binding_constraints_are_applied_before_schema_and_egress(tmp_path):
+    from app.tool_use.binding import BindingResolver, BindingTarget
+
+    async def scenario():
+        async with environment(tmp_path) as (service, source, run):
+            resolver = BindingResolver(
+                (
+                    BindingTarget(
+                        "public",
+                        "elyth",
+                        "miori",
+                        "公開資料",
+                        ("get_information",),
+                        '{"value":2}',
+                    ),
+                )
+            )
+            service.bindings = resolver
+            service.gate.bindings = resolver
+            original = service.cognition.decide
+
+            async def decide(context, cancellation):
+                result = await original(context, cancellation)
+                if result["action"] == "call":
+                    result["arguments_json"] = "{}"
+                return result
+
+            service.cognition.decide = decide
+            assert await service.execute(str(run.id)) == "APPLIED"
+            assert source.calls[0][1] == {"value": 2}
+            assert resolver._resolved == {}
+
+    asyncio.run(scenario())
+
+
+def test_paused_activity_resumes_with_new_attempt_and_one_publication(tmp_path):
+    async def scenario():
+        async with environment(tmp_path) as (service, source, run):
+            service.pause(str(run.id))
+            runtime = Runtime(service, tmp_path, Settings(True, "0 0 1 1 *"))
+            await runtime.start()
+            try:
+                resumed = await runtime.resume(str(run.id))
+                assert resumed.attempt == 2
+                for _ in range(100):
+                    if service.store.run(str(run.id)).phase == "finished":
+                        break
+                    await asyncio.sleep(0.05)
+                assert service.store.run(str(run.id)).result is Result.APPLIED
+                assert len(source.calls) == 1
+                assert (await runtime.resume(str(run.id))).attempt == 2
+            finally:
+                await runtime.close()
+
+    asyncio.run(scenario())
+
+
+def test_duplicate_model_reads_are_suppressed_before_final_synthesis(tmp_path):
+    async def scenario():
+        async with environment(tmp_path) as (service, source, run):
+
+            async def decide(context, cancellation):
+                if context["finalize_only"]:
+                    return {
+                        "action": "finish",
+                        "candidate_id": "",
+                        "arguments_json": "",
+                        "summary": "取得済みの公開話題",
+                    }
+                return {
+                    "action": "call",
+                    "candidate_id": context["candidates"][0]["id"],
+                    "arguments_json": '{"value":1}',
+                    "summary": "",
+                }
+
+            service.cognition.decide = decide
+            assert await service.execute(str(run.id)) == "APPLIED"
+            assert len(source.calls) == 1
 
     asyncio.run(scenario())

@@ -5,10 +5,19 @@ from enum import StrEnum
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, AwareDatetime, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    AwareDatetime,
+    StringConstraints,
+    model_validator,
+)
 
 Identifier = Annotated[str, Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$")]
-Content = Annotated[str, Field(min_length=1, max_length=2000)]
+Content = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
+]
 
 
 def now() -> datetime:
@@ -54,8 +63,10 @@ class LifeState(Record):
     status: StateStatus = StateStatus.ACTIVE
     content: Content
     target_id: Identifier | None = None
+    binding_target_id: Identifier | None = None
     source: Literal["user", "reflection", "activity"]
     source_ids: tuple[UUID, ...] = ()
+    reflection_revisions: dict[UUID, str] = Field(default_factory=dict)
     revision: int = Field(default=1, ge=1)
     created_at: AwareDatetime = Field(default_factory=now)
     updated_at: AwareDatetime = Field(default_factory=now)
@@ -68,6 +79,11 @@ class LifeState(Record):
             raise ValueError("derived state requires provenance")
         if len(set(self.source_ids)) != len(self.source_ids):
             raise ValueError("duplicate source")
+        if self.reflection_revisions and (
+            self.source != "reflection"
+            or set(self.reflection_revisions) != set(self.source_ids)
+        ):
+            raise ValueError("reflection revision boundary invalid")
         if self.updated_at < self.created_at:
             raise ValueError("invalid state timestamps")
         return self
@@ -80,6 +96,14 @@ class Grant(Record):
     enabled: bool
     revision: int = Field(default=1, ge=1)
     updated_at: AwareDatetime = Field(default_factory=now)
+
+
+class ObservationHandoff(Record):
+    """#100へ同じ入力を再送するための承認済み作業記録。SELF Episode正本ではない。"""
+
+    topic: Content
+    experienced_at: AwareDatetime = Field(default_factory=now)
+    source_revisions: tuple[str, ...]
 
 
 class Run(Record):
@@ -99,6 +123,7 @@ class Run(Record):
     finished_at: AwareDatetime | None = None
     source_revisions: tuple[str, ...] = ()
     dependency_results: dict[str, str] = Field(default_factory=dict)
+    handoff: ObservationHandoff | None = Field(default=None, repr=False)
 
 
 class LifeError(Exception):
