@@ -7,6 +7,8 @@
 ## 有効化
 
 既定は無効。今回の受入対象はdev/testのみであり、dogfoodへ配備しない。
+開発作業はLinux / WSL2上で行い、推奨配置は`~/dev/digital-souls`とする。
+`/mnt/c/Users/...`配下は避け、このリポジトリから作業worktreeを作成する。
 作業worktreeのPython環境へ`backend/requirements.txt`をインストールする。
 既存の`DS_ENVIRONMENT_ID` / `DS_DATA_DIR`による環境分離を維持し、他の環境のDBを流用しない。
 

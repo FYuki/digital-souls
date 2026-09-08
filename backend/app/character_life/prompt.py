@@ -33,7 +33,7 @@ class Context:
         if revisions is not None:
             try:
                 self.store.reconcile_reflections(character, revisions)
-            except (LifeError, sqlite3.Error):
+            except (LifeError, ValueError, sqlite3.Error):
                 # 訂正の反映に競合した場合も、派生状態を使わず会話を継続する。
                 revisions = None
         try:

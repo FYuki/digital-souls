@@ -26,15 +26,12 @@ _owner: Runtime | None = None
 T = TypeVar("T")
 
 
-def owner() -> Runtime:
-    if _owner is None:
-        raise RuntimeError("Character Life runtime is unavailable")
-    return _owner
-
-
 @DBOS.step(retries_allowed=False)
 def activity_step(run_id: str, attempt: int) -> str:
-    return owner().execute_on_owner_loop(run_id, attempt)
+    runtime = _owner
+    if runtime is None:
+        return Result.DEFERRED
+    return runtime.execute_on_owner_loop(run_id, attempt)
 
 
 @DBOS.workflow(name="character_life_activity_v1")
@@ -44,7 +41,9 @@ def activity_workflow(run_id: str, attempt: int) -> str:
 
 @DBOS.step(retries_allowed=False)
 def formation_step(character: str, workflow_id: str) -> str:
-    runtime = owner()
+    runtime = _owner
+    if runtime is None:
+        return Result.DEFERRED
     previous = runtime.service.store.formation_job_result(character, workflow_id)
     if previous is not None:
         return previous
@@ -73,7 +72,9 @@ def formation_workflow(character: str, workflow_id: str) -> str:
 
 @DBOS.step(retries_allowed=False)
 def schedule_step(scheduled_at: str) -> int:
-    runtime = owner()
+    runtime = _owner
+    if runtime is None:
+        return 0
     future = runtime.on_owner_loop(runtime.scan(scheduled_at))
     try:
         return future.result(timeout=60)
@@ -153,15 +154,34 @@ class Runtime:
             self.started = True
             # 正本への登録後・enqueue前に停止しても、安定IDで同じ実行だけを再投入する。
             for run in self.service.store.open_runs():
+                if await self._workflow_finished(f"{run.workflow_id}:{run.attempt}"):
+                    current = self.service.store.run(str(run.id))
+                    if current.attempt != run.attempt or current.phase not in {"queued", "running"}:
+                        continue
+                    # DBOSだけが終了した旧attemptを再enqueueしても実行されない。
+                    # 正本のhandoffは維持し、再検証する新しいattemptで回復する。
+                    run = current.model_copy(update={
+                        "attempt": current.attempt + 1, "phase": "queued",
+                        "result": None, "finished_at": None, "reason": "workflow_recovered",
+                    })
+                    self.service.store.save_run(run, expected_attempt=current.attempt)
                 await self.enqueue(run)
             for job in self.service.store.formation_jobs(None):
-                await self.enqueue_formation(str(job["character_id"]), str(job["id"]))
+                character, workflow_id = str(job["character_id"]), str(job["id"])
+                if await self._workflow_finished(workflow_id):
+                    self.service.store.finish_formation_job(character, workflow_id, Result.DEFERRED)
+                    continue
+                await self.enqueue_formation(character, workflow_id)
         except BaseException:
             try:
                 await self.close()
             except Exception:
                 logging.getLogger(__name__).warning("Character Life runtime cleanup failed")
             raise
+
+    async def _workflow_finished(self, workflow_id: str) -> bool:
+        status = await asyncio.to_thread(DBOS.get_workflow_status, workflow_id)
+        return status is not None and status.status in {"SUCCESS", "ERROR"}
 
     def on_owner_loop(self, coroutine: Coroutine[Any, Any, T]) -> Future[T]:
         # DBOS stepのContextVarをアプリ側へ運ばない。scanが投入する活動・形成は

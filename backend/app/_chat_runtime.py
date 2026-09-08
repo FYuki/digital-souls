@@ -789,7 +789,13 @@ def _build_unrecorded_prompt(
             token_counter=_ChatTokenCounter(dependencies.input_token_counter),
         )
         if dependencies.life_context is not None:
-            prompt = dependencies.life_context(character, prompt)
+            try:
+                prompt = dependencies.life_context(character, prompt)
+            except Exception as error:
+                logger.warning(
+                    "Character Life context skipped: exception_type=%s",
+                    type(error).__name__,
+                )
     except httpx.TimeoutException as exc:
         raise chat_service.ChatTimeoutError() from exc
     except httpx.HTTPError as exc:
