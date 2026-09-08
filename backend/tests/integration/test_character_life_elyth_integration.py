@@ -51,7 +51,7 @@ def test_elyth_topic_exploration_real_services(tmp_path, monkeypatch):
         environment[f"INFERENCE_TARGET_{target}"] = f"ollama/{model}"
         environment[f"INFERENCE_TARGET_{target}_MAX_INPUT_TOKENS"] = "12000"
         environment[f"INFERENCE_TARGET_{target}_MAX_OUTPUT_TOKENS"] = (
-            "1024" if target == "CHARACTER_LIFE" else "512"
+            "1024" if target in {"CHARACTER_LIFE", "CHAT"} else "512"
         )
         environment[f"INFERENCE_TARGET_{target}_TIMEOUT_SECONDS"] = "60"
         environment[f"INFERENCE_TARGET_{target}_OPTIONS_JSON"] = '{"temperature":0}'
@@ -83,6 +83,7 @@ def test_elyth_topic_exploration_real_services(tmp_path, monkeypatch):
     report = {
         "scenario": "elyth-topic-exploration",
         "model": model,
+        "chat_max_output_tokens": int(environment["INFERENCE_TARGET_CHAT_MAX_OUTPUT_TOKENS"]),
         "external_calls": [],
         "decisions": [],
         "status": "failed",

@@ -158,14 +158,18 @@ FORMATION_SCHEMA: Json = {
 
 
 class FormationPort(Protocol):
-    async def form(self, reflections: list[Json]) -> Json: ...
+    async def form(
+        self, reflections: list[Json], cancellation: InferenceCancellationToken
+    ) -> Json: ...
 
 
 class Formation:
     def __init__(self, router: InferenceRouter) -> None:
         self.router = router
 
-    async def form(self, reflections: list[Json]) -> Json:
+    async def form(
+        self, reflections: list[Json], cancellation: InferenceCancellationToken
+    ) -> Json:
         response = await run_sync(
             self.router.generate_structured,
             caller=InferenceCaller.CHARACTER_LIFE,
@@ -181,6 +185,7 @@ class Formation:
                 InferenceMessage("user", encode(reflections)),
             ),
             response_schema=FORMATION_SCHEMA,
+            cancellation_token=cancellation,
         )
         if not isinstance(response.value, dict):
             raise ValueError("invalid life state formation")

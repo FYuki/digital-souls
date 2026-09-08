@@ -8,7 +8,9 @@ from .models import ReflectionView, Result
 
 
 class MemoryPort(Protocol):
-    """run_idを冪等keyとし、既存keyは同じ経験へ解決する。SELF正本の更新条件は#100が所有する。"""
+    """run_idを冪等keyとし、既存keyは同じ経験へ解決する。SELF正本の更新条件は#100が所有する。
+
+    接続済みportのDEFERREDは一時保留で、同じhandoffの再試行が必要。未接続はServiceへNoneを渡す。"""
 
     async def record_observation(
         self,

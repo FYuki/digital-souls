@@ -63,10 +63,8 @@ class Service:
         self.store, self.gate, self.cognition = store, gate, cognition
         self.privacy, self.sanitizer = privacy, sanitizer
         self.foreground_busy, self.timeout = foreground_busy, timeout
-        self.memory, self.personality = (
-            memory or DeferredMemory(),
-            personality or DeferredPersonality(),
-        )
+        # Noneは後続Epicが未接続であることを明示する。接続済みportの一時保留と区別する。
+        self.memory, self.personality = memory, personality
         self.formation = formation
         self.reflections = reflections or DeferredReflections()
         self.bindings = bindings or BindingResolver()
@@ -387,7 +385,7 @@ class Service:
         assert handoff is not None
         # #100/#101はrun_idで冪等に受理する契約。本文・時刻・sourceは再開前後で同じ。
         try:
-            memory_result = await self.memory.record_observation(
+            memory_result = await (self.memory or DeferredMemory()).record_observation(
                 character=run.character_id,
                 run_id=str(run.id),
                 experienced_at=handoff.experienced_at,
@@ -400,15 +398,18 @@ class Service:
         if memory_result in {Result.APPLIED, Result.NO_CHANGE}:
             self.validate_current(run)
             try:
-                personality_result = await self.personality.evaluate(
+                personality_result = await (self.personality or DeferredPersonality()).evaluate(
                     run.character_id, str(run.id)
                 )
             except Exception:
                 personality_result = Result.FAILED
         self.validate_current(run)
-        if memory_result in {Result.FAILED, Result.RESULT_UNKNOWN} or personality_result in {
-            Result.FAILED, Result.RESULT_UNKNOWN
-        }:
+        incomplete = {Result.FAILED, Result.RESULT_UNKNOWN, Result.DEFERRED}
+        if (
+            self.memory is not None and memory_result in incomplete
+        ) or (
+            self.personality is not None and personality_result in incomplete
+        ):
             # 確定済みhandoffを残し、同じidempotency keyで通常のresumeから再試行する。
             return str(self.store.finish(
                 run, Result.DEFERRED, "dependency_handoff_failed",
@@ -433,32 +434,57 @@ class Service:
         if self.closing or self.foreground_busy() or self.formation is None:
             return Result.DEFERRED
 
+        cancellation = InferenceCancellationToken()
+
         def check_current() -> None:
             # 形成開始後に会話・利用者要求が発生した場合も、次の推論・保存へ進まない。
             if self.closing or self.foreground_busy():
+                cancellation.cancel()
                 raise LifeError(Result.DEFERRED, "foreground_priority")
             if any(run.requested for run in self.store.open_runs()):
+                cancellation.cancel()
                 raise LifeError(Result.DEFERRED, "requested_activity_priority")
 
         task = asyncio.current_task()
+        interruption = Result.DEFERRED
+
+        async def monitor_priority() -> None:
+            nonlocal interruption
+            while True:
+                await asyncio.sleep(0.05)
+                try:
+                    check_current()
+                except Exception as exc:
+                    interruption = exc.result if isinstance(exc, LifeError) else Result.FAILED
+                    cancellation.cancel()
+                    if task is not None:
+                        task.cancel()
+                    return
+
+        monitor = asyncio.create_task(monitor_priority())
         if task is not None:
             self.tasks.add(task)
         try:
             async with asyncio.timeout(self.timeout):
                 check_current()
-                await self.memory.catch_up(character)
-                return await self.formation.run(character, check_current=check_current)
+                await (self.memory or DeferredMemory()).catch_up(character)
+                return await self.formation.run(
+                    character, check_current=check_current, cancellation=cancellation
+                )
         except LifeError as error:
             return error.result
         except TimeoutError:
             return Result.DEFERRED
         except asyncio.CancelledError:
-            if self.closing:
-                return Result.DEFERRED
+            if self.closing or cancellation.is_cancelled:
+                return interruption
             raise
         except Exception:
             return Result.FAILED
         finally:
+            cancellation.cancel()
+            monitor.cancel()
+            await asyncio.gather(monitor, return_exceptions=True)
             if task is not None:
                 self.tasks.discard(task)
 

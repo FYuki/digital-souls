@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from contextlib import contextmanager
-from collections.abc import Iterator
+from contextlib import closing, contextmanager
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -16,6 +16,9 @@ class Store:
     def __init__(self, path: Path) -> None:
         self.path = path
         path.parent.mkdir(parents=True, exist_ok=True)
+        # WALはtransaction外で設定し、読取snapshotが書込commitを妨げないようにする。
+        with closing(sqlite3.connect(path, timeout=5)) as setup:
+            setup.execute("PRAGMA journal_mode=WAL")
         with self.transaction() as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
             if version not in {0, 1, 2}:
@@ -464,30 +467,49 @@ class Store:
     def invalidate_reflections(
         self, character: str, source_ids: frozenset[UUID]
     ) -> int:
-        affected = 0
-        for state in self.states(character, active_only=True, limit=-1):
-            if state.source == "reflection" and source_ids.intersection(
-                state.source_ids
-            ):
-                self.save_state(
-                    state.model_copy(update={"status": StateStatus.DORMANT}),
-                    expected_revision=state.revision,
-                )
-                affected += 1
-        return affected
+        return self._invalidate_reflections(
+            character, lambda state: bool(source_ids.intersection(state.source_ids))
+        )
 
     def reconcile_reflections(self, character: str, revisions: dict[UUID, str]) -> int:
-        affected = 0
-        for state in self.states(character, active_only=True, limit=-1):
-            if state.source == "reflection" and any(
+        return self._invalidate_reflections(
+            character,
+            lambda state: any(
                 source_id not in revisions
                 or state.reflection_revisions.get(source_id) != revisions[source_id]
                 for source_id in state.source_ids
-            ):
-                self.save_state(
-                    state.model_copy(update={"status": StateStatus.DORMANT}),
-                    expected_revision=state.revision,
+            ),
+        )
+
+    def _invalidate_reflections(
+        self, character: str, invalid: Callable[[LifeState], bool]
+    ) -> int:
+        # 正本照合・全件の休眠化・履歴更新を同じtransactionで確定する。
+        affected = 0
+        with self.transaction() as db:
+            rows = db.execute(
+                "SELECT document FROM life_states WHERE character_id=? "
+                "AND json_extract(document,'$.status')='ACTIVE' "
+                "AND json_extract(document,'$.source')='reflection'",
+                (character,),
+            ).fetchall()
+            for row in rows:
+                state = LifeState.model_validate_json(row[0])
+                if not invalid(state):
+                    continue
+                updated = state.model_copy(update={
+                    "status": StateStatus.DORMANT,
+                    "revision": state.revision + 1,
+                    "updated_at": now(),
+                })
+                changed = db.execute(
+                    "UPDATE life_states SET revision=?,document=? "
+                    "WHERE id=? AND character_id=? AND revision=?",
+                    (updated.revision, updated.model_dump_json(), str(state.id),
+                     character, state.revision),
                 )
+                if changed.rowcount != 1:
+                    raise LifeError(Result.CONFLICT, "state_revision_conflict")
                 affected += 1
         return affected
 
