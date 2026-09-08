@@ -45,7 +45,7 @@ def routing_history(prompt: BuiltPrompt) -> tuple[Json, ...]:
     return tuple(
         {"role": m.role.value, "content": m.content}
         for m in prompt.messages[:-1]
-        if m.role in {PromptRole.USER, PromptRole.ASSISTANT}
+        if m.routing_eligible and m.role in {PromptRole.USER, PromptRole.ASSISTANT}
     )[-8:]
 
 

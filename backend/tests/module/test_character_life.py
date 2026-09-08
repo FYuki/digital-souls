@@ -803,7 +803,7 @@ def test_gpu_sampler_timeout_is_missing_data_and_restores_callbacks(monkeypatch)
 
 
 @pytest.mark.parametrize("interruption", ["foreground", "requested", "shutdown", "timeout"])
-def test_formation_cancels_inference_before_worker_returns(tmp_path, interruption):
+def test_formation_cancels_inference_before_worker_returns(tmp_path, interruption, monkeypatch):
     import threading
     from types import SimpleNamespace
     from uuid import uuid4
@@ -832,7 +832,7 @@ def test_formation_cancels_inference_before_worker_returns(tmp_path, interruptio
                     tokens.append(kwargs["cancellation_token"])
                     loop.call_soon_threadsafe(entered.set)
                     try:
-                        assert release.wait(2)
+                        assert release.wait(10)
                         return SimpleNamespace(value={"states": [{
                             "kind": "INTEREST", "content": "遅れて返る内省",
                             "source_ids": [str(reflection.id)],
@@ -840,11 +840,23 @@ def test_formation_cancels_inference_before_worker_returns(tmp_path, interruptio
                     finally:
                         exited.set()
             service.formation = LifeFormation(service.store, Source(), Formation(Router()), Privacy())
+            deadline = None
             if interruption == "timeout":
                 service.timeout = 0.15
+                # 準備中は余裕を持たせ、推論に入ってから実asyncio timeoutを発火させる。
+                deadline = asyncio.timeout(5)
+                class ControlledDeadline:
+                    def __getattr__(self, name):
+                        return getattr(asyncio, name)
+                    def timeout(self, seconds):
+                        assert seconds == service.timeout
+                        return deadline
+                monkeypatch.setattr("app.character_life.service.asyncio", ControlledDeadline())
             task = asyncio.create_task(service.form_life_states("miori"))
             try:
-                await asyncio.wait_for(entered.wait(), 1)
+                await asyncio.wait_for(entered.wait(), 5)
+                if deadline is not None:
+                    deadline.reschedule(loop.time() + service.timeout)
                 if interruption == "foreground":
                     service.foreground_busy = lambda: True
                 elif interruption == "requested":
@@ -910,4 +922,164 @@ def test_real_dbos_cron_enqueues_autonomous_activity_and_formation(tmp_path):
             finally:
                 await runtime.close()
             assert not runtime.started
+    asyncio.run(scenario())
+
+
+def test_schedule_bridge_is_cancelled_and_unregistered_on_close(tmp_path, monkeypatch):
+    from app.character_life import runtime as module
+
+    async def scenario():
+        async with environment(tmp_path) as (service, _, _):
+            runtime = Runtime(service, tmp_path, Settings())
+            entered, exited = asyncio.Event(), asyncio.Event()
+            async def scan(_):
+                entered.set()
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    exited.set()
+            monkeypatch.setattr(runtime, "scan", scan)
+            monkeypatch.setattr(module, "_owner", runtime)
+            monkeypatch.setattr(module.DBOS, "destroy", lambda **_: None)
+            # decorator外のbridge本体を呼び、アプリloop上の実Futureと停止を検証する。
+            step = asyncio.create_task(asyncio.to_thread(module.schedule_step.__wrapped__, now().isoformat()))
+            try:
+                await asyncio.wait_for(entered.wait(), 2)
+                with runtime.future_lock:
+                    assert runtime.futures
+                await runtime.close()
+                with pytest.raises(asyncio.CancelledError):
+                    await asyncio.wait_for(step, 2)
+                await asyncio.wait_for(exited.wait(), 2)
+                assert not runtime.futures
+                assert module._owner is None
+            finally:
+                if not step.done():
+                    step.cancel()
+                    await asyncio.gather(step, return_exceptions=True)
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("startup", [True, False])
+def test_runtime_cleanup_failure_preserves_startup_error_and_owner_state(
+    tmp_path, monkeypatch, caplog, startup
+):
+    from app.character_life import runtime as module
+
+    launch_error = RuntimeError("synthetic launch error")
+    destroy_error = RuntimeError("synthetic private disconnect error")
+    class BrokenDBOS:
+        def __init__(self, **_):
+            pass
+        @staticmethod
+        def launch():
+            raise launch_error
+        @staticmethod
+        def destroy(**_):
+            raise destroy_error
+    monkeypatch.setattr(module, "DBOS", BrokenDBOS)
+
+    async def scenario():
+        async with environment(tmp_path) as (service, _, _):
+            runtime = Runtime(service, tmp_path, Settings())
+            if not startup:
+                monkeypatch.setattr(module, "_owner", runtime)
+                runtime.started = True
+            with pytest.raises(RuntimeError) as error:
+                await (runtime.start() if startup else runtime.close())
+            assert error.value is (launch_error if startup else destroy_error)
+            assert module._owner is None
+            assert not runtime.started
+            assert service.closing
+            assert "private disconnect" not in caplog.text
+            if startup:
+                assert "Character Life runtime cleanup failed" in caplog.text
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("interruption", ["foreground", "shutdown", "cleanup_shutdown"])
+def test_real_formation_step_checkpoints_deferral_when_interrupted(tmp_path, interruption, monkeypatch):
+    from dbos import DBOS
+
+    async def scenario():
+        async with environment(tmp_path) as (service, _, initial):
+            service.store.finish(initial, Result.NO_CHANGE, "setup")
+            entered = asyncio.Event()
+            class Formation:
+                async def run(self, *args, **kwargs):
+                    if interruption == "cleanup_shutdown":
+                        return Result.NO_CHANGE
+                    entered.set()
+                    await asyncio.Event().wait()
+            if interruption == "cleanup_shutdown":
+                class CleanupBoundary:
+                    def __getattr__(self, name):
+                        return getattr(asyncio, name)
+                    async def gather(self, *tasks, **kwargs):
+                        result = await asyncio.gather(*tasks, **kwargs)
+                        if any(t.get_coro().__name__ == "monitor_priority" for t in tasks):
+                            entered.set()
+                            await asyncio.Event().wait()
+                        return result
+                monkeypatch.setattr("app.character_life.service.asyncio", CleanupBoundary())
+            service.formation = Formation()
+            runtime = Runtime(service, tmp_path, Settings(True, "0 0 1 1 *"))
+            await runtime.start()
+            try:
+                job = await runtime.submit_formation("miori", "cancel-formation")
+                await asyncio.wait_for(entered.wait(), 10)
+                if interruption in {"shutdown", "cleanup_shutdown"}:
+                    await service.stop()
+                else:
+                    service.foreground_busy = lambda: True
+                async with asyncio.timeout(10):
+                    while service.store.formation_job_result("miori", job) is None:
+                        await asyncio.sleep(0.01)
+                assert service.store.formation_job_result("miori", job) == Result.DEFERRED
+                handle = await asyncio.to_thread(DBOS.retrieve_workflow, job)
+                assert await asyncio.to_thread(handle.get_result) == Result.DEFERRED
+                assert not service.tasks
+            finally:
+                await runtime.close()
+    asyncio.run(scenario())
+
+
+def test_formation_does_not_consume_unrelated_cancellation(tmp_path):
+    async def scenario():
+        async with environment(tmp_path) as (service, _, initial):
+            service.store.finish(initial, Result.NO_CHANGE, "setup")
+            entered = asyncio.Event()
+            class Formation:
+                async def run(self, *args, **kwargs):
+                    entered.set()
+                    await asyncio.Event().wait()
+            service.formation = Formation()
+            task = asyncio.create_task(service.form_life_states("miori"))
+            await asyncio.wait_for(entered.wait(), 2)
+            task.cancel("external")
+            with pytest.raises(asyncio.CancelledError) as error:
+                await task
+            assert error.value.args == ("external",)
+            assert not service.tasks
+    asyncio.run(scenario())
+
+
+def test_addon_off_while_life_waits_for_gate_prevents_dispatch(tmp_path):
+    from app.addon_admin.runtime import AddonRuntime
+
+    async def scenario():
+        async with environment(tmp_path) as (service, source, run):
+            manager = AddonRuntime(service.gate, settings_path=tmp_path / "addons.json")
+            reached = asyncio.Event()
+            async def reviewed():
+                reached.set()
+            service.privacy.before_return = reviewed
+            async with service.gate._locks["elyth"].hold(False):
+                task = asyncio.create_task(service.execute(str(run.id)))
+                await asyncio.wait_for(reached.wait(), 2)
+                await asyncio.sleep(0)
+                manager.set_enabled("elyth", False)
+            assert await asyncio.wait_for(task, 2) != Result.APPLIED
+            assert not source.calls
+            assert manager.list()[0]["effective_state"] == "disabled"
     asyncio.run(scenario())

@@ -204,6 +204,8 @@ class Store:
             )
 
     def save_state(self, state: LifeState, *, expected_revision: int = 0) -> LifeState:
+        # model_copyによる内部更新も、由来・revision・本文の検証を通して保存する。
+        state = LifeState.model_validate(state.model_dump())
         with self.transaction() as db:
             row = db.execute(
                 "SELECT character_id,revision FROM life_states WHERE id=?",

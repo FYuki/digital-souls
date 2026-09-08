@@ -80,6 +80,7 @@ def test_reflection_invalidation_preserves_history_but_removes_active_context(tm
             content="色彩への関心",
             source="reflection",
             source_ids=(source,),
+            reflection_revisions={source: "1"},
         )
     )
     assert store.invalidate_reflections("other", frozenset({source})) == 0
@@ -380,3 +381,37 @@ def test_reflection_invalidation_rolls_back_all_states_and_history(tmp_path, met
     for state in states:
         assert store.state("miori", state.id).status is StateStatus.DORMANT
         assert len(store.state_history("miori", state.id)) == 2
+
+
+@pytest.mark.parametrize("invalid", ["empty", "missing", "extra", "user", "activity"])
+def test_reflection_provenance_requires_exact_revision_keys(tmp_path, invalid):
+    from pydantic import ValidationError
+
+    source, other = uuid4(), uuid4()
+    state = LifeState(
+        character_id="miori", kind=Kind.INTEREST, content="色彩への関心",
+        source="reflection", source_ids=(source,), reflection_revisions={source: "1"},
+    )
+    changes = {
+        "empty": {"reflection_revisions": {}},
+        "missing": {"source_ids": (source, other)},
+        "extra": {"reflection_revisions": {source: "1", other: "2"}},
+        "user": {"source": "user"},
+        "activity": {"source": "activity"},
+    }[invalid]
+    data = state.model_dump() | changes
+    with pytest.raises(ValidationError, match="reflection revision boundary"):
+        LifeState.model_validate(data)
+    store = Store(tmp_path / "life.db")
+    with pytest.raises(ValidationError, match="reflection revision boundary"):
+        store.save_state(state.model_copy(update=changes))
+    assert not store.states("miori")
+
+
+def test_state_copy_cannot_save_blank_content(tmp_path):
+    from pydantic import ValidationError
+
+    store, state, _, _ = seeded(tmp_path)
+    with pytest.raises(ValidationError):
+        store.save_state(state.model_copy(update={"content": "  "}), expected_revision=1)
+    assert store.state("miori", state.id) == state

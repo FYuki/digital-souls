@@ -179,6 +179,7 @@ class PromptMessage:
     content: str
     memory_reference: PromptMemoryReference | None = None
     screen_lineages: tuple[ScreenLineage, ...] = ()
+    routing_eligible: bool = True
 
 
 @dataclass(frozen=True)

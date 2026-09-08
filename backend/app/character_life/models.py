@@ -79,10 +79,10 @@ class LifeState(Record):
             raise ValueError("derived state requires provenance")
         if len(set(self.source_ids)) != len(self.source_ids):
             raise ValueError("duplicate source")
-        if self.reflection_revisions and (
-            self.source != "reflection"
-            or set(self.reflection_revisions) != set(self.source_ids)
-        ):
+        if (
+            self.source == "reflection"
+            and set(self.reflection_revisions) != set(self.source_ids)
+        ) or (self.source != "reflection" and self.reflection_revisions):
             raise ValueError("reflection revision boundary invalid")
         if self.updated_at < self.created_at:
             raise ValueError("invalid state timestamps")
