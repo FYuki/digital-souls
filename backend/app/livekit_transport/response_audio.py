@@ -212,10 +212,11 @@ class ResponseAudioTracks:
         # 再接続で既に消えた所有trackへ、再度unpublishを送らない。
         if sid not in participant.track_publications:
             return
-        rtc_module = importlib.import_module("livekit.rtc")
+        # UnpublishTrackErrorはrtc直下へ再exportされていない。実SDKの定義元を参照する。
+        participant_module = importlib.import_module("livekit.rtc.participant")
         try:
             await participant.unpublish_track(sid)
-        except rtc_module.UnpublishTrackError:
+        except participant_module.UnpublishTrackError:
             # SDKのlocal_track_unpublished通知とFFI応答は競合する。
             # 所有SIDの消失を確認できた場合だけ、sourceの解放へ進む。
             if sid in participant.track_publications:

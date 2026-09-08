@@ -81,13 +81,14 @@ def rig(monkeypatch):
         flags.publications.pop(sid)
 
     rtc = SimpleNamespace(
-        AudioSource=Source, UnpublishTrackError=UnpublishTrackError,
+        AudioSource=Source,
         LocalAudioTrack=SimpleNamespace(create_audio_track=Track),
         TrackSource=SimpleNamespace(SOURCE_MICROPHONE='microphone'),
         TrackPublishOptions=lambda **kwargs: kwargs,
         AudioFrame=lambda data, rate, channels, count: SimpleNamespace(data=data),
     )
     monkeypatch.setitem(sys.modules, 'livekit.rtc', rtc)
+    monkeypatch.setitem(sys.modules, 'livekit.rtc.participant', SimpleNamespace(UnpublishTrackError=UnpublishTrackError))
     room = SimpleNamespace(local_participant=SimpleNamespace(publish_track=publish, unpublish_track=unpublish, track_publications=flags.publications))
     output = ResponseAudioTracks(room, ready_timeout_seconds=.05)
     return output, sources, tracks, operations, flags
@@ -414,4 +415,17 @@ def test_livekit_ack_completes_core_cancellation_while_control_queue_is_waiting(
         await session.end()
         await output.aclose()
         await coordinator.cleanup("test_complete")
+    asyncio.run(exercise())
+
+
+def test_cancellation_during_unpublish_preserves_cancellation_and_closes_owned_source(rig):
+    output, sources, tracks, _, flags = rig
+    async def exercise():
+        await output.begin_response(A)
+        flags.unpublish_error = asyncio.CancelledError()
+        with pytest.raises(asyncio.CancelledError):
+            await output.begin_response(B)
+        assert len(sources) == len(tracks) == 1
+        await output.aclose()
+        assert sources[0].closed
     asyncio.run(exercise())

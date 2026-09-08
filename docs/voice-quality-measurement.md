@@ -178,3 +178,5 @@ npm run test:integration:voice:reconnect -- \
 `pcm-multi-seed-v4-pause-100-20260908-01`（revision `ec79b4a`）では文中休止を持つ独立100件の会話動作、実際の最終STT入力、音声端部をすべて確認した。[PCM結果](artifacts/livekit-pcm-multi-seed-v4-pause-100-2026-09-08.json)の未確認は0件、最小端部相関は0.86580だった。同じmanifest hashに基づく[VAD結果](artifacts/livekit-vad-pcm-multi-seed-v4-pause-100-2026-09-08.json)は冒頭誤差・早すぎる終了・境界の不確かさ・文中休止の誤分割が各0件だった。発話全体の均一offsetが成立しない17件は残し、内部連続性の証明には使わない。
 
 [終了確認](artifacts/livekit-pcm-multi-seed-v4-pause-100-cleanup-2026-09-08.json)で所有Frontend・Backendの削除、proxyの停止、通常音声設定での実行、両集計の入力一致を確認した。この結果は文中休止cohortのVADと端部の証拠であり、通常設定のTTFA100件、別cohort、実声dogfoodや#150全体の受け入れ完了を示すものではない。旧v3の98/100という未達結果も保存したままである。
+
+実音声barge-inの回帰検証では、最初は非同期の最終意図判定を待たずに確認して失敗したため、判定到着を待つよう修正した。次の実行で停止988.5ms・取消1023.5ms（正解発話開始の下限から計算）を確認したが、終了時のSDK例外を4件記録したため全体成功にはしていない。[初回結果](artifacts/livekit-real-barge-in-regression-2026-09-08-01.json)と[終了時例外を含む結果](artifacts/livekit-real-barge-in-regression-2026-09-08-02.json)を保存した。実SDKでは`UnpublishTrackError`が`livekit.rtc`直下に再exportされていないことを確認し、実装と代替SDKを定義元の`livekit.rtc.participant`へ合わせた。取消を別の例外へ置き換えず音源を解放する回帰検証を含め、関連23テストと型検査が成功した。

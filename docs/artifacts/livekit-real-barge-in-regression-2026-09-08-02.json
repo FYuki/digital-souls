@@ -1,0 +1,45 @@
+{
+  "scope": "real_input_barge_in_regression_only",
+  "measurement_revision": "7527571852dd2e8f9ed14801a9593ede2aa775bb",
+  "passed": false,
+  "browser_assertions_passed": true,
+  "latency": {
+    "source": "automated_test",
+    "localStopMs": 1042,
+    "cancelTotalMs": 1077,
+    "fixture_sha256": "f30a370fef9c05ea158fc58aade405bccad6a82d894c86a45d615b15e1dec2ce",
+    "fixture_clock_bounds": {
+      "sourceStart": {
+        "lowerMs": 5765.5,
+        "upperMs": 5767.5,
+        "sourceSample": 0
+      },
+      "speechStart": {
+        "lowerMs": 5917.5,
+        "upperMs": 5917.800000011921,
+        "sourceSample": 7200
+      },
+      "speechEnd": {
+        "lowerMs": 6745.400000035763,
+        "upperMs": 6749.5,
+        "sourceSample": 47520
+      }
+    },
+    "localStopFromFixtureUpperMs": 988.5,
+    "cancelFromFixtureUpperMs": 1023.5,
+    "response_correlation_verified": true
+  },
+  "runtime_exception_count": 4,
+  "runtime_exception_root": "incorrect_unpublish_exception_module",
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "teardown_completed": true,
+  "log_reader_closed": true,
+  "full_issue_acceptance_verified": false,
+  "source_sha256": {
+    "environment_run": "109ee96a07858c803cae912a169181597299f65c61f17f6fb285d8094ce64d78",
+    "test_log": "7d8b0022004536da8f9ae318719f2c2a6a343b1e48c580f91f455541eaaf82a6"
+  }
+}
