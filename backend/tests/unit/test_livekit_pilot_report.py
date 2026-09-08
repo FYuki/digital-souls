@@ -347,7 +347,8 @@ def test_completion_requires_matching_source_trace(completion_evidence):
         validate_playback_completion(trial, points)
 
 
-def test_completion_aggregate_excludes_warmup_and_preserves_nonzero_gap(pilot_inputs, completion_evidence):
+@pytest.mark.parametrize("native_mode", ["legacy", "complete", "partial", "contradiction"])
+def test_completion_aggregate_excludes_warmup_and_preserves_nonzero_gap(pilot_inputs, completion_evidence, native_mode):
     import copy
     manifest, events, run = pilot_inputs
     trial_evidence, source_points = completion_evidence
@@ -364,6 +365,29 @@ def test_completion_aggregate_excludes_warmup_and_preserves_nonzero_gap(pilot_in
     for event in events:
         if event['name'] == 'first_playback':
             event['timestamp'] = 1100
+    if native_mode != "legacy":
+        from app.livekit_transport.measurement import LiveKitMeasurementSession
+        from app.livekit_transport.playback_summary import summary_from_playback_observation
+        for trial in manifest['trials']:
+            native = []
+            recorder = LiveKitMeasurementSession(
+                session_id=trial['sessionId'], character_id='miori',
+                measurement_kind='controlled_baseline', record=native.append, clock_ns=lambda: 1000,
+            )
+            recorder.bind_response(response_id=trial['responseId'], source_utterance_ids=(trial['utteranceId'],))
+            for name, point in source_points.items():
+                recorder.record_response_event(response_id=trial['responseId'], name=name, value=point.value, stage='transport')
+            assert recorder.record_playback_summary(
+                response_id=trial['responseId'], summary=summary_from_playback_observation(trial['playback_completion']),
+            )
+            playback_events = [event.model_dump(mode='json') for event in native if event.stage == 'playback']
+            if native_mode == 'partial': playback_events.pop()
+            if native_mode == 'contradiction': playback_events[-1]['value'] += 1
+            events.extend(playback_events)
+    if native_mode in ('partial', 'contradiction'):
+        with pytest.raises(ValueError, match='native playback summary'):
+            run()
+        return
     artifact = run()
     metrics = {item['name']: item for item in artifact['metrics']}
     for name in ('playback_continuity', 'playback_gap_total_ms', 'playback_gap_maximum_ms'):

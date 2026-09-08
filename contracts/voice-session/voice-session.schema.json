@@ -293,13 +293,90 @@
         "last_played_audio_sequence": { "$ref": "#/$defs/NonNegativeSafeInteger" }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
+    "PlaybackSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected_samples",
+        "input_samples",
+        "padding_samples",
+        "rendered_samples",
+        "packet_count",
+        "first_output_frame",
+        "last_output_end_frame",
+        "gap_samples",
+        "maximum_gap_samples",
+        "gap_count",
+        "first_rtp_timestamp",
+        "last_rtp_timestamp",
+        "output_clock_context_time",
+        "output_clock_performance_time",
+        "confirmation_observed_at_ms",
+        "sample_rate"
+      ],
+      "properties": {
+        "expected_samples": {
+          "$ref": "#/$defs/NonNegativeSafeInteger"
+        },
+        "input_samples": {
+          "$ref": "#/$defs/NonNegativeSafeInteger"
+        },
+        "padding_samples": {
+          "$ref": "#/$defs/NonNegativeSafeInteger"
+        },
+        "rendered_samples": {
+          "$ref": "#/$defs/NonNegativeSafeInteger"
+        },
+        "packet_count": {
+          "$ref": "#/$defs/NonNegativeSafeInteger"
+        },
+        "first_output_frame": {
+          "$ref": "#/$defs/NonNegativeSafeInteger"
+        },
+        "last_output_end_frame": {
+          "$ref": "#/$defs/NonNegativeSafeInteger"
+        },
+        "gap_samples": {
+          "$ref": "#/$defs/NonNegativeSafeInteger"
+        },
+        "maximum_gap_samples": {
+          "$ref": "#/$defs/NonNegativeSafeInteger"
+        },
+        "gap_count": {
+          "$ref": "#/$defs/NonNegativeSafeInteger"
+        },
+        "first_rtp_timestamp": {
+          "$ref": "#/$defs/NonNegativeSafeInteger"
+        },
+        "last_rtp_timestamp": {
+          "$ref": "#/$defs/NonNegativeSafeInteger"
+        },
+        "output_clock_context_time": {
+          "type": "number",
+          "minimum": 0
+        },
+        "output_clock_performance_time": {
+          "type": "number",
+          "minimum": 0
+        },
+        "confirmation_observed_at_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sample_rate": {
+          "type": "integer", "minimum": 48000, "maximum": 48000
+        }
+      }
+    },
     "PlaybackCompleted": {
       "type": "object", "additionalProperties": false,
       "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "last_played_audio_sequence", "monotonic_timestamp_ms"],
+      "dependentSchemas": { "playback_summary": { "required": ["response_finished"], "properties": { "response_finished": { "const": true } } } },
       "properties": {
         "type": { "const": "playback_completed" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
         "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" },
         "response_finished": { "type": "boolean" },
+        "playback_summary": { "$ref": "#/$defs/PlaybackSummary" },
         "last_played_audio_sequence": { "$ref": "#/$defs/Sequence" }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },

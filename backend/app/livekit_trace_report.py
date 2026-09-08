@@ -143,7 +143,8 @@ def finalize_livekit_dogfood_report(
                 method="performance_now",
                 unit="millisecond",
             ),
-        ],
+        ] + ([ClockMetadata(domain="browser_audio_context", method="output_timestamp_confirmed_frame", unit="millisecond")]
+             if any(event.clock_domain == "browser_audio_context" for event in events) else []),
         hardware=HardwareMetadata(description=platform.platform()),
         resources=ResourceMetadata(
             cpu_percent=unavailable,

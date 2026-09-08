@@ -9,6 +9,7 @@ from app.conversation_core import StageObservation
 from app.conversation_core.provider_result_audit import PROVIDER_RESULT_METRICS, PROVIDER_STOPPING_METRICS
 from app.inference.diagnostics import DIAGNOSTIC_NAMES
 from app.voice_metrics import EventOutcome, MeasurementKind, TraceEvent
+from app.livekit_transport.playback_summary import validate_playback_summary
 
 logger = logging.getLogger(__name__)
 TraceUnit = Literal["nanosecond", "millisecond"]
@@ -175,6 +176,38 @@ class LiveKitMeasurementSession:
                 if utterance_id in source_utterance_ids:
                     self._emit(event, utterance_id=utterance_id, response_id=response_id)
         self._retry_pending_client_observations()
+
+    def record_playback_summary(self, *, response_id: str, summary: object) -> bool:
+        """完了gateが受理した応答だけを、既存の送信量と照合して記録する。"""
+        if response_id not in self._response_utterances or not isinstance(summary, dict):
+            return False
+        source_samples = {
+            event.name: event.value for event in self._response_events.get(response_id, ())
+            if event.outcome == "success"
+        }
+        try:
+            values = validate_playback_summary(summary, source_samples)
+        except ValueError:
+            self.record_response_event(
+                response_id=response_id, name="playback_summary_invalid", stage="measurement",
+                outcome="excluded", reason_code="playback_summary_source_or_clock_mismatch",
+            )
+            return False
+        for name, frame in (
+            ("scheduled_playout", summary["first_output_frame"] + summary["expected_samples"]),
+            ("frame_playout", summary["last_output_end_frame"]),
+        ):
+            self.record_response_event(
+                response_id=response_id, name=name, stage="playback", timestamp=frame / 48,
+                clock_domain="browser_audio_context", unit="millisecond",
+            )
+        for name, value in values.items():
+            self.record_response_event(
+                response_id=response_id, name=name, stage="playback", value=value,
+                timestamp=summary["confirmation_observed_at_ms"],
+                clock_domain="client_monotonic", unit="millisecond",
+            )
+        return True
 
     def record_response_event(
         self,

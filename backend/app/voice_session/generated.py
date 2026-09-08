@@ -34,6 +34,25 @@ class Measurement(Enum):
     UTTERANCE_FINALIZED = "utterance_finalized"
 
 
+class PlaybackSummary(BaseModel):
+    confirmation_observed_at_ms: float
+    expected_samples: int
+    first_output_frame: int
+    first_rtp_timestamp: int
+    gap_count: int
+    gap_samples: int
+    input_samples: int
+    last_output_end_frame: int
+    last_rtp_timestamp: int
+    maximum_gap_samples: int
+    output_clock_context_time: float
+    output_clock_performance_time: float
+    packet_count: int
+    padding_samples: int
+    rendered_samples: int
+    sample_rate: int
+
+
 class ProtocolVersion(Enum):
     THE_10 = "1.0"
 
@@ -141,6 +160,7 @@ class VoiceSessionEvent(BaseModel):
     error_code: Optional[str] = None
     recoverable: Optional[bool] = None
     last_played_audio_sequence: Optional[int] = None
+    playback_summary: Optional[PlaybackSummary] = None
     response_finished: Optional[bool] = None
     classification: Optional[Classification] = None
     user_state: Optional[UserState] = None

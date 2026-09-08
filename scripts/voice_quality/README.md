@@ -665,3 +665,9 @@ previewのsample数や単なる最後のHTTP要求を代用にせず、曖昧な
 このPCM端部の検証範囲を合格とする。本文中の休止分割率、VAD判定時刻、
 発話途中の無欠落、他の音声品質条件の合格は別途必要になる。
 少数試行・欠測でもJSONを保存し、未達時はexit 1を返す。
+
+### 2026-09-08 文中休止100件の実Whisper入力照合
+
+`pcm-pause-100-20260908-01`（測定revision `6f1dc67303cef561a71a37f84aea868ea19e8401`）は100件すべてで会話動作と最終STT入力の相関を確認した。VADの先頭・早期終了・分割の検出基準は100件で通過したが、実PCM端部の厳密な照合は90件、未確認10件のためPCMレポートの`passed`はfalseである。検出時刻の合格を、実PCM端部の未確認の補完には使用しない。
+
+結果は`docs/artifacts/livekit-stt-pcm-pause-100-2026-09-08.json`、検出結果は`livekit-vad-pcm-pause-100-2026-09-08.json`に保存した。測定が所有したFrontendとBackendの削除、観測proxyポートの閉鎖、および入力artifactのhashは`livekit-stt-pcm-pause-100-cleanup-2026-09-08.json`に記録した。未確認試行を除外せず、100件の分母を保持する。

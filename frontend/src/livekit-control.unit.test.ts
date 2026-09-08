@@ -259,3 +259,37 @@ test('途中prefixの通知後にも全出力確認を一度だけ送る', () =>
   expect(tracker.create(responseId, 1, true)).toBeNull()
   expect(tracker.create(responseId, 1)).toBeNull()
 })
+
+test('完全再生の音切れ実測値を通知し、途中prefixへの添付を拒否する', () => {
+  const tracker = new PlaybackConfirmationTracker(
+    '20000000-0000-4000-8000-000000000010', () => 1300,
+    () => '10000000-0000-4000-8000-000000000020',
+  )
+  const responseId = '30000000-0000-4000-8000-000000000010'
+  const summary = {expectedSamples: 2880, inputSamples: 1900, paddingSamples: 980,
+    renderedSamples: 2880, packetCount: 3, firstOutputFrame: 48000,
+    lastOutputEndFrame: 51008, gapSamples: 128, maximumGapSamples: 128, gapCount: 1,
+    firstRtpTimestamp: 1000, lastRtpTimestamp: 2920, outputClockContextTime: 1.1,
+    outputClockPerformanceTime: 1200, confirmationObservedAtMs: 1210, sampleRate: 48000 as const}
+  expect(() => tracker.create(responseId, 1, false, summary)).toThrow('requires full completion')
+  const complete = tracker.create(responseId, 1, true, summary)
+  expect(complete?.event.playback_summary).toEqual({
+    expected_samples: summary.expectedSamples,
+    input_samples: summary.inputSamples,
+    padding_samples: summary.paddingSamples,
+    rendered_samples: summary.renderedSamples,
+    packet_count: summary.packetCount,
+    first_output_frame: summary.firstOutputFrame,
+    last_output_end_frame: summary.lastOutputEndFrame,
+    gap_samples: summary.gapSamples,
+    maximum_gap_samples: summary.maximumGapSamples,
+    gap_count: summary.gapCount,
+    first_rtp_timestamp: summary.firstRtpTimestamp,
+    last_rtp_timestamp: summary.lastRtpTimestamp,
+    output_clock_context_time: summary.outputClockContextTime,
+    output_clock_performance_time: summary.outputClockPerformanceTime,
+    confirmation_observed_at_ms: summary.confirmationObservedAtMs,
+    sample_rate: summary.sampleRate,
+  })
+  expect(tracker.create(responseId, 1, true, summary)).toBeNull()
+})

@@ -118,3 +118,11 @@ markerがある試行は4指標を`missing`・`ollama_api_internal_timing_not_ex
 HTTP header受信時刻とtotal/load/prompt evaluation/generationの残差を、受付・生成開始・queueの値へ変換しない。
 異なるclockの境界や、取得不能markerと内部時刻の矛盾も欠測として残す。
 これは内部queueを実測できるようになったという意味ではなく、取得不能の理由を明示する変更である。
+
+### 応答全体の再生品質を通常traceへ記録する
+
+完全再生を確認した`playback_completed`は、任意の`playback_summary`で出力sample数、RTP範囲、gap、出力時計を送る。途中prefixの通知には添付できない。Backendは現在待機している応答と末尾sequenceの完了gateが受理した通知だけを扱い、送信済みPCM量、padding、連続RTP、出力時計の通過を検証する。音切れがある場合も実測値を保持し、不整合をゼロへ置き換えない。
+
+記録するのは`scheduled_playout`、`frame_playout`と、gap合計・最大gap・underrun回数・再生時間の4値である。前者2点は`browser_audio_context`の同一時計で比較する。controlledの集計では製品traceと測定manifestの値が一致することを検証し、重複、部分的な記録、矛盾を拒否する。旧runで製品側の6観測がすべて存在しない場合のみ、従来どおりmanifestの検証済み値を使用する。
+
+これは応答全体を再生した場合の計測経路であり、途中キャンセルした音声全体の品質や、実声dogfoodの受け入れ完了を示すものではない。dogfoodの実測は所定の配備・手動受け入れ手順で別途実施する。

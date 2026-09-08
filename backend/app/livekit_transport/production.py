@@ -670,17 +670,17 @@ class _ConversationCoreDelivery:
         first_capture_ns = await self._audio_source.finish_response(response_id)
         if isinstance(self._audio_source, ResponseAudioTracks):
             statistics = self._audio_source.statistics(response_id)
+            if self._measurement is not None:
+                for name, value in statistics.items():
+                    self._measurement.record_response_event(
+                        response_id=response_id, name=name, stage="transport", value=value,
+                    )
             await self._coordinator.send_response_audio_finished(
                 response_id=response_id,
                 input_sample_count=statistics["response_audio_input_samples"],
                 captured_sample_count=statistics["response_audio_captured_samples"],
                 padding_sample_count=statistics["response_audio_padding_samples"],
             )
-            if self._measurement is not None:
-                for name, value in statistics.items():
-                    self._measurement.record_response_event(
-                        response_id=response_id, name=name, stage="transport", value=value,
-                    )
         await self._observe_first_audio_out(response_id, first_capture_ns)
 
     async def _observe_first_audio_out(self, response_id: str | None, timestamp_ns: int | None) -> None:
@@ -1198,7 +1198,11 @@ class _ConversationCoreBridge:
                 last_played_audio_sequence=last_played_audio_sequence,
             )
             if event_type == "playback_completed" and event.get("response_finished") is True:
-                self._confirm_response_playback(response_id, last_played_audio_sequence)
+                accepted = self._confirm_response_playback(response_id, last_played_audio_sequence)
+                if accepted and self._measurement is not None and "playback_summary" in event:
+                    self._measurement.record_playback_summary(
+                        response_id=response_id, summary=event["playback_summary"],
+                    )
         elif event_type == "session_disconnected":
             await self._session.disconnect()
         elif event_type == "session_reconnected":

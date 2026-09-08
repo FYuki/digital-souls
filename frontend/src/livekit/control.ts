@@ -1,3 +1,4 @@
+import type { PlaybackCompletion } from './packet-renderer'
 import type { VoiceSessionEvent } from '../lib/voice-session/generated'
 import { parseVoiceSessionEvent } from '../lib/voice-session/validation'
 
@@ -85,7 +86,8 @@ export class PlaybackConfirmationTracker {
     private readonly eventId: () => string,
   ) {}
 
-  create(responseId: string, continuousPrefix: number, responseFinished = false): PlaybackConfirmation | null {
+  create(responseId: string, continuousPrefix: number, responseFinished = false, summary?: PlaybackCompletion): PlaybackConfirmation | null {
+    if (summary !== undefined && !responseFinished) throw new Error('playback summary requires full completion')
     if (continuousPrefix < 0) return null
     const previous = this.reportedPrefixes.get(responseId)
     if (this.finishedResponses.has(responseId)) return null
@@ -98,6 +100,24 @@ export class PlaybackConfirmationTracker {
       response_id: responseId,
       last_played_audio_sequence: continuousPrefix + 1,
       ...(responseFinished ? {response_finished: true} : {}),
+      ...(summary !== undefined ? {playback_summary: {
+        expected_samples: summary.expectedSamples,
+        input_samples: summary.inputSamples,
+        padding_samples: summary.paddingSamples,
+        rendered_samples: summary.renderedSamples,
+        packet_count: summary.packetCount,
+        first_output_frame: summary.firstOutputFrame,
+        last_output_end_frame: summary.lastOutputEndFrame,
+        gap_samples: summary.gapSamples,
+        maximum_gap_samples: summary.maximumGapSamples,
+        gap_count: summary.gapCount,
+        first_rtp_timestamp: summary.firstRtpTimestamp,
+        last_rtp_timestamp: summary.lastRtpTimestamp,
+        output_clock_context_time: summary.outputClockContextTime,
+        output_clock_performance_time: summary.outputClockPerformanceTime,
+        confirmation_observed_at_ms: summary.confirmationObservedAtMs,
+        sample_rate: summary.sampleRate,
+      }} : {}),
       monotonic_timestamp_ms: this.monotonicMs(),
     })
     const confirmation = { event, responseId, continuousPrefix }
