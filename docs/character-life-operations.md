@@ -75,6 +75,7 @@ DBOSによる再投入抑止を外部副作用のexactly-once保証とは扱わ�
 
 cronはUTC。missed runのbackfillは無効で、古いscheduleの回復時にも過去の活動を捏造しない。
 登録済みキャラクターの内省形成要求と、許可済みの有効なGoal Intentionを定期scanする。
+DBOS stepの実行コンテキストはアプリ側event loopへ持ち込まず、活動・形成を正本の安定IDを持つ独立workflowとして投入する。
 queueの同時実行数は1で、利用者要求、自律活動、内省形成の順に優先する。
 同じGoalへの未完了の自律要求と同じcharacterへの未完了の内省形成を重ねない。活動の未完了queue上限はcharacterごとに100件。
 foreground会話がある場合は、認知の前後と外部dispatch直前に活動を保留する。
@@ -132,15 +133,16 @@ python -m pytest backend/tests/integration/test_character_life_elyth_integration
 
 起動ごとに新しいtest data rootを用意し、レポートの上書きを避ける。pytest fixtureは各ケースのDBをさらに独立した一時rootへ分離する。
 
-実接続テストではローカルOllama、ELYTH、DBOS、実socketのHTTP受付、同一要求の重複排除、
-次の会話へのLife State projectionと実モデル応答、終了処理を確認する。
+実接続テストでは登録済みDBOS scheduleを発火してrequested=falseの自律活動を起動し、
+ローカルOllama、ELYTH、実socketのHTTP受付、同一要求の重複排除、
+次の会話へのLife State projectionと実モデル応答、終了処理を確認する。時計による実cron発火は、外部をmockした実DBOSのモジュールテストでも確認する。
 会話の出力上限は通常の.env.exampleと同じ1,024トークンとする。512では思考出力だけで上限へ達し、本文が空になるケースを確認した。
 レポートへ本文・キー・argumentsを保存せず、結果・操作名・schema検証種別・時間・会話出力上限を記録する。
 
 ## 前景と背景の実測と制限
 
 `RUN_CHARACTER_LIFE_PRIORITY_BENCHMARK=true`を実接続受入に追加すると、同じ実Ollamaへ背景認知と会話を重ね、TTFT・GPU使用量・foreground中のdispatch件数を記録する。
-2026-09-08のgemma4:e4b（会話出力上限1,024）による直近の単一試行では、通常TTFT 12.390秒、重複時8.166秒、GPU使用メモリ最大9,827 MiB、使用率最大84%だった。
+2026-09-08のgemma4:e4b（会話出力上限1,024）による直近の単一試行では、通常TTFT 7.170秒、重複時4.794秒、GPU使用メモリ最大10,096 MiB、使用率最大85%だった。
 先行試行では重複時の遅延増加も観測しており、推論内容・cache等による変動を含む。この1試行で背景負荷の性能改善を主張しない。
 背景活動はDEFERREDとなり、foreground開始後の外部dispatchは0件。通常の強制pause/resumeとshutdownは別の自動テストで検証する。
 

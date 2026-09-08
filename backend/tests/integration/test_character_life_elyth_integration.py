@@ -5,15 +5,15 @@ import json
 import os
 import time
 from pathlib import Path
-from uuid import UUID, uuid4
 
 import pytest
+from dbos import DBOS
 from jsonschema import Draft202012Validator
 
 from app.character_life.cognition import Cognition, Privacy
 from app.character_life.models import Kind, LifeState, Result
 from app.character_life.prompt import Context
-from app.character_life.runtime import Runtime, Settings
+from app.character_life.runtime import Runtime, SCHEDULE, Settings
 from app.character_life.service import ELYTH_TOPIC_TOOLS, Service
 from app.character_life.store import Store
 from app.external_mcp import ExecutionGate, ExternalMCPClient, Registry
@@ -157,17 +157,19 @@ def test_elyth_topic_exploration_real_services(tmp_path, monkeypatch):
             runtime = Runtime(service, tmp_path, Settings(True, "0 0 1 1 *"))
             await runtime.start()
             try:
-                request_id = str(uuid4())
                 async with life_http(runtime) as http:
                     status = await http.get("/character-life/miori")
                     assert status.status_code == 200
                     assert status.headers["Cache-Control"] == "no-store"
-                    response = await http.post(
-                        "/character-life/miori/activities",
-                        json={"state_id": str(state.id), "request_id": request_id},
-                    )
-                    assert response.status_code == 202
-                    run = store.run(str(UUID(response.json()["id"])))
+                    schedule = await asyncio.to_thread(DBOS.trigger_schedule, SCHEDULE)
+                    async with asyncio.timeout(15):
+                        while not store.runs("miori"):
+                            await asyncio.sleep(0.05)
+                    run = store.runs("miori")[0]
+                    assert not run.requested
+                    assert run.request_id.startswith("schedule:")
+                    report["trigger"] = "dbos_schedule"
+                    report["autonomous"] = True
                 report["http_connectivity"] = "passed"
                 report["http_server_closed"] = True
                 for _ in range(500):
@@ -179,6 +181,11 @@ def test_elyth_topic_exploration_real_services(tmp_path, monkeypatch):
                 report["reason"] = final.reason
                 report["dependencies"] = final.dependency_results
                 assert final.result is Result.APPLIED, final.reason
+                schedule_status = await asyncio.to_thread(
+                    DBOS.get_workflow_status, schedule.get_workflow_id()
+                )
+                assert schedule_status is not None and schedule_status.status == "SUCCESS"
+                report["schedule_result"] = schedule_status.status
                 shares = [
                     s for s in store.states("miori") if s.kind is Kind.SHARE_CANDIDATE
                 ]
@@ -186,7 +193,7 @@ def test_elyth_topic_exploration_real_services(tmp_path, monkeypatch):
                 assert report["external_calls"]
                 count = len(report["external_calls"])
                 replay = await runtime.submit(
-                    "miori", state.id, request_id, requested=True
+                    "miori", state.id, run.request_id, requested=False
                 )
                 assert replay.id == run.id
                 await asyncio.sleep(0.1)
