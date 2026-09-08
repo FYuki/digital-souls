@@ -1,7 +1,8 @@
 import type {Room} from 'livekit-client'
 
 type Row = {stage: string; atMs: number; track: number; response: number; generation: number}
-type Snapshot = {rows: Row[]; closed: boolean; overflow: boolean}
+type State = {atMs: number; generation: number; context: string; subscriptions: number; graphs: number; decoders: number; closedObservers: number; stopped: number; resetVersion: number; recovering: boolean}
+type Snapshot = {rows: Row[]; states: State[]; closed: boolean; overflow: boolean}
 declare global {
   interface Window {
     __responseTrackDiagnostic?: {close: () => Snapshot}
@@ -11,6 +12,9 @@ declare global {
 // 実Roomのイベントと実ready送信を観測する。ID・payload本文を保存しない。
 export function installResponseTrackDiagnostic(): void {
   const rows: Row[] = []
+  const states: State[] = []
+  let sampleTimer: ReturnType<typeof setInterval> | undefined
+  let lastState = ""
   const tracks = new Map<string, number>(), responses = new Map<string, number>()
   let closed = false, overflow = false
   let restore: (() => void) | undefined
@@ -26,8 +30,8 @@ export function installResponseTrackDiagnostic(): void {
       response: ordinal(responses, response), generation})
   }
   window.__responseTrackDiagnostic = {close() {
-    closed = true; clearInterval(timer); restore?.()
-    return {rows: rows.map(row => ({...row})), closed, overflow}
+    closed = true; clearInterval(timer); clearInterval(sampleTimer); restore?.()
+    return {rows: rows.map(row => ({...row})), states, closed, overflow}
   }}
   const target = window as typeof window & {__digitalSoulsVoiceSessionTestPort?: {
     bindRoom?: (client: unknown) => void}}
@@ -36,7 +40,21 @@ export function installResponseTrackDiagnostic(): void {
   target.__digitalSoulsVoiceSessionTestPort.bindRoom = value => {
     previous?.(value)
     // bindRoomは接続前に呼ばれる。実SDK Roomが作られた後だけlistenerを付ける。
-    const client = value as {room: Room | null; generation: number}
+    const client = value as {room: Room | null; generation: number; audioContext: AudioContext | null;
+      subscriptions: Set<string>; audioGraphs: Map<string, unknown>; mediaObservers: Map<string, {decoderReady: boolean; closed: boolean}>;
+      stoppedResponses: Set<string>; audioGraphResetVersion: number; recovering: boolean}
+    sampleTimer = setInterval(() => {
+      const snapshot = {generation: client.generation, context: client.audioContext?.state ?? 'absent',
+        subscriptions: client.subscriptions.size, graphs: client.audioGraphs.size,
+        decoders: [...client.mediaObservers.values()].filter(observer => observer.decoderReady).length,
+        closedObservers: [...client.mediaObservers.values()].filter(observer => observer.closed).length,
+        stopped: client.stoppedResponses.size, resetVersion: client.audioGraphResetVersion, recovering: client.recovering}
+      const serialized = JSON.stringify(snapshot)
+      if (serialized === lastState) return
+      lastState = serialized
+      if (states.length >= 128) {overflow = true; return}
+      states.push({atMs: performance.now(), ...snapshot})
+    }, 5)
     timer = setInterval(() => {
       const room = client.room
       if (closed || !room) return

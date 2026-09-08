@@ -36,7 +36,12 @@ test.afterEach(async ({ page, context }, testInfo) => {
     if (!state) return null
     return {
       response_tracks: window.__responseTrackDiagnostic?.close(),
-      track_media: Object.values(state.trackMediaObservations ?? {}),
+      track_media: Object.values(state.trackMediaObservations ?? {}).map(media => ({
+        received_at_ms: media.trackReceivedAtMs,
+        decoder_missing: media.packetDecodeMissingReason ?? null,
+        clock_method: media.workerClockMethod ?? null,
+        timeline_interruption: media.packetTimelineInterruption ?? null,
+      })),
       core_events: state.coreEventDiagnostics.map(event => ({
         type: event.type, at_ms: event.atMs, reason_code: event.reasonCode,
       })),
