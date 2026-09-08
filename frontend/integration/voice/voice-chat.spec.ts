@@ -1,6 +1,6 @@
 import { installResponseTrackDiagnostic } from '../../playwright/response-track-readiness-diagnostic'
 import { readFileSync } from 'node:fs'
-import { installScheduledFixture, parseScheduledFixture } from '../../playwright/controlled-audio-fixture'
+import { installScheduledFixture, parseScheduledFixture, readFixtureBounds } from '../../playwright/controlled-audio-fixture'
 import { expect, test, type Page } from '@playwright/test'
 
 import {
@@ -29,7 +29,7 @@ test.beforeEach(async ({ page }, testInfo) => {
   if (reason !== null) test.skip(true, reason)
 })
 
-test.afterEach(async ({ page, context }, testInfo) => {
+test.afterEach(async ({ page }, testInfo) => {
   // 本文やIDを含めず、cleanupで失われる失敗理由と完了数を残す。
   const observations = await page.evaluate(() => {
     const state = window.__voiceChatE2E
@@ -56,7 +56,7 @@ test.afterEach(async ({ page, context }, testInfo) => {
   await testInfo.attach('voice-state-observations.json', {
     body: JSON.stringify(observations), contentType: 'application/json',
   })
-  await context.setOffline(false)
+  await page.evaluate(() => window.__voiceFixtureClock?.close())
   await driver.endVoiceSession(page)
   await hardDeleteSelectedConversation(page, 'miori')
 })
@@ -133,23 +133,54 @@ test('通常UIの同一LiveKit sessionで実サービス応答を3往復継続�
 
 })
 
-test('実LiveKit barge-inのlocal停止とcancel確定latencyを記録する', async ({ page }, testInfo) => {
+test('ラベル付き実音声によるLiveKit barge-inのlocal停止とcancel確定latencyを記録する', async ({ page }, testInfo) => {
   test.setTimeout(voiceTestTimeout * 2)
+  const initial = parseScheduledFixture(
+    readFileSync(new URL('../../playwright/fixtures/speech.wav', import.meta.url)),
+    JSON.parse(readFileSync(new URL('../../playwright/fixtures/speech.metadata.json', import.meta.url), 'utf8')),
+  )
+  const catalog = JSON.parse(readFileSync(new URL('../../playwright/fixtures/voice-quality-v2/manifest.json', import.meta.url), 'utf8')) as {
+    sources: Array<{id: string; cohort: string; source_file: string; source_sha256: string;
+      speech_start_sample: number; speech_end_sample: number}>
+  }
+  const source = catalog.sources.find(item => item.id === 'take-01' && item.cohort === 'take_turn')
+  if (!source) throw new Error('labeled take-turn fixture unavailable')
+  const interruption = parseScheduledFixture(
+    readFileSync(new URL(`../../playwright/fixtures/voice-quality-v2/${source.source_file}`, import.meta.url)),
+    {audio_sha256: source.source_sha256, sample_rate_hz: 48000,
+      speech_start_sample: source.speech_start_sample, speech_end_sample: source.speech_end_sample},
+  )
+  await installScheduledFixture(page, initial)
   await driver.enableMicrophone(page)
-  await expect(page.getByText('応答: 応答生成中')).toBeVisible({
-    timeout: voiceTestTimeout,
-  })
-  await page.evaluate(async () => {
-    const controller = window.__voiceSessionController
-    if (controller === undefined) throw new Error('voice controller is required')
-    await controller.speechStarted(crypto.randomUUID(), performance.now())
-  })
+  await expect(page.getByText('セッション: 接続済み')).toBeVisible({timeout: 15_000})
+  await page.evaluate(() => window.__voiceFixtureClock!.start())
+  const cycle = await driver.waitForCompletedVoiceCycle(page)
+  await page.waitForFunction(() => window.__voiceFixtureClock?.finished === true)
+  // 初回応答の実再生中にPCMを流し、通常のVAD→STT→意図判定を通す。
+  expect(await page.evaluate(responseId => window.__voiceChatE2E.activeResponseId === responseId
+    && (window.__voiceChatE2E.activeAudioGraphs ?? 0) > 0
+    && !window.__voiceChatE2E.playbackCompletions?.[responseId], cycle.responseId)).toBe(true)
+  await page.evaluate(fixture => window.__voiceFixtureClock!.replay(fixture), interruption)
+  await page.waitForFunction(() => window.__voiceFixtureClock?.finished === true)
+  const bounds = await readFixtureBounds(page)
+
   const evidence = await driver.waitForInterruptionEvidence(page) as {
     responseId: string
     speechStartedAtMs: number
     localPlaybackStoppedAtMs: number
     cancelConfirmedAtMs: number
   }
+  expect(evidence.responseId).toBe(cycle.responseId)
+  expect(await page.evaluate(responseId => window.__voiceChatE2E.coreEventDiagnostics.some(event =>
+    event.type === 'turn_decision' && event.responseId === responseId && event.final === true
+    && event.decision === 'take_turn'), cycle.responseId)).toBe(true)
+  // 正解の実音声開始からの上限も評価し、turn判定受信時刻で起点を置き換えない。
+  const localStopFromFixtureUpperMs = evidence.localPlaybackStoppedAtMs - bounds.speechStart.lowerMs
+  const cancelFromFixtureUpperMs = evidence.cancelConfirmedAtMs - bounds.speechStart.lowerMs
+  expect(localStopFromFixtureUpperMs).toBeGreaterThanOrEqual(0)
+  expect(localStopFromFixtureUpperMs).toBeLessThanOrEqual(3_000)
+  expect(cancelFromFixtureUpperMs).toBeGreaterThanOrEqual(0)
+  expect(cancelFromFixtureUpperMs).toBeLessThanOrEqual(3_500)
   const localStopMs = evidence.localPlaybackStoppedAtMs - evidence.speechStartedAtMs
   const cancelTotalMs = evidence.cancelConfirmedAtMs - evidence.speechStartedAtMs
 
@@ -163,27 +194,15 @@ test('実LiveKit barge-inのlocal停止とcancel確定latencyを記録する', a
       source: 'automated_test',
       localStopMs,
       cancelTotalMs,
-      responseId: evidence.responseId,
+      fixture_sha256: interruption.audioSha256,
+      fixture_clock_bounds: bounds,
+      localStopFromFixtureUpperMs,
+      cancelFromFixtureUpperMs,
+      response_correlation_verified: true,
     }, null, 2),
     contentType: 'application/json',
   })
 })
 
-test('通常UIが実LiveKit一時切断から同じconversationへ復帰する', async ({ page, context }, testInfo) => {
-  await driver.enableMicrophone(page)
-  const disconnectedAtMs = await page.evaluate(() => performance.now())
-  await context.setOffline(true)
-  await expect(page.getByText('セッション: 再接続中')).toBeVisible({ timeout: 15_000 })
-  await context.setOffline(false)
-  await expect(page.getByText('セッション: 接続済み')).toBeVisible({ timeout: 60_000 })
-  const reconnectedAtMs = await page.evaluate(() => performance.now())
-
-  await expect(page.locator('section[aria-label="音声会話の状態"]')).toHaveCount(1)
-  await testInfo.attach('reconnect-latency.real.json', {
-    body: JSON.stringify({
-      source: 'automated_test',
-      reconnectMs: reconnectedAtMs - disconnectedAtMs,
-    }, null, 2),
-    contentType: 'application/json',
-  })
-})
+// 再接続はtest:integration:voice:reconnectで専用bridgeへ実障害を入れて検証する。
+// livekit-quality.spec.tsのcontrol-probe分岐が、control/audio復旧・同sessionでの次応答・完全再生を確認する。
