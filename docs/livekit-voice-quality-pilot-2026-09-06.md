@@ -2358,3 +2358,42 @@ thinking無効14/18であり、この形式の項目は回答値の一致から�
 同じ版で実Chroma・実Ollama埋め込みによるRAG runtime evidenceとtoken countの
 インテグレーション3件が成功した。共有manifestのprivacy境界・character境界・取得閾値、
 再構築可能indexの検索経路とtoken estimateを、一時test data rootで検証した。
+
+## 通常UIの実接続再検証（2026-09-08）
+
+`2e40ae2`のテキスト統合は、実OllamaのチャットとVision画像参照の2件が成功した
+（34.8秒）。チャットテストは同じ文字列を本文・見出し・スレッド名に見つけて失敗していたため、
+本文へlocatorを限定し、既存の60秒の実応答待機を維持した。共有画像は合成canvasであり、
+OS pickerの検証ではない。環境reportのteardownはFrontend／Backendとも完了した。
+
+音声の既存テストはfake microphoneがファイルを繰り返し、通常応答中にも次の発話が入る。
+通常4件を既存の制御可能なPCM fixtureへ移し、3往復ではCore完了と実再生完了の両方を待ってから
+次の発話を送るようにした。従来の`waitForCompletedVoiceCycles`は初回再生の観測だけで件数を数えていた。
+`b424e25`の既存thinking設定、`0036e98`のthinking無効設定とも、起動・マイク継続・通常応答の
+3件が成功し、3往復は2応答目の`streaming_pipeline_failed`で失敗した。
+したがってthinking設定だけが原因とは判定しない。後続の旧割り込み・再接続テストはこの4件に含めていない。
+
+`0036e98`での単独再現は、LLM終了済み／TTS consumerの`DeliveryError`を記録した。
+原因例外は`TimeoutError`で、`ResponseAudioTracks.publish`のブラウザ準備完了待機
+（`response_audio.py:130`、3秒）から発生している。ブラウザのtransport failure記録は0件だった。
+例外本文は保存せず、既存Coreログの型・ソース位置とLLM／TTS終了状態だけを診断へ取り込んだ。
+この再現は失敗を保持しており、3往復受入や音声統合全体の成功には数えない。
+Frontendの型検査は0 errors／0 warnings。テスト設定・失敗観測以外の製品コードはこの段階で変更していない。
+
+## 凍結baselineの実観測区間の確認（2026-09-08）
+
+凍結WebSocket artifactを追加したcommitは`4d71fbb`、通常LiveKit 100件の測定版は`e506b2f`である。
+同名eventだけでは次の3区間を直接比較できない。
+
+| 指標 | WebSocketの観測 | LiveKitの観測 |
+|---|---|---|
+| utterance finalized | clientのVAD終了callbackからrecorder停止・PCM受取まで | serverのVAD終了通知受信からSTT後のCore発話確定まで |
+| response decision | clientのVAD終了callbackから音声送信直前まで | serverのVAD終了通知受信からCore response_startedまで |
+| STT開始 | 発話全体のWebSocket frame受信からSTT開始まで | 発話captureへの最初のPCM受信からSTT開始まで |
+
+根拠は`4d71fbb`の`frontend/src/lib/AudioRecorder.svelte:143`、`frontend/src/App.svelte:234`、
+`backend/app/routers/ws.py:246`および`:590`、`e506b2f`の
+`backend/app/livekit_transport/production.py:500`、`:512`、`:897`、`:940`と
+`backend/app/conversation_core/session.py:677`である。凍結baseline本文や過去の失敗評価は変更していない。
+残る同一区間8指標のp95は既定の相対上限内だが、VAD境界2指標はLiveKit側に欠測が残る。
+この確認だけで比較評価全体を合格にせず、絶対上限・割り込みの独立分母・実PCM境界の検証を継続する。
