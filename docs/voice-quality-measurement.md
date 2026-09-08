@@ -274,3 +274,8 @@ revision `2d10020ca818fce228b8446d51c329bebccb92e5`で、Whisper中継なし・�
 Ollamaへの実chat送信直前に、`ollama_<estimate|generation>_http_requests`と、実際の`options.num_ctx`・`options.num_predict`の最小・最大を数値traceへ記録する。名前は`ollama_<operation>_requested_<context_tokens|output_tokens>_<minimum|maximum>`で固定する。複数要求を合算して架空のcontext値にせず、同一応答中の設定範囲を保存する。cache照合のためのpayload作成やtags取得はchat送信として数えない。
 
 この値はアプリがHTTP clientへ渡した設定であり、provider受付・実際のmodel常駐設定や他アプリの要求を証明しない。常駐pollのcontext値、providerが返したload時間とは別の観測として照合する。本文・任意のoptionsキー・認証情報は保存しない。旧traceにない設定値を後から推定して補完しない。
+
+
+`019e62c8133779aba52086c23da3cdbd0504d3ac`で準備1件・測定3件の実サービスpilotを実行し、[匿名集計](artifacts/livekit-request-context-pilot-2026-09-08-01.json)と[送信設定・native trace・終了照合](artifacts/livekit-request-context-pilot-2026-09-08-01-verification.json)を保存した。全4応答のgeneration送信は各1回、contextの最小・最大は8,192、出力上限は1,024で一致した。estimateの実送信は初回1回でcontext 8,192・出力1、後続3件はcacheだった。RTP観測も全件native traceと一致し、所有app削除とteardown完了を確認した。
+
+測定3件のTTFA p95は1,738.740ms、Ollama load p95は246.876ms、gapは0だった。今回の常駐観測はcontext 8,192だけだった。このpilotは送信設定の計測経路を確認するもので、先行100件のcontext変化の要求元や速度再悪化の原因を特定したとは扱わない。
