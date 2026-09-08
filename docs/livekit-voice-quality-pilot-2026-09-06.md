@@ -2416,3 +2416,30 @@ Room 68件、Frontend全体881件、型検査0 errors／0 warningsが成功し�
 3往復では3応答の実再生完了、ready送信3件、世代0維持、transport failure 0件と診断終了を
 確認した。CHATは合成context照合済みのthink:falseで、他のoptionsは保持した。
 これは3往復の実統合であり、100試行・dogfoodの分母へ加算しない。
+
+## 修正後の通常100試行と観測区間を確認した比較（2026-09-08）
+
+測定版`a03e8a69d318b257bb4bfcc17289df631db85058`の
+[通常応答artifact](artifacts/livekit-controlled-complete-playback-2026-09-08.json)は、
+準備5回を除外し、同一fixture・初期状態、独立session／conversationの100/100回が成功した。
+受信・decode・実出力時計の順序、全PCM再生、transcript一致、明示終了を集計器で検証した。
+TTFAはp50 1,739.650ms、p95 1,814.895msで、絶対上限2,000msを満たす。
+p50の改善目安1,000msは未達である。発話確定はp95 288.557msで800ms以下だった。
+全100件でunderrun・gap・処理失敗・追加操作は0。RAG無効、CHAT think:falseの制御条件であり、
+dogfoodの実利用品質を証明する分母ではない。
+
+[検証記録](artifacts/livekit-controlled-complete-playback-2026-09-08-verification.json)には
+測定版、artifactとraw evidenceのhash、native SDK照合、終了処理を記録した。
+環境reportのteardown完了に加え、所有Frontend／BackendコンテナがDockerから削除済みであることを確認した。
+共有推論サービスは終了していない。Provider内部4指標は各100件を取得不能理由付きで残す。
+
+[通常latency比較](artifacts/livekit-normal-latency-comparison-2026-09-08.json)は、
+凍結baselineのhashと両測定版の確認済みsource hashを照合して生成する。比較可能な8指標は相対上限内だった。
+上記3区間の差を`not_comparable`と根拠付きで残し、発話確定の絶対上限は引き続き評価する。
+VAD冒頭・終了境界2指標の欠測があるため、比較結果は`passed:false`、CLIはexit 1である。
+既定evaluatorの結果も残し、通常試行にない割り込み4指標を補完しない。
+絶対上限超過、比較可能区間の遅延、部分欠測、未知の区間変更、source改変、hash不一致を含む
+比較器と既定evaluatorの回帰60件が成功した。
+
+残る受入には、実際にSTTへ渡したPCMと正解fixture境界の対応、dogfoodの再生継続性・処理失敗率、
+旧割り込み／再接続E2E入口の実障害検証との整合がある。全体の完了やPR作成済みとは扱わない。

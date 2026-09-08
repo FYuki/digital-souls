@@ -590,3 +590,20 @@ PYTHONDONTWRITEBYTECODE=1 backend/.venv/bin/python scripts/voice_quality/report_
 測るのはLLM要求から最初の本文、prompt準備、provider報告のload／prompt evaluation／generationであり、
 音声TTFAではない。`load_duration`を純粋なweight loadやqueue待ちと断定しない。
 条件の順序や共有Ollamaの状態の影響があるため、単独の比較でthinkingだけの因果効果を証明しない。
+
+## 観測区間を監査した通常応答のlatency比較
+
+```bash
+backend/.venv/bin/python scripts/voice_quality/compare_normal_latency.py \
+  --candidate docs/artifacts/livekit-controlled-complete-playback-2026-09-08.json \
+  --verification docs/artifacts/livekit-controlled-complete-playback-2026-09-08-verification.json \
+  --output /tmp/voice-normal-latency-new.json
+```
+
+凍結WebSocket artifactのhash、candidateの検証記録とのhash一致、測定版にある監査済みsourceを確認する。
+sourceが変更された場合、同名eventの観測区間を再確認するまでこの比較器は拒否する。
+発話確定・応答決定・STT開始の3区間は実観測の意味が異なるため、相対比較不能と根拠を記録する。
+絶対上限と他の比較可能指標は緩和しない。通常応答latencyだけの判定であり、
+割り込み・reconnect・stale・dogfoodなどの独立cohortは別の受入証拠が必要になる。
+既定`voice_metrics.evaluate_artifact`は変更せず、その結果とcoverage errorsも併記する。
+欠測や未達でもレポートを保存してexit 1を返す。既存出力は上書きしない。

@@ -1,0 +1,281 @@
+{
+  "$defs": {
+    "BoundaryEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "baseline": {
+          "title": "Baseline",
+          "type": "string"
+        },
+        "candidate": {
+          "title": "Candidate",
+          "type": "string"
+        },
+        "baseline_evidence": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Baseline Evidence",
+          "type": "array"
+        },
+        "candidate_evidence": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Candidate Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "baseline",
+        "candidate",
+        "baseline_evidence",
+        "candidate_evidence"
+      ],
+      "title": "BoundaryEvidence",
+      "type": "object"
+    },
+    "ComparisonRow": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "missing",
+            "not_comparable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "candidate_p95_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Candidate P95 Ms"
+        },
+        "baseline_p95_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Baseline P95 Ms"
+        },
+        "relative_limit_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Relative Limit Ms"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "audited_observation_intervals_differ",
+                "incomplete_measurement",
+                "measurement_boundary_mismatch"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        },
+        "boundary_evidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BoundaryEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "status",
+        "candidate_p95_ms",
+        "baseline_p95_ms",
+        "relative_limit_ms",
+        "reason"
+      ],
+      "title": "ComparisonRow",
+      "type": "object"
+    },
+    "TargetEvaluation": {
+      "additionalProperties": false,
+      "properties": {
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "absolute_passed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Absolute Passed"
+        },
+        "relative_passed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Passed"
+        },
+        "median_guide_met": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Median Guide Met"
+        },
+        "limit_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Limit Ms"
+        }
+      },
+      "required": [
+        "passed"
+      ],
+      "title": "TargetEvaluation",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "evaluation_scope": {
+      "const": "normal_response_latency_only",
+      "default": "normal_response_latency_only",
+      "title": "Evaluation Scope",
+      "type": "string"
+    },
+    "passed": {
+      "title": "Passed",
+      "type": "boolean"
+    },
+    "candidate_revision": {
+      "title": "Candidate Revision",
+      "type": "string"
+    },
+    "baseline_revision": {
+      "const": "4d71fbbf111ac87f22e7801106169ee6e4f1f532",
+      "default": "4d71fbbf111ac87f22e7801106169ee6e4f1f532",
+      "title": "Baseline Revision",
+      "type": "string"
+    },
+    "candidate_sha256": {
+      "title": "Candidate Sha256",
+      "type": "string"
+    },
+    "baseline_sha256": {
+      "const": "26b92cd07dd36be8e952e2e89927afa5e0cfc972f8f0959f06265e404e36e466",
+      "default": "26b92cd07dd36be8e952e2e89927afa5e0cfc972f8f0959f06265e404e36e466",
+      "title": "Baseline Sha256",
+      "type": "string"
+    },
+    "audited_source_sha256": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "type": "object"
+      },
+      "title": "Audited Source Sha256",
+      "type": "object"
+    },
+    "absolute_results": {
+      "additionalProperties": {
+        "$ref": "#/$defs/TargetEvaluation"
+      },
+      "title": "Absolute Results",
+      "type": "object"
+    },
+    "relative_results": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ComparisonRow"
+      },
+      "title": "Relative Results",
+      "type": "object"
+    },
+    "coverage_errors": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Coverage Errors",
+      "type": "array"
+    },
+    "strict_evaluation_passed": {
+      "title": "Strict Evaluation Passed",
+      "type": "boolean"
+    },
+    "strict_coverage_errors": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Strict Coverage Errors",
+      "type": "array"
+    }
+  },
+  "required": [
+    "passed",
+    "candidate_revision",
+    "candidate_sha256",
+    "audited_source_sha256",
+    "absolute_results",
+    "relative_results",
+    "coverage_errors",
+    "strict_evaluation_passed",
+    "strict_coverage_errors"
+  ],
+  "title": "NormalLatencyReport",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "監査済み観測区間に基づく通常100試行のlatency比較。音声品質全体の合格ではない。"
+}
