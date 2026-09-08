@@ -173,6 +173,19 @@ const emitPrivateFrame = (room: InstanceType<typeof livekitMocks.FakeRoom>, payl
   room.emit('dataReceived', payload, undefined, undefined, 'digital-souls.livekit-transport.v1')
 }
 
+const recoveryRequests = (room: InstanceType<typeof livekitMocks.FakeRoom>) =>
+  room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
+    .filter(p => p.type === 'control_probe')
+
+const acknowledgeRecovery = async (room: InstanceType<typeof livekitMocks.FakeRoom>, generation: number,
+  sessionId = '20000000-0000-4000-8000-000000000001') => {
+  await Promise.resolve()
+  const request = recoveryRequests(room).at(-1)
+  expect(request).toMatchObject({generation})
+  room.emit('dataReceived', new TextEncoder().encode(JSON.stringify({...request, type: 'control_probe_ack'})),
+    {identity: `character-miori-${sessionId}`, sid: 'PA_character'}, undefined, 'digital-souls.livekit-transport.v1')
+}
+
 const emitCoreEvent = (
   room: InstanceType<typeof livekitMocks.FakeRoom>,
   event: Record<string, unknown>,
@@ -879,7 +892,7 @@ test.each(['gap', 'overlap', 'ragged_gap', 'gap_during_resume'])('RTP不連続�
     await vi.waitFor(() => expect(audioContexts[0].close).toHaveBeenCalled())
     expect(audioContexts.flatMap(context => context.renderWorklets)).toHaveLength(1)
     const probe = client.probeControl()
-    const sent = messages().find(row => row.type === 'control_probe')
+    const sent = messages().filter(row => row.type === 'control_probe').at(-1)
     emitPrivateFrame(room, new TextEncoder().encode(JSON.stringify({...sent, type: 'control_probe_ack'})))
     expect(await probe).toMatchObject({status: 'received', generation: 1})
   } finally {client.disconnect()}
@@ -1057,6 +1070,8 @@ test('新世代の状態同期が終わるまで診断音を要求しない', as
     emitPrivateFrame(room, authoritativeState(0))
     expect(client.isAudioProbeReady()).toBe(false)
     emitPrivateFrame(room, authoritativeState(1))
+    expect(client.isAudioProbeReady()).toBe(false)
+    await acknowledgeRecovery(room, 1)
     expect(client.isAudioProbeReady()).toBe(true)
     const messages = room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
     expect(messages.filter(p => p.type === 'state_sync_request')).toHaveLength(1)
@@ -1111,6 +1126,8 @@ test.each(['send_failed', 'reply_missing'])('状態同期は同じ要求世代�
     expect(client.isAudioProbeReady()).toBe(false)
     expect(disconnected).not.toHaveBeenCalled()
     emitPrivateFrame(room, authoritativeState(1))
+    expect(client.isAudioProbeReady()).toBe(false)
+    await acknowledgeRecovery(room, 1)
     expect(client.isAudioProbeReady()).toBe(true)
     await vi.advanceTimersByTimeAsync(1000)
     expect(requests()).toHaveLength(3)
@@ -1135,6 +1152,8 @@ test('制御の同期確認後もSDKのmedia再接続完了まで診断音を送
     expect(await client.probeAudio()).toMatchObject({reason: 'unavailable'})
     expect(messages().filter(p => p.type === 'audio_probe_request')).toHaveLength(0)
     room.emit('reconnected')
+    expect(client.isAudioProbeReady()).toBe(false)
+    await acknowledgeRecovery(room, 1)
     expect(client.isAudioProbeReady()).toBe(true)
     const probe = client.probeAudio()
     await vi.advanceTimersByTimeAsync(250)
@@ -1157,6 +1176,8 @@ test('制御の同期確認後もSDKのmedia再接続完了まで診断音を送
     expect(client.isAudioProbeReady()).toBe(false)
     await vi.advanceTimersByTimeAsync(0)
     emitPrivateFrame(room, authoritativeState(3))
+    expect(client.isAudioProbeReady()).toBe(false)
+    await acknowledgeRecovery(room, 3)
     expect(client.isAudioProbeReady()).toBe(true)
   } finally {client.disconnect(); vi.useRealTimers()}
 })
@@ -1223,4 +1244,162 @@ test('時計probeはSDK connect完了までpublishせず、接続待ちへ割り
     expect(room.localParticipant.publishData).toHaveBeenCalledOnce()
     client.disconnect(); expect((await clock).status).toBe('interrupted')
   } finally {blocked.resolve(); client.disconnect(); connect.mockRestore()}
+})
+
+
+test('再接続の下り通知やpublish完了では操作可能に戻らず、同じnonceを再送して正しい相手の返信を待つ', async () => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'performance']})
+  const observations: RoomObservation[] = [], client = new LiveKitRoomClient(row => observations.push(row))
+  const sessionId = '20000000-0000-4000-8000-000000000001'
+  await client.connect('ws://test', 'token', sessionId)
+  const room = latestRoom()
+  try {
+    room.emit('signalReconnecting'); room.emit('reconnected')
+    await vi.advanceTimersByTimeAsync(0)
+    observations.length = 0
+    emitPrivateFrame(room, authoritativeState(1))
+    await vi.advanceTimersByTimeAsync(500)
+    const requests = recoveryRequests(room)
+    expect(requests).toHaveLength(3)
+    expect(requests.every(row => JSON.stringify(row) === JSON.stringify(requests[0]))).toBe(true)
+    const reply = (participant: unknown, probeId = requests[0].probe_id, generation = 1) => room.emit('dataReceived',
+      new TextEncoder().encode(JSON.stringify({protocol_version: '1.0', type: 'control_probe_ack', probe_id: probeId, generation})),
+      participant, undefined, 'digital-souls.livekit-transport.v1')
+    const publisher = {identity: `character-miori-${sessionId}`, sid: 'PA_character'}
+    reply(undefined)
+    reply({...publisher, sid: ''})
+    reply({...publisher, identity: 'character-miori-20000000-0000-4000-8000-000000000099'})
+    reply(publisher, crypto.randomUUID())
+    reply(publisher, requests[0].probe_id, 0)
+    emitPrivateFrame(room, authoritativeState(1))
+    expect(client.isAudioProbeReady()).toBe(false)
+    expect(observations.every(row => row.transport === 'unavailable' && row.control === 'unavailable')).toBe(true)
+    reply(publisher)
+    expect(client.isAudioProbeReady()).toBe(true)
+    expect(observations.at(-1)).toMatchObject({transport: 'available', control: 'available', generation: 1})
+    const count = observations.length
+    reply(publisher)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(observations).toHaveLength(count)
+    expect(recoveryRequests(room)).toHaveLength(3)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+test('世代変更と次の再接続は前の往復確認を破棄し、遅着返信で復旧扱いにしない', async () => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'performance']})
+  const client = new LiveKitRoomClient(() => undefined)
+  const sessionId = '20000000-0000-4000-8000-000000000001'
+  await client.connect('ws://test', 'token', sessionId)
+  const room = latestRoom()
+  const reply = (request: Record<string, unknown>) => room.emit('dataReceived',
+    new TextEncoder().encode(JSON.stringify({...request, type: 'control_probe_ack'})),
+    {identity: `character-miori-${sessionId}`, sid: 'PA_character'}, undefined, 'digital-souls.livekit-transport.v1')
+  try {
+    room.emit('signalReconnecting'); room.emit('reconnected')
+    emitPrivateFrame(room, authoritativeState(1))
+    await vi.advanceTimersByTimeAsync(0)
+    const first = recoveryRequests(room).at(-1)
+    emitPrivateFrame(room, authoritativeState(2))
+    await vi.advanceTimersByTimeAsync(0)
+    const second = recoveryRequests(room).at(-1)
+    expect(second.probe_id).not.toBe(first.probe_id)
+    reply(first)
+    expect(client.isAudioProbeReady()).toBe(false)
+    room.emit('signalReconnecting')
+    reply(second)
+    expect(client.isAudioProbeReady()).toBe(false)
+    emitPrivateFrame(room, authoritativeState(3))
+    await vi.advanceTimersByTimeAsync(500)
+    expect(recoveryRequests(room)).toHaveLength(2)
+    room.emit('reconnected')
+    await acknowledgeRecovery(room, 3)
+    expect(client.isAudioProbeReady()).toBe(true)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(recoveryRequests(room)).toHaveLength(3)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+test.each(['reply_missing', 'publish_pending'] as const)('往復確認が終わらない再接続は期限で終了し、timerを残さない: %s', async mode => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'performance']})
+  const observations: RoomObservation[] = [], client = new LiveKitRoomClient(row => observations.push(row))
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom(), disconnected = vi.spyOn(room, 'disconnect')
+  try {
+    room.emit('signalReconnecting'); room.emit('reconnected')
+    await vi.advanceTimersByTimeAsync(0)
+    if (mode === 'publish_pending') room.localParticipant.publishData.mockImplementation(() => new Promise(() => undefined))
+    emitPrivateFrame(room, authoritativeState(1))
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(disconnected).toHaveBeenCalledTimes(1)
+    expect(observations.at(-1)).toMatchObject({transport: 'unavailable', failureReason: 'recovery_probe_timeout'})
+    expect(recoveryRequests(room)).toHaveLength(mode === 'publish_pending' ? 1 : 240)
+    expect(vi.getTimerCount()).toBe(0)
+    expect(client.isAudioProbeReady()).toBe(false)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+test('往復確認中に切断した後は返信も再送も次sessionへ持ち越さない', async () => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'performance']})
+  const client = new LiveKitRoomClient(() => undefined)
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  try {
+    room.emit('signalReconnecting'); room.emit('reconnected')
+    emitPrivateFrame(room, authoritativeState(1))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(recoveryRequests(room)).toHaveLength(1)
+    client.disconnect()
+    await acknowledgeRecovery(room, 1)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(recoveryRequests(room)).toHaveLength(1)
+    expect(vi.getTimerCount()).toBe(0)
+    expect(client.isAudioProbeReady()).toBe(false)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+
+test('同じsessionへ明示再接続した場合も往復確認を待つ', async () => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'performance']})
+  const observations: RoomObservation[] = [], client = new LiveKitRoomClient(row => observations.push(row))
+  const sessionId = '20000000-0000-4000-8000-000000000001'
+  await client.connect('ws://test', 'token', sessionId)
+  try {
+    client.temporaryDisconnect()
+    await client.connect('ws://test', 'token', sessionId)
+    const room = latestRoom()
+    expect(observations.at(-1)).toMatchObject({transport: 'unavailable', control: 'unavailable'})
+    emitPrivateFrame(room, authoritativeState(1))
+    expect(client.isAudioProbeReady()).toBe(false)
+    await acknowledgeRecovery(room, 1)
+    expect(observations.at(-1)).toMatchObject({transport: 'available', control: 'available'})
+    expect(client.isAudioProbeReady()).toBe(true)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+test('往復確認中にサーバーが再びunavailableになったら状態同期からやり直す', async () => {
+  vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'performance']})
+  const client = new LiveKitRoomClient(() => undefined)
+  await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+  const room = latestRoom()
+  try {
+    room.emit('signalReconnecting'); room.emit('reconnected')
+    emitPrivateFrame(room, authoritativeState(1))
+    await vi.advanceTimersByTimeAsync(0)
+    emitPrivateFrame(room, new TextEncoder().encode(JSON.stringify({protocol_version: '1.0',
+      type: 'authoritative_state', generation: 1, session_phase: 'unavailable', terminal_outcomes: []})))
+    await acknowledgeRecovery(room, 1)
+    expect(client.isAudioProbeReady()).toBe(false)
+    await vi.advanceTimersByTimeAsync(500)
+    expect(recoveryRequests(room)).toHaveLength(1)
+    const requests = room.localParticipant.publishData.mock.calls.map(([p]) => JSON.parse(new TextDecoder().decode(p)))
+      .filter(row => row.type === 'state_sync_request')
+    expect(requests.map(row => row.generation)).toEqual([1, 1, 1])
+    emitPrivateFrame(room, authoritativeState(2))
+    await acknowledgeRecovery(room, 2)
+    expect(client.isAudioProbeReady()).toBe(true)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {client.disconnect(); vi.useRealTimers()}
 })
