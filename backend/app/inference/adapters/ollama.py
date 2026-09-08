@@ -108,6 +108,8 @@ class OllamaAdapter:
         self, request: TextGenerationRequest
     ) -> AsyncIterator[str]:
         payload = self._chat_payload(request, stream=True)
+        diagnostic("ollama_thinking_configured_requests", int(type(payload.get("think")) is bool))
+        diagnostic("ollama_thinking_disabled_requests", int(payload.get("think") is False))
         # /api/chatのdurationには内部受付・生成開始・独立したqueue待ちがない。
         # HTTP headerやtotalの残差を内部時刻・queue値として代用しない。
         diagnostic("ollama_internal_timing_unavailable")
@@ -412,7 +414,8 @@ class OllamaAdapter:
         context_window_tokens: int | None = None,
     ) -> dict[str, object]:
         options: dict[str, JsonValue] = dict(request.options)
-        thinking = options.pop("think", None)
+        # 音声応答の既定だけ待ち時間を減らす。明示されたthink設定と通常text応答は保持する。
+        thinking = options.pop("think", False if request.latency_sensitive else None)
         options.update(
             {
                 "num_ctx": (

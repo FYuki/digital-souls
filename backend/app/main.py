@@ -280,6 +280,7 @@ async def _stream_core_reply(
         prompt,
         max_output_tokens=max_output_tokens,
         settings=model_settings,
+        latency_sensitive=True,
     ):
         if screen is not None and not screen.is_current:
             raise ScreenPerceptionError("request_cancelled", stage="chat")

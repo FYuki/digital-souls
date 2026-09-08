@@ -128,3 +128,16 @@ HTTP header受信時刻とtotal/load/prompt evaluation/generationの残差を、
 これは応答全体を再生した場合の計測経路であり、途中キャンセルした音声全体の品質や、実声dogfoodの受け入れ完了を示すものではない。dogfoodの実測は所定の配備・手動受け入れ手順で別途実施する。
 
 2026-09-08の実サービスpilot（`native-playback-summary-pilot-20260908-02`、revision `74b026e`）で、準備1件・測定3件すべてに6観測が製品traceへ届き、manifestとの一致、匿名aggregate、所有コンテナの終了を確認した。測定3件のgap・underrunは0だった。これは通常計測経路の動作確認であり、実声dogfoodの受け入れや100件の品質判定ではない。直前のpilotはfixtureの開始時計の幅が45.4msとなって失敗した結果を保持し、実quantumで無音処理が可能なことを確認してからfixtureを開始する修正後に再検証した。20msの上限とfixtureのPCMは維持した。
+
+
+## 通常音声応答の低遅延設定
+
+Conversation Coreから音声の本文をstreamする要求には`latency_sensitive=true`を付ける。Ollama adapterは、この要求で`think`が明示されていない場合に`think: false`を送る。CHAT optionsに明示した`think: true`または`false`は優先する。通常のテキスト要求は従来どおりproviderの既定値を使う。
+
+この指定によって人格、履歴、RAG、現在の発話、context長、出力上限は削らない。adapterへ渡すoptionsは複製し、共有設定を変更しない。計測traceには要求数として`llm_latency_sensitive_requests`、`ollama_thinking_configured_requests`、`ollama_thinking_disabled_requests`を記録する。これらは同一計測内で合計される件数であり、設定の最終状態や本文の品質評価ではない。
+
+実サービス検証では`run_pilot.py`の`--disable-thinking`を付けず、通常経路からこの指定が送られることを確認する。過去の同flag付き実験は当時の実験条件として保持し、通常設定の性能証拠へ読み替えない。低遅延設定の関連テスト105件が成功した時点では、新設定の実接続100件および実声での会話品質受け入れは未完了である。
+
+## PCM端部照合の100件再検証（2026-09-08）
+
+`pcm-witness-v3-pause-100-20260908-01`では会話動作100件と実際の最終STT入力100件を確認したが、端部照合は98件成功、2件未確認だった。先頭の位置を求めるseedの相関が閾値未満であり、未確認2件を正常へ補完しない。[PCM結果](artifacts/livekit-pcm-witness-v3-pause-100-2026-09-08.json)、[VAD結果](artifacts/livekit-vad-pcm-witness-v3-pause-100-2026-09-08.json)、[終了確認](artifacts/livekit-pcm-witness-v3-pause-100-cleanup-2026-09-08.json)を保存した。共有サービスを残し、測定が所有したFrontend・Backendと観測proxyの終了を確認した。この測定は端部品質の受け入れを満たしていない。

@@ -503,3 +503,24 @@ def test_ollama_thinking_preference_rejects_non_boolean_values(invalid: object) 
     environment["INFERENCE_TARGET_CHAT_OPTIONS_JSON"] = json.dumps({"think": invalid})
     with pytest.raises(ValueError, match="think must be a boolean"):
         resolve_inference_settings(environment, default_provider_registry())
+
+
+def test_stream_latency_mode_is_per_request_and_keeps_target_options():
+    requests = []
+    class RecordingAdapter(_FakeAdapter):
+        async def stream_text(self, request):
+            requests.append(request)
+            yield 'ok'
+    router = _router(RecordingAdapter())
+    async def exercise():
+        for flag in (True, False):
+            assert [text async for text in router.stream_text(
+                caller=InferenceCaller.CHAT, target=InferenceTarget.CHAT,
+                messages=_messages(), latency_sensitive=flag,
+            )] == ['ok']
+    asyncio.run(exercise())
+    assert [r.latency_sensitive for r in requests] == [True, False]
+    assert requests[0].messages == requests[1].messages == _messages()
+    assert requests[0].options == requests[1].options
+    assert requests[0].max_input_tokens == requests[1].max_input_tokens
+    assert requests[0].max_output_tokens == requests[1].max_output_tokens

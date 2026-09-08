@@ -116,7 +116,10 @@ class InferenceRouter:
         target: InferenceTarget,
         messages: tuple[InferenceMessage, ...],
         timeout_seconds: float | None = None,
+        latency_sensitive: bool = False,
     ) -> AsyncIterator[str]:
+        if type(latency_sensitive) is not bool:
+            raise TypeError("latency_sensitive must be boolean")
         resolved, adapter = self._resolve(
             caller, target, InferenceCapability.STREAM_TEXT
         )
@@ -128,6 +131,7 @@ class InferenceRouter:
             messages=messages,
             model_id=resolved.reference.model_id,
             options=resolved.options,
+            latency_sensitive=latency_sensitive,
             max_input_tokens=resolved.max_input_tokens,
             max_output_tokens=max_output_tokens,
             timeout_seconds=self._timeout(resolved.timeout_seconds, timeout_seconds),
@@ -136,6 +140,7 @@ class InferenceRouter:
         request_id = str(uuid4())
         started_at = perf_counter()
         diagnostic("llm_request_started")
+        diagnostic("llm_latency_sensitive_requests", int(latency_sensitive))
         acquired = False
         error_category: InferenceErrorCategory | None = None
         try:

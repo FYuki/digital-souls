@@ -230,6 +230,11 @@ class TextGenerationRequest:
     max_input_tokens: int
     max_output_tokens: int
     timeout_seconds: float
+    latency_sensitive: bool = field(default=False, kw_only=True)
+
+    def __post_init__(self) -> None:
+        if type(self.latency_sensitive) is not bool:
+            raise TypeError("latency_sensitive must be boolean")
 
 
 @dataclass(frozen=True)

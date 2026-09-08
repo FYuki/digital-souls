@@ -537,3 +537,31 @@ def test_exact_count_cache_is_bounded_and_does_not_share_keys_between_instances(
     cache.put(keys[2], 3)
     assert cache.get(keys[1]) is None
     assert cache.get(keys[0]) == 1
+
+
+@pytest.mark.parametrize('latency_sensitive', [False, True])
+@pytest.mark.parametrize('explicit_thinking', [None, False, True])
+def test_voice_latency_default_preserves_explicit_preference_and_prompt(latency_sensitive, explicit_thinking):
+    from dataclasses import replace
+    options = {'temperature': .2}
+    if explicit_thinking is not None:
+        options['think'] = explicit_thinking
+    request = replace(_text_request(), options=options, latency_sensitive=latency_sensitive)
+    normal = OllamaAdapter._chat_payload(replace(request, latency_sensitive=False), stream=True)
+    payload = OllamaAdapter._chat_payload(request, stream=True)
+    expected = explicit_thinking if explicit_thinking is not None else (False if latency_sensitive else None)
+    if expected is None:
+        assert 'think' not in payload
+    else:
+        assert payload['think'] is expected
+    assert payload['messages'] == normal['messages']
+    assert payload['model'] == normal['model']
+    assert payload['options'] == normal['options']
+    assert request.options == options
+
+
+@pytest.mark.parametrize('invalid', [0, 1, 'true', None])
+def test_latency_request_rejects_non_boolean_flags(invalid):
+    from dataclasses import replace
+    with pytest.raises(TypeError, match='latency_sensitive'):
+        replace(_text_request(), latency_sensitive=invalid)

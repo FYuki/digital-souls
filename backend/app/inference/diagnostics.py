@@ -31,6 +31,7 @@ VALUE_NAMES = frozenset({
     "token_estimate_requests", "token_estimate_total_ms", "token_estimate_queue_ms",
     "prompt_message_count", "prompt_input_tokens",
     "llm_thinking_chunks", "llm_thinking_characters",
+    "llm_latency_sensitive_requests", "ollama_thinking_configured_requests", "ollama_thinking_disabled_requests",
     "token_estimate_cache_hits", "token_estimate_metadata_requests",
     *(f"prompt_{part}_tokens" for part in ("character", "character_lore", "history", "rag", "current_user", "post_history")),
     *(

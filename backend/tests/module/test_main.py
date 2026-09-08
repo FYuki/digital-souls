@@ -153,8 +153,9 @@ async def test_core_reply_prepares_prompt_outside_event_loop_thread(
             recorded_prompts.append(built_prompt)
 
     async def fake_stream_response(
-        built_prompt: object, *, max_output_tokens: int, settings: object
+        built_prompt: object, *, max_output_tokens: int, settings: object, latency_sensitive: bool
     ):
+        assert latency_sensitive is True
         stream_arguments.append((built_prompt, max_output_tokens, settings))
         yield "こんにちは"
 
