@@ -124,3 +124,12 @@ def test_complete_vad_only_changes_normal_latency_scope(artifacts):
     assert result['passed']
     assert not result['strict_evaluation_passed']
     assert 'turn_decision:incomplete_measurement' in result['strict_coverage_errors']
+
+
+def test_historical_and_native_playback_revisions_keep_distinct_audited_hashes():
+    historical = report.verify_sources('a03e8a69d318b257bb4bfcc17289df631db85058')
+    current = report.verify_sources('1c060e99d6918f593c6278b512366532a649dfd2')
+    assert historical['baseline'] == current['baseline']
+    assert historical['candidate'] == report.AUDITED_CANDIDATE_VARIANTS[0]
+    assert current['candidate'] == report.AUDITED_CANDIDATE_VARIANTS[1]
+    assert historical['candidate'] != current['candidate']

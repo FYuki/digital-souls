@@ -35,6 +35,15 @@ AUDITED_SOURCES = {
         'backend/app/conversation_core/session.py': '77df1eb129b35f6d0a84d4eb95be369d4b2927ab27227a17acf9a622953109c3',
     },
 }
+# 2026-09-08再監査: 生成音声の統計を完了通知より先に記録し、最終playback summaryを受信する変更。
+# 下記3区間の起点・終点は変更されていない。旧測定版も同じ厳密なhashで再検証する。
+AUDITED_CANDIDATE_VARIANTS = (
+    AUDITED_SOURCES['candidate'],
+    {
+        'backend/app/livekit_transport/production.py': 'c128656f318ddaf50c7d5badef566bc5eb9244f4e1dce8df36668c2c02ba1b23',
+        'backend/app/conversation_core/session.py': '77df1eb129b35f6d0a84d4eb95be369d4b2927ab27227a17acf9a622953109c3',
+    },
+)
 BOUNDARY_AUDIT = {
     'utterance_finalized': {
         'baseline': 'client VAD終了callback → recorder.stopAndTake完了',
@@ -104,13 +113,17 @@ def _source_bytes(revision: str, path: str) -> bytes:
     return subprocess.check_output(['git', 'show', f'{revision}:{path}'], cwd=ROOT, stderr=subprocess.DEVNULL)
 
 
-def verify_sources(candidate_revision: str) -> None:
+def verify_sources(candidate_revision: str) -> dict[str, dict[str, str]]:
     if re.fullmatch(r'[a-f0-9]{40}', candidate_revision) is None:
         raise ValueError('full candidate revision required')
-    for side, revision in (('baseline', BASELINE_REVISION), ('candidate', candidate_revision)):
-        for path, expected in AUDITED_SOURCES[side].items():
-            if hashlib.sha256(_source_bytes(revision, path)).hexdigest() != expected:
-                raise ValueError('measurement source changed; boundary audit required')
+    actual = {
+        side: {path: hashlib.sha256(_source_bytes(revision, path)).hexdigest()
+               for path in AUDITED_SOURCES[side]}
+        for side, revision in (('baseline', BASELINE_REVISION), ('candidate', candidate_revision))
+    }
+    if actual['baseline'] != AUDITED_SOURCES['baseline'] or actual['candidate'] not in AUDITED_CANDIDATE_VARIANTS:
+        raise ValueError('measurement source changed; boundary audit required')
+    return actual
 
 
 def complete(metric: MetricAggregate | None) -> bool:
@@ -186,14 +199,14 @@ def build_report(candidate_path: Path, baseline_path: Path, verification_path: P
     revision = evidence.get('measurement_revision')
     if not isinstance(revision, str):
         raise ValueError('candidate measurement revision required')
-    verify_sources(revision)
+    audited_sources = verify_sources(revision)
     schema = json.loads((ROOT / 'docs/schemas/voice-quality-artifact-v1.schema.json').read_text())
     for raw in (cbytes, bbytes):
         value = json.loads(raw)
         Draft202012Validator(schema).validate(value)
         _assert_anonymous(value)
     result = NormalLatencyReport(candidate_revision=revision, candidate_sha256=candidate_hash,
-        audited_source_sha256=AUDITED_SOURCES,
+        audited_source_sha256=audited_sources,
         **compare(AggregateArtifact.model_validate_json(cbytes), AggregateArtifact.model_validate_json(bbytes)))
     _assert_anonymous(result.model_dump(mode='json'))
     return result
