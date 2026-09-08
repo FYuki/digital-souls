@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from uuid import UUID
 
+from app.async_worker import run_sync
 from app.external_mcp.models import digest, validate_arguments
 from app.inference import InferenceCancellationToken
 
@@ -55,7 +56,10 @@ class LifeFormation:
             return Result.DEFERRED
         if any(revisions.get(r.id) != r.revision for r in reflections):
             return Result.SUPERSEDED
-        invalidated = self.store.reconcile_reflections(character, revisions)
+        invalidated = await run_sync(
+            self.store.reconcile_reflections, character, revisions, check_current=check
+        )
+        check()
         if not reflections:
             return Result.APPLIED if invalidated else Result.NO_CHANGE
         fingerprint = digest(sorted((str(r.id), r.revision) for r in reflections))
@@ -100,4 +104,7 @@ class LifeFormation:
         latest = self.source.current_revisions(character)
         if latest is None or any(latest.get(r.id) != r.revision for r in reflections):
             return Result.SUPERSEDED
-        return self.store.apply_formation(character, fingerprint, tuple(states))
+        return await run_sync(
+            self.store.apply_formation, character, fingerprint, tuple(states),
+            check_current=check,
+        )

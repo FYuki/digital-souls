@@ -1120,3 +1120,34 @@ def test_formation_failure_logs_type_without_private_content(tmp_path, caplog, s
             assert "PRIVATE_" not in caplog.text
             assert all(record.exc_info is None for record in caplog.records)
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("outcome", ["timeout", "exception", "no_topic", "handoff"])
+def test_pause_at_finish_never_returns_none_to_workflow(tmp_path, monkeypatch, outcome):
+    async def scenario():
+        async with environment(tmp_path) as (service, _, run):
+            finish = service.store.finish
+
+            def pause_before_finish(current, *args, **kwargs):
+                saved = service.store.run(str(current.id))
+                service.store.save_run(saved.model_copy(update={"phase": "paused"}))
+                return finish(current, *args, **kwargs)
+
+            monkeypatch.setattr(service.store, "finish", pause_before_finish)
+            if outcome != "handoff":
+                async def decide(context, cancellation):
+                    if outcome == "timeout":
+                        raise TimeoutError()
+                    if outcome == "exception":
+                        raise ValueError("external failure")
+                    return {"action": "finish", "candidate_id": "",
+                            "arguments_json": "", "summary": ""}
+
+                monkeypatch.setattr(service.cognition, "decide", decide)
+            assert await service.execute(str(run.id)) == Result.DEFERRED
+            saved = service.store.run(str(run.id))
+            assert saved.phase == "paused" and saved.result is None
+            assert not any(s.kind is Kind.SHARE_CANDIDATE
+                           for s in service.store.states("miori"))
+
+    asyncio.run(scenario())

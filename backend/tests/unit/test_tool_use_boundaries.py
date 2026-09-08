@@ -14,7 +14,7 @@ from app.inference import (
     InferenceErrorCategory,
 )
 from app.prompting import BuiltPrompt, PromptMessage, PromptRole, PromptUsage
-from app.tool_use.prompt import require_tool_room, with_tool_material
+from app.tool_use.prompt import require_tool_room, with_tool_material, routing_history
 from app.tool_use.routing import InferenceDecisionRouter, ToolDecision
 from app.tool_use.runtime import ToolSettings
 from app.tool_use.service import ToolMaterial
@@ -333,6 +333,8 @@ def test_prompt_shrinks_results_preserving_original_and_current_user():
         1600,
     )
     assert "短い結果" in small.messages[-2].content
+    assert routing_history(small) == routing_history(prompt)
+    assert routing_history(result) == routing_history(prompt)
 
 
 @pytest.mark.parametrize(

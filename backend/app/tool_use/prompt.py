@@ -36,6 +36,7 @@ def _messages(prompt: BuiltPrompt, payload: str) -> tuple[PromptMessage, ...]:
             "<untrusted_external_results>\n"
             + payload
             + "\n</untrusted_external_results>",
+            routing_eligible=False,
         ),
         prompt.messages[-1],
     )

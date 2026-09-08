@@ -473,7 +473,10 @@ class Store:
             character, lambda state: bool(source_ids.intersection(state.source_ids))
         )
 
-    def reconcile_reflections(self, character: str, revisions: dict[UUID, str]) -> int:
+    def reconcile_reflections(
+        self, character: str, revisions: dict[UUID, str], *,
+        check_current: Callable[[], None] = lambda: None,
+    ) -> int:
         return self._invalidate_reflections(
             character,
             lambda state: any(
@@ -481,14 +484,17 @@ class Store:
                 or state.reflection_revisions.get(source_id) != revisions[source_id]
                 for source_id in state.source_ids
             ),
+            check_current=check_current,
         )
 
     def _invalidate_reflections(
-        self, character: str, invalid: Callable[[LifeState], bool]
+        self, character: str, invalid: Callable[[LifeState], bool], *,
+        check_current: Callable[[], None] = lambda: None,
     ) -> int:
         # 正本照合・全件の休眠化・履歴更新を同じtransactionで確定する。
         affected = 0
         with self.transaction() as db:
+            check_current()
             rows = db.execute(
                 "SELECT document FROM life_states WHERE character_id=? "
                 "AND json_extract(document,'$.status')='ACTIVE' "
@@ -513,6 +519,7 @@ class Store:
                 if changed.rowcount != 1:
                     raise LifeError(Result.CONFLICT, "state_revision_conflict")
                 affected += 1
+            check_current()
         return affected
 
     def formation_exists(self, character: str, fingerprint: str) -> bool:
@@ -575,9 +582,12 @@ class Store:
             return [dict(row) for row in rows]
 
     def apply_formation(
-        self, character: str, fingerprint: str, states: tuple[LifeState, ...]
+        self, character: str, fingerprint: str, states: tuple[LifeState, ...], *,
+        check_current: Callable[[], None] = lambda: None,
     ) -> Result:
         with self.transaction() as db:
+            # worker待機中・書込中の取消しは、transactionを確定する前に検出する。
+            check_current()
             if db.execute(
                 "SELECT 1 FROM life_formations WHERE character_id=? AND fingerprint=?",
                 (character, fingerprint),
@@ -598,4 +608,5 @@ class Store:
             db.execute(
                 "INSERT INTO life_formations VALUES (?,?)", (character, fingerprint)
             )
+            check_current()
         return Result.APPLIED if states else Result.NO_CHANGE
