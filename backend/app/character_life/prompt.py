@@ -70,6 +70,7 @@ class Context:
                 PromptMessage(
                     PromptRole.USER,
                     "<life_state_data>\n" + encode(data) + "\n</life_state_data>",
+                    routing_eligible=False,
                 ),
                 prompt.messages[-1],
             )

@@ -142,7 +142,7 @@ python -m pytest backend/tests/integration/test_character_life_elyth_integration
 ## 前景と背景の実測と制限
 
 `RUN_CHARACTER_LIFE_PRIORITY_BENCHMARK=true`を実接続受入に追加すると、同じ実Ollamaへ背景認知と会話を重ね、TTFT・GPU使用量・foreground中のdispatch件数を記録する。
-2026-09-08のgemma4:e4b（会話出力上限1,024）による直近の単一試行では、通常TTFT 7.170秒、重複時4.794秒、GPU使用メモリ最大10,096 MiB、使用率最大85%だった。
+2026-09-08のgemma4:e4b（会話出力上限1,024）による直近の単一試行では、通常TTFT 8.950秒、重複時4.753秒、GPU使用メモリ最大9,815 MiB、使用率最大86%だった。
 先行試行では重複時の遅延増加も観測しており、推論内容・cache等による変動を含む。この1試行で背景負荷の性能改善を主張しない。
 背景活動はDEFERREDとなり、foreground開始後の外部dispatchは0件。通常の強制pause/resumeとshutdownは別の自動テストで検証する。
 

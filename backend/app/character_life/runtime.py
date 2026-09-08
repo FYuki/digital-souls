@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from concurrent.futures import Future
 from contextvars import Context
 from dataclasses import dataclass
@@ -48,8 +49,6 @@ def formation_step(character: str, workflow_id: str) -> str:
     if previous is not None:
         return previous
     future = runtime.on_owner_loop(runtime.service.form_life_states(character))
-    with runtime.future_lock:
-        runtime.futures.add(future)
     try:
         result = future.result(timeout=runtime.service.timeout + 10)
         runtime.service.store.finish_formation_job(
@@ -70,7 +69,11 @@ def formation_workflow(character: str, workflow_id: str) -> str:
 def schedule_step(scheduled_at: str) -> int:
     runtime = owner()
     future = runtime.on_owner_loop(runtime.scan(scheduled_at))
-    return future.result(timeout=60)
+    try:
+        return future.result(timeout=60)
+    finally:
+        with runtime.future_lock:
+            runtime.futures.discard(future)
 
 
 @DBOS.workflow(name="character_life_schedule_v1")
@@ -107,7 +110,7 @@ class Runtime:
         self.characters = characters
         self.system_path = data_root / "character-life-system.sqlite"
         self.loop = asyncio.get_running_loop()
-        self.futures: set[Future[str]] = set()
+        self.futures: set[Future[Any]] = set()
         self.future_lock = Lock()
         self.started = False
 
@@ -148,20 +151,25 @@ class Runtime:
             for job in self.service.store.formation_jobs(None):
                 await self.enqueue_formation(str(job["character_id"]), str(job["id"]))
         except BaseException:
-            await self.close()
+            try:
+                await self.close()
+            except Exception:
+                logging.getLogger(__name__).warning("Character Life runtime cleanup failed")
             raise
 
     def on_owner_loop(self, coroutine: Coroutine[Any, Any, T]) -> Future[T]:
         # DBOS stepのContextVarをアプリ側へ運ばない。scanが投入する活動・形成は
         # 正本の安定IDで回復する独立workflowであり、実行中stepの子ではない。
-        return Context().run(
-            asyncio.run_coroutine_threadsafe, coroutine, self.loop
-        )
+        # closeのsnapshotとの間に、投入済みだが未登録のFutureを作らない。
+        with self.future_lock:
+            future = Context().run(
+                asyncio.run_coroutine_threadsafe, coroutine, self.loop
+            )
+            self.futures.add(future)
+        return future
 
     def execute_on_owner_loop(self, run_id: str, attempt: int) -> str:
         future = self.on_owner_loop(self.service.execute(run_id, attempt=attempt))
-        with self.future_lock:
-            self.futures.add(future)
         try:
             return future.result(timeout=self.service.timeout + 10)
         finally:
@@ -261,6 +269,7 @@ class Runtime:
     async def close(self) -> None:
         global _owner
         await self.service.stop()
+        self.started = False
         # DBOSの停止をevent loop外で待ち、進行中の非同期処理に終了機会を与える。
         if _owner is self:
             try:
@@ -273,4 +282,3 @@ class Runtime:
                 for future in futures:
                     future.cancel()
                 _owner = None
-        self.started = False

@@ -61,7 +61,7 @@ JSON文字列による不変な保存形式を使い、取得したdocumentの�
 
 `refresh()`はpaginationを含むdiscovery全体を検証してstagedへ保存する。現在loopへ追加・削除・
 schema変更を途中反映せず、次の`begin_loop()`でactivateする。失敗したrefreshは旧snapshotを
-残してdegradedとなる。切断時はunavailable、再接続時は再discoveryと新世代を要求し、
+保持し、外部MCPのavailabilityは管理runtimeの接続単位判定に従う。単発の失敗をdegradedへ変更しない。切断時はunavailable、再接続時は再discoveryと新世代を要求し、
 古いloopやcached snapshotだけでは実行できない。
 
 JSON Schemaの外部参照は実行時に取得しない。未対応の参照や不正な引数はvalidation失敗となる。

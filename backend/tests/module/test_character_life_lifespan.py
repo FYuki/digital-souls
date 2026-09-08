@@ -28,6 +28,8 @@ def test_enabled_main_lifespan_owns_single_gate_and_collects_runtime(
         runtime = main.app.state.character_life_runtime
         assert runtime.started
         assert runtime.service.gate is tools[0].gate
+        assert main.app.state.addon_manager is tools[0].management
+        assert main.app.state.addon_manager.gate is runtime.service.gate
         assert runtime.system_path.parent == runtime_paths.data_root
         assert "miori" in runtime.characters()
         response = client.get("/character-life/miori")

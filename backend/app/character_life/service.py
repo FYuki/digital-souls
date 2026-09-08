@@ -447,44 +447,58 @@ class Service:
 
         task = asyncio.current_task()
         interruption = Result.DEFERRED
+        monitor_cancellation = object()
+        initial_cancellations = task.cancelling() if task is not None else 0
+        body_completed = False
 
         async def monitor_priority() -> None:
             nonlocal interruption
             while True:
                 await asyncio.sleep(0.05)
+                if body_completed:
+                    return
                 try:
                     check_current()
                 except Exception as exc:
                     interruption = exc.result if isinstance(exc, LifeError) else Result.FAILED
                     cancellation.cancel()
                     if task is not None:
-                        task.cancel()
+                        task.cancel(monitor_cancellation)
                     return
 
         monitor = asyncio.create_task(monitor_priority())
         if task is not None:
             self.tasks.add(task)
         try:
-            async with asyncio.timeout(self.timeout):
-                check_current()
-                await (self.memory or DeferredMemory()).catch_up(character)
-                return await self.formation.run(
-                    character, check_current=check_current, cancellation=cancellation
-                )
+            try:
+                async with asyncio.timeout(self.timeout):
+                    check_current()
+                    await (self.memory or DeferredMemory()).catch_up(character)
+                    return await self.formation.run(
+                        character, check_current=check_current, cancellation=cancellation
+                    )
+            finally:
+                # cleanupのawaitへ入る前に監視による新しい中断を止める。
+                body_completed = True
+                cancellation.cancel()
+                monitor.cancel()
+                await asyncio.gather(monitor, return_exceptions=True)
         except LifeError as error:
             return error.result
         except TimeoutError:
             return Result.DEFERRED
-        except asyncio.CancelledError:
-            if self.closing or cancellation.is_cancelled:
+        except asyncio.CancelledError as error:
+            if error.args == (monitor_cancellation,):
+                if task is not None and task.uncancel() > initial_cancellations:
+                    # 同時に届いた外部cancelまで、監視の取消しとして消費しない。
+                    raise
                 return interruption
+            if self.closing:
+                return Result.DEFERRED
             raise
         except Exception:
             return Result.FAILED
         finally:
-            cancellation.cancel()
-            monitor.cancel()
-            await asyncio.gather(monitor, return_exceptions=True)
             if task is not None:
                 self.tasks.discard(task)
 
