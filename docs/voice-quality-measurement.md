@@ -279,3 +279,12 @@ Ollamaへの実chat送信直前に、`ollama_<estimate|generation>_http_requests
 `019e62c8133779aba52086c23da3cdbd0504d3ac`で準備1件・測定3件の実サービスpilotを実行し、[匿名集計](artifacts/livekit-request-context-pilot-2026-09-08-01.json)と[送信設定・native trace・終了照合](artifacts/livekit-request-context-pilot-2026-09-08-01-verification.json)を保存した。全4応答のgeneration送信は各1回、contextの最小・最大は8,192、出力上限は1,024で一致した。estimateの実送信は初回1回でcontext 8,192・出力1、後続3件はcacheだった。RTP観測も全件native traceと一致し、所有app削除とteardown完了を確認した。
 
 測定3件のTTFA p95は1,738.740ms、Ollama load p95は246.876ms、gapは0だった。今回の常駐観測はcontext 8,192だけだった。このpilotは送信設定の計測経路を確認するもので、先行100件のcontext変化の要求元や速度再悪化の原因を特定したとは扱わない。
+
+
+### 自動回帰検証（2026-09-08、送信設定の計測追加後）
+
+`0a773381e71c1b91da352c6d7e0e6acc752b3284`で[検証結果](artifacts/livekit-automated-regression-2026-09-08-04.json)を保存した。単体テストはBackend 3,063件成功・1件skip、Frontend 789件成功だった。skipの理由はルート側のPromptfoo CLI未導入であり、既存lockfileの`npm ci`後、Ollamaを使わない当該CLI smokeが1件成功した。設定ファイル・lockfileは変更していない。
+
+結合テストの初回はBackend 1,429件成功・1件失敗で、Frontendは未実行だった。並行したモックE2Eが同じFrontendコンテナ名を使用し、所有権の保護により起動が拒否された。E2Eの所有コンテナ削除を確認してから結合テストを単独で再実行し、Backend 1,430件・Frontend 107件が成功した。初回失敗を削除して成功扱いにはしない。
+
+モックE2E 41件、Backend 237ファイル・Svelte・E2E TypeScriptの型検査、Python lint、Frontend buildも成功した。E2Eのtest-mocked Profile、teardown完了と所有Frontendの削除を確認した。buildの大きなchunkの警告は残る。これらは自動回帰の証拠であり、TTFAの未達、VAD境界、session集計、実声dogfoodの受け入れを置き換えない。
