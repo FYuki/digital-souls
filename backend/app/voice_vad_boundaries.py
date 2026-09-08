@@ -63,7 +63,7 @@ class VadBoundaryReport(BaseModel):
     source_sha256: dict[str, str] = Field(default_factory=dict)
 
 
-def summarize(manifest: dict, events: Sequence[TraceEvent]) -> VadBoundaryReport:
+def summarize(manifest: dict[str, object], events: Sequence[TraceEvent]) -> VadBoundaryReport:
     expected, warmup = manifest.get("expected_measured"), manifest.get("expected_warmup")
     trials = manifest.get("trials")
     if (type(expected) is not int or not 1 <= expected <= 100 or type(warmup) is not int
