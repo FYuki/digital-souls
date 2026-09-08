@@ -402,3 +402,13 @@ BackendはCoreからの実際の取消記録を確認してから受理し、完
 完全再生と取消の観測数を分けて残す。旧artifactは更新せず、当時の観測範囲と欠測を保持する。
 取消確認時点までのsnapshotであり、取消後の遅着packetやsession全通信量の証明には使わない。
 stats API未提供・timeout・track未取得は引き続き理由付き欠測とし、0 bytesへ変換しない。
+
+
+[取消応答の実接続3件](artifacts/livekit-cancelled-network-pilot-2026-09-09-01.json)は測定版`579d190`。
+独立3 sessionの対象応答でnative取消とRTP snapshotを照合し、送信73,004 bytes、受信60,525 bytes、
+受信273 packets・損失0、対象応答の欠測0を確認した。所有Frontend／Backendは撤去済み。
+これは取消確認時点の通信観測の検証であり、100件の性能評価や実声dogfoodの受け入れではない。
+[自動回帰](artifacts/livekit-cancelled-network-regression-2026-09-09.json)はFrontend unit 795件、
+Backend module 1,430件、Frontend module 107件、mocked E2E 41件、型検査・lint・buildを通過した。
+Backend全unitは3,121件成功・既存の取消event列期待1件が失敗し、追加した取消一次記録へ期待を更新した後、
+関連81件が成功した。初回失敗のログhashを残す。生成契約一致とmocked環境のteardown・所有Frontend撤去も確認した。

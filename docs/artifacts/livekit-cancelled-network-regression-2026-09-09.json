@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0",
+  "measurement_revision": "579d19033176872cca1fff96027956139391fe32",
+  "scope": "cancelled_network_change_automated_regression",
+  "backend_unit_initial": {
+    "passed": 3121,
+    "failed": 1,
+    "failure": "expected_cancel_trace_event_list_required_update"
+  },
+  "backend_unit_after_test_expectation_fix": {
+    "scope": "runtime_audio_and_network_trace",
+    "passed": 81,
+    "failed": 0
+  },
+  "frontend_unit": {
+    "passed": 795,
+    "failed": 0
+  },
+  "backend_module": {
+    "passed": 1430,
+    "failed": 0
+  },
+  "frontend_module": {
+    "passed": 107,
+    "failed": 0
+  },
+  "mocked_e2e": {
+    "passed": 41,
+    "failed": 0
+  },
+  "typecheck_passed": true,
+  "lint_passed": true,
+  "build_passed": true,
+  "existing_large_chunk_warning": true,
+  "generated_contract_unchanged_after_regeneration": true,
+  "mocked_teardown_completed": true,
+  "owned_mocked_frontend_absent": true,
+  "full_issue_acceptance_verified": false,
+  "dogfood_human_acceptance_verified": false,
+  "log_sha256": {
+    "backend": "0c80ab58614af1bd44737a7412d0def440ff46dde5959eb29dadd6d806edb418",
+    "backend-02": "fd1e6367aae9945768522cf42cfb58a0fe9f2b5625ecac020d52c8da3a8a67fc",
+    "backend-03": "c2e4797496a2a891f97bc968478958a0b990bd90e49c464612798f288c305322",
+    "frontend": "78ae14419988b94523d23053a01840b7efa8394fbb4206e5a4521f112b23a0c1",
+    "check": "d9bdab99d437a1a178457531e547571376ad6e6b81206d75c9b5611e2a9c8665",
+    "check-02": "e9dc8563c3dd771d89ce1488686a86364985ff0f93322ac56b32181e72ca0684",
+    "lint": "0fd7673c529fc719dbeff1b5dd8318abbe626e9e613768e848bad7d0b2a54213",
+    "build": "1a1feccfc6d9b449005da3ddb2ba62b7b631c2423a22e02416ba5f8c22c5d402",
+    "module": "1c4f2fc3fde9f777a38547911127b3b3b933597a49eac31d13328093c01088ab",
+    "mocked": "e5ff3d212f40e48806b1f95e70b351bb19005fe6407661fd458019cd5bb20982",
+    "generated": "ba5b7281147cf0e5397df735680f8c7faec02f2ff5487f5eb28a126a3a8c6f2a"
+  },
+  "environment_report_sha256": "47f5f4852f235784d6508f74cbfccd20c0afa4c20ef766125574de40bde0ca5e"
+}
