@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import asyncio
 from concurrent.futures import Future
+from contextvars import Context
 from dataclasses import dataclass
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from datetime import datetime
 from pathlib import Path
 from threading import Lock
 from uuid import UUID
-from typing import Any
+from typing import Any, TypeVar
 from app.external_mcp.models import digest
 
 from dbos import DBOS, DBOSConfig, SetEnqueueOptions, SetWorkflowID
@@ -21,6 +22,7 @@ from .service import Service
 QUEUE = "character-life"
 SCHEDULE = "character-life-scan"
 _owner: Runtime | None = None
+T = TypeVar("T")
 
 
 def owner() -> Runtime:
@@ -45,9 +47,7 @@ def formation_step(character: str, workflow_id: str) -> str:
     previous = runtime.service.store.formation_job_result(character, workflow_id)
     if previous is not None:
         return previous
-    future = asyncio.run_coroutine_threadsafe(
-        runtime.service.form_life_states(character), runtime.loop
-    )
+    future = runtime.on_owner_loop(runtime.service.form_life_states(character))
     with runtime.future_lock:
         runtime.futures.add(future)
     try:
@@ -69,7 +69,7 @@ def formation_workflow(character: str, workflow_id: str) -> str:
 @DBOS.step(retries_allowed=False)
 def schedule_step(scheduled_at: str) -> int:
     runtime = owner()
-    future = asyncio.run_coroutine_threadsafe(runtime.scan(scheduled_at), runtime.loop)
+    future = runtime.on_owner_loop(runtime.scan(scheduled_at))
     return future.result(timeout=60)
 
 
@@ -151,10 +151,15 @@ class Runtime:
             await self.close()
             raise
 
-    def execute_on_owner_loop(self, run_id: str, attempt: int) -> str:
-        future = asyncio.run_coroutine_threadsafe(
-            self.service.execute(run_id, attempt=attempt), self.loop
+    def on_owner_loop(self, coroutine: Coroutine[Any, Any, T]) -> Future[T]:
+        # DBOS stepのContextVarをアプリ側へ運ばない。scanが投入する活動・形成は
+        # 正本の安定IDで回復する独立workflowであり、実行中stepの子ではない。
+        return Context().run(
+            asyncio.run_coroutine_threadsafe, coroutine, self.loop
         )
+
+    def execute_on_owner_loop(self, run_id: str, attempt: int) -> str:
+        future = self.on_owner_loop(self.service.execute(run_id, attempt=attempt))
         with self.future_lock:
             self.futures.add(future)
         try:

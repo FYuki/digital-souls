@@ -866,3 +866,48 @@ def test_formation_cancels_inference_before_worker_returns(tmp_path, interruptio
             # 同期workerが遅れて返した結果も正本へ反映しない。
             assert not any(s.source == "reflection" for s in service.store.states("miori"))
     asyncio.run(scenario())
+
+
+def test_real_dbos_cron_enqueues_autonomous_activity_and_formation(tmp_path):
+    from dbos import DBOS
+    from app.character_life.runtime import SCHEDULE
+
+    async def scenario():
+        async with environment(tmp_path) as (service, source, initial):
+            service.store.finish(initial, Result.NO_CHANGE, "setup")
+            runtime = Runtime(
+                service, tmp_path, Settings(True, "*/5 * * * * *"),
+                characters=lambda: ("miori",),
+            )
+            await runtime.start()
+            try:
+                paused = False
+                # scanの直接呼出しでは検出できない、DBOS step contextからの投入を検証する。
+                async with asyncio.timeout(20):
+                    while True:
+                        runs = [r for r in service.store.runs("miori") if not r.requested]
+                        if runs and not paused:
+                            # 最初の実発火を観測後、次周期の別活動とは分けて検証する。
+                            await asyncio.to_thread(DBOS.pause_schedule, SCHEDULE)
+                            paused = True
+                        jobs = service.store.formation_jobs("miori")
+                        schedules = await asyncio.to_thread(
+                            DBOS.list_workflows, name="character_life_schedule_v1"
+                        )
+                        if (
+                            runs and runs[0].result is Result.APPLIED
+                            and jobs and jobs[0]["result"] == Result.DEFERRED
+                            and schedules and all(w.status == "SUCCESS" for w in schedules)
+                        ):
+                            break
+                        await asyncio.sleep(0.05)
+                service.foreground_busy = lambda: True
+                assert runs[0].request_id.startswith("schedule:")
+                assert len(source.calls) == 1
+                assert len([
+                    s for s in service.store.states("miori") if s.kind is Kind.SHARE_CANDIDATE
+                ]) == 1
+            finally:
+                await runtime.close()
+            assert not runtime.started
+    asyncio.run(scenario())
