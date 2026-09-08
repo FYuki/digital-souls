@@ -242,3 +242,10 @@ revision `2f2a3857ea34cd10f77a849e5b15a981baf48d18`で準備5件・通常音声�
 [packet供給の照合と終了確認](artifacts/livekit-normal-pcm-supply-100-2026-09-08-01-verification.json)で、全105件のpacket数・再生sample数・gap件数が製品側の完全再生記録と一致し、診断欠測・上限超過は0だった。本測定100件のgap/underrunは0。最大の受信間隔上限46.900ms、復号待ち上限3.100ms、main配送待ち上限3.500msを記録した。所有appの削除・proxy停止・teardown完了、実験用thinking overrideなしも確認した。
 
 これはPCM observerを介した入力品質・供給診断条件であり、通常latencyの測定と分離する。先行する通常設定100件の41.333msの音切れは再現しておらず、その原因特定や修正済みを示す結果ではない。
+
+
+### 製品traceのRTP計測経路（2026-09-08）
+
+revision `0d0aeb279b80131f729db9cdf17cbef44770aa9e`の通常音声pilotで、準備1件・測定3件のブラウザRTP値が製品traceに届き、manifestと一致することを確認した。[匿名集計](artifacts/livekit-native-network-pilot-2026-09-08-01.json)と[独立照合・終了確認](artifacts/livekit-native-network-pilot-2026-09-08-01-verification.json)を保存した。測定3件の送信40,096 bytes、受信129,524 bytes、受信552 packets、損失0をtraceから再集計して一致した。欠測0、完全再生3/3、gap 0、所有app削除とteardown完了を確認した。
+
+これは完了応答のブラウザ音声RTP payloadを対象とする小規模な経路検証である。session全体の通信量、取消された途中応答の通信量、実声dogfoodの受け入れを証明するものではない。
