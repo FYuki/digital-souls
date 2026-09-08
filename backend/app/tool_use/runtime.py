@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
-import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.external_mcp import Connection, ExecutionGate, ExternalMCPClient, Registry
+from app.external_mcp import Connection, ExecutionGate, Registry
 from app.external_mcp.models import MCPFailure, encode
+from app.addon_admin.runtime import AddonRuntime
 from app.inference import InferenceRouter
 from app.privacy.contracts import PrivacyScanner
 
@@ -19,13 +18,12 @@ from .projection import Sanitizer
 from .routing import InferenceDecisionRouter
 from .service import ToolService
 
-logger = logging.getLogger(__name__)
-
 
 @dataclass(frozen=True)
 class ToolSettings:
     connections: tuple[Connection, ...] = ()
     bindings: tuple[BindingTarget, ...] = ()
+    display_names: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def load(cls, path: str | None) -> ToolSettings:
@@ -38,7 +36,7 @@ class ToolSettings:
             value = json.loads(raw)
             if (
                 not isinstance(value, dict)
-                or set(value) - {"version", "connections", "bindings"}
+                or set(value) - {"version", "connections", "bindings", "display_names"}
                 or type(value.get("version")) is not int
                 or value.get("version") != 1
                 or not isinstance(value.get("connections"), list)
@@ -50,6 +48,16 @@ class ToolSettings:
             )
             ids = {c.id for c in connections}
             if len(ids) != len(connections) or len(connections) > 32:
+                raise ValueError()
+            display_names = value.get("display_names", {})
+            if not isinstance(display_names, dict) or any(
+                key not in ids
+                or not isinstance(name, str)
+                or not name.strip()
+                or len(name) > 128
+                or any(ord(char) < 32 for char in name)
+                for key, name in display_names.items()
+            ):
                 raise ValueError()
             targets = []
             for t in value.get("bindings", []):
@@ -89,7 +97,7 @@ class ToolSettings:
                 )
             if len({t.id for t in targets}) != len(targets) or len(targets) > 256:
                 raise ValueError()
-            return cls(connections, tuple(targets))
+            return cls(connections, tuple(targets), display_names)
         except (OSError, ValueError, TypeError, KeyError, MCPFailure):
             # 設定ファイル本文・パス・認証値を起動例外へ含めない。
             raise ValueError("invalid DS_MCP_CONFIG") from None
@@ -97,7 +105,12 @@ class ToolSettings:
 
 class ToolRuntime:
     def __init__(
-        self, settings: ToolSettings, router: InferenceRouter, scanner: PrivacyScanner
+        self,
+        settings: ToolSettings,
+        router: InferenceRouter,
+        scanner: PrivacyScanner,
+        *,
+        settings_path: Path | None = None,
     ) -> None:
         self.settings = settings
         registry = Registry()
@@ -105,7 +118,9 @@ class ToolRuntime:
         private: list[str] = []
         references: list[str] = []
         for connection in settings.connections:
-            registry.register(connection)
+            registry.register(
+                connection, display_name=settings.display_names.get(connection.id)
+            )
             config = connection.manifest["connection"]
             private.extend(
                 [
@@ -129,45 +144,12 @@ class ToolRuntime:
             bindings,
             protected_roots=protected,
         )
-        self._tasks: list[asyncio.Task[None]] = []
+        self.management = AddonRuntime(self.gate, settings_path=settings_path)
+        self.management.on_disabled = self.service.connection_disabled
 
     async def start(self) -> None:
-        ready = []
-        for connection in self.settings.connections:
-            if not connection.manifest["core_policy"]["enabled"]:
-                continue
-            event = asyncio.Event()
-            ready.append(event.wait())
-            self._tasks.append(asyncio.create_task(self._connection(connection, event)))
-        if ready:
-            await asyncio.gather(*ready)
-
-    async def _connection(self, connection: Connection, ready: asyncio.Event) -> None:
-        delay = 5
-        failed = False
-        while True:
-            try:
-                client = ExternalMCPClient(connection)
-                async with client.connect(), self.gate.attach(connection.id, client):
-                    delay, failed = 5, False
-                    ready.set()
-                    while client.connected:
-                        await asyncio.sleep(1)
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                # 共有serviceを止めず、接続失敗はmetadata-onlyで扱う。
-                if not failed:
-                    logger.warning("External MCP connection unavailable")
-                failed = True
-            finally:
-                ready.set()
-            await asyncio.sleep(delay)
-            delay = min(delay * 2, 300)
+        await self.management.start()
 
     async def close(self) -> None:
         self.service.close()
-        for task in self._tasks:
-            task.cancel()
-        await asyncio.gather(*self._tasks, return_exceptions=True)
-        self._tasks.clear()
+        await self.management.close()

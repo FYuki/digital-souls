@@ -182,17 +182,19 @@ class ExecutionGate:
         source = self._sources.get(connection_id)
         if not entry.linked or source is None or not source.connected:
             raise MCPFailure("unavailable", "not_connected")
+        generation = entry.generation
         # discoveryは読取専用。実行との競合を避け、stagedだけを更新する。
         async with self._locks[connection_id].hold(False):
             for attempt in range(2):
                 try:
-                    return self.registry.stage(connection_id, await source.discover())
+                    discovery = await source.discover()
+                    if entry.generation != generation:
+                        raise MCPFailure("policy", "connection_changed")
+                    return self.registry.stage(connection_id, discovery)
                 except MCPFailure as error:
                     if attempt == 0 and error.retryable:
                         continue
-                    self.registry.availability(
-                        connection_id, "degraded" if entry.active else "unavailable"
-                    )
+                    self.registry.operation_failure(connection_id, error)
                     raise
         raise AssertionError("unreachable")
 
@@ -250,9 +252,17 @@ class ExecutionGate:
                 except MCPFailure as error:
                     if attempt == 0 and error.retryable:
                         continue
-                    self.registry.availability(connection_id, "degraded")
+                    self.registry.operation_failure(connection_id, error)
                     raise
         raise AssertionError("unreachable")
+
+    def invalidate_connection(self, connection_id: str) -> None:
+        """設定OFFで回答待ちを破棄する。送信済み処理は取り消さない。"""
+        self._pending = {
+            key: pending
+            for key, pending in self._pending.items()
+            if pending.connection_id != connection_id
+        }
 
     def end_loop(self, loop_id: str) -> None:
         self.stop(loop_id)
@@ -321,12 +331,12 @@ class ExecutionGate:
         if (
             not entry.linked
             or entry.generation != generation
-            or entry.availability == "unavailable"
+            or entry.availability not in {"available", "degraded"}
             or source is None
             or not source.connected
         ):
             raise MCPFailure("unavailable", "not_connected")
-        if not entry.connection.manifest["core_policy"]["enabled"]:
+        if not entry.desired_enabled:
             raise MCPFailure("policy", "connection_disabled")
         return source
 
@@ -452,7 +462,11 @@ class ExecutionGate:
                 result["definition_revision"] = (
                     f"{connection_id}:{operation}:{digest(resource)}"
                 )
-                effective = {"concurrency": "parallel", "retry": "read_once"}
+                effective = {
+                    "effect": "read",
+                    "concurrency": "parallel",
+                    "retry": "read_once",
+                }
             rules = connection.restrictions(operation)
             if "deny" in rules:
                 raise MCPFailure("policy", "operation_denied")
@@ -482,6 +496,12 @@ class ExecutionGate:
                             raise MCPFailure("policy", "binding_denied")
                     # 非同期validatorを待つ間のstop/relinkもdispatch前に確認する。
                     self._live(loop, connection_id, generation)
+                    entry = self.registry.entry(connection_id)
+                    if entry.availability == "degraded" and (
+                        effective["effect"] != "read"
+                        or f"{kind}:{operation}" not in entry.healthy_operations
+                    ):
+                        raise MCPFailure("policy", "partial_failure_operation_denied")
                     self._charge(loop, connection_id, operation, arguments)
                     try:
                         if kind == "tool":
@@ -510,7 +530,7 @@ class ExecutionGate:
                             result["retry_count"] = 1
                             continue
                         if error.category in {"transport", "protocol", "auth"}:
-                            self.registry.availability(connection_id, "degraded")
+                            self.registry.operation_failure(connection_id, error)
                         raise
                 # 成功後の結果統合はretry区間の外で行う。
                 result["native_payload"] = payload
