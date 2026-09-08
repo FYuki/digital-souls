@@ -1967,3 +1967,41 @@ providerが開始されなかった応答には観測済みゼロを補わない
 音声残留が解消されたとは扱わない。次に送出停止、ブラウザ停止確認の要求・返答相関、
 通常Roomの出力監視を接続する。相槌の再生継続、正式100試行、再接続p95と他の受け入れ条件、
 最終実接続検証およびPR作成は引き続き未完了である。
+
+
+### 通常LiveKit経路へ停止確認を接続
+
+通常factoryからCoreの取消portへdeliveryを渡し、送出停止とブラウザ停止確認を並行して待つ。
+`ResponseAudioTracks.stop_response()`はpumpと実行中captureの終了後にnative queueを再度消去し、
+trackをmuteする。ブラウザの監視を途中で失わないよう、確認前にはtrackをunpublishしない。
+停止要求がtrack作成より先に到着した場合も、その応答IDの後着開始を拒否する。
+
+LiveKit private契約へ`output_stop_request`／`output_stop_confirmed`を追加した。
+返答は認証済みの現在participantから受け、session・response・接続generation・要求ごとのUUIDを
+照合する。Coreが待っている制御キューへACKを戻さず、対応するfutureだけを解決する。
+切断・unavailable・cleanup時は未確認の待機を失敗として解除し、古い返答は再利用しない。
+
+Roomの通常出力へ、診断設定に依存せず最終段monitorを接続する。
+監視nodeの停止markerに加えて実出力時計の通過を確認してから、privateの返答を送る。
+一度も接続されていない応答は後着graphも抑止したうえで`never_connected`と明示する。
+既に接続されたgraphの欠測や時計欠測をこの結果へ読み替えない。
+停止済み本文は受信診断・sequence検査・ACKを維持しつつ、表示先へ追加配送しない。
+相槌判定ではこの停止を要求せず、再生継続の仕様を維持する。
+
+`output_stop_requested`、`response_audio_source_stopped`、`output_stop_confirmed`を
+サーバーの単調時計で記録し、確認がCoreの`cancel_state_lower`以前であることを契約テストで確認した。
+Core・LiveKit関連484件が通過し、計測追加後の送出・停止確認33件も通過した。
+Frontend全828件、型検査・build、BackendのRuffと変更3 source fileのmypyが通過した。
+既存単体テストの疑似workletは音声を実行しないため、終了時を出力欠測として明示し、
+停止確認成功を自動生成しない。新しい停止確認テストでは、無音区間・停止marker・時計を個別に投入し、
+時計通過前に返答しないことを検証した。
+
+初回Frontendテストでは常時追加した監視nodeの数と終了待ちが従来の前提に合わず20件が失敗し、
+テストを実経路の構成へ更新した。追加テストの必須speakerと計測時計の指定漏れも修正した。
+全体検証では以前追加したE2EのProfile変数名が規約検査に合わない1件を検出し、既存規約に合わせた。
+いずれも失敗結果を保管している。buildのchunkサイズ警告とテスト用JWT鍵長の警告は既存のもの。
+
+この段階では通常経路への実装接続と単体・結合検証までであり、実接続の音声残留ゼロは未証明。
+版を固定した割り込み試行で、停止確認・Core確定・残留計測・終了と所有環境の片付けを照合する。
+正式100試行、再接続p95、STT境界、標準context品質性能、比較baseline、最終実接続とPR作成の
+全受け入れ条件を引き続き維持する。

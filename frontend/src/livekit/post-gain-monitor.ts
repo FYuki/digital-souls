@@ -21,7 +21,7 @@ function measuredNonnegative(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
 }
 
-// 明示診断時だけ追加する。音声はgain後段をそのまま通し、停止処理から独立してdrainを観測する。
+// 通常出力の停止確認を担当する。詳細な履歴の保存は明示診断時だけ行う。
 export class PostGainAudioMonitor {
   readonly node: AudioWorkletNode
   private readonly archive = new PostGainOutputArchive()

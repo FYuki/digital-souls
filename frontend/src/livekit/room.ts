@@ -2,6 +2,7 @@ import {DecodedReceiptAudit, type DecodedReceiptSnapshot} from './decoded-receip
 import type {CoreDeliveryObservation} from './core-delivery-observation'
 import {postGainAuditSource} from './post-gain-audit'
 import {PostGainAudioMonitor, type StaleAudioObservation} from './post-gain-monitor'
+import type {OutputStopRequest} from './private-contract'
 import {StateSyncRequest} from './state-sync-request'
 import {CoreAckOutbox} from './core-ack-outbox'
 import {VoiceReconnectPolicy, type RetryObservation} from './reconnect-policy'
@@ -109,6 +110,10 @@ export type ConnectionLifecycleObservation = Readonly<{event: 'retry_scheduled' 
   atMs: number; generation: number; retry?: RetryObservation; disconnect?: DisconnectObservation}>
 
 export class LiveKitRoomClient {
+  private readonly outputConnectedResponses = new Set<string>()
+  private readonly outputStopConfirmations = new Map<string, Promise<{
+    lastPlayedAudioSequence: number; outputConfirmation: 'output_clock_passed' | 'never_connected'
+  }>>()
   private recovering = false
   private recoverySynchronized = false
   private stateSyncRequest: StateSyncRequest | null = null
@@ -387,6 +392,37 @@ export class LiveKitRoomClient {
     return lastPlayedAudioSequence
   }
 
+  private async confirmOutputStop(room: Room, request: OutputStopRequest): Promise<void> {
+    if (request.sessionId !== this.sessionId || request.generation !== this.generation || this.room !== room) return
+    let confirmation = this.outputStopConfirmations.get(request.responseId)
+    if (confirmation === undefined) {
+      const lastPlayedAudioSequence = this.stopPlayback(request.responseId)
+      const graphs = [...this.audioGraphs.values()].filter(graph => graph.responseId === request.responseId)
+      confirmation = (async () => {
+        if (graphs.length === 0) {
+          // 停止済みIDは準備中/後着trackも接続しない。既に接続したgraphの欠測は成功にしない。
+          if (this.outputConnectedResponses.has(request.responseId) || lastPlayedAudioSequence !== 0) {
+            throw new Error('output_stop_graph_missing')
+          }
+          return {lastPlayedAudioSequence, outputConfirmation: 'never_connected' as const}
+        }
+        await Promise.all(graphs.map(graph => {
+          if (graph.audit === undefined) throw new Error('output_stop_monitor_missing')
+          return graph.audit.stopAndConfirm()
+        }))
+        return {lastPlayedAudioSequence, outputConfirmation: 'output_clock_passed' as const}
+      })()
+      this.outputStopConfirmations.set(request.responseId, confirmation)
+    }
+    const result = await confirmation
+    if (this.room !== room || request.sessionId !== this.sessionId || request.generation !== this.generation) return
+    await room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify({
+      protocol_version: '1.0', type: 'output_stop_confirmed', session_id: request.sessionId,
+      response_id: request.responseId, request_id: request.requestId, generation: request.generation,
+      last_played_audio_sequence: result.lastPlayedAudioSequence, output_confirmation: result.outputConfirmation,
+    })), {reliable: true, topic: PRIVATE_TOPIC})
+  }
+
   disconnect(): void {
     this.controlProbes.reset(); this.clockProbes.reset()
     this.audioProbe?.cancel()
@@ -452,6 +488,11 @@ export class LiveKitRoomClient {
       if (topic !== PRIVATE_TOPIC) return
       try {
         const frame = decodePrivateFrame(payload)
+        if (frame.type === 'output_stop_request') {
+          if (!this.isProbePublisher(_participant)) return
+          void this.confirmOutputStop(room, frame).catch(error => this.failTransport('output_clock', error))
+          return
+        }
         if (frame.type === 'audio_probe_finished') {
           if (this.isProbePublisher(_participant)) this.audioProbe?.finish(frame.probeId, frame.generation,
             frame.trackSid, _participant.sid, frame)
@@ -776,7 +817,9 @@ export class LiveKitRoomClient {
           cancelConfirmedAtMs: Math.floor(confirmedAt),
         })
       }
-      this.receiveCoreEvent(event)
+      // 受信・sequence・ACKは記録し、停止済み本文だけを表示先へ再配送しない。
+      if (!(event.type === 'response_delta' && event.response_id !== undefined
+        && this.stoppedResponses.has(event.response_id))) this.receiveCoreEvent(event)
     }
     if (this.room === room) this.coreAckOutbox?.enqueue(event.event_id)
     if (event.type === 'session_ended') this.failTransport()
@@ -916,7 +959,8 @@ export class LiveKitRoomClient {
     await context.resume()
     await workletReady
     await this.mediaObservers.get(key)?.ready()
-    if (!this.subscriptions.has(key) || this.audioContext !== context || this.generation !== generation) return
+    if (!this.subscriptions.has(key) || this.audioContext !== context || this.generation !== generation
+      || this.stoppedResponses.has(responseId)) return
     const worklet = new AudioWorkletNode(context, 'packet-renderer', {
       numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1],
       processorOptions: {paused: this.stoppedResponses.has(responseId) || this.suppressedResponseId !== null},
@@ -991,8 +1035,8 @@ export class LiveKitRoomClient {
     playbackElement.muted = true
     playbackElement.srcObject = new MediaStream([track.mediaStreamTrack])
     document.body.append(playbackElement)
-    const audit = this.staleAudioObserver === undefined || this.sessionId === null ? undefined
-      : new PostGainAudioMonitor(context, responseId, this.sessionId, generation, this.staleAudioObserver)
+    if (this.sessionId === null) throw new Error('output graph requires session identity')
+    const audit = new PostGainAudioMonitor(context, responseId, this.sessionId, generation, this.staleAudioObserver)
     const graph = {
       responseId, audit,
       outputTracker,
@@ -1058,6 +1102,8 @@ export class LiveKitRoomClient {
     this.suppressedLastPlayedAudioSequence = 0
     this.pendingPlaybackResponseId = null
     this.coreEvents.clear()
+    this.outputConnectedResponses.clear()
+    this.outputStopConfirmations.clear()
     this.recoverySynchronized = false
     this.clearStateSync()
     this.coreAckOutbox?.clear()
@@ -1178,6 +1224,7 @@ export class LiveKitRoomClient {
 
   private connectAudioEvidence(
     graph: {
+      responseId: string
       audit?: PostGainAudioMonitor
       worklet: AudioWorkletNode
       outputGain: GainNode
@@ -1186,6 +1233,7 @@ export class LiveKitRoomClient {
     },
     context: AudioContext,
   ): void {
+    this.outputConnectedResponses.add(graph.responseId)
     graph.worklet.port.postMessage({kind: 'resume'})
     graph.worklet.connect(graph.outputGain)
     graph.outputGain.connect(graph.audit?.node ?? context.destination)

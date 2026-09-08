@@ -29,7 +29,7 @@ from app.conversation_core.adapters import (
     ScreenLineageResponseState,
 )
 from app.conversation_core.ports import DeliveryPort
-from app.conversation_core.models import Response
+from app.conversation_core.models import Response, ResponseStopResult
 from app.livekit_transport.playback_completion import PlaybackCompletionGate
 from app.livekit_transport.bootstrap import (
     BOOTSTRAP_TIMEOUT_SECONDS,
@@ -361,6 +361,7 @@ class ProductionConversationCoreSessionFactory:
             response_id_factory=lambda: str(uuid4()),
             delivery=delivery,
             completion=delivery if isinstance(delivery, _ConversationCoreDelivery) else None,
+            cancellation=delivery if isinstance(delivery, _ConversationCoreDelivery) else None,
             persistence=ConversationHistoryPersistenceAdapter(
                 history_session=history_session,  # type: ignore[arg-type]
                 completed_turn_observer=self._completed_turn_observer,
@@ -623,6 +624,26 @@ class _ConversationCoreDelivery:
                 )
             return
         await self._coordinator.send_core(self._voice_payload(event))
+
+    async def stop_response(self, response: Response) -> ResponseStopResult:
+        if not isinstance(self._audio_source, ResponseAudioTracks):
+            raise RuntimeError("output stop confirmation requires response audio tracks")
+        if self._measurement is not None:
+            self._measurement.record_response_event(
+                response_id=response.response_id, name="output_stop_requested", stage="transport",
+            )
+        stopped, prefix = await asyncio.gather(
+            self._audio_source.stop_response(response.response_id),
+            self._coordinator.request_output_stop(response.response_id),
+            return_exceptions=True,
+        )
+        if isinstance(stopped, BaseException) or type(prefix) is not int:
+            raise RuntimeError("response output stop was not confirmed")
+        if self._measurement is not None:
+            self._measurement.record_response_event(
+                response_id=response.response_id, name="output_stop_confirmed", stage="transport",
+            )
+        return ResponseStopResult(prefix)
 
     async def finish_response(self, response: Response) -> None:
         if not response.audio_segments:

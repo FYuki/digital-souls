@@ -42,6 +42,7 @@ class ResponseAudioTracks:
         self._requested_response_id: str | None = None
         self._stopped = False
         self._closed = False
+        self._stopped_response_ids: set[str] = set()
         self._lock = asyncio.Lock()
         self._observe: Callable[[str, str], None] = lambda _name, _response_id: None
 
@@ -54,6 +55,8 @@ class ResponseAudioTracks:
         if str(UUID(response_id)) != response_id:
             raise ValueError("response track requires a canonical UUID")
         async with self._lock:
+            if response_id in self._stopped_response_ids:
+                raise asyncio.CancelledError("response audio was already stopped")
             if self._closed:
                 raise RuntimeError("response audio is closed")
             if self._current is not None and self._current.response_id == response_id:
@@ -177,6 +180,22 @@ class ResponseAudioTracks:
                 self._current.pacer.stop()
                 self._current.source.clear_queue()
             self._current.track.mute()
+
+    async def stop_response(self, response_id: str) -> None:
+        # まだpublishに入っていない開始処理も、後からこの応答を出力させない。
+        self._stopped_response_ids.add(response_id)
+        self.clear(response_id)
+        async with self._lock:
+            current = self._current
+            if current is None or current.response_id != response_id:
+                return
+            if not current.source_closed:
+                await current.pacer.aclose()
+                # 取消を吸収したcapture_frameがqueueへ渡した分も、pump終了後に除去する。
+                current.source.clear_queue()
+            current.track.mute()
+            self._observe("response_audio_source_stopped", response_id)
+            # browserの確認前にunsubscribe/disposeを誘発しないようtrackを保持する。
 
     async def aclose(self) -> None:
         self._closed = True

@@ -98,7 +98,17 @@ class FakeAudioWorkletNode {
   readonly port = {onmessage: null as ((event: MessageEvent) => void) | null, postMessage: vi.fn(), close: vi.fn()}
   disconnect = vi.fn()
   connect = vi.fn((destination: unknown) => destination)
-  constructor(context: FakeAudioContext) {context.worklets.push(this)}
+  autoFinish = true
+  constructor(context: FakeAudioContext, readonly processorName: string) {
+    context.worklets.push(this)
+    this.port.postMessage.mockImplementation((message: {kind: string}) => {
+      if (processorName === 'post-gain-audit' && message.kind === 'finish' && this.autoFinish) {
+        // 実workletを動かさない既存単体テストでは、出力欠測として終了させる。
+        // 停止確認の成功は生成しない。時計・停止検証では明示的なmessageを投入する。
+        queueMicrotask(() => this.port.onmessage?.({data: {kind: 'missing', reason: 'audit_output_unavailable'}} as MessageEvent))
+      }
+    })
+  }
 }
 
 class FakeGainNode {
@@ -118,6 +128,7 @@ class FakeAudioContext {
     await workletBlockers.shift()?.promise
   }) }
   readonly worklets: FakeAudioWorkletNode[] = []
+  get renderWorklets(): FakeAudioWorkletNode[] {return this.worklets.filter(node => node.processorName !== 'post-gain-audit')}
   readonly gains: FakeGainNode[] = []
 
   constructor(readonly options?: AudioContextOptions) {
@@ -211,6 +222,91 @@ describe('LiveKit Room generation synchronization', () => {
     vi.unstubAllGlobals()
   })
 
+  test('通常出力は実出力時計の通過まで停止確認を返さず旧本文を再配送しない', async () => {
+    const sessionId = '20000000-0000-4000-8000-000000000001'
+    const responseId = '50000000-0000-4000-8000-000000000001'
+    const receive = vi.fn(), raw = vi.fn()
+    const client = new LiveKitRoomClient(() => undefined, receive)
+    client.setCoreDeliveryObserver(raw)
+    let now = 1000
+    const time = vi.spyOn(performance, 'now').mockImplementation(() => now)
+    try {
+      await client.connect('ws://test', 'token', sessionId)
+      const room = latestRoom()
+      emitCoreEvent(room, {protocol_version: '1.0', type: 'response_started', session_id: sessionId,
+        response_id: responseId, event_id: crypto.randomUUID(), source_utterance_ids: [crypto.randomUUID()],
+        speaker: {participant_id: crypto.randomUUID(), role: 'character', character_id: 'miori'}, monotonic_timestamp_ms: 1})
+      room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
+        {trackSid: 'TR_stop', trackName: `ds-response-v1:${responseId}`})
+      await vi.waitFor(() => expect(audioContexts[0]?.worklets).toHaveLength(2))
+      const context = audioContexts[0], audit = context.worklets[1]
+      expect(context.gains[0].connect).toHaveBeenCalledWith(audit)
+      const request = {protocol_version: '1.0', type: 'output_stop_request', session_id: sessionId,
+        response_id: responseId, request_id: crypto.randomUUID(), generation: 0}
+      const send = () => room.emit('dataReceived', new TextEncoder().encode(JSON.stringify(request)),
+        {identity: `character-miori-${sessionId}`, sid: 'PA_character'}, undefined, 'digital-souls.livekit-transport.v1')
+      const acks = () => room.localParticipant.publishData.mock.calls.map(([payload]) => JSON.parse(new TextDecoder().decode(payload)))
+        .filter(frame => frame.type === 'output_stop_confirmed')
+      send(); send()
+      expect(audit.port.postMessage.mock.calls.filter(([message]) => message.kind === 'stop')).toHaveLength(1)
+      audit.port.onmessage?.({data: {kind: 'output', confirmedFrame: 48000, intervals: [
+        {startFrame: 48000, endFrame: 48128, nonzeroSamples: 0, firstNonzeroFrame: null, lastNonzeroFrame: null},
+      ]}} as MessageEvent)
+      audit.port.onmessage?.({data: {kind: 'stopped', endFrame: 48128}} as MessageEvent)
+      await Promise.resolve()
+      expect(acks()).toEqual([])
+      now = 1010
+      vi.spyOn(context, 'getOutputTimestamp').mockReturnValue({contextTime: 1.009, performanceTime: 1009})
+      await vi.waitFor(() => expect(acks()).toHaveLength(2))
+      expect(acks()[0]).toMatchObject({...request, type: 'output_stop_confirmed', last_played_audio_sequence: 0,
+        output_confirmation: 'output_clock_passed'})
+      emitCoreEvent(room, {protocol_version: '1.0', type: 'response_delta', session_id: sessionId,
+        response_id: responseId, event_id: crypto.randomUUID(), text_sequence: 1,
+        text: '後', text_range: {start: 0, end: 1}, monotonic_timestamp_ms: 2})
+      expect(raw.mock.calls.some(([row]) => row.type === 'response_delta')).toBe(true)
+      expect(receive.mock.calls.some(([event]) => event.type === 'response_delta')).toBe(false)
+    } finally {client.disconnect(); time.mockRestore()}
+  })
+
+  test('準備中に停止した未接続graphは後から接続せず、停止確認を欠測と混同しない', async () => {
+    const sessionId = '20000000-0000-4000-8000-000000000001'
+    const responseId = '50000000-0000-4000-8000-000000000001'
+    const client = new LiveKitRoomClient(() => undefined)
+    await client.connect('ws://test', 'token', sessionId)
+    const room = latestRoom(), blocker = deferred()
+    workletBlockers.push(blocker)
+    room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
+      {trackSid: 'TR_pending', trackName: `ds-response-v1:${responseId}`})
+    await vi.waitFor(() => expect(audioContexts).toHaveLength(1))
+    room.emit('dataReceived', new TextEncoder().encode(JSON.stringify({protocol_version: '1.0',
+      type: 'output_stop_request', session_id: sessionId, response_id: responseId,
+      request_id: crypto.randomUUID(), generation: 0})), {identity: `character-miori-${sessionId}`, sid: 'PA_character'},
+      undefined, 'digital-souls.livekit-transport.v1')
+    await vi.waitFor(() => expect(room.localParticipant.publishData.mock.calls
+      .map(([payload]) => JSON.parse(new TextDecoder().decode(payload)))
+      .filter(frame => frame.type === 'output_stop_confirmed')).toMatchObject([{output_confirmation: 'never_connected'}]))
+    blocker.resolve()
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(audioContexts[0].worklets).toHaveLength(0)
+    client.disconnect()
+  })
+
+  test.each(['publisher', 'session', 'generation'])('停止要求の相関違いは出力へ適用しない: %s', async mismatch => {
+    const sessionId = '20000000-0000-4000-8000-000000000001'
+    const client = new LiveKitRoomClient(() => undefined)
+    await client.connect('ws://test', 'token', sessionId)
+    const room = latestRoom(), stop = vi.spyOn(client, 'stopPlayback')
+    room.emit('dataReceived', new TextEncoder().encode(JSON.stringify({protocol_version: '1.0',
+      type: 'output_stop_request', session_id: mismatch === 'session' ? crypto.randomUUID() : sessionId,
+      response_id: crypto.randomUUID(), request_id: crypto.randomUUID(), generation: mismatch === 'generation' ? 1 : 0})),
+      {identity: mismatch === 'publisher' ? 'other' : `character-miori-${sessionId}`, sid: 'PA_character'},
+      undefined, 'digital-souls.livekit-transport.v1')
+    await Promise.resolve()
+    expect(stop).not.toHaveBeenCalled()
+    expect(room.localParticipant.publishData).not.toHaveBeenCalled()
+    client.disconnect()
+  })
+
   test('明示診断はgain後段を通り、cancel時に監視を切断せずcontext closeもdrainを待つ', async () => {
     const rows: import('./livekit/post-gain-monitor').StaleAudioObservation[] = []
     const receipts: import('./livekit/decoded-receipt-audit').DecodedReceiptSnapshot[] = []
@@ -230,6 +326,7 @@ describe('LiveKit Room generation synchronization', () => {
       mediaMocks.observers[0].playback!.packet({pcm: new Float32Array(128)})
       await vi.waitFor(() => expect(audioContexts[0]?.worklets).toHaveLength(2))
       const context = audioContexts[0], [renderer, audit] = context.worklets
+      audit.autoFinish = false
       expect(context.options).toEqual({sampleRate: 48000, latencyHint: 0})
       expect(context.gains[0].connect).toHaveBeenCalledWith(audit)
       expect(audit.connect).toHaveBeenCalledWith(context.destination)
@@ -424,7 +521,7 @@ describe('LiveKit Room generation synchronization', () => {
     firstClose.resolve()
     await vi.waitFor(() => {
       expect(audioContexts).toHaveLength(2)
-      expect(audioContexts.reduce((total, context) => total + context.worklets.length, 0)).toBe(2)
+      expect(audioContexts.reduce((total, context) => total + context.renderWorklets.length, 0)).toBe(2)
       expect(observations.at(-1)).toMatchObject({ activeAudioGraphs: 1 })
     })
     client.disconnect()
@@ -442,21 +539,21 @@ describe('LiveKit Room generation synchronization', () => {
     room.emit('trackSubscribed', firstTrack, publication, {})
     await vi.waitFor(() => {
       expect(audioContexts).toHaveLength(1)
-      expect(audioContexts[0].worklets).toHaveLength(1)
+      expect(audioContexts[0].renderWorklets).toHaveLength(1)
     })
 
     room.emit('trackSubscribed', replacementTrack, publication, {})
-    expect(audioContexts[0].worklets).toHaveLength(1)
+    expect(audioContexts[0].renderWorklets).toHaveLength(1)
     expect(observations.at(-1)).toMatchObject({
       duplicateTrackFrames: 1,
     })
 
     room.emit('trackUnsubscribed', firstTrack, publication, {})
-    expect(audioContexts[0].worklets[0].disconnect).toHaveBeenCalledTimes(1)
+    expect(audioContexts[0].renderWorklets[0].disconnect).toHaveBeenCalledTimes(1)
     room.emit('trackSubscribed', replacementTrack, publication, {})
 
     await vi.waitFor(() => {
-      expect(audioContexts[0].worklets).toHaveLength(2)
+      expect(audioContexts[0].renderWorklets).toHaveLength(2)
       expect(observations.at(-1)).toMatchObject({ activeAudioGraphs: 1 })
     })
     client.disconnect()
@@ -492,7 +589,7 @@ describe('LiveKit Room generation synchronization', () => {
 
     await vi.waitFor(() => {
       expect(audioContexts).toHaveLength(2)
-      expect(audioContexts[1].worklets).toHaveLength(1)
+      expect(audioContexts[1].renderWorklets).toHaveLength(1)
       expect(observations.at(-1)).toMatchObject({
         transport: 'available', audio: 'available', activeAudioGraphs: 1,
       })
@@ -517,14 +614,14 @@ describe('LiveKit Room generation synchronization', () => {
     )
     await vi.waitFor(() => {
       expect(audioContexts).toHaveLength(1)
-      expect(audioContexts[0].worklets).toHaveLength(1)
+      expect(audioContexts[0].renderWorklets).toHaveLength(1)
     })
     expect(audioContexts[0].gains[0].gain.value).toBe(1)
     expect(document.querySelectorAll('audio')).toHaveLength(1)
 
     expect(client.stopPlayback('50000000-0000-4000-8000-000000000001', 100)).toBe(0)
     expect(client.stopPlayback('50000000-0000-4000-8000-000000000001', 101)).toBe(0)
-    expect(audioContexts[0].worklets[0].disconnect).toHaveBeenCalledTimes(1)
+    expect(audioContexts[0].renderWorklets[0].disconnect).toHaveBeenCalledTimes(1)
     expect(document.querySelectorAll('audio')).toHaveLength(1)
     expect(document.querySelector('audio')?.muted).toBe(true)
     expect(observations.at(-1)).toMatchObject({
@@ -575,12 +672,12 @@ describe('LiveKit Room generation synchronization', () => {
       trackSid: 'TR_next', trackName: 'ds-response-v1:50000000-0000-4000-8000-000000000002',
     }, {})
     await vi.waitFor(() => {
-      expect(audioContexts[0].worklets).toHaveLength(2)
+      expect(audioContexts[0].renderWorklets).toHaveLength(2)
       expect(observations.at(-1)).toMatchObject({ activeAudioGraphs: 1 })
     })
     // 旧trackは残っていても再開しない。新しい応答のtrackだけを接続する。
-    expect(audioContexts[0].worklets[0].connect).toHaveBeenCalledTimes(1)
-    expect(audioContexts[0].worklets[1].connect).toHaveBeenCalledTimes(1)
+    expect(audioContexts[0].renderWorklets[0].connect).toHaveBeenCalledTimes(1)
+    expect(audioContexts[0].renderWorklets[1].connect).toHaveBeenCalledTimes(1)
     client.disconnect()
   })
 
@@ -662,8 +759,8 @@ test('復号PCMは一つのworkletへ渡し、停止後の旧PCMを再投入し�
   const responseId = '22222222-2222-2222-2222-222222222222'
   room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
     {trackSid: 'TR_packet', trackName: `ds-response-v1:${responseId}`})
-  await vi.waitFor(() => expect(audioContexts.at(-1)?.worklets).toHaveLength(1))
-  const worklet = audioContexts.at(-1)!.worklets[0]
+  await vi.waitFor(() => expect(audioContexts.at(-1)?.renderWorklets).toHaveLength(1))
+  const worklet = audioContexts.at(-1)!.renderWorklets[0]
   const observer = mediaMocks.observers.at(-1)!
   const pcm = new Float32Array(960).fill(.25)
   observer.playback!.packet({packetIndex: 0, rtpTimestamp: 99, receivedAtMs: 100, decodedAtMs: 101, pcm})
@@ -688,9 +785,9 @@ test.each(['valid', 'mismatched_decode', 'stopped', 'unsubscribed'])('実出力�
   const track = {kind: 'audio', mediaStreamTrack: {}}
   const publication = {trackSid: 'TR_correlated', trackName: `ds-response-v1:${responseId}`}
   room.emit('trackSubscribed', track, publication)
-  await vi.waitFor(() => expect(audioContexts.at(-1)?.worklets).toHaveLength(1))
+  await vi.waitFor(() => expect(audioContexts.at(-1)?.renderWorklets).toHaveLength(1))
   const observer = mediaMocks.observers.at(-1)!
-  const worklet = audioContexts.at(-1)!.worklets[0]
+  const worklet = audioContexts.at(-1)!.renderWorklets[0]
   const measurements = () => room.localParticipant.publishData.mock.calls
     .map(([payload]) => JSON.parse(new TextDecoder().decode(payload)))
     .filter(row => ['client_track_received', 'client_encoded_received', 'client_audio_decoded'].includes(row.measurement))
@@ -738,8 +835,8 @@ test.each(['gap', 'overlap', 'ragged_gap', 'gap_during_resume'])('RTP不連続�
   const room = latestRoom(), disconnected = vi.spyOn(room, 'disconnect')
   room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
     {trackSid: 'TR_loss', trackName: `ds-response-v1:${responseId}`})
-  await vi.waitFor(() => expect(audioContexts.at(-1)?.worklets).toHaveLength(1))
-  const observer = mediaMocks.observers.at(-1)!, worklet = audioContexts.at(-1)!.worklets[0]
+  await vi.waitFor(() => expect(audioContexts.at(-1)?.renderWorklets).toHaveLength(1))
+  const observer = mediaMocks.observers.at(-1)!, worklet = audioContexts.at(-1)!.renderWorklets[0]
   const frame = {receivedAtMs: 100, decodedAtMs: 101, pcm: new Float32Array(960).fill(.25)}
   try {
     observer.playback!.packet({...frame, packetIndex: 0, rtpTimestamp: 99})
@@ -780,7 +877,7 @@ test.each(['gap', 'overlap', 'ragged_gap', 'gap_during_resume'])('RTP不連続�
     emitPrivateFrame(room, authoritativeState(1, [{type: 'response_interrupted', session_id: sessionId,
       response_id: responseId, confirmed_audio_sequence: 0}]))
     await vi.waitFor(() => expect(audioContexts[0].close).toHaveBeenCalled())
-    expect(audioContexts.flatMap(context => context.worklets)).toHaveLength(1)
+    expect(audioContexts.flatMap(context => context.renderWorklets)).toHaveLength(1)
     const probe = client.probeControl()
     const sent = messages().find(row => row.type === 'control_probe')
     emitPrivateFrame(room, new TextEncoder().encode(JSON.stringify({...sent, type: 'control_probe_ack'})))
@@ -814,7 +911,7 @@ test('診断音は全packetの実出力時計を待ち、会話の再生・Core�
     expect(audioContexts).toHaveLength(0)
     room.emit('trackSubscribed', track, publication, probePublisher)
     await vi.advanceTimersByTimeAsync(1)
-    const context = audioContexts[0], worklet = context.worklets[0], observer = mediaMocks.observers[0]
+    const context = audioContexts[0], worklet = context.renderWorklets[0], observer = mediaMocks.observers[0]
     expect(probeMessages(room).filter(row => row.type === 'audio_probe_ready')).toHaveLength(1)
     let passed = false, resolved = false
     void pending.then(() => {resolved = true})

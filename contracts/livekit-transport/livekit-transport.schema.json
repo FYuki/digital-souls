@@ -15,9 +15,87 @@
     { "$ref": "#/$defs/AudioProbeRequest" },
     { "$ref": "#/$defs/AudioProbeReady" },
     { "$ref": "#/$defs/AudioProbeComplete" },
-    { "$ref": "#/$defs/AudioProbeFinished" }
+    { "$ref": "#/$defs/AudioProbeFinished" },
+    { "$ref": "#/$defs/OutputStopRequest" },
+    { "$ref": "#/$defs/OutputStopConfirmed" }
   ],
   "$defs": {
+    "OutputStopConfirmed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "session_id",
+        "response_id",
+        "request_id",
+        "generation",
+        "last_played_audio_sequence",
+        "output_confirmation"
+      ],
+      "properties": {
+        "protocol_version": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "type": {
+          "const": "output_stop_confirmed"
+        },
+        "session_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "response_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "request_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "generation": {
+          "$ref": "#/$defs/Generation"
+        },
+        "last_played_audio_sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "output_confirmation": {
+          "enum": [
+            "output_clock_passed",
+            "never_connected"
+          ]
+        }
+      }
+    },
+    "OutputStopRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "type",
+        "session_id",
+        "response_id",
+        "request_id",
+        "generation"
+      ],
+      "properties": {
+        "protocol_version": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "type": {
+          "const": "output_stop_request"
+        },
+        "session_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "response_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "request_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "generation": {
+          "$ref": "#/$defs/Generation"
+        }
+      }
+    },
     "ProtocolVersion": { "type": "string", "const": "1.0" },
     "Identifier": { "type": "string", "format": "uuid" },
     "Generation": { "type": "integer", "minimum": 0 },

@@ -63,6 +63,7 @@ class ProductionSessionCoordinator:
         monotonic_ms: Callable[[], int] = lambda: int(time.monotonic() * 1000),
         monotonic_us: Callable[[], int] = lambda: time.monotonic_ns() // 1000,
     ) -> None:
+        self._output_stop_requests: dict[str, tuple[str, int, asyncio.Future[int]]] = {}
         self.session_id = session_id
         self.user_identity = user_identity
         self._dependencies = dependencies
@@ -250,6 +251,9 @@ class ProductionSessionCoordinator:
                     else:
                         self._observe_sync("probe_unavailable")
                     return
+                if frame["type"] == "output_stop_confirmed":
+                    self._confirm_output_stop(frame)
+                    return
                 if frame["type"] == "response_track_ready":
                     self._dependencies.response_track_ready(str(frame["response_id"]), str(frame["track_sid"]))
                 elif frame["type"] == "ack":
@@ -282,6 +286,49 @@ class ProductionSessionCoordinator:
         task = asyncio.create_task(self._retry(event_id, payload))
         self._retry_tasks[("character_to_user", event_id)] = task
         await self._dependencies.publish_data(payload, APPLICATION_TOPIC)
+
+    async def request_output_stop(self, response_id: str) -> int:
+        if self._lifecycle.phase != "available":
+            raise RuntimeError("output stop requires an available session")
+        request_id, generation = str(uuid4()), self.generation
+        confirmed: asyncio.Future[int] = asyncio.get_running_loop().create_future()
+        self._output_stop_requests[request_id] = (response_id, generation, confirmed)
+        try:
+            await self._publish_private({
+                "protocol_version": "1.0", "type": "output_stop_request",
+                "session_id": self.session_id, "response_id": response_id,
+                "request_id": request_id, "generation": generation,
+            })
+            return await confirmed
+        finally:
+            self._output_stop_requests.pop(request_id, None)
+            if not confirmed.done():
+                confirmed.cancel()
+            elif not confirmed.cancelled():
+                confirmed.exception()
+
+    def _confirm_output_stop(self, frame: dict[str, object]) -> None:
+        pending = self._output_stop_requests.get(str(frame["request_id"]))
+        if pending is None or self._lifecycle.phase != "available":
+            return
+        response_id, generation, confirmed = pending
+        prefix = frame["last_played_audio_sequence"]
+        if (
+            confirmed.done() or frame["session_id"] != self.session_id
+            or frame["response_id"] != response_id or frame["generation"] != generation
+            or type(prefix) is not int or prefix < 0
+            or frame["output_confirmation"] not in {"output_clock_passed", "never_connected"}
+            or (frame["output_confirmation"] == "never_connected" and prefix != 0)
+        ):
+            return
+        self._lifecycle.confirm_playback(response_id=response_id, confirmed_audio_sequence=prefix)
+        # Coreが取消処理を待つ制御キューへ戻さず、この要求のfutureだけを解決する。
+        confirmed.set_result(prefix)
+
+    def _abort_output_stops(self) -> None:
+        for _, _, future in self._output_stop_requests.values():
+            if not future.done():
+                future.set_exception(RuntimeError("output stop connection lost"))
 
     async def send_screen(self, payload: bytes) -> None:
         """画面制御metadataを音声Core eventとは別topicで配送する。"""
@@ -348,6 +395,7 @@ class ProductionSessionCoordinator:
         if self._ended:
             return
         self._ended = True
+        self._abort_output_stops()
         self._cancel_deadline()
         self._cancel_retry_tasks()
         self._outboxes.clear_session(self.session_id)
@@ -430,6 +478,8 @@ class ProductionSessionCoordinator:
         await self._dependencies.publish_data(payload, PRIVATE_TOPIC)
 
     def _notify_core(self, event_type: str) -> None:
+        if event_type in {"session_disconnected", "session_ended"}:
+            self._abort_output_stops()
         payload = json.dumps(
             {
                 "protocol_version": "1.0",
