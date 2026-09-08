@@ -2272,3 +2272,28 @@ TCP/UDP経路、ICE復旧、ブラウザ側の再送、SFU受信処理のどれ�
 モックE2Eは破棄可能なtest環境で実行し、終了報告と所有Frontendコンテナの実削除を確認した。
 モックの結果を外部サービス実接続の代用にはしない。
 再接続の合否は最大値ではなく、独立100件のp95・10秒以内の率・重複・後続会話から再評価する。
+
+
+## 通常の復旧確認・マイク保持後の正式再接続100試行（F）
+
+測定版 `0be61dd1933a3088456c346e9b92ab7ff29b41b4` で独立した100 session／conversationへ各2秒のnetwork障害を注入した。
+[匿名集計](artifacts/livekit-reconnect-controlled-f.json)は、control／audio双方の復旧がp50 2446.28ms、p95 2683.88ms、
+10秒以内の復旧が100/100、後続会話の成功が100/100だった。
+既定の再接続cohort判定は**達成**。個々の3秒超過も取り除かず、100件の生時計・制御probe・実出力から独立に再集計した。
+重複出力区間は0件で、測定対象は同一response／SSRC／RTP sample区間の重なりである。
+
+[終了検証](artifacts/livekit-reconnect-controlled-f-verification.json)では100件の終了、200個の所有Frontend／Backendコンテナの実削除、
+専用SFUとnetworkの不在、100件の診断reader閉鎖、同一native SDK buildを確認した。
+全件の測定版と再集計schemaを照合し、保存済み集計との一致を確認した。
+
+補助的なimage observerは001の出力先制約で実行中digestを取り逃した。002〜100の99件は実行中image digestを確認し、
+001はDockerのcontainer作成eventから当該測定版のimage参照を照合した。001の実行中digestは未取得のまま明記する。
+このため外側wrapperの100件digest assertionは失敗するが、公式runnerの結果・100件の測定・補助observerの欠測は区別して保存した。
+全100件のnative SDK library照合には欠測がない。
+
+managed環境は各回でcompose buildを実行する。観測したimage digestはFrontend／Backendそれぞれ
+99／99種類だった。
+同じ測定版のimage参照を照合したが、各回のimage filesystemを相互比較した証拠はなく、digest同一とは扱わない。
+
+今回も測定時の `think:false`・RAG無効という条件を維持した。SCTP詳細loggingの診断用overrideは使っていない。
+この再接続結果だけで通常の人格・履歴・記憶を含む応答品質や、残る#150の条件、PR準備の完了とは扱わない。
