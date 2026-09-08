@@ -161,3 +161,13 @@ def test_local_blocks_allow_interior_shift_without_claiming_continuity(signal):
     result = match_bounded_pcm_edges(pcm(signal), pcm(captured), speech_start_sample=3200, speech_end_sample=16000)
     assert result['status'] == 'matched'
     assert not result['interior_continuity_verified']
+
+
+def test_witness_filter_and_search_support_remain_strictly_inside_100ms(signal):
+    result = match_bounded_pcm_edges(pcm(signal), pcm(signal), speech_start_sample=3200, speech_end_sample=16000)
+    assert result['status'] == 'matched'
+    support = (result['reference_edge_inset_samples'] + result['block_samples']
+               + result['search_radius_samples'] + result['filter_taps'] // 2)
+    assert support == 1584 < result['edge_tolerance_samples'] == 1600
+    assert result['filter_cutoff_hz'] == 3000
+    assert [e['blocks'][0]['reference_start_sample'] for e in result['edges']] == [3200, 14800]

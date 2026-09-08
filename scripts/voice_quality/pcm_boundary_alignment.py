@@ -116,11 +116,11 @@ def match_pcm_edges(reference_pcm: bytes, captured_pcm: bytes, *, speech_start_s
 
 
 BOUNDED_EDGE_METHOD = 'bandlimited_100ms_speech_edge_witness_v3'
-EDGE_FILTER_CUTOFF_HZ = 4000
+EDGE_FILTER_CUTOFF_HZ = 3000
 EDGE_FILTER_TAPS = 129
-EDGE_BLOCK_SAMPLES = 800
+EDGE_BLOCK_SAMPLES = 1200
 EDGE_SEARCH_RADIUS = 320
-EDGE_INSET_SAMPLES = 400
+EDGE_INSET_SAMPLES = 0
 EDGE_TOLERANCE_SAMPLES = 1600
 
 
@@ -135,7 +135,7 @@ def _edge_band(samples: np.ndarray) -> np.ndarray:
 
 def match_bounded_pcm_edges(reference_pcm: bytes, captured_pcm: bytes, *, speech_start_sample: int,
                             speech_end_sample: int) -> dict:
-    """端部から25–75msの特徴波形を照合する。100ms超の欠けの検出が対象。"""
+    """端部75msの特徴波形を照合する。100ms超の欠けの検出が対象。"""
     reference, captured = _samples(reference_pcm), _samples(captured_pcm)
     if (type(speech_start_sample) is not int or type(speech_end_sample) is not int
             or not 0 <= speech_start_sample < speech_end_sample <= len(reference)):
