@@ -190,3 +190,13 @@ SDK例外の修正後、通常音声E2E全5件は通ったが、終了・切断�
 修正後の実障害回帰（`voice-regression-reconnect-20260908-02`、revision `3c0b21f`）では、controlと音声が2296.37ms以内に復旧し、重複0・欠測0、同一sessionでの次応答の完全再生を確認した。[独立再集計](artifacts/livekit-reconnect-regression-2026-09-08-02.json)はnative SDK・時計・packet出力・次応答を再検証している。単一sessionなので正式100試行の合否はfalseのままにした。[終了照合](artifacts/livekit-reconnect-regression-2026-09-08-02-verification.json)で所有app・専用SFU・bridge・時計runnerの終了を確認した。通常音声E2E5件と合わせた回帰検証の成功であり、#150全体の受け入れとは区別する。
 
 通常設定の再pilot（`voice-default-latency-pilot-20260908-02`、revision `eb80708`）では、準備1件・独立測定3件が会話・完全再生・終了まで成功し、TTFA p50は1766.50ms、p95は1771.36msだった。Ollama load p95は257.90msで、観測した対象contextは8192のみだった。[匿名集計](artifacts/livekit-voice-default-latency-pilot-2026-09-08-02.json)と[設定・終了照合](artifacts/livekit-voice-default-latency-pilot-2026-09-08-02-verification.json)で、実験用上書きなしの通常経路と要求数counterを確認した。小規模測定ではTTFA目標内だが、準備5件＋独立100件による正式確認は別途必要である。前回の11.3秒という未達結果は保持している。
+
+### 通常音声設定の独立100件（2026-09-08）
+
+revision `95afacecf8e3cc55da85f0c53550479486bb8166`で、実験用thinking overrideを使わず、準備5件・独立session/conversationの通常応答100件を測定した。[匿名集計](artifacts/livekit-voice-default-controlled-100-2026-09-08.json)と[相関・終了検証](artifacts/livekit-voice-default-controlled-100-2026-09-08-verification.json)を保存した。全105件で通常音声のlatency policy、transcript・初期状態、6件の製品側再生観測とmanifest、全sample再生、session終了を照合した。所有appコンテナの削除とteardown完了も確認した。
+
+本測定100件のTTFAはp50 1,775.900ms、p95 1,845.425ms、発話確定はp95 299.950msだった。絶対目標は両方達成し、TTFA中央値1,000msの改善目安は未達だった。処理失敗0件、追加操作0回。Ollama contextは8,192だけを観測した。
+
+ただし、1件で再生gapが1回、1,984 samples（41.333ms）発生した。全sampleは再生されたが、制御測定のunderrun 0件は未達である。gap/underrunのp95は0でも、1件の発生を合格へ変換しない。[baseline比較](artifacts/livekit-voice-default-normal-latency-2026-09-08.json)では比較可能な8指標が許容範囲内、観測区間が異なる3指標は比較対象外、VAD冒頭・末尾の2指標はこのrunでは欠測として全体判定をfalseにした。実声dogfoodと#150全体の完了は示さない。
+
+run中のmanifestにはmeasurement revisionがあったが、最終保存時にその項目が失われた。このrunのrevision根拠はrunner事前検査と、測定中に変更していないcheckoutの観測であり、検証JSONに根拠と最終manifestの不足を明記した。
