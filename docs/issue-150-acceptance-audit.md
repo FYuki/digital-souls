@@ -6,22 +6,22 @@
 
 | 条件 | 保存証拠と現在の評価 | 残る確認 |
 |---|---|---|
-| TTFA p95 ≤ 2,000ms、p50 ≤ 1,000msは改善目安 | [通常100件](artifacts/livekit-voice-default-controlled-100-2026-09-08-verification.json): p95 1,845.425msの達成runあり。ただし[最新100件](artifacts/livekit-normal-supply-100-2026-09-08-01-verification.json)はp95 11,995.305msで9,995.305ms超過、p50 1,768.650msで目安未達 | 想定外contextとprovider load増大を切り分け、再現性を確認 |
-| utterance確定 p95 ≤ 800ms | 同じ通常100件: 299.950ms | 最終変更との照合 |
+| TTFA p95 ≤ 2,000ms、p50 ≤ 1,000msは改善目安 | [最新通常100件](artifacts/livekit-normal-isolated-100-2026-09-08-01-verification.json): p95 1,787.520msで上限より212.480ms短く達成。p50 1,736.350msは目安より736.350ms長い。前回11,995.305msの未達runも保持 | 共有Ollamaのcontext切り替えは今回0回。専有条件や将来の安定性を保証した結果ではない |
+| utterance確定 p95 ≤ 800ms | 同じ最新通常100件: 289.539ms | 配備後の実声条件とは区別 |
 | local playback stop p95 ≤ 3,000ms | [take-turn 100件](artifacts/livekit-take-turn-output-stop-proof-100.json): 1,936.250ms | 最終変更との照合 |
 | turn decision p95 ≤ 3,000ms | 同じtake-turn: 1,935.300ms | 最終変更との照合 |
 | decision後cancel p95 ≤ 200ms | 同じtake-turn: 30.266ms | 最終変更との照合 |
 | speech startからcancel p95 ≤ 3,500ms | 同じtake-turn: 1,968.250ms | 最終変更との照合 |
-| 比較可能なlatencyはbaseline + max(10%, 50ms)以内 | [最新100件の再集計](artifacts/livekit-normal-vad-reanalysis-2026-09-08-01-latency.json): 比較可能8指標達成、観測点が異なる5指標は監査付き比較対象外。VAD2指標の欠測は解消。TTFA絶対上限の未達で全体判定false | 速度を安定化し、最終測定版を照合 |
-| 発話冒頭・早期終了・文中無音の誤分割が各1%以下 | [文中休止100件](artifacts/livekit-vad-pcm-multi-seed-v4-pause-100-2026-09-08.json): 各0件。[通常100件のnative検出境界](artifacts/livekit-normal-vad-reanalysis-2026-09-08-01-boundaries.json)も開始遅延・早期終了0/100、欠測0。[実STT入力端部](artifacts/livekit-pcm-multi-seed-v4-pause-100-2026-09-08.json)100/100 | ブラウザ検出境界と実STT入力端部を混同しない。再集計は新しい実測ではない |
+| 比較可能なlatencyはbaseline + max(10%, 50ms)以内 | [最新100件](artifacts/livekit-normal-isolated-100-2026-09-08-01-latency.json): 比較可能8指標達成、観測点が異なる5指標は監査付き比較対象外。TTFA・発話確定の絶対上限も達成、通常latency比較判定true | 全Issueの合格とは区別。旧版の未達結果を保持 |
+| 発話冒頭・早期終了・文中無音の誤分割が各1%以下 | [文中休止100件](artifacts/livekit-vad-pcm-multi-seed-v4-pause-100-2026-09-08.json): 各0件。[最新通常100件のnative検出境界](artifacts/livekit-normal-isolated-100-2026-09-08-01-boundaries.json)も開始遅延・早期終了0/100、欠測0。[実STT入力端部](artifacts/livekit-pcm-multi-seed-v4-pause-100-2026-09-08.json)100/100 | ブラウザ検出境界と実STT入力端部を混同しない。通常runの境界を文中休止の誤分割証拠に置き換えない |
 | 相槌の誤cancel率 ≤ 2%、100件以上 | [相槌100件](artifacts/livekit-backchannel-100-2026-09-08-held.json): 誤cancel 0/100。意図不確定20件とharness失敗20件を保持 | 意図不確定を相槌分類成功と扱わず、誤cancelの観測範囲と最終変更を照合 |
 | take-turn見逃し率 ≤ 1%、100件以上 | take-turn 100件: 見逃し0/100、注入・決定・取消を全件確認 | 最終変更との照合 |
 | reconnect 10秒以内 ≥ 99%、p95 ≤ 3,000ms、重複0 | [実障害100件](artifacts/livekit-reconnect-controlled-f.json): 100/100、2,683.880ms、重複0、次応答完全再生100/100 | [終了検証](artifacts/livekit-reconnect-controlled-f-verification.json)のharness成功96/100と独立再集計を区別。最終変更との照合 |
-| 制御測定のunderrun 0件 | 先行通常100件で1件・41.333ms、未達。最新供給診断100件は0件だがTTFA未達。[PCM中継条件100件](artifacts/livekit-normal-pcm-supply-100-2026-09-08-01-verification.json)は0件 | 通常経路で原因調査。別条件で再発しないことだけでは修正済みにしない |
+| 制御測定のunderrun 0件 | 先行通常100件で1件・41.333ms、未達。[最新通常100件](artifacts/livekit-normal-isolated-100-2026-09-08-01-verification.json)は0件でTTFAも達成。[PCM中継条件100件](artifacts/livekit-normal-pcm-supply-100-2026-09-08-01-verification.json)は0件 | 通常経路で原因調査。別条件で再発しないことだけでは修正済みにしない |
 | dogfood gap合計 ≤ 0.1%、最大連続gap ≤ 200ms | 製品側の完全再生観測とgap集計を実装。実声dogfoodの証拠なし | 所定の配備後の実声測定 |
 | stale presented 0件 | [旧応答提示100件](artifacts/livekit-stale-output-stop-proof-100.json): 音声・画面text・履歴textの提示0。受信は4件で最大4 packetsの可能性を保持 | 受信0と読み替えず、最終変更との照合 |
-| 通常100件の処理失敗0 | 通常100件で0/100 | 最終runとの照合 |
-| dogfood処理失敗率 ≤ 1%、予期しないsession終了0 | 無応答を含むnative session journalと匿名集計を実装。実声dogfoodの証拠なし | 実障害時のsession記録と実声受け入れ |
+| 通常100件の処理失敗0 | 最新通常100件で0/100、105件のnative再生・RTP・session終了を照合、所有FE/BE撤去済み | 実声dogfoodとは別条件 |
+| dogfood処理失敗率 ≤ 1%、予期しないsession終了0 | 無応答を含むnative session journalと匿名集計を実装。最新通常100件の終了記録は欠測0・予期しない終了0・追加操作0。実声dogfoodの証拠なし | 実障害時のsession記録と実声受け入れ |
 | session開始後3往復以上の追加操作0 | [製品session計測の実接続3往復](artifacts/livekit-native-session-three-turn-2026-09-08-01-verification.json): 1 session・完全再生3応答・追加操作0・正常終了1・欠測0。ブラウザ操作観測とnative journalを照合 | 配備後の実声dogfood確認 |
 | #17必須指標に未実装由来のmissingを残さない | 製品RTP経路、再生、割り込み、手動resource入力を実装。欠測理由と分母は保持 | 取消途中の通信範囲、実障害時のsession記録、実声dogfoodを確認。全指標完了は未証明 |
 
@@ -35,7 +35,7 @@
 
 ## 次の作業
 
-1. 最新100件の速度再悪化を調査する。TTFA 2秒超過29件のうち28件でOllama load 1秒超過を確認した。他の要求元は未特定であり、共有推論を停止・変更せず、context変化との関係を切り分ける。
+1. 最新通常100件はTTFA p95 1,787.520ms、音切れ0件、VAD境界欠測0を確認した。前回の低速runではcontext切り替え107回、今回は0回だった。サーバーのchat要求213件に対して音声応答traceのHTTP要求は108件であり、残りの要求元と完全な専有は未証明として保持する。
 2. 診断結果から音切れの供給遅れを評価し、必要な修正と受け入れ測定を行う。
 3. 実装したsession journalを、実障害・無応答の実接続条件でも照合する。無応答・cleanup失敗・記録欠落・逆行する累積操作は関連ユニットテストで確認済み。正常な実接続3往復はnative完全再生3件・追加0・正常終了1・欠測0。
 4. VAD境界2指標は、保存済み通常100件のnative時刻から欠測なしで再集計した。残る取消途中の通信範囲と実声の計測条件を確認する。

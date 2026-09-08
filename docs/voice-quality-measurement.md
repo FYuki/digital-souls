@@ -343,3 +343,16 @@ LiveKitの`vad_leading_boundary`はfixture正解開始の因果下限から、�
 同時期に別タスクで実行されたツール利用の実LLMテストは、同じgemma4:e4bとloopbackの11434番ポートを既定とし、入力12,288＋推定出力1＝12,289、入力12,288＋生成出力1,024＝13,312のcontextを要求する実装だった。音声の常駐観測で見えた要求contextと一致する。過去プロセスの実効接続先や個々のHTTP要求の所有者まで相関したわけではないため、この実装だけを全遅延の確定原因とはしない。
 
 現在の別タスクの実LLMテストは終了を確認済みで、共有Ollamaの常駐モデルは空だった。サービスの停止・設定変更は行わず、この状態から通常の準備5件＋独立100件を再測定する。再測定中も実要求のcontextと常駐状態を観測し、完了後に同時間窓のサーバー側要求数とモデル読み込み記録を照合する。並行負荷のないことを推測だけで合格条件に置き換えない。
+
+
+## 通常100件の再測定（2026-09-08、context切り替えなし）
+
+測定版`f44f57761108c3582d7a1e48b3d8b4b1ed2bbdcc`で、準備5回＋独立100 session/conversationを通常の`integration-voice`経路で測定した。runは`normal-isolated-100-20260908-01`、Whisper PCM中継と実験用thinking上書きは使っていない。共有推論サービスの停止・設定変更は行っていない。
+
+[集計](artifacts/livekit-normal-isolated-100-2026-09-08-01.json)と[独立検証](artifacts/livekit-normal-isolated-100-2026-09-08-01-verification.json)では、TTFA p95 1,787.520ms（上限2,000ms）、p50 1,736.350ms（改善目安1,000ms）、発話確定p95 289.539ms、処理失敗0/100、再生gap／underrun 0件だった。TTFA 2秒超過は1/100で、p95基準は達成した。provider load p95は258.336ms。nativeの最初の再生時刻とprovider値から分位数を独立再計算し、105件の完全再生、RTP、供給診断、session journalをmanifestと照合した。測定100 sessionの終了・操作記録は欠測0、予期しない終了0、追加操作0で、3往復条件の証拠には加算しない。所有FE/BEの撤去とteardown完了を確認した。
+
+[VAD境界](artifacts/livekit-normal-isolated-100-2026-09-08-01-boundaries.json)は100/100を観測し、開始遅延・早期終了の超過0、欠測0、閾値をまたぐ不確定0。開始offset上限p95 17.630ms、終了offset上限p95 752.330msである。これは検出境界の測定であり、Whisperへ届いたPCM端部や文中休止の別cohortを置き換えない。[凍結baseline比較](artifacts/livekit-normal-isolated-100-2026-09-08-01-latency.json)は比較可能8指標と絶対上限2指標が通過し、観測区間が異なる5指標は監査付き比較対象外、coverage errorは0となった。
+
+[共有Ollamaログの数値照合](artifacts/livekit-normal-isolated-100-2026-09-08-01-ollama-journal.json)では、測定環境の開始から終了までcontext 8,192のみ、context値の切り替え0回、`model loaded` 1回だった。前回低速runの切り替え107回・読み込み完了108回と異なる。一方、サーバーのPOST `/api/chat`ログは213件、音声応答traceで観測したHTTP要求は見積もり3＋生成105＝108件であり、要求元の完全な帰属は未証明である。run名の`isolated`を共有Ollamaの専有証明と解釈しない。prompt見積もりは各応答3回、最初の準備試行で3回HTTP通信し、残る104応答では計312回cache hitだった。想定値1回に合わない記録を削除せず、実counterを用いて検証した。
+
+このrunは通常100件の数値条件を満たしたが、先行runの41.333msの音切れ原因を修正済みとは扱わない。過去の未達runを残し、実障害時のsession記録、最終回帰、配備後の人による実声dogfood受け入れと、Issue全体の完了は別途確認する。
