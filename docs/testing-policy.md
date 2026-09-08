@@ -86,6 +86,9 @@ npm run build
 
 CI は単体テスト、結合テスト、モックE2E、型チェック、Frontend build、Compose契約検証、Backend／Frontend image buildを実行する。別workflowはmainと`epic/**`へのpushでBackend／Frontend／Whisper imageをGHCRへcommit SHA tagで公開しdigestを記録する。実GPU・実接続スイートは外部サービスを必要とするため自動実行せず、Pull Request の検証欄へローカル実行結果または未実行状態を記録する。
 
+Backendの音声品質テストは、保存済みartifactの測定版を`git show`で照合し、Python CLIからTypeScriptの音声観測replayを実行する。
+そのためBackend CIもGit履歴全体を取得し、Node.js 22と`npm ci --prefix frontend`で固定されたreplay依存を準備する。履歴・依存の不足をテストのskipや監査省略で回避しない。
+
 Issue #135 Goal 1ではremote client、single-flight、capacity超過、timeout、worker再生成、Profile、Compose、deploy／rollbackをfakeまたはCPU不要の自動テストで検証する。RTX 4070 Ti SUPER上のCUDA／VRAM証跡、dev・dogfood同時会話、連続会話品質、WSL再起動復旧はGoal 2の手動受入とし、Goal 1の成功を実GPU受入済みとは扱わない。
 
 ## Pull Requestレビュー
