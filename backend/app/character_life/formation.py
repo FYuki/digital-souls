@@ -1,5 +1,6 @@
 """#100のACTIVE projectionからLife Stateを形成し、正本の変更時は採用しない。"""
 
+from collections.abc import Callable
 from uuid import UUID
 
 from app.external_mcp.models import digest, validate_arguments
@@ -25,8 +26,12 @@ class LifeFormation:
             privacy,
         )
 
-    async def run(self, character: str) -> Result:
+    async def run(
+        self, character: str, *, check_current: Callable[[], None] = lambda: None
+    ) -> Result:
+        check_current()
         reflections = await self.source.active(character)
+        check_current()
         if reflections is None:
             return Result.DEFERRED
         if len(reflections) > 16 or any(
@@ -50,6 +55,7 @@ class LifeFormation:
         proposal = await self.cognition.form(
             [r.model_dump(mode="json") for r in reflections]
         )
+        check_current()
         validate_arguments(FORMATION_SCHEMA, proposal)
         states = []
         for candidate in proposal["states"]:
@@ -58,6 +64,7 @@ class LifeFormation:
                 raise LifeError(Result.REJECTED, "reflection_evidence_invalid")
             if not await self.privacy.allowed(candidate["content"]):
                 raise LifeError(Result.REJECTED, "state_privacy_blocked")
+            check_current()
             states.append(
                 LifeState(
                     character_id=character,
@@ -69,6 +76,7 @@ class LifeFormation:
                 )
             )
         current = await self.source.active(character)
+        check_current()
         if current is None or any(
             r.character_id != character or not r.active for r in current
         ):

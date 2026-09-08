@@ -123,6 +123,86 @@ def test_exploration_through_real_gate_and_dependency_status(tmp_path):
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("interruption", ["foreground", "requested"])
+@pytest.mark.parametrize("stage", ["catch_up", "formation", "privacy"])
+def test_formation_yields_when_higher_priority_work_arrives(
+    tmp_path, interruption, stage
+):
+    from uuid import uuid4
+
+    from app.character_life.formation import LifeFormation
+    from app.character_life.models import ReflectionView
+    from app.character_life.ports import DeferredMemory
+
+    async def scenario():
+        async with environment(tmp_path) as (service, _, run):
+            # fixtureの利用者要求は完了済みとし、形成中に次の要求を投入する。
+            service.store.finish(run, Result.NO_CHANGE, "test_setup")
+            entered, release = asyncio.Event(), asyncio.Event()
+            calls = []
+            reflection = ReflectionView(
+                id=uuid4(), character_id="miori", revision="1",
+                content="色彩に関心を感じた", active=True,
+            )
+
+            async def checkpoint(name):
+                calls.append(name)
+                if name == stage:
+                    entered.set()
+                    await release.wait()
+
+            class Memory(DeferredMemory):
+                async def catch_up(self, character):
+                    await checkpoint("catch_up")
+                    return Result.NO_CHANGE
+
+            class Source:
+                async def active(self, character):
+                    return (reflection,)
+
+                def current_revisions(self, character):
+                    return {reflection.id: reflection.revision}
+
+            class Proposal:
+                async def form(self, reflections):
+                    await checkpoint("formation")
+                    return {"states": [{
+                        "kind": "INTEREST", "content": "色彩への関心",
+                        "source_ids": [str(reflection.id)],
+                    }]}
+
+            class Admission:
+                async def allowed(self, text):
+                    await checkpoint("privacy")
+                    return True
+
+            service.memory = Memory()
+            service.formation = LifeFormation(
+                service.store, Source(), Proposal(), Admission()
+            )
+            task = asyncio.create_task(service.form_life_states("miori"))
+            await asyncio.wait_for(entered.wait(), 2)
+            if interruption == "foreground":
+                service.foreground_busy = lambda: True
+            else:
+                state = service.store.state("miori", run.state_id)
+                grant = service.store.grant("miori", "elyth")
+                requested = service.store.create_run(state, grant, "next", True)
+            release.set()
+            assert await task == Result.DEFERRED
+            assert calls[-1] == stage
+            assert not any(s.source == "reflection" for s in service.store.states("miori"))
+            if interruption == "foreground":
+                service.foreground_busy = lambda: False
+            else:
+                service.store.finish(requested, Result.NO_CHANGE, "test_complete")
+            # 保留では形成済みledgerを消費せず、後のscanで同じ正本を再評価できる。
+            assert await service.form_life_states("miori") == Result.APPLIED
+            assert len([s for s in service.store.states("miori") if s.source == "reflection"]) == 1
+
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize("reason", ["revoke", "privacy", "foreground", "interest"])
 def test_policy_blocks_external_dispatch(tmp_path, reason):
     async def scenario():
