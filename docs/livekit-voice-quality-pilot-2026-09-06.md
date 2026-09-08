@@ -2297,3 +2297,29 @@ managed環境は各回でcompose buildを実行する。観測したimage digest
 
 今回も測定時の `think:false`・RAG無効という条件を維持した。SCTP詳細loggingの診断用overrideは使っていない。
 この再接続結果だけで通常の人格・履歴・記憶を含む応答品質や、残る#150の条件、PR準備の完了とは扱わない。
+
+
+## 合成人格・履歴・記憶contextの比較（2026-09-08）
+測定版 `76116f4dcddba99b98982108853ee3fea96bcac9` の一時prototypeで6条件×2設定を実行し、準備12回と測定36回の全48要求が成功した。
+[匿名集計](artifacts/livekit-context-comparison-2026-09-08.json)を保存済み数値から独立に再計算し、context専用schemaと匿名性検査を通した。
+使用したprototypeのrunner SHAはplanに記録されていなかったため、後から測定時の記録へ補完せずnullで保存した。再実行用CLIと集計器は `scripts/voice_quality/compare_context.py`／`report_context.py` に追加した。
+
+| 合成履歴（往復） | 合成記憶（件） | 通常設定 first token p50 | think:false first token p50 |
+|---:|---:|---:|---:|
+| 0 | 0 | 2761.6ms | 273.1ms |
+| 2 | 0 | 2207.4ms | 270.9ms |
+| 8 | 0 | 2054.9ms | 273.7ms |
+| 0 | 1 | 11865.5ms | 276.4ms |
+| 0 | 4 | 2807.7ms | 280.0ms |
+| 8 | 4 | 1611.0ms | 274.2ms |
+
+人格の必須部分を維持し、Character Book7件の選択処理を通した。選択された履歴・記憶の省略は0件だった。
+本質問で採用されたCharacter Bookの追加本文は0tokenで、全7項目が応答へ挿入されたという意味ではない。
+測定36件では名前・存在する合成事実の出現と、与えていない固定事実の非出現が期待どおりだった。
+応答本文は保存していない。指標は固定語句の出現条件であり、否定文中の同じ語句の出現も区別できない。意味上の事実正確性、一般的な人格品質、検索・privacy・記憶境界の実接続合格を証明しない。
+
+履歴・記憶が多いほど単調に遅くなる結果ではなかった。記憶1件・通常設定の約12秒の待ちには、
+provider報告のload_duration約8.19〜8.80秒が含まれる。ほかの代表条件ではload_durationは約240〜259msだった。
+共有Ollamaのresident状態をこのprototypeで連続観測していないため、thinkingだけに差を帰属させない。
+think:falseの各条件のfirst token p50は約271〜280msだが、これは音声TTFAでも標準設定への改善反映済みという意味でもない。
+通常のCHAT optionsは変更しておらず、#150の残る品質・VAD・baseline比較・dogfood受入は継続する。

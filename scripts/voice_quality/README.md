@@ -559,3 +559,34 @@ stopは監視のfinishとは別であり、取消境界以後の無音も独立�
 入力sourceを動かしたまま最終出力を停止する。ページだけを置換し、音声処理・時計はモック化しない。
 これはブラウザ最終出力段の検証であり、LiveKit経由の取消要求・停止確認・Core状態遷移を通す
 受け入れ試験ではない。現在、この確認をCoreの取消成立条件へ接続する作業は未完了である。
+
+
+## 人格を維持した合成履歴・記憶contextの比較
+
+他の音声測定を終了させ、commit済みworktreeで実行する。`compare_context.py`は再接続cohortと同じ
+排他lockを使うが、共有Ollamaを使う別プロジェクト全体を排他制御するものではない。
+`--output`は`/tmp`以下の新規ディレクトリを指定し、既存結果は上書きしない。
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 backend/.venv/bin/python scripts/voice_quality/compare_context.py \
+  --inference-env /path/to/inference.env \
+  --output /tmp/voice-context-comparison-01 --repetitions 3
+
+PYTHONDONTWRITEBYTECODE=1 backend/.venv/bin/python scripts/voice_quality/report_context.py \
+  --run /tmp/voice-context-comparison-01 \
+  --output docs/artifacts/voice-context-comparison-01.json
+```
+
+光織のCharacter CardとCharacter Bookの選択処理を維持し、固定した合成履歴0／2／8往復と
+記憶0／1／4件の6条件を比較する。通常のCHAT optionsと、そのoptionsの`think`だけをfalseにした条件を使う。
+各条件・設定で準備1回を除外し、指定回数を測定する。元の生成設定、実会話DB、記憶DBは変更しない。
+履歴・記憶はprompt入力へ直接渡すため、検索・privacy判定・永続化の実接続テストとは区別する。
+
+応答本文は保存しない。名前と固定した合成事実の出現だけをbooleanで保存し、未知の内容を補完していないかを
+限定的に調べる。この一致を人格・記憶の品質全体の合格判定にはしない。匿名集計は全計画試行の存在、
+重複、準備の除外、欠測と分母、時刻順序、schema、本文・IDの非混入を検証する。
+要求の失敗や未観測値を除去・ゼロ補完しない。runnerのSHAが未記録の旧prototype結果はnullのまま残す。
+
+測るのはLLM要求から最初の本文、prompt準備、provider報告のload／prompt evaluation／generationであり、
+音声TTFAではない。`load_duration`を純粋なweight loadやqueue待ちと断定しない。
+条件の順序や共有Ollamaの状態の影響があるため、単独の比較でthinkingだけの因果効果を証明しない。
