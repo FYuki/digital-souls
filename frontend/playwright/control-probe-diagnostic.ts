@@ -5,6 +5,7 @@ import {faultToBrowserOffset, type FaultClockCalibration} from './fault-clock'
 import {FaultClockRunner, calibrateFaultClock} from './fault-clock-runner'
 import {measureFaultRecovery} from './fault-recovery-diagnostic'
 import {installSdkReconnectDiagnostic, finishSdkClockDiagnostic} from './sdk-reconnect-diagnostic'
+import {installRtcReconnectDiagnostic} from './rtc-reconnect-diagnostic'
 import type { ControlProbeObservation } from '../src/livekit/control-probe'
 import { installScheduledFixture, type ScheduledFixture } from './controlled-audio-fixture'
 import { createVoiceChatDriver } from './voice-chat-suite'
@@ -34,6 +35,7 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
   }
   if (networkFault) {
     record.sdk_reconnect = await installSdkReconnectDiagnostic(page)
+    await page.addInitScript(installRtcReconnectDiagnostic)
     record.signaling_network = signaling
     page.on('response', response => {
       if (isSignaling(response.url())) recordSignaling('http_response', response.status())
@@ -116,6 +118,7 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
     if (networkFault) {
       stage = 'network_fault'
       if (!clockRunner || !clockBefore) throw new Error('dedicated fault clock unavailable')
+      await page.evaluate(() => (window as typeof window & {__voiceRtcDiagnostic?: {start: () => void}}).__voiceRtcDiagnostic?.start())
       const recovered = await measureFaultRecovery(page, clockRunner, clockBefore, record)
       // 回復計測の10秒窓を閉じた後に、同sessionで次の利用者発話を試す。復旧時間へ混ぜない。
       stage = 'post_fault_followup'
@@ -159,7 +162,12 @@ export async function measureControlProbeSession(browser: Browser, fixture: Sche
   } catch {
     record.failure_stage = stage
   } finally {
-    if (networkFault) record.sdk_clock = await finishSdkClockDiagnostic(page)
+    if (networkFault) {
+      record.sdk_clock = await finishSdkClockDiagnostic(page)
+      record.browser_rtc = await page.evaluate(() => (window as typeof window & {
+        __voiceRtcDiagnostic?: {finish: () => Promise<unknown>}
+      }).__voiceRtcDiagnostic?.finish() ?? {status: 'unavailable'}).catch(() => ({status: 'unavailable'}))
+    }
     record.evidence = await page.evaluate(() => ({
       media_timeline_interruptions: window.__voiceChatE2E.mediaTimelineInterruptions ?? [],
       media_packet_losses: window.__voiceChatE2E.mediaPacketLosses ?? [],
