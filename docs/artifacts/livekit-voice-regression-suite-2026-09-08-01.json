@@ -1,0 +1,21 @@
+{
+  "scope": "normal_voice_regression_suite",
+  "measurement_revision": "1f918e63cd8b2222e906a60e94fe7c7a3cca92d0",
+  "passed": false,
+  "expected_tests": 5,
+  "failed_tests": 1,
+  "not_run_tests": 4,
+  "failure_reason": "duplicate_fixture_audio_context_close",
+  "runtime_exception_count": 0,
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "teardown_completed": true,
+  "log_reader_closed": true,
+  "full_issue_acceptance_verified": false,
+  "source_sha256": {
+    "environment_run": "7d82a81ada27ce8f289b7f5abdaf68ea0763ca465d9ef2430dfc1cf8561c4792",
+    "test_log": "f87cf541cba7441eb7a12a35d9d1c8281c07ba8f204d8ff6173027e1b303c22e"
+  }
+}

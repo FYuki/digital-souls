@@ -57,8 +57,11 @@ test.afterEach(async ({ page }, testInfo) => {
   await testInfo.attach('voice-state-observations.json', {
     body: JSON.stringify(observations), contentType: 'application/json',
   })
-  await page.evaluate(() => window.__voiceFixtureClock?.close())
-  await driver.endVoiceSession(page)
+  try {
+    await driver.endVoiceSession(page)
+  } finally {
+    await page.evaluate(() => window.__voiceFixtureClock?.close())
+  }
   await hardDeleteSelectedConversation(page, 'miori')
 })
 
@@ -75,9 +78,6 @@ test.describe('通常応答の固定音声', () => {
       JSON.parse(readFileSync(new URL('../../playwright/fixtures/speech.metadata.json', import.meta.url), 'utf8')),
     )
     await installScheduledFixture(page, fixture)
-  })
-  test.afterEach(async ({ page }) => {
-    await page.evaluate(() => window.__voiceFixtureClock?.close())
   })
   const enableScheduledMicrophone = async (page: Page) => {
     const button = await driver.enableMicrophone(page)
