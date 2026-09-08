@@ -420,13 +420,22 @@ class Service:
     async def form_life_states(self, character: str) -> str:
         if self.closing or self.foreground_busy() or self.formation is None:
             return Result.DEFERRED
+
+        def check_current() -> None:
+            # 形成開始後に会話・利用者要求が発生した場合も、次の推論・保存へ進まない。
+            if self.closing or self.foreground_busy():
+                raise LifeError(Result.DEFERRED, "foreground_priority")
+            if any(run.requested for run in self.store.open_runs()):
+                raise LifeError(Result.DEFERRED, "requested_activity_priority")
+
         task = asyncio.current_task()
         if task is not None:
             self.tasks.add(task)
         try:
             async with asyncio.timeout(self.timeout):
+                check_current()
                 await self.memory.catch_up(character)
-                return await self.formation.run(character)
+                return await self.formation.run(character, check_current=check_current)
         except LifeError as error:
             return error.result
         except TimeoutError:
