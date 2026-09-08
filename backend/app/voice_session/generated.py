@@ -30,6 +30,7 @@ class Measurement(Enum):
     NETWORK_SUMMARY = "network_summary"
     PLAYBACK_STARTED = "playback_started"
     RESPONSE_STARTED = "response_started"
+    SESSION_SUMMARY = "session_summary"
     SPEECH_STOPPED = "speech_stopped"
     TURN_DECISION_RECEIVED = "turn_decision_received"
     UTTERANCE_FINALIZED = "utterance_finalized"
@@ -110,6 +111,15 @@ class VoiceSessionEventReason(Enum):
     SESSION_ENDED = "session_ended"
     TERMINAL_ERROR = "terminal_error"
     USER_REQUEST = "user_request"
+
+
+class SessionSummary(BaseModel):
+    end_requested: bool
+    microphone_activation_attempts: int
+    mute_attempts: int
+    operation_tracking_started: bool
+    retry_attempts: int
+    sequence: int
 
 
 class Role(Enum):
@@ -209,5 +219,6 @@ class VoiceSessionEvent(BaseModel):
     clock_domain: Optional[ClockDomain] = None
     measurement: Optional[Measurement] = None
     network_summary: Optional[NetworkSummary] = None
+    session_summary: Optional[SessionSummary] = None
     timestamp: Optional[Union[int, str]] = None
     unit: Optional[Unit] = None

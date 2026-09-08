@@ -360,6 +360,8 @@ export class LiveKitRoomClient {
     await this.room.localParticipant.setMicrophoneEnabled(false)
   }
 
+  private finalSummaryAck: { eventId: string; resolve: () => void } | null = null
+
   async publishControlEvent(value: VoiceSessionEvent): Promise<void> {
     const sessionId = this.sessionId
     const outbox = this.controlOutbox
@@ -371,7 +373,22 @@ export class LiveKitRoomClient {
       throw new Error('control event session_id does not match the connected session')
     }
     const payload = new TextEncoder().encode(JSON.stringify(event))
-    await outbox.enqueue({ event }, payload)
+    if (event.type !== 'observation' || event.measurement !== 'session_summary' || !event.session_summary?.end_requested) {
+      await outbox.enqueue({ event }, payload)
+      return
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const acknowledged = new Promise<void>(resolve => {
+      this.finalSummaryAck = { eventId: event.event_id, resolve }
+      timer = setTimeout(resolve, 500)
+    })
+    try {
+      await outbox.enqueue({ event }, payload)
+      await acknowledged
+    } finally {
+      if (timer !== undefined) clearTimeout(timer)
+      if (this.finalSummaryAck?.eventId === event.event_id) this.finalSummaryAck = null
+    }
   }
 
   stopPlayback(responseId: string, speechStartedAtMs?: number): number {
@@ -598,6 +615,10 @@ export class LiveKitRoomClient {
         } else if (frame.type === 'ack') {
           if (frame.generation !== this.generation) return
           const confirmation = this.controlOutbox?.acknowledge(frame.eventId)
+          if (this.finalSummaryAck?.eventId === frame.eventId) {
+            this.finalSummaryAck.resolve()
+            this.finalSummaryAck = null
+          }
           if (
             confirmation?.responseId !== undefined
             && confirmation.continuousPrefix !== undefined

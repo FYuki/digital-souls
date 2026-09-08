@@ -7,6 +7,7 @@ from app.livekit_transport.measurement import LiveKitMeasurementSession
 from app.livekit_transport.playback_completion import PlaybackCompletionGate
 from app.livekit_transport.production import _ConversationCoreBridge
 from app.voice_session.validation import parse_voice_session_event
+from app.voice_session_metrics import SessionMetrics
 
 
 def summary():
@@ -62,8 +63,13 @@ def test_bridge_records_only_accepted_full_response_completion():
         gate = PlaybackCompletionGate()
         class Core:
             async def confirm_playback(self, **kwargs): pass
+        session_events = []
+        session_metrics = SessionMetrics(character_id="fixture", session_id="session",
+            measurement_kind="dogfood", record=session_events.append)
+        session_metrics.activate()
         bridge = _ConversationCoreBridge(Core(), lambda task: None,
-                                         confirm_response_playback=gate.confirm, measurement=recorder)
+                                         confirm_response_playback=gate.confirm, measurement=recorder,
+                                         session_metrics=session_metrics)
         async def prepare(): pass
         pending = asyncio.create_task(gate.wait('response', 2, prepare))
         await asyncio.sleep(0)
@@ -74,10 +80,12 @@ def test_bridge_records_only_accepted_full_response_completion():
                         {**raw, 'response_id': 'old-response'}):
             await bridge._receive(invalid)
         assert not any(event.stage == 'playback' for event in events)
+        assert not any(event.name == "playback_completed" for event in session_events)
         await bridge._receive(raw)
         await bridge._receive(raw)
         await pending
         assert len([event for event in events if event.stage == 'playback']) == 6
+        assert [event.response_id for event in session_events if event.name == 'playback_completed'] == ['response']
     asyncio.run(exercise())
 
 

@@ -435,6 +435,12 @@
     }
   }
 
+  const prepareVoiceMicrophone = async () => {
+    await ensureVoiceSession()
+    // getUserMediaの失敗も利用者による開始・再試行として数える。
+    voiceSession.recordMicrophoneActivationAttempt()
+  }
+
   const resumeVoiceMicrophone = async (stream: MediaStream) => {
     try {
       await voiceSession.resumeMicrophone(stream)
@@ -482,6 +488,7 @@
   }
 
   const restartVoiceSession = async () => {
+    voiceSession.recordRetryAttempt()
     try {
       await ensureVoiceSession()
     } catch {
@@ -590,7 +597,7 @@
         disabled={voiceRecorderDisabled}
         forceOff={voiceRecorderForceOff}
         continuous={true}
-        onBeforeEnable={ensureVoiceSession}
+        onBeforeEnable={prepareVoiceMicrophone}
         onMicrophoneEnabled={resumeVoiceMicrophone}
         onMicrophoneDisabled={muteVoiceMicrophone}
         onSpeechStarted={handleSpeechStarted}

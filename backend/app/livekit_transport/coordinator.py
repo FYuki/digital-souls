@@ -20,6 +20,7 @@ from app.livekit_transport.delivery import (
     retry_deadlines_ms,
 )
 from app.livekit_transport.lifecycle import SessionLifecycle
+from app.voice_session_metrics import SessionMetrics
 from app.livekit_transport.mapping import ParticipantMapping
 from app.livekit_transport.outbox import (
     InMemoryOutboxManager,
@@ -55,6 +56,7 @@ class SessionCoordinatorDependencies:
     response_track_ready: Callable[[str, str], None] = lambda _response_id, _track_sid: None
     audio_probe: Callable[[str, str, int, str | None], None] | None = None
     sync_observer: Callable[[str, int, int], None] | None = None
+    session_metrics: SessionMetrics | None = None
 
 
 class ProductionSessionCoordinator:
@@ -152,6 +154,8 @@ class ProductionSessionCoordinator:
         elif self._lifecycle.phase == "bootstrapping":
             self._cancel_deadline()
             self._lifecycle.activate()
+            if self._dependencies.session_metrics is not None:
+                self._dependencies.session_metrics.activate()
         return False
 
     async def synchronize_reconnection(self) -> None:
@@ -195,6 +199,8 @@ class ProductionSessionCoordinator:
                 if str(event["session_id"]) != self.session_id:
                     raise TerminalProtocolError("Core event session mismatch")
                 self._delivery.receive(payload, event)
+                if event.get("measurement") == "session_summary" and self._dependencies.session_metrics is not None:
+                    self._dependencies.session_metrics.observe_summary(event.get("session_summary"))
                 if event["type"] in ("playback_completed", "playback_stopped"):
                     self._lifecycle.confirm_playback(
                         response_id=str(event["response_id"]),
@@ -415,7 +421,15 @@ class ProductionSessionCoordinator:
         self._terminal_outcomes.clear()
         self._mapping.clear()
         self._lifecycle.end(reason)
-        await self._dependencies.cleanup(self.session_id)
+        try:
+            await self._dependencies.cleanup(self.session_id)
+        except BaseException:
+            if self._dependencies.session_metrics is not None:
+                self._dependencies.session_metrics.end(reason, cleanup_completed=False)
+            raise
+        else:
+            if self._dependencies.session_metrics is not None:
+                self._dependencies.session_metrics.end(reason)
 
     async def _retry(self, event_id: str, payload: bytes) -> None:
         retry = RetryState(

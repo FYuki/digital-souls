@@ -126,6 +126,12 @@ export class LiveKitVoiceSessionController {
   private binding: TokenResponse | null = null
   private room: VoiceSessionRoom | null = null
   private operationVersion = 0
+  private sessionSummary = {
+    sequence: 0, microphone_activation_attempts: 0, mute_attempts: 0,
+    retry_attempts: 0, operation_tracking_started: false, end_requested: false,
+  }
+  private pendingRetryAttempts = 0
+  private ending: Promise<void> | null = null
   private microphoneEnabled = false
   private controlTail: Promise<void> = Promise.resolve()
   private generatingResponseId: string | null = null
@@ -177,6 +183,7 @@ export class LiveKitVoiceSessionController {
   }
 
   async ensureSession(context: VoiceSessionContext): Promise<void> {
+    if (this.ending !== null) await this.ending
     if (sameContext(this.context, context) && this.room !== null && this.binding !== null) {
       return
     }
@@ -210,6 +217,11 @@ export class LiveKitVoiceSessionController {
       }
       this.binding = binding
       this.room = room
+      this.sessionSummary = {
+        sequence: 0, microphone_activation_attempts: 0, mute_attempts: 0,
+        retry_attempts: this.pendingRetryAttempts, operation_tracking_started: this.pendingRetryAttempts > 0, end_requested: false,
+      }
+      this.pendingRetryAttempts = 0
       await this.publishControlEvent(room, this.event({
         type: 'session_start_requested',
         requested_reconnect_grace_ms: binding.reconnect_grace_ms,
@@ -231,6 +243,35 @@ export class LiveKitVoiceSessionController {
     }
   }
 
+  recordMicrophoneActivationAttempt(): void {
+    this.requiredRoom()
+    this.sessionSummary.operation_tracking_started = true
+    this.sessionSummary.microphone_activation_attempts += 1
+    void this.publishSessionSummary().catch(() => undefined)
+  }
+
+  recordRetryAttempt(): void {
+    if (this.binding === null || this.room === null) {
+      this.pendingRetryAttempts += 1
+      return
+    }
+    this.sessionSummary.operation_tracking_started = true
+    this.sessionSummary.retry_attempts += 1
+    void this.publishSessionSummary().catch(() => undefined)
+  }
+
+  private publishSessionSummary(endRequested = false): Promise<void> {
+    const room = this.requiredRoom()
+    this.sessionSummary.sequence += 1
+    this.sessionSummary.end_requested = endRequested
+    return this.publishControlEvent(room, this.event({
+      type: 'observation', measurement: 'session_summary',
+      timestamp: Math.floor(this.dependencies.monotonicMs()),
+      clock_domain: 'client_monotonic', unit: 'millisecond',
+      session_summary: { ...this.sessionSummary },
+    }))
+  }
+
   async resumeMicrophone(stream: MediaStream): Promise<void> {
     const room = this.requiredRoom()
     await room.publishMicrophone(stream)
@@ -242,6 +283,8 @@ export class LiveKitVoiceSessionController {
 
   async muteMicrophone(): Promise<void> {
     const room = this.requiredRoom()
+    this.sessionSummary.mute_attempts += 1
+    void this.publishSessionSummary().catch(() => undefined)
     await room.muteMicrophone()
     this.microphoneEnabled = false
     await this.publishControlEvent(room, this.event({ type: 'session_muted' }))
@@ -291,11 +334,33 @@ export class LiveKitVoiceSessionController {
     this.publishSnapshot()
   }
 
-  async end(): Promise<void> {
+  end(): Promise<void> {
+    if (this.ending !== null) return this.ending
+    const operation = this.finishEnd()
+    this.ending = operation
+    void operation.finally(() => {
+      if (this.ending === operation) this.ending = null
+    }).catch(() => undefined)
+    return operation
+  }
+
+  private async finishEnd(): Promise<void> {
     const binding = this.binding
     const room = this.room
     ++this.operationVersion
     this.clearReconnectTimer()
+    if (binding !== null && room !== null) {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try {
+        // ack待ちは最大500ms。欠落はBackend側で欠測となり、終了を妨げない。
+        await Promise.race([
+          this.publishSessionSummary(true).catch(() => undefined),
+          new Promise<void>(resolve => { timer = setTimeout(resolve, 500) }),
+        ])
+      } finally {
+        if (timer !== undefined) clearTimeout(timer)
+      }
+    }
     this.binding = null
     this.room = null
     this.controlTail = Promise.resolve()

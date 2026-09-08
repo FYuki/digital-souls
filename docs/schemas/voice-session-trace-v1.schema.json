@@ -1,0 +1,164 @@
+{
+  "$defs": {
+    "SessionSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "sequence": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "microphone_activation_attempts": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Microphone Activation Attempts",
+          "type": "integer"
+        },
+        "mute_attempts": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Mute Attempts",
+          "type": "integer"
+        },
+        "retry_attempts": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Retry Attempts",
+          "type": "integer"
+        },
+        "operation_tracking_started": {
+          "title": "Operation Tracking Started",
+          "type": "boolean"
+        },
+        "end_requested": {
+          "title": "End Requested",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "sequence",
+        "microphone_activation_attempts",
+        "mute_attempts",
+        "retry_attempts",
+        "operation_tracking_started",
+        "end_requested"
+      ],
+      "title": "SessionSummary",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "measurement_kind": {
+      "enum": [
+        "automated_test",
+        "controlled_baseline",
+        "dogfood"
+      ],
+      "title": "Measurement Kind",
+      "type": "string"
+    },
+    "character_id": {
+      "minLength": 1,
+      "title": "Character Id",
+      "type": "string"
+    },
+    "session_id": {
+      "minLength": 1,
+      "title": "Session Id",
+      "type": "string"
+    },
+    "sequence": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "timestamp_ns": {
+      "minimum": 0,
+      "title": "Timestamp Ns",
+      "type": "integer"
+    },
+    "clock_domain": {
+      "const": "server_monotonic",
+      "default": "server_monotonic",
+      "title": "Clock Domain",
+      "type": "string"
+    },
+    "name": {
+      "enum": [
+        "created",
+        "activated",
+        "summary",
+        "playback_completed",
+        "ended",
+        "cleanup_failed",
+        "invalid_summary",
+        "overflow"
+      ],
+      "title": "Name",
+      "type": "string"
+    },
+    "summary": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SessionSummary"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "response_id": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Response Id"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "enum": [
+            "explicit",
+            "protocol_error",
+            "runtime_error",
+            "reconnect_timeout",
+            "join_token_expired",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason"
+    }
+  },
+  "required": [
+    "measurement_kind",
+    "character_id",
+    "session_id",
+    "sequence",
+    "timestamp_ns",
+    "name"
+  ],
+  "title": "SessionTraceEvent",
+  "type": "object"
+}

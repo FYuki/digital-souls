@@ -356,6 +356,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         raw_trace_root.mkdir(parents=True, exist_ok=True)
         cleanup_expired_raw_traces(raw_trace_root, now=datetime.now(UTC))
+        cleanup_expired_raw_traces(raw_trace_root / "sessions", now=datetime.now(UTC))
         voice_trace_recorder = JsonlTraceRecorder(
             raw_trace_root / f"{uuid4()}.jsonl"
         )

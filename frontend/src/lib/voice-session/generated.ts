@@ -35,6 +35,7 @@ export interface VoiceSessionEvent {
     clock_domain?:                 ClockDomain;
     measurement?:                  Measurement;
     network_summary?:              NetworkSummary;
+    session_summary?:              SessionSummary;
     timestamp?:                    number | string;
     unit?:                         Unit;
 }
@@ -45,7 +46,7 @@ export type ClockDomain = "client_monotonic" | "server_monotonic";
 
 export type Decision = "backchannel" | "take_turn" | "indeterminate";
 
-export type Measurement = "speech_stopped" | "utterance_finalized" | "response_started" | "first_audio_out" | "playback_started" | "client_track_received" | "client_encoded_received" | "client_audio_decoded" | "turn_decision_received" | "cancel_confirmed" | "local_playback_stopped" | "network_summary";
+export type Measurement = "speech_stopped" | "utterance_finalized" | "response_started" | "first_audio_out" | "playback_started" | "client_track_received" | "client_encoded_received" | "client_audio_decoded" | "turn_decision_received" | "cancel_confirmed" | "local_playback_stopped" | "network_summary" | "session_summary";
 
 export interface NetworkSummary {
     downlink: Downlink;
@@ -92,6 +93,15 @@ export interface PlaybackSummary {
 }
 
 export type VoiceSessionEventReason = "user_request" | "terminal_error" | "reconnect_timeout" | "privacy" | "disconnect" | "session_ended" | "invalid_audio" | "input_capacity_exceeded" | "barge_in" | "decode_failure";
+
+export interface SessionSummary {
+    end_requested:                  boolean;
+    microphone_activation_attempts: number;
+    mute_attempts:                  number;
+    operation_tracking_started:     boolean;
+    retry_attempts:                 number;
+    sequence:                       number;
+}
 
 export interface Speaker {
     character_id?:  string;

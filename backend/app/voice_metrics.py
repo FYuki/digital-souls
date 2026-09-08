@@ -7,11 +7,14 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Callable, Literal, Sequence
+from typing import TYPE_CHECKING, Callable, Literal, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.inference.diagnostics import VALUE_NAMES
+
+if TYPE_CHECKING:
+    from app.voice_session_metrics import SessionTraceEvent
 
 SCHEMA_VERSION: Literal["1.0"] = "1.0"
 QUANTILE_METHOD: Literal["hyndman_fan_type_7"] = "hyndman_fan_type_7"
@@ -83,6 +86,14 @@ class JsonlTraceRecorder:
         with self._lock:
             with self._path.open("a", encoding="utf-8") as trace_file:
                 trace_file.write(line + "\n")
+
+    def record_session(self, event: SessionTraceEvent) -> None:
+        # response traceとは別のschemaを同じ保持期間で保存する。
+        path = self._path.parent / "sessions" / self._path.name
+        with self._lock:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as trace_file:
+                trace_file.write(event.model_dump_json() + "\n")
 
 
 def serialize_trace_event(

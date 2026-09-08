@@ -499,6 +499,38 @@
         }
       }
     },
+    "SessionSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "microphone_activation_attempts",
+        "mute_attempts",
+        "retry_attempts",
+        "operation_tracking_started",
+        "end_requested"
+      ],
+      "properties": {
+        "sequence": {
+          "$ref": "#/$defs/NonNegativeSafeInteger"
+        },
+        "microphone_activation_attempts": {
+          "$ref": "#/$defs/NonNegativeSafeInteger"
+        },
+        "mute_attempts": {
+          "$ref": "#/$defs/NonNegativeSafeInteger"
+        },
+        "retry_attempts": {
+          "$ref": "#/$defs/NonNegativeSafeInteger"
+        },
+        "operation_tracking_started": {
+          "type": "boolean"
+        },
+        "end_requested": {
+          "type": "boolean"
+        }
+      }
+    },
     "Observation": {
       "type": "object",
       "additionalProperties": false,
@@ -545,7 +577,8 @@
             "turn_decision_received",
             "cancel_confirmed",
             "local_playback_stopped",
-            "network_summary"
+            "network_summary",
+            "session_summary"
           ]
         },
         "timestamp": {
@@ -575,6 +608,9 @@
         },
         "network_summary": {
           "$ref": "#/$defs/NetworkSummary"
+        },
+        "session_summary": {
+          "$ref": "#/$defs/SessionSummary"
         }
       },
       "allOf": [
@@ -732,6 +768,39 @@
               "network_summary"
             ]
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "measurement": {
+                "const": "session_summary"
+              }
+            },
+            "required": [
+              "measurement"
+            ]
+          },
+          "then": {
+            "properties": {
+              "utterance_id": false,
+              "response_id": false,
+              "timestamp": {
+                "$ref": "#/$defs/NonNegativeSafeInteger"
+              },
+              "clock_domain": {
+                "const": "client_monotonic"
+              },
+              "unit": {
+                "const": "millisecond"
+              },
+              "session_summary": {
+                "$ref": "#/$defs/SessionSummary"
+              }
+            },
+            "required": [
+              "session_summary"
+            ]
+          }
         }
       ],
       "dependentSchemas": {
@@ -739,6 +808,16 @@
           "properties": {
             "measurement": {
               "const": "network_summary"
+            }
+          },
+          "required": [
+            "measurement"
+          ]
+        },
+        "session_summary": {
+          "properties": {
+            "measurement": {
+              "const": "session_summary"
             }
           },
           "required": [

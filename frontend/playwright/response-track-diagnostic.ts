@@ -18,6 +18,7 @@ export const measureResponseTrackSession = async (
     await mkdir(dirname(output), { recursive: true })
     await writeFile(output, JSON.stringify({
       measurement_scope: 'continuous_response_track_diagnostic', expected_turns: turns,
+      measurement_revision: process.env.VOICE_QUALITY_MEASUREMENT_REVISION,
       fixture_sha256: fixture.audioSha256, session_end_confirmed: ended, trials: observations,
       failure_diagnostics: failureDiagnostics,
     }, null, 2) + '\n')

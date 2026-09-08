@@ -84,6 +84,7 @@ describe('通常会話UI向けLiveKit音声session', () => {
       'speech_started',
       'speech_stopped',
       'observation',
+      'observation',
       'session_muted',
       'session_resumed',
     ])
@@ -405,5 +406,68 @@ describe('通常会話UI向けLiveKit音声session', () => {
       sessionId: null,
       activeResponseId: null,
     })
+  })
+})
+
+
+describe('session単位の操作計測', () => {
+  const summaries = (events: VoiceSessionEvent[]) => events
+    .filter(event => event.type === 'observation' && event.measurement === 'session_summary')
+    .map(event => event.session_summary!)
+
+  test('getUserMedia前の開始試行を保持し自動再接続を操作へ加算しない', async () => {
+    const { controller, events, observations } = setup()
+    await controller.ensureSession({ characterId: 'miori', conversationId: 'conversation-id' })
+    controller.recordMicrophoneActivationAttempt()
+    // 1回目はgetUserMedia失敗を想定。公開完了の通知は来ない。
+    controller.recordMicrophoneActivationAttempt()
+    await controller.resumeMicrophone(MICROPHONE_STREAM)
+    observations[0]({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable' })
+    observations[0]({ transport: 'available', control: 'available', audio: 'available' })
+    await controller.end()
+    expect(summaries(events).at(-1)).toMatchObject({
+      microphone_activation_attempts: 2, mute_attempts: 0, retry_attempts: 0,
+      operation_tracking_started: true, end_requested: true,
+    })
+  })
+
+  test('失敗したmuteを最終summaryに残し、終了通知を切断より先に送る', async () => {
+    const { controller, events, room } = setup()
+    await controller.ensureSession({ characterId: 'miori', conversationId: 'conversation-id' })
+    controller.recordMicrophoneActivationAttempt()
+    vi.mocked(room.muteMicrophone).mockRejectedValue(new Error('mute failed'))
+    await expect(controller.muteMicrophone()).rejects.toThrow('mute failed')
+    vi.mocked(room.disconnect).mockImplementation(() => {
+      expect(summaries(events).at(-1)?.end_requested).toBe(true)
+    })
+    await controller.end()
+    expect(summaries(events).at(-1)?.mute_attempts).toBe(1)
+  })
+
+  test('接続前の手動再試行を新sessionに保持する', async () => {
+    const { controller, dependencies, events } = setup()
+    vi.mocked(dependencies.requestToken).mockRejectedValueOnce(new Error('token failed'))
+    controller.recordRetryAttempt()
+    await expect(controller.ensureSession({ characterId: 'miori', conversationId: 'conversation-id' })).rejects.toThrow()
+    controller.recordRetryAttempt()
+    await controller.ensureSession({ characterId: 'miori', conversationId: 'conversation-id' })
+    controller.recordMicrophoneActivationAttempt()
+    await controller.end()
+    expect(summaries(events).at(-1)?.retry_attempts).toBe(2)
+  })
+
+  test('summary送信が停止しても終了APIと切断を500ms以内に実行する', async () => {
+    vi.useFakeTimers()
+    try {
+      const { controller, room, dependencies } = setup()
+      await controller.ensureSession({ characterId: 'miori', conversationId: 'conversation-id' })
+      vi.mocked(room.publishControlEvent).mockImplementation(() => new Promise(() => undefined))
+      const ended = controller.end()
+      await vi.advanceTimersByTimeAsync(500)
+      await ended
+      expect(room.disconnect).toHaveBeenCalledTimes(1)
+      expect(dependencies.endSession).toHaveBeenCalledWith(SESSION_ID)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally { vi.useRealTimers() }
   })
 })

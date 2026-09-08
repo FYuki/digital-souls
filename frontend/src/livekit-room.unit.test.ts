@@ -235,6 +235,31 @@ describe('LiveKit Room generation synchronization', () => {
     vi.unstubAllGlobals()
   })
 
+  test('session終了summaryは一致するackを待ち、世代違いでは完了しない', async () => {
+    const client = new LiveKitRoomClient(() => undefined, () => undefined)
+    const sessionId = '20000000-0000-4000-8000-000000000001'
+    await client.connect('ws://test', 'token', sessionId)
+    const room = latestRoom(), eventId = crypto.randomUUID()
+    let completed = false
+    const operation = client.publishControlEvent({
+      type: 'observation', protocol_version: '1.0', event_id: eventId, session_id: sessionId,
+      measurement: 'session_summary', timestamp: 100, clock_domain: 'client_monotonic', unit: 'millisecond',
+      session_summary: { sequence: 1, microphone_activation_attempts: 1, mute_attempts: 0,
+        retry_attempts: 0, operation_tracking_started: true, end_requested: true },
+    }).then(() => { completed = true })
+    await Promise.resolve()
+    const ack = (generation: number) => room.emit('dataReceived', new TextEncoder().encode(JSON.stringify({
+      type: 'ack', protocol_version: '1.0', event_id: eventId, generation,
+    })), undefined, undefined, 'digital-souls.livekit-transport.v1')
+    ack(1)
+    await Promise.resolve()
+    expect(completed).toBe(false)
+    ack(0)
+    await operation
+    expect(completed).toBe(true)
+    client.disconnect()
+  })
+
   test('通常出力は実出力時計の通過まで停止確認を返さず旧本文を再配送しない', async () => {
     const sessionId = '20000000-0000-4000-8000-000000000001'
     const responseId = '50000000-0000-4000-8000-000000000001'

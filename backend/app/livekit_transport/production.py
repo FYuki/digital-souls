@@ -54,7 +54,8 @@ from app.livekit_transport.stt_audio import (
 )
 from app.livekit_transport.response_audio import ResponseAudioTracks
 from app.livekit_transport.token import IssuedToken, LiveKitTokenSigner
-from app.voice_metrics import MeasurementKind, TraceEvent
+from app.voice_metrics import JsonlTraceRecorder, MeasurementKind, TraceEvent
+from app.voice_session_metrics import SessionMetrics
 from app.screen_perception.provenance import ScreenLineage
 
 if TYPE_CHECKING:
@@ -859,6 +860,7 @@ class _ConversationCoreBridge:
         confirm_response_playback: Callable[[str, int], bool] = lambda _response_id, _sequence: False,
         media_tail_seconds: float = 0.15,
         measurement: LiveKitMeasurementSession | None = None,
+        session_metrics: SessionMetrics | None = None,
     ) -> None:
         self._session = session
         self._schedule = schedule
@@ -866,6 +868,7 @@ class _ConversationCoreBridge:
         self._stop_audio = stop_audio
         self._confirm_response_playback = confirm_response_playback
         self._measurement = measurement
+        self._session_metrics = session_metrics
         self._user_audio_captures: deque[_UserAudioCapture] = deque()
         self._pending_transcriptions: deque[tuple[str, bytes, str | None]] = deque()
         self._pending_transcription_bytes = 0
@@ -1200,9 +1203,11 @@ class _ConversationCoreBridge:
             if event_type == "playback_completed" and event.get("response_finished") is True:
                 accepted = self._confirm_response_playback(response_id, last_played_audio_sequence)
                 if accepted and self._measurement is not None and "playback_summary" in event:
-                    self._measurement.record_playback_summary(
+                    recorded = self._measurement.record_playback_summary(
                         response_id=response_id, summary=event["playback_summary"],
                     )
+                    if recorded and self._session_metrics is not None:
+                        self._session_metrics.completed_playback(response_id)
         elif event_type == "session_disconnected":
             await self._session.disconnect()
         elif event_type == "session_reconnected":
@@ -1353,7 +1358,11 @@ class ProductionRuntimeManager:
         core_session_factory: _CoreSessionFactory | None = None,
         screen_session_revoker: _ScreenSessionRevoker | None = None,
         audio_probe_enabled: bool = False,
+        session_trace_recorder: JsonlTraceRecorder | None = None,
+        measurement_kind: MeasurementKind = "automated_test",
     ) -> None:
+        self._session_trace_recorder = session_trace_recorder
+        self._measurement_kind = measurement_kind
         self._audio_probe_enabled = audio_probe_enabled
         self._livekit_url = livekit_url
         self._signer = signer
@@ -1526,6 +1535,12 @@ class ProductionRuntimeManager:
             # 専用test Profileのみ。本文、ID、接続先、例外文字列を含めない。
             logger.warning("State sync: stage=%s generation=%d at_ms=%d", stage, generation, at_ms)
 
+        session_metrics = (
+            SessionMetrics(character_id=str(request["character_id"]), session_id=session_id,
+                           measurement_kind=self._measurement_kind,
+                           record=self._session_trace_recorder.record_session)
+            if self._session_trace_recorder is not None else None
+        )
         coordinator = ProductionSessionCoordinator(
             session_id=session_id,
             user_identity=user_identity,
@@ -1540,6 +1555,7 @@ class ProductionRuntimeManager:
                 response_track_ready=response_track_ready,
                 audio_probe=handle_audio_probe if audio_probe is not None else None,
                 sync_observer=observe_sync if self._audio_probe_enabled else None,
+                session_metrics=session_metrics,
             ),
             core_port=self._core_port,
         )
@@ -1686,6 +1702,7 @@ class ProductionRuntimeManager:
             stop_audio=audio_source.clear,
             confirm_response_playback=delivery.confirm_response_playback,
             measurement=delivery.measurement,
+            session_metrics=session_metrics,
         )
         self._audio_sources[session_id] = audio_source
         self._core_sessions[session_id] = core_session
@@ -2003,6 +2020,8 @@ async def configure_production_resources(
         core_session_factory=core_session_factory,
         screen_session_revoker=app.state.screen_perception_service,
         audio_probe_enabled=audio_probe_enabled(os.environ, livekit_url),
+        session_trace_recorder=getattr(app.state, "voice_trace_recorder", None),
+        measurement_kind=getattr(app.state, "voice_measurement_kind", "automated_test"),
     )
     validator = CharacterConversationBindingValidator(
         character_loader=load_character_card,

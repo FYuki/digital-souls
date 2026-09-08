@@ -330,11 +330,15 @@ describe('App conversation lifecycle', () => {
       liveKitMocks.controlEvents.map((event) => event.type),
     ).toEqual([
       'session_start_requested',
+      'observation',
       'session_resumed',
       'speech_started',
       'speech_stopped',
       'observation',
     ]))
+    expect(liveKitMocks.controlEvents.find(event => event.measurement === 'session_summary')?.session_summary).toMatchObject({
+      microphone_activation_attempts: 1, operation_tracking_started: true, end_requested: false,
+    })
     const tokenCall = fetchMock.mock.calls.find(([url]) => String(url) === '/api/voice/livekit/token')
     expect(JSON.parse(String(tokenCall?.[1]?.body))).toMatchObject({
       character_id: 'miori',

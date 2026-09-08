@@ -43,6 +43,11 @@ AUDITED_CANDIDATE_VARIANTS = (
         'backend/app/livekit_transport/production.py': 'c128656f318ddaf50c7d5badef566bc5eb9244f4e1dce8df36668c2c02ba1b23',
         'backend/app/conversation_core/session.py': '77df1eb129b35f6d0a84d4eb95be369d4b2927ab27227a17acf9a622953109c3',
     },
+    # 2026-09-08: session専用journalを追加。VAD受信、PCM受信、Core確定の境界は変更なし。
+    {
+        'backend/app/livekit_transport/production.py': 'fee46d48d5198b9ce9d6a1be0c2f45d684b1210f7b0590969ae7d7e84beaca70',
+        'backend/app/conversation_core/session.py': '77df1eb129b35f6d0a84d4eb95be369d4b2927ab27227a17acf9a622953109c3',
+    },
 )
 BOUNDARY_AUDIT = {
     'utterance_finalized': {

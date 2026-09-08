@@ -288,3 +288,22 @@ Ollamaへの実chat送信直前に、`ollama_<estimate|generation>_http_requests
 結合テストの初回はBackend 1,429件成功・1件失敗で、Frontendは未実行だった。並行したモックE2Eが同じFrontendコンテナ名を使用し、所有権の保護により起動が拒否された。E2Eの所有コンテナ削除を確認してから結合テストを単独で再実行し、Backend 1,430件・Frontend 107件が成功した。初回失敗を削除して成功扱いにはしない。
 
 モックE2E 41件、Backend 237ファイル・Svelte・E2E TypeScriptの型検査、Python lint、Frontend buildも成功した。E2Eのtest-mocked Profile、teardown完了と所有Frontendの削除を確認した。buildの大きなchunkの警告は残る。これらは自動回帰の証拠であり、TTFAの未達、VAD境界、session集計、実声dogfoodの受け入れを置き換えない。
+
+### 応答に依存しないsession記録（#150）
+
+製品のLiveKit coordinatorは、実session IDによる作成・初回参加・終了理由を、応答traceの隣の`sessions/<同名>.jsonl`へ保存する。無応答sessionにも架空のutterance/response IDを与えない。dogfoodの保持期間は応答traceと同じ7日である。匿名集計は`voice-session-aggregate-v1.schema.json`、raw記録は`voice-session-trace-v1.schema.json`に従う。
+
+ブラウザは`getUserMedia`前の開始試行、mute試行、手動の再試行を累積して送る。追加操作数は`max(0, 開始試行数 - 1) + mute試行数 + 手動再試行数`であり、失敗した操作も加算する。自動再接続と初回の開始操作は追加操作に含めない。接続前に失敗した手動再試行は、次に作成できたsessionに引き継ぐ。session自体を作れなかった接続要求は、このsession集計の観測対象外であり、成功sessionの分母に混ぜない。
+
+最終summaryは終了前に送信し、最大500msで送信・ack待ちを打ち切って終了処理を進める。サーバーの明示終了だけから正常終了とは推定せず、最終summaryの終了意思との一致を必要とする。突然の切断・サーバー停止等で操作の全期間を確認できないときは、最後に得た途中値を0件や完全な測定として報告しない。cleanup失敗、journalの欠落、連番矛盾、操作数の逆行、容量超過も欠測にする。欠測理由は重複し得るため件数を合算してsession数と解釈しない。
+
+3往復の分母はブラウザの応答件数ではなく、サーバーで生成元サンプル数と実出力時計を照合できた、異なる3応答以上の完全再生sessionである。本文・音声はsession journalへ保存せず、集計ではsession・character・response IDも除去する。
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python -m app.voice_session_metrics \
+  --trace <data-root>/voice-metrics/raw/sessions/<run>.jsonl \
+  --measurement-kind dogfood --expected-sessions <開始記録で確認したsession数> \
+  --output <匿名集計.json>
+```
+
+`--expected-sessions`はjournalの件数から推定せず、独立した開始記録や試験manifestから与える。journalが全くないsessionも欠測として残す。これはsession指標の集計であり、実声dogfood、通常100件の速度、#150全条件の達成は別途確認する。
