@@ -1,0 +1,115 @@
+{
+  "scope": "offline_synthetic_clipping_calibration",
+  "results": {
+    "backchannel": {
+      "intact_matched": 100,
+      "intact_total": 100,
+      "leading_101ms_deleted_matched": 0,
+      "leading_101ms_deleted_total": 100,
+      "trailing_101ms_deleted_matched": 0,
+      "trailing_101ms_deleted_total": 100,
+      "leading_101ms_silenced_matched": 60,
+      "leading_101ms_silenced_total": 100,
+      "trailing_101ms_silenced_matched": 30,
+      "trailing_101ms_silenced_total": 100
+    },
+    "take_turn": {
+      "intact_matched": 100,
+      "intact_total": 100,
+      "leading_101ms_deleted_matched": 0,
+      "leading_101ms_deleted_total": 100,
+      "trailing_101ms_deleted_matched": 0,
+      "trailing_101ms_deleted_total": 100,
+      "leading_101ms_silenced_matched": 80,
+      "leading_101ms_silenced_total": 100,
+      "trailing_101ms_silenced_matched": 70,
+      "trailing_101ms_silenced_total": 100
+    },
+    "pause": {
+      "intact_matched": 100,
+      "intact_total": 100,
+      "leading_101ms_deleted_matched": 0,
+      "leading_101ms_deleted_total": 100,
+      "trailing_101ms_deleted_matched": 0,
+      "trailing_101ms_deleted_total": 100,
+      "leading_101ms_silenced_matched": 60,
+      "leading_101ms_silenced_total": 100,
+      "trailing_101ms_silenced_matched": 80,
+      "trailing_101ms_silenced_total": 100
+    }
+  },
+  "false_accept_examples": [
+    {
+      "cohort": "backchannel",
+      "fixture_sha256": "864a983a923e06e4e1ad55a8046f3d1f8d422536e6d2c0348fb4af2a7cde780c",
+      "case": "trailing_101ms_silenced",
+      "correlations": [
+        0.9999999999999999,
+        0.8995780986509949
+      ]
+    },
+    {
+      "cohort": "backchannel",
+      "fixture_sha256": "ccbcde6348d078220cda56d509af1ac9c1761f2d533d1a21c9a4e2b5cf54e9a0",
+      "case": "trailing_101ms_silenced",
+      "correlations": [
+        1.0,
+        0.8995718620933515
+      ]
+    },
+    {
+      "cohort": "backchannel",
+      "fixture_sha256": "654c109ba02c5efe62b1540a6e95031003353260a6d4607adbb2f36f61d92d74",
+      "case": "trailing_101ms_silenced",
+      "correlations": [
+        1.0,
+        0.8995716803054329
+      ]
+    },
+    {
+      "cohort": "backchannel",
+      "fixture_sha256": "5e6a88d281e153e01187e0bda77b532df27c3f98da44e8c09ee1d5fd56ed538a",
+      "case": "trailing_101ms_silenced",
+      "correlations": [
+        1.0,
+        0.899572557866613
+      ]
+    },
+    {
+      "cohort": "backchannel",
+      "fixture_sha256": "03059feffb585043538dd652241187fd7d0d43e8c08cb8286c9f1e248fe9567c",
+      "case": "trailing_101ms_silenced",
+      "correlations": [
+        1.0,
+        0.8995723809465016
+      ]
+    },
+    {
+      "cohort": "backchannel",
+      "fixture_sha256": "b807fbc6721780c5a36aa41cf7e23e3f3e799fc203bc84e654515c8a013bea49",
+      "case": "trailing_101ms_silenced",
+      "correlations": [
+        0.9999999999999999,
+        0.8995780986509949
+      ]
+    },
+    {
+      "cohort": "backchannel",
+      "fixture_sha256": "a8d5e711ce13b45c00956c4df6d6c606afef2517c19b88d1af7b2274d4a8d8ef",
+      "case": "trailing_101ms_silenced",
+      "correlations": [
+        1.0,
+        0.8995718620933515
+      ]
+    },
+    {
+      "cohort": "backchannel",
+      "fixture_sha256": "5135c3a2d7e466522c35982af9839f69c20f37e82e77a0257dac08095a40ae54",
+      "case": "trailing_101ms_silenced",
+      "correlations": [
+        1.0,
+        0.8995716803054329
+      ]
+    }
+  ]
+}

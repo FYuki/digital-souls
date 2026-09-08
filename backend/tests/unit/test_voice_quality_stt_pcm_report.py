@@ -32,6 +32,17 @@ def evidence():
                     'reason': None, 'sample_rate_hz': 16000, 'captured_sample_count': 32000,
                     'anchors': anchors, 'leading_edge_captured': True, 'trailing_edge_captured': True,
                     'interior_continuity_verified': False}}
+        row['bounded_edge_alignment'] = {
+            'method': report.BOUNDED_EDGE_METHOD, 'status': 'matched', 'reason': None,
+            'sample_rate_hz': 16000, 'captured_sample_count': 32000,
+            'filter_cutoff_hz': 4000, 'filter_taps': 129, 'block_samples': 800, 'search_radius_samples': 320,
+            'interior_continuity_verified': False, 'full_band_quality_verified': False,
+            'edges': [{'side': side, 'seed': anchors[j], 'blocks': [
+                {'reference_start_sample': start, 'sample_count': 800, 'captured_start_sample': start + 3520,
+                 'correlation': .99, 'accepted': True}
+                for start in positions]}
+                for j, (side, positions) in enumerate([('leading', [1600, 2400]), ('trailing', [14400, 15200])])],
+        }
         observed.append(row)
         trials.append({'session_id': session, 'initial_utterance_id': str(UUID(int=i + 2001)),
             'fixture_sha256': digest, 'outcome': 'success', 'session_end_confirmed': True,
@@ -72,9 +83,9 @@ def test_missing_or_invalid_evidence_stays_in_denominator(evidence, mutation, re
         duplicate = copy.deepcopy(rows[0]); duplicate['request_ordinal'] = 101
         rows.append(duplicate); m['trials'][0]['pcm_input_observation']['rows'].append(duplicate)
     elif mutation == 'bad_edge':
-        rows[0]['edge_alignment']['anchors'][0]['correlation'] = .79
+        rows[0]['bounded_edge_alignment']['edges'][0]['blocks'][0]['correlation'] = .79
     elif mutation == 'wrong_boundary':
-        rows[0]['edge_alignment']['anchors'][0]['reference_start_sample'] = 1601
+        rows[0]['bounded_edge_alignment']['edges'][0]['blocks'][0]['reference_start_sample'] = 1601
     elif mutation == 'snapshot':
         m['trials'][0]['pcm_input_observation']['rows'] = []
     elif mutation == 'active':
@@ -115,4 +126,26 @@ def test_warmup_is_not_counted_as_normal_measured_evidence(evidence):
     result = report.summarize(m, rows, events, catalog)
     assert result['counts'].expected == result['counts'].edges_matched == 3
     assert result['counts'].missing == 0
+    assert not result['passed']
+
+
+def test_legacy_whole_window_correlation_cannot_prove_endpoint_retention(evidence):
+    evidence[1][0].pop('bounded_edge_alignment')
+    result = report.summarize(*evidence)
+    assert result['counts'].edges_matched == 99
+    assert result['missing_reasons'] == {'speech_edges_unverified': 1}
+    assert not result['passed']
+
+
+@pytest.mark.parametrize('damage', ['band', 'radius', 'ambiguous_seed', 'shifted_block', 'reversed', 'missing_block'])
+def test_bounded_edge_provenance_and_order_are_rechecked(evidence, damage):
+    edge = evidence[1][0]['bounded_edge_alignment']
+    if damage == 'band': edge['filter_cutoff_hz'] = 2000
+    elif damage == 'radius': edge['search_radius_samples'] = 10000
+    elif damage == 'ambiguous_seed': edge['edges'][0]['seed']['competing_peak_correlation'] = .98
+    elif damage == 'shifted_block': edge['edges'][0]['blocks'][0]['captured_start_sample'] += 321
+    elif damage == 'reversed': edge['edges'].reverse()
+    elif damage == 'missing_block': edge['edges'][0]['blocks'].pop()
+    result = report.summarize(*evidence)
+    assert result['missing_reasons'] == {'speech_edges_unverified': 1}
     assert not result['passed']

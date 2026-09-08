@@ -140,6 +140,10 @@
       "default": false,
       "title": "All Vad Acceptance Verified",
       "type": "boolean"
+    },
+    "edge_alignment_method": {
+      "const": "bandlimited_local_speech_edge_blocks_v2",
+      "type": "string"
     }
   },
   "required": [

@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'backend'))
 from app.voice_baseline import _assert_anonymous
-from pcm_boundary_alignment import MIN_CORRELATION, MIN_PEAK_MARGIN
+from pcm_boundary_alignment import BOUNDED_EDGE_METHOD, valid_bounded_pcm_edges
 
 
 class Counts(BaseModel):
@@ -37,6 +37,7 @@ class Counts(BaseModel):
 class PcmReport(BaseModel):
     model_config = ConfigDict(extra='forbid')
     schema_version: Literal['1.0'] = '1.0'
+    edge_alignment_method: Literal['bandlimited_local_speech_edge_blocks_v2'] = BOUNDED_EDGE_METHOD
     evaluation_scope: Literal['actual_stt_pcm_edge_coverage_only'] = 'actual_stt_pcm_edge_coverage_only'
     cohort: Literal['normal', 'pause', 'backchannel', 'take_turn']
     measurement_revision: str | None
@@ -55,34 +56,7 @@ def number(value) -> bool:
 
 
 def valid_edges(row: dict, start: int, end: int) -> bool:
-    edge = row.get('edge_alignment')
-    if not isinstance(edge, dict) or edge.get('method') != 'direct_speech_edge_pcm_correlation_v1':
-        return False
-    size = row.get('input_sample_count')
-    if (type(size) is not int or size <= 0 or edge.get('captured_sample_count') != size
-            or edge.get('status') != 'matched' or edge.get('reason') is not None
-            or edge.get('sample_rate_hz') != 16000
-            or edge.get('leading_edge_captured') is not True or edge.get('trailing_edge_captured') is not True
-            or edge.get('interior_continuity_verified') is not False):
-        return False
-    anchors = edge.get('anchors')
-    width = min(3200, (end - start) // 3)
-    if end - start < 960 or not isinstance(anchors, list) or len(anchors) != 2:
-        return False
-    positions = []
-    for anchor, expected in zip(anchors, (start, end - width), strict=True):
-        if not isinstance(anchor, dict):
-            return False
-        position, score, competing = (anchor.get('captured_start_sample'), anchor.get('correlation'),
-                                      anchor.get('competing_peak_correlation'))
-        if (anchor.get('reference_start_sample') != expected or anchor.get('sample_count') != width
-                or type(position) is not int or not 0 <= position <= size - width
-                or not number(score) or not MIN_CORRELATION <= score <= 1
-                or not number(competing) or competing > 1 or score - competing < MIN_PEAK_MARGIN
-                or anchor.get('accepted') is not True):
-            return False
-        positions.append(position)
-    return positions[0] + width <= positions[1]
+    return valid_bounded_pcm_edges(row.get('bounded_edge_alignment'), start, end, row.get('input_sample_count'))
 
 
 def summarize(manifest: dict, observed: list[dict], events: list[dict], catalog: dict[str, tuple[int, int]]) -> dict:
@@ -180,7 +154,7 @@ def summarize(manifest: dict, observed: list[dict], events: list[dict], catalog:
             missing['speech_edges_unverified'] += 1
             continue
         counts.edges_matched += 1
-        correlations.extend(a['correlation'] for a in row['edge_alignment']['anchors'])
+        correlations.extend(block['correlation'] for edge in row['bounded_edge_alignment']['edges'] for block in edge['blocks'])
     counts.missing = sum(missing.values())
     gates = {'independent_100': expected == 100, 'all_final_inputs_correlated': counts.final_inputs_correlated == expected,
              'all_speech_edges_matched': counts.edges_matched == expected, 'no_missing': counts.missing == 0,

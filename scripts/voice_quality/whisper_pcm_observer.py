@@ -11,7 +11,7 @@ import wave
 
 import httpx
 import numpy as np
-from pcm_boundary_alignment import align_pcm, match_pcm_edges
+from pcm_boundary_alignment import align_pcm, match_pcm_edges, match_bounded_pcm_edges
 
 ROOT = Path(__file__).resolve().parents[2]
 MAX_PCM_BYTES = 3_200_000
@@ -79,7 +79,7 @@ class WhisperPcmObserver:
                    'fixture_sha256': None if selected is None else selected['fixture_sha256'],
                    'started_ns': time.monotonic_ns(), 'completed_ns': None,
                    'input_sample_count': len(body) // 2, 'preparation_silence': body == bytes(3200),
-                   'upstream_status': None, 'alignment': None, 'edge_alignment': None, 'reason': None}
+                   'upstream_status': None, 'alignment': None, 'edge_alignment': None, 'bounded_edge_alignment': None, 'reason': None}
             if len(self.rows) >= MAX_ROWS:
                 self.overflow = True
                 self.active -= 1
@@ -99,6 +99,8 @@ class WhisperPcmObserver:
                     row['alignment'] = align_pcm(selected['reference'], body,
                         speech_start_sample=selected['start'], speech_end_sample=selected['end'])
                     row['edge_alignment'] = match_pcm_edges(selected['reference'], body,
+                        speech_start_sample=selected['start'], speech_end_sample=selected['end'])
+                    row['bounded_edge_alignment'] = match_bounded_pcm_edges(selected['reference'], body,
                         speech_start_sample=selected['start'], speech_end_sample=selected['end'])
                 except ValueError:
                     row['reason'] = 'alignment_failed'

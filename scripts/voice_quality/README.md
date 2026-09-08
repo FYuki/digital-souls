@@ -671,3 +671,20 @@ previewのsample数や単なる最後のHTTP要求を代用にせず、曖昧な
 `pcm-pause-100-20260908-01`（測定revision `6f1dc67303cef561a71a37f84aea868ea19e8401`）は100件すべてで会話動作と最終STT入力の相関を確認した。VADの先頭・早期終了・分割の検出基準は100件で通過したが、実PCM端部の厳密な照合は90件、未確認10件のためPCMレポートの`passed`はfalseである。検出時刻の合格を、実PCM端部の未確認の補完には使用しない。
 
 結果は`docs/artifacts/livekit-stt-pcm-pause-100-2026-09-08.json`、検出結果は`livekit-vad-pcm-pause-100-2026-09-08.json`に保存した。測定が所有したFrontendとBackendの削除、観測proxyポートの閉鎖、および入力artifactのhashは`livekit-stt-pcm-pause-100-cleanup-2026-09-08.json`に記録した。未確認試行を除外せず、100件の分母を保持する。
+
+### 端部照合の校正とv2診断
+
+200ms全体の相関だけを使うv1は、端部101msを無音化しても大きな残存波形に相関が支配され、合格と誤判定する反例が見つかった。v1の過去artifactは変更せず保持するが、その`edges_matched`だけでは端部保持の受け入れ証拠にしない。現在の集計は`bounded_edge_alignment`のv2証拠を要求し、旧方式だけの入力は未確認とする。
+
+v2は参照の先頭・末尾から600ms以内の一意なseedで位置を推定し、その位置から±20ms以内で、各端部100msの2つの50ms区間を独立に照合する。相関の下限0.8、seedの競合候補との差0.1、区間の順序と局所ずれの上限を検査する。照合用にのみ129tap・4kHz低域通過filterを同じ方法で双方へ適用し、符号化による高域の雑音変化の影響を抑える。Whisperへ転送するPCMは変更しない。これは端部の低域波形の存在確認であり、全帯域の品質や発話内部の連続性を証明しない。
+
+```bash
+backend/.venv/bin/python scripts/voice_quality/calibrate_pcm_edges.py \
+  --codec none --output /tmp/pcm-edge-calibration-raw-new.json
+backend/.venv/bin/python scripts/voice_quality/calibrate_pcm_edges.py \
+  --codec opus --bitrate 32000 --output /tmp/pcm-edge-calibration-opus-new.json
+```
+
+校正では通常fixtureとラベル付き300件について、無加工、先頭・末尾の101ms削除、同範囲の無音化、重複、順序入れ替えを確認する。Opusの場合は48kHzの元fixtureを符号化し、decoderの連続したPTSからcodec遅延を求めて欠けの注入位置を決める。生PCM・本文は保存せず、fixture hash、診断実装hash、件数、誤受理・正常系未確認の一覧だけを保存する。校正通過は実WebRTC入力での受け入れとは別であり、実入力の観測も必要である。
+
+v2の301件校正では、無加工入力の正常判定と既知の欠け・重複・並べ替えの拒否はすべて期待どおりだった。32kbps Opus往復でも既知の欠けの誤受理は0件だったが、正常な文中休止fixture 2件が未確認となった。両方の結果とv1の反例を`docs/artifacts/livekit-pcm-edge-*-2026-09-08.json`へ保持する。v2校正のOpus結果は`passed: false`であり、実入力の合格証明へ置き換えない。

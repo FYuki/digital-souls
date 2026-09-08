@@ -12,7 +12,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'scripts/voice_quality'))
 try:
-    from pcm_boundary_alignment import align_pcm, match_pcm_edges
+    from pcm_boundary_alignment import align_pcm, match_pcm_edges, match_bounded_pcm_edges
 finally:
     sys.path.remove(str(ROOT / 'scripts/voice_quality'))
 
@@ -97,6 +97,8 @@ def test_real_opus_roundtrip_of_fixed_fixture_keeps_known_alignment():
     reference = pcm(original[::3])
     edge = match_pcm_edges(reference, pcm(captured[::3]), speech_start_sample=5280, speech_end_sample=15040)
     assert edge['status'] == 'matched'
+    bounded = match_bounded_pcm_edges(reference, pcm(captured[::3]), speech_start_sample=5280, speech_end_sample=15040)
+    assert bounded['status'] == 'matched'
     result = align_pcm(reference, pcm(captured[::3]), speech_start_sample=5280, speech_end_sample=15040)
     assert result['status'] == 'aligned'
     assert result['lag_difference_samples'] == 0
@@ -125,3 +127,37 @@ def test_direct_edges_reject_repeated_audio_and_reordered_edges(signal):
     for captured in (np.r_[signal, signal], np.r_[signal[9600:], signal[:9600]]):
         result = match_pcm_edges(pcm(signal), pcm(captured), speech_start_sample=3200, speech_end_sample=16000)
         assert result['status'] == 'unverified'
+
+
+@pytest.mark.parametrize('side', ['leading', 'trailing'])
+@pytest.mark.parametrize('damage', ['silenced', 'deleted'])
+def test_short_blocks_reject_101ms_loss_hidden_by_louder_rest(signal, side, damage):
+    reference = signal.copy()
+    reference[3200:4816] //= 100
+    reference[14384:16000] //= 100
+    captured = reference.copy()
+    if side == 'leading':
+        if damage == 'silenced': captured[:4816] = 0
+        else: captured = captured[4816:]
+    else:
+        if damage == 'silenced': captured[14384:] = 0
+        else: captured = captured[:14384]
+    if damage == 'silenced':
+        # 大きな残存波形が200ms窓の相関を支配する旧方式の反例。
+        assert match_pcm_edges(pcm(reference), pcm(captured), speech_start_sample=3200, speech_end_sample=16000)['status'] == 'matched'
+    assert match_bounded_pcm_edges(pcm(reference), pcm(reference), speech_start_sample=3200, speech_end_sample=16000)['status'] == 'matched'
+    result = match_bounded_pcm_edges(pcm(reference), pcm(captured), speech_start_sample=3200, speech_end_sample=16000)
+    assert result['status'] == 'unverified'
+    assert not result['full_band_quality_verified']
+
+
+def test_bounded_blocks_reject_ambiguous_reordered_or_silent_audio(signal):
+    for captured in (np.r_[signal, signal], np.r_[signal[9600:], signal[:9600]], np.zeros(len(signal)), np.zeros(1)):
+        assert match_bounded_pcm_edges(pcm(signal), pcm(captured), speech_start_sample=3200, speech_end_sample=16000)['status'] == 'unverified'
+
+
+def test_local_blocks_allow_interior_shift_without_claiming_continuity(signal):
+    captured = np.r_[signal[:9600], np.zeros(640), signal[9600:]]
+    result = match_bounded_pcm_edges(pcm(signal), pcm(captured), speech_start_sample=3200, speech_end_sample=16000)
+    assert result['status'] == 'matched'
+    assert not result['interior_continuity_verified']

@@ -44,6 +44,8 @@ def test_http_forwards_actual_bytes_and_response_without_storing_either(tmp_path
             result = client.get('/observations').json()
             assert result['rows'][0]['alignment']['status'] == 'aligned'
             assert result['rows'][0]['edge_alignment']['status'] == 'matched'
+            assert result['rows'][0]['bounded_edge_alignment']['status'] == 'matched'
+            assert result['rows'][0]['bounded_edge_alignment']['full_band_quality_verified'] is False
             assert result['rows'][0]['input_sample_count'] == len(original) // 2
             assert result['active_requests'] == 0
     assert sent == [original]
