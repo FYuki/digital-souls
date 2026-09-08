@@ -44,6 +44,7 @@ test.afterEach(async ({ page }, testInfo) => {
       })),
       core_events: state.coreEventDiagnostics.map(event => ({
         type: event.type, at_ms: event.atMs, reason_code: event.reasonCode,
+        decision: event.decision, final: event.final,
       })),
       transport_failures: (state.transportFailures ?? []).map(event => ({
         stage: event.stage, reason: event.reason ?? null, at_ms: event.atMs,
@@ -171,9 +172,12 @@ test('ラベル付き実音声によるLiveKit barge-inのlocal停止とcancel�
     cancelConfirmedAtMs: number
   }
   expect(evidence.responseId).toBe(cycle.responseId)
-  expect(await page.evaluate(responseId => window.__voiceChatE2E.coreEventDiagnostics.some(event =>
-    event.type === 'turn_decision' && event.responseId === responseId && event.final === true
-    && event.decision === 'take_turn'), cycle.responseId)).toBe(true)
+  await page.waitForFunction(responseId => window.__voiceChatE2E.coreEventDiagnostics.some(event =>
+    event.type === 'turn_decision' && event.responseId === responseId && event.final === true),
+  cycle.responseId, {timeout: 10_000})
+  expect(await page.evaluate(responseId => window.__voiceChatE2E.coreEventDiagnostics.find(event =>
+    event.type === 'turn_decision' && event.responseId === responseId && event.final === true)?.decision,
+  cycle.responseId)).toBe('take_turn')
   // 正解の実音声開始からの上限も評価し、turn判定受信時刻で起点を置き換えない。
   const localStopFromFixtureUpperMs = evidence.localPlaybackStoppedAtMs - bounds.speechStart.lowerMs
   const cancelFromFixtureUpperMs = evidence.cancelConfirmedAtMs - bounds.speechStart.lowerMs

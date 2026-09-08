@@ -1,0 +1,18 @@
+{
+  "scope": "real_input_barge_in_regression_only",
+  "measurement_revision": "613a6caaf33e857b971103023f7029e56fb8501a",
+  "passed": false,
+  "failed_assertion": "immediate_final_take_turn_observation",
+  "latency_gates_reached": false,
+  "pipeline_failure_count": 0,
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "teardown_completed": true,
+  "log_reader_closed": true,
+  "source_sha256": {
+    "environment_run": "bce61c1eeeaa82ea9cea2d13901198baca0025a27b3e579cfa10120a5453f3b2",
+    "test_log": "9e4711d7e921323fbb7264b0ea1d15e9de1def5301d68d5574a2bf59c0182ffd"
+  }
+}
