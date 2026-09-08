@@ -27,7 +27,26 @@ test.beforeEach(async ({}, testInfo) => {
   if (reason !== null) test.skip(true, reason)
 })
 
-test.afterEach(async ({ page, context }) => {
+test.afterEach(async ({ page, context }, testInfo) => {
+  // 本文やIDを含めず、cleanupで失われる失敗理由と完了数を残す。
+  const observations = await page.evaluate(() => {
+    const state = window.__voiceChatE2E
+    if (!state) return null
+    return {
+      core_events: state.coreEventDiagnostics.map(event => ({
+        type: event.type, at_ms: event.atMs, reason_code: event.reasonCode,
+      })),
+      transport_failures: (state.transportFailures ?? []).map(event => ({
+        stage: event.stage, reason: event.reason ?? null, at_ms: event.atMs,
+      })),
+      cycle_count: state.cycles.length,
+      first_playback_count: state.cycles.filter(cycle => cycle.startedAt !== null).length,
+      complete_playback_count: Object.keys(state.playbackCompletions ?? {}).length,
+    }
+  })
+  await testInfo.attach('voice-state-observations.json', {
+    body: JSON.stringify(observations), contentType: 'application/json',
+  })
   await context.setOffline(false)
   await driver.endVoiceSession(page)
   await hardDeleteSelectedConversation(page, 'miori')
