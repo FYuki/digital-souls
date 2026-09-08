@@ -461,6 +461,11 @@ class Service:
                     check_current()
                 except Exception as exc:
                     interruption = exc.result if isinstance(exc, LifeError) else Result.FAILED
+                    if not isinstance(exc, LifeError):
+                        logging.getLogger(__name__).warning(
+                            "Character Life formation failed: exception_type=%s",
+                            type(exc).__name__,
+                        )
                     cancellation.cancel()
                     if task is not None:
                         task.cancel(monitor_cancellation)
@@ -496,7 +501,12 @@ class Service:
             if self.closing:
                 return Result.DEFERRED
             raise
-        except Exception:
+        except Exception as error:
+            # 外部例外の本文・tracebackは記録せず、診断には型名だけを残す。
+            logging.getLogger(__name__).warning(
+                "Character Life formation failed: exception_type=%s",
+                type(error).__name__,
+            )
             return Result.FAILED
         finally:
             if task is not None:

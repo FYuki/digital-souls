@@ -1093,3 +1093,30 @@ def test_addon_off_while_life_waits_for_gate_prevents_dispatch(tmp_path):
             assert not source.calls
             assert manager.list()[0]["effective_state"] == "disabled"
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("stage", ["formation", "priority_monitor"])
+def test_formation_failure_logs_type_without_private_content(tmp_path, caplog, stage):
+    async def scenario():
+        async with environment(tmp_path) as (service, _, initial):
+            service.store.finish(initial, Result.NO_CHANGE, "setup")
+            entered = False
+            class Formation:
+                async def run(self, *args, **kwargs):
+                    nonlocal entered
+                    entered = True
+                    if stage == "formation":
+                        raise RuntimeError("PRIVATE_FORMATION_SENTINEL")
+                    await asyncio.Event().wait()
+            def priority():
+                if entered:
+                    raise RuntimeError("PRIVATE_PRIORITY_SENTINEL")
+                return False
+            service.formation = Formation()
+            service.foreground_busy = priority
+            assert await asyncio.wait_for(service.form_life_states("miori"), 2) == Result.FAILED
+            assert not service.tasks
+            assert "exception_type=RuntimeError" in caplog.text
+            assert "PRIVATE_" not in caplog.text
+            assert all(record.exc_info is None for record in caplog.records)
+    asyncio.run(scenario())
