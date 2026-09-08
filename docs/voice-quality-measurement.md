@@ -147,7 +147,7 @@ Conversation Coreから音声の本文をstreamする要求には`latency_sensit
 
 ## 端部位置の複数候補照合
 
-端部照合v4は、発話先頭・末尾それぞれの最大600ms内で、高エネルギー位置と固定した始端・中央・終端の最大4候補を照合する。各候補は従来と同じ200msのseed、相関0.8以上、他位置との差0.1以上を要求する。採用する端部の75ms特徴窓、探索幅20ms、filterの片側4msを合わせた99msの範囲は維持する。正常な特徴窓を示した候補同士が20msを超えて食い違う場合は未確認にする。
+端部照合v4は、発話先頭・末尾それぞれの最大600ms内で、高エネルギー位置と固定した始端・中央・終端の最大4候補を照合する。各候補は従来と同じ最大200msのseed、相関0.8以上、他位置との差0.1以上を要求する。採用する端部の75ms特徴窓、探索幅20ms、filterの片側4msを合わせた99msの範囲は維持する。正常な特徴窓を示した候補同士が20msを超えて食い違う場合は未確認にする。
 
 全候補を数値証拠へ保存し、集計で固定位置の存在、選択候補、相関、局所窓、順序、候補間の一致を再検証する。中央部分の連続性や全周波数帯の音質は、この照合では証明しない。旧v3の保存結果はschema上で読めるが、v4の判定へ読み替えない。現在の再集計器はv4の候補証拠を要求する。
 
@@ -156,3 +156,25 @@ Conversation Coreから音声の本文をstreamする要求には`latency_sensit
 v4の校正では301音声×9条件について、[未圧縮](artifacts/livekit-pcm-multi-seed-v4-raw-2026-09-08.json)、[Opus 32kbps](artifacts/livekit-pcm-multi-seed-v4-opus32-2026-09-08.json)、[Opus 64kbps](artifacts/livekit-pcm-multi-seed-v4-opus64-2026-09-08.json)のすべてで正常301件を照合し、欠け・無音化・雑音・重複・順序逆転の2408件を拒否した。実際のWebRTC入力による100件の受け入れは別途必要である。関連テスト48件と、旧schema互換性を追加した集計テスト22件（前者と重複を含む）が成功した。
 
 v4実ブラウザpilot（`pcm-multi-seed-v4-pause-pilot-20260908-01`、revision `f942001`）では前回未確認だった5・66番と100番の音声を使い、3件とも実際の最終STT入力と端部を確認した。通常音声設定を用い、実験用thinking上書きは指定していない。[端部照合結果](artifacts/livekit-pcm-multi-seed-v4-pause-pilot-2026-09-08.json)と[所有環境・proxyの終了確認](artifacts/livekit-pcm-multi-seed-v4-pause-pilot-cleanup-2026-09-08.json)を保存した。最小端部相関は0.95749で、発話全体の均一offsetが成立しない1件もそのまま記録した。独立100件には達しておらず、全受け入れは未完了である。
+
+
+## 通常音声E2Eと実通信障害の回帰検証
+
+`npm run test:integration:voice`の割り込み検証は、再生中にラベル付き`take-01.wav`を入力し、実際のVAD・STT・意図判定と旧応答の取消を通す。停止・取消はfixtureの正解発話開始からも上限を評価する。人工的な`speechStarted()`の送信は使わない。
+
+localhostのWebRTCを切断できない`context.setOffline()`による旧再接続テストは、既存の実通信障害suiteへ統合した。通常の音声E2Eと再接続は、両方を実行して回帰確認する。Frontendディレクトリから次を実行する。
+
+```bash
+npm run test:integration:voice
+npm run test:integration:voice:reconnect -- \
+  --run-id <未使用のrun名> --inference-env <開発用推論設定のパス>
+```
+
+再接続コマンドは`run_pilot.py`と`livekit-quality.spec.ts`の実障害分岐を使い、[専用障害環境の手順](../infra/voice-quality/README.md)で事前に起動したbridgeのlabel・単独接続・専用loopback portを検証する。共有SFUやdogfoodは切断対象にできない。controlと実音声の双方の回復、同一sessionでの次発話、新しい応答の完全再生、sessionと所有app環境の終了を確認する。`--trials 3`は同一sessionの障害前probe数であり、独立した再接続3試行でも正式100試行でもない。正式再接続100件は既存の`run_reconnect_cohort.py`で別途測定する。
+
+
+## v4の実入力100件の結果
+
+`pcm-multi-seed-v4-pause-100-20260908-01`（revision `ec79b4a`）では文中休止を持つ独立100件の会話動作、実際の最終STT入力、音声端部をすべて確認した。[PCM結果](artifacts/livekit-pcm-multi-seed-v4-pause-100-2026-09-08.json)の未確認は0件、最小端部相関は0.86580だった。同じmanifest hashに基づく[VAD結果](artifacts/livekit-vad-pcm-multi-seed-v4-pause-100-2026-09-08.json)は冒頭誤差・早すぎる終了・境界の不確かさ・文中休止の誤分割が各0件だった。発話全体の均一offsetが成立しない17件は残し、内部連続性の証明には使わない。
+
+[終了確認](artifacts/livekit-pcm-multi-seed-v4-pause-100-cleanup-2026-09-08.json)で所有Frontend・Backendの削除、proxyの停止、通常音声設定での実行、両集計の入力一致を確認した。この結果は文中休止cohortのVADと端部の証拠であり、通常設定のTTFA100件、別cohort、実声dogfoodや#150全体の受け入れ完了を示すものではない。旧v3の98/100という未達結果も保存したままである。
