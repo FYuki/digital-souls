@@ -1042,6 +1042,44 @@ test.each([false, true])('全PCMの出力時計通過後の旧RTP異常だけが
   } finally {client.disconnect(); now.mockRestore()}
 })
 
+test.each(['measured', 'missing', 'stale', 'send_failed'])('RTP統計を同一応答の製品観測へ送り、計測失敗で再生をcancelしない: %s', async mode => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(row => observations.push(row))
+  const sessionId = '20000000-0000-4000-8000-000000000001'
+  const responseId = '22222222-2222-2222-2222-222222222222'
+  await client.connect('ws://test', 'token', sessionId)
+  const room = latestRoom(), disconnected = vi.spyOn(room, 'disconnect')
+  const sender = {getStats: async () => new Map([['private-uplink', {id:'private-uplink', type:'outbound-rtp',
+    kind:'audio', bytesSent:100, packetsSent:8, address:'private-address'}]])}
+  const receiver = {getStats: async () => new Map([['private-downlink', {id:'private-downlink', type:'inbound-rtp',
+    kind:'audio', bytesReceived:200, packetsReceived:4, packetsLost:0, address:'private-address'}]])}
+  if (mode !== 'missing') room.localParticipant.getTrackPublication.mockReturnValue({track:{sender}})
+  room.emit('trackSubscribed', {kind:'audio', mediaStreamTrack:{}, receiver},
+    {trackSid:'TR_network', trackName:`ds-response-v1:${responseId}`})
+  await vi.waitFor(() => expect(audioContexts.at(-1)?.renderWorklets).toHaveLength(1))
+  const publish = vi.spyOn(client, 'publishControlEvent')
+  if (mode === 'send_failed') publish.mockRejectedValueOnce(new Error('disconnected'))
+  try {
+    const internal = client as unknown as {observeNetwork: (response: string, key: string, generation: number, expected: number) => Promise<void>}
+    await internal.observeNetwork(responseId, 'TR_network', mode === 'stale' ? -1 : 0, 4)
+    if (mode === 'stale') {
+      expect(publish).not.toHaveBeenCalled()
+      expect(observations.some(row => row.networkObservation)).toBe(false)
+    } else {
+      const event = publish.mock.calls.find(([value]) => value.measurement === 'network_summary')?.[0]
+      expect(event).toMatchObject({type:'observation', session_id:sessionId, response_id:responseId,
+        measurement:'network_summary', clock_domain:'client_monotonic', unit:'millisecond',
+        network_summary:{method:'browser_audio_rtp_counters_v1',
+          uplink: mode === 'missing' ? {status:'missing', reason:'stats_api_unavailable'} : {status:'measured', bytes:100, packets:8},
+          downlink:{status:'measured', bytes:200, packets:4, lostPackets:0}}})
+      expect(JSON.stringify(event)).not.toMatch(/private-address|private-uplink|private-downlink/)
+      expect(observations.find(row => row.networkObservation)?.networkMeasurementDelivered).toBe(mode !== 'send_failed')
+    }
+    expect(observations.some(row => row.failureStage)).toBe(false)
+    expect(disconnected).not.toHaveBeenCalled()
+  } finally {client.disconnect()}
+})
+
 })
 
 test('実roomのprobe応答をnonce・世代へ相関し、通常の状態同期を追加送信しない', async () => {

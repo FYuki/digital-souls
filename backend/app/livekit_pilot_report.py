@@ -16,7 +16,7 @@ from jsonschema import Draft202012Validator
 from app.stt.remote_whisper_client import WHISPER_COMPUTE_TYPE, WHISPER_DEVICE
 from app.voice_baseline import _assert_anonymous, _load_manifest, _load_trace
 from app.voice_resource_metrics import aggregate_resources
-from app.voice_network_metrics import aggregate_network
+from app.voice_network_metrics import aggregate_network, network_observation_from_trace
 from app.voice_metrics import (
     ClockMetadata, DiagnosticValue, HardwareMetadata,
     ResourceMetadata, RunDiagnostics, TraceEvent, aggregate_events, create_run_metadata,
@@ -117,6 +117,12 @@ def _finalize_livekit_report(
         if any(event.outcome != "success" for event in matched):
             raise ValueError("pilot contains failed or excluded processing")
         points = {event.name: event for event in matched}
+        native_network = network_observation_from_trace(matched)
+        if trial.get("network_measurement_method") not in (None, "native_observation_summary_v1"):
+            raise ValueError("unknown network measurement method")
+        if native_network is not None or trial.get("network_measurement_method") == "native_observation_summary_v1":
+            if native_network is None or native_network != trial.get("network_observation"):
+                raise ValueError("native network summary contradicts manifest or is missing")
         if not {"stt_completed", "llm_completed", "tts_pipeline_completed", "first_playback"} <= points.keys():
             raise ValueError("pilot lacks successful generation or playback observations")
         origin = trial["fixtureStartedAt"]

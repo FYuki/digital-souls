@@ -85,6 +85,14 @@ CPUは取得sampleの単純平均、メモリとGPUは取得sampleの最大値�
 
 この取り込みはresourceだけを補う。通信量・packet loss、session中の追加操作、予期しない終了、再生品質は各々の観測が必要であり、resource値から推定しない。
 
+### 製品traceのRTP統計
+
+完全再生を確認した応答では、ブラウザが取得した送受信byte数・packet数・downlinkの累積lossを、`network_summary` observationとして同じsession/responseへ送る。IP、SSRC、stats ID、本文は含めない。Backendは既知の応答と生成PCMの総packet数を照合し、欠測理由を含むsnapshot全体を検証してから`network_rtp_*`の数値traceを記録する。重複snapshotや矛盾した値は混合しない。
+
+dogfood集計はこのtraceからnetwork metadataを作る。複数発話を結合した応答もRTP snapshotは1回分として合計する。APIの欠落・timeout・未更新のpacket数は欠測理由と分母を保存し、計測失敗だけでは応答処理を失敗扱いにしない。負のlossは別streamの正のlossを相殺せず、件数として記録する。従来のtraceにnetwork観測がなければ欠測を残す。
+
+この経路は完全再生した応答のRTP観測を対象とする。取り消し途中の応答やsession全期間のすべての通信を収集済みとは扱わない。新しい通常測定manifestは`network_measurement_method: native_observation_summary_v1`を宣言し、集計時に各応答の製品traceとブラウザ観測の一致を必須にする。ブラウザだけの値で製品側の欠測を埋めない。
+
 ## 保存と削除
 
 dogfood生traceはリポジトリ外の `DS_DATA_DIR/voice-metrics/raw/` へ保存し、7日を超えたファイルを起動時に削除する。生traceはGit、会話履歴、テスト成果物、dogfood backupの対象にしない。長期保存aggregateからはcharacter・event・session・utterance・response IDを除く。リポジトリ内へ誤出力した `voice-metrics/raw/` は `.gitignore` で追跡対象外にする。

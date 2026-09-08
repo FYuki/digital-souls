@@ -526,3 +526,25 @@ def test_manual_operations_aggregate_excludes_warmup_and_preserves_missing(pilot
     else:
         assert metric['success_count'] == 1 and metric['missing_count'] == 0
         assert metric['p95'] == len(actions)
+
+
+@pytest.mark.parametrize('native', ['valid', 'missing', 'mismatch'])
+def test_pilot_requires_declared_native_network_to_match_each_response(pilot_inputs, native):
+    from app.voice_network_metrics import network_summary_values
+    manifest, events, run = pilot_inputs
+    for trial in manifest['trials']:
+        trial['network_measurement_method'] = 'native_observation_summary_v1'
+        raw = {'method':'browser_audio_rtp_counters_v1', 'uplink':{'status':'measured', 'bytes':100, 'packets':8},
+               'downlink':{'status':'measured', 'bytes':200, 'packets':4, 'lostPackets':0}}
+        trial['network_observation'] = raw
+        if native == 'missing': continue
+        for name, value in network_summary_values(raw, expected_packets=4).items():
+            events.append({'schema_version':'1.0', 'measurement_kind':'controlled_baseline', 'event_id':str(uuid4()),
+                'character_id':'miori', 'session_id':trial['sessionId'], 'utterance_id':trial['utteranceId'],
+                'response_id':trial['responseId'], 'name':name, 'stage':'network', 'outcome':'success',
+                'timestamp':2000, 'clock_domain':'client_monotonic', 'unit':'millisecond', 'value':value})
+        if native == 'mismatch': raw['uplink']['bytes'] += 1
+    if native == 'valid':
+        assert run()['network']['sent_bytes']['value'] == 100
+    else:
+        with pytest.raises(ValueError, match='native network summary'): run()

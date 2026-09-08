@@ -10,6 +10,7 @@ from app.conversation_core.provider_result_audit import PROVIDER_RESULT_METRICS,
 from app.inference.diagnostics import DIAGNOSTIC_NAMES
 from app.voice_metrics import EventOutcome, MeasurementKind, TraceEvent
 from app.livekit_transport.playback_summary import validate_playback_summary
+from app.voice_network_metrics import network_summary_values
 
 logger = logging.getLogger(__name__)
 TraceUnit = Literal["nanosecond", "millisecond"]
@@ -300,6 +301,26 @@ class LiveKitMeasurementSession:
             return False
         measurement = event.get("measurement")
         timestamp = event.get("timestamp")
+        if measurement == "network_summary":
+            response_id = event.get("response_id")
+            if (not isinstance(response_id, str) or response_id not in self._response_utterances
+                    or type(timestamp) is not int or timestamp < 0
+                    or event.get("clock_domain") != "client_monotonic" or event.get("unit") != "millisecond"
+                    or ("response", response_id, "network_rtp_summary_recorded") in self._recorded_names):
+                return False
+            samples = next((item.value for item in self._response_events.get(response_id, ())
+                            if item.name == "response_audio_captured_samples" and item.outcome == "success"), None)
+            if samples is None or samples < 0 or samples % 960:
+                return False
+            try:
+                values = network_summary_values(event.get("network_summary"), expected_packets=int(samples) // 960)
+            except ValueError:
+                return False
+            self._seen_client_event_ids.add(event_id)
+            for name, value in values.items():
+                self.record_response_event(response_id=response_id, name=name, stage="network", value=value,
+                                           timestamp=timestamp, clock_domain="client_monotonic", unit="millisecond")
+            return True
         if (
             measurement not in {"speech_stopped", "playback_started", *_CLIENT_INTERRUPT_NAMES, *_CLIENT_MEDIA_NAMES}
             or type(timestamp) is not int

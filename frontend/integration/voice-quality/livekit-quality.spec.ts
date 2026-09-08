@@ -196,6 +196,7 @@ test(vadCohort ? '固定ラベルの文中休止で実ブラウザVADの分割�
           playback_supply_observation: await page.evaluate(readPlaybackSupplyDiagnostic, cycle.responseId!),
         } : {}),
         ...(sourceBounds ? { user_control_observation: userControlObservation } : {}),
+        network_measurement_method: 'native_observation_summary_v1',
         network_observation: await page.evaluate(responseId => window.__voiceChatE2E.networkObservations?.[responseId], cycle.responseId!),
         track_response_matches: await page.evaluate(responseId => window.__voiceChatE2E.lastTrackMediaResponseId === responseId, cycle.responseId),
         track_media_observation: await page.evaluate(() => window.__voiceChatE2E.lastTrackMediaObservation),

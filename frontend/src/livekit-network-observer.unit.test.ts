@@ -44,3 +44,9 @@ describe('RTP統計の数値だけを観測する', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 })
+
+
+test('受信packet数と負のlossから負の分母になる値は欠測にする', async () => {
+  expect((await new RtpNetworkObserver().capture(source(sent()), source(received(-11)), 10)).downlink)
+    .toEqual({status: 'missing', reason: 'invalid_rtp_counters'})
+})

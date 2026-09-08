@@ -10,13 +10,13 @@ from typing import Sequence
 from jsonschema import Draft202012Validator
 
 from app.voice_dogfood_resources import load_dogfood_resources
+from app.voice_network_metrics import aggregate_network_trace
 from app.model_settings import resolve_model_settings
 from app.stt.remote_whisper_client import WHISPER_COMPUTE_TYPE, WHISPER_DEVICE
 from app.voice_metrics import (
     ClockMetadata,
     DiagnosticValue,
     HardwareMetadata,
-    NetworkMetadata,
     ResourceMetadata,
     RunDiagnostics,
     TraceEvent,
@@ -153,12 +153,7 @@ def finalize_livekit_dogfood_report(
                        cpu_percent=unavailable,
                        memory_bytes=unavailable,
                    )),
-        network=NetworkMetadata(
-            sent_bytes=unavailable,
-            received_bytes=unavailable,
-            packet_loss_basis_points=unavailable,
-            condition="Ubuntu-dogfood LiveKit",
-        ),
+        network=aggregate_network_trace(events, condition="Ubuntu-dogfood LiveKit; browser audio RTP payload; loss at browser downlink"),
     )
     artifact = aggregate_events(events, metadata=metadata, diagnostics=diagnostics)
     serialized = artifact.model_dump(mode="json")

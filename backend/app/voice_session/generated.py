@@ -1,7 +1,7 @@
 from enum import Enum
 from pydantic import BaseModel
-from uuid import UUID
 from typing import Optional, List, Union
+from uuid import UUID
 
 
 class Classification(Enum):
@@ -27,11 +27,53 @@ class Measurement(Enum):
     CLIENT_TRACK_RECEIVED = "client_track_received"
     FIRST_AUDIO_OUT = "first_audio_out"
     LOCAL_PLAYBACK_STOPPED = "local_playback_stopped"
+    NETWORK_SUMMARY = "network_summary"
     PLAYBACK_STARTED = "playback_started"
     RESPONSE_STARTED = "response_started"
     SPEECH_STOPPED = "speech_stopped"
     TURN_DECISION_RECEIVED = "turn_decision_received"
     UTTERANCE_FINALIZED = "utterance_finalized"
+
+
+class DownlinkReason(Enum):
+    AMBIGUOUS_AUDIO_STREAM = "ambiguous_audio_stream"
+    COUNTER_REGRESSED = "counter_regressed"
+    INVALID_RTP_COUNTERS = "invalid_rtp_counters"
+    PLAYBACK_PACKETS_NOT_YET_REPORTED = "playback_packets_not_yet_reported"
+    STATS_API_UNAVAILABLE = "stats_api_unavailable"
+    STATS_FAILED = "stats_failed"
+    STATS_TIMEOUT = "stats_timeout"
+    STATS_UNAVAILABLE = "stats_unavailable"
+
+
+class Status(Enum):
+    MEASURED = "measured"
+    MISSING = "missing"
+
+
+class Downlink(BaseModel):
+    status: Status
+    bytes: Optional[int] = None
+    lost_packets: Optional[int] = None
+    packets: Optional[int] = None
+    reason: Optional[DownlinkReason] = None
+
+
+class Method(Enum):
+    BROWSER_AUDIO_RTP_COUNTERS_V1 = "browser_audio_rtp_counters_v1"
+
+
+class Uplink(BaseModel):
+    status: Status
+    bytes: Optional[int] = None
+    packets: Optional[int] = None
+    reason: Optional[DownlinkReason] = None
+
+
+class NetworkSummary(BaseModel):
+    downlink: Downlink
+    method: Method
+    uplink: Uplink
 
 
 class PlaybackSummary(BaseModel):
@@ -57,7 +99,7 @@ class ProtocolVersion(Enum):
     THE_10 = "1.0"
 
 
-class Reason(Enum):
+class VoiceSessionEventReason(Enum):
     BARGE_IN = "barge_in"
     DECODE_FAILURE = "decode_failure"
     DISCONNECT = "disconnect"
@@ -141,7 +183,7 @@ class VoiceSessionEvent(BaseModel):
     monotonic_timestamp_ms: Optional[int] = None
     requested_reconnect_grace_ms: Optional[int] = None
     reconnect_grace_ms: Optional[int] = None
-    reason: Optional[Reason] = None
+    reason: Optional[VoiceSessionEventReason] = None
     response_id: Optional[UUID] = None
     speaker: Optional[Speaker] = None
     utterance_id: Optional[UUID] = None
@@ -166,5 +208,6 @@ class VoiceSessionEvent(BaseModel):
     user_state: Optional[UserState] = None
     clock_domain: Optional[ClockDomain] = None
     measurement: Optional[Measurement] = None
+    network_summary: Optional[NetworkSummary] = None
     timestamp: Optional[Union[int, str]] = None
     unit: Optional[Unit] = None

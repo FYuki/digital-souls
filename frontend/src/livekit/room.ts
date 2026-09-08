@@ -75,6 +75,7 @@ export type RoomObservation = Readonly<{
   cancelConfirmedAtMs?: number
   networkResponseId?: string
   networkObservation?: NetworkObservation
+  networkMeasurementDelivered?: boolean
 }>
 
 export type MicrophoneCaptureOptions = Readonly<{
@@ -946,13 +947,27 @@ export class LiveKitRoomClient {
   }
 
   private async observeNetwork(responseId: string, key: string, generation: number, expectedPackets: number): Promise<void> {
-    const room = this.room
-    if (!room) return
+    const room = this.room, sessionId = this.sessionId
+    if (!room || sessionId === null) return
     const sender = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.sender
     const receiver = this.subscribedTracks.get(key)?.receiver
     const networkObservation = await this.networkObserver.capture(sender, receiver, expectedPackets)
     if (this.room !== room || this.generation !== generation || this.trackResponses.get(key) !== responseId) return
-    this.observe({transport: 'available', control: 'available', audio: 'available', networkResponseId: responseId, networkObservation})
+    let networkMeasurementDelivered = false
+    try {
+      await this.publishControlEvent(parseVoiceSessionEvent({
+        type: 'observation', protocol_version: '1.0', event_id: crypto.randomUUID(),
+        session_id: sessionId, response_id: responseId, measurement: 'network_summary',
+        network_summary: networkObservation, timestamp: Math.floor(performance.now()),
+        clock_domain: 'client_monotonic', unit: 'millisecond',
+      }))
+      networkMeasurementDelivered = true
+    } catch {
+      // 計測の配送失敗で再生済み応答をcancelしない。Backend側の欠測は集計に残す。
+    }
+    if (this.room !== room || this.generation !== generation || this.sessionId !== sessionId) return
+    this.observe({transport: 'available', control: 'available', audio: 'available',
+      networkResponseId: responseId, networkObservation, networkMeasurementDelivered})
   }
 
   private interruptResponseAfterPacketLoss(responseId: string, gap: RtpPacketGap): void {

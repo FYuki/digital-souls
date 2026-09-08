@@ -51,6 +51,7 @@ export class RtpNetworkObserver {
       if (typeof row.id !== 'string' || !row.id || !count(bytes) || !count(packets)
         || (type === 'inbound-rtp' && (typeof lost !== 'number' || !Number.isSafeInteger(lost)))) return missing('invalid_rtp_counters')
       if (type === 'inbound-rtp') {
+        if (packets + (lost as number) < 0) return missing('invalid_rtp_counters')
         if (!count(expectedPackets) || packets < expectedPackets) return missing('playback_packets_not_yet_reported')
         // RFCの累積lossは重複受信等で負数にもなる。ここでは0に書き換えない。
         return {status: 'measured', bytes, packets, lostPackets: lost as number}

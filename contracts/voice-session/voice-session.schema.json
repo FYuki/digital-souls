@@ -400,52 +400,352 @@
         "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
-    "Observation": {
-      "type": "object", "additionalProperties": false,
-      "required": ["type", "protocol_version", "event_id", "session_id", "measurement", "timestamp", "clock_domain", "unit"],
+    "NetworkMissing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "reason"
+      ],
       "properties": {
-        "type": { "const": "observation" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
-        "session_id": { "$ref": "#/$defs/Identifier" }, "utterance_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" },
-        "measurement": { "type": "string", "enum": ["speech_stopped", "utterance_finalized", "response_started", "first_audio_out", "playback_started", "client_track_received", "client_encoded_received", "client_audio_decoded", "turn_decision_received", "cancel_confirmed", "local_playback_stopped"] },
-        "timestamp": {
+        "status": {
+          "const": "missing"
+        },
+        "reason": {
+          "enum": [
+            "stats_api_unavailable",
+            "stats_failed",
+            "stats_timeout",
+            "stats_unavailable",
+            "ambiguous_audio_stream",
+            "invalid_rtp_counters",
+            "counter_regressed",
+            "playback_packets_not_yet_reported"
+          ]
+        }
+      }
+    },
+    "NetworkSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "uplink",
+        "downlink"
+      ],
+      "properties": {
+        "method": {
+          "const": "browser_audio_rtp_counters_v1"
+        },
+        "uplink": {
           "oneOf": [
-            { "$ref": "#/$defs/NonNegativeSafeInteger" },
-            { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" }
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "bytes",
+                "packets"
+              ],
+              "properties": {
+                "status": {
+                  "const": "measured"
+                },
+                "bytes": {
+                  "$ref": "#/$defs/NonNegativeSafeInteger"
+                },
+                "packets": {
+                  "$ref": "#/$defs/NonNegativeSafeInteger"
+                }
+              }
+            },
+            {
+              "$ref": "#/$defs/NetworkMissing"
+            }
           ]
         },
-        "clock_domain": { "type": "string", "enum": ["client_monotonic", "server_monotonic"] },
-        "unit": { "type": "string", "enum": ["millisecond", "nanosecond"] }
+        "downlink": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "bytes",
+                "packets",
+                "lostPackets"
+              ],
+              "properties": {
+                "status": {
+                  "const": "measured"
+                },
+                "bytes": {
+                  "$ref": "#/$defs/NonNegativeSafeInteger"
+                },
+                "packets": {
+                  "$ref": "#/$defs/NonNegativeSafeInteger"
+                },
+                "lostPackets": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              }
+            },
+            {
+              "$ref": "#/$defs/NetworkMissing"
+            }
+          ]
+        }
+      }
+    },
+    "Observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "protocol_version",
+        "event_id",
+        "session_id",
+        "measurement",
+        "timestamp",
+        "clock_domain",
+        "unit"
+      ],
+      "properties": {
+        "type": {
+          "const": "observation"
+        },
+        "protocol_version": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "event_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "session_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "utterance_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "response_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "measurement": {
+          "type": "string",
+          "enum": [
+            "speech_stopped",
+            "utterance_finalized",
+            "response_started",
+            "first_audio_out",
+            "playback_started",
+            "client_track_received",
+            "client_encoded_received",
+            "client_audio_decoded",
+            "turn_decision_received",
+            "cancel_confirmed",
+            "local_playback_stopped",
+            "network_summary"
+          ]
+        },
+        "timestamp": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/NonNegativeSafeInteger"
+            },
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$"
+            }
+          ]
+        },
+        "clock_domain": {
+          "type": "string",
+          "enum": [
+            "client_monotonic",
+            "server_monotonic"
+          ]
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "millisecond",
+            "nanosecond"
+          ]
+        },
+        "network_summary": {
+          "$ref": "#/$defs/NetworkSummary"
+        }
       },
       "allOf": [
         {
-          "if": { "properties": { "measurement": { "enum": ["client_track_received", "client_encoded_received", "client_audio_decoded"] } }, "required": ["measurement"] },
-          "then": { "properties": { "response_id": { "$ref": "#/$defs/Identifier" } }, "required": ["response_id"] }
-        },
-        {
-          "if": { "properties": { "measurement": { "enum": ["turn_decision_received", "cancel_confirmed", "local_playback_stopped"] } }, "required": ["measurement"] },
-          "then": { "properties": { "utterance_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" } }, "required": ["utterance_id", "response_id"] }
-        },
-        {
-          "if": { "properties": { "measurement": { "enum": ["speech_stopped", "playback_started", "client_track_received", "client_encoded_received", "client_audio_decoded", "turn_decision_received", "cancel_confirmed", "local_playback_stopped"] } }, "required": ["measurement"] },
+          "if": {
+            "properties": {
+              "measurement": {
+                "enum": [
+                  "client_track_received",
+                  "client_encoded_received",
+                  "client_audio_decoded"
+                ]
+              }
+            },
+            "required": [
+              "measurement"
+            ]
+          },
           "then": {
             "properties": {
-              "timestamp": { "$ref": "#/$defs/NonNegativeSafeInteger" },
-              "clock_domain": { "const": "client_monotonic" },
-              "unit": { "const": "millisecond" }
+              "response_id": {
+                "$ref": "#/$defs/Identifier"
+              }
+            },
+            "required": [
+              "response_id"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "measurement": {
+                "enum": [
+                  "turn_decision_received",
+                  "cancel_confirmed",
+                  "local_playback_stopped"
+                ]
+              }
+            },
+            "required": [
+              "measurement"
+            ]
+          },
+          "then": {
+            "properties": {
+              "utterance_id": {
+                "$ref": "#/$defs/Identifier"
+              },
+              "response_id": {
+                "$ref": "#/$defs/Identifier"
+              }
+            },
+            "required": [
+              "utterance_id",
+              "response_id"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "measurement": {
+                "enum": [
+                  "speech_stopped",
+                  "playback_started",
+                  "client_track_received",
+                  "client_encoded_received",
+                  "client_audio_decoded",
+                  "turn_decision_received",
+                  "cancel_confirmed",
+                  "local_playback_stopped"
+                ]
+              }
+            },
+            "required": [
+              "measurement"
+            ]
+          },
+          "then": {
+            "properties": {
+              "timestamp": {
+                "$ref": "#/$defs/NonNegativeSafeInteger"
+              },
+              "clock_domain": {
+                "const": "client_monotonic"
+              },
+              "unit": {
+                "const": "millisecond"
+              }
             }
           }
         },
         {
-          "if": { "properties": { "measurement": { "enum": ["utterance_finalized", "response_started", "first_audio_out"] } }, "required": ["measurement"] },
+          "if": {
+            "properties": {
+              "measurement": {
+                "enum": [
+                  "utterance_finalized",
+                  "response_started",
+                  "first_audio_out"
+                ]
+              }
+            },
+            "required": [
+              "measurement"
+            ]
+          },
           "then": {
             "properties": {
-              "timestamp": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
-              "clock_domain": { "const": "server_monotonic" },
-              "unit": { "const": "nanosecond" }
+              "timestamp": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)$"
+              },
+              "clock_domain": {
+                "const": "server_monotonic"
+              },
+              "unit": {
+                "const": "nanosecond"
+              }
             }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "measurement": {
+                "const": "network_summary"
+              }
+            },
+            "required": [
+              "measurement"
+            ]
+          },
+          "then": {
+            "properties": {
+              "response_id": {
+                "$ref": "#/$defs/Identifier"
+              },
+              "network_summary": {
+                "$ref": "#/$defs/NetworkSummary"
+              },
+              "timestamp": {
+                "$ref": "#/$defs/NonNegativeSafeInteger"
+              },
+              "clock_domain": {
+                "const": "client_monotonic"
+              },
+              "unit": {
+                "const": "millisecond"
+              }
+            },
+            "required": [
+              "response_id",
+              "network_summary"
+            ]
           }
         }
-      ]
+      ],
+      "dependentSchemas": {
+        "network_summary": {
+          "properties": {
+            "measurement": {
+              "const": "network_summary"
+            }
+          },
+          "required": [
+            "measurement"
+          ]
+        }
+      }
     }
   }
 }
