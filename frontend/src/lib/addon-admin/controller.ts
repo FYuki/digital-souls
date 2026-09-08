@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store'
-import { listAddons, setAddonEnabled, type AddonStatus } from './client'
+import { listAddons, setAddonEnabled, SettingsDurabilityError, type AddonStatus } from './client'
 
 export type ManagementState = {
   items: AddonStatus[]
@@ -7,6 +7,7 @@ export type ManagementState = {
   error: string | null
   pending: Set<string>
   rowErrors: Record<string, string>
+  retryEnabled: Record<string, boolean>
 }
 
 type Gateway = { list: typeof listAddons; setEnabled: typeof setAddonEnabled }
@@ -25,7 +26,7 @@ export function aggregateBadge(items: AddonStatus[]): 'error' | 'warning' | null
 }
 
 export function createAddonController(gateway: Gateway = { list: listAddons, setEnabled: setAddonEnabled }) {
-  let state: ManagementState = { items: [], loading: true, error: null, pending: new Set(), rowErrors: {} }
+  let state: ManagementState = { items: [], loading: true, error: null, pending: new Set(), rowErrors: {}, retryEnabled: {} }
   const store = writable(state)
   const publish = (next: Partial<ManagementState>) => { state = { ...state, ...next }; store.set(state) }
   let epoch = 0
@@ -57,12 +58,19 @@ export function createAddonController(gateway: Gateway = { list: listAddons, set
   async function toggle(id: string, enabled: boolean) {
     if (closed || state.pending.has(id)) return
     epoch += 1
-    publish({ pending: new Set([...state.pending, id]), rowErrors: { ...state.rowErrors, [id]: '' } })
+    let recheck = false
+    const retryEnabled = { ...state.retryEnabled }
+    delete retryEnabled[id]
+    publish({ pending: new Set([...state.pending, id]), rowErrors: { ...state.rowErrors, [id]: '' }, retryEnabled })
     try {
       const item = await bounded((signal) => gateway.setEnabled(id, enabled, signal))
       if (!closed) publish({ items: state.items.map((old) => old.connection_instance_id === id ? item : old) })
-    } catch {
-      if (!closed) publish({ rowErrors: { ...state.rowErrors, [id]: '変更を保存できませんでした。状態を再確認してください。' } })
+    } catch (error) {
+      recheck = error instanceof SettingsDurabilityError
+      const message = recheck
+        ? '変更は反映されましたが、保存の完了を確認できません。同じ設定を再度保存してください。'
+        : '変更を保存できませんでした。状態を再確認してください。'
+      if (!closed) publish({ rowErrors: { ...state.rowErrors, [id]: message }, retryEnabled: { ...state.retryEnabled, [id]: enabled } })
     } finally {
       if (!closed) {
         const pending = new Set(state.pending)
@@ -70,9 +78,14 @@ export function createAddonController(gateway: Gateway = { list: listAddons, set
         publish({ pending })
       }
     }
+    if (recheck) await refresh()
   }
   return {
     subscribe: store.subscribe, refresh, toggle,
+    async retry(id: string) {
+      const enabled = state.retryEnabled[id]
+      if (typeof enabled === 'boolean') await toggle(id, enabled)
+    },
     start() {
       if (timer || closed) return
       void refresh()

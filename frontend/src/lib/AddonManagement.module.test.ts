@@ -54,3 +54,20 @@ test.each([
   expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe(String(data.desired_enabled))
   controller.destroy()
 })
+
+test('保存再試行ボタンは失敗した希望値をそのまま再送する', async () => {
+  const gateway = {
+    list: vi.fn().mockResolvedValue([item]),
+    setEnabled: vi.fn().mockRejectedValueOnce(new Error('private')).mockResolvedValue({
+      ...item, desired_enabled: false, effective_state: 'disabled',
+    }),
+  }
+  const controller = createAddonController(gateway)
+  render(AddonManagement, { controller, onClose: vi.fn() })
+  await fireEvent.click(await screen.findByRole('switch', { name: '資料を利用する' }))
+  await fireEvent.click(await screen.findByRole('button', { name: '資料の設定保存を再試行' }))
+  await screen.findByText('無効')
+  expect(gateway.setEnabled.mock.calls.map((args) => args.slice(0, 2))).toEqual([['one', false], ['one', false]])
+  expect(screen.queryByRole('button', { name: '資料の設定保存を再試行' })).toBeNull()
+  controller.destroy()
+})

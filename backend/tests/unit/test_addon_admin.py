@@ -237,6 +237,7 @@ class HealthClient(FakeSource):
         super().__init__(connection)
         self.health_calls = 0
         self.health_error = None
+        self.health_permits = None
         self.closed = False
 
     @asynccontextmanager
@@ -247,6 +248,8 @@ class HealthClient(FakeSource):
             self.closed = True
 
     async def health(self):
+        if self.health_permits is not None:
+            await self.health_permits.acquire()
         self.health_calls += 1
         if self.health_error:
             raise self.health_error
@@ -262,18 +265,25 @@ def test_health_threshold_recovery_disabled_session_and_teardown(tmp_path):
     async def run():
         connection, gate, _ = setup(tmp_path)
         client = HealthClient(connection)
-        policy = HealthPolicy(interval=0.04, timeout=0.02, disconnect_poll=0.005)
+        policy = HealthPolicy(interval=0.04, timeout=2, disconnect_poll=0.005)
         runtime = AddonRuntime(gate, policy=policy, client_factory=lambda _: client)
         await runtime.start()
         try:
             await eventually(lambda: runtime.list()[0]["availability"] == "available")
+            before_failure = client.health_calls
+            client.health_permits = permits = asyncio.Semaphore(0)
             client.health_error = TimeoutError()
-            await eventually(lambda: client.health_calls >= 1)
+            permits.release()
+            await eventually(lambda: client.health_calls >= before_failure + 1)
             assert runtime.list()[0]["availability"] == "available"
-            await eventually(lambda: client.health_calls >= 3)
+            permits.release()
+            permits.release()
+            await eventually(lambda: client.health_calls >= before_failure + 3)
             assert runtime.list()[0]["availability"] == "unavailable"
             assert runtime.list()[0]["error_code"] == "health_check_failed"
             client.health_error = None
+            permits.release()
+            client.health_permits = None
             await eventually(lambda: runtime.list()[0]["availability"] == "available")
             runtime.set_enabled(connection.id, False)
             await asyncio.sleep(0.06)
@@ -380,9 +390,14 @@ def test_api_save_failure_is_sanitized(tmp_path, monkeypatch, failure_point):
                 json={"desired_enabled": False},
             )
         assert response.status_code == 503
-        assert response.json()["detail"] == "settings_save_failed"
+        replaced = failure_point == "fsync_directory"
+        assert response.json()["detail"] == (
+            "settings_durability_uncertain" if replaced else "settings_save_failed"
+        )
         assert "private endpoint and credential" not in response.text
-        assert runtime.list()[0]["desired_enabled"] is True
+        assert runtime.list()[0]["desired_enabled"] is (not replaced)
+        restored = SettingsStore(tmp_path / "addon-settings.json")
+        assert restored.initial(connection.id, True) is (not replaced)
 
     asyncio.run(run())
 
@@ -469,3 +484,36 @@ def test_browser_evidence_keeps_only_complete_fixed_events():
         sanitize(lines[1], "restored")
     with pytest.raises(RuntimeError, match="invalid browser evidence"):
         sanitize(lines[1].replace('"passed"', '"passed", "secret":"private"'), "restored")
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_post_replace_failure_matches_runtime_restart_and_gate(tmp_path, monkeypatch, enabled):
+    from app.addon_admin.store import SettingsDurabilityError
+
+    async def run():
+        connection, gate, runtime = setup(tmp_path, enabled=not enabled)
+        source = FakeSource(connection)
+        disabled = []
+        runtime.on_disabled = disabled.append
+        async with gate.attach(connection.id, source):
+            loop = gate.begin_loop(CTX)
+            generation = gate.registry.entry(connection.id).generation
+            with monkeypatch.context() as patch:
+                def fail(_):
+                    raise OSError("private storage error")
+                patch.setattr("app.addon_admin.store.fsync_directory", fail)
+                with pytest.raises(SettingsDurabilityError):
+                    runtime.set_enabled(connection.id, enabled)
+                assert runtime.store.initial(connection.id, not enabled) is enabled
+                _, _, restored = setup(tmp_path, enabled=not enabled)
+                assert restored.list()[0]["desired_enabled"] is enabled
+            assert runtime.list()[0]["desired_enabled"] is enabled
+            assert not gate.catalog_snapshots(loop)
+            assert disabled == ([] if enabled else [connection.id])
+            # 同じ希望値の再保存は耐久化だけを再試行し、旧loopを復活させない。
+            runtime.set_enabled(connection.id, enabled)
+            assert gate.registry.entry(connection.id).generation == generation + 1
+            assert not gate.catalog_snapshots(loop)
+            gate.end_loop(loop)
+
+    asyncio.run(run())

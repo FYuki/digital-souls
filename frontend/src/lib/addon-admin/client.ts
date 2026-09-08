@@ -58,10 +58,18 @@ export function parseStatus(value: unknown): AddonStatus {
   }
 }
 
+export class SettingsDurabilityError extends Error {}
+
 const base = '/api/addon-admin/connections'
 async function request(url: string, signal: AbortSignal, init?: RequestInit): Promise<unknown> {
   const response = await fetch(url, { ...init, signal, cache: 'no-store' })
-  if (!response.ok) throw new Error('management_request_failed')
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    if (response.status === 503 && body?.detail === 'settings_durability_uncertain') {
+      throw new SettingsDurabilityError('settings_durability_uncertain')
+    }
+    throw new Error('management_request_failed')
+  }
   return response.json()
 }
 

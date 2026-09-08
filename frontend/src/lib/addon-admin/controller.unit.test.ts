@@ -1,7 +1,7 @@
 import { get } from 'svelte/store'
 import { describe, test, expect, vi, afterEach } from 'vitest'
 import { createAddonController, sortedAddons, aggregateBadge } from './controller'
-import { parseStatus, stateMessage, setAddonEnabled, type AddonStatus } from './client'
+import { parseStatus, stateMessage, setAddonEnabled, SettingsDurabilityError, type AddonStatus } from './client'
 
 const row = (id = 'one', overrides: Partial<AddonStatus> = {}): AddonStatus => ({
   connection_instance_id: id, display_name: id, source_type: 'external', desired_enabled: true,
@@ -84,4 +84,28 @@ describe('連携管理', () => {
       method: 'PATCH', body: '{"desired_enabled":true}', cache: 'no-store',
     }))
   })
+})
+
+
+test('置換後の保存失敗を区別し、反映済み状態を再取得して同じ希望値を再保存する', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    detail: 'settings_durability_uncertain', private: 'raw-secret',
+  }), { status: 503 })))
+  await expect(setAddonEnabled('one', false, new AbortController().signal)).rejects.toBeInstanceOf(SettingsDurabilityError)
+  const off = row('one', { desired_enabled: false, effective_state: 'disabled' })
+  const gateway = {
+    list: vi.fn().mockResolvedValueOnce([row()]).mockResolvedValue([off]),
+    setEnabled: vi.fn().mockRejectedValueOnce(new SettingsDurabilityError()).mockResolvedValue(off),
+  }
+  const controller = createAddonController(gateway)
+  await controller.refresh()
+  await controller.toggle('one', false)
+  expect(get(controller).items[0].desired_enabled).toBe(false)
+  expect(get(controller).rowErrors.one).toContain('変更は反映されました')
+  expect(get(controller).rowErrors.one).not.toContain('raw-secret')
+  await controller.retry('one')
+  expect(gateway.setEnabled.mock.calls.map((args) => args.slice(0, 2))).toEqual([['one', false], ['one', false]])
+  expect(get(controller).rowErrors.one).toBe('')
+  expect(get(controller).retryEnabled).toEqual({})
+  controller.destroy()
 })

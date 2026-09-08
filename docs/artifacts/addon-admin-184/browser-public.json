@@ -5,17 +5,20 @@
     "package": "@modelcontextprotocol/server-everything",
     "version": "2026.8.31"
   },
+  "environment": {
+    "runtime": "real-core-vite-browser",
+    "toolRoutingConfigured": false
+  },
   "checks": [
-    "real-core-vite-browser",
-    "tool-routing-unconfigured",
     "registered-list",
-    "toggle",
+    "initial-available",
+    "toggle-off",
     "restart-restores-off",
     "on-rechecks-health",
     "idle-disconnect-badge",
     "offline-toggle"
   ],
-  "testedAt": "2026-09-08T04:26:01Z",
+  "testedAt": "2026-09-08T05:30:06Z",
   "teardown": "passed",
   "executionLog": {
     "path": "browser-execution.jsonl",
