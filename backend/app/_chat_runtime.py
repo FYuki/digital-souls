@@ -249,6 +249,7 @@ class ChatService:
                 message,
                 screen,
                 history_access,
+                False,  # Life Stateはツール結果の入力枠を確保してから追加する。
             )
 
             async def before_execute() -> None:
@@ -275,6 +276,9 @@ class ChatService:
                     material,
                     self._dependencies.input_token_counter,
                     context.prompt_config.chat_context_tokens - output_limit,
+                )
+                prompt = await run_sync(
+                    self.with_life_context, character, prompt,
                 )
                 reply = await run_sync(
                     _call_llm,
@@ -483,6 +487,7 @@ class ChatService:
         message: str,
         screen: ScreenTurnMaterial | None = None,
         history_access: ScreenHistoryAccess | None = None,
+        include_life_context: bool = True,
     ) -> tuple[BuiltPrompt, int]:
         context = _resolve_chat_context(
             character,
@@ -497,8 +502,12 @@ class ChatService:
             self._dependencies,
             screen=screen,
             history_access=history_access,
+            include_life_context=include_life_context,
         )
         return prompt, context.prompt_config.assistant_max_generation_tokens
+
+    def with_life_context(self, character: str, prompt: BuiltPrompt) -> BuiltPrompt:
+        return _with_life_context(character, prompt, self._dependencies)
 
     def record_successful_prompt_references(self, prompt: BuiltPrompt) -> None:
         _log_prompt_references(prompt)
@@ -770,6 +779,7 @@ def _build_unrecorded_prompt(
     *,
     screen: ScreenTurnMaterial | None = None,
     history_access: ScreenHistoryAccess | None = None,
+    include_life_context: bool = True,
 ) -> BuiltPrompt:
     try:
         prompt = dependencies.prompt_builder(
@@ -803,7 +813,17 @@ def _build_unrecorded_prompt(
         )
     else:
         prompt = _with_screen_turn_material(prompt, screen, context, dependencies)
-    # 現在の画面情報を先に確保し、任意のLife Stateは残りの入力枠に収める。
+    if include_life_context:
+        return _with_life_context(character, prompt, dependencies)
+    return prompt
+
+
+def _with_life_context(
+    character: str,
+    prompt: BuiltPrompt,
+    dependencies: ChatRuntimeDependencies,
+) -> BuiltPrompt:
+    # 現在の画面情報・外部結果を先に確保し、任意のLife Stateは残りの入力枠に収める。
     if dependencies.life_context is not None:
         try:
             prompt = dependencies.life_context(character, prompt)

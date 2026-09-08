@@ -1175,6 +1175,82 @@ class TestChatServiceRagContract:
             _chat_service(False, object())
 
 
+@pytest.mark.parametrize("input_limit", [4, 6])
+@pytest.mark.parametrize("invoke", [True, False])
+@pytest.mark.parametrize("streaming", [True, False])
+def test_tool_results_take_budget_priority_over_optional_life_state(
+    tmp_path: Path, input_limit: int, invoke: bool, streaming: bool,
+) -> None:
+    from app.character_life.models import Kind, LifeState
+    from app.character_life.prompt import Context
+    from app.character_life.store import Store
+    from app.tool_use.routing import ToolDecision
+    from tests.unit.test_tool_use import Decisions, call, runtime
+
+    store = Store(tmp_path / "life.db")
+    store.save_state(LifeState(
+        character_id="miori", kind=Kind.INTEREST,
+        content="色彩への関心", source="user",
+    ))
+    history = _RecordingHistorySession()
+    dependencies = _runtime_dependencies()
+    life_context = Context(store, dependencies.input_token_counter, input_limit)
+    decisions = Decisions(
+        *([call] if invoke else []), ToolDecision("finish"),
+    )
+    settings = resolve_model_settings(
+        {}, chat_context_tokens=input_limit + 1,
+        assistant_max_generation_tokens=1,
+    )
+    captured = []
+
+    async def stream(prompt, **_):
+        captured.append(prompt)
+        yield "回答"
+
+    async def scenario():
+        async with runtime(decisions) as (tools, source, _):
+            service = ChatService(
+                ChatRuntimeConfig(
+                    rag_enabled=False,
+                    memory_policy=None,
+                    prompt_config=settings,
+                    chroma_path=_CHROMA_PATH,
+                ),
+                _RecordingHistoryService(history),
+                dataclass_replace(dependencies, tools=tools, life_context=life_context),
+            )
+            with patch(_LOAD_PERSONALITY, return_value=_character_card()):
+                with patch(_GENERATE_RESPONSE, return_value="回答") as generate:
+                    message = "native-toolで取得して" if invoke else "こんにちは"
+                    if streaming:
+                        from app.main import _stream_core_reply
+
+                        with patch.object(llm_router, "stream_response", stream):
+                            chunks = [chunk async for chunk in _stream_core_reply(
+                                service, settings, "miori", history, message,
+                                tools=tools, conversation_id=str(CONVERSATION_ID),
+                            )]
+                        assert chunks == ["回答"]
+                    else:
+                        reply = await service.generate_reply_async(
+                            "miori", CONVERSATION_ID, message,
+                        )
+                        assert _assistant_content(reply) == "回答"
+            assert len(source.calls) == int(invoke)
+            return captured[0] if streaming else generate.call_args.args[0]
+
+    prompt = asyncio.run(scenario())
+    contents = [message.content for message in prompt.messages]
+    assert any("<untrusted_external_results>" in c for c in contents) == invoke
+    assert any("<life_state_data>" in c for c in contents) == (not invoke or input_limit == 6)
+    assert "色彩への関心" not in str(decisions.contexts)
+    assert contents[-1] == ("native-toolで取得して" if invoke else "こんにちは")
+    assert prompt.usage.total == dependencies.input_token_counter(prompt.messages)
+    assert prompt.usage.total <= input_limit
+    assert len(history.complete_calls) == (0 if streaming else 1)
+
+
 class TestScreenTurnIntegration:
     @staticmethod
     def _material(
