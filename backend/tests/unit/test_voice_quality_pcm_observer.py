@@ -51,7 +51,8 @@ def test_http_forwards_actual_bytes_and_response_without_storing_either(tmp_path
     assert sent == [original]
     saved = output.read_text()
     assert 'private response' not in saved and 'reference"' not in saved
-    assert len(saved) < 4000
+    # 片側最大4候補の数値記録を含む。PCMや本文は保存しない。
+    assert len(saved) < 12000
     assert not observer.thread.is_alive()
 
 

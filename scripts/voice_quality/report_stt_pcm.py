@@ -37,7 +37,7 @@ class Counts(BaseModel):
 class PcmReport(BaseModel):
     model_config = ConfigDict(extra='forbid')
     schema_version: Literal['1.0'] = '1.0'
-    edge_alignment_method: Literal['bandlimited_100ms_speech_edge_witness_v3'] = BOUNDED_EDGE_METHOD
+    edge_alignment_method: Literal['bandlimited_100ms_multi_seed_edge_witness_v4'] = BOUNDED_EDGE_METHOD
     evaluation_scope: Literal['actual_stt_pcm_edge_coverage_only'] = 'actual_stt_pcm_edge_coverage_only'
     cohort: Literal['normal', 'pause', 'backchannel', 'take_turn']
     measurement_revision: str | None

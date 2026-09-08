@@ -143,3 +143,14 @@ Conversation Coreから音声の本文をstreamする要求には`latency_sensit
 `pcm-witness-v3-pause-100-20260908-01`では会話動作100件と実際の最終STT入力100件を確認したが、端部照合は98件成功、2件未確認だった。先頭の位置を求めるseedの相関が閾値未満であり、未確認2件を正常へ補完しない。[PCM結果](artifacts/livekit-pcm-witness-v3-pause-100-2026-09-08.json)、[VAD結果](artifacts/livekit-vad-pcm-witness-v3-pause-100-2026-09-08.json)、[終了確認](artifacts/livekit-pcm-witness-v3-pause-100-cleanup-2026-09-08.json)を保存した。共有サービスを残し、測定が所有したFrontend・Backendと観測proxyの終了を確認した。この測定は端部品質の受け入れを満たしていない。
 
 通常設定の最初の実接続pilot（`voice-default-latency-pilot-20260908-01`、revision `1c060e9`）は準備1件・測定3件すべてで低遅延要求と`think: false`の送信を確認し、会話・再生・所有環境の終了を確認した。一方TTFA p95は11334.77msで未達だった。Ollama load p95は9605.52msで、計測中の常駐contextに要求した8192と異なる13024が観測され、モデル不在の観測もあった。同時要求の発生元は未確認であるため、原因を断定しない。[匿名集計](artifacts/livekit-voice-default-latency-pilot-2026-09-08-01.json)と[設定・終了照合](artifacts/livekit-voice-default-latency-pilot-2026-09-08-01-verification.json)を保存した。traceの`unit`はtimestampの単位であり、これらの要求数はaggregateでは`count`として扱う。
+
+
+## 端部位置の複数候補照合
+
+端部照合v4は、発話先頭・末尾それぞれの最大600ms内で、高エネルギー位置と固定した始端・中央・終端の最大4候補を照合する。各候補は従来と同じ200msのseed、相関0.8以上、他位置との差0.1以上を要求する。採用する端部の75ms特徴窓、探索幅20ms、filterの片側4msを合わせた99msの範囲は維持する。正常な特徴窓を示した候補同士が20msを超えて食い違う場合は未確認にする。
+
+全候補を数値証拠へ保存し、集計で固定位置の存在、選択候補、相関、局所窓、順序、候補間の一致を再検証する。中央部分の連続性や全周波数帯の音質は、この照合では証明しない。旧v3の保存結果はschema上で読めるが、v4の判定へ読み替えない。現在の再集計器はv4の候補証拠を要求する。
+
+通常latency比較器は、再生完了の製品trace追加後の`production.py`を再監査した。変更はsource統計の通知順と最終playback summaryの受信であり、比較不能とした3区間の起点・終点は維持されている。旧版と新版の監査済みファイルhashを別々に保持し、artifactには測定revisionから実際に読んだhashを記録する。未知の変更は再監査を要求する。これは比較器の準備であり、新設定100件の性能合格を示さない。
+
+v4の校正では301音声×9条件について、[未圧縮](artifacts/livekit-pcm-multi-seed-v4-raw-2026-09-08.json)、[Opus 32kbps](artifacts/livekit-pcm-multi-seed-v4-opus32-2026-09-08.json)、[Opus 64kbps](artifacts/livekit-pcm-multi-seed-v4-opus64-2026-09-08.json)のすべてで正常301件を照合し、欠け・無音化・雑音・重複・順序逆転の2408件を拒否した。実際のWebRTC入力による100件の受け入れは別途必要である。関連テスト48件と、旧schema互換性を追加した集計テスト22件（前者と重複を含む）が成功した。

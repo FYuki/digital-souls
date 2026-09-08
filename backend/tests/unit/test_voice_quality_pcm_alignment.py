@@ -171,3 +171,31 @@ def test_witness_filter_and_search_support_remain_strictly_inside_100ms(signal):
     assert support == 1584 < result['edge_tolerance_samples'] == 1600
     assert result['filter_cutoff_hz'] == 3000
     assert [e['blocks'][0]['reference_start_sample'] for e in result['edges']] == [3200, 14800]
+
+
+def test_multiple_seed_positions_recover_edges_when_loud_interior_is_changed(signal):
+    reference = signal.copy()
+    reference[7200:8200] = np.clip(reference[7200:8200].astype(float) * 4, -30000, 30000)
+    captured = reference.copy()
+    captured[7200:8200] = 0
+    result = match_bounded_pcm_edges(pcm(reference), pcm(captured), speech_start_sample=3200, speech_end_sample=16000)
+    assert result['status'] == 'matched'
+    leading = result['edges'][0]
+    assert leading['candidates'][0]['seed']['accepted'] is False
+    assert leading['seed']['accepted'] is True
+    assert result['interior_continuity_verified'] is False
+
+
+def test_numeric_edge_verifier_rejects_conflicting_candidates_and_missing_fixed_positions(signal):
+    from copy import deepcopy
+    from pcm_boundary_alignment import valid_bounded_pcm_edges
+    result = match_bounded_pcm_edges(pcm(signal), pcm(signal), speech_start_sample=3200, speech_end_sample=16000)
+    assert result['status'] == 'matched'
+    conflicting = deepcopy(result)
+    candidate = conflicting['edges'][0]['candidates'][-1]
+    candidate['seed']['captured_start_sample'] += 321
+    candidate['blocks'][0]['captured_start_sample'] += 321
+    assert not valid_bounded_pcm_edges(conflicting, 3200, 16000, len(signal))
+    missing = deepcopy(result)
+    missing['edges'][0]['candidates'] = missing['edges'][0]['candidates'][:1]
+    assert not valid_bounded_pcm_edges(missing, 3200, 16000, len(signal))

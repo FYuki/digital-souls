@@ -44,6 +44,12 @@ def evidence():
                 for start in positions]}
                 for j, (side, positions) in enumerate([('leading', [1600]), ('trailing', [14800])])],
         }
+        for edge, refs in zip(row['bounded_edge_alignment']['edges'], ([1600, 3600, 5600], [12800, 8800, 10800]), strict=True):
+            edge['candidates'] = []
+            for ref in refs:
+                seed = copy.deepcopy(edge['seed'])
+                seed.update(reference_start_sample=ref, captured_start_sample=ref + 3520)
+                edge['candidates'].append({'seed': seed, 'blocks': copy.deepcopy(edge['blocks'])})
         observed.append(row)
         trials.append({'session_id': session, 'initial_utterance_id': str(UUID(int=i + 2001)),
             'fixture_sha256': digest, 'outcome': 'success', 'session_end_confirmed': True,
@@ -150,3 +156,14 @@ def test_bounded_edge_provenance_and_order_are_rechecked(evidence, damage):
     result = report.summarize(*evidence)
     assert result['missing_reasons'] == {'speech_edges_unverified': 1}
     assert not result['passed']
+
+
+def test_saved_v3_report_remains_schema_readable_without_becoming_v4_evidence():
+    import json
+    from jsonschema import validate
+    root = Path(__file__).resolve().parents[3]
+    schema = json.loads((root / 'docs/schemas/voice-quality-stt-pcm-report-v1.schema.json').read_text())
+    historical = json.loads((root / 'docs/artifacts/livekit-pcm-witness-v3-pause-100-2026-09-08.json').read_text())
+    validate(historical, schema)
+    assert historical['edge_alignment_method'] != report.BOUNDED_EDGE_METHOD
+    assert historical['passed'] is False

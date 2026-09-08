@@ -115,7 +115,7 @@ def match_pcm_edges(reference_pcm: bytes, captured_pcm: bytes, *, speech_start_s
     return result
 
 
-BOUNDED_EDGE_METHOD = 'bandlimited_100ms_speech_edge_witness_v3'
+BOUNDED_EDGE_METHOD = 'bandlimited_100ms_multi_seed_edge_witness_v4'
 EDGE_FILTER_CUTOFF_HZ = 3000
 EDGE_FILTER_TAPS = 129
 EDGE_BLOCK_SAMPLES = 1200
@@ -155,24 +155,30 @@ def match_bounded_pcm_edges(reference_pcm: bytes, captured_pcm: bytes, *, speech
     for leading in (True, False):
         low, high = ((speech_start_sample, speech_start_sample + span) if leading
                      else (speech_end_sample - span, speech_end_sample))
-        position, pattern = _anchor(reference, low, high, width)
-        seed = _match(captured, position, pattern)
-        edge = {'side': 'leading' if leading else 'trailing', 'seed': seed, 'blocks': []}
-        result['edges'].append(edge)
-        if not seed['accepted']:
-            continue
-        lag = seed['captured_start_sample'] - position
-        positions = ((speech_start_sample + EDGE_INSET_SAMPLES,) if leading
-                     else (speech_end_sample - EDGE_INSET_SAMPLES - EDGE_BLOCK_SAMPLES,))
-        for position in positions:
-            low = max(0, position + lag - EDGE_SEARCH_RADIUS)
-            high = min(len(captured), position + lag + EDGE_SEARCH_RADIUS + EDGE_BLOCK_SAMPLES)
-            block = _match(captured[low:max(low, high)], position, reference[position:position + EDGE_BLOCK_SAMPLES])
+        energy_position, _ = _anchor(reference, low, high, width)
+        # 固定した端・中央・反対端と高エネルギー位置を使う。探索範囲と閾値は広げない。
+        candidate_positions = list(dict.fromkeys((energy_position, low, (low + high - width) // 2, high - width)))
+        candidates = []
+        expected = speech_start_sample if leading else speech_end_sample - EDGE_BLOCK_SAMPLES
+        for position in candidate_positions:
+            seed = _match(captured, position, reference[position:position + width])
+            candidate = {'seed': seed, 'blocks': []}
+            candidates.append(candidate)
+            if not seed['accepted']:
+                continue
+            lag = seed['captured_start_sample'] - position
+            window_low = max(0, expected + lag - EDGE_SEARCH_RADIUS)
+            window_high = min(len(captured), expected + lag + EDGE_SEARCH_RADIUS + EDGE_BLOCK_SAMPLES)
+            block = _match(captured[window_low:max(window_low, window_high)], expected,
+                           reference[expected:expected + EDGE_BLOCK_SAMPLES])
             if block['captured_start_sample'] is not None:
-                block['captured_start_sample'] += low
-            # 局所窓の位置は一意なseedで制限済み。特徴窓はfilterの4msと探索幅20msを含めても端部99ms以内に収まる。
+                block['captured_start_sample'] += window_low
+            # filter 4msと探索幅20msを含めても端部99ms以内。
             block['accepted'] = block['correlation'] is not None and block['correlation'] >= MIN_CORRELATION
-            edge['blocks'].append(block)
+            candidate['blocks'].append(block)
+        successful = [c for c in candidates if c['seed']['accepted'] and c['blocks'] and c['blocks'][0]['accepted']]
+        selected = successful[0] if successful else candidates[0]
+        result['edges'].append({'side': 'leading' if leading else 'trailing', **selected, 'candidates': candidates})
     if valid_bounded_pcm_edges(result, speech_start_sample, speech_end_sample, len(captured), require_status=False):
         result.update(status='matched', reason=None)
     return result
@@ -202,27 +208,55 @@ def valid_bounded_pcm_edges(edge: object, start: int, end: int, size: int, *, re
     for item, leading in zip(edges, (True, False), strict=True):
         if not isinstance(item, dict) or item.get('side') != ('leading' if leading else 'trailing'):
             return False
-        seed, blocks = item.get('seed'), item.get('blocks')
-        if not isinstance(seed, dict) or not isinstance(blocks, list) or len(blocks) != 1:
+        candidates = item.get('candidates')
+        if not isinstance(candidates, list) or not 1 <= len(candidates) <= 4:
             return False
-        ref, cap = seed.get('reference_start_sample'), seed.get('captured_start_sample')
         low, high = (start, start + span) if leading else (end - span, end)
-        ncc, competitor = seed.get('correlation'), seed.get('competing_peak_correlation')
-        if (not integer(ref) or not low <= ref <= high - width or not integer(cap) or not 0 <= cap <= size - width
-                or seed.get('sample_count') != width or seed.get('accepted') is not True
-                or not score(ncc) or not score(competitor) or ncc < MIN_CORRELATION or ncc - competitor < MIN_PEAK_MARGIN):
+        if any(not isinstance(c, dict) or not isinstance(c.get('seed'), dict) for c in candidates):
             return False
-        seeds.append(cap)
-        local = []
-        expected = (start + EDGE_INSET_SAMPLES,) if leading else (end - EDGE_INSET_SAMPLES - EDGE_BLOCK_SAMPLES,)
-        for block, expected_start in zip(blocks, expected, strict=True):
-            if not isinstance(block, dict): return False
-            at, ncc = block.get('captured_start_sample'), block.get('correlation')
-            if (block.get('reference_start_sample') != expected_start or block.get('sample_count') != EDGE_BLOCK_SAMPLES
-                    or not integer(at) or not 0 <= at <= size - EDGE_BLOCK_SAMPLES
-                    or abs(at - (expected_start + cap - ref)) > EDGE_SEARCH_RADIUS
-                    or block.get('accepted') is not True or not score(ncc) or ncc < MIN_CORRELATION):
-                return False
-            local.append(at)
-        positions.extend(local)
+        refs = [c['seed'].get('reference_start_sample') for c in candidates]
+        if (len(refs) != len(candidates) or any(not integer(ref) for ref in refs)
+                or len(set(refs)) != len(refs) or not {low, (low + high - width) // 2, high - width}.issubset(refs)
+                or any(not low <= ref <= high - width for ref in refs)):
+            return False
+        successful = [c for c in candidates if _valid_seed_witness(c, start, end, size, leading)]
+        if not successful:
+            return False
+        # 候補が別々の端を指した場合は、一番高い相関だけを選んで成功にしない。
+        locations = [c['blocks'][0]['captured_start_sample'] for c in successful]
+        if max(locations) - min(locations) > EDGE_SEARCH_RADIUS:
+            return False
+        chosen = successful[0]
+        if item.get('seed') != chosen['seed'] or item.get('blocks') != chosen['blocks']:
+            return False
+        seeds.append(chosen['seed']['captured_start_sample'])
+        positions.append(chosen['blocks'][0]['captured_start_sample'])
     return seeds[0] + width <= seeds[1] and positions[0] + EDGE_BLOCK_SAMPLES <= positions[1]
+
+
+def _valid_seed_witness(candidate: object, start: int, end: int, size: int, leading: bool) -> bool:
+    import math
+    def integer(value): return type(value) is int
+    def score(value): return type(value) in (int, float) and math.isfinite(value) and 0 <= value <= 1
+    if not isinstance(candidate, dict):
+        return False
+    width, span = min(3200, (end - start) // 3), min(9600, (end - start) // 2)
+    seed, blocks = candidate.get('seed'), candidate.get('blocks')
+    if not isinstance(seed, dict) or not isinstance(blocks, list) or len(blocks) != 1:
+        return False
+    ref, cap = seed.get('reference_start_sample'), seed.get('captured_start_sample')
+    low, high = (start, start + span) if leading else (end - span, end)
+    ncc, competitor = seed.get('correlation'), seed.get('competing_peak_correlation')
+    if (not integer(ref) or not low <= ref <= high - width or not integer(cap) or not 0 <= cap <= size - width
+            or seed.get('sample_count') != width or seed.get('accepted') is not True
+            or not score(ncc) or not score(competitor) or ncc < MIN_CORRELATION or ncc - competitor < MIN_PEAK_MARGIN):
+        return False
+    block = blocks[0]
+    if not isinstance(block, dict):
+        return False
+    expected = start + EDGE_INSET_SAMPLES if leading else end - EDGE_INSET_SAMPLES - EDGE_BLOCK_SAMPLES
+    at, ncc = block.get('captured_start_sample'), block.get('correlation')
+    return (block.get('reference_start_sample') == expected and block.get('sample_count') == EDGE_BLOCK_SAMPLES
+            and integer(at) and 0 <= at <= size - EDGE_BLOCK_SAMPLES
+            and abs(at - (expected + cap - ref)) <= EDGE_SEARCH_RADIUS
+            and block.get('accepted') is True and score(ncc) and ncc >= MIN_CORRELATION)

@@ -142,7 +142,10 @@
       "type": "boolean"
     },
     "edge_alignment_method": {
-      "const": "bandlimited_100ms_speech_edge_witness_v3",
+      "enum": [
+        "bandlimited_100ms_speech_edge_witness_v3",
+        "bandlimited_100ms_multi_seed_edge_witness_v4"
+      ],
       "type": "string"
     }
   },
