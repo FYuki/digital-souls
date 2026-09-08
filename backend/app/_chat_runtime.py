@@ -117,6 +117,7 @@ class ChatRuntimeDependencies:
     memory_formation_submitter: MemoryFormationSubmitter
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
     tools: ToolService | None = None
+    life_context: Callable[[str, BuiltPrompt], BuiltPrompt] | None = None
 
 
 @dataclass(frozen=True)
@@ -787,6 +788,8 @@ def _build_unrecorded_prompt(
             config=context.prompt_config,
             token_counter=_ChatTokenCounter(dependencies.input_token_counter),
         )
+        if dependencies.life_context is not None:
+            prompt = dependencies.life_context(character, prompt)
     except httpx.TimeoutException as exc:
         raise chat_service.ChatTimeoutError() from exc
     except httpx.HTTPError as exc:
