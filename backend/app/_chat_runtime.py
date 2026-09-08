@@ -788,14 +788,6 @@ def _build_unrecorded_prompt(
             config=context.prompt_config,
             token_counter=_ChatTokenCounter(dependencies.input_token_counter),
         )
-        if dependencies.life_context is not None:
-            try:
-                prompt = dependencies.life_context(character, prompt)
-            except Exception as error:
-                logger.warning(
-                    "Character Life context skipped: exception_type=%s",
-                    type(error).__name__,
-                )
     except httpx.TimeoutException as exc:
         raise chat_service.ChatTimeoutError() from exc
     except httpx.HTTPError as exc:
@@ -805,11 +797,22 @@ def _build_unrecorded_prompt(
             raise chat_service.ChatTimeoutError() from None
         raise chat_service.ChatBackendError() from None
     if screen is None:
-        return replace(
+        prompt = replace(
             prompt,
             screen_lineages=_follow_up_lineages(prompt.screen_lineages),
         )
-    return _with_screen_turn_material(prompt, screen, context, dependencies)
+    else:
+        prompt = _with_screen_turn_material(prompt, screen, context, dependencies)
+    # 現在の画面情報を先に確保し、任意のLife Stateは残りの入力枠に収める。
+    if dependencies.life_context is not None:
+        try:
+            prompt = dependencies.life_context(character, prompt)
+        except Exception as error:
+            logger.warning(
+                "Character Life context skipped: exception_type=%s",
+                type(error).__name__,
+            )
+    return prompt
 
 
 def _with_screen_turn_material(

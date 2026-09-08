@@ -4,7 +4,7 @@
 
 **ACTIVE**。
 
-#249のCharacter Life Runtimeについて、LangGraph / DBOS / Lettaの責務と統合方式を比較し、MVPのtop-level runtimeとしてDBOSを採用する。本ADRは採用方針を定めるものであり、実装・実接続受入の完了証跡ではない。
+`#249`のCharacter Life Runtimeについて、LangGraph / DBOS / Lettaの責務と統合方式を比較し、MVPのtop-level runtimeとしてDBOSを採用する。本ADRは採用方針を定めるものであり、実装・実接続受入の完了証跡ではない。
 
 人格・Memory・Reflection・Life State・Autonomyの意味契約は
 `character-life-memory-personality-autonomy-2026-09.md`を正本とする。本ADRはそれらの意味を変更せず、会話外処理をいつ・どのように継続実行するかだけを決める。

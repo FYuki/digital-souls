@@ -227,7 +227,7 @@ def test_elyth_topic_exploration_real_services(tmp_path, monkeypatch):
                     and item.get("content") == shares[0].content
                     for item in life_context
                 )
-                # JSONの改行escapeを復元して完全一致を確認し、失敗時も実本文を表示しない。
+                # 承認済み共有候補の本文が一致することを検証し、失敗時も実本文を表示しない。
                 assert share_is_in_context, "approved_share_missing_from_context"
                 started = time.monotonic()
                 first_delta = None
