@@ -577,6 +577,8 @@ export const createVoiceChatDriver = () => {
       const completed = window.__voiceChatE2E.cycles.filter((cycle) => (
         cycle.startedAt !== null
         && cycle.responseId !== null
+        && window.__voiceChatE2E.liveKitOrder.includes(`${cycle.responseId}:completed`)
+        && window.__voiceChatE2E.playbackCompletions?.[cycle.responseId] !== undefined
       ))
       return completed.length >= requiredCount ? completed.slice(0, requiredCount) : null
     }, count, { timeout: VOICE_RESPONSE_TIMEOUT_MS * count })

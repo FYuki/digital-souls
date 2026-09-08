@@ -1,4 +1,6 @@
-import { expect, test } from '@playwright/test'
+import { readFileSync } from 'node:fs'
+import { installScheduledFixture, parseScheduledFixture } from '../../playwright/controlled-audio-fixture'
+import { expect, test, type Page } from '@playwright/test'
 
 import {
   attachProfileEvidence,
@@ -37,6 +39,25 @@ test.setTimeout(voiceTestTimeout)
 
 const driver = createVoiceChatDriver()
 
+test.describe('通常応答の固定音声', () => {
+  test.beforeEach(async ({ page }) => {
+    const fixture = parseScheduledFixture(
+      readFileSync(new URL('../../playwright/fixtures/speech.wav', import.meta.url)),
+      JSON.parse(readFileSync(new URL('../../playwright/fixtures/speech.metadata.json', import.meta.url), 'utf8')),
+    )
+    await installScheduledFixture(page, fixture)
+  })
+  test.afterEach(async ({ page }) => {
+    await page.evaluate(() => window.__voiceFixtureClock?.close())
+  })
+  const enableScheduledMicrophone = async (page: Page) => {
+    const button = await driver.enableMicrophone(page)
+    await expect(page.getByText('セッション: 接続済み')).toBeVisible({ timeout: 15_000 })
+    await expect(button).toHaveClass(/mic-standby/)
+    await page.evaluate(() => window.__voiceFixtureClock!.start())
+    return button
+  }
+
 test('マイクボタン操作でOFFからSTANDBYへ遷移する', async ({ page }) => {
   const button = await driver.openVoiceChat(page)
   await expect(button).not.toHaveClass(/mic-standby|mic-active/)
@@ -50,14 +71,14 @@ test('マイクボタン操作でOFFからSTANDBYへ遷移する', async ({ page
 })
 
 test('VAD発話終了後もLiveKit継続microphone sessionを維持する', async ({ page }) => {
-  const button = await driver.enableMicrophone(page)
+  const button = await enableScheduledMicrophone(page)
   await expect(button).toHaveClass(/mic-active/, { timeout: 15_000 })
   await driver.expectMicrophoneStandby(page)
   await expect(button).toHaveAttribute('aria-pressed', 'true')
 })
 
 test('実音声応答のuser発話とmiori応答がこの順でチャット欄に表示される', async ({ page }) => {
-  await driver.enableMicrophone(page)
+  await enableScheduledMicrophone(page)
   await driver.expectMessages(page)
   await expect(driver.waitForLiveKitStreamingOrder(page)).resolves.toEqual([
     'text-delta',
@@ -68,12 +89,20 @@ test('実音声応答のuser発話とmiori応答がこの順でチャット欄�
 
 test('通常UIの同一LiveKit sessionで実サービス応答を3往復継続する', async ({ page }) => {
   test.setTimeout(voiceTestTimeout * 3)
-  await driver.enableMicrophone(page)
-  await driver.waitForCompletedVoiceCycles(page, 3)
+  await enableScheduledMicrophone(page)
+  for (let count = 1; count <= 3; count += 1) {
+    await driver.waitForCompletedVoiceCycles(page, count)
+    if (count < 3) {
+      await page.waitForFunction(() => window.__voiceFixtureClock?.finished === true)
+      await page.evaluate(() => window.__voiceFixtureClock!.replay())
+    }
+  }
 
   await expect(page.locator('article.message')).toHaveCount(6)
   await expect(page.getByRole('button', { name: 'マイクをオフにする' }))
     .toHaveAttribute('aria-pressed', 'true')
+})
+
 })
 
 test('実LiveKit barge-inのlocal停止とcancel確定latencyを記録する', async ({ page }, testInfo) => {
