@@ -142,7 +142,7 @@
       "type": "boolean"
     },
     "edge_alignment_method": {
-      "const": "bandlimited_local_speech_edge_blocks_v2",
+      "const": "bandlimited_100ms_speech_edge_witness_v3",
       "type": "string"
     }
   },

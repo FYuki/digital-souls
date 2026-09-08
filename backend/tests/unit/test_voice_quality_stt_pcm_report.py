@@ -36,12 +36,13 @@ def evidence():
             'method': report.BOUNDED_EDGE_METHOD, 'status': 'matched', 'reason': None,
             'sample_rate_hz': 16000, 'captured_sample_count': 32000,
             'filter_cutoff_hz': 4000, 'filter_taps': 129, 'block_samples': 800, 'search_radius_samples': 320,
+            'reference_edge_inset_samples': 400, 'edge_tolerance_samples': 1600,
             'interior_continuity_verified': False, 'full_band_quality_verified': False,
             'edges': [{'side': side, 'seed': anchors[j], 'blocks': [
                 {'reference_start_sample': start, 'sample_count': 800, 'captured_start_sample': start + 3520,
                  'correlation': .99, 'accepted': True}
                 for start in positions]}
-                for j, (side, positions) in enumerate([('leading', [1600, 2400]), ('trailing', [14400, 15200])])],
+                for j, (side, positions) in enumerate([('leading', [2000]), ('trailing', [14800])])],
         }
         observed.append(row)
         trials.append({'session_id': session, 'initial_utterance_id': str(UUID(int=i + 2001)),

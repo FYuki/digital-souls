@@ -115,11 +115,13 @@ def match_pcm_edges(reference_pcm: bytes, captured_pcm: bytes, *, speech_start_s
     return result
 
 
-BOUNDED_EDGE_METHOD = 'bandlimited_local_speech_edge_blocks_v2'
+BOUNDED_EDGE_METHOD = 'bandlimited_100ms_speech_edge_witness_v3'
 EDGE_FILTER_CUTOFF_HZ = 4000
 EDGE_FILTER_TAPS = 129
 EDGE_BLOCK_SAMPLES = 800
 EDGE_SEARCH_RADIUS = 320
+EDGE_INSET_SAMPLES = 400
+EDGE_TOLERANCE_SAMPLES = 1600
 
 
 def _edge_band(samples: np.ndarray) -> np.ndarray:
@@ -133,7 +135,7 @@ def _edge_band(samples: np.ndarray) -> np.ndarray:
 
 def match_bounded_pcm_edges(reference_pcm: bytes, captured_pcm: bytes, *, speech_start_sample: int,
                             speech_end_sample: int) -> dict:
-    """端部100msの各50msを個別に照合する。発話全体の連続性・全帯域品質は証明しない。"""
+    """端部から25–75msの特徴波形を照合する。100ms超の欠けの検出が対象。"""
     reference, captured = _samples(reference_pcm), _samples(captured_pcm)
     if (type(speech_start_sample) is not int or type(speech_end_sample) is not int
             or not 0 <= speech_start_sample < speech_end_sample <= len(reference)):
@@ -142,6 +144,7 @@ def match_bounded_pcm_edges(reference_pcm: bytes, captured_pcm: bytes, *, speech
               'sample_rate_hz': SAMPLE_RATE, 'captured_sample_count': len(captured),
               'filter_cutoff_hz': EDGE_FILTER_CUTOFF_HZ, 'filter_taps': EDGE_FILTER_TAPS,
               'block_samples': EDGE_BLOCK_SAMPLES, 'search_radius_samples': EDGE_SEARCH_RADIUS,
+              'reference_edge_inset_samples': EDGE_INSET_SAMPLES, 'edge_tolerance_samples': EDGE_TOLERANCE_SAMPLES,
               'edges': [], 'interior_continuity_verified': False, 'full_band_quality_verified': False}
     duration = speech_end_sample - speech_start_sample
     if duration < 3200:
@@ -159,15 +162,15 @@ def match_bounded_pcm_edges(reference_pcm: bytes, captured_pcm: bytes, *, speech
         if not seed['accepted']:
             continue
         lag = seed['captured_start_sample'] - position
-        positions = ((speech_start_sample, speech_start_sample + EDGE_BLOCK_SAMPLES) if leading
-                     else (speech_end_sample - 2 * EDGE_BLOCK_SAMPLES, speech_end_sample - EDGE_BLOCK_SAMPLES))
+        positions = ((speech_start_sample + EDGE_INSET_SAMPLES,) if leading
+                     else (speech_end_sample - EDGE_INSET_SAMPLES - EDGE_BLOCK_SAMPLES,))
         for position in positions:
             low = max(0, position + lag - EDGE_SEARCH_RADIUS)
             high = min(len(captured), position + lag + EDGE_SEARCH_RADIUS + EDGE_BLOCK_SAMPLES)
             block = _match(captured[low:max(low, high)], position, reference[position:position + EDGE_BLOCK_SAMPLES])
             if block['captured_start_sample'] is not None:
                 block['captured_start_sample'] += low
-            # 局所窓の位置は一意なseedで制限済み。各50msの波形一致を独立に要求する。
+            # 局所窓の位置は一意なseedで制限済み。特徴窓はfilterの4msと探索幅20msを含めても端部99ms以内に収まる。
             block['accepted'] = block['correlation'] is not None and block['correlation'] >= MIN_CORRELATION
             edge['blocks'].append(block)
     if valid_bounded_pcm_edges(result, speech_start_sample, speech_end_sample, len(captured), require_status=False):
@@ -185,6 +188,9 @@ def valid_bounded_pcm_edges(edge: object, start: int, end: int, size: int, *, re
             or edge.get('captured_sample_count') != size or edge.get('sample_rate_hz') != SAMPLE_RATE
             or edge.get('filter_cutoff_hz') != EDGE_FILTER_CUTOFF_HZ or edge.get('filter_taps') != EDGE_FILTER_TAPS
             or edge.get('block_samples') != EDGE_BLOCK_SAMPLES or edge.get('search_radius_samples') != EDGE_SEARCH_RADIUS
+            or edge.get('reference_edge_inset_samples') != EDGE_INSET_SAMPLES
+            or edge.get('edge_tolerance_samples') != EDGE_TOLERANCE_SAMPLES
+            or EDGE_INSET_SAMPLES + EDGE_BLOCK_SAMPLES + EDGE_SEARCH_RADIUS + EDGE_FILTER_TAPS // 2 >= EDGE_TOLERANCE_SAMPLES
             or edge.get('interior_continuity_verified') is not False or edge.get('full_band_quality_verified') is not False
             or (require_status and (edge.get('status') != 'matched' or edge.get('reason') is not None))):
         return False
@@ -197,7 +203,7 @@ def valid_bounded_pcm_edges(edge: object, start: int, end: int, size: int, *, re
         if not isinstance(item, dict) or item.get('side') != ('leading' if leading else 'trailing'):
             return False
         seed, blocks = item.get('seed'), item.get('blocks')
-        if not isinstance(seed, dict) or not isinstance(blocks, list) or len(blocks) != 2:
+        if not isinstance(seed, dict) or not isinstance(blocks, list) or len(blocks) != 1:
             return False
         ref, cap = seed.get('reference_start_sample'), seed.get('captured_start_sample')
         low, high = (start, start + span) if leading else (end - span, end)
@@ -208,7 +214,7 @@ def valid_bounded_pcm_edges(edge: object, start: int, end: int, size: int, *, re
             return False
         seeds.append(cap)
         local = []
-        expected = (start, start + EDGE_BLOCK_SAMPLES) if leading else (end - 2 * EDGE_BLOCK_SAMPLES, end - EDGE_BLOCK_SAMPLES)
+        expected = (start + EDGE_INSET_SAMPLES,) if leading else (end - EDGE_INSET_SAMPLES - EDGE_BLOCK_SAMPLES,)
         for block, expected_start in zip(blocks, expected, strict=True):
             if not isinstance(block, dict): return False
             at, ncc = block.get('captured_start_sample'), block.get('correlation')
@@ -218,7 +224,5 @@ def valid_bounded_pcm_edges(edge: object, start: int, end: int, size: int, *, re
                     or block.get('accepted') is not True or not score(ncc) or ncc < MIN_CORRELATION):
                 return False
             local.append(at)
-        if abs(local[1] - local[0] - EDGE_BLOCK_SAMPLES) > EDGE_SEARCH_RADIUS:
-            return False
         positions.extend(local)
-    return seeds[0] + width <= seeds[1] and positions[1] + EDGE_BLOCK_SAMPLES <= positions[2]
+    return seeds[0] + width <= seeds[1] and positions[0] + EDGE_BLOCK_SAMPLES <= positions[1]

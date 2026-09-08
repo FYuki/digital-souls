@@ -688,3 +688,5 @@ backend/.venv/bin/python scripts/voice_quality/calibrate_pcm_edges.py \
 校正では通常fixtureとラベル付き300件について、無加工、先頭・末尾の101ms削除、同範囲の無音化、重複、順序入れ替えを確認する。Opusの場合は48kHzの元fixtureを符号化し、decoderの連続したPTSからcodec遅延を求めて欠けの注入位置を決める。生PCM・本文は保存せず、fixture hash、診断実装hash、件数、誤受理・正常系未確認の一覧だけを保存する。校正通過は実WebRTC入力での受け入れとは別であり、実入力の観測も必要である。
 
 v2の301件校正では、無加工入力の正常判定と既知の欠け・重複・並べ替えの拒否はすべて期待どおりだった。32kbps Opus往復でも既知の欠けの誤受理は0件だったが、正常な文中休止fixture 2件が未確認となった。両方の結果とv1の反例を`docs/artifacts/livekit-pcm-edge-*-2026-09-08.json`へ保持する。v2校正のOpus結果は`passed: false`であり、実入力の合格証明へ置き換えない。
+
+v3の最初の校正条件は端部25–75msの50ms窓だった。探索20msとfilter片側4msを加えても端部99ms以内に収まり、101ms以上の削除・無音化・雑音化を検出できる位置に制限した。301件で無加工と64kbps Opusの校正は通過したが、32kbps Opusでは正常音声4件が未確認だった。これも`livekit-pcm-edge-witness-v3-50ms-*-2026-09-08.json`へ保存し、正常音声の未確認を除外しない。

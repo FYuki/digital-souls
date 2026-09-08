@@ -82,12 +82,17 @@ def calibrate(*, codec: str, bitrate: int, cohort: str | None = None) -> dict:
             offsets.add(offset)
             a, b = fixture['start'] + offset, fixture['end'] + offset
             cut = 1616  # 16kHzの101ms。100msの品質基準を越える既知の欠け。
+            rng = np.random.default_rng(int(item['audio_sha256'][:8], 16))
+            leading_noise = rng.integers(-2000, 2000, a + cut, dtype=np.int16)
+            trailing_noise = rng.integers(-2000, 2000, len(captured) - b + cut, dtype=np.int16)
             cases = {
                 'intact': captured,
                 'leading_101ms_deleted': captured[a + cut:],
                 'trailing_101ms_deleted': captured[:b - cut],
                 'leading_101ms_silenced': np.r_[np.zeros(a + cut), captured[a + cut:]],
                 'trailing_101ms_silenced': np.r_[captured[:b - cut], np.zeros(len(captured) - b + cut)],
+                'leading_101ms_noise': np.r_[leading_noise, captured[a + cut:]],
+                'trailing_101ms_noise': np.r_[captured[:b - cut], trailing_noise],
                 'duplicated': np.r_[captured, captured],
                 'reordered': np.r_[captured[(a + b) // 2:], captured[:(a + b) // 2]],
             }
