@@ -270,6 +270,9 @@ class ProductionSessionCoordinator:
             raise
 
     async def send_core(self, payload: bytes) -> None:
+        if self._lifecycle.phase in {"unavailable", "ended"}:
+            # 切断・終了後の最終通知は送信不能。Coreへ取消を伝え、delivery成功や処理失敗にしない。
+            raise asyncio.CancelledError("session is no longer available")
         if self._lifecycle.phase != "available":
             raise RuntimeError("session is not available")
         try:

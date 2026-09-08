@@ -674,7 +674,7 @@ def test_outbound_duplicate_is_sent_once_and_conflicting_payload_ends_session() 
     asyncio.run(exercise())
 
 
-@pytest.mark.parametrize("phase", ["bootstrapping", "unavailable"])
+@pytest.mark.parametrize("phase", ["bootstrapping", "unavailable", "ended"])
 def test_send_core_rejects_inactive_phase_without_delivery_state(
     phase: str,
 ) -> None:
@@ -694,7 +694,10 @@ def test_send_core_rejects_inactive_phase_without_delivery_state(
                 identity=identity, participant_sid="PA_current"
             )
 
-        with pytest.raises(RuntimeError, match="session is not available"):
+        if phase == "ended":
+            await coordinator.cleanup("explicit")
+        expected_error = RuntimeError if phase == "bootstrapping" else asyncio.CancelledError
+        with pytest.raises(expected_error, match="session is .*available"):
             await coordinator.send_core(SESSION_STARTED_PAYLOAD)
 
         assert coordinator.phase == phase
@@ -703,6 +706,13 @@ def test_send_core_rejects_inactive_phase_without_delivery_state(
         assert coordinator.acknowledge(
             "10000000-0000-4000-8000-000000000010", "character_to_user"
         ) is False
+        if phase == "unavailable":
+            coordinator.participant_connected(
+                identity="user-20000000-0000-4000-8000-000000000010",
+                participant_sid="PA_restored", room_sid="RM_one",
+            )
+            await coordinator.send_core(SESSION_STARTED_PAYLOAD)
+            assert published == [(SESSION_STARTED_PAYLOAD, module.APPLICATION_TOPIC)]
         await coordinator.cleanup("test_complete")
 
     asyncio.run(exercise())
