@@ -48,6 +48,31 @@ _DECIMAL_PATTERN = re.compile(r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?\Z")
 
 
 TARGET_DEFINITIONS: Mapping[InferenceTarget, TargetDefinition] = {
+    InferenceTarget.CHARACTER_LIFE: TargetDefinition(
+        target=InferenceTarget.CHARACTER_LIFE,
+        env_token="CHARACTER_LIFE",
+        required_capabilities=frozenset(
+            {
+                InferenceCapability.GENERATE_STRUCTURED,
+                InferenceCapability.ESTIMATE_INPUT_TOKENS,
+            }
+        ),
+        criticality=TargetCriticality.OPTIONAL,
+        failure_policy=TargetFailurePolicy.OPTIONAL_ERROR,
+        requires_output_limit=True,
+        local_only=True,
+    ),
+    InferenceTarget.TOOL_ROUTING: TargetDefinition(
+        target=InferenceTarget.TOOL_ROUTING,
+        env_token="TOOL_ROUTING",
+        required_capabilities=frozenset({
+            InferenceCapability.GENERATE_STRUCTURED,
+            InferenceCapability.ESTIMATE_INPUT_TOKENS,
+        }),
+        criticality=TargetCriticality.OPTIONAL,
+        failure_policy=TargetFailurePolicy.OPTIONAL_ERROR,
+        requires_output_limit=True,
+    ),
     InferenceTarget.CHAT: TargetDefinition(
         target=InferenceTarget.CHAT,
         env_token="CHAT",

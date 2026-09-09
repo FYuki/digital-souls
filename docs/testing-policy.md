@@ -91,6 +91,11 @@ Backendの音声品質テストは、保存済みartifactの測定版を`git sho
 
 Issue #135 Goal 1ではremote client、single-flight、capacity超過、timeout、worker再生成、Profile、Compose、deploy／rollbackをfakeまたはCPU不要の自動テストで検証する。RTX 4070 Ti SUPER上のCUDA／VRAM証跡、dev・dogfood同時会話、連続会話品質、WSL再起動復旧はGoal 2の手動受入とし、Goal 1の成功を実GPU受入済みとは扱わない。
 
+Issue `#146`の回帰テストは新規backup pathの検証、検証失敗時の更新停止、既知の汚染manifestの読込、
+保持期限でbackupが削除された世代へのrollback、旧履歴の不変性を一時環境で確認する。
+2026-09-06決定により、#135は残実装のmain取り込み時にcloseし、dogfoodのbackup／restore・
+失敗時rollbackの実機受入は別タスクとして扱う。手順は`infra/dogfood/README.md`に従う。
+
 ## Pull Requestレビュー
 
 Pull RequestではGitHub ActionsのCIに加え、GitHub Appとして導入したCodeRabbitによる自動レビューを実行する。レビュー設定の正本はリポジトリルートの`.coderabbit.yaml`とし、`AGENTS.md`および同設定の`knowledge_base.code_guidelines.filePatterns`に登録した規約・設計文書をレビュー基準として使用する。
@@ -98,6 +103,10 @@ Pull RequestではGitHub ActionsのCIに加え、GitHub Appとして導入した
 有効化時はリポジトリ管理者がCodeRabbitのGitHub Appに当該リポジトリへのアクセスを許可する。CodeRabbitはPull RequestイベントをGitHub Appとして処理するため、GitHub ActionsのworkflowへCodeRabbit用jobやsecretは追加しない。
 
 CodeRabbitの指摘はコードレビューの補助であり、GitHub Actionsやローカルで実行したテスト結果の代替にはしない。特に、CodeRabbitのレビュー完了を外部サービスとの実接続に成功した一次証跡として扱わない。
+
+main向けPRはCI成功に加え、最新差分へのCodeRabbitレビューと指摘の確認・必要な対応を受入条件とする。
+自動レビューがskipされた場合は`@coderabbitai full review`で依頼する。skip時の成功statusを
+実レビュー済みと扱わない。子PRのEpic統合はCI成功を条件とし、mainのマージはユーザーが行う。
 
 ## LLM classifier conformance
 
@@ -121,6 +130,81 @@ LiveKitの状態遷移、outbox、mapping、再生済みprefixはfake clock/port
 
 Wave 3のEpic受入シナリオ、自動testと利用者dogfoodの責務分離、再実行手順は
 [`wave3-acceptance-2026-08.md`](wave3-acceptance-2026-08.md)を正本とする。
+
+## Addon / MCP conformance
+
+#104 MCP-first接続基盤は、contract検証、test-owned MCP、実Addon/外部MCPを同じ証跡として扱わない。
+正本contractは`contracts/addon/`、設計判断は`docs/decisions/addon-connection-foundation-2026-09.md`、SDK version適合は`docs/addon-mcp-sdk-compatibility-2026-09.md`とする。
+
+### contract / unit
+
+`backend/tests/unit/`でJSON Schema Draft 2020-12とsemantic validatorを検証する。
+
+- `manifest.schema.json` / `addon-meta.schema.json` / `capability-snapshot.schema.json` / `execution-envelope.schema.json`
+- `contracts/addon/fixtures/valid/`は受理する
+- `contracts/addon/fixtures/invalid/`は拒否する
+- raw secretをManifestで受理しない
+- Core restrictionは安全側だけ
+- annotation未信頼時に`readOnlyHint=true`をeffective read-onlyへ昇格しない
+- `effect_source=unknown`はunknown / serial / retryなし
+
+これは外部MCPへ接続した証跡ではない。
+
+### test-owned MCP / module
+
+#159では`backend/tests/module/`からtest-owned MCP serverを別processで起動し、通常CIで実行可能なconformanceとする。
+
+- SDKは#152で確認した`mcp==2.0.0`をpinする
+- external Streamable HTTP（none / preconfigured Bearer）
+- external stdio server
+- self-ownedのOrigin拒否・localhost bind・mandatory Bearerは#221へ分離
+- MCP 2026-07-28 Tools / Resources / Prompts discovery
+- MRTR `input_required` →回答→元request再実行
+- mapping不能Tool
+- trusted/untrusted annotations
+- Tool追加/削除/schema変更、snapshot activation境界
+- effective read-onlyのみ並列/1 retry
+- write/destructive/unknownは直列/automatic retryなし
+- budget 6 / same-tool 3 / identical 2 / normal 3 cycle
+- Tasks必須operationは`unsupported`へ落とし、同serverの通常Toolを壊さない
+- native result保持、secret/raw payload非logging
+
+実行入口は`backend/tests/module/test_external_mcp_conformance.py`。unitは`test_external_mcp_registry.py`、`test_external_mcp_client.py`、`test_external_mcp_gate.py`、contract検証は`test_addon_contracts.py`に配置する。
+
+Core package/DBをtest MCP serverからimportしない。test-owned MCPの成功をDevelopment Observerや第三者MCPへの実接続成功とは扱わない。
+
+### real Addon / integration
+
+#58 Development Observer等の実Addon processとの接続は`backend/tests/integration/test_*_integration.py`に置く。
+実AddonのStreamable HTTP endpoint、service auth、process/config/store分離を実接続で検証する。
+
+第三者/コラボMCPを本番credentialで通常CIへ接続しない。必要な実接続受入は対象Issueで明示し、credentialをfixture/evidenceへ保存しない。
+
+### 外部MCPの独立実装との実接続
+
+`npm run test:integration:mcp`は公開されたFilesystem / Everything Serverに実接続する。
+`RUN_MCP_REAL_SERVICE_TESTS=true`と`MCP_REAL_SERVER_ROOT`を設定して明示実行する。
+通常CIでは実行しない。開始後の依存不足・認証・接続失敗はskipに変換しない。
+再実行手順、固定version、検証範囲と証跡は
+[`external-mcp-integration-2026-09.md`](external-mcp-integration-2026-09.md)を参照する。
+
+### 会話からのTool利用
+
+`test_tool_use.py`と`test_tool_use_boundaries.py`は候補・元schema・binding・MRTR・停止・予算を合成portで検証する。
+`test_tool_use_real_service_integration.py`は実LLMと公開Filesystem/Everythingへの接続を明示実行する。
+ブラウザのテキスト・LiveKit音声、追加質問と停止の実行方法・公開MCPと制御fixtureの区別は
+[会話からの外部MCP利用](tool-use.md)を参照する。実接続スイートをCIのmock結果で代替しない。
+この受入runnerはテスト所有LiveKitと動的portを使う独立入口であり、既存Profileの環境オーケストレーターを起動しない。
+共通reporterの`environment-run.json`／`evidence.json`の代わりに、テストdata rootの`runtime/tool-use/`
+へ解決済みProfileと`runtime-manifest.json`（run ID、実行時刻、実依存、所有process、結果）を記録する。
+共有用の専用成果物ディレクトリにはpath・endpoint・process/container識別子を除いた写しだけを置く。
+使用modelは実接続受入の再現条件として共有用にも記録する。
+起動途中の例外・中断はrunnerの非zero終了として扱い、readinessだけを成功証跡にしない。
+
+### SDK/version更新
+
+`mcp` package version更新は通常の依存更新として無条件mergeしない。protocol negotiation、Streamable HTTP、stdio、Tools/Resources、MRTR、trust/snapshot境界を#159 conformanceで再確認する。
+MCP Tasks extension等、SDKで未対応の任意能力は`unsupported`として明示し、通常Tool/Resource利用を失敗させない。
 
 ## Capability不足と失敗
 

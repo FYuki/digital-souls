@@ -701,9 +701,8 @@ def test_extractor_receives_only_current_user_and_latest_completed_turn(
                     ["oldest-user", "latest-user", "current-user"]
                 ):
                     _send_http_message(client, message)
-                # shutdownは未実行jobを破棄する。入力境界を検査するこのテストでは、
-                # 3件目の抽出器への引き渡しを確認してからアプリを終了する。
-                assert extractor_request.entered[2].wait(timeout=5)
+                    # shutdownは未開始jobを破棄するため、対象の抽出要求を確認してから次へ進む。
+                    assert extractor_request.entered[index].wait(timeout=5)
 
     transferred = (
         json.dumps(extractor_request.calls[2]["messages"], ensure_ascii=False)

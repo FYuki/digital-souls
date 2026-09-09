@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "runId": "19a68cab-8ff2-431f-8adc-6732561f70d6",
+  "startedAt": "2026-09-06T18:30:13.059564+00:00",
+  "environmentId": "test",
+  "mcpImplementation": "published-filesystem-and-everything",
+  "microphone": "chromium-voicevox-wav",
+  "routingModel": "ollama/gemma4:e4b",
+  "testStatus": "passed",
+  "completedAt": "2026-09-06T18:35:17.798587+00:00"
+}
