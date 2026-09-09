@@ -330,3 +330,28 @@ MRTRの追加情報は既存contextで補える場合に再開し、不足時は
 入力待ちは同じsnapshot・grant・budget・bindingを最大10分保持する。停止・会話切替・音声切断で破棄し、
 回答中のbarge-inでは古い音声を止めつつ入力待ちを保つ。Target未設定なら通常会話を維持する。
 設定、停止の意味、検証入口は[会話からの外部MCP利用](tool-use.md)を参照する。
+
+## Character Life Runtime
+
+`backend/app/character_life/`が会話外の実行を所有する。FastAPI lifespanでDBOSを一度だけ起動し、
+会話と同じToolRuntimeのRegistry・Execution Gate・BindingResolverを使用する。
+`DS_CHARACTER_LIFE_ENABLED`は既定falseで、今回の受入対象はdev/testである。
+
+DBOSはqueue・UTC schedule・再開・復旧を担当し、引数は参照IDと実行世代に限定する。
+`character-life.db`は6種類のLife State、revision履歴、Autonomy Grant、活動・内省形成の結果、監査を保持する。
+承認済みの観測handoffを関連domainへの呼出し前に固定し、再起動しても同じ時刻・本文・source・冪等keyで再送する。
+この作業記録は#100のSELF Episode正本ではない。共有候補と活動完了は同じtransactionで確定する。
+
+Interestだけでは開始せず、Goal Intentionまたは利用者が要求したImplementation Intentionとconnection単位のGrantを必要とする。
+元Reflectionのrevisionを採用直前に照合し、訂正・非公開化した派生状態を休眠化する。
+正本の照合不能時は派生状態を会話・活動に使用しない。状態履歴とprovenanceは保持する。
+Resource読取とTool呼出しはいずれもGateへ渡し、Binding制約を適用した最終引数へEgress判定を行う。
+高影響確認・副作用回復の接続前は、未分類の操作を`action_recovery_unavailable`で保留する。
+
+認知の前後とdispatch直前にforegroundを確認し、DBOS queueでは利用者要求を自律活動より優先する。
+同じGoalへの未完了の自律要求と同じcharacterへの未完了の内省形成を重ねない。活動queueはcharacterごとに100件まで受け付ける。
+停止時は進行中の結果を破棄し保留を確定してからDBOS・MCPを終了する。
+`_chat_runtime`は応答開始時の有効なLife Stateを非信頼データとして固定し、入力budgetに収まる分だけ参照する。
+
+関連Epic #100/#101/#102/#185の正本実装は含まない。未接続の結果はDEFERREDとして表示する。
+設定・API・保存・復旧・実接続検証は[Character Life運用手順](character-life-operations.md)を参照する。

@@ -139,9 +139,13 @@ class Connection:
         return digest({k: v for k, v in c.items() if k not in {"trust", "grant"}})
 
     def restrictions(self, name: str) -> frozenset[str]:
+        policy = self.manifest["core_policy"]
+        allowlist = policy.get("operation_allowlist")
+        if allowlist is not None and name not in allowlist:
+            return frozenset({"deny"})
         return frozenset(
             r["action"]
-            for r in self.manifest["core_policy"]["restrictions"]
+            for r in policy["restrictions"]
             if r["target"].get("tool_name") == name
         )
 

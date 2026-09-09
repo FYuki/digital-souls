@@ -55,6 +55,7 @@ class _Run:
     original_request: str = field(repr=False)
     cycle: int = 1
     user_followup: bool = False
+    clarification: list[Json] = field(default_factory=list, repr=False)
     results: list[Json] = field(default_factory=list, repr=False)
     sources: list[Json] = field(default_factory=list)
     forbidden: set[str] = field(default_factory=set)
@@ -218,6 +219,9 @@ class ToolService:
             )
         if run is not None:
             run.user_followup = True
+            if run.clarification and run.clarification[-1]["answer"] is None:
+                # 通常履歴の切り詰めに依存せず、直前の確認に対する回答を保持する。
+                run.clarification[-1]["answer"] = request
         if run is None:
             if len(self._runs) >= self.max_sessions:
                 return ToolMaterial(
@@ -332,7 +336,13 @@ class ToolService:
                 ),
             )
             candidates = select_candidates(
-                all_candidates, run.original_request + " " + request
+                all_candidates,
+                " ".join([
+                    run.original_request,
+                    *[q["answer"] for q in run.clarification if q["answer"] is not None],
+                    request,
+                ]),
+                preferred_request=request if run.user_followup else "",
             )
             if run.binding_candidate is not None:
                 candidates = (run.binding_candidate,)
@@ -372,6 +382,7 @@ class ToolService:
                     "current_user": request,
                     "user_followup": run.user_followup,
                     "history": list(history[-8:]),
+                    "clarification": [dict(q) for q in run.clarification],
                     "candidates": projections,
                     "results": run.results,
                     "pending": pending,
@@ -420,6 +431,7 @@ class ToolService:
                     None,
                     None,
                 )
+                run.clarification.clear()
                 run.results.clear()
                 run.sources.clear()
                 run.forbidden.clear()
@@ -437,6 +449,14 @@ class ToolService:
                         run,
                         "管理設定が必要なため、外部操作を停止しました。秘密情報は会話へ入力しないでください。",
                     )
+                if run.interaction is None and run.binding_candidate is None:
+                    if len(run.clarification) >= 4:
+                        return self._material(
+                            run,
+                            "追加回答から実行条件を確定できませんでした。確認を終了します。"
+                            "対象と条件をまとめて、改めて依頼してください。",
+                        )
+                    run.clarification.append({"question": text, "answer": None})
                 return self._material(run, text, waiting=True)
             if decision.action == "resume":
                 if run.interaction is None or run.answer_schema is None:
