@@ -100,6 +100,8 @@ def _import_chroma_store(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     fake_chromadb = ModuleType("chromadb")
     setattr(fake_chromadb, "PersistentClient", FakePersistentClient)
     monkeypatch.setitem(sys.modules, "chromadb", fake_chromadb)
+    # import時の親package属性も復元し、後続テストのpatch先を別moduleへ残さない。
+    monkeypatch.delattr(importlib.import_module("app.memory"), "chroma_store", raising=False)
     monkeypatch.delitem(sys.modules, "app.memory.chroma_store", raising=False)
     chroma_store = importlib.import_module("app.memory.chroma_store")
     FakePersistentClient.collections_by_path.clear()

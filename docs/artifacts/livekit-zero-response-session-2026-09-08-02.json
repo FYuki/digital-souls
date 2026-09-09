@@ -1,0 +1,136 @@
+{
+  "schema_version": "1.0",
+  "measurement_revision": "ff12158c4097aefec5080171b71fb9618ed319ce",
+  "verification_scope": "actual_zero_response_session_lifecycle_two_cases_only",
+  "full_issue_acceptance_verified": false,
+  "dogfood_human_acceptance_verified": false,
+  "supplied_utterances": 0,
+  "independent_sessions": 2,
+  "native_completed_responses": 0,
+  "native_session_journal_matches_manifest": true,
+  "native_session_end_missing": 0,
+  "expected_ends": 1,
+  "injected_disconnect_unexpected_ends": 1,
+  "disconnect_operation_window_missing_retained": true,
+  "fabricated_response_ids_used": false,
+  "response_trace_events": 0,
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "teardown_completed": true,
+  "validation": {
+    "related_tests_passed": 104,
+    "frontend_typecheck_passed": true
+  },
+  "session_aggregate": {
+    "schema_version": "1.0",
+    "measurement_kind": "controlled_baseline",
+    "scope": "runtime_sessions_including_zero_response",
+    "expected_sessions": 2,
+    "observed_sessions": 2,
+    "counts": {
+      "created_sessions": 2,
+      "activated_sessions": 2,
+      "ended_sessions": 2,
+      "zero_completed_response_sessions": 2,
+      "expected_ends": 1,
+      "unexpected_ends": 1
+    },
+    "end_reasons": {
+      "explicit": 1,
+      "reconnect_timeout": 1
+    },
+    "missing_sessions_by_reason": {
+      "complete_operation_window_not_recorded": 1
+    },
+    "additional_operations": {
+      "measured_sessions": 1,
+      "values": [
+        0
+      ]
+    },
+    "three_turn_additional_operations": {
+      "measured_sessions": 0,
+      "values": []
+    },
+    "full_issue_acceptance_verified": false
+  },
+  "case_aggregates": {
+    "explicit_end": {
+      "schema_version": "1.0",
+      "measurement_kind": "controlled_baseline",
+      "scope": "runtime_sessions_including_zero_response",
+      "expected_sessions": 1,
+      "observed_sessions": 1,
+      "counts": {
+        "created_sessions": 1,
+        "activated_sessions": 1,
+        "ended_sessions": 1,
+        "zero_completed_response_sessions": 1,
+        "expected_ends": 1
+      },
+      "end_reasons": {
+        "explicit": 1
+      },
+      "missing_sessions_by_reason": {},
+      "additional_operations": {
+        "measured_sessions": 1,
+        "values": [
+          0
+        ]
+      },
+      "three_turn_additional_operations": {
+        "measured_sessions": 0,
+        "values": []
+      },
+      "full_issue_acceptance_verified": false
+    },
+    "browser_disconnect": {
+      "schema_version": "1.0",
+      "measurement_kind": "controlled_baseline",
+      "scope": "runtime_sessions_including_zero_response",
+      "expected_sessions": 1,
+      "observed_sessions": 1,
+      "counts": {
+        "created_sessions": 1,
+        "activated_sessions": 1,
+        "ended_sessions": 1,
+        "zero_completed_response_sessions": 1,
+        "unexpected_ends": 1
+      },
+      "end_reasons": {
+        "reconnect_timeout": 1
+      },
+      "missing_sessions_by_reason": {
+        "complete_operation_window_not_recorded": 1
+      },
+      "additional_operations": {
+        "measured_sessions": 0,
+        "values": []
+      },
+      "three_turn_additional_operations": {
+        "measured_sessions": 0,
+        "values": []
+      },
+      "full_issue_acceptance_verified": false
+    }
+  },
+  "end_observation_elapsed_ms_by_case": {
+    "explicit_end": 102.47589100000005,
+    "browser_disconnect": 82177.772664
+  },
+  "end_observation_clock": "node_monotonic",
+  "end_observation_is_server_grace_duration": false,
+  "source_sha256": {
+    "trial-manifest.json": "94459efc332454262375d1609522c8f0b8dd8db2332456652e11c60481720ecc",
+    "runtime-data/voice-metrics/sessions/controlled-trace.jsonl": "fb9b36b8b73b685c1a831f2ab7fbc75e52e4e94b329993afcebd06a973bb4124",
+    "runtime-data/runtime/standalone/environment-run.json": "58246b358ee1cdecf010f159dc36c5b99d0c51b0de31adefced54b58410378fb",
+    "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+  },
+  "runtime_sources_unchanged_since_automated_revision": "43afa4f45e82db22980e149af1b6447a8105f770",
+  "runtime_source_tree_sha1": {
+    "backend/app": "dc789b317cdd154c1b70387198a0ce0f9e58ca52",
+    "frontend/src": "1d8a01033602a6dc9943f9a0a56dfe58bda028ad"
+  }
+}

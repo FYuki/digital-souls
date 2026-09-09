@@ -1,0 +1,108 @@
+--- a/livekit/src/rtc_engine/reconnect_strategy.rs
++++ b/livekit/src/rtc_engine/reconnect_strategy.rs
+@@ -22,7 +22,36 @@
+ use std::time::{Duration, SystemTime, UNIX_EPOCH};
+ 
+ /// Maximum number of reconnect attempts before the engine gives up and closes.
+-pub const RECONNECT_ATTEMPTS: u32 = 10;
++pub const RECONNECT_ATTEMPTS: u32 = 64;
++
++// 短い通信断では最大500msで再試行し、長い障害には従来の待機を適用する。
++const FAST_RETRY_WINDOW: Duration = Duration::from_secs(10);
++pub(super) const RECONNECT_RETRY_WINDOW: Duration = Duration::from_secs(60);
++const FAST_RETRY_MIN: Duration = Duration::from_millis(250);
++const FAST_RETRY_MAX: Duration = Duration::from_millis(500);
++
++// 新しい試行を開始する時間と回数を制限する。進行中の接続のtimeoutはSDKに従う。
++pub(super) fn retry_delay(attempt: u32, elapsed: Duration) -> Option<Duration> {
++    retry_delay_with_seed(attempt, elapsed, jitter_seed())
++}
++
++fn retry_delay_with_seed(attempt: u32, elapsed: Duration, seed: u64) -> Option<Duration> {
++    if attempt >= RECONNECT_ATTEMPTS || elapsed >= RECONNECT_RETRY_WINDOW {
++        return None;
++    }
++    let millis = if elapsed < FAST_RETRY_WINDOW {
++        let lower = FAST_RETRY_MIN.as_millis() as u64;
++        let upper = FAST_RETRY_MAX.as_millis() as u64;
++        lower + seed % (upper - lower + 1)
++    } else {
++        seed % (nominal(attempt).as_millis() as u64 + 1)
++    };
++    Some(Duration::from_millis(millis).min(RECONNECT_RETRY_WINDOW - elapsed))
++}
++
++fn jitter_seed() -> u64 {
++    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.subsec_nanos() as u64).unwrap_or(0)
++}
+ 
+ /// Exponential-backoff-with-full-jitter parameters for spacing reconnect
+ /// attempts. The per-attempt delay is sampled uniformly from
+@@ -45,11 +74,10 @@
+ /// uniformly from `[0, nominal(attempt)]`. A dependency-free pseudo-random
+ /// source from the system clock is sufficient — backoff jitter does not need
+ /// cryptographic quality, only de-correlation across clients.
++#[cfg(test)]
+ pub(super) fn delay(attempt: u32) -> Duration {
+     let nominal = nominal(attempt).as_millis() as u64;
+-    let seed =
+-        SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.subsec_nanos() as u64).unwrap_or(0);
+-    Duration::from_millis(seed % (nominal + 1))
++    Duration::from_millis(jitter_seed() % (nominal + 1))
+ }
+ 
+ #[cfg(test)]
+@@ -96,4 +124,28 @@
+             }
+         }
+     }
++    #[test]
++    fn fast_retries_survive_short_outage_and_bound_recovery_wait() {
++        // 即時失敗を繰り返しても10秒未満で試行を使い切らず、次の待機は500ms以下。
++        for seed in [0, 250, u64::MAX] {
++            let mut elapsed = Duration::ZERO;
++            let mut attempt = 1;
++            while elapsed < FAST_RETRY_WINDOW {
++                let wait = retry_delay_with_seed(attempt, elapsed, seed).expect("早期に打ち切らない");
++                assert!((FAST_RETRY_MIN..=FAST_RETRY_MAX).contains(&wait));
++                elapsed += wait;
++                attempt += 1;
++            }
++        }
++    }
++
++    #[test]
++    fn long_outage_keeps_backoff_and_stops_scheduling_at_budget() {
++        assert_eq!(retry_delay_with_seed(30, Duration::from_secs(10), 6000), Some(Duration::from_secs(6)));
++        assert_eq!(retry_delay_with_seed(30, Duration::from_millis(59900), 6000), Some(Duration::from_millis(100)));
++        assert_eq!(retry_delay_with_seed(1, RECONNECT_RETRY_WINDOW, 0), None);
++        assert_eq!(retry_delay_with_seed(RECONNECT_ATTEMPTS, Duration::ZERO, 0), None);
++        assert_eq!(retry_delay_with_seed(u32::MAX, Duration::MAX, u64::MAX), None);
++    }
++
+ }
+--- a/livekit/src/rtc_engine/mod.rs
++++ b/livekit/src/rtc_engine/mod.rs
+@@ -921,7 +921,11 @@
+         let mut resuming_emitted = false;
+         let mut restarting_emitted = false;
+ 
++        let reconnect_started = std::time::Instant::now();
+         for i in 1..=RECONNECT_ATTEMPTS {
++            if reconnect_started.elapsed() >= reconnect_strategy::RECONNECT_RETRY_WINDOW {
++                break;
++            }
+             let (is_closed, full_reconnect) = {
+                 let running_handle = self.running_handle.read();
+                 (running_handle.closed, running_handle.full_reconnect)
+@@ -1024,7 +1028,9 @@
+             // this wait so the next attempt fires immediately; a close signals
+             // close_notifier to break out of the loop early (the next iteration's
+             // `is_closed` check then returns) instead of waiting out the backoff.
+-            let backoff = reconnect_strategy::delay(i);
++            let Some(backoff) = reconnect_strategy::retry_delay(i, reconnect_started.elapsed()) else {
++                break;
++            };
+             tokio::select! {
+                 _ = livekit_runtime::sleep(backoff) => {}
+                 _ = self.retry_now_notify.notified() => {

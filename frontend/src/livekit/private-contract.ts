@@ -10,7 +10,14 @@ type TerminalOutcome = Readonly<{
   confirmedAudioSequence: number
 }>
 
+export type OutputStopRequest = Readonly<{
+  type: 'output_stop_request'; sessionId: string; responseId: string; requestId: string; generation: number
+}>
+
 type PrivateFrame =
+  | OutputStopRequest
+  | Readonly<{type: 'output_stop_confirmed'; sessionId: string; responseId: string; requestId: string;
+    generation: number; lastPlayedAudioSequence: number; outputConfirmation: 'output_clock_passed' | 'never_connected'}>
   | Readonly<{
     type: 'authoritative_state'
     generation: number
@@ -19,6 +26,13 @@ type PrivateFrame =
   }>
   | Readonly<{ type: 'ack'; eventId: string; generation: number }>
   | Readonly<{ type: 'state_sync_request'; generation: number }>
+  | Readonly<{ type: 'control_probe'; generation: number; probeId: string; observeClock?: true }>
+  | Readonly<{ type: 'control_probe_ack'; generation: number; probeId: string; serverReceivedAtUs?: number; serverSentAtUs?: number }>
+  | Readonly<{ type: 'audio_probe_request'; generation: number; probeId: string }>
+  | Readonly<{ type: 'audio_probe_ready' | 'audio_probe_complete'; generation: number; probeId: string; trackSid: string }>
+  | Readonly<{ type: 'audio_probe_finished'; generation: number; probeId: string; trackSid: string; inputSampleCount: number; capturedSampleCount: number; paddingSampleCount: number }>
+  | Readonly<{ type: 'response_audio_finished'; responseId: string; generation: number; inputSampleCount: number; capturedSampleCount: number; paddingSampleCount: number }>
+  | Readonly<{ type: 'response_track_ready'; responseId: string; trackSid: string; generation: number }>
   | Readonly<{
     type: 'logical_audio_segment'
     responseId: string
@@ -43,6 +57,9 @@ type TerminalOutcomeWire = Readonly<{
 }>
 
 type PrivateFrameWire =
+  | Readonly<{type: 'output_stop_request'; session_id: string; response_id: string; request_id: string; generation: number}>
+  | Readonly<{type: 'output_stop_confirmed'; session_id: string; response_id: string; request_id: string;
+    generation: number; last_played_audio_sequence: number; output_confirmation: 'output_clock_passed' | 'never_connected'}>
   | Readonly<{
     type: 'authoritative_state'
     generation: number
@@ -51,6 +68,13 @@ type PrivateFrameWire =
   }>
   | Readonly<{ type: 'ack'; event_id: string; generation: number }>
   | Readonly<{ type: 'state_sync_request'; generation: number }>
+  | Readonly<{ type: 'control_probe'; generation: number; probe_id: string; observe_clock?: true }>
+  | Readonly<{ type: 'control_probe_ack'; generation: number; probe_id: string; server_received_us?: number; server_sent_us?: number }>
+  | Readonly<{ type: 'audio_probe_request'; generation: number; probe_id: string }>
+  | Readonly<{ type: 'audio_probe_ready' | 'audio_probe_complete'; generation: number; probe_id: string; track_sid: string }>
+  | Readonly<{ type: 'audio_probe_finished'; generation: number; probe_id: string; track_sid: string; input_sample_count: number; captured_sample_count: number; padding_sample_count: number }>
+  | Readonly<{ type: 'response_audio_finished'; response_id: string; generation: number; input_sample_count: number; captured_sample_count: number; padding_sample_count: number }>
+  | Readonly<{ type: 'response_track_ready'; response_id: string; track_sid: string; generation: number }>
   | Readonly<{
     type: 'logical_audio_segment'
     response_id: string
@@ -77,6 +101,13 @@ export function parsePrivateFrame(value: unknown): PrivateFrame {
   }
   const frame = value as PrivateFrameWire
   switch (frame.type) {
+    case 'output_stop_request':
+      return {type: frame.type, sessionId: frame.session_id, responseId: frame.response_id,
+        requestId: frame.request_id, generation: frame.generation}
+    case 'output_stop_confirmed':
+      return {type: frame.type, sessionId: frame.session_id, responseId: frame.response_id,
+        requestId: frame.request_id, generation: frame.generation,
+        lastPlayedAudioSequence: frame.last_played_audio_sequence, outputConfirmation: frame.output_confirmation}
     case 'authoritative_state':
       return {
         type: frame.type,
@@ -95,8 +126,33 @@ export function parsePrivateFrame(value: unknown): PrivateFrame {
         eventId: frame.event_id,
         generation: frame.generation,
       }
+    case 'control_probe':
+      return {type: frame.type, generation: frame.generation, probeId: frame.probe_id,
+        ...(frame.observe_clock === true ? {observeClock: true} : {})}
+    case 'control_probe_ack':
+      if (frame.server_received_us !== undefined && frame.server_sent_us! < frame.server_received_us) {
+        throw new Error('invalid server clock order')
+      }
+      return {type: frame.type, generation: frame.generation, probeId: frame.probe_id,
+        ...(frame.server_received_us !== undefined ? {serverReceivedAtUs: frame.server_received_us,
+          serverSentAtUs: frame.server_sent_us!} : {})}
+    case 'audio_probe_request':
+      return {type: frame.type, generation: frame.generation, probeId: frame.probe_id}
+    case 'audio_probe_ready':
+    case 'audio_probe_complete':
+      return {type: frame.type, generation: frame.generation, probeId: frame.probe_id, trackSid: frame.track_sid}
+    case 'audio_probe_finished':
+      return {type: frame.type, generation: frame.generation, probeId: frame.probe_id, trackSid: frame.track_sid,
+        inputSampleCount: frame.input_sample_count, capturedSampleCount: frame.captured_sample_count,
+        paddingSampleCount: frame.padding_sample_count}
     case 'state_sync_request':
       return { type: frame.type, generation: frame.generation }
+    case 'response_audio_finished':
+      if (frame.input_sample_count + frame.padding_sample_count !== frame.captured_sample_count) throw new Error('source sample conservation failed')
+      return {type: frame.type, responseId: frame.response_id, generation: frame.generation,
+        inputSampleCount: frame.input_sample_count, capturedSampleCount: frame.captured_sample_count, paddingSampleCount: frame.padding_sample_count}
+    case 'response_track_ready':
+      return { type: frame.type, responseId: frame.response_id, trackSid: frame.track_sid, generation: frame.generation }
     case 'logical_audio_segment':
       return {
         type: frame.type,

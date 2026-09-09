@@ -57,6 +57,17 @@
       ]
     }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "name": { "const": "integration-voice-pcm" } }, "required": ["name"] },
+      "then": { "properties": { "dependencies": { "properties": { "whisper": { "properties": {
+        "baseUrl": { "enum": ["http://127.0.0.1:50023", "http://127.0.0.1:50023/"] }
+      } } } } } },
+      "else": { "properties": { "dependencies": { "properties": { "whisper": { "properties": {
+        "baseUrl": { "enum": ["http://127.0.0.1:50022", "http://127.0.0.1:50022/"] }
+      } } } } } }
+    }
+  ],
   "$defs": {
     "managedOrigin": {
       "type": "string",
@@ -181,7 +192,9 @@
         "baseUrl": {
           "enum": [
             "http://127.0.0.1:50022",
-            "http://127.0.0.1:50022/"
+            "http://127.0.0.1:50022/",
+            "http://127.0.0.1:50023",
+            "http://127.0.0.1:50023/"
           ]
         },
         "readinessPath": { "const": "/health/ready" }

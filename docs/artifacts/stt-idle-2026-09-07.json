@@ -1,0 +1,70 @@
+{
+  "scope": "stt_idle_diagnostic",
+  "trials": [
+    {
+      "idle_seconds": 0,
+      "silence_prewarm": false,
+      "after_prewarm_delay_seconds": null,
+      "warmup_ms": null,
+      "recognition_ms": 475.223978,
+      "matches": true
+    },
+    {
+      "idle_seconds": 0.2,
+      "silence_prewarm": false,
+      "after_prewarm_delay_seconds": null,
+      "warmup_ms": null,
+      "recognition_ms": 129.278922,
+      "matches": true
+    },
+    {
+      "idle_seconds": 0.5,
+      "silence_prewarm": false,
+      "after_prewarm_delay_seconds": null,
+      "warmup_ms": null,
+      "recognition_ms": 136.753396,
+      "matches": true
+    },
+    {
+      "idle_seconds": 1,
+      "silence_prewarm": false,
+      "after_prewarm_delay_seconds": null,
+      "warmup_ms": null,
+      "recognition_ms": 173.642733,
+      "matches": true
+    },
+    {
+      "idle_seconds": 2,
+      "silence_prewarm": false,
+      "after_prewarm_delay_seconds": null,
+      "warmup_ms": null,
+      "recognition_ms": 300.305547,
+      "matches": true
+    },
+    {
+      "idle_seconds": 4,
+      "silence_prewarm": false,
+      "after_prewarm_delay_seconds": null,
+      "warmup_ms": null,
+      "recognition_ms": 446.917796,
+      "matches": true
+    },
+    {
+      "idle_seconds": 4,
+      "silence_prewarm": true,
+      "after_prewarm_delay_seconds": 0.4,
+      "warmup_ms": 449.821106,
+      "recognition_ms": 123.089706,
+      "matches": true
+    },
+    {
+      "idle_seconds": 4,
+      "silence_prewarm": true,
+      "after_prewarm_delay_seconds": 0.4,
+      "warmup_ms": 435.72436,
+      "recognition_ms": 155.974182,
+      "matches": true
+    }
+  ],
+  "fixture_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e"
+}

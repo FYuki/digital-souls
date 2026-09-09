@@ -86,6 +86,9 @@ npm run build
 
 CI は単体テスト、結合テスト、モックE2E、型チェック、Frontend build、Compose契約検証、Backend／Frontend image buildを実行する。別workflowはmainと`epic/**`へのpushでBackend／Frontend／Whisper imageをGHCRへcommit SHA tagで公開しdigestを記録する。実GPU・実接続スイートは外部サービスを必要とするため自動実行せず、Pull Request の検証欄へローカル実行結果または未実行状態を記録する。
 
+Backendの音声品質テストは、保存済みartifactの測定版を`git show`で照合し、Python CLIからTypeScriptの音声観測replayを実行する。
+そのためBackend CIもGit履歴全体を取得し、Node.js 22と`npm ci --prefix frontend`で固定されたreplay依存を準備する。履歴・依存の不足をテストのskipや監査省略で回避しない。
+
 Issue #135 Goal 1ではremote client、single-flight、capacity超過、timeout、worker再生成、Profile、Compose、deploy／rollbackをfakeまたはCPU不要の自動テストで検証する。RTX 4070 Ti SUPER上のCUDA／VRAM証跡、dev・dogfood同時会話、連続会話品質、WSL再起動復旧はGoal 2の手動受入とし、Goal 1の成功を実GPU受入済みとは扱わない。
 
 ## Pull Requestレビュー
@@ -152,3 +155,30 @@ Wave 3のEpic受入シナリオ、自動testと利用者dogfoodの責務分離�
 - `environment-report-association`: 実行スイートとProfileの関連付け
 
 証跡生成失敗時は関連付けが完了していないため、`runId`、`profileReport`、`environmentReport` を記録しない。`failureMessage` には失敗原因のエラーメッセージを記録し、reporterは失敗証跡の保存後も呼び出し元へ失敗を伝える。
+
+
+## 音声CHATの合成context回答値
+
+`test_voice_context_quality_integration.py`は、通常のprompt構築とInference Routerから実Ollamaへ要求する。
+光織の名前、合成履歴の好み、合成記憶の場所、情報がない場合のnullをJSONの値として照合する。
+JSON形式は質問で依頼し、providerのstructured出力APIは使わないため、通常のthinking設定を強制無効にはしない。
+固定語句が否定文に出ただけでは正答にしない。6条件×2設定×3要求の全36件を保存し、失敗を除外しない。
+検索・privacy・永続化・自然な話し方の受入は別途必要である。
+
+```bash
+RUN_VOICE_CONTEXT_QUALITY=true \
+VOICE_CONTEXT_INFERENCE_ENV=/path/to/inference.env \
+VOICE_CONTEXT_EVIDENCE_PATH=/tmp/voice-context-answer-01.json \
+PYTHONDONTWRITEBYTECODE=1 backend/.venv/bin/python -m pytest \
+  backend/tests/integration/test_voice_context_quality_integration.py -q
+```
+
+他の実推論測定を終了し、commit済みのworktreeで実行する。出力先は新規ファイルに限定する。
+生成本文、prompt、provider例外本文を証跡へ保存しない。schema・匿名性・試行の独立した組合せと全分母を
+検証した後に証跡を保存し、不正解があればテストを失敗させる。明示実行しない場合のskipは実接続合格に数えない。
+
+合成context照合のschema 1.1では、JSONの固定キー・型・完全一致値を検査する前に、回答全体が
+単一のJSONコードブロックである場合だけその囲みを展開する。説明文や複数候補は除去しない。
+`strict_format_valid`で元のJSONのみという指定への適合を別記し、`passed`は取得できた回答値を
+評価する。これは音声回答にJSON形式を要求する製品仕様ではない。旧schema 1.0の失敗証跡は
+その定義のまま保存し、回答本文を保存していない過去試行を再採点しない。

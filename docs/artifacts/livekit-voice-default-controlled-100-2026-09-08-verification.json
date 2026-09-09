@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "run_id": "voice-default-controlled-100-20260908-01",
+  "measurement_revision": "95afacecf8e3cc55da85f0c53550479486bb8166",
+  "measurement_revision_source": "runner_preflight_and_observed_unchanged_checkout",
+  "final_manifest_revision_missing": true,
+  "verification_scope": "production_voice_latency_policy_controlled_100_only",
+  "full_issue_acceptance_verified": false,
+  "warmup_trials": 5,
+  "measured_trials": 100,
+  "independent_session_conversation_verified": true,
+  "transcript_and_initial_state_verified": true,
+  "experimental_thinking_override": false,
+  "per_response_policy_counters_verified": true,
+  "native_full_playback_events_verified": true,
+  "controlled_underrun_count": 1,
+  "controlled_underrun_target_passed": false,
+  "gap_total_ms": 41.333333333333336,
+  "maximum_gap_ms": 41.333333333333336,
+  "manifest_playback_match_verified_by_finalizer": true,
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "teardown_completed": true,
+  "ttfa_p50_ms": 1775.9000000059605,
+  "ttfa_p95_ms": 1845.4249999791384,
+  "ttfa_target_passed": true,
+  "median_guide_met": false,
+  "utterance_finalized_p95_ms": 299.94955200000004,
+  "utterance_finalized_target_passed": true,
+  "ollama_load_p95_ms": 266.64076745,
+  "observed_target_context_tokens": [
+    8192
+  ],
+  "observations_without_resident_model": 0,
+  "simultaneous_request_source_verified": false,
+  "artifact_sha256": "6139020c430f50971ec293c6cc8b177a11e14f6f510ae1e486de53fed3c32204",
+  "source_sha256": {
+    "trial-manifest.json": "4a288c82cc1bd5522c191f1558dd8666c4edc624ec85c2429310d943c27ec7ef",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "ec7aaed3f6fe8ea7c970842952eb24faa4188fc5d9ee231eff85c6002911ef4d",
+    "runtime-data/runtime/standalone/environment-run.json": "589d076e37f7b4822dbd4248aff114382f032c8e4f814497803b75a8d50656da",
+    "inference-runtime.jsonl": "e81818856b78454b3e16d692bb2c6e3f37872f7bf7602db1061e19baf5554477",
+    "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+  }
+}

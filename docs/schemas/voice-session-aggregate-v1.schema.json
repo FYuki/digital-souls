@@ -1,0 +1,146 @@
+{
+  "$defs": {
+    "OperationAggregate": {
+      "additionalProperties": false,
+      "properties": {
+        "measured_sessions": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Measured Sessions",
+          "type": "integer"
+        },
+        "values": {
+          "items": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "measured_sessions",
+        "values"
+      ],
+      "title": "OperationAggregate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "measurement_kind": {
+      "enum": [
+        "automated_test",
+        "controlled_baseline",
+        "dogfood"
+      ],
+      "title": "Measurement Kind",
+      "type": "string"
+    },
+    "scope": {
+      "const": "runtime_sessions_including_zero_response",
+      "default": "runtime_sessions_including_zero_response",
+      "title": "Scope",
+      "type": "string"
+    },
+    "expected_sessions": {
+      "minimum": 1,
+      "title": "Expected Sessions",
+      "type": "integer"
+    },
+    "observed_sessions": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "title": "Observed Sessions",
+      "type": "integer"
+    },
+    "counts": {
+      "additionalProperties": {
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "propertyNames": {
+        "enum": [
+          "created_sessions",
+          "activated_sessions",
+          "never_activated_sessions",
+          "ended_sessions",
+          "zero_completed_response_sessions",
+          "expected_ends",
+          "unexpected_ends"
+        ]
+      },
+      "title": "Counts",
+      "type": "object"
+    },
+    "end_reasons": {
+      "additionalProperties": {
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "propertyNames": {
+        "enum": [
+          "explicit",
+          "protocol_error",
+          "runtime_error",
+          "reconnect_timeout",
+          "join_token_expired",
+          "unknown"
+        ]
+      },
+      "title": "End Reasons",
+      "type": "object"
+    },
+    "missing_sessions_by_reason": {
+      "additionalProperties": {
+        "maximum": 9007199254740991,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "propertyNames": {
+        "enum": [
+          "incomplete_or_invalid_journal",
+          "session_end_not_recorded_or_cleanup_failed",
+          "end_intent_not_confirmed",
+          "complete_operation_window_not_recorded",
+          "session_journal_absent"
+        ]
+      },
+      "title": "Missing Sessions By Reason",
+      "type": "object"
+    },
+    "additional_operations": {
+      "$ref": "#/$defs/OperationAggregate"
+    },
+    "three_turn_additional_operations": {
+      "$ref": "#/$defs/OperationAggregate"
+    },
+    "full_issue_acceptance_verified": {
+      "const": false,
+      "default": false,
+      "title": "Full Issue Acceptance Verified",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "measurement_kind",
+    "expected_sessions",
+    "observed_sessions",
+    "counts",
+    "end_reasons",
+    "missing_sessions_by_reason",
+    "additional_operations",
+    "three_turn_additional_operations"
+  ],
+  "title": "SessionAggregate",
+  "type": "object"
+}

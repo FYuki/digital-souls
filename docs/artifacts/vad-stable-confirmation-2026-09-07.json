@@ -1,0 +1,202 @@
+{
+  "scope": "recorded_silero_and_synthetic_background_detector_comparison",
+  "detector_sha256": "77258aab5d0a57215861e1ad1bb6f80bd89a107f50d69320802e1d223097ee94",
+  "reference_detector_sha256": "5c0d6ab52c90ceda974733c6bc5ebfe31fcc049dbed90ebc1b4839701d46a52c",
+  "model_sha256": "a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28",
+  "options": {
+    "sampleRate": 16000,
+    "minimumRms": 0.001,
+    "minimumActiveMs": 100,
+    "silenceMs": 600,
+    "strongSpeechProbability": 0.3,
+    "minimumStrongMs": 300,
+    "shortStrongMs": 250,
+    "highSpeechProbability": 0.5,
+    "minimumHighMs": 192,
+    "negativeSpeechProbability": 0.25,
+    "neuralSilenceMs": 700,
+    "evidenceWindowMs": 2000
+  },
+  "frame_ms": 96,
+  "labeled": {
+    "reference": {
+      "backchannel": {
+        "denominator": 100,
+        "missed": 17,
+        "leading_loss": 17,
+        "early_end": 0,
+        "split": 0,
+        "finalize_delay_valid": 83,
+        "finalize_delay_p95_ms": 758.8
+      },
+      "take_turn": {
+        "denominator": 100,
+        "missed": 2,
+        "leading_loss": 2,
+        "early_end": 0,
+        "split": 0,
+        "finalize_delay_valid": 98,
+        "finalize_delay_p95_ms": 760.15
+      },
+      "pause": {
+        "denominator": 100,
+        "missed": 0,
+        "leading_loss": 0,
+        "early_end": 0,
+        "split": 0,
+        "finalize_delay_valid": 100,
+        "finalize_delay_p95_ms": 757.05
+      }
+    },
+    "current": {
+      "backchannel": {
+        "denominator": 100,
+        "missed": 17,
+        "leading_loss": 17,
+        "early_end": 0,
+        "split": 0,
+        "finalize_delay_valid": 83,
+        "finalize_delay_p95_ms": 758.8
+      },
+      "take_turn": {
+        "denominator": 100,
+        "missed": 0,
+        "leading_loss": 0,
+        "early_end": 0,
+        "split": 0,
+        "finalize_delay_valid": 100,
+        "finalize_delay_p95_ms": 761
+      },
+      "pause": {
+        "denominator": 100,
+        "missed": 0,
+        "leading_loss": 0,
+        "early_end": 0,
+        "split": 0,
+        "finalize_delay_valid": 100,
+        "finalize_delay_p95_ms": 757.05
+      }
+    },
+    "paired": {
+      "trial_count": 300,
+      "unique_fixture_hash_count": 300,
+      "changes": {
+        "missed": {
+          "regressed": 0,
+          "improved": 2
+        },
+        "leading_loss": {
+          "regressed": 0,
+          "improved": 2
+        },
+        "early_end": {
+          "regressed": 0,
+          "improved": 0
+        },
+        "split": {
+          "regressed": 0,
+          "improved": 0
+        }
+      }
+    }
+  },
+  "non_speech": {
+    "reference": {
+      "denominator": 120,
+      "candidate_false_starts": 9,
+      "baseline_false_starts": 14
+    },
+    "current": {
+      "denominator": 120,
+      "candidate_false_starts": 9,
+      "baseline_false_starts": 14
+    },
+    "paired": {
+      "trial_count": 120,
+      "unique_fixture_hash_count": 111,
+      "changes": {
+        "candidate_false_start": {
+          "regressed": 0,
+          "improved": 0
+        }
+      }
+    }
+  },
+  "continuous_background": {
+    "lead_ms": 20064,
+    "trials": [
+      {
+        "kind": "white_noise",
+        "gain": 0.005,
+        "ended": 1,
+        "confirmed_before_speech": 0,
+        "confirmation_ages_ms": [
+          2000
+        ],
+        "finalize_delay_ms": [
+          884
+        ]
+      },
+      {
+        "kind": "white_noise",
+        "gain": 0.015,
+        "ended": 1,
+        "confirmed_before_speech": 0,
+        "confirmation_ages_ms": [
+          2000
+        ],
+        "finalize_delay_ms": [
+          980
+        ]
+      },
+      {
+        "kind": "hum",
+        "gain": 0.005,
+        "ended": 1,
+        "confirmed_before_speech": 0,
+        "confirmation_ages_ms": [
+          2000
+        ],
+        "finalize_delay_ms": [
+          788
+        ]
+      },
+      {
+        "kind": "hum",
+        "gain": 0.015,
+        "ended": 1,
+        "confirmed_before_speech": 0,
+        "confirmation_ages_ms": [
+          2000
+        ],
+        "finalize_delay_ms": [
+          884
+        ]
+      },
+      {
+        "kind": "pink_noise",
+        "gain": 0.005,
+        "ended": 1,
+        "confirmed_before_speech": 0,
+        "confirmation_ages_ms": [
+          2000
+        ],
+        "finalize_delay_ms": [
+          884
+        ]
+      },
+      {
+        "kind": "pink_noise",
+        "gain": 0.015,
+        "ended": 1,
+        "confirmed_before_speech": 0,
+        "confirmation_ages_ms": [
+          2000
+        ],
+        "finalize_delay_ms": [
+          1076
+        ]
+      }
+    ]
+  }
+}

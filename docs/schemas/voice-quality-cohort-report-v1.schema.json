@@ -1,0 +1,660 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digital-souls.local/schemas/voice-quality-cohort-report-v1.schema.json",
+  "title": "ラベル付き音声品質cohortの匿名集計v1",
+  "description": "集計全体の形・型・指標名を検証する。分母の和、欠測理由、判定式はcohort_report_validation.pyでも検証する。",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cohort_schema_version",
+        "quantile_method",
+        "failure_stages",
+        "metric_schema_sha256",
+        "labeled_manifest_sha256",
+        "raw_manifest_sha256",
+        "raw_trace_sha256",
+        "reporter_sha256",
+        "cohort_schema_sha256",
+        "cohort_validator_sha256",
+        "scope",
+        "cohort",
+        "observer_timestamp_tolerance_ms",
+        "counts",
+        "missed_interruptions",
+        "metrics",
+        "evaluation"
+      ],
+      "properties": {
+        "cohort_schema_version": {
+          "const": "1.0"
+        },
+        "quantile_method": {
+          "const": "hyndman_fan_type_7"
+        },
+        "failure_stages": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "initial_response": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "playback_overlap": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "fixture_and_decision": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "cancel_or_continuity": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "cleanup": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        },
+        "metric_schema_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "labeled_manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "raw_manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "raw_trace_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "reporter_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "cohort_schema_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "cohort_validator_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "scope": {
+          "const": "labeled_livekit_take_turn_cohort_report"
+        },
+        "cohort": {
+          "const": "take_turn"
+        },
+        "observer_timestamp_tolerance_ms": {
+          "const": 2
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "expected",
+            "recorded",
+            "success",
+            "failure",
+            "verified_injection",
+            "session_end_confirmed",
+            "independent_sessions",
+            "take_turn_decision",
+            "verified_cancel"
+          ],
+          "properties": {
+            "expected": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "recorded": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "success": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "failure": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "verified_injection": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "session_end_confirmed": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "independent_sessions": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "take_turn_decision": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "verified_cancel": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        },
+        "missed_interruptions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "count",
+            "denominator",
+            "unverified_injection_count",
+            "rate_basis_points"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "denominator": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "unverified_injection_count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "rate_basis_points": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 10000
+            }
+          }
+        },
+        "metrics": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "prefixItems": [
+            {
+              "allOf": [
+                {
+                  "$ref": "https://digital-souls.local/schemas/voice-quality-artifact-v1.schema.json#/$defs/metric"
+                },
+                {
+                  "properties": {
+                    "name": {
+                      "const": "local_playback_stop"
+                    },
+                    "p50": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "p95": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "unit": {
+                      "const": "millisecond"
+                    },
+                    "start_point": {
+                      "const": "speech_started_client"
+                    },
+                    "end_point": {
+                      "const": "local_playback_stopped"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "https://digital-souls.local/schemas/voice-quality-artifact-v1.schema.json#/$defs/metric"
+                },
+                {
+                  "properties": {
+                    "name": {
+                      "const": "turn_decision"
+                    },
+                    "p50": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "p95": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "unit": {
+                      "const": "millisecond"
+                    },
+                    "start_point": {
+                      "const": "speech_started_client"
+                    },
+                    "end_point": {
+                      "const": "turn_decision_client"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "https://digital-souls.local/schemas/voice-quality-artifact-v1.schema.json#/$defs/metric"
+                },
+                {
+                  "properties": {
+                    "name": {
+                      "const": "cancel_after_decision"
+                    },
+                    "p50": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "p95": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "unit": {
+                      "const": "millisecond"
+                    },
+                    "start_point": {
+                      "const": "take_turn_decision"
+                    },
+                    "end_point": {
+                      "const": "server_cancelled"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "https://digital-souls.local/schemas/voice-quality-artifact-v1.schema.json#/$defs/metric"
+                },
+                {
+                  "properties": {
+                    "name": {
+                      "const": "barge_in_cancel_total"
+                    },
+                    "p50": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "p95": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "unit": {
+                      "const": "millisecond"
+                    },
+                    "start_point": {
+                      "const": "speech_started_client"
+                    },
+                    "end_point": {
+                      "const": "server_cancelled_client"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "items": false
+        },
+        "evaluation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "minimum_trials",
+            "coverage_complete",
+            "missed_rate_passed",
+            "latency_passed"
+          ],
+          "properties": {
+            "minimum_trials": {
+              "const": 100
+            },
+            "coverage_complete": {
+              "type": "boolean"
+            },
+            "missed_rate_passed": {
+              "type": "boolean"
+            },
+            "latency_passed": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "local_playback_stop",
+                "turn_decision",
+                "cancel_after_decision",
+                "barge_in_cancel_total"
+              ],
+              "properties": {
+                "local_playback_stop": {
+                  "type": "boolean"
+                },
+                "turn_decision": {
+                  "type": "boolean"
+                },
+                "cancel_after_decision": {
+                  "type": "boolean"
+                },
+                "barge_in_cancel_total": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cohort_schema_version",
+        "quantile_method",
+        "failure_stages",
+        "metric_schema_sha256",
+        "labeled_manifest_sha256",
+        "raw_manifest_sha256",
+        "raw_trace_sha256",
+        "reporter_sha256",
+        "cohort_schema_sha256",
+        "cohort_validator_sha256",
+        "scope",
+        "cohort",
+        "counts",
+        "metrics",
+        "evaluation",
+        "playback_validator_sha256",
+        "shared_reporter_sha256"
+      ],
+      "properties": {
+        "cohort_schema_version": {
+          "const": "1.0"
+        },
+        "quantile_method": {
+          "const": "hyndman_fan_type_7"
+        },
+        "failure_stages": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "initial_response": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "playback_overlap": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "fixture_and_decision": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "cancel_or_continuity": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "cleanup": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        },
+        "metric_schema_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "labeled_manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "raw_manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "raw_trace_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "reporter_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "cohort_schema_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "cohort_validator_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "scope": {
+          "const": "labeled_livekit_backchannel_cohort_report"
+        },
+        "cohort": {
+          "const": "backchannel"
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "expected",
+            "recorded",
+            "success",
+            "failure",
+            "verified_injection",
+            "session_end_confirmed",
+            "independent_sessions",
+            "backchannel_decision",
+            "take_turn_decision",
+            "indeterminate_decision",
+            "unverified_final_decision",
+            "observed_server_cancel",
+            "observed_local_stop"
+          ],
+          "properties": {
+            "expected": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "recorded": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "success": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "failure": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "verified_injection": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "session_end_confirmed": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "independent_sessions": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "backchannel_decision": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "take_turn_decision": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "indeterminate_decision": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "unverified_final_decision": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "observed_server_cancel": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "observed_local_stop": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        },
+        "metrics": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "prefixItems": [
+            {
+              "allOf": [
+                {
+                  "$ref": "https://digital-souls.local/schemas/voice-quality-artifact-v1.schema.json#/$defs/metric"
+                },
+                {
+                  "properties": {
+                    "name": {
+                      "const": "backchannel_false_cancel"
+                    },
+                    "p50": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "p95": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "unit": {
+                      "const": "count"
+                    },
+                    "start_point": {
+                      "const": "labeled_backchannel_injected"
+                    },
+                    "end_point": {
+                      "const": "old_response_full_output_or_cancel"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "items": false
+        },
+        "evaluation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "minimum_trials",
+            "coverage_complete",
+            "false_cancel_rate_passed"
+          ],
+          "properties": {
+            "minimum_trials": {
+              "const": 100
+            },
+            "coverage_complete": {
+              "type": "boolean"
+            },
+            "false_cancel_rate_passed": {
+              "type": "boolean"
+            }
+          }
+        },
+        "playback_validator_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "shared_reporter_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  ]
+}

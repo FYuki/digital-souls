@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "scope": "source_impact_review_not_new_measurement",
+  "audited_revision": "579d19033176872cca1fff96027956139391fe32",
+  "full_issue_acceptance_verified": false,
+  "dogfood_human_acceptance_verified": false,
+  "unchanged_algorithm_groups": [
+    {
+      "scope": "take_turn_and_stale",
+      "measurement_revision": "9a8ce42409e8118fdfec89505968ce698651ae9a",
+      "unchanged_paths": [
+        "backend/app/conversation_core",
+        "frontend/src/livekit/output-stop-proof.ts",
+        "frontend/src/livekit/packet-renderer.ts",
+        "backend/app/conversation_history",
+        "backend/app/privacy",
+        "backend/app/memory"
+      ]
+    },
+    {
+      "scope": "pause_and_vad",
+      "measurement_revision": "ec79b4a0e58c17da864be429fca5f229642b95a2",
+      "unchanged_paths": [
+        "frontend/src/lib/audio",
+        "frontend/src/lib/AudioRecorder.svelte",
+        "backend/app/livekit_transport/stt_audio.py",
+        "backend/app/stt"
+      ]
+    },
+    {
+      "scope": "backchannel_classifier",
+      "measurement_revision": "43e3a2b0b8d1719d29c7237b9adae48a47036a4f",
+      "unchanged_paths": [
+        "backend/app/conversation_core/turn_decision.py",
+        "frontend/src/lib/audio"
+      ]
+    },
+    {
+      "scope": "context_content_boundaries",
+      "measurement_revision": "afd703b5d9d13eb6dd5d79e36a928c1fed9309d8",
+      "unchanged_paths": [
+        "backend/app/chat_prompt.py",
+        "backend/app/prompting",
+        "backend/app/memory",
+        "backend/app/privacy",
+        "backend/app/conversation_history",
+        "characters"
+      ]
+    }
+  ],
+  "runtime_changes_after_normal_100": [
+    "backend/app/livekit_transport/measurement.py",
+    "backend/app/livekit_transport/production.py",
+    "backend/app/voice_metrics.py",
+    "backend/app/voice_network_metrics.py",
+    "backend/app/voice_session/generated.py",
+    "backend/app/voice_vad_boundaries.py",
+    "frontend/src/lib/voice-session/generated.ts",
+    "frontend/src/livekit-room.unit.test.ts",
+    "frontend/src/livekit/network-observer.ts",
+    "frontend/src/livekit/room.ts"
+  ],
+  "artifact_sha256": {
+    "livekit-normal-isolated-100-2026-09-08-01-verification.json": "98ab4442c6b0da64a12fc95a4e817b669209703311a902054900b4c2c1b6d84c",
+    "livekit-take-turn-output-stop-proof-100.json": "764dcc9e10a1d802c3d7ac711ec378ea5a153575a892e4f80c452856fc1b13b2",
+    "livekit-stale-output-stop-proof-100.json": "2a309784281d9fa9e78416a6b262fde205db8a32c06e7de3300a737a3b73e6dd",
+    "livekit-backchannel-100-2026-09-08-held.json": "2b3d320f1bb7388c21ecbd16dc85c7b52a0f6c126d9a7dc11d33a9cb9b492be0",
+    "livekit-reconnect-controlled-f.json": "382368bcb658efab1d206292cefbc7057fdb80099089dfe03f143d4bce56ee21",
+    "livekit-vad-pcm-multi-seed-v4-pause-100-2026-09-08.json": "ab089ec449c6c008e5cd0ff44ad614f7bef76aa51a2d62fd1e1d8b57bf9971d4",
+    "livekit-context-comparison-2026-09-08.json": "1e870d9f2c215632017843448e639890ed68ade2830338f4171b5b12b6dd4e54",
+    "livekit-context-answer-content-2026-09-08.json": "b3405f1be9bf28c6baba127451860f2bb66ffbe255ba656782838db20f0d9d3b"
+  },
+  "interpretation": {
+    "normal_100": "通常100件の測定結果は保持する。後続変更は取消時の通信観測とVAD集計の型注釈であり、新たな100件測定とは扱わない。",
+    "take_turn": "判定、Core取消、出力停止、renderer、履歴・記憶は同一。Roomの終了処理・計測差分は現在版の実接続回帰で確認し、新しいp95 cohortとは扱わない。",
+    "backchannel": "分類器と検出器は同一。後続の取消機構はtake-turn分岐を変更する。意図不確定20件を分類成功へ変更しない。",
+    "reconnect": "100件の旧測定を保持する。後続の再生完了・session計測は実復帰回帰と照合し、新たな100件の成功率とは扱わない。",
+    "context": "prompt、人格、履歴、記憶は同一。音声専用latency policyは内容確認済みのthinking無効設定を選ぶ。自然な話し方の受け入れは実声で確認する。",
+    "network": "取消確認時点の観測を完全再生と区別する。session全通信量や取消後の遅着packetの証明とは扱わない。",
+    "historical_failures": "過去の低速・音切れrunは保持する。その原因解決や共有Ollama専有を元Issueにない数値条件として追加しない。"
+  }
+}

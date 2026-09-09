@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "measurement_revision": "0d0aeb279b80131f729db9cdf17cbef44770aa9e",
+  "verification_scope": "native_rtp_observation_path_pilot_only",
+  "full_issue_acceptance_verified": false,
+  "dogfood_human_acceptance_verified": false,
+  "measured_trials": 3,
+  "warmup_trials": 1,
+  "native_network_matched_trials": 4,
+  "network_aggregate_recomputed_from_native_trace": true,
+  "network": {
+    "sent_bytes": {
+      "status": "measured",
+      "value": 40096,
+      "reason": null
+    },
+    "received_bytes": {
+      "status": "measured",
+      "value": 129524,
+      "reason": null
+    },
+    "packet_loss_basis_points": {
+      "status": "measured",
+      "value": 0.0,
+      "reason": null
+    },
+    "condition": "localhost LiveKit pilot; shared inference services; RAG disabled; browser audio RTP payload; loss at browser downlink",
+    "collection": {
+      "byte_scope": "browser_audio_rtp_payload",
+      "loss_scope": "browser_downlink_response_tracks",
+      "trial_count": 3,
+      "sent_trials": 3,
+      "received_trials": 3,
+      "loss_trials": 3,
+      "received_packets": 552,
+      "lost_packets": 0,
+      "negative_loss_trials": 0,
+      "missing_trials": {}
+    }
+  },
+  "experimental_thinking_override": false,
+  "full_playback_verified": true,
+  "gap_count": 0,
+  "ttfa_p95_ms": 1842.1400000333786,
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "teardown_completed": true,
+  "artifact_sha256": "fcd542b3438db6220d80b9e26e1ec51fb26d1093ca7dbd369b6b595cf6590395",
+  "source_sha256": {
+    "trial-manifest.json": "f3c8506f5c33fefcfd142624981a55e7c3b6dede730f24d9a42451f9b956ed6f",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "17c7f6063418d43df268105db0e342842a26cc6a3d6c8c0a04939e55c6174be3",
+    "runtime-data/runtime/standalone/environment-run.json": "f81dcc9f954d17909f4b2bfb5b54117128d8409ba548e2fe145486e56a38eb1c",
+    "inference-runtime.jsonl": "85017dd587b88e95489f94f2fb49809d0539e82a9146a02ff6da94d2fd95e412"
+  }
+}

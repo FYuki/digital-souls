@@ -1,0 +1,34 @@
+{
+  "scope": "stt_preparation_pilot_diagnostic",
+  "warmup_count": 1,
+  "measured_count": 10,
+  "quantile_method": "hyndman_fan_type_7",
+  "preparation_succeeded": 10,
+  "preparation_completed_before_recognition": 10,
+  "anonymous_silence_samples_per_preparation": 1600,
+  "fixture_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+  "preparation_is_additional_compute": true,
+  "metrics": {
+    "preparation_duration_ms": {
+      "count": 10,
+      "minimum": 322.689068,
+      "p50": 411.1870945,
+      "p95": 442.6607999,
+      "maximum": 444.459548
+    },
+    "preparation_lead_ms": {
+      "count": 10,
+      "minimum": 493.000751,
+      "p50": 499.409418,
+      "p95": 507.85540965,
+      "maximum": 509.785119
+    },
+    "recognition_stage_ms": {
+      "count": 10,
+      "minimum": 115.998553,
+      "p50": 121.2059165,
+      "p95": 138.9244883,
+      "maximum": 140.091692
+    }
+  }
+}

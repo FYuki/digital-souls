@@ -1,0 +1,26 @@
+{
+  "run_id": "pcm-witness-v3-pause-100-20260908-01",
+  "measurement_revision": "f214e7fb1b750c974da842cd1da6afd08b815a7a",
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "observer_port_closed": true,
+  "teardown_completed": true,
+  "same_manifest_for_vad_and_pcm": true,
+  "pcm_verified_trials": 98,
+  "pcm_unverified_trials": 2,
+  "unverified_trial_ordinals": [
+    5,
+    66
+  ],
+  "unverified_reason": "leading_seed_correlation_below_threshold",
+  "full_issue_acceptance_verified": false,
+  "report_sha256": "a2941dbba4de4b1130458677be43a0fd53d702d042da4b027188d663bbfeea63",
+  "source_sha256": {
+    "runtime-data/runtime/standalone/environment-run.json": "9aa6a2d99199074811668ead9bf92b6305aab909c7323b1884a3416b9a14fd44",
+    "trial-manifest.json": "b9434a4a80c6cc9edcc657842d023d24ae2ffde132a72275e7be0c8774a0b6bb",
+    "whisper-input-pcm.jsonl": "6c9c802286b0a06852dd9a396d12d343319a4fb87d4b6e9574216531d6fe44af",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "fbe2ef26284acab4f3949cad176b6f3329de3a249ff0c46649ec9013716604a0"
+  }
+}

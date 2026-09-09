@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "scope": "cancelled_response_rtp_real_integration_three_trials",
+  "measurement_revision": "579d19033176872cca1fff96027956139391fe32",
+  "passed": true,
+  "measured_trials": 3,
+  "independent_sessions": 3,
+  "native_cancel_and_snapshot_correlated_trials": 3,
+  "fully_measured_network_trials": 3,
+  "normal_completion_claimed": false,
+  "whole_session_bandwidth_verified": false,
+  "full_issue_acceptance_verified": false,
+  "dogfood_human_acceptance_verified": false,
+  "network": {
+    "sent_bytes": {
+      "status": "measured",
+      "value": 73004,
+      "reason": null
+    },
+    "received_bytes": {
+      "status": "measured",
+      "value": 60525,
+      "reason": null
+    },
+    "packet_loss_basis_points": {
+      "status": "measured",
+      "value": 0.0,
+      "reason": null
+    },
+    "condition": "integration-voice; cancellation acknowledgement snapshot; browser audio RTP payload",
+    "collection": {
+      "byte_scope": "browser_audio_rtp_payload",
+      "loss_scope": "browser_downlink_response_tracks",
+      "observation_boundaries": {
+        "response_cancelled": 3
+      },
+      "trial_count": 3,
+      "sent_trials": 3,
+      "received_trials": 3,
+      "loss_trials": 3,
+      "received_packets": 273,
+      "lost_packets": 0,
+      "negative_loss_trials": 0,
+      "missing_trials": {}
+    }
+  },
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "teardown_completed": true,
+  "experimental_thinking_override": false,
+  "source_sha256": {
+    "manifest": "8fe2d0df2ca6eedde75697fe760953064123b476d087466fa05cb4a348060176",
+    "trace": "db738ae6ee653daa2d85ab6407a7b86aa557c55d0a2f79b550b5bac9746006e2",
+    "environment": "825fd041955a7ae7607dc25502f613c18201d8f6121d734593b8f89d52f4c7a3",
+    "native_sdk": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+    "log": "386a85c84ad4c19f48234ec65528a365b8809fa84c34d733e1062175ea368ec6",
+    "verifier": "be8389a71a53e296daecad96540eaa1756e75d2b69a5b483d25b6034118f9e21"
+  }
+}

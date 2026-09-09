@@ -64,5 +64,15 @@ class RemoteWhisperTranscriber:
             raise RemoteWhisperError("Whisper response text is invalid")
         return transcript
 
+    def prepare(self) -> bool:
+        # 本文を持たない100msの無音。通常認識と同じモデル・推論経路を使う。
+        # clientだけ先にtimeoutするとservice側に推論が残るため、通常の
+        # service inference timeoutを上回る既存HTTP timeoutを維持する。
+        try:
+            self.transcribe(bytes(3_200))
+        except RemoteWhisperError:
+            return False
+        return True
+
     def close(self) -> None:
         self._client.close()

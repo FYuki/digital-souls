@@ -39,7 +39,11 @@ test('実サービスから受け取った光織の応答がチャット画面�
   await input.fill('こんにちは')
   await page.getByRole('button', { name: '送信' }).click()
 
-  await expect(page.getByText('こんにちは', { exact: true })).toBeVisible({
+  const userMessage = page.locator('article.message').nth(0)
+  await expect(userMessage.locator('.speaker')).toHaveText('あなた', {
+    timeout: REAL_RESPONSE_TIMEOUT_MS,
+  })
+  await expect(userMessage.locator('p')).toHaveText('こんにちは', {
     timeout: REAL_RESPONSE_TIMEOUT_MS,
   })
   const mioriMessage = page.locator('article.message').nth(1)

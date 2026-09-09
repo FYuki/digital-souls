@@ -5,6 +5,8 @@
   import type { SpeechActivity } from './lib/AudioRecorder.svelte'
   import CharacterPortrait from './lib/CharacterPortrait.svelte'
   import ChatWindow from './lib/ChatWindow.svelte'
+  import type {SettledVoiceTurnDisplay} from './lib/voice-turn-display'
+  import type {SelectedConversationContext} from './lib/conversations/controller'
   import ConversationSidebar from './lib/ConversationSidebar.svelte'
   import InputBar from './lib/InputBar.svelte'
   import MemoryManagement from './lib/MemoryManagement.svelte'
@@ -87,6 +89,8 @@
   let visualViewportHeight: number | null = null
   let visualViewportOffsetTop = 0
   type LiveVoiceTurn = {
+    context: SelectedConversationContext
+    historyTurnId?: string
     responseId: string | null
     sourceUtteranceIds: string[]
     userContent: string
@@ -94,6 +98,7 @@
     lastTextSequence: number
   }
   let liveVoiceTurn: LiveVoiceTurn | null = null
+  let settledVoiceTurns: (SettledVoiceTurnDisplay & {context: SelectedConversationContext})[] = []
   type FailedVoiceTurn = {
     responseId: string
     characterId: string
@@ -117,18 +122,24 @@
     activeResponseId: null,
   }
   const voiceSession = new LiveKitVoiceSessionController(
-    (snapshot) => { voiceSnapshot = snapshot },
+    (snapshot) => {
+      if (snapshot.phase === 'reconnecting') activeUtteranceId = null
+      voiceSnapshot = snapshot
+    },
     receiveVoiceCoreEvent,
   )
 
   function receiveVoiceCoreEvent(event: VoiceSessionEvent) {
     if (event.type === 'utterance_finalized' && event.utterance_id !== undefined) {
+      const context = conversationController.selectedContext()
+      if (context === null) return
       const transcript = event.transcript ?? ''
       if (event.should_response === false) return
       if (screenReferenceAvailable) screenReferenceDecisionActive = true
       finalizedUtterances.set(event.utterance_id, transcript)
       if (liveVoiceTurn === null) {
         liveVoiceTurn = {
+          context,
           responseId: null,
           sourceUtteranceIds: [event.utterance_id],
           userContent: transcript,
@@ -147,8 +158,12 @@
       return
     }
     if (event.type === 'response_started' && event.response_id !== undefined) {
+      const context = conversationController.selectedContext()
+      if (context === null) return
       const sourceIds = event.source_utterance_ids ?? []
       liveVoiceTurn = {
+        context,
+        ...(event.history_turn_id === undefined ? {} : {historyTurnId: event.history_turn_id}),
         responseId: event.response_id,
         sourceUtteranceIds: sourceIds,
         userContent: sourceIds
@@ -182,8 +197,9 @@
       && event.response_id === liveVoiceTurn.responseId
     ) {
       screenReferenceDecisionActive = false
+      const responseContext = liveVoiceTurn.context
       if (event.type === 'response_failed') {
-        const context = conversationController.selectedContext()
+        const context = responseContext
         if (context !== null) {
           failedVoiceTurns = [...failedVoiceTurns, {
             responseId: event.response_id,
@@ -197,13 +213,23 @@
       for (const utteranceId of liveVoiceTurn.sourceUtteranceIds) {
         finalizedUtterances.delete(utteranceId)
       }
+      if (event.type !== 'response_failed' && liveVoiceTurn.historyTurnId !== undefined
+        && liveVoiceTurn.responseId !== null) {
+        settledVoiceTurns = [...settledVoiceTurns, {...liveVoiceTurn,
+          historyTurnId: liveVoiceTurn.historyTurnId, responseId: liveVoiceTurn.responseId,
+          terminal: event.type === 'response_cancelled' ? 'cancelled' : 'completed'}]
+      }
       liveVoiceTurn = null
       if (event.type !== 'response_failed') {
-        const context = conversationController.selectedContext()
-        if (context !== null) {
-          void conversationController.refreshTurns(context)
-          void sidebarController.refreshCharacter(context.character)
-        }
+        void conversationController.refreshTurns(responseContext).then(() => {
+          // 失敗時や別会話の再取得では、未反映の表示を消さない。
+          const current = conversationController.selectedContext()
+          if (current?.character !== responseContext.character || current.conversationId !== responseContext.conversationId
+            || current.version !== responseContext.version) return
+          const loadedIds = new Set($conversationController.turns.map(turn => turn.turn_id))
+          settledVoiceTurns = settledVoiceTurns.filter(turn => !loadedIds.has(turn.historyTurnId))
+        })
+        void sidebarController.refreshCharacter(responseContext.character)
       }
       return
     }
@@ -236,7 +262,6 @@
     || endingVoiceSession
     || voiceSnapshot.phase === 'error'
     || voiceSnapshot.phase === 'ended'
-    || voiceSnapshot.phase === 'reconnecting'
   $: sessionStatus = ({
     idle: '停止',
     connecting: '接続中',
@@ -269,6 +294,12 @@
   }
 
   function syncVoiceSelection(character: string, conversationId: string | null) {
+    const matches = (context: SelectedConversationContext) => context.character === character && context.conversationId === conversationId
+    if (liveVoiceTurn !== null && !matches(liveVoiceTurn.context)) {
+      liveVoiceTurn = null
+      finalizedUtterances.clear()
+    }
+    settledVoiceTurns = settledVoiceTurns.filter(turn => matches(turn.context))
     const active = voiceSnapshot.context
     if (active === null || endingVoiceSession) return
     if (active.characterId === character && active.conversationId === conversationId) return
@@ -404,6 +435,12 @@
     }
   }
 
+  const prepareVoiceMicrophone = async () => {
+    await ensureVoiceSession()
+    // getUserMediaの失敗も利用者による開始・再試行として数える。
+    voiceSession.recordMicrophoneActivationAttempt()
+  }
+
   const resumeVoiceMicrophone = async (stream: MediaStream) => {
     try {
       await voiceSession.resumeMicrophone(stream)
@@ -424,6 +461,7 @@
   }
 
   const handleSpeechStarted = ({ clientMs }: SpeechActivity) => {
+    if (voiceSnapshot.phase === 'reconnecting') return
     const utteranceId = crypto.randomUUID()
     activeUtteranceId = utteranceId
     void voiceSession.speechStarted(utteranceId, clientMs).catch(appendApplicationError)
@@ -450,6 +488,7 @@
   }
 
   const restartVoiceSession = async () => {
+    voiceSession.recordRetryAttempt()
     try {
       await ensureVoiceSession()
     } catch {
@@ -525,6 +564,7 @@
           characterName={currentCharacterEntry?.display_name ?? $conversationController.character}
           failedVoiceTurns={visibleFailedVoiceTurns}
           liveVoiceTurn={liveVoiceTurn}
+          settledVoiceTurns={settledVoiceTurns}
         />
       </div>
     </div>
@@ -553,10 +593,11 @@
         screenReferenceAvailable={screenReferenceAvailable}
       />
       <AudioRecorder
+        suspended={voiceSnapshot.phase === 'reconnecting'}
         disabled={voiceRecorderDisabled}
         forceOff={voiceRecorderForceOff}
         continuous={true}
-        onBeforeEnable={ensureVoiceSession}
+        onBeforeEnable={prepareVoiceMicrophone}
         onMicrophoneEnabled={resumeVoiceMicrophone}
         onMicrophoneDisabled={muteVoiceMicrophone}
         onSpeechStarted={handleSpeechStarted}

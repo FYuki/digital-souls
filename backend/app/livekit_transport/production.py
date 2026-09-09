@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import time
+import struct
 from collections import deque
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
@@ -28,6 +29,8 @@ from app.conversation_core.adapters import (
     ScreenLineageResponseState,
 )
 from app.conversation_core.ports import DeliveryPort
+from app.conversation_core.models import Response, ResponseStopResult
+from app.livekit_transport.playback_completion import PlaybackCompletionGate
 from app.livekit_transport.bootstrap import (
     BOOTSTRAP_TIMEOUT_SECONDS,
     BootstrapService,
@@ -35,7 +38,10 @@ from app.livekit_transport.bootstrap import (
     InMemorySessionBindingRepository,
 )
 from app.livekit_transport.coordinator import (
+    APPLICATION_TOPIC,
     PRIVATE_TOPIC,
+    SCREEN_TOPIC,
+    ConfirmedOutputStop,
     ProductionSessionCoordinator,
     SessionCoordinatorDependencies,
 )
@@ -43,8 +49,13 @@ from app.livekit_transport.delivery import CoreNotificationPort
 from app.livekit_transport.errors import RoomCleanupPendingError
 from app.livekit_transport.measurement import LiveKitMeasurementSession
 from app.livekit_transport.runtime import MicrophoneTrackObserver
+from app.livekit_transport.stt_audio import (
+    PcmCaptureSpan, SttSignalSpan, prepare_stt_audio, stt_preparation_statistics,
+)
+from app.livekit_transport.response_audio import ResponseAudioTracks
 from app.livekit_transport.token import IssuedToken, LiveKitTokenSigner
-from app.voice_metrics import MeasurementKind, TraceEvent
+from app.voice_metrics import JsonlTraceRecorder, MeasurementKind, TraceEvent
+from app.voice_session_metrics import SessionMetrics
 from app.screen_perception.provenance import ScreenLineage
 
 if TYPE_CHECKING:
@@ -64,11 +75,16 @@ STT_MAX_PENDING_UTTERANCES = 3
 STT_MAX_OPEN_CAPTURES = STT_MAX_PENDING_UTTERANCES + 1
 STT_MAX_UTTERANCE_PCM_BYTES = STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 30
 STT_MAX_PENDING_PCM_BYTES = STT_MAX_PENDING_UTTERANCES * STT_MAX_UTTERANCE_PCM_BYTES
-# Whisperはstreaming APIではないため、冒頭800msのsnapshotを先行認識する。
+# Whisperはstreaming APIではないため、最初の静音閾値超過から800msのsnapshotを先行認識する。
+# 発話前のpre-rollの長さをこの800msへ含めない。
 STT_TURN_PREVIEW_PCM_BYTES = int(STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 0.8)
-# VADは誤検知を避けるため約400msの発話確認後にspeech_startedを送る。
-# data channelとmediaの到着差も含め、確認前の語頭をmedia側で800ms保持する。
-STT_MICROPHONE_PREROLL_BYTES = int(STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 0.8)
+STT_TURN_PREVIEW_MAX_ATTEMPTS = 3
+# 発話確認までの遅れを含め、通知前の語頭をmedia側で最大2秒保持する。
+# #150の固定fixtureで確認通知が語頭から1,440ms遅れる条件があり、800msでは語頭を失う。
+STT_MICROPHONE_PREROLL_BYTES = STT_SAMPLE_RATE * PCM_SAMPLE_WIDTH_BYTES * 2
+# 確認済み発話で300msの静音を受けたら、VAD終了待ちとSTT準備を重ねる。
+# 入力の切断・削除・発話確定には使わない。
+STT_PREPARATION_QUIET_SAMPLES = STT_SAMPLE_RATE * 300 // 1000
 
 
 def _livekit_rtc_module() -> Any:
@@ -228,7 +244,10 @@ class _LiveKitPcmAudioSource:
     def __init__(self, source: _RtcAudioSource) -> None:
         self._source = source
 
-    async def publish(self, pcm: bytes) -> None:
+    async def begin_response(self, response_id: str) -> None:
+        """単一sourceのadapter。productionではResponseAudioTracksがtrackを分離する。"""
+
+    async def publish(self, pcm: bytes, *, response_id: str) -> int:
         rtc_module = _livekit_rtc_module()
 
         samples_per_channel = len(pcm) // (
@@ -241,8 +260,12 @@ class _LiveKitPcmAudioSource:
             samples_per_channel,
         )
         await self._source.capture_frame(frame)
+        return time.monotonic_ns()
 
-    def clear(self) -> None:
+    async def finish_response(self, response_id: str) -> None:
+        """既存adapterのnative bufferは従来どおりsourceが所有する。"""
+
+    def clear(self, response_id: str | None = None) -> None:
         self._source.clear_queue()
 
 
@@ -341,6 +364,8 @@ class ProductionConversationCoreSessionFactory:
             session_id=session_id,
             response_id_factory=lambda: str(uuid4()),
             delivery=delivery,
+            completion=delivery if isinstance(delivery, _ConversationCoreDelivery) else None,
+            cancellation=delivery if isinstance(delivery, _ConversationCoreDelivery) else None,
             persistence=ConversationHistoryPersistenceAdapter(
                 history_session=history_session,  # type: ignore[arg-type]
                 completed_turn_observer=self._completed_turn_observer,
@@ -414,7 +439,7 @@ class _ConversationCoreDelivery:
         self,
         *,
         coordinator: ProductionSessionCoordinator,
-        audio_source: _LiveKitPcmAudioSource,
+        audio_source: _LiveKitPcmAudioSource | ResponseAudioTracks,
         character_participant_id: str,
         character_id: str,
         user_participant_id: str | None = None,
@@ -431,6 +456,9 @@ class _ConversationCoreDelivery:
             if user_participant_id is not None
             else None
         )
+        self._session_id: str | None = None
+        self._completion_gate = PlaybackCompletionGate()
+        self._completed_output_responses: set[str] = set()
         self._first_audio_observed: set[str] = set()
         self._first_text_observed: set[str] = set()
         self._measurement: LiveKitMeasurementSession | None = None
@@ -440,11 +468,21 @@ class _ConversationCoreDelivery:
         return self._measurement
 
     def attach_measurement(self, measurement: LiveKitMeasurementSession) -> None:
+        if self._measurement is measurement:
+            return
         if self._measurement is not None and self._measurement is not measurement:
             raise RuntimeError("delivery measurement is already attached")
         self._measurement = measurement
+        if isinstance(self._audio_source, ResponseAudioTracks):
+            self._audio_source.set_observer(lambda name, response_id: measurement.record_response_event(
+                response_id=response_id, name=name, stage="transport",
+            ))
 
     async def publish(self, event: CoreEvent) -> None:
+        if self._session_id is None:
+            self._session_id = event.session_id
+        elif self._session_id != event.session_id:
+            raise ValueError("delivery event belongs to another session")
         if (
             event.response_id is not None
             and event.source_utterance_ids is not None
@@ -470,6 +508,7 @@ class _ConversationCoreDelivery:
                     stage="turn",
                 )
             self._coordinator.begin_response(response_id=event.response_id)
+            await self._audio_source.begin_response(event.response_id)
         if (
             event.type == "utterance_finalized"
             and event.utterance_id is not None
@@ -542,43 +581,30 @@ class _ConversationCoreDelivery:
                 // (PCM_SAMPLE_WIDTH_BYTES * PCM_CHANNELS),
             )
             await self._coordinator.send_core(self._voice_payload(event))
-            await self._audio_source.publish(event.audio)
-            if first_audio:
-                self._first_audio_observed.add(response_id)
-                if self._measurement is not None:
-                    self._measurement.record_response_event(
-                        response_id=response_id,
-                        name="first_audio_out",
-                        stage="transport",
-                    )
-                await self._coordinator.send_core(
-                    json.dumps(
-                        {
-                            "type": "observation",
-                            "protocol_version": "1.0",
-                            "event_id": str(uuid4()),
-                            "session_id": event.session_id,
-                            "response_id": response_id,
-                            "measurement": "first_audio_out",
-                            "timestamp": str(time.monotonic_ns()),
-                            "clock_domain": "server_monotonic",
-                            "unit": "nanosecond",
-                        },
-                        separators=(",", ":"),
-                    ).encode()
-                )
+            first_capture_ns = await self._audio_source.publish(event.audio, response_id=response_id)
+            await self._observe_first_audio_out(response_id, first_capture_ns)
             return
         if (
             event.type == "response_cancelled"
             and event.response_id is not None
             and self._measurement is not None
         ):
+            if event.terminal_state_bounds_ns is not None:
+                for name, timestamp in zip(("cancel_state_lower", "cancel_state_upper"),
+                                           event.terminal_state_bounds_ns, strict=True):
+                    self._measurement.record_response_event(
+                        response_id=event.response_id, name=name, stage="response", timestamp=timestamp,
+                    )
             self._measurement.record_response_event(
                 response_id=event.response_id,
                 name="response_excluded",
                 stage="response",
                 outcome="excluded",
                 reason_code=event.reason or "response_cancelled",
+            )
+            self._measurement.record_response_event(
+                response_id=event.response_id, name="response_cancelled", stage="response",
+                outcome="excluded", reason_code=event.reason or "response_cancelled",
             )
         if (
             event.type == "response_privacy_skipped"
@@ -592,8 +618,11 @@ class _ConversationCoreDelivery:
                 outcome="excluded",
                 reason_code="privacy_skip",
             )
+        if event.type == "response_completed" and event.response_id is not None:
+            if event.response_id not in self._completed_output_responses:
+                await self._finish_audio(event.response_id)
         if event.type in {"response_cancelled", "response_failed"}:
-            self._audio_source.clear()
+            self._audio_source.clear(event.response_id)
         if event.type == "response_privacy_skipped":
             if event.source_utterance_ids is None:
                 raise ValueError("privacy event requires source utterance ids")
@@ -603,6 +632,76 @@ class _ConversationCoreDelivery:
                 )
             return
         await self._coordinator.send_core(self._voice_payload(event))
+
+    async def stop_response(self, response: Response) -> ResponseStopResult:
+        if not isinstance(self._audio_source, ResponseAudioTracks):
+            raise RuntimeError("output stop confirmation requires response audio tracks")
+        if self._measurement is not None:
+            self._measurement.record_response_event(
+                response_id=response.response_id, name="output_stop_requested", stage="transport",
+            )
+        stopped, prefix = await asyncio.gather(
+            self._audio_source.stop_response(response.response_id),
+            self._coordinator.request_output_stop(response.response_id),
+            return_exceptions=True,
+        )
+        if isinstance(stopped, BaseException) or not isinstance(prefix, ConfirmedOutputStop):
+            raise RuntimeError("response output stop was not confirmed")
+        if self._measurement is not None:
+            self._measurement.record_response_event(
+                response_id=response.response_id, name="output_stop_confirmed", stage="transport",
+                # この確認eventのIDを要求nonceと揃え、privateな一次記録同士だけで照合する。
+                event_id=prefix.request_id,
+            )
+        return ResponseStopResult(prefix.last_played_audio_sequence)
+
+    async def finish_response(self, response: Response) -> None:
+        if not response.audio_segments:
+            self._completed_output_responses.add(response.response_id)
+            return
+        if isinstance(self._audio_source, ResponseAudioTracks):
+            await self._completion_gate.wait(
+                response.response_id, len(response.audio_segments),
+                lambda: self._finish_audio(response.response_id),
+            )
+        else:
+            await self._finish_audio(response.response_id)
+        self._completed_output_responses.add(response.response_id)
+
+    def confirm_response_playback(self, response_id: str, last_audio_sequence: int) -> bool:
+        return self._completion_gate.confirm(response_id, last_audio_sequence)
+
+    async def _finish_audio(self, response_id: str) -> None:
+        first_capture_ns = await self._audio_source.finish_response(response_id)
+        if isinstance(self._audio_source, ResponseAudioTracks):
+            statistics = self._audio_source.statistics(response_id)
+            if self._measurement is not None:
+                for name, value in statistics.items():
+                    self._measurement.record_response_event(
+                        response_id=response_id, name=name, stage="transport", value=value,
+                    )
+            await self._coordinator.send_response_audio_finished(
+                response_id=response_id,
+                input_sample_count=statistics["response_audio_input_samples"],
+                captured_sample_count=statistics["response_audio_captured_samples"],
+                padding_sample_count=statistics["response_audio_padding_samples"],
+            )
+        await self._observe_first_audio_out(response_id, first_capture_ns)
+
+    async def _observe_first_audio_out(self, response_id: str | None, timestamp_ns: int | None) -> None:
+        if timestamp_ns is None or response_id is None or response_id in self._first_audio_observed:
+            return
+        self._first_audio_observed.add(response_id)
+        if self._measurement is not None:
+            self._measurement.record_response_event(
+                response_id=response_id, name="first_audio_out", stage="transport", timestamp=timestamp_ns,
+            )
+        await self._coordinator.send_core(json.dumps({
+            "type": "observation", "protocol_version": "1.0", "event_id": str(uuid4()),
+            "session_id": self._session_id, "response_id": response_id,
+            "measurement": "first_audio_out", "timestamp": str(timestamp_ns),
+            "clock_domain": "server_monotonic", "unit": "nanosecond",
+        }, separators=(",", ":")).encode())
 
     def _voice_payload(
         self, event: CoreEvent, *, utterance_id: str | None = None
@@ -622,6 +721,8 @@ class _ConversationCoreDelivery:
                 speaker=self._character_speaker,
                 source_utterance_ids=list(event.source_utterance_ids),
             )
+            if event.history_turn_id is not None:
+                payload["history_turn_id"] = event.history_turn_id
         elif event.type == "utterance_finalized":
             if (
                 event.utterance_id is None
@@ -743,8 +844,15 @@ class _UserAudioCapture:
     pcm: bytearray = field(default_factory=bytearray)
     finalized: bool = False
     finalization_scheduled: bool = False
+    media_tail_elapsed: bool = False
     capacity_exceeded: bool = False
-    preview_started: bool = False
+    preview_attempts: int = 0
+    preview_complete: bool = False
+    preview_last_signal_samples: int = 0
+    preview_signal: SttSignalSpan = field(default_factory=SttSignalSpan)
+    received_span: PcmCaptureSpan = field(default_factory=PcmCaptureSpan)
+    preparation_started: bool = False
+    quiet_samples: int = 0
 
 
 class _ConversationCoreBridge:
@@ -752,21 +860,25 @@ class _ConversationCoreBridge:
         self,
         session: ConversationCoreSession,
         schedule: Callable[[Awaitable[None]], None],
-        stop_audio: Callable[[], None] = lambda: None,
+        stop_audio: Callable[[str], None] = lambda _response_id: None,
+        confirm_response_playback: Callable[[str, int], bool] = lambda _response_id, _sequence: False,
         media_tail_seconds: float = 0.15,
         measurement: LiveKitMeasurementSession | None = None,
+        session_metrics: SessionMetrics | None = None,
     ) -> None:
         self._session = session
         self._schedule = schedule
         self._media_tail_seconds = media_tail_seconds
         self._stop_audio = stop_audio
+        self._confirm_response_playback = confirm_response_playback
         self._measurement = measurement
+        self._session_metrics = session_metrics
         self._user_audio_captures: deque[_UserAudioCapture] = deque()
         self._pending_transcriptions: deque[tuple[str, bytes, str | None]] = deque()
         self._pending_transcription_bytes = 0
         self._transcription_active = False
         self._microphone_preroll = bytearray()
-        self._interrupt_utterances_by_response: dict[str, str] = {}
+        self._microphone_received_bytes = 0
         self._control_lock = asyncio.Lock()
 
     def notify(self, payload: bytes) -> None:
@@ -774,14 +886,27 @@ class _ConversationCoreBridge:
         if event["type"] == "speech_started" and self._is_user_event(event):
             utterance_id = str(event["utterance_id"])
             if self._measurement is not None:
+                interrupted_response_id = event.get("response_id")
+                if isinstance(interrupted_response_id, str):
+                    self._measurement.bind_interruption(
+                        utterance_id=utterance_id, response_id=interrupted_response_id,
+                    )
                 self._measurement.record_utterance_event(
                     utterance_id=utterance_id,
                     name="speech_started",
                     stage="vad",
                 )
-            if isinstance(event.get("response_id"), str):
-                self._interrupt_utterances_by_response[str(event["response_id"])] = (
-                    utterance_id
+                self._measurement.record_utterance_event(
+                    utterance_id=utterance_id, name="speech_started_client", stage="vad",
+                    timestamp=event["monotonic_timestamp_ms"],
+                    clock_domain="client_monotonic", unit="millisecond",
+                )
+                # 通常発話の正解境界診断はその発話への応答に結ぶ。
+                # 割り込み指標のspeech_started_clientは従来どおり旧応答だけへ結ぶ。
+                self._measurement.record_utterance_event(
+                    utterance_id=utterance_id, name="vad_speech_start_client", stage="vad",
+                    timestamp=event["monotonic_timestamp_ms"],
+                    clock_domain="client_monotonic", unit="millisecond",
                 )
             open_captures = sum(
                 not capture.finalized for capture in self._user_audio_captures
@@ -804,9 +929,14 @@ class _ConversationCoreBridge:
                     else None
                 ),
             )
+            capture.received_span.append(
+                self._microphone_received_bytes - len(self._microphone_preroll),
+                len(self._microphone_preroll),
+            )
             capture.pcm.extend(self._microphone_preroll)
             self._microphone_preroll.clear()
             self._user_audio_captures.append(capture)
+            self._consider_stt_preparation(capture, bytes(capture.pcm))
             return
         if event["type"] == "speech_stopped" and self._is_user_event(event):
             utterance_id = str(event["utterance_id"])
@@ -839,6 +969,8 @@ class _ConversationCoreBridge:
             await self._receive(event)
 
     def receive_microphone(self, pcm: bytes) -> None:
+        received_start_byte = self._microphone_received_bytes
+        self._microphone_received_bytes += len(pcm)
         if not self._user_audio_captures:
             self._microphone_preroll.extend(pcm)
             excess = len(self._microphone_preroll) - STT_MICROPHONE_PREROLL_BYTES
@@ -862,23 +994,86 @@ class _ConversationCoreBridge:
         if len(capture.pcm) + len(pcm) > STT_MAX_UTTERANCE_PCM_BYTES:
             capture.capacity_exceeded = True
         elif not capture.capacity_exceeded:
+            capture.received_span.append(received_start_byte, len(pcm))
             capture.pcm.extend(pcm)
-        if (
-            capture.interrupted_response_id is not None
-            and not capture.preview_started
-            and not self._transcription_active
-            and len(capture.pcm) >= STT_TURN_PREVIEW_PCM_BYTES
-        ):
-            capture.preview_started = True
-            self._transcription_active = True
-            self._schedule(
-                self._preview_user_turn(
-                    utterance_id=capture.utterance_id,
-                    interrupted_response_id=capture.interrupted_response_id,
-                    microphone_pcm=bytes(capture.pcm),
-                )
-            )
+        self._consider_stt_preparation(capture, pcm)
+        self._consider_turn_preview(capture)
         self._schedule_finalization_if_ready(capture)
+
+    def _consider_turn_preview(self, capture: _UserAudioCapture) -> None:
+        if (capture.interrupted_response_id is None or capture.preview_complete
+                or capture.preview_attempts >= STT_TURN_PREVIEW_MAX_ATTEMPTS
+                or capture.finalized or capture.capacity_exceeded or self._transcription_active
+                or not getattr(self._session, "accepting_input", True)
+                or not any(item is capture for item in self._user_audio_captures)):
+            return
+        signal_samples = capture.preview_signal.sample_count(capture.pcm)
+        if (signal_samples - capture.preview_last_signal_samples) * PCM_SAMPLE_WIDTH_BYTES < STT_TURN_PREVIEW_PCM_BYTES:
+            return
+        # 相槌で始まる長い発話は追加800msで再評価する。全体STTを優先し、最大3回に限定する。
+        capture.preview_attempts += 1
+        capture.preview_last_signal_samples = signal_samples
+        self._transcription_active = True
+        if self._measurement is not None:
+            suffix = "" if capture.preview_attempts == 1 else f"_attempt_{capture.preview_attempts}"
+            for name, value in {
+                "stt_preview_raw_samples": len(capture.pcm) // PCM_SAMPLE_WIDTH_BYTES,
+                "stt_preview_signal_span_samples": signal_samples,
+            }.items():
+                self._measurement.record_utterance_event(
+                    utterance_id=capture.utterance_id, name=name + suffix, stage="stt_preview", value=value,
+                )
+        self._schedule(self._preview_user_turn(
+            utterance_id=capture.utterance_id,
+            interrupted_response_id=capture.interrupted_response_id,
+            microphone_pcm=bytes(capture.pcm), capture=capture,
+        ))
+
+    def _consider_stt_preparation(self, capture: _UserAudioCapture, pcm: bytes) -> None:
+        if (capture.preparation_started or capture.finalized or capture.capacity_exceeded
+                or capture.interrupted_response_id is not None or self._transcription_active
+                or not getattr(self._session, "accepting_input", True)
+                or not callable(getattr(self._session, "prepare_transcription", None))):
+            return
+        if len(pcm) % PCM_SAMPLE_WIDTH_BYTES:
+            capture.quiet_samples = 0
+            return
+        # 先頭trimと同じ静音閾値。静音が続かない環境では通常STTへ任せる。
+        for (sample,) in struct.iter_unpack("<h", pcm):
+            capture.quiet_samples = capture.quiet_samples + 1 if abs(sample) <= 16 else 0
+        if capture.quiet_samples >= STT_PREPARATION_QUIET_SAMPLES:
+            capture.preparation_started = True
+            self._schedule(self._prepare_transcription(capture))
+
+    async def _prepare_transcription(self, capture: _UserAudioCapture) -> None:
+        # scheduleと実行の間に発話確定・切断された場合も、新規要求を増やさない。
+        if (capture.finalized or capture.capacity_exceeded or self._transcription_active
+                or not getattr(self._session, "accepting_input", True)
+                or not any(item is capture for item in self._user_audio_captures)):
+            return
+        if self._measurement is not None:
+            self._measurement.record_utterance_event(
+                utterance_id=capture.utterance_id, name="stt_preparation_started",
+                stage="stt_preparation",
+            )
+        completed = False
+        try:
+            completed = await self._session.prepare_transcription()
+        except asyncio.CancelledError:
+            if self._measurement is not None:
+                self._measurement.record_utterance_event(
+                    utterance_id=capture.utterance_id, name="stt_preparation_await_cancelled",
+                    stage="stt_preparation",
+                )
+            raise
+        except Exception:
+            # 任意の最適化の失敗を通常認識の失敗件数へ混ぜない。
+            pass
+        if self._measurement is not None:
+            self._measurement.record_utterance_event(
+                utterance_id=capture.utterance_id, name="stt_preparation_finished",
+                stage="stt_preparation", value=int(completed),
+            )
 
     async def _preview_user_turn(
         self,
@@ -886,19 +1081,46 @@ class _ConversationCoreBridge:
         utterance_id: str,
         interrupted_response_id: str,
         microphone_pcm: bytes,
+        capture: _UserAudioCapture | None = None,
     ) -> None:
+        attempt = capture.preview_attempts if capture is not None else 1
         try:
-            await self._session.preview_turn(
+            if not getattr(self._session, "accepting_input", True):
+                return
+            if self._measurement is not None:
+                self._measurement.record_utterance_event(
+                    utterance_id=utterance_id, name=f"stt_preview_attempt_{attempt}_started", stage="stt_preview",
+                )
+            prepared_audio, removed_samples = prepare_stt_audio(microphone_pcm)
+            if self._measurement is not None:
+                for name, value in stt_preparation_statistics(microphone_pcm, prepared_audio, removed_samples).items():
+                    self._measurement.record_utterance_event(
+                        utterance_id=utterance_id, name=f'stt_preview_attempt_{attempt}_' + name.removeprefix('stt_'),
+                        stage='stt_preview', value=value,
+                    )
+            decision = await self._session.preview_turn(
                 utterance_id=utterance_id,
-                audio=microphone_pcm,
+                audio=prepared_audio,
                 interrupted_response_id=interrupted_response_id,
             )
+            if capture is not None:
+                capture.preview_complete = decision == "take_turn"
+            if self._measurement is not None:
+                self._measurement.record_utterance_event(
+                    utterance_id=utterance_id, name=f"stt_preview_attempt_{attempt}_completed", stage="stt_preview",
+                )
+        except asyncio.CancelledError:
+            if capture is not None:
+                capture.preview_complete = True
+            raise
         except Exception:
-            # 冒頭認識はlatency最適化であり、失敗時も発話全体のSTTで確定できる。
+            # 先行認識の失敗時も発話全体のSTTで確定できる。
             logger.exception("Turn preview failed: utterance_id=%s", utterance_id)
         finally:
             self._transcription_active = False
             self._start_next_transcription()
+            if capture is not None:
+                self._consider_turn_preview(capture)
 
     def _schedule_finalization_if_ready(self, capture: _UserAudioCapture) -> None:
         if (
@@ -914,11 +1136,11 @@ class _ConversationCoreBridge:
         # audio frameを取りこぼさない短い猶予を置いてからSTT入力を確定する。
         if self._media_tail_seconds > 0:
             await asyncio.sleep(self._media_tail_seconds)
-        if any(
-            capture.utterance_id == utterance_id
-            for capture in self._user_audio_captures
-        ):
-            await self._finalize_user_audio_if_ready()
+        for capture in self._user_audio_captures:
+            if capture.utterance_id == utterance_id:
+                capture.media_tail_elapsed = True
+                await self._finalize_user_audio_if_ready()
+                break
 
     async def _finalize_user_audio_if_ready(self) -> None:
         while self._user_audio_captures:
@@ -930,6 +1152,10 @@ class _ConversationCoreBridge:
                     return
                 self._user_audio_captures.popleft()
                 continue
+            # 各発話のtimerが完了するまで、その発話の末尾を確定しない。
+            # 音声のない旧captureは従来どおり後続を妨げず取り除く。
+            if not capture.media_tail_elapsed:
+                return
             utterance_id = capture.utterance_id
             microphone_pcm = bytes(capture.pcm)
             self._user_audio_captures.popleft()
@@ -939,6 +1165,11 @@ class _ConversationCoreBridge:
                     reason="input_capacity_exceeded",
                 )
                 continue
+            if self._measurement is not None:
+                for name, value in capture.received_span.statistics(microphone_pcm).items():
+                    self._measurement.record_utterance_event(
+                        utterance_id=utterance_id, name=name, stage='stt_capture', value=value,
+                    )
             await self._enqueue_user_audio(
                 utterance_id=utterance_id,
                 microphone_pcm=microphone_pcm,
@@ -968,18 +1199,19 @@ class _ConversationCoreBridge:
                 return
             if event_type == "playback_stopped":
                 # prefix検証や永続化が失敗しても、旧音声をlocal graph再接続後へ残さない。
-                self._stop_audio()
-                utterance_id = self._interrupt_utterances_by_response.get(response_id)
-                if utterance_id is not None and self._measurement is not None:
-                    self._measurement.record_utterance_event(
-                        utterance_id=utterance_id,
-                        name="local_playback_stopped",
-                        stage="playback",
-                    )
+                self._stop_audio(response_id)
             await self._session.confirm_playback(
                 response_id=response_id,
                 last_played_audio_sequence=last_played_audio_sequence,
             )
+            if event_type == "playback_completed" and event.get("response_finished") is True:
+                accepted = self._confirm_response_playback(response_id, last_played_audio_sequence)
+                if accepted and self._measurement is not None and "playback_summary" in event:
+                    recorded = self._measurement.record_playback_summary(
+                        response_id=response_id, summary=event["playback_summary"],
+                    )
+                    if recorded and self._session_metrics is not None:
+                        self._session_metrics.completed_playback(response_id)
         elif event_type == "session_disconnected":
             await self._session.disconnect()
         elif event_type == "session_reconnected":
@@ -1020,7 +1252,28 @@ class _ConversationCoreBridge:
         microphone_pcm: bytes,
         interrupted_response_id: str | None = None,
     ) -> None:
+        original_pcm = microphone_pcm
+        microphone_pcm, trimmed_samples = prepare_stt_audio(original_pcm)
         self._transcription_active = True
+        if self._measurement is not None:
+            # 本文・波形は残さず、STTへ渡したPCMの長さと振幅だけを確認する。
+            samples = [value[0] for value in struct.iter_unpack("<h", microphone_pcm)]
+            statistics = {
+                **stt_preparation_statistics(original_pcm, microphone_pcm, trimmed_samples),
+                "stt_input_sample_count": len(samples),
+                "stt_preroll_trimmed_samples": trimmed_samples,
+                "stt_input_peak_pcm16": max((abs(value) for value in samples), default=0),
+                "stt_input_rms_pcm16": (sum(value * value for value in samples) / max(1, len(samples))) ** .5,
+                "stt_input_active_samples": sum(abs(value) > 200 for value in samples),
+                "stt_input_first_nonzero_sample": next((i for i, value in enumerate(samples) if value != 0), len(samples)),
+                "stt_input_first_above_16_sample": next((i for i, value in enumerate(samples) if abs(value) > 16), len(samples)),
+                "stt_input_first_active_sample": next((i for i, value in enumerate(samples) if abs(value) > 200), len(samples)),
+                "stt_input_last_active_sample": next((len(samples) - 1 - i for i, value in enumerate(reversed(samples)) if abs(value) > 200), len(samples)),
+            }
+            for name, value in statistics.items():
+                self._measurement.record_utterance_event(
+                    utterance_id=utterance_id, name=name, stage="stt", value=value,
+                )
         try:
             if interrupted_response_id is None:
                 task = self._session.start_transcription(
@@ -1088,6 +1341,7 @@ class _ConversationCoreBridge:
 class _SessionCleanupState:
     room: rtc.Room | None
     pending_runtime_tasks: list[asyncio.Task[None]]
+    audio_source: ResponseAudioTracks | None = None
     session_binding_deleted: bool = False
     room_deleted: bool = False
     room_cleanup_task: asyncio.Task[None] | None = None
@@ -1107,7 +1361,13 @@ class ProductionRuntimeManager:
         core_port: CoreNotificationPort,
         core_session_factory: _CoreSessionFactory | None = None,
         screen_session_revoker: _ScreenSessionRevoker | None = None,
+        audio_probe_enabled: bool = False,
+        session_trace_recorder: JsonlTraceRecorder | None = None,
+        measurement_kind: MeasurementKind = "automated_test",
     ) -> None:
+        self._session_trace_recorder = session_trace_recorder
+        self._measurement_kind = measurement_kind
+        self._audio_probe_enabled = audio_probe_enabled
         self._livekit_url = livekit_url
         self._signer = signer
         self._room_manager = room_manager
@@ -1124,7 +1384,7 @@ class ProductionRuntimeManager:
         self._session_tasks: dict[str, set[asyncio.Task[None]]] = {}
         self._participant_event_tails: dict[str, asyncio.Task[None]] = {}
         self._ready: dict[str, asyncio.Event] = {}
-        self._audio_sources: dict[str, _LiveKitPcmAudioSource] = {}
+        self._audio_sources: dict[str, ResponseAudioTracks] = {}
         self._core_sessions: dict[str, ConversationCoreSession] = {}
         self._core_bridges: dict[str, _ConversationCoreBridge] = {}
         self._cleanup_states: dict[str, _SessionCleanupState] = {}
@@ -1186,15 +1446,105 @@ class ProductionRuntimeManager:
         )
         room: rtc.Room = rtc_module.Room()
 
+        if self._audio_probe_enabled:
+            room_observation_count = 0
+
+            def observe_room_stage(stage: str) -> None:
+                nonlocal room_observation_count
+                if room_observation_count > 128:
+                    return
+                if room_observation_count == 128:
+                    stage = "overflow"
+                room_observation_count += 1
+                # SDKの接続先・identity・例外本文は診断へ渡さない。
+                logger.warning("RTC lifecycle: stage=%s at_ms=%d", stage, time.monotonic_ns() // 1_000_000)
+
+            room.on("connected")(lambda: observe_room_stage("connected"))
+            room.on("reconnecting")(lambda: observe_room_stage("reconnecting"))
+            room.on("reconnected")(lambda: observe_room_stage("reconnected"))
+            room.on("disconnected")(lambda _reason: observe_room_stage("disconnected"))
+
         async def publish_data(payload: bytes, topic: str) -> None:
             await room.local_participant.publish_data(payload, reliable=True, topic=topic)
 
         async def cleanup(_owned_session_id: str) -> None:
             await self._cleanup_owned_session(session_id)
 
-        async def generation_ready() -> None:
-            return None
+        # 同じmicrophone trackでも、世代が変わると旧readerは入力を拒否して終了する。
+        # readerの終了を待ってから置き換え、二重取込と購読解除後の復活を防ぐ。
+        microphone_readers: dict[
+            int, tuple[rtc.Track, str, str, int, asyncio.Task[None] | None]
+        ] = {}
+        microphone_lock = asyncio.Lock()
 
+        async def replace_microphone_reader(
+            track: rtc.Track, identity: str, participant_sid: str,
+        ) -> None:
+            key = id(track)
+            old = microphone_readers.get(key)
+            if (old is not None and old[1] == identity and old[2] == participant_sid
+                    and old[3] == coordinator.generation
+                    and old[4] is not None and not old[4].done()
+                    and coordinator.is_current_participant(identity=identity, participant_sid=participant_sid)):
+                return
+            microphone_readers.pop(key, None)
+            if old is not None and old[4] is not None:
+                old[4].cancel()
+                await asyncio.gather(old[4], return_exceptions=True)
+            if not coordinator.is_current_participant(identity=identity, participant_sid=participant_sid):
+                return
+            generation = coordinator.generation
+            task = self._schedule_task(session_id, self._observe_microphone(
+                session_id, track, coordinator, identity, participant_sid, generation, publish_data,
+            ))
+            if task is not None:
+                microphone_readers[key] = (track, identity, participant_sid, generation, task)
+
+        async def generation_ready() -> None:
+            if audio_probe is not None:
+                await audio_probe.cancel()
+            async with microphone_lock:
+                for track, identity, participant_sid, _generation, _task in tuple(microphone_readers.values()):
+                    await replace_microphone_reader(track, identity, participant_sid)
+
+        def response_track_ready(response_id: str, track_sid: str) -> None:
+            source = self._audio_sources.get(session_id)
+            if source is not None:
+                source.confirm_ready(response_id, track_sid)
+
+        from app.livekit_transport.audio_probe import AudioProbePublisher
+        audio_probe = AudioProbePublisher(room,
+            current=lambda generation: coordinator.phase == "available" and coordinator.generation == generation,
+            publish=lambda frame: publish_data(json.dumps(frame).encode(), PRIVATE_TOPIC),
+            schedule=lambda operation: self._schedule_task(session_id, operation),
+        ) if self._audio_probe_enabled else None
+
+        def handle_audio_probe(kind: str, probe_id: str, generation: int, sid: str | None) -> None:
+            if audio_probe is None:
+                return
+            if kind == "audio_probe_request":
+                audio_probe.request(probe_id, generation)
+            elif sid is not None:
+                audio_probe.receive(kind, probe_id, generation, sid)
+
+        sync_observation_count = 0
+
+        def observe_sync(stage: str, generation: int, at_ms: int) -> None:
+            nonlocal sync_observation_count
+            if sync_observation_count > 512:
+                return
+            if sync_observation_count == 512:
+                stage = "overflow"
+            sync_observation_count += 1
+            # 専用test Profileのみ。本文、ID、接続先、例外文字列を含めない。
+            logger.warning("State sync: stage=%s generation=%d at_ms=%d", stage, generation, at_ms)
+
+        session_metrics = (
+            SessionMetrics(character_id=str(request["character_id"]), session_id=session_id,
+                           measurement_kind=self._measurement_kind,
+                           record=self._session_trace_recorder.record_session)
+            if self._session_trace_recorder is not None else None
+        )
         coordinator = ProductionSessionCoordinator(
             session_id=session_id,
             user_identity=user_identity,
@@ -1206,6 +1556,10 @@ class ProductionRuntimeManager:
                 publish_data=publish_data,
                 cleanup=cleanup,
                 generation_ready=generation_ready,
+                response_track_ready=response_track_ready,
+                audio_probe=handle_audio_probe if audio_probe is not None else None,
+                sync_observer=observe_sync if self._audio_probe_enabled else None,
+                session_metrics=session_metrics,
             ),
             core_port=self._core_port,
         )
@@ -1213,6 +1567,18 @@ class ProductionRuntimeManager:
         self._coordinators[session_id] = coordinator
         self._session_tasks[session_id] = set()
         self._ready[session_id] = asyncio.Event()
+        rtc_diagnostic = None
+        if self._audio_probe_enabled:
+            from app.livekit_transport.rtc_diagnostic import RtcIngressDiagnostic
+            rtc_diagnostic = RtcIngressDiagnostic(lambda: coordinator.generation)
+            stats_task: asyncio.Task[None] | None = None
+
+            def start_rtc_diagnostic() -> None:
+                nonlocal stats_task
+                if stats_task is None:
+                    stats_task = self._schedule_task(session_id, rtc_diagnostic.sample(room))
+
+            room.on("reconnecting")(start_rtc_diagnostic)
 
         def participant_connected(participant: rtc.RemoteParticipant) -> None:
             async def handle_connected() -> None:
@@ -1250,6 +1616,11 @@ class ProductionRuntimeManager:
 
         def data_received(packet: rtc.DataPacket) -> None:
             participant = getattr(packet, "participant", None)
+            if rtc_diagnostic is not None:
+                participant_kind = "missing" if participant is None else "current" if coordinator.is_current_participant(
+                    identity=str(participant.identity), participant_sid=str(participant.sid)) else "other"
+                rtc_diagnostic.ingress({PRIVATE_TOPIC: "private", APPLICATION_TOPIC: "application", SCREEN_TOPIC: "screen"}.get(
+                    str(packet.topic), "other"), participant_kind)
             if participant is None:
                 return
             self._schedule_task(
@@ -1279,24 +1650,30 @@ class ProductionRuntimeManager:
                     )
                 ):
                     return
-                self._schedule_task(
-                    session_id,
-                    self._observe_microphone(
-                        session_id,
-                        track,
-                        coordinator,
-                        str(participant.identity),
-                        str(participant.sid),
-                        coordinator.generation,
-                        publish_data,
-                    ),
-                )
+                async with microphone_lock:
+                    await replace_microphone_reader(track, str(participant.identity), str(participant.sid))
 
             self._schedule_serialized_participant_operation(
                 session_id, handle_track_subscribed
             )
 
         room.on("track_subscribed")(track_subscribed)
+
+        def track_unsubscribed(
+            track: rtc.Track,
+            _publication: rtc.RemoteTrackPublication,
+            _participant: rtc.RemoteParticipant,
+        ) -> None:
+            async def handle_track_unsubscribed() -> None:
+                async with microphone_lock:
+                    old = microphone_readers.pop(id(track), None)
+                    if old is not None and old[4] is not None:
+                        old[4].cancel()
+                        await asyncio.gather(old[4], return_exceptions=True)
+
+            self._schedule_serialized_participant_operation(session_id, handle_track_unsubscribed)
+
+        room.on("track_unsubscribed")(track_unsubscribed)
 
         await room.connect(self._livekit_url, token)
         coordinator.start_join_deadline()
@@ -1327,7 +1704,9 @@ class ProductionRuntimeManager:
             core_session,
             schedule_core_operation,
             stop_audio=audio_source.clear,
+            confirm_response_playback=delivery.confirm_response_playback,
             measurement=delivery.measurement,
+            session_metrics=session_metrics,
         )
         self._audio_sources[session_id] = audio_source
         self._core_sessions[session_id] = core_session
@@ -1458,18 +1837,9 @@ class ProductionRuntimeManager:
                 exc_info=(type(error), error, error.__traceback__),
             )
 
-    async def _prepare_output_track(
-        self, room: rtc.Room
-    ) -> _LiveKitPcmAudioSource:
-        rtc_module = _livekit_rtc_module()
-
-        source: rtc.AudioSource = rtc_module.AudioSource(PCM_SAMPLE_RATE, PCM_CHANNELS)
-        track = rtc_module.LocalAudioTrack.create_audio_track("character-response", source)
-        options = rtc_module.TrackPublishOptions(
-            source=rtc_module.TrackSource.SOURCE_MICROPHONE
-        )
-        await room.local_participant.publish_track(track, options)
-        return _LiveKitPcmAudioSource(source)
+    async def _prepare_output_track(self, room: rtc.Room) -> ResponseAudioTracks:
+        # 応答決定まで無所属の出力trackを発行しない。
+        return ResponseAudioTracks(room, sample_rate=PCM_SAMPLE_RATE, channels=PCM_CHANNELS)
 
     async def send_core(self, session_id: str, payload: bytes) -> None:
         coordinator = self._coordinators.get(session_id)
@@ -1528,16 +1898,20 @@ class ProductionRuntimeManager:
             core_session = self._core_sessions.pop(session_id, None)
             if core_session is not None:
                 await core_session.end()
+            audio_source = self._audio_sources.get(session_id)
             room, pending_tasks = self._release_runtime_ownership(session_id)
             state = _SessionCleanupState(
                 room=room,
                 pending_runtime_tasks=pending_tasks,
+                audio_source=audio_source,
             )
             self._cleanup_states[session_id] = state
 
         async with state.lock:
             room_cleanup_task = self._start_room_cleanup(session_id, state)
             local_operations: list[Awaitable[object]] = []
+            if state.audio_source is not None:
+                local_operations.append(asyncio.create_task(self._close_audio_source(state)))
             if not state.session_binding_deleted:
                 local_operations.append(
                     asyncio.create_task(self._delete_session_binding(session_id, state))
@@ -1569,6 +1943,12 @@ class ProductionRuntimeManager:
                 ) from room_cleanup_result
             if self._cleanup_states.get(session_id) is state:
                 self._cleanup_states.pop(session_id)
+
+    @staticmethod
+    async def _close_audio_source(state: _SessionCleanupState) -> None:
+        if state.audio_source is not None:
+            await state.audio_source.aclose()
+            state.audio_source = None
 
     async def _delete_session_binding(
         self, session_id: str, state: _SessionCleanupState
@@ -1620,6 +2000,8 @@ async def configure_production_resources(
     *,
     core_session_factory: _CoreSessionFactory | None,
 ) -> livekit_api.LiveKitAPI | None:
+    from app.livekit_transport.audio_probe import audio_probe_enabled
+
     settings = resolve_livekit_settings()
     if settings is None:
         return None
@@ -1641,6 +2023,9 @@ async def configure_production_resources(
         core_port=core_events,
         core_session_factory=core_session_factory,
         screen_session_revoker=app.state.screen_perception_service,
+        audio_probe_enabled=audio_probe_enabled(os.environ, livekit_url),
+        session_trace_recorder=getattr(app.state, "voice_trace_recorder", None),
+        measurement_kind=getattr(app.state, "voice_measurement_kind", "automated_test"),
     )
     validator = CharacterConversationBindingValidator(
         character_loader=load_character_card,

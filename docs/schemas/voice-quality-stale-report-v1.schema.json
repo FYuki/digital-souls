@@ -1,0 +1,658 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digital-souls.local/schemas/voice-quality-stale-report-v1.schema.json",
+  "title": "サーバーcancel後のstale出力・受信の匿名集計v1 / v1.1 / v1.2",
+  "description": "本文、ID、絶対時刻を禁止する。件数の和、上下限、合否式はreport_stale_output.pyでも検証する。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scope",
+    "cohort",
+    "cancel_boundary",
+    "audio_presentation_boundary",
+    "counts",
+    "channels",
+    "evaluation",
+    "provenance"
+  ],
+  "properties": {
+    "schema_version": {
+      "enum": [
+        "1.0",
+        "1.1",
+        "1.2"
+      ]
+    },
+    "scope": {
+      "const": "labeled_livekit_stale_output_report"
+    },
+    "cohort": {
+      "const": "take_turn"
+    },
+    "cancel_boundary": {
+      "const": "server_cancel_state_transition"
+    },
+    "audio_presentation_boundary": {
+      "const": "post_gain_browser_output_clock"
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected",
+        "recorded",
+        "success",
+        "failure",
+        "independent_sessions",
+        "session_end_confirmed",
+        "verified_injection",
+        "replayed_cancel_windows"
+      ],
+      "properties": {
+        "expected": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "recorded": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "success": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "failure": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "independent_sessions": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "session_end_confirmed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "verified_injection": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "replayed_cancel_windows": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    },
+    "channels": {},
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum_trials",
+        "cohort_coverage_complete",
+        "all_boundaries_observed",
+        "stale_presented_passed"
+      ],
+      "properties": {
+        "minimum_trials": {
+          "const": 100
+        },
+        "cohort_coverage_complete": {
+          "type": "boolean"
+        },
+        "all_boundaries_observed": {
+          "type": "boolean"
+        },
+        "stale_presented_passed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "measurement_revision",
+        "raw_manifest_sha256",
+        "raw_trace_sha256",
+        "fixtures_sha256",
+        "reporter_sha256",
+        "schema_sha256",
+        "clock_validator_sha256",
+        "fixture_validator_sha256",
+        "replay_sources_sha256"
+      ],
+      "properties": {
+        "measurement_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "raw_manifest_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "raw_trace_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "trace未生成の場合だけnull。空のtraceファイルは実際の空ファイルのhashを保持する。"
+        },
+        "fixtures_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "reporter_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "schema_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "clock_validator_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "fixture_validator_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "replay_sources_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "provider_result_boundary": {
+      "const": "core_provider_iterator_yield"
+    },
+    "output_stop_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "verified",
+        "unverified",
+        "unavailable"
+      ],
+      "properties": {
+        "method": {
+          "const": "response_request_and_post_gain_replay"
+        },
+        "verified": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "unverified": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "unavailable": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    }
+  },
+  "$defs": {
+    "channel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unit",
+        "observed",
+        "missing",
+        "definitely_stale",
+        "possibly_stale",
+        "verified_zero",
+        "missing_reasons",
+        "lower_total",
+        "upper_total"
+      ],
+      "properties": {
+        "unit": {
+          "enum": [
+            "sample",
+            "packet",
+            "utf16_code_unit",
+            "byte"
+          ]
+        },
+        "observed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "missing": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "definitely_stale": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "possibly_stale": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "verified_zero": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "missing_reasons": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "identity_missing": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "fixture_injection_unverified": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "session_end_unconfirmed": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "cancel_state_unobserved": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "clock_window_unobserved": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "cleanup_unobserved": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "observation_identity_unverified": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "output_window_unobserved": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "receipt_window_unobserved": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "text_window_unobserved": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "replay_invalid": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "history_window_unobserved": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "history_observer_unimplemented": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "server_generation_observer_unimplemented": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "server_result_window_unobserved": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        },
+        "lower_total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "upper_total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "1.0"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "channels": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "audio_presented_samples",
+              "audio_received_packets",
+              "audio_received_samples",
+              "text_received_characters",
+              "live_text_presented_characters",
+              "history_text_presented_characters",
+              "server_generated_text_characters",
+              "server_generated_audio_samples"
+            ],
+            "properties": {
+              "audio_presented_samples": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "sample"
+                      }
+                    }
+                  }
+                ]
+              },
+              "audio_received_packets": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "packet"
+                      }
+                    }
+                  }
+                ]
+              },
+              "audio_received_samples": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "sample"
+                      }
+                    }
+                  }
+                ]
+              },
+              "text_received_characters": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "utf16_code_unit"
+                      }
+                    }
+                  }
+                ]
+              },
+              "live_text_presented_characters": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "utf16_code_unit"
+                      }
+                    }
+                  }
+                ]
+              },
+              "history_text_presented_characters": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "utf16_code_unit"
+                      }
+                    }
+                  }
+                ]
+              },
+              "server_generated_text_characters": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "utf16_code_unit"
+                      }
+                    }
+                  }
+                ]
+              },
+              "server_generated_audio_samples": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "sample"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "not": {
+          "required": [
+            "provider_result_boundary"
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "provider_result_boundary"
+        ],
+        "properties": {
+          "channels": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "audio_presented_samples",
+              "audio_received_packets",
+              "audio_received_samples",
+              "text_received_characters",
+              "live_text_presented_characters",
+              "history_text_presented_characters",
+              "server_received_text_characters",
+              "server_received_audio_bytes"
+            ],
+            "properties": {
+              "audio_presented_samples": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "sample"
+                      }
+                    }
+                  }
+                ]
+              },
+              "audio_received_packets": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "packet"
+                      }
+                    }
+                  }
+                ]
+              },
+              "audio_received_samples": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "sample"
+                      }
+                    }
+                  }
+                ]
+              },
+              "text_received_characters": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "utf16_code_unit"
+                      }
+                    }
+                  }
+                ]
+              },
+              "live_text_presented_characters": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "utf16_code_unit"
+                      }
+                    }
+                  }
+                ]
+              },
+              "history_text_presented_characters": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "utf16_code_unit"
+                      }
+                    }
+                  }
+                ]
+              },
+              "server_received_text_characters": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "utf16_code_unit"
+                      }
+                    }
+                  }
+                ]
+              },
+              "server_received_audio_bytes": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/channel"
+                  },
+                  {
+                    "properties": {
+                      "unit": {
+                        "const": "byte"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "1.2"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "output_stop_evidence"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "output_stop_evidence"
+          ]
+        }
+      }
+    }
+  ]
+}

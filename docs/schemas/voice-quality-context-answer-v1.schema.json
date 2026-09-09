@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digital-souls.local/schemas/voice-quality-context-answer-v1.schema.json",
+  "title": "合成context回答値の匿名実接続証跡",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "configured_think",
+    "measurement_scope",
+    "measurement_revision",
+    "character_card_sha256",
+    "expected",
+    "recorded",
+    "passed",
+    "failed",
+    "memory_retrieval_exercised",
+    "natural_speech_style_verified",
+    "response_content_persisted",
+    "trials"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "configured_think": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "measurement_scope": {
+      "const": "synthetic_context_answer_conformance"
+    },
+    "measurement_revision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "character_card_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "expected": {
+      "const": 36
+    },
+    "recorded": {
+      "const": 36
+    },
+    "passed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 36
+    },
+    "failed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 36
+    },
+    "memory_retrieval_exercised": {
+      "const": false
+    },
+    "natural_speech_style_verified": {
+      "const": false
+    },
+    "response_content_persisted": {
+      "const": false
+    },
+    "trials": {
+      "type": "array",
+      "minItems": 36,
+      "maxItems": 36,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_index",
+          "variant",
+          "trial_index",
+          "format_valid",
+          "name_correct",
+          "history_correct",
+          "memory_correct",
+          "request_completed",
+          "provider_internal_timing_unavailable_recorded",
+          "passed"
+        ],
+        "properties": {
+          "case_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "variant": {
+            "enum": [
+              "configured",
+              "thinking_disabled"
+            ]
+          },
+          "trial_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "format_valid": {
+            "type": "boolean"
+          },
+          "name_correct": {
+            "type": "boolean"
+          },
+          "history_correct": {
+            "type": "boolean"
+          },
+          "memory_correct": {
+            "type": "boolean"
+          },
+          "request_completed": {
+            "type": "boolean"
+          },
+          "provider_internal_timing_unavailable_recorded": {
+            "type": "boolean"
+          },
+          "passed": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

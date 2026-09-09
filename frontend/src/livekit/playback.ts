@@ -57,6 +57,19 @@ export class PlaybackPrefixTracker {
     }
   }
 
+  metadataPrefixForTotal(responseId: string, sampleCount: number): number {
+    if (!Number.isSafeInteger(sampleCount) || sampleCount <= 0) return -1
+    const segments = this.responses.get(responseId)
+    if (!segments?.size) return -1
+    let total = 0
+    for (let sequence = 0; sequence < segments.size; sequence++) {
+      const samples = segments.get(sequence)?.metadataSamples
+      if (samples === undefined || !Number.isSafeInteger(samples) || samples <= 0) return -1
+      total += samples
+    }
+    return total === sampleCount ? segments.size - 1 : -1
+  }
+
   discardResponse(responseId: string): void {
     this.responses.delete(responseId)
   }
@@ -79,6 +92,7 @@ export class PlaybackPrefixTracker {
 export type PlaybackEvidence = Readonly<{
   responseId: string
   continuousPrefix: number
+  firstPlaybackFrame?: number
   renderedSamples: number
   renderedEnergy: number
   confirmedSegments: number
@@ -93,14 +107,19 @@ type PendingSegment = {
 }
 
 export type RenderInterval = Readonly<{
+  responseId?: string
   startFrame: number
   endFrame: number
   energy: number
+  firstAudibleFrame?: number
+  // response所有packetの実出力先頭。無音sampleも応答PCMの出力として数える。
+  firstResponseFrame?: number
 }>
 
 export class PlaybackEvidenceController {
   private readonly tracker: PlaybackPrefixTracker
   private readonly pending: PendingSegment[] = []
+  private readonly firstPlaybackFrames = new Map<string, number>()
   private generation: number
   private renderedSamples = 0
   private renderedEnergy = 0
@@ -119,6 +138,7 @@ export class PlaybackEvidenceController {
     this.generation = generation
     this.tracker.setGeneration(generation)
     this.pending.length = 0
+    this.firstPlaybackFrames.clear()
     this.renderedSamples = 0
     this.renderedEnergy = 0
     this.confirmedSegments = 0
@@ -132,10 +152,15 @@ export class PlaybackEvidenceController {
       }
     }
     this.tracker.discardResponse(responseId)
+    this.firstPlaybackFrames.delete(responseId)
   }
 
   continuousPrefix(responseId: string): number {
     return this.tracker.continuousPrefix(responseId)
+  }
+
+  metadataPrefixForTotal(responseId: string, sampleCount: number): number {
+    return this.tracker.metadataPrefixForTotal(responseId, sampleCount)
   }
 
   recordMetadata(metadata: SegmentMetadata, eligibleAfterFrame: number): void {
@@ -163,7 +188,8 @@ export class PlaybackEvidenceController {
     const intervalSamples = interval.endFrame - interval.startFrame
     while (cursor < interval.endFrame) {
       const segment = this.pending[0]
-      if (segment === undefined) {
+      if (segment === undefined || (interval.responseId !== undefined
+        && interval.responseId !== segment.metadata.responseId)) {
         this.unassignedRenderedSamples += interval.endFrame - cursor
         return
       }
@@ -175,12 +201,21 @@ export class PlaybackEvidenceController {
       }
       const required = segment.metadata.pcmSampleCount - segment.renderedSamples
       const consumed = Math.min(required, interval.endFrame - cursor)
+      const firstFrame = interval.firstResponseFrame ?? interval.firstAudibleFrame
+      if (
+        (interval.firstResponseFrame !== undefined || interval.energy > 0) && firstFrame !== undefined && Number.isInteger(firstFrame)
+        && firstFrame >= cursor && firstFrame < cursor + consumed
+        && !this.firstPlaybackFrames.has(segment.metadata.responseId)
+      ) this.firstPlaybackFrames.set(segment.metadata.responseId, firstFrame)
+      const firstPlaybackFrame = this.firstPlaybackFrames.get(segment.metadata.responseId)
+      const firstPlayback = firstPlaybackFrame === undefined ? {} : { firstPlaybackFrame }
       segment.renderedSamples += consumed
       segment.renderedEnergy += interval.energy * (consumed / intervalSamples)
       cursor += consumed
       if (segment.renderedSamples !== segment.metadata.pcmSampleCount) {
         this.observe({
           responseId: segment.metadata.responseId,
+          ...firstPlayback,
           continuousPrefix: this.tracker.continuousPrefix(segment.metadata.responseId),
           renderedSamples: this.renderedSamples + segment.renderedSamples,
           renderedEnergy: this.renderedEnergy + segment.renderedEnergy,
@@ -201,6 +236,7 @@ export class PlaybackEvidenceController {
       })
       this.observe({
         responseId: segment.metadata.responseId,
+        ...firstPlayback,
         continuousPrefix: this.tracker.continuousPrefix(segment.metadata.responseId),
         renderedSamples: this.renderedSamples,
         renderedEnergy: this.renderedEnergy,

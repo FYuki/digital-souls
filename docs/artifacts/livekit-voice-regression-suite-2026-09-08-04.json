@@ -1,0 +1,59 @@
+{
+  "scope": "normal_voice_regression_suite_only",
+  "measurement_revision": "70342338337b6b4f50d051f0557ecdaf13e6c98b",
+  "passed": true,
+  "expected_tests": 5,
+  "browser_tests_passed": 5,
+  "browser_tests_skipped": 0,
+  "three_turn_full_playback_verified": true,
+  "barge_in_latency": {
+    "source": "automated_test",
+    "localStopMs": 1069,
+    "cancelTotalMs": 1104,
+    "fixture_sha256": "f30a370fef9c05ea158fc58aade405bccad6a82d894c86a45d615b15e1dec2ce",
+    "fixture_clock_bounds": {
+      "sourceStart": {
+        "lowerMs": 4302.300000011921,
+        "upperMs": 4304.100000023842,
+        "sourceSample": 0
+      },
+      "speechStart": {
+        "lowerMs": 4442.300000011921,
+        "upperMs": 4444.399999976158,
+        "sourceSample": 7200
+      },
+      "speechEnd": {
+        "lowerMs": 5282.300000011921,
+        "upperMs": 5286.100000023842,
+        "sourceSample": 47520
+      }
+    },
+    "localStopFromFixtureUpperMs": 989.6999999880791,
+    "cancelFromFixtureUpperMs": 1024.699999988079,
+    "response_correlation_verified": true
+  },
+  "observed_core_pipeline_error_count": 0,
+  "log_reader_closed": true,
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "teardown_completed": true,
+  "experimental_thinking_override": false,
+  "full_issue_acceptance_verified": false,
+  "readiness_results": {
+    "frontend": "ready",
+    "backend": "ready",
+    "ollama": "ready",
+    "voicevox": "ready",
+    "whisper": "ready"
+  },
+  "source_sha256": {
+    "playwright_results": "99533e98dc6e4467f9ad14d2b99e329f5a7cdaff2455ca6077f674e309bda88c",
+    "environment_run": "0896e4e219feb2ea88f7a9cfcb37986807d24ed4d3a48e8d5e53ec5bf088bfff",
+    "diagnostic": "312fe4a7477013ea9516512a90b0fd1e9bcf366a3ae6760cc0e3f887d8b64a71",
+    "runner": "c1918c72e6c679358a1df0e40092d262a474b7c0b90bdda1e66c31e5659995ab",
+    "test_log": "4d661e326f7df790f835cb8f9ca334ca89f45e8d0e1287779bdc1e310d90c468",
+    "spec": "decf44bfadf169bee43769ee94dc069a4ab616cc32e8425260309ef3fbe745fb"
+  }
+}

@@ -258,6 +258,7 @@ class FakeHistorySession:
     class StartedTurn:
         handle: object
         content_skipped: bool
+        turn_id: UUID = UUID("60000000-0000-4000-8000-000000000902")
 
     started: list[str] = field(default_factory=list)
     completed: list[tuple[object, str]] = field(default_factory=list)
@@ -334,6 +335,7 @@ def test_history_adapter_propagates_privacy_skipped_start_result() -> None:
         )
 
         assert result.content_skipped is True
+        assert result.history_turn_id == str(history.handle.turn_id)
         assert history.started == ["保存対象外"]
 
     asyncio.run(exercise())
@@ -447,10 +449,11 @@ def test_core_starts_and_terminates_the_same_history_turn_once(
             completed_turn_observer=formation_candidates.append,
         )
         response_id = "50000000-0000-4000-8000-000000000902"
+        delivery = RecordingDelivery()
         session = public.ConversationCoreSession(
             session_id="20000000-0000-4000-8000-000000000902",
             response_id_factory=response_id_factory(response_id),
-            delivery=RecordingDelivery(),
+            delivery=delivery,
             persistence=persistence,
             observation=RecordingObservation(),
             stt=RecordingStt(),
@@ -473,6 +476,9 @@ def test_core_starts_and_terminates_the_same_history_turn_once(
         second = await getattr(session, terminal_method)(**kwargs)
         await asyncio.wait_for(session.end(), timeout=0.5)
 
+        started = next(event for event in delivery.events if event.type == "response_started")
+        assert started.history_turn_id == str(history.handle.turn_id)
+        assert started.history_turn_id != response_id
         assert first == second
         assert history.started == ["履歴へ保存する利用者発話"]
         assert len(history.completed) == (1 if history_operation == "completed" else 0)
@@ -569,5 +575,183 @@ def test_history_start_failure_delivers_failed_and_starts_pending_response() -> 
         assert persistence.started == ["最初の発話", "次の発話"]
 
         await asyncio.wait_for(session.end(), timeout=0.5)
+
+    asyncio.run(exercise())
+
+
+def test_pcm16_mono_decode_preserves_all_signed_values_and_rejects_half_sample():
+    import struct
+    _public, adapters = _modules()
+    values = list(range(-32768, 32768))
+    pcm = struct.pack(f'<{len(values)}h', *values)
+    assert adapters._decode_mono_pcm16(pcm, sample_width=2, channels=1) == values
+    with pytest.raises(ValueError, match='incomplete frame'):
+        adapters._decode_mono_pcm16(pcm + b'x', sample_width=2, channels=1)
+
+
+def test_double_rate_pcm_keeps_samples_midpoint_rounding_and_final_length():
+    _public, adapters = _modules()
+    # 全PCM16値に隣接する負／正・奇数／偶数の和を含め、0.5の偶数丸めも確認する。
+    values = [value for pair in zip(range(-32768, 32767), range(-32767, 32768)) for value in pair]
+    result = adapters._resample_pcm16(values, input_sample_rate=24000, output_sample_rate=48000)
+    assert len(result) == len(values) * 2 - 1
+    assert result[::2] == values
+    for index, (left, right) in enumerate(zip(values, values[1:])):
+        numerator = left + right
+        quotient, remainder = divmod(numerator, 2)
+        assert result[index * 2 + 1] == quotient + (remainder and quotient % 2)
+
+
+@pytest.mark.parametrize('input_rate,output_rate', [(16000,48000), (48000,16000), (44100,48000)])
+def test_other_pcm_resampling_rates_keep_linear_interpolation(input_rate, output_rate):
+    _public, adapters = _modules()
+    values = [-32768, -123, 0, 125, 32767]
+    output = adapters._resample_pcm16(values, input_sample_rate=input_rate, output_sample_rate=output_rate)
+    expected = []
+    for index in range(((len(values) - 1) * output_rate) // input_rate + 1):
+        left, remainder = divmod(index * input_rate, output_rate)
+        expected.append(values[-1] if left >= len(values) - 1 else
+                        round(values[left] * (1 - remainder / output_rate) + values[left + 1] * remainder / output_rate))
+    assert output == expected
+
+
+class PreparingTranscriber:
+    def __init__(self, *, fail: bool = False) -> None:
+        self.preparing = threading.Event()
+        self.release = threading.Event()
+        self.finished = threading.Event()
+        self.fail = fail
+        self.calls: list[bytes] = []
+        self.prepare_calls = 0
+
+    def prepare(self) -> bool:
+        self.prepare_calls += 1
+        self.preparing.set()
+        try:
+            assert self.release.wait(timeout=3)
+            if self.fail:
+                raise RuntimeError("preparation failed")
+            return True
+        finally:
+            self.finished.set()
+
+    def transcribe(self, audio: bytes) -> str:
+        self.calls.append(audio)
+        return "書き起こし"
+
+
+async def _wait_thread_signal(signal: threading.Event) -> None:
+    async with asyncio.timeout(2):
+        while not signal.is_set():
+            await asyncio.sleep(.001)
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_foreground_waits_for_preparation_without_capacity_failure(fail: bool) -> None:
+    async def exercise() -> None:
+        _, adapters = _modules()
+        transcriber = PreparingTranscriber(fail=fail)
+        adapter = adapters.WhisperSttAdapter(transcriber=transcriber)
+        prepare = asyncio.create_task(adapter.prepare())
+        try:
+            await _wait_thread_signal(transcriber.preparing)
+            assert await adapter.prepare() is False
+            foreground = asyncio.create_task(adapter.transcribe(b"original-pcm"))
+            await asyncio.sleep(.02)
+            assert not foreground.done()
+            assert transcriber.calls == []
+            transcriber.release.set()
+            assert await prepare is not fail
+            assert await foreground == "書き起こし"
+            assert transcriber.calls == [b"original-pcm"]
+            assert transcriber.prepare_calls == 1
+        finally:
+            transcriber.release.set()
+            await asyncio.gather(prepare, return_exceptions=True)
+
+    asyncio.run(exercise())
+
+
+def test_cancelled_foreground_waiter_never_sends_its_audio_after_preparation() -> None:
+    async def exercise() -> None:
+        _, adapters = _modules()
+        transcriber = PreparingTranscriber()
+        adapter = adapters.WhisperSttAdapter(transcriber=transcriber)
+        prepare = asyncio.create_task(adapter.prepare())
+        try:
+            await _wait_thread_signal(transcriber.preparing)
+            foreground = asyncio.create_task(adapter.transcribe(b"cancelled-private-pcm"))
+            await asyncio.sleep(.02)
+            foreground.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await foreground
+            transcriber.release.set()
+            assert await prepare
+            assert await adapter.transcribe(b"next") == "書き起こし"
+            assert transcriber.calls == [b"next"]
+        finally:
+            transcriber.release.set()
+            await asyncio.gather(prepare, return_exceptions=True)
+
+    asyncio.run(exercise())
+
+
+def test_cancelling_preparation_keeps_real_worker_reserved_until_http_finishes() -> None:
+    async def exercise() -> None:
+        _, adapters = _modules()
+        transcriber = PreparingTranscriber()
+        adapter = adapters.WhisperSttAdapter(transcriber=transcriber)
+        prepare = asyncio.create_task(adapter.prepare())
+        try:
+            await _wait_thread_signal(transcriber.preparing)
+            prepare.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await prepare
+            assert await adapter.prepare() is False
+            foreground = asyncio.create_task(adapter.transcribe(b"next"))
+            await asyncio.sleep(.02)
+            assert not foreground.done()
+            assert transcriber.calls == []
+            transcriber.release.set()
+            assert await foreground == "書き起こし"
+            assert transcriber.calls == [b"next"]
+        finally:
+            transcriber.release.set()
+            await _wait_thread_signal(transcriber.finished)
+
+    asyncio.run(exercise())
+
+
+def test_preparation_skips_while_foreground_is_active_even_with_spare_capacity() -> None:
+    class BusyTranscriber(PreparingTranscriber):
+        def transcribe(self, audio: bytes) -> str:
+            self.preparing.set()
+            assert self.release.wait(timeout=3)
+            return super().transcribe(audio)
+
+    async def exercise() -> None:
+        _, adapters = _modules()
+        transcriber = BusyTranscriber()
+        adapter = adapters.WhisperSttAdapter(transcriber=transcriber, max_inflight=2)
+        foreground = asyncio.create_task(adapter.transcribe(b"first"))
+        try:
+            await _wait_thread_signal(transcriber.preparing)
+            assert await adapter.prepare() is False
+            assert transcriber.prepare_calls == 0
+        finally:
+            transcriber.release.set()
+            assert await foreground == "書き起こし"
+
+    asyncio.run(exercise())
+
+
+def test_adapter_without_optional_preparation_remains_usable() -> None:
+    async def exercise() -> None:
+        _, adapters = _modules()
+        transcriber = FakeWhisperTranscriber()
+        adapter = adapters.WhisperSttAdapter(transcriber=transcriber)
+        assert await adapter.prepare() is False
+        assert await adapter.transcribe(b"original") == "書き起こし"
+        assert transcriber.calls == [b"original"]
 
     asyncio.run(exercise())

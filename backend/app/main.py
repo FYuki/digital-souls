@@ -253,6 +253,9 @@ async def _stream_core_reply(
     history_access: ScreenHistoryAccess | None = None,
     screen_lineage_observer: Callable[[tuple[ScreenLineage, ...]], None] | None = None,
 ) -> AsyncIterator[str]:
+    from app.inference.diagnostics import diagnostic
+
+    diagnostic("prompt_preparation_started")
     prepare_arguments: tuple[object, ...] = (
         character, history_session, transcript
     )
@@ -262,6 +265,11 @@ async def _stream_core_reply(
         chat_service.prepare_unrecorded_generation,
         *prepare_arguments,
     )
+    diagnostic("prompt_preparation_completed")
+    diagnostic("prompt_message_count", len(prompt.messages))
+    diagnostic("prompt_input_tokens", prompt.usage.total)
+    for part in ("character", "character_lore", "history", "rag", "current_user", "post_history"):
+        diagnostic(f"prompt_{part}_tokens", getattr(prompt.usage, part))
     if screen_lineage_observer is not None:
         screen_lineage_observer(prompt.screen_lineages)
     if history_access is not None and not all(
@@ -272,6 +280,7 @@ async def _stream_core_reply(
         prompt,
         max_output_tokens=max_output_tokens,
         settings=model_settings,
+        latency_sensitive=True,
     ):
         if screen is not None and not screen.is_current:
             raise ScreenPerceptionError("request_cancelled", stage="chat")
@@ -347,6 +356,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         raw_trace_root.mkdir(parents=True, exist_ok=True)
         cleanup_expired_raw_traces(raw_trace_root, now=datetime.now(UTC))
+        cleanup_expired_raw_traces(raw_trace_root / "sessions", now=datetime.now(UTC))
         voice_trace_recorder = JsonlTraceRecorder(
             raw_trace_root / f"{uuid4()}.jsonl"
         )

@@ -75,6 +75,7 @@ async def stream_response(
     *,
     max_output_tokens: int,
     settings: ModelSettings,
+    latency_sensitive: bool = False,
 ) -> AsyncIterator[str]:
     inference_router = current_inference_router()
     del max_output_tokens, settings
@@ -84,5 +85,6 @@ async def stream_response(
         caller=_CHAT_CALLER,
         target=InferenceTarget.CHAT,
         messages=_inference_messages(prompt.messages),
+        latency_sensitive=latency_sensitive,
     ):
         yield delta

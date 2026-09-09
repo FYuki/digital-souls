@@ -1,0 +1,102 @@
+{
+  "scope": "continuous_user_control_diagnostic",
+  "session_count": 1,
+  "turn_count": 3,
+  "session_end_confirmed": true,
+  "fixture_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+  "manual_operations": {
+    "status": "measured",
+    "value": 0,
+    "method": "document_activation_clicks_v1",
+    "observed_session_count": 1,
+    "completed_turns": 3,
+    "observation_duration_ms": 21951.90000000596
+  },
+  "playback": [
+    {
+      "playback_gap_total_ms": 0.0,
+      "playback_gap_maximum_ms": 0.0,
+      "playback_underrun_count": 0.0,
+      "playback_duration_ms": 3900.0
+    },
+    {
+      "playback_gap_total_ms": 0.0,
+      "playback_gap_maximum_ms": 0.0,
+      "playback_underrun_count": 0.0,
+      "playback_duration_ms": 3720.0
+    },
+    {
+      "playback_gap_total_ms": 0.0,
+      "playback_gap_maximum_ms": 0.0,
+      "playback_underrun_count": 0.0,
+      "playback_duration_ms": 3540.0
+    }
+  ],
+  "network": {
+    "sent_bytes": {
+      "status": "measured",
+      "value": 36444,
+      "reason": null
+    },
+    "received_bytes": {
+      "status": "measured",
+      "value": 129217,
+      "reason": null
+    },
+    "packet_loss_basis_points": {
+      "status": "measured",
+      "value": 0.0,
+      "reason": null
+    },
+    "condition": "localhost LiveKit; one session three turns; browser audio RTP payload; loss at browser downlink",
+    "collection": {
+      "byte_scope": "browser_audio_rtp_payload",
+      "loss_scope": "browser_downlink_response_tracks",
+      "trial_count": 3,
+      "sent_trials": 3,
+      "received_trials": 3,
+      "loss_trials": 3,
+      "received_packets": 558,
+      "lost_packets": 0,
+      "negative_loss_trials": 0,
+      "missing_trials": {}
+    }
+  },
+  "resources": {
+    "cpu_percent": {
+      "status": "measured",
+      "value": 37.92515837902285,
+      "reason": null
+    },
+    "memory_bytes": {
+      "status": "measured",
+      "value": 144637952,
+      "reason": null
+    },
+    "gpu_utilization_percent": {
+      "status": "measured",
+      "value": 38.0,
+      "reason": null
+    },
+    "gpu_memory_bytes": {
+      "status": "measured",
+      "value": 7885291520,
+      "reason": null
+    },
+    "collection": {
+      "cpu_scope": "owned_backend_container",
+      "cpu_method": "cpu_time_delta_over_observer_wall_time_one_core_100_percent",
+      "memory_method": "maximum_sampled_container_charged_bytes",
+      "gpu_scope": "shared_host_gpu",
+      "gpu_method": "maximum_device_utilization_and_maximum_total_used_bytes",
+      "backend_samples": 52,
+      "cpu_intervals": 51,
+      "cpu_observed_ms": 26476.12938,
+      "maximum_interval_ms": 609.140607,
+      "gpu_samples": 6,
+      "missing_samples": {
+        "owned_backend_not_running": 3
+      }
+    }
+  }
+}

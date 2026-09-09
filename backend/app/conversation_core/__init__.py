@@ -4,6 +4,7 @@ from app.conversation_core.models import (
     Response,
     ResponseStartResult,
     ResponseState,
+    ResponseStopResult,
     StageObservation,
     TerminalOutcome,
     TextDelta,
@@ -12,6 +13,7 @@ from app.conversation_core.models import (
 )
 from app.conversation_core.ports import (
     DeliveryPort,
+    ResponseCancellationPort,
     LlmPort,
     ObservationPort,
     PersistencePort,
@@ -31,6 +33,8 @@ __all__ = [
     "Response",
     "ResponseStartResult",
     "ResponseState",
+    "ResponseStopResult",
+    "ResponseCancellationPort",
     "StageObservation",
     "SttPort",
     "TerminalOutcome",

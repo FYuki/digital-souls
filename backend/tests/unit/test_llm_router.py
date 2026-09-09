@@ -71,3 +71,29 @@ class TestProviderBoundary:
         assert not hasattr(router, "OllamaClient")
         assert not hasattr(router, "ClaudeClient")
         assert not hasattr(router, "_create_llm_client")
+
+
+@pytest.mark.parametrize('latency_sensitive', [False, True])
+def test_streaming_preserves_prompt_and_explicit_latency_intent(latency_sensitive):
+    import asyncio
+    from app.inference import InferenceRouter, InferenceTarget
+    from app.llm.router import register_inference_router, clear_inference_router, stream_response
+    calls = []
+    router = MagicMock(spec=InferenceRouter)
+    async def stream(**kwargs):
+        calls.append(kwargs)
+        yield 'ok'
+    router.stream_text = stream
+    prompt = _built_prompt()
+    async def exercise():
+        return [chunk async for chunk in stream_response(
+            prompt, max_output_tokens=512, settings=_settings(), latency_sensitive=latency_sensitive,
+        )]
+    register_inference_router(router)
+    try:
+        assert asyncio.run(exercise()) == ['ok']
+    finally:
+        clear_inference_router(router)
+    assert calls[0]['latency_sensitive'] is latency_sensitive
+    assert calls[0]['target'] is InferenceTarget.CHAT
+    assert [message.content for message in calls[0]['messages']] == [message.content for message in prompt.messages]

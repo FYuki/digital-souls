@@ -1,0 +1,95 @@
+{
+  "scope": "offline_endpoint_detector_calibration_only",
+  "method": "bandlimited_local_speech_edge_blocks_v2",
+  "codec": "opus",
+  "bitrate": 32000,
+  "codec_source_offsets_samples": [
+    104
+  ],
+  "pyav_version": "17.1.0",
+  "fixture_manifest_sha256": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3",
+  "method_source_sha256": "95508b325b3b1e838f5f3006bcc752c66dfa4a72c24a8bad7b09f7532a33624c",
+  "fixture_count": 301,
+  "counts": {
+    "normal": {
+      "intact_total": 1,
+      "intact_matched": 1,
+      "leading_101ms_deleted_total": 1,
+      "leading_101ms_deleted_matched": 0,
+      "trailing_101ms_deleted_total": 1,
+      "trailing_101ms_deleted_matched": 0,
+      "leading_101ms_silenced_total": 1,
+      "leading_101ms_silenced_matched": 0,
+      "trailing_101ms_silenced_total": 1,
+      "trailing_101ms_silenced_matched": 0,
+      "duplicated_total": 1,
+      "duplicated_matched": 0,
+      "reordered_total": 1,
+      "reordered_matched": 0
+    },
+    "backchannel": {
+      "intact_total": 100,
+      "intact_matched": 100,
+      "leading_101ms_deleted_total": 100,
+      "leading_101ms_deleted_matched": 0,
+      "trailing_101ms_deleted_total": 100,
+      "trailing_101ms_deleted_matched": 0,
+      "leading_101ms_silenced_total": 100,
+      "leading_101ms_silenced_matched": 0,
+      "trailing_101ms_silenced_total": 100,
+      "trailing_101ms_silenced_matched": 0,
+      "duplicated_total": 100,
+      "duplicated_matched": 0,
+      "reordered_total": 100,
+      "reordered_matched": 0
+    },
+    "take_turn": {
+      "intact_total": 100,
+      "intact_matched": 100,
+      "leading_101ms_deleted_total": 100,
+      "leading_101ms_deleted_matched": 0,
+      "trailing_101ms_deleted_total": 100,
+      "trailing_101ms_deleted_matched": 0,
+      "leading_101ms_silenced_total": 100,
+      "leading_101ms_silenced_matched": 0,
+      "trailing_101ms_silenced_total": 100,
+      "trailing_101ms_silenced_matched": 0,
+      "duplicated_total": 100,
+      "duplicated_matched": 0,
+      "reordered_total": 100,
+      "reordered_matched": 0
+    },
+    "pause": {
+      "intact_total": 100,
+      "intact_matched": 98,
+      "leading_101ms_deleted_total": 100,
+      "leading_101ms_deleted_matched": 0,
+      "trailing_101ms_deleted_total": 100,
+      "trailing_101ms_deleted_matched": 0,
+      "leading_101ms_silenced_total": 100,
+      "leading_101ms_silenced_matched": 0,
+      "trailing_101ms_silenced_total": 100,
+      "trailing_101ms_silenced_matched": 0,
+      "duplicated_total": 100,
+      "duplicated_matched": 0,
+      "reordered_total": 100,
+      "reordered_matched": 0
+    }
+  },
+  "failures": [
+    {
+      "fixture_sha256": "aed20ffff3509c2d16e008cb2d90d86653f9d1719c3414fd555cc313f6998e09",
+      "cohort": "pause",
+      "case": "intact",
+      "status": "unverified"
+    },
+    {
+      "fixture_sha256": "a23554c6d415f8ace87c2e264eacb8574d8ccb13b38a0cfab3f8235870dd1075",
+      "cohort": "pause",
+      "case": "intact",
+      "status": "unverified"
+    }
+  ],
+  "passed": false,
+  "actual_web_rtc_input_verified": false
+}

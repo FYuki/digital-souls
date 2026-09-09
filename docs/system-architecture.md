@@ -62,6 +62,8 @@
 * `routers/chat.py` — テキストチャットのHTTPエンドポイント
 * `routers/ws.py` — 移行前baselineとして凍結するターン型音声WebSocketエンドポイント。Wave 3機能は追加しない
 * `routers/livekit.py` / `livekit_transport/` — LiveKit join認証、Roomとsessionの対応付け、control event配送、character audio runtimeを担うWave 3の正式な音声transport境界
+* `livekit_transport/paced_audio.py` — 応答ごとのPCM queueを最大1秒に制限し、入力のある10ms frameだけをbufferなしのnative AudioSourceへ供給する。cancel時はqueueと送信taskを止め、応答末尾は明示的にpaddingしてnative供給完了を待つ
+* `livekit_transport/playback_completion.py` — 残りPCMの送出後、応答ID・最終sequenceが一致するブラウザの全出力確認を待つ。Coreの生成pipelineは`ResponseCompletionPort`を介して完了を待ち、その間もcancelできる
 * `voice_metrics.py` — transport非依存のmetadata-only trace、集計artifact、保持、LiveKit受入目標判定
 * `chat_service.py` / `_chat_runtime.py` — チャットセッションの生成・応答生成のエントリポイント
 * `characters/loader.py` — `characters/` 配下のCharacter Card V3を検証し、Character Core、Character Book、`extensions.digital_souls`を型付きで読み取る
@@ -84,7 +86,7 @@
 ### フロントエンド（Vite + Svelte, `frontend/src/`）
 
 * `lib/audio/transport.ts` — 移行前baseline用の `WebSocketAudioTransport`。Wave 3の正式経路には使用しない
-* `livekit/` — LiveKit Room接続、microphone publish、Character AudioTrack再生、control event、再接続を担うWave 3音声transport
+* `livekit/` — LiveKit Room接続、microphone publish、応答IDを持つCharacter AudioTrack再生、旧応答trackの再開防止、control event、再接続を担うWave 3音声transport
 * `lib/audio/pcm-worklet-recorder.ts` / `lib/audio/vad-assets.ts` — AudioWorkletによるPCM録音とVAD（発話区間検出）
 * `lib/AudioRecorder.svelte` / `lib/AudioPlayer.svelte` — マイク入力UI・音声再生UI
 * `lib/ChatWindow.svelte` / `lib/InputBar.svelte` — テキストチャットUI

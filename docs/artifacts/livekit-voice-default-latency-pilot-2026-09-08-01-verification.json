@@ -1,0 +1,33 @@
+{
+  "run_id": "voice-default-latency-pilot-20260908-01",
+  "measurement_revision": "1c060e99d6918f593c6278b512366532a649dfd2",
+  "verification_scope": "production_voice_latency_policy_pilot_only",
+  "policy_verified": true,
+  "full_issue_acceptance_verified": false,
+  "warmup_trials": 1,
+  "measured_trials": 3,
+  "experimental_thinking_override": false,
+  "per_response_policy_counters_verified": true,
+  "full_playback_verified": true,
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "teardown_completed": true,
+  "ttfa_p95_ms": 11334.769999980927,
+  "ttfa_target_passed": false,
+  "ollama_load_p95_ms": 9605.521320299998,
+  "observed_target_context_tokens": [
+    8192,
+    13024
+  ],
+  "observations_without_resident_model": 80,
+  "simultaneous_request_source_verified": false,
+  "aggregate_sha256": "7ef03728b72e8c709317c0f0fcc5a18c9094df8842a128e3d5db1d84a5c50dac",
+  "source_sha256": {
+    "trial-manifest.json": "8727ca30636b14a80c3088ffc7b6709f39a11201757c8dc27cc2d4a4afbed51d",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "f489006e78595d5f3a38397499d9dda25cbee9468230d946b8ba6e9a639519d8",
+    "runtime-data/runtime/standalone/environment-run.json": "f9de768d4e95d0e2234ab990d77d9fdc1455a9471e368400ab22507bc1c44fd5",
+    "inference-runtime.jsonl": "1e4ef556e6424151f9161478d271dabaa17f708a9d3830a44b756c21c9fa1ae4"
+  }
+}

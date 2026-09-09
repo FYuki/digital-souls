@@ -8,6 +8,7 @@ from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from uuid import UUID
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -422,7 +423,10 @@ def test_response_started_character_speaker_passes_schema_validation() -> None:
             del payload
 
     class AudioSource:
-        async def publish(self, pcm: bytes) -> None:
+        async def begin_response(self, response_id: str) -> None:
+            pass
+
+        async def publish(self, pcm: bytes, *, response_id: str) -> None:
             raise AssertionError(f"response_started must not publish audio: {pcm!r}")
 
     async def exercise() -> None:
@@ -463,6 +467,7 @@ def test_response_started_character_speaker_passes_schema_validation() -> None:
             type="response_started",
             session_id=session_id,
             response_id="50000000-0000-4000-8000-000000000010",
+            history_turn_id="60000000-0000-4000-8000-000000000010",
             source_utterance_ids=(
                 "30000000-0000-4000-8000-000000000010",
             ),
@@ -476,6 +481,7 @@ def test_response_started_character_speaker_passes_schema_validation() -> None:
     asyncio.run(exercise())
 
     payload = json.loads(published[0])
+    assert payload["history_turn_id"] == "60000000-0000-4000-8000-000000000010"
     assert payload["speaker"] == {
         "participant_id": participant_id,
         "role": "character",
@@ -681,7 +687,9 @@ def test_production_core_bridge_keeps_full_vad_confirmation_window() -> None:
 
     asyncio.run(exercise())
 
-    assert production.STT_MICROPHONE_PREROLL_BYTES == int(16_000 * 2 * 0.8)
+    # 実fixtureの最大確認遅れ1,440msと到達差の余裕を保持し、2秒を上限とする。
+    retained_ms = production.STT_MICROPHONE_PREROLL_BYTES * 1000 / (16_000 * 2)
+    assert 1600 <= retained_ms <= 2000
     assert requests[0]["audio"] == (
         preroll[-production.STT_MICROPHONE_PREROLL_BYTES :] + b"live"
     )
@@ -731,6 +739,67 @@ def test_production_core_bridge_previews_first_audio_before_speech_end() -> None
     ]
 
 
+@pytest.mark.parametrize("prefix_samples", [0, 32_000])
+def test_turn_preview_waits_for_audio_after_signal_onset(prefix_samples: int) -> None:
+    """長い静音のpre-rollを800msの発話冒頭として数えない。"""
+    production = importlib.import_module("app.livekit_transport.production")
+    previews: list[bytes] = []
+    tasks: set[asyncio.Task[None]] = set()
+
+    class Core:
+        accepting_input = True
+
+        async def preview_turn(self, **request: object) -> str:
+            previews.append(request["audio"])
+            return "take_turn"
+
+    def schedule(operation: Awaitable[None]) -> None:
+        task = asyncio.create_task(operation)
+        tasks.add(task)
+        task.add_done_callback(tasks.discard)
+
+    bridge = production._ConversationCoreBridge(Core(), schedule)
+    voice = b"\x00\x10" * (production.STT_TURN_PREVIEW_PCM_BYTES // 2)
+
+    async def exercise() -> None:
+        bridge.receive_microphone(bytes(prefix_samples * 2))
+        bridge.notify(json.dumps({"type": "speech_started", "speaker": {"role": "user"},
+                                  "utterance_id": "preview-onset", "response_id": "old"}).encode())
+        bridge.receive_microphone(voice[:6400])  # 実音声200ms。
+        await _drain_asyncio_tasks(tasks)
+        assert previews == []
+        bridge.receive_microphone(voice[6400:])
+        await _drain_asyncio_tasks(tasks)
+        assert previews == [bytes(min(prefix_samples, 5120) * 2) + voice]
+        bridge.receive_microphone(voice)
+        await _drain_asyncio_tasks(tasks)
+        assert len(previews) == 1
+
+    asyncio.run(exercise())
+
+
+def test_turn_preview_does_not_transcribe_silence_or_closed_input() -> None:
+    production = importlib.import_module("app.livekit_transport.production")
+    scheduled: list[Awaitable[None]] = []
+
+    class Core:
+        accepting_input = True
+
+    core = Core()
+    bridge = production._ConversationCoreBridge(core, scheduled.append)
+    bridge.notify(json.dumps({"type": "speech_started", "speaker": {"role": "user"},
+                              "utterance_id": "preview-silence", "response_id": "old"}).encode())
+    bridge.receive_microphone(bytes(production.STT_TURN_PREVIEW_PCM_BYTES * 2))
+    try:
+        assert scheduled == []
+        core.accepting_input = False
+        bridge.receive_microphone(b"\x00\x10" * production.STT_TURN_PREVIEW_PCM_BYTES)
+        assert scheduled == []
+    finally:
+        for operation in scheduled:
+            operation.close()
+
+
 def test_production_core_bridge_stops_server_audio_for_playback_stop() -> None:
     production = importlib.import_module("app.livekit_transport.production")
     scheduled: list[Awaitable[None]] = []
@@ -743,7 +812,7 @@ def test_production_core_bridge_stops_server_audio_for_playback_stop() -> None:
     bridge = production._ConversationCoreBridge(
         RecordingCoreSession(),
         scheduled.append,
-        stop_audio=lambda: stopped.append("stopped"),
+        stop_audio=stopped.append,
         media_tail_seconds=0,
     )
     bridge.notify(
@@ -763,7 +832,7 @@ def test_production_core_bridge_stops_server_audio_for_playback_stop() -> None:
 
     asyncio.run(exercise())
 
-    assert stopped == ["stopped"]
+    assert stopped == ["50000000-0000-4000-8000-000000000010"]
 
 
 def test_production_core_bridge_stops_audio_before_prefix_validation_failure() -> None:
@@ -779,7 +848,7 @@ def test_production_core_bridge_stops_audio_before_prefix_validation_failure() -
     bridge = production._ConversationCoreBridge(
         RejectingCoreSession(),
         scheduled.append,
-        stop_audio=lambda: operations.append("stop"),
+        stop_audio=lambda _response_id: operations.append("stop"),
         media_tail_seconds=0,
     )
     bridge.notify(
@@ -839,7 +908,7 @@ def test_production_core_bridge_bounds_waiting_stt_and_discards_overflow() -> No
         for index in range(5):
             await bridge._enqueue_user_audio(
                 utterance_id=f"utterance-{index}",
-                microphone_pcm=b"pcm",
+                microphone_pcm=b"pcm0",
             )
         bridge._transcription_active = False
         utterance_id, microphone_pcm, interrupted_response_id = (
@@ -895,7 +964,7 @@ def test_production_core_bridge_discards_media_tail_after_disconnect() -> None:
             "utterance_id": "30000000-0000-4000-8000-000000000020",
         }
         bridge.notify(json.dumps({**common, "type": "speech_started"}).encode())
-        bridge.receive_microphone(b"stale-pcm")
+        bridge.receive_microphone(b"stale-pcm!")
         bridge.notify(
             json.dumps(
                 {
@@ -979,7 +1048,7 @@ def test_production_core_bridge_keeps_pcm_owned_by_each_consecutive_utterance() 
     }
 
     async def exercise() -> None:
-        for suffix, pcm in (("10", b"pcm-one"), ("11", b"pcm-two")):
+        for suffix, pcm in (("10", b"pcm-one!"), ("11", b"pcm-two!")):
             utterance_id = f"30000000-0000-4000-8000-0000000000{suffix}"
             bridge.notify(
                 json.dumps(
@@ -1015,12 +1084,12 @@ def test_production_core_bridge_keeps_pcm_owned_by_each_consecutive_utterance() 
     assert calls == [
         {
             "utterance_id": "30000000-0000-4000-8000-000000000010",
-            "audio": b"pcm-one",
+            "audio": b"pcm-one!",
             "should_response": True,
         },
         {
             "utterance_id": "30000000-0000-4000-8000-000000000011",
-            "audio": b"pcm-two",
+            "audio": b"pcm-two!",
             "should_response": True,
         },
     ]
@@ -1095,7 +1164,7 @@ def test_production_core_bridge_does_not_assign_current_pcm_to_old_empty_capture
             "speech_started",
             third_utterance_id,
         )
-        bridge.receive_microphone(b"pcm-three")
+        bridge.receive_microphone(b"pcm-three!")
         notify(
             "11000000-0000-4000-8000-000000000012",
             "speech_stopped",
@@ -1112,7 +1181,7 @@ def test_production_core_bridge_does_not_assign_current_pcm_to_old_empty_capture
     assert calls == [
         {
             "utterance_id": third_utterance_id,
-            "audio": b"pcm-three",
+            "audio": b"pcm-three!",
             "should_response": True,
         },
     ]
@@ -1156,8 +1225,8 @@ def test_production_core_bridge_keeps_delayed_pcm_for_finalized_captures() -> No
         notify("speech_stopped", first_id)
         notify("speech_started", second_id)
         notify("speech_stopped", second_id)
-        bridge.receive_microphone(b"pcm-one")
-        bridge.receive_microphone(b"pcm-two")
+        bridge.receive_microphone(b"pcm-one!")
+        bridge.receive_microphone(b"pcm-two!")
         for operation in scheduled:
             await operation
         await _drain_asyncio_tasks(transcription_tasks)
@@ -1165,10 +1234,10 @@ def test_production_core_bridge_keeps_delayed_pcm_for_finalized_captures() -> No
     asyncio.run(exercise())
 
     assert calls == [
-        {"utterance_id": first_id, "audio": b"pcm-one", "should_response": True},
+        {"utterance_id": first_id, "audio": b"pcm-one!", "should_response": True},
         {
             "utterance_id": second_id,
-            "audio": b"pcm-two",
+            "audio": b"pcm-two!",
             "should_response": True,
         },
     ]
@@ -1210,9 +1279,9 @@ def test_production_core_bridge_separates_overlapping_utterance_pcm() -> None:
 
     async def exercise() -> None:
         notify("speech_started", first_id)
-        bridge.receive_microphone(b"pcm-one")
+        bridge.receive_microphone(b"pcm-one!")
         notify("speech_started", second_id)
-        bridge.receive_microphone(b"pcm-two")
+        bridge.receive_microphone(b"pcm-two!")
         notify("speech_stopped", first_id)
         notify("speech_stopped", second_id)
         for operation in scheduled:
@@ -1222,8 +1291,8 @@ def test_production_core_bridge_separates_overlapping_utterance_pcm() -> None:
     asyncio.run(exercise())
 
     assert calls == [
-        {"utterance_id": first_id, "audio": b"pcm-one", "should_response": True},
-        {"utterance_id": second_id, "audio": b"pcm-two", "should_response": True},
+        {"utterance_id": first_id, "audio": b"pcm-one!", "should_response": True},
+        {"utterance_id": second_id, "audio": b"pcm-two!", "should_response": True},
     ]
 
 
@@ -1307,7 +1376,7 @@ def test_production_core_bridge_empty_capture_does_not_block_later_audio() -> No
     async def exercise() -> None:
         notify("speech_started", first_id)
         notify("speech_started", second_id)
-        bridge.receive_microphone(b"pcm-two")
+        bridge.receive_microphone(b"pcm-two!")
         notify("speech_stopped", first_id)
         notify("speech_stopped", second_id)
         for operation in scheduled:
@@ -1317,7 +1386,7 @@ def test_production_core_bridge_empty_capture_does_not_block_later_audio() -> No
     asyncio.run(exercise())
 
     assert calls == [
-        {"utterance_id": second_id, "audio": b"pcm-two", "should_response": True}
+        {"utterance_id": second_id, "audio": b"pcm-two!", "should_response": True}
     ]
 
 
@@ -1699,8 +1768,8 @@ def test_character_runtime_uses_microphone_grant_and_matching_publish_source(
             "can_publish_sources": ["microphone"],
         }
     ]
-    assert len(published_tracks) == 1
-    assert published_tracks[0][1].source == microphone_source
+    # 応答のないsessionには無所属のcharacter trackを作らない。
+    assert published_tracks == []
 
 
 def test_microphone_observer_returns_when_bridge_was_released(monkeypatch) -> None:
@@ -1759,8 +1828,9 @@ def test_microphone_observer_returns_when_bridge_was_released(monkeypatch) -> No
     assert stream_closed is True
 
 
-def test_serialized_participant_events_handle_track_before_immediate_disconnect(
-    monkeypatch,
+@pytest.mark.parametrize("mode", ["disconnect", "generation_sync"])
+def test_serialized_participant_events_and_generation_microphone_ownership(
+    monkeypatch, mode,
 ) -> None:
     production = importlib.import_module("app.livekit_transport.production")
     session_id = "20000000-0000-4000-8000-000000000010"
@@ -1809,7 +1879,8 @@ def test_serialized_participant_events_handle_track_before_immediate_disconnect(
             assert callable(disconnected)
             connected(participant)
             subscribed(remote_track, publication, participant)
-            disconnected(participant)
+            if mode == "disconnect":
+                disconnected(participant)
 
         async def disconnect(self) -> None:
             return None
@@ -1870,6 +1941,7 @@ def test_serialized_participant_events_handle_track_before_immediate_disconnect(
     async def exercise() -> None:
         observation_started = asyncio.Event()
         observations: list[tuple[str, str, object]] = []
+        reader_events: list[tuple[str, int]] = []
 
         async def observe_microphone(
             owned_session_id: str,
@@ -1880,10 +1952,16 @@ def test_serialized_participant_events_handle_track_before_immediate_disconnect(
             generation: int,
             publish_data: object,
         ) -> None:
-            del coordinator, generation, publish_data
+            del coordinator, publish_data
             observations.append((participant_identity, participant_sid, track))
             assert owned_session_id == session_id
             observation_started.set()
+            reader_events.append(("started", generation))
+            if mode == "generation_sync":
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    reader_events.append(("closed", generation))
 
         runtime._observe_microphone = observe_microphone
         await runtime.start_runtime(
@@ -1899,16 +1977,40 @@ def test_serialized_participant_events_handle_track_before_immediate_disconnect(
         await asyncio.wait_for(observation_started.wait(), timeout=0.5)
         coordinator = runtime._coordinators[session_id]
 
-        async def wait_until_disconnected() -> None:
-            while coordinator.phase != "unavailable":
-                await asyncio.sleep(0)
+        if mode == "generation_sync":
+            async def sync(generation: int) -> None:
+                await coordinator.receive_data(identity=user_identity, participant_sid="PA_user",
+                    topic="digital-souls.livekit-transport.v1", payload=json.dumps({
+                        "protocol_version": "1.0", "type": "state_sync_request", "generation": generation,
+                    }).encode())
 
-        await asyncio.wait_for(wait_until_disconnected(), timeout=0.5)
+            async def wait_for_event(event: tuple[str, int]) -> None:
+                while event not in reader_events:
+                    await asyncio.sleep(0)
 
-        assert observations == [(user_identity, "PA_user", remote_track)]
-        assert not coordinator.is_current_participant(
-            identity=user_identity, participant_sid="PA_user"
-        )
+            await sync(0)
+            await asyncio.wait_for(wait_for_event(("started", 1)), timeout=0.5)
+            assert reader_events == [("started", 0), ("closed", 0), ("started", 1)]
+            # 古い世代の再送では現世代readerを重複作成しない。
+            await sync(0)
+            await asyncio.sleep(0)
+            assert reader_events.count(("started", 1)) == 1
+            callbacks["track_unsubscribed"](remote_track, publication, participant)
+            await asyncio.wait_for(wait_for_event(("closed", 1)), timeout=0.5)
+            await sync(1)
+            await asyncio.sleep(0)
+            assert len(observations) == 2
+        else:
+            async def wait_until_disconnected() -> None:
+                while coordinator.phase != "unavailable":
+                    await asyncio.sleep(0)
+
+            await asyncio.wait_for(wait_until_disconnected(), timeout=0.5)
+
+            assert observations == [(user_identity, "PA_user", remote_track)]
+            assert not coordinator.is_current_participant(
+                identity=user_identity, participant_sid="PA_user"
+            )
         await runtime.stop(session_id)
 
     asyncio.run(exercise())
@@ -1946,7 +2048,7 @@ def test_production_stop_releases_local_ownership_before_external_cleanup_finish
         runtime._coordinators = {}
         runtime._session_tasks = {session_id: set()}
         runtime._ready = {session_id: asyncio.Event()}
-        runtime._audio_sources = {session_id: object()}
+        runtime._audio_sources = {session_id: SimpleNamespace(aclose=AsyncMock())}
         runtime._cleanup_states = {}
 
         stop_task = asyncio.create_task(runtime.stop(session_id))
@@ -1998,7 +2100,7 @@ def test_production_room_cleanup_survives_cancelled_stop() -> None:
         runtime._coordinators = {}
         runtime._session_tasks = {session_id: set()}
         runtime._ready = {session_id: asyncio.Event()}
-        runtime._audio_sources = {session_id: object()}
+        runtime._audio_sources = {session_id: SimpleNamespace(aclose=AsyncMock())}
         runtime._cleanup_states = {}
 
         stop_task = asyncio.create_task(runtime.stop(session_id))
@@ -2378,3 +2480,274 @@ def test_production_connect_failure_is_compensated_by_bootstrap_owner(
     assert runtime._coordinators == {}
     assert runtime._session_tasks == {}
     assert disconnected == [session_id]
+
+
+def test_production_core_bridge_waits_for_each_utterances_media_tail() -> None:
+    """前の発話の待機完了で、後続発話の遅着音声を打ち切らない。"""
+    production = importlib.import_module("app.livekit_transport.production")
+    scheduled: list[Awaitable[None]] = []
+    requests: list[dict[str, object]] = []
+
+    class RecordingCoreSession:
+        accepting_input = True
+
+        def start_transcription(self, **request: object) -> asyncio.Task[None]:
+            async def record() -> None:
+                requests.append(request)
+            return asyncio.create_task(record())
+
+    bridge = production._ConversationCoreBridge(
+        RecordingCoreSession(), scheduled.append, media_tail_seconds=0,
+    )
+
+    async def exercise() -> None:
+        try:
+            for utterance_id, pcm in (("first", b"first-pcm!"), ("second", b"second-pcm")):
+                common = {"speaker": {"role": "user"}, "utterance_id": utterance_id}
+                bridge.notify(json.dumps({**common, "type": "speech_started"}).encode())
+                bridge.receive_microphone(pcm)
+                bridge.notify(json.dumps({**common, "type": "speech_stopped"}).encode())
+            first_tail, second_tail = scheduled[:2]
+            await first_tail
+            await asyncio.sleep(0)
+            # 2つ目のtimerはまだ完了していない。末尾frameを受け付け続ける。
+            assert len(bridge._user_audio_captures) == 1
+            bridge.receive_microphone(b"-late-tail")
+            await second_tail
+            while len(scheduled) > 2:
+                await scheduled.pop(2)
+            await asyncio.sleep(0)
+        finally:
+            for operation in scheduled:
+                operation.close()
+
+    asyncio.run(exercise())
+    assert [request["audio"] for request in requests] == [
+        b"first-pcm!", b"second-pcm-late-tail",
+    ]
+
+
+@pytest.mark.parametrize("interruption", [False, True])
+def test_vad_source_boundary_is_correlated_without_rebinding_interruption(interruption) -> None:
+    from app.livekit_transport import production
+    from app.livekit_transport.measurement import LiveKitMeasurementSession
+
+    events = []
+    measurement = LiveKitMeasurementSession(
+        session_id="session", character_id="miori", measurement_kind="controlled_baseline",
+        record=events.append, clock_ns=lambda: 9_000_000_000,
+    )
+    if interruption:
+        measurement.bind_response(response_id="old-response", source_utterance_ids=("old-utterance",))
+    bridge = production._ConversationCoreBridge(NoopCoreSession(), lambda task: None, measurement=measurement)
+    bridge.notify(json.dumps({
+        "type": "speech_started", "utterance_id": "new-utterance", "speaker": {"role": "user"},
+        "monotonic_timestamp_ms": 1234,
+        **({"response_id": "old-response"} if interruption else {}),
+    }).encode())
+    measurement.bind_response(response_id="new-response", source_utterance_ids=("new-utterance",))
+    boundary = [event for event in events if event.name == "vad_speech_start_client"]
+    assert len(boundary) == 1
+    assert boundary[0].response_id == "new-response"
+    assert boundary[0].utterance_id == "new-utterance"
+    assert boundary[0].timestamp == 1234
+    assert boundary[0].clock_domain == "client_monotonic"
+    assert boundary[0].unit == "millisecond"
+    starts = [event for event in events if event.name == "speech_started_client"]
+    assert [event.response_id for event in starts] == (["old-response"] if interruption else [])
+
+
+def test_core_bridge_prepares_the_same_preroll_for_preview_and_final_stt() -> None:
+    production = importlib.import_module("app.livekit_transport.production")
+    calls: list[tuple[str, bytes]] = []
+    tasks: list[asyncio.Task[None]] = []
+
+    class Core:
+        accepting_input = True
+
+        def start_transcription(self, **request: object) -> asyncio.Task[None]:
+            async def record() -> None:
+                calls.append(("final", request["audio"]))
+            task = asyncio.create_task(record())
+            tasks.append(task)
+            return task
+
+        async def preview_turn(self, **request: object) -> None:
+            calls.append(("preview", request["audio"]))
+
+    bridge = production._ConversationCoreBridge(Core(), lambda operation: tasks.append(asyncio.create_task(operation)))
+    original = bytes(32000 * 2) + b"\x00\x10" * 8000
+    expected = bytes(5120 * 2) + b"\x00\x10" * 8000
+
+    async def exercise() -> None:
+        bridge._start_user_transcription("final", original)
+        await asyncio.gather(*tasks)
+        await bridge._preview_user_turn(utterance_id="preview", interrupted_response_id="old", microphone_pcm=original)
+
+    asyncio.run(exercise())
+    assert calls == [("final", expected), ("preview", expected)]
+
+
+class PreparationCoreSession:
+    def __init__(self, *, fail: bool = False) -> None:
+        self.accepting_input = True
+        self.fail = fail
+        self.preparations = 0
+        self.audio: list[bytes] = []
+
+    async def prepare_transcription(self) -> bool:
+        self.preparations += 1
+        if self.fail:
+            raise RuntimeError("optional preparation unavailable")
+        return True
+
+    def start_transcription(self, **request):
+        self.audio.append(request["audio"])
+        return asyncio.create_task(asyncio.sleep(0))
+
+
+def _preparation_event(kind: str, *, interrupted: bool = False) -> bytes:
+    event = {"type": kind, "utterance_id": "preparation-utterance",
+             "speaker": {"role": "user"}, "monotonic_timestamp_ms": 1000}
+    if interrupted:
+        event["response_id"] = "old-response"
+    return json.dumps(event).encode()
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_bridge_prepares_once_after_contiguous_quiet_without_ending_or_trimming_audio(fail) -> None:
+    async def exercise() -> None:
+        production = importlib.import_module("app.livekit_transport.production")
+        session = PreparationCoreSession(fail=fail)
+        tasks: set[asyncio.Task[None]] = set()
+
+        def schedule(operation):
+            task = asyncio.create_task(operation)
+            tasks.add(task)
+            task.add_done_callback(tasks.discard)
+
+        bridge = production._ConversationCoreBridge(session, schedule, media_tail_seconds=0)
+        bridge.notify(_preparation_event("speech_started"))
+        # 290msの静音は準備しない。途中の有音で静音の連続時間をリセットする。
+        pieces = [b"\x10\x01" * 160, bytes(16_000 * 2 * 290 // 1000),
+                  b"\x10\x01" * 160, bytes(16_000 * 2 * 290 // 1000)]
+        for pcm in pieces:
+            bridge.receive_microphone(pcm)
+        await _drain_asyncio_tasks(tasks)
+        assert session.preparations == 0
+        final_quiet = bytes(16_000 * 2 * 10 // 1000)
+        bridge.receive_microphone(final_quiet)
+        await _drain_asyncio_tasks(tasks)
+        assert session.preparations == 1
+        assert session.audio == []
+        assert not bridge._user_audio_captures[0].finalized
+        resumed = b"\x10\x01" * 160 + bytes(16_000)
+        bridge.receive_microphone(resumed)
+        await _drain_asyncio_tasks(tasks)
+        assert session.preparations == 1
+        bridge.notify(_preparation_event("speech_stopped"))
+        await _drain_asyncio_tasks(tasks)
+        assert session.audio == [b"".join(pieces) + final_quiet + resumed]
+
+    asyncio.run(exercise())
+
+
+def test_bridge_uses_retained_pcm_quiet_only_after_confirmed_speech_start() -> None:
+    async def exercise() -> None:
+        production = importlib.import_module("app.livekit_transport.production")
+        session = PreparationCoreSession()
+        tasks = []
+        bridge = production._ConversationCoreBridge(session, lambda op: tasks.append(asyncio.create_task(op)))
+        original = b"\x10\x01" * 160 + bytes(9600)
+        bridge.receive_microphone(original)
+        assert tasks == []
+        assert session.preparations == 0
+        bridge.notify(_preparation_event("speech_started"))
+        await asyncio.gather(*tasks)
+        assert session.preparations == 1
+        assert bytes(bridge._user_audio_captures[0].pcm) == original
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("gate", ["interruption", "active", "capacity", "ended", "finalized"])
+def test_bridge_skips_preparation_when_not_safe(gate: str) -> None:
+    async def exercise() -> None:
+        production = importlib.import_module("app.livekit_transport.production")
+        session = PreparationCoreSession()
+        tasks = []
+        bridge = production._ConversationCoreBridge(session, lambda op: tasks.append(asyncio.create_task(op)))
+        bridge.notify(_preparation_event("speech_started", interrupted=gate == "interruption"))
+        capture = bridge._user_audio_captures[0]
+        if gate == "active":
+            bridge._transcription_active = True
+        if gate == "capacity":
+            capture.capacity_exceeded = True
+        if gate == "ended":
+            session.accepting_input = False
+        if gate == "finalized":
+            capture.finalized = True
+        # finalizedのmedia-tailスケジュールはこの準備gate検査には含めない。
+        bridge._consider_stt_preparation(capture, bytes(9600))
+        await asyncio.gather(*tasks)
+        assert session.preparations == 0
+
+    asyncio.run(exercise())
+
+
+def test_scheduled_preparation_does_not_start_after_session_ends() -> None:
+    async def exercise() -> None:
+        production = importlib.import_module("app.livekit_transport.production")
+        session = PreparationCoreSession()
+        tasks = []
+        bridge = production._ConversationCoreBridge(session, lambda op: tasks.append(asyncio.create_task(op)))
+        bridge.notify(_preparation_event("speech_started"))
+        bridge.receive_microphone(bytes(9600))
+        assert len(tasks) == 1
+        session.accepting_input = False
+        await asyncio.gather(*tasks)
+        assert session.preparations == 0
+
+    asyncio.run(exercise())
+
+
+def test_only_explicit_full_playback_confirmation_releases_output_wait():
+    production = importlib.import_module("app.livekit_transport.production")
+    scheduled, confirmations = [], []
+    class Session:
+        async def confirm_playback(self, **_request):
+            # 最後のprefix自体は既に進捗通知で確認済みでも、全出力確認は受ける。
+            return False
+    bridge = production._ConversationCoreBridge(
+        Session(), scheduled.append,
+        confirm_response_playback=lambda response, sequence: confirmations.append((response, sequence)) or True,
+    )
+    for full in [False, True]:
+        bridge.notify(json.dumps({"type":"playback_completed", "response_id":"old-response", "last_played_audio_sequence":2, "response_finished":full}).encode())
+    async def exercise():
+        for operation in scheduled:
+            await operation
+    asyncio.run(exercise())
+    assert confirmations == [("old-response", 2)]
+
+
+def test_cancel_transition_clock_uses_core_capture_in_trace_not_delivery_time() -> None:
+    production = importlib.import_module("app.livekit_transport.production")
+    records = []
+    wire = []
+    async def send(payload):
+        wire.append(json.loads(payload))
+    delivery = production._ConversationCoreDelivery(
+        coordinator=SimpleNamespace(send_core=send), audio_source=SimpleNamespace(clear=lambda _: None),
+        character_participant_id="40000000-0000-4000-8000-000000000010", character_id="miori",
+    )
+    delivery.attach_measurement(SimpleNamespace(record_response_event=lambda **row: records.append(row)))
+    asyncio.run(delivery.publish(production.CoreEvent(type="response_cancelled",
+        session_id="20000000-0000-4000-8000-000000000010", response_id="50000000-0000-4000-8000-000000000010",
+        reason="barge_in", terminal_state_bounds_ns=(1_234_000, 1_234_900))))
+    assert [(r["name"], r.get("timestamp")) for r in records] == [
+        ("cancel_state_lower", 1_234_000), ("cancel_state_upper", 1_234_900),
+        ("response_excluded", None), ("response_cancelled", None)]
+    assert records[-1]["outcome"] == "excluded"
+    assert records[-1]["reason_code"] == "barge_in"
+    assert all("terminal_state_bounds_ns" not in event for event in wire)
