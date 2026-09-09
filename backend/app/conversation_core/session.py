@@ -89,6 +89,7 @@ class ConversationCoreSession:
         tts_queue_maxsize: int = 8,
         turn_classifier: Callable[[str], TurnDecision] = classify_turn,
         monotonic_ns: Callable[[], int] = time.monotonic_ns,
+        on_interruption: Callable[[str], None] = lambda _reason: None,
     ) -> None:
         if tts_queue_maxsize < 1:
             raise ValueError("tts_queue_maxsize must be positive")
@@ -108,6 +109,7 @@ class ConversationCoreSession:
         self._tts_queue_maxsize = tts_queue_maxsize
         self._turn_classifier = turn_classifier
         self._monotonic_ns = monotonic_ns
+        self._on_interruption = on_interruption
         self._responses: dict[str, Response] = {}
         self._utterances: dict[str, Utterance] = {}
         self._active_response_id: str | None = None
@@ -467,11 +469,15 @@ class ConversationCoreSession:
                         self._finish_cancellation(response, reason, stop_task)
                     )
                     self._cancellation_tasks[response_id] = task
+                    # 出力停止の確認待ちでも外部ツールの受付は直ちに閉じる。
+                    self._notify_interruption(reason)
             # 同時要求や呼出元の取消で、共通の停止処理を中断しない。
             return await asyncio.shield(task)
         response = self._responses.get(response_id)
         if response is None:
             return None
+        if not response.state.is_terminal:
+            self._notify_interruption(reason)
         result = await self._terminate(
             response_id=response_id,
             generation=response.generation,
@@ -576,6 +582,7 @@ class ConversationCoreSession:
         if self._ended or not self._connected:
             return
         self._connected = False
+        self._notify_interruption("disconnect")
         await self._terminate_active_for_shutdown("disconnect")
         self._discard_pending("disconnect")
         await self._cancel_all_stage_tasks()
@@ -591,10 +598,23 @@ class ConversationCoreSession:
             return
         self._connected = False
         self._ended = True
+        self._notify_interruption("session_ended")
         await self._terminate_active_for_shutdown("session_ended")
         self._discard_pending("session_ended")
         await self._cancel_all_stage_tasks()
         await self._finish_effect_tasks()
+
+    def _notify_interruption(self, reason: str) -> None:
+        try:
+            self._on_interruption(reason)
+        except Exception:
+            logger.warning(
+                "Conversation interruption callback failed: session_id=%s reason=%s",
+                self.session_id,
+                reason
+                if reason in {"disconnect", "session_ended", "barge_in", "user_cancelled"}
+                else "other",
+            )
 
     def _reserve_pending_response_locked(self) -> tuple[Response, str]:
         pending = self.pending_utterances

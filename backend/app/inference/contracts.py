@@ -12,6 +12,7 @@ JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
 
 
 class InferenceTarget(str, Enum):
+    CHARACTER_LIFE = "character-life"
     CHAT = "chat"
     PRIVACY = "privacy"
     MEMORY_EXTRACTION = "memory-extraction"
@@ -19,6 +20,7 @@ class InferenceTarget(str, Enum):
     EMBEDDING = "embedding"
     VISION = "vision"
     HEAVY_REASONING = "heavy-reasoning"
+    TOOL_ROUTING = "tool-routing"
 
 
 class InferenceCapability(str, Enum):

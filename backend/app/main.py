@@ -23,6 +23,7 @@ from app.audio_pipeline import (
 )
 from app.chat_prompt import build_chat_prompt
 from app.characters.loader import load_character_card
+from app.characters.catalog import CharacterCatalog
 from app.backup_restore import (
     BackupAuthenticationKey,
     create_backup,
@@ -81,7 +82,9 @@ from app.memory.formation.scheduler import MemoryFormationScheduler
 from app.memory.formation.worker import MemoryFormationWorker
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
 from app.memory.persistence.index_outbox_repository import IndexOutboxRepository
-from app.memory.persistence.temporary_repository import TemporaryProviderRecordRepository
+from app.memory.persistence.temporary_repository import (
+    TemporaryProviderRecordRepository,
+)
 from app.memory.providers import AddonRecordProvider, PersonaMemoryProvider
 from app.model_settings import ModelSettings, resolve_model_settings
 from app.prompting import BuiltPrompt, PromptMessage
@@ -97,6 +100,8 @@ from app.routers.ui_settings import router as ui_settings_router
 from app.routers.livekit import router as livekit_router
 from app.routers.screen_perception import router as screen_perception_router
 from app.routers.ws import router as ws_router
+from app.routers.tool_use import router as tool_use_router
+from app.routers.addon_admin import router as addon_admin_router
 from app.screen_perception.http_security import (
     SCREEN_ALLOWED_ORIGIN_ENV,
     resolve_screen_http_security,
@@ -127,6 +132,20 @@ from app.voice_metrics import (
     cleanup_expired_raw_traces,
     resolve_raw_trace_root,
 )
+from app.tool_use.runtime import ToolRuntime, ToolSettings
+from app.tool_use.prompt import routing_history, with_tool_material, require_tool_room
+from app.tool_use.service import ToolService
+from app.character_life.runtime import Runtime as LifeRuntime, Settings as LifeSettings
+from app.character_life.service import Service as LifeService
+from app.character_life.store import Store as LifeStore
+from app.character_life.cognition import (
+    Cognition as LifeCognition,
+    Privacy as LifePrivacy,
+)
+from app.character_life.prompt import Context as LifeContext
+from app.character_life.formation import LifeFormation
+from app.character_life.cognition import Formation as StateFormation
+from app.routers.character_life import router as character_life_router
 
 VOICE_MEASUREMENT_KIND_ENV = "VOICE_MEASUREMENT_KIND"
 VOICE_CONTROLLED_TRACE_PATH_ENV = "VOICE_CONTROLLED_TRACE_PATH"
@@ -139,6 +158,7 @@ DOGFOOD_BACKUP_DIR_ENV = "DOGFOOD_BACKUP_DIR"
 DOGFOOD_BACKUP_RETENTION_COUNT_ENV = "DOGFOOD_BACKUP_RETENTION_COUNT"
 DS_DEPLOYMENT_COMMIT_ENV = "DS_DEPLOYMENT_COMMIT"
 CONSOLIDATION_PROMPT_VERSION = "consolidation-v1"
+
 
 @dataclass(frozen=True)
 class _SchemaRollbackContext:
@@ -163,9 +183,10 @@ def ensure_schema_backup_gate(
     if retention_count <= 0:
         raise RuntimeError("dogfood backup retention count is invalid")
     deployment_commit = os.environ.get(DS_DEPLOYMENT_COMMIT_ENV)
-    if deployment_commit is not None and re.fullmatch(
-        r"[0-9a-f]{40}", deployment_commit
-    ) is None:
+    if (
+        deployment_commit is not None
+        and re.fullmatch(r"[0-9a-f]{40}", deployment_commit) is None
+    ):
         raise RuntimeError("deployment commit is invalid")
     authentication_key = resolve_backup_authentication_key(os.environ)
     generation = create_backup(
@@ -252,26 +273,75 @@ async def _stream_core_reply(
     screen: ScreenTurnMaterial | None = None,
     history_access: ScreenHistoryAccess | None = None,
     screen_lineage_observer: Callable[[tuple[ScreenLineage, ...]], None] | None = None,
+    tools: ToolService | None = None,
+    conversation_id: str | None = None,
 ) -> AsyncIterator[str]:
     from app.inference.diagnostics import diagnostic
 
     diagnostic("prompt_preparation_started")
-    prepare_arguments: tuple[object, ...] = (
-        character, history_session, transcript
-    )
-    if screen is not None or history_access is not None:
+    prepare_arguments: tuple[object, ...] = (character, history_session, transcript)
+    if tools is not None and conversation_id is not None:
+        prepare_arguments = (*prepare_arguments, screen, history_access, False)
+    elif screen is not None or history_access is not None:
         prepare_arguments = (*prepare_arguments, screen, history_access)
     prompt, max_output_tokens = await run_sync(
         chat_service.prepare_unrecorded_generation,
         *prepare_arguments,
     )
+    if screen_lineage_observer is not None:
+        screen_lineage_observer(prompt.screen_lineages)
+    if tools is not None and conversation_id is not None:
+
+        async def before_execute() -> None:
+            if screen is not None and not screen.is_current:
+                raise ScreenPerceptionError("request_cancelled", stage="chat")
+            if history_access is not None and not all(
+                history_access.allows(lineage) for lineage in prompt.screen_lineages
+            ):
+                raise ScreenPerceptionError("request_cancelled", stage="chat")
+            await run_sync(
+                require_tool_room,
+                prompt,
+                lambda messages: llm_router.count_input_tokens(
+                    messages, settings=model_settings
+                ),
+                model_settings.chat_context_tokens - max_output_tokens,
+            )
+
+        material = await tools.run(
+            character,
+            conversation_id,
+            transcript,
+            history=routing_history(prompt),
+            before_execute=before_execute,
+        )
+        if screen is not None and not screen.is_current:
+            tools.stop(character, conversation_id)
+            raise ScreenPerceptionError("request_cancelled", stage="chat")
+        if material.direct_text is not None:
+            if history_access is not None and not all(
+                history_access.allows(lineage) for lineage in prompt.screen_lineages
+            ):
+                tools.stop(character, conversation_id)
+                raise ScreenPerceptionError("request_cancelled", stage="chat")
+            yield material.direct_text
+            return
+        prompt = await run_sync(
+            with_tool_material,
+            prompt,
+            material,
+            lambda messages: llm_router.count_input_tokens(
+                messages, settings=model_settings
+            ),
+            model_settings.chat_context_tokens - max_output_tokens,
+        )
+        prompt = await run_sync(chat_service.with_life_context, character, prompt)
+    # ツール結果と生活状態を反映した、生成へ渡す最終promptを計測する。
     diagnostic("prompt_preparation_completed")
     diagnostic("prompt_message_count", len(prompt.messages))
     diagnostic("prompt_input_tokens", prompt.usage.total)
     for part in ("character", "character_lore", "history", "rag", "current_user", "post_history"):
         diagnostic(f"prompt_{part}_tokens", getattr(prompt.usage, part))
-    if screen_lineage_observer is not None:
-        screen_lineage_observer(prompt.screen_lineages)
     if history_access is not None and not all(
         history_access.allows(lineage) for lineage in prompt.screen_lineages
     ):
@@ -308,6 +378,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         os.environ,
         default_provider_registry(),
     )
+    tool_settings = ToolSettings.load(os.environ.get("DS_MCP_CONFIG"))
     chat_target = inference_settings.target(InferenceTarget.CHAT)
     chat_output_tokens = chat_target.max_output_tokens
     if chat_output_tokens is None:
@@ -368,9 +439,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     remove_legacy_chroma_index_once(runtime_paths, repository_root)
     log_runtime_configuration(runtime_paths)
 
-    def generate_llm_response(
-        prompt: BuiltPrompt, *, max_output_tokens: int
-    ) -> str:
+    def generate_llm_response(prompt: BuiltPrompt, *, max_output_tokens: int) -> str:
         return llm_router.generate_response(
             prompt,
             max_output_tokens=max_output_tokens,
@@ -396,8 +465,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from app.memory.persistence.schema import initialize_persona_memory_schema
 
         initialize_persona_memory_schema(runtime_paths, repository_root)
+
         def clock() -> datetime:
             return datetime.now(UTC)
+
         wal_cleanup = ConversationWalCleanup(
             database_path=conversation_history_config.database_path,
             clock=clock,
@@ -477,6 +548,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         memory_consolidation_classifier_client = None
         core_transcriber = None
         core_synthesizer = None
+        tool_runtime = None
+        life_runtime = None
+        life_context = None
         try:
             llm_router.register_inference_router(inference_runtime.router)
             inference_router_registered = True
@@ -490,6 +564,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 voice_trace_recorder_state_set = True
             app.state.conversation_history_repository = conversation_history_repository
             repository_state_set = True
+
             def validate_screen_context(
                 character_id: str, conversation_id: UUID
             ) -> None:
@@ -662,6 +737,67 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 conversation_history_repository,
                 history_sanitizer,
             )
+            life_settings = LifeSettings.load(dict(os.environ))
+            if (
+                life_settings.enabled
+                and InferenceTarget.CHARACTER_LIFE
+                not in inference_runtime.settings.targets
+            ):
+                raise ValueError(
+                    "Character Life requires INFERENCE_TARGET_CHARACTER_LIFE"
+                )
+            tool_runtime = ToolRuntime(
+                tool_settings,
+                inference_runtime.router,
+                privacy_scanner,
+                settings_path=runtime_paths.data_root / "addon-settings.json",
+            )
+            app.state.addon_manager = tool_runtime.management
+            await tool_runtime.start()
+            app.state.tool_service = (
+                tool_runtime.service
+                if InferenceTarget.TOOL_ROUTING in inference_runtime.settings.targets
+                else None
+            )
+            if life_settings.enabled:
+                assert tool_runtime is not None
+                life_store = LifeStore(runtime_paths.data_root / "character-life.db")
+                life_service = LifeService(
+                    life_store,
+                    tool_runtime.gate,
+                    LifeCognition(inference_runtime.router),
+                    LifePrivacy(
+                        tool_runtime.service.sanitizer,
+                        memory_consolidation_privacy_classifier,
+                    ),
+                    tool_runtime.service.sanitizer,
+                    foreground_busy=lambda: (
+                        conversation_history_repository.consolidation_activity()[0] > 0
+                    ),
+                    bindings=tool_runtime.service.bindings,
+                )
+                life_service.formation = LifeFormation(
+                    life_store,
+                    life_service.reflections,
+                    StateFormation(inference_runtime.router),
+                    life_service.privacy,
+                )
+                character_catalog = CharacterCatalog(repository_root / "characters")
+                life_runtime = LifeRuntime(
+                    life_service, runtime_paths.data_root, life_settings,
+                    characters=lambda: tuple(
+                        entry.character_id for entry in character_catalog.scan()
+                    ),
+                )
+                await life_runtime.start()
+                app.state.character_life_runtime = life_runtime
+                life_context = LifeContext(
+                    life_store,
+                    count_llm_input_tokens,
+                    model_settings.chat_context_tokens
+                    - model_settings.assistant_max_generation_tokens,
+                    reflections=life_service.reflections,
+                )
             app_chat_service = _chat_runtime.create_chat_service(
                 _chat_runtime.resolve_chat_runtime_config(
                     policy, model_settings, runtime_paths, occurred_timezone
@@ -678,6 +814,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     memory_embedder=memory_embedder,
                     memory_formation_submitter=memory_formation_scheduler,
                     clock=clock,
+                    tools=app.state.tool_service,
+                    life_context=life_context,
                 ),
             )
             app.state.chat_service = app_chat_service
@@ -712,8 +850,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         [tuple[ScreenLineage, ...]], None
                     ],
                 ) -> AsyncIterator[str]:
-                    history_access = await app.state.screen_perception_service.history_access(
-                        client_session_id
+                    history_access = (
+                        await app.state.screen_perception_service.history_access(
+                            client_session_id
+                        )
                     )
                     reference_history = (
                         await run_sync(
@@ -725,15 +865,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         if needs_reference_history(transcript)
                         else ()
                     )
-                    screen_material = await app.state.screen_perception_service.await_voice_material(
-                        client_session_id=client_session_id,
-                        character_id=character,
-                        conversation_id=conversation_id,
-                        question=transcript,
-                        publish_request=lambda payload: app.state.livekit_runtime_manager.send_screen(
-                            session_id, payload
-                        ),
-                        history=reference_history,
+                    screen_material = (
+                        await app.state.screen_perception_service.await_voice_material(
+                            client_session_id=client_session_id,
+                            character_id=character,
+                            conversation_id=conversation_id,
+                            question=transcript,
+                            publish_request=lambda payload: (
+                                app.state.livekit_runtime_manager.send_screen(
+                                    session_id, payload
+                                )
+                            ),
+                            history=reference_history,
+                        )
                     )
                     async for text in _stream_core_reply(
                         app_chat_service,
@@ -744,12 +888,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         screen_material,
                         history_access,
                         screen_lineage_observer,
+                        tools=app.state.tool_service,
+                        conversation_id=str(conversation_id),
                     ):
                         yield text
 
                 def submit_completed_core_turn(persisted_turn: object) -> None:
                     if not isinstance(persisted_turn, ConversationTurn):
-                        raise TypeError("completed Core turn must be a ConversationTurn")
+                        raise TypeError(
+                            "completed Core turn must be a ConversationTurn"
+                        )
                     if persisted_turn.status is not TurnStatus.COMPLETED:
                         return
                     if conversation_history_repository.is_screen_derived(
@@ -772,6 +920,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     history_service=conversation_history_service,
                     completed_turn_observer=submit_completed_core_turn,
                     generate_screen_reply_stream=generate_screen_core_reply_stream,
+                    on_conversation_interruption=(
+                        tool_runtime.service.interrupted
+                        if tool_runtime is not None
+                        else lambda _character, _conversation, _reason: None
+                    ),
                     measurement_kind=voice_measurement_kind,
                     trace_record=(
                         voice_trace_recorder.record
@@ -803,6 +956,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             if livekit_api is not None:
                 await run_cleanup(app.state.livekit_runtime_manager.stop_all())
                 await run_cleanup(livekit_api.aclose())
+            if life_runtime is not None:
+                await run_cleanup(life_runtime.close())
+            if hasattr(app.state, "character_life_runtime"):
+                del app.state.character_life_runtime
+            if tool_runtime is not None:
+                await run_cleanup(tool_runtime.close())
+            if hasattr(app.state, "tool_service"):
+                del app.state.tool_service
             if memory_consolidation_scheduler_started:
                 await run_cleanup(memory_consolidation_scheduler.stop())
             if memory_formation_scheduler_started:
@@ -898,6 +1059,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(tool_use_router)
+app.include_router(character_life_router)
+app.include_router(addon_admin_router)
 
 app.include_router(chat_router)
 app.include_router(character_catalog_router)

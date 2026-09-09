@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digital-souls.local/contracts/addon/1.0/addon-meta.schema.json",
+  "title": "DigitalSoulsAddonMeta",
+  "type": "object",
+  "required": ["io.digital-souls/operation"],
+  "properties": {
+    "io.digital-souls/operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stable_operation_id",
+        "effect",
+        "execution",
+        "concurrency",
+        "idempotency",
+        "requires_core_features"
+      ],
+      "properties": {
+        "stable_operation_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "effect": {"enum": ["read", "write", "destructive", "external_send", "unknown"]},
+        "execution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "cancellable"],
+          "properties": {
+            "mode": {"enum": ["immediate", "task"]},
+            "cancellable": {"type": "boolean"}
+          }
+        },
+        "conflict_scope": {"type": ["string", "null"], "maxLength": 200},
+        "concurrency": {"enum": ["parallel", "serial"]},
+        "idempotency": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["retry_semantics"],
+          "properties": {
+            "retry_semantics": {"enum": ["none", "replay_safe", "status_query"]},
+            "key_argument": {"type": "string", "minLength": 1}
+          }
+        },
+        "requires_core_features": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "events": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["history", "wake_up"],
+          "properties": {
+            "history": {"enum": ["none", "cursor_query", "resource"]},
+            "wake_up": {"enum": ["none", "resource_updated", "subscription"]}
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

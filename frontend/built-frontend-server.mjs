@@ -32,6 +32,7 @@ if (backendOrigin.protocol !== 'http:') {
   throw new Error('DS_BACKEND_ORIGIN must use http')
 }
 const backendProxyTimeoutMs = 30_000
+const conversationProxyTimeoutMs = 180_000
 
 const frontendDirectory = fileURLToPath(new URL('.', import.meta.url))
 const distDirectory = resolve(frontendDirectory, 'dist')
@@ -71,7 +72,8 @@ const proxyHttp = (incoming, outgoing, targetPath) => {
   const timeout = setTimeout(() => {
     timedOut = true
     proxy.destroy(new Error('Backend proxy timed out'))
-  }, backendProxyTimeoutMs)
+  }, targetPath === '/chat' || targetPath.startsWith('/perception/screen/')
+    ? conversationProxyTimeoutMs : backendProxyTimeoutMs)
   timeout.unref()
   proxy.once('close', () => clearTimeout(timeout))
   proxy.on('error', (error) => {

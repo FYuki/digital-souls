@@ -2,6 +2,13 @@
 
 [Issue #150](https://github.com/FYuki/digital-souls/issues/150)のWorkstream A–Eと完了条件を対象とする。基準値は変更しない。以下は2026-09-09時点の保存証拠の確認であり、全条件の達成宣言ではない。[差分照合](artifacts/livekit-final-source-impact-2026-09-09.json)で測定時の版と変更範囲を記録した。過去の100件測定と現在版の少数回帰を区別する。
 
+## main取り込み後の証拠の適用範囲（2026-09-09）
+
+PR #269はepicへマージ済み。`main`の`dc30afd`までを取り込み、外部MCP・ツール利用・アドオン管理・生活状態runtimeを統合した。
+音声の出力停止確認を待つ経路でもツールへ中断を一度だけ通知し、生成へ渡す最終prompt（ツール結果・生活状態を含む）を診断値へ記録する。
+以下の100件測定と差分照合artifactは、このmain統合より前の版の証拠として保持する。Core・prompt構築・推論対象が変更されているため、過去の差分なしという判定を統合後のHEADへ引き継がない。
+統合の自動回帰と、統合後の実声・性能受け入れは別に扱う。統合後の実声dogfoodや100件の性能再測定は未実施。
+
 ## 完了条件と証拠
 
 | 条件 | 保存証拠と現在の評価 | 残る確認 |
@@ -31,7 +38,7 @@
 - B: 受信・復号・実出力時計、割り込みのsession/utterance/旧response相関、正常cancelと処理失敗の分離を実装。製品traceとmanifestの一致を各reporterで検証する。
 - C: 相槌・take-turn・文中休止の独立100件と、生成／受信・提示の区別を実装。実PCMのv4端部照合は前後最大600msの候補を使い、内部全体や全帯域の品質は主張しない。正常301音声と8種類の破損を用いた校正を別保存している。
 - D: 専用network障害・復旧、再生継続性、resource、RTPの観測経路を実装。[製品RTP pilot](artifacts/livekit-native-network-pilot-2026-09-08-01-verification.json)で準備を含む4応答のnative trace一致を確認。完了応答の音声RTP payloadが範囲であり、session全通信量ではない。session追加操作・終了の製品集計を実装し、実接続3往復で追加0・正常終了・欠測なしを確認。無応答の正常終了と切断後の猶予満了終了を実接続2件で照合した。[一時切断から復帰したsession](artifacts/livekit-reconnect-session-regression-2026-09-08-03-verification.json)も追加0・正常終了・欠測0を照合した。実声dogfoodが残る。
-- E: 固定fixture・初期状態・warm-up除外・独立session/conversationと匿名schema検証を実装。失敗runを残す。[現在版の自動回帰](artifacts/livekit-automated-regression-2026-09-08-06.json)は全ユニット・モジュール・mocked E2E・型検査・lint・buildを通過。[実サービス音声回帰5ケース](artifacts/livekit-voice-regression-suite-2026-09-08-04.json)も成功。取消応答の通信観測修正後も[結合・モックE2E・型検査等](artifacts/livekit-cancelled-network-regression-2026-09-09.json)と実接続3件を検証。GitHub CIとPR作成、実声dogfoodの全条件は未完了。
+- E: 固定fixture・初期状態・warm-up除外・独立session/conversationと匿名schema検証を実装。失敗runを残す。[現在版の自動回帰](artifacts/livekit-automated-regression-2026-09-08-06.json)は全ユニット・モジュール・mocked E2E・型検査・lint・buildを通過。[実サービス音声回帰5ケース](artifacts/livekit-voice-regression-suite-2026-09-08-04.json)も成功。取消応答の通信観測修正後も[結合・モックE2E・型検査等](artifacts/livekit-cancelled-network-regression-2026-09-09.json)と実接続3件を検証。PR #269のCI全4ジョブは通過し、epicへマージ済み。実声dogfoodの全条件は未完了。
 
 ## 差分照合後に残る受け入れ
 
@@ -41,7 +48,7 @@ native取消記録と送受信量・packet lossを照合した。対象3応答�
 
 1. 人による実声dogfoodで、gap合計0.1%以下・最大200ms以下、処理失敗率1%以下、予期しない終了0、3往復の追加操作0を測定する。自然な応答・人格・記憶境界も既存の受け入れ手順で確認する。現時点では実測証拠がなく、達成扱いにしない。
 2. 実声runの欠測理由・分母を照合する。Ollama APIが公開しない内部受付・生成開始・queue時間は理由付き欠測とし、実装済み指標や0msと主張しない。完全再生／取消時点のRTP payloadと、session全体の通信量を区別する。
-3. 公開先の承認後、作業ブランチからepicへのDraft PRを作成し、GitHub CI／レビューを確認する。リポジトリ方針に沿ってepic→mainのレビュー・マージと明示deployを経て、上記の実声測定へ進む。Draft PRの作成だけで#150を完了にしない。
+3. main統合後の自動検証を確認し、epic→mainの差分レビュー・修正とユーザーによるマージ、明示deployを経て、上記の実声測定へ進む。PR #269のマージやepicの最新化だけで#150を完了にしない。
 
 先行runの41.333msの音切れとTTFA p95 11,995.305msの未達は保持する。最新通常100件の合格を将来の安定性や共有Ollamaの専有保証には使わない。一方、元Issueにない専有証明や過去全runの原因解決を追加の受け入れ条件にはしない。
 

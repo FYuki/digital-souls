@@ -261,7 +261,9 @@ dogfood受入する。受入開始前にIssue #112と
 
 優先度は低いが、旧Phase 6〜8のタスクをここに集約する。
 
-1. ツール実行基盤 + 農業日誌
+1. 外部MCP接続・Registry・Execution Gate・conformance（#104、#153/#154/#156/#159）を先行。
+   #152の確定契約に基づく実装と検証入口は[外部MCP利用基盤](external-mcp-foundation.md)を参照。
+   続いて#182でTool Catalog・会話利用を実装し、自作Addonは#221→#58→#186の順で進める。
 2. `ClaudeClient` 実装・プロバイダ切替（現状は `NotImplementedError` スタブ）
 3. Discord Bot / Mac mini常時稼働 / Live2D
 

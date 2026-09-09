@@ -44,7 +44,9 @@ def _write_manifest(
                 "targetCommit": target,
                 "profileSchemaVersion": 1,
                 "dataSchemaVersion": data_schema_version,
-                "backupId": "backup-test-generation",
+                "backupId": str(
+                    path.parents[2] / "backups" / "backup-20260906T000000Z-0123456789ab-abcdef012345"
+                ),
                 "images": TEST_DEPLOYMENT_IMAGES,
                 "deployedAt": "2026-08-14T00:00:00Z",
             }
@@ -253,7 +255,9 @@ def test_should_record_a_new_current_manifest_for_rollback(tmp_path: Path) -> No
             "targetCommit": OLDER_REVISION,
             "profileSchemaVersion": 1,
             "dataSchemaVersion": 3,
-            "backupId": "backup-test-generation",
+            "backupId": str(
+                tmp_path / "backups" / "backup-20260906T000000Z-0123456789ab-abcdef012345"
+            ),
         },
     )
     calls = tuple(call_log.read_text(encoding="utf-8").splitlines())
@@ -445,3 +449,112 @@ def test_should_reject_an_unsafe_manifest_parent_before_rollback_side_effects(
 
     assert result.returncode != 0
     assert not call_log.exists()
+
+
+@pytest.mark.parametrize("legacy", (None, "artifacts", "single-database"))
+def test_should_rollback_without_retained_backup_and_preserve_source_manifest(
+    tmp_path: Path,
+    legacy: str | None,
+) -> None:
+    environment, _ = _rollback_environment(tmp_path)
+    deployments = tmp_path / "state" / "deployments"
+    saved = next(deployments.glob(f"*-{OLDER_REVISION[:12]}.json"))
+    payload = json.loads(saved.read_text())
+    backup_path = payload["backupId"]
+    assert not Path(backup_path).exists()
+    if legacy == "artifacts":
+        report = {
+            "status": "ok",
+            "artifacts": [
+                {
+                    "filename": "conversation-history.db",
+                    "schemaVersion": 3,
+                    "recordCount": 2,
+                },
+                {"filename": "persona-memory.db", "schemaVersion": 1, "recordCount": 0},
+            ],
+        }
+        payload["backupId"] = json.dumps(report) + "\n" + backup_path
+    elif legacy == "single-database":
+        payload["backupId"] = (
+            json.dumps(
+                {
+                    "status": "ok",
+                    "schemaVersion": 3,
+                    "conversationCount": 2,
+                }
+            )
+            + "\n"
+            + backup_path
+        )
+    saved.write_text(json.dumps(payload))
+    original = saved.read_bytes()
+
+    result = subprocess.run(
+        _rollback_command(tmp_path),
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert saved.read_bytes() == original
+    current = json.loads((deployments / "current.json").read_text())
+    assert current["backupId"] == backup_path
+    assert current["targetCommit"] == OLDER_REVISION
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        "relative-path",
+        "/outside/{name}",
+        "{root}/../{name}",
+        "{path}\n",
+        "{path}\r",
+        "{path}\u0000",
+        "{path}\n{path}",
+        "false\n{path}",
+        '{{"status":"ok"}}\n{path}',
+        '{{"status":"error","schemaVersion":3,"conversationCount":2}}\n{path}',
+        '{{"status":"ok","schemaVersion":true,"conversationCount":2}}\n{path}',
+        '{{"status":"ok","schemaVersion":3,"conversationCount":2,"extra":0}}\n{path}',
+        '{{"status":"error","status":"ok","schemaVersion":3,"conversationCount":2}}\n{path}',
+        '{{"status":"ok","artifacts":[]}}\n{path}',
+        '{{"status":"ok","artifacts":[{{"filename":"conversation-history.db","schemaVersion":3,"recordCount":2}}]}}\n{path}',
+        '{{"status":"ok","artifacts":[{{"filename":"conversation-history.db","schemaVersion":3,"recordCount":2}},{{"filename":"conversation-history.db","schemaVersion":3,"recordCount":2}}]}}\n{path}',
+        '{{"status":"ok","artifacts":[{{"filename":"conversation-history.db","schemaVersion":3,"recordCount":2}},{{"filename":"persona-memory.db","schemaVersion":1,"recordCount":true}}]}}\n{path}',
+        '{{"status":"ok","artifacts":[{{"filename":"unknown.db","schemaVersion":3,"recordCount":2}}]}}\n{path}',
+        '{{"status":"ok","schemaVersion":3,"conversationCount":2}}\n{path}\nextra',
+    ),
+)
+def test_should_reject_unknown_backup_id_before_rollback_mutation(
+    tmp_path: Path,
+    value: str,
+) -> None:
+    environment, call_log = _rollback_environment(tmp_path)
+    deployments = tmp_path / "state" / "deployments"
+    saved = next(deployments.glob(f"*-{OLDER_REVISION[:12]}.json"))
+    payload = json.loads(saved.read_text())
+    backup = Path(payload["backupId"])
+    payload["backupId"] = value.format(
+        path=backup, root=backup.parent, name=backup.name
+    )
+    saved.write_text(json.dumps(payload))
+    originals = {path: path.read_bytes() for path in deployments.glob("*.json")}
+    revision = tmp_path / "config" / "dogfood.revision"
+    original_revision = revision.read_bytes()
+
+    result = subprocess.run(
+        _rollback_command(tmp_path),
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode != 0
+    assert not call_log.exists()
+    assert revision.read_bytes() == original_revision
+    assert {path: path.read_bytes() for path in deployments.glob("*.json")} == originals

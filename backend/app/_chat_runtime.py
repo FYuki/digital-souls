@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import threading
@@ -51,6 +52,8 @@ from app.screen_perception.detector import (
 from app.screen_perception.provenance import ScreenLineage
 from app.privacy.contracts import PrivacyScanner
 from app.privacy.semantic.classifier import SemanticPrivacyClassifier
+from app.tool_use.service import ToolService
+from app.tool_use.prompt import routing_history, with_tool_material, require_tool_room
 
 RAG_ENABLED_ENV = "RAG_ENABLED"
 RAG_ENABLED_VALUE = "true"
@@ -67,8 +70,7 @@ class CharacterRuntimeDefinition:
 
 
 class CharacterDefinitionLoader(Protocol):
-    def __call__(self, character: str) -> CharacterRuntimeDefinition:
-        ...
+    def __call__(self, character: str) -> CharacterRuntimeDefinition: ...
 
 
 class ChatPromptBuilder(Protocol):
@@ -82,8 +84,7 @@ class ChatPromptBuilder(Protocol):
         history_session: HistorySession,
         config: ModelSettings,
         token_counter: TokenCounter,
-    ) -> BuiltPrompt:
-        ...
+    ) -> BuiltPrompt: ...
 
 
 class LlmResponseGenerator(Protocol):
@@ -92,13 +93,11 @@ class LlmResponseGenerator(Protocol):
         prompt: BuiltPrompt,
         *,
         max_output_tokens: int,
-    ) -> str:
-        ...
+    ) -> str: ...
 
 
 class InputTokenCounter(Protocol):
-    def __call__(self, messages: tuple[PromptMessage, ...]) -> int:
-        ...
+    def __call__(self, messages: tuple[PromptMessage, ...]) -> int: ...
 
 
 class MemoryFormationSubmitter(Protocol):
@@ -117,6 +116,8 @@ class ChatRuntimeDependencies:
     memory_embedder: Callable[[str], list[float]]
     memory_formation_submitter: MemoryFormationSubmitter
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
+    tools: ToolService | None = None
+    life_context: Callable[[str, BuiltPrompt], BuiltPrompt] | None = None
 
 
 @dataclass(frozen=True)
@@ -206,6 +207,126 @@ class ChatService:
         self._runtime_config = runtime_config
         self._conversation_history_service = conversation_history_service
         self._dependencies = dependencies
+        self.tools = dependencies.tools
+
+    async def generate_reply_async(
+        self,
+        character: str,
+        conversation_id: UUID,
+        message: str,
+        screen: ScreenTurnMaterial | None = None,
+        history_access: ScreenHistoryAccess | None = None,
+    ) -> chat_service.ChatReply:
+        assert self.tools is not None
+        with self.tools.response_scope(character, str(conversation_id)):
+            return await self._generate_tool_reply(
+                character, conversation_id, message, screen, history_access
+            )
+
+    async def _generate_tool_reply(
+        self,
+        character: str,
+        conversation_id: UUID,
+        message: str,
+        screen: ScreenTurnMaterial | None,
+        history_access: ScreenHistoryAccess | None,
+    ) -> chat_service.ChatReply:
+        """外部I/Oの停止をasync境界で扱い、既存の履歴・privacy契約へ返す。"""
+        assert self.tools is not None
+        context = await run_sync(
+            _resolve_chat_context, character, self._runtime_config, self._dependencies
+        )
+        history_session = self._conversation_history_service.open_session(
+            character, conversation_id
+        )
+        started = await run_sync(history_session.start_turn, message)
+        try:
+            _require_current_screen_material(screen)
+            prompt, output_limit = await run_sync(
+                self.prepare_unrecorded_generation,
+                character,
+                history_session,
+                message,
+                screen,
+                history_access,
+                False,  # Life Stateはツール結果の入力枠を確保してから追加する。
+            )
+
+            async def before_execute() -> None:
+                _require_current_screen_material(screen)
+                _require_current_history_access(history_access, prompt.screen_lineages)
+                await run_sync(
+                    require_tool_room,
+                    prompt,
+                    self._dependencies.input_token_counter,
+                    context.prompt_config.chat_context_tokens - output_limit,
+                )
+
+            material = await self.tools.run(
+                character,
+                str(conversation_id),
+                message,
+                history=routing_history(prompt),
+                before_execute=before_execute,
+            )
+            if material.direct_text is None:
+                prompt = await run_sync(
+                    with_tool_material,
+                    prompt,
+                    material,
+                    self._dependencies.input_token_counter,
+                    context.prompt_config.chat_context_tokens - output_limit,
+                )
+                prompt = await run_sync(
+                    self.with_life_context, character, prompt,
+                )
+                reply = await run_sync(
+                    _call_llm,
+                    prompt,
+                    output_limit,
+                    self._dependencies.llm_response_generator,
+                )
+            else:
+                reply = material.direct_text
+            _require_current_screen_material(screen)
+            _require_current_history_access(history_access, prompt.screen_lineages)
+            if prompt.screen_lineages:
+                await run_sync(
+                    history_session.mark_screen_derived, started, prompt.screen_lineages
+                )
+            persisted = await run_sync(history_session.complete_turn, started, reply)
+        except BaseException:
+            try:
+                self.tools.stop(character, str(conversation_id))
+            except Exception as cleanup_error:
+                logger.warning("Tool cleanup failed: %s", type(cleanup_error).__name__)
+            cleanup = asyncio.create_task(run_sync(history_session.fail_turn, started))
+            while True:
+                try:
+                    await asyncio.shield(cleanup)
+                    break
+                except asyncio.CancelledError:
+                    if cleanup.cancelled():
+                        logger.warning("Failed-turn cleanup cancelled")
+                        break
+                    # 切断等による追加cancelでも、履歴の後始末を置き去りにしない。
+                    continue
+                except Exception as cleanup_error:
+                    logger.warning(
+                        "Failed-turn cleanup failed: %s", type(cleanup_error).__name__
+                    )
+                    break
+            raise
+        if persisted.status is TurnStatus.COMPLETED and not prompt.screen_lineages:
+            self._dependencies.memory_formation_submitter.submit(
+                MemoryFormationJob(
+                    character_id=persisted.character_id,
+                    conversation_id=persisted.conversation_id,
+                    turn_id=persisted.turn_id,
+                )
+            )
+        _log_prompt_references(prompt)
+        return _persisted_chat_reply(persisted)
 
     def generate_chat_reply(
         self,
@@ -241,9 +362,7 @@ class ChatService:
             character, conversation_id
         )
         items: list[ScreenReferenceHistoryItem] = []
-        turns = tuple(
-            history_session.prompt_turns(max_completed_turns=4, page_size=8)
-        )
+        turns = tuple(history_session.prompt_turns(max_completed_turns=4, page_size=8))
         for turn in reversed(turns):
             if not turn.is_completed:
                 continue
@@ -368,6 +487,7 @@ class ChatService:
         message: str,
         screen: ScreenTurnMaterial | None = None,
         history_access: ScreenHistoryAccess | None = None,
+        include_life_context: bool = True,
     ) -> tuple[BuiltPrompt, int]:
         context = _resolve_chat_context(
             character,
@@ -382,8 +502,12 @@ class ChatService:
             self._dependencies,
             screen=screen,
             history_access=history_access,
+            include_life_context=include_life_context,
         )
         return prompt, context.prompt_config.assistant_max_generation_tokens
+
+    def with_life_context(self, character: str, prompt: BuiltPrompt) -> BuiltPrompt:
+        return _with_life_context(character, prompt, self._dependencies)
 
     def record_successful_prompt_references(self, prompt: BuiltPrompt) -> None:
         _log_prompt_references(prompt)
@@ -425,6 +549,19 @@ def resolve_chat_runtime_config(
         chroma_path=runtime_paths.chroma_path,
         occurred_timezone=occurred_timezone,
     )
+
+
+async def generate_reply_with_tools(
+    operation: Callable[..., chat_service.ChatReply],
+    *args: object,
+    **kwargs: object,
+) -> chat_service.ChatReply:
+    """旧同期APIを維持しつつ、正式なHTTP入口で非同期Tool経路を使う。"""
+    owner = getattr(operation, "__self__", None)
+    if isinstance(owner, ChatService) and owner.tools is not None:
+        # 各公開生成APIの引数はcharacter/conversation/messageと任意の画面context。
+        return await owner.generate_reply_async(*args, **kwargs)  # type: ignore[arg-type]
+    return await run_sync(operation, *args, **kwargs)
 
 
 def create_chat_service(
@@ -642,6 +779,7 @@ def _build_unrecorded_prompt(
     *,
     screen: ScreenTurnMaterial | None = None,
     history_access: ScreenHistoryAccess | None = None,
+    include_life_context: bool = True,
 ) -> BuiltPrompt:
     try:
         prompt = dependencies.prompt_builder(
@@ -669,11 +807,32 @@ def _build_unrecorded_prompt(
             raise chat_service.ChatTimeoutError() from None
         raise chat_service.ChatBackendError() from None
     if screen is None:
-        return replace(
+        prompt = replace(
             prompt,
             screen_lineages=_follow_up_lineages(prompt.screen_lineages),
         )
-    return _with_screen_turn_material(prompt, screen, context, dependencies)
+    else:
+        prompt = _with_screen_turn_material(prompt, screen, context, dependencies)
+    if include_life_context:
+        return _with_life_context(character, prompt, dependencies)
+    return prompt
+
+
+def _with_life_context(
+    character: str,
+    prompt: BuiltPrompt,
+    dependencies: ChatRuntimeDependencies,
+) -> BuiltPrompt:
+    # 現在の画面情報・外部結果を先に確保し、任意のLife Stateは残りの入力枠に収める。
+    if dependencies.life_context is not None:
+        try:
+            prompt = dependencies.life_context(character, prompt)
+        except Exception as error:
+            logger.warning(
+                "Character Life context skipped: exception_type=%s",
+                type(error).__name__,
+            )
+    return prompt
 
 
 def _with_screen_turn_material(
@@ -689,8 +848,7 @@ def _with_screen_turn_material(
             "会話内と共有画面のどちらを指すか判断できませんでした。画面を見たとは言わず、"
             "候補を短く示してキャラクター自身の言葉で確認してください。"
             if screen.unavailable_reason == "clarify_reference"
-            else
-            "このターンでは利用者が現在の画面の確認を求めましたが、画面情報を取得できませんでした。"
+            else "このターンでは利用者が現在の画面の確認を求めましたが、画面情報を取得できませんでした。"
             "画面の内容を推測せず、確認できなかった旨をキャラクター自身の言葉で伝えてください。"
             "質問本文だけで安全に答えられる範囲があれば、それに続けてください。"
         )
@@ -753,10 +911,7 @@ def _with_screen_turn_material(
                 lineage.screen_lineage_id: lineage.as_follow_up()
                 for lineage in prompt.screen_lineages
             },
-            **{
-                lineage.screen_lineage_id: lineage
-                for lineage in screen.lineages
-            },
+            **{lineage.screen_lineage_id: lineage for lineage in screen.lineages},
         }.values()
     )
     return replace(
@@ -865,11 +1020,12 @@ class _ScreenFilteredPromptHistory:
                 yield turn
 
 
-def _follow_up_lineages(lineages: tuple[ScreenLineage, ...]) -> tuple[ScreenLineage, ...]:
+def _follow_up_lineages(
+    lineages: tuple[ScreenLineage, ...],
+) -> tuple[ScreenLineage, ...]:
     return tuple(
         {
-            lineage.screen_lineage_id: lineage.as_follow_up()
-            for lineage in lineages
+            lineage.screen_lineage_id: lineage.as_follow_up() for lineage in lineages
         }.values()
     )
 

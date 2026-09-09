@@ -42,7 +42,17 @@ def test_backend_module_tests_do_not_connect_to_external_services() -> None:
                 and isinstance(node.func.value, ast.Name)
                 and (node.func.value.id, node.func.attr) in network_calls
             ):
-                violations.append(f"{path.name}:{node.lineno}")
+                # #159のtest-owned MCPはlocalhostの動的portだけに接続する。
+                # 外部サービスの固定portやHTTP呼出しまで例外にしない。
+                test_owned_mcp_probe = (
+                    path.name == "test_external_mcp_conformance.py"
+                    and (node.func.value.id, node.func.attr) == ("socket", "create_connection")
+                    and len(node.args) == 1
+                    and ast.dump(node.args[0])
+                    == ast.dump(ast.parse("('127.0.0.1', port)", mode="eval").body)
+                )
+                if not test_owned_mcp_probe:
+                    violations.append(f"{path.name}:{node.lineno}")
             if (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
