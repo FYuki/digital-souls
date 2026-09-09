@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "scope": "pcm_pilot_cleanup",
+  "runs": [
+    {
+      "cohort": "normal",
+      "teardown_status": "completed",
+      "owned_services": [
+        {
+          "service": "frontend",
+          "container_absent": true
+        },
+        {
+          "service": "backend",
+          "container_absent": true
+        }
+      ]
+    },
+    {
+      "cohort": "pause",
+      "teardown_status": "completed",
+      "owned_services": [
+        {
+          "service": "frontend",
+          "container_absent": true
+        },
+        {
+          "service": "backend",
+          "container_absent": true
+        }
+      ]
+    },
+    {
+      "cohort": "backchannel",
+      "teardown_status": "completed",
+      "owned_services": [
+        {
+          "service": "frontend",
+          "container_absent": true
+        },
+        {
+          "service": "backend",
+          "container_absent": true
+        }
+      ]
+    },
+    {
+      "cohort": "take-turn",
+      "teardown_status": "completed",
+      "owned_services": [
+        {
+          "service": "frontend",
+          "container_absent": true
+        },
+        {
+          "service": "backend",
+          "container_absent": true
+        }
+      ]
+    }
+  ],
+  "observer_port_closed": true
+}

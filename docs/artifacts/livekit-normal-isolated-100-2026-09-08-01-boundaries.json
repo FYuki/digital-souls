@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0",
+  "measurement_kind": "controlled_baseline",
+  "measurement_revision": "f44f57761108c3582d7a1e48b3d8b4b1ed2bbdcc",
+  "scope": "normal_native_vad_detector_offsets_only",
+  "method": "client_detector_timestamps_vs_fixture_causal_bounds_v1",
+  "warmup_trials": 5,
+  "expected_trials": 100,
+  "measured_trials": 100,
+  "missing_trials": 0,
+  "missing_reasons": {},
+  "onset_offset_lower": {
+    "count": 100,
+    "minimum_ms": -75.39999997615814,
+    "p50_ms": 8.349999994039536,
+    "p95_ms": 14.045000001788138,
+    "maximum_ms": 21.400000035762787
+  },
+  "onset_offset_upper": {
+    "count": 100,
+    "minimum_ms": -71.69999998807907,
+    "p50_ms": 11.800000011920929,
+    "p95_ms": 17.63000002503395,
+    "maximum_ms": 24.80000001192093
+  },
+  "end_offset_lower": {
+    "count": 100,
+    "minimum_ms": 712.5999999642372,
+    "p50_ms": 743.3499999940395,
+    "p95_ms": 749.6350000232458,
+    "maximum_ms": 788.4000000357628
+  },
+  "end_offset_upper": {
+    "count": 100,
+    "minimum_ms": 715.0999999642372,
+    "p50_ms": 746.8499999940395,
+    "p95_ms": 752.3300000101328,
+    "maximum_ms": 791.0
+  },
+  "maximum_fixture_uncertainty_ms": 6.199999988079071,
+  "native_timestamp_quantization_ms": 1,
+  "leading_error_trials": 0,
+  "early_end_error_trials": 0,
+  "threshold_uncertain_trials": 0,
+  "rate_denominator": 100,
+  "boundary_targets_passed": true,
+  "independent_100_trials_verified": true,
+  "pcm_capture_boundaries_verified": false,
+  "false_split_rate_verified": false,
+  "full_issue_acceptance_verified": false,
+  "source_sha256": {
+    "trial_manifest": "64e54d120649a8490200ee40cd359529f8efc2cc02ac83ea19228fc6ab1fdec7",
+    "native_trace": "eaf3f7de08db5aa982bea9c81dacf742259e0cca8347424443b80beaff608681"
+  }
+}

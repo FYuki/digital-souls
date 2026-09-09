@@ -1,0 +1,84 @@
+{
+  "scope": "offline_model_frame_onset_alignment_candidate",
+  "production_changed": false,
+  "alignment": {
+    "activity_window_ms": 4,
+    "pre_onset_ms": 32,
+    "maximum_quiet_rms": 0.001,
+    "reset_quiet_ms": 700
+  },
+  "script_sha256": "fbf0fd5ee156ced9226b5892c8db562bf8eefb00d8f70322e16b5e2f0307d934",
+  "detector_sha256": "b8e1e76c9caf31f4e64658efb5a3438ac258e7f59b10475d95aa58dd5e3430b7",
+  "model_sha256": "a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28",
+  "manifest_sha256": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3",
+  "initial_fixture_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+  "summary": {
+    "baseline_backchannel": {
+      "denominator": 100,
+      "missed": 14,
+      "leading_loss": 14,
+      "early_end": 0,
+      "split": 0,
+      "false_start": 0
+    },
+    "baseline_take_turn": {
+      "denominator": 100,
+      "missed": 0,
+      "leading_loss": 0,
+      "early_end": 0,
+      "split": 0,
+      "false_start": 0
+    },
+    "baseline_pause": {
+      "denominator": 100,
+      "missed": 0,
+      "leading_loss": 0,
+      "early_end": 0,
+      "split": 0,
+      "false_start": 0
+    },
+    "baseline_non_speech": {
+      "denominator": 120,
+      "missed": 0,
+      "leading_loss": 0,
+      "early_end": 0,
+      "split": 0,
+      "false_start": 9
+    },
+    "aligned_backchannel": {
+      "denominator": 100,
+      "missed": 30,
+      "leading_loss": 30,
+      "early_end": 0,
+      "split": 0,
+      "false_start": 0
+    },
+    "aligned_take_turn": {
+      "denominator": 100,
+      "missed": 10,
+      "leading_loss": 12,
+      "early_end": 0,
+      "split": 0,
+      "false_start": 0
+    },
+    "aligned_pause": {
+      "denominator": 100,
+      "missed": 0,
+      "leading_loss": 0,
+      "early_end": 0,
+      "split": 0,
+      "false_start": 0
+    },
+    "aligned_non_speech": {
+      "denominator": 120,
+      "missed": 0,
+      "leading_loss": 0,
+      "early_end": 0,
+      "split": 0,
+      "false_start": 2
+    }
+  },
+  "raw_report_sha256": "da8766613a9cf907e8305a38a64b4439a80006be8afe4c77f3a8fedf5d194133",
+  "recorded_conditions": 840,
+  "decision": "rejected_due_to_speech_regression"
+}

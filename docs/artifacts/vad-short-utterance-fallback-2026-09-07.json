@@ -1,0 +1,393 @@
+{
+  "scope": "offline_short_utterance_fallback_candidate_evaluation",
+  "product_adopted": false,
+  "next_step": "候補を製品へ組み込み、実接続で再検証する",
+  "library": {
+    "repository": "https://github.com/OzymandiasTheGreat/libfvad-wasm",
+    "commit": "2692578b7f2af573e3a6efb84e4356b41250d414",
+    "embedded_source_sha256": "7dd307528d53cf2fb81495099f4d3de94e6a7c9de582617976cfcefe0428ca76",
+    "wasm_sha256": "3fadafc9c5c1c3117d0178ae631484c6dabc72e0f8742b95c370cd39f46cf171",
+    "wasm_bytes": 15331,
+    "license_sha256": "78b16d4e803975e0c5d826339c607d0676192a40e2c510c10b2cb4ab4cde416a"
+  },
+  "standalone_modes": {
+    "0": {
+      "speech": {
+        "raw_sha256": "d2b424bc58d69ac23595728bce6e355c1d9aea0a30d3ff6b41af19147010d155",
+        "summary": {
+          "backchannel": {
+            "denominator": 100,
+            "missed": 0,
+            "leading_loss": 0,
+            "early_end": 0,
+            "split": 0,
+            "finalize_delay_valid": 100,
+            "finalize_delay_p95_ms": 618.6666666666665
+          },
+          "take_turn": {
+            "denominator": 100,
+            "missed": 0,
+            "leading_loss": 0,
+            "early_end": 0,
+            "split": 0,
+            "finalize_delay_valid": 100,
+            "finalize_delay_p95_ms": 618.6666666666665
+          },
+          "pause": {
+            "denominator": 100,
+            "missed": 0,
+            "leading_loss": 0,
+            "early_end": 0,
+            "split": 0,
+            "finalize_delay_valid": 100,
+            "finalize_delay_p95_ms": 618.6666666666665
+          }
+        }
+      },
+      "non_speech": {
+        "raw_sha256": "0c791d7078f6ba3d67515cfde9f31ae1706260d1bb451034e45c52dffeb768fa",
+        "summary": {
+          "denominator": 120,
+          "candidate_false_starts": 41,
+          "baseline_false_starts": 47
+        }
+      }
+    },
+    "1": {
+      "speech": {
+        "raw_sha256": "9ef215e0abb1930e837552609dbec83084384e4eba273f14465f0a60e7490633",
+        "summary": {
+          "backchannel": {
+            "denominator": 100,
+            "missed": 3,
+            "leading_loss": 3,
+            "early_end": 0,
+            "split": 0,
+            "finalize_delay_valid": 97,
+            "finalize_delay_p95_ms": 618.6666666666665
+          },
+          "take_turn": {
+            "denominator": 100,
+            "missed": 0,
+            "leading_loss": 0,
+            "early_end": 0,
+            "split": 0,
+            "finalize_delay_valid": 100,
+            "finalize_delay_p95_ms": 618.6666666666665
+          },
+          "pause": {
+            "denominator": 100,
+            "missed": 0,
+            "leading_loss": 0,
+            "early_end": 0,
+            "split": 0,
+            "finalize_delay_valid": 100,
+            "finalize_delay_p95_ms": 618.6666666666665
+          }
+        }
+      },
+      "non_speech": {
+        "raw_sha256": "c1ea5c40f2ee010d991f383f874b648d1b1a2c972693963bfea1a9e031e9af86",
+        "summary": {
+          "denominator": 120,
+          "candidate_false_starts": 31,
+          "baseline_false_starts": 35
+        }
+      }
+    },
+    "2": {
+      "speech": {
+        "raw_sha256": "d6c400f872bd462d4ca7c539263659ace58cacc464ce79d71bce57e3856c166c",
+        "summary": {
+          "backchannel": {
+            "denominator": 100,
+            "missed": 5,
+            "leading_loss": 5,
+            "early_end": 0,
+            "split": 0,
+            "finalize_delay_valid": 95,
+            "finalize_delay_p95_ms": 618.6666666666665
+          },
+          "take_turn": {
+            "denominator": 100,
+            "missed": 0,
+            "leading_loss": 0,
+            "early_end": 2,
+            "split": 2,
+            "finalize_delay_valid": 98,
+            "finalize_delay_p95_ms": 618.6666666666665
+          },
+          "pause": {
+            "denominator": 100,
+            "missed": 0,
+            "leading_loss": 0,
+            "early_end": 0,
+            "split": 0,
+            "finalize_delay_valid": 100,
+            "finalize_delay_p95_ms": 618.6666666666665
+          }
+        }
+      },
+      "non_speech": {
+        "raw_sha256": "d3f27357a5afa1c3d65a40009288c731a31cf4bf9ee8a6b690a1696dacd5d5af",
+        "summary": {
+          "denominator": 120,
+          "candidate_false_starts": 21,
+          "baseline_false_starts": 26
+        }
+      }
+    },
+    "3": {
+      "speech": {
+        "raw_sha256": "cba78042567a8da623d76e5f168b706442d0f3037521ecb1db55d6f97f614e4a",
+        "summary": {
+          "backchannel": {
+            "denominator": 100,
+            "missed": 5,
+            "leading_loss": 5,
+            "early_end": 0,
+            "split": 0,
+            "finalize_delay_valid": 95,
+            "finalize_delay_p95_ms": 618.6666666666665
+          },
+          "take_turn": {
+            "denominator": 100,
+            "missed": 0,
+            "leading_loss": 0,
+            "early_end": 4,
+            "split": 4,
+            "finalize_delay_valid": 96,
+            "finalize_delay_p95_ms": 618.6666666666665
+          },
+          "pause": {
+            "denominator": 100,
+            "missed": 0,
+            "leading_loss": 0,
+            "early_end": 0,
+            "split": 0,
+            "finalize_delay_valid": 100,
+            "finalize_delay_p95_ms": 618.6666666666665
+          }
+        }
+      },
+      "non_speech": {
+        "raw_sha256": "ee37bb086218a910c5065d28ea06eb6dfbecf4fdcca75c34062896097c518be7",
+        "summary": {
+          "denominator": 120,
+          "candidate_false_starts": 9,
+          "baseline_false_starts": 17
+        }
+      }
+    }
+  },
+  "simple_fusion_rejected": {
+    "speech": {
+      "raw_sha256": "75722b6ecfbea2d7e08c0c908803dad3cb4ad38bbafdba70c873ea85b3749f91",
+      "summary": {
+        "backchannel": {
+          "denominator": 100,
+          "missed": 5,
+          "leading_loss": 5,
+          "early_end": 0,
+          "split": 0,
+          "finalize_delay_valid": 95,
+          "finalize_delay_p95_ms": 757.6666666666665
+        },
+        "take_turn": {
+          "denominator": 100,
+          "missed": 0,
+          "leading_loss": 0,
+          "early_end": 0,
+          "split": 0,
+          "finalize_delay_valid": 100,
+          "finalize_delay_p95_ms": 757.7166666666665
+        },
+        "pause": {
+          "denominator": 100,
+          "missed": 0,
+          "leading_loss": 0,
+          "early_end": 0,
+          "split": 0,
+          "finalize_delay_valid": 100,
+          "finalize_delay_p95_ms": 757.7166666666665
+        }
+      }
+    },
+    "non_speech": {
+      "raw_sha256": "a092525d421a2410dcd1cb7133388ca6299112a0cb157d2d25ff7e18018ee14d",
+      "summary": {
+        "denominator": 120,
+        "candidate_false_starts": 36,
+        "baseline_false_starts": 40
+      }
+    }
+  },
+  "candidate_options": {
+    "secondary_vad_mode": 0,
+    "secondary_frame_ms": 10,
+    "maximum_active_span_ms": 700,
+    "minimum_voiced_evidence_ms": 160,
+    "minimum_voiced_fraction": 0.6,
+    "maximum_two_band_concentration": 0.9,
+    "maximum_spectral_flatness": 0.3,
+    "fft_samples": 1024,
+    "spectral_peak_band_bins": 5,
+    "spectral_peak_bands": 2,
+    "original_pcm_and_neural_probability_preserved": true
+  },
+  "candidate": {
+    "speech": {
+      "raw_sha256": "c8a37d1cf1e792413932aecbdd18eb1af9f9f96107cc5f10e3cb2cf203f59ca8",
+      "summary": {
+        "backchannel": {
+          "denominator": 100,
+          "missed": 0,
+          "leading_loss": 0,
+          "early_end": 0,
+          "split": 0,
+          "finalize_delay_valid": 100,
+          "finalize_delay_p95_ms": 757.7166666666665
+        },
+        "take_turn": {
+          "denominator": 100,
+          "missed": 0,
+          "leading_loss": 0,
+          "early_end": 0,
+          "split": 0,
+          "finalize_delay_valid": 100,
+          "finalize_delay_p95_ms": 757.7166666666665
+        },
+        "pause": {
+          "denominator": 100,
+          "missed": 0,
+          "leading_loss": 0,
+          "early_end": 0,
+          "split": 0,
+          "finalize_delay_valid": 100,
+          "finalize_delay_p95_ms": 757.7166666666665
+        }
+      }
+    },
+    "non_speech": {
+      "raw_sha256": "a16203931760d14a389fd9de51325a9965d8e8c0b6213d9a2a4f01160da78ca7",
+      "summary": {
+        "denominator": 120,
+        "candidate_false_starts": 9,
+        "baseline_false_starts": 16
+      }
+    },
+    "supplemental_non_speech": {
+      "raw_sha256": "1e07236ecbd3381bcfecdcb1064310acd9ef523d18e981b246aecd8a4c98c5d3",
+      "summary": {
+        "denominator": 216,
+        "baseline_false_starts": 70,
+        "candidate_false_starts": 70,
+        "new_false_starts": 0
+      }
+    }
+  },
+  "rejected_supplemental_results": {
+    "single_band_gate": {
+      "raw_sha256": "35cca3b9345dfe21b0d09f081ed58565448116e5125a0b6443afc4e43b8d0822",
+      "summary": {
+        "denominator": 216,
+        "baseline_false_starts": 70,
+        "candidate_false_starts": 88,
+        "new_false_starts": 18
+      }
+    },
+    "two_band_gate_098": {
+      "raw_sha256": "f11a3d0cef11053ff35f9ff5b696e7da129cb5ec1de605dbd27fd60589d886ed",
+      "summary": {
+        "denominator": 216,
+        "baseline_false_starts": 70,
+        "candidate_false_starts": 76,
+        "new_false_starts": 6
+      }
+    }
+  },
+  "phase_sweep": {
+    "candidate": {
+      "raw_sha256": "36aad7efe1c03db0f5eba4850fff6f6b35b7e4cc7e0ca8adf601460bf920b95b",
+      "summary": {
+        "backchannel": {
+          "denominator": 600,
+          "missed": 0,
+          "leading_loss": 0,
+          "early_end": 0,
+          "split": 0,
+          "finalize_delay_valid": 600,
+          "finalize_delay_p95_ms": 759.6666666666665
+        },
+        "take_turn": {
+          "denominator": 600,
+          "missed": 2,
+          "leading_loss": 6,
+          "early_end": 0,
+          "split": 0,
+          "finalize_delay_valid": 598,
+          "finalize_delay_p95_ms": 759.6666666666665
+        },
+        "pause": {
+          "denominator": 600,
+          "missed": 0,
+          "leading_loss": 0,
+          "early_end": 0,
+          "split": 0,
+          "finalize_delay_valid": 600,
+          "finalize_delay_p95_ms": 757.6666666666665
+        }
+      },
+      "initial_utterance_confirmed_once": 1800,
+      "initial_utterance_denominator": 1800
+    },
+    "baseline": {
+      "raw_sha256": "f8d6c579c0408cd4067364f144dcb54afc06fd05a707e29dfaa5283db705b432",
+      "summary": {
+        "backchannel": {
+          "denominator": 600,
+          "missed": 85,
+          "leading_loss": 85,
+          "early_end": 0,
+          "split": 0,
+          "finalize_delay_valid": 515,
+          "finalize_delay_p95_ms": 759.6666666666665
+        },
+        "take_turn": {
+          "denominator": 600,
+          "missed": 2,
+          "leading_loss": 6,
+          "early_end": 0,
+          "split": 0,
+          "finalize_delay_valid": 598,
+          "finalize_delay_p95_ms": 759.6666666666665
+        },
+        "pause": {
+          "denominator": 600,
+          "missed": 0,
+          "leading_loss": 0,
+          "early_end": 0,
+          "split": 0,
+          "finalize_delay_valid": 600,
+          "finalize_delay_p95_ms": 757.6666666666665
+        }
+      },
+      "initial_utterance_confirmed_once": 1800,
+      "initial_utterance_denominator": 1800
+    }
+  },
+  "sources": {
+    "model.mjs": "45751fe19d1033d6cf718465696ca041912433d3e7f6de6d52a93249c48db6ff",
+    "tone.mjs": "82df7cd0cb2ab6474b74e210840c1d7159098b9bd8f413cb64d77a70622a5b71",
+    "detector-09.ts": "4ba6e19c8cddb1b418de6c92b49c6e7fdf89cdb5c175889ed0554335cdb258a8",
+    "runtime.mjs": "4cbc990fb5e767bba776865274b6b638099414409eac6665761d8523f15d4728",
+    "background.mjs": "0553124abe85fd692345412d2c5d2d00de617bfa099a982bee18b9a47c0bb9a9",
+    "short-noise-09.mjs": "039a0eb4fd0de15c8aa2d770e8670fe28a38343b12e33b73503f55df21b5db7d",
+    "runtime-phase-sweep.mjs": "4dbcbfb5a58ea65236a9f9a16798b518a4b9f092458d635a0083e3c62399c19d"
+  },
+  "limitations": [
+    "Browserの実入力・Coreのpre-rollと同時の開始終了通知は未検証",
+    "VADの全条件達成や相槌分類成功を示すartifactではない",
+    "take-turnの位相依存の未検出と冒頭欠落は比較元と同数で残る"
+  ]
+}

@@ -276,6 +276,9 @@ async def _stream_core_reply(
     tools: ToolService | None = None,
     conversation_id: str | None = None,
 ) -> AsyncIterator[str]:
+    from app.inference.diagnostics import diagnostic
+
+    diagnostic("prompt_preparation_started")
     prepare_arguments: tuple[object, ...] = (character, history_session, transcript)
     if tools is not None and conversation_id is not None:
         prepare_arguments = (*prepare_arguments, screen, history_access, False)
@@ -333,6 +336,12 @@ async def _stream_core_reply(
             model_settings.chat_context_tokens - max_output_tokens,
         )
         prompt = await run_sync(chat_service.with_life_context, character, prompt)
+    # ツール結果と生活状態を反映した、生成へ渡す最終promptを計測する。
+    diagnostic("prompt_preparation_completed")
+    diagnostic("prompt_message_count", len(prompt.messages))
+    diagnostic("prompt_input_tokens", prompt.usage.total)
+    for part in ("character", "character_lore", "history", "rag", "current_user", "post_history"):
+        diagnostic(f"prompt_{part}_tokens", getattr(prompt.usage, part))
     if history_access is not None and not all(
         history_access.allows(lineage) for lineage in prompt.screen_lineages
     ):
@@ -341,6 +350,7 @@ async def _stream_core_reply(
         prompt,
         max_output_tokens=max_output_tokens,
         settings=model_settings,
+        latency_sensitive=True,
     ):
         if screen is not None and not screen.is_current:
             raise ScreenPerceptionError("request_cancelled", stage="chat")
@@ -417,7 +427,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         raw_trace_root.mkdir(parents=True, exist_ok=True)
         cleanup_expired_raw_traces(raw_trace_root, now=datetime.now(UTC))
-        voice_trace_recorder = JsonlTraceRecorder(raw_trace_root / f"{uuid4()}.jsonl")
+        cleanup_expired_raw_traces(raw_trace_root / "sessions", now=datetime.now(UTC))
+        voice_trace_recorder = JsonlTraceRecorder(
+            raw_trace_root / f"{uuid4()}.jsonl"
+        )
         voice_measurement_kind = "dogfood"
     from app.restore_intent import require_no_restore_intent
 

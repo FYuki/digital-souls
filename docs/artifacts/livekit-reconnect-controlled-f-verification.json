@@ -1,0 +1,33 @@
+{
+  "completed": 100,
+  "reported_success": 96,
+  "session_end_confirmed": 100,
+  "fault_processes_closed": 100,
+  "owned_containers_deleted": 200,
+  "native_sdk_verified": 100,
+  "browser_clock_jump_trials": 0,
+  "sdk_gave_up_trials": 0,
+  "distinct_running_image_digests": {
+    "frontend": 99,
+    "backend": 99
+  },
+  "image_digest_identical_across_observed_trials": false,
+  "cross_trial_image_filesystem_comparison_available": false,
+  "running_image_digest_verified_trials": 99,
+  "image_reference_verified_from_daemon_event_trials": 1,
+  "running_image_digest_unavailable_trials": 1,
+  "dedicated_fault_service_and_network_absent": true,
+  "measurement_revision": "0be61dd1933a3088456c346e9b92ab7ff29b41b4",
+  "diagnostic_readers_closed": 100,
+  "independent_sessions": 100,
+  "independent_conversations": 100,
+  "schema_verified": true,
+  "recomputation_matches": true,
+  "native_sdk_library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+  "cohort_evaluation": {
+    "coverage_complete": true,
+    "rate_passed": true,
+    "latency_passed": true,
+    "passed": true
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "run_id": "pcm-multi-seed-v4-pause-pilot-20260908-01",
+  "measurement_revision": "f9420014caa4a3c5d84cefa3c7a6677bee306a66",
+  "scope": "real_pcm_edge_pilot_only",
+  "expected": 3,
+  "edges_matched": 3,
+  "final_inputs_correlated": 3,
+  "full_issue_acceptance_verified": false,
+  "experimental_thinking_override": false,
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "observer_port_closed": true,
+  "teardown_completed": true,
+  "report_sha256": "6ee69ed93daae0236f5ed48b44f110df4e2f35d8934a7c4f79f0c473d31ad41d",
+  "source_sha256": {
+    "trial-manifest.json": "142621c5d0374cb0abe946acc2e37b79079721663aa9598f510af6120a472d45",
+    "whisper-input-pcm.jsonl": "5bd4d0e1535bdf59167af7e3e85672a93426088db94a7a4a16b2b25a889580af",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "c53f1a717841f631907eeef3488a6ad6e562d82506eea35fae9575cf28ebc80f",
+    "runtime-data/runtime/standalone/environment-run.json": "45eb1e35cbf43e7902254bc5209fd72935c07345d7bac01e3e0bbb8bc4f518c0",
+    "inference-runtime.jsonl": "94a6e035a67c5343df3d54e14a0659915c0862e0465fed8a9525d80496ae1c2e"
+  }
+}

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import wave
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from io import BytesIO
 import struct
 import threading
 from typing import Protocol, cast
+from uuid import UUID
 
 from app.async_worker import SyncWorkerCapacityError, run_sync
 
@@ -76,20 +78,71 @@ class WhisperSttAdapter:
             raise ValueError("max_inflight must be positive")
         self._transcriber = transcriber
         self._capacity = threading.BoundedSemaphore(max_inflight)
+        self._condition = threading.Condition()
+        self._preparing = False
+        self._active_transcriptions = 0
+        self._pending_transcriptions = 0
 
     async def transcribe(self, audio: bytes) -> str:
+        cancelled = threading.Event()
+        with self._condition:
+            self._pending_transcriptions += 1
         try:
-            return await run_sync(self._transcribe_reserved, audio)
+            return await run_sync(self._transcribe_reserved, audio, cancelled)
+        except asyncio.CancelledError:
+            # 同期workerが準備完了を待っている間に破棄された音声は送信しない。
+            cancelled.set()
+            with self._condition:
+                self._condition.notify_all()
+            raise
         except SyncWorkerCapacityError as error:
             raise SttCapacityError("STT worker capacity exceeded") from error
+        finally:
+            with self._condition:
+                self._pending_transcriptions -= 1
 
-    def _transcribe_reserved(self, audio: bytes) -> str:
-        if not self._capacity.acquire(blocking=False):
-            raise SttCapacityError("STT capacity exceeded")
+    def _transcribe_reserved(self, audio: bytes, cancelled: threading.Event) -> str:
+        with self._condition:
+            self._condition.wait_for(lambda: not self._preparing or cancelled.is_set())
+            if cancelled.is_set():
+                raise asyncio.CancelledError()
+            if not self._capacity.acquire(blocking=False):
+                raise SttCapacityError("STT capacity exceeded")
+            self._active_transcriptions += 1
         try:
             return self._transcriber.transcribe(audio)
         finally:
-            self._capacity.release()
+            with self._condition:
+                self._active_transcriptions -= 1
+                self._capacity.release()
+
+    async def prepare(self) -> bool:
+        """認識要求がないときだけ準備し、失敗しても本来のSTTへ伝播させない。"""
+        cancelled = threading.Event()
+        try:
+            return await run_sync(self._prepare_reserved, cancelled)
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        except Exception:
+            return False
+
+    def _prepare_reserved(self, cancelled: threading.Event) -> bool:
+        prepare = getattr(self._transcriber, "prepare", None)
+        if not callable(prepare):
+            return False
+        with self._condition:
+            if (cancelled.is_set() or self._preparing or self._active_transcriptions
+                    or self._pending_transcriptions):
+                return False
+            self._preparing = True
+        try:
+            return bool(prepare())
+        finally:
+            # await側がキャンセルされても、実HTTP要求が終わるまでは枠を保持する。
+            with self._condition:
+                self._preparing = False
+                self._condition.notify_all()
 
 
 class VoicevoxTtsAdapter:
@@ -162,6 +215,11 @@ def _decode_mono_pcm16(
     pcm: bytes, *, sample_width: int, channels: int
 ) -> list[int]:
     frame_width = sample_width * channels
+    if sample_width == 2 and channels == 1:
+        # VOICEVOXの標準PCM16 monoは、sampleごとのbytes生成・int変換を避ける。
+        if len(pcm) % 2:
+            raise ValueError("VOICEVOX PCM contains an incomplete frame")
+        return list(struct.unpack(f"<{len(pcm) // 2}h", pcm))
     samples: list[int] = []
     for frame_offset in range(0, len(pcm), frame_width):
         channels_in_frame: list[int] = []
@@ -186,6 +244,13 @@ def _resample_pcm16(
 ) -> list[int]:
     if len(samples) < 2:
         return list(samples)
+    if output_sample_rate == input_sample_rate * 2 and all(-32768 <= sample <= 32767 for sample in samples):
+        # 24kHz→48kHzの線形補間は、元sampleと隣接sampleの中点を交互に置く。
+        # 既存と同じ偶数丸め・末尾sample数を維持し、整数除算とclampの反復を省く。
+        doubled = [0] * (len(samples) * 2 - 1)
+        doubled[::2] = samples
+        doubled[1::2] = [round((left + right) / 2) for left, right in zip(samples, samples[1:])]
+        return doubled
     output_count = ((len(samples) - 1) * output_sample_rate) // input_sample_rate + 1
     output: list[int] = []
     for output_index in range(output_count):
@@ -305,7 +370,13 @@ class ConversationHistoryPersistenceAdapter:
         content_skipped = getattr(started_turn, "content_skipped", None)
         if not isinstance(content_skipped, bool):
             raise TypeError("started history turn must expose content_skipped")
-        return ResponseStartResult(content_skipped=content_skipped)
+        turn_id = getattr(started_turn, "turn_id", None)
+        if turn_id is not None and not isinstance(turn_id, UUID):
+            raise TypeError("started history turn id must be a UUID")
+        return ResponseStartResult(
+            content_skipped=content_skipped,
+            history_turn_id=str(turn_id) if turn_id is not None else None,
+        )
 
     async def persist(self, outcome: TerminalOutcome) -> None:
         if outcome.response_id in self._persisted_response_ids:

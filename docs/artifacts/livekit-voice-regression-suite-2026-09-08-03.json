@@ -1,0 +1,49 @@
+{
+  "scope": "normal_voice_regression_suite_only",
+  "measurement_revision": "41bb2a2baf0e19d1623accb809fe189b08fb1d19",
+  "passed": true,
+  "expected_tests": 5,
+  "browser_tests_passed": 5,
+  "three_turn_full_playback_verified": true,
+  "barge_in_latency": {
+    "source": "automated_test",
+    "localStopMs": 1016,
+    "cancelTotalMs": 1052,
+    "fixture_sha256": "f30a370fef9c05ea158fc58aade405bccad6a82d894c86a45d615b15e1dec2ce",
+    "fixture_clock_bounds": {
+      "sourceStart": {
+        "lowerMs": 4352.100000023842,
+        "upperMs": 4353.800000011921,
+        "sourceSample": 0
+      },
+      "speechStart": {
+        "lowerMs": 4492.199999988079,
+        "upperMs": 4494.400000035763,
+        "sourceSample": 7200
+      },
+      "speechEnd": {
+        "lowerMs": 5332.100000023842,
+        "upperMs": 5335.800000011921,
+        "sourceSample": 47520
+      }
+    },
+    "localStopFromFixtureUpperMs": 995.8000000119209,
+    "cancelFromFixtureUpperMs": 1031.800000011921,
+    "response_correlation_verified": true
+  },
+  "observed_core_pipeline_error_count": 0,
+  "log_reader_closed": true,
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "teardown_completed": true,
+  "experimental_thinking_override": false,
+  "full_issue_acceptance_verified": false,
+  "source_sha256": {
+    "playwright_results": "1610c01a93d3a3933bf3630f9ea81b9cbe3a2915454e796f2b981b21efdb1fb3",
+    "environment_run": "7f1e44cecaf77bb4786c9aef4ad985f59ca208bc5cfb832e1712b0b83faf295e",
+    "diagnostic": "312fe4a7477013ea9516512a90b0fd1e9bcf366a3ae6760cc0e3f887d8b64a71",
+    "runner": "46afc658ae250f0c78ccaa0009ba934b449da12d3bc5d6e758cfcbc92de80f9f"
+  }
+}

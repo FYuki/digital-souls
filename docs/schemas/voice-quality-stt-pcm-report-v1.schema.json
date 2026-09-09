@@ -1,0 +1,165 @@
+{
+  "$defs": {
+    "Counts": {
+      "additionalProperties": false,
+      "properties": {
+        "expected": {
+          "title": "Expected",
+          "type": "integer"
+        },
+        "recorded": {
+          "title": "Recorded",
+          "type": "integer"
+        },
+        "final_inputs_correlated": {
+          "title": "Final Inputs Correlated",
+          "type": "integer"
+        },
+        "edges_matched": {
+          "title": "Edges Matched",
+          "type": "integer"
+        },
+        "missing": {
+          "title": "Missing",
+          "type": "integer"
+        },
+        "session_cleanup_confirmed": {
+          "title": "Session Cleanup Confirmed",
+          "type": "integer"
+        },
+        "voice_success": {
+          "title": "Voice Success",
+          "type": "integer"
+        },
+        "other_stt_requests": {
+          "title": "Other Stt Requests",
+          "type": "integer"
+        },
+        "nonuniform_global_alignment": {
+          "title": "Nonuniform Global Alignment",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "expected",
+        "recorded",
+        "final_inputs_correlated",
+        "edges_matched",
+        "missing",
+        "session_cleanup_confirmed",
+        "voice_success",
+        "other_stt_requests",
+        "nonuniform_global_alignment"
+      ],
+      "title": "Counts",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "evaluation_scope": {
+      "const": "actual_stt_pcm_edge_coverage_only",
+      "default": "actual_stt_pcm_edge_coverage_only",
+      "title": "Evaluation Scope",
+      "type": "string"
+    },
+    "cohort": {
+      "enum": [
+        "normal",
+        "pause",
+        "backchannel",
+        "take_turn"
+      ],
+      "title": "Cohort",
+      "type": "string"
+    },
+    "measurement_revision": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Measurement Revision"
+    },
+    "evidence_sha256": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Evidence Sha256",
+      "type": "object"
+    },
+    "counts": {
+      "$ref": "#/$defs/Counts"
+    },
+    "missing_reasons": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Missing Reasons",
+      "type": "object"
+    },
+    "minimum_edge_correlation": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Minimum Edge Correlation"
+    },
+    "passed": {
+      "title": "Passed",
+      "type": "boolean"
+    },
+    "gates": {
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "title": "Gates",
+      "type": "object"
+    },
+    "interior_continuity_verified": {
+      "const": false,
+      "default": false,
+      "title": "Interior Continuity Verified",
+      "type": "boolean"
+    },
+    "all_vad_acceptance_verified": {
+      "const": false,
+      "default": false,
+      "title": "All Vad Acceptance Verified",
+      "type": "boolean"
+    },
+    "edge_alignment_method": {
+      "enum": [
+        "bandlimited_100ms_speech_edge_witness_v3",
+        "bandlimited_100ms_multi_seed_edge_witness_v4"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "cohort",
+    "measurement_revision",
+    "evidence_sha256",
+    "counts",
+    "missing_reasons",
+    "minimum_edge_correlation",
+    "passed",
+    "gates"
+  ],
+  "title": "PcmReport",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

@@ -1,0 +1,1774 @@
+{
+  "schema_version": "1.0",
+  "measurement_kind": "controlled_baseline",
+  "transport": "livekit",
+  "run_id": "livekit-pilot-2026-09-07-session-cleanup",
+  "profile": "integration-voice",
+  "fixture_version": "speech-v2",
+  "quantile_method": "hyndman_fan_type_7",
+  "clocks": [
+    {
+      "domain": "server_monotonic",
+      "method": "perf_counter_ns",
+      "unit": "nanosecond"
+    },
+    {
+      "domain": "client_monotonic",
+      "method": "performance_now_and_audio_output_timestamp",
+      "unit": "millisecond"
+    }
+  ],
+  "run_counts": {
+    "warmup": 1,
+    "measured": 20,
+    "success": 20,
+    "failure": 0,
+    "excluded": 0
+  },
+  "metrics": [
+    {
+      "name": "utterance_finalized",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "vad_speech_end",
+      "end_point": "utterance_finalized",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 363.89049850000004,
+      "p95": 410.55808425,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "response_decision",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "vad_speech_end",
+      "end_point": "response_decision",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 377.0537385,
+      "p95": 421.18669695,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "stt_start_latency",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "user_audio_received",
+      "end_point": "stt_started",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 1106.7273925,
+      "p95": 1113.7549764500002,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "stt_processing",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "stt_started",
+      "end_point": "stt_completed",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 212.557162,
+      "p95": 259.8050436,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "llm_start_latency",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "stt_completed",
+      "end_point": "llm_started",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 15.232483,
+      "p95": 20.994759650000002,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "first_text_latency",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "stt_completed",
+      "end_point": "first_text_delta",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 377.884407,
+      "p95": 392.12710680000004,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "llm_completion",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "llm_started",
+      "end_point": "llm_completed",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 550.8244685,
+      "p95": 573.73128455,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "tts_start_latency",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "first_synthesizable_segment",
+      "end_point": "tts_started",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 24.2193385,
+      "p95": 31.58760080000001,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "first_audio_generation",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "first_synthesizable_segment",
+      "end_point": "first_audio_generated",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 363.35765000000004,
+      "p95": 459.25693765,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "client_playback_latency",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "client_audio_received",
+      "end_point": "first_playback",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "client_audio_received_event_missing": 20
+      }
+    },
+    {
+      "name": "ttfa",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "fixture_speech_end",
+      "end_point": "first_playback",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 1966.9500000029802,
+      "p95": 2065.94999999702,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "local_playback_stop",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "speech_started",
+      "end_point": "local_playback_stopped",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "speech_started_event_missing": 20
+      }
+    },
+    {
+      "name": "turn_decision",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "speech_started",
+      "end_point": "turn_decision",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "speech_started_event_missing": 20
+      }
+    },
+    {
+      "name": "cancel_after_decision",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "take_turn_decision",
+      "end_point": "server_cancelled",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "take_turn_decision_event_missing": 20
+      }
+    },
+    {
+      "name": "barge_in_cancel_total",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "speech_started",
+      "end_point": "server_cancelled",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "speech_started_event_missing": 20
+      }
+    },
+    {
+      "name": "vad_leading_boundary",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "fixture_speech_start",
+      "end_point": "captured_audio_start",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "captured_audio_start_event_missing": 20
+      }
+    },
+    {
+      "name": "vad_trailing_boundary",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "fixture_speech_end",
+      "end_point": "utterance_finalized",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "metric_boundary_clock_mismatch": 20
+      }
+    },
+    {
+      "name": "stale_output",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "server_cancelled",
+      "end_point": "stale_output",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "stale_output_event_missing": 20
+      }
+    },
+    {
+      "name": "reconnect",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "network_recovered",
+      "end_point": "transport_available",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "network_recovered_event_missing": 20
+      }
+    },
+    {
+      "name": "playback_continuity",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "scheduled_playout",
+      "end_point": "frame_playout",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "scheduled_playout_event_missing": 20
+      }
+    },
+    {
+      "name": "processing_failure",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "response_utterance",
+      "end_point": "processing_outcome",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "manual_operations",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "session_started",
+      "end_point": "session_ended",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "manual_operations_event_missing": 20
+      }
+    },
+    {
+      "name": "llm_first_provider_chunk_latency",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "llm_http_started",
+      "end_point": "llm_first_provider_chunk",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 343.4447825,
+      "p95": 355.5862691,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "llm_thinking_to_text_latency",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "llm_first_thinking_chunk",
+      "end_point": "llm_first_token",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "llm_first_thinking_chunk_event_missing": 20
+      }
+    },
+    {
+      "name": "prompt_preparation",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "prompt_preparation_started",
+      "end_point": "prompt_preparation_completed",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 5.0431539999999995,
+      "p95": 16.725111400000003,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "llm_request_latency",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "stt_completed",
+      "end_point": "llm_request_started",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 21.2790995,
+      "p95": 34.1566302,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "llm_capacity_wait",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "llm_request_started",
+      "end_point": "llm_capacity_acquired",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 0.003386,
+      "p95": 0.005365450000000007,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "llm_http_headers_latency",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "llm_http_started",
+      "end_point": "llm_http_headers_received",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 343.3331075,
+      "p95": 355.48237675,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "llm_first_token_latency",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "llm_http_started",
+      "end_point": "llm_first_token",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 343.44815700000004,
+      "p95": 355.5895618,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "llm_thinking_characters",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "llm_thinking_characters",
+      "end_point": "llm_thinking_characters",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "llm_thinking_characters_event_missing": 20
+      }
+    },
+    {
+      "name": "llm_thinking_chunks",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "llm_thinking_chunks",
+      "end_point": "llm_thinking_chunks",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "llm_thinking_chunks_event_missing": 20
+      }
+    },
+    {
+      "name": "ollama_estimate_cached_input_tokens",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "ollama_estimate_cached_input_tokens",
+      "end_point": "ollama_estimate_cached_input_tokens",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "ollama_estimate_cached_input_tokens_event_missing": 20
+      }
+    },
+    {
+      "name": "ollama_estimate_generation_ms",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "ollama_estimate_generation_ms",
+      "end_point": "ollama_estimate_generation_ms",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "ollama_estimate_generation_ms_event_missing": 20
+      }
+    },
+    {
+      "name": "ollama_estimate_input_tokens",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "ollama_estimate_input_tokens",
+      "end_point": "ollama_estimate_input_tokens",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "ollama_estimate_input_tokens_event_missing": 20
+      }
+    },
+    {
+      "name": "ollama_estimate_load_ms",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "ollama_estimate_load_ms",
+      "end_point": "ollama_estimate_load_ms",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "ollama_estimate_load_ms_event_missing": 20
+      }
+    },
+    {
+      "name": "ollama_estimate_output_tokens",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "ollama_estimate_output_tokens",
+      "end_point": "ollama_estimate_output_tokens",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "ollama_estimate_output_tokens_event_missing": 20
+      }
+    },
+    {
+      "name": "ollama_estimate_prompt_eval_ms",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "ollama_estimate_prompt_eval_ms",
+      "end_point": "ollama_estimate_prompt_eval_ms",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "ollama_estimate_prompt_eval_ms_event_missing": 20
+      }
+    },
+    {
+      "name": "ollama_estimate_total_ms",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "ollama_estimate_total_ms",
+      "end_point": "ollama_estimate_total_ms",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "ollama_estimate_total_ms_event_missing": 20
+      }
+    },
+    {
+      "name": "ollama_generation_cached_input_tokens",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "ollama_generation_cached_input_tokens",
+      "end_point": "ollama_generation_cached_input_tokens",
+      "trial_count": 20,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "ollama_generation_cached_input_tokens_event_missing": 20
+      }
+    },
+    {
+      "name": "ollama_generation_generation_ms",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "ollama_generation_generation_ms",
+      "end_point": "ollama_generation_generation_ms",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 174.17899999999997,
+      "p95": 208.33655,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "ollama_generation_input_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "ollama_generation_input_tokens",
+      "end_point": "ollama_generation_input_tokens",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 946.0,
+      "p95": 946.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "ollama_generation_load_ms",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "ollama_generation_load_ms",
+      "end_point": "ollama_generation_load_ms",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 275.77167,
+      "p95": 279.8184414,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "ollama_generation_output_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "ollama_generation_output_tokens",
+      "end_point": "ollama_generation_output_tokens",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 12.0,
+      "p95": 13.05,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "ollama_generation_prompt_eval_ms",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "ollama_generation_prompt_eval_ms",
+      "end_point": "ollama_generation_prompt_eval_ms",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 53.854,
+      "p95": 56.227000000000004,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "ollama_generation_total_ms",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "ollama_generation_total_ms",
+      "end_point": "ollama_generation_total_ms",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 520.6493175,
+      "p95": 548.05778665,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "prompt_character_lore_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "prompt_character_lore_tokens",
+      "end_point": "prompt_character_lore_tokens",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "prompt_character_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "prompt_character_tokens",
+      "end_point": "prompt_character_tokens",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 940.0,
+      "p95": 940.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "prompt_current_user_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "prompt_current_user_tokens",
+      "end_point": "prompt_current_user_tokens",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 10.0,
+      "p95": 10.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "prompt_history_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "prompt_history_tokens",
+      "end_point": "prompt_history_tokens",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "prompt_input_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "prompt_input_tokens",
+      "end_point": "prompt_input_tokens",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 946.0,
+      "p95": 946.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "prompt_message_count",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "prompt_message_count",
+      "end_point": "prompt_message_count",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 2.0,
+      "p95": 2.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "prompt_post_history_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "prompt_post_history_tokens",
+      "end_point": "prompt_post_history_tokens",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "prompt_rag_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "prompt_rag_tokens",
+      "end_point": "prompt_rag_tokens",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "token_estimate_cache_hits",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "token_estimate_cache_hits",
+      "end_point": "token_estimate_cache_hits",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 3.0,
+      "p95": 3.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "token_estimate_metadata_requests",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "token_estimate_metadata_requests",
+      "end_point": "token_estimate_metadata_requests",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 3.0,
+      "p95": 3.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "token_estimate_queue_ms",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "token_estimate_queue_ms",
+      "end_point": "token_estimate_queue_ms",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 0.02919200051110238,
+      "p95": 0.04171019172645174,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "token_estimate_requests",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "token_estimate_requests",
+      "end_point": "token_estimate_requests",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 3.0,
+      "p95": 3.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "token_estimate_total_ms",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "token_estimate_total_ms",
+      "end_point": "token_estimate_total_ms",
+      "trial_count": 20,
+      "success_count": 20,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 20,
+      "failure_rate_basis_points": 0,
+      "p50": 2.9069854936096817,
+      "p95": 4.720551212085412,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    }
+  ],
+  "stage_outcomes": [
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    }
+  ],
+  "whisper": {
+    "model": "medium",
+    "device": "cuda",
+    "compute_type": "int8_float16"
+  },
+  "hardware": {
+    "description": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39"
+  },
+  "resources": {
+    "cpu_percent": {
+      "status": "missing",
+      "value": null,
+      "reason": "process_tree_not_observed"
+    },
+    "memory_bytes": {
+      "status": "missing",
+      "value": null,
+      "reason": "process_tree_not_observed"
+    }
+  },
+  "network": {
+    "sent_bytes": {
+      "status": "missing",
+      "value": null,
+      "reason": "webrtc_counters_not_observed"
+    },
+    "received_bytes": {
+      "status": "missing",
+      "value": null,
+      "reason": "webrtc_counters_not_observed"
+    },
+    "packet_loss_basis_points": {
+      "status": "missing",
+      "value": null,
+      "reason": "webrtc_counters_not_observed"
+    },
+    "condition": "localhost LiveKit pilot; shared inference services; RAG disabled"
+  }
+}

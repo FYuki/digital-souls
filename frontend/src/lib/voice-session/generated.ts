@@ -9,7 +9,7 @@ export interface VoiceSessionEvent {
     session_id:                    string;
     type:                          Type;
     reconnect_grace_ms?:           number;
-    reason?:                       Reason;
+    reason?:                       VoiceSessionEventReason;
     response_id?:                  string;
     speaker?:                      Speaker;
     utterance_id?:                 string;
@@ -17,6 +17,7 @@ export interface VoiceSessionEvent {
     final?:                        boolean;
     should_response?:              boolean;
     transcript?:                   string;
+    history_turn_id?:              string;
     source_utterance_ids?:         string[];
     text?:                         string;
     text_range?:                   TextRange;
@@ -27,10 +28,14 @@ export interface VoiceSessionEvent {
     error_code?:                   string;
     recoverable?:                  boolean;
     last_played_audio_sequence?:   number;
+    playback_summary?:             PlaybackSummary;
+    response_finished?:            boolean;
     classification?:               Classification;
     user_state?:                   UserState;
     clock_domain?:                 ClockDomain;
     measurement?:                  Measurement;
+    network_summary?:              NetworkSummary;
+    session_summary?:              SessionSummary;
     timestamp?:                    number | string;
     unit?:                         Unit;
 }
@@ -41,9 +46,63 @@ export type ClockDomain = "client_monotonic" | "server_monotonic";
 
 export type Decision = "backchannel" | "take_turn" | "indeterminate";
 
-export type Measurement = "speech_stopped" | "utterance_finalized" | "response_started" | "first_audio_out" | "playback_started";
+export type Measurement = "speech_stopped" | "utterance_finalized" | "response_started" | "first_audio_out" | "playback_started" | "client_track_received" | "client_encoded_received" | "client_audio_decoded" | "turn_decision_received" | "cancel_confirmed" | "local_playback_stopped" | "network_summary" | "session_summary";
 
-export type Reason = "user_request" | "terminal_error" | "reconnect_timeout" | "privacy" | "disconnect" | "session_ended" | "invalid_audio" | "input_capacity_exceeded" | "barge_in" | "decode_failure";
+export interface NetworkSummary {
+    boundary?: "response_cancelled";
+    downlink:  Downlink;
+    method:    "browser_audio_rtp_counters_v1";
+    uplink:    Uplink;
+}
+
+export interface Downlink {
+    bytes?:       number;
+    lostPackets?: number;
+    packets?:     number;
+    status:       Status;
+    reason?:      DownlinkReason;
+}
+
+export type DownlinkReason = "stats_api_unavailable" | "stats_failed" | "stats_timeout" | "stats_unavailable" | "ambiguous_audio_stream" | "invalid_rtp_counters" | "counter_regressed" | "playback_packets_not_yet_reported";
+
+export type Status = "measured" | "missing";
+
+export interface Uplink {
+    bytes?:   number;
+    packets?: number;
+    status:   Status;
+    reason?:  DownlinkReason;
+}
+
+export interface PlaybackSummary {
+    confirmation_observed_at_ms:   number;
+    expected_samples:              number;
+    first_output_frame:            number;
+    first_rtp_timestamp:           number;
+    gap_count:                     number;
+    gap_samples:                   number;
+    input_samples:                 number;
+    last_output_end_frame:         number;
+    last_rtp_timestamp:            number;
+    maximum_gap_samples:           number;
+    output_clock_context_time:     number;
+    output_clock_performance_time: number;
+    packet_count:                  number;
+    padding_samples:               number;
+    rendered_samples:              number;
+    sample_rate:                   number;
+}
+
+export type VoiceSessionEventReason = "user_request" | "terminal_error" | "reconnect_timeout" | "privacy" | "disconnect" | "session_ended" | "invalid_audio" | "input_capacity_exceeded" | "barge_in" | "decode_failure";
+
+export interface SessionSummary {
+    end_requested:                  boolean;
+    microphone_activation_attempts: number;
+    mute_attempts:                  number;
+    operation_tracking_started:     boolean;
+    retry_attempts:                 number;
+    sequence:                       number;
+}
 
 export interface Speaker {
     character_id?:  string;

@@ -6,6 +6,7 @@ from enum import Enum
 
 class ResponseState(Enum):
     IN_PROGRESS = "in_progress"
+    CANCELLING = "cancelling"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
     FAILED = "failed"
@@ -13,7 +14,7 @@ class ResponseState(Enum):
 
     @property
     def is_terminal(self) -> bool:
-        return self is not ResponseState.IN_PROGRESS
+        return self not in {ResponseState.IN_PROGRESS, ResponseState.CANCELLING}
 
 
 class UtteranceState(Enum):
@@ -59,6 +60,13 @@ class Response:
 
 
 @dataclass(frozen=True)
+class ResponseStopResult:
+    """送出と最終出力の停止確認後に得た再生済みprefix。"""
+
+    last_played_audio_sequence: int
+
+
+@dataclass(frozen=True)
 class TerminalOutcome:
     response_id: str
     generation: int
@@ -69,11 +77,13 @@ class TerminalOutcome:
     last_played_audio_sequence: int
     last_text_sequence: int = 0
     source_utterance_ids: tuple[str, ...] = ()
+    terminal_state_bounds_ns: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True)
 class ResponseStartResult:
     content_skipped: bool
+    history_turn_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -100,6 +110,8 @@ class CoreEvent:
     reason: str | None = None
     last_text_sequence: int | None = None
     last_audio_sequence: int | None = None
+    terminal_state_bounds_ns: tuple[int, int] | None = None
+    history_turn_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -110,3 +122,5 @@ class StageObservation:
     stage: str
     outcome: str
     utterance_id: str | None = None
+    timestamp_ns: int | None = None
+    value: float | None = None

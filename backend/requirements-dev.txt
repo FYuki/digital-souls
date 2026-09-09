@@ -6,3 +6,7 @@ ruff
 rfc3986-validator==0.1.1
 types-jsonschema>=4.23
 PyYAML>=6.0
+
+# 音声品質診断のPCM照合と、実codecによる境界回帰テスト。
+numpy>=1.26
+av==17.1.0

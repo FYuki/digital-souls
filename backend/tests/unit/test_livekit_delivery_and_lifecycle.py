@@ -364,7 +364,7 @@ def test_disconnect_discards_response_and_interrupts_at_confirmed_prefix_once() 
     ]
 
 
-def _coordinator(module, published, cleaned, core_port=None):
+def _coordinator(module, published, cleaned, core_port=None, audio_probe=None, ready=None, sync_observer=None):
     async def publish(payload: bytes, topic: str) -> None:
         published.append((payload, topic))
 
@@ -372,7 +372,8 @@ def _coordinator(module, published, cleaned, core_port=None):
         cleaned.append(session_id)
 
     async def generation_ready() -> None:
-        return None
+        if ready is not None:
+            await ready()
 
     return module.ProductionSessionCoordinator(
         session_id="20000000-0000-4000-8000-000000000010",
@@ -383,6 +384,8 @@ def _coordinator(module, published, cleaned, core_port=None):
             publish_data=publish,
             cleanup=cleanup,
             generation_ready=generation_ready,
+            audio_probe=audio_probe,
+            sync_observer=sync_observer,
         ),
         core_port=core_port or RecordingCorePort(),
     )
@@ -671,7 +674,7 @@ def test_outbound_duplicate_is_sent_once_and_conflicting_payload_ends_session() 
     asyncio.run(exercise())
 
 
-@pytest.mark.parametrize("phase", ["bootstrapping", "unavailable"])
+@pytest.mark.parametrize("phase", ["bootstrapping", "unavailable", "ended"])
 def test_send_core_rejects_inactive_phase_without_delivery_state(
     phase: str,
 ) -> None:
@@ -691,7 +694,10 @@ def test_send_core_rejects_inactive_phase_without_delivery_state(
                 identity=identity, participant_sid="PA_current"
             )
 
-        with pytest.raises(RuntimeError, match="session is not available"):
+        if phase == "ended":
+            await coordinator.cleanup("explicit")
+        expected_error = RuntimeError if phase == "bootstrapping" else asyncio.CancelledError
+        with pytest.raises(expected_error, match="session is .*available"):
             await coordinator.send_core(SESSION_STARTED_PAYLOAD)
 
         assert coordinator.phase == phase
@@ -700,6 +706,13 @@ def test_send_core_rejects_inactive_phase_without_delivery_state(
         assert coordinator.acknowledge(
             "10000000-0000-4000-8000-000000000010", "character_to_user"
         ) is False
+        if phase == "unavailable":
+            coordinator.participant_connected(
+                identity="user-20000000-0000-4000-8000-000000000010",
+                participant_sid="PA_restored", room_sid="RM_one",
+            )
+            await coordinator.send_core(SESSION_STARTED_PAYLOAD)
+            assert published == [(SESSION_STARTED_PAYLOAD, module.APPLICATION_TOPIC)]
         await coordinator.cleanup("test_complete")
 
     asyncio.run(exercise())
@@ -1003,4 +1016,301 @@ def test_production_never_joined_deadline_owns_cleanup(monkeypatch) -> None:
         assert coordinator.phase == "ended"
         assert cleaned == ["20000000-0000-4000-8000-000000000010"]
 
+    asyncio.run(exercise())
+
+
+
+def test_response_track_readiness_requires_current_participant_and_generation():
+    module = _livekit_module("coordinator", "response audio receiver readiness")
+    async def exercise():
+        received = []
+        async def noop(*_args):
+            return None
+        coordinator = module.ProductionSessionCoordinator(
+            session_id="20000000-0000-4000-8000-000000000010", user_identity="user-one",
+            core_participant_id="30000000-0000-4000-8000-000000000010", reconnect_grace_ms=60000,
+            dependencies=module.SessionCoordinatorDependencies(
+                publish_data=noop, cleanup=noop, generation_ready=noop,
+                response_track_ready=lambda response, track: received.append((response, track)),
+            ), core_port=RecordingCorePort(),
+        )
+        coordinator.participant_connected(identity="user-one", participant_sid="PA_current", room_sid="RM_one")
+        response_id = "50000000-0000-4000-8000-000000000001"
+        frame = {"protocol_version": "1.0", "type": "response_track_ready", "response_id": response_id,
+                 "track_sid": "TR_one", "generation": 0}
+        for identity, participant, generation in [("other", "PA_current", 0), ("user-one", "PA_old", 0), ("user-one", "PA_current", 1)]:
+            await coordinator.receive_data(identity=identity, participant_sid=participant, topic=module.PRIVATE_TOPIC,
+                                           payload=json.dumps({**frame, "generation": generation}).encode())
+        assert received == []
+        await coordinator.receive_data(identity="user-one", participant_sid="PA_current", topic=module.PRIVATE_TOPIC,
+                                       payload=json.dumps(frame).encode())
+        assert received == [(response_id, "TR_one")]
+        await coordinator.cleanup("test_complete")
+    asyncio.run(exercise())
+
+
+def test_source_completion_reports_conserved_samples_on_private_topic() -> None:
+    module = _livekit_module("coordinator", "source completion metadata")
+    async def exercise() -> None:
+        published = []
+        coordinator = _coordinator(module, published, [])
+        coordinator.participant_connected(identity="user-20000000-0000-4000-8000-000000000010", participant_sid="PA_current", room_sid="RM_one")
+        await coordinator.send_response_audio_finished(response_id="30000000-0000-4000-8000-000000000010",
+            input_sample_count=1234, captured_sample_count=2880, padding_sample_count=1646)
+        payload, topic = published[0]
+        assert topic == module.PRIVATE_TOPIC
+        assert json.loads(payload) == {"protocol_version": "1.0", "type": "response_audio_finished",
+            "response_id": "30000000-0000-4000-8000-000000000010", "generation": 0,
+            "input_sample_count": 1234, "captured_sample_count": 2880, "padding_sample_count": 1646}
+        with pytest.raises(ValueError):
+            await coordinator.send_response_audio_finished(response_id="30000000-0000-4000-8000-000000000010",
+                input_sample_count=1234, captured_sample_count=1920, padding_sample_count=1646)
+        assert len(published) == 1
+        await coordinator.cleanup("test_complete")
+    asyncio.run(exercise())
+
+
+def test_control_probe_round_trip_does_not_change_generation_or_interrupt_response() -> None:
+    module = _livekit_module("coordinator", "non-mutating control probe")
+
+    async def exercise() -> None:
+        published: list[tuple[bytes, str]] = []
+        core = RecordingCorePort()
+        coordinator = _coordinator(module, published, [], core)
+        identity = "user-20000000-0000-4000-8000-000000000010"
+        coordinator.participant_connected(identity=identity, participant_sid="PA_current", room_sid="RM_one")
+        coordinator.begin_response(response_id="30000000-0000-4000-8000-000000000010")
+        previous_notifications = list(core.notifications)
+        for index in range(3):
+            probe_id = f"10000000-0000-4000-8000-{index:012d}"
+            await coordinator.receive_data(
+                identity=identity, participant_sid="PA_current", topic=module.PRIVATE_TOPIC,
+                payload=json.dumps({"protocol_version": "1.0", "type": "control_probe",
+                                    "probe_id": probe_id, "generation": 0}).encode(),
+            )
+            assert json.loads(published[-1][0]) == {
+                "protocol_version": "1.0", "type": "control_probe_ack",
+                "probe_id": probe_id, "generation": 0,
+            }
+            assert published[-1][1] == module.PRIVATE_TOPIC
+            assert coordinator.generation == 0
+            assert coordinator.phase == "available"
+            assert core.notifications == previous_notifications
+        await coordinator.cleanup("test_complete")
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("case", ["wrong_identity", "old_connection", "old_generation", "future_generation", "unavailable", "ended"])
+@pytest.mark.parametrize("observe_clock", [False, True])
+def test_control_probe_does_not_acknowledge_invalid_or_unavailable_connection(case, observe_clock) -> None:
+    module = _livekit_module("coordinator", "control probe connection ownership")
+
+    async def exercise() -> None:
+        published: list[tuple[bytes, str]] = []
+        coordinator = _coordinator(module, published, [])
+        identity = "user-20000000-0000-4000-8000-000000000010"
+        coordinator.participant_connected(identity=identity, participant_sid="PA_current", room_sid="RM_one")
+        generation = coordinator.generation
+        if case == "old_generation":
+            coordinator._lifecycle.advance_generation()
+        if case == "future_generation":
+            generation += 1
+        if case == "unavailable":
+            await coordinator.mark_unavailable()
+        if case == "ended":
+            await coordinator.cleanup("test_complete")
+        published.clear()
+        await coordinator.receive_data(
+            identity="unrelated" if case == "wrong_identity" else identity,
+            participant_sid="PA_old" if case == "old_connection" else "PA_current",
+            topic=module.PRIVATE_TOPIC,
+            payload=json.dumps({"protocol_version": "1.0", "type": "control_probe",
+                                "probe_id": "10000000-0000-4000-8000-000000000001",
+                                "generation": generation, **({"observe_clock": True} if observe_clock else {})}).encode(),
+        )
+        assert published == []
+        await coordinator.cleanup("test_complete")
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize('case', ['valid', 'disabled', 'wrong_identity', 'old_connection', 'old_generation',
+                                  'future_generation', 'unavailable', 'ended', 'wrong_direction'])
+def test_audio_probe_uses_only_current_authenticated_available_connection(case):
+    module = _livekit_module('coordinator', 'audio probe connection ownership')
+    async def exercise():
+        calls, published = [], []
+        core = RecordingCorePort()
+        coordinator = _coordinator(module, published, [], core,
+            None if case == 'disabled' else lambda *args: calls.append(args))
+        identity = 'user-20000000-0000-4000-8000-000000000010'
+        coordinator.participant_connected(identity=identity, participant_sid='PA_current', room_sid='RM_one')
+        generation = coordinator.generation
+        if case == 'old_generation':
+            coordinator._lifecycle.advance_generation()
+        if case == 'future_generation':
+            generation += 1
+        if case == 'unavailable':
+            await coordinator.mark_unavailable()
+        if case == 'ended':
+            await coordinator.cleanup('test_complete')
+        notifications = list(core.notifications)
+        probe_id = '10000000-0000-4000-8000-000000000001'
+        for kind in ['audio_probe_request', 'audio_probe_ready', 'audio_probe_complete']:
+            frame = dict(protocol_version='1.0', type=kind, probe_id=probe_id, generation=generation)
+            if kind != 'audio_probe_request':
+                frame['track_sid'] = 'TR_probe'
+            if case == 'wrong_direction':
+                frame.update(type='audio_probe_finished', track_sid='TR_probe', input_sample_count=9600,
+                             captured_sample_count=10560, padding_sample_count=960)
+            await coordinator.receive_data(identity='unrelated' if case == 'wrong_identity' else identity,
+                participant_sid='PA_old' if case == 'old_connection' else 'PA_current',
+                topic=module.PRIVATE_TOPIC, payload=json.dumps(frame).encode())
+        assert calls == ([('audio_probe_request', probe_id, 0, None), ('audio_probe_ready', probe_id, 0, 'TR_probe'),
+                          ('audio_probe_complete', probe_id, 0, 'TR_probe')] if case == 'valid' else [])
+        assert core.notifications == notifications
+        await coordinator.cleanup('test_complete')
+    asyncio.run(exercise())
+
+
+def test_repeated_sync_waits_for_generation_readiness_without_restarting_it() -> None:
+    module = _livekit_module("coordinator", "idempotent generation readiness")
+
+    async def exercise() -> None:
+        published: list[tuple[bytes, str]] = []
+        entered, release = asyncio.Event(), asyncio.Event()
+        calls: list[int] = []
+
+        async def ready() -> None:
+            calls.append(1)
+            entered.set()
+            await release.wait()
+
+        coordinator = _coordinator(module, published, [], ready=ready)
+        identity = "user-20000000-0000-4000-8000-000000000010"
+        coordinator.participant_connected(identity=identity, participant_sid="PA_current", room_sid="RM_one")
+
+        async def sync() -> None:
+            await coordinator.receive_data(identity=identity, participant_sid="PA_current", topic=module.PRIVATE_TOPIC,
+                payload=json.dumps({"protocol_version": "1.0", "type": "state_sync_request", "generation": 0}).encode())
+
+        first = asyncio.create_task(sync())
+        await asyncio.wait_for(entered.wait(), timeout=0.5)
+        second = asyncio.create_task(sync())
+        try:
+            await asyncio.sleep(0)
+            assert published == []
+            assert calls == [1]
+        finally:
+            release.set()
+            await asyncio.gather(first, second)
+            await coordinator.cleanup("test_complete")
+        assert calls == [1]
+        assert [json.loads(payload)["generation"] for payload, _ in published] == [1, 1]
+
+    asyncio.run(exercise())
+
+
+def test_sync_retries_failed_readiness_before_publishing_available() -> None:
+    module = _livekit_module("coordinator", "readiness failure retry")
+
+    async def exercise() -> None:
+        published: list[tuple[bytes, str]] = []
+        calls: list[int] = []
+
+        async def ready() -> None:
+            calls.append(1)
+            if len(calls) == 1:
+                raise RuntimeError("readiness failed")
+
+        coordinator = _coordinator(module, published, [], ready=ready)
+        identity = "user-20000000-0000-4000-8000-000000000010"
+        coordinator.participant_connected(identity=identity, participant_sid="PA_current", room_sid="RM_one")
+
+        async def sync() -> None:
+            await coordinator.receive_data(identity=identity, participant_sid="PA_current", topic=module.PRIVATE_TOPIC,
+                payload=json.dumps({"protocol_version": "1.0", "type": "state_sync_request", "generation": 0}).encode())
+
+        try:
+            await sync()
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("readiness failure must propagate")
+        assert published == []
+        await sync()
+        await sync()
+        assert calls == [1, 1]
+        assert [json.loads(payload)["generation"] for payload, _ in published] == [1, 1]
+        await coordinator.cleanup("test_complete")
+
+    asyncio.run(exercise())
+
+
+def test_state_sync_observations_separate_receive_readiness_and_send() -> None:
+    module = _livekit_module("coordinator", "state sync numeric observations")
+
+    async def exercise() -> None:
+        rows: list[tuple[str, int, int]] = []
+        coordinator = _coordinator(module, [], [], sync_observer=lambda *values: rows.append(values))
+        identity = "user-20000000-0000-4000-8000-000000000010"
+        coordinator.participant_connected(identity=identity, participant_sid="PA_current", room_sid="RM_one")
+        for _ in range(2):
+            await coordinator.receive_data(identity=identity, participant_sid="PA_current", topic=module.PRIVATE_TOPIC,
+                payload=json.dumps({"protocol_version": "1.0", "type": "state_sync_request", "generation": 0}).encode())
+        assert [row[0] for row in rows] == ["request_received", "lock_acquired", "ready_started",
+            "ready_completed", "send_started", "send_completed", "request_received", "lock_acquired",
+            "send_started", "send_completed"]
+        assert [row[1] for row in rows] == [0, 0, 1, 1, 1, 1, 1, 1, 1, 1]
+        assert all(type(row[2]) is int and row[2] >= 0 for row in rows)
+        assert [row[2] for row in rows] == sorted(row[2] for row in rows)
+        await coordinator.cleanup("test_complete")
+
+    asyncio.run(exercise())
+
+
+def test_control_probe_diagnostic_has_numeric_stages_without_probe_identity() -> None:
+    module = _livekit_module('coordinator', 'control probe stage observation')
+
+    async def exercise() -> None:
+        rows, published = [], []
+        coordinator = _coordinator(module, published, [], sync_observer=lambda *row: rows.append(row))
+        identity = 'user-20000000-0000-4000-8000-000000000010'
+        coordinator.participant_connected(identity=identity, participant_sid='PA_current', room_sid='RM_one')
+        probe_id = '10000000-0000-4000-8000-000000000001'
+        await coordinator.receive_data(identity=identity, participant_sid='PA_current', topic=module.PRIVATE_TOPIC,
+            payload=json.dumps({'protocol_version': '1.0', 'type': 'control_probe',
+                                'probe_id': probe_id, 'generation': 0}).encode())
+        assert [row[0] for row in rows] == ['probe_received', 'probe_ack_started', 'probe_ack_completed']
+        assert all(row[1] == 0 and type(row[2]) is int for row in rows)
+        assert rows[0][2] <= rows[1][2] <= rows[2][2]
+        assert probe_id not in json.dumps(rows) and identity not in json.dumps(rows)
+        rows.clear()
+        await coordinator.receive_data(identity=identity, participant_sid='PA_current', topic=module.PRIVATE_TOPIC,
+            payload=json.dumps({'protocol_version': '1.0', 'type': 'control_probe',
+                                'probe_id': probe_id, 'generation': 1}).encode())
+        assert [row[0] for row in rows] == ['probe_received', 'probe_generation_rejected']
+        assert len(published) == 1
+        await coordinator.cleanup('test_complete')
+
+    asyncio.run(exercise())
+
+
+def test_clock_probe_reports_server_receive_and_send_without_changing_state() -> None:
+    module = _livekit_module("coordinator", "clock probe causal order")
+    async def exercise() -> None:
+        published = []
+        coordinator = _coordinator(module, published, [])
+        coordinator._clock_us = iter((5_000_001, 5_000_004)).__next__
+        identity = "user-20000000-0000-4000-8000-000000000010"
+        coordinator.participant_connected(identity=identity, participant_sid="PA_current", room_sid="RM_one")
+        await coordinator.receive_data(identity=identity, participant_sid="PA_current", topic=module.PRIVATE_TOPIC,
+            payload=json.dumps({"protocol_version": "1.0", "type": "control_probe", "observe_clock": True,
+                "probe_id": "10000000-0000-4000-8000-000000000010", "generation": 0}).encode())
+        frame = json.loads(published[-1][0])
+        assert frame["server_received_us"] == 5_000_001
+        assert frame["server_sent_us"] == 5_000_004
+        assert coordinator.generation == 0 and coordinator.phase == "available"
+        await coordinator.cleanup("test_complete")
     asyncio.run(exercise())

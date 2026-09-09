@@ -29,6 +29,8 @@ from app.inference.contracts import (
 )
 from app.inference.errors import InferenceError, InferenceErrorCategory
 from app.inference.images import CONSERVATIVE_IMAGE_TOKEN_ESTIMATE
+from app.inference.diagnostics import diagnostic, ollama_diagnostics, ollama_request_diagnostics
+from app.inference.token_estimate_cache import ExactTokenEstimateCache
 
 
 _DIGEST_PATTERN = re.compile(r"sha256[:-]([0-9a-fA-F]{64})")
@@ -61,10 +63,12 @@ class OllamaAdapter:
         self._base_url = base_url.rstrip("/")
         self._http_client = http_client or httpx.Client(trust_env=False)
         self._owns_http_client = http_client is None
+        self._token_counts = ExactTokenEstimateCache()
         self._model_digests: dict[str, str] = {}
         self._model_details: dict[str, Mapping[str, object]] = {}
 
     def close(self) -> None:
+        self._token_counts.clear()
         if self._owns_http_client:
             self._http_client.close()
 
@@ -104,6 +108,11 @@ class OllamaAdapter:
         self, request: TextGenerationRequest
     ) -> AsyncIterator[str]:
         payload = self._chat_payload(request, stream=True)
+        diagnostic("ollama_thinking_configured_requests", int(type(payload.get("think")) is bool))
+        diagnostic("ollama_thinking_disabled_requests", int(payload.get("think") is False))
+        # /api/chatのdurationには内部受付・生成開始・独立したqueue待ちがない。
+        # HTTP headerやtotalの残差を内部時刻・queue値として代用しない。
+        diagnostic("ollama_internal_timing_unavailable")
         completed = False
         emitted = False
         try:
@@ -111,10 +120,13 @@ class OllamaAdapter:
                 timeout=httpx.Timeout(request.timeout_seconds),
                 trust_env=False,
             ) as client:
+                diagnostic("llm_http_started")
+                ollama_request_diagnostics(cast(Mapping[str, object], payload["options"]))
                 async with client.stream(
                     "POST", self._endpoint("/api/chat"), json=payload
                 ) as response:
                     response.raise_for_status()
+                    diagnostic("llm_http_headers_received")
                     async for line in response.aiter_lines():
                         if not line.strip():
                             continue
@@ -123,6 +135,7 @@ class OllamaAdapter:
                             emitted = True
                             yield content
                         if done:
+                            ollama_diagnostics(json.loads(line))
                             completed = True
                             break
         except asyncio.CancelledError:
@@ -226,6 +239,7 @@ class OllamaAdapter:
                 + CONSERVATIVE_IMAGE_TOKEN_ESTIMATE * image_count,
                 TokenEstimateAccuracy.ESTIMATED,
                 "ollama_multimodal_text_utf8_div3_margin15pct+1120_per_image",
+                external_request_count=0,
             )
         estimate_request = TextGenerationRequest(
             messages=request.messages,
@@ -235,14 +249,53 @@ class OllamaAdapter:
             max_output_tokens=1,
             timeout_seconds=request.timeout_seconds,
         )
-        response = self._post_chat(estimate_request)
+        context_window = request.context_window_tokens
+        if context_window is not None and (
+            type(context_window) is not int
+            or context_window < request.max_input_tokens + 1
+        ):
+            raise InferenceError(
+                InferenceErrorCategory.INVALID_REQUEST, retryable=False,
+            )
+        cache_key: bytes | None = None
+        metadata_requests = 0
+        if request.allow_cached_exact_result and request.response_schema is None:
+            # tagsのmanifest digestは毎回確認する。mutable tagの変更後に旧countを使わない。
+            metadata_requests = 1
+            diagnostic("token_estimate_metadata_requests", 1)
+            digest = self._current_model_manifest_digest(request)
+            if digest is not None:
+                payload = self._chat_payload(
+                    estimate_request, stream=False, context_window_tokens=context_window,
+                )
+                cache_key = self._token_counts.key(json.dumps(
+                    [digest, payload], ensure_ascii=False, sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8"))
+                cached = self._token_counts.get(cache_key)
+                if cached is not None:
+                    diagnostic("token_estimate_cache_hits", 1)
+                    return TokenEstimate(
+                        cached, TokenEstimateAccuracy.EXACT, "ollama_prompt_eval_count",
+                        external_request_count=metadata_requests,
+                    )
+        response = self._post_chat(
+            estimate_request, context_window_tokens=context_window,
+        )
         body = self._response_object(response)
+        ollama_diagnostics(body)
         prompt_count = self._positive_count(body.get("prompt_eval_count"))
         if request.response_schema is None:
+            if cache_key is not None:
+                metadata_requests += 1
+                diagnostic("token_estimate_metadata_requests", 1)
+                if self._current_model_manifest_digest(request) == digest:
+                    self._token_counts.put(cache_key, prompt_count)
             return TokenEstimate(
                 prompt_count,
                 TokenEstimateAccuracy.EXACT,
                 "ollama_prompt_eval_count",
+                external_request_count=1 + metadata_requests,
             )
         schema_bytes = json.dumps(
             request.response_schema,
@@ -254,7 +307,34 @@ class OllamaAdapter:
             prompt_count + conservative_schema_tokens,
             TokenEstimateAccuracy.ESTIMATED,
             "ollama_prompt_eval_count+schema_utf8_div3_margin10pct",
+            external_request_count=1,
         )
+
+    def _current_model_manifest_digest(self, request: TokenEstimateRequest) -> str | None:
+        try:
+            response = self._http_client.get(
+                self._endpoint("/api/tags"), timeout=httpx.Timeout(min(request.timeout_seconds, 1.0)),
+            )
+            response.raise_for_status()
+            models = self._response_object(response).get("models")
+        except (httpx.HTTPError, InferenceError):
+            # metadataを確認できないときは通常の計測を行い、cacheを使用しない。
+            return None
+        if not isinstance(models, list):
+            return None
+        names = {request.model_id}
+        if ":" not in request.model_id.rsplit("/", 1)[-1]:
+            names.add(f"{request.model_id}:latest")
+        matches = [
+            model for model in models if isinstance(model, Mapping)
+            and isinstance(model.get("name"), str) and model.get("name") in names
+        ]
+        if len(matches) != 1:
+            return None
+        digest = matches[0].get("digest")
+        if isinstance(digest, str) and re.fullmatch(r"(?:sha256:)?[0-9a-f]{64}", digest):
+            return digest
+        return None
 
     def resolve_model_digest(self, model_id: str, *, timeout_seconds: float) -> str:
         cached = self._model_digests.get(model_id)
@@ -308,15 +388,17 @@ class OllamaAdapter:
         request: TextGenerationRequest,
         *,
         response_schema: Mapping[str, object] | None = None,
+        context_window_tokens: int | None = None,
     ) -> httpx.Response:
         try:
+            payload = self._chat_payload(
+                request, stream=False, response_schema=response_schema,
+                context_window_tokens=context_window_tokens,
+            )
+            ollama_request_diagnostics(cast(Mapping[str, object], payload["options"]))
             response = self._http_client.post(
                 self._endpoint("/api/chat"),
-                json=self._chat_payload(
-                    request,
-                    stream=False,
-                    response_schema=response_schema,
-                ),
+                json=payload,
                 timeout=httpx.Timeout(request.timeout_seconds),
             )
             response.raise_for_status()
@@ -330,11 +412,18 @@ class OllamaAdapter:
         *,
         stream: bool,
         response_schema: Mapping[str, object] | None = None,
+        context_window_tokens: int | None = None,
     ) -> dict[str, object]:
         options: dict[str, JsonValue] = dict(request.options)
+        # 音声応答の既定だけ待ち時間を減らす。明示されたthink設定と通常text応答は保持する。
+        thinking = options.pop("think", False if request.latency_sensitive else None)
         options.update(
             {
-                "num_ctx": request.max_input_tokens + request.max_output_tokens,
+                "num_ctx": (
+                    context_window_tokens
+                    if context_window_tokens is not None
+                    else request.max_input_tokens + request.max_output_tokens
+                ),
                 "num_predict": request.max_output_tokens,
             }
         )
@@ -344,6 +433,8 @@ class OllamaAdapter:
             "messages": OllamaAdapter._messages(request.messages),
             "options": options,
         }
+        if thinking is not None:
+            payload["think"] = thinking
         if response_schema is not None:
             payload["format"] = OllamaAdapter._grammar_schema(response_schema)
             payload["think"] = False
@@ -443,6 +534,12 @@ class OllamaAdapter:
                 InferenceErrorCategory.INVALID_RESPONSE,
                 retryable=False,
             )
+        diagnostic("llm_first_provider_chunk")
+        thinking = message.get("thinking")
+        if isinstance(thinking, str) and thinking:
+            diagnostic("llm_first_thinking_chunk")
+            diagnostic("llm_thinking_chunks", 1)
+            diagnostic("llm_thinking_characters", len(thinking))
         content = message.get("content")
         if not isinstance(content, str):
             raise InferenceError(

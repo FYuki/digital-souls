@@ -1,0 +1,73 @@
+{
+  "schema_version": "1.0",
+  "verification_scope": "current_revision_automated_regression_only",
+  "measurement_revision": "43afa4f45e82db22980e149af1b6447a8105f770",
+  "full_issue_acceptance_verified": false,
+  "external_service_acceptance_replaced_by_mocks": false,
+  "checks": {
+    "unit": {
+      "exit_code": 0,
+      "revision": "d0f8c2087cfbb70edee56b6da269ae713e627eb5",
+      "backend_passed": 3104,
+      "backend_skipped": 0,
+      "frontend_passed": 794
+    },
+    "type_annotation_only_followup": {
+      "exit_code": 0,
+      "revision": "43afa4f45e82db22980e149af1b6447a8105f770",
+      "passed": 14,
+      "only_manifest_parameter_annotation_changed": true
+    },
+    "module": {
+      "exit_code": 0,
+      "backend_passed": 1430,
+      "frontend_passed": 107,
+      "ran_before_mocked_e2e": true
+    },
+    "mocked_e2e": {
+      "exit_code": 0,
+      "passed": 41,
+      "profile": "test-mocked",
+      "teardown_completed": true,
+      "exact_owned_frontend_container_absent": true
+    },
+    "initial_typecheck": {
+      "exit_code": 1,
+      "errors": 1,
+      "reason": "vad_manifest_generic_dict_type_arguments_missing"
+    },
+    "typecheck_after_fix": {
+      "exit_code": 0,
+      "backend_files": 239,
+      "svelte_errors": 0,
+      "svelte_warnings": 0,
+      "e2e_typescript_passed": true
+    },
+    "python_lint": {
+      "exit_code": 0
+    },
+    "frontend_build": {
+      "exit_code": 0,
+      "large_chunk_warning": true
+    },
+    "generated_contracts": {
+      "exit_code": 0,
+      "voice_unchanged": true,
+      "screen_unchanged": true
+    }
+  },
+  "source_sha256": {
+    "unit": "5448c4ae39a5de5c9de05894191c58b40f402dc1ecb5df7c4e45f51e67b3916c",
+    "module": "c6556a8d9b97a5e74d4da107feb9bcb8aaf74aa0d6162b4383e8519a19589ef2",
+    "mocked_e2e": "8c93a90ef3f2595295b9afdc43918c5da6d6cab59a3894ec5283300c5769465c",
+    "initial_typecheck_failed": "f8c3043679cf5c699625df20360a005c83466f6f05d4318e75534326cf6e95bc",
+    "typecheck": "e9dc8563c3dd771d89ce1488686a86364985ff0f93322ac56b32181e72ca0684",
+    "vad_type_fix_followup": "d2680a4d62344505fe73d1ae0505d15f91d9ae0b496166ead263ca5626ede430",
+    "lint": "0fd7673c529fc719dbeff1b5dd8318abbe626e9e613768e848bad7d0b2a54213",
+    "build": "004ce9e55d8f855d4bdce37a39010ba67bff3f7688068dbbc0150883fa2e62f2",
+    "generated_voice": "ba5b7281147cf0e5397df735680f8c7faec02f2ff5487f5eb28a126a3a8c6f2a",
+    "generated_screen": "b61a9ea6f1c58f47363ea45dd8c53deac1e67e93a7f75e45d10293c80ad0ec24"
+  },
+  "root_package_lock_sha256": "053a5fbdf8a637a83c6eb45e4b5cf02b28cc3547619e353f2a60b0b0784b8c67",
+  "mocked_e2e_environment_report_sha256": "25cbe88eb6ebe2a5a74bc0e9b51f10572fdf1dbd5a5739e05a99cd5338d390c4"
+}

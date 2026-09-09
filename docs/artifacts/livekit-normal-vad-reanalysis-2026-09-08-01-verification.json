@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "measurement_revision": "2d10020ca818fce228b8446d51c329bebccb92e5",
+  "aggregation_revision": "3fdcdb5d25714a589eb2d75635465caa3a96c239",
+  "verification_scope": "historical_normal_100_native_vad_reanalysis_only",
+  "new_measurement_performed": false,
+  "full_issue_acceptance_verified": false,
+  "warmup_trials": 5,
+  "measured_trials": 100,
+  "native_vad_boundaries_verified_trials": 100,
+  "native_vad_missing_trials": 0,
+  "native_timestamp_quantization_ms": 1,
+  "leading_error_trials": 0,
+  "early_end_error_trials": 0,
+  "all_prior_non_vad_metrics_unchanged": true,
+  "historical_request_diagnostics_missing": [
+    "ollama_estimate_http_requests",
+    "ollama_estimate_requested_context_tokens_maximum",
+    "ollama_estimate_requested_context_tokens_minimum",
+    "ollama_estimate_requested_output_tokens_maximum",
+    "ollama_estimate_requested_output_tokens_minimum",
+    "ollama_generation_http_requests",
+    "ollama_generation_requested_context_tokens_maximum",
+    "ollama_generation_requested_context_tokens_minimum",
+    "ollama_generation_requested_output_tokens_maximum",
+    "ollama_generation_requested_output_tokens_minimum"
+  ],
+  "ttfa_target_passed": false,
+  "ttfa_p95_ms": 11995.305000022054,
+  "pcm_capture_boundaries_verified": false,
+  "false_split_rate_verified": false,
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "teardown_completed": true,
+  "artifact_sha256": "99dd60e0a7a02558753bc5f8ed15b67773df30df89dfd8d7b2e3d3e8a11c6ed2",
+  "boundary_report_sha256": "eda92739f75744cbf3f1c191f7ad9575f147fc94302516649084508a28aa50ca",
+  "original_verification_sha256": "53c3152ef55027cfa4640019bf950e4eb0a4cbdb400245e64ba7f63bd0942817",
+  "source_sha256": {
+    "trial-manifest.json": "47c30b6417b3208d6cf9edea588d2684b075687c1d32b088b13cf2bfae27039d",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "7bbba46a72aa0ccbda552097aa96d6816eb6fe444e6e85026f4fe891eeaf941d",
+    "runtime-data/runtime/standalone/environment-run.json": "535bb353a97ced539a9853d80550bdb15dbfc38bacc43f4a997be757af016669",
+    "inference-runtime.jsonl": "694a346ba6021df826be8e38188b79926bb9034101ff7f79da32c2c013849258",
+    "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+  },
+  "validation": {
+    "related_backend_tests_passed": 173,
+    "backend_mypy_files": 2,
+    "ruff_passed": true
+  },
+  "normal_latency_comparison": {
+    "passed": false,
+    "coverage_errors": [],
+    "relative_passed": 8,
+    "audited_not_comparable": 5,
+    "ttfa_absolute_passed": false,
+    "comparison_sha256": "129b60be3a85d6efefbc3cee58347c9e2239f9e4073aa9902464d35d73757e2d"
+  }
+}

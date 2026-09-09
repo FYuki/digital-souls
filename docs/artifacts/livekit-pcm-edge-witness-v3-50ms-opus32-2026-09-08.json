@@ -1,0 +1,123 @@
+{
+  "scope": "offline_endpoint_detector_calibration_only",
+  "method": "bandlimited_100ms_speech_edge_witness_v3",
+  "codec": "opus",
+  "bitrate": 32000,
+  "codec_source_offsets_samples": [
+    104
+  ],
+  "pyav_version": "17.1.0",
+  "fixture_manifest_sha256": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3",
+  "method_source_sha256": "ddaa6ed4f6d933487c4a59142b2cf49a5bdcda70df667e7e7acbdcae6a7f6b76",
+  "fixture_count": 301,
+  "counts": {
+    "normal": {
+      "intact_total": 1,
+      "intact_matched": 1,
+      "leading_101ms_deleted_total": 1,
+      "leading_101ms_deleted_matched": 0,
+      "trailing_101ms_deleted_total": 1,
+      "trailing_101ms_deleted_matched": 0,
+      "leading_101ms_silenced_total": 1,
+      "leading_101ms_silenced_matched": 0,
+      "trailing_101ms_silenced_total": 1,
+      "trailing_101ms_silenced_matched": 0,
+      "leading_101ms_noise_total": 1,
+      "leading_101ms_noise_matched": 0,
+      "trailing_101ms_noise_total": 1,
+      "trailing_101ms_noise_matched": 0,
+      "duplicated_total": 1,
+      "duplicated_matched": 0,
+      "reordered_total": 1,
+      "reordered_matched": 0
+    },
+    "backchannel": {
+      "intact_total": 100,
+      "intact_matched": 100,
+      "leading_101ms_deleted_total": 100,
+      "leading_101ms_deleted_matched": 0,
+      "trailing_101ms_deleted_total": 100,
+      "trailing_101ms_deleted_matched": 0,
+      "leading_101ms_silenced_total": 100,
+      "leading_101ms_silenced_matched": 0,
+      "trailing_101ms_silenced_total": 100,
+      "trailing_101ms_silenced_matched": 0,
+      "leading_101ms_noise_total": 100,
+      "leading_101ms_noise_matched": 0,
+      "trailing_101ms_noise_total": 100,
+      "trailing_101ms_noise_matched": 0,
+      "duplicated_total": 100,
+      "duplicated_matched": 0,
+      "reordered_total": 100,
+      "reordered_matched": 0
+    },
+    "take_turn": {
+      "intact_total": 100,
+      "intact_matched": 100,
+      "leading_101ms_deleted_total": 100,
+      "leading_101ms_deleted_matched": 0,
+      "trailing_101ms_deleted_total": 100,
+      "trailing_101ms_deleted_matched": 0,
+      "leading_101ms_silenced_total": 100,
+      "leading_101ms_silenced_matched": 0,
+      "trailing_101ms_silenced_total": 100,
+      "trailing_101ms_silenced_matched": 0,
+      "leading_101ms_noise_total": 100,
+      "leading_101ms_noise_matched": 0,
+      "trailing_101ms_noise_total": 100,
+      "trailing_101ms_noise_matched": 0,
+      "duplicated_total": 100,
+      "duplicated_matched": 0,
+      "reordered_total": 100,
+      "reordered_matched": 0
+    },
+    "pause": {
+      "intact_total": 100,
+      "intact_matched": 96,
+      "leading_101ms_deleted_total": 100,
+      "leading_101ms_deleted_matched": 0,
+      "trailing_101ms_deleted_total": 100,
+      "trailing_101ms_deleted_matched": 0,
+      "leading_101ms_silenced_total": 100,
+      "leading_101ms_silenced_matched": 0,
+      "trailing_101ms_silenced_total": 100,
+      "trailing_101ms_silenced_matched": 0,
+      "leading_101ms_noise_total": 100,
+      "leading_101ms_noise_matched": 0,
+      "trailing_101ms_noise_total": 100,
+      "trailing_101ms_noise_matched": 0,
+      "duplicated_total": 100,
+      "duplicated_matched": 0,
+      "reordered_total": 100,
+      "reordered_matched": 0
+    }
+  },
+  "failures": [
+    {
+      "fixture_sha256": "aed20ffff3509c2d16e008cb2d90d86653f9d1719c3414fd555cc313f6998e09",
+      "cohort": "pause",
+      "case": "intact",
+      "status": "unverified"
+    },
+    {
+      "fixture_sha256": "454e5078ba1d5ce3df6375d484868be67b03353bb70b4ff4486e7cfcc1650ad3",
+      "cohort": "pause",
+      "case": "intact",
+      "status": "unverified"
+    },
+    {
+      "fixture_sha256": "51648c29aa927c88cd50881626fec903de35aa50ce74d0cefdebd4b1035f1065",
+      "cohort": "pause",
+      "case": "intact",
+      "status": "unverified"
+    },
+    {
+      "fixture_sha256": "83c229071b6329d9007dd4f26073ef6f22965bec1aec9966ca333ce57dde77fd",
+      "cohort": "pause",
+      "case": "intact",
+      "status": "unverified"
+    }
+  ],
+  "passed": false,
+  "actual_web_rtc_input_verified": false
+}

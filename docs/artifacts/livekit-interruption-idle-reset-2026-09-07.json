@@ -1,0 +1,138 @@
+{
+  "scope": "labeled_livekit_interruption_diagnostic_comparison",
+  "cohort": "take_turn",
+  "run_count": 2,
+  "labeled_manifest_sha256": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3",
+  "runs": [
+    {
+      "trial_count": 4,
+      "success_count": 3,
+      "failure_count": 1,
+      "failure_stages": {
+        "fixture_and_decision": 1
+      },
+      "independent_sessions": 4,
+      "playback_active_at_injection": 4,
+      "session_end_confirmed": 4,
+      "latencies": {
+        "local_playback_stop": {
+          "trial_count": 4,
+          "success_count": 3,
+          "missing_count": 1,
+          "unit": "millisecond",
+          "p50": 558.0,
+          "p95": 595.8,
+          "missing_reasons": {
+            "fixture_and_decision": 1
+          }
+        },
+        "turn_decision": {
+          "trial_count": 4,
+          "success_count": 3,
+          "missing_count": 1,
+          "unit": "millisecond",
+          "p50": 558.0,
+          "p95": 595.8,
+          "missing_reasons": {
+            "fixture_and_decision": 1
+          }
+        },
+        "cancel_after_decision": {
+          "trial_count": 4,
+          "success_count": 3,
+          "missing_count": 1,
+          "unit": "millisecond",
+          "p50": 4.42596897482872,
+          "p95": 4.734646520018577,
+          "missing_reasons": {
+            "fixture_and_decision": 1
+          }
+        },
+        "barge_in_cancel_total": {
+          "trial_count": 4,
+          "success_count": 3,
+          "missing_count": 1,
+          "unit": "millisecond",
+          "p50": 582.0,
+          "p95": 621.6,
+          "missing_reasons": {
+            "fixture_and_decision": 1
+          }
+        }
+      },
+      "vad_misfires_observed": [
+        {
+          "fixture_sha256": "a91d38aaceee34c121b227267041a8be00f56d039b2ec1db495aae72e849f83c",
+          "frame_count": 21,
+          "maximum_probability": 0.5113130211830139,
+          "maximum_rms": 0.08535975412283782
+        }
+      ]
+    },
+    {
+      "trial_count": 4,
+      "success_count": 3,
+      "failure_count": 1,
+      "failure_stages": {
+        "fixture_and_decision": 1
+      },
+      "independent_sessions": 4,
+      "playback_active_at_injection": 4,
+      "session_end_confirmed": 4,
+      "latencies": {
+        "local_playback_stop": {
+          "trial_count": 4,
+          "success_count": 3,
+          "missing_count": 1,
+          "unit": "millisecond",
+          "p50": 767.0,
+          "p95": 773.3,
+          "missing_reasons": {
+            "fixture_and_decision": 1
+          }
+        },
+        "turn_decision": {
+          "trial_count": 4,
+          "success_count": 3,
+          "missing_count": 1,
+          "unit": "millisecond",
+          "p50": 767.0,
+          "p95": 773.3,
+          "missing_reasons": {
+            "fixture_and_decision": 1
+          }
+        },
+        "cancel_after_decision": {
+          "trial_count": 4,
+          "success_count": 3,
+          "missing_count": 1,
+          "unit": "millisecond",
+          "p50": 4.5554430186748505,
+          "p95": 5.97893608212471,
+          "missing_reasons": {
+            "fixture_and_decision": 1
+          }
+        },
+        "barge_in_cancel_total": {
+          "trial_count": 4,
+          "success_count": 3,
+          "missing_count": 1,
+          "unit": "millisecond",
+          "p50": 796.0,
+          "p95": 796.0,
+          "missing_reasons": {
+            "fixture_and_decision": 1
+          }
+        }
+      },
+      "vad_misfires_observed": [
+        {
+          "fixture_sha256": "c799a275c9bf68df4da6ded7505ec9ce0bc568aff670218b29b6c3d8810e5f7d",
+          "frame_count": 21,
+          "maximum_probability": 0.43796220421791077,
+          "maximum_rms": 0.06342158359413609
+        }
+      ]
+    }
+  ]
+}

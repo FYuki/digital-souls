@@ -3,6 +3,21 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import App from './App.svelte'
 
+let vadFrameClock = 10_000
+const feedVadFrames = (
+  callback: (probabilities: { isSpeech: number; notSpeech: number }, frame: Float32Array) => void,
+  count: number, amplitude: number, probability: number,
+) => {
+  const clock = vi.spyOn(performance, 'now')
+  try {
+    for (let index = 0; index < count; index += 1) {
+      vadFrameClock += 96
+      clock.mockReturnValue(vadFrameClock)
+      callback({ isSpeech: probability, notSpeech: 1 - probability }, new Float32Array(1536).fill(amplitude))
+    }
+  } finally { clock.mockRestore() }
+}
+
 const CONVERSATION_ID = 'e98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'
 const SECOND_CONVERSATION_ID = '6ad9a610-02cc-4a41-b02e-503826f7292b'
 const THIRD_CONVERSATION_ID = 'f98d6c65-1ae9-4d6f-a8c8-d59b0ad09010'
@@ -32,6 +47,7 @@ const audioMocks = vi.hoisted(() => ({
   microphoneStream: { getTracks: () => [] } as unknown as MediaStream,
   vadOptions: undefined as
     | {
+        onFrameProcessed: (probabilities: { isSpeech: number; notSpeech: number }, frame: Float32Array) => void
         onSpeechStart: () => void
         onSpeechRealStart: () => void
         onSpeechEnd: () => void
@@ -44,11 +60,21 @@ vi.mock('@ricky0123/vad-web', () => ({
     new: vi.fn(async (options) => {
       audioMocks.vadOptions = options
       return {
+        processFrame: vi.fn(async () => undefined),
+        pause: vi.fn(async () => undefined),
         start: () => audioMocks.vadStart(),
         destroy: () => audioMocks.vadDestroy(),
       }
     }),
   },
+}))
+
+vi.mock('./lib/audio/short-speech-evidence', () => ({
+  createShortSpeechAnalyzer: vi.fn(async () => ({
+    process: () => ({voicedFraction: 0, tonalConcentration: 1, spectralFlatness: 1}),
+    reset: () => undefined,
+    close: () => undefined,
+  })),
 }))
 
 vi.mock('./lib/audio/pcm-worklet-recorder', () => ({
@@ -271,23 +297,48 @@ describe('App conversation lifecycle', () => {
     expect(localStorage.getItem('digital-souls:conversation:miori')).toBe(CONVERSATION_ID)
   })
 
+  test('再接続中はマイクを保持して発話を送らず、復旧後の次の発話を追加操作なしで送る', async () => {
+    render(App)
+    await startLiveKitSession()
+    const button = screen.getByRole('button', {name: 'マイクをオフにする'})
+    const frame = audioMocks.vadOptions!.onFrameProcessed
+    await act(() => liveKitMocks.observeRoom?.({transport: 'unavailable', control: 'unavailable', audio: 'unavailable'}))
+    expect(screen.getByText('セッション: 再接続中')).toBeTruthy()
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    expect(audioMocks.vadDestroy).not.toHaveBeenCalled()
+    feedVadFrames(frame, 4, .01, .8)
+    feedVadFrames(frame, 7, 0, .1)
+    expect(liveKitMocks.controlEvents.filter(event => event.type === 'speech_started')).toHaveLength(0)
+    await act(() => liveKitMocks.observeRoom?.({transport: 'available', control: 'available', audio: 'unavailable'}))
+    expect(screen.getByText('セッション: 接続済み')).toBeTruthy()
+    feedVadFrames(frame, 4, .01, .8)
+    feedVadFrames(frame, 7, 0, .1)
+    await waitFor(() => expect(liveKitMocks.controlEvents.filter(event => event.type === 'speech_stopped')).toHaveLength(1))
+    expect(liveKitMocks.controlEvents.filter(event => event.type === 'speech_started')).toHaveLength(1)
+    expect(audioMocks.getUserMedia).toHaveBeenCalledTimes(1)
+    expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(1)
+  })
+
   test('通常UIからLiveKit sessionを開始し継続VADと順序付きdeltaを表示する', async () => {
     render(App)
     await startLiveKitSession()
     if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
 
-    audioMocks.vadOptions.onSpeechStart()
-    audioMocks.vadOptions.onSpeechRealStart()
-    audioMocks.vadOptions.onSpeechEnd()
+    feedVadFrames(audioMocks.vadOptions.onFrameProcessed, 4, 0.01, 0.8)
+    feedVadFrames(audioMocks.vadOptions.onFrameProcessed, 7, 0, 0.8)
     await waitFor(() => expect(
       liveKitMocks.controlEvents.map((event) => event.type),
     ).toEqual([
       'session_start_requested',
+      'observation',
       'session_resumed',
       'speech_started',
       'speech_stopped',
       'observation',
     ]))
+    expect(liveKitMocks.controlEvents.find(event => event.measurement === 'session_summary')?.session_summary).toMatchObject({
+      microphone_activation_attempts: 1, operation_tracking_started: true, end_requested: false,
+    })
     const tokenCall = fetchMock.mock.calls.find(([url]) => String(url) === '/api/voice/livekit/token')
     expect(JSON.parse(String(tokenCall?.[1]?.body))).toMatchObject({
       character_id: 'miori',
@@ -348,7 +399,9 @@ describe('App conversation lifecycle', () => {
       type: 'response_delta', response_id: RESPONSE_ID,
       text_sequence: 1, text: '古い途中応答',
     })
+    expect(screen.getByText('古い途中応答').getAttribute('data-live-response-text')).toBe(RESPONSE_ID)
     await emitCoreEvent({ type: 'response_cancelled', response_id: RESPONSE_ID })
+    expect(document.querySelector(`[data-live-response-text="${RESPONSE_ID}"]`)).toBeNull()
     await emitCoreEvent({
       type: 'response_delta', response_id: RESPONSE_ID,
       text_sequence: 2, text: '混入してはいけない',
@@ -376,6 +429,67 @@ describe('App conversation lifecycle', () => {
     await waitFor(() => expect(
       fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/turns')).length,
     ).toBeGreaterThanOrEqual(2))
+  })
+
+  test.each(['response_cancelled', 'response_completed'])('%s後の履歴取得中と次応答開始後も同じ本文DOMを維持する', async terminal => {
+    render(App)
+    await startLiveKitSession()
+    let resolveHistory!: (value: Response) => void
+    fetchMock.mockImplementation((input, init) => String(input).endsWith('/turns')
+      ? new Promise<Response>(resolve => {resolveHistory = resolve}) : defaultFetch(input, init))
+    await emitCoreEvent({type: 'utterance_finalized', utterance_id: TURN_ID, transcript: '最初の質問', should_response: true})
+    await emitCoreEvent({type: 'response_started', response_id: RESPONSE_ID, history_turn_id: TURN_ID, source_utterance_ids: [TURN_ID]})
+    await emitCoreEvent({type: 'response_delta', response_id: RESPONSE_ID, text_sequence: 1, text: '表示済みの回答'})
+    const original = screen.getByText('表示済みの回答')
+    await emitCoreEvent({type: terminal, response_id: RESPONSE_ID})
+    expect(screen.getByText('表示済みの回答')).toBe(original)
+    await emitCoreEvent({type: 'response_delta', response_id: RESPONSE_ID, text_sequence: 2, text: '遅延文字'})
+    const next = '50000000-0000-4000-8000-000000000020'
+    await emitCoreEvent({type: 'response_started', response_id: next, history_turn_id: next, source_utterance_ids: [TURN_ID]})
+    await emitCoreEvent({type: 'response_delta', response_id: next, text_sequence: 1, text: '次の回答'})
+    expect(screen.getByText('表示済みの回答')).toBe(original)
+    resolveHistory(new Response(JSON.stringify([{kind: 'content', turn_id: TURN_ID, user_content: '最初の質問', assistant_content: '表示済み'}]), {status: 200}))
+    await waitFor(() => expect(screen.getByText('表示済み')).toBe(original))
+    expect(original.getAttribute('data-history-turn-text')).toBe(TURN_ID)
+    expect(document.querySelectorAll(`[data-turn-id="${TURN_ID}"]`)).toHaveLength(2)
+    expect(screen.queryByText(/遅延文字/)).toBeNull()
+    expect(screen.getByText('次の回答')).toBeTruthy()
+  })
+
+  test('履歴再取得の失敗では本文を消さず、会話を切り替えたら持ち込まない', async () => {
+    render(App); await startLiveKitSession()
+    await emitCoreEvent({type: 'utterance_finalized', utterance_id: TURN_ID, transcript: '元の質問', should_response: true})
+    await emitCoreEvent({type: 'response_started', response_id: RESPONSE_ID, history_turn_id: TURN_ID, source_utterance_ids: [TURN_ID]})
+    await emitCoreEvent({type: 'response_delta', response_id: RESPONSE_ID, text_sequence: 1, text: '保持する回答'})
+    const original = screen.getByText('保持する回答')
+    fetchMock.mockImplementation((input, init) => String(input).endsWith('/turns')
+      ? Promise.reject(new Error('history unavailable')) : defaultFetch(input, init))
+    await emitCoreEvent({type: 'response_cancelled', response_id: RESPONSE_ID})
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
+    expect(screen.getByText('保持する回答')).toBe(original)
+    fetchMock.mockImplementation(async (input, init) => init?.method === 'POST' && String(input).endsWith('/conversations')
+      ? new Response(JSON.stringify({...conversation, conversation_id: SECOND_CONVERSATION_ID, title: '別の会話'}), {status: 200}) : defaultFetch(input, init))
+    await fireEvent.click(screen.getByRole('button', {name: '新規スレッド（光織）'}))
+    await waitFor(() => expect(screen.queryByText('保持する回答')).toBeNull())
+    expect(original.isConnected).toBe(false)
+  })
+
+  test('会話切替後に以前の履歴取得が完了しても旧本文を復元しない', async () => {
+    render(App); await startLiveKitSession()
+    let resolveHistory!: (value: Response) => void
+    fetchMock.mockImplementation((input, init) => String(input).endsWith(`/${CONVERSATION_ID}/turns`)
+      ? new Promise<Response>(resolve => {resolveHistory = resolve})
+      : init?.method === 'POST' && String(input).endsWith('/conversations')
+        ? Promise.resolve(new Response(JSON.stringify({...conversation, conversation_id: SECOND_CONVERSATION_ID, title: '別の会話'}), {status: 200}))
+        : defaultFetch(input, init))
+    await emitCoreEvent({type: 'response_started', response_id: RESPONSE_ID, history_turn_id: TURN_ID, source_utterance_ids: [TURN_ID]})
+    await emitCoreEvent({type: 'response_delta', response_id: RESPONSE_ID, text_sequence: 1, text: '以前の回答'})
+    await emitCoreEvent({type: 'response_cancelled', response_id: RESPONSE_ID})
+    await fireEvent.click(screen.getByRole('button', {name: '新規スレッド（光織）'}))
+    await waitFor(() => expect(screen.queryByText('以前の回答')).toBeNull())
+    await act(() => resolveHistory(new Response(JSON.stringify([{kind: 'content', turn_id: TURN_ID, user_content: '以前の質問', assistant_content: '以前の回答'}]), {status: 200})))
+    expect(screen.queryByText('以前の回答')).toBeNull()
+    expect(document.querySelector(`[data-turn-id="${TURN_ID}"]`)).toBeNull()
   })
 
   test('response失敗後もユーザー発話と途中回答を画面に保持する', async () => {
@@ -423,8 +537,7 @@ describe('App conversation lifecycle', () => {
     expect(screen.getByText('再生: 再生中')).toBeTruthy()
     if (audioMocks.vadOptions === undefined) throw new Error('VAD callbacks are required')
 
-    audioMocks.vadOptions.onSpeechStart()
-    audioMocks.vadOptions.onSpeechRealStart()
+    feedVadFrames(audioMocks.vadOptions.onFrameProcessed, 4, 0.01, 0.8)
     await waitFor(() => expect(
       liveKitMocks.controlEvents.map((event) => event.type),
     ).toContain('speech_started'))

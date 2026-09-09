@@ -21,6 +21,14 @@ streaming、barge-in、再接続等のWave 3機能を追加しない。完成後
 
 通常UIはsession、input、response、playbackを独立表示する。`/voice/livekit`はdev serverとLiveKit integrationだけで利用し、production buildでは製品入口として公開しない。音声session中にtextを送信した場合は、active音声responseと再生を停止して音声sessionを終了した後、既存HTTP text chat経路で送る。同一LiveKit session内のtyped textは将来範囲とする。
 
+## 応答生成と出力完了の境界
+
+LiveKitのLLM／TTS生成終了だけでは、Coreの応答をCOMPLETEDにしない。transport非依存の`ResponseCompletionPort`を挟み、LiveKit adapterが残りPCMを送出して総sample数をブラウザへ通知し、全packetの出力時計通過を確認してからCoreを完了させる。CoreへRoom SID・Track ID・PCM配送方式は渡さない。この待機中も応答はIN_PROGRESSで、cancel・disconnect・session終了により処理を中断できる。
+
+`playback_completed`の途中prefix通知は維持し、全出力確認だけに`response_finished: true`を付ける。全出力時は同じ応答の連続したlogical metadataの総sample数と送信元input sample数を照合する。途中prefixが既に最終sequenceに達していても全出力通知を別eventとして一度送り、通常のcontrol outboxでACK・再送を扱う。Backendは待機中の応答IDと最終sequenceが一致する全出力確認だけを受理する。
+
+残りPCMの送出後、全出力確認が10秒以内に来なければ応答を失敗させ、待機を解放する。生成中・配送中・確認待ち中のcancelはCoreの通常のキャンセルとし、COMPLETEDからCANCELLEDへのterminal状態の書換えは行わない。遅れて届く`playback_stopped`も対象response IDに限定して音声を止める。この契約を使うFrontendとBackendは同じ変更を含む版を組み合わせる。
+
 ## 運用制約
 
 devは7880/TCP、7881/TCP、7882/UDP、dogfoodは17880/TCP、17881/TCP、17882/UDPを使う。host networkと単一UDP muxを使い、TURN、Redis、TLS、固定`node_ip`は初期範囲に含めない。

@@ -53,3 +53,22 @@ def test_should_map_remote_failures(status, error_type, error_code) -> None:
 def test_should_reject_timeout_not_longer_than_service_timeout() -> None:
     with pytest.raises(ValueError, match="must exceed"):
         RemoteWhisperTranscriber("http://127.0.0.1:50022", timeout_seconds=45)
+
+
+@pytest.mark.parametrize("failure", [None, 429, 504, "timeout", "invalid"])
+def test_preparation_uses_anonymous_silence_and_preserves_inference_timeout(failure) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.content == bytes(3200)
+        assert request.url.path == "/v1/transcriptions"
+        assert request.extensions["timeout"]["read"] > 45
+        if failure == "timeout":
+            raise httpx.ReadTimeout("test", request=request)
+        if failure == "invalid":
+            return httpx.Response(200, json={"text": None})
+        return httpx.Response(failure or 200, json={"text": "無音の認識結果は利用しない"})
+
+    client = _client(handler)
+    try:
+        assert client.prepare() is (failure is None)
+    finally:
+        client.close()

@@ -428,7 +428,7 @@ def test_automatic_llm_failure_terminates_once_and_starts_pending_response() -> 
     _run(exercise)
 
 
-def test_response_start_failure_terminates_once_and_allows_the_next_response() -> None:
+def test_response_start_failure_terminates_once_and_allows_the_next_response(caplog) -> None:
     async def exercise() -> None:
         module = _core_module()
         delivery = RecordingDelivery()
@@ -479,6 +479,10 @@ def test_response_start_failure_terminates_once_and_allows_the_next_response() -
         await session.end()
 
     _run(exercise)
+    assert "Core task failed: type=RuntimeError" in caplog.text
+    assert "start_response" in caplog.text
+    assert "response start failure sentinel" not in caplog.text
+    assert "開始に失敗する入力" not in caplog.text
 
 
 def test_terminal_persistence_failure_still_delivers_and_starts_pending_response() -> None:
@@ -1657,4 +1661,55 @@ def test_cancel_finishes_while_terminal_persistence_is_blocked() -> None:
         await _wait_until(lambda: session.running_stage_count == 0)
         assert len(persistence.outcomes) == 1
 
+    _run(exercise)
+
+
+@pytest.mark.parametrize("phase", ["preview", "final"])
+@pytest.mark.parametrize("already_completed", [False, True])
+def test_turn_cancel_observation_requires_a_cancelled_response(phase, already_completed) -> None:
+    async def exercise() -> None:
+        module, session, delivery, _persistence, observation = _session()
+        first = await session.finalize_utterance(
+            utterance_id=UTTERANCE_1, transcript="応答", should_response=True,
+        )
+        try:
+            if already_completed:
+                await session.complete_response(response_id=first.response_id, generation=first.generation)
+            if phase == "preview":
+                await session.preview_turn(utterance_id=UTTERANCE_2, audio=b"\0\0", interrupted_response_id=first.response_id)
+            else:
+                await session.start_transcription(utterance_id=UTTERANCE_2, audio=b"\0\0", should_response=True, interrupted_response_id=first.response_id)
+            expected = 0 if already_completed else 1
+            assert sum(item.stage == "server_cancelled" and item.utterance_id == UTTERANCE_2 for item in observation.observations) == expected
+            assert sum(event.type == "response_cancelled" and event.response_id == first.response_id for event in delivery.events) == expected
+            assert session.response(first.response_id).state is (module.ResponseState.COMPLETED if already_completed else module.ResponseState.CANCELLED)
+        finally:
+            await session.end()
+    _run(exercise)
+
+
+def test_cancel_clock_brackets_state_transition_and_survives_delayed_delivery() -> None:
+    async def exercise() -> None:
+        module, session, delivery, _, _ = _session()
+        persistence = BlockingTerminalPersistence()
+        session._persistence = persistence
+        response = await session.finalize_utterance(
+            utterance_id=UTTERANCE_1, transcript="中断対象", should_response=True,
+        )
+        states = []
+        ticks = iter((123_456_001, 123_456_999))
+        def clock() -> int:
+            states.append(session.response(response.response_id).state)
+            return next(ticks)
+        session._monotonic_ns = clock
+        await session.cancel_response(response_id=response.response_id, reason="barge_in")
+        await session.cancel_response(response_id=response.response_id, reason="barge_in")
+        await persistence.persist_started.wait()
+        assert states == [module.ResponseState.IN_PROGRESS, module.ResponseState.CANCELLED]
+        assert _terminal_events(delivery) == []
+        persistence.release_persist.set()
+        await _wait_until(lambda: len(_terminal_events(delivery)) == 1)
+        assert event_field(_terminal_events(delivery)[0], "terminal_state_bounds_ns") == (123_456_001, 123_456_999)
+        assert event_field(persistence.outcomes[0], "terminal_state_bounds_ns") == (123_456_001, 123_456_999)
+        await session.end()
     _run(exercise)

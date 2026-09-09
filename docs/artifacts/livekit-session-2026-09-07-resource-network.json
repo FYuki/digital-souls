@@ -1,0 +1,95 @@
+{
+  "scope": "continuous_resource_network_diagnostic",
+  "session_count": 1,
+  "turn_count": 3,
+  "session_end_confirmed": true,
+  "fixture_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+  "additional_user_control_actions": 0,
+  "playback": [
+    {
+      "playback_gap_total_ms": 0.0,
+      "playback_gap_maximum_ms": 0.0,
+      "playback_underrun_count": 0.0,
+      "playback_duration_ms": 3520.0
+    },
+    {
+      "playback_gap_total_ms": 0.0,
+      "playback_gap_maximum_ms": 0.0,
+      "playback_underrun_count": 0.0,
+      "playback_duration_ms": 2380.0
+    },
+    {
+      "playback_gap_total_ms": 0.0,
+      "playback_gap_maximum_ms": 0.0,
+      "playback_underrun_count": 0.0,
+      "playback_duration_ms": 2900.0
+    }
+  ],
+  "network": {
+    "sent_bytes": {
+      "status": "measured",
+      "value": 35855,
+      "reason": null
+    },
+    "received_bytes": {
+      "status": "measured",
+      "value": 101713,
+      "reason": null
+    },
+    "packet_loss_basis_points": {
+      "status": "measured",
+      "value": 0.0,
+      "reason": null
+    },
+    "condition": "localhost LiveKit; one session three turns; browser audio RTP payload; loss at browser downlink",
+    "collection": {
+      "byte_scope": "browser_audio_rtp_payload",
+      "loss_scope": "browser_downlink_response_tracks",
+      "trial_count": 3,
+      "sent_trials": 3,
+      "received_trials": 3,
+      "loss_trials": 3,
+      "received_packets": 440,
+      "lost_packets": 0,
+      "negative_loss_trials": 0,
+      "missing_trials": {}
+    }
+  },
+  "resources": {
+    "cpu_percent": {
+      "status": "measured",
+      "value": 20.963279125957605,
+      "reason": null
+    },
+    "memory_bytes": {
+      "status": "measured",
+      "value": 140902400,
+      "reason": null
+    },
+    "gpu_utilization_percent": {
+      "status": "measured",
+      "value": 81.0,
+      "reason": null
+    },
+    "gpu_memory_bytes": {
+      "status": "measured",
+      "value": 7885291520,
+      "reason": null
+    },
+    "collection": {
+      "cpu_scope": "owned_backend_container",
+      "cpu_method": "cpu_time_delta_over_observer_wall_time_one_core_100_percent",
+      "memory_method": "maximum_sampled_container_charged_bytes",
+      "gpu_scope": "shared_host_gpu",
+      "gpu_method": "maximum_device_utilization_and_maximum_total_used_bytes",
+      "backend_samples": 79,
+      "cpu_intervals": 78,
+      "cpu_observed_ms": 40381.468706,
+      "maximum_interval_ms": 554.762385,
+      "gpu_samples": 9,
+      "missing_samples": {
+        "owned_backend_not_running": 6
+      }
+    }
+  }
+}

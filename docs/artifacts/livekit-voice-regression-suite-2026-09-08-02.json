@@ -1,0 +1,20 @@
+{
+  "scope": "normal_voice_regression_suite",
+  "measurement_revision": "7a382c70c34ace0bdc349622b4aae12ab86876c6",
+  "passed": false,
+  "browser_tests_passed": 5,
+  "expected_tests": 5,
+  "runtime_exception_count": 2,
+  "runtime_exception_root": "terminal_delivery_after_transport_became_unavailable",
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "teardown_completed": true,
+  "log_reader_closed": true,
+  "full_issue_acceptance_verified": false,
+  "source_sha256": {
+    "environment_run": "dbe912ce3cd5900d894daadac749e68d4ee528b7e705c7e9e3cbb84270aceda2",
+    "test_log": "40946756048ea7901de20d2e985c75efd498ba9a209919024236f1eb017d426e"
+  }
+}

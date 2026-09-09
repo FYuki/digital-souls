@@ -1,0 +1,26 @@
+{
+  "version": "voice-quality-v1",
+  "context": "相手が説明を続けている最中。backchannelは短い受容・共感で説明継続を求め、take_turnは停止・訂正・質問で発話権を要求する。ラベルは音声生成や実装の判定より先に固定する。",
+  "cases": [
+    {"id": "ack-01", "cohort": "backchannel", "text": "うんうん", "intent": "説明を聞き続ける同意"},
+    {"id": "ack-02", "cohort": "backchannel", "text": "はい", "intent": "説明を聞き続ける応答"},
+    {"id": "ack-03", "cohort": "backchannel", "text": "ええ", "intent": "説明を聞き続ける同意"},
+    {"id": "ack-04", "cohort": "backchannel", "text": "へえ", "intent": "説明への驚き"},
+    {"id": "ack-05", "cohort": "backchannel", "text": "なるほど", "intent": "説明への理解"},
+    {"id": "ack-06", "cohort": "backchannel", "text": "そうなんだ", "intent": "説明への受容"},
+    {"id": "ack-07", "cohort": "backchannel", "text": "そうなんですね", "intent": "説明への丁寧な受容"},
+    {"id": "ack-08", "cohort": "backchannel", "text": "そうですね", "intent": "説明への同意"},
+    {"id": "ack-09", "cohort": "backchannel", "text": "確かに", "intent": "説明への同意"},
+    {"id": "ack-10", "cohort": "backchannel", "text": "そうそう", "intent": "説明への強い同意"},
+    {"id": "take-01", "cohort": "take_turn", "text": "ちょっと待って", "intent": "説明を止める"},
+    {"id": "take-02", "cohort": "take_turn", "text": "ストップして", "intent": "説明を止める"},
+    {"id": "take-03", "cohort": "take_turn", "text": "一つ質問してもいい", "intent": "質問のため発話権を求める"},
+    {"id": "take-04", "cohort": "take_turn", "text": "それは違うと思う", "intent": "内容への訂正"},
+    {"id": "take-05", "cohort": "take_turn", "text": "もう一度説明して", "intent": "説明のやり直しを求める"},
+    {"id": "take-06", "cohort": "take_turn", "text": "うん、でも質問がある", "intent": "同意に続いて質問へ切り替える"},
+    {"id": "take-07", "cohort": "take_turn", "text": "はい、そこを訂正して", "intent": "同意に続いて訂正を求める"},
+    {"id": "take-08", "cohort": "take_turn", "text": "なるほど、具体例を教えて", "intent": "理解に続いて具体例を求める"},
+    {"id": "take-09", "cohort": "take_turn", "text": "その話は後にしよう", "intent": "話題を切り替える"},
+    {"id": "take-10", "cohort": "take_turn", "text": "今は私の話を聞いて", "intent": "明示的に発話権を求める"}
+  ]
+}
