@@ -10,6 +10,8 @@ from pathlib import Path
 from app.external_mcp import Connection, ExecutionGate, Registry
 from app.external_mcp.models import MCPFailure, encode
 from app.addon_admin.runtime import AddonRuntime
+from app.addon_admin.connections import ConnectionStore
+from app.addon_admin.management import ConnectionManagement
 from app.inference import InferenceRouter
 from app.privacy.contracts import PrivacyScanner
 
@@ -114,13 +116,31 @@ class ToolRuntime:
     ) -> None:
         self.settings = settings
         registry = Registry()
+        connection_store = (
+            ConnectionStore(settings_path.parent / "mcp-admin" / "connections.sqlite3")
+            if settings_path is not None
+            else None
+        )
         bindings = BindingResolver(settings.bindings)
         private: list[str] = []
         references: list[str] = []
         for connection in settings.connections:
-            registry.register(
-                connection, display_name=settings.display_names.get(connection.id)
-            )
+            if (
+                connection_store is not None
+                and connection.manifest["connection"]["ownership"] == "external"
+            ):
+                auth = connection.manifest["connection"]["auth"]
+                connection_store.import_connection(
+                    connection,
+                    settings.display_names.get(connection.id, connection.id),
+                    os.environ.get(auth.get("secret_ref", ""))
+                    if auth["type"] == "bearer"
+                    else None,
+                )
+            else:
+                registry.register(
+                    connection, display_name=settings.display_names.get(connection.id)
+                )
             config = connection.manifest["connection"]
             private.extend(
                 [
@@ -132,6 +152,11 @@ class ToolRuntime:
             if secret_ref:
                 references.append(secret_ref)
                 private.append(os.environ.get(secret_ref, ""))
+        if connection_store is not None:
+            for record in connection_store.records():
+                registry.register(
+                    record.connection, display_name=record.spec.display_name
+                )
         self.gate = ExecutionGate(registry, bindings=bindings)
         protected = (
             Path(__file__).resolve().parents[3],
@@ -140,11 +165,24 @@ class ToolRuntime:
         self.service = ToolService(
             self.gate,
             InferenceDecisionRouter(router),
-            Sanitizer(scanner, tuple(private), tuple(references)),
+            Sanitizer(
+                scanner,
+                tuple(private),
+                tuple(references),
+                dynamic_private_values=connection_store.private_values
+                if connection_store
+                else None,
+            ),
             bindings,
             protected_roots=protected,
         )
-        self.management = AddonRuntime(self.gate, settings_path=settings_path)
+        self.management: AddonRuntime = (
+            ConnectionManagement(
+                self.gate, connection_store, settings_path=settings_path
+            )
+            if connection_store is not None
+            else AddonRuntime(self.gate, settings_path=settings_path)
+        )
         self.management.on_disabled = self.service.connection_disabled
 
     async def start(self) -> None:

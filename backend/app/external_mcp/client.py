@@ -11,7 +11,7 @@ from typing import Any, AsyncGenerator, AsyncIterator, Awaitable, Callable
 
 import anyio
 import httpx2
-from mcp import Client
+from mcp import Client, types
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
 from mcp.shared.exceptions import MCPError
@@ -312,8 +312,18 @@ class ExternalMCPClient:
         return self._connection_failure
 
     async def health(self) -> None:
-        # capabilityの有無に依存せず、副作用のないprotocol pingを使う。
-        await self._request(lambda client: client.session.send_ping())
+        # 2026-07-28ではpingが廃止されたため、能力や副作用に依存しないdiscoverを使う。
+        async def probe(client: Client) -> None:
+            if client.protocol_version >= "2026-07-28":
+                result = types.DiscoverResult.model_validate(
+                    await client.session.send_discover(client.protocol_version)
+                )
+                if client.protocol_version not in result.supported_versions:
+                    raise MCPFailure("protocol", "protocol_version_changed")
+            else:
+                await client.session.send_ping()
+
+        await self._request(probe)
 
     async def discover(self) -> Discovery:
         async def fetch(client: Client) -> Discovery:

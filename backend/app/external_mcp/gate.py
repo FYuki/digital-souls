@@ -6,9 +6,9 @@ import asyncio
 import json
 import time
 from collections import Counter, deque
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
-from typing import AsyncIterator, Callable
+from typing import AsyncIterator, Callable, Iterator
 from uuid import uuid4
 
 from .models import (
@@ -149,11 +149,34 @@ class ExecutionGate:
         self.parallelism = parallelism
         self.max_input_rounds = max_input_rounds
         self._sources: dict[str, CapabilitySource] = {}
+        self._executing: Counter[str] = Counter()
+        self._editing: set[str] = set()
         self._locks: dict[str, _ConnectionLock] = {}
         self._loops: dict[str, _Loop] = {}
         self._pending: dict[str, _Pending] = {}
         self._rates: dict[tuple[str, ...], deque[float]] = {}
         self._last_rate_cleanup = float("-inf")
+
+    @contextmanager
+    def edit_connection(self, connection_id: str) -> Iterator[None]:
+        """実行と編集の間にawaitを挟まず判定し、編集中の新規dispatchも拒否する。"""
+        if self._executing[connection_id] or connection_id in self._editing:
+            raise MCPFailure("policy", "connection_busy")
+        self._editing.add(connection_id)
+        try:
+            yield
+        finally:
+            self._editing.discard(connection_id)
+
+    @contextmanager
+    def _execution(self, connection_id: str) -> Iterator[None]:
+        if connection_id in self._editing:
+            raise MCPFailure("policy", "connection_busy")
+        self._executing[connection_id] += 1
+        try:
+            yield
+        finally:
+            self._executing[connection_id] -= 1
 
     @asynccontextmanager
     async def attach(
@@ -330,6 +353,7 @@ class ExecutionGate:
         source = self._sources.get(connection_id)
         if (
             not entry.linked
+            or connection_id in self._editing
             or entry.generation != generation
             or entry.availability not in {"available", "degraded"}
             or source is None
@@ -370,7 +394,12 @@ class ExecutionGate:
         dispatch_guard: Callable[[], None] | None = None,
     ) -> Json:
         return await self._execute(
-            connection_id, resource_ref, {}, loop_id, "resource", binding_id=binding_id,
+            connection_id,
+            resource_ref,
+            {},
+            loop_id,
+            "resource",
+            binding_id=binding_id,
             dispatch_guard=dispatch_guard,
         )
 
@@ -492,94 +521,106 @@ class ExecutionGate:
             )
             retry = effective["retry"] == "read_once" and "disable_retry" not in rules
             async with self._locks[connection_id].hold(parallel):
-                payload: Json
-                for attempt in range(2 if retry else 1):
-                    source = self._live(loop, connection_id, generation)
-                    if policy["resource_binding_required"] or binding_id is not None:
-                        if self.bindings is None or not await self.bindings.validate(
+                with self._execution(connection_id):
+                    payload: Json
+                    for attempt in range(2 if retry else 1):
+                        source = self._live(loop, connection_id, generation)
+                        if (
+                            policy["resource_binding_required"]
+                            or binding_id is not None
+                        ):
+                            if (
+                                self.bindings is None
+                                or not await self.bindings.validate(
+                                    connection_id,
+                                    operation,
+                                    loop.context.character_id,
+                                    binding_id,
+                                    loop.context.session_id,
+                                )
+                            ):
+                                raise MCPFailure("policy", "binding_denied")
+                        # 非同期validatorを待つ間のstop/relinkもdispatch前に確認する。
+                        self._live(loop, connection_id, generation)
+                        # queue/connection lock待機中の自律許可取消しも送信直前に反映する。
+                        if dispatch_guard is not None:
+                            dispatch_guard()
+                        entry = self.registry.entry(connection_id)
+                        if entry.availability == "degraded" and (
+                            effective["effect"] != "read"
+                            or f"{kind}:{operation}" not in entry.healthy_operations
+                        ):
+                            raise MCPFailure(
+                                "policy", "partial_failure_operation_denied"
+                            )
+                        self._charge(loop, connection_id, operation, arguments)
+                        try:
+                            if kind == "tool":
+                                # dispatch直前に元schemaを再検証する。
+                                assert tool is not None
+                                validate_arguments(tool["input_schema"], arguments)
+                                payload = await source.call_tool(
+                                    operation,
+                                    arguments,
+                                    input_responses=responses,
+                                    request_state=pending.request_state
+                                    if pending
+                                    else None,
+                                )
+                            else:
+                                payload = await source.read_resource(
+                                    operation,
+                                    input_responses=responses,
+                                    request_state=pending.request_state
+                                    if pending
+                                    else None,
+                                )
+                            break
+                        except MCPFailure as error:
+                            if retry and attempt == 0 and error.retryable:
+                                result["retry_count"] = 1
+                                continue
+                            if error.category in {"transport", "protocol", "auth"}:
+                                self.registry.operation_failure(connection_id, error)
+                            raise
+                    # 成功後の結果統合はretry区間の外で行う。
+                    result["native_payload"] = payload
+                    if payload.get("resultType") == "input_required":
+                        self._live(loop, connection_id, generation)
+                        request_state = payload.get("requestState")
+                        requests = payload.get("inputRequests") or {}
+                        if (
+                            request_state is not None
+                            and not isinstance(request_state, str)
+                        ) or not isinstance(requests, dict):
+                            raise MCPFailure("protocol", "invalid_input_required")
+                        if any(
+                            not isinstance(request, dict)
+                            or request.get("method") != "elicitation/create"
+                            for request in requests.values()
+                        ):
+                            raise MCPFailure(
+                                "policy", "required_capability_unsupported"
+                            )
+                        interaction_id = str(uuid4())
+                        self._pending[interaction_id] = _Pending(
+                            loop_id,
                             connection_id,
                             operation,
-                            loop.context.character_id,
+                            kind,
+                            encode(arguments),
+                            request_state,
+                            frozenset(requests),
+                            (pending.rounds if pending else 0) + 1,
                             binding_id,
-                            loop.context.session_id,
-                        ):
-                            raise MCPFailure("policy", "binding_denied")
-                    # 非同期validatorを待つ間のstop/relinkもdispatch前に確認する。
-                    self._live(loop, connection_id, generation)
-                    # queue/connection lock待機中の自律許可取消しも送信直前に反映する。
-                    if dispatch_guard is not None:
-                        dispatch_guard()
-                    entry = self.registry.entry(connection_id)
-                    if entry.availability == "degraded" and (
-                        effective["effect"] != "read"
-                        or f"{kind}:{operation}" not in entry.healthy_operations
-                    ):
-                        raise MCPFailure("policy", "partial_failure_operation_denied")
-                    self._charge(loop, connection_id, operation, arguments)
-                    try:
-                        if kind == "tool":
-                            # dispatch直前に元schemaを再検証する。
-                            assert tool is not None
-                            validate_arguments(tool["input_schema"], arguments)
-                            payload = await source.call_tool(
-                                operation,
-                                arguments,
-                                input_responses=responses,
-                                request_state=pending.request_state
-                                if pending
-                                else None,
-                            )
-                        else:
-                            payload = await source.read_resource(
-                                operation,
-                                input_responses=responses,
-                                request_state=pending.request_state
-                                if pending
-                                else None,
-                            )
-                        break
-                    except MCPFailure as error:
-                        if retry and attempt == 0 and error.retryable:
-                            result["retry_count"] = 1
-                            continue
-                        if error.category in {"transport", "protocol", "auth"}:
-                            self.registry.operation_failure(connection_id, error)
-                        raise
-                # 成功後の結果統合はretry区間の外で行う。
-                result["native_payload"] = payload
-                if payload.get("resultType") == "input_required":
-                    self._live(loop, connection_id, generation)
-                    request_state = payload.get("requestState")
-                    requests = payload.get("inputRequests") or {}
-                    if (
-                        request_state is not None and not isinstance(request_state, str)
-                    ) or not isinstance(requests, dict):
-                        raise MCPFailure("protocol", "invalid_input_required")
-                    if any(
-                        not isinstance(request, dict)
-                        or request.get("method") != "elicitation/create"
-                        for request in requests.values()
-                    ):
-                        raise MCPFailure("policy", "required_capability_unsupported")
-                    interaction_id = str(uuid4())
-                    self._pending[interaction_id] = _Pending(
-                        loop_id,
-                        connection_id,
-                        operation,
-                        kind,
-                        encode(arguments),
-                        request_state,
-                        frozenset(requests),
-                        (pending.rounds if pending else 0) + 1,
-                        binding_id,
-                    )
-                    result.update(
-                        outcome="input_required", interaction_id=interaction_id
-                    )
-                elif payload.get("isError"):
-                    result.update(outcome="failed", error_category="tool_error")
-                else:
-                    result["outcome"] = "succeeded"
+                        )
+                        result.update(
+                            outcome="input_required", interaction_id=interaction_id
+                        )
+                    elif payload.get("isError"):
+                        result.update(outcome="failed", error_category="tool_error")
+                    else:
+                        result["outcome"] = "succeeded"
         except MCPFailure as error:
             outcome = "failed"
             if error.code in {"budget_exceeded", "rate_limit_exceeded"}:
