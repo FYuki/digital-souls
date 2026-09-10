@@ -6,9 +6,33 @@
 ## 状態（2026-09-11）
 
 M1〜M4は各PRの全CI成功後にepicへ統合した。M5の制御MCPによる実プロセス検証は9件成功した。
-独立MCPを通すブラウザのテキスト／LiveKit受入は実行中であり、まだ完了扱いにしない。
+独立MCPを通すブラウザのテキスト／LiveKit受入は、下記の全シナリオが190.47秒で成功した。
 main向けDraft PRは[#311](https://github.com/FYuki/digital-souls/pull/311)。CodeRabbitの初回全差分レビュー21件へ回答し、修正をM5の[#310](https://github.com/FYuki/digital-souls/pull/310)へ反映した。
 関連unit 125件・module 76件・mypyは成功。[対応表](artifacts/addon-action-185/review-disposition.md)に合意を変更するため採用しなかった指摘も記載した。M5統合後の最新差分レビューは未完了。
+
+## 独立MCPの実接続受入
+
+- Run ID: `1e1fc35d-b2e0-41ba-a7b3-9d4000d7d12b`。実行commit: `63d9d914d20ea322b109bbd30b9c2307cd42dfbd`。開始時の追跡対象変更なし。
+- 2026-09-11 05:27〜05:30 JST。Playwrightは1件成功、失敗・skip・flakyは0件。
+- Chat / Tool Routing / PrivacyはOllama `0.32.5` の `gemma4:e4b`。同一モデルのcontextは合計8192。各用途の入出力上限は[manifest](artifacts/addon-action-185/independent-mcp/runtime-manifest.json)に記録した。
+- Filesystem MCP `2026.8.31`（stdio）、Whisper service `1.0` / `medium`（CUDA、`int8_float16`、revisionはmanifest参照）、VOICEVOXのversion応答は文字列`latest`、LiveKit `1.9.7`、Chromiumを使用した。VOICEVOXに数値versionを推定して付けない。
+
+| シナリオ | 観測結果 |
+|---|---|
+| 通常操作の読取 | 承認なしで「青い折り紙」を読み取り、内容を回答 |
+| テキストの単回承認 | 承認前は未変更、画面操作後に「赤い風船」へ更新し完了を回答 |
+| テキストの拒否 | 「白い雲」への変更を実行せず、「赤い風船」を維持 |
+| 音声発話による承認 | 「一度承認します」という実STT入力では未実行。画面の承認要求を維持 |
+| 音声中の単回承認 | 画面操作後に「青い星」へ更新、完了回答と実再生 |
+| 音声中の拒否 | 「緑の月」へ変更せず、「青い星」を維持。未実行を回答して再生 |
+| 音声中の常時承認 | 「金の花」へ更新、完了回答と実再生 |
+| 常時承認後の次回利用 | 対象の追加質問へ1回回答した後、新たな承認なしで「紫の花」へ更新し完了を回答 |
+
+音声7応答すべてでCore responseと入力IDの対応を確認し、期待sample数と実再生sample数が一致した（合計2,632,320 samples）。
+確認要求は単回・拒否・単回・拒否・常時の5件、変更は期待どおり4件の`applied`だった。
+回答本文も照合し、実行予告だけ・実行後の対象再質問を完了として含めていない。
+
+一次証跡: [Playwright結果](artifacts/addon-action-185/independent-mcp/playwright.txt)、[ブラウザreport](artifacts/addon-action-185/independent-mcp/browser-public.json)、[操作・回答・再生](artifacts/addon-action-185/independent-mcp/action-evidence.json)、[承認／実行記録](artifacts/addon-action-185/independent-mcp/action-state.json)、[推論・Tool段階](artifacts/addon-action-185/independent-mcp/stage-events.txt)。
 
 ## 検証境界
 
@@ -58,7 +82,7 @@ fixtureの制御ファイルは障害注入側だけが操作する。一般利�
 上記のファイル名は `backend/tests/unit/`、`backend/tests/module/`、`frontend/` 配下を指す。
 実サービス不足をこの自動回帰の成功で補って完了扱いにしない。
 
-## 実接続からの修正と未完了ケース
+## 実接続からの修正と失敗した試行
 
 - 読取結果だけで変更要求を完了扱いにした例を確認した。結果にCoreの操作分類を付け、変更完了の判断と回答の指示を修正した。回答生成時に実在しない承認待ちを履歴から推測しないようにした。
 - 音声の対象ラベルから元schemaの必須引数を構成する際、Coreのbinding補完が判断材料に含まれていなかった。引数値はCoreに残し、補完する引数名を提示するよう修正した。利用者が明示した値の不一致は引き続き拒否する。
@@ -90,7 +114,6 @@ dogfoodのデータやサービスを変更しない。実購入・契約・本�
 
 ## 残る受入
 
-- 独立MCPを通すブラウザのテキスト／LiveKitシナリオを完走し、provider/model・音声構成・実行commit・観測結果を保存する。
 - M5の最新CIを確認してepicへ統合する。
 - main向けPRに対してCodeRabbitの実差分レビューと指摘修正を完了する。mainへのマージはユーザーが行う。
 - Addon管理UI（#305）、音声だけの承認、SDK Tasks自体の新規実装、dogfoodデプロイは今回の完了条件に含めない。

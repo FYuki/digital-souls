@@ -1,0 +1,8 @@
+
+Running 1 test using 1 worker
+
+(node:820309) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 integration/addon-action/conversation.spec.ts:158:1 › 独立MCPへのテキスト・LiveKit会話で承認と実際の副作用を確認する (3.2m)
+
+  1 passed (3.2m)
