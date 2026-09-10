@@ -242,9 +242,7 @@ def _service(
         approved_repository=approved_repository,
         privacy_scanner=scanner,
         semantic_classifier=classifier,
-        evaluator=create_rag_admission_evaluator(
-            resolved_memory_policy().privacy
-        ),
+        evaluator=create_rag_admission_evaluator(resolved_memory_policy().privacy),
         occurred_timezone="Asia/Tokyo",
         extractor_version=EXTRACTOR_VERSION,
     )
@@ -316,7 +314,9 @@ def test_non_allow_decisions_never_reach_the_approved_repository(
     assert repository.touch_calls == []
 
 
-def test_allow_scans_source_and_each_slot_then_classifies_the_source_with_admission_profile() -> None:
+def test_allow_scans_source_and_each_slot_then_classifies_the_source_with_admission_profile() -> (
+    None
+):
     candidate = MemoryCandidate(
         memory_type=MemoryType.USER_PREFERENCE,
         structured_value=UserPreferenceValue(
@@ -340,7 +340,9 @@ def test_allow_scans_source_and_each_slot_then_classifies_the_source_with_admiss
     assert len(repository.save_calls) == 1
 
 
-def test_classifier_is_not_called_when_deterministic_checks_finish_the_decision() -> None:
+def test_classifier_is_not_called_when_deterministic_checks_finish_the_decision() -> (
+    None
+):
     service, _turns, repository, _scanner, classifier = _service(
         source_scan=ScanSuccess((_finding(PrivacyCategory.API_KEY),)),
     )
@@ -356,7 +358,9 @@ def test_classifier_is_not_called_when_deterministic_checks_finish_the_decision(
     "invalid_turn",
     [
         None,
-        _turn(status=TurnStatus.PRIVACY_SKIPPED, user_content=None, assistant_content=None),
+        _turn(
+            status=TurnStatus.PRIVACY_SKIPPED, user_content=None, assistant_content=None
+        ),
         _turn(status=TurnStatus.PROCESSING, assistant_content=None),
         _turn(user_content=None),
         _turn(assistant_content=None),
@@ -393,7 +397,9 @@ def test_invalid_source_at_initial_validation_has_no_processing_or_persistence(
     "invalid_turn",
     [
         None,
-        _turn(status=TurnStatus.PRIVACY_SKIPPED, user_content=None, assistant_content=None),
+        _turn(
+            status=TurnStatus.PRIVACY_SKIPPED, user_content=None, assistant_content=None
+        ),
         _turn(status=TurnStatus.PROCESSING, assistant_content=None),
         _turn(user_content=None),
         _turn(assistant_content=None),
@@ -548,3 +554,92 @@ def test_admission_logs_neither_source_slots_nor_privacy_findings(caplog) -> Non
     assert SOURCE_TEXT not in rendered_records
     assert SECRET_SLOT_TEXT not in rendered_records
     assert "PrivacyFinding" not in rendered_records
+
+
+def test_hearing_occurrence_and_related_trip_date_are_resolved_separately():
+    from app.memory.episode import (
+        EpisodeParticipant,
+        EpisodicEventType,
+        EpisodicEventValue,
+        ParticipantRole,
+        RelatedEpisode,
+    )
+    from app.memory.formation.temporal_resolution import AbsoluteDateExpression
+
+    value = EpisodicEventValue(
+        EpisodicEventType.ENCOUNTER,
+        "miori",
+        "光織",
+        "旅行の話",
+        "話を聞いた",
+        (EpisodeParticipant("ユーザー", ParticipantRole.SPEAKER),),
+        RelatedEpisode(
+            "静岡へ行った", (EpisodeParticipant("蒼", ParticipantRole.SUBJECT),)
+        ),
+    )
+    service, _, repository, scanner, classifier = _service()
+    scanner.scan.side_effect = lambda _: ScanSuccess(())
+    result = service.admit(
+        ExtractedMemoryCandidate(
+            MemoryCandidate(
+                MemoryType.EPISODIC_EVENT,
+                value,
+                ConversationSource(TurnStatus.COMPLETED, True),
+            ),
+            (),
+            occurrence_basis="CONVERSATION",
+            related_date_expressions=(
+                AbsoluteDateExpression(DateExpressionRole.PRIMARY, 2026, 7),
+            ),
+        ),
+        character_id=CHARACTER_ID,
+        conversation_id=CONVERSATION_ID,
+        turn_id=TURN_ID,
+        candidate_index=0,
+    )
+    assert result.decision is RagAdmissionDecision.ALLOW_STRUCTURED
+    saved = repository.save_calls[0]
+    assert saved["context"].occurred_at == CREATED_AT
+    assert saved["context"].experienced_at == CREATED_AT
+    assert saved["context"].occurred_precision is TemporalPrecision.SECOND
+    related = saved["candidate"].structured_value.related_event
+    assert related.occurred_at == datetime(2026, 6, 30, 15, tzinfo=UTC)
+    assert related.occurred_precision is TemporalPrecision.MONTH
+    assert "2026年07月" in saved["candidate"].normalized_text
+    assessed = classifier.classify.call_args.args[0]
+    assert SOURCE_TEXT in assessed and "蒼" in assessed and "静岡へ行った" in assessed
+
+
+def test_sensitive_participant_slot_is_rejected_before_saving():
+    from app.memory.episode import (
+        EpisodeParticipant,
+        EpisodicEventType,
+        EpisodicEventValue,
+        ParticipantRole,
+    )
+
+    value = EpisodicEventValue(
+        EpisodicEventType.ENCOUNTER,
+        "miori",
+        "光織",
+        "交流",
+        "話を聞いた",
+        (EpisodeParticipant(SECRET_SLOT_TEXT, ParticipantRole.SPEAKER),),
+    )
+    service, _, repository, scanner, classifier = _service()
+    scanner.scan.side_effect = lambda text: (
+        ScanSuccess((_finding(PrivacyCategory.API_KEY),))
+        if text == SECRET_SLOT_TEXT
+        else ScanSuccess(())
+    )
+    result = _admit(
+        service,
+        MemoryCandidate(
+            MemoryType.EPISODIC_EVENT,
+            value,
+            ConversationSource(TurnStatus.COMPLETED, True),
+        ),
+    )
+    assert result.decision is RagAdmissionDecision.DENY_SENSITIVE
+    assert not repository.save_calls
+    classifier.classify.assert_not_called()

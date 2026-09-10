@@ -94,7 +94,9 @@ APPROVED_COLUMNS = (
 )
 
 
-def _insert_approved(connection: sqlite3.Connection, values: tuple[object, ...]) -> None:
+def _insert_approved(
+    connection: sqlite3.Connection, values: tuple[object, ...]
+) -> None:
     placeholders = ", ".join("?" for _ in values)
     connection.execute(
         f"INSERT INTO approved_memories ({APPROVED_COLUMNS}) VALUES ({placeholders})",
@@ -154,7 +156,7 @@ def test_memory_sources_reject_an_unknown_source_type(tmp_path: Path) -> None:
             )
 
 
-def test_existing_v2_database_adds_consolidation_source_without_losing_rows(
+def test_existing_v2_data_is_not_converted_or_lost(
     tmp_path: Path,
 ) -> None:
     from app.memory.persistence.schema import initialize_persona_memory_schema
@@ -182,19 +184,15 @@ def test_existing_v2_database_adds_consolidation_source_without_losing_rows(
             "INSERT INTO memory_sources SELECT * FROM memory_sources_new"
         )
         connection.execute("DROP TABLE memory_sources_new")
+        connection.execute("PRAGMA user_version = 2")
 
-    initialize_persona_memory_schema(paths, tmp_path / "repository")
+    with pytest.raises(ValueError, match="cannot be converted"):
+        initialize_persona_memory_schema(paths, tmp_path / "repository")
 
     with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
         preserved = connection.execute(
             "SELECT source_type, source_ref FROM memory_sources"
         ).fetchall()
-        connection.execute(
-            "INSERT INTO memory_sources "
-            "(character_id, memory_id, source_type, source_provider_id, source_ref) "
-            "VALUES (?, ?, ?, ?, ?)",
-            ("miori", MEMORY_ONE, "CONSOLIDATION", "core", MEMORY_ONE),
-        )
         version = connection.execute("PRAGMA user_version").fetchone()[0]
 
     assert preserved == [("CONVERSATION_TURN", "existing-source")]
@@ -302,7 +300,9 @@ def test_schema_creates_worker_and_active_memory_indexes(tmp_path: Path) -> None
     assert "idx_approved_memories_occurred_range" in indexes
 
 
-def test_schema_v2_exposes_four_distinct_memory_dates(tmp_path: Path) -> None:
+def test_schema_v3_exposes_experience_time_without_conflating_other_dates(
+    tmp_path: Path,
+) -> None:
     from app.memory.persistence.schema import SCHEMA_VERSION
 
     paths = _initialize(tmp_path)
@@ -314,11 +314,12 @@ def test_schema_v2_exposes_four_distinct_memory_dates(tmp_path: Path) -> None:
             for row in connection.execute("PRAGMA table_info(approved_memories)")
         }
 
-    assert SCHEMA_VERSION == 2
-    assert version == 2
+    assert SCHEMA_VERSION == 3
+    assert version == 3
     assert columns["occurred_at"]["not_null"] is False
     assert columns["occurred_timezone"]["not_null"] is False
     assert columns["occurred_precision"]["not_null"] is False
+    assert columns["experienced_at"]["not_null"] is False
     assert columns["stated_at"]["not_null"] is True
     assert columns["created_at"]["not_null"] is True
     assert columns["last_user_mentioned_at"]["not_null"] is False
@@ -418,8 +419,7 @@ def test_schema_rejects_v1_without_migration_using_the_existing_error_contract(
 @pytest.mark.parametrize(
     "wrong_definition",
     [
-        "CREATE INDEX idx_memory_index_outbox_pending "
-        "ON approved_memories (status)",
+        "CREATE INDEX idx_memory_index_outbox_pending ON approved_memories (status)",
         "CREATE INDEX idx_memory_index_outbox_pending "
         "ON memory_index_outbox (created_at, status)",
     ],
@@ -439,8 +439,7 @@ def test_schema_recreates_an_existing_index_when_its_definition_is_wrong(
 
     with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
         owner = connection.execute(
-            "SELECT tbl_name FROM sqlite_master "
-            "WHERE type = 'index' AND name = ?",
+            "SELECT tbl_name FROM sqlite_master WHERE type = 'index' AND name = ?",
             ("idx_memory_index_outbox_pending",),
         ).fetchone()
         columns = tuple(
@@ -502,7 +501,8 @@ def test_sources_and_lineage_enforce_memory_foreign_keys_and_relation_allowlist(
             ("SUPERSEDES",),
         ).fetchone()[0]
         source_columns = {
-            str(row[1]) for row in connection.execute("PRAGMA table_info(memory_sources)")
+            str(row[1])
+            for row in connection.execute("PRAGMA table_info(memory_sources)")
         }
 
         with pytest.raises(sqlite3.IntegrityError):
@@ -661,3 +661,48 @@ def test_temporary_provider_records_reject_duplicate_source_identity(
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 duplicate_values,
             )
+
+
+def test_empty_v2_memory_schema_upgrades_without_changing_temporary_records(tmp_path):
+    from app.memory.persistence.schema import initialize_persona_memory_schema
+
+    paths = _initialize(tmp_path)
+    record = (
+        MEMORY_ONE,
+        "miori",
+        "temporary:recipe",
+        "recipe-1",
+        "recipe",
+        "{}",
+        "2026-09-10T00:00:00Z",
+        "2026-09-10T00:00:00Z",
+        "2026-09-10T00:00:00Z",
+    )
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        connection.execute(
+            "INSERT INTO temporary_provider_records VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            record,
+        )
+        from app.memory.persistence.schema import APPROVED_MEMORIES_SQL
+
+        connection.execute("DROP TABLE approved_memories")
+        connection.execute(
+            APPROVED_MEMORIES_SQL.replace("    experienced_at TEXT,\n", "").replace(
+                " AND experienced_at IS NOT NULL", ""
+            )
+        )
+        connection.execute("PRAGMA user_version = 2")
+    initialize_persona_memory_schema(paths, tmp_path / "repository")
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        assert (
+            connection.execute("SELECT * FROM temporary_provider_records").fetchone()
+            == record
+        )
+        assert "experienced_at" in {
+            row[1] for row in connection.execute("PRAGMA table_info(approved_memories)")
+        }
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert (
+            connection.execute("SELECT count(*) FROM approved_memories").fetchone()[0]
+            == 0
+        )

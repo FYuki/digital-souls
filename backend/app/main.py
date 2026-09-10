@@ -676,6 +676,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             memory_candidate_extractor = MemoryCandidateExtractor(
                 client=memory_extractor_client,
                 settings=formation_settings,
+                character_name_resolver=lambda character_id: (
+                    load_character_card(character_id).data.name
+                ),
+                identity_resolver=lambda _character_id: {
+                    ("character", entry.character_id): entry.display_name
+                    for entry in CharacterCatalog(repository_root / "characters").scan()
+                },
             )
             memory_formation_scheduler = MemoryFormationScheduler(
                 worker=MemoryFormationWorker(

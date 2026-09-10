@@ -193,6 +193,7 @@ def _route_ollama_post(extractor_request):
 
 def _character_card() -> MagicMock:
     card = MagicMock()
+    card.data.name = "光織"
     card.data.character_book = None
     card.to_character_prompt.return_value = CharacterPrompt(
         description="",
@@ -412,9 +413,20 @@ def _valid_preference_response() -> str:
         (
             {
                 "memory_type": "EPISODIC_EVENT",
+                "occurrence_basis": "EVENT",
+                "related_date_expressions": [],
                 "structured_value": {
                     "event_type": "ACHIEVEMENT",
-                    "subject": "USER",
+                    "action": "資格試験に合格した話を聞いた",
+                    "participants": [
+                        {
+                            "name": "ユーザー",
+                            "role": "SPEAKER",
+                            "entity_id": None,
+                            "entity_namespace": None,
+                        }
+                    ],
+                    "related_event": None,
                     "topic": "資格試験への合格",
                 },
             },
@@ -470,7 +482,9 @@ def test_http_turn_extracts_each_allowlisted_type_to_automatic_persistence(
                 json={"modelfile": "FROM /models/blobs/sha256-" + "0" * 64},
                 request=httpx.Request("POST", url),
             )
-        content = extractor_response if _is_extractor_request(json) else privacy_response
+        content = (
+            extractor_response if _is_extractor_request(json) else privacy_response
+        )
         return httpx.Response(
             200,
             json={"message": {"content": content}},
@@ -539,7 +553,9 @@ def test_noop_domain_dispatch_preserves_automatic_persona_admission(
                 json={"modelfile": "FROM /models/blobs/sha256-" + "0" * 64},
                 request=httpx.Request("POST", url),
             )
-        content = extractor_response if _is_extractor_request(json) else privacy_response
+        content = (
+            extractor_response if _is_extractor_request(json) else privacy_response
+        )
         return httpx.Response(
             200,
             json={"message": {"content": content}},

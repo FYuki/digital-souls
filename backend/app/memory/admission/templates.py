@@ -1,7 +1,5 @@
 from app.memory.admission.contracts import (
-    EpisodicEventType,
     EpisodicEventValue,
-    EpisodicSubject,
     InteractionAspect,
     InteractionPreferenceValue,
     PreferencePolarity,
@@ -9,17 +7,8 @@ from app.memory.admission.contracts import (
     UserPreferenceValue,
 )
 
-EPISODIC_SUBJECT_PREFIXES = {
-    EpisodicSubject.USER: "ユーザーが",
-    EpisodicSubject.SHARED: "ユーザーと",
-}
-EPISODIC_EVENT_PREDICATES = {
-    EpisodicEventType.SHARED_MILESTONE: "という節目を迎えた。",
-    EpisodicEventType.ACHIEVEMENT: "を達成した。",
-    EpisodicEventType.DECISION: "を決めた。",
-    EpisodicEventType.OUTCOME: "という結果になった。",
-    EpisodicEventType.CHANGE: "という変化があった。",
-}
+from app.memory.episode import render_episode
+
 USER_PREFERENCE_TEMPLATES = {
     PreferencePolarity.LIKE: "ユーザーは{object}を好む。",
     PreferencePolarity.DISLIKE: "ユーザーは{object}を好まない。",
@@ -36,11 +25,7 @@ INTERACTION_PREFERENCE_TEMPLATES = {
 
 def render_normalized_text(value: StructuredValue) -> str:
     if isinstance(value, EpisodicEventValue):
-        return (
-            EPISODIC_SUBJECT_PREFIXES[value.subject]
-            + value.topic
-            + EPISODIC_EVENT_PREDICATES[value.event_type]
-        )
+        return render_episode(value)
     if isinstance(value, UserPreferenceValue):
         return USER_PREFERENCE_TEMPLATES[value.polarity].format(
             object=value.object,

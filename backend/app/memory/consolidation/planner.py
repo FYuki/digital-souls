@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 import logging
 import time
 from collections.abc import Mapping
 from typing import Protocol
 from uuid import UUID
 
+from app.memory.episode import parse_episode_value
 from app.memory.admission.contracts import (
-    EpisodicEventType,
-    EpisodicEventValue,
-    EpisodicSubject,
     InteractionAspect,
     InteractionPreferenceValue,
     MemoryType,
@@ -185,15 +184,12 @@ def _parse_structured_value(
     memory_type: MemoryType, value: Mapping[str, object]
 ) -> StructuredValue:
     if memory_type is MemoryType.EPISODIC_EVENT:
-        if set(value) != {"event_type", "subject", "topic"}:
-            raise ConsolidationPlanParseError("episodic value fields are invalid")
-        return EpisodicEventValue(
-            event_type=EpisodicEventType(value["event_type"]),
-            subject=EpisodicSubject(value["subject"]),
-            topic=_string(value["topic"]),
-        )
+        return parse_episode_value(value)
     if memory_type is MemoryType.USER_PREFERENCE:
-        if set(value) not in ({"polarity", "object"}, {"polarity", "object", "alternative"}):
+        if set(value) not in (
+            {"polarity", "object"},
+            {"polarity", "object", "alternative"},
+        ):
             raise ConsolidationPlanParseError("preference value fields are invalid")
         alternative = value.get("alternative")
         return UserPreferenceValue(
@@ -256,6 +252,10 @@ def _build_messages(memories: tuple[ApprovedMemory, ...]) -> tuple[dict[str, str
             "content_version": memory.content_version,
             "memory_type": memory.memory_type.value,
             "normalized_text": memory.normalized_text,
+            "structured_value": asdict(memory.structured_value),
+            "occurred_at": memory.occurred_at,
+            "occurred_precision": memory.occurred_precision,
+            "experienced_at": memory.experienced_at,
         }
         for memory in memories
     ]
@@ -267,7 +267,10 @@ def _build_messages(memories: tuple[ApprovedMemory, ...]) -> tuple[dict[str, str
                 "DELETE_EXACT_DUPLICATE, CONFLICT, or NOOP. Never cross memory types."
             ),
         },
-        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+        {
+            "role": "user",
+            "content": json.dumps(payload, ensure_ascii=False, default=str),
+        },
     )
 
 

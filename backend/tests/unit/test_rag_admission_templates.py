@@ -12,37 +12,16 @@ def _render_normalized_text(value):
     return templates.render_normalized_text(value)
 
 
-@pytest.mark.parametrize(
-    ("subject_name", "prefix"),
-    [
-        ("USER", "ユーザーが"),
-        ("SHARED", "ユーザーと"),
-    ],
-)
-@pytest.mark.parametrize(
-    ("event_type_name", "predicate"),
-    [
-        ("SHARED_MILESTONE", "という節目を迎えた。"),
-        ("ACHIEVEMENT", "を達成した。"),
-        ("DECISION", "を決めた。"),
-        ("OUTCOME", "という結果になった。"),
-        ("CHANGE", "という変化があった。"),
-    ],
-)
-def test_renders_every_episodic_subject_and_event_combination(
-    subject_name: str,
-    prefix: str,
-    event_type_name: str,
-    predicate: str,
-) -> None:
+def test_renders_an_episode_from_its_owner_and_structured_action() -> None:
     contracts = _contracts()
     value = contracts.EpisodicEventValue(
-        contracts.EpisodicEventType[event_type_name],
-        contracts.EpisodicSubject[subject_name],
-        "資格取得",
+        contracts.EpisodicEventType.ACTIVITY,
+        "miori",
+        "光織",
+        "静岡への旅行",
+        "静岡へ行った",
     )
-
-    assert _render_normalized_text(value) == f"{prefix}資格取得{predicate}"
+    assert _render_normalized_text(value) == "光織は静岡へ行った。"
 
 
 @pytest.mark.parametrize(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime
+import json
 from typing import Protocol, cast
 from uuid import UUID
 
@@ -9,12 +10,17 @@ from app.conversation_history.models import ConversationTurn, TurnStatus
 from app.memory.admission.contracts import (
     ApprovedMemoryCandidate,
     ConversationSource,
+    EpisodicEventValue,
     RagAdmissionDecision,
     RagAdmissionResult,
 )
 from app.memory.admission.evaluator import RagAdmissionEvaluator
 from app.memory.formation.contracts import ExtractedMemoryCandidate
-from app.memory.formation.temporal_resolution import resolve_occurred_at
+from app.memory.formation.temporal_resolution import (
+    resolve_occurred_at,
+    OccurredAtResolution,
+)
+from app.memory.episode import TemporalPrecision, episode_slots
 from app.memory.persistence.contracts import (
     ApprovedMemory,
     FormationMethod,
@@ -97,6 +103,29 @@ class RagAdmissionService:
         if source_turn is None:
             return RagAdmissionResult(RagAdmissionDecision.ABSTAIN_UNKNOWN, None)
         source_text = cast(str, source_turn.user_content)
+        episode = extracted.candidate.structured_value
+        if isinstance(episode, EpisodicEventValue):
+            if episode.character_id != character_id:
+                return RagAdmissionResult(RagAdmissionDecision.ABSTAIN_UNKNOWN, None)
+            if episode.related_event is not None and extracted.related_date_expressions:
+                related_time = resolve_occurred_at(
+                    extracted.related_date_expressions,
+                    stated_at=source_turn.created_at,
+                    timezone=self._occurred_timezone,
+                )
+                related = replace(
+                    episode.related_event,
+                    occurred_at=related_time.occurred_at,
+                    occurred_timezone=related_time.occurred_timezone,
+                    occurred_precision=related_time.occurred_precision,
+                )
+                extracted = replace(
+                    extracted,
+                    candidate=replace(
+                        extracted.candidate,
+                        structured_value=replace(episode, related_event=related),
+                    ),
+                )
 
         authoritative_candidate = replace(
             extracted.candidate,
@@ -115,8 +144,15 @@ class RagAdmissionService:
             candidate_slot_scans=slot_scans,
             candidate=authoritative_candidate,
         ):
+            assessment_text = source_text
+            value = authoritative_candidate.structured_value
+            if isinstance(value, EpisodicEventValue):
+                # 抽出時に人物や行為へ生じた機微な推論も、元発言と併せて再評価する。
+                assessment_text += "\n保存候補の構造化情報:\n" + json.dumps(
+                    episode_slots(value), ensure_ascii=False, sort_keys=True
+                )
             assessment = self._semantic_classifier.classify(
-                source_text,
+                assessment_text,
                 ADMISSION,
             )
         result = self._evaluator.evaluate(
@@ -209,6 +245,10 @@ class RagAdmissionService:
             stated_at=turn.created_at,
             timezone=self._occurred_timezone,
         )
+        if extracted.occurrence_basis == "CONVERSATION":
+            occurrence = OccurredAtResolution(
+                turn.created_at, self._occurred_timezone, TemporalPrecision.SECOND
+            )
         return MemoryWriteContext(
             formation_method=FormationMethod.EXTRACTED,
             idempotency_key=build_conversation_idempotency_key(
@@ -222,6 +262,7 @@ class RagAdmissionService:
             occurred_timezone=occurrence.occurred_timezone,
             occurred_precision=occurrence.occurred_precision,
             stated_at=turn.created_at,
+            experienced_at=turn.created_at,
             expires_at=None,
             policy_version=assessment.policy_version,
             classifier_version=assessment.classifier_version,

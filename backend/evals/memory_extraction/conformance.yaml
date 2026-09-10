@@ -28,8 +28,11 @@ defaultTest:
         原文「{{text}}」と抽出結果を比較し、原文から導けない人物、対象、出来事、嗜好、
         理由、時期を追加していないかだけを評価する。原文の情報を省略したことは、この
         hallucination評価では失格理由にしない。候補が空なら追加情報はないので合格とする。
-        memory_type、structured_value、event_type、subject、polarity、object、alternative、
-        aspect、value、topicというスキーマのキーはすべて許可され、追加情報ではない。
+        memory_type、structured_value、event_type、character_id、character_name、action、participants、
+        related_event、description、name、role、entity_id、entity_namespace、memory_id、occurred_at、
+        occurred_timezone、occurred_precision、polarity、object、alternative、aspect、value、topicという
+        スキーマのキーはすべて許可され、追加情報ではない。所有者evalはアプリが付与した
+        検証用キャラクターであり、ユーザーの経験を聞いた主体として扱ってよい。
         スキーマのenumも原文の意味に合う分類なら追加情報ではない。自由記述値とenumが
         原文にない具体的事実を作っていないかだけを評価する。
 tests: cases.jsonl

@@ -25,7 +25,9 @@ from app.memory.persistence.contracts import (
     TemporaryProviderRecord,
     TemporaryProviderRecordCorrection,
 )
-from app.memory.persistence.temporary_repository import TemporaryProviderRecordRepository
+from app.memory.persistence.temporary_repository import (
+    TemporaryProviderRecordRepository,
+)
 from app.privacy.contracts import PrivacyScanner
 from app.privacy.semantic.classifier import SemanticPrivacyClassifier
 from app.privacy.semantic.contracts import ADMISSION
@@ -134,6 +136,7 @@ class PersonaMemoryProvider:
                 occurred_timezone=current.occurred_timezone,
                 occurred_precision=current.occurred_precision,
                 stated_at=current.stated_at,
+                experienced_at=current.experienced_at,
                 expires_at=current.expires_at,
                 policy_version=assessment.policy_version,
                 classifier_version=assessment.classifier_version,
@@ -183,6 +186,12 @@ class PersonaMemoryProvider:
             "normalized_text": memory.normalized_text,
             "structured_value": asdict(memory.structured_value),
             "effective_at": memory.occurred_at,
+            "occurred_at": memory.occurred_at,
+            "occurred_timezone": memory.occurred_timezone,
+            "occurred_precision": memory.occurred_precision,
+            "experienced_at": memory.experienced_at,
+            "stated_at": memory.stated_at,
+            "created_at": memory.created_at,
             "status": memory.status.value,
             "content_version": memory.content_version,
             "index_pending": index_pending,

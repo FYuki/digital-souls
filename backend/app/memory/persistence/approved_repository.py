@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Callable
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -11,9 +11,7 @@ from uuid import UUID
 
 from app.memory.admission.contracts import (
     ApprovedMemoryCandidate,
-    EpisodicEventType,
     EpisodicEventValue,
-    EpisodicSubject,
     InteractionAspect,
     InteractionPreferenceValue,
     MemoryType,
@@ -21,6 +19,7 @@ from app.memory.admission.contracts import (
     StructuredValue,
     UserPreferenceValue,
 )
+from app.memory.episode import parse_episode_value, render_episode
 from app.memory.persistence.contracts import (
     ApprovedMemory,
     ApprovedMemoryDetail,
@@ -61,6 +60,7 @@ APPROVED_COLUMN_NAMES = (
     "occurred_timezone",
     "occurred_precision",
     "stated_at",
+    "experienced_at",
     "expires_at",
     "last_user_mentioned_at",
     "last_consolidated_at",
@@ -99,6 +99,7 @@ class ApprovedMemoryRepository:
     ) -> ApprovedMemory:
         _require_character_id(character_id)
         _require_approved_candidate(candidate)
+        _require_episode_owner(character_id, candidate, context)
         memory_id = self._new_uuid(self._uuid_factory)
         now = self._now()
         with self._database.transaction() as connection:
@@ -109,6 +110,9 @@ class ApprovedMemoryRepository:
             )
             if existing is not None:
                 return existing
+            candidate = _resolve_episode_reference(
+                connection, character_id, memory_id, candidate, now
+            )
             insert_result = self._insert_approved_memory(
                 connection,
                 memory_id=memory_id,
@@ -158,6 +162,7 @@ class ApprovedMemoryRepository:
         _require_character_id(character_id)
         _require_uuid4(memory_id)
         _require_approved_candidate(candidate)
+        _require_episode_owner(character_id, candidate, context)
         now = self._now()
         memory_type, memory_kind, episodic_event_type = _candidate_classification(
             candidate
@@ -173,6 +178,9 @@ class ApprovedMemoryRepository:
                 if existing.id != memory_id:
                     raise ValueError("idempotency key belongs to another memory")
                 return current
+            candidate = _resolve_episode_reference(
+                connection, character_id, memory_id, candidate, now
+            )
             connection.execute(
                 "UPDATE approved_memories SET memory_kind = ?, memory_type = ?, "
                 "episodic_event_type = ?, formation_method = ?, normalized_text = ?, "
@@ -181,7 +189,7 @@ class ApprovedMemoryRepository:
                 "content_version = content_version + 1, "
                 "last_write_idempotency_key = ?, "
                 "occurred_at = ?, occurred_timezone = ?, occurred_precision = ?, "
-                "stated_at = ?, expires_at = ?, last_user_mentioned_at = ?, "
+                "stated_at = ?, experienced_at = ?, expires_at = ?, last_user_mentioned_at = ?, "
                 "updated_at = ? "
                 "WHERE character_id = ? AND id = ?",
                 (
@@ -201,6 +209,7 @@ class ApprovedMemoryRepository:
                     context.occurred_timezone,
                     _format_optional_precision(context.occurred_precision),
                     format_datetime(context.stated_at),
+                    _format_optional_datetime(context.experienced_at),
                     _format_optional_datetime(context.expires_at),
                     format_datetime(
                         max(
@@ -298,10 +307,16 @@ class ApprovedMemoryRepository:
                 ConsolidationOperation.SUPERSEDE,
             }:
                 if candidate is None or not isinstance(context, MemoryWriteContext):
-                    raise ValueError("content consolidation requires candidate and context")
+                    raise ValueError(
+                        "content consolidation requires candidate and context"
+                    )
                 _require_approved_candidate(candidate)
+                _require_episode_owner(character_id, candidate, context)
                 _require_consolidation_context(context)
                 memory_id = self._new_uuid(self._uuid_factory)
+                candidate = _resolve_episode_reference(
+                    connection, character_id, memory_id, candidate, now
+                )
                 inserted = self._insert_approved_memory(
                     connection,
                     memory_id=memory_id,
@@ -322,8 +337,12 @@ class ApprovedMemoryRepository:
                     "SAVE",
                     now,
                 )
-                self._insert_sources(connection, memory_id, character_id, context.sources)
-                self._insert_lineage(connection, memory_id, character_id, context.lineage)
+                self._insert_sources(
+                    connection, memory_id, character_id, context.sources
+                )
+                self._insert_lineage(
+                    connection, memory_id, character_id, context.lineage
+                )
                 self._insert_outbox(connection, memory_id, character_id, "UPSERT", now)
                 connection.execute(
                     "UPDATE approved_memories SET last_consolidated_at = ? "
@@ -703,10 +722,10 @@ class ApprovedMemoryRepository:
             "normalized_text, structured_value, policy_version, "
             "classifier_version, model_id, model_digest, prompt_version, "
             "content_version, status, idempotency_key, occurred_at, "
-            "occurred_timezone, occurred_precision, stated_at, expires_at, "
+            "occurred_timezone, occurred_precision, stated_at, experienced_at, expires_at, "
             "last_user_mentioned_at, last_consolidated_at, created_at, updated_at"
             ") VALUES (?, ?, 'core', ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, "
-            "1, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?) "
+            "1, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?) "
             "ON CONFLICT(character_id, idempotency_key) DO NOTHING",
             (
                 str(memory_id),
@@ -727,6 +746,7 @@ class ApprovedMemoryRepository:
                 context.occurred_timezone,
                 _format_optional_precision(context.occurred_precision),
                 format_datetime(context.stated_at),
+                _format_optional_datetime(context.experienced_at),
                 _format_optional_datetime(context.expires_at),
                 format_datetime(context.stated_at),
                 format_datetime(now),
@@ -894,9 +914,7 @@ def _memory_from_row(row: sqlite3.Row) -> ApprovedMemory:
             else parse_datetime(str(row["occurred_at"]))
         ),
         occurred_timezone=(
-            None
-            if row["occurred_timezone"] is None
-            else str(row["occurred_timezone"])
+            None if row["occurred_timezone"] is None else str(row["occurred_timezone"])
         ),
         occurred_precision=(
             None
@@ -904,6 +922,9 @@ def _memory_from_row(row: sqlite3.Row) -> ApprovedMemory:
             else TemporalPrecision(str(row["occurred_precision"]))
         ),
         stated_at=parse_datetime(str(row["stated_at"])),
+        experienced_at=None
+        if row["experienced_at"] is None
+        else parse_datetime(str(row["experienced_at"])),
         expires_at=(
             None
             if row["expires_at"] is None
@@ -943,6 +964,7 @@ def _serialize_structured_value(value: StructuredValue) -> str:
         ensure_ascii=False,
         separators=(",", ":"),
         sort_keys=True,
+        default=_json_scalar,
     )
 
 
@@ -952,11 +974,7 @@ def _deserialize_structured_value(
 ) -> StructuredValue:
     raw = cast(dict[str, object], json.loads(serialized))
     if memory_type is MemoryType.EPISODIC_EVENT:
-        return EpisodicEventValue(
-            event_type=EpisodicEventType(str(raw["event_type"])),
-            subject=EpisodicSubject(str(raw["subject"])),
-            topic=str(raw["topic"]),
-        )
+        return parse_episode_value(raw)
     if memory_type is MemoryType.USER_PREFERENCE:
         alternative = raw.get("alternative")
         return UserPreferenceValue(
@@ -1066,3 +1084,71 @@ def _require_core_provider(provider_id: str) -> None:
 def _require_uuid4(value: UUID) -> None:
     if not isinstance(value, UUID) or value.version != 4:
         raise ValueError("identifier must be a UUID4")
+
+
+def _json_scalar(value: object) -> str:
+    if isinstance(value, datetime):
+        return format_datetime(value)
+    if isinstance(value, UUID):
+        return str(value)
+    raise TypeError("unsupported structured scalar")
+
+
+def _require_episode_owner(
+    character_id: str, candidate: ApprovedMemoryCandidate, context: MemoryWriteContext
+) -> None:
+    value = candidate.structured_value
+    if isinstance(value, EpisodicEventValue):
+        if value.character_id != character_id:
+            raise ValueError("Episode owner must match character_id")
+        if context.experienced_at is None:
+            raise ValueError("Episode requires experienced_at")
+
+
+def _resolve_episode_reference(
+    connection: sqlite3.Connection,
+    character_id: str,
+    memory_id: UUID,
+    candidate: ApprovedMemoryCandidate,
+    now: datetime,
+) -> ApprovedMemoryCandidate:
+    value = candidate.structured_value
+    if not isinstance(value, EpisodicEventValue):
+        return candidate
+    related = value.related_event
+    if related is not None and related.memory_id is not None:
+        if related.memory_id == memory_id:
+            raise ValueError("Episode cannot refer to itself")
+        row = connection.execute(
+            f"SELECT {APPROVED_COLUMNS} FROM approved_memories "
+            "WHERE character_id = ? AND id = ? AND memory_type = 'EPISODIC_EVENT' "
+            "AND status = 'ACTIVE' AND (expires_at IS NULL OR expires_at > ?)",
+            (character_id, str(related.memory_id), format_datetime(now)),
+        ).fetchone()
+        if row is None:
+            raise ValueError(
+                "related Episode must be active and owned by the same character"
+            )
+        target = _memory_from_row(row)
+        actual = (
+            target.occurred_at,
+            target.occurred_timezone,
+            target.occurred_precision,
+        )
+        supplied = (
+            related.occurred_at,
+            related.occurred_timezone,
+            related.occurred_precision,
+        )
+        if related.occurred_at is not None and supplied != actual:
+            raise ValueError("related occurrence conflicts with the referenced Episode")
+        value = replace(
+            value,
+            related_event=replace(
+                related,
+                occurred_at=actual[0],
+                occurred_timezone=actual[1],
+                occurred_precision=actual[2],
+            ),
+        )
+    return ApprovedMemoryCandidate(value, render_episode(value))

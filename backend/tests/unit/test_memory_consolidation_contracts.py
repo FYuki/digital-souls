@@ -79,7 +79,13 @@ def test_parser_accepts_each_typed_plan(
     (
         (
             "EPISODIC_EVENT",
-            {"event_type": "ACHIEVEMENT", "subject": "USER", "topic": "散歩"},
+            {
+                "event_type": "ACTIVITY",
+                "character_id": "miori",
+                "character_name": "光織",
+                "topic": "散歩",
+                "action": "散歩をした",
+            },
             "EpisodicEventValue",
         ),
         (
@@ -188,9 +194,7 @@ def test_response_schema_constrains_plan_and_memory_reference_shapes() -> None:
                 {
                     "plan_type": "ERASE",
                     "reason_code": "MODEL_SELECTED",
-                    "memories": [
-                        {"memory_id": str(MEMORY_ONE), "content_version": 1}
-                    ],
+                    "memories": [{"memory_id": str(MEMORY_ONE), "content_version": 1}],
                 }
             ]
         },
@@ -199,9 +203,7 @@ def test_response_schema_constrains_plan_and_memory_reference_shapes() -> None:
                 {
                     "plan_type": "KEEP",
                     "reason_code": "FREE FORM BODY",
-                    "memories": [
-                        {"memory_id": str(MEMORY_ONE), "content_version": 1}
-                    ],
+                    "memories": [{"memory_id": str(MEMORY_ONE), "content_version": 1}],
                 }
             ]
         },
@@ -210,9 +212,7 @@ def test_response_schema_constrains_plan_and_memory_reference_shapes() -> None:
                 {
                     "plan_type": "KEEP",
                     "reason_code": "MODEL_SELECTED",
-                    "memories": [
-                        {"memory_id": str(MEMORY_ONE), "content_version": 1}
-                    ],
+                    "memories": [{"memory_id": str(MEMORY_ONE), "content_version": 1}],
                     "unexpected": True,
                 }
             ]
@@ -222,9 +222,7 @@ def test_response_schema_constrains_plan_and_memory_reference_shapes() -> None:
                 {
                     "plan_type": "MERGE",
                     "reason_code": "MODEL_SELECTED",
-                    "memories": [
-                        {"memory_id": str(MEMORY_ONE), "content_version": 1}
-                    ],
+                    "memories": [{"memory_id": str(MEMORY_ONE), "content_version": 1}],
                 }
             ]
         },

@@ -5,9 +5,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from uuid import UUID
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.memory.admission.contracts import MemoryType, StructuredValue
+from app.memory.episode import (
+    TemporalPrecision as TemporalPrecision,
+    validate_occurrence,
+)
 
 
 class FormationMethod(str, Enum):
@@ -15,15 +18,6 @@ class FormationMethod(str, Enum):
     EXTRACTED = "EXTRACTED"
     ADDON_EVENT = "ADDON_EVENT"
     CONSOLIDATED = "CONSOLIDATED"
-
-
-class TemporalPrecision(str, Enum):
-    YEAR = "YEAR"
-    MONTH = "MONTH"
-    DAY = "DAY"
-    HOUR = "HOUR"
-    MINUTE = "MINUTE"
-    SECOND = "SECOND"
 
 
 class MemoryStatus(str, Enum):
@@ -37,6 +31,8 @@ class MemorySourceType(str, Enum):
     ADDON_EVENT = "ADDON_EVENT"
     USER_CORRECTION = "USER_CORRECTION"
     CONSOLIDATION = "CONSOLIDATION"
+    AGENT_ACTIVITY = "AGENT_ACTIVITY"
+    EXTERNAL_RESOURCE = "EXTERNAL_RESOURCE"
 
 
 class ConsolidationOperation(str, Enum):
@@ -108,31 +104,16 @@ class MemoryWriteContext:
     prompt_version: str
     sources: tuple[MemorySourceInput, ...]
     lineage: tuple[MemoryLineageInput, ...] = ()
+    experienced_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.formation_method, FormationMethod):
             raise TypeError("formation_method must be a FormationMethod")
-        occurred_values = (
-            self.occurred_at,
-            self.occurred_timezone,
-            self.occurred_precision,
+        validate_occurrence(
+            self.occurred_at, self.occurred_timezone, self.occurred_precision
         )
-        if any(value is None for value in occurred_values) and not all(
-            value is None for value in occurred_values
-        ):
-            raise ValueError("occurred date fields must be all known or all unknown")
-        if self.occurred_at is not None:
-            _require_aware_datetime(self.occurred_at, "occurred_at")
-            if not isinstance(self.occurred_precision, TemporalPrecision):
-                raise TypeError("occurred_precision must be a TemporalPrecision")
-            assert self.occurred_timezone is not None
-            _require_non_empty(self.occurred_timezone, "occurred_timezone")
-            try:
-                ZoneInfo(self.occurred_timezone)
-            except ZoneInfoNotFoundError as error:
-                raise ValueError(
-                    "occurred_timezone must be an IANA timezone"
-                ) from error
+        if self.experienced_at is not None:
+            _require_aware_datetime(self.experienced_at, "experienced_at")
         _require_aware_datetime(self.stated_at, "stated_at")
         if self.expires_at is not None:
             _require_aware_datetime(self.expires_at, "expires_at")
@@ -178,6 +159,7 @@ class ApprovedMemory:
     last_consolidated_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    experienced_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -297,7 +279,9 @@ def build_consolidation_idempotency_key(
     try:
         operation = ConsolidationOperation(plan_type)
     except ValueError:
-        raise ValueError("plan_type must be a mutating consolidation operation") from None
+        raise ValueError(
+            "plan_type must be a mutating consolidation operation"
+        ) from None
     if operation is ConsolidationOperation.KEEP or not memories:
         raise ValueError("plan_type must be a mutating consolidation operation")
     normalized: list[tuple[str, int]] = []
@@ -326,7 +310,11 @@ def build_consolidation_idempotency_key(
 
 
 def _require_aware_datetime(value: datetime, field_name: str) -> None:
-    if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
+    if (
+        not isinstance(value, datetime)
+        or value.tzinfo is None
+        or value.utcoffset() is None
+    ):
         raise ValueError(f"{field_name} must be timezone-aware")
 
 
