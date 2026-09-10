@@ -7,7 +7,8 @@
 
 M1〜M4は各PRの全CI成功後にepicへ統合した。M5の制御MCPによる実プロセス検証は9件成功した。
 独立MCPを通すブラウザのテキスト／LiveKit受入は実行中であり、まだ完了扱いにしない。
-main向けDraft PRは[#311](https://github.com/FYuki/digital-souls/pull/311)。CodeRabbitの全差分レビューを開始済みで、レビュー・修正は未完了。
+main向けDraft PRは[#311](https://github.com/FYuki/digital-souls/pull/311)。CodeRabbitの初回全差分レビュー21件へ回答し、修正をM5の[#310](https://github.com/FYuki/digital-souls/pull/310)へ反映した。
+関連unit 125件・module 76件・mypyは成功。[対応表](artifacts/addon-action-185/review-disposition.md)に合意を変更するため採用しなかった指摘も記載した。M5統合後の最新差分レビューは未完了。
 
 ## 検証境界
 
@@ -63,6 +64,8 @@ fixtureの制御ファイルは障害注入側だけが操作する。一般利�
 - 音声の対象ラベルから元schemaの必須引数を構成する際、Coreのbinding補完が判断材料に含まれていなかった。引数値はCoreに残し、補完する引数名を提示するよう修正した。利用者が明示した値の不一致は引き続き拒否する。
 - これらの関連回帰68件は成功した（[binding-regression.txt](artifacts/addon-action-185/binding-regression.txt)）。実LLMの正確性をこの回帰だけで証明するものではなく、独立MCPの会話受入を別途継続する。
 - 初期の試行では対象パス不足、実LLMからの追加質問、承認後の180秒待機上限、音声のTool実行失敗で完走できなかった。失敗した試行は成功証跡に含めない。
+- `738d615` の試行（run `0e9a2a96-dea5-4d3a-a6a3-ca5f12a3cc5d`）でも単回承認後のHTTP応答が300秒以内に戻らなかった。外部ファイルは未更新で、送信記録は0件だった。
+- 次の非同期診断から、続行APIがViteの一般管理API向け50秒制限で切断されることを特定した。`/continue`だけ通常チャットと同じ180秒へ分類し、回答保存APIは既存の期限を維持した。実HTTPプロキシの回帰は修正前にsocket切断で失敗し、修正後は関連17件が成功した（[proxy-regression.txt](artifacts/addon-action-185/proxy-regression.txt)）。この回帰では待機時間を全経路共通で1/100に短縮し、独立MCP受入とは区別している。
 - 再実行入口は、実行commit・開始時の追跡対象ファイル変更の有無・サービスversion・固定metadataの処理段階・終了時の承認／実行状態を保存する。合成会話attachment内の一時pathも公開用に置換する。
 
 ## 再実行
