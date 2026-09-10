@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store'
-import { listAddons, setAddonEnabled, SettingsDurabilityError, type AddonStatus } from './client'
+import { listAddons, setAddonEnabled, SettingsDurabilityError, ManagementError, managementError, type AddonStatus } from './client'
 
 export type ManagementState = {
   items: AddonStatus[]
@@ -37,7 +37,7 @@ export function createAddonController(gateway: Gateway = { list: listAddons, set
   async function bounded<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
     const abort = new AbortController()
     requests.add(abort)
-    const deadline = setTimeout(() => abort.abort(), 10000)
+    const deadline = setTimeout(() => abort.abort(), 30000)
     try { return await operation(abort.signal) }
     finally { clearTimeout(deadline); requests.delete(abort) }
   }
@@ -69,7 +69,7 @@ export function createAddonController(gateway: Gateway = { list: listAddons, set
       recheck = error instanceof SettingsDurabilityError
       const message = recheck
         ? '変更は反映されましたが、保存の完了を確認できません。同じ設定を再度保存してください。'
-        : '変更を保存できませんでした。状態を再確認してください。'
+        : error instanceof ManagementError ? managementError(error) : '変更を保存できませんでした。状態を再確認してください。'
       if (!closed) publish({ rowErrors: { ...state.rowErrors, [id]: message }, retryEnabled: { ...state.retryEnabled, [id]: enabled } })
     } finally {
       if (!closed) {

@@ -322,6 +322,12 @@ Resourcesをnativeに読み取り、Promptsはdiscoveryまでに限定する。�
 回答後も同じloopと許可で再実行する。self-owned runtimeは#221が担当する。
 設定・公開Python API・制限は[外部MCP利用基盤](external-mcp-foundation.md)を参照する。
 
+管理UIはExternal MCPのHTTP/stdio設定と接続専有credentialを管理する。接続・credentialは
+専用SQLiteで永続化し、同一transactionで削除する。希望ON/OFF、runtime availability、
+現在設定の成功履歴を独立させ、設定revisionと実行世代で古い確認結果を破棄する。
+接続確認は管理sessionのdiscoveryを再利用し、Tool実行を伴わない。
+操作・移行手順は[Addon/連携の管理](addon-admin.md)、実接続証跡は[#242受入](mcp-admin-242-acceptance.md)を参照する。
+
 `backend/app/tool_use/`はこのGateをテキスト会話とLiveKit音声で共有する。管理設定から接続し、
 loopに固定した候補を資格・関連性・schema容量で絞り、専用`tool-routing` Targetで選択する。
 元schemaで引数を検証し、会話内の対象選択を呼出しごとのbindingとしてGateへ渡す。
