@@ -14,7 +14,7 @@ from app.inference import (
     InferenceErrorCategory,
 )
 from app.prompting import BuiltPrompt, PromptMessage, PromptRole, PromptUsage
-from app.tool_use.prompt import require_tool_room, with_tool_material, routing_history
+from app.tool_use.prompt import POLICY, require_tool_room, with_tool_material, routing_history
 from app.tool_use.routing import InferenceDecisionRouter, ToolDecision
 from app.tool_use.runtime import ToolSettings
 from app.tool_use.service import ToolMaterial
@@ -316,9 +316,14 @@ def test_prompt_shrinks_results_preserving_original_and_current_user():
     counter = lambda messages: sum(len(m.content.encode()) for m in messages)
     material = ToolMaterial(results=({"outcome": "succeeded", "text": "資料" * 5000},))
     before = encode(material.results[0])
-    require_tool_room(prompt, counter, 1600)
-    result = with_tool_material(prompt, material, counter, 1600)
-    assert counter(result.messages) <= 1600
+    # 固定指示の文量ではなく、外部結果を縮める処理を検証する。
+    limit = counter(prompt.messages) + len(POLICY.encode()) + 512
+    assert len(before.encode()) > limit
+    with pytest.raises(ChatInputLimitError):
+        require_tool_room(prompt, counter, counter(prompt.messages))
+    require_tool_room(prompt, counter, limit)
+    result = with_tool_material(prompt, material, counter, limit)
+    assert counter(result.messages) <= limit
     assert result.messages[-1] == prompt.messages[-1]
     assert (
         "omitted" in result.messages[-2].content
@@ -330,7 +335,7 @@ def test_prompt_shrinks_results_preserving_original_and_current_user():
         prompt,
         ToolMaterial(results=({"outcome": "succeeded", "text": "短い結果"},)),
         counter,
-        1600,
+        limit,
     )
     assert "短い結果" in small.messages[-2].content
     assert routing_history(small) == routing_history(prompt)

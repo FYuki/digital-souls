@@ -51,6 +51,24 @@ async function requestTextWrite(page: Page, value: string) {
   await expect(confirmation(page)).toBeVisible()
 }
 
+async function answerTextQuestionsWithoutApproval(page: Page, value: string) {
+  const conversation = await page.evaluate(() => localStorage.getItem('digital-souls:conversation:miori'))
+  expect(conversation).toBeTruthy()
+  for (let answered = 0; answered < 2; answered++) {
+    // 実Backendの状態を参照して、承認要求と引数の追加質問を区別する。
+    const response = await page.request.get(`/api/tool-use/status/miori/${encodeURIComponent(conversation!)}`)
+    expect(response.ok()).toBe(true)
+    const status = await response.json()
+    expect(status.confirmation_id ?? null).toBeNull()
+    if (status.state !== 'waiting') return
+    await expect(confirmation(page)).toHaveCount(0)
+    await expect(page.getByRole('region', { name: '外部参照', exact: true }))
+      .toContainText('追加情報をお待ちしています')
+    await expect(page.locator('article.message').last()).toContainText(/ファイル|パス|読み取|内容/)
+    await send(page, `対象は${sample}です。ファイル全体の内容を「${value}」だけに置き換えてください。`)
+  }
+}
+
 async function requestVoiceWrite(page: Page, clip: string) {
   const before = await playedResponses(page)
   await speak(page, clip)
@@ -189,6 +207,7 @@ test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用�
   await driver.endVoiceSession(page)
 
   await send(page, `検証用ファイル${sample}の内容を正確に「紫の花」だけに置き換えてください。`)
+  await answerTextQuestionsWithoutApproval(page, '紫の花')
   await expect.poll(sampleText).toBe('紫の花')
   await expectWriteReply(page, '紫の花')
   await expect(confirmation(page)).toHaveCount(0)
