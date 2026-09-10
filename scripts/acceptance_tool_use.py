@@ -362,8 +362,14 @@ def main():
             owned_process(
                 [
                     str(ROOT / "backend/.venv/bin/python"),
-                    "-m",
-                    "uvicorn",
+                    *(
+                        [
+                            "-c",
+                            "import faulthandler, runpy; faulthandler.dump_traceback_later(90, repeat=True); runpy.run_module('uvicorn', run_name='__main__')",
+                        ]
+                        if action
+                        else ["-m", "uvicorn"]
+                    ),
                     "app.main:app",
                     "--log-config",
                     str(log_config_path),
@@ -596,6 +602,23 @@ def main():
                 )
             )
         if action:
+            # 停滞診断はframe位置だけを残す。ローカル変数や例外本文は含めない。
+            stacks = [
+                line
+                for line in (runtime / "backend.log").read_text().splitlines()
+                if line.startswith(
+                    (
+                        "Thread ",
+                        "Current thread ",
+                        "  File ",
+                        "Timeout (",
+                        "  <no Python frame>",
+                    )
+                )
+            ]
+            (artifacts / "thread-stacks.txt").write_text(
+                public_evidence("\n".join(stacks) + "\n", root)
+            )
             stages = [
                 line
                 for line in (runtime / "backend.log").read_text().splitlines()

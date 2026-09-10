@@ -28,7 +28,7 @@ async function send(page: Page, message: string) {
   const input = page.getByRole('textbox', { name: 'メッセージ', exact: true })
   await expect(input).toBeEnabled()
   await input.fill(message)
-  const response = page.waitForResponse(r => r.url().endsWith('/api/chat') && r.request().method() === 'POST', { timeout: 180_000 })
+  const response = page.waitForResponse(r => r.url().endsWith('/api/chat') && r.request().method() === 'POST', { timeout: 300_000 })
   await page.getByRole('button', { name: '送信', exact: true }).click()
   expect((await response).ok()).toBe(true)
   await expect(input).toBeEnabled()
@@ -70,7 +70,7 @@ async function choose(page: Page, label: string) {
   for (const option of ['常に承認する', '一度承認する', '拒否する']) {
     await expect(confirmation(page).getByRole('button', { name: option, exact: true })).toBeVisible()
   }
-  const result = page.waitForResponse(r => /\/addon-actions\/requests\/[^/]+\/continue$/.test(r.url()) && r.request().method() === 'POST', { timeout: 180_000 })
+  const result = page.waitForResponse(r => /\/addon-actions\/requests\/[^/]+\/continue$/.test(r.url()) && r.request().method() === 'POST', { timeout: 300_000 })
   await confirmation(page).getByRole('button', { name: label, exact: true }).click()
   const response = await result
   expect(response.ok()).toBe(true)

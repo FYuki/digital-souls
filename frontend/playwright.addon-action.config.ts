@@ -11,7 +11,8 @@ export default defineConfig({
   outputDir,
   workers: 1,
   fullyParallel: false,
-  timeout: 900_000,
+  // 複数の実会話と承認後の永続化までを直列に通す。各HTTP要求は別途300秒で制限する。
+  timeout: 1_800_000,
   expect: { timeout: 180_000 },
   reporter: [['list'], ['json', { outputFile: join(outputDir, 'results.json') }]],
   use: {
