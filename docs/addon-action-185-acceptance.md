@@ -12,7 +12,24 @@ main向けPRは[#311](https://github.com/FYuki/digital-souls/pull/311)。CodeRab
 
 製品修正commit `c592dde` の[CI](https://github.com/FYuki/digital-souls/actions/runs/34525988163)は全job成功。Backend unitは3,432件成功・1件skip、moduleは1,556件成功・1件skip、mypyは288ファイル成功だった。skipのあるファイルは`test_semantic_privacy_eval_assets.py`と`test_dogfood_infrastructure.py`であり、成功件数や独立MCP・音声受入に含めない。
 
-## 独立MCPの実接続受入
+## main差分レビュー修正後の再受入（2026-09-11）
+
+最新の製品修正commitは `32dd75c98c17a1f793e5d718e59356a1e6d744fc`。単回承認の要求予約、Coreのlock内の期限確認、外部結果の初回整形から保存・回復・再返却までの省略通知保持を含む。
+
+- Run ID: `2e972281-26ea-4068-9bf0-05249d8d9037`。開始時の追跡対象変更なし。2026-09-11 08:21〜08:24 JST。
+- 独立Filesystem MCP・実LLM/STT/TTS・LiveKitの全8シナリオが **195.48秒で成功**。Playwrightは1成功、失敗・skip・flakyは0。
+- 画面承認は単回・拒否・単回・拒否・常時の5件。外部更新は4回の`applied`。拒否時と音声だけの承認では未更新。
+- 音声7応答すべてでCoreの入力IDを照合し、期待sample数と実再生sample数が一致（合計2,573,760 samples）。
+- provider/model・MCP/version・音声構成は初回と同じ。最新値は[manifest](artifacts/addon-action-185/final-review-mcp/runtime-manifest.json)を参照する。
+- 関連unit **165件成功**、HTTP・会話外活動・実プロセス回復を含むmodule **17件成功（84.13秒）**、mypy **288ファイル成功**。
+
+一次証跡: [Playwright](artifacts/addon-action-185/final-review-mcp/playwright.txt)、[ブラウザreport](artifacts/addon-action-185/final-review-mcp/browser-public.json)、[回答・再生](artifacts/addon-action-185/final-review-mcp/action-evidence.json)、[承認／実行記録](artifacts/addon-action-185/final-review-mcp/action-state.json)、[推論・Tool段階](artifacts/addon-action-185/final-review-mcp/stage-events.txt)、[unit](artifacts/addon-action-185/final-review-unit.txt)、[module](artifacts/addon-action-185/final-review-module.txt)。
+
+**文面品質の観測:** 最後の完了回答には正しい変更内容に加えて`<channel|>`と余分なメタ説明が混じった。外部の最終状態は「紫の花」で、更新・承認・再生の検証は成功しているが、このrunを文面品質の保証には使わない。加工して隠さず合成会話の証跡に残す。
+
+最初の再受入（run `c927548f-c5c5-4a97-a322-6433cf8adc94`）は、実更新後の「置き換わりました」という完了表現を試験が認識せず失敗した。判定へこの過去形を追加した`6f7ebeb`では全シナリオが185.82秒で成功。保存前の省略通知を補強した後、上記最新commitで再度全シナリオを実行した。失敗runは成功件数に含めない。
+
+## 独立MCPの初回実接続受入
 
 - Run ID: `1e1fc35d-b2e0-41ba-a7b3-9d4000d7d12b`。実行commit: `63d9d914d20ea322b109bbd30b9c2307cd42dfbd`。開始時の追跡対象変更なし。
 - 2026-09-11 05:27〜05:30 JST。Playwrightは1件成功、失敗・skip・flakyは0件。
