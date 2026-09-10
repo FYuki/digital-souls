@@ -1,0 +1,78 @@
+# #185 承認・回復の受入記録
+
+親Issueは[#185](https://github.com/FYuki/digital-souls/issues/185)、最終受入は[#304](https://github.com/FYuki/digital-souls/issues/304)。
+仕様は[承認・回復ADR](decisions/addon-action-approval-recovery-2026-09.md)を参照する。
+
+## 状態（2026-09-11）
+
+M1〜M4は各PRの全CI成功後にepicへ統合した。M5の制御MCPによる実プロセス検証は9件成功した。
+独立MCPを通すブラウザのテキスト／LiveKit受入は実行中であり、まだ完了扱いにしない。
+main向け差分のCodeRabbitレビュー・修正も未完了。
+
+## 検証境界
+
+| 検証 | 使用する実体 | 証明する範囲 |
+|---|---|---|
+| 独立MCPと会話 | 公開Filesystem MCP `2026.8.31`、実Ollama/STT/TTS、LiveKit `1.9.7`、Chromium | テキスト・音声から3択承認、実ファイル更新、結果回答・再生 |
+| 制御MCPと実プロセス | 別processのPython MCP、外部正本SQLite、Core子process | 確定結果、競合、外部commit後切断、Core保存前終了、安全な保存済み結果取得、cancel状態照会 |
+| 自動回帰 | Gate・承認SQLite・会話境界・Frontendテスト。必要箇所の外部応答はfixture | 状態分離、競合、重複回答、単回承認、安全境界、stop、UI・音声承認禁止 |
+
+制御MCPはCoreをimportしないが、本開発のために作ったfixtureであり、独立した公開MCPではない。
+同suiteのprivacy scanner/Egress許可は検証用で、semantic privacyの実接続を証明しない。
+独立MCPの音声入力はVOICEVOX合成発話をマイクMediaStreamへ流す。STT・LLM・MCP・TTS・LiveKit・再生は差し替えない。
+これは物理マイクや人の発話品質の証跡ではない。
+
+## 制御MCPの観測結果
+
+`backend/tests/module/test_addon_action_process_recovery.py` の9件が **80.29秒で成功**。
+一次出力は[process-recovery.txt](artifacts/addon-action-185/process-recovery.txt)。
+
+| 条件 | 観測した結果 |
+|---|---|
+| APPLIED / NO_CHANGE / CONFLICT / FAILED | 各結果を分離し、再接続・同一活動の再評価で新規dispatchしない。CONFLICTは外部の最新状態を保持 |
+| 外部commit直後にMCP process終了 | 外部更新は1回、CoreはRESULT_UNKNOWN。回復契約ありなら再接続後にstatusだけでAPPLIEDへ更新 |
+| 同じ切断で回復契約なし | RESULT_UNKNOWNを維持し、runtimeを再構成しても再送・新規承認をしない |
+| Taskにstop/cancel | 新規更新を停止。cancel要求後も外部がrunningなら停止済みと扱わず、再接続後の外部cancelledだけを確定状態に反映 |
+| 外部応答受信後・Core checkpoint前にCore process終了 | SQLite記録はDISPATCHINGのまま。再起動後にstatus不明→保存済み結果replayで回復。外部のchangeは1回のみ |
+| 初期60秒の会話外待機 | 実時計で60秒以上待機しDEFERRED。キューを保持。後からの単回承認ではdispatchせず、将来の別活動が1回だけ更新 |
+
+replayは既に受理された依頼の保存済み結果だけを返す契約であり、不明な依頼を新規実行しない。
+fixtureの制御ファイルは障害注入側だけが操作する。一般利用者へ公開するToolやCoreの新しい権限経路ではない。
+
+## 要件と自動検証の対応
+
+| 要件 | 検証箇所 |
+|---|---|
+| 接続 × 操作群 × 実行場面、初期値、拒否の効力、単回競合 | `test_addon_action_policy.py`、`test_addon_action_queue.py` |
+| 静的分類＋実引数、外部送信だけでは高影響にしない、未知は安全に緩和しない | `test_addon_action_policy.py` |
+| 待機期限・設定・遅い承認・重複回答・stop競合 | `test_addon_action_queue.py`、`test_addon_action_process_recovery.py` |
+| 承認後もEgress、Core保護、binding、snapshot、grantを再検査 | `test_addon_action_queue.py`、`test_addon_action_recovery.py`、既存Execution Gate回帰 |
+| 画面操作だけで再開、会話/STTでは承認しない、終了済みresponseを再開しない | `test_addon_action_conversation.py`、`test_addon_action_continuation.py`、`test_livekit_action_confirmation.py` |
+| 3択、重複クリック、retry、テキスト／LiveKit表示、320px表示 | `ActionConfirmation.module.test.ts`、`e2e/addon-action.spec.ts` |
+| 外部結果とruntime retryを分離、確定結果優先、状態不明を保持 | `test_addon_action_dispatch.py`、`test_addon_action_journal.py`、`test_addon_action_recovery.py` |
+| 会話外活動の期限終了・次回適用・結果不明の活動再試行 | `test_character_life_actions.py` |
+
+上記のファイル名は `backend/tests/unit/`、`backend/tests/module/`、`frontend/` 配下を指す。
+実サービス不足をこの自動回帰の成功で補って完了扱いにしない。
+
+## 再実行
+
+worktreeのルートから実行する。Backendの全unitと全moduleは別processに分ける。
+実接続は公開MCP依存・Chromium・Dockerと既存の推論サービスを必要とする。
+
+```bash
+backend/.venv/bin/python -m pytest backend/tests/module/test_addon_action_process_recovery.py -q
+ACCEPTANCE_INFERENCE_ENV=/path/to/private/backend.env \
+  backend/.venv/bin/python scripts/acceptance_tool_use.py --addon-action
+```
+
+受入scriptは一時data root、テスト所有Backend/Frontend/LiveKitを使用し、終了時に自身のprocessだけを停止する。
+dogfoodのデータやサービスを変更しない。実購入・契約・本番データ破壊は行わない。
+公開証跡へcredential・raw protocol payload・実会話履歴を含めない。
+
+## 残る受入
+
+- 独立MCPを通すブラウザのテキスト／LiveKitシナリオを完走し、provider/model・音声構成・実行commit・観測結果を保存する。
+- M5の最新CIを確認してepicへ統合する。
+- main向けPRに対してCodeRabbitの実差分レビューと指摘修正を完了する。mainへのマージはユーザーが行う。
+- Addon管理UI（#305）、音声だけの承認、SDK Tasks自体の新規実装、dogfoodデプロイは今回の完了条件に含めない。
