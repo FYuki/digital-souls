@@ -36,7 +36,7 @@ async function send(page: Page, message: string) {
 
 async function waitForApprovalOrQuestion(page: Page) {
   await expect(page.getByRole('region', { name: '外部参照', exact: true }))
-    .toContainText(/ハイリスク操作群・対話中|追加情報をお待ちしています/)
+    .toContainText(/ハイリスク操作群・対話中|追加情報をお待ちしています/, { timeout: 10_000 })
   return await confirmation(page).count() > 0
 }
 

@@ -706,6 +706,10 @@ class ToolService:
         result = self.sanitizer.result(
             envelope, may_change_state=candidate.may_change_state
         )
+        # native結果の自己申告ではなく、固定snapshotの実行分類を判断側へ渡す。
+        result["operation_effect"] = (
+            "may_change_state" if candidate.may_change_state else "read_only"
+        )
         result["source"] = {"label": candidate.name, "source_id": candidate.id}
         # 最終の未完了理由にも枠を残し、部分成功を回答へ統合できるようにする。
         remaining = 3_584 - sum(len(encode(r).encode()) for r in run.results)

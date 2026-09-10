@@ -92,6 +92,19 @@ def test_greeting_does_not_invoke():
     asyncio.run(run())
 
 
+@pytest.mark.parametrize("trusted,expected", [(True, "read_only"), (False, "may_change_state")])
+def test_result_effect_comes_from_snapshot_not_native_claim(trusted, expected):
+    async def run():
+        decisions = Decisions(call, ToolDecision("finish"))
+        async with runtime(decisions, config=manifest(trusted=trusted)) as (service, source, _):
+            source.result["structuredContent"] = {"operation_effect": "forged", "value": 1}
+            material = await service.run("miori", "session", "検証操作を使って")
+            assert material.results[0]["operation_effect"] == expected
+            assert decisions.contexts[-1]["results"][0]["operation_effect"] == expected
+            assert material.results[0]["structured"]["operation_effect"] == "forged"
+    asyncio.run(run())
+
+
 def test_catalog_pins_snapshot_and_filters_sharing_and_status():
     async def run():
         async with runtime(Decisions()) as (_, source, gate):
