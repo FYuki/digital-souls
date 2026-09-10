@@ -674,6 +674,7 @@ class ExecutionGate:
                         binding_id,
                         "require_confirmation" in rules,
                         responses,
+                        (recovery["request_key_argument"],) if recovery else (),
                     ),
                     live=live,
                     request_id=confirmation_id,

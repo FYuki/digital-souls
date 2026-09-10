@@ -34,26 +34,28 @@ class ActionDispatch:
                 "structured": self.sanitizer.value(external_result),
             }
             envelope["result_projection"] = projected
-            return self.journal.finish(
-                execution_id,
-                outcome,
-                task_id=task_id,
-                projection=json.loads(bounded_json(projected, 16_384)),
-            )
-        outcome = {
-            "succeeded": ActionOutcome.APPLIED,
-            "input_required": ActionOutcome.INPUT_REQUIRED,
-            "failed": ActionOutcome.FAILED,
-            "conflict": ActionOutcome.CONFLICT,
-            "no_change": ActionOutcome.NO_CHANGE,
-        }.get(envelope["outcome"], ActionOutcome.RESULT_UNKNOWN)
-        # MRTRのopaque stateは永続化せず、再起動後に要求を作り直して再送しない。
-        projected = self.sanitizer.result(envelope, may_change_state=False)
-        return self.journal.finish(
+        else:
+            outcome = {
+                "succeeded": ActionOutcome.APPLIED,
+                "input_required": ActionOutcome.INPUT_REQUIRED,
+                "failed": ActionOutcome.FAILED,
+                "conflict": ActionOutcome.CONFLICT,
+                "no_change": ActionOutcome.NO_CHANGE,
+            }.get(envelope["outcome"], ActionOutcome.RESULT_UNKNOWN)
+            task_id = None
+            # MRTRのopaque stateは永続化せず、再起動後に要求を作り直して再送しない。
+            projected = self.sanitizer.result(envelope, may_change_state=False)
+        observed = self.journal.finish(
             execution_id,
             outcome,
+            task_id=task_id,
             projection=json.loads(bounded_json(projected, 16_384)),
         )
+        if observed.outcome != outcome:
+            # 先に外部正本の照会で確定した結果を、遅い元応答で戻さない。
+            envelope["outcome"] = self.envelope_outcome(observed.outcome)
+            envelope["result_projection"] = observed.projection
+        return observed
 
     @staticmethod
     def envelope_outcome(outcome: ActionOutcome) -> str:

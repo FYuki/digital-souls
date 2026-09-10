@@ -98,6 +98,11 @@ def test_task_survives_restart_and_cancel_request_is_not_external_stop(tmp_path)
             loop = gate.begin_loop(ExecutionContext("miori", "session"))
             first = await approve_once(gate, p, c, loop)
             assert first["outcome"] == "running"
+            assert "request_id" not in p.store.requests()[0].preview["arguments"]
+            assert (
+                source.key
+                == recovery.actions.journal.get(first["execution_id"]).request_key
+            )
             assert not recovery.actions.journal.get(
                 first["execution_id"]
             ).cancel_requested
@@ -258,5 +263,60 @@ def test_recovery_revalidates_original_binding_and_privacy_before_query(tmp_path
             p.egress = blocked
             assert await recovery.recover(first["execution_id"]) == "running"
             assert len(source.calls) == 1
+
+    asyncio.run(run())
+
+
+def test_earlier_external_completion_wins_over_late_running_response(tmp_path):
+    async def run():
+        c, data = server_contract()
+        source = ExternalTasks(c, data)
+        gate, p, recovery = runtime(tmp_path, c)
+        async with gate.attach(c.id, source):
+            first = await approve_once(
+                gate, p, c, gate.begin_loop(ExecutionContext("miori", "session"))
+            )
+            source.state = "applied"
+            assert await recovery.recover(first["execution_id"]) == "applied"
+            late = {
+                "outcome": "succeeded",
+                "native_payload": {
+                    "structuredContent": {"action": {"status": "running"}}
+                },
+            }
+            recovery.actions.finish(first["execution_id"], late)
+            assert late["outcome"] == "succeeded"
+            assert late["result_projection"]["structured"]["result"]["count"] == 1
+
+    asyncio.run(run())
+
+
+def test_conflict_without_latest_state_fetches_external_truth_before_return(tmp_path):
+    async def run():
+        c, data = server_contract()
+
+        class LateState(ExternalTasks):
+            async def call_tool(self, name, arguments, **kwargs):
+                response = await super().call_tool(name, arguments, **kwargs)
+                if name == "native-tool":
+                    response["structuredContent"]["action"].pop("latest_state")
+                return response
+
+        source = LateState(c, data)
+        source.state = "conflict"
+        gate, p, recovery = runtime(tmp_path, c)
+        async with gate.attach(c.id, source):
+            result = await approve_once(
+                gate, p, c, gate.begin_loop(ExecutionContext("miori", "session"))
+            )
+            assert result["outcome"] == "conflict"
+            assert (
+                result["result_projection"]["structured"]["latest_state"]["version"]
+                == 2
+            )
+            assert [call[0] for call in source.calls] == [
+                "native-tool",
+                "action_status",
+            ]
 
     asyncio.run(run())

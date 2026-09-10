@@ -116,12 +116,22 @@ class ActionPolicy:
         if state.allowed:
             return ApprovalTicket(key, request_id)
         if request is None:
+            visible = {
+                k: v
+                for k, v in call.arguments.items()
+                if k not in call.core_argument_keys
+            }
+            preview_outgoing = (
+                {"arguments": visible, "input_responses": call.input_responses}
+                if call.input_responses is not None
+                else visible
+            )
             preview = {
                 "connection": self.sanitizer.text(call.connection_label, maximum=128),
                 "operation": self.sanitizer.text(call.operation, maximum=128),
                 "target": self.sanitizer.text(call.binding_id or "呼び出し引数で指定"),
                 "arguments": json.loads(
-                    bounded_json(self.sanitizer.value(outgoing), 2048)
+                    bounded_json(self.sanitizer.value(preview_outgoing), 2048)
                 ),
                 "reason": impact.reason,
             }
