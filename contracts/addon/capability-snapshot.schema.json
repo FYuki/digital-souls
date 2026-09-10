@@ -59,6 +59,15 @@
         "native_meta": {"type": "object"},
         "trust": {"$ref": "#/$defs/Trust"},
         "effective_policy": {"$ref": "#/$defs/EffectivePolicy"},
+        "impact_classification": {
+          "type": "object", "additionalProperties": false,
+          "required": ["effect", "source"],
+          "properties": {
+            "effect": {"enum": ["read", "write", "external_send", "destructive", "security", "financial", "unknown"]},
+            "source": {"enum": ["unknown", "definition_changed", "core_profile", "trusted_annotation", "trusted_addon_metadata"]},
+            "normal_arguments_schema": {"type": "object"}
+          }
+        },
         "requires_core_features": {
           "type": "array",
           "uniqueItems": true,

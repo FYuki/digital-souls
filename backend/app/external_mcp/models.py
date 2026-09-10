@@ -122,6 +122,11 @@ class Connection:
         for rule in value["core_policy"]["restrictions"]:
             if "stable_operation_id" in rule["target"]:
                 raise MCPFailure("policy", "unsupported_stable_operation_id")
+        profiles = value["core_policy"].get("impact_profiles", [])
+        if len({p["tool_name"] for p in profiles}) != len(profiles):
+            raise MCPFailure("validation", "duplicate_impact_profile")
+        for profile in profiles:
+            input_validator(profile["normal_arguments_schema"])
         return cls(encode(value))
 
     @property
@@ -177,6 +182,8 @@ class Snapshot:
 
 
 def build_snapshot(connection: Connection, discovery: Discovery) -> Snapshot:
+    from app.addon_action.impact import classify_static
+
     trusted = connection.manifest["connection"]["trust"]["annotations"]
     tools: list[Json] = []
     for native in discovery.tools:
@@ -214,6 +221,15 @@ def build_snapshot(connection: Connection, discovery: Discovery) -> Snapshot:
         if not isinstance(execution, dict):
             raise MCPFailure("validation", "invalid_execution_metadata")
         unsupported = execution.get("taskSupport") == "required"
+        impact = classify_static(connection.manifest, native, policy)
+        if impact["effect"] != "read" and read:
+            # Coreが副作用・定義変更を認識した場合はread annotationの最適化を抑止する。
+            policy = {
+                "effect": "unknown",
+                "effect_source": "unknown",
+                "concurrency": "serial",
+                "retry": "none",
+            }
         tool = {
             "name": native.get("name"),
             "input_schema": schema,
@@ -225,6 +241,7 @@ def build_snapshot(connection: Connection, discovery: Discovery) -> Snapshot:
             "native_meta": native.get("_meta") or {},
             "trust": {"annotations": trusted, "addon_metadata": False},
             "effective_policy": policy,
+            "impact_classification": impact,
             "status": "unsupported" if unsupported else "active",
         }
         if unsupported:
