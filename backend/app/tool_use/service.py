@@ -8,7 +8,8 @@ import logging
 import re
 import time
 from pathlib import Path
-from dataclasses import dataclass, field
+from uuid import uuid4
+from dataclasses import dataclass, field, replace
 from typing import Callable, cast
 from contextlib import contextmanager
 from collections.abc import Iterator, Awaitable
@@ -227,7 +228,9 @@ class ToolService:
                 return ToolMaterial(
                     direct_text="外部ツールの受付が混み合っています。少し待ってから再度依頼してください。"
                 )
-            context = ExecutionContext(character, conversation)
+            context = ExecutionContext(
+                character, conversation, action_scope=str(uuid4())
+            )
             run = _Run(self.gate.begin_loop(context), context, request)
             self._runs[key] = run
         if run.expiration:
@@ -337,11 +340,17 @@ class ToolService:
             )
             candidates = select_candidates(
                 all_candidates,
-                " ".join([
-                    run.original_request,
-                    *[q["answer"] for q in run.clarification if q["answer"] is not None],
-                    request,
-                ]),
+                " ".join(
+                    [
+                        run.original_request,
+                        *[
+                            q["answer"]
+                            for q in run.clarification
+                            if q["answer"] is not None
+                        ],
+                        request,
+                    ]
+                ),
                 preferred_request=request if run.user_followup else "",
             )
             if run.binding_candidate is not None:
@@ -424,6 +433,7 @@ class ToolService:
                     raise MCPFailure("policy", "unexpected_new_request")
                 # 新しいユーザー要求への切替だけを新しい予算の根拠にする。
                 self.gate.end_loop(run.loop)
+                run.context = replace(run.context, action_scope=str(uuid4()))
                 run.loop = self.gate.begin_loop(run.context)
                 run.original_request, run.cycle, run.user_followup = request, 1, False
                 run.interaction, run.answer_schema, run.binding_candidate = (
@@ -609,11 +619,17 @@ class ToolService:
                     run,
                     "取得結果が会話の上限に達しました。対象を絞って依頼してください。",
                 )
-            if envelope["outcome"] == "succeeded":
+            if envelope["outcome"] in {"succeeded", "no_change"}:
                 run.sources.append(source)
                 if run.call_fingerprint is not None:
                     run.completed_calls.add(run.call_fingerprint)
-            if envelope["outcome"] == "budget_exceeded":
+            if envelope["outcome"] in {
+                "budget_exceeded",
+                "running",
+                "cancel_requested",
+                "result_unknown",
+                "cancelled",
+            }:
                 return self._material(run)
             if envelope.get("error_category") == "validation" and any(
                 s["source_id"] == candidate.id for s in run.sources
@@ -621,7 +637,11 @@ class ToolService:
                 # 完了済み操作の再呼出しを、引数修復の連鎖で繰り返さない。
                 return self._material(run)
             if (
-                envelope["outcome"] != "succeeded"
+                envelope["outcome"] not in {"succeeded", "no_change"}
+                and not (
+                    envelope["outcome"] == "conflict"
+                    and "latest_state" in result.get("structured", {})
+                )
                 and envelope.get("error_category") != "validation"
             ):
                 run.forbidden.add(candidate.id)

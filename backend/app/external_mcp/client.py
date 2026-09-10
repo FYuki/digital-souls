@@ -261,9 +261,11 @@ class ExternalMCPClient:
 
     async def _request(self, request: Callable[[Client], Awaitable[Any]]) -> Any:
         if self._connection_failure is not None:
-            raise self._connection_failure
+            failure = self._connection_failure
+            raise MCPFailure(failure.category, failure.code, request_started=False)
         if self._client is None or self._owner is None:
-            raise MCPFailure("unavailable", "not_connected")
+            raise MCPFailure("unavailable", "not_connected", request_started=False)
+        request_started = False
         token = _private_io.set(True)
         failures: list[MCPFailure] = []
         failure_token = _http_failures.set(failures)
@@ -282,6 +284,8 @@ class ExternalMCPClient:
                             raise ValueError
                     except Exception:
                         raise MCPFailure("auth", "secret_unavailable") from None
+                # ここからはSDK/transportへ制御を渡すため、送信済みの可能性がある。
+                request_started = True
                 pending = asyncio.ensure_future(request(self._client))
                 try:
                     done, _ = await asyncio.wait(
@@ -302,10 +306,16 @@ class ExternalMCPClient:
         except asyncio.CancelledError:
             raise
         except Exception as error:
-            raise (
+            failure = (
                 failures[-1]
                 if failures
                 else self._connection_failure or _failure(error)
+            )
+            raise MCPFailure(
+                failure.category,
+                failure.code,
+                retryable=failure.retryable,
+                request_started=request_started,
             ) from None
         finally:
             _private_io.reset(token)

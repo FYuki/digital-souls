@@ -36,6 +36,10 @@ from .ports import (
 from .store import Store
 from .formation import LifeFormation
 
+from app.addon_action.models import ExecutionScene
+from app.addon_action.journal import ActionOutcome, ActionRecord, UNRESOLVED
+from app.addon_action.recovery import ActionRecovery
+
 ELYTH_ENDPOINT = "https://elythworld.com/api/mcp/remote"
 # 公式の公開情報取得操作に限定する。DM・通知・投稿・既読変更・Fieldは含めない。
 ELYTH_TOPIC_TOOLS = frozenset(
@@ -71,6 +75,9 @@ class Service:
         self.cancellations: dict[str, InferenceCancellationToken] = {}
         self.tasks: set[asyncio.Task[str]] = set()
         self.closing = False
+        self.loops: dict[str, str] = {}
+        if isinstance(gate.recovery, ActionRecovery):
+            gate.recovery.autonomous_guard = self.validate_recovery
 
     def validate_current(self, run: Run) -> LifeState:
         current = self.store.run(str(run.id))
@@ -107,8 +114,40 @@ class Service:
             raise LifeError(Result.DEFERRED, "requested_activity_priority")
         return state
 
+    def validate_recovery(self, record: ActionRecord) -> None:
+        # 照会・保存済み結果取得・cancelだけの継続許可。停止済み活動の新規操作は許可しない。
+        try:
+            run = self.store.run(record.identity.scope.removeprefix("life:"))
+            if (
+                record.identity.character != run.character_id
+                or record.identity.session != f"life-{run.id}"
+            ):
+                raise ValueError
+            state = self.store.state(run.character_id, run.state_id)
+            if state.target_id != record.identity.connection_id:
+                raise ValueError
+            grant = self.store.grant(run.character_id, record.identity.connection_id)
+            if (
+                not grant.enabled
+                or grant.revision != run.grant_revision
+                or grant.connection_identity != record.identity.connection_identity
+            ):
+                raise ValueError
+        except (ValueError, LifeError):
+            raise MCPFailure("policy", "autonomy_recovery_denied") from None
+
+    def action_records(self, run: Run) -> tuple[ActionRecord, ...]:
+        if self.gate.actions is None:
+            return ()
+        return self.gate.actions.journal.scope_records(
+            run.character_id, ExecutionScene.AUTONOMOUS, f"life:{run.id}"
+        )
+
+    def has_unresolved_action(self, run: Run) -> bool:
+        return any(record.outcome in UNRESOLVED for record in self.action_records(run))
+
     def allowed_candidate(self, candidate: Candidate) -> bool:
-        # 未実装の#185を迂回しない。ELYTHは公式操作名をCoreが狭めるだけで、
+        # ELYTHは#241の公開参照範囲を維持する。公式操作名をCoreが狭めるだけで、
         # unknown annotationをread/自動retryへ昇格させない。
         config = self.gate.registry.entry(candidate.connection_id).connection.manifest[
             "connection"
@@ -147,19 +186,34 @@ class Service:
             async with asyncio.timeout(self.timeout):
                 return await self._execute(run, cancellation)
         except LifeError as error:
-            return self._finished_result(
-                self.store.finish(run, error.result, error.reason)
+            result = (
+                Result.RESULT_UNKNOWN
+                if self.has_unresolved_action(run)
+                else error.result
             )
+            return self._finished_result(self.store.finish(run, result, error.reason))
         except TimeoutError:
             cancellation.cancel()
             return self._finished_result(
-                self.store.finish(run, Result.DEFERRED, "activity_timeout")
+                self.store.finish(
+                    run,
+                    Result.RESULT_UNKNOWN
+                    if self.has_unresolved_action(run)
+                    else Result.DEFERRED,
+                    "activity_timeout",
+                )
             )
         except asyncio.CancelledError:
             cancellation.cancel()
             if self.closing:
                 return self._finished_result(
-                    self.store.finish(run, Result.DEFERRED, "runtime_stopping")
+                    self.store.finish(
+                        run,
+                        Result.RESULT_UNKNOWN
+                        if self.has_unresolved_action(run)
+                        else Result.DEFERRED,
+                        "runtime_stopping",
+                    )
                 )
             raise
         except Exception as error:
@@ -169,7 +223,13 @@ class Service:
                 type(error).__name__,
             )
             return self._finished_result(
-                self.store.finish(run, Result.FAILED, "activity_failed")
+                self.store.finish(
+                    run,
+                    Result.RESULT_UNKNOWN
+                    if self.has_unresolved_action(run)
+                    else Result.FAILED,
+                    "activity_failed",
+                )
             )
         finally:
             self.cancellations.pop(run_id, None)
@@ -186,9 +246,20 @@ class Service:
             return await self._finish_handoff(run)
         assert state.target_id is not None
         loop_id = self.gate.begin_loop(
-            ExecutionContext(run.character_id, f"life-{run.id}")
+            ExecutionContext(
+                run.character_id,
+                f"life-{run.id}",
+                scene=ExecutionScene.AUTONOMOUS,
+                action_scope=f"life:{run.id}",
+            )
         )
+        self.loops[str(run.id)] = loop_id
         try:
+            for record in self.action_records(run):
+                if record.outcome in UNRESOLVED and self.gate.recovery is not None:
+                    await self.gate.recovery.recover(record.execution_id)
+            if self.has_unresolved_action(run):
+                raise LifeError(Result.RESULT_UNKNOWN, "external_action_unresolved")
             candidates = select_candidates(
                 tuple(
                     c
@@ -203,8 +274,20 @@ class Service:
                 raise LifeError(Result.DEFERRED, "read_capability_unavailable")
             seen: set[str] = set()
             unavailable: set[str] = set()
-            results: list[Json] = []
-            sources: list[str] = []
+            results: list[Json] = [
+                {
+                    **record.projection,
+                    "replayed": True,
+                    "operation": record.identity.operation,
+                }
+                for record in self.action_records(run)
+            ]
+            sources = [
+                record.identity.definition_digest + ":" + record.execution_id
+                for record in self.action_records(run)
+                if record.outcome in {ActionOutcome.APPLIED, ActionOutcome.NO_CHANGE}
+            ]
+            incomplete: Result | None = None
             for step in range(8):
                 self.validate_current(run)
                 decision = await self.cognition.decide(
@@ -228,7 +311,9 @@ class Service:
                     summary = decision["summary"].strip()
                     if not sources or not summary:
                         return self._finished_result(
-                            self.store.finish(run, Result.NO_CHANGE, "no_topic")
+                            self.store.finish(
+                                run, incomplete or Result.NO_CHANGE, "no_topic"
+                            )
                         )
                     if not await self.privacy.allowed(summary):
                         if step == 7:
@@ -240,7 +325,8 @@ class Service:
                         update={
                             "handoff": ObservationHandoff(
                                 character_id=run.character_id,
-                                topic=summary, source_revisions=tuple(sources)
+                                topic=summary,
+                                source_revisions=tuple(sources),
                             )
                         }
                     )
@@ -254,9 +340,11 @@ class Service:
                 )
                 if candidate is None:
                     raise LifeError(Result.REJECTED, "invalid_candidate")
-                if not self.readable_without_recovery(candidate):
-                    # Grantはwriteも対象とするが、#185のConfirmationPolicyPort /
-                    # ActionRecoveryPort接続前に副作用を開始しない。
+                if not self.readable_without_recovery(candidate) and (
+                    self.gate.actions is None
+                    or self.gate.confirmations is None
+                    or self.gate.recovery is None
+                ):
                     raise LifeError(Result.DEFERRED, "action_recovery_unavailable")
                 try:
                     arguments = json.loads(decision["arguments_json"])
@@ -314,7 +402,10 @@ class Service:
 
                 def guard() -> None:
                     self.validate_current(run)
-                    if time.monotonic() - approved_at > 30 or cancellation.is_cancelled:
+                    if cancellation.is_cancelled or (
+                        (candidate.kind != "tool" or self.gate.confirmations is None)
+                        and time.monotonic() - approved_at > 30
+                    ):
                         raise LifeError(Result.DEFERRED, "egress_approval_expired")
 
                 if candidate.kind == "tool":
@@ -344,7 +435,11 @@ class Service:
                     outcome=envelope["outcome"],
                 )
                 self.validate_current(run)
-                if envelope.get("error_category") == "tool_error":
+                if (
+                    envelope.get("error_category") == "tool_error"
+                    and envelope["outcome"] == "failed"
+                    and self.readable_without_recovery(candidate)
+                ):
                     # 読取先に現在の対象がない場合などは、別の候補を選び直せる。
                     # 外部エラー本文は推論へ入れず、成功した観測とも数えない。
                     results.append(
@@ -352,21 +447,45 @@ class Service:
                     )
                     unavailable.add(candidate.id)
                     continue
-                if envelope["outcome"] != "succeeded":
-                    raise LifeError(
-                        Result.DEFERRED
-                        if envelope["outcome"]
-                        in {"input_required", "unavailable", "budget_exceeded"}
-                        else Result.FAILED,
-                        "external_operation_incomplete",
+                outcome = envelope["outcome"]
+                if outcome in {"deferred", "rejected"}:
+                    incomplete = (
+                        Result.REJECTED if outcome == "rejected" else Result.DEFERRED
                     )
+                    results.append({"candidate_id": candidate.id, "outcome": outcome})
+                    unavailable.add(candidate.id)
+                    continue
+                if outcome not in {"succeeded", "no_change", "conflict"}:
+                    mapped = {
+                        "result_unknown": Result.RESULT_UNKNOWN,
+                        "running": Result.RESULT_UNKNOWN,
+                        "cancel_requested": Result.RESULT_UNKNOWN
+                        if self.has_unresolved_action(run)
+                        else Result.DEFERRED,
+                        "cancelled": Result.DEFERRED,
+                        "input_required": Result.DEFERRED,
+                        "unavailable": Result.DEFERRED,
+                        "budget_exceeded": Result.DEFERRED,
+                    }.get(outcome, Result.FAILED)
+                    raise LifeError(mapped, "external_operation_incomplete")
+                if outcome == "conflict":
+                    incomplete = Result.CONFLICT
+                    if "latest_state" not in envelope.get("result_projection", {}).get(
+                        "structured", {}
+                    ):
+                        raise LifeError(Result.CONFLICT, "latest_state_unavailable")
                 projected = self.sanitizer.result(envelope, may_change_state=False)
                 results.append(json.loads(bounded_json(projected, 3000)))
-                sources.append(
-                    candidate.snapshot_revision + ":" + envelope["execution_id"]
-                )
+                if outcome != "conflict":
+                    sources.append(
+                        candidate.snapshot_revision + ":" + envelope["execution_id"]
+                    )
             raise LifeError(Result.DEFERRED, "activity_budget_exhausted")
         finally:
+            task = asyncio.current_task()
+            if cancellation.is_cancelled or (task is not None and task.cancelling()):
+                self.gate.stop(loop_id)
+            self.loops.pop(str(run.id), None)
             self.gate.end_loop(loop_id)
             self.bindings.forget(run.character_id, f"life-{run.id}")
 
@@ -377,6 +496,9 @@ class Service:
         self.store.save_run(
             run.model_copy(update={"phase": "paused", "reason": "user_paused"})
         )
+        loop_id = self.loops.get(run_id)
+        if loop_id is not None:
+            self.gate.stop(loop_id)
         cancellation = self.cancellations.get(run_id)
         if cancellation:
             cancellation.cancel()
@@ -402,24 +524,29 @@ class Service:
         if memory_result in {Result.APPLIED, Result.NO_CHANGE}:
             self.validate_current(run)
             try:
-                personality_result = await (self.personality or DeferredPersonality()).evaluate(
-                    run.character_id, str(run.id)
-                )
+                personality_result = await (
+                    self.personality or DeferredPersonality()
+                ).evaluate(run.character_id, str(run.id))
             except Exception:
                 personality_result = Result.FAILED
         self.validate_current(run)
         incomplete = {Result.FAILED, Result.RESULT_UNKNOWN, Result.DEFERRED}
-        if (
-            self.memory is not None and memory_result in incomplete
-        ) or (
+        if (self.memory is not None and memory_result in incomplete) or (
             self.personality is not None and personality_result in incomplete
         ):
             # 確定済みhandoffを残し、同じidempotency keyで通常のresumeから再試行する。
-            return self._finished_result(self.store.finish(
-                run, Result.DEFERRED, "dependency_handoff_failed",
-                sources=handoff.source_revisions,
-                dependencies={"episode": memory_result, "personality": personality_result},
-            ))
+            return self._finished_result(
+                self.store.finish(
+                    run,
+                    Result.DEFERRED,
+                    "dependency_handoff_failed",
+                    sources=handoff.source_revisions,
+                    dependencies={
+                        "episode": memory_result,
+                        "personality": personality_result,
+                    },
+                )
+            )
         return self._finished_result(
             self.store.finish(
                 run,
@@ -464,7 +591,9 @@ class Service:
                 try:
                     check_current()
                 except Exception as exc:
-                    interruption = exc.result if isinstance(exc, LifeError) else Result.FAILED
+                    interruption = (
+                        exc.result if isinstance(exc, LifeError) else Result.FAILED
+                    )
                     if not isinstance(exc, LifeError):
                         logging.getLogger(__name__).warning(
                             "Character Life formation failed: exception_type=%s",
@@ -484,7 +613,9 @@ class Service:
                     check_current()
                     await (self.memory or DeferredMemory()).catch_up(character)
                     return await self.formation.run(
-                        character, check_current=check_current, cancellation=cancellation
+                        character,
+                        check_current=check_current,
+                        cancellation=cancellation,
                     )
             finally:
                 # cleanupのawaitへ入る前に監視による新しい中断を止める。

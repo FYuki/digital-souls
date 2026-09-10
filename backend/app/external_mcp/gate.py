@@ -8,7 +8,7 @@ import time
 from collections import Counter, deque
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
-from typing import AsyncIterator, Callable, Iterator
+from typing import TYPE_CHECKING, AsyncIterator, Callable, Iterator
 from uuid import uuid4
 from app.addon_action.models import ActionInvocation, ApprovalTicket, ExecutionScene
 
@@ -28,8 +28,14 @@ from .ports import (
     CapabilitySource,
     ConfirmationPolicyPort,
     UnsupportedTasks,
+    TaskTrackerPort,
+    ActionRecoveryPort,
 )
 from .registry import Registry
+
+if TYPE_CHECKING:
+    from app.addon_action.dispatch import ActionDispatch
+    from app.addon_action.journal import ActionRecord
 
 
 @dataclass(frozen=True)
@@ -39,6 +45,7 @@ class ExecutionContext:
     user_id: str | None = None
     binding_id: str | None = None
     scene: ExecutionScene = ExecutionScene.CONVERSATION
+    action_scope: str | None = None
 
 
 @dataclass
@@ -149,6 +156,7 @@ class ExecutionGate:
         *,
         bindings: BindingValidatorPort | None = None,
         confirmations: ConfirmationPolicyPort | None = None,
+        actions: ActionDispatch | None = None,
         rate_limits: RateLimits = RateLimits(),
         clock: Callable[[], float] = time.monotonic,
         parallelism: int = 4,
@@ -159,7 +167,9 @@ class ExecutionGate:
         self.registry = registry
         self.bindings = bindings
         self.confirmations = confirmations
-        self.tasks = UnsupportedTasks()
+        self.actions = actions
+        self.tasks: TaskTrackerPort = UnsupportedTasks()
+        self.recovery: ActionRecoveryPort | None = None
         self.rate_limits = rate_limits
         self.clock = clock
         self.parallelism = parallelism
@@ -245,8 +255,19 @@ class ExecutionGate:
         self._loops[token] = _Loop(context, self.registry.activate(), auto_cycle)
         return token
 
-    def stop(self, loop_id: str) -> None:
-        self._loop(loop_id).stopped = True
+    def stop(self, loop_id: str, *, cancel_actions: bool = True) -> None:
+        loop = self._loop(loop_id)
+        loop.stopped = True
+        if cancel_actions and self.actions is not None:
+            for record in self.actions.journal.pending():
+                if (
+                    record.identity.character == loop.context.character_id
+                    and record.identity.scene == loop.context.scene
+                    and record.identity.scope == (loop.context.action_scope or loop_id)
+                ):
+                    self.actions.on_change(
+                        self.actions.journal.request_cancel(record.execution_id)
+                    )
         if self.confirmations is not None:
             self.confirmations.end_loop(loop_id)
 
@@ -312,7 +333,7 @@ class ExecutionGate:
                 self._confirmation_pending.pop(request_id)
 
     def end_loop(self, loop_id: str) -> None:
-        self.stop(loop_id)
+        self.stop(loop_id, cancel_actions=False)
         self._loops.pop(loop_id)
         self._pending = {k: v for k, v in self._pending.items() if v.loop_id != loop_id}
         self._confirmation_pending = {
@@ -485,8 +506,21 @@ class ExecutionGate:
         dispatch_guard: Callable[[], None] | None = None,
         confirmation_id: str | None = None,
     ) -> Json:
+        from app.addon_action.journal import ActionIdentity, ActionOutcome
+        from app.addon_action.recovery_contract import (
+            bind_request_key,
+            recovery_profile,
+            request_key,
+        )
+
         # 不明なloopには監査主体が無いため、envelopeを捏造せず呼出しを拒否する。
         loop = self._loop(loop_id)
+        action_identity: ActionIdentity | None = None
+        claimed_action: str | None = None
+        dispatch_started = False
+        recovery: Json | None = None
+        action_request_key: str | None = None
+        original_arguments = arguments
         # 明示的な呼出しbindingを優先する。MRTRには解決済み値を固定する。
         binding_id = binding_id if binding_id is not None else loop.context.binding_id
         result: Json = {
@@ -506,6 +540,7 @@ class ExecutionGate:
         try:
             try:
                 arguments = json.loads(encode(arguments))
+                original_arguments = arguments
                 responses = (
                     json.loads(encode(responses)) if responses is not None else None
                 )
@@ -539,6 +574,28 @@ class ExecutionGate:
                 )
                 if tool["status"] == "unsupported":
                     raise MCPFailure("policy", "tasks_unsupported")
+                if self.actions is not None:
+                    recovery = recovery_profile(connection, operation, native["tools"])
+                    if recovery is not None:
+                        action_request_key = request_key(
+                            loop.context.action_scope or loop_id,
+                            loop.context.character_id,
+                            loop.context.scene,
+                            digest(
+                                [
+                                    connection_id,
+                                    operation,
+                                    binding_id,
+                                    original_arguments,
+                                ]
+                            ),
+                        )
+                        arguments = bind_request_key(
+                            recovery,
+                            original_arguments,
+                            action_request_key,
+                            tool["input_schema"],
+                        )
                 validate_arguments(tool["input_schema"], arguments)
                 effective = tool["effective_policy"]
             else:
@@ -558,6 +615,38 @@ class ExecutionGate:
             rules = connection.restrictions(operation)
             if "deny" in rules:
                 raise MCPFailure("policy", "operation_denied")
+            if (
+                self.actions is not None
+                and kind == "tool"
+                and effective["effect"] != "read"
+            ):
+                assert tool is not None
+                action_identity = ActionIdentity(
+                    loop.context.action_scope or loop_id,
+                    digest(
+                        [
+                            connection_id,
+                            operation,
+                            binding_id,
+                            original_arguments,
+                            responses,
+                            pending.request_state if pending else None,
+                        ]
+                    ),
+                    connection_id,
+                    connection.identity,
+                    loop.context.character_id,
+                    loop.context.session_id,
+                    loop.context.scene,
+                    operation,
+                    digest(tool["native_definition"]),
+                    binding_id,
+                    encode(recovery) if recovery else None,
+                    loop.context.user_id,
+                )
+                previous = self.actions.journal.check(action_identity)
+                if previous is not None:
+                    return self._previous_action(previous.execution_id, result)
             ticket: ApprovalTicket | None = None
             if self.confirmations is not None and kind == "tool":
                 assert tool is not None
@@ -636,7 +725,27 @@ class ExecutionGate:
                             raise MCPFailure(
                                 "policy", "partial_failure_operation_denied"
                             )
+                        if action_identity is not None:
+                            assert self.actions is not None
+                            # 承認/lock待機中に別workerが同じ活動を送信した場合も再送しない。
+                            previous = self.actions.journal.check(action_identity)
+                            if previous is not None:
+                                return self._previous_action(
+                                    previous.execution_id, result
+                                )
                         self._charge(loop, connection_id, operation, arguments)
+                        if action_identity is not None:
+                            assert self.actions is not None
+                            record, claimed = self.actions.journal.begin(
+                                action_identity,
+                                result["execution_id"],
+                                request_key=action_request_key,
+                            )
+                            if not claimed:
+                                return self._previous_action(
+                                    record.execution_id, result
+                                )
+                            claimed_action = record.execution_id
                         if ticket is not None and attempt == 0:
                             assert self.confirmations is not None
                             if not self.confirmations.consume(ticket):
@@ -648,6 +757,7 @@ class ExecutionGate:
                                 # dispatch直前に元schemaを再検証する。
                                 assert tool is not None
                                 validate_arguments(tool["input_schema"], arguments)
+                                dispatch_started = True
                                 payload = await source.call_tool(
                                     operation,
                                     arguments,
@@ -697,7 +807,7 @@ class ExecutionGate:
                             connection_id,
                             operation,
                             kind,
-                            encode(arguments),
+                            encode(original_arguments),
                             request_state,
                             frozenset(requests),
                             (pending.rounds if pending else 0) + 1,
@@ -707,7 +817,11 @@ class ExecutionGate:
                             outcome="input_required", interaction_id=interaction_id
                         )
                     elif payload.get("isError"):
-                        result.update(outcome="failed", error_category="tool_error")
+                        # Toolの失敗応答だけでは、部分的な副作用が無かったと保証できない。
+                        result.update(
+                            outcome="result_unknown" if claimed_action else "failed",
+                            error_category="tool_error",
+                        )
                     else:
                         result["outcome"] = "succeeded"
         except ConfirmationNeeded as error:
@@ -715,7 +829,7 @@ class ExecutionGate:
                 loop_id,
                 connection_id,
                 operation,
-                encode(arguments),
+                encode(original_arguments),
                 kind,
                 binding_id,
                 pending,
@@ -729,7 +843,18 @@ class ExecutionGate:
             )
         except MCPFailure as error:
             outcome = "failed"
-            if error.code in {"budget_exceeded", "rate_limit_exceeded"}:
+            if (
+                claimed_action
+                and dispatch_started
+                and error.request_started is not False
+            ):
+                outcome = "result_unknown"
+            elif (
+                error.category == "recovery"
+                and error.code == "scope_has_unresolved_action"
+            ):
+                outcome = "result_unknown"
+            elif error.code in {"budget_exceeded", "rate_limit_exceeded"}:
                 outcome = "budget_exceeded"
             elif error.code in {
                 "tasks_unsupported",
@@ -743,11 +868,123 @@ class ExecutionGate:
                 outcome = "deferred"
             elif error.code == "action_rejected":
                 outcome = "rejected"
+            if error.request_started is False:
+                dispatch_started = False
             result.update(
                 outcome=outcome,
                 error_category=error.category,
                 native_error={"code": error.code},
             )
+        except BaseException:
+            if claimed_action is not None:
+                assert self.actions is not None
+                self.actions.journal.finish(
+                    claimed_action,
+                    ActionOutcome.RESULT_UNKNOWN
+                    if dispatch_started
+                    else ActionOutcome.FAILED,
+                )
+            raise
+        result["finished_at"] = now()
+        if claimed_action is not None:
+            assert self.actions is not None
+            # 入力待ちやTool結果まで含め、送信後の観測をcheckpointより先に確定する。
+            record = self.actions.finish(claimed_action, result)
+            if record.outcome == ActionOutcome.CONFLICT and self.recovery is not None:
+                await self.recovery.recover(record.execution_id)
+                record = self.actions.journal.get(record.execution_id)
+                result["result_projection"] = record.projection
+            self.actions.on_change(record)
+            result["dispatch_started"] = dispatch_started
+        validate_contract("execution-envelope", result)
+        return result
+
+    def _previous_action(self, execution_id: str, envelope: Json) -> Json:
+        assert self.actions is not None
+        result = self.actions.previous(self.actions.journal.get(execution_id), envelope)
         result["finished_at"] = now()
         validate_contract("execution-envelope", result)
         return result
+
+    async def recovery_call(
+        self,
+        record: ActionRecord,
+        method: str,
+        *,
+        guard: Callable[[], None],
+    ) -> Json:
+        """記録済み依頼の照会/結果再取得/cancelに限定した、Core内部の回復経路。"""
+        from app.addon_action.recovery_contract import recovery_profile
+
+        if method not in {"status", "replay", "cancel"}:
+            raise MCPFailure("recovery", "invalid_recovery_method")
+        identity = record.identity
+        if identity.recovery_json is None:
+            raise MCPFailure("recovery", "recovery_unsupported")
+        loop_id = self.begin_loop(
+            ExecutionContext(
+                identity.character,
+                identity.session,
+                identity.user_id,
+                identity.binding_id,
+                identity.scene,
+                identity.scope,
+            )
+        )
+        try:
+            loop = self._loop(loop_id)
+            snapshot, generation = loop.snapshots.get(identity.connection_id, (None, 0))
+            if snapshot is None:
+                raise MCPFailure("policy", "snapshot_not_granted")
+            connection_id = identity.connection_id
+
+            def validate() -> tuple[CapabilitySource, Json, Json]:
+                source = self._live(loop, connection_id, generation)
+                self._sharing(loop, connection_id)
+                guard()
+                connection = self.registry.entry(connection_id).connection
+                if connection.identity != identity.connection_identity:
+                    raise MCPFailure("recovery", "action_identity_changed")
+                profile = recovery_profile(
+                    connection, identity.operation, snapshot.document["tools"]
+                )
+                if profile is None or encode(profile) != identity.recovery_json:
+                    raise MCPFailure("recovery", "recovery_definition_changed")
+                if method not in profile:
+                    raise MCPFailure("recovery", "recovery_unsupported")
+                return source, profile, connection.manifest["core_policy"]
+
+            _, profile, policy = validate()
+            operation = profile[method]["tool_name"]
+            arguments = {profile["request_key_argument"]: record.request_key}
+            tool = next(t for t in snapshot.document["tools"] if t["name"] == operation)
+            validate_arguments(tool["input_schema"], arguments)
+            # 元の対象bindingも保ち、回復Toolを別対象への汎用呼出しにしない。
+            async with self._locks[connection_id].hold(False):
+                with self._execution(connection_id):
+                    if (
+                        policy["resource_binding_required"]
+                        or identity.binding_id is not None
+                    ):
+                        if self.bindings is None or not await self.bindings.validate(
+                            connection_id,
+                            identity.operation,
+                            identity.character,
+                            identity.binding_id,
+                            identity.session,
+                        ):
+                            raise MCPFailure("policy", "binding_denied")
+                    if self.confirmations is None:
+                        raise MCPFailure("policy", "recovery_egress_unavailable")
+                    await self.confirmations.validate_egress(arguments)
+                    source, _, _ = validate()
+                    entry = self.registry.entry(connection_id)
+                    if (
+                        entry.availability == "degraded"
+                        and f"tool:{operation}" not in entry.healthy_operations
+                    ):
+                        raise MCPFailure("policy", "partial_failure_operation_denied")
+                    self._charge(loop, connection_id, operation, arguments)
+                    return await source.call_tool(operation, arguments)
+        finally:
+            self.end_loop(loop_id)

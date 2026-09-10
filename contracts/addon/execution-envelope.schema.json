@@ -32,16 +32,19 @@
     },
     "started_at": {"type": "string", "format": "date-time"},
     "finished_at": {"type": ["string", "null"], "format": "date-time"},
-    "outcome": {"enum": ["succeeded", "failed", "unsupported", "budget_exceeded", "result_unknown", "cancel_requested", "input_required", "confirmation_required", "deferred", "rejected"]},
+    "outcome": {"enum": ["succeeded", "failed", "unsupported", "budget_exceeded", "result_unknown", "cancel_requested", "input_required", "confirmation_required", "deferred", "rejected", "conflict", "no_change", "running", "cancelled"]},
     "error_category": {
       "type": ["string", "null"],
-      "enum": [null, "transport", "protocol", "auth", "validation", "tool_error", "unavailable", "policy"]
+      "enum": [null, "transport", "protocol", "auth", "validation", "tool_error", "unavailable", "policy", "recovery"]
     },
     "retry_count": {"type": "integer", "minimum": 0},
     "native_payload": {},
     "interaction_id": {"type": "string", "format": "uuid"},
     "confirmation_id": {"type": "string", "format": "uuid"},
     "native_error": {},
+    "replayed": {"type": "boolean"},
+    "dispatch_started": {"type": "boolean"},
+    "result_projection": {"type": "object"},
     "audit": {
       "type": "object",
       "required": ["character_id"],

@@ -18,6 +18,9 @@ from app.privacy.semantic.classifier import SemanticPrivacyClassifier
 from app.addon_action.egress import ActionEgress
 from app.addon_action.policy import ActionPolicy
 from app.addon_action.store import ActionStore
+from app.addon_action.journal import ActionJournal
+from app.addon_action.dispatch import ActionDispatch
+from app.addon_action.recovery import ActionRecovery
 
 from .binding import BindingResolver, BindingTarget
 from .projection import Sanitizer
@@ -200,6 +203,13 @@ class ToolRuntime:
             ),
         )
         self.gate.confirmations = self.action_policy
+        self.gate.actions = ActionDispatch(
+            ActionJournal(self.action_policy.store), self.service.sanitizer
+        )
+        self.action_recovery = ActionRecovery(self.gate, self.gate.actions)
+        self.gate.recovery = self.action_recovery
+        self.gate.tasks = self.action_recovery
+        self.gate.actions.on_change = self.action_recovery.changed
         self.management: AddonRuntime = (
             ConnectionManagement(
                 self.gate, connection_store, settings_path=settings_path
@@ -211,8 +221,12 @@ class ToolRuntime:
 
     async def start(self) -> None:
         self.action_policy.store.detach_waiters()
+        assert self.gate.actions is not None
+        self.gate.actions.journal.detach_dispatches()
         await self.management.start()
+        self.action_recovery.start()
 
     async def close(self) -> None:
         self.service.close()
+        await self.action_recovery.close()
         await self.management.close()
