@@ -9,6 +9,21 @@ const sample = process.env.TOOL_USE_TEST_SAMPLE!
 const sampleText = async () => (await readFile(sample, 'utf8')).trim()
 const confirmation = (page: Page) => page.getByRole('region', { name: '外部操作の承認', exact: true })
 
+test.afterEach(async ({ page }, info) => {
+  if (info.status !== info.expectedStatus) {
+    // 破棄可能な検証会話と数値イベントだけを残す。通信payloadは記録しない。
+    await info.attach('synthetic-conversation', {
+      body: JSON.stringify(await page.locator('article.message').allTextContents()), contentType: 'application/json',
+    })
+    await info.attach('voice-progress', {
+      body: JSON.stringify(await page.evaluate(() => {
+        const p = window.__voiceChatE2E
+        return { micStates: p.micStates, cycles: p.cycles, order: p.liveKitOrder, playback: p.playbackCompletions }
+      })), contentType: 'application/json',
+    })
+  }
+})
+
 async function send(page: Page, message: string) {
   const input = page.getByRole('textbox', { name: 'メッセージ', exact: true })
   await expect(input).toBeEnabled()
@@ -70,7 +85,6 @@ async function installSpeech(page: Page) {
       destination = context.createMediaStreamDestination()
       destination.channelCount = 1
       await context.resume()
-      setTimeout(() => { void play('action-once') }, 2_000)
       return destination.stream
     }
     ;(window as unknown as { __actionSpeech: typeof play }).__actionSpeech = play
@@ -101,6 +115,8 @@ test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用�
   expect(await sampleText()).toBe('赤い風船')
 
   await microphone.click()
+  await expect(microphone).toHaveClass(/mic-standby/)
+  await speak(page, 'action-once')
   await expect(confirmation(page)).toBeVisible()
   await waitForPlayback(page)
   const beforeSpokenApproval = await playedResponses(page)
