@@ -68,6 +68,18 @@ Capability変更は次loopへ反映し、実行中loopの定義へ途中追加�
 表示用preview・要求識別・arguments digestを保持しても、生payloadやsecretを会話履歴・RAG・
 通常logへ保存しない。要求表示の対応づけを引数条件ごとのpermissionへ置き換えない。
 
+保存先はruntime data rootの`addon-actions/actions.sqlite3`とする。承認状態と確認要求は
+別tableに保存し、回答の重複排除と単回許可の発行・消費をtransactionで制御する。
+Core起動時は旧要求の活動側待機を終了するが、要求と保存済み承認は保持する。
+会話外の待機時間は`DS_MCP_ACTION_WAIT_SECONDS`で設定する（正の秒数、既定60）。
+対話中の要求は既存のTool追加情報待機と同じ600秒を上限とし、画面離脱・stopでも終了する。
+
+`GET /addon-actions/requests`はcharacter/sessionで絞った安全なpreviewを返す。
+`POST /addon-actions/requests/{id}/answer`は要求主体と接続identityを確認して回答を保存する。
+このAPI自体はdispatchしない。実行側が元loopの有効性を再検証し、再開時にも
+binding・停止・grantと送信直前の意味privacyを確認する。MRTRの追加回答も外部送信内容として
+privacy・影響判定と要求識別に含め、元引数の通常分類だけで追加回答を許可しない。
+
 ## 利用者との対話
 
 今回のMVPはチャット内に3択を表示する。接続・操作群・実行場面と操作内容・対象を示す。

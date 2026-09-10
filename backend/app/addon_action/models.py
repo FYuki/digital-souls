@@ -1,7 +1,8 @@
 """承認の有効範囲。実引数やToolごとのpermissionとは分離する。"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Any
 
 
 class OperationGroup(StrEnum):
@@ -35,3 +36,26 @@ class ApprovalKey:
 
     def values(self) -> tuple[str, str, str, str]:
         return (self.connection_id, self.connection_identity, self.group, self.scene)
+
+
+@dataclass(frozen=True)
+class ActionInvocation:
+    connection_id: str
+    connection_identity: str
+    connection_label: str
+    character_id: str
+    session_id: str
+    loop_id: str
+    scene: ExecutionScene
+    operation: str
+    static_impact: dict[str, Any] = field(repr=False)
+    arguments: dict[str, Any] = field(repr=False)
+    binding_id: str | None = None
+    force_confirmation: bool = False
+    input_responses: dict[str, Any] | None = field(default=None, repr=False)
+
+
+@dataclass(frozen=True)
+class ApprovalTicket:
+    key: ApprovalKey
+    request_id: str | None = None

@@ -14,6 +14,10 @@ from app.addon_admin.connections import ConnectionStore
 from app.addon_admin.management import ConnectionManagement
 from app.inference import InferenceRouter
 from app.privacy.contracts import PrivacyScanner
+from app.privacy.semantic.classifier import SemanticPrivacyClassifier
+from app.addon_action.egress import ActionEgress
+from app.addon_action.policy import ActionPolicy
+from app.addon_action.store import ActionStore
 
 from .binding import BindingResolver, BindingTarget
 from .projection import Sanitizer
@@ -113,6 +117,7 @@ class ToolRuntime:
         scanner: PrivacyScanner,
         *,
         settings_path: Path | None = None,
+        classifier: SemanticPrivacyClassifier | None = None,
     ) -> None:
         self.settings = settings
         registry = Registry()
@@ -176,6 +181,25 @@ class ToolRuntime:
             bindings,
             protected_roots=protected,
         )
+        action_path = (
+            (
+                settings_path.parent
+                if settings_path is not None
+                else Path(os.environ.get("DS_DATA_DIR", "data"))
+            )
+            / "addon-actions"
+            / "actions.sqlite3"
+        )
+        self.action_policy = ActionPolicy(
+            ActionStore(action_path),
+            self.service.sanitizer,
+            egress=ActionEgress(classifier).allowed,
+            protected_roots=protected,
+            autonomous_wait_seconds=float(
+                os.environ.get("DS_MCP_ACTION_WAIT_SECONDS", "60")
+            ),
+        )
+        self.gate.confirmations = self.action_policy
         self.management: AddonRuntime = (
             ConnectionManagement(
                 self.gate, connection_store, settings_path=settings_path
@@ -186,6 +210,7 @@ class ToolRuntime:
         self.management.on_disabled = self.service.connection_disabled
 
     async def start(self) -> None:
+        self.action_policy.store.detach_waiters()
         await self.management.start()
 
     async def close(self) -> None:

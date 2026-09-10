@@ -29,6 +29,12 @@ class MCPFailure(Exception):
         super().__init__(code)
 
 
+class ConfirmationNeeded(MCPFailure):
+    def __init__(self, request_id: str) -> None:
+        super().__init__("policy", "confirmation_required")
+        self.request_id = request_id
+
+
 def encode(value: Any) -> str:
     return json.dumps(
         value,

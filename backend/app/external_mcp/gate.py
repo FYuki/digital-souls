@@ -10,9 +10,11 @@ from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from typing import AsyncIterator, Callable, Iterator
 from uuid import uuid4
+from app.addon_action.models import ActionInvocation, ApprovalTicket, ExecutionScene
 
 from .models import (
     Json,
+    ConfirmationNeeded,
     MCPFailure,
     Snapshot,
     digest,
@@ -36,6 +38,7 @@ class ExecutionContext:
     session_id: str
     user_id: str | None = None
     binding_id: str | None = None
+    scene: ExecutionScene = ExecutionScene.CONVERSATION
 
 
 @dataclass
@@ -61,6 +64,19 @@ class _Pending:
     request_ids: frozenset[str]
     rounds: int
     binding_id: str | None
+
+
+@dataclass(frozen=True)
+class _ConfirmationPending:
+    loop_id: str
+    connection_id: str
+    operation: str
+    arguments_json: str
+    kind: str
+    binding_id: str | None
+    pending: _Pending | None
+    responses_json: str | None
+    dispatch_guard: Callable[[], None] | None
 
 
 class _ConnectionLock:
@@ -154,6 +170,7 @@ class ExecutionGate:
         self._locks: dict[str, _ConnectionLock] = {}
         self._loops: dict[str, _Loop] = {}
         self._pending: dict[str, _Pending] = {}
+        self._confirmation_pending: dict[str, _ConfirmationPending] = {}
         self._rates: dict[tuple[str, ...], deque[float]] = {}
         self._last_rate_cleanup = float("-inf")
 
@@ -230,6 +247,8 @@ class ExecutionGate:
 
     def stop(self, loop_id: str) -> None:
         self._loop(loop_id).stopped = True
+        if self.confirmations is not None:
+            self.confirmations.end_loop(loop_id)
 
     def catalog_snapshots(self, loop_id: str) -> dict[str, Snapshot]:
         """現在loopの利用可能な正本だけを返す。stagedをactivateしない。"""
@@ -286,11 +305,19 @@ class ExecutionGate:
             for key, pending in self._pending.items()
             if pending.connection_id != connection_id
         }
+        for request_id, pending in tuple(self._confirmation_pending.items()):
+            if pending.connection_id == connection_id:
+                if self.confirmations is not None:
+                    self.confirmations.end_loop(pending.loop_id)
+                self._confirmation_pending.pop(request_id)
 
     def end_loop(self, loop_id: str) -> None:
         self.stop(loop_id)
         self._loops.pop(loop_id)
         self._pending = {k: v for k, v in self._pending.items() if v.loop_id != loop_id}
+        self._confirmation_pending = {
+            k: v for k, v in self._confirmation_pending.items() if v.loop_id != loop_id
+        }
 
     def _loop(self, loop_id: str) -> _Loop:
         try:
@@ -423,6 +450,27 @@ class ExecutionGate:
             binding_id=pending.binding_id,
         )
 
+    async def resume_confirmation(self, request_id: str, loop_id: str) -> Json:
+        saved = self._confirmation_pending.get(request_id)
+        if saved is None or saved.loop_id != loop_id:
+            raise MCPFailure("policy", "invalid_confirmation_resume")
+        # 同じ画面操作の再送で、承認済みの外部操作を二重に開始しない。
+        self._confirmation_pending.pop(request_id)
+        return await self._execute(
+            saved.connection_id,
+            saved.operation,
+            json.loads(saved.arguments_json),
+            loop_id,
+            saved.kind,
+            binding_id=saved.binding_id,
+            pending=saved.pending,
+            responses=json.loads(saved.responses_json)
+            if saved.responses_json
+            else None,
+            confirmation_id=request_id,
+            dispatch_guard=saved.dispatch_guard,
+        )
+
     async def _execute(
         self,
         connection_id: str,
@@ -435,6 +483,7 @@ class ExecutionGate:
         responses: Json | None = None,
         binding_id: str | None = None,
         dispatch_guard: Callable[[], None] | None = None,
+        confirmation_id: str | None = None,
     ) -> Json:
         # 不明なloopには監査主体が無いため、envelopeを捏造せず呼出しを拒否する。
         loop = self._loop(loop_id)
@@ -509,11 +558,39 @@ class ExecutionGate:
             rules = connection.restrictions(operation)
             if "deny" in rules:
                 raise MCPFailure("policy", "operation_denied")
-            if "require_confirmation" in rules:
-                if self.confirmations is None or not await self.confirmations.confirmed(
-                    connection_id, operation, arguments, loop.context.character_id
-                ):
-                    raise MCPFailure("policy", "confirmation_required")
+            ticket: ApprovalTicket | None = None
+            if self.confirmations is not None and kind == "tool":
+                assert tool is not None
+
+                def live() -> None:
+                    self._live(loop, connection_id, generation)
+                    if dispatch_guard is not None:
+                        dispatch_guard()
+
+                ticket = await self.confirmations.prepare(
+                    ActionInvocation(
+                        connection_id,
+                        connection.identity,
+                        self.registry.entry(connection_id).display_name,
+                        loop.context.character_id,
+                        loop.context.session_id,
+                        loop_id,
+                        loop.context.scene,
+                        operation,
+                        tool.get(
+                            "impact_classification",
+                            {"effect": "unknown", "source": "unknown"},
+                        ),
+                        arguments,
+                        binding_id,
+                        "require_confirmation" in rules,
+                        responses,
+                    ),
+                    live=live,
+                    request_id=confirmation_id,
+                )
+            elif "require_confirmation" in rules:
+                raise MCPFailure("policy", "confirmation_required")
             if pending and pending.rounds >= self.max_input_rounds:
                 raise MCPFailure("policy", "input_round_limit")
             parallel = (
@@ -541,6 +618,12 @@ class ExecutionGate:
                             ):
                                 raise MCPFailure("policy", "binding_denied")
                         # 非同期validatorを待つ間のstop/relinkもdispatch前に確認する。
+                        if self.confirmations is not None and kind == "tool":
+                            await self.confirmations.validate_egress(
+                                {"arguments": arguments, "input_responses": responses}
+                                if responses is not None
+                                else arguments
+                            )
                         self._live(loop, connection_id, generation)
                         # queue/connection lock待機中の自律許可取消しも送信直前に反映する。
                         if dispatch_guard is not None:
@@ -554,6 +637,12 @@ class ExecutionGate:
                                 "policy", "partial_failure_operation_denied"
                             )
                         self._charge(loop, connection_id, operation, arguments)
+                        if ticket is not None and attempt == 0:
+                            assert self.confirmations is not None
+                            if not self.confirmations.consume(ticket):
+                                raise MCPFailure(
+                                    "policy", "approval_consumed_or_expired"
+                                )
                         try:
                             if kind == "tool":
                                 # dispatch直前に元schemaを再検証する。
@@ -621,6 +710,23 @@ class ExecutionGate:
                         result.update(outcome="failed", error_category="tool_error")
                     else:
                         result["outcome"] = "succeeded"
+        except ConfirmationNeeded as error:
+            self._confirmation_pending[error.request_id] = _ConfirmationPending(
+                loop_id,
+                connection_id,
+                operation,
+                encode(arguments),
+                kind,
+                binding_id,
+                pending,
+                encode(responses) if responses is not None else None,
+                dispatch_guard,
+            )
+            result.update(
+                outcome="confirmation_required",
+                confirmation_id=error.request_id,
+                error_category="policy",
+            )
         except MCPFailure as error:
             outcome = "failed"
             if error.code in {"budget_exceeded", "rate_limit_exceeded"}:
@@ -633,6 +739,10 @@ class ExecutionGate:
                 outcome = "unsupported"
             elif error.code == "user_stopped":
                 outcome = "cancel_requested"
+            elif error.code == "confirmation_wait_ended":
+                outcome = "deferred"
+            elif error.code == "action_rejected":
+                outcome = "rejected"
             result.update(
                 outcome=outcome,
                 error_category=error.category,

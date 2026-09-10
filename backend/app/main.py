@@ -101,6 +101,7 @@ from app.routers.livekit import router as livekit_router
 from app.routers.screen_perception import router as screen_perception_router
 from app.routers.ws import router as ws_router
 from app.routers.tool_use import router as tool_use_router
+from app.routers.addon_actions import router as addon_actions_router
 from app.routers.addon_admin import router as addon_admin_router
 from app.screen_perception.http_security import (
     SCREEN_ALLOWED_ORIGIN_ENV,
@@ -751,8 +752,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 inference_runtime.router,
                 privacy_scanner,
                 settings_path=runtime_paths.data_root / "addon-settings.json",
+                classifier=memory_consolidation_privacy_classifier,
             )
             app.state.addon_manager = tool_runtime.management
+            app.state.action_policy = tool_runtime.action_policy
             await tool_runtime.start()
             app.state.tool_service = (
                 tool_runtime.service
@@ -964,6 +967,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await run_cleanup(tool_runtime.close())
             if hasattr(app.state, "tool_service"):
                 del app.state.tool_service
+            if hasattr(app.state, "action_policy"):
+                del app.state.action_policy
             if memory_consolidation_scheduler_started:
                 await run_cleanup(memory_consolidation_scheduler.stop())
             if memory_formation_scheduler_started:
@@ -1060,6 +1065,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(tool_use_router)
+app.include_router(addon_actions_router)
 app.include_router(character_life_router)
 app.include_router(addon_admin_router)
 

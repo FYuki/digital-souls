@@ -254,18 +254,43 @@ def test_sharing_and_binding_rejection(policy):
 
 def test_validated_binding_and_confirmation_arguments_are_stable():
     class Binding:
-        async def validate(self, connection_id, operation, character_id, binding_id, session_id):
+        async def validate(
+            self, connection_id, operation, character_id, binding_id, session_id
+        ):
             return binding_id == "resolved" and character_id == "miori"
 
     async def run():
         arguments = {"value": 1}
 
         class Confirmation:
-            async def confirmed(self, connection_id, operation, approved, character_id):
-                assert approved == {"value": 1}
+            async def prepare(self, call, *, live, request_id=None):
+                from app.addon_action.models import (
+                    ApprovalKey,
+                    ApprovalTicket,
+                    OperationGroup,
+                )
+
+                assert call.arguments == {"value": 1}
                 arguments["value"] = 2
                 await asyncio.sleep(0)
+                live()
+                return ApprovalTicket(
+                    ApprovalKey(
+                        call.connection_id,
+                        call.connection_identity,
+                        OperationGroup.HIGH_IMPACT,
+                        call.scene,
+                    )
+                )
+
+            async def validate_egress(self, arguments):
+                assert arguments == {"value": 1}
+
+            def consume(self, ticket):
                 return True
+
+            def end_loop(self, loop_id):
+                pass
 
         c = Connection.from_manifest(
             manifest(
