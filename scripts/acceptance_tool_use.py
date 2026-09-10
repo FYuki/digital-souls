@@ -193,7 +193,8 @@ def main():
         environment.update(
             {
                 f"INFERENCE_TARGET_{token}": "ollama/gemma4:e4b",
-                f"INFERENCE_TARGET_{token}_MAX_INPUT_TOKENS": "12288",
+                # 同じOllamaモデルの用途切替でcontext枠を変えず、既存の合計8192に揃える。
+                f"INFERENCE_TARGET_{token}_MAX_INPUT_TOKENS": str(8192 - output),
                 f"INFERENCE_TARGET_{token}_MAX_OUTPUT_TOKENS": str(output),
             }
         )
@@ -466,6 +467,23 @@ def main():
             if contract or action
             else "chromium-voicevox-wav",
             "routingModel": environment["INFERENCE_TARGET_TOOL_ROUTING"],
+            "inferenceTokenLimits": {
+                name.lower(): {
+                    "input": int(
+                        environment[f"INFERENCE_TARGET_{name}_MAX_INPUT_TOKENS"]
+                    ),
+                    "output": int(
+                        environment[f"INFERENCE_TARGET_{name}_MAX_OUTPUT_TOKENS"]
+                    ),
+                }
+                for name in (
+                    "CHAT",
+                    "PRIVACY",
+                    "MEMORY_EXTRACTION",
+                    "MEMORY_CONSOLIDATION",
+                    "TOOL_ROUTING",
+                )
+            },
             "implementationCommit": subprocess.check_output(
                 ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
             ).strip(),
