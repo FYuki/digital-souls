@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 from typing import Protocol
+from collections.abc import Callable
+from app.addon_action.models import ActionInvocation, ApprovalTicket
 from .models import Discovery, Json
 
 
@@ -42,9 +44,16 @@ class BindingValidatorPort(Protocol):
 
 
 class ConfirmationPolicyPort(Protocol):
-    async def confirmed(
-        self, connection_id: str, operation: str, arguments: Json, character_id: str
-    ) -> bool: ...
+    async def prepare(
+        self,
+        call: ActionInvocation,
+        *,
+        live: Callable[[], None],
+        request_id: str | None = None,
+    ) -> ApprovalTicket: ...
+    async def validate_egress(self, arguments: Json) -> None: ...
+    def consume(self, ticket: ApprovalTicket) -> bool: ...
+    def end_loop(self, loop_id: str) -> None: ...
 
 
 class TaskTrackerPort(Protocol):

@@ -32,7 +32,7 @@
     },
     "started_at": {"type": "string", "format": "date-time"},
     "finished_at": {"type": ["string", "null"], "format": "date-time"},
-    "outcome": {"enum": ["succeeded", "failed", "unsupported", "budget_exceeded", "result_unknown", "cancel_requested", "input_required"]},
+    "outcome": {"enum": ["succeeded", "failed", "unsupported", "budget_exceeded", "result_unknown", "cancel_requested", "input_required", "confirmation_required", "deferred", "rejected"]},
     "error_category": {
       "type": ["string", "null"],
       "enum": [null, "transport", "protocol", "auth", "validation", "tool_error", "unavailable", "policy"]
@@ -40,6 +40,7 @@
     "retry_count": {"type": "integer", "minimum": 0},
     "native_payload": {},
     "interaction_id": {"type": "string", "format": "uuid"},
+    "confirmation_id": {"type": "string", "format": "uuid"},
     "native_error": {},
     "audit": {
       "type": "object",
