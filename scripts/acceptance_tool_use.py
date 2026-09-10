@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import io
 import base64
+import io
 import json
 import os
 import re
-from pathlib import Path
 import secrets
-import sqlite3
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -19,22 +18,23 @@ import wave
 from contextlib import ExitStack, contextmanager
 from copy import deepcopy
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 import httpx
-from dotenv import dotenv_values
-from uvicorn.config import LOGGING_CONFIG
 from app.runtime_data_root import initialize_runtime_data_root
 from app.runtime_paths import resolve_runtime_paths
+from dotenv import dotenv_values
 from tests.external_mcp_test_support import manifest
 from tests.integration.test_external_mcp_real_servers_integration import (
     everything_http,
     free_port,
     stop_process,
 )
+from uvicorn.config import LOGGING_CONFIG
 
 
 def public_evidence(text: str, temporary_root: Path) -> str:
@@ -104,18 +104,20 @@ def speech(base, text, path, *, silence=90):
         base + "/synthesis", params={"speaker": 3}, json=query, timeout=30
     )
     result.raise_for_status()
-    with wave.open(io.BytesIO(result.content)) as source:
-        with wave.open(str(path), "wb") as output:
-            output.setparams(source.getparams())
-            output.writeframes(source.readframes(source.getnframes()))
-            output.writeframes(
-                bytes(
-                    source.getframerate()
-                    * source.getnchannels()
-                    * source.getsampwidth()
-                    * silence
-                )
+    with (
+        wave.open(io.BytesIO(result.content)) as source,
+        wave.open(str(path), "wb") as output,
+    ):
+        output.setparams(source.getparams())
+        output.writeframes(source.readframes(source.getnframes()))
+        output.writeframes(
+            bytes(
+                source.getframerate()
+                * source.getnchannels()
+                * source.getsampwidth()
+                * silence
             )
+        )
 
 
 def main():
@@ -268,6 +270,7 @@ def main():
         stack.callback(
             lambda: subprocess.run(
                 [docker, "stop", "--time", "5", container],
+                check=False,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
@@ -364,8 +367,7 @@ def main():
                     str(ROOT / "backend/.venv/bin/python"),
                     *(
                         [
-                            "-c",
-                            "import faulthandler, runpy; faulthandler.dump_traceback_later(90, repeat=True); runpy.run_module('uvicorn', run_name='__main__')",
+                            str(ROOT / "scripts/acceptance_backend.py"),
                         ]
                         if action
                         else ["-m", "uvicorn"]
@@ -559,6 +561,7 @@ def main():
                     else "playwright.tool-use.config.ts",
                     *arguments,
                 ],
+                check=False,
                 cwd=ROOT / "frontend",
                 env=test_env,
                 stdout=output,
@@ -613,6 +616,8 @@ def main():
                         "  File ",
                         "Timeout (",
                         "  <no Python frame>",
+                        "Acceptance task:",
+                        "Acceptance frame:",
                     )
                 )
             ]
