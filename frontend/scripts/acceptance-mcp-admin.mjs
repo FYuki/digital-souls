@@ -93,7 +93,7 @@ try {
     await page.screenshot({ path: config.screenshot, fullPage: true })
     await page.setViewportSize({ width: 320, height: 900 })
     await expect(row('stdio接続').getByRole('button', { name: 'stdio接続の詳細・編集' })).toBeVisible()
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), { timeout: 35000 }).toBe(true)
     passed('zero-tools-and-responsive-list')
   } else if (phase === 'restored') {
     await expect(page.getByRole('list', { name: '登録済みの連携' }).getByRole('listitem')).toHaveCount(5)

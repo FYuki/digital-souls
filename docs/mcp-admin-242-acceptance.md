@@ -9,7 +9,7 @@
 
 | 境界 | 確認内容 | 証跡 |
 |---|---|---|
-| 保存 | 接続ごとのcredential専有、同じ値の重複保存、再起動復元、secret_refの非入力 | `backend/tests/unit/test_mcp_connection_store.py` |
+| 保存 | 接続ごとのcredential専有、同じ値の重複保存、再起動復元、secret_refの非入力、既存Manifest argvの互換性 | `backend/tests/unit/test_mcp_connection_store.py` |
 | 削除 | 接続/credentialの同一transaction削除、失敗注入で双方rollback | 同上の削除失敗テスト |
 | 履歴 | 設定・credential更新でrevisionを進め成功履歴をリセット、表示名のみ維持、古い結果拒否 | 同上と`test_mcp_connection_management.py` |
 | runtime | OFF登録、初回確認失敗でも保存、確認成功後のみON、ON編集失敗時の希望状態維持と復旧 | `backend/tests/unit/test_mcp_connection_management.py` |
@@ -37,6 +37,7 @@ Ollamaは一時ポートのテスト所有processで、Core起動時のモデル
 
 すべてdev/test専用の一時data rootと動的portを使用し、dogfoodのサービス・履歴・credentialへ接続しない。
 起動したサービスは終了処理で停止し、成功した全段階とDB削除・log非露出・teardownを確認した後だけ公開結果を書く。
+ログの非露出検査は全processの停止・log fileのclose後に実施し、終了時の出力も含める。
 再実行の開始時に前回の成功証跡を削除し、途中失敗を成功と混同しない。
 
 ## 証跡の適用範囲

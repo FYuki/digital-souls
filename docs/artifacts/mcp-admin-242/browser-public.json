@@ -20,7 +20,7 @@
     "no-credential-in-process-or-browser-logs"
   ],
   "teardown": "passed",
-  "testedAt": "2026-09-10T03:17:53Z",
+  "testedAt": "2026-09-10T03:44:13Z",
   "executionLog": {
     "path": "browser-execution.jsonl",
     "sha256": "02bb056cba85e4925b2326f3a6c27e2301bbc472bc4e9ac8e9e8ce25d1015f7d"

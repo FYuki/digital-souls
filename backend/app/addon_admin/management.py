@@ -70,9 +70,11 @@ class ConnectionManagement(AddonRuntime):
                 else:
                     future.set_exception(MCPFailure("policy", "connection_changed"))
 
-    def _clean(self, value: object, maximum: int) -> str:
+    def _clean(
+        self, value: object, maximum: int, private_values: tuple[str, ...]
+    ) -> str:
         text = value if isinstance(value, str) else ""
-        for private in sorted(self.connections.private_values(), key=len, reverse=True):
+        for private in sorted(private_values, key=len, reverse=True):
             text = text.replace(private, "[非公開]")
         return "".join(c for c in text if c in "\n\t" or ord(c) >= 32)[:maximum]
 
@@ -81,15 +83,18 @@ class ConnectionManagement(AddonRuntime):
         if snapshot is None:
             return {}
         data = snapshot.document
+        private_values = self.connections.private_values()
         return {
             "counts": {
                 key: len(data[key]) for key in ("tools", "resources", "prompts")
             },
             "tools": [
                 {
-                    "name": self._clean(tool["name"], 256),
+                    "name": self._clean(tool["name"], 256, private_values),
                     "description": self._clean(
-                        tool["native_definition"].get("description", ""), 4096
+                        tool["native_definition"].get("description", ""),
+                        4096,
+                        private_values,
                     ),
                     "status": tool["status"],
                 }

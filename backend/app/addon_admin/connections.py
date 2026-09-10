@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sqlite3
@@ -61,13 +62,13 @@ class ConnectionStore:
             )
 
     @contextmanager
-    def transaction(self) -> Iterator[sqlite3.Connection]:
+    def transaction(self, *, write: bool = True) -> Iterator[sqlite3.Connection]:
         db = sqlite3.connect(self.path, timeout=5)
         db.row_factory = sqlite3.Row
         try:
             db.execute("PRAGMA foreign_keys=ON")
             db.execute("PRAGMA secure_delete=ON")
-            db.execute("BEGIN IMMEDIATE")
+            db.execute("BEGIN IMMEDIATE" if write else "BEGIN DEFERRED")
             yield db
             db.commit()
         except BaseException:
@@ -78,9 +79,12 @@ class ConnectionStore:
 
     @staticmethod
     def _record(row: sqlite3.Row) -> ConnectionRecord:
+        connection = Connection.from_manifest(json.loads(row["manifest"]))
         return ConnectionRecord(
-            Connection.from_manifest(json.loads(row["manifest"])),
-            ConnectionInput.model_validate_json(row["spec"]),
+            connection,
+            ConnectionInput.from_connection(
+                connection, json.loads(row["spec"])["display_name"]
+            ),
             row["revision"],
             row["secret_ref"],
             bool(row["credential_set"]),
@@ -91,13 +95,13 @@ class ConnectionStore:
         )
 
     def records(self) -> tuple[ConnectionRecord, ...]:
-        with self.transaction() as db:
+        with self.transaction(write=False) as db:
             rows = db.execute("""SELECT c.*, EXISTS(SELECT 1 FROM credentials s
                 WHERE s.connection_id=c.id) AS credential_set FROM connections c ORDER BY c.id""").fetchall()
             return tuple(self._record(row) for row in rows)
 
     def get(self, connection_id: str) -> ConnectionRecord:
-        with self.transaction() as db:
+        with self.transaction(write=False) as db:
             row = db.execute(
                 """SELECT c.*, EXISTS(SELECT 1 FROM credentials s
                 WHERE s.connection_id=c.id) AS credential_set FROM connections c WHERE c.id=?""",
@@ -265,7 +269,11 @@ class ConnectionStore:
                 self._private_values.add(value)
 
     async def resolve(self, secret_ref: str) -> str:
-        with self.transaction() as db:
+        # 認証中のSQLite待機で会話・管理APIのevent loopを停止しない。
+        return await asyncio.to_thread(self._resolve, secret_ref)
+
+    def _resolve(self, secret_ref: str) -> str:
+        with self.transaction(write=False) as db:
             row = db.execute(
                 "SELECT s.value FROM credentials s JOIN connections c ON c.id=s.connection_id "
                 "WHERE c.secret_ref=?",

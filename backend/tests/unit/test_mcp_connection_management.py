@@ -341,3 +341,37 @@ def test_delete_cancels_late_discovery_and_cannot_restore_connection(tmp_path):
             factory.release_check.set()
             await runtime.close()
     asyncio.run(run())
+
+
+def test_changed_settings_clear_old_attempt_while_new_check_is_pending(tmp_path):
+    async def run():
+        runtime, factory = setup(tmp_path)
+        try:
+            cid = (await runtime.create(spec()))["connection_instance_id"]
+            assert runtime.detail(cid)["last_checked_at"]
+            factory.pause_check = True
+            update = asyncio.create_task(runtime.update(
+                cid, spec(endpoint="http://127.0.0.1:9105/mcp")
+            ))
+            await asyncio.wait_for(factory.check_started.wait(), 1)
+            pending = runtime.detail(cid)
+            assert pending["availability"] == "unknown"
+            assert pending["last_success_at"] is None
+            assert pending["last_checked_at"] is None
+            factory.release_check.set()
+            assert (await update)["last_checked_at"]
+        finally:
+            factory.release_check.set()
+            await runtime.close()
+    asyncio.run(run())
+
+
+def test_dynamic_credential_is_redacted_before_output_truncation():
+    from app.tool_use.projection import Sanitizer
+    from tests.unit.test_tool_use import Scanner
+
+    secret = "synthetic-private-credential"
+    sanitizer = Sanitizer(Scanner(), dynamic_private_values=lambda: (secret,))
+    result = sanitizer.text("12345678" + secret, maximum=12)
+    assert "synt" not in result
+    assert result == "12345678[非公開"

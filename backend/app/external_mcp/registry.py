@@ -60,6 +60,7 @@ class Registry:
         entry = self.entry(connection.id)
         entry.connection = connection
         entry.display_name = display_name
+        entry.last_checked_at = None
         entry.generation += 1
         entry.linked = True
         entry.active = None

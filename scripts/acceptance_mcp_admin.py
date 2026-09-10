@@ -36,6 +36,24 @@ CHECKS = {
 }
 
 
+def stop_process(child):
+    # 回収済みPIDへ再送信しない。groupへ通知してからleaderをwaitする。
+    if child.returncode is not None:
+        return
+    try:
+        os.killpg(child.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        child.wait(timeout=15)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        child.wait(timeout=5)
+
+
 @contextmanager
 def process(command, environment, cwd, log):
     with log.open("w") as handle:
@@ -50,18 +68,7 @@ def process(command, environment, cwd, log):
         try:
             yield child
         finally:
-            if child.poll() is None:
-                child.terminate()
-                try:
-                    child.wait(timeout=15)
-                except subprocess.TimeoutExpired:
-                    os.killpg(child.pid, signal.SIGKILL)
-                    child.wait(timeout=5)
-            # テスト所有のstdio子processも同じgroupに所属する。
-            try:
-                os.killpg(child.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+            stop_process(child)
 
 
 def listen(port_number, child):
@@ -284,15 +291,13 @@ def main():
             print(f"{phase}: {len(current)} checks passed", flush=True)
 
         browser("initial")
-        backend.terminate()
-        backend.wait(timeout=15)
+        stop_process(backend)
         backend = stack.enter_context(
             process(command, environment, ROOT, diagnostic / "backend-restored.log")
         )
         ready(backend_url + "/addon-admin/connections", backend)
         browser("restored")
-        fixtures["http"].terminate()
-        fixtures["http"].wait(timeout=15)
+        stop_process(fixtures["http"])
         browser("disconnected")
         with sqlite3.connect(work / "data/mcp-admin/connections.sqlite3") as db:
             assert db.execute("SELECT COUNT(*) FROM connections").fetchone()[0] == 0
@@ -300,18 +305,19 @@ def main():
         events.append(
             {"check": "database-connection-and-credential-deletion", "status": "passed"}
         )
-        for log in diagnostic.glob("*.log"):
-            text = log.read_text()
-            for private in (
-                "synthetic-test-token",
-                "synthetic-wrong-token",
-                "private-auth-error",
-            ):
-                if private in text:
-                    raise RuntimeError("private value in acceptance log")
-        events.append(
-            {"check": "no-credential-in-process-or-browser-logs", "status": "passed"}
-        )
+    # 全processの停止・log fileのclose後に終了時の出力まで検査する。
+    for log in diagnostic.glob("*.log"):
+        text = log.read_text()
+        for private in (
+            "synthetic-test-token",
+            "synthetic-wrong-token",
+            "private-auth-error",
+        ):
+            if private in text:
+                raise RuntimeError("private value in acceptance log")
+    events.append(
+        {"check": "no-credential-in-process-or-browser-logs", "status": "passed"}
+    )
     event_text = "".join(json.dumps(event, sort_keys=True) + "\n" for event in events)
     event_path.write_text(event_text)
     report = {

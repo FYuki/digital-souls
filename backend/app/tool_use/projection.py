@@ -38,10 +38,11 @@ class Sanitizer:
         )
 
     def text(self, value: str, *, maximum: int = 16_384) -> str:
-        value = value[:maximum]
         for private in sorted(self.sensitive_values, key=len, reverse=True):
             if private:
                 value = value.replace(private, "[非公開]")
+        # secretを途中で切って断片を残さないよう、伏せた後で表示量を制限する。
+        value = value[:maximum]
         # URLは表示用出典へ流用しない。Coreが管理する出典ラベルを使う。
         value = _URL.sub("[外部参照]", value)
         result = self.scanner.scan(value)
