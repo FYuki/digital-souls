@@ -98,13 +98,24 @@ def speech(base, text, path, *, silence=90):
 
 def main():
     contract = "--contract-mcp" in sys.argv
-    arguments = [a for a in sys.argv[1:] if a != "--contract-mcp"]
+    action = "--addon-action" in sys.argv
+    if contract and action:
+        raise ValueError("会話契約fixtureと独立MCPの承認受入は別runで実行してください")
+    arguments = [
+        a for a in sys.argv[1:] if a not in {"--contract-mcp", "--addon-action"}
+    ]
     if os.environ.get("DS_ENVIRONMENT_ID") == "dogfood":
         raise RuntimeError("dogfoodから受入テストを起動できません")
     artifacts = (
         ROOT
         / "frontend/test-results"
-        / ("tool-use-contract-runtime" if contract else "tool-use-runtime")
+        / (
+            "addon-action-runtime"
+            if action
+            else "tool-use-contract-runtime"
+            if contract
+            else "tool-use-runtime"
+        )
     )
     artifacts.mkdir(parents=True, exist_ok=True)
     # 起動・readiness失敗でも前回の成功証跡を今回の結果として残さない。
@@ -123,8 +134,16 @@ def main():
     }
     if not contract:
         assert Path(servers["everything"]).is_file()
+        for name in ["filesystem"] if action else ["filesystem", "everything"]:
+            package = json.loads((packages / f"server-{name}/package.json").read_text())
+            assert package["version"] == "2026.8.31"
     # 認証値はprocess環境にだけ渡し、reportへ書かない。
-    configured = {**dotenv_values(ROOT / "backend/.env"), **os.environ}
+    configured = {
+        **dotenv_values(
+            os.environ.get("ACCEPTANCE_INFERENCE_ENV", str(ROOT / "backend/.env"))
+        ),
+        **os.environ,
+    }
     environment = {
         k: str(v)
         for k, v in configured.items()
@@ -181,7 +200,7 @@ def main():
         sample = files / "sample.txt"
         sample.write_text("展示テーマは青い折り紙です。", encoding="utf-8")
         endpoint = None
-        if not contract:
+        if not contract and not action:
             endpoint, _http = stack.enter_context(everything_http(servers, runtime))
         backend_port, frontend_port = free_port(), free_port()
         livekit_port, tcp_port, udp_port = free_port(), free_port(), free_port()
@@ -232,20 +251,28 @@ def main():
             )
         )
         ready(f"http://127.0.0.1:{livekit_port}/", lk)
-        filesystem = manifest(connection_id="acceptance-filesystem")
+        filesystem = manifest(
+            connection_id="acceptance-filesystem", trusted=action, binding=action
+        )
+        if action:
+            filesystem["core_policy"]["operation_allowlist"] = [
+                "read_text_file",
+                "write_file",
+            ]
         filesystem["connection"]["stdio"] = {
             "command": node,
             "args": [str(packages / "server-filesystem/dist/index.js"), str(files)],
         }
         config = root / "mcp.json"
-        connections = [
-            filesystem,
-            manifest(
-                connection_id="acceptance-http",
-                transport="streamable_http",
-                endpoint=endpoint,
-            ),
-        ]
+        connections = [filesystem]
+        if not action:
+            connections.append(
+                manifest(
+                    connection_id="acceptance-http",
+                    transport="streamable_http",
+                    endpoint=endpoint,
+                )
+            )
         signals = root / "signals"
         signals.mkdir()
         if contract:
@@ -267,7 +294,18 @@ def main():
                 {
                     "version": 1,
                     "connections": connections,
-                    "bindings": [],
+                    "bindings": [
+                        {
+                            "id": "acceptance-file",
+                            "connection_id": "acceptance-filesystem",
+                            "character_id": "miori",
+                            "label": "検証用ファイル",
+                            "operations": ["read_text_file", "write_file"],
+                            "arguments": {"path": str(sample)},
+                        }
+                    ]
+                    if action
+                    else [],
                 }
             )
         )
@@ -382,9 +420,13 @@ def main():
             "environmentId": "test",
             "mcpImplementation": "controlled-fixture"
             if contract
+            else "published-filesystem"
+            if action
             else "published-filesystem-and-everything",
+            "mcpVersion": None if contract else "2026.8.31",
+            "livekitVersion": "1.9.7",
             "microphone": "scheduled-voicevox-wav-mediastream"
-            if contract
+            if contract or action
             else "chromium-voicevox-wav",
             "routingModel": environment["INFERENCE_TARGET_TOOL_ROUTING"],
             "dataRoot": str(data),
@@ -420,6 +462,14 @@ def main():
             "TOOL_USE_TEST_SIGNALS": str(signals),
             "TOOL_USE_TEST_RESULTS_DIR": str(runtime / "browser"),
         }
+        if action:
+            for name, text in {
+                "action-once": "検証用ファイルの内容を、青い星、という三文字だけに置き換えてください。",
+                "spoken-approval": "一度承認します。実行してください。",
+                "action-reject": "検証用ファイルの内容を、緑の月、という三文字だけに置き換えてください。",
+                "action-always": "検証用ファイルの内容を、金の花、という三文字だけに置き換えてください。",
+            }.items():
+                speech(voicevox, text, root / f"{name}.wav", silence=0)
         if contract:
             speech(
                 voicevox,
@@ -446,7 +496,9 @@ def main():
                     str(ROOT / "frontend/node_modules/.bin/playwright"),
                     "test",
                     "--config",
-                    "playwright.tool-use-contract.config.ts"
+                    "playwright.addon-action.config.ts"
+                    if action
+                    else "playwright.tool-use-contract.config.ts"
                     if contract
                     else "playwright.tool-use.config.ts",
                     *arguments,
