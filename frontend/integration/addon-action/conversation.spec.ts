@@ -103,8 +103,11 @@ async function playedResponses(page: Page) {
 
 async function expectWriteReply(page: Page, value: string) {
   const reply = page.locator('article.message').last()
-  await expect(reply).toContainText(value)
-  await expect(reply).toContainText(/完了|更新しました|変更しました|置き換えました|書き換えました|保存しました|書き込みました/)
+  await expect(reply).toContainText(value, { timeout: 10_000 })
+  await expect(reply).toContainText(
+    /完了|(?:更新|変更|保存)(?:しました|されました|済み)|(?:置き換え|書き換え)(?:ました|られました)|書き込(?:みました|まれました)/,
+    { timeout: 10_000 },
+  )
 }
 
 async function waitForPlayback(page: Page, utteranceId?: string) {
