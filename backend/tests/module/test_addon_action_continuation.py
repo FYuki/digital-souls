@@ -5,17 +5,20 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx
+import pytest
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 from app.addon_action.models import ApprovalChoice
 from app.tool_use.routing import ToolDecision
 from app.routers import addon_actions
-from tests.unit.test_addon_action_queue import policy
-from tests.unit.test_tool_use import Decisions, call, runtime
+from tests.addon_action_test_support import policy
+from tests.tool_use_test_support import Decisions, call, runtime
 
 
+@pytest.mark.parametrize("direct_response", [False, True])
 def test_http_continue_is_bound_to_saved_answer_and_duplicate_does_not_restart(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, direct_response
 ):
     async def run():
         conversation = str(uuid4())
@@ -40,7 +43,8 @@ def test_http_continue_is_bound_to_saved_answer_and_duplicate_does_not_restart(
                 material = await service.run(
                     payload.character, str(payload.conversation_id), payload.message
                 )
-                return {"results": list(material.results)}
+                body = {"results": list(material.results)}
+                return JSONResponse(body) if direct_response else body
 
             monkeypatch.setattr(addon_actions, "chat", chat)
             async with httpx.AsyncClient(
@@ -69,9 +73,11 @@ def test_http_continue_is_bound_to_saved_answer_and_duplicate_does_not_restart(
                 await asyncio.wait_for(entered.wait(), 1)
                 duplicate = await client.post(url + "/continue", json=body)
                 assert duplicate.json() == {"state": "continuing"}
+                assert duplicate.headers["cache-control"] == "no-store"
                 release.set()
                 result = await first
                 assert result.status_code == 200
+                assert result.headers["cache-control"] == "no-store"
                 assert result.json()["results"][0]["outcome"] == "succeeded"
                 assert len(source.calls) == 1
                 assert (await client.post(url + "/continue", json=body)).json() == {

@@ -734,12 +734,13 @@ class ToolService:
             run.sources.append(source)
             if run.call_fingerprint is not None:
                 run.completed_calls.add(run.call_fingerprint)
-        if envelope["outcome"] in {
+        if result["outcome"] in {
             "budget_exceeded",
             "running",
             "result_unknown",
             "cancelled",
         }:
+            run.forbidden.add(candidate.id)
             return self._material(run)
         if envelope.get("error_category") == "validation" and any(
             s["source_id"] == candidate.id for s in run.sources

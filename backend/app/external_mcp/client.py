@@ -262,7 +262,7 @@ class ExternalMCPClient:
     async def _request(self, request: Callable[[Client], Awaitable[Any]]) -> Any:
         if self._connection_failure is not None:
             failure = self._connection_failure
-            raise MCPFailure(failure.category, failure.code, request_started=False)
+            raise MCPFailure(failure.category, failure.code, retryable=failure.retryable, request_started=False)
         if self._client is None or self._owner is None:
             raise MCPFailure("unavailable", "not_connected", request_started=False)
         request_started = False

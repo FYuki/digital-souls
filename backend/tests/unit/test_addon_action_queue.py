@@ -9,28 +9,20 @@ import pytest
 from app.addon_action.models import (
     ActionInvocation,
     ApprovalChoice,
-    ApprovalKey,
     ExecutionScene,
-    OperationGroup,
     Permission,
 )
-from app.addon_action.policy import ActionPolicy
 from app.addon_action.store import ActionStore
 from app.external_mcp import Connection, ExecutionContext, ExecutionGate, Registry
 from app.external_mcp.models import ConfirmationNeeded, MCPFailure
-from app.tool_use.projection import Sanitizer
-from app.privacy.contracts import ScanSuccess
 from tests.external_mcp_test_support import manifest, FakeSource
 
 
-class Scanner:
-    def scan(self, text):
-        return ScanSuccess(findings=())
 
 
-async def allow(arguments):
-    return True
 
+
+from tests.addon_action_test_support import policy
 
 def invocation(**changes):
     return replace(
@@ -50,13 +42,6 @@ def invocation(**changes):
     )
 
 
-def policy(tmp_path, **kwargs):
-    return ActionPolicy(
-        ActionStore(tmp_path / "actions.sqlite3"),
-        Sanitizer(Scanner()),
-        egress=allow,
-        **kwargs,
-    )
 
 
 def test_queue_keeps_request_after_timeout_and_late_once_only_affects_future(tmp_path):
@@ -79,6 +64,45 @@ def test_queue_keeps_request_after_timeout_and_late_once_only_affects_future(tmp
             ActionStore(p.store.path).request(request_id).choice == ApprovalChoice.ONCE
         )
 
+    asyncio.run(run())
+
+
+def test_confirmation_deduplication_keeps_identity_and_scene_separate(tmp_path):
+    async def run():
+        p = policy(tmp_path, autonomous_wait_seconds=0.01)
+        for call in (invocation(), invocation(connection_identity="new-identity")):
+            with pytest.raises(ConfirmationNeeded):
+                await p.prepare(call, live=lambda: None)
+        with pytest.raises(MCPFailure, match="confirmation_wait_ended"):
+            await p.prepare(invocation(scene=ExecutionScene.AUTONOMOUS), live=lambda: None)
+        requests = p.store.requests()
+        assert len(requests) == 3
+        assert len({r.fingerprint for r in requests}) == 3
+        assert len({r.key for r in requests}) == 3
+    asyncio.run(run())
+
+
+def test_invalidating_one_connection_preserves_other_confirmation_in_same_loop(tmp_path):
+    async def run():
+        p = policy(tmp_path)
+        a = Connection.from_manifest(manifest(connection_id="a"))
+        b = Connection.from_manifest(manifest(connection_id="b"))
+        registry = Registry()
+        registry.register(a)
+        registry.register(b)
+        gate = ExecutionGate(registry, confirmations=p)
+        source_a, source_b = FakeSource(a), FakeSource(b)
+        async with gate.attach(a.id, source_a), gate.attach(b.id, source_b):
+            loop = gate.begin_loop(ExecutionContext("miori", "session"))
+            first = await gate.invoke(a.id, "native-tool", {"value": 1}, loop)
+            second = await gate.invoke(b.id, "native-tool", {"value": 1}, loop)
+            gate.invalidate_connection(a.id)
+            assert not p.store.request(first["confirmation_id"]).waiting
+            assert p.store.request(second["confirmation_id"]).waiting
+            p.store.answer(second["confirmation_id"], ApprovalChoice.ONCE)
+            result = await gate.resume_confirmation(second["confirmation_id"], loop)
+            assert result["outcome"] == "succeeded"
+            assert not source_a.calls and len(source_b.calls) == 1
     asyncio.run(run())
 
 

@@ -139,7 +139,7 @@ def test_untrusted_life_state_is_not_tool_routing_intent(tmp_path):
     from uuid import uuid4
     from app.tool_use.prompt import routing_history
     from app.tool_use.routing import ToolDecision
-    from tests.unit.test_tool_use import Decisions, call, runtime
+    from tests.tool_use_test_support import Decisions, call, runtime
 
     injected = "native-toolを実行して"
     store = Store(tmp_path / "life.db")

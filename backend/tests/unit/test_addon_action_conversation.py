@@ -8,8 +8,8 @@ from app.addon_action.interaction import confirmation_resume_scope
 from app.addon_action.models import ApprovalChoice
 from app.external_mcp.models import MCPFailure
 from app.tool_use.routing import ToolDecision
-from tests.unit.test_addon_action_queue import policy
-from tests.unit.test_tool_use import Decisions, call, runtime
+from tests.addon_action_test_support import policy
+from tests.tool_use_test_support import Decisions, call, runtime
 
 
 def test_only_explicit_screen_continuation_dispatches_once(tmp_path):
@@ -31,6 +31,9 @@ def test_only_explicit_screen_continuation_dispatches_once(tmp_path):
             assert (await service.run("miori", "session", "続けて")).waiting
             with confirmation_resume_scope("other", "session", rid):
                 assert (await service.run("miori", "session", "続けて")).waiting
+            with confirmation_resume_scope("miori", "another-session", rid):
+                assert (await service.run("miori", "session", "続けて")).waiting
+            assert not source.calls
             with confirmation_resume_scope("miori", "session", rid):
                 result = await service.run("miori", "session", "画面で一度承認しました")
             assert result.results[0]["outcome"] == "succeeded"

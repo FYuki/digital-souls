@@ -330,7 +330,7 @@ def test_definite_health_error_immediate(tmp_path, category, code):
 
 
 def test_off_during_question_generation_cannot_create_stale_waiting():
-    from tests.unit.test_tool_use import (
+    from tests.tool_use_test_support import (
         runtime as tool_runtime,
         Decisions,
         InputSource,
@@ -435,7 +435,7 @@ def test_rechecking_clears_previous_partial_health(tmp_path, transition):
 
 def test_off_of_previous_interaction_does_not_stop_other_binding_wait():
     from dataclasses import replace
-    from tests.unit.test_tool_use import (
+    from tests.tool_use_test_support import (
         runtime as tool_runtime,
         Decisions,
         InputSource,

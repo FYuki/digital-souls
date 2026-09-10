@@ -99,3 +99,22 @@ def test_request_marks_credential_preflight_and_transport_failure_separately():
             await asyncio.gather(adapter._owner, return_exceptions=True)
 
     asyncio.run(run())
+
+
+def test_connection_failure_preserves_retryability_without_sending():
+    import asyncio
+    import pytest
+    from app.external_mcp import Connection, ExternalMCPClient
+    from app.external_mcp.models import MCPFailure
+    from tests.external_mcp_test_support import manifest
+
+    async def run():
+        client = ExternalMCPClient(Connection.from_manifest(manifest()))
+        client._connection_failure = MCPFailure("transport", "transport_timeout", retryable=True)
+        async def never(_):
+            raise AssertionError("dispatch must not start")
+        with pytest.raises(MCPFailure) as failed:
+            await client._request(never)
+        assert failed.value.retryable and failed.value.request_started is False
+        assert failed.value.category == "transport" and failed.value.code == "transport_timeout"
+    asyncio.run(run())

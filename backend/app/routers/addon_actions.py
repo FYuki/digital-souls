@@ -89,7 +89,9 @@ async def continue_conversation(
     request_id: UUID4,
     payload: ContinueInput,
     request: Request,
+    response: Response,
 ) -> PersistedChatResponse | JSONResponse | dict[str, str]:
+    response.headers["Cache-Control"] = "no-store"
     policy = _policy(request)
     service: ToolService | None = getattr(request.app.state, "tool_service", None)
     rid, conversation = str(request_id), str(payload.conversation_id)
@@ -145,7 +147,7 @@ async def continue_conversation(
             keep_claim = started
             return {"state": "voice_started" if started else "ended"}
         with confirmation_resume_scope(payload.character, conversation, rid):
-            return await chat(
+            result = await chat(
                 ChatRequest(
                     character=payload.character,
                     conversation_id=payload.conversation_id,
@@ -153,6 +155,9 @@ async def continue_conversation(
                 ),
                 request,
             )
+            if isinstance(result, JSONResponse):
+                result.headers["Cache-Control"] = "no-store"
+            return result
     finally:
         if not keep_claim:
             service.release_confirmation(payload.character, conversation, rid)

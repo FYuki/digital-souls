@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from weakref import WeakValueDictionary
 from collections.abc import Callable
 from typing import TYPE_CHECKING
@@ -18,6 +19,8 @@ from .recovery_contract import decode_action
 
 if TYPE_CHECKING:
     from app.external_mcp.gate import ExecutionGate
+
+logger = logging.getLogger(__name__)
 
 
 class ActionRecovery:
@@ -125,17 +128,24 @@ class ActionRecovery:
     async def _track(self) -> None:
         while True:
             self._wake.clear()
-            pending = [
-                r for r in self.actions.journal.pending() if r.identity.recovery_json
-            ]
-            # 同時照会数と1巡の件数を制限し、多数のTaskで会話の予算を占有しない。
-            if pending:
-                start = self._cursor % len(pending)
-                records = (pending[start:] + pending[:start])[:4]
-                self._cursor += len(records)
-                await asyncio.gather(
-                    *(self._track_one(r) for r in records), return_exceptions=True
-                )
+            try:
+                pending = [
+                    r for r in self.actions.journal.pending() if r.identity.recovery_json
+                ]
+                # 同時照会数と1巡の件数を制限し、多数のTaskで会話の予算を占有しない。
+                if pending:
+                    start = self._cursor % len(pending)
+                    records = (pending[start:] + pending[:start])[:4]
+                    self._cursor += len(records)
+                    results = await asyncio.gather(
+                        *(self._track_one(r) for r in records), return_exceptions=True
+                    )
+                    for result in results:
+                        if isinstance(result, Exception):
+                            logger.warning("Action recovery item failed: type=%s", type(result).__name__)
+            except Exception as error:
+                # 例外本文には外部内容が含まれ得るため、型だけを記録して次巡へ進む。
+                logger.warning("Action recovery polling failed: type=%s", type(error).__name__)
             try:
                 await asyncio.wait_for(self._wake.wait(), timeout=30)
             except TimeoutError:
