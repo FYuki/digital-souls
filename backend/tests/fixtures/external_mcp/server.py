@@ -23,6 +23,7 @@ parser.add_argument("--auth", choices=["none", "bearer", "oauth"], default="none
 parser.add_argument("--legacy", action="store_true")
 parser.add_argument("--empty", action="store_true")
 parser.add_argument("--active-marker")
+parser.add_argument("--handshake-failure", choices=["protocol", "timeout"])
 options = parser.parse_args()
 if options.pid:
     Path(options.pid).write_text(str(os.getpid()))
@@ -167,6 +168,12 @@ class AuthFixture:
 
     async def __call__(self, scope, receive, send):
         if scope["type"] == "http":
+            if scope["method"] == "POST" and options.handshake_failure:
+                if options.handshake_failure == "timeout":
+                    await asyncio.sleep(60)
+                return await PlainTextResponse(
+                    "invalid-protocol-private-payload", media_type="application/json"
+                )(scope, receive, send)
             headers = dict(scope["headers"])
             if options.auth == "oauth":
                 response = PlainTextResponse(

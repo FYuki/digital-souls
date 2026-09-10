@@ -320,3 +320,24 @@ def test_managed_runtime_preserves_self_owned_registration_and_switch(tmp_path):
             await runtime.close()
 
     asyncio.run(run())
+
+
+def test_delete_cancels_late_discovery_and_cannot_restore_connection(tmp_path):
+    async def run():
+        runtime, factory = setup(tmp_path)
+        try:
+            cid = (await runtime.create(spec()))["connection_instance_id"]
+            factory.pause_check = True
+            check = asyncio.create_task(runtime.check(cid))
+            await asyncio.wait_for(factory.check_started.wait(), 1)
+            await runtime.delete(cid)
+            factory.release_check.set()
+            with pytest.raises(MCPFailure, match="connection_changed"):
+                await check
+            await asyncio.sleep(.02)
+            assert runtime.list() == []
+            assert runtime.connections.records() == ()
+        finally:
+            factory.release_check.set()
+            await runtime.close()
+    asyncio.run(run())

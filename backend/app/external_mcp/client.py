@@ -122,10 +122,11 @@ def _failure(error: BaseException) -> MCPFailure:
         if error.response.status_code >= 500:
             return MCPFailure("transport", "http_service_error", retryable=True)
         return MCPFailure("protocol", "http_request_rejected")
+    if isinstance(error, (TimeoutError, httpx2.TimeoutException)):
+        return MCPFailure("transport", "transport_timeout", retryable=True)
     if isinstance(
         error,
         (
-            TimeoutError,
             OSError,
             httpx2.TransportError,
             anyio.EndOfStream,
@@ -197,8 +198,11 @@ class ExternalMCPClient:
             yield self
         finally:
             stop.set()
+            # initialize待機中はstopを読む区間に未到達。期限切れ時に所有taskも止める。
+            if not ready.is_set():
+                owner.cancel()
             try:
-                await owner
+                await asyncio.gather(owner, return_exceptions=True)
             finally:
                 self._owner = None
 

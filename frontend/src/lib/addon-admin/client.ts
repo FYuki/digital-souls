@@ -24,6 +24,9 @@ const errorMessages: Record<ErrorCode, string> = {
   partial_failure: '一部機能に問題があります',
 }
 
+const checkMessages: Record<string, string> = { ...errorMessages, confirmation_timeout: '接続確認がタイムアウトしました' }
+export const checkErrorMessage = (item: AddonStatus): string => item.last_check_error ? checkMessages[item.last_check_error] ?? '' : ''
+
 export const stateMessage = (item: AddonStatus): string => {
   switch (item.effective_state) {
     case 'disabled': return '無効'
@@ -63,7 +66,7 @@ export function parseStatus(value: unknown): AddonStatus {
       settings_revision: v.settings_revision,
       last_success_at: typeof v.last_success_at === 'string' ? v.last_success_at : null,
       last_attempt_at: typeof v.last_attempt_at === 'string' ? v.last_attempt_at : null,
-      last_check_error: typeof v.last_check_error === 'string' && Object.hasOwn(errorMessages, v.last_check_error) ? v.last_check_error : null,
+      last_check_error: typeof v.last_check_error === 'string' && Object.hasOwn(checkMessages, v.last_check_error) ? v.last_check_error : null,
     } : {}),
   }
 }

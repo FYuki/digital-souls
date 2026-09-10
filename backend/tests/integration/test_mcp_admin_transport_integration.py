@@ -100,3 +100,34 @@ def test_received_tool_blocks_mutations_and_recovery_invalidates_old_loop(
         "native-private-payload",
     ):
         assert private not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "failure,expected",
+    [("protocol", "protocol_error"), ("timeout", "confirmation_timeout")],
+)
+def test_real_handshake_failure_is_distinct_and_registration_remains_off(
+    tmp_path, caplog, failure, expected
+):
+    with http_server(handshake_failure=failure) as endpoint:
+        async def run():
+            runtime = ConnectionManagement(
+                ExecutionGate(Registry()),
+                ConnectionStore(tmp_path / "management" / "connections.sqlite3"),
+                settings_path=tmp_path / "settings.json",
+                policy=HealthPolicy(connect_timeout=1, timeout=.5),
+            )
+            try:
+                result = await runtime.create(spec(endpoint=endpoint, auth="none"))
+                assert result["desired_enabled"] is False
+                assert result["last_success_at"] is None
+                assert result["last_check_error"] == expected
+                cid = result["connection_instance_id"]
+                with pytest.raises(MCPFailure, match="connection_unconfirmed"):
+                    await runtime.enable(cid, True)
+                assert runtime.detail(cid)["desired_enabled"] is False
+                await runtime.delete(cid)
+            finally:
+                await runtime.close()
+        asyncio.run(run())
+    assert "invalid-protocol-private-payload" not in caplog.text

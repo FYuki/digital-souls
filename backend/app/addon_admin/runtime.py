@@ -123,7 +123,7 @@ class AddonRuntime:
     def _checked(self, entry: Entry) -> None:
         """管理拡張がdiscovery成功履歴を保存するための通知。"""
 
-    def _check_failed(self, entry: Entry) -> None:
+    def _check_failed(self, entry: Entry, *, timed_out: bool = False) -> None:
         """管理拡張が失敗した確認要求を完了するための通知。"""
 
     def _failed(self, entry: Entry, error: Exception, *, health: bool = False) -> None:
@@ -134,7 +134,11 @@ class AddonRuntime:
             elif error.category in {"protocol", "validation", "policy"}:
                 code = "protocol_error"
         self.registry.availability(entry.connection.id, "unavailable", error_code=code)
-        self._check_failed(entry)
+        self._check_failed(
+            entry,
+            timed_out=isinstance(error, TimeoutError)
+            or (isinstance(error, MCPFailure) and error.code == "transport_timeout"),
+        )
 
     async def _connection(self, entry: Entry) -> None:
         connection_id = entry.connection.id

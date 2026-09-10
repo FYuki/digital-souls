@@ -46,14 +46,15 @@ def stdio_connection(tmp_path, *, legacy=False):
 
 
 @contextmanager
-def http_server(auth="none", fault_state=None, *, with_process=False, active_marker=None):
+def http_server(auth="none", fault_state=None, *, with_process=False, active_marker=None, handshake_failure=None):
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
     process = subprocess.Popen(
         [sys.executable, str(SERVER), "--port", str(port), "--auth", auth]
         + (["--fault-state", str(fault_state)] if fault_state else [])
-        + (["--active-marker", str(active_marker)] if active_marker else []),
+        + (["--active-marker", str(active_marker)] if active_marker else [])
+        + (["--handshake-failure", handshake_failure] if handshake_failure else []),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
     )

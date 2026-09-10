@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
-  import { checkConnection, confirmationMessage, deleteConnection, getConnection, managementError,
+  import { checkConnection, checkErrorMessage, confirmationMessage, deleteConnection, getConnection, managementError,
     saveConnection, saveCredential, stateMessage, type ConnectionDetail, type ConnectionInput } from './addon-admin/client'
 
   export let connectionId: string | null = null
@@ -121,6 +121,7 @@
     <div class="connection-status" aria-live="polite">
       <p>利用意思: {detail.desired_enabled ? 'ON' : 'OFF'} / {stateMessage(detail)}</p>
       <p>{confirmationMessage(detail)}</p>
+      {#if checkErrorMessage(detail)}<p>前回の確認結果: {checkErrorMessage(detail)}</p>{/if}
       {#if detail.last_success_at}<p>最終成功: <time datetime={detail.last_success_at}>{new Date(detail.last_success_at).toLocaleString('ja-JP')}</time></p>{/if}
     </div>
   {:else}<p>新しい接続はOFFで保存します。接続確認に成功した後、一覧からONにできます。</p>{/if}

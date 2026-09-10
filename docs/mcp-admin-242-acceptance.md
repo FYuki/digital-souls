@@ -15,6 +15,7 @@
 | runtime | OFF登録、初回確認失敗でも保存、確認成功後のみON、ON編集失敗時の希望状態維持と復旧 | `backend/tests/unit/test_mcp_connection_management.py` |
 | 競合 | 確認待ちONに対する後着OFF、編集中の古い確認、Tool実行中の変更/削除拒否 | 同上 |
 | 実行中の実接続 | 別processがToolを受信した印を確認してから変更・credential更新・削除を拒否。表示名だけ変更し、復旧後は古いloopを拒否 | `backend/tests/integration/test_mcp_admin_transport_integration.py` |
+| 接続失敗の実接続 | 実HTTPの不正protocolとinitialize timeoutを区別し、OFF保存を維持。timeout時はSDK所有taskも終了 | `backend/tests/integration/test_mcp_admin_transport_integration.py` |
 | 新旧MCP | 新protocolはserver/discover、旧protocolはpingでhealth確認。HTTP/stdio、認証、取消しの既存境界 | `backend/tests/module/test_external_mcp_conformance.py`、`backend/tests/unit/test_external_mcp_client.py` |
 | UI | credential専用送信/入力消去、typed stdio、削除確認/実行中拒否、Tool説明のテキスト表示 | `frontend/src/lib/ExternalConnectionEditor.module.test.ts` |
 | ブラウザ | 実Core/Vite/HTTP・stdio MCPによる登録→ON→編集→再起動→接続断→削除。0 Tool、Bearer重複・更新、320px表示 | [公開受入結果](artifacts/mcp-admin-242/browser-public.json)、[固定イベントログ](artifacts/mcp-admin-242/browser-execution.jsonl) |

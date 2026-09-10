@@ -109,12 +109,14 @@ class ConnectionManagement(AddonRuntime):
         )
         self._complete(entry, True)
 
-    def _check_failed(self, entry: Entry) -> None:
+    def _check_failed(self, entry: Entry, *, timed_out: bool = False) -> None:
         if entry.connection.manifest["connection"]["ownership"] != "external":
             return
         record = self.connections.get(entry.connection.id)
         self.connections.checked(
-            entry.connection.id, record.revision, error_code=entry.error_code
+            entry.connection.id,
+            record.revision,
+            error_code="confirmation_timeout" if timed_out else entry.error_code,
         )
         self._requested.discard(entry.connection.id)
         self._complete(entry, False)

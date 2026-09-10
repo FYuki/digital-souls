@@ -170,3 +170,5 @@ ONの2接続と初期OFFの1接続を登録し、未確認・snapshot未取得�
 モデルを取得・再構築せず、dogfoodへ接続しない。
 
 受入結果と検証範囲は[外部MCP管理の受入記録](mcp-admin-242-acceptance.md)を参照する。
+
+接続確認のtimeoutは`last_check_error=confirmation_timeout`で区別する。OFF時も詳細に前回の失敗理由を固定文言で表示する。

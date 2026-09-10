@@ -77,3 +77,19 @@ test('Tool説明をテキスト表示し、個別無効化操作を追加しな�
   expect(screen.queryByRole('switch')).toBeNull()
   expect(screen.queryByRole('checkbox')).toBeNull()
 })
+
+
+test.each([
+  ['authentication_failed', '認証に失敗しました'],
+  ['protocol_error', '接続先との通信に問題があります'],
+  ['confirmation_timeout', '接続確認がタイムアウトしました'],
+])('OFFの接続でも前回の確認失敗を固定文言で表示する: %s', async (code, message) => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(reply({ ...detail,
+    availability: 'unavailable', error_code: 'connection_failed',
+    last_success_at: null, last_check_error: code,
+  })))
+  render(ExternalConnectionEditor, { connectionId: 'external-one', onClose: vi.fn(), onChanged: vi.fn() })
+  await screen.findByText(`前回の確認結果: ${message}`)
+  expect(screen.getByText('利用意思: OFF / 無効')).toBeTruthy()
+  expect(screen.getByText('接続未確認（前回確認失敗）')).toBeTruthy()
+})
