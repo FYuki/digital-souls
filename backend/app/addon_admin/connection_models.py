@@ -121,15 +121,21 @@ class ConnectionInput(StrictInput):
     def from_connection(
         cls, connection: Connection, display_name: str
     ) -> ConnectionInput:
+        # 既存ManifestはConnectionで検証済み。新規フォームの長さ・文字種制限を
+        # 移行時に遡及適用せず、SDKへ渡していた既存のargvをそのまま保存する。
         c = connection.manifest["connection"]
         settings = (
-            HTTPSettings(
+            HTTPSettings.model_construct(
                 transport="streamable_http",
                 endpoint=c["endpoint"],
                 auth=c["auth"]["type"],
             )
             if c["transport"] == "streamable_http"
-            else StdioSettings(transport="stdio", **c["stdio"])
+            else StdioSettings.model_construct(
+                transport="stdio",
+                args=c["stdio"].get("args", []),
+                command=c["stdio"]["command"],
+            )
         )
         return cls(display_name=display_name, settings=settings)
 

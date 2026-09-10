@@ -227,3 +227,47 @@ def test_auth_none_removes_stored_credential_atomically(tmp_path):
         asyncio.run(store.resolve(record.secret_ref))
     assert "synthetic-private-token" in store.private_values()
     assert "synthetic-private-token" not in json.dumps(updated.spec.model_dump())
+
+
+def test_legacy_manifest_stdio_is_preserved_without_new_form_limits(tmp_path):
+    value = manifest()
+    value["connection"]["stdio"] = {
+        "command": "/opt/legacy $tool",
+        "args": ["line1\nline2", "x" * 9000] + ["argument"] * 129,
+    }
+    connection = Connection.from_manifest(value)
+    store = store_at(tmp_path)
+    store.import_connection(connection, "既存のstdio", None)
+    restored = store_at(tmp_path).get(connection.id)
+    assert (
+        restored.connection.manifest["connection"]["stdio"]
+        == value["connection"]["stdio"]
+    )
+    assert restored.spec.settings.args == value["connection"]["stdio"]["args"]
+    with pytest.raises(ValidationError):
+        ConnectionInput.model_validate(restored.spec.model_dump())
+
+
+def test_reads_do_not_acquire_writer_lock_and_resolve_does_not_block_loop(tmp_path):
+    store = store_at(tmp_path)
+    record = store.create(spec())
+    store.credential(record.connection.id, token())
+    with store.transaction():
+        # 同時にRESERVED lockがあってもreadは既存snapshotを参照できる。
+        assert store.get(record.connection.id).credential_set
+        assert len(store.records()) == 1
+
+    async def run():
+        blocker = sqlite3.connect(store.path)
+        blocker.execute("BEGIN EXCLUSIVE")
+        pending = asyncio.create_task(store.resolve(record.secret_ref))
+        try:
+            await asyncio.sleep(0.05)
+            # SQLiteのlock待機中にもevent loopは進む。
+            assert not pending.done()
+        finally:
+            blocker.rollback()
+            blocker.close()
+        assert await asyncio.wait_for(pending, 1) == "synthetic-private-token"
+
+    asyncio.run(run())
