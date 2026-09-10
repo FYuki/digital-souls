@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import io
+import base64
 import json
 import os
 import re
 from pathlib import Path
 import secrets
+import sqlite3
 import shutil
 import subprocess
 import sys
@@ -42,6 +44,26 @@ def public_evidence(text: str, temporary_root: Path) -> str:
     return re.sub(
         r"(?:https?|wss?)://(?:localhost|127\.0\.0\.1):\d+", "<test-service>", text
     )
+
+
+def public_browser_report(value, temporary_root: Path):
+    """Playwrightがbase64にした合成会話attachmentも公開用pathへ置換する。"""
+    if isinstance(value, list):
+        return [public_browser_report(item, temporary_root) for item in value]
+    if not isinstance(value, dict):
+        return value
+    result = {
+        key: public_browser_report(item, temporary_root) for key, item in value.items()
+    }
+    if (
+        result.get("contentType") in {"application/json", "text/plain"}
+        and "body" in result
+    ):
+        decoded = base64.b64decode(result["body"], validate=True).decode("utf-8")
+        result["body"] = base64.b64encode(
+            public_evidence(decoded, temporary_root).encode()
+        ).decode()
+    return result
 
 
 @contextmanager
@@ -327,6 +349,13 @@ def main():
             "level": "INFO",
             "propagate": False,
         }
+        if action:
+            # 既存observerの固定metadataだけを記録する。本文・引数・認証情報は含まない。
+            logging_config["loggers"]["app.inference.runtime"] = {
+                "handlers": ["default"],
+                "level": "INFO",
+                "propagate": False,
+            }
         log_config_path = root / "logging.json"
         log_config_path.write_text(json.dumps(logging_config))
         backend = stack.enter_context(
@@ -429,6 +458,16 @@ def main():
             if contract or action
             else "chromium-voicevox-wav",
             "routingModel": environment["INFERENCE_TARGET_TOOL_ROUTING"],
+            "implementationCommit": subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+            ).strip(),
+            "trackedChangesAtStart": bool(
+                subprocess.check_output(
+                    ["git", "status", "--porcelain", "--untracked-files=no"],
+                    cwd=ROOT,
+                    text=True,
+                ).strip()
+            ),
             "dataRoot": str(data),
             "ownedProcesses": {"backend": backend.pid, "frontend": frontend.pid},
             "ownedLiveKitContainer": container,
@@ -439,6 +478,17 @@ def main():
             },
             "testStatus": "running",
         }
+        if action:
+            versions = {}
+            for name, path in (
+                ("whisper", "/version"),
+                ("voicevox", "/version"),
+                ("ollama", "/api/version"),
+            ):
+                response = httpx.get(service_urls[name] + path, timeout=10)
+                response.raise_for_status()
+                versions[name] = response.json()
+            run_manifest["serviceVersions"] = versions
         (runtime / "runtime-manifest.json").write_text(
             json.dumps(run_manifest, ensure_ascii=False, indent=2)
         )
@@ -536,7 +586,40 @@ def main():
         report = runtime / "browser" / "results.json"
         if report.is_file():
             (artifacts / "browser-public.json").write_text(
-                public_evidence(report.read_text(), root)
+                public_evidence(
+                    json.dumps(
+                        public_browser_report(json.loads(report.read_text()), root),
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                    root,
+                )
+            )
+        if action:
+            stages = [
+                line
+                for line in (runtime / "backend.log").read_text().splitlines()
+                if "Tool decision:" in line
+                or "Tool result:" in line
+                or "Tool confirmation continuation:" in line
+                or '"event": "inference_request"' in line
+            ]
+            (artifacts / "stage-events.txt").write_text(
+                public_evidence("\n".join(stages) + "\n", root)
+            )
+            with sqlite3.connect(
+                f"file:{data / 'addon-actions/actions.sqlite3'}?mode=ro", uri=True
+            ) as db:
+                state = {
+                    "confirmations": db.execute(
+                        "SELECT operation_group, scene, choice, waiting FROM action_confirmations"
+                    ).fetchall(),
+                    "executions": db.execute(
+                        "SELECT operation, outcome FROM action_executions"
+                    ).fetchall(),
+                }
+            (artifacts / "action-state.json").write_text(
+                json.dumps(state, ensure_ascii=False, indent=2)
             )
         return result.returncode
 

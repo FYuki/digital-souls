@@ -394,7 +394,9 @@ class ToolService:
                 await before_execute()
             candidate = run.candidate
             assert candidate is not None
+            logger.info("Tool confirmation continuation: stage=gate_enter")
             envelope = await self.gate.resume_confirmation(run.confirmation, run.loop)
+            logger.info("Tool confirmation continuation: outcome=%s", envelope["outcome"])
             run.confirmation, run.confirmation_guard = None, None
             material = self._accept_envelope(run, candidate, envelope, before_execute)
             if material is not None:
