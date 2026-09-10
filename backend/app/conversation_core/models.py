@@ -30,6 +30,7 @@ class Utterance:
     should_response: bool
     state: UtteranceState
     discard_reason: str | None = None
+    control_request_id: str | None = None
 
 
 @dataclass(frozen=True)

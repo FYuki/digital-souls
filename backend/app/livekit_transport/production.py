@@ -1856,6 +1856,33 @@ class ProductionRuntimeManager:
             raise RuntimeError("LiveKit session is not active")
         await coordinator.send_screen(payload)
 
+    async def submit_action_confirmation(
+        self, session_id: str, character: str, conversation: str,
+        request_id: str, message: str, still_waiting: Callable[[], bool],
+    ) -> bool:
+        """画面操作から音声応答を開始する。STT入力や終了済み活動を再開しない。"""
+        reservation = self._sessions.get(session_id)
+        core = self._core_sessions.get(session_id)
+        if (
+            reservation is None or core is None
+            or str(reservation.request["character_id"]) != character
+            or str(reservation.request["conversation_id"]) != conversation
+        ):
+            raise ValueError("voice_confirmation_session_mismatch")
+        # 確認の読み上げが終わるのを待ち、既存応答と入力を混ぜない。
+        async with asyncio.timeout(30):
+            while core.active_response is not None:
+                if not core.accepting_input or not still_waiting():
+                    return False
+                await asyncio.sleep(0.05)
+        if not core.accepting_input or not still_waiting():
+            return False
+        await core.finalize_utterance(
+            utterance_id=request_id, transcript=message, should_response=True,
+            control_request_id=request_id,
+        )
+        return True
+
     async def stop(self, session_id: str) -> None:
         coordinator = self._coordinators.get(session_id)
         if coordinator is not None:

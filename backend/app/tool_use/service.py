@@ -14,6 +14,7 @@ from typing import Callable, cast
 from contextlib import contextmanager
 from collections.abc import Iterator, Awaitable
 
+from app.addon_action.interaction import confirmation_resume_id
 from app.external_mcp import ExecutionContext, ExecutionGate
 from app.external_mcp.models import (
     Json,
@@ -61,6 +62,11 @@ class _Run:
     sources: list[Json] = field(default_factory=list)
     forbidden: set[str] = field(default_factory=set)
     completed_calls: set[str] = field(default_factory=set)
+    confirmation: str | None = None
+    continuation_claimed: bool = False
+    confirmation_guard: Callable[[], Awaitable[None]] | None = field(
+        default=None, repr=False
+    )
     interaction: str | None = None
     answer_schema: Json | None = field(default=None, repr=False)
     requests: Json = field(default_factory=dict, repr=False)
@@ -135,6 +141,36 @@ class ToolService:
             ),
         )
 
+    def pending_confirmation(
+        self, character: str, conversation: str, request_id: str
+    ) -> bool:
+        run = self._runs.get((character, conversation))
+        return bool(
+            run
+            and run.confirmation == request_id
+            and run.waiting_until is not None
+            and self.clock() < run.waiting_until
+            and run.task is None
+        )
+
+    def claim_confirmation(
+        self, character: str, conversation: str, request_id: str
+    ) -> bool:
+        if not self.pending_confirmation(character, conversation, request_id):
+            return False
+        run = self._runs[(character, conversation)]
+        if run.continuation_claimed:
+            return False
+        run.continuation_claimed = True
+        return True
+
+    def release_confirmation(
+        self, character: str, conversation: str, request_id: str
+    ) -> None:
+        run = self._runs.get((character, conversation))
+        if run is not None and run.confirmation == request_id:
+            run.continuation_claimed = False
+
     def heartbeat(self, character: str, conversation: str) -> None:
         # HTTPの入力待ちは常時接続を持たないため、画面の消失も有限時間で検出する。
         key = (character, conversation)
@@ -181,7 +217,7 @@ class ToolService:
         # 回答・binding待ちだけを終了する。既に送信した外部処理はGateの世代で再送を防ぐ。
         for key, run in tuple(self._runs.items()):
             candidate = run.binding_candidate or (
-                run.candidate if run.interaction else None
+                run.candidate if run.interaction or run.confirmation else None
             )
             if (
                 run.waiting_until is not None
@@ -218,7 +254,26 @@ class ToolService:
             return ToolMaterial(
                 direct_text="追加情報の回答期限が切れました。必要なら改めて依頼してください。"
             )
+        explicit_resume = confirmation_resume_id(character, conversation)
+        if explicit_resume is not None and (
+            run is None or run.confirmation != explicit_resume
+        ):
+            return ToolMaterial(
+                direct_text="この操作の待機は終了しています。承認は今後の利用に適用します。"
+            )
+        if (
+            run is not None
+            and run.confirmation is not None
+            and explicit_resume != run.confirmation
+        ):
+            # STTやLLM判断で承認を推測しない。待機期限も延長しない。
+            return self._material(
+                run,
+                "操作の承認をお待ちしています。画面の3つの選択肢から回答してください。",
+                waiting=True,
+            )
         if run is not None:
+            run.continuation_claimed = False
             run.user_followup = True
             if run.clarification and run.clarification[-1]["answer"] is None:
                 # 通常履歴の切り詰めに依存せず、直前の確認に対する回答を保持する。
@@ -260,6 +315,7 @@ class ToolService:
                     {"label": s["label"], "source_id": s["source_id"]}
                     for s in material.sources
                 ],
+                **({"confirmation_id": run.confirmation} if run.confirmation else {}),
             }
             if keep:
                 run.waiting_until = self.clock() + self.input_timeout
@@ -326,6 +382,23 @@ class ToolService:
         history: tuple[Json, ...],
         before_execute: Callable[[], Awaitable[None]] | None,
     ) -> ToolMaterial:
+        if run.confirmation is not None:
+            if (
+                confirmation_resume_id(run.context.character_id, run.context.session_id)
+                != run.confirmation
+            ):
+                raise MCPFailure("policy", "explicit_confirmation_required")
+            if run.confirmation_guard is not None:
+                await run.confirmation_guard()
+            if before_execute is not None:
+                await before_execute()
+            candidate = run.candidate
+            assert candidate is not None
+            envelope = await self.gate.resume_confirmation(run.confirmation, run.loop)
+            run.confirmation, run.confirmation_guard = None, None
+            material = self._accept_envelope(run, candidate, envelope, before_execute)
+            if material is not None:
+                return material
         # Gateは外部dispatch、こちらは失敗したDecisionを含むLLM判断回数を制限する。
         for _ in range(12):
             if run.cancellation.is_cancelled:
@@ -403,7 +476,7 @@ class ToolService:
             if run.cancellation.is_cancelled:
                 raise asyncio.CancelledError()
             waiting_candidate = run.binding_candidate or (
-                run.candidate if run.interaction else None
+                run.candidate if run.interaction or run.confirmation else None
             )
             if (
                 waiting_candidate is not None
@@ -587,68 +660,90 @@ class ToolService:
                 envelope["outcome"],
                 envelope.get("error_category", "none"),
             )
-            if envelope["outcome"] == "input_required":
-                run.interaction = envelope["interaction_id"]
-                run.candidate = candidate
-                try:
-                    run.answer_schema, run.requests = self._interaction(envelope)
-                except MCPFailure:
-                    return self._material(
-                        run,
-                        "追加の許可または管理設定が必要なため、操作を停止しました。秘密情報は会話へ入力しないでください。",
-                    )
-                # 現在contextで答えられる場合は次の判断でresume、足りなければ質問。
-                continue
-            source = {
-                "label": candidate.name,
-                "source_id": candidate.id,
-                "snapshot_revision": candidate.snapshot_revision,
-                "binding_id": run.binding_id,
-                "connection_instance_id": candidate.connection_id,
-            }
-            result = self.sanitizer.result(
-                envelope, may_change_state=candidate.may_change_state
-            )
-            result["source"] = {"label": candidate.name, "source_id": candidate.id}
-            # 最終の未完了理由にも枠を残し、部分成功を回答へ統合できるようにする。
-            remaining = 3_584 - sum(len(encode(r).encode()) for r in run.results)
-            if remaining >= 128:
-                run.results.append(json.loads(bounded_json(result, remaining)))
-            else:
-                return self._material(
-                    run,
-                    "取得結果が会話の上限に達しました。対象を絞って依頼してください。",
-                )
-            if envelope["outcome"] in {"succeeded", "no_change"}:
-                run.sources.append(source)
-                if run.call_fingerprint is not None:
-                    run.completed_calls.add(run.call_fingerprint)
-            if envelope["outcome"] in {
-                "budget_exceeded",
-                "running",
-                "cancel_requested",
-                "result_unknown",
-                "cancelled",
-            }:
-                return self._material(run)
-            if envelope.get("error_category") == "validation" and any(
-                s["source_id"] == candidate.id for s in run.sources
-            ):
-                # 完了済み操作の再呼出しを、引数修復の連鎖で繰り返さない。
-                return self._material(run)
-            if (
-                envelope["outcome"] not in {"succeeded", "no_change"}
-                and not (
-                    envelope["outcome"] == "conflict"
-                    and "latest_state" in result.get("structured", {})
-                )
-                and envelope.get("error_category") != "validation"
-            ):
-                run.forbidden.add(candidate.id)
+            material = self._accept_envelope(run, candidate, envelope, before_execute)
+            if material is not None:
+                return material
         return self._material(
             run,
             "外部ツールの判断回数が上限に達しました。取得できていない内容は回答できません。",
         )
+
+    def _accept_envelope(
+        self,
+        run: _Run,
+        candidate: Candidate,
+        envelope: Json,
+        before_execute: Callable[[], Awaitable[None]] | None,
+    ) -> ToolMaterial | None:
+        if envelope["outcome"] == "confirmation_required":
+            run.confirmation = envelope["confirmation_id"]
+            run.candidate, run.confirmation_guard = candidate, before_execute
+            return self._material(
+                run,
+                "操作の承認が必要です。画面で「常に承認する」「一度承認する」「拒否する」から選んでください。"
+                "一度の承認はツール呼び出し1回分です。",
+                waiting=True,
+            )
+        if envelope["outcome"] == "input_required":
+            run.interaction = envelope["interaction_id"]
+            run.candidate = candidate
+            try:
+                run.answer_schema, run.requests = self._interaction(envelope)
+            except MCPFailure:
+                return self._material(
+                    run,
+                    "追加の許可または管理設定が必要なため、操作を停止しました。秘密情報は会話へ入力しないでください。",
+                )
+            # 現在contextで答えられる場合は次の判断でresume、足りなければ質問。
+            return None
+        source = {
+            "label": candidate.name,
+            "source_id": candidate.id,
+            "snapshot_revision": candidate.snapshot_revision,
+            "binding_id": run.binding_id,
+            "connection_instance_id": candidate.connection_id,
+        }
+        result = self.sanitizer.result(
+            envelope, may_change_state=candidate.may_change_state
+        )
+        result["source"] = {"label": candidate.name, "source_id": candidate.id}
+        # 最終の未完了理由にも枠を残し、部分成功を回答へ統合できるようにする。
+        remaining = 3_584 - sum(len(encode(r).encode()) for r in run.results)
+        if remaining >= 128:
+            run.results.append(json.loads(bounded_json(result, remaining)))
+        else:
+            return self._material(
+                run,
+                "取得結果が会話の上限に達しました。対象を絞って依頼してください。",
+            )
+        if envelope["outcome"] in {"succeeded", "no_change"}:
+            run.sources.append(source)
+            if run.call_fingerprint is not None:
+                run.completed_calls.add(run.call_fingerprint)
+        if envelope["outcome"] in {
+            "budget_exceeded",
+            "running",
+            "result_unknown",
+            "cancelled",
+        }:
+            return self._material(run)
+        if envelope.get("error_category") == "validation" and any(
+            s["source_id"] == candidate.id for s in run.sources
+        ):
+            # 完了済み操作の再呼出しを、引数修復の連鎖で繰り返さない。
+            return self._material(run)
+        if (
+            envelope["outcome"] not in {"succeeded", "no_change"}
+            and not (
+                envelope["outcome"] == "conflict"
+                and "latest_state" in result.get("structured", {})
+            )
+            and envelope.get("error_category") != "validation"
+        ):
+            run.forbidden.add(candidate.id)
+        if envelope["outcome"] in {"rejected", "deferred", "cancel_requested"}:
+            return self._material(run)
+        return None
 
     def _protect_core(self, arguments: Json) -> None:
         """未知のserver cwdで相対pathを推測せず、明示pathを安全側に判定する。"""
