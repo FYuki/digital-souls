@@ -65,10 +65,10 @@ class ActionRecovery:
             # replayは保存済み結果の再返却だけを保証する契約。未実行を実行へ進めない。
             if method == "replay" and outcome in UNRESOLVED:
                 return record
-            projected = {
+            projected = self.actions.sanitizer.result({
                 "outcome": self.actions.envelope_outcome(outcome),
-                "structured": self.actions.sanitizer.value(external_result),
-            }
+                "result_projection": {"structured": external_result},
+            })
             return self.actions.journal.finish(
                 record.execution_id,
                 outcome,

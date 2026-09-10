@@ -4,6 +4,7 @@ import asyncio
 import sqlite3
 from dataclasses import replace
 from copy import deepcopy
+import pytest
 
 from app.addon_action.dispatch import ActionDispatch
 from app.addon_action.journal import ActionJournal, ActionOutcome
@@ -88,6 +89,38 @@ def runtime(tmp_path, c):
     gate.recovery = gate.tasks = recovery
     actions.on_change = recovery.changed
     return gate, p, recovery
+
+
+@pytest.mark.parametrize("initial", ["applied", "running"])
+def test_omission_is_preserved_from_external_result_through_storage_and_recovery(tmp_path, initial):
+    async def run():
+        c, data = server_contract()
+
+        class LargeTasks(ExternalTasks):
+            async def call_tool(self, name, arguments, **kwargs):
+                payload = await super().call_tool(name, arguments, **kwargs)
+                payload["structuredContent"]["action"]["result"]["items"] = list(range(65))
+                return payload
+
+        source = LargeTasks(c, data)
+        source.state = initial
+        gate, p, recovery = runtime(tmp_path, c)
+        context = ExecutionContext("miori", "session", action_scope="activity")
+        async with gate.attach(c.id, source):
+            first = await approve_once(gate, p, c, gate.begin_loop(context))
+            assert p.sanitizer.result(first)["omitted"] is True
+            if initial == "running":
+                source.state = "applied"
+                assert await recovery.recover(first["execution_id"]) == "applied"
+            stored = recovery.actions.journal.get(first["execution_id"])
+            assert stored.projection["omitted"] is True
+            again = await gate.invoke(c.id, "native-tool", {"value": 1}, gate.begin_loop(context))
+            projected = p.sanitizer.result(again)
+            assert projected["omitted"] and projected["replayed"]
+            assert projected["outcome"] == "succeeded"
+            assert projected["structured"]["result"]["items"] == list(range(64))
+            assert source.effects == 1
+    asyncio.run(run())
 
 
 def test_task_survives_restart_and_cancel_request_is_not_external_stop(tmp_path):

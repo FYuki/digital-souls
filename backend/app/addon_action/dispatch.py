@@ -29,10 +29,10 @@ class ActionDispatch:
                 envelope["native_payload"]
             )
             envelope["outcome"] = self.envelope_outcome(outcome)
-            projected = {
+            projected = self.sanitizer.result({
                 "outcome": envelope["outcome"],
-                "structured": self.sanitizer.value(external_result),
-            }
+                "result_projection": {"structured": external_result},
+            })
             envelope["result_projection"] = projected
         else:
             outcome = {

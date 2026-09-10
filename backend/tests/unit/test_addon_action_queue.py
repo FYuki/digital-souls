@@ -129,7 +129,7 @@ def test_repeated_answer_and_ticket_do_not_duplicate_once_or_always_dispatch(tmp
 def test_once_reservation_cannot_be_consumed_by_another_request(tmp_path):
     async def run():
         p = policy(tmp_path)
-        calls = (invocation(), invocation(loop_id="other", arguments={"value": 2}))
+        calls = (invocation(), invocation(arguments={"value": 2}))
         requests = []
         for call in calls:
             with pytest.raises(ConfirmationNeeded) as needed:
@@ -138,6 +138,8 @@ def test_once_reservation_cannot_be_consumed_by_another_request(tmp_path):
         a, b = requests
         assert a.key == b.key and a.fingerprint != b.fingerprint
         p.store.answer(a.id, ApprovalChoice.ONCE)
+        with pytest.raises(MCPFailure, match="confirmation_mismatch"):
+            await p.prepare(calls[1], live=lambda: None, request_id=a.id)
         assert not p.store.consume(a.key)
         assert not p.store.consume_request(b.key, b.id, p.clock())
         with pytest.raises(ConfirmationNeeded):
