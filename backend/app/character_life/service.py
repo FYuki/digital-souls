@@ -275,11 +275,11 @@ class Service:
             seen: set[str] = set()
             unavailable: set[str] = set()
             results: list[Json] = [
-                {
+                json.loads(bounded_json({
                     **record.projection,
                     "replayed": True,
                     "operation": record.identity.operation,
-                }
+                }, 3000))
                 for record in self.action_records(run)
             ]
             sources = [
@@ -496,7 +496,7 @@ class Service:
         self.store.save_run(
             run.model_copy(update={"phase": "paused", "reason": "user_paused"})
         )
-        loop_id = self.loops.get(run_id)
+        loop_id = self.loops.get(str(run.id))
         if loop_id is not None:
             self.gate.stop(loop_id)
         cancellation = self.cancellations.get(run_id)

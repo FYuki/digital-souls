@@ -111,6 +111,7 @@ def test_verified_normal_update_does_not_relax_retry_and_checks_actual_arguments
         },
     )
     static = tool["impact_classification"]
+    assert evaluate_impact(static, {"value": 2}).group == OperationGroup.NORMAL
     assert tool["effective_policy"] == {
         "effect": "unknown",
         "effect_source": "unknown",
@@ -181,6 +182,10 @@ def test_core_write_is_blocked_even_when_other_high_impact_is_present(tmp_path):
         protected_roots=(tmp_path,),
     )
     assert nested.blocked
+    relative = evaluate_impact(
+        tool["impact_classification"], {"path": "config"}, protected_roots=(tmp_path,),
+    )
+    assert relative.blocked and relative.reason == "unresolved_write_path"
 
 
 def test_core_profile_never_retains_conflicting_read_optimization():

@@ -92,7 +92,8 @@ class ActionPolicy:
             call.connection_id, call.connection_identity, impact.group, call.scene
         )
         fingerprint = digest(
-            [call.connection_id, call.operation, call.binding_id, outgoing]
+            [call.connection_id, call.connection_identity, impact.group, call.scene,
+             call.operation, call.binding_id, outgoing]
         )
         request: ConfirmationRequest | None = None
         if request_id is not None:
@@ -176,3 +177,6 @@ class ActionPolicy:
 
     def end_loop(self, loop_id: str) -> None:
         self.store.end_loop(loop_id)
+
+    def end_wait(self, request_id: str) -> None:
+        self.store.end_wait(request_id)

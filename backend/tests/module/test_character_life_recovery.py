@@ -8,7 +8,7 @@ from dbos import DBOS
 from app.character_life import runtime as module
 from app.character_life.models import Result
 from app.character_life.runtime import Runtime, Settings
-from tests.module.test_character_life import environment
+from tests.character_life_test_support import environment
 
 
 @pytest.mark.parametrize("legacy_error", [False, True])

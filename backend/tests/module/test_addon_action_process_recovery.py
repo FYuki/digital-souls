@@ -29,7 +29,7 @@ from app.external_mcp import (
 )
 from app.external_mcp.models import digest
 from tests.external_mcp_test_support import manifest
-from tests.unit.test_addon_action_queue import policy
+from tests.addon_action_test_support import policy
 
 
 SERVER = (

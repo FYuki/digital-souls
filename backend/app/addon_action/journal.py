@@ -88,6 +88,8 @@ class ActionJournal:
             db.execute(
                 "CREATE INDEX IF NOT EXISTS action_scope ON action_executions(character,scene,scope,outcome)"
             )
+            db.execute("CREATE INDEX IF NOT EXISTS action_task ON action_executions(connection_id,task_id)")
+            db.execute("CREATE INDEX IF NOT EXISTS action_pending ON action_executions(outcome,created_at)")
 
     @staticmethod
     def _record(row: sqlite3.Row) -> ActionRecord:
@@ -245,9 +247,9 @@ class ActionJournal:
             return tuple(
                 self._record(r)
                 for r in db.execute(
-                    "SELECT * FROM action_executions ORDER BY created_at"
+                    "SELECT * FROM action_executions WHERE outcome IN (" + ",".join("?" for _ in UNRESOLVED) + ") ORDER BY created_at",
+                    tuple(UNRESOLVED),
                 )
-                if r["outcome"] in UNRESOLVED
             )
 
     def for_task(self, connection_id: str, task_id: str) -> tuple[ActionRecord, ...]:

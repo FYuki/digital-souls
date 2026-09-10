@@ -9,8 +9,8 @@ from app.addon_action.models import ApprovalChoice, ExecutionScene
 from app.addon_action.recovery import ActionRecovery
 from app.character_life import service as module
 from app.external_mcp.models import MCPFailure
-from tests.module.test_character_life import environment, Cognition
-from tests.unit.test_addon_action_queue import policy
+from tests.character_life_test_support import environment, Cognition
+from tests.addon_action_test_support import policy
 
 
 def connect(service, tmp_path):
@@ -72,9 +72,10 @@ def test_approval_wait_rechecks_egress_without_old_thirty_second_cutoff(
             p = connect(service, tmp_path)
             p.autonomous_wait_seconds = 2
             seconds = [100.0]
-            monkeypatch.setattr(
-                module, "time", SimpleNamespace(monotonic=lambda: seconds[0])
-            )
+            # asyncioと共有するtime.monotonic自体は変更せず、サービスの時計だけを置換する。
+            clock = SimpleNamespace(**vars(module.time))
+            clock.monotonic = lambda: seconds[0]
+            monkeypatch.setattr(module, "time", clock)
             checked = []
 
             async def egress(arguments):
@@ -83,7 +84,7 @@ def test_approval_wait_rechecks_egress_without_old_thirty_second_cutoff(
 
             p.egress = egress
             task = asyncio.create_task(service.execute(str(activity.id)))
-            async with asyncio.timeout(2):
+            async with asyncio.timeout(0.5):
                 while not p.store.requests():
                     await asyncio.sleep(0.005)
             seconds[0] = 145.0

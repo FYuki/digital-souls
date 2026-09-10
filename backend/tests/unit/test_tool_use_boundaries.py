@@ -20,7 +20,7 @@ from app.tool_use.runtime import ToolSettings
 from app.tool_use.service import ToolMaterial
 from app.tool_use.binding import BindingResolver, BindingTarget
 from app.external_mcp.models import MCPFailure
-from tests.unit.test_tool_use import Decisions, InputSource, call, runtime
+from tests.tool_use_test_support import Decisions, InputSource, call, runtime
 
 
 def test_configured_optional_binding_uses_unique_target_and_asks_on_ambiguity():

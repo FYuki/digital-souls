@@ -1185,7 +1185,7 @@ def test_tool_results_take_budget_priority_over_optional_life_state(
     from app.character_life.prompt import Context
     from app.character_life.store import Store
     from app.tool_use.routing import ToolDecision
-    from tests.unit.test_tool_use import Decisions, call, runtime
+    from tests.tool_use_test_support import Decisions, call, runtime
 
     store = Store(tmp_path / "life.db")
     store.save_state(LifeState(

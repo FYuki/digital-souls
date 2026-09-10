@@ -2,71 +2,27 @@
 
 import asyncio
 import json
-from contextlib import asynccontextmanager
 
 import pytest
 
-from app.external_mcp import Connection, ExecutionContext, ExecutionGate, Registry
+from app.external_mcp import ExecutionContext
 from app.external_mcp.models import MCPFailure, encode
-from app.tool_use.binding import BindingResolver, BindingTarget
+from app.tool_use.binding import BindingTarget
 from app.tool_use.catalog import catalog, select_candidates
 from app.tool_use.projection import Sanitizer, bounded_json
 from app.tool_use.routing import ToolDecision
-from app.tool_use.service import ToolService
-from app.privacy.contracts import ScanSuccess
 from tests.external_mcp_test_support import FakeSource, discovery, manifest
 
 
-class Scanner:
-    def scan(self, text):
-        return ScanSuccess(())
 
 
-class Decisions:
-    def __init__(self, *steps):
-        self.steps = list(steps)
-        self.contexts = []
-
-    async def decide(self, context, cancellation):
-        self.contexts.append(context)
-        step = self.steps.pop(0)
-        return step(context) if callable(step) else step
 
 
-def call(context, *, name="native-tool", value=1, binding=""):
-    candidate = next(c for c in context["candidates"] if c["name"] == name)
-    return ToolDecision("call", candidate["id"], json.dumps({"value": value}), binding)
 
 
-@asynccontextmanager
-async def runtime(
-    decisions,
-    *,
-    config=None,
-    targets=(),
-    source_type=FakeSource,
-    sanitizer=None,
-    timeout=600,
-):
-    connection = Connection.from_manifest(config or manifest())
-    registry = Registry()
-    registry.register(connection)
-    bindings = BindingResolver(targets)
-    gate = ExecutionGate(registry, bindings=bindings)
-    source = source_type(connection)
-    service = ToolService(
-        gate,
-        decisions,
-        sanitizer or Sanitizer(Scanner()),
-        bindings,
-        input_timeout=timeout,
-    )
-    async with gate.attach(connection.id, source):
-        try:
-            yield service, source, gate
-        finally:
-            service.close()
 
+
+from tests.tool_use_test_support import Decisions, InputSource, Scanner, call, runtime
 
 def test_unclassified_tool_and_native_result_are_not_replaced():
     async def run():
@@ -89,6 +45,17 @@ def test_greeting_does_not_invoke():
             result = await service.run("miori", "session", "こんにちは")
             assert not result.results and not source.calls
 
+    asyncio.run(run())
+
+
+def test_projected_unknown_stops_before_another_external_operation():
+    async def run():
+        decisions = Decisions(call)
+        async with runtime(decisions) as (service, source, _):
+            source.failures = [MCPFailure("transport", "transport_error")]
+            result = await service.run("miori", "session", "外部操作を実行して")
+            assert result.results[0]["outcome"] == "result_unknown"
+            assert len(decisions.contexts) == 1 and len(source.calls) == 1
     asyncio.run(run())
 
 
@@ -299,29 +266,6 @@ def test_binding_selection_resumes_original_arguments_and_same_budget():
     asyncio.run(run())
 
 
-class InputSource(FakeSource):
-    async def call_tool(self, name, arguments, **kwargs):
-        self.calls.append((name, arguments, kwargs))
-        if kwargs.get("input_responses") is not None:
-            return {"content": [{"type": "text", "text": "完了"}]}
-        return {
-            "resultType": "input_required",
-            "requestState": "opaque-private-state",
-            "inputRequests": {
-                "answer": {
-                    "method": "elicitation/create",
-                    "params": {
-                        "message": "好きな色を教えて",
-                        "requestedSchema": {
-                            "type": "object",
-                            "properties": {"color": {"type": "string"}},
-                            "required": ["color"],
-                            "additionalProperties": False,
-                        },
-                    },
-                }
-            },
-        }
 
 
 def test_mrtr_resumes_same_loop_and_opaque_state_never_reaches_llm():
