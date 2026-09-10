@@ -3,11 +3,11 @@ import { installMockUiBootstrap } from './mock-ui-bootstrap'
 import { installMockLiveKit } from './mock-livekit'
 import { attachProfileEvidence, getCapabilitySkipReason, readResolvedProfile, type ResolvedProfile } from '../playwright/resolved-profile'
 
-let profile: ResolvedProfile
-test.beforeAll(async () => { profile = await readResolvedProfile() })
+let resolvedProfile: ResolvedProfile
+test.beforeAll(async () => { resolvedProfile = await readResolvedProfile() })
 test.beforeEach(async ({}, info) => {
-  await attachProfileEvidence(info, profile)
-  const reason = getCapabilitySkipReason(profile, 'mocked-e2e')
+  await attachProfileEvidence(info, resolvedProfile)
+  const reason = getCapabilitySkipReason(resolvedProfile, 'mocked-e2e')
   if (reason !== null) test.skip(true, reason)
 })
 
