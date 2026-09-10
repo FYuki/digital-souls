@@ -85,7 +85,7 @@ test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用�
   await installSpeech(page)
   const microphone = await driver.openVoiceChat(page)
 
-  await send(page, '検証用ファイルを読んで、展示テーマを教えてください。')
+  await send(page, `検証用ファイルは${sample}です。このパスのファイルを読んで、展示テーマを教えてください。今後も検証用ファイルとはこのパスを指します。`)
   await expect(page.locator('article.message').last()).toContainText('青い折り紙')
   await expect(confirmation(page)).toHaveCount(0)
 
