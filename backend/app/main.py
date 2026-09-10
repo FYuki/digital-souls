@@ -102,6 +102,8 @@ from app.routers.screen_perception import router as screen_perception_router
 from app.routers.ws import router as ws_router
 from app.routers.tool_use import router as tool_use_router
 from app.routers.addon_actions import router as addon_actions_router
+from app.addon_action.interaction import confirmation_resume_scope
+from app.conversation_core.control_input import current_control_request
 from app.routers.addon_admin import router as addon_admin_router
 from app.screen_perception.http_security import (
     SCREEN_ALLOWED_ORIGIN_ENV,
@@ -309,13 +311,14 @@ async def _stream_core_reply(
                 model_settings.chat_context_tokens - max_output_tokens,
             )
 
-        material = await tools.run(
-            character,
-            conversation_id,
-            transcript,
-            history=routing_history(prompt),
-            before_execute=before_execute,
-        )
+        with confirmation_resume_scope(character, conversation_id, current_control_request()):
+            material = await tools.run(
+                character,
+                conversation_id,
+                transcript,
+                history=routing_history(prompt),
+                before_execute=before_execute,
+            )
         if screen is not None and not screen.is_current:
             tools.stop(character, conversation_id)
             raise ScreenPerceptionError("request_cancelled", stage="chat")

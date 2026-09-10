@@ -1,12 +1,15 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte'
+  import ActionConfirmation from './ActionConfirmation.svelte'
 
   export let character: string
   export let conversationId: string
   export let onStop: () => Promise<void> = async () => undefined
+  export let onContinue: (requestId: string) => Promise<void | 'ended'> = async () => undefined
 
   let state = 'disabled'
   let sources: { label: string; source_id: string }[] = []
+  let confirmationId: string | null = null
   let ended = false
   let stopping = false
   let error = ''
@@ -25,6 +28,7 @@
       const data = value as Record<string, unknown>
       if (!['disabled', 'idle', 'running', 'waiting'].includes(String(data.state))) return
       state = String(data.state)
+      confirmationId = typeof data.confirmation_id === 'string' ? data.confirmation_id : null
       sources = Array.isArray(data.sources) ? data.sources.filter((item): item is { label: string; source_id: string } => (
         typeof item === 'object' && item !== null && typeof item.label === 'string' && typeof item.source_id === 'string'
       )) : []
@@ -85,7 +89,13 @@
     {#if state === 'running'}
       <span>外部情報を確認しています…</span>
     {:else if state === 'waiting'}
-      <span>追加情報をお待ちしています。入力または音声で回答できます。</span>
+      {#if confirmationId !== null}
+        {#key confirmationId}
+          <ActionConfirmation {character} {conversationId} requestId={confirmationId} {onContinue} />
+        {/key}
+      {:else}
+        <span>追加情報をお待ちしています。入力または音声で回答できます。</span>
+      {/if}
     {/if}
     {#if sources.length > 0}
       <details>

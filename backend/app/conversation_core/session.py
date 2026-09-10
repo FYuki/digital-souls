@@ -35,6 +35,7 @@ from app.conversation_core.provider_result_audit import ProviderResultAudit
 from app.conversation_core.segmentation import JapaneseTextSegmenter, TextSegment
 from app.conversation_core.turn_decision import TurnDecision, classify_turn
 from app.inference.diagnostics import collect_diagnostics
+from app.conversation_core.control_input import response_control_scope
 
 
 TaskResult = TypeVar("TaskResult")
@@ -176,25 +177,33 @@ class ConversationCoreSession:
         transcript: str,
         should_response: bool,
         retain_pending: bool = True,
+        control_request_id: str | None = None,
     ) -> Response | None:
         start_task: asyncio.Task[Response] | None = None
         async with self._state_lock:
             self._require_available()
             existing = self._utterances.get(utterance_id)
             if existing is not None:
-                if (existing.transcript, existing.should_response) != (
+                if (existing.transcript, existing.should_response, existing.control_request_id) != (
                     transcript,
                     should_response,
+                    control_request_id,
                 ):
                     raise TerminalProtocolError(
                         "utterance_id is associated with a different payload"
                     )
                 return self._response_containing(utterance_id)
 
+            if control_request_id is not None and (
+                self.active_response is not None or self.pending_utterances
+            ):
+                raise TerminalProtocolError("control_input_requires_idle")
+
             self._utterances[utterance_id] = Utterance(
                 utterance_id=utterance_id,
                 transcript=transcript,
                 should_response=should_response,
+                control_request_id=control_request_id,
                 state=(
                     UtteranceState.PENDING
                     if retain_pending
@@ -811,8 +820,14 @@ class ConversationCoreSession:
         response_input: str,
     ) -> None:
         audit = ProviderResultAudit()
+        control_request = (
+            self._utterances[response.source_utterance_ids[0]].control_request_id
+            if len(response.source_utterance_ids) == 1 else None
+        )
         try:
-            await self._run_observed_response_pipeline(response, response_input, audit)
+            # 前応答のterminal処理から次の発話を開始しても、画面操作を引き継がない。
+            with response_control_scope(control_request):
+                await self._run_observed_response_pipeline(response, response_input, audit)
         finally:
             # innerは取消時も両consumerの終了を待つ。受付が続く間にゼロでcloseしない。
             self._closed_provider_audits[response.response_id] = audit
