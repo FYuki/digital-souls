@@ -108,6 +108,61 @@ stopは新規state-changing callを止める。Task cancel送信だけで外部�
 再起動後も外部正本へ状態照会する。未対応機能・照会不能を成功へ変換しない。
 共通結果はAPPLIED/NO_CHANGE/DEFERRED/SUPERSEDED/CONFLICT/REJECTED/FAILED/RESULT_UNKNOWNを区別する。
 
+### 送信記録と活動の再開
+
+`addon-actions/actions.sqlite3`の実行記録に、接続identity、操作の定義digest、主体・場面、
+binding、論理的な活動scope、引数等のdigest、送信状態を保存する。引数本文は保存しない。
+送信直前のtransactionで実行権を取得し、同じscope・要求の別workerは外部へ送らない。
+Tool実行1回分の承認は、実行権を取得したworkerだけが消費する。
+
+会話内でCapabilityを更新してloopを作り直す場合も同じscopeを保つ。
+明示的な新規依頼には新しいscopeを使う。会話外は`life:{run_id}`を使い、runtimeのattemptに
+依存させない。同じ活動に未確定の副作用があれば、引数を変えた自動再送も止める。
+再開した会話外活動は、推論を始める前に保存済み実行と外部正本の状態を確認する。
+
+Core起動時に送信中だった記録は結果不明へ移す。送信前と確認できるcredential不足等は
+確定失敗と区別し、送信開始後の切断・キャンセル・通常Toolのエラーだけでは副作用が
+無かったと推測しない。確認できた結果は安全化・サイズ制限したprojectionだけを保存し、
+再取得時は`replayed`を付けて新規実行と区別する。MRTRのopaqueなrequest stateは保存せず、
+再起動後に元要求を作り直して再送しない。
+
+### 接続先が保証する回復アダプター
+
+管理設定の`core_policy.recovery_profiles`は、外部正本の回復能力をCore運用側が確認した
+場合だけ設定する。MCP metadataやLLMから自動生成・登録しない。汎用MCPにTask能力や
+冪等性があるとは仮定せず、profileが無ければ結果不明を保持する。
+
+採用する`contract: request-key-v1`は次の外部保証を必要とする。
+
+- 元操作の`tool_name`・native定義全体の`definition_digest`と、`status`、任意の`replay`・
+  `cancel` Toolの名前・定義digestを固定する。定義や設定の変更時は回復呼出しを拒否する。
+- `request_key_argument`で指定した、元Toolのschemaに存在する任意のstring引数へCoreが
+  同一依頼を識別するキーを補う。LLMがその引数を指定した呼出しは拒否する。
+  native schema自体は改変しない。外部はキーを別依頼へ再利用しない。
+- `status`は同じキーの外部正本を読む。`replay`は**既に受理・実行した依頼の保存済み結果の
+  再返却だけ**を行い、未受理の依頼を新規実行しない。照会不能・未発見を確定失敗としない。
+- `cancel`は同じキーに対する冪等な停止要求を送る。要求の受理と外部処理の停止完了を分ける。
+- 各回復Toolは、同じ`request_key_argument`だけを持つ引数で呼べる。
+  応答は`structuredContent.action`に`status`と、必要に応じて`task_id`・`result`・
+  `latest_state`を返す。statusは`applied/no_change/conflict/failed/result_unknown/running/
+  cancel_requested/cancelled`。`failed`は副作用なしの確定失敗を保証する。
+- 競合では`latest_state`を返す。元応答に無ければstatusを照会する。取得できなければ
+  競合を保持し、会話外活動が古い参照のまま自動実行を続けない。
+
+この契約はMCPの通常Toolを使う接続先固有adapterであり、SDKのTasks機能の新規実装ではない。
+未対応の`taskSupport=required`を対応済みと扱わない。
+
+回復経路も接続ON/OFF、availability、sharing、元binding、Autonomy Grant、定義、Egress、
+実行予算を検証する。statusと保存済み結果取得は新規副作用を起こさない。元の承認を根拠に
+任意Toolや変更した引数を実行する経路にはしない。
+開始済みTaskはCoreが所有する追跡処理で外部正本を照会する。同時照会は4件以下、通常間隔は
+30秒、1照会15秒を上限とし、Core終了時に追跡処理も終了する。再起動後に追跡を再開する。
+通常の会話loop終了では外部Taskをcancelせず、user stop時に停止要求を記録する。
+cancel非対応・応答不明でも、対応するstatus照会を継続する。
+
+会話外の承認待ちでは、元のprivacy判定から30秒経過したことだけを理由に終了しない。
+60秒の承認待機契約を保ち、実送信直前にEgressを再評価する。Target取消し・停止等は待機中にも反映する。
+
 ## 受入の境界
 
 実LLM・独立した実MCPを使い、テキストおよび実STT/TTS/LiveKitを通す音声の両経路を検証する。

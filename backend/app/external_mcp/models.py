@@ -22,10 +22,18 @@ CONTRACTS = Path(__file__).resolve().parents[3] / "contracts" / "addon"
 class MCPFailure(Exception):
     """外部本文を含めない固定エラーコード。"""
 
-    def __init__(self, category: str, code: str, *, retryable: bool = False) -> None:
+    def __init__(
+        self,
+        category: str,
+        code: str,
+        *,
+        retryable: bool = False,
+        request_started: bool | None = None,
+    ) -> None:
         self.category = category
         self.code = code
         self.retryable = retryable
+        self.request_started = request_started
         super().__init__(code)
 
 
@@ -133,6 +141,9 @@ class Connection:
             raise MCPFailure("validation", "duplicate_impact_profile")
         for profile in profiles:
             input_validator(profile["normal_arguments_schema"])
+        recovery = value["core_policy"].get("recovery_profiles", [])
+        if len({p["tool_name"] for p in recovery}) != len(recovery):
+            raise MCPFailure("validation", "duplicate_recovery_profile")
         return cls(encode(value))
 
     @property
@@ -228,7 +239,15 @@ def build_snapshot(connection: Connection, discovery: Discovery) -> Snapshot:
             raise MCPFailure("validation", "invalid_execution_metadata")
         unsupported = execution.get("taskSupport") == "required"
         impact = classify_static(connection.manifest, native, policy)
-        if impact["effect"] != "read" and read:
+        has_recovery = any(
+            p["tool_name"] == native.get("name")
+            for p in connection.manifest["core_policy"].get("recovery_profiles", [])
+        )
+        if has_recovery:
+            # 回復契約のある副作用をread annotationでretry/並行実行しない。
+            if impact["effect"] == "read":
+                impact = {"effect": "unknown", "source": "unknown"}
+        if has_recovery or (impact["effect"] != "read" and read):
             # Coreが副作用・定義変更を認識した場合はread annotationの最適化を抑止する。
             policy = {
                 "effect": "unknown",

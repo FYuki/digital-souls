@@ -53,6 +53,7 @@ class ActionInvocation:
     binding_id: str | None = None
     force_confirmation: bool = False
     input_responses: dict[str, Any] | None = field(default=None, repr=False)
+    core_argument_keys: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

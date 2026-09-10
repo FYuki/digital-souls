@@ -131,7 +131,7 @@ class InferenceDecisionRouter:
             context.get("pending") and context["pending"].get("answer_schema")
         )
         if not context.get("pending") and any(
-            r.get("outcome") == "succeeded" for r in context.get("results", [])
+            r.get("outcome") in {"succeeded", "no_change"} for r in context.get("results", [])
         ):
             # 取得後は要求の充足を先に判断し、schemaの穴埋めが余分な操作を誘発するのを防ぐ。
             completion_messages = (

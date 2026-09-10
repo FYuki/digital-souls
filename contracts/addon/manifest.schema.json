@@ -214,12 +214,15 @@
         "action": {"enum": ["deny", "force_serial", "disable_retry", "require_confirmation"]}
       }
     },
+    "RecoveryTool": {"type": "object", "additionalProperties": false, "required": ["tool_name", "definition_digest"], "properties": {"tool_name": {"type": "string", "minLength": 1, "maxLength": 128}, "definition_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}},
+    "RecoveryProfile": {"type": "object", "additionalProperties": false, "required": ["tool_name", "definition_digest", "request_key_argument", "status", "contract"], "properties": {"tool_name": {"type": "string", "minLength": 1, "maxLength": 128}, "definition_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "contract": {"const": "request-key-v1"}, "request_key_argument": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"}, "status": {"$ref": "#/$defs/RecoveryTool"}, "replay": {"$ref": "#/$defs/RecoveryTool"}, "cancel": {"$ref": "#/$defs/RecoveryTool"}}},
     "CorePolicy": {
       "type": "object",
       "additionalProperties": false,
       "required": ["enabled", "sharing", "resource_binding_required", "execution_budget", "restrictions"],
       "properties": {
         "enabled": {"type": "boolean"},
+        "recovery_profiles": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/RecoveryProfile"}},
         "impact_profiles": {
           "type": "array", "maxItems": 256,
           "items": {

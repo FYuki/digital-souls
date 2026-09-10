@@ -108,13 +108,24 @@ class Sanitizer:
     def result(self, envelope: Json, *, may_change_state: bool = True) -> Json:
         outcome = envelope["outcome"]
         projected: Json = {"outcome": outcome}
+        if "result_projection" in envelope:
+            return {
+                **self.value(envelope.get("result_projection") or {}),
+                "outcome": outcome,
+                **({"replayed": True} if envelope.get("replayed") else {}),
+            }
         if outcome != "succeeded":
             # tool/auth/transportの生エラー本文を送らない。
             projected["error"] = envelope.get("error_category", "input_required")
-            if may_change_state and envelope.get("error_category") in {
-                "transport",
-                "protocol",
-            }:
+            if (
+                may_change_state
+                and envelope.get("dispatch_started") is not False
+                and envelope.get("error_category")
+                in {
+                    "transport",
+                    "protocol",
+                }
+            ):
                 projected["outcome"] = "result_unknown"
             return projected
         native = envelope.get("native_payload") or {}
