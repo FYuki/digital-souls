@@ -32,7 +32,6 @@ if TYPE_CHECKING:
         ConversationSource,
         EpisodicEventType,
         EpisodicEventValue,
-        EpisodicSubject,
         InteractionAspect,
         InteractionPreferenceValue,
         MemoryCandidate,
@@ -53,7 +52,6 @@ def _with_admission_contract(test):
             "ConversationSource",
             "EpisodicEventType",
             "EpisodicEventValue",
-            "EpisodicSubject",
             "InteractionAspect",
             "InteractionPreferenceValue",
             "MemoryCandidate",
@@ -223,8 +221,11 @@ def test_general_semantic_content_is_not_memory_worthy() -> None:
     [
         (
             "episodic",
-            {"topic": ScanSuccess(())},
-            "ユーザーが資格取得を達成した。",
+            {
+                key: ScanSuccess(())
+                for key in ("character_id", "character_name", "topic", "action")
+            },
+            "光織は資格を取得した。",
         ),
         (
             "preference",
@@ -249,8 +250,10 @@ def test_safe_allowlist_candidates_are_approved_without_confirmation(
             MemoryType.EPISODIC_EVENT,
             EpisodicEventValue(
                 EpisodicEventType.ACHIEVEMENT,
-                EpisodicSubject.USER,
+                "miori",
+                "光織",
                 "資格取得",
+                "資格を取得した",
             ),
             _source(),
         ),

@@ -7,10 +7,8 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from app.memory.episode import parse_episode_value
 from app.memory.admission.contracts import (
-    EpisodicEventType,
-    EpisodicEventValue,
-    EpisodicSubject,
     InteractionAspect,
     InteractionPreferenceValue,
     MemoryCandidate,
@@ -48,9 +46,13 @@ class MemoryManagementRoute(SafeValidationRoute):
                     content={"reason_code": error.reason_code},
                 )
             except LookupError as error:
-                raise HTTPException(status_code=404, detail="record was not found") from error
+                raise HTTPException(
+                    status_code=404, detail="record was not found"
+                ) from error
             except (TypeError, ValueError) as error:
-                raise HTTPException(status_code=422, detail="invalid memory request") from error
+                raise HTTPException(
+                    status_code=422, detail="invalid memory request"
+                ) from error
 
         return memory_route_handler
 
@@ -69,18 +71,16 @@ class PersonaCorrectionRequest(BaseModel):
         value = self.structured_value
         structured: StructuredValue
         if self.memory_type is MemoryType.EPISODIC_EVENT:
-            structured = EpisodicEventValue(
-                event_type=EpisodicEventType(str(value.get("event_type", ""))),
-                subject=EpisodicSubject(str(value.get("subject", ""))),
-                topic=_required_string(value, "topic"),
-            )
+            structured = parse_episode_value(value)
         elif self.memory_type is MemoryType.USER_PREFERENCE:
             alternative = value.get("alternative")
             structured = UserPreferenceValue(
                 polarity=PreferencePolarity(str(value.get("polarity", ""))),
                 object=_required_string(value, "object"),
                 alternative=(
-                    None if alternative is None else _required_string(value, "alternative")
+                    None
+                    if alternative is None
+                    else _required_string(value, "alternative")
                 ),
             )
         else:

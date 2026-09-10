@@ -16,6 +16,7 @@ from app.memory.admission.contracts import (
     UserPreferenceValue,
 )
 from app.memory.admission.templates import render_normalized_text
+from app.memory.episode import episode_slots
 from app.memory.memory_policy import PrivacyPolicy
 from app.privacy.contracts import (
     PrivacyCategory,
@@ -193,7 +194,7 @@ class RagAdmissionEvaluator:
     @staticmethod
     def slot_values(value: StructuredValue) -> dict[str, str]:
         if isinstance(value, EpisodicEventValue):
-            return {"topic": value.topic}
+            return episode_slots(value)
         if isinstance(value, UserPreferenceValue):
             values = {"object": value.object}
             if value.alternative is not None:

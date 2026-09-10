@@ -366,10 +366,22 @@ Resource読取とTool呼出しはいずれもGateへ渡し、Binding制約を適
 
 ## #100の設計変更と現在の実装の区別
 
-現在のEpisodeは旧subject構造とturn単位の非同期抽出を使用する。#100ではキャラクター視点の
-共通契約、スレッド単位の抽出、Semantic / Reflection形成へ変更する。合意済み設計は
+Episodeの共通型は`character_id`を所有者とし、保存文の主語をそのキャラクターに固定する。
+旧subjectは使用せず、行為と複数の参加者（名称・出所付きID・役割）を保存する。
+今回の交流相手と話題の中の人物を分離し、話題の出来事は任意の関連情報として保持する。
+抽出器はCharacter Cardの表示名と既知IDを受け取り、未提示IDやIDと名称の不整合を拒否する。
+
+persona-memory.dbのschema versionは3。Episodeには経験取得日時`experienced_at`が必要で、
+経験の発生日時`occurred_at`、元発言日時`stated_at`、DB登録日時`created_at`と区別する。
+会話で聞いた経験は会話日時を発生日時とし、話題の旅行日時を関連情報へ分離する。
+関連Episode IDは同じcharacterの有効な記憶だけを参照でき、参照先の日時を正本とする。
+保存文の関連日時は判明した精度だけを表示する。新しい人物・行為のslotもprivacy検査へ渡す。
+新規DBまたは記憶領域が空のversion 2へ適用でき、一時provider recordは維持する。
+既存記憶があるversion 2は自動変換せず起動を停止し、データを変更しない。
+
+抽出の予約は現時点ではturn単位。スレッド単位の抽出、Semantic / Reflection形成は後続の
+チェックポイントで実装する。合意済み設計は
 [共通ADR](decisions/character-life-memory-personality-autonomy-2026-09.md)を参照する。
-この設計の記載は実装済みを意味せず、各子Issueの実装時に本書のruntime説明を更新する。
 
 既存moduleテストは抽出・privacy判定のLLMをモックしてHTTP会話からSQLiteへのEpisode保存を検証する。
 実LLMの抽出・判定から保存までの一連の成功については、#297で実接続の受入証跡を整備する。

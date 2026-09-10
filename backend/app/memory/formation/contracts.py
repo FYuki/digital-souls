@@ -25,3 +25,9 @@ class MemoryFormationJob:
 class ExtractedMemoryCandidate:
     candidate: MemoryCandidate
     date_expressions: tuple["DateExpression", ...]
+    occurrence_basis: str = "EVENT"
+    related_date_expressions: tuple["DateExpression", ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.occurrence_basis not in {"EVENT", "CONVERSATION"}:
+            raise ValueError("invalid occurrence_basis")

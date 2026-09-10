@@ -107,9 +107,20 @@ def _response(*candidates: dict[str, object]) -> str:
         (
             {
                 "memory_type": "EPISODIC_EVENT",
+                "occurrence_basis": "EVENT",
+                "related_date_expressions": [],
                 "structured_value": {
                     "event_type": "ACHIEVEMENT",
-                    "subject": "USER",
+                    "action": "資格試験に合格した話を聞いた",
+                    "participants": [
+                        {
+                            "name": "ユーザー",
+                            "role": "SPEAKER",
+                            "entity_id": None,
+                            "entity_namespace": None,
+                        }
+                    ],
+                    "related_event": None,
                     "topic": "資格試験への合格",
                 },
             },
@@ -159,7 +170,9 @@ def test_extracts_each_allowlisted_persona_memory_type(
     assert result[0].date_expressions == ()
 
 
-def test_extractor_returns_typed_date_expressions_without_resolving_timestamps() -> None:
+def test_extractor_returns_typed_date_expressions_without_resolving_timestamps() -> (
+    None
+):
     from app.memory.formation.temporal_resolution import (
         DateExpressionRole,
         RelativeDateExpression,
@@ -170,9 +183,20 @@ def test_extractor_returns_typed_date_expressions_without_resolving_timestamps()
             _response(
                 {
                     "memory_type": "EPISODIC_EVENT",
+                    "occurrence_basis": "EVENT",
+                    "related_date_expressions": [],
                     "structured_value": {
                         "event_type": "ACHIEVEMENT",
-                        "subject": "USER",
+                        "action": "資格試験に合格した話を聞いた",
+                        "participants": [
+                            {
+                                "name": "ユーザー",
+                                "role": "SPEAKER",
+                                "entity_id": None,
+                                "entity_namespace": None,
+                            }
+                        ],
+                        "related_event": None,
                         "topic": "資格試験への合格",
                     },
                     "date_expressions": [
@@ -217,9 +241,20 @@ def test_extractor_preserves_explicit_zero_offset_as_specified() -> None:
             _response(
                 {
                     "memory_type": "EPISODIC_EVENT",
+                    "occurrence_basis": "EVENT",
+                    "related_date_expressions": [],
                     "structured_value": {
                         "event_type": "ACHIEVEMENT",
-                        "subject": "USER",
+                        "action": "資格試験に合格した話を聞いた",
+                        "participants": [
+                            {
+                                "name": "ユーザー",
+                                "role": "SPEAKER",
+                                "entity_id": None,
+                                "entity_namespace": None,
+                            }
+                        ],
+                        "related_event": None,
                         "topic": "資格試験への合格",
                     },
                     "date_expressions": [
@@ -282,9 +317,20 @@ def test_invalid_date_expression_batch_is_discarded(
             _response(
                 {
                     "memory_type": "EPISODIC_EVENT",
+                    "occurrence_basis": "EVENT",
+                    "related_date_expressions": [],
                     "structured_value": {
                         "event_type": "ACHIEVEMENT",
-                        "subject": "USER",
+                        "action": "資格試験に合格した話を聞いた",
+                        "participants": [
+                            {
+                                "name": "ユーザー",
+                                "role": "SPEAKER",
+                                "entity_id": None,
+                                "entity_namespace": None,
+                            }
+                        ],
+                        "related_event": None,
                         "topic": "資格試験への合格",
                     },
                     "date_expressions": date_expressions,
@@ -305,7 +351,9 @@ def test_invalid_date_expression_batch_is_discarded(
     assert result == ()
 
 
-def test_extractor_transfers_only_current_user_and_one_previous_sanitized_turn() -> None:
+def test_extractor_transfers_only_current_user_and_one_previous_sanitized_turn() -> (
+    None
+):
     client = FakeExtractorClient([_response()])
 
     _extractor(client).extract(
@@ -332,7 +380,9 @@ def test_extractor_transfers_only_current_user_and_one_previous_sanitized_turn()
     "raw_output",
     [
         "not-json",
-        json.dumps({"candidates": [{"memory_type": "UNKNOWN", "structured_value": {}}]}),
+        json.dumps(
+            {"candidates": [{"memory_type": "UNKNOWN", "structured_value": {}}]}
+        ),
         json.dumps({"candidates": [{"memory_type": "USER_PREFERENCE"}]}),
         json.dumps(
             {
@@ -358,9 +408,20 @@ def test_extractor_transfers_only_current_user_and_one_previous_sanitized_turn()
         _response(
             {
                 "memory_type": "EPISODIC_EVENT",
+                "occurrence_basis": "EVENT",
+                "related_date_expressions": [],
                 "structured_value": {
                     "event_type": "ACHIEVEMENT",
-                    "subject": "USER",
+                    "action": "資格試験に合格した話を聞いた",
+                    "participants": [
+                        {
+                            "name": "ユーザー",
+                            "role": "SPEAKER",
+                            "entity_id": None,
+                            "entity_namespace": None,
+                        }
+                    ],
+                    "related_event": None,
                     "topic": 123,
                 },
             }
@@ -538,3 +599,66 @@ def test_extractor_uses_json_schema_output_limit_and_declared_version() -> None:
     assert client.calls[0]["max_output_tokens"] == 321
     assert isinstance(EXTRACTOR_VERSION, str)
     assert EXTRACTOR_VERSION.strip()
+
+
+@pytest.mark.parametrize(
+    "identity,name,accepted",
+    [
+        (("character", "ao"), "蒼", True),
+        (("character", "unknown"), "蒼", False),
+        (("character", "ao"), "別人", False),
+        (None, "蒼", True),
+    ],
+)
+def test_extractor_preserves_only_supplied_person_identities(identity, name, accepted):
+    from app.memory.formation.extractor import MemoryCandidateExtractor
+
+    person = {
+        "name": name,
+        "role": "SPEAKER",
+        "entity_namespace": None,
+        "entity_id": None,
+    }
+    if identity is not None:
+        person.update(entity_namespace=identity[0], entity_id=identity[1])
+    candidate = {
+        "memory_type": "EPISODIC_EVENT",
+        "occurrence_basis": "CONVERSATION",
+        "date_expressions": [],
+        "related_date_expressions": [],
+        "structured_value": {
+            "event_type": "ENCOUNTER",
+            "topic": "旅行の話",
+            "action": "旅行の話を聞いた",
+            "participants": [person],
+            "related_event": None,
+        },
+    }
+    client = FakeExtractorClient([_response(candidate)])
+    extractor = MemoryCandidateExtractor(
+        client=client,
+        settings=_settings(),
+        character_name_resolver=lambda _: "光織",
+        identity_resolver=lambda _: {("character", "ao"): "蒼"},
+    )
+    result = extractor.extract(
+        current_turn=_turn(
+            TURN_ID,
+            user_content="蒼から旅行の話を聞いた",
+            assistant_content=CURRENT_ASSISTANT,
+        ),
+        previous_turn=None,
+    )
+    assert bool(result) is accepted
+    payload = json.loads(client.calls[0]["messages"][1]["content"])
+    assert payload["owner"] == {"character_id": "miori", "name": "光織"}
+    assert {
+        "entity_namespace": "character",
+        "entity_id": "ao",
+        "name": "蒼",
+    } in payload["identities"]
+    if accepted:
+        value = result[0].candidate.structured_value
+        assert value.character_id == "miori"
+        assert value.character_name == "光織"
+        assert value.participants[0].identity == identity

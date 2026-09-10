@@ -4,7 +4,6 @@ import importlib
 import pytest
 
 
-
 def _contracts():
     return importlib.import_module("app.memory.admission.contracts")
 
@@ -23,8 +22,11 @@ def test_admission_enums_are_closed_to_the_allowlist_contract() -> None:
         "DECISION",
         "OUTCOME",
         "CHANGE",
+        "OBSERVATION",
+        "ACTIVITY",
+        "ENCOUNTER",
     }
-    assert {item.value for item in contracts.EpisodicSubject} == {"USER", "SHARED"}
+    assert not hasattr(contracts, "EpisodicSubject")
     assert {item.value for item in contracts.PreferencePolarity} == {
         "LIKE",
         "DISLIKE",
@@ -73,8 +75,10 @@ def test_free_text_slots_accept_one_to_sixty_characters(value_kind: str) -> None
     values = {
         "episodic": contracts.EpisodicEventValue(
             contracts.EpisodicEventType.ACHIEVEMENT,
-            contracts.EpisodicSubject.USER,
+            "miori",
+            "光織",
             "資格取得",
+            "資格を取得した",
         ),
         "preference": contracts.UserPreferenceValue(
             contracts.PreferencePolarity.LIKE,
@@ -117,7 +121,9 @@ def test_free_text_slots_reject_blank_or_overlong_values(
     constructors = {
         "topic": lambda: contracts.EpisodicEventValue(
             event_type=contracts.EpisodicEventType.CHANGE,
-            subject=contracts.EpisodicSubject.SHARED,
+            character_id="miori",
+            character_name="光織",
+            action="変化を経験した",
             topic=invalid_text,
         ),
         "object": lambda: contracts.UserPreferenceValue(
@@ -183,8 +189,10 @@ def test_candidate_rejects_memory_type_and_value_mismatch(
         ),
         "episodic": contracts.EpisodicEventValue(
             contracts.EpisodicEventType.DECISION,
-            contracts.EpisodicSubject.USER,
+            "miori",
+            "光織",
             "転職",
+            "転職を決めた",
         ),
     }
 

@@ -18,7 +18,7 @@ PERSONA_MEMORY_TABLES = frozenset(
         "temporary_provider_records",
     }
 )
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 APPROVED_MEMORIES_SQL = """
 CREATE TABLE approved_memories (
@@ -35,7 +35,8 @@ CREATE TABLE approved_memories (
     ),
     episodic_event_type TEXT CHECK (
         episodic_event_type IS NULL OR episodic_event_type IN (
-            'SHARED_MILESTONE', 'ACHIEVEMENT', 'DECISION', 'OUTCOME', 'CHANGE'
+            'SHARED_MILESTONE', 'ACHIEVEMENT', 'DECISION', 'OUTCOME', 'CHANGE',
+            'OBSERVATION', 'ACTIVITY', 'ENCOUNTER'
         )
     ),
     formation_method TEXT NOT NULL CHECK (
@@ -66,6 +67,7 @@ CREATE TABLE approved_memories (
         )
     ),
     stated_at TEXT NOT NULL,
+    experienced_at TEXT,
     expires_at TEXT,
     last_user_mentioned_at TEXT,
     last_consolidated_at TEXT,
@@ -75,7 +77,7 @@ CREATE TABLE approved_memories (
     UNIQUE (character_id, idempotency_key),
     CHECK (
         (memory_type = 'EPISODIC_EVENT' AND memory_kind = 'EPISODIC'
-            AND episodic_event_type IS NOT NULL)
+            AND episodic_event_type IS NOT NULL AND experienced_at IS NOT NULL)
         OR
         (memory_type IN ('USER_PREFERENCE', 'INTERACTION_PREFERENCE')
             AND memory_kind = 'SEMANTIC' AND episodic_event_type IS NULL)
@@ -97,7 +99,7 @@ CREATE TABLE memory_sources (
     source_type TEXT NOT NULL CHECK (
         source_type IN (
             'CONVERSATION_TURN', 'PROVIDER_RECORD', 'ADDON_EVENT', 'USER_CORRECTION',
-            'CONSOLIDATION'
+            'CONSOLIDATION', 'AGENT_ACTIVITY', 'EXTERNAL_RESOURCE'
         )
     ),
     source_provider_id TEXT NOT NULL CHECK (length(trim(source_provider_id)) > 0),
@@ -200,17 +202,34 @@ def initialize_persona_memory_schema(
         tables = _user_tables(connection)
         if tables and tables != PERSONA_MEMORY_TABLES:
             raise ValueError("existing persona memory database has an unknown schema")
+        if tables and int(connection.execute("PRAGMA user_version").fetchone()[0]) == 2:
+            # 記憶の変換対象はない。空の記憶tableだけを新定義へ替え、暫定記録は保持する。
+            memory_tables = PERSONA_MEMORY_TABLES - {"temporary_provider_records"}
+            if any(
+                connection.execute(f'SELECT 1 FROM "{name}" LIMIT 1').fetchone()
+                for name in memory_tables
+            ):
+                raise ValueError(
+                    "existing memory data cannot be converted automatically"
+                )
+            for name in (
+                "memory_sources",
+                "memory_lineage",
+                "memory_write_receipts",
+                "memory_index_outbox",
+                "approved_memories",
+            ):
+                connection.execute(f'DROP TABLE "{name}"')
+            _create_memory_tables(connection)
+            connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         if tables:
             version = int(connection.execute("PRAGMA user_version").fetchone()[0])
             if version != SCHEMA_VERSION:
-                raise ValueError("existing persona memory database has an unknown schema")
-            _ensure_consolidation_source_type(connection)
+                raise ValueError(
+                    "existing persona memory database has an unknown schema"
+                )
         else:
-            connection.execute(APPROVED_MEMORIES_SQL)
-            connection.execute(MEMORY_SOURCES_SQL)
-            connection.execute(MEMORY_LINEAGE_SQL)
-            connection.execute(MEMORY_WRITE_RECEIPTS_SQL)
-            connection.execute(MEMORY_INDEX_OUTBOX_SQL)
+            _create_memory_tables(connection)
             connection.execute(TEMPORARY_PROVIDER_RECORDS_SQL)
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         _ensure_indexes(connection)
@@ -244,20 +263,12 @@ def _ensure_indexes(connection: sqlite3.Connection) -> None:
         )
 
 
-def _ensure_consolidation_source_type(connection: sqlite3.Connection) -> None:
-    row = connection.execute(
-        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'memory_sources'"
-    ).fetchone()
-    if row is None or not isinstance(row[0], str):
-        raise ValueError("memory_sources schema is missing")
-    if "'CONSOLIDATION'" in row[0]:
-        return
-    connection.execute("ALTER TABLE memory_sources RENAME TO memory_sources_legacy")
-    connection.execute(MEMORY_SOURCES_SQL)
-    connection.execute(
-        "INSERT INTO memory_sources "
-        "(character_id, memory_id, source_type, source_provider_id, source_ref) "
-        "SELECT character_id, memory_id, source_type, source_provider_id, source_ref "
-        "FROM memory_sources_legacy"
-    )
-    connection.execute("DROP TABLE memory_sources_legacy")
+def _create_memory_tables(connection: sqlite3.Connection) -> None:
+    for sql in (
+        APPROVED_MEMORIES_SQL,
+        MEMORY_SOURCES_SQL,
+        MEMORY_LINEAGE_SQL,
+        MEMORY_WRITE_RECEIPTS_SQL,
+        MEMORY_INDEX_OUTBOX_SQL,
+    ):
+        connection.execute(sql)

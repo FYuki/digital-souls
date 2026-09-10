@@ -5,6 +5,10 @@ from enum import Enum
 from typing import TypeAlias
 
 from app.conversation_history.models import TurnStatus
+from app.memory.episode import (
+    EpisodicEventType as EpisodicEventType,
+    EpisodicEventValue as EpisodicEventValue,
+)
 
 MAX_FREE_TEXT_LENGTH = 60
 
@@ -13,19 +17,6 @@ class MemoryType(str, Enum):
     EPISODIC_EVENT = "EPISODIC_EVENT"
     USER_PREFERENCE = "USER_PREFERENCE"
     INTERACTION_PREFERENCE = "INTERACTION_PREFERENCE"
-
-
-class EpisodicEventType(str, Enum):
-    SHARED_MILESTONE = "SHARED_MILESTONE"
-    ACHIEVEMENT = "ACHIEVEMENT"
-    DECISION = "DECISION"
-    OUTCOME = "OUTCOME"
-    CHANGE = "CHANGE"
-
-
-class EpisodicSubject(str, Enum):
-    USER = "USER"
-    SHARED = "SHARED"
 
 
 class PreferencePolarity(str, Enum):
@@ -59,20 +50,6 @@ def _validate_free_text(value: str, field_name: str) -> None:
         raise ValueError(
             f"{field_name} must contain 1 to {MAX_FREE_TEXT_LENGTH} characters"
         )
-
-
-@dataclass(frozen=True)
-class EpisodicEventValue:
-    event_type: EpisodicEventType
-    subject: EpisodicSubject
-    topic: str
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.event_type, EpisodicEventType):
-            raise TypeError("event_type must be an EpisodicEventType")
-        if not isinstance(self.subject, EpisodicSubject):
-            raise TypeError("subject must be an EpisodicSubject")
-        _validate_free_text(self.topic, "topic")
 
 
 @dataclass(frozen=True)

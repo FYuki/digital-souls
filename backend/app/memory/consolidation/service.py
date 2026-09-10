@@ -161,7 +161,9 @@ class MemoryConsolidationService:
                 for plan in response.plans:
                     if should_stop() or self._monotonic_clock() >= deadline:
                         return
-                    plan_details = tuple(planned[ref.memory_id] for ref in plan.memories)
+                    plan_details = tuple(
+                        planned[ref.memory_id] for ref in plan.memories
+                    )
                     current_by_id = self._repository.get_details(
                         character_id=character_id,
                         provider_id="core",
@@ -316,9 +318,7 @@ def apply_validated_plan(
             outcome, model_id, prompt_version, policy_version, started_at
         )
         return outcome
-    _log_terminal_plan(
-        validated, model_id, prompt_version, policy_version, started_at
-    )
+    _log_terminal_plan(validated, model_id, prompt_version, policy_version, started_at)
     return validated
 
 
@@ -363,6 +363,7 @@ def _write_context(
             prompt_version=prompt_version,
         ),
         occurred_at=basis.occurred_at,
+        experienced_at=basis.experienced_at,
         occurred_timezone=basis.occurred_timezone,
         occurred_precision=basis.occurred_precision,
         stated_at=basis.stated_at,

@@ -3,6 +3,7 @@ from __future__ import annotations
 import atexit
 import json
 import os
+from dataclasses import asdict
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -62,7 +63,7 @@ def call_api(
         "candidates": [
             {
                 "memory_type": candidate.candidate.memory_type.value,
-                "structured_value": candidate.candidate.structured_value.__dict__,
+                "structured_value": asdict(candidate.candidate.structured_value),
             }
             for candidate in candidates
         ],
