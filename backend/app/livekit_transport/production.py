@@ -1877,11 +1877,12 @@ class ProductionRuntimeManager:
                 await asyncio.sleep(0.05)
         if not core.accepting_input or not still_waiting():
             return False
-        await core.finalize_utterance(
+        response = await core.finalize_utterance(
             utterance_id=request_id, transcript=message, should_response=True,
             control_request_id=request_id,
+            control_input_valid=still_waiting,
         )
-        return True
+        return response is not None
 
     async def stop(self, session_id: str) -> None:
         coordinator = self._coordinators.get(session_id)

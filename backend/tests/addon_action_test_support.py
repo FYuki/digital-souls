@@ -4,6 +4,7 @@ from app.addon_action.policy import ActionPolicy
 from app.addon_action.store import ActionStore
 from app.tool_use.projection import Sanitizer
 from app.privacy.contracts import ScanSuccess
+import time
 
 
 class Scanner:
@@ -17,9 +18,8 @@ async def allow(arguments):
 
 def policy(tmp_path, **kwargs):
     return ActionPolicy(
-        ActionStore(tmp_path / "actions.sqlite3"),
+        ActionStore(tmp_path / "actions.sqlite3", clock=kwargs.get("clock", time.time)),
         Sanitizer(Scanner()),
         egress=allow,
         **kwargs,
     )
-

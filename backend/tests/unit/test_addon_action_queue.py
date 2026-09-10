@@ -115,13 +115,81 @@ def test_repeated_answer_and_ticket_do_not_duplicate_once_or_always_dispatch(tmp
         stores = [ActionStore(p.store.path) for _ in range(10)]
         with ThreadPoolExecutor(max_workers=5) as pool:
             list(pool.map(lambda s: s.answer(rid, ApprovalChoice.ONCE), stores))
-        assert p.store.state(p.store.request(rid).key).remaining == 1
+        assert p.store.state(p.store.request(rid).key).remaining == 0
+        assert p.store.request(rid).once_reserved
         ticket = await p.prepare(invocation(), live=lambda: None, request_id=rid)
         assert p.consume(ticket)
         assert not p.consume(ticket)
         with pytest.raises(MCPFailure, match="confirmation_already_answered"):
             p.store.answer(rid, ApprovalChoice.ALWAYS)
 
+    asyncio.run(run())
+
+
+def test_once_reservation_cannot_be_consumed_by_another_request(tmp_path):
+    async def run():
+        p = policy(tmp_path)
+        calls = (invocation(), invocation(loop_id="other", arguments={"value": 2}))
+        requests = []
+        for call in calls:
+            with pytest.raises(ConfirmationNeeded) as needed:
+                await p.prepare(call, live=lambda: None)
+            requests.append(p.store.request(needed.value.request_id))
+        a, b = requests
+        assert a.key == b.key and a.fingerprint != b.fingerprint
+        p.store.answer(a.id, ApprovalChoice.ONCE)
+        assert not p.store.consume(a.key)
+        assert not p.store.consume_request(b.key, b.id, p.clock())
+        with pytest.raises(ConfirmationNeeded):
+            await p.prepare(calls[1], live=lambda: None, request_id=b.id)
+        ticket = await p.prepare(calls[0], live=lambda: None, request_id=a.id)
+        stores = [ActionStore(p.store.path) for _ in range(8)]
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            used = list(pool.map(lambda s: s.consume_request(ticket.key, a.id, p.clock()), stores))
+        assert sum(used) == 1
+        p.store.answer(a.id, ApprovalChoice.ONCE)
+        assert not p.store.consume(a.key)
+        assert not p.store.request(a.id).once_reserved
+    asyncio.run(run())
+
+
+def test_existing_confirmation_database_adds_reservation_without_losing_request(tmp_path):
+    async def run():
+        p = policy(tmp_path)
+        with pytest.raises(ConfirmationNeeded) as needed:
+            await p.prepare(invocation(), live=lambda: None)
+        before = p.store.request(needed.value.request_id)
+        with p.store.transaction() as db:
+            db.execute("ALTER TABLE action_confirmations DROP COLUMN once_reserved")
+        restored = ActionStore(p.store.path)
+        assert restored.request(before.id) == before
+        restored.answer(before.id, ApprovalChoice.ONCE)
+        assert not restored.consume(before.key)
+        assert restored.consume_request(before.key, before.id, p.clock())
+        assert not restored.consume_request(before.key, before.id, p.clock())
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("end", ["timeout", "stop", "restart"])
+def test_unused_request_reservation_does_not_become_a_future_credit(tmp_path, end):
+    async def run():
+        clock = [100.0]
+        p = policy(tmp_path, clock=lambda: clock[0], conversation_wait_seconds=1)
+        with pytest.raises(ConfirmationNeeded) as needed:
+            await p.prepare(invocation(), live=lambda: None)
+        rid = needed.value.request_id
+        p.store.answer(rid, ApprovalChoice.ONCE)
+        ticket = await p.prepare(invocation(), live=lambda: None, request_id=rid)
+        if end == "timeout":
+            clock[0] = 101.0
+        elif end == "stop":
+            p.end_loop("loop")
+        else:
+            ActionStore(p.store.path).detach_waiters()
+        assert not p.consume(ticket)
+        with pytest.raises(ConfirmationNeeded):
+            await p.prepare(invocation(loop_id="future"), live=lambda: None)
+        assert p.store.state(ticket.key).remaining == 0
     asyncio.run(run())
 
 
@@ -290,11 +358,10 @@ def test_confirmation_resume_keeps_dispatch_guard(tmp_path):
             result = await gate.resume_confirmation(initial["confirmation_id"], loop)
             assert result["native_error"]["code"] == "autonomy_revoked"
             assert not source.calls
-            assert (
-                p.store.state(p.store.request(initial["confirmation_id"]).key).remaining
-                == 1
-            )
+            saved = p.store.request(initial["confirmation_id"])
+            assert saved.once_reserved and p.store.state(saved.key).remaining == 0
             gate.end_loop(loop)
+            assert not p.store.request(saved.id).once_reserved
 
     asyncio.run(run())
 
