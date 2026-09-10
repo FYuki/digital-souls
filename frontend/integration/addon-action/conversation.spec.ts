@@ -18,7 +18,8 @@ test.afterEach(async ({ page }, info) => {
     await info.attach('voice-progress', {
       body: JSON.stringify(await page.evaluate(() => {
         const p = window.__voiceChatE2E
-        return { micStates: p.micStates, cycles: p.cycles, order: p.liveKitOrder, playback: p.playbackCompletions }
+        return { micStates: p.micStates, cycles: p.cycles, order: p.liveKitOrder,
+          responseSources: p.responseSourceUtterances, playback: p.playbackCompletions }
       })), contentType: 'application/json',
     })
   }
@@ -85,8 +86,9 @@ async function playedResponses(page: Page) {
 async function waitForPlayback(page: Page, utteranceId?: string) {
   await expect.poll(() => page.evaluate((id) => {
     const probe = window.__voiceChatE2E
-    const cycle = id ? probe.cycles.find(c => c.utteranceId === id) : probe.cycles.at(-1)
-    const response = cycle?.responseId
+    const response = id
+      ? Object.entries(probe.responseSourceUtterances ?? {}).find(([, sources]) => sources.includes(id))?.[0]
+      : probe.cycles.at(-1)?.responseId
     if (!response) return false
     const completion = probe.playbackCompletions?.[response]
     return probe.liveKitOrder.includes(`${response}:completed`)
@@ -186,7 +188,8 @@ test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用�
       spokenApprovalIgnored: true, voiceOnce: true, voiceReject: true,
       voiceAlways: true, subsequentWriteWithoutConfirmation: true,
       renderedResponses: await playedResponses(page), finalExternalState: await sampleText(),
-      playback: await page.evaluate(() => Object.values(window.__voiceChatE2E.playbackCompletions ?? {}).map(c => ({
+      playback: await page.evaluate(() => Object.entries(window.__voiceChatE2E.playbackCompletions ?? {}).map(([responseId, c]) => ({
+        responseId, sourceUtteranceIds: window.__voiceChatE2E.responseSourceUtterances?.[responseId] ?? [],
         expectedSamples: c.expectedSamples, renderedSamples: c.renderedSamples, packetCount: c.packetCount,
       }))),
     }), contentType: 'application/json',
