@@ -2,7 +2,11 @@
 
 ## 状態
 
-**ACTIVE**。
+**ACTIVE**。Episode・派生形成に関する一部の決定は2026-09-10に改定した。
+
+[キャラクター生活の共通契約](character-life-memory-personality-autonomy-2026-09.md)を、
+Episodeの所有者/参加者/日時、スレッド単位抽出、重複・根拠数、Semantic / Reflection、再評価の正本とする。
+以下のWave 2初期契約と競合する場合は同ADRを優先する。これは実装完了の記録ではない。
 
 本ADRは、Wave 2で実装する人格記憶のモデリング、保存判定、非同期記憶形成、検索順位、
 domain recordとの分離を定める。
@@ -87,17 +91,18 @@ domain recordを根拠とし、人格記憶を正確な台帳として扱わな�
 会話継続、関係上の経験、正確なdomain記録を同じ型へ入れると、訂正、削除、失効、addon移行の
 責任範囲が曖昧になる。取得方法よりも、情報の所有者とライフサイクルで境界を決める。
 
-### 2. 人格記憶はepisodicとsemanticに限定する
+### 2. approved_memoriesはepisodicとsemanticを保持する
 
 CoALA等の認知科学由来の分類は概念整理に利用するが、MVPの永続化schemaへすべての分類を
 そのまま持ち込まない。
 
 `approved_memories.memory_kind`は次の2種類とする。
 
-- `EPISODIC`: 時刻と文脈を伴う、ユーザーと人格の間で意味のある出来事
+- `EPISODIC`: 所有キャラクターの視点で整理した、時刻と文脈を伴う経験
 - `SEMANTIC`: 複数conversationでも利用する、安定したユーザーまたは対話上の事実
 
-MVPのpositive allowlistである`memory_type`は次に限定する。
+Wave 2初期実装のpositive allowlistである`memory_type`は次の3種類である。
+#100のDerived Semantic MemoryとReflectionは、派生時の検証・正本・利用境界を別に定義する。
 
 | `memory_type` | `memory_kind` | 内容 |
 |---|---|---|
@@ -113,16 +118,17 @@ MVPのpositive allowlistである`memory_type`は次に限定する。
 - `OUTCOME`
 - `CHANGE`
 
-`structured_value`は、`EPISODIC_EVENT`では`event_type`、`subject`、`topic`、
-`USER_PREFERENCE`では`polarity`、`object`、必要な場合の`alternative`、
-`INTERACTION_PREFERENCE`では`aspect`、`value`だけを持つ。`EPISODIC_EVENT.subject`は
-`USER`と`SHARED`に限定し、`THIRD_PARTY`は設けない。`OUTCOME`と`CHANGE`を含む
-すべてのevent typeを`topic`単一スロットで表現し、`outcome`スロットは設けない。
+`USER_PREFERENCE`の構造化値は`polarity`、`object`、任意の`alternative`、
+`INTERACTION_PREFERENCE`は`aspect`、`value`を持つ。
 
-構造化enumの追加は文の骨格が変わる場合に限り、追加時は本ADRを改訂する。
+Episodeの旧`event_type / subject / topic`だけの構造と`subject=USER / SHARED`制限は廃止する。
+所有`character_id`の視点を固定し、複数の参加者の識別情報・名称・役割と行為を保持する。
+`SELF` subjectの追加も行わない。外部活動向けevent typeを含む契約と保存文の例は
+[共通契約2章](character-life-memory-personality-autonomy-2026-09.md#2-episode--episodic-memory)へ集約する。
 
-`reflection`は記憶種別ではなく形成方法、`autobiographical`は必要になった場合のscope／subtypeとして
-扱う。意味分類できない内容を受け入れる`GENERAL_MEMORY`は作らない。
+Reflectionは単なるformation methodではなく、Semanticと別の永続概念とする。
+通常会話へ直接注入せず、検証済みの関心/Intention等への派生とPersonality更新へ利用する。
+意味分類できない内容を受け入れる`GENERAL_MEMORY`は作らない。
 
 判断理由は、研究上の分類をそのまま単一tableの列挙へ変換すると、検索対象でない手続きやtaskまで
 persona memoryへ混在するためである。MVPは、関係の連続性に直接必要な出来事と安定した事実だけを
@@ -166,7 +172,8 @@ persona memory系の`approved_memories`、`memory_sources`、`memory_lineage`、
 ロールバックによる履歴の巻き戻しを発生させない。memory行とoutbox行は同一ファイル内で
 更新し、トランザクション原子性を保つ。
 
-`approved_memories`は少なくとも次を持つ。
+Wave 2初期実装の`approved_memories`は次を持つ。#100では`experienced_at`、人物・役割、
+関連情報、派生元の版とlineageを共通契約に従って拡張する。
 
 ```text
 id: UUID text
@@ -199,21 +206,27 @@ created_at
 updated_at
 ```
 
-`created_at`はSQLite登録日（有効化日）、`occurred_at`は出来事が発生した時刻、`stated_at`は
+`created_at`はSQLite登録日（有効化日）、`occurred_at`は今回登録する経験が発生した時刻、`stated_at`は
 根拠となった発言turnの時刻、`last_user_mentioned_at`はユーザーがその内容を最後に明示言及した
 時刻であり、それぞれ別の意味を持つ。出来事の日付が不明な場合は`occurred_at`、
 `occurred_timezone`、`occurred_precision`をすべて`NULL`にし、`stated_at`では補完しない。
 出来事日が既知の場合は3列をすべて設定する。`stated_at`は常にtimezone-awareな値を保存する。
 
-Issue #11でpersona memory schemaをversion 2へ更新する。version 1からのmigrationは実装せず、
-既存dogfoodのpersona memory DBは再作成する。`temporary_provider_records`と将来のaddon recordは
-この時系列照合の対象外とし、同tableの`effective_at`契約は変更しない。
+Issue #11時点ではschema version 2への更新に伴い旧persona memory DBを再作成する判断を行った。
+これは当時の履歴であり、後続作業での再作成指示ではない。#100は変換対象となる既存記憶がないため、
+既存データ変換・旧形式互換復元・dogfood記憶マイグレーションを行わず、新規スキーマを定義/適用する。
+会話履歴や他の既存データを削除しない。`temporary_provider_records`の`effective_at`契約は変更しない。
+
+`experienced_at`は所有キャラクターが経験を得た時刻とする。過去の旅行を今日聞いた経験では、
+`occurred_at`と`experienced_at`は今日、旅行日時は任意の関連情報に分離する。関連する同じcharacterの
+Episodeが特定できればそのIDを保持し、日時は参照先を正本とする。
 
 provenanceは自由形式JSONだけに埋めず、型付き`memory_sources`で会話turn、addon event、
 provider record等との関係を保持する。複数のsourceから形成される記憶に対応するため、
 単一の`parent_id`や`consolidated` boolだけに依存しない。
 
-記憶同士の系譜は多対多の`memory_lineage`で保持し、関係を次に限定する。
+記憶同士の系譜は多対多の`memory_lineage`で保持する。Wave 2初期の関係は次とし、
+#100でABSTRACTED_FROM等と根拠の版・有効性を拡張する。
 
 - `CONSOLIDATED_FROM`
 - `SUPERSEDES`
@@ -397,23 +410,28 @@ completedかつ履歴本文保存済みのsanitized source turn
   -> workerがembeddingを生成してChromaへupsert
 ```
 
-候補抽出器はclassifierとは別componentとする。現在user turnと、省略表現の解決に必要な直近の
-sanitized turnだけをsourceにし、RAG検索結果を新規候補の根拠にしない。出力は型付きschema、
-最大3候補、決定的な生成設定から開始し、`normalized_text`はIssue #33の
-admissionが構造化値から決定的に生成する。候補抽出器や永続化層は生成しない。
-確認待ち候補や生source本文は永続化しない。
+候補抽出器はclassifierとは別componentとする。#100のEpisode抽出は、スレッド更新を起点に
+スレッド単位で予約する。保存済みで利用可能なsanitized sourceを使い、RAG検索結果を新規候補の根拠にしない。
+出力は型付きschemaとし、`normalized_text`はadmissionが所有者・人物・行為等の構造化値から生成する。
+候補抽出器や永続化層に任意の保存文を生成させず、拒否候補や生source本文を作業状態へ保存しない。
+
+Wave 2初期実装の「現在+直近turn、最大3候補」をスレッド全体の抽出上限にはしない。
+長文は分割抽出・統合し、古い部分の切り捨てと分割境界の二重登録を防ぐ。
+同一スレッドの未処理予約を一つに集約し、処理中更新は再予約する。抽出版と保存時の有効性を確認し、
+訂正/削除と矛盾する古い候補を保存しない。未処理revision/更新を失敗・再起動後も回復できるようにする。
 
 Issue #11以降、候補抽出器は相対・絶対・複数の日付表現だけを型付きで返し、絶対日時への変換は
-行わない。applicationが`stated_at`を基準点、起動時に解決したtimezoneを基準として、月末、
+行わない。applicationが根拠発言の`stated_at`を基準点、起動時に解決したtimezoneを基準として、月末、
 年末、閏年、年跨ぎを含め決定論的に`occurred_*`へ解決する。日付表現がない、または解決不能な
-場合は`occurred_*`を3列とも`NULL`にする。
+場合は`occurred_*`を3列とも`NULL`にする。話題の日時表現は今回の経験の日時と分離する。
 
-非同期classifierはbounded retryを行う。初期値は1回15秒、最大2回、全体35秒以内、queue滞留
-5分以内とし、設定で変更可能にする。上限を超えた候補は`ABSTAIN_UNKNOWN`として破棄する。
+非同期classifierはbounded retryを行う。Wave 2初期の1回15秒、最大2回、全体35秒以内、queue滞留
+5分以内という上限は設定値とする。上限超過で未検証候補を保存しない。#100では予約の滞留や
+一時的な推論失敗によって未処理revisionを永久に捨てず、後続実行で回復する。
 
-conversation由来のjobは、source turnが`completed`になり履歴本文の保存が確定してから投入する。
-形成処理中にsource turnが存在しない、本文非保存、`privacy_skipped`へ変化していることを検出した
-場合も、副作用なしで終了する。
+Wave 2初期のjobはcompleted turnの履歴本文保存後に投入する。#100のEpisodeはスレッド更新で
+予約するが、抽出に使用するsourceの保存状態・privacy・有効性を検証する。抽出開始後にsourceが
+削除/訂正/本文非保存へ変わった場合は古い結果を保存せず、更新された版を再処理する。
 
 判断理由は、会話応答がclassifier、embedding、Chroma登録、retryを待つと体感速度と可用性を
 損なうためである。ただし非同期化によって「履歴なし・長期記憶だけ」の経路を作らないよう、
@@ -497,10 +515,16 @@ LLMが重要と推定したという理由で関連性を逆転させないた�
 
 追加時は次だけを同期的に行う。
 
-- `character_id + source_conversation_id + source_turn_id + candidate_index + extractor_version`を
-  基礎にしたidempotency keyでretryによる重複を防ぐ
+- Wave 2初期のturn単位では`character_id + source_conversation_id + source_turn_id + candidate_index + extractor_version`を
+  冪等性の基礎とする。#100のスレッド単位抽出では入力版・根拠・分割統合後の候補同一性を含めて設計し、
+  再抽出で候補順が変わっても二重保存しない
 - 型ごとの決定論的natural keyで完全一致または明白な同一記憶を検出する
-- 同一内容へのユーザーの再言及は`TOUCH`として`last_user_mentioned_at`だけを更新する
+- Semanticの直接形成型の同一内容への再言及は`TOUCH`として`last_user_mentioned_at`だけを更新する
+- Episodeは所有者・人物/役割・行為・出来事・日時/精度を照合し、一律のTOUCHにしない。
+  日時不明の反復言及は別登録可能だが、派生根拠は1件とする。日時既知の同じ出来事への
+  日時不明の反復は追加しない。別日・別出来事と判明した場合は登録する
+- 日時補完は同一出来事と特定できる場合だけ行い、似た7月の経験で日時不明の6月の経験を上書きしない
+- 旅行した経験と旅行の思い出を語った経験は別に登録する。語った回数を旅行回数へ加算しない
 
 idempotency keyに生本文hashを使用しない。`TOUCH`では本文、構造化値、`content_version`、
 本文変更日時としての`updated_at`を変更せず、Chroma outboxを作らない。保存拒否またはprivacy拒否の

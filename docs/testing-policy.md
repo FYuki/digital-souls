@@ -266,3 +266,16 @@ PYTHONDONTWRITEBYTECODE=1 backend/.venv/bin/python -m pytest \
 `strict_format_valid`で元のJSONのみという指定への適合を別記し、`passed`は取得できた回答値を
 評価する。これは音声回答にJSON形式を要求する製品仕様ではない。旧schema 1.0の失敗証跡は
 その定義のまま保存し、回答本文を保存していない過去試行を再採点しない。
+
+## #100 Episode・派生形成の受入
+
+#288〜#297は各実装チェックポイントで対応するunit/module検証を完了し、最終受入だけへ先送りしない。
+決定的な回帰テストには人物・役割、日時精度/補完、反復言及と独立根拠数、旅行と回想の区別、
+スレッド長文分割、処理中更新/削除、再起動回復、lineage、再内省履歴、SQLite即時停止、古いChroma除外を含める。
+Reflectionを管理表示できても通常会話へ直接注入しないことを、検索とpromptの境界で検証する。
+
+#297では専用test data rootと合成scenarioを使い、実LLM抽出/privacy判定→SQLite保存、
+実Chroma/embedding検索、Semantic / Reflection形成、根拠失効、管理画面まで証跡を残す。
+抽出器やclassifierのモック、候補のDB直接投入、接続readinessだけではこの実接続受入を満たさない。
+実行commit、model/設定、scenario、期待値/結果、実行日時、artifactの所在、未検証事項を記録する。
+既存のprivacy/抽出conformance規則と環境分離を維持し、通常データやdogfoodをテストfixtureにしない。
