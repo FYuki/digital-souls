@@ -83,6 +83,12 @@ async function playedResponses(page: Page) {
     .filter(item => item.endsWith(':rendered-audio')).map(item => item.split(':')[0])).size)
 }
 
+async function expectWriteReply(page: Page, value: string) {
+  const reply = page.locator('article.message').last()
+  await expect(reply).toContainText(value)
+  await expect(reply).toContainText(/完了|更新しました|変更しました|置き換えました|書き換えました|保存しました|書き込みました/)
+}
+
 async function waitForPlayback(page: Page, utteranceId?: string) {
   await expect.poll(() => page.evaluate((id) => {
     const probe = window.__voiceChatE2E
@@ -140,6 +146,7 @@ test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用�
   expect(await sampleText()).toContain('青い折り紙')
   await choose(page, '一度承認する')
   await expect.poll(sampleText).toBe('赤い風船')
+  await expectWriteReply(page, '赤い風船')
   await expect(confirmation(page)).toHaveCount(0)
 
   await requestTextWrite(page, '白い雲')
@@ -161,6 +168,7 @@ test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用�
   const onceId = await choose(page, '一度承認する')
   await expect.poll(sampleText).toBe('青い星')
   await waitForPlayback(page, onceId)
+  await expectWriteReply(page, '青い星')
   await expect(confirmation(page)).toHaveCount(0)
 
   await requestVoiceWrite(page, 'action-reject')
@@ -177,10 +185,12 @@ test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用�
   const alwaysId = await choose(page, '常に承認する')
   await expect.poll(sampleText).toBe('金の花')
   await waitForPlayback(page, alwaysId)
+  await expectWriteReply(page, '金の花')
   await driver.endVoiceSession(page)
 
   await send(page, `検証用ファイル${sample}の内容を正確に「紫の花」だけに置き換えてください。`)
   await expect.poll(sampleText).toBe('紫の花')
+  await expectWriteReply(page, '紫の花')
   await expect(confirmation(page)).toHaveCount(0)
   await info.attach('action-evidence', {
     body: JSON.stringify({
@@ -188,6 +198,8 @@ test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用�
       spokenApprovalIgnored: true, voiceOnce: true, voiceReject: true,
       voiceAlways: true, subsequentWriteWithoutConfirmation: true,
       renderedResponses: await playedResponses(page), finalExternalState: await sampleText(),
+      // 合成試験の回答を保存し、実行予告だけで結果回答済みとしない。
+      syntheticReplies: await page.locator('article.message').allTextContents(),
       playback: await page.evaluate(() => Object.entries(window.__voiceChatE2E.playbackCompletions ?? {}).map(([responseId, c]) => ({
         responseId, sourceUtteranceIds: window.__voiceChatE2E.responseSourceUtterances?.[responseId] ?? [],
         expectedSamples: c.expectedSamples, renderedSamples: c.renderedSamples, packetCount: c.packetCount,
