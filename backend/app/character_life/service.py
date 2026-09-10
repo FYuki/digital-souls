@@ -364,7 +364,10 @@ class Service:
                         explicit=state.binding_target_id or "",
                         required=candidate.binding_required,
                     )
-                    arguments = apply_binding(arguments, constraints)
+                    arguments = apply_binding(
+                        arguments, constraints,
+                        reference=self.bindings.argument_reference(binding_id),
+                    )
                 except MCPFailure as error:
                     raise LifeError(
                         Result.DEFERRED

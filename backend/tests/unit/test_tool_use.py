@@ -65,7 +65,7 @@ def test_binding_supplies_missing_arguments_without_exposing_values_to_router():
 
         def bound_call(context):
             candidate = next(c for c in context["candidates"] if c["name"] == "native-tool")
-            assert candidate["bindings"] == [{"id": "selected", "label": "検証対象", "provided_arguments": ["value"]}]
+            assert candidate["bindings"] == [{"id": "selected", "label": "検証対象", "argument_reference": "@binding:selected", "provided_arguments": ["value"]}]
             assert candidate["input_schema"]["required"] == ["value"]
             return ToolDecision("call", candidate["id"], "{}", "selected")
 
@@ -77,6 +77,42 @@ def test_binding_supplies_missing_arguments_without_exposing_values_to_router():
         async with runtime(Decisions(lambda c: call(c, value=99, binding="selected")), targets=(target,)) as (service, source, _):
             result = await service.run("miori", "session", "値は99で実行して")
             assert result.direct_text and not source.calls
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("value,allowed", [
+    ("@binding:selected", True),
+    ("@binding:other", False),
+    ("@binding:selected/other", False),
+    ("検証対象", False),
+    ("", False),
+    (99, False),
+])
+def test_only_selected_core_reference_resolves_before_native_validation(value, allowed):
+    async def run():
+        target = BindingTarget("selected", "external-test", "miori", "検証対象", ("native-tool",), '{"value":37}')
+        async with runtime(
+            Decisions(lambda c: call(c, value=value, binding="selected"), ToolDecision("finish")),
+            targets=(target,),
+        ) as (service, source, _):
+            await service.run("miori", "session", "検証対象を使って")
+            assert bool(source.calls) == allowed
+            if allowed:
+                # 元schemaのintegerに適合した値だけをMCPへ渡す。
+                assert source.calls[0][1] == {"value": 37}
+    asyncio.run(run())
+
+
+def test_core_reference_cannot_hide_private_bound_value_from_egress():
+    async def run():
+        target = BindingTarget("selected", "external-test", "miori", "検証対象", ("native-tool",), '{"value":37}')
+        async with runtime(
+            Decisions(lambda c: call(c, value="@binding:selected", binding="selected")),
+            targets=(target,), sanitizer=Sanitizer(Scanner(), private_values=("37",)),
+        ) as (service, source, _):
+            material = await service.run("miori", "session", "検証対象を使って")
+            assert not source.calls
+            assert "安全に送信できない" in material.direct_text
     asyncio.run(run())
 
 
