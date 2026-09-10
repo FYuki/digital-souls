@@ -7,7 +7,7 @@
 
 M1〜M4は各PRの全CI成功後にepicへ統合した。M5の制御MCPによる実プロセス検証は9件成功した。
 独立MCPを通すブラウザのテキスト／LiveKit受入は実行中であり、まだ完了扱いにしない。
-main向け差分のCodeRabbitレビュー・修正も未完了。
+main向けDraft PRは[#311](https://github.com/FYuki/digital-souls/pull/311)。CodeRabbitの全差分レビューを開始済みで、レビュー・修正は未完了。
 
 ## 検証境界
 
@@ -51,9 +51,19 @@ fixtureの制御ファイルは障害注入側だけが操作する。一般利�
 | 3択、重複クリック、retry、テキスト／LiveKit表示、320px表示 | `ActionConfirmation.module.test.ts`、`e2e/addon-action.spec.ts` |
 | 外部結果とruntime retryを分離、確定結果優先、状態不明を保持 | `test_addon_action_dispatch.py`、`test_addon_action_journal.py`、`test_addon_action_recovery.py` |
 | 会話外活動の期限終了・次回適用・結果不明の活動再試行 | `test_character_life_actions.py` |
+| 読取と変更の結果分類を区別し、外部payloadの自己申告で分類を書き換えない | `test_tool_use.py` |
+| Coreが補うbinding引数名を提示し、元schema・値の非露出・明示値の不一致拒否を維持 | `test_tool_use.py` |
 
 上記のファイル名は `backend/tests/unit/`、`backend/tests/module/`、`frontend/` 配下を指す。
 実サービス不足をこの自動回帰の成功で補って完了扱いにしない。
+
+## 実接続からの修正と未完了ケース
+
+- 読取結果だけで変更要求を完了扱いにした例を確認した。結果にCoreの操作分類を付け、変更完了の判断と回答の指示を修正した。回答生成時に実在しない承認待ちを履歴から推測しないようにした。
+- 音声の対象ラベルから元schemaの必須引数を構成する際、Coreのbinding補完が判断材料に含まれていなかった。引数値はCoreに残し、補完する引数名を提示するよう修正した。利用者が明示した値の不一致は引き続き拒否する。
+- これらの関連回帰68件は成功した（[binding-regression.txt](artifacts/addon-action-185/binding-regression.txt)）。実LLMの正確性をこの回帰だけで証明するものではなく、独立MCPの会話受入を別途継続する。
+- 初期の試行では対象パス不足、実LLMからの追加質問、承認後の180秒待機上限、音声のTool実行失敗で完走できなかった。失敗した試行は成功証跡に含めない。
+- 再実行入口は、実行commit・開始時の追跡対象ファイル変更の有無・サービスversion・固定metadataの処理段階・終了時の承認／実行状態を保存する。合成会話attachment内の一時pathも公開用に置換する。
 
 ## 再実行
 
