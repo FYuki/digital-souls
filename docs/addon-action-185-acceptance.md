@@ -7,8 +7,10 @@
 
 M1〜M4は各PRの全CI成功後にepicへ統合した。M5の制御MCPによる実プロセス検証は9件成功した。
 独立MCPを通すブラウザのテキスト／LiveKit受入は、下記の全シナリオが190.47秒で成功した。
-main向けDraft PRは[#311](https://github.com/FYuki/digital-souls/pull/311)。CodeRabbitの初回全差分レビュー21件へ回答し、修正をM5の[#310](https://github.com/FYuki/digital-souls/pull/310)へ反映した。
-関連unit 125件・module 76件・mypyは成功。[対応表](artifacts/addon-action-185/review-disposition.md)に合意を変更するため採用しなかった指摘も記載した。M5統合後の最新差分レビューは未完了。
+main向けPRは[#311](https://github.com/FYuki/digital-souls/pull/311)。CodeRabbitの初回全差分レビュー21件へ回答し、修正をM5の[#310](https://github.com/FYuki/digital-souls/pull/310)へ反映した。
+関連unit 125件・module 76件・mypyは成功。[対応表](artifacts/addon-action-185/review-disposition.md)に合意を変更するため採用しなかった指摘も記載した。統合状況・最新CI・main差分レビューの現在の状態は両PRを参照する。
+
+製品修正commit `c592dde` の[CI](https://github.com/FYuki/digital-souls/actions/runs/34525988163)は全job成功。Backend unitは3,432件成功・1件skip、moduleは1,556件成功・1件skip、mypyは288ファイル成功だった。skipのあるファイルは`test_semantic_privacy_eval_assets.py`と`test_dogfood_infrastructure.py`であり、成功件数や独立MCP・音声受入に含めない。
 
 ## 独立MCPの実接続受入
 
@@ -112,7 +114,7 @@ ACCEPTANCE_INFERENCE_ENV=/path/to/private/backend.env \
 dogfoodのデータやサービスを変更しない。実購入・契約・本番データ破壊は行わない。
 公開証跡へcredential・raw protocol payload・実会話履歴を含めない。
 
-## 残る受入
+## 統合と後続範囲
 
 - M5の最新CIを確認してepicへ統合する。
 - main向けPRに対してCodeRabbitの実差分レビューと指摘修正を完了する。mainへのマージはユーザーが行う。
