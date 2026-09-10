@@ -34,6 +34,37 @@ async function send(page: Page, message: string) {
   await expect(input).toBeEnabled()
 }
 
+async function waitForApprovalOrQuestion(page: Page) {
+  await expect(page.getByRole('region', { name: '外部参照', exact: true }))
+    .toContainText(/ハイリスク操作群・対話中|追加情報をお待ちしています/)
+  return await confirmation(page).count() > 0
+}
+
+async function requestTextWrite(page: Page, value: string) {
+  await send(page, `検証用ファイル${sample}の内容を正確に「${value}」だけに置き換えてください。`)
+  for (let answered = 0; answered < 2 && !(await waitForApprovalOrQuestion(page)); answered++) {
+    // 実LLMが対象確認や先行読取を質問した場合だけ、利用者の追加回答として具体化する。
+    await expect(page.locator('article.message').last()).toContainText(/ファイル|パス|読み取|内容/)
+    await send(page, `はい。対象は${sample}です。必要ならこのファイルを読み取り、内容全体を「${value}」だけに置き換えてください。`)
+  }
+  await expect(confirmation(page)).toBeVisible()
+}
+
+async function requestVoiceWrite(page: Page, clip: string) {
+  const before = await playedResponses(page)
+  await speak(page, clip)
+  await expect.poll(() => playedResponses(page)).toBeGreaterThan(before)
+  for (let answered = 0; answered < 2; answered++) {
+    await waitForPlayback(page)
+    if (await waitForApprovalOrQuestion(page)) return
+    await expect(page.locator('article.message').last()).toContainText(/ファイル|パス|読み取|内容/)
+    const before = await playedResponses(page)
+    await speak(page, clip)
+    await expect.poll(() => playedResponses(page)).toBeGreaterThan(before)
+  }
+  await expect(confirmation(page)).toBeVisible()
+}
+
 async function choose(page: Page, label: string) {
   await expect(confirmation(page)).toContainText('ハイリスク操作群・対話中')
   for (const option of ['常に承認する', '一度承認する', '拒否する']) {
@@ -103,20 +134,20 @@ test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用�
   await expect(page.locator('article.message').last()).toContainText('青い折り紙')
   await expect(confirmation(page)).toHaveCount(0)
 
-  await send(page, `検証用ファイル${sample}の内容を正確に「赤い風船」だけに置き換えてください。`)
+  await requestTextWrite(page, '赤い風船')
   expect(await sampleText()).toContain('青い折り紙')
   await choose(page, '一度承認する')
   await expect.poll(sampleText).toBe('赤い風船')
   await expect(confirmation(page)).toHaveCount(0)
 
-  await send(page, `検証用ファイル${sample}の内容を正確に「白い雲」だけに置き換えてください。`)
+  await requestTextWrite(page, '白い雲')
   await choose(page, '拒否する')
   await expect(confirmation(page)).toHaveCount(0)
   expect(await sampleText()).toBe('赤い風船')
 
   await microphone.click()
   await expect(microphone).toHaveClass(/mic-standby/)
-  await speak(page, 'action-once')
+  await requestVoiceWrite(page, 'action-once')
   await expect(confirmation(page)).toBeVisible()
   await waitForPlayback(page)
   const beforeSpokenApproval = await playedResponses(page)
@@ -130,7 +161,7 @@ test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用�
   await waitForPlayback(page, onceId)
   await expect(confirmation(page)).toHaveCount(0)
 
-  await speak(page, 'action-reject')
+  await requestVoiceWrite(page, 'action-reject')
   await expect(confirmation(page)).toBeVisible()
   await waitForPlayback(page)
   const rejectId = await choose(page, '拒否する')
@@ -138,7 +169,7 @@ test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用�
   await waitForPlayback(page, rejectId)
   expect(await sampleText()).toBe('青い星')
 
-  await speak(page, 'action-always')
+  await requestVoiceWrite(page, 'action-always')
   await expect(confirmation(page)).toBeVisible()
   await waitForPlayback(page)
   const alwaysId = await choose(page, '常に承認する')
