@@ -123,6 +123,7 @@
       <p>{confirmationMessage(detail)}</p>
       {#if checkErrorMessage(detail)}<p>前回の確認結果: {checkErrorMessage(detail)}</p>{/if}
       {#if detail.last_success_at}<p>最終成功: <time datetime={detail.last_success_at}>{new Date(detail.last_success_at).toLocaleString('ja-JP')}</time></p>{/if}
+      {#if detail.last_checked_at}<p>最終確認: <time datetime={detail.last_checked_at}>{new Date(detail.last_checked_at).toLocaleString('ja-JP')}</time></p>{/if}
     </div>
   {:else}<p>新しい接続はOFFで保存します。接続確認に成功した後、一覧からONにできます。</p>{/if}
   {#if !loading}
