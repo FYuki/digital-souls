@@ -55,5 +55,12 @@ def test_livekit_confirmation_requires_matching_live_binding_and_waits_for_quest
             "voice", "miori", "conversation", "expired", "承認", lambda: False
         )
         assert len(calls) == 1
+        core.accepting_input = False
+        for active in (None, object()):
+            core.active_response = active
+            assert not await manager.submit_action_confirmation(
+                "voice", "miori", "conversation", "closed-input", "承認", lambda: True
+            )
+        assert len(calls) == 1
 
     asyncio.run(run())

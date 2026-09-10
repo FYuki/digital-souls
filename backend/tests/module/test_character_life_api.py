@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from app.routers import character_life
-from tests.module.test_character_life import environment
+from tests.character_life_test_support import environment
 
 
 def test_state_management_origin_conflict_and_audit(tmp_path, monkeypatch):

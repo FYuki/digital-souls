@@ -320,7 +320,7 @@ class ExecutionGate:
         raise AssertionError("unreachable")
 
     def invalidate_connection(self, connection_id: str) -> None:
-        """設定OFFで回答待ちを破棄する。送信済み処理は取り消さない。"""
+        """対象接続だけの回答待ちを終了する。他の接続や送信済み処理は取り消さない。"""
         self._pending = {
             key: pending
             for key, pending in self._pending.items()
@@ -329,7 +329,7 @@ class ExecutionGate:
         for request_id, pending in tuple(self._confirmation_pending.items()):
             if pending.connection_id == connection_id:
                 if self.confirmations is not None:
-                    self.confirmations.end_loop(pending.loop_id)
+                    self.confirmations.end_wait(request_id)
                 self._confirmation_pending.pop(request_id)
 
     def end_loop(self, loop_id: str) -> None:
@@ -892,9 +892,14 @@ class ExecutionGate:
             # 入力待ちやTool結果まで含め、送信後の観測をcheckpointより先に確定する。
             record = self.actions.finish(claimed_action, result)
             if record.outcome == ActionOutcome.CONFLICT and self.recovery is not None:
-                await self.recovery.recover(record.execution_id)
-                record = self.actions.journal.get(record.execution_id)
-                result["result_projection"] = record.projection
+                try:
+                    await self.recovery.recover(record.execution_id)
+                    record = self.actions.journal.get(record.execution_id)
+                except MCPFailure:
+                    # 追加照会の失敗で、すでに保存した外部CONFLICTを失わない。
+                    pass
+                else:
+                    result["result_projection"] = record.projection
             self.actions.on_change(record)
             result["dispatch_started"] = dispatch_started
         validate_contract("execution-envelope", result)

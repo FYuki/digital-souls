@@ -1,6 +1,7 @@
 """接続先の保証付き状態照会・結果再返却・cancelを実行記録と照合する。"""
 
 import asyncio
+import sqlite3
 from dataclasses import replace
 from copy import deepcopy
 
@@ -11,7 +12,7 @@ from app.external_mcp import Connection, ExecutionContext, ExecutionGate, Regist
 from app.external_mcp.models import digest, Discovery
 from tests.external_mcp_test_support import FakeSource, manifest, discovery
 from tests.unit.test_addon_action_dispatch import approve_once
-from tests.unit.test_addon_action_queue import policy
+from tests.addon_action_test_support import policy
 
 
 def server_contract():
@@ -224,6 +225,55 @@ def test_startup_worker_observes_external_completion_without_new_write(tmp_path)
             assert not gate._loops and restored._task is None
         assert source.effects == 1
 
+    asyncio.run(run())
+
+
+def test_polling_storage_error_does_not_permanently_stop_recovery(tmp_path, caplog):
+    async def run():
+        c, data = server_contract()
+        source = ExternalTasks(c, data)
+        gate, p, recovery = runtime(tmp_path, c)
+        async with gate.attach(c.id, source):
+            first = await approve_once(gate, p, c, gate.begin_loop(ExecutionContext("miori", "session")))
+            original = recovery.actions.journal.pending
+            failed = asyncio.Event()
+            def pending():
+                if not failed.is_set():
+                    failed.set()
+                    raise sqlite3.OperationalError("private-payload-must-not-be-logged")
+                return original()
+            recovery.actions.journal.pending = pending
+            recovery.start()
+            try:
+                await asyncio.wait_for(failed.wait(), 1)
+                assert not recovery._task.done()
+                source.state = "applied"
+                recovery._wake.set()
+                async with asyncio.timeout(2):
+                    while recovery.actions.journal.get(first["execution_id"]).outcome != ActionOutcome.APPLIED:
+                        await asyncio.sleep(0.01)
+            finally:
+                await recovery.close()
+        assert source.effects == 1
+    asyncio.run(run())
+    assert "OperationalError" in caplog.text and "private-payload" not in caplog.text
+
+
+def test_conflict_survives_failure_of_optional_recovery_lookup(tmp_path):
+    from app.external_mcp.models import MCPFailure
+    async def run():
+        c, data = server_contract()
+        source = ExternalTasks(c, data)
+        source.state = "conflict"
+        gate, p, recovery = runtime(tmp_path, c)
+        async def failed(_):
+            raise MCPFailure("recovery", "lookup_unavailable")
+        recovery.recover = failed
+        async with gate.attach(c.id, source):
+            result = await approve_once(gate, p, c, gate.begin_loop(ExecutionContext("miori", "session")))
+            assert result["outcome"] == "conflict"
+            assert recovery.actions.journal.get(result["execution_id"]).outcome == ActionOutcome.CONFLICT
+            assert source.effects == 1
     asyncio.run(run())
 
 

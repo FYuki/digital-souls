@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import base64
 import io
 import json
 import os
 import re
-from pathlib import Path
 import secrets
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -17,22 +18,23 @@ import wave
 from contextlib import ExitStack, contextmanager
 from copy import deepcopy
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 import httpx
-from dotenv import dotenv_values
-from uvicorn.config import LOGGING_CONFIG
 from app.runtime_data_root import initialize_runtime_data_root
 from app.runtime_paths import resolve_runtime_paths
+from dotenv import dotenv_values
 from tests.external_mcp_test_support import manifest
 from tests.integration.test_external_mcp_real_servers_integration import (
     everything_http,
     free_port,
     stop_process,
 )
+from uvicorn.config import LOGGING_CONFIG
 
 
 def public_evidence(text: str, temporary_root: Path) -> str:
@@ -42,6 +44,26 @@ def public_evidence(text: str, temporary_root: Path) -> str:
     return re.sub(
         r"(?:https?|wss?)://(?:localhost|127\.0\.0\.1):\d+", "<test-service>", text
     )
+
+
+def public_browser_report(value, temporary_root: Path):
+    """Playwrightがbase64にした合成会話attachmentも公開用pathへ置換する。"""
+    if isinstance(value, list):
+        return [public_browser_report(item, temporary_root) for item in value]
+    if not isinstance(value, dict):
+        return value
+    result = {
+        key: public_browser_report(item, temporary_root) for key, item in value.items()
+    }
+    if (
+        result.get("contentType") in {"application/json", "text/plain"}
+        and "body" in result
+    ):
+        decoded = base64.b64decode(result["body"], validate=True).decode("utf-8")
+        result["body"] = base64.b64encode(
+            public_evidence(decoded, temporary_root).encode()
+        ).decode()
+    return result
 
 
 @contextmanager
@@ -82,29 +104,42 @@ def speech(base, text, path, *, silence=90):
         base + "/synthesis", params={"speaker": 3}, json=query, timeout=30
     )
     result.raise_for_status()
-    with wave.open(io.BytesIO(result.content)) as source:
-        with wave.open(str(path), "wb") as output:
-            output.setparams(source.getparams())
-            output.writeframes(source.readframes(source.getnframes()))
-            output.writeframes(
-                bytes(
-                    source.getframerate()
-                    * source.getnchannels()
-                    * source.getsampwidth()
-                    * silence
-                )
+    with (
+        wave.open(io.BytesIO(result.content)) as source,
+        wave.open(str(path), "wb") as output,
+    ):
+        output.setparams(source.getparams())
+        output.writeframes(source.readframes(source.getnframes()))
+        output.writeframes(
+            bytes(
+                source.getframerate()
+                * source.getnchannels()
+                * source.getsampwidth()
+                * silence
             )
+        )
 
 
 def main():
     contract = "--contract-mcp" in sys.argv
-    arguments = [a for a in sys.argv[1:] if a != "--contract-mcp"]
+    action = "--addon-action" in sys.argv
+    if contract and action:
+        raise ValueError("会話契約fixtureと独立MCPの承認受入は別runで実行してください")
+    arguments = [
+        a for a in sys.argv[1:] if a not in {"--contract-mcp", "--addon-action"}
+    ]
     if os.environ.get("DS_ENVIRONMENT_ID") == "dogfood":
         raise RuntimeError("dogfoodから受入テストを起動できません")
     artifacts = (
         ROOT
         / "frontend/test-results"
-        / ("tool-use-contract-runtime" if contract else "tool-use-runtime")
+        / (
+            "addon-action-runtime"
+            if action
+            else "tool-use-contract-runtime"
+            if contract
+            else "tool-use-runtime"
+        )
     )
     artifacts.mkdir(parents=True, exist_ok=True)
     # 起動・readiness失敗でも前回の成功証跡を今回の結果として残さない。
@@ -123,8 +158,16 @@ def main():
     }
     if not contract:
         assert Path(servers["everything"]).is_file()
+        for name in ["filesystem"] if action else ["filesystem", "everything"]:
+            package = json.loads((packages / f"server-{name}/package.json").read_text())
+            assert package["version"] == "2026.8.31"
     # 認証値はprocess環境にだけ渡し、reportへ書かない。
-    configured = {**dotenv_values(ROOT / "backend/.env"), **os.environ}
+    configured = {
+        **dotenv_values(
+            os.environ.get("ACCEPTANCE_INFERENCE_ENV", str(ROOT / "backend/.env"))
+        ),
+        **os.environ,
+    }
     environment = {
         k: str(v)
         for k, v in configured.items()
@@ -150,7 +193,8 @@ def main():
         environment.update(
             {
                 f"INFERENCE_TARGET_{token}": "ollama/gemma4:e4b",
-                f"INFERENCE_TARGET_{token}_MAX_INPUT_TOKENS": "12288",
+                # 同じOllamaモデルの用途切替でcontext枠を変えず、既存の合計8192に揃える。
+                f"INFERENCE_TARGET_{token}_MAX_INPUT_TOKENS": str(8192 - output),
                 f"INFERENCE_TARGET_{token}_MAX_OUTPUT_TOKENS": str(output),
             }
         )
@@ -181,7 +225,7 @@ def main():
         sample = files / "sample.txt"
         sample.write_text("展示テーマは青い折り紙です。", encoding="utf-8")
         endpoint = None
-        if not contract:
+        if not contract and not action:
             endpoint, _http = stack.enter_context(everything_http(servers, runtime))
         backend_port, frontend_port = free_port(), free_port()
         livekit_port, tcp_port, udp_port = free_port(), free_port(), free_port()
@@ -227,25 +271,34 @@ def main():
         stack.callback(
             lambda: subprocess.run(
                 [docker, "stop", "--time", "5", container],
+                check=False,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
         )
         ready(f"http://127.0.0.1:{livekit_port}/", lk)
-        filesystem = manifest(connection_id="acceptance-filesystem")
+        filesystem = manifest(
+            connection_id="acceptance-filesystem", trusted=action, binding=action
+        )
+        if action:
+            filesystem["core_policy"]["operation_allowlist"] = [
+                "read_text_file",
+                "write_file",
+            ]
         filesystem["connection"]["stdio"] = {
             "command": node,
             "args": [str(packages / "server-filesystem/dist/index.js"), str(files)],
         }
         config = root / "mcp.json"
-        connections = [
-            filesystem,
-            manifest(
-                connection_id="acceptance-http",
-                transport="streamable_http",
-                endpoint=endpoint,
-            ),
-        ]
+        connections = [filesystem]
+        if not action:
+            connections.append(
+                manifest(
+                    connection_id="acceptance-http",
+                    transport="streamable_http",
+                    endpoint=endpoint,
+                )
+            )
         signals = root / "signals"
         signals.mkdir()
         if contract:
@@ -267,7 +320,18 @@ def main():
                 {
                     "version": 1,
                     "connections": connections,
-                    "bindings": [],
+                    "bindings": [
+                        {
+                            "id": "acceptance-file",
+                            "connection_id": "acceptance-filesystem",
+                            "character_id": "miori",
+                            "label": "検証用ファイル",
+                            "operations": ["read_text_file", "write_file"],
+                            "arguments": {"path": str(sample)},
+                        }
+                    ]
+                    if action
+                    else [],
                 }
             )
         )
@@ -289,14 +353,26 @@ def main():
             "level": "INFO",
             "propagate": False,
         }
+        if action:
+            # 既存observerの固定metadataだけを記録する。本文・引数・認証情報は含まない。
+            logging_config["loggers"]["app.inference.runtime"] = {
+                "handlers": ["default"],
+                "level": "INFO",
+                "propagate": False,
+            }
         log_config_path = root / "logging.json"
         log_config_path.write_text(json.dumps(logging_config))
         backend = stack.enter_context(
             owned_process(
                 [
                     str(ROOT / "backend/.venv/bin/python"),
-                    "-m",
-                    "uvicorn",
+                    *(
+                        [
+                            str(ROOT / "scripts/acceptance_backend.py"),
+                        ]
+                        if action
+                        else ["-m", "uvicorn"]
+                    ),
                     "app.main:app",
                     "--log-config",
                     str(log_config_path),
@@ -382,11 +458,42 @@ def main():
             "environmentId": "test",
             "mcpImplementation": "controlled-fixture"
             if contract
+            else "published-filesystem"
+            if action
             else "published-filesystem-and-everything",
+            "mcpVersion": None if contract else "2026.8.31",
+            "livekitVersion": "1.9.7",
             "microphone": "scheduled-voicevox-wav-mediastream"
-            if contract
+            if contract or action
             else "chromium-voicevox-wav",
             "routingModel": environment["INFERENCE_TARGET_TOOL_ROUTING"],
+            "inferenceTokenLimits": {
+                name.lower(): {
+                    "input": int(
+                        environment[f"INFERENCE_TARGET_{name}_MAX_INPUT_TOKENS"]
+                    ),
+                    "output": int(
+                        environment[f"INFERENCE_TARGET_{name}_MAX_OUTPUT_TOKENS"]
+                    ),
+                }
+                for name in (
+                    "CHAT",
+                    "PRIVACY",
+                    "MEMORY_EXTRACTION",
+                    "MEMORY_CONSOLIDATION",
+                    "TOOL_ROUTING",
+                )
+            },
+            "implementationCommit": subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+            ).strip(),
+            "trackedChangesAtStart": bool(
+                subprocess.check_output(
+                    ["git", "status", "--porcelain", "--untracked-files=no"],
+                    cwd=ROOT,
+                    text=True,
+                ).strip()
+            ),
             "dataRoot": str(data),
             "ownedProcesses": {"backend": backend.pid, "frontend": frontend.pid},
             "ownedLiveKitContainer": container,
@@ -397,6 +504,17 @@ def main():
             },
             "testStatus": "running",
         }
+        if action:
+            versions = {}
+            for name, path in (
+                ("whisper", "/version"),
+                ("voicevox", "/version"),
+                ("ollama", "/api/version"),
+            ):
+                response = httpx.get(service_urls[name] + path, timeout=10)
+                response.raise_for_status()
+                versions[name] = response.json()
+            run_manifest["serviceVersions"] = versions
         (runtime / "runtime-manifest.json").write_text(
             json.dumps(run_manifest, ensure_ascii=False, indent=2)
         )
@@ -420,6 +538,14 @@ def main():
             "TOOL_USE_TEST_SIGNALS": str(signals),
             "TOOL_USE_TEST_RESULTS_DIR": str(runtime / "browser"),
         }
+        if action:
+            for name, text in {
+                "action-once": "先ほど読み書きした検証用ファイルと同じパスです。そのファイルの内容を、青い星、という三文字だけに置き換えてください。",
+                "spoken-approval": "一度承認します。実行してください。",
+                "action-reject": "先ほど読み書きした検証用ファイルと同じパスです。そのファイルの内容を、緑の月、という三文字だけに置き換えてください。",
+                "action-always": "先ほど読み書きした検証用ファイルと同じパスです。そのファイルの内容を、金の花、という三文字だけに置き換えてください。",
+            }.items():
+                speech(voicevox, text, root / f"{name}.wav", silence=0)
         if contract:
             speech(
                 voicevox,
@@ -446,11 +572,14 @@ def main():
                     str(ROOT / "frontend/node_modules/.bin/playwright"),
                     "test",
                     "--config",
-                    "playwright.tool-use-contract.config.ts"
+                    "playwright.addon-action.config.ts"
+                    if action
+                    else "playwright.tool-use-contract.config.ts"
                     if contract
                     else "playwright.tool-use.config.ts",
                     *arguments,
                 ],
+                check=False,
                 cwd=ROOT / "frontend",
                 env=test_env,
                 stdout=output,
@@ -484,7 +613,61 @@ def main():
         report = runtime / "browser" / "results.json"
         if report.is_file():
             (artifacts / "browser-public.json").write_text(
-                public_evidence(report.read_text(), root)
+                public_evidence(
+                    json.dumps(
+                        public_browser_report(json.loads(report.read_text()), root),
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                    root,
+                )
+            )
+        if action:
+            # 停滞診断はframe位置だけを残す。ローカル変数や例外本文は含めない。
+            stacks = [
+                line
+                for line in (runtime / "backend.log").read_text().splitlines()
+                if line.startswith(
+                    (
+                        "Thread ",
+                        "Current thread ",
+                        "  File ",
+                        "Timeout (",
+                        "  <no Python frame>",
+                        "Acceptance task:",
+                        "Acceptance frame:",
+                    )
+                )
+            ]
+            (artifacts / "thread-stacks.txt").write_text(
+                public_evidence("\n".join(stacks) + "\n", root)
+            )
+            stages = [
+                line
+                for line in (runtime / "backend.log").read_text().splitlines()
+                if "Tool decision:" in line
+                or "Tool result:" in line
+                or "Tool routing stopped:" in line
+                or "Tool confirmation continuation:" in line
+                or '"event":"inference_request"' in line
+                or '"event": "inference_request"' in line
+            ]
+            (artifacts / "stage-events.txt").write_text(
+                public_evidence("\n".join(stages) + "\n", root)
+            )
+            with sqlite3.connect(
+                f"file:{data / 'addon-actions/actions.sqlite3'}?mode=ro", uri=True
+            ) as db:
+                state = {
+                    "confirmations": db.execute(
+                        "SELECT operation_group, scene, choice, waiting FROM action_confirmations"
+                    ).fetchall(),
+                    "executions": db.execute(
+                        "SELECT operation, outcome FROM action_executions"
+                    ).fetchall(),
+                }
+            (artifacts / "action-state.json").write_text(
+                json.dumps(state, ensure_ascii=False, indent=2)
             )
         return result.returncode
 

@@ -6,7 +6,7 @@ import json
 import pytest
 
 from app.tool_use.routing import ToolDecision
-from tests.unit.test_tool_use import Decisions, call, runtime
+from tests.tool_use_test_support import Decisions, call, runtime
 
 
 def test_answer_to_local_clarification_is_kept_without_conversation_history():

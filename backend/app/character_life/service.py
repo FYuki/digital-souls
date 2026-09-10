@@ -275,11 +275,11 @@ class Service:
             seen: set[str] = set()
             unavailable: set[str] = set()
             results: list[Json] = [
-                {
+                json.loads(bounded_json({
                     **record.projection,
                     "replayed": True,
                     "operation": record.identity.operation,
-                }
+                }, 3000))
                 for record in self.action_records(run)
             ]
             sources = [
@@ -364,7 +364,10 @@ class Service:
                         explicit=state.binding_target_id or "",
                         required=candidate.binding_required,
                     )
-                    arguments = apply_binding(arguments, constraints)
+                    arguments = apply_binding(
+                        arguments, constraints,
+                        reference=self.bindings.argument_reference(binding_id),
+                    )
                 except MCPFailure as error:
                     raise LifeError(
                         Result.DEFERRED
@@ -496,7 +499,7 @@ class Service:
         self.store.save_run(
             run.model_copy(update={"phase": "paused", "reason": "user_paused"})
         )
-        loop_id = self.loops.get(run_id)
+        loop_id = self.loops.get(str(run.id))
         if loop_id is not None:
             self.gate.stop(loop_id)
         cancellation = self.cancellations.get(run_id)

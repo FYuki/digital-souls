@@ -394,7 +394,9 @@ class ToolService:
                 await before_execute()
             candidate = run.candidate
             assert candidate is not None
+            logger.info("Tool confirmation continuation: stage=gate_enter")
             envelope = await self.gate.resume_confirmation(run.confirmation, run.loop)
+            logger.info("Tool confirmation continuation: outcome=%s", envelope["outcome"])
             run.confirmation, run.confirmation_guard = None, None
             material = self._accept_envelope(run, candidate, envelope, before_execute)
             if material is not None:
@@ -441,7 +443,16 @@ class ToolService:
             for candidate in candidates:
                 item = candidate.projection()
                 item["bindings"] = [
-                    {"id": t.id, "label": self.sanitizer.text(t.label)}
+                    {
+                        "id": t.id,
+                        "label": self.sanitizer.text(t.label),
+                        "argument_reference": t.argument_reference,
+                        # 値はCoreだけが保持する。schemaを改変せず、補完可能な引数名を示す。
+                        "provided_arguments": [
+                            self.sanitizer.text(key, maximum=200)
+                            for key in list(json.loads(t.arguments_json))[:128]
+                        ],
+                    }
                     for t in self.bindings.candidates(
                         run.context.character_id, candidate.connection_id, candidate.ref
                     )
@@ -614,7 +625,10 @@ class ToolService:
                     )
                 run.binding_candidate = None
                 run.user_followup = False
-                arguments = apply_binding(arguments, constraints)
+                arguments = apply_binding(
+                    arguments, constraints,
+                    reference=self.bindings.argument_reference(binding_id),
+                )
                 if not self.sanitizer.arguments_allowed(arguments):
                     return self._material(
                         run,
@@ -706,6 +720,10 @@ class ToolService:
         result = self.sanitizer.result(
             envelope, may_change_state=candidate.may_change_state
         )
+        # native結果の自己申告ではなく、固定snapshotの実行分類を判断側へ渡す。
+        result["operation_effect"] = (
+            "may_change_state" if candidate.may_change_state else "read_only"
+        )
         result["source"] = {"label": candidate.name, "source_id": candidate.id}
         # 最終の未完了理由にも枠を残し、部分成功を回答へ統合できるようにする。
         remaining = 3_584 - sum(len(encode(r).encode()) for r in run.results)
@@ -720,12 +738,13 @@ class ToolService:
             run.sources.append(source)
             if run.call_fingerprint is not None:
                 run.completed_calls.add(run.call_fingerprint)
-        if envelope["outcome"] in {
+        if result["outcome"] in {
             "budget_exceeded",
             "running",
             "result_unknown",
             "cancelled",
         }:
+            run.forbidden.add(candidate.id)
             return self._material(run)
         if envelope.get("error_category") == "validation" and any(
             s["source_id"] == candidate.id for s in run.sources

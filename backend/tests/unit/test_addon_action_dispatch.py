@@ -12,7 +12,7 @@ from app.addon_action.store import ActionStore
 from app.external_mcp import Connection, ExecutionContext, ExecutionGate, Registry
 from app.external_mcp.models import MCPFailure
 from tests.external_mcp_test_support import FakeSource, manifest
-from tests.unit.test_addon_action_queue import policy
+from tests.addon_action_test_support import policy
 
 
 def runtime(tmp_path, *, trusted=False):
@@ -110,6 +110,7 @@ def test_cancel_after_side_effect_and_restart_do_not_replay_or_modify_arguments(
             changed = await gate.invoke(c.id, "native-tool", {"value": 2}, loop)
             assert same["outcome"] == changed["outcome"] == "result_unknown"
             assert same["replayed"] and source.effects == 1
+            assert changed.get("replayed", False) is False
             assert len(p.store.requests()) == 1
             # 新しい明示的要求のみ、別scopeとして承認を求められる。
             new_loop = gate.begin_loop(

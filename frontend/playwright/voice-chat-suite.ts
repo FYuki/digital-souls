@@ -50,6 +50,7 @@ declare global {
       frameOrder: string[]
       liveKitOrder: string[]
       coreEventDiagnostics: Record<string, string | number | boolean | null>[]
+      responseSourceUtterances?: Record<string, string[]>
       micStates: ('off' | 'standby' | 'active')[]
       localStopAt?: number
       cancelRequestedAt?: number
@@ -313,6 +314,9 @@ const installPlaybackProbe = async (page: Page) => {
         }
         if (event.type === 'response_started' && event.response_id !== undefined) {
           const sourceIds = event.source_utterance_ids ?? []
+          // 画面操作の応答にはSTTのutterance_finalizedがない。Coreの対応表をそのまま保持する。
+          const responseSources = window.__voiceChatE2E.responseSourceUtterances ??= {}
+          responseSources[event.response_id] = [...sourceIds]
           const cycle = window.__voiceChatE2E.cycles.find((candidate) => (
             candidate.responseId === null && sourceIds.includes(candidate.utteranceId)
           ))

@@ -16,7 +16,7 @@ from app.tool_use.binding import BindingTarget
 from app.tool_use.projection import Sanitizer
 from app.tool_use.routing import InferenceDecisionRouter
 from app.tool_use.service import ToolService
-from tests.unit.test_tool_use import Decisions, Scanner, runtime
+from tests.tool_use_test_support import Decisions, Scanner, runtime
 from tests.external_mcp_test_support import manifest
 
 

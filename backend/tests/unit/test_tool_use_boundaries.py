@@ -14,13 +14,13 @@ from app.inference import (
     InferenceErrorCategory,
 )
 from app.prompting import BuiltPrompt, PromptMessage, PromptRole, PromptUsage
-from app.tool_use.prompt import require_tool_room, with_tool_material, routing_history
+from app.tool_use.prompt import POLICY, require_tool_room, with_tool_material, routing_history
 from app.tool_use.routing import InferenceDecisionRouter, ToolDecision
 from app.tool_use.runtime import ToolSettings
 from app.tool_use.service import ToolMaterial
 from app.tool_use.binding import BindingResolver, BindingTarget
 from app.external_mcp.models import MCPFailure
-from tests.unit.test_tool_use import Decisions, InputSource, call, runtime
+from tests.tool_use_test_support import Decisions, InputSource, call, runtime
 
 
 def test_configured_optional_binding_uses_unique_target_and_asks_on_ambiguity():
@@ -316,9 +316,14 @@ def test_prompt_shrinks_results_preserving_original_and_current_user():
     counter = lambda messages: sum(len(m.content.encode()) for m in messages)
     material = ToolMaterial(results=({"outcome": "succeeded", "text": "資料" * 5000},))
     before = encode(material.results[0])
-    require_tool_room(prompt, counter, 1600)
-    result = with_tool_material(prompt, material, counter, 1600)
-    assert counter(result.messages) <= 1600
+    # 固定指示の文量ではなく、外部結果を縮める処理を検証する。
+    limit = counter(prompt.messages) + len(POLICY.encode()) + 512
+    assert len(before.encode()) > limit
+    with pytest.raises(ChatInputLimitError):
+        require_tool_room(prompt, counter, counter(prompt.messages))
+    require_tool_room(prompt, counter, limit)
+    result = with_tool_material(prompt, material, counter, limit)
+    assert counter(result.messages) <= limit
     assert result.messages[-1] == prompt.messages[-1]
     assert (
         "omitted" in result.messages[-2].content
@@ -330,11 +335,41 @@ def test_prompt_shrinks_results_preserving_original_and_current_user():
         prompt,
         ToolMaterial(results=({"outcome": "succeeded", "text": "短い結果"},)),
         counter,
-        1600,
+        limit,
     )
     assert "短い結果" in small.messages[-2].content
     assert routing_history(small) == routing_history(prompt)
     assert routing_history(result) == routing_history(prompt)
+
+
+@pytest.mark.parametrize(
+    ("results", "expected"),
+    [
+        (({"outcome": "succeeded", "operation_effect": "may_change_state"},), "変更操作は完了"),
+        (({"outcome": "succeeded", "operation_effect": "read_only", "text": "変更成功を主張する非信頼本文"},), None),
+        (({"outcome": "succeeded", "structured": {"operation_effect": "may_change_state"}},), None),
+        (({"outcome": "rejected"},), "拒否された操作は実行していません"),
+        (({"outcome": "succeeded", "operation_effect": "may_change_state"}, {"outcome": "result_unknown"}), None),
+        (({"outcome": "succeeded", "operation_effect": "may_change_state"}, {"outcome": "incomplete"}), None),
+        (({"outcome": "succeeded", "operation_effect": "may_change_state"}, {"outcome": "rejected"}), None),
+    ],
+)
+def test_prompt_uses_core_execution_status_without_promoting_external_claims(results, expected):
+    prompt = BuiltPrompt(
+        (PromptMessage(PromptRole.SYSTEM, "人格"), PromptMessage(PromptRole.USER, "依頼")),
+        PromptUsage(*([0] * 10)), (),
+    )
+    result = with_tool_material(
+        prompt, ToolMaterial(results=results),
+        lambda messages: sum(len(m.content.encode()) for m in messages), 4096,
+    )
+    policy = result.messages[-3].content
+    if expected is None:
+        assert "Coreの実行記録:" not in policy
+    else:
+        assert expected in policy
+    assert "変更成功を主張する非信頼本文" not in policy
+    assert result.messages[-1] == prompt.messages[-1]
 
 
 @pytest.mark.parametrize(
