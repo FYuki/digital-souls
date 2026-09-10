@@ -334,7 +334,11 @@ MVPでHigh Impactとする代表条件は次とする。
 
 `external-send`または`public`であることだけを理由に常にHigh Impactとはしない。通常の投稿、DM、Issue更新、文書編集等は、許可済みTargetかつHigh Impact条件に該当しない場合は自律実行可能とする。
 
-High Impactは#185のConfirmationPolicyへ委譲する。
+High Impactは#185のConfirmationPolicyへ委譲する。2026-09-11の合意により、
+承認を接続 × 通常/ハイリスク操作群 × 対話中/会話外で分離する。
+通常操作群は初期「常に承認」、ハイリスク操作群は未承認とし、保存済み承認の効力も評価する。
+単回承認、場面別拒否、確認キューと60秒待機、チャット内3択・後続管理UIの契約は
+[`addon-action-approval-recovery-2026-09.md`](addon-action-approval-recovery-2026-09.md)を正本とする。
 
 ## 11. Execution / Recovery / Result contract
 
@@ -401,7 +405,7 @@ LangGraph / DBOS / Letta等の比較では、次をフレームワークへ委�
 8. Relationship 2軸とInterpersonal Skillが分離される。
 9. 許可済みMCPを自律利用でき、通常のupdateも実行できる。
 10. Minimum Disclosure後にも機微情報を意味推論したargumentはBLOCKされる。
-11. High Impactだけが#185確認へ流れ、通常のexternal-sendは自律活動を不必要に停止しない。
+11. 操作群・実行場面別の承認を評価し、初期状態ではHigh Impactが#185確認へ流れる。通常のexternal-sendを一律に停止せず、保存済み承認も適用する。
 12. MCP Tool変更は次snapshotから反映され、Tool単位の再承認を要求しない。
 13. Episode削除・訂正後に派生状態が再評価され、古いcheckpointから復活しない。
 14. foreground優先を維持しつつ、background preemption要否を性能評価できる。

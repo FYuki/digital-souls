@@ -220,6 +220,19 @@
       "required": ["enabled", "sharing", "resource_binding_required", "execution_budget", "restrictions"],
       "properties": {
         "enabled": {"type": "boolean"},
+        "impact_profiles": {
+          "type": "array", "maxItems": 256,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["tool_name", "definition_digest", "effect", "normal_arguments_schema"],
+            "properties": {
+              "tool_name": {"type": "string", "minLength": 1, "maxLength": 128},
+              "definition_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+              "effect": {"enum": ["read", "write", "external_send", "destructive", "security", "financial"]},
+              "normal_arguments_schema": {"type": "object"}
+            }
+          }
+        },
         "sharing": {"$ref": "#/$defs/Sharing"},
         "resource_binding_required": {"type": "boolean"},
         "operation_allowlist": {

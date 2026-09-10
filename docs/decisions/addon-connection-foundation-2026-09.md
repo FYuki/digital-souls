@@ -347,6 +347,9 @@ Tool実行成功後に追加metadata統合だけ失敗してもToolを再実行�
 
 ## 12. Task / Event / ActionRecoveryはPortまで
 
+この節は#104の責務を示す。#185で追加する承認・確認キュー・回復の契約は
+[`addon-action-approval-recovery-2026-09.md`](addon-action-approval-recovery-2026-09.md)を参照する。
+
 #104では次の抽象境界だけ用意する。
 
 ```text

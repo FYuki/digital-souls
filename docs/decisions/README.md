@@ -15,6 +15,8 @@ archive内の文書を現行仕様や実装のSource of Truthとして使用し�
 
 ## 現行の優先関係
 
+- [`addon-action-approval-recovery-2026-09.md`](addon-action-approval-recovery-2026-09.md) は、#185の接続・操作群・実行場面別承認、確認キュー、60秒待機、結果回復を定める。承認の効力・UI範囲はCharacter Life共通ADRより本ADRを優先する。
+
 - [`character-life-runtime-2026-09.md`](character-life-runtime-2026-09.md) は、#249のtop-level runtimeへDBOSを採用し、domain正本・関連Epicとの責務境界を定める。
 
 - [`character-life-memory-personality-autonomy-2026-09.md`](character-life-memory-personality-autonomy-2026-09.md) は、本人視点のEpisode、Semantic/Reflection分離、Life State、Big Five Aspects人格、Relationship、Autonomy Target、外部送信privacy、高影響操作の共通契約を定める。
