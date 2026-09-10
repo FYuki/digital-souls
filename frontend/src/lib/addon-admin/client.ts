@@ -10,6 +10,10 @@ export type AddonStatus = {
   effective_state: EffectiveState
   error_code: ErrorCode | null
   last_checked_at: string | null
+  settings_revision?: number
+  last_success_at?: string | null
+  last_attempt_at?: string | null
+  last_check_error?: string | null
 }
 
 const errorMessages: Record<ErrorCode, string> = {
@@ -55,10 +59,34 @@ export function parseStatus(value: unknown): AddonStatus {
     effective_state: v.effective_state as EffectiveState,
     error_code: v.error_code as ErrorCode | null,
     last_checked_at: v.last_checked_at as string | null,
+    ...(typeof v.settings_revision === 'number' ? {
+      settings_revision: v.settings_revision,
+      last_success_at: typeof v.last_success_at === 'string' ? v.last_success_at : null,
+      last_attempt_at: typeof v.last_attempt_at === 'string' ? v.last_attempt_at : null,
+      last_check_error: typeof v.last_check_error === 'string' && Object.hasOwn(errorMessages, v.last_check_error) ? v.last_check_error : null,
+    } : {}),
   }
 }
 
 export class SettingsDurabilityError extends Error {}
+export class ManagementError extends Error {}
+export function managementError(error: unknown): string {
+  switch (error instanceof ManagementError ? error.message : '') {
+    case 'connection_busy': return '実行完了後に再試行してください。'
+    case 'connection_changed': return '設定が変更されました。最新の状態を確認して再試行してください。'
+    case 'connection_unconfirmed': return '接続を確認できなかったため、ONにできませんでした。'
+    case 'invalid_connection_settings':
+    case 'invalid_management_request': return '入力内容を確認してください。'
+    case 'connection_not_found': return 'この接続は削除されています。'
+    default: return '操作を完了できませんでした。状態を確認して再試行してください。'
+  }
+}
+export function confirmationMessage(item: AddonStatus): string {
+  if (item.settings_revision === undefined) return ''
+  if (!item.last_success_at) return item.last_check_error ? '接続未確認（前回確認失敗）' : '接続未確認'
+  if (item.availability === 'unavailable') return '接続不可'
+  return '接続確認済み'
+}
 
 const base = '/api/addon-admin/connections'
 async function request(url: string, signal: AbortSignal, init?: RequestInit): Promise<unknown> {
@@ -68,9 +96,9 @@ async function request(url: string, signal: AbortSignal, init?: RequestInit): Pr
     if (response.status === 503 && body?.detail === 'settings_durability_uncertain') {
       throw new SettingsDurabilityError('settings_durability_uncertain')
     }
-    throw new Error('management_request_failed')
+    throw new ManagementError(typeof body?.detail === 'string' ? body.detail : 'management_request_failed')
   }
-  return response.json()
+  return response.status === 204 ? null : response.json()
 }
 
 export async function listAddons(signal: AbortSignal): Promise<AddonStatus[]> {
@@ -90,4 +118,53 @@ export async function setAddonEnabled(id: string, enabled: boolean, signal: Abor
   }))
   if (result.connection_instance_id !== id) throw new Error('invalid_management_response')
   return result
+}
+
+
+export type ConnectionSettings = { transport: 'streamable_http'; endpoint: string; auth: 'none' | 'bearer' }
+  | { transport: 'stdio'; command: string; args: string[] }
+export type ConnectionInput = { display_name: string; settings: ConnectionSettings }
+export type ConnectionDetail = AddonStatus & ConnectionInput & {
+  credential_set: boolean
+  capabilities: { counts?: { tools: number; resources: number; prompts: number }; tools?: { name: string; description: string; status: string }[] }
+}
+const external = '/api/addon-admin/external-connections'
+function parseDetail(value: unknown): ConnectionDetail {
+  const status = parseStatus(value)
+  const v = value as Record<string, unknown>
+  if (typeof v.settings !== 'object' || v.settings === null || typeof v.credential_set !== 'boolean'
+    || typeof v.capabilities !== 'object' || v.capabilities === null) throw new Error('invalid_management_response')
+  const settings = v.settings as Record<string, unknown>
+  let parsed: ConnectionSettings
+  if (settings.transport === 'streamable_http' && typeof settings.endpoint === 'string' && (settings.auth === 'none' || settings.auth === 'bearer')) {
+    parsed = { transport: 'streamable_http', endpoint: settings.endpoint, auth: settings.auth }
+  } else if (settings.transport === 'stdio' && typeof settings.command === 'string' && Array.isArray(settings.args) && settings.args.every((arg) => typeof arg === 'string')) {
+    parsed = { transport: 'stdio', command: settings.command, args: settings.args }
+  } else throw new Error('invalid_management_response')
+  const capabilities = v.capabilities as ConnectionDetail['capabilities']
+  if (capabilities.tools !== undefined && (!Array.isArray(capabilities.tools) || capabilities.tools.some((tool) =>
+    typeof tool !== 'object' || tool === null || typeof tool.name !== 'string' || typeof tool.description !== 'string' || typeof tool.status !== 'string'))) {
+    throw new Error('invalid_management_response')
+  }
+  return { ...status, settings: parsed, credential_set: v.credential_set,
+    capabilities: { counts: capabilities.counts, tools: capabilities.tools?.map(({ name, description, status }) => ({ name, description, status })) } }
+}
+export async function getConnection(id: string, signal: AbortSignal): Promise<ConnectionDetail> {
+  return parseDetail(await request(`${external}/${encodeURIComponent(id)}`, signal))
+}
+export async function saveConnection(id: string | null, input: ConnectionInput, signal: AbortSignal): Promise<ConnectionDetail> {
+  return parseDetail(await request(id ? `${external}/${encodeURIComponent(id)}` : external, signal, {
+    method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+  }))
+}
+export async function saveCredential(id: string, token: string, signal: AbortSignal): Promise<ConnectionDetail> {
+  return parseDetail(await request(`${external}/${encodeURIComponent(id)}/credential`, signal, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }),
+  }))
+}
+export async function checkConnection(id: string, signal: AbortSignal): Promise<ConnectionDetail> {
+  return parseDetail(await request(`${external}/${encodeURIComponent(id)}/check`, signal, { method: 'POST' }))
+}
+export async function deleteConnection(id: string, signal: AbortSignal): Promise<void> {
+  await request(`${external}/${encodeURIComponent(id)}`, signal, { method: 'DELETE' })
 }
