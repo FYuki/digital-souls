@@ -57,6 +57,8 @@ class AddonRuntime:
         self.on_disabled: Callable[[str], None] = lambda _: None
         self._tasks: list[asyncio.Task[None]] = []
         self._wake: dict[str, asyncio.Event] = {}
+        self._requested: set[str] = set()
+        self._confirmed_generation: dict[str, int] = {}
         for entry in self.registry.entries():
             entry.desired_enabled = self.store.initial(
                 entry.connection.id, entry.desired_enabled
@@ -118,6 +120,12 @@ class AddonRuntime:
             pass
         event.clear()
 
+    def _checked(self, entry: Entry) -> None:
+        """管理拡張がdiscovery成功履歴を保存するための通知。"""
+
+    def _check_failed(self, entry: Entry, *, timed_out: bool = False) -> None:
+        """管理拡張が失敗した確認要求を完了するための通知。"""
+
     def _failed(self, entry: Entry, error: Exception, *, health: bool = False) -> None:
         code = "health_check_failed" if health else "connection_failed"
         if isinstance(error, MCPFailure):
@@ -126,12 +134,17 @@ class AddonRuntime:
             elif error.category in {"protocol", "validation", "policy"}:
                 code = "protocol_error"
         self.registry.availability(entry.connection.id, "unavailable", error_code=code)
+        self._check_failed(
+            entry,
+            timed_out=isinstance(error, TimeoutError)
+            or (isinstance(error, MCPFailure) and error.code == "transport_timeout"),
+        )
 
     async def _connection(self, entry: Entry) -> None:
         connection_id = entry.connection.id
         delay = self.policy.retry_initial
         while True:
-            if not entry.desired_enabled:
+            if not entry.desired_enabled and connection_id not in self._requested:
                 await self._wait(connection_id, self.policy.interval)
                 continue
             try:
@@ -144,6 +157,8 @@ class AddonRuntime:
                     ):
                         deadline.reschedule(None)
                         delay = self.policy.retry_initial
+                        self._requested.discard(connection_id)
+                        self._checked(entry)
                         await self._monitor(entry, client)
             except asyncio.CancelledError:
                 raise
@@ -162,9 +177,14 @@ class AddonRuntime:
                     "unavailable", "connection_closed"
                 )
             current = asyncio.get_running_loop().time()
-            if entry.desired_enabled and (
-                entry.generation != checked_generation or current >= next_check
+            if self._confirmed_generation.get(entry.connection.id) == entry.generation:
+                checked_generation = entry.generation
+            forced = entry.connection.id in self._requested
+            if forced or (
+                entry.desired_enabled
+                and (entry.generation != checked_generation or current >= next_check)
             ):
+                self._requested.discard(entry.connection.id)
                 generation = entry.generation
                 if generation != checked_generation:
                     failures = 0
@@ -174,7 +194,7 @@ class AddonRuntime:
                         await client.health()
                     if generation != entry.generation:
                         continue
-                    if entry.availability in {"unknown", "unavailable"}:
+                    if forced or entry.availability in {"unknown", "unavailable"}:
                         async with asyncio.timeout(self.policy.connect_timeout):
                             await self.gate.refresh(entry.connection.id)
                     if generation == entry.generation:
@@ -182,6 +202,7 @@ class AddonRuntime:
                         if entry.availability != "degraded":
                             self.registry.availability(entry.connection.id, "available")
                         failures = 0
+                        self._checked(entry)
                 except asyncio.CancelledError:
                     raise
                 except Exception as error:
@@ -193,7 +214,8 @@ class AddonRuntime:
                             "validation",
                         }
                         if (
-                            definite
+                            forced
+                            or definite
                             or not client.connected
                             or failures >= self.policy.failures
                         ):

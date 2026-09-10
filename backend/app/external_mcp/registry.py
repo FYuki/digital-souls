@@ -55,6 +55,25 @@ class Registry:
             display_name=display_name or connection.id,
         )
 
+    def replace(self, connection: Connection, *, display_name: str) -> Entry:
+        """管理側で旧session終了後に設定を入れ替え、古いloopを失効させる。"""
+        entry = self.entry(connection.id)
+        entry.connection = connection
+        entry.display_name = display_name
+        entry.last_checked_at = None
+        entry.generation += 1
+        entry.linked = True
+        entry.active = None
+        entry.staged = None
+        self.availability(connection.id, "unknown")
+        return entry
+
+    def remove(self, connection_id: str) -> None:
+        entry = self.entry(connection_id)
+        entry.linked = False
+        entry.generation += 1
+        del self._entries[connection_id]
+
     def entry(self, connection_id: str) -> Entry:
         try:
             return self._entries[connection_id]

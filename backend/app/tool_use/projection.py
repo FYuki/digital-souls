@@ -6,6 +6,7 @@ import re
 import os
 from dataclasses import dataclass, field
 from typing import Any
+from collections.abc import Callable
 
 from app.external_mcp.models import Json, encode
 from app.privacy.contracts import PrivacyScanner, ScanSuccess
@@ -24,17 +25,24 @@ class Sanitizer:
     private_values: tuple[str, ...] = field(default=(), repr=False)
     secret_references: tuple[str, ...] = field(default=(), repr=False)
 
+    dynamic_private_values: Callable[[], tuple[str, ...]] | None = field(
+        default=None, repr=False
+    )
+
     @property
     def sensitive_values(self) -> tuple[str, ...]:
-        return self.private_values + tuple(
-            os.environ.get(ref, "") for ref in self.secret_references
+        return (
+            self.private_values
+            + tuple(os.environ.get(ref, "") for ref in self.secret_references)
+            + (self.dynamic_private_values() if self.dynamic_private_values else ())
         )
 
     def text(self, value: str, *, maximum: int = 16_384) -> str:
-        value = value[:maximum]
         for private in sorted(self.sensitive_values, key=len, reverse=True):
             if private:
                 value = value.replace(private, "[非公開]")
+        # secretを途中で切って断片を残さないよう、伏せた後で表示量を制限する。
+        value = value[:maximum]
         # URLは表示用出典へ流用しない。Coreが管理する出典ラベルを使う。
         value = _URL.sub("[外部参照]", value)
         result = self.scanner.scan(value)
