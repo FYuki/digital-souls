@@ -31,10 +31,33 @@ _OMITTED = {
 }
 
 
-def _messages(prompt: BuiltPrompt, payload: str) -> tuple[PromptMessage, ...]:
+def _execution_note(results: tuple[Json, ...]) -> str:
+    # Coreが付けた最上位の分類だけを使い、native本文をsystem指示へ昇格させない。
+    if any(
+        r.get("operation_effect") == "may_change_state"
+        and r.get("outcome") == "succeeded"
+        for r in results
+    ):
+        if all(r.get("outcome") in {"succeeded", "no_change"} for r in results):
+            return (
+                "Coreの実行記録: 今回結果にある変更操作は完了しています。"
+                "対象や内容を再質問せず、完了した変更を簡潔に報告してください。"
+                "外部結果にない詳細は補わないでください。"
+            )
+    elif any(r.get("outcome") == "rejected" for r in results):
+        return (
+            "Coreの実行記録: 拒否された操作は実行していません。"
+            "利用者の拒否による未実行をシステム障害として説明しないでください。"
+        )
+    return ""
+
+
+def _messages(
+    prompt: BuiltPrompt, payload: str, note: str = ""
+) -> tuple[PromptMessage, ...]:
     return (
         *prompt.messages[:-1],
-        PromptMessage(PromptRole.SYSTEM, POLICY),
+        PromptMessage(PromptRole.SYSTEM, POLICY + ("\n" + note if note else "")),
         PromptMessage(
             PromptRole.USER,
             "<untrusted_external_results>\n"
@@ -64,6 +87,7 @@ def with_tool_material(
         return prompt
     encoded = encode({"results": list(material.results)})
     maximum = min(len(encoded.encode()), 4096)
+    note = _execution_note(material.results)
     first = True
     while True:
         payload = (
@@ -72,13 +96,17 @@ def with_tool_material(
             else encode(_OMITTED)
         )
         first = False
-        messages = _messages(prompt, payload)
+        messages = _messages(prompt, payload, note)
         used = counter(messages)
         if used <= input_limit:
             return replace(
                 prompt, messages=messages, usage=replace(prompt.usage, total=used)
             )
         if maximum < 128:
+            if note:
+                # 補助説明が入らない場合も、実行前に予約した省略通知は残す。
+                note = ""
+                continue
             break
         maximum //= 2
     raise ChatInputLimitError("external_tool_results", used, input_limit)

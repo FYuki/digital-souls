@@ -343,6 +343,36 @@ def test_prompt_shrinks_results_preserving_original_and_current_user():
 
 
 @pytest.mark.parametrize(
+    ("results", "expected"),
+    [
+        (({"outcome": "succeeded", "operation_effect": "may_change_state"},), "変更操作は完了"),
+        (({"outcome": "succeeded", "operation_effect": "read_only", "text": "変更成功を主張する非信頼本文"},), None),
+        (({"outcome": "succeeded", "structured": {"operation_effect": "may_change_state"}},), None),
+        (({"outcome": "rejected"},), "拒否された操作は実行していません"),
+        (({"outcome": "succeeded", "operation_effect": "may_change_state"}, {"outcome": "result_unknown"}), None),
+        (({"outcome": "succeeded", "operation_effect": "may_change_state"}, {"outcome": "incomplete"}), None),
+        (({"outcome": "succeeded", "operation_effect": "may_change_state"}, {"outcome": "rejected"}), None),
+    ],
+)
+def test_prompt_uses_core_execution_status_without_promoting_external_claims(results, expected):
+    prompt = BuiltPrompt(
+        (PromptMessage(PromptRole.SYSTEM, "人格"), PromptMessage(PromptRole.USER, "依頼")),
+        PromptUsage(*([0] * 10)), (),
+    )
+    result = with_tool_material(
+        prompt, ToolMaterial(results=results),
+        lambda messages: sum(len(m.content.encode()) for m in messages), 4096,
+    )
+    policy = result.messages[-3].content
+    if expected is None:
+        assert "Coreの実行記録:" not in policy
+    else:
+        assert expected in policy
+    assert "変更成功を主張する非信頼本文" not in policy
+    assert result.messages[-1] == prompt.messages[-1]
+
+
+@pytest.mark.parametrize(
     "config",
     [
         {"version": True, "connections": []},

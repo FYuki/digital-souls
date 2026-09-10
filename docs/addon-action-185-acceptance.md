@@ -71,6 +71,7 @@ fixtureの制御ファイルは障害注入側だけが操作する。一般利�
 - 音声の画面承認後に実更新・音声再生まで到達した試行で、試験側がSTT入力イベントだけを追っていたため再生の対応付けに失敗した。画面承認から発生するCore responseの`source_utterance_ids`で対応付け、同じresponseの完了・実再生sample数を確認するよう修正した。
 - 推論contextを合計8192へ統一した試行でも、Action Egress独自の15秒制限でprivacy判定が時間切れになった。既存推論の既定上限に合わせて30秒まで判定を待つ。機微情報・判定不能・timeoutの拒否、再試行なしを維持し、関連40件が成功した（[egress-regression.txt](artifacts/addon-action-185/egress-regression.txt)）。この制御テストを実privacy受入の代わりにはしない。
 - その後は読取・テキストの単回承認まで進んだが、次の変更依頼で選択器が承認要否を会話で質問した。対象と引数が揃えばCoreへcallし、Coreが操作群の承認を判定する責務を選択器へ明示した。関連39件が成功した（[routing-approval-regression.txt](artifacts/addon-action-185/routing-approval-regression.txt)）。過去の音声回答に実行予告だけの例もあったため、完了した変更は結果として回答する指示と、実更新後の完了回答を確認する受入を追加した。
+- `fb45b76`の試行では期待する4回の更新と音声中の3択・再生まで到達したが、最後の実更新後に回答LLMが対象を再質問し、完了回答の検証で失敗した。Coreの最上位の実行分類から、確認済みの変更成功・拒否を回答指示に補足する。外部本文の主張、読取成功、部分失敗／結果不明を変更完了へ昇格させない。関連57件が成功した（[core-result-grounding.txt](artifacts/addon-action-185/core-result-grounding.txt)）。
 
 ## 再実行
 
