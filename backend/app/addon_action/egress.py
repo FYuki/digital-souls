@@ -21,6 +21,7 @@ class ActionEgress:
         result = await run_sync(
             self.classifier.classify,
             encode(arguments),
-            SemanticClassifierCallProfile("ADDON_ACTION_EGRESS", 15, 0, 0, 15),
+            # 推論の既定上限まで待つ。timeout/判定不能は引き続き拒否する。
+            SemanticClassifierCallProfile("ADDON_ACTION_EGRESS", 30, 0, 0, 30),
         )
         return result.classification == SemanticClassification.NOT_SENSITIVE

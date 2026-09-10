@@ -68,6 +68,8 @@ fixtureの制御ファイルは障害注入側だけが操作する。一般利�
 - `738d615` の試行（run `0e9a2a96-dea5-4d3a-a6a3-ca5f12a3cc5d`）でも単回承認後のHTTP応答が300秒以内に戻らなかった。外部ファイルは未更新で、送信記録は0件だった。
 - 次の非同期診断から、続行APIがViteの一般管理API向け50秒制限で切断されることを特定した。`/continue`だけ通常チャットと同じ180秒へ分類し、回答保存APIは既存の期限を維持した。実HTTPプロキシの回帰は修正前にsocket切断で失敗し、修正後は関連17件が成功した（[proxy-regression.txt](artifacts/addon-action-185/proxy-regression.txt)）。この回帰では待機時間を全経路共通で1/100に短縮し、独立MCP受入とは区別している。
 - 再実行入口は、実行commit・開始時の追跡対象ファイル変更の有無・サービスversion・固定metadataの処理段階・終了時の承認／実行状態を保存する。合成会話attachment内の一時pathも公開用に置換する。
+- 音声の画面承認後に実更新・音声再生まで到達した試行で、試験側がSTT入力イベントだけを追っていたため再生の対応付けに失敗した。画面承認から発生するCore responseの`source_utterance_ids`で対応付け、同じresponseの完了・実再生sample数を確認するよう修正した。
+- 推論contextを合計8192へ統一した試行でも、Action Egress独自の15秒制限でprivacy判定が時間切れになった。既存推論の既定上限に合わせて30秒まで判定を待つ。機微情報・判定不能・timeoutの拒否、再試行なしを維持し、関連40件が成功した（[egress-regression.txt](artifacts/addon-action-185/egress-regression.txt)）。この制御テストを実privacy受入の代わりにはしない。
 
 ## 再実行
 
