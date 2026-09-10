@@ -103,13 +103,13 @@ test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用�
   await expect(page.locator('article.message').last()).toContainText('青い折り紙')
   await expect(confirmation(page)).toHaveCount(0)
 
-  await send(page, '検証用ファイルの内容を正確に「赤い風船」だけに置き換えてください。')
+  await send(page, `検証用ファイル${sample}の内容を正確に「赤い風船」だけに置き換えてください。`)
   expect(await sampleText()).toContain('青い折り紙')
   await choose(page, '一度承認する')
   await expect.poll(sampleText).toBe('赤い風船')
   await expect(confirmation(page)).toHaveCount(0)
 
-  await send(page, '検証用ファイルの内容を正確に「白い雲」だけに置き換えてください。')
+  await send(page, `検証用ファイル${sample}の内容を正確に「白い雲」だけに置き換えてください。`)
   await choose(page, '拒否する')
   await expect(confirmation(page)).toHaveCount(0)
   expect(await sampleText()).toBe('赤い風船')
@@ -146,7 +146,7 @@ test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用�
   await waitForPlayback(page, alwaysId)
   await driver.endVoiceSession(page)
 
-  await send(page, '検証用ファイルの内容を正確に「紫の花」だけに置き換えてください。')
+  await send(page, `検証用ファイル${sample}の内容を正確に「紫の花」だけに置き換えてください。`)
   await expect.poll(sampleText).toBe('紫の花')
   await expect(confirmation(page)).toHaveCount(0)
   await info.attach('action-evidence', {
