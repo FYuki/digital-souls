@@ -348,7 +348,7 @@ MRTRの追加情報は既存contextで補える場合に再開し、不足時は
 DBOSはqueue・UTC schedule・再開・復旧を担当し、引数は参照IDと実行世代に限定する。
 `character-life.db`は6種類のLife State、revision履歴、Autonomy Grant、活動・内省形成の結果、監査を保持する。
 承認済みの観測handoffを関連domainへの呼出し前に固定し、再起動しても同じ時刻・本文・source・冪等keyで再送する。
-この作業記録は#100のSELF Episode正本ではない。共有候補と活動完了は同じtransactionで確定する。
+この作業記録は#100で定義するキャラクター視点のEpisode正本ではない。共有候補と活動完了は同じtransactionで確定する。
 
 Interestだけでは開始せず、Goal Intentionまたは利用者が要求したImplementation Intentionとconnection単位のGrantを必要とする。
 元Reflectionのrevisionを採用直前に照合し、訂正・非公開化した派生状態を休眠化する。
@@ -363,3 +363,13 @@ Resource読取とTool呼出しはいずれもGateへ渡し、Binding制約を適
 
 関連Epic #100/#101/#102/#185の正本実装は含まない。未接続の結果はDEFERREDとして表示する。
 設定・API・保存・復旧・実接続検証は[Character Life運用手順](character-life-operations.md)を参照する。
+
+## #100の設計変更と現在の実装の区別
+
+現在のEpisodeは旧subject構造とturn単位の非同期抽出を使用する。#100ではキャラクター視点の
+共通契約、スレッド単位の抽出、Semantic / Reflection形成へ変更する。合意済み設計は
+[共通ADR](decisions/character-life-memory-personality-autonomy-2026-09.md)を参照する。
+この設計の記載は実装済みを意味せず、各子Issueの実装時に本書のruntime説明を更新する。
+
+既存moduleテストは抽出・privacy判定のLLMをモックしてHTTP会話からSQLiteへのEpisode保存を検証する。
+実LLMの抽出・判定から保存までの一連の成功については、#297で実接続の受入証跡を整備する。

@@ -115,3 +115,10 @@ Wave 3の音声機能は最初からLiveKit経路へ実装する。現行WebSock
 - User + 光織 + 葵のテキストグループチャット
 - 共有会話とCharacter別episodic memoryの分離
 - LiveKit Roomへの複数Character音声統合
+
+## 経験から意味記憶・内省への発展
+
+#100は仕様合意済み・実装中。#288のADR更新から子Issueの依存順に進め、#297で実接続を受け入れる。
+会話外ログからのEpisode生成と実行管理は#249、Personality更新は#101が担当する。
+詳細な契約は[共通ADR](decisions/character-life-memory-personality-autonomy-2026-09.md)、
+実施順は[拡張計画](enhancement-plan.md)と[親Issue](https://github.com/FYuki/digital-souls/issues/100)を参照する。

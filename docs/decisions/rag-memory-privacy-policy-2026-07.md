@@ -16,6 +16,12 @@ SQLite正本／Chroma派生index、transactional outbox、metadata-only log、�
 記憶ontology、allowlist、個別確認、保存拒否scope、classifier構成、非同期形成、検索順位、
 conformance testは2026-08 ADRへ統合した。以下の本文は2026-07時点の判断履歴を含む。
 
+2026-09-10の#100におけるEpisode契約と派生形成は
+[キャラクター生活の共通契約](character-life-memory-personality-autonomy-2026-09.md)を優先する。
+Episodeが保存可能でも派生候補のprivacyを再評価し、検証後に自動保存する。拒否候補本文は保存しない。
+根拠失効時はSQLite上で即時利用停止し、Chroma再生成前も正本・関連参照の再検証で無効情報を除外する。
+参加者の識別情報・名称・役割等の追加slotもscanner/意味分類の対象とし、保存許可範囲を迂回しない。
+
 ## 背景
 
 現行実装は、SQLiteへ生の会話本文を保存し、その一部を同じ本文のままChromaへ登録する。

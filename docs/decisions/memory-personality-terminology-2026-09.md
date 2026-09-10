@@ -133,7 +133,9 @@ Long-term Memory
 
 ### 3.4 Episodic Memory / エピソード記憶
 
-「何が起きたか」という具体的な経験の記憶。
+所有する`character_id`の視点で「何を経験したか」を表す具体的な経験の記憶。
+経験の主語は所有キャラクターに固定し、交流相手・参加者・話題の人物は役割を区別して保持する。
+会話か外部サイトかによらず同じ契約で扱い、旧USER / SHARED / SELFというsubject分類は使わない。
 
 例:
 
@@ -141,7 +143,8 @@ Long-term Memory
 - キャラクター自身が外部活動で何かを観測した
 - ある出来事についてユーザーから初めて聞いた
 
-特定の時刻・文脈・経験主体と結びつく。会話中は関連する過去経験として必要時にretrieveする。
+特定の時刻・文脈・所有者と結びつく。旅行した経験とその思い出を語った経験は別Episodeであり、
+話を聞いた経験の発生日時は「聞いた日時」、話題の出来事の日時は任意の関連情報である。会話中は関連する過去経験として必要時にretrieveする。
 
 ### 3.5 Semantic Memory / 意味記憶
 
@@ -332,7 +335,8 @@ SQLite等の正本を原則保持し、Chroma等のsemantic index、structured /
 
 Reflectionを通常会話へ直接注入せず、Current InterestsやPersonalityへ変換された状態を通じて会話へ反映する。
 
-自己説明や「なぜそう考えるようになったか」を問われる特殊な経路では、Reflectionやそのprovenanceを明示的に参照してよい。
+自己説明や「なぜそう考えるようになったか」を問われる特殊な経路では、概念上はReflectionや
+provenanceを明示的に参照できる。ただし#100ではこの例外経路を追加せず、通常会話への直接注入を行わない。
 
 ## 7. 概念階層
 
@@ -361,7 +365,8 @@ Character State
 ## 8. 関連Epic / ADR
 
 - #48: Memory Consolidation。既存memoryの同種整理。
-- #100: Semantic Abstraction / Reflection形成。
+- #100: Episode共通契約と会話由来抽出の改修、Semantic Abstraction / Reflectionと検証済み派生結果。
+- #249: 会話外活動ログからのEpisode生成、Life State運用、実行管理。
 - #101: Reflection群からのPersonality Adaptation。
 - #102: execution logからのProcedural Learning / Skill更新。
 - #103: forgettingをretrievability低下として扱う将来検討。
