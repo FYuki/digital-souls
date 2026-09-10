@@ -16,7 +16,7 @@
   import ScreenCaptureControls from './lib/ScreenCaptureControls.svelte'
   import type { ScreenUploadResult } from './lib/screen-perception/client'
   import { listCharacters, rescanCharacters } from './lib/characters/client'
-  import { sendChatRequest } from './lib/chat/client'
+  import { sendChatRequest, parseChatResponseBody } from './lib/chat/client'
   import { createConversationSessionManager } from './lib/conversation-session'
   import {
     archiveConversation,
@@ -393,6 +393,28 @@
     }
   }
 
+  const handleActionContinue = async (requestId: string): Promise<void | 'ended'> => {
+    const context = conversationController.selectedContext()
+    if (context === null) return
+    const voiceId = voiceSnapshot.context?.characterId === context.character
+      && voiceSnapshot.context.conversationId === context.conversationId
+      ? voiceSnapshot.sessionId : null
+    const response = await fetch(`/api/addon-actions/requests/${encodeURIComponent(requestId)}/continue`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ character: context.character, conversation_id: context.conversationId,
+        ...(voiceId ? { voice_session_id: voiceId } : {}),
+      }),
+    })
+    if (!response.ok) throw new Error('action continuation failed')
+    const body = await response.json()
+    if (body.state === 'ended') return 'ended'
+    if (body.state === 'voice_started' || body.state === 'continuing') return
+    const chat = parseChatResponseBody(body, context.character)
+    if (conversationController.selectedContext()?.version !== context.version) return
+    conversationController.appendTurn(context, chat.turn)
+    void sidebarController.refreshCharacter(context.character)
+  }
+
   const handleSelectConversation = async (character: string, conversationId: string) => {
     if (interactionsDisabled) return
     showingMemoryManagement = false
@@ -616,6 +638,7 @@
             character={$conversationController.character}
             conversationId={$conversationController.selectedConversationId}
             onStop={endVoiceSession}
+            onContinue={handleActionContinue}
           />
         {/key}
       {/if}
