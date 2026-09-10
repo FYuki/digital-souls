@@ -21,12 +21,16 @@ parser.add_argument("--pid")
 parser.add_argument("--fault-state")
 parser.add_argument("--auth", choices=["none", "bearer", "oauth"], default="none")
 parser.add_argument("--legacy", action="store_true")
+parser.add_argument("--empty", action="store_true")
+parser.add_argument("--active-marker")
 options = parser.parse_args()
 if options.pid:
     Path(options.pid).write_text(str(os.getpid()))
 
 
 def definitions():
+    if options.empty:
+        return []
     state = (
         json.loads(Path(options.state).read_text())
         if options.state
@@ -63,7 +67,7 @@ async def list_tools(ctx, params):
     # paginationも必ず通す。
     return types.ListToolsResult(
         tools=tools[3:] if params and params.cursor else tools[:3],
-        next_cursor=None if params and params.cursor else "page2",
+        next_cursor=None if (params and params.cursor) or len(tools) <= 3 else "page2",
     )
 
 
@@ -79,7 +83,13 @@ async def call_tool(ctx, params):
             },
         )
     if params.name == "timeout":
-        await asyncio.sleep(10)
+        if options.active_marker:
+            marker = Path(options.active_marker)
+            marker.write_text("started")
+            while marker.exists():
+                await asyncio.sleep(.01)
+        else:
+            await asyncio.sleep(10)
     if params.name == "error":
         return types.CallToolResult(
             is_error=True,
@@ -226,6 +236,8 @@ def legacy():
                 "capabilities": {"tools": {}},
                 "serverInfo": {"name": "legacy-external", "version": "1"},
             }
+        elif method == "ping":
+            value = {}
         elif method == "tools/list":
             value = {
                 "tools": [

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "runtime": "real-core-vite-browser",
+  "mcp": "controlled-external-process-http-none-bearer-stdio",
+  "thirdPartyServiceAcceptance": false,
+  "toolRoutingConfigured": false,
+  "inference": "real-ollama-startup-model-probes-only",
+  "checks": [
+    "http-register-off-enable",
+    "display-name-edit-keeps-confirmed",
+    "bearer-duplicate-isolation-and-rotation",
+    "stdio-register-discovery",
+    "failed-save-and-enable-remain-off",
+    "zero-tools-and-responsive-list",
+    "restart-restores-settings-intent-history-and-credential",
+    "disconnect-and-settings-change-keep-on-intent",
+    "delete-all-connections-and-owned-credentials",
+    "database-connection-and-credential-deletion",
+    "no-credential-in-process-or-browser-logs"
+  ],
+  "teardown": "passed",
+  "testedAt": "2026-09-10T03:04:31Z",
+  "executionLog": {
+    "path": "browser-execution.jsonl",
+    "sha256": "02bb056cba85e4925b2326f3a6c27e2301bbc472bc4e9ac8e9e8ce25d1015f7d"
+  }
+}
