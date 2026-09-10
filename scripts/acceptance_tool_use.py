@@ -601,7 +601,9 @@ def main():
                 for line in (runtime / "backend.log").read_text().splitlines()
                 if "Tool decision:" in line
                 or "Tool result:" in line
+                or "Tool routing stopped:" in line
                 or "Tool confirmation continuation:" in line
+                or '"event":"inference_request"' in line
                 or '"event": "inference_request"' in line
             ]
             (artifacts / "stage-events.txt").write_text(

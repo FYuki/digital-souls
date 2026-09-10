@@ -92,6 +92,27 @@ def test_greeting_does_not_invoke():
     asyncio.run(run())
 
 
+def test_binding_supplies_missing_arguments_without_exposing_values_to_router():
+    async def run():
+        target = BindingTarget("selected", "external-test", "miori", "検証対象", ("native-tool",), '{"value": 37}')
+
+        def bound_call(context):
+            candidate = next(c for c in context["candidates"] if c["name"] == "native-tool")
+            assert candidate["bindings"] == [{"id": "selected", "label": "検証対象", "provided_arguments": ["value"]}]
+            assert candidate["input_schema"]["required"] == ["value"]
+            return ToolDecision("call", candidate["id"], "{}", "selected")
+
+        async with runtime(Decisions(bound_call, ToolDecision("finish")), targets=(target,)) as (service, source, _):
+            result = await service.run("miori", "session", "検証対象を使って")
+            assert result.results[0]["outcome"] == "succeeded"
+            assert source.calls[0][1] == {"value": 37}
+
+        async with runtime(Decisions(lambda c: call(c, value=99, binding="selected")), targets=(target,)) as (service, source, _):
+            result = await service.run("miori", "session", "値は99で実行して")
+            assert result.direct_text and not source.calls
+    asyncio.run(run())
+
+
 @pytest.mark.parametrize("trusted,expected", [(True, "read_only"), (False, "may_change_state")])
 def test_result_effect_comes_from_snapshot_not_native_claim(trusted, expected):
     async def run():

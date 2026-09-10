@@ -443,7 +443,15 @@ class ToolService:
             for candidate in candidates:
                 item = candidate.projection()
                 item["bindings"] = [
-                    {"id": t.id, "label": self.sanitizer.text(t.label)}
+                    {
+                        "id": t.id,
+                        "label": self.sanitizer.text(t.label),
+                        # 値はCoreだけが保持する。schemaを改変せず、補完可能な引数名を示す。
+                        "provided_arguments": [
+                            self.sanitizer.text(key, maximum=200)
+                            for key in list(json.loads(t.arguments_json))[:128]
+                        ],
+                    }
                     for t in self.bindings.candidates(
                         run.context.character_id, candidate.connection_id, candidate.ref
                     )
