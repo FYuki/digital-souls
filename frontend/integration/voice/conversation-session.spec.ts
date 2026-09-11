@@ -190,3 +190,48 @@ test('同じ実Conversationで音声→text→音声を保存し、textにもTTS
     textPlaybackSamples: playback.renderedSamples, textPlaybackPackets: playback.packetCount,
   }, null, 2), contentType: 'application/json'})
 })
+
+test('privacyで省略したtextを実LiveKit経由で履歴へ反映し、同じsessionで次の回答を再生する', async ({page}, testInfo) => {
+  let tokenRequests = 0
+  page.on('request', request => {
+    if (request.url().endsWith('/api/voice/livekit/token')) tokenRequests += 1
+  })
+  await driver.enableMicrophone(page)
+  const conversationId = await page.evaluate(() => localStorage.getItem('digital-souls:conversation:miori'))
+  expect(conversationId).not.toBeNull()
+  const input = page.getByLabel('メッセージ')
+  await input.fill('この話は履歴に残さないで。')
+  await input.press('Enter')
+  await expect(input).toHaveValue('', {timeout: 30_000})
+  await expect(input).not.toBeFocused()
+  await expect(page.getByText('保存されなかったターン')).toBeVisible()
+  await expect(page.getByText('入力: 聞き取り中')).toBeVisible()
+  const response = await page.request.get(`/api/characters/miori/conversations/${conversationId}/turns`)
+  expect(response.ok()).toBe(true)
+  const skipped = await response.json() as Array<Record<string, unknown>>
+  expect(skipped).toHaveLength(1)
+  expect(skipped[0]).toMatchObject({kind: 'privacy_skipped', reason_code: 'STORAGE_OPT_OUT'})
+  expect(skipped[0]).not.toHaveProperty('user_content')
+  expect(skipped[0]).not.toHaveProperty('assistant_content')
+  const privacyEvidence = await page.evaluate(() => ({
+    terminalCount: window.__voiceChatE2E.coreEventDiagnostics.filter(event => event.type === 'response_privacy_skipped').length,
+    startedCount: window.__voiceChatE2E.coreEventDiagnostics.filter(event => event.type === 'response_started').length,
+    deltaCount: window.__voiceChatE2E.coreEventDiagnostics.filter(event => event.type === 'response_delta').length,
+    playbackCount: Object.keys(window.__voiceChatE2E.playbackCompletions ?? {}).length,
+  }))
+  expect(privacyEvidence).toEqual({terminalCount: 1, startedCount: 0, deltaCount: 0, playbackCount: 0})
+  await expect(page.getByText('この話は履歴に残さないで。', {exact: true})).toHaveCount(0)
+
+  await input.fill('こんにちは。一文で返事をしてください。')
+  await input.press('Enter')
+  await expect(input).toHaveValue('', {timeout: 30_000})
+  const playback = await waitForTextPlayback(page)
+  await expect.poll(async () => (await history(page, conversationId!)).length, {timeout: 30_000}).toBe(2)
+  await expect(page.getByText('保存されなかったターン')).toHaveCount(1)
+  expect(tokenRequests).toBe(1)
+  await testInfo.attach('conversation-privacy-real.json', {contentType: 'application/json', body: JSON.stringify({
+    source: 'typed_text_with_real_privacy_policy_and_livekit',
+    privacy: privacyEvidence, historyCount: 2, tokenRequests,
+    followupRenderedSamples: playback.renderedSamples, followupPacketCount: playback.packetCount,
+  })})
+})

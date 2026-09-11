@@ -94,6 +94,24 @@ transport failure、音声出力区間の重複、packet証拠の欠測、出力
 | Desktop共通client | M4実装、契約文書 | 統合後の引き継ぎ最終確認 |
 | main向けレビュー | 子PRのEpic向けCI成功 | 最終main差分のCI、CodeRabbitと指摘修正 |
 
+## 競合条件の検証範囲
+
+`frontend/src/InputBar.unit.test.ts`と`frontend/src/lib/InputBar.unit.test.ts`は、IME変換中のEnter、失敗時の本文/focus保持、送信確認中から受理確定への遷移、スレッド別下書きと遅着結果を検証する。実OSのIME操作の受入ではない。
+
+受理台帳・結果照合・再送・ACK欠落の競合はM2/M4/M5のunit/module/モックE2Eで再現している。遅延STT・previewとtext優先の競合はM7のCore/bridge検証に対応する。実サービス側では通常の受理後再開、生成/再生へのtext割り込み、focus中の実音声抑止、別スレッドへの送信、実network障害後の会話継続を確認し、全競合パターンを実networkで再現したものとは区別する。
+
 ## 契約の引き継ぎ
 
 #317は [共通clientの利用方法](decisions/conversation-session-client-2026-09.md) と [Voice Sessionテキスト入力契約](decisions/conversation-session-text-input-2026-09.md) を参照する。Desktop shell、UI、OS統合は本Epicに含めない。mainへのマージはユーザーが実施する。
+
+## Privacy終端のレビュー修正
+
+main向けドラフトPR #338のCodeRabbit指摘から、直接テキストがprivacyで省略された場合のwire通知欠落を確認した。Coreは`response_started`より前に省略へ終端し、従来serializerはSpeechのutterance破棄だけを通知するため、Text-only入力ではブラウザへ省略結果が届かなかった。
+
+Epic統合commit `6b052700ee561b651d68013144cb72278902c5c2`（PR #339）は本文を含まない`response_privacy_skipped`を追加し、Appの履歴再取得、生成/再生終了、一時本文と遅着開始/deltaの除去を実装する。実SQLite/Core/serializerのSpeech・Text検証、開始前後のApp検証、共通投影、別応答維持、Room再生停止、schema/送信元の検証が通過した。CodeRabbitの再レビューでブロッカーなし、末尾空行の軽微な指摘も修正した。実際の保存拒否ルールによるブラウザ受入は、統合後に追加specを実行して記録する。
+
+## #291固定commitとのローカル互換性
+
+[ローカル接続検証](artifacts/conversation-session-memory-local-2026-09-11.json)は#319側`b416b363b1dc2a4ecc6cb49a1d7a108058b598bb`と、既存#291実装`6aee764cd702c5b947f5f7b4613f7e4c4c75c7cc`を独立worktreeで組み合わせた結果。音声→Text→音声の3 turnは実SQLiteで1つの永続予約へ合流し、thread revision=6、各turn revision=2となった。同じText入力IDの再送で追加更新はなく、新しいqueue instanceからrevision=6と3 turnすべてのsnapshotを取得できた。
+
+共通履歴/Privacy module 3件と既存保存入口・queueの競合/回復38件が成功。抽出LLMの実接続試験ではなく、#291の公開Epicへの取り込みと最終runtime受入も未完了のため、M3とM8はopenを維持する。
