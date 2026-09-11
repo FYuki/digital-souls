@@ -1,0 +1,84 @@
+name: Desktop Puppet Tauri PoC
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/desktop-puppet-tauri-poc
+    paths:
+      - "desktop-puppet/**"
+      - ".github/workflows/desktop-puppet-tauri-poc.yml"
+
+jobs:
+  windows-live2d-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    defaults:
+      run:
+        working-directory: desktop-puppet
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Svelte and TypeScript check
+        run: npm run check
+
+      - name: Vite build
+        run: npm run build
+
+      - name: Rust check
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Build Tauri executable
+        run: npm run tauri build -- --no-bundle
+
+      - name: Run Tauri and wait for Live2D ready
+        shell: pwsh
+        run: |
+          $statusFile = Join-Path $env:RUNNER_TEMP "digital-souls-live2d-status.json"
+          if (Test-Path $statusFile) { Remove-Item $statusFile -Force }
+          $env:DIGITAL_SOULS_LIVE2D_STATUS_FILE = $statusFile
+
+          $exe = Resolve-Path "src-tauri\target\release\digital-souls-desktop-puppet.exe"
+          $process = Start-Process -FilePath $exe -PassThru
+
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 60; $i++) {
+              if (Test-Path $statusFile) {
+                $raw = Get-Content $statusFile -Raw
+                Write-Host "Live2D status: $raw"
+                $payload = $raw | ConvertFrom-Json
+                if ($payload.status -eq "ready") {
+                  $ready = $true
+                  break
+                }
+                if ($payload.status -eq "error") {
+                  throw "Live2D runtime reported an error: $($payload.detail)"
+                }
+              }
+              Start-Sleep -Seconds 1
+            }
+
+            if (-not $ready) {
+              throw "Timed out waiting for Live2D ready status from Tauri/WebView2"
+            }
+          }
+          finally {
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+            }
+          }
