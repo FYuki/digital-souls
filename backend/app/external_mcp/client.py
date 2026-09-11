@@ -11,7 +11,7 @@ from typing import Any, AsyncGenerator, AsyncIterator, Awaitable, Callable
 
 import anyio
 import httpx2
-from mcp import Client
+from mcp import Client, types
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
 from mcp.shared.exceptions import MCPError
@@ -122,10 +122,11 @@ def _failure(error: BaseException) -> MCPFailure:
         if error.response.status_code >= 500:
             return MCPFailure("transport", "http_service_error", retryable=True)
         return MCPFailure("protocol", "http_request_rejected")
+    if isinstance(error, (TimeoutError, httpx2.TimeoutException)):
+        return MCPFailure("transport", "transport_timeout", retryable=True)
     if isinstance(
         error,
         (
-            TimeoutError,
             OSError,
             httpx2.TransportError,
             anyio.EndOfStream,
@@ -167,7 +168,7 @@ class ExternalMCPClient:
 
     @property
     def connected(self) -> bool:
-        return self._client is not None
+        return self._client is not None and self._connection_failure is None
 
     @asynccontextmanager
     async def connect(self) -> AsyncIterator[ExternalMCPClient]:
@@ -197,8 +198,11 @@ class ExternalMCPClient:
             yield self
         finally:
             stop.set()
+            # initialize待機中はstopを読む区間に未到達。期限切れ時に所有taskも止める。
+            if not ready.is_set():
+                owner.cancel()
             try:
-                await owner
+                await asyncio.gather(owner, return_exceptions=True)
             finally:
                 self._owner = None
 
@@ -257,9 +261,11 @@ class ExternalMCPClient:
 
     async def _request(self, request: Callable[[Client], Awaitable[Any]]) -> Any:
         if self._connection_failure is not None:
-            raise self._connection_failure
+            failure = self._connection_failure
+            raise MCPFailure(failure.category, failure.code, retryable=failure.retryable, request_started=False)
         if self._client is None or self._owner is None:
-            raise MCPFailure("unavailable", "not_connected")
+            raise MCPFailure("unavailable", "not_connected", request_started=False)
+        request_started = False
         token = _private_io.set(True)
         failures: list[MCPFailure] = []
         failure_token = _http_failures.set(failures)
@@ -278,6 +284,8 @@ class ExternalMCPClient:
                             raise ValueError
                     except Exception:
                         raise MCPFailure("auth", "secret_unavailable") from None
+                # ここからはSDK/transportへ制御を渡すため、送信済みの可能性がある。
+                request_started = True
                 pending = asyncio.ensure_future(request(self._client))
                 try:
                     done, _ = await asyncio.wait(
@@ -298,14 +306,38 @@ class ExternalMCPClient:
         except asyncio.CancelledError:
             raise
         except Exception as error:
-            raise (
+            failure = (
                 failures[-1]
                 if failures
                 else self._connection_failure or _failure(error)
+            )
+            raise MCPFailure(
+                failure.category,
+                failure.code,
+                retryable=failure.retryable,
+                request_started=request_started,
             ) from None
         finally:
             _private_io.reset(token)
             _http_failures.reset(failure_token)
+
+    @property
+    def connection_failure(self) -> MCPFailure | None:
+        return self._connection_failure
+
+    async def health(self) -> None:
+        # 2026-07-28ではpingが廃止されたため、能力や副作用に依存しないdiscoverを使う。
+        async def probe(client: Client) -> None:
+            if client.protocol_version >= "2026-07-28":
+                result = types.DiscoverResult.model_validate(
+                    await client.session.send_discover(client.protocol_version)
+                )
+                if client.protocol_version not in result.supported_versions:
+                    raise MCPFailure("protocol", "protocol_version_changed")
+            else:
+                await client.session.send_ping()
+
+        await self._request(probe)
 
     async def discover(self) -> Discovery:
         async def fetch(client: Client) -> Discovery:

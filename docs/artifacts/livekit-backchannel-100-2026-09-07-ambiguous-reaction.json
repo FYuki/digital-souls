@@ -1,0 +1,58 @@
+{
+  "scope": "labeled_livekit_backchannel_cohort_report",
+  "quantile_method": "hyndman_fan_type_7",
+  "cohort": "backchannel",
+  "counts": {
+    "expected": 100,
+    "recorded": 100,
+    "independent_sessions": 100,
+    "success": 79,
+    "failure": 21,
+    "verified_injection": 100,
+    "session_end_confirmed": 100,
+    "backchannel_decision": 79,
+    "take_turn_decision": 0,
+    "indeterminate_decision": 11,
+    "unverified_final_decision": 10,
+    "observed_server_cancel": 0,
+    "observed_local_stop": 0
+  },
+  "failure_stages": {
+    "fixture_and_decision": 10,
+    "cancel_or_continuity": 11
+  },
+  "metrics": [
+    {
+      "name": "backchannel_false_cancel",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "labeled_backchannel_injected",
+      "end_point": "old_response_full_output_or_cancel",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    }
+  ],
+  "evaluation": {
+    "minimum_trials": 100,
+    "coverage_complete": true,
+    "false_cancel_rate_passed": true
+  },
+  "metric_schema_sha256": "2d331448f38a27474f23d7d5631d2c1ab15b097e54dcf70ad153cce63fbe34b9",
+  "labeled_manifest_sha256": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3",
+  "raw_manifest_sha256": "f0ee2ed3adbb2e3c1252cb96504d892ed2f9483fe0ac66ef6651fe30df6ec2e4",
+  "raw_trace_sha256": "c988ebb9ccd2ae0affc7b40161efbd10eeda7ad230796f544066db528b487eaf",
+  "reporter_sha256": "4e9b5530db927fc5bf0455f15d9dbb9de4513ab8f7b496c490fc497a16aa609f",
+  "playback_validator_sha256": "63e26986ca6f117b947cc51a7b8037f56edeedc5f3863835fc22b7c605b18faa",
+  "shared_reporter_sha256": "3315e86505809d231a059a34597199a65912593ae07a699323a79a6cc7132f2a"
+}

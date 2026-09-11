@@ -1,0 +1,218 @@
+{
+  "schema_version": "1.0",
+  "evaluation_scope": "normal_response_latency_only",
+  "passed": false,
+  "candidate_revision": "2d10020ca818fce228b8446d51c329bebccb92e5",
+  "baseline_revision": "4d71fbbf111ac87f22e7801106169ee6e4f1f532",
+  "candidate_sha256": "99dd60e0a7a02558753bc5f8ed15b67773df30df89dfd8d7b2e3d3e8a11c6ed2",
+  "baseline_sha256": "26b92cd07dd36be8e952e2e89927afa5e0cfc972f8f0959f06265e404e36e466",
+  "audited_source_sha256": {
+    "baseline": {
+      "frontend/src/lib/AudioRecorder.svelte": "0a78b64940d90baf67e6d3b066dcd3fd9f53bdfb1173c1b30dc1811c8bd94046",
+      "frontend/src/App.svelte": "da8b59251e0132da4692ea1bc933f06df6200694830f0321701138224c0204c0",
+      "backend/app/routers/ws.py": "db4a53ade6159b8b55ef4f0eeff128eba698f11e0eef68e1411c430fc0b39e27"
+    },
+    "candidate": {
+      "backend/app/livekit_transport/production.py": "c128656f318ddaf50c7d5badef566bc5eb9244f4e1dce8df36668c2c02ba1b23",
+      "backend/app/conversation_core/session.py": "77df1eb129b35f6d0a84d4eb95be369d4b2927ab27227a17acf9a622953109c3"
+    },
+    "vad_candidate": {
+      "frontend/src/lib/AudioRecorder.svelte": "e288286ca4355a42733f7ff21d060e955b5af46838561265a3e8774acbc1f0df",
+      "frontend/src/lib/audio/utterance-detector.ts": "dc1fda4e55aa283c43c3846f243280f4ea2fc7610179e4be3eff2cfb199db040",
+      "frontend/src/App.svelte": "1eae6fd3cd401685e7ed792a325bdec08d8f140f6f7ba9bf6a8ed50224c3c700",
+      "frontend/src/livekit/voice-session.ts": "15339da7b4195dbc09fe526e64c602bd0641894f11655238010538bc9fbe57b9",
+      "backend/app/livekit_transport/measurement.py": "a87ec92503224cc5c5cfb0c7b8397e9dd5231df5b1e40f31ef125a83ac34e626",
+      "frontend/playwright/controlled-audio-fixture.ts": "c78eaec064d1ac7fdcf193e96029aea8377a855a9448cfd8f6702a6e17a770c6",
+      "frontend/integration/voice-quality/livekit-quality.spec.ts": "cefd1a9973688ae356ced54f72e5a3d28a8a582289ff97436c6c72aca99e9fe9"
+    }
+  },
+  "absolute_results": {
+    "ttfa": {
+      "passed": false,
+      "absolute_passed": false,
+      "relative_passed": null,
+      "median_guide_met": false,
+      "limit_ms": 2000.0
+    },
+    "utterance_finalized": {
+      "passed": true,
+      "absolute_passed": true,
+      "relative_passed": null,
+      "median_guide_met": null,
+      "limit_ms": 800.0
+    }
+  },
+  "relative_results": {
+    "utterance_finalized": {
+      "status": "not_comparable",
+      "candidate_p95_ms": 293.64886745,
+      "baseline_p95_ms": 0.5049999997019765,
+      "relative_limit_ms": null,
+      "reason": "audited_observation_intervals_differ",
+      "boundary_evidence": {
+        "baseline": "client VAD終了callback → recorder.stopAndTake完了",
+        "candidate": "server VAD終了通知受信 → STT後のCore発話確定",
+        "baseline_evidence": [
+          "frontend/src/lib/AudioRecorder.svelte:140-151"
+        ],
+        "candidate_evidence": [
+          "backend/app/livekit_transport/production.py:512-520",
+          "backend/app/livekit_transport/production.py:937-941",
+          "backend/app/conversation_core/session.py:698-700",
+          "backend/app/conversation_core/session.py:757-765"
+        ]
+      }
+    },
+    "response_decision": {
+      "status": "not_comparable",
+      "candidate_p95_ms": 308.38425185,
+      "baseline_p95_ms": 0.5049999997019765,
+      "relative_limit_ms": null,
+      "reason": "audited_observation_intervals_differ",
+      "boundary_evidence": {
+        "baseline": "client VAD終了callback → 全PCM送信直前",
+        "candidate": "server VAD終了通知受信 → Core response_started",
+        "baseline_evidence": [
+          "frontend/src/lib/AudioRecorder.svelte:140-151",
+          "frontend/src/App.svelte:233-239"
+        ],
+        "candidate_evidence": [
+          "backend/app/livekit_transport/production.py:494-508",
+          "backend/app/livekit_transport/production.py:937-941"
+        ]
+      }
+    },
+    "stt_start_latency": {
+      "status": "not_comparable",
+      "candidate_p95_ms": 1304.9011224,
+      "baseline_p95_ms": 1.2490054,
+      "relative_limit_ms": null,
+      "reason": "audited_observation_intervals_differ",
+      "boundary_evidence": {
+        "baseline": "発話全体のWebSocket frame受信 → STT開始",
+        "candidate": "発話captureへの最初のPCM受信 → STT開始",
+        "baseline_evidence": [
+          "backend/app/routers/ws.py:246-247",
+          "backend/app/routers/ws.py:590-627"
+        ],
+        "candidate_evidence": [
+          "backend/app/livekit_transport/production.py:973-991",
+          "backend/app/conversation_core/session.py:698-700"
+        ]
+      }
+    },
+    "stt_processing": {
+      "status": "passed",
+      "candidate_p95_ms": 136.36777625,
+      "baseline_p95_ms": 2170.69554505,
+      "relative_limit_ms": 2387.765099555,
+      "reason": null,
+      "boundary_evidence": null
+    },
+    "llm_start_latency": {
+      "status": "passed",
+      "candidate_p95_ms": 21.865580049999995,
+      "baseline_p95_ms": 0.2262813,
+      "relative_limit_ms": 50.2262813,
+      "reason": null,
+      "boundary_evidence": null
+    },
+    "first_text_latency": {
+      "status": "passed",
+      "candidate_p95_ms": 10577.8339516,
+      "baseline_p95_ms": 12335.07687625,
+      "relative_limit_ms": 13568.584563875,
+      "reason": null,
+      "boundary_evidence": null
+    },
+    "llm_completion": {
+      "status": "passed",
+      "candidate_p95_ms": 10692.762281199999,
+      "baseline_p95_ms": 12335.36990075,
+      "relative_limit_ms": 13568.906890825001,
+      "reason": null,
+      "boundary_evidence": null
+    },
+    "tts_start_latency": {
+      "status": "passed",
+      "candidate_p95_ms": 30.7521665,
+      "baseline_p95_ms": 0.7087882,
+      "relative_limit_ms": 50.7087882,
+      "reason": null,
+      "boundary_evidence": null
+    },
+    "first_audio_generation": {
+      "status": "passed",
+      "candidate_p95_ms": 363.81438694999997,
+      "baseline_p95_ms": 4023.34638455,
+      "relative_limit_ms": 4425.681023005,
+      "reason": null,
+      "boundary_evidence": null
+    },
+    "client_playback_latency": {
+      "status": "passed",
+      "candidate_p95_ms": 45.0,
+      "baseline_p95_ms": 31.19999998882413,
+      "relative_limit_ms": 81.19999998882413,
+      "reason": null,
+      "boundary_evidence": null
+    },
+    "ttfa": {
+      "status": "passed",
+      "candidate_p95_ms": 11995.305000022054,
+      "baseline_p95_ms": 19896.14999999702,
+      "relative_limit_ms": 21885.76499999672,
+      "reason": null,
+      "boundary_evidence": null
+    },
+    "vad_leading_boundary": {
+      "status": "not_comparable",
+      "candidate_p95_ms": 17.019999998807904,
+      "baseline_p95_ms": 179.7050000026822,
+      "relative_limit_ms": null,
+      "reason": "audited_observation_intervals_differ",
+      "boundary_evidence": {
+        "baseline": "fixture正解開始 → onSpeechStart callbackでrecorder.startを呼ぶ直前",
+        "candidate": "fixture正解開始の因果下限 → 確認された候補開始frameのclient時刻の丸め上限（offset上限）",
+        "baseline_evidence": [
+          "frontend/src/lib/AudioRecorder.svelte:54-55"
+        ],
+        "candidate_evidence": [
+          "frontend/src/lib/AudioRecorder.svelte:76-87",
+          "frontend/src/lib/audio/utterance-detector.ts:101-102",
+          "frontend/src/lib/audio/utterance-detector.ts:172",
+          "backend/app/livekit_transport/production.py:897-906"
+        ]
+      }
+    },
+    "vad_trailing_boundary": {
+      "status": "not_comparable",
+      "candidate_p95_ms": 751.8399999558926,
+      "baseline_p95_ms": 1489.7000000029802,
+      "relative_limit_ms": null,
+      "reason": "audited_observation_intervals_differ",
+      "boundary_evidence": {
+        "baseline": "fixture正解終了 → stopAndTake完了後の録音確定client時刻",
+        "candidate": "fixture正解終了の因果下限 → 検出器ended通知のclient時刻の丸め上限（offset上限）",
+        "baseline_evidence": [
+          "frontend/src/lib/AudioRecorder.svelte:140-151"
+        ],
+        "candidate_evidence": [
+          "frontend/src/lib/AudioRecorder.svelte:86-87",
+          "frontend/src/lib/AudioRecorder.svelte:242-247",
+          "backend/app/livekit_transport/measurement.py:401-409"
+        ]
+      }
+    }
+  },
+  "coverage_errors": [],
+  "strict_evaluation_passed": false,
+  "strict_coverage_errors": [
+    "barge_in_cancel_total:incomplete_measurement",
+    "cancel_after_decision:incomplete_measurement",
+    "local_playback_stop:incomplete_measurement",
+    "turn_decision:incomplete_measurement",
+    "vad_leading_boundary:measurement_boundary_mismatch",
+    "vad_trailing_boundary:measurement_boundary_mismatch"
+  ]
+}

@@ -253,3 +253,94 @@ def test_livekit_measurement_keeps_stt_failure_without_protocol_response() -> No
     assert recorded[0].outcome == "failure"
     assert recorded[0].reason_code == "stt_failed"
     assert recorded[0].response_id
+
+
+def test_interruption_keeps_old_response_and_client_clock_in_report(tmp_path) -> None:
+    import json
+    from pathlib import Path
+    from app.livekit_trace_report import finalize_livekit_dogfood_report
+
+    events = []
+    measurement = LiveKitMeasurementSession(
+        session_id="session-test", character_id="character-test",
+        measurement_kind="dogfood", record=events.append, clock_ns=lambda: 900_000_000,
+    )
+    measurement.bind_response(response_id="old-response", source_utterance_ids=("old-utterance",))
+    measurement.record_response_event(
+        response_id="old-response", name="first_playback", stage="playback",
+        timestamp=500, clock_domain="client_monotonic", unit="millisecond",
+    )
+    assert measurement.bind_interruption(utterance_id="interruption", response_id="old-response")
+    assert not measurement.bind_interruption(utterance_id="interruption", response_id="unknown")
+    for name, timestamp, domain, unit in (
+        ("speech_started_client", 1000, "client_monotonic", "millisecond"),
+        ("speech_started", 2_000_000_000, "server_monotonic", "nanosecond"),
+        ("local_playback_stopped", 1150, "client_monotonic", "millisecond"),
+        ("take_turn_decision", 2_100_000_000, "server_monotonic", "nanosecond"),
+        ("server_cancelled", 2_150_000_000, "server_monotonic", "nanosecond"),
+    ):
+        measurement.record_utterance_event(
+            utterance_id="interruption", name=name, stage="turn",
+            timestamp=timestamp, clock_domain=domain, unit=unit,
+        )
+    for name, timestamp in (("turn_decision_received", 1140), ("cancel_confirmed", 1200)):
+        event = {
+            "event_id": name, "session_id": "session-test",
+            "utterance_id": "interruption", "response_id": "old-response",
+            "measurement": name, "timestamp": timestamp,
+            "clock_domain": "client_monotonic", "unit": "millisecond",
+        }
+        assert not measurement.record_client_observation({**event, "response_id": "unknown"})
+        # IDを変えた正しい通知だけを受理し、重複も拒否する。
+        event["event_id"] = name + "-valid"
+        assert measurement.record_client_observation(event)
+        assert not measurement.record_client_observation(event)
+    measurement.bind_response(response_id="new-response", source_utterance_ids=("interruption",))
+    measurement.record_response_event(
+        response_id="new-response", name="first_playback", stage="playback",
+        timestamp=2000, clock_domain="client_monotonic", unit="millisecond",
+    )
+    assert not any(e.name == "local_playback_stopped" and e.response_id == "new-response" for e in events)
+    trace = tmp_path / "trace.jsonl"
+    trace.write_text("".join(e.model_dump_json() + "\n" for e in events))
+    output = tmp_path / "report.json"
+    finalize_livekit_dogfood_report(
+        trace_paths=[trace], output_path=output,
+        schema_path=Path(__file__).resolve().parents[3] / "docs/schemas/voice-quality-artifact-v1.schema.json",
+        run_id="interruption-test",
+    )
+    report = json.loads(output.read_text())
+    metrics = {m["name"]: m for m in report["metrics"]}
+    assert report["run_counts"]["measured"] == 2
+    assert report["run_counts"]["failure"] == 0
+    for name, duration in {
+        "local_playback_stop": 150, "turn_decision": 140,
+        "cancel_after_decision": 50, "barge_in_cancel_total": 200,
+    }.items():
+        assert metrics[name]["p95"] == duration
+        assert metrics[name]["rate_denominator"] == 1
+        assert metrics[name]["excluded_outcomes"] == {"not_interruption_trial": 2}
+    assert metrics["processing_failure"]["rate_denominator"] == 2
+    assert metrics["processing_failure"]["excluded_outcomes"] == {"interruption_trial": 1}
+
+
+def test_client_media_points_keep_distinct_timestamps_and_correlate_once():
+    recorded = []
+    measurement = LiveKitMeasurementSession(
+        session_id='session', character_id='miori', measurement_kind='controlled_baseline',
+        record=recorded.append, clock_ns=lambda: 1000000000,
+    )
+    for name, timestamp in (
+        ('client_track_received', 100), ('client_encoded_received', 700),
+        ('client_audio_decoded', 710), ('playback_started', 760),
+    ):
+        event = {'event_id': name, 'session_id': 'session', 'response_id': 'response',
+                 'measurement': name, 'timestamp': timestamp,
+                 'clock_domain': 'client_monotonic', 'unit': 'millisecond'}
+        assert not measurement.record_client_observation(event)
+    measurement.bind_response(response_id='response', source_utterance_ids=('utterance',))
+    assert [(event.name, event.timestamp) for event in recorded] == [
+        ('client_track_received', 100), ('client_audio_received', 700),
+        ('client_audio_decoded', 710), ('first_playback', 760),
+    ]
+    assert all(event.response_id == 'response' and event.utterance_id == 'utterance' for event in recorded)

@@ -1,0 +1,189 @@
+{
+  "schema_version": "1.0",
+  "evaluation_scope": "normal_response_latency_only",
+  "passed": false,
+  "candidate_revision": "a03e8a69d318b257bb4bfcc17289df631db85058",
+  "baseline_revision": "4d71fbbf111ac87f22e7801106169ee6e4f1f532",
+  "candidate_sha256": "dbddcb84f2ebc8276cd13ff7ef490591c3e62ce1d16d6fce0c37a64a3ee5a5f9",
+  "baseline_sha256": "26b92cd07dd36be8e952e2e89927afa5e0cfc972f8f0959f06265e404e36e466",
+  "audited_source_sha256": {
+    "baseline": {
+      "frontend/src/lib/AudioRecorder.svelte": "0a78b64940d90baf67e6d3b066dcd3fd9f53bdfb1173c1b30dc1811c8bd94046",
+      "frontend/src/App.svelte": "da8b59251e0132da4692ea1bc933f06df6200694830f0321701138224c0204c0",
+      "backend/app/routers/ws.py": "db4a53ade6159b8b55ef4f0eeff128eba698f11e0eef68e1411c430fc0b39e27"
+    },
+    "candidate": {
+      "backend/app/livekit_transport/production.py": "c3f69802f6beaa7f257896651ac4e85cbd132227dd9e83b65a3f1b9d8dc9358a",
+      "backend/app/conversation_core/session.py": "77df1eb129b35f6d0a84d4eb95be369d4b2927ab27227a17acf9a622953109c3"
+    }
+  },
+  "absolute_results": {
+    "ttfa": {
+      "passed": true,
+      "absolute_passed": true,
+      "relative_passed": null,
+      "median_guide_met": false,
+      "limit_ms": 2000.0
+    },
+    "utterance_finalized": {
+      "passed": true,
+      "absolute_passed": true,
+      "relative_passed": null,
+      "median_guide_met": null,
+      "limit_ms": 800.0
+    }
+  },
+  "relative_results": {
+    "utterance_finalized": {
+      "status": "not_comparable",
+      "candidate_p95_ms": 288.5572326,
+      "baseline_p95_ms": 0.5049999997019765,
+      "relative_limit_ms": null,
+      "reason": "audited_observation_intervals_differ",
+      "boundary_evidence": {
+        "baseline": "client VAD終了callback → recorder.stopAndTake完了",
+        "candidate": "server VAD終了通知受信 → STT後のCore発話確定",
+        "baseline_evidence": [
+          "frontend/src/lib/AudioRecorder.svelte:140-151"
+        ],
+        "candidate_evidence": [
+          "backend/app/livekit_transport/production.py:512-520",
+          "backend/app/livekit_transport/production.py:937-941",
+          "backend/app/conversation_core/session.py:698-700",
+          "backend/app/conversation_core/session.py:757-765"
+        ]
+      }
+    },
+    "response_decision": {
+      "status": "not_comparable",
+      "candidate_p95_ms": 298.767516,
+      "baseline_p95_ms": 0.5049999997019765,
+      "relative_limit_ms": null,
+      "reason": "audited_observation_intervals_differ",
+      "boundary_evidence": {
+        "baseline": "client VAD終了callback → 全PCM送信直前",
+        "candidate": "server VAD終了通知受信 → Core response_started",
+        "baseline_evidence": [
+          "frontend/src/lib/AudioRecorder.svelte:140-151",
+          "frontend/src/App.svelte:233-239"
+        ],
+        "candidate_evidence": [
+          "backend/app/livekit_transport/production.py:494-508",
+          "backend/app/livekit_transport/production.py:937-941"
+        ]
+      }
+    },
+    "stt_start_latency": {
+      "status": "not_comparable",
+      "candidate_p95_ms": 1306.18758395,
+      "baseline_p95_ms": 1.2490054,
+      "relative_limit_ms": null,
+      "reason": "audited_observation_intervals_differ",
+      "boundary_evidence": {
+        "baseline": "発話全体のWebSocket frame受信 → STT開始",
+        "candidate": "発話captureへの最初のPCM受信 → STT開始",
+        "baseline_evidence": [
+          "backend/app/routers/ws.py:246-247",
+          "backend/app/routers/ws.py:590-627"
+        ],
+        "candidate_evidence": [
+          "backend/app/livekit_transport/production.py:973-991",
+          "backend/app/conversation_core/session.py:698-700"
+        ]
+      }
+    },
+    "stt_processing": {
+      "status": "passed",
+      "candidate_p95_ms": 133.24315105,
+      "baseline_p95_ms": 2170.69554505,
+      "relative_limit_ms": 2387.765099555,
+      "reason": null,
+      "boundary_evidence": null
+    },
+    "llm_start_latency": {
+      "status": "passed",
+      "candidate_p95_ms": 16.717309549999996,
+      "baseline_p95_ms": 0.2262813,
+      "relative_limit_ms": 50.2262813,
+      "reason": null,
+      "boundary_evidence": null
+    },
+    "first_text_latency": {
+      "status": "passed",
+      "candidate_p95_ms": 344.50993470000003,
+      "baseline_p95_ms": 12335.07687625,
+      "relative_limit_ms": 13568.584563875,
+      "reason": null,
+      "boundary_evidence": null
+    },
+    "llm_completion": {
+      "status": "passed",
+      "candidate_p95_ms": 469.42047829999984,
+      "baseline_p95_ms": 12335.36990075,
+      "relative_limit_ms": 13568.906890825001,
+      "reason": null,
+      "boundary_evidence": null
+    },
+    "tts_start_latency": {
+      "status": "passed",
+      "candidate_p95_ms": 28.712380399999997,
+      "baseline_p95_ms": 0.7087882,
+      "relative_limit_ms": 50.7087882,
+      "reason": null,
+      "boundary_evidence": null
+    },
+    "first_audio_generation": {
+      "status": "passed",
+      "candidate_p95_ms": 373.6631719,
+      "baseline_p95_ms": 4023.34638455,
+      "relative_limit_ms": 4425.681023005,
+      "reason": null,
+      "boundary_evidence": null
+    },
+    "client_playback_latency": {
+      "status": "passed",
+      "candidate_p95_ms": 45.0,
+      "baseline_p95_ms": 31.19999998882413,
+      "relative_limit_ms": 81.19999998882413,
+      "reason": null,
+      "boundary_evidence": null
+    },
+    "ttfa": {
+      "status": "passed",
+      "candidate_p95_ms": 1814.8950000181794,
+      "baseline_p95_ms": 19896.14999999702,
+      "relative_limit_ms": 21885.76499999672,
+      "reason": null,
+      "boundary_evidence": null
+    },
+    "vad_leading_boundary": {
+      "status": "missing",
+      "candidate_p95_ms": null,
+      "baseline_p95_ms": 179.7050000026822,
+      "relative_limit_ms": 229.7050000026822,
+      "reason": "incomplete_measurement",
+      "boundary_evidence": null
+    },
+    "vad_trailing_boundary": {
+      "status": "missing",
+      "candidate_p95_ms": null,
+      "baseline_p95_ms": 1489.7000000029802,
+      "relative_limit_ms": 1638.6700000032783,
+      "reason": "incomplete_measurement",
+      "boundary_evidence": null
+    }
+  },
+  "coverage_errors": [
+    "vad_leading_boundary:incomplete_measurement",
+    "vad_trailing_boundary:incomplete_measurement"
+  ],
+  "strict_evaluation_passed": false,
+  "strict_coverage_errors": [
+    "barge_in_cancel_total:incomplete_measurement",
+    "cancel_after_decision:incomplete_measurement",
+    "local_playback_stop:incomplete_measurement",
+    "turn_decision:incomplete_measurement",
+    "vad_leading_boundary:incomplete_measurement",
+    "vad_trailing_boundary:incomplete_measurement"
+  ]
+}

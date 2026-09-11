@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "evaluation_scope": "actual_stt_pcm_edge_coverage_only",
+  "cohort": "take_turn",
+  "measurement_revision": "5cf2d5f256ec64d5b95a2fb0b74a01d834690a47",
+  "evidence_sha256": {
+    "manifest": "0d51f76b0c4de3c509f7306aea74d99b1a79e05e6051aaaba4ead61d4692e375",
+    "observer": "9b4d099c9efc07f992c846dd65d5ddd3e40f0a2ad413520c356080ee1c5761b8",
+    "trace": "cb755d3f6e01d74a4eae3ee7e285d89c903c664d92a2b555fa599d6c6c5a07a9",
+    "profile": "3f27518ffca4e07eae553d50955680c1625fd2bc72e8e4a9e5d578d7e72d53c4"
+  },
+  "counts": {
+    "expected": 3,
+    "recorded": 3,
+    "final_inputs_correlated": 3,
+    "edges_matched": 3,
+    "missing": 0,
+    "session_cleanup_confirmed": 3,
+    "voice_success": 3,
+    "other_stt_requests": 4,
+    "nonuniform_global_alignment": 0
+  },
+  "missing_reasons": {},
+  "minimum_edge_correlation": 0.9495280288508703,
+  "passed": false,
+  "gates": {
+    "independent_100": false,
+    "all_final_inputs_correlated": true,
+    "all_speech_edges_matched": true,
+    "no_missing": true,
+    "all_sessions_ended": true,
+    "measurement_revision_recorded": true
+  },
+  "interior_continuity_verified": false,
+  "all_vad_acceptance_verified": false
+}

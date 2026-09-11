@@ -21,6 +21,29 @@ const readResolvedProfile = (reportPath: string) => {
 }
 
 const createRealBackendProxy = (origin: string): Record<string, ProxyOptions> => ({
+  // Tool loopの有限deadlineと最終回答生成を待つ。音声mediaはLiveKitが担う。
+  '/api/chat': {
+    target: origin,
+    changeOrigin: true,
+    timeout: 180_000,
+    proxyTimeout: 180_000,
+    rewrite: (path: string) => path.replace(/^\/api(?=\/|$)/, ''),
+  },
+  '/api/perception/screen/': {
+    target: origin,
+    changeOrigin: true,
+    timeout: 180_000,
+    proxyTimeout: 180_000,
+    rewrite: (path: string) => path.replace(/^\/api(?=\/|$)/, ''),
+  },
+  // 承認後の続行も実LLM・Toolを通る会話応答。一般管理APIの50秒で切断しない。
+  '^/api/addon-actions/(?:admin/)?requests/[^/]+/continue(?:\\?|$)': {
+    target: origin,
+    changeOrigin: true,
+    timeout: 180_000,
+    proxyTimeout: 180_000,
+    rewrite: (path: string) => path.replace(/^\/api(?=\/|$)/, ''),
+  },
   [API_PROXY_PREFIX]: {
     target: origin,
     changeOrigin: true,

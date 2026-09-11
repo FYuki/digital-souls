@@ -1,0 +1,14 @@
+
+Running 3 tests using 1 worker
+
+(node:2097786) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [text] › integration/tool-use/conversation.spec.ts:18:1 › 実ブラウザのテキスト会話でstdio ToolとHTTP Resourceの結果を回答する (1.2m)
+(node:2099077) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 [filesystem] › integration/tool-use/conversation.spec.ts:32:5 › 実LiveKit音声/filesystem › 音声入力から外部取得・回答・AudioTrack再生まで通る (3.3m)
+(node:2106884) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  3 [resource] › integration/tool-use/conversation.spec.ts:32:5 › 実LiveKit音声/resource › 音声入力から外部取得・回答・AudioTrack再生まで通る (46.7s)
+
+  3 passed (5.2m)

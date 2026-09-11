@@ -5,6 +5,8 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator, FormatChecker
 
 from tests.environment_test_support import resolved_runtime_paths
@@ -19,6 +21,60 @@ def _resolve(profile_name: str, tmp_path: Path):
     return resolve_profile(
         {"DS_PROFILE": profile_name}, None, resolved_runtime_paths(tmp_path)
     )
+
+
+@pytest.mark.parametrize("profile_name", ["dev", "dogfood"])
+def test_container_preserves_profile_origin_for_screen_aware_chat(
+    profile_name: str, tmp_path: Path,
+) -> None:
+    from adapters.backend import BackendAdapter
+    from dotenv import dotenv_values
+
+    from app.routers.screen_perception import _require_mutation_origin
+    from app.screen_perception.http_security import resolve_screen_http_security
+    from tests.environment_test_support import RecordingRunner
+
+    report = _resolve(profile_name, tmp_path)
+    origin = report["dependencies"]["frontend"]["baseUrl"]
+    adapter = BackendAdapter(
+        tmp_path, resolved_runtime_paths(tmp_path), RecordingRunner(),
+        effective_profile=profile_name,
+    )
+    environment = {
+        **report["derivedEnvironment"],
+        "DS_RUNTIME_UID": "10001",
+        "DS_RUNTIME_GID": "10001",
+        "DOGFOOD_BACKEND_IMAGE": "ghcr.io/example/backend@sha256:" + "a" * 64,
+        "DOGFOOD_CONFIG_DIR": str(tmp_path / "config"),
+        "DOGFOOD_BACKUP_DIR": str(tmp_path / "backups"),
+        "SCREEN_UNRELATED_SECRET": "must-not-forward",
+    }
+    dependency = report["dependencies"]["backend"]
+    values = adapter._write_compose_environment(  # noqa: SLF001
+        dependency, environment, host=dependency["host"], port=dependency["port"],
+    )
+    # 実際にコンテナへ渡すenv fileを読み、会話と同じOrigin検証へつなぐ。
+    container_environment = dotenv_values(values["DS_CONTAINER_ENV_FILE"])
+    app = FastAPI()
+    app.state.screen_http_security = resolve_screen_http_security(
+        container_environment.get("SCREEN_ALLOWED_ORIGIN") or "http://localhost:5173"
+    )
+
+    @app.post("/origin-check")
+    def check_origin(request: Request):
+        _require_mutation_origin(request)
+        return {"accepted": True}
+
+    with TestClient(app) as client:
+        assert client.post("/origin-check", headers={"Origin": origin}).status_code == 200
+        other_origin = (
+            "http://localhost:5173" if profile_name == "dogfood"
+            else "http://localhost:15173"
+        )
+        assert client.post("/origin-check", headers={"Origin": other_origin}).status_code == 403
+        assert client.post("/origin-check").status_code == 403
+    assert container_environment["SCREEN_ALLOWED_ORIGIN"] == origin
+    assert "SCREEN_UNRELATED_SECRET" not in container_environment
 
 
 @pytest.mark.parametrize(

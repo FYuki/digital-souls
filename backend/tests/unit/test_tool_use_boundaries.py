@@ -1,0 +1,412 @@
+"""Tool利用の予算・停止・会話分離・設定の境界を検証する。"""
+
+import asyncio
+import json
+from types import SimpleNamespace
+
+import pytest
+
+from app.chat_service import ChatInputLimitError
+from app.external_mcp.models import encode
+from app.inference import (
+    InferenceCancellationToken,
+    InferenceError,
+    InferenceErrorCategory,
+)
+from app.prompting import BuiltPrompt, PromptMessage, PromptRole, PromptUsage
+from app.tool_use.prompt import POLICY, require_tool_room, with_tool_material, routing_history
+from app.tool_use.routing import InferenceDecisionRouter, ToolDecision
+from app.tool_use.runtime import ToolSettings
+from app.tool_use.service import CONFIRMATION_REQUIRED_MESSAGE, CONFIRMATION_WAITING_MESSAGE, ToolMaterial
+from app.tool_use.binding import BindingResolver, BindingTarget
+from app.external_mcp.models import MCPFailure
+from tests.tool_use_test_support import Decisions, InputSource, call, runtime
+
+
+def test_configured_optional_binding_uses_unique_target_and_asks_on_ambiguity():
+    one = BindingTarget(
+        "a", "connection", "miori", "対象A", ("operation",), '{"project":"a"}'
+    )
+    two = BindingTarget(
+        "b", "connection", "miori", "対象B", ("operation",), '{"project":"b"}'
+    )
+    resolver = BindingResolver((one,))
+    binding, arguments = resolver.resolve("miori", "session", "connection", "operation")
+    assert binding and arguments == {"project": "a"}
+    resolver = BindingResolver((one, two))
+    with pytest.raises(MCPFailure, match="binding_input_required"):
+        resolver.resolve("miori", "session", "connection", "operation")
+
+
+def test_per_call_binding_overrides_legacy_context_and_is_pinned_across_mrtr():
+    from app.external_mcp import Connection, ExecutionContext, ExecutionGate, Registry
+    from tests.external_mcp_test_support import manifest
+
+    class Binding:
+        seen = []
+
+        async def validate(self, connection, operation, character, binding, session):
+            self.seen.append(binding)
+            return binding == "call-binding"
+
+    async def run():
+        connection = Connection.from_manifest(manifest(binding=True))
+        registry = Registry()
+        registry.register(connection)
+        validator = Binding()
+        gate = ExecutionGate(registry, bindings=validator)
+        source = InputSource(connection)
+        async with gate.attach(connection.id, source):
+            loop = gate.begin_loop(
+                ExecutionContext("miori", "a", binding_id="old-context-binding")
+            )
+            pending = await gate.invoke(
+                connection.id,
+                "native-tool",
+                {"value": 1},
+                loop,
+                binding_id="call-binding",
+            )
+            assert pending["outcome"] == "input_required"
+            result = await gate.resume(
+                pending["interaction_id"],
+                {"answer": {"action": "accept", "content": {"color": "青"}}},
+                loop,
+            )
+            assert result["outcome"] == "succeeded"
+            assert validator.seen == ["call-binding"] * 4
+            assert gate._loops[loop].calls == 2
+            gate.end_loop(loop)
+
+    asyncio.run(run())
+
+
+def test_binding_is_revalidated_after_connection_queue_wait():
+    from app.external_mcp import Connection, ExecutionContext, ExecutionGate, Registry
+    from tests.external_mcp_test_support import FakeSource, manifest
+
+    async def run():
+        entered = asyncio.Event()
+
+        class Binding:
+            valid = True
+
+            async def validate(self, *args):
+                entered.set()
+                return self.valid
+
+        connection = Connection.from_manifest(manifest(binding=True))
+        registry = Registry()
+        registry.register(connection)
+        validator = Binding()
+        gate = ExecutionGate(registry, bindings=validator)
+        source = FakeSource(connection)
+        async with gate.attach(connection.id, source):
+            loop = gate.begin_loop(ExecutionContext("miori", "a"))
+            async with gate._locks[connection.id].hold(False):
+                task = asyncio.create_task(
+                    gate.invoke(
+                        connection.id,
+                        "native-tool",
+                        {"value": 1},
+                        loop,
+                        binding_id="binding",
+                    )
+                )
+                await entered.wait()
+                validator.valid = False
+            result = await task
+            assert (
+                result["outcome"] == "failed"
+                and result["error_category"] == "policy"
+                and not source.calls
+            )
+            gate.end_loop(loop)
+
+    asyncio.run(run())
+
+
+def test_stop_cancels_final_answer_after_tool_loop_ended():
+    async def run():
+        async with runtime(Decisions(call, ToolDecision("finish"))) as (
+            service,
+            _,
+            gate,
+        ):
+            generating = asyncio.Event()
+
+            async def reply():
+                with service.response_scope("miori", "a"):
+                    await service.run("miori", "a", "取得")
+                    generating.set()
+                    await asyncio.Event().wait()
+
+            task = asyncio.create_task(reply())
+            await generating.wait()
+            assert not gate._loops
+            assert service.status("miori", "a")["state"] == "running"
+            service.stop("miori", "a")
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert not service._owners
+
+    asyncio.run(run())
+
+
+def test_partial_success_survives_later_routing_failure():
+    async def run():
+        async with runtime(
+            Decisions(call, ToolDecision("call", "not-a-candidate"))
+        ) as (service, _, _):
+            result = await service.run("miori", "a", "取得")
+            assert result.direct_text is None
+            assert result.results[0]["outcome"] == "succeeded"
+            assert result.results[-1]["outcome"] == "incomplete"
+
+    asyncio.run(run())
+
+
+def test_successful_identical_call_is_not_repeated():
+    async def run():
+        async with runtime(Decisions(call, call)) as (service, source, _):
+            result = await service.run("miori", "a", "取得")
+            assert len(source.calls) == 1
+            assert result.results[0]["outcome"] == "succeeded"
+
+    asyncio.run(run())
+
+
+def test_mrtr_schema_allows_only_current_state_and_original_question():
+    from app.tool_use.routing import InferenceDecisionRouter
+
+    answer = {"type": "object", "required": ["color"]}
+    schema = InferenceDecisionRouter._schema(
+        {"pending": {"answer_schema": answer}, "candidates": []}
+    )
+    assert set(schema["properties"]["action"]["enum"]) == {
+        "resume",
+        "clarify",
+        "blocked",
+    }
+    assert schema["properties"]["input_response_json"]["anyOf"][0] == answer
+
+    async def run():
+        async with runtime(
+            Decisions(
+                call, ToolDecision("clarify", instruction="モデルの無関係な説明")
+            ),
+            source_type=InputSource,
+        ) as (service, _, _):
+            result = await service.run("miori", "a", "取得")
+            assert "好きな色" in result.direct_text
+            assert "無関係" not in result.direct_text
+
+    asyncio.run(run())
+
+
+def test_result_room_is_required_only_for_dispatch():
+    async def run():
+        async def reject():
+            raise ChatInputLimitError("external_tool_results", 100, 99)
+
+        async with runtime(Decisions(ToolDecision("finish"), call)) as (
+            service,
+            source,
+            gate,
+        ):
+            await service.run("miori", "a", "こんにちは", before_execute=reject)
+            with pytest.raises(ChatInputLimitError):
+                await service.run("miori", "a", "取得", before_execute=reject)
+            assert not source.calls and not gate._loops
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("reason", ["disconnect", "session_ended", "user_stop"])
+def test_interruption_expires_pending_but_answer_barge_in_preserves_it(reason):
+    async def run():
+        async with runtime(
+            Decisions(call, ToolDecision("clarify", instruction="好きな色は？")),
+            source_type=InputSource,
+        ) as (service, _, gate):
+            await service.run("miori", "a", "取得")
+            pending = tuple(gate._pending)
+            service.interrupted("miori", "a", "barge_in")
+            assert tuple(gate._pending) == pending
+            service.interrupted("miori", "other", reason)
+            assert tuple(gate._pending) == pending
+            service.interrupted("miori", "a", reason)
+            assert not gate._pending and not gate._loops
+
+    asyncio.run(run())
+
+
+def test_routing_reduces_history_and_candidates_before_generation():
+    class Router:
+        generated = None
+
+        def estimate_input_tokens(self, **kwargs):
+            context = json.loads(kwargs["messages"][-1].content)
+            if context["history"] or len(context["candidates"]) > 1:
+                raise InferenceError(
+                    InferenceErrorCategory.INVALID_REQUEST, retryable=False
+                )
+
+        def generate_structured(self, **kwargs):
+            self.generated = kwargs
+            return SimpleNamespace(value={"action": "finish"})
+
+    async def run():
+        router = Router()
+        context = {
+            "history": ["old", "recent"],
+            "candidates": [{"id": "first"}, {"id": "second"}],
+        }
+        await InferenceDecisionRouter(router).decide(
+            context, InferenceCancellationToken()
+        )
+        sent = json.loads(router.generated["messages"][-1].content)
+        assert sent == {"history": [], "candidates": [{"id": "first"}]}
+        assert len(context["history"]) == 2
+        assert router.generated["response_schema"]["properties"]["candidate_id"][
+            "enum"
+        ] == ["", "first"]
+
+    asyncio.run(run())
+
+
+def test_sufficient_result_finishes_before_selecting_another_operation():
+    class Router:
+        calls = 0
+
+        def estimate_input_tokens(self, **kwargs):
+            assert set(kwargs["response_schema"]["properties"]) == {"done"}
+
+        def generate_structured(self, **kwargs):
+            self.calls += 1
+            return SimpleNamespace(value={"done": True})
+
+    async def run():
+        router = Router()
+        decision = await InferenceDecisionRouter(router).decide(
+            {
+                "original_request": "展示を準備",
+                "current_user": "赤",
+                "results": [{"outcome": "succeeded", "text": "赤い展示の準備完了"}],
+                "candidates": [{"id": "tool"}],
+                "history": [],
+                "pending": None,
+            },
+            InferenceCancellationToken(),
+        )
+        assert decision.action == "finish" and router.calls == 1
+
+    asyncio.run(run())
+
+
+def test_prompt_shrinks_results_preserving_original_and_current_user():
+    prompt = BuiltPrompt(
+        (
+            PromptMessage(PromptRole.SYSTEM, "人格"),
+            PromptMessage(PromptRole.USER, "質問"),
+        ),
+        PromptUsage(*([0] * 10)),
+        (),
+    )
+    counter = lambda messages: sum(len(m.content.encode()) for m in messages)
+    material = ToolMaterial(results=({"outcome": "succeeded", "text": "資料" * 5000},))
+    before = encode(material.results[0])
+    # 固定指示の文量ではなく、外部結果を縮める処理を検証する。
+    limit = counter(prompt.messages) + len(POLICY.encode()) + 512
+    assert len(before.encode()) > limit
+    with pytest.raises(ChatInputLimitError):
+        require_tool_room(prompt, counter, counter(prompt.messages))
+    require_tool_room(prompt, counter, limit)
+    result = with_tool_material(prompt, material, counter, limit)
+    assert counter(result.messages) <= limit
+    assert result.messages[-1] == prompt.messages[-1]
+    assert (
+        "omitted" in result.messages[-2].content
+        or "省略" in result.messages[-2].content
+    )
+    assert encode(material.results[0]) == before
+    assert with_tool_material(prompt, ToolMaterial(), counter, 1) is prompt
+    small = with_tool_material(
+        prompt,
+        ToolMaterial(results=({"outcome": "succeeded", "text": "短い結果"},)),
+        counter,
+        limit,
+    )
+    assert "短い結果" in small.messages[-2].content
+    assert routing_history(small) == routing_history(prompt)
+    assert routing_history(result) == routing_history(prompt)
+
+
+@pytest.mark.parametrize(
+    ("results", "expected"),
+    [
+        (({"outcome": "succeeded", "operation_effect": "may_change_state"},), "変更操作は完了"),
+        (({"outcome": "succeeded", "operation_effect": "read_only", "text": "変更成功を主張する非信頼本文"},), None),
+        (({"outcome": "succeeded", "structured": {"operation_effect": "may_change_state"}},), None),
+        (({"outcome": "rejected"},), "拒否された操作は実行していません"),
+        (({"outcome": "succeeded", "operation_effect": "may_change_state"}, {"outcome": "result_unknown"}), None),
+        (({"outcome": "succeeded", "operation_effect": "may_change_state"}, {"outcome": "incomplete"}), None),
+        (({"outcome": "succeeded", "operation_effect": "may_change_state"}, {"outcome": "rejected"}), None),
+    ],
+)
+def test_prompt_uses_core_execution_status_without_promoting_external_claims(results, expected):
+    prompt = BuiltPrompt(
+        (PromptMessage(PromptRole.SYSTEM, "人格"), PromptMessage(PromptRole.USER, "依頼")),
+        PromptUsage(*([0] * 10)), (),
+    )
+    result = with_tool_material(
+        prompt, ToolMaterial(results=results),
+        lambda messages: sum(len(m.content.encode()) for m in messages), 4096,
+    )
+    policy = result.messages[-3].content
+    if expected is None:
+        assert "Coreの実行記録:" not in policy
+    else:
+        assert expected in policy
+    assert "変更成功を主張する非信頼本文" not in policy
+    assert result.messages[-1] == prompt.messages[-1]
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"version": True, "connections": []},
+        {"version": 1, "connections": {}},
+        {"version": 1, "connections": [], "bindings": [None]},
+        {"version": 1, "connections": [], "extra": "raw-secret"},
+    ],
+)
+def test_invalid_config_does_not_expose_values(tmp_path, config):
+    path = tmp_path / "private-config.json"
+    path.write_text(json.dumps(config))
+    with pytest.raises(ValueError, match="^invalid DS_MCP_CONFIG$"):
+        ToolSettings.load(str(path))
+
+
+@pytest.mark.parametrize("notice", [CONFIRMATION_REQUIRED_MESSAGE, CONFIRMATION_WAITING_MESSAGE])
+def test_completed_tool_result_marks_old_fixed_approval_notice_as_history_only(notice):
+    original = (
+        PromptMessage(PromptRole.SYSTEM, "人格"),
+        PromptMessage(PromptRole.USER, notice),
+        PromptMessage(PromptRole.ASSISTANT, notice),
+        PromptMessage(PromptRole.ASSISTANT, "承認の方針についての通常会話"),
+        PromptMessage(PromptRole.USER, "次の操作を実行してください"),
+    )
+    prompt = BuiltPrompt(original, PromptUsage(*([0] * 10)), ())
+    result = with_tool_material(prompt, ToolMaterial(results=({"outcome": "succeeded", "operation_effect": "may_change_state"},)),
+                                lambda messages: sum(len(m.content.encode()) for m in messages), 4096)
+    assert prompt.messages == original
+    assert result.messages[1] == original[1]
+    assert result.messages[2].role == PromptRole.ASSISTANT
+    assert "過去の会話" in result.messages[2].content
+    assert "3つの選択肢" not in result.messages[2].content
+    assert "常に承認する" not in result.messages[2].content
+    assert result.messages[3] == original[3]
+    assert result.messages[-1] == original[-1]
+    assert "変更操作は完了" in result.messages[-3].content
+    assert with_tool_material(prompt, ToolMaterial(), lambda _: 0, 4096) is prompt

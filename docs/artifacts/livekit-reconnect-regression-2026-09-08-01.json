@@ -1,0 +1,34 @@
+{
+  "scope": "real_network_fault_regression_only",
+  "measurement_revision": "fe3bc950753d616ec18d21949d38846cdf687e2d",
+  "passed": false,
+  "failure_stage": "post_fault_followup",
+  "failed_condition": "two_complete_responses_including_fault_interrupted_initial_response",
+  "recovery": {
+    "control_recovery_upper_ms": 2213.7076409459114,
+    "audio_recovery_upper_ms": 2343.085307588737,
+    "recovery_upper_ms": 2343.085307588737,
+    "duplicate_packet_output_intervals": 0,
+    "packet_evidence_missing": 0,
+    "output_path_failures": 0,
+    "output_evidence_complete": true,
+    "duplicate_measurement_scope": "overlapping_response_ssrc_rtp_sample_intervals",
+    "audio_missing_reason": null
+  },
+  "fault_recovery_passed": true,
+  "following_full_playback_present": true,
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "owned_fault_sfu_absent": true,
+  "owned_fault_network_absent": true,
+  "fault_clock_process_closed": true,
+  "session_end_confirmed": true,
+  "teardown_completed": true,
+  "full_issue_acceptance_verified": false,
+  "source_sha256": {
+    "trial-manifest.json": "934fc26b3561dca68aa7d258fa077e46ad96cb449a522202ac3fd42074bc5a27",
+    "runtime-data/runtime/standalone/environment-run.json": "4f6546152fd93a562e303e7453551192217271b800e44ad85862a9ae19217593"
+  }
+}

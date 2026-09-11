@@ -1,0 +1,286 @@
+{
+  "version": "voice-quality-v2",
+  "context": "相手が説明を続けている最中。backchannelは短い受容・共感で説明継続を求め、take_turnは停止・訂正・質問で発話権を要求する。ラベルは音声生成や実装の判定より先に固定する。",
+  "cases": [
+    {
+      "id": "ack-01",
+      "cohort": "backchannel",
+      "text": "うんうん",
+      "intent": "説明を聞き続ける同意"
+    },
+    {
+      "id": "ack-02",
+      "cohort": "backchannel",
+      "text": "はい",
+      "intent": "説明を聞き続ける応答"
+    },
+    {
+      "id": "ack-03",
+      "cohort": "backchannel",
+      "text": "ええ",
+      "intent": "説明を聞き続ける同意"
+    },
+    {
+      "id": "ack-04",
+      "cohort": "backchannel",
+      "text": "へえ",
+      "intent": "説明への驚き"
+    },
+    {
+      "id": "ack-05",
+      "cohort": "backchannel",
+      "text": "なるほど",
+      "intent": "説明への理解"
+    },
+    {
+      "id": "ack-06",
+      "cohort": "backchannel",
+      "text": "そうなんだ",
+      "intent": "説明への受容"
+    },
+    {
+      "id": "ack-07",
+      "cohort": "backchannel",
+      "text": "そうなんですね",
+      "intent": "説明への丁寧な受容"
+    },
+    {
+      "id": "ack-08",
+      "cohort": "backchannel",
+      "text": "そうですね",
+      "intent": "説明への同意"
+    },
+    {
+      "id": "ack-09",
+      "cohort": "backchannel",
+      "text": "確かに",
+      "intent": "説明への同意"
+    },
+    {
+      "id": "ack-10",
+      "cohort": "backchannel",
+      "text": "そうそう",
+      "intent": "説明への強い同意"
+    },
+    {
+      "id": "take-01",
+      "cohort": "take_turn",
+      "text": "ちょっと待って",
+      "intent": "説明を止める"
+    },
+    {
+      "id": "take-02",
+      "cohort": "take_turn",
+      "text": "ストップして",
+      "intent": "説明を止める"
+    },
+    {
+      "id": "take-03",
+      "cohort": "take_turn",
+      "text": "一つ質問してもいい",
+      "intent": "質問のため発話権を求める"
+    },
+    {
+      "id": "take-04",
+      "cohort": "take_turn",
+      "text": "それは違うと思う",
+      "intent": "内容への訂正"
+    },
+    {
+      "id": "take-05",
+      "cohort": "take_turn",
+      "text": "もう一度説明して",
+      "intent": "説明のやり直しを求める"
+    },
+    {
+      "id": "take-06",
+      "cohort": "take_turn",
+      "text": "うん、でも質問がある",
+      "intent": "同意に続いて質問へ切り替える"
+    },
+    {
+      "id": "take-07",
+      "cohort": "take_turn",
+      "text": "はい、そこを訂正して",
+      "intent": "同意に続いて訂正を求める"
+    },
+    {
+      "id": "take-08",
+      "cohort": "take_turn",
+      "text": "なるほど、具体例を教えて",
+      "intent": "理解に続いて具体例を求める"
+    },
+    {
+      "id": "take-09",
+      "cohort": "take_turn",
+      "text": "その話は後にしよう",
+      "intent": "話題を切り替える"
+    },
+    {
+      "id": "take-10",
+      "cohort": "take_turn",
+      "text": "今は私の話を聞いて",
+      "intent": "明示的に発話権を求める"
+    },
+    {
+      "id": "pause-01-before",
+      "cohort": "pause",
+      "pair_id": "pause-01",
+      "part": "before",
+      "text": "今日の予定は",
+      "intent": "予定を説明する一文の主題と述部"
+    },
+    {
+      "id": "pause-01-after",
+      "cohort": "pause",
+      "pair_id": "pause-01",
+      "part": "after",
+      "text": "午後から散歩です",
+      "intent": "予定を説明する一文の主題と述部"
+    },
+    {
+      "id": "pause-02-before",
+      "cohort": "pause",
+      "pair_id": "pause-02",
+      "part": "before",
+      "text": "明日の朝は",
+      "intent": "予定を説明する一文の主題と述部"
+    },
+    {
+      "id": "pause-02-after",
+      "cohort": "pause",
+      "pair_id": "pause-02",
+      "part": "after",
+      "text": "早めに起きようと思う",
+      "intent": "予定を説明する一文の主題と述部"
+    },
+    {
+      "id": "pause-03-before",
+      "cohort": "pause",
+      "pair_id": "pause-03",
+      "part": "before",
+      "text": "私が聞きたかったのは",
+      "intent": "質問の焦点と述部"
+    },
+    {
+      "id": "pause-03-after",
+      "cohort": "pause",
+      "pair_id": "pause-03",
+      "part": "after",
+      "text": "その理由です",
+      "intent": "質問の焦点と述部"
+    },
+    {
+      "id": "pause-04-before",
+      "cohort": "pause",
+      "pair_id": "pause-04",
+      "part": "before",
+      "text": "その方法なら",
+      "intent": "条件節と主節"
+    },
+    {
+      "id": "pause-04-after",
+      "cohort": "pause",
+      "pair_id": "pause-04",
+      "part": "after",
+      "text": "少し時間がかかるね",
+      "intent": "条件節と主節"
+    },
+    {
+      "id": "pause-05-before",
+      "cohort": "pause",
+      "pair_id": "pause-05",
+      "part": "before",
+      "text": "一番大切なのは",
+      "intent": "主題と述部"
+    },
+    {
+      "id": "pause-05-after",
+      "cohort": "pause",
+      "pair_id": "pause-05",
+      "part": "after",
+      "text": "無理をしないことです",
+      "intent": "主題と述部"
+    },
+    {
+      "id": "pause-06-before",
+      "cohort": "pause",
+      "pair_id": "pause-06",
+      "part": "before",
+      "text": "ええと",
+      "intent": "語頭の言い淀みと質問"
+    },
+    {
+      "id": "pause-06-after",
+      "cohort": "pause",
+      "pair_id": "pause-06",
+      "part": "after",
+      "text": "次は何をすればいいかな",
+      "intent": "語頭の言い淀みと質問"
+    },
+    {
+      "id": "pause-07-before",
+      "cohort": "pause",
+      "pair_id": "pause-07",
+      "part": "before",
+      "text": "あの",
+      "intent": "語頭の言い淀みと要求"
+    },
+    {
+      "id": "pause-07-after",
+      "cohort": "pause",
+      "pair_id": "pause-07",
+      "part": "after",
+      "text": "もう少し詳しく教えて",
+      "intent": "語頭の言い淀みと要求"
+    },
+    {
+      "id": "pause-08-before",
+      "cohort": "pause",
+      "pair_id": "pause-08",
+      "part": "before",
+      "text": "今日は",
+      "intent": "文中の言い淀み"
+    },
+    {
+      "id": "pause-08-after",
+      "cohort": "pause",
+      "pair_id": "pause-08",
+      "part": "after",
+      "text": "ええと、近くの公園に行こうかな",
+      "intent": "文中の言い淀み"
+    },
+    {
+      "id": "pause-09-before",
+      "cohort": "pause",
+      "pair_id": "pause-09",
+      "part": "before",
+      "text": "その説明は",
+      "intent": "文中の言い淀み"
+    },
+    {
+      "id": "pause-09-after",
+      "cohort": "pause",
+      "pair_id": "pause-09",
+      "part": "after",
+      "text": "あの、少し難しかったです",
+      "intent": "文中の言い淀み"
+    },
+    {
+      "id": "pause-10-before",
+      "cohort": "pause",
+      "pair_id": "pause-10",
+      "part": "before",
+      "text": "それについては",
+      "intent": "考えながら文を続ける"
+    },
+    {
+      "id": "pause-10-after",
+      "cohort": "pause",
+      "pair_id": "pause-10",
+      "part": "after",
+      "text": "そうだな、明日もう一度考えたい",
+      "intent": "考えながら文を続ける"
+    }
+  ]
+}

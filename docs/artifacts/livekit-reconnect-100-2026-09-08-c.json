@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0",
+  "measurement_scope": "livekit_fault_recovery_cohort_report",
+  "audio_availability_method": "fresh_rtc_probe_and_followup",
+  "fixture_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+  "measurement_revision": "77ab6521d72ec06f695818d7eb6a97c7068664fe",
+  "counts": {
+    "expected": 100,
+    "recorded": 100,
+    "independent_sessions": 100,
+    "independent_conversations": 100,
+    "verified_faults": 98,
+    "complete_output_trials": 91,
+    "recovered_within_ten_seconds": 91,
+    "not_recovered": 9,
+    "session_end_confirmed": 100,
+    "fault_children_closed": 100,
+    "successful_followup_conversations": 96
+  },
+  "missing_reasons": {
+    "network_effect_unverified": 2,
+    "output_evidence_incomplete": 7
+  },
+  "duplicate_packet_output_intervals": 0,
+  "duplicate_measurement_scope": "overlapping_response_ssrc_rtp_sample_intervals",
+  "latency_ms": {
+    "control": {
+      "count": 96,
+      "p50": 2409.369899496436,
+      "p95": 5268.314281232655
+    },
+    "audio": {
+      "count": 95,
+      "p50": 2552.248650644462,
+      "p95": 5449.39676492261
+    },
+    "both": {
+      "count": 91,
+      "p50": 2568.3942606360124,
+      "p95": 5481.954949792584
+    }
+  },
+  "evaluation": {
+    "coverage_complete": false,
+    "rate_passed": false,
+    "latency_passed": false,
+    "passed": false
+  }
+}

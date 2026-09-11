@@ -1,0 +1,169 @@
+{
+  "config": {
+    "argv": [
+      "/usr/bin/node",
+      "./frontend/node_modules/.bin/playwright",
+      "test",
+      "--config",
+      "playwright.addon-action.config.ts",
+      "--grep",
+      "管理画面"
+    ],
+    "configFile": "./frontend/playwright.addon-action.config.ts",
+    "rootDir": "./frontend/integration/addon-action",
+    "failOnFlakyTests": false,
+    "forbidOnly": true,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "<test-root>/data/runtime/tool-use/browser",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "./frontend/integration/addon-action",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 1800000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "<test-root>/data/runtime/tool-use/browser/results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.61.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "conversation.spec.ts",
+      "file": "conversation.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "管理画面から待機中のテキスト・LiveKit承認と停止後の将来単回許可を実行する",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 1800000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 155750,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-11T05:17:56.007Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "admin-action-evidence",
+                      "contentType": "application/json",
+                      "body": "eyJ0ZXh0QWRtaW5Db250aW51YXRpb24iOnRydWUsImxhdGVBcHByb3ZhbERpZE5vdFJlcGxheSI6dHJ1ZSwiZnV0dXJlT25jZUNvbnN1bWVkIjp0cnVlLCJ2b2ljZUFkbWluQ29udGludWF0aW9uQW5kUGxheWJhY2siOnRydWUsImF1dG9ub21vdXNTZXR0aW5nc0lzb2xhdGVkIjp0cnVlfQ=="
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e7085d83df82ab600126-abe31b9eb9ed12707c92",
+          "file": "conversation.spec.ts",
+          "line": 191,
+          "column": 1
+        },
+        {
+          "title": "管理画面で未使用予約を取り消すと次の依頼で新しい確認を行う",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 1800000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 12632,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-11T05:20:31.815Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "reset-wait-evidence",
+                      "contentType": "application/json",
+                      "body": "eyJyZXNlcnZhdGlvblJldm9rZWQiOnRydWUsIm5leHRSZXF1ZXN0SXNGcmVzaCI6dHJ1ZSwibm9VbmFwcHJvdmVkV3JpdGUiOnRydWV9"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e7085d83df82ab600126-d72af954fa3a546d5124",
+          "file": "conversation.spec.ts",
+          "line": 319,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-11T05:17:55.658Z",
+    "duration": 168838.603,
+    "expected": 2,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

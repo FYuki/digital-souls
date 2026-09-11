@@ -1,0 +1,193 @@
+{
+  "scope": "real_livekit_short_speech_integration_pilot",
+  "implementation_commit": "c907f06",
+  "minimum_100_trial_acceptance": false,
+  "conditions": {
+    "thinking_disabled": true,
+    "rag_enabled": false
+  },
+  "reports": {
+    "backchannel": {
+      "scope": "labeled_livekit_backchannel_cohort_report",
+      "quantile_method": "hyndman_fan_type_7",
+      "cohort": "backchannel",
+      "counts": {
+        "expected": 4,
+        "recorded": 4,
+        "independent_sessions": 4,
+        "success": 4,
+        "failure": 0,
+        "verified_injection": 4,
+        "session_end_confirmed": 4,
+        "backchannel_decision": 4,
+        "take_turn_decision": 0,
+        "indeterminate_decision": 0,
+        "unverified_final_decision": 0,
+        "observed_server_cancel": 0,
+        "observed_local_stop": 0
+      },
+      "failure_stages": {},
+      "metrics": [
+        {
+          "name": "backchannel_false_cancel",
+          "status": "measured",
+          "unit": "count",
+          "start_point": "labeled_backchannel_injected",
+          "end_point": "old_response_full_output_or_cancel",
+          "trial_count": 4,
+          "success_count": 4,
+          "failure_count": 0,
+          "missing_count": 0,
+          "not_applicable_count": 0,
+          "excluded_count": 0,
+          "rate_denominator": 4,
+          "failure_rate_basis_points": 0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "not_applicable_reason": null,
+          "excluded_outcomes": {},
+          "missing_outcomes": {}
+        }
+      ],
+      "evaluation": {
+        "minimum_trials": 100,
+        "coverage_complete": true,
+        "false_cancel_rate_passed": false
+      },
+      "metric_schema_sha256": "2d331448f38a27474f23d7d5631d2c1ab15b097e54dcf70ad153cce63fbe34b9",
+      "labeled_manifest_sha256": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3",
+      "raw_manifest_sha256": "ae40a5b1e9b5d860b10122c3cbc89e02b236f72cf1c1c744b76270cff007d5bf",
+      "raw_trace_sha256": "1745d87d883121f55822296251a5cec8f9f6f225b203e7bd4c5f615a8808c03f",
+      "reporter_sha256": "4e9b5530db927fc5bf0455f15d9dbb9de4513ab8f7b496c490fc497a16aa609f",
+      "playback_validator_sha256": "63e26986ca6f117b947cc51a7b8037f56edeedc5f3863835fc22b7c605b18faa",
+      "shared_reporter_sha256": "3315e86505809d231a059a34597199a65912593ae07a699323a79a6cc7132f2a"
+    },
+    "take-turn": {
+      "scope": "labeled_livekit_take_turn_cohort_report",
+      "cohort": "take_turn",
+      "observer_timestamp_tolerance_ms": 2,
+      "quantile_method": "hyndman_fan_type_7",
+      "counts": {
+        "expected": 4,
+        "recorded": 4,
+        "success": 4,
+        "failure": 0,
+        "verified_injection": 4,
+        "take_turn_decision": 4,
+        "verified_cancel": 4,
+        "session_end_confirmed": 4,
+        "independent_sessions": 4
+      },
+      "failure_stages": {},
+      "missed_interruptions": {
+        "count": 0,
+        "denominator": 4,
+        "unverified_injection_count": 0,
+        "rate_basis_points": 0
+      },
+      "metrics": [
+        {
+          "name": "local_playback_stop",
+          "status": "measured",
+          "unit": "millisecond",
+          "start_point": "speech_started_client",
+          "end_point": "local_playback_stopped",
+          "trial_count": 4,
+          "success_count": 4,
+          "failure_count": 0,
+          "missing_count": 0,
+          "not_applicable_count": 0,
+          "excluded_count": 0,
+          "rate_denominator": 4,
+          "failure_rate_basis_points": 0,
+          "p50": 1070.5,
+          "p95": 1106.1,
+          "not_applicable_reason": null,
+          "excluded_outcomes": {},
+          "missing_outcomes": {}
+        },
+        {
+          "name": "turn_decision",
+          "status": "measured",
+          "unit": "millisecond",
+          "start_point": "speech_started_client",
+          "end_point": "turn_decision_client",
+          "trial_count": 4,
+          "success_count": 4,
+          "failure_count": 0,
+          "missing_count": 0,
+          "not_applicable_count": 0,
+          "excluded_count": 0,
+          "rate_denominator": 4,
+          "failure_rate_basis_points": 0,
+          "p50": 1070.0,
+          "p95": 1106.1,
+          "not_applicable_reason": null,
+          "excluded_outcomes": {},
+          "missing_outcomes": {}
+        },
+        {
+          "name": "cancel_after_decision",
+          "status": "measured",
+          "unit": "millisecond",
+          "start_point": "take_turn_decision",
+          "end_point": "server_cancelled",
+          "trial_count": 4,
+          "success_count": 4,
+          "failure_count": 0,
+          "missing_count": 0,
+          "not_applicable_count": 0,
+          "excluded_count": 0,
+          "rate_denominator": 4,
+          "failure_rate_basis_points": 0,
+          "p50": 5.889245,
+          "p95": 6.9339257,
+          "not_applicable_reason": null,
+          "excluded_outcomes": {},
+          "missing_outcomes": {}
+        },
+        {
+          "name": "barge_in_cancel_total",
+          "status": "measured",
+          "unit": "millisecond",
+          "start_point": "speech_started_client",
+          "end_point": "server_cancelled_client",
+          "trial_count": 4,
+          "success_count": 4,
+          "failure_count": 0,
+          "missing_count": 0,
+          "not_applicable_count": 0,
+          "excluded_count": 0,
+          "rate_denominator": 4,
+          "failure_rate_basis_points": 0,
+          "p50": 1090.5,
+          "p95": 1130.35,
+          "not_applicable_reason": null,
+          "excluded_outcomes": {},
+          "missing_outcomes": {}
+        }
+      ],
+      "evaluation": {
+        "minimum_trials": 100,
+        "coverage_complete": true,
+        "missed_rate_passed": false,
+        "latency_passed": {
+          "local_playback_stop": true,
+          "turn_decision": true,
+          "cancel_after_decision": true,
+          "barge_in_cancel_total": true
+        }
+      },
+      "metric_schema_sha256": "2d331448f38a27474f23d7d5631d2c1ab15b097e54dcf70ad153cce63fbe34b9",
+      "labeled_manifest_sha256": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3",
+      "raw_manifest_sha256": "99dfeaee998f1129d75b7b73bb8cd979393d65b521098610bebb49a0c609130a",
+      "raw_trace_sha256": "31e9e0a09dba39d1f7b639732e0c359ca02d04b76507fb6a25df8c673e10d61c",
+      "reporter_sha256": "3315e86505809d231a059a34597199a65912593ae07a699323a79a6cc7132f2a"
+    }
+  },
+  "cleanup": {
+    "all_8_sessions_explicitly_ended": true,
+    "both_runs_teardown_completed": true,
+    "owned_frontend_backend_containers_deletion_verified": true
+  }
+}

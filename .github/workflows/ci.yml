@@ -34,9 +34,20 @@ jobs:
   backend:
     name: backend
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 依存導入と全unit/module検証を含める。2026-09-11は10分でmodule 94%時点に到達。
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
+        with:
+          # 音声品質artifactの計測境界を過去commitのソースと照合する。
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install voice quality replay dependencies
+        run: npm ci --prefix frontend
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'

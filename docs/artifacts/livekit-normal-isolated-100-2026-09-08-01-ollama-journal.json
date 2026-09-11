@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "scope": "shared_ollama_journal_and_own_http_counts_only",
+  "measurement_revision": "f44f57761108c3582d7a1e48b3d8b4b1ed2bbdcc",
+  "window_start_utc": "2026-09-08T13:39:34.908493+00:00",
+  "window_end_utc": "2026-09-08T13:53:37.882903+00:00",
+  "journal_entries": 9697,
+  "chat_http_log_entries": 213,
+  "marker_counts": {
+    "model loaded": 1,
+    "loading model": 4
+  },
+  "allocated_context_log_entries": [
+    {
+      "context_tokens": 8192,
+      "entries": 2
+    }
+  ],
+  "context_value_changes": 0,
+  "first_context_changes": [
+    {
+      "timestamp_us": 1788874798912568,
+      "allocated_context_tokens": 8192
+    }
+  ],
+  "last_context_changes": [
+    {
+      "timestamp_us": 1788874798912568,
+      "allocated_context_tokens": 8192
+    }
+  ],
+  "source_journal_sha256": "8f3f8e28cf0d5e456da5a3ba3790cb60ca02a857d1e7867f47d2872c5e128d9a",
+  "own_http_requests_including_warmup": {
+    "estimate": 3.0,
+    "generation": 105.0
+  },
+  "chat_request_count_matches_own_trace": false,
+  "only_expected_allocated_context_observed": true,
+  "all_requests_attributed_to_individual_owner": false,
+  "exclusive_access_guaranteed": false,
+  "full_issue_acceptance_verified": false
+}

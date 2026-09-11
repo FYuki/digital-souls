@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "runId": "869ff82c-2fb5-44e9-9115-4de7650a844b",
+  "startedAt": "2026-09-11T05:17:49.420373+00:00",
+  "environmentId": "test",
+  "mcpImplementation": "published-filesystem",
+  "mcpVersion": "2026.8.31",
+  "livekitVersion": "1.9.7",
+  "microphone": "scheduled-voicevox-wav-mediastream",
+  "routingModel": "ollama/gemma4:e4b",
+  "inferenceTokenLimits": {
+    "chat": {
+      "input": 7168,
+      "output": 1024
+    },
+    "privacy": {
+      "input": 7680,
+      "output": 512
+    },
+    "memory_extraction": {
+      "input": 7680,
+      "output": 512
+    },
+    "memory_consolidation": {
+      "input": 7680,
+      "output": 512
+    },
+    "tool_routing": {
+      "input": 7168,
+      "output": 1024
+    }
+  },
+  "implementationCommit": "fefe06adad9a31e85d1b7d82e62ec388c4c0ead6",
+  "trackedChangesAtStart": false,
+  "testStatus": "passed",
+  "serviceVersions": {
+    "whisper": {
+      "serviceVersion": "1.0",
+      "model": "medium",
+      "modelRevision": "08e178d48790749d25932bbc082711ddcfdfbc4f",
+      "device": "cuda",
+      "deviceIndex": 0,
+      "computeType": "int8_float16",
+      "modelInstances": 1,
+      "globalInflight": 1
+    },
+    "voicevox": "latest",
+    "ollama": {
+      "version": "0.32.5"
+    },
+    "voicevoxRuntime": {
+      "imageId": "sha256:eaf829d9e1d7c85121cba6220292b42e1fbadc22b7552820f8b4fe5df5c819aa",
+      "source": "running-container"
+    }
+  },
+  "completedAt": "2026-09-11T05:20:44.505054+00:00"
+}

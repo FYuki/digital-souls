@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "measurement_kind": "controlled_baseline",
+  "scope": "runtime_sessions_including_zero_response",
+  "expected_sessions": 1,
+  "observed_sessions": 1,
+  "counts": {
+    "created_sessions": 1,
+    "activated_sessions": 1,
+    "ended_sessions": 1,
+    "expected_ends": 1
+  },
+  "end_reasons": {
+    "explicit": 1
+  },
+  "missing_sessions_by_reason": {},
+  "additional_operations": {
+    "measured_sessions": 1,
+    "values": [
+      0
+    ]
+  },
+  "three_turn_additional_operations": {
+    "measured_sessions": 1,
+    "values": [
+      0
+    ]
+  },
+  "full_issue_acceptance_verified": false
+}

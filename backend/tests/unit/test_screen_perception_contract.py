@@ -111,6 +111,7 @@ def test_backend_boundary_rejects_calendar_invalid_timestamp() -> None:
         for event in _valid_events("normal-session.json")
         if event["type"] == "screen_snapshot_requested"
     )
+    parser.parse_screen_perception_event(request)
     # format extraの有無で拒否する層が変わっても、境界で不正日付を拒否する。
     with pytest.raises(ValueError, match="screen perception event"):
         parser.parse_screen_perception_event(

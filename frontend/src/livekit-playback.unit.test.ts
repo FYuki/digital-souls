@@ -37,6 +37,7 @@ interface PlaybackModule {
     discardResponse(responseId: string): void
     recordMetadata(metadata: SegmentMetadata, eligibleAfterFrame: number): void
     recordRenderedInterval(interval: {
+      responseId?: string
       startFrame: number
       endFrame: number
       energy: number
@@ -237,4 +238,31 @@ describe('LiveKit rendered playback prefix', () => {
       continuousPrefix: 0,
     }])
   })
+  test('旧responseのtrack frameを新responseのmetadataへ割り当てない', async () => {
+    const { PlaybackEvidenceController } = await playbackModule('response track attribution')
+    const observe = vi.fn()
+    const controller = new PlaybackEvidenceController(1, observe)
+    controller.recordMetadata({ responseId: 'new-response', audioSequence: 0, generation: 1, pcmSampleCount: 240 }, 0)
+    controller.recordRenderedInterval({ responseId: 'old-response', startFrame: 0, endFrame: 240, energy: 1 })
+    expect(observe).not.toHaveBeenCalled()
+    controller.recordRenderedInterval({ responseId: 'new-response', startFrame: 240, endFrame: 480, energy: 1 })
+    expect(observe).toHaveBeenCalledWith(expect.objectContaining({ responseId: 'new-response', continuousPrefix: 0, unassignedRenderedSamples: 240 }))
+  })
+
+})
+
+
+test('全出力確認のprefixには同じ応答の連続metadataと総sample数の一致が必要', async () => {
+  const {PlaybackPrefixTracker} = await import('./livekit/playback')
+  const tracker = new PlaybackPrefixTracker({generation: 2})
+  const row = {responseId: 'response', generation: 2, pcmSampleCount: 480}
+  tracker.recordMetadata({...row, audioSequence: 0})
+  tracker.recordMetadata({...row, audioSequence: 2})
+  expect(tracker.metadataPrefixForTotal('response', 960)).toBe(-1)
+  tracker.recordMetadata({...row, audioSequence: 1})
+  expect(tracker.metadataPrefixForTotal('response', 1440)).toBe(2)
+  expect(tracker.metadataPrefixForTotal('response', 1439)).toBe(-1)
+  expect(tracker.metadataPrefixForTotal('other', 1440)).toBe(-1)
+  tracker.setGeneration(3)
+  expect(tracker.metadataPrefixForTotal('response', 1440)).toBe(-1)
 })

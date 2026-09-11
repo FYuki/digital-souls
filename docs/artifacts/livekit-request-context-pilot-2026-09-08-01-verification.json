@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "measurement_revision": "019e62c8133779aba52086c23da3cdbd0504d3ac",
+  "verification_scope": "actual_request_context_and_native_trace_pilot_only",
+  "full_issue_acceptance_verified": false,
+  "dogfood_human_acceptance_verified": false,
+  "measured_trials": 3,
+  "warmup_trials": 1,
+  "native_network_matched_trials": 4,
+  "network_aggregate_recomputed_from_native_trace": true,
+  "network": {
+    "sent_bytes": {
+      "status": "measured",
+      "value": 40089,
+      "reason": null
+    },
+    "received_bytes": {
+      "status": "measured",
+      "value": 123528,
+      "reason": null
+    },
+    "packet_loss_basis_points": {
+      "status": "measured",
+      "value": 0.0,
+      "reason": null
+    },
+    "condition": "localhost LiveKit pilot; shared inference services; RAG disabled; browser audio RTP payload; loss at browser downlink",
+    "collection": {
+      "byte_scope": "browser_audio_rtp_payload",
+      "loss_scope": "browser_downlink_response_tracks",
+      "trial_count": 3,
+      "sent_trials": 3,
+      "received_trials": 3,
+      "loss_trials": 3,
+      "received_packets": 528,
+      "lost_packets": 0,
+      "negative_loss_trials": 0,
+      "missing_trials": {}
+    }
+  },
+  "experimental_thinking_override": false,
+  "full_playback_verified": true,
+  "gap_count": 0,
+  "ttfa_p95_ms": 1738.7399999976158,
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "teardown_completed": true,
+  "artifact_sha256": "2a23e56a6dff6a0f29f20e7d75184b8454c82c357b8e91c8daed453616820d10",
+  "source_sha256": {
+    "trial-manifest.json": "84ecf350be9735138a2e663c9b326a90c29b5445e196168141f6bb93cbf9c3fe",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "8d8a3b3c646c9d913b377adbc7f5bda0a893d257909e9195d1e315ab33688635",
+    "runtime-data/runtime/standalone/environment-run.json": "bc010ca4c8376417ff104618b735ede9194b78b89a785d62c316e830a8be1fdc",
+    "inference-runtime.jsonl": "1757a9b8503c55dfe0c6d43f8120b74b4998f37b887082ca081eb729cc27904d"
+  },
+  "generation_request_context_verified_trials": 4,
+  "generation_context_tokens_minimum": 8192,
+  "generation_context_tokens_maximum": 8192,
+  "generation_output_tokens_minimum": 1024,
+  "generation_output_tokens_maximum": 1024,
+  "actual_estimate_http_requests": 1,
+  "estimate_context_tokens": 8192,
+  "estimate_output_tokens": 1,
+  "observed_target_context_tokens": [
+    8192
+  ],
+  "provider_load_p95_ms": 246.8761755,
+  "prior_100_trial_slowdown_cause_resolved": false,
+  "other_request_source_identified": false
+}

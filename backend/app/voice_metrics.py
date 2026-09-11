@@ -4,12 +4,17 @@ import math
 import json
 import threading
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Callable, Literal, Sequence
+from typing import TYPE_CHECKING, Callable, Literal, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.inference.diagnostics import VALUE_NAMES
+
+if TYPE_CHECKING:
+    from app.voice_session_metrics import SessionTraceEvent
 
 SCHEMA_VERSION: Literal["1.0"] = "1.0"
 QUANTILE_METHOD: Literal["hyndman_fan_type_7"] = "hyndman_fan_type_7"
@@ -81,6 +86,14 @@ class JsonlTraceRecorder:
         with self._lock:
             with self._path.open("a", encoding="utf-8") as trace_file:
                 trace_file.write(line + "\n")
+
+    def record_session(self, event: SessionTraceEvent) -> None:
+        # response traceとは別のschemaを同じ保持期間で保存する。
+        path = self._path.parent / "sessions" / self._path.name
+        with self._lock:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as trace_file:
+                trace_file.write(event.model_dump_json() + "\n")
 
 
 def serialize_trace_event(
@@ -177,6 +190,7 @@ class MetricAggregate(BaseModel):
     p95: float | None
     not_applicable_reason: str | None
     excluded_outcomes: dict[str, int]
+    missing_outcomes: dict[str, int] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_not_applicable_reason(self) -> MetricAggregate:
@@ -254,6 +268,11 @@ def aggregate_metric(
         p95=type7_quantile(values, 0.95) if values else None,
         not_applicable_reason=not_applicable_reason,
         excluded_outcomes=dict(excluded),
+        missing_outcomes=dict(Counter(
+            observation.reason_code
+            for observation in observations
+            if observation.status == "missing" and observation.reason_code is not None
+        )),
     )
 
 
@@ -351,11 +370,76 @@ class DiagnosticValue(BaseModel):
         return self
 
 
+class ResourceCollection(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    cpu_scope: Literal["owned_backend_container"] = "owned_backend_container"
+    cpu_method: Literal["cpu_time_delta_over_observer_wall_time_one_core_100_percent"] = "cpu_time_delta_over_observer_wall_time_one_core_100_percent"
+    memory_method: Literal["maximum_sampled_container_charged_bytes"] = "maximum_sampled_container_charged_bytes"
+    gpu_scope: Literal["shared_host_gpu"] = "shared_host_gpu"
+    gpu_method: Literal["maximum_device_utilization_and_maximum_total_used_bytes"] = "maximum_device_utilization_and_maximum_total_used_bytes"
+    backend_samples: int = Field(ge=0)
+    cpu_intervals: int = Field(ge=0)
+    cpu_observed_ms: float = Field(ge=0, allow_inf_nan=False)
+    maximum_interval_ms: float = Field(ge=0, allow_inf_nan=False)
+    gpu_samples: int = Field(ge=0)
+    missing_samples: dict[str, int]
+
+
+class ManualResourceCollection(BaseModel):
+    """手動取得のsnapshot。所有テストcontainerの連続観測とは別の方法として記録する。"""
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    method: Literal["manual_docker_stats_and_host_gpu_v1"] = "manual_docker_stats_and_host_gpu_v1"
+    cpu_scope: Literal["backend_container"] = "backend_container"
+    cpu_method: Literal["mean_sampled_docker_stats_percent_one_core_100_percent"] = "mean_sampled_docker_stats_percent_one_core_100_percent"
+    memory_method: Literal["maximum_sampled_docker_stats_cli_usage_bytes_excluding_cache"] = "maximum_sampled_docker_stats_cli_usage_bytes_excluding_cache"
+    gpu_scope: Literal["shared_host_gpu"] = "shared_host_gpu"
+    gpu_method: Literal["maximum_sampled_device_utilization_and_total_used_bytes"] = "maximum_sampled_device_utilization_and_total_used_bytes"
+    sample_count: int = Field(ge=1)
+    sample_window_ms: float = Field(ge=0, allow_inf_nan=False)
+    maximum_interval_ms: float = Field(ge=0, allow_inf_nan=False)
+    measured_samples: dict[str, int]
+    missing_samples: dict[str, int]
+
+    @model_validator(mode="after")
+    def validate_counts(self) -> ManualResourceCollection:
+        names = {"cpu_percent", "memory_bytes", "gpu_utilization_percent", "gpu_memory_bytes"}
+        if set(self.measured_samples) != names or set(self.missing_samples) != names:
+            raise ValueError("manual resource coverage requires every metric")
+        for name in names:
+            measured, missing = self.measured_samples[name], self.missing_samples[name]
+            if measured < 0 or missing < 0 or measured + missing != self.sample_count:
+                raise ValueError("manual resource sample denominator mismatch")
+        if self.maximum_interval_ms > self.sample_window_ms:
+            raise ValueError("manual resource interval exceeds observation window")
+        return self
+
+
 class ResourceMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     cpu_percent: DiagnosticValue
     memory_bytes: DiagnosticValue
+    gpu_utilization_percent: DiagnosticValue = Field(default_factory=lambda: DiagnosticValue(status="missing", reason="gpu_not_observed"))
+    gpu_memory_bytes: DiagnosticValue = Field(default_factory=lambda: DiagnosticValue(status="missing", reason="gpu_not_observed"))
+    collection: ResourceCollection | ManualResourceCollection | None = None
+
+
+class NetworkCollection(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    byte_scope: Literal["browser_audio_rtp_payload"] = "browser_audio_rtp_payload"
+    loss_scope: Literal["browser_downlink_response_tracks"] = "browser_downlink_response_tracks"
+    observation_boundaries: dict[Literal["playback_completed", "response_cancelled"], int] = Field(default_factory=dict)
+    trial_count: int = Field(ge=0)
+    sent_trials: int = Field(ge=0)
+    received_trials: int = Field(ge=0)
+    loss_trials: int = Field(ge=0)
+    received_packets: int = Field(ge=0)
+    lost_packets: int = Field(ge=0)
+    negative_loss_trials: int = Field(ge=0)
+    missing_trials: dict[str, int]
 
 
 class NetworkMetadata(BaseModel):
@@ -365,6 +449,7 @@ class NetworkMetadata(BaseModel):
     received_bytes: DiagnosticValue
     packet_loss_basis_points: DiagnosticValue
     condition: str
+    collection: NetworkCollection | None = None
 
 
 class HardwareMetadata(BaseModel):
@@ -459,6 +544,8 @@ class _MetricDefinition:
     exclude_on_response_outcome: bool = False
     value_event: str | None = None
     signed_offset: bool = False
+    unavailable_event: str | None = None
+    unavailable_reason: str | None = None
 
 
 _METRIC_CATALOG = (
@@ -485,6 +572,72 @@ _METRIC_CATALOG = (
     _MetricDefinition("processing_failure", "stt_started", "first_playback", "response_utterance", "processing_outcome", unit="count", failure_stages=("stt", "llm", "tts", "transport", "playback"), exclude_on_response_outcome=True),
     _MetricDefinition("manual_operations", None, None, "session_started", "session_ended", unit="count", value_event="manual_operations"),
 )
+
+
+# LiveKitの検出境界は、旧WebSocketの録音開始・録音確定とは異なる。
+# fixtureの下限を引いた値は、符号付き検出offsetの上限を表す。
+LIVEKIT_VAD_POINTS = {
+    "vad_leading_boundary": ("fixture_speech_start_lower_bound", "vad_speech_start_client_upper_bound"),
+    "vad_trailing_boundary": ("fixture_speech_end_lower_bound", "speech_stopped_client_upper_bound"),
+}
+
+_LIVEKIT_VAD_EVENTS = {"vad_leading_boundary": "vad_speech_start_client", "vad_trailing_boundary": "speech_stopped"}
+
+_LIVEKIT_DIAGNOSTIC_CATALOG = (
+    *(
+        _MetricDefinition(
+            name, start, end, start or "ollama_provider_queue_wait", end or "ollama_provider_queue_wait",
+            value_event="ollama_provider_queue_ms" if start is None else None,
+            failure_stages=("llm",),
+            unavailable_event="ollama_internal_timing_unavailable",
+            unavailable_reason="ollama_api_internal_timing_not_exposed",
+        )
+        for name, start, end in (
+            ("llm_provider_acceptance_latency", "llm_http_started", "llm_provider_accepted"),
+            ("llm_provider_generation_start_latency", "llm_provider_accepted", "llm_provider_generation_started"),
+            ("llm_generation_start_to_first_token_received", "llm_provider_generation_started", "llm_first_token"),
+            ("ollama_provider_queue_wait", None, None),
+        )
+    ),
+    _MetricDefinition("client_decode_latency", "client_audio_received", "client_audio_decoded", "client_audio_received", "client_audio_decoded", failure_stages=("transport",)),
+    _MetricDefinition("decoded_to_playback_latency", "client_audio_decoded", "first_playback", "client_audio_decoded", "first_playback", failure_stages=("transport", "playback")),
+    _MetricDefinition("llm_first_provider_chunk_latency", "llm_http_started", "llm_first_provider_chunk", "llm_http_started", "llm_first_provider_chunk", failure_stages=("llm",)),
+    _MetricDefinition("llm_thinking_to_text_latency", "llm_first_thinking_chunk", "llm_first_token", "llm_first_thinking_chunk", "llm_first_token", failure_stages=("llm",)),
+    _MetricDefinition("prompt_preparation", "prompt_preparation_started", "prompt_preparation_completed", "prompt_preparation_started", "prompt_preparation_completed"),
+    _MetricDefinition("llm_request_latency", "stt_completed", "llm_request_started", "stt_completed", "llm_request_started"),
+    _MetricDefinition("llm_capacity_wait", "llm_request_started", "llm_capacity_acquired", "llm_request_started", "llm_capacity_acquired"),
+    _MetricDefinition("llm_http_headers_latency", "llm_http_started", "llm_http_headers_received", "llm_http_started", "llm_http_headers_received"),
+    _MetricDefinition("llm_first_token_latency", "llm_http_started", "llm_first_token", "llm_http_started", "llm_first_token"),
+    *(
+        _MetricDefinition(name, None, None, name, name, unit=unit, value_event=name)
+        for name, unit in (
+            ("playback_gap_total_ms", "millisecond"),
+            ("playback_gap_maximum_ms", "millisecond"),
+            ("playback_underrun_count", "count"),
+            ("playback_duration_ms", "millisecond"),
+        )
+    ),
+    *(
+        _MetricDefinition(
+            name, None, None, name, name,
+            unit="millisecond" if name.endswith("_ms") else "count",
+            value_event=name,
+        )
+        for name in sorted(VALUE_NAMES)
+    ),
+)
+
+
+_INTERRUPT_CLIENT_POINTS = {
+    "local_playback_stop": ("speech_started_client", "local_playback_stopped"),
+    "turn_decision": ("speech_started_client", "turn_decision_client"),
+    "barge_in_cancel_total": ("speech_started_client", "server_cancelled_client"),
+}
+_INTERRUPTION_METRICS = frozenset({*_INTERRUPT_CLIENT_POINTS, "cancel_after_decision"})
+
+
+def _is_interruption_trial(events: Sequence[TraceEvent]) -> bool:
+    return any(event.name == "interruption_started" for event in events)
 
 
 def _trial_key(event: TraceEvent) -> tuple[str, str, str]:
@@ -536,6 +689,13 @@ def _metric_observation(
     if relevant_failure is not None:
         assert relevant_failure.reason_code is not None
         return MetricObservation.failed(relevant_failure.reason_code)
+    if definition.unavailable_event is not None and definition.unavailable_event in by_name:
+        if any(name in by_name for name in (
+            "llm_provider_accepted", "llm_provider_generation_started", "ollama_provider_queue_ms",
+        )):
+            return MetricObservation.missing("provider_timing_evidence_conflict")
+        assert definition.unavailable_reason is not None
+        return MetricObservation.missing(definition.unavailable_reason)
     if definition.name == "ttfa" and "fixture_speech_end" not in by_name:
         return MetricObservation.not_applicable(
             "fixture_boundary_requires_controlled_runner"
@@ -555,15 +715,27 @@ def _metric_observation(
             return MetricObservation.missing(f"{definition.value_event}_value_missing")
         return MetricObservation.measured(latest.value)
     assert definition.start_event is not None and definition.end_event is not None
+    if transport == "livekit" and definition.name in LIVEKIT_VAD_POINTS:
+        for name in (definition.start_event, definition.end_event):
+            observed = [event for event in trial_events if event.name == name]
+            if len(observed) > 1:
+                return MetricObservation.missing("duplicate_vad_boundary")
     started = by_name.get(definition.start_event)
     completed = by_name.get(definition.end_event)
     if started is None or completed is None:
         missing = definition.start_event if started is None else definition.end_event
         return MetricObservation.missing(f"{missing}_event_missing")
+    # 同一試行にclient/serverの境界が揃っても時計変換は推測しない。
+    # 算出できない指標だけを欠測とし、同一時計のTTFA等は集計を続ける。
+    if started.clock_domain != completed.clock_domain or started.unit != completed.unit:
+        return MetricObservation.missing("metric_boundary_clock_mismatch")
     if definition.signed_offset:
-        if started.clock_domain != completed.clock_domain or started.unit != completed.unit:
-            raise ValueError("events from different clock domains cannot be subtracted")
         offset = completed.timestamp - started.timestamp
+        if transport == "livekit" and definition.name in LIVEKIT_VAD_POINTS:
+            if completed.timestamp % 1 or completed.unit != "millisecond":
+                return MetricObservation.missing("native_vad_timestamp_not_integer_milliseconds")
+            # wire時刻はMath.floor(ms)。真の検出時刻の上限を1ms加えて保持する。
+            offset += 1
         if started.unit == "nanosecond":
             offset /= 1_000_000
         return MetricObservation.measured(float(offset))
@@ -613,12 +785,47 @@ def aggregate_events(
     trials: dict[tuple[str, str, str], list[TraceEvent]] = {}
     for event in events:
         trials.setdefault(_trial_key(event), []).append(event)
-    primary_events = [_primary_trial_event(trial) for trial in trials.values()]
+    response_trials = [trial for trial in trials.values() if not _is_interruption_trial(trial)]
+    has_interruptions = len(response_trials) != len(trials)
+    primary_events = [_primary_trial_event(trial) for trial in response_trials]
     outcomes = [
         outcome
-        for trial in trials.values()
+        for trial in response_trials
         for outcome in _stage_outcomes(trial)
     ]
+    definitions = (
+        _METRIC_CATALOG + _LIVEKIT_DIAGNOSTIC_CATALOG
+        if metadata.transport == "livekit" else _METRIC_CATALOG
+    )
+    if metadata.transport == "livekit":
+        definitions = tuple(
+            replace(definition, start_point=LIVEKIT_VAD_POINTS[definition.name][0],
+                    end_event=_LIVEKIT_VAD_EVENTS[definition.name],
+                    end_point=LIVEKIT_VAD_POINTS[definition.name][1])
+            if definition.name in LIVEKIT_VAD_POINTS else definition
+            for definition in definitions
+        )
+    if has_interruptions:
+        definitions = tuple(
+            replace(
+                definition,
+                start_event=_INTERRUPT_CLIENT_POINTS[definition.name][0],
+                end_event=_INTERRUPT_CLIENT_POINTS[definition.name][1],
+                start_point=_INTERRUPT_CLIENT_POINTS[definition.name][0],
+                end_point=_INTERRUPT_CLIENT_POINTS[definition.name][1],
+            ) if definition.name in _INTERRUPT_CLIENT_POINTS else definition
+            for definition in definitions
+        )
+
+    def observe_trial(definition: _MetricDefinition, trial: Sequence[TraceEvent]) -> MetricObservation:
+        if has_interruptions:
+            expects_interruption = definition.name in _INTERRUPTION_METRICS
+            if expects_interruption != _is_interruption_trial(trial):
+                return MetricObservation.excluded(
+                    "not_interruption_trial" if expects_interruption else "interruption_trial"
+                )
+        return _metric_observation(definition, trial, transport=metadata.transport)
+
     failures = sum(event.outcome == "failure" for event in primary_events)
     exclusions = sum(event.outcome == "excluded" for event in primary_events)
     successes = len(primary_events) - failures - exclusions
@@ -626,18 +833,14 @@ def aggregate_events(
         aggregate_metric(
             definition.name,
             [
-                _metric_observation(
-                    definition,
-                    trial,
-                    transport=metadata.transport,
-                )
+                observe_trial(definition, trial)
                 for trial in trials.values()
             ],
             unit=definition.unit,
             start_point=definition.start_point,
             end_point=definition.end_point,
         )
-        for definition in _METRIC_CATALOG
+        for definition in definitions
     ]
     return AggregateArtifact(
         schema_version=SCHEMA_VERSION,
@@ -650,7 +853,7 @@ def aggregate_events(
         clocks=diagnostics.clocks,
         run_counts=RunCounts(
             warmup=metadata.warmup_runs,
-            measured=len(trials),
+            measured=len(response_trials),
             success=successes,
             failure=failures,
             excluded=exclusions,
@@ -827,7 +1030,7 @@ class ReconnectEvaluation(BaseModel):
 
     passed: bool
     within_ten_seconds_rate_basis_points: int
-    recovery_p95_ms: float
+    recovery_p95_ms: float | None
 
 
 def evaluate_reconnect(
@@ -837,12 +1040,29 @@ def evaluate_reconnect(
     successful_recovery_ms: Sequence[float],
     duplicate_playbacks: int,
 ) -> ReconnectEvaluation:
+    # 10秒以内に回復した全試行の遅延を要求し、一部の有効値だけで合格にしない。
+    if any(type(value) is not int for value in (
+        trials, recovered_within_ten_seconds, duplicate_playbacks,
+    )) or duplicate_playbacks < 0:
+        raise ValueError("reconnect counts must be nonnegative integers")
     rate = _basis_points(recovered_within_ten_seconds, trials)
-    recovery_p95 = type7_quantile(successful_recovery_ms, 0.95)
+    if len(successful_recovery_ms) != recovered_within_ten_seconds:
+        raise ValueError("recovery sample count must match successful trials")
+    if any(
+        isinstance(value, bool) or not isinstance(value, (int, float))
+        or not math.isfinite(value) or not 0 <= value <= 10_000
+        for value in successful_recovery_ms
+    ):
+        raise ValueError("recovery latency must be finite and within ten seconds")
+    recovery_p95 = (
+        type7_quantile(successful_recovery_ms, 0.95)
+        if successful_recovery_ms else None
+    )
     return ReconnectEvaluation(
         passed=(
             trials == 100
             and rate >= 9_900
+            and recovery_p95 is not None
             and recovery_p95 <= 3_000
             and duplicate_playbacks == 0
         ),
@@ -874,11 +1094,11 @@ def evaluate_vad(
     split_rate = _basis_points(splits_at_intentional_pause, trials)
     return VadEvaluation(
         passed=(
-            leading_rate <= 100
-            and early_rate <= 100
+            leading_losses_over_100_ms * 100 <= trials
+            and early_ends_over_100_ms * 100 <= trials
             and utterance_finalize_p95_ms <= 800
             and intentional_pause_ms <= 600
-            and split_rate <= 100
+            and splits_at_intentional_pause * 100 <= trials
         ),
         leading_loss_rate_basis_points=leading_rate,
         early_end_rate_basis_points=early_rate,
@@ -911,8 +1131,8 @@ def evaluate_turn_classification(
         passed=(
             backchannel_trials >= 100
             and interruption_trials >= 100
-            and false_rate <= 200
-            and missed_rate <= 100
+            and false_cancels * 100 <= backchannel_trials * 2
+            and missed_interruptions * 100 <= interruption_trials
         ),
         false_cancel_rate_basis_points=false_rate,
         missed_interruption_rate_basis_points=missed_rate,
@@ -944,20 +1164,20 @@ def evaluate_quality_targets(
     duplicate_playbacks: int,
     required_manual_operations: int,
 ) -> QualityTargetEvaluation:
-    gap_rate = _basis_points(dogfood_gap_ms, dogfood_playback_ms)
-    failure_rate = _basis_points(
+    _basis_points(dogfood_gap_ms, dogfood_playback_ms)
+    _basis_points(
         dogfood_processing_failures,
         dogfood_response_utterances,
     )
     return QualityTargetEvaluation(
         continuity_passed=(
             controlled_underruns == 0
-            and gap_rate <= 10
+            and dogfood_gap_ms * 1_000 <= dogfood_playback_ms
             and maximum_continuous_gap_ms <= 200
         ),
         processing_passed=(
             controlled_processing_failures == 0
-            and failure_rate <= 100
+            and dogfood_processing_failures * 100 <= dogfood_response_utterances
             and unexpected_session_ends == 0
         ),
         presentation_passed=(
@@ -971,8 +1191,11 @@ def evaluate_quality_targets(
 class ArtifactEvaluation(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    # 音声品質全体の合否ではなく、latency部分の判定である。
+    evaluation_scope: Literal["latency_only"] = "latency_only"
     passed: bool
     metric_results: dict[str, TargetEvaluation]
+    coverage_errors: list[str] = Field(default_factory=list)
 
 
 def evaluate_artifact(
@@ -982,21 +1205,56 @@ def evaluate_artifact(
     if candidate.transport != "livekit" or baseline.transport != "websocket":
         raise ValueError("artifact comparison requires LiveKit and WebSocket")
     baseline_metrics = {metric.name: metric for metric in baseline.metrics}
+    candidate_metrics = {metric.name: metric for metric in candidate.metrics}
+    coverage: list[str] = []
+    for label, artifact in (("candidate", candidate), ("baseline", baseline)):
+        if (
+            artifact.measurement_kind != "controlled_baseline"
+            or artifact.run_counts.warmup != 5
+            or artifact.run_counts.measured != 100
+        ):
+            coverage.append(f"{label}:controlled_run_count")
+        if len({metric.name for metric in artifact.metrics}) != len(artifact.metrics):
+            coverage.append(f"{label}:duplicate_metric")
+    if candidate.fixture_version != baseline.fixture_version:
+        coverage.append("fixture_version_mismatch")
     results: dict[str, TargetEvaluation] = {}
-    for metric in candidate.metrics:
-        if metric.name not in ABSOLUTE_LATENCY_LIMITS_MS or metric.p95 is None:
+    comparable = {
+        metric.name for metric in baseline.metrics
+        if metric.unit == "millisecond" and metric.status == "measured"
+        and metric.p95 is not None
+    }
+    required = set(ABSOLUTE_LATENCY_LIMITS_MS) | comparable
+    for name in sorted(required):
+        metric = candidate_metrics.get(name)
+        if (
+            metric is None or metric.status != "measured" or metric.p95 is None
+            or metric.p50 is None or metric.success_count < 100
+            or metric.missing_count != 0 or metric.failure_count != 0
+            or metric.not_applicable_count != 0
+        ):
+            coverage.append(f"{name}:incomplete_measurement")
+            results[name] = TargetEvaluation(passed=False)
             continue
-        websocket_metric = baseline_metrics.get(metric.name)
-        websocket_p95 = (
-            websocket_metric.p95 if websocket_metric is not None else None
-        )
-        results[metric.name] = evaluate_latency_target(
-            metric_name=metric.name,
-            p50_ms=metric.p50 if metric.p50 is not None else metric.p95,
-            p95_ms=metric.p95,
-            websocket_p95_ms=websocket_p95,
-        )
+        websocket = baseline_metrics.get(name)
+        websocket_p95 = None if name not in comparable or websocket is None else websocket.p95
+        if websocket is not None and name in comparable and (
+            metric.start_point != websocket.start_point
+            or metric.end_point != websocket.end_point
+        ):
+            coverage.append(f"{name}:measurement_boundary_mismatch")
+            results[name] = TargetEvaluation(passed=False)
+            continue
+        if name in ABSOLUTE_LATENCY_LIMITS_MS:
+            results[name] = evaluate_latency_target(
+                metric_name=name, p50_ms=metric.p50, p95_ms=metric.p95,
+                websocket_p95_ms=websocket_p95,
+            )
+        else:
+            assert websocket_p95 is not None
+            results[name] = evaluate_relative_latency(metric.p95, websocket_p95)
     return ArtifactEvaluation(
-        passed=bool(results) and all(result.passed for result in results.values()),
+        passed=not coverage and bool(results) and all(result.passed for result in results.values()),
         metric_results=results,
+        coverage_errors=coverage,
     )

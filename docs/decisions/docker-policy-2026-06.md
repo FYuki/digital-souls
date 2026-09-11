@@ -11,6 +11,10 @@ Issue #135 Goal 1では、コード、設定、CI、dogfood配備資材を実機
 実Ubuntu-dogfoodへの適用、実GPUでのVRAM／latency計測、連続会話と再起動受入はGoal 2で行う。
 Issue #112は本決定と実装の対象外である。
 
+2026-09-06決定: 過去backupの実在をrollbackの必須条件とする要件は取り下げる。
+manifestとbackupの保持数が異なるため、古い世代へ戻せることを優先する。新規backupの検証は維持し、
+過去manifestは既知の汚染形式だけを読込時に正規化する。schema不一致時の切替拒否は維持する。
+
 ## 背景
 
 当初は個人開発・単一マシンであり、FastAPI、Vite、Ollama、WhisperをWSL2上で直接実行する方が
@@ -132,6 +136,10 @@ backup ID、deploy日時にimage digestを追加する。
 deploy前backup、backup検証、readiness、失敗時rollbackを維持する。rollbackは保存済みmanifestの
 commit、schema、backupとimage digestの組を検証して切り替える。mainへのmerge、image build、
 registry更新だけではdogfoodの実行imageを変更しない。
+
+対象digestをGHCRから取得できない場合の再ビルドは本移行の範囲外とし、
+ユーザーの明示指示で別途対応する。当時の依存が取得できない場合も同じ扱いとし、
+通常rollbackから自動再ビルドや別バージョンのimageへの代替は行わない。
 
 3 imageは`dogfood-images.env`へ原子的に反映し、systemd targetの再起動で同じcommitの組へ切り替える。
 このファイルは`0600 root:root`とし、active digestを必要とするroot control plane、deploy、Whisper runnerだけが読む。Ollama、VOICEVOX、LiveKit runnerはimage digestを使用しないため読み込まず、Ollamaの非root process所有を維持する。

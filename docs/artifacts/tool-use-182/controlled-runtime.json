@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "runId": "dbef8518-30e8-418c-8811-3ba0ed887a9f",
+  "startedAt": "2026-09-06T19:39:00.953380+00:00",
+  "environmentId": "test",
+  "mcpImplementation": "controlled-fixture",
+  "microphone": "scheduled-voicevox-wav-mediastream",
+  "routingModel": "ollama/gemma4:e4b",
+  "testStatus": "passed",
+  "completedAt": "2026-09-06T19:44:24.728533+00:00"
+}

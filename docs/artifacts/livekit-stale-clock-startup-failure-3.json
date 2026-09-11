@@ -1,0 +1,140 @@
+{
+  "schema_version": "1.0",
+  "scope": "labeled_livekit_stale_output_report",
+  "cohort": "take_turn",
+  "cancel_boundary": "server_cancel_state_transition",
+  "audio_presentation_boundary": "post_gain_browser_output_clock",
+  "counts": {
+    "expected": 3,
+    "recorded": 3,
+    "success": 0,
+    "failure": 3,
+    "independent_sessions": 3,
+    "session_end_confirmed": 0,
+    "verified_injection": 0,
+    "replayed_cancel_windows": 0
+  },
+  "channels": {
+    "audio_presented_samples": {
+      "unit": "sample",
+      "observed": 0,
+      "missing": 3,
+      "missing_reasons": {
+        "fixture_injection_unverified": 3
+      },
+      "definitely_stale": 0,
+      "possibly_stale": 0,
+      "verified_zero": 0,
+      "lower_total": 0,
+      "upper_total": 0
+    },
+    "audio_received_packets": {
+      "unit": "packet",
+      "observed": 0,
+      "missing": 3,
+      "missing_reasons": {
+        "fixture_injection_unverified": 3
+      },
+      "definitely_stale": 0,
+      "possibly_stale": 0,
+      "verified_zero": 0,
+      "lower_total": 0,
+      "upper_total": 0
+    },
+    "audio_received_samples": {
+      "unit": "sample",
+      "observed": 0,
+      "missing": 3,
+      "missing_reasons": {
+        "fixture_injection_unverified": 3
+      },
+      "definitely_stale": 0,
+      "possibly_stale": 0,
+      "verified_zero": 0,
+      "lower_total": 0,
+      "upper_total": 0
+    },
+    "text_received_characters": {
+      "unit": "utf16_code_unit",
+      "observed": 0,
+      "missing": 3,
+      "missing_reasons": {
+        "fixture_injection_unverified": 3
+      },
+      "definitely_stale": 0,
+      "possibly_stale": 0,
+      "verified_zero": 0,
+      "lower_total": 0,
+      "upper_total": 0
+    },
+    "live_text_presented_characters": {
+      "unit": "utf16_code_unit",
+      "observed": 0,
+      "missing": 3,
+      "missing_reasons": {
+        "fixture_injection_unverified": 3
+      },
+      "definitely_stale": 0,
+      "possibly_stale": 0,
+      "verified_zero": 0,
+      "lower_total": 0,
+      "upper_total": 0
+    },
+    "history_text_presented_characters": {
+      "unit": "utf16_code_unit",
+      "observed": 0,
+      "missing": 3,
+      "missing_reasons": {
+        "history_observer_unimplemented": 3
+      },
+      "definitely_stale": 0,
+      "possibly_stale": 0,
+      "verified_zero": 0,
+      "lower_total": 0,
+      "upper_total": 0
+    },
+    "server_generated_text_characters": {
+      "unit": "utf16_code_unit",
+      "observed": 0,
+      "missing": 3,
+      "missing_reasons": {
+        "server_generation_observer_unimplemented": 3
+      },
+      "definitely_stale": 0,
+      "possibly_stale": 0,
+      "verified_zero": 0,
+      "lower_total": 0,
+      "upper_total": 0
+    },
+    "server_generated_audio_samples": {
+      "unit": "sample",
+      "observed": 0,
+      "missing": 3,
+      "missing_reasons": {
+        "server_generation_observer_unimplemented": 3
+      },
+      "definitely_stale": 0,
+      "possibly_stale": 0,
+      "verified_zero": 0,
+      "lower_total": 0,
+      "upper_total": 0
+    }
+  },
+  "evaluation": {
+    "minimum_trials": 100,
+    "cohort_coverage_complete": false,
+    "all_boundaries_observed": false,
+    "stale_presented_passed": false
+  },
+  "provenance": {
+    "measurement_revision": "54177f5310e5e021b60639d89c373660d4c672a2",
+    "raw_manifest_sha256": "664c6e8be5abeb648c5d9889fa55a6f566f7df897db362f1187fb0f3198580db",
+    "raw_trace_sha256": null,
+    "fixtures_sha256": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3",
+    "reporter_sha256": "98c3ae61e8c990e9f1ead541d132958c19e5f9ce0160c5e5744be802181fb352",
+    "schema_sha256": "83c0199ca5b11265ac6d1ff2f4cd73bfb3ccc0ea3aada0066b52dcf2853de8ec",
+    "clock_validator_sha256": "a0a4b30020050e5adc6cb8b2322d630ba1c47d3b72e9862c24084474a8cf608f",
+    "fixture_validator_sha256": "7595cd7d062da61783f7f73d736340559d05c0e57c0edf3fca1608e7fdd1fdc3",
+    "replay_sources_sha256": "e3d3f4419c8ce0abe2c8cd21a3efe0c61fbac6d7e4e3ed898a7f6406fdd8364c"
+  }
+}

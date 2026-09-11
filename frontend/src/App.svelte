@@ -1,17 +1,23 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import ToolUseStatus from './lib/ToolUseStatus.svelte'
+  import { onMount, tick } from 'svelte'
 
   import AudioRecorder from './lib/AudioRecorder.svelte'
   import type { SpeechActivity } from './lib/AudioRecorder.svelte'
   import CharacterPortrait from './lib/CharacterPortrait.svelte'
   import ChatWindow from './lib/ChatWindow.svelte'
+  import type {SettledVoiceTurnDisplay} from './lib/voice-turn-display'
+  import type {SelectedConversationContext} from './lib/conversations/controller'
   import ConversationSidebar from './lib/ConversationSidebar.svelte'
   import InputBar from './lib/InputBar.svelte'
   import MemoryManagement from './lib/MemoryManagement.svelte'
+  import AddonManagement from './lib/AddonManagement.svelte'
+  import type { ApprovalRequest } from './lib/addon-admin/approvals'
+  import { createAddonController, aggregateBadge } from './lib/addon-admin/controller'
   import ScreenCaptureControls from './lib/ScreenCaptureControls.svelte'
   import type { ScreenUploadResult } from './lib/screen-perception/client'
   import { listCharacters, rescanCharacters } from './lib/characters/client'
-  import { sendChatRequest } from './lib/chat/client'
+  import { sendChatRequest, parseChatResponseBody } from './lib/chat/client'
   import { createConversationSessionManager } from './lib/conversation-session'
   import {
     archiveConversation,
@@ -79,6 +85,15 @@
   let screenReferenceAvailable = false
   let screenReferenceDecisionActive = false
   let applicationError: string | null = null
+  const addonController = createAddonController()
+  let showingAddonManagement = false
+  let addonReturnFocus: HTMLButtonElement | null = null
+  async function closeAddonManagement() {
+    showingAddonManagement = false
+    sidebarOpen = true
+    await tick()
+    addonReturnFocus?.focus()
+  }
   let showingMemoryManagement = false
   let activeUtteranceId: string | null = null
   let endingVoiceSession = false
@@ -87,6 +102,8 @@
   let visualViewportHeight: number | null = null
   let visualViewportOffsetTop = 0
   type LiveVoiceTurn = {
+    context: SelectedConversationContext
+    historyTurnId?: string
     responseId: string | null
     sourceUtteranceIds: string[]
     userContent: string
@@ -94,6 +111,7 @@
     lastTextSequence: number
   }
   let liveVoiceTurn: LiveVoiceTurn | null = null
+  let settledVoiceTurns: (SettledVoiceTurnDisplay & {context: SelectedConversationContext})[] = []
   type FailedVoiceTurn = {
     responseId: string
     characterId: string
@@ -117,18 +135,24 @@
     activeResponseId: null,
   }
   const voiceSession = new LiveKitVoiceSessionController(
-    (snapshot) => { voiceSnapshot = snapshot },
+    (snapshot) => {
+      if (snapshot.phase === 'reconnecting') activeUtteranceId = null
+      voiceSnapshot = snapshot
+    },
     receiveVoiceCoreEvent,
   )
 
   function receiveVoiceCoreEvent(event: VoiceSessionEvent) {
     if (event.type === 'utterance_finalized' && event.utterance_id !== undefined) {
+      const context = conversationController.selectedContext()
+      if (context === null) return
       const transcript = event.transcript ?? ''
       if (event.should_response === false) return
       if (screenReferenceAvailable) screenReferenceDecisionActive = true
       finalizedUtterances.set(event.utterance_id, transcript)
       if (liveVoiceTurn === null) {
         liveVoiceTurn = {
+          context,
           responseId: null,
           sourceUtteranceIds: [event.utterance_id],
           userContent: transcript,
@@ -147,8 +171,12 @@
       return
     }
     if (event.type === 'response_started' && event.response_id !== undefined) {
+      const context = conversationController.selectedContext()
+      if (context === null) return
       const sourceIds = event.source_utterance_ids ?? []
       liveVoiceTurn = {
+        context,
+        ...(event.history_turn_id === undefined ? {} : {historyTurnId: event.history_turn_id}),
         responseId: event.response_id,
         sourceUtteranceIds: sourceIds,
         userContent: sourceIds
@@ -182,8 +210,9 @@
       && event.response_id === liveVoiceTurn.responseId
     ) {
       screenReferenceDecisionActive = false
+      const responseContext = liveVoiceTurn.context
       if (event.type === 'response_failed') {
-        const context = conversationController.selectedContext()
+        const context = responseContext
         if (context !== null) {
           failedVoiceTurns = [...failedVoiceTurns, {
             responseId: event.response_id,
@@ -197,13 +226,23 @@
       for (const utteranceId of liveVoiceTurn.sourceUtteranceIds) {
         finalizedUtterances.delete(utteranceId)
       }
+      if (event.type !== 'response_failed' && liveVoiceTurn.historyTurnId !== undefined
+        && liveVoiceTurn.responseId !== null) {
+        settledVoiceTurns = [...settledVoiceTurns, {...liveVoiceTurn,
+          historyTurnId: liveVoiceTurn.historyTurnId, responseId: liveVoiceTurn.responseId,
+          terminal: event.type === 'response_cancelled' ? 'cancelled' : 'completed'}]
+      }
       liveVoiceTurn = null
       if (event.type !== 'response_failed') {
-        const context = conversationController.selectedContext()
-        if (context !== null) {
-          void conversationController.refreshTurns(context)
-          void sidebarController.refreshCharacter(context.character)
-        }
+        void conversationController.refreshTurns(responseContext).then(() => {
+          // 失敗時や別会話の再取得では、未反映の表示を消さない。
+          const current = conversationController.selectedContext()
+          if (current?.character !== responseContext.character || current.conversationId !== responseContext.conversationId
+            || current.version !== responseContext.version) return
+          const loadedIds = new Set($conversationController.turns.map(turn => turn.turn_id))
+          settledVoiceTurns = settledVoiceTurns.filter(turn => !loadedIds.has(turn.historyTurnId))
+        })
+        void sidebarController.refreshCharacter(responseContext.character)
       }
       return
     }
@@ -236,7 +275,6 @@
     || endingVoiceSession
     || voiceSnapshot.phase === 'error'
     || voiceSnapshot.phase === 'ended'
-    || voiceSnapshot.phase === 'reconnecting'
   $: sessionStatus = ({
     idle: '停止',
     connecting: '接続中',
@@ -269,6 +307,12 @@
   }
 
   function syncVoiceSelection(character: string, conversationId: string | null) {
+    const matches = (context: SelectedConversationContext) => context.character === character && context.conversationId === conversationId
+    if (liveVoiceTurn !== null && !matches(liveVoiceTurn.context)) {
+      liveVoiceTurn = null
+      finalizedUtterances.clear()
+    }
+    settledVoiceTurns = settledVoiceTurns.filter(turn => matches(turn.context))
     const active = voiceSnapshot.context
     if (active === null || endingVoiceSession) return
     if (active.characterId === character && active.conversationId === conversationId) return
@@ -276,6 +320,9 @@
   }
 
   onMount(() => {
+    addonController.start()
+    const refreshAddons = () => { void addonController.refresh() }
+    window.addEventListener('focus', refreshAddons)
     const compactQuery = window.matchMedia?.('(max-width: 900px)')
     const viewport = window.visualViewport
     const updateLayout = () => {
@@ -297,6 +344,8 @@
     window.addEventListener('resize', updateViewport)
     void sidebarController.initialize()
     return () => {
+      addonController.destroy()
+      window.removeEventListener('focus', refreshAddons)
       compactQuery?.removeEventListener('change', updateLayout)
       viewport?.removeEventListener('resize', updateViewport)
       viewport?.removeEventListener('scroll', updateViewport)
@@ -345,9 +394,42 @@
     }
   }
 
+  const handleActionContinue = async (requestId: string): Promise<void | 'ended'> => {
+    const context = conversationController.selectedContext()
+    if (context === null) return
+    const voiceId = voiceSnapshot.context?.characterId === context.character
+      && voiceSnapshot.context.conversationId === context.conversationId
+      ? voiceSnapshot.sessionId : null
+    const response = await fetch(`/api/addon-actions/requests/${encodeURIComponent(requestId)}/continue`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ character: context.character, conversation_id: context.conversationId,
+        ...(voiceId ? { voice_session_id: voiceId } : {}),
+      }),
+    })
+    if (!response.ok) throw new Error('action continuation failed')
+    const body = await response.json()
+    if (body.state === 'ended') return 'ended'
+    if (body.state === 'voice_started' || body.state === 'continuing') return
+    const chat = parseChatResponseBody(body, context.character)
+    if (conversationController.selectedContext()?.version !== context.version) return
+    conversationController.appendTurn(context, chat.turn)
+    void sidebarController.refreshCharacter(context.character)
+  }
+
+  function handleAdminContinued(item: ApprovalRequest, body: Record<string, unknown>) {
+    if (typeof body.state === 'string') return
+    const chat = parseChatResponseBody(body, item.character_id)
+    const context = conversationController.selectedContext()
+    if (context?.character === item.character_id && context.conversationId === item.session_id) {
+      conversationController.appendTurn(context, chat.turn)
+    }
+    void sidebarController.refreshCharacter(item.character_id)
+  }
+
   const handleSelectConversation = async (character: string, conversationId: string) => {
     if (interactionsDisabled) return
     showingMemoryManagement = false
+    showingAddonManagement = false
     if (character !== $conversationController.character) {
       await conversationController.loadCharacter(character)
     }
@@ -404,6 +486,12 @@
     }
   }
 
+  const prepareVoiceMicrophone = async () => {
+    await ensureVoiceSession()
+    // getUserMediaの失敗も利用者による開始・再試行として数える。
+    voiceSession.recordMicrophoneActivationAttempt()
+  }
+
   const resumeVoiceMicrophone = async (stream: MediaStream) => {
     try {
       await voiceSession.resumeMicrophone(stream)
@@ -424,6 +512,7 @@
   }
 
   const handleSpeechStarted = ({ clientMs }: SpeechActivity) => {
+    if (voiceSnapshot.phase === 'reconnecting') return
     const utteranceId = crypto.randomUUID()
     activeUtteranceId = utteranceId
     void voiceSession.speechStarted(utteranceId, clientMs).catch(appendApplicationError)
@@ -450,6 +539,7 @@
   }
 
   const restartVoiceSession = async () => {
+    voiceSession.recordRetryAttempt()
     try {
       await ensureVoiceSession()
     } catch {
@@ -477,7 +567,9 @@
     onCreated={(character, conversation) => { void handleCreatedConversation(character, conversation) }}
     onRemoved={handleRemovedConversation}
     onRenamed={() => undefined}
-    onOpenMemory={() => { showingMemoryManagement = true; if (compactLayout) sidebarOpen = false }}
+    addonBadge={aggregateBadge($addonController.items)}
+    onOpenAddons={(trigger) => { addonReturnFocus = trigger; showingMemoryManagement = false; showingAddonManagement = true; if (compactLayout) sidebarOpen = false }}
+    onOpenMemory={() => { showingAddonManagement = false; showingMemoryManagement = true; if (compactLayout) sidebarOpen = false }}
   >
     <ScreenCaptureControls
       slot="screen-controls"
@@ -492,12 +584,17 @@
   {#if !sidebarOpen}
     <button class="floating-menu" type="button" aria-label="サイドバーを開く" on:click={() => { sidebarOpen = true }}>☰</button>
   {/if}
-  {#if showingMemoryManagement}
+  {#if showingAddonManagement}
+    <section class="content-panel memory-panel">
+      <AddonManagement controller={addonController} onContinued={handleAdminContinued} onClose={() => { void closeAddonManagement() }} />
+    </section>
+  {:else if showingMemoryManagement}
     <section class="content-panel memory-panel">
       <MemoryManagement character={$conversationController.character} onClose={() => { showingMemoryManagement = false }} />
     </section>
-  {:else}
-  <section class="chat-panel" aria-label={`${currentCharacterEntry?.display_name ?? $conversationController.character}とのチャット`}>
+  {/if}
+  {#if !showingMemoryManagement}
+  <section class="chat-panel" class:management-hidden={showingAddonManagement} aria-hidden={showingAddonManagement} aria-label={`${currentCharacterEntry?.display_name ?? $conversationController.character}とのチャット`}>
     <header class="chat-header">
       <p class="eyebrow">digital-souls</p>
       <div class="current-thread">
@@ -525,6 +622,7 @@
           characterName={currentCharacterEntry?.display_name ?? $conversationController.character}
           failedVoiceTurns={visibleFailedVoiceTurns}
           liveVoiceTurn={liveVoiceTurn}
+          settledVoiceTurns={settledVoiceTurns}
         />
       </div>
     </div>
@@ -546,6 +644,16 @@
       </section>
     {/if}
     <div class="input-area">
+      {#if $conversationController.selectedConversationId !== null}
+        {#key `${$conversationController.character}:${$conversationController.selectedConversationId}`}
+          <ToolUseStatus
+            character={$conversationController.character}
+            conversationId={$conversationController.selectedConversationId}
+            onStop={endVoiceSession}
+            onContinue={handleActionContinue}
+          />
+        {/key}
+      {/if}
       <InputBar
         onSend={handleSend}
         characterName={currentCharacterEntry?.display_name ?? $conversationController.character}
@@ -553,10 +661,11 @@
         screenReferenceAvailable={screenReferenceAvailable}
       />
       <AudioRecorder
+        suspended={voiceSnapshot.phase === 'reconnecting'}
         disabled={voiceRecorderDisabled}
         forceOff={voiceRecorderForceOff}
         continuous={true}
-        onBeforeEnable={ensureVoiceSession}
+        onBeforeEnable={prepareVoiceMicrophone}
         onMicrophoneEnabled={resumeVoiceMicrophone}
         onMicrophoneDisabled={muteVoiceMicrophone}
         onSpeechStarted={handleSpeechStarted}
@@ -578,6 +687,7 @@
 </main>
 
 <style>
+  .chat-panel.management-hidden { display: none; }
   .app-shell {
     position: relative;
     height: var(--visual-viewport-height, 100dvh);
@@ -708,6 +818,7 @@
 
   .input-area {
     display: flex;
+    flex-wrap: wrap;
     align-items: stretch;
     gap: 12px;
     padding: 16px 24px 20px;

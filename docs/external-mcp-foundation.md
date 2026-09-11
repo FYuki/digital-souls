@@ -1,8 +1,9 @@
 # 外部MCP利用基盤（#104）
 
 `backend/app/external_mcp/`は、登録済み外部MCPのdiscoveryと選択済みoperationの実行を提供する。
-会話からのTool選択・LLM向けprojection・binding解決・応答への統合は#182で実装する。
-現在の会話画面へMCPを自動接続する設定やHTTP管理APIは追加しない。
+会話からのTool選択・LLM向けprojection・binding解決・応答への統合は
+`backend/app/tool_use/`が担当する。会話用の管理設定と停止APIは
+[会話からの外部MCP利用](tool-use.md)を参照する。
 
 ## 構成と呼出順
 
@@ -60,7 +61,7 @@ JSON文字列による不変な保存形式を使い、取得したdocumentの�
 
 `refresh()`はpaginationを含むdiscovery全体を検証してstagedへ保存する。現在loopへ追加・削除・
 schema変更を途中反映せず、次の`begin_loop()`でactivateする。失敗したrefreshは旧snapshotを
-残してdegradedとなる。切断時はunavailable、再接続時は再discoveryと新世代を要求し、
+保持し、外部MCPのavailabilityは管理runtimeの接続単位判定に従う。単発の失敗をdegradedへ変更しない。切断時はunavailable、再接続時は再discoveryと新世代を要求し、
 古いloopやcached snapshotだけでは実行できない。
 
 JSON Schemaの外部参照は実行時に取得しない。未対応の参照や不正な引数はvalidation失敗となる。

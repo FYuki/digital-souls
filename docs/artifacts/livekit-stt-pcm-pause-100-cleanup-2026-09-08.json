@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "run_id": "pcm-pause-100-20260908-01",
+  "measurement_revision": "6f1dc67303cef561a71a37f84aea868ea19e8401",
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "observer_port_closed": true,
+  "teardown_completed": true,
+  "source_hashes": {
+    "runtime-data/runtime/standalone/environment-run.json": "bdc32b4c29c6d006adff931c66f45a241662d259396faf21fc1b5c9d378e5839",
+    "trial-manifest.json": "1a17079d2d8bc9fda1747eb6aa6b05aa0d91e6694f96b8c4df8edd062793b9b9",
+    "whisper-input-pcm.jsonl": "a2344d726546dbee2f6ecc5ada6085bb53c919b8c503c7e369e8bad56d51b7c9",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "de4cf80debad68d89a12dc09f498ab920521d0bb3cb1cf616a5e31b9ea413baf"
+  }
+}

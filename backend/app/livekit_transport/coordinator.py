@@ -20,6 +20,7 @@ from app.livekit_transport.delivery import (
     retry_deadlines_ms,
 )
 from app.livekit_transport.lifecycle import SessionLifecycle
+from app.voice_session_metrics import SessionMetrics
 from app.livekit_transport.mapping import ParticipantMapping
 from app.livekit_transport.outbox import (
     InMemoryOutboxManager,
@@ -41,10 +42,21 @@ def _required_int(value: object, field: str) -> int:
 
 
 @dataclass(frozen=True)
+class ConfirmedOutputStop:
+    request_id: str
+    generation: int
+    last_played_audio_sequence: int
+
+
+@dataclass(frozen=True)
 class SessionCoordinatorDependencies:
     publish_data: Callable[[bytes, str], Awaitable[None]]
     cleanup: Callable[[str], Awaitable[None]]
     generation_ready: Callable[[], Awaitable[None]]
+    response_track_ready: Callable[[str, str], None] = lambda _response_id, _track_sid: None
+    audio_probe: Callable[[str, str, int, str | None], None] | None = None
+    sync_observer: Callable[[str, int, int], None] | None = None
+    session_metrics: SessionMetrics | None = None
 
 
 class ProductionSessionCoordinator:
@@ -58,12 +70,15 @@ class ProductionSessionCoordinator:
         dependencies: SessionCoordinatorDependencies,
         core_port: CoreNotificationPort,
         monotonic_ms: Callable[[], int] = lambda: int(time.monotonic() * 1000),
+        monotonic_us: Callable[[], int] = lambda: time.monotonic_ns() // 1000,
     ) -> None:
+        self._output_stop_requests: dict[str, tuple[str, int, asyncio.Future[int]]] = {}
         self.session_id = session_id
         self.user_identity = user_identity
         self._dependencies = dependencies
         self._core_port = core_port
         self._clock = monotonic_ms
+        self._clock_us = monotonic_us
         self._mapping = ParticipantMapping()
         self._mapping.bind(
             core_participant_id=core_participant_id,
@@ -90,6 +105,8 @@ class ProductionSessionCoordinator:
         self._retry_tasks: dict[tuple[str, str], asyncio.Task[None]] = {}
         self._deadline_task: asyncio.Task[None] | None = None
         self._ended = False
+        self._state_sync_lock = asyncio.Lock()
+        self._ready_generation: int | None = None
 
     @property
     def generation(self) -> int:
@@ -137,10 +154,13 @@ class ProductionSessionCoordinator:
         elif self._lifecycle.phase == "bootstrapping":
             self._cancel_deadline()
             self._lifecycle.activate()
+            if self._dependencies.session_metrics is not None:
+                self._dependencies.session_metrics.activate()
         return False
 
     async def synchronize_reconnection(self) -> None:
-        await self._send_authoritative_state()
+        async with self._state_sync_lock:
+            await self._send_ready_authoritative_state()
 
     def is_current_participant(self, *, identity: str, participant_sid: str) -> bool:
         return (
@@ -179,6 +199,8 @@ class ProductionSessionCoordinator:
                 if str(event["session_id"]) != self.session_id:
                     raise TerminalProtocolError("Core event session mismatch")
                 self._delivery.receive(payload, event)
+                if event.get("measurement") == "session_summary" and self._dependencies.session_metrics is not None:
+                    self._dependencies.session_metrics.observe_summary(event.get("session_summary"))
                 if event["type"] in ("playback_completed", "playback_stopped"):
                     self._lifecycle.confirm_playback(
                         response_id=str(event["response_id"]),
@@ -200,26 +222,63 @@ class ProductionSessionCoordinator:
                 frame = decode_private_frame(payload)
                 frame_generation = _required_int(frame["generation"], "generation")
                 if frame["type"] == "state_sync_request":
-                    if frame_generation > self.generation:
-                        return
-                    if self._lifecycle.phase == "unavailable":
-                        self._lifecycle.reconnect(now_ms=self._clock())
-                        self._cancel_deadline()
-                        self._notify_core("session_reconnected")
-                    elif frame_generation == self.generation:
-                        self._lifecycle.advance_generation()
-                    await self._send_authoritative_state()
-                    await self._dependencies.generation_ready()
+                    self._observe_sync("request_received")
+                    # 再送は同じ要求世代のまま直列化し、準備完了前のavailable通知を防ぐ。
+                    async with self._state_sync_lock:
+                        self._observe_sync("lock_acquired")
+                        if frame_generation > self.generation or self._ended:
+                            return
+                        if self._lifecycle.phase == "unavailable":
+                            self._lifecycle.reconnect(now_ms=self._clock())
+                            self._cancel_deadline()
+                            self._notify_core("session_reconnected")
+                        elif frame_generation == self.generation:
+                            self._lifecycle.advance_generation()
+                        await self._send_ready_authoritative_state()
                     return
+                if frame["type"] == "control_probe":
+                    received_us = self._clock_us() if frame.get("observe_clock") is True else None
+                    self._observe_sync("probe_received")
                 if frame_generation != self.generation:
+                    if frame["type"] == "control_probe":
+                        self._observe_sync("probe_generation_rejected")
                     return
-                if frame["type"] == "ack":
+                if frame["type"] in {"audio_probe_request", "audio_probe_ready", "audio_probe_complete"}:
+                    if self._lifecycle.phase == "available" and self._dependencies.audio_probe is not None:
+                        self._dependencies.audio_probe(str(frame["type"]), str(frame["probe_id"]), frame_generation,
+                            str(frame["track_sid"]) if "track_sid" in frame else None)
+                    return
+                if frame["type"] == "control_probe":
+                    # 疎通確認は世代・再生・Core状態を変えず、現在利用可能な接続だけで応答する。
+                    if self._lifecycle.phase == "available":
+                        self._observe_sync("probe_ack_started")
+                        await self._publish_private({
+                            "protocol_version": "1.0",
+                            "type": "control_probe_ack",
+                            "probe_id": frame["probe_id"],
+                            "generation": self.generation,
+                            **({"server_received_us": received_us, "server_sent_us": self._clock_us()}
+                               if received_us is not None else {}),
+                        })
+                        self._observe_sync("probe_ack_completed")
+                    else:
+                        self._observe_sync("probe_unavailable")
+                    return
+                if frame["type"] == "output_stop_confirmed":
+                    self._confirm_output_stop(frame)
+                    return
+                if frame["type"] == "response_track_ready":
+                    self._dependencies.response_track_ready(str(frame["response_id"]), str(frame["track_sid"]))
+                elif frame["type"] == "ack":
                     self.acknowledge(str(frame["event_id"]), "character_to_user")
         except TerminalProtocolError:
             await self.cleanup("protocol_error")
             raise
 
     async def send_core(self, payload: bytes) -> None:
+        if self._lifecycle.phase in {"unavailable", "ended"}:
+            # 切断・終了後の最終通知は送信不能。Coreへ取消を伝え、delivery成功や処理失敗にしない。
+            raise asyncio.CancelledError("session is no longer available")
         if self._lifecycle.phase != "available":
             raise RuntimeError("session is not available")
         try:
@@ -243,6 +302,52 @@ class ProductionSessionCoordinator:
         task = asyncio.create_task(self._retry(event_id, payload))
         self._retry_tasks[("character_to_user", event_id)] = task
         await self._dependencies.publish_data(payload, APPLICATION_TOPIC)
+
+    async def request_output_stop(self, response_id: str) -> ConfirmedOutputStop:
+        if self._lifecycle.phase != "available":
+            raise RuntimeError("output stop requires an available session")
+        request_id, generation = str(uuid4()), self.generation
+        confirmed: asyncio.Future[int] = asyncio.get_running_loop().create_future()
+        self._output_stop_requests[request_id] = (response_id, generation, confirmed)
+        try:
+            await self._publish_private({
+                "protocol_version": "1.0", "type": "output_stop_request",
+                "session_id": self.session_id, "response_id": response_id,
+                "request_id": request_id, "generation": generation,
+            })
+            prefix = await confirmed
+            if generation != self.generation or self._lifecycle.phase != "available":
+                raise RuntimeError("output stop connection changed")
+            return ConfirmedOutputStop(request_id, generation, prefix)
+        finally:
+            self._output_stop_requests.pop(request_id, None)
+            if not confirmed.done():
+                confirmed.cancel()
+            elif not confirmed.cancelled():
+                confirmed.exception()
+
+    def _confirm_output_stop(self, frame: dict[str, object]) -> None:
+        pending = self._output_stop_requests.get(str(frame["request_id"]))
+        if pending is None or self._lifecycle.phase != "available":
+            return
+        response_id, generation, confirmed = pending
+        prefix = frame["last_played_audio_sequence"]
+        if (
+            confirmed.done() or frame["session_id"] != self.session_id
+            or frame["response_id"] != response_id or frame["generation"] != generation
+            or type(prefix) is not int or prefix < 0
+            or frame["output_confirmation"] not in {"output_clock_passed", "never_connected"}
+            or (frame["output_confirmation"] == "never_connected" and prefix != 0)
+        ):
+            return
+        self._lifecycle.confirm_playback(response_id=response_id, confirmed_audio_sequence=prefix)
+        # Coreが取消処理を待つ制御キューへ戻さず、この要求のfutureだけを解決する。
+        confirmed.set_result(prefix)
+
+    def _abort_output_stops(self) -> None:
+        for _, _, future in self._output_stop_requests.values():
+            if not future.done():
+                future.set_exception(RuntimeError("output stop connection lost"))
 
     async def send_screen(self, payload: bytes) -> None:
         """画面制御metadataを音声Core eventとは別topicで配送する。"""
@@ -271,6 +376,23 @@ class ProductionSessionCoordinator:
             }
         )
 
+    async def send_response_audio_finished(
+        self, *, response_id: str, input_sample_count: int,
+        captured_sample_count: int, padding_sample_count: int,
+    ) -> None:
+        """native供給完了の総sample数を送る。ブラウザ再生完了とは区別する。"""
+        if self._lifecycle.phase != "available":
+            raise RuntimeError("session is not available")
+        if input_sample_count + padding_sample_count != captured_sample_count:
+            raise ValueError("response source sample conservation failed")
+        await self._publish_private({
+            "protocol_version": "1.0", "type": "response_audio_finished",
+            "response_id": response_id, "generation": self.generation,
+            "input_sample_count": input_sample_count,
+            "captured_sample_count": captured_sample_count,
+            "padding_sample_count": padding_sample_count,
+        })
+
     def acknowledge(self, event_id: str, direction: str) -> bool:
         acknowledged = self._outboxes.get(self.session_id, direction).ack(event_id)
         if acknowledged:
@@ -292,13 +414,22 @@ class ProductionSessionCoordinator:
         if self._ended:
             return
         self._ended = True
+        self._abort_output_stops()
         self._cancel_deadline()
         self._cancel_retry_tasks()
         self._outboxes.clear_session(self.session_id)
         self._terminal_outcomes.clear()
         self._mapping.clear()
         self._lifecycle.end(reason)
-        await self._dependencies.cleanup(self.session_id)
+        try:
+            await self._dependencies.cleanup(self.session_id)
+        except BaseException:
+            if self._dependencies.session_metrics is not None:
+                self._dependencies.session_metrics.end(reason, cleanup_completed=False)
+            raise
+        else:
+            if self._dependencies.session_metrics is not None:
+                self._dependencies.session_metrics.end(reason)
 
     async def _retry(self, event_id: str, payload: bytes) -> None:
         retry = RetryState(
@@ -333,6 +464,26 @@ class ProductionSessionCoordinator:
         finally:
             self._retry_tasks.pop(("character_to_user", event_id), None)
 
+    async def _send_ready_authoritative_state(self) -> None:
+        generation = self.generation
+        if self._ended:
+            return
+        if self._ready_generation != generation:
+            self._observe_sync("ready_started")
+            await self._dependencies.generation_ready()
+            self._observe_sync("ready_completed")
+            self._ready_generation = generation
+        # 準備中のparticipant再接続・終了は、新世代が準備済みだと補完しない。
+        if self._ended or self.generation != generation:
+            return
+        self._observe_sync("send_started")
+        await self._send_authoritative_state()
+        self._observe_sync("send_completed")
+
+    def _observe_sync(self, stage: str) -> None:
+        if self._dependencies.sync_observer is not None:
+            self._dependencies.sync_observer(stage, self.generation, self._clock())
+
     async def _send_authoritative_state(self) -> None:
         frames = reconnect_sync_frames(
             authoritative_state={
@@ -354,6 +505,8 @@ class ProductionSessionCoordinator:
         await self._dependencies.publish_data(payload, PRIVATE_TOPIC)
 
     def _notify_core(self, event_type: str) -> None:
+        if event_type in {"session_disconnected", "session_ended"}:
+            self._abort_output_stops()
         payload = json.dumps(
             {
                 "protocol_version": "1.0",

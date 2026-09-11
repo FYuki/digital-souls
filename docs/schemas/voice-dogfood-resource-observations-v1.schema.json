@@ -1,0 +1,118 @@
+{
+  "$defs": {
+    "DogfoodResourceSample": {
+      "additionalProperties": false,
+      "properties": {
+        "elapsed_ms": {
+          "minimum": 0,
+          "title": "Elapsed Ms",
+          "type": "number"
+        },
+        "cpu_percent": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cpu Percent"
+        },
+        "memory_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Memory Bytes"
+        },
+        "gpu_utilization_percent": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Gpu Utilization Percent"
+        },
+        "gpu_memory_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Gpu Memory Bytes"
+        }
+      },
+      "required": [
+        "elapsed_ms",
+        "cpu_percent",
+        "memory_bytes",
+        "gpu_utilization_percent",
+        "gpu_memory_bytes"
+      ],
+      "title": "DogfoodResourceSample",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "measurement_kind": {
+      "const": "dogfood",
+      "title": "Measurement Kind",
+      "type": "string"
+    },
+    "method": {
+      "const": "manual_docker_stats_and_host_gpu_v1",
+      "title": "Method",
+      "type": "string"
+    },
+    "trace_sha256": {
+      "items": {
+        "pattern": "^[a-f0-9]{64}$",
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Trace Sha256",
+      "type": "array"
+    },
+    "samples": {
+      "items": {
+        "$ref": "#/$defs/DogfoodResourceSample"
+      },
+      "minItems": 1,
+      "title": "Samples",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "measurement_kind",
+    "method",
+    "trace_sha256",
+    "samples"
+  ],
+  "title": "dogfood手動resource観測 v1",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digital-souls.local/schemas/voice-dogfood-resource-observations-v1.schema.json"
+}

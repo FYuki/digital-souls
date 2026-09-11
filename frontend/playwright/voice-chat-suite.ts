@@ -1,4 +1,14 @@
+import type {DecodedReceiptSnapshot} from '../src/livekit/decoded-receipt-audit'
+import {installStaleTextProbe} from './stale-text-probe'
+import type {CoreDeliveryObservation} from '../src/livekit/core-delivery-observation'
+import type {StaleAudioObservation} from '../src/livekit/post-gain-monitor'
+import { installUserControlProbe } from './user-control-probe'
+import type {} from './controlled-audio-fixture'
+import type {RtpPacketGap} from '../src/livekit/rtp-packet-sequence'
 import { fileURLToPath } from 'node:url'
+import type {PacketPlaybackObservation, PlaybackCompletion} from '../src/livekit/packet-renderer'
+import type { NetworkObservation } from '../src/livekit/network-observer'
+import type { MediaObservation } from '../src/livekit/media-observer'
 
 import { expect, type Page } from '@playwright/test'
 
@@ -8,8 +18,24 @@ declare global {
       speechStarted: (utteranceId: string, atMs: number) => Promise<void>
     }
     __voiceChatE2E: {
+      decodedReceipts?: DecodedReceiptSnapshot[]
+      decodedReceiptsOverflow?: boolean
+      staleAudio?: StaleAudioObservation[]
+      staleAudioOverflow?: boolean
+      mediaTimelineInterruptions?: Array<{responseId: string; atMs: number; reason: 'timestamp_overlap' | 'timestamp_discontinuity'}>
+      mediaPacketLosses?: Array<RtpPacketGap & {responseId: string; atMs: number}>
+      transportFailures?: {stage: string; reason?: string; context?: Readonly<Record<string, number>>; atMs: number}[]
+      activeAudioGraphs?: number
+      activeResponseId?: string
+      lastTrackMediaResponseId?: string
+      lastTrackMediaObservation?: MediaObservation
+      trackMediaObservations?: Record<string, MediaObservation>
+      lastPacketPlaybackObservation?: PacketPlaybackObservation
+      playbackCompletions?: Record<string, PlaybackCompletion>
+      networkObservations?: Record<string, NetworkObservation>
       cycles: {
         fixtureStartedAt: number
+        trackReceivedAt?: number
         sendAt: number
         audioReceivedAt: number | null
         audioDecodeAt: number | null
@@ -18,11 +44,13 @@ declare global {
         utteranceId: string
         responseId: string | null
         conversationId: string
-        sentBytes: number
+        sentBytes: number | null
         receivedBytes: number | null
       }[]
       frameOrder: string[]
       liveKitOrder: string[]
+      coreEventDiagnostics: Record<string, string | number | boolean | null>[]
+      responseSourceUtterances?: Record<string, string[]>
       micStates: ('off' | 'standby' | 'active')[]
       localStopAt?: number
       cancelRequestedAt?: number
@@ -42,26 +70,30 @@ const VOICE_RESPONSE_TIMEOUT_MS = 60_000
 const VOICE_TEST_TIMEOUT_MS = 120_000
 
 type CompletedVoiceCycle = {
+  trackReceivedAt?: number
   fixtureStartedAt: number
   sendAt: number
-  audioReceivedAt: number
-  audioDecodeAt: number
+  audioReceivedAt: number | null
+  audioDecodeAt: number | null
   startedAt: number
   latencyMs: number
   sessionId: string
   utteranceId: string
   responseId: string
   conversationId: string
-  sentBytes: number
-  receivedBytes: number
+  sentBytes: number | null
+  receivedBytes: number | null
 }
 
 const installPlaybackProbe = async (page: Page) => {
+  await page.addInitScript(installStaleTextProbe)
+  await page.addInitScript(installUserControlProbe)
   await page.addInitScript(() => {
     window.__voiceChatE2E = {
       cycles: [],
       frameOrder: [],
       liveKitOrder: [],
+      coreEventDiagnostics: [],
       micStates: [],
       interruptions: [],
     }
@@ -94,16 +126,42 @@ const installPlaybackProbe = async (page: Page) => {
       observeMicrophoneState()
     }, { once: true })
     let fixtureStartedAt: number | null = null
+    const mediaByResponse = new Map<string, MediaObservation>()
+    const applyMediaEvidence = (responseId: string) => {
+      const evidence = mediaByResponse.get(responseId)
+      const cycle = window.__voiceChatE2E.cycles.find((candidate) => candidate.responseId === responseId)
+      if (evidence === undefined || cycle === undefined) return
+      cycle.trackReceivedAt = evidence.trackReceivedAtMs
+      cycle.audioReceivedAt = evidence.firstPacketReceivedAtMs ?? null
+      cycle.audioDecodeAt = evidence.firstPacketDecodedAtMs ?? null
+    }
     const testPortTarget = window as typeof window & {
       __digitalSoulsVoiceSessionTestPort?: {
         createRoom?: (...args: never[]) => unknown
+        observeCoreDelivery?: (observation: CoreDeliveryObservation) => void
+        observeDecodedReceipts?: (row: DecodedReceiptSnapshot) => void
+        observeStaleAudio?: (observation: StaleAudioObservation) => void
         observeRoom?: (observation: {
+          mediaTimelineInterruption?: {responseId: string; atMs: number; reason: 'timestamp_overlap' | 'timestamp_discontinuity'}
+          mediaPacketLoss?: RtpPacketGap & {responseId: string; atMs: number}
+          failureContext?: Readonly<Record<string, number>>
+          failureReason?: string
+          failureStage?: string
+          firstPlaybackAtMs?: number
+          packetPlaybackObservation?: PacketPlaybackObservation
+          playbackCompletedResponseId?: string
+          playbackCompletion?: PlaybackCompletion
+          mediaResponseId?: string
+          mediaTrackResponseId?: string
+          mediaObservation?: MediaObservation
           renderedEnergy?: number
           activeResponseId?: string
           activeAudioGraphs?: number
           renderedSamples?: number
           speechStartedAtMs?: number
           localPlaybackStoppedAtMs?: number
+          networkResponseId?: string
+          networkObservation?: NetworkObservation
           cancelConfirmedAtMs?: number
         }) => void
         receiveCoreEvent?: (event: {
@@ -113,6 +171,12 @@ const installPlaybackProbe = async (page: Page) => {
           response_id?: string
           source_utterance_ids?: string[]
           measurement?: string
+          should_response?: boolean
+          reason?: string
+          error_code?: string
+          transcript?: string
+          decision?: string
+          final?: boolean
         }) => void
         bindController?: (controller: {
           speechStarted: (utteranceId: string, atMs: number) => Promise<void>
@@ -121,10 +185,58 @@ const installPlaybackProbe = async (page: Page) => {
     }
     testPortTarget.__digitalSoulsVoiceSessionTestPort = {
       ...testPortTarget.__digitalSoulsVoiceSessionTestPort,
+      observeCoreDelivery: row => window.__voiceStaleTextProbe?.receive(row),
+      observeDecodedReceipts: observation => {
+        const rows = window.__voiceChatE2E.decodedReceipts ??= []
+        if (rows.length >= 1024) {window.__voiceChatE2E.decodedReceiptsOverflow = true; return}
+        rows.push(observation)
+      },
+      observeStaleAudio: (observation) => {
+        const rows = window.__voiceChatE2E.staleAudio ??= []
+        if (rows.length >= 1024) {window.__voiceChatE2E.staleAudioOverflow = true; return}
+        rows.push(observation)
+      },
       bindController: (controller) => {
         window.__voiceSessionController = controller
       },
       observeRoom: (observation) => {
+        if (observation.mediaTimelineInterruption) {
+          window.__voiceChatE2E.mediaTimelineInterruptions ??= []
+          window.__voiceChatE2E.mediaTimelineInterruptions.push(observation.mediaTimelineInterruption)
+        }
+        if (observation.mediaPacketLoss) {
+          window.__voiceChatE2E.mediaPacketLosses ??= []
+          window.__voiceChatE2E.mediaPacketLosses.push(observation.mediaPacketLoss)
+        }
+        if (observation.activeAudioGraphs !== undefined) window.__voiceChatE2E.activeAudioGraphs = observation.activeAudioGraphs
+        if (observation.activeResponseId !== undefined) window.__voiceChatE2E.activeResponseId = observation.activeResponseId
+        if (observation.failureStage) {
+          window.__voiceChatE2E.transportFailures ??= []
+          window.__voiceChatE2E.transportFailures.push({stage: observation.failureStage, reason: observation.failureReason, context: observation.failureContext, atMs: performance.now()})
+        }
+        if (observation.playbackCompletedResponseId && observation.playbackCompletion) {
+          window.__voiceChatE2E.playbackCompletions ??= {}
+          window.__voiceChatE2E.playbackCompletions[observation.playbackCompletedResponseId] = observation.playbackCompletion
+        }
+        if (observation.networkResponseId && observation.networkObservation) {
+          window.__voiceChatE2E.networkObservations ??= {}
+          window.__voiceChatE2E.networkObservations[observation.networkResponseId] = observation.networkObservation
+        }
+        if (observation.packetPlaybackObservation !== undefined) {
+          window.__voiceChatE2E.lastPacketPlaybackObservation = {...observation.packetPlaybackObservation}
+        }
+        if (observation.mediaObservation !== undefined) {
+          window.__voiceChatE2E.lastTrackMediaObservation = { ...observation.mediaObservation }
+          window.__voiceChatE2E.lastTrackMediaResponseId = observation.mediaTrackResponseId
+          if (observation.mediaTrackResponseId) {
+            window.__voiceChatE2E.trackMediaObservations ??= {}
+            window.__voiceChatE2E.trackMediaObservations[observation.mediaTrackResponseId] = {...observation.mediaObservation}
+          }
+        }
+        if (observation.mediaResponseId !== undefined && observation.mediaObservation !== undefined) {
+          mediaByResponse.set(observation.mediaResponseId, observation.mediaObservation)
+          applyMediaEvidence(observation.mediaResponseId)
+        }
         if (
           observation.activeResponseId !== undefined
           && observation.activeResponseId !== ''
@@ -151,7 +263,7 @@ const installPlaybackProbe = async (page: Page) => {
         }
         if ((observation.activeAudioGraphs ?? 0) > 0) appendOnce('room:audio-graph')
         if (
-          (observation.renderedEnergy ?? 0) > 0
+          observation.firstPlaybackAtMs !== undefined
           && observation.activeResponseId !== undefined
           && observation.activeResponseId !== ''
         ) {
@@ -161,15 +273,23 @@ const installPlaybackProbe = async (page: Page) => {
             && candidate.startedAt === null
           ))
           if (cycle !== undefined) {
-            const now = performance.now()
-            cycle.audioReceivedAt = now
-            cycle.audioDecodeAt = now
-            cycle.startedAt = now
-            cycle.receivedBytes = observation.renderedSamples ?? 1
+            // WebRTC受信・decoder完了はこのcallbackでは観測できない。
+            cycle.startedAt = observation.firstPlaybackAtMs
           }
         }
       },
       receiveCoreEvent: (event) => {
+        // 本文は保存せず、応答開始前に失敗した試行も相関できる状態だけを残す。
+        const diagnostics = window.__voiceChatE2E.coreEventDiagnostics
+        diagnostics.push({
+          type: event.type, atMs: performance.now(),
+          sessionId: event.session_id ?? null, utteranceId: event.utterance_id ?? null,
+          responseId: event.response_id ?? null, shouldResponse: event.should_response ?? null,
+          reasonCode: event.error_code ?? event.reason ?? null,
+          transcriptLength: event.transcript?.length ?? null,
+          decision: event.decision ?? null, final: event.final ?? null,
+        })
+        if (diagnostics.length > 256) diagnostics.shift()
         if (
           event.type === 'utterance_finalized'
           && event.utterance_id !== undefined
@@ -179,7 +299,7 @@ const installPlaybackProbe = async (page: Page) => {
         ) {
           const now = performance.now()
           window.__voiceChatE2E.cycles.push({
-            fixtureStartedAt: fixtureStartedAt ?? now,
+            fixtureStartedAt: window.__voiceFixtureClock?.bounds.sourceStart?.lowerMs ?? fixtureStartedAt ?? now,
             sendAt: now,
             audioReceivedAt: null,
             audioDecodeAt: null,
@@ -188,16 +308,22 @@ const installPlaybackProbe = async (page: Page) => {
             utteranceId: event.utterance_id,
             responseId: null,
             conversationId: localStorage.getItem('digital-souls:conversation:miori') ?? '',
-            sentBytes: 1,
+            sentBytes: null,
             receivedBytes: null,
           })
         }
         if (event.type === 'response_started' && event.response_id !== undefined) {
           const sourceIds = event.source_utterance_ids ?? []
+          // 画面操作の応答にはSTTのutterance_finalizedがない。Coreの対応表をそのまま保持する。
+          const responseSources = window.__voiceChatE2E.responseSourceUtterances ??= {}
+          responseSources[event.response_id] = [...sourceIds]
           const cycle = window.__voiceChatE2E.cycles.find((candidate) => (
             candidate.responseId === null && sourceIds.includes(candidate.utteranceId)
           ))
-          if (cycle !== undefined) cycle.responseId = event.response_id
+          if (cycle !== undefined) {
+            cycle.responseId = event.response_id
+            applyMediaEvidence(event.response_id)
+          }
         }
         const responseId = event.response_id
         if (responseId === undefined) return
@@ -344,16 +470,11 @@ const installPlaybackProbe = async (page: Page) => {
 const waitForCompletedVoiceCycle = async (page: Page): Promise<CompletedVoiceCycle> => {
   const handle = await page.waitForFunction(() => {
     const cycle = window.__voiceChatE2E.cycles.find((candidate) => (
-      candidate.audioReceivedAt !== null &&
-      candidate.audioDecodeAt !== null &&
       candidate.startedAt !== null
     ))
     if (
-      cycle?.audioReceivedAt === null ||
-      cycle?.audioDecodeAt === null ||
       cycle?.startedAt === null ||
       cycle?.responseId === null ||
-      cycle?.receivedBytes === null ||
       cycle === undefined
     ) return null
     return {
@@ -363,9 +484,11 @@ const waitForCompletedVoiceCycle = async (page: Page): Promise<CompletedVoiceCyc
   }, undefined, { timeout: VOICE_RESPONSE_TIMEOUT_MS })
   const cycle = await handle.jsonValue() as CompletedVoiceCycle
   const ordered = (
-    cycle.audioReceivedAt >= cycle.sendAt &&
-    cycle.audioDecodeAt >= cycle.audioReceivedAt &&
-    cycle.startedAt >= cycle.audioDecodeAt &&
+    (cycle.audioReceivedAt === null || cycle.audioReceivedAt >= cycle.sendAt) &&
+    (cycle.audioDecodeAt === null || (
+      cycle.audioReceivedAt !== null && cycle.audioDecodeAt >= cycle.audioReceivedAt
+      && cycle.startedAt >= cycle.audioDecodeAt
+    )) &&
     cycle.latencyMs >= 0
   )
   const numericValues = [
@@ -384,7 +507,7 @@ const waitForCompletedVoiceCycle = async (page: Page): Promise<CompletedVoiceCyc
     cycle.responseId,
     cycle.conversationId,
   ].every((value) => value.length > 0)
-  if (!numericValues.every(Number.isFinite) || !ordered || !correlationComplete) {
+  if (!numericValues.filter((value) => value !== null).every(Number.isFinite) || !ordered || !correlationComplete) {
     throw new Error(`invalid voice playback cycle: ${JSON.stringify(cycle)}`)
   }
   return cycle
@@ -405,7 +528,7 @@ export const createVoiceChatDriver = () => {
   const openVoiceChat = async (page: Page) => {
     await installPlaybackProbe(page)
     await page.goto('/')
-    await page.getByRole('button', { name: '新規スレッド（光織）' }).click()
+    await page.getByRole('button', { name: '新規スレッド（光織）' }).click({ timeout: 15_000 })
     const button = page.getByRole('button', { name: /マイクを(オン|オフ)にする/ })
     await expect(button).toBeEnabled()
     return button
@@ -453,12 +576,13 @@ export const createVoiceChatDriver = () => {
       throw new Error('voice cycle count must be positive')
     }
     const handle = await page.waitForFunction((requiredCount) => {
+      if (window.__voiceChatE2E.transportFailures?.length) throw new Error('voice transport failed')
+      if (window.__voiceChatE2E.coreEventDiagnostics.some(event => event.type === 'response_failed')) throw new Error('voice response failed')
       const completed = window.__voiceChatE2E.cycles.filter((cycle) => (
-        cycle.audioReceivedAt !== null
-        && cycle.audioDecodeAt !== null
-        && cycle.startedAt !== null
+        cycle.startedAt !== null
         && cycle.responseId !== null
-        && cycle.receivedBytes !== null
+        && window.__voiceChatE2E.liveKitOrder.includes(`${cycle.responseId}:completed`)
+        && window.__voiceChatE2E.playbackCompletions?.[cycle.responseId] !== undefined
       ))
       return completed.length >= requiredCount ? completed.slice(0, requiredCount) : null
     }, count, { timeout: VOICE_RESPONSE_TIMEOUT_MS * count })

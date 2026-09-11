@@ -9,13 +9,14 @@ from typing import Sequence
 
 from jsonschema import Draft202012Validator
 
+from app.voice_dogfood_resources import load_dogfood_resources
+from app.voice_network_metrics import aggregate_network_trace
 from app.model_settings import resolve_model_settings
 from app.stt.remote_whisper_client import WHISPER_COMPUTE_TYPE, WHISPER_DEVICE
 from app.voice_metrics import (
     ClockMetadata,
     DiagnosticValue,
     HardwareMetadata,
-    NetworkMetadata,
     ResourceMetadata,
     RunDiagnostics,
     TraceEvent,
@@ -108,6 +109,7 @@ def finalize_livekit_dogfood_report(
     output_path: Path,
     schema_path: Path,
     run_id: str,
+    resource_observations_path: Path | None = None,
 ) -> None:
     events = _load_traces(trace_paths)
     trial_count = len({
@@ -143,18 +145,15 @@ def finalize_livekit_dogfood_report(
                 method="performance_now",
                 unit="millisecond",
             ),
-        ],
+        ] + ([ClockMetadata(domain="browser_audio_context", method="output_timestamp_confirmed_frame", unit="millisecond")]
+             if any(event.clock_domain == "browser_audio_context" for event in events) else []),
         hardware=HardwareMetadata(description=platform.platform()),
-        resources=ResourceMetadata(
-            cpu_percent=unavailable,
-            memory_bytes=unavailable,
-        ),
-        network=NetworkMetadata(
-            sent_bytes=unavailable,
-            received_bytes=unavailable,
-            packet_loss_basis_points=unavailable,
-            condition="Ubuntu-dogfood LiveKit",
-        ),
+        resources=(load_dogfood_resources(resource_observations_path, trace_paths=trace_paths)
+                   if resource_observations_path is not None else ResourceMetadata(
+                       cpu_percent=unavailable,
+                       memory_bytes=unavailable,
+                   )),
+        network=aggregate_network_trace(events, condition="Ubuntu-dogfood LiveKit; browser audio RTP payload; loss at browser downlink"),
     )
     artifact = aggregate_events(events, metadata=metadata, diagnostics=diagnostics)
     serialized = artifact.model_dump(mode="json")
@@ -176,12 +175,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--schema", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--resource-observations", type=Path)
     args = parser.parse_args(argv)
     finalize_livekit_dogfood_report(
         trace_paths=args.trace,
         output_path=args.output,
         schema_path=args.schema,
         run_id=args.run_id,
+        resource_observations_path=args.resource_observations,
     )
 
 

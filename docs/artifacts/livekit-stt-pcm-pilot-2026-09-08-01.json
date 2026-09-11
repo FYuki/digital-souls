@@ -1,0 +1,181 @@
+{
+  "schema_version": "1.0",
+  "scope": "actual_whisper_input_pcm_pilot",
+  "measurement_revision": "59fcbaa4b9e271aad34d6f78777abf8e27d78481",
+  "expected_warmup": 1,
+  "expected_measured": 3,
+  "runner_exit_code": 0,
+  "trials": [
+    {
+      "trial_ordinal": 1,
+      "phase": "warmup",
+      "voice_outcome": "success",
+      "actual_stt_sample_count": 28587,
+      "trace_sample_count_matches": true,
+      "prepared_suffix_preserved": true,
+      "alignment": {
+        "method": "two_anchor_normalized_pcm_correlation_v1",
+        "status": "aligned",
+        "reason": null,
+        "sample_rate_hz": 16000,
+        "reference_sample_count": 32086,
+        "captured_sample_count": 28587,
+        "anchors": [
+          {
+            "reference_start_sample": 6185,
+            "sample_count": 3200,
+            "captured_start_sample": 6041,
+            "correlation": 0.9981273830116065,
+            "competing_peak_correlation": 0.8336536552701616,
+            "accepted": true
+          },
+          {
+            "reference_start_sample": 11545,
+            "sample_count": 3200,
+            "captured_start_sample": 11401,
+            "correlation": 0.99204495755372,
+            "competing_peak_correlation": 0.7616386252140767,
+            "accepted": true
+          }
+        ],
+        "lag_difference_samples": 0,
+        "alignment_tolerance_samples": 32,
+        "leading_loss_upper_ms": 0.0,
+        "early_end_loss_upper_ms": 0.0
+      }
+    },
+    {
+      "trial_ordinal": 2,
+      "phase": "measured",
+      "voice_outcome": "success",
+      "actual_stt_sample_count": 28258,
+      "trace_sample_count_matches": true,
+      "prepared_suffix_preserved": true,
+      "alignment": {
+        "method": "two_anchor_normalized_pcm_correlation_v1",
+        "status": "aligned",
+        "reason": null,
+        "sample_rate_hz": 16000,
+        "reference_sample_count": 32086,
+        "captured_sample_count": 28258,
+        "anchors": [
+          {
+            "reference_start_sample": 6185,
+            "sample_count": 3200,
+            "captured_start_sample": 6054,
+            "correlation": 0.9974962359498302,
+            "competing_peak_correlation": 0.8314100843735279,
+            "accepted": true
+          },
+          {
+            "reference_start_sample": 11545,
+            "sample_count": 3200,
+            "captured_start_sample": 11413,
+            "correlation": 0.9946698356884148,
+            "competing_peak_correlation": 0.7609742608081573,
+            "accepted": true
+          }
+        ],
+        "lag_difference_samples": 1,
+        "alignment_tolerance_samples": 32,
+        "leading_loss_upper_ms": 0.0,
+        "early_end_loss_upper_ms": 0.0
+      }
+    },
+    {
+      "trial_ordinal": 3,
+      "phase": "measured",
+      "voice_outcome": "success",
+      "actual_stt_sample_count": 28481,
+      "trace_sample_count_matches": true,
+      "prepared_suffix_preserved": true,
+      "alignment": {
+        "method": "two_anchor_normalized_pcm_correlation_v1",
+        "status": "aligned",
+        "reason": null,
+        "sample_rate_hz": 16000,
+        "reference_sample_count": 32086,
+        "captured_sample_count": 28481,
+        "anchors": [
+          {
+            "reference_start_sample": 6185,
+            "sample_count": 3200,
+            "captured_start_sample": 6095,
+            "correlation": 0.9984465846221697,
+            "competing_peak_correlation": 0.833937482168664,
+            "accepted": true
+          },
+          {
+            "reference_start_sample": 11545,
+            "sample_count": 3200,
+            "captured_start_sample": 11455,
+            "correlation": 0.9921501136225827,
+            "competing_peak_correlation": 0.7622362027624927,
+            "accepted": true
+          }
+        ],
+        "lag_difference_samples": 0,
+        "alignment_tolerance_samples": 32,
+        "leading_loss_upper_ms": 0.0,
+        "early_end_loss_upper_ms": 0.0
+      }
+    },
+    {
+      "trial_ordinal": 4,
+      "phase": "measured",
+      "voice_outcome": "success",
+      "actual_stt_sample_count": 28226,
+      "trace_sample_count_matches": true,
+      "prepared_suffix_preserved": true,
+      "alignment": {
+        "method": "two_anchor_normalized_pcm_correlation_v1",
+        "status": "unverified",
+        "reason": "inconsistent_anchor_offsets",
+        "sample_rate_hz": 16000,
+        "reference_sample_count": 32086,
+        "captured_sample_count": 28226,
+        "anchors": [
+          {
+            "reference_start_sample": 6185,
+            "sample_count": 3200,
+            "captured_start_sample": 6051,
+            "correlation": 0.9990882809803864,
+            "competing_peak_correlation": 0.8362075780083892,
+            "accepted": true
+          },
+          {
+            "reference_start_sample": 11545,
+            "sample_count": 3200,
+            "captured_start_sample": 11190,
+            "correlation": 0.9933572998575241,
+            "competing_peak_correlation": 0.7616783348919647,
+            "accepted": true
+          }
+        ],
+        "lag_difference_samples": 221,
+        "alignment_tolerance_samples": 32,
+        "leading_loss_upper_ms": null,
+        "early_end_loss_upper_ms": null
+      }
+    }
+  ],
+  "owned_services": [
+    {
+      "service": "frontend",
+      "container_absent": true
+    },
+    {
+      "service": "backend",
+      "container_absent": true
+    }
+  ],
+  "observer_port_closed": true,
+  "teardown_status": "completed",
+  "input_audio_saved": false,
+  "raw_evidence_sha256": {
+    "trial-manifest.json": "1cdf287c3c2fb1ffb5972b6616b2e3af4354398f17f582a05f5827950a143415",
+    "whisper-input-pcm.jsonl": "60763df9ecc9e71ab026d300c73d4048c3dc025a6958c3650c2b4ade883688b1",
+    "runtime-data/voice-metrics/controlled-trace.jsonl": "41c12144bfa85022c4329db8fc1c8e9aee9f10a8287507e4d95684744d5f7ed5",
+    "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+  }
+}

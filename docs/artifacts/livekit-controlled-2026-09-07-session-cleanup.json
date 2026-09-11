@@ -1,0 +1,3774 @@
+{
+  "schema_version": "1.0",
+  "measurement_kind": "controlled_baseline",
+  "transport": "livekit",
+  "run_id": "livekit-controlled-2026-09-07-session-cleanup",
+  "profile": "integration-voice",
+  "fixture_version": "speech-v2",
+  "quantile_method": "hyndman_fan_type_7",
+  "clocks": [
+    {
+      "domain": "server_monotonic",
+      "method": "perf_counter_ns",
+      "unit": "nanosecond"
+    },
+    {
+      "domain": "client_monotonic",
+      "method": "performance_now_and_audio_output_timestamp",
+      "unit": "millisecond"
+    }
+  ],
+  "run_counts": {
+    "warmup": 5,
+    "measured": 100,
+    "success": 100,
+    "failure": 0,
+    "excluded": 0
+  },
+  "metrics": [
+    {
+      "name": "utterance_finalized",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "vad_speech_end",
+      "end_point": "utterance_finalized",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 365.9744245,
+      "p95": 410.39241254999996,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "response_decision",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "vad_speech_end",
+      "end_point": "response_decision",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 378.7625325,
+      "p95": 420.65715175,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "stt_start_latency",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "user_audio_received",
+      "end_point": "stt_started",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 1108.0408645,
+      "p95": 1112.8485641500001,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "stt_processing",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "stt_started",
+      "end_point": "stt_completed",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 213.9599005,
+      "p95": 258.0862583,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "llm_start_latency",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "stt_completed",
+      "end_point": "llm_started",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 13.0822225,
+      "p95": 24.768005499999997,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "first_text_latency",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "stt_completed",
+      "end_point": "first_text_delta",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 379.208635,
+      "p95": 395.00898745,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "llm_completion",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "llm_started",
+      "end_point": "llm_completed",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 517.3512774999999,
+      "p95": 579.12901935,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "tts_start_latency",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "first_synthesizable_segment",
+      "end_point": "tts_started",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 23.948202000000002,
+      "p95": 30.097136900000002,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "first_audio_generation",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "first_synthesizable_segment",
+      "end_point": "first_audio_generated",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 369.622413,
+      "p95": 434.20228815,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "client_playback_latency",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "client_audio_received",
+      "end_point": "first_playback",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "client_audio_received_event_missing": 100
+      }
+    },
+    {
+      "name": "ttfa",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "fixture_speech_end",
+      "end_point": "first_playback",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 1972.1499999985099,
+      "p95": 2053.15,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "local_playback_stop",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "speech_started",
+      "end_point": "local_playback_stopped",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "speech_started_event_missing": 100
+      }
+    },
+    {
+      "name": "turn_decision",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "speech_started",
+      "end_point": "turn_decision",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "speech_started_event_missing": 100
+      }
+    },
+    {
+      "name": "cancel_after_decision",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "take_turn_decision",
+      "end_point": "server_cancelled",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "take_turn_decision_event_missing": 100
+      }
+    },
+    {
+      "name": "barge_in_cancel_total",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "speech_started",
+      "end_point": "server_cancelled",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "speech_started_event_missing": 100
+      }
+    },
+    {
+      "name": "vad_leading_boundary",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "fixture_speech_start",
+      "end_point": "captured_audio_start",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "captured_audio_start_event_missing": 100
+      }
+    },
+    {
+      "name": "vad_trailing_boundary",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "fixture_speech_end",
+      "end_point": "utterance_finalized",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "metric_boundary_clock_mismatch": 100
+      }
+    },
+    {
+      "name": "stale_output",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "server_cancelled",
+      "end_point": "stale_output",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "stale_output_event_missing": 100
+      }
+    },
+    {
+      "name": "reconnect",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "network_recovered",
+      "end_point": "transport_available",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "network_recovered_event_missing": 100
+      }
+    },
+    {
+      "name": "playback_continuity",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "scheduled_playout",
+      "end_point": "frame_playout",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "scheduled_playout_event_missing": 100
+      }
+    },
+    {
+      "name": "processing_failure",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "response_utterance",
+      "end_point": "processing_outcome",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "manual_operations",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "session_started",
+      "end_point": "session_ended",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "manual_operations_event_missing": 100
+      }
+    },
+    {
+      "name": "llm_first_provider_chunk_latency",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "llm_http_started",
+      "end_point": "llm_first_provider_chunk",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 346.911389,
+      "p95": 358.1249353,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "llm_thinking_to_text_latency",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "llm_first_thinking_chunk",
+      "end_point": "llm_first_token",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "llm_first_thinking_chunk_event_missing": 100
+      }
+    },
+    {
+      "name": "prompt_preparation",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "prompt_preparation_started",
+      "end_point": "prompt_preparation_completed",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 4.7034590000000005,
+      "p95": 16.0125934,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "llm_request_latency",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "stt_completed",
+      "end_point": "llm_request_started",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 19.339218000000002,
+      "p95": 32.70046135,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "llm_capacity_wait",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "llm_request_started",
+      "end_point": "llm_capacity_acquired",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 0.003183,
+      "p95": 0.0036877499999999996,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "llm_http_headers_latency",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "llm_http_started",
+      "end_point": "llm_http_headers_received",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 346.7757475,
+      "p95": 357.9970342,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "llm_first_token_latency",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "llm_http_started",
+      "end_point": "llm_first_token",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 346.91598799999997,
+      "p95": 358.12866879999996,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "llm_thinking_characters",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "llm_thinking_characters",
+      "end_point": "llm_thinking_characters",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "llm_thinking_characters_event_missing": 100
+      }
+    },
+    {
+      "name": "llm_thinking_chunks",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "llm_thinking_chunks",
+      "end_point": "llm_thinking_chunks",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "llm_thinking_chunks_event_missing": 100
+      }
+    },
+    {
+      "name": "ollama_estimate_cached_input_tokens",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "ollama_estimate_cached_input_tokens",
+      "end_point": "ollama_estimate_cached_input_tokens",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "ollama_estimate_cached_input_tokens_event_missing": 100
+      }
+    },
+    {
+      "name": "ollama_estimate_generation_ms",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "ollama_estimate_generation_ms",
+      "end_point": "ollama_estimate_generation_ms",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "ollama_estimate_generation_ms_event_missing": 100
+      }
+    },
+    {
+      "name": "ollama_estimate_input_tokens",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "ollama_estimate_input_tokens",
+      "end_point": "ollama_estimate_input_tokens",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "ollama_estimate_input_tokens_event_missing": 100
+      }
+    },
+    {
+      "name": "ollama_estimate_load_ms",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "ollama_estimate_load_ms",
+      "end_point": "ollama_estimate_load_ms",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "ollama_estimate_load_ms_event_missing": 100
+      }
+    },
+    {
+      "name": "ollama_estimate_output_tokens",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "ollama_estimate_output_tokens",
+      "end_point": "ollama_estimate_output_tokens",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "ollama_estimate_output_tokens_event_missing": 100
+      }
+    },
+    {
+      "name": "ollama_estimate_prompt_eval_ms",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "ollama_estimate_prompt_eval_ms",
+      "end_point": "ollama_estimate_prompt_eval_ms",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "ollama_estimate_prompt_eval_ms_event_missing": 100
+      }
+    },
+    {
+      "name": "ollama_estimate_total_ms",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "ollama_estimate_total_ms",
+      "end_point": "ollama_estimate_total_ms",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "ollama_estimate_total_ms_event_missing": 100
+      }
+    },
+    {
+      "name": "ollama_generation_cached_input_tokens",
+      "status": "missing",
+      "unit": "count",
+      "start_point": "ollama_generation_cached_input_tokens",
+      "end_point": "ollama_generation_cached_input_tokens",
+      "trial_count": 100,
+      "success_count": 0,
+      "failure_count": 0,
+      "missing_count": 100,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": null,
+      "p95": null,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "ollama_generation_cached_input_tokens_event_missing": 100
+      }
+    },
+    {
+      "name": "ollama_generation_generation_ms",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "ollama_generation_generation_ms",
+      "end_point": "ollama_generation_generation_ms",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 138.396,
+      "p95": 204.8522,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "ollama_generation_input_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "ollama_generation_input_tokens",
+      "end_point": "ollama_generation_input_tokens",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 946.0,
+      "p95": 946.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "ollama_generation_load_ms",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "ollama_generation_load_ms",
+      "end_point": "ollama_generation_load_ms",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 276.91582600000004,
+      "p95": 283.55050700000004,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "ollama_generation_output_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "ollama_generation_output_tokens",
+      "end_point": "ollama_generation_output_tokens",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 12.0,
+      "p95": 12.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "ollama_generation_prompt_eval_ms",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "ollama_generation_prompt_eval_ms",
+      "end_point": "ollama_generation_prompt_eval_ms",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 50.119,
+      "p95": 57.15805,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "ollama_generation_total_ms",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "ollama_generation_total_ms",
+      "end_point": "ollama_generation_total_ms",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 490.691349,
+      "p95": 553.48777935,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "prompt_character_lore_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "prompt_character_lore_tokens",
+      "end_point": "prompt_character_lore_tokens",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "prompt_character_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "prompt_character_tokens",
+      "end_point": "prompt_character_tokens",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 940.0,
+      "p95": 940.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "prompt_current_user_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "prompt_current_user_tokens",
+      "end_point": "prompt_current_user_tokens",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 10.0,
+      "p95": 10.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "prompt_history_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "prompt_history_tokens",
+      "end_point": "prompt_history_tokens",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "prompt_input_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "prompt_input_tokens",
+      "end_point": "prompt_input_tokens",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 946.0,
+      "p95": 946.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "prompt_message_count",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "prompt_message_count",
+      "end_point": "prompt_message_count",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 2.0,
+      "p95": 2.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "prompt_post_history_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "prompt_post_history_tokens",
+      "end_point": "prompt_post_history_tokens",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "prompt_rag_tokens",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "prompt_rag_tokens",
+      "end_point": "prompt_rag_tokens",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "token_estimate_cache_hits",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "token_estimate_cache_hits",
+      "end_point": "token_estimate_cache_hits",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 3.0,
+      "p95": 3.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "token_estimate_metadata_requests",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "token_estimate_metadata_requests",
+      "end_point": "token_estimate_metadata_requests",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 3.0,
+      "p95": 3.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "token_estimate_queue_ms",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "token_estimate_queue_ms",
+      "end_point": "token_estimate_queue_ms",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 0.029411508876364678,
+      "p95": 0.038806004158686846,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "token_estimate_requests",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "token_estimate_requests",
+      "end_point": "token_estimate_requests",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 3.0,
+      "p95": 3.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    },
+    {
+      "name": "token_estimate_total_ms",
+      "status": "measured",
+      "unit": "millisecond",
+      "start_point": "token_estimate_total_ms",
+      "end_point": "token_estimate_total_ms",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 2.767720499832649,
+      "p95": 4.244866954104509,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    }
+  ],
+  "stage_outcomes": [
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "stt",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "llm",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "tts",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "transport",
+      "reason_code": null
+    },
+    {
+      "status": "success",
+      "stage": "playback",
+      "reason_code": null
+    }
+  ],
+  "whisper": {
+    "model": "medium",
+    "device": "cuda",
+    "compute_type": "int8_float16"
+  },
+  "hardware": {
+    "description": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39"
+  },
+  "resources": {
+    "cpu_percent": {
+      "status": "missing",
+      "value": null,
+      "reason": "process_tree_not_observed"
+    },
+    "memory_bytes": {
+      "status": "missing",
+      "value": null,
+      "reason": "process_tree_not_observed"
+    }
+  },
+  "network": {
+    "sent_bytes": {
+      "status": "missing",
+      "value": null,
+      "reason": "webrtc_counters_not_observed"
+    },
+    "received_bytes": {
+      "status": "missing",
+      "value": null,
+      "reason": "webrtc_counters_not_observed"
+    },
+    "packet_loss_basis_points": {
+      "status": "missing",
+      "value": null,
+      "reason": "webrtc_counters_not_observed"
+    },
+    "condition": "localhost LiveKit controlled; shared inference services; RAG disabled"
+  }
+}

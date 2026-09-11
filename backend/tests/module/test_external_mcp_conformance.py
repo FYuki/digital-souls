@@ -46,13 +46,15 @@ def stdio_connection(tmp_path, *, legacy=False):
 
 
 @contextmanager
-def http_server(auth="none", fault_state=None, *, with_process=False):
+def http_server(auth="none", fault_state=None, *, with_process=False, active_marker=None, handshake_failure=None):
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
     process = subprocess.Popen(
         [sys.executable, str(SERVER), "--port", str(port), "--auth", auth]
-        + (["--fault-state", str(fault_state)] if fault_state else []),
+        + (["--fault-state", str(fault_state)] if fault_state else [])
+        + (["--active-marker", str(active_marker)] if active_marker else [])
+        + (["--handshake-failure", handshake_failure] if handshake_failure else []),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
     )
@@ -85,6 +87,7 @@ async def exercise(connection, *, expect_mrtr=True):
     gate = ExecutionGate(registry)
     adapter = ExternalMCPClient(connection, timeout=3)
     async with adapter.connect(), gate.attach(connection.id, adapter):
+        await adapter.health()
         loop = gate.begin_loop(CTX)
         active = registry.entry(connection.id).active.document
         assert len(active["tools"]) == 6
@@ -284,9 +287,15 @@ def test_bearer_is_resolved_per_request_and_invalid_rotation_is_contained(
             assert missing["error_category"] == "auth", missing
             monkeypatch.setenv("MCP_TEST_TOKEN", "private-invalid-token")
             result = await gate.invoke(c.id, "native", {"value": 1}, loop)
-            assert result["error_category"] == "auth", result
+            assert result["error_category"] == "unavailable", result
             assert result["retry_count"] == 0
+            assert r.entry(c.id).availability == "unavailable"
+            # auth失敗後は新規実行を止め、管理側の再確認で失効を検証する。
+            with pytest.raises(MCPFailure) as invalid:
+                await gate.refresh(c.id)
+            assert invalid.value.category == "auth"
             monkeypatch.setenv("MCP_TEST_TOKEN", "synthetic-test-token")
+            await gate.refresh(c.id)
             result = await gate.invoke(c.id, "native", {"value": 2}, loop)
             assert result["outcome"] == "succeeded", result
 

@@ -905,3 +905,100 @@ def test_vm_base_01_finalizer_rejects_fixture_or_transcript_mismatch(
             output_path=tmp_path / "artifact.json",
             schema_path=Path("docs/schemas/voice-quality-artifact-v1.schema.json"),
         )
+
+
+@pytest.mark.parametrize("metric,start,end", [
+    ("vad_trailing_boundary", "fixture_speech_end", "speech_stopped"),
+    ("client_playback_latency", "client_audio_received", "first_playback"),
+])
+def test_mixed_clock_metric_is_missing_without_losing_valid_ttfa(metric, start, end):
+    metrics = _voice_metrics()
+    events = [
+        _event(metrics, event_id="fixture", name="fixture_speech_end", timestamp=1000,
+               clock_domain="client_monotonic", unit="millisecond"),
+        _event(metrics, event_id="playback", name="first_playback", timestamp=1750,
+               clock_domain="client_monotonic", unit="millisecond"),
+        _event(metrics, event_id="server", name=end if start == "fixture_speech_end" else start,
+               timestamp=2000000000),
+    ]
+    metadata, diagnostics = _aggregation_context(metrics)
+    metadata = metadata.model_copy(update={"transport": "livekit"})
+    artifact = metrics.aggregate_events(events, metadata=metadata, diagnostics=diagnostics)
+    catalog = {item.name: item for item in artifact.metrics}
+    assert catalog["ttfa"].p95 == 750
+    assert catalog[metric].status == "missing"
+    assert catalog[metric].missing_outcomes == {"metric_boundary_clock_mismatch": 1}
+
+
+@pytest.mark.parametrize('reported', [False, True])
+def test_provider_internal_timing_is_never_inferred_from_http_or_residual(reported):
+    metrics = _voice_metrics()
+    metadata, diagnostics = _aggregation_context(metrics)
+    metadata = metadata.model_copy(update={'transport': 'livekit'})
+    events = [_event(metrics, event_id=str(i), name=name, timestamp=(i+1)*1_000_000,
+                     stage='inference_diagnostic', value=value)
+              for i,(name,value) in enumerate([
+                  ('llm_http_started',None),('llm_http_headers_received',None),('llm_first_token',None),
+                  ('ollama_generation_total_ms',12),('ollama_generation_load_ms',2),
+                  ('ollama_generation_prompt_eval_ms',4),('ollama_generation_generation_ms',6)])]
+    if reported:
+        events.append(_event(metrics,event_id='unsupported',name='ollama_internal_timing_unavailable',
+                             timestamp=1,stage='inference_diagnostic'))
+    artifact=metrics.aggregate_events(events,metadata=metadata,diagnostics=diagnostics)
+    by_name={m.name:m for m in artifact.metrics}
+    names=('llm_provider_acceptance_latency','llm_provider_generation_start_latency',
+           'llm_generation_start_to_first_token_received','ollama_provider_queue_wait')
+    for name in names:
+        metric=by_name[name]
+        assert metric.status=='missing' and metric.missing_count==metric.rate_denominator==1
+        assert metric.p50 is metric.p95 is None
+        if reported:
+            assert metric.missing_outcomes=={'ollama_api_internal_timing_not_exposed':1}
+        else:
+            assert 'ollama_api_internal_timing_not_exposed' not in metric.missing_outcomes
+    assert by_name['llm_http_headers_latency'].p95 == 1
+    assert by_name['ollama_generation_load_ms'].p95 == 2
+
+
+def test_provider_timing_does_not_subtract_distinct_clocks():
+    metrics = _voice_metrics()
+    metadata, diagnostics = _aggregation_context(metrics)
+    metadata = metadata.model_copy(update={'transport': 'livekit'})
+    events=[_event(metrics,event_id='sent',name='llm_http_started',timestamp=1,stage='inference_diagnostic'),
+            _event(metrics,event_id='accepted',name='llm_provider_accepted',timestamp=2,
+                   clock_domain='provider_monotonic',stage='inference_diagnostic')]
+    artifact=metrics.aggregate_events(events,metadata=metadata,diagnostics=diagnostics)
+    metric=next(m for m in artifact.metrics if m.name=='llm_provider_acceptance_latency')
+    assert metric.missing_outcomes=={'metric_boundary_clock_mismatch':1}
+
+
+
+def test_conflicting_provider_timing_marker_is_not_used_as_zero_latency():
+    metrics = _voice_metrics()
+    metadata, diagnostics = _aggregation_context(metrics)
+    metadata = metadata.model_copy(update={'transport': 'livekit'})
+    events=[_event(metrics,event_id='sent',name='llm_http_started',timestamp=1,stage='inference_diagnostic'),
+            _event(metrics,event_id='accepted',name='llm_provider_accepted',timestamp=2,stage='inference_diagnostic'),
+            _event(metrics,event_id='unavailable',name='ollama_internal_timing_unavailable',timestamp=3,stage='inference_diagnostic')]
+    artifact=metrics.aggregate_events(events,metadata=metadata,diagnostics=diagnostics)
+    metric=next(m for m in artifact.metrics if m.name=='llm_provider_acceptance_latency')
+    assert metric.missing_outcomes=={'provider_timing_evidence_conflict':1}
+    assert metric.p95 is None
+
+
+def test_livekit_vad_uses_detector_clock_and_preserves_rounding_upper_bound():
+    metrics = _voice_metrics()
+    events = [_event(metrics, event_id=name, name=name, timestamp=stamp,
+                     clock_domain="client_monotonic", unit="millisecond")
+              for name, stamp in [("fixture_speech_start",1000), ("vad_speech_start_client",990),
+                                  ("fixture_speech_end",1600), ("speech_stopped",1700), ("first_playback",1800)]]
+    events.append(_event(metrics, event_id="core-final", name="utterance_finalized", timestamp=90000000000))
+    metadata, diagnostics = _aggregation_context(metrics)
+    metadata = metadata.model_copy(update={"transport":"livekit"})
+    result = metrics.aggregate_events(events, metadata=metadata, diagnostics=diagnostics)
+    catalog = {row.name:row for row in result.metrics}
+    assert catalog["vad_leading_boundary"].p95 == -9
+    assert catalog["vad_trailing_boundary"].p95 == 101
+    assert catalog["vad_trailing_boundary"].end_point == "speech_stopped_client_upper_bound"
+    duplicate = metrics.aggregate_events(events + [events[3]], metadata=metadata, diagnostics=diagnostics)
+    assert next(row for row in duplicate.metrics if row.name == "vad_trailing_boundary").missing_outcomes == {"duplicate_vad_boundary":1}

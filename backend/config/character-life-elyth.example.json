@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "connections": [
+    {
+      "manifest_version": "1.0",
+      "connection": {
+        "id": "elyth",
+        "ownership": "external",
+        "protocol": "mcp",
+        "transport": "streamable_http",
+        "endpoint": "https://elythworld.com/api/mcp/remote",
+        "auth": {
+          "type": "bearer",
+          "secret_ref": "ELYTH_API_KEY"
+        },
+        "trust": {
+          "annotations": false,
+          "addon_metadata": false
+        },
+        "grant": {
+          "scope": "validated_snapshot",
+          "activation": "next_execution_loop"
+        }
+      },
+      "capabilities": {
+        "source": "mcp_discovery",
+        "tools": [],
+        "resources": [],
+        "prompts": []
+      },
+      "core_policy": {
+        "enabled": true,
+        "sharing": {
+          "mode": "character_bound",
+          "character_id": "miori"
+        },
+        "resource_binding_required": false,
+        "restrictions": [],
+        "execution_budget": {
+          "max_calls_per_loop": 6,
+          "max_consecutive_same_tool": 3,
+          "max_identical_call": 2,
+          "normal_max_auto_cycles": 3
+        },
+        "operation_allowlist": [
+          "get_information",
+          "get_event",
+          "get_aituber",
+          "get_thread",
+          "search_post"
+        ]
+      }
+    }
+  ],
+  "bindings": []
+}

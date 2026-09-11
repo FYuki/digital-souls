@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import pytest
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
@@ -232,4 +233,50 @@ def test_bounded_tts_queue_applies_backpressure_to_llm_stream() -> None:
         tts.release.set()
         await session.end()
 
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("outcome", ["completed", "cancelled", "failed"])
+def test_response_remains_cancellable_until_output_completion(outcome):
+    from tests.conversation_core_test_support import RecordingLlm, RecordingTts
+    from app.conversation_core.models import ResponseState
+
+    async def exercise():
+        entered, release = asyncio.Event(), asyncio.Event()
+        class Completion:
+            async def finish_response(self, response):
+                assert len(response.audio_segments) == 1
+                entered.set()
+                await release.wait()
+                if outcome == "failed":
+                    raise TimeoutError("output confirmation missing")
+        delivery, persistence = RecordingDelivery(), RecordingPersistence()
+        session = ConversationCoreSession(
+            session_id="20000000-0000-4000-8000-000000000001",
+            response_id_factory=response_id_factory("50000000-0000-4000-8000-000000000001"),
+            delivery=delivery, persistence=persistence, observation=RecordingObservation(),
+            stt=RecordingStt(), llm=RecordingLlm((TextDelta(1, "応答。", (0, 3)),)),
+            tts=RecordingTts(), completion=Completion(),
+        )
+        try:
+            response = await session.finalize_utterance(utterance_id="input", transcript="開始", should_response=True)
+            await asyncio.wait_for(entered.wait(), 1)
+            assert session.response(response.response_id).state is ResponseState.IN_PROGRESS
+            assert persistence.outcomes == []
+            if outcome == "cancelled":
+                await session.cancel_response(response_id=response.response_id, reason="barge_in")
+            else:
+                release.set()
+            for _ in range(30):
+                await asyncio.sleep(0)
+                if persistence.outcomes:
+                    break
+            assert session.response(response.response_id).state.value == outcome
+            assert len(persistence.outcomes) == 1
+            assert persistence.outcomes[0].state.value == outcome
+            terminal = [e.type for e in delivery.events if e.type in {"response_completed", "response_cancelled", "response_failed"}]
+            assert terminal == ["response_" + outcome]
+        finally:
+            release.set()
+            await session.end()
     asyncio.run(exercise())

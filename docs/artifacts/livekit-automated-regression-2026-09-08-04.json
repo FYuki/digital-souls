@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "verification_scope": "current_revision_automated_regression_only",
+  "measurement_revision": "0a773381e71c1b91da352c6d7e0e6acc752b3284",
+  "full_issue_acceptance_verified": false,
+  "external_service_acceptance_replaced_by_mocks": false,
+  "checks": {
+    "unit": {
+      "exit_code": 0,
+      "backend_passed": 3063,
+      "backend_skipped": 1,
+      "frontend_passed": 789,
+      "skipped_check": "promptfoo_cli_smoke_dependency_unavailable"
+    },
+    "promptfoo_cli_smoke_followup": {
+      "exit_code": 0,
+      "passed": 1,
+      "uses_ollama": false,
+      "previous_skip_verified": true,
+      "dependency_source": "repository_root_package_lock"
+    },
+    "module_initial": {
+      "exit_code": 1,
+      "backend_passed": 1429,
+      "backend_failed": 1,
+      "frontend_executed": false,
+      "observed_failure_reason": "concurrent_mocked_e2e_owned_frontend_name_collision",
+      "environment_failure_report_retained": false
+    },
+    "module_isolated_repeat": {
+      "exit_code": 0,
+      "backend_passed": 1430,
+      "frontend_passed": 107,
+      "competing_mocked_e2e_completed_before_start": true
+    },
+    "mocked_e2e": {
+      "exit_code": 0,
+      "passed": 41,
+      "profile": "test-mocked",
+      "teardown_completed": true,
+      "exact_owned_frontend_container_absent": true
+    },
+    "typecheck": {
+      "exit_code": 0,
+      "backend_files": 237,
+      "svelte_errors": 0,
+      "svelte_warnings": 0,
+      "e2e_typescript_passed": true
+    },
+    "python_lint": {
+      "exit_code": 0
+    },
+    "frontend_build": {
+      "exit_code": 0,
+      "large_chunk_warning": true
+    }
+  },
+  "source_sha256": {
+    "unit": "f0cd648d6666f64241864f1466c7c3715456270d88de35783d11821166eeda40",
+    "module_initial": "09511522546c5c3433329bf091598f2f2c6c1d1284002e62d7a146685ab9ddb6",
+    "module_isolated": "18670ae91cdf573bef632072a7c387b4e324aa04f8564029ba02b601bbcd55ae",
+    "mocked_e2e": "6d2a19a84583e22ffbd186dc37729ec9c88c5ba86fccb61230a01737e3544a9b",
+    "typecheck": "4a751daea626173b1fd3ea7b051997bac1b7a91a8e4eb4bdff106c6c7dcd9c4b",
+    "lint": "0fd7673c529fc719dbeff1b5dd8318abbe626e9e613768e848bad7d0b2a54213",
+    "build": "f5cb2d7a1a6260d4a0f3ffa315a1afcd04899a64902ea9afac8f2446a4b6731f",
+    "dependency_install": "f77c0aca74dfc47f8e726cff1a39600718ce7022a54572b5104efd5be3484507",
+    "promptfoo_smoke": "b3c21efd16219be28a52a0dcc580ff27440f51697f2aceac9c53dfe2425dcae3"
+  },
+  "root_package_lock_sha256": "053a5fbdf8a637a83c6eb45e4b5cf02b28cc3547619e353f2a60b0b0784b8c67",
+  "mocked_e2e_environment_report_sha256": "00ba0d641856bdd3da3d5cfa1dfd200c4452de982ec7ed483fb0aff9358d6764"
+}

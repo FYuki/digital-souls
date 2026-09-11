@@ -238,3 +238,146 @@ def test_vm_target_01_continuity_processing_and_presentation_contracts() -> None
     assert result.continuity_passed is True
     assert result.processing_passed is True
     assert result.presentation_passed is True
+
+
+def _complete_latency_artifacts(metrics):
+    candidate = _artifact(metrics, transport="livekit", cpu_percent=10)
+    baseline = _artifact(metrics, transport="websocket", cpu_percent=10)
+    names = [*metrics.ABSOLUTE_LATENCY_LIMITS_MS, "first_text_delta"]
+    candidates = [metrics.aggregate_metric(
+        name, [metrics.MetricObservation.measured(100)] * 100,
+        start_point=f"{name}_start", end_point=f"{name}_end",
+    ) for name in names]
+    references = [metric for metric in candidates if metric.name in {"ttfa", "first_text_delta"}]
+    return candidate.model_copy(update={"metrics": candidates}), baseline.model_copy(update={"metrics": references})
+
+
+def test_artifact_latency_requires_all_measurements_and_full_trial_count() -> None:
+    metrics = _evaluator()
+    candidate, baseline = _complete_latency_artifacts(metrics)
+    assert metrics.evaluate_artifact(candidate, baseline).passed
+    partial = candidate.model_copy(update={"metrics": candidate.metrics[:1]})
+    result = metrics.evaluate_artifact(partial, baseline)
+    assert not result.passed
+    assert "local_playback_stop:incomplete_measurement" in result.coverage_errors
+    pilot = candidate.model_copy(update={"run_counts": candidate.run_counts.model_copy(update={"measured": 3})})
+    assert not metrics.evaluate_artifact(pilot, baseline).passed
+
+
+def test_partial_p95_does_not_hide_missing_trials_and_reasons() -> None:
+    metrics = _evaluator()
+    candidate, baseline = _complete_latency_artifacts(metrics)
+    metric = metrics.aggregate_metric(
+        "ttfa", [metrics.MetricObservation.measured(100)] * 99
+        + [metrics.MetricObservation.missing("client_playback_not_observed")],
+        start_point="ttfa_start", end_point="ttfa_end",
+    )
+    assert metric.p95 == 100
+    assert metric.rate_denominator == 100
+    assert metric.missing_outcomes == {"client_playback_not_observed": 1}
+    candidate = candidate.model_copy(update={"metrics": [metric, *candidate.metrics[1:]]})
+    assert not metrics.evaluate_artifact(candidate, baseline).passed
+
+
+def test_relative_only_latency_is_checked_and_changed_boundaries_fail_closed() -> None:
+    metrics = _evaluator()
+    candidate, baseline = _complete_latency_artifacts(metrics)
+    candidate = candidate.model_copy(update={"metrics": [
+        *candidate.metrics[:-1], candidate.metrics[-1].model_copy(update={"p95": 151}),
+    ]})
+    result = metrics.evaluate_artifact(candidate, baseline)
+    assert not result.passed
+    assert result.metric_results["first_text_delta"].relative_passed is False
+    candidate = candidate.model_copy(update={"metrics": [
+        *candidate.metrics[:-1], candidate.metrics[-1].model_copy(update={"p95": 100, "start_point": "wrong_clock_boundary"}),
+    ]})
+    assert "first_text_delta:measurement_boundary_mismatch" in metrics.evaluate_artifact(candidate, baseline).coverage_errors
+
+
+@pytest.mark.parametrize('latencies', [[1_000.0], [1_000.0] * 98, [1_000.0] * 100])
+def test_reconnect_rejects_missing_or_extra_success_latencies(latencies):
+    with pytest.raises(ValueError, match='recovery sample count'):
+        _evaluator().evaluate_reconnect(
+            trials=100, recovered_within_ten_seconds=99,
+            successful_recovery_ms=latencies, duplicate_playbacks=0,
+        )
+
+
+@pytest.mark.parametrize('value', [-1, 10_000.001, float('nan'), float('inf'), True, 'private'])
+def test_reconnect_rejects_invalid_or_late_success_latency(value):
+    with pytest.raises(ValueError, match='recovery latency') as caught:
+        _evaluator().evaluate_reconnect(
+            trials=100, recovered_within_ten_seconds=99,
+            successful_recovery_ms=[1_000.0] * 98 + [value], duplicate_playbacks=0,
+        )
+    assert 'private' not in str(caught.value)
+
+
+@pytest.mark.parametrize('field,value', [
+    ('trials', True), ('trials', 100.0), ('trials', 0),
+    ('recovered_within_ten_seconds', 99.0), ('recovered_within_ten_seconds', True),
+    ('recovered_within_ten_seconds', -1), ('recovered_within_ten_seconds', 101),
+    ('duplicate_playbacks', -1), ('duplicate_playbacks', False),
+])
+def test_reconnect_requires_integer_counts_with_valid_bounds(field, value):
+    arguments = dict(trials=100, recovered_within_ten_seconds=99,
+                     successful_recovery_ms=[1_000.0] * 99, duplicate_playbacks=0)
+    arguments[field] = value
+    with pytest.raises(ValueError):
+        _evaluator().evaluate_reconnect(**arguments)
+
+
+def test_reconnect_all_timeouts_are_failed_without_fabricated_latency():
+    result = _evaluator().evaluate_reconnect(
+        trials=100, recovered_within_ten_seconds=0,
+        successful_recovery_ms=[], duplicate_playbacks=0,
+    )
+    assert result.passed is False
+    assert result.within_ten_seconds_rate_basis_points == 0
+    assert result.recovery_p95_ms is None
+
+
+def test_reconnect_success_population_preserves_slow_recoveries_and_duplicates():
+    metrics = _evaluator()
+    arguments = dict(trials=100, recovered_within_ten_seconds=99,
+                     successful_recovery_ms=[1_000.0] * 93 + [10_000.0] * 6,
+                     duplicate_playbacks=0)
+    slow = metrics.evaluate_reconnect(**arguments)
+    assert slow.passed is False
+    assert slow.recovery_p95_ms == 10_000.0
+    arguments.update(successful_recovery_ms=[1_000.0] * 99, duplicate_playbacks=1)
+    assert metrics.evaluate_reconnect(**arguments).passed is False
+
+
+@pytest.mark.parametrize('field', ['leading_losses_over_100_ms', 'early_ends_over_100_ms', 'splits_at_intentional_pause'])
+def test_vad_rate_just_over_limit_is_not_rounded_into_acceptance(field):
+    arguments = dict(trials=100_000, leading_losses_over_100_ms=0,
+                     early_ends_over_100_ms=0, utterance_finalize_p95_ms=800.0,
+                     intentional_pause_ms=600, splits_at_intentional_pause=0)
+    arguments[field] = 1_001
+    result = _evaluator().evaluate_vad(**arguments)
+    assert result.passed is False
+
+
+@pytest.mark.parametrize('field,count', [('false_cancels', 2_001), ('missed_interruptions', 1_001)])
+def test_turn_rate_just_over_limit_is_not_rounded_into_acceptance(field, count):
+    arguments = dict(backchannel_trials=100_000, interruption_trials=100_000,
+                     false_cancels=0, missed_interruptions=0, indeterminate=0)
+    arguments[field] = count
+    assert _evaluator().evaluate_turn_classification(**arguments).passed is False
+
+
+@pytest.mark.parametrize('field,result_field', [
+    ('dogfood_gap_ms', 'continuity_passed'),
+    ('dogfood_processing_failures', 'processing_passed'),
+])
+def test_dogfood_rate_just_over_limit_is_not_rounded_into_acceptance(field, result_field):
+    arguments = dict(controlled_underruns=0, controlled_processing_failures=0,
+                     dogfood_gap_ms=0, dogfood_playback_ms=1_000_000,
+                     maximum_continuous_gap_ms=100,
+                     dogfood_processing_failures=0, dogfood_response_utterances=100_000,
+                     unexpected_session_ends=0, stale_presented=0,
+                     duplicate_playbacks=0, required_manual_operations=0)
+    arguments[field] = 1_001
+    result = _evaluator().evaluate_quality_targets(**arguments)
+    assert getattr(result, result_field) is False

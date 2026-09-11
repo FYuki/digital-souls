@@ -1,0 +1,82 @@
+{
+  "scope": "offline_production_short_speech_fallback_verification",
+  "browser_acceptance_verified": false,
+  "short_speech": {
+    "source_sha256": "dfc4d12aa595c4a741b9dc75ed4bad3968e45ecefa723a8b595fa7375a05a1b3",
+    "wasm_sha256": "3fadafc9c5c1c3117d0178ae631484c6dabc72e0f8742b95c370cd39f46cf171"
+  },
+  "comparisons": {
+    "voice": {
+      "raw_sha256": "bda1d77ee25b54ef517a7be6e91c49677ca0abe5deb155ebf1a9a91bc50e4a91",
+      "prototype_raw_sha256": "c8a37d1cf1e792413932aecbdd18eb1af9f9f96107cc5f10e3cb2cf203f59ca8",
+      "denominator": 300,
+      "exact_row_matches": 300,
+      "summary": {
+        "backchannel": {
+          "denominator": 100,
+          "missed": 0,
+          "leading_loss": 0,
+          "early_end": 0,
+          "split": 0,
+          "finalize_delay_valid": 100,
+          "finalize_delay_p95_ms": 757.7166666666665
+        },
+        "take_turn": {
+          "denominator": 100,
+          "missed": 0,
+          "leading_loss": 0,
+          "early_end": 0,
+          "split": 0,
+          "finalize_delay_valid": 100,
+          "finalize_delay_p95_ms": 757.7166666666665
+        },
+        "pause": {
+          "denominator": 100,
+          "missed": 0,
+          "leading_loss": 0,
+          "early_end": 0,
+          "split": 0,
+          "finalize_delay_valid": 100,
+          "finalize_delay_p95_ms": 757.7166666666665
+        }
+      }
+    },
+    "background": {
+      "raw_sha256": "282d103a224f39181aa8577acb924cc9d2e8736597d15cca28f66f4d9a42a098",
+      "prototype_raw_sha256": "a16203931760d14a389fd9de51325a9965d8e8c0b6213d9a2a4f01160da78ca7",
+      "denominator": 120,
+      "exact_row_matches": 120,
+      "summary": {
+        "denominator": 120,
+        "candidate_false_starts": 9,
+        "baseline_false_starts": 16
+      }
+    },
+    "short_noise": {
+      "raw_sha256": "4d20537324d891421b741a8b386aa5cc9e74fbc79bb7bffc537cf5c8774cd49d",
+      "prototype_raw_sha256": "1e07236ecbd3381bcfecdcb1064310acd9ef523d18e981b246aecd8a4c98c5d3",
+      "denominator": 216,
+      "exact_row_matches": 216,
+      "summary": {
+        "denominator": 216,
+        "baseline_false_starts": 70,
+        "candidate_false_starts": 70,
+        "new_false_starts": 0
+      }
+    }
+  },
+  "tests": {
+    "frontend_unit_passed": 490,
+    "frontend_module_passed": 97,
+    "typecheck_passed": true,
+    "build_passed": true
+  },
+  "sources": {
+    "frontend/src/lib/AudioRecorder.svelte": "fbcaa85935f11798e51049dbe2b17baca0c3226576ecbda3dc717eb3e3c43750",
+    "frontend/src/lib/audio/utterance-detector.ts": "30725d9cc94e648502d265730640563af2d799b2abfc70c33ab1578b84366333",
+    "frontend/src/lib/audio/idle-vad-reset.ts": "1916c482ba31c46b59f3394c16df8e7440bcd3e0a2f3ff1c965c44ebdc4787f9",
+    "frontend/scripts/measure-vad-runtime-cohorts.mjs": "355471056747e8d626e008135748b004355d2a3d333d69782f7cda4454e0f94a",
+    "frontend/scripts/measure-utterance-background.mjs": "ea5d4730c12a256962642dbe708dc46729a8b98f46590f6466c2eb0e2b30a501",
+    "frontend/scripts/measure-short-vad-noise.mjs": "57e34f779607ca48b664faec67f42dbb3eadb1f026d525aaf9d365ec45881c4f"
+  }
+}

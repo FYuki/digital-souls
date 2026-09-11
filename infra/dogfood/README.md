@@ -283,6 +283,39 @@ rollbackは引数なしで現在manifestの直前commitへ、`--to`で保存済�
 
 deployment manifestは`DOGFOOD_STATE_DIR/deployments/`へ`root:digital-souls`、`0640`で保存する。1操作1 JSON、`current.json`が最新状態を表し、履歴は新しい20世代だけを保持する。commit、Profile schema、SQLite data schema、backup ID、Backend／Frontend／Whisper digest、UTC deploy時刻だけを記録し、会話本文、prompt、秘密値は保存しない。`dogfood.env`はdeploy、rollback、manifest、logへ複製しない。
 
+### backupIdの出力契約と旧manifestの読込
+
+`dogfood_backup`の成功時stdoutは正規backup generationの絶対path 1行だけとする。
+新規deployでは設定済み`DOGFOOD_BACKUP_DIR`直下の正規generation名、正規化済み絶対path、
+実在directory、symlinkを経由しないことを確認し、`backup-verify`成功後だけmanifestへ保存する。
+検証JSONはstdoutへ混入させない。path検証または`backup-verify`失敗時はmanifest、revision、
+checkout、serviceの更新へ進まない。
+
+旧版で成功JSONと改行が`backupId`へ混入したmanifestは、手編集や一括上書きで移行しない。
+更新したrollback readerが「既知の成功JSON 1行 + 改行 + 正規backup path」だけを読込時に正規化する。
+成功JSONは`status: ok`と2つのSQLite artifactの`artifacts`（filename、schemaVersion、recordCount）、または旧単一DB形式の
+`status: ok`、`schemaVersion`、`conversationCount`に限定する。未知field、重複key、不正型、
+余分な行、root外pathは拒否する。rollback成功時に新しい履歴manifestと`current.json`へ正規pathを
+記録し、元の履歴manifestは変更しない。通常のmanifest保持数による整理は継続する。
+この補正だけではmanifest schemaを変更しないため、`migrate-deployment-contract.sh`による
+archive移行は不要である。修正済みrevisionのrollback scriptを使用し、過去manifestをそのまま読む。
+
+manifestは20世代、backupは既定7世代のため、古いbackupの実在・再検証をrollbackの必須条件にはしない。
+削除済みbackupを参照する世代でも現在DBと保存済みmanifestのschemaが一致すればrollbackできる。
+これはDBの自動restoreを追加するものではなく、schema不一致時は従来どおり切替を拒否する。
+必要なbackupが残っていない場合もschema検証を迂回しない。
+
+アプリケーションは保存済みmanifestに記録されたGHCRのimage digestを取得して戻す。
+対象imageを取得できない場合は通常rollbackを停止し、別バージョンのimageで代用しない。
+最終手段として対象commitから再ビルドする対応は、ユーザーの明示指示で別途行う。
+当時の依存が取得できない場合の調整を含め、再ビルドとその受入は#135／#146の範囲外とする。
+再ビルドで元と異なるdigestになったimageを、保存済みdigestのimageと同一のものとして扱わない。
+
+2026-09-06決定: #146のコード、回帰テスト、手順書をmainへ取り込む時点で#135をcloseする。
+dogfood実機のbackup／別data rootへのrestore／失敗時rollback受入は別タスクとする。
+そのタスクでは本書の実機検証時のデータ保全、restore drill、readiness確認に従い、
+clean／旧汚染manifestの双方と既存データ保持を確認する。自動テスト成功を実機受入済みとは扱わない。
+
 ## SQLite artifactのbackup／restore
 
 SQLiteの`conversation-history.db`を会話履歴、`persona-memory.db`を人格記憶の正本とし、同じgenerationで一組としてbackup／restoreする。backupはSQLite公式backup APIで作成するため、WALへcommit済みで未checkpointのデータも整合したsnapshotへ含まれる。Chromaは再構築可能な派生indexであり、backupへ含めない。

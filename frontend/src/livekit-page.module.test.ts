@@ -21,6 +21,8 @@ const mountLiveKitEntrypoint = async () => {
   window.history.replaceState({}, '', '/voice/livekit')
   document.body.innerHTML = '<div id="app"></div>'
   await import('./main')
+  // mainから起動する非同期の画面読込が完了してからDOMを検証する。
+  await vi.dynamicImportSettled()
   await waitFor(() => {
     expect(screen.getByRole('heading', { name: 'LiveKit 音声transport実験' })).toBeTruthy()
   })

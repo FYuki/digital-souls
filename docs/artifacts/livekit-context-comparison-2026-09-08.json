@@ -1,0 +1,1835 @@
+{
+  "schema_version": "1.0",
+  "measurement_scope": "synthetic_prompt_context_comparison",
+  "measurement_revision": "76116f4dcddba99b98982108853ee3fea96bcac9",
+  "character_card_sha256": "115fe849f08055dd141cde3aff20802ff406ff172d8f4a569c2dd039b465b709",
+  "runner_sha256": null,
+  "normal_options_think": null,
+  "counts": {
+    "recorded": 48,
+    "warmup": 12,
+    "warmup_failure": 0,
+    "measured": 36,
+    "request_failure": 0
+  },
+  "limits": {
+    "memory_retrieval_exercised": false,
+    "general_personality_quality_verified": false,
+    "pure_thinking_causal_effect_verified": false,
+    "response_content_persisted": false
+  },
+  "conditions": [
+    {
+      "case_index": 0,
+      "history_count": 0,
+      "memory_count": 0,
+      "variant": "configured",
+      "measured": 3,
+      "request_success": 3,
+      "request_failure": 0,
+      "expected_marker_match": 3,
+      "expected_marker_mismatch": 0,
+      "marker_observation_unavailable": 0,
+      "metrics": {
+        "first_token_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2761.6035620000002,
+          "p95": 4018.8017089999994,
+          "minimum": 2695.176489,
+          "maximum": 4158.490392
+        },
+        "prompt_preparation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2.218486,
+          "p95": 3.1005516999999996,
+          "minimum": 2.1266059999999998,
+          "maximum": 3.198559
+        },
+        "provider_load_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 242.231392,
+          "p95": 242.32209129999998,
+          "minimum": 241.392328,
+          "maximum": 242.332169
+        },
+        "provider_prompt_eval_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 18.805,
+          "p95": 18.8347,
+          "minimum": 17.832,
+          "maximum": 18.838
+        },
+        "provider_generation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2805.979,
+          "p95": 4064.9286999999995,
+          "minimum": 2795.475,
+          "maximum": 4204.812
+        }
+      },
+      "prompt_tokens": {
+        "total": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 978.0,
+          "p95": 978.0,
+          "minimum": 978,
+          "maximum": 978
+        },
+        "character": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 942.0,
+          "p95": 942.0,
+          "minimum": 942,
+          "maximum": 942
+        },
+        "character_lore": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "rag": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "current_user": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 47.0,
+          "p95": 47.0,
+          "minimum": 47,
+          "maximum": 47
+        },
+        "post_history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_character_lore_entries": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_rag_items": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_history_exchanges": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "case_index": 0,
+      "history_count": 0,
+      "memory_count": 0,
+      "variant": "thinking_disabled",
+      "measured": 3,
+      "request_success": 3,
+      "request_failure": 0,
+      "expected_marker_match": 3,
+      "expected_marker_mismatch": 0,
+      "marker_observation_unavailable": 0,
+      "metrics": {
+        "first_token_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 273.055716,
+          "p95": 278.54642340000004,
+          "minimum": 272.64691999999997,
+          "maximum": 279.15650200000005
+        },
+        "prompt_preparation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2.144161,
+          "p95": 2.6986356999999996,
+          "minimum": 2.066045,
+          "maximum": 2.7602439999999997
+        },
+        "provider_load_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 242.826704,
+          "p95": 247.4647172,
+          "minimum": 242.78411,
+          "maximum": 247.980052
+        },
+        "provider_prompt_eval_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 14.028,
+          "p95": 14.176499999999999,
+          "minimum": 13.942,
+          "maximum": 14.193
+        },
+        "provider_generation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 258.565,
+          "p95": 265.9144,
+          "minimum": 246.9,
+          "maximum": 266.731
+        }
+      },
+      "prompt_tokens": {
+        "total": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 976.0,
+          "p95": 976.0,
+          "minimum": 976,
+          "maximum": 976
+        },
+        "character": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 940.0,
+          "p95": 940.0,
+          "minimum": 940,
+          "maximum": 940
+        },
+        "character_lore": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "rag": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "current_user": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 40.0,
+          "p95": 40.0,
+          "minimum": 40,
+          "maximum": 40
+        },
+        "post_history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_character_lore_entries": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_rag_items": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_history_exchanges": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "case_index": 1,
+      "history_count": 2,
+      "memory_count": 0,
+      "variant": "configured",
+      "measured": 3,
+      "request_success": 3,
+      "request_failure": 0,
+      "expected_marker_match": 3,
+      "expected_marker_mismatch": 0,
+      "marker_observation_unavailable": 0,
+      "metrics": {
+        "first_token_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2207.408446,
+          "p95": 2674.7697664,
+          "minimum": 1737.4273859999998,
+          "maximum": 2726.6988020000003
+        },
+        "prompt_preparation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2.648632,
+          "p95": 5.8563688,
+          "minimum": 2.521437,
+          "maximum": 6.212784
+        },
+        "provider_load_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 242.420328,
+          "p95": 242.45507070000002,
+          "minimum": 241.120246,
+          "maximum": 242.458931
+        },
+        "provider_prompt_eval_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 17.66,
+          "p95": 17.7284,
+          "minimum": 17.317,
+          "maximum": 17.736
+        },
+        "provider_generation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2247.569,
+          "p95": 2668.2884,
+          "minimum": 1719.468,
+          "maximum": 2715.035
+        }
+      },
+      "prompt_tokens": {
+        "total": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 1032.0,
+          "p95": 1032.0,
+          "minimum": 1032,
+          "maximum": 1032
+        },
+        "character": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 942.0,
+          "p95": 942.0,
+          "minimum": 942,
+          "maximum": 942
+        },
+        "character_lore": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "rag": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 65.0,
+          "p95": 65.0,
+          "minimum": 65,
+          "maximum": 65
+        },
+        "current_user": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 47.0,
+          "p95": 47.0,
+          "minimum": 47,
+          "maximum": 47
+        },
+        "post_history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_character_lore_entries": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_rag_items": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_history_exchanges": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "case_index": 1,
+      "history_count": 2,
+      "memory_count": 0,
+      "variant": "thinking_disabled",
+      "measured": 3,
+      "request_success": 3,
+      "request_failure": 0,
+      "expected_marker_match": 3,
+      "expected_marker_mismatch": 0,
+      "marker_observation_unavailable": 0,
+      "metrics": {
+        "first_token_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 270.935041,
+          "p95": 272.27726049999995,
+          "minimum": 270.59695600000003,
+          "maximum": 272.42639599999995
+        },
+        "prompt_preparation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2.552696,
+          "p95": 3.5018531,
+          "minimum": 2.539943,
+          "maximum": 3.607315
+        },
+        "provider_load_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 241.253342,
+          "p95": 241.3689164,
+          "minimum": 240.876279,
+          "maximum": 241.381758
+        },
+        "provider_prompt_eval_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 14.315,
+          "p95": 14.543600000000001,
+          "minimum": 13.727,
+          "maximum": 14.569
+        },
+        "provider_generation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 234.364,
+          "p95": 243.6025,
+          "minimum": 211.817,
+          "maximum": 244.629
+        }
+      },
+      "prompt_tokens": {
+        "total": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 1030.0,
+          "p95": 1030.0,
+          "minimum": 1030,
+          "maximum": 1030
+        },
+        "character": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 940.0,
+          "p95": 940.0,
+          "minimum": 940,
+          "maximum": 940
+        },
+        "character_lore": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "rag": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 58.0,
+          "p95": 58.0,
+          "minimum": 58,
+          "maximum": 58
+        },
+        "current_user": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 40.0,
+          "p95": 40.0,
+          "minimum": 40,
+          "maximum": 40
+        },
+        "post_history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_character_lore_entries": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_rag_items": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_history_exchanges": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "case_index": 2,
+      "history_count": 8,
+      "memory_count": 0,
+      "variant": "configured",
+      "measured": 3,
+      "request_success": 3,
+      "request_failure": 0,
+      "expected_marker_match": 3,
+      "expected_marker_mismatch": 0,
+      "marker_observation_unavailable": 0,
+      "metrics": {
+        "first_token_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2054.946594,
+          "p95": 2795.4358536,
+          "minimum": 1936.0298699999998,
+          "maximum": 2877.712438
+        },
+        "prompt_preparation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2.474894,
+          "p95": 3.4782959,
+          "minimum": 2.4727449999999997,
+          "maximum": 3.589785
+        },
+        "provider_load_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 243.405482,
+          "p95": 245.11703450000002,
+          "minimum": 243.296906,
+          "maximum": 245.307207
+        },
+        "provider_prompt_eval_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 17.259,
+          "p95": 18.0627,
+          "minimum": 17.214,
+          "maximum": 18.152
+        },
+        "provider_generation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2060.428,
+          "p95": 2786.3707,
+          "minimum": 1885.016,
+          "maximum": 2867.031
+        }
+      },
+      "prompt_tokens": {
+        "total": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 1206.0,
+          "p95": 1206.0,
+          "minimum": 1206,
+          "maximum": 1206
+        },
+        "character": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 942.0,
+          "p95": 942.0,
+          "minimum": 942,
+          "maximum": 942
+        },
+        "character_lore": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "rag": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 239.0,
+          "p95": 239.0,
+          "minimum": 239,
+          "maximum": 239
+        },
+        "current_user": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 47.0,
+          "p95": 47.0,
+          "minimum": 47,
+          "maximum": 47
+        },
+        "post_history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_character_lore_entries": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_rag_items": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_history_exchanges": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "case_index": 2,
+      "history_count": 8,
+      "memory_count": 0,
+      "variant": "thinking_disabled",
+      "measured": 3,
+      "request_success": 3,
+      "request_failure": 0,
+      "expected_marker_match": 3,
+      "expected_marker_mismatch": 0,
+      "marker_observation_unavailable": 0,
+      "metrics": {
+        "first_token_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 273.706091,
+          "p95": 276.1742726,
+          "minimum": 271.31122899999997,
+          "maximum": 276.448515
+        },
+        "prompt_preparation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2.8548810000000002,
+          "p95": 3.7428353999999997,
+          "minimum": 2.626385,
+          "maximum": 3.841497
+        },
+        "provider_load_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 243.430671,
+          "p95": 245.749539,
+          "minimum": 242.194193,
+          "maximum": 246.007191
+        },
+        "provider_prompt_eval_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 13.933,
+          "p95": 14.0338,
+          "minimum": 13.112,
+          "maximum": 14.045
+        },
+        "provider_generation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 235.131,
+          "p95": 236.643,
+          "minimum": 197.987,
+          "maximum": 236.811
+        }
+      },
+      "prompt_tokens": {
+        "total": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 1204.0,
+          "p95": 1204.0,
+          "minimum": 1204,
+          "maximum": 1204
+        },
+        "character": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 940.0,
+          "p95": 940.0,
+          "minimum": 940,
+          "maximum": 940
+        },
+        "character_lore": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "rag": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 232.0,
+          "p95": 232.0,
+          "minimum": 232,
+          "maximum": 232
+        },
+        "current_user": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 40.0,
+          "p95": 40.0,
+          "minimum": 40,
+          "maximum": 40
+        },
+        "post_history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_character_lore_entries": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_rag_items": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_history_exchanges": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "case_index": 3,
+      "history_count": 0,
+      "memory_count": 1,
+      "variant": "configured",
+      "measured": 3,
+      "request_success": 3,
+      "request_failure": 0,
+      "expected_marker_match": 3,
+      "expected_marker_mismatch": 0,
+      "marker_observation_unavailable": 0,
+      "metrics": {
+        "first_token_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 11865.509225,
+          "p95": 12080.6451566,
+          "minimum": 11444.899322000001,
+          "maximum": 12104.549149
+        },
+        "prompt_preparation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2.8234809999999997,
+          "p95": 3.0751687,
+          "minimum": 2.754031,
+          "maximum": 3.103134
+        },
+        "provider_load_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 8511.07058,
+          "p95": 8774.5929074,
+          "minimum": 8190.754882,
+          "maximum": 8803.873166
+        },
+        "provider_prompt_eval_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 177.433,
+          "p95": 177.76330000000002,
+          "minimum": 132.806,
+          "maximum": 177.8
+        },
+        "provider_generation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 3368.204,
+          "p95": 3534.3503,
+          "minimum": 3257.613,
+          "maximum": 3552.811
+        }
+      },
+      "prompt_tokens": {
+        "total": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 1000.0,
+          "p95": 1000.0,
+          "minimum": 1000,
+          "maximum": 1000
+        },
+        "character": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 942.0,
+          "p95": 942.0,
+          "minimum": 942,
+          "maximum": 942
+        },
+        "character_lore": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "rag": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 28.0,
+          "p95": 28.0,
+          "minimum": 28,
+          "maximum": 28
+        },
+        "history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "current_user": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 47.0,
+          "p95": 47.0,
+          "minimum": 47,
+          "maximum": 47
+        },
+        "post_history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_character_lore_entries": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_rag_items": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_history_exchanges": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "case_index": 3,
+      "history_count": 0,
+      "memory_count": 1,
+      "variant": "thinking_disabled",
+      "measured": 3,
+      "request_success": 3,
+      "request_failure": 0,
+      "expected_marker_match": 3,
+      "expected_marker_mismatch": 0,
+      "marker_observation_unavailable": 0,
+      "metrics": {
+        "first_token_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 276.42188200000004,
+          "p95": 288.44125329999997,
+          "minimum": 270.665303,
+          "maximum": 289.77673899999996
+        },
+        "prompt_preparation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2.674154,
+          "p95": 3.3669155,
+          "minimum": 2.447731,
+          "maximum": 3.4438890000000004
+        },
+        "provider_load_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 242.646372,
+          "p95": 257.9288535,
+          "minimum": 240.830595,
+          "maximum": 259.626907
+        },
+        "provider_prompt_eval_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 13.6,
+          "p95": 16.953400000000002,
+          "minimum": 12.783,
+          "maximum": 17.326
+        },
+        "provider_generation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 329.35,
+          "p95": 517.7137,
+          "minimum": 228.972,
+          "maximum": 538.643
+        }
+      },
+      "prompt_tokens": {
+        "total": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 998.0,
+          "p95": 998.0,
+          "minimum": 998,
+          "maximum": 998
+        },
+        "character": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 940.0,
+          "p95": 940.0,
+          "minimum": 940,
+          "maximum": 940
+        },
+        "character_lore": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "rag": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 26.0,
+          "p95": 26.0,
+          "minimum": 26,
+          "maximum": 26
+        },
+        "history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "current_user": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 40.0,
+          "p95": 40.0,
+          "minimum": 40,
+          "maximum": 40
+        },
+        "post_history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_character_lore_entries": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_rag_items": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_history_exchanges": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "case_index": 4,
+      "history_count": 0,
+      "memory_count": 4,
+      "variant": "configured",
+      "measured": 3,
+      "request_success": 3,
+      "request_failure": 0,
+      "expected_marker_match": 3,
+      "expected_marker_mismatch": 0,
+      "marker_observation_unavailable": 0,
+      "metrics": {
+        "first_token_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2807.732574,
+          "p95": 4006.1839616999996,
+          "minimum": 2470.173784,
+          "maximum": 4139.345227
+        },
+        "prompt_preparation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2.6358349999999997,
+          "p95": 3.1435889,
+          "minimum": 2.564527,
+          "maximum": 3.200006
+        },
+        "provider_load_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 242.928725,
+          "p95": 244.1221385,
+          "minimum": 241.743901,
+          "maximum": 244.25474
+        },
+        "provider_prompt_eval_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 37.69,
+          "p95": 38.3254,
+          "minimum": 37.109,
+          "maximum": 38.396
+        },
+        "provider_generation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2880.309,
+          "p95": 4052.4627,
+          "minimum": 2577.519,
+          "maximum": 4182.702
+        }
+      },
+      "prompt_tokens": {
+        "total": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 1066.0,
+          "p95": 1066.0,
+          "minimum": 1066,
+          "maximum": 1066
+        },
+        "character": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 942.0,
+          "p95": 942.0,
+          "minimum": 942,
+          "maximum": 942
+        },
+        "character_lore": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "rag": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 94.0,
+          "p95": 94.0,
+          "minimum": 94,
+          "maximum": 94
+        },
+        "history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "current_user": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 47.0,
+          "p95": 47.0,
+          "minimum": 47,
+          "maximum": 47
+        },
+        "post_history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_character_lore_entries": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_rag_items": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_history_exchanges": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "case_index": 4,
+      "history_count": 0,
+      "memory_count": 4,
+      "variant": "thinking_disabled",
+      "measured": 3,
+      "request_success": 3,
+      "request_failure": 0,
+      "expected_marker_match": 3,
+      "expected_marker_mismatch": 0,
+      "marker_observation_unavailable": 0,
+      "metrics": {
+        "first_token_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 279.96513899999997,
+          "p95": 305.4318279,
+          "minimum": 269.909968,
+          "maximum": 308.26146
+        },
+        "prompt_preparation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 2.934102,
+          "p95": 3.064809,
+          "minimum": 2.391953,
+          "maximum": 3.079332
+        },
+        "provider_load_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 244.040382,
+          "p95": 249.7108428,
+          "minimum": 240.951213,
+          "maximum": 250.340894
+        },
+        "provider_prompt_eval_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 13.515,
+          "p95": 34.5057,
+          "minimum": 13.049,
+          "maximum": 36.838
+        },
+        "provider_generation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 327.68,
+          "p95": 330.1316,
+          "minimum": 318.445,
+          "maximum": 330.404
+        }
+      },
+      "prompt_tokens": {
+        "total": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 1064.0,
+          "p95": 1064.0,
+          "minimum": 1064,
+          "maximum": 1064
+        },
+        "character": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 940.0,
+          "p95": 940.0,
+          "minimum": 940,
+          "maximum": 940
+        },
+        "character_lore": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "rag": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 92.0,
+          "p95": 92.0,
+          "minimum": 92,
+          "maximum": 92
+        },
+        "history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "current_user": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 40.0,
+          "p95": 40.0,
+          "minimum": 40,
+          "maximum": 40
+        },
+        "post_history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_character_lore_entries": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_rag_items": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_history_exchanges": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "case_index": 5,
+      "history_count": 8,
+      "memory_count": 4,
+      "variant": "configured",
+      "measured": 3,
+      "request_success": 3,
+      "request_failure": 0,
+      "expected_marker_match": 3,
+      "expected_marker_mismatch": 0,
+      "marker_observation_unavailable": 0,
+      "metrics": {
+        "first_token_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 1611.042137,
+          "p95": 2060.46782,
+          "minimum": 1318.9947300000001,
+          "maximum": 2110.404007
+        },
+        "prompt_preparation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 3.0888009999999997,
+          "p95": 4.2326938,
+          "minimum": 3.074938,
+          "maximum": 4.359793
+        },
+        "provider_load_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 252.487193,
+          "p95": 253.13829439999998,
+          "minimum": 249.1112,
+          "maximum": 253.210639
+        },
+        "provider_prompt_eval_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 18.277,
+          "p95": 20.5009,
+          "minimum": 17.766,
+          "maximum": 20.748
+        },
+        "provider_generation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 1616.165,
+          "p95": 2047.8067990999998,
+          "minimum": 1308.302,
+          "maximum": 2095.766999
+        }
+      },
+      "prompt_tokens": {
+        "total": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 1294.0,
+          "p95": 1294.0,
+          "minimum": 1294,
+          "maximum": 1294
+        },
+        "character": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 942.0,
+          "p95": 942.0,
+          "minimum": 942,
+          "maximum": 942
+        },
+        "character_lore": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "rag": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 94.0,
+          "p95": 94.0,
+          "minimum": 94,
+          "maximum": 94
+        },
+        "history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 239.0,
+          "p95": 239.0,
+          "minimum": 239,
+          "maximum": 239
+        },
+        "current_user": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 47.0,
+          "p95": 47.0,
+          "minimum": 47,
+          "maximum": 47
+        },
+        "post_history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_character_lore_entries": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_rag_items": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_history_exchanges": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    },
+    {
+      "case_index": 5,
+      "history_count": 8,
+      "memory_count": 4,
+      "variant": "thinking_disabled",
+      "measured": 3,
+      "request_success": 3,
+      "request_failure": 0,
+      "expected_marker_match": 3,
+      "expected_marker_mismatch": 0,
+      "marker_observation_unavailable": 0,
+      "metrics": {
+        "first_token_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 274.248386,
+          "p95": 418.41108710000003,
+          "minimum": 273.25088900000003,
+          "maximum": 434.429165
+        },
+        "prompt_preparation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 3.220363,
+          "p95": 3.2580334,
+          "minimum": 3.053693,
+          "maximum": 3.262219
+        },
+        "provider_load_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 244.969334,
+          "p95": 246.2835581,
+          "minimum": 243.611902,
+          "maximum": 246.429583
+        },
+        "provider_prompt_eval_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 13.541,
+          "p95": 35.157199999999996,
+          "minimum": 12.792,
+          "maximum": 37.559
+        },
+        "provider_generation_ms": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 236.135,
+          "p95": 289.5743,
+          "minimum": 233.274,
+          "maximum": 295.512
+        }
+      },
+      "prompt_tokens": {
+        "total": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 1292.0,
+          "p95": 1292.0,
+          "minimum": 1292,
+          "maximum": 1292
+        },
+        "character": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 940.0,
+          "p95": 940.0,
+          "minimum": 940,
+          "maximum": 940
+        },
+        "character_lore": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "rag": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 92.0,
+          "p95": 92.0,
+          "minimum": 92,
+          "maximum": 92
+        },
+        "history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 232.0,
+          "p95": 232.0,
+          "minimum": 232,
+          "maximum": 232
+        },
+        "current_user": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 40.0,
+          "p95": 40.0,
+          "minimum": 40,
+          "maximum": 40
+        },
+        "post_history": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_character_lore_entries": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_rag_items": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        },
+        "omitted_history_exchanges": {
+          "count": 3,
+          "missing": 0,
+          "missing_reason": null,
+          "p50": 0.0,
+          "p95": 0.0,
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    }
+  ]
+}

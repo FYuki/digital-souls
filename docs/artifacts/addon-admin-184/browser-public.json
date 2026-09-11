@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "mcp": {
+    "package": "@modelcontextprotocol/server-everything",
+    "version": "2026.8.31"
+  },
+  "environment": {
+    "runtime": "real-core-vite-browser",
+    "toolRoutingConfigured": false
+  },
+  "checks": [
+    "registered-list",
+    "initial-available",
+    "toggle-off",
+    "restart-restores-off",
+    "on-rechecks-health",
+    "idle-disconnect-badge",
+    "offline-toggle"
+  ],
+  "testedAt": "2026-09-08T05:30:06Z",
+  "teardown": "passed",
+  "executionLog": {
+    "path": "browser-execution.jsonl",
+    "sha256": "b2b466a4dd87339497db8e5fc8fc2335f08f7f58ef024c56ffeec068364b3e97"
+  }
+}

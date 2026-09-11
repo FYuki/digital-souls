@@ -1,0 +1,145 @@
+{
+  "schema_version": "1.0",
+  "scope": "shared_ollama_context_switch_diagnostic_only",
+  "measurement_revision": "2d10020ca818fce228b8446d51c329bebccb92e5",
+  "window_start_utc": "2026-09-08T11:41:47.794184+00:00",
+  "window_end_utc": "2026-09-08T12:00:15.562849+00:00",
+  "server_version_observed_now": "0.32.5",
+  "journal_entries": 45548,
+  "chat_http_log_entries": 291,
+  "marker_counts": {
+    "loading model": 432,
+    "model loaded": 108
+  },
+  "allocated_context_log_entries": [
+    {
+      "context_tokens": 8192,
+      "entries": 108
+    },
+    {
+      "context_tokens": 12544,
+      "entries": 74
+    },
+    {
+      "context_tokens": 13312,
+      "entries": 34
+    }
+  ],
+  "context_value_changes": 107,
+  "first_context_changes": [
+    {
+      "timestamp_us": 1788868028499378,
+      "allocated_context_tokens": 12544
+    },
+    {
+      "timestamp_us": 1788868032559678,
+      "allocated_context_tokens": 8192
+    },
+    {
+      "timestamp_us": 1788868036939950,
+      "allocated_context_tokens": 13312
+    },
+    {
+      "timestamp_us": 1788868042131257,
+      "allocated_context_tokens": 8192
+    },
+    {
+      "timestamp_us": 1788868046266066,
+      "allocated_context_tokens": 12544
+    },
+    {
+      "timestamp_us": 1788868050264842,
+      "allocated_context_tokens": 8192
+    },
+    {
+      "timestamp_us": 1788868054536157,
+      "allocated_context_tokens": 13312
+    },
+    {
+      "timestamp_us": 1788868059897572,
+      "allocated_context_tokens": 8192
+    },
+    {
+      "timestamp_us": 1788868063928326,
+      "allocated_context_tokens": 12544
+    },
+    {
+      "timestamp_us": 1788868067991323,
+      "allocated_context_tokens": 8192
+    },
+    {
+      "timestamp_us": 1788868072294153,
+      "allocated_context_tokens": 13312
+    },
+    {
+      "timestamp_us": 1788868077794108,
+      "allocated_context_tokens": 8192
+    }
+  ],
+  "last_context_changes": [
+    {
+      "timestamp_us": 1788868666162024,
+      "allocated_context_tokens": 13312
+    },
+    {
+      "timestamp_us": 1788868671245114,
+      "allocated_context_tokens": 8192
+    },
+    {
+      "timestamp_us": 1788868675062656,
+      "allocated_context_tokens": 12544
+    },
+    {
+      "timestamp_us": 1788868679142203,
+      "allocated_context_tokens": 8192
+    },
+    {
+      "timestamp_us": 1788868683393325,
+      "allocated_context_tokens": 12544
+    },
+    {
+      "timestamp_us": 1788868687387745,
+      "allocated_context_tokens": 8192
+    },
+    {
+      "timestamp_us": 1788868691327240,
+      "allocated_context_tokens": 13312
+    },
+    {
+      "timestamp_us": 1788868695250297,
+      "allocated_context_tokens": 8192
+    },
+    {
+      "timestamp_us": 1788868699455544,
+      "allocated_context_tokens": 12544
+    },
+    {
+      "timestamp_us": 1788868703488428,
+      "allocated_context_tokens": 8192
+    },
+    {
+      "timestamp_us": 1788868707486802,
+      "allocated_context_tokens": 13312
+    },
+    {
+      "timestamp_us": 1788868715304860,
+      "allocated_context_tokens": 8192
+    }
+  ],
+  "source_journal_sha256": "72873f3d95ebb91971b9e32c1c8a663b56e53c2ddc4bd2f7af03b659dbc9def1",
+  "voice_requested_context_tokens": 8192,
+  "other_real_test_config": {
+    "model_matches_voice": true,
+    "default_loopback_port_matches_voice": true,
+    "input_tokens": 12288,
+    "estimate_output_tokens": 1,
+    "generation_output_tokens": 1024,
+    "estimate_requested_context_tokens": 12289,
+    "generation_requested_context_tokens": 13312,
+    "effective_prior_process_endpoint_verified": false,
+    "requests_attributed_to_individual_owner": false,
+    "current_real_test_process_confirmed_terminal": true
+  },
+  "all_latency_causality_proven": false,
+  "full_issue_acceptance_verified": false
+}

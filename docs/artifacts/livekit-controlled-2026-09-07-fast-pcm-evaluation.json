@@ -1,0 +1,133 @@
+{
+  "evaluation_scope": "latency_only",
+  "passed": false,
+  "metric_results": {
+    "barge_in_cancel_total": {
+      "passed": false,
+      "absolute_passed": null,
+      "relative_passed": null,
+      "median_guide_met": null,
+      "limit_ms": null
+    },
+    "cancel_after_decision": {
+      "passed": false,
+      "absolute_passed": null,
+      "relative_passed": null,
+      "median_guide_met": null,
+      "limit_ms": null
+    },
+    "client_playback_latency": {
+      "passed": false,
+      "absolute_passed": null,
+      "relative_passed": false,
+      "median_guide_met": null,
+      "limit_ms": 81.19999998882413
+    },
+    "first_audio_generation": {
+      "passed": true,
+      "absolute_passed": null,
+      "relative_passed": true,
+      "median_guide_met": null,
+      "limit_ms": 4425.681023005
+    },
+    "first_text_latency": {
+      "passed": true,
+      "absolute_passed": null,
+      "relative_passed": true,
+      "median_guide_met": null,
+      "limit_ms": 13568.584563875
+    },
+    "llm_completion": {
+      "passed": true,
+      "absolute_passed": null,
+      "relative_passed": true,
+      "median_guide_met": null,
+      "limit_ms": 13568.906890825001
+    },
+    "llm_start_latency": {
+      "passed": true,
+      "absolute_passed": null,
+      "relative_passed": true,
+      "median_guide_met": null,
+      "limit_ms": 50.2262813
+    },
+    "local_playback_stop": {
+      "passed": false,
+      "absolute_passed": null,
+      "relative_passed": null,
+      "median_guide_met": null,
+      "limit_ms": null
+    },
+    "response_decision": {
+      "passed": false,
+      "absolute_passed": null,
+      "relative_passed": false,
+      "median_guide_met": null,
+      "limit_ms": 50.50499999970198
+    },
+    "stt_processing": {
+      "passed": true,
+      "absolute_passed": null,
+      "relative_passed": true,
+      "median_guide_met": null,
+      "limit_ms": 2387.765099555
+    },
+    "stt_start_latency": {
+      "passed": false,
+      "absolute_passed": null,
+      "relative_passed": false,
+      "median_guide_met": null,
+      "limit_ms": 51.2490054
+    },
+    "ttfa": {
+      "passed": false,
+      "absolute_passed": false,
+      "relative_passed": true,
+      "median_guide_met": false,
+      "limit_ms": 2000.0
+    },
+    "tts_start_latency": {
+      "passed": true,
+      "absolute_passed": null,
+      "relative_passed": true,
+      "median_guide_met": null,
+      "limit_ms": 50.7087882
+    },
+    "turn_decision": {
+      "passed": false,
+      "absolute_passed": null,
+      "relative_passed": null,
+      "median_guide_met": null,
+      "limit_ms": null
+    },
+    "utterance_finalized": {
+      "passed": false,
+      "absolute_passed": true,
+      "relative_passed": false,
+      "median_guide_met": null,
+      "limit_ms": 800.0
+    },
+    "vad_leading_boundary": {
+      "passed": false,
+      "absolute_passed": null,
+      "relative_passed": null,
+      "median_guide_met": null,
+      "limit_ms": null
+    },
+    "vad_trailing_boundary": {
+      "passed": false,
+      "absolute_passed": null,
+      "relative_passed": null,
+      "median_guide_met": null,
+      "limit_ms": null
+    }
+  },
+  "coverage_errors": [
+    "barge_in_cancel_total:incomplete_measurement",
+    "cancel_after_decision:incomplete_measurement",
+    "local_playback_stop:incomplete_measurement",
+    "turn_decision:incomplete_measurement",
+    "vad_leading_boundary:incomplete_measurement",
+    "vad_trailing_boundary:incomplete_measurement"
+  ]
+}

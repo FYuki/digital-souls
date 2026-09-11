@@ -1,0 +1,165 @@
+{
+  "schema_version": "1.0",
+  "measurement_revision": "a03e8a69d318b257bb4bfcc17289df631db85058",
+  "artifact_sha256": "dbddcb84f2ebc8276cd13ff7ef490591c3e62ce1d16d6fce0c37a64a3ee5a5f9",
+  "raw_evidence_sha256": {
+    "trial-manifest.json": "49049ec9ce3d5006cb52786a93a2f08a081bf2dc402c0f4e6d95b356f69c3e4d",
+    "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+    "playwright-results.json": "68e5318a9f9fe3f09433ed602c7db00227e08c9224f985727b87face8dfad85b",
+    "inference-runtime.jsonl": "efa146215b25d057a431f550a802988e9f4db659c519f7227aab2bfc181c833a"
+  },
+  "counts": {
+    "warmup": 5,
+    "measured": 100,
+    "success": 100,
+    "failure": 0,
+    "excluded": 0
+  },
+  "schema_and_anonymity_validation": "passed",
+  "runner_exit_code": 0,
+  "native_sdk_status": "verified",
+  "teardown_status": "completed",
+  "owned_services": [
+    {
+      "service": "frontend",
+      "container_absent": true
+    },
+    {
+      "service": "backend",
+      "container_absent": true
+    }
+  ],
+  "strict_latency_evaluation": {
+    "evaluation_scope": "latency_only",
+    "passed": false,
+    "metric_results": {
+      "barge_in_cancel_total": {
+        "passed": false,
+        "absolute_passed": null,
+        "relative_passed": null,
+        "median_guide_met": null,
+        "limit_ms": null
+      },
+      "cancel_after_decision": {
+        "passed": false,
+        "absolute_passed": null,
+        "relative_passed": null,
+        "median_guide_met": null,
+        "limit_ms": null
+      },
+      "client_playback_latency": {
+        "passed": true,
+        "absolute_passed": null,
+        "relative_passed": true,
+        "median_guide_met": null,
+        "limit_ms": 81.19999998882413
+      },
+      "first_audio_generation": {
+        "passed": true,
+        "absolute_passed": null,
+        "relative_passed": true,
+        "median_guide_met": null,
+        "limit_ms": 4425.681023005
+      },
+      "first_text_latency": {
+        "passed": true,
+        "absolute_passed": null,
+        "relative_passed": true,
+        "median_guide_met": null,
+        "limit_ms": 13568.584563875
+      },
+      "llm_completion": {
+        "passed": true,
+        "absolute_passed": null,
+        "relative_passed": true,
+        "median_guide_met": null,
+        "limit_ms": 13568.906890825001
+      },
+      "llm_start_latency": {
+        "passed": true,
+        "absolute_passed": null,
+        "relative_passed": true,
+        "median_guide_met": null,
+        "limit_ms": 50.2262813
+      },
+      "local_playback_stop": {
+        "passed": false,
+        "absolute_passed": null,
+        "relative_passed": null,
+        "median_guide_met": null,
+        "limit_ms": null
+      },
+      "response_decision": {
+        "passed": false,
+        "absolute_passed": null,
+        "relative_passed": false,
+        "median_guide_met": null,
+        "limit_ms": 50.50499999970198
+      },
+      "stt_processing": {
+        "passed": true,
+        "absolute_passed": null,
+        "relative_passed": true,
+        "median_guide_met": null,
+        "limit_ms": 2387.765099555
+      },
+      "stt_start_latency": {
+        "passed": false,
+        "absolute_passed": null,
+        "relative_passed": false,
+        "median_guide_met": null,
+        "limit_ms": 51.2490054
+      },
+      "ttfa": {
+        "passed": true,
+        "absolute_passed": true,
+        "relative_passed": true,
+        "median_guide_met": false,
+        "limit_ms": 2000.0
+      },
+      "tts_start_latency": {
+        "passed": true,
+        "absolute_passed": null,
+        "relative_passed": true,
+        "median_guide_met": null,
+        "limit_ms": 50.7087882
+      },
+      "turn_decision": {
+        "passed": false,
+        "absolute_passed": null,
+        "relative_passed": null,
+        "median_guide_met": null,
+        "limit_ms": null
+      },
+      "utterance_finalized": {
+        "passed": false,
+        "absolute_passed": true,
+        "relative_passed": false,
+        "median_guide_met": null,
+        "limit_ms": 800.0
+      },
+      "vad_leading_boundary": {
+        "passed": false,
+        "absolute_passed": null,
+        "relative_passed": null,
+        "median_guide_met": null,
+        "limit_ms": null
+      },
+      "vad_trailing_boundary": {
+        "passed": false,
+        "absolute_passed": null,
+        "relative_passed": null,
+        "median_guide_met": null,
+        "limit_ms": null
+      }
+    },
+    "coverage_errors": [
+      "barge_in_cancel_total:incomplete_measurement",
+      "cancel_after_decision:incomplete_measurement",
+      "local_playback_stop:incomplete_measurement",
+      "turn_decision:incomplete_measurement",
+      "vad_leading_boundary:incomplete_measurement",
+      "vad_trailing_boundary:incomplete_measurement"
+    ]
+  }
+}

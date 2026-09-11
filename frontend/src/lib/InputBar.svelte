@@ -108,7 +108,10 @@
     .input-bar {
       padding: 12px;
       gap: 8px;
+      flex-wrap: wrap;
     }
+
+    .screen-reference { flex-basis: 100%; }
 
     button {
       min-width: 68px;

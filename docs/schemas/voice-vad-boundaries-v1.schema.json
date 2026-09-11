@@ -1,0 +1,221 @@
+{
+  "$defs": {
+    "OffsetDistribution": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "minimum": 0,
+          "title": "Count",
+          "type": "integer"
+        },
+        "minimum_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Minimum Ms"
+        },
+        "p50_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P50 Ms"
+        },
+        "p95_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P95 Ms"
+        },
+        "maximum_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Maximum Ms"
+        }
+      },
+      "required": [
+        "count",
+        "minimum_ms",
+        "p50_ms",
+        "p95_ms",
+        "maximum_ms"
+      ],
+      "title": "OffsetDistribution",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "measurement_kind": {
+      "const": "controlled_baseline",
+      "default": "controlled_baseline",
+      "title": "Measurement Kind",
+      "type": "string"
+    },
+    "measurement_revision": {
+      "pattern": "^[a-f0-9]{40}$",
+      "title": "Measurement Revision",
+      "type": "string"
+    },
+    "scope": {
+      "const": "normal_native_vad_detector_offsets_only",
+      "default": "normal_native_vad_detector_offsets_only",
+      "title": "Scope",
+      "type": "string"
+    },
+    "method": {
+      "const": "client_detector_timestamps_vs_fixture_causal_bounds_v1",
+      "default": "client_detector_timestamps_vs_fixture_causal_bounds_v1",
+      "title": "Method",
+      "type": "string"
+    },
+    "warmup_trials": {
+      "title": "Warmup Trials",
+      "type": "integer"
+    },
+    "expected_trials": {
+      "title": "Expected Trials",
+      "type": "integer"
+    },
+    "measured_trials": {
+      "title": "Measured Trials",
+      "type": "integer"
+    },
+    "missing_trials": {
+      "title": "Missing Trials",
+      "type": "integer"
+    },
+    "missing_reasons": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Missing Reasons",
+      "type": "object"
+    },
+    "onset_offset_lower": {
+      "$ref": "#/$defs/OffsetDistribution"
+    },
+    "onset_offset_upper": {
+      "$ref": "#/$defs/OffsetDistribution"
+    },
+    "end_offset_lower": {
+      "$ref": "#/$defs/OffsetDistribution"
+    },
+    "end_offset_upper": {
+      "$ref": "#/$defs/OffsetDistribution"
+    },
+    "maximum_fixture_uncertainty_ms": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Maximum Fixture Uncertainty Ms"
+    },
+    "native_timestamp_quantization_ms": {
+      "const": 1,
+      "default": 1,
+      "title": "Native Timestamp Quantization Ms",
+      "type": "integer"
+    },
+    "leading_error_trials": {
+      "title": "Leading Error Trials",
+      "type": "integer"
+    },
+    "early_end_error_trials": {
+      "title": "Early End Error Trials",
+      "type": "integer"
+    },
+    "threshold_uncertain_trials": {
+      "title": "Threshold Uncertain Trials",
+      "type": "integer"
+    },
+    "rate_denominator": {
+      "title": "Rate Denominator",
+      "type": "integer"
+    },
+    "boundary_targets_passed": {
+      "title": "Boundary Targets Passed",
+      "type": "boolean"
+    },
+    "independent_100_trials_verified": {
+      "title": "Independent 100 Trials Verified",
+      "type": "boolean"
+    },
+    "pcm_capture_boundaries_verified": {
+      "const": false,
+      "default": false,
+      "title": "Pcm Capture Boundaries Verified",
+      "type": "boolean"
+    },
+    "false_split_rate_verified": {
+      "const": false,
+      "default": false,
+      "title": "False Split Rate Verified",
+      "type": "boolean"
+    },
+    "full_issue_acceptance_verified": {
+      "const": false,
+      "default": false,
+      "title": "Full Issue Acceptance Verified",
+      "type": "boolean"
+    },
+    "source_sha256": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Source Sha256",
+      "type": "object"
+    }
+  },
+  "required": [
+    "measurement_revision",
+    "warmup_trials",
+    "expected_trials",
+    "measured_trials",
+    "missing_trials",
+    "missing_reasons",
+    "onset_offset_lower",
+    "onset_offset_upper",
+    "end_offset_lower",
+    "end_offset_upper",
+    "maximum_fixture_uncertainty_ms",
+    "leading_error_trials",
+    "early_end_error_trials",
+    "threshold_uncertain_trials",
+    "rate_denominator",
+    "boundary_targets_passed",
+    "independent_100_trials_verified"
+  ],
+  "title": "VadBoundaryReport",
+  "type": "object"
+}

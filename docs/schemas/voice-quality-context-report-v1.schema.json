@@ -1,0 +1,324 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://digital-souls.local/schemas/voice-quality-context-report-v1.schema.json",
+  "title": "固定した合成context比較の匿名集計",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "measurement_scope",
+    "measurement_revision",
+    "character_card_sha256",
+    "runner_sha256",
+    "normal_options_think",
+    "counts",
+    "limits",
+    "conditions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "measurement_scope": {
+      "const": "synthetic_prompt_context_comparison"
+    },
+    "measurement_revision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "character_card_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "runner_sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "normal_options_think": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recorded",
+        "warmup",
+        "warmup_failure",
+        "measured",
+        "request_failure"
+      ],
+      "properties": {
+        "recorded": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 72
+        },
+        "warmup": {
+          "const": 12
+        },
+        "warmup_failure": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 12
+        },
+        "measured": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 60
+        },
+        "request_failure": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 60
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "memory_retrieval_exercised",
+        "general_personality_quality_verified",
+        "pure_thinking_causal_effect_verified",
+        "response_content_persisted"
+      ],
+      "properties": {
+        "memory_retrieval_exercised": {
+          "const": false
+        },
+        "general_personality_quality_verified": {
+          "const": false
+        },
+        "pure_thinking_causal_effect_verified": {
+          "const": false
+        },
+        "response_content_persisted": {
+          "const": false
+        }
+      }
+    },
+    "conditions": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_index",
+          "history_count",
+          "memory_count",
+          "variant",
+          "measured",
+          "request_success",
+          "request_failure",
+          "expected_marker_match",
+          "expected_marker_mismatch",
+          "marker_observation_unavailable",
+          "metrics",
+          "prompt_tokens"
+        ],
+        "properties": {
+          "case_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "history_count": {
+            "enum": [
+              0,
+              2,
+              8
+            ]
+          },
+          "memory_count": {
+            "enum": [
+              0,
+              1,
+              4
+            ]
+          },
+          "variant": {
+            "enum": [
+              "configured",
+              "thinking_disabled"
+            ]
+          },
+          "measured": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "request_success": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "request_failure": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "expected_marker_match": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "expected_marker_mismatch": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "marker_observation_unavailable": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "first_token_ms",
+              "prompt_preparation_ms",
+              "provider_load_ms",
+              "provider_prompt_eval_ms",
+              "provider_generation_ms"
+            ],
+            "properties": {
+              "first_token_ms": {
+                "$ref": "#/$defs/statistic"
+              },
+              "prompt_preparation_ms": {
+                "$ref": "#/$defs/statistic"
+              },
+              "provider_load_ms": {
+                "$ref": "#/$defs/statistic"
+              },
+              "provider_prompt_eval_ms": {
+                "$ref": "#/$defs/statistic"
+              },
+              "provider_generation_ms": {
+                "$ref": "#/$defs/statistic"
+              }
+            }
+          },
+          "prompt_tokens": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "total",
+              "character",
+              "character_lore",
+              "rag",
+              "history",
+              "current_user",
+              "post_history",
+              "omitted_character_lore_entries",
+              "omitted_rag_items",
+              "omitted_history_exchanges"
+            ],
+            "properties": {
+              "total": {
+                "$ref": "#/$defs/statistic"
+              },
+              "character": {
+                "$ref": "#/$defs/statistic"
+              },
+              "character_lore": {
+                "$ref": "#/$defs/statistic"
+              },
+              "rag": {
+                "$ref": "#/$defs/statistic"
+              },
+              "history": {
+                "$ref": "#/$defs/statistic"
+              },
+              "current_user": {
+                "$ref": "#/$defs/statistic"
+              },
+              "post_history": {
+                "$ref": "#/$defs/statistic"
+              },
+              "omitted_character_lore_entries": {
+                "$ref": "#/$defs/statistic"
+              },
+              "omitted_rag_items": {
+                "$ref": "#/$defs/statistic"
+              },
+              "omitted_history_exchanges": {
+                "$ref": "#/$defs/statistic"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "statistic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "count",
+        "missing",
+        "missing_reason",
+        "p50",
+        "p95",
+        "minimum",
+        "maximum"
+      ],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "missing": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "missing_reason": {
+          "enum": [
+            null,
+            "required_observation_missing"
+          ]
+        },
+        "p50": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "p95": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "minimum": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "maximum": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

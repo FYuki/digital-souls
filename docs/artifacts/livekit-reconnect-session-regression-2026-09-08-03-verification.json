@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0",
+  "measurement_revision": "6787abbcc5de44ac7ac22170fe1814123d283227",
+  "verification_scope": "real_reconnect_and_native_session_regression_one_session_only",
+  "full_issue_acceptance_verified": false,
+  "independent_100_trials_verified": false,
+  "regression_passed": true,
+  "cohort_reporter_exit_code": 1,
+  "cohort_acceptance_false_reason": "independent_100_trials_required",
+  "control_recovery_upper_ms": 2366.770300924778,
+  "audio_recovery_upper_ms": 2502.4898009605404,
+  "duplicate_playback_intervals": 0,
+  "post_fault_followup_fully_played": true,
+  "post_fault_followup_in_native_session_journal": true,
+  "native_completed_responses": 1,
+  "native_session_aggregate": {
+    "schema_version": "1.0",
+    "measurement_kind": "controlled_baseline",
+    "scope": "runtime_sessions_including_zero_response",
+    "expected_sessions": 1,
+    "observed_sessions": 1,
+    "counts": {
+      "created_sessions": 1,
+      "activated_sessions": 1,
+      "ended_sessions": 1,
+      "expected_ends": 1
+    },
+    "end_reasons": {
+      "explicit": 1
+    },
+    "missing_sessions_by_reason": {},
+    "additional_operations": {
+      "measured_sessions": 1,
+      "values": [
+        0
+      ]
+    },
+    "three_turn_additional_operations": {
+      "measured_sessions": 0,
+      "values": []
+    },
+    "full_issue_acceptance_verified": false
+  },
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "owned_fault_sfu_absent": true,
+  "teardown_completed": true,
+  "cohort_report_sha256": "2f5cb23c6eee286ae40e42cf809cfeef51df75c4e3c05662579b284de1b0e1fe",
+  "source_sha256": {
+    "trial-manifest.json": "05419e544e1ee83715b120bdd3cde9b4892c019444769f8c0d551634dd0790d6",
+    "runtime-data/voice-metrics/sessions/controlled-trace.jsonl": "e0b203de2a32d575af540758e0db88a0e58c25093490c6622a992225393f6338",
+    "runtime-data/runtime/standalone/environment-run.json": "f3a565a9359a7702279a7fa3b0e5e00ac5af9ddafbc68c289c7e2ef245fa08fe",
+    "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f"
+  },
+  "execution_sha256": "049b43759109b0ca928a8bffa66e2d884559eae5250261d49edb97ff86197d01",
+  "test_log_sha256": "23839068e8e79bc8acb03c57a1606170f25512fe01923df22e3a8e5e77bbcf8c"
+}

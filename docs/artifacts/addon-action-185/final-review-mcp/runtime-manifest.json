@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "runId": "2e972281-26ea-4068-9bf0-05249d8d9037",
+  "startedAt": "2026-09-10T23:21:34.008805+00:00",
+  "environmentId": "test",
+  "mcpImplementation": "published-filesystem",
+  "mcpVersion": "2026.8.31",
+  "livekitVersion": "1.9.7",
+  "microphone": "scheduled-voicevox-wav-mediastream",
+  "routingModel": "ollama/gemma4:e4b",
+  "inferenceTokenLimits": {
+    "chat": {
+      "input": 7168,
+      "output": 1024
+    },
+    "privacy": {
+      "input": 7680,
+      "output": 512
+    },
+    "memory_extraction": {
+      "input": 7680,
+      "output": 512
+    },
+    "memory_consolidation": {
+      "input": 7680,
+      "output": 512
+    },
+    "tool_routing": {
+      "input": 7168,
+      "output": 1024
+    }
+  },
+  "implementationCommit": "32dd75c98c17a1f793e5d718e59356a1e6d744fc",
+  "trackedChangesAtStart": false,
+  "testStatus": "passed",
+  "serviceVersions": {
+    "whisper": {
+      "serviceVersion": "1.0",
+      "model": "medium",
+      "modelRevision": "08e178d48790749d25932bbc082711ddcfdfbc4f",
+      "device": "cuda",
+      "deviceIndex": 0,
+      "computeType": "int8_float16",
+      "modelInstances": 1,
+      "globalInflight": 1
+    },
+    "voicevox": "latest",
+    "ollama": {
+      "version": "0.32.5"
+    }
+  },
+  "completedAt": "2026-09-10T23:24:37.596393+00:00"
+}

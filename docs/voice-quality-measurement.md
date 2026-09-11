@@ -65,6 +65,350 @@ PYTHONPATH=backend backend/.venv/bin/python -m app.livekit_trace_report \
 
 browser内だけで確定するclient track受信、barge-in local停止、reconnect、playback continuityは、`test:integration:voice`のPlaywright添付証跡と#112の手動受入記録を併用する。Backend生traceに対応eventがない場合、aggregate上も`missing`のまま残し、測定済みに見せかけない。
 
+### 手動で取得したdogfood resourceの取り込み
+
+同じ受け入れrunで取得した数値を、`voice-dogfood-resource-observations-v1.schema.json`に従うJSONへ記録し、上記コマンドに`--resource-observations <観測JSON>`を追加する。この入力は手動測定の申告であり、実サービスの自動テストや測定済み証拠を生成する機能ではない。
+
+入力は`schema_version: "1.0"`、`measurement_kind: "dogfood"`、`method: "manual_docker_stats_and_host_gpu_v1"`、選択した全traceファイルのSHA-256配列`trace_sha256`、`samples`配列を持つ。受け入れ終了後のtraceに対して`sha256sum`でhashを取得する。選択traceとの不一致、重複、別の測定種別、未知の項目は拒否する。観測JSONも生traceと同様にリポジトリ外で保管し、公開artifactへはhashやIDを転記しない。
+
+各sampleの必須項目は次のとおり。取得できなかった数値は`null`とし、0で埋めない。
+
+| 項目 | 観測方法・単位 |
+|---|---|
+| `elapsed_ms` | 最初のresource観測を起点とする経過ミリ秒。sampleごとに単調増加 |
+| `cpu_percent` | 同じBackend containerの`docker stats --no-stream`のCPU%。1 core占有が100%なので100を超える値も許容 |
+| `memory_bytes` | 同じ出力のメモリ使用量をbyteへ換算。Docker CLIがcacheを差し引いた値であり、container charged bytesやRSSとは区別 |
+| `gpu_utilization_percent` | 同じhostのGPU device使用率の最大値。0〜100% |
+| `gpu_memory_bytes` | 同じhostの全GPU device使用メモリ合計をbyteへ換算 |
+
+CPUは取得sampleの単純平均、メモリとGPUは取得sampleの最大値を集計する。全期間の時間加重平均やsample間の瞬間peakとは扱わない。`resources.collection`へ観測方法、scope、全sample数、観測時間幅、最大間隔、指標ごとの観測・欠測件数を保存する。全sampleが未取得の指標は`manual_dogfood_sample_not_recorded`として欠測を残す。共有GPUには他processの負荷も含まれ、Backend専有値として解釈しない。
+
+この取り込みはresourceだけを補う。通信量・packet loss、session中の追加操作、予期しない終了、再生品質は各々の観測が必要であり、resource値から推定しない。
+
+### 製品traceのRTP統計
+
+完全再生を確認した応答では、ブラウザが取得した送受信byte数・packet数・downlinkの累積lossを、`network_summary` observationとして同じsession/responseへ送る。IP、SSRC、stats ID、本文は含めない。Backendは既知の応答と生成PCMの総packet数を照合し、欠測理由を含むsnapshot全体を検証してから`network_rtp_*`の数値traceを記録する。重複snapshotや矛盾した値は混合しない。
+
+dogfood集計はこのtraceからnetwork metadataを作る。複数発話を結合した応答もRTP snapshotは1回分として合計する。APIの欠落・timeout・未更新のpacket数は欠測理由と分母を保存し、計測失敗だけでは応答処理を失敗扱いにしない。負のlossは別streamの正のlossを相殺せず、件数として記録する。従来のtraceにnetwork観測がなければ欠測を残す。
+
+この経路は完全再生した応答のRTP観測を対象とする。取り消し途中の応答やsession全期間のすべての通信を収集済みとは扱わない。新しい通常測定manifestは`network_measurement_method: native_observation_summary_v1`を宣言し、集計時に各応答の製品traceとブラウザ観測の一致を必須にする。ブラウザだけの値で製品側の欠測を埋めない。
+
 ## 保存と削除
 
 dogfood生traceはリポジトリ外の `DS_DATA_DIR/voice-metrics/raw/` へ保存し、7日を超えたファイルを起動時に削除する。生traceはGit、会話履歴、テスト成果物、dogfood backupの対象にしない。長期保存aggregateからはcharacter・event・session・utterance・response IDを除く。リポジトリ内へ誤出力した `voice-metrics/raw/` は `.gitignore` で追跡対象外にする。
+
+### 障害runnerとBrowserの時計対応
+
+専用bridgeの制御probe診断では、Python障害runnerとBrowserへそれぞれnonce付き標準入出力要求／
+`page.evaluate`を送り、Node側の要求送信・応答受信時刻でremote時刻を囲む。
+起動時間は較正の往復時間へ含めない。Pythonのns値は十進文字列で渡す。
+診断前後に各5sampleを保存し、両方を説明できるoffsetの共通区間から
+`fault_runner_monotonic`→`client_monotonic`の上下限を求める。
+Browser時計の量子化を考慮して各sampleの両端へ0.2msの余裕を付ける。
+区間が交差しない場合や合成した幅が20msを超える場合は測定失敗とする。
+
+復旧時刻の上限を過ぎて送信した要求のみを復旧確認の候補にし、遅延は復旧時刻の下限から
+算出する。復旧前の要求に対する遅着ackや、誤差区間内の送信で成功率を補完しない。
+この時計較正だけでは音声復旧・重複再生・再接続100試行の受け入れを証明しない。
+
+
+## 取消前の出力停止確認と独立再集計
+
+LiveKitの停止要求にはsession、response、transport generationと要求IDを付ける。
+通常の出力経路では最終AudioWorkletを不可逆に無音化し、無音化位置を実出力時計が通過してから確認を返す。
+サーバーは音声sourceの停止とその確認を待ち、生成stageの終了と合わせてCoreの取消を確定する。
+
+明示的な診断では、ブラウザの各出力graphに別々のIDを付け、要求、停止位置、時計通過の一次記録を
+既存の出力・時計archiveへ保存する。サーバーの`output_stop_confirmed` event IDは対応する要求IDと一致する。
+独立replayは同じsession・response・generation・graph・要求ID、出力区間の連続性、停止位置の無音、
+実出力時計の通過、停止後の非ゼロ出力の不在、archiveの閉鎖を検証する。サーバーの時刻は整数文字列で受け、
+要求、source停止、出力停止確認、Core取消下限・上限の順序を整数精度を保ったまま照合する。
+
+この照合に成功した場合のみ、取消前に実出力を通過したframeを取消frame下限へ加える。
+時計probeから求めた元の取消時刻上下限は変更しない。欠落、競合する要求、別graph、非ゼロ出力、
+逆転したサーバー時刻や未閉鎖の観測をゼロと扱わない。要求の一次記録がない旧測定は従来の時計照合で再集計する。
+
+stale report v1.2の`output_stop_evidence`には検証済み、未検証、利用不能の試行数のみを保存し、
+その合計を予定試行数と一致させる。生ID、本文、音声は公開aggregateへ出さない。
+v1.0/v1.1の保存済みartifactと当時の欠測・不確かさは変更しない。
+出力停止の確認だけで正式100試行や他の音声品質受入条件を満たしたとは判定しない。
+
+
+## Provider内部時刻の取得可否
+
+LiveKitの匿名集計にはHTTP要求からprovider受付、provider受付から生成開始、生成開始から本文の
+最初のtoken受信まで、およびOllamaの独立したqueue待ちを別指標として残す。
+現在利用するOllama `/api/chat` の応答には内部受付・生成開始のclockと独立したqueue待ちがないため、
+adapterは`ollama_internal_timing_unavailable`を記録する。このmarker自身の記録時計を内部時刻には使わない。
+
+markerがある試行は4指標を`missing`・`ollama_api_internal_timing_not_exposed`として分母に残す。
+未計測の旧traceへ取得不能markerを後から追加せず、旧traceは必要eventの欠測として扱う。
+HTTP header受信時刻とtotal/load/prompt evaluation/generationの残差を、受付・生成開始・queueの値へ変換しない。
+異なるclockの境界や、取得不能markerと内部時刻の矛盾も欠測として残す。
+これは内部queueを実測できるようになったという意味ではなく、取得不能の理由を明示する変更である。
+
+### 応答全体の再生品質を通常traceへ記録する
+
+完全再生を確認した`playback_completed`は、任意の`playback_summary`で出力sample数、RTP範囲、gap、出力時計を送る。途中prefixの通知には添付できない。Backendは現在待機している応答と末尾sequenceの完了gateが受理した通知だけを扱い、送信済みPCM量、padding、連続RTP、出力時計の通過を検証する。音切れがある場合も実測値を保持し、不整合をゼロへ置き換えない。
+
+記録するのは`scheduled_playout`、`frame_playout`と、gap合計・最大gap・underrun回数・再生時間の4値である。前者2点は`browser_audio_context`の同一時計で比較する。controlledの集計では製品traceと測定manifestの値が一致することを検証し、重複、部分的な記録、矛盾を拒否する。旧runで製品側の6観測がすべて存在しない場合のみ、従来どおりmanifestの検証済み値を使用する。
+
+これは応答全体を再生した場合の計測経路であり、途中キャンセルした音声全体の品質や、実声dogfoodの受け入れ完了を示すものではない。dogfoodの実測は所定の配備・手動受け入れ手順で別途実施する。
+
+2026-09-08の実サービスpilot（`native-playback-summary-pilot-20260908-02`、revision `74b026e`）で、準備1件・測定3件すべてに6観測が製品traceへ届き、manifestとの一致、匿名aggregate、所有コンテナの終了を確認した。測定3件のgap・underrunは0だった。これは通常計測経路の動作確認であり、実声dogfoodの受け入れや100件の品質判定ではない。直前のpilotはfixtureの開始時計の幅が45.4msとなって失敗した結果を保持し、実quantumで無音処理が可能なことを確認してからfixtureを開始する修正後に再検証した。20msの上限とfixtureのPCMは維持した。
+
+
+## 通常音声応答の低遅延設定
+
+Conversation Coreから音声の本文をstreamする要求には`latency_sensitive=true`を付ける。Ollama adapterは、この要求で`think`が明示されていない場合に`think: false`を送る。CHAT optionsに明示した`think: true`または`false`は優先する。通常のテキスト要求は従来どおりproviderの既定値を使う。
+
+この指定によって人格、履歴、RAG、現在の発話、context長、出力上限は削らない。adapterへ渡すoptionsは複製し、共有設定を変更しない。計測traceには要求数として`llm_latency_sensitive_requests`、`ollama_thinking_configured_requests`、`ollama_thinking_disabled_requests`を記録する。これらは同一計測内で合計される件数であり、設定の最終状態や本文の品質評価ではない。
+
+実サービス検証では`run_pilot.py`の`--disable-thinking`を付けず、通常経路からこの指定が送られることを確認する。過去の同flag付き実験は当時の実験条件として保持し、通常設定の性能証拠へ読み替えない。低遅延設定の関連テスト105件が成功した時点では、新設定の実接続100件および実声での会話品質受け入れは未完了である。
+
+## PCM端部照合の100件再検証（2026-09-08）
+
+`pcm-witness-v3-pause-100-20260908-01`では会話動作100件と実際の最終STT入力100件を確認したが、端部照合は98件成功、2件未確認だった。先頭の位置を求めるseedの相関が閾値未満であり、未確認2件を正常へ補完しない。[PCM結果](artifacts/livekit-pcm-witness-v3-pause-100-2026-09-08.json)、[VAD結果](artifacts/livekit-vad-pcm-witness-v3-pause-100-2026-09-08.json)、[終了確認](artifacts/livekit-pcm-witness-v3-pause-100-cleanup-2026-09-08.json)を保存した。共有サービスを残し、測定が所有したFrontend・Backendと観測proxyの終了を確認した。この測定は端部品質の受け入れを満たしていない。
+
+通常設定の最初の実接続pilot（`voice-default-latency-pilot-20260908-01`、revision `1c060e9`）は準備1件・測定3件すべてで低遅延要求と`think: false`の送信を確認し、会話・再生・所有環境の終了を確認した。一方TTFA p95は11334.77msで未達だった。Ollama load p95は9605.52msで、計測中の常駐contextに要求した8192と異なる13024が観測され、モデル不在の観測もあった。同時要求の発生元は未確認であるため、原因を断定しない。[匿名集計](artifacts/livekit-voice-default-latency-pilot-2026-09-08-01.json)と[設定・終了照合](artifacts/livekit-voice-default-latency-pilot-2026-09-08-01-verification.json)を保存した。traceの`unit`はtimestampの単位であり、これらの要求数はaggregateでは`count`として扱う。
+
+
+## 端部位置の複数候補照合
+
+端部照合v4は、発話先頭・末尾それぞれの最大600ms内で、高エネルギー位置と固定した始端・中央・終端の最大4候補を照合する。各候補は従来と同じ最大200msのseed、相関0.8以上、他位置との差0.1以上を要求する。採用する端部の75ms特徴窓、探索幅20ms、filterの片側4msを合わせた99msの範囲は維持する。正常な特徴窓を示した候補同士が20msを超えて食い違う場合は未確認にする。
+
+全候補を数値証拠へ保存し、集計で固定位置の存在、選択候補、相関、局所窓、順序、候補間の一致を再検証する。中央部分の連続性や全周波数帯の音質は、この照合では証明しない。旧v3の保存結果はschema上で読めるが、v4の判定へ読み替えない。現在の再集計器はv4の候補証拠を要求する。
+
+通常latency比較器は、再生完了の製品trace追加後の`production.py`を再監査した。変更はsource統計の通知順と最終playback summaryの受信であり、比較不能とした3区間の起点・終点は維持されている。旧版と新版の監査済みファイルhashを別々に保持し、artifactには測定revisionから実際に読んだhashを記録する。未知の変更は再監査を要求する。これは比較器の準備であり、新設定100件の性能合格を示さない。
+
+v4の校正では301音声×9条件について、[未圧縮](artifacts/livekit-pcm-multi-seed-v4-raw-2026-09-08.json)、[Opus 32kbps](artifacts/livekit-pcm-multi-seed-v4-opus32-2026-09-08.json)、[Opus 64kbps](artifacts/livekit-pcm-multi-seed-v4-opus64-2026-09-08.json)のすべてで正常301件を照合し、欠け・無音化・雑音・重複・順序逆転の2408件を拒否した。実際のWebRTC入力による100件の受け入れは別途必要である。関連テスト48件と、旧schema互換性を追加した集計テスト22件（前者と重複を含む）が成功した。
+
+v4実ブラウザpilot（`pcm-multi-seed-v4-pause-pilot-20260908-01`、revision `f942001`）では前回未確認だった5・66番と100番の音声を使い、3件とも実際の最終STT入力と端部を確認した。通常音声設定を用い、実験用thinking上書きは指定していない。[端部照合結果](artifacts/livekit-pcm-multi-seed-v4-pause-pilot-2026-09-08.json)と[所有環境・proxyの終了確認](artifacts/livekit-pcm-multi-seed-v4-pause-pilot-cleanup-2026-09-08.json)を保存した。最小端部相関は0.95749で、発話全体の均一offsetが成立しない1件もそのまま記録した。独立100件には達しておらず、全受け入れは未完了である。
+
+
+## 通常音声E2Eと実通信障害の回帰検証
+
+`npm run test:integration:voice`の割り込み検証は、再生中にラベル付き`take-01.wav`を入力し、実際のVAD・STT・意図判定と旧応答の取消を通す。停止・取消はfixtureの正解発話開始からも上限を評価する。人工的な`speechStarted()`の送信は使わない。
+
+localhostのWebRTCを切断できない`context.setOffline()`による旧再接続テストは、既存の実通信障害suiteへ統合した。通常の音声E2Eと再接続は、両方を実行して回帰確認する。Frontendディレクトリから次を実行する。
+
+```bash
+npm run test:integration:voice
+npm run test:integration:voice:reconnect -- \
+  --run-id <未使用のrun名> --inference-env <開発用推論設定のパス>
+```
+
+再接続コマンドは`run_pilot.py`と`livekit-quality.spec.ts`の実障害分岐を使い、[専用障害環境の手順](../infra/voice-quality/README.md)で事前に起動したbridgeのlabel・単独接続・専用loopback portを検証する。共有SFUやdogfoodは切断対象にできない。controlと実音声の双方の回復、同一sessionでの次発話、新しい応答の完全再生、sessionと所有app環境の終了を確認する。`--trials 3`は同一sessionの障害前probe数であり、独立した再接続3試行でも正式100試行でもない。正式再接続100件は既存の`run_reconnect_cohort.py`で別途測定する。
+
+
+## v4の実入力100件の結果
+
+`pcm-multi-seed-v4-pause-100-20260908-01`（revision `ec79b4a`）では文中休止を持つ独立100件の会話動作、実際の最終STT入力、音声端部をすべて確認した。[PCM結果](artifacts/livekit-pcm-multi-seed-v4-pause-100-2026-09-08.json)の未確認は0件、最小端部相関は0.86580だった。同じmanifest hashに基づく[VAD結果](artifacts/livekit-vad-pcm-multi-seed-v4-pause-100-2026-09-08.json)は冒頭誤差・早すぎる終了・境界の不確かさ・文中休止の誤分割が各0件だった。発話全体の均一offsetが成立しない17件は残し、内部連続性の証明には使わない。
+
+[終了確認](artifacts/livekit-pcm-multi-seed-v4-pause-100-cleanup-2026-09-08.json)で所有Frontend・Backendの削除、proxyの停止、通常音声設定での実行、両集計の入力一致を確認した。この結果は文中休止cohortのVADと端部の証拠であり、通常設定のTTFA100件、別cohort、実声dogfoodや#150全体の受け入れ完了を示すものではない。旧v3の98/100という未達結果も保存したままである。
+
+実音声barge-inの回帰検証では、最初は非同期の最終意図判定を待たずに確認して失敗したため、判定到着を待つよう修正した。次の実行で停止988.5ms・取消1023.5ms（正解発話開始の下限から計算）を確認したが、終了時のSDK例外を4件記録したため全体成功にはしていない。[初回結果](artifacts/livekit-real-barge-in-regression-2026-09-08-01.json)と[終了時例外を含む結果](artifacts/livekit-real-barge-in-regression-2026-09-08-02.json)を保存した。実SDKでは`UnpublishTrackError`が`livekit.rtc`直下に再exportされていないことを確認し、実装と代替SDKを定義元の`livekit.rtc.participant`へ合わせた。取消を別の例外へ置き換えず音源を解放する回帰検証を含め、関連23テストと型検査が成功した。
+
+SDK例外の修正後、通常音声E2E全5件は通ったが、終了・切断後の最終通知を送信しようとしてdelivery失敗2件を記録した。[この結果](artifacts/livekit-voice-regression-suite-2026-09-08-02.json)も未達として保持した。coordinatorが`unavailable`または`ended`の場合は、送信を取消としてCoreへ伝えるようにした。成功として記録したり、送信queueへ積んだりしない。初期化前の送信は引き続きエラーとし、再接続後は新しい送信を受け付ける。切断・終了・再接続、Coreのstreamingと停止確認を含む95テストと型検査が成功した。
+
+`41bb2a2`で通常音声E2E全5件を再実行し、3往復の完全再生、実音声barge-in、観測対象のCore/pipeline例外0件、所有環境とログreaderの終了を確認した。[回帰結果](artifacts/livekit-voice-regression-suite-2026-09-08-03.json)は通常音声設定の実接続検証であり、正式100件の性能測定や実声dogfood受け入れとは分けて扱う。
+
+再接続の回帰初回はcontrolと実音声が2343.09ms以内に回復し、重複出力0件だった。一方、テストは切断前に中断された初回応答も含めて2応答の完了を待ち、復旧後の新しい応答が完全再生されていても失敗した。[初回結果](artifacts/livekit-reconnect-regression-2026-09-08-01.json)を保存し、同一session・異なるresponse・新しいfixture開始以降の発話／再生に限定して、その応答の完了と完全再生を直接待つように修正した。復旧時間の10秒窓、3秒の目標、重複出力の条件は変更していない。
+
+修正後の実障害回帰（`voice-regression-reconnect-20260908-02`、revision `3c0b21f`）では、controlと音声が2296.37ms以内に復旧し、重複0・欠測0、同一sessionでの次応答の完全再生を確認した。[独立再集計](artifacts/livekit-reconnect-regression-2026-09-08-02.json)はnative SDK・時計・packet出力・次応答を再検証している。単一sessionなので正式100試行の合否はfalseのままにした。[終了照合](artifacts/livekit-reconnect-regression-2026-09-08-02-verification.json)で所有app・専用SFU・bridge・時計runnerの終了を確認した。通常音声E2E5件と合わせた回帰検証の成功であり、#150全体の受け入れとは区別する。
+
+通常設定の再pilot（`voice-default-latency-pilot-20260908-02`、revision `eb80708`）では、準備1件・独立測定3件が会話・完全再生・終了まで成功し、TTFA p50は1766.50ms、p95は1771.36msだった。Ollama load p95は257.90msで、観測した対象contextは8192のみだった。[匿名集計](artifacts/livekit-voice-default-latency-pilot-2026-09-08-02.json)と[設定・終了照合](artifacts/livekit-voice-default-latency-pilot-2026-09-08-02-verification.json)で、実験用上書きなしの通常経路と要求数counterを確認した。小規模測定ではTTFA目標内だが、準備5件＋独立100件による正式確認は別途必要である。前回の11.3秒という未達結果は保持している。
+
+### 通常音声設定の独立100件（2026-09-08）
+
+revision `95afacecf8e3cc55da85f0c53550479486bb8166`で、実験用thinking overrideを使わず、準備5件・独立session/conversationの通常応答100件を測定した。[匿名集計](artifacts/livekit-voice-default-controlled-100-2026-09-08.json)と[相関・終了検証](artifacts/livekit-voice-default-controlled-100-2026-09-08-verification.json)を保存した。全105件で通常音声のlatency policy、transcript・初期状態、6件の製品側再生観測とmanifest、全sample再生、session終了を照合した。所有appコンテナの削除とteardown完了も確認した。
+
+本測定100件のTTFAはp50 1,775.900ms、p95 1,845.425ms、発話確定はp95 299.950msだった。絶対目標は両方達成し、TTFA中央値1,000msの改善目安は未達だった。処理失敗0件、追加操作0回。Ollama contextは8,192だけを観測した。
+
+ただし、1件で再生gapが1回、1,984 samples（41.333ms）発生した。全sampleは再生されたが、制御測定のunderrun 0件は未達である。gap/underrunのp95は0でも、1件の発生を合格へ変換しない。[baseline比較](artifacts/livekit-voice-default-normal-latency-2026-09-08.json)では比較可能な8指標が許容範囲内、観測区間が異なる3指標は比較対象外、VAD冒頭・末尾の2指標はこのrunでは欠測として全体判定をfalseにした。実声dogfoodと#150全体の完了は示さない。
+
+run中のmanifestにはmeasurement revisionがあったが、最終保存時にその項目が失われた。このrunのrevision根拠はrunner事前検査と、測定中に変更していないcheckoutの観測であり、検証JSONに根拠と最終manifestの不足を明記した。
+
+
+### 通常PCM・供給診断pilot（2026-09-08）
+
+revision `465abd6`の準備1件・測定3件で、通常音声の実Whisper入力端部と再生供給の数値診断を確認した。[PCM集計](artifacts/livekit-normal-pcm-supply-pilot-2026-09-08-01.json)は3件すべての最終STT入力・端部を相関したが、100件未満なので全体判定はfalseである。[照合・終了確認](artifacts/livekit-normal-pcm-supply-pilot-2026-09-08-01-verification.json)で全4件のpacket数・sample数・gap件数と完全再生記録の一致、診断欠測0、所有appとproxyの終了を確認した。測定3件のgapは0、受信間隔の最大上限32.600ms、復号待ち上限2.100ms、main配送待ち上限2.300msだった。この小規模runだけでは先行100件の音切れ原因や解消を証明しない。
+
+
+### 通常PCM品質100件（2026-09-08）
+
+revision `2f2a3857ea34cd10f77a849e5b15a981baf48d18`で準備5件・通常音声の独立100件を実行した。[PCM端部集計](artifacts/livekit-normal-pcm-supply-100-2026-09-08-01.json)では、最終Whisper入力の相関100/100、v4端部照合100/100、欠測0、session終了100/100だった。全体の時間伸縮が均一でない11件も診断値として保持し、内部PCM全体の品質を証明したとは扱わない。
+
+[packet供給の照合と終了確認](artifacts/livekit-normal-pcm-supply-100-2026-09-08-01-verification.json)で、全105件のpacket数・再生sample数・gap件数が製品側の完全再生記録と一致し、診断欠測・上限超過は0だった。本測定100件のgap/underrunは0。最大の受信間隔上限46.900ms、復号待ち上限3.100ms、main配送待ち上限3.500msを記録した。所有appの削除・proxy停止・teardown完了、実験用thinking overrideなしも確認した。
+
+これはPCM observerを介した入力品質・供給診断条件であり、通常latencyの測定と分離する。先行する通常設定100件の41.333msの音切れは再現しておらず、その原因特定や修正済みを示す結果ではない。
+
+
+### 製品traceのRTP計測経路（2026-09-08）
+
+revision `0d0aeb279b80131f729db9cdf17cbef44770aa9e`の通常音声pilotで、準備1件・測定3件のブラウザRTP値が製品traceに届き、manifestと一致することを確認した。[匿名集計](artifacts/livekit-native-network-pilot-2026-09-08-01.json)と[独立照合・終了確認](artifacts/livekit-native-network-pilot-2026-09-08-01-verification.json)を保存した。測定3件の送信40,096 bytes、受信129,524 bytes、受信552 packets、損失0をtraceから再集計して一致した。欠測0、完全再生3/3、gap 0、所有app削除とteardown完了を確認した。
+
+これは完了応答のブラウザ音声RTP payloadを対象とする小規模な経路検証である。session全体の通信量、取消された途中応答の通信量、実声dogfoodの受け入れを証明するものではない。
+
+
+### 通常経路の再生供給診断
+
+`run_pilot.py --observe-playback-supply --scheduled-fixture`で、通常の`integration-voice` Profileのままpacket受信・復号・main配送・再生までの時間上限とgap前後の数値を記録する。`--observe-stt-pcm`とは独立し、Whisper中継は起動しない。独立100件では`--controlled`を併用する。manifestに両observerの有効状態を保存する。先行するPCM観測runは既存どおり供給診断も含む。
+
+この診断はブラウザの追加観測処理を含む条件として扱い、未観測runやPCM中継runと混同しない。入力fixture、推論設定、再生buffer、目標値は変更しない。既知の音切れを起こしたrunも保持し、新しいrunだけで原因が解消したとは判定しない。
+
+
+### 通常経路の供給診断100件と速度再悪化（2026-09-08）
+
+revision `2d10020ca818fce228b8446d51c329bebccb92e5`で、Whisper中継なし・実験用thinking overrideなしの通常経路を準備5件・独立100件測定した。[匿名集計](artifacts/livekit-normal-supply-100-2026-09-08-01.json)と[設定・native観測・終了照合](artifacts/livekit-normal-supply-100-2026-09-08-01-verification.json)を保存した。全100件の会話・完全再生・session終了が成功し、全105件で供給診断とnative再生記録が一致した。RTPもnative traceからの独立集計と一致し、所有app削除・teardown完了を確認した。
+
+本測定のgap/underrunは0だった。一方、TTFA p50は1,768.650ms、p95は11,995.305msとなり、p95の絶対上限2,000msを9,995.305ms超えた。発話確定p95は293.649ms、client playback p95は45msだった。[baseline比較](artifacts/livekit-normal-supply-latency-2026-09-08-01.json)では比較可能8指標は相対許容範囲内だが、TTFA絶対上限とVAD境界2指標の欠測により全体判定はfalseである。
+
+[provider loadの数値照合](artifacts/livekit-normal-supply-load-diagnostic-2026-09-08-01.json)では、TTFAが2秒を超えた29件のうち28件で、Ollamaが返すgeneration load時間も1秒を超えた。load p95は10,300.998msだった。常駐観測には想定8,192に加えて12,289・13,312のcontext設定と、対象モデルが観測されないsampleが含まれる。ただし常駐sampleは準備・起動・終了も含み、応答件数とは別の分母である。他の要求元やcontext変化の因果関係は未特定で、load時間をqueue待ちの実測へ読み替えない。
+
+先行runのp95 1,845msという速度達成は保持するが、通常運用で安定して再現できたとは扱わない。今回のgap 0も先行runの41.333ms gapの原因修正を証明しない。まず共有推論の設定変化とload増大を切り分け、速度と再生継続性を同じ条件で満たす必要がある。全条件の証拠と未完了項目は[Issue #150受け入れ確認表](issue-150-acceptance-audit.md)にまとめる。
+
+
+### 送信時の推論設定と常駐設定の分離
+
+Ollamaへの実chat送信直前に、`ollama_<estimate|generation>_http_requests`と、実際の`options.num_ctx`・`options.num_predict`の最小・最大を数値traceへ記録する。名前は`ollama_<operation>_requested_<context_tokens|output_tokens>_<minimum|maximum>`で固定する。複数要求を合算して架空のcontext値にせず、同一応答中の設定範囲を保存する。cache照合のためのpayload作成やtags取得はchat送信として数えない。
+
+この値はアプリがHTTP clientへ渡した設定であり、provider受付・実際のmodel常駐設定や他アプリの要求を証明しない。常駐pollのcontext値、providerが返したload時間とは別の観測として照合する。本文・任意のoptionsキー・認証情報は保存しない。旧traceにない設定値を後から推定して補完しない。
+
+
+`019e62c8133779aba52086c23da3cdbd0504d3ac`で準備1件・測定3件の実サービスpilotを実行し、[匿名集計](artifacts/livekit-request-context-pilot-2026-09-08-01.json)と[送信設定・native trace・終了照合](artifacts/livekit-request-context-pilot-2026-09-08-01-verification.json)を保存した。全4応答のgeneration送信は各1回、contextの最小・最大は8,192、出力上限は1,024で一致した。estimateの実送信は初回1回でcontext 8,192・出力1、後続3件はcacheだった。RTP観測も全件native traceと一致し、所有app削除とteardown完了を確認した。
+
+測定3件のTTFA p95は1,738.740ms、Ollama load p95は246.876ms、gapは0だった。今回の常駐観測はcontext 8,192だけだった。このpilotは送信設定の計測経路を確認するもので、先行100件のcontext変化の要求元や速度再悪化の原因を特定したとは扱わない。
+
+
+### 自動回帰検証（2026-09-08、送信設定の計測追加後）
+
+`0a773381e71c1b91da352c6d7e0e6acc752b3284`で[検証結果](artifacts/livekit-automated-regression-2026-09-08-04.json)を保存した。単体テストはBackend 3,063件成功・1件skip、Frontend 789件成功だった。skipの理由はルート側のPromptfoo CLI未導入であり、既存lockfileの`npm ci`後、Ollamaを使わない当該CLI smokeが1件成功した。設定ファイル・lockfileは変更していない。
+
+結合テストの初回はBackend 1,429件成功・1件失敗で、Frontendは未実行だった。並行したモックE2Eが同じFrontendコンテナ名を使用し、所有権の保護により起動が拒否された。E2Eの所有コンテナ削除を確認してから結合テストを単独で再実行し、Backend 1,430件・Frontend 107件が成功した。初回失敗を削除して成功扱いにはしない。
+
+モックE2E 41件、Backend 237ファイル・Svelte・E2E TypeScriptの型検査、Python lint、Frontend buildも成功した。E2Eのtest-mocked Profile、teardown完了と所有Frontendの削除を確認した。buildの大きなchunkの警告は残る。これらは自動回帰の証拠であり、TTFAの未達、VAD境界、session集計、実声dogfoodの受け入れを置き換えない。
+
+### 応答に依存しないsession記録（#150）
+
+製品のLiveKit coordinatorは、実session IDによる作成・初回参加・終了理由を、応答traceの隣の`sessions/<同名>.jsonl`へ保存する。無応答sessionにも架空のutterance/response IDを与えない。dogfoodの保持期間は応答traceと同じ7日である。匿名集計は`voice-session-aggregate-v1.schema.json`、raw記録は`voice-session-trace-v1.schema.json`に従う。
+
+ブラウザは`getUserMedia`前の開始試行、mute試行、手動の再試行を累積して送る。追加操作数は`max(0, 開始試行数 - 1) + mute試行数 + 手動再試行数`であり、失敗した操作も加算する。自動再接続と初回の開始操作は追加操作に含めない。接続前に失敗した手動再試行は、次に作成できたsessionに引き継ぐ。session自体を作れなかった接続要求は、このsession集計の観測対象外であり、成功sessionの分母に混ぜない。
+
+最終summaryは終了前に送信し、最大500msで送信・ack待ちを打ち切って終了処理を進める。サーバーの明示終了だけから正常終了とは推定せず、最終summaryの終了意思との一致を必要とする。突然の切断・サーバー停止等で操作の全期間を確認できないときは、最後に得た途中値を0件や完全な測定として報告しない。cleanup失敗、journalの欠落、連番矛盾、操作数の逆行、容量超過も欠測にする。欠測理由は重複し得るため件数を合算してsession数と解釈しない。
+
+3往復の分母はブラウザの応答件数ではなく、サーバーで生成元サンプル数と実出力時計を照合できた、異なる3応答以上の完全再生sessionである。本文・音声はsession journalへ保存せず、集計ではsession・character・response IDも除去する。
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python -m app.voice_session_metrics \
+  --trace <data-root>/voice-metrics/raw/sessions/<run>.jsonl \
+  --measurement-kind dogfood --expected-sessions <開始記録で確認したsession数> \
+  --output <匿名集計.json>
+```
+
+`--expected-sessions`はjournalの件数から推定せず、独立した開始記録や試験manifestから与える。journalが全くないsessionも欠測として残す。これはsession指標の集計であり、実声dogfood、通常100件の速度、#150全条件の達成は別途確認する。
+
+#### 2026-09-08: 製品session記録の実接続確認
+
+`6ec4aa3a85ad745281c7ab63ec878d031f5ccb33`で`native-session-three-turn-20260908-01`を実行。通常のintegration-voice Profileで実Whisper・Ollama・VOICEVOX・LiveKitを使い、同じsessionで3応答の完全再生を確認した。native journalの作成・参加・3回の完全再生・最終操作summary・正常終了がmanifestと一致した。初回マイク開始1回、追加操作0、予期しない終了0、欠測0、gap0。実験的thinking上書きは使用していない。専用Frontend／Backendの実コンテナ削除とteardown完了も確認した。
+
+[session集計](artifacts/livekit-native-session-three-turn-2026-09-08-01.json)と[独立照合結果](artifacts/livekit-native-session-three-turn-2026-09-08-01-verification.json)を保存した。関連Backend 232件、Frontend全ユニット794件、baseline比較16件、変更Backend 4ファイルのmypy・ruff、Frontend/Svelte/E2E TypeScript型検査を通過した。初回のFrontend検証ではschemaのstrictRequired違反、全ユニットでは新しいobservationを含まない既存期待値を検出し、修正後に全件を再実行した。
+
+この1 sessionは計測経路の実接続検証であり、通常100件の速度安定化、実障害時のsession照合、実声dogfoodの受入れ完了を示さない。最新通常100件のTTFA p95 11,995.305msという未達判定は維持する。
+
+### 通常fixtureのnative VAD境界と旧録音境界の区別
+
+LiveKitの`vad_leading_boundary`はfixture正解開始の因果下限から、確認されたVAD候補開始frameのclient時刻の上限までを表す。`vad_trailing_boundary`はfixture正解終了の因果下限から、VADのended通知に使ったclient時刻の上限までを表す。wire時刻は整数msへ切り捨てられるため、上限には1msを加える。これらは検出器の時刻であり、実STT入力の先頭・末尾sampleの証明には使用しない。
+
+旧WebSocketの値は、`onSpeechStart`で`recorder.start()`を呼ぶ直前、および`stopAndTake()`完了後のclient時刻である。LiveKitの検出器時刻と同一区間ではないため、明示した新しい観測点・100件の完全な記録・監査済みの生成元を確認した場合だけ、baseline相対比較を「比較対象外」とする。欠測のまま比較対象外へ変換せず、TTFA等の絶対目標と、VAD誤差率の判定は別に残す。
+
+`python -m app.voice_vad_boundaries --manifest <trial-manifest.json> --trace <controlled-trace.jsonl> --output <新規出力.json>`は、通常fixtureの正解時計幅とnative時刻の1ms丸めを含む、開始・終了offsetの下限／上限を匿名集計する。開始offset上限が100ms超、終了offset下限が-100ms未満の場合をそれぞれ誤差件数へ加算する。閾値をまたぐ不確かな例も除外せず記録する。分母には欠測試行を残し、warm-upを除外し、独立session等のIDとfixtureを確認する。文中無音の誤分割と実PCM端部は専用cohort・PCM照合の証拠を併用する。
+
+古い測定を再集計する場合は元のartifactを上書きせず、測定revision、集計revision、元manifest／traceのhashを併記する。改善のための新しい100件測定と解釈しない。
+
+#### 2026-09-08: 通常100件のVAD再集計
+
+測定`2d10020ca818fce228b8446d51c329bebccb92e5`の保存済み通常100件を、集計`3fdcdb5d25714a589eb2d75635465caa3a96c239`で再解析した。[境界レポート](artifacts/livekit-normal-vad-reanalysis-2026-09-08-01-boundaries.json)は開始・終了のnative時刻を100/100で相関し、欠測0、100ms超の開始遅延0、100ms超の早期終了0、閾値をまたぐ不確かな例0だった。開始offset上限p95は17.020ms、終了offset上限p95は751.840ms。fixture時計幅は最大3.600msで、native wire時刻の1ms切り捨ても区間に含めた。
+
+[再集計artifact](artifacts/livekit-normal-vad-reanalysis-2026-09-08-01.json)と[独立照合](artifacts/livekit-normal-vad-reanalysis-2026-09-08-01-verification.json)を保存した。既存のVAD以外の指標は全て元のartifactと一致し、TTFA p95 11,995.305msの未達を保持している。後から追加されたHTTP要求context診断10項目は、この測定版では記録されていないためmissingのままとした。全指標の欠測が解消したという意味ではない。
+
+[baseline比較](artifacts/livekit-normal-vad-reanalysis-2026-09-08-01-latency.json)は比較可能8指標が基準内、観測点が異なる5指標が監査付き比較対象外。通常latencyのcoverage errorsは0だが、TTFA絶対上限により全体判定falseである。生成元のブラウザ・native観測・fixture時計のファイルhashを測定revisionに照合し、元のmanifest・trace・過去検証のhash、測定が所有したFrontend／Backendの削除も再確認した。旧artifactは上書きしていない。
+
+関連Backend 173件、変更2ファイルのmypy、Backend集計と比較器のruffを通過した。新たな会話試験や共有推論の設定変更は行っていない。実PCM端部、誤分割率、実声dogfood、応答速度の改善はそれぞれ別の証拠を必要とする。
+
+#### 2026-09-08: 遅延時間帯の共有Ollamaログ
+
+最新の遅い通常100件と同じ18.5分の時間窓について、共有Ollamaサービスのjournalから数値と固定の状態名だけを抽出した。[数値診断](artifacts/livekit-shared-ollama-context-diagnostic-2026-09-08-01.json)では`model loaded`の記録108回、内部context値の切り替わり107回を確認した。内部確保値は8,192／12,544／13,312だった。本文・prompt・音声・認証情報は抽出結果へ保存していない。
+
+同時期に別タスクで実行されたツール利用の実LLMテストは、同じgemma4:e4bとloopbackの11434番ポートを既定とし、入力12,288＋推定出力1＝12,289、入力12,288＋生成出力1,024＝13,312のcontextを要求する実装だった。音声の常駐観測で見えた要求contextと一致する。過去プロセスの実効接続先や個々のHTTP要求の所有者まで相関したわけではないため、この実装だけを全遅延の確定原因とはしない。
+
+現在の別タスクの実LLMテストは終了を確認済みで、共有Ollamaの常駐モデルは空だった。サービスの停止・設定変更は行わず、この状態から通常の準備5件＋独立100件を再測定する。再測定中も実要求のcontextと常駐状態を観測し、完了後に同時間窓のサーバー側要求数とモデル読み込み記録を照合する。並行負荷のないことを推測だけで合格条件に置き換えない。
+
+
+## 通常100件の再測定（2026-09-08、context切り替えなし）
+
+測定版`f44f57761108c3582d7a1e48b3d8b4b1ed2bbdcc`で、準備5回＋独立100 session/conversationを通常の`integration-voice`経路で測定した。runは`normal-isolated-100-20260908-01`、Whisper PCM中継と実験用thinking上書きは使っていない。共有推論サービスの停止・設定変更は行っていない。
+
+[集計](artifacts/livekit-normal-isolated-100-2026-09-08-01.json)と[独立検証](artifacts/livekit-normal-isolated-100-2026-09-08-01-verification.json)では、TTFA p95 1,787.520ms（上限2,000ms）、p50 1,736.350ms（改善目安1,000ms）、発話確定p95 289.539ms、処理失敗0/100、再生gap／underrun 0件だった。TTFA 2秒超過は1/100で、p95基準は達成した。provider load p95は258.336ms。nativeの最初の再生時刻とprovider値から分位数を独立再計算し、105件の完全再生、RTP、供給診断、session journalをmanifestと照合した。測定100 sessionの終了・操作記録は欠測0、予期しない終了0、追加操作0で、3往復条件の証拠には加算しない。所有FE/BEの撤去とteardown完了を確認した。
+
+[VAD境界](artifacts/livekit-normal-isolated-100-2026-09-08-01-boundaries.json)は100/100を観測し、開始遅延・早期終了の超過0、欠測0、閾値をまたぐ不確定0。開始offset上限p95 17.630ms、終了offset上限p95 752.330msである。これは検出境界の測定であり、Whisperへ届いたPCM端部や文中休止の別cohortを置き換えない。[凍結baseline比較](artifacts/livekit-normal-isolated-100-2026-09-08-01-latency.json)は比較可能8指標と絶対上限2指標が通過し、観測区間が異なる5指標は監査付き比較対象外、coverage errorは0となった。
+
+[共有Ollamaログの数値照合](artifacts/livekit-normal-isolated-100-2026-09-08-01-ollama-journal.json)では、測定環境の開始から終了までcontext 8,192のみ、context値の切り替え0回、`model loaded` 1回だった。前回低速runの切り替え107回・読み込み完了108回と異なる。一方、サーバーのPOST `/api/chat`ログは213件、音声応答traceで観測したHTTP要求は見積もり3＋生成105＝108件であり、要求元の完全な帰属は未証明である。run名の`isolated`を共有Ollamaの専有証明と解釈しない。prompt見積もりは各応答3回、最初の準備試行で3回HTTP通信し、残る104応答では計312回cache hitだった。想定値1回に合わない記録を削除せず、実counterを用いて検証した。
+
+このrunは通常100件の数値条件を満たしたが、先行runの41.333msの音切れ原因を修正済みとは扱わない。過去の未達runを残し、実障害時のsession記録、最終回帰、配備後の人による実声dogfood受け入れと、Issue全体の完了は別途確認する。
+
+
+## 自動回帰の再確認（2026-09-08、通常100件測定後）
+
+[自動回帰証拠](artifacts/livekit-automated-regression-2026-09-08-06.json)を保存した。全ユニットはBackend 3,104件・Frontend 794件、モジュールはBackend 1,430件・Frontend 107件、test-mocked E2Eは41件成功。モジュールとE2Eは順に実行し、所有Frontendの撤去とteardown完了を確認した。生成した音声／画面認識契約は既存ファイルと一致した。
+
+最初の全体mypyは`voice_vad_boundaries.summarize`の引数`dict`に型引数がないため1件失敗した。測定版の処理を変えず`dict[str, object]`へ修正し、修正版`43afa4f`でVAD関連14件と全体mypy（239ファイル）、Svelte／E2E TypeScript、Python lint、Frontend buildが成功した。全ユニットの版は直前の`d0f8c20`であり、この1行の型注釈以外にコード差分がないことを照合した。初回失敗ログのhashも保存する。buildには既存のchunkサイズ警告がある。
+
+これらのモックを使った検証を、実サービス回帰や人による実声dogfood受け入れの代わりにはしない。
+
+
+## 無応答sessionの実接続確認（2026-09-08）
+
+[無応答sessionの検証](artifacts/livekit-zero-response-session-2026-09-08-02.json)を測定版`ff12158`で実施した。実Browser／LiveKitにマイクを接続し、発話は供給せず、正常終了とpage切断の独立2 sessionを測定した。native journalのcreated／activated／endedを各1件、応答IDと完全再生応答0件、明示終了APIは正常側1回・切断側0回と照合した。正常側は`explicit`で終了し追加操作0、切断側は`reconnect_timeout`で終了した。切断側は最後の操作summaryがないため、`complete_operation_window_not_recorded`を1件保持し、操作0とは集計しない。所有FE/BEの撤去とteardown完了を確認した。
+
+[初回失敗](artifacts/livekit-zero-response-session-2026-09-08-01-failed.json)も保存した。page切断後の待機を「再接続猶予＋20秒」としていたが、SFUの切断検知が遅れ、server側の猶予満了前にテスト環境を終了していた。診断側の待機起点の違いを考慮して再確認した結果、2ケースが成功した。page終了操作からnative終了を観測するまで約82.18秒だったが、これはSFUの切断検知と60秒の猶予、cleanup、観測遅延を含む。短時間障害の再接続p95やserver内部の猶予時間としては使用しない。
+
+診断の選択条件とsession集計の関連104件、Svelte／E2E TypeScript型検査が成功した。製品の`backend/app`・`frontend/src`は自動回帰版`43afa4f`から変更がないことをGit tree hashで確認した。この2件の障害注入を実声dogfoodの予期しない終了率へ混ぜず、通常100件や復帰を伴う再接続cohortとも分離する。
+
+
+## 実サービス音声回帰の再確認（2026-09-08）
+
+[実サービス音声回帰5ケース](artifacts/livekit-voice-regression-suite-2026-09-08-04.json)を`7034233`で再実行した。マイク開始、VAD後のsession維持、通常応答、同一sessionの3往復、ラベル付き実音声による割り込みがすべて成功し、skipは0だった。3往復の完全再生3件を添付観測で確認した。割り込みの固定音声開始からの上限はlocal停止989.700ms、cancel確定1,024.700msで各絶対上限以内だった。この1例を独立100件のp95としては扱わない。
+
+Backendログの固定診断markerを観測し、Core／pipeline例外0、reader終了を確認した。Frontend・Backend・Ollama・VOICEVOX・Whisperのready確認と、所有Frontend／Backendの撤去、teardown完了を検証した。前回の回帰raw証拠は専用worktree内に退避して保持した。新しいsession診断に加えたこの回帰も、人による実声dogfood受け入れを代替しない。
+
+
+## 一時切断から復帰したsessionの記録（2026-09-08）
+
+測定版`6787abb`で、専用SFUを用いる[再接続回帰](artifacts/livekit-reconnect-session-regression-2026-09-08-03-verification.json)を1 session実行した。control回復上限2,366.770ms、audio回復上限2,502.490ms、重複再生0で、復帰後の次応答を完全再生した。次応答のIDをnative session journalと照合し、追加操作0、正常終了1、予期しない終了0、終了・操作記録の欠測0を確認した。所有Frontend／Backendと専用障害SFUを撤去し、共有SFUは操作していない。
+
+[独立再集計](artifacts/livekit-reconnect-session-regression-2026-09-08-03-cohort.json)ではcoverage・成功率・latencyの各評価が通過したが、試行数1のため100試行を要求する総合`passed`はfalse、reporterの終了コードは1のまま保持する。既存の再接続100件をこの1件で置き換えない。これによりnative session記録は、通常100件、連続3往復、無応答の正常／切断終了、一時切断からの復帰を実接続で照合した。人による実声dogfoodの終了率・操作回数の受け入れは別途必要である。
+
+
+### 取消応答のRTP観測境界（2026-09-09）
+
+完全再生時だけ統計を送信していたため、取消応答を含むrunの通信量は未取得になっていた。
+取消通知を受けたブラウザは、停止・取消の完了を待たせずに同じ応答trackのRTP統計を取得し、
+`boundary: response_cancelled`を付けて送る。完全再生の観測が先に開始済みなら二重計上しない。
+非同期の計測完了で次応答や再接続の再生状態を変更しない。
+
+BackendはCoreからの実際の取消記録を確認してから受理し、完全再生に必要なpacket下限を取消応答へ適用しない。
+通常の完全再生では従来のpacket下限を保持する。匿名集計の`network.collection.observation_boundaries`に
+完全再生と取消の観測数を分けて残す。旧artifactは更新せず、当時の観測範囲と欠測を保持する。
+取消確認時点までのsnapshotであり、取消後の遅着packetやsession全通信量の証明には使わない。
+stats API未提供・timeout・track未取得は引き続き理由付き欠測とし、0 bytesへ変換しない。
+
+
+[取消応答の実接続3件](artifacts/livekit-cancelled-network-pilot-2026-09-09-01.json)は測定版`579d190`。
+独立3 sessionの対象応答でnative取消とRTP snapshotを照合し、送信73,004 bytes、受信60,525 bytes、
+受信273 packets・損失0、対象応答の欠測0を確認した。所有Frontend／Backendは撤去済み。
+これは取消確認時点の通信観測の検証であり、100件の性能評価や実声dogfoodの受け入れではない。
+[自動回帰](artifacts/livekit-cancelled-network-regression-2026-09-09.json)はFrontend unit 795件、
+Backend module 1,430件、Frontend module 107件、mocked E2E 41件、型検査・lint・buildを通過した。
+Backend全unitは3,121件成功・既存の取消event列期待1件が失敗し、追加した取消一次記録へ期待を更新した後、
+関連81件が成功した。初回失敗のログhashを残す。生成契約一致とmocked環境のteardown・所有Frontend撤去も確認した。

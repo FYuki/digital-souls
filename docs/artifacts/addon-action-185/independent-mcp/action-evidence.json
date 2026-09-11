@@ -1,0 +1,107 @@
+{
+  "normalReadWithoutConfirmation": true,
+  "textOnce": true,
+  "textReject": true,
+  "spokenApprovalIgnored": true,
+  "voiceOnce": true,
+  "voiceReject": true,
+  "voiceAlways": true,
+  "subsequentWriteWithoutConfirmation": true,
+  "renderedResponses": 7,
+  "finalExternalState": "紫の花",
+  "syntheticReplies": [
+    "あなた 検証用ファイルは<test-root>/files/sample.txtです。このパスのファイルを読んで、展示テーマを教えてください。今後も検証用ファイルとはこのパスを指します。",
+    "光織 ファイルを読み取りました。展示テーマは青い折り紙ですね。\n\n今後もこのパスを検証用ファイルとして参照します。 ",
+    "あなた 検証用ファイル<test-root>/files/sample.txtの内容を正確に「赤い風船」だけに置き換えてください。",
+    "光織 操作の承認が必要です。画面で「常に承認する」「一度承認する」「拒否する」から選んでください。一度の承認はツール呼び出し1回分です。 ",
+    "あなた 画面で「一度承認する」を選択しました。",
+    "光織 検証用のファイルの内容を、「赤い風船」に置き換えて保存しましたね。 ",
+    "あなた 検証用ファイル<test-root>/files/sample.txtの内容を正確に「白い雲」だけに置き換えてください。",
+    "光織 操作の承認が必要です。画面で「常に承認する」「一度承認する」「拒否する」から選んでください。一度の承認はツール呼び出し1回分です。 ",
+    "あなた 画面で「拒否する」を選択しました。",
+    "光織 承知いたしました。「白い雲」への置き換えは行われませんでしたね。 ",
+    "あなた 先ほど読みかけした検証用ファイルと同じパスです。そのファイルの内容を青い星という3文字だけに置き換えてください。",
+    "光織 操作の承認が必要です。画面で「常に承認する」「一度承認する」「拒否する」から選んでください。一度の承認はツール呼び出し1回分です。 ",
+    "あなた 一度承認します。実行してください。",
+    "光織 操作の承認をお待ちしています。画面の3つの選択肢から回答してください。 ",
+    "あなた 画面で「一度承認する」を選択しました。",
+    "光織 検証用ファイルの内容を、「青い星」に置き換えて保存しましたね。 ",
+    "あなた 先ほど読み解きした検証用ファイルと同じパスですそのファイルの内容を緑の月という3文字だけに置き換えてください",
+    "光織 操作の承認が必要です。画面で「常に承認する」「一度承認する」「拒否する」から選んでください。一度の承認はツール呼び出し1回分です。 ",
+    "あなた 画面で「拒否する」を選択しました。",
+    "光織 「緑の月」への置き換えは行われませんでしたね。ご理解ください。 ",
+    "あなた 先ほど読み解きした検証用ファイルと同じパスです。そのファイルの内容を金の花という3文字だけに置き換えてください。",
+    "光織 操作の承認が必要です。画面で「常に承認する」「一度承認する」「拒否する」から選んでください。一度の承認はツール呼び出し1回分です。 ",
+    "あなた 画面で「常に承認する」を選択しました。",
+    "光織 検証用ファイルの内容を、「金の花」に置き換えて保存しましたね。 ",
+    "あなた 検証用ファイル<test-root>/files/sample.txtの内容を正確に「紫の花」だけに置き換えてください。",
+    "光織 「紫の花」に置き換えるためのファイルパスと、新しい内容（文字列）を教えてください。 ",
+    "あなた 対象は<test-root>/files/sample.txtです。ファイル全体の内容を「紫の花」だけに置き換えてください。",
+    "光織 検証用ファイルの内容を、「紫の花」に置き換えましたね。 "
+  ],
+  "playback": [
+    {
+      "responseId": "0a206f77-621b-4db3-a967-9fe2659db23d",
+      "sourceUtteranceIds": [
+        "990c519b-bc89-4b63-9e8b-f4f37cd737c5"
+      ],
+      "expectedSamples": 546240,
+      "renderedSamples": 546240,
+      "packetCount": 569
+    },
+    {
+      "responseId": "7d4b336f-a391-4bd7-a513-169e79d86648",
+      "sourceUtteranceIds": [
+        "3367c729-a34b-4f44-9953-d29ed54c53b4"
+      ],
+      "expectedSamples": 256320,
+      "renderedSamples": 256320,
+      "packetCount": 267
+    },
+    {
+      "responseId": "ac3c8f39-fd8a-4294-98c9-5754a56b485b",
+      "sourceUtteranceIds": [
+        "346455f0-534d-4921-8354-a8d84a7e1573"
+      ],
+      "expectedSamples": 253440,
+      "renderedSamples": 253440,
+      "packetCount": 264
+    },
+    {
+      "responseId": "d57d9074-a729-4cef-b42d-bb538f2f1fe9",
+      "sourceUtteranceIds": [
+        "810f68ee-44d8-41d4-a46a-1db8b6b49635"
+      ],
+      "expectedSamples": 546240,
+      "renderedSamples": 546240,
+      "packetCount": 569
+    },
+    {
+      "responseId": "32e4c82e-f7fb-4c42-9ebc-97dc8188b49c",
+      "sourceUtteranceIds": [
+        "df160c2f-092b-453b-977c-c5f5ecadb7c7"
+      ],
+      "expectedSamples": 233280,
+      "renderedSamples": 233280,
+      "packetCount": 243
+    },
+    {
+      "responseId": "764c8337-eca8-4c08-bfac-f5b4bc29f111",
+      "sourceUtteranceIds": [
+        "88fecdff-1605-439a-aadd-8c8d86405f34"
+      ],
+      "expectedSamples": 546240,
+      "renderedSamples": 546240,
+      "packetCount": 569
+    },
+    {
+      "responseId": "55e59de7-a21c-4919-b618-bb20dbdf5cdb",
+      "sourceUtteranceIds": [
+        "cb2ed188-7c03-4646-ab5b-b18802c45480"
+      ],
+      "expectedSamples": 250560,
+      "renderedSamples": 250560,
+      "packetCount": 261
+    }
+  ]
+}

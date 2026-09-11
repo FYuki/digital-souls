@@ -28,6 +28,11 @@
     "eval:memory:conformance": "python3 scripts/eval_memory_extraction.py conformance",
     "eval:rag:real": "backend/.venv/bin/python -m pytest backend/tests/integration -m rag_retrieval_real",
     "test:integration:mcp": "backend/.venv/bin/python -m pytest -s backend/tests/integration/test_external_mcp_real_servers_integration.py",
-    "eval:screen-reference:conformance": "PYTHONPATH=backend python3 backend/evals/screen_reference/gate.py"
+    "test:integration:tool-use": "backend/.venv/bin/python -m pytest -s backend/tests/integration/test_tool_use_real_service_integration.py",
+    "test:acceptance:tool-use": "backend/.venv/bin/python scripts/acceptance_tool_use.py",
+    "test:acceptance:tool-use-contract": "backend/.venv/bin/python scripts/acceptance_tool_use.py --contract-mcp",
+    "eval:screen-reference:conformance": "PYTHONPATH=backend python3 backend/evals/screen_reference/gate.py",
+    "test:acceptance:mcp-admin": "backend/.venv/bin/python scripts/acceptance_mcp_admin.py",
+    "test:acceptance:addon-admin": "backend/.venv/bin/python scripts/acceptance_addon_admin.py"
   }
 }

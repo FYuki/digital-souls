@@ -1,0 +1,139 @@
+{
+  "scope": "labeled_livekit_take_turn_cohort_report",
+  "cohort": "take_turn",
+  "observer_timestamp_tolerance_ms": 2,
+  "quantile_method": "hyndman_fan_type_7",
+  "counts": {
+    "expected": 100,
+    "recorded": 100,
+    "success": 80,
+    "failure": 20,
+    "verified_injection": 99,
+    "take_turn_decision": 96,
+    "verified_cancel": 80,
+    "session_end_confirmed": 100,
+    "independent_sessions": 100
+  },
+  "failure_stages": {
+    "fixture_and_decision": 4,
+    "cancel_or_continuity": 16
+  },
+  "missed_interruptions": {
+    "count": 19,
+    "denominator": 99,
+    "unverified_injection_count": 1,
+    "rate_basis_points": 1919
+  },
+  "metrics": [
+    {
+      "name": "local_playback_stop",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "speech_started_client",
+      "end_point": "local_playback_stopped",
+      "trial_count": 100,
+      "success_count": 96,
+      "failure_count": 0,
+      "missing_count": 4,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 491.5,
+      "p95": 3254.25,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "final_decision_unavailable": 3,
+        "fixture_injection_unverified": 1
+      }
+    },
+    {
+      "name": "turn_decision",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "speech_started_client",
+      "end_point": "turn_decision_client",
+      "trial_count": 100,
+      "success_count": 96,
+      "failure_count": 0,
+      "missing_count": 4,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 491.5,
+      "p95": 3253.25,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "final_decision_unavailable": 3,
+        "fixture_injection_unverified": 1
+      }
+    },
+    {
+      "name": "cancel_after_decision",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "take_turn_decision",
+      "end_point": "server_cancelled",
+      "trial_count": 100,
+      "success_count": 80,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 4.7338425,
+      "p95": 6.945947849999999,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "final_decision_unavailable": 3,
+        "server_cancel_not_confirmed": 16,
+        "fixture_injection_unverified": 1
+      }
+    },
+    {
+      "name": "barge_in_cancel_total",
+      "status": "missing",
+      "unit": "millisecond",
+      "start_point": "speech_started_client",
+      "end_point": "server_cancelled_client",
+      "trial_count": 100,
+      "success_count": 80,
+      "failure_count": 0,
+      "missing_count": 20,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 475.0,
+      "p95": 1366.1,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {
+        "final_decision_unavailable": 3,
+        "trace_point_unavailable": 16,
+        "fixture_injection_unverified": 1
+      }
+    }
+  ],
+  "evaluation": {
+    "minimum_trials": 100,
+    "coverage_complete": false,
+    "missed_rate_passed": false,
+    "latency_passed": {
+      "local_playback_stop": false,
+      "turn_decision": false,
+      "cancel_after_decision": false,
+      "barge_in_cancel_total": false
+    }
+  },
+  "metric_schema_sha256": "2d331448f38a27474f23d7d5631d2c1ab15b097e54dcf70ad153cce63fbe34b9",
+  "labeled_manifest_sha256": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3",
+  "raw_manifest_sha256": "a1c3fc78061285b7ab38b3dd6e89af213b642a25a744277e78c788d2243c0283",
+  "raw_trace_sha256": "fd823a1e131a396b3a83d74ec0c0fe2533c360d4edb6b713b03531db0d67bb13",
+  "reporter_sha256": "3315e86505809d231a059a34597199a65912593ae07a699323a79a6cc7132f2a"
+}

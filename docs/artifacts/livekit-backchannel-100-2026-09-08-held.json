@@ -1,0 +1,60 @@
+{
+  "scope": "labeled_livekit_backchannel_cohort_report",
+  "quantile_method": "hyndman_fan_type_7",
+  "cohort": "backchannel",
+  "counts": {
+    "expected": 100,
+    "recorded": 100,
+    "independent_sessions": 100,
+    "success": 80,
+    "failure": 20,
+    "verified_injection": 100,
+    "session_end_confirmed": 100,
+    "backchannel_decision": 80,
+    "take_turn_decision": 0,
+    "indeterminate_decision": 20,
+    "unverified_final_decision": 0,
+    "observed_server_cancel": 0,
+    "observed_local_stop": 0
+  },
+  "failure_stages": {
+    "cancel_or_continuity": 20
+  },
+  "metrics": [
+    {
+      "name": "backchannel_false_cancel",
+      "status": "measured",
+      "unit": "count",
+      "start_point": "labeled_backchannel_injected",
+      "end_point": "old_response_full_output_or_cancel",
+      "trial_count": 100,
+      "success_count": 100,
+      "failure_count": 0,
+      "missing_count": 0,
+      "not_applicable_count": 0,
+      "excluded_count": 0,
+      "rate_denominator": 100,
+      "failure_rate_basis_points": 0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "not_applicable_reason": null,
+      "excluded_outcomes": {},
+      "missing_outcomes": {}
+    }
+  ],
+  "evaluation": {
+    "minimum_trials": 100,
+    "coverage_complete": true,
+    "false_cancel_rate_passed": true
+  },
+  "metric_schema_sha256": "2d331448f38a27474f23d7d5631d2c1ab15b097e54dcf70ad153cce63fbe34b9",
+  "labeled_manifest_sha256": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3",
+  "raw_manifest_sha256": "7d5e1a9e9e269e63ee8f7bb24898556c6ac21083400d41ff76767ffe93935ca9",
+  "raw_trace_sha256": "e6c46113f7db262ca6d6586520c674a3223928fba4e304a43b98054931c34896",
+  "reporter_sha256": "221038020bdecfaa0a04cc3f35a53ce479aa015ca62e046bee970badde37f987",
+  "playback_validator_sha256": "63e26986ca6f117b947cc51a7b8037f56edeedc5f3863835fc22b7c605b18faa",
+  "shared_reporter_sha256": "7595cd7d062da61783f7f73d736340559d05c0e57c0edf3fca1608e7fdd1fdc3",
+  "cohort_schema_version": "1.0",
+  "cohort_schema_sha256": "0e5c6d86e7e64c3b05ae83e116cd4fdcdfea5e545ac20b8072909a356210d3b4",
+  "cohort_validator_sha256": "ee77a111e7dd82d45ef4170934c476529e3539e874129c467f87b2657610416b"
+}

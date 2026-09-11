@@ -1,0 +1,25 @@
+{
+  "scope": "real_network_fault_single_session_regression_only",
+  "measurement_revision": "3c0b21f4ac7379721d77bf5b72dad2b862d0d13c",
+  "regression_passed": true,
+  "expected_sessions": 1,
+  "native_sdk_verified": true,
+  "fresh_control_and_audio_recovery_verified": true,
+  "same_session_followup_full_playback_verified": true,
+  "owned_container_absent": {
+    "frontend": true,
+    "backend": true
+  },
+  "owned_fault_sfu_absent": true,
+  "owned_fault_network_absent": true,
+  "session_end_confirmed": true,
+  "fault_clock_process_closed": true,
+  "teardown_completed": true,
+  "full_issue_acceptance_verified": false,
+  "report_sha256": "f1aa384a65dd4e0a022244642ae437475b1b3c7030e3d90a096e780a6c515776",
+  "source_sha256": {
+    "trial-manifest.json": "712d24dbc029035093dc520dd2a17fdc34ea845ba85b86ff1642e32a5d7d8d29",
+    "native-sdk.json": "4c41ddeca8abcb15d58f3e6770a194f363fc30f9f89397d66850bbd35e9f515f",
+    "runtime-data/runtime/standalone/environment-run.json": "5d4cd8a96488329820430b45758dd400ed4bed77fd0bc9fc951f1c3935cc1f13"
+  }
+}
