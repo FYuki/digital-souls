@@ -31,6 +31,7 @@ export class PostGainAudioMonitor {
   private stopRequestId: string | null = null
   private readonly archive = new PostGainOutputArchive()
   private readonly tracker = new PostGainOutputAudit()
+  private stopTracker: PostGainOutputAudit | null = null
   private readonly timer: ReturnType<typeof setInterval>
   private timeout: ReturnType<typeof setTimeout> | null = null
   private finishRequested = false
@@ -78,6 +79,7 @@ export class PostGainAudioMonitor {
       }
       if (this.report !== undefined) this.archive.record({kind: 'message', message: event.data, atMs: performance.now()})
       this.tracker.record(event.data)
+      this.stopTracker?.record(event.data)
       if (event.data.kind === 'output') {
         const last = event.data.intervals.at(-1)
         if (last !== undefined) this.lastWorkletOutput = {endFrame: last.endFrame, nonzeroSamples: last.nonzeroSamples}
@@ -103,6 +105,9 @@ export class PostGainAudioMonitor {
         sessionId: this.sessionId, responseId: this.responseId, generation: this.generation,
         graphId: this.graphId, atMs: performance.now()})
     }
+    // 全再生の品質欠測と、今回の停止境界の証明を分離する。判定規則は共通。
+    this.stopTracker = new PostGainOutputAudit()
+    this.stopTracker.poll(this.context.getOutputTimestamp(), this.context.sampleRate, performance.now())
     this.stopIssuedAfterFrame = this.lastWorkletOutput?.endFrame ?? null
     this.stopPromise = new Promise((resolve, reject) => {this.resolveStop = resolve; this.rejectStop = reject})
     this.stopTimeout = setTimeout(() => this.failStop('output_stop_confirmation_timeout'), 1000)
@@ -166,19 +171,21 @@ export class PostGainAudioMonitor {
     if (this.report !== undefined) this.archive.record({kind: 'clock', timestamp, sampleRate: this.context.sampleRate, atMs})
     this.tracker.poll(timestamp, this.context.sampleRate, atMs)
     const row = this.tracker.snapshot()
-    if (row.missingReason !== null) this.failStop('output_stop_observation_invalid')
-    else if (this.stopFrame !== null && row.outputClockPassedFrame !== null
-      && row.outputClockPassedFrame >= this.stopFrame && this.resolveStop !== null) {
-      this.stopConfirmation = {endFrame: this.stopFrame, outputClockPassedFrame: row.outputClockPassedFrame, observedAtMs: atMs}
+    this.stopTracker?.poll(timestamp, this.context.sampleRate, atMs)
+    const stop = this.stopTracker?.snapshot()
+    if (stop && stop.missingReason !== null) this.failStop('output_stop_observation_invalid')
+    else if (this.stopFrame !== null && stop && stop.outputClockPassedFrame !== null
+      && stop.outputClockPassedFrame >= this.stopFrame && this.resolveStop !== null) {
+      this.stopConfirmation = {endFrame: this.stopFrame, outputClockPassedFrame: stop.outputClockPassedFrame, observedAtMs: atMs}
       if (this.report !== undefined && this.stopRequestId !== null) {
         this.archive.record({kind: 'stop_confirmed', requestId: this.stopRequestId, endFrame: this.stopFrame,
-          outputClockPassedFrame: row.outputClockPassedFrame, atMs})
+          outputClockPassedFrame: stop.outputClockPassedFrame, atMs})
       }
       this.resolveStop(this.stopConfirmation)
       this.resolveStop = null; this.rejectStop = null
       if (this.stopTimeout !== null) {clearTimeout(this.stopTimeout); this.stopTimeout = null}
     }
-    if (row.drained || row.missingReason !== null) {
+    if (this.finishRequested && (row.drained || row.missingReason !== null)) {
       clearInterval(this.timer)
       if (this.timeout !== null) {clearTimeout(this.timeout); this.timeout = null}
       this.settle()

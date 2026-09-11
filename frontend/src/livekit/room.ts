@@ -691,7 +691,16 @@ export class LiveKitRoomClient {
         const receiptAudit = this.receiptObserver && this.sessionId !== null
           ? new DecodedReceiptAudit(responseId, this.sessionId, this.generation, performance.now(), this.receiptObserver) : undefined
         if (receiptAudit) this.receiptAudits.set(key, receiptAudit)
-        const observer = new RemoteMediaObserver(track.receiver, track.mediaStreamTrack,
+        const generation = this.generation
+        const sessionId = this.sessionId
+        // 解除・取消・再購読後に戻った旧処理の失敗を、現在の会話へ適用しない。
+        let observer: RemoteMediaObserver | undefined
+        const isCurrent = () => this.room === room && this.sessionId === sessionId
+          && this.subscriptions.has(key)
+          && this.subscribedTracks.get(key) === track && this.trackResponses.get(key) === responseId
+          && !this.stoppedResponses.has(responseId)
+          && (observer === undefined || this.mediaObservers.get(key) === observer)
+        observer = new RemoteMediaObserver(track.receiver, track.mediaStreamTrack,
           (evidence) => this.observeTrackMedia(evidence, responseId, key), {
             packet: packet => {
               receiptAudit?.received(packet.pcm.length, performance.now())
@@ -717,7 +726,7 @@ export class LiveKitRoomClient {
               if (this.completedPlaybackResponses.has(responseId)) return
               graph.worklet.port.postMessage({kind: 'pcm', packetIndex: packet.packetIndex,
                 rtpTimestamp: packet.rtpTimestamp, samples: packet.pcm}, [packet.pcm.buffer])
-            }, failed: () => this.failTransport('media_decoder'),
+            }, failed: () => {if (isCurrent()) this.failTransport('media_decoder')},
             interrupted: () => {
               if (!this.subscriptions.has(key) || this.trackResponses.get(key) !== responseId) return
               this.interruptResponseAfterMediaDiscontinuity(responseId, {mediaTimelineInterruption: {
@@ -725,7 +734,9 @@ export class LiveKitRoomClient {
             },
           })
         this.mediaObservers.set(key, observer)
-        void this.attachRenderEvidence(track, key).catch(() => this.failTransport('audio_graph'))
+        void this.attachRenderEvidence(track, key).catch(error => {
+          if (isCurrent() && this.generation === generation) this.failTransport('audio_graph', error)
+        })
       },
     )
     room.on(RoomEvent.TrackUnsubscribed, (_track, publication) => {
@@ -1048,12 +1059,17 @@ export class LiveKitRoomClient {
 
   private failTransport(failureStage: NonNullable<RoomObservation['failureStage']> = 'transport', reason?: unknown): void {
     // 任意の例外本文を外へ渡さず、内部の固定エラー名だけを診断に残す。
-    const knownReasons = ['state_sync_timeout', 'recovery_probe_timeout', 'RTP packet sequence invalid', 'invalid packet render interval', 'invalid RTP timestamp', 'RTP timeline discontinuity',
+    const knownReasons = ['output_stop_request_changed', 'output_stop_graph_missing', 'output_stop_monitor_missing',
+      'output_stop_request_mismatch', 'output_stop_monitor_unavailable', 'output_stop_marker_invalid',
+      'output_stop_confirmation_timeout', 'output_stop_monitor_closed', 'output_stop_observation_invalid',
+      'first output media correlation mismatch', 'full playback metadata does not match source samples', 'state_sync_timeout', 'recovery_probe_timeout', 'RTP packet sequence invalid', 'invalid packet render interval', 'invalid RTP timestamp', 'RTP timeline discontinuity',
       'render beyond completed source', 'output clock confirmation queue overflow', 'invalid packet output clock',
       'first output packet mismatch', 'packet_or_sample_mismatch', 'pcm_queue_overflow', 'render_clock_unreconciled']
     const message = reason instanceof Error ? reason.message : reason
     const failureReason = typeof message === 'string' && knownReasons.includes(message) ? message : 'unclassified'
 
+    // 切断イベントが先に画面状態を破棄しても、開発環境では固定の理由だけを残す。
+    ;(import.meta as ImportMeta & {hot?: {send(event: string, data: unknown): void}}).hot?.send('voice:failure', {stage: failureStage, reason: failureReason})
     this.pendingDisconnectOrigin ??= 'transport_failure'
     this.room?.disconnect()
     void this.closeAudioGraph()
