@@ -1,0 +1,48 @@
+{
+  "confirmations": [
+    [
+      "high_impact",
+      "conversation",
+      "once",
+      0
+    ],
+    [
+      "high_impact",
+      "conversation",
+      "once",
+      0
+    ],
+    [
+      "high_impact",
+      "conversation",
+      "once",
+      0
+    ],
+    [
+      "high_impact",
+      "conversation",
+      "once",
+      0
+    ],
+    [
+      "high_impact",
+      "conversation",
+      null,
+      0
+    ]
+  ],
+  "executions": [
+    [
+      "write_file",
+      "applied"
+    ],
+    [
+      "write_file",
+      "applied"
+    ],
+    [
+      "write_file",
+      "applied"
+    ]
+  ]
+}

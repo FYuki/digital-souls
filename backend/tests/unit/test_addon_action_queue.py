@@ -162,6 +162,8 @@ def test_existing_confirmation_database_adds_reservation_without_losing_request(
             await p.prepare(invocation(), live=lambda: None)
         before = p.store.request(needed.value.request_id)
         with p.store.transaction() as db:
+            # 旧schemaには予約列も、その列を参照する新しい索引も存在しない。
+            db.execute("DROP INDEX action_confirmations_reservations")
             db.execute("ALTER TABLE action_confirmations DROP COLUMN once_reserved")
         restored = ActionStore(p.store.path)
         assert restored.request(before.id) == before

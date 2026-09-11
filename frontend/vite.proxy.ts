@@ -37,7 +37,7 @@ const createRealBackendProxy = (origin: string): Record<string, ProxyOptions> =>
     rewrite: (path: string) => path.replace(/^\/api(?=\/|$)/, ''),
   },
   // 承認後の続行も実LLM・Toolを通る会話応答。一般管理APIの50秒で切断しない。
-  '^/api/addon-actions/requests/[^/]+/continue(?:\\?|$)': {
+  '^/api/addon-actions/(?:admin/)?requests/[^/]+/continue(?:\\?|$)': {
     target: origin,
     changeOrigin: true,
     timeout: 180_000,

@@ -12,6 +12,7 @@
   import InputBar from './lib/InputBar.svelte'
   import MemoryManagement from './lib/MemoryManagement.svelte'
   import AddonManagement from './lib/AddonManagement.svelte'
+  import type { ApprovalRequest } from './lib/addon-admin/approvals'
   import { createAddonController, aggregateBadge } from './lib/addon-admin/controller'
   import ScreenCaptureControls from './lib/ScreenCaptureControls.svelte'
   import type { ScreenUploadResult } from './lib/screen-perception/client'
@@ -415,6 +416,16 @@
     void sidebarController.refreshCharacter(context.character)
   }
 
+  function handleAdminContinued(item: ApprovalRequest, body: Record<string, unknown>) {
+    if (typeof body.state === 'string') return
+    const chat = parseChatResponseBody(body, item.character_id)
+    const context = conversationController.selectedContext()
+    if (context?.character === item.character_id && context.conversationId === item.session_id) {
+      conversationController.appendTurn(context, chat.turn)
+    }
+    void sidebarController.refreshCharacter(item.character_id)
+  }
+
   const handleSelectConversation = async (character: string, conversationId: string) => {
     if (interactionsDisabled) return
     showingMemoryManagement = false
@@ -575,14 +586,15 @@
   {/if}
   {#if showingAddonManagement}
     <section class="content-panel memory-panel">
-      <AddonManagement controller={addonController} onClose={() => { void closeAddonManagement() }} />
+      <AddonManagement controller={addonController} onContinued={handleAdminContinued} onClose={() => { void closeAddonManagement() }} />
     </section>
   {:else if showingMemoryManagement}
     <section class="content-panel memory-panel">
       <MemoryManagement character={$conversationController.character} onClose={() => { showingMemoryManagement = false }} />
     </section>
-  {:else}
-  <section class="chat-panel" aria-label={`${currentCharacterEntry?.display_name ?? $conversationController.character}とのチャット`}>
+  {/if}
+  {#if !showingMemoryManagement}
+  <section class="chat-panel" class:management-hidden={showingAddonManagement} aria-hidden={showingAddonManagement} aria-label={`${currentCharacterEntry?.display_name ?? $conversationController.character}とのチャット`}>
     <header class="chat-header">
       <p class="eyebrow">digital-souls</p>
       <div class="current-thread">
@@ -675,6 +687,7 @@
 </main>
 
 <style>
+  .chat-panel.management-hidden { display: none; }
   .app-shell {
     position: relative;
     height: var(--visual-viewport-height, 100dvh);

@@ -42,11 +42,11 @@ async function waitForApprovalOrQuestion(page: Page) {
 }
 
 async function requestTextWrite(page: Page, value: string) {
-  await send(page, `検証用ファイル${sample}の内容を正確に「${value}」だけに置き換えてください。`)
+  await send(page, `write_fileツールを使って検証用ファイル${sample}を更新してください。pathは${sample}、contentは正確に「${value}」です。完了後は実行結果と変更後の内容を教えてください。`)
   for (let answered = 0; answered < 2 && !(await waitForApprovalOrQuestion(page)); answered++) {
     // 実LLMが対象確認や先行読取を質問した場合だけ、利用者の追加回答として具体化する。
     await expect(page.locator('article.message').last()).toContainText(/ファイル|パス|読み取|内容/)
-    await send(page, `はい。対象は${sample}です。必要ならこのファイルを読み取り、内容全体を「${value}」だけに置き換えてください。`)
+    await send(page, `はい。write_fileを実行してください。pathは${sample}、contentは正確に「${value}」です。`)
   }
   await expect(confirmation(page)).toBeVisible()
 }
@@ -105,7 +105,7 @@ async function expectWriteReply(page: Page, value: string) {
   const reply = page.locator('article.message').last()
   await expect(reply).toContainText(value, { timeout: 10_000 })
   await expect(reply).toContainText(
-    /完了|(?:更新|変更|保存)(?:しました|されました|済み)|(?:置き換え|書き換え)(?:ました|られました)|(?:置き換わ|書き換わ)りました|書き込(?:みました|まれました)/,
+    /完了|(?:更新|変更|保存|上書き)(?:しました|されました|済み)|(?:置き換え|書き換え)(?:ました|られました)|(?:置き換わ|書き換わ)りました|書き込(?:みました|まれました)/,
     { timeout: 10_000 },
   )
 }
@@ -154,6 +154,91 @@ async function installSpeech(page: Page) {
 const speak = (page: Page, name: string) => page.evaluate(
   clip => (window as unknown as { __actionSpeech: (name: string) => Promise<void> }).__actionSpeech(clip), name,
 )
+
+const adminPanel = (page: Page) => page.getByRole('region', { name: '確認キュー・承認設定', exact: true })
+
+async function openAdmin(page: Page) {
+  const opener = page.getByRole('button', { name: /Addon \/ 連携/ })
+  if (!(await opener.isVisible())) await page.getByRole('button', { name: 'サイドバーを開く' }).click()
+  await opener.click()
+  await expect(adminPanel(page)).toBeVisible()
+  await expect(adminPanel(page).getByRole('button', { name: '承認状態を再取得' })).toBeEnabled()
+}
+
+async function resetConversationApproval(page: Page) {
+  await openAdmin(page)
+  const row = adminPanel(page).getByRole('listitem', { name: /ハイリスク操作群・対話中$/ })
+  await row.getByRole('button', { name: '未承認へ戻す' }).click()
+  await expect(adminPanel(page)).toContainText('未承認へ戻しました。')
+  await expect(adminPanel(page).getByRole('button', { name: '承認状態を再取得' })).toBeEnabled()
+  await page.getByRole('button', { name: 'チャットへ戻る', exact: true }).click()
+}
+
+async function chooseInAdmin(page: Page, label: string, live: boolean) {
+  await openAdmin(page)
+  const queue = adminPanel(page).getByRole('list', { name: '確認要求一覧' })
+  await expect(queue.getByRole('listitem')).toHaveCount(1)
+  await expect(queue).toContainText(live ? '元の操作は待機中です' : '元の操作の待機は終了しています')
+  const result = page.waitForResponse(r => r.url().endsWith(live ? '/continue' : '/answer') && r.request().method() === 'POST', { timeout: 300_000 })
+  await queue.getByRole('button', { name: label, exact: true }).click()
+  const response = await result
+  expect(response.ok()).toBe(true)
+  const id = new URL(response.url()).pathname.split('/').at(-2)!
+  await expect(adminPanel(page).getByRole('button', { name: '承認状態を再取得' })).toBeEnabled({ timeout: 300_000 })
+  return id
+}
+
+test('管理画面から待機中のテキスト・LiveKit承認と停止後の将来単回許可を実行する', async ({ page }, info) => {
+  await installSpeech(page)
+  const microphone = await driver.openVoiceChat(page)
+  await resetConversationApproval(page)
+  const original = await sampleText()
+  await send(page, `検証用ファイルは${sample}です。このパスのファイルを読んで内容を教えてください。今後も検証用ファイルとはこのパスを指します。`)
+  await requestTextWrite(page, '赤い風船')
+  expect(await sampleText()).toBe(original)
+  await chooseInAdmin(page, '一度承認する', true)
+  await expect.poll(sampleText).toBe('赤い風船')
+  await page.getByRole('button', { name: 'チャットへ戻る', exact: true }).click()
+  await expectWriteReply(page, '赤い風船')
+
+  await requestTextWrite(page, '白い雲')
+  // 明示停止は期限切れと同じ「待機終了」。管理画面への切替とは別に検証する。
+  await page.getByRole('button', { name: '外部操作を停止', exact: true }).click()
+  await expect(confirmation(page)).toHaveCount(0)
+  await chooseInAdmin(page, '一度承認する', false)
+  expect(await sampleText()).toBe('赤い風船')
+  const setting = adminPanel(page).getByRole('listitem', { name: /ハイリスク操作群・対話中$/ })
+  await expect(setting).toContainText('将来の呼び出し用の単回許可：1回')
+  await page.getByRole('button', { name: 'チャットへ戻る', exact: true }).click()
+  await send(page, `write_fileツールを実行し、pathを${sample}、contentを正確に「紫の花」にしてください。完了後は実行結果と変更後の内容を教えてください。`)
+  await answerTextQuestionsWithoutApproval(page, '紫の花')
+  await expect.poll(sampleText).toBe('紫の花')
+  await expectWriteReply(page, '紫の花')
+
+  await microphone.click()
+  await expect(microphone).toHaveClass(/mic-standby/)
+  await requestVoiceWrite(page, 'action-once')
+  await waitForPlayback(page)
+  const voiceId = await chooseInAdmin(page, '一度承認する', true)
+  await expect.poll(sampleText).toBe('青い星')
+  await waitForPlayback(page, voiceId)
+  await page.getByRole('button', { name: 'チャットへ戻る', exact: true }).click()
+  await expectWriteReply(page, '青い星')
+  await driver.endVoiceSession(page)
+
+  await openAdmin(page)
+  const autonomous = adminPanel(page).getByRole('listitem', { name: /ハイリスク操作群・会話外$/ })
+  await autonomous.getByRole('button', { name: '拒否へ変更' }).click()
+  await expect(autonomous).toContainText('設定：拒否')
+  await autonomous.getByRole('button', { name: '未承認へ戻す' }).click()
+  await expect(autonomous).toContainText('設定：未承認')
+  await expect(adminPanel(page).getByRole('listitem', { name: /通常操作群・会話外$/ })).toContainText('設定：常に承認')
+  await page.screenshot({ path: info.outputPath('approval-admin.png'), fullPage: true })
+  await info.attach('admin-action-evidence', { body: JSON.stringify({
+    textAdminContinuation: true, lateApprovalDidNotReplay: true, futureOnceConsumed: true,
+    voiceAdminContinuationAndPlayback: true, autonomousSettingsIsolated: true,
+  }), contentType: 'application/json' })
+})
 
 test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用を確認する', async ({ page }, info) => {
   await installSpeech(page)
@@ -209,7 +294,7 @@ test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用�
   await expectWriteReply(page, '金の花')
   await driver.endVoiceSession(page)
 
-  await send(page, `検証用ファイル${sample}の内容を正確に「紫の花」だけに置き換えてください。`)
+  await send(page, `write_fileツールを実行し、pathを${sample}、contentを正確に「紫の花」にしてください。完了後は実行結果と変更後の内容を教えてください。`)
   await answerTextQuestionsWithoutApproval(page, '紫の花')
   await expect.poll(sampleText).toBe('紫の花')
   await expectWriteReply(page, '紫の花')
@@ -228,4 +313,38 @@ test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用�
       }))),
     }), contentType: 'application/json',
   })
+})
+
+
+test('管理画面で未使用予約を取り消すと次の依頼で新しい確認を行う', async ({ page }, info) => {
+  await installSpeech(page)
+  await driver.openVoiceChat(page)
+  await resetConversationApproval(page)
+  const original = await sampleText()
+  await requestTextWrite(page, '緑の葉')
+  const conversation = await page.evaluate(() => localStorage.getItem('digital-souls:conversation:miori'))
+  const queue = await page.request.get('/api/addon-actions/admin/requests')
+  expect(queue.ok()).toBe(true)
+  const pending = (await queue.json()).requests.find((r: { session_id: string; waiting: boolean }) => r.session_id === conversation && r.waiting)
+  expect(pending).toBeTruthy()
+  // 続行前の競合を再現するため、実Backendへ回答だけを保存する。応答は差し替えない。
+  const answer = await page.request.post(`/api/addon-actions/admin/requests/${pending.id}/answer`, { data: { choice: 'once' } })
+  expect(answer.ok()).toBe(true)
+  await openAdmin(page)
+  const setting = adminPanel(page).getByRole('listitem', { name: /ハイリスク操作群・対話中$/ })
+  await expect(setting).toContainText('待機中の要求への予約：1回')
+  await setting.getByRole('button', { name: '未承認へ戻す' }).click()
+  await expect(setting).toContainText('待機中の要求への予約：0回')
+  await expect(adminPanel(page).getByRole('button', { name: '承認状態を再取得' })).toBeEnabled()
+  await page.getByRole('button', { name: 'チャットへ戻る', exact: true }).click()
+  await requestTextWrite(page, '黄色い花')
+  const fresh = await page.request.get(`/api/tool-use/status/miori/${conversation}`)
+  expect(fresh.ok()).toBe(true)
+  const status = await fresh.json()
+  expect(status.confirmation_id).toBeTruthy()
+  expect(status.confirmation_id).not.toBe(pending.id)
+  expect(await sampleText()).toBe(original)
+  await page.getByRole('button', { name: '外部操作を停止', exact: true }).click()
+  await expect(confirmation(page)).toHaveCount(0)
+  await info.attach('reset-wait-evidence', { body: JSON.stringify({ reservationRevoked: true, nextRequestIsFresh: true, noUnapprovedWrite: true }), contentType: 'application/json' })
 })

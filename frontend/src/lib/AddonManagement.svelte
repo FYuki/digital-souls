@@ -1,11 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import ExternalConnectionEditor from './ExternalConnectionEditor.svelte'
+  import AddonApprovals from './AddonApprovals.svelte'
+  import type { ApprovalRequest } from './addon-admin/approvals'
   import { stateMessage, confirmationMessage } from './addon-admin/client'
   import { sortedAddons, type AddonController } from './addon-admin/controller'
 
   export let controller: AddonController
   export let onClose: () => void
+  export let onContinued: (item: ApprovalRequest, body: Record<string, unknown>) => void = () => undefined
   let heading: HTMLHeadingElement
   let editing: string | null | undefined = undefined
   $: items = sortedAddons($controller.items)
@@ -65,6 +68,7 @@
       {/each}
     </ul>
   {/if}
+  <AddonApprovals {onContinued} />
   {/if}
 </div>
 

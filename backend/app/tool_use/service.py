@@ -40,6 +40,11 @@ _PROTECTED_INPUT = re.compile(
 _REFRESH = re.compile(r"refresh|更新|再取得", re.I)
 logger = logging.getLogger(__name__)
 TOOL_STOP_MESSAGE = "tool_operation_stopped"
+CONFIRMATION_REQUIRED_MESSAGE = (
+    "操作の承認が必要です。画面で「常に承認する」「一度承認する」「拒否する」から選んでください。"
+    "一度の承認はツール呼び出し1回分です。"
+)
+CONFIRMATION_WAITING_MESSAGE = "操作の承認をお待ちしています。画面の3つの選択肢から回答してください。"
 
 
 @dataclass(frozen=True)
@@ -203,6 +208,9 @@ class ToolService:
         for task in targets:
             if task is not asyncio.current_task():
                 task.cancel(TOOL_STOP_MESSAGE)
+        self._clean_run(key, run)
+
+    def _clean_run(self, key: tuple[str, str], run: _Run | None) -> None:
         if run is not None:
             run.cancellation.cancel()
             self.gate.end_loop(run.loop)
@@ -210,8 +218,16 @@ class ToolService:
                 run.expiration.cancel()
             if run.presence_expiration:
                 run.presence_expiration.cancel()
-        self.bindings.forget(character, conversation)
+        self.bindings.forget(*key)
         self._status.pop(key, None)
+
+    def end_idle_confirmations(self, request_ids: tuple[str, ...]) -> None:
+        """正本で終了した承認待ちだけを破棄し、開始済み処理や返答のownerは中断しない。"""
+        ended = set(request_ids)
+        for key, run in tuple(self._runs.items()):
+            if run.confirmation in ended and run.task is None:
+                self._runs.pop(key)
+                self._clean_run(key, run)
 
     def connection_disabled(self, connection_id: str) -> None:
         # 回答・binding待ちだけを終了する。既に送信した外部処理はGateの世代で再送を防ぐ。
@@ -269,7 +285,7 @@ class ToolService:
             # STTやLLM判断で承認を推測しない。待機期限も延長しない。
             return self._material(
                 run,
-                "操作の承認をお待ちしています。画面の3つの選択肢から回答してください。",
+                CONFIRMATION_WAITING_MESSAGE,
                 waiting=True,
             )
         if run is not None:
@@ -694,8 +710,7 @@ class ToolService:
             run.candidate, run.confirmation_guard = candidate, before_execute
             return self._material(
                 run,
-                "操作の承認が必要です。画面で「常に承認する」「一度承認する」「拒否する」から選んでください。"
-                "一度の承認はツール呼び出し1回分です。",
+                CONFIRMATION_REQUIRED_MESSAGE,
                 waiting=True,
             )
         if envelope["outcome"] == "input_required":

@@ -1,0 +1,7 @@
+{
+  "textAdminContinuation": true,
+  "lateApprovalDidNotReplay": true,
+  "futureOnceConsumed": true,
+  "voiceAdminContinuationAndPlayback": true,
+  "autonomousSettingsIsolated": true
+}
