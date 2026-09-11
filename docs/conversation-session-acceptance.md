@@ -2,7 +2,7 @@
 
 ## 判定
 
-受入は進行中。M1〜M7の基礎実装はEpicへ統合したが、#279との全体統合、#291のthread revision・Episode抽出予約、および本書の未検証項目は残っている。親IssueやM8の完了を意味しない。
+受入は未完了。M1〜M7の基礎実装はEpicへ統合し、privacy修正後の実音声15件とBackend実transport 11件は成功した。#279/#291の公開統合に加え、再接続100件の成功率・coverage未達と、相槌代表10件中2件の判定不能が残る。親IssueやM8の完了を意味しない。
 
 ## 対象と環境
 
@@ -65,6 +65,8 @@ commit `64d4150b437dcd7925d3670be82aacb46068c07c` と同じspec・製品コー�
 
 この診断ページ `/voice/livekit` はViteの開発モードでのみ有効。今回のBackendは独立 `integration-transport-327-dev` data rootで起動し、別途所有するVite開発サーバーを5174番で起動した。`DS_PROFILE_REPORT`と`DS_BACKEND_ORIGIN`を同じtest Backendへ向け、`LIVEKIT_TEST_FRONTEND_URL=http://localhost:5174`を指定した。終了時にViteと所有Frontend/Backendを終了し、共有LiveKitは停止しなかった。
 
+privacy修正を含む`dfdffd216736ed199692ecbee9ffa914bc156785`では、[Backendの実LiveKit transport](artifacts/conversation-session-backend-transport-real-2026-09-11.json)も11件成功（46.32秒、skip/failure 0、teardown完了）。独立`integration-backend-livekit-327`環境を起動し、`LIVEKIT_TEST_BACKEND_URL`をそのBackendへ設定して`PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/integration/test_livekit_transport_integration.py -q`を実行した。Frontend側2件と合わせてtransport両側を確認したが、一つのrootコマンドを一括実行した結果ではない。実STT/LLM/TTSの全会話はvoiceスイートの証跡へ対応付ける。
+
 調整時の失敗もartifactへ記録した。runnerが正常readiness 204を200だけで判定した待機、製品buildへ接続して診断ページがなかった2件、Playwrightの既定出力先によるtest runtime identityの消失、回答前のprobeへ再生graph 1個を期待していた2件を区別する。data rootは新設し、`playwright.integration-livekit.config.ts`の出力先をruntime dataと分離した。`room.ts`はprobeやresponse IDのないtrackを回答graphへ接続しない既存仕様なので、その期待値を0へ整合した。実回答の再生成功は全音声スイートのsample/packet観測で別に確認しており、性能閾値は変更していない。
 
 ## 専用ネットワーク障害の初回診断
@@ -79,6 +81,22 @@ transport failure、音声出力区間の重複、packet証拠の欠測、出力
 
 [現行版の追加試行](artifacts/conversation-session-reconnect-repeat-real-2026-09-11.json) は製品コード変更なしで成功し、control復旧上限2,556.8ms、audio復旧上限2,686.6ms、次回答の完全再生を確認した。初回の遅延を単発の成功で解決済みにせず、既存 `run_reconnect_cohort.py` の100session集計へ進む。全試行と失敗を保持し、既存の10秒以内成功率99%以上・p95 3,000ms以下・重複0の条件を変更しない。
 
+## 100 sessionの再接続集計
+
+固定commit `af906381c6f1827c942f56e5434dcbf5dd804069`、事前登録した`conversation-327-reconnect-100-a-001`〜`100`を全件実行した。[匿名集計](artifacts/conversation-session-reconnect-cohort-real-2026-09-11.json)の総合判定は**失敗**。初回再生前に止まった6件も分母へ残し、10秒以内復旧は94/100で99%条件に未達、coverageも未達だった。復旧を計測できた94件のp95は2,679.99ms、重複出力は0で、94件すべて次の音声回答も同一sessionで完全再生した。p95単独の成功を総合成功へ読み替えない。
+
+個別診断は91件成功・9件失敗。初回再生未完了は039/044/045/072/098/099の6件。006/024/074は復旧上限5,315.04 / 5,167.65 / 3,253.60msで単発診断の3,000msを超えた。これら3件は100件集計の10秒以内には含まれる。100件すべてsession終了・fault時計終了・所有Frontend/Backend削除を確認し、最後に専用LiveKitとnetworkも削除した。通常の共有LiveKitは維持した。
+
+最初の集計実行は、初回再生失敗のrawにまだない`audio_availability_method`を旧packet方式と誤認し、「方式混在」で停止した。集計処理の修正commit `3b1e2192571278b889c17f468ebcc224ae58c37a`で元の全100件を再計算した。未実施方式は未計測、失敗は分母と欠測理由に残し、全件失敗の場合も方式/p95をnullにする。混在方式の拒否や99%/3,000ms/重複0の条件は維持し、関連31テストが成功した。元のrunner終了コード2と修正後の集計終了コード1も[試行別証跡](artifacts/conversation-session-reconnect-inference-observations-2026-09-11.json)へ記録した。raw試行の書き換え・除外・差し替えは行っていない。
+
+試行別証跡には共有Ollamaの常駐context観測を併記する。全test設定はcontext合計8,192・RAG無効だが、初回再生失敗の前後に未常駐/36,864等を観測した。共有推論の状態変化との因果は未確定であり、#319の回帰とも外部要因とも断定しない。共有推論サービスの停止・設定変更は行っていない。
+
+## 相槌の実接続診断
+
+`dfdffd216736ed199692ecbee9ffa914bc156785`で、事前選択した相槌fixture番号`3,13,23,33,43,53,63,73,83,93`を実STT/LLM/TTS/LiveKit/ブラウザへ通した。[10件の診断](artifacts/conversation-session-backchannel-real-2026-09-11.json)は8件成功・2件失敗で、Playwright全体も失敗。番号23/33のBE最終判定は`indeterminate`で、期待した`backchannel`には一致しなかった。10件すべて旧回答のcancelはなく、回答を完全再生し、session終了を確認した。再生継続を理由に判定不一致を成功へ変更しない。
+
+この10件は100件の性能/精度受入ではなく、BEによる相槌判定と既存再生継続の接続範囲を確認する代表診断。`backend/app/conversation_core/turn_decision.py`自体は#319開始前の版から変更されていないが、統合全体の回帰有無をそれだけで断定しない。最初はrunner用一時envのキー形式不足で試行開始前に停止し、`LIVEKIT_KEYS`形式へ修正して同じ事前選択で開始した。試行の差し替えは行わず、所有Frontend/Backendのteardown完了と共有LiveKitの維持を確認した。
+
 ## 条件と検証の対応
 
 | 条件 | 現在の証拠 | 残作業 |
@@ -88,8 +106,8 @@ transport failure、音声出力区間の重複、packet証拠の欠測、出力
 | focus抑止・Enter/クリック・manual mute | M6 unit/module/mock E2E、実接続で4組合せ成功 | #279全体と統合した再検証 |
 | 送信失敗・不明結果・再接続照合・冪等性 | M2/M4/M5のunit/module/mock E2E | 実接続で確認した範囲の記録 |
 | text優先・遅延STT / preview / 旧response排除 | M7 Core + bridge + 受付台帳module、FE unit/mock E2E、実生成中/再生中text割り込み | 障害注入の実接続範囲の記録 |
-| BEの相槌・take-turn判断 | Core回帰、実take-turn / barge-in回帰 | 相槌コホートの実接続範囲の記録 |
-| 通常text・通常voice・再接続 | 全voice 14件、通常text 1件、実transport 2件成功。障害後の次回答も完了 | 専用network障害の初回復旧上限5.19秒。開始前の版と比較中 |
+| BEの相槌・take-turn判断 | Core回帰、実take-turn / barge-in回帰。相槌10件とも再生継続 | 相槌ラベル一致は8/10。2件がBE最終判定不能 |
+| 通常text・通常voice・再接続 | privacy追加後の全voice 15件、通常text 1件、実transport FE 2件/BE 11件成功 | 全100件集計は94%・coverage未達。94件のp95は2.68秒 |
 | #279との状態・マイク・履歴分離 | M5/M6接点の基礎実装 | #279全体は未統合 |
 | Desktop共通client | M4実装、契約文書 | 統合後の引き継ぎ最終確認 |
 | main向けレビュー | 子PRのEpic向けCI成功 | 最終main差分のCI、CodeRabbitと指摘修正 |
@@ -108,7 +126,9 @@ transport failure、音声出力区間の重複、packet証拠の欠測、出力
 
 main向けドラフトPR #338のCodeRabbit指摘から、直接テキストがprivacyで省略された場合のwire通知欠落を確認した。Coreは`response_started`より前に省略へ終端し、従来serializerはSpeechのutterance破棄だけを通知するため、Text-only入力ではブラウザへ省略結果が届かなかった。
 
-Epic統合commit `6b052700ee561b651d68013144cb72278902c5c2`（PR #339）は本文を含まない`response_privacy_skipped`を追加し、Appの履歴再取得、生成/再生終了、一時本文と遅着開始/deltaの除去を実装する。実SQLite/Core/serializerのSpeech・Text検証、開始前後のApp検証、共通投影、別応答維持、Room再生停止、schema/送信元の検証が通過した。CodeRabbitの再レビューでブロッカーなし、末尾空行の軽微な指摘も修正した。実際の保存拒否ルールによるブラウザ受入は、統合後に追加specを実行して記録する。
+Epic統合commit `6b052700ee561b651d68013144cb72278902c5c2`（PR #339）は本文を含まない`response_privacy_skipped`を追加し、Appの履歴再取得、生成/再生終了、一時本文と遅着開始/deltaの除去を実装する。実SQLite/Core/serializerのSpeech・Text検証、開始前後のApp検証、共通投影、別応答維持、Room再生停止、schema/送信元の検証が通過した。CodeRabbitの再レビューでブロッカーなし、末尾空行の軽微な指摘も修正した。
+
+`dfdffd216736ed199692ecbee9ffa914bc156785`で追加specを含む`npm run test:integration:voice -- --workers=1`を実行し、[全15件成功](artifacts/conversation-session-privacy-full-voice-real-2026-09-11.json)（4.0分、skip/flaky/failure 0、teardown完了）。実際の保存拒否ルールにより、省略通知1件・生成開始0件・delta 0件・TTS再生0件となり、履歴に本文なしの省略行が表示された。続く通常textは同じsessionで139,200 samples / 145 packetsを再生し、履歴2件・token取得1回を確認した。既存14件も同じ実行で成功した。
 
 ## #291固定commitとのローカル互換性
 

@@ -1,0 +1,1578 @@
+{
+  "scope": "shared_inference_observations_during_reconnect_cohort",
+  "measurement_revision": "af906381c6f1827c942f56e5434dcbf5dd804069",
+  "expected_sessions": 100,
+  "completed_sessions": 100,
+  "cohort_passed": false,
+  "interpretation": "初回再生失敗6件を旧packet方式と誤認した集計処理のみ修正し、元の全100件から再計算。失敗と既存閾値を保持。モデルの常駐context変化は観測事実であり、初回再生失敗との因果は未確定。",
+  "trials": [
+    {
+      "index": 1,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2469.6647166608964,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "36864": 79,
+        "not_resident": 56,
+        "8192": 5
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 2,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2307.4093996428637,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "36864": 116,
+        "not_resident": 101,
+        "8192": 2
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 3,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2614.790224004748,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "36864": 98,
+        "not_resident": 88,
+        "8192": 6
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 4,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2537.3758106428795,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "36864": 98,
+        "not_resident": 77,
+        "8192": 12
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 5,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2387.404593629042,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 6,
+      "diagnostic_outcome": "failure",
+      "failure_stage": "network_fault",
+      "recovery_upper_ms": 5315.043467674175,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 7,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2368.731808669487,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 61
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 8,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2364.911165634552,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 60
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 9,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2597.0081976525,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 58
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 10,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2368.7381866554424,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 11,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2297.0267456666625,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 57
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 12,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2390.3233006726896,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 13,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2631.0263676265877,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 58
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 14,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2305.238036985158,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 60
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 15,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2632.855510656993,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 58
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 16,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2374.833161631981,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 17,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2526.4873936659496,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 18,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2297.787496629873,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 58
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 19,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2505.1748180086615,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 20,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2420.2889906818073,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 58
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 21,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2431.2217786618876,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 22,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2447.793521623771,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 61
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 23,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2324.450406011343,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 58
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 24,
+      "diagnostic_outcome": "failure",
+      "failure_stage": "network_fault",
+      "recovery_upper_ms": 5167.647893661897,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 25,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2471.2247476557895,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 26,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2555.4749946896227,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 61
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 27,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2697.9395157066974,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 60
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 28,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2279.191781675974,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 29,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2320.54937266914,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 30,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2349.912422967911,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 58
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 31,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2318.4242186500232,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 58
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 32,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2399.9656426827114,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 33,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2540.578022650163,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 43,
+        "not_resident": 50,
+        "36864": 23
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 34,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2549.9405559906954,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "36864": 59,
+        "not_resident": 72,
+        "8192": 14
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 35,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2482.8081017073782,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 36,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2272.1001196431316,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 37,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2516.6900769708154,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 58
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 38,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2501.6982626279987,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 39,
+        "not_resident": 50,
+        "17408": 3
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 39,
+      "diagnostic_outcome": "failure",
+      "failure_stage": "first_playback",
+      "recovery_upper_ms": null,
+      "followup_outcome": null,
+      "ollama_context_observation_counts": {
+        "17408": 6,
+        "not_resident": 57,
+        "36864": 66
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 40,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2344.1605796248114,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "not_resident": 56,
+        "36864": 39,
+        "8192": 44,
+        "16896": 1
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 41,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2400.951649674098,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 42,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2426.7377096604505,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 43,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2411.598843604963,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 25,
+        "not_resident": 51,
+        "36864": 52
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 44,
+      "diagnostic_outcome": "failure",
+      "failure_stage": "first_playback",
+      "recovery_upper_ms": null,
+      "followup_outcome": null,
+      "ollama_context_observation_counts": {
+        "36864": 79,
+        "not_resident": 50
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 45,
+      "diagnostic_outcome": "failure",
+      "failure_stage": "first_playback",
+      "recovery_upper_ms": null,
+      "followup_outcome": null,
+      "ollama_context_observation_counts": {
+        "not_resident": 56,
+        "36864": 73
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 46,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2511.573570662418,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "not_resident": 26,
+        "36864": 35,
+        "8192": 42
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 47,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2417.9064959836014,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 58
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 48,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2544.072792992354,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 49,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2650.228295623938,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 50,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2357.1892199592585,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 51,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2385.771858634391,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 22,
+        "not_resident": 69,
+        "36864": 74
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 52,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2286.358745970965,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 53,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2525.1708736435576,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 58
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 54,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2460.3905496429597,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 33,
+        "not_resident": 28,
+        "36864": 40
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 55,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2482.744779684941,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 56,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2529.0340756754085,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 58
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 57,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2375.2248599920276,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 48,
+        "not_resident": 50,
+        "36864": 22
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 58,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2307.3326616529594,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "36864": 58,
+        "not_resident": 69,
+        "8192": 15
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 59,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2305.6857576114344,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 38,
+        "not_resident": 49,
+        "36864": 21
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 60,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2295.9960190291386,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "36864": 55,
+        "not_resident": 71,
+        "8192": 14
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 61,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2344.7408136202503,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 62,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2647.6789586576615,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 63,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2410.813066651026,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 58
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 64,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2416.253751628081,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 65,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2376.5349869456295,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 66,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2344.5182086490786,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 60
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 67,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2560.2492336799296,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 61
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 68,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2478.3040349555013,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 58
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 69,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2500.067425696294,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 61
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 70,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2735.083294650476,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 34,
+        "not_resident": 48,
+        "36864": 29
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 71,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2236.4839976669973,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "36864": 83,
+        "not_resident": 104,
+        "8192": 1
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 72,
+      "diagnostic_outcome": "failure",
+      "failure_stage": "first_playback",
+      "recovery_upper_ms": null,
+      "followup_outcome": null,
+      "ollama_context_observation_counts": {
+        "36864": 81,
+        "not_resident": 49
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 73,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2459.588838665164,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "36864": 113,
+        "not_resident": 97,
+        "8192": 16
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 74,
+      "diagnostic_outcome": "failure",
+      "failure_stage": "network_fault",
+      "recovery_upper_ms": 3253.60009968988,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 75,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2592.911385669391,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 60
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 76,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2339.949903019189,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 55,
+        "not_resident": 2
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 77,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2247.5972216765076,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "not_resident": 42,
+        "36864": 33,
+        "8192": 44
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 78,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2545.4145516432927,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 61
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 79,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2336.8063709704875,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 80,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2489.0025476223636,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 53,
+        "not_resident": 7
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 81,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2402.883585672298,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "36864": 19,
+        "not_resident": 8,
+        "8192": 43
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 82,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2330.9475416728656,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 61
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 83,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2327.3643509762296,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 60
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 84,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2659.5532726530237,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 60
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 85,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2602.185395997525,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 60
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 86,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2508.5150166863605,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 87,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2559.185666987896,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 64
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 88,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2544.212919994354,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 60
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 89,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2278.7694986628685,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 60
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 90,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2439.589482963798,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 59,
+        "not_resident": 31,
+        "36864": 49
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 91,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2397.437913984775,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 61
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 92,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2275.599570977449,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 60
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 93,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2271.5035656193886,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 60
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 94,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2670.3178546597155,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 60
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 95,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2336.2357930130966,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 61
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 96,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2267.70742663304,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 60
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 97,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2442.260528662602,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "8192": 60
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 98,
+      "diagnostic_outcome": "failure",
+      "failure_stage": "first_playback",
+      "recovery_upper_ms": null,
+      "followup_outcome": null,
+      "ollama_context_observation_counts": {
+        "8192": 13,
+        "not_resident": 49,
+        "36864": 67,
+        "16896": 1
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 99,
+      "diagnostic_outcome": "failure",
+      "failure_stage": "first_playback",
+      "recovery_upper_ms": null,
+      "followup_outcome": null,
+      "ollama_context_observation_counts": {
+        "not_resident": 53,
+        "36864": 74,
+        "8192": 2,
+        "16896": 1
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    },
+    {
+      "index": 100,
+      "diagnostic_outcome": "success",
+      "failure_stage": null,
+      "recovery_upper_ms": 2627.148398666064,
+      "followup_outcome": "success",
+      "ollama_context_observation_counts": {
+        "not_resident": 22,
+        "8192": 44
+      },
+      "configured_chat_context_tokens": 8192,
+      "rag_enabled": "false",
+      "teardown_completed": true,
+      "session_end_confirmed": true,
+      "fault_clock_closed": true
+    }
+  ],
+  "aggregation_revision": "3b1e2192571278b889c17f468ebcc224ae58c37a",
+  "original_runner_exit_code": 2,
+  "original_runner_terminal": {
+    "event": "cohort_stopped",
+    "completed": 100,
+    "reason": "execution_or_teardown_unverified"
+  },
+  "original_aggregation_error": "reconnect cohort mixes audio availability methods",
+  "reaggregation_exit_code": 1
+}
