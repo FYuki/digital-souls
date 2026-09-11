@@ -68,6 +68,22 @@ const setup = () => {
 }
 
 describe('通常会話UI向けLiveKit音声session', () => {
+  test('privacy終端がthinkingを解消し、後発応答の生成状態は消さない', async () => {
+    const {controller, coreEventReceivers} = setup()
+    await controller.ensureSession({characterId: 'miori', conversationId: 'a'})
+    const receive = (event: Record<string, unknown>) => coreEventReceivers[0]({session_id: SESSION_ID, ...event} as VoiceSessionEvent)
+    receive({type: 'utterance_finalized', utterance_id: UTTERANCE_ID, should_response: true})
+    expect(controller.snapshot().response).toBe('thinking')
+    receive({type: 'response_privacy_skipped', response_id: 'skipped'})
+    expect(controller.snapshot().response).toBe('idle')
+    receive({type: 'response_started', response_id: 'next'})
+    receive({type: 'response_privacy_skipped', response_id: 'skipped'})
+    expect(controller.snapshot()).toMatchObject({response: 'generating', activeResponseId: 'next'})
+    receive({type: 'response_privacy_skipped', response_id: 'next'})
+    expect(controller.snapshot().response).toBe('idle')
+    await controller.end()
+  })
+
   test('text submitで即時停止し、playback通知ACKを待たずcancelとtextを送り旧deltaを捨てる', async () => {
     const {controller, room, events, coreEventReceivers, observations, delivered} = setup()
     const context = {characterId: 'miori', conversationId: 'a'}

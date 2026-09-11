@@ -30,6 +30,7 @@
     { "$ref": "#/$defs/ResponseCancelRequested" },
     { "$ref": "#/$defs/ResponseCancelled" },
     { "$ref": "#/$defs/ResponseFailed" },
+    { "$ref": "#/$defs/ResponsePrivacySkipped" },
     { "$ref": "#/$defs/PlaybackStarted" },
     { "$ref": "#/$defs/PlaybackStopped" },
     { "$ref": "#/$defs/PlaybackCompleted" },
@@ -470,6 +471,16 @@
         "type": { "const": "response_cancelled" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
         "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" },
         "reason": { "type": "string", "enum": ["barge_in", "session_ended", "disconnect"] }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
+      }
+    },
+    "ResponsePrivacySkipped": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "source_inputs", "monotonic_timestamp_ms"],
+      "properties": {
+        "type": { "const": "response_privacy_skipped" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
+        "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" },
+        "source_inputs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/InputSource" } },
+        "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
     "ResponseFailed": {

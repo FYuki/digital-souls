@@ -586,6 +586,47 @@ describe('App conversation lifecycle', () => {
     expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(1)
   })
 
+  test.each(['text', 'speech', 'started'])('privacy省略%sは開始前後とも履歴を更新し、本文や生成状態を残さない', async source => {
+    render(App)
+    await startLiveKitSession()
+    const input = screen.getByRole<HTMLTextAreaElement>('textbox', {name: 'メッセージ'})
+    let inputId = TURN_ID
+    if (source === 'text') {
+      await act(() => input.focus())
+      await fireEvent.input(input, {target: {value: '保存しない入力'}})
+      await fireEvent.click(screen.getByRole('button', {name: '送信'}))
+      await waitFor(() => expect(liveKitMocks.controlEvents.some(event => event.type === 'user_text_submitted')).toBe(true))
+      inputId = String(liveKitMocks.controlEvents.find(event => event.type === 'user_text_submitted')!.event_id)
+      await emitCoreEvent({type: 'user_input_result', input_event_id: inputId, status: 'accepted', response_id: RESPONSE_ID})
+    } else {
+      await emitCoreEvent({type: 'utterance_finalized', utterance_id: inputId, transcript: '保存しない入力', should_response: true})
+      if (source === 'started') {
+        await emitCoreEvent({type: 'response_started', response_id: RESPONSE_ID, source_utterance_ids: [inputId]})
+        await emitCoreEvent({type: 'response_delta', response_id: RESPONSE_ID, text_sequence: 1, text: '保存しない回答'})
+      }
+    }
+    fetchMock.mockImplementation((url, init) => String(url).endsWith('/turns')
+      ? Promise.resolve(new Response(JSON.stringify([{kind: 'privacy_skipped', turn_id: TURN_ID,
+        reason_code: 'STORAGE_OPT_OUT', sanitizer_version: 'test', policy_version: 'test'}])))
+      : defaultFetch(url, init))
+    await emitCoreEvent({type: 'response_privacy_skipped', response_id: RESPONSE_ID,
+      source_inputs: [{input_id: inputId, source: source === 'text' ? 'text' : 'speech'}]})
+    expect(await screen.findByText('保存されなかったターン')).toBeTruthy()
+    expect(screen.queryByText('保存しない入力')).toBeNull()
+    expect(screen.queryByText('保存しない回答')).toBeNull()
+    expect(input.value).toBe('')
+    expect(await screen.findByText('入力: 聞き取り中')).toBeTruthy()
+    expect(liveKitMocks.disconnect).not.toHaveBeenCalled()
+    // 終端後の遅着した開始・本文は復活させず、次の応答は同じsessionで表示する。
+    await emitCoreEvent({type: 'response_started', response_id: RESPONSE_ID, source_utterance_ids: [inputId]})
+    await emitCoreEvent({type: 'response_delta', response_id: RESPONSE_ID, text_sequence: 2, text: '遅着した本文'})
+    expect(screen.queryByText('遅着した本文')).toBeNull()
+    const nextResponse = '50000000-0000-4000-8000-000000000020'
+    await emitCoreEvent({type: 'response_started', response_id: nextResponse, source_utterance_ids: []})
+    await emitCoreEvent({type: 'response_delta', response_id: nextResponse, text_sequence: 1, text: '次の回答'})
+    expect(screen.getByText('次の回答')).toBeTruthy()
+  })
+
   test('同じスレッドのtextをVoice Sessionへ送り、受理後に本文を消して同じ回答を表示する', async () => {
     render(App)
     await startLiveKitSession()

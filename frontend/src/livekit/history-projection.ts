@@ -33,6 +33,19 @@ export class VoiceHistoryProjection {
     const previous = this.turns.get(key)
     if (previous !== undefined && (previous.context.characterId !== context.characterId
       || previous.context.conversationId !== context.conversationId)) return null
+    if (event.type === 'response_privacy_skipped') {
+      for (const source of event.source_inputs ?? []) {
+        if (source.source === 'speech') this.speech.delete(`${event.session_id}:${source.input_id}`)
+      }
+      // 開始前の省略も記録し、遅着した開始・本文で再表示しない。
+      const turn: ProjectedVoiceTurn = Object.freeze({
+        sessionId: event.session_id, context: Object.freeze({...context}), responseId: event.response_id,
+        historyTurnId: previous?.historyTurnId ?? null, userContent: '', assistantContent: '',
+        lastTextSequence: 0, status: 'privacy_skipped',
+      })
+      this.turns.set(key, turn)
+      return turn
+    }
     if (event.type === 'response_started') {
       if (previous !== undefined) return null
       const sources = event.source_inputs ?? (event.source_utterance_ids ?? [])

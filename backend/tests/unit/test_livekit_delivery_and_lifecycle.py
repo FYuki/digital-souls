@@ -391,7 +391,7 @@ def _coordinator(module, published, cleaned, core_port=None, audio_probe=None, r
     )
 
 
-@pytest.mark.parametrize("case", ["valid", "participant", "session", "backend_result"])
+@pytest.mark.parametrize("case", ["valid", "participant", "session", "backend_result", "backend_privacy"])
 def test_text_input_is_bound_to_authenticated_user_before_delivery_ack(case: str) -> None:
     module = _livekit_module("coordinator", "text input authorization")
 
@@ -415,6 +415,11 @@ def test_text_input_is_bound_to_authenticated_user_before_delivery_ack(case: str
             event.pop("speaker")
             event.pop("text")
             event.update(type="user_input_result", input_event_id=str(uuid4()), status="accepted")
+        elif case == "backend_privacy":
+            event.pop("speaker")
+            event.pop("text")
+            event.update(type="response_privacy_skipped", response_id=str(uuid4()),
+                         source_inputs=[{"input_id": str(uuid4()), "source": "text"}])
         receive = coordinator.receive_data(
             identity=identity, participant_sid="PA_current", topic=module.APPLICATION_TOPIC,
             payload=json.dumps(event).encode(),
