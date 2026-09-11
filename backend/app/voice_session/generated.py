@@ -179,6 +179,7 @@ class TypeEnum(Enum):
     RESPONSE_COMPLETED = "response_completed"
     RESPONSE_DELTA = "response_delta"
     RESPONSE_FAILED = "response_failed"
+    RESPONSE_PRIVACY_SKIPPED = "response_privacy_skipped"
     RESPONSE_STARTED = "response_started"
     SESSION_DISCONNECTED = "session_disconnected"
     SESSION_ENDED = "session_ended"

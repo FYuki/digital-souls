@@ -627,7 +627,7 @@ class _ConversationCoreDelivery:
         if event.type == "response_completed" and event.response_id is not None:
             if event.response_id not in self._completed_output_responses:
                 await self._finish_audio(event.response_id)
-        if event.type in {"response_cancelled", "response_failed"}:
+        if event.type in {"response_cancelled", "response_failed", "response_privacy_skipped"}:
             self._audio_source.clear(event.response_id)
         if event.type == "response_privacy_skipped":
             if event.source_utterance_ids is None:
@@ -636,7 +636,6 @@ class _ConversationCoreDelivery:
                 await self._coordinator.send_core(
                     self._voice_payload(event, utterance_id=utterance_id)
                 )
-            return
         await self._coordinator.send_core(self._voice_payload(event))
 
     async def stop_response(self, response: Response) -> ResponseStopResult:
@@ -840,11 +839,17 @@ class _ConversationCoreDelivery:
                 recoverable=True,
             )
         elif event.type == "response_privacy_skipped":
-            payload.update(
-                type="utterance_discarded",
-                utterance_id=utterance_id,
-                reason="privacy",
-            )
+            if utterance_id is not None:
+                # 既存の音声入力破棄通知を維持する。
+                payload.update(type="utterance_discarded", utterance_id=utterance_id, reason="privacy")
+            else:
+                sources = event.source_inputs
+                if not sources:
+                    raise ValueError("privacy event requires source inputs")
+                payload.update(
+                    type=event.type, response_id=event.response_id,
+                    source_inputs=[{"input_id": item.input_id, "source": item.source} for item in sources],
+                )
         else:
             raise ValueError(f"unsupported Core event type: {event.type}")
         return json.dumps(payload, separators=(",", ":")).encode()

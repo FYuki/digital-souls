@@ -198,8 +198,8 @@ class ProductionSessionCoordinator:
                 event = decode_core_event(payload)
                 if str(event["session_id"]) != self.session_id:
                     raise TerminalProtocolError("Core event session mismatch")
-                if event["type"] == "user_input_result":
-                    raise TerminalProtocolError("input result is owned by Backend")
+                if event["type"] in {"user_input_result", "response_privacy_skipped"}:
+                    raise TerminalProtocolError("result is owned by Backend")
                 if event["type"] in {"user_text_submitted", "user_input_result_requested"}:
                     speaker = event.get("speaker")
                     expected = self._mapping.core_notification(

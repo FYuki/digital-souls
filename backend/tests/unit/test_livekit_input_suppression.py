@@ -81,4 +81,3 @@ def test_focus_and_manual_mute_are_independent_backend_gates() -> None:
         assert not tasks
 
     asyncio.run(exercise())
-

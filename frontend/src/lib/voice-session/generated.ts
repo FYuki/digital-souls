@@ -133,7 +133,7 @@ export interface TextRange {
     start: number;
 }
 
-export type Type = "user_text_submitted" | "user_input_result_requested" | "user_input_result" | "audio_input_suppression_changed" | "session_start_requested" | "session_started" | "session_muted" | "session_resumed" | "session_ended" | "session_disconnected" | "session_reconnect_requested" | "session_reconnected" | "speech_started" | "speech_stopped" | "turn_decision" | "utterance_finalized" | "utterance_pending" | "utterance_discarded" | "response_started" | "response_delta" | "response_audio_segment" | "response_completed" | "response_cancel_requested" | "response_cancelled" | "response_failed" | "playback_started" | "playback_stopped" | "playback_completed" | "playback_decode_failed" | "error" | "observation";
+export type Type = "user_text_submitted" | "user_input_result_requested" | "user_input_result" | "audio_input_suppression_changed" | "session_start_requested" | "session_started" | "session_muted" | "session_resumed" | "session_ended" | "session_disconnected" | "session_reconnect_requested" | "session_reconnected" | "speech_started" | "speech_stopped" | "turn_decision" | "utterance_finalized" | "utterance_pending" | "utterance_discarded" | "response_started" | "response_delta" | "response_audio_segment" | "response_completed" | "response_cancel_requested" | "response_cancelled" | "response_failed" | "response_privacy_skipped" | "playback_started" | "playback_stopped" | "playback_completed" | "playback_decode_failed" | "error" | "observation";
 
 export type Unit = "millisecond" | "nanosecond";
 

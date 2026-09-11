@@ -42,6 +42,25 @@ describe('DOM非依存のConversation client共通部品', () => {
     expect(projection.receive(delta, context, [])).toBeNull()
   })
 
+  test.each([false, true])('privacy終端は開始済み=%sでも本文を除去し、遅着開始を拒否する', started => {
+    const projection = new VoiceHistoryProjection()
+    const start = event({type: 'response_started', response_id: responseId,
+      source_utterance_ids: [], source_inputs: [{input_id: inputId, source: 'text'}],
+      speaker: {role: 'character', participant_id: inputId, character_id: 'miori'}})
+    if (started) {
+      projection.receive(start, context, [])
+      projection.receive(event({type: 'response_delta', response_id: responseId, text_sequence: 1,
+        text: '本文', text_range: {start: 0, end: 2}}), context, [])
+    }
+    expect(projection.receive(event({type: 'response_privacy_skipped', response_id: responseId,
+      source_inputs: [{input_id: inputId, source: 'text'}]}), context, [])).toMatchObject({
+      status: 'privacy_skipped', userContent: '', assistantContent: '',
+    })
+    expect(projection.receive(start, context, [])).toBeNull()
+    expect(projection.receive(event({type: 'response_delta', response_id: responseId, text_sequence: 1,
+      text: '遅着', text_range: {start: 0, end: 2}}), context, [])).toBeNull()
+  })
+
   test('focus解除・送信成功相当のblurでは持続muteを解除しない', () => {
     const policy = new InputSuppressionPolicy()
     policy.resumeExplicitly()
