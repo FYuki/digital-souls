@@ -16,7 +16,7 @@ const retryTimer: RetryTimer = {
 
 const confirmation = (eventId: string): PlaybackConfirmation => ({
   event: {
-    protocol_version: '1.0',
+    protocol_version: '1.1',
     event_id: eventId,
     type: 'playback_completed',
     session_id: '20000000-0000-4000-8000-000000000010',
@@ -34,7 +34,7 @@ afterEach(() => {
 
 const responseDelta = (eventId: string, sequence: number): Uint8Array => new TextEncoder().encode(
   JSON.stringify({
-    protocol_version: '1.0',
+    protocol_version: '1.1',
     event_id: eventId,
     type: 'response_delta',
     session_id: '20000000-0000-4000-8000-000000000010',

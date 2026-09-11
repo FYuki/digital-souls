@@ -529,7 +529,7 @@ def test_production_core_bridge_routes_microphone_and_control_to_one_session() -
 
     async def exercise() -> None:
         common = {
-            "protocol_version": "1.0",
+            "protocol_version": "1.1",
             "event_id": "10000000-0000-4000-8000-000000000010",
             "session_id": "20000000-0000-4000-8000-000000000010",
             "monotonic_timestamp_ms": 1_000,
@@ -953,7 +953,7 @@ def test_production_core_bridge_discards_media_tail_after_disconnect() -> None:
 
     async def exercise() -> None:
         common = {
-            "protocol_version": "1.0",
+            "protocol_version": "1.1",
             "event_id": "10000000-0000-4000-8000-000000000020",
             "session_id": "20000000-0000-4000-8000-000000000020",
             "monotonic_timestamp_ms": 1_000,
@@ -1562,7 +1562,7 @@ def test_production_core_bridge_does_not_use_client_text_without_pcm() -> None:
         bridge.notify(
             json.dumps(
                 {
-                    "protocol_version": "1.0",
+                    "protocol_version": "1.1",
                     "event_id": "10000000-0000-4000-8000-000000000010",
                     "session_id": "20000000-0000-4000-8000-000000000010",
                     "monotonic_timestamp_ms": 1_000,
@@ -1575,7 +1575,7 @@ def test_production_core_bridge_does_not_use_client_text_without_pcm() -> None:
         bridge.notify(
             json.dumps(
                 {
-                    "protocol_version": "1.0",
+                    "protocol_version": "1.1",
                     "event_id": "10000000-0000-4000-8000-000000000011",
                     "session_id": "20000000-0000-4000-8000-000000000010",
                     "monotonic_timestamp_ms": 1_001,
@@ -2183,7 +2183,7 @@ def test_bootstrap_timeout_leaves_room_cleanup_owned_until_it_finishes() -> None
             timeout_seconds=0.01,
         )
         request = {
-            "protocol_version": "1.0",
+            "protocol_version": "1.1",
             "request_id": "10000000-0000-4000-8000-000000000010",
             "character_id": "miori",
             "conversation_id": "20000000-0000-4000-8000-000000000011",
@@ -2464,7 +2464,7 @@ def test_production_connect_failure_is_compensated_by_bootstrap_owner(
         timeout_seconds=0.1,
     )
     request = {
-        "protocol_version": "1.0",
+        "protocol_version": "1.1",
         "request_id": "10000000-0000-4000-8000-000000000010",
         "character_id": "miori",
         "conversation_id": "20000000-0000-4000-8000-000000000011",
