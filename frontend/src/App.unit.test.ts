@@ -44,7 +44,7 @@ const audioMocks = vi.hoisted(() => ({
   recorderStopAndTake: vi.fn(),
   recorderClose: vi.fn(),
   getUserMedia: vi.fn(),
-  microphoneStream: { getTracks: () => [] } as unknown as MediaStream,
+  microphoneStream: { getTracks: () => [], getAudioTracks: () => [] } as unknown as MediaStream,
   vadOptions: undefined as
     | {
         onFrameProcessed: (probabilities: { isSpeech: number; notSpeech: number }, frame: Float32Array) => void
@@ -220,6 +220,7 @@ const startLiveKitSession = async () => {
   await selectConversation()
   await fireEvent.click(screen.getByRole('button', { name: 'マイクをオンにする' }))
   await waitFor(() => expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(1))
+  await screen.findByRole('button', {name: 'マイクをオフにする'})
 }
 
 const emitCoreEvent = async (event: Record<string, unknown>) => {
@@ -560,6 +561,31 @@ describe('App conversation lifecycle', () => {
     expect(screen.getByText('再生: 停止済み')).toBeTruthy()
   })
 
+  test.each(['Enter', 'click'])('%s送信で受理を待ってfocusを解除し、同じsessionでマイクを再開する', async operation => {
+    render(App)
+    await startLiveKitSession()
+    const input = screen.getByRole<HTMLInputElement>('textbox', {name: 'メッセージ'})
+    await act(() => input.focus())
+    expect(await screen.findByText('入力: テキスト入力中')).toBeTruthy()
+    await fireEvent.input(input, {target: {value: '同じ音声会話'}})
+    if (operation === 'Enter') await fireEvent.keyDown(input, {key: 'Enter'})
+    else {
+      const button = screen.getByRole('button', {name: '送信'})
+      expect(await fireEvent.mouseDown(button)).toBe(false)
+      await fireEvent.click(button)
+    }
+    await waitFor(() => expect(liveKitMocks.controlEvents.some(event => event.type === 'user_text_submitted')).toBe(true))
+    const submitted = liveKitMocks.controlEvents.find(event => event.type === 'user_text_submitted')!
+    expect(document.activeElement).toBe(input)
+    expect(input.value).toBe('同じ音声会話')
+    expect(liveKitMocks.stopPlayback).not.toHaveBeenCalled()
+    await emitCoreEvent({type: 'user_input_result', input_event_id: submitted.event_id, status: 'accepted', response_id: RESPONSE_ID})
+    await waitFor(() => expect(document.activeElement).not.toBe(input))
+    expect(await screen.findByText('入力: 聞き取り中')).toBeTruthy()
+    expect(liveKitMocks.disconnect).not.toHaveBeenCalled()
+    expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(1)
+  })
+
   test('同じスレッドのtextをVoice Sessionへ送り、受理後に本文を消して同じ回答を表示する', async () => {
     render(App)
     await startLiveKitSession()
@@ -596,6 +622,33 @@ describe('App conversation lifecycle', () => {
     expect(screen.getByRole<HTMLInputElement>('textbox', {name: 'メッセージ'}).value).toBe('結果不明の本文')
     expect(screen.getByRole<HTMLButtonElement>('button', {name: '送信'}).disabled).toBe(true)
     expect(fetchMock.mock.calls.some(([input]) => String(input) === '/api/chat')).toBe(false)
+  })
+
+  test('送信拒否では本文とfocusを保持し、手動mute中の受理でもマイクを再開しない', async () => {
+    let eventSequence = 0
+    vi.stubGlobal('crypto', {randomUUID: () => `10000000-0000-4000-8000-${String(++eventSequence).padStart(12, '0')}`})
+    render(App)
+    await startLiveKitSession()
+    await fireEvent.click(screen.getByRole('button', {name: 'マイクをオフにする'}))
+    await screen.findByRole('button', {name: 'マイクをオンにする'})
+    const input = screen.getByRole<HTMLInputElement>('textbox', {name: 'メッセージ'})
+    await act(() => input.focus())
+    await fireEvent.input(input, {target: {value: '保持する入力'}})
+    await fireEvent.keyDown(input, {key: 'Enter'})
+    await waitFor(() => expect(liveKitMocks.controlEvents.some(event => event.type === 'user_text_submitted')).toBe(true))
+    const first = liveKitMocks.controlEvents.find(event => event.type === 'user_text_submitted')!
+    await emitCoreEvent({type: 'user_input_result', input_event_id: first.event_id, status: 'rejected', error_code: 'unavailable'})
+    expect(document.activeElement).toBe(input)
+    expect(input.value).toBe('保持する入力')
+    await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', {name: '送信'}).disabled).toBe(false))
+    await fireEvent.keyDown(input, {key: 'Enter'})
+    await waitFor(() => expect(liveKitMocks.controlEvents.filter(event => event.type === 'user_text_submitted')).toHaveLength(2))
+    const second = liveKitMocks.controlEvents.filter(event => event.type === 'user_text_submitted')[1]
+    await emitCoreEvent({type: 'user_input_result', input_event_id: second.event_id, status: 'accepted', response_id: RESPONSE_ID})
+    await waitFor(() => expect(input.value).toBe(''))
+    expect(document.activeElement).not.toBe(input)
+    expect(screen.getByText('入力: ミュート')).toBeTruthy()
+    expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(1)
   })
 
   test('音声Aを継続してBへHTTP送信し、Aの回答をBへ混入させない', async () => {

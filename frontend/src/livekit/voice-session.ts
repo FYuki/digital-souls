@@ -12,6 +12,7 @@ import {
 import { LiveKitRoomClient, type RoomObservation } from './room'
 import type { SnapshotRequested } from '../lib/screen-perception/generated'
 import {TextSubmissionTracker, type TextSubmission} from './text-input'
+import {InputSuppressionPolicy} from './input-suppression'
 
 export type VoiceSessionPhase =
   | 'idle'
@@ -22,7 +23,7 @@ export type VoiceSessionPhase =
   | 'ended'
   | 'error'
 
-export type VoiceInputPhase = 'inactive' | 'muted' | 'listening' | 'transcribing'
+export type VoiceInputPhase = 'inactive' | 'muted' | 'suppressed' | 'listening' | 'transcribing'
 export type VoiceResponsePhase = 'idle' | 'thinking' | 'generating' | 'interrupting'
 export type VoicePlaybackPhase = 'idle' | 'playing' | 'stopped'
 
@@ -135,6 +136,11 @@ export class LiveKitVoiceSessionController {
   private pendingRetryAttempts = 0
   private ending: Promise<void> | null = null
   private microphoneEnabled = false
+  private inputSuppression = new InputSuppressionPolicy()
+  private microphoneStream: MediaStream | null = null
+  private microphoneTail: Promise<void> = Promise.resolve()
+  private focusRevision = 0
+  private inputGatePending = false
   private controlTail: Promise<void> = Promise.resolve()
   private generatingResponseId: string | null = null
   private playbackResponseId: string | null = null
@@ -277,6 +283,9 @@ export class LiveKitVoiceSessionController {
       await this.end()
     }
     const version = ++this.operationVersion
+    this.inputSuppression = new InputSuppressionPolicy()
+    this.inputGatePending = false
+    this.microphoneStream = null
     this.context = context
     this.setPhase('connecting')
     try {
@@ -361,26 +370,97 @@ export class LiveKitVoiceSessionController {
 
   async resumeMicrophone(stream: MediaStream): Promise<void> {
     const room = this.requiredRoom()
-    await room.publishMicrophone(stream)
-    this.microphoneEnabled = true
-    await this.publishControlEvent(room, this.event({ type: 'session_resumed' }))
-    this.input = 'listening'
-    this.setPhase('listening')
+    this.inputSuppression.resumeExplicitly()
+    this.microphoneStream = stream
+    this.setMicrophoneTracks(!this.inputSuppression.suppressed && !this.inputGatePending)
+    return this.queueMicrophoneOperation(async () => {
+      await room.publishMicrophone(stream)
+      if (room !== this.room) return
+      await this.publishControlEvent(room, this.event({ type: 'session_resumed' }))
+      this.microphoneEnabled = !this.hasPersistentMute()
+      this.refreshMicrophoneState()
+    })
   }
 
   async muteMicrophone(): Promise<void> {
-    const room = this.requiredRoom()
+    this.inputSuppression.mute()
     this.sessionSummary.mute_attempts += 1
     void this.publishSessionSummary().catch(() => undefined)
-    await room.muteMicrophone()
+    return this.applyPersistentMute()
+  }
+
+  async muteForThreadSwitch(): Promise<void> {
+    this.inputSuppression.switchThread()
+    await this.applyPersistentMute()
+    await this.publishFocusSuppression()
+  }
+
+  async setTextInputFocused(context: VoiceSessionContext, focused: boolean): Promise<void> {
+    if (!this.matchesContext(context)) return
+    if (this.inputSuppression.snapshot().includes('text_focus') === focused) return
+    this.inputSuppression.setFocused(focused)
+    this.inputGatePending = true
+    // focusではdeviceを即時無音化し、回答生成・再生には触れない。
+    if (focused) this.setMicrophoneTracks(false)
+    this.refreshMicrophoneState(false)
+    await this.publishFocusSuppression()
+  }
+
+  private hasPersistentMute(): boolean {
+    return this.inputSuppression.snapshot().some(reason => reason !== 'text_focus')
+  }
+
+  private setMicrophoneTracks(enabled: boolean): void {
+    for (const track of this.microphoneStream?.getAudioTracks() ?? []) track.enabled = enabled
+  }
+
+  private refreshMicrophoneState(updateTracks = true): void {
+    const enabled = this.microphoneEnabled && !this.inputSuppression.suppressed && !this.inputGatePending
+    if (updateTracks) this.setMicrophoneTracks(enabled && this.phase !== 'reconnecting')
+    this.input = !this.microphoneEnabled || this.hasPersistentMute() ? 'muted'
+      : enabled ? 'listening' : 'suppressed'
+    if (this.phase !== 'reconnecting') this.phase = this.microphoneEnabled ? 'listening' : 'muted'
+    this.publishSnapshot()
+  }
+
+  private queueMicrophoneOperation(operation: () => Promise<void>): Promise<void> {
+    const room = this.room
+    const next = this.microphoneTail.then(async () => {
+      if (room !== this.room) return
+      await operation()
+    })
+    this.microphoneTail = next.catch(() => undefined)
+    return next
+  }
+
+  private async applyPersistentMute(): Promise<void> {
+    const room = this.requiredRoom()
     this.microphoneEnabled = false
-    await this.publishControlEvent(room, this.event({ type: 'session_muted' }))
-    this.input = 'muted'
-    if (this.phase === 'reconnecting') this.publishSnapshot()
-    else this.setPhase('muted')
+    this.refreshMicrophoneState()
+    return this.queueMicrophoneOperation(async () => {
+      await room.muteMicrophone()
+      if (room !== this.room) return
+      await this.publishControlEvent(room, this.event({ type: 'session_muted' }))
+    })
+  }
+
+  private async publishFocusSuppression(): Promise<void> {
+    const revision = ++this.focusRevision
+    if (this.phase === 'reconnecting') return
+    const room = this.requiredRoom()
+    const event = this.event({type: 'audio_input_suppression_changed', reason: 'text_focus',
+      suppressed: this.inputSuppression.snapshot().includes('text_focus')})
+    return this.queueMicrophoneOperation(async () => {
+      await this.publishControlEvent(room, event)
+      if (room === this.room && revision === this.focusRevision) {
+        this.inputGatePending = false
+        this.refreshMicrophoneState()
+      }
+    })
   }
 
   async speechStarted(utteranceId: string, atMs: number): Promise<void> {
+    if (!this.microphoneEnabled || this.inputSuppression.suppressed || this.inputGatePending || this.phase === 'reconnecting') return
     const room = this.requiredRoom()
     const interruptedResponseId = this.generatingResponseId ?? this.playbackResponseId
     if (!this.speechStarts.has(utteranceId)) {
@@ -402,6 +482,7 @@ export class LiveKitVoiceSessionController {
   }
 
   async speechStopped(utteranceId: string, atMs: number): Promise<void> {
+    if (!this.microphoneEnabled || this.inputSuppression.suppressed || this.inputGatePending || this.phase === 'reconnecting') return
     const room = this.requiredRoom()
     await this.publishControlEvent(room, this.event({
       type: 'speech_stopped',
@@ -461,6 +542,9 @@ export class LiveKitVoiceSessionController {
     this.speechStarts.clear()
     this.interruptingUtterances.clear()
     this.microphoneEnabled = false
+    this.microphoneStream = null
+    this.inputSuppression = new InputSuppressionPolicy()
+    this.microphoneTail = Promise.resolve()
     this.input = 'inactive'
     this.response = 'idle'
     this.playback = 'idle'
@@ -515,6 +599,7 @@ export class LiveKitVoiceSessionController {
     if (version !== this.operationVersion || this.phase === 'ended') return
     if (observation.transport === 'unavailable') {
       this.preserveUnconfirmedText()
+      this.setMicrophoneTracks(false)
       this.setPhase('reconnecting')
       this.startReconnectTimer(version)
       return
@@ -522,6 +607,7 @@ export class LiveKitVoiceSessionController {
     if (observation.transport === 'available' && this.phase === 'reconnecting') {
       this.clearReconnectTimer()
       this.setPhase(this.microphoneEnabled ? 'listening' : 'muted')
+      void this.publishFocusSuppression().catch(() => undefined)
       void this.reconcileTextInputs()
     }
     if (observation.playbackCompletedResponseId) this.renderCompletedResponses.add(observation.playbackCompletedResponseId)
@@ -594,7 +680,7 @@ export class LiveKitVoiceSessionController {
     } else if (event.type === 'response_delta' && event.response_id === this.generatingResponseId) {
       this.response = 'generating'
     } else if (event.type === 'utterance_finalized' || event.type === 'utterance_discarded') {
-      this.input = this.microphoneEnabled ? 'listening' : 'muted'
+      this.refreshMicrophoneState()
       if (
         event.type === 'utterance_finalized'
         && event.should_response === true
@@ -631,8 +717,11 @@ export class LiveKitVoiceSessionController {
         this.playback = 'stopped'
       }
     } else if (event.type === 'error') {
-      this.microphoneEnabled = event.user_state !== 'muted'
-      this.input = event.user_state === 'muted' ? 'muted' : 'listening'
+      if (event.user_state === 'muted') {
+        this.inputSuppression.mute()
+        this.microphoneEnabled = false
+      }
+      this.refreshMicrophoneState()
       if (event.classification === 'terminal') {
         this.terminateTransport('error')
         this.notifyCoreEvent(event)

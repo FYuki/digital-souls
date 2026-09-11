@@ -83,6 +83,38 @@ test('マイクボタン操作でOFFから有効状態へ遷移する', async ({
   await expect(button).toHaveClass(/mic-standby|mic-active/)
 })
 
+for (const operation of ['Enter', 'click'] as const) {
+  for (const manualMute of [false, true]) {
+    test(`focusだけで音声入力を抑止し${operation}受理後もmanual mute=${manualMute}を保持する`, async ({page}) => {
+      const button = await driver.enableMicrophone(page)
+      if (manualMute) {
+        await button.click()
+        await expect(page.getByText('入力: ミュート')).toBeVisible()
+      }
+      await page.evaluate(() => (window as unknown as {__mockLiveKit: {beginInterruptibleResponse: () => void}}).__mockLiveKit.beginInterruptibleResponse())
+      const input = page.getByLabel('メッセージ')
+      await input.fill('文字入力を優先')
+      await expect(input).toBeFocused()
+      await expect(page.getByText(manualMute ? '入力: ミュート' : '入力: テキスト入力中')).toBeVisible()
+      await expect(page.getByText('再生: 再生中')).toBeVisible()
+      if (!manualMute) await expect.poll(() => page.evaluate(() =>
+        (window as unknown as {__mockLiveKit: {microphoneEnabled: () => boolean}}).__mockLiveKit.microphoneEnabled(),
+      )).toBe(false)
+      if (operation === 'Enter') await input.press('Enter')
+      else await page.getByRole('button', {name: '送信', exact: true}).click()
+      await expect(page.getByText('送信中', {exact: true})).toBeVisible()
+      await expect(input).toBeFocused()
+      await page.evaluate(() => (window as unknown as {__mockLiveKit: {resolveTextInput: (status: 'accepted') => void}}).__mockLiveKit.resolveTextInput('accepted'))
+      await expect(input).not.toBeFocused()
+      await expect(input).toHaveValue('')
+      await expect(page.getByText(manualMute ? '入力: ミュート' : '入力: 聞き取り中')).toBeVisible()
+      await expect.poll(() => page.evaluate(() =>
+        (window as unknown as {__mockLiveKit: {lifecycle: {publishMicrophoneCount: number}}}).__mockLiveKit.lifecycle.publishMicrophoneCount,
+      )).toBe(1)
+    })
+  }
+}
+
 test('VADの発話イベント中も継続microphone sessionを維持する', async ({ page }) => {
   const button = await driver.enableMicrophone(page)
   await expect(button).toHaveClass(/mic-active/, { timeout: 15_000 })

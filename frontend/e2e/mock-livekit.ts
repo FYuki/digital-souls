@@ -50,6 +50,8 @@ export const installMockLiveKit = async (
         let responseSequence = 0
         let activeResponseId: string | null = null
         const emittedUtterances = new Set<string>()
+        const controlEvents: Record<string, unknown>[] = []
+        let microphoneStream: MediaStream | null = null
         const lifecycle = {
           publishMicrophoneCount: 0,
           muteMicrophoneCount: 0,
@@ -111,6 +113,14 @@ export const installMockLiveKit = async (
           activeResponseId = null
         }
         ;(window as unknown as { __mockLiveKit?: Record<string, unknown> }).__mockLiveKit = {
+          controlEvents,
+          microphoneEnabled: () => microphoneStream?.getAudioTracks().some(track => track.enabled) ?? false,
+          resolveTextInput: (status: 'accepted' | 'rejected') => {
+            const input = [...controlEvents].reverse().find(event => event.type === 'user_text_submitted')
+            if (input === undefined) throw new Error('text input has not arrived')
+            receiveCoreEvent({type: 'user_input_result', session_id: sessionId,
+              input_event_id: input.event_id, status})
+          },
           submitUtterance: async () => {
             const utteranceId = crypto.randomUUID()
             await emitResponse(utteranceId)
@@ -158,7 +168,8 @@ export const installMockLiveKit = async (
             conversationId = token.split(':').at(-1) ?? ''
             observe({ transport: 'available', control: 'available', audio: 'unavailable' })
           },
-          async publishMicrophone() {
+          async publishMicrophone(stream: MediaStream) {
+            microphoneStream = stream
             lifecycle.publishMicrophoneCount += 1
           },
           async muteMicrophone() {
@@ -195,6 +206,7 @@ export const installMockLiveKit = async (
             return 0
           },
           async publishControlEvent(event: Record<string, unknown>) {
+            controlEvents.push(event)
             if (event.type === 'response_cancel_requested') {
               const responseId = String(event.response_id)
               const probe = (window as unknown as { __voiceChatE2E?: {
