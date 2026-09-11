@@ -11,6 +11,7 @@ import {
 } from './client'
 import { LiveKitRoomClient, type RoomObservation } from './room'
 import type { SnapshotRequested } from '../lib/screen-perception/generated'
+import {TextSubmissionTracker, type TextSubmission} from './text-input'
 
 export type VoiceSessionPhase =
   | 'idle'
@@ -38,6 +39,7 @@ export type VoiceSessionSnapshot = Readonly<{
   context: VoiceSessionContext | null
   sessionId: string | null
   activeResponseId: string | null
+  textSubmissions: readonly TextSubmission[]
 }>
 
 export type VoiceSessionRoom = {
@@ -143,10 +145,12 @@ export class LiveKitVoiceSessionController {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private screenClientSessionId: string | null = null
   private receiveScreenRequest: (event: SnapshotRequested) => void = () => undefined
+  private readonly textInputs = new TextSubmissionTracker()
+  private textResultTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(
     private readonly observe: (snapshot: VoiceSessionSnapshot) => void,
-    private readonly receiveCoreEvent: (event: VoiceSessionEvent) => void,
+    private readonly receiveCoreEvent: (event: VoiceSessionEvent, context: VoiceSessionContext) => void,
     private readonly dependencies: VoiceSessionDependencies = defaultDependencies,
   ) {
     const testPort = (globalThis as typeof globalThis & {
@@ -171,7 +175,89 @@ export class LiveKitVoiceSessionController {
       context: this.context,
       sessionId: this.binding?.session_id ?? null,
       activeResponseId: this.generatingResponseId ?? this.playbackResponseId,
+      textSubmissions: this.textInputs.snapshot(),
     }
+  }
+
+  matchesContext(context: VoiceSessionContext): boolean {
+    return sameContext(this.context, context) && this.binding !== null && this.room !== null
+  }
+
+  canSubmitText(context: VoiceSessionContext): boolean {
+    return this.matchesContext(context) && (this.phase === 'listening' || this.phase === 'muted')
+      && !this.textInputs.hasPending(context)
+  }
+
+  async interruptResponse(context: VoiceSessionContext): Promise<void> {
+    if (!this.matchesContext(context)) throw new Error('response belongs to another thread')
+    const responseId = this.generatingResponseId ?? this.playbackResponseId
+    if (responseId === null) return
+    const room = this.requiredRoom()
+    const lastPlayed = room.stopPlayback(responseId)
+    this.interruptedResponseIds.add(responseId)
+    this.playback = 'stopped'
+    if (this.generatingResponseId === responseId) this.response = 'interrupting'
+    this.publishSnapshot()
+    await this.publishControlEvent(room, this.event({type: 'playback_stopped',
+      response_id: responseId, reason: 'barge_in', last_played_audio_sequence: lastPlayed}))
+    await this.publishControlEvent(room, this.event({type: 'response_cancel_requested',
+      response_id: responseId, reason: 'barge_in'}))
+  }
+
+  async submitText(context: VoiceSessionContext, text: string): Promise<string> {
+    if (!this.canSubmitText(context)) throw new Error('text input is unavailable for this thread')
+    const room = this.requiredRoom()
+    const event = this.event({type: 'user_text_submitted', text, speaker: this.userSpeaker()})
+    this.textInputs.begin(event, context)
+    this.publishSnapshot()
+    this.scheduleTextResultQuery()
+    try {
+      await room.publishControlEvent(event)
+    } catch {
+      // publish失敗はBE未受理の証拠ではない。本文と元のIDを保持する。
+      this.textInputs.markUnknown(event.session_id, event.event_id)
+      this.publishSnapshot()
+    }
+    return event.event_id
+  }
+
+  private scheduleTextResultQuery(): void {
+    if (this.textResultTimer !== null || this.binding === null || this.phase === 'reconnecting'
+      || this.textInputs.pending(this.binding.session_id).length === 0) return
+    this.textResultTimer = setTimeout(() => {
+      this.textResultTimer = null
+      if (this.binding !== null) this.textInputs.markUnknown(this.binding.session_id)
+      this.publishSnapshot()
+      void this.reconcileTextInputs()
+    }, 5_000)
+  }
+
+  private async reconcileTextInputs(): Promise<void> {
+    const room = this.room, binding = this.binding
+    if (room === null || binding === null || this.phase === 'reconnecting') return
+    try {
+      for (const entry of this.textInputs.pending(binding.session_id)) {
+        const event = this.event({type: 'user_input_result_requested',
+          input_event_id: entry.inputId, speaker: this.userSpeaker()})
+        // 元のpublish完了待ちで照合要求を塞がない。再送はroomのoutboxが所有する。
+        await room.publishControlEvent(event)
+      }
+    } catch {
+      this.textInputs.markUnknown(binding.session_id)
+      this.publishSnapshot()
+    } finally {
+      this.scheduleTextResultQuery()
+    }
+  }
+
+  private clearTextResultTimer(): void {
+    if (this.textResultTimer !== null) clearTimeout(this.textResultTimer)
+    this.textResultTimer = null
+  }
+
+  private preserveUnconfirmedText(): void {
+    this.clearTextResultTimer()
+    if (this.binding !== null) this.textInputs.markUnknown(this.binding.session_id)
   }
 
   setScreenIntegration(
@@ -216,6 +302,7 @@ export class LiveKitVoiceSessionController {
         return
       }
       this.binding = binding
+      this.textInputs.releaseResolvedSessions(binding.session_id)
       this.room = room
       this.sessionSummary = {
         sequence: 0, microphone_activation_attempts: 0, mute_attempts: 0,
@@ -347,6 +434,7 @@ export class LiveKitVoiceSessionController {
   private async finishEnd(): Promise<void> {
     const binding = this.binding
     const room = this.room
+    this.preserveUnconfirmedText()
     ++this.operationVersion
     this.clearReconnectTimer()
     if (binding !== null && room !== null) {
@@ -426,6 +514,7 @@ export class LiveKitVoiceSessionController {
   private receiveRoomObservation(version: number, observation: RoomObservation): void {
     if (version !== this.operationVersion || this.phase === 'ended') return
     if (observation.transport === 'unavailable') {
+      this.preserveUnconfirmedText()
       this.setPhase('reconnecting')
       this.startReconnectTimer(version)
       return
@@ -433,6 +522,7 @@ export class LiveKitVoiceSessionController {
     if (observation.transport === 'available' && this.phase === 'reconnecting') {
       this.clearReconnectTimer()
       this.setPhase(this.microphoneEnabled ? 'listening' : 'muted')
+      void this.reconcileTextInputs()
     }
     if (observation.playbackCompletedResponseId) this.renderCompletedResponses.add(observation.playbackCompletedResponseId)
     if (
@@ -461,6 +551,14 @@ export class LiveKitVoiceSessionController {
   }
 
   private receiveRoomCoreEvent(event: VoiceSessionEvent): void {
+    if (event.type === 'user_input_result') {
+      if (event.session_id !== this.binding?.session_id) return
+      if (!this.textInputs.receive(event)) return
+      if (this.textInputs.pending(event.session_id).length === 0) this.clearTextResultTimer()
+      this.publishSnapshot()
+      this.notifyCoreEvent(event)
+      return
+    }
     if (event.type === 'response_started') this.renderCompletedResponses.clear()
     if (event.type === 'turn_decision' && (event.final || event.decision === 'take_turn')) {
       this.publishInterruptionObservation('turn_decision_received', event.utterance_id, event.response_id)
@@ -473,7 +571,7 @@ export class LiveKitVoiceSessionController {
     }
     if (event.type === 'session_ended') {
       this.terminateTransport('ended')
-      this.receiveCoreEvent(event)
+      this.notifyCoreEvent(event)
       return
     }
     if (
@@ -537,12 +635,16 @@ export class LiveKitVoiceSessionController {
       this.input = event.user_state === 'muted' ? 'muted' : 'listening'
       if (event.classification === 'terminal') {
         this.terminateTransport('error')
-        this.receiveCoreEvent(event)
+        this.notifyCoreEvent(event)
         return
       }
     }
     this.publishSnapshot()
-    this.receiveCoreEvent(event)
+    this.notifyCoreEvent(event)
+  }
+
+  private notifyCoreEvent(event: VoiceSessionEvent): void {
+    if (this.context !== null) this.receiveCoreEvent(event, this.context)
   }
 
   private publishInterruptionObservation(
@@ -583,6 +685,7 @@ export class LiveKitVoiceSessionController {
   }
 
   private terminateTransport(phase: 'ended' | 'error'): void {
+    this.preserveUnconfirmedText()
     ++this.operationVersion
     this.clearReconnectTimer()
     this.room?.disconnect()
@@ -610,6 +713,7 @@ export class LiveKitVoiceSessionController {
       this.reconnectTimer = null
       if (version !== this.operationVersion || this.phase !== 'reconnecting') return
       const binding = this.binding
+      this.preserveUnconfirmedText()
       this.room?.disconnect()
       ++this.operationVersion
       this.room = null
