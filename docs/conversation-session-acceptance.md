@@ -77,6 +77,8 @@ transport failure、音声出力区間の重複、packet証拠の欠測、出力
 
 [開始前の版の比較試行](artifacts/conversation-session-reconnect-baseline-2026-09-11.json) は成功した。control復旧上限2,356.4ms、audio復旧上限2,476.4msで、次回答の完全再生・終了・専用環境の片付けも成功。各版1試行だけなので、#319の回帰とも既存の揺らぎとも断定しない。現行版の追加試行と、遅延が生じた状態同期・復旧probeを調査する。初回の5.19秒は除外せず残す。
 
+[現行版の追加試行](artifacts/conversation-session-reconnect-repeat-real-2026-09-11.json) は製品コード変更なしで成功し、control復旧上限2,556.8ms、audio復旧上限2,686.6ms、次回答の完全再生を確認した。初回の遅延を単発の成功で解決済みにせず、既存 `run_reconnect_cohort.py` の100session集計へ進む。全試行と失敗を保持し、既存の10秒以内成功率99%以上・p95 3,000ms以下・重複0の条件を変更しない。
+
 ## 条件と検証の対応
 
 | 条件 | 現在の証拠 | 残作業 |

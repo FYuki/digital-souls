@@ -1,0 +1,254 @@
+{
+  "measurement_scope": "livekit_fault_recovery_session_diagnostic",
+  "measurement_revision": "736126d89b9ef048cd64c1769fb332b39c8d3233",
+  "fixture_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+  "outcome": "success",
+  "failure_stage": null,
+  "fault_duration_ms": 2000,
+  "fault_operation_succeeded": true,
+  "network_fault_affected_control": true,
+  "fault_recovery_passed": true,
+  "recovery": {
+    "control_recovery_upper_ms": 2556.7707509994507,
+    "audio_recovery_upper_ms": 2686.638250999451,
+    "recovery_upper_ms": 2686.638250999451,
+    "duplicate_packet_output_intervals": 0,
+    "packet_evidence_missing": 0,
+    "output_path_failures": 0,
+    "output_evidence_complete": true,
+    "duplicate_measurement_scope": "overlapping_response_ssrc_rtp_sample_intervals",
+    "audio_missing_reason": null
+  },
+  "session_end_confirmed": true,
+  "fault_clock_process_closed": true,
+  "issue": 319,
+  "run_id": "conversation-327-reconnect-20260911b",
+  "threshold_ms": 3000,
+  "source": "fixed audio; unchanged production code; independent second diagnostic",
+  "human_microphone_listening": "not performed",
+  "post_fault_followup": {
+    "outcome": "success",
+    "same_session": true,
+    "playback_completion": {
+      "expectedSamples": 225600,
+      "inputSamples": 223742,
+      "paddingSamples": 1858,
+      "renderedSamples": 225600,
+      "packetCount": 235,
+      "firstOutputFrame": 72576,
+      "lastOutputEndFrame": 298176,
+      "gapSamples": 0,
+      "maximumGapSamples": 0,
+      "gapCount": 0,
+      "firstRtpTimestamp": 1615795117,
+      "lastRtpTimestamp": 1616019757,
+      "outputClockContextTime": 6.213334333333333,
+      "outputClockPerformanceTime": 26723.5,
+      "confirmationObservedAtMs": 26725.70000001788,
+      "sampleRate": 48000
+    }
+  },
+  "connection_events": [
+    {
+      "event": "signal_connected",
+      "atMs": 1379.6000000238419,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 5751.800000011921,
+      "generation": 0,
+      "retry": {
+        "retryCount": 0,
+        "elapsedMs": 0,
+        "delayMs": 0
+      }
+    },
+    {
+      "event": "signal_reconnecting",
+      "atMs": 5753,
+      "generation": 0
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 5753.800000011921,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 5765,
+      "generation": 0,
+      "retry": {
+        "retryCount": 1,
+        "elapsedMs": 13.299999982118607,
+        "delayMs": 263.8206469620578
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 6007.300000011921,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 6034.200000017881,
+      "generation": 0,
+      "retry": {
+        "retryCount": 2,
+        "elapsedMs": 282.5,
+        "delayMs": 296.9645289236819
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 6262.4000000059605,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 6339.700000017881,
+      "generation": 0,
+      "retry": {
+        "retryCount": 3,
+        "elapsedMs": 588,
+        "delayMs": 281.749099642946
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 6517.300000011921,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 6630.700000017881,
+      "generation": 0,
+      "retry": {
+        "retryCount": 4,
+        "elapsedMs": 879,
+        "delayMs": 470.2921305826692
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 6772.200000017881,
+      "generation": 0
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 7027.300000011921,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 7109.4000000059605,
+      "generation": 0,
+      "retry": {
+        "retryCount": 5,
+        "elapsedMs": 1357.699999988079,
+        "delayMs": 418.2406911505626
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 7282.200000017881,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 7534.5,
+      "generation": 0,
+      "retry": {
+        "retryCount": 6,
+        "elapsedMs": 1782.7999999821186,
+        "delayMs": 414.56870474963665
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 7537.300000011921,
+      "generation": 0
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 7792.300000011921,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 7954.300000011921,
+      "generation": 0,
+      "retry": {
+        "retryCount": 7,
+        "elapsedMs": 2202.5,
+        "delayMs": 256.8859760866976
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 8047.200000017881,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 8219.40000000596,
+      "generation": 0,
+      "retry": {
+        "retryCount": 8,
+        "elapsedMs": 2467.699999988079,
+        "delayMs": 474.76376478160256
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 8302.300000011921,
+      "generation": 0
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 8557.300000011921,
+      "generation": 0
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 8807.300000011921,
+      "generation": 0
+    },
+    {
+      "event": "authoritative_state",
+      "atMs": 8883.5,
+      "generation": 1
+    },
+    {
+      "event": "authoritative_state",
+      "atMs": 8888.5,
+      "generation": 2
+    },
+    {
+      "event": "reconnected",
+      "atMs": 10706.300000011921,
+      "generation": 2
+    },
+    {
+      "event": "authoritative_state",
+      "atMs": 10710.90000000596,
+      "generation": 2
+    }
+  ],
+  "native_sdk": {
+    "status": "verified",
+    "build": {
+      "schema_version": 1,
+      "python_sdk_version": "1.1.16",
+      "ffi_version": "0.12.73",
+      "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+      "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+      "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+      "reconnect_policy": "short-outage-v1",
+      "target": "x86_64-unknown-linux-gnu",
+      "cuda_video_codecs_enabled": false
+    }
+  },
+  "teardown_status": "completed",
+  "dedicated_fault_container_and_network_removed": true
+}
