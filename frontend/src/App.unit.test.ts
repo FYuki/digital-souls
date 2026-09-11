@@ -560,44 +560,72 @@ describe('App conversation lifecycle', () => {
     expect(screen.getByText('再生: 停止済み')).toBeTruthy()
   })
 
-  test('音声session中のtext送信は音声を終了してからHTTP経路を使う', async () => {
+  test('同じスレッドのtextをVoice Sessionへ送り、受理後に本文を消して同じ回答を表示する', async () => {
     render(App)
     await startLiveKitSession()
     await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
-      target: { value: 'テキストへ切り替える' },
+      target: { value: '音声と同じ会話への入力' },
     })
     await fireEvent.click(screen.getByRole('button', { name: '送信' }))
 
-    await screen.findByText('HTTP応答です。')
-    expect(liveKitMocks.disconnect).toHaveBeenCalledTimes(1)
-    const requests = fetchMock.mock.calls.map(([input, init]) => ({
-      url: String(input), method: init?.method,
-    }))
-    const endIndex = requests.findIndex((request) => (
-      request.url.includes('/api/voice/livekit/sessions/')
-      && request.method === 'DELETE'
-    ))
-    const chatIndex = requests.findIndex((request) => request.url === '/api/chat')
-    expect(endIndex).toBeGreaterThanOrEqual(0)
-    expect(chatIndex).toBeGreaterThan(endIndex)
+    await waitFor(() => expect(liveKitMocks.controlEvents.some(event => event.type === 'user_text_submitted')).toBe(true))
+    const submitted = liveKitMocks.controlEvents.find(event => event.type === 'user_text_submitted')!
+    const textbox = screen.getByRole<HTMLInputElement>('textbox', {name: 'メッセージ'})
+    expect(textbox.value).toBe('音声と同じ会話への入力')
+    await emitCoreEvent({type: 'user_input_result', input_event_id: submitted.event_id, status: 'accepted', response_id: RESPONSE_ID})
+    await waitFor(() => expect(textbox.value).toBe(''))
+    await emitCoreEvent({type: 'response_started', response_id: RESPONSE_ID,
+      source_utterance_ids: [], source_inputs: [{input_id: submitted.event_id, source: 'text'}]})
+    await emitCoreEvent({type: 'response_delta', response_id: RESPONSE_ID, text_sequence: 1, text: '同じ音声会話の回答'})
+    expect(await screen.findByText('音声と同じ会話への入力')).toBeTruthy()
+    expect(await screen.findByText('同じ音声会話の回答')).toBeTruthy()
+    expect(liveKitMocks.disconnect).not.toHaveBeenCalled()
+    expect(fetchMock.mock.calls.some(([input]) => String(input) === '/api/chat')).toBe(false)
   })
 
-  test('音声session終了APIが失敗してもtext送信を継続する', async () => {
+  test('受理結果不明を送信確認中と表示し本文を保持する', async () => {
+    render(App)
+    await startLiveKitSession()
+    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
+      target: { value: '結果不明の本文' },
+    })
+    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
+
+    await act(() => liveKitMocks.observeRoom?.({transport: 'unavailable', control: 'unavailable', audio: 'unavailable'}))
+    expect(await screen.findByText('送信確認中')).toBeTruthy()
+    expect(screen.getByRole<HTMLInputElement>('textbox', {name: 'メッセージ'}).value).toBe('結果不明の本文')
+    expect(screen.getByRole<HTMLButtonElement>('button', {name: '送信'}).disabled).toBe(true)
+    expect(fetchMock.mock.calls.some(([input]) => String(input) === '/api/chat')).toBe(false)
+  })
+
+  test('音声Aを継続してBへHTTP送信し、Aの回答をBへ混入させない', async () => {
     fetchMock.mockImplementation(async (input, init) => {
-      if (String(input).startsWith('/api/voice/livekit/sessions/') && init?.method === 'DELETE') {
-        return new Response(null, { status: 503 })
+      const url = String(input)
+      if (url === '/api/characters/miori/conversations' && init === undefined) {
+        return new Response(JSON.stringify([conversation, {...conversation, conversation_id: SECOND_CONVERSATION_ID, title: '別スレッドB'}]))
       }
       return defaultFetch(input, init)
     })
     render(App)
     await startLiveKitSession()
-    await fireEvent.input(screen.getByRole('textbox', { name: 'メッセージ' }), {
-      target: { value: '終了失敗後も送信する' },
-    })
-    await fireEvent.click(screen.getByRole('button', { name: '送信' }))
-
+    await emitCoreEvent({type: 'utterance_finalized', utterance_id: TURN_ID, transcript: 'Aだけの音声質問', should_response: true})
+    await emitCoreEvent({type: 'response_started', response_id: RESPONSE_ID, source_utterance_ids: [TURN_ID]})
+    await fireEvent.click(screen.getByRole('button', {name: '別スレッドB'}))
+    await waitFor(() => expect(liveKitMocks.muteMicrophone).toHaveBeenCalledOnce())
+    await emitCoreEvent({type: 'response_delta', response_id: RESPONSE_ID, text_sequence: 1, text: 'Aだけの回答'})
+    expect(screen.queryByText('Aだけの回答')).toBeNull()
+    expect(liveKitMocks.disconnect).not.toHaveBeenCalled()
+    await fireEvent.input(screen.getByRole('textbox', {name: 'メッセージ'}), {target: {value: 'Bへの質問'}})
+    await fireEvent.click(screen.getByRole('button', {name: '送信'}))
     expect(await screen.findByText('HTTP応答です。')).toBeTruthy()
-    expect(fetchMock.mock.calls.some(([input]) => String(input) === '/api/chat')).toBe(true)
+    const call = fetchMock.mock.calls.find(([input]) => String(input) === '/api/chat')!
+    expect(JSON.parse(String(call[1]?.body))).toMatchObject({conversation_id: SECOND_CONVERSATION_ID, message: 'Bへの質問'})
+    expect(liveKitMocks.controlEvents.some(event => event.type === 'user_text_submitted')).toBe(false)
+    expect(liveKitMocks.stopPlayback).not.toHaveBeenCalled()
+    expect(liveKitMocks.disconnect).not.toHaveBeenCalled()
+    await selectConversation()
+    expect(await screen.findByText('Aだけの回答')).toBeTruthy()
+    expect(liveKitMocks.publishMicrophone).toHaveBeenCalledTimes(1)
   })
 
   test('recoverable音声エラー後もmicを維持して次の応答を処理する', async () => {
