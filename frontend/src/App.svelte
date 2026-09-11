@@ -133,6 +133,7 @@
     context: null,
     sessionId: null,
     activeResponseId: null,
+    textSubmissions: [],
   }
   const voiceSession = new LiveKitVoiceSessionController(
     (snapshot) => {

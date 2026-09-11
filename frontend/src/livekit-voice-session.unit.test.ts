@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import type { VoiceSessionEvent } from './lib/voice-session/generated'
 import type { RoomObservation } from './livekit/room'
@@ -14,11 +14,14 @@ const PARTICIPANT_ID = '40000000-0000-4000-8000-000000000001'
 const UTTERANCE_ID = '30000000-0000-4000-8000-000000000001'
 const MICROPHONE_STREAM = {} as MediaStream
 
+afterEach(() => { vi.useRealTimers() })
+
 const setup = () => {
   const events: VoiceSessionEvent[] = []
   const snapshots: VoiceSessionSnapshot[] = []
   const observations: Array<(value: RoomObservation) => void> = []
   const coreEventReceivers: Array<(event: VoiceSessionEvent) => void> = []
+  const delivered: Array<{event: VoiceSessionEvent; context: {characterId: string; conversationId: string}}> = []
   const room: VoiceSessionRoom = {
     connect: vi.fn(async () => undefined),
     publishMicrophone: vi.fn(async () => undefined),
@@ -49,7 +52,7 @@ const setup = () => {
   }
   const controller = new LiveKitVoiceSessionController(
     (snapshot) => snapshots.push(snapshot),
-    () => undefined,
+    (event, context) => delivered.push({event, context}),
     dependencies,
   )
   return {
@@ -60,6 +63,7 @@ const setup = () => {
     observations,
     room,
     snapshots,
+    delivered,
   }
 }
 
@@ -405,10 +409,149 @@ describe('通常会話UI向けLiveKit音声session', () => {
       context: null,
       sessionId: null,
       activeResponseId: null,
+      textSubmissions: [],
     })
   })
 })
 
+
+describe('音声sessionのテキスト受付と結果照合', () => {
+  const context = {characterId: 'miori', conversationId: 'thread-a'}
+  const result = (inputId: string, status: 'processing' | 'accepted' | 'rejected' | 'not_received',
+    sessionId = SESSION_ID): VoiceSessionEvent => ({
+    type: 'user_input_result', protocol_version: '1.1', session_id: sessionId,
+    event_id: crypto.randomUUID(), monotonic_timestamp_ms: 1, input_event_id: inputId, status,
+  })
+
+  test('配送完了で本文を消さず、BE受理結果を送信元スレッドへ対応付ける', async () => {
+    const {controller, events, coreEventReceivers} = setup()
+    await controller.ensureSession(context)
+    const id = await controller.submitText(context, '直接テキスト')
+    expect(controller.snapshot().textSubmissions).toEqual([{
+      inputId: id, sessionId: SESSION_ID, context, text: '直接テキスト',
+      status: 'sending', responseId: null, errorCode: null,
+    }])
+    expect(controller.snapshot().response).toBe('idle')
+    expect(controller.canSubmitText(context)).toBe(false)
+    coreEventReceivers[0](result(id, 'accepted'))
+    expect(controller.snapshot().textSubmissions[0].status).toBe('accepted')
+    expect(controller.canSubmitText(context)).toBe(true)
+    coreEventReceivers[0](result(id, 'processing'))
+    expect(controller.snapshot().textSubmissions[0].status).toBe('accepted')
+    expect(events.filter(event => event.type === 'user_text_submitted')).toHaveLength(1)
+    await controller.end()
+  })
+
+  test('表示スレッドが異なる送信で既存sessionを誤操作しない', async () => {
+    const {controller, room, events, dependencies} = setup()
+    await controller.ensureSession(context)
+    const before = events.length
+    await expect(controller.submitText({...context, conversationId: 'thread-b'}, '別スレッド')).rejects.toThrow()
+    expect(events).toHaveLength(before)
+    expect(room.stopPlayback).not.toHaveBeenCalled()
+    expect(dependencies.endSession).not.toHaveBeenCalled()
+    await controller.end()
+  })
+
+  test('切断後は元のIDを照合し、新しい入力として自動再送しない', async () => {
+    const {controller, observations, events, coreEventReceivers} = setup()
+    await controller.ensureSession(context)
+    const id = await controller.submitText(context, '送信確認を続ける本文')
+    observations[0]({transport: 'unavailable', control: 'unavailable', audio: 'unavailable'})
+    expect(controller.snapshot().textSubmissions[0]).toMatchObject({status: 'confirming', text: '送信確認を続ける本文'})
+    observations[0]({transport: 'available', control: 'available', audio: 'available'})
+    await Promise.resolve()
+    expect(events.filter(event => event.type === 'user_input_result_requested')).toMatchObject([{input_event_id: id}])
+    expect(events.filter(event => event.type === 'user_text_submitted')).toHaveLength(1)
+    coreEventReceivers[0](result(id, 'accepted'))
+    await controller.end()
+  })
+
+  test.each(['not_received', 'rejected'] as const)('BEの%sだけが明示的な再送を許可する', async status => {
+    const {controller, coreEventReceivers} = setup()
+    await controller.ensureSession(context)
+    const id = await controller.submitText(context, '再送する本文')
+    coreEventReceivers[0](result(id, status, 'other-session'))
+    expect(controller.canSubmitText(context)).toBe(false)
+    coreEventReceivers[0](result(id, status))
+    const nextId = await controller.submitText(context, '再送する本文')
+    expect(nextId).not.toBe(id)
+    coreEventReceivers[0](result(nextId, 'accepted'))
+    await controller.end()
+  })
+
+  test('publish例外とsession終了を未受理へ読み替えず本文を保持する', async () => {
+    const {controller, room} = setup()
+    await controller.ensureSession(context)
+    vi.mocked(room.publishControlEvent).mockRejectedValueOnce(new Error('connection lost'))
+    await controller.submitText(context, '失われてはいけない本文')
+    expect(controller.snapshot().textSubmissions[0].status).toBe('confirming')
+    await controller.end()
+    expect(controller.snapshot().textSubmissions[0]).toMatchObject({status: 'confirming', text: '失われてはいけない本文', context})
+  })
+
+  test('結果未着のタイムアウトで照合を行い、processingの間は新規送信しない', async () => {
+    vi.useFakeTimers()
+    const {controller, coreEventReceivers, events} = setup()
+    await controller.ensureSession(context)
+    const id = await controller.submitText(context, '結果通知待ち')
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(controller.snapshot().textSubmissions[0].status).toBe('confirming')
+    coreEventReceivers[0](result(id, 'processing'))
+    expect(controller.canSubmitText(context)).toBe(false)
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(events.filter(event => event.type === 'user_input_result_requested')).toHaveLength(2)
+    coreEventReceivers[0](result(id, 'accepted'))
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(events.filter(event => event.type === 'user_input_result_requested')).toHaveLength(2)
+    await controller.end()
+  })
+
+  test('元publishが完了待ちでも再接続照合を送信できる', async () => {
+    const {controller, room, observations, events, coreEventReceivers} = setup()
+    await controller.ensureSession(context)
+    let release: () => void = () => undefined
+    vi.mocked(room.publishControlEvent).mockImplementationOnce(async event => {
+      events.push(event)
+      await new Promise<void>(resolve => { release = resolve })
+    })
+    const submitted = controller.submitText(context, 'publish待ちの入力')
+    const id = controller.snapshot().textSubmissions[0].inputId
+    observations[0]({transport: 'unavailable', control: 'unavailable', audio: 'unavailable'})
+    observations[0]({transport: 'available', control: 'available', audio: 'available'})
+    await Promise.resolve()
+    expect(events.filter(event => event.type === 'user_input_result_requested')).toHaveLength(1)
+    coreEventReceivers[0](result(id, 'accepted'))
+    release()
+    await submitted
+    await controller.end()
+  })
+
+  test('回答eventは表示先を参照せずsessionの所属スレッドと共に通知する', async () => {
+    const {controller, delivered, coreEventReceivers} = setup()
+    await controller.ensureSession(context)
+    coreEventReceivers[0]({type: 'response_started', response_id: 'response-a'} as VoiceSessionEvent)
+    expect(delivered[0].context).toEqual(context)
+    expect(controller.snapshot().response).toBe('generating')
+    await controller.end()
+  })
+
+  test('明示中断は即時local stopを行い、BE取消成立を先取りしない', async () => {
+    const {controller, room, events, coreEventReceivers} = setup()
+    await controller.ensureSession(context)
+    const responseId = '50000000-0000-4000-8000-000000000001'
+    coreEventReceivers[0]({type: 'response_started', response_id: responseId} as VoiceSessionEvent)
+    const interrupt = controller.interruptResponse(context)
+    expect(room.stopPlayback).toHaveBeenCalledWith(responseId)
+    expect(controller.snapshot().response).toBe('interrupting')
+    await interrupt
+    expect(events.slice(-2).map(event => event.type)).toEqual(['playback_stopped', 'response_cancel_requested'])
+    expect(controller.snapshot().response).toBe('interrupting')
+    coreEventReceivers[0]({type: 'response_cancelled', response_id: responseId} as VoiceSessionEvent)
+    expect(controller.snapshot().response).toBe('idle')
+    await controller.end()
+  })
+})
 
 describe('session単位の操作計測', () => {
   const summaries = (events: VoiceSessionEvent[]) => events
