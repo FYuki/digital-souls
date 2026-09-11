@@ -45,7 +45,7 @@ def test_reset_after_consumption_does_not_revoke_started_call_or_reopen_request(
                          fingerprint="request", preview={}, wait_seconds=60)
     store.answer(item.id, ApprovalChoice.ONCE)
     assert store.consume_request(key, item.id, 100)
-    store.set_permission(key, Permission.UNAPPROVED)
+    assert store.set_permission(key, Permission.UNAPPROVED) == ()
     store.set_permission(key, Permission.ALWAYS)
     assert not store.consume_request(key, item.id, 100)
     assert store.consume(key)

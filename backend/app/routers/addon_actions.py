@@ -256,7 +256,10 @@ async def update_permission(
             raise MCPFailure("policy", "connection_changed")
         key = ApprovalKey(connection.id, connection.identity, payload.operation_group, payload.scene)
         # awaitを挟まずidentity照合と設定変更を行う。ON/OFF・grantは変更しない。
-        policy.store.set_permission(key, payload.permission)
+        ended = policy.store.set_permission(key, payload.permission)
+        service: ToolService | None = getattr(request.app.state, "tool_service", None)
+        if service is not None:
+            service.end_idle_confirmations(ended)
         return {"setting": policy.store.settings(key)}
     except MCPFailure:
         raise HTTPException(409, "承認設定を変更できません。状態を再取得してください。") from None

@@ -92,7 +92,7 @@ def test_http_continue_is_bound_to_saved_answer_and_duplicate_does_not_restart(
 def test_admin_voice_continuation_rechecks_reset_while_waiting_for_audio(monkeypatch, tmp_path):
     async def run():
         conversation, voice = str(uuid4()), str(uuid4())
-        async with runtime(Decisions(call)) as (service, source, gate):
+        async with runtime(Decisions(call, call)) as (service, source, gate):
             gate.confirmations = p = policy(tmp_path)
             await service.run("miori", conversation, "実行して")
             rid = service.status("miori", conversation)["confirmation_id"]
@@ -130,6 +130,10 @@ def test_admin_voice_continuation_rechecks_reset_while_waiting_for_audio(monkeyp
                 assert (await continuing).json() == {"state": "ended"}
                 assert not source.calls and not p.store.request(rid).once_reserved
                 assert (await client.post(url + "/continue")).json() == {"state": "ended"}
+                with service.response_scope("miori", conversation):
+                    fresh = await service.run("miori", conversation, "別の操作を依頼します")
+                    assert fresh.waiting
+                    assert service.status("miori", conversation)["confirmation_id"] != rid
 
     asyncio.run(run())
 
