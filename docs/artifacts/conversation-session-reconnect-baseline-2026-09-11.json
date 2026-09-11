@@ -1,0 +1,269 @@
+{
+  "measurement_scope": "livekit_fault_recovery_session_diagnostic",
+  "measurement_revision": "051115fa445e432274fa6b07e9b53a647fc429c1",
+  "fixture_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+  "outcome": "success",
+  "failure_stage": null,
+  "expected_probes": 3,
+  "probes": [
+    {
+      "status": "received",
+      "generation": 0,
+      "probeId": "47db25dd-531e-4d20-8e30-41acb228e840",
+      "sentAtMs": 5341.9000000059605,
+      "receivedAtMs": 5360.0999999940395,
+      "sendCompletedAtMs": 5342.199999988079,
+      "playbackActive": true
+    },
+    {
+      "status": "received",
+      "generation": 0,
+      "probeId": "13f7ba53-897a-4037-9514-cfc825c05225",
+      "sentAtMs": 5464.699999988079,
+      "receivedAtMs": 5468,
+      "sendCompletedAtMs": 5464.9000000059605,
+      "playbackActive": true
+    },
+    {
+      "status": "received",
+      "generation": 0,
+      "probeId": "6a756acd-3761-49c1-a1c7-f493beb406aa",
+      "sentAtMs": 5570.5,
+      "receivedAtMs": 5575.0999999940395,
+      "sendCompletedAtMs": 5570.699999988079,
+      "playbackActive": true
+    }
+  ],
+  "fault_duration_ms": 2000,
+  "fault_operation_succeeded": true,
+  "network_fault_affected_control": true,
+  "fault_recovery_passed": true,
+  "recovery": {
+    "control_recovery_upper_ms": 2356.442325979471,
+    "audio_recovery_upper_ms": 2476.3959926401767,
+    "recovery_upper_ms": 2476.3959926401767,
+    "duplicate_packet_output_intervals": 0,
+    "packet_evidence_missing": 0,
+    "output_path_failures": 0,
+    "output_evidence_complete": true,
+    "duplicate_measurement_scope": "overlapping_response_ssrc_rtp_sample_intervals",
+    "audio_missing_reason": null
+  },
+  "session_end_confirmed": true,
+  "fault_clock_process_closed": true,
+  "issue": 319,
+  "run_id": "conversation-319-baseline-20260911a",
+  "threshold_ms": 3000,
+  "source": "pre-319 comparison; fixed audio and same dedicated network fault",
+  "human_microphone_listening": "not performed",
+  "post_fault_followup": {
+    "outcome": "success",
+    "same_session": true,
+    "playback_completion": {
+      "expectedSamples": 168960,
+      "inputSamples": 167422,
+      "paddingSamples": 1538,
+      "renderedSamples": 168960,
+      "packetCount": 176,
+      "firstOutputFrame": 63232,
+      "lastOutputEndFrame": 232192,
+      "gapSamples": 0,
+      "maximumGapSamples": 0,
+      "gapCount": 0,
+      "firstRtpTimestamp": 3767297875,
+      "lastRtpTimestamp": 3767465875,
+      "outputClockContextTime": 4.837334333333334,
+      "outputClockPerformanceTime": 25196.40000000596,
+      "confirmationObservedAtMs": 25196.59999999404,
+      "sampleRate": 48000
+    }
+  },
+  "connection_events": [
+    {
+      "event": "signal_connected",
+      "atMs": 1232.2999999821186,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 5644.699999988079,
+      "generation": 0,
+      "retry": {
+        "retryCount": 0,
+        "elapsedMs": 0,
+        "delayMs": 0
+      }
+    },
+    {
+      "event": "signal_reconnecting",
+      "atMs": 5645.9000000059605,
+      "generation": 0
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 5646.4000000059605,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 5658.699999988079,
+      "generation": 0,
+      "retry": {
+        "retryCount": 1,
+        "elapsedMs": 14,
+        "delayMs": 452.74417122651727
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 5899.699999988079,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 6117.5,
+      "generation": 0,
+      "retry": {
+        "retryCount": 2,
+        "elapsedMs": 472.80000001192093,
+        "delayMs": 438.1911628009004
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 6154.699999988079,
+      "generation": 0
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 6409.699999988079,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 6563.199999988079,
+      "generation": 0,
+      "retry": {
+        "retryCount": 3,
+        "elapsedMs": 918.4000000059605,
+        "delayMs": 381.93516177175024
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 6664.699999988079,
+      "generation": 0
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 6919.699999988079,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 6952.799999982119,
+      "generation": 0,
+      "retry": {
+        "retryCount": 4,
+        "elapsedMs": 1308.0999999940395,
+        "delayMs": 332.646352908153
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 7174.799999982119,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 7291.699999988079,
+      "generation": 0,
+      "retry": {
+        "retryCount": 5,
+        "elapsedMs": 1647,
+        "delayMs": 491.52869618245285
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 7429.799999982119,
+      "generation": 0
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 7684.9000000059605,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 7791.799999982119,
+      "generation": 0,
+      "retry": {
+        "retryCount": 6,
+        "elapsedMs": 2147.0999999940395,
+        "delayMs": 286.4104656734465
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 7940.0999999940395,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 8087.299999982119,
+      "generation": 0,
+      "retry": {
+        "retryCount": 7,
+        "elapsedMs": 2442.5999999940395,
+        "delayMs": 259.0011911590191
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 8194.699999988079,
+      "generation": 0
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 8449.799999982119,
+      "generation": 0
+    },
+    {
+      "event": "authoritative_state",
+      "atMs": 8564.299999982119,
+      "generation": 1
+    },
+    {
+      "event": "authoritative_state",
+      "atMs": 8566.59999999404,
+      "generation": 2
+    },
+    {
+      "event": "reconnected",
+      "atMs": 10362.90000000596,
+      "generation": 2
+    },
+    {
+      "event": "authoritative_state",
+      "atMs": 10368,
+      "generation": 2
+    }
+  ],
+  "native_sdk": {
+    "status": "verified",
+    "build": {
+      "schema_version": 1,
+      "python_sdk_version": "1.1.16",
+      "ffi_version": "0.12.73",
+      "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+      "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+      "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+      "reconnect_policy": "short-outage-v1",
+      "target": "x86_64-unknown-linux-gnu",
+      "cuda_video_codecs_enabled": false
+    }
+  },
+  "teardown_status": "completed",
+  "dedicated_fault_container_and_network_removed": true
+}

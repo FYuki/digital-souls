@@ -22,6 +22,8 @@ Core eventの通知callbackは`(event, context)`を受け取る。表示中の�
 
 `VoiceHistoryProjection`は共有protocolの`source_inputs`、STT確定文、送信本文から表示用のuser/character turnを作る。response ID・session ID・スレッドの対応とtext sequenceを検証し、重複・終端後の遅着deltaを反映しない。通常の保存済み履歴はBackendから取得し、この一時投影を第二の履歴正本にしない。sessionを解放したら`releaseSession`で投影の本文を解放する。
 
+`response_privacy_skipped`は`response_started`より前にも届く終端通知で、`response_id`と`source_inputs`だけを含む。controllerは該当応答の生成/再生を終了し、projectionは本文を持たない終端として遅着開始/deltaを拒否する。shellは表示用のlive turnがなくても通知の`context`に対応するBackend履歴を再取得し、保存された省略表示へ更新する。送信の`accepted`は回答の生成開始や本文保存の保証ではないため、この終端で受理結果を未受理へ戻さない。別スレッドや後発応答の状態を消さない。
+
 ## 入力抑止と中断
 
 `InputSuppressionPolicy`はmanual、text focus、thread switchを独立した理由として保持する。focus解除ではmanual/thread switchを消さない。スレッド切り替え時に`switchThread()`、元スレッドでの明示再開時だけ`resumeExplicitly()`を使う。device・VAD・BE抑止イベントへの反映は#325の責務とする。

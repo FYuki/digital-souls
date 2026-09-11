@@ -36,9 +36,13 @@ export function summarizeFaultRecoveryCohort(records: readonly Record<string, un
       throw new Error('reconnect fixture identity unavailable')
     }
     fixtures.add(record.fixture_sha256)
-    const audioMethod = record.audio_availability_method ?? 'response_packets'
-    if (!['response_packets', 'fresh_rtc_probe_and_followup'].includes(String(audioMethod))) throw new Error('unknown audio availability method')
-    audioMethods.add(String(audioMethod))
+    // 障害注入前の失敗には方式がまだない。旧packet方式と推定して混在扱いにせず、失敗分母には残す。
+    const audioMethod = record.audio_availability_method
+      ?? (record.fault_operation_succeeded === true ? 'response_packets' : null)
+    if (audioMethod !== null) {
+      if (!['response_packets', 'fresh_rtc_probe_and_followup'].includes(String(audioMethod))) throw new Error('unknown audio availability method')
+      audioMethods.add(String(audioMethod))
+    }
     if (typeof record.measurement_revision === 'string' && /^[0-9a-f]{40}$/.test(record.measurement_revision)) revisions.add(record.measurement_revision)
     else omit('measurement_revision_unavailable')
     if (uuid(record.session_id)) {
@@ -109,7 +113,7 @@ export function summarizeFaultRecoveryCohort(records: readonly Record<string, un
       } else omit('output_evidence_incomplete')
     } catch {omit('recovery_evidence_invalid')}
   }
-  if (audioMethods.size !== 1) throw new Error('reconnect cohort mixes audio availability methods')
+  if (audioMethods.size > 1) throw new Error('reconnect cohort mixes audio availability methods')
   if (revisions.size > 1) throw new Error('reconnect cohort mixes revisions')
   if (fixtures.size !== 1) throw new Error('reconnect cohort mixes fixtures')
   const coverage = sessions.size === expected && conversations.size === expected && verifiedFaults === expected
@@ -117,7 +121,7 @@ export function summarizeFaultRecoveryCohort(records: readonly Record<string, un
   const ratePassed = recovered.length * 100 >= expected * 99
   const p95 = quantile(recovered, .95)
   return {schema_version: '1.0', measurement_scope: 'livekit_fault_recovery_cohort_report',
-    audio_availability_method: [...audioMethods][0],
+    audio_availability_method: [...audioMethods][0] ?? null,
     fixture_sha256: [...fixtures][0], measurement_revision: [...revisions][0] ?? null,
     counts: {expected, recorded: records.length, independent_sessions: sessions.size, independent_conversations: conversations.size,
       verified_faults: verifiedFaults, complete_output_trials: completeOutput, recovered_within_ten_seconds: recovered.length,
