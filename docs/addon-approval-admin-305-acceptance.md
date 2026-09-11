@@ -56,15 +56,16 @@ Scenario: 古い接続へ承認を流用しない
 
 2026-09-11に以下を確認した。自動回帰・制御fixture・独立MCPへの実接続を区別する。
 
-- Backendの関連unit/module回帰110件が成功。音声入力待ち中の許可取消テストを加えた続行module全6件も成功。
-- Frontend unit 802件、module 136件、承認UIのmocked E2E 6件が成功。
-- Svelte/TypeScript、mypy（284ファイル）、ruff、Frontend buildが成功。
-- 実接続受入1件が108秒で成功。テキスト続行・停止後の回答で再実行しないこと・次の1回で消費・同じLiveKit音声会話の続行とブラウザ音声再生・会話外設定の範囲分離を確認した。
+- Backendの関連unit/module回帰[110件](artifacts/addon-approval-admin-305/backend-focused.txt)が成功。レビュー修正後はID不正・承認共有と要求予約の分離を加えた関連module/unit [16件](artifacts/addon-approval-admin-305/backend-review.txt)が成功。旧DB移行fixtureの更新後は[関連回帰89件](artifacts/addon-approval-admin-305/backend-review-regression.txt)が成功。
+- 停止後の将来単回利用で過去の承認案内を返答へ反復する問題に対し、生成用の固定案内を過去形へ整理した。関連[回帰101件](artifacts/addon-approval-admin-305/approval-history-regression.txt)が成功し、保存履歴・利用者発言の非変更を検証した。
+- Frontend [unit 802件](artifacts/addon-approval-admin-305/frontend-unit.txt)、[module 136件](artifacts/addon-approval-admin-305/frontend-module.txt)、3択すべてを含む承認UIの[mocked E2E 8件](artifacts/addon-approval-admin-305/e2e-review.txt)が成功。
+- Svelte/TypeScript、mypy、ruff、[Frontend build](artifacts/addon-approval-admin-305/frontend-build.txt)が成功。mypyの一次ログは[子PRのBackend CI](https://github.com/FYuki/digital-souls/actions/runs/34560720485/job/103142755430)を参照する。
+- 最終修正後の実接続受入1件が227秒で成功。テキスト続行・停止後の回答で再実行しないこと・次の1回で消費・同じLiveKit音声会話の続行とブラウザ音声再生・会話外設定の範囲分離を確認した。
 
-実接続のrun IDは `ccdbe7fa-e1d2-460c-855d-2da596e0be66`、実装commitは `c2b4e8e012dfddb9849d66fdd6d5b26bd79da033`（開始時にtracked変更なし）。
-[環境と結果](artifacts/addon-approval-admin-305/runtime-manifest.json)、[ブラウザ結果](artifacts/addon-approval-admin-305/browser-public.json)、[受入項目](artifacts/addon-approval-admin-305/admin-action-evidence.json)、[実操作3回の適用記録](artifacts/addon-approval-admin-305/action-state.json)を保存した。以後のモバイルmocked E2Eセレクタ修正は製品コードを変更していない。
+実接続のrun IDは `4900148a-7744-4416-b139-96870a8422d9`、実装commitは `c535eaf6ec752d72d41b1a5273dc59d87df6ba1f`（開始時にtracked変更なし）。
+[環境と結果](artifacts/addon-approval-admin-305/runtime-manifest.json)、[ブラウザ結果](artifacts/addon-approval-admin-305/browser-public.json)、[受入項目](artifacts/addon-approval-admin-305/admin-action-evidence.json)、[実操作3回の適用記録](artifacts/addon-approval-admin-305/action-state.json)を保存した。以後の証跡・文書更新は製品コードを変更していない。VOICEVOXは稼働中コンテナから不変image IDを取得した。
 
-最初の実接続試行は、LLMが指定値に説明文を付けて書き込んだためファイル完全一致で失敗した。要求文で検証用の正確な内容を指定し直して再試行し、成功した。完全一致や実行回数の判定は緩めていない。
+実接続の途中試行では、指定値への説明文付加、完了表現「上書きしました」の判定漏れ、実行後に過去の承認案内を反復する返答、事前読み取りだけで書き換えを予告する返答で失敗した。検証用の操作名・引数を明確にし、完了表現を補足し、固定の過去承認案内を生成用文脈で区別したうえで再検証した。ファイル完全一致、実行回数、完了返答、音声再生の判定は維持している。最終runの成功はこの合成シナリオの受入であり、任意の自然言語依頼に対するLLM応答品質全般を保証するものではない。
 
 | 要件 | 検証箇所 |
 |---|---|
@@ -80,11 +81,21 @@ Scenario: 古い接続へ承認を流用しない
 音声入力だけVOICEVOX合成発話をマイクMediaStreamへ流す。物理マイクや人の発話品質の検証とは区別する。
 会話外の待機・競合の決定論的検証は制御fixtureであり、ブラウザによる実会話検証とは別に扱う。
 テストは一時data rootとテスト所有Backend・Frontend・LiveKitを使用する。共有推論サービスは停止しない。
+実行ログは公開用に端末の色指定・ローカルworktree pathだけ除いて保存した。
+VOICEVOXの`/version`応答が`latest`の場合、不変なビルド識別子にはならない。受入時に`ACCEPTANCE_VOICEVOX_CONTAINER`と、別WSL distributionなら`ACCEPTANCE_VOICEVOX_WSL_DISTRIBUTION`を指定し、稼働中コンテナの不変image IDを追加採取する。Dockerを読み取れない環境ではIDを推測せず、取得できたAPI版だけを記録する。
 
 ```bash
 backend/.venv/bin/python -m pytest backend/tests/module/test_addon_approval_admin.py backend/tests/module/test_addon_action_continuation.py backend/tests/unit/test_addon_approval_reset.py backend/tests/unit/test_livekit_action_confirmation.py -q
+ACCEPTANCE_VOICEVOX_CONTAINER=digital-souls-voicevox \
+ACCEPTANCE_VOICEVOX_WSL_DISTRIBUTION=Ubuntu-dogfood \
 ACCEPTANCE_INFERENCE_ENV=/path/to/private/backend.env \
   backend/.venv/bin/python scripts/acceptance_tool_use.py --addon-action --grep 管理画面
 ```
+
+## レビュー対応
+
+[子PR #314](https://github.com/FYuki/digital-souls/pull/314)のCodeRabbit全差分レビューで8件の指摘を受けた。
+[修正PR #316](https://github.com/FYuki/digital-souls/pull/316)で索引、承認設定の一括read transaction、不正UUIDの409応答、実行ログへの参照、可変mypy件数の除去、VOICEVOX image ID採取、管理UI全3択のE2Eを対応した。
+キャラクター別permissionへの変更はIssue #305と合意済み契約に矛盾するため、[根拠を示してCodeRabbitが撤回](https://github.com/FYuki/digital-souls/pull/314#discussion_r3985926734)した。保存承認の共有と、要求への単回予約が別要求へ流用されないことを追加検証した。
 
 main向けPRは最新差分のCI成功、CodeRabbitレビューと指摘対応まで完了させる。mainへのマージはユーザーが行う。

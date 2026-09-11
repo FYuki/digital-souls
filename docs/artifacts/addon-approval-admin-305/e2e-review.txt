@@ -1,0 +1,33 @@
+
+> digital-souls-frontend@0.0.0 test:e2e:mocked
+> playwright test --config playwright.mocked.config.ts --grep 承認UI
+
+
+Running 8 tests using 8 workers
+
+(node:1014307) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1014306) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1014320) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1014308) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1014332) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1014314) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1014326) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1014338) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  5 [e2e/chromium] › e2e/addon-action.spec.ts:23:3 › 承認UI 一度承認する 320px voice=false admin=false (2.9s)
+  ✓  1 [e2e/chromium] › e2e/addon-action.spec.ts:23:3 › 承認UI 拒否する 1280px voice=false admin=false (3.0s)
+  ✓  6 [e2e/chromium] › e2e/addon-action.spec.ts:23:3 › 承認UI 一度承認する 1280px voice=true admin=true (3.1s)
+  ✓  4 [e2e/chromium] › e2e/addon-action.spec.ts:23:3 › 承認UI 拒否する 1280px voice=false admin=true (3.1s)
+  ✓  8 [e2e/chromium] › e2e/addon-action.spec.ts:23:3 › 承認UI 一度承認する 320px voice=false admin=true (3.1s)
+  ✓  2 [e2e/chromium] › e2e/addon-action.spec.ts:23:3 › 承認UI 常に承認する 1280px voice=false admin=false (3.3s)
+  ✓  3 [e2e/chromium] › e2e/addon-action.spec.ts:23:3 › 承認UI 一度承認する 1280px voice=true admin=false (3.4s)
+  ✓  7 [e2e/chromium] › e2e/addon-action.spec.ts:23:3 › 承認UI 常に承認する 1280px voice=false admin=true (3.4s)
+
+  8 passed (23.6s)

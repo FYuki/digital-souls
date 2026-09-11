@@ -134,3 +134,29 @@ def test_admin_projection_redacts_registered_secret_and_validation_never_echoes_
     body = setting_body(client, key, "secret-admin-token")
     result = client.put("/addon-actions/admin/permissions", json=body)
     assert result.status_code == 422 and "secret-admin-token" not in result.text
+
+
+@pytest.mark.parametrize("invalid_voice", [False, True])
+def test_admin_continue_rejects_malformed_saved_subject_without_echoing(admin, invalid_voice):
+    client, p, _, key, _ = admin
+    key = replace(key, scene=ExecutionScene.CONVERSATION)
+    invalid = "private-malformed-session"
+    item = enqueue(p, key, session_id=str(uuid4()) if invalid_voice else invalid)
+    p.store.answer(item.id, ApprovalChoice.ONCE)
+    if invalid_voice:
+        client.app.state.livekit_runtime_manager = SimpleNamespace(confirmation_session=lambda *_: invalid)
+    response = client.post(f"/addon-actions/admin/requests/{item.id}/continue")
+    assert response.status_code == 409
+    assert invalid not in response.text
+    assert p.store.request(item.id).once_reserved
+
+
+def test_saved_approval_is_shared_but_live_reservation_remains_request_scoped(admin):
+    client, p, _, key, _ = admin
+    first = enqueue(p, key, character_id="miori")
+    second = enqueue(p, key, character_id="other-character")
+    assert client.post(f"/addon-actions/admin/requests/{first.id}/answer", json={"choice": "once"}).status_code == 200
+    assert not p.store.consume_request(key, second.id, 100)
+    assert p.store.consume_request(key, first.id, 100)
+    assert client.put("/addon-actions/admin/permissions", json=setting_body(client, key, "always")).status_code == 200
+    assert p.store.consume_request(key, second.id, 100)

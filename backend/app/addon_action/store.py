@@ -7,7 +7,7 @@ import json
 import sqlite3
 import time
 from uuid import uuid4
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -95,13 +95,21 @@ class ActionStore:
             if "once_reserved" not in columns:
                 db.execute("ALTER TABLE action_confirmations ADD COLUMN once_reserved INTEGER NOT NULL DEFAULT 0")
 
+            db.execute("""CREATE INDEX IF NOT EXISTS action_confirmations_page
+                ON action_confirmations(created_at DESC, id DESC)""")
+            db.execute("""CREATE INDEX IF NOT EXISTS action_confirmations_unanswered_page
+                ON action_confirmations(created_at DESC, id DESC) WHERE choice IS NULL""")
+            db.execute("""CREATE INDEX IF NOT EXISTS action_confirmations_reservations
+                ON action_confirmations(connection_id, identity, operation_group, scene, wait_until)
+                WHERE once_reserved=1 AND waiting=1""")
+
     @contextmanager
-    def transaction(self) -> Iterator[sqlite3.Connection]:
+    def transaction(self, *, write: bool = True) -> Iterator[sqlite3.Connection]:
         db = sqlite3.connect(self.path, timeout=5)
         db.row_factory = sqlite3.Row
         try:
             db.execute("PRAGMA secure_delete=ON")
-            db.execute("BEGIN IMMEDIATE")
+            db.execute("BEGIN IMMEDIATE" if write else "BEGIN")
             yield db
             db.commit()
         except BaseException:
@@ -163,16 +171,24 @@ class ActionStore:
             self._choose(db, key, choice)
 
     def settings(self, key: ApprovalKey) -> Json:
-        with self.transaction() as db:
-            state = self._state(db, key)
-            reserved = db.execute(
-                """SELECT COUNT(*) FROM action_confirmations
-                WHERE connection_id=? AND identity=? AND operation_group=? AND scene=?
-                AND once_reserved=1 AND waiting=1 AND wait_until>?""",
-                (*key.values(), self.clock()),
-            ).fetchone()[0]
-            return {"permission": state.permission, "remaining": state.remaining,
-                    "reserved": reserved}
+        return self.settings_many([key])[key]
+
+    def settings_many(self, keys: Iterable[ApprovalKey]) -> dict[ApprovalKey, Json]:
+        """複数承認範囲を同じ読み取りsnapshotから取得する。"""
+        result: dict[ApprovalKey, Json] = {}
+        with self.transaction(write=False) as db:
+            now = self.clock()
+            for key in keys:
+                state = self._state(db, key)
+                reserved = db.execute(
+                    """SELECT COUNT(*) FROM action_confirmations
+                    WHERE connection_id=? AND identity=? AND operation_group=? AND scene=?
+                    AND once_reserved=1 AND waiting=1 AND wait_until>?""",
+                    (*key.values(), now),
+                ).fetchone()[0]
+                result[key] = {"permission": state.permission, "remaining": state.remaining,
+                               "reserved": reserved}
+        return result
 
     def set_permission(self, key: ApprovalKey, permission: Permission) -> None:
         """保存設定の置換。dispatchの消費と同じtransaction境界で未使用許可を解除する。"""
@@ -194,7 +210,7 @@ class ActionStore:
         self, *, unanswered: bool = True, before: str | None = None, limit: int = 50
     ) -> tuple[tuple[ConfirmationRequest, ...], str | None]:
         """管理キューは作成時刻とIDでページ化し、未回答を件数上限で隠さない。"""
-        with self.transaction() as db:
+        with self.transaction(write=False) as db:
             cursor = None
             if before is not None:
                 cursor = db.execute(
@@ -202,12 +218,13 @@ class ActionStore:
                 ).fetchone()
                 if cursor is None:
                     raise MCPFailure("policy", "unknown_confirmation_cursor")
+            unanswered_filter = "choice IS NULL AND " if unanswered else ""
             rows = db.execute(
-                """SELECT * FROM action_confirmations
-                WHERE (?=0 OR choice IS NULL)
+                f"""SELECT * FROM action_confirmations
+                WHERE {unanswered_filter}1=1
                 AND (? IS NULL OR created_at<? OR (created_at=? AND id<?))
                 ORDER BY created_at DESC,id DESC LIMIT ?""",
-                (int(unanswered), before, cursor["created_at"] if cursor else None,
+                (before, cursor["created_at"] if cursor else None,
                  cursor["created_at"] if cursor else None, before, limit + 1),
             ).fetchall()
             page = tuple(self._request(row) for row in rows[:limit])

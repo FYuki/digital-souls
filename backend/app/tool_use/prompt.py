@@ -6,7 +6,7 @@ from typing import Callable
 from app.chat_service import ChatInputLimitError
 from app.external_mcp.models import Json, encode
 from app.prompting import BuiltPrompt, PromptMessage, PromptRole
-from .service import ToolMaterial
+from .service import CONFIRMATION_REQUIRED_MESSAGE, CONFIRMATION_WAITING_MESSAGE, ToolMaterial
 from .projection import bounded_json
 
 POLICY = (
@@ -55,8 +55,16 @@ def _execution_note(results: tuple[Json, ...]) -> str:
 def _messages(
     prompt: BuiltPrompt, payload: str, note: str = ""
 ) -> tuple[PromptMessage, ...]:
+    # 固定の過去UI案内を現在の承認要求として反復させない。保存履歴や利用者発言は変えない。
+    history = tuple(
+        replace(message, content="過去の会話では操作の承認を案内しました。現在の状態は最新のCore実行記録を参照してください。")
+        if message.role == PromptRole.ASSISTANT
+        and message.content in {CONFIRMATION_REQUIRED_MESSAGE, CONFIRMATION_WAITING_MESSAGE}
+        else message
+        for message in prompt.messages[:-1]
+    )
     return (
-        *prompt.messages[:-1],
+        *history,
         PromptMessage(PromptRole.SYSTEM, POLICY + ("\n" + note if note else "")),
         PromptMessage(
             PromptRole.USER,

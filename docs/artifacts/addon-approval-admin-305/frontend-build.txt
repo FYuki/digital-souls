@@ -1,0 +1,21 @@
+
+> digital-souls-frontend@0.0.0 build
+> vite build
+
+vite v5.4.21 building for production...
+transforming...
+✓ 430 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                        0.40 kB │ gzip:   0.27 kB
+dist/assets/libfvad-Dbi4ZqrU.wasm     15.33 kB
+dist/assets/index-BkiBHF1r.css         0.35 kB │ gzip:   0.26 kB
+dist/assets/App-kIkn7dHD.css          28.90 kB │ gzip:   5.69 kB
+dist/assets/index-BfWOFOfV.js          2.11 kB │ gzip:   1.07 kB
+dist/assets/App-CDwP5lo2.js        1,521.47 kB │ gzip: 417.50 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 2.34s

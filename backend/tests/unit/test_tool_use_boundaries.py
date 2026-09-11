@@ -17,7 +17,7 @@ from app.prompting import BuiltPrompt, PromptMessage, PromptRole, PromptUsage
 from app.tool_use.prompt import POLICY, require_tool_room, with_tool_material, routing_history
 from app.tool_use.routing import InferenceDecisionRouter, ToolDecision
 from app.tool_use.runtime import ToolSettings
-from app.tool_use.service import ToolMaterial
+from app.tool_use.service import CONFIRMATION_REQUIRED_MESSAGE, CONFIRMATION_WAITING_MESSAGE, ToolMaterial
 from app.tool_use.binding import BindingResolver, BindingTarget
 from app.external_mcp.models import MCPFailure
 from tests.tool_use_test_support import Decisions, InputSource, call, runtime
@@ -386,3 +386,27 @@ def test_invalid_config_does_not_expose_values(tmp_path, config):
     path.write_text(json.dumps(config))
     with pytest.raises(ValueError, match="^invalid DS_MCP_CONFIG$"):
         ToolSettings.load(str(path))
+
+
+@pytest.mark.parametrize("notice", [CONFIRMATION_REQUIRED_MESSAGE, CONFIRMATION_WAITING_MESSAGE])
+def test_completed_tool_result_marks_old_fixed_approval_notice_as_history_only(notice):
+    original = (
+        PromptMessage(PromptRole.SYSTEM, "人格"),
+        PromptMessage(PromptRole.USER, notice),
+        PromptMessage(PromptRole.ASSISTANT, notice),
+        PromptMessage(PromptRole.ASSISTANT, "承認の方針についての通常会話"),
+        PromptMessage(PromptRole.USER, "次の操作を実行してください"),
+    )
+    prompt = BuiltPrompt(original, PromptUsage(*([0] * 10)), ())
+    result = with_tool_material(prompt, ToolMaterial(results=({"outcome": "succeeded", "operation_effect": "may_change_state"},)),
+                                lambda messages: sum(len(m.content.encode()) for m in messages), 4096)
+    assert prompt.messages == original
+    assert result.messages[1] == original[1]
+    assert result.messages[2].role == PromptRole.ASSISTANT
+    assert "過去の会話" in result.messages[2].content
+    assert "3つの選択肢" not in result.messages[2].content
+    assert "常に承認する" not in result.messages[2].content
+    assert result.messages[3] == original[3]
+    assert result.messages[-1] == original[-1]
+    assert "変更操作は完了" in result.messages[-3].content
+    assert with_tool_material(prompt, ToolMaterial(), lambda _: 0, 4096) is prompt

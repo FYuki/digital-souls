@@ -19,7 +19,7 @@ for (const scenario of [
   { choice: 'once', label: '一度承認する', width: 320, voice: false },
   { choice: 'reject', label: '拒否する', width: 1280, voice: false },
   { choice: 'once', label: '一度承認する', width: 1280, voice: true },
-].flatMap(item => [{ ...item, admin: false }, ...(item.choice === 'once' ? [{ ...item, admin: true }] : [])])) {
+].flatMap(item => [{ ...item, admin: false }, { ...item, admin: true }])) {
   test(`承認UI ${scenario.label} ${scenario.width}px voice=${scenario.voice} admin=${scenario.admin}`, async ({ page }, info) => {
     await page.setViewportSize({ width: scenario.width, height: 1000 })
     await page.route('**/api/**', async route => { await route.fulfill({ json: [] }) })

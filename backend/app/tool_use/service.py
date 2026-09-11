@@ -40,6 +40,11 @@ _PROTECTED_INPUT = re.compile(
 _REFRESH = re.compile(r"refresh|更新|再取得", re.I)
 logger = logging.getLogger(__name__)
 TOOL_STOP_MESSAGE = "tool_operation_stopped"
+CONFIRMATION_REQUIRED_MESSAGE = (
+    "操作の承認が必要です。画面で「常に承認する」「一度承認する」「拒否する」から選んでください。"
+    "一度の承認はツール呼び出し1回分です。"
+)
+CONFIRMATION_WAITING_MESSAGE = "操作の承認をお待ちしています。画面の3つの選択肢から回答してください。"
 
 
 @dataclass(frozen=True)
@@ -269,7 +274,7 @@ class ToolService:
             # STTやLLM判断で承認を推測しない。待機期限も延長しない。
             return self._material(
                 run,
-                "操作の承認をお待ちしています。画面の3つの選択肢から回答してください。",
+                CONFIRMATION_WAITING_MESSAGE,
                 waiting=True,
             )
         if run is not None:
@@ -694,8 +699,7 @@ class ToolService:
             run.candidate, run.confirmation_guard = candidate, before_execute
             return self._material(
                 run,
-                "操作の承認が必要です。画面で「常に承認する」「一度承認する」「拒否する」から選んでください。"
-                "一度の承認はツール呼び出し1回分です。",
+                CONFIRMATION_REQUIRED_MESSAGE,
                 waiting=True,
             )
         if envelope["outcome"] == "input_required":

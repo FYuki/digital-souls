@@ -42,11 +42,11 @@ async function waitForApprovalOrQuestion(page: Page) {
 }
 
 async function requestTextWrite(page: Page, value: string) {
-  await send(page, `検証用ファイル${sample}の内容を正確に「${value}」だけに置き換えてください。write_fileのcontentは「${value}」です。「展示テーマは」「です。」などの前後の文は含めないでください。`)
+  await send(page, `write_fileツールを使って検証用ファイル${sample}を更新してください。pathは${sample}、contentは正確に「${value}」です。完了後は実行結果と変更後の内容を教えてください。`)
   for (let answered = 0; answered < 2 && !(await waitForApprovalOrQuestion(page)); answered++) {
     // 実LLMが対象確認や先行読取を質問した場合だけ、利用者の追加回答として具体化する。
     await expect(page.locator('article.message').last()).toContainText(/ファイル|パス|読み取|内容/)
-    await send(page, `はい。対象は${sample}です。必要ならこのファイルを読み取り、内容全体を「${value}」だけに置き換えてください。`)
+    await send(page, `はい。write_fileを実行してください。pathは${sample}、contentは正確に「${value}」です。`)
   }
   await expect(confirmation(page)).toBeVisible()
 }
@@ -105,7 +105,7 @@ async function expectWriteReply(page: Page, value: string) {
   const reply = page.locator('article.message').last()
   await expect(reply).toContainText(value, { timeout: 10_000 })
   await expect(reply).toContainText(
-    /完了|(?:更新|変更|保存)(?:しました|されました|済み)|(?:置き換え|書き換え)(?:ました|られました)|(?:置き換わ|書き換わ)りました|書き込(?:みました|まれました)/,
+    /完了|(?:更新|変更|保存|上書き)(?:しました|されました|済み)|(?:置き換え|書き換え)(?:ました|られました)|(?:置き換わ|書き換わ)りました|書き込(?:みました|まれました)/,
     { timeout: 10_000 },
   )
 }
@@ -210,7 +210,7 @@ test('管理画面から待機中のテキスト・LiveKit承認と停止後の�
   const setting = adminPanel(page).getByRole('listitem', { name: /ハイリスク操作群・対話中$/ })
   await expect(setting).toContainText('将来の呼び出し用の単回許可：1回')
   await page.getByRole('button', { name: 'チャットへ戻る', exact: true }).click()
-  await send(page, `検証用ファイル${sample}の内容を正確に「紫の花」だけに置き換えてください。`)
+  await send(page, `write_fileツールを実行し、pathを${sample}、contentを正確に「紫の花」にしてください。完了後は実行結果と変更後の内容を教えてください。`)
   await answerTextQuestionsWithoutApproval(page, '紫の花')
   await expect.poll(sampleText).toBe('紫の花')
   await expectWriteReply(page, '紫の花')
@@ -294,7 +294,7 @@ test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用�
   await expectWriteReply(page, '金の花')
   await driver.endVoiceSession(page)
 
-  await send(page, `検証用ファイル${sample}の内容を正確に「紫の花」だけに置き換えてください。`)
+  await send(page, `write_fileツールを実行し、pathを${sample}、contentを正確に「紫の花」にしてください。完了後は実行結果と変更後の内容を教えてください。`)
   await answerTextQuestionsWithoutApproval(page, '紫の花')
   await expect.poll(sampleText).toBe('紫の花')
   await expectWriteReply(page, '紫の花')
