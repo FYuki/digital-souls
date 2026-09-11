@@ -96,6 +96,8 @@ export async function mountLive2D(
     // Live2DModelの自動更新がPixiJSのTickerを利用できるようにする。
     window.PIXI = PIXI;
     Live2DModel.registerTicker(PIXI.Ticker);
+    // TauriのCSPではblob workerを許可しないため、画像はメインスレッドで読む。
+    PIXI.Assets.setPreferences({ preferWorkers: false });
 
     const host = canvas.parentElement;
     if (!host) {
