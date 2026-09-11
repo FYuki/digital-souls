@@ -67,6 +67,16 @@ commit `64d4150b437dcd7925d3670be82aacb46068c07c` と同じspec・製品コー�
 
 調整時の失敗もartifactへ記録した。runnerが正常readiness 204を200だけで判定した待機、製品buildへ接続して診断ページがなかった2件、Playwrightの既定出力先によるtest runtime identityの消失、回答前のprobeへ再生graph 1個を期待していた2件を区別する。data rootは新設し、`playwright.integration-livekit.config.ts`の出力先をruntime dataと分離した。`room.ts`はprobeやresponse IDのないtrackを回答graphへ接続しない既存仕様なので、その期待値を0へ整合した。実回答の再生成功は全音声スイートのsample/packet観測で別に確認しており、性能閾値は変更していない。
 
+## 専用ネットワーク障害の初回診断
+
+`f6d78373a9882174f2a966215d7bb424ddb41243` で `run_pilot.py --run-id conversation-327-reconnect-20260911a --inference-env backend/.env.example --livekit-env <専用一時env> --fault-bridge --network-fault --control-probe --trials 3 --scheduled-fixture` を実行した。専用の `ds-voice-quality-fault` Compose projectと新しいキーを使用し、通常サービスへ障害を入れなかった。
+
+[初回の再接続証跡](artifacts/conversation-session-reconnect-first-real-2026-09-11.json) は失敗。2秒の切断がcontrolへ作用し、復旧後の同一sessionで次の音声回答を168,960 samples / 176 packetsまで完全再生できたが、control復旧上限5,064.7ms、audio復旧上限5,187.3msで、診断の3,000msゲートを超えた。次回答の成功を使って診断全体を成功へ読み替えない。
+
+transport failure、音声出力区間の重複、packet証拠の欠測、出力経路のfailureは0。SDKの測定版を確認し、session終了、fault時計process終了、test環境teardown、専用LiveKitとnetworkの削除を確認した。これは1sessionの診断であり、100試行のp95の回帰有無までは結論しない。#319開始前のcommit `051115fa445e432274fa6b07e9b53a647fc429c1` を別worktreeに展開し、同じ条件で比較中。閾値は変更しない。
+
+[開始前の版の比較試行](artifacts/conversation-session-reconnect-baseline-2026-09-11.json) は成功した。control復旧上限2,356.4ms、audio復旧上限2,476.4msで、次回答の完全再生・終了・専用環境の片付けも成功。各版1試行だけなので、#319の回帰とも既存の揺らぎとも断定しない。現行版の追加試行と、遅延が生じた状態同期・復旧probeを調査する。初回の5.19秒は除外せず残す。
+
 ## 条件と検証の対応
 
 | 条件 | 現在の証拠 | 残作業 |
@@ -77,7 +87,7 @@ commit `64d4150b437dcd7925d3670be82aacb46068c07c` と同じspec・製品コー�
 | 送信失敗・不明結果・再接続照合・冪等性 | M2/M4/M5のunit/module/mock E2E | 実接続で確認した範囲の記録 |
 | text優先・遅延STT / preview / 旧response排除 | M7 Core + bridge + 受付台帳module、FE unit/mock E2E、実生成中/再生中text割り込み | 障害注入の実接続範囲の記録 |
 | BEの相槌・take-turn判断 | Core回帰、実take-turn / barge-in回帰 | 相槌コホートの実接続範囲の記録 |
-| 通常text・通常voice・再接続 | 全voice 14件、通常text 1件、実transport 2件成功 | 専用network障害からの会話reconnect回帰 |
+| 通常text・通常voice・再接続 | 全voice 14件、通常text 1件、実transport 2件成功。障害後の次回答も完了 | 専用network障害の初回復旧上限5.19秒。開始前の版と比較中 |
 | #279との状態・マイク・履歴分離 | M5/M6接点の基礎実装 | #279全体は未統合 |
 | Desktop共通client | M4実装、契約文書 | 統合後の引き継ぎ最終確認 |
 | main向けレビュー | 子PRのEpic向けCI成功 | 最終main差分のCI、CodeRabbitと指摘修正 |

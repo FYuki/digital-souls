@@ -1,0 +1,272 @@
+{
+  "measurement_scope": "livekit_fault_recovery_session_diagnostic",
+  "measurement_revision": "f6d78373a9882174f2a966215d7bb424ddb41243",
+  "fixture_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+  "outcome": "failure",
+  "failure_stage": "network_fault",
+  "expected_probes": 3,
+  "probes": [
+    {
+      "status": "received",
+      "generation": 0,
+      "probeId": "06528e9e-e624-4003-b7cf-c00de979dbe3",
+      "sentAtMs": 8486.699999988079,
+      "receivedAtMs": 8509,
+      "sendCompletedAtMs": 8487.09999999404,
+      "playbackActive": true
+    },
+    {
+      "status": "received",
+      "generation": 0,
+      "probeId": "00156c9a-b688-457c-b1ec-a54fedcc73d4",
+      "sentAtMs": 8613.5,
+      "receivedAtMs": 8619.199999988079,
+      "sendCompletedAtMs": 8613.799999982119,
+      "playbackActive": true
+    },
+    {
+      "status": "received",
+      "generation": 0,
+      "probeId": "a80389ca-e929-4cb6-8e5b-ffaa02fcee40",
+      "sentAtMs": 8722.299999982119,
+      "receivedAtMs": 8727.09999999404,
+      "sendCompletedAtMs": 8722.699999988079,
+      "playbackActive": true
+    }
+  ],
+  "fault_duration_ms": 2000,
+  "fault_operation_succeeded": true,
+  "network_fault_affected_control": true,
+  "fault_recovery_passed": false,
+  "recovery": {
+    "control_recovery_upper_ms": 5064.726420968771,
+    "audio_recovery_upper_ms": 5187.294087653318,
+    "recovery_upper_ms": 5187.294087653318,
+    "duplicate_packet_output_intervals": 0,
+    "packet_evidence_missing": 0,
+    "output_path_failures": 0,
+    "output_evidence_complete": true,
+    "duplicate_measurement_scope": "overlapping_response_ssrc_rtp_sample_intervals",
+    "audio_missing_reason": null
+  },
+  "session_end_confirmed": true,
+  "fault_clock_process_closed": true,
+  "issue": 319,
+  "run_id": "conversation-327-reconnect-20260911a",
+  "threshold_ms": 3000,
+  "human_microphone_listening": "not performed",
+  "source": "fixed audio fixture; real dedicated LiveKit bridge disconnected for 2 seconds; shared real STT/LLM/TTS and browser",
+  "post_fault_followup": {
+    "outcome": "success",
+    "same_session": true,
+    "different_response": true,
+    "playback_completion": {
+      "expectedSamples": 168960,
+      "inputSamples": 167422,
+      "paddingSamples": 1538,
+      "renderedSamples": 168960,
+      "packetCount": 176,
+      "firstOutputFrame": 62336,
+      "lastOutputEndFrame": 231296,
+      "gapSamples": 0,
+      "maximumGapSamples": 0,
+      "gapCount": 0,
+      "firstRtpTimestamp": 1282222438,
+      "lastRtpTimestamp": 1282390438,
+      "outputClockContextTime": 4.818667666666667,
+      "outputClockPerformanceTime": 28299,
+      "confirmationObservedAtMs": 28300.29999998212,
+      "sampleRate": 48000
+    },
+    "track_response_matches": true
+  },
+  "connection_events": [
+    {
+      "event": "signal_connected",
+      "atMs": 1269.5999999940395,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 8806.299999982119,
+      "generation": 0,
+      "retry": {
+        "retryCount": 0,
+        "elapsedMs": 0,
+        "delayMs": 0
+      }
+    },
+    {
+      "event": "signal_reconnecting",
+      "atMs": 8808.199999988079,
+      "generation": 0
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 8809.09999999404,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 8822.59999999404,
+      "generation": 0,
+      "retry": {
+        "retryCount": 1,
+        "elapsedMs": 16.400000005960464,
+        "delayMs": 265.34586998288523
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 9060.5,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 9097.5,
+      "generation": 0,
+      "retry": {
+        "retryCount": 2,
+        "elapsedMs": 291.30000001192093,
+        "delayMs": 495.71733438185413
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 9316.199999988079,
+      "generation": 0
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 9570.5,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 9598.5,
+      "generation": 0,
+      "retry": {
+        "retryCount": 3,
+        "elapsedMs": 792.3000000119209,
+        "delayMs": 349.7187949354933
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 9825.5,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 9957.299999982119,
+      "generation": 0,
+      "retry": {
+        "retryCount": 4,
+        "elapsedMs": 1151.0999999940395,
+        "delayMs": 255.46728366776637
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 10080.5,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 10222.399999976158,
+      "generation": 0,
+      "retry": {
+        "retryCount": 5,
+        "elapsedMs": 1416.199999988079,
+        "delayMs": 419.22614099384157
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 10335.5,
+      "generation": 0
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 10590.5,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 10647.399999976158,
+      "generation": 0,
+      "retry": {
+        "retryCount": 6,
+        "elapsedMs": 1841.199999988079,
+        "delayMs": 493.46747454525365
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 10845.59999999404,
+      "generation": 0
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 11100.5,
+      "generation": 0
+    },
+    {
+      "event": "retry_scheduled",
+      "atMs": 11148.09999999404,
+      "generation": 0,
+      "retry": {
+        "retryCount": 7,
+        "elapsedMs": 2341.9000000059605,
+        "delayMs": 307.0144339453399
+      }
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 11355.5,
+      "generation": 0
+    },
+    {
+      "event": "state_sync_requested",
+      "atMs": 11610.5,
+      "generation": 0
+    },
+    {
+      "event": "authoritative_state",
+      "atMs": 11624.299999982119,
+      "generation": 1
+    },
+    {
+      "event": "authoritative_state",
+      "atMs": 11626.699999988079,
+      "generation": 2
+    },
+    {
+      "event": "reconnected",
+      "atMs": 13469.59999999404,
+      "generation": 2
+    },
+    {
+      "event": "authoritative_state",
+      "atMs": 16308.899999976158,
+      "generation": 2
+    }
+  ],
+  "transport_failures": [],
+  "native_sdk": {
+    "status": "verified",
+    "build": {
+      "schema_version": 1,
+      "python_sdk_version": "1.1.16",
+      "ffi_version": "0.12.73",
+      "source_revision": "63128d01d955d9d8967544f46cff64a361232bf6",
+      "patch_sha256": "3a67fd71bf4def808affeb3f8f2121d1ae1d9e942743e4cc85e87d1e79d27312",
+      "library_sha256": "0e93775cdb58704ae62bb349caa7e95ff39d66671021fb5c84cc884642e3fc6d",
+      "reconnect_policy": "short-outage-v1",
+      "target": "x86_64-unknown-linux-gnu",
+      "cuda_video_codecs_enabled": false
+    }
+  },
+  "teardown_status": "completed",
+  "dedicated_fault_container_and_network_removed": true
+}
