@@ -8,5 +8,6 @@
   "passed": 31,
   "failed": 0,
   "stdout_and_stderr": "\n RUN  v2.1.9 /tmp/digital-souls-327-ci/frontend\n\n ✓ src/fault-recovery-cohort.unit.test.ts (31 tests) 85ms\n\n Test Files  1 passed (1)\n      Tests  31 passed (31)\n   Start at  20:52:17\n   Duration  1.06s (transform 351ms, setup 710ms, collect 41ms, tests 85ms, environment 0ms, prepare 70ms)\n\n",
-  "note": "初回実行も31件成功。レビュー対応として同一テスト内容を再実行し、標準出力・標準エラーを原文で保存。"
+  "note": "初回実行も31件成功。レビュー対応として同一テスト内容を再実行し、標準出力・標準エラーを原文で保存。",
+  "worktree_note": "別のレビュー修正はworking treeに存在。当該31テストと集計実装は記録commitと同一。"
 }

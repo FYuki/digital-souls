@@ -135,3 +135,9 @@ Epic統合commit `6b052700ee561b651d68013144cb72278902c5c2`（PR #339）は本�
 [ローカル接続検証](artifacts/conversation-session-memory-local-2026-09-11.json)は#319側`b416b363b1dc2a4ecc6cb49a1d7a108058b598bb`と、既存#291実装`6aee764cd702c5b947f5f7b4613f7e4c4c75c7cc`を独立worktreeで組み合わせた結果。音声→Text→音声の3 turnは実SQLiteで1つの永続予約へ合流し、thread revision=6、各turn revision=2となった。同じText入力IDの再送で追加更新はなく、新しいqueue instanceからrevision=6と3 turnすべてのsnapshotを取得できた。
 
 共通履歴/Privacy module 3件と既存保存入口・queueの競合/回復38件が成功。抽出LLMの実接続試験ではなく、#291の公開Epicへの取り込みと最終runtime受入も未完了のため、M3とM8はopenを維持する。
+
+## 割り込みphaseのレビュー修正
+
+旧generation試験は`response_started`を待つだけで、入力操作時に生成が完了していないことと、まだ音声再生が始まっていないことをassertしていなかった。過去の成功件数は保持するが、generation/playbackの厳密な区別の証拠は次の再検証へ対応付ける。
+
+`071a3002e285df48310a06cca4a3efb0f187c8bf`は入力前と送信直前に旧応答の終端なし・rendered-audioなし・再生完了なしを確認し、再生中ケースでも送信直前の再生継続を確認する。`npm run test:integration:voice -- --workers=1 --grep '実回答の(generation|playback)中'`で[2件成功](artifacts/conversation-session-interruption-review-real-2026-09-11.json)（44.3秒、skip/flaky/failure 0、teardown完了）。`beforeSubmit`の観測値を証跡へ残した。
