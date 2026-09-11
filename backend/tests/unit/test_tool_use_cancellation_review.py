@@ -12,7 +12,7 @@ from app.chat_service import ChatBackendError, ChatTimeoutError
 from app.external_mcp.models import MCPFailure
 from app.routers import chat as route
 from app.tool_use.routing import parse_object
-from tests.unit.test_tool_use import Decisions, runtime
+from tests.tool_use_test_support import Decisions, runtime
 from tests.unit.test_conversation_core_lifecycle import _session, UTTERANCE_1
 
 

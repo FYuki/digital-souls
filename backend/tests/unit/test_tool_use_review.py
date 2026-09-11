@@ -16,7 +16,7 @@ from app.tool_use.binding import BindingTarget
 from app.tool_use.projection import Sanitizer
 from app.tool_use.routing import InferenceDecisionRouter
 from app.tool_use.service import ToolService
-from tests.unit.test_tool_use import Decisions, Scanner, runtime
+from tests.tool_use_test_support import Decisions, Scanner, runtime
 from tests.external_mcp_test_support import manifest
 
 
@@ -45,6 +45,26 @@ def test_structured_truncation_is_explicit(structured):
         {"outcome": "succeeded", "native_payload": {"structuredContent": structured}}
     )
     assert result["omitted"] is True
+
+
+@pytest.mark.parametrize("kind", ["list", "dict", "string", "depth", "complete"])
+def test_recovered_projection_reports_internal_omission(kind):
+    values = {
+        "list": list(range(65)), "dict": {str(n): n for n in range(129)},
+        "string": "x" * 16_385, "complete": {"count": 1},
+    }
+    deep = 1
+    for _ in range(14):
+        deep = {"child": deep}
+    values["depth"] = deep
+    result = Sanitizer(Scanner()).result({
+        "outcome": "succeeded", "replayed": True,
+        "result_projection": {"structured": values[kind]},
+    })
+    assert result.get("omitted", False) is (kind != "complete")
+    assert result["outcome"] == "succeeded" and result["replayed"] is True
+    if kind == "complete":
+        assert result["structured"] == values[kind]
 
 
 def test_binding_from_other_conversation_is_denied_and_close_releases_it():

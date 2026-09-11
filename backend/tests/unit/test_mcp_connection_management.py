@@ -368,7 +368,7 @@ def test_changed_settings_clear_old_attempt_while_new_check_is_pending(tmp_path)
 
 def test_dynamic_credential_is_redacted_before_output_truncation():
     from app.tool_use.projection import Sanitizer
-    from tests.unit.test_tool_use import Scanner
+    from tests.tool_use_test_support import Scanner
 
     secret = "synthetic-private-credential"
     sanitizer = Sanitizer(Scanner(), dynamic_private_values=lambda: (secret,))

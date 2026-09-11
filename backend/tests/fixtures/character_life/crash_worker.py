@@ -14,7 +14,7 @@ from app.character_life.store import Store
 from app.external_mcp import Connection, ExecutionGate, Registry
 from app.tool_use.projection import Sanitizer
 from tests.external_mcp_test_support import FakeSource, discovery, manifest
-from tests.module.test_character_life import Cognition, Privacy, Scanner
+from tests.character_life_test_support import Cognition, Privacy, Scanner
 
 
 async def main(root: Path):

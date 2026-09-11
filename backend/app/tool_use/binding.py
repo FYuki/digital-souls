@@ -17,6 +17,11 @@ class BindingTarget:
     operations: tuple[str, ...]
     arguments_json: str = field(default="{}", repr=False)
 
+    @property
+    def argument_reference(self) -> str:
+        """実値を公開せず、選択した対象の固定引数を参照するCore専用表現。"""
+        return f"@binding:{self.id}"
+
 
 class BindingResolver:
     def __init__(self, targets: tuple[BindingTarget, ...] = ()) -> None:
@@ -90,6 +95,10 @@ class BindingResolver:
             and item[1] in self.candidates(character_id, connection_id, operation)
         )
 
+    def argument_reference(self, binding_id: str | None) -> str | None:
+        selected = self._resolved.get(binding_id or "")
+        return selected[1].argument_reference if selected else None
+
     def forget(self, character: str, conversation: str) -> None:
         self._selected = {
             k: v
@@ -103,9 +112,13 @@ class BindingResolver:
         }
 
 
-def apply_binding(arguments: Json, constraints: Json) -> Json:
+def apply_binding(arguments: Json, constraints: Json, *, reference: str | None = None) -> Json:
+    # Coreが発行した「選択中のbinding」の参照だけを、固定済み引数へ解決する。
+    # 異なる参照・その他の実値は従来通り不一致として拒否する。
     if any(
-        key in arguments and encode(arguments[key]) != encode(value)
+        key in arguments
+        and not (reference is not None and arguments[key] == reference)
+        and encode(arguments[key]) != encode(value)
         for key, value in constraints.items()
     ):
         raise MCPFailure("policy", "binding_argument_mismatch")
