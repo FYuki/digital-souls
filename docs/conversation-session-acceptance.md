@@ -47,17 +47,27 @@ npm run test:integration:voice -- conversation-session.spec.ts
 
 [別スレッドの再検証証跡](artifacts/conversation-session-routing-real-2026-09-11.json): 修正後1件成功（1.1分）、teardown完了。Aの回答再生はBを表示しても継続し、A/Bの履歴は各1件へ独立して保存された。Bだけが `/chat` を使い、Voice Sessionのtoken取得は全体で1回。Aに戻った後のtext送信でも切り替えミュートを保持し、AのTTS回答を再生できた。#279全体の未読バッジ・背景再生設定まで統合した試験ではない。
 
+## 全音声スイートの回帰
+
+commit `64d4150b437dcd7925d3670be82aacb46068c07c` と同じspec・製品コードで `npm run test:integration:voice -- --workers=1` を実行した。
+[全音声スイートの証跡](artifacts/conversation-session-full-voice-real-2026-09-11.json) は14件成功（3.7分）、skip / flaky / failureは0、teardown完了。
+
+- 新規9件: 生成中/再生中text割り込み、A/B送信、focus中の音声抑止と送信後再開、Enter/クリック×manual mute ON/OFFの4組合せとfocus中のTTS継続、音声→text→音声。
+- 既存5件: マイク開始、VAD終了後のsession継続、通常音声の表示、同一sessionでの3往復、ラベル付き実音声のbarge-in。
+- barge-inはBEの最終take-turn判定を確認し、固定音声開始からlocal stopの上限982.4ms、cancel確認の上限1,010.4msだった。既存assertionの3,000ms / 3,500msを変更せず成功した。1試行の結果であり、#150の100試行・p95の達成を新たに証明したものではない。
+- textだけを投入するcontrols試験ではSTTを呼ぶ必要がない。Whisper実接続の処理結果はfocus後の音声・混在・既存音声試験で確認した。
+
 ## 条件と検証の対応
 
 | 条件 | 現在の証拠 | 残作業 |
 |---|---|---|
 | 共通入力・同一履歴・textのTTS | M3 module、実混在会話 | #291と統合したrevision / 抽出予約 |
 | 同一スレッドの送信・session維持 | M5 unit/module/mock E2E、実混在会話、実A/B送信 | #279全体と統合した再検証 |
-| focus抑止・Enter/クリック・manual mute | M6 unit/module/mock E2E、実focus/クリック試験 | Enter送信のmanual mute全組合せ |
+| focus抑止・Enter/クリック・manual mute | M6 unit/module/mock E2E、実接続で4組合せ成功 | #279全体と統合した再検証 |
 | 送信失敗・不明結果・再接続照合・冪等性 | M2/M4/M5のunit/module/mock E2E | 実接続で確認した範囲の記録 |
 | text優先・遅延STT / preview / 旧response排除 | M7 Core + bridge + 受付台帳module、FE unit/mock E2E、実生成中/再生中text割り込み | 障害注入の実接続範囲の記録 |
-| BEの相槌・take-turn判断 | Core回帰 | 実barge-in回帰 |
-| 通常text・通常voice・再接続 | 既存voiceの初回1往復成功 | 全voice / text / transport / reconnect回帰 |
+| BEの相槌・take-turn判断 | Core回帰、実take-turn / barge-in回帰 | 相槌コホートの実接続範囲の記録 |
+| 通常text・通常voice・再接続 | 全voice 14件成功 | text / transport / reconnect回帰 |
 | #279との状態・マイク・履歴分離 | M5/M6接点の基礎実装 | #279全体は未統合 |
 | Desktop共通client | M4実装、契約文書 | 統合後の引き継ぎ最終確認 |
 | main向けレビュー | 子PRのEpic向けCI成功 | 最終main差分のCI、CodeRabbitと指摘修正 |

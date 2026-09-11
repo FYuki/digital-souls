@@ -1,0 +1,22 @@
+{
+  "issue": 319,
+  "base_commit": "64d4150b437dcd7925d3670be82aacb46068c07c",
+  "source": "typed text through ordinary /chat with real Backend and Ollama",
+  "statistics": {
+    "startTime": "2026-09-11T09:53:14.092Z",
+    "duration": 10170.753999999999,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "tests": [
+    {
+      "title": "実サービスから受け取った光織の応答がチャット画面に表示される",
+      "status": "passed",
+      "duration_ms": 5298
+    }
+  ],
+  "environment_status": "completed",
+  "teardown_status": "completed"
+}

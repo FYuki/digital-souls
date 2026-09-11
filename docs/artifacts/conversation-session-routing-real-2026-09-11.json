@@ -6,7 +6,7 @@
     "frontend/integration/voice/conversation-session.spec.ts": "cf9a854166230e4cf9bebbd870b3ea1526ffe3f95201b4c79111a940190a0e2b",
     "frontend/integration/voice/conversation-session-controls.spec.ts": "9788c62c391306c90370ecda0918c97f95ee8c9116b37f0a42139f78cd68c062"
   },
-  "source": "fixed audio fixture or typed text; real BE/Whisper/Ollama/VOICEVOX/LiveKit/browser",
+  "source": "fixed audio fixture or typed text; real BE/Ollama/VOICEVOX/LiveKit/browser; Whisper is exercised only by speech cases",
   "human_microphone_listening": "not performed",
   "statistics": {
     "startTime": "2026-09-11T09:47:42.308Z",
