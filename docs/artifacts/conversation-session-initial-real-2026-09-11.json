@@ -2,7 +2,7 @@
   "issue": 319,
   "milestone": 327,
   "production_commit": "c2b94a74a9d214485ebed67c6c32b540c7afae06",
-  "acceptance_spec": "frontend/integration/voice/conversation-session.spec.ts (working tree)",
+  "acceptance_spec": "frontend/integration/voice/conversation-session.spec.ts",
   "source": "fixed audio fixture and typed text; real Backend/Whisper/Ollama/VOICEVOX/LiveKit/browser playback",
   "human_microphone_listening": "not performed",
   "statistics": {
@@ -869,5 +869,13 @@
     "#291 revision and Episode scheduling integration",
     "remaining parent acceptance scenarios",
     "main diff CI and CodeRabbit review"
-  ]
+  ],
+  "acceptance_spec_sha256": "15960c82c0d08eaaaa27ca5fcc9ad49a86ddbc051ce473270139135abcf586ec",
+  "acceptance_spec_snapshot": "docs/artifacts/conversation-session-initial-executed-spec-2026-09-11.txt",
+  "acceptance_spec_provenance": {
+    "created_at": "2026-09-11T09:28:29.815Z",
+    "source": "実行直前のファイル作成記録から復元",
+    "first_committed_revision": "f955d466f52b67aa963bf6cb815d0d5a484bd41b",
+    "post_execution_difference": "初回実行後にtextPlayback.jsonValue()のnull guardを追加。snapshotとhashはその追加前。"
+  }
 }

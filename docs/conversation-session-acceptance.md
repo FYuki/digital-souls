@@ -27,7 +27,7 @@ npm run test:integration:voice -- conversation-session.spec.ts
 
 初回の3実行はそれぞれ1件成功。混在試験は2026-09-11 09:28 UTC開始、47.8秒、skip / flaky / failureは0。各実行で環境のteardown完了を確認した。
 
-[初回の機械可読証跡](artifacts/conversation-session-initial-real-2026-09-11.json)には固定入力由来のイベント相関、再生sample / packet数、履歴件数だけを残し、会話本文・秘密値は含めない。
+[初回の機械可読証跡](artifacts/conversation-session-initial-real-2026-09-11.json)には固定入力由来のイベント相関、再生sample / packet数、履歴件数だけを残し、会話本文・秘密値は含めない。実行直前の作成記録から[実行したspec](artifacts/conversation-session-initial-executed-spec-2026-09-11.txt)を復元し、SHA-256を記録した。初回実行後のnull guard追加を含む最初のcommitとは区別している。
 
 混在試験で確認したこと:
 
@@ -87,7 +87,7 @@ transport failure、音声出力区間の重複、packet証拠の欠測、出力
 
 個別診断は91件成功・9件失敗。初回再生未完了は039/044/045/072/098/099の6件。006/024/074は復旧上限5,315.04 / 5,167.65 / 3,253.60msで単発診断の3,000msを超えた。これら3件は100件集計の10秒以内には含まれる。100件すべてsession終了・fault時計終了・所有Frontend/Backend削除を確認し、最後に専用LiveKitとnetworkも削除した。通常の共有LiveKitは維持した。
 
-最初の集計実行は、初回再生失敗のrawにまだない`audio_availability_method`を旧packet方式と誤認し、「方式混在」で停止した。集計処理の修正commit `3b1e2192571278b889c17f468ebcc224ae58c37a`で元の全100件を再計算した。未実施方式は未計測、失敗は分母と欠測理由に残し、全件失敗の場合も方式/p95をnullにする。混在方式の拒否や99%/3,000ms/重複0の条件は維持し、関連31テストが成功した。元のrunner終了コード2と修正後の集計終了コード1も[試行別証跡](artifacts/conversation-session-reconnect-inference-observations-2026-09-11.json)へ記録した。raw試行の書き換え・除外・差し替えは行っていない。
+最初の集計実行は、初回再生失敗のrawにまだない`audio_availability_method`を旧packet方式と誤認し、「方式混在」で停止した。集計処理の修正commit `3b1e2192571278b889c17f468ebcc224ae58c37a`で元の全100件を再計算した。未実施方式は未計測、失敗は分母と欠測理由に残し、全件失敗の場合も方式/p95をnullにする。混在方式の拒否や99%/3,000ms/重複0の条件は維持し、[関連31テストの実行記録](artifacts/conversation-session-cohort-unit-2026-09-11.json)にコマンド・成功状態・実行ログを保存した。元のrunner終了コード2と修正後の集計終了コード1も[試行別証跡](artifacts/conversation-session-reconnect-inference-observations-2026-09-11.json)へ記録した。raw試行の書き換え・除外・差し替えは行っていない。
 
 試行別証跡には共有Ollamaの常駐context観測を併記する。全test設定はcontext合計8,192・RAG無効だが、初回再生失敗の前後に未常駐/36,864等を観測した。共有推論の状態変化との因果は未確定であり、#319の回帰とも外部要因とも断定しない。共有推論サービスの停止・設定変更は行っていない。
 

@@ -69,6 +69,14 @@ const waitForPlayback = async (page: Page, responseId: string) => {
   return result
 }
 
+const observeResponse = (page: Page, responseId: string) => page.evaluate(id => ({
+  terminal: window.__voiceChatE2E.coreEventDiagnostics.filter(event => event.responseId === id
+    && ['response_completed', 'response_cancelled', 'response_failed', 'response_privacy_skipped'].includes(String(event.type)))
+    .map(event => event.type),
+  renderedAudio: window.__voiceChatE2E.liveKitOrder.includes(`${id}:rendered-audio`),
+  playbackCompleted: window.__voiceChatE2E.playbackCompletions?.[id] !== undefined,
+}), responseId)
+
 for (const phase of ['generation', 'playback'] as const) {
   test(`実回答の${phase}中にtextで割り込み、新回答を同じsessionで再生する`, async ({page}, testInfo) => {
     await driver.enableMicrophone(page)
@@ -82,8 +90,14 @@ for (const phase of ['generation', 'playback'] as const) {
       await page.waitForFunction(id => window.__voiceChatE2E.liveKitOrder.includes(`${id}:rendered-audio`),
         previous, {timeout: 60_000})
       expect(await page.evaluate(id => window.__voiceChatE2E.playbackCompletions?.[id] !== undefined, previous)).toBe(false)
+    } else {
+      expect(await observeResponse(page, previous)).toEqual({terminal: [], renderedAudio: false, playbackCompleted: false})
     }
     await input.fill('説明を止めて、こんにちはとだけ挨拶してください。')
+    // 入力操作中にphaseが進んだ場合も、別phaseの試験成功として記録しない。
+    const beforeSubmit = await observeResponse(page, previous)
+    if (phase === 'generation') expect(beforeSubmit).toEqual({terminal: [], renderedAudio: false, playbackCompleted: false})
+    else expect(beforeSubmit).toMatchObject({renderedAudio: true, playbackCompleted: false})
     await input.press('Enter')
     const next = await waitForResponse(page, [previous])
     expect(next).not.toBe(previous)
@@ -100,7 +114,7 @@ for (const phase of ['generation', 'playback'] as const) {
     expect(state.oldPlaybackCompleted).toBe(false)
     expect(state.sessions).toHaveLength(1)
     await testInfo.attach('text-interruption-evidence.json', {body: JSON.stringify({
-      phase, previous, next, ...state, newPlaybackSamples: playback.renderedSamples,
+      phase, previous, next, beforeSubmit, ...state, newPlaybackSamples: playback.renderedSamples,
     }), contentType: 'application/json'})
   })
 }
