@@ -387,7 +387,7 @@ export class LiveKitVoiceSessionController {
     const binding = this.binding
     if (binding === null) throw new Error('LiveKit voice session is not connected')
     const envelope: Record<string, unknown> = {
-      protocol_version: '1.0',
+      protocol_version: '1.1',
       event_id: this.dependencies.eventId(),
       session_id: binding.session_id,
       ...fields,

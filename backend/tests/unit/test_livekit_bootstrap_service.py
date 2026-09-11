@@ -145,7 +145,7 @@ class FakeTokenSigner:
 
 def _request() -> dict[str, object]:
     return {
-        "protocol_version": "1.0",
+        "protocol_version": "1.1",
         "request_id": "10000000-0000-4000-8000-000000000010",
         "character_id": "miori",
         "conversation_id": "20000000-0000-4000-8000-000000000011",

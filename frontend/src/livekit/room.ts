@@ -961,7 +961,7 @@ export class LiveKitRoomClient {
     if (sessionId === null) throw new Error('LiveKit Room is not connected')
     await this.publishControlEvent(parseVoiceSessionEvent({
       type: 'observation',
-      protocol_version: '1.0',
+      protocol_version: '1.1',
       event_id: crypto.randomUUID(),
       session_id: sessionId,
       response_id: responseId,
@@ -986,7 +986,7 @@ export class LiveKitRoomClient {
     let networkMeasurementDelivered = false
     try {
       await this.publishControlEvent(parseVoiceSessionEvent({
-        type: 'observation', protocol_version: '1.0', event_id: crypto.randomUUID(),
+        type: 'observation', protocol_version: '1.1', event_id: crypto.randomUUID(),
         session_id: sessionId, response_id: responseId, measurement: 'network_summary',
         network_summary: networkObservation, timestamp: Math.floor(performance.now()),
         clock_domain: 'client_monotonic', unit: 'millisecond',
@@ -1025,7 +1025,7 @@ export class LiveKitRoomClient {
     this.observe({transport: 'available', control: 'available', audio: 'unavailable',
       ...evidence})
     const event = (fields: Record<string, unknown>) => parseVoiceSessionEvent({
-      protocol_version: '1.0', event_id: crypto.randomUUID(), session_id: sessionId,
+      protocol_version: '1.1', event_id: crypto.randomUUID(), session_id: sessionId,
       response_id: responseId, reason: 'disconnect', monotonic_timestamp_ms: Math.floor(performance.now()),
       ...fields,
     })

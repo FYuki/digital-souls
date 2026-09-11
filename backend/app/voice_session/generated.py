@@ -51,13 +51,13 @@ class DownlinkReason(Enum):
     STATS_UNAVAILABLE = "stats_unavailable"
 
 
-class Status(Enum):
+class DownlinkStatus(Enum):
     MEASURED = "measured"
     MISSING = "missing"
 
 
 class Downlink(BaseModel):
-    status: Status
+    status: DownlinkStatus
     bytes: Optional[int] = None
     lost_packets: Optional[int] = None
     packets: Optional[int] = None
@@ -69,7 +69,7 @@ class Method(Enum):
 
 
 class Uplink(BaseModel):
-    status: Status
+    status: DownlinkStatus
     bytes: Optional[int] = None
     packets: Optional[int] = None
     reason: Optional[DownlinkReason] = None
@@ -102,7 +102,7 @@ class PlaybackSummary(BaseModel):
 
 
 class ProtocolVersion(Enum):
-    THE_10 = "1.0"
+    THE_11 = "1.1"
 
 
 class VoiceSessionEventReason(Enum):
@@ -115,6 +115,7 @@ class VoiceSessionEventReason(Enum):
     RECONNECT_TIMEOUT = "reconnect_timeout"
     SESSION_ENDED = "session_ended"
     TERMINAL_ERROR = "terminal_error"
+    TEXT_FOCUS = "text_focus"
     USER_REQUEST = "user_request"
 
 
@@ -125,6 +126,16 @@ class SessionSummary(BaseModel):
     operation_tracking_started: bool
     retry_attempts: int
     sequence: int
+
+
+class Source(Enum):
+    SPEECH = "speech"
+    TEXT = "text"
+
+
+class VoiceSessionSchema(BaseModel):
+    input_id: UUID
+    source: Source
 
 
 class Role(Enum):
@@ -138,6 +149,13 @@ class Speaker(BaseModel):
     character_id: Optional[str] = None
 
 
+class VoiceSessionEventStatus(Enum):
+    ACCEPTED = "accepted"
+    NOT_RECEIVED = "not_received"
+    PROCESSING = "processing"
+    REJECTED = "rejected"
+
+
 class TextRange(BaseModel):
     """生成本文を Unicode code point の半開区間 [start, end) で指す。0 <= start <= end を満たす。"""
 
@@ -146,6 +164,7 @@ class TextRange(BaseModel):
 
 
 class TypeEnum(Enum):
+    AUDIO_INPUT_SUPPRESSION_CHANGED = "audio_input_suppression_changed"
     ERROR = "error"
     OBSERVATION = "observation"
     PLAYBACK_COMPLETED = "playback_completed"
@@ -170,6 +189,9 @@ class TypeEnum(Enum):
     SPEECH_STARTED = "speech_started"
     SPEECH_STOPPED = "speech_stopped"
     TURN_DECISION = "turn_decision"
+    USER_INPUT_RESULT = "user_input_result"
+    USER_INPUT_RESULT_REQUESTED = "user_input_result_requested"
+    USER_TEXT_SUBMITTED = "user_text_submitted"
     UTTERANCE_DISCARDED = "utterance_discarded"
     UTTERANCE_FINALIZED = "utterance_finalized"
     UTTERANCE_PENDING = "utterance_pending"
@@ -196,25 +218,29 @@ class VoiceSessionEvent(BaseModel):
     session_id: UUID
     type: TypeEnum
     monotonic_timestamp_ms: Optional[int] = None
+    speaker: Optional[Speaker] = None
+    text: Optional[str] = None
+    input_event_id: Optional[UUID] = None
+    error_code: Optional[str] = None
+    response_id: Optional[UUID] = None
+    status: Optional[VoiceSessionEventStatus] = None
+    reason: Optional[VoiceSessionEventReason] = None
+    suppressed: Optional[bool] = None
     requested_reconnect_grace_ms: Optional[int] = None
     reconnect_grace_ms: Optional[int] = None
-    reason: Optional[VoiceSessionEventReason] = None
-    response_id: Optional[UUID] = None
-    speaker: Optional[Speaker] = None
     utterance_id: Optional[UUID] = None
     decision: Optional[Decision] = None
     final: Optional[bool] = None
     should_response: Optional[bool] = None
     transcript: Optional[str] = None
     history_turn_id: Optional[UUID] = None
+    source_inputs: Optional[List[VoiceSessionSchema]] = None
     source_utterance_ids: Optional[List[UUID]] = None
-    text: Optional[str] = None
     text_range: Optional[TextRange] = None
     text_sequence: Optional[int] = None
     audio_sequence: Optional[int] = None
     last_audio_sequence: Optional[int] = None
     last_text_sequence: Optional[int] = None
-    error_code: Optional[str] = None
     recoverable: Optional[bool] = None
     last_played_audio_sequence: Optional[int] = None
     playback_summary: Optional[PlaybackSummary] = None

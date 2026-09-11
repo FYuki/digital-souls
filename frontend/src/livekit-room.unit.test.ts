@@ -242,7 +242,7 @@ describe('LiveKit Room generation synchronization', () => {
     const room = latestRoom(), eventId = crypto.randomUUID()
     let completed = false
     const operation = client.publishControlEvent({
-      type: 'observation', protocol_version: '1.0', event_id: eventId, session_id: sessionId,
+      type: 'observation', protocol_version: '1.1', event_id: eventId, session_id: sessionId,
       measurement: 'session_summary', timestamp: 100, clock_domain: 'client_monotonic', unit: 'millisecond',
       session_summary: { sequence: 1, microphone_activation_attempts: 1, mute_attempts: 0,
         retry_attempts: 0, operation_tracking_started: true, end_requested: true },
@@ -271,7 +271,7 @@ describe('LiveKit Room generation synchronization', () => {
     try {
       await client.connect('ws://test', 'token', sessionId)
       const room = latestRoom()
-      emitCoreEvent(room, {protocol_version: '1.0', type: 'response_started', session_id: sessionId,
+      emitCoreEvent(room, {protocol_version: '1.1', type: 'response_started', session_id: sessionId,
         response_id: responseId, event_id: crypto.randomUUID(), source_utterance_ids: [crypto.randomUUID()],
         speaker: {participant_id: crypto.randomUUID(), role: 'character', character_id: 'miori'}, monotonic_timestamp_ms: 1})
       room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
@@ -298,7 +298,7 @@ describe('LiveKit Room generation synchronization', () => {
       await vi.waitFor(() => expect(acks()).toHaveLength(2))
       expect(acks()[0]).toMatchObject({...request, type: 'output_stop_confirmed', last_played_audio_sequence: 0,
         output_confirmation: 'output_clock_passed'})
-      emitCoreEvent(room, {protocol_version: '1.0', type: 'response_delta', session_id: sessionId,
+      emitCoreEvent(room, {protocol_version: '1.1', type: 'response_delta', session_id: sessionId,
         response_id: responseId, event_id: crypto.randomUUID(), text_sequence: 1,
         text: '後', text_range: {start: 0, end: 1}, monotonic_timestamp_ms: 2})
       expect(raw.mock.calls.some(([row]) => row.type === 'response_delta')).toBe(true)
@@ -375,7 +375,7 @@ describe('LiveKit Room generation synchronization', () => {
         firstNonzeroFrame: i === 0 ? 48000 : null, lastNonzeroFrame: i === 0 ? 48127 : null,
       }))}} as MessageEvent)
       now = 1010
-      emitCoreEvent(room, {protocol_version: '1.0', type: 'response_cancelled',
+      emitCoreEvent(room, {protocol_version: '1.1', type: 'response_cancelled',
         event_id: '60000000-0000-4000-8000-000000000003', session_id: sessionId, response_id: responseId,
         reason: 'barge_in', monotonic_timestamp_ms: 2002})
       expect(renderer.disconnect).toHaveBeenCalledOnce()
@@ -668,7 +668,7 @@ describe('LiveKit Room generation synchronization', () => {
 
     emitCoreEvent(room, {
       type: 'response_started',
-      protocol_version: '1.0',
+      protocol_version: '1.1',
       event_id: '10000000-0000-4000-8000-000000000001',
       session_id: '20000000-0000-4000-8000-000000000001',
       response_id: '50000000-0000-4000-8000-000000000002',
@@ -697,7 +697,7 @@ describe('LiveKit Room generation synchronization', () => {
 
     emitCoreEvent(room, {
       type: 'response_audio_segment',
-      protocol_version: '1.0',
+      protocol_version: '1.1',
       event_id: '10000000-0000-4000-8000-000000000002',
       session_id: '20000000-0000-4000-8000-000000000001',
       response_id: '50000000-0000-4000-8000-000000000002',
@@ -1080,7 +1080,7 @@ test('取消後のRTP観測は旧応答へ一度だけ送信し、非同期完�
     {trackSid:'TR_cancel_network', trackName:`ds-response-v1:${responseId}`})
   await vi.waitFor(() => expect(audioContexts.at(-1)?.renderWorklets).toHaveLength(1))
   const publish = vi.spyOn(client, 'publishControlEvent')
-  const cancelled = {protocol_version:'1.0', type:'response_cancelled', session_id:sessionId,
+  const cancelled = {protocol_version:'1.1', type:'response_cancelled', session_id:sessionId,
     event_id:'60000000-0000-4000-8000-000000000003', response_id:responseId, reason:'barge_in', monotonic_timestamp_ms:1000}
   try {
     emitCoreEvent(room, cancelled)
@@ -1224,7 +1224,7 @@ test('CoreイベントはACK送信失敗中にも一度だけ適用し、ACK再�
   client.setCoreDeliveryObserver(delivery)
   await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000010')
   const room = latestRoom(), disconnected = vi.spyOn(room, 'disconnect')
-  const event = {protocol_version: '1.0', event_id: '10000000-0000-4000-8000-000000000010',
+  const event = {protocol_version: '1.1', event_id: '10000000-0000-4000-8000-000000000010',
     type: 'response_delta', session_id: '20000000-0000-4000-8000-000000000010',
     response_id: '30000000-0000-4000-8000-000000000010', text_sequence: 1, text: 'a',
     text_range: {start: 0, end: 1}, monotonic_timestamp_ms: 1}

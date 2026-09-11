@@ -45,10 +45,11 @@ from app.livekit_transport.coordinator import (
     ProductionSessionCoordinator,
     SessionCoordinatorDependencies,
 )
-from app.livekit_transport.delivery import CoreNotificationPort
+from app.livekit_transport.delivery import CoreNotificationPort, TerminalProtocolError
 from app.livekit_transport.errors import RoomCleanupPendingError
 from app.livekit_transport.measurement import LiveKitMeasurementSession
 from app.livekit_transport.runtime import MicrophoneTrackObserver
+from app.livekit_transport.text_input import TextInputReceiver
 from app.livekit_transport.stt_audio import (
     PcmCaptureSpan, SttSignalSpan, prepare_stt_audio, stt_preparation_statistics,
 )
@@ -700,7 +701,7 @@ class _ConversationCoreDelivery:
                 response_id=response_id, name="first_audio_out", stage="transport", timestamp=timestamp_ns,
             )
         await self._coordinator.send_core(json.dumps({
-            "type": "observation", "protocol_version": "1.0", "event_id": str(uuid4()),
+            "type": "observation", "protocol_version": "1.1", "event_id": str(uuid4()),
             "session_id": self._session_id, "response_id": response_id,
             "measurement": "first_audio_out", "timestamp": str(timestamp_ns),
             "clock_domain": "server_monotonic", "unit": "nanosecond",
@@ -710,7 +711,7 @@ class _ConversationCoreDelivery:
         self, event: CoreEvent, *, utterance_id: str | None = None
     ) -> bytes:
         payload: dict[str, object] = {
-            "protocol_version": "1.0",
+            "protocol_version": "1.1",
             "event_id": str(uuid4()),
             "session_id": event.session_id,
             "monotonic_timestamp_ms": int(time.monotonic() * 1000),
@@ -868,8 +869,10 @@ class _ConversationCoreBridge:
         media_tail_seconds: float = 0.15,
         measurement: LiveKitMeasurementSession | None = None,
         session_metrics: SessionMetrics | None = None,
+        text_input: TextInputReceiver | None = None,
     ) -> None:
         self._session = session
+        self._text_input = text_input
         self._schedule = schedule
         self._media_tail_seconds = media_tail_seconds
         self._stop_audio = stop_audio
@@ -886,6 +889,12 @@ class _ConversationCoreBridge:
 
     def notify(self, payload: bytes) -> None:
         event = json.loads(payload)
+        if event["type"] in {"user_text_submitted", "user_input_result_requested"}:
+            if self._text_input is None:
+                raise TerminalProtocolError("text input receiver is not connected")
+            # 受付が非同期処理中でも照合要求はprocessingの結果へ到達できる。
+            self._schedule(self._text_input.receive(event))
+            return
         if event["type"] == "speech_started" and self._is_user_event(event):
             utterance_id = str(event["utterance_id"])
             if self._measurement is not None:

@@ -4,28 +4,32 @@
 export interface VoiceSessionEvent {
     event_id:                      string;
     monotonic_timestamp_ms?:       number;
-    protocol_version:              "1.0";
-    requested_reconnect_grace_ms?: number;
+    protocol_version:              "1.1";
     session_id:                    string;
-    type:                          Type;
-    reconnect_grace_ms?:           number;
-    reason?:                       VoiceSessionEventReason;
-    response_id?:                  string;
     speaker?:                      Speaker;
+    text?:                         string;
+    type:                          Type;
+    input_event_id?:               string;
+    error_code?:                   string;
+    response_id?:                  string;
+    status?:                       VoiceSessionEventStatus;
+    reason?:                       VoiceSessionEventReason;
+    suppressed?:                   boolean;
+    requested_reconnect_grace_ms?: number;
+    reconnect_grace_ms?:           number;
     utterance_id?:                 string;
     decision?:                     Decision;
     final?:                        boolean;
     should_response?:              boolean;
     transcript?:                   string;
     history_turn_id?:              string;
+    source_inputs?:                VoiceSessionSchema[];
     source_utterance_ids?:         string[];
-    text?:                         string;
     text_range?:                   TextRange;
     text_sequence?:                number;
     audio_sequence?:               number;
     last_audio_sequence?:          number;
     last_text_sequence?:           number;
-    error_code?:                   string;
     recoverable?:                  boolean;
     last_played_audio_sequence?:   number;
     playback_summary?:             PlaybackSummary;
@@ -59,18 +63,18 @@ export interface Downlink {
     bytes?:       number;
     lostPackets?: number;
     packets?:     number;
-    status:       Status;
+    status:       DownlinkStatus;
     reason?:      DownlinkReason;
 }
 
 export type DownlinkReason = "stats_api_unavailable" | "stats_failed" | "stats_timeout" | "stats_unavailable" | "ambiguous_audio_stream" | "invalid_rtp_counters" | "counter_regressed" | "playback_packets_not_yet_reported";
 
-export type Status = "measured" | "missing";
+export type DownlinkStatus = "measured" | "missing";
 
 export interface Uplink {
     bytes?:   number;
     packets?: number;
-    status:   Status;
+    status:   DownlinkStatus;
     reason?:  DownlinkReason;
 }
 
@@ -93,7 +97,7 @@ export interface PlaybackSummary {
     sample_rate:                   number;
 }
 
-export type VoiceSessionEventReason = "user_request" | "terminal_error" | "reconnect_timeout" | "privacy" | "disconnect" | "session_ended" | "invalid_audio" | "input_capacity_exceeded" | "barge_in" | "decode_failure";
+export type VoiceSessionEventReason = "text_focus" | "user_request" | "terminal_error" | "reconnect_timeout" | "privacy" | "disconnect" | "session_ended" | "invalid_audio" | "input_capacity_exceeded" | "barge_in" | "decode_failure";
 
 export interface SessionSummary {
     end_requested:                  boolean;
@@ -104,13 +108,22 @@ export interface SessionSummary {
     sequence:                       number;
 }
 
+export interface VoiceSessionSchema {
+    input_id: string;
+    source:   Source;
+}
+
+export type Source = "speech" | "text";
+
 export interface Speaker {
-    character_id?:  string;
     participant_id: string;
     role:           Role;
+    character_id?:  string;
 }
 
 export type Role = "user" | "character";
+
+export type VoiceSessionEventStatus = "processing" | "accepted" | "rejected" | "not_received";
 
 /**
  * 生成本文を Unicode code point の半開区間 [start, end) で指す。0 <= start <= end を満たす。
@@ -120,7 +133,7 @@ export interface TextRange {
     start: number;
 }
 
-export type Type = "session_start_requested" | "session_started" | "session_muted" | "session_resumed" | "session_ended" | "session_disconnected" | "session_reconnect_requested" | "session_reconnected" | "speech_started" | "speech_stopped" | "turn_decision" | "utterance_finalized" | "utterance_pending" | "utterance_discarded" | "response_started" | "response_delta" | "response_audio_segment" | "response_completed" | "response_cancel_requested" | "response_cancelled" | "response_failed" | "playback_started" | "playback_stopped" | "playback_completed" | "playback_decode_failed" | "error" | "observation";
+export type Type = "user_text_submitted" | "user_input_result_requested" | "user_input_result" | "audio_input_suppression_changed" | "session_start_requested" | "session_started" | "session_muted" | "session_resumed" | "session_ended" | "session_disconnected" | "session_reconnect_requested" | "session_reconnected" | "speech_started" | "speech_stopped" | "turn_decision" | "utterance_finalized" | "utterance_pending" | "utterance_discarded" | "response_started" | "response_delta" | "response_audio_segment" | "response_completed" | "response_cancel_requested" | "response_cancelled" | "response_failed" | "playback_started" | "playback_stopped" | "playback_completed" | "playback_decode_failed" | "error" | "observation";
 
 export type Unit = "millisecond" | "nanosecond";
 

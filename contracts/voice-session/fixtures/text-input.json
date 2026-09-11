@@ -1,0 +1,134 @@
+{
+  "valid": [
+    {
+      "protocol_version": "1.1",
+      "event_id": "10000000-0000-4000-8000-000000000011",
+      "session_id": "10000000-0000-4000-8000-000000000001",
+      "monotonic_timestamp_ms": 1,
+      "type": "user_text_submitted",
+      "speaker": {
+        "participant_id": "10000000-0000-4000-8000-000000000002",
+        "role": "user"
+      },
+      "text": "音声と同じ会話へ送信します"
+    },
+    {
+      "protocol_version": "1.1",
+      "event_id": "10000000-0000-4000-8000-000000000011",
+      "session_id": "10000000-0000-4000-8000-000000000001",
+      "monotonic_timestamp_ms": 1,
+      "type": "user_input_result_requested",
+      "speaker": {
+        "participant_id": "10000000-0000-4000-8000-000000000002",
+        "role": "user"
+      },
+      "input_event_id": "10000000-0000-4000-8000-000000000011"
+    },
+    {
+      "protocol_version": "1.1",
+      "event_id": "10000000-0000-4000-8000-000000000011",
+      "session_id": "10000000-0000-4000-8000-000000000001",
+      "monotonic_timestamp_ms": 1,
+      "type": "user_input_result",
+      "input_event_id": "10000000-0000-4000-8000-000000000011",
+      "status": "processing"
+    },
+    {
+      "protocol_version": "1.1",
+      "event_id": "10000000-0000-4000-8000-000000000011",
+      "session_id": "10000000-0000-4000-8000-000000000001",
+      "monotonic_timestamp_ms": 1,
+      "type": "user_input_result",
+      "input_event_id": "10000000-0000-4000-8000-000000000011",
+      "status": "accepted"
+    },
+    {
+      "protocol_version": "1.1",
+      "event_id": "10000000-0000-4000-8000-000000000011",
+      "session_id": "10000000-0000-4000-8000-000000000001",
+      "monotonic_timestamp_ms": 1,
+      "type": "user_input_result",
+      "input_event_id": "10000000-0000-4000-8000-000000000011",
+      "status": "rejected"
+    },
+    {
+      "protocol_version": "1.1",
+      "event_id": "10000000-0000-4000-8000-000000000011",
+      "session_id": "10000000-0000-4000-8000-000000000001",
+      "monotonic_timestamp_ms": 1,
+      "type": "user_input_result",
+      "input_event_id": "10000000-0000-4000-8000-000000000011",
+      "status": "not_received"
+    },
+    {
+      "protocol_version": "1.1",
+      "event_id": "10000000-0000-4000-8000-000000000011",
+      "session_id": "10000000-0000-4000-8000-000000000001",
+      "monotonic_timestamp_ms": 1,
+      "type": "audio_input_suppression_changed",
+      "reason": "text_focus",
+      "suppressed": true
+    }
+  ],
+  "invalid": [
+    {
+      "protocol_version": "1.0",
+      "event_id": "10000000-0000-4000-8000-000000000011",
+      "session_id": "10000000-0000-4000-8000-000000000001",
+      "monotonic_timestamp_ms": 1,
+      "type": "user_text_submitted",
+      "speaker": {
+        "participant_id": "10000000-0000-4000-8000-000000000002",
+        "role": "user"
+      },
+      "text": "音声と同じ会話へ送信します"
+    },
+    {
+      "protocol_version": "1.1",
+      "event_id": "10000000-0000-4000-8000-000000000011",
+      "session_id": "10000000-0000-4000-8000-000000000001",
+      "monotonic_timestamp_ms": 1,
+      "type": "user_text_submitted",
+      "speaker": {
+        "participant_id": "10000000-0000-4000-8000-000000000002",
+        "role": "user"
+      },
+      "text": " \n\t"
+    },
+    {
+      "protocol_version": "1.1",
+      "event_id": "10000000-0000-4000-8000-000000000011",
+      "session_id": "10000000-0000-4000-8000-000000000001",
+      "monotonic_timestamp_ms": 1,
+      "type": "user_text_submitted",
+      "speaker": {
+        "participant_id": "10000000-0000-4000-8000-000000000002",
+        "role": "character",
+        "character_id": "miori"
+      },
+      "text": "音声と同じ会話へ送信します"
+    },
+    {
+      "protocol_version": "1.1",
+      "event_id": "10000000-0000-4000-8000-000000000011",
+      "session_id": "10000000-0000-4000-8000-000000000001",
+      "monotonic_timestamp_ms": 1,
+      "type": "user_input_result_requested",
+      "speaker": {
+        "participant_id": "10000000-0000-4000-8000-000000000002",
+        "role": "user"
+      },
+      "input_event_id": "10000000-0000-4000-8000-000000000011",
+      "text": "送信の照合へ本文を混ぜない"
+    },
+    {
+      "protocol_version": "1.1",
+      "event_id": "10000000-0000-4000-8000-000000000011",
+      "session_id": "10000000-0000-4000-8000-000000000001",
+      "monotonic_timestamp_ms": 1,
+      "type": "user_input_result",
+      "input_event_id": "10000000-0000-4000-8000-000000000011",
+      "status": "delivered"
+    }
+  ]
+}
