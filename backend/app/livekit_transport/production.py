@@ -892,6 +892,7 @@ class _ConversationCoreBridge:
         self._pending_transcriptions: deque[tuple[str, bytes, str | None]] = deque()
         self._pending_transcription_bytes = 0
         self._transcription_active = False
+        self._transcription_epoch = 0
         self._microphone_preroll = bytearray()
         self._microphone_received_bytes = 0
         self._control_lock = asyncio.Lock()
@@ -995,6 +996,20 @@ class _ConversationCoreBridge:
     def _audio_input_suppressed(self) -> bool:
         return self._text_focus_suppressed or self._manual_input_muted
 
+    def invalidate_unfinalized_audio(self) -> tuple[str, ...]:
+        """新しいtext受付時に、未確定capture/待機STTを次の入力世代から切り離す。"""
+        discarded = tuple(dict.fromkeys([
+            *(capture.utterance_id for capture in self._user_audio_captures),
+            *(utterance_id for utterance_id, _, _ in self._pending_transcriptions),
+        ]))
+        self._transcription_epoch += 1
+        self._transcription_active = False
+        self._user_audio_captures.clear()
+        self._pending_transcriptions.clear()
+        self._pending_transcription_bytes = 0
+        self._microphone_preroll.clear()
+        return discarded
+
     def _apply_audio_input_gate(self) -> None:
         if not self._audio_input_suppressed:
             return
@@ -1080,6 +1095,7 @@ class _ConversationCoreBridge:
             utterance_id=capture.utterance_id,
             interrupted_response_id=capture.interrupted_response_id,
             microphone_pcm=bytes(capture.pcm), capture=capture,
+            epoch=self._transcription_epoch,
         ))
 
     def _consider_stt_preparation(self, capture: _UserAudioCapture, pcm: bytes) -> None:
@@ -1135,10 +1151,13 @@ class _ConversationCoreBridge:
         interrupted_response_id: str,
         microphone_pcm: bytes,
         capture: _UserAudioCapture | None = None,
+        epoch: int | None = None,
     ) -> None:
+        if epoch is None:
+            epoch = self._transcription_epoch
         attempt = capture.preview_attempts if capture is not None else 1
         try:
-            if not getattr(self._session, "accepting_input", True):
+            if epoch != self._transcription_epoch or not getattr(self._session, "accepting_input", True):
                 return
             if self._measurement is not None:
                 self._measurement.record_utterance_event(
@@ -1155,7 +1174,7 @@ class _ConversationCoreBridge:
                 utterance_id=utterance_id,
                 audio=prepared_audio,
                 interrupted_response_id=interrupted_response_id,
-                input_is_current=lambda: not self._audio_input_suppressed and (
+                input_is_current=lambda: epoch == self._transcription_epoch and not self._audio_input_suppressed and (
                     capture is None or any(item is capture for item in self._user_audio_captures)
                 ),
             )
@@ -1173,10 +1192,11 @@ class _ConversationCoreBridge:
             # 先行認識の失敗時も発話全体のSTTで確定できる。
             logger.exception("Turn preview failed: utterance_id=%s", utterance_id)
         finally:
-            self._transcription_active = False
-            self._start_next_transcription()
-            if capture is not None:
-                self._consider_turn_preview(capture)
+            if epoch == self._transcription_epoch:
+                self._transcription_active = False
+                self._start_next_transcription()
+                if capture is not None:
+                    self._consider_turn_preview(capture)
 
     def _schedule_finalization_if_ready(self, capture: _UserAudioCapture) -> None:
         if (
@@ -1350,14 +1370,19 @@ class _ConversationCoreBridge:
                 self._transcription_active = False
                 return
             raise
-        task.add_done_callback(self._transcription_done)
+        epoch = self._transcription_epoch
+        task.add_done_callback(lambda task: self._transcription_done(task, epoch))
 
-    def _transcription_done(self, task: asyncio.Task[object]) -> None:
+    def _transcription_done(self, task: asyncio.Task[object], epoch: int) -> None:
         self._consume_task(task)
+        if epoch != self._transcription_epoch:
+            return
         self._transcription_active = False
         self._start_next_transcription()
 
     def _start_next_transcription(self) -> None:
+        if self._transcription_active:
+            return
         if not getattr(self._session, "accepting_input", True):
             self._pending_transcriptions.clear()
             self._pending_transcription_bytes = 0
@@ -1757,7 +1782,10 @@ class ProductionRuntimeManager:
             self._schedule_task(session_id, operation)
 
         async def submit_text(input_id: str, text: str) -> str | None:
-            response = await core_session.submit_text(input_id=input_id, text=text)
+            discarded = bridge.invalidate_unfinalized_audio()
+            response = await core_session.submit_text(
+                input_id=input_id, text=text, discard_speech_ids=discarded,
+            )
             return response.response_id if response is not None else None
 
         async def publish_input_result(event: dict[str, object]) -> None:

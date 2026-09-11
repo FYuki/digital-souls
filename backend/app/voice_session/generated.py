@@ -117,6 +117,7 @@ class VoiceSessionEventReason(Enum):
     SESSION_ENDED = "session_ended"
     TERMINAL_ERROR = "terminal_error"
     TEXT_FOCUS = "text_focus"
+    TEXT_PRIORITY = "text_priority"
     USER_REQUEST = "user_request"
 
 

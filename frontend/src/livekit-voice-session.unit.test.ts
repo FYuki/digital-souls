@@ -68,6 +68,34 @@ const setup = () => {
 }
 
 describe('通常会話UI向けLiveKit音声session', () => {
+  test('text submitで即時停止し、playback通知ACKを待たずcancelとtextを送り旧deltaを捨てる', async () => {
+    const {controller, room, events, coreEventReceivers, observations, delivered} = setup()
+    const context = {characterId: 'miori', conversationId: 'a'}
+    const oldResponse = '50000000-0000-4000-8000-000000000051'
+    const newResponse = '50000000-0000-4000-8000-000000000052'
+    await controller.ensureSession(context)
+    coreEventReceivers[0]({type: 'response_started', response_id: oldResponse} as VoiceSessionEvent)
+    let release: () => void = () => undefined
+    vi.mocked(room.publishControlEvent).mockImplementation(async event => {
+      events.push(event)
+      if (event.type === 'playback_stopped') await new Promise<void>(resolve => {release = resolve})
+    })
+    const submitted = controller.submitText(context, '新しい質問')
+    expect(room.stopPlayback).toHaveBeenCalledWith(oldResponse)
+    await submitted
+    expect(events.map(event => event.type)).toEqual(expect.arrayContaining(['response_cancel_requested', 'user_text_submitted']))
+    expect(controller.snapshot().response).toBe('interrupting')
+    coreEventReceivers[0]({type: 'response_delta', response_id: oldResponse, text: '遅着'} as VoiceSessionEvent)
+    expect(controller.snapshot().response).toBe('interrupting')
+    coreEventReceivers[0]({type: 'response_started', response_id: newResponse} as VoiceSessionEvent)
+    coreEventReceivers[0]({type: 'response_delta', response_id: oldResponse, text: 'さらに遅着'} as VoiceSessionEvent)
+    observations[0]({transport: 'available', control: 'available', audio: 'available', activeResponseId: oldResponse, renderedEnergy: 1})
+    expect(controller.snapshot()).toMatchObject({activeResponseId: newResponse, playback: 'idle'})
+    expect(delivered.some(row => row.event.type === 'response_delta')).toBe(false)
+    release()
+    await controller.end()
+  })
+
   test('focusだけで音声入力を抑止し、回答と接続を保持してblurで再開する', async () => {
     const {controller, room, events, coreEventReceivers} = setup()
     const context = {characterId: 'miori', conversationId: 'a'}

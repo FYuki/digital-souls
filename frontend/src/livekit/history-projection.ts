@@ -20,6 +20,10 @@ export class VoiceHistoryProjection {
 
   receive(event: VoiceSessionEvent, context: VoiceSessionContext,
     submissions: readonly TextSubmission[]): ProjectedVoiceTurn | null {
+    if (event.type === 'utterance_discarded' && event.utterance_id !== undefined) {
+      this.speech.delete(`${event.session_id}:${event.utterance_id}`)
+      return null
+    }
     if (event.type === 'utterance_finalized' && event.utterance_id !== undefined) {
       this.speech.set(`${event.session_id}:${event.utterance_id}`, event.transcript ?? '')
       return null
