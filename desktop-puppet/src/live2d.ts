@@ -119,13 +119,15 @@ export async function mountLive2D(
     const model = await Live2DModel.from(MODEL_URL, {
       autoInteract: false,
     });
+    // PixiJS 8の描画コールバックが参照するrendererを明示する。
+    model.setRenderer(app.renderer);
     app.stage.addChild(model);
 
     const baseWidth = Math.max(model.width, 1);
     const baseHeight = Math.max(model.height, 1);
     const fit = () => {
-      const width = Math.max(app.renderer.width, 1);
-      const height = Math.max(app.renderer.height, 1);
+      const width = Math.max(app.screen.width, 1);
+      const height = Math.max(app.screen.height, 1);
       const scale = Math.min(width / baseWidth, height / baseHeight) * 0.92;
       model.anchor.set(0.5, 0.5);
       model.scale.set(scale);
@@ -147,7 +149,18 @@ export async function mountLive2D(
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     app.renderer.render(app.stage);
 
-    const detail = `Live2D ready: ${Math.round(app.renderer.width)}x${Math.round(app.renderer.height)}`;
+    // 読込成功だけでREADYにせず、透明背景以外の描画結果があることを確認する。
+    const gl = canvas.getContext("webgl2") ?? canvas.getContext("webgl");
+    if (!gl) throw new Error("Live2DのWebGLコンテキストを取得できません");
+    const pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
+    gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    let visiblePixels = 0;
+    for (let i = 3; i < pixels.length; i += 4) {
+      if (pixels[i] > 0) visiblePixels++;
+    }
+    if (visiblePixels === 0) throw new Error("Live2Dの描画結果が透明です");
+
+    const detail = `Live2D ready: ${Math.round(app.renderer.width)}x${Math.round(app.renderer.height)}, pixels=${visiblePixels}`;
     await updateStatus(onStatus, "ready", detail);
 
     return {
