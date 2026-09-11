@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { Live2DModel } from "@naari3/pixi-live2d-display/cubism5";
 import * as PIXI from "pixi.js";
+// TauriのCSP下ではevalを使わないPixiJSの実装を登録する。
+import "pixi.js/unsafe-eval";
 
 const MODEL_URL =
   "https://raw.githubusercontent.com/Live2D/CubismWebSamples/develop/Samples/Resources/Hiyori/Hiyori.model3.json";

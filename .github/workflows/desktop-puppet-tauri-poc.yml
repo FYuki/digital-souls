@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feat/desktop-puppet-tauri-poc
+      - codex/desktop-puppet-demo
     paths:
       - "desktop-puppet/**"
       - ".github/workflows/desktop-puppet-tauri-poc.yml"
@@ -82,3 +83,14 @@ jobs:
               Stop-Process -Id $process.Id -Force
             }
           }
+
+      - name: Upload Windows demo and runtime status
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-puppet-windows
+          path: |
+            desktop-puppet/src-tauri/target/release/digital-souls-desktop-puppet.exe
+            ${{ runner.temp }}/digital-souls-live2d-status.json
+          if-no-files-found: warn
+          retention-days: 7
