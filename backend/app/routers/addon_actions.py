@@ -1,10 +1,12 @@
 """内部管理・チャットからの承認回答。回答自体は外部操作を実行しない。"""
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, UUID4
+from uuid import UUID
 
-from app.addon_action.models import ApprovalChoice
+from app.addon_action.models import ApprovalChoice, ApprovalKey, OperationGroup, Permission
+from app.addon_action.store import ConfirmationRequest
 from app.addon_action.policy import ActionPolicy
 from app.external_mcp.models import MCPFailure
 from app.routers.validation import SafeValidationRoute
@@ -13,6 +15,7 @@ from app.addon_action.models import ExecutionScene
 from app.routers.chat import ChatRequest, PersistedChatResponse, chat
 from app.conversation_core.session import TerminalProtocolError
 from app.tool_use.service import ToolService
+from app.external_mcp.models import Json, digest
 
 router = APIRouter(prefix="/addon-actions", route_class=SafeValidationRoute)
 
@@ -108,8 +111,11 @@ async def continue_conversation(
         raise HTTPException(409, "この確認要求から会話を続行できません。") from None
 
     def waiting() -> bool:
+        current = policy.store.request(rid)
         return bool(
             service
+            and current.waiting
+            and policy.clock() < current.wait_until
             and service.pending_confirmation(payload.character, conversation, rid)
         )
 
@@ -161,3 +167,131 @@ async def continue_conversation(
     finally:
         if not keep_claim:
             service.release_confirmation(payload.character, conversation, rid)
+
+
+class AdminAnswerInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    choice: ApprovalChoice
+
+
+class PermissionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    connection_id: str = Field(min_length=1, max_length=256)
+    connection_token: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    operation_group: OperationGroup
+    scene: ExecutionScene
+    permission: Permission
+
+
+def _connection_token(connection_id: str, identity: str) -> str:
+    return digest([connection_id, identity])
+
+
+def _admin_projection(request: Request, item: ConfirmationRequest) -> Json:
+    policy = _policy(request)
+    available = False
+    try:
+        entry = request.app.state.addon_manager.gate.registry.entry(item.key.connection_id)
+        available = entry.linked and entry.connection.identity == item.key.connection_identity
+    except MCPFailure:
+        pass
+    # 取得時にも現在のsecret redactionを適用し、生の引数・fingerprint等は返さない。
+    preview = policy.sanitizer.value(item.preview)
+    return {
+        **item.public(), "preview": preview,
+        "character_id": item.character_id, "session_id": item.session_id,
+        "waiting": item.waiting and policy.clock() < item.wait_until,
+        "connection_available": available,
+        "once_reserved": item.once_reserved and item.waiting and policy.clock() < item.wait_until,
+    }
+
+
+@router.get("/admin/requests")
+async def admin_requests(
+    request: Request, response: Response, unanswered: bool = True,
+    before: UUID4 | None = None, limit: int = Query(default=50, ge=1, le=100),
+) -> dict[str, object]:
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        page, cursor = _policy(request).store.request_page(
+            unanswered=unanswered, before=str(before) if before else None, limit=limit,
+        )
+    except MCPFailure:
+        raise HTTPException(409, "確認キューを先頭から再取得してください。") from None
+    return {"requests": [_admin_projection(request, item) for item in page], "next_cursor": cursor}
+
+
+@router.get("/admin/permissions")
+async def admin_permissions(request: Request, response: Response) -> dict[str, object]:
+    response.headers["Cache-Control"] = "no-store"
+    policy = _policy(request)
+    rows = []
+    for entry in request.app.state.addon_manager.gate.registry.entries():
+        if not entry.linked:
+            continue
+        connection = entry.connection
+        for group in OperationGroup:
+            for scene in ExecutionScene:
+                key = ApprovalKey(connection.id, connection.identity, group, scene)
+                rows.append({
+                    "connection_id": connection.id,
+                    "connection_token": _connection_token(connection.id, connection.identity),
+                    "connection_label": policy.sanitizer.text(entry.display_name, maximum=128),
+                    "operation_group": group, "scene": scene, **policy.store.settings(key),
+                })
+    return {"permissions": rows}
+
+
+@router.put("/admin/permissions")
+async def update_permission(
+    payload: PermissionInput, request: Request, response: Response,
+) -> dict[str, object]:
+    response.headers["Cache-Control"] = "no-store"
+    policy = _policy(request)
+    try:
+        entry = request.app.state.addon_manager.gate.registry.entry(payload.connection_id)
+        connection = entry.connection
+        if not entry.linked or payload.connection_token != _connection_token(connection.id, connection.identity):
+            raise MCPFailure("policy", "connection_changed")
+        key = ApprovalKey(connection.id, connection.identity, payload.operation_group, payload.scene)
+        # awaitを挟まずidentity照合と設定変更を行う。ON/OFF・grantは変更しない。
+        policy.store.set_permission(key, payload.permission)
+        return {"setting": policy.store.settings(key)}
+    except MCPFailure:
+        raise HTTPException(409, "承認設定を変更できません。状態を再取得してください。") from None
+
+
+@router.post("/admin/requests/{request_id}/answer")
+async def admin_answer(
+    request_id: UUID4, payload: AdminAnswerInput, request: Request, response: Response,
+) -> dict[str, object]:
+    try:
+        item = _policy(request).store.request(str(request_id))
+    except MCPFailure:
+        raise HTTPException(409, "確認要求を再取得してください。") from None
+    await answer(request_id, AnswerInput(
+        choice=payload.choice, character=item.character_id, session_id=item.session_id,
+    ), request, response)
+    return {"request": _admin_projection(request, _policy(request).store.request(item.id))}
+
+
+@router.post("/admin/requests/{request_id}/continue", response_model=None)
+async def admin_continue(
+    request_id: UUID4, request: Request, response: Response,
+) -> PersistedChatResponse | JSONResponse | dict[str, str]:
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        item = _policy(request).store.request(str(request_id))
+    except MCPFailure:
+        raise HTTPException(409, "確認要求を再取得してください。") from None
+    if item.key.scene == ExecutionScene.AUTONOMOUS:
+        # 会話外は既存runtimeの待機が回答を観測する。別活動を起動しない。
+        return {"state": "autonomous"}
+    if not _admin_projection(request, item)["connection_available"]:
+        return {"state": "ended"}
+    manager = getattr(request.app.state, "livekit_runtime_manager", None)
+    voice = manager.confirmation_session(item.character_id, item.session_id) if manager else None
+    return await continue_conversation(request_id, ContinueInput(
+        character=item.character_id, conversation_id=UUID(item.session_id),
+        voice_session_id=UUID(voice) if voice else None,
+    ), request, response)

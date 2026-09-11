@@ -20,7 +20,7 @@ async function close(server: Server) {
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
 }
 
-test('承認後の会話は管理APIの待機上限を超えてもVite経由で回答を受け取れる', async () => {
+test.each(['requests', 'admin/requests'])('承認後の会話 %s は管理APIの待機上限を超えてもVite経由で回答を受け取れる', async (route) => {
   const directory = await mkdtemp(join(tmpdir(), 'action-proxy-'))
   // 本物のHTTP転送で確認し、待機時間だけ全経路共通で1/100へ短縮する。
   const backend = createHttpServer((request, response) => {
@@ -52,7 +52,7 @@ test('承認後の会話は管理APIの待機上限を超えてもVite経由で�
     })
     frontend = createHttpServer(vite.middlewares)
     const url = await listen(frontend)
-    const path = '/addon-actions/requests/0f703072-47fa-4fc8-805f-c14779bbb73d'
+    const path = `/addon-actions/${route}/0f703072-47fa-4fc8-805f-c14779bbb73d`
     for (const query of ['', '?source=chat']) {
       const response = await fetch(`${url}/api${path}/continue${query}`, {
         method: 'POST', body: '{}', signal: AbortSignal.timeout(3000),

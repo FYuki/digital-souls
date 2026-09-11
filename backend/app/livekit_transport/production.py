@@ -1856,6 +1856,18 @@ class ProductionRuntimeManager:
             raise RuntimeError("LiveKit session is not active")
         await coordinator.send_screen(payload)
 
+    def confirmation_session(self, character: str, conversation: str) -> str | None:
+        """管理画面の選択中スレッドによらず、要求を所有する音声sessionへ続行する。"""
+        for session_id in self._core_sessions:
+            reservation = self._sessions.get(session_id)
+            if (
+                reservation is not None
+                and str(reservation.request["character_id"]) == character
+                and str(reservation.request["conversation_id"]) == conversation
+            ):
+                return session_id
+        return None
+
     async def submit_action_confirmation(
         self, session_id: str, character: str, conversation: str,
         request_id: str, message: str, still_waiting: Callable[[], bool],
