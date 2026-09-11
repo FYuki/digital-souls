@@ -42,6 +42,7 @@ SSOTは既存の`contracts/voice-session/voice-session.schema.json`とする。`
 | `user_input_result` | BE | `input_event_id`、`status`、必要な`response_id` / `error_code`。受理結果の正本 |
 | `audio_input_suppression_changed` | FE | `suppressed`、`reason=text_focus`。manual muteと独立した音声入力抑止の変更 |
 | `response_started` | BE | 既存情報と`source_inputs`。Speech/Textの入力を一度だけ消費した応答 |
+| `response_privacy_skipped` | BE | `response_id`、`source_inputs`。本文を含まないprivacy終端。開始前にも通知する |
 
 本文は空白だけの入力を拒否し、既存の通常chatと整合する入力長・privacy検証を行う。上限を超える入力を切り詰めて別の内容として受理しない。イベント名とschemaの具体化はこの契約を実装する#321で行う。
 
@@ -56,6 +57,8 @@ SSOTは既存の`contracts/voice-session/voice-session.schema.json`とする。`
 | `not_received` | 照合時に未受理を確定し、元の送信を閉じた | 本文を保持し、ユーザーが再送できる |
 
 受理成立後にLLM/TTSが失敗しても、入力を未受理へ戻さない。回答の失敗は既存response lifecycleで通知する。privacyで本文を保存しない場合も、本文を複製しない識別子と処理結果で送信の受理状態を区別する。
+
+privacy終端は受理結果と独立して通知し、`response_started`がまだ存在しなくても履歴を再取得する。既存の音声向け`utterance_discarded(reason=privacy)`は維持するが、テキストに架空のutteranceを作らない。該当応答の一時本文・生成／再生状態を終了し、遅着した開始・deltaを再表示しない。別スレッドまたは後発応答の状態は変更せず、sessionと手動muteを維持する。schemaで通知本文の追加を拒否し、通知を受信したFEが独自に履歴内容を再構成しない。
 
 ### 再送・照合の競合
 

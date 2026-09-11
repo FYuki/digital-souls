@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from uuid import uuid4
 
 from app.conversation_core import ConversationCoreSession, InputSource, TextDelta
@@ -108,5 +110,60 @@ def test_speech_text_speech_share_sqlite_history_context_and_tts(tmp_path: Path)
         assert wire["source_inputs"] == [{"input_id": ids[1], "source": "text"}]
         assert wire["source_utterance_ids"] == []
         assert wire["history_turn_id"] in {str(turn.turn_id) for turn in turns}
+        await session.end()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("source", ["text", "speech"])
+def test_privacy_skip_reaches_wire_without_content_and_keeps_one_history_turn(tmp_path: Path, source: str) -> None:
+    async def run():
+        repository = create_repository(tmp_path / "privacy.db", uuid_factory=uuid4)
+        conversation = repository.create_conversation("miori")
+        sanitizer = MagicMock()
+        sanitizer.sanitize_current_user.return_value = ConversationHistoryDecision(
+            action=ConversationHistoryAction.SKIP_CONTENT,
+            reason_code=HistoryDecisionReasonCode.STORAGE_OPT_OUT,
+            sanitizer_version="test", policy_version="test", content=None,
+        )
+        history = ConversationHistorySession("miori", conversation.conversation_id, repository, sanitizer)
+        coordinator, audio = MagicMock(), MagicMock()
+        wire = []
+
+        async def send_core(payload):
+            wire.append(decode_core_event(payload))
+
+        coordinator.send_core = AsyncMock(side_effect=send_core)
+        delivery = _ConversationCoreDelivery(
+            coordinator=coordinator, audio_source=audio,
+            character_participant_id=str(uuid4()), character_id="miori", user_participant_id=str(uuid4()),
+        )
+        stt, llm, tts = RecordingStt(transcript="保存しない入力"), MagicMock(), RecordingTts()
+        session = ConversationCoreSession(
+            session_id=str(uuid4()), response_id_factory=lambda: str(uuid4()),
+            delivery=delivery, persistence=ConversationHistoryPersistenceAdapter(history_session=history),
+            observation=RecordingObservation(), stt=stt, llm=llm, tts=tts,
+        )
+        input_id = str(uuid4())
+        if source == "text":
+            await session.submit_text(input_id=input_id, text="保存しない入力")
+            await session.submit_text(input_id=input_id, text="保存しない入力")
+        else:
+            await session.start_transcription(utterance_id=input_id, audio=b"speech", should_response=True)
+        async with asyncio.timeout(3):
+            while not any(event["type"] == "response_privacy_skipped" for event in wire):
+                await asyncio.sleep(0.001)
+        privacy = [event for event in wire if event["type"] == "response_privacy_skipped"]
+        assert len(privacy) == 1
+        assert privacy[0]["source_inputs"] == [{"input_id": input_id, "source": source}]
+        assert not {"text", "transcript", "user_content", "assistant_content"} & privacy[0].keys()
+        assert not any(event["type"].startswith("response_") and event["type"] != "response_privacy_skipped" for event in wire)
+        assert [event["utterance_id"] for event in wire if event["type"] == "utterance_discarded"] == ([input_id] if source == "speech" else [])
+        turns = repository.list_turns("miori", conversation.conversation_id)
+        assert len(turns) == 1
+        assert turns[0].user_content is None and turns[0].assistant_content is None
+        assert len(stt.calls) == (1 if source == "speech" else 0)
+        llm.generate.assert_not_called()
+        assert tts.calls == []
+        audio.begin_response.assert_not_called()
         await session.end()
     asyncio.run(run())

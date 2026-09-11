@@ -653,6 +653,9 @@ export class LiveKitVoiceSessionController {
       this.notifyCoreEvent(event)
       return
     }
+    if (event.type === 'response_privacy_skipped' && event.response_id !== undefined) {
+      this.interruptedResponseIds.add(event.response_id)
+    }
     if (event.type === 'response_started') this.renderCompletedResponses.clear()
     if (event.type === 'turn_decision' && (event.final || event.decision === 'take_turn')) {
       this.publishInterruptionObservation('turn_decision_received', event.utterance_id, event.response_id)
@@ -697,10 +700,11 @@ export class LiveKitVoiceSessionController {
         this.response = 'thinking'
       }
     } else if (
-      ['response_completed', 'response_cancelled', 'response_failed'].includes(event.type)
+      ['response_completed', 'response_cancelled', 'response_failed', 'response_privacy_skipped'].includes(event.type)
       && event.response_id !== undefined
     ) {
-      if (event.response_id === this.generatingResponseId) {
+      if (event.response_id === this.generatingResponseId
+        || (event.type === 'response_privacy_skipped' && this.generatingResponseId === null)) {
         this.generatingResponseId = null
         this.response = 'idle'
       }

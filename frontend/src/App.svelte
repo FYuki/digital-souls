@@ -180,6 +180,21 @@
       }
       return
     }
+    if (event.type === 'response_privacy_skipped' && event.response_id !== undefined) {
+      const sourceIds = (event.source_inputs ?? []).filter(source => source.source === 'speech')
+        .map(source => source.input_id)
+      for (const utteranceId of sourceIds) finalizedUtterances.delete(utteranceId)
+      if (liveVoiceTurn?.responseId === event.response_id
+        || (liveVoiceTurn?.responseId === null
+          && liveVoiceTurn.sourceUtteranceIds.some(id => sourceIds.includes(id)))) {
+        liveVoiceTurn = null
+        screenReferenceDecisionActive = false
+      }
+      // 開始前に省略されたテキストにも保存済みのprivacy表示を反映する。
+      void conversationController.refreshTurns(context)
+      void sidebarController.refreshCharacter(context.character)
+      return
+    }
     if (event.type === 'response_started' && event.response_id !== undefined) {
       if (projected === null) return
       const sourceIds = event.source_utterance_ids ?? []

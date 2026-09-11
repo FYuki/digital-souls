@@ -345,6 +345,25 @@ describe('LiveKit Room generation synchronization', () => {
     client.disconnect()
   })
 
+  test('privacy終端で該当応答の再生graphを止め、sessionは維持する', async () => {
+    const client = new LiveKitRoomClient(() => undefined)
+    const responseId = '50000000-0000-4000-8000-000000000001'
+    const sessionId = '20000000-0000-4000-8000-000000000001'
+    try {
+      await client.connect('ws://test', 'token', sessionId)
+      const room = latestRoom()
+      room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
+        {trackSid: 'TR_privacy', trackName: `ds-response-v1:${responseId}`})
+      await vi.waitFor(() => expect(audioContexts[0]?.worklets).toHaveLength(2))
+      const renderer = audioContexts[0].worklets[0]
+      emitCoreEvent(room, {protocol_version: '1.1', type: 'response_privacy_skipped',
+        event_id: '60000000-0000-4000-8000-000000000003', session_id: sessionId, response_id: responseId,
+        source_inputs: [{input_id: responseId, source: 'text'}], monotonic_timestamp_ms: 2002})
+      expect(renderer.disconnect).toHaveBeenCalledOnce()
+      expect(audioContexts[0].close).not.toHaveBeenCalled()
+    } finally {client.disconnect()}
+  })
+
   test('明示診断はgain後段を通り、cancel時に監視を切断せずcontext closeもdrainを待つ', async () => {
     const rows: import('./livekit/post-gain-monitor').StaleAudioObservation[] = []
     const receipts: import('./livekit/decoded-receipt-audit').DecodedReceiptSnapshot[] = []

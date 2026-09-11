@@ -878,7 +878,7 @@ export class LiveKitRoomClient {
         this.resumePlaybackGraphs(event.response_id)
       }
       if (
-        (event.type === 'response_cancelled' || event.type === 'response_failed')
+        (event.type === 'response_cancelled' || event.type === 'response_failed' || event.type === 'response_privacy_skipped')
         && event.response_id !== undefined
       ) {
         this.stoppedResponses.add(event.response_id)
