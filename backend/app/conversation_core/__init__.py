@@ -1,6 +1,7 @@
 from app.conversation_core.models import (
     AudioSegment,
     CoreEvent,
+    InputSource,
     Response,
     ResponseStartResult,
     ResponseState,
@@ -10,6 +11,7 @@ from app.conversation_core.models import (
     TextDelta,
     Utterance,
     UtteranceState,
+    UserInput,
 )
 from app.conversation_core.ports import (
     DeliveryPort,
@@ -26,6 +28,7 @@ __all__ = [
     "AudioSegment",
     "ConversationCoreSession",
     "CoreEvent",
+    "InputSource",
     "DeliveryPort",
     "LlmPort",
     "ObservationPort",
@@ -43,4 +46,5 @@ __all__ = [
     "TtsPort",
     "Utterance",
     "UtteranceState",
+    "UserInput",
 ]

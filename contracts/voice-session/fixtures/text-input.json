@@ -68,6 +68,26 @@
       "type": "audio_input_suppression_changed",
       "reason": "text_focus",
       "suppressed": true
+    },
+    {
+      "protocol_version": "1.1",
+      "event_id": "10000000-0000-4000-8000-000000000011",
+      "session_id": "10000000-0000-4000-8000-000000000001",
+      "monotonic_timestamp_ms": 1,
+      "type": "response_started",
+      "response_id": "50000000-0000-4000-8000-000000000319",
+      "speaker": {
+        "role": "character",
+        "character_id": "miori",
+        "participant_id": "40000000-0000-4000-8000-000000000319"
+      },
+      "source_utterance_ids": [],
+      "source_inputs": [
+        {
+          "input_id": "10000000-0000-4000-8000-000000000011",
+          "source": "text"
+        }
+      ]
     }
   ],
   "invalid": [
@@ -129,6 +149,35 @@
       "type": "user_input_result",
       "input_event_id": "10000000-0000-4000-8000-000000000011",
       "status": "delivered"
+    },
+    {
+      "protocol_version": "1.1",
+      "event_id": "10000000-0000-4000-8000-000000000011",
+      "session_id": "10000000-0000-4000-8000-000000000001",
+      "monotonic_timestamp_ms": 1,
+      "type": "response_started",
+      "response_id": "50000000-0000-4000-8000-000000000319",
+      "speaker": {
+        "role": "character",
+        "character_id": "miori",
+        "participant_id": "40000000-0000-4000-8000-000000000319"
+      },
+      "source_utterance_ids": [],
+      "source_inputs": []
+    },
+    {
+      "protocol_version": "1.1",
+      "event_id": "10000000-0000-4000-8000-000000000011",
+      "session_id": "10000000-0000-4000-8000-000000000001",
+      "monotonic_timestamp_ms": 1,
+      "type": "response_started",
+      "response_id": "50000000-0000-4000-8000-000000000319",
+      "speaker": {
+        "role": "character",
+        "character_id": "miori",
+        "participant_id": "40000000-0000-4000-8000-000000000319"
+      },
+      "source_utterance_ids": []
     }
   ]
 }

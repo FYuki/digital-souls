@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Callable, Literal, cast
 from uuid import uuid4
 
-from app.conversation_core import StageObservation
+from app.conversation_core import InputSource, StageObservation
 from app.conversation_core.provider_result_audit import PROVIDER_RESULT_METRICS, PROVIDER_STOPPING_METRICS
 from app.inference.diagnostics import DIAGNOSTIC_NAMES
 from app.voice_metrics import EventOutcome, MeasurementKind, TraceEvent
@@ -73,10 +73,15 @@ class LiveKitMeasurementSession:
         self._recorded_names: set[tuple[str, str, str]] = set()
 
     def bind_response(
-        self, *, response_id: str, source_utterance_ids: tuple[str, ...]
+        self, *, response_id: str, source_utterance_ids: tuple[str, ...],
+        source_inputs: tuple[InputSource, ...] | None = None,
     ) -> None:
-        if not source_utterance_ids:
+        if not source_utterance_ids and not (
+            source_inputs and all(item.source == "text" for item in source_inputs)
+        ):
             raise ValueError("response measurement requires a source utterance")
+        # Textのみの応答も再生確認と音声割り込みの相関対象にする。
+        # STT起点の音声品質traceへ架空のutteranceを追加しない。
         existing = self._response_utterances.get(response_id)
         if existing is not None and existing != source_utterance_ids:
             raise ValueError("response measurement binding cannot change")

@@ -2,7 +2,7 @@
 
 ## 状態・適用範囲
 
-**ACTIVE**。#319の決定事項と#320の設計を定める。2026-09-11時点では設計を確定した段階であり、runtimeへの適用・受入は#321〜#327で行う。
+**ACTIVE**。#319の決定事項と#320の設計を定める。runtimeへ#321〜#327で段階的に適用する。基礎実装と実サービスでの全体受入は区別し、各子Issueで進捗を管理する。
 
 同じConversation Sessionへ音声とテキストを投入し、回答をテキストとTTSで返す。既存のsession / response / playback lifecycle、音声の相槌判定、privacy、履歴保存の正本は維持する。本ADRはテキスト入力、受理結果、入力抑止、入力source、および送信先の規則について既存の[音声契約](voice-session-contract-2026-08.md)と[LiveKit契約](livekit-transport-2026-08.md)より優先する。
 
@@ -24,6 +24,10 @@ Coreは`UserInput`を境界とし、`input_id`、`source`（`speech` / `text`）
 - response開始時の`source_inputs`は、消費した入力の`input_id`と`source`を順序付きで表す。`source_utterance_ids`を残す箇所はSpeechだけの派生値とし、TextのIDを混入させない。
 - pendingの確定済みSpeechを後続入力とまとめる既存規則は維持する。テキスト優先で破棄するのは先行する未確定音声であり、確定・保存済み履歴を削除しない。
 - 同じsessionに紐付くconversation、character、Memory / Tool / Screen Perception文脈、privacy境界を共用する。LiveKitのRoom/Track IDはCoreへ持ち込まない。
+
+Coreのpending管理・応答予約・終端後の後続入力開始は`UserInput`を正本とする。既存の`utterance()` / `pending_utterances`はSpeechだけの参照であり、Textは返さない。`response_started`は実運用serializerから常に`source_inputs`を送る。Textのみなら`source_utterance_ids`は空配列とし、schemaは入力元のない応答を拒否する。
+
+Text応答も再生確認・音声による割り込みの計測相関対象にする。Speech/STT起点の品質traceには架空のutteranceを追加せず、Text-only応答を音声入力のTTFA標本として扱わない。
 
 ## protocolと互換性
 

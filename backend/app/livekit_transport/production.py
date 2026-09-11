@@ -495,6 +495,7 @@ class _ConversationCoreDelivery:
             self._measurement.bind_response(
                 response_id=event.response_id,
                 source_utterance_ids=event.source_utterance_ids,
+                source_inputs=event.source_inputs,
             )
         if event.type == "response_started":
             if event.response_id is None or event.source_utterance_ids is None:
@@ -505,6 +506,7 @@ class _ConversationCoreDelivery:
                 self._measurement.bind_response(
                     response_id=event.response_id,
                     source_utterance_ids=event.source_utterance_ids,
+                    source_inputs=event.source_inputs,
                 )
                 self._measurement.record_response_event(
                     response_id=event.response_id,
@@ -724,6 +726,13 @@ class _ConversationCoreDelivery:
                 response_id=event.response_id,
                 speaker=self._character_speaker,
                 source_utterance_ids=list(event.source_utterance_ids),
+                source_inputs=[
+                    {"input_id": item.input_id, "source": item.source}
+                    for item in event.source_inputs
+                ] if event.source_inputs is not None else [
+                    {"input_id": item, "source": "speech"}
+                    for item in event.source_utterance_ids
+                ],
             )
             if event.history_turn_id is not None:
                 payload["history_turn_id"] = event.history_turn_id
@@ -1712,6 +1721,13 @@ class ProductionRuntimeManager:
         def schedule_core_operation(operation: Awaitable[None]) -> None:
             self._schedule_task(session_id, operation)
 
+        async def submit_text(input_id: str, text: str) -> str | None:
+            response = await core_session.submit_text(input_id=input_id, text=text)
+            return response.response_id if response is not None else None
+
+        async def publish_input_result(event: dict[str, object]) -> None:
+            await coordinator.send_core(json.dumps(event, ensure_ascii=False).encode())
+
         bridge = _ConversationCoreBridge(
             core_session,
             schedule_core_operation,
@@ -1719,6 +1735,11 @@ class ProductionRuntimeManager:
             confirm_response_playback=delivery.confirm_response_playback,
             measurement=delivery.measurement,
             session_metrics=session_metrics,
+            text_input=TextInputReceiver(
+                session_id=session_id, participant_id=str(request["core_participant_id"]),
+                submit=submit_text, publish=publish_input_result,
+                accepting_input=lambda: core_session.accepting_input,
+            ),
         )
         self._audio_sources[session_id] = audio_source
         self._core_sessions[session_id] = core_session

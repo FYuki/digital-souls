@@ -1,6 +1,6 @@
 from enum import Enum
 from pydantic import BaseModel
-from typing import Optional, List, Union
+from typing import Optional, List, Any, Union
 from uuid import UUID
 
 
@@ -235,7 +235,7 @@ class VoiceSessionEvent(BaseModel):
     transcript: Optional[str] = None
     history_turn_id: Optional[UUID] = None
     source_inputs: Optional[List[VoiceSessionSchema]] = None
-    source_utterance_ids: Optional[List[UUID]] = None
+    source_utterance_ids: Optional[List[Any]] = None
     text_range: Optional[TextRange] = None
     text_sequence: Optional[int] = None
     audio_sequence: Optional[int] = None

@@ -411,7 +411,8 @@ def test_cancel_clears_character_audio_queue_and_next_response_can_publish(
     assert ("frame", b"\x02\x00" * 3) in operations
 
 
-def test_response_started_character_speaker_passes_schema_validation() -> None:
+@pytest.mark.parametrize("source", ["speech", "text"])
+def test_response_started_character_speaker_passes_schema_validation(source) -> None:
     production = importlib.import_module("app.livekit_transport.production")
     coordinator_module = importlib.import_module("app.livekit_transport.coordinator")
     session_id = "20000000-0000-4000-8000-000000000010"
@@ -463,6 +464,12 @@ def test_response_started_character_speaker_passes_schema_validation() -> None:
             character_participant_id=participant_id,
             character_id="miori",
         )
+        from app.conversation_core import InputSource
+        from app.livekit_transport.measurement import LiveKitMeasurementSession
+        delivery.attach_measurement(LiveKitMeasurementSession(
+            session_id=session_id, character_id="miori", measurement_kind="automated_test",
+            record=None, clock_ns=lambda: 1,
+        ))
         event = production.CoreEvent(
             type="response_started",
             session_id=session_id,
@@ -470,7 +477,8 @@ def test_response_started_character_speaker_passes_schema_validation() -> None:
             history_turn_id="60000000-0000-4000-8000-000000000010",
             source_utterance_ids=(
                 "30000000-0000-4000-8000-000000000010",
-            ),
+            ) if source == "speech" else (),
+            source_inputs=(InputSource("30000000-0000-4000-8000-000000000010", source),),
         )
 
         await delivery.publish(event)
