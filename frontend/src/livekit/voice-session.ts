@@ -603,11 +603,10 @@ export class LiveKitVoiceSessionController {
         this.response = 'thinking'
       }
     } else if (
-      ['response_completed', 'response_cancelled', 'response_failed', 'response_privacy_skipped'].includes(event.type)
+      ['response_completed', 'response_cancelled', 'response_failed'].includes(event.type)
       && event.response_id !== undefined
     ) {
-      if (event.response_id === this.generatingResponseId
-        || (event.type === 'response_privacy_skipped' && this.generatingResponseId === null)) {
+      if (event.response_id === this.generatingResponseId) {
         this.generatingResponseId = null
         this.response = 'idle'
       }
