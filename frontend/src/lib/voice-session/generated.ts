@@ -24,7 +24,7 @@ export interface VoiceSessionEvent {
     transcript?:                   string;
     history_turn_id?:              string;
     source_inputs?:                VoiceSessionSchema[];
-    source_utterance_ids?:         string[];
+    source_utterance_ids?:         any[];
     text_range?:                   TextRange;
     text_sequence?:                number;
     audio_sequence?:               number;
