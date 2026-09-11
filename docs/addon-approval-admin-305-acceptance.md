@@ -91,4 +91,10 @@ ACCEPTANCE_INFERENCE_ENV=/path/to/private/backend.env \
   backend/.venv/bin/python scripts/acceptance_tool_use.py --addon-action --grep 管理画面
 ```
 
+## レビュー対応
+
+[子PR #314](https://github.com/FYuki/digital-souls/pull/314)のCodeRabbit全差分レビューで8件の指摘を受けた。
+[修正PR #316](https://github.com/FYuki/digital-souls/pull/316)で索引、承認設定の一括read transaction、不正UUIDの409応答、実行ログへの参照、可変mypy件数の除去、VOICEVOX image ID採取、管理UI全3択のE2Eを対応した。
+キャラクター別permissionへの変更はIssue #305と合意済み契約に矛盾するため、[根拠を示してCodeRabbitが撤回](https://github.com/FYuki/digital-souls/pull/314#discussion_r3985926734)した。保存承認の共有と、要求への単回予約が別要求へ流用されないことを追加検証した。
+
 main向けPRは最新差分のCI成功、CodeRabbitレビューと指摘対応まで完了させる。mainへのマージはユーザーが行う。
