@@ -56,7 +56,7 @@ Scenario: 古い接続へ承認を流用しない
 
 2026-09-11に以下を確認した。自動回帰・制御fixture・独立MCPへの実接続を区別する。
 
-- Backendの関連unit/module回帰[110件](artifacts/addon-approval-admin-305/backend-focused.txt)が成功。レビュー修正後はID不正・承認共有と要求予約の分離を加えた関連module/unit [16件](artifacts/addon-approval-admin-305/backend-review.txt)が成功。
+- Backendの関連unit/module回帰[110件](artifacts/addon-approval-admin-305/backend-focused.txt)が成功。レビュー修正後はID不正・承認共有と要求予約の分離を加えた関連module/unit [16件](artifacts/addon-approval-admin-305/backend-review.txt)が成功。旧DB移行fixtureの更新後は[関連回帰89件](artifacts/addon-approval-admin-305/backend-review-regression.txt)が成功。
 - Frontend [unit 802件](artifacts/addon-approval-admin-305/frontend-unit.txt)、[module 136件](artifacts/addon-approval-admin-305/frontend-module.txt)、3択すべてを含む承認UIの[mocked E2E 8件](artifacts/addon-approval-admin-305/e2e-review.txt)が成功。
 - Svelte/TypeScript、mypy、ruff、[Frontend build](artifacts/addon-approval-admin-305/frontend-build.txt)が成功。mypyの一次ログは[子PRのBackend CI](https://github.com/FYuki/digital-souls/actions/runs/34560720485/job/103142755430)を参照する。
 - 実接続受入1件が108秒で成功。テキスト続行・停止後の回答で再実行しないこと・次の1回で消費・同じLiveKit音声会話の続行とブラウザ音声再生・会話外設定の範囲分離を確認した。
