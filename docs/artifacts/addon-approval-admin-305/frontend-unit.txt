@@ -1,0 +1,76 @@
+
+> digital-souls-frontend@0.0.0 test:unit
+> vitest run .unit.test.ts
+
+
+ RUN  v2.1.9 <worktree>/frontend
+
+ ✓ src/stale-text-probe.unit.test.ts (9 tests) 41ms
+ ✓ src/rtc-reconnect-diagnostic.unit.test.ts (8 tests) 17ms
+ ✓ src/lib/audio/utterance-detector.unit.test.ts (16 tests) 63ms
+ ✓ playwright/controlled-audio-fixture.unit.test.ts (18 tests) 13ms
+ ✓ src/lib/audio/pcm-worklet-recorder.unit.test.ts (7 tests) 9ms
+ ✓ src/lib/sidebar/controller.unit.test.ts (10 tests) 28ms
+ ✓ src/lib/conversations/controller.unit.test.ts (11 tests) 24ms
+ ✓ src/livekit-playback.unit.test.ts (9 tests) 343ms
+ ✓ src/post-gain-audit.unit.test.ts (18 tests) 21ms
+ ✓ src/livekit-packet-renderer.unit.test.ts (21 tests) 36ms
+ ✓ src/lib/screen-perception/capture.unit.test.ts (26 tests) 43ms
+ ✓ src/post-gain-monitor.unit.test.ts (19 tests) 40ms
+ ✓ src/stale-window.unit.test.ts (8 tests) 8ms
+ ✓ src/lib/addon-admin/controller.unit.test.ts (7 tests) 26ms
+ ✓ src/output-stop-proof.unit.test.ts (30 tests) 16ms
+ ✓ src/lib/audio/transport.unit.test.ts (22 tests) 86ms
+ ✓ src/livekit-private-contract.unit.test.ts (23 tests) 28ms
+ ✓ src/livekit-media-observer.unit.test.ts (31 tests) 145ms
+ ✓ src/vite-proxy.unit.test.ts (9 tests) 282ms
+ ✓ src/livekit-control.unit.test.ts (13 tests) 63ms
+ ✓ src/lib/AudioRecorder.unit.test.ts (25 tests) 286ms
+ ✓ src/lib/voice-session/voice-session-contract.unit.test.ts (29 tests) 757ms
+   ✓ voice session shared contract > 共有fixture normal.json のeventを境界validation後だけ受理する 489ms
+ ✓ src/livekit-voice-session.unit.test.ts (19 tests) 97ms
+ ✓ src/lib/ScreenCaptureControls.unit.test.ts (12 tests) 430ms
+ ✓ src/livekit-control-probe.unit.test.ts (20 tests) 11ms
+ ✓ src/lib/conversations/client.unit.test.ts (13 tests) 19ms
+ ✓ src/livekit-network-observer.unit.test.ts (12 tests) 24ms
+ ✓ src/lib/conversation-session.unit.test.ts (11 tests) 18ms
+ ✓ src/lib/audio/short-utterance-fallback.unit.test.ts (20 tests) 37ms
+ ✓ src/livekit-opus-packet-decoder.unit.test.ts (18 tests) 14ms
+ ✓ src/livekit-core-ack-outbox.unit.test.ts (9 tests) 20ms
+ ✓ src/stale-history.unit.test.ts (6 tests) 12ms
+ ✓ src/lib/audio/idle-vad-reset.unit.test.ts (6 tests) 60ms
+ ✓ src/lib/ui-settings/client.unit.test.ts (7 tests) 18ms
+ ✓ src/packet-output-diagnostic.unit.test.ts (7 tests) 18ms
+ ✓ src/lib/chat/client.unit.test.ts (9 tests) 19ms
+ ✓ src/vite-vad-assets.unit.test.ts (5 tests) 28ms
+ ✓ src/livekit-reconnect-policy.unit.test.ts (10 tests) 12ms
+ ✓ src/livekit-render-worklet.unit.test.ts (4 tests) 10ms
+ ✓ src/fault-clock.unit.test.ts (12 tests) 16ms
+ ✓ src/playback-supply-diagnostic.unit.test.ts (3 tests) 7ms
+ ✓ playwright/voice-baseline-fixture.unit.test.ts (7 tests) 15ms
+ ✓ src/lib/InputBar.unit.test.ts (5 tests) 156ms
+ ✓ src/lib/AudioPlayer.unit.test.ts (5 tests) 120ms
+ ✓ src/lib/screen-perception/screen-perception-contract.unit.test.ts (4 tests) 19ms
+ ✓ src/lib/RenameThreadDialog.unit.test.ts (5 tests) 305ms
+ ✓ src/rtp-duplicate-filter.unit.test.ts (3 tests) 9ms
+ ✓ src/lib/characters/client.unit.test.ts (6 tests) 10ms
+ ✓ src/MemoryManagement.unit.test.ts (6 tests) 623ms
+ ✓ src/rtp-packet-sequence.unit.test.ts (9 tests) 6ms
+ ✓ src/livekit-render-quantum-clock.unit.test.ts (7 tests) 8ms
+ ✓ src/livekit-observation.unit.test.ts (2 tests) 13ms
+ ✓ src/lib/audio/vad-policy.unit.test.ts (1 test) 2ms
+ ✓ src/livekit-state-sync-request.unit.test.ts (3 tests) 6ms
+ ✓ src/lib/HardDeleteDialog.unit.test.ts (5 tests) 70ms
+ ✓ src/sdk-reconnect-diagnostic.unit.test.ts (5 tests) 3ms
+ ✓ src/lib/CharacterPortrait.unit.test.ts (4 tests) 60ms
+ ✓ src/livekit/worker-clock.unit.test.ts (7 tests) 3ms
+ ✓ src/lib/audio/short-speech-evidence.unit.test.ts (6 tests) 39ms
+ ✓ src/fault-recovery-cohort.unit.test.ts (29 tests) 72ms
+ ✓ src/livekit-room.unit.test.ts (74 tests) 2489ms
+ ✓ src/App.unit.test.ts (37 tests) 1906ms
+
+ Test Files  62 passed (62)
+      Tests  802 passed (802)
+   Start at  12:50:41
+   Duration  5.78s (transform 9.19s, setup 51.17s, collect 19.30s, tests 9.18s, environment 23.38s, prepare 5.01s)
+

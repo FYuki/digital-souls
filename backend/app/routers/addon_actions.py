@@ -225,7 +225,7 @@ async def admin_requests(
 async def admin_permissions(request: Request, response: Response) -> dict[str, object]:
     response.headers["Cache-Control"] = "no-store"
     policy = _policy(request)
-    rows = []
+    rows: list[tuple[ApprovalKey, Json]] = []
     for entry in request.app.state.addon_manager.gate.registry.entries():
         if not entry.linked:
             continue
@@ -233,13 +233,14 @@ async def admin_permissions(request: Request, response: Response) -> dict[str, o
         for group in OperationGroup:
             for scene in ExecutionScene:
                 key = ApprovalKey(connection.id, connection.identity, group, scene)
-                rows.append({
+                rows.append((key, {
                     "connection_id": connection.id,
                     "connection_token": _connection_token(connection.id, connection.identity),
                     "connection_label": policy.sanitizer.text(entry.display_name, maximum=128),
-                    "operation_group": group, "scene": scene, **policy.store.settings(key),
-                })
-    return {"permissions": rows}
+                    "operation_group": group, "scene": scene,
+                }))
+    settings = policy.store.settings_many(key for key, _ in rows)
+    return {"permissions": [{**row, **settings[key]} for key, row in rows]}
 
 
 @router.put("/admin/permissions")
@@ -291,7 +292,11 @@ async def admin_continue(
         return {"state": "ended"}
     manager = getattr(request.app.state, "livekit_runtime_manager", None)
     voice = manager.confirmation_session(item.character_id, item.session_id) if manager else None
-    return await continue_conversation(request_id, ContinueInput(
-        character=item.character_id, conversation_id=UUID(item.session_id),
-        voice_session_id=UUID(voice) if voice else None,
-    ), request, response)
+    try:
+        payload = ContinueInput(
+            character=item.character_id, conversation_id=UUID(item.session_id),
+            voice_session_id=UUID(voice) if voice else None,
+        )
+    except ValueError:
+        raise HTTPException(409, "この確認要求から会話を続行できません。") from None
+    return await continue_conversation(request_id, payload, request, response)

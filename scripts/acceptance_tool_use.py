@@ -120,6 +120,26 @@ def speech(base, text, path, *, silence=90):
         )
 
 
+def voicevox_runtime_identity(configured):
+    """指定された稼働中コンテナの不変image IDだけを読み取り、環境変数は取得しない。"""
+    container = configured.get("ACCEPTANCE_VOICEVOX_CONTAINER")
+    if not container:
+        return None
+    distribution = configured.get("ACCEPTANCE_VOICEVOX_WSL_DISTRIBUTION")
+    command = ["docker"]
+    if distribution:
+        launcher = shutil.which("wsl.exe") or "/mnt/c/Windows/System32/wsl.exe"
+        command = [launcher, "--distribution", distribution, "--cd", "/tmp", "--exec", "docker"]
+    result = subprocess.run(
+        [*command, "inspect", "--type=container", "--format", "{{.State.Running}} {{.Image}}", container],
+        capture_output=True, text=True, timeout=15, check=True,
+    )
+    parts = result.stdout.strip().split()
+    if len(parts) != 2 or parts[0] != "true" or not re.fullmatch(r"sha256:[0-9a-f]{64}", parts[1]):
+        raise RuntimeError("VOICEVOXの稼働中コンテナのimage IDを確認できません")
+    return {"imageId": parts[1], "source": "running-container"}
+
+
 def main():
     contract = "--contract-mcp" in sys.argv
     action = "--addon-action" in sys.argv
@@ -514,6 +534,9 @@ def main():
                 response = httpx.get(service_urls[name] + path, timeout=10)
                 response.raise_for_status()
                 versions[name] = response.json()
+            voicevox_identity = voicevox_runtime_identity(configured)
+            if voicevox_identity is not None:
+                versions["voicevoxRuntime"] = voicevox_identity
             run_manifest["serviceVersions"] = versions
         (runtime / "runtime-manifest.json").write_text(
             json.dumps(run_manifest, ensure_ascii=False, indent=2)

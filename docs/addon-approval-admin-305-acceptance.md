@@ -56,9 +56,9 @@ Scenario: 古い接続へ承認を流用しない
 
 2026-09-11に以下を確認した。自動回帰・制御fixture・独立MCPへの実接続を区別する。
 
-- Backendの関連unit/module回帰110件が成功。音声入力待ち中の許可取消テストを加えた続行module全6件も成功。
-- Frontend unit 802件、module 136件、承認UIのmocked E2E 6件が成功。
-- Svelte/TypeScript、mypy（284ファイル）、ruff、Frontend buildが成功。
+- Backendの関連unit/module回帰[110件](artifacts/addon-approval-admin-305/backend-focused.txt)が成功。レビュー修正後はID不正・承認共有と要求予約の分離を加えた関連module/unit [16件](artifacts/addon-approval-admin-305/backend-review.txt)が成功。
+- Frontend [unit 802件](artifacts/addon-approval-admin-305/frontend-unit.txt)、[module 136件](artifacts/addon-approval-admin-305/frontend-module.txt)、3択すべてを含む承認UIの[mocked E2E 8件](artifacts/addon-approval-admin-305/e2e-review.txt)が成功。
+- Svelte/TypeScript、mypy、ruff、[Frontend build](artifacts/addon-approval-admin-305/frontend-build.txt)が成功。mypyの一次ログは[子PRのBackend CI](https://github.com/FYuki/digital-souls/actions/runs/34560720485/job/103142755430)を参照する。
 - 実接続受入1件が108秒で成功。テキスト続行・停止後の回答で再実行しないこと・次の1回で消費・同じLiveKit音声会話の続行とブラウザ音声再生・会話外設定の範囲分離を確認した。
 
 実接続のrun IDは `ccdbe7fa-e1d2-460c-855d-2da596e0be66`、実装commitは `c2b4e8e012dfddb9849d66fdd6d5b26bd79da033`（開始時にtracked変更なし）。
@@ -80,9 +80,13 @@ Scenario: 古い接続へ承認を流用しない
 音声入力だけVOICEVOX合成発話をマイクMediaStreamへ流す。物理マイクや人の発話品質の検証とは区別する。
 会話外の待機・競合の決定論的検証は制御fixtureであり、ブラウザによる実会話検証とは別に扱う。
 テストは一時data rootとテスト所有Backend・Frontend・LiveKitを使用する。共有推論サービスは停止しない。
+実行ログは公開用に端末の色指定・ローカルworktree pathだけ除いて保存した。
+VOICEVOXの`/version`応答が`latest`の場合、不変なビルド識別子にはならない。受入時に`ACCEPTANCE_VOICEVOX_CONTAINER`と、別WSL distributionなら`ACCEPTANCE_VOICEVOX_WSL_DISTRIBUTION`を指定し、稼働中コンテナの不変image IDを追加採取する。Dockerを読み取れない環境ではIDを推測せず、取得できたAPI版だけを記録する。
 
 ```bash
 backend/.venv/bin/python -m pytest backend/tests/module/test_addon_approval_admin.py backend/tests/module/test_addon_action_continuation.py backend/tests/unit/test_addon_approval_reset.py backend/tests/unit/test_livekit_action_confirmation.py -q
+ACCEPTANCE_VOICEVOX_CONTAINER=digital-souls-voicevox \
+ACCEPTANCE_VOICEVOX_WSL_DISTRIBUTION=Ubuntu-dogfood \
 ACCEPTANCE_INFERENCE_ENV=/path/to/private/backend.env \
   backend/.venv/bin/python scripts/acceptance_tool_use.py --addon-action --grep 管理画面
 ```
