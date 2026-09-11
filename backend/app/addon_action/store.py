@@ -162,6 +162,57 @@ class ActionStore:
         with self.transaction() as db:
             self._choose(db, key, choice)
 
+    def settings(self, key: ApprovalKey) -> Json:
+        with self.transaction() as db:
+            state = self._state(db, key)
+            reserved = db.execute(
+                """SELECT COUNT(*) FROM action_confirmations
+                WHERE connection_id=? AND identity=? AND operation_group=? AND scene=?
+                AND once_reserved=1 AND waiting=1 AND wait_until>?""",
+                (*key.values(), self.clock()),
+            ).fetchone()[0]
+            return {"permission": state.permission, "remaining": state.remaining,
+                    "reserved": reserved}
+
+    def set_permission(self, key: ApprovalKey, permission: Permission) -> None:
+        """保存設定の置換。dispatchの消費と同じtransaction境界で未使用許可を解除する。"""
+        if permission == Permission.DENIED and key.scene == ExecutionScene.CONVERSATION:
+            raise MCPFailure("policy", "conversation_denial_is_request_scoped")
+        with self.transaction() as db:
+            self._write(db, key, PermissionState(permission))
+            if permission != Permission.ALWAYS:
+                # 既に回答した古い要求は、後の再承認でも再開させない。
+                # 未回答キューは保持し、次の明示回答を可能にする。
+                db.execute(
+                    """UPDATE action_confirmations SET once_reserved=0,
+                    waiting=CASE WHEN choice IS NOT NULL THEN 0 ELSE waiting END
+                    WHERE connection_id=? AND identity=? AND operation_group=? AND scene=?""",
+                    key.values(),
+                )
+
+    def request_page(
+        self, *, unanswered: bool = True, before: str | None = None, limit: int = 50
+    ) -> tuple[tuple[ConfirmationRequest, ...], str | None]:
+        """管理キューは作成時刻とIDでページ化し、未回答を件数上限で隠さない。"""
+        with self.transaction() as db:
+            cursor = None
+            if before is not None:
+                cursor = db.execute(
+                    "SELECT created_at,id FROM action_confirmations WHERE id=?", (before,)
+                ).fetchone()
+                if cursor is None:
+                    raise MCPFailure("policy", "unknown_confirmation_cursor")
+            rows = db.execute(
+                """SELECT * FROM action_confirmations
+                WHERE (?=0 OR choice IS NULL)
+                AND (? IS NULL OR created_at<? OR (created_at=? AND id<?))
+                ORDER BY created_at DESC,id DESC LIMIT ?""",
+                (int(unanswered), before, cursor["created_at"] if cursor else None,
+                 cursor["created_at"] if cursor else None, before, limit + 1),
+            ).fetchall()
+            page = tuple(self._request(row) for row in rows[:limit])
+            return page, page[-1].id if len(rows) > limit else None
+
     def consume(self, key: ApprovalKey) -> bool:
         with self.transaction() as db:
             return self._consume(db, key)

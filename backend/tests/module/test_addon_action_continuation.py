@@ -17,8 +17,9 @@ from tests.tool_use_test_support import Decisions, call, runtime
 
 
 @pytest.mark.parametrize("direct_response", [False, True])
+@pytest.mark.parametrize("admin_endpoint", [False, True])
 def test_http_continue_is_bound_to_saved_answer_and_duplicate_does_not_restart(
-    monkeypatch, tmp_path, direct_response
+    monkeypatch, tmp_path, direct_response, admin_endpoint
 ):
     async def run():
         conversation = str(uuid4())
@@ -50,25 +51,26 @@ def test_http_continue_is_bound_to_saved_answer_and_duplicate_does_not_restart(
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app), base_url="http://test"
             ) as client:
-                url = f"/addon-actions/requests/{rid}"
+                url = f"/addon-actions/{'admin/' if admin_endpoint else ''}requests/{rid}"
                 body = {"character": "miori", "conversation_id": conversation}
                 assert (
                     await client.post(url + "/continue", json=body)
                 ).status_code == 409
                 saved = await client.post(
                     url + "/answer",
-                    json={
+                    json={"choice": "once"} if admin_endpoint else {
                         "character": "miori",
                         "session_id": conversation,
                         "choice": "once",
                     },
                 )
                 assert saved.status_code == 200 and not source.calls
-                assert (
-                    await client.post(
-                        url + "/continue", json={**body, "character": "other"}
-                    )
-                ).status_code == 409
+                if not admin_endpoint:
+                    assert (
+                        await client.post(
+                            url + "/continue", json={**body, "character": "other"}
+                        )
+                    ).status_code == 409
                 first = asyncio.create_task(client.post(url + "/continue", json=body))
                 await asyncio.wait_for(entered.wait(), 1)
                 duplicate = await client.post(url + "/continue", json=body)
@@ -83,6 +85,51 @@ def test_http_continue_is_bound_to_saved_answer_and_duplicate_does_not_restart(
                 assert (await client.post(url + "/continue", json=body)).json() == {
                     "state": "ended"
                 }
+
+    asyncio.run(run())
+
+
+def test_admin_voice_continuation_rechecks_reset_while_waiting_for_audio(monkeypatch, tmp_path):
+    async def run():
+        conversation, voice = str(uuid4()), str(uuid4())
+        async with runtime(Decisions(call)) as (service, source, gate):
+            gate.confirmations = p = policy(tmp_path)
+            await service.run("miori", conversation, "実行して")
+            rid = service.status("miori", conversation)["confirmation_id"]
+            app = FastAPI()
+            app.include_router(addon_actions.router)
+            app.state.tool_service, app.state.action_policy = service, p
+            app.state.addon_manager = SimpleNamespace(gate=gate)
+            entered, release = asyncio.Event(), asyncio.Event()
+
+            def session(character, session_id):
+                assert (character, session_id) == ("miori", conversation)
+                return voice
+
+            async def submit(session_id, character, conversation_id, request_id, message, waiting):
+                assert (session_id, character, conversation_id, request_id) == (voice, "miori", conversation, rid)
+                assert waiting()
+                entered.set()
+                await release.wait()
+                return waiting()
+
+            app.state.livekit_runtime_manager = SimpleNamespace(
+                confirmation_session=session, submit_action_confirmation=submit,
+            )
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+                url = f"/addon-actions/admin/requests/{rid}"
+                assert (await client.post(url + "/answer", json={"choice": "once"})).status_code == 200
+                continuing = asyncio.create_task(client.post(url + "/continue"))
+                await asyncio.wait_for(entered.wait(), 1)
+                rows = (await client.get("/addon-actions/admin/permissions")).json()["permissions"]
+                row = next(row for row in rows if row["operation_group"] == "high_impact" and row["scene"] == "conversation")
+                body = {name: row[name] for name in ("connection_id", "connection_token", "operation_group", "scene")}
+                result = await client.put("/addon-actions/admin/permissions", json={**body, "permission": "unapproved"})
+                assert result.status_code == 200
+                release.set()
+                assert (await continuing).json() == {"state": "ended"}
+                assert not source.calls and not p.store.request(rid).once_reserved
+                assert (await client.post(url + "/continue")).json() == {"state": "ended"}
 
     asyncio.run(run())
 

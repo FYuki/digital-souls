@@ -155,6 +155,91 @@ const speak = (page: Page, name: string) => page.evaluate(
   clip => (window as unknown as { __actionSpeech: (name: string) => Promise<void> }).__actionSpeech(clip), name,
 )
 
+const adminPanel = (page: Page) => page.getByRole('region', { name: '確認キュー・承認設定', exact: true })
+
+async function openAdmin(page: Page) {
+  const opener = page.getByRole('button', { name: /Addon \/ 連携/ })
+  if (!(await opener.isVisible())) await page.getByRole('button', { name: 'サイドバーを開く' }).click()
+  await opener.click()
+  await expect(adminPanel(page)).toBeVisible()
+  await expect(adminPanel(page).getByRole('button', { name: '承認状態を再取得' })).toBeEnabled()
+}
+
+async function resetConversationApproval(page: Page) {
+  await openAdmin(page)
+  const row = adminPanel(page).getByRole('listitem', { name: /ハイリスク操作群・対話中$/ })
+  await row.getByRole('button', { name: '未承認へ戻す' }).click()
+  await expect(adminPanel(page)).toContainText('未承認へ戻しました。')
+  await expect(adminPanel(page).getByRole('button', { name: '承認状態を再取得' })).toBeEnabled()
+  await page.getByRole('button', { name: 'チャットへ戻る', exact: true }).click()
+}
+
+async function chooseInAdmin(page: Page, label: string, live: boolean) {
+  await openAdmin(page)
+  const queue = adminPanel(page).getByRole('list', { name: '確認要求一覧' })
+  await expect(queue.getByRole('listitem')).toHaveCount(1)
+  await expect(queue).toContainText(live ? '元の操作は待機中です' : '元の操作の待機は終了しています')
+  const result = page.waitForResponse(r => r.url().endsWith(live ? '/continue' : '/answer') && r.request().method() === 'POST', { timeout: 300_000 })
+  await queue.getByRole('button', { name: label, exact: true }).click()
+  const response = await result
+  expect(response.ok()).toBe(true)
+  const id = new URL(response.url()).pathname.split('/').at(-2)!
+  await expect(adminPanel(page).getByRole('button', { name: '承認状態を再取得' })).toBeEnabled({ timeout: 300_000 })
+  return id
+}
+
+test('管理画面から待機中のテキスト・LiveKit承認と停止後の将来単回許可を実行する', async ({ page }, info) => {
+  await installSpeech(page)
+  const microphone = await driver.openVoiceChat(page)
+  await resetConversationApproval(page)
+  const original = await sampleText()
+  await send(page, `検証用ファイルは${sample}です。このパスのファイルを読んで内容を教えてください。今後も検証用ファイルとはこのパスを指します。`)
+  await requestTextWrite(page, '赤い風船')
+  expect(await sampleText()).toBe(original)
+  await chooseInAdmin(page, '一度承認する', true)
+  await expect.poll(sampleText).toBe('赤い風船')
+  await page.getByRole('button', { name: 'チャットへ戻る', exact: true }).click()
+  await expectWriteReply(page, '赤い風船')
+
+  await requestTextWrite(page, '白い雲')
+  // 明示停止は期限切れと同じ「待機終了」。管理画面への切替とは別に検証する。
+  await page.getByRole('button', { name: '外部操作を停止', exact: true }).click()
+  await expect(confirmation(page)).toHaveCount(0)
+  await chooseInAdmin(page, '一度承認する', false)
+  expect(await sampleText()).toBe('赤い風船')
+  const setting = adminPanel(page).getByRole('listitem', { name: /ハイリスク操作群・対話中$/ })
+  await expect(setting).toContainText('将来の呼び出し用の単回許可：1回')
+  await page.getByRole('button', { name: 'チャットへ戻る', exact: true }).click()
+  await send(page, `検証用ファイル${sample}の内容を正確に「紫の花」だけに置き換えてください。`)
+  await answerTextQuestionsWithoutApproval(page, '紫の花')
+  await expect.poll(sampleText).toBe('紫の花')
+  await expectWriteReply(page, '紫の花')
+
+  await microphone.click()
+  await expect(microphone).toHaveClass(/mic-standby/)
+  await requestVoiceWrite(page, 'action-once')
+  await waitForPlayback(page)
+  const voiceId = await chooseInAdmin(page, '一度承認する', true)
+  await expect.poll(sampleText).toBe('青い星')
+  await waitForPlayback(page, voiceId)
+  await page.getByRole('button', { name: 'チャットへ戻る', exact: true }).click()
+  await expectWriteReply(page, '青い星')
+  await driver.endVoiceSession(page)
+
+  await openAdmin(page)
+  const autonomous = adminPanel(page).getByRole('listitem', { name: /ハイリスク操作群・会話外$/ })
+  await autonomous.getByRole('button', { name: '拒否へ変更' }).click()
+  await expect(autonomous).toContainText('設定：拒否')
+  await autonomous.getByRole('button', { name: '未承認へ戻す' }).click()
+  await expect(autonomous).toContainText('設定：未承認')
+  await expect(adminPanel(page).getByRole('listitem', { name: /通常操作群・会話外$/ })).toContainText('設定：常に承認')
+  await page.screenshot({ path: info.outputPath('approval-admin.png'), fullPage: true })
+  await info.attach('admin-action-evidence', { body: JSON.stringify({
+    textAdminContinuation: true, lateApprovalDidNotReplay: true, futureOnceConsumed: true,
+    voiceAdminContinuationAndPlayback: true, autonomousSettingsIsolated: true,
+  }), contentType: 'application/json' })
+})
+
 test('独立MCPへのテキスト・LiveKit会話で承認と実際の副作用を確認する', async ({ page }, info) => {
   await installSpeech(page)
   const microphone = await driver.openVoiceChat(page)

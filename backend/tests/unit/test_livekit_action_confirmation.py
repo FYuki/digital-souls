@@ -26,6 +26,9 @@ def test_livekit_confirmation_requires_matching_live_binding_and_waits_for_quest
         manager._sessions = SimpleNamespace(
             get=lambda key: reservation if key == "voice" else None
         )
+        assert manager.confirmation_session("miori", "conversation") == "voice"
+        assert manager.confirmation_session("other", "conversation") is None
+        assert manager.confirmation_session("miori", "other") is None
         with pytest.raises(ValueError):
             await manager.submit_action_confirmation(
                 "voice", "other", "conversation", "id", "承認", lambda: True
