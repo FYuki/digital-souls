@@ -42,7 +42,7 @@ async function waitForApprovalOrQuestion(page: Page) {
 }
 
 async function requestTextWrite(page: Page, value: string) {
-  await send(page, `検証用ファイル${sample}の内容を正確に「${value}」だけに置き換えてください。`)
+  await send(page, `検証用ファイル${sample}の内容を正確に「${value}」だけに置き換えてください。write_fileのcontentは「${value}」です。「展示テーマは」「です。」などの前後の文は含めないでください。`)
   for (let answered = 0; answered < 2 && !(await waitForApprovalOrQuestion(page)); answered++) {
     // 実LLMが対象確認や先行読取を質問した場合だけ、利用者の追加回答として具体化する。
     await expect(page.locator('article.message').last()).toContainText(/ファイル|パス|読み取|内容/)
