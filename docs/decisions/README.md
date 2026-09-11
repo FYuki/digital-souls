@@ -15,6 +15,8 @@ archive内の文書を現行仕様や実装のSource of Truthとして使用し�
 
 ## 現行の優先関係
 
+- [`conversation-session-text-input-2026-09.md`](conversation-session-text-input-2026-09.md) は、#319のSpeech/Text共通入力、受理結果照合、focus抑止、スレッド別送信を定める。この範囲は既存の音声/LiveKit契約より優先し、runtimeへの適用・受入は#321〜#327で追跡する。
+
 - [`addon-action-approval-recovery-2026-09.md`](addon-action-approval-recovery-2026-09.md) は、#185の接続・操作群・実行場面別承認、確認キュー、60秒待機、結果回復を定める。承認の効力・UI範囲はCharacter Life共通ADRより本ADRを優先する。
 
 - [`character-life-runtime-2026-09.md`](character-life-runtime-2026-09.md) は、#249のtop-level runtimeへDBOSを採用し、domain正本・関連Epicとの責務境界を定める。
