@@ -54,7 +54,17 @@ Scenario: 古い接続へ承認を流用しない
 
 ## 検証と証跡
 
-検証結果は完了後に本節へ記録する。自動回帰・制御fixture・独立MCPへの実接続を区別する。
+2026-09-11に以下を確認した。自動回帰・制御fixture・独立MCPへの実接続を区別する。
+
+- Backendの関連unit/module回帰110件が成功。音声入力待ち中の許可取消テストを加えた続行module全6件も成功。
+- Frontend unit 802件、module 136件、承認UIのmocked E2E 6件が成功。
+- Svelte/TypeScript、mypy（284ファイル）、ruff、Frontend buildが成功。
+- 実接続受入1件が108秒で成功。テキスト続行・停止後の回答で再実行しないこと・次の1回で消費・同じLiveKit音声会話の続行とブラウザ音声再生・会話外設定の範囲分離を確認した。
+
+実接続のrun IDは `ccdbe7fa-e1d2-460c-855d-2da596e0be66`、実装commitは `c2b4e8e012dfddb9849d66fdd6d5b26bd79da033`（開始時にtracked変更なし）。
+[環境と結果](artifacts/addon-approval-admin-305/runtime-manifest.json)、[ブラウザ結果](artifacts/addon-approval-admin-305/browser-public.json)、[受入項目](artifacts/addon-approval-admin-305/admin-action-evidence.json)、[実操作3回の適用記録](artifacts/addon-approval-admin-305/action-state.json)を保存した。以後のモバイルmocked E2Eセレクタ修正は製品コードを変更していない。
+
+最初の実接続試行は、LLMが指定値に説明文を付けて書き込んだためファイル完全一致で失敗した。要求文で検証用の正確な内容を指定し直して再試行し、成功した。完全一致や実行回数の判定は緩めていない。
 
 | 要件 | 検証箇所 |
 |---|---|

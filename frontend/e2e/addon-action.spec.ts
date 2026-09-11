@@ -121,7 +121,7 @@ for (const scenario of [
     await expect.poll(() => continued).toBe(1)
     if (scenario.admin) {
       await page.getByRole('button', { name: 'チャットへ戻る', exact: true }).click()
-      if (scenario.width === 320) await page.getByRole('button', { name: 'サイドバーを閉じる' }).click()
+      if (scenario.width === 320) await page.getByRole('complementary', { name: 'スレッド一覧' }).getByRole('button', { name: 'サイドバーを閉じる' }).click()
     }
     if (!scenario.voice) await expect(page.getByText(scenario.choice === 'reject' ? '操作を拒否しました。' : '文書を変更しました。', { exact: true })).toBeVisible()
   })
