@@ -19,7 +19,7 @@ Issue #113で追加した`/voice/livekit`は基盤検証用の一時入口であ
 streaming、barge-in、再接続等のWave 3機能を追加しない。完成後に別工程でdefault transportを
 切り替える計画は設けず、Frontend統合の時点からLiveKitを正式経路として扱う。
 
-通常UIはsession、input、response、playbackを独立表示する。`/voice/livekit`はdev serverとLiveKit integrationだけで利用し、production buildでは製品入口として公開しない。音声session中にtextを送信した場合は、active音声responseと再生を停止して音声sessionを終了した後、既存HTTP text chat経路で送る。同一LiveKit session内のtyped textは将来範囲とする。
+通常UIはsession、input、response、playbackを独立表示する。`/voice/livekit`はdev serverとLiveKit integrationだけで利用し、production buildでは製品入口として公開しない。#319拡張前のruntimeでは、音声session中のtext送信でactive音声responseと再生を停止し、session終了後に既存HTTP text chat経路で送る。#319では[Conversation Session契約](conversation-session-text-input-2026-09.md)に従い、同じスレッドのtyped textをVoice Sessionへ投入して接続を維持する。受理結果の確認はtransport ACKと分離する。新契約の実装・受入は#321〜#327で追跡する。
 
 ## 応答生成と出力完了の境界
 
