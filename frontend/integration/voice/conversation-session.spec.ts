@@ -11,9 +11,9 @@ test.describe.configure({mode: 'serial'})
 test.setTimeout(voiceTestTimeout * 3)
 
 test.beforeEach(async ({page}, testInfo) => {
-  const profile = await readResolvedProfile()
-  await attachProfileEvidence(testInfo, profile)
-  const reason = getCapabilitySkipReason(profile, 'voice-chat-real')
+  const resolvedProfile = await readResolvedProfile()
+  await attachProfileEvidence(testInfo, resolvedProfile)
+  const reason = getCapabilitySkipReason(resolvedProfile, 'voice-chat-real')
   if (reason !== null) test.skip(true, reason)
   await installScheduledFixture(page, parseScheduledFixture(
     readFileSync(new URL('../../playwright/fixtures/speech.wav', import.meta.url)),
