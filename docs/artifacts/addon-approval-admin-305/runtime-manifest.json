@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "runId": "ccdbe7fa-e1d2-460c-855d-2da596e0be66",
-  "startedAt": "2026-09-11T03:57:46.907808+00:00",
+  "runId": "4900148a-7744-4416-b139-96870a8422d9",
+  "startedAt": "2026-09-11T04:45:22.140722+00:00",
   "environmentId": "test",
   "mcpImplementation": "published-filesystem",
   "mcpVersion": "2026.8.31",
@@ -30,7 +30,7 @@
       "output": 1024
     }
   },
-  "implementationCommit": "c2b4e8e012dfddb9849d66fdd6d5b26bd79da033",
+  "implementationCommit": "c535eaf6ec752d72d41b1a5273dc59d87df6ba1f",
   "trackedChangesAtStart": false,
   "testStatus": "passed",
   "serviceVersions": {
@@ -47,7 +47,11 @@
     "voicevox": "latest",
     "ollama": {
       "version": "0.32.5"
+    },
+    "voicevoxRuntime": {
+      "imageId": "sha256:eaf829d9e1d7c85121cba6220292b42e1fbadc22b7552820f8b4fe5df5c819aa",
+      "source": "running-container"
     }
   },
-  "completedAt": "2026-09-11T03:59:41.765839+00:00"
+  "completedAt": "2026-09-11T04:49:16.541779+00:00"
 }
