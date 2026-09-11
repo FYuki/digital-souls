@@ -50,6 +50,86 @@ const history = async (page: Page, conversationId: string): Promise<HistoryTurn[
   return response.json()
 }
 
+const waitForTextPlayback = async (page: Page, previous: string[] = []) => {
+  const result = await page.waitForFunction(ignored => {
+    const state = window.__voiceChatE2E
+    const event = state.coreEventDiagnostics.find(event => event.type === 'response_started'
+      && typeof event.responseId === 'string' && !ignored.includes(event.responseId)
+      && state.responseSourceUtterances?.[event.responseId]?.length === 0)
+    if (typeof event?.responseId !== 'string') return null
+    const playback = state.playbackCompletions?.[event.responseId]
+    return playback ? {responseId: event.responseId, ...playback} : null
+  }, previous, {timeout: 90_000})
+  const playback = await result.jsonValue()
+  if (playback === null) throw new Error('テキスト回答の再生完了を観測できない')
+  expect(playback.renderedSamples).toBeGreaterThan(0)
+  expect(playback.packetCount).toBeGreaterThan(0)
+  return playback
+}
+
+test('focus中の実音声を取り込まず、Enter受理後の次の音声を同じsessionで取り込む', async ({page}, testInfo) => {
+  await driver.enableMicrophone(page)
+  const input = page.getByLabel('メッセージ')
+  await input.fill('こんにちは。短く挨拶してください。')
+  await expect(page.getByText('入力: テキスト入力中')).toBeVisible()
+  await page.evaluate(() => window.__voiceFixtureClock!.start())
+  await page.waitForFunction(() => window.__voiceFixtureClock?.finished === true)
+  // 固定音声の全区間を流しても、focus中はCoreへの音声入力を確定しない。
+  expect(await page.evaluate(() => window.__voiceChatE2E.cycles)).toHaveLength(0)
+  expect(await page.evaluate(() => window.__voiceChatE2E.coreEventDiagnostics
+    .filter(event => event.type === 'response_started'))).toHaveLength(0)
+  await input.press('Enter')
+  await expect(input).toHaveValue('', {timeout: 60_000})
+  await expect(input).not.toBeFocused()
+  await expect(page.getByText('入力: 聞き取り中')).toBeVisible()
+  const playback = await waitForTextPlayback(page)
+  await page.evaluate(() => window.__voiceFixtureClock!.replay())
+  await driver.waitForCompletedVoiceCycles(page, 1)
+  const conversationId = await page.evaluate(() => localStorage.getItem('digital-souls:conversation:miori'))
+  await expect.poll(async () => (await history(page, conversationId!)).length).toBe(2)
+  await testInfo.attach('focus-suppression-evidence.json', {body: JSON.stringify({
+    suppressedFixtureCycles: 0, resumedVoiceCycles: 1, historyTurns: 2,
+    textPlaybackSamples: playback.renderedSamples,
+  }), contentType: 'application/json'})
+})
+
+for (const manualMute of [false, true]) {
+ for (const operation of ['click', 'Enter'] as const) {
+  test(`${operation}受理後の手動ミュート=${manualMute}を保ち、focusだけでは実TTSを止めない`, async ({page}, testInfo) => {
+    const microphone = await driver.enableMicrophone(page)
+    if (manualMute) await microphone.click()
+    const input = page.getByLabel('メッセージ')
+    await input.fill('夜空の星を眺める楽しさを、三文で説明してください。')
+    if (operation === 'Enter') await input.press('Enter')
+    else await page.getByRole('button', {name: '送信', exact: true}).click()
+    await expect(input).toHaveValue('', {timeout: 60_000})
+    await expect(input).not.toBeFocused()
+    await expect(page.getByRole('button', {name: /マイクを(オン|オフ)にする/}))
+      .toHaveAttribute('aria-pressed', String(!manualMute))
+    const active = await page.waitForFunction(() => {
+      const state = window.__voiceChatE2E
+      const id = state.activeResponseId
+      return id && state.liveKitOrder.includes(`${id}:rendered-audio`)
+        && !state.playbackCompletions?.[id] ? id : null
+    }, undefined, {timeout: 60_000})
+    const responseId = await active.jsonValue()
+    expect(typeof responseId).toBe('string')
+    await input.focus()
+    await expect(input).toBeFocused()
+    const playback = await waitForTextPlayback(page)
+    expect(playback.responseId).toBe(responseId)
+    expect(await page.evaluate(id => window.__voiceChatE2E.coreEventDiagnostics.some(event =>
+      event.responseId === id && event.type === 'response_cancelled'), responseId)).toBe(false)
+    await expect(page.getByRole('button', {name: /マイクを(オン|オフ)にする/}))
+      .toHaveAttribute('aria-pressed', String(!manualMute))
+    await testInfo.attach('focus-playback-evidence.json', {body: JSON.stringify({
+      operation, manualMute, focusDuringPlayback: true, responseCancelled: false,
+      completedSamples: playback.renderedSamples, completedPackets: playback.packetCount,
+    }), contentType: 'application/json'})
+  })
+ }
+}
+
 test('同じ実Conversationで音声→text→音声を保存し、textにもTTSを再生する', async ({page}, testInfo) => {
   const tokenRequests: string[] = []
   page.on('request', request => {
