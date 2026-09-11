@@ -190,13 +190,19 @@ class ActionStore:
                                "reserved": reserved}
         return result
 
-    def set_permission(self, key: ApprovalKey, permission: Permission) -> None:
+    def set_permission(self, key: ApprovalKey, permission: Permission) -> tuple[str, ...]:
         """保存設定の置換。dispatchの消費と同じtransaction境界で未使用許可を解除する。"""
         if permission == Permission.DENIED and key.scene == ExecutionScene.CONVERSATION:
             raise MCPFailure("policy", "conversation_denial_is_request_scoped")
         with self.transaction() as db:
             self._write(db, key, PermissionState(permission))
+            ended: tuple[str, ...] = ()
             if permission != Permission.ALWAYS:
+                ended = tuple(row["id"] for row in db.execute(
+                    """SELECT id FROM action_confirmations
+                    WHERE connection_id=? AND identity=? AND operation_group=? AND scene=?
+                    AND choice IS NOT NULL AND waiting=1""", key.values(),
+                ))
                 # 既に回答した古い要求は、後の再承認でも再開させない。
                 # 未回答キューは保持し、次の明示回答を可能にする。
                 db.execute(
@@ -205,6 +211,7 @@ class ActionStore:
                     WHERE connection_id=? AND identity=? AND operation_group=? AND scene=?""",
                     key.values(),
                 )
+            return ended
 
     def request_page(
         self, *, unanswered: bool = True, before: str | None = None, limit: int = 50

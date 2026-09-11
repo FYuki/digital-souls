@@ -90,12 +90,12 @@
                   "workerIndex": 0,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 227350,
+                  "duration": 155750,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-09-11T04:45:29.083Z",
+                  "startTime": "2026-09-11T05:17:56.007Z",
                   "annotations": [],
                   "attachments": [
                     {
@@ -113,15 +113,55 @@
           "file": "conversation.spec.ts",
           "line": 191,
           "column": 1
+        },
+        {
+          "title": "管理画面で未使用予約を取り消すと次の依頼で新しい確認を行う",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 1800000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 12632,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-11T05:20:31.815Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "reset-wait-evidence",
+                      "contentType": "application/json",
+                      "body": "eyJyZXNlcnZhdGlvblJldm9rZWQiOnRydWUsIm5leHRSZXF1ZXN0SXNGcmVzaCI6dHJ1ZSwibm9VbmFwcHJvdmVkV3JpdGUiOnRydWV9"
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "e7085d83df82ab600126-d72af954fa3a546d5124",
+          "file": "conversation.spec.ts",
+          "line": 319,
+          "column": 1
         }
       ]
     }
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-09-11T04:45:28.780Z",
-    "duration": 227752.807,
-    "expected": 1,
+    "startTime": "2026-09-11T05:17:55.658Z",
+    "duration": 168838.603,
+    "expected": 2,
     "skipped": 0,
     "unexpected": 0,
     "flaky": 0

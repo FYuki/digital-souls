@@ -208,6 +208,9 @@ class ToolService:
         for task in targets:
             if task is not asyncio.current_task():
                 task.cancel(TOOL_STOP_MESSAGE)
+        self._clean_run(key, run)
+
+    def _clean_run(self, key: tuple[str, str], run: _Run | None) -> None:
         if run is not None:
             run.cancellation.cancel()
             self.gate.end_loop(run.loop)
@@ -215,8 +218,16 @@ class ToolService:
                 run.expiration.cancel()
             if run.presence_expiration:
                 run.presence_expiration.cancel()
-        self.bindings.forget(character, conversation)
+        self.bindings.forget(*key)
         self._status.pop(key, None)
+
+    def end_idle_confirmations(self, request_ids: tuple[str, ...]) -> None:
+        """正本で終了した承認待ちだけを破棄し、開始済み処理や返答のownerは中断しない。"""
+        ended = set(request_ids)
+        for key, run in tuple(self._runs.items()):
+            if run.confirmation in ended and run.task is None:
+                self._runs.pop(key)
+                self._clean_run(key, run)
 
     def connection_disabled(self, connection_id: str) -> None:
         # 回答・binding待ちだけを終了する。既に送信した外部処理はGateの世代で再送を防ぐ。
