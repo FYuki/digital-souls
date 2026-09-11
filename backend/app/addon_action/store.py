@@ -7,7 +7,7 @@ import json
 import sqlite3
 import time
 from uuid import uuid4
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -46,6 +46,7 @@ class ConfirmationRequest:
     wait_until: float
     waiting: bool
     choice: ApprovalChoice | None
+    once_reserved: bool = False
 
     def public(self) -> Json:
         return {
@@ -62,8 +63,9 @@ class ConfirmationRequest:
 
 
 class ActionStore:
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, clock: Callable[[], float] = time.time) -> None:
         self.path = path
+        self.clock = clock
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         try:
             fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
@@ -89,6 +91,9 @@ class ActionStore:
                 waiting INTEGER NOT NULL DEFAULT 1, choice TEXT,
                 UNIQUE(loop_id, fingerprint)
             )""")
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(action_confirmations)")}
+            if "once_reserved" not in columns:
+                db.execute("ALTER TABLE action_confirmations ADD COLUMN once_reserved INTEGER NOT NULL DEFAULT 0")
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
@@ -136,7 +141,8 @@ class ActionStore:
         )
 
     def _choose(
-        self, db: sqlite3.Connection, key: ApprovalKey, choice: ApprovalChoice
+        self, db: sqlite3.Connection, key: ApprovalKey, choice: ApprovalChoice,
+        *, reserve_once: bool = False,
     ) -> None:
         if choice == ApprovalChoice.REJECT:
             if key.scene == ExecutionScene.AUTONOMOUS:
@@ -148,7 +154,7 @@ class ActionStore:
             key,
             PermissionState(Permission.ALWAYS)
             if choice == ApprovalChoice.ALWAYS
-            else PermissionState(Permission.UNAPPROVED, state.remaining + 1),
+            else PermissionState(Permission.UNAPPROVED, state.remaining + int(not reserve_once)),
         )
 
     def choose(self, key: ApprovalKey, choice: ApprovalChoice) -> None:
@@ -189,6 +195,14 @@ class ActionStore:
                     or request.choice == ApprovalChoice.REJECT
                 ):
                     return False
+                if request.once_reserved:
+                    if self._state(db, key).permission == Permission.DENIED:
+                        return False
+                    db.execute(
+                        "UPDATE action_confirmations SET waiting=0,once_reserved=0 WHERE id=?",
+                        (request_id,),
+                    )
+                    return True
             if not self._consume(db, key):
                 return False
             if request_id is not None:
@@ -217,6 +231,7 @@ class ActionStore:
             row["wait_until"],
             bool(row["waiting"]),
             ApprovalChoice(row["choice"]) if row["choice"] else None,
+            bool(row["once_reserved"]),
         )
 
     def enqueue(
@@ -231,10 +246,12 @@ class ActionStore:
         wait_seconds: float,
         now: float | None = None,
     ) -> ConfirmationRequest:
-        created = time.time() if now is None else now
+        created = self.clock() if now is None else now
         with self.transaction() as db:
             db.execute(
                 """INSERT OR IGNORE INTO action_confirmations
+                (id,connection_id,identity,operation_group,scene,character_id,session_id,
+                 loop_id,fingerprint,preview,created_at,wait_until,waiting,choice)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,NULL)""",
                 (
                     str(uuid4()),
@@ -289,10 +306,17 @@ class ActionStore:
                 if request.choice != choice:
                     raise MCPFailure("policy", "confirmation_already_answered")
                 return request
-            self._choose(db, request.key, choice)
+            current = self.clock()
+            reserve_once = (
+                choice == ApprovalChoice.ONCE
+                and request.waiting and current < request.wait_until
+            )
+            # 待機中の単回許可は表示した要求だけへ予約する。遅い回答だけが将来の共通枠になる。
+            self._choose(db, request.key, choice, reserve_once=reserve_once)
             db.execute(
-                "UPDATE action_confirmations SET choice=? WHERE id=?",
-                (choice, request_id),
+                """UPDATE action_confirmations SET choice=?,once_reserved=?,
+                waiting=CASE WHEN wait_until<=? THEN 0 ELSE waiting END WHERE id=?""",
+                (choice, int(reserve_once), current, request_id),
             )
             row = db.execute(
                 "SELECT * FROM action_confirmations WHERE id=?", (request_id,)
@@ -303,16 +327,16 @@ class ActionStore:
     def end_wait(self, request_id: str) -> None:
         with self.transaction() as db:
             db.execute(
-                "UPDATE action_confirmations SET waiting=0 WHERE id=?", (request_id,)
+                "UPDATE action_confirmations SET waiting=0,once_reserved=0 WHERE id=?", (request_id,)
             )
 
     def end_loop(self, loop_id: str) -> None:
         with self.transaction() as db:
             db.execute(
-                "UPDATE action_confirmations SET waiting=0 WHERE loop_id=?", (loop_id,)
+                "UPDATE action_confirmations SET waiting=0,once_reserved=0 WHERE loop_id=?", (loop_id,)
             )
 
     def detach_waiters(self) -> None:
         """runtime起動時に一度だけ呼ぶ。保存済みキュー・回答は消さない。"""
         with self.transaction() as db:
-            db.execute("UPDATE action_confirmations SET waiting=0 WHERE waiting=1")
+            db.execute("UPDATE action_confirmations SET waiting=0,once_reserved=0 WHERE waiting=1")

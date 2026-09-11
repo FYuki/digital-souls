@@ -109,9 +109,12 @@ class Sanitizer:
         outcome = envelope["outcome"]
         projected: Json = {"outcome": outcome}
         if "result_projection" in envelope:
+            truncation = [False]
+            projection = self.value(envelope.get("result_projection") or {}, omitted=truncation)
             return {
-                **self.value(envelope.get("result_projection") or {}),
+                **projection,
                 "outcome": outcome,
+                **({"omitted": True} if truncation[0] else {}),
                 **({"replayed": True} if envelope.get("replayed") else {}),
             }
         if outcome != "succeeded":

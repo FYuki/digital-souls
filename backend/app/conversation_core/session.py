@@ -178,10 +178,13 @@ class ConversationCoreSession:
         should_response: bool,
         retain_pending: bool = True,
         control_request_id: str | None = None,
+        control_input_valid: Callable[[], bool] | None = None,
     ) -> Response | None:
         start_task: asyncio.Task[Response] | None = None
         async with self._state_lock:
             self._require_available()
+            if control_input_valid is not None and not control_input_valid():
+                return None
             existing = self._utterances.get(utterance_id)
             if existing is not None:
                 if (existing.transcript, existing.should_response, existing.control_request_id) != (

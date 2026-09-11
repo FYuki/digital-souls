@@ -118,11 +118,14 @@ def test_stopped_conversation_and_voice_mismatch_do_not_dispatch(monkeypatch, tm
                 }
                 assert (await client.post(url, json=body)).status_code == 409
                 # 失敗後は正しい会話で再度続行可能。単回承認は未消費。
+                assert p.store.request(rid).once_reserved
                 assert service.claim_confirmation("miori", conversation, rid)
                 service.release_confirmation("miori", conversation, rid)
                 service.stop("miori", conversation)
                 assert (await client.post(url, json=body)).json() == {"state": "ended"}
                 assert len(calls) == 1 and not source.calls
-                assert p.store.state(p.store.request(rid).key).remaining == 1
+                saved = p.store.request(rid)
+                assert not saved.once_reserved
+                assert p.store.state(saved.key).remaining == 0
 
     asyncio.run(run())

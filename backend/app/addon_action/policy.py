@@ -114,7 +114,7 @@ class ActionPolicy:
         state = self.store.state(key)
         if state.permission == Permission.DENIED:
             raise MCPFailure("policy", "action_rejected")
-        if state.allowed:
+        if state.allowed or (request is not None and request.once_reserved):
             return ApprovalTicket(key, request_id)
         if request is None:
             visible = {
@@ -153,6 +153,8 @@ class ActionPolicy:
             raise MCPFailure("policy", "confirmation_wait_ended")
         if request.choice == ApprovalChoice.REJECT:
             raise MCPFailure("policy", "action_rejected")
+        if request.once_reserved:
+            return ApprovalTicket(key, request.id)
         if call.scene == ExecutionScene.CONVERSATION:
             raise ConfirmationNeeded(request.id)
         try:

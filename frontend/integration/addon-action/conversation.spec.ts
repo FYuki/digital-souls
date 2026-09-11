@@ -105,7 +105,7 @@ async function expectWriteReply(page: Page, value: string) {
   const reply = page.locator('article.message').last()
   await expect(reply).toContainText(value, { timeout: 10_000 })
   await expect(reply).toContainText(
-    /完了|(?:更新|変更|保存)(?:しました|されました|済み)|(?:置き換え|書き換え)(?:ました|られました)|書き込(?:みました|まれました)/,
+    /完了|(?:更新|変更|保存)(?:しました|されました|済み)|(?:置き換え|書き換え)(?:ました|られました)|(?:置き換わ|書き換わ)りました|書き込(?:みました|まれました)/,
     { timeout: 10_000 },
   )
 }

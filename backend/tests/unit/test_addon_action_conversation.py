@@ -82,7 +82,9 @@ def test_saved_screen_context_is_revalidated_on_continuation(tmp_path):
             with confirmation_resume_scope("miori", "session", rid):
                 await service.run("miori", "session", "承認しました")
             assert not source.calls
-            assert p.store.state(p.store.request(rid).key).remaining == 1
+            saved = p.store.request(rid)
+            assert not saved.waiting and not saved.once_reserved
+            assert p.store.state(saved.key).remaining == 0
 
     asyncio.run(run())
 
