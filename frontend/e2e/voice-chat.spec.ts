@@ -288,6 +288,44 @@ test('barge-inでlocal停止とserver cancelを相関し遅延出力を破棄す
   })
 })
 
+test('text submitが旧回答を停止し、遅延deltaを混ぜず同じsessionで次の音声へ戻る', async ({page}) => {
+  await driver.enableMicrophone(page)
+  const oldResponseId = await page.evaluate(() =>
+    (window as unknown as {__mockLiveKit: {beginInterruptibleResponse: () => string}}).__mockLiveKit.beginInterruptibleResponse(),
+  )
+  const input = page.getByLabel('メッセージ')
+  await input.fill('テキストによる割り込み')
+  await expect(page.getByText('再生: 再生中')).toBeVisible()
+  await input.press('Enter')
+  await expect(page.getByText('再生: 停止済み')).toBeVisible()
+  await expect(page.getByText('破棄対象', {exact: true})).toHaveCount(0)
+  const types = await page.evaluate(() =>
+    (window as unknown as {__mockLiveKit: {controlEvents: {type: string}[]}}).__mockLiveKit.controlEvents.map(event => event.type),
+  )
+  expect(types).toEqual(expect.arrayContaining(['playback_stopped', 'response_cancel_requested', 'user_text_submitted']))
+  await page.evaluate(async oldId => {
+    const mock = (window as unknown as {__mockLiveKit: {
+      completeTextResponse: (text: string) => Promise<string>
+      emitLateOutput: (responseId: string) => void
+    }}).__mockLiveKit
+    await mock.completeTextResponse('テキストへの新しい回答')
+    mock.emitLateOutput(oldId)
+  }, oldResponseId)
+  await expect(page.getByText('テキストによる割り込み', {exact: true})).toBeVisible()
+  await expect(page.getByText('テキストへの新しい回答', {exact: true})).toBeVisible()
+  await expect(page.getByText('破棄対象', {exact: true})).toHaveCount(0)
+  await expect(input).not.toBeFocused()
+  await expect(page.getByText('入力: 聞き取り中')).toBeVisible()
+  await page.evaluate(async () => (window as unknown as {__mockLiveKit: {submitUtterance: () => Promise<void>}}).__mockLiveKit.submitUtterance())
+  await expect(page.getByText(MOCK_RESPONSE_TEXT, {exact: true}).last()).toBeVisible()
+  await expect(page.getByText('破棄対象', {exact: true})).toHaveCount(0)
+  const lifecycle = await page.evaluate(() =>
+    (window as unknown as {__mockLiveKit: {lifecycle: {publishMicrophoneCount: number; disconnectCount: number}}}).__mockLiveKit.lifecycle,
+  )
+  expect(lifecycle.publishMicrophoneCount).toBe(1)
+  expect(lifecycle.disconnectCount).toBe(0)
+})
+
 test('連続barge-in後も旧responseを混入させず同じsessionで次の発話を処理する', async ({ page }) => {
   await driver.enableMicrophone(page)
 

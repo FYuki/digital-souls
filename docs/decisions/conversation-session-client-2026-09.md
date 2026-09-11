@@ -26,7 +26,7 @@ Core eventの通知callbackは`(event, context)`を受け取る。表示中の�
 
 `InputSuppressionPolicy`はmanual、text focus、thread switchを独立した理由として保持する。focus解除ではmanual/thread switchを消さない。スレッド切り替え時に`switchThread()`、元スレッドでの明示再開時だけ`resumeExplicitly()`を使う。device・VAD・BE抑止イベントへの反映は#325の責務とする。
 
-`interruptResponse(context)`は対象スレッドを確認して即時local playback stopを行い、再生済みprefixとcancel要求を送る。BEの取消通知を受けるまで生成完了と扱わない。音声の相槌・take-turn判定はBEのまま維持する。`submitText`との一体化と遅延STT破棄は#326で行う。
+`interruptResponse(context)`は対象スレッドを確認して即時local playback stopを行い、再生済みprefixとcancel要求を送る。BEの取消通知を受けるまで生成完了と扱わない。音声の相槌・take-turn判定はBEのまま維持する。`submitText`との一体化と遅延STT破棄は以下のM7境界で扱う。
 
 ## 検証範囲
 
@@ -53,7 +53,30 @@ BEはfocusとmanualの入力ゲートを独立保持し、抑止中の音声fram
 STTへ渡さない。抑止時に未終了のcaptureは `input_suppressed` として破棄し、
 先行STT previewにはcaptureの有効性を渡して、遅延結果による回答停止を防ぐ。
 focus以前にVADで終了した音声や処理中の確定入力はfocus操作だけでは取り消さない。
-text submit時に先行する未確定入力をすべて破棄する規則はM7で統合する。
+text submit時に先行する未確定入力をすべて破棄する規則は以下のM7境界で扱う。
 
 unit/module検証は実サービス・ブラウザ音声受入の代わりにしない。#279との全体統合と
 実LiveKit/STT/LLM/TTSを用いた混在会話はM8の完了条件として残す。
+
+## text submitによる割り込みと音声入力の世代（M7）
+
+clientは新しいtextの送信IDを予約してから、旧回答を即時local stopし、
+`playback_stopped`、`response_cancel_requested`、`user_text_submitted`を送る。
+再生停止通知のACKを待ってtextやcancel要求を止めない。旧responseのdelta、開始イベント、
+再生観測は取消対象のresponse IDで除外する。取消の成立・終端履歴はBE通知を正本とする。
+
+BEの`TextInputReceiver`が新規受付と判定した入力だけが、production bridgeの
+未確定capture、media tail待機、待機STT、prerollを破棄する。Coreは音声入力の世代を
+進め、処理中STTやpreviewの結果を無効化する。providerの終了を待つことなくtextを
+共通User Input queueへ入れ、旧responseをcancelして次の回答を開始する。
+無効化された音声は`utterance_discarded(reason=text_priority)`で示す。
+
+音声の世代はSTT開始前、認識後、turn決定の配送、cancelの状態変更、User Input受理で
+確認する。古いSTTの成功・失敗やpreviewが遅着しても新しい入力・回答を開始／取消しない。
+bridgeも処理世代を持ち、古いtaskの完了通知で新しいSTTの実行中状態を解除しない。
+再接続時の照合・同じevent IDの再送は受理台帳が処理し、音声破棄やcancelを再実行しない。
+
+すでに確定した音声入力は共通queueに保持し、textと同じ順序で次のUser Turnへ渡す。
+すでに保存した履歴も保持する。別スレッドへのHTTP送信にはこの処理を適用しない。
+Core/bridge/受理台帳を接続したmodule検証とmocked browser検証を行うが、実サービスを
+用いた混在会話・履歴更新・音声再生の最終受入はM8で確認する。

@@ -204,10 +204,12 @@ export class LiveKitVoiceSessionController {
     this.playback = 'stopped'
     if (this.generatingResponseId === responseId) this.response = 'interrupting'
     this.publishSnapshot()
-    await this.publishControlEvent(room, this.event({type: 'playback_stopped',
-      response_id: responseId, reason: 'barge_in', last_played_audio_sequence: lastPlayed}))
-    await this.publishControlEvent(room, this.event({type: 'response_cancel_requested',
-      response_id: responseId, reason: 'barge_in'}))
+    await Promise.all([
+      room.publishControlEvent(this.event({type: 'playback_stopped',
+        response_id: responseId, reason: 'barge_in', last_played_audio_sequence: lastPlayed})),
+      room.publishControlEvent(this.event({type: 'response_cancel_requested',
+        response_id: responseId, reason: 'barge_in'})),
+    ])
   }
 
   async submitText(context: VoiceSessionContext, text: string): Promise<string> {
@@ -217,6 +219,9 @@ export class LiveKitVoiceSessionController {
     this.textInputs.begin(event, context)
     this.publishSnapshot()
     this.scheduleTextResultQuery()
+    // local stopは同期部分で即時実行する。cancelの通信待ちでtext受付を遅らせない。
+    // BEも新しいtext受付で旧応答をcancelし、取消の成立を決定する。
+    void this.interruptResponse(context).catch(() => undefined)
     try {
       await room.publishControlEvent(event)
     } catch {
@@ -614,6 +619,7 @@ export class LiveKitVoiceSessionController {
     if (
       observation.activeResponseId !== undefined
       && observation.activeResponseId !== ''
+      && !this.interruptedResponseIds.has(observation.activeResponseId)
     ) {
       this.playbackResponseId = observation.activeResponseId
       if (observation.playedPrefix !== undefined) {
@@ -637,6 +643,8 @@ export class LiveKitVoiceSessionController {
   }
 
   private receiveRoomCoreEvent(event: VoiceSessionEvent): void {
+    if (event.response_id !== undefined && this.interruptedResponseIds.has(event.response_id)
+      && (event.type === 'response_delta' || event.type === 'response_started')) return
     if (event.type === 'user_input_result') {
       if (event.session_id !== this.binding?.session_id) return
       if (!this.textInputs.receive(event)) return
@@ -650,6 +658,7 @@ export class LiveKitVoiceSessionController {
       this.publishInterruptionObservation('turn_decision_received', event.utterance_id, event.response_id)
     }
     if (event.type === 'response_cancelled' && event.response_id !== undefined) {
+      this.interruptedResponseIds.add(event.response_id)
       this.publishInterruptionObservation(
         'cancel_confirmed', this.interruptingUtterances.get(event.response_id), event.response_id,
       )
@@ -670,7 +679,6 @@ export class LiveKitVoiceSessionController {
         this.response = 'interrupting'
       }
     } else if (event.type === 'response_started' && event.response_id !== undefined) {
-      this.interruptedResponseIds.clear()
       this.generatingResponseId = event.response_id
       this.playbackResponseId = null
       this.playbackLastPlayedSequence = 0

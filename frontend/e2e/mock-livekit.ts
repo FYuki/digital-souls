@@ -121,6 +121,29 @@ export const installMockLiveKit = async (
             receiveCoreEvent({type: 'user_input_result', session_id: sessionId,
               input_event_id: input.event_id, status})
           },
+          completeTextResponse: async (text: string) => {
+            const input = [...controlEvents].reverse().find(event => event.type === 'user_text_submitted')
+            if (input === undefined) throw new Error('text input has not arrived')
+            responseSequence += 1
+            const responseId = `50000000-0000-4000-8000-${String(responseSequence).padStart(12, '0')}`
+            receiveCoreEvent({type: 'user_input_result', session_id: sessionId,
+              input_event_id: input.event_id, status: 'accepted', response_id: responseId})
+            receiveCoreEvent({type: 'response_started', session_id: sessionId, response_id: responseId,
+              source_utterance_ids: [], source_inputs: [{input_id: input.event_id, source: 'text'}]})
+            receiveCoreEvent({type: 'response_delta', session_id: sessionId, response_id: responseId,
+              text_sequence: 1, text, text_range: {start: 0, end: text.length}})
+            await (window as unknown as {__recordMockVoiceTurn: (user: string, assistant: string) => Promise<void>})
+              .__recordMockVoiceTurn(String(input.text), text)
+            receiveCoreEvent({type: 'response_completed', session_id: sessionId, response_id: responseId,
+              last_text_sequence: 1, last_audio_sequence: 0})
+            return responseId
+          },
+          emitLateOutput: (responseId: string) => {
+            receiveCoreEvent({type: 'response_delta', session_id: sessionId,
+              response_id: responseId, text_sequence: 2, text: '破棄対象'})
+            observe({transport: 'available', control: 'available', audio: 'available',
+              activeResponseId: responseId, renderedEnergy: 1})
+          },
           submitUtterance: async () => {
             const utteranceId = crypto.randomUUID()
             await emitResponse(utteranceId)
