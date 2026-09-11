@@ -1,0 +1,223 @@
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  font-family: Inter, "Yu Gothic UI", "Hiragino Kaku Gothic ProN", sans-serif;
+  color: #f6f3ff;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.puppet-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+}
+
+.drag-handle {
+  position: absolute;
+  z-index: 20;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 64px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(22, 18, 34, 0.52);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(12px);
+  cursor: grab;
+  letter-spacing: 4px;
+}
+
+.puppet-stage {
+  position: absolute;
+  inset: 0;
+  min-height: 420px;
+}
+
+.puppet-stage canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.hidden {
+  visibility: hidden;
+}
+
+.fixed-portrait {
+  position: absolute;
+  inset: 54px 42px 118px;
+  display: grid;
+  place-items: center;
+  border-radius: 42% 42% 24% 24%;
+  background: linear-gradient(180deg, rgba(255, 183, 101, 0.86), rgba(164, 106, 197, 0.85) 55%, rgba(38, 39, 91, 0.92));
+  box-shadow: 0 26px 60px rgba(19, 12, 40, 0.36);
+  overflow: hidden;
+}
+
+.portrait-glow {
+  position: absolute;
+  width: 72%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,0.68), rgba(255,219,161,0.15) 58%, transparent 72%);
+}
+
+.portrait-face {
+  position: relative;
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-shadow: 0 4px 18px rgba(39, 21, 62, 0.42);
+}
+
+.portrait-caption {
+  position: absolute;
+  bottom: 24px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  opacity: 0.72;
+}
+
+.status-pill {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  width: min(84%, 420px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 14px;
+  border-radius: 14px;
+  background: rgba(20, 18, 31, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(14px);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.status-pill strong {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.status-pill.ready {
+  border-color: rgba(169, 255, 209, 0.42);
+}
+
+.status-pill.error {
+  border-color: rgba(255, 147, 147, 0.56);
+}
+
+.chat-panel {
+  position: absolute;
+  z-index: 15;
+  left: 18px;
+  right: 18px;
+  bottom: 74px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(20, 18, 31, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 18px 50px rgba(12, 8, 25, 0.28);
+  user-select: text;
+}
+
+.chat-history {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.message {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.message .role {
+  opacity: 0.62;
+  font-weight: 700;
+}
+
+.message.user {
+  color: #d9efff;
+}
+
+.message.assistant {
+  color: #fff5df;
+}
+
+.chat-panel form {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-panel input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 11px;
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  outline: none;
+}
+
+.chat-panel button,
+.context-menu button {
+  border: 0;
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.12);
+  color: inherit;
+  cursor: pointer;
+}
+
+.chat-panel button:hover,
+.context-menu button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.poc-note {
+  margin: 8px 2px 0;
+  opacity: 0.5;
+  font-size: 10px;
+}
+
+.context-menu {
+  position: absolute;
+  z-index: 30;
+  top: 48px;
+  right: 16px;
+  width: 188px;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(20, 18, 31, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 18px 50px rgba(12, 8, 25, 0.34);
+}
+
+.context-menu button {
+  text-align: left;
+  font-size: 12px;
+}
