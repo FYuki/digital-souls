@@ -46,6 +46,7 @@ export type RoomObservation = Readonly<{
   generation?: number
   failureContext?: Readonly<Record<string, number>>
   failureReason?: string
+  recoveryStopped?: boolean
   failureStage?: 'transport' | 'media_decoder' | 'audio_graph' | 'output_clock' | 'renderer' | 'rtp_timeline'
   mediaPacketLoss?: RtpPacketGap & {responseId: string; atMs: number}
   mediaTimelineInterruption?: {responseId: string; atMs: number; reason: 'timestamp_overlap' | 'timestamp_discontinuity'}
@@ -763,6 +764,8 @@ export class LiveKitRoomClient {
         transport: this.explicitDisconnect ? 'idle' : 'unavailable',
         control: 'unavailable',
         audio: 'unavailable',
+        // SDKのDisconnectedは自動再接続の終了。一時切断は呼び出し元が再接続する。
+        ...(!this.explicitDisconnect && origin !== 'temporary' ? {recoveryStopped: true} : {}),
       })
       this.explicitDisconnect = false
     })
@@ -1054,7 +1057,7 @@ export class LiveKitRoomClient {
     this.pendingDisconnectOrigin ??= 'transport_failure'
     this.room?.disconnect()
     void this.closeAudioGraph()
-    this.observe({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable', failureStage, failureReason,
+    this.observe({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable', failureStage, failureReason, recoveryStopped: true,
       ...(reason instanceof PacketRenderError || reason instanceof RtpPacketSequenceError ? {failureContext: reason.context} : {}) })
   }
 

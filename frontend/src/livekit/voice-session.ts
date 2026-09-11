@@ -602,6 +602,13 @@ export class LiveKitVoiceSessionController {
 
   private receiveRoomObservation(version: number, observation: RoomObservation): void {
     if (version !== this.operationVersion || this.phase === 'ended') return
+    if (observation.recoveryStopped) {
+      const binding = this.binding
+      this.setMicrophoneTracks(false)
+      this.terminateTransport('error')
+      if (binding !== null) void this.dependencies.endSession(binding.session_id).catch(() => undefined)
+      return
+    }
     if (observation.transport === 'unavailable') {
       this.preserveUnconfirmedText()
       this.setMicrophoneTracks(false)

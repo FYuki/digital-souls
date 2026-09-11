@@ -1561,3 +1561,26 @@ test('往復確認中にサーバーが再びunavailableになったら状態同
     expect(vi.getTimerCount()).toBe(0)
   } finally {client.disconnect(); vi.useRealTimers()}
 })
+
+
+test('SDKの再試行中と最終切断を区別して通知する', async () => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(value => observations.push(value))
+  await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
+  latestRoom().emit('reconnecting')
+  expect(observations.at(-1)).toMatchObject({transport: 'unavailable'})
+  expect(observations.at(-1)?.recoveryStopped).not.toBe(true)
+  latestRoom().emit('disconnected', 1)
+  expect(observations.at(-1)).toMatchObject({transport: 'unavailable', recoveryStopped: true})
+  client.disconnect()
+})
+
+test('呼び出し元が復旧する一時切断を最終切断と誤認しない', async () => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(value => observations.push(value))
+  await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
+  observations.length = 0
+  client.temporaryDisconnect()
+  expect(observations.some(value => value.recoveryStopped)).toBe(false)
+  client.disconnect()
+})

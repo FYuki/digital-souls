@@ -68,6 +68,24 @@ const setup = () => {
 }
 
 describe('通常会話UI向けLiveKit音声session', () => {
+  test('自動復旧が終了した接続は待機を続けず停止し、古い通知で再開しない', async () => {
+    vi.useFakeTimers()
+    const {controller, observations, dependencies} = setup()
+    const track = {enabled: true}
+    await controller.ensureSession({characterId: 'miori', conversationId: 'a'})
+    await controller.resumeMicrophone({getAudioTracks: () => [track]} as unknown as MediaStream)
+    observations[0]({transport: 'unavailable', control: 'unavailable', audio: 'unavailable'})
+    expect(controller.snapshot().phase).toBe('reconnecting')
+    observations[0]({transport: 'unavailable', control: 'unavailable', audio: 'unavailable', recoveryStopped: true})
+    expect(controller.snapshot().phase).toBe('error')
+    expect(track.enabled).toBe(false)
+    expect(dependencies.endSession).toHaveBeenCalledWith(SESSION_ID)
+    observations[0]({transport: 'available', control: 'available', audio: 'available'})
+    await vi.advanceTimersByTimeAsync(60_001)
+    expect(controller.snapshot().phase).toBe('error')
+    expect(dependencies.endSession).toHaveBeenCalledTimes(1)
+  })
+
   test('privacy終端がthinkingを解消し、後発応答の生成状態は消さない', async () => {
     const {controller, coreEventReceivers} = setup()
     await controller.ensureSession({characterId: 'miori', conversationId: 'a'})
