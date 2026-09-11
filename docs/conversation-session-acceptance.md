@@ -57,6 +57,16 @@ commit `64d4150b437dcd7925d3670be82aacb46068c07c` と同じspec・製品コー�
 - barge-inはBEの最終take-turn判定を確認し、固定音声開始からlocal stopの上限982.4ms、cancel確認の上限1,010.4msだった。既存assertionの3,000ms / 3,500msを変更せず成功した。1試行の結果であり、#150の100試行・p95の達成を新たに証明したものではない。
 - textだけを投入するcontrols試験ではSTTを呼ぶ必要がない。Whisper実接続の処理結果はfocus後の音声・混在・既存音声試験で確認した。
 
+## 通常textと実transport
+
+[通常チャット](artifacts/conversation-session-text-real-2026-09-11.json) は `npm run test:integration:text -- chat.spec.ts` で1件成功（10.2秒）、teardown完了。Voice Sessionを開始せず実Backend・Ollamaの応答を表示した。
+
+[実transport](artifacts/conversation-session-transport-real-2026-09-11.json) は `npm run test:integration:livekit -- --reporter=list,json --output=test-results/playwright-artifacts/transport-327` で2件成功（3.7秒）、teardown完了。実microphone PCMの送達と、明示的な一時切断から同じsession・generation 1への再接続を確認した。LLM/STT/TTS会話試験やネットワーク障害注入の代用にはしない。
+
+この診断ページ `/voice/livekit` はViteの開発モードでのみ有効。今回のBackendは独立 `integration-transport-327-dev` data rootで起動し、別途所有するVite開発サーバーを5174番で起動した。`DS_PROFILE_REPORT`と`DS_BACKEND_ORIGIN`を同じtest Backendへ向け、`LIVEKIT_TEST_FRONTEND_URL=http://localhost:5174`を指定した。終了時にViteと所有Frontend/Backendを終了し、共有LiveKitは停止しなかった。
+
+調整時の失敗もartifactへ記録した。runnerが正常readiness 204を200だけで判定した待機、製品buildへ接続して診断ページがなかった2件、Playwrightの既定出力先によるtest runtime identityの消失、回答前のprobeへ再生graph 1個を期待していた2件を区別する。data rootは新設し、`playwright.integration-livekit.config.ts`の出力先をruntime dataと分離した。`room.ts`はprobeやresponse IDのないtrackを回答graphへ接続しない既存仕様なので、その期待値を0へ整合した。実回答の再生成功は全音声スイートのsample/packet観測で別に確認しており、性能閾値は変更していない。
+
 ## 条件と検証の対応
 
 | 条件 | 現在の証拠 | 残作業 |
@@ -67,7 +77,7 @@ commit `64d4150b437dcd7925d3670be82aacb46068c07c` と同じspec・製品コー�
 | 送信失敗・不明結果・再接続照合・冪等性 | M2/M4/M5のunit/module/mock E2E | 実接続で確認した範囲の記録 |
 | text優先・遅延STT / preview / 旧response排除 | M7 Core + bridge + 受付台帳module、FE unit/mock E2E、実生成中/再生中text割り込み | 障害注入の実接続範囲の記録 |
 | BEの相槌・take-turn判断 | Core回帰、実take-turn / barge-in回帰 | 相槌コホートの実接続範囲の記録 |
-| 通常text・通常voice・再接続 | 全voice 14件成功 | text / transport / reconnect回帰 |
+| 通常text・通常voice・再接続 | 全voice 14件、通常text 1件、実transport 2件成功 | 専用network障害からの会話reconnect回帰 |
 | #279との状態・マイク・履歴分離 | M5/M6接点の基礎実装 | #279全体は未統合 |
 | Desktop共通client | M4実装、契約文書 | 統合後の引き継ぎ最終確認 |
 | main向けレビュー | 子PRのEpic向けCI成功 | 最終main差分のCI、CodeRabbitと指摘修正 |
