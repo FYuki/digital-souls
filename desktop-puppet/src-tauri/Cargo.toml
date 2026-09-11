@@ -1,0 +1,17 @@
+[package]
+name = "digital-souls-desktop-puppet"
+version = "0.1.0"
+description = "digital-souls Desktop Puppet PoC"
+authors = ["digital-souls"]
+edition = "2021"
+
+[lib]
+name = "digital_souls_desktop_puppet_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.1", features = [] }
+
+[dependencies]
+tauri = { version = "2.11.1", features = [] }
+serde_json = "1"
