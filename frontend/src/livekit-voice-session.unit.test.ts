@@ -12,7 +12,7 @@ import {
 const SESSION_ID = '20000000-0000-4000-8000-000000000001'
 const PARTICIPANT_ID = '40000000-0000-4000-8000-000000000001'
 const UTTERANCE_ID = '30000000-0000-4000-8000-000000000001'
-const MICROPHONE_STREAM = {} as MediaStream
+const MICROPHONE_STREAM = {getAudioTracks: () => []} as unknown as MediaStream
 
 afterEach(() => { vi.useRealTimers() })
 
@@ -68,6 +68,78 @@ const setup = () => {
 }
 
 describe('通常会話UI向けLiveKit音声session', () => {
+  test('focusだけで音声入力を抑止し、回答と接続を保持してblurで再開する', async () => {
+    const {controller, room, events, coreEventReceivers} = setup()
+    const context = {characterId: 'miori', conversationId: 'a'}
+    const track = {enabled: true}
+    const stream = {getAudioTracks: () => [track]} as unknown as MediaStream
+    await controller.ensureSession(context)
+    await controller.resumeMicrophone(stream)
+    coreEventReceivers[0]({type: 'response_started', response_id: 'response-a'} as VoiceSessionEvent)
+    const focus = controller.setTextInputFocused(context, true)
+    expect(track.enabled).toBe(false)
+    await focus
+    await controller.speechStarted(UTTERANCE_ID, 1010)
+    await controller.speechStopped(UTTERANCE_ID, 1020)
+    expect(controller.snapshot()).toMatchObject({input: 'suppressed', response: 'generating'})
+    expect(events.some(event => event.type === 'speech_started' || event.type === 'session_muted')).toBe(false)
+    expect(room.stopPlayback).not.toHaveBeenCalled()
+    expect(room.disconnect).not.toHaveBeenCalled()
+    await controller.setTextInputFocused(context, false)
+    expect(track.enabled).toBe(true)
+    expect(controller.snapshot().input).toBe('listening')
+    expect(events.filter(event => event.type === 'audio_input_suppression_changed').map(event => event.suppressed)).toEqual([true, false])
+  })
+
+  test.each(['manual', 'thread_switch'] as const)('%s muteはfocus解除や別スレッドの操作で解除しない', async reason => {
+    const {controller, room} = setup()
+    const context = {characterId: 'miori', conversationId: 'a'}
+    await controller.ensureSession(context)
+    await controller.resumeMicrophone(MICROPHONE_STREAM)
+    if (reason === 'manual') await controller.muteMicrophone()
+    else await controller.muteForThreadSwitch()
+    await controller.setTextInputFocused(context, true)
+    await controller.setTextInputFocused({characterId: 'miori', conversationId: 'b'}, false)
+    await controller.setTextInputFocused(context, false)
+    expect(controller.snapshot().input).toBe('muted')
+    expect(room.publishMicrophone).toHaveBeenCalledTimes(1)
+    await controller.resumeMicrophone(MICROPHONE_STREAM)
+    expect(controller.snapshot().input).toBe('listening')
+  })
+
+  test('連続focus変更は最新の抑止ACKまで音声を再開しない', async () => {
+    const {controller, room} = setup()
+    const context = {characterId: 'miori', conversationId: 'a'}
+    const track = {enabled: true}
+    await controller.ensureSession(context)
+    await controller.resumeMicrophone({getAudioTracks: () => [track]} as unknown as MediaStream)
+    let acknowledge: () => void = () => undefined
+    vi.mocked(room.publishControlEvent).mockImplementationOnce(() => new Promise<void>(resolve => {acknowledge = resolve}))
+    const focused = controller.setTextInputFocused(context, true)
+    const blurred = controller.setTextInputFocused(context, false)
+    const refocused = controller.setTextInputFocused(context, true)
+    await vi.waitFor(() => expect(room.publishControlEvent).toHaveBeenCalledTimes(3))
+    expect(track.enabled).toBe(false)
+    acknowledge()
+    await Promise.all([focused, blurred, refocused])
+    expect(track.enabled).toBe(false)
+    expect(controller.snapshot().input).toBe('suppressed')
+  })
+
+  test('再接続中のfocus解除を復旧時に照合し、手動muteは保持する', async () => {
+    const {controller, observations, events} = setup()
+    const context = {characterId: 'miori', conversationId: 'a'}
+    await controller.ensureSession(context)
+    await controller.resumeMicrophone(MICROPHONE_STREAM)
+    await controller.setTextInputFocused(context, true)
+    observations[0]({transport: 'unavailable', control: 'unavailable', audio: 'unavailable'})
+    await controller.setTextInputFocused(context, false)
+    await controller.muteMicrophone()
+    observations[0]({transport: 'available', control: 'available', audio: 'available'})
+    await vi.waitFor(() => expect(events.filter(event => event.type === 'audio_input_suppression_changed').at(-1)).toMatchObject({suppressed: false}))
+    expect(controller.snapshot().input).toBe('muted')
+  })
+
   test('sessionとutteranceを分離し、mute後も同じsessionを再開する', async () => {
     const { controller, dependencies, events, room } = setup()
     const context = { characterId: 'miori', conversationId: 'conversation-id' }
@@ -245,6 +317,7 @@ describe('通常会話UI向けLiveKit音声session', () => {
     await controller.ensureSession({
       characterId: 'miori', conversationId: 'conversation-id',
     })
+    await controller.resumeMicrophone(MICROPHONE_STREAM)
     coreEventReceivers[0]({
       type: 'response_started',
       response_id: '50000000-0000-4000-8000-000000000001',
@@ -272,7 +345,7 @@ describe('通常会話UI向けLiveKit音声session', () => {
 
     expect(room.stopPlayback).not.toHaveBeenCalled()
     expect(events.map((event) => event.type)).toEqual([
-      'session_start_requested', 'speech_started',
+      'session_start_requested', 'session_resumed', 'speech_started',
     ])
     expect(controller.snapshot().response).toBe('idle')
   })

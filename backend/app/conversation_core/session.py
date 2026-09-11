@@ -295,11 +295,14 @@ class ConversationCoreSession:
         utterance_id: str,
         audio: bytes,
         interrupted_response_id: str,
+        input_is_current: Callable[[], bool] | None = None,
     ) -> TurnDecision:
         """発話冒頭の認識結果から暫定判定し、明確な発話なら旧回答を早期終了する。"""
         await self._record_utterance_stage(utterance_id, "stt_preview", "started")
         transcript = await self._stt.transcribe(audio)
         await self._record_utterance_stage(utterance_id, "stt_preview", "completed")
+        if input_is_current is not None and not input_is_current():
+            return "backchannel"
         decision = self._turn_classifier(transcript)
         await self._record_utterance_stage(
             utterance_id, "turn_decision", "completed"
@@ -308,6 +311,8 @@ class ConversationCoreSession:
             await self._record_utterance_stage(
                 utterance_id, "take_turn_decision", "completed"
             )
+        if input_is_current is not None and not input_is_current():
+            return "backchannel"
         await self._publish_utterance_delivery(
             CoreEvent(
                 type="turn_decision",
@@ -316,12 +321,13 @@ class ConversationCoreSession:
                 response_id=interrupted_response_id,
                 decision=decision,
                 final=False,
-            )
+            ), input_is_current=input_is_current,
         )
         if decision == "take_turn":
             cancelled = await self.cancel_response(
                 response_id=interrupted_response_id,
                 reason="barge_in",
+                input_is_current=input_is_current,
             )
             if cancelled is not None and cancelled.state is ResponseState.CANCELLED:
                 await self._record_utterance_stage(
@@ -486,11 +492,14 @@ class ConversationCoreSession:
         )
 
     async def cancel_response(
-        self, *, response_id: str, reason: str
+        self, *, response_id: str, reason: str,
+        input_is_current: Callable[[], bool] | None = None,
     ) -> Response | None:
         if self._cancellation is not None:
             async with self._state_lock:
                 response = self._responses.get(response_id)
+                if input_is_current is not None and not input_is_current():
+                    return response
                 if response is None or response.state.is_terminal:
                     return response
                 task = self._cancellation_tasks.get(response_id)
@@ -514,14 +523,19 @@ class ConversationCoreSession:
         response = self._responses.get(response_id)
         if response is None:
             return None
-        if not response.state.is_terminal:
+        if input_is_current is not None and not input_is_current():
+            return response
+        if not response.state.is_terminal and input_is_current is None:
             self._notify_interruption(reason)
         result = await self._terminate(
             response_id=response_id,
             generation=response.generation,
             state=ResponseState.CANCELLED,
             reason=reason,
+            input_is_current=input_is_current,
         )
+        if result.state is not ResponseState.CANCELLED:
+            return result
         self._request_response_task_cancellation(response_id, response.generation)
         for _ in range(3):
             await asyncio.sleep(0)
@@ -1220,10 +1234,13 @@ class ConversationCoreSession:
         generation: int,
         state: ResponseState,
         reason: str | None,
+        input_is_current: Callable[[], bool] | None = None,
     ) -> Response:
         terminal_started = False
         async with self._state_lock:
             response = self._responses[response_id]
+            if input_is_current is not None and not input_is_current():
+                return response
             if response.state.is_terminal:
                 return response
             if response.generation != generation:
@@ -1239,6 +1256,9 @@ class ConversationCoreSession:
                         self._cancellation_outcomes[response_id] = (state, reason)
                     self._output_stop_tasks[response_id].cancel()
                 return response
+            if input_is_current is not None and state is ResponseState.CANCELLED:
+                # previewの有効性確認とTool等の割り込み通知を同じlock内で行う。
+                self._notify_interruption(reason or "barge_in")
             response = replace(response, state=state, terminal_reason=reason)
             # awaitを挟まず、公開状態の書き換えを同じ単調時計の2点で囲む。
             # 通知の送信・永続化完了をcancel成立時刻へ読み替えない。
@@ -1480,13 +1500,17 @@ class ConversationCoreSession:
             "completed",
         )
 
-    async def _publish_utterance_delivery(self, event: CoreEvent) -> None:
+    async def _publish_utterance_delivery(
+        self, event: CoreEvent, *, input_is_current: Callable[[], bool] | None = None,
+    ) -> None:
         utterance_id = event.utterance_id
         if utterance_id is None:
             raise TerminalProtocolError(
                 "utterance delivery event requires utterance identity"
             )
         await self._record_utterance_stage(utterance_id, "delivery", "started")
+        if input_is_current is not None and not input_is_current():
+            return
         try:
             await self._delivery.publish(event)
         except asyncio.CancelledError:

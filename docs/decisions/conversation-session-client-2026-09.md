@@ -31,3 +31,29 @@ Core eventの通知callbackは`(event, context)`を受け取る。表示中の�
 ## 検証範囲
 
 clientのunit検証では配送/受理の分離、publish未完了時の照合、切断・結果不明・再送、スレッド誤操作防止、BE状態とlocal stopの境界を確認する。共有schemaと実client部品を接続するmodule検証では混在入力の履歴投影、重複・遅着、mute理由の保持を確認する。実LiveKit/LLM/STT/TTS/ブラウザでの受入は#327で別途行う。
+
+## focusによる入力抑止の接続（M6）
+
+`setTextInputFocused(context, focused)` は一致するsessionの音声入力だけを抑止する。
+microphone trackを直ちに無音化し、VAD境界をリセットし、BEへ
+`audio_input_suppression_changed(reason=text_focus)` を送る。focusは通常の
+`session_muted` や利用者のmute試行数に加算しない。blur時には抑止解除の通知完了を
+待って再開する。短時間のfocus/blurが重なった場合は最新の状態だけを反映する。
+
+`muteMicrophone()` はmanual、`muteForThreadSwitch()` はthread_switchを保持する。
+両者はfocus解除・受理成功では解除されず、`resumeMicrophone(stream)` の明示操作で
+解除する。マイク操作は直列化し、遅いpublish完了で新しいmuteを上書きしない。
+再接続時は現在のfocus状態を再通知し、接続中に変更された抑止状態をBEへ戻す。
+
+Web入力欄は受理確定まで本文とfocusを保持し、Enter/クリックとも成功時にblurする。
+送信ボタンのpointer/mouse押下ではfocusを奪わない。別スレッドのfocus操作は
+元sessionへ適用しない。UIの「テキスト入力中」は一時抑止、「ミュート」は持続muteを表す。
+
+BEはfocusとmanualの入力ゲートを独立保持し、抑止中の音声frame/prerollを
+STTへ渡さない。抑止時に未終了のcaptureは `input_suppressed` として破棄し、
+先行STT previewにはcaptureの有効性を渡して、遅延結果による回答停止を防ぐ。
+focus以前にVADで終了した音声や処理中の確定入力はfocus操作だけでは取り消さない。
+text submit時に先行する未確定入力をすべて破棄する規則はM7で統合する。
+
+unit/module検証は実サービス・ブラウザ音声受入の代わりにしない。#279との全体統合と
+実LiveKit/STT/LLM/TTSを用いた混在会話はM8の完了条件として残す。

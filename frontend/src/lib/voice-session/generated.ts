@@ -97,7 +97,7 @@ export interface PlaybackSummary {
     sample_rate:                   number;
 }
 
-export type VoiceSessionEventReason = "text_focus" | "user_request" | "terminal_error" | "reconnect_timeout" | "privacy" | "disconnect" | "session_ended" | "invalid_audio" | "input_capacity_exceeded" | "barge_in" | "decode_failure";
+export type VoiceSessionEventReason = "text_focus" | "user_request" | "terminal_error" | "reconnect_timeout" | "privacy" | "disconnect" | "session_ended" | "invalid_audio" | "input_capacity_exceeded" | "input_suppressed" | "barge_in" | "decode_failure";
 
 export interface SessionSummary {
     end_requested:                  boolean;

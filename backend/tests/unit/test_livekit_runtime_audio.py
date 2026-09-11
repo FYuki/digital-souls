@@ -738,6 +738,7 @@ def test_production_core_bridge_previews_first_audio_before_speech_end() -> None
 
     asyncio.run(exercise())
 
+    assert callable(previews[0].pop("input_is_current"))
     assert previews == [
         {
             "utterance_id": "30000000-0000-4000-8000-000000000021",

@@ -312,6 +312,7 @@
   $: inputStatus = ({
     inactive: '停止',
     muted: 'ミュート',
+    suppressed: 'テキスト入力中',
     listening: '聞き取り中',
     transcribing: '文字起こし中',
   } as const)[voiceSnapshot.input]
@@ -339,7 +340,7 @@
     activeUtteranceId = null
     if (sessionId !== null && voiceSwitchMutedSessionId !== sessionId) {
       voiceSwitchMutedSessionId = sessionId
-      void voiceSession.muteMicrophone().catch(appendApplicationError)
+      void voiceSession.muteForThreadSwitch().catch(appendApplicationError)
     }
   }
 
@@ -700,9 +701,15 @@
         screenReferenceAvailable={screenReferenceAvailable && !voiceMatchesSelection}
         threadKey={`${$conversationController.character}:${$conversationController.selectedConversationId}`}
         submission={selectedTextSubmission}
+        onFocusChanged={(focused) => {
+          const context = conversationController.selectedContext()
+          if (context !== null) void voiceSession.setTextInputFocused({
+            characterId: context.character, conversationId: context.conversationId,
+          }, focused).catch(appendApplicationError)
+        }}
       />
       <AudioRecorder
-        suspended={voiceSnapshot.phase === 'reconnecting'}
+        suspended={voiceSnapshot.phase === 'reconnecting' || voiceSnapshot.input === 'suppressed'}
         disabled={voiceRecorderDisabled}
         forceOff={voiceRecorderForceOff}
         continuous={true}

@@ -110,6 +110,7 @@ class VoiceSessionEventReason(Enum):
     DECODE_FAILURE = "decode_failure"
     DISCONNECT = "disconnect"
     INPUT_CAPACITY_EXCEEDED = "input_capacity_exceeded"
+    INPUT_SUPPRESSED = "input_suppressed"
     INVALID_AUDIO = "invalid_audio"
     PRIVACY = "privacy"
     RECONNECT_TIMEOUT = "reconnect_timeout"

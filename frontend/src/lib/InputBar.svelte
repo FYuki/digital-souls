@@ -104,7 +104,8 @@
     on:focus={() => onFocusChanged(true)}
     on:blur={() => onFocusChanged(false)}
   />
-  <button type="submit" disabled={disabled || sendDisabled || pending || text.trim().length === 0}>送信</button>
+  <button type="submit" on:mousedown|preventDefault on:pointerdown|preventDefault
+    disabled={disabled || sendDisabled || pending || text.trim().length === 0}>送信</button>
   {#if submission?.status === 'confirming'}
     <span role="status">送信確認中</span>
   {:else if pending}

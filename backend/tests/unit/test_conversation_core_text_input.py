@@ -23,6 +23,35 @@ def _session(*, content_skipped=False):
     return session, delivery, persistence, stt, llm, tts
 
 
+def test_invalidated_preview_cannot_cancel_current_response_after_stt_returns() -> None:
+    async def run():
+        session, delivery, _, _, _, _ = _session()
+        started, release = asyncio.Event(), asyncio.Event()
+
+        class DelayedStt:
+            async def transcribe(self, audio: bytes) -> str:
+                started.set()
+                await release.wait()
+                return "別の話をしましょう"
+
+        session._stt = DelayedStt()
+        response = await session.submit_text(input_id=str(uuid4()), text="継続する回答")
+        current = True
+        preview = asyncio.create_task(session.preview_turn(
+            utterance_id=str(uuid4()), audio=b"pcm", interrupted_response_id=response.response_id,
+            input_is_current=lambda: current,
+        ))
+        await started.wait()
+        current = False
+        release.set()
+        await preview
+        assert not session.response(response.response_id).state.is_terminal
+        assert not any(event.type == "turn_decision" for event in delivery.events)
+        await session.end()
+
+    asyncio.run(run())
+
+
 def test_direct_text_uses_common_response_without_synthetic_speech() -> None:
     async def run():
         session, delivery, persistence, stt, llm, _ = _session()

@@ -895,9 +895,19 @@ class _ConversationCoreBridge:
         self._microphone_preroll = bytearray()
         self._microphone_received_bytes = 0
         self._control_lock = asyncio.Lock()
+        self._text_focus_suppressed = False
+        self._manual_input_muted = False
 
     def notify(self, payload: bytes) -> None:
         event = json.loads(payload)
+        if event["type"] == "audio_input_suppression_changed":
+            self._text_focus_suppressed = bool(event["suppressed"])
+            self._apply_audio_input_gate()
+            return
+        if event["type"] in {"session_muted", "session_resumed"}:
+            self._manual_input_muted = event["type"] == "session_muted"
+            self._apply_audio_input_gate()
+            return
         if event["type"] in {"user_text_submitted", "user_input_result_requested"}:
             if self._text_input is None:
                 raise TerminalProtocolError("text input receiver is not connected")
@@ -905,6 +915,8 @@ class _ConversationCoreBridge:
             self._schedule(self._text_input.receive(event))
             return
         if event["type"] == "speech_started" and self._is_user_event(event):
+            if self._audio_input_suppressed:
+                return
             utterance_id = str(event["utterance_id"])
             if self._measurement is not None:
                 interrupted_response_id = event.get("response_id")
@@ -940,7 +952,7 @@ class _ConversationCoreBridge:
                 )
                 self._user_audio_captures.remove(oldest_open)
                 self._schedule(
-                    self._discard_capture_for_capacity(oldest_open.utterance_id)
+                    self._discard_capture(oldest_open.utterance_id)
                 )
             capture = _UserAudioCapture(
                 utterance_id=utterance_id,
@@ -979,10 +991,28 @@ class _ConversationCoreBridge:
             return
         self._schedule(self._receive_serialized(event))
 
-    async def _discard_capture_for_capacity(self, utterance_id: str) -> None:
+    @property
+    def _audio_input_suppressed(self) -> bool:
+        return self._text_focus_suppressed or self._manual_input_muted
+
+    def _apply_audio_input_gate(self) -> None:
+        if not self._audio_input_suppressed:
+            return
+        # mediaとcontrolの到着順は異なる。抑止中のframe/prerollを復帰後へ渡さない。
+        self._microphone_preroll.clear()
+        for capture in tuple(self._user_audio_captures):
+            if not capture.finalized:
+                self._user_audio_captures.remove(capture)
+                self._schedule(self._discard_capture(
+                    utterance_id=capture.utterance_id, reason="input_suppressed",
+                ))
+
+    async def _discard_capture(
+        self, utterance_id: str, reason: str = "input_capacity_exceeded",
+    ) -> None:
         await self._session.discard_utterance(
             utterance_id=utterance_id,
-            reason="input_capacity_exceeded",
+            reason=reason,
         )
 
     async def _receive_serialized(self, event: dict[str, object]) -> None:
@@ -992,6 +1022,8 @@ class _ConversationCoreBridge:
     def receive_microphone(self, pcm: bytes) -> None:
         received_start_byte = self._microphone_received_bytes
         self._microphone_received_bytes += len(pcm)
+        if self._audio_input_suppressed:
+            return
         if not self._user_audio_captures:
             self._microphone_preroll.extend(pcm)
             excess = len(self._microphone_preroll) - STT_MICROPHONE_PREROLL_BYTES
@@ -1123,6 +1155,9 @@ class _ConversationCoreBridge:
                 utterance_id=utterance_id,
                 audio=prepared_audio,
                 interrupted_response_id=interrupted_response_id,
+                input_is_current=lambda: not self._audio_input_suppressed and (
+                    capture is None or any(item is capture for item in self._user_audio_captures)
+                ),
             )
             if capture is not None:
                 capture.preview_complete = decision == "take_turn"
