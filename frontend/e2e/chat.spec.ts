@@ -156,19 +156,26 @@ test('利用者がAからBへ切り替えてAへ戻すとcharacter別UUIDv4をHT
   const [conversationIdA] = liveKit.readBindings('miori')
 
   await page.getByRole('button', { name: '新規スレッド（キャラクターB）' }).click()
-  await page.getByRole('button', { name: 'マイクをオンにする' }).click()
-  await expect.poll(() => liveKit.readBindings('mock-character-b').length).toBe(1)
+  // Aを維持したままBへの通常textを送る。表示切替は音声sessionを終了しない。
+  await expect(page.getByRole('button', { name: 'マイクをオンにする' })).toBeDisabled()
   await page.getByLabel('メッセージ').fill('Bへの質問')
   await page.getByRole('button', { name: '送信' }).click()
   await expect(page.getByText('応答3')).toBeVisible()
+  expect(liveKit.readBindings('mock-character-b')).toEqual([])
+  expect(liveKit.readBindings('miori')).toEqual([conversationIdA])
+  await expect(page.getByRole('button', { name: '音声会話を終了' })).toBeVisible()
+  await page.getByRole('button', { name: '音声会話を終了' }).click()
+  await page.getByRole('button', { name: 'マイクをオンにする' }).click()
+  await expect.poll(() => liveKit.readBindings('mock-character-b').length).toBe(1)
   const [conversationIdB] = liveKit.readBindings('mock-character-b')
+  await page.getByRole('button', { name: '音声会話を終了' }).click()
 
   await page.getByRole('button', { name: CONVERSATION_IDS.miori, exact: true }).click()
-  await page.getByRole('button', { name: 'マイクをオンにする' }).click()
-  await expect.poll(() => liveKit.readBindings('miori').length).toBe(2)
   await page.getByLabel('メッセージ').fill('Aへの再質問')
   await page.getByRole('button', { name: '送信' }).click()
   await expect(page.getByText('応答4')).toBeVisible()
+  await page.getByRole('button', { name: 'マイクをオンにする' }).click()
+  await expect.poll(() => liveKit.readBindings('miori').length).toBe(2)
   const returnedConversationIdsA = liveKit.readBindings('miori')
 
   expect(requestBodies.map((body) => body.character)).toEqual([
