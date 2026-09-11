@@ -39,8 +39,8 @@ jobs:
       - name: Vite build
         run: npm run build
 
-      - name: Rust check
-        run: cargo check --manifest-path src-tauri/Cargo.toml
+      - name: Generate Tauri icons
+        run: npm run prepare:icons
 
       - name: Build Tauri executable
         run: npm run tauri build -- --no-bundle
