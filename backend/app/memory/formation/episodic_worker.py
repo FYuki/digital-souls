@@ -63,6 +63,7 @@ class EpisodicFormationWorker:
                     batch = self._extractor.extract(
                         snapshot=snapshot, chunk=chunk, catalog=catalog, provenance=provenance,
                         progress=progress, entity_labels=labels,
+                        source_masks=self._registration.source_masks(snapshot),
                     )
                 except ExtractionInputTooLarge:
                     left, right = bisect_chunk(chunk)

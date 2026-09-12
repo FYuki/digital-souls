@@ -21,6 +21,7 @@ from app.memory.episodic.quotes import (
 )
 from app.memory.episodic.repository import EpisodicRepository, RecordConflict
 from app.memory.episodic.sources import validate_conversation_sources
+from app.memory.episodic.source_masks import overlaps_mask, visible_ranges
 from app.memory.episodic.temporal import resolve_time
 from app.memory.formation.thread_chunks import ThreadChunk
 from app.memory.formation.thread_queue import ThreadFormationQueue, ThreadSnapshot
@@ -104,6 +105,10 @@ class EpisodicRegistrationService:
                     if list(pair) not in progress[key])
         return records, provenance, progress
 
+    def source_masks(self, snapshot: ThreadSnapshot) -> tuple[SourceSpan, ...]:
+        with self._repository.read() as tx:
+            return tx.source_masks(snapshot.lease.character_id, snapshot.lease.conversation_id)
+
     def reconcile_sources(self, snapshot: ThreadSnapshot) -> None:
         """出典が変わった記憶を止める。検索側も現在の履歴で別途検証する。"""
         current = {s.turn.turn_id: s.revision for s in snapshot.sources}
@@ -174,14 +179,21 @@ class EpisodicRegistrationService:
             if previous is not None and previous.status is RecordStatus.ACTIVE:
                 with self._repository.read() as tx:
                     sources = distinct_sources(tx.versions(character_id, previous.id)[-1].sources + sources)
-            source_texts = self._source_texts(snapshot, sources)
-            review = self._reviewer.review(kind=proposal.kind, value=value, source_texts=source_texts)
+            masks = self.source_masks(snapshot)
+            if any(overlaps_mask(source, masks) for source in sources):
+                review = PrivacyReview(False, "SOURCE_REDACTED")
+            else:
+                source_texts = self._source_texts(snapshot, sources, masks)
+                review = self._reviewer.review(kind=proposal.kind, value=value, source_texts=source_texts)
             if review.stamp is not None and extraction_identity is not None:
                 review = replace(review, stamp=review.stamp.model_copy(update={"extraction": extraction_identity}))
             prepared.append(PreparedRecord(proposal, anchor, sources, value, previous, review))
         return PreparedBatch(snapshot, chunk, batch, tuple(prepared), links, merges)
 
-    def _source_texts(self, snapshot: ThreadSnapshot, sources: tuple[SourceSpan, ...]) -> tuple[str, ...]:
+    def _source_texts(
+        self, snapshot: ThreadSnapshot, sources: tuple[SourceSpan, ...],
+        masks: tuple[SourceSpan, ...] = (),
+    ) -> tuple[str, ...]:
         by_id = {s.turn.turn_id: s for s in snapshot.sources}
         texts: list[str] = []
         for span in sources:
@@ -193,7 +205,9 @@ class EpisodicRegistrationService:
             text = source.turn.user_content if span.role == "user" else source.turn.assistant_content
             if text is None:
                 raise RecordConflict("source content is unavailable")
-            texts.append(text)
+            whole = span.model_copy(update={"start": 0, "end": len(text)})
+            # privacy判定には引用外も渡すが、削除済み本文を再送信しない。
+            texts.append("\n[削除済み範囲]\n".join(text[start:end] for start, end in visible_ranges(whole, masks)))
         return tuple(dict.fromkeys(texts))
 
     def _value(
@@ -281,6 +295,8 @@ class EpisodicRegistrationService:
                         rejected += 1
                         continue
                     assert item.review.stamp is not None
+                    # 推論中の管理操作を反映する。本文更新を伴わないREFERENCEも検証する。
+                    tx.require_valid_sources(character_id, item.sources)
                     current = tx.get(character_id, previous.id) if previous else None
                     if previous is not None and current != previous:
                         raise RecordConflict("target changed while extraction or privacy assessment was running")

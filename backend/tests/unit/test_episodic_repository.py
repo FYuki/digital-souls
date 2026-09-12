@@ -243,3 +243,15 @@ def test_invalidated_source_blocks_new_receipt_but_not_new_source_revision(repos
         assert tx.list_records("miori") == ()
         fresh = source(source_id=old.source_id, revision=2)
         assert create(tx, sources=(fresh,)).status is RecordStatus.ACTIVE
+
+
+def test_delete_using_original_provenance_succeeds_and_blocks_new_receipts(repository):
+    evidence = source()
+    with repository.transaction() as tx:
+        fact = create(tx, sources=(evidence,))
+        tx.delete(character_id="miori", record_id=fact.id, expected_version=1,
+                  sources=(evidence,), receipt_id=uuid4())
+        with pytest.raises(RecordConflict, match="removed"):
+            create(tx, sources=(evidence,))
+        assert create(tx, character="other", sources=(evidence,)).status is RecordStatus.ACTIVE
+        assert create(tx, sources=(evidence.model_copy(update={"revision": 2}),)).status is RecordStatus.ACTIVE

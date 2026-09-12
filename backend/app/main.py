@@ -85,6 +85,8 @@ from app.memory.episodic.privacy import EpisodicPrivacyReviewer
 from app.memory.formation.worker import MemoryFormationWorker
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
 from app.memory.episodic.repository import EpisodicRepository
+from app.memory.episodic.management import EpisodicMemoryManagement
+from app.routers.episodic_memories import router as episodic_memories_router
 from app.memory.episodic.sources import ConversationSourceGuard
 from app.memory.episodic.read_repository import CombinedMemoryReadRepository, EpisodicReadRepository
 from app.memory.persistence.index_outbox_repository import IndexOutboxRepository
@@ -555,6 +557,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         inference_router_state_set = False
         inference_router_registered = False
         persona_memory_provider_state_set = False
+        episodic_memory_management_state_set = False
         addon_record_provider_state_set = False
         rag_admission_service_state_set = False
         screen_perception_state_set = False
@@ -643,6 +646,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 clock=clock,
             )
             persona_memory_provider_state_set = True
+            app.state.episodic_memory_management = EpisodicMemoryManagement(
+                reader=memory_read_repository.episodic,
+                reviewer=EpisodicPrivacyReviewer(
+                    scanner=privacy_scanner, classifier=semantic_privacy_classifier, policy=policy.privacy,
+                ),
+                clock=clock, index_sync=memory_index_sync,
+            )
+            episodic_memory_management_state_set = True
             app.state.addon_record_provider = AddonRecordProvider(
                 temporary_record_repository
             )
@@ -1075,6 +1086,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                         llm_router.clear_inference_router,
                         inference_runtime.router,
                     )
+                if episodic_memory_management_state_set:
+                    cleanup.callback(delattr, app.state, "episodic_memory_management")
                 if persona_memory_provider_state_set:
                     cleanup.callback(delattr, app.state, "persona_memory_provider")
                 if addon_record_provider_state_set:
@@ -1112,6 +1125,7 @@ app.include_router(chat_router)
 app.include_router(character_catalog_router)
 app.include_router(conversations_router)
 app.include_router(memory_management_router)
+app.include_router(episodic_memories_router)
 app.include_router(ui_settings_router)
 app.include_router(livekit_router)
 app.include_router(screen_perception_router)

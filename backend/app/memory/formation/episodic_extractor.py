@@ -11,7 +11,8 @@ from pydantic import ValidationError
 from app.inference import InferenceError
 from app.memory.episodic.contracts import Record, RecordStatus, SourceSpan
 from app.memory.episodic.extraction_contracts import ExtractionBatch
-from app.memory.episodic.quotes import InvalidExtraction
+from app.memory.episodic.quotes import InvalidExtraction, fragment_span
+from app.memory.episodic.source_masks import overlaps_mask, visible_ranges
 from app.memory.formation.config import MemoryFormationSettings
 from app.memory.formation.thread_chunks import ThreadChunk
 from app.memory.formation.thread_queue import ThreadSnapshot
@@ -92,7 +93,7 @@ class ThreadEpisodeExtractor:
     def extract(
         self, *, snapshot: ThreadSnapshot, chunk: ThreadChunk, catalog: tuple[Record, ...],
         provenance: Mapping[UUID, tuple[SourceSpan, ...]], progress: Mapping[str, list[list[int]]],
-        entity_labels: Mapping[str, str],
+        entity_labels: Mapping[str, str], source_masks: tuple[SourceSpan, ...] = (),
     ) -> ExtractionBatch:
         fragments = []
         for ownership, parts in (("context_before", chunk.context_before), ("primary", chunk.primary),
@@ -100,15 +101,21 @@ class ThreadEpisodeExtractor:
             for part in parts:
                 source = part.source
                 key = f"{source.turn.turn_id}:{source.revision}:{part.role}"
-                fragments.append({
-                    "source_id": str(source.turn.turn_id), "revision": source.revision,
-                    "role": part.role, "start": part.start, "end": part.end,
-                    "ownership": ownership, "text": part.text, "processed_ranges": progress.get(key, []),
-                })
+                for start, end in visible_ranges(fragment_span(part), source_masks):
+                    fragments.append({
+                        "source_id": str(source.turn.turn_id), "revision": source.revision,
+                        "role": part.role, "start": start, "end": end,
+                        "ownership": ownership, "text": part.text[start - part.start:end - part.start],
+                        "processed_ranges": progress.get(key, []),
+                    })
+        if not any(part["ownership"] == "primary" for part in fragments):
+            return ExtractionBatch(records=())
         known = []
         for record in catalog:
             item = record.model_dump(mode="json")
-            if record.status is not RecordStatus.ACTIVE:
+            if record.status is not RecordStatus.ACTIVE or any(
+                overlaps_mask(source, source_masks) for source in provenance.get(record.id, ())
+            ):
                 item["five_w"] = None
             item["sources"] = [source.model_dump(mode="json") for source in provenance.get(record.id, ())]
             known.append(item)

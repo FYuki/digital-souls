@@ -150,3 +150,44 @@ async def test_durable_scheduler_recovers_existing_reservations_on_start(harness
         assert len(harness.records()) == 2
     finally:
         await scheduler.stop()
+
+
+def test_extractor_masks_context_and_primary_without_changing_quote_offsets(harness):
+    from app.memory.episodic.contracts import SourceSpan
+    from tests.module.test_episodic_registration import quote, initial
+    ep, fa, turn = initial(harness)
+    harness.turn("次の話をする")
+    snapshot = harness.snapshot()
+    chunks = split_thread(snapshot, max_characters=3, context_characters=30)
+    old = quote(snapshot, turn)
+    masks = (SourceSpan(source_id=turn.turn_id, revision=old.revision, role="user",
+                        start=1, end=5, stated_at=harness.now[0]),)
+    client = Client(callback=lambda *_: ExtractionBatch(records=()).model_dump_json())
+    extractor = ThreadEpisodeExtractor(client=client, settings=SETTINGS)
+    for chunk in chunks:
+        catalog, provenance, progress = harness.service.extraction_context(snapshot, chunk)
+        extractor.extract(snapshot=snapshot, chunk=chunk, catalog=catalog, provenance=provenance,
+                          progress=progress, entity_labels={}, source_masks=masks)
+    assert client.requests
+    for request in client.requests:
+        for record in request["known_records"]:
+            if record["id"] in {str(ep.id), str(fa.id)}:
+                assert record["five_w"] is None
+        for part in request["fragments"]:
+            if part["source_id"] == str(turn.turn_id):
+                assert part["role"] == "user"
+                assert part["end"] <= 1 or part["start"] >= 5
+                assert part["text"] == turn.user_content[part["start"]:part["end"]]
+
+
+def test_fully_masked_primary_finishes_without_inference(harness):
+    from app.memory.episodic.quotes import fragment_span
+    harness.turn("うどんを食べた")
+    snapshot = harness.snapshot()
+    chunk = split_thread(snapshot)[0]
+    client = Client()
+    result = ThreadEpisodeExtractor(client=client, settings=SETTINGS).extract(
+        snapshot=snapshot, chunk=chunk, catalog=(), provenance={}, progress={}, entity_labels={},
+        source_masks=tuple(fragment_span(part) for part in chunk.primary))
+    assert result.complete and result.records == ()
+    assert client.requests == []

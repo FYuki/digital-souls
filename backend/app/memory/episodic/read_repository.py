@@ -7,6 +7,7 @@ from uuid import UUID
 
 from app.memory.episodic.contracts import Record, RecordKind, RecordStatus, SourceSpan
 from app.memory.episodic.rendering import render_five_w
+from app.memory.episodic.source_masks import overlaps_mask
 from app.memory.episodic.repository import EpisodicRepository, EpisodicTransaction, RecordVersion
 from app.memory.episodic.sources import (
     ConversationSourceGuard, InvalidConversationSource, validate_conversation_sources,
@@ -70,6 +71,9 @@ class EpisodicReadRepository:
         version = next((v for v in versions if v.content_version == record.content_version), None)
         if version is None or not self._sources_valid(history, cutoff, record, version.sources):
             return None
+        masks = tx.source_masks(record.character_id, record.conversation_id)
+        if any(overlaps_mask(source, masks) for source in version.sources):
+            return None
         return version
 
     def _unsafe_facts(
@@ -108,7 +112,7 @@ class EpisodicReadRepository:
 
     def _project(
         self, tx: EpisodicTransaction, history: sqlite3.Connection, cutoff: datetime, record: Record,
-        unsafe_facts: set[UUID],
+        unsafe_facts: set[UUID], *, include_merged: bool = False,
     ) -> EpisodicMemoryView:
         version = self._current(tx, history, cutoff, record)
         if version is not None and record.kind is RecordKind.EPISODE:
@@ -125,10 +129,10 @@ class EpisodicReadRepository:
                     break
         if version is not None and record.kind is RecordKind.FACT:
             # 有効な統合は代表だけを返す。失効した統合元は再評価するまで復帰させない。
-            if record.id in unsafe_facts or any(
+            if record.id in unsafe_facts or (not include_merged and any(
                 m.source_fact_id == record.id and m.source_version == record.content_version
                 for m in tx.merges(record.character_id)
-            ):
+            )):
                 version = None
         value = record.five_w if version is not None else None
         when = value.when if value else None

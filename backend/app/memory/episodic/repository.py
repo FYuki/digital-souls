@@ -18,8 +18,9 @@ from uuid import UUID, uuid4
 
 from app.memory.episodic.contracts import (
     FiveW, FormationStamp, MergeRelation, Record, RecordKind, RecordStatus,
-    Reference, SourceSpan,
+    Reference, SourceSpan, What,
 )
+from app.memory.episodic.source_masks import overlaps_mask
 from app.memory.persistence.sqlite import PersonaMemorySqlite, format_datetime, parse_datetime
 
 
@@ -164,9 +165,77 @@ class EpisodicTransaction:
              record.content_version, self._now),
         )
 
+    def source_masks(
+        self, character_id: str, conversation_id: UUID | None = None,
+    ) -> tuple[SourceSpan, ...]:
+        """削除版と手動訂正前の出典範囲。本文を再保存せず再抽出を防ぐ。"""
+        rows = self._connection.execute(
+            """SELECT v.sources FROM episodic_versions v JOIN episodic_records r
+               ON r.character_id=v.character_id AND r.id=v.record_id
+               WHERE r.character_id=?
+               AND (? IS NULL OR r.conversation_id=?)
+               AND (v.content IS NULL OR (r.kind='FACT' AND EXISTS(
+                   SELECT 1 FROM episodic_versions corrected
+                   WHERE corrected.character_id=r.character_id AND corrected.record_id=r.id
+                   AND corrected.content_version > v.content_version
+                   AND NOT EXISTS(SELECT 1 FROM json_each(corrected.sources) source
+                       WHERE json_extract(source.value,'$.role') <> 'manual'))))""",
+            (character_id, str(conversation_id) if conversation_id else None,
+             str(conversation_id) if conversation_id else None),
+        ).fetchall()
+        unique = {source.identity: source for row in rows for source in _parse_sources(row["sources"])
+                  if source.role in {"user", "assistant"}}
+        return tuple(unique.values())
+
+    def require_valid_sources(self, character_id: str, sources: tuple[SourceSpan, ...]) -> None:
+        self._valid_sources(character_id, sources)
+
+    def operation_result(
+        self, character_id: str, receipt_id: UUID, operation: str, record_id: UUID,
+    ) -> WriteResult | None:
+        return self._replay(character_id, receipt_id, operation, record_id)
+
+    def erase_version_content(self, character_id: str, record_id: UUID, version: int) -> None:
+        self._writable()
+        record = self.get(character_id, record_id)
+        if record is None or version >= record.content_version:
+            raise RecordConflict("only historical content can be erased independently")
+        self._connection.execute(
+            "UPDATE episodic_versions SET content=NULL WHERE character_id=? AND record_id=? AND content_version=?",
+            (character_id, str(record_id), version),
+        )
+
+    def redact_episode(
+        self, record: Record, *, sources: tuple[SourceSpan, ...], receipt_id: UUID,
+    ) -> Record:
+        """関連Factを削除した経験のIDと日時を残し、本文と過去版を検索・監査から除く。"""
+        self._writable()
+        if record.kind is not RecordKind.EPISODE or record.status is RecordStatus.DELETED:
+            raise RecordConflict("episode is unavailable")
+        versions = self.versions(record.character_id, record.id)
+        self.update(
+            character_id=record.character_id, record_id=record.id, expected_version=record.content_version,
+            five_w=FiveW(what=What(predicate="関連情報が削除された経験"),
+                         when=record.five_w.when if record.five_w else None),
+            sources=sources, stamp=versions[-1].stamp, receipt_id=receipt_id,
+        )
+        for version in versions:
+            self.erase_version_content(record.character_id, record.id, version.content_version)
+        self._connection.execute(
+            "UPDATE episodic_records SET status='INACTIVE' WHERE character_id=? AND id=?",
+            (record.character_id, str(record.id)),
+        )
+        redacted = self.get(record.character_id, record.id)
+        assert redacted is not None
+        self._outbox(redacted)
+        return redacted
+
     def _valid_sources(self, character_id: str, sources: tuple[SourceSpan, ...]) -> str:
         encoded = _sources_json(sources)
+        masks = self.source_masks(character_id)
         for source in sources:
+            if overlaps_mask(source, masks):
+                raise RecordConflict("source range was removed by a management operation")
             if self._connection.execute(
                 """SELECT 1 FROM episodic_invalid_sources
                    WHERE character_id = ? AND source_id = ? AND revision = ?""",
@@ -176,11 +245,12 @@ class EpisodicTransaction:
         return encoded
 
     def _version(self, record: Record, sources: tuple[SourceSpan, ...], stamp: FormationStamp) -> None:
+        # create/update/deleteで変更前に検証済み。削除自身が作るmaskで監査版を拒否しない。
         self._connection.execute(
             "INSERT INTO episodic_versions VALUES (?,?,?,?,?,?,?)",
             (record.character_id, str(record.id), record.content_version,
              record.five_w.model_dump_json() if record.five_w else None,
-             self._valid_sources(record.character_id, sources), stamp.model_dump_json(), self._now),
+             _sources_json(sources), stamp.model_dump_json(), self._now),
         )
 
     def _outbox(self, record: Record) -> None:

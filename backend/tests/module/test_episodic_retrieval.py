@@ -328,3 +328,47 @@ def test_chat_prompt_receives_month_precision_context_and_version(h):
     assert item.reference.content_version == 1
     assert item.reference.occurred_at is None
     assert item.reference.occurred_precision == "MONTH"
+
+
+def test_management_correction_and_deletion_reach_actual_chroma_and_prompt(h):
+    from app.memory.episodic.management import EpisodicMemoryManagement
+    from app.memory.episodic.privacy import PrivacyReview
+    fact = h.create()
+    episode = h.create(kind=RecordKind.EPISODE)
+    h.link(episode, fact)
+    h.index.run_worker_once()
+    reviewer = Mock()
+    reviewer.review.return_value = PrivacyReview(True, "ALLOW", STAMP)
+    management = EpisodicMemoryManagement(
+        reader=h.read.episodic, reviewer=reviewer, clock=lambda: NOW, index_sync=h.index)
+    management.correct(character_id="miori", record_id=fact.id, expected_version=1,
+                       five_w=h.value(predicate="訂正した月旅行を想像する"), idempotency_key=uuid4())
+    h.index.run_worker_once()
+    result = h.retrieve()
+    assert [m.memory_id for m in result.memories] == [str(fact.id)]
+    assert result.memories[0].content_version == 2
+    assert "訂正した月旅行を想像する" in result.memories[0].normalized_text
+    management.delete(character_id="miori", record_id=fact.id, expected_version=2, idempotency_key=uuid4())
+    assert h.retrieve().memories == ()
+    h.index.run_worker_once()
+    h.index.reconcile_once()
+    assert h.retrieve().memories == ()
+    assert all(v.five_w is None for v in (
+        h.read.get(character_id="miori", memory_id=fact.id),
+        h.read.get(character_id="miori", memory_id=episode.id),
+    ))
+
+
+def test_removed_input_also_blocks_fact_derived_from_assistant_paraphrase(h):
+    from app.memory.episodic.contracts import RecordStatus
+    fact = h.create()
+    reply_source = h.span.model_copy(update={"role": "assistant", "start": 0, "end": len("想像の旅行ですね")})
+    with h.episodic.transaction(now=NOW) as tx:
+        paraphrase = tx.create(
+            character_id="miori", conversation_id=h.conversation, kind=RecordKind.FACT,
+            five_w=h.value(), sources=(reply_source,), stamp=STAMP, receipt_id=uuid4(),
+        ).record
+    h.delete(fact)
+    assert h.read.get(character_id="miori", memory_id=paraphrase.id).five_w is None
+    with h.episodic.read() as tx:
+        assert tx.get("miori", paraphrase.id).status is RecordStatus.ACTIVE
