@@ -208,4 +208,9 @@ Backend・Frontendを起動する。gemma4:e4b / nomic-embed-text:latestが導�
 通常会話・管理UIの試験はそのURLへ行う。停止は同じrunRootに `stop` ファイルを作成するか、
 runnerへ終了signalを送る。所有するBackend/Frontendだけを停止し、共有Ollamaは操作しない。
 合成データとmanifestは試験結果の調査用に残す。
+正常停止後は `python scripts/acceptance_episodic_memory.py --resume-root <runRoot>` で、
+同じtest data rootを保持して新しいcommit・portで再起動できる。
+実行中のrootや通常/dogfoodのdata rootは受け付けず、前回manifestをrun ID付きで保持する。
+会話ログは採用した記憶ID・内容版・日時精度の既存metadataだけを追加で有効にする。
+モデルが未ロードの状態での既存realtime privacy timeoutと、明示的にロード済みの機能検証を区別して記録する。
 このrunnerのreadyは起動確認だけであり、#344の抽出・検索・管理操作・応答の合格証跡ではない。

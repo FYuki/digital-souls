@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import signal
@@ -11,10 +12,12 @@ import sys
 import tempfile
 import threading
 import time
+from copy import deepcopy
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
+from uvicorn.config import LOGGING_CONFIG
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
@@ -56,12 +59,32 @@ def stop_owned(process: subprocess.Popen) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--resume-root", type=Path, help="正常停止した専用test data rootを保持して再起動")
+    args = parser.parse_args()
     if os.environ.get("DS_ENVIRONMENT_ID") == "dogfood":
         raise RuntimeError("dogfood environment is not an acceptance target")
     dirty = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True)
     if dirty.strip():
         raise RuntimeError("commit the worktree before real acceptance")
-    root = Path(tempfile.mkdtemp(prefix="ds-memory-340-"))
+    previous_run_id = None
+    if args.resume_root is None:
+        root = Path(tempfile.mkdtemp(prefix="ds-memory-340-"))
+    else:
+        root = args.resume_root.resolve(strict=True)
+        if root.parent != Path(tempfile.gettempdir()).resolve() or not root.name.startswith("ds-memory-340-"):
+            raise RuntimeError("only this runner's temporary test roots may be resumed")
+        previous = json.loads((root / "runtime-manifest.json").read_text(encoding="utf-8"))
+        if (previous.get("status") != "stopped" or previous.get("environmentId") != "test"
+                or previous.get("dataRoot") != str(root / "data")
+                or (root / "data").resolve() != root / "data"):
+            raise RuntimeError("resume requires a stopped, isolated test runtime")
+        previous_run_id = str(UUID(previous["runId"]))
+        (root / f"runtime-manifest-{previous_run_id}.json").write_text(
+            json.dumps(previous, ensure_ascii=False, indent=2), encoding="utf-8",
+        )
+        # 既に正常停止した専用runnerの停止要求だけを解除する。データは変更しない。
+        (root / "stop").unlink(missing_ok=True)
     data = root / "data"
     backend_port, frontend_port = free_port(), free_port()
     backend = f"http://127.0.0.1:{backend_port}"
@@ -115,7 +138,15 @@ def main() -> int:
             "whisper": {"mode": "disabled", "source": None},
         },
     }), encoding="utf-8")
+    logging_config = deepcopy(LOGGING_CONFIG)
+    # このloggerのINFOは採用した記憶のID・版・日時精度だけ。本文やpromptは記録しない。
+    logging_config["loggers"]["app._chat_runtime"] = {
+        "handlers": ["default"], "level": "INFO", "propagate": False,
+    }
+    log_config_path = root / "logging.json"
+    log_config_path.write_text(json.dumps(logging_config), encoding="utf-8")
     manifest = {
+        "previousRunId": previous_run_id,
         "schemaVersion": 1, "runId": str(uuid4()), "status": "starting",
         "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "environmentId": "test", "dataRoot": str(data), "models": identities,
@@ -132,10 +163,11 @@ def main() -> int:
         signal.signal(signum, lambda *_: stopped.set())
     processes = []
     try:
-        with (root / "backend.log").open("wb") as backend_log, (root / "frontend.log").open("wb") as frontend_log:
+        with (root / "backend.log").open("ab") as backend_log, (root / "frontend.log").open("ab") as frontend_log:
             api = subprocess.Popen(
                 [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1",
-                 "--port", str(backend_port), "--no-access-log", "--log-level", "warning"],
+                 "--port", str(backend_port), "--no-access-log", "--log-level", "warning",
+                 "--log-config", str(log_config_path)],
                 cwd=ROOT, env=environment, stdout=backend_log, stderr=subprocess.STDOUT,
             )
             processes.append(api)
