@@ -219,6 +219,18 @@ export class LiveKitRoomClient {
     })
   }
 
+  private traceLifecycle(direction: 'incoming' | 'outgoing', event: VoiceSessionEvent): void {
+    if (!['user_text_submitted', 'user_input_result', 'speech_started', 'speech_stopped',
+      'turn_decision', 'response_started', 'response_cancel_requested', 'response_cancelled',
+      'response_completed', 'response_failed', 'utterance_discarded'].includes(event.type)) return
+    // devだけで取消元を相関する。本文・音声・tokenは送らない。
+    ;(import.meta as ImportMeta & {hot?: {send(event: string, data: unknown): void}}).hot?.send('voice:lifecycle', {
+      direction, type: event.type, event_id: event.event_id, response_id: event.response_id,
+      utterance_id: event.utterance_id, input_event_id: event.input_event_id,
+      reason: event.reason, decision: event.decision, status: event.status,
+    })
+  }
+
   private observe(observation: RoomObservation): void {
     // 下りの状態通知や再生継続だけでは、復旧後の上りの疎通を確認できない。
     this.receiveObservation(this.recoveryPending && observation.transport === 'available'
@@ -366,6 +378,7 @@ export class LiveKitRoomClient {
   private finalSummaryAck: { eventId: string; resolve: () => void } | null = null
 
   async publishControlEvent(value: VoiceSessionEvent): Promise<void> {
+    this.traceLifecycle('outgoing', value)
     const sessionId = this.sessionId
     const outbox = this.controlOutbox
     if (sessionId === null || outbox === null) {
@@ -859,6 +872,7 @@ export class LiveKitRoomClient {
         ...(event.history_turn_id === undefined ? {} : {historyTurnId: event.history_turn_id})})
     }
     if (!duplicate) {
+      this.traceLifecycle('incoming', event)
       if (event.type === 'response_started' && event.response_id !== undefined
         && !this.stoppedResponses.has(event.response_id)) {
         if (this.latestResponseId !== null && this.latestResponseId !== event.response_id) {
