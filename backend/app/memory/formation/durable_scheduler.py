@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import math
+from pathlib import Path
 from typing import Protocol
 from collections.abc import Callable
 import threading
@@ -70,7 +71,16 @@ class DurableMemoryFormationScheduler:
             try:
                 worked = await asyncio.to_thread(self._worker.process_next, should_stop=self._stop.is_set)
             except Exception as error:
-                logger.warning("episodic formation failed: error_type=%s", type(error).__name__)
+                trace = error.__traceback__
+                while trace is not None and trace.tb_next is not None:
+                    trace = trace.tb_next
+                site = "unknown" if trace is None else (
+                    f"{Path(trace.tb_frame.f_code.co_filename).name}:"
+                    f"{trace.tb_frame.f_code.co_name}:{trace.tb_lineno}"
+                )
+                # 例外本文・stackのソース行・localsには元会話が入り得る。コード位置だけ記録する。
+                logger.warning("episodic formation failed: error_type=%s error_site=%s",
+                               type(error).__name__, site)
                 worked = False
             finally:
                 self._active.clear()

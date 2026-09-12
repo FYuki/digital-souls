@@ -287,3 +287,26 @@ def test_continuing_heard_episode_from_a_reply_preserves_original_perspective(ha
     assert current.five_w.when == old.five_w.when
     assert current.five_w.what.predicate == "聞いた"
     assert next(p for p in current.five_w.who if p.entity_id == "character:miori").role.value == "LISTENER"
+
+
+@pytest.mark.anyio
+async def test_scheduler_failure_diagnostic_excludes_exception_content(harness, caplog):
+    import asyncio
+
+    class FailingWorker:
+        def process_next(self, *, should_stop):
+            raise ValueError("PRIVATE_SYNTHETIC_CONVERSATION")
+
+    scheduler = DurableMemoryFormationScheduler(
+        worker=FailingWorker(), queue=harness.queue, poll_seconds=0.01,
+    )
+    await scheduler.start()
+    try:
+        async with asyncio.timeout(2):
+            while "episodic formation failed" not in caplog.text:
+                await asyncio.sleep(0.01)
+    finally:
+        await scheduler.stop()
+    assert "error_type=ValueError" in caplog.text
+    assert "error_site=test_episodic_formation.py:process_next:" in caplog.text
+    assert "PRIVATE_SYNTHETIC_CONVERSATION" not in caplog.text
