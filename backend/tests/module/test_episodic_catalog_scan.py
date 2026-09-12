@@ -88,7 +88,7 @@ def extract(harness, setup, client):
     snapshot, chunk, catalog, provenance, progress, _ = setup
     return ThreadEpisodeExtractor(client=client, settings=SETTINGS).extract(
         snapshot=snapshot, chunk=chunk, catalog=catalog, provenance=provenance, progress=progress,
-        entity_labels={}, should_stop=lambda: client.stopped)
+        entity_labels={"speaker:user": "ユーザー", "character:miori": "光織"}, should_stop=lambda: client.stopped)
 
 
 def test_last_catalog_page_is_matched_before_atomic_update_and_all_ids_are_examined(harness):

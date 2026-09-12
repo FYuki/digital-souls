@@ -95,7 +95,8 @@ def harness(tmp_path: Path):
     repository = EpisodicRepository(paths.persona_memory_sqlite_path)
     reviewer = Reviewer()
     service = EpisodicRegistrationService(repository=repository, queue=queue, reviewer=reviewer,
-                                          timezone="Asia/Tokyo", clock=lambda: now[0])
+                                          timezone="Asia/Tokyo", clock=lambda: now[0],
+                                          entity_labels={"speaker:user": "ユーザー", "character:miori": "光織"})
     return Harness(paths, conversation.conversation_id, repository, queue, service, reviewer, now)
 
 

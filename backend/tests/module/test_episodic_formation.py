@@ -55,7 +55,7 @@ class Client:
 def worker(harness, client, *, budget=4000):
     return EpisodicFormationWorker(
         queue=harness.queue, extractor=ThreadEpisodeExtractor(client=client, settings=SETTINGS),
-        registration=harness.service, entity_labels=lambda _: {"speaker:user": "ユーザー"},
+        registration=harness.service, entity_labels=lambda _: {"speaker:user": "ユーザー", "character:miori": "光織"},
         extraction_identity=lambda: ExtractionIdentity(
             provider_id="fake", model_id="test", model_digest="test-digest", prompt_version="test-v1"),
         chunk_characters=budget, context_characters=0,
@@ -210,8 +210,8 @@ def test_grounding_rechecks_content_without_reselecting_record_identity(harness)
         candidate = value["candidate"]
         content = candidate["five_w"]
         if candidate["kind"] == "EPISODE":
-            content["what"]["predicate"] = "聞いた"
-            content["where"] = None
+            content["what"]["predicate"] = "語った"
+            content["where"] = {"name": "話題に出ただけの店"}
         else:
             content["when"] = {"relative_unit": "DAY", "relative_offset": 0}
         return GroundedContent.model_validate({
@@ -225,6 +225,9 @@ def test_grounding_rechecks_content_without_reselecting_record_identity(harness)
     assert len(episodes) == len(facts) == 1
     assert episodes[0].five_w.what.predicate == "聞いた"
     assert episodes[0].five_w.where is None
+    assert [(p.entity_id, p.role.value) for p in episodes[0].five_w.who] == [
+        ("character:miori", "LISTENER"), ("speaker:user", "SPEAKER"),
+    ]
     assert facts[0].five_w.when.parts.day == harness.now[0].day
     assert len(client.ground_requests) == 2
     assert all(request["known_records"] == [] for request in client.ground_requests)
@@ -246,3 +249,41 @@ def test_grounding_failure_after_first_record_does_not_partially_register(harnes
     assert len(client.ground_requests) == 3
     assert harness.records() == ()
     assert harness.queue.has_pending()
+
+
+@pytest.mark.parametrize(("role", "predicate", "owner_role"), [
+    ("user", "聞いた", "LISTENER"), ("assistant", "語った", "SPEAKER"),
+])
+def test_conversation_episode_participants_follow_source_role(harness, role, predicate, owner_role):
+    harness.turn("昼食について話す")
+    def proposed(value, _):
+        part = next(p for p in value["fragments"] if p["role"] == role and p["ownership"] == "primary")
+        q = SourceQuote(source_id=part["source_id"], revision=part["revision"], role=role,
+                        quote=part["text"], start=part["start"])
+        return ExtractionBatch(records=(episode(q),)).model_dump_json()
+    worker(harness, Client(callback=proposed)).process_next()
+    record, = harness.records()
+    assert record.five_w.what.predicate == predicate
+    assert next(p for p in record.five_w.who if p.entity_id == "character:miori").role.value == owner_role
+    assert record.five_w.where is None
+
+
+def test_continuing_heard_episode_from_a_reply_preserves_original_perspective(harness):
+    from app.memory.episodic.contracts import RecordKind
+    harness.turn("昼食について話す")
+    worker(harness, Client()).process_next()
+    old, = harness.records(RecordKind.EPISODE)
+    new = harness.turn("その昼食について補足する")
+    def continued(value, _):
+        part = next(p for p in value["fragments"]
+                    if p["role"] == "assistant" and p["source_id"] == str(new.turn_id))
+        q = SourceQuote(source_id=part["source_id"], revision=part["revision"], role="assistant",
+                        quote=part["text"], start=part["start"])
+        return ExtractionBatch(records=(episode(q, existing=old),)).model_dump_json()
+    worker(harness, Client(callback=continued)).process_next()
+    current, = harness.records(RecordKind.EPISODE)
+    assert current.id == old.id
+    assert current.content_version == 2
+    assert current.five_w.when == old.five_w.when
+    assert current.five_w.what.predicate == "聞いた"
+    assert next(p for p in current.five_w.who if p.entity_id == "character:miori").role.value == "LISTENER"
