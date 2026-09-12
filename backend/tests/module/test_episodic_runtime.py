@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import main
+from app.memory.episodic.extraction_contracts import ExtractionBatch
 from tests.conversation_history_test_support import CONVERSATION_ID, create_repository
 from tests.module.test_memory_formation_chat_entrypoints import _character_card
 
@@ -52,7 +53,7 @@ class Model:
         source = next(f for f in request["fragments"] if f["ownership"] == "primary" and f["role"] == "user")
         quote = dict(source_id=source["source_id"], revision=source["revision"], role="user",
                      quote=source["text"], start=source["start"])
-        return {
+        return ExtractionBatch.model_validate({
             "complete": True,
             "records": [
                 dict(key="episode", kind="EPISODE", operation="NEW", anchor=quote, sources=[quote],
@@ -61,7 +62,7 @@ class Model:
                      five_w={"what": {"predicate": "食べた", "object": "うどん"}, "context": "REPORTED"}),
             ],
             "links": [dict(episode="episode", fact="fact", sources=[quote])],
-        }
+        }).model_dump(mode="json")
 
 
 @pytest.fixture
@@ -125,7 +126,7 @@ def test_reply_does_not_wait_and_lifespan_forms_episode_fact_link(model, runtime
             assert connection.execute("SELECT COUNT(*) FROM episodic_links WHERE valid=1").fetchone()[0] == 1
             assert connection.execute("SELECT COUNT(*) FROM approved_memories").fetchone()[0] == 0
             stamp = json.loads(connection.execute("SELECT stamp FROM episodic_versions LIMIT 1").fetchone()[0])
-        assert stamp["extraction"]["prompt_version"] == "episode-fact-extraction-v2"
+        assert stamp["extraction"]["prompt_version"] == "episode-fact-extraction-v3"
         assert model.calls[0]["entity_labels"]["character:miori"] == "光織"
 
 
