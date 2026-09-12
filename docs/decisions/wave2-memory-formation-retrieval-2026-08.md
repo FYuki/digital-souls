@@ -111,6 +111,11 @@ domain recordを根拠とし、人格記憶を正確な台帳として扱わな�
 - #100: EXPERIENCE_DERIVED形成とReflectionを所有する。Reflectionは単なる形成方法ではなく別の永続正本とする。
 - Reflectionを通常会話のRAG / promptへ直接注入しない。Current Interests・人格等への間接反映を維持する。
 
+2026-09-13の#340合意では、日常経験も対象に含め、特別な重要性がないことだけでは除外しない。
+上表の旧EPISODIC_EVENTの節目・達成等を、新しいEpisodeの保存対象の上限にしない。
+明示的な仮定・創作を話した経験とそのFactも、仮定・創作の文脈を保持して保存・検索・利用する。
+一続きの経験と語り直し、Fact情報の補足・訂正は[境界ADR](episode-fact-semantic-boundaries-2026-09.md)に従う。
+
 意味分類できない内容を無制限に受け入れるGENERAL_MEMORYは作らない。型・保存policy・privacy・管理方法を
 定義してから採用し、Factの追加によってドメイン台帳や全会話本文を無条件に保存しない。
 
