@@ -1366,3 +1366,13 @@ def test_clock_probe_reports_server_receive_and_send_without_changing_state() ->
         assert coordinator.generation == 0 and coordinator.phase == "available"
         await coordinator.cleanup("test_complete")
     asyncio.run(exercise())
+
+
+def test_default_deduplication_history_survives_long_conversations() -> None:
+    module = _livekit_module("delivery", "long conversation deduplication")
+    deduplicator = module.EventDeduplicator()
+    for index in range(1024):
+        assert deduplicator.classify(str(index), str(index).encode()).status == "accepted"
+    assert deduplicator.classify("0", b"0").status == "duplicate"
+    with pytest.raises(module.ConflictingDuplicateError):
+        deduplicator.classify("0", b"changed")

@@ -1059,7 +1059,7 @@ export class LiveKitRoomClient {
 
   private failTransport(failureStage: NonNullable<RoomObservation['failureStage']> = 'transport', reason?: unknown): void {
     // 任意の例外本文を外へ渡さず、内部の固定エラー名だけを診断に残す。
-    const knownReasons = ['output_stop_request_changed', 'output_stop_graph_missing', 'output_stop_monitor_missing',
+    const knownReasons = ['event deduplication capacity exceeded', 'browser control outbox capacity exceeded', 'output_stop_request_changed', 'output_stop_graph_missing', 'output_stop_monitor_missing',
       'output_stop_request_mismatch', 'output_stop_monitor_unavailable', 'output_stop_marker_invalid',
       'output_stop_confirmation_timeout', 'output_stop_monitor_closed', 'output_stop_observation_invalid',
       'first output media correlation mismatch', 'full playback metadata does not match source samples', 'state_sync_timeout', 'recovery_probe_timeout', 'RTP packet sequence invalid', 'invalid packet render interval', 'invalid RTP timestamp', 'RTP timeline discontinuity',
