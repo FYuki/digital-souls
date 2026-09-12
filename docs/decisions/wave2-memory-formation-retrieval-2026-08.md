@@ -2,14 +2,17 @@
 
 ## 状態
 
-**ACTIVE**。
+**ACTIVE**。Wave 2の保存・privacy・検索基盤の判断を保持する。
 
-本ADRは、Wave 2で実装する人格記憶のモデリング、保存判定、非同期記憶形成、検索順位、
-domain recordとの分離を定める。
+2026-09-12の#352により、Episode / Fact / Semanticの正本、5W、日時、形成経路、Fact照合・失効は
+[Episode・Fact・Semanticの正本と形成責務](episode-fact-semantic-boundaries-2026-09.md)を優先する。
+本ADRの旧subject / topic単一スロット、現在+直前turnだけのEpisode抽出、意味記憶の形成方法を
+新モデルの設計制約にしない。以下で「既存Wave 2」と明記した物理schema・処理は従来基盤の記録であり、
+新モデルの実装完了や旧形式互換を要求する記述ではない。
 
 Inference Provider／Target、Ollama固定経路、consolidation Modelの選択、Embedding Index fingerprintと
 再構築時の切替については`inference-provider-foundation-2026-09.md`を優先する。本ADRのprivacy、
-保存allowlist、fail-closed、SQLite正本、Chroma派生Index、transactional outboxは引き続き有効であり、
+保存allowlistによる検証、fail-closed、SQLite正本、Chroma派生Index、transactional outboxは引き続き有効であり、
 Provider変更によって緩和しない。
 
 RAG privacyの絶対禁止、SQLite正本、Chroma派生index、transactional outbox等の不変条件は
@@ -21,10 +24,10 @@ RAG privacyの絶対禁止、SQLite正本、Chroma派生index、transactional ou
 - 「履歴に残さないで」を履歴だけの拒否として扱うstorage scope
 - Wave 2の意味分類器、記憶形成、検索順位に関するMVPの具体方式
 
-上記の範囲で記述が競合する場合は、本ADRを優先する。
+上記の範囲では本ADRを優先し、その後のEpisode / Fact / Semantic責務再編は前述の2026-09 ADRを優先する。
 
 開発とdogfoodの実行境界、data root、backup、migration、rollbackは
-`local-dogfood-environment-2026-08.md`を正本とする。Wave 2のSQLite／Chroma実装は同ADRの
+`local-dogfood-environment-2026-08.md`を正本とする。SQLite／Chroma実装は同ADRの
 環境identityとデータ保持契約を前提にする。
 
 ## 背景
@@ -36,39 +39,39 @@ RAG privacyの絶対禁止、SQLite正本、Chroma派生index、transactional ou
 - 人格記憶は、ユーザーとの関係や継続的な応答に必要な経験・事実である
 - 農業日誌やレシピは、正確な値とdomain固有の更新規則を持つ記録である
 - 会話履歴は同一conversationを継続するための記録であり、別conversationから検索しない
-- Character Card、system prompt、code、skillは人格の手続き・規則であり、会話から学習する記憶ではない
+- Character Card、system prompt、code、skillは、通常のpersona memoryとは正本・更新経路を分ける
 
-また、保存候補ごとの確認と通知は、allowlistで保存範囲を十分に限定するMVPでは操作負荷になる。
-一方で、機微情報を誤って保存しないこと、ユーザーが記憶一覧から訂正・物理削除できることは
-維持する必要がある。
+保存候補ごとの確認と通知は、allowlistで保存範囲を限定するMVPでは操作負荷になる。
+一方で、機微情報を誤って保存しないこと、ユーザーが記憶一覧から訂正・物理削除できることは維持する。
 
-会話由来の情報は、利用者から見た短期記憶であるconversation historyを経て、必要な内容だけが
-長期記憶であるpersona memoryへ形成されるものとする。
+会話由来の情報はconversation historyを経て、必要な内容だけをpersona memoryへ形成する。
 
 ```text
 current turn
-  -> conversation history（短期記憶）
-       -> approved persona memory / RAG（長期記憶）
+  -> 保存許可されたconversation history
+       +-> Episode / Fact形成・同thread登録（#340）
+       +-> Direct Semantic Extraction（#341）
 ```
 
-したがって、conversation由来の長期記憶だけを保存し、元の短期記憶を保存しない経路は作らない。
-これは保存判定時の形成条件であり、後日ユーザーが会話履歴を削除した場合に、既存の長期記憶を
-暗黙に連動削除することまでは意味しない。履歴と長期記憶の削除は管理画面上の別操作とする。
+conversation由来の長期記憶だけを保存し、元の履歴本文を保存しない経路は作らない。
+後日の会話履歴削除と長期記憶の物理削除は別操作だが、参照元失効後も依存情報を有効のままにしてよいわけではない。
+新モデルではsource / 版 / Fact統合関係に依存する結果を即時利用停止・再評価する。物理連動削除とは区別する。
 
 ## 決定事項
 
 ### 1. 記憶、履歴、記録、検索を分離する
 
-MVPでは次の概念を区別する。
+次の概念を区別する。
 
 | 概念 | 用途 | 永続化・取得 |
 |---|---|---|
-| working memory | 現在の入力、現在のgoal、処理中の文脈 | prompt/runtime内だけ。独立した長期保存tableを作らない |
+| working memory | 現在の入力、現在のgoal、処理中の文脈 | prompt/runtime内。独立した長期保存tableを作らない |
 | conversation history | 同一conversationの再開と表示 | SQLite。別conversationからRAG検索しない |
-| persona memory | 人格が保持する経験と安定した関係情報 | `approved_memories`をSQLite正本、Chromaを派生indexとする |
-| domain record | 農業日誌、レシピ等の正確な記録 | 暫定providerまたは将来のaddon DBで管理する |
-| procedural knowledge | Character Card、system prompt、code、skill | 通常のpersona memoryへ保存しない |
-| prospective task | 将来実行する予定、reminder | scheduler／task addonで管理し、persona memoryへ保存しない |
+| persona memory | キャラクターの経験と知識 | SQLite正本、Chroma派生index。Episode / Semantic / Reflectionの責務を分離 |
+| Related Facts | 経験で得た対象の情報・申告内容 | #342のID付きFactとEpisode–Fact参照。外部domainやSemanticの正本ではない |
+| domain record | 農業日誌、レシピ等の正確な記録 | 暫定providerまたはaddon DBで管理 |
+| procedural knowledge | Character Card、system prompt、code、skill | 通常のpersona memoryへ保存しない。学習Skillは#102の別経路 |
+| prospective task | 将来実行する予定、reminder | scheduler／task addonで管理。#249のLife Stateとは正本を区別 |
 
 promptへ情報を供給する境界は、実装詳細としてのRAGに直接依存させず、概念上は次の
 `ContextProvider`へ分ける。
@@ -87,52 +90,35 @@ domain recordを根拠とし、人格記憶を正確な台帳として扱わな�
 会話継続、関係上の経験、正確なdomain記録を同じ型へ入れると、訂正、削除、失効、addon移行の
 責任範囲が曖昧になる。取得方法よりも、情報の所有者とライフサイクルで境界を決める。
 
-### 2. 人格記憶はepisodicとsemanticに限定する
+### 2. Episode・Fact・Semantic・Reflectionの正本を分ける
 
-CoALA等の認知科学由来の分類は概念整理に利用するが、MVPの永続化schemaへすべての分類を
-そのまま持ち込まない。
+既存Wave 2の`approved_memories.memory_kind`はEPISODIC / SEMANTICの2種類で、positive allowlistは次のとおりである。
 
-`approved_memories.memory_kind`は次の2種類とする。
-
-- `EPISODIC`: 時刻と文脈を伴う、ユーザーと人格の間で意味のある出来事
-- `SEMANTIC`: 複数conversationでも利用する、安定したユーザーまたは対話上の事実
-
-MVPのpositive allowlistである`memory_type`は次に限定する。
-
-| `memory_type` | `memory_kind` | 内容 |
+| 既存memory_type | memory_kind | 内容 |
 |---|---|---|
-| `EPISODIC_EVENT` | `EPISODIC` | 共有した節目、達成、決定、結果、関係上重要な変化 |
-| `USER_PREFERENCE` | `SEMANTIC` | ユーザー本人の安全な好み |
-| `INTERACTION_PREFERENCE` | `SEMANTIC` | 呼び方、回答形式等の安全な対話上の希望 |
+| EPISODIC_EVENT | EPISODIC | 共有した節目、達成、決定、結果、関係上重要な変化 |
+| USER_PREFERENCE | SEMANTIC | ユーザー本人の安全な好み |
+| INTERACTION_PREFERENCE | SEMANTIC | 呼び方、回答形式等の安全な対話上の希望 |
 
-`EPISODIC_EVENT`の初期event typeは次に限定する。
+既存の直接形成preferenceがあることと、新しい汎用Semantic schema・formation_typeが実装済みであることは別である。
+新しい採用設計では次を適用する。具体的な物理schema・型の追加は#342 / #345で検証する。
 
-- `SHARED_MILESTONE`
-- `ACHIEVEMENT`
-- `DECISION`
-- `OUTCOME`
-- `CHANGE`
+- #340: Episodeは所有characterの経験。内容は5W、必須はWhatの述語のみ。他の5Wの欠損を許容する。
+- owner character_idは管理境界であり、不明な行為者を所有者で補完しない。
+- 旧subject=USER/SHARED/SELF、topic単一スロット、event typeの旧必須性を新形式の制約にしない。
+- Related Factsは対象の5Wを持つ独立ID付きレコードとし、EpisodeからID参照する。取得元・版・経緯を維持する。
+- #341: SemanticはDIRECT_EXTRACTION / EXPERIENCE_DERIVEDを形成方法として区別し、共通Storeで管理する。
+- #100: EXPERIENCE_DERIVED形成とReflectionを所有する。Reflectionは単なる形成方法ではなく別の永続正本とする。
+- Reflectionを通常会話のRAG / promptへ直接注入しない。Current Interests・人格等への間接反映を維持する。
 
-`structured_value`は、`EPISODIC_EVENT`では`event_type`、`subject`、`topic`、
-`USER_PREFERENCE`では`polarity`、`object`、必要な場合の`alternative`、
-`INTERACTION_PREFERENCE`では`aspect`、`value`だけを持つ。`EPISODIC_EVENT.subject`は
-`USER`と`SHARED`に限定し、`THIRD_PARTY`は設けない。`OUTCOME`と`CHANGE`を含む
-すべてのevent typeを`topic`単一スロットで表現し、`outcome`スロットは設けない。
-
-構造化enumの追加は文の骨格が変わる場合に限り、追加時は本ADRを改訂する。
-
-`reflection`は記憶種別ではなく形成方法、`autobiographical`は必要になった場合のscope／subtypeとして
-扱う。意味分類できない内容を受け入れる`GENERAL_MEMORY`は作らない。
-
-判断理由は、研究上の分類をそのまま単一tableの列挙へ変換すると、検索対象でない手続きやtaskまで
-persona memoryへ混在するためである。MVPは、関係の連続性に直接必要な出来事と安定した事実だけを
-狭いallowlistにし、新しい型は保存policyと管理方法を定義できた時点で追加する。
+意味分類できない内容を無制限に受け入れるGENERAL_MEMORYは作らない。型・保存policy・privacy・管理方法を
+定義してから採用し、Factの追加によってドメイン台帳や全会話本文を無条件に保存しない。
 
 ### 3. domain recordを人格記憶から分離する
 
 `provider_id`はデータの所有境界を表し、記憶の意味分類には使用しない。
 
-MVPでは次の値から開始する。
+既存Wave 2では次の値から開始する。
 
 ```text
 core
@@ -143,30 +129,28 @@ temporary:recipe
 - `approved_memories`は人格側が所有する記憶だけを持ち、`provider_id=core`とする
 - 農業日誌とレシピは別の`temporary_provider_records`で保持する
 - addon完成後は、`temporary:*`のrecordを対応するaddon DBへ移行し、暫定recordを物理削除する
-- addonはpersona memory DBへ直接書き込まず、型付き`DomainEvent`を発行する
+- addonはpersona memory DBへ直接書き込まず、型付き`DomainEvent`等の共通境界を利用する
 - persona memoryへ形成したepisodeは、元recordの移行後も`provider_id=core`のまま残す
 - provenanceには元の`source_provider_id`とsource IDを保持する
 
-すべてのdomain recordをepisodeへ変換しない。共有した節目、達成、決定、結果、変化のうち、
-将来の関係的な応答に有用でprivacy検査を通過したものだけを`EPISODIC_EVENT`候補にする。
+すべてのdomain recordをepisodeへ変換しない。将来の関係的な応答に有用で、privacy検査を通過した経験だけを候補にする。
+会話外活動ログからの実生成は#249、Episode / Factの共通登録は#340で行う。
 
 例えば「トマトを12.4kg収穫した」という正確な数量は農業recordに保持し、persona memoryには
 「ユーザーと今季最初のトマト収穫を迎え、一緒に成果を喜んだ」のような関係上の出来事を保持する。
 
 判断理由は、domain recordには正確な訂正、集計、schema migrationが必要なのに対し、persona memoryは
-その出来事が関係にとって何を意味したかを保持するためである。addon完成後に記録の所有先を移しても、
-人格側の経験まで失わないよう、所有者とprovenanceを分ける。
+関係上の経験を保持するためである。addon完成後に記録の所有先を移しても、人格側の経験まで失わないよう、
+所有者とprovenanceを分ける。Factも外部domainの正本を置き換えない。
 
-### 4. SQLite正本のschemaは用途を明示する
+### 4. SQLite正本のschemaと新モデルの適用境界
 
-persona memory系の`approved_memories`、`memory_sources`、`memory_lineage`、
-`memory_write_receipts`、`memory_index_outbox`、`temporary_provider_records`は、
-専用の`persona-memory.db`に配置する。
-`conversation-history.db`とはファイルを分け、会話履歴schemaの変更やpersona memory側の
-ロールバックによる履歴の巻き戻しを発生させない。memory行とoutbox行は同一ファイル内で
-更新し、トランザクション原子性を保つ。
+既存Wave 2の`approved_memories`、`memory_sources`、`memory_lineage`、`memory_write_receipts`、
+`memory_index_outbox`、`temporary_provider_records`は専用の`persona-memory.db`に配置する。
+`conversation-history.db`とはファイルを分け、persona memory側のロールバックで会話履歴を巻き戻さない。
+memory行とoutbox行を同一ファイル内で更新し、トランザクション原子性を保つ。
 
-`approved_memories`は少なくとも次を持つ。
+以下は既存Wave 2のフィールド契約であり、新モデルの物理schemaを固定するものではない。
 
 ```text
 id: UUID text
@@ -199,71 +183,62 @@ created_at
 updated_at
 ```
 
-`created_at`はSQLite登録日（有効化日）、`occurred_at`は出来事が発生した時刻、`stated_at`は
-根拠となった発言turnの時刻、`last_user_mentioned_at`はユーザーがその内容を最後に明示言及した
-時刻であり、それぞれ別の意味を持つ。出来事の日付が不明な場合は`occurred_at`、
-`occurred_timezone`、`occurred_precision`をすべて`NULL`にし、`stated_at`では補完しない。
-出来事日が既知の場合は3列をすべて設定する。`stated_at`は常にtimezone-awareな値を保存する。
+新モデルのID・内容版・出典版・参照失効は2026-09 ADRを正本とする。
+Episode / Fact / Episode–Fact参照 / Fact統合関係は#342、Semantic共通schema・formation_typeは#345、
+Reflection専用正本は#292が所有する。旧formation_methodをDIRECT_EXTRACTION / EXPERIENCE_DERIVEDと混同しない。
 
-Issue #11でpersona memory schemaをversion 2へ更新する。version 1からのmigrationは実装せず、
-既存dogfoodのpersona memory DBは再作成する。`temporary_provider_records`と将来のaddon recordは
-この時系列照合の対象外とし、同tableの`effective_at`契約は変更しない。
+Episodeのoccurred_at相当は今回の経験日時、Factの対象日時は話題の出来事の日時とする。
+experienced_at / stated_at / created_at / last_user_mentioned_atも区別する。
+タイムゾーンはconfigで定義し、元発言日時から相対日時を解釈する。使用timezone・部分日時・精度を保持し、
+config変更や再試行で黙って解釈を変えない。日付・時刻・精度をすべて既知またはすべてNULLにする旧制約を新形式へ強制しない。
+不明な対象日時を発言・登録日時で埋めず、月精度を月初の特定日や出来事の継続時間とみなさない。
 
-provenanceは自由形式JSONだけに埋めず、型付き`memory_sources`で会話turn、addon event、
-provider record等との関係を保持する。複数のsourceから形成される記憶に対応するため、
-単一の`parent_id`や`consolidated` boolだけに依存しない。
+#11のschema version 2や当時の適用方式は完了時点の履歴であり、今回のDB再作成許可ではない。
+#289も合意時点ではEpicブランチのみの未リリース旧形式であり、旧形式の運用データ移行・後方互換を要求しない。
+mainからの安全な適用と、会話履歴・temporary_provider_records・他データの保護は維持する。
+想定外のデータを自動破棄・変換せず、DB全体を初期化しない。
 
-記憶同士の系譜は多対多の`memory_lineage`で保持し、関係を次に限定する。
+provenanceは自由形式JSONだけに埋めず、型付き参照で会話turn、addon event、provider record等との関係を保持する。
+各参照元の版を追跡し、複数sourceを単一parent_idやconsolidated boolだけで表現しない。
 
-- `CONSOLIDATED_FROM`
-- `SUPERSEDES`
-- `DUPLICATE_OF`
+既存Wave 2のmemory_lineageはCONSOLIDATED_FROM / SUPERSEDES / DUPLICATE_OFを持つ。
+新しいEpisode派生lineageやFact統合関係は各所有Epicで拡張する。Fact統合を既存memoryの置換と同一視しない。
 
-Issue #8では、永続化用の`MemoryWriteContext`が型付きsource識別子と任意のlineageを受け取る。
-`save`／`correct`は`approved_memories`、`memory_sources`、`memory_lineage`、
-`memory_write_receipts`、`memory_index_outbox`を同一トランザクションで更新する。
-候補抽出（#10）、runtime統合（#29）、nightly consolidation（#48）はこの境界へ入力を供給するが、
-provenanceとlineageの永続化経路そのものはIssue #8で提供する。
+Issue #8のMemoryWriteContextによる型付きsource・lineageと、save / correctで正本・source・lineage・
+write receipt・outboxを同一transactionへ入れる原則を再利用する。
+memory_write_receiptsは過去の保存・訂正の再試行で本文やoutboxを二重更新しないための不変記録である。
 
-`memory_write_receipts`は初回保存と訂正の冪等性キーを`character_id`単位で不変記録する。
-これにより、後続の訂正後に過去の訂正が再試行されても、本文の再更新とoutboxの重複作成を防ぐ。
+ChromaにはSQLiteのmemory_id、normalized_text、embeddingと必要最小限の検索metadataだけをmirrorする。
+last_user_mentioned_atだけが変わる場合、Chromaは更新しない。
+新モデルではSQLite正本に加え、Fact / source / 統合関係の有効性を取得時に検証する。
+根拠の訂正・削除時は依存結果を即時利用停止し、Chroma更新の完了を待たない。
 
-ChromaにはSQLiteの`memory_id`、`normalized_text`、embeddingと検索filterに必要な最小metadataだけを
-mirrorする。`last_user_mentioned_at`だけが変わる場合、Chromaは更新しない。
-
-MVPでは次をschemaへ追加しない。
-
-- LLMが推定した連続値の`importance`、`confidence`
-- ユーザーの心理状態を推定する`emotional_valence`、`emotional_intensity`
-- `access_count`、`last_accessed_at`
-- 自由形式のassociation graph、entity graph
-- 会話から学習した記憶を常時挿入する`pinned`
-
-判断理由は、SQLiteを監査・訂正・削除の正本、Chromaを再構築可能なindexとして維持するためである。
-出所とversionは後から判定を説明できる形で保持する一方、根拠の弱いLLM推定値や検索回数由来の値を
-正本へ入れず、MVPの更新規則を決定的に保つ。
+既存Wave 2ではLLM推定のimportance / confidence、心理状態のemotional_valence / emotional_intensity、
+access_count / last_accessed_at、自由形式graph、学習memoryのpinned常時注入を追加しなかった。
+新しい#341/#100の根拠評価metadataは別契約とし、LLMの自己申告値でprivacyや根拠条件を迂回しない。
+Factの型付きID関係は、自由形式のentity graphを無制限に導入する許可ではない。
 
 ### 5. allowlistを保存同意として扱い、個別確認・通知を行わない
 
-MVPでは、次の条件をすべて満たす候補を自動保存する。
+次の条件をすべて満たす候補を自動保存する。
 
 ```text
-positive allowlistの型
+保存policyで許可された型
 + privacy検査通過
-+ current turnに保存拒否指示なし
++ 対象sourceに保存拒否指示なし
 + conversation由来の場合はsource turnの履歴本文が保存済み
-= 保存同意済みのApprovedMemoryCandidate
+= 保存可能な検証済みCandidate
 ```
 
 候補ごとのユーザー確認、保存通知、確認待ち候補の永続化、確認TTLは実装しない。
-`PENDING_CONFIRMATION`も保存判定から削除する。
+PENDING_CONFIRMATIONも保存判定から削除する。
 
 ユーザーの「覚えて」は候補抽出を促すが、絶対禁止、意味分類、allowlistを迂回しない。
 保存内容は記憶一覧UIから閲覧、訂正、物理削除できるようにする。
+新しいUIは#343 / #348 / #351で各Epicごとに確認し、#296の横断Issueを復活させない。
 
-判断理由は、allowlistを狭く固定し、privacy判定をfail-closedにし、保存後の管理手段を用意すれば、
-候補ごとの確認で会話を中断する負担を避けられるためである。保存通知も同じ情報を重ねて提示するだけに
-なるためMVPでは行わず、ユーザーの制御は記憶一覧で一元化する。
+判断理由は、保存対象を限定し、privacy判定をfail-closedにし、保存後の管理手段を用意すれば、
+候補ごとの確認で会話を中断する負担を避けられるためである。
 
 ### 6. 保存拒否指示はcurrent turnの履歴と記憶形成へ適用する
 
@@ -271,15 +246,14 @@ positive allowlistの型
 
 | 指示 | scope | 処置 |
 |---|---|---|
-| 「覚えないで」「記憶しないで」 | `RAG` | persona memory／RAGへ保存しない。履歴は通常policyに従う |
-| 「履歴に残さないで」 | `BOTH` | 履歴本文、persona memory／RAG、current turn由来の暫定domain recordへ保存しない |
-| 「保存しないで」「記録しないで」 | `BOTH` | 履歴本文、persona memory／RAG、current turn由来の暫定domain recordへ保存しない |
+| 「覚えないで」「記憶しないで」 | RAG | persona memory／RAGへ保存しない。履歴は通常policyに従う |
+| 「履歴に残さないで」 | BOTH | 履歴本文、persona memory／RAG、current turn由来の暫定domain recordへ保存しない |
+| 「保存しないで」「記録しないで」 | BOTH | 履歴本文、persona memory／RAG、current turn由来の暫定domain recordへ保存しない |
 
-MVPの`StorageScope`は`RAG`と`BOTH`に限定し、`HISTORY`は削除する。効力はcurrent userの
-current turnだけとする。保存拒否があるturnでは、既存記憶への`last_user_mentioned_at`更新も
-行わない。
+MVPのStorageScopeはRAGとBOTHに限定し、HISTORYは削除する。効力はcurrent userのcurrent turnだけとする。
+保存拒否があるturnでは、既存記憶へのlast_user_mentioned_at更新も行わない。
 
-conversation由来の記憶形成には、元turnの履歴本文が保存済みであることを必須条件とする。
+conversation由来の形成には、元turnの履歴本文が保存済みであることを必須条件とする。
 
 ```text
 conversation-derived ALLOW_STRUCTURED
@@ -287,61 +261,50 @@ conversation-derived ALLOW_STRUCTURED
   AND source turnの履歴本文が保存済み
 ```
 
-履歴用sanitizerが`SKIP_CONTENT`を返した場合、turnが`privacy_skipped`になった場合、または
-ユーザーが履歴保存を拒否した場合は、候補抽出、`TOUCH`、暫定domain record作成を含む後続の
-永続化を行わない。assistant側の検査結果でturn全体の履歴本文を消去した場合も同様とする。
+履歴用sanitizerがSKIP_CONTENTを返した場合、turnがprivacy_skippedになった場合、または履歴保存を拒否した場合は、
+候補抽出、TOUCH、暫定domain record作成を含む後続の永続化を行わない。
+assistant側の検査結果でturn全体の履歴本文を消去した場合も同様とする。
+スレッド抽出へ変更しても、対象turnごとの拒否・保存状態を保持し、周囲の許可済み発言で制約を洗い流さない。
 
-判断理由は、短期記憶から長期記憶を形成するモデルでは、元の短期記憶が存在しないのに長期記憶だけが
-残る状態はユーザーの保存意図と一致しないためである。このため`HISTORY`だけを拒否してRAGを許可する
-scopeは設けない。一方、「覚えないで」は履歴を残しつつ長期化だけを止める要求として有効なため、
-`RAG` scopeは残す。addon自身のrecordから発生する`DomainEvent`はconversation由来ではないため、
-この形成条件ではなくaddon側の保存policyに従う。
+判断理由は、元の履歴が存在しないのに長期記憶だけが残る状態は保存意図と一致しないためである。
+HISTORYだけを拒否してRAGを許可するscopeは設けない。「覚えないで」は履歴を残しつつ長期化を止める要求として有効なためRAGを残す。
+addon自身のrecordから発生するDomainEventはconversation由来ではなく、addon側policyとCore admissionを適用する。
 
 ### 7. classifierとadmission evaluatorの責務を分離する
 
-Wave 1の決定論的privacy scanner、Wave 2の`SemanticPrivacyClassifier`、
-`RagAdmissionEvaluator`は別の責務を持つ。
+Wave 1の決定論的privacy scanner、SemanticPrivacyClassifier、RagAdmissionEvaluatorは別の責務を持つ。
 
 | component | 責務 | 行わないこと |
 |---|---|---|
-| Wave 1 privacy scanner | 秘密値、直接識別値、保存拒否指示を決定論的に検出する | 文脈依存の意味分類、保存先の最終決定 |
-| `SemanticPrivacyClassifier` | health、心理状態、第三者情報、暗示表現等を文脈から分類する | allowlist変更、保存可否・権限の決定 |
-| `RagAdmissionEvaluator` | scanner finding、semantic assessment、候補型から最終結果を決定論的に算出する | LLM呼び出し、DB／embedding／Chroma操作 |
+| Wave 1 privacy scanner | 秘密値、直接識別値、保存拒否指示を決定論的に検出 | 文脈依存の意味分類、保存先の最終決定 |
+| SemanticPrivacyClassifier | health、心理状態、第三者情報、暗示表現等を文脈から分類 | allowlist変更、保存可否・権限の決定 |
+| RagAdmissionEvaluator | scanner finding、semantic assessment、候補型から最終結果を決定論的に算出 | LLM呼び出し、DB／embedding／Chroma操作 |
 
-MVPでは`SemanticSignalScreener`やkeywordによる意味的な前段filterを設けず、allowlist候補を
-すべて`SemanticPrivacyClassifier`へ渡す。暗示表現がclassifierへ届かない経路を作らない。
-最適化が必要になった場合はencoderによる前段実装を検討するが、Wave 1 scannerは引き続き
-絶対禁止と明示的保存拒否の境界として残す。
+SemanticSignalScreenerやkeywordによる意味的な前段filterを設けず、allowlist候補をすべてSemanticPrivacyClassifierへ渡す。
+暗示表現がclassifierへ届かない経路を作らない。最適化が必要な場合はencoderによる前段実装を検討するが、
+Wave 1 scannerは絶対禁止と明示的保存拒否の境界として残す。
 
-Wave 1 scannerが絶対禁止または保存拒否を確定した場合はclassifierを呼ばず、直ちに拒否する。
-classifierのtimeout、モデル未ロード、未知言語、不正出力、未知カテゴリは安全側の
-`ABSTAIN_UNKNOWN`とし、保存しない。
-
-保存判定は次の5状態とする。
+Wave 1 scannerが絶対禁止または保存拒否を確定した場合はclassifierを呼ばず直ちに拒否する。
+classifierのtimeout、モデル未ロード、未知言語、不正出力、未知カテゴリはABSTAIN_UNKNOWNとし、保存しない。
 
 | 状態 | 意味 | 永続化副作用 |
 |---|---|---|
-| `DENY_SENSITIVE` | 機微情報または絶対禁止 | なし |
-| `DENY_USER_REQUEST` | current turnの保存拒否 | なし |
-| `ABSTAIN_UNKNOWN` | 判定不能またはclassifier障害 | なし |
-| `NOT_MEMORY_WORTHY` | 安全だがallowlist外または長期的価値なし | なし |
-| `ALLOW_STRUCTURED` | allowlistへ正規化されprivacy検査通過 | `ApprovedMemoryCandidate`を生成可能 |
+| DENY_SENSITIVE | 機微情報または絶対禁止 | なし |
+| DENY_USER_REQUEST | current turnの保存拒否 | なし |
+| ABSTAIN_UNKNOWN | 判定不能またはclassifier障害 | なし |
+| NOT_MEMORY_WORTHY | 安全だがallowlist外または長期的価値なし | なし |
+| ALLOW_STRUCTURED | allowlistへ正規化されprivacy検査通過 | 検証済みCandidateを生成可能 |
 
-`ALLOW_STRUCTURED`だけがrepositoryへ到達できる。LLMは`character_id`、`provider_id`、保存先、
-allowlistを選択しない。
-
-判断理由は、意味の理解には文脈を扱えるclassifierが必要だが、非決定的なmodelへ保存権限まで
-与えると、model、prompt、障害時fallbackの変更でpolicyが変わるためである。また、意味的な
-前段filterを置くと、そこで取りこぼした暗示表現がclassifierへ到達しない。絶対禁止は安価で
-決定的なscannerで即時終了し、それ以外の候補はclassifierへ渡した後、applicationが最終決定する。
+ALLOW_STRUCTUREDだけがrepositoryへ到達できる。LLMはcharacter_id、provider_id、保存先、allowlistを選択しない。
+意味理解のmodelと、保存権限を検証するapplicationを分ける。Factの同一性候補も検証なしに正本化しない。
+統合見送りはprivacy拒否とは別であり、保存条件を満たす欠損Factまで捨てない。
 
 ### 8. 意味分類器はlocal LLMで開始し、versionを分離して記録する
 
-MVPの`SemanticPrivacyClassifier`はローカルOllamaの`gemma4:e4b`を会話モデルと共有して開始する。
-分類器が会話と競合して応答遅延やtimeoutを発生させることが観測された場合は、会話処理を優先し、
-必要に応じて分類器専用model instanceへ分離する。
+既存Wave 2のSemanticPrivacyClassifierはローカルOllamaのgemma4:e4bを会話モデルと共有して開始する。
+分類器が会話と競合して応答遅延やtimeoutを発生させる場合は会話を優先し、必要なら専用instanceへ分離する。
 
-判定のprovenanceは結合文字列にせず、次の独立したfieldで表現する。
+判定のprovenanceは結合文字列にせず、次の独立fieldで表現する。
 
 ```text
 classifier_version
@@ -351,17 +314,15 @@ prompt_version
 policy_version
 ```
 
-Wave 1 scannerの結果だけで終了しclassifierを呼ばなかった場合、semantic provenanceは`NULL`とする。
-本Wave 2契約のpolicy versionは`2026-08-wave2-v1`とし、`HISTORY` scopeの削除と
-同じバージョンで管理する。
+Wave 1 scannerの結果だけで終了しclassifierを呼ばなかった場合、semantic provenanceはNULLとする。
+既存Wave 2契約のpolicy versionは2026-08-wave2-v1であり、HISTORY scopeの削除と同じ版で管理する。
+新モデルのpolicy / schemaの版は実装時に定め、文書更新だけでruntimeの版を変更しない。
 
-判断理由は、機微な本文を外部APIへ送らず、既存の常用modelを流用してMVPの構成とmemory使用量を
-小さくするためである。最初からinstanceを分けず、会話との競合をlatencyとtimeoutで観測してから
-分離する。versionを独立fieldにするのは、model更新、prompt変更、classifier実装変更、policy変更の
-どれが判定差を生んだかを後から切り分けるためである。
+機微な本文を外部APIへ送らず、既存modelを流用して構成を小さくする。versionを独立fieldにするのは、
+model・prompt・classifier・policyのどの変更が判定差を生んだかを切り分けるためである。
 
-Issue #105以降も`privacy` Targetはlocal Provider専用であり、この安全境界は維持する。ただし、
-Ollama Clientを直接呼ぶ実装と用途別Model envは共通Inference Target経路へ置き換える。
+Issue #105以降もprivacy Targetはlocal Provider専用である。Ollama Client直接呼出しと用途別Model envは
+共通Inference Target経路へ置き換えるが、この安全境界は維持する。
 
 ### 9. 会話応答と記憶形成を分離する
 
@@ -380,75 +341,67 @@ current user input
   -> userへ応答
 ```
 
-現在のuser原文は応答生成中だけ使用できるが、原文、原文hash、マスク前本文をSQLite、log、例外へ
-残さない。userとassistantの双方に同じ履歴用scanner／sanitizerを適用する。
+現在のuser原文は応答生成中だけ使用できるが、原文、原文hash、マスク前本文をSQLite、log、例外へ残さない。
+userとassistantの双方に同じ履歴用scanner／sanitizerを適用する。
 
-非同期の記憶形成は概ね次とする。
+#340の新しい非同期形成契約は次とする。
 
 ```text
-completedかつ履歴本文保存済みのsanitized source turn
-  -> Wave 1 finding、保存拒否、絶対禁止を確認
-  -> allowlist候補を構造化抽出
-  -> candidate schemaを決定論的に検証
-  -> candidateへWave 1 scannerを再適用
-  -> sourceとcandidateをSemanticPrivacyClassifierで評価
-  -> RagAdmissionEvaluator
-  -> ALLOW_STRUCTUREDだけSQLite memory + UPSERT outboxを同一transactionで保存
-  -> workerがembeddingを生成してChromaへupsert
+共通Conversation History保存・スレッド更新
+  -> #291: 非同期予約、許可済みthread snapshot取得、必要な長文分割
+  -> Episode / Fact候補抽出と元発言ID・版・範囲の対応
+  -> candidate schema・Wave 1 scanner・semantic privacy・sourceの検証
+  -> #290: 同一character・同一threadのFact照合と登録判定
+  -> #342: Episode / Fact / 参照 / 有効な統合関係 / 必要なoutboxを保存
+  -> index worker
 ```
 
-候補抽出器はclassifierとは別componentとする。現在user turnと、省略表現の解決に必要な直近の
-sanitized turnだけをsourceにし、RAG検索結果を新規候補の根拠にしない。出力は型付きschema、
-最大3候補、決定的な生成設定から開始し、`normalized_text`はIssue #33の
-admissionが構造化値から決定的に生成する。候補抽出器や永続化層は生成しない。
-確認待ち候補や生source本文は永続化しない。
+候補抽出器とclassifierは別component。現在+直前turnだけへ限定せず、スレッド全体を対象にする。
+長文の古い部分を黙って捨てず、分割境界の二重登録を防ぐ。元発言の拒否・版・有効性は維持する。
+RAG検索結果は新規経験の根拠にしない。保存文は構造化値から所有者・行為者・対象・時刻が混同されない形で生成する。
+未検証候補や生source本文を通常の記憶正本・ログへ転記しない。拒否候補の本文は保存しない。
 
-Issue #11以降、候補抽出器は相対・絶対・複数の日付表現だけを型付きで返し、絶対日時への変換は
-行わない。applicationが`stated_at`を基準点、起動時に解決したtimezoneを基準として、月末、
-年末、閏年、年跨ぎを含め決定論的に`occurred_*`へ解決する。日付表現がない、または解決不能な
-場合は`occurred_*`を3列とも`NULL`にする。
+同一スレッドの未処理予約を集約し、処理中更新は再予約する。失敗・再起動で未処理版を回復する。
+thread revision増加だけで処理済み元発言から記憶を増殖させず、新発言と訂正を取りこぼさない。
+sourceの版・有効性を保存直前にも確認し、古い候補・Fact同一性判定を適用しない。
 
-非同期classifierはbounded retryを行う。初期値は1回15秒、最大2回、全体35秒以内、queue滞留
-5分以内とし、設定で変更可能にする。上限を超えた候補は`ABSTAIN_UNKNOWN`として破棄する。
+相対日時はconfigのtimezoneと元発言日時を基準に解釈する。worker実行日時を基準にせず、部分日時・精度を保持する。
+元発言やFactの対象日時と、話を聞いた経験の日時を区別する。
 
-conversation由来のjobは、source turnが`completed`になり履歴本文の保存が確定してから投入する。
-形成処理中にsource turnが存在しない、本文非保存、`privacy_skipped`へ変化していることを検出した
-場合も、副作用なしで終了する。
+既存非同期classifierのbounded retry初期値は1回15秒、最大2回、全体35秒以内、queue滞留5分以内で、設定変更可能である。
+新workerの回復・再予約と区別し、上限超過や判定不能で保存条件を緩めない。
+sourceが削除・本文非保存・privacy_skippedへ変化していたら古い形成結果を保存しない。
 
-判断理由は、会話応答がclassifier、embedding、Chroma登録、retryを待つと体感速度と可用性を
-損なうためである。ただし非同期化によって「履歴なし・長期記憶だけ」の経路を作らないよう、
-source turnの状態をjob投入時とadmission時に確認する。
+Direct Semantic Extractionは#341、保存済みEpisodeからの一般化・内省の夜間形成は#100、別thread Fact整理は#354である。
+各pipelineの生成・保存責務を#291へ混在させない。
 
 ### 10. 機微なcurrent queryではRAG検索を行わない
 
-現在のuser発言が機微である場合、保存済み記憶の検索自体をskipする。ローカルembeddingだけを
-許可して検索結果を再検証する方式は採用しない。
+現在のuser発言が機微である場合、保存済み記憶の検索自体をskipする。ローカルembeddingだけを許可して
+検索結果を再検証する方式は採用しない。
 
-- Wave 1の絶対禁止findingまたは`ScanFailure`: RAG検索をskip
-- semantic assessmentが`SENSITIVE`または`ABSTAIN`: RAG検索をskip
-- semantic assessmentが`NOT_SENSITIVE`: RAG検索を許可
+- Wave 1の絶対禁止findingまたはScanFailure: RAG検索をskip
+- semantic assessmentがSENSITIVEまたはABSTAIN: RAG検索をskip
+- semantic assessmentがNOT_SENSITIVE: RAG検索を許可
 
-検索前classifierは同期経路のため、短いtimeoutで1回だけ呼び、retryしない。初期timeoutは3秒とし、
-timeout、不正出力、モデル未ロード時はRAG検索だけをskipして通常会話を続ける。得られたassessmentは、
-同じsourceに対する非同期admissionで安全に再利用できる場合は再利用してよい。
+検索前classifierは同期経路のため短いtimeoutで1回だけ呼び、retryしない。初期timeoutは3秒とし、
+timeout、不正出力、モデル未ロード時はRAG検索だけをskipして通常会話を続ける。
+同じsourceに対する非同期admissionで安全に再利用できるassessmentは再利用してよい。
 
-判断理由は、機微queryをembeddingしてindexへ問い合わせた時点で、検索後の再検証より前に
-機微な意図と既存記憶の関連付けが発生するためである。検索結果だけを厳しく検査する方式では
-この境界を守れないため、判定不能を含めて検索前にskipし、会話そのものは継続する。
+機微queryをembeddingしてindexへ問い合わせた時点で、機微な意図と既存記憶の関連付けが発生するため、
+検索後の再検証だけでは境界を守れない。判定不能を含め検索前にskipし、会話そのものは継続する。
 
 ### 11. 検索順位は意味的関連度を主、最終言及日時をtie-breakとする
 
-MVPの検索順位は次の原則とする。
+既存検索順位の原則を維持する。
 
-1. Chromaの意味的関連度で候補を取得する
-2. `memory_id`でSQLite正本を引き直し、`character_id`、状態、TTL、policy version、本文の
-   決定論的再検査を通過した候補だけを残す
-3. 関連度閾値を満たす候補を意味的関連度の降順で並べる
-4. 関連度が同等とみなせる候補間だけ、`last_user_mentioned_at`の新しいものを優先する
-5. さらに同順位なら`created_at DESC`、`id ASC`で安定順序を作る
-6. 設定された最大件数とprompt token budgetの範囲で注入する
-
-概念上の順序は次になる。
+1. Chromaの意味的関連度で候補を取得する。
+2. memory_idでSQLite正本を引き直し、character_id、状態、TTL、policy version、本文の決定論的再検査を通す。
+3. 新モデルではFact・source・統合関係・派生根拠の有効性と版も確認し、古いindexから無効情報を返さない。
+4. 関連度閾値を満たす候補を意味的関連度の降順で並べる。
+5. 同等関連度の候補間だけlast_user_mentioned_atの新しさを優先する。
+6. さらに同順位ならcreated_at DESC、id ASCで安定順序を作る。
+7. 最大件数とprompt token budgetの範囲で注入する。Reflectionは通常会話へ直接注入しない。
 
 ```text
 semantic_relevance DESC
@@ -457,78 +410,64 @@ semantic_relevance DESC
 -> id ASC
 ```
 
-「同等関連度」の許容幅はIssue #9の固定検索corpusで決め、設定値として持つ。最近言及されたことを
-理由に、明確に関連度の低い記憶を繰り上げない。
+同等関連度の許容幅は#9の固定検索corpusで決め、設定値として持つ。新しさを理由に明確に関連度の低い記憶を繰り上げない。
 
-Issue #11以降、時間条件を決定論的パーサで抽出できたqueryは、SQLiteの`occurred_at`期間検索と
-Chroma意味検索を両方実行してunionする。一致種別の優先順位は、両方一致、意味一致、期間一致の
-順とする。同じ一致種別では意味的関連度を主とし、意味距離を持たない期間一致同士では
-`last_user_mentioned_at`をtie-breakに用いる。時間条件なし、またはパース失敗時は従来どおり
-Chroma一次、SQLite再検証へ縮退する。query解析の同期経路へLLM往復は追加しない。
+#11の既存時間検索は、決定論的パーサで時間条件を抽出できたqueryについてSQLite期間検索とChroma意味検索をunionする。
+一致種別は両方一致、意味一致、期間一致の順。同種別では意味的関連度を主にし、意味距離のない期間一致同士では
+last_user_mentioned_atをtie-breakにする。時間条件なし・パース失敗時はChroma一次、SQLite再検証へ縮退する。
+query解析の同期経路へLLM往復は追加しない。
 
-日時検索の判断根拠はSQLite正本だけとし、Chromaの`occurred_at` metadataはindex整合確認の補助に
-限る。Chroma由来候補もSQLiteで再検証し、promptにはSQLite検証済みの`occurred_at`と精度を併記する。
-出来事日不明の記憶は日時ラベルなしで提示する。両経路が正常終了して0件の場合は、該当なしと
-推測禁止を明示する。検索で使用したmemory ID、出来事日時、精度、一致種別はmetadata-onlyで
-追跡し、query本文とmemory本文はlogへ残さない。
+日時検索の根拠はSQLite正本とし、Chromaの日時metadataは整合確認の補助に限る。
+新モデルでは経験日時とFact対象日時を区別し、部分日時を確定日時のように表示・照合しない。
+promptには検証済み日時と精度を併記し、不明な日時を補完しない。両経路が正常終了して0件なら該当なしと推測禁止を明示する。
+検索で使用したmemory ID・日時・精度・一致種別は既存metadata-only policyに従って追跡し、query・memory本文をlogへ残さない。
 
-季節は`occurred_at`の月から決定論的に導出し、春を3〜5月、夏を6〜8月、秋を9〜11月、冬を
-12〜2月とする。冬は年を跨ぎ、「去年の冬」は前年12月から当年2月までとする。
-`occurred_precision`が`YEAR`または`NULL`の記憶は季節照合からreason code付きで除外する。
-`TemporalPrecision`は`YEAR`から`SECOND`までの既存6値を維持し、季節値を追加しない。
+既存季節照合はoccurred_atの月から導出し、春3〜5月、夏6〜8月、秋9〜11月、冬12〜2月とする。
+冬は年を跨ぎ、「去年の冬」は前年12月から当年2月までとする。YEAR精度またはNULLは季節照合から理由付きで除外する。
+既存TemporalPrecisionのYEARからSECONDまでの6値と、新しい部分日時の物理表現は区別し、#342で整合させる。
 
-`last_user_mentioned_at`はユーザーが明示的に新規言及、再言及、訂正した場合だけ更新する。
-検索、prompt注入、assistantによる言及、addon recordの更新、consolidationでは更新しない。
-新しいuser由来の記憶では言及日時を設定し、addonだけから形成した記憶は`NULL`から開始する。
+last_user_mentioned_atはユーザーの明示的な新規言及・再言及・訂正でのみ更新する。
+検索、prompt注入、assistant言及、addon更新、consolidationでは新しい言及日時を作らない。
+新しいuser由来記憶は言及日時を設定し、addonだけ由来の場合はNULLから開始する。
 consolidationではsource群の最大日時を引き継ぐ。
 
-次はMVPで採用しない。
+検索回数による強化、自動減衰・忘却、直近性・重要度・関連度の固定重み0.5 / 2 / 3は採用しない。
+現在の問いとの関連性を主とし、検索された記憶がさらに強まるfeedback loopを作らない。
 
-- 検索された回数による強化
-- エビングハウス型またはその他の自動減衰・忘却
-- 直近性、重要度、関連度の固定重み`0.5 / 2 / 3`
+### 12. 同thread登録時照合と、保存後の非同期整理を分ける
 
-判断理由は、検索の目的は現在の問いに合う記憶を選ぶことであり、単に新しい、頻繁に検索された、
-LLMが重要と推定したという理由で関連性を逆転させないためである。ユーザーの再言及は明示的な
-新しさのsignalとして採用するが、意味的関連度が同等の場合だけ使う。検索自体では日時を更新せず、
-検索された記憶がさらに検索されやすくなるfeedback loopを作らない。
+再試行による二重保存防止は、意味的な出来事同定とは別の制御である。
+元発言ID・版・抽出範囲と保存結果を対応づけ、同じ元入力の再処理でEpisode / Fact / link / 統合関係を増やさない。
+thread revisionやcandidate_indexだけを新経験の証拠にしない。生本文hashをidempotency keyへ使わない。
 
-### 12. 重複は追加時に安全な範囲だけ処理し、意味的整理は後続batchに分ける
+既存Wave 2の型ごとのnatural keyとTOUCHは既存型の契約であり、新しいFactの同一性判定を代替しない。
+TOUCHはlast_user_mentioned_atだけを更新し、本文・構造化値・content_version・updated_atを変更せず、Chroma outboxも作らない。
+保存拒否・privacy拒否のturnでTOUCHしない条件は維持する。
 
-追加時は次だけを同期的に行う。
+新しいMVPのFact照合は#290が#291の非同期抽出・登録ジョブ内で行う。
+同一character・同一threadに限定し、Factの5Wと文脈から同一出来事への再言及と確認できたときだけIDでまとめる。
+unknown同士、日/月の範囲包含、同名だけ、同日別回の可能性は統合根拠にしない。
+統合できなくても保存可能な情報は保持し、曖昧な追加の破棄・自動日時補完はしない。
+会話応答は完了を待たず、同thread照合を別の夜間整理待ちにもしない。
 
-- `character_id + source_conversation_id + source_turn_id + candidate_index + extractor_version`を
-  基礎にしたidempotency keyでretryによる重複を防ぐ
-- 型ごとの決定論的natural keyで完全一致または明白な同一記憶を検出する
-- 同一内容へのユーザーの再言及は`TOUCH`として`last_user_mentioned_at`だけを更新する
+同一character・別threadの保存済みFact統合は#354の後続非同期jobへ分離する。
+#48の基盤を再利用可能だが、Fact固有の照合・ID解決・失効処理を実装済みとは扱わない。
+Fact統合では元Episode・元Fact ID・出典を維持し、Episode自体の統合・削除は行わない。
+#354は#340 / #341 / #100のMVP完了条件ではない。
 
-idempotency keyに生本文hashを使用しない。`TOUCH`では本文、構造化値、`content_version`、
-本文変更日時としての`updated_at`を変更せず、Chroma outboxを作らない。保存拒否またはprivacy拒否の
-turnでは`TOUCH`も行わない。
-
-embedding類似度やLLMによる意味的mergeを追加経路へ入れない。会話応答と保存処理を重くし、
-誤mergeを即時に確定させるためである。
-
-意味的な重複整理が必要になった場合は、夜間またはidle時の単一background jobとして追加する。
-対象は`provider_id=core`のpersona memoryだけとし、temporary／addon recordは対象外とする。
-LLMは次の型付きplanだけを返し、applicationがtype、character、version、privacy、lineageを検証して
-適用する。
+既存#48のpersona memory整理はprovider_id=coreだけを対象にし、temporary / addon recordを除外する。
+型付きplanは次を維持する。
 
 ```text
 KEEP / MERGE / SUPERSEDE / DELETE_EXACT_DUPLICATE / CONFLICT / NOOP
 ```
 
-曖昧な候補を自動削除しない。MVPではschemaとlineageだけ準備し、nightly consolidationの実装は
-記憶登録・管理UI・outboxの完成後にIssue #48で行う。
-
-判断理由は、retryや完全一致は追加時に安全かつ安価に判定できる一方、言い換え、矛盾、時間変化を
-含む意味的重複には複数記憶をまとめて見る必要があるためである。追加時の誤mergeは直ちに記憶を
-失わせるので避け、会話負荷の低い時間帯に型付きplanを検証して整理する。これは人が活動中に
-覚え、休息時に記憶を整理するモデルにも対応する。
+applicationがtype、character、version、privacy、lineageを検証して適用し、曖昧な候補を自動削除しない。
+詳細な既存consolidation契約は第16節を参照する。Fact統合をこのmemory置換処理へ無条件に読み替えない。
 
 ### 13. promptfooとpytestの責務を分けてclassifierを評価する
 
-意味分類器のconformance testはpromptfooを用い、通常のunit testへ実model評価を混在させない。
+意味分類器のconformance testはpromptfooを用い、通常unit testへ実model評価を混在させない。
 
 ```text
 backend/evals/privacy_classifier/
@@ -539,38 +478,29 @@ backend/evals/privacy_classifier/
 └─ README.md
 ```
 
-- `prompt-lab.yaml`: Ollamaを直接呼び、productionで観測した失敗を合成case化し、redから最小の
-  prompt修正でgreenへするprompt tuning用
-- `conformance.yaml`: Python providerを介してproductionの`SemanticPrivacyClassifier`、
-  parser、version伝搬を含めて評価するrelease gate
-- pytest unit: prompt組立、schema、parser、fail-closed、`RagAdmissionEvaluator`をfakeで検証する
-- integration test: 実Ollamaへ接続する少数のsmoke caseを通常unit testと分離する
+- prompt-lab.yaml: productionの失敗構造を合成case化し、redから最小prompt修正でgreenへするtuning用
+- conformance.yaml: production classifier、parser、version伝搬を含めて評価するrelease gate
+- pytest unit: prompt組立、schema、parser、fail-closed、RagAdmissionEvaluatorをfakeで検証
+- integration test: 実サービスに接続するsmoke caseを通常unitと分離
 
-実ユーザー本文をcorpusへコピーせず、問題の構造だけを再現する合成caseを作る。機微caseと安全caseは
-対になるよう用意する。構造化enumの正誤は決定論的assertionで検査し、規則で表現できる判定へ
-LLM-as-judgeを使用しない。
+実ユーザー本文をcorpusへコピーしない。機微caseと安全caseを対で用意し、enumは決定論的assertionで検査する。
+規則で表現できる判定へLLM-as-judgeを使用しない。
 
-合格基準は、安全側へ倒す。
+- 固定した機微caseがNOT_SENSITIVEになることを許容しない
+- SENSITIVEまたはABSTAINは安全側の結果として許容する
+- timeout、未知言語、未ロード、不正出力が保存許可にならない
+- 安全候補の過検知は記録して改善するが、機微caseを保存可能にしてrecallを上げない
 
-- 固定した機微caseが`NOT_SENSITIVE`になることを許容しない
-- `SENSITIVE`または`ABSTAIN`は安全側の結果として許容する
-- timeout、未知言語、モデル未ロード、不正出力が保存許可にならない
-- 安全なallowlist候補の過検知は記録し、prompt tuningで改善するが、機微caseを保存可能にして
-  recallを上げない
+重要な変更では対象suiteを3回反復してから全suiteを実行する。
+release時はmodel / prompt / policyの版を固定し、cache無効の全case反復結果を残す。
+promptfooは固定versionのdevelopment dependencyとし、結果や本文を外部共有しない。
 
-重要な変更では対象suiteを3回反復してから全suiteを実行する。release時はmodel、prompt、policyの
-versionを固定し、cacheを無効にした全caseの反復結果を残す。promptfooはversionを固定した
-development dependencyとし、結果や本文を外部共有しない。
-
-判断理由は、pytestだけでは非決定的な実modelの意味分類品質を評価できず、promptfooだけでは
-production adapter、parser、fail-closedのcode contractを十分に保証できないためである。
-productionの失敗を合成caseへ変換し、red、最小修正、green、regressionの順で残すことで、
-実ユーザー本文を保存せずにprompt改善の履歴を作る。
+新しい記憶形成の最終受入は#344 / #349 / #297で行い、UIも#343 / #348 / #351で個別に検証する。
+mock / fixture / readiness / DB直接投入だけの結果を、実LLM抽出から保存までの成功と同一視しない。
 
 ### 14. 会話品質への影響を観測してから最適化する
 
-非同期admission workerのconcurrencyは1から開始し、会話処理を優先する。少なくとも次を
-metadata-onlyで観測する。
+非同期admission workerのconcurrencyは1から開始し、会話処理を優先する。少なくとも次をmetadata-onlyで観測する。
 
 - 会話応答のp95 latency
 - classifierのqueue待ち時間とtimeout率
@@ -578,119 +508,92 @@ metadata-onlyで観測する。
 - GPU／memory使用量
 - admission decision、reason code、model／prompt／policy version
 
-会話遅延、classifier timeout、queue滞留が継続的に発生した場合、専用instanceまたはencoderによる
-前段最適化を検討する。固定検索重み、access強化、減衰、semantic screenerは、運用上の問題が
-観測される前には追加しない。
+会話遅延、classifier timeout、queue滞留が続く場合、専用instanceまたはencoderによる前段最適化を検討する。
+固定検索重み、access強化、減衰、semantic screenerは、問題が観測される前には追加しない。
+先に構成と評価軸を増やさず、実測から必要な最適化を選ぶ。
 
-判断理由は、MVP時点では競合の有無と支配的なbottleneckが分からず、先に専用instance、encoder、
-複合rankingを入れると構成と評価軸だけが増えるためである。会話p95、queue待ち、timeout等の
-観測結果から、必要な最適化だけを選ぶ。
+### 15. 実施順序と責務の移行
 
-### 15. Wave 2はprivacy判定から検索、形成、管理の順で進める
-
-実装順は親Issue #28で管理し、次の依存順とする。
+既存Wave 2の実施順は#28の履歴として保持する。
 
 ```text
-#25（Wave 1 privacy scanner、完了）
-  -> #50（dogfood環境分離、完了）
-  -> #22
-  -> #33
-  -> #8
-  -> (#29 || #30)
-  -> #31
-  -> #9
-  -> #10
-  -> (#11 || #12)
-  -> #28の受入確認
+#25 -> #50 -> #22 -> #33 -> #8 -> (#29 || #30) -> #31 -> #9 -> #10 -> (#11 || #12) -> #28受入
 ```
 
-判断理由は、#22の再開前に、dev／testとdogfoodのdata root、port、process ownership、
-backup／migration境界を固定し、TAKTからdogfoodデータへ到達できないことを#50で受け入れる
-必要があったためである。#50は2026-08-17に手動受入まで完了した。
-その後は意味分類と決定論的admissionを確立し、SQLite正本、Chroma同期、検索を構築する。
-自動記憶形成は安全な保存境界と取得境界が完成してから接続する。時系列照合と管理UIは、共通の
-schemaとrepositoryが完成した後で並行して進めてよい。nightly consolidationはこの依存列の
-完了後に別Issueとして追加する。
+#50はdev/testとdogfoodのdata root・port・process ownership・backup/migration境界を分離した。
+以降、privacyとadmission、SQLite正本、Chroma同期、検索、自動形成、時系列照合、UIを整えた。
+#48はその後の既存persona memory整理であり、完了履歴を維持する。
+
+新モデルは#352のADRを共通前提に、#340（#342 -> #290 -> #291、UI #343、受入 #344）と
+#341（#345、#346、#347、UI #348、受入 #349）を分離する。
+#100は保存済みEpisodeと共通Semantic Storeを利用し、#292 / #293 / #294 / #295、UI #351、受入 #297を担当する。
+#354を待つ依存列を追加しない。進捗はIssue、実装済みruntimeはsystem-architecture.mdで扱う。
 
 ### 16. core persona memoryをidle時に原子的にconsolidationする
 
-Issue #48では、`provider_id=core`のactive persona memoryだけをcharacterとmemory typeごとに
-分離し、夜間または一定idle時間後にconcurrency 1で整理する。会話処理、非同期admission、
-Chroma outboxに未処理作業がある間は起動せず、実行中に優先作業が生じた場合は次のmemory単位へ
-進む前に停止する。
+本節は完了済み#48の既存記憶レコード整理契約であり、新Fact統合の実装ではない。
 
-planは`KEEP`、`MERGE`、`SUPERSEDE`、`DELETE_EXACT_DUPLICATE`、`CONFLICT`、`NOOP`の
-6種に限定する。LLMはローカルOllamaだけを使用し、applicationがcharacter、provider、memory
-kind／type、content version、privacy、source、lineageをSQLite正本から再検証する。
-`CONFLICT`と`NOOP`はDBを変更せず、物理削除は本文・構造化値・時間情報が完全一致する場合だけ
-許可する。
+provider_id=coreのactive persona memoryだけをcharacterとmemory typeごとに分離し、夜間または一定idle時間後にconcurrency 1で整理する。
+会話処理、非同期admission、Chroma outboxに未処理作業がある間は起動せず、実行中に優先作業が生じた場合は次のmemory単位へ進む前に停止する。
 
-`MERGE`と`SUPERSEDE`は`formation_method=CONSOLIDATED`の新規行を作り、元行を
-`INACTIVE`にする。新行から元行へ`CONSOLIDATED_FROM`または`SUPERSEDES`のlineageを張り、
-`memory_sources.source_type=CONSOLIDATION`、`source_provider_id=core`、元memory idの
-`source_ref`を保存する。新規行、source、lineage、write receipt、旧行状態変更、新旧outboxは
-単一SQLite transactionで確定する。旧行にも`UPSERT` outboxを作り、index workerがinactive行を
-Chromaから削除する。
+planはKEEP、MERGE、SUPERSEDE、DELETE_EXACT_DUPLICATE、CONFLICT、NOOPの6種。
+Provider / Model選択は2026-09のInference ADRを適用し、applicationがcharacter、provider、memory kind/type、
+content version、privacy、source、lineageをSQLite正本から再検証する。
+CONFLICT / NOOPはDBを変更せず、物理削除は本文・構造化値・時間情報が完全一致する場合だけ許可する。
 
-consolidationのidempotency keyは、固定接頭辞`consolidation`、character id、plan種別、
-prompt version（`consolidation-v1`）、digestを`:`で連結する。digestはmemory idと
-content versionの組を昇順に並べ、各組を`<memory_id>:<content_version>`として改行で連結した
-文字列だけのSHA-256とする。character idとprompt versionには`:`を許可せず、memory idはkeyへ
-平文で含めない。同じ入力snapshotの再実行では新規行やDELETE outboxを重複生成しない。
+MERGE / SUPERSEDEはformation_method=CONSOLIDATEDの新規行を作り、元行をINACTIVEにする。
+新行から元行へCONSOLIDATED_FROM / SUPERSEDESを張り、source_type=CONSOLIDATION、source_provider_id=core、
+元memory idのsource_refを保存する。新規行、source、lineage、write receipt、旧行状態変更、新旧outboxは単一transactionで確定する。
+旧行にもUPSERT outboxを作り、index workerがinactive行をChromaから削除する。
 
-`SCHEMA_VERSION`は2のまま維持する。既存DBの更新要否は`sqlite_master`に保存された
-`memory_sources`の`CREATE TABLE`文に`CONSOLIDATION`が含まれるかで判別する。含まれる場合は
-更新済みとして何もせず、含まれない場合だけ同一transaction内で旧tableをrenameし、新しい
-CHECK制約でtableを再作成して全行を移送した後、旧tableを削除する。途中で失敗した場合は
-transactionをrollbackし、次回起動時に同じ判定から再実行することで更新を冪等にする。
+既存idempotency keyは、consolidation、character id、plan種別、prompt version（consolidation-v1）、digestをコロンで連結する。
+digestはmemory idとcontent versionの組を昇順に並べ、各組を< memory_id >:< content_version >の形式（山括弧と空白は含めない）で
+改行連結した文字列のSHA-256である。character idとprompt versionにコロンを許可せず、memory idをkeyへ平文で含めない。
+同じ入力snapshotの再実行で新規行やDELETE outboxを重複生成しない。
 
-ログは件数、plan種別、latency、reason code、model／prompt／policy versionに限定し、
-CONFLICT時だけ対象memory idを記録する。memory本文、prompt、model出力全文は記録しない。
+#48のschema更新はSCHEMA_VERSION=2を維持し、sqlite_masterのmemory_sourcesのCREATE TABLE文にCONSOLIDATIONが
+含まれるかで更新要否を判別する方式だった。未更新の場合のみ同一transactionで旧tableをrename、新CHECK制約のtableへ
+全行移送して旧tableを削除する。途中失敗はrollbackし再実行する。
+これは当時の更新契約であり、#342 / #345の新schema適用方式を固定しない。
 
-## MVPで実装しない項目
+ログは件数、plan種別、latency、reason code、model / prompt / policy versionに限定し、CONFLICT時だけ対象memory idを記録する。
+memory本文、prompt、model出力全文を記録しない。Fact固有の監査も既存privacyを弱めない。
+
+## 新モデルのMVPで実装しない項目
 
 - 候補ごとの同意確認、保存通知、確認待ち状態
-- `SemanticSignalScreener`または決定論的な意味keyword gate
-- access countによる強化、時間減衰、自動忘却
-- 固定の複合検索重み
-- LLM推定の重要度、感情、心理状態を記憶metadataとして保存すること
+- SemanticSignalScreenerや決定論的な意味keyword gate
+- access countによる強化、自動減衰・忘却、固定の複合検索重み
 - raw会話turnをそのままepisodic memoryとして保存すること
-- persona memory、domain record、task、procedural knowledgeを1つの汎用tableへ混在させること
-- 追加時のLLM／embeddingによる意味的merge
-- 曖昧な記憶の自動削除
-- entity graph、自由形式association graph
+- persona memory、domain record、task、procedural knowledgeを単一の汎用正本へ混在させること
+- 別threadのFact統合（#354の後続非同期処理）と別character統合
+- 曖昧な同一性による自動統合・日時補完・追加情報の破棄
+- Fact統合によるEpisodeの自動統合・削除、Semanticへの自動昇格
+- 通常会話へのReflection直接注入、例外的な自己説明検索
+- 自由形式entity / association graph
 - addon完成前にtemporary recordをpersona memoryへ移すこと
 
 ## 影響・トレードオフ
 
-- 個別確認なしで記憶が増えるが、保存対象は狭いallowlistとprivacy gateに限定され、記憶一覧から
-  ユーザーが管理できる
-- classifier障害や怪しい候補は保存されないため、記憶の取りこぼしは許容する
-- 会話応答を非同期記憶形成から分離することで、登録処理のretryが通常会話を待たせない
-- 機微queryでは関連記憶があっても検索しないため回答の個別性は下がるが、機微なqueryから
-  記憶indexへアクセスしないことを優先する
-- domain recordとpersona memoryの二重表現が発生し得るが、正確な記録と関係上の経験を混同しない
-- SQLite、Chroma、将来のaddon DB間のprovenanceと同期設計が必要になる
-- 最終言及日時をtie-breakだけに使うため、検索feedback loopを作らず再言及の新しさを反映できる
-- 自動減衰を行わないため、忘却はユーザー削除、失効、訂正、後続consolidationで明示的に扱う
+- 候補確認なしで記憶を形成するが、保存policyとprivacy gateを維持し、各Epicの管理UIで監査する。
+- 欠損を許容して保存できる一方、unknownを一致扱いしないため自動統合は保守的になる。
+- 独立性不明のFactを別の出来事と数えないため、生成できる一般化知識が少なくなる場合がある。
+- 非同期抽出・登録と別thread整理を分け、会話の応答を待たせない。
+- domain record、Episode、Fact、Semanticに内容が重なる場合も、正確な台帳・経験・取得情報・知識の責務を混同しない。
+- SQLiteの版・出典・参照失効、Chromaとの同期が必要になる。
+- 最終言及日時をtie-breakだけに使い、検索feedback loopを作らない。
+- 明示削除・利用停止・通常の忘却を区別し、削除対象を統合履歴等から復活させない。
 
 ## 関連
 
-- `docs/decisions/rag-memory-privacy-policy-2026-07.md` — privacy不変条件、SQLite／Chroma、outbox
-- `docs/decisions/archive/miori-memory-policy-2026-06.md` — 本ADRへ統合済みの初期検討履歴
-- `docs/decisions/archive/Multi-character-db-2026-06.md` — characterごとのデータ分離に関する初期検討履歴
-- `docs/decisions/character-card-v3-prompt-builder-2026-07.md` — prompt合成境界
-- `docs/system-architecture.md` — システム全体の責務分離
-- `docs/testing-policy.md` — unit／integration／E2Eの区分
-- GitHub Issue #22 — 意味分類器
-- GitHub Issue #33 — 決定論的な長期記憶保存判定
-- GitHub Issue #8 — SQLite正本とoutbox
-- GitHub Issue #29、#30、#31 — 承認済み記憶と検索基盤の後続作業
-- GitHub Issue #9 — 検索・再検証・順位付け
-- GitHub Issue #10 — 記憶候補抽出と自動保存
-- GitHub Issue #11 — 記憶の時系列照合
-- GitHub Issue #12 — 記憶管理UI
-- GitHub Issue #28 — Wave 2親Issueと受入確認
-- GitHub Issue #48 — Wave 2完了後のidle時persona memory consolidation
-- [プロンプトエンジニアリングのすすめかた](https://zenn.dev/nrs/articles/70db94beb7b76d) —
-  productionの失敗を固定caseへ変換するred／green／regression運用
+- [Episode・Fact・Semantic境界](episode-fact-semantic-boundaries-2026-09.md) — #352の採用契約と優先範囲
+- [Character Life共通契約](character-life-memory-personality-autonomy-2026-09.md)
+- [RAG privacy方針](rag-memory-privacy-policy-2026-07.md) — 維持するprivacy・SQLite・Chroma・outbox境界
+- [システムアーキテクチャ](../system-architecture.md) — 実装済みruntime
+- [エンハンス計画](../enhancement-plan.md) — 分解・依存・実施順
+- [テスト方針](../testing-policy.md) — unit / module / integration / E2Eの区分
+- #340 / #341 / #100 — Episode・Fact / Semantic / 一般化・Reflection
+- #354 — 同一characterの別thread Fact非同期整理
+- #48 — 既存persona memory consolidationの完了履歴
+- #289 — 合意時点でEpicのみの未リリース旧Episode形式
+- #28および#22 / #33 / #8 / #29 / #30 / #31 / #9 / #10 / #11 / #12 — 既存Wave 2実装の履歴

@@ -70,7 +70,8 @@ MVP完了時点で判明したギャップ（多ターン会話、RAG本稼働�
 
 ### Wave 2: 「覚えている」（RAG本稼働）
 
-設計上の正本: `docs/decisions/wave2-memory-formation-retrieval-2026-08.md`
+基盤の設計判断: [Wave 2記憶形成・検索方針](decisions/wave2-memory-formation-retrieval-2026-08.md)。
+後続の記憶責務再編は次節と[Episode・Fact・Semantic境界ADR](decisions/episode-fact-semantic-boundaries-2026-09.md)を参照する。
 
 - 文脈依存の機微情報判定とpositive allowlistによる保存判定
 - SQLiteを正本、Chromaを派生indexとする長期記憶・検索基盤
@@ -81,6 +82,21 @@ MVP完了時点で判明したギャップ（多ターン会話、RAG本稼働�
 - 人格記憶・暫定記録の閲覧、訂正、物理削除
 - idle時のpersona memory consolidation
 - 開発とdogfoodのruntime data、service、backup、deployの分離
+
+### 記憶モデルの拡張: 正本と認知処理を分離する
+
+2026-09の採用設計。Wave 2の基盤完成やADR更新を、新モデルの実装・運用完了とは扱わない。
+
+| Epic | 実現する機能 |
+|---|---|
+| #340 | 経験を5WとID参照されたFactとして形成・管理する。同一スレッド内のFact照合は非同期抽出・登録時に行う |
+| #341 | 明示知識の直接抽出と、経験から派生した意味記憶を共通管理する |
+| #100 | 保存済み経験から意味知識を一般化し、内省・再内省・派生結果を形成する |
+| #354（後続） | 同一キャラクターの別スレッド間Factを、保存後の独立した非同期処理で整理・統合する |
+
+#354は上記3 EpicのMVP必須依存・完了条件にしない。UI・受入は各Epicで確認する。
+人格更新#101、Skill学習#102、Life State・会話外活動#249の責務は維持する。
+詳細な契約と依存は[記憶境界ADR](decisions/episode-fact-semantic-boundaries-2026-09.md)と各Issueを参照する。
 
 ### Wave 3: 「自然に話せる」（LiveKitによる双方向音声会話）
 

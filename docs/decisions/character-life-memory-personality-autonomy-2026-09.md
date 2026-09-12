@@ -6,12 +6,17 @@
 
 本ADRは、ユーザーと共に過ごすパートナー型AIとして、キャラクターが会話外でも経験を持ち、経験を整理・内省し、中期的な関心・意思と長期的な人格へ反映しながら活動するための共通契約を定める。
 
+2026-09-12の#352で記憶責務を再編した。Episode / Fact / Semanticの正本、5W、日時、ID参照、
+Fact照合・統合、参照失効の詳細は[Episode・Fact・Semanticの正本と形成責務](episode-fact-semantic-boundaries-2026-09.md)を優先する。
+本ADRはLife State・Personality・Relationship・自律活動との接続を所有する。
+ACTIVEは採用設計を意味し、新しい記憶モデルがmain / dogfoodで実装済みであることを意味しない。
+
 本ADRは実行ランタイムの製品選定を固定しない。LangGraph、DBOS、Letta等を比較する場合も、本ADRのデータ・安全・更新契約を共通の受入条件とする。
 
 競合する範囲では次の既存ADRを部分的に改定する。
 
 - `wave2-memory-formation-retrieval-2026-08.md`
-  - `EPISODIC_EVENT.subject=USER/SHARED`限定を改定し、本人視点の`SELF`経験を追加する。
+  - 旧`EPISODIC_EVENT.subject=USER/SHARED/SELF`による経験分類は新契約では要求しない。所有characterと行為者・参加者・話題の人物を分ける。
   - `reflection`を単なるformation methodとする記述を改定し、ReflectionをSemantic Memoryとは別の永続概念として扱う。
   - working memoryとは別に、中期的なLife Stateを定義する。
 - `rag-memory-privacy-policy-2026-07.md`
@@ -26,141 +31,142 @@
 主目的は業務代行ではなく、キャラクターの経験蓄積・整理・内省・人格形成と、ユーザー不在時にも継続する生活感である。
 
 ```text
-ユーザーとの会話・共同作業 / キャラクター自身の活動
-                         ↓
-                    Episode
-                         ↓
-        ┌────────────────┴────────────────┐
-        ↓                                 ↓
-Semantic Abstraction                 Reflection
-客観的な共通要素の蒸留          本人が経験をどう捉えたか
-        ↓                                 ↓
-Semantic Memory                  ┌────────┴────────┐
-                                 ↓                 ↓
-                           Life State          Personality
-                        中期的な関心・意思      長期的傾向
-                                 ↓                 ↓
-                              Activity / Conversation
-                                      ↓
-                                  New Episode
+保存済み会話履歴 / 許可された活動
+     +-> Episode / Fact形成・登録（#340、活動ログの実抽出は#249）
+     |          |
+     |          +-> 保存済みEpisode + 有効なFact参照
+     |                     +-> 一般化（#100）-> EXPERIENCE_DERIVED Semantic
+     |                     +-> Reflection（#100）
+     |                              +-> Life State（#249）
+     |                              +-> Personality（#101）
+     |
+     +-> 明示命題の抽出・検証（#341）-> DIRECT_EXTRACTION Semantic
+
+Life State / Personality / Memory
+     -> Activity / Conversation -> 新しい経験
 ```
 
-Memory、Reflection、Personality、Relationship、Skill、runtime stateは同じ正本として扱わない。
+Memory、Fact、Reflection、Personality、Relationship、Skill、runtime stateは同じ正本として扱わない。
+Semantic Memoryの共通Storeは#341、Episode / Factの共通基盤は#340、経験の一般化・内省は#100が所有する。
 
 ## 2. Episode / Episodic Memory
 
-### 2.1 本人経験を既存persona memoryへ統合する
+### 2.1 所有キャラクターの経験と、関連Factを分ける
 
-本人が会話外で実際に行った活動・観測も、自伝的なエピソード記憶として既存`approved_memories`へ保存する。別のself episode tableは作らない。
+Episodeは、所有するcharacter_idの視点で整理した経験の記憶である。会話・共同活動・会話外活動の場所によらない。
+所有者を不明な行為者として補完せず、実際の参加者・役割と話題に登場する人物を分離する。同名だけで人物を同定しない。
 
-`EPISODIC_EVENT.subject`は次を許可する。
+Episodeの内容は5Wで表現し、必須はWhatの述語のみとする。Who / When / Where / Why / 目的語等の欠損を許容する。
+Whyは明示理由のみ。保存価値・privacy・source・schema検証と、管理情報の必須性は内容の欠損許容とは別に扱う。
 
-- `USER`
-- `SHARED`
-- `SELF`
+Related Factsはその経験で得た情報・申告内容であり、独立したfact_id付きレコードとEpisode–Fact参照で保持する。
+Factには話題の対象の5Wを持たせ、Episodeの「聞いた経験」の5Wとは混同しない。
+物理table・型は#342で確定し、#289の未リリース形式や旧subject分類を継承条件にしない。
 
-`SELF`はキャラクター本人が経験した出来事を表す。所有者は常に`character_id`で分離する。
+| 記録例 | 区別するもの |
+|---|---|
+| 光織はユーザー、蒼と静岡へ行った | 光織自身の旅行経験 |
+| 光織はユーザーと以前の旅行を語った | 思い出を語った経験。旅行そのものとは別Episode |
+| 光織はユーザーから静岡旅行の話を聞いた | 聞いた経験と、ユーザーが旅行したというFact。光織を旅行参加者にしない |
+| 蒼も同じ話を聞いた | 蒼が所有する別Episode。同じ話題でもcharacter境界を越えてFactを統合しない |
 
-MVPの本人活動向けevent typeとして次を追加する。
+Factが同一でも、二度聞いた経験まで統合しない。元Fact・元発言/版・取得経緯を残し、確認済みの同一性は版付きID関係で表す。
 
-- `OBSERVATION`
-- `ACTIVITY`
-- `ENCOUNTER`
+### 2.2 経験日時と対象日時
 
-既存の`SHARED_MILESTONE / ACHIEVEMENT / DECISION / OUTCOME / CHANGE`は維持する。
+- Episodeのoccurred_at相当: 今回の経験が起きた日時。話を聞いた場合は聞いた日時。
+- Factの対象日時: 話題の出来事が起きた日時・部分日時・可能範囲・精度。
+- experienced_at: 所有キャラクターが経験を得た日時。内省・人格の時間基準。
+- stated_at: 元発言日時。
+- created_at: DB登録日時。
 
-### 2.2 `experienced_at`を追加する
+過去の旅行を今日聞いた場合、Episodeの経験日時は今日、Factの対象日時は過去とする。
+対象日時不明をstated_at / created_atで埋めない。タイムゾーンはconfigで定義し、相対日時は元発言日時を基準に解釈する。
+使用timezoneと精度を保持し、夜間実行・再試行・config変更で黙って再解釈しない。「先月」を月初の特定日にしない。
 
-既存の時刻は次の意味を維持する。
+### 2.3 Source / provenanceと処理の境界
 
-- `occurred_at`: 世界で出来事が起きた時刻
-- `stated_at`: 根拠発言の時刻
-- `created_at`: SQLiteへ登録・有効化した時刻
-
-これに加え、人格形成・内省の時間基準として`experienced_at`を持つ。
-
-`experienced_at`はキャラクター本人がその経験を得た時刻である。過去の出来事を今日初めて聞いた場合、`occurred_at`は過去、`experienced_at`は今日になる。
-
-### 2.3 Source / provenance
-
-既存`memory_sources`を再利用し、必要に応じて次のsource typeを追加する。
-
-- `AGENT_ACTIVITY`
-- `EXTERNAL_RESOURCE`
-
-活動ログとEpisodeは分ける。全Tool callをEpisodeへ変換しない。
+活動ログとEpisodeは分け、全Tool callやdomain recordをEpisodeへ変換しない。元resource / activityへのprovenanceを保持する。
 
 ```text
 Activity / Tool Execution
-        ↓
-保存条件・意味評価
-        ↓
-Episode
+  -> #249: 活動ログの要約・保存条件・意味評価
+  -> #340: 共通Episode / Fact登録契約
 ```
 
-外部情報を取得した場合は、「本人がその情報を読んだ・見た・聞いた」という経験と、外部情報そのものの正本を混同しない。元resource / activityへのprovenanceを保持する。
+会話由来の抽出は#291がスレッド更新を起点に非同期予約し、#290が同一character・同一threadのFactを抽出・登録時に照合する。
+5Wと文脈で同一出来事への再言及と確認できた場合だけIDでまとめる。unknown同士・日時包含・同名だけを一致根拠にしない。
+会話応答は完了を待たず、同thread照合を別の夜間処理の完了待ちにも置かない。
+別thread間の保存済みFact統合は#354の後続非同期整理であり、#340 / #341 / #100のMVP依存にしない。
 
 ## 3. Semantic Memory / Reflection / Candidate
 
 ### 3.1 Semantic Memory
 
-Semantic Memoryは、複数のEpisodeから感情・意思・自己評価をなるべく排して抽出した、根拠付きの共通要素とする。
+Semantic Memoryは、世界・人物・自分について知識として採用する事実・概念・傾向である。
+Episodeからの一般化だけを意味記憶全体の定義にしない。
 
-「客観的」とは外部世界の絶対的真実を意味せず、与えられたEpisode集合から根拠を追跡できる一般化を意味する。
+- DIRECT_EXTRACTION: #341が明示命題を発言・許可された情報源から抽出する。複数Episodeを要求しない。
+- EXPERIENCE_DERIVED: #100が保存済みの独立した複数Episodeから一般化する。感情・意思・自己評価を事実的根拠に混ぜない。
 
-Derived Semantic Memoryはprivacy・schema・evidence検証完了後、既存の長期記憶へ保存する。元Episodeは削除・置換しない。
-
-lineageには`ABSTRACTED_FROM`等、派生元Episodeを追跡できるrelationを追加する。
+formation_typeは形成方法、provenanceは実際の情報源・各参照元の版である。共通schema・保存・訂正・検索は#341が所有する。
+「客観的な一般化」は外部世界の絶対的真実ではなく、入力経験へ根拠を追跡できる共通要素を意味する。
+Factは付随情報であってSemantic正本ではなく、Fact保存・統合だけで自動昇格しない。
+元Episodeを削除・置換せず、派生元とその版をlineage / provenanceで保持する。
 
 ### 3.2 Reflection
 
 Reflectionは、本人が複数のEpisodeをどう認知・評価し、何を感じ、何を大切にし、今後どうしたいと捉えたかを表す。
 
-ReflectionはSemantic Memoryとは別概念であり、`approved_memories`とは別の永続model/tableを第一候補とする。同じ`persona-memory.db`へ保存してよい。
+ReflectionはSemantic Memoryとは別概念であり、#292が別の永続model/tableで正本を保持する。同じpersona-memory.dbへ保存してよい。
+MVP lifecycleはACTIVE / SUPERSEDED / INACTIVEとする。
 
-ReflectionのMVP lifecycleは次とする。
-
-- `ACTIVE`
-- `SUPERSEDED`
-- `INACTIVE`
-
-再内省により認知が変わった場合、旧Reflectionを物理削除せず`SUPERSEDED`とし、新しいReflectionを`ACTIVE`にする。
+再内省により同じ論点の捉え方が変わった場合、旧ReflectionをSUPERSEDEDとして残し、新ReflectionをACTIVEにする。
+異なる観点のReflectionは共存できる。新しい関連Episodeや根拠訂正/削除で再評価し、Personality変更だけでは再内省しない。
+実行時は現在のPersonalityを利用できる。旧Reflectionは補助情報であり、独立Episode根拠には数えない。
 
 Reflectionは自由文とprovenanceを正本とし、Insight / Interest / Intentionを同じ自由文へ埋め込んで更新し続けない。
+**通常会話のRAG / promptへReflectionを直接注入しない。** 例外的な自己説明検索は今回追加しない。
 
 ### 3.3 Reflectionからの派生
 
 Reflectionから次の概念を分離して派生可能とする。
 
-- `Insight`: 自己洞察。「自分はどういう傾向・価値を持つようだ」と理解した内容。
-- `Interest`: 現在注意・好奇心が向いている対象。
-- `Goal Intention`: 今後どうしたいかという目標意図。
-- `Implementation Intention`: 「XならYする」という条件付きの実行意図。
+- Insight: 自己洞察。「自分はどういう傾向・価値を持つようだ」と理解した内容。
+- Current Interests: 現在注意・好奇心が向いている対象。
+- Goal Intention: 今後どうしたいかという目標意図。
+- Implementation Intention: 「XならYする」という条件付きの実行意図。
 
 Reflectionは過去の認知、Intentionは未来の方向・行動方針である。
+#100がprovenance・validity付きの検証済み結果を形成し、Life Stateとしての運用は#249、人格更新は#101が行う。
 
 ### 3.4 Candidate
 
 Candidateは、LLM等が生成したが、privacy・evidence・schema・policy検証前のデータである。
+検証を通った候補だけを自動保存・有効化し、手動候補承認は追加しない。
+未検証/拒否Candidateを検索・人格更新へ使用しない。拒否本文は保存せず、許可された監査情報だけを残す。
 
-Candidateを承認済みの長期記憶やReflectionとして検索・人格更新へ利用しない。永続化が必要な場合は検索対象外・短期保持の作業データとして扱う。
-
-Semantic/Reflectionは、派生元Episodeが保存可能であってもprivacyを再評価する。複数の安全なEpisodeから機微情報を推論する可能性があるためである。
+Semantic / Reflectionは、派生元Episodeが保存可能であってもprivacyを再評価する。
+複数の安全なEpisodeから機微情報を推論する可能性があるためである。Factや統合関係にもsource・privacy境界を適用する。
 
 ## 4. Episode bundle / cluster
 
-Semantic Abstraction / Reflection形成時の「cluster」は永続的なcluster entityではなく、今回一緒に評価するEpisode集合とする。
+Semantic Abstraction / Reflection形成時のclusterは永続entityではなく、今回一緒に評価するEpisode集合とする。
 
-基本手順は次とする。
+1. 新規・更新Episode等をanchorにする。
+2. Chromaで近傍候補を取得する。
+3. SQLite正本でcharacter、型、world、人物・役割、時刻・精度、sourceの版、Fact参照・統合関係の有効性を確認する。
+4. 独立した2件以上の経験を最低条件とし、支持・反証・適用条件を評価する。不足・矛盾があれば条件付き一般化または見送りとする。
 
-1. 新しいEpisode等をanchorにする。
-2. Chromaでsemantic近傍を取得する。
-3. SQLite正本で`character_id`、memory type / event type、対象world・subject、時刻等を検証・絞り込む。
-4. 独立した複数Episodeが揃った場合にSemantic / Reflection候補を生成する。
+character_idは絶対境界。timeは検索範囲・関連性・継続性に使い、機械的な同日clusterへ分断しない。
+候補件数・類似度threshold・time windowは設定可能にする。気質/人格による着目は許容するが事実根拠を水増ししない。
 
-`character_id`は絶対境界とする。timeはclusterを分断する絶対条件ではなく、検索範囲・関連性・長期継続性評価に利用する。
+同じ有効な代表Fact IDを同一の話題の出来事について二重加算しない。
+異なるFact / Episode / thread / 発言日時は独立性の証明ではない。独立性不明の組は独立2件の根拠に使わず、同一だと強制統合もしない。
+同じ旅行について二度聞いた場合、聞いた経験は二件でも、二回の旅行の証拠にはしない。
 
-近傍取得数、類似度threshold、time window等はdogfoodで調整可能な設定値とする。
+#295はMVPでは夜間固定時刻に一般化・Reflection形成/再評価を行う。
+#291の抽出・登録、#341のDirect Extraction、#354の別thread整理とはトリガーを分ける。
 
 ## 5. Life State
 
@@ -359,7 +365,11 @@ runtime間で共通化する結果状態は次を基本とする。
 
 処理自体が正常完了しても、根拠不足等で`NO_CHANGE`となることを正常結果として扱う。
 
-元Episodeの訂正・削除・非公開化が発生した場合、依存するSemantic / Reflection / Life State / Personalityを即座に物理削除するのではなく、stale / reevaluation対象とし、残存根拠から再評価する。古いruntime checkpointから削除済み情報を正本へ復活させない。
+元Episode / Fact / source / 統合関係の訂正・削除・失効時、依存するSemantic / Reflectionと派生結果を
+SQLite上で即時利用停止し、再評価対象にする。物理削除や人格全体の無条件rollbackとは分離する。
+Life StateとPersonalityは既存の正本境界で残存根拠・影響範囲から再評価する。
+古いindex・参照・runtime checkpointから削除済み情報を正本へ復活させない。
+詳細は[参照失効契約](episode-fact-semantic-boundaries-2026-09.md)を適用する。
 
 ## 12. Background priority / resource scheduling
 
@@ -393,12 +403,12 @@ LangGraph / DBOS / Letta等の比較では、次をフレームワークへ委�
 
 ## 14. 受入シナリオ
 
-少なくとも次を検証する。
+少なくとも次を検証する。各機能の受入を本ADRの更新完了と同一視しない。
 
-1. 複数EpisodeからDerived Semantic MemoryとReflectionを形成できる。
-2. ReflectionからInterest / Intentionが形成され、外部活動につながる。
-3. 本人の会話外活動が`SELF` Episodeとしてsource付きで保存される。
-4. 同じEpisodeについて再内省してもPersonality evidenceが水増しされない。
+1. #340でEpisode / FactをID・出典付きで保存し、同thread登録時の5W一致確認と見送りを検証する。
+2. #341でDIRECT_EXTRACTIONとEXPERIENCE_DERIVEDを共通Semanticとして管理し、#100で一般化・Reflection形成を検証する。
+3. 本人の会話外活動は#249が共通契約を利用し、所有characterのEpisodeとして保存する。旧SELF分類は必須にしない。
+4. 同じEpisodeや同じ旅行Factについて再内省してもPersonality evidenceが水増しされない。
 5. 反証がある場合はPersonality更新を弱化・保留できる。
 6. Big Five Aspects 10因子の更新がboundedで監査可能である。
 7. Egogram評価は表出一貫性の質的評価としてのみ使われる。
@@ -407,5 +417,6 @@ LangGraph / DBOS / Letta等の比較では、次をフレームワークへ委�
 10. Minimum Disclosure後にも機微情報を意味推論したargumentはBLOCKされる。
 11. 操作群・実行場面別の承認を評価し、初期状態ではHigh Impactが#185確認へ流れる。通常のexternal-sendを一律に停止せず、保存済み承認も適用する。
 12. MCP Tool変更は次snapshotから反映され、Tool単位の再承認を要求しない。
-13. Episode削除・訂正後に派生状態が再評価され、古いcheckpointから復活しない。
+13. 根拠訂正・削除後の即時利用停止と再評価を確認し、古いcheckpointや参照から復活させない。
 14. foreground優先を維持しつつ、background preemption要否を性能評価できる。
+15. UIは#343 / #348 / #351、実接続受入は#344 / #349 / #297で各Epicごとに確認する。#354の別thread整理をMVP完了条件にしない。
