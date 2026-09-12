@@ -6,7 +6,9 @@ import threading
 
 from app.memory.episodic.contracts import ExtractionIdentity
 from app.memory.episodic.registration import EpisodicRegistrationService
-from app.memory.formation.episodic_extractor import ExtractionInputTooLarge, ThreadEpisodeExtractor
+from app.memory.formation.episodic_extractor import (
+    ExtractionInputTooLarge, ExtractionInterrupted, ThreadEpisodeExtractor,
+)
 from app.memory.formation.thread_chunks import bisect_chunk, split_thread
 from app.memory.formation.thread_queue import ThreadFormationQueue, StaleThreadSnapshot
 
@@ -64,6 +66,7 @@ class EpisodicFormationWorker:
                         snapshot=snapshot, chunk=chunk, catalog=catalog, provenance=provenance,
                         progress=progress, entity_labels=labels,
                         source_masks=self._registration.source_masks(snapshot),
+                        should_stop=lambda: should_stop() or lost.is_set(),
                     )
                 except ExtractionInputTooLarge:
                     left, right = bisect_chunk(chunk)
@@ -81,7 +84,7 @@ class EpisodicFormationWorker:
                 rejected += result.rejected
             with self._queue.guard(snapshot) as connection:
                 self._queue.finish(connection, snapshot, saved_count=saved, rejected_count=rejected)
-        except StaleThreadSnapshot:
+        except (StaleThreadSnapshot, ExtractionInterrupted):
             self._queue.release(lease, failed=False)
         except Exception:
             self._queue.release(lease, failed=True)

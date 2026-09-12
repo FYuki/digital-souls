@@ -170,4 +170,28 @@ UTC日時、commit、環境区分、Provider／Model、合成fixture ID、成功
 通常起動時に未処理予約を回収する。抽出失敗・モデル識別情報の取得失敗では予約を残して再試行する。
 推論時間は既存のMEMORY_FORMATION_LLM_TIMEOUT_SECONDSとTOTAL_TIMEOUT_SECONDSで調整する。
 入力予算を超えた発言は分割して処理し、完了したように見せて切り捨てない。
-既存Factが多い場合の候補探索・予算対応と、実モデルの抽出品質は#340の最終受入で検証する。
+既存一覧が入力予算を超える場合は、現在の会話から取得した候補を固定し、同一スレッドの
+保存済み一覧を予算内のページに分けて全件照合する。全ページの結果が揃うまで登録せず、
+一意に確認できた対象だけを補足・訂正する。ページをまたいで複数候補がある場合や、
+候補が1件でも確定できない場合は、既存本文を上書きせず新規情報として保持する。
+更新対象が定まった後は、その現在内容を読み、補足・訂正内容を個別に構成する。
+
+出典の全範囲はSQLiteに保持する。推論へは現在見えている発言と重なる出典範囲、
+最初/最後の取得時刻、出典件数を渡し、版の蓄積だけで入力が膨張しないようにする。
+推論時間の上限は各抽出・照合・訂正構成の呼出しに適用し、ページ間では停止要求を確認する。
+中断・失敗時には未完了予約を残し、既存のlease更新と再実行の冪等性で回復する。
+実モデルによる抽出・照合品質と大量Factでの処理時間は#340の最終受入で確認する。
+
+
+### #340の専用実接続runtime
+
+commit済みのworktreeで `python scripts/acceptance_episodic_memory.py` を実行すると、
+devの既存Ollamaを外部サービスとして利用し、新しいtest data rootと動的portで
+Backend・Frontendを起動する。gemma4:e4b / nomic-embed-text:latestが導入済みであることを確認する。
+常用の.env・data rootはコピーせず、ローカル推論Target・token予算を専用processへ設定する。
+
+出力されるrunRoot内のruntime-manifest.jsonに、commit・model digest・予算・所有processとURLを記録する。
+通常会話・管理UIの試験はそのURLへ行う。停止は同じrunRootに `stop` ファイルを作成するか、
+runnerへ終了signalを送る。所有するBackend/Frontendだけを停止し、共有Ollamaは操作しない。
+合成データとmanifestは試験結果の調査用に残す。
+このrunnerのreadyは起動確認だけであり、#344の抽出・検索・管理操作・応答の合格証跡ではない。
