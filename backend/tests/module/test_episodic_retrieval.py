@@ -447,3 +447,99 @@ def test_generated_reply_using_concurrently_corrected_memory_is_not_committed(h)
         recorder.record(started, prompt)
     with h.episodic.read() as tx:
         assert started.turn_id in tx.invalid_response_ids("miori")
+
+
+
+def legacy_from_source(h, source_id):
+    from app.memory.persistence.contracts import MemorySourceInput, MemorySourceType
+    context = replace(_context(), policy_version=POLICY.policy_version, idempotency_key=str(uuid4()),
+                      sources=(MemorySourceInput(source_type=MemorySourceType.CONVERSATION_TURN,
+                                                 source_provider_id="core", source_ref=str(source_id)),))
+    return h.legacy.save(character_id="miori", candidate=_candidate("うどんを好む"), context=context), context
+
+
+@pytest.mark.parametrize("change", ["correct", "delete"])
+def test_fact_management_excludes_legacy_preference_from_same_source_and_reextract(h, change):
+    from app.memory.episodic.management import EpisodicMemoryManagement
+    from app.memory.episodic.privacy import PrivacyReview
+
+    fact = h.create()
+    preference, context = legacy_from_source(h, h.span.source_id)
+    from app.memory.persistence.contracts import MemorySourceInput, MemorySourceType
+    derived = h.legacy.save(
+        character_id="miori", candidate=_candidate("統合してもうどんを好む"),
+        context=replace(context, idempotency_key=str(uuid4()),
+                        sources=(MemorySourceInput(source_type=MemorySourceType.CONSOLIDATION,
+                                                   source_provider_id="core", source_ref=str(preference.id)),)),
+    )
+    h.index.run_worker_once()
+    assert str(preference.id) in {m.memory_id for m in h.retrieve().memories}
+    reviewer = Mock()
+    reviewer.review.return_value = PrivacyReview(True, "ALLOW", STAMP)
+    management = EpisodicMemoryManagement(reader=h.read.episodic, reviewer=reviewer,
+                                          clock=lambda: NOW, index_sync=h.index)
+    if change == "correct":
+        management.correct(character_id="miori", record_id=fact.id, expected_version=1,
+                           five_w=h.value(predicate="訂正した"), idempotency_key=uuid4())
+    else:
+        management.delete(character_id="miori", record_id=fact.id, expected_version=1, idempotency_key=uuid4())
+    assert h.read.get(character_id="miori", memory_id=preference.id) is None
+    assert h.read.get(character_id="miori", memory_id=derived.id) is None
+    if change == "correct":
+        assert h.legacy.get(character_id="miori", memory_id=preference.id).status is MemoryStatus.INACTIVE
+        assert h.legacy.get(character_id="miori", memory_id=derived.id).status is MemoryStatus.INACTIVE
+    if change == "delete":
+        assert h.legacy.get(character_id="miori", memory_id=derived.id) is None
+        assert h.legacy.get(character_id="miori", memory_id=preference.id) is None
+        assert "うどんを好む".encode() not in h.paths.persona_memory_sqlite_path.read_bytes()
+    assert preference.id not in {m.id for m in h.read.list_active(character_id="miori")}
+    assert str(preference.id) not in {m.memory_id for m in h.retrieve().memories}
+    with pytest.raises(ValueError, match="removed memory content"):
+        h.legacy.save(character_id="miori", candidate=_candidate("うどんを好む"),
+                      context=replace(context, idempotency_key=str(uuid4())))
+
+
+def test_manually_corrected_preference_is_independent_of_old_fact_source(h):
+    from app.memory.persistence.contracts import FormationMethod, MemorySourceInput, MemorySourceType
+
+    fact = h.create()
+    preference, context = legacy_from_source(h, h.span.source_id)
+    child = h.legacy.save(
+        character_id="miori", candidate=_candidate("旧preferenceを統合した内容"),
+        context=replace(context, idempotency_key=str(uuid4()),
+                        sources=(MemorySourceInput(source_type=MemorySourceType.CONSOLIDATION,
+                                                   source_provider_id="core", source_ref=str(preference.id)),)),
+    )
+    key = str(uuid4())
+    corrected = h.legacy.correct(
+        character_id="miori", memory_id=preference.id, candidate=_candidate("そばを好む"),
+        context=replace(context, formation_method=FormationMethod.DIRECT, idempotency_key=key,
+                        sources=(MemorySourceInput(source_type=MemorySourceType.USER_CORRECTION,
+                                                   source_provider_id="core", source_ref=key),)),
+    )
+    h.delete(fact)
+    assert h.read.get(character_id="miori", memory_id=preference.id) == corrected
+    assert h.read.get(character_id="miori", memory_id=child.id) is None
+
+
+
+def test_fact_correction_invalidates_an_already_planned_legacy_consolidation(h):
+    from app.memory.persistence.contracts import ConsolidationOperation, ConsolidationConflictError
+    from tests.unit.test_memory_consolidation_repository import _snapshot
+
+    fact = h.create()
+    preference, _ = legacy_from_source(h, h.span.source_id)
+    snapshot = _snapshot(h.legacy, preference.id)
+    with h.episodic.transaction() as tx:
+        tx.update(character_id="miori", record_id=fact.id, expected_version=1,
+                  five_w=h.value(predicate="訂正した"),
+                  sources=(SourceSpan(source_id=uuid4(), revision=1, role="manual",
+                                      start=0, end=1, stated_at=NOW),),
+                  stamp=STAMP, receipt_id=uuid4())
+    # preference自体の版が不変でも、根拠が失効した計画を適用しない。
+    with pytest.raises(ConsolidationConflictError):
+        h.legacy.apply_consolidation(
+            character_id="miori", operation=ConsolidationOperation.KEEP,
+            inputs=(snapshot,), candidate=None, context=None,
+            canonical_memory_id=preference.id, consolidated_at=NOW,
+        )

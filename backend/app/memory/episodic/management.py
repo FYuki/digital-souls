@@ -1,6 +1,5 @@
 """Fact単位の管理操作。外部privacy判定とSQLiteの原子的な版更新を分ける。"""
 
-from collections import defaultdict, deque
 from collections.abc import Callable
 from datetime import datetime
 from typing import Protocol
@@ -11,7 +10,7 @@ from app.memory.episodic.read_repository import EpisodicReadRepository
 from app.memory.episodic.registration import PrivacyReviewer
 from app.memory.episodic.rendering import render_five_w
 from app.memory.episodic.repository import EpisodicTransaction, RecordConflict
-from app.memory.episodic.source_masks import overlaps_mask
+from app.memory.episodic.deletion_plan import plan_deletion
 from app.memory.persistence.contracts import MemoryStatus
 from app.memory.providers import MemoryCorrectionRejected
 
@@ -147,6 +146,7 @@ class EpisodicMemoryManagement:
         )
         if not review.allowed or review.stamp is None:
             raise MemoryCorrectionRejected(reason_code=review.reason)
+        affected = {record_id}
         with self._repository.transaction(now=now) as tx:
             replay = tx.operation_result(character_id, idempotency_key, "UPDATE", record_id)
             if replay is None:
@@ -158,8 +158,10 @@ class EpisodicMemoryManagement:
                     five_w=five_w, sources=_manual_source(idempotency_key, now),
                     stamp=review.stamp, receipt_id=idempotency_key,
                 )
+                affected.update(tx.deactivate_unsafe_legacy(character_id))
         # 正本の版照合が即時に旧索引を無効化する。新索引は永続outboxで再生成する。
-        self._index_sync.delete_after_commit(character_id=character_id, memory_id=record_id)
+        for memory_id in affected:
+            self._index_sync.delete_after_commit(character_id=character_id, memory_id=memory_id)
 
     def delete(
         self, *, character_id: str, record_id: UUID, expected_version: int, idempotency_key: UUID,
@@ -172,72 +174,26 @@ class EpisodicMemoryManagement:
                 affected.add(record_id)
             else:
                 _fact(tx, character_id, record_id, expected_version)
-                records = {r.id: r for r in tx.list_records(character_id, active_only=False)}
-                versions_by_id = {record.id: tx.versions(character_id, record.id)
-                                  for record in records.values() if record.kind is RecordKind.FACT}
-                source_dependents: dict[
-                    tuple[UUID, int, str], list[tuple[tuple[UUID, int], SourceSpan]]
-                ] = defaultdict(list)
-                for fact_id, versions in versions_by_id.items():
-                    for version in versions:
-                        for source in version.sources:
-                            if source.role in {"user", "assistant"}:
-                                source_dependents[source.source_id, source.revision, source.role].append(
-                                    ((fact_id, version.content_version), source))
-                # 同一性はID全体でなく、統合した内容版の辺に沿って伝播させる。
-                edges: dict[tuple[UUID, int], set[tuple[UUID, int]]] = defaultdict(set)
-                for merge in tx.merges(character_id):
-                    left = merge.source_fact_id, merge.source_version
-                    right = merge.target_fact_id, merge.target_version
-                    edges[left].add(right)
-                    edges[right].add(left)
-                erased = {(record_id, v.content_version) for v in tx.versions(character_id, record_id)}
-                pending = deque(erased)
-                deleted_ids = {record_id}
-                while pending:
-                    pair = pending.popleft()
-                    related = set(edges[pair])
-                    record = records[pair[0]]
-                    versions = versions_by_id[record.id]
-                    affected_sources = next(v.sources for v in versions if v.content_version == pair[1])
-                    # 同じ出典範囲から作った別Factや返答由来の言い換えも、本文消去の対象とする。
-                    for removed_source in affected_sources:
-                        roles = ("user", "assistant") if removed_source.role == "user" else (removed_source.role,)
-                        for role in roles:
-                            for dependent, source in source_dependents[
-                                removed_source.source_id, removed_source.revision, role
-                            ]:
-                                if overlaps_mask(source, (removed_source,)):
-                                    related.add(dependent)
-                    if record.status is not RecordStatus.DELETED and any(
-                        overlaps_mask(source, affected_sources) for source in versions[-1].sources
-                    ):
-                        # 新版でも削除対象の出典を継承しているなら独立した訂正とは扱わない。
-                        related.add((record.id, record.content_version))
-                    if pair[1] == record.content_version and record.status is not RecordStatus.DELETED:
-                        deleted_ids.add(record.id)
-                        related.update((record.id, v.content_version) for v in tx.versions(character_id, record.id))
-                    for neighbor in related - erased:
-                        erased.add(neighbor)
-                        pending.append(neighbor)
-                for target_id in sorted(deleted_ids, key=str):
-                    target = records[target_id]
+                plan = plan_deletion(tx, character_id, record_id)
+                for target_id in sorted(plan.deleted_facts, key=str):
+                    target = plan.records[target_id]
                     key = idempotency_key if target_id == record_id else uuid5(idempotency_key, str(target_id))
                     tx.delete(character_id=character_id, record_id=target_id,
                               expected_version=target.content_version,
                               sources=_manual_source(idempotency_key, now), receipt_id=key)
                     affected.add(target_id)
-                for target_id, erased_version in erased:
-                    if target_id not in deleted_ids:
+                for memory_id in sorted(plan.deleted_legacy, key=str):
+                    tx.erase_legacy_memory(character_id, memory_id)
+                    affected.add(memory_id)
+                for episode_id in sorted(plan.redacted_episodes, key=str):
+                    tx.redact_episode(plan.records[episode_id], sources=_manual_source(idempotency_key, now),
+                                      receipt_id=uuid5(idempotency_key, str(episode_id)))
+                    affected.add(episode_id)
+                for target_id, erased_version in plan.erased_versions:
+                    target = plan.records[target_id]
+                    if target_id not in affected and target.status is not RecordStatus.DELETED:
+                        # 根拠を独立して訂正した新版は保持し、依存のある過去版だけを消去する。
                         tx.erase_version_content(character_id, target_id, erased_version)
-                for episode in records.values():
-                    if episode.kind is not RecordKind.EPISODE or episode.status is RecordStatus.DELETED:
-                        continue
-                    if any((link.fact_id, link.fact_version) in erased
-                           for link in tx.references(character_id, episode.id)):
-                        tx.redact_episode(episode, sources=_manual_source(idempotency_key, now),
-                                          receipt_id=uuid5(idempotency_key, str(episode.id)))
-                        affected.add(episode.id)
         for target_id in affected:
             self._index_sync.delete_after_commit(character_id=character_id, memory_id=target_id)
         self._repository.truncate_wal()

@@ -188,10 +188,71 @@ class EpisodicTransaction:
                   if source.role in {"user", "assistant"}}
         return tuple(unique.values())
 
+    def response_references(self, character_id: str) -> tuple[tuple[UUID, UUID, int], ...]:
+        return tuple((UUID(row[0]), UUID(row[1]), int(row[2])) for row in self._connection.execute(
+            "SELECT turn_id,memory_id,content_version FROM memory_response_dependencies WHERE character_id=?",
+            (character_id,),
+        ))
+
+    def legacy_response_sources(self, character_id: str) -> dict[tuple[UUID, int], set[UUID]]:
+        effective = response_provenance.legacy_source_turns(self._connection, character_id)
+        historical = response_provenance.legacy_source_turns(
+            self._connection, character_id, include_superseded=True,
+        )
+        current = self.legacy_versions(character_id)
+        nodes = {(memory_id, version) for _, memory_id, version in self.response_references(character_id)
+                 if memory_id in current}
+        nodes.update(current.items())
+        return {
+            (memory_id, version): {UUID(source_id) for source_id in (
+                effective if version == current[memory_id] else historical
+            )[str(memory_id)]}
+            for memory_id, version in nodes
+        }
+
+    def legacy_versions(self, character_id: str) -> dict[UUID, int]:
+        return {UUID(row[0]): int(row[1]) for row in self._connection.execute(
+            "SELECT id,content_version FROM approved_memories WHERE character_id=?", (character_id,),
+        )}
+
+    def erase_legacy_memory(self, character_id: str, memory_id: UUID) -> None:
+        self._writable()
+        self._connection.execute(
+            "DELETE FROM approved_memories WHERE character_id=? AND id=?",
+            (character_id, str(memory_id)),
+        )
+        self._enqueue_memory_delete(character_id, memory_id)
+
+    def deactivate_unsafe_legacy(self, character_id: str) -> tuple[UUID, ...]:
+        self._writable()
+        changed = []
+        for memory_id in sorted(self.invalid_legacy_ids(character_id), key=str):
+            result = self._connection.execute(
+                "UPDATE approved_memories SET status='INACTIVE',updated_at=? WHERE character_id=? AND id=? AND status='ACTIVE'",
+                (self._now, character_id, str(memory_id)),
+            )
+            if result.rowcount:
+                changed.append(memory_id)
+                self._enqueue_memory_delete(character_id, memory_id)
+        return tuple(changed)
+
+    def _enqueue_memory_delete(self, character_id: str, memory_id: UUID) -> None:
+        self._connection.execute(
+            """INSERT INTO memory_index_outbox
+               (id,memory_id,character_id,operation,status,attempt_count,last_error_code,created_at,updated_at)
+               VALUES (?,?,?,'DELETE','PENDING',0,NULL,?,?)""",
+            (str(uuid4()), str(memory_id), character_id, self._now, self._now),
+        )
+
     def invalid_response_ids(self, character_id: str) -> set[UUID]:
         return response_provenance.invalid_responses(
             self._connection, character_id, masks=self.source_masks(character_id),
         )
+
+    def invalid_legacy_ids(self, character_id: str) -> set[UUID]:
+        return response_provenance.invalid_provenance(
+            self._connection, character_id, masks=self.source_masks(character_id),
+        )[1]
 
     def response_sources_valid(self, character_id: str, sources: tuple[SourceSpan, ...]) -> bool:
         invalid = self.invalid_response_ids(character_id)

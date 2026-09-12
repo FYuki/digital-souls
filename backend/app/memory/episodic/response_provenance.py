@@ -108,19 +108,17 @@ def record_response(
     )
 
 
-def invalid_responses(
+def invalid_provenance(
     connection: sqlite3.Connection, character_id: str, *,
     masks: tuple[SourceSpan, ...] = (),
-) -> set[UUID]:
-    """版付き依存をたどり、循環・欠損・失効を含む回答を求める。"""
+) -> tuple[set[UUID], set[UUID]]:
+    """版付き依存をたどり、無効な回答と旧preferenceを求める。"""
     by_turn: dict[str, set[MemoryVersion]] = defaultdict(set)
     for turn_id, memory_id, version in connection.execute(
         "SELECT turn_id,memory_id,content_version FROM memory_response_dependencies WHERE character_id=?",
         (character_id,),
     ):
         by_turn[str(turn_id)].add((str(memory_id), int(version)))
-    if not by_turn:
-        return set()
     dependencies: dict[MemoryVersion, set[MemoryVersion]] = defaultdict(set)
     eligible: set[MemoryVersion] = set()
     invalid_sources = {(str(row[0]), int(row[1])) for row in connection.execute(
@@ -143,11 +141,20 @@ def invalid_responses(
         for source in sources:
             if source.role == "assistant":
                 dependencies[node].update(by_turn[str(source.source_id)])
+    legacy_nodes: set[MemoryVersion] = set()
+    removed_turns = {str(source.source_id) for source in masks}
+    removed_turns.update(source_id for source_id, _ in invalid_sources)
+    legacy_sources = legacy_source_turns(connection, character_id)
     for memory_id, version, status in connection.execute(
         "SELECT id,content_version,status FROM approved_memories WHERE character_id=?", (character_id,),
     ):
-        if status == "ACTIVE":
-            eligible.add((str(memory_id), int(version)))
+        node = str(memory_id), int(version)
+        legacy_nodes.add(node)
+        turns = legacy_sources[node[0]]
+        if status == "ACTIVE" and not turns & removed_turns:
+            eligible.add(node)
+        for turn_id in turns:
+            dependencies[node].update(by_turn[turn_id])
     for episode_id, episode_version, fact_id, fact_version, valid in connection.execute(
         "SELECT episode_id,episode_version,fact_id,fact_version,valid FROM episodic_links WHERE character_id=?",
         (character_id,),
@@ -179,4 +186,71 @@ def invalid_responses(
             waiting[dependent] -= 1
             if waiting[dependent] == 0:
                 pending.append(dependent)
-    return {UUID(turn_id) for turn_id, refs in by_turn.items() if not refs <= valid_nodes}
+    return (
+        {UUID(turn_id) for turn_id, refs in by_turn.items() if not refs <= valid_nodes},
+        {UUID(memory_id) for memory_id, version in legacy_nodes if (memory_id, version) not in valid_nodes},
+    )
+
+
+def invalid_responses(
+    connection: sqlite3.Connection, character_id: str, *, masks: tuple[SourceSpan, ...] = (),
+) -> set[UUID]:
+    return invalid_provenance(connection, character_id, masks=masks)[0]
+
+
+def legacy_source_turns(
+    connection: sqlite3.Connection, character_id: str, *, include_superseded: bool = False,
+) -> dict[str, set[str]]:
+    """旧記憶の会話出典。最新の明示的な手動訂正だけを独立した根拠として扱う。"""
+    sources: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for memory_id, kind, ref in connection.execute(
+        "SELECT memory_id,source_type,source_ref FROM memory_sources WHERE character_id=?", (character_id,),
+    ):
+        sources[str(memory_id)].append((str(kind), str(ref)))
+    result: dict[str, set[str]] = {}
+    parents: dict[str, set[str]] = defaultdict(set)
+    independent: set[str] = set()
+    for memory_id, write_key in connection.execute(
+        "SELECT id,last_write_idempotency_key FROM approved_memories WHERE character_id=?", (character_id,),
+    ):
+        evidence = sources[str(memory_id)]
+        result[str(memory_id)] = set()
+        if not include_superseded and any(kind == "USER_CORRECTION" and ref == write_key for kind, ref in evidence):
+            independent.add(str(memory_id))
+            continue
+        for kind, ref in evidence:
+            if kind == "CONSOLIDATION":
+                parents[str(memory_id)].add(ref)
+            if kind != "CONVERSATION_TURN":
+                continue
+            turn_id = conversation_source_id(ref)
+            if turn_id is not None:
+                result[str(memory_id)].add(str(turn_id))
+    for memory_id, related_id in connection.execute(
+        "SELECT memory_id,related_memory_id FROM memory_lineage WHERE character_id=?", (character_id,),
+    ):
+        parents[str(memory_id)].add(str(related_id))
+    # 旧consolidationは入力版を持たない。親を手動訂正しただけで既存の子の
+    # 旧出典を消し、独立した新しい根拠として扱わない。子自身の手動訂正は上で分離する。
+    historical_parents = (
+        {} if include_superseded else legacy_source_turns(connection, character_id, include_superseded=True)
+    )
+    changed = True
+    while changed:
+        changed = False
+        for memory_id, related_ids in parents.items():
+            if memory_id not in result or memory_id in independent:
+                continue
+            before = len(result[memory_id])
+            for related_id in related_ids:
+                result[memory_id].update(historical_parents.get(related_id, result.get(related_id, set())))
+            changed |= len(result[memory_id]) != before
+    return result
+
+
+def conversation_source_id(source_ref: str) -> UUID | None:
+    try:
+        turn_id = UUID(source_ref.rsplit(":", 1)[-1])
+    except ValueError:
+        return None
+    return turn_id if turn_id.version == 4 else None

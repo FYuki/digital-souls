@@ -163,12 +163,15 @@ class CombinedMemoryReadRepository:
 
     def get(self, *, character_id: str, memory_id: UUID) -> ReadableMemory | None:
         episodic = self.episodic.get(character_id=character_id, memory_id=memory_id)
-        return episodic if episodic is not None else self.legacy.get(
-            character_id=character_id, memory_id=memory_id,
-        )
+        if episodic is not None:
+            return episodic
+        if memory_id in self._invalid_legacy_ids(character_id):
+            return None
+        return self.legacy.get(character_id=character_id, memory_id=memory_id)
 
     def list_active(self, *, character_id: str) -> list[ReadableMemory]:
-        return [*self.legacy.list_active(character_id=character_id),
+        invalid = self._invalid_legacy_ids(character_id)
+        return [*(memory for memory in self.legacy.list_active(character_id=character_id) if memory.id not in invalid),
                 *self.episodic.list_active(character_id=character_id)]
 
     def list_character_ids(self) -> set[str]:
@@ -185,4 +188,9 @@ class CombinedMemoryReadRepository:
         episodic = [view for view in self.episodic.list_active(character_id=character_id)
                     if view.policy_version in compatible_policy_versions and view.five_w is not None
                     and matches_time(view.five_w.when, start, end)]
-        return [*legacy, *episodic]
+        invalid = self._invalid_legacy_ids(character_id)
+        return [*(memory for memory in legacy if memory.id not in invalid), *episodic]
+
+    def _invalid_legacy_ids(self, character_id: str) -> set[UUID]:
+        with self.episodic.repository.read() as tx:
+            return tx.invalid_legacy_ids(character_id)

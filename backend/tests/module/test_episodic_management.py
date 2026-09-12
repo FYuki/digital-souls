@@ -253,3 +253,107 @@ def test_delete_erases_assistant_paraphrase_even_without_fact_merge(harness, man
     with harness.repository.read() as tx:
         assert tx.get("miori", paraphrase.id).status is RecordStatus.DELETED
         assert all(v.five_w is None for v in tx.versions("miori", paraphrase.id))
+
+
+
+def recalled_record(harness, reference, *, kind=RecordKind.FACT, value=None):
+    from app.conversation_history.models import ProcessingTurnInput
+    from app.memory.episodic.response_provenance import record_response
+    from tests.conversation_history_test_support import create_repository
+
+    history = create_repository(harness.paths.sqlite_path, now=harness.now[0], uuid_factory=uuid4)
+    conversation = history.create_conversation("miori").conversation_id
+    turn = history.create_processing_turn("miori", conversation, ProcessingTurnInput("思い出して"))
+    with harness.repository.transaction() as tx:
+        record_response(
+            tx._connection, character_id="miori", conversation_id=conversation, turn_id=turn.turn_id,
+            references=((reference.id, reference.content_version),), created_at=harness.now[0].isoformat(),
+        )
+    turn = history.complete_turn("miori", conversation, turn.turn_id,
+                                 sanitized_assistant_content="うどんを食べたそうです")
+    source = SourceSpan(source_id=turn.turn_id, revision=2, role="assistant",
+                        start=0, end=len(turn.assistant_content), stated_at=turn.updated_at)
+    with harness.repository.transaction() as tx:
+        record = tx.create(character_id="miori", conversation_id=conversation, kind=kind,
+                           five_w=value or reference.five_w, sources=(source,), stamp=STAMP,
+                           receipt_id=uuid4()).record
+    return record, source
+
+
+@pytest.mark.parametrize("reference_kind", [RecordKind.FACT, RecordKind.EPISODE])
+def test_delete_erases_recalled_fact_across_threads(harness, management, reference_kind):
+    ep, fa, _ = initial(harness)
+    reference = fa if reference_kind is RecordKind.FACT else ep
+    derived, source = recalled_record(harness, reference)
+    _, client, purger = management
+    request = operation(1)
+    assert client.request("DELETE", f"{COLLECTION}/{fa.id}", json=request).status_code == 204
+    with harness.repository.read() as tx:
+        assert tx.get("miori", derived.id).status is RecordStatus.DELETED
+        assert all(v.five_w is None for v in tx.versions("miori", derived.id))
+        assert source.source_id in tx.invalid_response_ids("miori")
+        assert tx.get("miori", ep.id).status is RecordStatus.INACTIVE
+    assert ("miori", derived.id) in purger.ids
+    assert client.request("DELETE", f"{COLLECTION}/{fa.id}", json=request).status_code == 204
+
+
+def test_delete_erases_old_recalled_version_but_keeps_independent_correction(harness, management):
+    _, fa, _ = initial(harness)
+    derived, _ = recalled_record(harness, fa)
+    _, client, _ = management
+    assert client.patch(f"{COLLECTION}/{derived.id}", json=correction(1, "ラーメン")).status_code == 200
+    assert client.request("DELETE", f"{COLLECTION}/{fa.id}", json=operation(1)).status_code == 204
+    with harness.repository.read() as tx:
+        current = tx.get("miori", derived.id)
+        assert current.status is RecordStatus.ACTIVE and current.content_version == 2
+        assert current.five_w.what.object == "ラーメン"
+        versions = tx.versions("miori", derived.id)
+        assert versions[0].five_w is None and versions[1].five_w == current.five_w
+
+
+def test_delete_follows_multiple_responses_and_preserves_episode_identity(harness, management):
+    ep, fa, _ = initial(harness)
+    first, _ = recalled_record(harness, fa)
+    retold, _ = recalled_record(harness, first, kind=RecordKind.EPISODE)
+    last, _ = recalled_record(harness, retold)
+    _, client, _ = management
+    assert client.request("DELETE", f"{COLLECTION}/{fa.id}", json=operation(1)).status_code == 204
+    with harness.repository.read() as tx:
+        for record in (fa, first, last):
+            assert tx.get("miori", record.id).status is RecordStatus.DELETED
+            assert all(v.five_w is None for v in tx.versions("miori", record.id))
+        kept = tx.get("miori", retold.id)
+        assert kept.id == retold.id and kept.status is RecordStatus.INACTIVE
+        assert kept.five_w.when == retold.five_w.when
+        assert tx.versions("miori", retold.id)[0].five_w is None
+        assert tx.get("miori", ep.id).id == ep.id
+
+
+def test_delete_follows_old_preference_version_and_preserves_manual_new_version(harness, management):
+    from dataclasses import replace
+    from app.memory.persistence.approved_repository import ApprovedMemoryRepository
+    from app.memory.persistence.contracts import FormationMethod, MemorySourceInput, MemorySourceType
+    from tests.unit.test_approved_memory_repository import _candidate, _context
+
+    _, fa, turn = initial(harness)
+    legacy = ApprovedMemoryRepository(database_path=harness.paths.persona_memory_sqlite_path,
+                                      clock=lambda: harness.now[0], uuid_factory=uuid4,
+                                      outbox_uuid_factory=uuid4)
+    context = replace(_context(), idempotency_key=str(uuid4()),
+                      sources=(MemorySourceInput(source_type=MemorySourceType.CONVERSATION_TURN,
+                                                 source_provider_id="core", source_ref=str(turn.turn_id)),))
+    preference = legacy.save(character_id="miori", candidate=_candidate("うどんを好む"), context=context)
+    recalled, _ = recalled_record(harness, preference, value=fa.five_w)
+    key = str(uuid4())
+    corrected = legacy.correct(
+        character_id="miori", memory_id=preference.id, candidate=_candidate("そばを好む"),
+        context=replace(context, formation_method=FormationMethod.DIRECT, idempotency_key=key,
+                        sources=(MemorySourceInput(source_type=MemorySourceType.USER_CORRECTION,
+                                                   source_provider_id="core", source_ref=key),)),
+    )
+    _, client, _ = management
+    assert client.request("DELETE", f"{COLLECTION}/{fa.id}", json=operation(1)).status_code == 204
+    assert legacy.get(character_id="miori", memory_id=preference.id) == corrected
+    with harness.repository.read() as tx:
+        assert tx.get("miori", recalled.id).status is RecordStatus.DELETED
+        assert all(v.five_w is None for v in tx.versions("miori", recalled.id))
