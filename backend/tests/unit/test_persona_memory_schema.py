@@ -14,7 +14,7 @@ EXPECTED_TABLES = {
     "memory_index_outbox",
     "temporary_provider_records",
     "episodic_records", "episodic_versions", "episodic_links",
-    "episodic_merges", "episodic_receipts", "episodic_invalid_sources",
+    "episodic_merges", "episodic_receipts", "episodic_invalid_sources", "episodic_processed_spans",
 }
 MEMORY_ONE = "00000000-0000-4000-8000-000000000001"
 MEMORY_TWO = "00000000-0000-4000-8000-000000000002"

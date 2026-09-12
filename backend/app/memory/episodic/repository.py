@@ -389,3 +389,45 @@ class EpisodicTransaction:
                 params,
             )
         return ids
+
+
+    def is_processed(self, character_id: str, conversation_id: UUID, anchor: SourceSpan) -> bool:
+        """primary範囲で所有した開始位置を使い、分割境界と引用長の変動で再登録しない。"""
+        return self._connection.execute(
+            """SELECT 1 FROM episodic_processed_spans WHERE character_id = ? AND conversation_id = ?
+               AND source_id = ? AND revision = ? AND role = ? AND start <= ? AND end > ? LIMIT 1""",
+            (character_id, str(conversation_id), str(anchor.source_id), anchor.revision,
+             anchor.role, anchor.start, anchor.start),
+        ).fetchone() is not None
+
+    def mark_processed(
+        self, character_id: str, conversation_id: UUID, sources: tuple[SourceSpan, ...],
+    ) -> None:
+        self._writable()
+        for source in sources:
+            self._connection.execute(
+                "INSERT OR IGNORE INTO episodic_processed_spans VALUES (?,?,?,?,?,?,?,?)",
+                (character_id, str(conversation_id), str(source.source_id), source.revision,
+                 source.role, source.start, source.end, self._now),
+            )
+
+
+    def processed_ranges(
+        self, character_id: str, conversation_id: UUID, source: SourceSpan,
+    ) -> tuple[tuple[int, int], ...]:
+        rows = self._connection.execute(
+            """SELECT start,end FROM episodic_processed_spans
+               WHERE character_id = ? AND conversation_id = ? AND source_id = ? AND revision = ?
+               AND role = ? AND start < ? AND end > ? ORDER BY start,end""",
+            (character_id, str(conversation_id), str(source.source_id), source.revision,
+             source.role, source.end, source.start),
+        ).fetchall()
+        return tuple((int(row["start"]), int(row["end"])) for row in rows)
+
+
+    def receipt_record(self, character_id: str, receipt_id: UUID) -> Record | None:
+        row = self._connection.execute(
+            "SELECT record_id FROM episodic_receipts WHERE character_id = ? AND receipt_key = ?",
+            (character_id, str(receipt_id)),
+        ).fetchone()
+        return self.get(character_id, UUID(row["record_id"])) if row else None

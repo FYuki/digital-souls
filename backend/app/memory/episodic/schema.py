@@ -4,10 +4,21 @@ import sqlite3
 
 EPISODIC_TABLES = frozenset({
     "episodic_records", "episodic_versions", "episodic_links",
-    "episodic_merges", "episodic_receipts", "episodic_invalid_sources",
+    "episodic_merges", "episodic_receipts", "episodic_invalid_sources", "episodic_processed_spans",
 })
 
 DEFINITIONS = (
+    """CREATE TABLE episodic_processed_spans (
+        character_id TEXT NOT NULL,
+        conversation_id TEXT NOT NULL,
+        source_id TEXT NOT NULL,
+        revision INTEGER NOT NULL CHECK(revision > 0),
+        role TEXT NOT NULL CHECK(role IN ('user','assistant')),
+        start INTEGER NOT NULL CHECK(start >= 0),
+        end INTEGER NOT NULL CHECK(end > start),
+        processed_at TEXT NOT NULL,
+        PRIMARY KEY(character_id,conversation_id,source_id,revision,role,start,end)
+    )""",
     """CREATE TABLE episodic_invalid_sources (
         character_id TEXT NOT NULL,
         source_id TEXT NOT NULL,

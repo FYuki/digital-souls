@@ -210,7 +210,15 @@ class RecordKind(str, Enum):
     FACT = "FACT"
 
 
+class ExtractionIdentity(Contract):
+    provider_id: Identity
+    model_id: Identity
+    model_digest: Identity
+    prompt_version: Identity
+
+
 class FormationStamp(Contract):
+    extraction: ExtractionIdentity | None = None
     policy_version: Identity
     classifier_version: Identity
     model_id: Identity
