@@ -77,6 +77,7 @@ def main() -> int:
         "PYTHONPATH": str(ROOT / "backend"), "PYTHON_DOTENV_DISABLED": "1",
         "DS_ENVIRONMENT_ID": "test", "DS_DATA_DIR": str(data), "OLLAMA_BASE_URL": ollama,
         "RAG_ENABLED": "true", "DS_CHARACTER_LIFE_ENABLED": "false",
+        "SCREEN_ALLOWED_ORIGIN": frontend,
         "LLM_CONTEXT_TOKEN_LIMIT": "36864",
         "MEMORY_FORMATION_LLM_TIMEOUT_SECONDS": "180",
         "MEMORY_FORMATION_TOTAL_TIMEOUT_SECONDS": "400",
