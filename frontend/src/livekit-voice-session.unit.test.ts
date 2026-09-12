@@ -68,6 +68,24 @@ const setup = () => {
 }
 
 describe('通常会話UI向けLiveKit音声session', () => {
+  test('自動復旧が終了した接続は待機を続けず停止し、古い通知で再開しない', async () => {
+    vi.useFakeTimers()
+    const {controller, observations, dependencies} = setup()
+    const track = {enabled: true}
+    await controller.ensureSession({characterId: 'miori', conversationId: 'a'})
+    await controller.resumeMicrophone({getAudioTracks: () => [track]} as unknown as MediaStream)
+    observations[0]({transport: 'unavailable', control: 'unavailable', audio: 'unavailable'})
+    expect(controller.snapshot().phase).toBe('reconnecting')
+    observations[0]({transport: 'unavailable', control: 'unavailable', audio: 'unavailable', recoveryStopped: true})
+    expect(controller.snapshot().phase).toBe('error')
+    expect(track.enabled).toBe(false)
+    expect(dependencies.endSession).toHaveBeenCalledWith(SESSION_ID)
+    observations[0]({transport: 'available', control: 'available', audio: 'available'})
+    await vi.advanceTimersByTimeAsync(60_001)
+    expect(controller.snapshot().phase).toBe('error')
+    expect(dependencies.endSession).toHaveBeenCalledTimes(1)
+  })
+
   test('privacy終端がthinkingを解消し、後発応答の生成状態は消さない', async () => {
     const {controller, coreEventReceivers} = setup()
     await controller.ensureSession({characterId: 'miori', conversationId: 'a'})
@@ -133,6 +151,31 @@ describe('通常会話UI向けLiveKit音声session', () => {
     expect(track.enabled).toBe(true)
     expect(controller.snapshot().input).toBe('listening')
     expect(events.filter(event => event.type === 'audio_input_suppression_changed').map(event => event.suppressed)).toEqual([true, false])
+  })
+
+  test('テキスト入力中は回答再生を続け、送信時だけ旧回答を止める', async () => {
+    const {controller, room, events, coreEventReceivers, observations} = setup()
+    const context = {characterId: 'miori', conversationId: 'a'}
+    const responseId = '50000000-0000-4000-8000-000000000051'
+    const track = {enabled: true}
+    await controller.ensureSession(context)
+    await controller.resumeMicrophone({getAudioTracks: () => [track]} as unknown as MediaStream)
+    coreEventReceivers[0]({type: 'response_started', response_id: responseId} as VoiceSessionEvent)
+    observations[0]({transport: 'available', control: 'available', audio: 'available',
+      activeResponseId: responseId, renderedEnergy: 1})
+    expect(controller.snapshot().playback).toBe('playing')
+    await controller.setTextInputFocused(context, true)
+    await controller.speechStarted(UTTERANCE_ID, 1010)
+    await controller.speechStopped(UTTERANCE_ID, 1020)
+    expect(track.enabled).toBe(false)
+    expect(controller.snapshot()).toMatchObject({input: 'suppressed', playback: 'playing'})
+    expect(room.stopPlayback).not.toHaveBeenCalled()
+    expect(events.some(e => ['speech_started', 'speech_stopped', 'response_cancel_requested', 'playback_stopped'].includes(e.type))).toBe(false)
+    await controller.submitText(context, '次の質問')
+    expect(room.stopPlayback).toHaveBeenCalledWith(responseId)
+    expect(controller.snapshot().playback).toBe('stopped')
+    expect(events.map(e => e.type)).toEqual(expect.arrayContaining(['response_cancel_requested', 'user_text_submitted']))
+    await controller.end()
   })
 
   test.each(['manual', 'thread_switch'] as const)('%s muteはfocus解除や別スレッドの操作で解除しない', async reason => {

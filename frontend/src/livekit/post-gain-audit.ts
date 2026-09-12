@@ -128,6 +128,8 @@ export class PostGainOutputAudit {
   private clockFailure: GainAuditSnapshot['clockFailure'] = null
   private lastClock: {contextTime: number; performanceTime: number; observedAtMs: number} | null = null
 
+  constructor(private readonly options: {clockRegression?: 'fail' | 'wait'} = {}) {}
+
   markCancelled(bounds: Bounds, observedAtMs: number, confirmedOutputFrameFloor?: number): void {
     const floor = confirmedOutputFrameFloor ?? null
     if (this.cancel !== null && bounds.lowerMs === this.cancel.lowerMs && bounds.upperMs === this.cancel.upperMs
@@ -205,6 +207,9 @@ export class PostGainOutputAudit {
     if (performanceTime + this.roundingMarginMs > observedAtMs) return
     if (this.lastClock !== null && (contextTime < this.lastClock.contextTime
       || performanceTime < this.lastClock.performanceTime || observedAtMs < this.lastClock.observedAtMs)) {
+      // 停止専用の確認では逆行値を採用せず、既存anchorを保持して次の実測を待つ。
+      // 全再生の品質監査は従来どおり欠測とする。
+      if (this.options.clockRegression === 'wait') return
       this.clockFailure = {stage: 'timestamp_regression', values: {contextTime, performanceTime, observedAtMs,
         previousContextTime: this.lastClock.contextTime, previousPerformanceTime: this.lastClock.performanceTime,
         previousObservedAtMs: this.lastClock.observedAtMs}}

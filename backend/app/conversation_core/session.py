@@ -241,9 +241,10 @@ class ConversationCoreSession:
     ) -> Response | None:
         start_task: asyncio.Task[Response] | None = None
         async with self._state_lock:
-            self._require_available()
+            # 配送やロック待ちの間に失効したSTT結果は、新規入力の例外にせず破棄する。
             if control_input_valid is not None and not control_input_valid():
                 return None
+            self._require_available()
             existing = self._inputs.get(item.input_id)
             if existing is not None:
                 if (existing.source, existing.text, existing.should_response, existing.control_request_id) != (
@@ -670,6 +671,7 @@ class ConversationCoreSession:
         if self._ended or not self._connected:
             return
         self._connected = False
+        self._speech_generation += 1
         self._notify_interruption("disconnect")
         await self._terminate_active_for_shutdown("disconnect")
         self._discard_pending("disconnect")
@@ -685,6 +687,7 @@ class ConversationCoreSession:
         if self._ended:
             return
         self._connected = False
+        self._speech_generation += 1
         self._ended = True
         self._notify_interruption("session_ended")
         await self._terminate_active_for_shutdown("session_ended")

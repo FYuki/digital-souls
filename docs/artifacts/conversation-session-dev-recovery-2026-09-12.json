@@ -1,0 +1,62 @@
+{
+  "source_commit": "648ea12a28a9c1c81e73be852392be9b74c05e2a",
+  "main_commit": "051115fa445e432274fa6b07e9b53a647fc429c1",
+  "date": "2026-09-12",
+  "profile": "dev-voice",
+  "runtime_rag_enabled": false,
+  "runs": [
+    {
+      "case": "long-after",
+      "windows_chrome_headed": false,
+      "audio_output_enabled": false,
+      "transport_failures": [],
+      "core_event_counts": {
+        "response_started": 1,
+        "user_input_result": 1,
+        "response_delta": 101,
+        "response_audio_segment": 9,
+        "observation": 1,
+        "response_completed": 1
+      },
+      "completed_playbacks": 1,
+      "raw_sha256": "9c9f6508449da7b6565faad6a82a6e7d14d18f5ac6f11b5fe305a9364f84ac88"
+    },
+    {
+      "case": "audible-after",
+      "windows_chrome_headed": true,
+      "audio_output_enabled": true,
+      "transport_failures": [],
+      "core_event_counts": {
+        "response_started": 1,
+        "user_input_result": 1,
+        "response_delta": 83,
+        "response_audio_segment": 8,
+        "observation": 1,
+        "response_completed": 1
+      },
+      "completed_playbacks": 1,
+      "raw_sha256": "a1e26ca23f39b8a7e8e71ab43ebf294e59b7d0089d3c3ca413f4aeccd7519e5f"
+    },
+    {
+      "case": "voice-after",
+      "windows_chrome_headed": false,
+      "audio_output_enabled": false,
+      "transport_failures": [],
+      "core_event_counts": {
+        "utterance_finalized": 1,
+        "response_started": 1,
+        "response_delta": 12,
+        "response_audio_segment": 2,
+        "observation": 1,
+        "response_completed": 1
+      },
+      "completed_playbacks": 1,
+      "raw_sha256": "869ad5ebc3dea52cad164a33fcd08b1d65fe6fcec6fac3f04f4d21f6b01a01bf"
+    }
+  ],
+  "limits": [
+    "固定音声・テキストによる実サービス試験。ユーザーの生マイクでの再受入は未実施。",
+    "以前の頻発する再生中切断を再現していないため、その根本原因の解消は未証明。",
+    "SDKのv1 endpoint 404からv0へのfallbackと_data_track警告は成功した接続でも出るため、今回の修正対象とはしない。"
+  ]
+}

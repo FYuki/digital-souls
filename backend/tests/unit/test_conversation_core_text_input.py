@@ -200,3 +200,48 @@ def test_text_preserves_finalized_pending_speech_while_interrupting_response() -
         assert session.response(previous.response_id).state.value == "cancelled"
         await session.end()
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("shutdown", ["disconnect", "end"])
+def test_stt_finalization_waiting_for_lock_is_discarded_after_shutdown(shutdown) -> None:
+    async def run():
+        session, _, persistence, *_ = _session()
+        input_id = str(uuid4())
+        generation = session._speech_generation
+        await session._state_lock.acquire()
+        task = asyncio.create_task(session.finalize_utterance(
+            utterance_id=input_id, transcript="遅れて届いた発話", should_response=True,
+            control_input_valid=lambda: session.accepting_input and generation == session._speech_generation,
+        ))
+        await asyncio.sleep(0)
+        await getattr(session, shutdown)()
+        session._state_lock.release()
+        assert await task is None
+        assert persistence.starts == []
+        with pytest.raises(KeyError):
+            session.user_input(input_id)
+        with pytest.raises(RuntimeError, match="session is not available"):
+            await session.finalize_utterance(
+                utterance_id=str(uuid4()), transcript="新規入力", should_response=True,
+            )
+        await session.end()
+    asyncio.run(run())
+
+
+def test_reconnect_does_not_revalidate_stt_from_previous_connection() -> None:
+    async def run():
+        session, _, persistence, *_ = _session()
+        generation = session._speech_generation
+        await session.disconnect()
+        await session.reconnect()
+        result = await session.finalize_utterance(
+            utterance_id=str(uuid4()), transcript="旧接続の発話", should_response=True,
+            control_input_valid=lambda: session.accepting_input and generation == session._speech_generation,
+        )
+        assert result is None
+        assert persistence.starts == []
+        fresh = await session.submit_text(input_id=str(uuid4()), text="再接続後の入力")
+        assert fresh is not None
+        assert len(persistence.starts) == 1
+        await session.end()
+    asyncio.run(run())

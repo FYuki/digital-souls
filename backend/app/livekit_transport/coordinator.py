@@ -93,10 +93,7 @@ class ProductionSessionCoordinator:
             notify=self._record_terminal_outcome,
         )
         self._delivery = CoreEventDelivery(core_port=core_port)
-        self._outbound_deduplicator = EventDeduplicator(
-            max_events=OUTBOX_MAX_EVENTS * 2,
-            max_bytes=OUTBOX_MAX_BYTES * 2,
-        )
+        self._outbound_deduplicator = EventDeduplicator()
         self._outbound_sequences = EventSequenceTracker()
         self._outboxes = InMemoryOutboxManager(
             max_events=OUTBOX_MAX_EVENTS,

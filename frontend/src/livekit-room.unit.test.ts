@@ -447,6 +447,50 @@ describe('LiveKit Room generation synchronization', () => {
     client.disconnect()
   })
 
+  test.each(['unsubscribed', 'stopped', 'replaced'])('旧購読の復号失敗で会話を終了しない（%s）', async mode => {
+    const observations: RoomObservation[] = []
+    const client = new LiveKitRoomClient(row => observations.push(row))
+    await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+    const room = latestRoom()
+    const responseId = '50000000-0000-4000-8000-000000000001'
+    const track = {kind: 'audio', mediaStreamTrack: {}}
+    const publication = {trackSid: 'TR_late', trackName: `ds-response-v1:${responseId}`}
+    room.emit('trackSubscribed', track, publication)
+    await vi.waitFor(() => expect(audioContexts.at(-1)?.renderWorklets).toHaveLength(1))
+    const old = mediaMocks.observers.at(-1)!
+    if (mode === 'stopped') client.stopPlayback(responseId)
+    else room.emit('trackUnsubscribed', track, publication)
+    if (mode === 'replaced') {
+      room.emit('trackSubscribed', track, publication)
+      await vi.waitFor(() => expect(mediaMocks.observers).toHaveLength(2))
+    }
+    old.playback!.failed()
+    expect(observations.filter(row => row.failureStage)).toEqual([])
+    client.disconnect()
+  })
+
+  test('購読解除でready待機が拒否されても接続エラーにしない', async () => {
+    const observations: RoomObservation[] = []
+    const client = new LiveKitRoomClient(row => observations.push(row))
+    await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+    const room = latestRoom()
+    const blocker = deferred()
+    workletBlockers.push(blocker)
+    const track = {kind: 'audio', mediaStreamTrack: {}}
+    const publication = {trackSid: 'TR_cancel_ready', trackName: 'ds-response-v1:50000000-0000-4000-8000-000000000001'}
+    room.emit('trackSubscribed', track, publication)
+    const observer = mediaMocks.observers.at(-1)! as unknown as {ready: () => Promise<void>; close: () => void}
+    let reject!: (error: Error) => void
+    observer.ready = () => new Promise<void>((_resolve, rejectReady) => {reject = rejectReady})
+    observer.close = () => reject(new Error('media observer closed'))
+    blocker.resolve()
+    await vi.waitFor(() => expect(reject).toBeTypeOf('function'))
+    room.emit('trackUnsubscribed', track, publication)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(observations.filter(row => row.failureStage)).toEqual([])
+    client.disconnect()
+  })
+
   test('ready送信の完了が切断後に戻っても音声利用可能へ戻さない', async () => {
     const observations: RoomObservation[] = []
     const client = new LiveKitRoomClient(value => observations.push(value))
@@ -1560,4 +1604,27 @@ test('往復確認中にサーバーが再びunavailableになったら状態同
     expect(client.isAudioProbeReady()).toBe(true)
     expect(vi.getTimerCount()).toBe(0)
   } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+
+test('SDKの再試行中と最終切断を区別して通知する', async () => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(value => observations.push(value))
+  await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
+  latestRoom().emit('reconnecting')
+  expect(observations.at(-1)).toMatchObject({transport: 'unavailable'})
+  expect(observations.at(-1)?.recoveryStopped).not.toBe(true)
+  latestRoom().emit('disconnected', 1)
+  expect(observations.at(-1)).toMatchObject({transport: 'unavailable', recoveryStopped: true})
+  client.disconnect()
+})
+
+test('呼び出し元が復旧する一時切断を最終切断と誤認しない', async () => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(value => observations.push(value))
+  await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
+  observations.length = 0
+  client.temporaryDisconnect()
+  expect(observations.some(value => value.recoveryStopped)).toBe(false)
+  client.disconnect()
 })

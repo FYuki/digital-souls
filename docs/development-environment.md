@@ -218,3 +218,19 @@ devは`infra/livekit/compose.yaml`を起動し、Backendへ`LIVEKIT_URL`、`LIVE
 ## テストとの関係
 
 テスト層と外部サービス実接続の扱いは `docs/testing-policy.md` を参照する。VOICEVOX / Whisper / ChromaDB / Ollama の実接続を完了条件として報告する場合は、同ドキュメントのインテグレーションテスト方針に従い、実サービスへの接続ログを一次証跡にする。
+
+
+## 記憶検索を使わない実マイク確認
+
+音声・テキスト会話のみを確認するときは `DS_PROFILE=dev-voice` で
+`scripts/start-all.sh` を起動する。devと同じポートを使うため、既存のdevは所有run reportで
+停止してから切り替える。`DS_ENVIRONMENT_ID=dev` と専用data rootを使用する。
+Ollama／VOICEVOX／Whisper／LiveKitは既存externalサービスを再利用し、停止対象にしない。
+
+RAGの有効・無効はProfileのChroma modeが正本であり、`RAG_ENABLED=false` の環境変数だけでは
+`dev` の設定を上書きできない。`dev-voice` はChromaをdisabledにして、解決済み設定と
+起動後Backendの `RAG_ENABLED=false` が一致するようにする。既存の索引や履歴は削除しない。
+
+音声接続の自動再試行中は復旧表示を維持する。SDKの最終切断やアプリ側の音声処理失敗で
+再試行が終了した場合は停止状態と「音声会話を再開」を表示し、実際には再接続していない
+状態で復旧表示を続けない。履歴と未確認送信は保持する。
