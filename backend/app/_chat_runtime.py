@@ -29,7 +29,7 @@ from app.model_settings import ModelSettings
 from app.runtime_paths import RuntimePaths
 from app.memory import rag_service as _rag_service
 from app.memory.chroma_store import MemorySearchResult
-from app.memory.persistence.approved_repository import ApprovedMemoryRepository
+from app.memory.read_contracts import MemoryReadRepository
 from app.memory.persistence.sqlite import format_datetime
 from app.memory.formation.contracts import MemoryFormationJob
 from app.prompting import (
@@ -112,7 +112,7 @@ class ChatRuntimeDependencies:
     input_token_counter: InputTokenCounter
     privacy_scanner: PrivacyScanner
     semantic_classifier: SemanticPrivacyClassifier
-    approved_memory_repository: ApprovedMemoryRepository
+    approved_memory_repository: MemoryReadRepository
     memory_embedder: Callable[[str], list[float]]
     memory_formation_submitter: MemoryFormationSubmitter
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
@@ -680,6 +680,7 @@ def _rag_context_for_reply(
                 raw_distance=memory.raw_distance,
                 reference=PromptMemoryReference(
                     memory_id=memory.memory_id,
+                    content_version=memory.content_version,
                     occurred_at=(
                         None
                         if memory.occurred_at is None
@@ -699,6 +700,9 @@ def _rag_context_for_reply(
 
 
 def _memory_prompt_content(memory: MemorySearchResult, timezone: str) -> str:
+    if memory.temporal_text is not None:
+        # Episode/Factの本文は元のtimezone・精度・範囲を含む。config変更で再解釈しない。
+        return memory.normalized_text
     if memory.occurred_at is None:
         return memory.normalized_text
     occurred_at = datetime.fromisoformat(memory.occurred_at).astimezone(
@@ -934,6 +938,7 @@ def _log_prompt_references(prompt: BuiltPrompt) -> None:
             tuple(
                 {
                     "memory_id": reference.memory_id,
+                    "content_version": reference.content_version,
                     "occurred_at": (
                         None
                         if reference.occurred_at is None

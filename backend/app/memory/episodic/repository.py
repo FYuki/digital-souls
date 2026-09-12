@@ -105,6 +105,12 @@ class EpisodicTransaction:
         ).fetchone()
         return _record(row) if row is not None else None
 
+    def list_character_ids(self) -> set[str]:
+        rows = self._connection.execute(
+            "SELECT DISTINCT character_id FROM episodic_records"
+        ).fetchall()
+        return {str(row["character_id"]) for row in rows}
+
     def list_records(
         self, character_id: str, *, conversation_id: UUID | None = None,
         kind: RecordKind | None = None, active_only: bool = True,

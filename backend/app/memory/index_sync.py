@@ -20,8 +20,9 @@ from app.memory.chroma_store import (
     memory_index_metadata,
     upsert_memory_index_entry,
 )
-from app.memory.persistence.approved_repository import ApprovedMemoryRepository
-from app.memory.persistence.contracts import ApprovedMemory, MemoryStatus
+from app.memory.read_contracts import MemoryReadRepository
+from app.memory.persistence.contracts import MemoryStatus
+from app.memory.read_contracts import ReadableMemory
 from app.memory.persistence.index_outbox_repository import (
     IndexOutboxEntry,
     IndexOutboxRepository,
@@ -49,7 +50,7 @@ class MemoryIndexSync:
     def __init__(
         self,
         *,
-        approved_repository: ApprovedMemoryRepository,
+        approved_repository: MemoryReadRepository,
         outbox_repository: IndexOutboxRepository,
         chroma_path: Path,
         runtime_report_dir: Path,
@@ -331,7 +332,7 @@ class MemoryIndexSync:
 
     def _reconcile_memory(
         self,
-        memory: ApprovedMemory,
+        memory: ReadableMemory,
         is_indexed: bool,
         *,
         force_upsert: bool,
@@ -364,7 +365,7 @@ class MemoryIndexSync:
 
     def _upsert_memory(
         self,
-        memory: ApprovedMemory,
+        memory: ReadableMemory,
         *,
         fingerprint: EmbeddingFingerprint | None = None,
         embedding: list[float] | None = None,
@@ -497,7 +498,7 @@ class MemoryIndexSync:
 
 
 def _memory_metadata(
-    memory: ApprovedMemory, fingerprint: EmbeddingFingerprint
+    memory: ReadableMemory, fingerprint: EmbeddingFingerprint
 ) -> dict[str, str]:
     return memory_index_metadata(
         character_id=memory.character_id,

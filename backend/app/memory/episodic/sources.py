@@ -58,6 +58,12 @@ class ConversationSourceGuard:
         self._retention = retention
 
     @contextmanager
+    def snapshot(self) -> Iterator[tuple[sqlite3.Connection, datetime]]:
+        """複数記憶の検証中に履歴を固定する。外部推論をこの中で実行しない。"""
+        with self._database.transaction() as connection:
+            yield connection, self._clock() - self._retention
+
+    @contextmanager
     def guard(
         self, *, character_id: str, conversation_id: UUID, sources: tuple[SourceSpan, ...],
     ) -> Iterator[sqlite3.Connection]:
