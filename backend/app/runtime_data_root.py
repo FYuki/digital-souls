@@ -33,8 +33,7 @@ def initialize_runtime_data_root(
     paths: RuntimePaths, repository_root: Path
 ) -> None:
     _validate_path_contract(paths, repository_root)
-    if paths.identity_marker_path.exists():
-        _validate_identity_marker(paths)
+    # marker作成中の部分書き込みを読まないよう、検証も作成と同じlock内で行う。
     with _identity_lock(paths.data_root):
         if paths.identity_marker_path.exists():
             _validate_identity_marker(paths)
@@ -50,9 +49,10 @@ def validate_existing_runtime_data_root(
     paths: RuntimePaths, repository_root: Path
 ) -> None:
     _validate_path_contract(paths, repository_root)
-    if not paths.identity_marker_path.exists():
-        raise ValueError("runtime data root identity marker is missing")
-    _validate_identity_marker(paths)
+    with _identity_lock(paths.data_root):
+        if not paths.identity_marker_path.exists():
+            raise ValueError("runtime data root identity marker is missing")
+        _validate_identity_marker(paths)
 
 
 def remove_legacy_chroma_index_once(
