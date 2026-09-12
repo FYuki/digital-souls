@@ -18,8 +18,8 @@ INFERENCE_TARGET_PRIVACY_MAX_INPUT_TOKENS=7680
 INFERENCE_TARGET_PRIVACY_MAX_OUTPUT_TOKENS=512
 INFERENCE_TARGET_PRIVACY_OPTIONS_JSON={"temperature":0}
 INFERENCE_TARGET_MEMORY_EXTRACTION=ollama/gemma4:e4b
-INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_INPUT_TOKENS=7680
-INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS=512
+INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_INPUT_TOKENS=32768
+INFERENCE_TARGET_MEMORY_EXTRACTION_MAX_OUTPUT_TOKENS=4096
 INFERENCE_TARGET_MEMORY_EXTRACTION_OPTIONS_JSON={"temperature":0}
 INFERENCE_TARGET_MEMORY_CONSOLIDATION=ollama/gemma4:12b
 INFERENCE_TARGET_MEMORY_CONSOLIDATION_MAX_INPUT_TOKENS=7680
@@ -157,3 +157,17 @@ npm run eval:screen-reference:conformance
 この結果は本文非保持のsynthetic route conformanceであり、実モデル品質の代用ではない。実接続証跡は
 UTC日時、commit、環境区分、Provider／Model、合成fixture ID、成功可否、分岐、区間遅延だけを#217へ
 記録する。対象特定率と実質回答開始P50／P95はモデルごとの反復結果から別途集計する。
+
+
+## Episode / Fact抽出の入力と出力予算
+
+#340の構造化抽出はスレッドの発言範囲と既存Episode / Factの文脈を使うため、
+設定例のMEMORY_EXTRACTIONを入力32,768・出力4,096 tokensにする。
+実モデルがこの合計contextを扱えることをdevの実接続で確認し、必要に応じて設定する。
+既存環境の設定やdogfood稼働データは、文書・設定例の更新だけでは変更されない。
+
+会話応答は抽出を待たない。予約は会話履歴と同じSQLite transactionで確定し、
+通常起動時に未処理予約を回収する。抽出失敗・モデル識別情報の取得失敗では予約を残して再試行する。
+推論時間は既存のMEMORY_FORMATION_LLM_TIMEOUT_SECONDSとTOTAL_TIMEOUT_SECONDSで調整する。
+入力予算を超えた発言は分割して処理し、完了したように見せて切り捨てない。
+既存Factが多い場合の候補探索・予算対応と、実モデルの抽出品質は#340の最終受入で検証する。

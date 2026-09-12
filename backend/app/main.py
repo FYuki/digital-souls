@@ -79,6 +79,9 @@ from app.memory.formation.config import resolve_memory_formation_settings
 from app.memory.formation.contracts import MemoryFormationJob
 from app.memory.formation.extractor import EXTRACTOR_VERSION, MemoryCandidateExtractor
 from app.memory.formation.scheduler import MemoryFormationScheduler
+from app.memory.formation.combined_scheduler import CombinedFormationScheduler
+from app.memory.formation.runtime import build_episodic_scheduler
+from app.memory.episodic.privacy import EpisodicPrivacyReviewer
 from app.memory.formation.worker import MemoryFormationWorker
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
 from app.memory.episodic.repository import EpisodicRepository
@@ -694,8 +697,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             memory_candidate_extractor = MemoryCandidateExtractor(
                 client=memory_extractor_client,
                 settings=formation_settings,
+                preferences_only=True,
             )
-            memory_formation_scheduler = MemoryFormationScheduler(
+            preference_formation_scheduler = MemoryFormationScheduler(
                 worker=MemoryFormationWorker(
                     conversation_repository=conversation_history_repository,
                     extractor=memory_candidate_extractor,
@@ -704,6 +708,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 ),
                 max_queue_age_seconds=formation_settings.max_queue_age_seconds,
                 queue_maxsize=formation_settings.queue_maxsize,
+            )
+            def episodic_entity_labels(character_id: str) -> dict[str, str]:
+                card = load_character_card(character_id)
+                return {"speaker:user": "ユーザー", f"character:{character_id}": card.data.name}
+
+            memory_formation_scheduler = CombinedFormationScheduler(
+                preference_formation_scheduler,
+                build_episodic_scheduler(
+                    history_path=conversation_history_config.database_path,
+                    repository=episodic_repository, clock=clock,
+                    retention=conversation_history_config.retention, timezone=occurred_timezone,
+                    reviewer=EpisodicPrivacyReviewer(
+                        scanner=privacy_scanner, classifier=semantic_privacy_classifier,
+                        policy=policy.privacy,
+                    ),
+                    client=memory_extractor_client, settings=formation_settings,
+                    runtime=inference_runtime, entity_labels=episodic_entity_labels,
+                ),
             )
             await memory_formation_scheduler.start()
             memory_formation_scheduler_started = True
