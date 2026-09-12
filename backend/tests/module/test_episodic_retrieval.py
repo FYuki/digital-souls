@@ -372,3 +372,78 @@ def test_removed_input_also_blocks_fact_derived_from_assistant_paraphrase(h):
     assert h.read.get(character_id="miori", memory_id=paraphrase.id).five_w is None
     with h.episodic.read() as tx:
         assert tx.get("miori", paraphrase.id).status is RecordStatus.ACTIVE
+
+
+
+def test_prior_recall_answer_cannot_reintroduce_manually_corrected_fact(h):
+    from app.memory.response_provenance_recorder import ResponseProvenanceRecorder
+    from app.memory.episodic.management import EpisodicMemoryManagement
+    from app.prompting import PromptMemoryReference, RagContext, RagItem
+    from tests.prompt_test_support import prompt_build_input, prompt_builder
+    from app.memory.episodic.privacy import PrivacyReview
+
+    original = h.create()
+    conversation = h.history.create_conversation("miori").conversation_id
+    started = h.history.create_processing_turn(
+        "miori", conversation, ProcessingTurnInput("旅行先を思い出して"),
+    )
+    prompt = prompt_builder().build(prompt_build_input(rag=RagContext(items=(
+        RagItem("旅行の記憶", 0.1, PromptMemoryReference(
+            str(original.id), None, None, "SEMANTIC", original.content_version,
+        )),
+    ))))
+    recorder = ResponseProvenanceRecorder(h.paths.persona_memory_sqlite_path)
+    recorder.record(started, prompt)
+    response = h.history.complete_turn(
+        "miori", conversation, started.turn_id, sanitized_assistant_content="月を想像した旅行でした",
+    )
+    source = SourceSpan(source_id=response.turn_id, revision=2, role="assistant",
+                        start=0, end=len(response.assistant_content), stated_at=response.updated_at)
+    with h.episodic.transaction() as tx:
+        recalled = tx.create(
+            character_id="miori", conversation_id=conversation, kind=RecordKind.FACT,
+            five_w=h.value(), sources=(source,), stamp=STAMP, receipt_id=uuid4(),
+        ).record
+    h.index.run_worker_once()
+    assert str(recalled.id) in {result.memory_id for result in h.retrieve().memories}
+    reviewer = Mock()
+    reviewer.review.return_value = PrivacyReview(True, "ALLOW", STAMP)
+    service = EpisodicMemoryManagement(
+        reader=h.read.episodic, reviewer=reviewer, clock=lambda: NOW, index_sync=h.index,
+    )
+    service.correct(character_id="miori", record_id=original.id, expected_version=1,
+                    five_w=h.value(predicate="訂正済みの旅行"), idempotency_key=uuid4())
+    # 派生Factの古いChroma行が残っていてもSQLiteの出典検証で即座に除外する。
+    view = h.read.get(character_id="miori", memory_id=recalled.id)
+    assert view.status is MemoryStatus.INACTIVE and view.normalized_text == ""
+    h.index.run_worker_once()
+    results = h.retrieve()
+    assert str(recalled.id) not in {result.memory_id for result in results.memories}
+    assert any(result.memory_id == str(original.id) and result.content_version == 2 for result in results.memories)
+
+
+def test_generated_reply_using_concurrently_corrected_memory_is_not_committed(h):
+    from app.memory.response_provenance_recorder import ResponseProvenanceRecorder
+    from app.prompting import PromptMemoryReference, RagContext, RagItem
+    from tests.prompt_test_support import prompt_build_input, prompt_builder
+
+    original = h.create()
+    started = h.history.create_processing_turn(
+        "miori", h.conversation, ProcessingTurnInput("思い出して"),
+    )
+    prompt = prompt_builder().build(prompt_build_input(rag=RagContext(items=(
+        RagItem("採用済みの記憶", 0.1, PromptMemoryReference(
+            str(original.id), None, None, "SEMANTIC", 1,
+        )),
+    ))))
+    with h.episodic.transaction() as tx:
+        tx.update(character_id="miori", record_id=original.id, expected_version=1,
+                  five_w=h.value(predicate="訂正した"),
+                  sources=(SourceSpan(source_id=uuid4(), revision=1, role="manual",
+                                      start=0, end=1, stated_at=NOW),),
+                  stamp=STAMP, receipt_id=uuid4())
+    recorder = ResponseProvenanceRecorder(h.paths.persona_memory_sqlite_path)
+    with pytest.raises(ValueError, match="invalid memory version"):
+        recorder.record(started, prompt)
+    with h.episodic.read() as tx:
+        assert started.turn_id in tx.invalid_response_ids("miori")

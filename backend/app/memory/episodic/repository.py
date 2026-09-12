@@ -21,6 +21,7 @@ from app.memory.episodic.contracts import (
     Reference, SourceSpan, What,
 )
 from app.memory.episodic.source_masks import overlaps_mask
+from app.memory.episodic import response_provenance
 from app.memory.persistence.sqlite import PersonaMemorySqlite, format_datetime, parse_datetime
 
 
@@ -187,6 +188,15 @@ class EpisodicTransaction:
                   if source.role in {"user", "assistant"}}
         return tuple(unique.values())
 
+    def invalid_response_ids(self, character_id: str) -> set[UUID]:
+        return response_provenance.invalid_responses(
+            self._connection, character_id, masks=self.source_masks(character_id),
+        )
+
+    def response_sources_valid(self, character_id: str, sources: tuple[SourceSpan, ...]) -> bool:
+        invalid = self.invalid_response_ids(character_id)
+        return not any(source.role == "assistant" and source.source_id in invalid for source in sources)
+
     def require_valid_sources(self, character_id: str, sources: tuple[SourceSpan, ...]) -> None:
         self._valid_sources(character_id, sources)
 
@@ -232,6 +242,8 @@ class EpisodicTransaction:
 
     def _valid_sources(self, character_id: str, sources: tuple[SourceSpan, ...]) -> str:
         encoded = _sources_json(sources)
+        if not self.response_sources_valid(character_id, sources):
+            raise RecordConflict("response depends on an invalid memory version")
         masks = self.source_masks(character_id)
         for source in sources:
             if overlaps_mask(source, masks):

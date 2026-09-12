@@ -509,7 +509,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             uuid_factory=uuid4,
             outbox_uuid_factory=uuid4,
         )
+        from app.memory.response_provenance_recorder import ResponseProvenanceRecorder
+
         episodic_repository = EpisodicRepository(runtime_paths.persona_memory_sqlite_path)
+        response_provenance_recorder = ResponseProvenanceRecorder(runtime_paths.persona_memory_sqlite_path)
         memory_read_repository = CombinedMemoryReadRepository(
             approved_memory_repository,
             EpisodicReadRepository(
@@ -869,6 +872,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     clock=clock,
                     tools=app.state.tool_service,
                     life_context=life_context,
+                    response_provenance_recorder=response_provenance_recorder.record,
+                    response_history_filter=response_provenance_recorder.filter_history,
                 ),
             )
             app.state.chat_service = app_chat_service

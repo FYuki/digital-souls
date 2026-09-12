@@ -124,6 +124,8 @@ def test_reply_does_not_wait_and_lifespan_forms_episode_fact_link(model, runtime
             assert model.entered.wait(timeout=2)
             assert not model.release.is_set()
             assert records(runtime_paths) == []
+            with sqlite3.connect(runtime_paths.persona_memory_sqlite_path) as connection:
+                assert connection.execute("SELECT COUNT(*) FROM memory_response_origins").fetchone()[0] == 1
         finally:
             model.release.set()
         wait_for_records(runtime_paths)

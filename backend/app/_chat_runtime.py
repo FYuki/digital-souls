@@ -118,6 +118,8 @@ class ChatRuntimeDependencies:
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
     tools: ToolService | None = None
     life_context: Callable[[str, BuiltPrompt], BuiltPrompt] | None = None
+    response_provenance_recorder: Callable[[ConversationTurn, BuiltPrompt], None] | None = None
+    response_history_filter: Callable[[str, RestoredHistoryTurn], RestoredHistoryTurn] | None = None
 
 
 @dataclass(frozen=True)
@@ -294,6 +296,7 @@ class ChatService:
                 await run_sync(
                     history_session.mark_screen_derived, started, prompt.screen_lineages
                 )
+            await run_sync(_record_response_provenance, self._dependencies, started, prompt)
             persisted = await run_sync(history_session.complete_turn, started, reply)
         except BaseException:
             try:
@@ -791,13 +794,8 @@ def _build_unrecorded_prompt(
             character_book=context.character_book,
             rag=_rag_context_for_reply(character, message, context, dependencies),
             current_user=CurrentUserMessage(message),
-            history_session=(
-                history_session
-                if history_access is None
-                else cast(
-                    HistorySession,
-                    _ScreenFilteredPromptHistory(history_session, history_access),
-                )
+            history_session=_filtered_prompt_history(
+                history_session, character, dependencies.response_history_filter, history_access,
             ),
             config=context.prompt_config,
             token_counter=_ChatTokenCounter(dependencies.input_token_counter),
@@ -926,6 +924,17 @@ def _with_screen_turn_material(
     )
 
 
+def _record_response_provenance(
+    dependencies: ChatRuntimeDependencies, started: StartedHistoryTurn, prompt: BuiltPrompt,
+) -> None:
+    recorder = dependencies.response_provenance_recorder
+    if recorder is None or started.content_skipped:
+        return
+    if started.initial_turn is None:
+        raise ValueError("response provenance requires its persisted starting turn")
+    recorder(started.initial_turn, prompt)
+
+
 def _log_prompt_references(prompt: BuiltPrompt) -> None:
     references = tuple(
         message.memory_reference
@@ -984,6 +993,7 @@ def _generate_recorded_reply(
         if prompt.screen_lineages:
             history_session.mark_screen_derived(started_turn, prompt.screen_lineages)
         _log_prompt_references(prompt)
+        _record_response_provenance(dependencies, started_turn, prompt)
         persisted_turn = history_session.complete_turn(started_turn, reply)
     except Exception:
         try:
@@ -1069,3 +1079,26 @@ def _persisted_chat_reply(turn: ConversationTurn) -> chat_service.ChatReply:
         assistant_content=turn.assistant_content,
     )
     return chat_service.ChatReply(turn.turn_id, persisted)
+
+
+def _filtered_prompt_history(
+    source: HistorySession, character_id: str,
+    memory_filter: Callable[[str, RestoredHistoryTurn], RestoredHistoryTurn] | None,
+    screen_access: ScreenHistoryAccess | None,
+) -> HistorySession:
+    if memory_filter is not None:
+        source = cast(HistorySession, _MemoryFilteredPromptHistory(source, character_id, memory_filter))
+    if screen_access is not None:
+        source = cast(HistorySession, _ScreenFilteredPromptHistory(source, screen_access))
+    return source
+
+
+@dataclass(frozen=True)
+class _MemoryFilteredPromptHistory:
+    source: HistorySession
+    character_id: str
+    memory_filter: Callable[[str, RestoredHistoryTurn], RestoredHistoryTurn]
+
+    def prompt_turns(self, *, max_completed_turns: int, page_size: int) -> Iterator[RestoredHistoryTurn]:
+        for turn in self.source.prompt_turns(max_completed_turns=max_completed_turns, page_size=page_size):
+            yield self.memory_filter(self.character_id, turn)

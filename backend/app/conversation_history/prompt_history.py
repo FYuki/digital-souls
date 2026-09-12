@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from uuid import UUID
 
 from app.conversation_history.models import ConversationTurn, TurnStatus
 from app.screen_perception.provenance import ScreenLineage
@@ -10,6 +11,7 @@ class RestoredHistoryTurn:
     assistant_content: str | None
     is_completed: bool
     screen_lineages: tuple[ScreenLineage, ...] = ()
+    turn_id: UUID | None = None
 
 
 def restore_prompt_turn(
@@ -34,4 +36,5 @@ def restore_prompt_turn(
         assistant_content=assistant_content,
         is_completed=turn.status is TurnStatus.COMPLETED,
         screen_lineages=screen_lineages,
+        turn_id=turn.turn_id,
     )

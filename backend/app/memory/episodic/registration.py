@@ -107,7 +107,16 @@ class EpisodicRegistrationService:
 
     def source_masks(self, snapshot: ThreadSnapshot) -> tuple[SourceSpan, ...]:
         with self._repository.read() as tx:
-            return tx.source_masks(snapshot.lease.character_id, snapshot.lease.conversation_id)
+            masks = tx.source_masks(snapshot.lease.character_id, snapshot.lease.conversation_id)
+            invalid = tx.invalid_response_ids(snapshot.lease.character_id)
+            responses = tuple(
+                SourceSpan(source_id=source.turn.turn_id, revision=source.revision, role="assistant",
+                           start=0, end=len(source.turn.assistant_content),
+                           stated_at=source.turn.updated_at)
+                for source in snapshot.sources
+                if source.turn.turn_id in invalid and source.turn.assistant_content
+            )
+            return masks + responses
 
     def reconcile_sources(self, snapshot: ThreadSnapshot) -> None:
         """出典が変わった記憶を止める。検索側も現在の履歴で別途検証する。"""

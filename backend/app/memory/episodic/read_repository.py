@@ -71,6 +71,8 @@ class EpisodicReadRepository:
         version = next((v for v in versions if v.content_version == record.content_version), None)
         if version is None or not self._sources_valid(history, cutoff, record, version.sources):
             return None
+        if not tx.response_sources_valid(record.character_id, version.sources):
+            return None
         masks = tx.source_masks(record.character_id, record.conversation_id)
         if any(overlaps_mask(source, masks) for source in version.sources):
             return None
