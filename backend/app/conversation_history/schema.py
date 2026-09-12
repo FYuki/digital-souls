@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.conversation_history.errors import LegacySchemaError
+from app.conversation_history.memory_queue_schema import (
+    MEMORY_QUEUE_TABLES, MEMORY_QUEUE_DEFINITIONS, add_memory_queue_schema,
+)
 from app.conversation_history.sqlite_lease import normal_sqlite_access
 from app.conversation_history.titles import (
     CONVERSATION_TITLE_MAX_LENGTH,
@@ -12,13 +15,14 @@ from app.conversation_history.titles import (
 )
 from app.privacy.contracts import HistoryDecisionReasonCode
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 _VERSION_TWO_SCHEMA_VERSION = 2
 _VERSION_THREE_SCHEMA_VERSION = 3
 _VERSION_FOUR_SCHEMA_VERSION = 4
 _VERSION_FIVE_SCHEMA_VERSION = 5
 _VERSION_SIX_SCHEMA_VERSION = 6
 _VERSION_SEVEN_SCHEMA_VERSION = 7
+_VERSION_EIGHT_SCHEMA_VERSION = 8
 _VERSION_FIVE_TABLES = frozenset(
     {
         "conversations",
@@ -33,7 +37,8 @@ _VERSION_SIX_TABLES = _VERSION_FIVE_TABLES | frozenset(
         "ui_thread_pins",
     }
 )
-CURRENT_TABLES = _VERSION_SIX_TABLES | frozenset({"screen_turn_provenance"})
+_VERSION_EIGHT_TABLES = _VERSION_SIX_TABLES | frozenset({"screen_turn_provenance"})
+CURRENT_TABLES = _VERSION_EIGHT_TABLES | MEMORY_QUEUE_TABLES
 
 
 @dataclass(frozen=True)
@@ -70,6 +75,7 @@ def inspect_conversation_history_artifact_schema(
                 or _is_version_five_schema(connection)
                 or _is_version_six_schema(connection)
                 or _is_version_seven_schema(connection)
+                or _is_version_eight_schema(connection)
             ),
         )
 
@@ -558,12 +564,26 @@ def _is_version_four_schema(connection: sqlite3.Connection) -> bool:
 
 
 def _has_current_schema_contract(connection: sqlite3.Connection) -> bool:
+    return _has_core_schema_contract(connection, SCHEMA_VERSION) and all(
+        _schema_object_sql(connection, object_type, name) == _normalized_sql(sql)
+        for object_type, name, sql in MEMORY_QUEUE_DEFINITIONS
+    )
+
+
+def _is_version_eight_schema(connection: sqlite3.Connection) -> bool:
+    return (
+        _user_tables(connection) == _VERSION_EIGHT_TABLES
+        and _has_core_schema_contract(connection, _VERSION_EIGHT_SCHEMA_VERSION)
+    )
+
+
+def _has_core_schema_contract(connection: sqlite3.Connection, version: int) -> bool:
     return (
         _column_names(connection, "conversations") == CONVERSATIONS_COLUMNS
         and _column_names(connection, "conversation_turns")
         == CONVERSATION_TURNS_COLUMNS
         and connection.execute("PRAGMA user_version").fetchone()[0]
-        == SCHEMA_VERSION
+        == version
         and _has_conversation_definitions(connection)
         and _schema_object_sql(connection, "table", "ui_settings")
         == _normalized_sql(UI_SETTINGS_SQL)
@@ -596,7 +616,7 @@ def _is_version_six_schema(connection: sqlite3.Connection) -> bool:
 
 def _is_version_seven_schema(connection: sqlite3.Connection) -> bool:
     return (
-        _user_tables(connection) == CURRENT_TABLES
+        _user_tables(connection) == _VERSION_EIGHT_TABLES
         and _column_names(connection, "conversations") == CONVERSATIONS_COLUMNS
         and _column_names(connection, "conversation_turns")
         == CONVERSATION_TURNS_COLUMNS
@@ -748,6 +768,7 @@ def _add_screen_provenance_to_current_schema(
     connection: sqlite3.Connection,
 ) -> None:
     connection.execute(SCREEN_TURN_PROVENANCE_SQL)
+    add_memory_queue_schema(connection)
     connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
@@ -768,6 +789,7 @@ def _migrate_screen_provenance_to_version_eight(
         f"SELECT {columns} FROM screen_turn_provenance_version_seven"
     )
     connection.execute("DROP TABLE screen_turn_provenance_version_seven")
+    add_memory_queue_schema(connection)
     connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
@@ -782,6 +804,13 @@ def initialize_conversation_history_schema(database_path: Path) -> None:
             tables = _user_tables(connection)
             if tables:
                 if _is_current_schema(connection):
+                    connection.commit()
+                    return
+                if _is_version_eight_schema(connection):
+                    add_memory_queue_schema(connection)
+                    connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+                    if not _is_current_schema(connection):
+                        raise LegacySchemaError("version eight migration did not create current schema")
                     connection.commit()
                     return
                 if _is_version_two_schema(connection):
@@ -831,6 +860,7 @@ def initialize_conversation_history_schema(database_path: Path) -> None:
             connection.execute(SCREEN_TURN_PROVENANCE_SQL)
             connection.execute(HISTORY_INDEX_SQL)
             connection.execute(STALE_INDEX_SQL)
+            add_memory_queue_schema(connection)
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             connection.commit()
         except BaseException:
