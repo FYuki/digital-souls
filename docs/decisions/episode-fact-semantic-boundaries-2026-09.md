@@ -1,0 +1,274 @@
+# Episode・Fact・Semanticの正本と形成責務 (2026-09)
+
+## 状態・適用範囲
+
+**ACTIVE**。2026-09-11の責務再編と2026-09-12の合意を、#352で文書化した採用設計である。
+ACTIVEは設計判断の有効性を意味し、アプリケーション実装・main取り込み・dogfood反映の完了を意味しない。
+
+本ADRはEpisode / Fact / Semantic / Reflectionの正本、形成経路、Fact同一性、欠損・日時・参照失効の契約を定める。
+この範囲では以下の既存ADRに優先する。それ以外の判断を失効させない。
+
+- [Character Life共通契約](character-life-memory-personality-autonomy-2026-09.md)
+- [記憶・人格の用語契約](memory-personality-terminology-2026-09.md)
+- [Wave 2記憶形成・検索方針](wave2-memory-formation-retrieval-2026-08.md)
+- [RAG privacy方針](rag-memory-privacy-policy-2026-07.md)
+
+privacyの絶対禁止、保存拒否、検証前候補の利用禁止、SQLite正本 / Chroma派生index、transactional outbox、
+character境界を維持する。認知処理によって権限やprivacyを緩和しない。
+
+## 1. 正本と処理の所有権
+
+| 担当 | 所有する正本・処理 | 所有しない処理 |
+|---|---|---|
+| #340 | Episode / Fact / ID参照の基盤、会話由来の抽出・登録、同一thread内の登録時Fact照合 | 別thread統合、Semantic形成、内省 |
+| #341 | Semantic共通schema・保存・訂正・検索、DIRECT_EXTRACTION | Episode群の一般化、Reflection |
+| #100 | 保存済みEpisodeからの一般化、Reflection正本・再内省・派生結果、夜間形成 | Episode / Factのschema・抽出、Semantic Storeの再実装 |
+| #354 | 同一character・別threadの保存済みFactを非同期に整理・統合 | MVP登録処理、Episode自体の統合 |
+| #48 | 既存persona memoryの非同期consolidation | 新Fact統合の実装済み保証、意味一般化 |
+| #101 | Reflectionと根拠経験によるPersonality更新 | 記憶の直接抽出、Skill学習 |
+| #102 | 実行・対話ログによるProcedural / Interpersonal Skill学習 | Reflectionだけを根拠にしたSkill確定 |
+| #249 | Life State運用、会話外活動ログからのEpisode生成、Character Life Runtime | 上記の記憶正本・形成処理の再実装 |
+
+```text
+保存済み会話履歴
+  +-> #340: Episode / Fact抽出・同一thread照合・登録
+  |              |
+  |              +-> 保存済みEpisode + 有効なFact参照
+  |                          |
+  |                          +-> #100: 一般化 -> EXPERIENCE_DERIVED Semantic
+  |                          +-> #100: Reflection -> #101 / #249
+  |
+  +-> #341: 明示命題の抽出・検証 -> DIRECT_EXTRACTION Semantic
+
+同一characterの別threadにある保存済みFact
+  -> #354: 別の非同期整理 -> 版付きFact統合関係
+```
+
+#354は後続拡張であり、#340 / #341 / #100のMVP必須依存・完了条件にしない。
+
+## 2. EpisodeとFactをIDで分離する
+
+Episodeは「所有キャラクターが何を経験したか」。Factは「その経験で得た対象の情報・申告内容」である。
+Factという名前は外部世界で検証済みの真実を保証しない。発言者・元情報・版を追跡し、伝聞を直接経験に変えない。
+
+Related Factsは意味上はEpisodeの付随情報だが、保存上は独立したfact_id付きレコードとする。
+Episode内のJSON配列だけに閉じ込めない。API / UIが配列へ投影することは許容する。
+
+| 論理モデル | 必要な情報 |
+|---|---|
+| Episode | episode_id、character_id、出典thread、経験の5W、内容版・状態、元入力範囲・provenance |
+| Fact | 安定したfact_id、character_id、対象の5W・内容、内容版・状態、元情報・取得threadを識別できる出典 |
+| Episode–Fact参照 | link_id、character_id、episode_id、fact_id、元発言ID・版・抽出範囲、参照の有効性 |
+| Fact統合関係 | merge_id、character_id、統合元/先Fact IDと双方の版、照合scope、根拠thread・元発言/版、判定policy・根拠・有効状態 |
+
+具体的な物理table・カラム名・型・参照制約は#342で確定する。この表はDB migrationや実装済みschemaの宣言ではない。
+
+```text
+Episode E1 -- 参照 L1 -- Fact F1
+                  |          ^
+                  T1         | 有効な版付き統合関係
+                             |
+Episode E2 -- 参照 L2 -- Fact F2
+                  |
+                  T2
+```
+
+E1とE2は別の経験として残す。F2から有効な代表Fact ID F1を解決できても、元Fact ID・参照・取得経緯を消さない。
+1 Episodeから複数Fact、複数Episodeから同じ有効Factを参照可能にする。
+
+fact_idを5Wのハッシュにしない。5Wが訂正されても識別子を保ち、同じ5Wの別出来事も表現できるようにする。
+代表IDの共有は同一性の表現であり、無条件な内容上書き・出典の信頼度昇格・Semanticへの自動昇格ではない。
+
+## 3. 5Wの欠損と保存条件
+
+Episodeは経験の5W、Factは話題の対象の5Wを保持する。両者の行為者・日時を取り違えない。
+
+| 内容 | 必須性・扱い |
+|---|---|
+| Whatの述語 | 内容上の必須。行為・出来事・状態を表す |
+| Whatの対象・目的語等 | 任意。不明は不明のまま |
+| Who | 任意。行為者・参加者・役割を区別し、同名だけで人物を同定しない |
+| When | 任意。部分日時・範囲・精度を保持 |
+| Where | 任意。場所を推測補完しない |
+| Why | 任意。明示された理由のみ |
+
+character_id、ID、出典と各参照元の版、状態、登録日時等は管理情報として別途付与・検証する。
+記憶所有者が既知であることを、不明な出来事の行為者を所有者で補う根拠にしない。
+内容上は述語だけで成立しても、保存価値・privacy・source・schema等の検証を通らなければ保存しない。
+
+「雨だったから家にいた」は明示理由を保持できる。「雨の日に家にいた」だけから理由を雨と推測しない。
+Reflectionが推論による動機・因果を扱う場合も主観的解釈として分離し、Factへ逆流させない。
+
+## 4. 経験日時・対象日時・タイムゾーン
+
+| 項目 | 意味 |
+|---|---|
+| Episodeのoccurred_at相当 | 今回の経験自体が発生した日時。「話を聞いた」なら聞いた日時 |
+| Factの対象日時 | 話題の旅行等が発生した日時・可能範囲・精度 |
+| experienced_at | 所有キャラクターが経験を得た日時。内省・人格の時間基準 |
+| stated_at | 根拠となる元発言日時 |
+| created_at | DB登録日時 |
+
+日時解釈のタイムゾーンはconfigで定義し、アプリケーションが適用する。LLMにtimezoneを生成させない。
+相対日時の基準は元発言日時であり、抽出worker・夜間バッチの実行日時ではない。
+使用timezone、元発言への参照、解釈結果と精度を保持し、config変更時に既存データを黙って再解釈しない。
+configキー・部分日時の物理表現は#342で確定する。
+
+例えばconfigがAsia/Tokyoの場合、2026-09-12の「昨日、静岡へ行った」は2026-09-11の日精度、
+2026-10-12の「先月、静岡へ行った」は2026-09の月精度になる。後者を9月1日に行ったと保存しない。
+月精度を範囲で実装する場合も、その範囲は日時の不確実性であって旅行の継続時間ではない。
+年・日など一部が不明でも、分かる情報をすべてNULLへ潰さず保持する。
+
+経験の日時が会話ログから確定できることと、話題の過去の日時を会話日時で埋めることは別である。
+不明な対象日時をstated_at / created_atで補わない。話題の日時を「聞いたEpisode」のoccurred_atへ入れない。
+
+## 5. MVPのFact照合は抽出・登録時に限定する
+
+```text
+共通Conversation History保存
+  -> thread更新により非同期予約（#291）
+  -> スレッドsnapshotからEpisode / Fact候補を抽出
+  -> source / 版 / schema / privacy検証
+  -> 同一character・同一threadのFact照合（#290）
+  -> ID参照・出典・確認済み統合関係を登録（#342）
+```
+
+「登録時」は会話応答への同期処理を意味しない。会話応答は抽出・照合・登録を待たず、
+同一thread照合も独立した夜間整理の完了待ちにしない。
+照合範囲は今回抽出した候補同士と、同じcharacter_id・conversation_id由来の保存済みFactだけとする。
+
+### 5.1 統合条件
+
+比較対象はFactの5Wであり、「聞いた経験」の5W一致で関連Fact全部を統合しない。
+
+- Who: 対象人物・役割を確定して一致させる。同名だけでは一致にしない。
+- What: 行為・対象・肯定/否定・実施/予定等が一致する。
+- When: configと元発言日時で解釈した日時・精度が一致する。日/月の範囲包含だけでは不足。
+- Where: 同じ場所だと確認できる。
+- Why: 明示理由が一致する。推測で補完しない。
+- 文脈: 同一の出来事への再言及だと確認できる。同日同目的でも別回の可能性が残れば見送る。
+
+unknown同士は一致の証拠ではない。Whyを含め5Wの一致を確認できない場合、MVPの自動統合は行わない。
+保存条件と統合条件は別であり、統合見送りを保存拒否にしない。
+5WをDB上の出来事一意制約にせず、不確実な候補を「既存と同じらしい」と破棄・日時補完しない。
+
+| ケース | 登録時の扱い |
+|---|---|
+| 同threadで人物・行為・日時精度・場所・明示理由が一致し、同じ件への再言及と確認 | 版付きID関係で同一Factとして扱う。Episodeは別々に維持 |
+| 両方のWhy等がunknown | 保存条件を満たせば別Factとして保持。統合しない |
+| 9月12日の「昨日」と10月12日の「先月」が同じ静岡旅行を指す可能性 | 日/月の包含だけでは統合しない |
+| 同名人物、同日同目的の別回、否定と肯定、実施と予定、複数候補 | 不明・不一致として見送る |
+| 同じ5Wでも別thread | MVP照合の対象外。後続#354へ分離 |
+| 別character | 候補取得・参照・統合の全段階で拒否 |
+
+### 5.2 冪等性とスレッド更新
+
+同一入力の再試行による二重保存防止は、5Wによる同一性判定とは別に行う。
+元発言ID・版・抽出範囲と保存結果を対応づけ、Episode / Fact / link / 統合関係を増殖させない。
+thread revisionが増えて全体を再抽出しても、以前の元発言範囲から同じ記録を新規作成し続けない。
+新発言・訂正は回収し、revision増加やcandidateの配列位置だけを新しい経験の根拠にしない。
+
+#291は予約集約、処理中更新の再予約、長文分割・統合、未処理版の再起動後回復を所有する。
+前半の切捨て・分割境界の二重登録を防ぎ、保存前にsourceの版・有効性を再確認する。
+保存拒否されたsourceやRAG検索結果を新しい抽出根拠へ転用しない。
+
+## 6. 別threadのFact統合は後続の非同期整理
+
+#354は同一character・異なるconversation_idに出典を持つ保存済みFactを、登録処理と別の非同期jobで扱う。
+重複Episode整理と同様のモデルとし、#48の小規模batch・優先制御・版検証・privacy・lineage・冪等性を
+適用可能な範囲で再利用する。完了済み#48がFact統合まで実装済みであるとは扱わない。
+
+会話応答とMVP登録を優先し、完了待ちにしない。Factの共通ID構造は#342を再利用する。
+別characterの統合、Fact統合によるEpisodeの統合・削除、曖昧な自動hard deleteは行わない。
+詳細な照合実装、候補上限、実行間隔、UIと子Issue分割は#354の着手時に定める。
+
+## 7. Semanticの形成方法と根拠
+
+Semanticは「世界・人物・自分について、知識として何を採用しているか」を表す。
+Episode群からの一般化だけに限定しない。
+
+| formation_type | 形成責務・条件 | provenance |
+|---|---|---|
+| DIRECT_EXTRACTION | #341。保存可能な明示命題を発言・許可された情報源から抽出。複数Episodeを要求しない | 元発言・文書等の識別子と各参照元の版 |
+| EXPERIENCE_DERIVED | #100 / #293。保存済みの独立した2件以上の経験から一般化。件数だけで採用しない | 根拠Episodeとその版、有効なFact参照・統合関係等 |
+
+formation_typeは形成方法、provenanceは実際の情報源・根拠である。版は各参照元に対応づけ、
+複数根拠の版を単一source_revisionだけで代用しない。
+既存formation_methodのDIRECT / EXTRACTED / ADDON_EVENT / CONSOLIDATEDとは意味を混同せず、
+旧列との具体的な整理は#345で定める。consolidationされたことから獲得経路を推測しない。
+
+「紅茶が好き」と本人が明示した場合はDirect Extractionの候補にできるが、一度紅茶を飲んだだけから
+「紅茶好き」を直接取得した事実として確定しない。直接取得も正確性の保証ではなく、privacy・schema・
+出典の有効性・矛盾等を検証する。#341が両経路の共通Store・lifecycle・retrievalを所有する。
+
+FactはSemantic正本の代わりにならず、自動昇格しない。必要な内容だけを別のSemantic抽出・検証に通す。
+同じ元発言をEpisode / Fact / Semanticへ表現しても独立根拠が増えたとは扱わない。
+
+## 8. 独立根拠・Reflection・派生状態
+
+#293は有効な代表Fact IDを解決し、同じ話題の出来事を二重加算しない。
+異なるFact ID・Episode ID・thread・発言日時は、出来事が独立している証明ではない。
+独立性不明の組は独立2件の一般化根拠として使わず、同一だと強制確定して統合する必要もない。
+「旅行の話を二度聞いた経験」と「二度旅行した事実」を、一般化する命題に応じて区別する。
+
+Reflectionは#100 / #292 / #294が別の永続正本として管理する。ACTIVE / SUPERSEDED / INACTIVEと
+根拠・評価・再内省履歴を保持し、同論点の旧解釈は置換履歴として残す。異なる観点は共存できる。
+旧Reflectionは補助情報であり、独立したEpisode根拠には加算しない。
+Insight / Current Interests / Goal Intention / Implementation IntentionはReflection本体と分離した検証済み結果とし、
+Life State運用は#249、人格更新は#101へ渡す。通常会話のRAG / promptへReflectionを直接注入しない。
+例外的な自己説明検索は今回追加しない。
+
+#295はSemantic / Reflection形成・再評価をMVPでは夜間固定時刻に実行する。Episode / Fact抽出、
+Direct Extraction、#354の別thread整理とは別のトリガーである。
+新規・更新Episodeや根拠訂正/削除で再評価し、Personality変更だけでは再内省を起動しない。
+実行時は現在のPersonalityを参照できる。固定Temperamentと可変Personalityの区別を維持する。
+
+## 9. 訂正・削除・参照失効とprivacy
+
+LLM出力はCandidateであり、privacy / evidence / schema / policy検証を通った結果だけを自動有効化する。
+候補ごとの手動承認を追加しない。未検証/拒否Candidateを検索・人格更新へ使わず、拒否本文を保存しない。
+監査は許可された日時・理由・根拠識別子等に限定し、生本文・prompt・raw出力を通常ログへ残さない。
+
+- 同一性判定に使ったFact・source・版が訂正/削除/無効化されたら、依存する統合関係を即時利用停止する。
+- 同一sourceまたは元Episodeに依存するSemantic / Reflection / 派生結果もSQLite上で即時利用停止し、再評価対象にする。
+- 他の出典が残っていても、旧統合・旧本文を無条件に有効のままにしない。残存根拠から再評価する。
+- 別の「話を聞いた経験」まで無条件に物理削除しない。ただし削除対象の情報が本文に残る場合は停止・再評価する。
+- 会話履歴削除と長期記憶の物理削除は同一操作にしない一方、参照元失効後の利用停止を別操作待ちにしない。
+- 人格全体を無条件に過去へrollbackせず、#101の影響trait・残存根拠による再評価境界を維持する。
+- 登録・参照更新・統合関係と必要なoutboxを原子的に整合させ、適用直前に版を検証する。
+- 循環・複数の有効統合先・別character参照を拒否し、再試行・並行処理で二重統合しない。
+- Chromaの削除/再生成が遅れても、取得時にSQLite正本と参照先・統合関係の有効性を再確認する。
+- 旧ID、統合履歴、別参照、checkpointから削除・無効情報を復活させない。監査のための履歴保持でprivacy上の削除を迂回しない。
+
+domain recordの正本はAddon等に残す。許可された情報源であることは、全件を人格記憶へコピーする許可ではない。
+画面由来情報の長期記憶除外、外部contentの非信頼性、Minimum Disclosure / Egress Check、Execution Gateも維持する。
+
+## 10. 移行・文書・検証境界
+
+#289は2026-09-12の合意時点で旧モデルによるEpicブランチのみの実装であり、main / dogfood未反映である。
+再利用可能なコードは利用するが、旧形式継承・#289形式のデータ移行・後方互換を新設計の制約にしない。
+#289は当時の完了履歴として残す。新schemaは#342で扱い、旧実装のCI成功を新契約の受入に読み替えない。
+mainからの安全なschema適用、会話履歴・一時provider record・他データの保護は必要である。
+想定外の既存データを黙って変換・破棄せず、DB全体を初期化する許可と解釈しない。
+
+[システムアーキテクチャ](../system-architecture.md)は実装済みruntimeを記述し、本ADRの将来設計を
+実装済みの現在形で転記しない。[ロードマップ](../roadmap.md)は目標・参照先、
+[エンハンス計画](../enhancement-plan.md)は分解・依存、Issueは進捗と受入条件を所有する。
+[テスト方針](../testing-policy.md)に従い、unit/module・mocked E2E・実LLM/SQLite/Chromaの証跡を区別する。
+
+UIと受入は各Epicで確認する。#296の横断UIは復活させない。
+
+| 範囲 | UI | 最終受入 |
+|---|---|---|
+| #340 Episode / Fact・同thread登録 | #343 | #344 |
+| #341 Semantic・形成経路・出典 | #348 | #349 |
+| #100 Reflection・再内省 | #351 | #297 |
+| #354 別thread Fact統合 | 本Epic内で既存画面を再利用して確認 | 後続Epic内で確認 |
+
+#342 -> #290 -> #291の登録基盤と、#345のSemantic基盤を分ける。#293はそれらの契約を利用し、
+#292 / #294 / #295へつなぐ。#354を待つ循環依存を作らない。
+
+必要な検証例は、述語のみの保存、5W一致の同thread統合、unknown・日/月包含・同名・別回・否定/予定の見送り、
+別thread/character越境拒否、長文再抽出の冪等性、訂正後の即時失効、循環拒否、古いindexからの復活防止である。
+実LLMをmockした成功やDBへの候補直接投入だけで、抽出から保存までの実接続受入を合格にしない。
+文書更新自体はアプリケーション実装、データ変換、ジョブ起動、mainへのマージ、dogfood操作を含まない。
