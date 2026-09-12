@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import main
-from app.memory.episodic.extraction_contracts import ExtractionBatch
+from app.memory.episodic.extraction_contracts import ExtractionBatch, GroundedContent
 from tests.conversation_history_test_support import CONVERSATION_ID, create_repository
 from tests.module.test_memory_formation_chat_entrypoints import _character_card
 
@@ -40,6 +40,12 @@ class Model:
                 request = __import__("json").loads(json["messages"][-1]["content"])
                 self.calls.append(request)
                 content = self.batch(request)
+            elif "five_w" in properties:
+                request = __import__("json").loads(json["messages"][-1]["content"])
+                candidate = request["candidate"]
+                content = GroundedContent.model_validate({
+                    "five_w": candidate["five_w"], "time_source": candidate["time_source"],
+                }).model_dump(mode="json")
             elif "candidates" in properties:
                 content = {"candidates": []}
             else:
@@ -126,7 +132,7 @@ def test_reply_does_not_wait_and_lifespan_forms_episode_fact_link(model, runtime
             assert connection.execute("SELECT COUNT(*) FROM episodic_links WHERE valid=1").fetchone()[0] == 1
             assert connection.execute("SELECT COUNT(*) FROM approved_memories").fetchone()[0] == 0
             stamp = json.loads(connection.execute("SELECT stamp FROM episodic_versions LIMIT 1").fetchone()[0])
-        assert stamp["extraction"]["prompt_version"] == "episode-fact-extraction-v3"
+        assert stamp["extraction"]["prompt_version"] == "episode-fact-extraction-v4"
         assert model.calls[0]["entity_labels"]["character:miori"] == "光織"
 
 

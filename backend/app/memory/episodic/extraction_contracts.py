@@ -18,6 +18,12 @@ class SourceQuote(BaseModel):
     start: Annotated[int, Field(strict=True, ge=0)] | None = None
 
 
+class GroundedContent(Contract):
+    """候補の同一性を変えず、出典から記録の5Wを再検証する推論結果。"""
+    five_w: ExtractedFiveW
+    time_source: SourceQuote | None = None
+
+
 class ExistingTarget(Contract):
     id: UUID4
     version: Version

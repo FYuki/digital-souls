@@ -6,7 +6,7 @@ import json
 import pytest
 
 from app.memory.episodic.contracts import ExtractionIdentity
-from app.memory.episodic.extraction_contracts import ExtractionBatch, SourceQuote
+from app.memory.episodic.extraction_contracts import ExtractionBatch, SourceQuote, GroundedContent
 from app.memory.episodic.quotes import InvalidExtraction
 from app.memory.formation.config import MemoryFormationSettings
 from app.memory.formation.durable_scheduler import DurableMemoryFormationScheduler
@@ -23,12 +23,22 @@ class Client:
         self.callback = callback or self.valid_response
         self.fit_callback = fits
         self.requests = []
+        self.ground_requests = []
+        self.ground_callback = None
 
     def fits(self, messages, json_schema):
         return True if self.fit_callback is None else self.fit_callback(messages, json_schema)
 
     def chat(self, messages, *, json_schema, timeout_seconds, max_output_tokens):
         value = json.loads(messages[1]["content"])
+        if value.get("phase") == "ground_content":
+            self.ground_requests.append(value)
+            if self.ground_callback is not None:
+                return self.ground_callback(value, len(self.ground_requests))
+            candidate = value["candidate"]
+            return GroundedContent.model_validate({
+                "five_w": candidate["five_w"], "time_source": candidate["time_source"],
+            }).model_dump_json()
         self.requests.append(value)
         return self.callback(value, len(self.requests))
 
@@ -191,3 +201,48 @@ def test_fully_masked_primary_finishes_without_inference(harness):
         source_masks=tuple(fragment_span(part) for part in chunk.primary))
     assert result.complete and result.records == ()
     assert client.requests == []
+
+
+def test_grounding_rechecks_content_without_reselecting_record_identity(harness):
+    harness.turn("今日うどんを食べた")
+    client = Client()
+    def grounded(value, index):
+        candidate = value["candidate"]
+        content = candidate["five_w"]
+        if candidate["kind"] == "EPISODE":
+            content["what"]["predicate"] = "聞いた"
+            content["where"] = None
+        else:
+            content["when"] = {"relative_unit": "DAY", "relative_offset": 0}
+        return GroundedContent.model_validate({
+            "five_w": content, "time_source": candidate["anchor"] if candidate["kind"] == "FACT" else None,
+        }).model_dump_json()
+    client.ground_callback = grounded
+    worker(harness, client).process_next()
+    from app.memory.episodic.contracts import RecordKind
+    episodes = harness.records(RecordKind.EPISODE)
+    facts = harness.records(RecordKind.FACT)
+    assert len(episodes) == len(facts) == 1
+    assert episodes[0].five_w.what.predicate == "聞いた"
+    assert episodes[0].five_w.where is None
+    assert facts[0].five_w.when.parts.day == harness.now[0].day
+    assert len(client.ground_requests) == 2
+    assert all(request["known_records"] == [] for request in client.ground_requests)
+    assert not harness.queue.has_pending()
+
+
+def test_grounding_failure_after_first_record_does_not_partially_register(harness):
+    harness.turn("うどんを食べた")
+    client = Client()
+    def grounded(value, index):
+        if index > 1:
+            return "invalid"
+        return GroundedContent.model_validate({
+            "five_w": value["candidate"]["five_w"],
+        }).model_dump_json()
+    client.ground_callback = grounded
+    with pytest.raises(InvalidExtraction):
+        worker(harness, client).process_next()
+    assert len(client.ground_requests) == 3
+    assert harness.records() == ()
+    assert harness.queue.has_pending()
