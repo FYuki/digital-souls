@@ -13,13 +13,15 @@ EXPECTED_TABLES = {
     "memory_write_receipts",
     "memory_index_outbox",
     "temporary_provider_records",
+    "episodic_records", "episodic_versions", "episodic_links",
+    "episodic_merges", "episodic_receipts", "episodic_invalid_sources", "episodic_processed_spans",
 }
 MEMORY_ONE = "00000000-0000-4000-8000-000000000001"
 MEMORY_TWO = "00000000-0000-4000-8000-000000000002"
 OUTBOX_ONE = "10000000-0000-4000-8000-000000000001"
 
 
-def _initialize(tmp_path: Path):
+def _initialize(tmp_path: Path, *, legacy: bool = False):
     from app.memory.persistence.schema import initialize_persona_memory_schema
     from app.runtime_paths import resolve_runtime_paths
 
@@ -32,7 +34,20 @@ def _initialize(tmp_path: Path):
         },
         repository_root,
     )
-    initialize_persona_memory_schema(paths, repository_root)
+    if legacy:
+        from app.runtime_data_root import initialize_runtime_data_root
+        from app.memory.persistence import schema
+        initialize_runtime_data_root(paths, repository_root)
+        with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+            for definition in (
+                schema.APPROVED_MEMORIES_SQL, schema.MEMORY_SOURCES_SQL,
+                schema.MEMORY_LINEAGE_SQL, schema.MEMORY_WRITE_RECEIPTS_SQL,
+                schema.MEMORY_INDEX_OUTBOX_SQL, schema.TEMPORARY_PROVIDER_RECORDS_SQL,
+            ):
+                connection.execute(definition)
+            connection.execute("PRAGMA user_version = 2")
+    else:
+        initialize_persona_memory_schema(paths, repository_root)
     return paths
 
 
@@ -159,7 +174,7 @@ def test_existing_v2_database_adds_consolidation_source_without_losing_rows(
 ) -> None:
     from app.memory.persistence.schema import initialize_persona_memory_schema
 
-    paths = _initialize(tmp_path)
+    paths = _initialize(tmp_path, legacy=True)
     with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
         _insert_approved(connection, _approved_values())
         connection.execute(
@@ -198,7 +213,7 @@ def test_existing_v2_database_adds_consolidation_source_without_losing_rows(
         version = connection.execute("PRAGMA user_version").fetchone()[0]
 
     assert preserved == [("CONVERSATION_TURN", "existing-source")]
-    assert version == 2
+    assert version == 3
 
 
 @pytest.mark.parametrize(
@@ -302,7 +317,7 @@ def test_schema_creates_worker_and_active_memory_indexes(tmp_path: Path) -> None
     assert "idx_approved_memories_occurred_range" in indexes
 
 
-def test_schema_v2_exposes_four_distinct_memory_dates(tmp_path: Path) -> None:
+def test_schema_preserves_four_distinct_legacy_memory_dates(tmp_path: Path) -> None:
     from app.memory.persistence.schema import SCHEMA_VERSION
 
     paths = _initialize(tmp_path)
@@ -314,8 +329,8 @@ def test_schema_v2_exposes_four_distinct_memory_dates(tmp_path: Path) -> None:
             for row in connection.execute("PRAGMA table_info(approved_memories)")
         }
 
-    assert SCHEMA_VERSION == 2
-    assert version == 2
+    assert SCHEMA_VERSION == 3
+    assert version == 3
     assert columns["occurred_at"]["not_null"] is False
     assert columns["occurred_timezone"]["not_null"] is False
     assert columns["occurred_precision"]["not_null"] is False
@@ -661,3 +676,73 @@ def test_temporary_provider_records_reject_duplicate_source_identity(
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 duplicate_values,
             )
+
+
+def test_v2_migration_preserves_every_legacy_table_and_backup_verification_is_readonly(tmp_path):
+    from app.memory.persistence.schema import (
+        initialize_persona_memory_schema, LEGACY_PERSONA_MEMORY_TABLES,
+    )
+    from app.backup_restore.sqlite_snapshot import verify_sqlite_database
+    from app.backup_restore.models import PERSONA_MEMORY_ARTIFACT_FILENAME
+
+    paths = _initialize(tmp_path, legacy=True)
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        _insert_approved(connection, _approved_values())
+        _insert_approved(connection, _approved_values(memory_id=MEMORY_TWO, idempotency_key="second"))
+        connection.execute("INSERT INTO memory_sources VALUES (?,?,?,?,?)",
+                           ("miori", MEMORY_ONE, "CONVERSATION_TURN", "core", "source-1"))
+        connection.execute("INSERT INTO memory_lineage VALUES (?,?,?,?)",
+                           ("miori", MEMORY_TWO, MEMORY_ONE, "SUPERSEDES"))
+        connection.execute("INSERT INTO memory_write_receipts VALUES (?,?,?,?,?)",
+                           ("miori", "receipt", MEMORY_ONE, "SAVE", "2026-09-13T00:00:00.000000Z"))
+        connection.execute("INSERT INTO memory_index_outbox VALUES (?,?,?,?,?,?,?,?,?)",
+                           (OUTBOX_ONE, MEMORY_ONE, "miori", "UPSERT", "PENDING", 0, None, "now", "now"))
+        connection.execute("INSERT INTO temporary_provider_records VALUES (?,?,?,?,?,?,?,?,?)",
+                           ("temporary-1", "miori", "temporary:recipe", "source-1", "RECIPE",
+                            '{"name":"うどん"}', "now", "now", "now"))
+        before = {name: connection.execute(f"SELECT * FROM {name}").fetchall()
+                  for name in LEGACY_PERSONA_MEMORY_TABLES}
+    old_bytes = paths.persona_memory_sqlite_path.read_bytes()
+    verification = verify_sqlite_database(paths.persona_memory_sqlite_path, PERSONA_MEMORY_ARTIFACT_FILENAME)
+    assert verification.schema_version == 2
+    assert verification.record_count == 2
+    assert paths.persona_memory_sqlite_path.read_bytes() == old_bytes
+
+    initialize_persona_memory_schema(paths, tmp_path / "repository")
+    initialize_persona_memory_schema(paths, tmp_path / "repository")
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        after = {name: connection.execute(f"SELECT * FROM {name}").fetchall()
+                 for name in LEGACY_PERSONA_MEMORY_TABLES}
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+    assert after == before
+    assert not paths.sqlite_path.exists()
+
+
+def test_failed_episodic_migration_rolls_back_schema_and_preserves_v2_rows(tmp_path, monkeypatch):
+    from app.memory.persistence import schema
+    paths = _initialize(tmp_path, legacy=True)
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        _insert_approved(connection, _approved_values())
+    original = schema.initialize_episodic_schema
+    def fail_after_schema(connection):
+        original(connection)
+        raise RuntimeError("interrupted migration")
+    monkeypatch.setattr(schema, "initialize_episodic_schema", fail_after_schema)
+    with pytest.raises(RuntimeError, match="interrupted"):
+        schema.initialize_persona_memory_schema(paths, tmp_path / "repository")
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert connection.execute("SELECT id FROM approved_memories").fetchall() == [(MEMORY_ONE,)]
+        assert not connection.execute(
+            "SELECT name FROM sqlite_master WHERE name LIKE 'episodic_%'"
+        ).fetchall()
+
+
+def test_missing_episodic_integrity_trigger_is_not_silently_accepted(tmp_path):
+    from app.memory.persistence.schema import initialize_persona_memory_schema
+    paths = _initialize(tmp_path)
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
+        connection.execute("DROP TRIGGER episodic_merge_current")
+    with pytest.raises(ValueError, match="unknown schema"):
+        initialize_persona_memory_schema(paths, tmp_path / "repository")

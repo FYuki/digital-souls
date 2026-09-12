@@ -22,6 +22,7 @@ class PromptMemoryReference:
     occurred_at: datetime | None
     occurred_precision: str | None
     match_kind: str
+    content_version: int | None = None
 
 
 @dataclass(frozen=True, repr=False)

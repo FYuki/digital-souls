@@ -10,11 +10,13 @@ from app.backup_restore.models import (
     BackupSchemaError,
     BackupVerification,
 )
+from app.memory.episodic.schema import validate_episodic_schema
 from app.conversation_history.schema import (
     inspect_conversation_history_artifact_schema,
 )
 from app.memory.persistence.schema import (
     PERSONA_MEMORY_TABLES,
+    LEGACY_PERSONA_MEMORY_TABLES,
     SCHEMA_VERSION as PERSONA_MEMORY_SCHEMA_VERSION,
 )
 
@@ -93,13 +95,20 @@ def verify_sqlite_database(
                     "WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
                 )
             )
-        if (
-            schema_version != PERSONA_MEMORY_SCHEMA_VERSION
-            or tables != PERSONA_MEMORY_TABLES
-        ):
-            raise BackupSchemaError(
-                "SQLite schema version or table contract does not match"
-            )
+            is_current = schema_version == PERSONA_MEMORY_SCHEMA_VERSION and tables == PERSONA_MEMORY_TABLES
+            is_legacy = schema_version == 2 and tables == LEGACY_PERSONA_MEMORY_TABLES
+            if not is_current and not is_legacy:
+                raise BackupSchemaError(
+                    "SQLite schema version or table contract does not match"
+                )
+            if is_current:
+                try:
+                    validate_episodic_schema(connection)
+                    record_count += int(connection.execute(
+                        "SELECT COUNT(*) FROM episodic_records"
+                    ).fetchone()[0])
+                except (ValueError, sqlite3.Error) as error:
+                    raise BackupSchemaError("SQLite episodic schema validation failed") from error
     else:
         raise BackupSchemaError("SQLite artifact type is unsupported")
     return BackupVerification(

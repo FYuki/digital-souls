@@ -81,6 +81,9 @@ from app.memory.formation.extractor import EXTRACTOR_VERSION, MemoryCandidateExt
 from app.memory.formation.scheduler import MemoryFormationScheduler
 from app.memory.formation.worker import MemoryFormationWorker
 from app.memory.persistence.approved_repository import ApprovedMemoryRepository
+from app.memory.episodic.repository import EpisodicRepository
+from app.memory.episodic.sources import ConversationSourceGuard
+from app.memory.episodic.read_repository import CombinedMemoryReadRepository, EpisodicReadRepository
 from app.memory.persistence.index_outbox_repository import IndexOutboxRepository
 from app.memory.persistence.temporary_repository import (
     TemporaryProviderRecordRepository,
@@ -501,6 +504,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             uuid_factory=uuid4,
             outbox_uuid_factory=uuid4,
         )
+        episodic_repository = EpisodicRepository(runtime_paths.persona_memory_sqlite_path)
+        memory_read_repository = CombinedMemoryReadRepository(
+            approved_memory_repository,
+            EpisodicReadRepository(
+                episodic_repository,
+                ConversationSourceGuard(
+                    conversation_history_config.database_path,
+                    clock=clock, retention=conversation_history_config.retention,
+                ),
+            ),
+        )
         outbox_repository = IndexOutboxRepository(
             database_path=runtime_paths.persona_memory_sqlite_path,
             clock=clock,
@@ -510,7 +524,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             settings=inference_runtime.settings,
         )
         memory_index_sync = MemoryIndexSync(
-            approved_repository=approved_memory_repository,
+            approved_repository=memory_read_repository,
             outbox_repository=outbox_repository,
             chroma_path=runtime_paths.chroma_path,
             runtime_report_dir=runtime_paths.runtime_report_dir,
@@ -816,7 +830,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                     input_token_counter=count_llm_input_tokens,
                     privacy_scanner=privacy_scanner,
                     semantic_classifier=semantic_privacy_classifier,
-                    approved_memory_repository=approved_memory_repository,
+                    approved_memory_repository=memory_read_repository,
                     memory_embedder=memory_embedder,
                     memory_formation_submitter=memory_formation_scheduler,
                     clock=clock,
