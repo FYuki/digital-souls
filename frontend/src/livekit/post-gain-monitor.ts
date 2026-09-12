@@ -106,7 +106,7 @@ export class PostGainAudioMonitor {
         graphId: this.graphId, atMs: performance.now()})
     }
     // 全再生の品質欠測と、今回の停止境界の証明を分離する。判定規則は共通。
-    this.stopTracker = new PostGainOutputAudit()
+    this.stopTracker = new PostGainOutputAudit({clockRegression: 'wait'})
     this.stopTracker.poll(this.context.getOutputTimestamp(), this.context.sampleRate, performance.now())
     this.stopIssuedAfterFrame = this.lastWorkletOutput?.endFrame ?? null
     this.stopPromise = new Promise((resolve, reject) => {this.resolveStop = resolve; this.rejectStop = reject})
