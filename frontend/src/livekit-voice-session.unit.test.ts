@@ -153,6 +153,31 @@ describe('通常会話UI向けLiveKit音声session', () => {
     expect(events.filter(event => event.type === 'audio_input_suppression_changed').map(event => event.suppressed)).toEqual([true, false])
   })
 
+  test('テキスト入力中は回答再生を続け、送信時だけ旧回答を止める', async () => {
+    const {controller, room, events, coreEventReceivers, observations} = setup()
+    const context = {characterId: 'miori', conversationId: 'a'}
+    const responseId = '50000000-0000-4000-8000-000000000051'
+    const track = {enabled: true}
+    await controller.ensureSession(context)
+    await controller.resumeMicrophone({getAudioTracks: () => [track]} as unknown as MediaStream)
+    coreEventReceivers[0]({type: 'response_started', response_id: responseId} as VoiceSessionEvent)
+    observations[0]({transport: 'available', control: 'available', audio: 'available',
+      activeResponseId: responseId, renderedEnergy: 1})
+    expect(controller.snapshot().playback).toBe('playing')
+    await controller.setTextInputFocused(context, true)
+    await controller.speechStarted(UTTERANCE_ID, 1010)
+    await controller.speechStopped(UTTERANCE_ID, 1020)
+    expect(track.enabled).toBe(false)
+    expect(controller.snapshot()).toMatchObject({input: 'suppressed', playback: 'playing'})
+    expect(room.stopPlayback).not.toHaveBeenCalled()
+    expect(events.some(e => ['speech_started', 'speech_stopped', 'response_cancel_requested', 'playback_stopped'].includes(e.type))).toBe(false)
+    await controller.submitText(context, '次の質問')
+    expect(room.stopPlayback).toHaveBeenCalledWith(responseId)
+    expect(controller.snapshot().playback).toBe('stopped')
+    expect(events.map(e => e.type)).toEqual(expect.arrayContaining(['response_cancel_requested', 'user_text_submitted']))
+    await controller.end()
+  })
+
   test.each(['manual', 'thread_switch'] as const)('%s muteはfocus解除や別スレッドの操作で解除しない', async reason => {
     const {controller, room} = setup()
     const context = {characterId: 'miori', conversationId: 'a'}
