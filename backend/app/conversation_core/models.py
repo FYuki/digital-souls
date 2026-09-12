@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import Literal
 
 
 class ResponseState(Enum):
@@ -21,6 +22,29 @@ class UtteranceState(Enum):
     PENDING = "pending"
     CONSUMED = "consumed"
     DISCARDED = "discarded"
+
+
+@dataclass(frozen=True)
+class InputSource:
+    input_id: str
+    source: Literal["speech", "text"]
+
+
+@dataclass(frozen=True)
+class UserInput:
+    """STTで確定した音声と直接入力されたテキストの共通境界。"""
+
+    input_id: str
+    source: Literal["speech", "text"]
+    text: str
+    should_response: bool
+    state: UtteranceState
+    discard_reason: str | None = None
+    control_request_id: str | None = None
+
+    @property
+    def reference(self) -> InputSource:
+        return InputSource(self.input_id, self.source)
 
 
 @dataclass(frozen=True)
@@ -53,6 +77,7 @@ class Response:
     generation: int
     source_utterance_ids: tuple[str, ...]
     state: ResponseState
+    source_inputs: tuple[InputSource, ...] = ()
     generated_text: str = ""
     last_text_sequence: int = 0
     audio_segments: tuple[AudioSegment, ...] = ()
@@ -78,6 +103,7 @@ class TerminalOutcome:
     last_played_audio_sequence: int
     last_text_sequence: int = 0
     source_utterance_ids: tuple[str, ...] = ()
+    source_inputs: tuple[InputSource, ...] = ()
     terminal_state_bounds_ns: tuple[int, int] | None = None
 
 
@@ -103,6 +129,7 @@ class CoreEvent:
     response_id: str | None = None
     generation: int | None = None
     source_utterance_ids: tuple[str, ...] | None = None
+    source_inputs: tuple[InputSource, ...] | None = None
     text_sequence: int | None = None
     text: str | None = None
     text_range: tuple[int, int] | None = None

@@ -20,6 +20,7 @@ from app.conversation_core.models import (
     TerminalOutcome,
     Utterance,
     UtteranceState,
+    UserInput,
 )
 from app.conversation_core.ports import (
     DeliveryPort,
@@ -112,12 +113,15 @@ class ConversationCoreSession:
         self._monotonic_ns = monotonic_ns
         self._on_interruption = on_interruption
         self._responses: dict[str, Response] = {}
-        self._utterances: dict[str, Utterance] = {}
+        self._inputs: dict[str, UserInput] = {}
         self._active_response_id: str | None = None
         self._next_generation = 1
         self._connected = True
         self._ended = False
         self._state_lock = asyncio.Lock()
+        self._text_input_lock = asyncio.Lock()
+        self._speech_generation = 0
+        self._transcribing_inputs: dict[str, int] = {}
         self._stage_tasks: set[asyncio.Task[object]] = set()
         self._stage_task_keys: dict[asyncio.Task[object], tuple[str, int]] = {}
         self._effect_tasks: set[asyncio.Task[object]] = set()
@@ -141,9 +145,16 @@ class ConversationCoreSession:
     @property
     def pending_utterances(self) -> tuple[Utterance, ...]:
         return tuple(
-            utterance
-            for utterance in self._utterances.values()
-            if utterance.state is UtteranceState.PENDING
+            self.utterance(item.input_id)
+            for item in self.pending_inputs
+            if item.source == "speech"
+        )
+
+    @property
+    def pending_inputs(self) -> tuple[UserInput, ...]:
+        return tuple(
+            item for item in self._inputs.values()
+            if item.state is UtteranceState.PENDING
         )
 
     @property
@@ -168,7 +179,17 @@ class ConversationCoreSession:
         return self._responses[response_id]
 
     def utterance(self, utterance_id: str) -> Utterance:
-        return self._utterances[utterance_id]
+        item = self._inputs[utterance_id]
+        if item.source != "speech":
+            raise KeyError(utterance_id)
+        return Utterance(
+            utterance_id=item.input_id, transcript=item.text,
+            should_response=item.should_response, state=item.state,
+            discard_reason=item.discard_reason, control_request_id=item.control_request_id,
+        )
+
+    def user_input(self, input_id: str) -> UserInput:
+        return self._inputs[input_id]
 
     async def finalize_utterance(
         self,
@@ -180,40 +201,67 @@ class ConversationCoreSession:
         control_request_id: str | None = None,
         control_input_valid: Callable[[], bool] | None = None,
     ) -> Response | None:
+        return await self._accept_input(
+            UserInput(
+                input_id=utterance_id, source="speech", text=transcript,
+                should_response=should_response, control_request_id=control_request_id,
+                state=UtteranceState.PENDING if retain_pending else UtteranceState.CONSUMED,
+            ),
+            control_input_valid=control_input_valid,
+        )
+
+    async def submit_text(
+        self, *, input_id: str, text: str, discard_speech_ids: tuple[str, ...] = (),
+    ) -> Response | None:
+        if not text.strip():
+            raise ValueError("text input must not be empty")
+        item = UserInput(
+            input_id=input_id, source="text", text=text,
+            should_response=True, state=UtteranceState.PENDING,
+        )
+        async with self._text_input_lock:
+            self._require_available()
+            if input_id in self._inputs:
+                return await self._accept_input(item)
+            # STTの終了待ちをせず、その前に開始した音声の処理権を失効させる。
+            self._speech_generation += 1
+            for utterance_id in set(discard_speech_ids) | self._transcribing_inputs.keys():
+                self._register_effect_task(self.discard_utterance(
+                    utterance_id=utterance_id, reason="text_priority",
+                ))
+            previous = self.active_response
+            # 旧回答の終了処理が次の入力を予約する前にtextを共通queueへ入れる。
+            response = await self._accept_input(item)
+            if previous is not None and not previous.state.is_terminal:
+                await self.cancel_response(response_id=previous.response_id, reason="barge_in")
+            return response or self._response_containing(input_id)
+
+    async def _accept_input(
+        self, item: UserInput, *, control_input_valid: Callable[[], bool] | None = None,
+    ) -> Response | None:
         start_task: asyncio.Task[Response] | None = None
         async with self._state_lock:
-            self._require_available()
+            # 配送やロック待ちの間に失効したSTT結果は、新規入力の例外にせず破棄する。
             if control_input_valid is not None and not control_input_valid():
                 return None
-            existing = self._utterances.get(utterance_id)
+            self._require_available()
+            existing = self._inputs.get(item.input_id)
             if existing is not None:
-                if (existing.transcript, existing.should_response, existing.control_request_id) != (
-                    transcript,
-                    should_response,
-                    control_request_id,
+                if (existing.source, existing.text, existing.should_response, existing.control_request_id) != (
+                    item.source, item.text, item.should_response, item.control_request_id,
                 ):
                     raise TerminalProtocolError(
-                        "utterance_id is associated with a different payload"
+                        "input_id is associated with a different payload"
                     )
-                return self._response_containing(utterance_id)
+                return self._response_containing(item.input_id)
 
-            if control_request_id is not None and (
-                self.active_response is not None or self.pending_utterances
+            if item.control_request_id is not None and (
+                self.active_response is not None or self.pending_inputs
             ):
                 raise TerminalProtocolError("control_input_requires_idle")
 
-            self._utterances[utterance_id] = Utterance(
-                utterance_id=utterance_id,
-                transcript=transcript,
-                should_response=should_response,
-                control_request_id=control_request_id,
-                state=(
-                    UtteranceState.PENDING
-                    if retain_pending
-                    else UtteranceState.CONSUMED
-                ),
-            )
-            if self.active_response is None and should_response:
+            self._inputs[item.input_id] = item
+            if self.active_response is None and item.should_response:
                 response, response_input = self._reserve_pending_response_locked()
                 start_task = self._register_effect_task(
                     self._start_reserved_response(response, response_input)
@@ -225,12 +273,12 @@ class ConversationCoreSession:
     async def discard_utterance(self, *, utterance_id: str, reason: str) -> bool:
         """未処理の発話を理由付きで終端し、黙って欠落させない。"""
         async with self._state_lock:
-            existing = self._utterances.get(utterance_id)
+            existing = self._inputs.get(utterance_id)
             if existing is not None:
                 return False
-            self._utterances[utterance_id] = Utterance(
-                utterance_id=utterance_id,
-                transcript="",
+            self._inputs[utterance_id] = UserInput(
+                input_id=utterance_id, source="speech",
+                text="",
                 should_response=False,
                 state=UtteranceState.DISCARDED,
                 discard_reason=reason,
@@ -254,14 +302,22 @@ class ConversationCoreSession:
         interrupted_response_id: str | None = None,
     ) -> asyncio.Task[Response | None]:
         self._require_available()
-        return self._register_stage_task(
+        generation = self._speech_generation
+        self._transcribing_inputs[utterance_id] = generation
+        task = self._register_stage_task(
             self._transcribe_utterance(
                 utterance_id=utterance_id,
                 audio=audio,
                 should_response=should_response,
                 interrupted_response_id=interrupted_response_id,
+                speech_generation=generation,
             )
         )
+        def finished(_task: asyncio.Task[object]) -> None:
+            if self._transcribing_inputs.get(utterance_id) == generation:
+                self._transcribing_inputs.pop(utterance_id, None)
+        task.add_done_callback(finished)
+        return task
 
     async def preview_turn(
         self,
@@ -269,11 +325,21 @@ class ConversationCoreSession:
         utterance_id: str,
         audio: bytes,
         interrupted_response_id: str,
+        input_is_current: Callable[[], bool] | None = None,
     ) -> TurnDecision:
         """発話冒頭の認識結果から暫定判定し、明確な発話なら旧回答を早期終了する。"""
+        generation = self._speech_generation
+        source_is_current = input_is_current
+        input_is_current = lambda: self.accepting_input and generation == self._speech_generation and (
+            source_is_current is None or source_is_current()
+        )
         await self._record_utterance_stage(utterance_id, "stt_preview", "started")
+        if not input_is_current():
+            return "backchannel"
         transcript = await self._stt.transcribe(audio)
         await self._record_utterance_stage(utterance_id, "stt_preview", "completed")
+        if input_is_current is not None and not input_is_current():
+            return "backchannel"
         decision = self._turn_classifier(transcript)
         await self._record_utterance_stage(
             utterance_id, "turn_decision", "completed"
@@ -282,6 +348,8 @@ class ConversationCoreSession:
             await self._record_utterance_stage(
                 utterance_id, "take_turn_decision", "completed"
             )
+        if input_is_current is not None and not input_is_current():
+            return "backchannel"
         await self._publish_utterance_delivery(
             CoreEvent(
                 type="turn_decision",
@@ -290,12 +358,13 @@ class ConversationCoreSession:
                 response_id=interrupted_response_id,
                 decision=decision,
                 final=False,
-            )
+            ), input_is_current=input_is_current,
         )
         if decision == "take_turn":
             cancelled = await self.cancel_response(
                 response_id=interrupted_response_id,
                 reason="barge_in",
+                input_is_current=input_is_current,
             )
             if cancelled is not None and cancelled.state is ResponseState.CANCELLED:
                 await self._record_utterance_stage(
@@ -460,11 +529,14 @@ class ConversationCoreSession:
         )
 
     async def cancel_response(
-        self, *, response_id: str, reason: str
+        self, *, response_id: str, reason: str,
+        input_is_current: Callable[[], bool] | None = None,
     ) -> Response | None:
         if self._cancellation is not None:
             async with self._state_lock:
                 response = self._responses.get(response_id)
+                if input_is_current is not None and not input_is_current():
+                    return response
                 if response is None or response.state.is_terminal:
                     return response
                 task = self._cancellation_tasks.get(response_id)
@@ -488,14 +560,19 @@ class ConversationCoreSession:
         response = self._responses.get(response_id)
         if response is None:
             return None
-        if not response.state.is_terminal:
+        if input_is_current is not None and not input_is_current():
+            return response
+        if not response.state.is_terminal and input_is_current is None:
             self._notify_interruption(reason)
         result = await self._terminate(
             response_id=response_id,
             generation=response.generation,
             state=ResponseState.CANCELLED,
             reason=reason,
+            input_is_current=input_is_current,
         )
+        if result.state is not ResponseState.CANCELLED:
+            return result
         self._request_response_task_cancellation(response_id, response.generation)
         for _ in range(3):
             await asyncio.sleep(0)
@@ -594,6 +671,7 @@ class ConversationCoreSession:
         if self._ended or not self._connected:
             return
         self._connected = False
+        self._speech_generation += 1
         self._notify_interruption("disconnect")
         await self._terminate_active_for_shutdown("disconnect")
         self._discard_pending("disconnect")
@@ -609,6 +687,7 @@ class ConversationCoreSession:
         if self._ended:
             return
         self._connected = False
+        self._speech_generation += 1
         self._ended = True
         self._notify_interruption("session_ended")
         await self._terminate_active_for_shutdown("session_ended")
@@ -629,25 +708,27 @@ class ConversationCoreSession:
             )
 
     def _reserve_pending_response_locked(self) -> tuple[Response, str]:
-        pending = self.pending_utterances
+        pending = self.pending_inputs
         if not pending or self.active_response is not None:
             raise RuntimeError("response cannot start without pending input")
         response_id = self._response_id_factory()
         if response_id in self._responses:
             raise TerminalProtocolError("response_id must be unique within a session")
         generation = self._next_generation
-        source_ids = tuple(item.utterance_id for item in pending)
-        response_input = "\n".join(item.transcript for item in pending)
+        source_inputs = tuple(item.reference for item in pending)
+        source_ids = tuple(item.input_id for item in pending if item.source == "speech")
+        response_input = "\n".join(item.text for item in pending)
         self._next_generation += 1
-        for utterance in pending:
-            self._utterances[utterance.utterance_id] = replace(
-                utterance,
+        for item in pending:
+            self._inputs[item.input_id] = replace(
+                item,
                 state=UtteranceState.CONSUMED,
             )
         response = Response(
             response_id=response_id,
             generation=generation,
             source_utterance_ids=source_ids,
+            source_inputs=source_inputs,
             state=ResponseState.IN_PROGRESS,
         )
         self._responses[response_id] = response
@@ -698,6 +779,7 @@ class ConversationCoreSession:
                     response_id=response.response_id,
                     generation=response.generation,
                     source_utterance_ids=response.source_utterance_ids,
+                    source_inputs=response.source_inputs,
                     history_turn_id=start_result.history_turn_id,
                 ),
                 response.response_id,
@@ -726,8 +808,13 @@ class ConversationCoreSession:
         audio: bytes,
         should_response: bool,
         interrupted_response_id: str | None,
+        speech_generation: int,
     ) -> Response | None:
+        def input_is_current() -> bool:
+            return self.accepting_input and speech_generation == self._speech_generation
         await self._record_utterance_stage(utterance_id, "stt", "started")
+        if not input_is_current():
+            return None
         try:
             transcript = await self._stt.transcribe(audio)
         except asyncio.CancelledError:
@@ -735,6 +822,8 @@ class ConversationCoreSession:
             raise
         except Exception as error:
             await self._record_utterance_stage(utterance_id, "stt", "failed")
+            if not input_is_current():
+                return None
             error_code = getattr(error, "error_code", None)
             if isinstance(error_code, str):
                 await self._discard_failed_utterance(
@@ -751,10 +840,12 @@ class ConversationCoreSession:
                         error_code=error_code,
                         recoverable=True,
                         user_state="listening",
-                    )
+                    ), input_is_current=input_is_current,
                 )
             raise
         await self._record_utterance_stage(utterance_id, "stt", "completed")
+        if not input_is_current():
+            return None
         retain_pending = True
         if interrupted_response_id is not None:
             decision = self._turn_classifier(transcript)
@@ -775,12 +866,13 @@ class ConversationCoreSession:
                     response_id=interrupted_response_id,
                     decision=decision,
                     final=True,
-                )
+                ), input_is_current=input_is_current,
             )
             if should_response:
                 cancelled = await self.cancel_response(
                     response_id=interrupted_response_id,
                     reason="barge_in",
+                    input_is_current=input_is_current,
                 )
                 if cancelled is not None and cancelled.state is ResponseState.CANCELLED:
                     await self._record_utterance_stage(
@@ -793,25 +885,26 @@ class ConversationCoreSession:
                 utterance_id=utterance_id,
                 transcript=transcript,
                 should_response=should_response,
-            )
+            ), input_is_current=input_is_current,
         )
         return await self.finalize_utterance(
             utterance_id=utterance_id,
             transcript=transcript,
             should_response=should_response,
             retain_pending=retain_pending,
+            control_input_valid=input_is_current,
         )
 
     async def _discard_failed_utterance(
         self, *, utterance_id: str, should_response: bool, reason: str
     ) -> None:
         async with self._state_lock:
-            existing = self._utterances.get(utterance_id)
+            existing = self._inputs.get(utterance_id)
             if existing is not None:
                 return
-            self._utterances[utterance_id] = Utterance(
-                utterance_id=utterance_id,
-                transcript="",
+            self._inputs[utterance_id] = UserInput(
+                input_id=utterance_id, source="speech",
+                text="",
                 should_response=should_response,
                 state=UtteranceState.DISCARDED,
                 discard_reason=reason,
@@ -824,8 +917,8 @@ class ConversationCoreSession:
     ) -> None:
         audit = ProviderResultAudit()
         control_request = (
-            self._utterances[response.source_utterance_ids[0]].control_request_id
-            if len(response.source_utterance_ids) == 1 else None
+            self._inputs[response.source_inputs[0].input_id].control_request_id
+            if len(response.source_inputs) == 1 else None
         )
         try:
             # 前応答のterminal処理から次の発話を開始しても、画面操作を引き継がない。
@@ -1191,10 +1284,13 @@ class ConversationCoreSession:
         generation: int,
         state: ResponseState,
         reason: str | None,
+        input_is_current: Callable[[], bool] | None = None,
     ) -> Response:
         terminal_started = False
         async with self._state_lock:
             response = self._responses[response_id]
+            if input_is_current is not None and not input_is_current():
+                return response
             if response.state.is_terminal:
                 return response
             if response.generation != generation:
@@ -1210,6 +1306,9 @@ class ConversationCoreSession:
                         self._cancellation_outcomes[response_id] = (state, reason)
                     self._output_stop_tasks[response_id].cancel()
                 return response
+            if input_is_current is not None and state is ResponseState.CANCELLED:
+                # previewの有効性確認とTool等の割り込み通知を同じlock内で行う。
+                self._notify_interruption(reason or "barge_in")
             response = replace(response, state=state, terminal_reason=reason)
             # awaitを挟まず、公開状態の書き換えを同じ単調時計の2点で囲む。
             # 通知の送信・永続化完了をcancel成立時刻へ読み替えない。
@@ -1228,6 +1327,7 @@ class ConversationCoreSession:
                 last_played_audio_sequence=response.last_played_audio_sequence,
                 last_text_sequence=response.last_text_sequence,
                 source_utterance_ids=response.source_utterance_ids,
+                source_inputs=response.source_inputs,
                 terminal_state_bounds_ns=(transition_before, transition_after)
                 if transition_before is not None and transition_after is not None else None,
             )
@@ -1256,6 +1356,7 @@ class ConversationCoreSession:
                         generation=outcome.generation,
                         reason=outcome.reason,
                         source_utterance_ids=outcome.source_utterance_ids,
+                        source_inputs=outcome.source_inputs,
                         last_text_sequence=outcome.last_text_sequence,
                         last_audio_sequence=len(outcome.audio_segments),
                         terminal_state_bounds_ns=outcome.terminal_state_bounds_ns,
@@ -1270,7 +1371,7 @@ class ConversationCoreSession:
                 not self._connected
                 or self.active_response is not None
                 or not any(
-                    utterance.should_response for utterance in self.pending_utterances
+                    item.should_response for item in self.pending_inputs
                 )
             ):
                 return
@@ -1296,9 +1397,9 @@ class ConversationCoreSession:
         )
 
     def _discard_pending(self, reason: str) -> None:
-        for utterance in self.pending_utterances:
-            self._utterances[utterance.utterance_id] = replace(
-                utterance,
+        for item in self.pending_inputs:
+            self._inputs[item.input_id] = replace(
+                item,
                 state=UtteranceState.DISCARDED,
                 discard_reason=reason,
             )
@@ -1449,13 +1550,17 @@ class ConversationCoreSession:
             "completed",
         )
 
-    async def _publish_utterance_delivery(self, event: CoreEvent) -> None:
+    async def _publish_utterance_delivery(
+        self, event: CoreEvent, *, input_is_current: Callable[[], bool] | None = None,
+    ) -> None:
         utterance_id = event.utterance_id
         if utterance_id is None:
             raise TerminalProtocolError(
                 "utterance delivery event requires utterance identity"
             )
         await self._record_utterance_stage(utterance_id, "delivery", "started")
+        if input_is_current is not None and not input_is_current():
+            return
         try:
             await self._delivery.publish(event)
         except asyncio.CancelledError:
@@ -1553,7 +1658,7 @@ class ConversationCoreSession:
             (
                 response
                 for response in self._responses.values()
-                if utterance_id in response.source_utterance_ids
+                if any(item.input_id == utterance_id for item in response.source_inputs)
             ),
             None,
         )

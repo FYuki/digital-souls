@@ -1,0 +1,68 @@
+{
+  "scope": "backend_real_livekit_transport",
+  "measurement_revision": "dfdffd216736ed199692ecbee9ffa914bc156785",
+  "command": "PYTHONPATH=backend backend/.venv/bin/python -m pytest backend/tests/integration/test_livekit_transport_integration.py -q",
+  "tests": [
+    {
+      "name": "test_real_livekit_bootstrap_joins_user_and_character_to_one_room",
+      "duration_seconds": 1.056,
+      "status": "passed"
+    },
+    {
+      "name": "test_real_livekit_rejects_expired_token_and_accepts_reissued_token",
+      "duration_seconds": 0.343,
+      "status": "passed"
+    },
+    {
+      "name": "test_real_livekit_user_grant_excludes_camera_publication",
+      "duration_seconds": 0.263,
+      "status": "passed"
+    },
+    {
+      "name": "test_real_livekit_application_event_receives_private_ack",
+      "duration_seconds": 3.276,
+      "status": "passed"
+    },
+    {
+      "name": "test_real_livekit_first_ack_stops_backend_outbox_retry",
+      "duration_seconds": 5.614,
+      "status": "passed"
+    },
+    {
+      "name": "test_real_livekit_sustained_microphone_keeps_core_delivery_available",
+      "duration_seconds": 12.284,
+      "status": "passed"
+    },
+    {
+      "name": "test_real_livekit_ack_after_first_retry_stops_remaining_retries",
+      "duration_seconds": 5.409,
+      "status": "passed"
+    },
+    {
+      "name": "test_real_livekit_retry_exhaustion_keeps_room_until_terminal_cleanup",
+      "duration_seconds": 7.191,
+      "status": "passed"
+    },
+    {
+      "name": "test_real_livekit_outbox_overflow_keeps_room_until_terminal_cleanup",
+      "duration_seconds": 3.746,
+      "status": "passed"
+    },
+    {
+      "name": "test_real_livekit_duplicate_identity_keeps_new_connection_and_session",
+      "duration_seconds": 0.293,
+      "status": "passed"
+    },
+    {
+      "name": "test_real_livekit_grace_timeout_cleans_up_and_requires_a_new_session",
+      "duration_seconds": 6.557,
+      "status": "passed"
+    }
+  ],
+  "teardown_status": "completed",
+  "environment_id": "test",
+  "limitations": [
+    "実LiveKit/SDK/Backendのtransport試験。実STT/LLM/TTSの全会話は別のvoiceスイートで検証。",
+    "共有LiveKitは所有・停止しない。"
+  ]
+}

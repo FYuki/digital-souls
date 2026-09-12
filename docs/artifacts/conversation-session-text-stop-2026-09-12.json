@@ -1,0 +1,50 @@
+{
+  "source_commit": "7185b8c",
+  "runs": [
+    {
+      "file": "text-stop-before.json",
+      "sha256": "857ef4fd22240e5956c80565bcaa4853dc970bcbed03bdcda7a2f75691d847b3",
+      "failures": [
+        {
+          "stage": "output_clock",
+          "reason": "output_stop_observation_invalid"
+        }
+      ],
+      "text_submissions_during_playback": 1,
+      "playback_starts": 1,
+      "event_counts": {
+        "response_started": 1,
+        "user_input_result": 1,
+        "response_delta": 148,
+        "response_audio_segment": 1
+      },
+      "stop_clock_diagnostics": [
+        "STOP_DIAGNOSTIC output_stop_observation_invalid {\"drained\":false,\"complete\":false,\"cancelOutputFrameBounds\":null,\"clockCorrelationMethod\":\"bracketing_output_timestamps\",\"timestampRoundingMarginMs\":0.2,\"missingReason\":\"audit_output_clock_invalid\",\"cancelBoundsMs\":null,\"outputClockPassedFrame\":null,\"nonzeroSamplesAfterCancelLower\":0,\"firstOutputAtMs\":null,\"lastOutputEndAtMs\":null,\"clockFailure\":{\"stage\":\"timestamp_regression\",\"values\":{\"contextTime\":3.878084,\"performanceTime\":7458.300000011921,\"observedAtMs\":7462.4000000059605,\"previousContextTime\":3.8780843333333332,\"previousPerformanceTime\":7458.199999988079,\"previousObservedAtMs\":7458.4000000059605}},\"nonzeroSamplesAfterCancelUpper\":0,\"boundaryUncertainIntervals\":0,\"observedIntervals\":0,\"observationBoundary\":\"post_gain_browser_output_clock\"}"
+      ]
+    },
+    {
+      "file": "text-stop-after.json",
+      "sha256": "e15eff70e5ed800a51d38b027c5b7d3559310c651c66bdd6a20d3eadccf894ad",
+      "failures": [],
+      "text_submissions_during_playback": 3,
+      "playback_starts": 4,
+      "event_counts": {
+        "response_started": 4,
+        "user_input_result": 4,
+        "response_delta": 131,
+        "response_audio_segment": 5,
+        "observation": 2,
+        "response_cancelled": 3
+      },
+      "stop_clock_diagnostics": []
+    }
+  ],
+  "verification": {
+    "unit": 861,
+    "module": 140,
+    "typecheck": "passed",
+    "build": "passed"
+  },
+  "method": "Windows Chrome + 実LiveKit/Ollama/VOICEVOX、模擬マイク。再生開始後に入力欄のblur/focusとテキスト送信を3回繰り返す。停止監査の数値だけを診断出力する処理をブラウザで追加。",
+  "human_microphone_acceptance": false
+}

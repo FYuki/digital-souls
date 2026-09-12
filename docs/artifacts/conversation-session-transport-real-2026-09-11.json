@@ -1,0 +1,54 @@
+{
+  "issue": 319,
+  "base_commit": "dfc4264857677cd732b1ad0e87d36b2028d0e1d7",
+  "spec_sha256": "8489a2d8a563f624b71d17d6505c58093c92f2559818e7cc523fd3588061b712",
+  "source": "synthetic microphone PCM and control/audio probes through real Backend and LiveKit; dev Vite diagnostic page; no LLM/STT/TTS conversation acceptance",
+  "statistics": {
+    "startTime": "2026-09-11T10:00:49.117Z",
+    "duration": 3677.2780000000002,
+    "expected": 2,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "tests": [
+    {
+      "title": "fake microphone traverses the real LiveKit room once",
+      "status": "passed",
+      "duration_ms": 2223
+    },
+    {
+      "title": "temporary interruption resubscribes once and resumes the same session",
+      "status": "passed",
+      "duration_ms": 1116
+    }
+  ],
+  "environment_status": "completed",
+  "teardown_status": "completed",
+  "previous_attempts": [
+    {
+      "stage": "runner readiness",
+      "outcome": "HTTP 204 incorrectly awaited as 200; interrupted runner, owned environment teardown completed"
+    },
+    {
+      "stage": "diagnostic page",
+      "outcome": "two tests failed because production build excludes dev-only /voice/livekit; switched to owned Vite on port 5174"
+    },
+    {
+      "stage": "output directory",
+      "outcome": "Playwright default test-results cleanup removed test runtime identity; new dedicated data root and artifact output directory used; repository config corrected"
+    },
+    {
+      "stage": "probe expectation",
+      "outcome": "two tests failed expecting one response playback graph before a response; current room ignores probe/non-response tracks; corrected expected graphs to zero",
+      "statistics": {
+        "startTime": "2026-09-11T09:59:11.024Z",
+        "duration": 14054.883,
+        "expected": 0,
+        "skipped": 0,
+        "unexpected": 2,
+        "flaky": 0
+      }
+    }
+  ]
+}

@@ -1,9 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://digital-souls.local/contracts/voice-session/1.0/voice-session.schema.json",
+  "$id": "https://digital-souls.local/contracts/voice-session/1.1/voice-session.schema.json",
   "title": "VoiceSessionEvent",
   "description": "transport 非依存の双方向音声セッションイベント契約。音声バイト列はこのイベント契約の外側にある一時 media として扱う。",
   "oneOf": [
+    { "$ref": "#/$defs/UserTextSubmitted" },
+    { "$ref": "#/$defs/UserInputResultRequested" },
+    { "$ref": "#/$defs/UserInputResult" },
+    { "$ref": "#/$defs/AudioInputSuppressionChanged" },
+
     { "$ref": "#/$defs/SessionStartRequested" },
     { "$ref": "#/$defs/SessionStarted" },
     { "$ref": "#/$defs/SessionMuted" },
@@ -25,6 +30,7 @@
     { "$ref": "#/$defs/ResponseCancelRequested" },
     { "$ref": "#/$defs/ResponseCancelled" },
     { "$ref": "#/$defs/ResponseFailed" },
+    { "$ref": "#/$defs/ResponsePrivacySkipped" },
     { "$ref": "#/$defs/PlaybackStarted" },
     { "$ref": "#/$defs/PlaybackStopped" },
     { "$ref": "#/$defs/PlaybackCompleted" },
@@ -33,7 +39,204 @@
     { "$ref": "#/$defs/Observation" }
   ],
   "$defs": {
-    "ProtocolVersion": { "type": "string", "const": "1.0" },
+    "UserSpeaker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "participant_id",
+        "role"
+      ],
+      "properties": {
+        "participant_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "role": {
+          "const": "user",
+          "type": "string"
+        }
+      }
+    },
+    "InputSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_id",
+        "source"
+      ],
+      "properties": {
+        "input_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "speech",
+            "text"
+          ]
+        }
+      }
+    },
+    "UserTextSubmitted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "protocol_version",
+        "event_id",
+        "session_id",
+        "monotonic_timestamp_ms",
+        "speaker",
+        "text"
+      ],
+      "properties": {
+        "type": {
+          "const": "user_text_submitted"
+        },
+        "protocol_version": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "event_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "session_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "monotonic_timestamp_ms": {
+          "$ref": "#/$defs/MonotonicTimestamp"
+        },
+        "speaker": {
+          "$ref": "#/$defs/UserSpeaker"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      }
+    },
+    "UserInputResultRequested": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "protocol_version",
+        "event_id",
+        "session_id",
+        "monotonic_timestamp_ms",
+        "speaker",
+        "input_event_id"
+      ],
+      "properties": {
+        "type": {
+          "const": "user_input_result_requested"
+        },
+        "protocol_version": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "event_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "session_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "monotonic_timestamp_ms": {
+          "$ref": "#/$defs/MonotonicTimestamp"
+        },
+        "speaker": {
+          "$ref": "#/$defs/UserSpeaker"
+        },
+        "input_event_id": {
+          "$ref": "#/$defs/Identifier"
+        }
+      }
+    },
+    "UserInputResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "protocol_version",
+        "event_id",
+        "session_id",
+        "monotonic_timestamp_ms",
+        "input_event_id",
+        "status"
+      ],
+      "properties": {
+        "type": {
+          "const": "user_input_result"
+        },
+        "protocol_version": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "event_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "session_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "monotonic_timestamp_ms": {
+          "$ref": "#/$defs/MonotonicTimestamp"
+        },
+        "input_event_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "processing",
+            "accepted",
+            "rejected",
+            "not_received"
+          ]
+        },
+        "response_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "error_code": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "AudioInputSuppressionChanged": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "protocol_version",
+        "event_id",
+        "session_id",
+        "monotonic_timestamp_ms",
+        "suppressed",
+        "reason"
+      ],
+      "properties": {
+        "type": {
+          "const": "audio_input_suppression_changed"
+        },
+        "protocol_version": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "event_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "session_id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "monotonic_timestamp_ms": {
+          "$ref": "#/$defs/MonotonicTimestamp"
+        },
+        "suppressed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "const": "text_focus"
+        }
+      }
+    },
+    "ProtocolVersion": { "type": "string", "const": "1.1" },
     "Identifier": {
       "type": "string",
       "format": "uuid",
@@ -205,17 +408,22 @@
       "properties": {
         "type": { "const": "utterance_discarded" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
         "session_id": { "$ref": "#/$defs/Identifier" }, "utterance_id": { "$ref": "#/$defs/Identifier" },
-        "reason": { "type": "string", "enum": ["privacy", "disconnect", "session_ended", "invalid_audio", "input_capacity_exceeded"] }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
+        "reason": { "type": "string", "enum": ["privacy", "disconnect", "session_ended", "invalid_audio", "input_capacity_exceeded", "input_suppressed", "text_priority"] }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
     "ResponseStarted": {
       "type": "object", "additionalProperties": false,
       "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "speaker", "source_utterance_ids", "monotonic_timestamp_ms"],
+      "anyOf": [
+        { "required": ["source_inputs"], "properties": { "source_inputs": {} } },
+        { "properties": { "source_utterance_ids": { "type": "array", "minItems": 1 } } }
+      ],
       "properties": {
         "type": { "const": "response_started" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
         "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" }, "speaker": { "$ref": "#/$defs/Speaker" },
         "history_turn_id": { "$ref": "#/$defs/Identifier" },
-        "source_utterance_ids": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/Identifier" } },
+        "source_inputs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/InputSource" } },
+        "source_utterance_ids": { "type": "array", "minItems": 0, "uniqueItems": true, "items": { "$ref": "#/$defs/Identifier" } },
         "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
@@ -263,6 +471,16 @@
         "type": { "const": "response_cancelled" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
         "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" },
         "reason": { "type": "string", "enum": ["barge_in", "session_ended", "disconnect"] }, "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
+      }
+    },
+    "ResponsePrivacySkipped": {
+      "type": "object", "additionalProperties": false,
+      "required": ["type", "protocol_version", "event_id", "session_id", "response_id", "source_inputs", "monotonic_timestamp_ms"],
+      "properties": {
+        "type": { "const": "response_privacy_skipped" }, "protocol_version": { "$ref": "#/$defs/ProtocolVersion" }, "event_id": { "$ref": "#/$defs/Identifier" },
+        "session_id": { "$ref": "#/$defs/Identifier" }, "response_id": { "$ref": "#/$defs/Identifier" },
+        "source_inputs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/InputSource" } },
+        "monotonic_timestamp_ms": { "$ref": "#/$defs/MonotonicTimestamp" }
       }
     },
     "ResponseFailed": {

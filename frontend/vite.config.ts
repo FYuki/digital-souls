@@ -1,13 +1,14 @@
 import { svelte, vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import { defineConfig } from 'vite'
 
+import { createVoiceDiagnosticsPlugin } from './vite.voice-diagnostics'
 import { createVadAssetPlugin } from './vite.vad-assets'
 import {
   createBackendProxy,
 } from './vite.proxy'
 
 export default defineConfig(({ command, mode, isPreview }) => ({
-  plugins: [svelte({ preprocess: vitePreprocess() }), createVadAssetPlugin()],
+  plugins: [svelte({ preprocess: vitePreprocess() }), createVadAssetPlugin(), createVoiceDiagnosticsPlugin()],
   resolve: {
     conditions: ['browser'],
   },

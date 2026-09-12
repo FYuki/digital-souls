@@ -9,7 +9,7 @@ export type TokenResponse = Readonly<{
 }>
 
 type TokenRequest = {
-  protocol_version: '1.0'
+  protocol_version: '1.1'
   request_id: string
   character_id: string
   conversation_id: string
@@ -70,7 +70,7 @@ export const requestLiveKitToken = async (
   screenClientSessionId?: string | null,
 ): Promise<TokenResponse> => {
   const body: TokenRequest = {
-    protocol_version: '1.0',
+    protocol_version: '1.1',
     request_id: crypto.randomUUID(),
     character_id: characterId,
     conversation_id: conversationId,

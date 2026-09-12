@@ -6,6 +6,8 @@
 
 ## 背景
 
+2026-09の#319拡張（Speech/Text共通入力、受理結果照合、focus抑止、protocol移行）は[Conversation Session契約](conversation-session-text-input-2026-09.md)を優先する。以下の音声専用入力・protocol `1.0`の記述は拡張前runtimeの基準であり、更新後の契約・実装段階は後続ADRで区別する。音声の相槌判定・既存response終端・実再生prefixの規則は継続する。
+
 現行の `backend/app/routers/ws.py` はターン型 WebSocket であり、Issue #17 の baseline 測定対象でもある。継続 listening、barge-in、再接続をこの経路へ直接足すと、状態モデルと測定条件を同時に変えてしまう。一方、FE/BE 間の既存会話契約は手書きで二重管理され、音声セッション向けの型生成・runtime validation・再生成差分検知がない。
 
 ## 決定事項

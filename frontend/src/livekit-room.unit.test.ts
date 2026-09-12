@@ -242,7 +242,7 @@ describe('LiveKit Room generation synchronization', () => {
     const room = latestRoom(), eventId = crypto.randomUUID()
     let completed = false
     const operation = client.publishControlEvent({
-      type: 'observation', protocol_version: '1.0', event_id: eventId, session_id: sessionId,
+      type: 'observation', protocol_version: '1.1', event_id: eventId, session_id: sessionId,
       measurement: 'session_summary', timestamp: 100, clock_domain: 'client_monotonic', unit: 'millisecond',
       session_summary: { sequence: 1, microphone_activation_attempts: 1, mute_attempts: 0,
         retry_attempts: 0, operation_tracking_started: true, end_requested: true },
@@ -271,7 +271,7 @@ describe('LiveKit Room generation synchronization', () => {
     try {
       await client.connect('ws://test', 'token', sessionId)
       const room = latestRoom()
-      emitCoreEvent(room, {protocol_version: '1.0', type: 'response_started', session_id: sessionId,
+      emitCoreEvent(room, {protocol_version: '1.1', type: 'response_started', session_id: sessionId,
         response_id: responseId, event_id: crypto.randomUUID(), source_utterance_ids: [crypto.randomUUID()],
         speaker: {participant_id: crypto.randomUUID(), role: 'character', character_id: 'miori'}, monotonic_timestamp_ms: 1})
       room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
@@ -298,7 +298,7 @@ describe('LiveKit Room generation synchronization', () => {
       await vi.waitFor(() => expect(acks()).toHaveLength(2))
       expect(acks()[0]).toMatchObject({...request, type: 'output_stop_confirmed', last_played_audio_sequence: 0,
         output_confirmation: 'output_clock_passed'})
-      emitCoreEvent(room, {protocol_version: '1.0', type: 'response_delta', session_id: sessionId,
+      emitCoreEvent(room, {protocol_version: '1.1', type: 'response_delta', session_id: sessionId,
         response_id: responseId, event_id: crypto.randomUUID(), text_sequence: 1,
         text: '後', text_range: {start: 0, end: 1}, monotonic_timestamp_ms: 2})
       expect(raw.mock.calls.some(([row]) => row.type === 'response_delta')).toBe(true)
@@ -345,6 +345,25 @@ describe('LiveKit Room generation synchronization', () => {
     client.disconnect()
   })
 
+  test('privacy終端で該当応答の再生graphを止め、sessionは維持する', async () => {
+    const client = new LiveKitRoomClient(() => undefined)
+    const responseId = '50000000-0000-4000-8000-000000000001'
+    const sessionId = '20000000-0000-4000-8000-000000000001'
+    try {
+      await client.connect('ws://test', 'token', sessionId)
+      const room = latestRoom()
+      room.emit('trackSubscribed', {kind: 'audio', mediaStreamTrack: {}},
+        {trackSid: 'TR_privacy', trackName: `ds-response-v1:${responseId}`})
+      await vi.waitFor(() => expect(audioContexts[0]?.worklets).toHaveLength(2))
+      const renderer = audioContexts[0].worklets[0]
+      emitCoreEvent(room, {protocol_version: '1.1', type: 'response_privacy_skipped',
+        event_id: '60000000-0000-4000-8000-000000000003', session_id: sessionId, response_id: responseId,
+        source_inputs: [{input_id: responseId, source: 'text'}], monotonic_timestamp_ms: 2002})
+      expect(renderer.disconnect).toHaveBeenCalledOnce()
+      expect(audioContexts[0].close).not.toHaveBeenCalled()
+    } finally {client.disconnect()}
+  })
+
   test('明示診断はgain後段を通り、cancel時に監視を切断せずcontext closeもdrainを待つ', async () => {
     const rows: import('./livekit/post-gain-monitor').StaleAudioObservation[] = []
     const receipts: import('./livekit/decoded-receipt-audit').DecodedReceiptSnapshot[] = []
@@ -375,7 +394,7 @@ describe('LiveKit Room generation synchronization', () => {
         firstNonzeroFrame: i === 0 ? 48000 : null, lastNonzeroFrame: i === 0 ? 48127 : null,
       }))}} as MessageEvent)
       now = 1010
-      emitCoreEvent(room, {protocol_version: '1.0', type: 'response_cancelled',
+      emitCoreEvent(room, {protocol_version: '1.1', type: 'response_cancelled',
         event_id: '60000000-0000-4000-8000-000000000003', session_id: sessionId, response_id: responseId,
         reason: 'barge_in', monotonic_timestamp_ms: 2002})
       expect(renderer.disconnect).toHaveBeenCalledOnce()
@@ -425,6 +444,50 @@ describe('LiveKit Room generation synchronization', () => {
         track_sid: 'TR_ready', generation: 0,
       }]))
     }
+    client.disconnect()
+  })
+
+  test.each(['unsubscribed', 'stopped', 'replaced'])('旧購読の復号失敗で会話を終了しない（%s）', async mode => {
+    const observations: RoomObservation[] = []
+    const client = new LiveKitRoomClient(row => observations.push(row))
+    await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+    const room = latestRoom()
+    const responseId = '50000000-0000-4000-8000-000000000001'
+    const track = {kind: 'audio', mediaStreamTrack: {}}
+    const publication = {trackSid: 'TR_late', trackName: `ds-response-v1:${responseId}`}
+    room.emit('trackSubscribed', track, publication)
+    await vi.waitFor(() => expect(audioContexts.at(-1)?.renderWorklets).toHaveLength(1))
+    const old = mediaMocks.observers.at(-1)!
+    if (mode === 'stopped') client.stopPlayback(responseId)
+    else room.emit('trackUnsubscribed', track, publication)
+    if (mode === 'replaced') {
+      room.emit('trackSubscribed', track, publication)
+      await vi.waitFor(() => expect(mediaMocks.observers).toHaveLength(2))
+    }
+    old.playback!.failed()
+    expect(observations.filter(row => row.failureStage)).toEqual([])
+    client.disconnect()
+  })
+
+  test('購読解除でready待機が拒否されても接続エラーにしない', async () => {
+    const observations: RoomObservation[] = []
+    const client = new LiveKitRoomClient(row => observations.push(row))
+    await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000001')
+    const room = latestRoom()
+    const blocker = deferred()
+    workletBlockers.push(blocker)
+    const track = {kind: 'audio', mediaStreamTrack: {}}
+    const publication = {trackSid: 'TR_cancel_ready', trackName: 'ds-response-v1:50000000-0000-4000-8000-000000000001'}
+    room.emit('trackSubscribed', track, publication)
+    const observer = mediaMocks.observers.at(-1)! as unknown as {ready: () => Promise<void>; close: () => void}
+    let reject!: (error: Error) => void
+    observer.ready = () => new Promise<void>((_resolve, rejectReady) => {reject = rejectReady})
+    observer.close = () => reject(new Error('media observer closed'))
+    blocker.resolve()
+    await vi.waitFor(() => expect(reject).toBeTypeOf('function'))
+    room.emit('trackUnsubscribed', track, publication)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(observations.filter(row => row.failureStage)).toEqual([])
     client.disconnect()
   })
 
@@ -668,7 +731,7 @@ describe('LiveKit Room generation synchronization', () => {
 
     emitCoreEvent(room, {
       type: 'response_started',
-      protocol_version: '1.0',
+      protocol_version: '1.1',
       event_id: '10000000-0000-4000-8000-000000000001',
       session_id: '20000000-0000-4000-8000-000000000001',
       response_id: '50000000-0000-4000-8000-000000000002',
@@ -697,7 +760,7 @@ describe('LiveKit Room generation synchronization', () => {
 
     emitCoreEvent(room, {
       type: 'response_audio_segment',
-      protocol_version: '1.0',
+      protocol_version: '1.1',
       event_id: '10000000-0000-4000-8000-000000000002',
       session_id: '20000000-0000-4000-8000-000000000001',
       response_id: '50000000-0000-4000-8000-000000000002',
@@ -1080,7 +1143,7 @@ test('取消後のRTP観測は旧応答へ一度だけ送信し、非同期完�
     {trackSid:'TR_cancel_network', trackName:`ds-response-v1:${responseId}`})
   await vi.waitFor(() => expect(audioContexts.at(-1)?.renderWorklets).toHaveLength(1))
   const publish = vi.spyOn(client, 'publishControlEvent')
-  const cancelled = {protocol_version:'1.0', type:'response_cancelled', session_id:sessionId,
+  const cancelled = {protocol_version:'1.1', type:'response_cancelled', session_id:sessionId,
     event_id:'60000000-0000-4000-8000-000000000003', response_id:responseId, reason:'barge_in', monotonic_timestamp_ms:1000}
   try {
     emitCoreEvent(room, cancelled)
@@ -1224,7 +1287,7 @@ test('CoreイベントはACK送信失敗中にも一度だけ適用し、ACK再�
   client.setCoreDeliveryObserver(delivery)
   await client.connect('ws://test', 'token', '20000000-0000-4000-8000-000000000010')
   const room = latestRoom(), disconnected = vi.spyOn(room, 'disconnect')
-  const event = {protocol_version: '1.0', event_id: '10000000-0000-4000-8000-000000000010',
+  const event = {protocol_version: '1.1', event_id: '10000000-0000-4000-8000-000000000010',
     type: 'response_delta', session_id: '20000000-0000-4000-8000-000000000010',
     response_id: '30000000-0000-4000-8000-000000000010', text_sequence: 1, text: 'a',
     text_range: {start: 0, end: 1}, monotonic_timestamp_ms: 1}
@@ -1541,4 +1604,27 @@ test('往復確認中にサーバーが再びunavailableになったら状態同
     expect(client.isAudioProbeReady()).toBe(true)
     expect(vi.getTimerCount()).toBe(0)
   } finally {client.disconnect(); vi.useRealTimers()}
+})
+
+
+test('SDKの再試行中と最終切断を区別して通知する', async () => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(value => observations.push(value))
+  await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
+  latestRoom().emit('reconnecting')
+  expect(observations.at(-1)).toMatchObject({transport: 'unavailable'})
+  expect(observations.at(-1)?.recoveryStopped).not.toBe(true)
+  latestRoom().emit('disconnected', 1)
+  expect(observations.at(-1)).toMatchObject({transport: 'unavailable', recoveryStopped: true})
+  client.disconnect()
+})
+
+test('呼び出し元が復旧する一時切断を最終切断と誤認しない', async () => {
+  const observations: RoomObservation[] = []
+  const client = new LiveKitRoomClient(value => observations.push(value))
+  await client.connect('ws://127.0.0.1:7880', 'token', '20000000-0000-4000-8000-000000000001')
+  observations.length = 0
+  client.temporaryDisconnect()
+  expect(observations.some(value => value.recoveryStopped)).toBe(false)
+  client.disconnect()
 })

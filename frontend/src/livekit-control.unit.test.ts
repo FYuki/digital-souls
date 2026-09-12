@@ -16,7 +16,7 @@ const retryTimer: RetryTimer = {
 
 const confirmation = (eventId: string): PlaybackConfirmation => ({
   event: {
-    protocol_version: '1.0',
+    protocol_version: '1.1',
     event_id: eventId,
     type: 'playback_completed',
     session_id: '20000000-0000-4000-8000-000000000010',
@@ -34,7 +34,7 @@ afterEach(() => {
 
 const responseDelta = (eventId: string, sequence: number): Uint8Array => new TextEncoder().encode(
   JSON.stringify({
-    protocol_version: '1.0',
+    protocol_version: '1.1',
     event_id: eventId,
     type: 'response_delta',
     session_id: '20000000-0000-4000-8000-000000000010',
@@ -56,6 +56,14 @@ describe('LiveKit Core event receiver', () => {
     expect(() => receiver.receive(
       responseDelta('10000000-0000-4000-8000-000000000010', 2),
     )).toThrow('conflicting payload')
+  })
+
+  test('通常の履歴枠は1024個の連続deltaを保持し、先頭の再送・改変も識別する', () => {
+    const receiver = new CoreEventReceiver()
+    const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`
+    for (let n = 1; n <= 1024; n++) expect(receiver.receive(responseDelta(id(n), n)).duplicate).toBe(false)
+    expect(receiver.receive(responseDelta(id(1), 1)).duplicate).toBe(true)
+    expect(() => receiver.receive(responseDelta(id(1), 2))).toThrow('conflicting payload')
   })
 
   test('欠番をCore consumerへ渡す前に拒否する', () => {

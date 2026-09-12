@@ -136,7 +136,7 @@ test.each(['invalid_marker', 'old_marker', 'nonzero_marker', 'invalid_clock', 't
   else if (mode === 'nonzero_marker') f.send({kind: 'stopped', endFrame: 50176})
   else if (mode === 'invalid_clock') {
     f.send({kind: 'stopped', endFrame: 50176})
-    f.now(1020); f.clock({contextTime: .9, performanceTime: 1019}); await vi.advanceTimersByTimeAsync(5)
+    f.now(1020); f.clock({contextTime: .9, performanceTime: 1019}); await vi.advanceTimersByTimeAsync(1000)
   } else if (mode === 'timeout') await vi.advanceTimersByTimeAsync(1000)
   else {
     const disposed = f.monitor.dispose()
@@ -179,4 +179,41 @@ test('同じ要求の停止・時計通過を一次記録へ残し、別の要�
   expect(row).toMatchObject({graphClosed: true, outputStopConfirmation: {observedAtMs: 1051},
     outputArchive: {clockInvalid: false, overflow: false, lockedAtMs: 1052, closedAtMs: 1061}})
   expect(f.node.port.postMessage.mock.calls.filter(([m]) => m.kind === 'stop')).toHaveLength(1)
+})
+
+
+test('停止要求前の時計逆行は品質欠測に残し、停止要求後の実出力確認を妨げない', async () => {
+  const f = fixture(); f.output()
+  f.now(1020); f.clock({contextTime: 1.003, performanceTime: 1019})
+  await vi.advanceTimersByTimeAsync(5)
+  f.now(1030); f.clock({contextTime: 1.025, performanceTime: 1029})
+  const pending = f.monitor.stopAndConfirm()
+  const confirmed = vi.fn(); void pending.then(confirmed)
+  stopOutput(f); f.send({kind: 'stopped', endFrame: 50176})
+  await Promise.resolve(); expect(confirmed).not.toHaveBeenCalled()
+  f.now(1051); f.clock({contextTime: 1.05, performanceTime: 1050})
+  await vi.advanceTimersByTimeAsync(5)
+  expect(await pending).toMatchObject({endFrame: 50176, outputClockPassedFrame: 50176})
+  f.monitor.cancel(1051); await closeStopped(f)
+  expect(f.rows.at(-1)?.audit).toMatchObject({complete: false, missingReason: 'audit_output_clock_invalid'})
+  expect(f.rows.at(-1)?.outputStopConfirmation).toBeDefined()
+})
+
+
+test.each([0.000000333333333, 0.0054])('停止要求後の時計逆行は出力確認に使わず、正常な時計を待つ (%s秒)', async regression => {
+  const f = fixture(); f.output(); f.now(1010)
+  const pending = f.monitor.stopAndConfirm()
+  const confirmed = vi.fn(), failed = vi.fn(); void pending.then(confirmed, failed)
+  f.now(1020); f.clock({contextTime: 1.009 - regression, performanceTime: 1019})
+  stopOutput(f); f.send({kind: 'stopped', endFrame: 50176})
+  await vi.advanceTimersByTimeAsync(5)
+  expect(confirmed).not.toHaveBeenCalled(); expect(failed).not.toHaveBeenCalled()
+  // 正常に戻っても停止位置を通過するまでは確認しない。
+  f.now(1031); f.clock({contextTime: 1.03, performanceTime: 1030})
+  await vi.advanceTimersByTimeAsync(5); expect(confirmed).not.toHaveBeenCalled()
+  f.now(1051); f.clock({contextTime: 1.05, performanceTime: 1050})
+  await vi.advanceTimersByTimeAsync(5)
+  expect(await pending).toMatchObject({endFrame: 50176, outputClockPassedFrame: 50176})
+  f.monitor.cancel(1051); await closeStopped(f)
+  expect(f.rows.at(-1)?.audit).toMatchObject({complete: false, missingReason: 'audit_output_clock_invalid'})
 })

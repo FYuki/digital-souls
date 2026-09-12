@@ -137,7 +137,7 @@ def test_sidecar_does_not_pollute_response_jsonl(tmp_path: Path):
 
 
 def event(session_id, **changes):
-    return dict(type="observation", protocol_version="1.0", event_id=str(uuid4()),
+    return dict(type="observation", protocol_version="1.1", event_id=str(uuid4()),
                 session_id=session_id, measurement="session_summary", timestamp=100,
                 clock_domain="client_monotonic", unit="millisecond", session_summary=summary(), **changes)
 

@@ -44,7 +44,9 @@
   import {
     LiveKitVoiceSessionController,
     type VoiceSessionSnapshot,
+    type VoiceSessionContext,
   } from './livekit/voice-session'
+  import {VoiceHistoryProjection} from './livekit/history-projection'
 
   const INITIAL_CHARACTER_ID = 'miori'
   const ERROR_MESSAGE = '応答の取得に失敗しました。'
@@ -97,6 +99,9 @@
   let showingMemoryManagement = false
   let activeUtteranceId: string | null = null
   let endingVoiceSession = false
+  let voiceSourceLabel = ''
+  let voiceSwitchMutedSessionId: string | null = null
+  let voiceErrors: Record<string, string> = {}
   let sidebarOpen = true
   let compactLayout = false
   let visualViewportHeight: number | null = null
@@ -125,6 +130,7 @@
     && turn.conversationId === $conversationController.selectedConversationId
   ))
   const finalizedUtterances = new Map<string, string>()
+  const voiceHistory = new VoiceHistoryProjection()
   let voiceSnapshot: VoiceSessionSnapshot = {
     phase: 'idle',
     input: 'inactive',
@@ -133,6 +139,7 @@
     context: null,
     sessionId: null,
     activeResponseId: null,
+    textSubmissions: [],
   }
   const voiceSession = new LiveKitVoiceSessionController(
     (snapshot) => {
@@ -142,10 +149,13 @@
     receiveVoiceCoreEvent,
   )
 
-  function receiveVoiceCoreEvent(event: VoiceSessionEvent) {
+  function receiveVoiceCoreEvent(event: VoiceSessionEvent, voiceContext: VoiceSessionContext) {
+    const selected = conversationController.selectedContext()
+    const context: SelectedConversationContext = selected?.character === voiceContext.characterId
+      && selected.conversationId === voiceContext.conversationId ? selected
+      : {character: voiceContext.characterId, conversationId: voiceContext.conversationId, version: -1}
+    const projected = voiceHistory.receive(event, voiceContext, voiceSnapshot.textSubmissions)
     if (event.type === 'utterance_finalized' && event.utterance_id !== undefined) {
-      const context = conversationController.selectedContext()
-      if (context === null) return
       const transcript = event.transcript ?? ''
       if (event.should_response === false) return
       if (screenReferenceAvailable) screenReferenceDecisionActive = true
@@ -170,19 +180,30 @@
       }
       return
     }
+    if (event.type === 'response_privacy_skipped' && event.response_id !== undefined) {
+      const sourceIds = (event.source_inputs ?? []).filter(source => source.source === 'speech')
+        .map(source => source.input_id)
+      for (const utteranceId of sourceIds) finalizedUtterances.delete(utteranceId)
+      if (liveVoiceTurn?.responseId === event.response_id
+        || (liveVoiceTurn?.responseId === null
+          && liveVoiceTurn.sourceUtteranceIds.some(id => sourceIds.includes(id)))) {
+        liveVoiceTurn = null
+        screenReferenceDecisionActive = false
+      }
+      // 開始前に省略されたテキストにも保存済みのprivacy表示を反映する。
+      void conversationController.refreshTurns(context)
+      void sidebarController.refreshCharacter(context.character)
+      return
+    }
     if (event.type === 'response_started' && event.response_id !== undefined) {
-      const context = conversationController.selectedContext()
-      if (context === null) return
+      if (projected === null) return
       const sourceIds = event.source_utterance_ids ?? []
       liveVoiceTurn = {
         context,
         ...(event.history_turn_id === undefined ? {} : {historyTurnId: event.history_turn_id}),
         responseId: event.response_id,
         sourceUtteranceIds: sourceIds,
-        userContent: sourceIds
-          .map((utteranceId) => finalizedUtterances.get(utteranceId) ?? '')
-          .filter((text) => text !== '')
-          .join('\n'),
+        userContent: projected.userContent,
         assistantContent: '',
         lastTextSequence: 0,
       }
@@ -194,13 +215,13 @@
       && event.text_sequence !== undefined
       && event.text !== undefined
       && liveVoiceTurn?.responseId === event.response_id
-      && event.text_sequence === liveVoiceTurn.lastTextSequence + 1
+      && projected !== null
     ) {
       screenReferenceDecisionActive = false
       liveVoiceTurn = {
         ...liveVoiceTurn,
-        assistantContent: liveVoiceTurn.assistantContent + event.text,
-        lastTextSequence: event.text_sequence,
+        assistantContent: projected.assistantContent,
+        lastTextSequence: projected.lastTextSequence,
       }
       return
     }
@@ -249,7 +270,7 @@
     if (event.type === 'error') {
       screenReferenceDecisionActive = false
       if (event.utterance_id !== undefined) finalizedUtterances.delete(event.utterance_id)
-      appendApplicationError()
+      voiceErrors = {...voiceErrors, [`${context.character}:${context.conversationId}`]: ERROR_MESSAGE}
       return
     }
     if (event.type === 'utterance_discarded' && event.utterance_id !== undefined) {
@@ -262,16 +283,35 @@
   $: interactionsDisabled = pendingRequest !== null
     || $conversationController.pending
     || $conversationController.deleteCandidate !== null
+  $: selectedVoiceContext = $conversationController.selectedConversationId === null ? null : {
+    characterId: $conversationController.character, conversationId: $conversationController.selectedConversationId,
+  }
+  $: voiceMatchesSelection = voiceSnapshot.context !== null && selectedVoiceContext !== null
+    && voiceSnapshot.context.characterId === selectedVoiceContext.characterId
+    && voiceSnapshot.context.conversationId === selectedVoiceContext.conversationId
+  $: voiceMismatch = voiceSnapshot.sessionId !== null && !voiceMatchesSelection
+  $: selectedTextSubmission = [...voiceSnapshot.textSubmissions].reverse().find(entry =>
+    entry.context.characterId === $conversationController.character
+    && entry.context.conversationId === $conversationController.selectedConversationId
+    && (entry.sessionId === voiceSnapshot.sessionId || entry.status === 'sending' || entry.status === 'confirming')) ?? null
+  $: visibleLiveVoiceTurn = liveVoiceTurn?.context.character === $conversationController.character
+    && liveVoiceTurn.context.conversationId === $conversationController.selectedConversationId ? liveVoiceTurn : null
+  $: visibleSettledVoiceTurns = settledVoiceTurns.filter(turn => turn.context.character === $conversationController.character
+    && turn.context.conversationId === $conversationController.selectedConversationId)
+  $: visibleVoiceError = voiceErrors[`${$conversationController.character}:${$conversationController.selectedConversationId}`] ?? ''
   $: syncVoiceSelection(
     $conversationController.character,
     $conversationController.selectedConversationId,
+    voiceSnapshot.sessionId,
   )
   $: voiceRecorderDisabled = $conversationController.selectedConversationId === null
+    || voiceMismatch
     || $conversationController.pending
     || $conversationController.deleteCandidate !== null
     || endingVoiceSession
     || voiceSnapshot.phase === 'connecting'
   $: voiceRecorderForceOff = $conversationController.selectedConversationId === null
+    || voiceMismatch
     || endingVoiceSession
     || voiceSnapshot.phase === 'error'
     || voiceSnapshot.phase === 'ended'
@@ -287,6 +327,7 @@
   $: inputStatus = ({
     inactive: '停止',
     muted: 'ミュート',
+    suppressed: 'テキスト入力中',
     listening: '聞き取り中',
     transcribing: '文字起こし中',
   } as const)[voiceSnapshot.input]
@@ -306,17 +347,16 @@
     applicationError = ERROR_MESSAGE
   }
 
-  function syncVoiceSelection(character: string, conversationId: string | null) {
-    const matches = (context: SelectedConversationContext) => context.character === character && context.conversationId === conversationId
-    if (liveVoiceTurn !== null && !matches(liveVoiceTurn.context)) {
-      liveVoiceTurn = null
-      finalizedUtterances.clear()
-    }
-    settledVoiceTurns = settledVoiceTurns.filter(turn => matches(turn.context))
+  function syncVoiceSelection(character: string, conversationId: string | null, sessionId: string | null) {
     const active = voiceSnapshot.context
     if (active === null || endingVoiceSession) return
     if (active.characterId === character && active.conversationId === conversationId) return
-    void endVoiceSession()
+    // 表示選択ではsessionと生成を終えない。device停止とBEのmute状態をそろえる。
+    activeUtteranceId = null
+    if (sessionId !== null && voiceSwitchMutedSessionId !== sessionId) {
+      voiceSwitchMutedSessionId = sessionId
+      void voiceSession.muteForThreadSwitch().catch(appendApplicationError)
+    }
   }
 
   onMount(() => {
@@ -354,18 +394,25 @@
     }
   })
 
-  const handleSend = async (message: string, screenReference = false) => {
+  const handleSend = async (message: string, screenReference = false): Promise<'accepted' | 'failed' | {inputId: string}> => {
     const text = message.trim()
     const context = conversationController.selectedContext()
-    if (text.length === 0 || interactionsDisabled || context === null) return
+    if (text.length === 0 || interactionsDisabled || context === null) return 'failed'
+    const target = {characterId: context.character, conversationId: context.conversationId}
+    if (voiceSession.matchesContext(target)) {
+      try {
+        voiceErrors = {...voiceErrors, [`${context.character}:${context.conversationId}`]: ''}
+        const inputId = await voiceSession.submitText(target, text)
+        return {inputId}
+      } catch {
+        conversationController.reportConversationError(context)
+        return 'failed'
+      }
+    }
     pendingRequest = 'text'
     if (screenReferenceAvailable) screenReferenceDecisionActive = true
     applicationError = null
     try {
-      if (voiceSnapshot.sessionId !== null || voiceSnapshot.phase === 'reconnecting') {
-        activeUtteranceId = null
-        await voiceSession.end().catch(() => undefined)
-      }
       const response = await sendChatRequest({
         character: context.character,
         conversationId: context.conversationId,
@@ -383,11 +430,13 @@
         completed = upload.chat
       }
       if (completed === null) throw new Error('text screen request did not return a chat turn')
-      if (conversationController.selectedContext()?.version !== context.version) return
+      if (conversationController.selectedContext()?.version !== context.version) return 'accepted'
       conversationController.appendTurn(context, completed.turn)
       void sidebarController.refreshCharacter(context.character)
+      return 'accepted'
     } catch {
       conversationController.reportConversationError(context)
+      return 'failed'
     } finally {
       screenReferenceDecisionActive = false
       if (conversationController.selectedContext()?.version === context.version) pendingRequest = null
@@ -465,6 +514,7 @@
   const ensureVoiceSession = async () => {
     const context = conversationController.selectedContext()
     if (context === null) throw new Error('Conversation is not selected')
+    voiceSourceLabel = currentConversation?.title ?? '音声会話のスレッド'
     applicationError = null
     try {
       voiceSession.setScreenIntegration(
@@ -494,6 +544,9 @@
 
   const resumeVoiceMicrophone = async (stream: MediaStream) => {
     try {
+      const context = conversationController.selectedContext()
+      if (context === null || !voiceSession.matchesContext({characterId: context.character, conversationId: context.conversationId})) return
+      voiceSwitchMutedSessionId = null
       await voiceSession.resumeMicrophone(stream)
     } catch (error) {
       appendApplicationError()
@@ -621,16 +674,17 @@
           turns={$conversationController.turns}
           characterName={currentCharacterEntry?.display_name ?? $conversationController.character}
           failedVoiceTurns={visibleFailedVoiceTurns}
-          liveVoiceTurn={liveVoiceTurn}
-          settledVoiceTurns={settledVoiceTurns}
+          liveVoiceTurn={visibleLiveVoiceTurn}
+          settledVoiceTurns={visibleSettledVoiceTurns}
         />
       </div>
     </div>
-    {#if applicationError !== null || $conversationController.error !== null}
-      <p class="application-error" role="alert">{applicationError ?? $conversationController.error}</p>
+    {#if applicationError !== null || $conversationController.error !== null || visibleVoiceError}
+      <p class="application-error" role="alert">{applicationError ?? $conversationController.error ?? visibleVoiceError}</p>
     {/if}
     {#if voiceSnapshot.phase !== 'idle'}
       <section class="voice-status" aria-label="音声会話の状態" aria-live="polite">
+        {#if voiceMismatch}<span>「{voiceSourceLabel}」の音声会話を継続中</span>{/if}
         <span>セッション: {sessionStatus}</span>
         <span>入力: {inputStatus}</span>
         <span>応答: {responseStatus}</span>
@@ -658,10 +712,19 @@
         onSend={handleSend}
         characterName={currentCharacterEntry?.display_name ?? $conversationController.character}
         disabled={interactionsDisabled || $conversationController.selectedConversationId === null}
-        screenReferenceAvailable={screenReferenceAvailable}
+        sendDisabled={voiceMatchesSelection && ['connecting', 'reconnecting', 'ended', 'error'].includes(voiceSnapshot.phase)}
+        screenReferenceAvailable={screenReferenceAvailable && !voiceMatchesSelection}
+        threadKey={`${$conversationController.character}:${$conversationController.selectedConversationId}`}
+        submission={selectedTextSubmission}
+        onFocusChanged={(focused) => {
+          const context = conversationController.selectedContext()
+          if (context !== null) void voiceSession.setTextInputFocused({
+            characterId: context.character, conversationId: context.conversationId,
+          }, focused).catch(appendApplicationError)
+        }}
       />
       <AudioRecorder
-        suspended={voiceSnapshot.phase === 'reconnecting'}
+        suspended={voiceSnapshot.phase === 'reconnecting' || voiceSnapshot.input === 'suppressed'}
         disabled={voiceRecorderDisabled}
         forceOff={voiceRecorderForceOff}
         continuous={true}

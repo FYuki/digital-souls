@@ -91,7 +91,7 @@ def test_bridge_records_only_accepted_full_response_completion():
 
 @pytest.mark.parametrize('finished', [None, False, True])
 def test_summary_contract_requires_finished_response(finished):
-    event = dict(type='playback_completed', protocol_version='1.0', event_id=str(uuid4()),
+    event = dict(type='playback_completed', protocol_version="1.1", event_id=str(uuid4()),
                  session_id=str(uuid4()), response_id=str(uuid4()), last_played_audio_sequence=2,
                  monotonic_timestamp_ms=1300, playback_summary=summary())
     if finished is not None: event['response_finished'] = finished

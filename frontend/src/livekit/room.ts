@@ -46,6 +46,7 @@ export type RoomObservation = Readonly<{
   generation?: number
   failureContext?: Readonly<Record<string, number>>
   failureReason?: string
+  recoveryStopped?: boolean
   failureStage?: 'transport' | 'media_decoder' | 'audio_graph' | 'output_clock' | 'renderer' | 'rtp_timeline'
   mediaPacketLoss?: RtpPacketGap & {responseId: string; atMs: number}
   mediaTimelineInterruption?: {responseId: string; atMs: number; reason: 'timestamp_overlap' | 'timestamp_discontinuity'}
@@ -218,6 +219,18 @@ export class LiveKitRoomClient {
     })
   }
 
+  private traceLifecycle(direction: 'incoming' | 'outgoing', event: VoiceSessionEvent): void {
+    if (!['user_text_submitted', 'user_input_result', 'speech_started', 'speech_stopped',
+      'turn_decision', 'response_started', 'response_cancel_requested', 'response_cancelled',
+      'response_completed', 'response_failed', 'utterance_discarded'].includes(event.type)) return
+    // devだけで取消元を相関する。本文・音声・tokenは送らない。
+    ;(import.meta as ImportMeta & {hot?: {send(event: string, data: unknown): void}}).hot?.send('voice:lifecycle', {
+      direction, type: event.type, event_id: event.event_id, response_id: event.response_id,
+      utterance_id: event.utterance_id, input_event_id: event.input_event_id,
+      reason: event.reason, decision: event.decision, status: event.status,
+    })
+  }
+
   private observe(observation: RoomObservation): void {
     // 下りの状態通知や再生継続だけでは、復旧後の上りの疎通を確認できない。
     this.receiveObservation(this.recoveryPending && observation.transport === 'available'
@@ -365,6 +378,7 @@ export class LiveKitRoomClient {
   private finalSummaryAck: { eventId: string; resolve: () => void } | null = null
 
   async publishControlEvent(value: VoiceSessionEvent): Promise<void> {
+    this.traceLifecycle('outgoing', value)
     const sessionId = this.sessionId
     const outbox = this.controlOutbox
     if (sessionId === null || outbox === null) {
@@ -690,7 +704,16 @@ export class LiveKitRoomClient {
         const receiptAudit = this.receiptObserver && this.sessionId !== null
           ? new DecodedReceiptAudit(responseId, this.sessionId, this.generation, performance.now(), this.receiptObserver) : undefined
         if (receiptAudit) this.receiptAudits.set(key, receiptAudit)
-        const observer = new RemoteMediaObserver(track.receiver, track.mediaStreamTrack,
+        const generation = this.generation
+        const sessionId = this.sessionId
+        // 解除・取消・再購読後に戻った旧処理の失敗を、現在の会話へ適用しない。
+        let observer: RemoteMediaObserver | undefined
+        const isCurrent = () => this.room === room && this.sessionId === sessionId
+          && this.subscriptions.has(key)
+          && this.subscribedTracks.get(key) === track && this.trackResponses.get(key) === responseId
+          && !this.stoppedResponses.has(responseId)
+          && (observer === undefined || this.mediaObservers.get(key) === observer)
+        observer = new RemoteMediaObserver(track.receiver, track.mediaStreamTrack,
           (evidence) => this.observeTrackMedia(evidence, responseId, key), {
             packet: packet => {
               receiptAudit?.received(packet.pcm.length, performance.now())
@@ -716,7 +739,7 @@ export class LiveKitRoomClient {
               if (this.completedPlaybackResponses.has(responseId)) return
               graph.worklet.port.postMessage({kind: 'pcm', packetIndex: packet.packetIndex,
                 rtpTimestamp: packet.rtpTimestamp, samples: packet.pcm}, [packet.pcm.buffer])
-            }, failed: () => this.failTransport('media_decoder'),
+            }, failed: () => {if (isCurrent()) this.failTransport('media_decoder')},
             interrupted: () => {
               if (!this.subscriptions.has(key) || this.trackResponses.get(key) !== responseId) return
               this.interruptResponseAfterMediaDiscontinuity(responseId, {mediaTimelineInterruption: {
@@ -724,7 +747,9 @@ export class LiveKitRoomClient {
             },
           })
         this.mediaObservers.set(key, observer)
-        void this.attachRenderEvidence(track, key).catch(() => this.failTransport('audio_graph'))
+        void this.attachRenderEvidence(track, key).catch(error => {
+          if (isCurrent() && this.generation === generation) this.failTransport('audio_graph', error)
+        })
       },
     )
     room.on(RoomEvent.TrackUnsubscribed, (_track, publication) => {
@@ -763,6 +788,8 @@ export class LiveKitRoomClient {
         transport: this.explicitDisconnect ? 'idle' : 'unavailable',
         control: 'unavailable',
         audio: 'unavailable',
+        // SDKのDisconnectedは自動再接続の終了。一時切断は呼び出し元が再接続する。
+        ...(!this.explicitDisconnect && origin !== 'temporary' ? {recoveryStopped: true} : {}),
       })
       this.explicitDisconnect = false
     })
@@ -845,6 +872,7 @@ export class LiveKitRoomClient {
         ...(event.history_turn_id === undefined ? {} : {historyTurnId: event.history_turn_id})})
     }
     if (!duplicate) {
+      this.traceLifecycle('incoming', event)
       if (event.type === 'response_started' && event.response_id !== undefined
         && !this.stoppedResponses.has(event.response_id)) {
         if (this.latestResponseId !== null && this.latestResponseId !== event.response_id) {
@@ -878,7 +906,7 @@ export class LiveKitRoomClient {
         this.resumePlaybackGraphs(event.response_id)
       }
       if (
-        (event.type === 'response_cancelled' || event.type === 'response_failed')
+        (event.type === 'response_cancelled' || event.type === 'response_failed' || event.type === 'response_privacy_skipped')
         && event.response_id !== undefined
       ) {
         this.stoppedResponses.add(event.response_id)
@@ -961,7 +989,7 @@ export class LiveKitRoomClient {
     if (sessionId === null) throw new Error('LiveKit Room is not connected')
     await this.publishControlEvent(parseVoiceSessionEvent({
       type: 'observation',
-      protocol_version: '1.0',
+      protocol_version: '1.1',
       event_id: crypto.randomUUID(),
       session_id: sessionId,
       response_id: responseId,
@@ -986,7 +1014,7 @@ export class LiveKitRoomClient {
     let networkMeasurementDelivered = false
     try {
       await this.publishControlEvent(parseVoiceSessionEvent({
-        type: 'observation', protocol_version: '1.0', event_id: crypto.randomUUID(),
+        type: 'observation', protocol_version: '1.1', event_id: crypto.randomUUID(),
         session_id: sessionId, response_id: responseId, measurement: 'network_summary',
         network_summary: networkObservation, timestamp: Math.floor(performance.now()),
         clock_domain: 'client_monotonic', unit: 'millisecond',
@@ -1025,7 +1053,7 @@ export class LiveKitRoomClient {
     this.observe({transport: 'available', control: 'available', audio: 'unavailable',
       ...evidence})
     const event = (fields: Record<string, unknown>) => parseVoiceSessionEvent({
-      protocol_version: '1.0', event_id: crypto.randomUUID(), session_id: sessionId,
+      protocol_version: '1.1', event_id: crypto.randomUUID(), session_id: sessionId,
       response_id: responseId, reason: 'disconnect', monotonic_timestamp_ms: Math.floor(performance.now()),
       ...fields,
     })
@@ -1045,16 +1073,21 @@ export class LiveKitRoomClient {
 
   private failTransport(failureStage: NonNullable<RoomObservation['failureStage']> = 'transport', reason?: unknown): void {
     // 任意の例外本文を外へ渡さず、内部の固定エラー名だけを診断に残す。
-    const knownReasons = ['state_sync_timeout', 'recovery_probe_timeout', 'RTP packet sequence invalid', 'invalid packet render interval', 'invalid RTP timestamp', 'RTP timeline discontinuity',
+    const knownReasons = ['event deduplication capacity exceeded', 'browser control outbox capacity exceeded', 'output_stop_request_changed', 'output_stop_graph_missing', 'output_stop_monitor_missing',
+      'output_stop_request_mismatch', 'output_stop_monitor_unavailable', 'output_stop_marker_invalid',
+      'output_stop_confirmation_timeout', 'output_stop_monitor_closed', 'output_stop_observation_invalid',
+      'first output media correlation mismatch', 'full playback metadata does not match source samples', 'state_sync_timeout', 'recovery_probe_timeout', 'RTP packet sequence invalid', 'invalid packet render interval', 'invalid RTP timestamp', 'RTP timeline discontinuity',
       'render beyond completed source', 'output clock confirmation queue overflow', 'invalid packet output clock',
       'first output packet mismatch', 'packet_or_sample_mismatch', 'pcm_queue_overflow', 'render_clock_unreconciled']
     const message = reason instanceof Error ? reason.message : reason
     const failureReason = typeof message === 'string' && knownReasons.includes(message) ? message : 'unclassified'
 
+    // 切断イベントが先に画面状態を破棄しても、開発環境では固定の理由だけを残す。
+    ;(import.meta as ImportMeta & {hot?: {send(event: string, data: unknown): void}}).hot?.send('voice:failure', {stage: failureStage, reason: failureReason})
     this.pendingDisconnectOrigin ??= 'transport_failure'
     this.room?.disconnect()
     void this.closeAudioGraph()
-    this.observe({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable', failureStage, failureReason,
+    this.observe({ transport: 'unavailable', control: 'unavailable', audio: 'unavailable', failureStage, failureReason, recoveryStopped: true,
       ...(reason instanceof PacketRenderError || reason instanceof RtpPacketSequenceError ? {failureContext: reason.context} : {}) })
   }
 

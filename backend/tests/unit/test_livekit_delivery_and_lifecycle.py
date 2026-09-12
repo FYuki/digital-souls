@@ -10,7 +10,7 @@ import pytest
 
 
 SESSION_STARTED_PAYLOAD = (
-    b'{"protocol_version":"1.0","event_id":'
+    b'{"protocol_version":"1.1","event_id":'
     b'"10000000-0000-4000-8000-000000000010","type":"session_started",'
     b'"session_id":"20000000-0000-4000-8000-000000000010",'
     b'"monotonic_timestamp_ms":1000,"reconnect_grace_ms":60000}'
@@ -21,7 +21,7 @@ def _playback_payload(
     *, event_id: str, event_type: str = "playback_completed", sequence: int = 1
 ) -> bytes:
     event = {
-        "protocol_version": "1.0",
+        "protocol_version": "1.1",
         "event_id": event_id,
         "type": event_type,
         "session_id": "20000000-0000-4000-8000-000000000010",
@@ -143,13 +143,13 @@ def test_conflicting_duplicate_cleans_up_the_terminal_session() -> None:
     "payload",
     [
         (
-            b'{"protocol_version":"1.0","event_id":'
+            b'{"protocol_version":"1.1","event_id":'
             b'"10000000-0000-4000-8000-000000000011","type":"unknown_event",'
             b'"session_id":"20000000-0000-4000-8000-000000000010",'
             b'"monotonic_timestamp_ms":1000}'
         ),
         (
-            b'{"protocol_version":"1.0","event_id":'
+            b'{"protocol_version":"1.1","event_id":'
             b'"10000000-0000-4000-8000-000000000012","type":"session_started",'
             b'"session_id":"20000000-0000-4000-8000-000000000010",'
             b'"monotonic_timestamp_ms":1000}'
@@ -183,7 +183,7 @@ def test_core_sequence_gap_is_terminal_before_core_notification() -> None:
     )
     payload = json.dumps(
         {
-            "protocol_version": "1.0",
+            "protocol_version": "1.1",
             "event_id": "10000000-0000-4000-8000-000000000013",
             "type": "response_delta",
             "session_id": "20000000-0000-4000-8000-000000000010",
@@ -389,6 +389,58 @@ def _coordinator(module, published, cleaned, core_port=None, audio_probe=None, r
         ),
         core_port=core_port or RecordingCorePort(),
     )
+
+
+@pytest.mark.parametrize("case", ["valid", "participant", "session", "backend_result", "backend_privacy"])
+def test_text_input_is_bound_to_authenticated_user_before_delivery_ack(case: str) -> None:
+    module = _livekit_module("coordinator", "text input authorization")
+
+    async def exercise() -> None:
+        published, cleaned = [], []
+        core = RecordingCorePort()
+        coordinator = _coordinator(module, published, cleaned, core_port=core)
+        identity = "user-20000000-0000-4000-8000-000000000010"
+        coordinator.participant_connected(identity=identity, participant_sid="PA_current", room_sid="RM_one")
+        event = {
+            "type": "user_text_submitted", "protocol_version": "1.1",
+            "event_id": str(uuid4()), "session_id": coordinator.session_id,
+            "monotonic_timestamp_ms": 1, "text": "同じスレッドへの入力",
+            "speaker": {"role": "user", "participant_id": "40000000-0000-4000-8000-000000000010"},
+        }
+        if case == "participant":
+            event["speaker"]["participant_id"] = str(uuid4())
+        elif case == "session":
+            event["session_id"] = str(uuid4())
+        elif case == "backend_result":
+            event.pop("speaker")
+            event.pop("text")
+            event.update(type="user_input_result", input_event_id=str(uuid4()), status="accepted")
+        elif case == "backend_privacy":
+            event.pop("speaker")
+            event.pop("text")
+            event.update(type="response_privacy_skipped", response_id=str(uuid4()),
+                         source_inputs=[{"input_id": str(uuid4()), "source": "text"}])
+        receive = coordinator.receive_data(
+            identity=identity, participant_sid="PA_current", topic=module.APPLICATION_TOPIC,
+            payload=json.dumps(event).encode(),
+        )
+        if case == "valid":
+            await receive
+        else:
+            with pytest.raises(module.TerminalProtocolError):
+                await receive
+        forwarded = [json.loads(payload) for payload in core.notifications]
+        acknowledgments = [json.loads(payload) for payload, _ in published if json.loads(payload)["type"] == "ack"]
+        if case == "valid":
+            assert event in forwarded
+            assert acknowledgments[0]["event_id"] == event["event_id"]
+        else:
+            assert event not in forwarded
+            assert acknowledgments == []
+            assert cleaned == [coordinator.session_id]
+        await coordinator.cleanup("test_complete")
+
+    asyncio.run(exercise())
 
 
 def test_coordinator_releases_delivery_state_before_cleanup_dependency_finishes() -> None:
@@ -1314,3 +1366,13 @@ def test_clock_probe_reports_server_receive_and_send_without_changing_state() ->
         assert coordinator.generation == 0 and coordinator.phase == "available"
         await coordinator.cleanup("test_complete")
     asyncio.run(exercise())
+
+
+def test_default_deduplication_history_survives_long_conversations() -> None:
+    module = _livekit_module("delivery", "long conversation deduplication")
+    deduplicator = module.EventDeduplicator()
+    for index in range(1024):
+        assert deduplicator.classify(str(index), str(index).encode()).status == "accepted"
+    assert deduplicator.classify("0", b"0").status == "duplicate"
+    with pytest.raises(module.ConflictingDuplicateError):
+        deduplicator.classify("0", b"changed")
