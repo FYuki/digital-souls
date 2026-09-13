@@ -219,3 +219,25 @@ Speech/LiveKitにも、生成へ渡した最終promptの参照ID・版を履歴�
 
 品質168/170（Fact操作8/10、項目別90%未達）と行為者94/100は上記の比較時点の実測値であり、
 接続修正で全項目合格へ変更しない。#344の総合受入は別途追跡する。
+
+
+### 接続後の実LLMによる限定検証
+
+実行commit: 8184b992df32ce3dd0a4235c6b45fa1174939a25。
+専用test data rootと空きポートのFastAPI・実Gemma・SQLite・Chromaを使用し、
+HTTPから合成会話を入力した。候補のDB直接投入や推論mockは使っていない。
+モデル実体はgemma4:e4b / sha256:4c27e0f5b5adf02ac956c7322bd2ee7636fe3f45a8512c9aba5385242cb6e09a。
+共有推論サービスと既存dev/dogfoodは停止・変更していない。
+
+- 初回チャットは502、QUERY_GATEは約2秒でtimeoutした。モデルへの短い直接推論成功後の再試行は200だった。
+- 通常workerがv13-compact18をstampへ記録し、Episode・Fact・有効な取得参照を保存、予約はSAVEDに到達した。
+- 「昨日、公園で青い鍵を拾った」のFactのACTORはspeaker:user。日時は元発言基準の前日に解決した。
+- 語り直しで新Episodeを追加し、その会話では保存済み記憶のID・版がpromptへ採用された。
+- **未達**: 同じ鍵を青から赤へ明示訂正する会話で、既存Factを更新せず別Factを追加した。
+  元Factの安定IDを保つ訂正の受入は成功として扱わない。20回検討後の追加最適化は行っていない。
+- 所有するtest runtimeだけを正常停止・再起動し、5記録のID・版・件数が変わらないことを確認した。
+
+ローカル証跡: /tmp/ds-memory-340-l7qcx74p/integration-verification.json、
+runtime-manifest.json、memory-initial.json、memory-retelling.json。
+今回は実ブラウザとLiveKitの全経路を通していない。固定評価の残る未達、
+QUERY_GATEの初回timeout、#344の総合受入は引き続き区別して追跡する。
