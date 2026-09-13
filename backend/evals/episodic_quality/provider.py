@@ -108,10 +108,13 @@ def call_api(prompt, options, context):
                     extractor._messages(CATALOG_SCAN_PROMPT, payload), CatalogMatches, lambda: False)
                 output["catalog"] = result.model_dump(mode="json")
             elif data["stage"] == "extract":
-                # 操作選定段階を測る。5Wの再推論や保存で誤りを隠さない。
+                # 本番と同じく操作選定後に5Wを再検証し、確定した抽出結果を測る。
                 result = extractor._infer(
                     extractor._messages(SYSTEM_PROMPT, payload), ExtractionBatch, lambda: False,
                     anchor_validator(payload))
+                if result.complete:
+                    result = extractor._ground_content(
+                        result, payload, payload["known_records"], LABELS, lambda: False)
                 output["batch"] = result.model_dump(mode="json")
             else:
                 raise ValueError("unknown evaluation stage")

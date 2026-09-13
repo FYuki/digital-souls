@@ -32,7 +32,7 @@ case欠落・重複・未知IDやモデル/provenance混在は実行不成立。
 ## 本番との接続と限界
 
 - extract: 本番SYSTEM_PROMPT、ExtractionBatch、schema修復とcanonical anchor修復を使う。
-  操作選定の結果を測るため、その後の5W再推論は呼ばない。
+  操作選定後の5W再推論も本番と同様に呼び、確定した抽出結果を採点する。
 - ground: 対象行為だけを固定し、本番_ground_contentで5Wと文脈を読み直す。
 - catalog: 本番CATALOG_SCAN_PROMPTとCatalogMatchesを呼ぶ。同一性の意味判断もここで測る。
   大量catalogの全ページ走査やmerges提案の最終採用・DB統合実行はこの正解率に含めない。
