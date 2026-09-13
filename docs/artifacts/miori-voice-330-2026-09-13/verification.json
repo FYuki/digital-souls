@@ -111,8 +111,10 @@
       "日本語の読み",
       "句点境界の間"
     ],
-    "next_check": "元の区間音声に0.2秒・0.3秒の無音を加えた試聴素材を比較。",
-    "scope": "実会話への適用位置と、元音声が持つ無音を考慮する処理は#329で確認する。"
+    "next_check": "分割再生の間の調整と実会話での受入は#329で確認する。",
+    "scope": "実会話への適用位置と、元音声が持つ無音を考慮する処理は#329で確認する。",
+    "follow_up_feedback": "0.2秒・0.3秒の比較後も、連結部分によって間が長すぎる部分と短い部分がある。一括出力や1ファイルにまとめる必要性について質問あり。",
+    "decision": "固定の無音追加は採用しない。採用参照は一括生成した14.12秒の原音をそのまま保持し、連結版は追加検証素材として扱う。"
   },
   "not_verified": [
     "共有推論サービスへの配備と再起動",
@@ -133,7 +135,7 @@
         "inserted_silence_frames": 9600,
         "method": "既存の区間PCMを変更せず、区間境界に指定長のゼロPCMを挿入した試聴素材。",
         "sha256": "900eabb26d6b3a1be562b7957cdf822093dc67de7abd335e67523c9077beab90",
-        "human_listening_status": "pending"
+        "human_listening_status": "not_adopted"
       },
       {
         "file": "segmented-gap-300ms.wav",
@@ -145,8 +147,9 @@
         "inserted_silence_frames": 14400,
         "method": "既存の区間PCMを変更せず、区間境界に指定長のゼロPCMを挿入した試聴素材。",
         "sha256": "b9637dd330fdbbd63ce272fafe2f62e8e0d375bce95b8ff6d6193f7e5f950574",
-        "human_listening_status": "pending"
+        "human_listening_status": "not_adopted"
       }
-    ]
+    ],
+    "decision": "試聴で間の長短が指摘されたため、固定の200ms/300ms追加はいずれも採用しない。"
   }
 }
