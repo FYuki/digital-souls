@@ -134,7 +134,7 @@ def test_reply_does_not_wait_and_lifespan_forms_episode_fact_link(model, runtime
             assert connection.execute("SELECT COUNT(*) FROM episodic_links WHERE valid=1").fetchone()[0] == 1
             assert connection.execute("SELECT COUNT(*) FROM approved_memories").fetchone()[0] == 0
             stamp = json.loads(connection.execute("SELECT stamp FROM episodic_versions LIMIT 1").fetchone()[0])
-        assert stamp["extraction"]["prompt_version"] == "episode-fact-extraction-v11"
+        assert stamp["extraction"]["prompt_version"] == "episode-fact-extraction-v12"
         assert model.calls[0]["entity_labels"]["character:miori"] == "光織"
 
 
