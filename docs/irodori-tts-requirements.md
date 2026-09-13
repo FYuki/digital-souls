@@ -137,3 +137,7 @@ LiveKitやConversation Sessionの再設計、自動フォールバック、品�
 
 実装順序と子Issueの管理は#329を正本とする。worktreeを用い、作業PRをCI成功後にepicへ統合する。
 main向け差分はCodeRabbitレビュー・指摘修正を行い、mainへのマージはユーザーが実施する。
+
+## 実GPU検証記録
+
+[2026-09の実GPU検証](irodori-tts-validation-2026-09.md)に、固定設定の100試行・VOICEVOX比較・共有サービスの取消と実障害回復・実会話診断を記録する。IrodoriのTTFA目標未達、音質受入とモデル最終判断の未完了を区別する。
