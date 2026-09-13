@@ -50,17 +50,40 @@ VOICEVOXは既存のTTFA p95 2000ms目標を満たす。Irodoriは未達で、p9
 | 診断 | 実行数 | 確認結果 |
 |---|---:|---|
 | 同一Session連続会話 | 3発話 | 同じSession、異なるresponse、transcript一致、各音声track対応、Session終了 |
-| 発話権を取る割込 | 3独立Session | 実再生中の固定音声入力、take_turn判定、旧応答取消、音声graph解放、Session終了 |
+| 発話権を取る割込（pilot） | 3独立Session | 実再生中の固定音声入力、take_turn判定、旧応答取消、音声graph解放、Session終了 |
 | 無発話の終了・切断 | 2Session | 正常終了とbrowser切断後の再接続猶予終了をnative記録で確認 |
 | 専用LiveKit bridgeの2秒切断 | 1Session | 制御と実音声の回復、復旧後の次発話、Session終了 |
 
-割込後の旧音声提示、受信音声、本文提示・受信、Coreが受け取るprovider結果は、観測した3件の全境界で遅延結果0だった。出力停止の再検証も3件確認済み。ただし既存reporterの最低100試行を満たさないため、正式な割込率・stale受入は未合格のまま記録する。
+割込後の旧音声提示、受信音声、本文提示・受信、Coreが受け取るprovider結果は、観測した3件の全境界で遅延結果0だった。出力停止の再検証も3件確認済み。ただし既存reporterの最低100試行を満たさないため、このpilot単独の正式な割込率・stale受入は未合格のまま記録する。後述の独立100試行を正式な追加検証とする。
 
 ネットワーク復旧から制御回復までの上限値は360.2ms、実音声回復まで2553.6ms（1回）。重複出力区間0、packet証拠欠測0、出力経路失敗0。ネットワーク切断が制御へ作用したことを確認し、単なるTCP疎通や後続発話だけを回復の代用にしていない。診断は共有TTSを停止せず、専用ラベル・独立bridge・loopback公開ポートを確認したLiveKitだけへ作用させた。再接続成功率99%の証明ではない。
 
 実行revisionは連続会話・割込・終了が9922b9b、ネットワーク障害がdbc620e（診断Profile追加8fc2ce8を含む）。[実スタック診断集計](validation/irodori-329/real-stack-diagnostics.json)、[割込集計](validation/irodori-329/take-turn-report.json)、[旧応答停止監査](validation/irodori-329/stale-output-report.json)に匿名値と元証跡hashを保存した。
 
 割込run 01は展開済み固定WAV不足で音声入力前に失敗。保存済み原音声・全300件のrecipeとhashを検証して展開し、run 02で測定した。ネットワークrun 01は専用LiveKitのキー区切り構文により起動前に停止し、専用環境ファイルの空白を補正してrun 02で測定した。これらの前提失敗は実応答成功数に含めない。
+
+## 割込・旧応答停止の正式100試行
+
+2026-09-14 JSTに、同じ通常設定・選定音声・計測revision dbc620eで、固定ラベル付きtake_turnの100独立Sessionを追加測定した。run IDはirodori-329-take-turn-100-01。実再生との重なり、take_turn判定、取消、Session終了を全100件で確認し、失敗・欠測は0。10語句の位相と音量を変えた既存fixtureであり、100人の実発声を代表しない。
+
+| 指標 | 境界 | p50 | p95 | 既存p95上限 |
+|---|---|---:|---:|---:|
+| local_playback_stop | clientのspeech_started→local_playback_stopped | 1063.0ms | 1890.1ms | 3000ms |
+| turn_decision | clientのspeech_started→turn_decision_client | 1063.0ms | 1890.1ms | 3000ms |
+| cancel_after_decision | serverのtake_turn_decision→server_cancelled | 26.8ms | 31.6ms | 200ms |
+| barge_in_cancel_total | clientのspeech_started→server_cancelled_client | 1106.5ms | 1923.3ms | 3500ms |
+
+旧応答のブラウザ出力は、post-gainの実出力時計と保存した停止窓を再検証した。旧音声提示、受信本文、live/history本文提示、Coreのprovider結果受信は全100件で0。出力停止証拠100件、未確認・欠測0で、既存reporterの最低100件・coverage・全境界観測・stale提示の判定をすべて満たした。
+
+受信音声は2件で取消時刻の境界と重なり、合計で最大2packet／1920sampleが取消後受信の可能性として残る。確実な取消後受信は0で、これらも旧音声として再生されていない。受信と提示の境界を混同せず、受信packetすべてが確実に0だったとは扱わない。
+
+[正式割込100試行](validation/irodori-329/take-turn-100-report.json)と[正式旧応答停止監査](validation/irodori-329/stale-output-100-report.json)に、匿名集計・元manifest/trace/fixture/reporterのhashを保存した。先の3件pilotのファイルは変更していない。
+
+## 実ブラウザ出力の試聴用録音
+
+同じ選定設定を用い、実Backend／Whisper／LLM／Irodori／LiveKitの応答「こんにちは。今日も穏やかな時間ですね。」を、ブラウザのpost-gain最終出力から分岐録音した。最初の待ち時間を含む14.16秒、48kHz monoの試聴用WAVを作成し、元WebMも保持した。録音時の追加Opus符号化を経るため、無加工の合成WAVや正式性能測定とは区別する。
+
+ローカル試聴専用revision e9d7ebd、run ID irodori-329-listening-01。WAV SHA256はe8c6fd6ab0072a664b600d10cd221ff17e8269e8afe587fe957000d6d0254ed6、元WebMは16c536d190cdf8fa5dce89f3be4ae77d9d1bcdef331128cfd4c1d919b6577d20。録音経路の追加は製品コードに含めない。区間間の自然さ・音質のユーザー受入は未完了。
 
 ## compile追加実験
 
