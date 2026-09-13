@@ -862,6 +862,8 @@ class TestWebSocketEndpoint:
     def test_rag_enabled_uses_retrieved_memories_in_the_prompt(
         self, monkeypatch, runtime_paths
     ):
+        from tests.module.test_chat import _saved_rag_memory
+
         user_message = "前回なんの話をしたっけ？"
         from app.memory.memory_policy import resolved_memory_policy
 
@@ -876,13 +878,7 @@ class TestWebSocketEndpoint:
                         _BUILD_AUGMENTED_SYSTEM_PROMPT,
                         return_value=RetrievalOutcome(
                             (
-                                MemorySearchResult(
-                                memory_id="memory-1",
-                                normalized_text="前回は畑の話をした",
-                                occurred_at="2026-07-31T00:00:00.000000Z",
-                                memory_type="USER_PREFERENCE",
-                                raw_distance=1.25,
-                                ),
+                                _saved_rag_memory("前回は畑の話をした", runtime_paths),
                             ),
                             False,
                         ),

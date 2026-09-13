@@ -33,6 +33,9 @@ def initialize_runtime_data_root(
     paths: RuntimePaths, repository_root: Path
 ) -> None:
     _validate_path_contract(paths, repository_root)
+    # 旧rootにlockがない場合も、identity不一致では何も作成しない。
+    if paths.identity_marker_path.exists() and not (paths.data_root / IDENTITY_LOCK_FILENAME).exists():
+        _validate_identity_marker(paths)
     # marker作成中の部分書き込みを読まないよう、検証も作成と同じlock内で行う。
     with _identity_lock(paths.data_root):
         if paths.identity_marker_path.exists():
@@ -49,9 +52,15 @@ def validate_existing_runtime_data_root(
     paths: RuntimePaths, repository_root: Path
 ) -> None:
     _validate_path_contract(paths, repository_root)
-    with _identity_lock(paths.data_root):
-        if not paths.identity_marker_path.exists():
-            raise ValueError("runtime data root identity marker is missing")
+    if not paths.identity_marker_path.exists() and not (paths.data_root / IDENTITY_LOCK_FILENAME).exists():
+        raise ValueError("runtime data root identity marker is missing")
+    # 新しい初期化はmarkerより先にlockを作る。旧rootの検証ではlockを新設しない。
+    if (paths.data_root / IDENTITY_LOCK_FILENAME).exists():
+        with _identity_lock(paths.data_root):
+            if not paths.identity_marker_path.exists():
+                raise ValueError("runtime data root identity marker is missing")
+            _validate_identity_marker(paths)
+    else:
         _validate_identity_marker(paths)
 
 
