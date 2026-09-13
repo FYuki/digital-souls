@@ -411,3 +411,50 @@ def test_rt_safe_02_rejects_derived_path_outside_canonical_data_root(
         selected_operation(invalid_paths, repository_root)
 
     assert sentinel.read_text(encoding="utf-8") == "keep"
+
+
+
+@pytest.mark.parametrize("reader_name", ["initialize_runtime_data_root", "validate_existing_runtime_data_root"])
+def test_identity_reader_waits_for_marker_publication(monkeypatch, tmp_path, reader_name):
+    from concurrent.futures import ThreadPoolExecutor
+    from contextlib import contextmanager
+    from threading import Event
+    from app import runtime_data_root
+
+    repository_root = tmp_path / "repository"
+    repository_root.mkdir()
+    paths = _paths(tmp_path / "data", repository_root)
+    partial_written, reader_waiting, release_writer = Event(), Event(), Event()
+    original_lock = runtime_data_root._identity_lock
+
+    @contextmanager
+    def observed_lock(root):
+        if partial_written.is_set():
+            reader_waiting.set()
+        with original_lock(root):
+            yield
+
+    def paused_publication(paths):
+        payload = json.dumps({"schemaVersion": 1, "environmentId": "test"})
+        with paths.identity_marker_path.open("x", encoding="utf-8") as marker:
+            marker.write(payload[:1])
+            marker.flush()
+            partial_written.set()
+            assert release_writer.wait(timeout=5)
+            marker.write(payload[1:])
+            marker.flush()
+
+    monkeypatch.setattr(runtime_data_root, "_identity_lock", observed_lock)
+    monkeypatch.setattr(runtime_data_root, "_create_identity_marker", paused_publication)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        writer = pool.submit(runtime_data_root.initialize_runtime_data_root, paths, repository_root)
+        assert partial_written.wait(timeout=2)
+        reader = pool.submit(getattr(runtime_data_root, reader_name), paths, repository_root)
+        try:
+            assert reader_waiting.wait(timeout=2), "reader bypassed the identity lock"
+            assert not reader.done()
+        finally:
+            release_writer.set()
+        writer.result(timeout=3)
+        reader.result(timeout=3)
+    assert json.loads(paths.identity_marker_path.read_text())["environmentId"] == "test"

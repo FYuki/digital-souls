@@ -2,6 +2,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from uuid import UUID
 
 from app.characters.lore_selector import (
     CharacterLoreSelection,
@@ -22,6 +23,7 @@ class PromptMemoryReference:
     occurred_at: datetime | None
     occurred_precision: str | None
     match_kind: str
+    content_version: int | None = None
 
 
 @dataclass(frozen=True, repr=False)
@@ -77,6 +79,7 @@ class MaskedHistoryTurn:
     assistant_content: str | None
     is_completed: bool
     screen_lineages: tuple[ScreenLineage, ...] = ()
+    turn_id: UUID | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.user_content, str):
@@ -180,6 +183,7 @@ class PromptMessage:
     memory_reference: PromptMemoryReference | None = None
     screen_lineages: tuple[ScreenLineage, ...] = ()
     routing_eligible: bool = True
+    history_turn_id: UUID | None = None
 
 
 @dataclass(frozen=True)

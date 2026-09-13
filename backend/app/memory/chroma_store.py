@@ -87,6 +87,8 @@ class MemorySearchResult:
     raw_distance: float
     occurred_precision: TemporalPrecision | None = None
     match_kind: RetrievalMatchKind = RetrievalMatchKind.SEMANTIC
+    temporal_text: str | None = None
+    content_version: int | None = None
 
 
 class _ChromaCollection(Protocol):

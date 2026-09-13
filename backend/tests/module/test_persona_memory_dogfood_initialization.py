@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from app.memory.episodic.schema import EPISODIC_TABLES
+
 
 def _dogfood_paths(tmp_path: Path):
     from app.runtime_paths import resolve_runtime_paths
@@ -75,7 +77,7 @@ def test_persona_schema_initialization_preserves_existing_conversation_database(
         "memory_write_receipts",
         "memory_index_outbox",
         "temporary_provider_records",
-    }
+    } | EPISODIC_TABLES
 
 
 def test_identity_mismatch_fails_before_creating_or_repairing_runtime_artifacts(
