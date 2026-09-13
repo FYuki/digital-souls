@@ -376,3 +376,25 @@ def test_schema_repair_checks_expanded_input_budget(harness):
             progress={}, entity_labels={"speaker:user": "ユーザー", "character:miori": "光織"})
     assert len(client.requests) == 1
     assert harness.records() == ()
+
+
+def test_generation_schema_limits_source_ids_to_visible_history(harness):
+    from app.memory.formation.episodic_extractor import EXTRACTION_SCHEMA
+
+    class ConstrainedClient(Client):
+        def __init__(self):
+            super().__init__()
+            self.schemas = []
+
+        def chat(self, messages, *, json_schema, **kwargs):
+            self.schemas.append(json_schema)
+            return super().chat(messages, json_schema=json_schema, **kwargs)
+
+    turn = harness.turn("うどんを食べた")
+    client = ConstrainedClient()
+    assert worker(harness, client).process_next()
+    assert client.schemas
+    for schema in client.schemas:
+        if "SourceQuote" in schema.get("$defs", {}):
+            assert schema["$defs"]["SourceQuote"]["properties"]["source_id"]["enum"] == [str(turn.turn_id)]
+    assert "enum" not in EXTRACTION_SCHEMA["$defs"]["SourceQuote"]["properties"]["source_id"]

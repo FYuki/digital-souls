@@ -306,3 +306,35 @@ def test_same_thread_confirmed_five_w_merge_keeps_original_ids_and_experiences(h
         assert tx.representative("miori", duplicate.id).id == original.id
         assert len(tx.merges("miori")) == 1
         assert tx.merges("miori")[0].evidence
+
+
+def test_quote_resolves_unique_original_text_despite_wrong_unicode_offset(harness):
+    from app.memory.episodic.quotes import resolve_quote
+
+    turn = harness.turn("😀うどんを食べた")
+    snapshot = harness.snapshot()
+    source = quote(snapshot, turn, "うどん").model_copy(update={"start": 2})
+    span = resolve_quote(source, snapshot, split_thread(snapshot)[0])
+    assert (span.start, span.end) == (1, 4)
+
+
+def test_wrong_quote_offset_does_not_guess_between_repeated_occurrences(harness):
+    from app.memory.episodic.quotes import resolve_quote
+
+    turn = harness.turn("うどんとうどん")
+    snapshot = harness.snapshot()
+    source = quote(snapshot, turn, "うどん")
+    with pytest.raises(InvalidExtraction, match="ambiguous"):
+        resolve_quote(source.model_copy(update={"start": 1}), snapshot, split_thread(snapshot)[0])
+    assert resolve_quote(source.model_copy(update={"start": 4}), snapshot, split_thread(snapshot)[0]).start == 4
+
+
+def test_corrected_quote_offset_cannot_escape_visible_fragment(harness):
+    from app.memory.episodic.quotes import resolve_quote
+
+    turn = harness.turn("うどんを食べた")
+    snapshot = harness.snapshot()
+    source = quote(snapshot, turn, "食べた").model_copy(update={"start": 100})
+    first = split_thread(snapshot, max_characters=2, context_characters=0)[0]
+    with pytest.raises(InvalidExtraction, match="not visible"):
+        resolve_quote(source, snapshot, first)

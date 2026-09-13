@@ -28,12 +28,12 @@ def resolve_quote(quote: SourceQuote, snapshot: ThreadSnapshot, chunk: ThreadChu
     if body is None:
         raise InvalidExtraction("source body is unavailable")
     start = quote.start
-    if start is None:
+    if start is None or not body.startswith(quote.quote, start):
+        # モデルの位置計算（UTF-16等）がずれても、一意な原文一致ならUnicode位置を正本から求める。
+        # 同じ引用が複数ある場合は位置を推測せず、元の明確な指定を必須にする。
         start = body.find(quote.quote)
         if start < 0 or body.find(quote.quote, start + 1) >= 0:
             raise InvalidExtraction("quote is missing or ambiguous")
-    if not body.startswith(quote.quote, start):
-        raise InvalidExtraction("quote does not match its source")
     end = start + len(quote.quote)
     cursor = start
     parts = sorted((p for p in chunk.fragments if p.source == source and p.role == quote.role),
