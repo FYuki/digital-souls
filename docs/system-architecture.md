@@ -328,6 +328,8 @@ Truthとするが、ADRとtyped policy schemaが定める絶対禁止を削除�
 `persona-memory.db`の`episodic_records`へ独立したIDで保存する。
 `episodic_versions`に内容版と根拠、`episodic_links`にEpisode–Fact参照、
 `episodic_merges`にFact間の版付き統合関係を保持する。既存の`approved_memories`とは別の正本である。
+内容版の識別子・出典・形成設定はDB制約で不変とし、本文の消去とその再試行だけを許可する。
+Persona Memory schema v5への移行では既存の版を保全し、v3・v4のバックアップも検証・復元対象として保持する。
 
 登録サービスは元発言ID・source revision・引用範囲とprivacyを検証し、同じcharacter・threadでの
 Fact照合、明確な補足訂正、取得経緯の追加、冪等登録を扱う。曖昧な対象は推測更新しない。

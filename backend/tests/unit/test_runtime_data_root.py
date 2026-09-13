@@ -458,3 +458,35 @@ def test_identity_reader_waits_for_marker_publication(monkeypatch, tmp_path, rea
         writer.result(timeout=3)
         reader.result(timeout=3)
     assert json.loads(paths.identity_marker_path.read_text())["environmentId"] == "test"
+
+
+def test_validator_winning_lock_before_initializer_rejects_uninitialized_root(monkeypatch, tmp_path):
+    """lock作成は初期化完了ではない。検証が先行した場合はrootを採用しない。"""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event, current_thread
+    from app import runtime_data_root
+
+    root = tmp_path / "repository"
+    root.mkdir()
+    paths = _paths(tmp_path / "data", root)
+    opened, release = Event(), Event()
+    original_flock = runtime_data_root.flock
+
+    def pause_before_writer_lock(descriptor, operation):
+        if current_thread().name.startswith("initializer") and operation == runtime_data_root.LOCK_EX:
+            opened.set()
+            assert release.wait(timeout=5)
+        original_flock(descriptor, operation)
+
+    monkeypatch.setattr(runtime_data_root, "flock", pause_before_writer_lock)
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="initializer") as pool:
+        writer = pool.submit(runtime_data_root.initialize_runtime_data_root, paths, root)
+        try:
+            assert opened.wait(timeout=2)
+            with pytest.raises(ValueError, match="identity marker is missing"):
+                runtime_data_root.validate_existing_runtime_data_root(paths, root)
+            assert not paths.identity_marker_path.exists()
+        finally:
+            release.set()
+        writer.result(timeout=3)
+    runtime_data_root.validate_existing_runtime_data_root(paths, root)

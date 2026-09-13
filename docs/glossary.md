@@ -54,6 +54,7 @@ Sessionの再送・重複検知履歴は有限です。スレッドを永続化�
 | 既存の`EPISODIC_EVENT` | 具体的な出来事の記憶。現行のsubjectは`USER / SHARED`、event typeは`SHARED_MILESTONE / ACHIEVEMENT / DECISION / OUTCOME / CHANGE` | 実装：[admission型](../backend/app/memory/admission/contracts.py) |
 | Episode / エピソード記憶 | 所有キャラクターが経験したことを5Wで保持する独立レコード。話題の情報はFact IDで参照し、後日の語り直しは新しい経験として扱う | 保存・登録・管理基盤を実装、自動抽出の起動接続は後続：[契約](../backend/app/memory/episodic/contracts.py)、[境界ADR](decisions/episode-fact-semantic-boundaries-2026-09.md) |
 | Fact / 話題の情報 | 経験で取得した情報・申告内容の5W。安定IDと内容版を持つ。Semanticの正本や外部の事実確認結果とは異なり、明確な補足・訂正では内容版を更新する | 実装：[登録](../backend/app/memory/episodic/registration.py)、[管理](../backend/app/memory/episodic/management.py) |
+| 内容版 | Episode / Factの内容と出典・形成設定を対応づけた履歴。識別子・版番号・出典・設定は変更せず、削除時は本文だけを消去できる。消去の再試行は許可する | 実装：[版の保存制約](../backend/app/memory/episodic/schema.py)、[移行](../backend/app/memory/persistence/schema.py) |
 | Episode–Fact参照 / Fact統合関係 | 経験から情報への取得経緯と、同一Factを指すID間の関係。双方の版・根拠・有効状態を保持し、訂正・削除で無効化する | 実装：[schema](../backend/app/memory/episodic/schema.py)、[境界ADR](decisions/episode-fact-semantic-boundaries-2026-09.md) |
 | SELF Episode / 本人経験 | キャラクター自身の会話外活動・観測の記憶。活動handoffや実行ログを保存しただけではSELF Episode形成済みとはしない | 設計・未接続：[共通契約](decisions/character-life-memory-personality-autonomy-2026-09.md)、[Life運用](character-life-operations.md) |
 | Semantic Memory / 意味記憶 | 特定の一出来事ではなく、事実・安定した好み等。現行の直接形成型は`USER_PREFERENCE / INTERACTION_PREFERENCE` | 一部実装：[admission型](../backend/app/memory/admission/contracts.py)、[用語ADR](decisions/memory-personality-terminology-2026-09.md) |

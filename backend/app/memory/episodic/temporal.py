@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from app.memory.episodic.contracts import ResolvedTime, TimeExpression, TimeParts
+from app.memory.episodic.quotes import InvalidExtraction
 
 
 def resolve_time(
@@ -17,14 +18,22 @@ def resolve_time(
         assert expression.relative_offset is not None
         offset = expression.relative_offset
         if expression.relative_unit == "DAY":
-            day = local.date() + timedelta(days=offset)
+            try:
+                day = local.date() + timedelta(days=offset)
+            except OverflowError as error:
+                raise InvalidExtraction("relative date is outside supported years") from error
             parts = TimeParts(year=day.year, month=day.month, day=day.day)
         elif expression.relative_unit == "MONTH":
             month_index = local.year * 12 + local.month - 1 + offset
             year, month = divmod(month_index, 12)
+            if not 1 <= year <= 9999:
+                raise InvalidExtraction("relative date is outside supported years")
             parts = TimeParts(year=year, month=month + 1)
         else:
-            parts = TimeParts(year=local.year + offset)
+            year = local.year + offset
+            if not 1 <= year <= 9999:
+                raise InvalidExtraction("relative date is outside supported years")
+            parts = TimeParts(year=year)
     return ResolvedTime(
         parts=parts,
         end=expression.end,

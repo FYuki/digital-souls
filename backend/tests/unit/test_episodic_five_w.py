@@ -114,3 +114,48 @@ def test_privacy_slots_include_names_roles_targets_place_and_reason() -> None:
     assert set(text_slots(value)) == {
         "利用者", "speaker:user", "訪れた", "店", "駅前", "place:station", "昼食のため",
     }
+
+
+@pytest.mark.parametrize("start,end,valid", [
+    (TimeParts(year=2026, month=9), TimeParts(year=2026), True),
+    (TimeParts(year=2026), TimeParts(year=2026, month=1), True),
+    (TimeParts(year=2027), TimeParts(year=2026, month=9), False),
+    (TimeParts(year=2026, month=9, day=2), TimeParts(year=2026, month=9, day=1, hour=23), False),
+    (TimeParts(year=2026, month=9, day=1, hour=23), TimeParts(year=2026, month=9, day=1), True),
+    (TimeParts(year=9999, month=12), TimeParts(year=9999), True),
+])
+def test_range_order_uses_effective_bounds_at_mixed_precision(start, end, valid):
+    values = dict(parts=start, end=end, range_kind="DURATION", timezone="UTC",
+                  reference_at=datetime(2026, 9, 12, tzinfo=UTC))
+    if valid:
+        result = ResolvedTime(**values)
+        assert result.parts == start and result.end == end
+    else:
+        with pytest.raises(ValidationError, match="reversed"):
+            ResolvedTime(**values)
+
+
+@pytest.mark.parametrize("unit,source,offset", [
+    ("YEAR", datetime(2026, 1, 1, tzinfo=UTC), -12000),
+    ("YEAR", datetime(2026, 1, 1, tzinfo=UTC), 12000),
+    ("MONTH", datetime(1, 1, 1, tzinfo=UTC), -1),
+    ("MONTH", datetime(9999, 12, 1, tzinfo=UTC), 1),
+    ("DAY", datetime(1, 1, 1, tzinfo=UTC), -1),
+    ("DAY", datetime(9999, 12, 31, tzinfo=UTC), 1),
+])
+def test_relative_date_overflow_is_an_invalid_extraction(unit, source, offset):
+    from app.memory.episodic.quotes import InvalidExtraction
+    with pytest.raises(InvalidExtraction, match="outside supported years"):
+        resolve_time(TimeExpression(relative_unit=unit, relative_offset=offset),
+                     stated_at=source, timezone="UTC")
+
+
+@pytest.mark.parametrize("unit,source,offset,expected", [
+    ("YEAR", datetime(2, 1, 1, tzinfo=UTC), -1, TimeParts(year=1)),
+    ("YEAR", datetime(9998, 1, 1, tzinfo=UTC), 1, TimeParts(year=9999)),
+    ("MONTH", datetime(1, 2, 1, tzinfo=UTC), -1, TimeParts(year=1, month=1)),
+    ("MONTH", datetime(9999, 11, 1, tzinfo=UTC), 1, TimeParts(year=9999, month=12)),
+])
+def test_relative_dates_accept_supported_year_boundaries(unit, source, offset, expected):
+    assert resolve_time(TimeExpression(relative_unit=unit, relative_offset=offset),
+                        stated_at=source, timezone="UTC").parts == expected
