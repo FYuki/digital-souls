@@ -1,77 +1,103 @@
 # backend
 
-digital-souls の自作バックエンド（FastAPI）。
+`digital-souls`の自作バックエンド（FastAPI）。現在の全体構成は[アーキテクチャ](../docs/system-architecture.md)、概念と実装名の対応は[用語集](../docs/glossary.md)を参照する。
+
+## 主な責務
+
+| 領域 | 実装入口 |
+|---|---|
+| Character Card V3・Book・カタログ・立ち絵 | `app/characters/`、`app/routers/character_catalog.py` |
+| テキスト・Speech/Text共通会話処理 | `app/chat_service.py`、`app/_chat_runtime.py`、`app/conversation_core/` |
+| LiveKit音声・control・接続管理 | `app/livekit_transport/`、`app/voice_session/`、`app/routers/livekit.py` |
+| 会話履歴・スレッド・UI設定 | `app/conversation_history/`、`app/ui_settings/` |
+| 長期記憶の形成・検索・統合・管理 | `app/memory/`、`app/routers/memory_management.py` |
+| privacy・prompt・用途別推論 | `app/privacy/`、`app/prompting/`、`app/inference/` |
+| 必要なturnだけの画面参照 | `app/screen_perception/`、`app/routers/screen_perception.py` |
+| 外部MCP・会話利用・承認・管理 | `app/external_mcp/`、`app/tool_use/`、`app/addon_action/`、`app/addon_admin/` |
+| 会話外活動・Life State | `app/character_life/`。DBOS基盤は既定無効、dev/test対象 |
+
+`POST /chat`のHTTP会話に加え、実行中Conversation Sessionでは音声とテキストを同じCoreへ渡す。正式な音声経路はLiveKitであり、`app/routers/ws.py`の旧WebSocketはbaseline／互換用である。
 
 ## runtimeデータ
 
 `DS_DATA_DIR`をSQLite、Chroma、runtime report、cacheの単一data rootとして使用する。
-`DS_ENVIRONMENT_ID`は`dev`、`test`、`dogfood`のいずれかで、未指定時は`dev`、未指定時のdata rootは
-`backend/app/data`である。dogfoodはリポジトリ外の絶対パスを指定する。起動時に
-`.environment-identity.json`を検証し、不一致ならデータストアを開く前に終了する。
+`DS_ENVIRONMENT_ID`は`dev`、`test`、`dogfood`のいずれかで、未指定時は`dev`、未指定のdata rootは`backend/app/data`である。
+dogfoodはリポジトリ外の絶対パスを指定する。起動時に`.environment-identity.json`を検証し、不一致ならデータストアを開く前に終了する。
 
-- Ollama（gemma4:e4b）への接続
-- キャラクター（`characters/`）のロード
-- `GET /` のヘルスチェック
-- `POST /chat` のチャット応答 API
-- `GET /characters`、`POST /characters/rescan` のキャラクターカタログ API
-- `GET /characters/{character_id}/assets/standing/default.png` の立ち絵配信 API
-- `POST /characters/{character_id}/conversations` のスレッド作成 API
-- `GET /characters/{character_id}/conversations` の利用中スレッド一覧 API
-- `GET /characters/{character_id}/conversations/archived` のアーカイブ済み一覧 API
-- スレッド単位の履歴取得・名称変更・アーカイブ・復元・物理削除 API
-- `GET /ui-settings`、`PATCH /ui-settings` と配下のキャラクター表示・ピン留め API
-- `/perception/screen`配下のrouting開示、共有session、heartbeat／失効、turn限定の静止画受付 API
+会話履歴は`conversation-history.db`、承認済み長期記憶等は`persona-memory.db`、検索indexは`chroma/`へ分ける。
+パスの正本は[`app/runtime_paths.py`](app/runtime_paths.py)。Character Lifeのdomain DB・DBOS管理DB等、機能固有の保存先とbackup条件は各運用手順を参照する。Chromaを記憶の正本や唯一のbackup対象にしない。
 
-スレッド名は最初の履歴保存可能なユーザー発言から一度だけ決定論的に生成する。
-手動名は自動生成で上書きしない。UI設定は現段階ではローカル単一ユーザー`local`へ紐付け、
-立ち絵配置、PC／compact別の履歴範囲、キャラクターの表示状態、キャラクター／スレッドの
-ピン留めをSQLiteへ保存する。SNSログイン実装後に実ユーザーIDとの関連付けへ移行する。
+## キャラクター・スレッド・UI設定
+
+主なAPIは次のとおり。全体の登録は[`app/main.py`](app/main.py)と各routerを参照する。
+
+- `GET /`、`GET /health/ready`、`GET /health/inference`：稼働・readiness・推論状態。
+- `GET /characters`、`POST /characters/rescan`、`GET /characters/{character_id}/assets/standing/default.png`：カタログと立ち絵。
+- `POST /characters/{character_id}/conversations`、`GET /characters/{character_id}/conversations`、`GET /characters/{character_id}/conversations/archived`：スレッド作成・通常一覧・アーカイブ一覧。履歴取得・名称変更・アーカイブ・復元・物理削除もスレッド単位で行う。
+- `GET /ui-settings`と配下の更新操作：立ち絵配置、履歴範囲、キャラクター表示、キャラクター／スレッドのピン留め。
+
+スレッド名は最初の履歴保存可能なユーザー発言から一度だけ決定論的に生成し、手動名を上書きしない。
+UI設定はローカル単一ユーザー`local`へ紐付ける。SNSログイン等の実ユーザーIDとの統合は後続範囲である。
 
 キャラクターカタログはリクエスト時に`characters/`を再走査し、有効なCharacter Cardだけを返す。
-立ち絵URLはバックエンドが生成し、character境界、variant、PNG、symlink脱出を検証する。
-立ち絵レスポンスは`ETag`と`Cache-Control: no-cache`を返し、`If-None-Match`による再検証に対応する。
-フロントエンドはrepository上のファイルパスを直接組み立てない。
+立ち絵URLはBackendが生成し、character境界、variant、PNG、symlink脱出を検証する。
+立ち絵は`ETag`と`Cache-Control: no-cache`を返し、`If-None-Match`による再検証に対応する。Frontendはリポジトリ内のファイルパスを直接組み立てない。
 
-アーカイブは短期会話履歴を保持したまま通常利用から外す操作であり、物理削除では
-対象 conversation とその全 turn だけを SQLite から削除する。削除後、この短期会話履歴は
-復元できない。SQLite 接続では `secure_delete` を有効にし、物理削除後の WAL 後処理に
-失敗した場合は本文を含まない再試行情報を保存してバックエンド起動時に再試行する。
-アーカイブと物理削除のどちらも RAG 長期記憶は変更せず、その閲覧・訂正・物理削除と
-Chroma 同期削除は Wave 2 で実装する。既存の backup、snapshot、ファイルシステム上の
-複製からの消去は保証しない。
+アーカイブは短期会話履歴を保持したまま通常利用から外す操作である。
+スレッドの物理削除では対象conversationと全turnだけをSQLiteから削除し、短期履歴は復元できなくなる。
+`secure_delete`を有効にし、物理削除後のWAL後処理に失敗した場合は本文を含まない再試行情報を保存して起動時に再試行する。
+どちらもRAG長期記憶は暗黙変更しない。既存backup・snapshot・ファイルシステム上の複製からの消去までは保証しない。
 
-Wave 2の実装順と受入条件は
-[#28](https://github.com/FYuki/digital-souls/issues/28)および
-`docs/decisions/wave2-memory-formation-retrieval-2026-08.md`を参照する。
+## 長期記憶
 
-## セットアップ
+保存済み会話履歴から非同期に候補を形成し、privacyとpositive allowlistを通過した記憶だけをSQLiteへ保存する。
+現行の許可型は`EPISODIC_EVENT / USER_PREFERENCE / INTERACTION_PREFERENCE`である。
+SQLiteの変更とindex outboxを同じtransactionに記録し、Chromaへ同期する。検索結果はSQLite正本で所有character・状態・期限・policy等を再検証する。
 
-初回、または `backend/requirements.txt` の更新後に、リポジトリルートで実行する。
+**長期記憶・暫定記録の閲覧、訂正、物理削除は実装済み**である。
+長期記憶の物理削除はSQLite commit後にChroma削除を同期試行し、失敗時はoutboxの再試行で回復する。スレッド削除とは別操作である。
+既存記憶のconsolidationも、複数Episodeからの意味抽象化・Reflection形成・人格適応とは区別する。
+設計と受入は[Wave 2 ADR](../docs/decisions/wave2-memory-formation-retrieval-2026-08.md)、[受入記録](../docs/wave2-acceptance-2026-08.md)、現行型は[`admission/contracts.py`](app/memory/admission/contracts.py)を参照する。
+
+## セットアップ・起動
+
+通常はリポジトリルートの`scripts/start-all.sh`を使うProfile＋Docker構成で起動する。
+共有推論サービス、dev用LiveKit、data root、停止手順まで含む[開発環境](../docs/development-environment.md)に従う。
+
+ホスト上の検査や互換・単体開発用のPython環境は、初回または依存更新時に次で作成する。
 
 ```bash
 scripts/setup-backend.sh
 ```
 
-`setup-backend.sh` は `backend/.venv` の作成と実行時依存関係のインストールだけを行い、バックエンドは起動しない。
+このスクリプトは`backend/.venv`の作成と実行時依存関係のインストールだけを行い、Backendは起動しない。
+テスト用依存・実行条件は[テスト方針](../docs/testing-policy.md)を参照する。
+画面の画像decodeにはPillowを使用するが、Vision Target未設定で画像送信やVision推論は開始しない。
 
-画面知覚の画像decode検証にはPillowを使用する。Vision Targetを未設定にした環境でも依存関係は同じで、画面送信やVision推論は開始されない。
-
-## 起動
+Docker経路と区別して、互換・単体開発のためにBackendだけをforeground起動する場合は次を使う。
 
 ```bash
 scripts/start-backend.sh --host localhost --port 8000 --reload
 ```
 
-`start-backend.sh` は解決済みの dev Profile（`localhost:8000`、reload有効）と一致するhost、port、reload設定を明示して実行する。構築済みの `backend/.venv` を使ってバックエンドだけを foreground で起動し、環境がない場合にセットアップは自動実行されず、`setup-backend.sh` の実行を促すエラーで終了する。バックエンドプロセス自身が終了した場合は、その終了ステータスが呼び出し元へ伝播する。
+解決済みProfileと一致するhost・port・reload設定を指定する。構築済みの`.venv`が必要で、セットアップは自動実行しない。
+Backendプロセスが終了した場合は終了ステータスが呼び出し元へ伝播する。
 
-LLM・Whisper・prompt予算は `backend/.env.example` の環境変数で変更できる。Inferenceは用途別の `INFERENCE_TARGET_*` でProvider／Model、入力・出力token上限、timeout、同時実行数を指定する。Chatの入力＋出力上限は`LLM_CONTEXT_TOKEN_LIMIT`以下でなければならない。不正値や旧Ollama用途別変数は起動時エラーになる。
+## 推論・STT・任意機能
 
-画面知覚を使う環境だけoptionalな`INFERENCE_TARGET_VISION`を設定する。画像上限とProviderごとのpayload変換、起動時Capability確認は[`docs/inference-operations.md`](../docs/inference-operations.md)を参照する。
+LLMとprompt予算は[`backend/.env.example`](.env.example)の`INFERENCE_TARGET_*`等で設定する。
+Provider／Model、入力・出力token上限、timeout、同時実行数を用途別に解決する。
+Chatの入力＋出力上限は`LLM_CONTEXT_TOKEN_LIMIT`以下とし、不正値や旧Ollama用途別変数は起動時エラーにする。
+Provider AdapterはOllama／OpenAI API／Codex runtimeに対応し、Coreから接続先を直接選ばない。
 
-画面参照は共有ONを画像送信許可とはみなさない。Conversation Coreが現在発言と許可された履歴から
-参照要否を3分岐し、必要なturnにだけ静止画を要求する。参照判断LLMはChat Targetを
-`screen-reference` callerとして利用し、Provider、対象、同意を選べない。生画像とVision観測は
-request終了時に破棄し、privacy処理済み回答だけを画面由来provenance付きで短期履歴へ保存する。
-このprovenanceを持つturnとその派生turnはMemory Formationへ投入しない。
+STTは`WHISPER_BASE_URL`で指定した共有Whisper HTTP serviceを使用する。
+現行Backendで`WHISPER_MODEL`に基づいてGPUモデルを初期化するわけではない。モデル設定と共有serviceの起動・変更は[開発環境](../docs/development-environment.md)と[dogfood運用](../infra/dogfood/README.md)を確認する。
 
-`WHISPER_MODEL` を変更すると、環境adapterのcache確認・prepareとバックエンドのfaster-whisper初期化が同じモデルへ切り替わる。Profile経由の起動では、これらの設定が解決済みreportへ記録され、バックエンドとadapterの双方へ渡される。
+画面知覚を使う環境だけ任意の`INFERENCE_TARGET_VISION`を設定する。
+共有ONは画像送信の包括許可ではなく、Coreが現在発言と許可された履歴から参照要否を3分岐する。
+参照判断LLMはChat Targetを`screen-reference` callerとして利用し、Provider・対象・同意を選べない。
+生画像とVision観測はrequest終了時に破棄し、privacy処理済み回答だけを画面由来provenance付きで短期履歴へ保存する。
+この由来を持つturnと派生turnはMemory Formationへ投入しない。
+
+設定と検証の詳細は[Inference運用](../docs/inference-operations.md)、[会話からのMCP利用](../docs/tool-use.md)、[Addon管理](../docs/addon-admin.md)を参照する。
+Character Lifeは[専用手順](../docs/character-life-operations.md)で明示的に有効化する。DBOS基盤やLife Stateの存在を、SELF Episode・Reflection・人格・Skillの全体実装完了と解釈しない。

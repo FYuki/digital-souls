@@ -4,58 +4,48 @@
 > 「AIRIの位置づけ」セクションは本転換に伴い失効しているため削除し、現行の自作構成の記述に置換した。
 > 理由・経緯は `docs/decisions/` を参照。
 
+本書は現在のコードの構成・責務境界を説明する。採用設計と実装範囲が異なる箇所は分けて記す。
+用語は[用語集](glossary.md)、ADRの優先関係は[ADR案内](decisions/README.md)、起動・配備は
+[開発環境](development-environment.md)と[dogfood運用](../infra/dogfood/README.md)を参照する。
+`ACTIVE`なADRの存在を、その全体の実装完了・既定有効・dogfood受入済みとは扱わない。
+
 ## 基本思想
 
 `digital-souls` では、AI人格の本体を「表示・配信システム」ではなく、「人格・記憶・判断・ツール実行」に置く。
 
-表示形態は用途に応じて切り替える。
-
-- 日常利用: 静止画UIまたは軽量チャットUI
-- 通常の視覚表現: Live2D
-- 配信・イベント時: 必要に応じてVRM
-- 重い推論: WindowsメインPCまたはCloud VM
+現在はブラウザのテキスト・音声会話と静止画立ち絵を提供する。Live2D／VRM、追加クライアント、
+Mac mini等への常時稼働環境移行は拡張方針として分ける。推論先は用途別Targetへ明示的に割り当て、
+Windowsやcloudへの暗黙fallbackを前提にしない。
 
 ## 全体構成
 
 ```text
-                     User / Viewer
-                          │
-                          ▼
-                  Input Interface
-          Chat / Voice / Discord / Web UI
-                          │
-                          ▼
-                 digital-souls Core
-                          │
-        ┌─────────────────┼─────────────────┐
-        │                 │                 │
-        ▼                 ▼                 ▼
-   Personality         Memory             Tools
- characters/        RAG / DB        Farming / Recipe
-        │                 │                 │
-        └─────────────────┼─────────────────┘
-                          ▼
-                  Inference Router
-                          │
-        ┌─────────────────┼─────────────────┐
-        │                 │                 │
-        ▼                 ▼                 ▼
-   Local LLM         Windows PC        Cloud GPU/VM
- Mac mini/Ollama     Heavy models      Fallback worker
-                          │
-                          ▼
-                 Output Controller
-                          │
-        ┌─────────────────┼─────────────────┐
-        │                 │                 │
-        ▼                 ▼                 ▼
-   Static Image          Live2D              VRM
-  Personal UI       VTube Studio      3tene/Warudo/etc.
+                  Browser UI（Svelte）
+             テキスト・マイク・立ち絵・管理
+                    │             │
+                   HTTP       LiveKit media/control
+                    └──────┬──────┘
+                           ▼
+                 FastAPI / Conversation Core
+                    ├─ Character Card / Lore / PromptBuilder
+                    ├─ Conversation History（SQLite）
+                    ├─ Persona Memory（SQLite正本 → Chroma index）
+                    ├─ Inference Router（用途別Target → Provider Adapter）
+                    ├─ Screen Perception（必要なturnだけ）
+                    ├─ MCP / Tool Use / Execution Gate / Addon管理
+                    └─ Character Life / DBOS（任意有効化・dev/test）
+                  音声認識: 共有Whisper HTTP service
+                  音声合成: VOICEVOX
 ```
+
+通常の起動はEnvironment ProfileとDockerを使用する。Profileの`managed`は起動管理の所有対象、
+`external`は起動済みサービスの再利用、`in_process`はプロセス内依存である。
+現行のdev ProfileではBackend／Frontendがmanaged、Ollama／VOICEVOX／Whisper／LiveKitがexternal、
+Chromaがin_processである。接続先とreadinessは[dev Profile](../environments/profiles/dev.json)を参照する。
 
 ## 自作BE/FE構成
 
-`digital-souls` のCoreは、自作BE（FastAPI）+ 自作FE（Vite + Svelte）で実装する。
+`digital-souls`のCoreは、自作BE（FastAPI）+ 自作FE（Vite + Svelte）で実装している。
 
 ### バックエンド（FastAPI, `backend/app/`）
 
@@ -66,6 +56,10 @@
 * `livekit_transport/playback_completion.py` — 残りPCMの送出後、応答ID・最終sequenceが一致するブラウザの全出力確認を待つ。Coreの生成pipelineは`ResponseCompletionPort`を介して完了を待ち、その間もcancelできる
 * `voice_metrics.py` — transport非依存のmetadata-only trace、集計artifact、保持、LiveKit受入目標判定
 * `chat_service.py` / `_chat_runtime.py` — チャットセッションの生成・応答生成のエントリポイント
+* `conversation_core/` — Speech/Text入力を共通の応答・中断・履歴処理へ接続する
+* `routers/memory_management.py` — 長期記憶・暫定記録の閲覧、訂正、物理削除
+* `addon_action/` / `addon_admin/` — 操作承認・確認・結果回復と、接続・credential等の管理
+* `character_life/` — 会話外活動とLife State。関連する記憶・内省・人格等の正本との接続範囲は後述
 * `characters/loader.py` — `characters/` 配下のCharacter Card V3を検証し、Character Core、Character Book、`extensions.digital_souls`を型付きで読み取る
 * `characters/catalog.py` / `routers/character_catalog.py` — Character Cardの表示名と標準立ち絵metadataを再走査し、character境界を検証してPNGを配信する
 * `conversation_history/` — `character_id`とUUIDv4の`conversation_id`を境界に、短期会話履歴、スレッド名、アーカイブ状態をSQLiteへ保存する
@@ -90,6 +84,7 @@
 * `lib/audio/pcm-worklet-recorder.ts` / `lib/audio/vad-assets.ts` — AudioWorkletによるPCM録音とVAD（発話区間検出）
 * `lib/AudioRecorder.svelte` / `lib/AudioPlayer.svelte` — マイク入力UI・音声再生UI
 * `lib/ChatWindow.svelte` / `lib/InputBar.svelte` — テキストチャットUI
+* `lib/MemoryManagement.svelte` / `lib/AddonManagement.svelte` — 記憶管理、Addon接続管理・操作承認のUI
 * `lib/ScreenCaptureControls.svelte` / `lib/screen-perception/` — サイドバーメニュー上の共有操作、標準picker、単一monitor／window／browser tabの検証、ローカルpreview、取得時だけの静止画化、共有sessionの失効を担う。サイドバーを閉じても選択中の共有対象を破棄せず、共有ONだけでは画像送信や定期解析を始めない
 * `lib/ConversationSidebar.svelte` / `lib/sidebar/controller.ts` — キャラクター別スレッド一覧、設定、操作メニュー、desktop sidebar／compact drawerの状態を管理する
 * `lib/CharacterPortrait.svelte` — catalogが返した標準立ち絵URLだけを表示し、未設定・読込失敗時は会話を止めず共通プレースホルダーへ切り替える
@@ -105,11 +100,28 @@ turnに付けてMemory FormationとChroma投入から除外する。非表示の
 固定する。背面時の履歴は入力・音声操作を除いた会話領域の下端を基準に50%、75%、100%を
 使用し、立ち絵の上へ透明な履歴領域と高不透明度のメッセージバブルを重ねる。
 
+### 会話スレッドと実行Session
+
+永続スレッドの`conversation_id`、実行中Conversation Sessionの`session_id`、保存Turnの`turn_id`、
+音声入力の`utterance_id`、応答の`response_id`は異なる単位である。
+同じ実行SessionへSpeech/Textを渡し、入力受理・応答生成・再生完了・履歴保存結果を区別する。
+Frontendは選択スレッドに実行Sessionがあればそこへテキストを送り、別スレッドのテキストはHTTP経路へ送る。
+`frontend/src/lib/conversation-session.ts`は選択済みスレッドIDの保存helperであり、共通実行clientとは別である。
+
+入力欄focusによる音声入力抑止、利用者によるmute、テキスト送信等による応答中断、Session終了を区別する。
+focusだけでは進行中の再生を止めない。詳細は[混在Session契約](decisions/conversation-session-text-input-2026-09.md)と
+[共通client契約](decisions/conversation-session-client-2026-09.md)を参照する。
+実装があることと遅延・再接続・連続運用の受入完了は別である。既知の制約と未解決事項は
+[混在Session受入](conversation-session-acceptance.md)、[dev回復記録](conversation-session-dev-recovery.md)、
+[連続操作試験](conversation-session-dev-operations.md)に残す。再送・重複検知履歴は有限であり、無期限Sessionを保証しない。
+
 ### Character CardとCharacter Lore
 
 runtime人格定義の正本は`characters/{id}/{id}.card.json`である。Character Card V3の
 `data.character_book`がない既存カードは、Character Loreなしとして従来どおり動作する。
 Bookがある場合、共通ChatServiceはCharacter CoreとBookを同じload結果から取得する。
+光織のCoreは性格中心で、記録・検索等を固定業務として与えない。判断は
+[固定役割と人格の分離](decisions/miori-personality-without-fixed-role-2026-09.md)を参照する。
 
 Lore照合はRAG検索と分離する。current userを先頭に、同じconversationから復元した
 privacy処理済みuser／assistant messageを新しい順に`scan_depth`件だけ走査する。literal照合は
@@ -137,9 +149,12 @@ PromptBuilderのLore領域上限では、priority、insertion order、カード�
 RAGの`memory_reference`も付けない。詳細な契約は
 `docs/decisions/character-book-runtime-2026-08.md`を正本とする。
 
-## 表示・配信レイヤー
+## 現在の表示と将来の配信拡張
 
-### 基本
+現在のruntime表示はブラウザの静止画立ち絵である。以下のLive2D／VRM連携は拡張方針・検討候補であり、
+現行の統合済み機能や採用済みアプリケーション一覧ではない。
+
+### 拡張方針
 
 * Live2Dを標準の姿とする
 * パーソナルAI用途では静止画UIも許容する
@@ -168,9 +183,9 @@ VRMは常用ではなく、配信・イベント用の身体として扱う。
 
 ## 推論ルーター
 
-Coreは`chat`、`privacy`、`memory-extraction`、`memory-consolidation`、`embedding`、`heavy-reasoning`の固定Targetだけを指定する。環境は各Targetへ`provider/model`を直接割り当て、Provider RegistryがOllama、OpenAI API、Codex runtimeのAdapterを選ぶ。独立したInference Profileや暗黙fallbackは持たない。
+Coreは`chat`、`privacy`、`memory-extraction`、`memory-consolidation`、`embedding`、`vision`、`heavy-reasoning`、`tool-routing`、`character-life`の用途Targetを指定する。型の正本は[`inference/contracts.py`](../backend/app/inference/contracts.py)である。環境は各Targetへ`provider/model`を直接割り当て、Provider RegistryがOllama、OpenAI API、Codex runtimeのAdapterを選ぶ。独立したInference Profileや暗黙fallbackは持たない。
 
-`privacy`はローカルProvider固定で、設定から緩和できない。その他のTargetへcloud Providerを割り当てた場合は起動時にwarningを記録する。起動時には静的設定を検証した後、生成を伴わないProvider別probeを行う。`chat`の利用不能は起動失敗、他の設定済みTargetは`degraded`として起動を継続する。
+`privacy`と`character-life`はローカルProviderに限定する。cloud利用が可能なTargetへcloud Providerを割り当てた場合は起動時にwarningを記録する。起動時には静的設定を検証した後、生成を伴わないProvider別probeを行う。`chat`の利用不能は起動失敗、他の設定済みTargetは`degraded`として起動を継続する。
 
 `/health/ready`は必須Targetのaggregateだけを返し、`/health/inference`はTarget別状態と共通error categoryだけを返す。Provider、Model、endpoint、認証状態は公開しない。Provider／Modelを含む運用metadataはprompt／response本文を除外した構造化logに記録する。設定、認証、実接続受入の手順は[`inference-operations.md`](inference-operations.md)を参照する。
 
@@ -185,6 +200,12 @@ Coreは`chat`、`privacy`、`memory-extraction`、`memory-consolidation`、`embe
 ## 記憶・ツール設計
 
 ### 会話履歴とRAG長期記憶
+
+現行の許可型は`EPISODIC_EVENT / USER_PREFERENCE / INTERACTION_PREFERENCE`である。
+Episodic subjectは`USER / SHARED`で、SELF、`experienced_at`、派生意味記憶、独立した内省記憶、人格適応は
+採用済みの拡張設計と現在の型を区別する。[admission型](../backend/app/memory/admission/contracts.py)、
+[永続化型](../backend/app/memory/persistence/contracts.py)、[用語集](glossary.md)を参照する。
+既存memoryのconsolidationは実装済みだが、意味抽象化・内省・人格更新を行う処理ではない。
 
 UI上のスレッドはBackendの`conversation_id`に対応する。同じ`character_id`と
 `conversation_id`の履歴だけを復元し、別conversationの生会話は検索しない。
@@ -231,7 +252,7 @@ RAG admission evaluatorだけが決定論的findingとassessmentから保存可�
 conversationのアーカイブは履歴をSQLiteへ保持したまま通常一覧、prompt注入、追記対象から
 除外する。物理削除はconversationとturnをSQLiteからhard deleteし、RAG長期記憶は暗黙削除しない。
 
-会話履歴DBの現行schema versionは3である。SQLiteを正本、Chromaを再構築可能な派生indexとし、
+会話履歴DBの現行schema versionは8である。版の正本は[`conversation_history/schema.py`](../backend/app/conversation_history/schema.py)の`SCHEMA_VERSION`を参照する。SQLiteを正本、Chromaを再構築可能な派生indexとし、
 backup artifactにはSQLiteと検証用JSONだけを含める。WAL稼働中のbackupはSQLite公式backup APIで
 整合snapshotを作成する。restoreはchecksum、schema、environment identityを切替前に検証し、
 検証済みstaging SQLiteを単一のatomic置換で切り替える。通常の手動restoreでは、切替前の検証・
@@ -305,10 +326,9 @@ Truthとするが、ADRとtyped policy schemaが定める絶対禁止を削除�
 
 `backend/app/livekit_transport/`がRoomとsessionの対応付け、メモリ上のoutbox、ACK/retry、generation、transport私有mappingを所有する。Conversation CoreはLiveKitのRoom、Participant、Trackを知らず、検証済みCore eventとtransport available/unavailableのみを観測する。詳細は`docs/decisions/livekit-transport-2026-08.md`を参照する。
 
-Issue #113で追加した`/voice/livekit`と`LiveKitPage`は基盤検証用の一時入口である。Wave 3の
-Frontend実装では通常の会話・conversation UIへLiveKitを直接組み込み、その時点から正式な
-音声経路として扱う。既存WebSocket音声pipelineをWave 3完成形へ拡張した後でtransportを
-切り替える二段階実装は行わない。
+LiveKitは`frontend/src/App.svelte`の通常会話UIへ統合済みで、現在の正式な音声経路である。
+#113の専用画面は基盤検証の経緯であり、通常利用で別の検証画面へ移動する前提にはしない。
+既存WebSocket音声pipelineを新機能へ拡張してから切り替える二段階実装は行わない。
 
 ## 外部MCP接続・実行基盤
 
@@ -339,6 +359,11 @@ MRTRの追加情報は既存contextで補える場合に再開し、不足時は
 回答中のbarge-inでは古い音声を止めつつ入力待ちを保つ。Target未設定なら通常会話を維持する。
 設定、停止の意味、検証入口は[会話からの外部MCP利用](tool-use.md)を参照する。
 
+`backend/app/addon_action/`は操作承認・実行確認・結果回復を扱う。管理UIでは接続や操作群、実行場面に応じた
+許可と今回の確認を区別する。現在の契約と検証は[承認・回復ADR](decisions/addon-action-approval-recovery-2026-09.md)、
+[#185受入](addon-action-185-acceptance.md)、[承認管理UI受入](addon-approval-admin-305-acceptance.md)を参照する。
+この基盤が存在することと、Character Lifeへ高影響操作・副作用回復が接続済みであることは別である。
+
 ## Character Life Runtime
 
 `backend/app/character_life/`が会話外の実行を所有する。FastAPI lifespanでDBOSを一度だけ起動し、
@@ -361,5 +386,7 @@ Resource読取とTool呼出しはいずれもGateへ渡し、Binding制約を適
 停止時は進行中の結果を破棄し保留を確定してからDBOS・MCPを終了する。
 `_chat_runtime`は応答開始時の有効なLife Stateを非信頼データとして固定し、入力budgetに収まる分だけ参照する。
 
-関連Epic #100/#101/#102/#185の正本実装は含まない。未接続の結果はDEFERREDとして表示する。
+Character Life基盤は、関連Epic #100/#101/#102のdomain正本実装や、#185の高影響確認・副作用回復との接続までを含まない。
+#185自体の操作承認・回復基盤は前節に記載した範囲で存在する。Life側の未接続結果はDEFERREDとして表示する。
+Reflectionの取得元が未接続の場合も、内省形成・人格更新が成功したと扱わない。
 設定・API・保存・復旧・実接続検証は[Character Life運用手順](character-life-operations.md)を参照する。
