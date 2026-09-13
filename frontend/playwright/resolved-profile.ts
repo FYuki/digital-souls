@@ -90,3 +90,16 @@ export const attachProfileEvidence = async (
     contentType: 'application/json',
   })
 }
+
+
+/** 実音声計測は、起動したtest ProfileのFrontendだけに接続する。 */
+export const readVoiceMeasurementBaseUrl = async (): Promise<string> => {
+  const report = await readResolvedProfile()
+  if (!['integration-voice', 'integration-voice-fault', 'integration-voice-pcm', 'integration-irodori']
+    .includes(report.effectiveProfile) || process.env.DS_ENVIRONMENT_ID !== 'test') {
+    throw new Error('voice measurement requires a resolved test profile')
+  }
+  const baseUrl = report.dependencies.frontend.baseUrl
+  if (baseUrl === undefined) throw new Error('measurement frontend URL is missing')
+  return baseUrl
+}

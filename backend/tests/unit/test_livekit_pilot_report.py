@@ -9,8 +9,8 @@ import pytest
 from app.livekit_pilot_report import finalize_livekit_controlled, finalize_livekit_pilot
 
 
-@pytest.fixture
-def pilot_inputs(tmp_path):
+@pytest.fixture(params=['integration-voice', 'integration-irodori'])
+def pilot_inputs(tmp_path, request):
     root = Path(__file__).resolve().parents[3]
     fixture = json.loads((root / 'frontend/playwright/fixtures/speech.metadata.json').read_text())
     trials = []
@@ -38,7 +38,7 @@ def pilot_inputs(tmp_path):
             })
     manifest = {'measurement_scope': 'pilot', 'expected_warmup': 1, 'expected_measured': 1,
                 'fixture': fixture, 'initial_state_hash': 'requested-state', 'trials': trials}
-    profile = {'effectiveProfile': 'integration-voice', 'derivedEnvironment': {'WHISPER_MODEL': 'medium', 'RAG_ENABLED': 'false'}}
+    profile = {'effectiveProfile': request.param, 'derivedEnvironment': {'WHISPER_MODEL': 'medium', 'RAG_ENABLED': 'false'}}
     paths = {name: tmp_path / (name + '.json') for name in ('manifest', 'trace', 'output', 'profile')}
     paths['profile'].write_text(json.dumps(profile))
     def run(*, controlled=False, resource_rows=None):
@@ -52,7 +52,9 @@ def pilot_inputs(tmp_path):
                               output_path=paths['output'], profile_report_path=paths['profile'],
                               schema_path=root / 'docs/schemas/voice-quality-artifact-v1.schema.json',
                               run_id='unit-pilot', resource_observations_path=resource_path if resource_rows is not None else None)
-        return json.loads(paths['output'].read_text())
+        result = json.loads(paths['output'].read_text())
+        assert result['profile'] == request.param
+        return result
     return manifest, events, run
 
 

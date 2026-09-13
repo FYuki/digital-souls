@@ -1,3 +1,4 @@
+import { readVoiceMeasurementBaseUrl } from './resolved-profile'
 // 発話を供給せず、実Roomの正常終了と切断後の終了を確認する。通常100件とは別の診断。
 import { expect, type Browser } from '@playwright/test'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -38,7 +39,7 @@ export async function measureZeroResponseSessions(
     }
   }
   for (const kind of ['explicit_end', 'browser_disconnect'] as const) {
-    const page = await browser.newPage({ baseURL: 'http://localhost:5173', permissions: ['microphone'] })
+    const page = await browser.newPage({ baseURL: await readVoiceMeasurementBaseUrl(), permissions: ['microphone'] })
     const driver = createVoiceChatDriver()
     const record: Record<string, unknown> = { kind, outcome: 'failure' }
     cases.push(record)

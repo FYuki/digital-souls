@@ -1,3 +1,4 @@
+import { readVoiceMeasurementBaseUrl } from './resolved-profile'
 import { expect, type Browser } from '@playwright/test'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
@@ -13,7 +14,7 @@ import { createVoiceChatDriver } from './voice-chat-suite'
 // 1 sessionの実制御・音声を診断する。明示時だけ専用bridgeを切断し、再接続100件とは分離する。
 export async function measureControlProbeSession(browser: Browser, fixture: ScheduledFixture,
   count: number, output: string): Promise<void> {
-  const page = await browser.newPage({baseURL: 'http://localhost:5173', permissions: ['microphone']})
+  const page = await browser.newPage({baseURL: await readVoiceMeasurementBaseUrl(), permissions: ['microphone']})
   const driver = createVoiceChatDriver()
   const networkFault = process.env.VOICE_QUALITY_NETWORK_FAULT === '1'
   const probes: Array<ControlProbeObservation & {playbackActive: boolean}> = []
