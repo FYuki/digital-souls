@@ -3,19 +3,19 @@
   "name": "integration-irodori",
   "description": "Irodori実接続検証とVOICEVOX比較用。音声選択はCCVで行い、共有TTSの起動・停止は行わない",
   "readyGate": {
-    "baseUrl": "http://127.0.0.1:4174"
+    "baseUrl": "http://127.0.0.1:18574"
   },
   "dependencies": {
     "frontend": {
       "mode": "real",
       "source": "managed",
-      "baseUrl": "http://localhost:5173",
+      "baseUrl": "http://localhost:18573",
       "readinessPath": "/"
     },
     "backend": {
       "mode": "real",
       "source": "managed",
-      "baseUrl": "http://localhost:8000",
+      "baseUrl": "http://localhost:18500",
       "readinessPath": "/health/ready",
       "reload": true
     },

@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import UUID4, BaseModel, Field
 
+from app.characters.loader import TtsConfigMissingError, TtsConfigValidationError
 from app.livekit_transport.bootstrap import (
     BindingValidationError,
     BootstrapService,
@@ -15,6 +16,7 @@ from app.livekit_transport.bootstrap import (
     UnknownSessionError,
 )
 from app.routers.screen_perception import _require_owner
+from app.tts.irodori_client import IrodoriTtsError
 
 
 SUPPORTED_PROTOCOL_VERSION = "1.1"
@@ -84,6 +86,10 @@ async def issue_token(body: TokenRequest, request: Request) -> TokenResponse:
         raise _conflict("session_not_reconnectable") from error
     except BootstrapTimeoutError as error:
         raise HTTPException(504, detail={"code": "bootstrap_timeout"}) from error
+    except (TtsConfigMissingError, TtsConfigValidationError) as error:
+        raise HTTPException(503, detail={"code": error.error_code}) from error
+    except IrodoriTtsError as error:
+        raise HTTPException(503, detail={"code": error.error_code}) from error
     return TokenResponse(
         session_id=UUID(result.session_id),
         participant_id=UUID(result.participant_id),

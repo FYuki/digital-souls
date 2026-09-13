@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import ExitStack
 import json
 import math
 import os
@@ -10,6 +9,7 @@ import re
 import subprocess
 import sys
 import time
+from contextlib import ExitStack
 from http.client import HTTPException
 from pathlib import Path
 from urllib.request import ProxyHandler, Request, build_opener
@@ -115,8 +115,12 @@ def probe_gpu() -> dict[str, object]:
 def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
                       trials: int, disable_thinking: bool, scheduled_fixture: bool = False, continuous_turns: int = 0,
                       controlled: bool = False, interruption_cohort: str | None = None,
-                      control_probe: bool = False, fault_bridge: bool = False, network_fault: bool = False, fixture_indices: str | None = None, vad_cohort: str | None = None, observe_stt_pcm: bool = False, observe_playback_supply: bool = False, session_lifecycle: bool = False) -> dict[str, str]:
+                      control_probe: bool = False, fault_bridge: bool = False, network_fault: bool = False, fixture_indices: str | None = None, vad_cohort: str | None = None, observe_stt_pcm: bool = False, observe_playback_supply: bool = False, session_lifecycle: bool = False, profile: str = "integration-voice") -> dict[str, str]:
     run_root(run_id)
+    if profile not in {"integration-voice", "integration-irodori"}:
+        raise ValueError("unsupported measurement profile")
+    if profile == "integration-irodori" and (observe_stt_pcm or fault_bridge):
+        raise ValueError("Irodori profile cannot use PCM or fault bridge profiles")
     if type(session_lifecycle) is not bool or (session_lifecycle and (
         trials != 2 or not scheduled_fixture or controlled or continuous_turns
         or interruption_cohort or control_probe or fault_bridge or network_fault
@@ -167,7 +171,7 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
     excluded = ("INFERENCE_TARGET_HEAVY_REASONING", "INFERENCE_TARGET_VISION")
     env = {k: v for k, v in os.environ.items() if not k.startswith(excluded)}
     for key, value in dotenv_values(inference_env).items():
-        if value is not None and key.startswith(("INFERENCE_", "OLLAMA_", "WHISPER_", "VOICEVOX_")) and not key.startswith(excluded):
+        if value is not None and key.startswith(("INFERENCE_", "OLLAMA_", "WHISPER_", "VOICEVOX_", "IRODORI_")) and not key.startswith(excluded):
             env[key] = value
     if disable_thinking:
         options = json.loads(env.get("INFERENCE_TARGET_CHAT_OPTIONS_JSON", "{}"))
@@ -198,7 +202,8 @@ def pilot_environment(inference_env: Path, livekit_env: Path, run_id: str,
         env["VOICE_QUALITY_OBSERVE_PLAYBACK_SUPPLY"] = "1"
     if observe_stt_pcm:
         env["VOICE_QUALITY_OBSERVE_STT_PCM"] = "1"
-    env["DS_PROFILE"] = "integration-voice-pcm" if observe_stt_pcm else ("integration-voice-fault" if fault_bridge else "integration-voice")
+    env["DS_PROFILE"] = "integration-voice-pcm" if observe_stt_pcm else ("integration-voice-fault" if fault_bridge else profile)
+    env["VOICE_QUALITY_PROFILE"] = profile
     if fault_bridge:
         env["VOICE_QUALITY_FAULT_BRIDGE"] = "1"
     env.pop("VOICE_QUALITY_CONTROL_PROBE", None)
@@ -227,7 +232,7 @@ def run(args: argparse.Namespace) -> int:
     from native_sdk import NativeSdkSampler
     from native_sdk_experiment.prepare import REVISION
 
-    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe, args.fault_bridge, args.network_fault, args.fixture_indices, args.vad_cohort, getattr(args, "observe_stt_pcm", False), getattr(args, "observe_playback_supply", False), getattr(args, "session_lifecycle", False))
+    env = pilot_environment(args.inference_env, args.livekit_env, args.run_id, args.trials, args.disable_thinking, args.scheduled_fixture, args.continuous_turns, args.controlled, args.interruption_cohort, args.control_probe, args.fault_bridge, args.network_fault, args.fixture_indices, args.vad_cohort, getattr(args, "observe_stt_pcm", False), getattr(args, "observe_playback_supply", False), getattr(args, "session_lifecycle", False), getattr(args, "profile", "integration-voice"))
     if args.fault_bridge:
         from network_fault import resolve_target
         resolve_target("ds-voice-quality-fault-livekit-1")
@@ -290,6 +295,8 @@ def run(args: argparse.Namespace) -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profile", choices=("integration-voice", "integration-irodori"),
+                        default="integration-voice", help="共有TTS検証Profile。声の選択はCCVで行う。")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--inference-env", type=Path, required=True)
     parser.add_argument("--livekit-env", type=Path, default=ROOT / "infra/livekit/.env")
