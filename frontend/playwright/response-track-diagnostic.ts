@@ -1,3 +1,4 @@
+import { readVoiceMeasurementBaseUrl } from './resolved-profile'
 // 実サービスで同一sessionのtrack切替を確認する。独立100試行の代用にはしない。
 import { expect, type Browser } from '@playwright/test'
 import { writeFile, mkdir } from 'node:fs/promises'
@@ -9,7 +10,7 @@ import { normalizeBaselineTranscript } from './voice-baseline-fixture'
 export const measureResponseTrackSession = async (
   browser: Browser, fixture: ScheduledFixture, expectedTranscript: string, turns: number, output: string,
 ): Promise<void> => {
-  const page = await browser.newPage({ baseURL: 'http://localhost:5173', permissions: ['microphone'] })
+  const page = await browser.newPage({ baseURL: await readVoiceMeasurementBaseUrl(), permissions: ['microphone'] })
   const driver = createVoiceChatDriver()
   const observations: Record<string, unknown>[] = []
   let ended = false

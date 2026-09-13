@@ -1,3 +1,4 @@
+import { readVoiceMeasurementBaseUrl } from './resolved-profile'
 import { selectPcmFixture, snapshotPcmInputs } from './whisper-pcm-observer'
 import {installServerClockProbe} from './server-clock-probe'
 // 固定ラベル音声を実応答の再生中へ入れる。通常応答の100試行とは別の分母を持つ。
@@ -80,7 +81,7 @@ export async function measureLabeledInterruptions(browser: Browser, initial: Sch
       sample_rate_hz: selectedTrial.sample_rate_hz,
       speech_start_sample: selectedTrial.speech_intervals[0].start_sample,
       speech_end_sample: selectedTrial.speech_intervals.at(-1)!.end_sample})
-    const page = await browser.newPage({baseURL: 'http://localhost:5173', permissions: ['microphone']})
+    const page = await browser.newPage({baseURL: await readVoiceMeasurementBaseUrl(), permissions: ['microphone']})
     const driver = createVoiceChatDriver()
     const trial: Record<string, unknown> = {fixture_sha256: selectedTrial.audio_sha256, cohort, outcome: 'failure'}
     let stage = 'initial_response'
