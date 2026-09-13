@@ -156,7 +156,7 @@ def test_v3_migration_preserves_records_and_v3_backup_is_readable(setup):
     with repo.read() as tx:
         assert tx.get("miori", fact.id) == fact
         assert tx.invalid_response_ids("miori") == set()
-        assert tx._connection.execute("PRAGMA user_version").fetchone()[0] == 4
+        assert tx._connection.execute("PRAGMA user_version").fetchone()[0] == 5
 
 
 def test_invalid_response_is_removed_from_prompt_history_without_changing_saved_user(setup):
@@ -178,3 +178,29 @@ def test_invalid_response_is_removed_from_prompt_history_without_changing_saved_
     assert filtered.assistant_content is None and filtered.turn_id == turn_id
     assert turn.assistant_content == "うどんでした"
     assert recorder.filter_history("other", turn) == turn
+
+
+@pytest.mark.parametrize("old_version", [3, 4])
+def test_version_guards_migrate_without_rewriting_saved_history(setup, old_version):
+    from app.backup_restore.sqlite_snapshot import verify_sqlite_database
+    repo, paths, root = setup
+    with repo.transaction() as tx:
+        fact = create(tx)
+        before = tx.versions("miori", fact.id)
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as db:
+        db.execute("DROP TRIGGER episodic_version_immutable")
+        db.execute("DROP TRIGGER episodic_version_no_delete")
+        if old_version == 3:
+            db.execute("DROP TABLE memory_response_dependencies")
+            db.execute("DROP TABLE memory_response_origins")
+        db.execute(f"PRAGMA user_version={old_version}")
+    assert verify_sqlite_database(paths.persona_memory_sqlite_path, "persona-memory.db").schema_version == old_version
+    initialize_persona_memory_schema(paths, root)
+    initialize_persona_memory_schema(paths, root)
+    assert verify_sqlite_database(paths.persona_memory_sqlite_path, "persona-memory.db").schema_version == 5
+    with repo.read() as tx:
+        assert tx.get("miori", fact.id) == fact
+        assert tx.versions("miori", fact.id) == before
+    with sqlite3.connect(paths.persona_memory_sqlite_path) as db:
+        with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+            db.execute("UPDATE episodic_versions SET stamp='{}'")

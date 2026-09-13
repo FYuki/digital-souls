@@ -135,14 +135,17 @@ class ResolvedTime(Contract):
         if (self.end is None) != (self.range_kind == "POINT"):
             raise ValueError("invalid time range")
         if self.end is not None:
-            names = ("year", "month", "day", "hour", "minute", "second")
-            start = tuple(getattr(self.parts, name) for name in names)
-            end = tuple(getattr(self.end, name) for name in names)
-            if self.parts.precision == self.end.precision and self.parts.precision not in {
-                "UNKNOWN", "PARTIAL"
-            }:
-                left = tuple(value for value in start if value is not None)
-                right = tuple(value for value in end if value is not None)
+            if all(parts.precision not in {"UNKNOWN", "PARTIAL"} for parts in (self.parts, self.end)):
+                # 開始の最早境界と終了の最遅境界で比較し、異なる精度を保持する。
+                start, end = self.parts, self.end
+                assert start.year is not None and end.year is not None
+                left = (start.year, start.month or 1, start.day or 1,
+                        start.hour or 0, start.minute or 0, start.second or 0)
+                end_month = end.month or 12
+                right = (end.year, end_month, end.day or calendar.monthrange(end.year, end_month)[1],
+                         end.hour if end.hour is not None else 23,
+                         end.minute if end.minute is not None else 59,
+                         end.second if end.second is not None else 59)
                 if left > right:
                     raise ValueError("time range is reversed")
         return self

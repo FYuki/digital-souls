@@ -47,15 +47,16 @@ class EpisodicMemoryManagement:
 
     def list(self, *, character_id: str) -> list[dict[str, object]]:
         with self._reader.source_guard.snapshot() as (history, cutoff), self._repository.read() as tx:
-            unsafe = self._reader._unsafe_facts(tx, history, cutoff, character_id)
+            state = self._reader._read_state(tx, history, cutoff, character_id)
+            unsafe = self._reader._unsafe_facts(tx, history, cutoff, character_id, state)
             results = []
             all_records = tx.list_records(character_id, active_only=False)
             views = {record.id: self._reader._project(
-                tx, history, cutoff, record, unsafe, include_merged=True,
+                tx, history, cutoff, record, unsafe, state, include_merged=True,
             ) for record in all_records}
             active = {record.id: record for record in all_records
                       if views[record.id].status is MemoryStatus.ACTIVE}
-            merges = tx.merges(character_id)
+            merges = state.merges
             links = [link for episode in all_records if episode.kind is RecordKind.EPISODE
                      for link in tx.references(character_id, episode.id)]
             by_id = {record.id: record for record in all_records}
@@ -68,8 +69,8 @@ class EpisodicMemoryManagement:
                 item["five_w"] = view.five_w.model_dump(mode="json") if view.five_w else None
                 item["normalized_text"] = view.normalized_text
                 item["experienced_when"] = (
-                    record.five_w.when.model_dump(mode="json")
-                    if record.kind is RecordKind.EPISODE and record.five_w and record.five_w.when else None
+                    view.five_w.when.model_dump(mode="json")
+                    if record.kind is RecordKind.EPISODE and view.five_w and view.five_w.when else None
                 )
                 # 旧版の本文を監査応答から返さない。ID・版・出典・判断の設定は追跡可能にする。
                 item["versions"] = [{

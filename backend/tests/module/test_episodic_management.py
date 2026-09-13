@@ -357,3 +357,67 @@ def test_delete_follows_old_preference_version_and_preserves_manual_new_version(
     with harness.repository.read() as tx:
         assert tx.get("miori", recalled.id).status is RecordStatus.DELETED
         assert all(v.five_w is None for v in tx.versions("miori", recalled.id))
+
+
+@pytest.mark.parametrize("invalidity", ["expired", "deleted"])
+def test_management_masks_experienced_time_with_invalid_episode(harness, management, invalidity):
+    ep, fa, _ = initial(harness)
+    service, client, _ = management
+    assert client.get(f"{COLLECTION}/{ep.id}").json()["experienced_when"] is not None
+    if invalidity == "expired":
+        harness.now[0] += timedelta(days=366)
+    else:
+        service.delete(character_id="miori", record_id=fa.id, expected_version=1, idempotency_key=uuid4())
+    for value in (client.get(f"{COLLECTION}/{ep.id}").json(),
+                  next(x for x in client.get(COLLECTION).json() if x["id"] == str(ep.id))):
+        assert value["five_w"] is None
+        assert value["experienced_when"] is None
+        assert value["normalized_text"] == ""
+
+
+@pytest.mark.parametrize("operation", ["list_active", "get", "management"])
+def test_read_snapshot_shares_provenance_and_keeps_conversation_masks_separate(harness, management, monkeypatch, operation):
+    from collections import Counter
+    from app.memory.episodic.repository import EpisodicTransaction
+    from tests.conversation_history_test_support import create_repository
+    ep1, fa1, _ = initial(harness)
+    first_thread = harness.conversation_id
+    history = create_repository(harness.paths.sqlite_path, now=harness.now[0], uuid_factory=uuid4)
+    harness.conversation_id = history.create_conversation("miori").conversation_id
+    initial(harness)
+    ep2 = next(x for x in harness.records(RecordKind.EPISODE) if x.conversation_id == harness.conversation_id)
+    fa2 = next(x for x in harness.records(RecordKind.FACT) if x.conversation_id == harness.conversation_id)
+    service, _, _ = management
+    counts = Counter()
+    original_masks = EpisodicTransaction.source_masks
+    original_invalid = EpisodicTransaction.invalid_response_ids
+    original_merges = EpisodicTransaction.merges
+    with harness.repository.read() as tx:
+        mask = tx.versions("miori", fa1.id)[0].sources
+
+    def masks(tx, character_id, conversation_id=None):
+        counts[("masks", conversation_id)] += 1
+        return mask if conversation_id == first_thread else original_masks(tx, character_id, conversation_id)
+
+    def invalid(tx, *args, **kwargs):
+        counts["invalid"] += 1
+        return original_invalid(tx, *args, **kwargs)
+
+    def merges(tx, *args, **kwargs):
+        counts["merges"] += 1
+        return original_merges(tx, *args, **kwargs)
+
+    monkeypatch.setattr(EpisodicTransaction, "source_masks", masks)
+    monkeypatch.setattr(EpisodicTransaction, "invalid_response_ids", invalid)
+    monkeypatch.setattr(EpisodicTransaction, "merges", merges)
+    if operation == "management":
+        values = service.list(character_id="miori")
+        assert {x["id"] for x in values if x["status"] == "ACTIVE"} == {str(ep2.id), str(fa2.id)}
+    elif operation == "get":
+        assert service._reader.get(character_id="miori", memory_id=ep2.id).five_w is not None
+    else:
+        assert {x.id for x in service._reader.list_active(character_id="miori")} == {ep2.id, fa2.id}
+    assert counts["invalid"] == counts["merges"] == 1
+    assert counts[("masks", first_thread)] == 1
+    assert counts[("masks", harness.conversation_id)] == 1
+    assert counts[("masks", None)] == 1

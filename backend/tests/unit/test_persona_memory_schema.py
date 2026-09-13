@@ -215,7 +215,7 @@ def test_existing_v2_database_adds_consolidation_source_without_losing_rows(
         version = connection.execute("PRAGMA user_version").fetchone()[0]
 
     assert preserved == [("CONVERSATION_TURN", "existing-source")]
-    assert version == 4
+    assert version == 5
 
 
 @pytest.mark.parametrize(
@@ -331,8 +331,8 @@ def test_schema_preserves_four_distinct_legacy_memory_dates(tmp_path: Path) -> N
             for row in connection.execute("PRAGMA table_info(approved_memories)")
         }
 
-    assert SCHEMA_VERSION == 4
-    assert version == 4
+    assert SCHEMA_VERSION == 5
+    assert version == 5
     assert columns["occurred_at"]["not_null"] is False
     assert columns["occurred_timezone"]["not_null"] is False
     assert columns["occurred_precision"]["not_null"] is False
@@ -715,7 +715,7 @@ def test_v2_migration_preserves_every_legacy_table_and_backup_verification_is_re
     with sqlite3.connect(paths.persona_memory_sqlite_path) as connection:
         after = {name: connection.execute(f"SELECT * FROM {name}").fetchall()
                  for name in LEGACY_PERSONA_MEMORY_TABLES}
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 4
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 5
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
     assert after == before
     assert not paths.sqlite_path.exists()

@@ -100,14 +100,15 @@ def verify_sqlite_database(
             is_current = schema_version == PERSONA_MEMORY_SCHEMA_VERSION and tables == PERSONA_MEMORY_TABLES
             is_legacy = schema_version == 2 and tables == LEGACY_PERSONA_MEMORY_TABLES
             is_version_three = schema_version == 3 and tables == VERSION_THREE_PERSONA_MEMORY_TABLES
-            if not is_current and not is_legacy and not is_version_three:
+            is_version_four = schema_version == 4 and tables == PERSONA_MEMORY_TABLES
+            if not is_current and not is_legacy and not is_version_three and not is_version_four:
                 raise BackupSchemaError(
                     "SQLite schema version or table contract does not match"
                 )
-            if is_current or is_version_three:
+            if is_current or is_version_three or is_version_four:
                 try:
-                    validate_episodic_schema(connection)
-                    if is_current:
+                    validate_episodic_schema(connection, version_guards=is_current)
+                    if is_current or is_version_four:
                         response_provenance.validate_schema(connection)
                     record_count += int(connection.execute(
                         "SELECT COUNT(*) FROM episodic_records"
