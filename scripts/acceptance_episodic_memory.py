@@ -139,10 +139,15 @@ def main() -> int:
         },
     }), encoding="utf-8")
     logging_config = deepcopy(LOGGING_CONFIG)
-    # このloggerのINFOは採用した記憶のID・版・日時精度だけ。本文やpromptは記録しない。
-    logging_config["loggers"]["app._chat_runtime"] = {
-        "handlers": ["default"], "level": "INFO", "propagate": False,
-    }
+    # 選択記憶のID・版・日時精度と固定の判定コードだけ。本文やpromptは記録しない。
+    for logger_name in (
+        "app._chat_runtime",
+        "app.memory.episodic.registration",
+        "app.privacy.semantic.classifier",
+    ):
+        logging_config["loggers"][logger_name] = {
+            "handlers": ["default"], "level": "INFO", "propagate": False,
+        }
     log_config_path = root / "logging.json"
     log_config_path.write_text(json.dumps(logging_config), encoding="utf-8")
     manifest = {

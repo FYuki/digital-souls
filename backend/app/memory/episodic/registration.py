@@ -4,6 +4,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
 import json
+import logging
 import sqlite3
 from typing import Protocol
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
@@ -15,7 +16,7 @@ from app.memory.episodic.contracts import (
 )
 from app.memory.episodic.extraction_contracts import ExtractionBatch, ExtractedRecord
 from app.memory.episodic.matching import same_five_w
-from app.memory.episodic.privacy import PrivacyReview
+from app.memory.episodic.privacy import PrivacyReview, PrivacyAssessmentUnavailable
 from app.memory.episodic.quotes import (
     InvalidExtraction, distinct_sources, fragment_span, owns_anchor, resolve_quote,
 )
@@ -25,6 +26,13 @@ from app.memory.episodic.source_masks import overlaps_mask, visible_ranges
 from app.memory.episodic.temporal import resolve_time
 from app.memory.formation.thread_chunks import ThreadChunk
 from app.memory.formation.thread_queue import ThreadFormationQueue, ThreadSnapshot
+
+
+logger = logging.getLogger(__name__)
+_REVIEW_REASON_CODES = frozenset({
+    "MISSING_SOURCE", "SCAN_FAILED", "SENSITIVE_OR_OPT_OUT", "SEMANTIC_PRIVACY_DENIED",
+    "SEMANTIC_PRIVACY_UNAVAILABLE", "POLICY_VERSION_CHANGED", "SOURCE_REDACTED",
+})
 
 
 class PrivacyReviewer(Protocol):
@@ -194,6 +202,14 @@ class EpisodicRegistrationService:
             else:
                 source_texts = self._source_texts(snapshot, sources, masks)
                 review = self._reviewer.review(kind=proposal.kind, value=value, source_texts=source_texts)
+            if not review.allowed:
+                # 理由は既知のコードだけを出す。独自reviewerの自由文をログへ渡さない。
+                reason_code = review.reason if review.reason in _REVIEW_REASON_CODES else "OTHER"
+                logger.info("episodic candidate rejected: kind=%s reason_code=%s retryable=%s",
+                            proposal.kind.value, reason_code, review.retryable)
+            if review.retryable:
+                # 一部だけ保存してchunk全体を処理済みにすると、判定不能のFactを取りこぼす。
+                raise PrivacyAssessmentUnavailable()
             if review.stamp is not None and extraction_identity is not None:
                 review = replace(review, stamp=review.stamp.model_copy(update={"extraction": extraction_identity}))
             prepared.append(PreparedRecord(proposal, anchor, sources, value, previous, review))

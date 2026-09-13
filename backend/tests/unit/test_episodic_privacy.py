@@ -60,3 +60,30 @@ def test_masked_placeholder_and_old_policy_assessment_are_not_stored():
     classifier.classify.return_value = replace(_assessment(), policy_version="old-policy")
     assert not gate.review(kind=RecordKind.FACT, value=FiveW(what=What(predicate="聞いた")),
                            source_texts=("話をした",)).allowed
+
+
+@pytest.mark.parametrize("reason", [
+    "TIMEOUT", "MODEL_NOT_LOADED", "MODEL_UNAVAILABLE", "INVALID_OUTPUT",
+    "UNKNOWN_CATEGORY", "UNKNOWN_LANGUAGE",
+])
+def test_abstaining_admission_retains_retryable_outcome(reason):
+    from app.privacy.semantic.contracts import SemanticAssessmentReasonCode
+
+    gate, _, classifier = reviewer()
+    classifier.classify.return_value = replace(
+        _assessment(SemanticClassification.ABSTAIN),
+        reason_code=SemanticAssessmentReasonCode(reason),
+    )
+    result = gate.review(kind=RecordKind.FACT, value=FiveW(what=What(predicate="食べた")),
+                         source_texts=("うどんを食べた",))
+    assert not result.allowed and result.stamp is None
+    assert result.retryable
+    assert result.reason == "SEMANTIC_PRIVACY_UNAVAILABLE"
+
+
+def test_sensitive_admission_remains_a_terminal_denial():
+    gate, _, classifier = reviewer()
+    classifier.classify.return_value = _assessment(SemanticClassification.SENSITIVE)
+    result = gate.review(kind=RecordKind.FACT, value=FiveW(what=What(predicate="話した")),
+                         source_texts=("保存できない内容",))
+    assert not result.allowed and not result.retryable

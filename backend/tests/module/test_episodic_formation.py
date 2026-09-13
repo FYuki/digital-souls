@@ -310,3 +310,32 @@ async def test_scheduler_failure_diagnostic_excludes_exception_content(harness, 
     assert "error_type=ValueError" in caplog.text
     assert "error_site=test_episodic_formation.py:process_next:" in caplog.text
     assert "PRIVATE_SYNTHETIC_CONVERSATION" not in caplog.text
+
+
+def test_transient_fact_privacy_failure_keeps_whole_chunk_pending_then_recovers(harness, monkeypatch):
+    from datetime import timedelta
+    from app.memory.episodic.contracts import RecordKind
+    from app.memory.episodic.privacy import PrivacyReview, PrivacyAssessmentUnavailable
+
+    harness.turn("うどんを食べた")
+    original_review = harness.reviewer.review
+
+    def unavailable_fact(**kwargs):
+        if kwargs["kind"] is RecordKind.FACT:
+            return PrivacyReview(False, "SEMANTIC_PRIVACY_UNAVAILABLE", retryable=True)
+        return original_review(**kwargs)
+
+    monkeypatch.setattr(harness.reviewer, "review", unavailable_fact)
+    with pytest.raises(PrivacyAssessmentUnavailable):
+        worker(harness, Client()).process_next()
+    assert harness.records() == ()
+    assert harness.queue.has_pending()
+    assert harness.queue.claim() is None
+    monkeypatch.setattr(harness.reviewer, "review", original_review)
+    harness.now[0] += timedelta(seconds=6)
+    assert worker(harness, Client()).process_next()
+    assert {record.kind for record in harness.records()} == {RecordKind.EPISODE, RecordKind.FACT}
+    with harness.repository.read() as tx:
+        episode_record = next(r for r in harness.records() if r.kind is RecordKind.EPISODE)
+        assert len(tx.references("miori", episode_record.id)) == 1
+    assert not harness.queue.has_pending()

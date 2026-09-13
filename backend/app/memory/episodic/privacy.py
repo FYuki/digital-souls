@@ -15,6 +15,11 @@ class PrivacyReview:
     allowed: bool
     reason: str
     stamp: FormationStamp | None = None
+    retryable: bool = False
+
+
+class PrivacyAssessmentUnavailable(RuntimeError):
+    """候補の可否を確定できないため、保存も処理済み化も行わず予約を残す。"""
 
 
 class EpisodicPrivacyReviewer:
@@ -36,17 +41,18 @@ class EpisodicPrivacyReviewer:
         for text in texts:
             result = self._scanner.scan(text)
             if not isinstance(result, ScanSuccess):
-                return PrivacyReview(False, "SCAN_FAILED")
+                return PrivacyReview(False, "SCAN_FAILED", retryable=True)
             if result.findings or any(token in text for token in self._placeholders):
                 return PrivacyReview(False, "SENSITIVE_OR_OPT_OUT")
         assessment: PrivacyAssessment | None = None
         # slotを組み合わせて生成した内容も分類し、出典にない機微情報の生成を通さない。
         for text in dict.fromkeys((*source_texts, normalized)):
             assessment = self._classifier.classify(text, ADMISSION)
-            if (
-                assessment.policy_version != self._policy.policy_version
-                or assessment.classification is not SemanticClassification.NOT_SENSITIVE
-            ):
+            if assessment.policy_version != self._policy.policy_version:
+                return PrivacyReview(False, "POLICY_VERSION_CHANGED", retryable=True)
+            if assessment.classification is SemanticClassification.ABSTAIN:
+                return PrivacyReview(False, "SEMANTIC_PRIVACY_UNAVAILABLE", retryable=True)
+            if assessment.classification is SemanticClassification.SENSITIVE:
                 return PrivacyReview(False, "SEMANTIC_PRIVACY_DENIED")
         assert assessment is not None
         return PrivacyReview(True, "ALLOW", FormationStamp(
