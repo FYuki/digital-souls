@@ -27,7 +27,8 @@ class Quote(Contract):
 class FactContent(Contract):
     operation: str
     target: Index | None
-    predicate: Annotated[str, Field(min_length=1)]
+    changes: tuple[str, ...]
+    predicate: Annotated[str, Field(min_length=1)] | None
     object: str | None
     anchor: Quote
 
@@ -35,6 +36,7 @@ class NewFact(FactContent):
     operation: Literal["NEW"]
     target: None
     changes: tuple[()] = ()
+    predicate: Annotated[str, Field(min_length=1)]
 
 class UpdateFact(FactContent):
     operation: Literal["UPDATE"]
@@ -42,13 +44,12 @@ class UpdateFact(FactContent):
     changes: Annotated[tuple[Literal["who", "what", "when", "where", "why", "context"], ...],
                        Field(min_length=1, max_length=6)]
 
-class ReferenceFact(Contract):
+class ReferenceFact(FactContent):
     operation: Literal["REFERENCE"]
     target: Index
+    changes: tuple[()] = ()
     predicate: None
     object: None
-    anchor: Quote
-    changes: tuple[()] = ()
 
 Fact = NewFact | UpdateFact | ReferenceFact
 
@@ -114,11 +115,18 @@ def expand(plan, payload):
     records, links, merges = [], [], []
     for i, f in enumerate(plan.facts):
         q = quote(f.anchor)
+        selected_target = target(f.target, "FACT")
+        if f.operation == "REFERENCE":
+            content = None
+        elif f.operation == "UPDATE" and "what" not in f.changes:
+            # 部分更新のために未変更のWhatをモデルへ創作させない。
+            previous = [r for r in payload["known_records"] if r["kind"] == "FACT"][f.target]
+            content = ExtractedFiveW(what=What.model_validate(previous["five_w"]["what"]))
+        else:
+            content = ExtractedFiveW(what=What(predicate=f.predicate, object=f.object))
         records.append(ExtractedRecord(
-            key=f"f{i}", kind="FACT", operation=f.operation, target=target(f.target, "FACT"),
-            five_w=None if f.operation == "REFERENCE" else
-            ExtractedFiveW(what=What(predicate=f.predicate, object=f.object)),
-            anchor=q, sources=(q,), changes=f.changes,
+            key=f"f{i}", kind="FACT", operation=f.operation, target=selected_target,
+            five_w=content, anchor=q, sources=(q,), changes=f.changes,
         ))
     # 同じ引用・話題・対象・参照を持つ完全に同じ提案だけを一件にする。
     for i, e in enumerate(dict.fromkeys(plan.episodes)):
@@ -203,10 +211,17 @@ Factは話題の人物の出来事・属性・感想。一文ごとではなく�
 例:「やあ。話をするね。私は傘を買った。以上です。」なら傘を買った一件。
 predicateは行為、objectは対象。他の5Wは後工程が扱う。
 known_factsに対応がない新しい出来事はNEW、target=null、changes=[]。
-既存の明確な一件への訂正・補足はUPDATE、target=index、changesは変わる5Wだけ。
+既存の明確な一件への訂正・補足はUPDATE、target=index。
+先にchangesへ変更する項目だけを選ぶ。場所だけの補足は["where"]だけ。
+whatを変更しないUPDATEではpredicate/object=nullにする。未変更のWhatはアプリが保持する。
+whatを変更する場合だけ新しいpredicate/objectを記入する。
 訂正前の値と訂正後の値を二件にせず、同じFactのUPDATE一件にする。
 内容の変わらない再言及はREFERENCE、target=index、predicate/object=null、changes=[]。
-同じtargetへの出力は一件。曖昧な対象の上書きは禁止しNEWで保持する。
+同じtargetへの出力は一件。
+どの既存記録か不明なら、補足したいという意図があってもUPDATEはできない。
+その場合はNEW、target=null、changes=[]とし、今明言された情報だけを述語と対象へ記す。
+例:「前の二件のどちらかわからないが、場所は駅」なら既存を選ばず、新しい場所情報として保持する。
+過去の一件を指す導入と続く同じ体験の本文は一つのFact。文ごとにREFERENCEとNEWを重複させない。
 別回の出来事はNEW。仮定・創作・予定を過去の実体験と同一視しない。
 anchor.fragmentは対象内容を含むfragmentのindex。textはその一件を裏付ける短い原文の引用。
 startは原文のUnicode位置、不明ならnull。独立した複数Factには別の引用位置を選ぶ。
@@ -215,6 +230,10 @@ startは原文のUnicode位置、不明ならnull。独立した複数Factには
 {"has_unprocessed_input":false,"facts":[{"operation":"NEW","target":null,"predicate":"買った",
 "object":"傘","anchor":{"fragment":1,"text":"私は傘を買った。","start":null},"changes":[]}]}
 挨拶と締めくくりのFactは追加しない。例の内容を回答へコピーせず入力会話を読んで抽出する。
+部分更新の形式例（known_facts[0]の出来事の場所だけを駅と補足）:
+{"has_unprocessed_input":false,"facts":[{"operation":"UPDATE","target":0,"changes":["where"],
+"predicate":null,"object":null,"anchor":{"fragment":0,"text":"その場所は駅だよ。","start":null}}]}
+
 """
 
 EPISODE_PROMPT = """所有キャラクターが今回の会話で話を聞いた/語った経験をEpisodeにする。
@@ -224,6 +243,12 @@ factsのindexは入力配列の0始まり。Episode.factsにはその経験に�
 今回の発言が現在の話の続きを明言し、対応するknown_episodesがある場合、targetにそのindexを指定。
 targetを指定した同じ経験を、target=nullでもう一つ作らない。
 後日改めて語り直す場合は新しい経験なのでtarget=null。話題のFactが同じでも経験は別。
+「改めて語り直す」という導入と続く本文は、合わせて一つの新しいEpisode。
+語り直しの形式例:「前の傘を買った件を改めて話すね。傘を買ったんだ。」で、
+話題のFact indexが0の場合、Episodeは一件:
+{"has_unprocessed_input":false,"episodes":[{"target":null,"topic":"傘を買った話の語り直し",
+"anchor":{"fragment":0,"text":"前の傘を買った件を改めて話すね。","start":null},"facts":[0]}]}
+例の内容をコピーせず、実際の入力に対応させる。
 既存に対応しない経験もtarget=null。既存FactのindexをEpisodeのtargetにしない。
 primaryの経験だけを扱う。anchorはその話題・継続・語り直しがある原文の短い引用とfragment index。
 startは原文のUnicode位置、不明ならnull。topicは聞いた/語った話題。

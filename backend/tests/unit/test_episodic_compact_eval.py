@@ -131,3 +131,21 @@ def test_empty_time_is_null_without_discarding_its_evidence(monkeypatch):
     assert normalized.five_w.when is None
     assert normalized.time_source is None
     assert temporal_quote in normalized.sources
+
+def test_partial_update_keeps_unchanged_what_from_selected_record():
+    from pathlib import Path
+    cases = [json.loads(line) for line in
+             (Path(__file__).parents[2] / "evals/episodic_quality/cases.jsonl").read_text().splitlines()]
+    case = next(c for c in cases if c["id"] == "fact_operation-04")
+    _, _, payload = build_input(case["vars"]["input_json"])
+    source = payload["fragments"][0]
+    plan = Plan.model_validate({
+        "complete": True,
+        "facts": [{"operation": "UPDATE", "target": 0, "changes": ["where"],
+                   "predicate": None, "object": None,
+                   "anchor": {"fragment": 0, "text": source["text"], "start": None}}],
+        "episodes": [], "merges": [],
+    })
+    record = expand(plan, payload).records[0]
+    assert record.changes == ("where",)
+    assert record.five_w.what.model_dump(mode="json") == payload["known_records"][0]["five_w"]["what"]
