@@ -22,8 +22,12 @@ characters/
 └─ miori/
    ├─ miori.card.json
    ├─ assets/
-   │  └─ standing/
-   │     └─ default.png
+   │  ├─ standing/
+   │  │  └─ default.png
+   │  └─ voice/
+   │     ├─ miori-b3-4221.wav
+   │     └─ miori-b3-4221.json
+   ├─ voice.md
    ├─ personality.md
    ├─ world.md
    └─ memory-policy.md
@@ -43,6 +47,7 @@ characters/
 |---|---|
 | `{id}.card.json` | runtimeで使用する人格Core・条件付きCharacter Lore・表示名・会話例・応答指示の正本 |
 | `assets/standing/default.png` | 会話画面で使用する標準立ち絵 |
+| `assets/voice/`、[光織のvoice.md](miori/voice.md) | 選定した参照音声・生成記録・登録手順。runtimeへの接続は#329で対応 |
 | `personality.md` | Character Cardを編集するときの非runtime補助資料 |
 | `world.md` | 世界観、比喩体系、用語、演出方針、応答上の扱い |
 | `memory-policy.md` | 記憶方針本文の移動先と実装設定ファイルへの案内 |
@@ -128,6 +133,7 @@ characters/{id}/assets/standing/default.png
 詳細は以下を参照。
 
 - `characters/miori/miori.card.json`
+- [光織の採用音声・登録手順](miori/voice.md)
 - `characters/miori/personality.md`（非runtimeの編集補助）
 - `characters/miori/world.md`
 - `docs/decisions/wave2-memory-formation-retrieval-2026-08.md`
