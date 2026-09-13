@@ -1,11 +1,12 @@
 """Episode/Factの有効な正本を既存記憶と併せて検索へ渡す。"""
 
 from collections import defaultdict, deque
+from dataclasses import dataclass, field
 from datetime import datetime
 import sqlite3
 from uuid import UUID
 
-from app.memory.episodic.contracts import Record, RecordKind, RecordStatus, SourceSpan
+from app.memory.episodic.contracts import MergeRelation, Record, RecordKind, RecordStatus, SourceSpan
 from app.memory.episodic.rendering import render_five_w
 from app.memory.episodic.source_masks import overlaps_mask
 from app.memory.episodic.repository import EpisodicRepository, EpisodicTransaction, RecordVersion
@@ -18,6 +19,16 @@ from app.memory.persistence.contracts import MemoryStatus, TemporalPrecision
 from app.memory.read_contracts import EpisodicMemoryView, ReadableMemory
 
 
+@dataclass
+class _ReadState:
+    """1つのcharacterの履歴・記憶snapshotだけで使い捨てる読み取り状態。"""
+
+    invalid_responses: set[UUID]
+    merges: tuple[MergeRelation, ...]
+    masks: dict[UUID | None, tuple[SourceSpan, ...]] = field(default_factory=dict)
+    current: dict[UUID, RecordVersion | None] = field(default_factory=dict)
+
+
 class EpisodicReadRepository:
     def __init__(self, repository: EpisodicRepository, source_guard: ConversationSourceGuard) -> None:
         self.repository = repository
@@ -26,14 +37,18 @@ class EpisodicReadRepository:
     def get(self, *, character_id: str, memory_id: UUID) -> EpisodicMemoryView | None:
         with self.source_guard.snapshot() as (history, cutoff), self.repository.read() as tx:
             record = tx.get(character_id, memory_id)
-            return None if record is None else self._project(
-                tx, history, cutoff, record, self._unsafe_facts(tx, history, cutoff, character_id),
+            if record is None:
+                return None
+            state = self._read_state(tx, history, cutoff, character_id)
+            return self._project(
+                tx, history, cutoff, record, self._unsafe_facts(tx, history, cutoff, character_id, state), state,
             )
 
     def list_active(self, *, character_id: str) -> list[EpisodicMemoryView]:
         with self.source_guard.snapshot() as (history, cutoff), self.repository.read() as tx:
-            unsafe = self._unsafe_facts(tx, history, cutoff, character_id)
-            views = [self._project(tx, history, cutoff, record, unsafe)
+            state = self._read_state(tx, history, cutoff, character_id)
+            unsafe = self._unsafe_facts(tx, history, cutoff, character_id, state)
+            views = [self._project(tx, history, cutoff, record, unsafe, state)
                      for record in tx.list_records(character_id)]
         return [view for view in views if view.status is MemoryStatus.ACTIVE]
 
@@ -80,39 +95,53 @@ class EpisodicReadRepository:
                 ),
             )
 
+    def _read_state(
+        self, tx: EpisodicTransaction, history: sqlite3.Connection, cutoff: datetime, character_id: str,
+    ) -> _ReadState:
+        return _ReadState(
+            invalid_responses=tx.invalid_response_ids(
+                character_id,
+                source_validator=lambda conversation_id, sources: self._conversation_sources_valid(
+                    history, cutoff, character_id, conversation_id, sources,
+                ),
+            ),
+            merges=tx.merges(character_id),
+        )
+
     def _current(
         self, tx: EpisodicTransaction, history: sqlite3.Connection, cutoff: datetime, record: Record,
+        state: _ReadState,
     ) -> RecordVersion | None:
+        if record.id in state.current:
+            return state.current[record.id]
+        state.current[record.id] = None
         if record.status is not RecordStatus.ACTIVE or record.five_w is None:
             return None
         versions = tx.versions(record.character_id, record.id)
         version = next((v for v in versions if v.content_version == record.content_version), None)
         if version is None or not self._sources_valid(history, cutoff, record, version.sources):
             return None
-        invalid = tx.invalid_response_ids(
-            record.character_id,
-            source_validator=lambda conversation_id, sources: self._conversation_sources_valid(
-                history, cutoff, record.character_id, conversation_id, sources,
-            ),
-        )
-        if any(s.role == "assistant" and s.source_id in invalid for s in version.sources):
+        if any(s.role == "assistant" and s.source_id in state.invalid_responses for s in version.sources):
             return None
-        masks = tx.source_masks(record.character_id, record.conversation_id)
-        if any(overlaps_mask(source, masks) for source in version.sources):
+        if record.conversation_id not in state.masks:
+            state.masks[record.conversation_id] = tx.source_masks(record.character_id, record.conversation_id)
+        if any(overlaps_mask(source, state.masks[record.conversation_id]) for source in version.sources):
             return None
+        state.current[record.id] = version
         return version
 
     def _unsafe_facts(
         self, tx: EpisodicTransaction, history: sqlite3.Connection, cutoff: datetime, character_id: str,
+        state: _ReadState,
     ) -> set[UUID]:
         records = {r.id: r for r in tx.list_records(
             character_id, kind=RecordKind.FACT, active_only=False,
         )}
-        blocked = {r.id for r in records.values() if self._current(tx, history, cutoff, r) is None}
+        blocked = {r.id for r in records.values() if self._current(tx, history, cutoff, r, state) is None}
         deleted = {r.id for r in records.values() if r.status is RecordStatus.DELETED}
         deletion_edges: dict[UUID, set[UUID]] = defaultdict(set)
         dependency_edges: dict[UUID, set[UUID]] = defaultdict(set)
-        for merge in tx.merges(character_id):
+        for merge in state.merges:
             source, target = records.get(merge.source_fact_id), records.get(merge.target_fact_id)
             if source is None or target is None:
                 continue
@@ -138,9 +167,9 @@ class EpisodicReadRepository:
 
     def _project(
         self, tx: EpisodicTransaction, history: sqlite3.Connection, cutoff: datetime, record: Record,
-        unsafe_facts: set[UUID], *, include_merged: bool = False,
+        unsafe_facts: set[UUID], state: _ReadState, *, include_merged: bool = False,
     ) -> EpisodicMemoryView:
-        version = self._current(tx, history, cutoff, record)
+        version = self._current(tx, history, cutoff, record, state)
         if version is not None and record.kind is RecordKind.EPISODE:
             # Factの旧内容を別Episode本文から検索し直さない。経験の監査レコードは残す。
             for link in tx.references(record.character_id, record.id):
@@ -149,7 +178,7 @@ class EpisodicReadRepository:
                 fact = tx.get(record.character_id, link.fact_id)
                 if (not link.valid or fact is None or fact.id in unsafe_facts
                         or fact.content_version != link.fact_version
-                        or self._current(tx, history, cutoff, fact) is None
+                        or self._current(tx, history, cutoff, fact, state) is None
                         or not self._sources_valid(history, cutoff, record, link.sources)):
                     version = None
                     break
@@ -157,7 +186,7 @@ class EpisodicReadRepository:
             # 有効な統合は代表だけを返す。失効した統合元は再評価するまで復帰させない。
             if record.id in unsafe_facts or (not include_merged and any(
                 m.source_fact_id == record.id and m.source_version == record.content_version
-                for m in tx.merges(record.character_id)
+                for m in state.merges
             )):
                 version = None
         value = record.five_w if version is not None else None

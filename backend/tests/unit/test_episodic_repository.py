@@ -255,3 +255,28 @@ def test_delete_using_original_provenance_succeeds_and_blocks_new_receipts(repos
             create(tx, sources=(evidence,))
         assert create(tx, character="other", sources=(evidence,)).status is RecordStatus.ACTIVE
         assert create(tx, sources=(evidence.model_copy(update={"revision": 2}),)).status is RecordStatus.ACTIVE
+
+
+@pytest.mark.parametrize("assignment", [
+    "character_id='other'", "record_id='changed'", "content_version=9",
+    "sources='[]'", "stamp='{}'", "created_at='changed'", "content='{}'",
+])
+def test_historical_version_metadata_and_content_are_immutable(repository, assignment):
+    with repository.transaction(now=NOW) as tx:
+        fact = create(tx)
+        with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+            tx._connection.execute(
+                f"UPDATE episodic_versions SET {assignment} WHERE record_id=?", (str(fact.id),))
+        assert tx.versions("miori", fact.id)[0].five_w == VALUE
+
+
+def test_version_redaction_is_idempotent_but_cannot_be_reversed_or_deleted(repository):
+    with repository.transaction(now=NOW) as tx:
+        fact = create(tx)
+        for _ in range(2):
+            tx._connection.execute("UPDATE episodic_versions SET content=NULL WHERE record_id=?", (str(fact.id),))
+        assert tx.versions("miori", fact.id)[0].five_w is None
+        with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+            tx._connection.execute("UPDATE episodic_versions SET content='{}' WHERE record_id=?", (str(fact.id),))
+        with pytest.raises(sqlite3.IntegrityError, match="cannot be deleted"):
+            tx._connection.execute("DELETE FROM episodic_versions WHERE record_id=?", (str(fact.id),))

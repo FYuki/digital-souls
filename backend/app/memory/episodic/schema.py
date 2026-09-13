@@ -190,16 +190,38 @@ DEFINITIONS = (
 )
 
 
-def initialize_episodic_schema(connection: sqlite3.Connection) -> None:
+VERSION_GUARDS = (
+    """CREATE TRIGGER episodic_version_immutable BEFORE UPDATE ON episodic_versions
+       WHEN OLD.character_id IS NOT NEW.character_id
+         OR OLD.record_id IS NOT NEW.record_id
+         OR OLD.content_version IS NOT NEW.content_version
+         OR OLD.sources IS NOT NEW.sources
+         OR OLD.stamp IS NOT NEW.stamp
+         OR OLD.created_at IS NOT NEW.created_at
+         OR (OLD.content IS NOT NEW.content AND NEW.content IS NOT NULL)
+       BEGIN SELECT RAISE(ABORT,'episodic version is immutable'); END""",
+    """CREATE TRIGGER episodic_version_no_delete BEFORE DELETE ON episodic_versions
+       BEGIN SELECT RAISE(ABORT,'episodic version cannot be deleted'); END""",
+)
+
+
+def initialize_version_guards(connection: sqlite3.Connection) -> None:
+    for definition in VERSION_GUARDS:
+        connection.execute(definition.replace("CREATE TRIGGER", "CREATE TRIGGER IF NOT EXISTS", 1))
+
+
+def initialize_episodic_schema(connection: sqlite3.Connection, *, version_guards: bool = True) -> None:
     for definition in DEFINITIONS:
         connection.execute(definition)
+    if version_guards:
+        initialize_version_guards(connection)
 
 
-def validate_episodic_schema(connection: sqlite3.Connection) -> None:
+def validate_episodic_schema(connection: sqlite3.Connection, *, version_guards: bool = True) -> None:
     """同じtable名だけの不完全なDBを受理しない。修復・書換えは行わない。"""
     expected = sqlite3.connect(":memory:")
     try:
-        initialize_episodic_schema(expected)
+        initialize_episodic_schema(expected, version_guards=version_guards)
         rows = expected.execute(
             "SELECT type,name,sql FROM sqlite_master WHERE sql IS NOT NULL"
         ).fetchall()
