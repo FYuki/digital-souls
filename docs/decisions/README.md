@@ -18,6 +18,7 @@ archive内の文書を現行仕様や実装のSource of Truthとして使用し�
 
 ## 現行の優先関係
 
+- [`tts-engine-reference-voice-2026-09.md`](tts-engine-reference-voice-2026-09.md)は、#329のSession開始時のTTS選択と、Irodoriのvoice ID・参照音声の固定対応を追加する。既存の音声／Speech・Text共通Session契約と環境分離境界を維持する。Irodoriの実装・モデル本採用・dogfood受入は未完了で、[要件](../irodori-tts-requirements.md)と#329で追跡する。
 - [`conversation-session-text-input-2026-09.md`](conversation-session-text-input-2026-09.md)は、#319のSpeech/Text共通入力、受理結果照合、focus抑止、スレッド別送信を定める。この範囲は既存の音声／LiveKit契約より優先する。実装・受入の追跡元は#321〜#327で、現行の受入結果と残課題は[混在Session受入](../conversation-session-acceptance.md)等を参照する。
 - [`conversation-session-client-2026-09.md`](conversation-session-client-2026-09.md)は、#323の共通client API、送信結果管理、履歴表示、入力抑止・中断の利用境界を定める。WebとDesktop #317から共用する設計であり、Desktop本体の実装完了を意味しない。
 - [`addon-action-approval-recovery-2026-09.md`](addon-action-approval-recovery-2026-09.md)は、#185の接続・操作群・実行場面別承認、確認キュー、60秒待機、結果回復を定める。承認の効力・UI範囲はCharacter Life共通ADRより本ADRを優先する。
