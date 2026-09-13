@@ -71,10 +71,10 @@ GPU空き不足などで起動できない場合は未配備・未準備とし�
 所有者が設定したenvファイルを指定して実行する。
 
 ```bash
-python3 infra/irodori/validate-deployment.py \
-  --env-file /etc/digital-souls/irodori.env --compose-file infra/irodori/compose.yaml
+python3 /opt/digital-souls-irodori/validate-deployment.py \
+  --env-file /etc/digital-souls/irodori.env --compose-file /opt/digital-souls-irodori/compose.yaml
 docker compose --env-file /etc/digital-souls/irodori.env \
-  -f infra/irodori/compose.yaml up -d --wait --wait-timeout 600
+  -f /opt/digital-souls-irodori/compose.yaml up -d --wait --wait-timeout 600
 curl --fail http://127.0.0.1:50024/health/ready
 curl --fail http://127.0.0.1:50024/version
 ```

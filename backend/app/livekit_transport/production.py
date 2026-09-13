@@ -1798,9 +1798,20 @@ class ProductionRuntimeManager:
 
         room.on("track_unsubscribed")(track_unsubscribed)
 
+        def startup_ended() -> bool:
+            return (
+                self._coordinators.get(session_id) is not coordinator
+                or coordinator.phase == "ended"
+            )
+
         await room.connect(self._livekit_url, token)
+        if startup_ended():
+            raise RuntimeError("runtime startup ended")
         coordinator.start_join_deadline()
         audio_source = await self._prepare_output_track(room)
+        if startup_ended():
+            await audio_source.aclose()
+            raise RuntimeError("runtime startup ended")
         self._audio_sources[session_id] = audio_source
         delivery = _ConversationCoreDelivery(
             coordinator=coordinator,
@@ -1827,6 +1838,10 @@ class ProductionRuntimeManager:
         core_session = (
             await created_session if inspect.isawaitable(created_session) else created_session
         )
+        # await中の期限切れ・終了後は、遅れて完成したCoreを登録せず閉じる。
+        if startup_ended():
+            await core_session.end()
+            raise RuntimeError("runtime startup ended")
 
         def schedule_core_operation(operation: Awaitable[None]) -> None:
             self._schedule_task(session_id, operation)
