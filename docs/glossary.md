@@ -8,6 +8,8 @@
 
 用語の正式な判断は[記憶・人格の用語契約](decisions/memory-personality-terminology-2026-09.md)等のADR、現在の挙動はコード・[アーキテクチャ](system-architecture.md)、進捗はIssuesが正本です。本書で仕様を新設・上書きしません。ADRの`ACTIVE`は「有効な設計判断」であり「実装完了」ではありません。優先関係は[ADR案内](decisions/README.md)を参照してください。
 
+通知・非同期結果の節は#183のEpic開始時に追加した設計用語です。既存コードの照合基準や、他の項目の実装状態を変更するものではありません。
+
 ## キャラクター・人格定義
 
 | 用語・実装名 | このリポジトリでの意味・区別 | 状態・参照 |
@@ -96,6 +98,24 @@ Sessionの再送・重複検知履歴は有限です。スレッドを永続化�
 | Binding / 対象拘束 | 呼出し先の対象を、登録済み設定や今回の会話で選んだ対象へ結び付ける制約 | 実装：[会話利用](tool-use.md)、[MCP基盤](external-mcp-foundation.md) |
 | Egress Privacy Check / 外部送信検査 | 外部へ渡す最終引数等の検査。長期記憶への保存可否とは別の判断 | 実装：[addon_action](../backend/app/addon_action/)、[共通契約](decisions/character-life-memory-personality-autonomy-2026-09.md) |
 | Approval / 確認 / Result Recovery | 操作を許可する条件、今回の実行確認、不明な実行結果の回復を区別する。結果不明は成功や安全な再実行と同義ではない | 実装：[操作承認・回復契約](decisions/addon-action-approval-recovery-2026-09.md)、[受入](addon-action-185-acceptance.md)。Life接続範囲は別途確認 |
+
+## 通知・非同期結果（設計）
+
+以下の新しい名称は概念上の名前であり、実装クラス・API・DB列の存在を示しません。具体的な型と状態は#158／#363／#365等の実装時に対応づけます。
+
+| 用語・実装名 | このリポジトリでの意味・区別 | 状態・参照 |
+|---|---|---|
+| Event / イベント、Event ingestion | 提供元の出来事とCoreへの取得・復旧。提供元が本文の正本を持ち、Coreの有限bufferや通知を正本の代わりにしない | 後続設計・#187：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| Notification / 通知 | ユーザーが出来事を確認するためのmetadataと出典参照。会話メッセージ・発話命令・Task状態そのものではない | 設計・#183／#158：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| 通知Policy、`ignore / state-only / notify` | 無視／管理metadataだけ更新／通知を作成・更新、の分類。notifyだけでは会話取込・発話を許可しない | 設計・#158：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| 登録時担当 / 担当キャラクター | 非同期処理を追加した時点の担当・呼出主体。依頼ユーザー、閲覧ユーザー、外部接続認証主体とは別で、画面切替に追従しない | 設計・#158／#363：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| 登録時対象 / 対象設定revision | 接続・認証主体参照・binding・Task／ruleの対象と版。会話の対象変更とは独立し、開始済みTaskへ新設定を遡及しない。現在権限は取得時に再検証する | 設計・#158／#363：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| Origin / Target / Delivery policy | Originは依頼・設定元、Targetは結果の届け先、Policyは通知のみ等の配送方針。元の会話がない通知もあり、現在表示中の会話とは同義でない | 設計・#365：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| 通知用read-only caller | 登録時担当で通知内容を安全に取得する処理。LLMのToolDecisionを必要としないが、共有Gate・認可・binding・snapshot・予算を通す。Inference Callerとは別 | 設計・#363：[Tool利用ADR](decisions/tool-use-foundation-2026-09.md)、[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| 取得実行 / 継続的な予算集計単位 | 個々の短い取得と、Task／rule等に紐付く再試行を含む制限の範囲。元の会話loopを保持せず、新実行IDで制限をリセットしない | 設計・#363：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| 内容取得済み / 既読 / 会話取込済み / 報告済み | 取得成功、ユーザー確認、会話文脈への採用、担当の報告turn保存を区別する。どれもTask取消しや音声再生完了と同義ではない | 設計・#191／#365：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| 報告起点 / 任意の自発発話候補 | 前者は元の依頼・結果を参照するCore認可済みの応答起点。後者は許可・idle・cooldown・TTL等で判断する任意候補。依頼報告を任意候補TTLで捨てない | 設計・#365／#189：[Session接続点](decisions/conversation-session-text-input-2026-09.md)、[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
+| コピー・会話引用の非伝播 | 明示共有された範囲だけを別キャラクターとの通常会話で扱い、元の非同期処理の担当・設定・状態へ会話や返答を伝えない。通知閲覧だけでは共有しない | 設計・#366：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md) |
 
 ## Character Life・環境・運用
 

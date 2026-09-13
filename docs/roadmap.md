@@ -86,6 +86,7 @@ Speech/Textの併用、入力受理照合、focus抑止、スレッド別送信�
 - 接続管理、操作承認・実行確認・結果回復：[Addon管理](addon-admin.md)と[承認・回復ADR](decisions/addon-action-approval-recovery-2026-09.md)。
 - 用途別Inference TargetとProvider Adapter：[Inference運用](inference-operations.md)。
 - 画面知覚、追加クライアント、常時稼働、アバター連携：[画面知覚ADR](decisions/browser-screen-perception-2026-09.md)と[拡張計画](enhancement-plan.md)。
+- 後続のイベント取り込み・復旧、会話／LLM非依存の通知タブ・未読管理、通知を担当キャラクターの会話へ統合する報告機能を分離して整備する：[通知／会話分離ADR](decisions/notification-conversation-separation-2026-09.md)。通知基盤単独で利用可能にし、会話統合を後続にする設計であり、現行実装の完成を示さない。
 
 個別の業務addon、self-owned runtime、Desktop／Discord、Live2D／VRM等まで一括して実装済みとしない。
 
