@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "name": "dev-voice",
+  "description": "実マイク確認用。記憶検索を無効にして音声・テキスト会話を実サービスへ接続する",
+  "readyGate": {
+    "baseUrl": "http://127.0.0.1:4174"
+  },
+  "dependencies": {
+    "frontend": {
+      "mode": "real",
+      "source": "managed",
+      "baseUrl": "http://localhost:5173",
+      "readinessPath": "/"
+    },
+    "backend": {
+      "mode": "real",
+      "source": "managed",
+      "baseUrl": "http://localhost:8000",
+      "readinessPath": "/health/ready",
+      "reload": true
+    },
+    "ollama": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://localhost:11434",
+      "readinessPath": "/api/tags"
+    },
+    "voicevox": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://127.0.0.1:50021",
+      "readinessPath": "/version"
+    },
+    "livekit": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://127.0.0.1:7880",
+      "readinessPath": "/"
+    },
+    "whisper": {
+      "mode": "real",
+      "source": "external",
+      "baseUrl": "http://127.0.0.1:50022",
+      "readinessPath": "/health/ready"
+    },
+    "chroma": {
+      "mode": "disabled",
+      "source": null
+    }
+  }
+}

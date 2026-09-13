@@ -15,6 +15,9 @@ archive内の文書を現行仕様や実装のSource of Truthとして使用し�
 
 ## 現行の優先関係
 
+- [`conversation-session-text-input-2026-09.md`](conversation-session-text-input-2026-09.md) は、#319のSpeech/Text共通入力、受理結果照合、focus抑止、スレッド別送信を定める。この範囲は既存の音声/LiveKit契約より優先し、runtimeへの適用・受入は#321〜#327で追跡する。
+- [`conversation-session-client-2026-09.md`](conversation-session-client-2026-09.md) は、#323の共通client API、送信結果管理、履歴表示、入力抑止・中断の利用境界を定める。WebとDesktop #317から共用する。
+
 - [`episode-fact-semantic-boundaries-2026-09.md`](episode-fact-semantic-boundaries-2026-09.md) は、#352で確定したEpisode / Fact / Semantic / Reflectionの正本責務、述語のみ必須の5W、config timezone、FactのID参照・版・失効、同thread登録時照合と後続#354の別thread非同期整理を定める。2026-09-13の#340合意による日常経験・仮定/創作、経験の単位、Fact更新と統合の区別、管理操作・dev受入も含む。この記憶再編の範囲ではCharacter Life・用語・Wave 2・RAG privacy ADRの旧記述より優先する。
 - [`memory-personality-terminology-2026-09.md`](memory-personality-terminology-2026-09.md) は記憶・Fact・内省・気質・人格・処理の用語を定める。物理schemaの設計は#342 / #345等で具体化し、用語表を実装済みschemaと扱わない。
 - [`addon-action-approval-recovery-2026-09.md`](addon-action-approval-recovery-2026-09.md) は、#185の接続・操作群・実行場面別承認、確認キュー、60秒待機、結果回復を定める。承認の効力・UI範囲はCharacter Life共通ADRより本ADRを優先する。

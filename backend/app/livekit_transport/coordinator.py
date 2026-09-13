@@ -93,10 +93,7 @@ class ProductionSessionCoordinator:
             notify=self._record_terminal_outcome,
         )
         self._delivery = CoreEventDelivery(core_port=core_port)
-        self._outbound_deduplicator = EventDeduplicator(
-            max_events=OUTBOX_MAX_EVENTS * 2,
-            max_bytes=OUTBOX_MAX_BYTES * 2,
-        )
+        self._outbound_deduplicator = EventDeduplicator()
         self._outbound_sequences = EventSequenceTracker()
         self._outboxes = InMemoryOutboxManager(
             max_events=OUTBOX_MAX_EVENTS,
@@ -198,6 +195,19 @@ class ProductionSessionCoordinator:
                 event = decode_core_event(payload)
                 if str(event["session_id"]) != self.session_id:
                     raise TerminalProtocolError("Core event session mismatch")
+                if event["type"] in {"user_input_result", "response_privacy_skipped"}:
+                    raise TerminalProtocolError("result is owned by Backend")
+                if event["type"] in {"user_text_submitted", "user_input_result_requested"}:
+                    speaker = event.get("speaker")
+                    expected = self._mapping.core_notification(
+                        identity=identity, event_type="text_input"
+                    )["participant_id"]
+                    if (
+                        not isinstance(speaker, dict)
+                        or speaker.get("role") != "user"
+                        or speaker.get("participant_id") != expected
+                    ):
+                        raise TerminalProtocolError("text input participant mismatch")
                 self._delivery.receive(payload, event)
                 if event.get("measurement") == "session_summary" and self._dependencies.session_metrics is not None:
                     self._dependencies.session_metrics.observe_summary(event.get("session_summary"))
@@ -509,7 +519,7 @@ class ProductionSessionCoordinator:
             self._abort_output_stops()
         payload = json.dumps(
             {
-                "protocol_version": "1.0",
+                "protocol_version": "1.1",
                 "event_id": str(uuid4()),
                 "type": event_type,
                 "session_id": self.session_id,

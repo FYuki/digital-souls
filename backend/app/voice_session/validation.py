@@ -29,7 +29,7 @@ def parse_voice_session_event(value: object) -> VoiceSessionEvent:
         key=lambda error: tuple(str(segment) for segment in error.path),
     )
     if errors:
-        raise ValueError("voice session event does not match protocol 1.0") from errors[0]
+        raise ValueError("voice session event does not match protocol 1.1") from errors[0]
     try:
         event = VoiceSessionEvent.model_validate(value)
     except ValidationError as error:

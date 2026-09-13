@@ -12,8 +12,9 @@ export class CoreEventReceiver {
   private retainedBytes = 0
 
   constructor(
-    private readonly maxEvents = 256,
-    private readonly maxBytes = 1_048_576,
+    // ACK済みも重複検知に保持する履歴枠。未送信outboxの256件とは分ける。
+    private readonly maxEvents = 16_384,
+    private readonly maxBytes = 16_777_216,
   ) {
     if (maxEvents < 1 || maxBytes < 1) {
       throw new Error('deduplication limits must be positive')
@@ -93,7 +94,7 @@ export class PlaybackConfirmationTracker {
     if (this.finishedResponses.has(responseId)) return null
     if (previous !== undefined && (continuousPrefix < previous || (!responseFinished && continuousPrefix === previous))) return null
     const event = parseVoiceSessionEvent({
-      protocol_version: '1.0',
+      protocol_version: '1.1',
       event_id: this.eventId(),
       type: 'playback_completed',
       session_id: this.sessionId,

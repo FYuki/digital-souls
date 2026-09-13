@@ -1,0 +1,93 @@
+{
+  "date": "2026-09-12",
+  "source_commit": "cbaffe9",
+  "environment": "dev-voice",
+  "human_microphone_acceptance": false,
+  "method": "Windows Chrome、実LiveKit/Ollama/VOICEVOX。マイクはブラウザの模擬デバイス、発話開始はcontrollerへ注入。修正前の詳細診断では停止理由の分類と数値snapshot出力だけをブラウザ内で追加。",
+  "clock_regression_observed": {
+    "previous_context_time": 3.3300633333333334,
+    "context_time": 3.324668,
+    "missing_reason": "audit_output_clock_invalid",
+    "failure_stage": "timestamp_regression"
+  },
+  "runs": [
+    {
+      "file": "dev-319-interrupt-active.json",
+      "sha256": "9bdae704048b7fc56876b170fb0de8f53bd0c26b8258b693702235cec22e5604",
+      "failures": [
+        {
+          "stage": "output_clock",
+          "reason": "unclassified"
+        }
+      ],
+      "events": {
+        "response_started": 1,
+        "user_input_result": 1,
+        "response_delta": 65,
+        "response_audio_segment": 2,
+        "observation": 1,
+        "turn_decision": 2
+      },
+      "playback_completions": 0,
+      "followup_played": null
+    },
+    {
+      "file": "dev-319-stop-clock.json",
+      "sha256": "bb062f9d900fb44078ac6dedfc86f54641592ef0b43e5caf4e498dbc4c3418c1",
+      "failures": [
+        {
+          "stage": "output_clock",
+          "reason": "output_stop_observation_invalid"
+        }
+      ],
+      "events": {
+        "response_started": 1,
+        "user_input_result": 1,
+        "response_delta": 157,
+        "response_audio_segment": 1,
+        "turn_decision": 1
+      },
+      "playback_completions": 0,
+      "followup_played": null
+    },
+    {
+      "file": "dev-319-interrupt-after-1.json",
+      "sha256": "5dd545f7c00ec19869f2048aa1edd2bc884c53729a04edaa3eb90b4d36709c48",
+      "failures": [],
+      "events": {
+        "response_started": 1,
+        "user_input_result": 1,
+        "response_delta": 68,
+        "response_audio_segment": 2,
+        "observation": 1,
+        "turn_decision": 1,
+        "response_cancelled": 1
+      },
+      "playback_completions": 0,
+      "followup_played": null
+    },
+    {
+      "file": "dev-319-interrupt-followup.json",
+      "sha256": "3dbfd582792b2b42b41c6c0bddbf190c20b548b3b2f669c6ec026ed57fca031e",
+      "failures": [],
+      "events": {
+        "response_started": 2,
+        "user_input_result": 2,
+        "response_delta": 39,
+        "response_audio_segment": 4,
+        "observation": 2,
+        "turn_decision": 1,
+        "response_cancelled": 1,
+        "utterance_discarded": 1
+      },
+      "playback_completions": 1,
+      "followup_played": true
+    }
+  ],
+  "verification": {
+    "unit_passed": 858,
+    "module_passed": 140,
+    "typecheck": "passed",
+    "build": "passed"
+  }
+}

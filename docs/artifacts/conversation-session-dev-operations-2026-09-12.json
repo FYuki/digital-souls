@@ -1,0 +1,99 @@
+{
+  "source_commit": "ea77807",
+  "runs": [
+    {
+      "file": "operation-stress-before.json",
+      "sha256": "045b83a5dbb146f3f78cc9785adfb5551a67adb30951e7ef53abd8cf9b1e3217",
+      "passed": false,
+      "failures": [
+        {
+          "stage": "transport",
+          "reason": "unclassified"
+        }
+      ],
+      "operations": 4,
+      "playback_starts": 4,
+      "playback_completions": 0,
+      "received_events": 256,
+      "event_counts": {
+        "response_started": 5,
+        "user_input_result": 5,
+        "response_delta": 237,
+        "response_audio_segment": 4,
+        "response_cancelled": 4,
+        "observation": 1
+      }
+    },
+    {
+      "file": "operation-stack-before.json",
+      "sha256": "055b41a93b90deea8d3ac084e37c45d966c837791bf2ebd9def96f0cfce6c0f7",
+      "passed": false,
+      "failures": [
+        {
+          "stage": "transport",
+          "reason": "unclassified"
+        }
+      ],
+      "operations": 5,
+      "playback_starts": 5,
+      "playback_completions": 0,
+      "received_events": 256,
+      "event_counts": {
+        "response_started": 6,
+        "user_input_result": 6,
+        "response_delta": 230,
+        "response_audio_segment": 7,
+        "response_cancelled": 5,
+        "observation": 2
+      }
+    },
+    {
+      "file": "operation-reason-before.json",
+      "sha256": "485d4d851194543803b84fb9209ccdd73a56e37690eccb52b166db6d57d93b54",
+      "passed": false,
+      "failures": [
+        {
+          "stage": "transport",
+          "reason": "unclassified"
+        }
+      ],
+      "operations": 7,
+      "playback_starts": 7,
+      "playback_completions": 0,
+      "received_events": 256,
+      "event_counts": {
+        "response_started": 8,
+        "user_input_result": 8,
+        "response_delta": 220,
+        "response_audio_segment": 10,
+        "observation": 3,
+        "response_cancelled": 7
+      }
+    },
+    {
+      "file": "operation-stress-after.json",
+      "sha256": "b8308f923dd1e686b7d5f82c7abeb352bd1ac49c91411bc518704381ef49eaf5",
+      "passed": true,
+      "failures": [],
+      "operations": 8,
+      "playback_starts": 9,
+      "playback_completions": 1,
+      "received_events": 489,
+      "event_counts": {
+        "response_started": 9,
+        "user_input_result": 9,
+        "response_delta": 450,
+        "response_audio_segment": 9,
+        "observation": 4,
+        "response_cancelled": 8
+      }
+    }
+  ],
+  "human_microphone_acceptance": false,
+  "validation": {
+    "frontend_unit": 862,
+    "backend_related": 130,
+    "typecheck": "passed",
+    "build": "passed"
+  }
+}

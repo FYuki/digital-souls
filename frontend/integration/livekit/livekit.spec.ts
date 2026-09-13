@@ -33,7 +33,8 @@ test('fake microphone traverses the real LiveKit room once', async ({ page }) =>
   await expect(page.getByText('character rendered energy: 0', { exact: true })).toBeVisible()
   await expect(page.getByText('played prefix: -1', { exact: true })).toBeVisible()
   await expect(page.getByText('duplicate track frames: 0', { exact: true })).toBeVisible()
-  await expect(page.getByText('active audio graphs: 1', { exact: true })).toBeVisible()
+  // 疎通probeは回答の再生graphを作らない。回答音声はvoiceスイートで実再生を確認する。
+  await expect(page.getByText('active audio graphs: 0', { exact: true })).toBeVisible()
   await expect(page.getByText('confirmed segments: 0', { exact: true })).toBeVisible()
 })
 
@@ -56,7 +57,7 @@ test('temporary interruption resubscribes once and resumes the same session', as
   await expect(page.getByTestId('session-id')).toHaveText(session as string)
   await expect(page.getByText('generation: 1', { exact: true })).toBeVisible()
   await expect(page.getByText('duplicate track frames: 0', { exact: true })).toBeVisible()
-  await expect(page.getByText('active audio graphs: 1', { exact: true })).toBeVisible()
+  await expect(page.getByText('active audio graphs: 0', { exact: true })).toBeVisible()
   await expect(page.getByText('confirmed segments: 0', { exact: true })).toBeVisible()
   await expect(page.getByText('character rendered samples: 0', { exact: true })).toBeVisible()
   await expect(page.getByText('played prefix: -1', { exact: true })).toBeVisible()

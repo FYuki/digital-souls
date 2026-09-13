@@ -50,7 +50,7 @@ def _bootstrap(
     session_id: str | None = None,
 ) -> httpx.Response:
     body: dict[str, object] = {
-        "protocol_version": "1.0",
+        "protocol_version": "1.1",
         "request_id": str(uuid4()),
         "character_id": CHARACTER_ID,
         "conversation_id": conversation_id,
@@ -64,7 +64,7 @@ def _bootstrap(
 def _core_event(session_id: str, event_id: str) -> bytes:
     return json.dumps(
         {
-            "protocol_version": "1.0",
+            "protocol_version": "1.1",
             "event_id": event_id,
             "type": "session_started",
             "session_id": session_id,
@@ -447,7 +447,7 @@ def test_real_livekit_application_event_receives_private_ack() -> None:
                 await room.connect(livekit_url, binding["token"])
                 payload = json.dumps(
                     {
-                        "protocol_version": "1.0",
+                        "protocol_version": "1.1",
                         "event_id": event_id,
                         "type": "session_started",
                         "session_id": session_id,

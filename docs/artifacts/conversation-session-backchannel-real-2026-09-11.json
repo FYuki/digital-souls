@@ -1,0 +1,200 @@
+{
+  "scope": "real_labeled_backchannel_diagnostic",
+  "measurement_revision": "dfdffd216736ed199692ecbee9ffa914bc156785",
+  "expected_measured": 10,
+  "successful": 8,
+  "failed": 2,
+  "command": "run_pilot.py --run-id conversation-327-backchannel-20260911a --inference-env backend/.env.example --livekit-env <temporary env> --trials 10 --scheduled-fixture --interruption-cohort backchannel --fixture-indices 3,13,23,33,43,53,63,73,83,93",
+  "fixture_manifest_sha256": "f17955c010edbe3d0f194c3edc6473e9b37009ea133aecf6228588448fc2b2f3",
+  "initial_fixture_sha256": "56e10d861de9fdb8e9057d87c551432e4fea06656f8a60b88b4701929ce6722e",
+  "trials": [
+    {
+      "ordinal": 1,
+      "fixture_index": 3,
+      "fixture_sha256": "654c109ba02c5efe62b1540a6e95031003353260a6d4607adbb2f36f61d92d74",
+      "outcome": "success",
+      "failure_stage": null,
+      "backend_decision": "backchannel",
+      "backend_decision_final": true,
+      "old_response_cancelled": false,
+      "playback_completion": {
+        "expectedSamples": 168960,
+        "renderedSamples": 168960,
+        "packetCount": 176,
+        "gapSamples": 2880,
+        "maximumGapSamples": 2880
+      },
+      "session_end_confirmed": true
+    },
+    {
+      "ordinal": 2,
+      "fixture_index": 13,
+      "fixture_sha256": "28694cc3c259b3b54c19a60de464637b4af1f3d861ec1b8aa0d48513f79b7967",
+      "outcome": "success",
+      "failure_stage": null,
+      "backend_decision": "backchannel",
+      "backend_decision_final": true,
+      "old_response_cancelled": false,
+      "playback_completion": {
+        "expectedSamples": 139200,
+        "renderedSamples": 139200,
+        "packetCount": 145,
+        "gapSamples": 0,
+        "maximumGapSamples": 0
+      },
+      "session_end_confirmed": true
+    },
+    {
+      "ordinal": 3,
+      "fixture_index": 23,
+      "fixture_sha256": "d7520f838ce98732914691b40ed5d03d1ea94e7d58b1b689a479ef77dab912e4",
+      "outcome": "failure",
+      "failure_stage": "cancel_or_continuity",
+      "backend_decision": "indeterminate",
+      "backend_decision_final": true,
+      "old_response_cancelled": false,
+      "playback_completion": {
+        "expectedSamples": 168960,
+        "renderedSamples": 168960,
+        "packetCount": 176,
+        "gapSamples": 0,
+        "maximumGapSamples": 0
+      },
+      "session_end_confirmed": true
+    },
+    {
+      "ordinal": 4,
+      "fixture_index": 33,
+      "fixture_sha256": "6541e2e1e621fa1e5f7d28f8ee779872bb21f06156065cbe0aba6c5ee5b3c7a2",
+      "outcome": "failure",
+      "failure_stage": "cancel_or_continuity",
+      "backend_decision": "indeterminate",
+      "backend_decision_final": true,
+      "old_response_cancelled": false,
+      "playback_completion": {
+        "expectedSamples": 168960,
+        "renderedSamples": 168960,
+        "packetCount": 176,
+        "gapSamples": 192,
+        "maximumGapSamples": 192
+      },
+      "session_end_confirmed": true
+    },
+    {
+      "ordinal": 5,
+      "fixture_index": 43,
+      "fixture_sha256": "ed00253e67e26cc38a794cec84f2595566ffaabbc206f4f675e4e2d137664846",
+      "outcome": "success",
+      "failure_stage": null,
+      "backend_decision": "backchannel",
+      "backend_decision_final": true,
+      "old_response_cancelled": false,
+      "playback_completion": {
+        "expectedSamples": 168960,
+        "renderedSamples": 168960,
+        "packetCount": 176,
+        "gapSamples": 512,
+        "maximumGapSamples": 512
+      },
+      "session_end_confirmed": true
+    },
+    {
+      "ordinal": 6,
+      "fixture_index": 53,
+      "fixture_sha256": "e2da4b0211fa6ff9b5799755d8ca7b25fca2e61acbbbb8f76d024b3dca341f5d",
+      "outcome": "success",
+      "failure_stage": null,
+      "backend_decision": "backchannel",
+      "backend_decision_final": true,
+      "old_response_cancelled": false,
+      "playback_completion": {
+        "expectedSamples": 168960,
+        "renderedSamples": 168960,
+        "packetCount": 176,
+        "gapSamples": 128,
+        "maximumGapSamples": 128
+      },
+      "session_end_confirmed": true
+    },
+    {
+      "ordinal": 7,
+      "fixture_index": 63,
+      "fixture_sha256": "5fd6b97f7fb914a0c688f56ca1af1dd200d9b110d33132a38c537713b1c0a410",
+      "outcome": "success",
+      "failure_stage": null,
+      "backend_decision": "backchannel",
+      "backend_decision_final": true,
+      "old_response_cancelled": false,
+      "playback_completion": {
+        "expectedSamples": 168960,
+        "renderedSamples": 168960,
+        "packetCount": 176,
+        "gapSamples": 0,
+        "maximumGapSamples": 0
+      },
+      "session_end_confirmed": true
+    },
+    {
+      "ordinal": 8,
+      "fixture_index": 73,
+      "fixture_sha256": "519bfe6d78a3a8b6af9469335b8d084a5d179285ad659bffff947f984a0d8e28",
+      "outcome": "success",
+      "failure_stage": null,
+      "backend_decision": "backchannel",
+      "backend_decision_final": true,
+      "old_response_cancelled": false,
+      "playback_completion": {
+        "expectedSamples": 168960,
+        "renderedSamples": 168960,
+        "packetCount": 176,
+        "gapSamples": 320,
+        "maximumGapSamples": 320
+      },
+      "session_end_confirmed": true
+    },
+    {
+      "ordinal": 9,
+      "fixture_index": 83,
+      "fixture_sha256": "9a41d8295bcfd633e1c5e992dd35c0daf9f2c31d1e8bb87e8f50c84c59cc59da",
+      "outcome": "success",
+      "failure_stage": null,
+      "backend_decision": "backchannel",
+      "backend_decision_final": true,
+      "old_response_cancelled": false,
+      "playback_completion": {
+        "expectedSamples": 187200,
+        "renderedSamples": 187200,
+        "packetCount": 195,
+        "gapSamples": 512,
+        "maximumGapSamples": 512
+      },
+      "session_end_confirmed": true
+    },
+    {
+      "ordinal": 10,
+      "fixture_index": 93,
+      "fixture_sha256": "ef206a6682a5013b71f5a6c8fe52059171350bcee831db50211ac534146525ea",
+      "outcome": "success",
+      "failure_stage": null,
+      "backend_decision": "backchannel",
+      "backend_decision_final": true,
+      "old_response_cancelled": false,
+      "playback_completion": {
+        "expectedSamples": 168960,
+        "renderedSamples": 168960,
+        "packetCount": 176,
+        "gapSamples": 0,
+        "maximumGapSamples": 0
+      },
+      "session_end_confirmed": true
+    }
+  ],
+  "environment_id": "test",
+  "teardown_status": "completed",
+  "preflight_failure": "一時envのキー形式不足で試行前に停止。LIVEKIT_KEYS形式へ修正し、同じ事前選択で開始。",
+  "limitations": [
+    "10件の代表診断であり100件の性能/精度受入ではない。",
+    "判定不能の2件を成功へ読み替えず、再生継続とラベル一致を区別。",
+    "固定WAVの実STT/LLM/TTS/LiveKit/ブラウザ試験。人のマイク発話・聴感確認は未実施。"
+  ]
+}

@@ -390,7 +390,7 @@ def test_turn_decision_requires_explicit_decision_and_finality() -> None:
     parser = importlib.import_module("app.voice_session.validation")
     event = {
         "type": "turn_decision",
-        "protocol_version": "1.0",
+        "protocol_version": "1.1",
         "event_id": "10000000-0000-4000-8000-000000000090",
         "session_id": "20000000-0000-4000-8000-000000000001",
         "utterance_id": "30000000-0000-4000-8000-000000000090",
