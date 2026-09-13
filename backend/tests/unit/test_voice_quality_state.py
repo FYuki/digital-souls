@@ -11,13 +11,13 @@ from app.memory.persistence.schema import PERSONA_MEMORY_TABLES
 from app.voice_quality_state import inspect_controlled_initial_state
 
 
-@pytest.fixture
-def state_inputs(tmp_path):
+@pytest.fixture(params=['integration-voice', 'integration-irodori'])
+def state_inputs(tmp_path, request):
     data = tmp_path / 'data'
     data.mkdir()
     (data / '.environment-identity.json').write_text(json.dumps({'environmentId': 'test'}))
     profile_path = tmp_path / 'profile.json'
-    profile = {'effectiveProfile': 'integration-voice', 'derivedEnvironment': {
+    profile = {'effectiveProfile': request.param, 'derivedEnvironment': {
         'DS_ENVIRONMENT_ID': 'test', 'DS_DATA_DIR': str(data), 'RAG_ENABLED': 'false',
     }}
     profile_path.write_text(json.dumps(profile))

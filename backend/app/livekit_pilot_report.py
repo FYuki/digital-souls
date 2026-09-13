@@ -31,8 +31,8 @@ def _finalize_livekit_report(
     """試行数と証拠を検証する。品質合否は個別のevaluatorで判定する。"""
     manifest = _load_manifest(manifest_path)
     profile = json.loads(profile_report_path.read_text())
-    if profile.get("effectiveProfile") != "integration-voice":
-        raise ValueError("pilot requires the integration-voice profile")
+    if profile.get("effectiveProfile") not in ("integration-voice", "integration-irodori"):
+        raise ValueError("pilot requires an integration voice measurement profile")
     configured = profile.get("derivedEnvironment", {})
     if controlled and configured.get("RAG_ENABLED") != "false":
         raise ValueError("controlled evidence requires the resolved RAG-disabled profile")
@@ -221,7 +221,7 @@ def _finalize_livekit_report(
         events,
         metadata=create_run_metadata(
             measurement_kind="controlled_baseline", transport="livekit", run_id=run_id,
-            profile="integration-voice", fixture_version=fixture["fixture_version"],
+            profile=profile["effectiveProfile"], fixture_version=fixture["fixture_version"],
             warmup_runs=warmup_count, measured_runs=expected, whisper_model=whisper_model,
             whisper_device=WHISPER_DEVICE, whisper_compute_type=WHISPER_COMPUTE_TYPE,
         ),
