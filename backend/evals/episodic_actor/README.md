@@ -49,3 +49,19 @@ npm run eval:episodic-actor
 `summary.json` に正解率と分類別成績、`progress.jsonl` にcase単位の進捗、
 `promptfoo.log` に実行ログを残す。出力人物、model digest、prompt version、推論予算と時間も合成試験の証跡として保持する。
 `summary.json` の `passed` がfalse、またはrunが不完全ならコマンドは非0で終了する。
+
+
+## 出力設計の比較
+
+既定はproduction。評価専用の改善案は次のコマンドで測定する。
+
+~~~bash
+npm run eval:episodic-actor -- --design compact --output-dir /tmp/unique-compact-actor
+~~~
+
+行為者の固定正解と90%の基準は共通。設計hashを記録し、異なる設計のrunを混ぜて合格にしない。
+compactの人物schemaは名前と既知IDの対応、FactのACTOR役割を制約する。
+誰が行為者かはLLMが本文から判断し、人物を特定できない場合の空配列も許す。
+アプリの実行経路は変更しない。
+
+[比較結果・反復確認・検証境界](../../../docs/episodic-quality-iterations-2026-09.md)を参照する。

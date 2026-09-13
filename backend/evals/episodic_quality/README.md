@@ -69,3 +69,23 @@ npm run eval:episodic-quality -- --categories catalog same_event のように分
 選んだ分類の全件を測定し、その分類ごとに90%を要求する。全項目の合格とは扱わない。
 manifestには実行したcase IDを記録し、corpus全体のhashも維持する。
 引用位置の一意な原文一致による補正は本番resolve_quoteと同じ条件で採点する。
+
+
+## 指示文・出力設計の比較
+
+既定はproduction。評価専用の改善案を測る場合だけ、次のように指定する。
+
+~~~bash
+npm run eval:episodic-quality -- --design compact --output-dir /tmp/unique-compact-quality
+~~~
+
+compactは、意味判断を段階に分け、ID・参照関係・Episodeの話題をコードで組み立てる設計の比較案。
+アプリの実行経路やdev設定を切り替える機能ではない。通常の出典・所有範囲・構造の検証を維持する。
+同じ正解・閾値で採点し、manifestと出力のprompt_versionには設計hashも記録する。
+
+個別の失敗を診断するscripts/episodic_prompt_lab.pyは、登録済みの合成ケースに限定して
+実際のリクエストと応答をローカルへ保存する。実ユーザー会話を入力しない。
+--iteration 1..20を指定し、新規の出力先を使う。同じ候補の確認再実行はその反復の別runとして記録する。
+反復番号の引数範囲だけでは別run間の総数を管理できないため、実験台帳で全候補を管理する。
+
+[比較結果・反復履歴・検証境界](../../../docs/episodic-quality-iterations-2026-09.md)を参照する。
