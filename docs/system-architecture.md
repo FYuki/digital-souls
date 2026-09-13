@@ -74,9 +74,10 @@ Chromaがin_processである。接続先とreadinessは[dev Profile](../environm
 * `model_settings.py` — Whisperモデル、履歴・入力・モデルcontext上限を型付きで解決する。InferenceのProvider、Model、入力／出力上限は`inference/config.py`がTarget単位で解決し、Backendはlifespanの先頭で検証する
 * `tts/voicevox_client.py` / `tts/speech_synthesizer.py` — VOICEVOXによる音声合成
 * `tts/irodori_client.py` — Irodoriの準備確認と区間単位HTTP合成。CCVをSession開始時に固定し、切断時にはHTTP待機を取り消す
-* `irodori_service/` — dogfoodが所有する共有GPUサービス。固定revision、参照音声登録、実合成warmup、単一workerと待機列を管理する
 * `audio/transport.py` / `audio_pipeline.py` — 音声フレームの送受信・パイプライン制御
 
+リポジトリルートの `irodori_service/` はBackendから独立し、dogfoodが所有する共有GPUサービス。
+固定revision、参照音声登録、実合成warmup、単一workerと待機列を管理する。
 Irodori対応はepic実装であり、本採用・性能受入は#329の実測後に判断する。
 通常のdev Profileへ必須依存を追加せず、`integration-irodori`で外部サービスの準備を確認する。
 合成失敗時の応答終了、逐次区間送信、再接続は既存Conversation Core／LiveKit境界を使う。

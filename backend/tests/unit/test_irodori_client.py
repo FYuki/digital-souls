@@ -245,3 +245,30 @@ def test_real_adapter_keeps_segment_streaming_and_allows_next_response_after_fai
             assert [event_field(e, "text_range") for e in audio] == [(0, 7), (7, 12)]
         await session.end()
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("url", [
+    "http://127.0.0.1:50024", "http://127.0.0.2:50024",
+    "http://[::1]:50024", "http://localhost:50024", "https://tts.example.test",
+])
+def test_dogfood_accepts_loopback_http_or_remote_https(url) -> None:
+    assert IrodoriRuntimeConfig(base_url=url, environment="dogfood").base_url == url
+
+
+@pytest.mark.parametrize("url", ["http://tts.example.test", "http://192.168.1.10:50024"])
+def test_dogfood_rejects_cleartext_remote_tts(url) -> None:
+    with pytest.raises(ValueError, match="HTTPS or a loopback host"):
+        IrodoriRuntimeConfig(base_url=url, environment="dogfood")
+
+
+def test_tts_redirect_does_not_forward_private_text() -> None:
+    async def scenario() -> None:
+        calls = []
+        def handle(request):
+            calls.append(request)
+            return httpx.Response(307, headers={"location": "https://untrusted.example.test"})
+        client = IrodoriClient(IrodoriRuntimeConfig(), transport=httpx.MockTransport(handle))
+        with pytest.raises(IrodoriTtsError):
+            await client.synthesize_pcm("転送しない本文。", voice())
+        assert len(calls) == 1
+    asyncio.run(scenario())

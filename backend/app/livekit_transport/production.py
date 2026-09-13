@@ -1801,6 +1801,7 @@ class ProductionRuntimeManager:
         await room.connect(self._livekit_url, token)
         coordinator.start_join_deadline()
         audio_source = await self._prepare_output_track(room)
+        self._audio_sources[session_id] = audio_source
         delivery = _ConversationCoreDelivery(
             coordinator=coordinator,
             audio_source=audio_source,
@@ -1853,7 +1854,6 @@ class ProductionRuntimeManager:
                 accepting_input=lambda: core_session.accepting_input,
             ),
         )
-        self._audio_sources[session_id] = audio_source
         self._core_sessions[session_id] = core_session
         self._core_bridges[session_id] = bridge
         if isinstance(self._core_port, ProductionCoreEventInbox):

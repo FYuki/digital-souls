@@ -2399,8 +2399,9 @@ def test_production_stop_retries_only_failed_room_disconnect() -> None:
     asyncio.run(exercise())
 
 
+@pytest.mark.parametrize("failure_stage", ["connect", "tts_prepare"])
 def test_production_connect_failure_is_compensated_by_bootstrap_owner(
-    monkeypatch,
+    monkeypatch, failure_stage,
 ) -> None:
     bootstrap = importlib.import_module("app.livekit_transport.bootstrap")
     production = importlib.import_module("app.livekit_transport.production")
@@ -2423,7 +2424,8 @@ def test_production_connect_failure_is_compensated_by_bootstrap_owner(
             return lambda callback: callback
 
         async def connect(self, _url: str, _token: str) -> None:
-            raise RuntimeError("room connection failed")
+            if failure_stage == "connect":
+                raise RuntimeError("room connection failed")
 
         async def disconnect(self) -> None:
             disconnected.append(session_id)
@@ -2465,6 +2467,16 @@ def test_production_connect_failure_is_compensated_by_bootstrap_owner(
         session_repository=sessions,
         core_port=CorePort(),
     )
+    closed_sources = []
+    async def close_source():
+        closed_sources.append(session_id)
+    async def prepare_output(_room):
+        return SimpleNamespace(aclose=close_source)
+    async def fail_preparation(**_kwargs):
+        raise RuntimeError("tts preparation failed")
+    if failure_stage == "tts_prepare":
+        runtime._prepare_output_track = prepare_output
+        runtime._core_session_factory = SimpleNamespace(create=fail_preparation, create_ready=fail_preparation)
     service = bootstrap.BootstrapService(
         session_repository=sessions,
         room_manager=rooms,
@@ -2480,7 +2492,7 @@ def test_production_connect_failure_is_compensated_by_bootstrap_owner(
         "requested_reconnect_grace_ms": 60_000,
     }
 
-    with pytest.raises(RuntimeError, match="room connection failed"):
+    with pytest.raises(RuntimeError, match="room connection failed|tts preparation failed"):
         asyncio.run(asyncio.wait_for(service.bootstrap(request), timeout=0.5))
 
     assert sessions.contains(session_id) is False
@@ -2489,6 +2501,9 @@ def test_production_connect_failure_is_compensated_by_bootstrap_owner(
     assert runtime._coordinators == {}
     assert runtime._session_tasks == {}
     assert disconnected == [session_id]
+
+    assert closed_sources == ([session_id] if failure_stage == "tts_prepare" else [])
+    assert runtime._audio_sources == {}
 
 
 def test_production_core_bridge_waits_for_each_utterances_media_tail() -> None:

@@ -289,3 +289,68 @@ def test_partial_worker_reply_obeys_inference_deadline_and_allows_restart(tmp_pa
         worker.close()
         if operation.ident is not None:
             operation.join(timeout=2)
+
+
+def test_voice_validation_bounds_cancelled_io_without_starving_inference(tmp_path, monkeypatch) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    async def scenario() -> None:
+        asyncio.get_running_loop().set_default_executor(ThreadPoolExecutor(max_workers=1))
+        settings = config(tmp_path, max_voice_checks=1)
+        register_selected(settings)
+        worker = BlockingWorker()
+        worker.release.set()
+        app = create_app(settings, worker)
+        entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+        original = RegisteredVoices.resolve
+        def slow_resolve(self, identifier):
+            entered.set()
+            try:
+                if not release.wait(3):
+                    raise AssertionError("validation not released")
+                return original(self, identifier)
+            finally:
+                finished.set()
+        monkeypatch.setattr(RegisteredVoices, "resolve", slow_resolve)
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+                async def post():
+                    return await client.post("/v1/audio/speech", json=payload().model_dump(),
+                                             headers={"X-DS-Environment": "test"})
+                pending = asyncio.create_task(post())
+                try:
+                    async def wait_entered():
+                        while not entered.is_set():
+                            await asyncio.sleep(0.001)
+                    await asyncio.wait_for(wait_entered(), 1)
+                    assert (await post()).status_code == 429
+                    assert (await client.get("/v1/audio/voices")).status_code == 429
+                    pending.cancel()
+                    with pytest.raises(asyncio.CancelledError):
+                        await pending
+                    assert (await post()).status_code == 429
+                    # 検証I/Oが停止中でも、共有executorを使う推論は進行できる。
+                    assert await asyncio.wait_for(app.state.scheduler.submit(payload(), "test"), 1) == wav_bytes()
+                finally:
+                    release.set()
+                    await asyncio.gather(pending, return_exceptions=True)
+                assert await asyncio.to_thread(finished.wait, 1)
+                await asyncio.sleep(0)
+                assert (await post()).status_code == 200
+    asyncio.run(scenario())
+
+
+def test_voice_validation_releases_slot_after_failure() -> None:
+    from irodori_service.voice_validation import VoiceValidationPool
+
+    async def scenario() -> None:
+        pool = VoiceValidationPool(1)
+        def fail():
+            raise ServiceError("tts_voice_changed", 409)
+        try:
+            with pytest.raises(ServiceError, match="tts_voice_changed"):
+                await pool.run(fail)
+            assert await pool.run(lambda: "recovered") == "recovered"
+        finally:
+            await pool.close()
+    asyncio.run(scenario())

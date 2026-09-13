@@ -20,6 +20,7 @@ from irodori_service.config import (
 )
 from irodori_service.contracts import ServiceError, SpeechRequest
 from irodori_service.scheduler import Environment, SynthesisScheduler, SynthesisWorker
+from irodori_service.voice_validation import VoiceValidationPool
 from irodori_service.voices import RegisteredVoices
 from irodori_service.worker import ProcessWorker
 
@@ -32,6 +33,7 @@ def create_app(
     config = config or load_config()
     worker = worker or ProcessWorker(config)
     voices = RegisteredVoices(config.voices_dir)
+    voice_validation = VoiceValidationPool(config.max_voice_checks)
     scheduler = SynthesisScheduler(worker, config)
 
     @asynccontextmanager
@@ -40,7 +42,10 @@ def create_app(
             await scheduler.start()
             yield
         finally:
-            await scheduler.close()
+            try:
+                await scheduler.close()
+            finally:
+                await voice_validation.close()
 
     app = FastAPI(title="Digital Souls Irodori Service", lifespan=lifespan)
     app.state.scheduler = scheduler
@@ -73,6 +78,7 @@ def create_app(
             "serverRevision": SERVER_REVISION, "irodoriRevision": IRODORI_REVISION,
             "device": "cuda", "precision": "bf16", "quantized": False,
             "globalInflight": 1, "maxPending": config.max_pending,
+            "maxVoiceChecks": config.max_voice_checks,
             "queueTimeoutSeconds": config.queue_timeout,
             "inferenceTimeoutSeconds": config.inference_timeout,
             "preparationSeconds": getattr(worker, "preparation_seconds", None),
@@ -81,7 +87,7 @@ def create_app(
 
     @app.get("/v1/audio/voices")
     async def list_voices() -> dict[str, object]:
-        identifiers = await asyncio.to_thread(voices.list_ids)
+        identifiers = await voice_validation.run(voices.list_ids)
         return {"object": "list", "data": [
             {"id": identifier, "object": "voice", "no_ref": False}
             for identifier in identifiers
@@ -102,7 +108,7 @@ def create_app(
             payload = SpeechRequest.model_validate_json(body)
         except ValueError as error:
             raise ServiceError("tts_invalid_request", 422) from error
-        await asyncio.to_thread(voices.resolve, payload.voice)
+        await voice_validation.run(lambda: voices.resolve(payload.voice))
         result = asyncio.create_task(scheduler.submit(payload, cast(Environment, environment)))
 
         async def watch_disconnect() -> None:
