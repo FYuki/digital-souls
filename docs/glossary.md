@@ -40,6 +40,8 @@
 | Input suppression / 入力抑止 | 入力欄focus等により音声入力の採用を一時的に抑えること。利用者のmute、応答中断、Session終了とは区別する | 実装：[混在入力契約](decisions/conversation-session-text-input-2026-09.md) |
 | AudioTransport / LiveKit | 音声・control eventの送受信境界と現行の通信実装。Room／Participant／Trackはtransport側の概念で、会話スレッドの正本ではない | 実装：[transport契約](decisions/livekit-transport-2026-08.md)、[実装](../backend/app/livekit_transport/) |
 | STT / TTS | STTは共有Whisper HTTP serviceによる認識、TTSはVOICEVOXによる合成。現行BackendはWhisperのGPUモデルを所有しない | 実装：[remote client](../backend/app/stt/remote_whisper_client.py)、[TTS](../backend/app/tts/) |
+| Voice Design / 声の設計 | Caption（声質・話し方の説明文）から音声候補を合成し、ユーザーが声を選ぶ工程。モデル最終採用やTTS接続とは別 | 選定済み：[光織の音声](../characters/miori/voice.md)、[選定記録](miori-voice-selection-2026-09-13.md) |
+| Reference voice / 参照音声、voice ID | 別文章の合成時に声の手掛かりとして渡すWAVと、推論サービスに登録する識別子。VOICEVOXの整数speaker IDとは別 | 資産・dev登録済み、CCV接続は#329：[光織の音声](../characters/miori/voice.md) |
 
 Sessionの再送・重複検知履歴は有限です。スレッドを永続化できることは、接続を無期限維持できる保証ではありません。[連続操作試験](conversation-session-dev-operations.md)を参照してください。
 

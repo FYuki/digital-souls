@@ -1,0 +1,969 @@
+{
+  "issue": 330,
+  "workflow": "ユーザーの指示でdevの公式Irodori-TTS-Server APIを使用。公式Gradio UIは未構築・未使用。",
+  "model": {
+    "repository": "Aratako/Irodori-TTS-v4.1-Small",
+    "revision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+    "quantized": false,
+    "model_device": "cuda",
+    "model_precision": "bf16",
+    "codec_device": "cuda",
+    "codec_precision": "bf16",
+    "codec_repository": "Aratako/Semantic-DACVAE-Japanese-32dim",
+    "codec_revision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214"
+  },
+  "selected_audio_sha256": "f001f7df5415e74b955a8e15f9c2955cefcbc19b3e2282150fc67f0a9dcc2b79",
+  "decisions": [
+    "中性的な雰囲気を持つ女性の声として選定。",
+    "B-1/B-3を比較しB-3を選択。",
+    "seed比較後に4221を選択。",
+    "speed 0.9/1.1/0.99/0.98と比較し標準1.00を選択。"
+  ],
+  "candidate_audio_storage": "元候補WAVはdev用Irodori worktreeのoutputs/<source_run>/<source_file>に保持。採用WAVをリポジトリ管理する。",
+  "trials": [
+    {
+      "source_run": "miori-voice-candidates-20260912-224525",
+      "source_file": "01-balanced.wav",
+      "sha256": "12cf7231bfc4167559a182f00f45f0fb79e36f75e1de9886dbaea3542bb1c89b",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "中程度の高さの、性別を感じさせにくい中性的な声。澄んだ響きに柔らかな温かさがある。穏やかで親しみやすい丁寧な話し方。発音は明瞭で、抑揚は控えめ。自然な速さで、句点に短い間を置き、語尾を優しく収める。",
+          "seed": 4219,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T22:45:26.307791+09:00",
+      "audio_seconds": 12.68,
+      "elapsed_seconds": 1.206,
+      "selected": false
+    },
+    {
+      "source_run": "miori-voice-candidates-20260912-224525",
+      "source_file": "02-low.wav",
+      "sha256": "1f1a2937967aed51a60c723fb16605b306a0aa9fce58f011f8d6324926a6fa27",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "中低音域の中性的な声。落ち着いた柔らかい響きで、声の芯がある。穏やかな先輩のような、控えめで丁寧な話し方。ゆったりしすぎない自然なテンポで明瞭に話し、抑揚を小さく、語尾は静かに下げる。",
+          "seed": 4219,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T22:45:27.313656+09:00",
+      "audio_seconds": 12.68,
+      "elapsed_seconds": 0.965,
+      "selected": false
+    },
+    {
+      "source_run": "miori-voice-candidates-20260912-224525",
+      "source_file": "03-clear.wav",
+      "sha256": "0098215497837078fb364b3d74320098417dc895de040db78254280fa7edf176",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "やや高めの中性的な声。透明感があり、軽やかで、息成分は少なく澄んでいる。優しく親しみやすい丁寧な口調。穏やかな明るさを保ち、発音ははっきり、抑揚は小さめ。自然な速さで話し、語尾を柔らかく収める。",
+          "seed": 4219,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T22:45:28.341089+09:00",
+      "audio_seconds": 13.8,
+      "elapsed_seconds": 0.992,
+      "selected": false
+    },
+    {
+      "source_run": "miori-voice-candidates-20260912-224525",
+      "source_file": "04-warm.wav",
+      "sha256": "45da252a96ac3b1965236908fd092e8cab3d6962d4d6daefd1dc1f04cb1fb1c4",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "中音域の、やや女性的な柔らかい中性声。丸みのある温かい響き。優しい先輩がそばで落ち着いて話すような、親しみのある丁寧な口調。かすかな微笑みを感じる声色。滑舌は明瞭で、自然な間を置き、静かに語尾を下げる。",
+          "seed": 4219,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T22:45:29.342800+09:00",
+      "audio_seconds": 13.16,
+      "elapsed_seconds": 0.966,
+      "selected": false
+    },
+    {
+      "source_run": "miori-voice-candidates-20260912-224525",
+      "source_file": "05-ethereal.wav",
+      "sha256": "81e6fac0315d9120c68043c5eab40aa941a3a33f75ff68218edde1833daf1078",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "中音域の中性的な声。薄い息を含んだ、透明で柔らかな響き。少し浮世離れした静けさがあり、穏やかで丁寧に話す。声量は自然で、言葉は明瞭。ゆるやかな抑揚で、文の間に小さな余白を置き、語尾をそっと収める。",
+          "seed": 4219,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T22:45:30.394729+09:00",
+      "audio_seconds": 14.64,
+      "elapsed_seconds": 1.016,
+      "selected": false
+    },
+    {
+      "source_run": "miori-voice-candidates-20260912-224525",
+      "source_file": "06-synthetic.wav",
+      "sha256": "0f06dc91c15fb5164a522af704a861f4b0fae2e6b95899c6e36733ac6cd4d4ee",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "やや高めの中性的な声。澄んだ芯があり、息成分は少ない。音声合成の案内音声のように母音と子音が整い、一定のテンポで明瞭に話す。抑揚は小さく、音の高さを安定させる。穏やかで親しみやすい丁寧な口調で、語尾は短く柔らかい。",
+          "seed": 4219,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T22:45:31.414420+09:00",
+      "audio_seconds": 14.2,
+      "elapsed_seconds": 0.984,
+      "selected": false
+    },
+    {
+      "source_run": "miori-female-variants-20260912-225105",
+      "source_file": "02a-low-clear.wav",
+      "sha256": "abd6ac8b60c0897fdc5f7e3adc324f3cc9a60b78acbaa51404263e1b479c2d04",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "落ち着いた成人女性の声。女性としてやや低めの音域で、すっきりと澄んだ柔らかな響き。甘さを控えた凛とした雰囲気。穏やかで丁寧な話し方で、自然な速さと明瞭な発音。小さな抑揚で、語尾を静かに柔らかく下げる。",
+          "seed": 4220,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T22:51:07.055927+09:00",
+      "audio_seconds": 13.12,
+      "elapsed_seconds": 1.13,
+      "selected": false
+    },
+    {
+      "source_run": "miori-female-variants-20260912-225105",
+      "source_file": "02b-low-warm.wav",
+      "sha256": "0f5354cd0cb1160cffcb289d06586fc1f4fe3d34e317718dace38db1dac3bf24",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "中低音域の成人女性の声。丸みのある温かい声質で、柔らかな女性らしい響き。落ち着いた優しい先輩のように、控えめな微笑みを含んで丁寧に話す。自然なテンポで発音は明瞭。感情を穏やかににじませ、語尾を優しく収める。",
+          "seed": 4221,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T22:51:08.071149+09:00",
+      "audio_seconds": 12.92,
+      "elapsed_seconds": 0.948,
+      "selected": false
+    },
+    {
+      "source_run": "miori-female-variants-20260912-225105",
+      "source_file": "02c-low-husky.wav",
+      "sha256": "fc88f6803e8da073fb19dc7e640a0a8e49e6c0eb667d869e0fed3f6625cdfaa6",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "やや低めの落ち着いた成人女性の声。ごく薄いハスキーさと柔らかな艶があり、発音は澄んで聞き取りやすい。甘さを抑えた穏やかな丁寧語。小さな抑揚と自然な間で話し、文末は静かに優しく下げる。",
+          "seed": 4222,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T22:51:09.094609+09:00",
+      "audio_seconds": 13.76,
+      "elapsed_seconds": 0.96,
+      "selected": false
+    },
+    {
+      "source_run": "miori-female-variants-20260912-225105",
+      "source_file": "05a-soft-airy.wav",
+      "sha256": "d2edf3fa87528c746be26130c04ac1e2c658bda1e734c4b8eeda826029eaae4d",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "中音域の柔らかな成人女性の声。薄い息を含んだ透明な響きで、繊細な女性らしさがある。少し浮世離れした静かな雰囲気。自然な声量で明瞭に、穏やかな丁寧語で話す。文の間に短い余白を置き、語尾をそっと柔らかく収める。",
+          "seed": 4220,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T22:51:10.143596+09:00",
+      "audio_seconds": 14.28,
+      "elapsed_seconds": 0.983,
+      "selected": false
+    },
+    {
+      "source_run": "miori-female-variants-20260912-225105",
+      "source_file": "05b-clear-light.wav",
+      "sha256": "e081b2c6ba696f4a55ebeece8a6825e3c7c8146f2e5027179d060dc152d05fd9",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きに、ほんの少し息が混じる。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 4221,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T22:51:11.201922+09:00",
+      "audio_seconds": 14.04,
+      "elapsed_seconds": 0.992,
+      "selected": false
+    },
+    {
+      "source_run": "miori-female-variants-20260912-225105",
+      "source_file": "05c-soft-dusk.wav",
+      "sha256": "36603d3d17ab98a9141762013dead8b21f7613d3125462b32e4efb565518d0ab",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性としてやや低めの、柔らかく澄んだ成人女性の声。ほのかな息感と温かい艶があり、静かな余韻を感じる響き。少し幻想的で落ち着いた雰囲気。自然な声量と明瞭な発音を保ち、穏やかで丁寧に話す。短い間を置き、語尾をそっと下げる。",
+          "seed": 4222,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T22:51:12.273863+09:00",
+      "audio_seconds": 14.32,
+      "elapsed_seconds": 1.006,
+      "selected": false
+    },
+    {
+      "source_run": "miori-5b-variants-20260912-225512",
+      "source_file": "5b1-clear.wav",
+      "sha256": "2f39a0a852a610547ba8cfa547875134fadfd6cc3a276859a08820edab1e209c",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きに柔らかな芯があり、息成分は少ない。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 4221,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T22:55:14.026192+09:00",
+      "audio_seconds": 13.8,
+      "elapsed_seconds": 1.353,
+      "selected": false
+    },
+    {
+      "source_run": "miori-5b-variants-20260912-225512",
+      "source_file": "5b2-warm.wav",
+      "sha256": "e9cc27a7d0296c321b321724517a8492c3eda8f91ba788cd56c179ee784eb941",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きに、ほんの少し息が混じる。優しい先輩のような温かさと、かすかな微笑みを感じる。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 4221,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T22:55:15.068851+09:00",
+      "audio_seconds": 13.8,
+      "elapsed_seconds": 0.973,
+      "selected": false
+    },
+    {
+      "source_run": "miori-5b-variants-20260912-225512",
+      "source_file": "5b3-airy.wav",
+      "sha256": "f001f7df5415e74b955a8e15f9c2955cefcbc19b3e2282150fc67f0a9dcc2b79",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 4221,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T22:55:16.117036+09:00",
+      "audio_seconds": 14.12,
+      "elapsed_seconds": 0.981,
+      "selected": true
+    },
+    {
+      "source_run": "miori-5b-variants-20260912-225512",
+      "source_file": "5b4-calm.wav",
+      "sha256": "570828c919738e658583783d219b57d96105b35cb66b7fa588fcf405adb164f6",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度の音域の、透明感のある成人女性の声。軽やかで澄んだ響きに、ほんの少し息が混じる。落ち着いた凛とした声色で、甘さは控えめ。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 4221,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T22:55:17.170878+09:00",
+      "audio_seconds": 13.8,
+      "elapsed_seconds": 0.988,
+      "selected": false
+    },
+    {
+      "source_run": "miori-5b-variants-20260912-225512",
+      "source_file": "5b5-bright.wav",
+      "sha256": "e534ff001567acef7fb15cbe049a8262e502b22ec34aaece78970f602bfa249e",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性としてやや高めの音域の、透明感のある成人女性の声。軽やかで澄んだ響きに、ほんの少し息が混じる。柔らかな明るさがあり、落ち着いた大人の女性らしい声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 4221,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T22:55:18.311565+09:00",
+      "audio_seconds": 13.88,
+      "elapsed_seconds": 1.073,
+      "selected": false
+    },
+    {
+      "source_run": "miori-fixed-caption-seeds-20260912-231520",
+      "source_file": "b1-1-seed-5101.wav",
+      "sha256": "92c1a8e475290c49a64f5a7b3a9beb0d8126296f2762f224086c7d041b003c46",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きに柔らかな芯があり、息成分は少ない。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 5101,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:15:21.302308+09:00",
+      "audio_seconds": 13.8,
+      "elapsed_seconds": 1.182,
+      "selected": false
+    },
+    {
+      "source_run": "miori-fixed-caption-seeds-20260912-231520",
+      "source_file": "b1-2-seed-5102.wav",
+      "sha256": "a3d836a6a36fd1d3e4d70794a6c0634d548b1f4c8642fed8cd0b6da41e095aff",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きに柔らかな芯があり、息成分は少ない。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 5102,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:15:22.350774+09:00",
+      "audio_seconds": 13.8,
+      "elapsed_seconds": 0.981,
+      "selected": false
+    },
+    {
+      "source_run": "miori-fixed-caption-seeds-20260912-231520",
+      "source_file": "b1-3-seed-5103.wav",
+      "sha256": "583f229278f16d91543aacc5897d8c3dfa41e7c6bf449eada2fbad89a000be3b",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きに柔らかな芯があり、息成分は少ない。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 5103,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:15:23.387007+09:00",
+      "audio_seconds": 13.8,
+      "elapsed_seconds": 0.97,
+      "selected": false
+    },
+    {
+      "source_run": "miori-fixed-caption-seeds-20260912-231520",
+      "source_file": "b1-4-seed-5104.wav",
+      "sha256": "835480c897664f0f204a16833412ab89b0b450c4099b5754860b1b9ef97eda3d",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きに柔らかな芯があり、息成分は少ない。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 5104,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:15:24.421001+09:00",
+      "audio_seconds": 13.8,
+      "elapsed_seconds": 0.966,
+      "selected": false
+    },
+    {
+      "source_run": "miori-fixed-caption-seeds-20260912-231520",
+      "source_file": "b3-1-seed-5101.wav",
+      "sha256": "2613e9e52827e41707bcea29ee302ab147623eb15379d05dfbdfe3cbfb4864cc",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 5101,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:15:25.474823+09:00",
+      "audio_seconds": 14.12,
+      "elapsed_seconds": 0.988,
+      "selected": false
+    },
+    {
+      "source_run": "miori-fixed-caption-seeds-20260912-231520",
+      "source_file": "b3-2-seed-5102.wav",
+      "sha256": "f9bcc31fcc168351d2809d5775329f15594b8af05e000a1a91ae4b0308ee4a8f",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 5102,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:15:26.520781+09:00",
+      "audio_seconds": 14.12,
+      "elapsed_seconds": 0.98,
+      "selected": false
+    },
+    {
+      "source_run": "miori-fixed-caption-seeds-20260912-231520",
+      "source_file": "b3-3-seed-5103.wav",
+      "sha256": "dbf4cff18a21771d65ca5fa65a242b8f84be20fd786b822338c08e00d79b06b0",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 5103,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:15:27.560573+09:00",
+      "audio_seconds": 14.12,
+      "elapsed_seconds": 0.973,
+      "selected": false
+    },
+    {
+      "source_run": "miori-fixed-caption-seeds-20260912-231520",
+      "source_file": "b3-4-seed-5104.wav",
+      "sha256": "194c2becc8bd6f6bab717904c5bdbac1ae99cf0aed60f2ae6f526c38a1c7ebe8",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 5104,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:15:28.601719+09:00",
+      "audio_seconds": 14.12,
+      "elapsed_seconds": 0.976,
+      "selected": false
+    },
+    {
+      "source_run": "miori-fixed-caption-more-20260912-234806",
+      "source_file": "b1-1-seed-17.wav",
+      "sha256": "8ea0855a9b6035fa4bed4ce57513a9745bfc3e955d7e753485377c3fbef1f5e7",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きに柔らかな芯があり、息成分は少ない。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 17,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:48:07.390627+09:00",
+      "audio_seconds": 13.8,
+      "elapsed_seconds": 1.204,
+      "selected": false
+    },
+    {
+      "source_run": "miori-fixed-caption-more-20260912-234806",
+      "source_file": "b1-2-seed-90371.wav",
+      "sha256": "7e9effce753a8abba1bf9813beba8f081312e66ff9b958d8ee8563e0ba15f797",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きに柔らかな芯があり、息成分は少ない。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 90371,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:48:08.426521+09:00",
+      "audio_seconds": 13.8,
+      "elapsed_seconds": 0.968,
+      "selected": false
+    },
+    {
+      "source_run": "miori-fixed-caption-more-20260912-234806",
+      "source_file": "b1-3-seed-1847309.wav",
+      "sha256": "a2e33412db0e4edfdafa6ca51d8fe2ce9ed18443e5e76554bc5579032a4fe714",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きに柔らかな芯があり、息成分は少ない。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 1847309,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:48:09.445073+09:00",
+      "audio_seconds": 13.8,
+      "elapsed_seconds": 0.951,
+      "selected": false
+    },
+    {
+      "source_run": "miori-fixed-caption-more-20260912-234806",
+      "source_file": "b1-4-seed-927416503.wav",
+      "sha256": "eb9161d0e541267433d307bc41466c986e6e7ac6be5e001f0621503c96a24074",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きに柔らかな芯があり、息成分は少ない。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 927416503,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:48:10.471144+09:00",
+      "audio_seconds": 13.8,
+      "elapsed_seconds": 0.96,
+      "selected": false
+    },
+    {
+      "source_run": "miori-fixed-caption-more-20260912-234806",
+      "source_file": "b3-1-seed-17.wav",
+      "sha256": "27d12e31b1767c3676921b7d113a45aef5139620881918ee358db368abd1f153",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 17,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:48:11.507667+09:00",
+      "audio_seconds": 14.12,
+      "elapsed_seconds": 0.972,
+      "selected": false
+    },
+    {
+      "source_run": "miori-fixed-caption-more-20260912-234806",
+      "source_file": "b3-2-seed-90371.wav",
+      "sha256": "83d005a6ebac0bc1b4b5216a32e7348defc804b03e0ba46b7163c16520de33a5",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 90371,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:48:12.541451+09:00",
+      "audio_seconds": 14.12,
+      "elapsed_seconds": 0.967,
+      "selected": false
+    },
+    {
+      "source_run": "miori-fixed-caption-more-20260912-234806",
+      "source_file": "b3-3-seed-1847309.wav",
+      "sha256": "858d19437e26d1103279cbd2ca2e162adbe68530828fa35642752523dc234f1d",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 1847309,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:48:13.581164+09:00",
+      "audio_seconds": 14.12,
+      "elapsed_seconds": 0.974,
+      "selected": false
+    },
+    {
+      "source_run": "miori-fixed-caption-more-20260912-234806",
+      "source_file": "b3-4-seed-927416503.wav",
+      "sha256": "7f2cdceb52efdb0e9be0b69c651acb25e80f506113999c590f869b5f46b97864",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 927416503,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:48:14.617879+09:00",
+      "audio_seconds": 14.12,
+      "elapsed_seconds": 0.968,
+      "selected": false
+    },
+    {
+      "source_run": "miori-shortlist-comparison-20260912-235742",
+      "source_file": "new-b1-281.wav",
+      "sha256": "e926c9bea0ac9cebc820cbee70b6805bea37369364738f8ba10c86c3d5cb69ae",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きに柔らかな芯があり、息成分は少ない。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 281,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:57:43.834110+09:00",
+      "audio_seconds": 13.8,
+      "elapsed_seconds": 1.205,
+      "selected": false
+    },
+    {
+      "source_run": "miori-shortlist-comparison-20260912-235742",
+      "source_file": "new-b1-3184057.wav",
+      "sha256": "df07263dacfbfe32e0aa4916aaf86dba1e02bce81b3f22ebca838e897779aa8d",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きに柔らかな芯があり、息成分は少ない。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 3184057,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:57:45.977829+09:00",
+      "audio_seconds": 13.8,
+      "elapsed_seconds": 0.927,
+      "selected": false
+    },
+    {
+      "source_run": "miori-shortlist-comparison-20260912-235742",
+      "source_file": "new-b1-64027.wav",
+      "sha256": "42869faf5e2b5bfb1e97fe7d93fbc6ff53911a8125e82846744ba8d5cddc661b",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きに柔らかな芯があり、息成分は少ない。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 64027,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:57:45.014226+09:00",
+      "audio_seconds": 13.8,
+      "elapsed_seconds": 1.139,
+      "selected": false
+    },
+    {
+      "source_run": "miori-shortlist-comparison-20260912-235742",
+      "source_file": "new-b3-281.wav",
+      "sha256": "a80b5864c5cff214c857fca0d363bc9a312219e152a33d0e1f6470c83396cb91",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 281,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:57:46.960276+09:00",
+      "audio_seconds": 14.12,
+      "elapsed_seconds": 0.947,
+      "selected": false
+    },
+    {
+      "source_run": "miori-shortlist-comparison-20260912-235742",
+      "source_file": "new-b3-3184057.wav",
+      "sha256": "200b4832cc8b2c22a2f562ffa26dc4cab573fcc6098c04b33666fce545f55c4f",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 3184057,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:57:48.907158+09:00",
+      "audio_seconds": 14.12,
+      "elapsed_seconds": 0.934,
+      "selected": false
+    },
+    {
+      "source_run": "miori-shortlist-comparison-20260912-235742",
+      "source_file": "new-b3-64027.wav",
+      "sha256": "afc5dcd8330a6b00ceb27bd2ad2d089e98af1119e475a5726863bef7e5e6e1ee",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 64027,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-12T23:57:47.936985+09:00",
+      "audio_seconds": 14.12,
+      "elapsed_seconds": 0.941,
+      "selected": false
+    },
+    {
+      "source_run": "miori-b3-extra-20260913-175303",
+      "source_file": "new-b3-145802637.wav",
+      "sha256": "eb12b417aaeb7c087eaeee5a48ea10b4e949822cc19f1593b598f6275ac3b9d3",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 145802637,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-13T17:53:10.913022+09:00",
+      "audio_seconds": 14.12,
+      "elapsed_seconds": 1.451,
+      "selected": false
+    },
+    {
+      "source_run": "miori-b3-extra-20260913-175303",
+      "source_file": "new-b3-25813.wav",
+      "sha256": "20d6210dc234b3bb2e5dd84e4d0bbf9d61ee1749b506809bc0260057fb24505f",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 25813,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-13T17:53:07.772972+09:00",
+      "audio_seconds": 14.12,
+      "elapsed_seconds": 1.505,
+      "selected": false
+    },
+    {
+      "source_run": "miori-b3-extra-20260913-175303",
+      "source_file": "new-b3-670193.wav",
+      "sha256": "2e37f67ded706f80c7136c48bcd46b6612a83bdf54c7d191159e5df0a5962d76",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 670193,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-13T17:53:09.408917+09:00",
+      "audio_seconds": 14.12,
+      "elapsed_seconds": 1.593,
+      "selected": false
+    },
+    {
+      "source_run": "miori-b3-extra-20260913-175303",
+      "source_file": "new-b3-709.wav",
+      "sha256": "0a34452a5842661201cc047d3e892d57ef02d6229c79abc5024bfcf579c27306",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 709,
+          "num_steps": 40
+        }
+      },
+      "generated_at": "2026-09-13T17:53:06.210307+09:00",
+      "audio_seconds": 14.12,
+      "elapsed_seconds": 2.215,
+      "selected": false
+    },
+    {
+      "source_run": "miori-b3-4221-speed-20260913-180349",
+      "source_file": "speed-090.wav",
+      "sha256": "24d9594a9a683b0211ca5f97355d36e90e77d67d9861b8ba35e2a77728ddc4cf",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 4221,
+          "num_steps": 40
+        },
+        "speed": 0.9
+      },
+      "generated_at": "2026-09-13T18:03:50.487269+09:00",
+      "audio_seconds": 15.72,
+      "elapsed_seconds": 1.319,
+      "selected": false
+    },
+    {
+      "source_run": "miori-b3-4221-speed-20260913-180349",
+      "source_file": "speed-110.wav",
+      "sha256": "a50a2941bc6c1b94a4440d5e5b9f2e4f8ad13b6a88b3d1e556fcde907bee2ed8",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 4221,
+          "num_steps": 40
+        },
+        "speed": 1.1
+      },
+      "generated_at": "2026-09-13T18:03:51.907757+09:00",
+      "audio_seconds": 12.84,
+      "elapsed_seconds": 1.419,
+      "selected": false
+    },
+    {
+      "source_run": "miori-b3-4221-fine-speed-20260913-190410",
+      "source_file": "speed-098.wav",
+      "sha256": "2db36fc9adb629bfb31e0a3ce54137ae7f40af28c99e9c7566bb928e5df4669c",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 4221,
+          "num_steps": 40
+        },
+        "speed": 0.98
+      },
+      "generated_at": "2026-09-13T19:04:13.359300+09:00",
+      "audio_seconds": 14.4,
+      "elapsed_seconds": 1.561,
+      "selected": false
+    },
+    {
+      "source_run": "miori-b3-4221-fine-speed-20260913-190410",
+      "source_file": "speed-099.wav",
+      "sha256": "072c8579555d701a9a725b0be0bb7ea55f581a3d19870296c47bc7d3ec22f0f3",
+      "request": {
+        "model": "irodori-tts",
+        "input": "こんばんは、みおりです。今日は何をお手伝いしましょうか。急いで答えを出さなくても、大丈夫です。分かるところから、一緒に整理していきましょう。",
+        "voice": "none",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 4221,
+          "num_steps": 40
+        },
+        "speed": 0.99
+      },
+      "generated_at": "2026-09-13T19:04:11.796784+09:00",
+      "audio_seconds": 14.28,
+      "elapsed_seconds": 1.588,
+      "selected": false
+    }
+  ]
+}

@@ -1,0 +1,155 @@
+{
+  "executed_at": "2026-09-13T20:05:12.476983+09:00",
+  "environment": "Ubuntu dev / localhost:8088 / NVIDIA RTX 4070 Ti SUPER",
+  "scope": "Irodori単体API。LiveKit・Backend・CCVを経由していない。",
+  "reference_voice_id": "miori-b3-4221",
+  "reference_sha256": "f001f7df5415e74b955a8e15f9c2955cefcbc19b3e2282150fc67f0a9dcc2b79",
+  "model": {
+    "repository": "Aratako/Irodori-TTS-v4.1-Small",
+    "revision": "2b28324dc263ed5e6638b3cf3dd94c82ead07b4b",
+    "quantized": false,
+    "model_device": "cuda",
+    "model_precision": "bf16",
+    "codec_device": "cuda",
+    "codec_precision": "bf16",
+    "codec_repository": "Aratako/Semantic-DACVAE-Japanese-32dim",
+    "codec_revision": "47376ee24834d7a05a48ebabfe3cde29b3c5e214"
+  },
+  "requests": [
+    {
+      "file": "full.wav",
+      "request": {
+        "model": "irodori-tts",
+        "input": "今日は、どんな一日でしたか。よかったら、ゆっくり聞かせてください。",
+        "voice": "miori-b3-4221",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 4221,
+          "num_steps": 40,
+          "chunking_enabled": false
+        },
+        "speed": 1.0
+      },
+      "http_status": 200,
+      "elapsed_seconds": 1.881,
+      "audio_seconds": 6.88,
+      "frames": 330240,
+      "sample_rate": 48000,
+      "channels": 1,
+      "sample_width_bytes": 2,
+      "rms_pcm16": 4637.02,
+      "sha256": "d2b1bdb367ae6f0145c7c8cd9f81186fe9613fabcdb5875624fdca42ad1c0f39"
+    },
+    {
+      "file": "segment-01.wav",
+      "request": {
+        "model": "irodori-tts",
+        "input": "今日は、どんな一日でしたか。",
+        "voice": "miori-b3-4221",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 4221,
+          "num_steps": 40,
+          "chunking_enabled": false
+        },
+        "speed": 1.0
+      },
+      "http_status": 200,
+      "elapsed_seconds": 1.538,
+      "audio_seconds": 3.2,
+      "frames": 153600,
+      "sample_rate": 48000,
+      "channels": 1,
+      "sample_width_bytes": 2,
+      "rms_pcm16": 4760.21,
+      "sha256": "a2a53456f3dce1ab33d578e43855cfc4436383a3f62aba106a4757f6decd3650"
+    },
+    {
+      "file": "segment-02.wav",
+      "request": {
+        "model": "irodori-tts",
+        "input": "よかったら、ゆっくり聞かせてください。",
+        "voice": "miori-b3-4221",
+        "response_format": "wav",
+        "irodori": {
+          "caption": "女性として中程度からやや高めの、透明感のある成人女性の声。軽やかで澄んだ響きを、薄い息が柔らかく包む。繊細で少し儚い声色。上品で静か、少し不思議な雰囲気。親しみやすい柔らかな丁寧語で、自然な声量と速さではっきり話す。抑揚は控えめで、文末を優しく収める。",
+          "seed": 4221,
+          "num_steps": 40,
+          "chunking_enabled": false
+        },
+        "speed": 1.0
+      },
+      "http_status": 200,
+      "elapsed_seconds": 1.54,
+      "audio_seconds": 3.56,
+      "frames": 170880,
+      "sample_rate": 48000,
+      "channels": 1,
+      "sample_width_bytes": 2,
+      "rms_pcm16": 4860.73,
+      "sha256": "3938b597a9977778029a9d1e586e439ef5b07c06273e2aa3cbbab0a681af332d"
+    }
+  ],
+  "segmented_preview": {
+    "file": "segmented.wav",
+    "source_files": [
+      "segment-01.wav",
+      "segment-02.wav"
+    ],
+    "method": "2リクエストのPCMを順に連結。無音の追加・削除・音量補正なし。",
+    "sha256": "49e1767600a2bd16bf8527902457f79d507c3dde178c2247efe1f74ce5cba5d3"
+  },
+  "human_listening": {
+    "status": "issues_reported",
+    "reported_on": "2026-09-13",
+    "issue": "分割して連結した音声は境界に間がなく、不自然。",
+    "full_audio_status": "個別の受入判断は未確認",
+    "checks": [
+      "声の同一性",
+      "日本語の読み",
+      "句点境界の間"
+    ],
+    "next_check": "分割再生の間の調整と実会話での受入は#329で確認する。",
+    "scope": "実会話への適用位置と、元音声が持つ無音を考慮する処理は#329で確認する。",
+    "follow_up_feedback": "0.2秒・0.3秒の比較後も、連結部分によって間が長すぎる部分と短い部分がある。一括出力や1ファイルにまとめる必要性について質問あり。",
+    "decision": "固定の無音追加は採用しない。採用参照は一括生成した14.12秒の原音をそのまま保持し、連結版は追加検証素材として扱う。"
+  },
+  "not_verified": [
+    "共有推論サービスへの配備と再起動",
+    "CCV接続",
+    "実会話の音質と発話開始までの遅延",
+    "モデル最終採用"
+  ],
+  "gap_previews": {
+    "created_at": "2026-09-13T20:16:23.491101+09:00",
+    "variants": [
+      {
+        "file": "segmented-gap-200ms.wav",
+        "source_files": [
+          "segment-01.wav",
+          "segment-02.wav"
+        ],
+        "inserted_gap_ms": 200,
+        "inserted_silence_frames": 9600,
+        "method": "既存の区間PCMを変更せず、区間境界に指定長のゼロPCMを挿入した試聴素材。",
+        "sha256": "900eabb26d6b3a1be562b7957cdf822093dc67de7abd335e67523c9077beab90",
+        "human_listening_status": "not_adopted"
+      },
+      {
+        "file": "segmented-gap-300ms.wav",
+        "source_files": [
+          "segment-01.wav",
+          "segment-02.wav"
+        ],
+        "inserted_gap_ms": 300,
+        "inserted_silence_frames": 14400,
+        "method": "既存の区間PCMを変更せず、区間境界に指定長のゼロPCMを挿入した試聴素材。",
+        "sha256": "b9637dd330fdbbd63ce272fafe2f62e8e0d375bce95b8ff6d6193f7e5f950574",
+        "human_listening_status": "not_adopted"
+      }
+    ],
+    "decision": "試聴で間の長短が指摘されたため、固定の200ms/300ms追加はいずれも採用しない。"
+  }
+}
