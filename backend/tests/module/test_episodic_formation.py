@@ -339,3 +339,40 @@ def test_transient_fact_privacy_failure_keeps_whole_chunk_pending_then_recovers(
         episode_record = next(r for r in harness.records() if r.kind is RecordKind.EPISODE)
         assert len(tx.references("miori", episode_record.id)) == 1
     assert not harness.queue.has_pending()
+
+
+def test_schema_retry_includes_validation_feedback_without_relaxing_contract(harness, caplog):
+    class RepairClient(Client):
+        def __init__(self):
+            super().__init__()
+            self.messages = []
+
+        def chat(self, messages, **kwargs):
+            self.messages.append(messages)
+            if len(self.messages) == 1:
+                return '{"records":"PRIVATE_INVALID_OUTPUT"}'
+            return super().chat(messages, **kwargs)
+
+    harness.turn("うどんを食べた")
+    client = RepairClient()
+    assert worker(harness, client).process_next()
+    assert len(harness.records()) == 2
+    repaired = client.messages[1]
+    assert repaired[:2] == client.messages[0]
+    assert repaired[-2] == {"role": "assistant", "content": '{"records":"PRIVATE_INVALID_OUTPUT"}'}
+    assert "records" in repaired[-1]["content"] and "tuple_type" in repaired[-1]["content"]
+    assert "schema=ExtractionBatch" in caplog.text
+    assert "PRIVATE_INVALID_OUTPUT" not in caplog.text
+
+
+def test_schema_repair_checks_expanded_input_budget(harness):
+    harness.turn("うどんを食べた")
+    snapshot = harness.snapshot()
+    client = Client(callback=lambda *_: '{"records":"invalid"}',
+                    fits=lambda messages, _: len(messages) == 2)
+    with pytest.raises(ExtractionInputTooLarge, match="schema repair"):
+        ThreadEpisodeExtractor(client=client, settings=SETTINGS).extract(
+            snapshot=snapshot, chunk=split_thread(snapshot)[0], catalog=(), provenance={},
+            progress={}, entity_labels={"speaker:user": "ユーザー", "character:miori": "光織"})
+    assert len(client.requests) == 1
+    assert harness.records() == ()
